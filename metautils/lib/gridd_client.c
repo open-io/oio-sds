@@ -49,11 +49,6 @@ enum client_step_e
 	STATUS_FAILED
 };
 
-struct gridd_client_factory_s
-{
-	struct abstract_client_factory_s abstract;
-};
-
 struct gridd_client_s
 {
 	GByteArray *request;
@@ -167,16 +162,6 @@ _count_network_error (const char *url, const GError *err)
 }
 
 /* ------------------------------------------------------------------------- */
-
-static void _factory_clean(struct gridd_client_factory_s *self);
-static struct gridd_client_s * _factory_create_client (
-		struct gridd_client_factory_s *self);
-
-struct gridd_client_factory_vtable_s VTABLE_FACTORY =
-{
-	_factory_clean,
-	_factory_create_client
-};
 
 static void
 _client_reset_reply(struct gridd_client_s *client)
@@ -841,22 +826,6 @@ gridd_client_fail(struct gridd_client_s *client, GError *why)
 	_client_replace_error(client, why);
 }
 
-static void
-_factory_clean(struct gridd_client_factory_s *self)
-{
-	EXTRA_ASSERT(self != NULL);
-	EXTRA_ASSERT(self->abstract.vtable == &VTABLE_FACTORY);
-	SLICE_FREE(struct gridd_client_factory_s, self);
-}
-
-static struct gridd_client_s *
-_factory_create_client (struct gridd_client_factory_s *factory)
-{
-	EXTRA_ASSERT(factory != NULL);
-	(void) factory;
-	return gridd_client_create_empty();
-}
-
 /* ------------------------------------------------------------------------- */
 
 void
@@ -917,13 +886,5 @@ gridd_client_set_avoidance (struct gridd_client_s *c, gboolean onoff)
 {
 	if (unlikely(!c)) return;
 	c->avoidance_onoff = BOOL(onoff);
-}
-
-struct gridd_client_factory_s *
-gridd_client_factory_create(void)
-{
-	struct gridd_client_factory_s *factory = SLICE_NEW0(struct gridd_client_factory_s);
-	factory->abstract.vtable = &VTABLE_FACTORY;
-	return factory;
 }
 

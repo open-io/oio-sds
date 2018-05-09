@@ -347,7 +347,6 @@ _init_configless_structures(struct sqlx_service_s *ss)
 			|| !(ss->server = network_server_init())
 			|| !(ss->dispatcher = transport_gridd_build_empty_dispatcher())
 			|| !(ss->clients_pool = gridd_client_pool_create())
-			|| !(ss->clients_factory = gridd_client_factory_create())
 			|| !(ss->resolver = hc_resolver_create())
 			|| !(ss->gtq_admin = grid_task_queue_create("admin"))
 			|| !(ss->gtq_reload = grid_task_queue_create("reload"))) {
@@ -361,8 +360,7 @@ _init_configless_structures(struct sqlx_service_s *ss)
 static gboolean
 _configure_peering (struct sqlx_service_s *ss)
 {
-	ss->peering = sqlx_peering_factory__create_direct
-		(ss->clients_pool, ss->clients_factory);
+	ss->peering = sqlx_peering_factory__create_direct(ss->clients_pool);
 	return TRUE;
 }
 
@@ -910,11 +908,6 @@ sqlx_service_specific_fini(void)
 	if (SRV.clients_pool) {
 		gridd_client_pool_destroy (SRV.clients_pool);
 		SRV.clients_pool = NULL;
-	}
-
-	if (SRV.clients_factory) {
-		gridd_client_factory_clean(SRV.clients_factory);
-		SRV.clients_factory = NULL;
 	}
 
 	// Must be freed after SRV.clients_pool

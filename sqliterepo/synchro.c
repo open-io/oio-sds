@@ -585,10 +585,6 @@ struct sqlx_peering_direct_s
 {
 	struct sqlx_peering_vtable_s *vtable;
 
-	/* Instanciates client. Designed for testing purposes, to avoid requiring
-	   any network during the tests. */
-	struct gridd_client_factory_s *factory;
-
 	/* pool'ifies the client sockets to avoid reserving to many file
 	 * descriptors. */
 	struct gridd_client_pool_s *pool;
@@ -599,13 +595,11 @@ struct sqlx_peering_direct_s
 };
 
 struct sqlx_peering_s *
-sqlx_peering_factory__create_direct (struct gridd_client_pool_s *pool,
-		struct gridd_client_factory_s *factory)
+sqlx_peering_factory__create_direct (struct gridd_client_pool_s *pool)
 {
 	struct sqlx_peering_direct_s *self = g_malloc0 (sizeof(*self));
 	self->vtable = &vtable_peering_DIRECT;
 	self->pool = pool;
-	self->factory = factory;
 	self->fd_udp = -1;
 	return (struct sqlx_peering_s*) self;
 }
@@ -656,7 +650,7 @@ _direct_use (struct sqlx_peering_s *self,
 		}
 	} else {
 		struct event_client_s *mc = g_malloc0 (sizeof(struct event_client_s));
-		mc->client = gridd_client_factory_create_client (p->factory);
+		mc->client = gridd_client_create_empty ();
 
 		gridd_client_set_timeout(mc->client, oio_election_use_timeout_req);
 		gridd_client_set_timeout_cnx(mc->client, oio_election_use_timeout_cnx);
@@ -720,7 +714,7 @@ _direct_pipefrom (struct sqlx_peering_s *self,
 
 	struct evtclient_PIPEFROM_s *mc =
 		g_malloc0 (sizeof(struct evtclient_PIPEFROM_s));
-	mc->ec.client = gridd_client_factory_create_client (p->factory);
+	mc->ec.client = gridd_client_create_empty ();
 	mc->ec.on_end = (gridd_client_end_f) on_end_PIPEFROM;
 	mc->hook = result;
 	mc->manager = manager;
@@ -820,7 +814,7 @@ _direct_getvers (struct sqlx_peering_s *self,
 
 	struct evtclient_GETVERS_s *mc =
 		g_malloc0 (sizeof(struct evtclient_GETVERS_s));
-	mc->ec.client = gridd_client_factory_create_client (p->factory);
+	mc->ec.client = gridd_client_create_empty();
 	mc->ec.on_end = (gridd_client_end_f) on_end_GETVERS;
 	mc->hook = result;
 	mc->manager = manager;

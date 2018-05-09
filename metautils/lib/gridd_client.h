@@ -73,30 +73,6 @@ void gridd_client_set_keepalive(struct gridd_client_s *self, gboolean on);
 
 /* ------------------------------------------------------------------------- */
 
-struct gridd_client_factory_vtable_s
-{
-	void (*clean) (struct gridd_client_factory_s *self);
-
-	// Instatiates an empty client (no target, ni request).
-	struct gridd_client_s* (*create) (struct gridd_client_factory_s *f);
-};
-
-struct abstract_client_factory_s
-{
-	struct gridd_client_factory_vtable_s *vtable;
-};
-
-#define gridd_client_factory_clean(p) \
-	((struct abstract_client_factory_s*)(p))->vtable->clean(p)
-
-#define gridd_client_factory_create_client(p) \
-	((struct abstract_client_factory_s*)(p))->vtable->create(p)
-
-// Instanciate a clients factory with the default VTABLE. This factory will
-// provide clients with the same VTABLE than those created with
-// gridd_client_create_empty().
-struct gridd_client_factory_s * gridd_client_factory_create(void);
-
 /* If that list of peers odwn is not periodically refreshed, it ends up with
  * a set of blocked peers */
 void gridd_client_learn_peers_down(const char * const * peers);
