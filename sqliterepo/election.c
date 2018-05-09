@@ -1468,9 +1468,14 @@ deferred_completion_ASKING(struct exec_later_ASKING_context_s *d)
 				int zrc2 = sqlx_sync_adelete(d->member->sync,
 						member_masterpath(d->member, path, sizeof(path)), -1,
 						completion_DeleteRogueNode, NULL);
-				GRID_WARN("Rogue being deleted %s", path);
-				if (zrc2 != ZOK)
-					GRID_WARN("Failed! %s", zerror(zrc2));
+				TRACE_EXECUTION(d->member->manager);
+
+				if (zrc2 != ZOK) {
+					GRID_WARN("Failed to delete Rogue %s: %s", path, zerror(zrc2));
+				} else {
+					GRID_WARN("Rogue being deleted %s", path);
+				}
+				TRACE_EXECUTION(d->member->manager);
 
 				transition(d->member, EVT_MASTER_BAD, NULL);
 			} else {
