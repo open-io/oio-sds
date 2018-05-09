@@ -246,51 +246,48 @@ _sync_clear (struct sqlx_sync_s *ss)
 }
 
 static GError *
-_sync_open (struct sqlx_sync_s *ss)
+_sync_open (struct sqlx_sync_s *ss UNUSED)
 {
-	(void) ss;
+	EXTRA_ASSERT (ss->vtable == &vtable_sync_NOOP);
 	GRID_DEBUG ("%s", __FUNCTION__);
 	return NULL;
 }
 
 static void
-_sync_close (struct sqlx_sync_s *ss)
+_sync_close (struct sqlx_sync_s *ss UNUSED)
 {
-	(void) ss;
+	EXTRA_ASSERT (ss->vtable == &vtable_sync_NOOP);
 	GRID_DEBUG ("%s", __FUNCTION__);
 }
 
 static int
-_sync_acreate (struct sqlx_sync_s *ss, const char *path, const char *v,
-		int vlen, int flags, string_completion_t completion, const void *data)
+_sync_acreate (struct sqlx_sync_s *ss, const char *path UNUSED,
+		const char *v UNUSED, int vlen UNUSED, int flags UNUSED,
+		string_completion_t completion UNUSED, const void *data UNUSED)
 {
-	(void) ss;
-	(void) path, (void) v, (void) vlen, (void) flags;
-	(void) completion, (void) data;
+	EXTRA_ASSERT (ss->vtable == &vtable_sync_NOOP);
 	enum hook_type_e val = CMD_CREATE;
 	g_array_append_vals (ss->pending, &val, 1);
 	return ZOK;
 }
 
 static int
-_sync_adelete (struct sqlx_sync_s *ss, const char *path, int version,
-		void_completion_t completion, const void *data)
+_sync_adelete (struct sqlx_sync_s *ss,
+		const char *path UNUSED, int version UNUSED,
+		void_completion_t completion UNUSED, const void *data UNUSED)
 {
-	(void) ss, (void) path, (void) version;
-	(void) completion, (void) data;
+	EXTRA_ASSERT (ss->vtable == &vtable_sync_NOOP);
 	enum hook_type_e val = CMD_DELETE;
 	g_array_append_vals (ss->pending, &val, 1);
 	return ZOK;
 }
 
 static int
-_sync_awexists (struct sqlx_sync_s *ss, const char *path,
-		watcher_fn watcher, void* watcherCtx,
-		stat_completion_t completion, const void *data)
+_sync_awexists (struct sqlx_sync_s *ss, const char *path UNUSED,
+		watcher_fn watcher UNUSED, void* watcherCtx UNUSED,
+		stat_completion_t completion UNUSED, const void *data UNUSED)
 {
-	(void) ss, (void) path;
-	(void) watcher, (void) watcherCtx;
-	(void) completion, (void) data;
+	EXTRA_ASSERT (ss->vtable == &vtable_sync_NOOP);
 	if (completion) {
 		enum hook_type_e val = CMD_EXIST;
 		g_array_append_vals (ss->pending, &val, 1);
@@ -298,13 +295,11 @@ _sync_awexists (struct sqlx_sync_s *ss, const char *path,
 	return ZOK;
 }
 
-static int _sync_awget (struct sqlx_sync_s *ss, const char *path,
-		watcher_fn watcher, void* watcherCtx,
-		data_completion_t completion, const void *data)
+static int _sync_awget (struct sqlx_sync_s *ss, const char *path UNUSED,
+		watcher_fn watcher UNUSED, void* watcherCtx UNUSED,
+		data_completion_t completion UNUSED, const void *data UNUSED)
 {
-	(void) ss, (void) path;
-	(void) watcher, (void) watcherCtx;
-	(void) completion, (void) data;
+	EXTRA_ASSERT (ss->vtable == &vtable_sync_NOOP);
 	if (completion) {
 		enum hook_type_e val = CMD_GET;
 		g_array_append_vals (ss->pending, &val, 1);
@@ -313,13 +308,11 @@ static int _sync_awget (struct sqlx_sync_s *ss, const char *path,
 }
 
 static int
-_sync_awget_children (struct sqlx_sync_s *ss, const char *path,
-		watcher_fn watcher, void* watcherCtx,
-		strings_completion_t completion, const void *data)
+_sync_awget_children (struct sqlx_sync_s *ss, const char *path UNUSED,
+		watcher_fn watcher UNUSED, void* watcherCtx UNUSED,
+		strings_completion_t completion UNUSED, const void *data UNUSED)
 {
-	(void) ss, (void) path;
-	(void) watcher, (void) watcherCtx;
-	(void) completion, (void) data;
+	EXTRA_ASSERT (ss->vtable == &vtable_sync_NOOP);
 	if (completion) {
 		enum hook_type_e val = CMD_LIST;
 		g_array_append_vals (ss->pending, &val, 1);
@@ -328,13 +321,11 @@ _sync_awget_children (struct sqlx_sync_s *ss, const char *path,
 }
 
 static int
-_sync_awget_siblings (struct sqlx_sync_s *ss, const char *path,
-		watcher_fn watcher, void* watcherCtx,
-		strings_completion_t completion, const void *data)
+_sync_awget_siblings (struct sqlx_sync_s *ss, const char *path UNUSED,
+		watcher_fn watcher UNUSED, void* watcherCtx UNUSED,
+		strings_completion_t completion UNUSED, const void *data UNUSED)
 {
-	(void) ss, (void) path;
-	(void) watcher, (void) watcherCtx;
-	(void) completion, (void) data;
+	EXTRA_ASSERT (ss->vtable == &vtable_sync_NOOP);
 	if (completion) {
 		enum hook_type_e val = CMD_LIST;
 		g_array_append_vals (ss->pending, &val, 1);
