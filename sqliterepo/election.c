@@ -2196,6 +2196,7 @@ _common_action_to_LEAVE(struct election_member_s *member,
 	int zrc = sqlx_sync_adelete(member->sync,
 			member_fullpath(member, path, sizeof(path)), -1,
 			completion_LEAVING, member);
+	TRACE_EXECUTION(member->manager);
 
 	if (unlikely(zrc != ZOK))
 		return member_fail_on_error(member, zrc);
