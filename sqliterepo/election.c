@@ -2072,13 +2072,13 @@ _result_GETVERS (GError *enet,
 		MEMBER_CHECK(member);
 
 		member_lock(member);
-		if (!err)
+		if (!err) {
 			transition(member, EVT_GETVERS_OK, &reqid);
-		else if (err->code == CODE_PIPEFROM)
+		} else if (err->code == CODE_PIPEFROM) {
 			transition(member, EVT_GETVERS_OLD, &reqid);
-		else if (err->code == CODE_CONCURRENT)
+		} else if (err->code == CODE_CONCURRENT) {
 			transition(member, EVT_GETVERS_RACE, &reqid);
-		else {
+		} else {
 			if (err->code == CODE_CONTAINER_NOTFOUND) {
 				// We may have asked the wrong peer
 				member->requested_peers_decache = 1;
