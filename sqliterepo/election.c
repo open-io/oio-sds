@@ -588,7 +588,7 @@ election_manager_create(struct replication_config_s *config,
 		g_tree_new_full(metautils_strcmp3, NULL, g_free, _cond_clean);
 
 	manager->completions =
-		g_thread_pool_new((GFunc)_completion_router, manager, 2, FALSE, NULL);
+		g_thread_pool_new((GFunc)_completion_router, manager, 8, FALSE, NULL);
 
 	manager->tasks_getpeers =
 		g_thread_pool_new((GFunc)_worker_getpeers, manager, 8, FALSE, NULL);
