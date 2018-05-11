@@ -342,8 +342,8 @@
 
 			{ "type": "monotonic", "name": "oio_election_lock_alert_delay",
 				"key": "sqliterepo.election.lock_alert_delay",
-				"descr": ".",
-				"def": "50", "min": "1", "max": "60s" },
+				"descr": "Only effective when built in DEBUG mode. Dump the long critical sections around the elections lock, when the lock is held for longer then this threshold (in microseconds).",
+				"def": "200", "min": "1", "max": "60s" },
 
 			{ "type": "monotonic", "name": "oio_election_period_cond_wait",
 				"key": "sqliterepo.election.wait.quantum",
