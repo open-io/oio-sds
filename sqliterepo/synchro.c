@@ -20,6 +20,7 @@ License along with this library.
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
 
 #include <zookeeper.h>
 #include <zookeeper_log.h>
@@ -557,18 +558,20 @@ sqlx_sync_awget_siblings (struct sqlx_sync_s *ss, const char *path,
 
 static void _direct_destroy (struct sqlx_peering_s *self);
 
-static void _direct_use (struct sqlx_peering_s *self,
-		const char *url,
-		const struct sqlx_name_s *n);
+static void _direct_notify (struct sqlx_peering_s *self);
 
-static void _direct_getvers (struct sqlx_peering_s *self,
+static gboolean _direct_use (struct sqlx_peering_s *self,
+		const char *url,
+		const struct sqlx_name_inline_s *n);
+
+static gboolean _direct_getvers (struct sqlx_peering_s *self,
 		const char *url,
 		const struct sqlx_name_s *n,
 		struct election_manager_s *manager,
 		guint reqid,
 		sqlx_peering_getvers_end_f result);
 
-static void _direct_pipefrom (struct sqlx_peering_s *self,
+static gboolean _direct_pipefrom (struct sqlx_peering_s *self,
 		const char *url,
 		const struct sqlx_name_s *n,
 		const char *src,
@@ -578,7 +581,8 @@ static void _direct_pipefrom (struct sqlx_peering_s *self,
 
 struct sqlx_peering_vtable_s vtable_peering_DIRECT =
 {
-	_direct_destroy, _direct_use, _direct_getvers, _direct_pipefrom
+	_direct_destroy, _direct_notify,
+	_direct_use, _direct_getvers, _direct_pipefrom
 };
 
 struct sqlx_peering_direct_s
@@ -589,10 +593,35 @@ struct sqlx_peering_direct_s
 	 * descriptors. */
 	struct gridd_client_pool_s *pool;
 
+	GThreadPool *pool_udp_use;
+
 	/* Some requests may be sent over a UDP channel. We just need a file
 	 * descriptor from the application */
 	int fd_udp;
 };
+
+/* @private */
+struct use_request_s {
+	gsize addr_len;
+	struct sockaddr_in6 addr;
+	struct sqlx_name_inline_s name;
+};
+
+static void
+_use_by_udp(struct use_request_s *req, struct sqlx_peering_direct_s *self)
+{
+	NAME2CONST(n, req->name);
+	GByteArray *msg = sqlx_pack_USE(&n);
+	const ssize_t len = msg->len;
+	const ssize_t sent = sendto(self->fd_udp, msg->data, msg->len,
+			MSG_NOSIGNAL, (struct sockaddr*) &req->addr, req->addr_len);
+	g_byte_array_unref(msg);
+	if (sent != len) {
+		int errsav = errno;
+		GRID_DEBUG("USE(%s.%s) failed: (%d) %s",
+				n.base, n.type, errsav, strerror(errsav));
+	}
+}
 
 struct sqlx_peering_s *
 sqlx_peering_factory__create_direct (struct gridd_client_pool_s *pool)
@@ -601,6 +630,7 @@ sqlx_peering_factory__create_direct (struct gridd_client_pool_s *pool)
 	self->vtable = &vtable_peering_DIRECT;
 	self->pool = pool;
 	self->fd_udp = -1;
+	self->pool_udp_use = g_thread_pool_new((GFunc)_use_by_udp, self, 8, FALSE, NULL);
 	return (struct sqlx_peering_s*) self;
 }
 
@@ -619,35 +649,39 @@ _direct_destroy (struct sqlx_peering_s *self)
 	if (!self) return;
 	struct sqlx_peering_direct_s *p = (struct sqlx_peering_direct_s*) self;
 	g_assert(p->vtable == &vtable_peering_DIRECT);
+	if (p->pool_udp_use)
+		g_thread_pool_free(p->pool_udp_use, FALSE, TRUE);
 	g_free (p);
 }
 
 static void
+_direct_notify (struct sqlx_peering_s *self)
+{
+	if (!self) return;
+	struct sqlx_peering_direct_s *p = (struct sqlx_peering_direct_s*) self;
+	EXTRA_ASSERT(p->vtable == &vtable_peering_DIRECT);
+	gridd_client_pool_notify(p->pool);
+}
+
+static gboolean
 _direct_use (struct sqlx_peering_s *self,
 		const char *url,
-		const struct sqlx_name_s *n)
+		const struct sqlx_name_inline_s *ni)
 {
 	struct sqlx_peering_direct_s *p = (struct sqlx_peering_direct_s*) self;
 	EXTRA_ASSERT(p != NULL && p->vtable == &vtable_peering_DIRECT);
 	EXTRA_ASSERT(url != NULL);
-	EXTRA_ASSERT(n != NULL);
+	EXTRA_ASSERT(ni != NULL);
 
 	if (p->fd_udp >= 0) {
-		struct sockaddr_storage ss;
-		gsize ss_len = sizeof(ss);
-		struct sockaddr *sa = (struct sockaddr*) &ss;
-		if (grid_string_to_sockaddr(url, sa, &ss_len)) {
-			GByteArray *req = sqlx_pack_USE(n);
-			const ssize_t sent = sendto(p->fd_udp, req->data, req->len,
-					MSG_NOSIGNAL, sa, ss_len);
-			const ssize_t len = req->len;
-			g_byte_array_unref(req);
-			if (sent != len) {
-				int errsav = errno;
-				GRID_DEBUG("USE(%s,%s.%s) failed: (%d) %s",
-						url, n->base, n->type, errsav, strerror(errsav));
-			}
-		}
+		struct use_request_s req = {0};
+		req.addr_len = sizeof(req.addr);
+		memcpy(&req.name, ni, sizeof(req.name));
+		if (grid_string_to_sockaddr(url,
+					(struct sockaddr*)&req.addr, &req.addr_len))
+			metautils_gthreadpool_push("UDP", p->pool_udp_use,
+					g_memdup(&req, sizeof(req)));
+		return FALSE;
 	} else {
 		struct event_client_s *mc = g_malloc0 (sizeof(struct event_client_s));
 		mc->client = gridd_client_create_empty ();
@@ -660,16 +694,20 @@ _direct_use (struct sqlx_peering_s *self,
 			GRID_DEBUG("USE error: (%d) %s", err->code, err->message);
 			event_client_free(mc);
 			g_error_free(err);
+			return FALSE;
 		} else {
-			GByteArray *req = sqlx_pack_USE(n);
+			NAME2CONST(n, *ni);
+			GByteArray *req = sqlx_pack_USE(&n);
 			err = gridd_client_request (mc->client, req, NULL, NULL);
 			g_byte_array_unref(req);
 			if (err) {
 				GRID_DEBUG("USE error: (%d) %s", err->code, err->message);
 				event_client_free(mc);
 				g_error_free(err);
+				return FALSE;
 			} else {
 				gridd_client_pool_defer(p->pool, mc);
+				return TRUE;
 			}
 		}
 	}
@@ -697,7 +735,7 @@ on_end_PIPEFROM (struct evtclient_PIPEFROM_s *mc)
 		g_error_free(err);
 }
 
-static void
+static gboolean
 _direct_pipefrom (struct sqlx_peering_s *self,
 		const char *url,
 		const struct sqlx_name_s *n,
@@ -728,6 +766,7 @@ _direct_pipefrom (struct sqlx_peering_s *self,
 	if (NULL != err) {
 		gridd_client_fail(mc->ec.client, err);
 		event_client_free(&mc->ec);
+		return FALSE;
 	} else {
 		GByteArray *req = sqlx_pack_PIPEFROM(n, src);
 		err = gridd_client_request(mc->ec.client, req, NULL, NULL);
@@ -735,8 +774,10 @@ _direct_pipefrom (struct sqlx_peering_s *self,
 		if (NULL != err) {
 			gridd_client_fail(mc->ec.client, err);
 			event_client_free(&mc->ec);
+			return FALSE;
 		} else {
 			gridd_client_pool_defer(p->pool, &mc->ec);
+			return TRUE;
 		}
 	}
 }
@@ -799,7 +840,7 @@ on_reply_GETVERS (gpointer ctx, MESSAGE reply)
 	return TRUE;
 }
 
-static void
+static gboolean
 _direct_getvers (struct sqlx_peering_s *self,
 		const char *url,
 		const struct sqlx_name_s *n,
@@ -814,7 +855,7 @@ _direct_getvers (struct sqlx_peering_s *self,
 
 	struct evtclient_GETVERS_s *mc =
 		g_malloc0 (sizeof(struct evtclient_GETVERS_s));
-	mc->ec.client = gridd_client_create_empty();
+	mc->ec.client = gridd_client_create_empty ();
 	mc->ec.on_end = (gridd_client_end_f) on_end_GETVERS;
 	mc->hook = result;
 	mc->manager = manager;
@@ -829,6 +870,7 @@ _direct_getvers (struct sqlx_peering_s *self,
 	if (NULL != err) {
 		gridd_client_fail(mc->ec.client, err);
 		event_client_free(&mc->ec);
+		return FALSE;
 	} else {
 		GByteArray *req = sqlx_pack_GETVERS(n);
 		err = gridd_client_request (mc->ec.client, req, mc, on_reply_GETVERS);
@@ -836,8 +878,10 @@ _direct_getvers (struct sqlx_peering_s *self,
 		if (NULL != err) {
 			gridd_client_fail(mc->ec.client, err);
 			event_client_free(&mc->ec);
+			return FALSE;
 		} else {
 			gridd_client_pool_defer(p->pool, &mc->ec);
+			return TRUE;
 		}
 	}
 }
@@ -857,8 +901,18 @@ sqlx_peering__destroy (struct sqlx_peering_s *self)
 }
 
 void
+sqlx_peering__notify (struct sqlx_peering_s *self)
+{
+#ifdef HAVE_EXTRA_DEBUG
+	PEER_CALL(self,notify)(self);
+#else
+	return _direct_notify(self);
+#endif
+}
+
+gboolean
 sqlx_peering__use (struct sqlx_peering_s *self, const char *url,
-		const struct sqlx_name_s *n)
+		const struct sqlx_name_inline_s *n)
 {
 #ifdef HAVE_EXTRA_DEBUG
 	PEER_CALL(self,use)(self,url,n);
@@ -867,7 +921,7 @@ sqlx_peering__use (struct sqlx_peering_s *self, const char *url,
 #endif
 }
 
-void
+gboolean
 sqlx_peering__getvers (struct sqlx_peering_s *self, const char *url,
 		const struct sqlx_name_s *n, struct election_manager_s *manager,
 		guint reqid, sqlx_peering_getvers_end_f result)
@@ -879,7 +933,7 @@ sqlx_peering__getvers (struct sqlx_peering_s *self, const char *url,
 #endif
 }
 
-void
+gboolean
 sqlx_peering__pipefrom (struct sqlx_peering_s *self, const char *url,
 			const struct sqlx_name_s *n, const char *src,
 			struct election_manager_s *manager, guint reqid,

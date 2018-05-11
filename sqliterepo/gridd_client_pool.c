@@ -399,7 +399,6 @@ gridd_client_pool_defer(struct gridd_client_pool_s *pool, struct event_client_s 
 		gint64 now = oio_ext_monotonic_time();
 		ev->deadline_start = now + 4 * G_TIME_SPAN_SECOND;
 		g_async_queue_push(pool->pending_clients, ev);
-		gridd_client_pool_notify(pool);
 	}
 }
 
