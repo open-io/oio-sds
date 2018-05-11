@@ -98,11 +98,13 @@ _get_vers (gpointer ctx UNUSED, const struct sqlx_name_s *n UNUSED,
 
 static void _peering_destroy (struct sqlx_peering_s *self);
 
-static void _peering_use (struct sqlx_peering_s *self,
-			const char *url,
-			const struct sqlx_name_s *n);
+static void _peering_notify (struct sqlx_peering_s *self UNUSED) {}
 
-static void _peering_getvers (struct sqlx_peering_s *self,
+static gboolean _peering_use (struct sqlx_peering_s *self,
+			const char *url,
+			const struct sqlx_name_inline_s *n);
+
+static gboolean _peering_getvers (struct sqlx_peering_s *self,
 			const char *url,
 			const struct sqlx_name_s *n,
 			/* for the return */
@@ -110,7 +112,7 @@ static void _peering_getvers (struct sqlx_peering_s *self,
 			guint reqid,
 			sqlx_peering_getvers_end_f result);
 
-static void _peering_pipefrom (struct sqlx_peering_s *self,
+static gboolean _peering_pipefrom (struct sqlx_peering_s *self,
 			const char *url,
 			const struct sqlx_name_s *n,
 			const char *src,
@@ -121,21 +123,23 @@ static void _peering_pipefrom (struct sqlx_peering_s *self,
 
 struct sqlx_peering_vtable_s vtable_peering_NOOP =
 {
-	_peering_destroy, _peering_use, _peering_getvers, _peering_pipefrom
+	_peering_destroy, _peering_notify,
+	_peering_use, _peering_getvers, _peering_pipefrom
 };
 
 static void _peering_destroy (struct sqlx_peering_s *self) { g_free (self); }
 
-static void
+static gboolean
 _peering_use (struct sqlx_peering_s *self,
 			const char *url,
-			const struct sqlx_name_s *n)
+			const struct sqlx_name_inline_s *n)
 {
 	(void) self, (void) url, (void) n;
 	GRID_DEBUG (">>> %s (%s)", __FUNCTION__, url);
+	return FALSE;
 }
 
-static void
+static gboolean
 _peering_getvers (struct sqlx_peering_s *self,
 			const char *url,
 			const struct sqlx_name_s *n,
@@ -146,9 +150,10 @@ _peering_getvers (struct sqlx_peering_s *self,
 {
 	(void) self, (void) url, (void) n;
 	(void) manager, (void) reqid, (void) result;
+	return FALSE;
 }
 
-static void
+static gboolean
 _peering_pipefrom (struct sqlx_peering_s *self,
 			const char *url,
 			const struct sqlx_name_s *n,
@@ -160,6 +165,7 @@ _peering_pipefrom (struct sqlx_peering_s *self,
 {
 	(void) self, (void) url, (void) n, (void) src;
 	(void) manager, (void) reqid, (void) result;
+	return FALSE;
 }
 
 static struct sqlx_peering_s *

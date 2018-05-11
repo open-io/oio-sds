@@ -30,7 +30,6 @@ License along with this library.
 #include "election.h"
 #include "version.h"
 #include "synchro.h"
-#include "gridd_client_pool.h"
 #include "internals.h"
 
 #define EVENTLOG_SIZE 32
@@ -131,6 +130,8 @@ struct election_manager_s
 	GArray *activity_trace;
 
 	gboolean exiting;
+
+	gboolean deferred_peering_notify;
 
 	struct deque_beacon_s members_by_state[STEP_MAX];
 };
@@ -439,7 +440,12 @@ _manage_dump_activity(struct election_manager_s *M)
 #define _manager_unlock(M) do { \
 	TRACE_EXECUTION(M); \
 	_manage_dump_activity(M); \
+	const gboolean _peering_notify = (M)->deferred_peering_notify; \
+	(M)->deferred_peering_notify = FALSE; \
 	g_mutex_unlock(&M->lock); \
+	if (_peering_notify) { \
+		sqlx_peering__notify((M)->peering); \
+	} \
 } while (0)
 
 static void _completion_router(gpointer p, struct election_manager_s *M);
@@ -2013,8 +2019,8 @@ defer_USE(struct election_member_s *member)
 	if (member->peers) {
 		member->last_USE = oio_ext_monotonic_time();
 		for (gchar **p = member->peers; *p; p++) {
-			MEMBER_NAME(n,member);
-			sqlx_peering__use (member->manager->peering, *p, &n);
+			member->manager->deferred_peering_notify |= sqlx_peering__use(
+					member->manager->peering, *p, &member->inline_name);
 			TRACE_EXECUTION(member->manager);
 		}
 	}
@@ -2378,8 +2384,9 @@ member_action_to_SYNCING(struct election_member_s *member)
 	member->when_unstable = oio_ext_monotonic_time();
 
 	MEMBER_NAME(n, member);
-	sqlx_peering__pipefrom (member->manager->peering, target,
-			&n, source, member->manager, 0, _result_PIPEFROM);
+	member->manager->deferred_peering_notify |= sqlx_peering__pipefrom(
+			member->manager->peering, target, &n, source,
+			member->manager, 0, _result_PIPEFROM);
 	TRACE_EXECUTION(member->manager);
 
 	return member_set_status(member, STEP_SYNCING);
@@ -2448,8 +2455,9 @@ member_action_to_CHECKING_MASTER(struct election_member_s *m)
 	m->errors_GETVERS = 0;
 
 	MEMBER_NAME(n, m);
-	sqlx_peering__getvers (m->manager->peering, m->master_url,
-			&n, m->manager, 0, _result_GETVERS);
+	m->manager->deferred_peering_notify |= sqlx_peering__getvers(
+			m->manager->peering, m->master_url, &n,
+			m->manager, 0, _result_GETVERS);
 	TRACE_EXECUTION(m->manager);
 
 	return member_set_status(m, STEP_CHECKING_MASTER);
@@ -2481,8 +2489,8 @@ member_action_to_CHECKING_SLAVES(struct election_member_s *m)
 
 	MEMBER_NAME(n, m);
 	for (gchar **p=m->peers; *p; p++) {
-		sqlx_peering__getvers (m->manager->peering, *p,
-				&n, m->manager, 0, _result_GETVERS);
+		m->manager->deferred_peering_notify |= sqlx_peering__getvers(
+				m->manager->peering, *p, &n, m->manager, 0, _result_GETVERS);
 		TRACE_EXECUTION(m->manager);
 	}
 
