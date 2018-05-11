@@ -1148,9 +1148,9 @@ Used by `gcc`
 
 ### sqliterepo.election.lock_alert_delay
 
-> .
+> Only effective when built in DEBUG mode. Dump the long critical sections around the elections lock, when the lock is held for longer then this threshold (in microseconds).
 
- * default: **50**
+ * default: **200**
  * type: gint64
  * cmake directive: *OIO_SQLITEREPO_ELECTION_LOCK_ALERT_DELAY*
  * range: 1 -> 60 * G_TIME_SPAN_SECOND
