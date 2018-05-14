@@ -255,7 +255,7 @@ _check_server(struct _queue_BEANSTALKD_s *q, int fd)
 	gchar buf[2048];
 
 	/* send the request */
-	strcpy(buf, "stats\r\n");
+	g_strlcpy(buf, "stats\r\n", sizeof(buf));
 	struct iovec iov[1] = {};
 	iov[0].iov_base = buf;
 	iov[0].iov_len = strlen(buf);
