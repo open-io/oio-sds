@@ -122,7 +122,7 @@ struct chunk_s
 	guint32 score;
 	gchar hexhash[STRLEN_CHUNKHASH];
 	guint8 flag_success : 1;  /* only used during an upload */
-	gchar url[1];
+	gchar url[];
 };
 
 struct metachunk_s
@@ -170,8 +170,9 @@ _load_one_chunk (struct json_object *jurl, struct json_object *jsize,
 		struct json_object *jpos, struct json_object *jscore)
 {
 	const char *s = json_object_get_string(jurl);
-	struct chunk_s *result = g_malloc0 (sizeof(struct chunk_s) + strlen(s));
-	strcpy (result->url, s);
+	const size_t len = strlen(s);
+	struct chunk_s *result = g_malloc0 (sizeof(struct chunk_s) + len + 1);
+	memcpy(result->url, s, len + 1);
 	result->size = json_object_get_int64(jsize);
 	if (jscore != NULL)
 		result->score = (guint32)json_object_get_int64(jscore);
