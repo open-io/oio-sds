@@ -21,14 +21,14 @@ set -e
 NS=OPENIO
 IP=
 PORT=
-OIO=$HOME/.oio
-SDS=$OIO/sds
-GRIDINIT_SOCK=${SDS}/run/gridinit.sock
+OIO="$HOME/.oio"
+SDS="$OIO/sds"
+GRIDINIT_SOCK="${SDS}/run/gridinit.sock"
 BOOTSTRAP_CONFIG=
 SERVICE_ID=
 RANDOM_SERVICE_ID=
 PROFILE=
-DATADIR=
+DATADIR="$SDS/data"
 
 ZKSLOW=0
 verbose=0
@@ -92,6 +92,16 @@ export G_DEBUG_LEVEL
 
 if [ $verbose -ge 1 ] ; then set -x ; fi
 
+# Check the datadir is a directory the current user owns
+[ -n "$DATADIR" ]
+if [[ -e "$DATADIR" ]] ; then
+	[ -d "$DATADIR" ]
+	[ -O "$DATADIR" ]
+	[ -r "$DATADIR" ]
+	[ -x "$DATADIR" ]
+	[ -w "$DATADIR" ]
+fi
+
 # Stop and clean a previous installation.
 pgrep -u "$UID" --full gridinit | while read pidof_gridinit ; do
     # First try a clean stop of gridinit's children
@@ -118,7 +128,13 @@ done
 
 # Generate a new configuration and start the new gridinit
 
-mkdir -p "$OIO" && cd "$OIO" && (rm -rf sds.conf sds/{conf,data,run,logs})
+mkdir -p "$OIO"
+cd "$OIO"
+rm -rf sds.conf sds/{conf,data,run,logs}
+if [[ -d "$DATADIR" ]] ; then
+    rm -rf $DATADIR/${NS}*
+fi
+
 bootstrap_opt=
 if [[ -n "${PORT}" ]] ; then bootstrap_opt="${bootstrap_opt} --port ${PORT}" ; fi
 if [[ -n "${SERVICE_ID}" ]] ; then bootstrap_opt="${bootstrap_opt} --with-service-id" ; fi
