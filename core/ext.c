@@ -517,8 +517,9 @@ static int _get_major_minor (const gchar *path, guint *pmaj, guint *pmin) {
 			out = p;
 	}
 	if (!out) {
-		out = g_malloc0 (sizeof(struct path_maj_min_s) + strlen(path) + 1);
-		strcpy (out->path, path);
+		const size_t len = strlen(path);
+		out = g_malloc0 (sizeof(struct path_maj_min_s) + len + 1);
+		memcpy(out->path, path, len + 1);
 		majmin_cache = g_slist_prepend (majmin_cache, out);
 	}
 
