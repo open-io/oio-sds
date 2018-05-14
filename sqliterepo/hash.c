@@ -36,7 +36,7 @@ sqliterepo_hash_name (const struct sqlx_name_s *n, gchar *d, gsize dlen)
 	g_checksum_update(h, (guint8*)n->type, strlen(n->type));
 	const char *hex = g_checksum_get_string(h);
 	/* TODO maybe is it possible to make this in one pass */
-	strncpy(d, hex, dlen);
+	g_strlcpy(d, hex, dlen);
 	oio_str_upper(d);
 	g_checksum_free(h);
 
