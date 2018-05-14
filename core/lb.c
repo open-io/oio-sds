@@ -253,11 +253,11 @@ static struct oio_lb_pool_vtable_s vtable_LOCAL =
 static struct _lb_item_s *
 _item_make (oio_location_t location, const char *id, const char *addr)
 {
-	int len = strlen (id);
+	const size_t len = strlen (id);
 	struct _lb_item_s *out = g_malloc0 (sizeof(struct _lb_item_s) + len + 1);
 	out->location = location;
-	strcpy (out->id, id);
-	strcpy (out->addr, addr);
+	g_strlcpy (out->addr, addr, sizeof(out->addr));
+	memcpy(out->id, id, len + 1);
 	return out;
 }
 
@@ -886,7 +886,7 @@ oio_lb_world__add_pool_target (struct oio_lb_pool_s *self, const char *to)
 	EXTRA_ASSERT (lb->targets != NULL);
 
 	/* prepare the string to be easy to parse. */
-	gsize tolen = strlen (to);
+	const size_t tolen = strlen (to);
 	gchar *copy = g_malloc (tolen + 2);
 	memcpy (copy, to, tolen + 1);
 	copy [tolen+1] = '\0';
@@ -1130,11 +1130,12 @@ oio_lb_world__get_item(struct oio_lb_world_s *self, const char *id)
 	g_rw_lock_reader_lock(&self->lock);
 	struct _lb_item_s *item0 = g_tree_lookup(self->items, id);
 	if (item0) {
-		item = g_malloc0(sizeof(struct oio_lb_item_s) + strlen(id) + 1);
+		const size_t len = strlen(id);
+		item = g_malloc0(sizeof(struct oio_lb_item_s) + len + 1);
 		item->location = item0->location;
 		item->weight = item0->weight;
-		strcpy(item->id, id);
-		strcpy(item->addr, item0->addr);
+		memcpy(item->addr, item0->addr, sizeof(item->addr));
+		memcpy(item->id, id, len + 1);
 	}
 	g_rw_lock_reader_unlock(&self->lock);
 	return item;
