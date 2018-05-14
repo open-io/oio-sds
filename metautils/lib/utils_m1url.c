@@ -28,9 +28,9 @@ meta1_unpack_url(const gchar *url)
 
 	EXTRA_ASSERT(url != NULL);
 
-	int len = strlen(url);
-	gchar *tmp = g_alloca(len+1);
-	g_strlcpy(tmp, url, len+1);
+	const size_t urllen = strlen(url);
+	gchar *tmp = g_alloca(urllen + 1);
+	memcpy(tmp, url, urllen + 1);
 
 	if (!(type = strchr(tmp, '|')))
 		return NULL;
@@ -43,15 +43,17 @@ meta1_unpack_url(const gchar *url)
 	if (!(args = strchr(host, '|')))
 		return NULL;
 	*(args++) = '\0';
-	if (strlen(args) >= LIMIT_LENGTH_SRVARGS)
+
+	const size_t argslen = strlen(args);
+	if (argslen >= LIMIT_LENGTH_SRVARGS)
 		return NULL;
 
 	struct meta1_service_url_s *result;
-	result = g_malloc0(sizeof(*result) + strlen(args) + 1);
+	result = g_malloc0(sizeof(*result) + argslen + 1);
 	result->seq = g_ascii_strtoll(url, NULL, 10);
 	g_strlcpy(result->srvtype, type, sizeof(result->srvtype));
 	g_strlcpy(result->host, host, sizeof(result->host));
-	strcpy(result->args, args);
+	g_strlcpy(result->args, args, argslen + 1);
 
 	return result;
 }
