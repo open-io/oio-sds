@@ -47,16 +47,15 @@ static GError *__get_container_all_services(struct sqlx_sqlite3_s *sq3,
 static struct meta1_service_url_s *
 meta1_url_dup(struct meta1_service_url_s *u)
 {
-	struct meta1_service_url_s *result;
-
 	if (!u)
 		return NULL;
 
-	result = g_malloc0(sizeof(struct meta1_service_url_s) + 1 + strlen(u->args));
+	const size_t argslen = strlen(u->args);
+	struct meta1_service_url_s *result = g_malloc0(sizeof(*result) + argslen + 1);
 	result->seq = u->seq;
-	strcpy(result->srvtype, u->srvtype);
-	strcpy(result->host, u->host);
-	strcpy(result->args, u->args);
+	g_strlcpy(result->srvtype, u->srvtype, sizeof(result->srvtype));
+	g_strlcpy(result->host, u->host, sizeof(result->host));
+	g_strlcpy(result->args, u->args, argslen + 1);
 
 	return result;
 }
@@ -838,7 +837,7 @@ __relink_container_services(struct m1v2_relink_input_s *in, gchar ***out)
 	if (!err && !in->dryrun) {
 		packed = _ids_to_url((char**)ids->pdata);
 		packed->seq = ref->seq;
-		strcpy (packed->srvtype, ref->srvtype);
+		g_strlcpy (packed->srvtype, ref->srvtype, sizeof(packed->srvtype));
 		err = __save_service (in->sq3, in->url, packed, TRUE);
 	}
 
