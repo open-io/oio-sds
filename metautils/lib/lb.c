@@ -128,7 +128,7 @@ oio_lb_world__reload_pools(struct oio_lb_world_s *lbw,
 			return;
 		}
 		char *str_def = g_alloca(def->len + 1);
-		strncpy(str_def, (const char*)def->data, def->len);
+		memcpy(str_def, (const char*)def->data, def->len);
 		str_def[def->len] = '\0';
 		struct oio_lb_pool_s *pool = NULL;
 		pool = oio_lb_world__create_pool(lbw, name);
