@@ -162,7 +162,7 @@ oio_var_register_string(gchar *p,
 	rec.ptr.str = p;
 	rec.min.u = limit;
 	rec.max.u = limit;
-	strncpy(rec.ptr.str, def, rec.max.u);
+	g_strlcpy(rec.ptr.str, def, rec.max.u);
 	rec.def.str = (char *) def;
 	_register_record(&rec);
 }
@@ -208,7 +208,7 @@ _record_set(struct oio_var_record_s *rec, union oio_var_default_u v)
 			*(rec->ptr.t) = CLAMP(v.t, rec->min.t, rec->max.t);
 			return;
 		case OIO_VARTYPE_string:
-			strncpy(rec->ptr.str, v.str, rec->max.u);
+			g_strlcpy(rec->ptr.str, v.str, rec->max.u);
 			return;
 	}
 	g_assert_not_reached();
