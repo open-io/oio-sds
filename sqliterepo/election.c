@@ -1322,14 +1322,14 @@ static void
 completion_DeleteRogueNode(int zrc, const void *d UNUSED)
 {
 	if (zrc == ZNONODE) {
-		GRID_TRACE2("Rogue disappeared");
+		GRID_TRACE2("Rogue ZK node disappeared");
 	} else if (zrc == ZOK) {
-		GRID_TRACE("Rogue deleted");
+		GRID_TRACE("Rogue ZK node deleted");
 	} else if (zrc == ZSESSIONEXPIRED) {
 		/* the node will expire, don't flood with logs in this case */
-		GRID_DEBUG("Rogue deletion error: %s", zerror(zrc));
+		GRID_DEBUG("Rogue ZK node deletion error: %s", zerror(zrc));
 	} else {
-		GRID_WARN("Rogue deletion error: %s", zerror(zrc));
+		GRID_WARN("Rogue ZK node deletion error: %s", zerror(zrc));
 	}
 }
 
@@ -1481,9 +1481,9 @@ deferred_completion_ASKING(struct exec_later_ASKING_context_s *d)
 				TRACE_EXECUTION(d->member->manager);
 
 				if (zrc2 != ZOK) {
-					GRID_WARN("Failed to delete Rogue %s: %s", path, zerror(zrc2));
+					GRID_WARN("Failed to delete Rogue ZK node %s: %s", path, zerror(zrc2));
 				} else {
-					GRID_WARN("Rogue being deleted %s", path);
+					GRID_WARN("Rogue ZK node being deleted %s", path);
 				}
 				TRACE_EXECUTION(d->member->manager);
 
