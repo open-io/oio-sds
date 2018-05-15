@@ -19,6 +19,8 @@ from oio.common.client import ProxyClient
 from oio.common.decorators import ensure_headers
 from oio.common.json import json
 from oio.common import exceptions
+from oio.common.easy_value import boolean_value
+
 
 CONTENT_HEADER_PREFIX = 'x-oio-content-meta-'
 SYSMETA_KEYS = ("chunk-method", "ctime", "deleted", "hash", "hash-method",
@@ -356,6 +358,13 @@ class ContainerClient(ProxyClient):
         data = json.dumps(data)
         self._request(
             'POST', '/raw_delete', data=data, params=params, **kwargs)
+
+    def container_flush(self, account=None, reference=None, cid=None,
+                        **kwargs):
+        params = self._make_params(account, reference, cid=cid)
+        resp, _ = self._request('POST', '/flush', params=params, **kwargs)
+        return {'truncated':
+                boolean_value(resp.getheader('x-oio-truncated', False))}
 
     def content_list(self, account=None, reference=None, limit=None,
                      marker=None, end_marker=None, prefix=None,

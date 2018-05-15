@@ -281,7 +281,7 @@ class ObjectStorageApi(object):
     @handle_container_not_found
     @ensure_headers
     @ensure_request_id
-    def container_flush(self, account, container, **kwargs):
+    def container_flush(self, account, container, fast=False, **kwargs):
         """
         Flush a container
 
@@ -290,16 +290,20 @@ class ObjectStorageApi(object):
         :param container: name of the container
         :type container: `str`
         """
-        def _get_names(objects):
-            for object in objects:
-                yield object["name"]
+        if (fast):
+            while (True):
+                rep = self.container.container_flush(account, container,
+                                                     **kwargs)
+                if not rep['truncated']:
+                    return
 
         while (True):
             rep = self.object_list(account, container, **kwargs)
             if not rep["objects"]:
                 break
-            self.object_delete_many(account, container,
-                                    _get_names(rep["objects"]), **kwargs)
+            self.object_delete_many(
+                account, container,
+                [object["name"] for object in rep["objects"]], **kwargs)
 
     @handle_account_not_found
     @ensure_headers
