@@ -41,7 +41,12 @@
 			{ "type": "bool", "name": "meta2_flag_delete_exceeding_versions",
 				"key": "meta2.delete_exceeding_versions",
 				"descr": "When adding alias with versioning, deletes exceeding versions.",
-				"def": false }
+				"def": false },
+
+			{ "type": "int64", "name": "meta2_flush_limit",
+				"key": "meta2.flush_limit",
+				"descr": "When flushing a container, limits the number of deleted objects.",
+				"def": 1000, "min": 0, "max": "max" }
 		]
 	},
 	"rawx": {

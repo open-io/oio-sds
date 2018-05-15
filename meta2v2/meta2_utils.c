@@ -2738,20 +2738,32 @@ m2db_deduplicate_contents(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 }
 
 GError*
-m2db_flush_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0)
+m2db_flush_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0,
+		gboolean *truncated)
 {
 	GError *err = NULL;
+	gint64 limit = meta2_flush_limit + 1;
 
 	GPtrArray *aliases = g_ptr_array_new();
 	GVariant *params[3] = {NULL};
-	err = ALIASES_load(sq3->db, "", params, _bean_buffer_cb, aliases);
+	gchar sql[32];
+	g_snprintf(sql, 32, "1 LIMIT %"G_GINT64_FORMAT, limit);
+	err = ALIASES_load(sq3->db, sql, params, _bean_buffer_cb, aliases);
 	metautils_gvariant_unrefv(params);
+
+	guint nb_aliases = aliases->len;
+	if (nb_aliases == limit) {
+		_bean_clean(aliases->pdata[limit-1]);
+		aliases->pdata[limit-1] = NULL;
+		g_ptr_array_remove_index_fast(aliases, limit-1);
+		*truncated = TRUE;
+	}
 
 	if (!err)
 		err = _real_delete_aliases(sq3, aliases, cb, u0);
 	_bean_cleanv2(aliases);
 
-	if (!err) {
+	if (!err && !(*truncated)) {
 		int rc = sqlx_exec(sq3->db,
 				"DELETE FROM aliases;"
 				"DELETE FROM contents;"

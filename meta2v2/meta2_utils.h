@@ -216,7 +216,7 @@ GError* m2db_purge(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 
 /** Delete all aliases of the container, without doing any check.  */
 GError* m2db_flush_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb,
-		gpointer u0);
+		gpointer u0, gboolean *truncated);
 
 GError* m2db_deduplicate_contents(struct sqlx_sqlite3_s *sq3,
 		struct oio_url_s *url);

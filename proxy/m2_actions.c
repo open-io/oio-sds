@@ -57,21 +57,27 @@ _get_meta2_realtype (struct req_args_s *args, gchar *d, gsize dlen)
 }
 
 static GError *
-_resolve_meta2 (struct req_args_s *args, enum proxy_preference_e how,
-		request_packer_f pack, GSList **out)
+_resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
+		request_packer_f pack, gpointer out, client_on_reply decoder)
 {
-	if (out) *out = NULL;
-
 	gchar realtype[64];
-	_get_meta2_realtype (args, realtype, sizeof(realtype));
+	GSList **out_list = NULL;
+	_get_meta2_realtype(args, realtype, sizeof(realtype));
 	CLIENT_CTX(ctx, args, realtype, 1);
 	ctx.which = how;
+	if (decoder) {
+		ctx.decoder_data = out;
+		ctx.decoder = decoder;
+	} else if (out) {
+		out_list = (GSList **) out;
+		*out_list = NULL;
+	}
 
 	GError *err = gridd_request_replicated (args, &ctx, pack);
 
 	if (err) {
 		GRID_DEBUG("M2V2 call failed: %d %s", err->code, err->message);
-	} else if (out) {
+	} else if (out_list) {
 		EXTRA_ASSERT(ctx.bodyv != NULL);
 		for (guint i=0; i<ctx.count ;++i) {
 			GError *e = ctx.errorv[i];
@@ -81,7 +87,7 @@ _resolve_meta2 (struct req_args_s *args, enum proxy_preference_e how,
 			if (b && b->data && b->len) {
 				GSList *l = bean_sequence_unmarshall (b->data, b->len);
 				if (l) {
-					*out = metautils_gslist_precat (*out, l);
+					*out_list = metautils_gslist_precat (*out_list, l);
 				}
 			}
 		}
@@ -92,25 +98,6 @@ _resolve_meta2 (struct req_args_s *args, enum proxy_preference_e how,
 				ctx.resolve_duration, ctx.request_duration);
 		args->rp->add_header(PROXYD_HEADER_PERFDATA, perfdata);
 	}
-
-	client_clean (&ctx);
-	return err;
-}
-
-static GError *
-_resolve_meta2_for_list (struct req_args_s *args, request_packer_f pack,
-		struct list_result_s *out)
-{
-	gchar realtype[64];
-	_get_meta2_realtype (args, realtype, sizeof(realtype));
-	CLIENT_CTX_SLAVE(ctx, args, realtype, 1);
-	ctx.decoder_data = out;
-	ctx.decoder = m2v2_list_result_extract;
-
-	GError *err = gridd_request_replicated (args, &ctx, pack);
-
-	if (err)
-		GRID_DEBUG("M2V2 call failed: %d %s", err->code, err->message);
 
 	client_clean (&ctx);
 	return err;
@@ -967,7 +954,7 @@ _m2_container_create_with_properties (struct req_args_s *args, char **props,
 
 retry:
 	GRID_TRACE("Container creation %s", oio_url_get (args->url, OIOURL_WHOLE));
-	err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
+	err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	if (err && CODE_IS_NOTFOUND(err->code)) {
 		if (autocreate) {
 			GRID_DEBUG("Resource not found, autocreation: (%d) %s",
@@ -1008,7 +995,7 @@ static void
 _re_enable (struct req_args_s *args)
 {
 	PACKER_VOID (_pack) { return sqlx_pack_ENABLE (_u, DL()); }
-	GError *e = _resolve_meta2(args, CLIENT_PREFER_MASTER, _pack, NULL);
+	GError *e = _resolve_meta2(args, CLIENT_PREFER_MASTER, _pack, NULL, NULL);
 	if (e && e->code == CODE_CONTAINER_ENABLED)
 		g_clear_error(&e);
 	if (e) {
@@ -1041,7 +1028,7 @@ action_m2_container_destroy (struct req_args_s *args)
 	/* 1. FREEZE the base to avoid writings during the operation */
 	if (!err) {
 		PACKER_VOID(_pack) { return sqlx_pack_FREEZE(_u, DL()); }
-		err = _resolve_meta2 (args, CLIENT_PREFER_MASTER, _pack, NULL);
+		err = _resolve_meta2(args, CLIENT_PREFER_MASTER, _pack, NULL, NULL);
 		if (err != NULL && err->code == CODE_CONTAINER_FROZEN) {
 			g_clear_error(&err);
 		} else if (err != NULL && CODE_IS_NETWORK_ERROR(err->code)) {
@@ -1057,7 +1044,7 @@ action_m2_container_destroy (struct req_args_s *args)
 	if (!err && !force) {
 		guint32 flags = flag_force_master ? M2V2_FLAG_MASTER : 0;
 		PACKER_VOID(_pack) { return m2v2_remote_pack_ISEMPTY (args->url, flags, DL()); }
-		err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
+		err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 		if (err != NULL) {
 			/* rollback! */
 			_re_enable (args);
@@ -1141,7 +1128,7 @@ action_m2_container_purge (struct req_args_s *args, struct json_object *j UNUSED
 		PACKER_VOID(_pack) {
 			return m2v2_remote_pack_PURGEB(args->url, maxvers_str, DL());
 		}
-		err = _resolve_meta2(args, _prefer_master(), _pack, NULL);
+		err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	}
 	return _reply_m2_error(args, err);
 }
@@ -1150,9 +1137,13 @@ static enum http_rc_e
 action_m2_container_flush (struct req_args_s *args, struct json_object *j UNUSED)
 {
 	PACKER_VOID(_pack) { return m2v2_remote_pack_FLUSH (args->url, DL()); }
-	GError *err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
+	gboolean truncated = FALSE;
+	GError *err = _resolve_meta2(args, _prefer_master(), _pack, &truncated,
+			m2v2_boolean_truncated_extract);
 	if (NULL != err)
 		return _reply_common_error (args, err);
+	args->rp->add_header(PROXYD_HEADER_PREFIX "truncated",
+			g_strdup(truncated ? "true" : "false"));
 	return _reply_success_json (args, NULL);
 }
 
@@ -1160,7 +1151,7 @@ static enum http_rc_e
 action_m2_container_dedup (struct req_args_s *args, struct json_object *j UNUSED)
 {
 	PACKER_VOID(_pack) { return m2v2_remote_pack_DEDUP (args->url, DL()); }
-	GError *err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
+	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	if (NULL != err)
 		return _reply_common_error (args, err);
 	return _reply_success_json (args, NULL);
@@ -1170,7 +1161,7 @@ static enum http_rc_e
 action_m2_container_touch (struct req_args_s *args, struct json_object *j UNUSED)
 {
 	PACKER_VOID(_pack) { return m2v2_remote_pack_TOUCHB (args->url, 0, DL()); }
-	GError *err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
+	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	if (NULL != err) {
 		if (CODE_IS_NOTFOUND(err->code))
 			return _reply_forbidden_error (args, err);
@@ -1196,7 +1187,7 @@ action_m2_container_raw_insert (struct req_args_s *args, struct json_object *jar
 	PACKER_VOID(_pack) {
 		return m2v2_remote_pack_RAW_ADD (args->url, beans, force, DL());
 	}
-	err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
+	err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	_bean_cleanl2(beans);
 	if (NULL != err)
 		return _reply_m2_error (args, err);
@@ -1216,7 +1207,7 @@ action_m2_container_raw_delete (struct req_args_s *args, struct json_object *jar
 		return _reply_format_error (args, BADREQ("Empty beans list"));
 
 	PACKER_VOID(_pack) { return m2v2_remote_pack_RAW_DEL (args->url, beans, DL()); }
-	err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
+	err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	_bean_cleanl2(beans);
 	if (NULL != err)
 		return _reply_m2_error (args, err);
@@ -1252,7 +1243,7 @@ action_m2_container_raw_update (struct req_args_s *args, struct json_object *jar
 			return m2v2_remote_pack_RAW_SUBST(args->url, beans_new, beans_old,
 					frozen, DL());
 		}
-		err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
+		err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	}
 
 	_bean_cleanl2 (beans_old);
@@ -1381,9 +1372,9 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 		return sqlx_pack_SNAPSHOT(n, url, target_cid, seq_num, DL());
 	}
 
-	err = _resolve_meta2(args, CLIENT_PREFER_MASTER, _pack, NULL);
+	err = _resolve_meta2(args, CLIENT_PREFER_MASTER, _pack, NULL, NULL);
 	g_free(url);
-	if (err)
+	if(err)
 		goto cleanup;
 
 cleanup:
@@ -1540,7 +1531,8 @@ static GError * _list_loop (struct req_args_s *args,
 			in.marker_start = out0->next_marker;
 
 		/* Action */
-		err = _resolve_meta2_for_list (args, _pack, &out);
+		err = _resolve_meta2(args, _prefer_slave(), _pack, &out,
+				m2v2_list_result_extract);
 		if (err) {
 			m2v2_list_result_clean (&out);
 			break;
@@ -1811,7 +1803,7 @@ static enum http_rc_e action_m2_content_prepare (struct req_args_s *args,
 retry:
 	GRID_TRACE("Content preparation %s", oio_url_get (args->url, OIOURL_WHOLE));
 	beans = NULL;
-	err = _resolve_meta2 (args, _prefer_slave(), _pack, &beans);
+	err = _resolve_meta2(args, _prefer_slave(), _pack, &beans, NULL);
 
 	// Maybe manage autocreation
 	if (err && CODE_IS_NOTFOUND(err->code)) {
@@ -1874,7 +1866,7 @@ static GError *_m2_json_spare (struct req_args_s *args,
 		return m2v2_remote_pack_SPARE (args->url, OPT("stgpol"), notin, broken, DL());
 	}
 	GSList *obeans = NULL;
-	err = _resolve_meta2 (args, _prefer_master(), _pack, &obeans);
+	err = _resolve_meta2(args, _prefer_master(), _pack, &obeans, NULL);
 	_bean_cleanl2 (broken);
 	_bean_cleanl2 (notin);
 	EXTRA_ASSERT ((err != NULL) ^ (obeans != NULL));
@@ -1903,7 +1895,7 @@ static enum http_rc_e action_m2_content_touch (struct req_args_s *args,
 		return _reply_format_error(args, BADREQ("missing content path of ID"));
 
 	PACKER_VOID(_pack) { return m2v2_remote_pack_TOUCHC (args->url, DL()); }
-	GError *err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
+	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	return _reply_m2_error (args, err);
 }
 
@@ -1930,7 +1922,7 @@ static enum http_rc_e action_m2_content_link (struct req_args_s *args,
 		return _reply_m2_error (args, BADREQ("Expected: id (hexa string)"));
 
 	PACKER_VOID(_pack) { return m2v2_remote_pack_LINK (args->url, DL()); }
-	err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
+	err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	return _reply_m2_error (args, err);
 }
 
@@ -1962,7 +1954,7 @@ static enum http_rc_e action_m2_content_propset (struct req_args_s *args,
 		flags |= M2V2_FLAG_FLUSH;
 
 	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_SET (args->url, flags, beans, DL()); }
-	GError *err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
+	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	_bean_cleanl2 (beans);
 	return _reply_m2_error (args, err);
 }
@@ -1979,7 +1971,7 @@ static enum http_rc_e action_m2_content_propdel (struct req_args_s *args,
 		return _reply_format_error(args, err);
 
 	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_DEL (args->url, namev, DL()); }
-	err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
+	err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	g_strfreev(namev);
 	return _reply_m2_error (args, err);
 }
@@ -1990,7 +1982,7 @@ static enum http_rc_e action_m2_content_propget (struct req_args_s *args,
 
 	GSList *beans = NULL;
 	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_GET (args->url, flags, DL()); }
-	GError *err = _resolve_meta2 (args, _prefer_slave(), _pack, &beans);
+	GError *err = _resolve_meta2(args, _prefer_slave(), _pack, &beans, NULL);
 	return _reply_properties (args, err, beans);
 }
 
@@ -2023,7 +2015,7 @@ static GError *_m2_json_put (struct req_args_s *args,
 		if (append) return m2v2_remote_pack_APPEND (args->url, ibeans, DL());
 		return m2v2_remote_pack_PUT (args->url, ibeans, DL());
 	}
-	err = _resolve_meta2 (args, _prefer_master(), _pack, &obeans);
+	err = _resolve_meta2(args, _prefer_master(), _pack, &obeans, NULL);
 	_bean_cleanl2 (obeans);
 	_bean_cleanl2 (ibeans);
 	return err;
@@ -2061,7 +2053,7 @@ static enum http_rc_e _m2_content_update(struct req_args_s *args,
 		PACKER_VOID(_pack) {
 			return m2v2_remote_pack_UPDATE(args->url, ibeans, DL());
 		}
-		err = _resolve_meta2(args, _prefer_master(), _pack, &obeans);
+		err = _resolve_meta2(args, _prefer_master(), _pack, &obeans, NULL);
 	}
 	_bean_cleanl2(obeans);
 	_bean_cleanl2(ibeans);
@@ -2079,7 +2071,7 @@ action_m2_content_purge (struct req_args_s *args, struct json_object *j UNUSED)
 		PACKER_VOID(_pack) {
 			return m2v2_remote_pack_PURGEC(args->url, maxvers_str, DL());
 		}
-		err = _resolve_meta2(args, _prefer_master(), _pack, NULL);
+		err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	}
 	return _reply_m2_error(args, err);
 }
@@ -2114,7 +2106,7 @@ enum http_rc_e action_content_truncate(struct req_args_s *args) {
 		PACKER_VOID(_pack) {
 			return m2v2_remote_pack_TRUNC(args->url, size, DL());
 		}
-		err = _resolve_meta2(args, _prefer_master(), _pack, NULL);
+		err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	}
 	return _reply_m2_error(args, err);
 }
@@ -2131,13 +2123,13 @@ enum http_rc_e action_content_show (struct req_args_s *args) {
 	if (!oio_str_parse_bool(OPT("properties"), TRUE))
 		flags |= M2V2_FLAG_NOPROPS;
 	PACKER_VOID(_pack) { return m2v2_remote_pack_GET (args->url, flags, DL()); }
-	GError *err = _resolve_meta2 (args, _prefer_slave(), _pack, &beans);
+	GError *err = _resolve_meta2(args, _prefer_slave(), _pack, &beans, NULL);
 	return _reply_simplified_beans (args, err, beans, TRUE);
 }
 
 enum http_rc_e action_content_delete (struct req_args_s *args) {
 	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url, DL()); }
-	GError *err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
+	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	return _reply_m2_error (args, err);
 }
 
@@ -2185,7 +2177,7 @@ _m2_content_delete_many (struct req_args_s *args, struct json_object * jbody) {
 		const gchar *name = json_object_get_string(jname);
 
 		oio_url_set(args->url, OIOURL_PATH, name);
-		GError *err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
+		GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 		_bulk_item_result(gresponse, i, name, err, HTTP_CODE_NO_CONTENT);
 		if (err) g_clear_error(&err);
 	}
@@ -2224,7 +2216,7 @@ enum http_rc_e action_content_prop_del (struct req_args_s *args) {
 
 enum http_rc_e action_content_drain(struct req_args_s *args) {
 	PACKER_VOID(_pack) {return m2v2_remote_pack_DRAIN(args->url, DL());}
-	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL);
+	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	return _reply_m2_error(args, err);
 }
 
@@ -2257,7 +2249,7 @@ enum http_rc_e action_content_copy (struct req_args_s *args) {
 	PACKER_VOID(_pack) {
 		return m2v2_remote_pack_COPY (target_url, oio_url_get(args->url, OIOURL_PATH), DL());
 	}
-	GError *err = _resolve_meta2 (args, _prefer_master(), _pack, NULL);
+	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	oio_url_pclean(&target_url);
 	return _reply_m2_error (args, err);
 }

@@ -245,11 +245,7 @@ enum proxy_preference_e _prefer_master (void);
 
 #define CLIENT_CTX(ctx,args,type,seq)  \
 	struct client_ctx_s ctx = {0}; \
-	client_init (&ctx, args, type, seq) \
-
-#define CLIENT_CTX_SLAVE(ctx,args,type,seq) \
-	CLIENT_CTX(ctx,args,type,seq); \
-	ctx.which = _prefer_slave()
+	client_init (&ctx, args, type, seq)
 
 GError * _m1_locate_and_action (struct oio_url_s *url,
 		GError * (*hook) (const char *m1addr));
