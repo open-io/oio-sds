@@ -411,6 +411,15 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_META2_DELETE_EXCEEDING_VERSIONS*
 
+### meta2.flush_limit
+
+> When flushing a container, limits the number of deleted objects.
+
+ * default: **1000**
+ * type: gint64
+ * cmake directive: *OIO_META2_FLUSH_LIMIT*
+ * range: 0 -> G_MAXINT64
+
 ### meta2.generate.precheck
 
 > Should the meta2 check the container state (quota, etc) before generating chunks.

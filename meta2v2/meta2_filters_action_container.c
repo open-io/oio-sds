@@ -173,14 +173,16 @@ meta2_filter_action_purge_container(struct gridd_filter_ctx_s *ctx,
 
 int
 meta2_filter_action_flush_container(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply UNUSED)
+		struct gridd_reply_ctx_s *reply)
 {
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	GSList *beans_list_list = NULL;
+	gboolean truncated = FALSE;
 
 	GError *err = meta2_backend_flush_container(meta2_filter_ctx_get_backend(ctx),
-			meta2_filter_ctx_get_url(ctx), _bean_list_cb, &beans_list_list);
+			meta2_filter_ctx_get_url(ctx), _bean_list_cb, &beans_list_list,
+			&truncated);
 
 	for (GSList *l=beans_list_list; l; l=l->next) {
 		_m2b_notify_beans(m2b, url, l->data, "content.deleted", TRUE);
@@ -188,8 +190,11 @@ meta2_filter_action_flush_container(struct gridd_filter_ctx_s *ctx,
 	}
 	g_slist_free(beans_list_list);
 
-	if (!err)
+	if (!err) {
+		reply->add_header(NAME_MSGKEY_TRUNCATED,
+				metautils_gba_from_string(truncated ? "true" : "false"));
 		return FILTER_OK;
+	}
 	GRID_DEBUG("Container flush failed (%d): %s", err->code, err->message);
 	meta2_filter_ctx_set_error(ctx, err);
 	return FILTER_KO;

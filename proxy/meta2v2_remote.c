@@ -123,6 +123,20 @@ m2v2_list_result_extract (gpointer ctx, MESSAGE reply)
 	return TRUE;
 }
 
+gboolean
+m2v2_boolean_truncated_extract(gpointer ctx, MESSAGE reply)
+{
+	gboolean *truncated = ctx;
+	EXTRA_ASSERT (truncated != NULL);
+
+	GError *err = metautils_message_extract_boolean(reply,
+			NAME_MSGKEY_TRUNCATED, FALSE, truncated);
+	if (err)
+		g_clear_error(&err);
+
+	return TRUE;
+}
+
 GByteArray* m2v2_remote_pack_CREATE(
 		struct oio_url_s *url,
 		struct m2v2_create_params_s *pols,

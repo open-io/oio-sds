@@ -703,7 +703,7 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 
 GError *
 meta2_backend_flush_container(struct meta2_backend_s *m2, struct oio_url_s *url,
-		m2_onbean_cb cb, gpointer u0)
+		m2_onbean_cb cb, gpointer u0, gboolean *truncated)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -714,21 +714,23 @@ meta2_backend_flush_container(struct meta2_backend_s *m2, struct oio_url_s *url,
 	if (!err) {
 		EXTRA_ASSERT(sq3 != NULL);
 		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
-			err = m2db_flush_container(sq3, cb, u0);
+			err = m2db_flush_container(sq3, cb, u0, truncated);
 			err = sqlx_transaction_end(repctx, err);
 		}
-		if (!err)
+		if (!err) {
 			m2b_add_modified_container(m2, sq3);
-		if (!err) {
-			int rc = sqlx_exec(sq3->db, "VACUUM");
-			if (rc != SQLITE_OK)
-				err = SQLITE_GERROR(sq3->db, rc);
-		}
-		if (!err) {
-			if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
-				if (!err)
-					sqlx_transaction_notify_huge_changes(repctx);
-				err = sqlx_transaction_end(repctx, err);
+			if (!(*truncated)) {
+				int rc = sqlx_exec(sq3->db, "VACUUM");
+				if (rc != SQLITE_OK)
+					err = SQLITE_GERROR(sq3->db, rc);
+
+				if (!err) {
+					if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
+						if (!err)
+							sqlx_transaction_notify_huge_changes(repctx);
+						err = sqlx_transaction_end(repctx, err);
+					}
+				}
 			}
 		}
 		m2b_close(sq3);

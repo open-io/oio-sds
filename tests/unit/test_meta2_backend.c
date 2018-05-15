@@ -435,8 +435,10 @@ test_container_flush(void)
 		check_list_count(m2,u,1);
 
 		/* flush the container */
-		err = meta2_backend_flush_container(m2, u, NULL, NULL);
+		gboolean truncated = FALSE;
+		err = meta2_backend_flush_container(m2, u, NULL, NULL, &truncated);
 		g_assert_no_error(err);
+		g_assert(!truncated);
 		check_list_count(m2, u, 0);
 
 		/* check we get nothing when looking for a valid version */

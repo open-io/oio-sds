@@ -22,6 +22,7 @@ import struct
 from tests.utils import BaseTestCase, random_str
 from oio.common.constants import OIO_DB_STATUS_NAME, OIO_DB_ENABLED, \
                                  OIO_DB_FROZEN, OIO_DB_DISABLED
+from oio.common.easy_value import boolean_value
 
 
 def random_content():
@@ -466,19 +467,21 @@ class TestMeta2Containers(BaseTestCase):
                             params=params)
         self.assertEqual(404, resp.status)
 
-        def flush_and_check():
+        def flush_and_check(truncated=False, objects=0, usage=0):
             resp = self.request('POST', self.url_container('flush'),
                                 params=params)
             self.assertEqual(204, resp.status)
+            self.assertEqual(truncated,
+                             boolean_value(resp.getheader('x-oio-truncated')))
             resp = self.request('POST', self.url_container('get_properties'),
                                 params=params)
             data = self.json_loads(resp.data)
-            self.assertEqual(data['system']['sys.m2.objects'], '0')
-            self.assertEqual(data['system']['sys.m2.usage'], '0')
+            self.assertEqual(data['system']['sys.m2.objects'], str(objects))
+            self.assertEqual(data['system']['sys.m2.usage'], str(usage))
             resp = self.request('GET', self.url_container('list'),
                                 params=params)
             data = self.json_loads(resp.data)
-            self.assertEqual(len(data['objects']), 0)
+            self.assertEqual(len(data['objects']), objects)
 
         # empty container
         self._create(params, 201)
@@ -489,8 +492,9 @@ class TestMeta2Containers(BaseTestCase):
         flush_and_check()
 
         # many contents
-        for i in range(100):
+        for i in range(1024):
             self._create_content("content"+str(i))
+        flush_and_check(truncated=True, objects=24, usage=24576)
         flush_and_check()
 
 
