@@ -24,6 +24,7 @@ from oio.common.constants import CHUNK_HEADERS
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.storage_functions import _sort_chunks as sort_chunks
 from oio.common import exceptions as exc
+from oio.conscience.client import ConscienceClient
 from tests.utils import random_str, random_data, random_id, BaseTestCase
 
 
@@ -274,6 +275,90 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertRaises(
             exc.NoSuchContainer, self.api.container_set_properties,
             self.account, name, metadata)
+
+    def _wait_account_meta2(self):
+        # give account and meta2 time to catch their breath
+        wait = False
+        cluster = ConscienceClient({"namespace": self.ns})
+        while True:
+            try:
+                for service in cluster.all_services("account"):
+                    if int(service['score']) < 70:
+                        wait = True
+                        continue
+                if not wait:
+                    for service in cluster.all_services("meta2"):
+                        if int(service['score']) < 70:
+                            wait = True
+                            continue
+                    if not wait:
+                        return
+            except exc.OioException:
+                pass
+            wait = False
+            time.sleep(5)
+
+    def test_container_flush(self):
+        name = random_str(32)
+
+        # no container
+        self.assertRaises(exc.NoSuchContainer,
+                          self.api.container_flush, self.account, name)
+
+        def flush_and_check():
+            self.api.container_flush(self.account, name)
+            self._wait_account_meta2()
+            properties = self.api.container_get_properties(self.account, name)
+            self.assertEqual(properties['system']['sys.m2.objects'], '0')
+            self.assertEqual(properties['system']['sys.m2.usage'], '0')
+            list_objects = self.api.object_list(self.account, name)
+            self.assertEqual(len(list_objects['objects']), 0)
+
+        # empty container
+        self.api.container_create(self.account, name)
+        flush_and_check()
+
+        # one content
+        self.api.object_create(self.account, name, obj_name='content',
+                               data='data')
+        flush_and_check()
+
+        # many contents
+        for i in range(1024):
+            self.api.object_create(self.account, name,
+                                   obj_name='content'+str(i), data='data')
+        flush_and_check()
+
+    def test_container_flush_fast(self):
+        name = random_str(32)
+
+        # no container
+        self.assertRaises(exc.NoSuchContainer,
+                          self.api.container_flush, self.account, name, True)
+
+        def flush_and_check():
+            self.api.container_flush(self.account, name, fast=True)
+            self._wait_account_meta2()
+            properties = self.api.container_get_properties(self.account, name)
+            self.assertEqual(properties['system']['sys.m2.objects'], '0')
+            self.assertEqual(properties['system']['sys.m2.usage'], '0')
+            list_objects = self.api.object_list(self.account, name)
+            self.assertEqual(len(list_objects['objects']), 0)
+
+        # empty container
+        self.api.container_create(self.account, name)
+        flush_and_check()
+
+        # one content
+        self.api.object_create(self.account, name, obj_name='content',
+                               data='data')
+        flush_and_check()
+
+        # many contents
+        for i in range(1024):
+            self.api.object_create(self.account, name,
+                                   obj_name='content'+str(i), data='data')
+        flush_and_check()
 
     def test_del_properties(self):
         name = random_str(32)
@@ -579,6 +664,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         name = random_str(32)
         self.api.account.container_update(name, name, {"mtime": time.time()})
         self.api.container_refresh(name, name)
+        time.sleep(0.5)  # ensure container event have been processed
         containers = self.api.container_list(name)
         self.assertEqual(0, len(containers))
         self.api.account_delete(name)

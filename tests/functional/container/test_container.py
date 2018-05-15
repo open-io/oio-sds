@@ -15,14 +15,17 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import time
 import binascii
 import logging
 import simplejson as json
 import struct
 from tests.utils import BaseTestCase, random_str
+from oio.common import exceptions as exc
 from oio.common.constants import OIO_DB_STATUS_NAME, OIO_DB_ENABLED, \
                                  OIO_DB_FROZEN, OIO_DB_DISABLED
 from oio.common.easy_value import boolean_value
+from oio.conscience.client import ConscienceClient
 
 
 def random_content():
@@ -459,6 +462,28 @@ class TestMeta2Containers(BaseTestCase):
             self._create_content("content2")
         purge_and_check(6)
 
+    def _wait_account_meta2(self):
+        # give account and meta2 time to catch their breath
+        wait = False
+        cluster = ConscienceClient({"namespace": self.ns})
+        while True:
+            try:
+                for service in cluster.all_services("account"):
+                    if int(service['score']) < 70:
+                        wait = True
+                        continue
+                if not wait:
+                    for service in cluster.all_services("meta2"):
+                        if int(service['score']) < 70:
+                            wait = True
+                            continue
+                    if not wait:
+                        return
+            except exc.OioException:
+                pass
+            wait = False
+            time.sleep(5)
+
     def test_flush(self):
         params = self.param_ref(self.ref)
 
@@ -473,6 +498,7 @@ class TestMeta2Containers(BaseTestCase):
             self.assertEqual(204, resp.status)
             self.assertEqual(truncated,
                              boolean_value(resp.getheader('x-oio-truncated')))
+            self._wait_account_meta2()
             resp = self.request('POST', self.url_container('get_properties'),
                                 params=params)
             data = self.json_loads(resp.data)
