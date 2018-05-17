@@ -146,12 +146,12 @@
 		"variables": [
 			{ "type": "uint", "name": "oio_socket_gridd_rcvbuf",
 				"key": "socket.gridd.rcvbuf",
-				"descr": "Set to a non-zero value to explicitely force a RCVBUF option on client sockets to gridd services.",
+				"descr": "Set to a non-zero value to explicitely force a RCVBUF option on client sockets to gridd services. Set to 0 to keep the OS default.",
 				"def": 0, "min": 0, "max": "16Mi"},
 
 			{ "type": "uint", "name": "oio_socket_gridd_sndbuf",
 				"key": "socket.gridd.sndbuf",
-				"descr": "Set to a non-zero value to explicitely force a SNDBUF option on client sockets to gridd services.",
+				"descr": "Set to a non-zero value to explicitely force a SNDBUF option on client sockets to gridd services. Set to 0 to keep the OS default.",
 				"def": 0, "min": 0, "max": "16Mi"},
 
 			{ "type": "uint", "name": "oio_ns_meta1_digits",
@@ -337,7 +337,7 @@
 		"variables": [
 			{ "type": "bool", "name": "sqliterepo_udp_deferred",
 				"key": "sqliterepo.udp_deferred",
-				"descr": "Should the sendto() of DB_USE be deferred to a thread-pool. Only effective when `oio_udp_allowed` is set.",
+				"descr": "Should the sendto() of DB_USE be deferred to a thread-pool. Only effective when `oio_udp_allowed` is set. Set to 0 to keep the OS default.",
 				"def": true},
 
 			{ "type": "uint", "name": "sqliterepo_zk_mux_factor",
