@@ -1267,10 +1267,9 @@ restart_srv_from_file(gchar *path)
 			GRID_ERROR("Failed to unmarshall service info: (%d) %s",
 				err->code, err->message);
 		} else {
-
+			time_t time = get_file_timestamp(path);
 			for (GSList *si = si_l; si; si = si->next){
 				struct service_info_s *si_data = si->data;
-				time_t time = get_file_timestamp(path);
 				score_t new_score = {SCORE_UNLOCK, time};
 				si_data->score = new_score;
 				push_service(si_data);
