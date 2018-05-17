@@ -532,13 +532,17 @@ sock_setopt_buflen(int fd)
 {
 	int rc, opt;
 
-	opt = 4096;
-	rc = metautils_syscall_setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &opt, sizeof(opt));
-	(void) rc;
+	if (oio_socket_gridd_sndbuf > 0) {
+		opt = oio_socket_gridd_sndbuf;
+		rc = metautils_syscall_setsockopt(fd, SOL_SOCKET, SO_SNDBUF, &opt, sizeof(opt));
+		(void) rc;
+	}
 
-	opt = 8192;
-	rc = metautils_syscall_setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &opt, sizeof(opt));
-	(void) rc;
+	if (oio_socket_gridd_rcvbuf > 0) {
+		opt = oio_socket_gridd_rcvbuf;
+		rc = metautils_syscall_setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &opt, sizeof(opt));
+		(void) rc;
+	}
 }
 
 static volatile gint64 _fastopen_last_error = 0;
