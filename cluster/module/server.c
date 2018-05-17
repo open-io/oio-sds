@@ -1235,6 +1235,13 @@ end:
 	g_free(services_names);
 }
 
+static time_t
+get_file_timestamp(gchar *path)
+{
+	GStatBuf buf;
+	g_stat(path, &buf);
+	return buf.st_mtime;
+}
 
 static gboolean
 restart_srv_from_file(gchar *path)
@@ -1260,9 +1267,25 @@ restart_srv_from_file(gchar *path)
 			GRID_ERROR("Failed to unmarshall service info: (%d) %s",
 				err->code, err->message);
 		} else {
+
 			for (GSList *si = si_l; si; si = si->next){
 				struct service_info_s *si_data = si->data;
+				time_t time = get_file_timestamp(path);
+				score_t new_score = {SCORE_UNLOCK, time};
+				si_data->score = new_score;
 				push_service(si_data);
+
+				struct conscience_srvtype_s *srvtype = conscience_get_srvtype
+					(si_data->type, FALSE);
+				if(!srvtype) {
+					GRID_ERROR("Service type [%s/%s] not found",
+						   nsname, si_data->type);
+				} else {
+					si_data->score.value = 0;
+					struct conscience_srv_s *p_srv =
+						conscience_srvtype_refresh(srvtype, si_data);
+					p_srv->locked = FALSE;
+				}
 			}
 		}
 	}
