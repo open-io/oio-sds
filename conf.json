@@ -820,6 +820,11 @@
 		"code": "client_variables.c",
 		"header": "client_variables.h",
 		"variables": [
+			{ "type": "uint", "name": "oio_socket_proxy_buflen",
+				"key": "socket.proxy.buflen",
+				"descr": "Set to a non-zero value to explicitely force a RCVBUF option on client sockets to/from proxy services.",
+				"def": 0, "min": 0, "max": "16Mi"},
+
 			{ "type": "bool", "name": "oio_sds_default_autocreate",
 				"key": "core.sds.autocreate",
 				"descr": "In the current oio-sds client SDK, should the entities be autocreated while accessed for the first time. So, when pushing a content in a container, when this option is set to 'true', the USER and the CONTAINER will be created and configured to the namespace's defaults.",
