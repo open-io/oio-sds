@@ -981,6 +981,24 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_SOCKET_FASTOPEN_ENABLED*
 
+### socket.gridd.rcvbuf
+
+> Set to a non-zero value to explicitely force a RCVBUF option on client sockets to gridd services. Set to 0 to keep the OS default.
+
+ * default: **0**
+ * type: guint
+ * cmake directive: *OIO_SOCKET_GRIDD_RCVBUF*
+ * range: 0 -> 16777216
+
+### socket.gridd.sndbuf
+
+> Set to a non-zero value to explicitely force a SNDBUF option on client sockets to gridd services. Set to 0 to keep the OS default.
+
+ * default: **0**
+ * type: guint
+ * cmake directive: *OIO_SOCKET_GRIDD_SNDBUF*
+ * range: 0 -> 16777216
+
 ### socket.linger.delay
 
 > When socket.linger.enabled is set to TRUE, socket.linger.delat tells how the socket remains in the TIME_WAIT state after the close() has been called.
@@ -1005,6 +1023,15 @@ Used by `gcc`
  * default: **TRUE**
  * type: gboolean
  * cmake directive: *OIO_SOCKET_NODELAY_ENABLED*
+
+### socket.proxy.buflen
+
+> Set to a non-zero value to explicitely force a RCVBUF option on client sockets to/from proxy services.
+
+ * default: **0**
+ * type: guint
+ * cmake directive: *OIO_SOCKET_PROXY_BUFLEN*
+ * range: 0 -> 16777216
 
 ### socket.quickack.enabled
 
@@ -1369,6 +1396,14 @@ Used by `gcc`
  * type: gint64
  * cmake directive: *OIO_SQLITEREPO_SERVICE_EXIT_TTL*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
+
+### sqliterepo.udp_deferred
+
+> Should the sendto() of DB_USE be deferred to a thread-pool. Only effective when `oio_udp_allowed` is set. Set to 0 to keep the OS default.
+
+ * default: **TRUE**
+ * type: gboolean
+ * cmake directive: *OIO_SQLITEREPO_UDP_DEFERRED*
 
 ### sqliterepo.zk.mux_factor
 
