@@ -335,6 +335,11 @@
 		"code": "sqliterepo_variables.c",
 		"header": "sqliterepo_variables.h",
 		"variables": [
+			{ "type": "bool", "name": "sqliterepo_udp_deferred",
+				"key": "sqliterepo.udp_deferred",
+				"descr": "Should the sendto() of DB_USE be deferred to a thread-pool. Only effective when `oio_udp_allowed` is set.",
+				"def": true},
+
 			{ "type": "uint", "name": "sqliterepo_zk_mux_factor",
 				"key": "sqliterepo.zk.mux_factor",
 				"descr": "For testing purposes. The value simulates ZK sharding on different connection to the same cluster.",

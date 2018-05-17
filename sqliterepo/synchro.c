@@ -677,10 +677,17 @@ _direct_use (struct sqlx_peering_s *self,
 		struct use_request_s req = {0};
 		req.addr_len = sizeof(req.addr);
 		memcpy(&req.name, ni, sizeof(req.name));
-		if (grid_string_to_sockaddr(url,
-					(struct sockaddr*)&req.addr, &req.addr_len))
-			metautils_gthreadpool_push("UDP", p->pool_udp_use,
-					g_memdup(&req, sizeof(req)));
+		if (!grid_string_to_sockaddr(url,
+					(struct sockaddr*)&req.addr, &req.addr_len)) {
+			GRID_WARN("Invalid peer addr [%s]", url);
+		} else {
+			if (sqliterepo_udp_deferred) {
+				metautils_gthreadpool_push("UDP", p->pool_udp_use,
+						g_memdup(&req, sizeof(req)));
+			} else {
+				_use_by_udp(&req, p);
+			}
+		}
 		return FALSE;
 	} else {
 		struct event_client_s *mc = g_malloc0 (sizeof(struct event_client_s));
