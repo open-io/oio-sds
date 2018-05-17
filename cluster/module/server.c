@@ -1294,7 +1294,6 @@ restart_srv_from_file(gchar *path)
 			} else {
 				for (GSList *si = si_l; si; si = si->next){
 					struct service_info_s *si_data = si->data;
-					//gint32 score_val = si_data->score.value;
 					score_t new_score = {SCORE_UNLOCK, ftime};
 					si_data->score = new_score;
 					push_service(si_data);
