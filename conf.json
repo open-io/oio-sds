@@ -144,6 +144,16 @@
 		"code": "common_variables.c",
 		"header": "common_variables.h",
 		"variables": [
+			{ "type": "uint", "name": "oio_socket_gridd_rcvbuf",
+				"key": "socket.gridd.rcvbuf",
+				"descr": "Set to a non-zero value to explicitely force a RCVBUF option on client sockets to gridd services.",
+				"def": 0, "min": 0, "max": "16Mi"},
+
+			{ "type": "uint", "name": "oio_socket_gridd_sndbuf",
+				"key": "socket.gridd.sndbuf",
+				"descr": "Set to a non-zero value to explicitely force a SNDBUF option on client sockets to gridd services.",
+				"def": 0, "min": 0, "max": "16Mi"},
+
 			{ "type": "uint", "name": "oio_ns_meta1_digits",
 				"key": "ns.meta1_digits",
 				"descr": "Default number of digits to agregate meta1 databases.",
