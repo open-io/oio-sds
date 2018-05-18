@@ -1257,11 +1257,14 @@ end:
 static time_t
 get_file_timestamp(gchar *path)
 {
-	GStatBuf *buff = NULL;
-	g_stat(path, buff);
-	if(!buff)
-		return -1;
-	return buff->st_mtime;
+	GStatBuf buff;
+	int ret = g_stat(path, &buff);
+	if (ret < 0){
+		GRID_ERROR("Failed to get persistence mtime: %s",
+			   strerror(errno));
+		return ret;
+	}
+	return buff.st_mtime;
 }
 
 static gboolean
@@ -1289,9 +1292,7 @@ restart_srv_from_file(gchar *path)
 				err->code, err->message);
 		} else {
 			time_t ftime = get_file_timestamp(path);
-			if (ftime == -1){
-				GRID_ERROR("Failed to get persistence file mtime");
-			} else {
+		        if (ftime > 0){
 				for (GSList *si = si_l; si; si = si->next){
 					struct service_info_s *si_data = si->data;
 					score_t new_score = {SCORE_UNLOCK, ftime};
