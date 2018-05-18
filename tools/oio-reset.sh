@@ -130,7 +130,7 @@ done
 
 mkdir -p "$OIO"
 cd "$OIO"
-rm -rf sds.conf sds/{conf,data,run,logs}
+rm -rf sds.conf sds/{conf,run,logs}
 if [[ -d "$DATADIR" ]] ; then
     rm -rf $DATADIR/${NS}*
 fi
