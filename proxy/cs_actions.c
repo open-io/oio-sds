@@ -107,6 +107,9 @@ conscience_remote_get_types(gchar **allcs, gchar ***out, gint64 deadline)
 GError *
 conscience_remote_push_services(gchar **allcs, GSList *ls, gint64 deadline)
 {
+	if (!ls)  /* Avoid sending an empty request */
+		return NULL;
+
 	GError * action(const char *cs) {
 		MESSAGE req = metautils_message_create_named("CS_PSH",
 				oio_clamp_deadline(proxy_timeout_conscience, deadline));
