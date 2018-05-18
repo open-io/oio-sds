@@ -1015,7 +1015,6 @@ _cs_dispatch_PUSH(struct gridd_reply_ctx_s *reply,
 	GSList *list_srvinfo = NULL;
 	GError *err = metautils_message_extract_body_encoded(
 			reply->request, TRUE, &list_srvinfo, service_info_unmarshall);
-	EXTRA_ASSERT((err != NULL) ^ (list_srvinfo != NULL));
 	if (err) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -1065,7 +1064,6 @@ _cs_dispatch_RM(struct gridd_reply_ctx_s *reply,
 	GSList *list_srvinfo = NULL;
 	GError *err = metautils_message_extract_body_encoded(
 			reply->request, TRUE, &list_srvinfo, service_info_unmarshall);
-	EXTRA_ASSERT((err != NULL) ^ (list_srvinfo != NULL));
 	if (err) {
 		reply->send_error(0, err);
 		return TRUE;
