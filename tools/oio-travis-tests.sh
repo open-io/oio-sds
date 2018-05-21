@@ -154,6 +154,11 @@ func_tests () {
 	CNAME=$RANDOM
 	${PYTHON} $(which openio) object create $CNAME /tmp/blob%
 
+	if is_running_test_suite "repli"; then
+		oio-check-directory ${OIO_NS} meta0 meta1 dir rdir
+		oio-check-master --oio-account $OIO_USER --oio-ns $OIO_NS $CNAME
+	fi
+
 	# At least spawn one oio-crawler-integrity on a container that exists
 	# TODO(jfs): Move in a tests/functional/cli python test
 	${PYTHON} $(which oio-crawler-integrity) $OIO_NS $OIO_ACCOUNT $CNAME
