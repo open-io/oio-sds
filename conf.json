@@ -154,6 +154,16 @@
 		"code": "common_variables.c",
 		"header": "common_variables.h",
 		"variables": [
+			{ "type": "uint", "name": "oio_socket_gridd_rcvbuf",
+				"key": "socket.gridd.rcvbuf",
+				"descr": "Set to a non-zero value to explicitely force a RCVBUF option on client sockets to gridd services. Set to 0 to keep the OS default.",
+				"def": 0, "min": 0, "max": "16Mi"},
+
+			{ "type": "uint", "name": "oio_socket_gridd_sndbuf",
+				"key": "socket.gridd.sndbuf",
+				"descr": "Set to a non-zero value to explicitely force a SNDBUF option on client sockets to gridd services. Set to 0 to keep the OS default.",
+				"def": 0, "min": 0, "max": "16Mi"},
+
 			{ "type": "uint", "name": "oio_ns_meta1_digits",
 				"key": "ns.meta1_digits",
 				"descr": "Default number of digits to agregate meta1 databases.",
@@ -335,6 +345,11 @@
 		"code": "sqliterepo_variables.c",
 		"header": "sqliterepo_variables.h",
 		"variables": [
+			{ "type": "bool", "name": "sqliterepo_udp_deferred",
+				"key": "sqliterepo.udp_deferred",
+				"descr": "Should the sendto() of DB_USE be deferred to a thread-pool. Only effective when `oio_udp_allowed` is set. Set to 0 to keep the OS default.",
+				"def": true},
+
 			{ "type": "uint", "name": "sqliterepo_zk_mux_factor",
 				"key": "sqliterepo.zk.mux_factor",
 				"descr": "For testing purposes. The value simulates ZK sharding on different connection to the same cluster.",
@@ -352,8 +367,8 @@
 
 			{ "type": "monotonic", "name": "oio_election_lock_alert_delay",
 				"key": "sqliterepo.election.lock_alert_delay",
-				"descr": ".",
-				"def": "50", "min": "1", "max": "60s" },
+				"descr": "Only effective when built in DEBUG mode. Dump the long critical sections around the elections lock, when the lock is held for longer then this threshold (in microseconds).",
+				"def": "200", "min": "1", "max": "60s" },
 
 			{ "type": "monotonic", "name": "oio_election_period_cond_wait",
 				"key": "sqliterepo.election.wait.quantum",
@@ -840,6 +855,11 @@
 		"code": "client_variables.c",
 		"header": "client_variables.h",
 		"variables": [
+			{ "type": "uint", "name": "oio_socket_proxy_buflen",
+				"key": "socket.proxy.buflen",
+				"descr": "Set to a non-zero value to explicitely force a RCVBUF option on client sockets to/from proxy services.",
+				"def": 0, "min": 0, "max": "16Mi"},
+
 			{ "type": "bool", "name": "oio_sds_default_autocreate",
 				"key": "core.sds.autocreate",
 				"descr": "In the current oio-sds client SDK, should the entities be autocreated while accessed for the first time. So, when pushing a content in a container, when this option is set to 'true', the USER and the CONTAINER will be created and configured to the namespace's defaults.",

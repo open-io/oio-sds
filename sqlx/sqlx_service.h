@@ -23,7 +23,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define PSRV(P) ((struct sqlx_service_s*)(P))
 
 struct election_manager_s;
-struct gridd_client_factory_s;
 struct gridd_client_pool_s;
 struct gridd_request_dispatcher_s;
 struct grid_single_rrd_s;
@@ -117,7 +116,6 @@ struct sqlx_service_s
 	struct grid_task_queue_s *gtq_admin;
 	GThread *thread_admin;
 
-	struct gridd_client_factory_s *clients_factory;
 	struct gridd_client_pool_s *clients_pool;
 	GThread *thread_client;
 

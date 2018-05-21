@@ -30,7 +30,6 @@ License along with this library.
 #include "election.h"
 #include "version.h"
 #include "synchro.h"
-#include "gridd_client_pool.h"
 #include "internals.h"
 
 #define EVENTLOG_SIZE 32
@@ -127,22 +126,24 @@ struct election_manager_s
 
 	GMutex lock;
 
-	struct deque_beacon_s members_by_state[STEP_MAX];
-
 	/* Trace of actions while the lock was held */
 	GArray *activity_trace;
 
 	gboolean exiting;
+
+	gboolean deferred_peering_notify;
+
+	struct deque_beacon_s members_by_state[STEP_MAX];
 };
 
 /* @private */
 struct logged_event_s
 {
-	enum event_type_e event   :6;
-	enum election_step_e pre  :5;
-	enum election_step_e post :5;
-	gint64 time              :48;  // cheeseparing economies
-} __attribute__ ((packed));
+	gint64 time;
+	enum event_type_e event   :8;
+	enum election_step_e pre  :8;
+	enum election_step_e post :8;
+};
 
 /* @private */
 struct election_member_s
@@ -389,6 +390,8 @@ _cond_clean (gpointer p)
 static inline void
 _manager_record_activity(struct election_manager_s *M, const char *fn, int ln)
 {
+	if (M->exiting) return;
+
 	struct activity_trace_element_s item = {};
 	item.when = oio_ext_monotonic_time();
 	item.func = fn;
@@ -406,6 +409,8 @@ _manager_record_activity(struct election_manager_s *M, const char *fn, int ln)
 static void
 _manage_dump_activity(struct election_manager_s *M)
 {
+	if (M->exiting) return;
+
 	const GArray *ga = M->activity_trace;
 	EXTRA_ASSERT(ga->len > 0);
 	gint64 _in = g_array_index(ga, struct activity_trace_element_s, 0).when;
@@ -437,7 +442,12 @@ _manage_dump_activity(struct election_manager_s *M)
 #define _manager_unlock(M) do { \
 	TRACE_EXECUTION(M); \
 	_manage_dump_activity(M); \
+	const gboolean _peering_notify = (M)->deferred_peering_notify; \
+	(M)->deferred_peering_notify = FALSE; \
 	g_mutex_unlock(&M->lock); \
+	if (_peering_notify) { \
+		sqlx_peering__notify((M)->peering); \
+	} \
 } while (0)
 
 static void _completion_router(gpointer p, struct election_manager_s *M);
@@ -586,7 +596,7 @@ election_manager_create(struct replication_config_s *config,
 		g_tree_new_full(metautils_strcmp3, NULL, g_free, _cond_clean);
 
 	manager->completions =
-		g_thread_pool_new((GFunc)_completion_router, manager, 2, FALSE, NULL);
+		g_thread_pool_new((GFunc)_completion_router, manager, 8, FALSE, NULL);
 
 	manager->tasks_getpeers =
 		g_thread_pool_new((GFunc)_worker_getpeers, manager, 8, FALSE, NULL);
@@ -1392,14 +1402,14 @@ static void
 completion_DeleteRogueNode(int zrc, const void *d UNUSED)
 {
 	if (zrc == ZNONODE) {
-		GRID_TRACE2("Rogue disappeared");
+		GRID_TRACE2("Rogue ZK node disappeared");
 	} else if (zrc == ZOK) {
-		GRID_TRACE("Rogue deleted");
+		GRID_TRACE("Rogue ZK node deleted");
 	} else if (zrc == ZSESSIONEXPIRED) {
 		/* the node will expire, don't flood with logs in this case */
-		GRID_DEBUG("Rogue deletion error: %s", zerror(zrc));
+		GRID_DEBUG("Rogue ZK node deletion error: %s", zerror(zrc));
 	} else {
-		GRID_WARN("Rogue deletion error: %s", zerror(zrc));
+		GRID_WARN("Rogue ZK node deletion error: %s", zerror(zrc));
 	}
 }
 
@@ -1548,9 +1558,14 @@ deferred_completion_ASKING(struct exec_later_ASKING_context_s *d)
 				int zrc2 = sqlx_sync_adelete(d->member->sync,
 						member_masterpath(d->member, path, sizeof(path)), -1,
 						completion_DeleteRogueNode, NULL);
-				GRID_WARN("Rogue being deleted %s", path);
-				if (zrc2 != ZOK)
-					GRID_WARN("Failed! %s", zerror(zrc2));
+				TRACE_EXECUTION(d->member->manager);
+
+				if (zrc2 != ZOK) {
+					GRID_WARN("Failed to delete Rogue ZK node %s: %s", path, zerror(zrc2));
+				} else {
+					GRID_WARN("Rogue ZK node being deleted %s", path);
+				}
+				TRACE_EXECUTION(d->member->manager);
 
 				transition(d->member, EVT_MASTER_BAD, NULL);
 			} else {
@@ -2088,10 +2103,9 @@ defer_USE(struct election_member_s *member)
 	if (member->peers) {
 		member->last_USE = oio_ext_monotonic_time();
 		for (gchar **p = member->peers; *p; p++) {
-			MEMBER_NAME(n,member);
-			sqlx_peering__use (member->manager->peering, *p, &n);
+			member->manager->deferred_peering_notify |= sqlx_peering__use(
+					member->manager->peering, *p, &member->inline_name);
 			TRACE_EXECUTION(member->manager);
-			member_trace("sched:USE", member);
 		}
 	}
 
@@ -2154,14 +2168,13 @@ _result_GETVERS (GError *enet,
 		MEMBER_CHECK(member);
 
 		member_lock(member);
-		if (!err)
+		if (!err) {
 			transition(member, EVT_GETVERS_OK, &reqid);
-		else if (err->code == CODE_PIPEFROM)
+		} else if (err->code == CODE_PIPEFROM) {
 			transition(member, EVT_GETVERS_OLD, &reqid);
-		else if (err->code == CODE_CONCURRENT)
+		} else if (err->code == CODE_CONCURRENT) {
 			transition(member, EVT_GETVERS_RACE, &reqid);
-		else {
-			GRID_DEBUG("GETVERS error: (%d) %s", err->code, err->message);
+		} else {
 			if (err->code == CODE_CONTAINER_NOTFOUND) {
 				// We may have asked the wrong peer
 				member->requested_peers_decache = 1;
@@ -2285,6 +2298,7 @@ _common_action_to_LEAVE(struct election_member_s *member,
 	int zrc = sqlx_sync_adelete(member->sync,
 			member_fullpath(member, path, sizeof(path)), -1,
 			completion_LEAVING, member);
+	TRACE_EXECUTION(member->manager);
 
 	if (unlikely(zrc != ZOK))
 		return member_fail_on_error(member, zrc);
@@ -2467,10 +2481,10 @@ member_action_to_SYNCING(struct election_member_s *member)
 	member->when_unstable = oio_ext_monotonic_time();
 
 	MEMBER_NAME(n, member);
-	sqlx_peering__pipefrom (member->manager->peering, target,
-			&n, source, member->manager, 0, _result_PIPEFROM);
+	member->manager->deferred_peering_notify |= sqlx_peering__pipefrom(
+			member->manager->peering, target, &n, source,
+			member->manager, 0, _result_PIPEFROM);
 	TRACE_EXECUTION(member->manager);
-	member_debug("sched:PIPEFROM", member);
 
 	return member_set_status(member, STEP_SYNCING);
 }
@@ -2538,10 +2552,10 @@ member_action_to_CHECKING_MASTER(struct election_member_s *m)
 	m->errors_GETVERS = 0;
 
 	MEMBER_NAME(n, m);
-	sqlx_peering__getvers (m->manager->peering, m->master_url,
-			&n, m->manager, 0, _result_GETVERS);
+	m->manager->deferred_peering_notify |= sqlx_peering__getvers(
+			m->manager->peering, m->master_url, &n,
+			m->manager, 0, _result_GETVERS);
 	TRACE_EXECUTION(m->manager);
-	member_trace("sched:GETVERS", m);
 
 	return member_set_status(m, STEP_CHECKING_MASTER);
 }
@@ -2572,10 +2586,9 @@ member_action_to_CHECKING_SLAVES(struct election_member_s *m)
 
 	MEMBER_NAME(n, m);
 	for (gchar **p=m->peers; *p; p++) {
-		sqlx_peering__getvers (m->manager->peering, *p,
-				&n, m->manager, 0, _result_GETVERS);
+		m->manager->deferred_peering_notify |= sqlx_peering__getvers(
+				m->manager->peering, *p, &n, m->manager, 0, _result_GETVERS);
 		TRACE_EXECUTION(m->manager);
-		member_trace("sched:GETVERS", m);
 	}
 
 	return member_set_status(m, STEP_CHECKING_SLAVES);

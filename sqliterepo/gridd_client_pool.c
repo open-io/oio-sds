@@ -36,7 +36,6 @@ License along with this library.
 
 struct gridd_client_pool_s
 {
-	struct gridd_client_pool_vtable_s *vtable;
 	struct event_client_s **active_clients;
 	GAsyncQueue *pending_clients;
 
@@ -57,25 +56,9 @@ struct gridd_client_pool_s
 	int closed;
 };
 
-static void _destroy (struct gridd_client_pool_s *p);
-
-static void _defer (struct gridd_client_pool_s *p, struct event_client_s *ev);
-
-static GError* _round (struct gridd_client_pool_s *p, time_t sec);
-
-static void _reconfigure (struct gridd_client_pool_s *p);
-
 static void _increment_active_clients_limit(struct gridd_client_pool_s *pool);
 
 static void _decrement_active_clients_limit(struct gridd_client_pool_s *pool);
-
-static struct gridd_client_pool_vtable_s VTABLE =
-{
-	_destroy,
-	_defer,
-	_round,
-	_reconfigure
-};
 
 struct gridd_client_pool_s *
 gridd_client_pool_create(void)
@@ -122,9 +105,7 @@ gridd_client_pool_create(void)
 		return NULL;
 	}
 
-	pool->vtable = &VTABLE;
-
-	_reconfigure(pool);
+	gridd_client_pool_reconfigure(pool);
 	return pool;
 }
 
@@ -192,12 +173,11 @@ event_client_free(struct event_client_s *ec)
 	g_free (ec);
 }
 
-static void
-_destroy(struct gridd_client_pool_s *pool)
+void
+gridd_client_pool_destroy(struct gridd_client_pool_s *pool)
 {
 	if (!pool)
 		return;
-	EXTRA_ASSERT(pool->vtable == &VTABLE);
 
 	pool->closed = ~0;
 
@@ -375,11 +355,10 @@ _manage_all_events(struct gridd_client_pool_s *pool,
 	}
 }
 
-static void
-_reconfigure(struct gridd_client_pool_s *pool)
+void
+gridd_client_pool_reconfigure(struct gridd_client_pool_s *pool)
 {
 	EXTRA_ASSERT(pool != NULL);
-	EXTRA_ASSERT(pool->vtable == &VTABLE);
 	if (sqliterepo_fd_max_active <= 0) {
 		pool->active_clients_max = pool->active_clients_size;
 	} else {
@@ -394,11 +373,10 @@ _reconfigure(struct gridd_client_pool_s *pool)
 			pool->active_clients_max);
 }
 
-static GError *
-_round(struct gridd_client_pool_s *pool, time_t sec)
+GError *
+gridd_client_pool_round(struct gridd_client_pool_s *pool, time_t sec)
 {
 	EXTRA_ASSERT(pool != NULL);
-	EXTRA_ASSERT(pool->vtable == &VTABLE);
 	EXTRA_ASSERT(pool->fdmon >= 0);
 	g_assert(sqliterepo_fd_max_active > 0);
 
@@ -424,11 +402,10 @@ _round(struct gridd_client_pool_s *pool, time_t sec)
 	return NULL;
 }
 
-static void
-_defer(struct gridd_client_pool_s *pool, struct event_client_s *ev)
+void
+gridd_client_pool_defer(struct gridd_client_pool_s *pool, struct event_client_s *ev)
 {
 	EXTRA_ASSERT(pool != NULL);
-	EXTRA_ASSERT(pool->vtable == &VTABLE);
 	EXTRA_ASSERT(ev != NULL);
 	EXTRA_ASSERT(pool->pending_clients != NULL);
 	EXTRA_ASSERT(pool->efd >= 0);
@@ -439,14 +416,7 @@ _defer(struct gridd_client_pool_s *pool, struct event_client_s *ev)
 	} else {
 		gint64 now = oio_ext_monotonic_time();
 		ev->deadline_start = now + 4 * G_TIME_SPAN_SECOND;
-		/* eventfd requires 8-byte integer */
-		guint64 c = 1u;
 		g_async_queue_push(pool->pending_clients, ev);
-		int rc = metautils_syscall_write(pool->efd, &c, 8);
-		if (unlikely(rc < 0)) {
-			GRID_WARN("Failed to signal new deferred requests: (%d) %s",
-					errno, strerror(errno));
-		}
 	}
 }
 
@@ -479,4 +449,16 @@ _decrement_active_clients_limit(struct gridd_client_pool_s *pool)
 	pool->active_clients_threshold = MAX(new_threshold, pool->active_clients_min);
 	pool->active_clients_limit = pool->active_clients_min;
 	GRID_DEBUG("Decrement active clients limit: %u", pool->active_clients_limit);
+}
+
+void
+gridd_client_pool_notify(struct gridd_client_pool_s *pool)
+{
+	/* eventfd requires 8-byte integer */
+	guint64 c = 1u;
+	int rc = metautils_syscall_write(pool->efd, &c, 8);
+	if (unlikely(rc < 0)) {
+		GRID_WARN("Failed to signal new deferred requests: (%d) %s",
+				errno, strerror(errno));
+	}
 }

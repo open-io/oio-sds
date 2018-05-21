@@ -67,32 +67,33 @@ struct abstract_sqlx_sync_s
 	struct sqlx_sync_vtable_s *vtable;
 };
 
-#define sqlx_sync_clear(ss) \
-	((struct abstract_sqlx_sync_s*)(ss))->vtable->clear(ss)
+void sqlx_sync_clear(struct sqlx_sync_s *ss);
 
-#define sqlx_sync_open(ss) \
-	((struct abstract_sqlx_sync_s*)(ss))->vtable->open(ss)
+GError * sqlx_sync_open(struct sqlx_sync_s *ss);
 
-#define sqlx_sync_close(ss) \
-	((struct abstract_sqlx_sync_s*)(ss))->vtable->close(ss)
+void sqlx_sync_close(struct sqlx_sync_s *ss);
 
-#define sqlx_sync_acreate(ss, path, v, vlen, flags, completion, data) \
-	((struct abstract_sqlx_sync_s*)(ss))->vtable->acreate(ss, path, v, vlen, flags, completion, data)
+int sqlx_sync_acreate (struct sqlx_sync_s *ss, const char *path, const char *v,
+		int vlen, int flags, string_completion_t completion, const void *data);
 
-#define sqlx_sync_adelete(ss, path, ver, completion, data) \
-	((struct abstract_sqlx_sync_s*)(ss))->vtable->adelete(ss, path, ver, completion, data)
+int sqlx_sync_adelete (struct sqlx_sync_s *ss, const char *path, int version,
+		void_completion_t completion, const void *data);
 
-#define sqlx_sync_awexists(ss, path, watch, watchctx, completion, data) \
-	((struct abstract_sqlx_sync_s*)(ss))->vtable->awexists(ss, path, watch, watchctx, completion, data)
+int sqlx_sync_awexists(struct sqlx_sync_s *ss, const char *path,
+		watcher_fn watcher, void* watcherCtx,
+		stat_completion_t completion, const void *data);
 
-#define sqlx_sync_awget(ss, path, watch, watchctx, completion, data) \
-	((struct abstract_sqlx_sync_s*)(ss))->vtable->awget(ss, path, watch, watchctx, completion, data)
+int sqlx_sync_awget (struct sqlx_sync_s *ss, const char *path,
+		watcher_fn watcher, void* watcherCtx,
+		data_completion_t completion, const void *data);
 
-#define sqlx_sync_awget_children(ss, path, watch, watchctx, completion, d) \
-	((struct abstract_sqlx_sync_s*)(ss))->vtable->awget_children(ss, path, watch, watchctx, completion, d)
+int sqlx_sync_awget_children (struct sqlx_sync_s *ss, const char *path,
+		watcher_fn watcher, void* watcherCtx,
+		strings_completion_t completion, const void *data);
 
-#define sqlx_sync_awget_siblings(ss, path, watch, watchctx, completion, d) \
-	((struct abstract_sqlx_sync_s*)(ss))->vtable->awget_siblings(ss, path, watch, watchctx, completion, d)
+int sqlx_sync_awget_siblings (struct sqlx_sync_s *ss, const char *path,
+		watcher_fn watcher, void* watcherCtx,
+		strings_completion_t completion, const void *data);
 
 /** Initiates a sqlx synchronizer based on ZooKeeper.
  * @param url the Zookeeper connection string */
@@ -105,8 +106,8 @@ void sqlx_sync_set_hash(struct sqlx_sync_s *ss, guint witdth, guint depth);
 /* -------------------------------------------------------------------------- */
 
 struct sqlx_name_s;
+struct sqlx_name_inline_s;
 struct election_manager_s;
-struct gridd_client_factory_s;
 struct gridd_client_pool_s;
 
 struct sqlx_peering_s;
@@ -124,11 +125,15 @@ struct sqlx_peering_vtable_s
 {
 	void (*destroy) (struct sqlx_peering_s *self);
 
-	void (*use) (struct sqlx_peering_s *self,
-			const char *url,
-			const struct sqlx_name_s *n);
+	void (*notify) (struct sqlx_peering_s *self);
 
-	void (*getvers) (struct sqlx_peering_s *self,
+	/** @return FALSE if no notify() is necessary (i.e. no command deferred) */
+	gboolean (*use) (struct sqlx_peering_s *self,
+			const char *url,
+			const struct sqlx_name_inline_s *n);
+
+	/** @return FALSE if no notify() is necessary (i.e. no command deferred) */
+	gboolean (*getvers) (struct sqlx_peering_s *self,
 			const char *url,
 			const struct sqlx_name_s *n,
 			/* for the return */
@@ -136,7 +141,8 @@ struct sqlx_peering_vtable_s
 			guint reqid,
 			sqlx_peering_getvers_end_f result);
 
-	void (*pipefrom) (struct sqlx_peering_s *self,
+	/** @return FALSE if no notify() is necessary (i.e. no command deferred) */
+	gboolean (*pipefrom) (struct sqlx_peering_s *self,
 			const char *url,
 			const struct sqlx_name_s *n,
 			const char *src,
@@ -153,21 +159,22 @@ struct sqlx_peering_abstract_s
 
 void sqlx_peering__destroy (struct sqlx_peering_s *self);
 
-void sqlx_peering__use (struct sqlx_peering_s *self, const char *url,
-		const struct sqlx_name_s *n);
+void sqlx_peering__notify (struct sqlx_peering_s *self);
 
-void sqlx_peering__getvers (struct sqlx_peering_s *self, const char *url,
+gboolean sqlx_peering__use (struct sqlx_peering_s *self, const char *url,
+		const struct sqlx_name_inline_s *n);
+
+gboolean sqlx_peering__getvers (struct sqlx_peering_s *self, const char *url,
 		const struct sqlx_name_s *n, struct election_manager_s *manager,
 		guint reqid, sqlx_peering_getvers_end_f result);
 
-void sqlx_peering__pipefrom (struct sqlx_peering_s *self, const char *url,
+gboolean sqlx_peering__pipefrom (struct sqlx_peering_s *self, const char *url,
 			const struct sqlx_name_s *n, const char *src,
 			struct election_manager_s *manager, guint reqid,
 			sqlx_peering_pipefrom_end_f result);
 
 struct sqlx_peering_s * sqlx_peering_factory__create_direct (
-		struct gridd_client_pool_s *clipool,
-		struct gridd_client_factory_s *clifac);
+		struct gridd_client_pool_s *clipool);
 
 void sqlx_peering_direct__set_udp (struct sqlx_peering_s *self, int fd);
 
