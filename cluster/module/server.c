@@ -1254,19 +1254,6 @@ end:
 	g_free(services_names);
 }
 
-static time_t
-get_file_timestamp(gchar *path)
-{
-	GStatBuf buff;
-	int ret = g_stat(path, &buff);
-	if (ret < 0){
-		GRID_ERROR("Failed to get persistence mtime: %s",
-			   strerror(errno));
-		return ret;
-	}
-	return buff.st_mtime;
-}
-
 static gboolean
 restart_srv_from_file(gchar *path)
 {
@@ -1277,45 +1264,54 @@ restart_srv_from_file(gchar *path)
 	if (!g_file_test(path, G_FILE_TEST_EXISTS))
 		return FALSE;
 
-	gboolean ret = g_file_get_contents(path, &all_encoded, &length, &err);
+	gboolean ret = FALSE;
 
-	if (!ret){
+	if (!g_file_get_contents(path, &all_encoded, &length, &err)) {
 		GRID_ERROR("Failed to read services status from file [%s] (%d) %s",
 			path, err->code, err->message);
-	} else {
-		GSList *si_l = NULL;
 
-		service_info_unmarshall(&si_l, all_encoded, length, &err);
+	    goto restart_end;
+	}
+	GSList *si_l = NULL;
 
-		if (err){
-			GRID_ERROR("Failed to unmarshall service info: (%d) %s",
+	service_info_unmarshall(&si_l, all_encoded, length, &err);
+
+	if (err) {
+		GRID_ERROR("Failed to unmarshall service info: (%d) %s",
 				err->code, err->message);
-		} else {
-			time_t ftime = get_file_timestamp(path);
-		        if (ftime > 0){
-				for (GSList *si = si_l; si; si = si->next){
-					struct service_info_s *si_data = si->data;
-					score_t new_score = {SCORE_UNLOCK, ftime};
-					si_data->score = new_score;
-					push_service(si_data);
+		goto restart_end;
+	}
 
-					struct conscience_srvtype_s *srvtype = conscience_get_srvtype
-						(si_data->type, FALSE);
-					if(!srvtype) {
-						GRID_ERROR("Service type [%s/%s] not found",
-							nsname, si_data->type);
-					} else {
-						si_data->score.value = 0;
-						struct conscience_srv_s *p_srv =
-							conscience_srvtype_refresh(srvtype, si_data);
-						p_srv->locked = FALSE;
-					}
-				}
-			}
+	for (GSList *si = si_l; si; si = si->next) {
+		struct service_info_s *si_data = si->data;
+		score_t old_score = si_data->score;
+
+		struct conscience_srvtype_s *srvtype = conscience_get_srvtype
+			(si_data->type, FALSE);
+		if(!srvtype) {
+			GRID_ERROR("Service type [%s/%s] not found",
+					nsname, si_data->type);
+		} else {
+			/* service is not registered if score.value != 0 */
+			si_data->score.value = 0;
+			struct conscience_srv_s *p_srv =
+				conscience_srvtype_refresh(srvtype, si_data);
+
+			/* FIXME should we unlock it if saved score is already 0 ? */
+			p_srv->locked = FALSE;
+
+			/* force score to allow _task_expire to pass since
+			 * it should not possible to have unlocked service with score 0 */
+			p_srv->score = old_score;
 		}
 	}
-	if (err != NULL)
+	ret = 0;
+	g_slist_free_full (si_l, (GDestroyNotify) service_info_clean);
+
+restart_end:
+	if (err != NULL) {
 		g_error_free(err);
+	}
 	g_free(all_encoded);
 	return ret;
 }
