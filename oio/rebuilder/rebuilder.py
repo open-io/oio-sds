@@ -77,6 +77,7 @@ class Rebuilder(object):
                 start_time, end_time, passes, errors,
                 waiting_time, rebuilder_time, elapsed,
                 total_items_processed, info, **kwargs))
+        return errors == 0
 
     def _create_worker(self, **kwargs):
         raise NotImplementedError()

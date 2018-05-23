@@ -128,14 +128,17 @@ func_tests () {
 
 	test_proxy_forward
 
-    # test a content with a strange name, through the CLI and the API
-    /usr/bin/fallocate -l $RANDOM /tmp/blob%
-    CNAME=$RANDOM
-    ${PYTHON} $(which openio) object create $CNAME /tmp/blob%
+    if [ -n "${REBUILDER}" ]; then
+        for i in $(seq 1 100); do
+            dd if=/dev/urandom of=/tmp/openio_object_$i bs=1K \
+                    count=$(shuf -i 1-2000 -n 1) 2> /dev/null
+            echo "object create container-${RANDOM} /tmp/openio_object_$i" \
+                    "--name object-${RANDOM}"
+        done | ${PYTHON} $(which openio)
 
-    # At least spawn one oio-crawler-integrity on a container that exists
-    # TODO(jfs): Move in a tests/functional/cli python test
-    ${PYTHON} $(which oio-crawler-integrity) $OIO_NS $OIO_ACCOUNT $CNAME
+        # test rebuilder (meta1, meta2 and blob)
+        ${SRCDIR}/tools/oio-test-rebuilder.sh -n "${OIO_NS}"
+    fi
 
 	# Run the whole suite of functional tests (Python)
     cd $SRCDIR
@@ -145,6 +148,14 @@ func_tests () {
 	# Run the whole suite of functional tests (C)
     cd $WRKDIR
     make -C tests/func test
+
+    # test a content with a strange name, through the CLI and the API
+    /usr/bin/fallocate -l $RANDOM /tmp/blob%
+    CNAME=$RANDOM
+    ${PYTHON} $(which openio) object create $CNAME /tmp/blob%
+    # At least spawn one oio-crawler-integrity on a container that exists
+    # TODO(jfs): Move in a tests/functional/cli python test
+    ${PYTHON} $(which oio-crawler-integrity) $OIO_NS $OIO_ACCOUNT $CNAME
 
     # Create a file just bigger than chunk size
     SOURCE=$(mktemp)
@@ -210,10 +221,12 @@ if is_running_test_suite "unit" ; then
 fi
 
 if is_running_test_suite "repli" ; then
-	echo -e "\n### Replication tests"
+    echo -e "\n### Replication tests"
+    export REBUILDER=1
     func_tests -f "${SRCDIR}/etc/bootstrap-preset-smallrepli.yml" \
-		-f "${SRCDIR}/etc/bootstrap-option-udp.yml"
-	fi
+            -f "${SRCDIR}/etc/bootstrap-option-udp.yml"
+    unset REBUILDER
+fi
 
 if is_running_test_suite "worm" ; then
 	echo -e "\n### WORM tests"
@@ -250,13 +263,17 @@ if is_running_test_suite "small-cache" ; then
 fi
 
 if is_running_test_suite "3copies" ; then
-	echo -e "\n### 3copies tests"
+    echo -e "\n### 3copies tests"
+    export REBUILDER=1
     func_tests -f "${SRCDIR}/etc/bootstrap-preset-3COPIES-11RAWX.yml"
+    unset REBUILDER
 fi
 
 if is_running_test_suite "ec" ; then
-	echo -e "\n### EC tests"
+    echo -e "\n### EC tests"
+    export REBUILDER=1
     func_tests -f "${SRCDIR}/etc/bootstrap-preset-EC.yml"
+    unset REBUILDER
 fi
 
 if is_running_test_suite "multi-beanstalk" ; then
