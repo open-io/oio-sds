@@ -6,7 +6,7 @@ install:
   - sudo apt-add-repository "deb http://mirror.openio.io/pub/repo/openio/sds/17.04/ubuntu/trusty ./"
   - sudo apt-get update -qq
   - sudo apt-get install -y --force-yes openio-gridinit openio-asn1c
-  - sudo apt-get install -y --force-yes flex bison curl lcov libglib2.0-dev libzookeeper-mt-dev libzmq3-dev libcurl4-gnutls-dev libapreq2-dev libsqlite3-dev libattr1-dev apache2 apache2-dev libapache2-mod-wsgi liblzo2-dev libjson-c-dev libleveldb1 libleveldb-dev libattr1-dev python-all-dev python-virtualenv liberasurecode-dev zookeeper zookeeper-bin zookeeperd beanstalkd
+  - sudo apt-get install -y --force-yes flex bison curl lcov libglib2.0-dev libzookeeper-mt-dev libzmq3-dev libcurl4-gnutls-dev libapreq2-dev libsqlite3-dev attr libattr1-dev apache2 apache2-dev libapache2-mod-wsgi liblzo2-dev libjson-c-dev libleveldb1 libleveldb-dev libattr1-dev python-all-dev python-virtualenv liberasurecode-dev zookeeper zookeeper-bin zookeeperd beanstalkd
   - sudo apt-get install -y --force-yes gdb
   - sudo service beanstalkd stop
   - virtualenv $HOME/oio && source $HOME/oio/bin/activate
