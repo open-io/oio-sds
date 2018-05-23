@@ -170,8 +170,13 @@ $cmd_openio directory bootstrap --check \
 
 echo -e "\n### Assign rdir services"
 # Force meta1 services to reload meta0 cache
+for addr in $(oio-test-config.py -t meta1); do
+    $cmd_openio cluster lock meta1 $addr
+done
 gridinit_cmd -S "$GRIDINIT_SOCK" restart "@meta1" >/dev/null
-sleep 1
+COUNT=$(oio-test-config.py -c -t meta1)
+$cmd_openio cluster wait -d 30 -u -n "$COUNT" meta1
+
 $cmd_openio volume admin bootstrap
 
 echo -e "\n### Wait for the services to have a score"
