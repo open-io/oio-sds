@@ -207,7 +207,7 @@ class DirectoryWarmup(DirectoryCmd):
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
-        digits = self.app.client_manager.get_meta1_digits()
+        digits = self.app.client_manager.meta1_digits
         workers_count = parsed_args.workers
 
         conf = {'namespace': self.app.client_manager.namespace}
@@ -250,7 +250,7 @@ class DirectoryWarmup(DirectoryCmd):
 
 class WarmupWorker(object):
     def __init__(self, conf, log):
-        from oio.common.http import get_pool_manager
+        from oio.common.http_urllib3 import get_pool_manager
         self.log = log
         self.pool = get_pool_manager()
         self.url_prefix = 'http://%s/v3.0/%s/admin/status?type=meta1&cid=' % (
