@@ -76,7 +76,7 @@ guint32 key_from_loc_level(oio_location_t location, int level);
 
 /* -------------------------------------------------------------------------- */
 
-/* Resolve service_id to addr
+/* Resolve service_id to service address.
  * The result must be freed if found or NULL. */
 gchar* oio_lb_resolve_service_id(const gchar* service_id);
 

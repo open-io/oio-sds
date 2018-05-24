@@ -1087,7 +1087,7 @@ action_m2_container_destroy (struct req_args_s *args)
 		const guint32 flag_force = (force) ? M2V2_DESTROY_FORCE : 0;
 
 		meta1_urlv_shift_addr(urlv);
-        // char *url = _resolve_service_id(urlv[0]);
+		// char *url = _resolve_service_id(urlv[0]);
 		err = m2v2_remote_execute_DESTROY(urlv[0], args->url,
 				M2V2_DESTROY_EVENT|flag_force);
 		if (err != NULL) {

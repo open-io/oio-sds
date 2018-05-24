@@ -308,8 +308,8 @@ label_retry:
 
 	gboolean stop = FALSE;
 	for (gchar **pu = m1uv; *pu && !stop; ++pu) {
-        const char *url = pu[0];
-        const char *next_url = pu[1];
+		const char *url = pu[0];
+		const char *next_url = pu[1];
 		// const char *_id = pu[0];
 		// char *_url = strdup(_id);
 		// const char *next_id = pu[1];
@@ -319,28 +319,28 @@ label_retry:
 		if (!client) {
 			err = SYSERR("Memory allocation error");
 		} else {
-        #if 0
-            /* try to resolve url ? */
-            {
-	            gchar *key = oio_make_service_key(ns_name, ctx->type, _id);
-                GRID_ERROR("%s %s", ns_name, ctx->type);
-                struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, key);
+#if 0
+			/* try to resolve url ? */
+			{
+				gchar *key = oio_make_service_key(ns_name, ctx->type, _id);
+				GRID_ERROR("%s %s", ns_name, ctx->type);
+				struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, key);
 
-                if (item) {
-                    free(_url);
-                    _url = strdup(item->addr);
-                    g_free(item);
-                }
+				if (item) {
+					free(_url);
+					_url = strdup(item->addr);
+					g_free(item);
+				}
 
-                g_free(key);
-            }
-        #endif
+				g_free(key);
+			}
+#endif
 
 			// err = gridd_client_connect_url(client, _url);
 			err = gridd_client_connect_url(client, url);
 			if (err) {
 				//GRID_WARN("Invalid peer [%s] for %s", _url, _id);
-                GRID_WARN("Invalid peer [%s]", url);
+				GRID_WARN("Invalid peer [%s]", url);
 				err->code = ERRCODE_CONN_NOROUTE;
 			}
 		}
@@ -387,7 +387,7 @@ label_retry:
 		 * must contain the corresponding item. */
 		if (err) {
 			// GRID_DEBUG("ERROR %s %s -> (%d) %s", _url, _id, err->code, err->message);
-            GRID_DEBUG("ERROR %s -> (%d) %s", url, err->code, err->message);
+			GRID_DEBUG("ERROR %s -> (%d) %s", url, err->code, err->message);
 			g_ptr_array_add (errorv, g_error_copy(err));
 			if (!body)
 				body = g_byte_array_new();
@@ -463,7 +463,7 @@ label_retry:
 			gridd_client_free (client);
 			client = NULL;
 		}
-        //free(_url);
+		//free(_url);
 	}
 	ctx->request_duration = oio_ext_monotonic_time() - resolve_end;
 

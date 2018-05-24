@@ -699,9 +699,6 @@ _direct_use (struct sqlx_peering_s *self,
 			} else {
 				_use_by_udp_no_free(&req, p);
 			}
-		} else {
-			GRID_WARN("USE(%s,%s.%s) failed to parse url",
-					url, n->base, n->type);
 		}
 		return FALSE;
 	} else {

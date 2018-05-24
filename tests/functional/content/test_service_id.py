@@ -35,9 +35,9 @@ WATCH_CONF = exp("~/.oio/sds/conf/watch/%s-%s.yml")
 HTTPD_CONF = exp("~/.oio/sds/conf/%s-%s.httpd.conf")
 
 
-class BaseTestServiceId(BaseTestCase):
+class BaseServiceIdTest(BaseTestCase):
     def setUp(self):
-        super(BaseTestServiceId, self).setUp()
+        super(BaseServiceIdTest, self).setUp()
 
         if not self.conf['with_service_id']:
             self.skipTest("Service ID not enabled")
@@ -46,7 +46,7 @@ class BaseTestServiceId(BaseTestCase):
         self.http = urllib3.PoolManager()
 
     def tearDown(self):
-        super(BaseTestServiceId, self).tearDown()
+        super(BaseServiceIdTest, self).tearDown()
 
     def _service(self, name, action):
         name = "%s-%s" % (self.conf['namespace'], name)
@@ -76,14 +76,6 @@ class BaseTestServiceId(BaseTestCase):
                                       obj_name="plop", data="*" * 1024)
         ret = self.conn.object_locate(self.account, self._cnt, "plop")
         return ret
-
-    def _generate_data(self):
-        # generate content with a chunk located on rawx
-        while True:
-            ret = self._create_data()[1]
-            for item in ret:
-                if self.rawx['service_id'] in item['url']:
-                    return
 
     def _check_data(self):
         try:
@@ -126,7 +118,7 @@ class BaseTestServiceId(BaseTestCase):
         self._cache_flush()
 
 
-class TestRawxServiceId(BaseTestServiceId):
+class TestRawxServiceId(BaseServiceIdTest):
     def setUp(self):
         super(TestRawxServiceId, self).setUp()
 
@@ -178,6 +170,16 @@ class TestRawxServiceId(BaseTestServiceId):
         with open(exp(GRID_CONF), "w") as fp:
             grid.write(fp)
 
+    def _generate_data(self):
+        """
+        Create an object with a chunk located on the rawx service under test.
+        """
+        while True:
+            ret = self._create_data()[1]
+            for item in ret:
+                if self.rawx['service_id'] in item['url']:
+                    return
+
     def test_rawx_service_id_new_addr(self):
         self._generate_data()
         self._change_rawx_addr(self.name, self._newport)
@@ -189,7 +191,7 @@ class TestRawxServiceId(BaseTestServiceId):
         self._wait_data()
 
 
-class TestMeta2ServiceId(BaseTestServiceId):
+class TestMeta2ServiceId(BaseServiceIdTest):
     def setUp(self):
         super(TestMeta2ServiceId, self).setUp()
 

@@ -97,95 +97,104 @@ oio_lb_pool__get_item(struct oio_lb_pool_s *self,
 
 /* -------------------------------------------------------------------------- */
 
-/* Mapping <service_id, addr> */
+/* Map service IDs to addresses <service_id, addr> */
 
-static GRWLock lock_service_id_addr;
+static GRWLock service_id_to_addr_lock;
 
-static GTree *tree_service_id_addr = NULL;  /* <gchar*> -> <gchar*> */
+static GTree *service_id_to_addr = NULL;  /* <gchar*> -> <gchar*> */
 
 
 static void __attribute__ ((constructor))
-_oio_cache_service_id_contructor (void)
+_oio_service_id_cache_constructor(void)
 {
 	static volatile guint lazy_init = 1;
 	if (lazy_init) {
 		if (g_atomic_int_compare_and_exchange(&lazy_init, 1, 0)) {
-			g_rw_lock_init(&lock_service_id_addr);
-			tree_service_id_addr = g_tree_new_full(oio_str_cmp3, NULL, g_free, g_free);
+			g_rw_lock_init(&service_id_to_addr_lock);
+			service_id_to_addr =
+				g_tree_new_full(oio_str_cmp3, NULL, g_free, g_free);
 		}
 	}
 }
 
-static const gchar *_oio_cache_get_service_id(const gchar* service_id)
+static const gchar *
+_oio_service_id_parse(const gchar* service_id)
 {
-	/* FIXME(mb) we should use meta1_url_shift_addr but it add dependency on metautils */
+	/* FIXME(mb): we should use meta1_url_shift_addr
+	 * but it would add a dependency on metautils */
 
 	const gchar *s = strchr(service_id, '|');
-	if (s) s = strchr(s+1, '|');
-	if (s) s++;
+	if (s)
+		s = strchr(s+1, '|');
+	if (s)
+		s++;
 
 	return s;
 }
 
-static void _oio_cache_add_service_id_addr(const gchar* service_id, const gchar* addr)
+static void
+_oio_service_id_cache_add_addr(const gchar* service_id, const gchar* addr)
 {
-	g_rw_lock_writer_lock(&lock_service_id_addr);
+	g_rw_lock_writer_lock(&service_id_to_addr_lock);
 
-	const gchar *id = _oio_cache_get_service_id(service_id);
+	const gchar *id = _oio_service_id_parse(service_id);
 	if (id) {
-		g_tree_replace(tree_service_id_addr, g_strdup(id), g_strdup(addr));
+		g_tree_replace(service_id_to_addr, g_strdup(id), g_strdup(addr));
 	}
-	g_rw_lock_writer_unlock(&lock_service_id_addr);
+	g_rw_lock_writer_unlock(&service_id_to_addr_lock);
 }
 
 /* FIXME(mb) should be called when removing items from LB will be implemented */
 __attribute__ ((unused))
-static void _oio_cache_remove_service_id(const gchar* service_id)
+static void
+_oio_service_id_cache_remove(const gchar* service_id)
 {
-	g_rw_lock_writer_lock(&lock_service_id_addr);
+	g_rw_lock_writer_lock(&service_id_to_addr_lock);
 
-	const gchar *id = _oio_cache_get_service_id(service_id);
+	const gchar *id = _oio_service_id_parse(service_id);
 	if (id) {
-		g_tree_remove(tree_service_id_addr, id);
+		g_tree_remove(service_id_to_addr, id);
 	}
-
-	g_rw_lock_writer_unlock(&lock_service_id_addr);
+	g_rw_lock_writer_unlock(&service_id_to_addr_lock);
 }
 
-static void _oio_cache_service_id_flush (void)
+static void
+_oio_service_id_cache_flush(void)
 {
-	g_rw_lock_writer_lock(&lock_service_id_addr);
+	g_rw_lock_writer_lock(&service_id_to_addr_lock);
 
-	g_tree_destroy(tree_service_id_addr);
-	tree_service_id_addr = g_tree_new_full(oio_str_cmp3, NULL, g_free, g_free);
+	g_tree_destroy(service_id_to_addr);
+	service_id_to_addr = g_tree_new_full(oio_str_cmp3, NULL, g_free, g_free);
 
-	g_rw_lock_writer_unlock(&lock_service_id_addr);
+	g_rw_lock_writer_unlock(&service_id_to_addr_lock);
 }
 
 static void __attribute__ ((destructor))
-_oio_cache_service_id_destroy (void)
+_oio_service_id_cache_destroy(void)
 {
-	g_rw_lock_writer_lock(&lock_service_id_addr);
+	g_rw_lock_writer_lock(&service_id_to_addr_lock);
 
-	EXTRA_ASSERT(tree_service_id_addr != NULL);
+	EXTRA_ASSERT(service_id_to_addr != NULL);
 
-	g_tree_destroy(tree_service_id_addr);
-	tree_service_id_addr = NULL;
-	g_rw_lock_writer_unlock(&lock_service_id_addr);
+	g_tree_destroy(service_id_to_addr);
+	service_id_to_addr = NULL;
+	g_rw_lock_writer_unlock(&service_id_to_addr_lock);
 
-	g_rw_lock_clear(&lock_service_id_addr);
+	g_rw_lock_clear(&service_id_to_addr_lock);
 }
 
-gchar* oio_lb_resolve_service_id (const gchar* service_id)
+gchar*
+oio_lb_resolve_service_id(const gchar* service_id)
 {
 	EXTRA_ASSERT(service_id != NULL);
 
 	gchar *res = NULL;
-	g_rw_lock_reader_lock(&lock_service_id_addr);
-	if (tree_service_id_addr && (res = g_tree_lookup(tree_service_id_addr, service_id))) {
+	g_rw_lock_reader_lock(&service_id_to_addr_lock);
+	if (service_id_to_addr &&
+			(res = g_tree_lookup(service_id_to_addr, service_id))) {
 		res = g_strdup(res);
 	}
-	g_rw_lock_reader_unlock(&lock_service_id_addr);
+	g_rw_lock_reader_unlock(&service_id_to_addr_lock);
 	return res;
 }
 
@@ -1123,7 +1132,7 @@ oio_lb_world__flush(struct oio_lb_world_s *self)
 		self->items = g_tree_new_full (oio_str_cmp3, NULL,
 				g_free, g_free);
 	}
-	_oio_cache_service_id_flush();
+	_oio_service_id_cache_flush();
 
 	g_rw_lock_writer_unlock(&self->lock);
 }
@@ -1146,7 +1155,7 @@ oio_lb_world__destroy (struct oio_lb_world_s *self)
 	g_rw_lock_clear(&self->lock);
 	g_free (self);
 
-	_oio_cache_service_id_flush();
+	_oio_service_id_cache_flush();
 }
 
 struct oio_lb_pool_s *
@@ -1318,7 +1327,7 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 		item0 = _item_make (item->location, item->id, item->addr);
 		item0->weight = item->weight;
 		g_tree_replace (self->items, g_strdup(item0->id), item0);
-		_oio_cache_add_service_id_addr(item0->id, item0->addr);
+		_oio_service_id_cache_add_addr(item0->id, item0->addr);
 
 	} else {
 
