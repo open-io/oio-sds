@@ -609,7 +609,7 @@ struct use_request_s {
 };
 
 static void
-_use_by_udp(struct use_request_s *req, struct sqlx_peering_direct_s *self)
+_use_by_udp_no_free(struct use_request_s *req, struct sqlx_peering_direct_s *self)
 {
 	NAME2CONST(n, req->name);
 	GByteArray *msg = sqlx_pack_USE(&n, req->deadline);
@@ -622,6 +622,13 @@ _use_by_udp(struct use_request_s *req, struct sqlx_peering_direct_s *self)
 		GRID_DEBUG("USE(%s.%s) failed: (%d) %s",
 				n.base, n.type, errsav, strerror(errsav));
 	}
+}
+
+static void
+_use_by_udp(struct use_request_s *req, struct sqlx_peering_direct_s *self)
+{
+	_use_by_udp_no_free(req, self);
+	g_free(req);
 }
 
 struct sqlx_peering_s *
@@ -690,7 +697,7 @@ _direct_use (struct sqlx_peering_s *self,
 				metautils_gthreadpool_push("UDP", p->pool_udp_use,
 						g_memdup(&req, sizeof(req)));
 			} else {
-				_use_by_udp(&req, p);
+				_use_by_udp_no_free(&req, p);
 			}
 		}
 		return FALSE;
