@@ -135,13 +135,12 @@ _oio_service_id_parse(const gchar* service_id)
 static void
 _oio_service_id_cache_add_addr(const gchar* service_id, const gchar* addr)
 {
-	g_rw_lock_writer_lock(&service_id_to_addr_lock);
-
 	const gchar *id = _oio_service_id_parse(service_id);
 	if (id) {
+		g_rw_lock_writer_lock(&service_id_to_addr_lock);
 		g_tree_replace(service_id_to_addr, g_strdup(id), g_strdup(addr));
+		g_rw_lock_writer_unlock(&service_id_to_addr_lock);
 	}
-	g_rw_lock_writer_unlock(&service_id_to_addr_lock);
 }
 
 /* FIXME(mb) should be called when removing items from LB will be implemented */
@@ -149,13 +148,12 @@ __attribute__ ((unused))
 static void
 _oio_service_id_cache_remove(const gchar* service_id)
 {
-	g_rw_lock_writer_lock(&service_id_to_addr_lock);
-
 	const gchar *id = _oio_service_id_parse(service_id);
 	if (id) {
+		g_rw_lock_writer_lock(&service_id_to_addr_lock);
 		g_tree_remove(service_id_to_addr, id);
+		g_rw_lock_writer_unlock(&service_id_to_addr_lock);
 	}
-	g_rw_lock_writer_unlock(&service_id_to_addr_lock);
 }
 
 static void
