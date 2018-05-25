@@ -17,6 +17,8 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
+#include <errno.h>
+
 #include <glib.h>
 #include <sqlite3.h>
 
@@ -532,16 +534,35 @@ _pipe_base_from(const gchar *source, struct sqlx_repository_s *repo,
 		struct sqlx_name_s *name, struct restore_ctx_s **ctx)
 {
 	GError *err;
+	gboolean try_slash_tmp = FALSE, autocreate = TRUE;
+	gchar tmpdir[LIMIT_LENGTH_VOLUMENAME+4] = {0};
 	gchar path[LIMIT_LENGTH_VOLUMENAME+32] = {0};
 
 	GRID_TRACE2("%s(%s,%p,%s,%s)", __FUNCTION__,
 			source, repo, name->base, name->type);
 
-	g_snprintf(path, sizeof(path), "%s/tmp/restore.sqlite3.XXXXXX",
-			repo->basedir);
+retry:
+	g_snprintf(tmpdir, sizeof(tmpdir), "%s/tmp",
+			try_slash_tmp ? "" : repo->basedir);
+	g_snprintf(path, sizeof(path), "%s/restore.sqlite3.XXXXXX", tmpdir);
 	err = restore_ctx_create(path, ctx);
-	if (err != NULL)
+	if (err != NULL) {
+		if (err->code == ENOENT) {
+			if (autocreate) {
+				autocreate = FALSE;
+				if (g_mkdir(tmpdir, 0755) == 0) {
+					g_clear_error(&err);
+					goto retry;
+				}
+			}
+		}
+		if (!try_slash_tmp) {
+			try_slash_tmp = TRUE;
+			g_clear_error(&err);
+			goto retry;
+		}
 		return err;
+	}
 
 	GError *_pipe_from_cb(GByteArray *part, gint64 remaining, gpointer arg)
 	{
