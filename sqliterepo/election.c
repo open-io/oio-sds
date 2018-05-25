@@ -1811,6 +1811,8 @@ watch_SELF(zhandle_t *h UNUSED, int type, int state, const char *path, void *d)
 static void
 _completion_router(gpointer p, struct election_manager_s *M)
 {
+	oio_ext_set_deadline(oio_ext_monotonic_time() + 2 * G_TIME_SPAN_SECOND);
+
 	switch (*((enum deferred_action_type_e*)p)) {
 		case DAT_CREATING:
 			return deferred_completion_CREATING(p);
