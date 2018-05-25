@@ -1842,6 +1842,8 @@ _worker_getpeers(struct election_member_s *m, struct election_manager_s *M)
 	m->requested_peers_decache = 0;
 	member_unlock(m);
 
+	oio_ext_set_deadline(oio_ext_monotonic_time() + 10 * G_TIME_SPAN_SECOND);
+
 	NAME2CONST(n, inline_name);
 	GError *err = election_get_peers(M, &n, decache, &peers);
 
