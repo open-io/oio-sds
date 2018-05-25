@@ -1831,6 +1831,7 @@ _completion_router(gpointer p, struct election_manager_s *M)
 static void
 _worker_getpeers(struct election_member_s *m, struct election_manager_s *M)
 {
+	GError *err = NULL;
 	gchar **peers = NULL;
 	struct sqlx_name_inline_s inline_name = {};
 
@@ -1841,7 +1842,7 @@ _worker_getpeers(struct election_member_s *m, struct election_manager_s *M)
 	member_unlock(m);
 
 	NAME2CONST(n, inline_name);
-	GError *err = election_get_peers(M, &n, decache, &peers);
+	err = M->config->get_peers(M->config->ctx, &n, decache, &peers);
 
 	member_lock(m);
 	if (err || !peers || !*peers) {
