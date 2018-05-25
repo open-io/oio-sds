@@ -44,6 +44,7 @@ class BaseServiceIdTest(BaseTestCase):
 
         self._cnt = random_str(10)
         self.http = urllib3.PoolManager()
+        self.api = ObjectStorageApi(self.ns)
 
     def tearDown(self):
         super(BaseServiceIdTest, self).tearDown()
@@ -72,25 +73,28 @@ class BaseServiceIdTest(BaseTestCase):
             self.assertEqual(r.status, 204)
 
     def _create_data(self):
-        ret = self.conn.object_create(self.account, self._cnt,
-                                      obj_name="plop", data="*" * 1024)
-        ret = self.conn.object_locate(self.account, self._cnt, "plop")
+        ret = self.api.object_create(self.account, self._cnt,
+                                     obj_name="plop", data="*" * 1024)
+        ret = self.api.object_locate(self.account, self._cnt, "plop")
         return ret
 
-    def _check_data(self):
+    def _service_in_charge_is_up(self):
+        """
+        Tells if the service in charge of the mock object is up and running.
+        """
         try:
             # cache may be empty for meta2 as well, catch exceptions here
-            self.conn.object_locate(self.account, self._cnt, "plop")[1]
+            self.api.object_locate(self.account, self._cnt, "plop")[1]
             return True
         except ServiceBusy:
             return False
 
-    def _wait_data(self, timeout=10):
-        """wait that chunk become available."""
-        while not self._check_data():
+    def _wait_for_data_availability(self, timeout=10):
+        """Wait for the mock object to become available."""
+        while timeout > 0 and not self._service_in_charge_is_up():
             time.sleep(1)
             timeout -= 1
-        self.assertTrue(timeout)
+        self.assertGreater(timeout, 0)
 
     def _update_event_watch(self, name, port):
         conf = None
@@ -125,12 +129,11 @@ class TestRawxServiceId(BaseServiceIdTest):
         if not self.conf['with_service_id']:
             self.skipTest("Service ID not enabled")
 
-        # support mix deployement
+        # support mixed deployement
         self.rawx = {}
         while 'service_id' not in self.rawx:
             self.rawx = random.choice(self.conf['services']['rawx'])
 
-        self.conn = ObjectStorageApi(self.ns)
         self.name = "rawx-%d" % int(self.rawx['num'])
 
         self._port = int(self.rawx['addr'].split(':')[1])
@@ -144,7 +147,7 @@ class TestRawxServiceId(BaseServiceIdTest):
     def _check_data(self):
         try:
             # cache may be empty for meta2 as well, catch exceptions here
-            ret = self.conn.object_locate(self.account, self._cnt, "plop")[1]
+            ret = self.api.object_locate(self.account, self._cnt, "plop")[1]
         except ServiceBusy:
             return False
 
@@ -184,11 +187,11 @@ class TestRawxServiceId(BaseServiceIdTest):
         self._generate_data()
         self._change_rawx_addr(self.name, self._newport)
 
-        self._wait_data()
+        self._wait_for_data_availability()
         # reset addr of rawx
         self._change_rawx_addr(self.name, self._port)
 
-        self._wait_data()
+        self._wait_for_data_availability()
 
 
 class TestMeta2ServiceId(BaseServiceIdTest):
@@ -198,8 +201,7 @@ class TestMeta2ServiceId(BaseServiceIdTest):
         if not self.conf['with_service_id']:
             self.skipTest("Service ID not enabled")
 
-        # support mix deployement
-        self.conn = ObjectStorageApi(self.ns)
+        # support mixed deployement
         self.meta2 = list(self.conf['services']['meta2'])
         for entry in self.meta2:
             port = int(entry['addr'].split(':')[1])
@@ -253,8 +255,8 @@ class TestMeta2ServiceId(BaseServiceIdTest):
         self._create_data()
         self._change_meta2_addr('new_port')
 
-        self._wait_data(timeout=10)
+        self._wait_for_data_availability(timeout=10)
 
         # reset configuration
         self._change_meta2_addr('old_port')
-        self._wait_data(timeout=10)
+        self._wait_for_data_availability(timeout=10)
