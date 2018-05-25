@@ -470,7 +470,7 @@ _restore_snapshot(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 
 	sqlx_repository_unlock_and_close_noerror(sq3);
 	return err;
-} 
+}
 
 static GError *
 _dump(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
@@ -1418,13 +1418,6 @@ _handler_GETVERS(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	/* Kickoff the election, we are already involved in it... */
-	if (NULL != (err = sqlx_repository_use_base(repo, &n0, TRUE, NULL))) {
-		g_prefix_error(&err, "Use: ");
-		reply->send_error(0, err);
-		return TRUE;
-	}
-
 	err = sqlx_repository_open_and_lock(repo, &n0,
 			SQLX_OPEN_CREATE|SQLX_OPEN_LOCAL|SQLX_OPEN_URGENT, &sq3, NULL);
 	if (NULL != err) {
@@ -1478,15 +1471,6 @@ _handler_REPLICATE(struct gridd_reply_ctx_s *reply,
 	}
 
 	reply->send_reply(CODE_TEMPORARY, "received");
-
-	/* Starts an election without being an initiator ... because I receive
-	 * this request from a master, so an election is already running
-	 * somewhere else. */
-	err = sqlx_repository_use_base(repo, &n0, FALSE, NULL);
-	if (NULL != err) {
-		reply->send_error(0, err);
-		return TRUE;
-	}
 
 	err = sqlx_repository_open_and_lock(repo, &n0,
 			SQLX_OPEN_LOCAL|SQLX_OPEN_URGENT, &sq3, NULL);
@@ -1838,25 +1822,11 @@ _handler_RESYNC(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	GError *err = NULL;
-	gboolean has_peers = FALSE;
-	struct election_manager_s *em = NULL;
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
 	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
-		reply->send_error(0, err);
-		return TRUE;
-	}
-
-	/* Force refresh of peers from meta1/meta0 */
-	em = sqlx_repository_get_elections_manager(repo);
-	err = election_has_peers(em, &n0, TRUE, &has_peers);
-	g_clear_error(&err);
-
-	/* Open and lock the base */
-	err = sqlx_repository_use_base(repo, &n0, FALSE, NULL);
-	if (NULL != err) {
 		reply->send_error(0, err);
 		return TRUE;
 	}
