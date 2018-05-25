@@ -25,6 +25,8 @@ env:
   - TEST_SUITE=cli
   - TEST_SUITE=worm
   - TEST_SUITE=build,unit,copyright,variables
+  - TEST_SUITE=rebuilder,mover
+  - TEST_SUITE=rebuilder,mover,with-service-id
 script:
   - sudo bash -c "echo '/tmp/core.%p.%E' > /proc/sys/kernel/core_pattern"
   - ulimit -c unlimited -S

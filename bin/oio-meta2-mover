@@ -16,6 +16,7 @@
 # License along with this library.
 
 import argparse
+import sys
 
 from oio.directory.meta1 import Meta1RefMapping
 
@@ -47,6 +48,16 @@ def make_arg_parser():
 
 if __name__ == '__main__':
     args = make_arg_parser().parse_args()
-    mapping = Meta1RefMapping(args.namespace)
-    mapping.move(args.src_service, args.dest_service, args.base, 'meta2')
-    print(mapping.apply())
+
+    moved_ok = None
+    try:
+        mapping = Meta1RefMapping(args.namespace)
+        moved = mapping.move(args.src_service, args.dest_service, args.base,
+                             'meta2')
+        moved_ok = mapping.apply(moved)
+    except Exception as exc:
+        print("ERROR: " + str(exc))
+    if not moved_ok:
+        sys.exit(1)
+    for base in moved_ok:
+        print(base)
