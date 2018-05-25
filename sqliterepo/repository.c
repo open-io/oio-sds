@@ -1079,7 +1079,6 @@ sqlx_repository_timed_open_and_lock(sqlx_repository_t *repo,
 	args.urgent = BOOL(how & SQLX_OPEN_URGENT);
 	args.deadline = deadline;
 
-
 	switch (how & SQLX_OPEN_REPLIMODE) {
 		case SQLX_OPEN_LOCAL:
 			err = _open_and_lock_base(&args, 0, result, NULL);

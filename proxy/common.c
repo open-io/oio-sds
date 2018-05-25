@@ -310,36 +310,14 @@ label_retry:
 	for (gchar **pu = m1uv; *pu && !stop; ++pu) {
 		const char *url = pu[0];
 		const char *next_url = pu[1];
-		// const char *_id = pu[0];
-		// char *_url = strdup(_id);
-		// const char *next_id = pu[1];
 		GByteArray *body = NULL;
 
 		struct gridd_client_s *client = gridd_client_create_empty();
 		if (!client) {
 			err = SYSERR("Memory allocation error");
 		} else {
-#if 0
-			/* try to resolve url ? */
-			{
-				gchar *key = oio_make_service_key(ns_name, ctx->type, _id);
-				GRID_ERROR("%s %s", ns_name, ctx->type);
-				struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, key);
-
-				if (item) {
-					free(_url);
-					_url = strdup(item->addr);
-					g_free(item);
-				}
-
-				g_free(key);
-			}
-#endif
-
-			// err = gridd_client_connect_url(client, _url);
 			err = gridd_client_connect_url(client, url);
 			if (err) {
-				//GRID_WARN("Invalid peer [%s] for %s", _url, _id);
 				GRID_WARN("Invalid peer [%s]", url);
 				err->code = ERRCODE_CONN_NOROUTE;
 			}
@@ -386,7 +364,6 @@ label_retry:
 		/* ensure an output for that request: each array (url, body, error)
 		 * must contain the corresponding item. */
 		if (err) {
-			// GRID_DEBUG("ERROR %s %s -> (%d) %s", _url, _id, err->code, err->message);
 			GRID_DEBUG("ERROR %s -> (%d) %s", url, err->code, err->message);
 			g_ptr_array_add (errorv, g_error_copy(err));
 			if (!body)
@@ -400,7 +377,6 @@ label_retry:
 		}
 		g_ptr_array_add (bodyv, body);
 		g_ptr_array_add (urlv, g_strdup(url));
-		// g_ptr_array_add (urlv, g_strdup(_id));
 
 		/* Check for a possible redirection */
 		if (flag_prefer_master_for_read || flag_prefer_slave_for_read
@@ -419,7 +395,6 @@ label_retry:
 			if (CODE_IS_NETWORK_ERROR(err->code)) {
 				/* the target service is in bad shape, let's avoid it for
 				 * the subsequent requests. */
-				//service_invalidate(_id);
 				service_invalidate(url);
 
 				/* TODO(jfs): should we let the client retry or occupy a
@@ -444,7 +419,6 @@ label_retry:
 				 * client SDK. This error is a clue that the other replicas
 				 * will also be overloaded. */
 				service_invalidate(url);
-				// service_invalidate(_id);
 				stop = TRUE;
 			} else if (ctx->which == CLIENT_RUN_ALL
 					|| ctx->which == CLIENT_SPECIFIED) {
@@ -463,7 +437,6 @@ label_retry:
 			gridd_client_free (client);
 			client = NULL;
 		}
-		//free(_url);
 	}
 	ctx->request_duration = oio_ext_monotonic_time() - resolve_end;
 
