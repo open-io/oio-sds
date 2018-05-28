@@ -27,7 +27,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "actions.h"
 
 
-static char*
+static gchar*
 _resolve_service_id(const char *service_id)
 {
 	gchar *out;
@@ -1376,14 +1376,14 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 
 	meta1_urlv_shift_addr(urlv);
 	CLIENT_CTX(ctx, args, type, 1);
-	char *url = _resolve_service_id(urlv[0]);
+	gchar *url = _resolve_service_id(urlv[0]);
 	GByteArray * _pack(const struct sqlx_name_s *n) {
 		return sqlx_pack_SNAPSHOT(n, url, target_cid, seq_num, DL());
 	}
 
 	err = _resolve_meta2(args, CLIENT_PREFER_MASTER, _pack, NULL);
-	free(url);
-	if(err)
+	g_free(url);
+	if (err)
 		goto cleanup;
 
 cleanup:
