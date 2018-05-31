@@ -14,6 +14,8 @@
 # License along with this library.
 
 import random
+import os
+
 from tests.utils import BaseTestCase, random_str
 from oio.directory.admin import AdminClient
 from oio import ObjectStorageApi
@@ -30,7 +32,10 @@ class TestAdmin(BaseTestCase):
 
     def tearDown(self):
         super(TestAdmin, self).tearDown()
-        self.api.container_delete(self.account, self.container)
+        try:
+            self.api.container_delete(self.account, self.container)
+        except Exception:
+            pass
 
     def test_election_leave_service_id(self):
         status = self.admin.election_status(
@@ -40,8 +45,8 @@ class TestAdmin(BaseTestCase):
         election = self.admin.election_leave(
             "meta2", account=self.account, reference=self.container,
             service_id=service_id)
-        self.assertEquals(1, len(election))
-        self.assertEquals(200, election[service_id]["status"]["status"])
+        self.assertEqual(1, len(election))
+        self.assertEqual(200, election[service_id]["status"]["status"])
 
     def test_election_leave_serveral_service_ids(self):
         status = self.admin.election_status(
@@ -53,6 +58,24 @@ class TestAdmin(BaseTestCase):
         election = self.admin.election_leave(
             "meta2", account=self.account, reference=self.container,
             service_id=','.join(service_ids))
-        self.assertEquals(2, len(election))
-        self.assertEquals(200, election[service_ids[0]]["status"]["status"])
-        self.assertEquals(200, election[service_ids[1]]["status"]["status"])
+        self.assertEqual(2, len(election))
+        self.assertEqual(200, election[service_ids[0]]["status"]["status"])
+        self.assertEqual(200, election[service_ids[1]]["status"]["status"])
+
+    def test_has_base(self):
+        info = self.admin.has_base(
+            'meta2', account=self.account, reference=self.container)
+        for peer, meta in info.iteritems():
+            self.assertEqual(200, meta['status']['status'])
+
+        peer = info.keys()[0]
+        peer_loc = info[peer]['body']
+        self.assertTrue(os.path.isfile(peer_loc))
+        os.remove(peer_loc)
+
+        info = self.admin.has_base(
+            'meta2', account=self.account, reference=self.container)
+        self.assertNotEquals(200, info[peer]['status']['status'])
+        del info[peer]
+        for peer, meta in info.iteritems():
+            self.assertEqual(200, meta['status']['status'])

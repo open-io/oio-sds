@@ -128,6 +128,14 @@ class AdminClient(ProxyClient):
         return body
 
     @loc_params
+    def has_base(self, params, **kwargs):
+        """
+        Ask each peer if base exists.
+        """
+        _, body = self._request('POST', '/has', params=params, **kwargs)
+        return body
+
+    @loc_params
     def set_properties(self, params,
                        properties=None, system=None, **kwargs):
         """

@@ -19,7 +19,7 @@ import sys
 
 from oio import ObjectStorageApi
 from oio.common.exceptions import NotFound, OioTimeout, ServiceBusy
-from oio.common.client import ProxyClient
+from oio.directory.admin import AdminClient
 from oio.rebuilder.rebuilder import Rebuilder, RebuilderWorker
 
 
@@ -67,39 +67,31 @@ class MetaRebuilderWorker(RebuilderWorker):
         super(MetaRebuilderWorker, self).__init__(conf, logger, **kwargs)
         self.type = type_
         self.max_attempts = max_attempts
-        self.proxy_client = ProxyClient(
-            self.conf, request_prefix='/admin', logger=self.logger)
+        self.admin_client = AdminClient(self.conf, logger=self.logger)
 
     def _rebuild_one(self, cid, **kwargs):
         missing_base = False
-        params = {'cid': cid, 'type': self.type}
         for attempts in range(self.max_attempts):
             try:
                 if not missing_base:
                     # Check if the bases exist
-                    _, info = self.proxy_client._request('POST', '/has',
-                                                         params=params)
+                    info = self.admin_client.has_base(self.type, cid=cid)
                     for meta in info.values():
                         if meta['status']['status'] != 200:
                             missing_base = True
                             break
 
                 if missing_base:
+                    self.admin_client.election_leave(self.type, cid=cid)
                     # Setting a property will trigger a database replication
-                    properties = {'properties': {'sys.last_rebuild':
-                                                 str(int(time.time()))}}
-                    self.proxy_client._request('POST', '/set_properties',
-                                               params=params, json=properties)
+                    properties = {'sys.last_rebuild': str(int(time.time()))}
+                    self.admin_client.set_properties(self.type, cid=cid,
+                                                     properties=properties)
                 self.passes += 1
                 break
             except Exception as err:
                 if attempts < self.max_attempts - 1:
                     if isinstance(err, NotFound):
-                        try:
-                            self.proxy_client._request('POST', '/leave',
-                                                       params=params)
-                        except Exception:
-                            pass
                         continue
                     if isinstance(err, OioTimeout) \
                             or isinstance(err, ServiceBusy):
