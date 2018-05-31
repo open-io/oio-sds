@@ -1,5 +1,6 @@
 storage_policy: "EC"
-chunk_size: 1048576
+config:
+  ns.chunk_size: 1048576
 redis: true
 rdir:
   count: 2
