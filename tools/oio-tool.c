@@ -259,6 +259,7 @@ main (int argc, char **argv)
 		_print_usage(argv[0]);
 		return 2;
 	}
+	oio_log_lazy_init();
 	oio_ext_set_random_reqid ();
 
 	if (!strcmp("config", argv[1])) {
