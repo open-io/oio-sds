@@ -299,6 +299,13 @@ action_admin_ping (struct req_args_s *args)
 }
 
 enum http_rc_e
+action_admin_has (struct req_args_s *args)
+{
+	PACKER_VOID(_pack) { return sqlx_pack_HAS (_u, DL()); }
+	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, _pack);
+}
+
+enum http_rc_e
 action_admin_status (struct req_args_s *args)
 {
 	PACKER_VOID(_pack) { return sqlx_pack_STATUS (_u, DL()); }

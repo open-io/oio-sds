@@ -109,6 +109,7 @@ enum http_rc_e action_content_purge (struct req_args_s *args);
 // Admin on SQLX bases
 
 enum http_rc_e action_admin_ping (struct req_args_s *args);
+enum http_rc_e action_admin_has (struct req_args_s *args);
 enum http_rc_e action_admin_status (struct req_args_s *args);
 enum http_rc_e action_admin_info (struct req_args_s *args);
 enum http_rc_e action_admin_drop_cache (struct req_args_s *args);

@@ -1511,14 +1511,21 @@ _handler_HAS(struct gridd_reply_ctx_s *reply,
 	}
 
 	if (NULL != (err = sqlx_repository_has_base2(repo, &n0, &bddname))) {
+		GError *e = sqlx_repository_remove_from_cache(repo, &n0);
+		if (e)
+			g_clear_error(&e);
 		reply->send_error(0, err);
 	} else {
+		GString *body = g_string_new("\"");
 		if (bddname) {
-			reply->add_body(metautils_gba_from_string(bddname));
+			g_string_append(body, bddname);
 			g_free(bddname);
 		} else {
-			reply->add_body(metautils_gba_from_string("Not found"));
+			g_string_append(body, "Not found");
 		}
+		g_string_append_c(body, '"');
+		reply->add_body(metautils_gba_from_string(body->str));
+		g_string_free(body, TRUE);
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
