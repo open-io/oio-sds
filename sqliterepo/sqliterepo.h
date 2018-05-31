@@ -252,6 +252,9 @@ GError* sqlx_repository_has_base2(sqlx_repository_t *repo,
 
 #define sqlx_repository_has_base(r,n) sqlx_repository_has_base2(r,n,NULL)
 
+GError* sqlx_repository_remove_from_cache(sqlx_repository_t *repo,
+		const struct sqlx_name_s *name);
+
 /** Allocates the internal structure for an election, but does not
  * kick it off.  */
 GError* sqlx_repository_prepare_election(sqlx_repository_t *repo,
