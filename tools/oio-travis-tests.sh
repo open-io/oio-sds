@@ -122,6 +122,23 @@ test_proxy_forward () {
 	done
 }
 
+ec_tests () {
+	randomize_env
+    $OIO_RESET -N $OIO_NS $@
+
+	SIZE0=$((256*1024*1024))
+	export OIO_USER=user-$RANDOM OIO_PATH=path-$RANDOM
+	echo $OIO_NS $OIO_ACCOUNT $OIO_USER $OIO_PATH
+	./core/tool_sdk put $SIZE0
+	openio object save $OIO_USER $OIO_PATH
+	SIZE=$(stat --printf='%s' $OIO_PATH)
+	/bin/rm "$OIO_PATH"
+	[ "$SIZE0" == "$SIZE" ]
+
+    gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
+	sleep 0.5
+}
+
 func_tests () {
 	randomize_env
     $OIO_RESET -N $OIO_NS $@
@@ -272,6 +289,9 @@ fi
 if is_running_test_suite "ec" ; then
     echo -e "\n### EC tests"
     export REBUILDER=1
+    ec_tests -f "${SRCDIR}/etc/bootstrap-preset-EC.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-chunksize-512MiB.yml"
+
     func_tests -f "${SRCDIR}/etc/bootstrap-preset-EC.yml"
     unset REBUILDER
 fi
