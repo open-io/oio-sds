@@ -207,12 +207,12 @@ MaxSpareServers 40
 </IfModule>
 
 <IfModule worker.c>
-StartServers 2
-MaxClients 40
-MaxRequestWorkers 100
-MinSpareThreads 2
-MaxSpareThreads 40
-ThreadsPerChild 20
+MaxClients 512
+MaxRequestWorkers 512
+ThreadsPerChild 256
+StartServers 1
+MinSpareThreads 8
+MaxSpareThreads 32
 MaxRequestsPerChild 0
 </IfModule>
 
