@@ -747,7 +747,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
                         if len(data) == 0:
                             break
                         send(data)
-                        
+
                 # flush out buffered data
                 send('')
 
