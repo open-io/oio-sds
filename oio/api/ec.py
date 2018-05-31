@@ -719,23 +719,35 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 for writer in writers:
                     writer.start(pool)
 
-                # the main write loop
-                while True:
-                    remaining_bytes = size - bytes_transferred
-                    if io.WRITE_CHUNK_SIZE < remaining_bytes:
-                        read_size = io.WRITE_CHUNK_SIZE
-                    else:
-                        read_size = remaining_bytes
+                def read(read_size):
                     with green.SourceReadTimeout(self.read_timeout):
                         try:
                             data = source.read(read_size)
                         except (ValueError, IOError) as exc:
                             raise SourceReadError(str(exc))
-                    if len(data) == 0:
-                        break
-                    bytes_transferred += len(data)
-                    send(data)
+                    return data
 
+                # the main write loop
+                if size:
+                    while True:
+                        remaining_bytes = size - bytes_transferred
+                        if io.WRITE_CHUNK_SIZE < remaining_bytes:
+                            read_size = io.WRITE_CHUNK_SIZE
+                        else:
+                            read_size = remaining_bytes
+                        data = read(read_size)
+                        bytes_transferred += len(data)
+                        if len(data) == 0:
+                            break
+                        send(data)
+                else:
+                    while True:
+                        data = read(io.WRITE_CHUNK_SIZE)
+                        bytes_transferred += len(data)
+                        if len(data) == 0:
+                            break
+                        send(data)
+                        
                 # flush out buffered data
                 send('')
 

@@ -202,10 +202,6 @@ class ECD(WerkzeugApp):
         storage_method = STORAGE_METHODS.load(sysmeta['chunk_method'])
 
         if storage_method.ec:
-            if not size:
-                # FIXME: get chunk size from proxy
-                size = (storage_method.ec_nb_data * 10 *
-                        storage_method.ec_segment_size)
             nb_chunks = (storage_method.ec_nb_data +
                          storage_method.ec_nb_parity)
             pos = safe_get_header(req, 'chunk_pos')
