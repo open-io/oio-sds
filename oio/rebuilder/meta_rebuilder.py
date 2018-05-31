@@ -18,7 +18,7 @@ import time
 import sys
 
 from oio import ObjectStorageApi
-from oio.common.exceptions import NotFound, ServiceBusy
+from oio.common.exceptions import NotFound, OioTimeout, ServiceBusy
 from oio.common.client import ProxyClient
 from oio.rebuilder.rebuilder import Rebuilder, RebuilderWorker
 
@@ -71,20 +71,29 @@ class MetaRebuilderWorker(RebuilderWorker):
             self.conf, request_prefix='/admin', logger=self.logger)
 
     def _rebuild_one(self, cid, **kwargs):
-        attempts = 0
-        while True:
-            attempts += 1
-            params = {'cid': cid, 'type': self.type}
+        missing_base = False
+        params = {'cid': cid, 'type': self.type}
+        for attempts in range(self.max_attempts):
             try:
-                properties = {'properties': {'sys.last_rebuild':
-                                             str(int(time.time()))}}
-                # Setting a property will trigger a database replication
-                self.proxy_client._request('POST', '/set_properties',
-                                           params=params, json=properties)
+                if not missing_base:
+                    # Check if the bases exist
+                    _, info = self.proxy_client._request('POST', '/has',
+                                                         params=params)
+                    for meta in info.values():
+                        if meta['status']['status'] != 200:
+                            missing_base = True
+                            break
+
+                if missing_base:
+                    # Setting a property will trigger a database replication
+                    properties = {'properties': {'sys.last_rebuild':
+                                                 str(int(time.time()))}}
+                    self.proxy_client._request('POST', '/set_properties',
+                                               params=params, json=properties)
                 self.passes += 1
                 break
             except Exception as err:
-                if attempts < self.max_attempts:
+                if attempts < self.max_attempts - 1:
                     if isinstance(err, NotFound):
                         try:
                             self.proxy_client._request('POST', '/leave',
@@ -92,7 +101,8 @@ class MetaRebuilderWorker(RebuilderWorker):
                         except Exception:
                             pass
                         continue
-                    if isinstance(err, ServiceBusy):
+                    if isinstance(err, OioTimeout) \
+                            or isinstance(err, ServiceBusy):
                         time.sleep(attempts * 0.5)
                         continue
                 self.logger.error('ERROR while rebuilding %s: %s', cid, err)
