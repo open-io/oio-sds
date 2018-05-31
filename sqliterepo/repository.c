@@ -1165,6 +1165,46 @@ sqlx_repository_has_base2(sqlx_repository_t *repo, const struct sqlx_name_s *n,
 	return err;
 }
 
+GError*
+sqlx_repository_remove_from_cache(sqlx_repository_t *repo,
+		const struct sqlx_name_s *name)
+{
+	if (repo->cache == NULL)
+		return NULL;
+
+	GError *err = NULL;
+	struct open_args_s args = {0};
+
+	err = _open_fill_args(&args, repo, name);
+	if (err)
+		goto end_sqlx_cache_close;
+	args.no_refcheck = BOOL(SQLX_OPEN_NOREFCHECK);
+	args.create = BOOL(0);
+	args.urgent = BOOL(0);
+	args.deadline = oio_ext_get_deadline();
+
+	gint bd = -1;
+	err = sqlx_cache_open_and_lock_base(args.repo->cache, args.realname,
+		   args.urgent, &bd, args.deadline);
+	if (err) {
+		g_prefix_error(&err, "cache error: ");
+		goto end_sqlx_cache_close;
+	}
+
+	struct sqlx_sqlite3_s *sq3 = sqlx_cache_get_handle(args.repo->cache, bd);
+	if (sq3 == NULL)
+		goto end_sqlx_cache_close;
+
+	err = sqlx_cache_unlock_and_close_base(args.repo->cache, bd,
+			SQLX_CLOSE_IMMEDIATELY);
+	if (err)
+		goto end_sqlx_cache_close;
+
+end_sqlx_cache_close:
+	_open_clean_args(&args);
+	return err;
+}
+
 /* ------------------------------------------------------------------------- */
 
 GError*
