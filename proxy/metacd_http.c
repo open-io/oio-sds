@@ -996,6 +996,9 @@ configure_request_handlers (void)
 	/* Ask each peer to trigger or update the election ("DB_USE"). */
 	SET("/$NS/admin/ping/#POST", action_admin_ping);
 
+	/* Ask each peer if base exists ("DB_HAS"). */
+	SET("/$NS/admin/has/#POST", action_admin_has);
+
 	SET("/$NS/admin/info/#POST", action_admin_info);
 
 	/* Ask each peer for the status of the election.
