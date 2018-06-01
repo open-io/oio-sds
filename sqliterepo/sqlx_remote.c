@@ -153,6 +153,13 @@ sqlx_pack_PIPETO(const struct sqlx_name_s *name, const gchar *target, gint64 dea
 }
 
 GByteArray*
+sqlx_pack_REMOVE(const struct sqlx_name_s *name, gint64 deadline)
+{
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_REMOVE, name, deadline);
+	return message_marshall_gba_and_clean(req);
+}
+
+GByteArray*
 sqlx_pack_DUMP(const struct sqlx_name_s *name, gboolean chunked, gint64 deadline)
 {
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_DUMP, name, deadline);

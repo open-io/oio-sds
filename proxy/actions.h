@@ -117,6 +117,7 @@ enum http_rc_e action_admin_sync (struct req_args_s *args);
 enum http_rc_e action_admin_leave (struct req_args_s *args);
 enum http_rc_e action_admin_debug (struct req_args_s *args);
 enum http_rc_e action_admin_copy (struct req_args_s *args);
+enum http_rc_e action_admin_remove (struct req_args_s *args);
 enum http_rc_e action_admin_prop_get (struct req_args_s *args);
 enum http_rc_e action_admin_prop_set (struct req_args_s *args);
 enum http_rc_e action_admin_prop_del (struct req_args_s *args);
