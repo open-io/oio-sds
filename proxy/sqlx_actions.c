@@ -337,7 +337,7 @@ enum http_rc_e
 action_admin_leave (struct req_args_s *args)
 {
 	PACKER_VOID(_pack) { return sqlx_pack_EXITELECTION (_u, DL()); }
-	const char *service_id = OPT("service_id");
+	const char *service_id = SERVICE_ID();
 	if (service_id)
 		return _sqlx_action_noreturn (args, CLIENT_SPECIFIED, _pack);
 	else
@@ -361,7 +361,7 @@ enum http_rc_e
 action_admin_remove (struct req_args_s *args)
 {
 	PACKER_VOID(_pack) { return sqlx_pack_REMOVE(_u, DL()); }
-	const char *service_id = OPT("service_id");
+	const char *service_id = SERVICE_ID();
 	if (service_id == NULL)
 		return _reply_format_error(args, BADREQ("No service ID"));
 

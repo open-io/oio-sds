@@ -57,10 +57,10 @@ class TestAdmin(BaseTestCase):
         service_ids = peers.keys()[:2]
         election = self.admin.election_leave(
             "meta2", account=self.account, reference=self.container,
-            service_id=','.join(service_ids))
-        self.assertEqual(2, len(election))
-        self.assertEqual(200, election[service_ids[0]]["status"]["status"])
-        self.assertEqual(200, election[service_ids[1]]["status"]["status"])
+            service_id=service_ids)
+        self.assertEquals(2, len(election))
+        self.assertEquals(200, election[service_ids[0]]["status"]["status"])
+        self.assertEquals(200, election[service_ids[1]]["status"]["status"])
 
     def test_has_base(self):
         info = self.admin.has_base(
