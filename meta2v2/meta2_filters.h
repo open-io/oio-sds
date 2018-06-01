@@ -61,7 +61,6 @@ M2V2_DECLARE_FILTER(meta2_filter_check_ns_not_wormed);
 M2V2_DECLARE_FILTER(meta2_filter_check_events_not_stalled);
 
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_url);
-M2V2_DECLARE_FILTER(meta2_filter_extract_header_copy);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_chunk_beans);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_storage_policy);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_version_policy);

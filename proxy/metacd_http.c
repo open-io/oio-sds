@@ -987,7 +987,6 @@ configure_request_handlers (void)
 	SET("/$NS/content/del_properties/#POST", action_content_prop_del);
 	SET("/$NS/content/touch/#POST", action_content_touch);
 	SET("/$NS/content/spare/#POST", action_content_spare);
-	SET("/$NS/content/copy/#POST", action_content_copy);
 	SET("/$NS/content/update/#POST", action_content_update);
 	SET("/$NS/content/truncate/#POST", action_content_truncate);
 	SET("/$NS/content/purge/#POST", action_content_purge);

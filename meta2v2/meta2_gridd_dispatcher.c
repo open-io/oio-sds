@@ -293,7 +293,6 @@ static gridd_filter M2V2_BEANS_FILTER[] =
 static gridd_filter M2V2_PUT_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
-	meta2_filter_extract_header_copy,
 	meta2_filter_extract_header_optional_overwrite,
 	meta2_filter_extract_header_localflag,
 	meta2_filter_extract_admin,
@@ -555,4 +554,3 @@ meta2_gridd_get_v2_requests(void)
 
 	return descriptions;
 }
-

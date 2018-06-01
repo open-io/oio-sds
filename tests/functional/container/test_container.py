@@ -716,37 +716,6 @@ class TestMeta2Contents(BaseTestCase):
         for r in json_data['contents']:
             self.assertEqual(r['status'], 204)
 
-    def test_copy(self):
-        path = random_content()
-        to = '{0}/{1}/{2}//{3}'.format(self.ns, self.account, self.ref,
-                                       path+'-COPY')
-        headers = {'Destination': to, 'X-oio-action-mode': 'autocreate'}
-
-        resp = self.request('POST', self.url_content('copy'))
-        self.assertError(resp, 400, 400)
-
-        params = self.param_ref(self.ref)
-        resp = self.request('POST', self.url_content('copy'), params=params)
-        self.assertError(resp, 400, 400)
-
-        params = self.param_content(self.ref, path)
-        resp = self.request('POST', self.url_content('copy'), params=params)
-        self.assertError(resp, 400, 400)
-
-        # No user, no container, no content
-        resp = self.request('POST', self.url_content('copy'),
-                            headers=headers, params=params)
-        self.assertError(resp, 404, 406)
-
-        # No content
-        data = json.dumps({'properties': {}})
-        resp = self.request('POST', self.url_container('create'),
-                            params=params, headers=headers, data=data)
-        self.assertEqual(resp.status, 201)
-        resp = self.request('POST', self.url_content('copy'),
-                            headers=headers, params=params)
-        self.assertError(resp, 404, 420)
-
     def test_cycle_properties(self):
         path = random_content()
         params = self.param_content(self.ref, path)
@@ -826,13 +795,6 @@ class TestMeta2Contents(BaseTestCase):
         resp = self.request('GET', self.url_content('show'), params=params)
         self.assertEqual(resp.status, 200)
 
-        to = '{0}/{1}/{2}//{3}-COPY'.format(self.ns, self.account,
-                                            self.ref, path)
-        headers = {'Destination': to}
-        resp = self.request('POST', self.url_content('copy'), headers=headers,
-                            params=params)
-        self.assertEqual(resp.status, 204)
-
         resp = self.request('GET', self.url_content('show'), params=params)
         self.assertEqual(resp.status, 200)
 
@@ -900,13 +862,6 @@ class TestMeta2Contents(BaseTestCase):
                             data=json.dumps(chunks))
         self.assertError(resp, 410, 427)
 
-        # CopyShouldWork
-        to = '{0}/{1}/{2}//{3}-COPY'.format(self.ns, self.account,
-                                            self.ref, path)
-        headers = {'Destination': to}
-        resp = self.request('POST', self.url_content('copy'),
-                            headers=headers, params=params)
-        self.assertEqual(resp.status, 204)
         # DeleteShouldWork
         resp = self.request('POST', self.url_content('delete'), params=params)
         self.assertEqual(resp.status, 204)

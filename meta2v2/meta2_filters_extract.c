@@ -89,20 +89,6 @@ meta2_filter_extract_header_url(struct gridd_filter_ctx_s *ctx,
 }
 
 int
-meta2_filter_extract_header_copy(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	char buf[512];
-
-	TRACE_FILTER();
-	EXTRACT_STRING(NAME_MSGKEY_COPY, TRUE);
-	if (NULL != meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_COPY))
-		meta2_filter_ctx_add_param(ctx, "BODY_OPT", "OK");
-	return FILTER_OK;
-}
-
-int
 meta2_filter_extract_header_storage_policy(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {

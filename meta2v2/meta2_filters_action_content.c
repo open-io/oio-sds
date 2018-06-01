@@ -133,9 +133,46 @@ _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	}
 }
 
-static int
-_put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
+int
+meta2_filter_action_check_content(struct gridd_filter_ctx_s * ctx,
+		struct gridd_reply_ctx_s *reply) {
+	(void) reply;
+	GError *e = NULL;
+	int rc = FILTER_OK;
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+
+	gboolean is_update = FALSE;
+	const char *update = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_UPDATE);
+	if (update != NULL)
+		is_update=TRUE;
+
+	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
+	GString *message= g_string_new("");
+	e = meta2_backend_check_content(m2b, beans, message, is_update);
+	if (e) {
+		GString *gs = oio_event__create("storage.content.broken", url);
+		g_string_append(gs, ",\"data\":{");
+		g_string_append(gs, message->str);
+		g_string_append(gs, "}}");
+		oio_events_queue__send (m2b->notifier, g_string_free (gs, FALSE));
+		if (e->code == CODE_CONTENT_CORRUPTED) {
+			meta2_filter_ctx_set_error(ctx, e);
+			e = NULL;
+			rc = FILTER_KO;
+		} else {
+			g_clear_error(&e);
+		}
+	}
+	g_string_free(message, TRUE);
+	return rc;
+}
+
+int
+meta2_filter_action_put_content(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
 {
+	TRACE_FILTER();
 	GError *e = NULL;
 	gint rc = FILTER_OK;
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
@@ -182,95 +219,6 @@ _put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
 	g_slist_free_full(deleted, (GDestroyNotify)_bean_cleanl2);
 	_on_bean_ctx_clean(obc);
 	return rc;
-}
-
-static int
-_copy_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
-		const char *source)
-{
-	GError *e = NULL;
-	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
-	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	GSList *deleted = NULL;
-
-	GRID_DEBUG("Copying %s from %s", oio_url_get(url, OIOURL_WHOLE), source);
-
-	e = meta2_backend_copy_alias(m2b, url, source, _bean_list_cb, &deleted);
-	if (NULL != e) {
-		GRID_DEBUG("Fail to copy alias (%s) to (%s)", source, oio_url_get(url, OIOURL_WHOLE));
-		meta2_filter_ctx_set_error(ctx, e);
-		return FILTER_KO;
-	} else {
-		for (GSList *l=deleted; l; l=l->next) {
-			_m2b_notify_beans(m2b, url, l->data, "content.deleted", TRUE);
-		}
-
-		// For notification purposes, we need to load all the beans
-		struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
-		e = meta2_backend_get_alias(m2b, url, M2V2_FLAG_NOPROPS,
-				_bean_list_cb, &obc->l);
-		if (!e)
-			_on_bean_ctx_send_list(obc);
-		_on_bean_ctx_clean(obc);
-	}
-
-	g_slist_free_full(deleted, (GDestroyNotify)_bean_cleanl2);
-	return FILTER_OK;
-}
-
-int
-meta2_filter_action_check_content(struct gridd_filter_ctx_s * ctx,
-		struct gridd_reply_ctx_s *reply) {
-	(void) reply;
-	GError *e = NULL;
-	int rc = FILTER_OK;
-	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
-	const char *copy_source = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_COPY);
-	if (copy_source != NULL)
-		return rc;
-
-	gboolean is_update = FALSE;
-	const char *update = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_UPDATE);
-	if (update != NULL)
-		is_update=TRUE;
-
-	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
-	GString *message= g_string_new("");
-	e = meta2_backend_check_content(m2b, beans, message, is_update);
-	if (e) {
-		GString *gs = oio_event__create("storage.content.broken", url);
-		g_string_append(gs, ",\"data\":{");
-		g_string_append(gs, message->str);
-		g_string_append(gs, "}}");
-		oio_events_queue__send (m2b->notifier, g_string_free (gs, FALSE));
-		if (e->code == CODE_CONTENT_CORRUPTED) {
-			meta2_filter_ctx_set_error(ctx, e);
-			e = NULL;
-			rc = FILTER_KO;
-		} else {
-			g_clear_error(&e);
-		}
-	}
-	g_string_free(message, TRUE);
-	return rc;
-}
-
-int
-meta2_filter_action_put_content(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	TRACE_FILTER();
-	const char *copy_source = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_COPY);
-	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
-
-	if (NULL != copy_source) {
-		reply->subject("%s|%s|COPY(%s)", oio_url_get(url, OIOURL_WHOLE),
-				oio_url_get(url, OIOURL_HEXID), copy_source);
-		return _copy_alias(ctx, reply, copy_source);
-	}
-
-	return _put_alias(ctx, reply);
 }
 
 int
