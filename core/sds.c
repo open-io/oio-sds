@@ -278,7 +278,7 @@ _get_meta_bound (GSList *lchunks)
 
 static GError *
 _organize_chunks (GSList *lchunks, struct metachunk_s ***result,
-		gboolean no_shuffle)
+		gboolean no_shuffle, gint64 k)
 {
 	*result = NULL;
 
@@ -321,6 +321,16 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result,
 		/* Even with EC, the value of the 'chunk_size' attribute stored with each
 		 * chunk is the size of the metachunk. */
 		out[i]->size = ((struct chunk_s*)(out[i]->chunks->data))->size;
+	}
+
+	/* patch each metachunk-size and multiply it by K */
+	for (guint i = 0; i < meta_bound; ++i) {
+		struct metachunk_s *mc = out[i];
+		mc->size = mc->size * k;
+		for (GSList *l=mc->chunks; l ;l=l->next) {
+			struct chunk_s *chunk = l->data;
+			chunk->size = mc->size;
+		}
 	}
 
 	/* Compute each metachunk's offset in the main content */
@@ -954,7 +964,7 @@ _download_to_hook (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 			.sds = sds, .dst = dst, .src = src, .chunk_method = chunk_method,
 			.metachunks = NULL, .chunks = chunks,
 		};
-		err = _organize_chunks(chunks, &dl.metachunks, sds->no_shuffle);
+		err = _organize_chunks(chunks, &dl.metachunks, sds->no_shuffle, 1);
 		if (!err) {
 			EXTRA_ASSERT (dl.metachunks != NULL);
 			err = _download (&dl);
@@ -1315,23 +1325,46 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 			g_prefix_error (&err, "Parsing: ");
 		json_object_put (jbody);
 		json_tokener_free (tok);
+	}
 
-		/* Verify we are not doing erasure coding.
-		 * TODO: implement erasure coding in C */
-		if (oio_sds_upload_needs_ecd(ul)) {
-			if (oio_str_is_set(ul->sds->ecd)) {
-				GRID_DEBUG("using ecd gateway");
-			} else {
-				err = NEWERROR(CODE_NOT_IMPLEMENTED,
-						"cannot upload this without ecd");
+	gint64 k = 1;
+
+	/* Verify either we are doing erasure coding or not */
+	if (!err && oio_sds_upload_needs_ecd(ul)) {
+		if (oio_str_is_set(ul->sds->ecd)) {
+			GRID_DEBUG("using ecd gateway");
+		} else {
+			err = NEWERROR(CODE_NOT_IMPLEMENTED,
+					"cannot upload this without ecd");
+		}
+
+		/* If we erasure-code, patch the metachunk-size */
+		gboolean found_k = FALSE;
+		if (!err) {
+			const char *params = strchr(ul->chunk_method, '/') + 1;
+			gchar **tokens = g_strsplit(params, OIO_CSV_SEP, -1);
+			for (gchar **pt=tokens; tokens && *pt && !found_k ;++pt) {
+				if (g_str_has_prefix(*pt, "k=")) {
+					const char *value = strchr(*pt, '=') + 1;
+					k = g_ascii_strtoll(value, NULL, 10);
+					found_k = TRUE;
+				}
 			}
+			if (tokens) g_strfreev(tokens);
+		}
+		if (!err) {
+		   if (!found_k) {
+				err = SYSERR("No K configured for EC");
+		   } else {
+			   ul->chunk_size = ul->chunk_size * k;
+		   }
 		}
 	}
 
 	/* Organize the set of chunks into metachunks. */
 	if (!err) {
 		struct metachunk_s **out = NULL;
-		if ((err = _organize_chunks(_chunks, &out, ul->sds->no_shuffle)))
+		if ((err = _organize_chunks(_chunks, &out, ul->sds->no_shuffle, k)))
 			g_prefix_error (&err, "Logic: ");
 		else
 			for (struct metachunk_s **p = out; *p; ++p)
