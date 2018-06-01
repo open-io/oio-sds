@@ -860,16 +860,20 @@ class ObjectStorageApi(object):
             copies.append(tmp)
         return copies
 
-    # FIXME(FVE): should be named 'object_link'
-    # TODO(FVE): must be optimised to detect that the target account
-    # and container are the same as source account and source container,
-    # and then use the optimised version (just create an alias in meta2).
+    def object_fastcopy(self, *args, **kwargs):
+        """
+        :deprecated: use `object_link`.
+        """
+        warnings.warn("You'd better use object_link()",
+                      DeprecationWarning)
+        return self.object_link(*args, **kwargs)
+
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def object_fastcopy(self, target_account, target_container, target_obj,
-                        link_account, link_container, link_obj,
-                        version=None, properties_directive='COPY', **kwargs):
+    def object_link(self, target_account, target_container, target_obj,
+                    link_account, link_container, link_obj, version=None,
+                    properties_directive='COPY', **kwargs):
         """
         Make a shallow copy of an object.
         Works across accounts and across containers.

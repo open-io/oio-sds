@@ -763,21 +763,21 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertRaises(
             exc.NoSuchAccount, self.api.account_flush, account)
 
-    def test_object_simple_fast_copy_different_container(self):
+    def test_object_link_different_container(self):
         target_container = random_str(16)
         link_container = random_str(16)
         target_obj = random_str(16)
         link_obj = random_str(16)
         self.api.object_create(self.account, target_container, data="1"*128,
                                obj_name=target_obj)
-        self.api.object_fastcopy(self.account, target_container, target_obj,
-                                 self.account, link_container, link_obj)
+        self.api.object_link(self.account, target_container, target_obj,
+                             self.account, link_container, link_obj)
         _, data = self.api.object_fetch(self.account, link_container, link_obj)
         data = "".join(data)
         self.assertEqual(len(data), 128)
         self.assertEqual(data, "1" * 128)
 
-    def test_object_simple_fast_copy_different_container_no_autocreate(self):
+    def test_object_link_different_container_no_autocreate(self):
         target_container = random_str(16)
         link_container = random_str(16)
         target_obj = random_str(16)
@@ -786,33 +786,33 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
                                obj_name=target_obj)
         self.assertRaises(
             exc.NotFound,
-            self.api.object_fastcopy, self.account, target_container,
+            self.api.object_link, self.account, target_container,
             target_obj, self.account, link_container, link_obj,
             autocreate=False)
 
-    def test_object_simple_fast_copy_same_container(self):
+    def test_object_link_same_container(self):
         container = random_str(16)
         target_obj = random_str(16)
         link_obj = random_str(16)
         self.api.object_create(self.account, container, data="1"*128,
                                obj_name=target_obj)
-        self.api.object_fastcopy(self.account, container, target_obj,
-                                 self.account, container, link_obj)
+        self.api.object_link(self.account, container, target_obj,
+                             self.account, container, link_obj)
         _, data = self.api.object_fetch(self.account, container, link_obj)
         data = "".join(data)
         self.assertEqual(len(data), 128)
         self.assertEqual(data, "1" * 128)
 
-    def test_object_simple_fast_copy_same_name_same_container(self):
+    def test_object_link_same_name_same_container(self):
         """ Considered as a rename"""
         container = random_str(16)
         obj = random_str(16)
         self.api.object_create(self.account, container, data="1"*128,
                                obj_name=obj)
-        self.api.object_fastcopy(self.account, container, obj,
-                                 self.account, container, obj)
+        self.api.object_link(self.account, container, obj,
+                             self.account, container, obj)
 
-    def test_object_simple_fast_copy_with_already_existing_name(self):
+    def test_object_link_with_already_existing_name(self):
         target_container = random_str(16)
         link_container = random_str(16)
         target_obj = random_str(16)
@@ -821,14 +821,14 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
                                obj_name=target_obj)
         self.api.object_create(self.account, target_container, data="0"*128,
                                obj_name=link_obj)
-        self.api.object_fastcopy(self.account, target_container, target_obj,
-                                 self.account, link_container, link_obj)
+        self.api.object_link(self.account, target_container, target_obj,
+                             self.account, link_container, link_obj)
         _, data = self.api.object_fetch(self.account, link_container, link_obj)
         data = "".join(data)
         self.assertEqual(len(data), 128)
         self.assertEqual(data, "1" * 128)
 
-    def test_object_simple_fast_copy_with_metadata(self):
+    def test_object_link_with_metadata(self):
         target_container = random_str(16)
         link_container = random_str(16)
         target_obj = random_str(16)
@@ -836,18 +836,18 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.object_create(self.account, target_container, data="1"*128,
                                obj_name=target_obj,
                                metadata={'AAA': '1', 'BBB': '1'})
-        self.api.object_fastcopy(self.account, target_container, target_obj,
-                                 self.account, link_container, link_obj,
-                                 metadata={'BBB': '2'})
+        self.api.object_link(self.account, target_container, target_obj,
+                             self.account, link_container, link_obj,
+                             metadata={'BBB': '2'})
         metadata, _ = self.api.object_fetch(self.account, link_container,
                                             link_obj)
         self.assertDictEqual(metadata.get('properties', {}),
                              {'AAA': '1', 'BBB': '1'})
 
-        self.api.object_fastcopy(self.account, target_container, target_obj,
-                                 self.account, link_container, link_obj,
-                                 metadata={'BBB': '2'},
-                                 properties_directive='REPLACE')
+        self.api.object_link(self.account, target_container, target_obj,
+                             self.account, link_container, link_obj,
+                             metadata={'BBB': '2'},
+                             properties_directive='REPLACE')
         metadata, _ = self.api.object_fetch(self.account, link_container,
                                             link_obj)
         self.assertDictEqual(metadata.get('properties', {}),
