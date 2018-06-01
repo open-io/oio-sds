@@ -131,14 +131,14 @@ class MetaMapping(object):
             no_longer_used = [v for v in old_peers if v not in peers]
             service_type = self._get_service_type_by_base(base)
             cid, _ = self.get_cid_and_seq(base)
-            for service_id in no_longer_used:
+            if no_longer_used:
                 try:
-                    self.admin.election_leave(service_type, cid=cid,
-                                              service_id=service_id)
+                    self.admin.remove_base(service_type, cid=cid,
+                                           service_id=no_longer_used)
                 except OioException as exc:
                     self.logger.warn(
-                        "Failed to leave the election for base %s (%s): %s",
-                        cid, service_id, exc)
+                        "Failed to remove the base %s (%s): %s",
+                        cid, no_longer_used.join(','), exc)
             try:
                 self.admin.election_leave(service_type, cid=cid)
                 election = self.admin.election_status(service_type, cid=cid)

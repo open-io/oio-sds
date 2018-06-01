@@ -388,6 +388,13 @@ oio_meta2_mover()
     fi
   done
 
+  if [ "$(/usr/bin/find "${META2_LOC_TO_MOVE}" -type f 2> /dev/null \
+      | /usr/bin/wc -l)" -ne 0 ]; then
+    echo "Not empty for the meta2 ${META2_IP_TO_MOVE}"
+    FAIL=true
+    continue
+  fi
+
   if [ "${FAIL}" = true ]; then
     printf "${RED}\noio-meta2-mover: FAILED\n${NO_COLOR}"
     exit 1

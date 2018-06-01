@@ -64,7 +64,13 @@ class AdminClient(ProxyClient):
         Force all peers to leave the election.
         """
         if service_id:
-            params['service_id'] = service_id
+            if isinstance(service_id, basestring):
+                params['service_id'] = service_id
+            else:
+                try:
+                    params['service_id'] = ','.join(service_id)
+                except Exception:
+                    raise ValueError("'service_id' must be a string or a list")
         _, body = self._request('POST', '/leave', params=params, **kwargs)
         return body
 
@@ -192,6 +198,21 @@ class AdminClient(ProxyClient):
         """
         self._request('POST', "/copy",
                       params=params, json={'to': svc_to}, **kwargs)
+
+    @loc_params
+    def remove_base(self, params, service_id, **kwargs):
+        """
+        Remove specific base.
+        """
+        if isinstance(service_id, basestring):
+            params['service_id'] = service_id
+        else:
+            try:
+                params['service_id'] = ','.join(service_id)
+            except Exception:
+                raise ValueError("'service_id' must be a string or a list")
+        _, body = self._request('POST', '/remove', params=params, **kwargs)
+        return body
 
     def _forward_service_action(self, svc_id, action, **kwargs):
         """Execute service-specific actions."""

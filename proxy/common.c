@@ -248,7 +248,7 @@ gridd_request_replicated (struct req_args_s *args, struct client_ctx_s *ctx,
 	/* Locate the services */
 label_retry:
 	if (ctx->which == CLIENT_SPECIFIED) {
-		const char *service_id = OPT("service_id");
+		const char *service_id = SERVICE_ID();
 		EXTRA_ASSERT(service_id != NULL);
 		m1uv = g_strsplit(service_id, OIO_CSV_SEP, -1);
 	} else if (*ctx->type == '#') {
