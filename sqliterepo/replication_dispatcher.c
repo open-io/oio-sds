@@ -1686,6 +1686,34 @@ _handler_PIPETO(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
+_handler_REMOVE(struct gridd_reply_ctx_s *reply,
+		struct sqlx_repository_s *repo, gpointer ignored)
+{
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	struct sqlx_name_inline_s name;
+	NAME2CONST(n0, name);
+
+	(void) ignored;
+	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
+		reply->send_error(0, err);
+		return TRUE;
+	}
+
+	err = sqlx_repository_open_and_lock(repo, &n0,
+			SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK, &sq3, NULL);
+	if (err) {
+		reply->send_error(0, err);
+		return TRUE;
+	}
+	sq3->deleted = TRUE;
+	sqlx_repository_unlock_and_close_noerror(sq3);
+
+	reply->send_reply(CODE_FINAL_OK, "OK");
+	return TRUE;
+}
+
+static gboolean
 _handler_DUMP(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
@@ -2514,6 +2542,7 @@ sqlx_repli_gridd_get_requests(void)
 		{NAME_MSGNAME_SQLX_EXITELECTION, (hook) _handler_EXIT,      NULL},
 		{NAME_MSGNAME_SQLX_PIPETO,       (hook) _handler_PIPETO,    NULL},
 		{NAME_MSGNAME_SQLX_PIPEFROM,     (hook) _handler_PIPEFROM,  NULL},
+		{NAME_MSGNAME_SQLX_REMOVE,       (hook) _handler_REMOVE,    NULL},
 		{NAME_MSGNAME_SQLX_SNAPSHOT,     (hook) _handler_SNAPSHOT,  NULL},
 		{NAME_MSGNAME_SQLX_DUMP,         (hook) _handler_DUMP,      NULL},
 		{NAME_MSGNAME_SQLX_RESTORE,      (hook) _handler_RESTORE,   NULL},
@@ -2541,4 +2570,3 @@ sqlx_sql_gridd_get_requests(void)
 
 	return descriptions;
 }
-

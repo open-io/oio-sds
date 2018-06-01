@@ -358,6 +358,17 @@ action_admin_copy (struct req_args_s *args)
 }
 
 enum http_rc_e
+action_admin_remove (struct req_args_s *args)
+{
+	PACKER_VOID(_pack) { return sqlx_pack_REMOVE(_u, DL()); }
+	const char *service_id = OPT("service_id");
+	if (service_id == NULL)
+		return _reply_format_error(args, BADREQ("No service ID"));
+
+	return _sqlx_action_noreturn(args, CLIENT_SPECIFIED, _pack);
+}
+
+enum http_rc_e
 action_admin_prop_get (struct req_args_s *args)
 {
 	return rest_action (args, action_sqlx_propget);
