@@ -295,7 +295,8 @@ ErrorLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-errors.log
 CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-access.log log/common env=!nolog
 LogLevel info
 
-WSGIDaemonProcess ${SRVTYPE}-${SRVNUM} processes=2 threads=1 user=${USER} group=${GROUP}
+#WSGIDaemonProcess ${SRVTYPE}-${SRVNUM} processes=8 threads=1 response-buffer-size=8388608 send-buffer-size=8388608 receive-buffer-size=8388608 user=${USER} group=${GROUP}
+WSGIDaemonProcess ${SRVTYPE}-${SRVNUM} processes=8 threads=1 user=${USER} group=${GROUP}
 #WSGIProcessGroup ${SRVTYPE}-${SRVNUM}
 WSGIApplicationGroup ${SRVTYPE}-${SRVNUM}
 WSGIScriptAlias / ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.wsgi
