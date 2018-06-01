@@ -199,7 +199,7 @@ const char * oio_error_message (const struct oio_error_s *e);
 /**
  * Prepare an OpenIO SDS client.
  *
- * @param out A placeholder for the 
+ * @param out A placeholder for the
  * @param ns
  * @return NULL if an error occured, or a pointer to a valid OpenIO SDS client.
  */
@@ -574,21 +574,6 @@ struct oio_error_s* oio_sds_get_container_properties (struct oio_sds_s *sds,
 /** Set properties of a file with the val values */
 struct oio_error_s* oio_sds_set_container_properties(struct oio_sds_s *sds,
 		struct oio_url_s *url, const char * const *val);
-
-/** Creates an alias named 'url' pointing on the physical content 'content_id'
- * in the same container.
- *  'url' be a fully qualified content URI.
- *  'content_id' must be an hexadecimal string. */
-struct oio_error_s* oio_sds_link (struct oio_sds_s *sds, struct oio_url_s *url,
-		const char *content_id);
-
-/**
- * Attempts a link with oio_sds_link(), then calls oio_sds_upload_from_source()
- * in case of error, if the link failed because of a content not found.
- * The underlying call to oio_sds_link() requires the 'content_id' field of
- * 'dst' to be set to a non-NULL value. */
-struct oio_error_s* oio_sds_link_or_upload (struct oio_sds_s *sds,
-		struct oio_sds_ul_src_s *src, struct oio_sds_ul_dst_s *dst);
 
 /**
  * Truncate a content to the specified size.

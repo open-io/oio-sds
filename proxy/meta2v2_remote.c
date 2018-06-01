@@ -449,12 +449,6 @@ m2v2_remote_pack_ISEMPTY (struct oio_url_s *url, guint32 flags, gint64 dl)
 	return _m2v2_pack_request_with_flags(NAME_MSGNAME_M2V2_ISEMPTY, url, NULL, flags, dl);
 }
 
-GByteArray*
-m2v2_remote_pack_LINK(struct oio_url_s *url, gint64 dl)
-{
-	return _m2v2_pack_request(NAME_MSGNAME_M2V2_LINK, url, NULL, dl);
-}
-
 /* ------------------------------------------------------------------------- */
 
 GError*

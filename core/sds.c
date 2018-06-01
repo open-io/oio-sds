@@ -2282,41 +2282,6 @@ end:
 /* Misc. -------------------------------------------------------------------- */
 
 struct oio_error_s*
-oio_sds_link (struct oio_sds_s *sds, struct oio_url_s *url, const char *content_id)
-{
-	if (!sds || !url || !content_id)
-		return (struct oio_error_s*) BADREQ("Missing argument");
-	if (!oio_str_ishexa1 (content_id))
-		return (struct oio_error_s*) BADREQ("content_id not hexadecimal");
-	oio_ext_set_reqid (sds->session_id);
-	oio_ext_set_admin (sds->admin);
-
-	GError *err;
-	CURL_DO(sds, H, err = oio_proxy_call_content_link (H, url, content_id));
-	return (struct oio_error_s*) err;
-}
-
-struct oio_error_s*
-oio_sds_link_or_upload (struct oio_sds_s *sds, struct oio_sds_ul_src_s *src,
-		struct oio_sds_ul_dst_s *dst)
-{
-	if (!sds || !src || !dst)
-		return (struct oio_error_s*) BADREQ("Missing argument");
-	if (!dst->content_id)
-		return (struct oio_error_s*) BADREQ("Missing content ID");
-	if (dst->partial || dst->append)
-		return (struct oio_error_s*) BADREQ("Append and Partial uploads forbidden");
-
-	struct oio_error_s *err = oio_sds_link (sds, dst->url, dst->content_id);
-	if (!err)
-		return NULL;
-	int code = oio_error_code(err);
-	if (code == CODE_CONTENT_NOTFOUND || code == CODE_NOT_IMPLEMENTED)
-		oio_error_pfree (&err);
-	return oio_sds_upload (sds, src, dst);
-}
-
-struct oio_error_s*
 oio_sds_truncate (struct oio_sds_s *sds, struct oio_url_s *url, size_t size)
 {
 	if (!sds || !url)

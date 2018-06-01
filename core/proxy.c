@@ -610,19 +610,6 @@ oio_proxy_call_content_delete (CURL *h, struct oio_url_s *u)
 }
 
 GError *
-oio_proxy_call_content_link (CURL *h, struct oio_url_s *u, const char *id)
-{
-	GString *http_url = _curl_content_url (u, "link");
-	if (!http_url) return BADNS();
-
-	struct http_ctx_s i = { .headers = NULL, .body = _gs_vprintf("{\"id\":\"%s\"}", id) };
-	GError *err = _proxy_call (h, "POST", http_url->str, &i, NULL);
-	g_string_free (http_url, TRUE);
-	g_string_free (i.body, TRUE);
-	return err;
-}
-
-GError *
 oio_proxy_call_content_truncate (CURL *h, struct oio_url_s *u, gint64 size)
 {
 	GString *http_url = _curl_content_url(u, "truncate");

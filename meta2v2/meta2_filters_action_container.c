@@ -507,41 +507,6 @@ meta2_filter_action_update_beans(struct gridd_filter_ctx_s *ctx,
 }
 
 int
-meta2_filter_action_link(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	(void) reply;
-	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
-	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	GError *err = NULL;
-	GBytes *id = NULL;
-
-	// Get the header ID (binary form)
-	const char *hexid = oio_url_get(url, OIOURL_CONTENTID);
-	if (!hexid)
-		err = BADREQ("Missing content ID");
-	else if (!oio_str_ishexa1(hexid))
-		err = BADREQ("Invalid content ID");
-	else
-		id = g_byte_array_free_to_bytes (metautils_gba_from_hexstring(hexid));
-
-	// Perform the link
-	if (!err) {
-		GRID_DEBUG("Linking [%s] to [%s]", oio_url_get(url, OIOURL_WHOLE), hexid);
-		err = meta2_backend_link_content (m2b, url, id);
-	}
-
-	// Cleanup and exit
-	if (id)
-		g_bytes_unref (id);
-	if (!err)
-		return FILTER_OK;
-
-	meta2_filter_ctx_set_error(ctx, err);
-	return FILTER_KO;
-}
-
-int
 meta2_filter_action_touch_container(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply UNUSED)
 {
