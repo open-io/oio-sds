@@ -295,14 +295,6 @@ m2v2_remote_pack_APPEND(struct oio_url_s *url, GSList *beans, gint64 dl)
 }
 
 GByteArray*
-m2v2_remote_pack_COPY(struct oio_url_s *url, const char *src, gint64 dl)
-{
-	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_PUT, url, NULL, dl);
-	metautils_message_add_field_str(msg, NAME_MSGKEY_COPY, src);
-	return message_marshall_gba_and_clean(msg);
-}
-
-GByteArray*
 m2v2_remote_pack_DRAIN(struct oio_url_s *url, gint64 dl)
 {
 	return _m2v2_pack_request(NAME_MSGNAME_M2V2_DRAIN, url, NULL, dl);

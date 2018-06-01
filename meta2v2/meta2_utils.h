@@ -180,9 +180,6 @@ GError* m2db_force_alias(struct m2db_put_args_s *args, GSList *in,
 		m2_onbean_cb cb_deleted, gpointer u0_deleted,
 		m2_onbean_cb cb_added, gpointer u0_added);
 
-GError* m2db_copy_alias(struct m2db_put_args_s *args, const char *source,
-		m2_onbean_cb cb_deleted, gpointer u0_deleted);
-
 GError* m2db_append_to_alias(struct sqlx_sqlite3_s *sq3,
 		struct oio_url_s *url, GSList *beans,
 		m2_onbean_cb cb, gpointer u0);

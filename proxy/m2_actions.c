@@ -2220,40 +2220,6 @@ enum http_rc_e action_content_drain(struct req_args_s *args) {
 	return _reply_m2_error(args, err);
 }
 
-enum http_rc_e action_content_copy (struct req_args_s *args) {
-	const gchar *target = g_tree_lookup (args->rq->tree_headers, "destination");
-	const gchar *_err = NULL;
-
-	if (!target)
-		return _reply_format_error(args, BADREQ("Missing target header"));
-
-	struct oio_url_s *target_url = oio_url_init(target);
-	if (!target_url || !oio_url_check(target_url, NULL, &_err))
-		return _reply_format_error(args, BADREQ("Invalid %s in target header", _err));
-
-	// Check the namespace and container match between both URLs
-	if (!oio_url_has(target_url, OIOURL_HEXID)
-			|| !oio_url_has(target_url, OIOURL_NS)
-			|| !oio_url_has(target_url, OIOURL_PATH)) {
-		oio_url_pclean(&target_url);
-		return _reply_format_error(args, BADREQ("Invalid source URL"));
-	}
-	if (!oio_url_has(args->url, OIOURL_HEXID)
-			|| !oio_url_has(args->url, OIOURL_NS)
-			|| strcmp(oio_url_get(target_url, OIOURL_NS), oio_url_get(args->url, OIOURL_NS))
-			|| strcmp(oio_url_get(target_url, OIOURL_HEXID), oio_url_get(args->url, OIOURL_HEXID))) {
-		oio_url_pclean(&target_url);
-		return _reply_format_error(args, BADREQ("Invalid source/target URL"));
-	}
-
-	PACKER_VOID(_pack) {
-		return m2v2_remote_pack_COPY (target_url, oio_url_get(args->url, OIOURL_PATH), DL());
-	}
-	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
-	oio_url_pclean(&target_url);
-	return _reply_m2_error (args, err);
-}
-
 enum http_rc_e action_content_purge (struct req_args_s *args) {
 	return rest_action (args, action_m2_content_purge);
 }
