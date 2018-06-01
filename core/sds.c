@@ -1487,19 +1487,20 @@ _sds_upload_add_headers(struct oio_sds_ul_s *ul, struct http_put_dest_s *dest)
 			"%s", escaped);
 	g_free (escaped);
 
-	const gchar *full_path = oio_url_get(ul->dst->url, OIOURL_FULLPATH);
-	if (!oio_url_has(ul->dst->url, OIOURL_VERSION))
-		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "full-path", "%s/%"
-				G_GINT64_FORMAT, full_path, ul->version);
-	else
-		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "full-path", "%s",
-				full_path);
+	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-version",
+			"%" G_GINT64_FORMAT, ul->version);
+
+	struct oio_url_s *url = oio_url_dup(ul->dst->url);
+	gchar version[21];
+	g_sprintf(version, "%"G_GINT64_FORMAT, ul->version);
+	oio_url_set(url, OIOURL_VERSION, version);
+	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "full-path", "%s",
+			g_strdup(oio_url_get(url, OIOURL_FULLPATH)));
+	oio_url_clean(url);
 
 	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "oio-version", "%s",
 			oio_sds_client_version);
 
-	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-version",
-			"%" G_GINT64_FORMAT, ul->version);
 	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-id",
 			"%s", ul->hexid);
 

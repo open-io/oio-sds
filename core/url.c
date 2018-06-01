@@ -182,6 +182,43 @@ _compute_id (struct oio_url_s *url)
 	return 1;
 }
 
+static gchar *
+_pack_fullpath(struct oio_url_s *u)
+{
+	GString *gs = g_string_new("");
+	if (u->account)
+		g_string_append_uri_escaped(gs, u->account, NULL, TRUE);
+	g_string_append_c(gs, '/');
+	if (u->user)
+		g_string_append_uri_escaped(gs, u->user, NULL, TRUE);
+	g_string_append_c(gs, '/');
+	if (u->path)
+		g_string_append_uri_escaped(gs, u->path, NULL, TRUE);
+	g_string_append_c(gs, '/');
+	if (u->version)
+		g_string_append(gs, u->version);
+	return g_string_free(gs, FALSE);
+}
+
+static void
+_unpack_fullpath(struct oio_url_s *u, const gchar *strfullpath)
+{
+	gchar **fullpath = g_strsplit(strfullpath, "/", -1);
+	if (g_strv_length(fullpath) == 4) {
+		char *account = g_uri_unescape_string(fullpath[0], NULL);
+		oio_url_set(u, OIOURL_ACCOUNT, account);
+		g_free(account);
+		char *container = g_uri_unescape_string(fullpath[1], NULL);
+		oio_url_set(u, OIOURL_USER, container);
+		g_free(container);
+		char *path = g_uri_unescape_string(fullpath[2], NULL);
+		oio_url_set(u, OIOURL_PATH, path);
+		g_free(path);
+		oio_url_set(u, OIOURL_VERSION, fullpath[3]);
+	}
+	g_strfreev(fullpath);
+}
+
 /* ------------------------------------------------------------------------- */
 
 struct oio_url_s *
@@ -309,7 +346,8 @@ oio_url_set(struct oio_url_s *u, enum oio_url_field_e f, const char *v)
 			return NULL;
 
 		case OIOURL_FULLPATH:
-			return NULL;
+			_unpack_fullpath(u, v);
+			return u;
 
 		case OIOURL_HEXID:
 			u->hexid[0] = 0;
@@ -473,28 +511,6 @@ _pack_url(struct oio_url_s *u)
 	return gs;
 }
 
-static GString *
-_pack_fullpath(struct oio_url_s *u)
-{
-	GString *gs = g_string_new("");
-	if (u->account) {
-		g_string_append_uri_escaped(gs, u->account, NULL, TRUE);
-		if (u->user) {
-			g_string_append_c(gs, '/');
-			g_string_append_uri_escaped(gs, u->user, NULL, TRUE);
-			if (u->path) {
-				g_string_append_c(gs, '/');
-				g_string_append_uri_escaped(gs, u->path, NULL, TRUE);
-				if (u->version) {
-					g_string_append_c(gs, '/');
-					g_string_append_uri_escaped(gs, u->version, NULL, TRUE);
-				}
-			}
-		}
-	}
-	return gs;
-}
-
 const char*
 oio_url_get(struct oio_url_s *u, enum oio_url_field_e f)
 {
@@ -535,7 +551,7 @@ oio_url_get(struct oio_url_s *u, enum oio_url_field_e f)
 
 		case OIOURL_FULLPATH:
 			if (!u->fullpath)
-				u->fullpath = g_string_free(_pack_fullpath(u), FALSE);
+				u->fullpath = _pack_fullpath(u);
 			return u->fullpath;
 	}
 
