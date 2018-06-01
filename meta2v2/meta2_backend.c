@@ -1119,31 +1119,6 @@ meta2_backend_insert_beans(struct meta2_backend_s *m2b,
 }
 
 GError*
-meta2_backend_link_content (struct meta2_backend_s *m2b,
-		struct oio_url_s *url, GBytes *content_id)
-{
-	EXTRA_ASSERT (m2b != NULL);
-	EXTRA_ASSERT (url != NULL);
-	EXTRA_ASSERT (content_id != NULL);
-
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_repctx_s *repctx = NULL;
-
-	err = m2b_open (m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
-	if (err) return err;
-
-	if (!(err = sqlx_transaction_begin (sq3, &repctx))) {
-		if (NULL != (err = m2db_link_content (sq3, url, content_id)))
-			GRID_DEBUG("Link failed: (%d) %s", err->code, err->message);
-		err = sqlx_transaction_end (repctx, err);
-	}
-
-	m2b_close (sq3);
-	return err;
-}
-
-GError*
 meta2_backend_delete_beans(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *beans)
 {

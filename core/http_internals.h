@@ -146,9 +146,6 @@ GError * oio_proxy_call_content_drain(CURL *h, struct oio_url_s *u);
 
 GError * oio_proxy_call_content_delete (CURL *h, struct oio_url_s *u);
 
-GError * oio_proxy_call_content_link (CURL *h, struct oio_url_s *u,
-		const char *id);
-
 GError * oio_proxy_call_content_truncate (CURL *h, struct oio_url_s *u,
 		gint64 size);
 

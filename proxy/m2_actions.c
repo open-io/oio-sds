@@ -1899,33 +1899,6 @@ static enum http_rc_e action_m2_content_touch (struct req_args_s *args,
 	return _reply_m2_error (args, err);
 }
 
-static enum http_rc_e action_m2_content_link (struct req_args_s *args,
-		struct json_object *jargs) {
-	if (!oio_url_has_fq_container(args->url))
-		return _reply_m2_error (args, BADREQ("no container identified"));
-	if (NULL != CONTENT())
-		return _reply_m2_error (args, BADREQ("No content allowed in the URL"));
-	if (!jargs || !json_object_is_type (jargs, json_type_object))
-		return _reply_m2_error (args, BADREQ("Expected: json object"));
-
-	struct json_object *jid = NULL;
-	struct oio_ext_json_mapping_s m[] = {
-		{"id",  &jid,  json_type_string, 1},
-		{NULL, NULL, 0, 0}
-	};
-	GError *err = oio_ext_extract_json (jargs, m);
-	if (err)
-		return _reply_m2_error (args, BADREQ("Expected: id (string)"));
-
-	const char *id = json_object_get_string (jid);
-	if (!oio_url_set (args->url, OIOURL_CONTENTID, id))
-		return _reply_m2_error (args, BADREQ("Expected: id (hexa string)"));
-
-	PACKER_VOID(_pack) { return m2v2_remote_pack_LINK (args->url, DL()); }
-	err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
-	return _reply_m2_error (args, err);
-}
-
 static enum http_rc_e action_m2_content_propset (struct req_args_s *args,
 		struct json_object *jargs) {
 	if (CONTENT())
@@ -2192,10 +2165,6 @@ enum http_rc_e action_content_delete_many (struct req_args_s *args) {
 
 enum http_rc_e action_content_touch (struct req_args_s *args) {
 	return rest_action (args, action_m2_content_touch);
-}
-
-enum http_rc_e action_content_link (struct req_args_s *args) {
-	return rest_action (args, action_m2_content_link);
 }
 
 enum http_rc_e action_content_spare (struct req_args_s *args) {

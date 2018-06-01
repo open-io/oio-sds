@@ -228,14 +228,11 @@ _roundtrip_tail (struct file_info_s *fi0, const char * content_id,
 	gchar tmppath[256];
 	struct oio_error_s *err = NULL;
 	struct file_info_s fi;
-	struct oio_url_s *url1;
 
 	g_snprintf (tmppath, sizeof(tmppath),
 			"/tmp/test-roundtrip-%d-%"G_GINT64_FORMAT"-",
 			getpid(), oio_ext_real_time());
 	oio_str_randomize (tmppath+strlen(tmppath), 17, random_chars);
-	url1 = oio_url_dup (url);
-	oio_url_set (url1, OIOURL_PATH, tmppath);
 
 	GRID_DEBUG ("Roundtrip on local(%s) distant(%s) content_id(%s)", tmppath,
 			oio_url_get (url, OIOURL_WHOLE), content_id);
@@ -266,10 +263,6 @@ _roundtrip_tail (struct file_info_s *fi0, const char * content_id,
 		};
 		err = oio_sds_download (client, &dl_src, &dl_dst);
 	} while (0);
-	NOERROR(err);
-
-	/* link the container */
-	err = oio_sds_link (client, url1, content_id);
 	NOERROR(err);
 
 	/* List the container, the content must appear */
@@ -395,18 +388,10 @@ _roundtrip_tail (struct file_info_s *fi0, const char * content_id,
 	/* Check the content is not present anymore */
 	CHECK_ABSENT(client,url);
 
-	/* Remove the linked content from the container */
-	err = oio_sds_delete (client, url1);
-	NOERROR(err);
-
-	/* Check the content is not present anymore */
-	CHECK_ABSENT(client,url1);
-
 	/* TODO deleting twice SHOULD fail. */
 	/* TODO setting properties on the content MUST fail */
 	/* TODO getting properties from the content MUST fail */
 
-	oio_url_pclean(&url1);
 	g_remove (tmppath);
 }
 
