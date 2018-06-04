@@ -23,9 +23,8 @@ License along with this library.
 #include <glib/gstdio.h>
 
 #include <core/oio_sds.h>
-#include <core/oioext.h>
-#include <core/oiolog.h>
-#include <core/oiostr.h>
+#include <core/oio_core.h>
+#include <metautils/lib/storage_policy.h>
 
 #include "internals.h"
 
@@ -572,7 +571,8 @@ _roundtrip_put_from_file (const char * const * properties)
 static void
 check_chunksize (const char * const * properties)
 {
-	int64_t chunk_size = 5*1024*1024;
+	const gint64 mega = 1024 * 1024;
+	gint64 chunk_size = 5 * mega;
 	struct oio_error_s *err = NULL;
 
 	struct oio_url_s *url_random = oio_url_dup(url);
@@ -581,7 +581,7 @@ check_chunksize (const char * const * properties)
 	oio_url_set(url_random, OIOURL_PATH, path);
 
 	/* generate a buffer to work in. First we fill it of random bytes */
-	gsize size = 7*1024*1024;
+	const gsize size = chunk_size + 1 * mega;
 	guint8 *buffer = g_malloc(size);
 	g_assert_nonnull(buffer);
 	oio_buf_randomize(buffer, size);
@@ -608,16 +608,26 @@ check_chunksize (const char * const * properties)
 
 	/* get details on the content */
 	gsize max_size[2] = {0};
+	guint k = 1;
+	void _on_info(void *i UNUSED, enum oio_sds_content_key_e key, const char *v) {
+		if (key != OIO_SDS_CONTENT_CHUNKMETHOD)
+			return;
+		k = data_security_decode_param_int64(v, DS_KEY_K, 1);
+	}
 	void _on_metachunk(void *i UNUSED, guint seq, gsize offt, gsize len) {
 		GRID_DEBUG("metachunk: %u, %"G_GSIZE_FORMAT" %"G_GSIZE_FORMAT,
 				seq, offt, len);
 		g_assert_cmpuint(seq, <, 2);
 		max_size[seq] = len;
 	}
-	err = oio_sds_show_content(client, url, NULL, NULL, _on_metachunk, NULL);
+	err = oio_sds_show_content(client, url, NULL, _on_info, _on_metachunk, NULL);
 	NOERROR(err);
-	g_assert_cmpuint(max_size[0], ==, chunk_size);
-	g_assert_cmpuint(max_size[1], ==, size - chunk_size);
+	if (k == 1) {
+		g_assert_cmpuint(max_size[0], ==, chunk_size);
+		g_assert_cmpuint(max_size[1], ==, size - chunk_size);
+	} else {
+		g_assert_cmpuint(max_size[0], <=, k * chunk_size);
+	}
 
 	/* delete the content */
 	err = oio_sds_delete(client, url);
@@ -752,6 +762,10 @@ main(int argc, char **argv)
 
 	if (argc != 2) {
 		g_printerr ("Usage: %s PATH\n", argv[0]);
+		return 1;
+	}
+	if (!oio_var_value_with_files(g_getenv("OIO_NS"), TRUE, NULL)) {
+		g_printerr("Unknown NS [%s]\n", g_getenv("OIO_NS"));
 		return 1;
 	}
 

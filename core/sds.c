@@ -1339,26 +1339,8 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 		}
 
 		/* If we erasure-code, patch the metachunk-size */
-		gboolean found_k = FALSE;
-		if (!err) {
-			const char *params = strchr(ul->chunk_method, '/') + 1;
-			gchar **tokens = g_strsplit(params, OIO_CSV_SEP, -1);
-			for (gchar **pt=tokens; tokens && *pt && !found_k ;++pt) {
-				if (g_str_has_prefix(*pt, "k=")) {
-					const char *value = strchr(*pt, '=') + 1;
-					k = g_ascii_strtoll(value, NULL, 10);
-					found_k = TRUE;
-				}
-			}
-			if (tokens) g_strfreev(tokens);
-		}
-		if (!err) {
-		   if (!found_k) {
-				err = SYSERR("No K configured for EC");
-		   } else {
-			   ul->chunk_size = ul->chunk_size * k;
-		   }
-		}
+		k = data_security_decode_param_int64(ul->chunk_method, "k", 1);
+		ul->chunk_size = ul->chunk_size * k;
 	}
 
 	/* Organize the set of chunks into metachunks. */

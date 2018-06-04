@@ -86,4 +86,24 @@ const char * data_security_get_param(const struct data_security_s *ds,
 gint64 data_security_get_int64_param(const struct data_security_s *ds,
 		const char *key, gint64 def);
 
+static inline gint64
+data_security_decode_param_int64 (const char *encoded, const char *k, gint64 def)
+{
+	gint64 rc = def;
+	const char *params = strchr(encoded, '/') + 1;
+	gchar **tokens = g_strsplit(params, OIO_CSV_SEP, -1);
+	gchar *prefix = g_strdup_printf("%s=", k);
+	for (gchar **pt=tokens; tokens && *pt ;++pt) {
+		if (g_str_has_prefix(*pt, prefix)) {
+			const char *value = strchr(*pt, '=') + 1;
+			if (oio_str_is_number(value, &rc))
+				break;
+		}
+	}
+	if (tokens)
+		g_strfreev(tokens);
+	g_free(prefix);
+	return rc;
+}
+
 #endif /*OIO_SDS__metautils__lib__storage_policy_h*/
