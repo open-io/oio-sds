@@ -1849,7 +1849,7 @@ _upload_sequential (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 		err = oio_sds_upload_prepare(ul, src->data.hook.size);
 
 	size_t sent = 0;
-	const size_t blen = 131072;
+	const size_t blen = 262144;
 	guint8 *b = g_malloc(blen);
 
 	while (!err && !oio_sds_upload_done (ul)) {
