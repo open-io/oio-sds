@@ -742,6 +742,10 @@ _curl_get_handle_blob (void)
 	curl_easy_setopt (h, CURLOPT_PROXY, "");
 	curl_easy_setopt (h, CURLOPT_SOCKOPTDATA, NULL);
 	curl_easy_setopt (h, CURLOPT_SOCKOPTFUNCTION, _curl_set_sockopt_blob);
+	if (oio_socket_rawx_buflen > 0) {
+		unsigned long opt = oio_socket_rawx_buflen;
+		curl_easy_setopt (h, CURLOPT_BUFFERSIZE, opt);
+	}
 	if (GRID_TRACE2_ENABLED()) {
 		curl_easy_setopt (h, CURLOPT_DEBUGFUNCTION, _trace);
 		curl_easy_setopt (h, CURLOPT_VERBOSE, 1L);
