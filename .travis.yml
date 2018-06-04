@@ -14,12 +14,15 @@ install:
   - pip install --upgrade -r all-requirements.txt -r test-requirements.txt
   - pip install --upgrade zkpython
 env:
-  - TEST_SUITE=build,unit,small-cache
-  - TEST_SUITE=copyright,worm,slave,cli,variables
-  - TEST_SUITE=3copies
   - TEST_SUITE=repli
   - TEST_SUITE=ec
+  - TEST_SUITE=3copies
   - TEST_SUITE=multi-beanstalk
+  - TEST_SUITE=small-cache
+  - TEST_SUITE=slave
+  - TEST_SUITE=cli
+  - TEST_SUITE=worm
+  - TEST_SUITE=build,unit,copyright,variables
 script:
   - sudo bash -c "echo '/tmp/core.%p.%E' > /proc/sys/kernel/core_pattern"
   - ulimit -c unlimited -S

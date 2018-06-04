@@ -44,10 +44,12 @@ function dump_syslog {
 }
 
 function trap_exit {
-	set +e
+    set +e
     #pip list
     gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock status3
     #dump_syslog
+    tail -n 5 $HOME/.oio/sds/logs/${OIO_NS}-container-1-errors.log
+    tail -n 5 $HOME/.oio/sds/logs/${OIO_NS}-ecd-1-errors.log
     oio-gdb.py
 }
 
