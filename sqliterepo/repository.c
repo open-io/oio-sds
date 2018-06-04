@@ -1165,6 +1165,7 @@ sqlx_repository_has_base2(sqlx_repository_t *repo, const struct sqlx_name_s *n,
 	return err;
 }
 
+/* TODO(jfs): reimplement without opening the DB if it was closed */
 GError*
 sqlx_repository_remove_from_cache(sqlx_repository_t *repo,
 		const struct sqlx_name_s *name)
