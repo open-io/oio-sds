@@ -24,6 +24,7 @@ from oio.common.constants import CHUNK_HEADERS
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.storage_functions import _sort_chunks as sort_chunks
 from oio.common import exceptions as exc
+from oio.common.utils import cid_from_name
 from oio.conscience.client import ConscienceClient
 from tests.utils import random_str, random_data, random_id, BaseTestCase
 
@@ -763,19 +764,81 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertRaises(
             exc.NoSuchAccount, self.api.account_flush, account)
 
+    def _link_and_check(self, target_container, target_obj,
+                        link_container, link_obj, expected_data,
+                        target_content_id=None, target_version=None,
+                        link_content_id=None, **kwargs):
+        self.api.object_link(
+            self.account, target_container, target_obj,
+            self.account, link_container, link_obj,
+            target_content_id=target_content_id, target_version=target_version,
+            link_content_id=link_content_id, **kwargs)
+
+        meta, data = self.api.object_fetch(
+            self.account, link_container, link_obj)
+        data = "".join(data)
+        self.assertEqual(len(data), len(expected_data))
+        self.assertEqual(data, expected_data)
+        self.assertEqual(link_obj, meta['name'])
+        self.assertEqual(cid_from_name(self.account, link_container),
+                         meta['container_id'])
+        if link_content_id:
+            self.assertEqual(link_content_id, meta['id'])
+
+        obj = self.api.object_show(self.account, link_container, link_obj,
+                                   content=link_content_id)
+        del meta['ns']
+        del meta['container_id']
+        self.assertDictEqual(meta, obj)
+        # TODO Check metadata chunks
+
     def test_object_link_different_container(self):
         target_container = random_str(16)
-        link_container = random_str(16)
         target_obj = random_str(16)
+        target_content_id = random_id(32)
+
+        self.api.object_create(
+            self.account, target_container, data="1"*128, obj_name=target_obj,
+            content_id=target_content_id)
+        obj = self.api.object_show(self.account, target_container, target_obj,
+                                   content=target_content_id)
+        target_version = obj['version']
+
+        # send target path
+        link_container = random_str(16)
         link_obj = random_str(16)
-        self.api.object_create(self.account, target_container, data="1"*128,
-                               obj_name=target_obj)
-        self.api.object_link(self.account, target_container, target_obj,
-                             self.account, link_container, link_obj)
-        _, data = self.api.object_fetch(self.account, link_container, link_obj)
-        data = "".join(data)
-        self.assertEqual(len(data), 128)
-        self.assertEqual(data, "1" * 128)
+        self._link_and_check(
+            target_container, target_obj, link_container, link_obj, "1"*128)
+
+        # send target content ID
+        link_container = random_str(16)
+        link_obj = random_str(16)
+        self._link_and_check(
+            target_container, None, link_container, link_obj, "1"*128,
+            target_content_id=target_content_id)
+
+        # send target path and version
+        link_container = random_str(16)
+        link_obj = random_str(16)
+        self._link_and_check(
+            target_container, target_obj, link_container, link_obj, "1"*128,
+            target_version=target_version)
+
+        # send target path and wrong version
+        link_container = random_str(16)
+        link_obj = random_str(16)
+        self.assertRaises(exc.NoSuchObject, self.api.object_link,
+                          self.account, target_container, target_obj,
+                          self.account, link_container, link_obj,
+                          target_version='0')
+
+        # send link content ID
+        link_container = random_str(16)
+        link_obj = random_str(16)
+        link_content_id = random_id(32)
+        self._link_and_check(
+            target_container, target_obj, link_container, link_obj, "1"*128,
+            link_content_id=link_content_id)
 
     def test_object_link_different_container_no_autocreate(self):
         target_container = random_str(16)
@@ -791,17 +854,48 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             autocreate=False)
 
     def test_object_link_same_container(self):
-        container = random_str(16)
+        target_container = random_str(16)
         target_obj = random_str(16)
+        link_container = target_container
+        target_content_id = random_id(32)
+
+        self.api.object_create(
+            self.account, target_container, data="1"*128, obj_name=target_obj,
+            content_id=target_content_id)
+        obj = self.api.object_show(self.account, target_container, target_obj,
+                                   content=target_content_id)
+        target_version = obj['version']
+
+        # send target path
         link_obj = random_str(16)
-        self.api.object_create(self.account, container, data="1"*128,
-                               obj_name=target_obj)
-        self.api.object_link(self.account, container, target_obj,
-                             self.account, container, link_obj)
-        _, data = self.api.object_fetch(self.account, container, link_obj)
-        data = "".join(data)
-        self.assertEqual(len(data), 128)
-        self.assertEqual(data, "1" * 128)
+        self._link_and_check(
+            target_container, target_obj, link_container, link_obj, "1"*128)
+
+        # send target content ID
+        link_obj = random_str(16)
+        self._link_and_check(
+            target_container, None, link_container, link_obj, "1"*128,
+            target_content_id=target_content_id)
+
+        # send target path and version
+        link_obj = random_str(16)
+        self._link_and_check(
+            target_container, target_obj, link_container, link_obj, "1"*128,
+            target_version=target_version)
+
+        # send target and wrong version
+        link_obj = random_str(16)
+        self.assertRaises(exc.NoSuchObject, self.api.object_link,
+                          self.account, target_container, target_obj,
+                          self.account, link_container, link_obj,
+                          target_version='0')
+
+        # send link content ID
+        link_obj = random_str(16)
+        link_content_id = random_id(32)
+        self._link_and_check(
+            target_container, target_obj, link_container, link_obj, "1"*128,
+            link_content_id=link_content_id)
 
     def test_object_link_same_name_same_container(self):
         """ Considered as a rename"""
@@ -809,8 +903,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         obj = random_str(16)
         self.api.object_create(self.account, container, data="1"*128,
                                obj_name=obj)
-        self.api.object_link(self.account, container, obj,
-                             self.account, container, obj)
+        self._link_and_check(
+            container, obj, container, obj, "1"*128)
 
     def test_object_link_with_already_existing_name(self):
         target_container = random_str(16)
@@ -821,12 +915,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
                                obj_name=target_obj)
         self.api.object_create(self.account, target_container, data="0"*128,
                                obj_name=link_obj)
-        self.api.object_link(self.account, target_container, target_obj,
-                             self.account, link_container, link_obj)
-        _, data = self.api.object_fetch(self.account, link_container, link_obj)
-        data = "".join(data)
-        self.assertEqual(len(data), 128)
-        self.assertEqual(data, "1" * 128)
+        self._link_and_check(
+            target_container, target_obj, link_container, link_obj, "1"*128)
 
     def test_object_link_with_metadata(self):
         target_container = random_str(16)

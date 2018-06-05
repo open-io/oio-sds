@@ -872,15 +872,26 @@ class ObjectStorageApi(object):
     @ensure_headers
     @ensure_request_id
     def object_link(self, target_account, target_container, target_obj,
-                    link_account, link_container, link_obj, version=None,
-                    properties_directive='COPY', **kwargs):
+                    link_account, link_container, link_obj,
+                    target_version=None, target_content_id=None,
+                    link_content_id=None, properties_directive='COPY',
+                    **kwargs):
         """
         Make a shallow copy of an object.
         Works across accounts and across containers.
         """
-        meta, chunks = self.object_locate(
-            target_account, target_container, target_obj, version=version,
-            **kwargs)
+        target_meta, chunks = self.object_locate(
+            target_account, target_container, target_obj,
+            version=target_version, content=target_content_id, **kwargs)
+        link_meta, _ = self.container.content_prepare(
+            link_account, link_container, link_obj, content_id=link_content_id,
+            size=1, stgpol=target_meta['policy'], **kwargs)
+        link_meta['chunk_method'] = target_meta['chunk_method']
+        link_meta['length'] = target_meta['length']
+        link_meta['hash'] = target_meta['hash']
+        link_meta['hash_method'] = target_meta['hash_method']
+        link_meta['mime_type'] = target_meta['mime_type']
+        link_meta['properties'] = target_meta['properties']
 
         chunks_copies = self._generate_fullchunk_copies(chunks)
         chunks_copies_url = []
@@ -890,9 +901,9 @@ class ObjectStorageApi(object):
         for chunk in chunks_copies:
             chunks_copies_url.append(chunk['url'])
         fullpath = self._generate_fullpath(link_account, link_container,
-                                           link_obj, version)
+                                           link_obj, link_meta['version'])
         data = {'chunks': chunks_copies,
-                'properties': meta['properties'] or {}}
+                'properties': link_meta['properties'] or {}}
         if properties_directive == 'REPLACE':
             if 'metadata' in kwargs:
                 # TODO it should emit a DeprecationWarning
@@ -901,25 +912,15 @@ class ObjectStorageApi(object):
                 data['properties'] = kwargs['properties']
             else:
                 data['properties'] = {}
-        try:
-            self._link_chunks(
-                chunks_url, chunks_copies_url, fullpath[0], **kwargs)
-            self.container.content_create(
-                link_account, link_container, link_obj,
-                size=meta['length'], data=data, checksum=meta['hash'],
-                stgpol=meta['policy'], mime_type=meta['mime_type'],
-                chunk_method=meta['chunk_method'], **kwargs)
-        except Exception:
-            del_resps = self.blob_client.chunk_delete_many(chunks_copies,
-                                                           **kwargs)
-            for resp in del_resps:
-                if isinstance(resp, Exception):
-                    self.logger.warn('failed to delete chunk %s (%s)',
-                                     resp.chunk['url'], resp)
-                elif resp.status not in (204, 404):
-                    self.logger.warn('failed to delete chunk %s (HTTP %s)',
-                                     resp.chunk['url'], resp.status)
-            raise
+        self._link_chunks(
+            chunks_url, chunks_copies_url, fullpath[0], **kwargs)
+        self.container.content_create(
+            link_account, link_container, link_obj,
+            version=link_meta['version'], content_id=link_meta['id'],
+            data=data, size=link_meta['length'], checksum=link_meta['hash'],
+            stgpol=link_meta['policy'], mime_type=link_meta['mime_type'],
+            chunk_method=link_meta['chunk_method'], **kwargs)
+        return link_meta
 
     @staticmethod
     def _ttfb_wrapper(stream, req_start, perfdata):
