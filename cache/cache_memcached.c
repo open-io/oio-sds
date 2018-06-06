@@ -47,7 +47,7 @@ struct oio_cache_s *
 oio_cache_make_memcached (const char *ip, int port)
 {
 	EXTRA_ASSERT (ip != NULL);
-	struct oio_cache_memcached_s *self = SLICE_NEW0 (struct oio_cache_memcached_s);
+	struct oio_cache_memcached_s *self = g_slice_new0 (struct oio_cache_memcached_s);
 	self->vtable = &vtable_memcached;
 
 	char *config = g_strdup_printf ("--SERVER=%s:%d", ip, port);
@@ -62,7 +62,7 @@ oio_cache_make_memcached (const char *ip, int port)
 struct oio_cache_s *
 oio_cache_make_memcached_config (const char *config)
 {
-	struct oio_cache_memcached_s *self = SLICE_NEW0 (struct oio_cache_memcached_s);
+	struct oio_cache_memcached_s *self = g_slice_new0 (struct oio_cache_memcached_s);
 	self->vtable = &vtable_memcached;
 	self->memc = memcached (config, strlen(config));
 	if (!self->memc)
@@ -82,10 +82,10 @@ memcached_parse_status(memcached_return_t rc)
 
 		case MEMCACHED_CONNECTION_FAILURE:
 			return OIO_CACHE_DISCONNECTED;
-		
+
 		case MEMCACHED_NOTFOUND:
 			return OIO_CACHE_NOTFOUND;
-		
+
 		case MEMCACHED_TIMEOUT:
 			return OIO_CACHE_TIMEOUT;
 
@@ -104,7 +104,7 @@ _memcached_destroy (struct oio_cache_s *self)
 		return;
 	memcached_free (c->memc);
 	c->memc = NULL;
-	SLICE_FREE (struct oio_cache_memcached_s, c);
+	g_slice_free (struct oio_cache_memcached_s, c);
 }
 
 static enum oio_cache_status_e

@@ -30,7 +30,7 @@ struct oio_cache_NOOP_s
 static void
 _noop_destroy (struct oio_cache_s *self)
 {
-	SLICE_FREE(struct oio_cache_NOOP_s, (struct oio_cache_NOOP_s*) self);
+	g_slice_free(struct oio_cache_NOOP_s, (struct oio_cache_NOOP_s*) self);
 }
 
 static enum oio_cache_status_e
@@ -64,7 +64,7 @@ static struct oio_cache_vtable_s vtable_NOOP =
 struct oio_cache_s *
 oio_cache_make_NOOP (void)
 {
-	struct oio_cache_NOOP_s *self = SLICE_NEW0 (struct oio_cache_NOOP_s);
+	struct oio_cache_NOOP_s *self = g_slice_new0 (struct oio_cache_NOOP_s);
 	self->vtable = &vtable_NOOP;
 	return (struct oio_cache_s*) self;
 }

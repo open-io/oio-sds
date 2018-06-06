@@ -44,7 +44,7 @@ struct oio_cache_s *
 oio_cache_make_multilayer (GSList *caches)
 {
 	EXTRA_ASSERT (caches != NULL);
-	struct oio_cache_multilayer_s *self = SLICE_NEW0 (struct oio_cache_multilayer_s);
+	struct oio_cache_multilayer_s *self = g_slice_new0 (struct oio_cache_multilayer_s);
 	self->vtable = &vtable_multilayer;
 	self->caches = caches;
 	return (struct oio_cache_s*) self;
@@ -53,7 +53,7 @@ oio_cache_make_multilayer (GSList *caches)
 struct oio_cache_s *
 oio_cache_make_multilayer_var (struct oio_cache_s *first, ...)
 {
-	struct oio_cache_multilayer_s *self = SLICE_NEW0 (struct oio_cache_multilayer_s);
+	struct oio_cache_multilayer_s *self = g_slice_new0 (struct oio_cache_multilayer_s);
 	self->vtable = &vtable_multilayer;
 	self->caches = NULL;
 
@@ -78,7 +78,7 @@ _multilayer_destroy (struct oio_cache_s *self)
 		return;
 	g_slist_free_full (c->caches, (GDestroyNotify) oio_cache_destroy);
 	c->caches = NULL;
-	SLICE_FREE (struct oio_cache_multilayer_s, c);
+	g_slice_free (struct oio_cache_multilayer_s, c);
 }
 
 static enum oio_cache_status_e
