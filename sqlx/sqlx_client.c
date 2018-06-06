@@ -155,7 +155,7 @@ oio_sqlx_client_factory__batch (struct oio_sqlx_client_factory_s *self,
 {
 	(void) self;
 	EXTRA_ASSERT(out != NULL);
-	*out = SLICE_NEW0(struct oio_sqlx_batch_s);
+	*out = g_slice_new0(struct oio_sqlx_batch_s);
 	(*out)->statements = g_ptr_array_new_with_free_func((GDestroyNotify)g_ptr_array_unref);
 	return NULL;
 }
@@ -168,7 +168,7 @@ oio_sqlx_batch__destroy (struct oio_sqlx_batch_s *self)
 	if (self->statements)
 		g_ptr_array_free (self->statements, TRUE);
 	self->statements = NULL;
-	SLICE_FREE(struct oio_sqlx_batch_s, self);
+	g_slice_free(struct oio_sqlx_batch_s, self);
 }
 
 void
@@ -267,7 +267,7 @@ oio_sqlx_batch_result__destroy (struct oio_sqlx_batch_result_s *self)
 		return;
 	if (self->results)
 		g_ptr_array_free (self->results, TRUE);
-	SLICE_FREE (struct oio_sqlx_batch_result_s, self);
+	g_slice_free (struct oio_sqlx_batch_result_s, self);
 }
 
 static void
@@ -281,13 +281,13 @@ _free_statement_result (struct oio_sqlx_statement_result_s *p)
 		g_ptr_array_free (p->rows, TRUE);
 		p->rows = NULL;
 	}
-	SLICE_FREE(struct oio_sqlx_statement_result_s, p);
+	g_slice_free(struct oio_sqlx_statement_result_s, p);
 }
 
 struct oio_sqlx_batch_result_s *
 oio_sqlx_batch_result__create (void)
 {
-	struct oio_sqlx_batch_result_s *self = SLICE_NEW0(struct oio_sqlx_batch_result_s);
+	struct oio_sqlx_batch_result_s *self = g_slice_new0(struct oio_sqlx_batch_result_s);
 	self->results = g_ptr_array_new_with_free_func (
 			(GDestroyNotify)_free_statement_result);
 	return self;
@@ -296,7 +296,7 @@ oio_sqlx_batch_result__create (void)
 struct oio_sqlx_statement_result_s *
 oio_sqlx_statement_result__create (void)
 {
-	struct oio_sqlx_statement_result_s *self = SLICE_NEW0(
+	struct oio_sqlx_statement_result_s *self = g_slice_new0(
 			struct oio_sqlx_statement_result_s);
 	self->rows = g_ptr_array_new_with_free_func ((GDestroyNotify)g_strfreev);
 	return self;
