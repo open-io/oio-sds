@@ -83,6 +83,7 @@ class MetaRebuilderWorker(RebuilderWorker):
 
                 if missing_base:
                     self.admin_client.election_leave(self.type, cid=cid)
+                    # TODO(adu): use self.admin_client.election_sync
                     # Setting a property will trigger a database replication
                     properties = {'sys.last_rebuild': str(int(time.time()))}
                     self.admin_client.set_properties(self.type, cid=cid,
