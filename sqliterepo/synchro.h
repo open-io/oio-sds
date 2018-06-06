@@ -31,6 +31,8 @@ License along with this library.
 
 struct sqlx_sync_s;
 
+struct election_member_s;
+
 struct sqlx_sync_vtable_s
 {
 	void (*clear) (struct sqlx_sync_s *ss);
@@ -113,12 +115,13 @@ struct gridd_client_pool_s;
 struct sqlx_peering_s;
 
 typedef void (*sqlx_peering_pipefrom_end_f) (GError *e,
-		struct election_manager_s *m, const struct sqlx_name_s *n,
+		struct election_member_s *m,
 		guint reqid);
 
 typedef void (*sqlx_peering_getvers_end_f) (GError *e,
-		struct election_manager_s *m, const struct sqlx_name_s *n,
-		guint reqid, GTree *vremote);
+		struct election_member_s *m,
+		guint reqid,
+		GTree *vremote);
 
 /* Represents what an election needs to communicate with its peers. */
 struct sqlx_peering_vtable_s
@@ -129,25 +132,28 @@ struct sqlx_peering_vtable_s
 
 	/** @return FALSE if no notify() is necessary (i.e. no command deferred) */
 	gboolean (*use) (struct sqlx_peering_s *self,
+			/* in */
 			const char *url,
 			const struct sqlx_name_inline_s *n);
 
 	/** @return FALSE if no notify() is necessary (i.e. no command deferred) */
 	gboolean (*getvers) (struct sqlx_peering_s *self,
+			/* in */
 			const char *url,
-			const struct sqlx_name_s *n,
-			/* for the return */
-			struct election_manager_s *manager,
+			const struct sqlx_name_inline_s *n,
+			/* out */
+			struct election_member_s *m,
 			guint reqid,
 			sqlx_peering_getvers_end_f result);
 
 	/** @return FALSE if no notify() is necessary (i.e. no command deferred) */
 	gboolean (*pipefrom) (struct sqlx_peering_s *self,
+			/* in */
 			const char *url,
-			const struct sqlx_name_s *n,
+			const struct sqlx_name_inline_s *n,
 			const char *src,
-			/* for the return */
-			struct election_manager_s *manager,
+			/* out */
+			struct election_member_s *m,
 			guint reqid,
 			sqlx_peering_pipefrom_end_f result);
 };
@@ -161,17 +167,29 @@ void sqlx_peering__destroy (struct sqlx_peering_s *self);
 
 void sqlx_peering__notify (struct sqlx_peering_s *self);
 
-gboolean sqlx_peering__use (struct sqlx_peering_s *self, const char *url,
+gboolean sqlx_peering__use (struct sqlx_peering_s *self,
+		/* in */
+		const char *url,
 		const struct sqlx_name_inline_s *n);
 
-gboolean sqlx_peering__getvers (struct sqlx_peering_s *self, const char *url,
-		const struct sqlx_name_s *n, struct election_manager_s *manager,
-		guint reqid, sqlx_peering_getvers_end_f result);
+gboolean sqlx_peering__getvers (struct sqlx_peering_s *self,
+		/* in */
+		const char *url,
+		const struct sqlx_name_inline_s *n,
+		/* out */
+		struct election_member_s *m,
+		guint reqid,
+		sqlx_peering_getvers_end_f result);
 
-gboolean sqlx_peering__pipefrom (struct sqlx_peering_s *self, const char *url,
-			const struct sqlx_name_s *n, const char *src,
-			struct election_manager_s *manager, guint reqid,
-			sqlx_peering_pipefrom_end_f result);
+gboolean sqlx_peering__pipefrom (struct sqlx_peering_s *self,
+		/* in */
+		const char *url,
+		const struct sqlx_name_inline_s *n,
+		const char *src,
+		/* out */
+		struct election_member_s *m,
+		guint reqid,
+		sqlx_peering_pipefrom_end_f result);
 
 struct sqlx_peering_s * sqlx_peering_factory__create_direct (
 		struct gridd_client_pool_s *clipool);

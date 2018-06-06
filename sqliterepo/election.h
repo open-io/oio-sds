@@ -35,6 +35,7 @@ struct election_counts_s
 /* Hidden type */
 struct sqlx_repository_s;
 struct election_manager_s;
+struct election_member_s;
 struct sqlx_sync_s;
 struct sqlx_peering_s;
 struct sqlx_name_s;
@@ -231,7 +232,5 @@ void election_manager_set_peering (struct election_manager_s *m,
 		struct sqlx_peering_s *peering);
 
 gboolean election_manager_configured(const struct election_manager_s *m);
-
-struct election_member_s;
 
 #endif /*OIO_SDS__sqliterepo__election_h*/

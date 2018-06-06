@@ -1224,15 +1224,6 @@ _LOCKED_init_member(struct election_manager_s *manager,
 	return member;
 }
 
-static struct election_member_s *
-manager_get_member (struct election_manager_s *m, const char *k)
-{
-	_manager_lock(m);
-	struct election_member_s *member = _LOCKED_get_member (m, k);
-	_manager_unlock(m);
-	return member;
-}
-
 static guint
 manager_count_active(struct election_manager_s *manager)
 {
@@ -2123,23 +2114,23 @@ defer_USE(struct election_member_s *member)
 }
 
 static void
-_result_GETVERS (GError *enet,
-		struct election_manager_s *manager, const struct sqlx_name_s *name,
+_result_GETVERS (GError *enet, struct election_member_s *m,
 		guint reqid, GTree *vremote)
 {
 	GError *err = NULL;
 	GTree *vlocal = NULL;
 
-	EXTRA_ASSERT(manager != NULL);
-	EXTRA_ASSERT(name != NULL);
+	MEMBER_CHECK(m);
 	EXTRA_ASSERT((enet != NULL) ^ (vremote != NULL));
 
 	if (enet) {
 		err = g_error_copy(enet);
 		GRID_DEBUG("GETVERS error [%s.%s]: (%d) %s",
-				name->base, name->type, err->code, err->message);
+				m->inline_name.base, m->inline_name.type,
+				err->code, err->message);
 	} else {
-		err = manager->config->get_version(manager->config->ctx, name, &vlocal);
+		NAME2CONST(name, m->inline_name);
+		err = m->manager->config->get_version(m->manager->config->ctx, &name, &vlocal);
 		EXTRA_ASSERT ((err != NULL) ^ (vlocal != NULL));
 		if (err && err->code == CODE_CONTAINER_NOTFOUND) {
 			/* We don't have the base! If we are here, we can suppose we have
@@ -2149,7 +2140,8 @@ _result_GETVERS (GError *enet,
 			err = NEWERROR(CODE_PIPEFROM, "Local database missing");
 		} else if (err) {
 			GRID_WARN("GETVERS error [%s.%s]: (%d) %s",
-					name->base, name->type, err->code, err->message);
+					m->inline_name.base, m->inline_name.type,
+					err->code, err->message);
 		}
 	}
 
@@ -2168,62 +2160,45 @@ _result_GETVERS (GError *enet,
 		}
 	}
 
-	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
-	sqliterepo_hash_name(name, key, sizeof(key));
-	struct election_member_s *member = manager_get_member(manager, key);
-	if (!member) {
-		GRID_WARN("GETVERS Election disappeared [%s]", key);
+	member_lock(m);
+	if (!err) {
+		transition(m, EVT_GETVERS_OK, &reqid);
+	} else if (err->code == CODE_PIPEFROM) {
+		transition(m, EVT_GETVERS_OLD, &reqid);
+	} else if (err->code == CODE_CONCURRENT) {
+		transition(m, EVT_GETVERS_RACE, &reqid);
 	} else {
-
-		MEMBER_CHECK(member);
-
-		member_lock(member);
-		if (!err) {
-			transition(member, EVT_GETVERS_OK, &reqid);
-		} else if (err->code == CODE_PIPEFROM) {
-			transition(member, EVT_GETVERS_OLD, &reqid);
-		} else if (err->code == CODE_CONCURRENT) {
-			transition(member, EVT_GETVERS_RACE, &reqid);
-		} else {
-			if (err->code == CODE_CONTAINER_NOTFOUND) {
-				// We may have asked the wrong peer
-				member->requested_peers_decache = 1;
-			}
-			transition(member, EVT_GETVERS_KO, &reqid);
+		if (err->code == CODE_CONTAINER_NOTFOUND) {
+			// We may have asked the wrong peer
+			m->requested_peers_decache = 1;
 		}
-		member_unref(member);
-		member_unlock(member);
+		transition(m, EVT_GETVERS_KO, &reqid);
 	}
+	member_unref(m);
+	member_unlock(m);
 
 	if (err) g_clear_error(&err);
 	if (vlocal) g_tree_destroy(vlocal);
 }
 
 static void
-_result_PIPEFROM (GError *e, struct election_manager_s *manager,
-		const struct sqlx_name_s *n, guint reqid)
+_result_PIPEFROM (GError *e, struct election_member_s *m, guint reqid)
 {
-	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
-	sqliterepo_hash_name(n, key, sizeof(key));
-
 	if (!e || CODE_IS_OK(e->code)) {
 		GRID_DEBUG("PIPEFROM ok [%s.%s] [%s]",
-				n->base, n->type, key);
+				m->inline_name.base, m->inline_name.type, m->key);
 	} else {
 		GRID_WARN("PIPEFROM failed [%s.%s] [%s]: (%d) %s",
-				n->base, n->type, key, e->code, e->message);
+				m->inline_name.base, m->inline_name.type, m->key,
+				e->code, e->message);
 	}
 
-	struct election_member_s *member = manager_get_member (manager, key);
-
-	if (member) {
-		member_lock(member);
-		/* We do the transition even if we undergo an error.
-		 * This means we are not consistent but eventually consistent. */
-		transition(member, EVT_SYNC_OK, &reqid);
-		member_unref(member);
-		member_unlock(member);
-	}
+	member_lock(m);
+	/* We do the transition even if we undergo an error.
+	 * This means we are not consistent but eventually consistent. */
+	transition(m, EVT_SYNC_OK, &reqid);
+	member_unref(m);
+	member_unlock(m);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -2490,10 +2465,10 @@ member_action_to_SYNCING(struct election_member_s *member)
 	 * unstable state */
 	member->when_unstable = oio_ext_monotonic_time();
 
-	MEMBER_NAME(n, member);
+	member_ref(member);
 	member->manager->deferred_peering_notify |= sqlx_peering__pipefrom(
-			member->manager->peering, target, &n, source,
-			member->manager, 0, _result_PIPEFROM);
+			member->manager->peering, target, &member->inline_name, source,
+			member, 0, _result_PIPEFROM);
 	TRACE_EXECUTION(member->manager);
 
 	return member_set_status(member, STEP_SYNCING);
@@ -2561,10 +2536,9 @@ member_action_to_CHECKING_MASTER(struct election_member_s *m)
 	m->concurrent_GETVERS = 0;
 	m->errors_GETVERS = 0;
 
-	MEMBER_NAME(n, m);
+	member_ref(m);
 	m->manager->deferred_peering_notify |= sqlx_peering__getvers(
-			m->manager->peering, m->master_url, &n,
-			m->manager, 0, _result_GETVERS);
+			m->manager->peering, m->master_url, &m->inline_name, m, 0, _result_GETVERS);
 	TRACE_EXECUTION(m->manager);
 
 	return member_set_status(m, STEP_CHECKING_MASTER);
@@ -2594,10 +2568,10 @@ member_action_to_CHECKING_SLAVES(struct election_member_s *m)
 	m->outdated_GETVERS = 0;
 	m->errors_GETVERS = 0;
 
-	MEMBER_NAME(n, m);
 	for (gchar **p=m->peers; *p; p++) {
+		member_ref(m);
 		m->manager->deferred_peering_notify |= sqlx_peering__getvers(
-				m->manager->peering, *p, &n, m->manager, 0, _result_GETVERS);
+				m->manager->peering, *p, &m->inline_name, m, 0, _result_GETVERS);
 		TRACE_EXECUTION(m->manager);
 	}
 

@@ -37,9 +37,6 @@ License along with this library.
 
 #define MEMBER(D)   ((struct election_member_s*)(D))
 #define MMANAGER(D) MEMBER(D)->manager
-#define MKEY(D)     MEMBER(D)->key
-#define MCFG(D)     MMANAGER(D)->config
-#define MKEY_S(D)   hashstr_str(MEMBER(D)->key)
 
 #define CONFIG_CHECK(C) do {\
 	EXTRA_ASSERT((C) != NULL);\
