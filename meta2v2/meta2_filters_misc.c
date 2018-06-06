@@ -41,7 +41,7 @@ struct on_bean_ctx_s *
 _on_bean_ctx_init(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	struct on_bean_ctx_s * obc = SLICE_NEW0(struct on_bean_ctx_s);
+	struct on_bean_ctx_s * obc = g_slice_new0(struct on_bean_ctx_s);
 	obc->l = NULL;
 	obc->first = TRUE;
 	obc->ctx = ctx;
@@ -74,7 +74,7 @@ _on_bean_ctx_clean(struct on_bean_ctx_s *obc)
 	}
 	obc->reply = NULL;
 	obc->ctx = NULL;
-	SLICE_FREE(struct on_bean_ctx_s, obc);
+	g_slice_free(struct on_bean_ctx_s, obc);
 }
 
 int
