@@ -843,6 +843,7 @@ dispatch_PING(struct gridd_reply_ctx_s *reply,
 		gpointer gdata UNUSED, gpointer hdata UNUSED)
 {
 	reply->no_access();
+	reply->add_body(metautils_gba_from_string("OK\r\n"));
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
