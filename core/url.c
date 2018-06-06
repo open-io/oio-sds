@@ -189,7 +189,7 @@ oio_url_init(const char *url)
 {
 	if (!url)
 		return NULL;
-	struct oio_url_s *result = SLICE_NEW0(struct oio_url_s);
+	struct oio_url_s *result = g_slice_new0(struct oio_url_s);
 	if (_parse_url(result, url, TRUE))
 		return result;
 	oio_url_clean(result);
@@ -201,7 +201,7 @@ oio_url_init_raw(const char *url)
 {
 	if (!url)
 		return NULL;
-	struct oio_url_s *result = SLICE_NEW0(struct oio_url_s);
+	struct oio_url_s *result = g_slice_new0(struct oio_url_s);
 	if (_parse_url(result, url, FALSE))
 		return result;
 	oio_url_clean(result);
@@ -211,7 +211,7 @@ oio_url_init_raw(const char *url)
 struct oio_url_s *
 oio_url_empty(void)
 {
-	return SLICE_NEW0(struct oio_url_s);
+	return g_slice_new0(struct oio_url_s);
 }
 
 void
@@ -220,7 +220,7 @@ oio_url_clean(struct oio_url_s *u)
 	if (!u)
 		return;
 	_clean_url (u);
-	SLICE_FREE (struct oio_url_s, u);
+	g_slice_free (struct oio_url_s, u);
 }
 
 void
@@ -253,7 +253,7 @@ oio_url_dup(const struct oio_url_s *u)
 	if (!u)
 		return NULL;
 
-	struct oio_url_s *result = SLICE_NEW0(struct oio_url_s);
+	struct oio_url_s *result = g_slice_new0(struct oio_url_s);
 	memcpy (result, u, sizeof(struct oio_url_s));
 
 	STRDUP(result, u, ns);
