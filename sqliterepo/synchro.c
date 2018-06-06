@@ -35,6 +35,7 @@ License along with this library.
 #include "sqlx_remote.h"
 #include "gridd_client_pool.h"
 
+
 static const char * zoo_state2str(int state) {
 #define ON_STATE(N) do { if (state == ZOO_##N##_STATE) return #N; } while (0)
 	ON_STATE(EXPIRED_SESSION);
@@ -561,21 +562,26 @@ static void _direct_destroy (struct sqlx_peering_s *self);
 static void _direct_notify (struct sqlx_peering_s *self);
 
 static gboolean _direct_use (struct sqlx_peering_s *self,
+		/* in */
 		const char *url,
 		const struct sqlx_name_inline_s *n);
 
 static gboolean _direct_getvers (struct sqlx_peering_s *self,
+		/* in */
 		const char *url,
-		const struct sqlx_name_s *n,
-		struct election_manager_s *manager,
+		const struct sqlx_name_inline_s *n,
+		/* out */
+		struct election_member_s *m,
 		guint reqid,
 		sqlx_peering_getvers_end_f result);
 
 static gboolean _direct_pipefrom (struct sqlx_peering_s *self,
+		/* in */
 		const char *url,
-		const struct sqlx_name_s *n,
+		const struct sqlx_name_inline_s *n,
 		const char *src,
-		struct election_manager_s *manager,
+		/* out */
+		struct election_member_s *m,
 		guint reqid,
 		sqlx_peering_pipefrom_end_f result);
 
@@ -673,6 +679,7 @@ _direct_notify (struct sqlx_peering_s *self)
 
 static gboolean
 _direct_use (struct sqlx_peering_s *self,
+		/* in */
 		const char *url,
 		const struct sqlx_name_inline_s *ni)
 {
@@ -739,9 +746,8 @@ struct evtclient_PIPEFROM_s
 	struct event_client_s ec;
 
 	sqlx_peering_pipefrom_end_f hook;
-	struct election_manager_s *manager;
+	struct election_member_s *m;
 	guint reqid;
-	struct sqlx_name_inline_s name;
 };
 
 static void
@@ -750,26 +756,26 @@ on_end_PIPEFROM (struct evtclient_PIPEFROM_s *mc)
 	EXTRA_ASSERT(mc != NULL);
 	EXTRA_ASSERT(mc->ec.client != NULL);
 	GError *err = gridd_client_error(mc->ec.client);
-	NAME2CONST(n, mc->name);
-	mc->hook (err, mc->manager, &n, mc->reqid);
+	mc->hook (err, mc->m, mc->reqid);
 	if (err)
 		g_error_free(err);
 }
 
 static gboolean
 _direct_pipefrom (struct sqlx_peering_s *self,
+		/* in */
 		const char *url,
-		const struct sqlx_name_s *n,
+		const struct sqlx_name_inline_s *n,
 		const char *src,
-		/* for the output */
-		struct election_manager_s *manager,
+		/* out */
+		struct election_member_s *m,
 		guint reqid,
 		sqlx_peering_pipefrom_end_f result)
 {
 	struct sqlx_peering_direct_s *p = (struct sqlx_peering_direct_s*) self;
 	EXTRA_ASSERT(p != NULL && p->vtable == &vtable_peering_DIRECT);
 	EXTRA_ASSERT(url != NULL);
-	EXTRA_ASSERT(n != NULL);
+	EXTRA_ASSERT(m != NULL);
 
 	struct evtclient_PIPEFROM_s *mc =
 		g_slice_alloc0(sizeof(struct evtclient_PIPEFROM_s));
@@ -777,8 +783,7 @@ _direct_pipefrom (struct sqlx_peering_s *self,
 	mc->ec.client = gridd_client_create_empty ();
 	mc->ec.on_end = (gridd_client_end_f) on_end_PIPEFROM;
 	mc->hook = result;
-	mc->manager = manager;
-	NAMEFILL(mc->name, *n);
+	mc->m = m;
 	mc->reqid = reqid;
 
 	const gint64 deadline = oio_ext_get_deadline();
@@ -793,7 +798,8 @@ _direct_pipefrom (struct sqlx_peering_s *self,
 		event_client_free(&mc->ec);
 		return FALSE;
 	} else {
-		GByteArray *req = sqlx_pack_PIPEFROM(n, src,
+		NAME2CONST(n0, *n);
+		GByteArray *req = sqlx_pack_PIPEFROM(&n0, src,
 				oio_clamp_deadline(oio_election_resync_timeout_req, deadline));
 		err = gridd_client_request(mc->ec.client, req, NULL, NULL);
 		g_byte_array_unref(req);
@@ -813,8 +819,7 @@ struct evtclient_GETVERS_s
 	struct event_client_s ec;
 
 	sqlx_peering_getvers_end_f hook;
-	struct sqlx_name_inline_s name;
-	struct election_manager_s *manager;
+	struct election_member_s *m;
 	GTree *vremote;
 	guint reqid;
 };
@@ -829,11 +834,10 @@ on_end_GETVERS(struct evtclient_GETVERS_s *mc)
 	if (!err && !mc->vremote)
 		err = SYSERR("BUG: no version replied");
 	if (likely(NULL != mc->hook)) {
-		NAME2CONST(n, mc->name);
 		if (err)
-			mc->hook (err, mc->manager, &n, mc->reqid, NULL);
+			mc->hook (err, mc->m, mc->reqid, NULL);
 		else
-			mc->hook (NULL, mc->manager, &n, mc->reqid, mc->vremote);
+			mc->hook (NULL, mc->m, mc->reqid, mc->vremote);
 	}
 
 	if (mc->vremote)
@@ -868,16 +872,18 @@ on_reply_GETVERS (gpointer ctx, MESSAGE reply)
 
 static gboolean
 _direct_getvers (struct sqlx_peering_s *self,
+		/* in */
 		const char *url,
-		const struct sqlx_name_s *n,
-		struct election_manager_s *manager,
+		const struct sqlx_name_inline_s *n,
+		/* out */
+		struct election_member_s *m,
 		guint reqid,
 		sqlx_peering_getvers_end_f result)
 {
 	struct sqlx_peering_direct_s *p = (struct sqlx_peering_direct_s*) self;
 	EXTRA_ASSERT(p != NULL && p->vtable == &vtable_peering_DIRECT);
 	EXTRA_ASSERT(url != NULL);
-	EXTRA_ASSERT(n != NULL);
+	EXTRA_ASSERT(m != NULL);
 
 	struct evtclient_GETVERS_s *mc =
 		g_slice_alloc0(sizeof(struct evtclient_GETVERS_s));
@@ -885,8 +891,7 @@ _direct_getvers (struct sqlx_peering_s *self,
 	mc->ec.client = gridd_client_create_empty ();
 	mc->ec.on_end = (gridd_client_end_f) on_end_GETVERS;
 	mc->hook = result;
-	mc->manager = manager;
-	NAMEFILL(mc->name, *n);
+	mc->m = m;
 	mc->reqid = reqid;
 	mc->vremote = NULL;
 
@@ -902,7 +907,8 @@ _direct_getvers (struct sqlx_peering_s *self,
 		event_client_free(&mc->ec);
 		return FALSE;
 	} else {
-		GByteArray *req = sqlx_pack_GETVERS(n, deadline);
+		NAME2CONST(n0, *n);
+		GByteArray *req = sqlx_pack_GETVERS(&n0, deadline);
 		err = gridd_client_request (mc->ec.client, req, mc, on_reply_GETVERS);
 		g_byte_array_unref(req);
 		if (NULL != err) {
@@ -941,37 +947,49 @@ sqlx_peering__notify (struct sqlx_peering_s *self)
 }
 
 gboolean
-sqlx_peering__use (struct sqlx_peering_s *self, const char *url,
+sqlx_peering__use (struct sqlx_peering_s *self,
+		/* in */
+		const char *url,
 		const struct sqlx_name_inline_s *n)
 {
 #ifdef HAVE_EXTRA_DEBUG
-	PEER_CALL(self,use)(self,url,n);
+	PEER_CALL(self,use)(self, url, n);
 #else
 	return _direct_use(self, url, n);
 #endif
 }
 
 gboolean
-sqlx_peering__getvers (struct sqlx_peering_s *self, const char *url,
-		const struct sqlx_name_s *n, struct election_manager_s *manager,
-		guint reqid, sqlx_peering_getvers_end_f result)
+sqlx_peering__getvers (struct sqlx_peering_s *self,
+		/* in */
+		const char *url,
+		const struct sqlx_name_inline_s *n,
+		/* out */
+		struct election_member_s *m,
+		guint reqid,
+		sqlx_peering_getvers_end_f result)
 {
 #ifdef HAVE_EXTRA_DEBUG
-	PEER_CALL(self,getvers)(self,url,n, manager,reqid,result);
+	PEER_CALL(self,getvers)(self, url, n, m, reqid, result);
 #else
-	return _direct_getvers(self, url, n, manager, reqid, result);
+	return _direct_getvers(self, url, n, m, reqid, result);
 #endif
 }
 
 gboolean
-sqlx_peering__pipefrom (struct sqlx_peering_s *self, const char *url,
-			const struct sqlx_name_s *n, const char *src,
-			struct election_manager_s *manager, guint reqid,
-			sqlx_peering_pipefrom_end_f result)
+sqlx_peering__pipefrom (struct sqlx_peering_s *self,
+		/* in */
+		const char *url,
+		const struct sqlx_name_inline_s *n,
+		const char *src,
+		/* out */
+		struct election_member_s *m,
+		guint reqid,
+		sqlx_peering_pipefrom_end_f result)
 {
 #ifdef HAVE_EXTRA_DEBUG
-	PEER_CALL(self,pipefrom)(self,url,n,src, manager,reqid,result);
+	PEER_CALL(self,pipefrom)(self, url, n, src, m, reqid, result);
 #else
-	return _direct_pipefrom(self, url, n, src, manager, reqid, result);
+	return _direct_pipefrom(self, url, n, src, m, reqid, result);
 #endif
 }

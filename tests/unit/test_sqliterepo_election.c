@@ -40,6 +40,15 @@ static volatile gint64 CLOCK = 0;
 static gint64 _get_monotonic (void) { return CLOCK; }
 static gint64 _get_real (void) { return CLOCK; }
 
+static struct election_member_s *
+manager_get_member (struct election_manager_s *m, const char *k)
+{
+	_manager_lock(m);
+	struct election_member_s *member = _LOCKED_get_member (m, k);
+	_manager_unlock(m);
+	return member;
+}
+
 static void
 member_reset_requests(struct election_member_s *m)
 {
@@ -105,21 +114,23 @@ static gboolean _peering_use (struct sqlx_peering_s *self,
 			const struct sqlx_name_inline_s *n);
 
 static gboolean _peering_getvers (struct sqlx_peering_s *self,
-			const char *url,
-			const struct sqlx_name_s *n,
-			/* for the return */
-			struct election_manager_s *manager,
-			guint reqid,
-			sqlx_peering_getvers_end_f result);
+		/* in */
+		const char *url,
+		const struct sqlx_name_inline_s *n,
+		/* out */
+		struct election_member_s *m,
+		guint reqid,
+		sqlx_peering_getvers_end_f result);
 
 static gboolean _peering_pipefrom (struct sqlx_peering_s *self,
-			const char *url,
-			const struct sqlx_name_s *n,
-			const char *src,
-			/* for the return */
-			struct election_manager_s *manager,
-			guint reqid,
-			sqlx_peering_pipefrom_end_f result);
+		/* in */
+		const char *url,
+		const struct sqlx_name_inline_s *n,
+		const char *src,
+		/* out */
+		struct election_member_s *m,
+		guint reqid,
+		sqlx_peering_pipefrom_end_f result);
 
 struct sqlx_peering_vtable_s vtable_peering_NOOP =
 {
@@ -131,8 +142,8 @@ static void _peering_destroy (struct sqlx_peering_s *self) { g_free (self); }
 
 static gboolean
 _peering_use (struct sqlx_peering_s *self,
-			const char *url,
-			const struct sqlx_name_inline_s *n)
+		const char *url,
+		const struct sqlx_name_inline_s *n)
 {
 	(void) self, (void) url, (void) n;
 	GRID_DEBUG (">>> %s (%s)", __FUNCTION__, url);
@@ -141,30 +152,32 @@ _peering_use (struct sqlx_peering_s *self,
 
 static gboolean
 _peering_getvers (struct sqlx_peering_s *self,
-			const char *url,
-			const struct sqlx_name_s *n,
-			/* for the return */
-			struct election_manager_s *manager,
-			guint reqid,
-			sqlx_peering_getvers_end_f result)
+		/* in */
+		const char *url,
+		const struct sqlx_name_inline_s *n,
+		/* out */
+		struct election_member_s *m,
+		guint reqid,
+		sqlx_peering_getvers_end_f result)
 {
 	(void) self, (void) url, (void) n;
-	(void) manager, (void) reqid, (void) result;
+	(void) m, (void) reqid, (void) result;
 	return FALSE;
 }
 
 static gboolean
 _peering_pipefrom (struct sqlx_peering_s *self,
-			const char *url,
-			const struct sqlx_name_s *n,
-			const char *src,
-			/* for the return */
-			struct election_manager_s *manager,
-			guint reqid,
-			sqlx_peering_pipefrom_end_f result)
+		/* in */
+		const char *url,
+		const struct sqlx_name_inline_s *n,
+		const char *src,
+		/* out */
+		struct election_member_s *m,
+		guint reqid,
+		sqlx_peering_pipefrom_end_f result)
 {
 	(void) self, (void) url, (void) n, (void) src;
-	(void) manager, (void) reqid, (void) result;
+	(void) m, (void) reqid, (void) result;
 	return FALSE;
 }
 
