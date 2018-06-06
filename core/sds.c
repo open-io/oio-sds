@@ -412,7 +412,7 @@ oio_sds_init (struct oio_sds_s **out, const char *ns)
 
 	EXTRA_ASSERT (out != NULL);
 	EXTRA_ASSERT (ns != NULL);
-	*out = SLICE_NEW0 (struct oio_sds_s);
+	*out = g_slice_new0 (struct oio_sds_s);
 	(*out)->session_id = g_strdup(oio_ext_get_reqid());
 	(*out)->ns = g_strdup (ns);
 	(*out)->proxy = oio_cfg_get_proxy_containers (ns);
@@ -437,7 +437,7 @@ oio_sds_free (struct oio_sds_s *sds)
 	if (sds->curl_handle)
 		curl_easy_cleanup (sds->curl_handle);
 	g_mutex_clear(&(sds->curl_lock));
-	SLICE_FREE (struct oio_sds_s, sds);
+	g_slice_free (struct oio_sds_s, sds);
 }
 
 void
