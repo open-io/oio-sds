@@ -1373,6 +1373,14 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 	return (struct oio_error_s*) err;
 }
 
+static void
+_upload_feed_bytes (struct oio_sds_ul_s *ul, GBytes *bytes)
+{
+	g_queue_push_tail (ul->buffer_tail, bytes);
+	if (!g_bytes_get_size(bytes))
+		ul->ready_for_data = FALSE;
+}
+
 struct oio_error_s *
 oio_sds_upload_feed (struct oio_sds_ul_s *ul,
 		const unsigned char *buf, size_t len)
@@ -1381,9 +1389,7 @@ oio_sds_upload_feed (struct oio_sds_ul_s *ul,
 	EXTRA_ASSERT (ul != NULL);
 	g_assert (!ul->finished);
 	g_assert (ul->ready_for_data);
-	g_queue_push_tail (ul->buffer_tail, g_bytes_new (buf, len));
-	if (!len)
-		ul->ready_for_data = FALSE;
+	_upload_feed_bytes(ul, g_bytes_new (buf, len));
 	return NULL;
 }
 
@@ -1832,15 +1838,13 @@ _upload_sequential (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 		err = oio_sds_upload_prepare(ul, src->data.hook.size);
 
 	size_t sent = 0;
-	const size_t blen = 262144;
-	guint8 *b = g_malloc(blen);
 
 	while (!err && !oio_sds_upload_done (ul)) {
 		GRID_TRACE("%s (%p) not done yet", __FUNCTION__, ul);
 
 		/* feed the upload queue */
 		if (oio_sds_upload_greedy (ul)) {
-			size_t max = blen;
+			size_t max = 8 * 1024 * 1024;
 			if (src->data.hook.size > 0 && src->data.hook.size != (size_t)-1) {
 				const size_t remaining = src->data.hook.size - sent;
 				max = MIN(remaining, max);
@@ -1850,24 +1854,27 @@ _upload_sequential (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 			}
 
 			if (0 == max) {
-				err = oio_sds_upload_feed (ul, b, 0);
+				_upload_feed_bytes (ul, g_bytes_new_static((guint8*)"", 0));
 			} else {
+				guint8 *b = g_malloc(max);
 				size_t l = src->data.hook.cb (src->data.hook.ctx, b, max);
 				switch (l) {
 					case OIO_SDS_UL__ERROR:
 						err = (struct oio_error_s*) SYSERR("data hook error");
 						break;
 					case OIO_SDS_UL__DONE:
-						err = oio_sds_upload_feed (ul, b, 0);
+						_upload_feed_bytes (ul, g_bytes_new_static((guint8*)"", 0));
 						break;
 					case OIO_SDS_UL__NODATA:
 						GRID_INFO("%s No data ready from user's hook", __FUNCTION__);
 						break;
 					default:
-						err = oio_sds_upload_feed (ul, b, l);
+						_upload_feed_bytes (ul, g_bytes_new_take(b, l));
+						b = NULL;
 						sent += l;
 						break;
 				}
+				oio_pfree0(&b, NULL);
 			}
 		}
 
@@ -1875,8 +1882,6 @@ _upload_sequential (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 		if (!err)
 			err = oio_sds_upload_step (ul);
 	}
-
-	oio_pfree0(&b, NULL);
 
 	if (!err) {
 		err = oio_sds_upload_commit (ul);
