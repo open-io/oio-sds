@@ -26,21 +26,12 @@ extern "C" {
 #include <glib.h>
 #include <json-c/json.h>
 
-# ifdef HAVE_NO_SLICE
-#  define SLICE_NEW0(T)    g_try_new0(T,1)
-#  define SLICE_NEW(T)     g_try_new(T,1)
-#  define SLICE_ALLOC0(S)  g_try_malloc0(S)
-#  define SLICE_ALLOC(S)   g_try_malloc(S)
-#  define SLICE_FREE(T,P)  g_free(P)
-#  define SLICE_FREE1(S,P) g_free(P)
-# else
 #  define SLICE_NEW0(T)    g_slice_new0(T)
 #  define SLICE_NEW(T)     g_slice_new(T)
 #  define SLICE_ALLOC0(S)  g_slice_alloc0(S)
 #  define SLICE_ALLOC(S)   g_slice_alloc(S)
 #  define SLICE_FREE(T,P)  g_slice_free(T,(P))
 #  define SLICE_FREE1(S,P) g_slice_free1((S),(P))
-# endif
 
 // Return -1 if A<B, 0 if A==B, 1 if A>B
 #define CMP(a,b) (((a) > (b)) - ((a) < (b)))
