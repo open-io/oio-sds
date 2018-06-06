@@ -47,7 +47,7 @@ struct oio_cache_s *
 oio_cache_make_redis (const char *ip, int port, const struct timeval timeout)
 {
 	EXTRA_ASSERT (ip != NULL);
-	struct oio_cache_redis_s *self = SLICE_NEW0 (struct oio_cache_redis_s);
+	struct oio_cache_redis_s *self = g_slice_new0 (struct oio_cache_redis_s);
 	self->vtable = &vtable_redis;
 	self->redis = redisConnectWithTimeout (ip, port, timeout);
 	return (struct oio_cache_s*) self;
@@ -132,7 +132,7 @@ _redis_destroy (struct oio_cache_s *self)
 		return;
 	redisFree (c->redis);
 	c->redis = NULL;
-	SLICE_FREE (struct oio_cache_redis_s, c);
+	g_slice_free (struct oio_cache_redis_s, c);
 }
 
 static enum oio_cache_status_e

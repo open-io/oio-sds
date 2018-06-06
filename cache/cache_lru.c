@@ -44,7 +44,7 @@ struct oio_cache_s *
 oio_cache_make_LRU (struct lru_tree_s *lru)
 {
 	EXTRA_ASSERT (lru != NULL);
-	struct oio_cache_LRU_s *self = SLICE_NEW0 (struct oio_cache_LRU_s);
+	struct oio_cache_LRU_s *self = g_slice_new0 (struct oio_cache_LRU_s);
 	self->vtable = &vtable_LRU;
 	self->lru = lru;
 	return (struct oio_cache_s*) self;
@@ -58,7 +58,7 @@ _lru_destroy (struct oio_cache_s *self)
 		return;
 	lru_tree_destroy (l->lru);
 	l->lru = NULL;
-	SLICE_FREE (struct oio_cache_LRU_s, l);
+	g_slice_free (struct oio_cache_LRU_s, l);
 }
 
 static enum oio_cache_status_e
