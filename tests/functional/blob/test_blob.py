@@ -190,9 +190,8 @@ class TestBlobFunctional(BaseTestCase):
         resp, body = self._http_request(chunkurl, 'GET', '', {})
         self.assertEqual(resp.status, 200)
         self.assertEqual(body, chunkdata)
-        fp = set(headers.pop('x-oio-chunk-meta-full-path').split(','))
-        fp2 = set(resp.getheader('x-oio-chunk-meta-full-path').split(','))
-        self.assertSetEqual(fp2, fp)
+        self.assertEqual(headers.pop('x-oio-chunk-meta-full-path'),
+                         resp.getheader('x-oio-chunk-meta-full-path'))
 
         headers['x-oio-chunk-meta-metachunk-size'] = metachunk_size
         headers['x-oio-chunk-meta-metachunk-hash'] = metachunk_hash.upper()
@@ -326,15 +325,15 @@ class TestBlobFunctional(BaseTestCase):
         chunkdata = random_buffer(string.printable, 1)
         chunkurl = self._rawx_url(chunkid)
         # chunkpath = self._chunk_path(chunkid)
-        headers = self._chunk_attr(chunkid, chunkdata)
+        headers1 = self._chunk_attr(chunkid, chunkdata)
         metachunk_hash = md5().hexdigest()
         trailers = {'x-oio-chunk-meta-metachunk-size': 1,
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
 
         self._check_not_present(chunkurl)
-        headers['x-oio-chunk-meta-full-path'] = self._generate_fullpath(
-                path, path, path, headers['x-oio-chunk-meta-content-version'])
-        resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
+        headers1['x-oio-chunk-meta-full-path'] = self._generate_fullpath(
+                path, path, path, headers1['x-oio-chunk-meta-content-version'])
+        resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers1,
                                      trailers)
         self.assertEqual(resp.status, 201)
 
@@ -342,20 +341,23 @@ class TestBlobFunctional(BaseTestCase):
         copyid = chunkid[:-60] + copyid[-60:]
         copyurl = self._rawx_url(copyid)
 
-        headers = {}
-        headers["Destination"] = copyurl
-        headers['x-oio-chunk-meta-full-path'] = self._generate_fullpath(
+        headers2 = {}
+        headers2["Destination"] = copyurl
+        headers2['x-oio-chunk-meta-full-path'] = self._generate_fullpath(
                 "account-snapshot", "container-snapshot", path+"-snapshot",
                 'x-oio-chunk-meta-content-version')
-        resp, _ = self._http_request(chunkurl, 'COPY', '', headers)
+        resp, _ = self._http_request(chunkurl, 'COPY', '', headers2)
         self.assertEqual(resp.status, 201)
+
+        resp, body = self._http_request(chunkurl, 'GET', '', {})
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(headers1['x-oio-chunk-meta-full-path'],
+                         resp.getheader('x-oio-chunk-meta-full-path'))
+
         resp, body = self._http_request(copyurl, 'GET', '', {})
         self.assertEqual(resp.status, 200)
-        fp = set([headers['x-oio-chunk-meta-full-path'],
-                  self._generate_fullpath(path, path, path,
-                                          '1456938361143740')])
-        fp2 = set(resp.getheader('x-oio-chunk-meta-full-path').split(","))
-        self.assertSetEqual(fp, fp2)
+        self.assertEqual(headers2['x-oio-chunk-meta-full-path'],
+                         resp.getheader('x-oio-chunk-meta-full-path'))
 
     def test_strange_path(self):
         strange_paths = [

@@ -151,7 +151,7 @@ send_chunk_event(const char *type, const dav_resource *resource)
 
 	_PAIR_AND_COMMA("oio_version", resource->info->chunk.oio_version);
 
-	_PAIR_AND_COMMA("full_path", resource->info->chunk.oio_full_path);
+	_PAIR_AND_COMMA("full_path", resource->info->chunk.content_fullpath);
 
 	g_string_append_c(json, '}');
 

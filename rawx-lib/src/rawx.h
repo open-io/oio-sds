@@ -27,6 +27,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define ATTR_DOMAIN "user.grid"
 # define ATTR_DOMAIN_OIO "user.oio"
 
+# define ATTR_NAME_CONTENT_FULLPATH "content.fullpath"
+
 # define ATTR_NAME_CONTENT_CONTAINER "content.container"
 
 # define ATTR_NAME_CONTENT_ID      "content.id"
@@ -92,20 +94,24 @@ typedef struct chunk_textinfo_s
 
 	gchar *oio_version;
 
-	gchar *oio_full_path;
+	gchar *content_fullpath;
 
 } chunk_textinfo_t;
 
 void chunk_textinfo_free_content(struct chunk_textinfo_s *cti);
 
-gboolean set_rawx_info_to_file (const char *p, GError **error, struct chunk_textinfo_s *chunk);
-gboolean set_rawx_info_to_fd (int fd, GError **err, struct chunk_textinfo_s *chunk);
+gboolean set_rawx_info_to_file(const char *p, GError **error,
+		struct chunk_textinfo_s *chunk);
+gboolean set_rawx_info_to_fd(int fd, GError **error,
+		struct chunk_textinfo_s *chunk);
 
 gboolean set_compression_info_in_attr(const char *p, GError **error, const char *v);
 gboolean set_chunk_compressed_size_in_attr(const char *p, GError **error, guint32 v);
 
-gboolean get_rawx_info_from_file (const char *p, GError **error, struct chunk_textinfo_s *chunk);
-gboolean get_rawx_info_from_fd (int fd, GError **error, struct chunk_textinfo_s *chunk);
+gboolean get_rawx_info_from_file(const char *p, GError **error, gchar *hex_chunkid,
+		struct chunk_textinfo_s *chunk);
+gboolean get_rawx_info_from_fd(int fd, GError **error, gchar *hex_chunkid,
+		struct chunk_textinfo_s *chunk);
 
 gboolean get_compression_info_in_attr(const char *p, GError **error, GHashTable *table);
 

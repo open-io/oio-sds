@@ -291,7 +291,7 @@ _load_in_place_chunk_info(const dav_resource *r, const char *path, struct chunk_
 
 	/* No need to check for the chunk's presence, getting its attributes will
 	 * fail if the chunk doesn't exists */
-	if (!get_rawx_info_from_file(path, &ge, chunk)) {
+	if (!get_rawx_info_from_file(path, &ge, strrchr(path, '/')+1, chunk)) {
 		if (NULL != ge) {
 			e = server_create_and_stat_error(conf, p, HTTP_CONFLICT, 0,
 					apr_pstrcat(p, "Failed to get chunk attributes: ", ge->message, NULL));
@@ -321,7 +321,7 @@ _load_in_place_chunk_info(const dav_resource *r, const char *path, struct chunk_
 	str_replace_by_pooled_str(p, &(chunk->chunk_hash));
 
 	str_replace_by_pooled_str(p, &(chunk->oio_version));
-	str_replace_by_pooled_str(p, &(chunk->oio_full_path));
+	str_replace_by_pooled_str(p, &(chunk->content_fullpath));
 
 
 	if (!get_compression_info_in_attr(path, &ge, comp_opt)){

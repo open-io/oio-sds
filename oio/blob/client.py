@@ -41,9 +41,6 @@ def extract_headers_meta(headers):
         except KeyError as err:
             if k not in chunk_xattr_keys_optional:
                 raise err
-    if 'full_path' in meta:
-        meta['full_path'] = meta['full_path'].split(',')
-
     return meta
 
 

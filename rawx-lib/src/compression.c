@@ -91,7 +91,7 @@ copy_fattr(const gchar *src, gchar* dst, GError **error)
 	gboolean status = FALSE;
 	struct chunk_textinfo_s chunk = {0};
 
-	if (!get_rawx_info_from_file(src, error, &chunk)) {
+	if (!get_rawx_info_from_file(src, error, strrchr(src, '/')+1, &chunk)) {
 		GSETERROR(error, "Failed to load extended attributes from source file\n");
 		goto err;
 	}
