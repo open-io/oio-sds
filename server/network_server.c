@@ -182,7 +182,7 @@ network_server_stat_push4 (struct network_server_s *srv, gboolean increment,
 		GQuark k3, guint64 v3, GQuark k4, guint64 v4)
 {
 	EXTRA_ASSERT (srv != NULL);
-	struct server_stat_msg_s *m = SLICE_NEW0 (struct server_stat_msg_s);
+	struct server_stat_msg_s *m = g_slice_new0 (struct server_stat_msg_s);
 	m->which[0] = k1, m->which[1] = k2, m->which[2] = k3, m->which[3] = k4;
 	m->value[0] = v1, m->value[1] = v2, m->value[2] = v3, m->value[3] = v4;
 	m->increment = BOOL(increment);
@@ -731,7 +731,7 @@ _manage_udp_event(struct network_server_s *srv, struct endpoint_s *e,
 			break;
 
 		/* fake a client, the transport needs it */
-		struct network_client_s *clt = SLICE_NEW0(struct network_client_s);
+		struct network_client_s *clt = g_slice_new0(struct network_client_s);
 		clt->server = srv;
 		clt->fd = -1;
 		clt->events = CLT_READ;
@@ -1016,7 +1016,7 @@ retry:
 			break;
 	}
 
-	struct network_client_s *clt = SLICE_NEW0(struct network_client_s);
+	struct network_client_s *clt = g_slice_new0(struct network_client_s);
 	if (NULL == clt) {
 		metautils_pclose(&fd);
 		_cnx_notify_close(srv);
@@ -1027,7 +1027,7 @@ retry:
 		case EXCESS_NONE:
 			break;
 		case EXCESS_HARD:
-			SLICE_FREE(struct network_client_s, clt);
+			g_slice_free(struct network_client_s, clt);
 			metautils_pclose(&fd);
 			_cnx_notify_close(srv);
 			GRID_WARN("Too many inbound connections! (max=%u)",
@@ -1076,7 +1076,7 @@ _cb_stats(struct server_stat_msg_s *msg, struct network_server_s *srv)
 	g_mutex_lock (&srv->lock_stats);
 	for (int i=0; i<4 ;++i) _manage_at (i);
 	g_mutex_unlock (&srv->lock_stats);
-	SLICE_FREE(struct server_stat_msg_s, msg);
+	g_slice_free(struct server_stat_msg_s, msg);
 }
 
 static void
@@ -1221,7 +1221,7 @@ _client_clean(struct network_server_s *srv, struct network_client_s *clt)
 	if (clt->current_error)
 		g_clear_error(&(clt->current_error));
 
-	SLICE_FREE(struct network_client_s, clt);
+	g_slice_free(struct network_client_s, clt);
 }
 
 static int
