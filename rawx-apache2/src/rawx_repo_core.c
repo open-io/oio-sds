@@ -292,7 +292,7 @@ chunk_info_fields__glib2apr (apr_pool_t *pool, struct chunk_textinfo_s *cti)
 
 	REPLACE_FIELD(oio_version);
 
-	REPLACE_FIELD(oio_full_path);
+	REPLACE_FIELD(content_fullpath);
 }
 
 void
@@ -332,8 +332,8 @@ request_load_chunk_info_from_headers(request_rec *request,
 	LAZY_LOAD_FIELD(chunk_hash,             "chunk-hash");
 	LAZY_LOAD_FIELD(oio_version,            "oio-version");
 
-	if (!cti->oio_full_path) {
-		_load_raw_field(pool, src, RAWX_HEADER_PREFIX  "full-path", &(cti->oio_full_path));
+	if (!cti->content_fullpath) {
+		_load_raw_field(pool, src, RAWX_HEADER_PREFIX  "full-path", &(cti->content_fullpath));
 	}
 }
 
@@ -428,7 +428,8 @@ resource_stat_chunk(dav_resource *resource, int flags)
 
 		memset(&(ctx->chunk), 0, sizeof(ctx->chunk));
 		if (flags & RESOURCE_STAT_CHUNK_READ_ATTRS) {
-			rc = get_rawx_info_from_file(resource_get_pathname(resource), &err, &(ctx->chunk));
+			rc = get_rawx_info_from_file(resource_get_pathname(resource), &err,
+					resource->info->hex_chunkid, &(ctx->chunk));
 			if (!rc) {
 				DAV_DEBUG_RES(resource, 0, "Chunk xattr loading error [%s] : %s",
 						resource_get_pathname(resource),
@@ -473,7 +474,7 @@ request_fill_headers(request_rec *r, struct chunk_textinfo_s *c)
 
 	__set_header(r, "oio-version", c->oio_version);
 
-	__set_header(r, "full-path", c->oio_full_path);
+	__set_header(r, "full-path", c->content_fullpath);
 
 }
 
@@ -636,7 +637,7 @@ rawx_repo_commit_upload(dav_stream *stream)
 	DUP(oio_version);
 	DUP(compression_metadata);
 	DUP(compression_size);
-	DUP(oio_full_path);
+	DUP(content_fullpath);
 
 	/* Load the metadata located in the Trailers of the request */
 	request_overload_chunk_info_from_trailers (stream->r->info->request, &fake);

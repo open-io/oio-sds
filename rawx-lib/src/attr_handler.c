@@ -70,79 +70,61 @@ retry:
 		goto error_set_attr; \
 }
 
-static gboolean
-_set_xattr_list(int fd, gchar* strkeys)
-{
-	if (!strkeys)
-		return FALSE;
-
-	gchar **keys = g_strsplit(strkeys, ",", -1);
-	if (!keys)
-		return FALSE;
-
-	gboolean rc = FALSE;
-	GChecksum *checksum = g_checksum_new(G_CHECKSUM_SHA256);
-	for (gchar **key = keys; *key; ++key) {
-		g_checksum_reset(checksum);
-		g_checksum_update(checksum, (guint8*)*key, strlen(*key));
-		gchar *hexup = g_ascii_strup(g_checksum_get_string(checksum), -1);
-		gchar *xname = g_strconcat(ATTR_DOMAIN_OIO, ":", hexup, NULL);
-		const int xrc = fsetxattr(fd, xname, *key, strlen(*key), 0);
-		g_free(xname);
-		g_free(hexup);
-		if (xrc == -1)
-			goto error_label;
-	}
-	rc = TRUE;
-error_label:
-	g_checksum_free(checksum);
-	g_strfreev(keys);
-	return rc;
-}
-
 gboolean
-set_rawx_info_to_fd (int fd, GError **error, struct chunk_textinfo_s *cti)
+set_rawx_info_to_fd(int fd, GError **error, struct chunk_textinfo_s *chunk)
 {
 	if (fd < 0) {
 		GSETCODE(error, EINVAL, "invalid FD");
 		return FALSE;
 	}
 
-	if (!cti)
+	if (!chunk)
 		return TRUE;
 
-	oio_str_upper(cti->container_id);
-	oio_str_upper(cti->content_id);
-	oio_str_upper(cti->chunk_hash);
-	oio_str_upper(cti->metachunk_hash);
+	if (chunk->content_fullpath && !chunk->chunk_id) {
+		GSETCODE(error, EINVAL, "Missing chunk ID");
+		return FALSE;
+	}
 
-	SET(ATTR_NAME_CONTENT_CONTAINER, cti->container_id);
+	oio_str_upper(chunk->container_id);
+	oio_str_upper(chunk->content_id);
+	oio_str_upper(chunk->chunk_hash);
+	oio_str_upper(chunk->metachunk_hash);
 
-	SET(ATTR_NAME_CONTENT_ID,          cti->content_id);
-	SET(ATTR_NAME_CONTENT_PATH,        cti->content_path);
-	SET(ATTR_NAME_CONTENT_VERSION,     cti->content_version);
-	SET(ATTR_NAME_CONTENT_SIZE,        cti->content_size);
-	SET(ATTR_NAME_CONTENT_NBCHUNK,     cti->content_chunk_nb);
+	if (chunk->content_fullpath) {
+		gchar *attr_name_content_fullpath = g_strconcat(
+				ATTR_DOMAIN_OIO "." ATTR_NAME_CONTENT_FULLPATH ":",
+				chunk->chunk_id, NULL);
+		if (fsetxattr(fd, attr_name_content_fullpath, chunk->content_fullpath,
+				strlen(chunk->content_fullpath), 0) < 0)
+			goto error_set_attr;
+		g_free(attr_name_content_fullpath);
+	}
 
-	SET(ATTR_NAME_CONTENT_STGPOL,      cti->content_storage_policy);
-	SET(ATTR_NAME_CONTENT_CHUNKMETHOD, cti->content_chunk_method);
-	SET(ATTR_NAME_CONTENT_MIMETYPE,    cti->content_mime_type);
+	SET(ATTR_NAME_CONTENT_CONTAINER, chunk->container_id);
 
-	SET(ATTR_NAME_METACHUNK_SIZE, cti->metachunk_size);
-	SET(ATTR_NAME_METACHUNK_HASH, cti->metachunk_hash);
+	SET(ATTR_NAME_CONTENT_ID,          chunk->content_id);
+	SET(ATTR_NAME_CONTENT_PATH,        chunk->content_path);
+	SET(ATTR_NAME_CONTENT_VERSION,     chunk->content_version);
+	SET(ATTR_NAME_CONTENT_SIZE,        chunk->content_size);
+	SET(ATTR_NAME_CONTENT_NBCHUNK,     chunk->content_chunk_nb);
 
-	SET(ATTR_NAME_CHUNK_ID,   cti->chunk_id);
-	SET(ATTR_NAME_CHUNK_SIZE, cti->chunk_size);
-	SET(ATTR_NAME_CHUNK_HASH, cti->chunk_hash);
-	SET(ATTR_NAME_CHUNK_POS,  cti->chunk_position);
+	SET(ATTR_NAME_CONTENT_STGPOL,      chunk->content_storage_policy);
+	SET(ATTR_NAME_CONTENT_CHUNKMETHOD, chunk->content_chunk_method);
+	SET(ATTR_NAME_CONTENT_MIMETYPE,    chunk->content_mime_type);
 
-	SET(ATTR_NAME_CHUNK_METADATA_COMPRESS, cti->compression_metadata);
-	SET(ATTR_NAME_CHUNK_COMPRESSED_SIZE,   cti->compression_size);
+	SET(ATTR_NAME_METACHUNK_SIZE, chunk->metachunk_size);
+	SET(ATTR_NAME_METACHUNK_HASH, chunk->metachunk_hash);
 
-	SET(ATTR_NAME_OIO_VERSION, cti->oio_version);
+	SET(ATTR_NAME_CHUNK_ID,   chunk->chunk_id);
+	SET(ATTR_NAME_CHUNK_SIZE, chunk->chunk_size);
+	SET(ATTR_NAME_CHUNK_HASH, chunk->chunk_hash);
+	SET(ATTR_NAME_CHUNK_POS,  chunk->chunk_position);
 
-	if (cti->oio_full_path && !_set_xattr_list(fd, cti->oio_full_path))
-		goto error_set_attr;
+	SET(ATTR_NAME_CHUNK_METADATA_COMPRESS, chunk->compression_metadata);
+	SET(ATTR_NAME_CHUNK_COMPRESSED_SIZE,   chunk->compression_size);
+
+	SET(ATTR_NAME_OIO_VERSION, chunk->oio_version);
 
 	return TRUE;
 
@@ -152,14 +134,15 @@ error_set_attr:
 }
 
 gboolean
-set_rawx_info_to_file (const char *p, GError **error, struct chunk_textinfo_s *cti)
+set_rawx_info_to_file(const char *p, GError **error,
+		struct chunk_textinfo_s *chunk)
 {
 	int fd = open(p, O_WRONLY);
 	if (fd < 0) {
 		GSETCODE(error, errno, "open() error: (%d) %s", errno, strerror(errno));
 		return FALSE;
 	} else {
-		gboolean rc = set_rawx_info_to_fd (fd, error, cti);
+		gboolean rc = set_rawx_info_to_fd(fd, error, chunk);
 		int errsav = errno;
 		metautils_pclose (&fd);
 		errno = errsav;
@@ -203,77 +186,20 @@ _get (int fd, const char *k, gchar **pv)
 
 #define GET(K,R) _get(fd, ATTR_DOMAIN "." K, &(R))
 
-static GString *
-_append_path(GString *gs, const char *path)
-{
-	if (gs->len > 0)
-		gs = g_string_append_c(gs, ',');
-	return g_string_append(gs, path);
-}
-
-static GString*
-_get_fullpaths_from_listxattr(int fd, gchar * xattrlist, ssize_t size)
-{
-	GString* user_list = g_string_sized_new(8192);
-
-	for (gint i = 0; i < size; i+= strlen(&xattrlist[i]) + 1) {
-		const char *k = &xattrlist[i];
-		if (g_str_has_prefix(k, ATTR_DOMAIN_OIO ":")) {
-			if (strchr(k, '/')) {
-				/* old-style with a path in the key */
-				k += sizeof(ATTR_DOMAIN_OIO ":") - 1;
-				user_list = _append_path(user_list, k);
-			} else {
-				/* new-style SHA256 identifiers */
-				gchar *path = NULL;
-				if (_get(fd, k, &path)) {
-					user_list = _append_path(user_list, path);
-					g_free(path);
-				}
-			}
-		}
-	}
-
-	return user_list;
-}
-
-static gboolean
-_get_fullpaths_from_fd(int fd, gchar **list_path)
-{
-	ssize_t s = longest_xattr_list;
-	gchar *buf = g_malloc0(s);
-	ssize_t rc;
-retry:
-	rc = flistxattr(fd, buf, longest_xattr_list);
-	if (rc < 0) {
-		if (errno == ERANGE) {
-			s = s*2;
-			if (s > longest_xattr_list)
-				longest_xattr_list = s;
-			buf = g_realloc(buf, s);
-			memset(buf, 0, s);
-			goto retry;
-		} else {
-			g_free(buf);
-			return FALSE;
-		}
-	}
-	GString *full_path = _get_fullpaths_from_listxattr(fd, buf, rc);
-	*list_path = full_path->str;
-	g_free(buf);
-	g_string_free(full_path, FALSE);
-	return TRUE;
-}
-
 gboolean
-get_rawx_info_from_fd (int fd, GError **error, struct chunk_textinfo_s *cti)
+get_rawx_info_from_fd(int fd, GError **error, gchar *hex_chunkid,
+		struct chunk_textinfo_s *chunk)
 {
 	if (fd < 0) {
 		GSETCODE(error, EINVAL, "invalid FD");
 		return FALSE;
 	}
+	if (!hex_chunkid) {
+		GSETCODE(error, EINVAL, "invalid chunk ID");
+		return FALSE;
+	}
 
-	if (!cti) {
+	if (!chunk) {
 		gchar *v = NULL;
 		if (!GET(ATTR_NAME_CONTENT_CONTAINER, v)) {
 			if (errno == ENOTSUP) {
@@ -286,7 +212,7 @@ get_rawx_info_from_fd (int fd, GError **error, struct chunk_textinfo_s *cti)
 		return TRUE;
 	}
 
-	if (!GET(ATTR_NAME_CONTENT_CONTAINER, cti->container_id)) {
+	if (!GET(ATTR_NAME_CONTENT_CONTAINER, chunk->container_id)) {
 		/* just one check to detect unsupported xattr */
 		if (errno == ENOTSUP) {
 			GSETCODE(error, errno, "xattr not supported");
@@ -294,43 +220,52 @@ get_rawx_info_from_fd (int fd, GError **error, struct chunk_textinfo_s *cti)
 		}
 	}
 
-	_get_fullpaths_from_fd(fd, &(cti->oio_full_path));
+	gchar *attr_name_content_fullpath = g_strconcat(
+			ATTR_DOMAIN_OIO "." ATTR_NAME_CONTENT_FULLPATH ":", hex_chunkid,
+			NULL);
+	_get(fd, attr_name_content_fullpath, &(chunk->content_fullpath));
+	g_free(attr_name_content_fullpath);
+	if (chunk->content_fullpath) {
+		chunk->chunk_id = g_strdup(hex_chunkid);
+	} else {
+		GET(ATTR_NAME_CHUNK_ID,   chunk->chunk_id);
+	}
 
-	GET(ATTR_NAME_CONTENT_ID,      cti->content_id);
-	GET(ATTR_NAME_CONTENT_PATH,    cti->content_path);
-	GET(ATTR_NAME_CONTENT_VERSION, cti->content_version);
-	GET(ATTR_NAME_CONTENT_SIZE,    cti->content_size);
-	GET(ATTR_NAME_CONTENT_NBCHUNK, cti->content_chunk_nb);
+	GET(ATTR_NAME_CONTENT_ID,      chunk->content_id);
+	GET(ATTR_NAME_CONTENT_PATH,    chunk->content_path);
+	GET(ATTR_NAME_CONTENT_VERSION, chunk->content_version);
+	GET(ATTR_NAME_CONTENT_SIZE,    chunk->content_size);
+	GET(ATTR_NAME_CONTENT_NBCHUNK, chunk->content_chunk_nb);
 
-	GET(ATTR_NAME_CONTENT_STGPOL,      cti->content_storage_policy);
-	GET(ATTR_NAME_CONTENT_CHUNKMETHOD, cti->content_chunk_method);
-	GET(ATTR_NAME_CONTENT_MIMETYPE,    cti->content_mime_type);
+	GET(ATTR_NAME_CONTENT_STGPOL,      chunk->content_storage_policy);
+	GET(ATTR_NAME_CONTENT_CHUNKMETHOD, chunk->content_chunk_method);
+	GET(ATTR_NAME_CONTENT_MIMETYPE,    chunk->content_mime_type);
 
-	GET(ATTR_NAME_METACHUNK_SIZE, cti->metachunk_size);
-	GET(ATTR_NAME_METACHUNK_HASH, cti->metachunk_hash);
+	GET(ATTR_NAME_METACHUNK_SIZE, chunk->metachunk_size);
+	GET(ATTR_NAME_METACHUNK_HASH, chunk->metachunk_hash);
 
-	GET(ATTR_NAME_CHUNK_ID,   cti->chunk_id);
-	GET(ATTR_NAME_CHUNK_SIZE, cti->chunk_size);
-	GET(ATTR_NAME_CHUNK_POS,  cti->chunk_position);
-	GET(ATTR_NAME_CHUNK_HASH, cti->chunk_hash);
+	GET(ATTR_NAME_CHUNK_SIZE, chunk->chunk_size);
+	GET(ATTR_NAME_CHUNK_POS,  chunk->chunk_position);
+	GET(ATTR_NAME_CHUNK_HASH, chunk->chunk_hash);
 
-	GET(ATTR_NAME_CHUNK_METADATA_COMPRESS, cti->compression_metadata);
-	GET(ATTR_NAME_CHUNK_COMPRESSED_SIZE,   cti->compression_size);
+	GET(ATTR_NAME_CHUNK_METADATA_COMPRESS, chunk->compression_metadata);
+	GET(ATTR_NAME_CHUNK_COMPRESSED_SIZE,   chunk->compression_size);
 
-	GET(ATTR_NAME_OIO_VERSION, cti->oio_version);
+	GET(ATTR_NAME_OIO_VERSION, chunk->oio_version);
 
 	return TRUE;
 }
 
 gboolean
-get_rawx_info_from_file (const char *p, GError ** error, struct chunk_textinfo_s *cti)
+get_rawx_info_from_file(const char *p, GError **error, gchar *hex_chunkid,
+		struct chunk_textinfo_s *chunk)
 {
 	int fd = open(p, O_RDONLY);
 	if (fd < 0) {
 		GSETCODE(error, errno, "open() error: (%d) %s", errno, strerror(errno));
 		return FALSE;
 	} else {
-		gboolean rc = get_rawx_info_from_fd (fd, error, cti);
+		gboolean rc = get_rawx_info_from_fd(fd, error, hex_chunkid, chunk);
 		int errsav = errno;
 		metautils_pclose (&fd);
 		errno = errsav;
@@ -394,5 +329,5 @@ chunk_textinfo_free_content(struct chunk_textinfo_s *cti)
 
 	oio_str_clean (&cti->oio_version);
 
-	oio_str_clean (&cti->oio_full_path);
+	oio_str_clean (&cti->content_fullpath);
 }

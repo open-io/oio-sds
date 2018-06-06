@@ -414,7 +414,7 @@ zlib_compressed_chunk_init(struct compressed_chunk_s *chunk, const gchar *path)
 	memset(&ck, 0, sizeof(ck));
 	
 	/* Get chunk uncompressed size in his attr */
-	if (!get_rawx_info_from_file(path, &error, &cti)){
+	if (!get_rawx_info_from_file(path, &error, strrchr(path, '/')+1, &cti)) {
 		GRID_DEBUG("Failed to get chunk info in attr : %s", error->message);
 		g_clear_error(&error);
 		return 1;
