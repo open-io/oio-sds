@@ -1249,7 +1249,8 @@ oio_sds_upload_done (struct oio_sds_ul_s *ul)
 int
 oio_sds_upload_greedy (struct oio_sds_ul_s *ul)
 {
-	return NULL != ul && !ul->finished && ul->ready_for_data;
+	return NULL != ul && !ul->finished && ul->ready_for_data
+		&& g_queue_is_empty(ul->buffer_tail);
 }
 
 int
