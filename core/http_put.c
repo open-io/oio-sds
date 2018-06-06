@@ -617,26 +617,29 @@ http_put_step (struct http_put_s *p)
 			__FUNCTION__, count_dests, count_up, count_waiting_for_data);
 
 	if (count_up) {
-		fd_set fdread, fdwrite, fdexcep;
 		int maxfd = -1;
-		struct timeval tv = {1,0};
-		FD_ZERO(&fdread);
-		FD_ZERO(&fdwrite);
-		FD_ZERO(&fdexcep);
-
 		long timeout = 0;
+		struct timeval tv = {1,0};
+		fd_set fdread = {}, fdwrite = {}, fdexcep = {};
+
 		curl_multi_timeout (p->mhandle, &timeout);
-		if (timeout < 1000) {
+
+		/* timeout not set, libcurl recommend to wait for a few seconds */
+		if (timeout < 0)
+			timeout = 1000;
+
+		/* No need to wait if actions are ready */
+		if (timeout > 0) {
 			tv.tv_sec = timeout / 1000;
 			tv.tv_usec = (timeout * 1000) % 1000000;
-		}
-		curl_multi_fdset(p->mhandle, &fdread, &fdwrite, &fdexcep, &maxfd);
+			curl_multi_fdset(p->mhandle, &fdread, &fdwrite, &fdexcep, &maxfd);
 
 retry:
-		rc = select(maxfd+1, &fdread, &fdwrite, &fdexcep, &tv);
-		if (rc < 0) {
-			if (errno == EINTR) goto retry;
-			return SYSERR("select() error: (%d) %s", errno, strerror(errno));
+			rc = select(maxfd+1, &fdread, &fdwrite, &fdexcep, &tv);
+			if (rc < 0) {
+				if (errno == EINTR) goto retry;
+				return SYSERR("select() error: (%d) %s", errno, strerror(errno));
+			}
 		}
 	}
 
