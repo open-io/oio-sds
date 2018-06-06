@@ -627,8 +627,8 @@ http_put_step (struct http_put_s *p)
 		long timeout = 0;
 		curl_multi_timeout (p->mhandle, &timeout);
 		if (timeout < 1000) {
-			tv.tv_sec = 0;
-			tv.tv_usec = timeout * 1000;
+			tv.tv_sec = timeout / 1000;
+			tv.tv_usec = (timeout * 1000) % 1000000;
 		}
 		curl_multi_fdset(p->mhandle, &fdread, &fdwrite, &fdexcep, &maxfd);
 
