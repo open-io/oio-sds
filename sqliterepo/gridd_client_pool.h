@@ -44,6 +44,8 @@ struct event_client_s
 	 * will be an error, and there won't even be a connection for it. */
 	gint64 deadline_start;
 
+	gsize struct_size;
+
 	/* hidden abstract fields */
 };
 

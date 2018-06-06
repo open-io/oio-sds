@@ -193,7 +193,7 @@ __close_base(struct sqlx_sqlite3_s *sq3)
 	if (sq3->admin)
 		g_tree_destroy(sq3->admin);
 	sq3->bd = -1;
-	SLICE_FREE(struct sqlx_sqlite3_s, sq3);
+	g_slice_free(struct sqlx_sqlite3_s, sq3);
 }
 
 static int
@@ -715,7 +715,7 @@ __open_not_cached(struct open_args_s *args, struct sqlx_sqlite3_s **result)
 
 	sqlite3_busy_timeout(handle, 30000);
 
-	struct sqlx_sqlite3_s *sq3 = SLICE_NEW0(struct sqlx_sqlite3_s);
+	struct sqlx_sqlite3_s *sq3 = g_slice_new0(struct sqlx_sqlite3_s);
 	sq3->db = handle;
 	sq3->bd = -1;
 	sq3->repo = args->repo;
