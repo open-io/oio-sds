@@ -131,7 +131,7 @@ path_matching_get_variable (struct path_matching_s *self, const char *name)
 struct path_matching_s *
 _match_dup (const struct path_matching_s *m0)
 {
-	struct path_matching_s *m = SLICE_NEW (struct path_matching_s);
+	struct path_matching_s *m = g_slice_new (struct path_matching_s);
 	m->last = m0->last;
 	m->vars = m0->vars ? g_strdupv (m0->vars) : g_try_malloc0 (sizeof(gchar*));
 	return m;
@@ -141,7 +141,7 @@ void
 _match_free (struct path_matching_s *m)
 {
 	if (m->vars) g_strfreev (m->vars);
-	SLICE_FREE (struct path_matching_s, m);
+	g_slice_free (struct path_matching_s, m);
 }
 
 struct trie_node_s *
