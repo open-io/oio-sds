@@ -170,7 +170,7 @@ event_client_free(struct event_client_s *ec)
 		ec->on_end(ec);
 	if (ec->client)
 		gridd_client_free(ec->client);
-	g_free (ec);
+	g_slice_free1(ec->struct_size, (void*)ec);
 }
 
 void

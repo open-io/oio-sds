@@ -702,7 +702,9 @@ _direct_use (struct sqlx_peering_s *self,
 		}
 		return FALSE;
 	} else {
-		struct event_client_s *mc = g_malloc0 (sizeof(struct event_client_s));
+		struct event_client_s *mc =
+			g_slice_alloc0(sizeof(struct event_client_s));
+		mc->struct_size = sizeof(struct event_client_s);
 		mc->client = gridd_client_create_empty ();
 
 		gridd_client_set_timeout(mc->client, oio_election_use_timeout_req);
@@ -770,7 +772,8 @@ _direct_pipefrom (struct sqlx_peering_s *self,
 	EXTRA_ASSERT(n != NULL);
 
 	struct evtclient_PIPEFROM_s *mc =
-		g_malloc0 (sizeof(struct evtclient_PIPEFROM_s));
+		g_slice_alloc0(sizeof(struct evtclient_PIPEFROM_s));
+	mc->ec.struct_size = sizeof(struct evtclient_PIPEFROM_s);
 	mc->ec.client = gridd_client_create_empty ();
 	mc->ec.on_end = (gridd_client_end_f) on_end_PIPEFROM;
 	mc->hook = result;
@@ -877,7 +880,8 @@ _direct_getvers (struct sqlx_peering_s *self,
 	EXTRA_ASSERT(n != NULL);
 
 	struct evtclient_GETVERS_s *mc =
-		g_malloc0 (sizeof(struct evtclient_GETVERS_s));
+		g_slice_alloc0(sizeof(struct evtclient_GETVERS_s));
+	mc->ec.struct_size = sizeof(struct evtclient_GETVERS_s);
 	mc->ec.client = gridd_client_create_empty ();
 	mc->ec.on_end = (gridd_client_end_f) on_end_GETVERS;
 	mc->hook = result;

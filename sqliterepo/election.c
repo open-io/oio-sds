@@ -1453,15 +1453,16 @@ deferred_completion_CREATING(struct exec_later_CREATING_context_s *d)
 	member_unref(d->member);
 	member_unlock(d->member);
 
-	g_free(d);
+	g_slice_free1(sizeof(struct exec_later_CREATING_context_s), d);
 }
 
 static void
 completion_CREATING(int zrc, const char *path, const void *d)
 {
-	if (!d) return;
+	if (unlikely(!d)) return;
 
-	struct exec_later_CREATING_context_s *ctx = g_malloc0(sizeof(*ctx));
+	struct exec_later_CREATING_context_s *ctx =
+		g_slice_alloc0(sizeof(struct exec_later_CREATING_context_s));
 	ctx->magic = DAT_CREATING;
 	ctx->member = (struct election_member_s *) d;
 	ctx->local_id = -1;
@@ -1501,7 +1502,7 @@ deferred_completion_WATCHING(struct exec_later_WATCHING_context_s *d)
 	member_unref(d->member);
 	member_unlock(d->member);
 
-	g_free(d);
+	g_slice_free1(sizeof(struct exec_later_WATCHING_context_s), d);
 }
 
 static void
@@ -1509,7 +1510,8 @@ completion_WATCHING(int zrc, const struct Stat *s UNUSED, const void *d)
 {
 	if (!d) return;
 
-	struct exec_later_WATCHING_context_s *ctx = g_malloc0(sizeof(*ctx));
+	struct exec_later_WATCHING_context_s *ctx =
+		g_slice_alloc0(sizeof(struct exec_later_WATCHING_context_s));
 	ctx->magic = DAT_WATCHING;
 	ctx->zrc = zrc;
 	ctx->member = (struct election_member_s*) d;
@@ -1575,6 +1577,7 @@ deferred_completion_ASKING(struct exec_later_ASKING_context_s *d)
 	}
 	member_unref(d->member);
 	member_unlock(d->member);
+
 	g_free0 (d);
 }
 
@@ -1620,7 +1623,7 @@ deferred_completion_LISTING (struct exec_later_LISTING_context_s *d)
 	member_unref(d->member);
 	member_unlock(d->member);
 
-	g_free(d);
+	g_slice_free1(sizeof(struct exec_later_LISTING_context_s), d);
 }
 
 static void
@@ -1638,7 +1641,8 @@ completion_LISTING(int zrc, const struct String_vector *sv, const void *d)
 	}
 	g_array_free(i32v, TRUE);
 
-	struct exec_later_LISTING_context_s *ctx = g_malloc0(sizeof(*ctx));
+	struct exec_later_LISTING_context_s *ctx =
+		g_slice_alloc0(sizeof(struct exec_later_LISTING_context_s));
 	ctx->magic = DAT_LISTING;
 	if (ZOK == (ctx->zrc = zrc))
 		ctx->zrc = has_first ? ZOK : ZNONODE;
@@ -1675,7 +1679,7 @@ deferred_completion_LEAVING(struct exec_later_LEAVING_context_s *d)
 	member_unref(d->member);
 	member_unlock(d->member);
 
-	g_free(d);
+	g_slice_free1(sizeof(struct exec_later_LEAVING_context_s), d);
 }
 
 static void
@@ -1683,7 +1687,8 @@ completion_LEAVING(int zrc, const void *d)
 {
 	if (!d) return;
 
-	struct exec_later_LEAVING_context_s *ctx = g_malloc0(sizeof(*ctx));
+	struct exec_later_LEAVING_context_s *ctx =
+		g_slice_alloc0(sizeof(struct exec_later_LEAVING_context_s));
 	ctx->magic = DAT_LEAVING;
 	ctx->zrc = zrc;
 	ctx->member = (struct election_member_s*) d;
