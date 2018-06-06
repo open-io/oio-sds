@@ -88,7 +88,7 @@ _sds_factory_destroy (struct oio_sqlx_client_factory_s *self)
 	oio_str_clean (&s->ns);
 	s->dir = NULL;
 	s->vtable = NULL;
-	SLICE_FREE (struct oio_sqlx_client_factory_SDS_s, s);
+	g_slice_free (struct oio_sqlx_client_factory_SDS_s, s);
 }
 
 static GError *
@@ -105,7 +105,7 @@ _sds_factory_open (struct oio_sqlx_client_factory_s *self,
 	if (!oio_url_has_fq_container(u))
 		return BADREQ("Partial URL");
 
-	struct oio_sqlx_client_SDS_s * client = SLICE_NEW0 (struct oio_sqlx_client_SDS_s);
+	struct oio_sqlx_client_SDS_s * client = g_slice_new0 (struct oio_sqlx_client_SDS_s);
 	client->vtable = &vtable_SDS;
 	client->factory = f;
 	client->url = oio_url_dup (u);
@@ -118,7 +118,7 @@ struct oio_sqlx_client_factory_s *
 oio_sqlx_client_factory__create_sds (const char *ns,
 		struct oio_directory_s *dir)
 {
-	struct oio_sqlx_client_factory_SDS_s *self = SLICE_NEW0 (struct oio_sqlx_client_factory_SDS_s);
+	struct oio_sqlx_client_factory_SDS_s *self = g_slice_new0 (struct oio_sqlx_client_factory_SDS_s);
 	self->vtable = &vtable_factory_SDS;
 	self->ns = g_strdup (ns);
 	self->dir = dir;
@@ -150,7 +150,7 @@ _sds_client_destroy (struct oio_sqlx_client_s *self)
 	c->vtable = NULL;
 	c->factory = NULL;
 	oio_url_pclean (&c->url);
-	SLICE_FREE (struct oio_sqlx_client_SDS_s, c);
+	g_slice_free (struct oio_sqlx_client_SDS_s, c);
 }
 
 /* With SQLX, creating a DB is mainly a call to the directory to ensure a
