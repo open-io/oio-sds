@@ -1149,7 +1149,6 @@ def generate(options):
         env = dict(ENV)
         env.update(add)
         env['env.G_DEBUG'] = "fatal_warnings"
-        env['env.G_SLICE'] = "always-malloc"
         if options.get(PROFILE) == "valgrind":
             orig_exe = env.get('EXE', None)
             new_exe = "valgrind --leak-check=full --leak-resolution=high\
@@ -1157,6 +1156,7 @@ def generate(options):
             env['env.ORIG_EXE'] = orig_exe
             env['EXE'] = new_exe
             env['env.G_DEBUG'] = "gc-friendly"
+            env['env.G_SLICE'] = "always-malloc"
         elif options.get(PROFILE) == "callgrind":
             orig_exe = env.get('EXE', None)
             new_exe = "valgrind --tool=callgrind --collect-jumps=yes\
