@@ -554,7 +554,7 @@ gridd_client_free(struct gridd_client_s *client)
 	if (client->reply)
 		g_byte_array_free(client->reply, TRUE);
 	client->fd = -1;
-	SLICE_FREE (struct gridd_client_s, client);
+	g_slice_free (struct gridd_client_s, client);
 }
 
 void
@@ -846,7 +846,7 @@ gridd_client_learn_peers_down(const char * const * peers)
 struct gridd_client_s *
 gridd_client_create_empty(void)
 {
-	struct gridd_client_s *client = SLICE_NEW0(struct gridd_client_s);
+	struct gridd_client_s *client = g_slice_new0(struct gridd_client_s);
 	if (unlikely(!client))
 		return NULL;
 
