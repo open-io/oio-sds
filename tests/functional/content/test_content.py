@@ -28,12 +28,12 @@ from oio.blob.client import BlobClient
 from oio.common.exceptions import NotFound, \
     ContentNotFound, ClientException, OrphanChunk
 from oio.common.utils import cid_from_name
+from oio.common.fullpath import encode_fullpath
 from oio.container.client import ContainerClient
 from oio.content.factory import ContentFactory
 from oio.content.plain import PlainContent
 from oio.content.ec import ECContent
 from tests.utils import BaseTestCase, ec
-from urllib import quote_plus
 
 
 def md5_stream(stream):
@@ -75,12 +75,6 @@ class TestContentFactory(BaseTestCase):
 
     def tearDown(self):
         super(TestContentFactory, self).tearDown()
-
-    def _generate_fullpath(self, account, container_name, path, version):
-        return ['{0}/{1}/{2}/{3}'.format(quote_plus(account),
-                                         quote_plus(container_name),
-                                         quote_plus(path),
-                                         version)]
 
     def test_get_ec(self):
         meta = {
@@ -125,10 +119,8 @@ class TestContentFactory(BaseTestCase):
         self.assertEqual(c.length, 658)
         self.assertEqual(c.path, "tox.ini")
         self.assertEqual(c.full_path,
-                         self._generate_fullpath(self.account,
-                                                 self.container_name,
-                                                 "tox.ini",
-                                                 meta['version']))
+                         encode_fullpath(self.account, self.container_name,
+                                         "tox.ini", meta['version']))
         self.assertEqual(c.version, "1450176946676289")
         # TODO test storage method
         self.assertEqual(len(c.chunks), 4)
@@ -173,10 +165,8 @@ class TestContentFactory(BaseTestCase):
         self.assertEqual(c.path, "tox.ini")
         self.assertEqual(c.version, "1450176946676289")
         self.assertEqual(c.full_path,
-                         self._generate_fullpath(self.account,
-                                                 self.container_name,
-                                                 "tox.ini",
-                                                 meta['version']))
+                         encode_fullpath(self.account, self.container_name,
+                                         "tox.ini", meta['version']))
         # TODO test storage_method
         self.assertEqual(len(c.chunks), 2)
         self.assertEqual(c.chunks[0].raw(), chunks[0])
@@ -424,10 +414,8 @@ class TestContentFactory(BaseTestCase):
             # Ensure the saved path is the one we gave the object
             for cname in answers:
                 self.assertEqual(cname, answers[cname].path)
-                full_path = self._generate_fullpath(self.account,
-                                                    self.container_name,
-                                                    cname,
-                                                    answers[cname].version)
+                full_path = encode_fullpath(self.account, self.container_name,
+                                            cname, answers[cname].version)
                 self.assertEqual(answers[cname].full_path, full_path)
             # Ensure all objects appear in listing
             for cname in strange_paths:

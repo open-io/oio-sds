@@ -21,7 +21,7 @@ import os
 import warnings
 import time
 import random
-from urllib import quote_plus, unquote_plus
+from urllib import unquote_plus
 
 from oio.common import exceptions as exc
 from oio.api.ec import ECWriteHandler
@@ -40,6 +40,7 @@ from oio.common.decorators import handle_account_not_found, \
     handle_container_not_found, handle_object_not_found
 from oio.common.storage_functions import _sort_chunks, fetch_stream, \
     fetch_stream_ec
+from oio.common.fullpath import encode_fullpath
 
 
 # TODO(FVE): decorate more methods
@@ -383,9 +384,9 @@ class ObjectStorageApi(object):
                     account, container, obj["name"], **kwargs)
                 chunks = [chunk['url'] for chunk in data[1]]
                 copies = self._generate_copies(chunks)
-                fullpath = self._generate_fullpath(
+                fullpath = encode_fullpath(
                     dst_account, dst_container, obj['name'], obj['version'])
-                self._link_chunks(chunks, copies, fullpath[0], **kwargs)
+                self._link_chunks(chunks, copies, fullpath, **kwargs)
                 t_beans, c_beans = self._prepare_meta2_raw_update(
                     data[1], copies, obj['content'])
                 target_beans.extend(t_beans)
@@ -900,8 +901,8 @@ class ObjectStorageApi(object):
             chunks_url.append(chunk['url'])
         for chunk in chunks_copies:
             chunks_copies_url.append(chunk['url'])
-        fullpath = self._generate_fullpath(link_account, link_container,
-                                           link_obj, link_meta['version'])
+        fullpath = encode_fullpath(link_account, link_container,
+                                   link_obj, link_meta['version'])
         data = {'chunks': chunks_copies,
                 'properties': link_meta['properties'] or {}}
         if properties_directive == 'REPLACE':
@@ -913,7 +914,7 @@ class ObjectStorageApi(object):
             else:
                 data['properties'] = {}
         self._link_chunks(
-            chunks_url, chunks_copies_url, fullpath[0], **kwargs)
+            chunks_url, chunks_copies_url, fullpath, **kwargs)
         self.container.content_create(
             link_account, link_container, link_obj,
             version=link_meta['version'], content_id=link_meta['id'],
@@ -1078,12 +1079,6 @@ class ObjectStorageApi(object):
             account, container, obj, properties=properties,
             version=version, **kwargs)
 
-    def _generate_fullpath(self, account, container_name, path, version):
-        return ['{0}/{1}/{2}/{3}'.format(quote_plus(account),
-                                         quote_plus(container_name),
-                                         quote_plus(path),
-                                         version)]
-
     def _object_upload(self, ul_handler, **kwargs):
         """Upload data to rawx, measure time it takes."""
         perfdata = kwargs.get('perfdata', self.container.perfdata)
@@ -1108,7 +1103,7 @@ class ObjectStorageApi(object):
         obj_meta['content_path'] = obj_name
         obj_meta['container_id'] = cid_from_name(account, container).upper()
         obj_meta['ns'] = self.namespace
-        obj_meta['full_path'] = self._generate_fullpath(
+        obj_meta['full_path'] = encode_fullpath(
             account, container, obj_name, obj_meta['version'])
         obj_meta['oio_version'] = (obj_meta.get('oio_version')
                                    or OIO_VERSION)

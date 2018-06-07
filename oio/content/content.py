@@ -18,8 +18,8 @@ from oio.common.exceptions import ClientException, OrphanChunk
 from oio.common.logger import get_logger
 from oio.blob.client import BlobClient
 from oio.container.client import ContainerClient
-from urllib import quote_plus
 from oio.common.constants import OIO_VERSION
+from oio.common.fullpath import encode_fullpath
 
 
 class Content(object):
@@ -51,11 +51,8 @@ class Content(object):
         if 'full_path' in self.metadata:
             self.full_path = metadata['full_path']
         else:
-            self.full_path = ['{0}/{1}/{2}/{3}'.
-                              format(quote_plus(self.account),
-                                     quote_plus(self.container_name),
-                                     quote_plus(self.path),
-                                     self.version)]
+            self.full_path = encode_fullpath(self.account, self.container_name,
+                                             self.path, self.version)
 
     @property
     def mime_type(self):

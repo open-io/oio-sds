@@ -25,6 +25,7 @@ from oio.common.http_urllib3 import get_pool_manager
 from oio.common.storage_functions import _sort_chunks as sort_chunks
 from oio.common import exceptions as exc
 from oio.common.utils import cid_from_name
+from oio.common.fullpath import encode_fullpath
 from oio.conscience.client import ConscienceClient
 from tests.utils import random_str, random_data, random_id, BaseTestCase
 
@@ -1053,16 +1054,16 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         url_list = [c['url'] for c in chunk_list]
         copy_list = self.api._generate_copies(url_list)
         # every chunks should have the fullpath
-        fullpath = self.api._generate_fullpath(
+        fullpath = encode_fullpath(
             self.account, snapshot_name, 'copy', 12456)
-        self.api._link_chunks(url_list, copy_list, fullpath[0])
+        self.api._link_chunks(url_list, copy_list, fullpath)
         # check that every copy exists
         pool_manager = get_pool_manager()
         for copy in copy_list:
             resp = pool_manager.request(
                 'HEAD', self.api._blob_client.resolve_url(copy))
             self.assertEqual(resp.status, 200)
-            self.assertIn(fullpath[0],
+            self.assertIn(fullpath,
                           resp.headers[CHUNK_HEADERS['full_path']])
         # Snapshot on non existing container should failed
         self.assertRaises(exc.NoSuchContainer,
