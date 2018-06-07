@@ -1021,22 +1021,34 @@ dav_rawx_remove_resource(dav_resource *resource, dav_response **response)
 
 	if (DAV_RESOURCE_TYPE_REGULAR != resource->type)  {
 		e = server_create_and_stat_error(resource_get_server_config(resource), pool,
-			HTTP_CONFLICT, 0, "Cannot DELETE this type of resource.");
+				HTTP_CONFLICT, 0, "Cannot DELETE this type of resource.");
 		goto end_remove;
 	}
 	if (resource->collection) {
 		e = server_create_and_stat_error(resource_get_server_config(resource), pool,
-			HTTP_CONFLICT, 0, "No DELETE on collections");
+				HTTP_CONFLICT, 0, "No DELETE on collections");
 		goto end_remove;
+	}
+
+	GError *local_error = NULL;
+	if (remove_fullpath_from_attr(resource_get_pathname(resource), &local_error,
+			resource->info->hex_chunkid)) {
+		if (local_error) {
+			GRID_WARN("Error to remove content fullpath: (%d) %s",
+					local_error->code, local_error->message);
+			g_error_free(local_error);
+		} else {
+			GRID_WARN("Error to remove content fullpath");
+		}
 	}
 
 	status = apr_file_remove(resource_get_pathname(resource), pool);
 	if (APR_SUCCESS != status) {
-		e = server_create_and_stat_error(resource_get_server_config(resource), pool,
-			HTTP_FORBIDDEN, 0, apr_pstrcat(pool,
-					"Failed to DELETE this chunk : ",
-					apr_strerror(status, buff, sizeof(buff)),
-					NULL));
+		e = server_create_and_stat_error(resource_get_server_config(resource),
+				pool, HTTP_FORBIDDEN, 0, apr_pstrcat(pool,
+						"Failed to DELETE this chunk : ",
+						apr_strerror(status, buff, sizeof(buff)),
+						NULL));
 		goto end_remove;
 	}
 
