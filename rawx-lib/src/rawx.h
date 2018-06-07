@@ -115,4 +115,7 @@ gboolean get_rawx_info_from_fd(int fd, GError **error, gchar *hex_chunkid,
 
 gboolean get_compression_info_in_attr(const char *p, GError **error, GHashTable *table);
 
+gboolean remove_fullpath_from_attr(const char *p, GError **error,
+		const gchar *hex_chunkid);
+
 #endif /*OIO_SDS__rawx_lib__src__rawx_h*/

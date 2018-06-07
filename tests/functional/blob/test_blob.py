@@ -24,6 +24,7 @@ from urlparse import urlparse
 from urllib import quote_plus
 from oio.common.http_eventlet import http_connect
 from oio.common.constants import OIO_VERSION
+from oio.blob.utils import read_chunk_metadata
 
 from tests.utils import BaseTestCase
 
@@ -324,7 +325,7 @@ class TestBlobFunctional(BaseTestCase):
         chunkid = self.chunkid()
         chunkdata = random_buffer(string.printable, 1)
         chunkurl = self._rawx_url(chunkid)
-        # chunkpath = self._chunk_path(chunkid)
+        chunkpath = self._chunk_path(chunkid)
         headers1 = self._chunk_attr(chunkid, chunkdata)
         metachunk_hash = md5().hexdigest()
         trailers = {'x-oio-chunk-meta-metachunk-size': 1,
@@ -340,6 +341,7 @@ class TestBlobFunctional(BaseTestCase):
         copyid = self.chunkid()
         copyid = chunkid[:-60] + copyid[-60:]
         copyurl = self._rawx_url(copyid)
+        copypath = self._chunk_path(copyid)
 
         headers2 = {}
         headers2["Destination"] = copyurl
@@ -358,6 +360,43 @@ class TestBlobFunctional(BaseTestCase):
         self.assertEqual(resp.status, 200)
         self.assertEqual(headers2['x-oio-chunk-meta-full-path'],
                          resp.getheader('x-oio-chunk-meta-full-path'))
+
+        with open(chunkpath, 'r') as fd:
+            meta = read_chunk_metadata(fd, chunkid)
+            self.assertEqual(headers1['x-oio-chunk-meta-full-path'],
+                             meta['full_path'])
+            self.assertEqual(1, len(meta['links']))
+            self.assertEqual(headers2['x-oio-chunk-meta-full-path'],
+                             meta['links'][copyid])
+
+        with open(copypath, 'r') as fd:
+            meta = read_chunk_metadata(fd, copyid)
+            self.assertEqual(headers2['x-oio-chunk-meta-full-path'],
+                             meta['full_path'])
+            self.assertEqual(1, len(meta['links']))
+            self.assertEqual(headers1['x-oio-chunk-meta-full-path'],
+                             meta['links'][chunkid])
+
+        resp, body = self._http_request(chunkurl, 'DELETE', '', {})
+        self.assertEqual(resp.status, 204)
+        resp, body = self._http_request(chunkurl, 'GET', '', {})
+        self.assertEqual(resp.status, 404)
+
+        resp, body = self._http_request(copyurl, 'GET', '', {})
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(headers2['x-oio-chunk-meta-full-path'],
+                         resp.getheader('x-oio-chunk-meta-full-path'))
+
+        with open(copypath, 'r') as fd:
+            meta = read_chunk_metadata(fd, copyid)
+            self.assertEqual(headers2['x-oio-chunk-meta-full-path'],
+                             meta['full_path'])
+            self.assertEqual(0, len(meta['links']))
+
+        resp, body = self._http_request(copyurl, 'DELETE', '', {})
+        self.assertEqual(resp.status, 204)
+        resp, body = self._http_request(copyurl, 'GET', '', {})
+        self.assertEqual(resp.status, 404)
 
     def test_strange_path(self):
         strange_paths = [
