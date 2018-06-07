@@ -28,6 +28,7 @@ from oio.common.constants import chunk_xattr_keys
 from tests.utils import BaseTestCase, random_str, random_id
 from oio.common.constants import OIO_VERSION, \
         CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
+from oio.common.fullpath import encode_fullpath
 
 
 class TestContent(object):
@@ -77,8 +78,8 @@ class TestBlobAuditorFunctional(BaseTestCase):
 
         self.content = TestContent(
             random_str(6), len(self.data), self.url_rand, 1)
-        self.content_fullpath = '%s/%s/%s/%s' % (self.account, self.ref,
-                                                 self.content.path, '1')
+        self.content_fullpath = encode_fullpath(self.account, self.ref,
+                                                self.content.path, 1)
 
         self.content.id_container = cid_from_name(
             self.account, self.ref).upper()
