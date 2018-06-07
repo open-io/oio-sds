@@ -18,6 +18,7 @@ import logging
 import re
 import socket
 from urllib import quote, quote_plus
+from urlparse import urlparse
 
 from eventlet import patcher
 from eventlet.green.httplib import HTTPConnection, HTTPResponse, _UNKNOWN, \
@@ -292,12 +293,17 @@ def get_pool_manager(pool_connections=DEFAULT_POOLSIZE,
                                block=False)
 
 
-def oio_exception_from_httperror(exc, reqid=None):
+def oio_exception_from_httperror(exc, reqid=None, url=None):
     """
     Convert an HTTPError from urllib3 to an OioException,
     and re-raise it.
     """
-    extra = ("reqid=%s" % reqid) if reqid else None
+    extra_dict = dict()
+    if reqid:
+        extra_dict['reqid'] = reqid
+    if url:
+        extra_dict['host'] = urlparse(url).netloc
+    extra = ', '.join('%s=%s' % x for x in extra_dict.items())
     if isinstance(exc, urllib3.exceptions.MaxRetryError):
         if isinstance(exc.reason, urllib3.exceptions.NewConnectionError):
             oio_reraise(exceptions.OioNetworkException, exc.reason, extra)

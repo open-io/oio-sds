@@ -135,7 +135,9 @@ class HttpApi(object):
                 except ValueError:
                     pass
         except urllib3.exceptions.HTTPError as exc:
-            oio_exception_from_httperror(exc, out_headers.get('X-oio-req-id'))
+            oio_exception_from_httperror(exc,
+                                         reqid=out_headers.get('X-oio-req-id'),
+                                         url=url)
         if resp.status >= 400:
             raise exceptions.from_response(resp, body)
         return resp, body
