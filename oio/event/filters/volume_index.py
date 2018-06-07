@@ -28,20 +28,24 @@ class VolumeIndexFilter(Filter):
     _attempts_push = 3
     _attempts_delete = 3
 
-    def _chunk_delete(self,
+    def _chunk_delete(self, reqid,
                       volume_id, container_id, content_id, chunk_id):
+        headers = {'X-oio-req-id': reqid}
         try:
             return self.app.rdir.chunk_delete(
-                    volume_id, container_id, content_id, chunk_id)
+                    volume_id, container_id, content_id, chunk_id,
+                    headers=headers)
         except Exception as ex:
             self.logger.warn("chunk delete failed: %s", ex)
 
-    def _chunk_push(self,
+    def _chunk_push(self, reqid,
                     volume_id, container_id, content_id, chunk_id,
                     args):
+        headers = {'X-oio-req-id': reqid}
         try:
             return self.app.rdir.chunk_push(
-                    volume_id, container_id, content_id, chunk_id, **args)
+                    volume_id, container_id, content_id, chunk_id,
+                    headers=headers, **args)
         except Exception as ex:
             self.logger.warn("chunk push failed: %s", ex)
 
@@ -56,12 +60,14 @@ class VolumeIndexFilter(Filter):
             try:
                 if event.event_type == EventTypes.CHUNK_DELETED:
                     self._chunk_delete(
+                        event.reqid,
                         volume_id, container_id, content_id, chunk_id)
                 else:
                     args = {
                         'mtime': event.when / 1000000,  # seconds
                     }
                     self._chunk_push(
+                        event.reqid,
                         volume_id, container_id, content_id, chunk_id, args)
             except OioException as exc:
                 resp = EventError(event=event,
