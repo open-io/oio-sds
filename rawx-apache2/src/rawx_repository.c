@@ -879,6 +879,7 @@ dav_rawx_copy_resource(const dav_resource *src, dav_resource *dst, int depth,
 	apr_status_t status;
 	dav_error *e = NULL;
 	dav_rawx_server_conf * srv_conf = resource_get_server_config(src);
+	struct chunk_textinfo_s fake = {0};
 
 	*response = NULL;
 
@@ -931,9 +932,22 @@ dav_rawx_copy_resource(const dav_resource *src, dav_resource *dst, int depth,
 		goto end_copy;
 	}
 
+	if (!get_rawx_info_from_file(resource_get_pathname(dst), &local_error,
+			dst->info->hex_chunkid, &fake)) {
+		e = server_create_and_stat_error(srv_conf, pool,
+				HTTP_FORBIDDEN, 0,
+				apr_pstrdup(pool, gerror_get_message(local_error)));
+		goto end_copy;
+	}
+	struct chunk_textinfo_s chunk = dst->info->chunk;
+	dst->info->chunk = fake;
+	send_chunk_event("storage.chunk.new", dst);
+	dst->info->chunk = chunk;
+
 	server_inc_stat(srv_conf, RAWX_STATNAME_REP_2XX, 0);
 
 end_copy:
+	chunk_textinfo_free_content(&fake);
 	server_inc_request_stat(srv_conf, RAWX_STATNAME_REQ_OTHER,
 			request_get_duration(src->info->request));
 
