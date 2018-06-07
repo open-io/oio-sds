@@ -23,7 +23,7 @@ from oio.blob.utils import check_volume, read_chunk_metadata
 from oio.rdir.client import RdirClient
 from oio.common.daemon import Daemon
 from oio.common import exceptions as exc
-from oio.common.utils import get_logger, int_value, paths_gen
+from oio.common.utils import get_logger, int_value, paths_gen, request_id
 from oio.common.green import ratelimit
 from oio.common.exceptions import OioNetworkException
 from oio.common.constants import STRLEN_CHUNKID
@@ -123,10 +123,12 @@ class BlobIndexer(Daemon):
                 raise exc.FaultyChunk(
                     'Missing extended attribute %s' % e)
             data = {'mtime': int(time.time())}
+            headers = {'X-oio-req-id': 'blob-indexer-' + request_id()[:-13]}
             self.index_client.chunk_push(self.volume_id,
                                          meta['container_id'],
                                          meta['content_id'],
                                          meta['chunk_id'],
+                                         headers=headers,
                                          **data)
 
     def run(self, *args, **kwargs):

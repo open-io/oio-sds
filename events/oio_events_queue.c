@@ -204,10 +204,21 @@ oio_event__init (GString *gs, const char *type, struct oio_url_s *url)
 }
 
 GString*
-oio_event__create (const char *type, struct oio_url_s *url)
+oio_event__create(const char *type, struct oio_url_s *url)
+{
+	return oio_event__create_with_id(type, url, NULL);
+}
+
+GString*
+oio_event__create_with_id(const char *type, struct oio_url_s *url,
+		const char *request_id)
 {
 	GString *gs = g_string_sized_new(512);
 	g_string_append_c (gs, '{');
 	oio_event__init (gs, type, url);
+	if (request_id && *request_id) {
+		g_string_append_c(gs, ',');
+		oio_str_gstring_append_json_pair(gs, "request_id", request_id);
+	}
 	return gs;
 }

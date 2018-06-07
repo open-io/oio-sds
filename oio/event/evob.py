@@ -39,13 +39,14 @@ class Event(object):
     job_id = _event_env_property('job_id')
     event_type = _event_env_property('event')
     data = _event_env_property('data')
+    reqid = _event_env_property('request_id')
     when = _event_env_property('when')
 
     def __init__(self, env):
         self.env = env
 
     def __repr__(self):
-        return "Event [%s](%s)" % (self.job_id, self.event_type)
+        return "Event [%s,%s](%s)" % (self.job_id, self.reqid, self.event_type)
 
 
 class Response(object):

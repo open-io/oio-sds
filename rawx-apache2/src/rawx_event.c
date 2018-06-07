@@ -92,10 +92,12 @@ rawx_event_destroy (void)
 }
 
 GError *
-rawx_event_send (const char *event_type, GString *data_json)
+rawx_event_send(const char *event_type, const char *request_id,
+		GString *data_json)
 {
 	if (q != NULL && th_queue != NULL) {
-		GString *json = oio_event__create (event_type, NULL);
+		GString *json = oio_event__create_with_id(
+				event_type, NULL, request_id);
 		g_string_append_printf(json, ",\"data\":%.*s}",
 				(int) data_json->len, data_json->str);
 		oio_events_queue__send (q, g_string_free (json, FALSE));
