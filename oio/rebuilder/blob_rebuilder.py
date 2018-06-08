@@ -109,12 +109,14 @@ class BlobRebuilder(Rebuilder):
                                                 rebuild=True)
 
     def rebuilder_pass_with_lock(self):
+        success = False
         self.rdir_client.admin_lock(self.volume,
                                     "rebuilder on %s" % gethostname())
         try:
-            self.rebuilder_pass()
+            success = self.rebuilder_pass()
         finally:
             self.rdir_client.admin_unlock(self.volume)
+        return success
 
     def _create_worker(self, **kwargs):
         return BlobRebuilderWorker(

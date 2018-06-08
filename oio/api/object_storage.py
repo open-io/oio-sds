@@ -869,7 +869,7 @@ class ObjectStorageApi(object):
     @ensure_request_id
     def object_fastcopy(self, target_account, target_container, target_obj,
                         link_account, link_container, link_obj,
-                        version=None, **kwargs):
+                        version=None, properties_directive='COPY', **kwargs):
         """
         Make a shallow copy of an object.
         Works across accounts and across containers.
@@ -889,6 +889,14 @@ class ObjectStorageApi(object):
                                            link_obj, version)
         data = {'chunks': chunks_copies,
                 'properties': meta['properties'] or {}}
+        if properties_directive == 'REPLACE':
+            if 'metadata' in kwargs:
+                # TODO it should emit a DeprecationWarning
+                data['properties'] = kwargs['metadata']
+            elif 'properties' in kwargs:
+                data['properties'] = kwargs['properties']
+            else:
+                data['properties'] = {}
         try:
             self._link_chunks(
                 chunks_url, chunks_copies_url, fullpath[0], **kwargs)

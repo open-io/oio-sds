@@ -209,12 +209,12 @@ MaxSpareServers 40
 </IfModule>
 
 <IfModule worker.c>
-StartServers 2
-MaxClients 40
-MaxRequestWorkers 100
-MinSpareThreads 2
-MaxSpareThreads 40
-ThreadsPerChild 20
+MaxClients 512
+MaxRequestWorkers 512
+ThreadsPerChild 256
+StartServers 1
+MinSpareThreads 8
+MaxSpareThreads 32
 MaxRequestsPerChild 0
 </IfModule>
 
@@ -298,7 +298,8 @@ ErrorLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-errors.log
 CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-access.log log/common env=!nolog
 LogLevel info
 
-WSGIDaemonProcess ${SRVTYPE}-${SRVNUM} processes=2 threads=1 user=${USER} group=${GROUP}
+#WSGIDaemonProcess ${SRVTYPE}-${SRVNUM} processes=8 threads=1 response-buffer-size=8388608 send-buffer-size=8388608 receive-buffer-size=8388608 user=${USER} group=${GROUP}
+WSGIDaemonProcess ${SRVTYPE}-${SRVNUM} processes=8 threads=1 user=${USER} group=${GROUP}
 #WSGIProcessGroup ${SRVTYPE}-${SRVNUM}
 WSGIApplicationGroup ${SRVTYPE}-${SRVNUM}
 WSGIScriptAlias / ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.wsgi

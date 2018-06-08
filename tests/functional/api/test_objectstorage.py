@@ -828,6 +828,31 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertEqual(len(data), 128)
         self.assertEqual(data, "1" * 128)
 
+    def test_object_simple_fast_copy_with_metadata(self):
+        target_container = random_str(16)
+        link_container = random_str(16)
+        target_obj = random_str(16)
+        link_obj = random_str(16)
+        self.api.object_create(self.account, target_container, data="1"*128,
+                               obj_name=target_obj,
+                               metadata={'AAA': '1', 'BBB': '1'})
+        self.api.object_fastcopy(self.account, target_container, target_obj,
+                                 self.account, link_container, link_obj,
+                                 metadata={'BBB': '2'})
+        metadata, _ = self.api.object_fetch(self.account, link_container,
+                                            link_obj)
+        self.assertDictEqual(metadata.get('properties', {}),
+                             {'AAA': '1', 'BBB': '1'})
+
+        self.api.object_fastcopy(self.account, target_container, target_obj,
+                                 self.account, link_container, link_obj,
+                                 metadata={'BBB': '2'},
+                                 properties_directive='REPLACE')
+        metadata, _ = self.api.object_fetch(self.account, link_container,
+                                            link_obj)
+        self.assertDictEqual(metadata.get('properties', {}),
+                             {'BBB': '2'})
+
     def test_object_create_then_truncate(self):
         """Create an object then truncate data"""
         name = random_str(16)

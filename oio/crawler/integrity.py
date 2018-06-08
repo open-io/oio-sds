@@ -414,6 +414,8 @@ class Checker(object):
         self.pool.waitall()
 
     def report(self):
+        success = True
+
         def _report_stat(name, stat):
             print("{0:18}: {1}".format(name, stat))
 
@@ -421,27 +423,36 @@ class Checker(object):
         print('Report')
         _report_stat("Accounts checked", self.accounts_checked)
         if self.account_not_found:
+            success = False
             _report_stat("Missing accounts", self.account_not_found)
         if self.account_exceptions:
-            _report_stat("Exceptions", self.account_not_found)
+            success = False
+            _report_stat("Exceptions", self.account_exceptions)
         print()
         _report_stat("Containers checked", self.containers_checked)
         if self.container_not_found:
+            success = False
             _report_stat("Missing containers", self.container_not_found)
         if self.container_exceptions:
+            success = False
             _report_stat("Exceptions", self.container_exceptions)
         print()
         _report_stat("Objects checked", self.objects_checked)
         if self.object_not_found:
+            success = False
             _report_stat("Missing objects", self.object_not_found)
         if self.object_exceptions:
+            success = False
             _report_stat("Exceptions", self.object_exceptions)
         print()
         _report_stat("Chunks checked", self.chunks_checked)
         if self.chunk_not_found:
+            success = False
             _report_stat("Missing chunks", self.chunk_not_found)
         if self.chunk_exceptions:
+            success = False
             _report_stat("Exceptions", self.chunk_exceptions)
+        return success
 
 
 def main():
@@ -503,4 +514,5 @@ def main():
     for entry in args:
         checker.check(Target(*entry))
     checker.wait()
-    checker.report()
+    if not checker.report():
+        sys.exit(1)

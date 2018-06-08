@@ -1078,12 +1078,12 @@ Used by `gcc`
 
 ### socket.proxy.buflen
 
-> Set to a non-zero value to explicitely force a RCVBUF option on client sockets to/from proxy services.
+> Advice the libcurl to use that buffer size for the interactions with the proxy. libcurl gives no guaranty to take the advice into account. Set to 0 to let the default. libcurl applies its own range, usually between 1k and 512k.
 
  * default: **0**
  * type: guint
  * cmake directive: *OIO_SOCKET_PROXY_BUFLEN*
- * range: 0 -> 16777216
+ * range: 0 -> 512000
 
 ### socket.quickack.enabled
 
@@ -1092,6 +1092,15 @@ Used by `gcc`
  * default: **TRUE**
  * type: gboolean
  * cmake directive: *OIO_SOCKET_QUICKACK_ENABLED*
+
+### socket.rawx.buflen
+
+> Advice the libcurl to use that buffer size for the interactions with the rawx services. libcurl gives no guaranty to take the advice into account. Set to 0 to let the default. libcurl applies its own range, usually between 1k and 512k.
+
+ * default: **0**
+ * type: guint
+ * cmake directive: *OIO_SOCKET_RAWX_BUFLEN*
+ * range: 0 -> 512000
 
 ### sqliterepo.cache.heat_threshold
 

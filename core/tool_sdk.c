@@ -21,9 +21,7 @@ License along with this library.
 #include <glib.h>
 
 #include <core/oio_sds.h>
-#include <core/oioext.h>
-#include <core/oiostr.h>
-#include <core/oiolog.h>
+#include <core/oio_core.h>
 
 #include "internals.h"
 
@@ -128,6 +126,11 @@ int main(int argc, char **argv) {
 	g_assert (OIO_SDS_VERSION == oio_sds_version());
 	oio_log_flags |= LOG_FLAG_PRETTYTIME;
 	oio_log_verbose_default();
+
+	if (!oio_var_value_with_files(g_getenv("OIO_NS"), TRUE, NULL)) {
+		g_printerr("Unknown NS [%s]\n", g_getenv("OIO_NS"));
+		return 1;
+	}
 
 	if (argc < 2) {
 		g_printerr("Missing argument\n");

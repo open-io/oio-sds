@@ -862,8 +862,13 @@
 		"variables": [
 			{ "type": "uint", "name": "oio_socket_proxy_buflen",
 				"key": "socket.proxy.buflen",
-				"descr": "Set to a non-zero value to explicitely force a RCVBUF option on client sockets to/from proxy services.",
-				"def": 0, "min": 0, "max": "16Mi"},
+				"descr": "Advice the libcurl to use that buffer size for the interactions with the proxy. libcurl gives no guaranty to take the advice into account. Set to 0 to let the default. libcurl applies its own range, usually between 1k and 512k.",
+				"def": "0", "min": 0, "max": "512k"},
+
+			{ "type": "uint", "name": "oio_socket_rawx_buflen",
+				"key": "socket.rawx.buflen",
+				"descr": "Advice the libcurl to use that buffer size for the interactions with the rawx services. libcurl gives no guaranty to take the advice into account. Set to 0 to let the default. libcurl applies its own range, usually between 1k and 512k.",
+				"def": "0", "min": 0, "max": "512k"},
 
 			{ "type": "bool", "name": "oio_sds_default_autocreate",
 				"key": "core.sds.autocreate",

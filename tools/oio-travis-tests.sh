@@ -143,6 +143,23 @@ wait_proxy_cache() {
     done
 }
 
+ec_tests () {
+	randomize_env
+    $OIO_RESET -N $OIO_NS $@
+
+	SIZE0=$((256*1024*1024))
+	export OIO_USER=user-$RANDOM OIO_PATH=path-$RANDOM
+	echo $OIO_NS $OIO_ACCOUNT $OIO_USER $OIO_PATH
+	( export G_DEBUG_LEVEL=W ; ./core/tool_sdk put $SIZE0 )
+	openio object save $OIO_USER $OIO_PATH
+	SIZE=$(stat --printf='%s' $OIO_PATH)
+	/bin/rm "$OIO_PATH"
+	[ "$SIZE0" == "$SIZE" ]
+
+    gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
+	sleep 0.5
+}
+
 func_tests () {
 	randomize_env
 	args=
@@ -172,6 +189,18 @@ func_tests () {
 	# TODO(jfs): Move in a tests/functional/cli python test
 	${PYTHON} $(which oio-crawler-integrity) $OIO_NS $OIO_ACCOUNT $CNAME
 
+    if [ -n "${REBUILDER}" ]; then
+        for i in $(seq 1 100); do
+            dd if=/dev/urandom of=/tmp/openio_object_$i bs=1K \
+                    count=$(shuf -i 1-2000 -n 1) 2> /dev/null
+            echo "object create container-${RANDOM} /tmp/openio_object_$i" \
+                    "--name object-${RANDOM}"
+        done | ${PYTHON} $(which openio)
+
+        # test rebuilder (meta1, meta2 and blob)
+        ${SRCDIR}/tools/oio-test-rebuilder.sh -n "${OIO_NS}"
+    fi
+
 	# Run the whole suite of functional tests (Python)
 	cd $SRCDIR
 	tox -e coverage
@@ -181,11 +210,20 @@ func_tests () {
 	cd $WRKDIR
 	make -C tests/func test
 
+    # test a content with a strange name, through the CLI and the API
+    /usr/bin/fallocate -l $RANDOM /tmp/blob%
+    CNAME=$RANDOM
+    ${PYTHON} $(which openio) object create $CNAME /tmp/blob%
+    # At least spawn one oio-crawler-integrity on a container that exists
+    # TODO(jfs): Move in a tests/functional/cli python test
+    ${PYTHON} $(which oio-crawler-integrity) $OIO_NS $OIO_ACCOUNT $CNAME
+
 	# Create a file just bigger than chunk size
 	SOURCE=$(mktemp)
 	dd if=/dev/urandom of=$SOURCE bs=128K count=9
+
 	# Run the test-suite of the C API
-	./core/tool_roundtrip $SOURCE
+	${WRKDIR}/core/tool_roundtrip $SOURCE
 	rm -f $SOURCE
 
 	test_oio_cluster
@@ -248,11 +286,13 @@ fi
 
 if is_running_test_suite "repli" ; then
 	echo -e "\n### Replication tests"
+    export REBUILDER=1
 	func_tests -f "${SRCDIR}/etc/bootstrap-preset-smallrepli.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-udp.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-long-timeouts.yml" \
 		-f "${SRCDIR}/etc/bootstrap-meta1-1digits.yml"
-	fi
+    unset REBUILDER
+fi
 
 if is_running_test_suite "worm" ; then
 	echo -e "\n### WORM tests"
@@ -290,12 +330,19 @@ fi
 
 if is_running_test_suite "3copies" ; then
 	echo -e "\n### 3copies tests"
+    export REBUILDER=1
 	func_tests -f "${SRCDIR}/etc/bootstrap-preset-3COPIES-11RAWX.yml"
+    unset REBUILDER
 fi
 
 if is_running_test_suite "ec" ; then
-	echo -e "\n### EC tests"
-	func_tests -f "${SRCDIR}/etc/bootstrap-preset-EC.yml"
+    echo -e "\n### EC tests"
+    export REBUILDER=1
+    ec_tests -f "${SRCDIR}/etc/bootstrap-preset-EC.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-chunksize-512MiB.yml"
+
+    func_tests -f "${SRCDIR}/etc/bootstrap-preset-EC.yml"
+    unset REBUILDER
 fi
 
 if is_running_test_suite "multi-beanstalk" ; then

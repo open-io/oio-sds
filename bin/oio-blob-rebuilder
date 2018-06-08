@@ -17,6 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
+import sys
 
 from oio.rebuilder.blob_rebuilder import BlobRebuilder, DEFAULT_REBUILDER_TUBE
 from oio.common.logger import get_logger
@@ -122,19 +123,22 @@ def main():
     if args.chunks_per_second is not None:
         conf['items_per_second'] = args.chunks_per_second
 
+    success = False
     try:
         blob_rebuilder = BlobRebuilder(
             conf, logger, args.volume, input_file=args.input_file,
             try_chunk_delete=args.delete_faulty_chunks,
             beanstalkd_addr=args.beanstalkd)
         if args.volume:
-            blob_rebuilder.rebuilder_pass_with_lock()
+            success = blob_rebuilder.rebuilder_pass_with_lock()
         else:
-            blob_rebuilder.rebuilder_pass()
+            success = blob_rebuilder.rebuilder_pass()
     except KeyboardInterrupt:
         logger.info('Exiting')
     except Exception as exc:
         logger.exception('ERROR in rebuilder: %s', exc)
+    if not success:
+        sys.exit(1)
 
 
 if __name__ == '__main__':

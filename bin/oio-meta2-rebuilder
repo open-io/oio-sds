@@ -17,6 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
+import sys
 
 from oio.rebuilder.meta2_rebuilder import Meta2Rebuilder
 from oio.common.logger import get_logger
@@ -81,11 +82,14 @@ if __name__ == '__main__':
 
     logger = get_logger(conf, None, not args.quiet)
 
+    success = False
     try:
         meta2_rebuilder = Meta2Rebuilder(conf, logger,
                                          input_file=args.input_file)
-        meta2_rebuilder.rebuilder_pass()
+        success = meta2_rebuilder.rebuilder_pass()
     except KeyboardInterrupt:
         logger.info('Exiting')
     except Exception as e:
         logger.exception('ERROR in rebuilder: %s' % e)
+    if not success:
+        sys.exit(1)

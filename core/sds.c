@@ -280,7 +280,7 @@ _get_meta_bound (GSList *lchunks)
 
 static GError *
 _organize_chunks (GSList *lchunks, struct metachunk_s ***result,
-		gboolean no_shuffle)
+		gboolean no_shuffle, gint64 k)
 {
 	*result = NULL;
 
@@ -323,6 +323,16 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result,
 		/* Even with EC, the value of the 'chunk_size' attribute stored with each
 		 * chunk is the size of the metachunk. */
 		out[i]->size = ((struct chunk_s*)(out[i]->chunks->data))->size;
+	}
+
+	/* patch each metachunk-size and multiply it by K */
+	for (guint i = 0; i < meta_bound; ++i) {
+		struct metachunk_s *mc = out[i];
+		mc->size = mc->size * k;
+		for (GSList *l=mc->chunks; l ;l=l->next) {
+			struct chunk_s *chunk = l->data;
+			chunk->size = mc->size;
+		}
 	}
 
 	/* Compute each metachunk's offset in the main content */
@@ -956,7 +966,7 @@ _download_to_hook (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 			.sds = sds, .dst = dst, .src = src, .chunk_method = chunk_method,
 			.metachunks = NULL, .chunks = chunks,
 		};
-		err = _organize_chunks(chunks, &dl.metachunks, sds->no_shuffle);
+		err = _organize_chunks(chunks, &dl.metachunks, sds->no_shuffle, 1);
 		if (!err) {
 			EXTRA_ASSERT (dl.metachunks != NULL);
 			err = _download (&dl);
@@ -1244,7 +1254,8 @@ oio_sds_upload_done (struct oio_sds_ul_s *ul)
 int
 oio_sds_upload_greedy (struct oio_sds_ul_s *ul)
 {
-	return NULL != ul && !ul->finished && ul->ready_for_data;
+	return NULL != ul && !ul->finished && ul->ready_for_data
+		&& g_queue_is_empty(ul->buffer_tail);
 }
 
 int
@@ -1320,23 +1331,28 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 			g_prefix_error (&err, "Parsing: ");
 		json_object_put (jbody);
 		json_tokener_free (tok);
+	}
 
-		/* Verify we are not doing erasure coding.
-		 * TODO: implement erasure coding in C */
-		if (oio_sds_upload_needs_ecd(ul)) {
-			if (oio_str_is_set(ul->sds->ecd)) {
-				GRID_DEBUG("using ecd gateway");
-			} else {
-				err = NEWERROR(CODE_NOT_IMPLEMENTED,
-						"cannot upload this without ecd");
-			}
+	gint64 k = 1;
+
+	/* Verify either we are doing erasure coding or not */
+	if (!err && oio_sds_upload_needs_ecd(ul)) {
+		if (oio_str_is_set(ul->sds->ecd)) {
+			GRID_DEBUG("using ecd gateway");
+		} else {
+			err = NEWERROR(CODE_NOT_IMPLEMENTED,
+					"cannot upload this without ecd");
 		}
+
+		/* If we erasure-code, patch the metachunk-size */
+		k = data_security_decode_param_int64(ul->chunk_method, "k", 1);
+		ul->chunk_size = ul->chunk_size * k;
 	}
 
 	/* Organize the set of chunks into metachunks. */
 	if (!err) {
 		struct metachunk_s **out = NULL;
-		if ((err = _organize_chunks(_chunks, &out, ul->sds->no_shuffle)))
+		if ((err = _organize_chunks(_chunks, &out, ul->sds->no_shuffle, k)))
 			g_prefix_error (&err, "Logic: ");
 		else
 			for (struct metachunk_s **p = out; *p; ++p)
@@ -1362,6 +1378,14 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 	return (struct oio_error_s*) err;
 }
 
+static void
+_upload_feed_bytes (struct oio_sds_ul_s *ul, GBytes *bytes)
+{
+	g_queue_push_tail (ul->buffer_tail, bytes);
+	if (!g_bytes_get_size(bytes))
+		ul->ready_for_data = FALSE;
+}
+
 struct oio_error_s *
 oio_sds_upload_feed (struct oio_sds_ul_s *ul,
 		const unsigned char *buf, size_t len)
@@ -1370,9 +1394,7 @@ oio_sds_upload_feed (struct oio_sds_ul_s *ul,
 	EXTRA_ASSERT (ul != NULL);
 	g_assert (!ul->finished);
 	g_assert (ul->ready_for_data);
-	g_queue_push_tail (ul->buffer_tail, g_bytes_new (buf, len));
-	if (!len)
-		ul->ready_for_data = FALSE;
+	_upload_feed_bytes(ul, g_bytes_new (buf, len));
 	return NULL;
 }
 
@@ -1821,15 +1843,13 @@ _upload_sequential (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 		err = oio_sds_upload_prepare(ul, src->data.hook.size);
 
 	size_t sent = 0;
-	const size_t blen = 131072;
-	guint8 *b = g_malloc(blen);
 
 	while (!err && !oio_sds_upload_done (ul)) {
 		GRID_TRACE("%s (%p) not done yet", __FUNCTION__, ul);
 
 		/* feed the upload queue */
 		if (oio_sds_upload_greedy (ul)) {
-			size_t max = blen;
+			size_t max = 8 * 1024 * 1024;
 			if (src->data.hook.size > 0 && src->data.hook.size != (size_t)-1) {
 				const size_t remaining = src->data.hook.size - sent;
 				max = MIN(remaining, max);
@@ -1839,24 +1859,27 @@ _upload_sequential (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 			}
 
 			if (0 == max) {
-				err = oio_sds_upload_feed (ul, b, 0);
+				_upload_feed_bytes (ul, g_bytes_new_static((guint8*)"", 0));
 			} else {
+				guint8 *b = g_malloc(max);
 				size_t l = src->data.hook.cb (src->data.hook.ctx, b, max);
 				switch (l) {
 					case OIO_SDS_UL__ERROR:
 						err = (struct oio_error_s*) SYSERR("data hook error");
 						break;
 					case OIO_SDS_UL__DONE:
-						err = oio_sds_upload_feed (ul, b, 0);
+						_upload_feed_bytes (ul, g_bytes_new_static((guint8*)"", 0));
 						break;
 					case OIO_SDS_UL__NODATA:
 						GRID_INFO("%s No data ready from user's hook", __FUNCTION__);
 						break;
 					default:
-						err = oio_sds_upload_feed (ul, b, l);
+						_upload_feed_bytes (ul, g_bytes_new_take(b, l));
+						b = NULL;
 						sent += l;
 						break;
 				}
+				oio_pfree0(&b, NULL);
 			}
 		}
 
@@ -1864,8 +1887,6 @@ _upload_sequential (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 		if (!err)
 			err = oio_sds_upload_step (ul);
 	}
-
-	oio_pfree0(&b, NULL);
 
 	if (!err) {
 		err = oio_sds_upload_commit (ul);

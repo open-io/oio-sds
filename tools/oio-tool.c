@@ -264,6 +264,7 @@ main (int argc, char **argv)
 	timeout = 10.0;
 	deadline = oio_ext_monotonic_time() + (timeout * G_TIME_SPAN_SECOND);
 	oio_ext_set_deadline(deadline);
+	oio_log_lazy_init();
 	oio_ext_set_random_reqid ();
 
 	if (!strcmp("config", argv[1])) {
