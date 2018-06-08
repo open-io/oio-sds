@@ -116,7 +116,6 @@ set_rawx_info_to_fd(int fd, GError **error, struct chunk_textinfo_s *chunk)
 	SET(ATTR_NAME_METACHUNK_SIZE, chunk->metachunk_size);
 	SET(ATTR_NAME_METACHUNK_HASH, chunk->metachunk_hash);
 
-	SET(ATTR_NAME_CHUNK_ID,   chunk->chunk_id);
 	SET(ATTR_NAME_CHUNK_SIZE, chunk->chunk_size);
 	SET(ATTR_NAME_CHUNK_HASH, chunk->chunk_hash);
 	SET(ATTR_NAME_CHUNK_POS,  chunk->chunk_position);

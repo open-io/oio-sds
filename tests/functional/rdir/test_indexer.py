@@ -104,7 +104,7 @@ class TestIndexerCrawler(BaseTestCase):
 
         with mock.patch('oio.blob.indexer.time.time',
                         mock.MagicMock(return_value=1234)):
-            indexer.update_index(chunk_path)
+            indexer.update_index(chunk_path, chunk_id)
 
         # check rdir
         check_value = self._rdir_get(self._get_service_id_or_addr(),
@@ -117,7 +117,7 @@ class TestIndexerCrawler(BaseTestCase):
         # index a chunk already indexed
         with mock.patch('oio.blob.indexer.time.time',
                         mock.MagicMock(return_value=4567)):
-            indexer.update_index(chunk_path)
+            indexer.update_index(chunk_path, chunk_id)
 
         # check rdir
         check_value = self._rdir_get(self._get_service_id_or_addr(),
@@ -145,7 +145,8 @@ class TestIndexerCrawler(BaseTestCase):
         # try to index the chunk
         indexer = BlobIndexer(self.conf)
 
-        self.assertRaises(FaultyChunk, indexer.update_index, chunk_path)
+        self.assertRaises(FaultyChunk, indexer.update_index, chunk_path,
+                          chunk_id)
         os.remove(chunk_path)
 
     def test_index_chunk_with_wrong_paths(self):

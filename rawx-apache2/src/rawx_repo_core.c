@@ -445,36 +445,36 @@ resource_stat_chunk(dav_resource *resource, int flags)
 }
 
 void
-request_fill_headers(request_rec *r, struct chunk_textinfo_s *c)
+request_fill_headers(request_rec *r, struct chunk_textinfo_s *chunk)
 {
-	__set_header(r, "container-id",  c->container_id);
+	__set_header(r, "container-id",  chunk->container_id);
 
-	if (c->content_path) {
-		gchar *decoded = g_uri_escape_string (c->content_path, NULL, FALSE);
+	if (chunk->content_path) {
+		gchar *decoded = g_uri_escape_string(chunk->content_path, NULL, FALSE);
 		__set_header(r, "content-path", decoded);
 		g_free (decoded);
 	}
 
-	__set_header(r, "content-id",       c->content_id);
-	__set_header(r, "content-size",     c->content_size);
-	__set_header(r, "content-version",  c->content_version);
-	__set_header(r, "content-chunksnb", c->content_chunk_nb);
+	__set_header(r, "content-id",       chunk->content_id);
+	__set_header(r, "content-size",     chunk->content_size);
+	__set_header(r, "content-version",  chunk->content_version);
+	__set_header(r, "content-chunksnb", chunk->content_chunk_nb);
 
-	__set_header(r, "content-storage-policy", c->content_storage_policy);
-	__set_header(r, "content-chunk-method",   c->content_chunk_method);
-	__set_header(r, "content-mime-type",      c->content_mime_type);
+	__set_header(r, "content-storage-policy", chunk->content_storage_policy);
+	__set_header(r, "content-chunk-method",   chunk->content_chunk_method);
+	__set_header(r, "content-mime-type",      chunk->content_mime_type);
 
-	__set_header(r, "metachunk-size", c->metachunk_size);
-	__set_header(r, "metachunk-hash", c->metachunk_hash);
+	__set_header(r, "metachunk-size", chunk->metachunk_size);
+	__set_header(r, "metachunk-hash", chunk->metachunk_hash);
 
-	__set_header(r, "chunk-id",   c->chunk_id);
-	__set_header(r, "chunk-size", c->chunk_size);
-	__set_header(r, "chunk-hash", c->chunk_hash);
-	__set_header(r, "chunk-pos",  c->chunk_position);
+	__set_header(r, "chunk-id",   chunk->chunk_id);
+	__set_header(r, "chunk-size", chunk->chunk_size);
+	__set_header(r, "chunk-hash", chunk->chunk_hash);
+	__set_header(r, "chunk-pos",  chunk->chunk_position);
 
-	__set_header(r, "oio-version", c->oio_version);
+	__set_header(r, "oio-version", chunk->oio_version);
 
-	__set_header(r, "full-path", c->content_fullpath);
+	__set_header(r, "full-path", chunk->content_fullpath);
 
 }
 

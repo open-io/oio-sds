@@ -101,7 +101,7 @@ const char * check_chunk_info_with_trailers(const struct chunk_textinfo_s * cons
 
 void request_parse_query(request_rec *r, dav_resource *resource);
 
-void request_fill_headers(request_rec *r, struct chunk_textinfo_s *c1);
+void request_fill_headers(request_rec *r, struct chunk_textinfo_s *chunk);
 
 dav_error * rawx_repo_check_request(request_rec *req, const char *root_dir, const char *label,
 		int use_checked_in, dav_resource_private *ctx, dav_resource **result_resource);

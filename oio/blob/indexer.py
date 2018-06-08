@@ -59,12 +59,14 @@ class BlobIndexer(Daemon):
         def safe_update_index(path):
             chunk_id = path.rsplit('/', 1)[-1]
             if len(chunk_id) != STRLEN_CHUNKID:
+                self.logger.warn('WARN Not a chunk %s' % path)
                 return
             for c in chunk_id:
                 if c not in hexdigits:
+                    self.logger.warn('WARN Not a chunk %s' % path)
                     return
             try:
-                self.update_index(path)
+                self.update_index(path, chunk_id)
                 self.successes += 1
                 self.logger.debug('Updated %s', path)
             except OioNetworkException as exc:
@@ -117,10 +119,10 @@ class BlobIndexer(Daemon):
                 report('running')
         report('ended')
 
-    def update_index(self, path):
+    def update_index(self, path, chunk_id):
         with open(path) as f:
             try:
-                meta = read_chunk_metadata(f)
+                meta = read_chunk_metadata(f, chunk_id)
             except exc.MissingAttribute as e:
                 raise exc.FaultyChunk(
                     'Missing extended attribute %s' % e)
