@@ -468,6 +468,9 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 			if (0 != apr_strnatcasecmp(resource->info->chunk.chunk_id, resource->info->hex_chunkid))
 				return server_create_and_stat_error(request_get_server_config(r), r->pool,
 						HTTP_BAD_REQUEST, 0, "chunk-id mismatch");
+		} else {
+			resource->info->chunk.chunk_id = apr_pstrdup(
+					r->pool, resource->info->hex_chunkid);
 		}
 		if (resource->exists)
 			return server_create_and_stat_error(request_get_server_config(r), r->pool,

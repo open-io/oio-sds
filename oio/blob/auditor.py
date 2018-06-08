@@ -15,6 +15,7 @@
 
 
 from contextlib import closing
+from string import hexdigits
 import hashlib
 import time
 
@@ -26,6 +27,7 @@ from oio.common.utils import paths_gen
 from oio.common.easy_value import int_value
 from oio.common.logger import get_logger
 from oio.common.green import ratelimit
+from oio.common.constants import STRLEN_CHUNKID
 
 
 SLEEP_TIME = 30
@@ -142,8 +144,16 @@ class BlobAuditorWorker(object):
         )
 
     def safe_chunk_audit(self, path):
+        chunk_id = path.rsplit('/', 1)[-1]
+        if len(chunk_id) != STRLEN_CHUNKID:
+            self.logger.warn('WARN Not a chunk %s' % path)
+            return
+        for c in chunk_id:
+            if c not in hexdigits:
+                self.logger.warn('WARN Not a chunk %s' % path)
+                return
         try:
-            self.chunk_audit(path)
+            self.chunk_audit(path, chunk_id)
         except exc.FaultyChunk as err:
             self.faulty_chunks += 1
             self.logger.error('ERROR faulty chunk %s: %s', path, err)
@@ -159,10 +169,10 @@ class BlobAuditorWorker(object):
 
         self.passes += 1
 
-    def chunk_audit(self, path):
+    def chunk_audit(self, path, chunk_id):
         with open(path) as f:
             try:
-                meta = read_chunk_metadata(f)
+                meta = read_chunk_metadata(f, chunk_id)
             except exc.MissingAttribute as e:
                 raise exc.FaultyChunk(
                     'Missing extended attribute %s' % e)

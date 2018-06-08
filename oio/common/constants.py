@@ -99,6 +99,8 @@ chunk_xattr_keys = {
     'oio_version': 'grid.oio.version'
 }
 
+CHUNK_XATTR_CONTENT_FULLPATH_PREFIX = 'oio.content.fullpath:'
+
 chunk_xattr_keys_optional = {
         'content_chunksnb': True,
         'chunk_hash': True,

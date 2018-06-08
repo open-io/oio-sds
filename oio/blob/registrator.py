@@ -15,6 +15,7 @@
 
 
 from contextlib import contextmanager
+from string import hexdigits
 from os.path import basename
 from time import clock as now
 
@@ -22,6 +23,7 @@ from oio.common.utils import paths_gen
 from oio.blob.utils import check_volume, read_chunk_metadata
 from oio.container.client import ContainerClient
 from oio.common.exceptions import Conflict, NotFound
+from oio.common.constants import STRLEN_CHUNKID
 
 
 default_report_interval = 60.0
@@ -78,10 +80,18 @@ class BlobRegistratorWorker(object):
 
         paths = paths_gen(self.volume)
         for path in paths:
+            chunk_id = path.rsplit('/', 1)[-1]
+            if len(chunk_id) != STRLEN_CHUNKID:
+                self.logger.warn('WARN Not a chunk %s' % path)
+                return
+            for c in chunk_id:
+                if c not in hexdigits:
+                    self.logger.warn('WARN Not a chunk %s' % path)
+                    return
             # Action
             try:
                 with open(path) as f:
-                    meta = read_chunk_metadata(f)
+                    meta = read_chunk_metadata(f, chunk_id)
                     self.action(self, path, f, meta)
                     success = success + 1
             except NotFound as e:

@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from string import hexdigits
 import time
 
 from oio.blob.client import BlobClient
@@ -25,6 +26,7 @@ from oio.common.utils import paths_gen, statfs
 from oio.common.easy_value import int_value
 from oio.common.logger import get_logger
 from oio.common.green import ratelimit
+from oio.common.constants import STRLEN_CHUNKID
 from oio.content.factory import ContentFactory
 
 SLEEP_TIME = 30
@@ -136,19 +138,27 @@ class BlobMoverWorker(object):
         )
 
     def safe_chunk_move(self, path):
+        chunk_id = path.rsplit('/', 1)[-1]
+        if len(chunk_id) != STRLEN_CHUNKID:
+            self.logger.warn('WARN Not a chunk %s' % path)
+            return
+        for c in chunk_id:
+            if c not in hexdigits:
+                self.logger.warn('WARN Not a chunk %s' % path)
+                return
         try:
-            self.chunk_move(path)
+            self.chunk_move(path, chunk_id)
         except Exception as e:
             self.errors += 1
             self.logger.error('ERROR while moving chunk %s: %s', path, e)
         self.passes += 1
 
-    def load_chunk_metadata(self, path):
+    def load_chunk_metadata(self, path, chunk_id):
         with open(path) as f:
-            return read_chunk_metadata(f)
+            return read_chunk_metadata(f, chunk_id)
 
-    def chunk_move(self, path):
-        meta = self.load_chunk_metadata(path)
+    def chunk_move(self, path, chunk_id):
+        meta = self.load_chunk_metadata(path, chunk_id)
         container_id = meta['container_id']
         content_id = meta['content_id']
         chunk_id = meta['chunk_id']

@@ -17,7 +17,7 @@
 from oio.common import exceptions as exc
 from oio.common.xattr import read_user_xattr
 from oio.common.constants import chunk_xattr_keys, chunk_xattr_keys_optional, \
-    volume_xattr_keys
+    volume_xattr_keys, CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
 
 
 def check_volume(volume_path):
@@ -48,13 +48,29 @@ def check_volume(volume_path):
     return namespace, server_id
 
 
-def read_chunk_metadata(fd):
+def read_chunk_metadata(fd, chunk_id):
+    chunk_id = chunk_id.upper()
     raw_meta = read_user_xattr(fd)
     meta = {}
+    meta['links'] = dict()
+    raw_chunk_id = None
+    for k, v in raw_meta.iteritems():
+        # New chunk
+        if k.startswith(CHUNK_XATTR_CONTENT_FULLPATH_PREFIX):
+            chunkid = k[len(CHUNK_XATTR_CONTENT_FULLPATH_PREFIX):]
+            if chunkid == chunk_id:
+                raw_chunk_id = chunkid
+                meta['full_path'] = v
+            else:
+                meta['links'][chunkid] = v
+    if raw_chunk_id:
+        raw_meta[chunk_xattr_keys['chunk_id']] = raw_chunk_id
     for k, v in chunk_xattr_keys.iteritems():
         if v not in raw_meta:
             if k not in chunk_xattr_keys_optional:
                 raise exc.MissingAttribute(v)
         else:
             meta[k] = raw_meta[v]
+    if meta['chunk_id'] != chunk_id:
+        raise exc.MissingAttribute(chunk_xattr_keys('chunk_id'))
     return meta
