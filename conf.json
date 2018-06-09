@@ -884,7 +884,13 @@
 				"key": "core.sds.version",
 				"limit": 64,
 				"def": "4.0",
-				"descr": "The version of the sds. It's used to know the expected metadata of a chunk" }
+				"descr": "The version of the sds. It's used to know the expected metadata of a chunk" },
+
+			{ "type": "bool", "name": "oio_sds_client_patch_metachunk_size",
+				"key": "core.sds.patch_metachunk_size",
+				"def": "true",
+				"descr": "Should the client calculate the metachunk base on EC policy and chunk size and update the information?" }
+
 		]
 	}
 }
