@@ -890,7 +890,10 @@ class ECWriteHandler(io.WriteHandler):
 
         # this gives us an upper bound
         max_size = self.storage_method.ec_nb_data * chunk_size
-        max_size = max_size - max_size % self.storage_method.ec_segment_size
+        if max_size > self.storage_method.ec_segment_size:
+            # align metachunk size on EC segment size
+            max_size = \
+                max_size - max_size % self.storage_method.ec_segment_size
 
         # meta chunks:
         #
