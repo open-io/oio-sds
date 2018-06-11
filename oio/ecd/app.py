@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from hashlib import md5
+from urllib import unquote
 
 from werkzeug.exceptions import BadRequest
 from werkzeug.routing import Map, Rule
@@ -70,7 +71,7 @@ def load_sysmeta(request):
     sysmeta = dict()
     sysmeta['id'] = safe_get_header(request, 'content_id')
     sysmeta['version'] = safe_get_header(request, 'content_version')
-    sysmeta['content_path'] = safe_get_header(request, 'content_path')
+    sysmeta['content_path'] = unquote(safe_get_header(request, 'content_path'))
     sysmeta['content_length'] = safe_get_header(request, 'content_length', "0")
     sysmeta['chunk_method'] = safe_get_header(request, 'content_chunkmethod')
     sysmeta['mime_type'] = safe_get_header(request, 'content_mime_type')

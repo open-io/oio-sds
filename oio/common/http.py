@@ -14,7 +14,7 @@
 # License along with this library.
 
 import re
-from urllib import quote_plus
+from urllib import quote
 from oio.common.constants import CHUNK_HEADERS, OIO_VERSION
 from oio.common.http_eventlet import CustomHttpConnection \
     as NewCustomHttpConnection
@@ -100,30 +100,29 @@ def headers_from_object_metadata(metadata):
     """
     Generate chunk PUT request headers from object metadata.
     """
-    out = dict()
-    out["transfer-encoding"] = "chunked"
+    headers = dict()
+    headers["transfer-encoding"] = "chunked"
     # FIXME: remove key incoherencies
-    out[CHUNK_HEADERS["content_id"]] = metadata['id']
-    out[CHUNK_HEADERS["content_version"]] = metadata['version']
-    out[CHUNK_HEADERS["content_path"]] = metadata['content_path']
-    out[CHUNK_HEADERS["content_chunkmethod"]] = metadata['chunk_method']
-    out[CHUNK_HEADERS["content_policy"]] = metadata['policy']
-    out[CHUNK_HEADERS["container_id"]] = metadata['container_id']
-    out[CHUNK_HEADERS["oio_version"]] = metadata.get('oio_version',
-                                                     OIO_VERSION)
+    headers[CHUNK_HEADERS["content_id"]] = metadata['id']
+    headers[CHUNK_HEADERS["content_version"]] = str(metadata['version'])
+    headers[CHUNK_HEADERS["content_path"]] = quote(metadata['content_path'])
+    headers[CHUNK_HEADERS["content_chunkmethod"]] = metadata['chunk_method']
+    headers[CHUNK_HEADERS["content_policy"]] = metadata['policy']
+    headers[CHUNK_HEADERS["container_id"]] = metadata['container_id']
+    headers[CHUNK_HEADERS["oio_version"]] = metadata.get('oio_version',
+                                                         OIO_VERSION)
 
     for key in ['metachunk_hash', 'metachunk_size', 'chunk_hash']:
         val = metadata.get(key)
         if val is not None:
-            out[CHUNK_HEADERS[key]] = metadata[key]
+            headers[CHUNK_HEADERS[key]] = str(metadata[key])
 
-    header = {k: quote_plus(str(v)) for (k, v) in out.iteritems()}
     full_path = metadata['full_path']
     if isinstance(full_path, basestring):
-        header[CHUNK_HEADERS['full_path']] = full_path
+        headers[CHUNK_HEADERS['full_path']] = full_path
     else:
-        header[CHUNK_HEADERS['full_path']] = ','.join(full_path)
-    return header
+        headers[CHUNK_HEADERS['full_path']] = ','.join(full_path)
+    return headers
 
 
 class HeadersDict(dict):

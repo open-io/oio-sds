@@ -338,53 +338,160 @@ request_load_chunk_info_from_headers(request_rec *request,
 }
 
 const char *
-check_chunk_info(const struct chunk_textinfo_s * const cti)
+check_chunk_content_fullpath(apr_pool_t *pool,
+		struct chunk_textinfo_s * chunk)
 {
-	if (!cti->container_id) return "container-id";
-	if (!cti->content_id) return "content-id";
-	if (!cti->content_storage_policy) return "storage-policy";
-	if (!cti->content_chunk_method) return "chunk-method";
-	//if (!cti->content_mime_type) return "mime-type";
-	if (!cti->content_path) return "content-path";
-	if (!cti->content_version) return "version";
-	if (!cti->chunk_position) return "chunk-pos";
+	if (!chunk->content_fullpath) return "full-path";
+	gchar **fullpath = g_strsplit(chunk->content_fullpath, "/", -1);
+	guint fullpath_len = g_strv_length(fullpath);
+	if (fullpath_len != 5 && (fullpath_len != 4 || !chunk->content_id)) {
+		g_strfreev(fullpath);
+		return "full-path";
+	}
 
-	oio_str_upper (cti->container_id);
-	oio_str_upper (cti->content_id);
-	oio_str_upper (cti->chunk_hash);
-	oio_str_upper (cti->chunk_id);
+	gboolean success = TRUE;
+	char *account = NULL;
+	char *container = NULL;
+	char *path = NULL;
+	char *version = NULL;
+	char *content = NULL;
 
-	if (!oio_str_ishexa(cti->container_id, 64)) return "container-id";
-	if (!_null_or_hexa1(cti->content_id)) return "content-id";
-	if (!_null_or_hexa1(cti->chunk_id)) return "chunk-id";
-	if (!_null_or_hexa1(cti->chunk_hash)) return "chunk-hash";
+	account = g_uri_unescape_string(fullpath[0], NULL);
+	if (!account || !account[0]) {
+		success = FALSE;
+		goto end_check_chunk_content_fullpath;
+	}
+	container = g_uri_unescape_string(fullpath[1], NULL);
+	if (!container || !container[0]) {
+		success = FALSE;
+		goto end_check_chunk_content_fullpath;
+	}
+	guint8 container_id[32];
+	char container_hexid[STRLEN_CONTAINERID];
+	// NS is unused
+	oio_str_hash_name(container_id, NULL, account, container);
+	oio_str_bin2hex(container_id, sizeof(container_id),
+			container_hexid, sizeof(container_hexid));
+	if (chunk->container_id) {
+		oio_str_upper(chunk->container_id);
+		if (strncmp(chunk->container_id, container_hexid,
+				STRLEN_CONTAINERID) != 0) {
+			success = FALSE;
+			goto end_check_chunk_content_fullpath;
+		}
+	} else {
+		chunk->container_id = apr_pstrdup(pool, container_hexid);
+	}
+	path = g_uri_unescape_string(fullpath[2], NULL);
+	if (!path || !path[0]) {
+		success = FALSE;
+		goto end_check_chunk_content_fullpath;
+	}
+	if (chunk->content_path) {
+		if (strncmp(chunk->content_path, path,
+				LIMIT_LENGTH_CONTENTPATH) != 0) {
+			success = FALSE;
+			goto end_check_chunk_content_fullpath;
+		}
+	} else {
+		chunk->content_path = apr_pstrdup(pool, path);
+	}
+	version = g_uri_unescape_string(fullpath[3], NULL);
+	if (!version || !version[0] || !oio_str_isdigit(version)) {
+		success = FALSE;
+		goto end_check_chunk_content_fullpath;
+	}
+	if (chunk->content_version) {
+		if (strncmp(chunk->content_version, version,
+				LIMIT_LENGTH_VERSION) != 0) {
+			success = FALSE;
+			goto end_check_chunk_content_fullpath;
+		}
+	} else {
+		chunk->content_version = apr_pstrdup(pool, version);
+	}
+	if (fullpath_len == 5) {
+		// New content fullpath
+		content = g_uri_unescape_string(fullpath[4], NULL);
+		if (!content || !oio_str_ishexa1(content)) {
+			success = FALSE;
+			goto end_check_chunk_content_fullpath;
+		}
+		if (chunk->content_id) {
+			if (apr_strnatcasecmp(chunk->content_id, content) != 0) {
+				success = FALSE;
+				goto end_check_chunk_content_fullpath;
+			}
+		} else {
+			chunk->content_id = apr_pstrdup(pool, content);
+		}
+		oio_str_upper(chunk->content_id);
+		oio_str_upper(strrchr(chunk->content_fullpath, '/') + 1);
+	} else {
+		// Old content fullpath
+		if (!chunk->content_id || !oio_str_ishexa1(chunk->content_id)) {
+			success = FALSE;
+			goto end_check_chunk_content_fullpath;
+		}
+		oio_str_upper(chunk->content_id);
+		char *old_content_fullpath = chunk->content_fullpath;
+		chunk->content_fullpath = apr_pstrcat(
+				pool, chunk->content_fullpath, "/", chunk->content_id, NULL);
+		g_free(old_content_fullpath);
+	}
 
-	return NULL;
+end_check_chunk_content_fullpath:
+	g_free(account);
+	g_free(container);
+	g_free(path);
+	g_free(version);
+	g_free(content);
+	g_strfreev(fullpath);
+	return success ? NULL : "full-path";
 }
 
 const char *
-check_chunk_info_with_trailers(const struct chunk_textinfo_s * const cti)
+check_chunk_info(apr_pool_t *pool,
+		struct chunk_textinfo_s * chunk)
 {
-	const char *msg = check_chunk_info (cti);
+	if (!chunk->content_storage_policy) return "storage-policy";
+	if (!chunk->content_chunk_method) return "chunk-method";
+	//if (!chunk->content_mime_type) return "mime-type";
+	if (!chunk->chunk_position) return "chunk-pos";
+
+	oio_str_upper(chunk->chunk_hash);
+	oio_str_upper(chunk->chunk_id);
+
+	if (!_null_or_hexa1(chunk->chunk_id)) return "chunk-id";
+	if (!_null_or_hexa1(chunk->chunk_hash)) return "chunk-hash";
+
+	return check_chunk_content_fullpath(pool, chunk);
+}
+
+const char *
+check_chunk_info_with_trailers(apr_pool_t *pool,
+		struct chunk_textinfo_s * chunk)
+{
+	const char *msg = check_chunk_info(pool, chunk);
 	if (NULL != msg) return msg;
 
-	if (cti->metachunk_size && !oio_str_is_number(cti->metachunk_size, NULL))
+	if (chunk->metachunk_size && !oio_str_is_number(chunk->metachunk_size, NULL))
 		return "metachunk-size";
 
-	oio_str_upper (cti->metachunk_hash);
+	oio_str_upper (chunk->metachunk_hash);
 
-	if (!_null_or_hexa1(cti->metachunk_hash))
+	if (!_null_or_hexa1(chunk->metachunk_hash))
 		return "metachunk-hash";
 
-	if (cti->chunk_size && !oio_str_is_number(cti->chunk_size, NULL))
+	if (chunk->chunk_size && !oio_str_is_number(chunk->chunk_size, NULL))
 		return "chunk-size";
 
-	if (g_str_has_prefix(cti->content_chunk_method, "ec/")
-			&& !cti->metachunk_size)
+	if (g_str_has_prefix(chunk->content_chunk_method, "ec/")
+			&& !chunk->metachunk_size)
 		return "metachunk-size";
 
-	if (g_str_has_prefix(cti->content_chunk_method, "ec/")
-			&& !cti->metachunk_hash)
+	if (g_str_has_prefix(chunk->content_chunk_method, "ec/")
+			&& !chunk->metachunk_hash)
 		return "metachunk-hash";
 
 	return NULL;
@@ -618,6 +725,7 @@ rawx_repo_commit_upload(dav_stream *stream)
 {
 	dav_error *e = NULL;
 	struct chunk_textinfo_s fake = {0};
+	dav_rawx_server_conf *conf = resource_get_server_config(stream->r);
 
 	DUP(container_id);
 	DUP(content_id);
@@ -656,7 +764,7 @@ rawx_repo_commit_upload(dav_stream *stream)
 			 * computed over the input */
 			if (0 != strcasecmp(fake.chunk_hash, hex)) {
 				return server_create_and_stat_error(
-						resource_get_server_config(stream->r), stream->p, HTTP_UNPROCESSABLE_ENTITY, 0,
+						conf, stream->p, HTTP_UNPROCESSABLE_ENTITY, 0,
 						apr_pstrcat(stream->p, "MD5 mismatch hdr=", fake.chunk_hash, " body=", hex, NULL));
 			} else {
 				DAV_DEBUG_REQ(stream->r->info->request, 0, "MD5 match for %s",
@@ -680,11 +788,12 @@ rawx_repo_commit_upload(dav_stream *stream)
 		oio_str_replace(&(fake.compression_size), size);
 	}
 
-	const char *msg = check_chunk_info_with_trailers (&fake);
+	const char *msg = check_chunk_info_with_trailers(
+			stream->p, &fake);
 	if (msg != NULL) {
 		e = server_create_and_stat_error(
-				resource_get_server_config(stream->r), stream->p, HTTP_FORBIDDEN, 0,
-				apr_pstrcat(stream->p, "Error with xattr/header ", msg, NULL));
+				conf, stream->p, HTTP_FORBIDDEN, 0, apr_pstrcat(stream->p,
+						"Error with xattr/header ", msg, NULL));
 		return e;
 	}
 

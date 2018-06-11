@@ -95,9 +95,14 @@ void request_load_chunk_info_from_headers(request_rec *request,
 void request_overload_chunk_info_from_trailers(request_rec *request,
 		struct chunk_textinfo_s *cti);
 
-const char * check_chunk_info(const struct chunk_textinfo_s * const cti);
+const char * check_chunk_content_fullpath(apr_pool_t *pool,
+		struct chunk_textinfo_s * chunk);
 
-const char * check_chunk_info_with_trailers(const struct chunk_textinfo_s * const cti);
+const char * check_chunk_info(apr_pool_t *pool,
+		struct chunk_textinfo_s * chunk);
+
+const char * check_chunk_info_with_trailers(apr_pool_t *pool,
+		struct chunk_textinfo_s * chunk);
 
 void request_parse_query(request_rec *r, dav_resource *resource);
 
