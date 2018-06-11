@@ -17,7 +17,7 @@ import json
 import sys
 import time
 from oio.api.base import HttpApi
-from oio.common.utils import get_logger, quote
+from oio.common.utils import get_logger
 from oio.common.exceptions import ClientException, OioNetworkException
 from oio.conscience.client import ConscienceClient
 
@@ -87,7 +87,8 @@ class AccountClient(HttpApi):
         if not params:
             params = dict()
         if account:
-            params['id'] = quote(account)
+            # Do not quote account, _request() will urlencode query string
+            params['id'] = account
         try:
             resp, body = self._request(method, action, params=params, **kwargs)
         except OioNetworkException as exc:
