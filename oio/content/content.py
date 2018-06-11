@@ -51,8 +51,9 @@ class Content(object):
         if 'full_path' in self.metadata:
             self.full_path = metadata['full_path']
         else:
-            self.full_path = encode_fullpath(self.account, self.container_name,
-                                             self.path, self.version)
+            self.full_path = encode_fullpath(
+                self.account, self.container_name, self.path, self.version,
+                self.content_id)
 
     @property
     def mime_type(self):

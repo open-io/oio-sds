@@ -16,18 +16,20 @@
 from urllib import quote_plus, unquote_plus
 
 
-def encode_fullpath(account, container, path, version):
-    if not account or not container or not path or not version:
+def encode_fullpath(account, container, path, version, content_id):
+    if not account or not container or not path or not version \
+            or not content_id:
         raise ValueError("Can't encode fullpath")
-    return '{0}/{1}/{2}/{3}'.format(quote_plus(account),
-                                    quote_plus(container),
-                                    quote_plus(path),
-                                    quote_plus(str(version)))
+    return '{0}/{1}/{2}/{3}/{4}'.format(quote_plus(account),
+                                        quote_plus(container),
+                                        quote_plus(path),
+                                        quote_plus(str(version)),
+                                        quote_plus(content_id))
 
 
 def decode_fullpath(fullpath):
     fp = fullpath.split('/')
-    if len(fp) != 4:
+    if len(fp) != 5:
         raise ValueError("'fullpath': Wrong format")
     decoded = list()
     for part in fp:

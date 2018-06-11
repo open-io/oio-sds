@@ -185,18 +185,19 @@ _compute_id (struct oio_url_s *url)
 static gchar *
 _pack_fullpath(struct oio_url_s *u)
 {
+	if (!u->account || !u->user || !u->path || !u->version || !u->content)
+		return NULL;
+
 	GString *gs = g_string_new("");
-	if (u->account)
-		g_string_append_uri_escaped(gs, u->account, NULL, TRUE);
+	g_string_append_uri_escaped(gs, u->account, NULL, TRUE);
 	g_string_append_c(gs, '/');
-	if (u->user)
-		g_string_append_uri_escaped(gs, u->user, NULL, TRUE);
+	g_string_append_uri_escaped(gs, u->user, NULL, TRUE);
 	g_string_append_c(gs, '/');
-	if (u->path)
-		g_string_append_uri_escaped(gs, u->path, NULL, TRUE);
+	g_string_append_uri_escaped(gs, u->path, NULL, TRUE);
 	g_string_append_c(gs, '/');
-	if (u->version)
-		g_string_append(gs, u->version);
+	g_string_append_uri_escaped(gs, u->version, NULL, TRUE);
+	g_string_append_c(gs, '/');
+	g_string_append_uri_escaped(gs, u->content, NULL, TRUE);
 	return g_string_free(gs, FALSE);
 }
 
@@ -204,7 +205,7 @@ static void
 _unpack_fullpath(struct oio_url_s *u, const gchar *strfullpath)
 {
 	gchar **fullpath = g_strsplit(strfullpath, "/", -1);
-	if (g_strv_length(fullpath) == 4) {
+	if (g_strv_length(fullpath) == 5) {
 		char *account = g_uri_unescape_string(fullpath[0], NULL);
 		oio_url_set(u, OIOURL_ACCOUNT, account);
 		g_free(account);
@@ -214,7 +215,12 @@ _unpack_fullpath(struct oio_url_s *u, const gchar *strfullpath)
 		char *path = g_uri_unescape_string(fullpath[2], NULL);
 		oio_url_set(u, OIOURL_PATH, path);
 		g_free(path);
-		oio_url_set(u, OIOURL_VERSION, fullpath[3]);
+		char *version = g_uri_unescape_string(fullpath[3], NULL);
+		oio_url_set(u, OIOURL_VERSION, version);
+		g_free(version);
+		char *content = g_uri_unescape_string(fullpath[4], NULL);
+		oio_url_set(u, OIOURL_CONTENTID, content);
+		g_free(content);
 	}
 	g_strfreev(fullpath);
 }
@@ -322,11 +328,13 @@ oio_url_set(struct oio_url_s *u, enum oio_url_field_e f, const char *v)
 		case OIOURL_ACCOUNT:
 			oio_str_replace(&(u->account), v);
 			u->hexid[0] = 0;
+			oio_str_clean(&u->fullpath);
 			return u;
 
 		case OIOURL_USER:
 			oio_str_replace(&(u->user), v);
 			u->hexid[0] = 0;
+			oio_str_clean(&u->fullpath);
 			return u;
 
 		case OIOURL_TYPE:
@@ -336,10 +344,12 @@ oio_url_set(struct oio_url_s *u, enum oio_url_field_e f, const char *v)
 
 		case OIOURL_PATH:
 			oio_str_replace(&(u->path), v);
+			oio_str_clean(&u->fullpath);
 			return u;
 
 		case OIOURL_VERSION:
 			oio_str_replace(&(u->version), v);
+			oio_str_clean(&u->fullpath);
 			return u;
 
 		case OIOURL_WHOLE:
@@ -365,6 +375,7 @@ oio_url_set(struct oio_url_s *u, enum oio_url_field_e f, const char *v)
 			if (!oio_str_ishexa1(v))
 				return NULL;
 			oio_str_replace(&(u->content), v);
+			oio_str_clean(&u->fullpath);
 			return u;
 	}
 
@@ -387,11 +398,13 @@ oio_url_unset(struct oio_url_s *u, enum oio_url_field_e f)
 		case OIOURL_ACCOUNT:
 			oio_str_clean(&u->account);
 			u->hexid[0] = 0;
+			oio_str_clean(&u->fullpath);
 			return;
 
 		case OIOURL_USER:
 			oio_str_clean(&u->user);
 			u->hexid[0] = 0;
+			oio_str_clean(&u->fullpath);
 			return;
 
 		case OIOURL_TYPE:
@@ -401,10 +414,12 @@ oio_url_unset(struct oio_url_s *u, enum oio_url_field_e f)
 
 		case OIOURL_PATH:
 			oio_str_clean(&u->path);
+			oio_str_clean(&u->fullpath);
 			return;
 
 		case OIOURL_VERSION:
 			oio_str_clean(&u->version);
+			oio_str_clean(&u->fullpath);
 			return;
 
 		case OIOURL_WHOLE:
@@ -421,6 +436,7 @@ oio_url_unset(struct oio_url_s *u, enum oio_url_field_e f)
 
 		case OIOURL_CONTENTID:
 			oio_str_clean(&u->content);
+			oio_str_clean(&u->fullpath);
 			return;
 	}
 

@@ -78,8 +78,8 @@ class TestBlobAuditorFunctional(BaseTestCase):
 
         self.content = TestContent(
             random_str(6), len(self.data), self.url_rand, 1)
-        self.content_fullpath = encode_fullpath(self.account, self.ref,
-                                                self.content.path, 1)
+        self.content_fullpath = encode_fullpath(
+            self.account, self.ref, self.content.path, 1, random_id(32))
 
         self.content.id_container = cid_from_name(
             self.account, self.ref).upper()
