@@ -450,16 +450,29 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 
 	if (r->method_number == M_COPY) {
 		request_load_chunk_info_from_headers(r, &(resource->info->chunk));
+		const char *missing = check_chunk_content_fullpath(
+				r->pool, &resource->info->chunk);
+		if (missing != NULL) {
+			return server_create_and_stat_error(
+					request_get_server_config(r), r->pool,
+					HTTP_BAD_REQUEST, 0,
+					apr_pstrcat(r->pool, "missing or invalid header ", missing,
+							NULL));
+		}
 	}
 
 	if (r->method_number == M_PUT || r->method_number == M_POST ||
 			r->method_number == M_MOVE ||
 			(r->method_number == M_GET && ctx.update_only)) {
 		request_load_chunk_info_from_headers(r, &(resource->info->chunk));
-		const char *missing = check_chunk_info(&resource->info->chunk);
+		const char *missing = check_chunk_info(
+				r->pool, &resource->info->chunk);
 		if (missing != NULL) {
-			return server_create_and_stat_error(request_get_server_config(r), r->pool,
-				HTTP_BAD_REQUEST, 0, apr_pstrcat(r->pool, "missing or invalid header ", missing, NULL));
+			return server_create_and_stat_error(
+					request_get_server_config(r), r->pool,
+					HTTP_BAD_REQUEST, 0,
+					apr_pstrcat(r->pool, "missing or invalid header ", missing,
+							NULL));
 		}
 	}
 
@@ -896,13 +909,6 @@ dav_rawx_copy_resource(const dav_resource *src, dav_resource *dst, int depth,
 	if (!apr_strnatcasecmp(src->info->hex_chunkid, dst->info->hex_chunkid)) {
 		e = server_create_and_stat_error(srv_conf, pool, HTTP_FORBIDDEN, 0,
 				"Source and destination should not have the same id");
-		goto end_copy;
-	}
-
-	if (!src->info->chunk.content_fullpath) {
-		e = server_create_and_stat_error(srv_conf, pool,
-					HTTP_FORBIDDEN, 0,
-					apr_pstrdup(pool, "Missing fullpath"));
 		goto end_copy;
 	}
 

@@ -58,7 +58,7 @@ class TestStorageTierer(BaseTestCase):
         self.container_1_content_0_name = "container_1_content_0"
         self.container_1_content_0 = self._new_content(
             self.container_1_id, self.container_1_content_0_name, "SINGLE",
-            self.test_account, self.container_0_name)
+            self.test_account, self.container_1_name)
 
         self.container_2_name = "container_with_2_contents"
         self.container_2_id = cid_from_name(
@@ -68,11 +68,11 @@ class TestStorageTierer(BaseTestCase):
         self.container_2_content_0_name = "container_2_content_0"
         self.container_2_content_0 = self._new_content(
             self.container_2_id, self.container_2_content_0_name, "SINGLE",
-            self.test_account, self.container_0_name)
+            self.test_account, self.container_2_name)
         self.container_2_content_1_name = "container_2_content_1"
         self.container_2_content_1 = self._new_content(
             self.container_2_id, self.container_2_content_1_name, "TWOCOPIES",
-            self.test_account, self.container_0_name)
+            self.test_account, self.container_2_name)
 
     def _new_content(self, container_id, content_name, stgpol, account,
                      reference):

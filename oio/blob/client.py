@@ -15,6 +15,7 @@
 
 
 from functools import wraps
+from urllib import unquote
 
 from eventlet import GreenPile
 from oio.common.http_urllib3 import get_pool_manager, \
@@ -37,7 +38,10 @@ def extract_headers_meta(headers):
     meta = {}
     for k in CHUNK_HEADERS.iterkeys():
         try:
-            meta[k] = headers[CHUNK_HEADERS[k]]
+            if k == 'full_path':
+                meta[k] = headers[CHUNK_HEADERS[k]]
+            else:
+                meta[k] = unquote(headers[CHUNK_HEADERS[k]])
         except KeyError as err:
             if k not in chunk_xattr_keys_optional:
                 raise err

@@ -74,8 +74,11 @@ gboolean oio_str_ishexa(const char *s, gsize slen);
 /** Returns TRUE if 's' contains only printable ascii characters. */
 gboolean oio_str_is_printable(const char *s, gsize slen);
 
-/** Returns is 's' is an even number of hexadecimal characters */
+/** Returns TRUE if 's' is an even number of hexadecimal characters. */
 gboolean oio_str_ishexa1(const char *s);
+
+/** Returns FALSE if 's' contains a non-digit character. */
+gboolean oio_str_isdigit(const char *s);
 
 /** Convert an hexa string to its binary form */
 gboolean oio_str_hex2bin(const char * src, guint8* dst, gsize dlen);

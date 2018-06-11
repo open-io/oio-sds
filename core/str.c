@@ -137,6 +137,16 @@ gboolean oio_str_is_printable(const char *s, gsize slen) {
 	return TRUE;
 }
 
+gboolean oio_str_isdigit(const char *s) {
+	if (!s || !*s)
+		return FALSE;
+	for (; *s ;++s) {
+		if (!g_ascii_isdigit(*s))
+			return FALSE;
+	}
+	return TRUE;
+}
+
 gboolean oio_str_hex2bin(const char *s0, guint8 *d, gsize dlen) {
 	const guint8 *s = (const guint8*) s0;
 	if (!s || !d)
