@@ -1,4 +1,4 @@
-# Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2017-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from urlparse import urlparse
 from eventlet import patcher
 from urllib3.exceptions import MaxRetryError, TimeoutError, \
     NewConnectionError, ProtocolError, ProxyError, ClosedPoolError
@@ -56,12 +57,17 @@ def get_pool_manager(pool_connections=DEFAULT_POOLSIZE,
                                block=False)
 
 
-def oio_exception_from_httperror(exc, reqid=None):
+def oio_exception_from_httperror(exc, reqid=None, url=None):
     """
     Convert an HTTPError from urllib3 to an OioException,
     and re-raise it.
     """
-    extra = ("reqid=%s" % reqid) if reqid else None
+    extra_dict = dict()
+    if reqid:
+        extra_dict['reqid'] = reqid
+    if url:
+        extra_dict['host'] = urlparse(url).netloc
+    extra = ', '.join('%s=%s' % x for x in extra_dict.items())
     if isinstance(exc, MaxRetryError):
         if isinstance(exc.reason, NewConnectionError):
             reraise(OioNetworkException, exc.reason, extra)

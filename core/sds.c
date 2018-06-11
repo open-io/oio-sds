@@ -1345,8 +1345,10 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 		}
 
 		/* If we erasure-code, patch the metachunk-size */
-		k = data_security_decode_param_int64(ul->chunk_method, "k", 1);
-		ul->chunk_size = ul->chunk_size * k;
+		if (oio_sds_client_patch_metachunk_size) {
+			k = data_security_decode_param_int64(ul->chunk_method, "k", 1);
+			ul->chunk_size = ul->chunk_size * k;
+		}
 	}
 
 	/* Organize the set of chunks into metachunks. */

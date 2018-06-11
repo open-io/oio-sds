@@ -199,6 +199,14 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_CORE_RESOLVER_SRV_SHUFFLE*
 
+### core.sds.adapt_metachunk_size
+
+> Should the client adapt metachunk size to EC policy parameters? Letting this on will make bigger metachunks, but chunks on storage will stay at normal chunk size. Disabling this option allows clients to do write alignment.
+
+ * default: **TRUE**
+ * type: gboolean
+ * cmake directive: *OIO_CORE_SDS_ADAPT_METACHUNK_SIZE*
+
 ### core.sds.autocreate
 
 > In the current oio-sds client SDK, should the entities be autocreated while accessed for the first time. So, when pushing a content in a container, when this option is set to 'true', the USER and the CONTAINER will be created and configured to the namespace's defaults.

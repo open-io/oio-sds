@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -23,7 +23,7 @@ from oio.blob.utils import check_volume, read_chunk_metadata
 from oio.rdir.client import RdirClient
 from oio.common.daemon import Daemon
 from oio.common import exceptions as exc
-from oio.common.utils import paths_gen
+from oio.common.utils import paths_gen, request_id
 from oio.common.easy_value import int_value
 from oio.common.logger import get_logger
 from oio.common.green import ratelimit
@@ -125,10 +125,12 @@ class BlobIndexer(Daemon):
                 raise exc.FaultyChunk(
                     'Missing extended attribute %s' % e)
             data = {'mtime': int(time.time())}
+            headers = {'X-oio-req-id': 'blob-indexer-' + request_id()[:-13]}
             self.index_client.chunk_push(self.volume_id,
                                          meta['container_id'],
                                          meta['content_id'],
                                          meta['chunk_id'],
+                                         headers=headers,
                                          **data)
 
     def run(self, *args, **kwargs):

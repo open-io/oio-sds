@@ -52,6 +52,10 @@ void oio_event__init (GString *out, const char *type, struct oio_url_s *url);
 
 GString* oio_event__create (const char *type, struct oio_url_s *url);
 
+/* Create the base of a JSON formatted event, with the specified request ID. */
+GString* oio_event__create_with_id(const char *type, struct oio_url_s *url,
+		const char *request_id);
+
 /* -------------------------------------------------------------------------- */
 
 /* find the appropriate implementation of event queue for the configuration

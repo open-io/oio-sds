@@ -155,8 +155,10 @@ send_chunk_event(const char *type, const dav_resource *resource)
 
 	g_string_append_c(json, '}');
 
+	const char *reqid = apr_table_get(
+			resource->info->request->headers_in, PROXYD_HEADER_REQID);
 	const gint64 pre = oio_ext_monotonic_time ();
-	GError *err = rawx_event_send(type, json);
+	GError *err = rawx_event_send(type, reqid, json);
 	const gint64 post = oio_ext_monotonic_time ();
 	if (!err) {
 		gint64 limit = 5 * G_TIME_SPAN_SECOND;

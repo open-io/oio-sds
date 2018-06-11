@@ -613,7 +613,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # Ensure the error is passed to the upper level
         self.assertRaises(
             exc.DeadlineReached, self.api.object_create, self.account,
-            name, obj_name=name, data=name+name)
+            name, obj_name=name, data=name*4)
         # Ensure that the chunk deletion has been called with proper args
         self.api.blob_client.chunk_delete_many.assert_called_once()
 

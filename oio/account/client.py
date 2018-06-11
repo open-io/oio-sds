@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,7 +17,6 @@ import json
 import sys
 import time
 from oio.api.base import HttpApi
-from oio.common.utils import quote
 from oio.common.logger import get_logger
 from oio.common.exceptions import ClientException, OioNetworkException
 from oio.conscience.client import ConscienceClient
@@ -88,7 +87,8 @@ class AccountClient(HttpApi):
         if not params:
             params = dict()
         if account:
-            params['id'] = quote(account)
+            # Do not quote account, _request() will urlencode query string
+            params['id'] = account
         try:
             resp, body = self._request(method, action, params=params, **kwargs)
         except OioNetworkException as exc:

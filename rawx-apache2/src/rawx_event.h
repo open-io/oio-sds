@@ -45,6 +45,7 @@ void rawx_event_destroy(void);
  *
  * @return NULL if OK, or a GError describing the problem
  */
-GError* rawx_event_send(const char *event_type, GString *data_json);
+GError* rawx_event_send(const char *event_type, const char *request_id,
+		GString *data_json);
 
 #endif /*OIO_SDS__rawx_apache2__src__rawx_event_h*/

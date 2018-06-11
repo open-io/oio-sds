@@ -20,6 +20,7 @@ from oio.common.exceptions import OioNetworkException, OioException, \
     reraise as oio_reraise
 from oio.common.utils import group_chunk_errors, request_id
 from oio.common.logger import get_logger
+from oio.common.decorators import ensure_headers, ensure_request_id
 from oio.conscience.client import ConscienceClient
 from oio.directory.client import DirectoryClient
 from time import sleep
@@ -269,6 +270,8 @@ class RdirClient(HttpApi):
         rdir_host = self._get_rdir_addr(volume_id, req_id)
         return 'http://%s/v1/rdir/%s' % (rdir_host, action)
 
+    @ensure_headers
+    @ensure_request_id
     def _rdir_request(self, volume, method, action, create=False, **kwargs):
         params = {'vol': volume}
         if create:
@@ -288,7 +291,7 @@ class RdirClient(HttpApi):
         self._rdir_request(volume_id, 'POST', 'create', **kwargs)
 
     def chunk_push(self, volume_id, container_id, content_id, chunk_id,
-                   **data):
+                   headers=None, **data):
         """Reference a chunk in the reverse directory"""
         body = {'container_id': container_id,
                 'content_id': content_id,
@@ -298,18 +301,20 @@ class RdirClient(HttpApi):
             body[key] = value
 
         self._rdir_request(volume_id, 'POST', 'push', create=True,
-                           json=body)
+                           json=body, headers=headers)
 
-    def chunk_delete(self, volume_id, container_id, content_id, chunk_id):
+    def chunk_delete(self, volume_id, container_id, content_id, chunk_id,
+                     **kwargs):
         """Unreference a chunk from the reverse directory"""
         body = {'container_id': container_id,
                 'content_id': content_id,
                 'chunk_id': chunk_id}
 
-        self._rdir_request(volume_id, 'DELETE', 'delete', json=body)
+        self._rdir_request(volume_id, 'DELETE', 'delete',
+                           json=body, **kwargs)
 
     def chunk_fetch(self, volume, limit=100, rebuild=False,
-                    container_id=None, max_attempts=3):
+                    container_id=None, max_attempts=3, **kwargs):
         """
         Fetch the list of chunks belonging to the specified volume.
 
@@ -332,8 +337,8 @@ class RdirClient(HttpApi):
         while True:
             for i in range(max_attempts):
                 try:
-                    resp, resp_body = self._rdir_request(
-                        volume, 'POST', 'fetch', json=req_body)
+                    _resp, resp_body = self._rdir_request(
+                        volume, 'POST', 'fetch', json=req_body, **kwargs)
                     break
                 except OioNetworkException:
                     # Monotonic backoff
@@ -344,38 +349,42 @@ class RdirClient(HttpApi):
                     raise
             if len(resp_body) == 0:
                 break
+            key = None
             for (key, value) in resp_body:
                 container, content, chunk = key.split('|')
                 yield container, content, chunk, value
-            req_body['start_after'] = key
+            if key is not None:
+                req_body['start_after'] = key
 
-    def admin_incident_set(self, volume, date):
+    def admin_incident_set(self, volume, date, **kwargs):
         body = {'date': int(float(date))}
-        self._rdir_request(volume, 'POST', 'admin/incident', json=body)
+        self._rdir_request(volume, 'POST', 'admin/incident',
+                           json=body, **kwargs)
 
-    def admin_incident_get(self, volume):
-        resp, resp_body = self._rdir_request(volume, 'GET',
-                                             'admin/incident')
-        return resp_body.get('date')
+    def admin_incident_get(self, volume, **kwargs):
+        _resp, body = self._rdir_request(volume, 'GET',
+                                         'admin/incident', **kwargs)
+        return body.get('date')
 
-    def admin_lock(self, volume, who):
+    def admin_lock(self, volume, who, **kwargs):
         body = {'who': who}
 
-        self._rdir_request(volume, 'POST', 'admin/lock', json=body)
+        self._rdir_request(volume, 'POST', 'admin/lock', json=body, **kwargs)
 
-    def admin_unlock(self, volume):
-        self._rdir_request(volume, 'POST', 'admin/unlock')
+    def admin_unlock(self, volume, **kwargs):
+        self._rdir_request(volume, 'POST', 'admin/unlock', **kwargs)
 
-    def admin_show(self, volume):
-        resp, resp_body = self._rdir_request(volume, 'GET', 'admin/show')
-        return resp_body
+    def admin_show(self, volume, **kwargs):
+        _resp, body = self._rdir_request(volume, 'GET', 'admin/show',
+                                         **kwargs)
+        return body
 
-    def admin_clear(self, volume, clear_all=False):
+    def admin_clear(self, volume, clear_all=False, **kwargs):
         body = {'all': clear_all}
-        resp, resp_body = self._rdir_request(
-            volume, 'POST', 'admin/clear', json=body)
+        _resp, resp_body = self._rdir_request(
+            volume, 'POST', 'admin/clear', json=body, **kwargs)
         return resp_body
 
-    def status(self, volume):
-        resp, resp_body = self._rdir_request(volume, 'GET', 'status')
-        return resp_body
+    def status(self, volume, **kwargs):
+        _resp, body = self._rdir_request(volume, 'GET', 'status', **kwargs)
+        return body

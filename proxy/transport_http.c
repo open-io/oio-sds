@@ -344,7 +344,7 @@ sender(gpointer k, gpointer v, gpointer u)
 static void
 _access_log(struct req_ctx_s *r, gint status, gsize out_len, const gchar *tail)
 {
-	if (r->access_disabled && 2 == (status / 100))
+	if (r->access_disabled && 2 == (status / 100) && !GRID_DEBUG_ENABLED())
 		return;
 
 	const char *reqid = g_tree_lookup(r->request->tree_headers, PROXYD_HEADER_REQID);
