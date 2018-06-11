@@ -115,7 +115,7 @@ class TestECContent(BaseTestCase):
                 self.assertEqual(meta['chunk_hash'], md5_stream(stream))
                 full_path = encode_fullpath(
                     self.account, self.container_name, self.content,
-                    meta['content_version'])
+                    meta['content_version'], meta['content_id'])
                 self.assertEqual(meta['full_path'], full_path)
                 self.assertEqual(meta['oio_version'], '4.0')
                 self.assertEqual(metachunk_hash, chunk.checksum)

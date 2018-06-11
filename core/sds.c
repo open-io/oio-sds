@@ -1489,20 +1489,20 @@ _sds_upload_add_headers(struct oio_sds_ul_s *ul, struct http_put_dest_s *dest)
 
 	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-version",
 			"%" G_GINT64_FORMAT, ul->version);
+	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-id",
+			"%s", ul->hexid);
 
 	struct oio_url_s *url = oio_url_dup(ul->dst->url);
 	gchar version[21];
 	g_sprintf(version, "%"G_GINT64_FORMAT, ul->version);
 	oio_url_set(url, OIOURL_VERSION, version);
+	oio_url_set(url, OIOURL_CONTENTID, ul->hexid);
 	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "full-path", "%s",
 			g_strdup(oio_url_get(url, OIOURL_FULLPATH)));
 	oio_url_clean(url);
 
 	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "oio-version", "%s",
 			oio_sds_client_version);
-
-	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-id",
-			"%s", ul->hexid);
 
 	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-storage-policy",
 			"%s", ul->stgpol);

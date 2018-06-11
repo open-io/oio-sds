@@ -1055,7 +1055,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         copy_list = self.api._generate_copies(url_list)
         # every chunks should have the fullpath
         fullpath = encode_fullpath(
-            self.account, snapshot_name, 'copy', 12456)
+            self.account, snapshot_name, 'copy', 12456, random_id(32))
         self.api._link_chunks(url_list, copy_list, fullpath)
         # check that every copy exists
         pool_manager = get_pool_manager()

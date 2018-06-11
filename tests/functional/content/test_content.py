@@ -120,7 +120,8 @@ class TestContentFactory(BaseTestCase):
         self.assertEqual(c.path, "tox.ini")
         self.assertEqual(c.full_path,
                          encode_fullpath(self.account, self.container_name,
-                                         "tox.ini", meta['version']))
+                                         "tox.ini", meta['version'],
+                                         meta['id']))
         self.assertEqual(c.version, "1450176946676289")
         # TODO test storage method
         self.assertEqual(len(c.chunks), 4)
@@ -166,7 +167,8 @@ class TestContentFactory(BaseTestCase):
         self.assertEqual(c.version, "1450176946676289")
         self.assertEqual(c.full_path,
                          encode_fullpath(self.account, self.container_name,
-                                         "tox.ini", meta['version']))
+                                         "tox.ini", meta['version'],
+                                         meta['id']))
         # TODO test storage_method
         self.assertEqual(len(c.chunks), 2)
         self.assertEqual(c.chunks[0].raw(), chunks[0])
@@ -414,9 +416,10 @@ class TestContentFactory(BaseTestCase):
             # Ensure the saved path is the one we gave the object
             for cname in answers:
                 self.assertEqual(cname, answers[cname].path)
-                full_path = encode_fullpath(self.account, self.container_name,
-                                            cname, answers[cname].version)
-                self.assertEqual(answers[cname].full_path, full_path)
+                fullpath = encode_fullpath(
+                    self.account, self.container_name, cname,
+                    answers[cname].version, answers[cname].content_id)
+                self.assertEqual(answers[cname].full_path, fullpath)
             # Ensure all objects appear in listing
             for cname in strange_paths:
                 self.assertIn(cname, obj_set)

@@ -108,7 +108,7 @@ class TestPlainContent(BaseTestCase):
                 self.assertEqual(chunk.checksum, chunk_hash)
                 full_path = encode_fullpath(
                     self.account, self.container_name, self.content,
-                    meta['content_version'])
+                    meta['content_version'], meta['content_id'])
                 self.assertEqual(meta['full_path'], full_path)
                 self.assertEqual(meta['oio_version'], '4.0')
 

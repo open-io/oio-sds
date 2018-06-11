@@ -25,6 +25,7 @@ from oio.common.http_eventlet import http_connect
 from oio.common.constants import OIO_VERSION
 from oio.common.fullpath import encode_fullpath
 from oio.blob.utils import read_chunk_metadata
+from tests.utils import random_id
 
 from tests.utils import BaseTestCase
 
@@ -58,7 +59,8 @@ class TestBlobFunctional(BaseTestCase):
             'x-oio-chunk-meta-chunk-hash': md5(data).hexdigest().upper(),
             'x-oio-chunk-meta-chunk-pos': 0,
             'x-oio-chunk-meta-full-path': encode_fullpath(
-                'myaccount', 'mycontainer', 'test-plop', 1456938361143740),
+                'myaccount', 'mycontainer', 'test-plop', 1456938361143740,
+                random_id(32)),
             'x-oio-chunk-meta-oio-version': OIO_VERSION
         }
 
@@ -139,7 +141,7 @@ class TestBlobFunctional(BaseTestCase):
         headers["Destination"] = chunkurl
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
                 "account-snapshot", "container-snapshot", "test"+"-snapshot",
-                'x-oio-chunk-meta-content-version')
+                'x-oio-chunk-meta-content-version', random_id(32))
         resp, _ = self._http_request(chunkurl, 'COPY', '', headers)
         self.assertEqual(resp.status, 403)
 
@@ -159,7 +161,8 @@ class TestBlobFunctional(BaseTestCase):
 
         if path:
             headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-                path, path, path, headers['x-oio-chunk-meta-content-version'])
+                path, path, path, headers['x-oio-chunk-meta-content-version'],
+                headers['x-oio-chunk-meta-content-id'])
         # we do not really care about the actual value
         metachunk_size = 9 * length
         # TODO take random legit value
@@ -327,7 +330,8 @@ class TestBlobFunctional(BaseTestCase):
 
         self._check_not_present(chunkurl)
         headers1['x-oio-chunk-meta-full-path'] = encode_fullpath(
-                path, path, path, headers1['x-oio-chunk-meta-content-version'])
+                path, path, path, headers1['x-oio-chunk-meta-content-version'],
+                headers1['x-oio-chunk-meta-content-id'])
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers1,
                                      trailers)
         self.assertEqual(resp.status, 201)
@@ -341,7 +345,7 @@ class TestBlobFunctional(BaseTestCase):
         headers2["Destination"] = copyurl
         headers2['x-oio-chunk-meta-full-path'] = encode_fullpath(
                 "account-snapshot", "container-snapshot", path+"-snapshot",
-                'x-oio-chunk-meta-content-version')
+                'x-oio-chunk-meta-content-version', random_id(32))
         resp, _ = self._http_request(chunkurl, 'COPY', '', headers2)
         self.assertEqual(resp.status, 201)
 

@@ -385,7 +385,8 @@ class ObjectStorageApi(object):
                 chunks = [chunk['url'] for chunk in data[1]]
                 copies = self._generate_copies(chunks)
                 fullpath = encode_fullpath(
-                    dst_account, dst_container, obj['name'], obj['version'])
+                    dst_account, dst_container, obj['name'], obj['version'],
+                    obj['content'])
                 self._link_chunks(chunks, copies, fullpath, **kwargs)
                 t_beans, c_beans = self._prepare_meta2_raw_update(
                     data[1], copies, obj['content'])
@@ -901,8 +902,9 @@ class ObjectStorageApi(object):
             chunks_url.append(chunk['url'])
         for chunk in chunks_copies:
             chunks_copies_url.append(chunk['url'])
-        fullpath = encode_fullpath(link_account, link_container,
-                                   link_obj, link_meta['version'])
+        fullpath = encode_fullpath(
+            link_account, link_container, link_obj, link_meta['version'],
+            link_meta['id'])
         data = {'chunks': chunks_copies,
                 'properties': link_meta['properties'] or {}}
         if properties_directive == 'REPLACE':
@@ -1104,7 +1106,7 @@ class ObjectStorageApi(object):
         obj_meta['container_id'] = cid_from_name(account, container).upper()
         obj_meta['ns'] = self.namespace
         obj_meta['full_path'] = encode_fullpath(
-            account, container, obj_name, obj_meta['version'])
+            account, container, obj_name, obj_meta['version'], obj_meta['id'])
         obj_meta['oio_version'] = (obj_meta.get('oio_version')
                                    or OIO_VERSION)
 
