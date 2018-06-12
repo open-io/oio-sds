@@ -1457,14 +1457,15 @@ deferred_completion_ASKING(struct exec_later_ASKING_context_s *d)
 
 	member_lock(d->member);
 	member_log_completion("ASK", d->zrc, d->member);
+
 	if (d->zrc != ZOK) {
 		transition_error(d->member, EVT_MASTER_KO, d->zrc);
 	} else {
+		const char * const * peers = (const char * const *) d->member->peers;
 		if (!d->master[0] || !metautils_url_valid_for_connect(d->master)) {
 			transition(d->member, EVT_MASTER_BAD, NULL);
-		} else if (!d->member->peers || !oio_strv_has((const char * const *)d->member->peers, d->master)) {
-			/* The master is an unknown peer. A reload of the peers is necessary */
-			GRID_WARN("unknown master [%s] for [%s.%s]", d->master,
+		} else if (!peers) {
+			GRID_WARN("No peer known for [%s.%s]",
 					d->member->inline_name.base, d->member->inline_name.type);
 			d->member->requested_peers_decache = 1;
 			transition(d->member, EVT_MASTER_BAD, NULL);
@@ -1487,6 +1488,17 @@ deferred_completion_ASKING(struct exec_later_ASKING_context_s *d)
 				}
 				TRACE_EXECUTION(d->member->manager);
 
+				transition(d->member, EVT_MASTER_BAD, NULL);
+			} else if (!oio_strv_has(peers, d->master)) {
+				/* The master is an unknown peer. A reload of the peers is necessary */
+				GString *tmp = g_string_sized_new(128);
+				for (const char * const *p = peers; peers && *p ;++p)
+					g_string_append_printf(tmp, " [%s]", *p);
+				GRID_WARN("unknown master [%s] for [%s.%s], only%s", d->master,
+						d->member->inline_name.base, d->member->inline_name.type,
+						tmp->str);
+				g_string_free(tmp, TRUE);
+				d->member->requested_peers_decache = 1;
 				transition(d->member, EVT_MASTER_BAD, NULL);
 			} else {
 				transition(d->member, EVT_MASTER_OK, d->master);
