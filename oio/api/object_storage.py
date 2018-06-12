@@ -21,7 +21,7 @@ import os
 import warnings
 import time
 import random
-from urllib import unquote_plus
+from urllib import unquote
 
 from oio.common import exceptions as exc
 from oio.api.ec import ECWriteHandler
@@ -796,7 +796,7 @@ class ObjectStorageApi(object):
             hdrs.get(HEADER_PREFIX + 'list-truncated'))
         marker_header = HEADER_PREFIX + 'list-marker'
         if marker_header in hdrs:
-            resp_body['next_marker'] = unquote_plus(hdrs.get(marker_header))
+            resp_body['next_marker'] = unquote(hdrs.get(marker_header))
         return resp_body
 
     @handle_object_not_found
