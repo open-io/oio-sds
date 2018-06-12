@@ -18,7 +18,7 @@ import json
 from tests.functional.cli import CliTestCase
 
 CLUSTER_FIELDS = ['namespace', 'storage_policy', 'chunksize']
-CLUSTER_LIST_HEADERS = ['Type', 'Addr', 'ServiceId', 'Volume', 'Location',
+CLUSTER_LIST_HEADERS = ['Type', 'Addr', 'Service Id', 'Volume', 'Location',
                         'Slots', 'Up', 'Score']
 
 
