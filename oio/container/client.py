@@ -14,7 +14,7 @@
 # License along with this library.
 
 import warnings
-from urllib import unquote_plus
+from urllib import unquote
 from oio.common.client import ProxyClient
 from oio.common.decorators import ensure_headers
 from oio.common.json import json
@@ -39,10 +39,10 @@ def extract_content_headers_meta(headers):
             # instead of the response headers.
             if short_key.startswith("x-") or short_key not in SYSMETA_KEYS:
                 resp_headers['properties'][short_key] = \
-                    unquote_plus(headers[key])
+                    unquote(headers[key])
             else:
                 short_key = short_key.replace('-', '_')
-                resp_headers[short_key] = unquote_plus(headers[key])
+                resp_headers[short_key] = unquote(headers[key])
     chunk_size = headers.get('x-oio-ns-chunk-size')
     if chunk_size:
         resp_headers['chunk_size'] = int(chunk_size)
