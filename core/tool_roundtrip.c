@@ -641,6 +641,7 @@ check_chunksize (const char * const * properties)
 
 	/**************************************************
 	 * Configure the chunk size only for this upload. */
+	oio_var_value_one("core.sds.adapt_metachunk_size", "false");
 	ul_dst.chunk_size = chunk_size;
 	err = oio_sds_upload_from_buffer(client, &ul_dst, buffer, size);
 	NOERROR(err);
