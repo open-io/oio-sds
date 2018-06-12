@@ -16,40 +16,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import sys, logging, itertools
+import sys
+import logging
 import zookeeper
 from oio.common.configuration import load_namespace_conf
+from oio.zk.admin import get_connected_handles, generate_namespace_tree
 
-PREFIX='/hc'
-PREFIX_NS=PREFIX+'/ns'
-hexa = '0123456789ABCDEF'
-SRVTYPES = {
-        "meta0": (0,0),
-        "meta1": (1,3),
-        "meta2": (2,2),
-        "sqlx":  (2,2),
-}
-
-def hash_tokens (w):
-    if w == 0:
-        return []
-    return itertools.product(hexa, repeat=w)
-
-def hash_tree (d0, w):
-    tokens = [''.join(x) for x in hash_tokens(w)]
-
-    def depth(d):
-        if d == 0:
-            return []
-        return itertools.product(tokens, repeat=d)
-    for x in depth(d0):
-        yield '/'.join(x)
-
-def namespace_tree (ns, srvtype):
-    d, w = SRVTYPES[srvtype]
-    basedir = PREFIX_NS+'/'+ns+'/el/'+srvtype
-    for x in hash_tree(d, w):
-        yield basedir+'/'+x
 
 def list_nodes (zh, path, options):
     path = path.replace('//', '/')
@@ -64,6 +36,7 @@ def list_nodes (zh, path, options):
 
     except Exception as e:
         logging.warn("ERROR list %s: %s", path, e)
+
 
 def main():
     from optparse import OptionParser as OptionParser
@@ -102,16 +75,13 @@ def main():
     ns = args[1]
     cnxstr = load_namespace_conf(ns)['zookeeper']
 
-    zookeeper.set_debug_level(zookeeper.LOG_LEVEL_INFO)
-    zh = zookeeper.init(cnxstr)
-
-    for srvtype in args[2:]:
-        for group in namespace_tree(ns, srvtype):
-            for child, meta in list_nodes(zh, group, options):
+    for zh in get_connected_handles(cnxstr):
+        for group in generate_namespace_tree(ns, args[2:], non_leaf=False):
+            logging.debug("#group %s", group)
+            for child, meta in list_nodes(zh.get(), group, options):
                 if meta['dataLength'] > options.SIZE:
                     print "NODE", meta['dataLength'], child
-
-    zookeeper.close(zh)
+        zh.close()
 
 if __name__ == '__main__':
     main()

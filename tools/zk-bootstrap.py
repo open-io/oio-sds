@@ -41,9 +41,6 @@ def main():
             '--slow',
             action="store_true", dest="flag_slow", default=False,
             help='Send small batches to avoid timeouts on slow hosts.')
-    parser.add_argument(
-            '--avoid', action="append", dest="AVOID_TYPES",
-            help='Avoid entries for the specified service types')
     args = parser.parse_args()
 
     # Logging configuration
@@ -66,7 +63,6 @@ def main():
     for zh in get_connected_handles(cnxstr):
         try:
             create_namespace_tree(zh.get(), args.ns, batch_size=batch_size,
-                                  types_to_avoid=args.AVOID_TYPES,
                                   precheck=args.flag_lazy)
         finally:
             zh.close()
