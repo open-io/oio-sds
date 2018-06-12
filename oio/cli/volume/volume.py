@@ -198,6 +198,23 @@ class UnlockAdminVolume(lister.Lister):
         return columns, results
 
 
+def _format_assignation(all_rawx):
+    """Prepare the list of results for display"""
+    # Possible improvement: if we do not sort by rdir,
+    # we can yield results instead of building a list.
+    results = list()
+    for rawx in all_rawx:
+        rdir = rawx.get('rdir', {'addr': 'n/a', 'tags': {}})
+        results.append(
+            (rdir['tags'].get('tag.service_id') or rdir['addr'],
+             rawx['tags'].get('tag.service_id') or rawx['addr'],
+             rdir['tags'].get('tag.loc'),
+             rawx['tags'].get('tag.loc')))
+    results.sort()
+    columns = ('Rdir', 'Rawx', 'Rdir location', 'Rawx location')
+    return columns, results
+
+
 class BootstrapVolume(lister.Lister):
     """Assign an rdir service to all rawx"""
 
@@ -232,15 +249,7 @@ class BootstrapVolume(lister.Lister):
                 self.app.client_manager.volume.rdir_lb.get_assignation(
                         connection_timeout=30.0, read_timeout=90.0)
 
-        results = list()
-        for rawx in all_rawx:
-            rdir = rawx.get('rdir', {"addr": "n/a", "tags": {}})
-            results.append((rdir['addr'],
-                            rawx['addr'],
-                            rdir['tags'].get('tag.loc'),
-                            rawx['tags'].get('tag.loc')))
-        results.sort()
-        columns = ('Rdir', 'Rawx', 'Rdir location', 'Rawx location')
+        columns, results = _format_assignation(all_rawx)
         # FIXME(FVE): return 1 if self.error
         return columns, results
 
@@ -267,28 +276,24 @@ class DisplayVolumeAssignation(lister.Lister):
 
         results = list()
         if not parsed_args.aggregated:
-            for rawx in all_rawx:
-                rdir = rawx.get('rdir', {"addr": "n/a", "tags": {}})
-                results.append((rdir['addr'],
-                                rawx['addr'],
-                                rdir['tags'].get('tag.loc'),
-                                rawx['tags'].get('tag.loc')))
-            results.sort()
-            columns = ('Rdir', 'Rawx', 'Rdir location', 'Rawx location')
+            columns, results = _format_assignation(all_rawx)
         else:
             dummy_rdir = {"addr": "n/a", "tags": {}}
-            rdir_by_addr = dict()
+            rdir_by_id = dict()
             for rawx in all_rawx:
                 rdir = rawx.get('rdir', dummy_rdir)
-                rdir_by_addr[rdir["addr"]] = rdir
+                rdir_id = rdir['tags'].get('tag.service_id') or rdir['addr']
+                rdir_by_id[rdir_id] = rdir
                 managed_rawx = rdir.get('managed_rawx') or list()
-                managed_rawx.append(rawx['addr'])
+                rawx_id = rawx['tags'].get('tag.service_id') or rawx['addr']
+                managed_rawx.append(rawx_id)
                 rdir['managed_rawx'] = managed_rawx
             for rdir in all_rdir:
-                if rdir['addr'] not in rdir_by_addr:
+                rdir_id = rdir['tags'].get('tag.service_id') or rdir['addr']
+                if rdir_id not in rdir_by_id:
                     rdir['managed_rawx'] = list()
-                    rdir_by_addr[rdir["addr"]] = rdir
-            for addr, rdir in rdir_by_addr.iteritems():
+                    rdir_by_id[rdir_id] = rdir
+            for addr, rdir in rdir_by_id.iteritems():
                 results.append((addr,
                                 len(rdir['managed_rawx']),
                                 ' '.join(rdir['managed_rawx'])))
