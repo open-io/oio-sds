@@ -358,7 +358,11 @@ _init_configless_structures(struct sqlx_service_s *ss)
 		GRID_WARN("SERVICE init error: memory allocation failure");
 		return FALSE;
 	}
-	oio_var_fix_one("resolver.cache.enabled", "false");
+
+	/* JFS: It was a good idea initially, to turn caching of and avoid
+	 * many decache orders to have predictive movers and rebuilders...
+	 * But it turns so slow without that cache :/ */
+	//oio_var_fix_one("resolver.cache.enabled", "false");
 
 	return TRUE;
 }
