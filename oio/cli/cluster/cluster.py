@@ -372,6 +372,29 @@ class ClusterFlush(command.Command):
                                 (srv_type, str(e)))
 
 
+class ClusterResolve(show.ShowOne):
+    """Resolve a service ID to an IP address and port"""
+
+    log = getLogger(__name__ + '.ClusterFlush')
+
+    def get_parser(self, prog_name):
+        parser = super(ClusterResolve, self).get_parser(prog_name)
+        parser.add_argument(
+            'srv_type',
+            help='Service type')
+        parser.add_argument(
+            'srv_id',
+            help='ID of the service'
+        )
+
+        return parser
+
+    def take_action(self, parsed_args):
+        resolved = self.app.client_manager.cluster.resolve(
+            parsed_args.srv_type, parsed_args.srv_id)
+        return zip(*resolved.items())
+
+
 class LocalNSConf(show.ShowOne):
     """show namespace configuration values locally configured"""
 
