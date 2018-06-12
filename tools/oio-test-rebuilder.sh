@@ -2,6 +2,9 @@
 
 NAMESPACE=$($(which oio-test-config.py) -n)
 WORKERS=10
+CLI=$(which openio)
+
+SVCID_ENABLED=$(openio cluster list rawx -c 'Service Id' -f value | grep -v 'n/a')
 
 usage() {
   echo "Usage: $(basename "${0}") -n namespace -w workers"
@@ -38,9 +41,9 @@ PROXY=$($(which oio-test-config.py) -t proxy -1)
 
 FAIL=false
 
-TMP_VOLUME="/tmp/openio_volume_before"
-TMP_FILE_BEFORE="/tmp/openio_file_before"
-TMP_FILE_AFTER="/tmp/openio_file_after"
+TMP_VOLUME="${TMPDIR:-/tmp}/openio_volume_before"
+TMP_FILE_BEFORE="${TMPDIR:-/tmp}/openio_file_before"
+TMP_FILE_AFTER="${TMPDIR:-/tmp}/openio_file_after"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -110,7 +113,7 @@ oio_meta_rebuilder()
 
   OLD_IFS=$IFS
   IFS=' ' read -r META_IP_TO_REBUILD META_LOC_TO_REBUILD <<< \
-      "$($(which openio) cluster list "${TYPE}" -c Addr -c Volume \
+      "$($CLI cluster list "${TYPE}" -c Addr -c Volume \
       -f value | /usr/bin/shuf -n 1)"
   IFS=$OLD_IFS
 
@@ -207,6 +210,13 @@ oio_meta_rebuilder()
   fi
 }
 
+resolve_chunk()
+{
+  ID=$(echo "$1" | sed -E -n -e 's,http://([^/]+)/.*,\1,p')
+  NETLOC=$($CLI cluster resolve -f value rawx "$ID")
+  echo "${1/$ID/$NETLOC}"
+}
+
 oio_blob_rebuilder()
 {
   set -e
@@ -216,30 +226,34 @@ oio_blob_rebuilder()
   echo ""
 
   OLD_IFS=$IFS
-  IFS=' ' read -r RAWX_IP_TO_REBUILD RAWX_LOC_TO_REBUILD <<< \
-      "$($(which openio) cluster list rawx -c Addr -c Volume -f value \
+  IFS=' ' read -r RAWX_IP_TO_REBUILD RAWX_ID RAWX_LOC_TO_REBUILD <<< \
+      "$($CLI cluster list rawx -c Addr -c "Service Id" -c Volume -f value \
       | /usr/bin/shuf -n 1)"
   IFS=$OLD_IFS
+  if [ -z "$SVCID_ENABLED" ] || [ "$RAWX_ID" = "n/a" ]
+  then
+    RAWX_ID=${RAWX_IP_TO_REBUILD}
+  fi
 
   TOTAL_CHUNKS=0
   while read -r RAWX_LOC; do
     TOTAL_CHUNKS=$(( TOTAL_CHUNKS + $(/usr/bin/find "${RAWX_LOC}" -type f \
     | /usr/bin/wc -l) ))
-  done < <($(which openio) cluster list rawx -c Volume -f value)
+  done < <($CLI cluster list rawx -c Volume -f value)
 
-  echo "Remove the rawx ${RAWX_IP_TO_REBUILD}"
+  echo "Remove data from the rawx ${RAWX_IP_TO_REBUILD} ($RAWX_ID)"
   /bin/rm -rf "${TMP_VOLUME}"
   /bin/cp -a "${RAWX_LOC_TO_REBUILD}" "${TMP_VOLUME}"
   /bin/rm -rf "${RAWX_LOC_TO_REBUILD}"
   /bin/mkdir "${RAWX_LOC_TO_REBUILD}"
 
-  echo "Create an incident for the rawx ${RAWX_IP_TO_REBUILD}"
-  $(which openio) volume admin incident "${RAWX_IP_TO_REBUILD}"
+  echo "Create an incident for the rawx ${RAWX_IP_TO_REBUILD} ($RAWX_ID)"
+  $CLI volume admin incident "${RAWX_ID}"
 
   set +e
 
-  echo "Start the rebuilding for the rawx ${RAWX_IP_TO_REBUILD}"
-  if ! $(which oio-blob-rebuilder) --volume "${RAWX_IP_TO_REBUILD}" \
+  echo "Start the rebuilding for the rawx ${RAWX_IP_TO_REBUILD} ($RAWX_ID)"
+  if ! $(which oio-blob-rebuilder) --volume "${RAWX_ID}" \
       --workers "${WORKERS}" --allow-same-rawx "${NAMESPACE}"; then
     FAIL=true
   fi
@@ -250,7 +264,7 @@ oio_blob_rebuilder()
   while read -r RAWX_LOC; do
     TOTAL_CHUNKS_AFTER=$(( TOTAL_CHUNKS_AFTER + \
         $(/usr/bin/find "${RAWX_LOC}" -type f | /usr/bin/wc -l) ))
-  done < <($(which openio) cluster list rawx -c Volume -f value)
+  done < <($CLI cluster list rawx -c Volume -f value)
   if [ "${TOTAL_CHUNKS}" -ne "${TOTAL_CHUNKS_AFTER}" ]; then
     echo "Wrong number of chunks:" \
         "before=${TOTAL_CHUNKS} after=${TOTAL_CHUNKS_AFTER}"
@@ -260,19 +274,19 @@ oio_blob_rebuilder()
   for CHUNK in ${TMP_VOLUME}/*/*; do
     if ! CONTAINER_ID=$(/usr/bin/getfattr -n "user.grid.content.container" \
         --only-values "${CHUNK}" 2> /dev/null); then
-      echo "${CHUNK}: Missing attribute for the rawx ${RAWX_IP_TO_REBUILD}"
+      echo "${CHUNK}: Missing container attribute for the rawx ${RAWX_IP_TO_REBUILD}"
       FAIL=true
       continue
     fi
     if ! CONTENT_ID=$(/usr/bin/getfattr -n "user.grid.content.id" \
         --only-values "${CHUNK}" 2> /dev/null); then
-      echo "${CHUNK}: Missing attribute for the rawx ${RAWX_IP_TO_REBUILD}"
+      echo "${CHUNK}: Missing content id attribute for the rawx ${RAWX_IP_TO_REBUILD}"
       FAIL=true
       continue
     fi
     if ! POSITION=$(/usr/bin/getfattr -n "user.grid.chunk.position" \
         --only-values "${CHUNK}" 2> /dev/null); then
-      echo "${CHUNK}: Missing attribute for the rawx ${RAWX_IP_TO_REBUILD}"
+      echo "${CHUNK}: Missing chunk position attribute for the rawx ${RAWX_IP_TO_REBUILD}"
       FAIL=true
       continue
     fi
@@ -296,7 +310,7 @@ print(account + ' ' + container + ' ' + content + ' ' + version)" \
     IFS=' ' read -r ACCOUNT CONTAINER CONTENT VERSION <<< "${CONTENT_INFO}"
     IFS=$OLD_IFS
 
-    if ! CHUNK_URLS=$($(which openio) object locate \
+    if ! CHUNK_URLS=$($CLI object locate \
         --oio-account "${ACCOUNT}" "${CONTAINER}" "${CONTENT}" \
         --object-version "${VERSION}" -f value -c Pos -c Id \
         | /bin/grep "^${POSITION} " | /usr/bin/cut -d' ' -f2) \
@@ -321,9 +335,15 @@ print(account + ' ' + container + ' ' + content + ' ' + version)" \
         FAIL=true
         continue
       fi
-      if ! /usr/bin/wget -O "${TMP_FILE_AFTER}" "${CHUNK_URL}" \
+      if [ -n "$SVCID_ENABLED" ]
+      then
+        CURLABLE=$(resolve_chunk "${CHUNK_URL}")
+      else
+        CURLABLE=${CHUNK_URL}
+      fi
+      if ! /usr/bin/wget -O "${TMP_FILE_AFTER}" "${CURLABLE}" \
           &> /dev/null; then
-        echo "$${CHUNK}: (${CHUNK_URL}) wget failed for the rawx" \
+        echo "${CHUNK}: (${CURLABLE}) wget failed for the rawx" \
             "${RAWX_IP_TO_REBUILD}"
         FAIL=true
         continue
@@ -343,14 +363,16 @@ print(account + ' ' + container + ' ' + content + ' ' + version)" \
       fi
     done
     IFS=$OLD_IFS
+    echo -n '.'
   done
+  echo
 
   if [ "${FAIL}" = true ]; then
     printf "${RED}\noio-blob-rebuilder: FAILED\n${NO_COLOR}"
     exit 1
   else
-    echo "Remove the incident for the rawx ${RAWX_IP_TO_REBUILD}"
-    $(which openio) volume admin clear "${RAWX_IP_TO_REBUILD}"
+    echo "Remove the incident for the rawx ${RAWX_IP_TO_REBUILD} ($RAWX_ID)"
+    $CLI volume admin clear "${RAWX_ID}"
 
     printf "${GREEN}\noio-blob-rebuilder: OK\n${NO_COLOR}}"
   fi
