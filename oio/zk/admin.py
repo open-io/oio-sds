@@ -68,7 +68,7 @@ def _batch_split(nodes, N):
     last = 0
     batch = list()
     for x in nodes:
-        current = x[0].count('/')
+        current = x.count('/')
         batch.append(x)
         if len(batch) >= N or last != current:
             yield batch
@@ -95,8 +95,8 @@ def _create_ignore_errors(zh, path, data, ctx):
 
 def _batch_create(zh, batch):
     ctx = {"started": 0, "failed": 0, "sem": threading.Semaphore(0)}
-    for path, data in batch:
-        _create_ignore_errors(zh, path, data, ctx)
+    for path in batch:
+        _create_ignore_errors(zh, path, '', ctx)
     for i in range(ctx['started']):
         ctx['sem'].acquire()
     return ctx['started'], ctx['failed']
@@ -108,26 +108,38 @@ def _generate_hash_tokens(w):
     return itertools.product('0123456789ABCDEF', repeat=w)
 
 
+def _generate_hashed_leafs(d0, w0):
+    tokens = [''.join(x) for x in _generate_hash_tokens(w0)]
+    for x in itertools.product(tokens, repeat=d0):
+        yield '/'.join(x)
+
+
 def _generate_hashed_tree(d0, w0):
     tokens = [''.join(x) for x in _generate_hash_tokens(w0)]
-    for d in range(d0+1):
-        if d == 0:
-            continue
-        for x in itertools.product(tokens, repeat=d):
+    for d in range(d0):
+        for x in itertools.product(tokens, repeat=d+1):
             yield '/'.join(x)
 
 
-def generate_namespace_tree(ns, types):
-    yield (_PREFIX_NS, '')
-    yield (_PREFIX_NS+'/'+ns, str(now()))
-    yield (_PREFIX_NS+'/'+ns+'/srv', '')
-    yield (_PREFIX_NS+'/'+ns+'/srv/meta0', '')
-    yield (_PREFIX_NS+'/'+ns+'/el', '')
-    for srvtype, d, w in types:
+def generate_namespace_tree(ns, types, non_leaf=True):
+    if non_leaf:
+        yield _PREFIX_NS
+        yield _PREFIX_NS+'/'+ns
+        yield _PREFIX_NS+'/'+ns+'/srv'
+        yield _PREFIX_NS+'/'+ns+'/srv/meta0'
+        yield _PREFIX_NS+'/'+ns+'/el'
+    for srvtype, d, w in _srvtypes:
+        if srvtype not in types:
+            continue
         basedir = _PREFIX_NS+'/' + ns + '/el/' + srvtype
-        yield (basedir, '')
-        for x in _generate_hashed_tree(d, w):
-            yield (basedir+'/'+x, '')
+        if non_leaf:
+            yield basedir
+        if non_leaf:
+            for x in _generate_hashed_tree(d, w):
+                yield basedir+'/'+x
+        else:
+            for x in _generate_hashed_leafs(d, w):
+                yield basedir+'/'+x
 
 
 def _create_tree(zh, nodes, batch_size):
@@ -144,20 +156,10 @@ def _create_tree(zh, nodes, batch_size):
     return ok, ko
 
 
-def _filter_srvtypes(types_to_avoid):
-    if not types_to_avoid:
-        types_to_avoid = list()
-    for t, w, d in _srvtypes:
-        if types_to_avoid:
-            if t in types_to_avoid:
-                continue
-        yield t, w, d
-
-
-def _probe(zh, ns, types):
+def _probe(zh, ns):
     logging.info("Probing for an existing namespace [%s]", ns)
     try:
-        for t, _, _ in types:
+        for t, _, _ in _srvtypes:
             _, _ = zookeeper.get(zh, _PREFIX_NS + '/' + ns + '/el/' + t)
         for path in get_meta0_paths(zh, ns):
             _, _ = zookeeper.get(zh, path)
@@ -166,10 +168,8 @@ def _probe(zh, ns, types):
         return False
 
 
-def create_namespace_tree(zh, ns, batch_size=2048, types_to_avoid=[],
-                          precheck=False):
-    types = tuple(_filter_srvtypes(types_to_avoid))
-    if precheck and _probe(zh, ns, types):
+def create_namespace_tree(zh, ns, batch_size=2048, precheck=False):
+    if precheck and _probe(zh, ns):
         return 0, 0
 
     # Synchronous creation of the root, helps detecting a lot of
@@ -179,7 +179,7 @@ def create_namespace_tree(zh, ns, batch_size=2048, types_to_avoid=[],
     except zookeeper.NodeExistsException:
         pass
 
-    nodes = generate_namespace_tree(ns, types)
+    nodes = generate_namespace_tree(ns, [t for t, _, _ in _srvtypes])
     return _create_tree(zh, nodes, batch_size=int(batch_size))
 
 

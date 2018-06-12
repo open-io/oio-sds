@@ -1726,6 +1726,7 @@ def main():
             '${HOME}/go_coverage.output.${NS}.${SRVTYPE}.${SRVNUM}.${IP}.${PORT} ' \
             '-test.syslog OIO,${NS},${SRVTYPE},${SRVNUM} ' \
             '-test.conf ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.httpd.conf'
+
     parser = argparse.ArgumentParser(description='OpenIO bootstrap tool')
     parser.add_argument("-c", "--conf",
                         action="append", dest='config',
@@ -1736,16 +1737,19 @@ def main():
     parser.add_argument("-p", "--port",
                         type=int, default=6000,
                         help="Specify the first port of the range")
-    parser.add_argument(
-        "-u", "--with-service-id", action='store_true', default=False,
-        help="generate service IDs for services supporting them")
+
+    parser.add_argument("-u", "--with-service-id",
+                        action='store_true', default=False,
+                        help=("generate service IDs for services "
+                              "supporting them"))
     parser.add_argument("--random-service-id",
                         action='store_true', default=False,
                         help=("generate services service IDs randomly "
                               "(implies --with--service-id)"))
-    parser.add_argument(
-        "--profile", choices=['default', 'valgrind', 'callgrind'],
-        help="Launch SDS with specific tool")
+
+    parser.add_argument("--profile",
+                        choices=['default', 'valgrind', 'callgrind'],
+                        help="Launch SDS with specific tool")
     parser.add_argument("-D", "--data",
                         action="store", type=str, default=None,
                         help="Specify a DATA directory")
