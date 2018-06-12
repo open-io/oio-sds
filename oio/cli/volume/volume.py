@@ -19,7 +19,10 @@ from cliff import lister, show
 
 class ShowAdminVolume(show.ShowOne):
     """
-    Show information about a volume, especially the last incident date.
+    Show information about a volume, like the last incident date,
+    or the presence of a lock on the volume.
+
+    An empty output means there is no lock and incident on the volume.
     """
 
     log = getLogger(__name__ + '.ShowAdminVolume')
@@ -29,7 +32,7 @@ class ShowAdminVolume(show.ShowOne):
         parser.add_argument(
             'volume',
             metavar='<volume>',
-            help='IP:PORT of the rawx service')
+            help='ID of the rawx service')
         return parser
 
     def take_action(self, parsed_args):
@@ -45,7 +48,7 @@ class ShowAdminVolume(show.ShowOne):
 
 
 class ClearAdminVolume(lister.Lister):
-    """Clear admin volume"""
+    """Clear volume incident date."""
 
     log = getLogger(__name__ + '.ClearAdminVolume')
 
@@ -55,7 +58,7 @@ class ClearAdminVolume(lister.Lister):
             'volumes',
             metavar='<volumes>',
             nargs='+',
-            help='IP:PORT of the rawx services',
+            help='IDs of the rawx services',
         )
         return parser
 
@@ -74,7 +77,10 @@ class ClearAdminVolume(lister.Lister):
 
 
 class ShowVolume(show.ShowOne):
-    """Show volume"""
+    """
+    Show various volume information, like number of indexed chunks,
+    and names of containers having chunks on this volume.
+    """
 
     log = getLogger(__name__ + '.ShowVolume')
 
@@ -83,7 +89,7 @@ class ShowVolume(show.ShowOne):
         parser.add_argument(
             'volume',
             metavar='<volume>',
-            help='IP:PORT of the rawx service',
+            help='ID of the rawx service',
         )
         return parser
 
@@ -97,7 +103,7 @@ class ShowVolume(show.ShowOne):
 
 
 class IncidentAdminVolume(lister.Lister):
-    """Set incident on Volume"""
+    """Declare an incident on the specified volume."""
 
     log = getLogger(__name__ + '.IncidentAdminVolume')
 
@@ -107,7 +113,7 @@ class IncidentAdminVolume(lister.Lister):
             'volumes',
             metavar='<volumes>',
             nargs='+',
-            help='IP:PORT of the rawx services',
+            help='IDs of the rawx services',
         )
         parser.add_argument(
             '--date',
@@ -115,7 +121,7 @@ class IncidentAdminVolume(lister.Lister):
             default=[],
             type=int,
             action='append',
-            help='Incident date to set (seconds)')
+            help='Incident date to set (seconds since Epoch)')
         return parser
 
     def take_action(self, parsed_args):
@@ -137,7 +143,10 @@ class IncidentAdminVolume(lister.Lister):
 
 
 class LockAdminVolume(lister.Lister):
-    """Lock Volume"""
+    """
+    Lock the specified volumes.
+    Useful to prevent several rebuilders to work on the same volume.
+    """
 
     log = getLogger(__name__ + '.LockAdminVolume')
 
@@ -147,12 +156,12 @@ class LockAdminVolume(lister.Lister):
             'volumes',
             metavar='<volumes>',
             nargs='+',
-            help='IP:PORT of the rawx services')
+            help='IDs of the rawx services')
         parser.add_argument(
             '--key',
             metavar='<key>',
             required=True,
-            help='Lock key')
+            help='Identifier of what is locking the volume')
         return parser
 
     def take_action(self, parsed_args):
@@ -171,7 +180,7 @@ class LockAdminVolume(lister.Lister):
 
 
 class UnlockAdminVolume(lister.Lister):
-    """Unlock Volume"""
+    """Unlock the specified volumes."""
 
     log = getLogger(__name__ + '.UnlockAdminVolume')
 
@@ -181,7 +190,7 @@ class UnlockAdminVolume(lister.Lister):
             'volumes',
             metavar='<volumes>',
             nargs='+',
-            help='IP:PORT of the rawx services')
+            help='IDs of the rawx services')
         return parser
 
     def take_action(self, parsed_args):

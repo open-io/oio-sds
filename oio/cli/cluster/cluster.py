@@ -93,10 +93,10 @@ class ClusterList(lister.Lister):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         if parsed_args.stats:
-            columns = ('Type', 'Addr', 'ServiceId', 'Volume', 'Location',
+            columns = ('Type', 'Addr', 'Service Id', 'Volume', 'Location',
                        'Slots', 'Up', 'Score', 'Stats')
         else:
-            columns = ('Type', 'Addr', 'ServiceId', 'Volume', 'Location',
+            columns = ('Type', 'Addr', 'Service Id', 'Volume', 'Location',
                        'Slots', 'Up', 'Score')
         return columns, self._list_services(parsed_args)
 
@@ -133,7 +133,7 @@ class ClusterLocalList(lister.Lister):
             if not srv_types or srv_type in srv_types:
                 results.append((srv_type, addr, service_id, volume, location,
                                 slots, up, score))
-        columns = ('Type', 'Addr', 'ServiceId', 'Volume', 'Location',
+        columns = ('Type', 'Addr', 'Service Id', 'Volume', 'Location',
                    'Slots', 'Up', 'Score')
         result_gen = (r for r in results)
         return columns, result_gen
