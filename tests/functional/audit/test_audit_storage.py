@@ -107,7 +107,6 @@ class TestBlobAuditorFunctional(BaseTestCase):
 
         self.chunk_path = self.test_dir + '/data/' + self.namespace + \
             '-rawx-1/' + self.chunk.chunk_id[0:3] + "/" + self.chunk.chunk_id
-        self.bad_container_id = '0'*64
 
     def tearDown(self):
         super(TestBlobAuditorFunctional, self).tearDown()
@@ -183,8 +182,9 @@ class TestBlobAuditorFunctional(BaseTestCase):
     def test_xattr_bad_content_path(self):
         self.init_content()
         xattr.setxattr(
-            self.chunk_path, 'user.' + chunk_xattr_keys['content_path'],
-            'WRONG_PATH')
+            self.chunk_path, 'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
+            + str(self.chunk.chunk_id), encode_fullpath(
+                self.account, self.ref, 'WRONG_PATH', 1, '0000'))
 
         self.assertRaises(exc.OrphanChunk, self.auditor.chunk_audit,
                           self.chunk_path, self.chunk.chunk_id)
@@ -204,8 +204,10 @@ class TestBlobAuditorFunctional(BaseTestCase):
     def test_xattr_bad_content_container(self):
         self.init_content()
         xattr.setxattr(
-            self.chunk_path, 'user.' + chunk_xattr_keys['container_id'],
-            self.bad_container_id)
+            self.chunk_path, 'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
+            + str(self.chunk.chunk_id), encode_fullpath(
+                self.account, 'WRONG_REF', self.content.path, 1, '0000'))
+
         self.assertRaises(exc.OrphanChunk, self.auditor.chunk_audit,
                           self.chunk_path, self.chunk.chunk_id)
 
