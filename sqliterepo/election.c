@@ -891,6 +891,7 @@ _manager_clean(struct election_manager_s *manager)
 
 	g_mutex_clear(&manager->lock);
 
+	g_free(manager->sync_tab);
 	g_free(manager);
 }
 
