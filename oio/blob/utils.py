@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -21,14 +21,30 @@ from oio.common.constants import chunk_xattr_keys, chunk_xattr_keys_optional, \
 
 
 def check_volume(volume_path):
+    """
+    Check if `volume_path` points to a rawx directory.
+
+    :returns: the namespace name and the service ID
+    :raises oio.common.exceptions.OioException: when the specified path
+        does not belong to a rawx service or misses some attributes.
+    """
+    msg_pfx = 'Invalid volume path [%s]: ' % volume_path
     meta = read_user_xattr(volume_path)
     server_type = meta.get(volume_xattr_keys['type'])
+    if server_type is None:
+        raise exc.OioException(msg_pfx + 'missing %s xattr' %
+                               volume_xattr_keys['type'])
     if server_type != 'rawx':
-        raise exc.OioException('Invalid volume path')
+        raise exc.OioException(msg_pfx +
+                               'service is a %s, not a rawx' % server_type)
     namespace = meta.get(volume_xattr_keys['namespace'])
     server_id = meta.get(volume_xattr_keys['id'])
-    if namespace is None or server_id is None:
-        raise exc.OioException('Invalid rawx volume path')
+    if server_id is None:
+        raise exc.OioException(msg_pfx + 'missing %s xattr' %
+                               volume_xattr_keys['id'])
+    elif namespace is None:
+        raise exc.OioException(msg_pfx + 'missing %s xattr' %
+                               volume_xattr_keys['namespace'])
     return namespace, server_id
 
 
