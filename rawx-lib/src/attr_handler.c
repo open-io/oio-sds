@@ -96,16 +96,13 @@ set_rawx_info_to_fd(int fd, GError **error, struct chunk_textinfo_s *chunk)
 				ATTR_DOMAIN_OIO "." ATTR_NAME_CONTENT_FULLPATH ":",
 				chunk->chunk_id, NULL);
 		if (fsetxattr(fd, attr_name_content_fullpath, chunk->content_fullpath,
-				strlen(chunk->content_fullpath), 0) < 0)
+				strlen(chunk->content_fullpath), 0) < 0) {
+			g_free(attr_name_content_fullpath);
 			goto error_set_attr;
+		}
 		g_free(attr_name_content_fullpath);
 	}
 
-	SET(ATTR_NAME_CONTENT_CONTAINER, chunk->container_id);
-
-	SET(ATTR_NAME_CONTENT_ID,          chunk->content_id);
-	SET(ATTR_NAME_CONTENT_PATH,        chunk->content_path);
-	SET(ATTR_NAME_CONTENT_VERSION,     chunk->content_version);
 	SET(ATTR_NAME_CONTENT_SIZE,        chunk->content_size);
 	SET(ATTR_NAME_CONTENT_NBCHUNK,     chunk->content_chunk_nb);
 
@@ -173,6 +170,19 @@ set_chunk_compressed_size_in_attr(const char *p, GError ** error, guint32 v)
 
 /* -------------------------------------------------------------------------- */
 
+static gchar *
+_pack_content_fullpath(struct chunk_textinfo_s *chunk)
+{
+	// account and container are unknown
+	GString *gs = g_string_new("//");
+	g_string_append_uri_escaped(gs, chunk->content_path, NULL, TRUE);
+	g_string_append_c(gs, '/');
+	g_string_append_uri_escaped(gs, chunk->content_version, NULL, TRUE);
+	g_string_append_c(gs, '/');
+	g_string_append_uri_escaped(gs, chunk->content_id, NULL, TRUE);
+	return g_string_free(gs, FALSE);
+}
+
 static gboolean
 _get (int fd, const char *k, gchar **pv)
 {
@@ -200,7 +210,7 @@ get_rawx_info_from_fd(int fd, GError **error, gchar *hex_chunkid,
 
 	if (!chunk) {
 		gchar *v = NULL;
-		if (!GET(ATTR_NAME_CONTENT_CONTAINER, v)) {
+		if (!GET(ATTR_NAME_CONTENT_STGPOL, v)) {
 			if (errno == ENOTSUP) {
 				GSETCODE(error, errno, "xattr not supported");
 				return FALSE;
@@ -211,7 +221,7 @@ get_rawx_info_from_fd(int fd, GError **error, gchar *hex_chunkid,
 		return TRUE;
 	}
 
-	if (!GET(ATTR_NAME_CONTENT_CONTAINER, chunk->container_id)) {
+	if (!GET(ATTR_NAME_CONTENT_STGPOL, chunk->content_storage_policy)) {
 		/* just one check to detect unsupported xattr */
 		if (errno == ENOTSUP) {
 			GSETCODE(error, errno, "xattr not supported");
@@ -225,18 +235,48 @@ get_rawx_info_from_fd(int fd, GError **error, gchar *hex_chunkid,
 	_get(fd, attr_name_content_fullpath, &(chunk->content_fullpath));
 	g_free(attr_name_content_fullpath);
 	if (chunk->content_fullpath) {
+		// New chunk
 		chunk->chunk_id = g_strdup(hex_chunkid);
+		gchar **fullpath = g_strsplit(chunk->content_fullpath, "/", -1);
+		guint fullpath_len = g_strv_length(fullpath);
+		if (fullpath_len != 5) {
+			GSETCODE(error, EINVAL, "invalid xattr fullpath");
+			return FALSE;
+		}
+
+		char *account = g_uri_unescape_string(fullpath[0], NULL);
+		char *container = g_uri_unescape_string(fullpath[1], NULL);
+		guint8 container_id[32];
+		char container_hexid[65];
+		// NS is unused
+		oio_str_hash_name(container_id, NULL, account, container);
+		oio_str_bin2hex(container_id, sizeof(container_id),
+				container_hexid, sizeof(container_hexid));
+		g_free(account);
+		g_free(container);
+
+		chunk->container_id = g_strdup(container_hexid);
+		chunk->content_path = g_uri_unescape_string(fullpath[2], NULL);
+		chunk->content_version = g_uri_unescape_string(fullpath[3], NULL);
+		chunk->content_id = g_uri_unescape_string(fullpath[4], NULL);
+		g_strfreev(fullpath);
 	} else {
-		GET(ATTR_NAME_CHUNK_ID,   chunk->chunk_id);
+		// Old chunk
+		GET(ATTR_NAME_CHUNK_ID,          chunk->chunk_id);
+		if (g_strcmp0(hex_chunkid, chunk->chunk_id) != 0) {
+			GSETCODE(error, EINVAL, "invalid xattr chunk ID");
+			return FALSE;
+		}
+		GET(ATTR_NAME_CONTENT_CONTAINER, chunk->container_id);
+		GET(ATTR_NAME_CONTENT_PATH,      chunk->content_path);
+		GET(ATTR_NAME_CONTENT_VERSION,   chunk->content_version);
+		GET(ATTR_NAME_CONTENT_ID,        chunk->content_id);
+		chunk->content_fullpath = _pack_content_fullpath(chunk);
 	}
 
-	GET(ATTR_NAME_CONTENT_ID,      chunk->content_id);
-	GET(ATTR_NAME_CONTENT_PATH,    chunk->content_path);
-	GET(ATTR_NAME_CONTENT_VERSION, chunk->content_version);
 	GET(ATTR_NAME_CONTENT_SIZE,    chunk->content_size);
 	GET(ATTR_NAME_CONTENT_NBCHUNK, chunk->content_chunk_nb);
 
-	GET(ATTR_NAME_CONTENT_STGPOL,      chunk->content_storage_policy);
 	GET(ATTR_NAME_CONTENT_CHUNKMETHOD, chunk->content_chunk_method);
 	GET(ATTR_NAME_CONTENT_MIMETYPE,    chunk->content_mime_type);
 

@@ -18,6 +18,8 @@ from oio.common import exceptions as exc
 from oio.common.xattr import read_user_xattr
 from oio.common.constants import chunk_xattr_keys, chunk_xattr_keys_optional, \
     volume_xattr_keys, CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
+from oio.common.fullpath import decode_fullpath
+from oio.common.utils import cid_from_name
 
 
 def check_volume(volume_path):
@@ -53,7 +55,7 @@ def read_chunk_metadata(fd, chunk_id):
     raw_meta = read_user_xattr(fd)
     meta = {}
     meta['links'] = dict()
-    raw_chunk_id = None
+    raw_chunk_id = container_id = path = version = content_id = None
     for k, v in raw_meta.iteritems():
         # New chunk
         if k.startswith(CHUNK_XATTR_CONTENT_FULLPATH_PREFIX):
@@ -61,10 +63,17 @@ def read_chunk_metadata(fd, chunk_id):
             if chunkid == chunk_id:
                 raw_chunk_id = chunkid
                 meta['full_path'] = v
+                account, container, path, version, content_id = \
+                    decode_fullpath(v)
+                container_id = cid_from_name(account, container)
             else:
                 meta['links'][chunkid] = v
     if raw_chunk_id:
         raw_meta[chunk_xattr_keys['chunk_id']] = raw_chunk_id
+        raw_meta[chunk_xattr_keys['container_id']] = container_id
+        raw_meta[chunk_xattr_keys['content_path']] = path
+        raw_meta[chunk_xattr_keys['content_version']] = version
+        raw_meta[chunk_xattr_keys['content_id']] = content_id
     for k, v in chunk_xattr_keys.iteritems():
         if v not in raw_meta:
             if k not in chunk_xattr_keys_optional:

@@ -272,15 +272,10 @@ oio_blob_rebuilder()
   fi
 
   for CHUNK in ${TMP_VOLUME}/*/*; do
-    if ! CONTAINER_ID=$(/usr/bin/getfattr -n "user.grid.content.container" \
+    CHUNK_ID=${CHUNK##*/}
+    if ! FULLPATH=$(/usr/bin/getfattr -n "user.oio.content.fullpath:${CHUNK_ID}" \
         --only-values "${CHUNK}" 2> /dev/null); then
-      echo "${CHUNK}: Missing container attribute for the rawx ${RAWX_IP_TO_REBUILD}"
-      FAIL=true
-      continue
-    fi
-    if ! CONTENT_ID=$(/usr/bin/getfattr -n "user.grid.content.id" \
-        --only-values "${CHUNK}" 2> /dev/null); then
-      echo "${CHUNK}: Missing content id attribute for the rawx ${RAWX_IP_TO_REBUILD}"
+      echo "${CHUNK}: Missing fullpath attribute for the rawx ${RAWX_IP_TO_REBUILD}"
       FAIL=true
       continue
     fi
@@ -291,23 +286,8 @@ oio_blob_rebuilder()
       continue
     fi
 
-    if ! CONTENT_INFO=$($(which python) -c "from oio import ObjectStorageApi
-api = ObjectStorageApi('${NAMESPACE}')
-properties = api.container_get_properties(None, None, cid='${CONTAINER_ID}')
-account = properties['system']['sys.account']
-container = properties['system']['sys.user.name']
-properties = api.object_get_properties(account, container, None, content='${CONTENT_ID}')
-content = properties['name']
-version = properties['version']
-print(account + ' ' + container + ' ' + content + ' ' + version)" \
-        2> /dev/null); then
-      echo "${CHUNK}: Retrieving properties failed for the rawx" \
-          "${RAWX_IP_TO_REBUILD}"
-      FAIL=true
-      continue
-    fi
     OLD_IFS=$IFS
-    IFS=' ' read -r ACCOUNT CONTAINER CONTENT VERSION <<< "${CONTENT_INFO}"
+    IFS='/' read -r ACCOUNT CONTAINER CONTENT VERSION CONTENTID <<< "${FULLPATH}"
     IFS=$OLD_IFS
 
     if ! CHUNK_URLS=$($CLI object locate \
@@ -322,7 +302,7 @@ print(account + ' ' + container + ' ' + content + ' ' + version)" \
     OLD_IFS=$IFS
     IFS=$'\n'
     for CHUNK_URL in $(echo "${CHUNK_URLS}"); do
-      if [ "${CHUNK_URL##*/}" = "${CHUNK##*/}" ]; then
+      if [ "${CHUNK_URL##*/}" = "${CHUNK_ID}" ]; then
         echo "${CHUNK}: (${CHUNK_URL}) meta2 not updated for the rawx " \
             "${RAWX_IP_TO_REBUILD}"
         FAIL=true
