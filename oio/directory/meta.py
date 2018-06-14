@@ -56,7 +56,11 @@ class MetaMapping(object):
         for svc_type in self.services_by_service_type.keys():
             self.services_by_service_type[svc_type].clear()
             for svc in self.conscience.all_services(svc_type):
-                self.services_by_service_type[svc_type][svc["addr"]] = svc
+                service_id = svc["tags"].get('tag.service_id', None)
+                if service_id:
+                    self.services_by_service_type[svc_type][service_id] = svc
+                else:
+                    self.services_by_service_type[svc_type][svc["addr"]] = svc
 
     @staticmethod
     def get_cid_and_seq(base):
