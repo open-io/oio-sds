@@ -22,11 +22,12 @@ from oio.common.exceptions import ContentNotFound
 from oio.container.client import ContainerClient
 from oio.common.daemon import Daemon
 from oio.common import exceptions as exc
-from oio.common.utils import paths_gen, statfs
-from oio.common.easy_value import int_value
+from oio.common.utils import paths_gen, statfs, cid_from_name
+from oio.common.easy_value import int_value, true_value
 from oio.common.logger import get_logger
 from oio.common.green import ratelimit
 from oio.common.constants import STRLEN_CHUNKID
+from oio.common.fullpath import decode_fullpath
 from oio.content.factory import ContentFactory
 
 SLEEP_TIME = 30
@@ -58,6 +59,7 @@ class BlobMoverWorker(object):
             conf.get('chunks_per_second'), 30)
         self.max_bytes_per_second = int_value(
             conf.get('bytes_per_second'), 10000000)
+        self.allow_links = true_value(conf.get('allow_links', True))
         self.blob_client = BlobClient(conf)
         self.container_client = ContainerClient(conf, logger=self.logger)
         self.content_factory = ContentFactory(conf)
@@ -162,7 +164,6 @@ class BlobMoverWorker(object):
         container_id = meta['container_id']
         content_id = meta['content_id']
         chunk_id = meta['chunk_id']
-        chunk_url = 'http://%s/%s' % (self.address, meta['chunk_id'])
 
         try:
             content = self.content_factory.get(container_id, content_id)
@@ -172,7 +173,28 @@ class BlobMoverWorker(object):
         new_chunk = content.move_chunk(chunk_id)
 
         self.logger.info(
-            'moved chunk %s to %s', chunk_url, new_chunk['url'])
+            'moved chunk http://%s/%s to %s',
+            self.address, chunk_id, new_chunk['url'])
+
+        if self.allow_links:
+            old_links = meta['links']
+            for chunk_id, fullpath in old_links.iteritems():
+                account, container, _, _, content_id = \
+                    decode_fullpath(fullpath)
+                container_id = cid_from_name(account, container)
+
+                try:
+                    content = self.content_factory.get(container_id,
+                                                       content_id)
+                except ContentNotFound:
+                    raise exc.OrphanChunk('Content not found')
+
+                new_linked_chunk = content.move_linked_chunk(
+                    chunk_id, new_chunk['url'])
+
+                self.logger.info(
+                    'moved chunk http://%s/%s to %s',
+                    self.address, chunk_id, new_linked_chunk['url'])
 
 
 class BlobMover(Daemon):

@@ -181,10 +181,32 @@ class Content(object):
 
         try:
             self.blob_client.chunk_delete(current_chunk.url)
-        except Exception:
-            self.logger.warn("Failed to delete chunk %s" % current_chunk.url)
+        except Exception as err:
+            self.logger.warn(
+                "Failed to delete chunk %s: %s", current_chunk.url, err)
 
         current_chunk.url = spare_urls[0]
+
+        return current_chunk.raw()
+
+    def move_linked_chunk(self, chunk_id, from_url):
+        current_chunk = self.chunks.filter(id=chunk_id).one()
+        if current_chunk is None:
+            raise OrphanChunk("Chunk not found in content")
+
+        _, to_url = self.blob_client.chunk_link(from_url, None, self.full_path)
+        self.logger.debug("link chunk %s from %s to %s", chunk_id, from_url,
+                          to_url)
+
+        self._update_spare_chunk(current_chunk, to_url)
+
+        try:
+            self.blob_client.chunk_delete(current_chunk.url)
+        except Exception as err:
+            self.logger.warn(
+                "Failed to delete chunk %s: %s", current_chunk.url, err)
+
+        current_chunk.url = to_url
 
         return current_chunk.raw()
 
