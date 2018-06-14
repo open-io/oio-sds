@@ -14,6 +14,7 @@
 # License along with this library.
 
 
+import random
 from functools import wraps
 from urllib import unquote
 
@@ -186,11 +187,26 @@ class BlobClient(object):
             if stream:
                 stream.close()
 
+    def _generate_fullchunk_copy(self, chunk, random_hex=60, **kwargs):
+        """
+        Generate new chunk URLs, by replacing the last `random_hex`
+        characters of the original URLs by random hexadecimal digits.
+        """
+        rnd = ''.join(random.choice('0123456789ABCDEF')
+                      for _ in range(random_hex))
+        return chunk[:-random_hex] + rnd
+
     @update_rawx_perfdata
     @ensure_headers
     @ensure_request_id
-    def chunk_link(self, target, link, **kwargs):
-        headers = kwargs.get('headers')
-        headers['Destination'] = link[:-64] + '/' + link[-64:]
-        return self.http_pool.request(
-            'COPY', self.resolve_url(target), headers=headers)
+    def chunk_link(self, target, link, fullpath, headers=None, **kwargs):
+        hdrs = headers.copy()
+        if link is None:
+            link = self._generate_fullchunk_copy(target, **kwargs)
+        hdrs['Destination'] = link
+        hdrs[CHUNK_HEADERS['full_path']] = fullpath
+        resp = self.http_pool.request('COPY', self.resolve_url(target),
+                                      headers=hdrs)
+        if resp.status != 201:
+            raise exc.ChunkException(resp.status)
+        return resp, link

@@ -20,8 +20,6 @@ from mock import MagicMock as Mock
 from functools import partial
 from urllib3 import HTTPResponse
 from oio.api.object_storage import ObjectStorageApi
-from oio.common.constants import CHUNK_HEADERS
-from oio.common.http_urllib3 import get_pool_manager
 from oio.common.storage_functions import _sort_chunks as sort_chunks
 from oio.common import exceptions as exc
 from oio.common.utils import cid_from_name
@@ -1014,57 +1012,66 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertFalse(res[0][1])
 
     def test_container_snapshot(self):
-        name = random_str(16)
-        self.api.container_create(self.account, name)
-        test_object = "test_object"
-        self.api.object_create(self.account, name, data="0"*128,
-                               obj_name=test_object)
+        container = random_str(16)
+        self.api.container_create(self.account, container)
+        test_object = "test_object_%d"
+        for i in range(100):
+            self.api.object_create(self.account, container, data="0"*128,
+                                   obj_name=test_object % i)
+
         # Snapshot cannot have same name and same account
         self.assertRaises(exc.ClientException,
                           self.api.container_snapshot,
-                          self.account, name, self.account, name)
-        snapshot_name = random_str(16)
-        self.assertNotEqual(snapshot_name, name)
+                          self.account, container, self.account, container)
+        snapshot = random_str(16)
+        self.assertNotEqual(snapshot, container)
         # Non existing snapshot should work
-        self.api.container_snapshot(self.account, name, self.account,
-                                    snapshot_name)
+        self.api.container_snapshot(self.account, container, self.account,
+                                    snapshot)
         # Already taken snapshot name should failed
         self.assertRaises(exc.ClientException,
                           self.api.container_snapshot,
-                          self.account, name, self.account, snapshot_name)
+                          self.account, container, self.account, snapshot)
         # Check Container Frozen so create should failed
         self.assertRaises(exc.ServiceBusy,
                           self.api.object_create,
-                          self.account, snapshot_name,
+                          self.account, snapshot,
                           data="1"*128,
                           obj_name="should_not_be_created")
 
-        # fullpath is set on every chunk
-        chunk_list = self.api.object_locate(self.account, name, test_object)[1]
-        # check that every chunk is different from the target
-        snapshot_list = self.api.object_locate(self.account, snapshot_name,
-                                               test_object)[1]
+        for i in range(100):
+            _, chunks = self.api.object_locate(self.account, container,
+                                               test_object % i)
+            _, chunks_copies = self.api.object_locate(self.account, snapshot,
+                                                      test_object % i)
 
-        for c, t in zip(chunk_list, snapshot_list):
-            self.assertNotEqual(c['url'], t['url'])
+            for chunk, copy in zip(chunks, chunks_copies):
+                # check that every chunk is different from the target
+                self.assertNotEqual(chunk['url'], copy['url'])
+
+                # check the metadata
+                meta = self.api._blob_client.chunk_head(chunk['url'])
+                meta_copies = self.api._blob_client.chunk_head(copy['url'])
+
+                fullpath = encode_fullpath(
+                    self.account, snapshot, test_object % i,
+                    meta['content_version'], meta['content_id'])
+                container_id = cid_from_name(self.account, snapshot)
+
+                self.assertEqual(fullpath, meta_copies['full_path'])
+                del meta['full_path']
+                del meta_copies['full_path']
+                self.assertEqual(container_id, meta_copies['container_id'])
+                del meta['container_id']
+                del meta_copies['container_id']
+                del meta['chunk_id']
+                del meta_copies['chunk_id']
+                self.assertDictEqual(meta, meta_copies)
+
         # check target can be used
-        self.api.object_create(self.account, name, data="0"*128,
+        self.api.object_create(self.account, container, data="0"*128,
                                obj_name="should_be_created")
-        # Generate hard links of each chunk of the object
-        url_list = [c['url'] for c in chunk_list]
-        copy_list = self.api._generate_copies(url_list)
-        # every chunks should have the fullpath
-        fullpath = encode_fullpath(
-            self.account, snapshot_name, 'copy', 12456, random_id(32))
-        self.api._link_chunks(url_list, copy_list, fullpath)
-        # check that every copy exists
-        pool_manager = get_pool_manager()
-        for copy in copy_list:
-            resp = pool_manager.request(
-                'HEAD', self.api._blob_client.resolve_url(copy))
-            self.assertEqual(resp.status, 200)
-            self.assertIn(fullpath,
-                          resp.headers[CHUNK_HEADERS['full_path']])
+
         # Snapshot on non existing container should failed
         self.assertRaises(exc.NoSuchContainer,
                           self.api.container_snapshot,
@@ -1073,11 +1080,11 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # Snapshot need to have a account
         self.assertRaises(exc.ClientException,
                           self.api.container_snapshot,
-                          self.account, name, None, random_str(16))
+                          self.account, container, None, random_str(16))
         # Snapshot need to have a name
         self.assertRaises(exc.ClientException,
                           self.api.container_snapshot,
-                          self.account, name, random_str(16), None)
+                          self.account, container, random_str(16), None)
 
     def test_object_create_long_name(self):
         """Create an objet whose name has the maximum length allowed"""
