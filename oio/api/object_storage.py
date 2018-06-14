@@ -35,7 +35,7 @@ from oio.common.easy_value import float_value, true_value
 from oio.common.logger import get_logger
 from oio.common.decorators import ensure_headers, ensure_request_id
 from oio.common.storage_method import STORAGE_METHODS
-from oio.common.constants import OIO_VERSION, CHUNK_HEADERS, HEADER_PREFIX
+from oio.common.constants import OIO_VERSION, HEADER_PREFIX
 from oio.common.decorators import handle_account_not_found, \
     handle_container_not_found, handle_object_not_found
 from oio.common.storage_functions import _sort_chunks, fetch_stream, \
@@ -380,16 +380,15 @@ class ObjectStorageApi(object):
             target_beans = []
             copy_beans = []
             for obj in obj_gen:
-                data = self.object_locate(
-                    account, container, obj["name"], **kwargs)
-                chunks = [chunk['url'] for chunk in data[1]]
-                copies = self._generate_copies(chunks)
+                _, chunks = self.object_locate(
+                    account, container, obj["name"], version=obj['version'],
+                    **kwargs)
                 fullpath = encode_fullpath(
                     dst_account, dst_container, obj['name'], obj['version'],
                     obj['content'])
-                self._link_chunks(chunks, copies, fullpath, **kwargs)
+                chunks_copies = self._link_chunks(chunks, fullpath, **kwargs)
                 t_beans, c_beans = self._prepare_meta2_raw_update(
-                    data[1], copies, obj['content'])
+                    chunks, chunks_copies, obj['content'])
                 target_beans.extend(t_beans)
                 copy_beans.extend(c_beans)
                 if len(target_beans) > batch:
@@ -850,18 +849,6 @@ class ObjectStorageApi(object):
                       DeprecationWarning)
         return self.object_locate(*args, **kwargs)
 
-    def _generate_fullchunk_copies(self, chunks, random_hex=60):
-        # random_hex is the number of hexadecimals characters to generate for
-        # the copy path
-        copies = []
-        for c in chunks:
-            tmp = c.copy()
-            rnd = (''.join(random.choice('0123456789ABCDEF')
-                           for _ in range(random_hex)))
-            tmp['url'] = ''.join([tmp['url'][:-random_hex], rnd])
-            copies.append(tmp)
-        return copies
-
     def object_fastcopy(self, *args, **kwargs):
         """
         :deprecated: use `object_link`.
@@ -895,16 +882,11 @@ class ObjectStorageApi(object):
         link_meta['mime_type'] = target_meta['mime_type']
         link_meta['properties'] = target_meta['properties']
 
-        chunks_copies = self._generate_fullchunk_copies(chunks)
-        chunks_copies_url = []
-        chunks_url = []
-        for chunk in chunks:
-            chunks_url.append(chunk['url'])
-        for chunk in chunks_copies:
-            chunks_copies_url.append(chunk['url'])
         fullpath = encode_fullpath(
             link_account, link_container, link_obj, link_meta['version'],
             link_meta['id'])
+        chunks_copies = self._link_chunks(chunks, fullpath, **kwargs)
+
         data = {'chunks': chunks_copies,
                 'properties': link_meta['properties'] or {}}
         if properties_directive == 'REPLACE':
@@ -915,8 +897,7 @@ class ObjectStorageApi(object):
                 data['properties'] = kwargs['properties']
             else:
                 data['properties'] = {}
-        self._link_chunks(
-            chunks_url, chunks_copies_url, fullpath, **kwargs)
+
         self.container.content_create(
             link_account, link_container, link_obj,
             version=link_meta['version'], content_id=link_meta['id'],
@@ -1319,36 +1300,22 @@ class ObjectStorageApi(object):
         """
         return ''.join(random.choice(dictionary) for _ in range(num_chars))
 
-    def _generate_copies(self, chunks, random_hex=60):
-        """
-        Generate new chunk URLs, by replacing the last `random_hex`
-        characters of the original URLs by random hexadecimal digits.
-        """
-        copies = []
-        for chunk in chunks:
-            tmp = ''.join((chunk[:-random_hex],
-                           self._random_buffer('0123456789ABCDEF',
-                                               random_hex)))
-            copies.append(tmp)
-        return copies
-
-    def _link_chunks(self, targets, copies, fullpath, **kwargs):
+    def _link_chunks(self, targets, fullpath, **kwargs):
         """
         Create chunk hard links.
 
         :param targets: original chunk URLs
-        :param copies: new chunk URLs
         :param fullpath: full path to the object whose chunks will
             be hard linked
         """
-        out_kwargs = dict(kwargs)
-        headers = out_kwargs.pop('headers', dict())
-        headers.update(((CHUNK_HEADERS['full_path'], fullpath), ))
-        for target, copy in zip(targets, copies):
-            res = self.blob_client.chunk_link(target, copy,
-                                              headers=headers, **out_kwargs)
-            if res.status != 201:
-                raise exc.ChunkException(res.status)
+        new_chunks = list()
+        for chunk in targets:
+            resp, new_chunk_url = self.blob_client.chunk_link(
+                chunk['url'], None, fullpath, **kwargs)
+            new_chunk = chunk.copy()
+            new_chunk['url'] = new_chunk_url
+            new_chunks.append(new_chunk)
+        return new_chunks
 
     def _prepare_meta2_raw_update(self, targets, copies, content):
         """
@@ -1358,18 +1325,17 @@ class ObjectStorageApi(object):
         targets_beans = []
         copies_beans = []
         for target, copy in zip(targets, copies):
-            targets_beans.append(self._m2_chunk_bean(
-                target['url'], target, content))
-            copies_beans.append(self._m2_chunk_bean(copy, target, content))
+            targets_beans.append(self._m2_chunk_bean(target, content))
+            copies_beans.append(self._m2_chunk_bean(copy, content))
         return targets_beans, copies_beans
 
     @staticmethod
-    def _m2_chunk_bean(url, meta, content):
+    def _m2_chunk_bean(meta, content):
         """
         Prepare a dictionary to be used as a chunk "bean" (in meta2 sense).
         """
         return {"type": "chunk",
-                "id": url,
+                "id": meta['url'],
                 "hash": meta['hash'],
                 "size": int(meta["size"]),
                 "pos": meta["pos"],
