@@ -773,23 +773,38 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             target_content_id=target_content_id, target_version=target_version,
             link_content_id=link_content_id, **kwargs)
 
-        meta, data = self.api.object_fetch(
+        original_meta, data = self.api.object_fetch(
             self.account, link_container, link_obj)
         data = "".join(data)
+        cid = cid_from_name(self.account, link_container)
+        fullpath = encode_fullpath(
+            self.account, link_container, link_obj, original_meta['version'],
+            original_meta['id'])
         self.assertEqual(len(data), len(expected_data))
         self.assertEqual(data, expected_data)
-        self.assertEqual(link_obj, meta['name'])
-        self.assertEqual(cid_from_name(self.account, link_container),
-                         meta['container_id'])
+        self.assertEqual(link_obj, original_meta['name'])
+        self.assertEqual(cid, original_meta['container_id'])
         if link_content_id:
-            self.assertEqual(link_content_id, meta['id'])
+            self.assertEqual(link_content_id, original_meta['id'])
 
-        obj = self.api.object_show(self.account, link_container, link_obj,
-                                   content=link_content_id)
-        del meta['ns']
-        del meta['container_id']
-        self.assertDictEqual(meta, obj)
-        # TODO Check metadata chunks
+        meta, chunks = self.api.object_locate(
+            self.account, link_container, link_obj, content=link_content_id)
+        del original_meta['ns']
+        del original_meta['container_id']
+        self.assertDictEqual(original_meta, meta)
+
+        for chunk in chunks:
+            meta = self.api.blob_client.chunk_head(chunk['url'])
+            self.assertEqual(cid, meta['container_id'])
+            self.assertEqual(original_meta['name'], meta['content_path'])
+            self.assertEqual(str(original_meta['version']),
+                             str(meta['content_version']))
+            self.assertEqual(original_meta['id'], meta['content_id'])
+            self.assertEqual(fullpath, meta['full_path'])
+            self.assertEqual(original_meta['chunk_method'],
+                             meta['content_chunkmethod'])
+            self.assertEqual(original_meta['policy'], meta['content_policy'])
+            self.assertEqual(chunk['pos'], meta['chunk_pos'])
 
     def test_object_link_different_container(self):
         target_container = random_str(16)
