@@ -418,3 +418,81 @@ class TestBlobFunctional(BaseTestCase):
         for path in strange_paths:
             self._cycle_put(1, 201, path=path)
             self._cycle_copy(path)
+
+    def test_copy_with_same_chunkid(self):
+        metachunk_hash = md5().hexdigest()
+        trailers = {'x-oio-chunk-meta-metachunk-size': 1,
+                    'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
+
+        chunkid1 = self.chunkid()
+        chunkdata1 = random_buffer(string.printable, 1)
+        chunkurl1 = self._rawx_url(chunkid1)
+        headers1 = self._chunk_attr(chunkid1, chunkdata1)
+        self._check_not_present(chunkurl1)
+        resp, _ = self._http_request(chunkurl1, 'PUT', chunkdata1, headers1,
+                                     trailers)
+        self.assertEqual(resp.status, 201)
+
+        headers = {}
+        headers["Destination"] = chunkurl1
+        headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
+                "account-snapshot", "container-snapshot", "content-snapshot",
+                1456938361143741, random_id(32))
+        resp, _ = self._http_request(chunkurl1, 'COPY', '', headers)
+        self.assertEqual(resp.status, 403)
+
+    def test_copy_with_existing_destination(self):
+        metachunk_hash = md5().hexdigest()
+        trailers = {'x-oio-chunk-meta-metachunk-size': 1,
+                    'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
+
+        chunkid1 = self.chunkid()
+        chunkdata1 = random_buffer(string.printable, 1)
+        chunkurl1 = self._rawx_url(chunkid1)
+        headers1 = self._chunk_attr(chunkid1, chunkdata1)
+        self._check_not_present(chunkurl1)
+        resp, _ = self._http_request(chunkurl1, 'PUT', chunkdata1, headers1,
+                                     trailers)
+        self.assertEqual(resp.status, 201)
+
+        chunkid2 = self.chunkid()
+        chunkdata2 = random_buffer(string.printable, 1)
+        chunkurl2 = self._rawx_url(chunkid2)
+        headers2 = self._chunk_attr(chunkid2, chunkdata2)
+        self._check_not_present(chunkurl2)
+        resp, _ = self._http_request(chunkurl2, 'PUT', chunkdata2, headers2,
+                                     trailers)
+        self.assertEqual(resp.status, 201)
+
+        headers = {}
+        headers["Destination"] = chunkurl2
+        headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
+                "account-snapshot", "container-snapshot", "content-snapshot",
+                1456938361143741, random_id(32))
+        resp, _ = self._http_request(chunkurl1, 'COPY', '', headers)
+        self.assertEqual(resp.status, 409)
+
+    def test_copy_with_nonexistent_source(self):
+        metachunk_hash = md5().hexdigest()
+        trailers = {'x-oio-chunk-meta-metachunk-size': 1,
+                    'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
+
+        chunkid1 = self.chunkid()
+        chunkurl1 = self._rawx_url(chunkid1)
+
+        chunkid2 = self.chunkid()
+        chunkdata2 = random_buffer(string.printable, 1)
+        chunkurl2 = self._rawx_url(chunkid2)
+        headers2 = self._chunk_attr(chunkid2, chunkdata2)
+        self._check_not_present(chunkurl2)
+        resp, _ = self._http_request(chunkurl2, 'PUT', chunkdata2, headers2,
+                                     trailers)
+        self.assertEqual(resp.status, 201)
+
+        headers = {}
+        headers["Destination"] = chunkurl2
+        headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
+                "account-snapshot", "container-snapshot", "content-snapshot",
+                1456938361143741, random_id(32))
+        resp, _ = self._http_request(chunkurl1, 'COPY', '', headers)
+        self.assertEqual(resp.status, 404)
