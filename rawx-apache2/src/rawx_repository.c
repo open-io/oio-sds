@@ -911,6 +911,11 @@ dav_rawx_copy_resource(const dav_resource *src, dav_resource *dst, int depth,
 				"Source and destination should not have the same id");
 		goto end_copy;
 	}
+	if (dst->exists) {
+		e = server_create_and_stat_error(srv_conf, pool, HTTP_CONFLICT, 0,
+				"Destination already exists");
+		goto end_copy;
+	}
 
 	dst->info->chunk.chunk_id = apr_pstrdup(pool, dst->info->hex_chunkid);
 	dst->info->chunk.content_fullpath = apr_pstrdup(
@@ -1024,6 +1029,14 @@ dav_rawx_remove_resource(dav_resource *resource, dav_response **response)
 	DAV_XDEBUG_RES(resource, 0, "%s(%s)", __FUNCTION__, resource_get_pathname(resource));
 	pool = resource->pool;
 	*response = NULL;
+
+	if (resource->info->request->method_number == M_COPY) {
+		// If the destination exists and isn't versioned,
+		// Apache2 removes the destination
+		// See https://github.com/apache/httpd/blob/2.0.17/modules/dav/main/mod_dav.c#L2742
+		// Ignore to create an error with 'copy_resource'
+		goto end_remove;
+	}
 
 	if (DAV_RESOURCE_TYPE_REGULAR != resource->type)  {
 		e = server_create_and_stat_error(resource_get_server_config(resource), pool,
