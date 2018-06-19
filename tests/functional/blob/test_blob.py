@@ -154,12 +154,18 @@ class TestBlobFunctional(BaseTestCase):
         resp, _ = self._http_request(chunkurl, 'COPY', '', headers)
         self.assertEqual(resp.status, 400)
 
-    def _cycle_put(self, length, expected, remove_headers=None, path=None):
+    def _cycle_put(self, length, expected, remove_headers=None, path=None,
+                   old_fullpath=False):
         chunkid = self.chunkid()
         chunkdata = random_buffer(string.printable, length)
         chunkurl = self._rawx_url(chunkid)
         chunkpath = self._chunk_path(chunkid)
         headers = self._chunk_attr(chunkid, chunkdata, path=path)
+        fullpath = headers['x-oio-chunk-meta-full-path']
+        if old_fullpath:
+            headers['x-oio-chunk-meta-full-path'] = \
+                headers['x-oio-chunk-meta-full-path'].rsplit('/', 1)[0]
+            print(headers['x-oio-chunk-meta-full-path'])
         if remove_headers:
             for h in remove_headers:
                 del headers[h]
@@ -195,8 +201,9 @@ class TestBlobFunctional(BaseTestCase):
         resp, body = self._http_request(chunkurl, 'GET', '', {})
         self.assertEqual(resp.status, 200)
         self.assertEqual(body, chunkdata)
-        self.assertEqual(headers.pop('x-oio-chunk-meta-full-path'),
+        self.assertEqual(fullpath,
                          resp.getheader('x-oio-chunk-meta-full-path'))
+        headers.pop('x-oio-chunk-meta-full-path')
 
         headers['x-oio-chunk-meta-metachunk-size'] = metachunk_size
         headers['x-oio-chunk-meta-metachunk-hash'] = metachunk_hash.upper()
@@ -630,3 +637,6 @@ class TestBlobFunctional(BaseTestCase):
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
         self.assertEqual(resp.status, 400)
+
+    def test_old_fullpath(self):
+        self._cycle_put(32, 201, old_fullpath=True)

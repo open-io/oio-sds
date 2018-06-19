@@ -436,8 +436,7 @@ check_chunk_content_fullpath(apr_pool_t *pool,
 		oio_str_upper(chunk->content_id);
 		char *old_content_fullpath = chunk->content_fullpath;
 		chunk->content_fullpath = apr_pstrcat(
-				pool, chunk->content_fullpath, "/", chunk->content_id, NULL);
-		g_free(old_content_fullpath);
+				pool, old_content_fullpath, "/", chunk->content_id, NULL);
 	}
 
 end_check_chunk_content_fullpath:
