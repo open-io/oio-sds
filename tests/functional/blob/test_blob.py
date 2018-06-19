@@ -276,6 +276,12 @@ class TestBlobFunctional(BaseTestCase):
                         remove_headers=['x-oio-chunk-meta-content-path'])
         self._cycle_put(32, 201,
                         remove_headers=['x-oio-chunk-meta-container-id'])
+        self._cycle_put(32, 201,
+                        remove_headers=[
+                            'x-oio-chunk-meta-container-id',
+                            'x-oio-chunk-meta-content-path',
+                            'x-oio-chunk-meta-content-version',
+                            'x-oio-chunk-meta-content-id'])
 
     def _check_not_present(self, chunkurl):
         resp, body = self._http_request(chunkurl, 'GET', '', {})
@@ -496,3 +502,131 @@ class TestBlobFunctional(BaseTestCase):
                 1456938361143741, random_id(32))
         resp, _ = self._http_request(chunkurl1, 'COPY', '', headers)
         self.assertEqual(resp.status, 404)
+
+    def test_wrong_fullpath(self):
+        metachunk_hash = md5().hexdigest()
+        trailers = {'x-oio-chunk-meta-metachunk-size': 1,
+                    'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
+
+        chunkid = self.chunkid()
+        chunkdata = random_buffer(string.printable, 1)
+        chunkurl = self._rawx_url(chunkid)
+        hdrs = self._chunk_attr(chunkid, chunkdata)
+        self._check_not_present(chunkurl)
+
+        headers = hdrs.copy()
+        headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
+            'test', 'blob', 'test-plop', 1456938361143740,
+            '0123456789ABCDEF') + "/too_long"
+        resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
+                                     trailers)
+        self.assertEqual(resp.status, 400)
+
+        headers = hdrs.copy()
+        headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
+            'test', 'blob', 'test-plop', 1456938361143740,
+            '0123456789ABCDEF').rsplit('/', 2)[0]
+        resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
+                                     trailers)
+        self.assertEqual(resp.status, 400)
+
+        headers = hdrs.copy()
+        headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
+            'wrong-account', 'blob', 'test-plop', 1456938361143740,
+            '0123456789ABCDEF')
+        resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
+                                     trailers)
+        self.assertEqual(resp.status, 400)
+
+        headers = hdrs.copy()
+        headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
+            'test', 'wrong-container', 'test-plop', 1456938361143740,
+            '0123456789ABCDEF')
+        resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
+                                     trailers)
+        self.assertEqual(resp.status, 400)
+
+        headers = hdrs.copy()
+        headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
+            'test', 'blob', 'wrong-path', 1456938361143740,
+            '0123456789ABCDEF')
+        resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
+                                     trailers)
+        self.assertEqual(resp.status, 400)
+
+        headers = hdrs.copy()
+        headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
+            'test', 'blob', 'test-plop', 9999999999999999,
+            '0123456789ABCDEF')
+        resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
+                                     trailers)
+        self.assertEqual(resp.status, 400)
+
+        headers = hdrs.copy()
+        headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
+            'test', 'blob', 'test-plop', 1456938361143740,
+            '9999999999999999')
+        resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
+                                     trailers)
+        self.assertEqual(resp.status, 400)
+
+        headers = hdrs.copy()
+        del headers['x-oio-chunk-meta-container-id']
+        headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
+            'empty', 'blob', 'test-plop', 1456938361143740,
+            '0123456789ABCDEF').replace('empty', '')
+        resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
+                                     trailers)
+        self.assertEqual(resp.status, 400)
+
+        headers = hdrs.copy()
+        del headers['x-oio-chunk-meta-container-id']
+        headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
+            'test', 'empty', 'test-plop', 1456938361143740,
+            '0123456789ABCDEF').replace('empty', '')
+        resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
+                                     trailers)
+        self.assertEqual(resp.status, 400)
+
+        headers = hdrs.copy()
+        del headers['x-oio-chunk-meta-content-path']
+        headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
+            'test', 'blob', 'empty', 1456938361143740,
+            '0123456789ABCDEF').replace('empty', '')
+        resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
+                                     trailers)
+        self.assertEqual(resp.status, 400)
+
+        headers = hdrs.copy()
+        del headers['x-oio-chunk-meta-content-version']
+        headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
+            'test', 'blob', 'test-plop', 'empty',
+            '0123456789ABCDEF').replace('empty', '')
+        resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
+                                     trailers)
+        self.assertEqual(resp.status, 400)
+
+        headers = hdrs.copy()
+        del headers['x-oio-chunk-meta-content-id']
+        headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
+            'test', 'blob', 'test-plop', 1456938361143740,
+            'empty').replace('empty', '')
+        resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
+                                     trailers)
+        self.assertEqual(resp.status, 400)
+
+        headers = hdrs.copy()
+        del headers['x-oio-chunk-meta-content-version']
+        headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
+            'test', 'blob', 'test-plop', 'digit', '0123456789ABCDEF')
+        resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
+                                     trailers)
+        self.assertEqual(resp.status, 400)
+
+        headers = hdrs.copy()
+        del headers['x-oio-chunk-meta-content-id']
+        headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
+            'test', 'blob', 'test-plop', 1456938361143740, 'hexa')
+        resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
+                                     trailers)
+        self.assertEqual(resp.status, 400)
