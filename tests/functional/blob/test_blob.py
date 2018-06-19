@@ -24,9 +24,11 @@ from urlparse import urlparse
 from urllib import unquote
 from oio.common.http import headers_from_object_metadata
 from oio.common.http_eventlet import http_connect
-from oio.common.constants import OIO_VERSION, CHUNK_HEADERS
+from oio.common.constants import OIO_VERSION, CHUNK_HEADERS, \
+    chunk_xattr_keys, CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
 from oio.common.fullpath import encode_fullpath
 from oio.common.utils import cid_from_name
+from oio.common.xattr import xattr
 from oio.blob.utils import read_chunk_metadata
 from tests.utils import random_id
 
@@ -49,19 +51,18 @@ class TestBlobFunctional(BaseTestCase):
         return random_buffer('0123456789ABCDEF', 64)
 
     def _chunk_attr(self, chunk_id, data, path=None):
-        if path is None:
-            path = 'test-plop'
+        if path is not None:
+            self.content_path = path
         headers = headers_from_object_metadata({
-            'id': '0123456789ABCDEF',
-            'version': '1456938361143740',
-            'content_path': path,
+            'id': self.content_id,
+            'version': self.content_version,
+            'content_path': self.content_path,
             'chunk_method':
                 'ec/algo=liberasurecode_rs_vand,k=6,m=3',
             'policy': 'TESTPOLICY',
-            'container_id': cid_from_name('test', 'blob'),
+            'container_id': self.cid,
             'chunk_hash': md5(data).hexdigest().upper(),
-            'full_path': encode_fullpath('test', 'blob', path,
-                                         1456938361143740, '0123456789ABCDEF'),
+            'full_path': self.fullpath,
             'oio_version': OIO_VERSION
         })
         headers[CHUNK_HEADERS['chunk_pos']] = 0
@@ -83,6 +84,13 @@ class TestBlobFunctional(BaseTestCase):
         rawx_num, rawx_path, rawx_addr, _ = self.get_service_url('rawx')
         self.rawx = 'http://' + rawx_addr
         self.rawx_path = rawx_path + '/'
+        self.cid = cid_from_name('test', 'blob')
+        self.content_path = 'test-plop'
+        self.content_version = '1456938361143740'
+        self.content_id = '0123456789ABCDEF'
+        self.fullpath = encode_fullpath(
+            'test', 'blob', self.content_path, self.content_version,
+            self.content_id)
 
     def tearDown(self):
         super(TestBlobFunctional, self).tearDown()
@@ -133,14 +141,14 @@ class TestBlobFunctional(BaseTestCase):
         resp, body = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                         trailers)
         expected = 201
-        self.assertEqual(resp.status, expected)
+        self.assertEqual(expected, resp.status)
         copyid = self.chunkid()
         copyid = chunkid[:-60] + copyid[-60:]
         copyurl = self._rawx_url(copyid)
         headers = {}
         headers["Destination"] = copyurl
         resp, _ = self._http_request(chunkurl, 'COPY', '', headers)
-        self.assertEqual(resp.status, 400)
+        self.assertEqual(400, resp.status)
 
         headers = {}
         headers["Destination"] = chunkurl
@@ -148,19 +156,21 @@ class TestBlobFunctional(BaseTestCase):
                 "account-snapshot", "container-snapshot", "test"+"-snapshot",
                 1456938361143741, random_id(32))
         resp, _ = self._http_request(chunkurl, 'COPY', '', headers)
-        self.assertEqual(resp.status, 403)
+        self.assertEqual(403, resp.status)
 
         headers = {}
         resp, _ = self._http_request(chunkurl, 'COPY', '', headers)
-        self.assertEqual(resp.status, 400)
+        self.assertEqual(400, resp.status)
 
     def _cycle_put(self, length, expected, remove_headers=None, path=None,
                    old_fullpath=False):
+        if path:
+            self.path = path
         chunkid = self.chunkid()
         chunkdata = random_buffer(string.printable, length)
         chunkurl = self._rawx_url(chunkid)
         chunkpath = self._chunk_path(chunkid)
-        headers = self._chunk_attr(chunkid, chunkdata, path=path)
+        headers = self._chunk_attr(chunkid, chunkdata)
         fullpath = headers['x-oio-chunk-meta-full-path']
         if old_fullpath:
             headers['x-oio-chunk-meta-full-path'] = \
@@ -183,14 +193,14 @@ class TestBlobFunctional(BaseTestCase):
         # Initial put that must succeed
         resp, body = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                         trailers)
-        self.assertEqual(resp.status, expected)
+        self.assertEqual(expected, resp.status)
         if expected / 100 != 2:
             self.assertFalse(os.path.isfile(chunkpath))
             return
         # the first PUT succeeded, the second MUST fail
         resp, body = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                         trailers)
-        self.assertEqual(resp.status, 409)
+        self.assertEqual(409, resp.status)
         # check the file if is correct
         with open(chunkpath) as f:
             data = f.read()
@@ -199,7 +209,7 @@ class TestBlobFunctional(BaseTestCase):
         # check the whole download is correct
         # TODO FIXME getting an empty content should return 204
         resp, body = self._http_request(chunkurl, 'GET', '', {})
-        self.assertEqual(resp.status, 200)
+        self.assertEqual(200, resp.status)
         self.assertEqual(body, chunkdata)
         self.assertEqual(fullpath,
                          resp.getheader('x-oio-chunk-meta-full-path'))
@@ -235,11 +245,11 @@ class TestBlobFunctional(BaseTestCase):
             # returns "200 OK" with an empty body, but should return 416
             r = "bytes={0}-{1}".format(length, length+1)
             resp, body = self._http_request(chunkurl, 'GET', '', {'Range': r})
-            self.assertEqual(resp.status, 416)
+            self.assertEqual(416, resp.status)
 
         # delete the chunk, check it is missing as expected
         resp, body = self._http_request(chunkurl, 'DELETE', '', {})
-        self.assertEqual(resp.status, 204)
+        self.assertEqual(204, resp.status)
         self.assertFalse(os.path.isfile(chunkpath))
 
         self._check_not_present(chunkurl)
@@ -292,9 +302,9 @@ class TestBlobFunctional(BaseTestCase):
 
     def _check_not_present(self, chunkurl):
         resp, body = self._http_request(chunkurl, 'GET', '', {})
-        self.assertEqual(resp.status, 404)
+        self.assertEqual(404, resp.status)
         resp, body = self._http_request(chunkurl, 'DELETE', '', {})
-        self.assertEqual(resp.status, 404)
+        self.assertEqual(404, resp.status)
 
     def _check_bad_headers(self, length, bad_headers=None, bad_trailers=None):
         chunkid = self.chunkid()
@@ -315,7 +325,7 @@ class TestBlobFunctional(BaseTestCase):
 
         resp, body = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                         trailers)
-        self.assertEqual(resp.status, 400)
+        self.assertEqual(400, resp.status)
 
         self._check_not_present(chunkurl)
 
@@ -338,11 +348,13 @@ class TestBlobFunctional(BaseTestCase):
             32, bad_headers={'x-oio-chunk-meta-chunk-id': '00'*32})
 
     def _cycle_copy(self, path):
+        if path:
+            self.path = path
         chunkid = self.chunkid()
         chunkdata = random_buffer(string.printable, 1)
         chunkurl = self._rawx_url(chunkid)
         chunkpath = self._chunk_path(chunkid)
-        headers1 = self._chunk_attr(chunkid, chunkdata, path=path)
+        headers1 = self._chunk_attr(chunkid, chunkdata)
         metachunk_hash = md5().hexdigest()
         trailers = {'x-oio-chunk-meta-metachunk-size': 1,
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
@@ -350,7 +362,7 @@ class TestBlobFunctional(BaseTestCase):
         self._check_not_present(chunkurl)
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers1,
                                      trailers)
-        self.assertEqual(resp.status, 201)
+        self.assertEqual(201, resp.status)
 
         copyid = self.chunkid()
         copyid = chunkid[:-60] + copyid[-60:]
@@ -363,15 +375,15 @@ class TestBlobFunctional(BaseTestCase):
                 "account-snapshot", "container-snapshot", path+"-snapshot",
                 1456938361143741, random_id(32))
         resp, _ = self._http_request(chunkurl, 'COPY', '', headers2)
-        self.assertEqual(resp.status, 201)
+        self.assertEqual(201, resp.status)
 
         resp, body = self._http_request(chunkurl, 'GET', '', {})
-        self.assertEqual(resp.status, 200)
+        self.assertEqual(200, resp.status)
         self.assertEqual(headers1['x-oio-chunk-meta-full-path'],
                          resp.getheader('x-oio-chunk-meta-full-path'))
 
         resp, body = self._http_request(copyurl, 'GET', '', {})
-        self.assertEqual(resp.status, 200)
+        self.assertEqual(200, resp.status)
         self.assertEqual(headers2['x-oio-chunk-meta-full-path'],
                          resp.getheader('x-oio-chunk-meta-full-path'))
 
@@ -392,12 +404,12 @@ class TestBlobFunctional(BaseTestCase):
                              meta['links'][chunkid])
 
         resp, body = self._http_request(chunkurl, 'DELETE', '', {})
-        self.assertEqual(resp.status, 204)
+        self.assertEqual(204, resp.status)
         resp, body = self._http_request(chunkurl, 'GET', '', {})
-        self.assertEqual(resp.status, 404)
+        self.assertEqual(404, resp.status)
 
         resp, body = self._http_request(copyurl, 'GET', '', {})
-        self.assertEqual(resp.status, 200)
+        self.assertEqual(200, resp.status)
         self.assertEqual(headers2['x-oio-chunk-meta-full-path'],
                          resp.getheader('x-oio-chunk-meta-full-path'))
 
@@ -408,9 +420,9 @@ class TestBlobFunctional(BaseTestCase):
             self.assertEqual(0, len(meta['links']))
 
         resp, body = self._http_request(copyurl, 'DELETE', '', {})
-        self.assertEqual(resp.status, 204)
+        self.assertEqual(204, resp.status)
         resp, body = self._http_request(copyurl, 'GET', '', {})
-        self.assertEqual(resp.status, 404)
+        self.assertEqual(404, resp.status)
 
     def test_strange_path(self):
         strange_paths = [
@@ -444,7 +456,7 @@ class TestBlobFunctional(BaseTestCase):
         self._check_not_present(chunkurl1)
         resp, _ = self._http_request(chunkurl1, 'PUT', chunkdata1, headers1,
                                      trailers)
-        self.assertEqual(resp.status, 201)
+        self.assertEqual(201, resp.status)
 
         headers = {}
         headers["Destination"] = chunkurl1
@@ -452,7 +464,7 @@ class TestBlobFunctional(BaseTestCase):
                 "account-snapshot", "container-snapshot", "content-snapshot",
                 1456938361143741, random_id(32))
         resp, _ = self._http_request(chunkurl1, 'COPY', '', headers)
-        self.assertEqual(resp.status, 403)
+        self.assertEqual(403, resp.status)
 
     def test_copy_with_existing_destination(self):
         metachunk_hash = md5().hexdigest()
@@ -466,7 +478,7 @@ class TestBlobFunctional(BaseTestCase):
         self._check_not_present(chunkurl1)
         resp, _ = self._http_request(chunkurl1, 'PUT', chunkdata1, headers1,
                                      trailers)
-        self.assertEqual(resp.status, 201)
+        self.assertEqual(201, resp.status)
 
         chunkid2 = self.chunkid()
         chunkdata2 = random_buffer(string.printable, 1)
@@ -475,7 +487,7 @@ class TestBlobFunctional(BaseTestCase):
         self._check_not_present(chunkurl2)
         resp, _ = self._http_request(chunkurl2, 'PUT', chunkdata2, headers2,
                                      trailers)
-        self.assertEqual(resp.status, 201)
+        self.assertEqual(201, resp.status)
 
         headers = {}
         headers["Destination"] = chunkurl2
@@ -483,7 +495,7 @@ class TestBlobFunctional(BaseTestCase):
                 "account-snapshot", "container-snapshot", "content-snapshot",
                 1456938361143741, random_id(32))
         resp, _ = self._http_request(chunkurl1, 'COPY', '', headers)
-        self.assertEqual(resp.status, 409)
+        self.assertEqual(409, resp.status)
 
     def test_copy_with_nonexistent_source(self):
         metachunk_hash = md5().hexdigest()
@@ -500,7 +512,7 @@ class TestBlobFunctional(BaseTestCase):
         self._check_not_present(chunkurl2)
         resp, _ = self._http_request(chunkurl2, 'PUT', chunkdata2, headers2,
                                      trailers)
-        self.assertEqual(resp.status, 201)
+        self.assertEqual(201, resp.status)
 
         headers = {}
         headers["Destination"] = chunkurl2
@@ -508,7 +520,7 @@ class TestBlobFunctional(BaseTestCase):
                 "account-snapshot", "container-snapshot", "content-snapshot",
                 1456938361143741, random_id(32))
         resp, _ = self._http_request(chunkurl1, 'COPY', '', headers)
-        self.assertEqual(resp.status, 404)
+        self.assertEqual(404, resp.status)
 
     def test_wrong_fullpath(self):
         metachunk_hash = md5().hexdigest()
@@ -523,120 +535,260 @@ class TestBlobFunctional(BaseTestCase):
 
         headers = hdrs.copy()
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'test', 'blob', 'test-plop', 1456938361143740,
-            '0123456789ABCDEF') + "/too_long"
+            'test', 'blob', self.content_path, self.content_version,
+            self.content_id) + "/too_long"
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
-        self.assertEqual(resp.status, 400)
+        self.assertEqual(400, resp.status)
 
         headers = hdrs.copy()
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'test', 'blob', 'test-plop', 1456938361143740,
-            '0123456789ABCDEF').rsplit('/', 2)[0]
+            'test', 'blob', self.content_path, self.content_version,
+            self.content_id).rsplit('/', 2)[0]
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
-        self.assertEqual(resp.status, 400)
+        self.assertEqual(400, resp.status)
 
         headers = hdrs.copy()
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'wrong-account', 'blob', 'test-plop', 1456938361143740,
-            '0123456789ABCDEF')
+            'wrong-account', 'blob', self.content_path, self.content_version,
+            self.content_id)
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
-        self.assertEqual(resp.status, 400)
+        self.assertEqual(400, resp.status)
 
         headers = hdrs.copy()
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'test', 'wrong-container', 'test-plop', 1456938361143740,
-            '0123456789ABCDEF')
+            'test', 'wrong-container', self.content_path, self.content_version,
+            self.content_id)
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
-        self.assertEqual(resp.status, 400)
+        self.assertEqual(400, resp.status)
 
         headers = hdrs.copy()
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'test', 'blob', 'wrong-path', 1456938361143740,
-            '0123456789ABCDEF')
+            'test', 'blob', 'wrong-path', self.content_version,
+            self.content_id)
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
-        self.assertEqual(resp.status, 400)
+        self.assertEqual(400, resp.status)
 
         headers = hdrs.copy()
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'test', 'blob', 'test-plop', 9999999999999999,
-            '0123456789ABCDEF')
+            'test', 'blob', self.content_path, 9999999999999999,
+            self.content_id)
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
-        self.assertEqual(resp.status, 400)
+        self.assertEqual(400, resp.status)
 
         headers = hdrs.copy()
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'test', 'blob', 'test-plop', 1456938361143740,
+            'test', 'blob', self.content_path, self.content_version,
             '9999999999999999')
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
-        self.assertEqual(resp.status, 400)
+        self.assertEqual(400, resp.status)
 
         headers = hdrs.copy()
         del headers['x-oio-chunk-meta-container-id']
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'empty', 'blob', 'test-plop', 1456938361143740,
-            '0123456789ABCDEF').replace('empty', '')
+            'empty', 'blob', self.content_path, self.content_version,
+            self.content_id).replace('empty', '')
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
-        self.assertEqual(resp.status, 400)
+        self.assertEqual(400, resp.status)
 
         headers = hdrs.copy()
         del headers['x-oio-chunk-meta-container-id']
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'test', 'empty', 'test-plop', 1456938361143740,
-            '0123456789ABCDEF').replace('empty', '')
+            'test', 'empty', self.content_path, self.content_version,
+            self.content_id).replace('empty', '')
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
-        self.assertEqual(resp.status, 400)
+        self.assertEqual(400, resp.status)
 
         headers = hdrs.copy()
         del headers['x-oio-chunk-meta-content-path']
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'test', 'blob', 'empty', 1456938361143740,
-            '0123456789ABCDEF').replace('empty', '')
+            'test', 'blob', 'empty', self.content_version,
+            self.content_id).replace('empty', '')
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
-        self.assertEqual(resp.status, 400)
+        self.assertEqual(400, resp.status)
 
         headers = hdrs.copy()
         del headers['x-oio-chunk-meta-content-version']
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'test', 'blob', 'test-plop', 'empty',
-            '0123456789ABCDEF').replace('empty', '')
+            'test', 'blob', self.content_path, 'empty',
+            self.content_id).replace('empty', '')
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
-        self.assertEqual(resp.status, 400)
+        self.assertEqual(400, resp.status)
 
         headers = hdrs.copy()
         del headers['x-oio-chunk-meta-content-id']
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'test', 'blob', 'test-plop', 1456938361143740,
+            'test', 'blob', self.content_path, self.content_version,
             'empty').replace('empty', '')
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
-        self.assertEqual(resp.status, 400)
+        self.assertEqual(400, resp.status)
 
         headers = hdrs.copy()
         del headers['x-oio-chunk-meta-content-version']
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'test', 'blob', 'test-plop', 'digit', '0123456789ABCDEF')
+            'test', 'blob', self.content_path, 'digit', self.content_id)
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
-        self.assertEqual(resp.status, 400)
+        self.assertEqual(400, resp.status)
 
         headers = hdrs.copy()
         del headers['x-oio-chunk-meta-content-id']
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'test', 'blob', 'test-plop', 1456938361143740, 'hexa')
+            'test', 'blob', self.content_path, self.content_version, 'hexa')
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
-        self.assertEqual(resp.status, 400)
+        self.assertEqual(400, resp.status)
 
     def test_old_fullpath(self):
         self._cycle_put(32, 201, old_fullpath=True)
+
+    def test_read_old_chunk(self):
+        metachunk_hash = md5().hexdigest()
+        trailers = {'x-oio-chunk-meta-metachunk-size': 1,
+                    'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
+
+        chunkid = self.chunkid()
+        chunkdata = random_buffer(string.printable, 1)
+        chunkurl = self._rawx_url(chunkid)
+        chunkpath = self._chunk_path(chunkid)
+        headers = self._chunk_attr(chunkid, chunkdata)
+        self._check_not_present(chunkurl)
+
+        resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
+                                     trailers)
+        self.assertEqual(201, resp.status)
+
+        resp1, data1 = self._http_request(chunkurl, 'GET', '', {})
+        self.assertEqual(200, resp1.status)
+        headers1 = dict(resp1.getheaders())
+        with open(chunkpath, 'r') as fd:
+            meta1 = read_chunk_metadata(fd, chunkid)
+
+        # Old chunk
+        xattr.setxattr(
+            chunkpath, 'user.' + chunk_xattr_keys['chunk_id'], chunkid)
+        xattr.setxattr(
+            chunkpath, 'user.' + chunk_xattr_keys['container_id'], self.cid)
+        xattr.setxattr(
+            chunkpath, 'user.' + chunk_xattr_keys['content_path'],
+            self.content_path)
+        xattr.setxattr(
+            chunkpath, 'user.' + chunk_xattr_keys['content_version'],
+            self.content_version)
+        xattr.setxattr(
+            chunkpath, 'user.' + chunk_xattr_keys['content_id'],
+            self.content_id)
+        xattr.removexattr(
+            chunkpath, 'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + chunkid)
+
+        resp2, data2 = self._http_request(chunkurl, 'GET', '', {})
+        self.assertEqual(200, resp2.status)
+        headers2 = dict(resp2.getheaders())
+        with open(chunkpath, 'r') as fd:
+            meta2 = read_chunk_metadata(fd, chunkid)
+
+        self.assertEqual(data1, data2)
+        del headers1[CHUNK_HEADERS['full_path']]
+        self.assertDictEqual(headers1, headers2)
+        del meta1['full_path']
+        self.assertDictEqual(meta1, meta2)
+
+        # Copy old chunk
+        copyid = self.chunkid()
+        copyid = chunkid[:-60] + copyid[-60:]
+        copyurl = self._rawx_url(copyid)
+        copypath = self._chunk_path(copyid)
+        copycontentid = random_id(32)
+        copyheaders = {}
+        copyheaders["Destination"] = copyurl
+        copyheaders['x-oio-chunk-meta-full-path'] = encode_fullpath(
+            "account-snapshot", "container-snapshot",
+            self.content_path+"-snapshot", 1456938361143741, copycontentid)
+        resp, _ = self._http_request(chunkurl, 'COPY', '', copyheaders)
+        self.assertEqual(201, resp.status)
+
+        resp2, data2 = self._http_request(chunkurl, 'GET', '', {})
+        self.assertEqual(200, resp2.status)
+        headers2 = dict(resp2.getheaders())
+        with open(chunkpath, 'r') as fd:
+            meta2 = read_chunk_metadata(fd, chunkid)
+
+        self.assertEqual(1, len(meta2['links']))
+        self.assertEqual(copyheaders['x-oio-chunk-meta-full-path'],
+                         meta2['links'][copyid])
+        meta2['links'] = dict()
+
+        self.assertEqual(data1, data2)
+        self.assertDictEqual(headers1, headers2)
+        self.assertDictEqual(meta1, meta2)
+
+        resp3, data3 = self._http_request(copyurl, 'GET', '', {})
+        self.assertEqual(200, resp3.status)
+        headers3 = dict(resp3.getheaders())
+        with open(copypath, 'r') as fd:
+            meta3 = read_chunk_metadata(fd, copyid)
+
+        self.assertEqual(
+            copyheaders['x-oio-chunk-meta-full-path'],
+            headers3['x-oio-chunk-meta-full-path'])
+        del headers3['x-oio-chunk-meta-full-path']
+        self.assertEqual(
+            cid_from_name("account-snapshot", "container-snapshot"),
+            headers3['x-oio-chunk-meta-container-id'])
+        del headers1['x-oio-chunk-meta-container-id']
+        del headers3['x-oio-chunk-meta-container-id']
+        self.assertEqual(
+            self.content_path+"-snapshot",
+            unquote(headers3['x-oio-chunk-meta-content-path']))
+        del headers1['x-oio-chunk-meta-content-path']
+        del headers3['x-oio-chunk-meta-content-path']
+        self.assertEqual(
+            '1456938361143741',
+            headers3['x-oio-chunk-meta-content-version'])
+        del headers1['x-oio-chunk-meta-content-version']
+        del headers3['x-oio-chunk-meta-content-version']
+        self.assertEqual(
+            copycontentid, headers3['x-oio-chunk-meta-content-id'])
+        del headers1['x-oio-chunk-meta-content-id']
+        del headers3['x-oio-chunk-meta-content-id']
+        self.assertEqual(copyid, headers3['x-oio-chunk-meta-chunk-id'])
+        del headers1['x-oio-chunk-meta-chunk-id']
+        del headers3['x-oio-chunk-meta-chunk-id']
+
+        self.assertEqual(
+            copyheaders['x-oio-chunk-meta-full-path'], meta3['full_path'])
+        del meta3['full_path']
+        self.assertEqual(
+            cid_from_name("account-snapshot", "container-snapshot"),
+            meta3['container_id'])
+        del meta1['container_id']
+        del meta3['container_id']
+        self.assertEqual(self.content_path+"-snapshot", meta3['content_path'])
+        del meta1['content_path']
+        del meta3['content_path']
+        self.assertEqual('1456938361143741', meta3['content_version'])
+        del meta1['content_version']
+        del meta3['content_version']
+        self.assertEqual(copycontentid, meta3['content_id'])
+        del meta1['content_id']
+        del meta3['content_id']
+        self.assertEqual(copyid, meta3['chunk_id'])
+        del meta1['chunk_id']
+        del meta3['chunk_id']
+        # FIXME the old chunk is invisible
+        self.assertEqual(0, len(meta3['links']))
+
+        self.assertEqual(data1, data3)
+        self.assertDictEqual(headers1, headers3)
+        self.assertDictEqual(meta1, meta3)

@@ -170,19 +170,6 @@ set_chunk_compressed_size_in_attr(const char *p, GError ** error, guint32 v)
 
 /* -------------------------------------------------------------------------- */
 
-static gchar *
-_pack_content_fullpath(struct chunk_textinfo_s *chunk)
-{
-	// account and container are unknown
-	GString *gs = g_string_new("//");
-	g_string_append_uri_escaped(gs, chunk->content_path, NULL, TRUE);
-	g_string_append_c(gs, '/');
-	g_string_append_uri_escaped(gs, chunk->content_version, NULL, TRUE);
-	g_string_append_c(gs, '/');
-	g_string_append_uri_escaped(gs, chunk->content_id, NULL, TRUE);
-	return g_string_free(gs, FALSE);
-}
-
 static gboolean
 _get (int fd, const char *k, gchar **pv)
 {
@@ -271,7 +258,6 @@ get_rawx_info_from_fd(int fd, GError **error, gchar *hex_chunkid,
 		GET(ATTR_NAME_CONTENT_PATH,      chunk->content_path);
 		GET(ATTR_NAME_CONTENT_VERSION,   chunk->content_version);
 		GET(ATTR_NAME_CONTENT_ID,        chunk->content_id);
-		chunk->content_fullpath = _pack_content_fullpath(chunk);
 	}
 
 	GET(ATTR_NAME_CONTENT_SIZE,    chunk->content_size);
