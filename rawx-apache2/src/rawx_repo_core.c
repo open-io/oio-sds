@@ -397,7 +397,7 @@ check_chunk_content_fullpath(apr_pool_t *pool,
 		chunk->content_path = apr_pstrdup(pool, path);
 	}
 	version = g_uri_unescape_string(fullpath[3], NULL);
-	if (!version || !version[0] || !oio_str_isdigit(version)) {
+	if (!version || !oio_str_isdigit(version)) {
 		success = FALSE;
 		goto end_check_chunk_content_fullpath;
 	}
