@@ -245,7 +245,7 @@ Used by `gcc`
 
 > The version of the sds. It's used to know the expected metadata of a chunk
 
- * default: **4.0**
+ * default: **4.2**
  * type: string
  * cmake directive: *OIO_CORE_SDS_VERSION*
 
