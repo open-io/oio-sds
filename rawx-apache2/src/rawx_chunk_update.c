@@ -173,8 +173,8 @@ Example
    X-oio-chunk-meta-chunk-size: 100
    X-oio-chunk-meta-chunk-hash: 527EC56D67EF8DA68E3FB93158552272
    X-oio-chunk-meta-chunk-pos: 0.3
-   X-oio-chunk-meta-oio-version: 4.0
-   X-oio-chunk-meta-full-path: ACCT/JFS/magic/1511281109448048
+   X-oio-chunk-meta-oio-version: 4.2
+   X-oio-chunk-meta-full-path: ACCT/JFS/magic/1511281109448048/5835AF8D805E0500AAB7F6808F50900A
 
 
 

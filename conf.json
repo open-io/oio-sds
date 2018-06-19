@@ -918,7 +918,7 @@
 			{ "type": "string", "name": "oio_sds_client_version",
 				"key": "core.sds.version",
 				"limit": 64,
-				"def": "4.0",
+				"def": "4.2",
 				"descr": "The version of the sds. It's used to know the expected metadata of a chunk" },
 
 			{ "type": "bool", "name": "oio_sds_client_patch_metachunk_size",

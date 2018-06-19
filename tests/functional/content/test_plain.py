@@ -110,7 +110,7 @@ class TestPlainContent(BaseTestCase):
                     self.account, self.container_name, self.content,
                     meta['content_version'], meta['content_id'])
                 self.assertEqual(meta['full_path'], full_path)
-                self.assertEqual(meta['oio_version'], '4.0')
+                self.assertEqual(meta['oio_version'], '4.2')
 
     def test_twocopies_create_0_byte(self):
         self._test_create(self.stgpol_twocopies, 0)
