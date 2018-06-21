@@ -75,7 +75,11 @@ class PlainContent(Content):
         uploaded = False
         for src in duplicate_chunks:
             try:
-                self.blob_client.chunk_copy(src.url, spare_urls[0])
+                self.blob_client.chunk_copy(
+                    src.url, spare_urls[0], chunk_id=chunk_id,
+                    fullpath=self.full_path, cid=self.container_id,
+                    path=self.path, version=self.version,
+                    content_id=self.content_id)
                 self.logger.debug('Chunk copied from %s to %s, registering it',
                                   src.url, spare_urls[0])
                 uploaded = True

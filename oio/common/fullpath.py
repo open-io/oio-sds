@@ -24,7 +24,7 @@ def encode_fullpath(account, container, path, version, content_id):
                                         quote(container, ''),
                                         quote(path, ''),
                                         quote(str(version), ''),
-                                        quote(content_id), '')
+                                        quote(content_id, ''))
 
 
 def decode_fullpath(fullpath):

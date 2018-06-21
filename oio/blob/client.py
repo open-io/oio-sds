@@ -23,7 +23,7 @@ from oio.common.http_urllib3 import get_pool_manager, \
     oio_exception_from_httperror, urllib3
 from oio.common import exceptions as exc, utils
 from oio.common.constants import CHUNK_HEADERS, chunk_xattr_keys_optional, \
-        HEADER_PREFIX
+        HEADER_PREFIX, OIO_VERSION
 from oio.common.decorators import ensure_headers, ensure_request_id
 from oio.api.io import ChunkReader
 from oio.api.replication import ReplicatedMetachunkWriter, FakeChecksum
@@ -170,15 +170,21 @@ class BlobClient(object):
     @update_rawx_perfdata
     @ensure_headers
     @ensure_request_id
-    def chunk_copy(self, from_url, to_url, **kwargs):
+    def chunk_copy(self, from_url, to_url, chunk_id=None, fullpath=None,
+                   cid=None, path=None, version=None, content_id=None,
+                   **kwargs):
         stream = None
         try:
             meta, stream = self.chunk_get(from_url, **kwargs)
-            meta['chunk_id'] = to_url.split('/')[-1]
+            meta['oio_version'] = OIO_VERSION
+            meta['chunk_id'] = chunk_id or to_url.split('/')[-1]
+            meta['full_path'] = fullpath or meta['full_path']
+            meta['container_id'] = cid or meta['container_id']
+            meta['content_path'] = path or meta['content_path']
             # FIXME: the original keys are the good ones.
             # ReplicatedMetachunkWriter should be modified to accept them.
-            meta['id'] = meta['content_id']
-            meta['version'] = meta['content_version']
+            meta['version'] = version or meta['content_version']
+            meta['id'] = content_id or meta['content_id']
             meta['chunk_method'] = meta['content_chunkmethod']
             meta['policy'] = meta['content_policy']
             copy_meta = self.chunk_put(to_url, meta, stream, **kwargs)

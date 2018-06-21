@@ -117,11 +117,7 @@ def headers_from_object_metadata(metadata):
         if val is not None:
             headers[CHUNK_HEADERS[key]] = str(metadata[key])
 
-    full_path = metadata['full_path']
-    if isinstance(full_path, basestring):
-        headers[CHUNK_HEADERS['full_path']] = full_path
-    else:
-        headers[CHUNK_HEADERS['full_path']] = ','.join(full_path)
+    headers[CHUNK_HEADERS['full_path']] = metadata['full_path']
     return headers
 
 

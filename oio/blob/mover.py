@@ -39,6 +39,7 @@ class BlobMoverWorker(object):
         self.conf = conf
         self.logger = logger or get_logger(conf)
         self.volume = volume
+        self.namespace, self.address = check_volume(self.volume)
         self.run_time = 0
         self.passes = 0
         self.errors = 0
@@ -65,8 +66,6 @@ class BlobMoverWorker(object):
         self.content_factory = ContentFactory(conf)
 
     def mover_pass(self):
-        self.namespace, self.address = check_volume(self.volume)
-
         start_time = report_time = time.time()
 
         total_errors = 0

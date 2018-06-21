@@ -175,7 +175,10 @@ class Content(object):
 
         self.logger.debug("copy chunk from %s to %s",
                           current_chunk.url, spare_urls[0])
-        self.blob_client.chunk_copy(current_chunk.url, spare_urls[0])
+        self.blob_client.chunk_copy(
+            current_chunk.url, spare_urls[0], chunk_id=chunk_id,
+            fullpath=self.full_path, cid=self.container_id,
+            path=self.path, version=self.version, content_id=self.content_id)
 
         self._update_spare_chunk(current_chunk, spare_urls[0])
 
