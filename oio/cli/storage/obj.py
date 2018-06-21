@@ -501,20 +501,24 @@ class ListObject(ContainerCommandMixin, lister.Lister):
         return parser
 
     def _list_loop(self, account, container, **kwargs):
-        resp = self.app.client_manager.storage.object_list(
-            account, container, **kwargs)
-        listing = resp['objects']
-        for element in listing:
-            yield element
-
-        while resp['truncated']:
-            kwargs['marker'] = resp.get('next_marker')
+        try:
             resp = self.app.client_manager.storage.object_list(
                 account, container, **kwargs)
             listing = resp['objects']
-            if listing:
-                for element in listing:
-                    yield element
+            for element in listing:
+                yield element
+
+            while resp['truncated']:
+                kwargs['marker'] = resp.get('next_marker')
+                resp = self.app.client_manager.storage.object_list(
+                    account, container, **kwargs)
+                listing = resp['objects']
+                if listing:
+                    for element in listing:
+                        yield element
+        except OioException as exc:
+            self.log.warn('Failed to list objects from %s: %s', container, exc)
+            return
 
     # TODO: make a decorator with this loop pattern
     def _container_provider(self, account, **kwargs):
