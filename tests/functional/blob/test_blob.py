@@ -24,13 +24,12 @@ from urlparse import urlparse
 from urllib import unquote
 from oio.common.http import headers_from_object_metadata
 from oio.common.http_eventlet import http_connect
-from oio.common.constants import OIO_VERSION, CHUNK_HEADERS, \
-    chunk_xattr_keys, CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
+from oio.common.constants import OIO_VERSION, CHUNK_HEADERS
 from oio.common.fullpath import encode_fullpath
 from oio.common.utils import cid_from_name
-from oio.common.xattr import xattr
 from oio.blob.utils import read_chunk_metadata
 from tests.utils import random_id
+from tests.functional.blob import convert_to_old_chunk
 
 from tests.utils import BaseTestCase
 
@@ -675,22 +674,9 @@ class TestBlobFunctional(BaseTestCase):
         with open(chunkpath, 'r') as fd:
             meta1 = read_chunk_metadata(fd, chunkid)
 
-        # Old chunk
-        xattr.setxattr(
-            chunkpath, 'user.' + chunk_xattr_keys['chunk_id'], chunkid)
-        xattr.setxattr(
-            chunkpath, 'user.' + chunk_xattr_keys['container_id'], self.cid)
-        xattr.setxattr(
-            chunkpath, 'user.' + chunk_xattr_keys['content_path'],
-            self.content_path)
-        xattr.setxattr(
-            chunkpath, 'user.' + chunk_xattr_keys['content_version'],
-            self.content_version)
-        xattr.setxattr(
-            chunkpath, 'user.' + chunk_xattr_keys['content_id'],
+        convert_to_old_chunk(
+            chunkpath, self.cid, self.content_path, self.content_version,
             self.content_id)
-        xattr.removexattr(
-            chunkpath, 'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + chunkid)
 
         resp2, data2 = self._http_request(chunkurl, 'GET', '', {})
         self.assertEqual(200, resp2.status)
@@ -700,8 +686,12 @@ class TestBlobFunctional(BaseTestCase):
 
         self.assertEqual(data1, data2)
         del headers1[CHUNK_HEADERS['full_path']]
+        del headers1[CHUNK_HEADERS['oio_version']]
+        del headers2[CHUNK_HEADERS['oio_version']]
         self.assertDictEqual(headers1, headers2)
         del meta1['full_path']
+        del meta1['oio_version']
+        del meta2['oio_version']
         self.assertDictEqual(meta1, meta2)
 
         # Copy old chunk
@@ -730,7 +720,9 @@ class TestBlobFunctional(BaseTestCase):
         meta2['links'] = dict()
 
         self.assertEqual(data1, data2)
+        del headers2[CHUNK_HEADERS['oio_version']]
         self.assertDictEqual(headers1, headers2)
+        del meta2['oio_version']
         self.assertDictEqual(meta1, meta2)
 
         resp3, data3 = self._http_request(copyurl, 'GET', '', {})
@@ -790,5 +782,7 @@ class TestBlobFunctional(BaseTestCase):
         self.assertEqual(0, len(meta3['links']))
 
         self.assertEqual(data1, data3)
+        del headers3[CHUNK_HEADERS['oio_version']]
         self.assertDictEqual(headers1, headers3)
+        del meta3['oio_version']
         self.assertDictEqual(meta1, meta3)
