@@ -819,7 +819,6 @@ static GError *
 _max (struct req_args_s *args, gint64 *pmax)
 {
 	const char *s = OPT("max");
-	*pmax = 0;
 	if (!s)
 		return NULL;
 
@@ -1463,6 +1462,9 @@ enum http_rc_e action_container_list (struct req_args_s *args) {
 	list_in.prefix = OPT("prefix");
 	list_in.marker_start = OPT("marker");
 	list_in.marker_end = OPT("end_marker");
+	/* This is the default when no limit is passed in the request.
+	 * The client can still pass a larger limit. */
+	list_in.maxkeys = 1000;
 	if (!list_in.marker_end)
 		list_in.marker_end = OPT("marker_end");  // backward compatibility
 	if (OPT("deleted"))
