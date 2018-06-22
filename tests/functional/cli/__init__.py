@@ -1,4 +1,4 @@
-# Copyright (C) 2016-2017 OpenIO SAS
+# Copyright (C) 2016-2018 OpenIO SAS
 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -33,15 +33,16 @@ class CommandFailed(Exception):
                                  self.stderr))
 
 
-def execute(cmd):
+def execute(cmd, stdin=None):
     """Executes command."""
     cmdlist = shlex.split(cmd)
     result = ''
     result_err = ''
     stdout = subprocess.PIPE
     stderr = subprocess.PIPE
-    proc = subprocess.Popen(cmdlist, stdout=stdout, stderr=stderr)
-    result, result_err = proc.communicate()
+    in_ = subprocess.PIPE if stdin else None
+    proc = subprocess.Popen(cmdlist, stdin=in_, stdout=stdout, stderr=stderr)
+    result, result_err = proc.communicate(stdin)
     result = result.decode('utf-8')
     if proc.returncode != 0:
         raise CommandFailed(proc.returncode, cmd, result, result_err)
@@ -53,6 +54,11 @@ class CliTestCase(BaseTestCase):
     def openio(cls, cmd):
         """Executes openio CLI command."""
         return execute('openio ' + cmd)
+
+    @classmethod
+    def openio_batch(cls, commands):
+        """Execute several commands in the same openio CLI process."""
+        return execute('openio', stdin='\n'.join(commands))
 
     @classmethod
     def get_opts(cls, fields, format='value'):
