@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,7 +18,7 @@ import sys
 import time
 from oio.api.base import HttpApi
 from oio.common.utils import get_logger
-from oio.common.exceptions import ClientException, OioNetworkException
+from oio.common.exceptions import OioException, OioNetworkException
 from oio.conscience.client import ConscienceClient
 
 
@@ -47,11 +47,8 @@ class AccountClient(HttpApi):
 
     def _get_account_addr(self):
         """Fetch IP and port of an account service from Conscience."""
-        try:
-            acct_instance = self.cs.next_instance('account')
-            acct_addr = acct_instance.get('addr')
-        except Exception:
-            raise ClientException("No Account service found")
+        acct_instance = self.cs.next_instance('account')
+        acct_addr = acct_instance.get('addr')
         return acct_addr
 
     def _refresh_endpoint(self, now=None):
@@ -75,7 +72,7 @@ class AccountClient(HttpApi):
                         raise
                     self.logger.warn(
                             "Failed to refresh account endpoint: %s", exc)
-                except ClientException:
+                except OioException:
                     if not self.endpoint:
                         # Cannot use the previous one
                         raise
