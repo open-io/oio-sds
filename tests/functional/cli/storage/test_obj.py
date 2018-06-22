@@ -196,3 +196,47 @@ class ObjTest(CliTestCase):
                           self.openio,
                           ' '.join(['object drain', cname,
                                     'should not exist']))
+
+    def test_autocontainer_object_listing(self):
+        obj_count = 7
+        with tempfile.NamedTemporaryFile() as myfile:
+            myfile.write('something')
+            myfile.flush()
+            prefix = random_str(8)
+            # TODO(FVE): find a quicker way to upload several objects
+            commands = list()
+            for i in range(obj_count):
+                obj_name = '%s_%d' % (prefix, i)
+                commands.append(' '.join(['object create --auto ',
+                                          myfile.name, '--name ', obj_name]))
+            self.openio_batch(commands)
+
+        # Default listing
+        opts = self.get_opts([], 'json')
+        output = self.openio('object list --auto --prefix ' +
+                             prefix + ' ' + opts)
+        listing = self.json_loads(output)
+        self.assertEqual(obj_count, len(listing))
+        for obj in listing:
+            # 4 columns
+            self.assertEqual(4, len(obj))
+
+        # Listing with properties
+        opts = self.get_opts([], 'json')
+        output = self.openio('object list --auto --properties --prefix ' +
+                             prefix + ' ' + opts)
+        listing = self.json_loads(output)
+        self.assertEqual(obj_count, len(listing))
+        for obj in listing:
+            # 9 columns
+            self.assertEqual(9, len(obj))
+
+        # Unpaged listing
+        opts = self.get_opts([], 'json')
+        output = self.openio('object list --auto --no-paging --prefix ' +
+                             prefix + ' ' + opts)
+        listing = self.json_loads(output)
+        self.assertEqual(obj_count, len(listing))
+        for obj in listing:
+            # 4 columns
+            self.assertEqual(4, len(obj))

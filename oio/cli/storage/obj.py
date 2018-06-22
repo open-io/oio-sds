@@ -566,12 +566,12 @@ class ListObject(ContainerCommandMixin, lister.Lister):
                     return
 
     def _list_autocontainer_objects(self, container, **kwargs):
+        object_list = []
         if not self.autocontainer.verify(container):
             self.log.debug("Container %s is not an autocontainer",
                            container)
-            return
+            return object_list
         self.log.debug("Listing autocontainer %s", container)
-        object_list = []
         for i in self._list_loop(self.account, container, **kwargs):
             object_list.append(i)
         return object_list
