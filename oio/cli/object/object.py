@@ -163,8 +163,9 @@ class CreateObject(ContainerCommandMixin, lister.Lister):
                 results.append((name, 0, None, 'Interrupted'))
                 any_error = True
                 break
-            except Exception:
-                self.log.exception("Failed to upload %s in %s", obj, container)
+            except Exception as exc:
+                self.log.error('Failed to upload %s in %s: %s',
+                               obj, container, exc)
                 any_error = True
                 results.append((name, 0, None, 'Failed'))
 
@@ -313,14 +314,12 @@ class ShowObject(ObjectCommandMixin, show.ShowOne):
             version=parsed_args.object_version)
         info = {'account': account,
                 'container': container,
-                'object': obj,
-                'id': data['id'],
-                'version': data['version'],
-                'mime-type': data['mime_type'],
-                'size': data['length'],
-                'hash': data['hash'],
-                'ctime': data['ctime'],
-                'policy': data['policy']}
+                'object': obj}
+        conv = {'id': 'id', 'version': 'version', 'mime-type': 'mime_type',
+                'size': 'length', 'hash': 'hash', 'ctime': 'ctime',
+                'policy': 'policy'}
+        for key0, key1 in conv.items():
+            info[key0] = data.get(key1, 'n/a')
         for k, v in data['properties'].iteritems():
             info['meta.' + k] = v
         return zip(*sorted(info.iteritems()))
@@ -536,12 +535,12 @@ class ListObject(ContainerCommandMixin, lister.Lister):
                     return
 
     def _list_autocontainer_objects(self, container, account, **kwargs):
+        object_list = []
         if not self.flatns_manager.verify(container):
             self.log.debug("Container %s is not an autocontainer",
                            container)
-            return list()
+            return object_list
         self.log.debug("Listing autocontainer %s", container)
-        object_list = []
         for i in depaginate(
                 self.app.client_manager.storage.object_list,
                 listing_key=lambda x: x['objects'],
@@ -593,6 +592,10 @@ class ListObject(ContainerCommandMixin, lister.Lister):
                 resp = self.app.client_manager.storage.object_list(
                     account, container, **kwargs)
                 obj_gen = resp['objects']
+                if resp.get('truncated'):
+                    self.log.info(
+                        'Object listing has been truncated, next marker: %s',
+                        resp.get('next_marker'))
 
         if parsed_args.long_listing:
             from oio.common.timestamp import Timestamp
@@ -610,23 +613,33 @@ class ListObject(ContainerCommandMixin, lister.Lister):
 
             def _gen_results(objects):
                 for obj in objects:
-                    result = (obj['name'], obj['size'],
-                              obj['hash'], obj['version'],
-                              obj['deleted'], obj['mime_type'],
-                              Timestamp(obj['ctime']).isoformat,
-                              obj['policy'],
-                              _format_props(obj.get('properties', {})))
-                    yield result
-            results = _gen_results(obj_gen)
+                    try:
+                        result = (obj['name'], obj['size'],
+                                  obj['hash'], obj['version'],
+                                  obj['deleted'], obj['mime_type'],
+                                  Timestamp(obj['ctime']).isoformat,
+                                  obj['policy'],
+                                  _format_props(obj.get('properties', {})))
+                        yield result
+                    except KeyError as exc:
+                        self.log.warn("Bad object entry, missing '%s': %s",
+                                      exc, obj)
             columns = ('Name', 'Size', 'Hash', 'Version', 'Deleted',
                        'Content-Type', 'Last-Modified', 'Policy', 'Properties')
         else:
-            results = ((obj['name'],
-                        obj['size'] if not obj['deleted'] else 'deleted',
-                        obj['hash'],
-                        obj['version'])
-                       for obj in obj_gen)
+            def _gen_results(objects):
+                for obj in objects:
+                    try:
+                        yield (
+                            obj['name'],
+                            obj['size'] if not obj['deleted'] else 'deleted',
+                            obj['hash'],
+                            obj['version'])
+                    except KeyError as exc:
+                        self.log.warn("Bad object entry, missing '%s': %s",
+                                      exc, obj)
             columns = ('Name', 'Size', 'Hash', 'Version')
+        results = _gen_results(obj_gen)
         return (columns, results)
 
 

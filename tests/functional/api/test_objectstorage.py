@@ -283,12 +283,12 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         while True:
             try:
                 for service in cluster.all_services("account"):
-                    if int(service['score']) < 70:
+                    if int(service['score']) < 7:
                         wait = True
                         continue
                 if not wait:
                     for service in cluster.all_services("meta2"):
-                        if int(service['score']) < 70:
+                        if int(service['score']) < 7:
                             wait = True
                             continue
                     if not wait:
@@ -626,10 +626,10 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
         self.api.container_create(account, name)
         ref_time = time.time()
-        time.sleep(0.5)  # ensure container event have been processed
+        time.sleep(1)  # ensure container event have been processed
         # container_refresh on existing container
         self.api.container_refresh(account, name)
-        time.sleep(0.5)  # ensure container event have been processed
+        time.sleep(1)  # ensure container event have been processed
         res = self.api.container_list(account, prefix=name)
         name_container, nb_objects, nb_bytes, _, mtime = res[0]
         self.assertEqual(name, name_container)
@@ -639,10 +639,10 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
         ref_time = mtime
         self.api.object_create(account, name, data="data", obj_name=name)
-        time.sleep(0.5)  # ensure container event have been processed
+        time.sleep(1)  # ensure container event have been processed
         # container_refresh on existing container with data
         self.api.container_refresh(account, name)
-        time.sleep(0.5)  # ensure container event have been processed
+        time.sleep(1)  # ensure container event have been processed
         res = self.api.container_list(account, prefix=name)
         name_container, nb_objects, nb_bytes, _, mtime = res[0]
         self.assertEqual(name, name_container)
@@ -651,9 +651,9 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertGreater(mtime, ref_time)
 
         self.api.object_delete(account, name, name)
-        time.sleep(0.5)  # ensure container event have been processed
+        time.sleep(1)  # ensure container event have been processed
         self.api.container_delete(account, name)
-        time.sleep(0.5)  # ensure container event have been processed
+        time.sleep(1)  # ensure container event have been processed
         # container_refresh on deleted container
         self.assertRaises(
             exc.NoSuchContainer, self.api.container_refresh, account, name)
