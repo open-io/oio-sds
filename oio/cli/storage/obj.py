@@ -613,6 +613,10 @@ class ListObject(ContainerCommandMixin, lister.Lister):
                 resp = self.app.client_manager.storage.object_list(
                     account, container, **kwargs)
                 obj_gen = resp['objects']
+                if resp.get('truncated'):
+                    self.log.info(
+                        'Object listing has been truncated, next marker: %s',
+                        resp.get('next_marker'))
 
         if parsed_args.long_listing:
             from oio.common.utils import Timestamp
