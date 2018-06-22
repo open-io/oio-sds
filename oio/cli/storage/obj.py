@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -165,8 +165,9 @@ class CreateObject(ContainerCommandMixin, lister.Lister):
                 results.append((name, 0, None, 'Interrupted'))
                 any_error = True
                 break
-            except Exception:
-                self.log.exception("Failed to upload %s in %s", obj, container)
+            except OioException as exc:
+                self.log.error('Failed to upload %s in %s: %s',
+                               obj, container, exc)
                 any_error = True
                 results.append((name, 0, None, 'Failed'))
 
