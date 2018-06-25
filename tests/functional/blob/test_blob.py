@@ -16,7 +16,6 @@
 # License along with this library.
 
 import string
-import random
 import os
 import os.path
 from hashlib import md5
@@ -29,25 +28,14 @@ from oio.common.fullpath import encode_fullpath
 from oio.common.utils import cid_from_name
 from oio.blob.utils import read_chunk_metadata
 from tests.utils import random_id
-from tests.functional.blob import convert_to_old_chunk
+from tests.functional.blob import convert_to_old_chunk, random_buffer, \
+    random_chunk_id
 
 from tests.utils import BaseTestCase
 
 
-def random_buffer(dictionary, n):
-    slot = 512
-    pattern = ''.join(random.choice(dictionary) for _ in range(slot))
-    t = []
-    while len(t) * slot < n:
-        t.append(pattern)
-    return ''.join(t)[:n]
-
-
 # TODO we should the content of events sent by the rawx
 class TestBlobFunctional(BaseTestCase):
-
-    def chunkid(self):
-        return random_buffer('0123456789ABCDEF', 64)
 
     def _chunk_attr(self, chunk_id, data, path=None):
         if path is not None:
@@ -125,7 +113,7 @@ class TestBlobFunctional(BaseTestCase):
 
     def test_copy_errors(self):
         length = 100
-        chunkid = self.chunkid()
+        chunkid = random_chunk_id()
         chunkdata = random_buffer(string.printable, length)
         chunkurl = self._rawx_url(chunkid)
         self._check_not_present(chunkurl)
@@ -141,7 +129,7 @@ class TestBlobFunctional(BaseTestCase):
                                         trailers)
         expected = 201
         self.assertEqual(expected, resp.status)
-        copyid = self.chunkid()
+        copyid = random_chunk_id()
         copyid = chunkid[:-60] + copyid[-60:]
         copyurl = self._rawx_url(copyid)
         headers = {}
@@ -165,7 +153,7 @@ class TestBlobFunctional(BaseTestCase):
                    old_fullpath=False):
         if path:
             self.path = path
-        chunkid = self.chunkid()
+        chunkid = random_chunk_id()
         chunkdata = random_buffer(string.printable, length)
         chunkurl = self._rawx_url(chunkid)
         chunkpath = self._chunk_path(chunkid)
@@ -306,7 +294,7 @@ class TestBlobFunctional(BaseTestCase):
         self.assertEqual(404, resp.status)
 
     def _check_bad_headers(self, length, bad_headers=None, bad_trailers=None):
-        chunkid = self.chunkid()
+        chunkid = random_chunk_id()
         chunkdata = random_buffer(string.printable, length)
         chunkurl = self._rawx_url(chunkid)
         headers = self._chunk_attr(chunkid, chunkdata)
@@ -349,7 +337,7 @@ class TestBlobFunctional(BaseTestCase):
     def _cycle_copy(self, path):
         if path:
             self.path = path
-        chunkid = self.chunkid()
+        chunkid = random_chunk_id()
         chunkdata = random_buffer(string.printable, 1)
         chunkurl = self._rawx_url(chunkid)
         chunkpath = self._chunk_path(chunkid)
@@ -363,7 +351,7 @@ class TestBlobFunctional(BaseTestCase):
                                      trailers)
         self.assertEqual(201, resp.status)
 
-        copyid = self.chunkid()
+        copyid = random_chunk_id()
         copyid = chunkid[:-60] + copyid[-60:]
         copyurl = self._rawx_url(copyid)
         copypath = self._chunk_path(copyid)
@@ -448,7 +436,7 @@ class TestBlobFunctional(BaseTestCase):
         trailers = {'x-oio-chunk-meta-metachunk-size': 1,
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
 
-        chunkid1 = self.chunkid()
+        chunkid1 = random_chunk_id()
         chunkdata1 = random_buffer(string.printable, 1)
         chunkurl1 = self._rawx_url(chunkid1)
         headers1 = self._chunk_attr(chunkid1, chunkdata1)
@@ -470,7 +458,7 @@ class TestBlobFunctional(BaseTestCase):
         trailers = {'x-oio-chunk-meta-metachunk-size': 1,
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
 
-        chunkid1 = self.chunkid()
+        chunkid1 = random_chunk_id()
         chunkdata1 = random_buffer(string.printable, 1)
         chunkurl1 = self._rawx_url(chunkid1)
         headers1 = self._chunk_attr(chunkid1, chunkdata1)
@@ -479,7 +467,7 @@ class TestBlobFunctional(BaseTestCase):
                                      trailers)
         self.assertEqual(201, resp.status)
 
-        chunkid2 = self.chunkid()
+        chunkid2 = random_chunk_id()
         chunkdata2 = random_buffer(string.printable, 1)
         chunkurl2 = self._rawx_url(chunkid2)
         headers2 = self._chunk_attr(chunkid2, chunkdata2)
@@ -501,10 +489,10 @@ class TestBlobFunctional(BaseTestCase):
         trailers = {'x-oio-chunk-meta-metachunk-size': 1,
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
 
-        chunkid1 = self.chunkid()
+        chunkid1 = random_chunk_id()
         chunkurl1 = self._rawx_url(chunkid1)
 
-        chunkid2 = self.chunkid()
+        chunkid2 = random_chunk_id()
         chunkdata2 = random_buffer(string.printable, 1)
         chunkurl2 = self._rawx_url(chunkid2)
         headers2 = self._chunk_attr(chunkid2, chunkdata2)
@@ -526,7 +514,7 @@ class TestBlobFunctional(BaseTestCase):
         trailers = {'x-oio-chunk-meta-metachunk-size': 1,
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
 
-        chunkid = self.chunkid()
+        chunkid = random_chunk_id()
         chunkdata = random_buffer(string.printable, 1)
         chunkurl = self._rawx_url(chunkid)
         hdrs = self._chunk_attr(chunkid, chunkdata)
@@ -657,7 +645,7 @@ class TestBlobFunctional(BaseTestCase):
         trailers = {'x-oio-chunk-meta-metachunk-size': 1,
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
 
-        chunkid = self.chunkid()
+        chunkid = random_chunk_id()
         chunkdata = random_buffer(string.printable, 1)
         chunkurl = self._rawx_url(chunkid)
         chunkpath = self._chunk_path(chunkid)
@@ -695,7 +683,7 @@ class TestBlobFunctional(BaseTestCase):
         self.assertDictEqual(meta1, meta2)
 
         # Copy old chunk
-        copyid = self.chunkid()
+        copyid = random_chunk_id()
         copyid = chunkid[:-60] + copyid[-60:]
         copyurl = self._rawx_url(copyid)
         copypath = self._chunk_path(copyid)
