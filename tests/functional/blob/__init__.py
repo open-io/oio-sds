@@ -14,6 +14,7 @@
 # License along with this library.
 
 import random
+import shutil
 
 from oio.common.constants import chunk_xattr_keys, \
     CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
@@ -22,21 +23,22 @@ from oio.common.xattr import xattr
 
 def convert_to_old_chunk(chunk_path, cid, path, version, content_id):
     chunk_id = chunk_path.rsplit('/', 1)[1]
-    xattr.setxattr(
-        chunk_path, 'user.' + chunk_xattr_keys['chunk_id'], chunk_id)
-    xattr.setxattr(
-        chunk_path, 'user.' + chunk_xattr_keys['container_id'], cid)
-    xattr.setxattr(
-        chunk_path, 'user.' + chunk_xattr_keys['content_path'], path)
-    xattr.setxattr(
-        chunk_path, 'user.' + chunk_xattr_keys['content_version'],
-        str(version))
-    xattr.setxattr(
-        chunk_path, 'user.' + chunk_xattr_keys['content_id'], content_id)
-    xattr.setxattr(
-        chunk_path, 'user.' + chunk_xattr_keys['oio_version'], '4.0')
-    xattr.removexattr(
-        chunk_path, 'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + chunk_id)
+    with open(chunk_path, 'r') as fd:
+        xattr.setxattr(
+            fd, 'user.' + chunk_xattr_keys['chunk_id'], chunk_id)
+        xattr.setxattr(
+            fd, 'user.' + chunk_xattr_keys['container_id'], cid)
+        xattr.setxattr(
+            fd, 'user.' + chunk_xattr_keys['content_path'], path)
+        xattr.setxattr(
+            fd, 'user.' + chunk_xattr_keys['content_version'],
+            str(version))
+        xattr.setxattr(
+            fd, 'user.' + chunk_xattr_keys['content_id'], content_id)
+        xattr.setxattr(
+            fd, 'user.' + chunk_xattr_keys['oio_version'], '4.0')
+        xattr.removexattr(
+            fd, 'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + chunk_id)
 
 
 def random_buffer(dictionary, n):
@@ -50,3 +52,11 @@ def random_buffer(dictionary, n):
 
 def random_chunk_id():
     return random_buffer('0123456789ABCDEF', 64)
+
+
+def copy_chunk(src, dst):
+    shutil.copyfile(src, dst)
+    all_xattrs = xattr.get_all(src)
+    with open(dst, 'r') as fd:
+        for k, v in all_xattrs:
+            xattr.setxattr(fd, k, v)
