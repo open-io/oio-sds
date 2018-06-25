@@ -1963,7 +1963,7 @@ _m2_content_delete_many (struct req_args_s *args, struct json_object * jbody) {
 		return _reply_format_error(args,
 				BADREQ("At least one element is needed"));
 
-	if (jarray_len > proxy_bulk_max_create_many)
+	if (jarray_len > proxy_bulk_max_delete_many)
 		return _reply_too_large(args, NEWERROR(HTTP_CODE_PAYLOAD_TO_LARGE,
 				"Payload Too Large"));
 
