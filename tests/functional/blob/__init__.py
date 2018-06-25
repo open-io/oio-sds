@@ -13,6 +13,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import random
+
 from oio.common.constants import chunk_xattr_keys, \
     CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
 from oio.common.xattr import xattr
@@ -27,10 +29,24 @@ def convert_to_old_chunk(chunk_path, cid, path, version, content_id):
     xattr.setxattr(
         chunk_path, 'user.' + chunk_xattr_keys['content_path'], path)
     xattr.setxattr(
-        chunk_path, 'user.' + chunk_xattr_keys['content_version'], version)
+        chunk_path, 'user.' + chunk_xattr_keys['content_version'],
+        str(version))
     xattr.setxattr(
         chunk_path, 'user.' + chunk_xattr_keys['content_id'], content_id)
     xattr.setxattr(
         chunk_path, 'user.' + chunk_xattr_keys['oio_version'], '4.0')
     xattr.removexattr(
         chunk_path, 'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + chunk_id)
+
+
+def random_buffer(dictionary, n):
+    slot = 512
+    pattern = ''.join(random.choice(dictionary) for _ in range(slot))
+    t = []
+    while len(t) * slot < n:
+        t.append(pattern)
+    return ''.join(t)[:n]
+
+
+def random_chunk_id():
+    return random_buffer('0123456789ABCDEF', 64)

@@ -34,7 +34,6 @@ class TestBlobMover(BaseTestCase):
         self.cid = cid_from_name(self.account, self.container)
         self.path = random_str(16)
         self.api = ObjectStorageApi(self.ns)
-        self.conf = {'namespace': self.ns}
         self.conscience = ConscienceClient(self.conf)
         self.blob_client = BlobClient(self.conf)
 

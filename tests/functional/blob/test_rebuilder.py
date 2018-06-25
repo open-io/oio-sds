@@ -35,7 +35,6 @@ class TestBlobRebuilder(BaseTestCase):
         self.cid = cid_from_name(self.account, self.container)
         self.path = random_str(16)
         self.api = ObjectStorageApi(self.ns)
-        self.conf = {'namespace': self.ns, 'allow_same_rawx': True}
         self.conscience = ConscienceClient(self.conf)
         self.blob_client = BlobClient(self.conf)
 
@@ -84,8 +83,9 @@ class TestBlobRebuilder(BaseTestCase):
         chunks_kept = list(self.chunks)
         chunks_kept.remove(chunk)
 
-        rebuilder = BlobRebuilderWorker(self.conf, None,
-                                        chunk_volume)
+        conf = self.conf.copy()
+        conf['allow_same_rawx'] = True
+        rebuilder = BlobRebuilderWorker(conf, None, chunk_volume)
         rebuilder.chunk_rebuild(self.cid, self.content_id, chunk_id)
 
         _, new_chunks = self.api.object_locate(
