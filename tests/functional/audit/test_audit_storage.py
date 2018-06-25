@@ -32,10 +32,11 @@ from oio.common.fullpath import encode_fullpath
 
 
 class TestContent(object):
-    def __init__(self, path, size, id_r, nb_chunks):
+    def __init__(self, path, size, cid, content_id, nb_chunks):
         self.path = path
         self.size = size
-        self.id_container = id_r
+        self.cid = cid
+        self.content_id = content_id
         self.nb_chunks = nb_chunks
 
 
@@ -70,20 +71,18 @@ class TestBlobAuditorFunctional(BaseTestCase):
 
         self.container_c.container_create(self.account, self.ref)
 
-        self.url_rand = random_id(64)
-
         self.data = random_str(1280)
         self.h.update(self.data)
         self.hash_rand = self.h.hexdigest().lower()
 
         self.content = TestContent(
-            random_str(6), len(self.data), self.url_rand, 1)
+            random_str(6), len(self.data),
+            cid_from_name(self.account, self.ref).upper(), random_id(32), 1)
         self.content_fullpath = encode_fullpath(
-            self.account, self.ref, self.content.path, 1, '0000')
+            self.account, self.ref, self.content.path, 1,
+            self.content.content_id)
 
-        self.content.id_container = cid_from_name(
-            self.account, self.ref).upper()
-        self.chunk = TestChunk(self.content.size, self.url_rand, 0,
+        self.chunk = TestChunk(self.content.size, random_id(64), 0,
                                self.hash_rand)
 
         self.chunk_url = "%s/%s" % (self.rawx, self.chunk.chunk_id)
@@ -92,10 +91,10 @@ class TestBlobAuditorFunctional(BaseTestCase):
                             "url":  self.chunk_url}
 
         chunk_meta = {'content_path': self.content.path,
-                      'container_id': self.content.id_container,
+                      'container_id': self.content.cid,
                       'chunk_method': 'plain/nb_copy=3',
                       'policy': 'TESTPOLICY',
-                      'id': '0000',
+                      'id': self.content.content_id,
                       'version': 1,
                       'chunk_id': self.chunk.chunk_id,
                       'chunk_pos': self.chunk.pos,
@@ -131,7 +130,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
         self.container_c.content_create(
             self.account, self.ref, self.content.path, self.chunk.size,
             self.hash_rand, data={'chunks': [self.chunk_proxy]},
-            content_id=random_id(32))
+            content_id=self.content.content_id)
 
     def test_chunk_audit(self):
         self.init_content()
