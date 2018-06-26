@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -247,7 +247,7 @@ def get_logger(
 
 def parse_options(parser=None):
     if parser is None:
-        parser = OptionParser(usage='%prog CONFIG [options]')
+        parser = OptionParser(usage='%prog CONFIGURATION_FILE [options]')
     parser.add_option('-v', '--verbose', default=False,
                       action='store_true', help='verbose output')
 
@@ -255,7 +255,7 @@ def parse_options(parser=None):
 
     if not args:
         parser.print_usage()
-        print("Error: missing argument config path")
+        print("Error: missing configuration file path")
         sys.exit(1)
     config = os.path.abspath(args.pop(0))
     if not os.path.exists(config):
