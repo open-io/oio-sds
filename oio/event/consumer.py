@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -27,8 +27,7 @@ from oio.common.exceptions import OioNetworkException, ClientException
 from oio.conscience.client import ConscienceClient
 from oio.rdir.client import RdirClient
 from oio.event.beanstalk import Beanstalk, ConnectionError
-from oio.common.utils import true_value, drop_privileges, \
-        json, int_value
+from oio.common.utils import drop_privileges, json, int_value
 from oio.event.evob import is_success, is_error
 from oio.event.loader import loadhandlers
 
@@ -147,14 +146,18 @@ class EventWorker(Worker):
         self.acct_refresh_interval = int_value(
             self.conf.get('acct_refresh_interval'), 60
         )
-        self.acct_update = true_value(self.conf.get('acct_update', True))
-        self.rdir_update = true_value(self.conf.get('rdir_update', True))
         self.app_env['acct_addr'] = self.acct_addr
         if 'handlers_conf' not in self.conf:
             raise ValueError("'handlers_conf' path not defined in conf")
         self.handlers = loadhandlers(self.conf.get('handlers_conf'),
                                      global_conf=self.conf,
                                      app=self)
+
+        for opt in ('acct_update', 'rdir_update',
+                    'retries_per_second', 'batch_size'):
+            if opt in self.conf:
+                self.logger.warn('Deprecated option: %s', opt)
+
         super(EventWorker, self).init()
 
     def notify(self):

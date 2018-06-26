@@ -18,13 +18,18 @@
 
 import eventlet.hubs
 from optparse import OptionParser
+from oio import __canonical_version__
 from oio.common.utils import parse_options
 from oio.common.green import get_hub
 from oio.event.agent import Runner
 from oio.event.consumer import EventWorker
 
 if __name__ == '__main__':
-    parser = OptionParser("%prog CONFIG [options]")
+    doc = """%%prog CONFIG [options]
+
+For a sample configuration file, see
+https://github.com/open-io/oio-sds/blob/%s/etc/event-agent.conf-sample"""
+    parser = OptionParser(doc % __canonical_version__)
     config, options = parse_options(parser)
     eventlet.hubs.use_hub(get_hub())
     Runner(config, EventWorker, **options).run()
