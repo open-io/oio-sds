@@ -48,6 +48,10 @@ function dump_syslog {
 function trap_exit {
 	set +e
 	#pip list
+	BEANSTALK=$(oio-test-config.py -t beanstalkd)
+	if [ ! -z "${BEANSTALK}" ]; then
+		oio-dump-buried-events.py ${BEANSTALK}
+	fi
 	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock status3
 	#dump_syslog
 	oio-gdb.py
