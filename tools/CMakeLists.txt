@@ -49,4 +49,5 @@ install(PROGRAMS
 			${CMAKE_CURRENT_BINARY_DIR}/oio-bootstrap.py
 			oio-test-config.py
 			oio-reset.sh
+			oio-dump-buried-events.py
         DESTINATION bin)
