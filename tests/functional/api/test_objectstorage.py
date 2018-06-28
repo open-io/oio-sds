@@ -283,12 +283,12 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         while True:
             try:
                 for service in cluster.all_services("account"):
-                    if int(service['score']) < 7:
+                    if int(service['score']) < 50:
                         wait = True
                         continue
                 if not wait:
                     for service in cluster.all_services("meta2"):
-                        if int(service['score']) < 7:
+                        if int(service['score']) < 50:
                             wait = True
                             continue
                     if not wait:
