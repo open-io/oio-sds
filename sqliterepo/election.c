@@ -3245,8 +3245,13 @@ _member_react_LISTING(struct election_member_s *member, enum event_type_e evt,
 			/* nominal flow */
 			if (member->local_id == *p_masterid) {
 				/* We are 1st, the probable future master */
-				member_set_master_id(member, member->local_id);
-				return member_action_to_CHECKING_SLAVES(member);
+				if(!sqliterepo_allow_master) {
+					member->requested_USE = 1;
+					return member_action_to_LEAVING(member);
+				} else {
+					member_set_master_id(member, member->local_id);
+					return member_action_to_CHECKING_SLAVES(member);
+				}
 			} else {
 				/* We are in the tail, probable future slave */
 				member_set_master_id(member, *p_masterid);
