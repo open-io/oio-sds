@@ -642,7 +642,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         time.sleep(1)  # ensure container event have been processed
         # container_refresh on existing container with data
         self.api.container_refresh(account, name)
-        time.sleep(1)  # ensure container event have been processed
+        time.sleep(15)  # ensure container event have been processed
         res = self.api.container_list(account, prefix=name)
         name_container, nb_objects, nb_bytes, _, mtime = res[0]
         self.assertEqual(name, name_container)
