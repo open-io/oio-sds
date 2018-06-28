@@ -30,7 +30,6 @@ License along with this library.
 #include <sqliterepo/election.h>
 #include <sqliterepo/version.h>
 #include <sqliterepo/sqlx_remote.h>
-
 #define FAKE_GETPEERS
 #include "../../sqliterepo/election.c"
 
@@ -828,9 +827,15 @@ static void test_STEP_LISTING(void) {
 	RESET();
 	i64 = m->local_id; /* -> master */
 	transition(m, EVT_LIST_OK, &i64);
-	g_assert_cmpint(m->local_id, ==, m->master_id);
-	_member_assert_CHECKING_SLAVES(m);
-	_pending(0);
+	if (!OIO_SQLITEREPO_ELECTION_ALLOW_MASTER) {
+		g_assert_cmpint(m->local_id, !=, m->master_id);
+		_member_assert_LEAVING(m);
+		_pending(CMD_DELETE, 0);
+	} else {
+		g_assert_cmpint(m->local_id, ==, m->master_id);
+		_member_assert_CHECKING_SLAVES(m);
+		_pending(0);
+	}
 
 	RESET();
 	i64 = m->local_id + 1; /* -> slave */

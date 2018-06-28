@@ -460,6 +460,11 @@
 				"descr": "When timers are raised on elections, report a warning if the background task holds the lock longer than this value.",
 				"def": "100ms", "min": 0, "max": "max" },
 
+			{ "type": "bool", "name": "sqliterepo_allow_master",
+				"key": "sqliterepo.election.allow_master",
+				"descr": "Allow the role of MASTER in any election.",
+				"def": false },
+
 			{ "type": "uint", "name": "disconnection_rrd_window",
 			   "key": "sqliterepo.zk.rrd.window",
 				"descr": "Sets the time window to remember the reconnection events, on a ZK connection.",
