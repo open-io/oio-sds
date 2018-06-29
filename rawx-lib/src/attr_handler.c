@@ -338,6 +338,7 @@ remove_fullpath_from_attr(const char *p, GError **error,
 				NULL);
 		const int rc = fremovexattr(fd, xname);
 		g_free(xname);
+		close(fd);
 		return rc != -1;
 	}
 }
