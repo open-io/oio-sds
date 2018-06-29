@@ -1192,14 +1192,8 @@ sqlx_repository_remove_from_cache(sqlx_repository_t *repo,
 		goto end_sqlx_cache_close;
 	}
 
-	struct sqlx_sqlite3_s *sq3 = sqlx_cache_get_handle(args.repo->cache, bd);
-	if (sq3 == NULL)
-		goto end_sqlx_cache_close;
-
 	err = sqlx_cache_unlock_and_close_base(args.repo->cache, bd,
 			SQLX_CLOSE_IMMEDIATELY);
-	if (err)
-		goto end_sqlx_cache_close;
 
 end_sqlx_cache_close:
 	_open_clean_args(&args);
