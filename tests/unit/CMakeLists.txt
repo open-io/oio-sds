@@ -89,6 +89,10 @@ add_executable(test_stats_holder test_stats_holder.c)
 target_link_libraries(test_stats_holder server ${COMMON})
 add_test(NAME server/stats COMMAND test_stats_holder)
 
+add_executable(test_network_server test_network_server.c)
+target_link_libraries(test_network_server ${COMMON} server)
+add_test(NAME server/server_core COMMAND test_network_server)
+
 add_executable(test_sqliterepo_version test_sqliterepo_version.c)
 target_link_libraries(test_sqliterepo_version sqliterepo ${COMMON})
 add_test(NAME sqliterepo/version COMMAND test_sqliterepo_version)
@@ -120,4 +124,3 @@ add_test(NAME events/abstract COMMAND test_events_queue)
 add_executable(test_events_beanstalkd test_events_beanstalkd.c)
 target_link_libraries(test_events_beanstalkd ${COMMON} oioevents server)
 add_test(NAME events/beanstalkd COMMAND test_events_beanstalkd)
-
