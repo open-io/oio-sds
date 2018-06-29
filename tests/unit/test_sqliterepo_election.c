@@ -827,7 +827,7 @@ static void test_STEP_LISTING(void) {
 	RESET();
 	i64 = m->local_id; /* -> master */
 	transition(m, EVT_LIST_OK, &i64);
-	if (!OIO_SQLITEREPO_ELECTION_ALLOW_MASTER) {
+	if (!sqliterepo_allow_master) {
 		g_assert_cmpint(m->local_id, !=, m->master_id);
 		_member_assert_LEAVING(m);
 		_pending(CMD_DELETE, 0);

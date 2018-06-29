@@ -1202,7 +1202,7 @@ Used by `gcc`
 
 > Allow the role of MASTER in any election.
 
- * default: **FALSE**
+ * default: **TRUE**
  * type: gboolean
  * cmake directive: *OIO_SQLITEREPO_ELECTION_ALLOW_MASTER*
 

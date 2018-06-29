@@ -463,7 +463,7 @@
 			{ "type": "bool", "name": "sqliterepo_allow_master",
 				"key": "sqliterepo.election.allow_master",
 				"descr": "Allow the role of MASTER in any election.",
-				"def": false },
+				"def": true },
 
 			{ "type": "uint", "name": "disconnection_rrd_window",
 			   "key": "sqliterepo.zk.rrd.window",
