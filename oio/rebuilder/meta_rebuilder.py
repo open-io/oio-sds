@@ -93,9 +93,11 @@ class MetaRebuilderWorker(RebuilderWorker):
             except Exception as err:
                 if attempts < self.max_attempts - 1:
                     if isinstance(err, NotFound):
+                        self.logger.warn('%s: %s', cid, err)
                         continue
                     if isinstance(err, OioTimeout) \
                             or isinstance(err, ServiceBusy):
+                        self.logger.warn('%s: %s', cid, err)
                         time.sleep(attempts * 0.5)
                         continue
                 self.logger.error('ERROR while rebuilding %s: %s', cid, err)
