@@ -894,6 +894,22 @@ _endpoint_close (struct endpoint_s *u)
 }
 
 static GError *
+_checked_inet_pton(int af, const char *src, void *dst)
+{
+	int rc = inet_pton(af, src, dst);
+	switch (rc) {
+		case 0:
+			return NEWERROR(EINVAL, "invalid bind address: '%s'", src);
+			break;
+		case -1:
+			return NEWERROR(errno, "%m: %d", af);
+			break;
+		default:
+			return NULL;
+	}
+}
+
+static GError *
 _endpoint_open(struct endpoint_s *u, gboolean udp_allowed)
 {
 	EXTRA_ASSERT(u != NULL);
@@ -933,6 +949,7 @@ _endpoint_open(struct endpoint_s *u, gboolean udp_allowed)
 			sock_set_reuseaddr (u->fd_udp, TRUE);
 	}
 
+	GError *err = NULL;
 	/* Bind the socket the right way according to its type */
 	if (_endpoint_is_UNIX(u)) {
 		struct sockaddr_un *sun = (struct sockaddr_un*) &ss;
@@ -944,13 +961,15 @@ _endpoint_open(struct endpoint_s *u, gboolean udp_allowed)
 		ss_len = sizeof(*s6);
 		s6->sin6_family = AF_INET6;
 		s6->sin6_port = htons(u->port_cfg);
-		inet_pton(AF_INET6, u->url, &(s6->sin6_addr));
+		if ((err = _checked_inet_pton(AF_INET6, u->url, &(s6->sin6_addr))))
+			return err;
 	} else {
 		struct sockaddr_in *s4 = (struct sockaddr_in*) &ss;
 		ss_len = sizeof(*s4);
 		s4->sin_family = AF_INET;
 		s4->sin_port = htons(u->port_cfg);
-		inet_pton(AF_INET, u->url, &(s4->sin_addr));
+		if ((err = _checked_inet_pton(AF_INET, u->url, &(s4->sin_addr))))
+			return err;
 	}
 
 	if (0 > bind(u->fd, (struct sockaddr*)&ss, ss_len)) {
