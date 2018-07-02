@@ -205,11 +205,15 @@ class BlobAuditorWorker(object):
                 if not chunk_data:
                     raise exc.OrphanChunk('Not found in content')
 
-                if chunk_data['size'] != int(meta['chunk_size']):
-                    raise exc.FaultyChunk('Invalid chunk size found')
+                metachunk_size = meta.get('metachunk_size')
+                if metachunk_size is not None \
+                        and chunk_data['size'] != int(metachunk_size):
+                    raise exc.FaultyChunk('Invalid metachunk size found')
 
-                if chunk_data['hash'] != meta['chunk_hash']:
-                    raise exc.FaultyChunk('Invalid chunk hash found')
+                metachunk_hash = meta.get('metachunk_hash')
+                if metachunk_hash is not None \
+                        and chunk_data['hash'] != meta['metachunk_hash']:
+                    raise exc.FaultyChunk('Invalid metachunk hash found')
 
                 if chunk_data['pos'] != meta['chunk_pos']:
                     raise exc.FaultyChunk('Invalid chunk position found')
