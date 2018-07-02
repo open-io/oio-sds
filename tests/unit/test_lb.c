@@ -22,6 +22,10 @@ License along with this library.
 #include <core/oiolb.h>
 #include <metautils/lib/metautils.h>
 
+#ifndef LB_TESTS_DATASETS
+#define LB_TESTS_DATASETS "tests/datasets"
+#endif
+
 static struct oio_lb_item_s *
 _srv (int i)
 {
@@ -1243,7 +1247,7 @@ main(int argc, char **argv)
 	_add_level_repartition_test(lrt7, "8x3+1x1", 16); // 12+4
 	_add_level_repartition_test(lrt7, "8x3+1x1", 18); // 14+4
 
-	_add_tests_from_files("tests/datasets");
+	_add_tests_from_files(LB_TESTS_DATASETS);
 
 	return g_test_run();
 };

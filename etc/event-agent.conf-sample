@@ -3,10 +3,18 @@ namespace = OPENIO
 user = openio
 queue_url = beanstalk://127.0.0.1:11300
 tube = oio
-# based on CPU count
+
+# Number of worker processes, based on CPU count if not set
 workers = 2
-concurrency = 10
+
+# Number of green threads
+#concurrency = 10
+
 handlers_conf = /etc/oio/sds/OPENIO/event-agent/event-handlers.conf
+
+# How often to refresh the account service address (in seconds)
+#acct_refresh_interval = 60
+
 log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log

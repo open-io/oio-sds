@@ -23,7 +23,7 @@ from ConfigParser import SafeConfigParser
 
 def parse_options(parser=None):
     if parser is None:
-        parser = OptionParser(usage='%prog CONFIG [options]')
+        parser = OptionParser(usage='%prog CONFIGURATION_FILE [options]')
     parser.add_option('-v', '--verbose', default=False,
                       action='store_true', help='verbose output')
 
@@ -31,7 +31,7 @@ def parse_options(parser=None):
 
     if not args:
         parser.print_usage()
-        print("Error: missing argument config path")
+        print("Error: missing configuration file path")
         exit(1)
     config = path.abspath(args.pop(0))
     if not path.exists(config):

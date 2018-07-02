@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -85,7 +85,7 @@ except pkg_resources.DistributionNotFound:
     import pbr.version
     _version_info = pbr.version.VersionInfo('oio')
     __version__ = _version_info.release_string()
-    __canonical_version = _version_info.version_string()
+    __canonical_version__ = _version_info.version_string()
 
 
 sys.modules[__name__] = OioModule()
