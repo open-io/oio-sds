@@ -389,7 +389,9 @@ _item_is_too_popular(struct polling_ctx_s *ctx, const oio_location_t item,
 		guint32 n_leafs = GPOINTER_TO_UINT(
 				g_datalist_id_get_data(&(slot->items_by_loc[level]), key));
 		if (unlikely(n_leafs == 0)) {
-			GRID_WARN("BUG: LB reload not followed by rehash");
+			GRID_WARN("BUG: %s: LB reload not followed by rehash, "
+					"item %"OIO_LOC_FORMAT" not found at level %d",
+					__FUNCTION__, item, level);
 			n_leafs = 1;
 		}
 		// How often the location has been chosen
@@ -597,7 +599,7 @@ _local_slot__poll(struct oio_lb_slot_s *slot, const guint16 bit_shift,
 		gboolean reversed, struct polling_ctx_s *ctx)
 {
 	if (unlikely(_slot_needs_rehash(slot)))
-		GRID_WARN("BUG: LB reload not followed by rehash");
+		GRID_WARN("BUG: %s: LB reload not followed by rehash", __FUNCTION__);
 
 	GRID_TRACE2(
 			"%s slot=%s sum=%"G_GUINT32_FORMAT
@@ -714,7 +716,8 @@ _local_target__is_satisfied(struct oio_lb_pool_LOCAL_s *lb,
 			continue;
 		}
 		if (unlikely(_slot_needs_rehash(slot))) {
-			GRID_WARN("BUG: LB reload not followed by rehash");
+			GRID_WARN("BUG: %s: LB reload not followed by rehash",
+					__FUNCTION__);
 		}
 		oio_location_t *known = ctx->next_polled;
 		do {
@@ -1079,9 +1082,12 @@ _world_create_slot (struct oio_lb_world_s *self, const char *name)
 		for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
 			g_datalist_init(&(slot->items_by_loc[level]));
 		}
+		GRID_INFO("Creating service slot [%s]", name);
 		g_rw_lock_writer_lock(&self->lock);
 		g_tree_replace(self->slots, g_strdup(name), slot);
 		g_rw_lock_writer_unlock(&self->lock);
+	} else {
+		GRID_TRACE("Slot [%s] already exists", name);
 	}
 	return slot;
 }
