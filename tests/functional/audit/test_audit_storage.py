@@ -32,20 +32,28 @@ from oio.common.fullpath import encode_fullpath
 
 
 class TestContent(object):
-    def __init__(self, path, size, cid, content_id, nb_chunks):
-        self.path = path
-        self.size = size
-        self.cid = cid
-        self.content_id = content_id
-        self.nb_chunks = nb_chunks
+    def __init__(self, account, ref):
+        self.cid = cid_from_name(account, ref)
+        self.path = random_str(6)
+        self.version = 1
+        self.id = random_id(32)
+        self.fullpath = encode_fullpath(
+            account, ref, self.path, self.version, self.id)
+        self.data = random_str(1280)
+        self.size = len(self.data)
+        md5 = hashlib.new('md5')
+        md5.update(self.data)
+        self.hash = md5.hexdigest().lower()
 
 
 class TestChunk(object):
-    def __init__(self, size, id_r, pos, md5):
-        self.size = size
-        self.chunk_id = id_r
-        self.pos = pos
-        self.md5 = md5
+    def __init__(self, rawx_id, rawx_loc, metachunk_size, metachunk_hash):
+        self.id = random_id(64)
+        self.url = "%s/%s" % (rawx_id, self.id)
+        self.path = rawx_loc + '/' + self.id[0:3] + '/' + self.id
+        self.pos = 0
+        self.metachunk_size = metachunk_size
+        self.metachunk_hash = metachunk_hash
 
 
 class TestBlobAuditorFunctional(BaseTestCase):
@@ -53,202 +61,178 @@ class TestBlobAuditorFunctional(BaseTestCase):
         super(TestBlobAuditorFunctional, self).setUp()
         self.namespace = self.conf['namespace']
         self.account = self.conf['account']
-
-        self.test_dir = self.conf['sds_path']
-
-        rawx_num, rawx_path, rawx_addr, rawx_uuid = \
-            self.get_service_url('rawx')
-        self.rawx = 'http://' + rawx_uuid if rawx_uuid else rawx_addr
-
-        self.h = hashlib.new('md5')
-
-        conf = {"namespace": self.namespace}
-        self.auditor = BlobAuditorWorker(conf, get_logger(None), None)
-        self.container_c = ContainerClient(conf)
-        self.blob_c = BlobClient(conf=conf)
-
         self.ref = random_str(8)
 
-        self.container_c.container_create(self.account, self.ref)
+        _, rawx_loc, rawx_addr, rawx_uuid = \
+            self.get_service_url('rawx')
+        self.rawx_id = 'http://' + (rawx_uuid if rawx_uuid else rawx_addr)
 
-        self.data = random_str(1280)
-        self.h.update(self.data)
-        self.hash_rand = self.h.hexdigest().lower()
+        self.auditor = BlobAuditorWorker(self.conf, get_logger(None), None)
+        self.container_client = ContainerClient(self.conf)
+        self.blob_client = BlobClient(conf=self.conf)
 
-        self.content = TestContent(
-            random_str(6), len(self.data),
-            cid_from_name(self.account, self.ref).upper(), random_id(32), 1)
-        self.content_fullpath = encode_fullpath(
-            self.account, self.ref, self.content.path, 1,
-            self.content.content_id)
+        self.container_client.container_create(self.account, self.ref)
+        self.content = TestContent(self.account, self.ref)
+        self.chunk = TestChunk(self.rawx_id, rawx_loc,
+                               self.content.size, self.content.hash)
 
-        self.chunk = TestChunk(self.content.size, random_id(64), 0,
-                               self.hash_rand)
-
-        self.chunk_url = "%s/%s" % (self.rawx, self.chunk.chunk_id)
-        self.chunk_proxy = {"hash": self.chunk.md5, "pos": "0",
-                            "size": self.chunk.size,
-                            "url":  self.chunk_url}
-
-        chunk_meta = {'content_path': self.content.path,
-                      'container_id': self.content.cid,
-                      'chunk_method': 'plain/nb_copy=3',
-                      'policy': 'TESTPOLICY',
-                      'id': self.content.content_id,
-                      'version': 1,
-                      'chunk_id': self.chunk.chunk_id,
-                      'chunk_pos': self.chunk.pos,
-                      'chunk_hash': self.chunk.md5,
-                      'full_path': self.content_fullpath,
-                      'oio_version': OIO_VERSION
-                      }
-        self.blob_c.chunk_put(self.chunk_url, chunk_meta, self.data)
-
-        self.chunk_path = self.test_dir + '/data/' + self.namespace + \
-            '-rawx-1/' + self.chunk.chunk_id[0:3] + "/" + self.chunk.chunk_id
+        chunk_meta = {
+            'container_id': self.content.cid,
+            'content_path': self.content.path,
+            'version': self.content.version,
+            'id': self.content.id,
+            'full_path': self.content.fullpath,
+            'chunk_method': 'plain/nb_copy=3',
+            'policy': 'TESTPOLICY',
+            'chunk_id': self.chunk.id,
+            'chunk_pos': self.chunk.pos,
+            'chunk_hash': self.chunk.metachunk_hash,
+            'chunk_size': self.chunk.metachunk_size,
+            'metachunk_hash': self.chunk.metachunk_hash,
+            'metachunk_size': self.chunk.metachunk_size,
+            'oio_version': OIO_VERSION}
+        self.blob_client.chunk_put(self.chunk.url, chunk_meta,
+                                   self.content.data)
 
     def tearDown(self):
         super(TestBlobAuditorFunctional, self).tearDown()
 
         try:
-            self.container_c.content_delete(
+            self.container_client.content_delete(
                 self.account, self.ref, self.content.path)
         except Exception:
             pass
 
         try:
-            self.container_c.container_destroy(self.account, self.ref)
+            self.container_client.container_destroy(self.account, self.ref)
         except Exception:
             pass
 
         try:
-            os.remove(self.chunk_path)
+            os.remove(self.chunk.path)
         except Exception:
             pass
 
     def init_content(self):
-        self.container_c.content_create(
-            self.account, self.ref, self.content.path, self.chunk.size,
-            self.hash_rand, data={'chunks': [self.chunk_proxy]},
-            content_id=self.content.content_id)
+        chunk_proxy = {
+            "url":  self.chunk.url,
+            "pos": str(self.chunk.pos),
+            "hash": self.chunk.metachunk_hash,
+            "size": self.chunk.metachunk_size}
+        self.container_client.content_create(
+            self.account, self.ref, self.content.path,
+            content_id=self.content.id,
+            size=self.content.size, checksum=self.content.hash,
+            data={'chunks': [chunk_proxy]})
 
     def test_chunk_audit(self):
         self.init_content()
-        self.auditor.chunk_audit(self.chunk_path, self.chunk.chunk_id)
+        self.auditor.chunk_audit(self.chunk.path, self.chunk.id)
 
     def test_content_deleted(self):
         self.assertRaises(exc.OrphanChunk, self.auditor.chunk_audit,
-                          self.chunk_path, self.chunk.chunk_id)
+                          self.chunk.path, self.chunk.id)
 
     def test_container_deleted(self):
-        self.container_c.container_delete(self.account, self.ref)
+        self.container_client.container_delete(self.account, self.ref)
 
         self.assertRaises(exc.OrphanChunk, self.auditor.chunk_audit,
-                          self.chunk_path, self.chunk.chunk_id)
+                          self.chunk.path, self.chunk.id)
 
     def test_chunk_corrupted(self):
         self.init_content()
-        with open(self.chunk_path, "w") as f:
+        with open(self.chunk.path, "w") as f:
             f.write(random_str(1280))
 
         self.assertRaises(exc.CorruptedChunk, self.auditor.chunk_audit,
-                          self.chunk_path, self.chunk.chunk_id)
+                          self.chunk.path, self.chunk.id)
 
-    def test_chunk_bad_size(self):
+    def test_chunk_bad_chunk_size(self):
         self.init_content()
-        with open(self.chunk_path, "w") as f:
+        with open(self.chunk.path, "w") as f:
             f.write(random_str(320))
 
         self.assertRaises(exc.FaultyChunk, self.auditor.chunk_audit,
-                          self.chunk_path, self.chunk.chunk_id)
+                          self.chunk.path, self.chunk.id)
 
-    def test_xattr_bad_chunk_size(self):
+    def test_xattr_bad_xattr_metachunk_size(self):
         self.init_content()
         xattr.setxattr(
-            self.chunk_path, 'user.' + chunk_xattr_keys['chunk_size'], '-1')
+            self.chunk.path, 'user.' + chunk_xattr_keys['metachunk_size'],
+            '320')
 
         self.assertRaises(exc.FaultyChunk, self.auditor.chunk_audit,
-                          self.chunk_path, self.chunk.chunk_id)
+                          self.chunk.path, self.chunk.id)
 
-    def test_xattr_bad_chunk_hash(self):
+    def test_xattr_bad_xattr_metachunk_hash(self):
         self.init_content()
         xattr.setxattr(
-            self.chunk_path, 'user.' + chunk_xattr_keys['chunk_hash'],
-            'WRONG_HASH')
-        self.assertRaises(exc.CorruptedChunk, self.auditor.chunk_audit,
-                          self.chunk_path, self.chunk.chunk_id)
+            self.chunk.path, 'user.' + chunk_xattr_keys['metachunk_hash'],
+            '0123456789ABCDEF0123456789ABCDEF')
 
-    def test_xattr_bad_content_path(self):
-        self.init_content()
-        xattr.setxattr(
-            self.chunk_path, 'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
-            + str(self.chunk.chunk_id), encode_fullpath(
-                self.account, self.ref, 'WRONG_PATH', 1, '0000'))
+        self.assertRaises(exc.FaultyChunk, self.auditor.chunk_audit,
+                          self.chunk.path, self.chunk.id)
 
-        self.assertRaises(exc.OrphanChunk, self.auditor.chunk_audit,
-                          self.chunk_path, self.chunk.chunk_id)
-
-    def test_xattr_bad_chunk_id(self):
+    def test_xattr_bad_xattr_chunk_id(self):
         self.init_content()
         xattr.removexattr(
-            self.chunk_path, 'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
-            + str(self.chunk.chunk_id))
+            self.chunk.path, 'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
+            + str(self.chunk.id))
         xattr.setxattr(
-            self.chunk_path, 'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
-            + 'WRONG_ID', self.content_fullpath)
+            self.chunk.path, 'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
+            + 'WRONG_ID', self.content.fullpath)
 
         self.assertRaises(exc.FaultyChunk, self.auditor.chunk_audit,
-                          self.chunk_path, self.chunk.chunk_id)
+                          self.chunk.path, self.chunk.id)
 
-    def test_xattr_bad_content_container(self):
+    def test_xattr_bad_xattr_content_container(self):
         self.init_content()
         xattr.setxattr(
-            self.chunk_path, 'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
-            + str(self.chunk.chunk_id), encode_fullpath(
-                self.account, 'WRONG_REF', self.content.path, 1, '0000'))
+            self.chunk.path, 'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
+            + str(self.chunk.id), encode_fullpath(
+                self.account, 'WRONG_REF', self.content.path,
+                self.content.version, self.content.id))
 
         self.assertRaises(exc.OrphanChunk, self.auditor.chunk_audit,
-                          self.chunk_path, self.chunk.chunk_id)
+                          self.chunk.path, self.chunk.id)
 
-    def test_xattr_bad_chunk_position(self):
+    def test_xattr_bad_xattr_content_id(self):
         self.init_content()
-        xattr.setxattr(self.chunk_path, 'user.grid.chunk.position', '42')
-
         xattr.setxattr(
-            self.chunk_path, 'user.' + chunk_xattr_keys['chunk_pos'],
-            '42')
-        self.assertRaises(exc.FaultyChunk, self.auditor.chunk_audit,
-                          self.chunk_path, self.chunk.chunk_id)
+            self.chunk.path, 'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
+            + str(self.chunk.id), encode_fullpath(
+                self.account, self.ref, self.content.path,
+                self.content.version, '0123456789ABCDEF'))
 
-    def test_chunk_bad_hash(self):
-        self.h.update(self.data)
-        self.hash_rand = self.h.hexdigest().lower()
-        self.chunk.md5 = self.hash_rand
-        self.chunk_proxy['hash'] = self.chunk.md5
+        self.assertRaises(exc.OrphanChunk, self.auditor.chunk_audit,
+                          self.chunk.path, self.chunk.id)
+
+    def test_xattr_bad_xattr_chunk_position(self):
+        self.init_content()
+        xattr.setxattr(
+            self.chunk.path, 'user.' + chunk_xattr_keys['chunk_pos'], '42')
+
+        self.assertRaises(exc.FaultyChunk, self.auditor.chunk_audit,
+                          self.chunk.path, self.chunk.id)
+
+    def test_chunk_bad_meta2_metachunk_size(self):
+        self.content.size = 320
+        self.chunk.metachunk_size = 320
         self.init_content()
 
         self.assertRaises(exc.FaultyChunk, self.auditor.chunk_audit,
-                          self.chunk_path, self.chunk.chunk_id)
+                          self.chunk.path, self.chunk.id)
 
-    def test_chunk_bad_length(self):
-        self.chunk.size = 320
-        self.chunk_proxy['size'] = self.chunk.size
+    def test_chunk_bad_meta2_metachunk_hash(self):
+        self.chunk.metachunk_hash = '0123456789ABCDEF0123456789ABCDEF'
         self.init_content()
 
         self.assertRaises(exc.FaultyChunk, self.auditor.chunk_audit,
-                          self.chunk_path, self.chunk.chunk_id)
+                          self.chunk.path, self.chunk.id)
 
-    def test_chunk_bad_chunk_size(self):
-        self.chunk.size = 320
-        self.chunk_proxy['size'] = self.chunk.size
-        self.init_content()
-
-        self.assertRaises(exc.FaultyChunk, self.auditor.chunk_audit,
-                          self.chunk_path, self.chunk.chunk_id)
-
-    def test_chunk_bad_url(self):
-        self.chunk_proxy['url'] = '%s/WRONG_ID' % self.rawx
+    def test_chunk_bad_meta2_chunk_url(self):
+        self.chunk.url = '%s/0123456789ABCDEF' % self.rawx_id
         self.init_content()
 
         self.assertRaises(exc.OrphanChunk, self.auditor.chunk_audit,
-                          self.chunk_path, self.chunk.chunk_id)
+                          self.chunk.path, self.chunk.id)
