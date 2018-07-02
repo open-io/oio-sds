@@ -17,6 +17,7 @@ link_directories(
 
 set(COMMON oiocore oiosds metautils ${GLIB2_LIBRARIES})
 
+add_definitions(-DLB_TESTS_DATASETS="${CMAKE_SOURCE_DIR}/tests/datasets")
 add_executable(test_lb test_lb.c)
 target_link_libraries(test_lb metautils ${COMMON})
 add_test(NAME core/lb COMMAND test_lb)
