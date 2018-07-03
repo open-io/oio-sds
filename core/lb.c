@@ -26,6 +26,8 @@ License along with this library.
 #include <core/oioext.h>
 #include <core/oiolog.h>
 
+#include <core/lb_variables.h>
+
 #include "internals.h"
 
 typedef guint32 generation_t;
@@ -61,6 +63,18 @@ struct oio_lb_pool_abstract_s
 	struct oio_lb_pool_vtable_s *vtable;
 	gchar *name;
 };
+
+#define WRITER_LOCK_DO(Lock,Action) do { \
+	g_rw_lock_writer_lock(Lock);\
+	gint64 _lock_start = oio_ext_monotonic_time();\
+	Action;\
+	gint64 _lock_elapsed = oio_ext_monotonic_time() - _lock_start;\
+	g_rw_lock_writer_unlock(Lock);\
+	if (_lock_elapsed > oio_lb_writer_lock_alert_delay) {\
+		GRID_NOTICE("LOCK total=%"G_GINT64_FORMAT" (%"G_GINT64_FORMAT"/%s:%d)",\
+			_lock_elapsed, _lock_elapsed, __FUNCTION__, __LINE__);\
+	}\
+} while (0)
 
 #define CFG_CALL(self,F) VTABLE_CALL(self,struct oio_lb_pool_abstract_s*,F)
 
@@ -1467,6 +1481,19 @@ absolute_delta(register const guint32 u0, register const guint32 u1)
 }
 
 static void
+_world_rehash_slots(struct oio_lb_world_s *self)
+{
+	gboolean _on_slot_rehash(gpointer k UNUSED,
+			struct oio_lb_slot_s *slot, gpointer w UNUSED) {
+		if (_slot_needs_rehash(slot))
+			_slot_rehash(slot);
+		return FALSE;
+	}
+	WRITER_LOCK_DO(&self->lock,
+			g_tree_foreach(self->slots, (GTraverseFunc)_on_slot_rehash, self));
+}
+
+static void
 _world_purge_slot_items(struct oio_lb_world_s *self, guint32 age)
 {
 	gboolean _on_slot_purge_inside(gpointer k UNUSED,
@@ -1496,10 +1523,9 @@ _world_purge_slot_items(struct oio_lb_world_s *self, guint32 age)
 		return FALSE;
 	}
 
-	g_rw_lock_writer_lock(&self->lock);
-	g_tree_foreach(
-			self->slots, (GTraverseFunc)_on_slot_purge_inside, self);
-	g_rw_lock_writer_unlock(&self->lock);
+
+	WRITER_LOCK_DO(&self->lock, g_tree_foreach(self->slots,
+			(GTraverseFunc)_on_slot_purge_inside, self));
 }
 
 static void
@@ -1538,6 +1564,14 @@ oio_lb_world__purge_old_generations(struct oio_lb_world_s *self)
 
 	/* it is currently highly probable a service that disappeared will come
 	 * back soon. So we don't purge the items yet. */
+}
+
+void
+oio_lb_world__rehash_all_slots(struct oio_lb_world_s *self)
+{
+	EXTRA_ASSERT(self != NULL);
+
+	_world_rehash_slots(self);
 }
 
 

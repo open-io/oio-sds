@@ -156,6 +156,15 @@ Used by `gcc`
  * type: string
  * cmake directive: *OIO_CORE_HTTP_USER_AGENT*
 
+### core.lb.writer_lock_alert_delay
+
+> Dump the time spent while holding the global writer lock, when the lock is held for longer than this threshold (in microseconds).
+
+ * default: **5000**
+ * type: gint64
+ * cmake directive: *OIO_CORE_LB_WRITER_LOCK_ALERT_DELAY*
+ * range: 1 -> 60 * G_TIME_SPAN_SECOND
+
 ### core.period.refresh.cpu_idle
 
 > Sets the miniimal amount of time between two refreshed of the known CPU-idle counters for the current host. Keep this value small.
@@ -1244,7 +1253,7 @@ Used by `gcc`
 
 ### sqliterepo.election.lock_alert_delay
 
-> Only effective when built in DEBUG mode. Dump the long critical sections around the elections lock, when the lock is held for longer then this threshold (in microseconds).
+> Only effective when built in DEBUG mode. Dump the long critical sections around the elections lock, when the lock is held for longer than this threshold (in microseconds).
 
  * default: **200**
  * type: gint64

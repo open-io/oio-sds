@@ -128,6 +128,10 @@ void oio_lb_world__increment_generation(struct oio_lb_world_s *self);
 
 void oio_lb_world__purge_old_generations(struct oio_lb_world_s *self);
 
+/* When not possible to purge old generations (because of update errors),
+ * we must still rehash the slots that have been updated. */
+void oio_lb_world__rehash_all_slots(struct oio_lb_world_s *self);
+
 /* Maximum distance between services */
 #define OIO_LB_OPT_MAX_DIST       "max_dist"
 /* Absolute minimum distance between services */
