@@ -52,13 +52,7 @@ event_worker_init(const char *addr)
 		return NULL;
 	}
 
-	GError *err = oio_events_queue_factory__check_config(addr);
-	if (err) {
-		g_prefix_error(&err, "Configuration error: ");
-		return err;
-	}
-
-	err = oio_events_queue_factory__create(addr, &q);
+	GError *err = oio_events_queue_factory__create(addr, &q);
 	if (err) {
 		g_prefix_error(&err, "Event queue creation failed: ");
 		return err;
