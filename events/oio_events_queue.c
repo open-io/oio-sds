@@ -160,35 +160,6 @@ oio_events_queue_factory__create (const char *cfg, struct oio_events_queue_s **o
 	}
 }
 
-GError *
-oio_events_queue_factory__check_config (const char *cfg)
-{
-	const char *tmp;
-	if (!cfg)
-		return BADREQ("NULL configuration");
-	if (!*cfg)
-		return BADREQ("Empty configuration");
-
-	if (NULL != (tmp = _has_prefix (cfg, "beanstalk://"))) {
-		if (!metautils_url_valid_for_connect (tmp))
-			return BADREQ("Invalid beanstalkd URL");
-		return NULL;
-	}
-
-	if (NULL != (tmp = _has_prefix (cfg, "inproc://")))
-		return NULL;
-	if (NULL != (tmp = _has_prefix (cfg, "ipc://")))
-		return NULL;
-
-	if (NULL != (tmp = _has_prefix (cfg, "tcp://"))) {
-		if (!metautils_url_valid_for_connect (tmp))
-			return BADREQ("Invalid zmq/tcp URL");
-		return NULL;
-	}
-
-	return BADREQ("implementation not recognized");
-}
-
 void
 oio_event__init (GString *gs, const char *type, struct oio_url_s *url)
 {

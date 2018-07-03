@@ -53,13 +53,7 @@ rawx_event_init (const char *addr)
 		return NULL;
 	}
 
-	GError *err = oio_events_queue_factory__check_config (addr);
-	if (err) {
-		g_prefix_error (&err, "Configuration error: ");
-		return err;
-	}
-
-	err = oio_events_queue_factory__create (addr, &q);
+	GError *err = oio_events_queue_factory__create (addr, &q);
 	if (err) {
 		g_prefix_error (&err, "Event queue creation failed: ");
 		return err;
@@ -106,4 +100,3 @@ rawx_event_send(const char *event_type, const char *request_id,
 	g_string_free (data_json, TRUE);
 	return NULL;
 }
-
