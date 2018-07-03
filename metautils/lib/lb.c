@@ -41,6 +41,9 @@ oio_lb_world__feed_service_info_list(struct oio_lb_world_s *lbw,
 	struct oio_lb_item_s *item =
 		g_alloca(sizeof(struct oio_lb_item_s) + LIMIT_LENGTH_SRVID);
 
+	/* FIXME(FVE): this function should update slots in an atomic way.
+	 * Here, we are feeding them with services, but not rehashing them. */
+
 	for (GSList *l = services; l; l = l->next) {
 		char slot_name[128] = {0};
 		struct service_info_s *srv = l->data;
