@@ -543,6 +543,42 @@ test_local_feed (void)
 }
 
 static void
+test_local_feed_zero_scored(void)
+{
+	struct oio_lb_world_s *world = oio_lb_local__create_world();
+	struct oio_lb_item_s *srv0 = g_malloc0(
+			LIMIT_LENGTH_SRVID + sizeof (struct oio_lb_item_s));
+	struct oio_lb_item_s *srv1 = g_malloc0(
+			LIMIT_LENGTH_SRVID + sizeof (struct oio_lb_item_s));
+	struct oio_lb_item_s *srv2 = g_malloc0(
+			LIMIT_LENGTH_SRVID + sizeof (struct oio_lb_item_s));
+	srv0->location = 42 + 65536;
+	srv0->weight = 0;
+	g_sprintf(srv0->id, "ID-%d", 42);
+	srv1->location = 43 + 65536;
+	srv1->weight = 42;
+	g_sprintf(srv1->id, "ID-%d", 43);
+	srv2->location = 44 + 65536;
+	srv2->weight = 0;
+	g_sprintf(srv2->id, "ID-%d", 44);
+
+	oio_lb_world__create_slot(world, "0");
+	oio_lb_world__feed_slot(world, "0", srv0);
+	oio_lb_world__feed_slot(world, "0", srv1);
+	oio_lb_world__feed_slot(world, "0", srv2);
+
+	oio_lb_world__debug(world);
+	g_assert_cmpuint(1, ==, oio_lb_world__count_slot_items(world, "0"));
+	oio_lb_world__rehash_all_slots(world);
+	g_assert_cmpuint(1, ==, oio_lb_world__count_slot_items(world, "0"));
+
+	g_free(srv0);
+	g_free(srv1);
+	g_free(srv2);
+	oio_lb_world__destroy(world);
+}
+
+static void
 test_local_pool (void)
 {
 	struct oio_lb_world_s *world = oio_lb_local__create_world ();
@@ -753,6 +789,8 @@ main(int argc, char **argv)
 	g_test_add_func("/core/lb/local/pool", test_local_pool);
 	g_test_add_func("/core/lb/local/feed", test_local_feed);
 	g_test_add_func("/core/lb/local/feed_twice", test_local_feed_twice);
+	g_test_add_func("/core/lb/local/feed_zero_scored",
+			test_local_feed_zero_scored);
 	g_test_add_func("/core/lb/local/poll", test_local_poll);
 	g_test_add_func("/core/lb/local/poll_same_low",
 			test_local_poll_same_low_bits);
