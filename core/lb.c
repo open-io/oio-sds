@@ -511,6 +511,12 @@ _item_is_too_popular(struct polling_ctx_s *ctx, const oio_location_t item,
 					"item %"OIO_LOC_FORMAT" not found at level %d",
 					__FUNCTION__, item, level);
 			n_leafs = 1;
+		} else if (unlikely(n_leafs > slot->items->len)) {
+			GRID_WARN("BUG: %s: LB reload not followed by rehash, "
+					"more different locations than items in the slot %s "
+					"(%u/%u)",
+					__FUNCTION__, slot->name, n_leafs, slot->items->len);
+			n_leafs = slot->items->len;
 		}
 		// How often the location has been chosen
 		guint32 popularity = GPOINTER_TO_UINT(
