@@ -160,6 +160,10 @@ class SourceReadTimeout(OioTimeout):
 
 
 class VolumeException(OioException):
+    """
+    Exception raised when someone is trying to contact a rdir service,
+    but there is none assigned to the specified rawx.
+    """
     pass
 
 
