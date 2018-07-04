@@ -134,13 +134,6 @@ _flush_buffered(struct oio_events_queue_s *self, struct _queue_FANOUT_s *q)
 	oio_events_queue_send_buffered(self, &q->buffer, MAX(1, avail / 2));
 }
 
-static gboolean
-_event_running (gboolean pending)
-{
-	(void) pending;
-	return grid_main_is_running ();
-}
-
 static GError *
 _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 {
@@ -156,7 +149,7 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 	/* start one thread for each sub-queue */
 	gpointer _worker_queue (gpointer p) {
 		metautils_ignore_signals();
-		oio_events_queue__run (p, _event_running);
+		oio_events_queue__run (p, running);
 		return p;
 	}
 	GPtrArray *threads = g_ptr_array_new();
