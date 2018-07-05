@@ -51,13 +51,34 @@ void
 _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		GSList *beans, const char *name, gboolean send_chunks)
 {
+	if (!m2b->notifier)
+		return;
+
 	guint n_events = 1;
 	guint cur_event = 0;
+	struct oio_url_s *url2 = NULL;
+	struct bean_ALIASES_s *alias = NULL;
+
+	void load_url_from_alias() {
+		if (alias == NULL)
+			return;
+		GString *path = ALIASES_get_alias(alias);
+		oio_url_set(url2, OIOURL_PATH, path->str);
+		gint64 version = ALIASES_get_version(alias);
+		gchar *str_version = g_strdup_printf("%"G_GINT64_FORMAT, version);
+		oio_url_set(url2, OIOURL_VERSION, str_version);
+		g_free(str_version);
+		GByteArray *content_id = ALIASES_get_content(alias);
+		GString *hex_content_id = metautils_gba_to_hexgstr(NULL, content_id);
+		oio_url_set(url2, OIOURL_CONTENTID, hex_content_id->str);
+		g_string_free(hex_content_id, TRUE);
+	}
+
 	void forward(GSList *list_of_beans) {
 		gchar tmp[256];
 		g_snprintf (tmp, sizeof(tmp), "%s.%s", META2_EVENTS_PREFIX, name);
 
-		GString *gs = oio_event__create(tmp, url);
+		GString *gs = oio_event__create(tmp, url2);
 		g_string_append_c(gs, ',');
 		oio_str_gstring_append_json_pair_int(gs, "part", cur_event++);
 		g_string_append_c(gs, ',');
@@ -68,8 +89,10 @@ _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		oio_events_queue__send (m2b->notifier, g_string_free (gs, FALSE));
 	}
 
-	if (!m2b->notifier)
-		return;
+	if (url == NULL)
+		url2 = oio_url_empty();
+	else
+		url2 = oio_url_dup(url);
 
 	guint beans_len = g_slist_length(beans);
 	if (!send_chunks) {
@@ -77,10 +100,20 @@ _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		for (GSList *l = beans; l; l = l->next) {
 			if (DESCR(l->data) != &descr_struct_CHUNKS)
 				non_chunks = g_slist_prepend(non_chunks, l->data);
+			else if (DESCR(l->data) == &descr_struct_ALIASES)
+				alias = l->data;
 		}
+		load_url_from_alias();
 		forward(non_chunks);
 		g_slist_free(non_chunks);
 	} else if (beans_len < 16) {
+		for (GSList *l = beans; l; l = l->next) {
+			if (DESCR(l->data) == &descr_struct_ALIASES) {
+				alias = l->data;
+				break;
+			}
+		}
+		load_url_from_alias();
 		forward(beans);
 	} else {
 		/* first, notify everything but the chunks */
@@ -93,10 +126,14 @@ _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 				else
 					header = l->data;
 				non_chunks = g_slist_prepend (non_chunks, l->data);
+			} else if (DESCR(l->data) == &descr_struct_ALIASES) {
+				alias = l->data;
 			} else if (&descr_struct_CHUNKS != DESCR(l->data)) {
 				non_chunks = g_slist_prepend (non_chunks, l->data);
 			}
 		}
+		load_url_from_alias();
+
 		n_events += 1 + (beans_len - g_slist_length(non_chunks)) / 16;
 		if (non_chunks) {
 			forward (non_chunks);
@@ -131,6 +168,8 @@ _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 			batch = NULL;
 		}
 	}
+
+	oio_url_clean(url2);
 }
 
 int
