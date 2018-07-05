@@ -27,7 +27,7 @@ from oio.common.utils import paths_gen, request_id
 from oio.common.easy_value import int_value
 from oio.common.logger import get_logger
 from oio.common.green import ratelimit
-from oio.common.exceptions import OioNetworkException
+from oio.common.exceptions import OioNetworkException, VolumeException
 from oio.common.constants import STRLEN_CHUNKID
 
 
@@ -72,6 +72,13 @@ class BlobIndexer(Daemon):
             except OioNetworkException as exc:
                 self.errors += 1
                 self.logger.warn('ERROR while updating %s: %s', path, exc)
+            except VolumeException as exc:
+                self.errors += 1
+                self.logger.error('Cannot index %s: %s', path, exc)
+                # All chunks of this volume are indexed in the same service,
+                # no need to try another chunk, it will generate the same
+                # error. Let the upper level retry later.
+                raise
             except Exception:
                 self.errors += 1
                 self.logger.exception('ERROR while updating %s', path)
@@ -141,8 +148,11 @@ class BlobIndexer(Daemon):
             pre = time.time()
             try:
                 self.index_pass()
-            except Exception as e:
-                self.logger.exception('ERROR during indexing: %s' % e)
+            except VolumeException as exc:
+                self.logger.error('Cannot index chunks, will retry later: %s',
+                                  exc)
+            except Exception as exc:
+                self.logger.exception('ERROR during indexing: %s', exc)
             else:
                 self.passes += 1
             elapsed = (time.time() - pre) or 0.000001
