@@ -131,7 +131,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
             logger.warn('Source read error')
             raise
         except Timeout as to:
-            logger.exception('Timeout writing data (%s)', to)
+            logger.error('Timeout writing data (%s)', to)
             raise exc.OioTimeout(to)
         except Exception:
             logger.exception('Exception writing data')
@@ -178,11 +178,14 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                     parsed.netloc, 'PUT', parsed.path, hdrs)
                 conn.chunk = chunk
             return conn, chunk
-        except (Exception, Timeout) as err:
+        except Timeout as err:
+            msg = str(err)
+            logger.error("Failed to connect to %s (%s)", chunk, msg)
+        except Exception as err:
             msg = str(err)
             logger.exception("Failed to connect to %s (%s)", chunk, msg)
-            chunk['error'] = msg
-            return None, chunk
+        chunk['error'] = msg
+        return None, chunk
 
     def _send_data(self, conn):
         """
@@ -208,7 +211,11 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         try:
             with green.ChunkWriteTimeout(self.write_timeout):
                 resp = conn.getresponse()
-        except (Exception, Timeout) as err:
+        except Timeout as err:
+            resp = err
+            logger.error('Failed to read response from %s: %s',
+                         conn.chunk, err)
+        except Exception as err:
             resp = err
             logger.exception("Failed to read response from %s", conn.chunk)
         return (conn, resp)

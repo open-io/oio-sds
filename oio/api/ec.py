@@ -774,7 +774,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
             logger.warn('Source read error: %s', exc)
             raise
         except Timeout as to:
-            logger.exception('Timeout writing data')
+            logger.error('Timeout writing data: %s', to)
             raise exceptions.OioTimeout(to)
         except Exception:
             logger.exception('Exception writing data')
@@ -963,7 +963,9 @@ class ECRebuildHandler(object):
                 logger.warning('Invalid GET response from %s: %s %s',
                                chunk, resp.status, resp.reason)
                 resp = None
-        except (Exception, Timeout):
+        except Timeout as to:
+            logger.error('ERROR fetching %s: %s', chunk, to)
+        except Exception:
             logger.exception('ERROR fetching %s', chunk)
         return resp
 
@@ -1011,9 +1013,10 @@ class ECRebuildHandler(object):
                 try:
                     with Timeout(self.read_timeout):
                         frag = [frag for frag in pile]
-                except (Exception, Timeout):
-                    # TODO complete error message
-                    logger.exception('ERROR rebuilding')
+                except Timeout as to:
+                    logger.error('ERROR while rebuilding: %s', to)
+                except Exception:
+                    logger.exception('ERROR while rebuilding')
                     break
                 if not all(frag):
                     break
