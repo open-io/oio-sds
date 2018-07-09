@@ -156,7 +156,8 @@ class BlobMoverWorker(object):
 
     def load_chunk_metadata(self, path, chunk_id):
         with open(path) as f:
-            return read_chunk_metadata(f, chunk_id)
+            meta, _ = read_chunk_metadata(f, chunk_id)
+            return meta
 
     def chunk_move(self, path, chunk_id):
         meta = self.load_chunk_metadata(path, chunk_id)

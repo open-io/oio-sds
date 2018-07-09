@@ -129,10 +129,11 @@ class BlobIndexer(Daemon):
     def update_index(self, path, chunk_id):
         with open(path) as f:
             try:
-                meta = read_chunk_metadata(f, chunk_id)
+                meta, raw_meta = read_chunk_metadata(f, chunk_id)
             except exc.MissingAttribute as e:
                 raise exc.FaultyChunk(
                     'Missing extended attribute %s' % e)
+
             data = {'mtime': int(time.time())}
             headers = {'X-oio-req-id': 'blob-indexer-' + request_id()[:-13]}
             self.index_client.chunk_push(self.volume_id,

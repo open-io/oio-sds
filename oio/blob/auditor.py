@@ -172,7 +172,7 @@ class BlobAuditorWorker(object):
     def chunk_audit(self, path, chunk_id):
         with open(path) as f:
             try:
-                meta = read_chunk_metadata(f, chunk_id)
+                meta, _ = read_chunk_metadata(f, chunk_id)
             except exc.MissingAttribute as e:
                 raise exc.FaultyChunk(
                     'Missing extended attribute %s' % e)
