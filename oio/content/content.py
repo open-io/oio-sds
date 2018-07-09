@@ -306,7 +306,7 @@ class ChunksHelper(object):
             self.chunks = chunks
         self.chunks.sort()
 
-    def filter(self, id=None, pos=None, metapos=None, subpos=None):
+    def filter(self, id=None, pos=None, metapos=None, subpos=None, host=None):
         found = []
         for c in self.chunks:
             if id is not None and c.id != id:
@@ -317,10 +317,12 @@ class ChunksHelper(object):
                 continue
             if subpos is not None and c.subpos != subpos:
                 continue
+            if host is not None and c.host != host:
+                continue
             found.append(c)
         return ChunksHelper(found, False)
 
-    def exclude(self, id=None, pos=None, metapos=None, subpos=None):
+    def exclude(self, id=None, pos=None, metapos=None, subpos=None, host=None):
         found = []
         for c in self.chunks:
             if id is not None and c.id == id:
@@ -330,6 +332,8 @@ class ChunksHelper(object):
             if metapos is not None and c.metapos == metapos:
                 continue
             if subpos is not None and c.subpos == subpos:
+                continue
+            if host is not None and c.host == host:
                 continue
             found.append(c)
         return ChunksHelper(found, False)
