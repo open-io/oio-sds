@@ -240,3 +240,26 @@ class ObjectTest(CliTestCase):
         for obj in listing:
             # 4 columns
             self.assertEqual(4, len(obj))
+
+    def test_object_link(self):
+        with tempfile.NamedTemporaryFile() as myfile:
+            myfile.write('something')
+            myfile.flush()
+            cont_name = random_str(8)
+            output = self.openio('container create ' + cont_name )
+            obj_name = random_str(8)
+            output = self.openio('object create ' + cont_name + ' ' +
+                                  myfile.name + ' --name ' + obj_name +
+                                 ' -f json')
+            output = self.openio('object show -f json ' +
+                                 cont_name + ' ' + obj_name)
+            output = self.json_loads(output)
+            self.assertEqual(output['object'], obj_name)
+            lk_name = obj_name + '-link'
+            output = self.openio('object link ' + cont_name +
+                                 ' ' + obj_name + ' ' + lk_name)
+            self.assertEqual(output, '')
+            output = self.openio('object show -f json ' +
+                                 cont_name + ' ' + lk_name)
+            output = self.json_loads(output)
+            self.assertEqual(output['object'], lk_name)
