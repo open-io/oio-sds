@@ -39,6 +39,12 @@ typedef guint32 generation_t;
 /* This special target matches any service, any location. */
 #define OIO_LB_JOKER_SVC_TARGET "__any_slot"
 
+guint64 _prime_numbers[] = {
+	524287u, 524269u, 524261u, 524257u,
+	2147483629u, 2147483587u, 2147483579u, 2147483563u,
+	0u
+};
+
 typedef guint16 oio_refcount_t;
 
 struct oio_lb_pool_vtable_s
@@ -268,6 +274,8 @@ struct oio_lb_slot_s
 	guint8 flag_dirty_order : 1;
 
 	guint8 flag_rehash_on_update : 1;
+
+	guint64 jump;
 };
 
 /* All the load-balancing information:
@@ -654,6 +662,24 @@ _slot_rehash (struct oio_lb_slot_s *slot)
 		}
 		slot->sum_weight = sum;
 	}
+
+	/* 2^31-1 used to be the default jump, and was giving good results,
+	 * except in some situations.
+	 * Now we try to find a number which is:
+	 * - prime with the number of items;
+	 * - about in the middle of the range. */
+	slot->jump = OIO_LB_SHUFFLE_JUMP;
+	guint64 low = slot->items->len / 3;
+	guint64 high = slot->items->len - low;
+	for (int i = 0; slot->items->len > 0 && _prime_numbers[i] != 0u; i++) {
+		guint64 jump_mod = _prime_numbers[i] % slot->items->len;
+		if (jump_mod != 1 && jump_mod != slot->items->len - 1 &&
+				jump_mod > low && jump_mod < high) {
+			slot->jump = jump_mod;
+			GRID_TRACE("Selected jump: %"G_GUINT64_FORMAT, jump_mod);
+			break;
+		}
+	}
 }
 
 /* return the position of the stored_item with the closest <acc_weight> to
@@ -770,7 +796,7 @@ _local_slot__poll(struct oio_lb_slot_s *slot, const guint16 bit_shift,
 	while (iter++ < slot->items->len) {
 		if (_accept_item(slot, bit_shift, reversed, ctx, i))
 			return TRUE;
-		i = (i + OIO_LB_SHUFFLE_JUMP) % slot->items->len;
+		i = (i + slot->jump) % slot->items->len;
 	}
 
 	GRID_TRACE("%s avoided everything in slot=%s", __FUNCTION__, slot->name);
@@ -1209,6 +1235,7 @@ _world_create_slot (struct oio_lb_world_s *self, const char *name)
 		for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
 			g_datalist_init(&(slot->items_by_loc[level]));
 		}
+		slot->jump = OIO_LB_SHUFFLE_JUMP;
 		GRID_INFO("Creating service slot [%s]", name);
 		g_rw_lock_writer_lock(&self->lock);
 		g_tree_replace(self->slots, g_strdup(name), slot);
@@ -1448,10 +1475,11 @@ oio_lb_world__foreach(struct oio_lb_world_s *self, void *udata,
 static void
 _slot_debug (struct oio_lb_slot_s *slot)
 {
-	GRID_DEBUG("slot=%s num=%u sum=%"G_GUINT32_FORMAT" flags=%d content:",
+	GRID_DEBUG("slot=%s num=%u sum=%"G_GUINT32_FORMAT" flags=%d jump=%"
+			G_GUINT64_FORMAT" content:",
 			slot->name, slot->items->len, slot->sum_weight,
 			slot->flag_dirty_weights | slot->flag_dirty_order<<1 |
-			slot->flag_rehash_on_update<<2);
+			slot->flag_rehash_on_update<<2, slot->jump);
 	for (guint i = 0; i < slot->items->len; ++i) {
 		const struct _slot_item_s *si = &SLOT_ITEM(slot,i);
 		GRID_DEBUG ("- [%s,0x%"OIO_LOC_FORMAT"] w=%u/%"G_GUINT32_FORMAT,
