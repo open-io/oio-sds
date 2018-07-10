@@ -227,13 +227,19 @@ class FlushContainer(command.Command):
             metavar='<container>',
             help='Container to flush'
         )
+        parser.add_argument(
+            '--quickly',
+            action='store_true',
+            dest='quick',
+            help='Flush container quickly, may put high pressure on the event system'
+        )
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
         self.app.client_manager.storage.container_flush(
-            self.app.client_manager.account, parsed_args.container)
+            self.app.client_manager.account, parsed_args.container, quickly=parsed_args.fast)
 
 
 class ShowContainer(show.ShowOne):
