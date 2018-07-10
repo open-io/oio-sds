@@ -467,15 +467,17 @@ class TestMeta2Containers(BaseTestCase):
         # give account and meta2 time to catch their breath
         wait = False
         cluster = ConscienceClient({"namespace": self.ns})
-        while True:
+        for i in range(10):
             try:
                 for service in cluster.all_services("account"):
+                    # Score depends only on CPU usage.
                     if int(service['score']) < 70:
                         wait = True
                         continue
                 if not wait:
                     for service in cluster.all_services("meta2"):
-                        if int(service['score']) < 70:
+                        # Score depends also on available storage.
+                        if int(service['score']) < 50:
                             wait = True
                             continue
                     if not wait:
@@ -484,6 +486,9 @@ class TestMeta2Containers(BaseTestCase):
                 pass
             wait = False
             time.sleep(5)
+        else:
+            logging.warn('Some scores may still be low, '
+                         'but we already waited for 50 seconds')
 
     def test_flush(self):
         params = self.param_ref(self.ref)
