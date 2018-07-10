@@ -785,3 +785,69 @@ class PurgeObject(ObjectCommandMixin, command.Command):
             account, parsed_args.container, parsed_args.object,
             maxvers=parsed_args.max_versions
         )
+
+
+class LinkObject(ObjectCommandMixin, command.Command):
+    """Make a shallow copy of an object."""
+
+    log = getLogger(__name__ + '.LinkObject')
+
+    def get_parser(self, prog_name):
+        from oio.cli.common.utils import KeyValueAction
+
+        parser = super(LinkObject, self).get_parser(prog_name)
+        self.patch_parser(parser)
+        parser.add_argument(
+            '--link-account',
+            metavar='<account>',
+            help='Name of the link account.')
+        parser.add_argument(
+            '--link-container',
+            metavar='<container>',
+            help='Name of the link container.')
+        parser.add_argument(
+            'link_object',
+            metavar='<object>',
+            help='Name of the link object.')
+        parser.add_argument(
+            '--content-id',
+            metavar='<content ID>',
+            help='Content ID.')
+        parser.add_argument(
+            '--link-content-id',
+            metavar='<content ID>',
+            help='link content ID.')
+        parser.add_argument(
+            '--property',
+            metavar='<key=value>',
+            action=KeyValueAction,
+            help='Property to add to the link')
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        account = self.app.client_manager.account
+        directive = 'COPY'
+        kwargs = {}
+
+        if parsed_args.auto:
+            container = self.flatns_manager(parsed_args.object)
+        else:
+            container = parsed_args.container
+        if parsed_args.property:
+            directive = 'REPLACE'
+            kwargs['properties'] = parsed_args.property
+        if not parsed_args.link_account:
+            parsed_args.link_account = account
+        if not parsed_args.link_container:
+            parsed_args.link_container = container
+
+        self.app.client_manager.storage.object_link(
+            account, container, parsed_args.object,
+            parsed_args.link_account, parsed_args.link_container,
+            parsed_args.link_object, maxvers=parsed_args.object_version,
+            target_content_id=parsed_args.content_id,
+            link_content_id=parsed_args.link_content_id,
+            properties_directive=directive, **kwargs
+        )
