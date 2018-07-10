@@ -419,8 +419,11 @@ _test_repartition_by_loc_level(struct oio_lb_world_s *world,
 	g_assert_cmpint(unbalanced, <, shots);
 
 	int ideal_count = targets * shots / services;
-	int min_count = ideal_count * 80 / 100;
-	int max_count = ideal_count * 120 / 100;
+	int acceptable_deviation_percent = 20;
+	int min_count = ideal_count * (100 - acceptable_deviation_percent) / 100;
+	int max_count = ideal_count * (100 + acceptable_deviation_percent) / 100;
+	int over_selected = 0;
+	int under_selected = 0;
 
 	void _on_item_check(const char *id, gpointer pcount, gpointer d UNUSED) {
 		gint count = GPOINTER_TO_INT(pcount);
@@ -431,6 +434,10 @@ _test_repartition_by_loc_level(struct oio_lb_world_s *world,
 					"(min/ideal/max/diff: %d/%d/%d/%+2.2f%%)",
 					id, count, min_count, ideal_count, max_count,
 					deviation_percent);
+			if (count < min_count)
+				under_selected++;
+			else
+				over_selected++;
 		} else {
 			GRID_DEBUG("service %s chosen %d times "
 					"(min/ideal/max/diff: %d/%d/%d/%+2.2f%%)",
@@ -441,6 +448,11 @@ _test_repartition_by_loc_level(struct oio_lb_world_s *world,
 	g_hash_table_foreach(counts, (GHFunc)_on_item_check, NULL);
 
 	g_hash_table_destroy(counts);
+
+	if (over_selected)
+		GRID_WARN("%d/%d services over selected", over_selected, services);
+	if (under_selected)
+		GRID_WARN("%d/%d services under selected", under_selected, services);
 }
 
 static void
@@ -767,8 +779,9 @@ _add_tests_from_files(const char *dir_path)
 	while ((entry = g_dir_read_name(dir))) {
 		if (g_str_has_prefix(entry, "lb-")) {
 			gchar *full_path = g_build_filename(dir_path, entry, NULL);
-			// FIXME: get target count from file name
-			_add_level_repartition_test_file(full_path, 15);
+			// FIXME(FVE): get target count from file name,
+			//_add_level_repartition_test_file(full_path, 15);
+			_add_level_repartition_test_file(full_path, 3);
 		} else {
 			GRID_DEBUG("Ignoring %s", entry);
 		}
