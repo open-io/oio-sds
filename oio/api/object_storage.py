@@ -290,7 +290,8 @@ class ObjectStorageApi(object):
         :type account: `str`
         :param container: name of the container
         :type container: `str`
-        :param fast: flush container quickly, may put high pressure on the event system
+        :param fast: flush container quickly, may put high pressure
+            on the event system
         :type fast: `bool`
         """
         if (fast):

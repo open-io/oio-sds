@@ -231,7 +231,8 @@ class FlushContainer(command.Command):
             '--quickly',
             action='store_true',
             dest='quick',
-            help='Flush container quickly, may put high pressure on the event system'
+            help="""Flush container quickly, may put high pressure
+ on the event system"""
         )
         return parser
 
@@ -239,7 +240,8 @@ class FlushContainer(command.Command):
         self.log.debug('take_action(%s)', parsed_args)
 
         self.app.client_manager.storage.container_flush(
-            self.app.client_manager.account, parsed_args.container, quickly=parsed_args.fast)
+            self.app.client_manager.account, parsed_args.container,
+            fast=parsed_args.quick)
 
 
 class ShowContainer(show.ShowOne):
