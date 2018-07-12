@@ -19,7 +19,8 @@ from logging import getLogger
 from cliff import command, show, lister
 from time import time
 from oio.common.timestamp import Timestamp
-from oio.common.constants import OIO_DB_STATUS_NAME
+from oio.common.constants import OIO_DB_STATUS_NAME,\
+    OIO_DB_ENABLED, OIO_DB_DISABLED, OIO_DB_FROZEN
 from oio.common.easy_value import boolean_value
 
 
@@ -120,7 +121,7 @@ class CreateContainer(SetPropertyCommandMixin, lister.Lister):
 
 
 class SetContainer(SetPropertyCommandMixin, command.Command):
-    """Set container properties, quota, storage policy or versioning."""
+    """Set container properties, quota, storage policy, status or versioning."""
 
     log = getLogger(__name__ + '.SetContainer')
 
@@ -139,6 +140,11 @@ class SetContainer(SetPropertyCommandMixin, command.Command):
             help='Clear previous properties',
             action="store_true"
         )
+        parser.add_argument(
+            '--status',
+            metavar='<status>',
+            help='Set container status, can be enabled, disabled or frozen'
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -155,6 +161,13 @@ class SetContainer(SetPropertyCommandMixin, command.Command):
         if parsed_args.delete_exceeding_versions is not None:
             system['sys.m2.policy.version.delete_exceeding'] = \
                 str(int(parsed_args.delete_exceeding_versions))
+        if parsed_args.status is not None:
+            status_value = {
+                'enabled': str(OIO_DB_ENABLED),
+                'disabled': str(OIO_DB_DISABLED),
+                'frozen': str(OIO_DB_FROZEN)
+            }
+            system['sys.status'] = status_value[parsed_args.status]
 
         self.app.client_manager.storage.container_set_properties(
             self.app.client_manager.account,
