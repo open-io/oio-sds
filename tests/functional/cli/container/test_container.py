@@ -121,3 +121,19 @@ class ContainerTest(CliTestCase):
         self.assertEqual('', output)
         output = self.openio('object list ' + self.NAME)
         self.assertEqual('\n', output)
+
+    def test_container_set_status(self):
+        opts = ' -f json'
+        output = self.openio('container show '+ self.NAME + opts)
+        output = self.json_loads(output)
+        self.assertEqual(output['status'], "Enabled")
+        output = self.openio('container set --status frozen ' + self.NAME)
+        self.assertEqual('', output)
+        output = self.openio('container show '+ self.NAME + opts)
+        output = self.json_loads(output)
+        self.assertEqual(output['status'], "Frozen")
+        output = self.openio('container set --status enabled ' + self.NAME)
+        self.assertEqual('', output)
+        output = self.openio('container show '+ self.NAME + opts)
+        output = self.json_loads(output)
+        self.assertEqual(output['status'], "Enabled")
