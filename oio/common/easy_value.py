@@ -14,6 +14,7 @@
 # License along with this library.
 
 import math
+import string
 
 
 def int_value(value, default):
@@ -69,3 +70,11 @@ def convert_size(size, unit=""):
         p = math.pow(1000, i)
         size = round(size / p, 3)
     return "%s%s%s" % (size, METRIC_SYMBOLS[i], unit)
+
+
+def is_hexa(hexa, size=None):
+    if not isinstance(hexa, basestring):
+        return False
+    if size and len(hexa) != size:
+        return False
+    return all(c in string.hexdigits for c in hexa)
