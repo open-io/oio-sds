@@ -16,6 +16,9 @@
 from __future__ import absolute_import
 import errno
 
+from oio.common.constants import chunk_xattr_keys, \
+    CHUNK_XATTR_CONTENT_FULLPATH_PREFIX, OIO_VERSION
+
 
 xattr = None
 try:
@@ -42,3 +45,28 @@ def read_user_xattr(fd):
 
     meta = {k[5:]: v for k, v in it if k.startswith('user.')}
     return meta
+
+
+def modify_xattr(fd, new_fullpaths, remove_old_xattr, xattr_to_remove):
+    for chunk_id, new_fullpath in new_fullpaths.iteritems():
+        xattr.setxattr(
+            fd,
+            'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + chunk_id.upper(),
+            new_fullpath)
+
+    for key in xattr_to_remove:
+        try:
+            xattr.removexattr(fd, 'user.' + key)
+        except IOError:
+            pass
+
+    if remove_old_xattr:
+        for key in ['chunk_id', 'container_id', 'content_path',
+                    'content_version', 'content_id']:
+            try:
+                xattr.removexattr(fd, 'user.' + chunk_xattr_keys[key])
+            except IOError:
+                pass
+
+    xattr.setxattr(fd, 'user.' + chunk_xattr_keys['oio_version'],
+                   OIO_VERSION)
