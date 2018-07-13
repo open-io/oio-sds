@@ -121,7 +121,9 @@ class CreateContainer(SetPropertyCommandMixin, lister.Lister):
 
 
 class SetContainer(SetPropertyCommandMixin, command.Command):
-    """Set container properties, quota, storage policy, status or versioning."""
+    """
+    Set container properties, quota, storage policy, status or versioning.
+    """
 
     log = getLogger(__name__ + '.SetContainer')
 
