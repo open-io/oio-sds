@@ -18,6 +18,7 @@ import time
 import os
 from string import hexdigits
 from datetime import datetime
+from collections import OrderedDict
 
 from oio.common.constants import chunk_xattr_keys, OIO_VERSION, \
     STRLEN_CHUNKID
@@ -40,6 +41,22 @@ XATTR_OLD_FULLPATH = 'oio:'
 XATTR_OLD_FULLPATH_SIZE = 4
 
 
+class CacheDict(OrderedDict):
+
+    def __init__(self, size=262144):
+        super(CacheDict, self).__init__()
+        self.size = size
+        self._check_size()
+
+    def __setitem__(self, key, value):
+        super(CacheDict, self).__setitem__(key, value)
+        self._check_size()
+
+    def _check_size(self):
+        while len(self) > self.size:
+            self.popitem(last=False)
+
+
 class BlobConverter(object):
 
     def __init__(self, conf, logger=None, **kwargs):
@@ -52,8 +69,8 @@ class BlobConverter(object):
         self.volume = volume
         self.namespace, self.volume_id = check_volume(self.volume)
         # cache
-        self.name_by_cid = dict()
-        self.content_id_by_name = dict()
+        self.name_by_cid = CacheDict()
+        self.content_id_by_name = CacheDict()
         # client
         self.container_client = ContainerClient(conf)
         self.content_factory = ContentFactory(conf, logger=self.logger)
