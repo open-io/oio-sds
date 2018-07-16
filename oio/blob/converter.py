@@ -16,6 +16,7 @@
 
 import time
 import os
+import tempfile
 from string import hexdigits
 from datetime import datetime
 from collections import OrderedDict
@@ -30,7 +31,7 @@ from oio.common.exceptions import ContentNotFound, OrphanChunk, \
     ConfigurationException
 from oio.common.logger import get_logger
 from oio.common.green import ratelimit
-from oio.common.easy_value import int_value, is_hexa
+from oio.common.easy_value import int_value, is_hexa, true_value
 from oio.container.client import ContainerClient
 from oio.content.factory import ContentFactory
 from oio.blob.utils import read_chunk_metadata, check_volume
@@ -86,6 +87,26 @@ class BlobConverter(object):
         self.chunks_run_time = 0
         self.max_chunks_per_second = int_value(
             conf.get('chunks_per_second'), 30)
+        # backup
+        self.backup = true_value(conf.get('backup', True))
+        self.backup_dir = conf.get('backup_dir', tempfile.gettempdir())
+        self.backup_name = 'backup_%s_%f' \
+            % (self.volume_id, time.time())
+
+    def save_xattr(self, chunk_id, xattr):
+        if not self.backup:
+            return
+        dirname = self.backup_dir + '/' + self.backup_name + '/' + chunk_id[:3]
+        try:
+            os.makedirs(dirname)
+        except OSError:
+            if not os.path.isdir(dirname):
+                raise
+        with open(dirname + '/' + chunk_id, 'w') as backup_fd:
+            # same format as getfattr
+            backup_fd.write('# file: ' + self._get_path(chunk_id) + '\n')
+            for k, v in xattr.iteritems():
+                backup_fd.write('user.' + k + '="' + v + '"\n')
 
     def _save_container(self, cid, account, container):
         cid = cid.upper()
@@ -240,7 +261,7 @@ class BlobConverter(object):
         if fullpath is not None:
             self.decode_fullpath(fullpath)
             if meta.get('oio_version') == OIO_VERSION:
-                return meta
+                return True, meta
 
         chunk_inode = os.fstat(fd.fileno()).st_ino
         raw_chunk_id = None
@@ -322,9 +343,10 @@ class BlobConverter(object):
                 self.logger.warn('chunk_id=%s (old xattr): %s',
                                  raw_chunk_id, exc)
 
+        self.save_xattr(chunk_id, raw_meta)
         # for security, if there is an error, we don't delete old xattr
         modify_xattr(fd, new_fullpaths, success, xattr_to_remove)
-        return success
+        return success, None
 
     def safe_convert_chunk(self, path, fd=None, chunk_id=None):
         if chunk_id is None:
@@ -342,9 +364,9 @@ class BlobConverter(object):
         try:
             if fd is None:
                 with open(path) as fd:
-                    success = self.convert_chunk(fd, chunk_id)
+                    success, _ = self.convert_chunk(fd, chunk_id)
             else:
-                success = self.convert_chunk(fd, chunk_id)
+                success, _ = self.convert_chunk(fd, chunk_id)
         except Exception:
             self.logger.exception('ERROR while conversion %s', path)
 
@@ -387,6 +409,8 @@ class BlobConverter(object):
         self.start_time = time.time()
         self.errors = 0
         self.passes = 0
+
+        self.backup_name = 'backup_%s_%f' % (self.volume_id, self.start_time)
 
         paths = paths_gen(self.volume)
         for path in paths:
