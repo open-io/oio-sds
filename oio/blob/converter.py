@@ -119,6 +119,9 @@ class BlobConverter(object):
         self.content_id_by_name[(cid, path, version)] = content_id
         return cid, path, version, content_id
 
+    def _get_path(self, chunk_id):
+        return self.volume + '/' + chunk_id[:3] + '/' + chunk_id
+
     def cid_from_name(self, account, container):
         cid = cid_from_name(account, container)
         cid, account, container = self._save_container(cid, account, container)
@@ -169,8 +172,7 @@ class BlobConverter(object):
             raise ValueError('chunk ID must be hexadecimal (%s)'
                              % STRLEN_CHUNKID)
         try:
-            chunk_inode2 = os.stat(
-                self.volume + '/' + chunk_id[:3] + '/' + chunk_id).st_ino
+            chunk_inode2 = os.stat(self._get_path(chunk_id)).st_ino
         except OSError:
             raise OrphanChunk('No such chunk: possible orphan chunk')
         if chunk_inode2 != chunk_inode:
@@ -376,7 +378,20 @@ class BlobConverter(object):
             self.logger.debug('Converted %s', path)
         self.passes += 1
 
-    def converter_pass(self):
+    def _fetch_chunks_from_file(self, input_file):
+        with open(input_file, 'r') as ifile:
+            for line in ifile:
+                chunk_id = line.strip()
+                if chunk_id and not chunk_id.startswith('#'):
+                    yield self._get_path(chunk_id)
+
+    def paths_gen(self, input_file=None):
+        if input_file:
+            return self._fetch_chunks_from_file(input_file)
+        else:
+            return paths_gen(self.volume)
+
+    def converter_pass(self, input_file=None):
         def report(tag, now=None):
             if now is None:
                 now = time.time()
@@ -412,7 +427,7 @@ class BlobConverter(object):
 
         self.backup_name = 'backup_%s_%f' % (self.volume_id, self.start_time)
 
-        paths = paths_gen(self.volume)
+        paths = self.paths_gen(input_file=input_file)
         for path in paths:
             self.safe_convert_chunk(path)
 
