@@ -24,11 +24,12 @@ from oio.rdir.client import RdirClient
 from oio.common.daemon import Daemon
 from oio.common import exceptions as exc
 from oio.common.utils import paths_gen, request_id
-from oio.common.easy_value import int_value
+from oio.common.easy_value import int_value, true_value
 from oio.common.logger import get_logger
 from oio.common.green import ratelimit
 from oio.common.exceptions import OioNetworkException, VolumeException
 from oio.common.constants import STRLEN_CHUNKID
+from oio.blob.converter import BlobConverter
 
 
 class BlobIndexer(Daemon):
@@ -53,6 +54,8 @@ class BlobIndexer(Daemon):
             conf.get('chunks_per_second'), 30)
         self.index_client = RdirClient(conf, logger=self.logger)
         self.namespace, self.volume_id = check_volume(self.volume)
+        self.convert_chunks = true_value(conf.get('convert_chunks'))
+        self.converter = None
 
     def index_pass(self):
 
@@ -113,6 +116,9 @@ class BlobIndexer(Daemon):
         self.errors = 0
         self.successes = 0
 
+        if self.convert_chunks:
+            self.converter = BlobConverter(self.conf, logger=self.logger)
+
         paths = paths_gen(self.volume)
         report('started')
         for path in paths:
@@ -129,7 +135,11 @@ class BlobIndexer(Daemon):
     def update_index(self, path, chunk_id):
         with open(path) as f:
             try:
-                meta, raw_meta = read_chunk_metadata(f, chunk_id)
+                meta = None
+                if self.convert_chunks and self.converter:
+                    _, meta = self.converter.convert_chunk(f, chunk_id)
+                if meta is None:
+                    meta, _ = read_chunk_metadata(f, chunk_id)
             except exc.MissingAttribute as e:
                 raise exc.FaultyChunk(
                     'Missing extended attribute %s' % e)
