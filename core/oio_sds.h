@@ -29,7 +29,7 @@ License along with this library.
 
 /** Version started to be defined in June, 2016. Version prior to 20160600
  * have no ABI incompatibilities. */
-#define OIO_SDS_VERSION 20180206
+#define OIO_SDS_VERSION 20180716
 
 #ifdef __cplusplus
 extern "C" {
