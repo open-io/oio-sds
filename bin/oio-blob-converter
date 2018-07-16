@@ -55,9 +55,9 @@ convert only the listed chunks.
 
     parser.add_argument('-q', '--quiet', action='store_true',
                         help="Don't print log on console")
-    ifile_help = "Read chunks from this file instead of rdir. " \
+    ifile_help = "Read chunks from this file instead of volume. " \
                  "Each line should be formatted like " \
-                 "'container_id|content_id|short_chunk_id_or_position'."
+                 "'chunk_id'."
     parser.add_argument('--input-file', nargs='?',
                         help=ifile_help)
 
@@ -83,8 +83,7 @@ def main():
         conf['syslog_prefix'] = args.log_syslog_prefix
     else:
         conf['syslog_prefix'] = 'OIO,%s,blob-converter,%s' % \
-            (args.namespace,
-             args.volume or args.input_file)
+            (args.namespace, args.volume)
 
     logger = get_logger(conf, 'log', not args.quiet)
 
@@ -95,9 +94,8 @@ def main():
 
     success = False
     try:
-        blob_converter = BlobConverter(
-            conf, logger, input_file=args.input_file)
-        success = blob_converter.converter_pass()
+        blob_converter = BlobConverter(conf, logger)
+        success = blob_converter.converter_pass(input_file=args.input_file)
     except KeyboardInterrupt:
         logger.info('Exiting')
     except Exception as exc:
