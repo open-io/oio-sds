@@ -246,10 +246,10 @@ class ObjectTest(CliTestCase):
             myfile.write('something')
             myfile.flush()
             cont_name = random_str(8)
-            output = self.openio('container create ' + cont_name )
+            output = self.openio('container create ' + cont_name)
             obj_name = random_str(8)
             output = self.openio('object create ' + cont_name + ' ' +
-                                  myfile.name + ' --name ' + obj_name +
+                                 myfile.name + ' --name ' + obj_name +
                                  ' -f json')
             output = self.openio('object show -f json ' +
                                  cont_name + ' ' + obj_name)
