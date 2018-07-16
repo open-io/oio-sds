@@ -46,6 +46,13 @@ convert only the listed chunks.
                         help="Report interval in seconds (3600)")
     parser.add_argument('--chunks-per-second', type=int,
                         help="Max chunks per second per worker (30)")
+    parser.add_argument('--no-backup', action='store_true',
+                        help="Don't save old xattr to a file",
+                        default=False)
+    parser.add_argument('--backup-dir',
+                        help="Directory where save backup"
+                             "(tempory directory by default)")
+
     parser.add_argument('-q', '--quiet', action='store_true',
                         help="Don't print log on console")
     ifile_help = "Read chunks from this file instead of rdir. " \
@@ -63,6 +70,8 @@ def main():
     conf = {}
     conf['namespace'] = args.namespace
     conf['volume'] = args.volume
+    conf['backup'] = not args.no_backup
+    conf['backup_dir'] = args.backup_dir
 
     if args.log_level is not None:
         conf['log_level'] = args.log_level
