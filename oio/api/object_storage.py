@@ -643,7 +643,7 @@ class ObjectStorageApi(object):
     @ensure_headers
     @ensure_request_id
     def object_touch(self, account, container, obj,
-                     version=None, **kwargs):
+                     version=None, cid=None, **kwargs):
         """
         Trigger a notification about an object
         (as if it just had been created).
@@ -655,7 +655,7 @@ class ObjectStorageApi(object):
         :param obj: name of the object to touch
         """
         self.container.content_touch(account, container, obj,
-                                     version=version, **kwargs)
+                                     version=version, cid=cid, **kwargs)
 
     @ensure_headers
     @ensure_request_id
@@ -804,7 +804,7 @@ class ObjectStorageApi(object):
     @handle_object_not_found
     @ensure_headers
     @ensure_request_id
-    def object_locate(self, account, container, obj,
+    def object_locate(self, account, container, obj, cid=None,
                       version=None, chunk_info=False, properties=True,
                       **kwargs):
         """
@@ -826,7 +826,7 @@ class ObjectStorageApi(object):
         """
         obj_meta, chunks = self.container.content_locate(
             account, container, obj, properties=properties,
-            version=version, **kwargs)
+            version=version, cid=cid, **kwargs)
 
         # FIXME(FVE): converting to float does not sort properly
         # the chunks of the same metachunk
@@ -922,7 +922,7 @@ class ObjectStorageApi(object):
     @ensure_headers
     @ensure_request_id
     def object_fetch(self, account, container, obj, version=None, ranges=None,
-                     key_file=None, **kwargs):
+                     key_file=None, cid=None, **kwargs):
         """
         Download an object.
 
@@ -951,11 +951,11 @@ class ObjectStorageApi(object):
             req_start = monotonic_time()
 
         meta, raw_chunks = self.object_locate(
-            account, container, obj, version=version, **kwargs)
+            account, container, obj, version=version, cid=cid, **kwargs)
         chunk_method = meta['chunk_method']
         storage_method = STORAGE_METHODS.load(chunk_method)
         chunks = _sort_chunks(raw_chunks, storage_method.ec)
-        meta['container_id'] = cid_from_name(account, container).upper()
+        meta['container_id'] = cid or cid_from_name(account, container).upper()
         meta['ns'] = self.namespace
         if storage_method.ec:
             stream = fetch_stream_ec(chunks, ranges, storage_method, **kwargs)

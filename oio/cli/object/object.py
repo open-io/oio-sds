@@ -33,7 +33,7 @@ class ContainerCommandMixin(object):
             'container',
             metavar='<container>',
             nargs='?',
-            help=("Name of the container to interact with.\n" +
+            help=("Name or cid of the container to interact with.\n" +
                   "Optional if --auto is specified.")
         )
         parser.add_argument(
@@ -42,12 +42,23 @@ class ContainerCommandMixin(object):
                   "'flat_*' namespace parameters (<container> is ignored)."),
             action="store_true",
         )
+        parser.add_argument(
+            '--cid',
+            dest='is_cid',
+            default=False,
+            help="Interpret <container> as a CID",
+            action='store_true'
+        )
 
     def take_action(self, parsed_args):
         if not parsed_args.container and not parsed_args.auto:
             from argparse import ArgumentError
             raise ArgumentError(parsed_args.container,
                                 "Missing value for container or --auto")
+        parsed_args.cid = None
+        if parsed_args.is_cid:
+            parsed_args.cid = parsed_args.container
+            parsed_args.container = None
 
 
 class ObjectCommandMixin(ContainerCommandMixin):
@@ -128,11 +139,16 @@ class CreateObject(ContainerCommandMixin, lister.Lister):
         super(CreateObject, self).take_action(parsed_args)
 
         container = parsed_args.container
+        cid =  parsed_args.cid
         policy = parsed_args.policy
         objs = parsed_args.objects
         names = parsed_args.name
         key_file = parsed_args.key_file
         autocreate = parsed_args.autocreate
+        if cid is not None:
+            data = self.app.client_manager.storage.container_get_properties(
+                self.app.client_manager.account, None, cid=cid)
+            container = data['system']['sys.user.name']
         if key_file and key_file[0] != '/':
             key_file = os.getcwd() + '/' + key_file
 
@@ -189,7 +205,7 @@ class TouchObject(ContainerCommandMixin, command.Command):
             'objects',
             metavar='<object>',
             nargs='+',
-            help='Object(s) to delete'
+            help='Object(s) to touch'
         )
         parser.add_argument(
             '--object-version',
@@ -202,11 +218,15 @@ class TouchObject(ContainerCommandMixin, command.Command):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         super(TouchObject, self).take_action(parsed_args)
-        container = parsed_args.container
 
+        container = parsed_args.container
+        cid = parsed_args.cid
         if len(parsed_args.objects) > 1 and parsed_args.object_version:
             raise Exception("Cannot specify a version for several objects")
-
+        if cid is not None:
+            data = self.app.client_manager.storage.container_get_properties(
+                self.app.client_manager.account, None, cid=cid)
+            container = data['system']['sys.user.name']
         for obj in parsed_args.objects:
             if parsed_args.auto:
                 container = self.flatns_manager(obj)
@@ -214,7 +234,8 @@ class TouchObject(ContainerCommandMixin, command.Command):
                 self.app.client_manager.account,
                 container,
                 obj,
-                version=parsed_args.object_version)
+                version=parsed_args.object_version,
+                cid=cid)
 
 
 class DeleteObject(ContainerCommandMixin, lister.Lister):
@@ -256,7 +277,8 @@ class DeleteObject(ContainerCommandMixin, lister.Lister):
                 account,
                 container,
                 parsed_args.objects[0],
-                version=parsed_args.object_version)
+                version=parsed_args.object_version,
+                cid=parsed_args.cid)
             results.append((parsed_args.objects[0], deleted))
         else:
             if parsed_args.object_version:
@@ -277,6 +299,11 @@ class DeleteObject(ContainerCommandMixin, lister.Lister):
                     results += tmp
             else:
                 container = parsed_args.container
+                cid = parsed_args.cid
+                if cid is not None:
+                    data = self.app.client_manager.storage.container_get_properties(
+                        self.app.client_manager.account, None, cid=cid)
+                    container = data['system']['sys.user.name']
                 results = self.app.client_manager.storage.object_delete_many(
                     account,
                     container,
@@ -302,16 +329,18 @@ class ShowObject(ObjectCommandMixin, show.ShowOne):
         super(ShowObject, self).take_action(parsed_args)
 
         account = self.app.client_manager.account
-        container = parsed_args.container
         obj = parsed_args.object
 
+        container = parsed_args.container
+        cid = parsed_args.cid
         if parsed_args.auto:
             container = self.flatns_manager(obj)
         data = self.app.client_manager.storage.object_show(
             account,
             container,
             obj,
-            version=parsed_args.object_version)
+            version=parsed_args.object_version,
+            cid=cid)
         info = {'account': account,
                 'container': container,
                 'object': obj}
@@ -352,6 +381,7 @@ class SetObject(ObjectCommandMixin, command.Command):
         self.log.debug('take_action(%s)', parsed_args)
         super(SetObject, self).take_action(parsed_args)
         container = parsed_args.container
+        cid = parsed_args.cid
         obj = parsed_args.object
         if parsed_args.auto:
             container = self.flatns_manager(obj)
@@ -362,7 +392,8 @@ class SetObject(ObjectCommandMixin, command.Command):
             obj,
             properties,
             version=parsed_args.object_version,
-            clear=parsed_args.clear)
+            clear=parsed_args.clear,
+            cid=cid)
 
 
 class SaveObject(ObjectCommandMixin, command.Command):
@@ -390,6 +421,7 @@ class SaveObject(ObjectCommandMixin, command.Command):
         super(SaveObject, self).take_action(parsed_args)
 
         container = parsed_args.container
+        cid = parsed_args.cid
         obj = parsed_args.object
         key_file = parsed_args.key_file
         if key_file and key_file[0] != '/':
@@ -406,6 +438,7 @@ class SaveObject(ObjectCommandMixin, command.Command):
             obj,
             key_file=key_file,
             properties=False,
+            cid=cid
         )
         if not os.path.exists(os.path.dirname(filename)):
             if len(os.path.dirname(filename)) > 0:
@@ -581,16 +614,18 @@ class ListObject(ContainerCommandMixin, lister.Lister):
             obj_gen = self._autocontainer_loop(account, **kwargs)
         else:
             container = parsed_args.container
+            cid = parsed_args.cid
             if parsed_args.full_listing:
                 obj_gen = depaginate(
                     self.app.client_manager.storage.object_list,
                     listing_key=lambda x: x['objects'],
                     marker_key=lambda x: x.get('next_marker'),
                     truncated_key=lambda x: x['truncated'],
-                    account=account, container=container, **kwargs)
+                    account=account, container=container,
+                    cid=cid, **kwargs)
             else:
                 resp = self.app.client_manager.storage.object_list(
-                    account, container, **kwargs)
+                    account, container, cid=cid, **kwargs)
                 obj_gen = resp['objects']
                 if resp.get('truncated'):
                     self.log.info(
@@ -665,6 +700,7 @@ class UnsetObject(ObjectCommandMixin, command.Command):
         self.log.debug('take_action(%s)', parsed_args)
         super(UnsetObject, self).take_action(parsed_args)
         container = parsed_args.container
+        cid = parsed_args.cid
         obj = parsed_args.object
         properties = parsed_args.property
         if parsed_args.auto:
@@ -674,7 +710,8 @@ class UnsetObject(ObjectCommandMixin, command.Command):
             container,
             obj,
             properties,
-            version=parsed_args.object_version)
+            version=parsed_args.object_version,
+            cid=cid)
 
 
 class DrainObject(ContainerCommandMixin, command.Command):
@@ -702,12 +739,13 @@ but no action needing the removed chunks are accepted\
         super(DrainObject, self).take_action(parsed_args)
         account = self.app.client_manager.account
         container = parsed_args.container
-
+        cid = parsed_args.cid
         for obj in parsed_args.objects:
             self.app.client_manager.storage.object_drain(
                 account,
                 container,
-                obj)
+                obj,
+                cid=cid)
 
 
 class LocateObject(ObjectCommandMixin, lister.Lister):
@@ -733,12 +771,14 @@ class LocateObject(ObjectCommandMixin, lister.Lister):
 
         account = self.app.client_manager.account
         container = parsed_args.container
+        cid = parsed_args.cid
+
         obj = parsed_args.object
         if parsed_args.auto:
             container = self.flatns_manager(obj)
 
         data = self.app.client_manager.storage.object_locate(
-            account, container, obj,
+            account, container, obj, cid=cid,
             version=parsed_args.object_version,
             chunk_info=parsed_args.chunk_info)
 
@@ -779,11 +819,14 @@ class PurgeObject(ObjectCommandMixin, command.Command):
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
+        super(PurgeObject, self).take_action(parsed_args)
 
+        container = parsed_args.container
+        cid = parsed_args.cid
         account = self.app.client_manager.account
         self.app.client_manager.storage.container.content_purge(
-            account, parsed_args.container, parsed_args.object,
-            maxvers=parsed_args.max_versions
+            account, container, parsed_args.object,
+            maxvers=parsed_args.max_versions, cid=cid
         )
 
 

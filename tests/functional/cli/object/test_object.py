@@ -36,15 +36,28 @@ class ObjectTest(CliTestCase):
     """Functional tests for objects."""
 
     CONTAINER_NAME = uuid.uuid4().hex
+    
+    @classmethod
+    def _get_cid_from_name(self, name):
+        opts = self.get_opts([], 'json')
+        output = self.openio('container show ' + name + opts)
+        data = self.json_loads(output)
+        return data['base_name']
 
-    def test_obj(self):
+    def __test_obj(self, name, with_cid=False):
         with tempfile.NamedTemporaryFile() as f:
             test_content = 'test content'
             f.write(test_content)
             f.flush()
-            self._test_obj(f.name, test_content, self.CONTAINER_NAME)
-        self._test_many_obj()
-
+            self._test_obj(f.name, test_content, name, with_cid=with_cid)
+        self._test_many_obj(with_cid=with_cid)
+        
+    def test_obj(self):
+        self.__test_obj(uuid.uuid4().hex)
+        
+    def test_obj_with_cid(self):
+        self.__test_obj(uuid.uuid4().hex, with_cid=True)
+        
     def test_obj_without_autocreate(self):
         with tempfile.NamedTemporaryFile() as f:
             test_content = 'test content'
@@ -57,11 +70,16 @@ class ObjectTest(CliTestCase):
                 'object create --no-autocreate ' +
                 uuid.uuid4().hex + ' ' + f.name)
 
-    def _test_many_obj(self):
+    def _test_many_obj(self, with_cid=False):
         cname = self.CONTAINER_NAME
+        cid_opt = ''
+        if with_cid:
+            cname = self._get_cid_from_name(self.CONTAINER_NAME)
+            cid_opt = '--cid '
         opts = self.get_opts([], 'json')
         obj_name_exists = ''
         obj_name_also_exists = ''
+        
         # delete 2 existent
         with tempfile.NamedTemporaryFile(delete=False) as f:
             f.write('test_exists')
@@ -73,16 +91,16 @@ class ObjectTest(CliTestCase):
             f.flush()
             obj_file_also_exists = f.name
             obj_name_also_exists = os.path.basename(f.name)
-        self.openio('object create ' + ' ' + cname +
+        self.openio('object create ' + cid_opt +' ' + cname +
                     ' ' + obj_file_exists + ' ' + obj_file_also_exists
                     + ' ' + opts)
-        output = self.openio('object delete ' + cname + ' ' + obj_name_exists
-                             + ' ' + obj_name_also_exists + opts)
+        output = self.openio('object delete ' + cid_opt+ cname + ' ' +
+                             obj_name_exists + ' ' + obj_name_also_exists + opts)
         data_json = self.json_loads(output)
         self.assertEqual(data_json[0]['Deleted'], True)
         self.assertEqual(data_json[1]['Deleted'], True)
         # delete 2 nonexistent
-        output = self.openio('object delete ' + cname + ' ' +
+        output = self.openio('object delete ' + cid_opt +cname + ' ' +
                              'should_not_exists' + ' ' +
                              'should_also_not_exists' + opts)
         data_json = self.json_loads(output)
@@ -94,10 +112,10 @@ class ObjectTest(CliTestCase):
             f.flush()
             obj_file_exists = f.name
             obj_name_exists = os.path.basename(f.name)
-        self.openio('object create ' + ' ' + cname +
+        self.openio('object create ' + cid_opt +' ' + cname +
                     ' ' + obj_file_exists + opts)
-        output = self.openio('object delete ' + cname + ' ' + obj_name_exists
-                             + ' should_not_exists' + opts)
+        output = self.openio('object delete ' + cid_opt + cname + ' ' +
+                             obj_name_exists + ' should_not_exists' + opts)
         data_json = self.json_loads(output)
         self.assertEqual(data_json[0]['Deleted'], True)
         self.assertEqual(data_json[1]['Deleted'], False)
@@ -110,7 +128,8 @@ class ObjectTest(CliTestCase):
     def _test_auto_container(self, test_content):
         self._test_obj('/etc/fstab', test_content, '06EE0', auto='--auto')
 
-    def _test_obj(self, obj_file, test_content, cname, auto=''):
+    def _test_obj(self, obj_file, test_content, cname, auto='', with_cid=False):
+        cid_opt=''
         checksum = md5(test_content).hexdigest().upper()
         opts = self.get_opts([], 'json')
         output = self.openio('container create ' + cname + opts)
@@ -118,6 +137,10 @@ class ObjectTest(CliTestCase):
         self.assertThat(len(data), Equals(1))
         self.assert_list_fields(data, HEADERS)
         self.assertThat(data[0]['Name'], Equals(cname))
+        cname_or_cid = cname
+        if with_cid:
+            cname_or_cid = self._get_cid_from_name(cname)
+            cid_opt = '--cid '
         # TODO ensure a clean environment before the test, and proper cleanup
         # after, so that we can check the container is properly created
         if not auto:
@@ -151,7 +174,7 @@ class ObjectTest(CliTestCase):
         self.assertThat(item['Hash'], Equals(checksum))
 
         opts = self.get_opts([], 'json')
-        output = self.openio('object list ' + cname + opts)
+        output = self.openio('object list ' + cid_opt + cname_or_cid + opts)
         listing = self.json_loads(output)
         self.assert_list_fields(listing, OBJ_HEADERS)
         self.assertThat(len(data), Equals(2))
@@ -160,42 +183,53 @@ class ObjectTest(CliTestCase):
         self.assertThat(item['Size'], Equals(len(test_content)))
         self.assertThat(item['Hash'], Equals(checksum))
 
-        output = self.openio('object save ' + cname + ' ' + obj_name)
+        output = self.openio('object save ' + cid_opt + cname_or_cid + ' ' + obj_name)
         self.addCleanup(os.remove, obj_name)
         self.assertOutput('', output)
 
         tmp_file = 'tmp_obj'
-        output = self.openio('object save ' + cname +
+        output = self.openio('object save ' + cid_opt + cname_or_cid +
                              ' ' + obj_name + ' --file ' + tmp_file)
         self.addCleanup(os.remove, tmp_file)
         self.assertOutput('', output)
 
         opts = self.get_opts([], 'json')
-        output = self.openio('object show ' + cname + ' ' + obj_name + opts)
+        output = self.openio('object show ' + cid_opt + cname_or_cid + ' ' + obj_name + opts)
         data = self.json_loads(output)
         self.assert_show_fields(data, OBJ_FIELDS)
         self.assertThat(data['object'], Equals(obj_name))
         self.assertThat(data['size'], Equals(str(len(test_content))))
         self.assertThat(data['hash'], Equals(checksum))
 
-        output = self.openio('object delete ' + cname + ' ' + obj_name + opts)
+        output = self.openio('object delete ' + cid_opt + cname_or_cid + ' ' + obj_name + opts)
         self.assertEqual(True, self.json_loads(output)[0]['Deleted'])
 
-    def test_drain(self):
+    def _test_drain(self, with_cid=False):
         cname = random_str(16)
+        cid_opt = ''
+        if with_cid:
+            self.openio(' '.join(['container create', cname]))
+            cname = self._get_cid_from_name(cname)
+            cid_opt = '--cid'
+
         with tempfile.NamedTemporaryFile(delete=False) as f:
             f.write('test_exists')
             f.flush()
             obj = f.name
             obj_name = random_str(16)
-            self.openio(' '.join(['object create ', cname, obj,
+            self.openio(' '.join(['object create ', cid_opt, cname, obj,
                                   '--name ', obj_name]))
-            self.openio(' '.join(['object drain ', cname, ' ', obj_name]))
+            self.openio(' '.join(['object drain ', cid_opt, cname, ' ', obj_name]))
 
         self.assertRaises(CommandFailed,
                           self.openio,
-                          ' '.join(['object drain', cname,
+                          ' '.join(['object drain', cid_opt, cname,
                                     'should not exist']))
+    def test_drain(self):
+        self._test_drain()
+
+    def test_drain_with_cid(self):
+        self._test_drain(with_cid=True)
 
     def test_autocontainer_object_listing(self):
         obj_count = 7
