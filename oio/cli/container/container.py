@@ -299,6 +299,13 @@ class FlushContainer(ContainerCommandMixin, command.Command):
  on the event system"""
         )
         self.patch_parser_container(parser)
+        parser.add_argument(
+            '--quickly',
+            action='store_true',
+            dest='quick',
+            help="""Flush container quickly, may put high pressure
+ on the event system"""
+)
         return parser
 
     def take_action(self, parsed_args):

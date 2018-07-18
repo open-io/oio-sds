@@ -183,32 +183,54 @@ class ContainerTest(CliTestCase):
     def test_container_flush_with_cid(self):
         self._test_container_flush(with_cid=True)
 
-    def test_container_flush_quickly(self):
+    def _test_container_flush_quickly(self, with_cid=False):
+        cid_opt=''
+        name = self.NAME
+        if with_cid:
+            cid_opt = '--cid '
+            name = self.CID
         with tempfile.NamedTemporaryFile(delete=False) as f:
             f.write('test_exists')
             f.flush()
             obj = f.name
             for i in range(10):
                 obj_name = random_str(16)
-                self.openio('object create ' + self.NAME
+                self.openio('object create ' +  cid_opt + name
                             + ' ' + obj + ' --name ' + obj_name)
-        output = self.openio('container flush --quickly ' + self.NAME)
+        output = self.openio('container flush --quickly ' +  cid_opt + name )
         self.assertEqual('', output)
-        output = self.openio('object list ' + self.NAME)
+        output = self.openio('object list ' + cid_opt + name)
         self.assertEqual('\n', output)
+        
+    def test_container_flush_quickly(self):
+        self._test_container_flush_quickly()
 
-    def test_container_set_status(self):
+    def test_container_flush_quickly_with_cid(self):
+        self._test_container_flush_quickly(with_cid=True)
+
+    def _test_container_set_status(self, with_cid=False):
+        cid_opt=''
+        name = self.NAME
+        if with_cid:
+            cid_opt = '--cid '
+            name = self.CID
         opts = ' -f json'
-        output = self.openio('container show ' + self.NAME + opts)
+        output = self.openio('container show ' + cid_opt + name + opts)
         output = self.json_loads(output)
         self.assertEqual(output['status'], "Enabled")
-        output = self.openio('container set --status frozen ' + self.NAME)
+        output = self.openio('container set --status frozen ' + cid_opt + name)
         self.assertEqual('', output)
-        output = self.openio('container show ' + self.NAME + opts)
+        output = self.openio('container show ' + cid_opt + name + opts)
         output = self.json_loads(output)
         self.assertEqual(output['status'], "Frozen")
-        output = self.openio('container set --status enabled ' + self.NAME)
+        output = self.openio('container set --status enabled ' + cid_opt + name)
         self.assertEqual('', output)
-        output = self.openio('container show ' + self.NAME + opts)
+        output = self.openio('container show ' + cid_opt + name + opts)
         output = self.json_loads(output)
         self.assertEqual(output['status'], "Enabled")
+
+    def test_container_set_status(self):
+        self._test_container_set_status()
+
+    def test_container_set_status_with_cid(self):
+        self._test_container_set_status(with_cid=True)
