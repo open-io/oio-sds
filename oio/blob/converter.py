@@ -88,13 +88,15 @@ class BlobConverter(object):
         self.max_chunks_per_second = int_value(
             conf.get('chunks_per_second'), 30)
         # backup
-        self.backup = true_value(conf.get('backup', True))
-        self.backup_dir = conf.get('backup_dir', tempfile.gettempdir())
+        self.no_backup = true_value(conf.get('no_backup', False))
+        self.backup_dir = conf.get('backup_dir') or tempfile.gettempdir()
         self.backup_name = 'backup_%s_%f' \
             % (self.volume_id, time.time())
+        # dry run
+        self.dry_run = true_value(conf.get('dry_run', False))
 
     def save_xattr(self, chunk_id, xattr):
-        if not self.backup:
+        if self.no_backup:
             return
         dirname = self.backup_dir + '/' + self.backup_name + '/' + chunk_id[:3]
         try:
@@ -346,8 +348,15 @@ class BlobConverter(object):
                                  raw_chunk_id, exc)
 
         self.save_xattr(chunk_id, raw_meta)
-        # for security, if there is an error, we don't delete old xattr
-        modify_xattr(fd, new_fullpaths, success, xattr_to_remove)
+
+        if self.dry_run:
+            self.logger.info(
+                "[dryrun] Converting chunk %s: success=%s new_fullpaths=%s "
+                "xattr_to_remove=%s", chunk_id, str(success),
+                str(new_fullpaths), str(xattr_to_remove))
+        else:
+            # for security, if there is an error, we don't delete old xattr
+            modify_xattr(fd, new_fullpaths, success, xattr_to_remove)
         return success, None
 
     def safe_convert_chunk(self, path, fd=None, chunk_id=None):
