@@ -202,7 +202,7 @@ class TestRdirServer(RdirTestCase):
         resp = self._post("/v1/rdir/fetch", params={'vol': self.vol})
         self.assertEqual(resp.status, 200)
         reference = [
-            [_key(rec), {'mtime': rec['mtime'], 'rtime': 0}]
+            [_key(rec), {'mtime': rec['mtime']}]
         ]
         self.assertListEqual(self.json_loads(resp.data), reference)
 
@@ -243,7 +243,7 @@ class TestRdirServer(RdirTestCase):
         resp = self._post("/v1/rdir/fetch", params={'vol': self.vol})
         self.assertEqual(resp.status, 200)
         self.assertEqual(self.json_loads(resp.data), [
-            [_key(rec), {'mtime': rec['mtime'], 'rtime': 0}]
+            [_key(rec), {'mtime': rec['mtime']}]
         ])
 
     def test_push_missing_fields(self):

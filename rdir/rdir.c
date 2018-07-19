@@ -244,7 +244,7 @@ struct rdir_base_s
 
 struct rdir_record_s
 {
-	gint64 mtime, rtime;
+	gint64 mtime;
 	gchar container[STRLEN_CONTAINERID];
 	gchar content[LIMIT_LENGTH_CONTENTPATH];
 	gchar chunk[LIMIT_LENGTH_CHUNKURL];
@@ -287,23 +287,18 @@ _record_encode(struct rdir_record_s *rec, GString *value)
 		g_string_append_c(value, ',');
 		oio_str_gstring_append_json_pair_int(value, "mtime", rec->mtime);
 	}
-	if (rec->rtime > 0) {
-		g_string_append_c(value, ',');
-		oio_str_gstring_append_json_pair_int(value, "rtime", rec->rtime);
-	}
 	g_string_append_c(value, '}');
 }
 
 static GError *
 _record_extract(struct rdir_record_s *rec, struct json_object *jrecord)
 {
-	struct json_object *jcontainer, *jcontent, *jchunk, *jrtime, *jmtime;
+	struct json_object *jcontainer, *jcontent, *jchunk, *jmtime;
 	struct oio_ext_json_mapping_s map[] = {
 		{"container_id", &jcontainer, json_type_string, 1},
 		{"content_id",   &jcontent,   json_type_string, 1},
 		{"chunk_id",     &jchunk,     json_type_string, 1},
-		{"rtime",        &jmtime,     json_type_int,    0},
-		{"mtime",        &jrtime,     json_type_int,    0},
+		{"mtime",        &jmtime,     json_type_int,    0},
 		{NULL, NULL, 0, 0}
 	};
 	GError *err = oio_ext_extract_json(jrecord, map);
@@ -315,7 +310,6 @@ _record_extract(struct rdir_record_s *rec, struct json_object *jrecord)
 		g_strlcpy(rec->chunk, json_object_get_string(jchunk),
 				sizeof(rec->chunk));
 		rec->mtime = jmtime ? json_object_get_int64(jmtime) : 0;
-		rec->rtime = jrtime ? json_object_get_int64(jrtime) : 0;
 	}
 	return err;
 }
@@ -570,9 +564,8 @@ _db_vol_fetch(const char *volid, GString *value,
 			continue;
 		}
 
-		if (rebuild && incident_date > 0) {
-			if (rec.mtime > incident_date && rec.rtime > incident_date)
-				continue;
+		if (rebuild && incident_date > 0 && rec.mtime > incident_date) {
+			continue;
 		}
 
 		if (nb++ > 0)
@@ -587,8 +580,6 @@ _db_vol_fetch(const char *volid, GString *value,
 		g_string_append_c(value, ',');
 		g_string_append_c(value, '{');
 		oio_str_gstring_append_json_pair_int(value, "mtime", rec.mtime);
-		g_string_append_c(value, ',');
-		oio_str_gstring_append_json_pair_int(value, "rtime", rec.rtime);
 		g_string_append_c(value, '}');
 		g_string_append_c(value, ']');
 
@@ -621,7 +612,7 @@ _db_vol_delete(const char *volid, GString *key)
 }
 
 static void
-_dump_vol_status(GString *value, GTree *tree_containers, GTree *tree_rebuilt)
+_dump_vol_status(GString *value, GTree *tree_containers)
 {
 	gboolean first = TRUE;
 	gboolean _on_container(gpointer k, gpointer v, gpointer i UNUSED) {
@@ -633,12 +624,6 @@ _dump_vol_status(GString *value, GTree *tree_containers, GTree *tree_rebuilt)
 		g_string_append_c(value, '{');
 		oio_str_gstring_append_json_pair_int(value,
 				"total", GPOINTER_TO_INT(v)-1);
-		gpointer p = g_tree_lookup(tree_rebuilt, k);
-		if (p) {
-			g_string_append_c(value, ',');
-			oio_str_gstring_append_json_pair_int(value,
-					"rebuilt", GPOINTER_TO_INT(p)-1);
-		}
 		g_string_append_c(value, '}');
 		return FALSE;
 	}
@@ -649,7 +634,7 @@ static GError *
 _db_vol_status(const char *volid, GString *value)
 {
 	static const char beacon[] = CHUNK_PREFIX;
-	gint64 nb_chunks = 0, nb_rebuilt = 0, incident_date = 0;
+	gint64 nb_chunks = 0, incident_date = 0;
 	struct rdir_base_s *base = NULL;
 	GError *err = NULL;
 
@@ -661,18 +646,11 @@ _db_vol_status(const char *volid, GString *value)
 
 	GTree *tree_containers =
 		g_tree_new_full(metautils_strcmp3, NULL, g_free, NULL);
-	GTree *tree_rebuilt =
-		g_tree_new_full(metautils_strcmp3, NULL, g_free, NULL);
 
 	void count_chunk(const char *cid) {
 		gpointer p = g_tree_lookup(tree_containers, cid);
 		gint v = p ? GPOINTER_TO_INT(p) + 1 : 2;
 		g_tree_replace(tree_containers, g_strdup(cid), GINT_TO_POINTER(v));
-	}
-	void count_rebuilt(const char *cid) {
-		gpointer p = g_tree_lookup(tree_rebuilt, cid);
-		gint v = p ? GPOINTER_TO_INT(p) + 1 : 2;
-		g_tree_replace(tree_rebuilt, g_strdup(cid), GINT_TO_POINTER(v));
 	}
 
 	/* Iterate over the chunk to count them and their containers */
@@ -704,26 +682,6 @@ _db_vol_status(const char *volid, GString *value)
 
 		/* count that chunk, for its container */
 		count_chunk(cid);
-
-		if (incident_date > 0) {
-			const char *v0 = leveldb_iter_value(it, &len);
-			struct json_object *jrecord = NULL;
-			err = JSON_parse_buffer((const guint8*)v0, len, &jrecord);
-			if (err) {
-				GRID_TRACE("malformed record [%s]: (%d) %s",
-						k0, err->code, err->message);
-				g_clear_error(&err);
-			} else {
-				json_object *jrtime = NULL;
-				if (json_object_object_get_ex(jrecord, "rtime", &jrtime)
-						&& json_object_is_type(jrtime, json_type_int)
-						&& json_object_get_int64(jrtime) > incident_date) {
-					nb_rebuilt++;
-					count_rebuilt(cid);
-				}
-				json_object_put(jrecord);
-			}
-		}
 	}
 	leveldb_iter_destroy(it);
 
@@ -733,16 +691,12 @@ _db_vol_status(const char *volid, GString *value)
 	g_string_append_c(value, ':');
 	g_string_append_c(value, '{');
 	oio_str_gstring_append_json_pair_int(value, "total", nb_chunks);
-	if (incident_date > 0) {
-		g_string_append_c(value, ',');
-		oio_str_gstring_append_json_pair_int(value, "rebuilt", nb_rebuilt);
-	}
 	g_string_append_c(value, '}');
 	g_string_append_c(value, ',');
 	oio_str_gstring_append_json_quote(value, "container");
 	g_string_append_c(value, ':');
 	g_string_append_c(value, '{');
-	_dump_vol_status(value, tree_containers, tree_rebuilt);
+	_dump_vol_status(value, tree_containers);
 	g_string_append_c(value, '}');
 	if (incident_date > 0) {
 		g_string_append_c(value, ',');
@@ -756,7 +710,6 @@ _db_vol_status(const char *volid, GString *value)
 	g_string_append_c(value, '}');
 
 	g_tree_destroy(tree_containers);
-	g_tree_destroy(tree_rebuilt);
 	return NULL;
 }
 
@@ -909,20 +862,21 @@ _db_admin_clear(const char *volid, gboolean all, gint64 *p_nb_removed)
 			leveldb_writebatch_delete(batch, key, keylen);
 			nb_removed++;
 		} else {
-			size_t vallen = 0;
-			const char *val = leveldb_iter_value(it, &vallen);
-
-			/* TODO(jfs): we parse the whole object, but we just need the rtime
-			 * so there is maybe a small room for a lean improvement. */
-			struct rdir_record_s rec = {0};
-			err = _record_parse(&rec, val, vallen);
-			if (err) {
-				GRID_INFO("Malformed record at [%.*s]", (int)keylen, key);
-				g_clear_error(&err);
-			} else if (rec.rtime > 0 && rec.rtime > incident) {
-				leveldb_writebatch_delete(batch, key, keylen);
-				nb_removed++;
-			}
+// 			TODO(adu)
+// 			size_t vallen = 0;
+// 			const char *val = leveldb_iter_value(it, &vallen);
+//
+// 			/* TODO(jfs): we parse the whole object, but we just need the rtime
+// 			 * so there is maybe a small room for a lean improvement. */
+// 			struct rdir_record_s rec = {0};
+// 			err = _record_parse(&rec, val, vallen);
+// 			if (err) {
+// 				GRID_INFO("Malformed record at [%.*s]", (int)keylen, key);
+// 				g_clear_error(&err);
+// 			} else if (rec.rtime > 0 && rec.rtime > incident) {
+// 				leveldb_writebatch_delete(batch, key, keylen);
+// 				nb_removed++;
+// 			}
 		}
 	}
 	leveldb_iter_destroy(it);
