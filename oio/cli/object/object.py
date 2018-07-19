@@ -139,7 +139,7 @@ class CreateObject(ContainerCommandMixin, lister.Lister):
         super(CreateObject, self).take_action(parsed_args)
 
         container = parsed_args.container
-        cid =  parsed_args.cid
+        cid = parsed_args.cid
         policy = parsed_args.policy
         objs = parsed_args.objects
         names = parsed_args.name
@@ -301,8 +301,10 @@ class DeleteObject(ContainerCommandMixin, lister.Lister):
                 container = parsed_args.container
                 cid = parsed_args.cid
                 if cid is not None:
-                    data = self.app.client_manager.storage.container_get_properties(
-                        self.app.client_manager.account, None, cid=cid)
+                    data = (
+                        self.app.client_manager.storage.
+                        container_get_properties(
+                            self.app.client_manager.account, None, cid=cid))
                     container = data['system']['sys.user.name']
                 results = self.app.client_manager.storage.object_delete_many(
                     account,
@@ -885,6 +887,11 @@ class LinkObject(ObjectCommandMixin, command.Command):
             parsed_args.link_account = account
         if not parsed_args.link_container:
             parsed_args.link_container = container
+            parsed_args.cid = None
+        cid = None
+        if parsed_args.is_cid:
+            cid = container
+            container = None
 
         self.app.client_manager.storage.object_link(
             account, container, parsed_args.object,
@@ -892,5 +899,5 @@ class LinkObject(ObjectCommandMixin, command.Command):
             parsed_args.link_object, maxvers=parsed_args.object_version,
             target_content_id=parsed_args.content_id,
             link_content_id=parsed_args.link_content_id,
-            properties_directive=directive, **kwargs
+            properties_directive=directive, cid=cid, **kwargs
         )

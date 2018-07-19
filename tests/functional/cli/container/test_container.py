@@ -45,12 +45,12 @@ class ContainerTest(CliTestCase):
 
     def _test_container_show(self, with_cid=False):
         opts = self.get_opts(['container'])
-        cid_opt=''
+        cid_opt = ''
         name = self.NAME
         if with_cid:
             cid_opt = '--cid '
             name = self.CID
-        output = self.openio('container show '+ cid_opt + name + opts)
+        output = self.openio('container show ' + cid_opt + name + opts)
         self.assertEqual(self.NAME + '\n', output)
 
     def test_container_show(self):
@@ -61,12 +61,12 @@ class ContainerTest(CliTestCase):
 
     def _test_container_show_table(self, with_cid=False):
         opts = self.get_opts([], 'table')
-        cid_opt=''
+        cid_opt = ''
         name = self.NAME
         if with_cid:
             cid_opt = '--cid '
             name = self.CID
-        output = self.openio('container show ' + cid_opt +name + opts)
+        output = self.openio('container show ' + cid_opt + name + opts)
         regex = "|\s*%s\s*|\s*%s\s*|"
         self.assertIsNotNone(re.match(regex % ("bytes_usage", "0B"), output))
         self.assertIsNotNone(re.match(regex % ("objects", "0"), output))
@@ -83,7 +83,7 @@ class ContainerTest(CliTestCase):
         self.assertIn(self.NAME, output)
 
     def _test_container_refresh(self, with_cid=False):
-        cid_opt=''
+        cid_opt = ''
         name = self.NAME
         if with_cid:
             cid_opt = '--cid '
@@ -108,7 +108,7 @@ class ContainerTest(CliTestCase):
     def _test_container_snapshot(self, with_cid=False):
         # Snapshot should reply the name of the snapshot on success
         opts = self.get_opts([], 'json')
-        cid_opt=''
+        cid_opt = ''
         name = self.NAME
         if with_cid:
             cid_opt = '--cid '
@@ -125,7 +125,7 @@ class ContainerTest(CliTestCase):
         dst_container = random_str(16)
         opts += " --dst-account " + dst_account
         opts += " --dst-container " + dst_container
-        output = self.openio('container snapshot ' +  cid_opt + name + opts)
+        output = self.openio('container snapshot ' + cid_opt + name + opts)
         output = self.json_loads(output)[0]
         self.assertEqual(output['Account'], dst_account)
         self.assertEqual(output['Container'], dst_container)
@@ -143,12 +143,12 @@ class ContainerTest(CliTestCase):
         self._test_container_snapshot(with_cid=True)
 
     def _test_container_purge(self, with_cid=False):
-        cid_opt=''
+        cid_opt = ''
         name = self.NAME
         if with_cid:
             cid_opt = '--cid '
             name = self.CID
-        output = self.openio('container purge ' + cid_opt  +name)
+        output = self.openio('container purge ' + cid_opt + name)
         self.assertEqual('', output)
 
     def test_container_purge(self):
@@ -157,9 +157,8 @@ class ContainerTest(CliTestCase):
     def test_container_purge_with_cid(self):
         self._test_container_purge(with_cid=True)
 
-
     def _test_container_flush(self, with_cid=False):
-        cid_opt=''
+        cid_opt = ''
         name = self.NAME
         if with_cid:
             cid_opt = '--cid '
@@ -172,7 +171,7 @@ class ContainerTest(CliTestCase):
                 obj_name = random_str(16)
                 self.openio('object create ' + self.NAME
                             + ' ' + obj + ' --name ' + obj_name)
-        output = self.openio('container flush ' + cid_opt +name)
+        output = self.openio('container flush ' + cid_opt + name)
         self.assertEqual('', output)
         output = self.openio('object list ' + self.NAME)
         self.assertEqual('\n', output)
@@ -184,7 +183,7 @@ class ContainerTest(CliTestCase):
         self._test_container_flush(with_cid=True)
 
     def _test_container_flush_quickly(self, with_cid=False):
-        cid_opt=''
+        cid_opt = ''
         name = self.NAME
         if with_cid:
             cid_opt = '--cid '
@@ -195,13 +194,13 @@ class ContainerTest(CliTestCase):
             obj = f.name
             for i in range(10):
                 obj_name = random_str(16)
-                self.openio('object create ' +  cid_opt + name
+                self.openio('object create ' + cid_opt + name
                             + ' ' + obj + ' --name ' + obj_name)
-        output = self.openio('container flush --quickly ' +  cid_opt + name )
+        output = self.openio('container flush --quickly ' + cid_opt + name)
         self.assertEqual('', output)
         output = self.openio('object list ' + cid_opt + name)
         self.assertEqual('\n', output)
-        
+
     def test_container_flush_quickly(self):
         self._test_container_flush_quickly()
 
@@ -209,7 +208,7 @@ class ContainerTest(CliTestCase):
         self._test_container_flush_quickly(with_cid=True)
 
     def _test_container_set_status(self, with_cid=False):
-        cid_opt=''
+        cid_opt = ''
         name = self.NAME
         if with_cid:
             cid_opt = '--cid '
@@ -223,7 +222,8 @@ class ContainerTest(CliTestCase):
         output = self.openio('container show ' + cid_opt + name + opts)
         output = self.json_loads(output)
         self.assertEqual(output['status'], "Frozen")
-        output = self.openio('container set --status enabled ' + cid_opt + name)
+        output = self.openio('container set --status enabled ' +
+                             cid_opt + name)
         self.assertEqual('', output)
         output = self.openio('container show ' + cid_opt + name + opts)
         output = self.json_loads(output)
