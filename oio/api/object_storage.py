@@ -22,7 +22,6 @@ import warnings
 import time
 import random
 from urllib import unquote
-
 from oio.common import exceptions as exc
 from oio.api.ec import ECWriteHandler
 from oio.api.io import MetachunkPreparer
@@ -643,7 +642,7 @@ class ObjectStorageApi(object):
     @ensure_headers
     @ensure_request_id
     def object_touch(self, account, container, obj,
-                     version=None, cid=None, **kwargs):
+                     version=None, **kwargs):
         """
         Trigger a notification about an object
         (as if it just had been created).
@@ -655,7 +654,7 @@ class ObjectStorageApi(object):
         :param obj: name of the object to touch
         """
         self.container.content_touch(account, container, obj,
-                                     version=version, cid=cid, **kwargs)
+                                     version=version, **kwargs)
 
     @ensure_headers
     @ensure_request_id
@@ -804,7 +803,7 @@ class ObjectStorageApi(object):
     @handle_object_not_found
     @ensure_headers
     @ensure_request_id
-    def object_locate(self, account, container, obj, cid=None,
+    def object_locate(self, account, container, obj,
                       version=None, chunk_info=False, properties=True,
                       **kwargs):
         """
@@ -826,7 +825,7 @@ class ObjectStorageApi(object):
         """
         obj_meta, chunks = self.container.content_locate(
             account, container, obj, properties=properties,
-            version=version, cid=cid, **kwargs)
+            version=version, **kwargs)
 
         # FIXME(FVE): converting to float does not sort properly
         # the chunks of the same metachunk
@@ -922,7 +921,7 @@ class ObjectStorageApi(object):
     @ensure_headers
     @ensure_request_id
     def object_fetch(self, account, container, obj, version=None, ranges=None,
-                     key_file=None, cid=None, **kwargs):
+                     key_file=None, **kwargs):
         """
         Download an object.
 
@@ -950,12 +949,25 @@ class ObjectStorageApi(object):
         if perfdata is not None:
             req_start = monotonic_time()
 
+        # Check cid format
+        cid_arg = kwargs.get('cid')
+        if cid_arg is not None:
+            cid_arg = cid_arg.upper()
+            cid_seq = cid_arg.split('.', 1)
+            try:
+                int(cid_seq[0], 16)
+                if len(cid_seq) > 1:
+                    int(cid_seq[1], 10)
+            except ValueError:
+                raise exc.OioException("Invalid cid: " + cid_arg)
+
         meta, raw_chunks = self.object_locate(
-            account, container, obj, version=version, cid=cid, **kwargs)
+            account, container, obj, version=version, **kwargs)
         chunk_method = meta['chunk_method']
         storage_method = STORAGE_METHODS.load(chunk_method)
         chunks = _sort_chunks(raw_chunks, storage_method.ec)
-        meta['container_id'] = cid or cid_from_name(account, container).upper()
+        meta['container_id'] = (
+            cid_arg or cid_from_name(account, container).upper())
         meta['ns'] = self.namespace
         if storage_method.ec:
             stream = fetch_stream_ec(chunks, ranges, storage_method, **kwargs)

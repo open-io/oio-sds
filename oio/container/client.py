@@ -500,7 +500,7 @@ class ContainerClient(ProxyClient):
             return results
         except exceptions.NotFound:
             for obj in paths:
-                rc = self.content_delete(account, reference, obj, cid=cid
+                rc = self.content_delete(account, reference, obj, cid=cid,
                                          **kwargs)
                 results.append((obj, rc))
             return results
@@ -568,7 +568,7 @@ class ContainerClient(ProxyClient):
         :keyword autocreate: create container if it doesn't exist
         """
         uri = self._make_uri('content/prepare')
-        params = self._make_params(account, reference, path,
+        params = self._make_params(account, reference, path, cid=cid,
                                    content=content_id)
         data = {'size': size}
         if stgpol:
