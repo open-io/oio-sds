@@ -1,0 +1,26 @@
+
+add_custom_target(oio-rawx ALL)
+
+add_custom_command(
+	TARGET oio-rawx
+	DEPENDS
+		${CMAKE_CURRENT_SOURCE_DIR}/chunkrepo.go
+		${CMAKE_CURRENT_SOURCE_DIR}/conf_reader.go
+		${CMAKE_CURRENT_SOURCE_DIR}/filerepo.go
+		${CMAKE_CURRENT_SOURCE_DIR}/filerepo_test.go
+		${CMAKE_CURRENT_SOURCE_DIR}/handler_chunk.go
+		${CMAKE_CURRENT_SOURCE_DIR}/handler_stat.go
+		${CMAKE_CURRENT_SOURCE_DIR}/hexa.go
+		${CMAKE_CURRENT_SOURCE_DIR}/limited_reader.go
+		${CMAKE_CURRENT_SOURCE_DIR}/main.go
+		${CMAKE_CURRENT_SOURCE_DIR}/mover.go
+		${CMAKE_CURRENT_SOURCE_DIR}/rawx.go
+		${CMAKE_CURRENT_SOURCE_DIR}/repo.go
+	COMMAND
+		cd ${CMAKE_CURRENT_SOURCE_DIR} && go build -o ${CMAKE_CURRENT_BINARY_DIR}/oio-rawx .
+	COMMENT
+		"Build RAWX v2, written in Golang"
+)
+
+install(PROGRAMS oio-rawx
+		RUNTIME DESTINATION bin)
