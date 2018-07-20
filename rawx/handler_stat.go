@@ -118,6 +118,8 @@ type statHandler struct {
 	rawx *rawxService
 }
 
+// FIXME(jfs): Shouldn't a HEAD return the Content-Length of the GET on the
+// same resource, but without the body?
 func doCheckStats(rr *rawxRequest) {
 	rr.rep.Header().Set("Accept-Ranges", "none")
 	rr.rep.Header().Set("Content-Length", "0")

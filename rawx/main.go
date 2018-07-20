@@ -31,6 +31,20 @@ import (
 	"regexp"
 )
 
+func checkURL(url string) {
+	addr, err := net.ResolveTCPAddr("tcp", url)
+	if err != nil || addr.Port <= 0 {
+		log.Fatalf("%s is not a valid URL", url)
+	}
+}
+
+// TODO(jfs): the pattern doesn't patch the requirement
+func checkNS(ns string) {
+	if ok, _ := regexp.MatchString("[0-9a-zA-Z]+(\\.[0-9a-zA-Z]+)*", ns); !ok {
+		log.Fatalf("%s is not a valid namespace name", ns)
+	}
+}
+
 func usage(why string) {
 	log.Println("rawx NS IP:PORT BASEDIR")
 	log.Fatal(why)
@@ -52,43 +66,57 @@ func checkNamespace(ns string) bool {
 	return ok
 }
 
-func main() {
-	flag.Parse()
-	if flag.NArg() != 3 {
-		usage("Missing positional arguments")
-	}
-
-	ns := flag.Arg(0)
-	if !checkNamespace(ns) {
-		usage("Invalid namespace Format")
-	}
-
-	ipPort := flag.Arg(1)
-	if !checkUrl(ipPort) {
-		usage("Invalid URL format")
-	}
-
-	basedir := filepath.Clean(flag.Arg(2))
+func checkMakeFileRepo(dir string) *FileRepository {
+	basedir := filepath.Clean(dir)
 	if !filepath.IsAbs(basedir) {
-		usage("Basedir must be absolute")
+		log.Fatalf("Filerepo path must be absolute, got %s", basedir)
+	}
+	return MakeFileRepository(basedir, nil)
+}
+
+func main() {
+	_ = flag.String("D", "UNUSED", "Unused compatibility flag")
+	confPtr := flag.String("f", "", "Path to configuration file")
+	flag.Parse()
+
+	if flag.NArg() != 0 {
+		log.Fatal("Unexpected positional argument detected")
 	}
 
-	var rawxid string
+	var opts optionsMap
 
-	filerepo := MakeFileRepository(basedir, nil)
+	if len(*confPtr) <= 0 {
+		log.Fatal("Missing configuration file")
+	} else if cfg, err := filepath.Abs(*confPtr); err != nil {
+		log.Fatal("Invalid configuration file path", err.Error())
+	} else if opts, err = ReadConfig(cfg); err != nil {
+		log.Fatal("Exiting with error: ", err.Error())
+	} else {
+		log.Println("Loaded configuration from", cfg)
+	}
+
+	checkNS(opts["ns"])
+	checkURL(opts["addr"])
+	filerepo := checkMakeFileRepo(opts["basedir"])
+	filerepo.HashWidth = opts.getInt("hash_width", filerepo.HashWidth)
+	filerepo.HashDepth = opts.getInt("hash_depth", filerepo.HashDepth)
+	filerepo.sync_file = opts.getBool("fsync_file", filerepo.sync_file)
+	filerepo.sync_dir = opts.getBool("fsync_dir", filerepo.sync_dir)
+	filerepo.fallocate_file = opts.getBool("fallocate", filerepo.fallocate_file)
+
 	chunkrepo := MakeChunkRepository(filerepo)
-	if err := chunkrepo.Lock(ns, ipPort); err != nil {
-		usage("Basedir cannot be locked with xattr : " + err.Error())
+	if err := chunkrepo.Lock(opts["ns"], opts["addr"]); err != nil {
+		log.Fatal("Basedir cannot be locked with xattr:", err.Error())
 	}
 
 	logger_access, _ := syslog.NewLogger(syslog.LOG_INFO|syslog.LOG_LOCAL0, 0)
 	logger_error, _ := syslog.NewLogger(syslog.LOG_INFO|syslog.LOG_LOCAL1, 0)
 	rawx := rawxService{
-		ns:            ns,
-		id:            rawxid,
-		url:           ipPort,
+		ns:            opts["ns"],
+		id:            "",
+		url:           opts["addr"],
 		repo:          chunkrepo,
-		compress:      false,
+		compress:      opts.getBool("compress", false),
 		logger_access: logger_access,
 		logger_error:  logger_error,
 	}
@@ -102,6 +130,6 @@ func main() {
 	http.Handle("/", &chunkHandler{&rawx})
 
 	if err := http.ListenAndServe(rawx.url, nil); err != nil {
-		log.Fatal("HTTP error : ", err)
+		log.Fatal("HTTP error:", err)
 	}
 }
