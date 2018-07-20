@@ -44,8 +44,8 @@ class VolumeClientCli(object):
     def volume_admin_show(self, volume):
         return self.volume.admin_show(volume)
 
-    def volume_admin_clear(self, volume):
-        return self.volume.admin_clear(volume)
+    def volume_admin_clear(self, volume, **kwargs):
+        return self.volume.admin_clear(volume, **kwargs)
 
     def volume_show(self, volume):
         from oio.common.json import json

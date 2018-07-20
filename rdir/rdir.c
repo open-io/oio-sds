@@ -837,16 +837,20 @@ _db_admin_unlock(const char *volid)
 }
 
 static GError *
-_db_admin_clear(const char *volid, gboolean all, gint64 *p_nb_removed)
+_db_admin_clear(const char *volid, gboolean all, gboolean before_incident,
+		gboolean repair, gint64 *p_nb_removed, gint64 *p_nb_repaired,
+		gint64 *p_errors)
 {
 	struct rdir_base_s *base = NULL;
 	GError *err = NULL;
 	char *errmsg = NULL;
 	int errsav = 0;
 	gint64 nb_removed = 0;
+	gint64 nb_repaired = 0;
+	gint64 errors = 0;
 	gint64 incident = 0;
 
-	if (!all) {
+	if (before_incident) {
 		if (NULL != (err = _db_admin_get_incident(volid, &incident)))
 			return err;
 	}
@@ -856,38 +860,63 @@ _db_admin_clear(const char *volid, gboolean all, gint64 *p_nb_removed)
 
 	leveldb_writebatch_t *batch = leveldb_writebatch_create();
 
-	leveldb_readoptions_t *roptions = leveldb_readoptions_create();
-	leveldb_readoptions_set_fill_cache(roptions, 0);
-	leveldb_iterator_t *it = leveldb_create_iterator(base->base, roptions);
-	leveldb_readoptions_destroy(roptions);
-	leveldb_iter_seek(it, CHUNK_PREFIX, sizeof(CHUNK_PREFIX)-1);
-	for (; leveldb_iter_valid(it) ; leveldb_iter_next(it)) {
-		size_t keylen = 0;
-		const char *key = leveldb_iter_key(it, &keylen);
-		if (*key != CHUNK_PREFIX[0])
-			break;
-		if (all || incident <= 0) {
-			leveldb_writebatch_delete(batch, key, keylen);
-			nb_removed++;
-		} else {
-// 			TODO(adu)
-// 			size_t vallen = 0;
-// 			const char *val = leveldb_iter_value(it, &vallen);
-//
-// 			/* TODO(jfs): we parse the whole object, but we just need the rtime
-// 			 * so there is maybe a small room for a lean improvement. */
-// 			struct rdir_record_s rec = {0};
-// 			err = _record_parse(&rec, val, vallen);
-// 			if (err) {
-// 				GRID_INFO("Malformed record at [%.*s]", (int)keylen, key);
-// 				g_clear_error(&err);
-// 			} else if (rec.rtime > 0 && rec.rtime > incident) {
-// 				leveldb_writebatch_delete(batch, key, keylen);
-// 				nb_removed++;
-// 			}
+	if (all || (before_incident && incident > 0) || repair) {
+		leveldb_readoptions_t *roptions = leveldb_readoptions_create();
+		leveldb_readoptions_set_fill_cache(roptions, 0);
+		leveldb_iterator_t *it = leveldb_create_iterator(base->base, roptions);
+		leveldb_readoptions_destroy(roptions);
+		leveldb_iter_seek(it, CHUNK_PREFIX, sizeof(CHUNK_PREFIX)-1);
+		for (; leveldb_iter_valid(it) ; leveldb_iter_next(it)) {
+			size_t keylen = 0;
+			const char *key = leveldb_iter_key(it, &keylen);
+			if (*key != CHUNK_PREFIX[0])
+				break;
+
+			if (all) {
+				leveldb_writebatch_delete(batch, key, keylen);
+				nb_removed++;
+				continue;
+			}
+
+			size_t vallen = 0;
+			const char *val = leveldb_iter_value(it, &vallen);
+
+			/* TODO(jfs): we parse the whole object, but we just need the rtime
+				* so there is maybe a small room for a lean improvement. */
+			struct rdir_record_s rec = {0};
+			err = _record_parse(&rec, val, vallen);
+			if (err) {
+				GRID_INFO("Malformed record at [%.*s]", (int)keylen, key);
+				g_clear_error(&err);
+				errors++;
+				continue;
+			}
+
+			if (before_incident && incident > 0 && rec.mtime <= incident) {
+				leveldb_writebatch_delete(batch, key, keylen);
+				nb_removed++;
+				continue;
+			}
+
+			if (repair) {
+				GString *repaired_key = _record_to_key(&rec);
+				GString *repaired_val = g_string_sized_new(1024);
+				_record_encode(&rec, repaired_val);
+				err = _db_vol_push(volid, FALSE, repaired_key, repaired_val);
+				g_string_free(repaired_key, TRUE);
+				g_string_free(repaired_val, TRUE);
+				if (err) {
+					GRID_INFO("Push failed at [%.*s]: %s", (int)keylen, key,
+							err->message);
+					g_clear_error(&err);
+					errors++;
+					continue;
+				}
+				nb_repaired++;
+			}
 		}
+		leveldb_iter_destroy(it);
 	}
-	leveldb_iter_destroy(it);
 
 	leveldb_writebatch_delete(batch, KEY_INCIDENT, sizeof(KEY_INCIDENT)-1);
 
@@ -898,6 +927,8 @@ _db_admin_clear(const char *volid, gboolean all, gint64 *p_nb_removed)
 	leveldb_writebatch_destroy(batch);
 
 	*p_nb_removed = nb_removed;
+	*p_nb_repaired = nb_repaired;
+	*p_errors = errors;
 	return errmsg ? _map_errno_to_gerror(errsav, errmsg) : NULL;
 }
 
@@ -1108,7 +1139,8 @@ _route_admin_lock(struct req_args_s *args, struct json_object *jbody,
 }
 
 static enum http_rc_e
-_route_admin_clear(struct req_args_s *args, const char *volid, const char *all)
+_route_admin_clear(struct req_args_s *args, const char *volid, const char *all,
+		const char *before_incident, const char *repair)
 {
 	GError *err = NULL;
 
@@ -1121,7 +1153,12 @@ _route_admin_clear(struct req_args_s *args, const char *volid, const char *all)
 		return _reply_common_error(args->rp, err);
 
 	gint64 nb_removed = 0;
-	err = _db_admin_clear(volid, oio_str_parse_bool(all, FALSE), &nb_removed);
+	gint64 nb_repaired = 0;
+	gint64 errors = 0;
+	err = _db_admin_clear(volid, oio_str_parse_bool(all, FALSE),
+			oio_str_parse_bool(before_incident, FALSE),
+			oio_str_parse_bool(repair, FALSE), &nb_removed, &nb_repaired,
+			&errors);
 
 	GError *_e;
 	if (NULL != (_e = _db_admin_unlock(volid))) {
@@ -1132,6 +1169,10 @@ _route_admin_clear(struct req_args_s *args, const char *volid, const char *all)
 		GString *value = g_string_sized_new(64);
 		g_string_append_c(value, '{');
 		oio_str_gstring_append_json_pair_int(value, "removed", nb_removed);
+		g_string_append_c(value, ',');
+		oio_str_gstring_append_json_pair_int(value, "repaired", nb_repaired);
+		g_string_append_c(value, ',');
+		oio_str_gstring_append_json_pair_int(value, "errors", errors);
 		g_string_append_c(value, '}');
 		return _reply_ok(args->rp, value);
 	}
@@ -1317,7 +1358,8 @@ _handler_decode_route(struct req_args_s *args, struct json_object *jbody,
 
 		case OIO_RDIR_ADMIN_CLEAR:
 			CHECK_METHOD("POST");
-			return _route_admin_clear(args, OPT("vol"), OPT("all"));
+			return _route_admin_clear(args, OPT("vol"), OPT("all"),
+					OPT("before_incident"), OPT("repair"));
 
 		case OIO_RDIR_VOL_CREATE:
 			CHECK_METHOD("POST");
