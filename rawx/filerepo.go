@@ -47,15 +47,16 @@ type Notifier interface {
 }
 
 type FileRepository struct {
-	notifier     Notifier
-	root         string
-	putOpenMode  os.FileMode
-	putMkdirMode os.FileMode
-	HashWidth    int
-	HashDepth    int
-	putOpenFlags int
-	sync_file    bool
-	sync_dir     bool
+	notifier       Notifier
+	root           string
+	putOpenMode    os.FileMode
+	putMkdirMode   os.FileMode
+	HashWidth      int
+	HashDepth      int
+	putOpenFlags   int
+	sync_file      bool
+	sync_dir       bool
+	fallocate_file bool
 }
 
 func MakeFileRepository(root string, notifier Notifier) *FileRepository {
