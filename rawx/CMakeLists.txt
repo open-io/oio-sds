@@ -17,10 +17,10 @@ add_custom_command(
 		${CMAKE_CURRENT_SOURCE_DIR}/rawx.go
 		${CMAKE_CURRENT_SOURCE_DIR}/repo.go
 	COMMAND
-		cd ${CMAKE_CURRENT_SOURCE_DIR} && go build -o ${CMAKE_CURRENT_BINARY_DIR}/oio-rawx .
+	cd ${CMAKE_CURRENT_SOURCE_DIR} && ${GO_EXECUTABLE} build -o ${CMAKE_CURRENT_BINARY_DIR}/oio-rawx .
 	COMMENT
 		"Build RAWX v2, written in Golang"
 )
 
-install(PROGRAMS oio-rawx
-		RUNTIME DESTINATION bin)
+install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/oio-rawx
+		DESTINATION bin)
