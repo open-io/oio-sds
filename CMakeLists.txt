@@ -369,9 +369,12 @@ else()
 	find_program(ASN1C_EXECUTABLE asn1c)
 endif()
 set(ASN1C_EXE_OPTS "-fwide-types")
+
+find_program(GO_EXECUTABLE go)
 endif (NOT SDK_ONLY)
 
 if (NOT SDK_ONLY)
+test_CLI(GO_EXECUTABLE "go")
 test_CLI(FLEX_EXECUTABLE "flex")
 test_CLI(BISON_EXECUTABLE "bison")
 test_CLI(ASN1C_EXECUTABLE "asn1c")
