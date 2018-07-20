@@ -16,6 +16,8 @@
 from logging import getLogger
 from cliff import lister, show
 
+from oio.common.exceptions import OioException
+
 
 class ShowAdminVolume(show.ShowOne):
     """
@@ -60,6 +62,27 @@ class ClearAdminVolume(lister.Lister):
             nargs='+',
             help='IDs of the rawx services',
         )
+        parser.add_argument(
+            '--all',
+            dest='clear_all',
+            default=False,
+            help="Clear all chunks entries",
+            action='store_true'
+        )
+        parser.add_argument(
+            '--before-incident',
+            dest='before_incident',
+            default=False,
+            help="Clear all chunks entries before incident date",
+            action='store_true'
+        )
+        parser.add_argument(
+            '--repair',
+            dest='repair',
+            default=False,
+            help="Repair all chunks entries",
+            action='store_true'
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -69,10 +92,15 @@ class ClearAdminVolume(lister.Lister):
 
         results = list()
         for volume in volumes:
-            self.app.client_manager.volume.volume_admin_clear(
-                    volume)
-            results.append((volume, True))
-        columns = ('Volume', 'Success')
+            try:
+                resp_body = self.app.client_manager.volume.volume_admin_clear(
+                        volume, clear_all=parsed_args.clear_all,
+                        before_incident=parsed_args.before_incident,
+                        repair=parsed_args.repair)
+                results.append((volume, True, resp_body))
+            except OioException as exc:
+                results.append((volume, False, exc))
+        columns = ('Volume', 'Success', 'Message')
         return columns, results
 
 
@@ -243,8 +271,6 @@ class BootstrapVolume(lister.Lister):
         return parser
 
     def take_action(self, parsed_args):
-        from oio.common.exceptions import OioException
-
         self.log.debug('take_action(%s)', parsed_args)
 
         try:
