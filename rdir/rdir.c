@@ -293,12 +293,14 @@ _record_encode(struct rdir_record_s *rec, GString *value)
 static GError *
 _record_extract(struct rdir_record_s *rec, struct json_object *jrecord)
 {
-	struct json_object *jcontainer, *jcontent, *jchunk, *jmtime;
+	struct json_object *jcontainer, *jcontent, *jchunk, *jmtime, *jrtime;
 	struct oio_ext_json_mapping_s map[] = {
 		{"container_id", &jcontainer, json_type_string, 1},
 		{"content_id",   &jcontent,   json_type_string, 1},
 		{"chunk_id",     &jchunk,     json_type_string, 1},
 		{"mtime",        &jmtime,     json_type_int,    0},
+		// FIXME(adu) to delete after deleting all rtime
+		{"rtime",        &jrtime,     json_type_int,    0},
 		{NULL, NULL, 0, 0}
 	};
 	GError *err = oio_ext_extract_json(jrecord, map);
@@ -309,7 +311,13 @@ _record_extract(struct rdir_record_s *rec, struct json_object *jrecord)
 				sizeof(rec->content));
 		g_strlcpy(rec->chunk, json_object_get_string(jchunk),
 				sizeof(rec->chunk));
-		rec->mtime = jmtime ? json_object_get_int64(jmtime) : 0;
+		gint64 mtime = 0;
+		gint64 rtime = 0;
+		if (jmtime)
+			mtime = json_object_get_int64(jmtime);
+		if (jrtime)
+			rtime = json_object_get_int64(jrtime);
+		rec->mtime = MAX(mtime, rtime);
 	}
 	return err;
 }
