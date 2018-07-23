@@ -96,13 +96,17 @@ func setOrHasXattr(path, n, v string) error {
 	}
 }
 
-func (r *FileRepository) Lock(ns, url string) error {
+func (r *FileRepository) Lock(ns, id string) error {
 	var err error
-	err = setOrHasXattr(r.root, "user.rawx_server.address", url)
+	err = setOrHasXattr(r.root, "user.server.id", id)
 	if err != nil {
 		return err
 	}
-	err = setOrHasXattr(r.root, "user.rawx_server.namespace", ns)
+	err = setOrHasXattr(r.root, "user.server.ns", ns)
+	if err != nil {
+		return err
+	}
+	err = setOrHasXattr(r.root, "user.server.type", "rawx")
 	if err != nil {
 		return err
 	}
