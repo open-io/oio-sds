@@ -18,9 +18,9 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -33,13 +33,11 @@ func setError(rep http.ResponseWriter, e error) {
 }
 
 type rawxService struct {
-	ns            string
-	url           string
-	id            string
-	repo          Repository
-	compress      bool
-	logger_access *log.Logger
-	logger_error  *log.Logger
+	ns       string
+	url      string
+	id       string
+	repo     Repository
+	compress bool
 }
 
 type rawxRequest struct {
@@ -64,7 +62,7 @@ func (self *rawxRequest) replyCode(code int) {
 
 func (self *rawxRequest) replyError(err error) {
 	if os.IsExist(err) {
-		self.replyCode(http.StatusForbidden)
+		self.replyCode(http.StatusConflict)
 	} else if os.IsPermission(err) {
 		self.replyCode(http.StatusForbidden)
 	} else if os.IsNotExist(err) {
@@ -84,14 +82,18 @@ func (self *rawxRequest) replyError(err error) {
 			case ErrMd5Mismatch:
 				self.replyCode(http.StatusBadRequest)
 			default:
+				panic("wot?!")
 				self.replyCode(http.StatusInternalServerError)
 			}
 		}
 	}
 }
 
-func (self *rawxService) serveHTTP(rep http.ResponseWriter, req *http.Request, action func(rr *rawxRequest)) {
+func (self *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 	pre := time.Now()
+
+	// Sanitizes the Path, trim repeated separators, etc
+	req.URL.Path = filepath.Clean(req.URL.Path)
 
 	// Extract some common headers
 	reqid := req.Header.Get("X-oio-reqid")
@@ -119,8 +121,14 @@ func (self *rawxService) serveHTTP(rep http.ResponseWriter, req *http.Request, a
 	if len(req.Host) > 0 && (req.Host != self.id && req.Host != self.url) {
 		rawxreq.replyCode(http.StatusTeapot)
 	} else {
-		action(&rawxreq)
+		// TODO(jfs): sanitize the path
+		if req.URL.Path == "/info" || req.URL.Path == "/stat" {
+			rawxreq.serveStat(rep, req)
+		} else {
+			rawxreq.serveChunk(rep, req)
+		}
 	}
+
 	spent := uint64(time.Since(pre).Nanoseconds() / 1000)
 
 	// Increment counters and log the request
@@ -134,5 +142,5 @@ func (self *rawxService) serveHTTP(rep http.ResponseWriter, req *http.Request, a
 		os.Getpid(), self.url, req.RemoteAddr, req.Method,
 		rawxreq.status, spent, rawxreq.bytes_out,
 		rawxreq.reqid, req.URL.Path)
-	self.logger_access.Print(trace)
+	logger_access.Print(trace)
 }

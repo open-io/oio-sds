@@ -24,22 +24,17 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"path/filepath"
 	"strings"
 )
-
-type chunkHandler struct {
-	rawx *rawxService
-}
 
 type attrMapping struct {
 	attr   string
 	header string
 }
 
-const bufSize = 16384
+const bufSize = 1024 * 1024
 
 var AttrMap []attrMapping = []attrMapping{
 	{AttrNameAlias, "Alias"},
@@ -54,7 +49,6 @@ var AttrMap []attrMapping = []attrMapping{
 
 var mandatoryHeaders = []string{
 	AttrNameStgPol,
-	AttrNameMimeType,
 	AttrNameChunkMethod,
 	AttrNameChunkId,
 	AttrNameSize,
@@ -68,22 +62,33 @@ type upload struct {
 }
 
 func putData(out io.Writer, ul *upload) error {
+	running := true
 	remaining := ul.length
+	logger_error.Printf("Uploading %v bytes", remaining)
 	chunkHash := md5.New()
 	buf := make([]byte, bufSize)
-	for remaining > 0 {
-		max := remaining
-		if max > bufSize {
-			max = bufSize
+	for running && remaining != 0 {
+		max := int64(bufSize)
+		if remaining > 0 && remaining < bufSize {
+			max = remaining
 		}
 		n, err := ul.in.Read(buf[:max])
+		logger_error.Printf("consumed %v / %s", n, err)
 		if n > 0 {
+			if remaining > 0 {
+				remaining = remaining - int64(n)
+			}
 			out.Write(buf[:n])
 			chunkHash.Write(buf[:n])
-			remaining = remaining - int64(n)
 		}
 		if err != nil {
-			return err
+			if err == io.EOF && remaining < 0 {
+				// Clean end of chunked stream
+				running = false
+			} else {
+				// Any other error
+				return err
+			}
 		}
 	}
 
@@ -125,7 +130,7 @@ func uploadChunk(rr *rawxRequest, chunkid string) {
 	// Check all the mandatory headers are present
 	for _, k := range mandatoryHeaders {
 		if _, ok := rr.xattr[k]; !ok {
-			rr.rawx.logger_error.Print("Missing header", k)
+			logger_error.Print("Missing header: ", k)
 			rr.replyError(ErrMissingHeader)
 			return
 		}
@@ -134,6 +139,7 @@ func uploadChunk(rr *rawxRequest, chunkid string) {
 	// Attempt a PUT in the repository
 	out, err := rr.rawx.repo.Put(chunkid)
 	if err != nil {
+		logger_error.Print("Chunk opening error: ", err)
 		rr.replyError(err)
 		return
 	}
@@ -151,12 +157,16 @@ func uploadChunk(rr *rawxRequest, chunkid string) {
 			err = errClose
 		}
 	} else {
-		err = putData(out, &ul)
+		if err = putData(out, &ul); err != nil {
+			logger_error.Print("Chunk upload error: ", err)
+		}
 	}
 
 	// Finish with the XATTR management
 	if err != nil {
-		err = putFinish(rr, out, ul.h)
+		if err = putFinish(rr, out, ul.h); err != nil {
+			logger_error.Print("Chunk close error: ", err)
+		}
 	}
 
 	// Then reply
@@ -166,7 +176,7 @@ func uploadChunk(rr *rawxRequest, chunkid string) {
 	} else {
 		out.Commit()
 		rr.rep.Header().Set("chunkhash", ul.h)
-		rr.replyCode(http.StatusOK)
+		rr.replyCode(http.StatusCreated)
 	}
 }
 
@@ -193,6 +203,7 @@ func downloadChunk(rr *rawxRequest, chunkid string) {
 		defer inChunk.Close()
 	}
 	if err != nil {
+		logger_error.Print("File error: ", err)
 		rr.replyError(err)
 		return
 	}
@@ -283,7 +294,7 @@ func downloadChunk(rr *rawxRequest, chunkid string) {
 		}
 		if err != nil {
 			if err != io.EOF {
-				log.Printf("Write() error : %v", err)
+				logger_error.Print("Write() error: ", err)
 			}
 			break
 		}
@@ -298,28 +309,26 @@ func removeChunk(rr *rawxRequest, chunkid string) {
 	}
 }
 
-func (self *chunkHandler) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
-	self.rawx.serveHTTP(rep, req, func(rr *rawxRequest) {
-		chunkid := filepath.Base(req.URL.Path)
-		switch req.Method {
-		case "PUT":
-			rr.stats_time = TimePut
-			rr.stats_hits = HitsPut
-			uploadChunk(rr, chunkid)
-		case "HEAD":
-			rr.stats_time = TimeHead
-			rr.stats_hits = HitsHead
-			checkChunk(rr, chunkid)
-		case "GET":
-			rr.stats_time = TimeGet
-			rr.stats_hits = HitsGet
-			downloadChunk(rr, chunkid)
-		case "DELETE":
-			rr.stats_time = TimeDel
-			rr.stats_hits = HitsDel
-			removeChunk(rr, chunkid)
-		default:
-			rr.replyCode(http.StatusMethodNotAllowed)
-		}
-	})
+func (rr *rawxRequest) serveChunk(rep http.ResponseWriter, req *http.Request) {
+	chunkid := filepath.Base(req.URL.Path)
+	switch req.Method {
+	case "PUT":
+		rr.stats_time = TimePut
+		rr.stats_hits = HitsPut
+		uploadChunk(rr, chunkid)
+	case "HEAD":
+		rr.stats_time = TimeHead
+		rr.stats_hits = HitsHead
+		checkChunk(rr, chunkid)
+	case "GET":
+		rr.stats_time = TimeGet
+		rr.stats_hits = HitsGet
+		downloadChunk(rr, chunkid)
+	case "DELETE":
+		rr.stats_time = TimeDel
+		rr.stats_hits = HitsDel
+		removeChunk(rr, chunkid)
+	default:
+		rr.replyCode(http.StatusMethodNotAllowed)
+	}
 }

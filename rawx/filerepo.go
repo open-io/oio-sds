@@ -21,7 +21,6 @@ import (
 	"container/list"
 	"errors"
 	"io/ioutil"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -127,7 +126,8 @@ func (r *FileRepository) Del(name string) error {
 	if p, err := r.nameToPath(name); err != nil {
 		return err
 	} else {
-		if err := os.Remove(p); err == nil {
+		err = os.Remove(p)
+		if err == nil {
 			r.notifier.NotifyDel(name)
 		}
 		return err
@@ -161,7 +161,7 @@ func (r *FileRepository) realPut(n, p string) (FileWriter, error) {
 		if _, err = os.Stat(p); err == nil {
 			os.Remove(path_temp)
 			f.Close()
-			return nil, ErrChunkExists
+			return nil, os.ErrExist
 		}
 
 		return &RealFileWriter{
@@ -169,7 +169,8 @@ func (r *FileRepository) realPut(n, p string) (FileWriter, error) {
 			impl: f, notifier: r.notifier,
 			sync_file: r.sync_file, sync_dir: r.sync_dir,
 		}, nil
-	} else if os.IsNotExist(err) { // Lazy dir creation
+	} else if os.IsNotExist(err) {
+		// Lazy dir creation
 		err = os.MkdirAll(filepath.Dir(p), r.putMkdirMode)
 		if err == nil {
 			return r.realPut(n, p)
@@ -270,7 +271,7 @@ func (w *RealFileWriter) syncDir() {
 			f.Sync()
 			f.Close()
 		} else {
-			log.Println("Directory sync error: ", err)
+			logger_error.Print("Directory sync error: ", err)
 		}
 	}
 }
@@ -284,10 +285,10 @@ func (w *RealFileWriter) Commit() error {
 			w.syncDir()
 			w.notifier.NotifyPut(w.name)
 		} else {
-			log.Println("Rename error: ", err)
+			logger_error.Print("Rename error: ", err)
 		}
 	} else {
-		log.Println("Close error: ", err)
+		logger_error.Print("Close error: ", err)
 	}
 	if err != nil {
 		os.Remove(w.path_temp)

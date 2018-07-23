@@ -31,6 +31,11 @@ import (
 	"regexp"
 )
 
+var (
+	logger_access *log.Logger = nil
+	logger_error  *log.Logger = nil
+)
+
 func checkURL(url string) {
 	addr, err := net.ResolveTCPAddr("tcp", url)
 	if err != nil || addr.Port <= 0 {
@@ -83,6 +88,9 @@ func main() {
 		log.Fatal("Unexpected positional argument detected")
 	}
 
+	logger_access, _ = syslog.NewLogger(syslog.LOG_INFO|syslog.LOG_LOCAL0, 0)
+	logger_error, _ = syslog.NewLogger(syslog.LOG_INFO|syslog.LOG_LOCAL1, 0)
+
 	var opts optionsMap
 
 	if len(*confPtr) <= 0 {
@@ -99,6 +107,7 @@ func main() {
 	// No service ID specified, using the service address instead
 	if len(opts["id"]) <= 0 {
 		opts["id"] = opts["addr"]
+		logger_error.Print("No service ID, using ADDR ", opts["addr"])
 	}
 
 	filerepo := checkMakeFileRepo(opts["basedir"])
@@ -110,30 +119,18 @@ func main() {
 
 	chunkrepo := MakeChunkRepository(filerepo)
 	if err := chunkrepo.Lock(opts["ns"], opts["id"]); err != nil {
-		log.Fatal("Basedir cannot be locked with xattr:", err.Error())
+		logger_error.Fatal("Volume lock error: ", err.Error())
 	}
 
-	logger_access, _ := syslog.NewLogger(syslog.LOG_INFO|syslog.LOG_LOCAL0, 0)
-	logger_error, _ := syslog.NewLogger(syslog.LOG_INFO|syslog.LOG_LOCAL1, 0)
 	rawx := rawxService{
-		ns:            opts["ns"],
-		id:            opts["id"],
-		url:           opts["addr"],
-		repo:          chunkrepo,
-		compress:      opts.getBool("compress", false),
-		logger_access: logger_access,
-		logger_error:  logger_error,
+		ns:       opts["ns"],
+		id:       opts["id"],
+		url:      opts["addr"],
+		repo:     chunkrepo,
+		compress: opts.getBool("compress", false),
 	}
 
-	http.Handle("/chunk", &chunkHandler{&rawx})
-	http.Handle("/info", &statHandler{&rawx})
-	http.Handle("/stat", &statHandler{&rawx})
-
-	// Some usages of the RAWX API don't use any prefix when calling
-	// operations on chunks.
-	http.Handle("/", &chunkHandler{&rawx})
-
-	if err := http.ListenAndServe(rawx.url, nil); err != nil {
-		log.Fatal("HTTP error:", err)
+	if err := http.ListenAndServe(rawx.url, &rawx); err != nil {
+		logger_error.Fatal("HTTP error: ", err.Error())
 	}
 }
