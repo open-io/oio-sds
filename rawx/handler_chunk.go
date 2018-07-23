@@ -254,16 +254,26 @@ func downloadChunk(rr *rawxRequest, chunkid string) {
 		}
 	}
 
+	// Prepare the headers of the reply
 	if has_range() {
 		rr.rep.Header().Set("Content-Range", fmt.Sprintf("bytes %v-%v/%v", offset, offset+size, size))
 		rr.rep.Header().Set("Content-Length", fmt.Sprintf("%v", size))
+		if size <= 0 {
+			rr.replyCode(http.StatusNoContent)
+		} else {
+			rr.replyCode(http.StatusPartialContent)
+		}
 	} else {
 		length := inChunk.Size()
 		rr.rep.Header().Set("Content-Length", fmt.Sprintf("%v", length))
+		if length <= 0 {
+			rr.replyCode(http.StatusNoContent)
+		} else {
+			rr.replyCode(http.StatusOK)
+		}
 	}
 
 	// Now transmit the clear data to the client
-	rr.replyCode(http.StatusOK)
 	buf := make([]byte, bufSize)
 	for {
 		n, err := in.Read(buf)
