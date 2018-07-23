@@ -111,7 +111,7 @@ func main() {
 	logger_error, _ := syslog.NewLogger(syslog.LOG_INFO|syslog.LOG_LOCAL1, 0)
 	rawx := rawxService{
 		ns:            opts["ns"],
-		id:            "",
+		id:            opts["id"],
 		url:           opts["addr"],
 		repo:          chunkrepo,
 		compress:      opts.getBool("compress", false),
