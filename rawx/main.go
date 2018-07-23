@@ -91,8 +91,6 @@ func main() {
 		log.Fatal("Invalid configuration file path", err.Error())
 	} else if opts, err = ReadConfig(cfg); err != nil {
 		log.Fatal("Exiting with error: ", err.Error())
-	} else {
-		log.Println("Loaded configuration from", cfg)
 	}
 
 	checkNS(opts["ns"])
