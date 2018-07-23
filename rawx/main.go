@@ -95,6 +95,12 @@ func main() {
 
 	checkNS(opts["ns"])
 	checkURL(opts["addr"])
+
+	// No service ID specified, using the service address instead
+	if len(opts["id"]) <= 0 {
+		opts["id"] = opts["addr"]
+	}
+
 	filerepo := checkMakeFileRepo(opts["basedir"])
 	filerepo.HashWidth = opts.getInt("hash_width", filerepo.HashWidth)
 	filerepo.HashDepth = opts.getInt("hash_depth", filerepo.HashDepth)
@@ -103,7 +109,7 @@ func main() {
 	filerepo.fallocate_file = opts.getBool("fallocate", filerepo.fallocate_file)
 
 	chunkrepo := MakeChunkRepository(filerepo)
-	if err := chunkrepo.Lock(opts["ns"], opts["addr"]); err != nil {
+	if err := chunkrepo.Lock(opts["ns"], opts["id"]); err != nil {
 		log.Fatal("Basedir cannot be locked with xattr:", err.Error())
 	}
 
