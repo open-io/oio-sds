@@ -16,26 +16,41 @@
 # License along with this library.
 
 import string
-import os
-import os.path
+from os.path import isfile
+from os import remove
+from shutil import rmtree
+from uuid import uuid4
+from tempfile import mktemp, mkdtemp
 from hashlib import md5
+from subprocess import Popen
 from urlparse import urlparse
 from urllib import unquote
 from oio.common.http import headers_from_object_metadata
 from oio.common.http_eventlet import http_connect
+from oio.common.http_urllib3 import get_pool_manager
 from oio.common.constants import OIO_VERSION, CHUNK_HEADERS
 from oio.common.fullpath import encode_fullpath
 from oio.common.utils import cid_from_name
 from oio.blob.utils import read_chunk_metadata
-from tests.utils import random_id
+from tests.utils import CommonTestCase, random_id
 from tests.functional.blob import convert_to_old_chunk, random_buffer, \
     random_chunk_id
+from tests.proc import wait_for_slow_startup
 
-from tests.utils import BaseTestCase
+
+map_cfg = {'addr': 'Listen',
+           'ns': 'grid_namespace',
+           'basedir': 'grid_docroot'}
+
+
+def _write_config(path, config):
+    with open(path, 'w') as f:
+        for k, v in config.iteritems():
+            f.write("{0} {1}\n".format(map_cfg[k], config[k]))
 
 
 # TODO we should the content of events sent by the rawx
-class TestBlobFunctional(BaseTestCase):
+class RawxAbstractTestSuite(object):
 
     def _chunk_attr(self, chunk_id, data, path=None):
         if path is not None:
@@ -64,13 +79,7 @@ class TestBlobFunctional(BaseTestCase):
         chunkid = chunkid.upper()
         return self.rawx_path + '/' + chunkid[:3] + '/' + chunkid
 
-    def setUp(self):
-        super(TestBlobFunctional, self).setUp()
-        self.namespace = self.conf['namespace']
-        self.test_dir = self.conf['sds_path']
-        rawx_num, rawx_path, rawx_addr, _ = self.get_service_url('rawx')
-        self.rawx = 'http://' + rawx_addr
-        self.rawx_path = rawx_path + '/'
+    def _setup(self):
         self.container = 'blob'
         self.cid = cid_from_name(self.account, 'blob')
         self.content_path = 'test-plop'
@@ -80,8 +89,8 @@ class TestBlobFunctional(BaseTestCase):
             self.account, 'blob', self.content_path, self.content_version,
             self.content_id)
 
-    def tearDown(self):
-        super(TestBlobFunctional, self).tearDown()
+    def _teardown(self):
+        pass
 
     def _http_request(self, chunkurl, method, body, headers, trailers=None):
         parsed = urlparse(chunkurl)
@@ -182,7 +191,7 @@ class TestBlobFunctional(BaseTestCase):
                                         trailers)
         self.assertEqual(expected, resp.status)
         if expected / 100 != 2:
-            self.assertFalse(os.path.isfile(chunkpath))
+            self.assertFalse(isfile(chunkpath))
             return
         # the first PUT succeeded, the second MUST fail
         resp, body = self._http_request(chunkurl, 'PUT', chunkdata, headers,
@@ -237,7 +246,7 @@ class TestBlobFunctional(BaseTestCase):
         # delete the chunk, check it is missing as expected
         resp, body = self._http_request(chunkurl, 'DELETE', '', {})
         self.assertEqual(204, resp.status)
-        self.assertFalse(os.path.isfile(chunkpath))
+        self.assertFalse(isfile(chunkpath))
 
         self._check_not_present(chunkurl)
 
@@ -775,3 +784,67 @@ class TestBlobFunctional(BaseTestCase):
         self.assertDictEqual(headers1, headers3)
         del meta3['oio_version']
         self.assertDictEqual(meta1, meta3)
+
+
+class RawxV1TestSuite(CommonTestCase, RawxAbstractTestSuite):
+
+    def setUp(self):
+        super(RawxV1TestSuite, self).setUp()
+        self._setup()
+        _, rawx_path, rawx_addr, _ = self.get_service_url('rawx')
+        self.rawx = 'http://' + rawx_addr
+        self.rawx_path = rawx_path + '/'
+
+    def tearDown(self):
+        super(RawxV1TestSuite, self).tearDown()
+        self._teardown()
+
+
+class RawxV2TestSuite(CommonTestCase, RawxAbstractTestSuite):
+
+    def setUp(self):
+        super(RawxV2TestSuite, self).setUp()
+        self._setup()
+        self.http_pool = get_pool_manager(max_retries=10, backoff_factor=0.05)
+        self.garbage_files = list()
+        self.garbage_procs = list()
+
+        # Start a sandbox rawx
+        self.num, self.host, self.port = 17, '127.0.0.1', 5999
+        self.cfg_path = mktemp()
+        self.dir_path = mkdtemp()
+        self.service_id = str(uuid4())
+        self.garbage_files.extend((self.cfg_path, self.dir_path))
+        config = {'addr': '{0}:{1}'.format(self.host, self.port),
+                  'ns': self.ns, 'basedir': self.dir_path}
+        _write_config(self.cfg_path, config)
+        child = Popen(('oio-rawx', '-f', self.cfg_path),
+                      close_fds=True)
+        if not wait_for_slow_startup(self.port):
+            child.kill()
+            raise Exception("The RDIR server is too long to start")
+        else:
+            self.garbage_procs.append(child)
+
+        # Prepare the test env variables
+        _, rawx_path, rawx_addr, _ = self.get_service_url('rawx')
+        self.rawx = 'http://' + self.host + ':' + str(self.port)
+        self.rawx_path = self.dir_path + '/'
+
+    def tearDown(self):
+        super(RawxV2TestSuite, self).tearDown()
+        self._teardown()
+        self.http_pool.clear()
+        for p in self.garbage_procs:
+            try:
+                p.terminate()
+                p.kill()
+            except Exception:
+                pass
+        for f in self.garbage_files:
+            ignore_errors = True
+            try:
+                rmtree(f, ignore_errors)
+                remove(f)
+            except Exception:
+                pass

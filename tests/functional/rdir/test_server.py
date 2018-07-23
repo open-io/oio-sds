@@ -15,15 +15,17 @@
 
 import time
 import tempfile
-import shutil
+from shutil import rmtree
 import simplejson as json
 import subprocess
-import errno
 import uuid
 from os import remove
 from oio.common.http_urllib3 import get_pool_manager
 
 from tests.utils import CommonTestCase, random_str, random_id
+
+from tests.proc import check_process_absent, \
+        wait_for_slow_startup, does_startup_fail
 
 
 def _key(rec):
@@ -41,55 +43,6 @@ def _write_config(path, config):
         for k, v in config.iteritems():
             f.write("{0} = {1}\n".format(map_cfg[k], config[k]))
         f.write("syslog_prefix = OIO,OPENIO,rdir,1\n")
-
-
-def _check_for_server(port):
-    hexport = "%04X" % port
-    with open("/proc/net/tcp", "r") as f:
-        for line in f:
-            tokens = line.strip().split()
-            port = tokens[1][9:13]
-            if port == hexport:
-                return True
-    return False
-
-
-def _wait_for_slow_startup(port):
-    for i in range(5):
-        if _check_for_server(port):
-            return True
-        time.sleep(i * 0.2)
-    return False
-
-
-def _kill_and_watch_it_die(proc):
-    try:
-        proc.terminate()
-    except Exception:
-        pass
-    proc.wait()
-
-
-def _does_startup_fail(path, config):
-    _write_config(path, config)
-    with open('/dev/null', 'w') as out:
-        fd = out.fileno()
-        proc = subprocess.Popen(['oio-rdir-server', path], stderr=fd)
-        return _check_process_absent(proc)
-
-
-def _check_process_absent(proc):
-    for i in range(5):
-        if proc.poll() is not None:
-            return True
-        time.sleep(i * 0.2)
-    try:
-        proc.terminate()
-    except OSError as exc:
-        return exc.errno == errno.ESRCH
-    except Exception:
-        pass
-    return False
 
 
 class RdirTestCase(CommonTestCase):
@@ -111,7 +64,7 @@ class RdirTestCase(CommonTestCase):
         for f in self.garbage_files:
             ignore_errors = True
             try:
-                shutil.rmtree(f, ignore_errors)
+                rmtree(f, ignore_errors)
                 remove(f)
             except Exception:
                 pass
@@ -538,7 +491,7 @@ class TestRdirServer2(RdirTestCase):
 
         child = subprocess.Popen(['oio-rdir-server', self.cfg_path],
                                  close_fds=True)
-        if not _wait_for_slow_startup(self.port):
+        if not wait_for_slow_startup(self.port):
             child.kill()
             raise Exception("The RDIR server is too long to start")
         else:
@@ -634,7 +587,7 @@ class TestRdirServer3(RdirTestCase):
         with open('/dev/null', 'w') as out:
             fd = out.fileno()
             proc = subprocess.Popen(['oio-rdir-server'], stderr=fd)
-            self.assertTrue(_check_process_absent(proc))
+            self.assertTrue(check_process_absent(proc))
 
     def test_wrong_config(self):
         cfg = '/x/y/z/not_found/on_any/server/rdir.conf'
@@ -642,11 +595,12 @@ class TestRdirServer3(RdirTestCase):
             fd = out.fileno()
             proc = subprocess.Popen(
                     ['oio-rdir-server', cfg], stderr=fd)
-            self.assertTrue(_check_process_absent(proc))
+            self.assertTrue(check_process_absent(proc))
 
     def _check_rdir_startup_fail(self, path, config):
         self.garbage_files.append(path)
-        self.assertTrue(_does_startup_fail(path, config))
+        _write_config(path, config)
+        self.assertTrue(does_startup_fail(path))
 
     def test_basedir_not_found(self):
         path = tempfile.mktemp()
@@ -689,7 +643,7 @@ class TestRdirServer3(RdirTestCase):
             _write_config(cfg, config)
             proc0 = subprocess.Popen(['oio-rdir-server', cfg], stderr=fd)
             self.garbage_procs.append(proc0)
-            self.assertTrue(_wait_for_slow_startup(port))
+            self.assertTrue(wait_for_slow_startup(port))
 
     def test_volume_lock(self):
         host, port = '127.0.0.1', 5999
@@ -704,11 +658,11 @@ class TestRdirServer3(RdirTestCase):
         _write_config(cfg, config)
         proc0 = subprocess.Popen(['oio-rdir-server', cfg], stderr=fd)
         self.garbage_procs.append(proc0)
-        self.assertTrue(_wait_for_slow_startup(port))
+        self.assertTrue(wait_for_slow_startup(port))
 
         # now start a second rdir on another port
         config.update({'port': port + 1})
         _write_config(cfg, config)
         proc1 = subprocess.Popen(['oio-rdir-server', cfg], stderr=fd)
         self.garbage_procs.append(proc1)
-        self.assertTrue(_check_process_absent(proc1))
+        self.assertTrue(check_process_absent(proc1))
