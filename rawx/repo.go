@@ -31,15 +31,16 @@ var (
 )
 
 var (
-	AttrNameCompression = "compression"
-	AttrNameChecksum    = "chunk.hash"
-	AttrNamePosition    = "chunk.position"
-	AttrNameSize        = "chunk.size"
-	AttrNameChunkId     = "chunk.id"
-	AttrNameAlias       = "content"
-	AttrNameChunkMethod = "content.chunk_method"
-	AttrNameMimeType    = "content.mime_type"
-	AttrNameStgPol      = "content.storage_policy"
+	AttrNameCompression  = "compression"
+	AttrNameChecksum     = "chunk.hash"
+	AttrNamePosition     = "chunk.position"
+	AttrNameSize         = "chunk.size"
+	AttrNameChunkId      = "chunk.id"
+	AttrNameAlias        = "content"
+	AttrNameChunkMethod  = "content.chunk_method"
+	AttrNameMimeType     = "content.mime_type"
+	AttrNameStgPol       = "content.storage_policy"
+	AttrNameXattrVersion = "oio.version"
 )
 
 var (
