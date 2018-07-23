@@ -137,15 +137,13 @@ func doGetStats(rr *rawxRequest) {
 	}
 }
 
-func (self *statHandler) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
-	self.rawx.serveHTTP(rep, req, func(rr *rawxRequest) {
-		switch req.Method {
-		case "GET":
-			doGetStats(rr)
-		case "HEAD":
-			doCheckStats(rr)
-		default:
-			rr.replyCode(http.StatusMethodNotAllowed)
-		}
-	})
+func (rr *rawxRequest) serveStat(rep http.ResponseWriter, req *http.Request) {
+	switch req.Method {
+	case "GET":
+		doGetStats(rr)
+	case "HEAD":
+		doCheckStats(rr)
+	default:
+		rr.replyCode(http.StatusMethodNotAllowed)
+	}
 }

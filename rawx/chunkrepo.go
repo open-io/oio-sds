@@ -60,7 +60,7 @@ func (self *chunkRepository) Del(name string) error {
 	} else {
 		err = self.sub.Del(name)
 		if err == nil {
-			return nil // Success!
+			return nil
 		} else if err != os.ErrNotExist && !os.IsNotExist(err) {
 			return err
 		} else {
