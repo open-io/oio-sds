@@ -22,6 +22,7 @@ func ReadConfig(conf string) (optionsMap, error) {
 		"grid_docroot":     "basedir",
 		"grid_compression": "compression",
 		"grid_fallocate":   "fallocate",
+		"grid_service_id":  "id",
 		// TODO(jfs): also implement a cachedir
 	}
 	var opts = make(map[string]string)
