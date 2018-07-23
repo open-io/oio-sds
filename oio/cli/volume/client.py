@@ -53,7 +53,7 @@ class VolumeClientCli(object):
         info = self.volume.status(volume)
         data = {}
         containers = info.get('container')
-        data['chunk'] = info.get('chunk').get('total')
+        data['chunk'] = info.get('chunk')
         for ct in containers:
             data['container.%s' % ct] = json.dumps(containers[ct])
         return data
