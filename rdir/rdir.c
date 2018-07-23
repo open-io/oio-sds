@@ -620,7 +620,7 @@ _db_vol_delete(const char *volid, GString *key)
 }
 
 static void
-_dump_vol_status(GString *value, GTree *tree_containers)
+_dump_vol_status(GString *value, GTree *tree_containers, GTree *tree_to_rebuild)
 {
 	gboolean first = TRUE;
 	gboolean _on_container(gpointer k, gpointer v, gpointer i UNUSED) {
@@ -632,6 +632,12 @@ _dump_vol_status(GString *value, GTree *tree_containers)
 		g_string_append_c(value, '{');
 		oio_str_gstring_append_json_pair_int(value,
 				"total", GPOINTER_TO_INT(v)-1);
+		gpointer p = g_tree_lookup(tree_to_rebuild, k);
+		if (p) {
+			g_string_append_c(value, ',');
+			oio_str_gstring_append_json_pair_int(value,
+					"to_rebuild", GPOINTER_TO_INT(p)-1);
+		}
 		g_string_append_c(value, '}');
 		return FALSE;
 	}
@@ -642,7 +648,7 @@ static GError *
 _db_vol_status(const char *volid, GString *value)
 {
 	static const char beacon[] = CHUNK_PREFIX;
-	gint64 nb_chunks = 0, incident_date = 0;
+	gint64 nb_chunks = 0, nb_to_rebuild = 0, incident_date = 0;
 	struct rdir_base_s *base = NULL;
 	GError *err = NULL;
 
@@ -654,11 +660,18 @@ _db_vol_status(const char *volid, GString *value)
 
 	GTree *tree_containers =
 		g_tree_new_full(metautils_strcmp3, NULL, g_free, NULL);
+	GTree *tree_to_rebuild =
+		g_tree_new_full(metautils_strcmp3, NULL, g_free, NULL);
 
 	void count_chunk(const char *cid) {
 		gpointer p = g_tree_lookup(tree_containers, cid);
 		gint v = p ? GPOINTER_TO_INT(p) + 1 : 2;
 		g_tree_replace(tree_containers, g_strdup(cid), GINT_TO_POINTER(v));
+	}
+	void count_to_rebuild(const char *cid) {
+		gpointer p = g_tree_lookup(tree_to_rebuild, cid);
+		gint v = p ? GPOINTER_TO_INT(p) + 1 : 2;
+		g_tree_replace(tree_to_rebuild, g_strdup(cid), GINT_TO_POINTER(v));
 	}
 
 	/* Iterate over the chunk to count them and their containers */
@@ -690,6 +703,26 @@ _db_vol_status(const char *volid, GString *value)
 
 		/* count that chunk, for its container */
 		count_chunk(cid);
+
+		if (incident_date > 0) {
+			const char *v0 = leveldb_iter_value(it, &len);
+			struct json_object *jrecord = NULL;
+			err = JSON_parse_buffer((const guint8*)v0, len, &jrecord);
+			if (err) {
+				GRID_TRACE("malformed record [%s]: (%d) %s",
+						k0, err->code, err->message);
+				g_clear_error(&err);
+			} else {
+				json_object *jmtime = NULL;
+				if (json_object_object_get_ex(jrecord, "mtime", &jmtime)
+						&& json_object_is_type(jmtime, json_type_int)
+						&& json_object_get_int64(jmtime) <= incident_date) {
+					nb_to_rebuild++;
+					count_to_rebuild(cid);
+				}
+				json_object_put(jrecord);
+			}
+		}
 	}
 	leveldb_iter_destroy(it);
 
@@ -699,12 +732,17 @@ _db_vol_status(const char *volid, GString *value)
 	g_string_append_c(value, ':');
 	g_string_append_c(value, '{');
 	oio_str_gstring_append_json_pair_int(value, "total", nb_chunks);
+	if (incident_date > 0 && nb_to_rebuild > 0) {
+		g_string_append_c(value, ',');
+		oio_str_gstring_append_json_pair_int(value, "to_rebuild",
+				nb_to_rebuild);
+	}
 	g_string_append_c(value, '}');
 	g_string_append_c(value, ',');
 	oio_str_gstring_append_json_quote(value, "container");
 	g_string_append_c(value, ':');
 	g_string_append_c(value, '{');
-	_dump_vol_status(value, tree_containers);
+	_dump_vol_status(value, tree_containers, tree_to_rebuild);
 	g_string_append_c(value, '}');
 	if (incident_date > 0) {
 		g_string_append_c(value, ',');
@@ -718,6 +756,7 @@ _db_vol_status(const char *volid, GString *value)
 	g_string_append_c(value, '}');
 
 	g_tree_destroy(tree_containers);
+	g_tree_destroy(tree_to_rebuild);
 	return NULL;
 }
 
