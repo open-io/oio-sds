@@ -125,7 +125,7 @@ func uploadChunk(rr *rawxRequest, chunkid string) {
 	// Check all the mandatory headers are present
 	for _, k := range mandatoryHeaders {
 		if _, ok := rr.xattr[k]; !ok {
-			rr.rawx.logger_error.Print("Missing header %s", k)
+			rr.rawx.logger_error.Print("Missing header", k)
 			rr.replyError(ErrMissingHeader)
 			return
 		}
