@@ -255,6 +255,7 @@ func downloadChunk(rr *rawxRequest, chunkid string) {
 	}
 
 	if has_range() {
+		rr.rep.Header().Set("Content-Range", fmt.Sprintf("bytes %v-%v/%v", offset, offset+size, size))
 		rr.rep.Header().Set("Content-Length", fmt.Sprintf("%v", size))
 	} else {
 		length := inChunk.Size()
