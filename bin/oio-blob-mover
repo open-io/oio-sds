@@ -16,12 +16,34 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import argparse
+
 from oio.blob.mover import BlobMover
 from oio.common.daemon import run_daemon
-from oio.common.configuration import parse_options
-from optparse import OptionParser
+
+def make_arg_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('config', help="Configuration file")
+    parser.add_argument('--number', type=int,
+                        help="Number of chunk to move")
+    parser.add_argument('--usage-target', type=int,
+                        help="Percentage of disk usage target")
+    parser.add_argument('--daemon', type=int,
+                        help="Interval to run the mover in seconds.")
+    parser.add_argument('--verbose', '-v', action='store_true',
+                        help="More verbose output")
+    return parser
+
+def main():
+    args = make_arg_parser().parse_args()
+    config = args.config
+    number = args.number
+    usage_target = args.usage_target
+    daemon = args.daemon
+    verbose=args.verbose
+    run_daemon(BlobMover, config, number=number,
+               usage_target=usage_target, daemon=daemon,
+               verbose=verbose)
 
 if __name__ == '__main__':
-    parser = OptionParser("%prog CONFIG [options]")
-    config, options = parse_options(parser)
-    run_daemon(BlobMover, config, **options)
+    main()

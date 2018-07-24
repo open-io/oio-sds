@@ -30,7 +30,6 @@ from oio.common.constants import STRLEN_CHUNKID
 from oio.common.fullpath import decode_fullpath
 from oio.content.factory import ContentFactory
 
-SLEEP_TIME = 30
 READ_BUFFER_SIZE = 65535
 
 
@@ -65,13 +64,16 @@ class BlobMoverWorker(object):
         self.container_client = ContainerClient(conf, logger=self.logger)
         self.content_factory = ContentFactory(conf)
 
-    def mover_pass(self):
+    def mover_pass(self, usage_target=None, number=None, **kwargs):
         start_time = report_time = time.time()
 
         total_errors = 0
         mover_time = 0
 
         paths = paths_gen(self.volume)
+
+        if usage_target is not None:
+            self.usage_target = usage_target
 
         for path in paths:
             loop_time = time.time()
@@ -121,6 +123,8 @@ class BlobMoverWorker(object):
                 self.bytes_processed = 0
                 self.last_reported = now
             mover_time += (now - loop_time)
+            if number is not None and self.total_chunks_processed >= number:
+                break
         elapsed = (time.time() - start_time) or 0.000001
         self.logger.info(
             '%(elapsed).02f '
@@ -198,25 +202,25 @@ class BlobMoverWorker(object):
 
 
 class BlobMover(Daemon):
-    def __init__(self, conf, **kwargs):
+    def __init__(self, conf, daemon=None, **kwargs):
         super(BlobMover, self).__init__(conf)
         self.logger = get_logger(conf)
         volume = conf.get('volume')
         if not volume:
             raise exc.ConfigurationException('No volume specified for mover')
         self.volume = volume
-        global SLEEP_TIME
-        if SLEEP_TIME > int(conf.get('report_interval', 3600)):
-            SLEEP_TIME = int(conf.get('report_interval', 3600))
+        if daemon > int(conf.get('report_interval', 3600)):
+            daemon = int(conf.get('report_interval', 3600))
 
     def run(self, *args, **kwargs):
-        while True:
+        work = True
+        while work:
             try:
                 worker = BlobMoverWorker(self.conf, self.logger, self.volume)
-                worker.mover_pass()
+                worker.mover_pass(**kwargs)
+                work = False
             except Exception as e:
                 self.logger.exception('ERROR in mover: %s' % e)
-            self._sleep()
-
-    def _sleep(self):
-        time.sleep(SLEEP_TIME)
+            if kwargs.get('daemon') is not None:
+                work = True
+                time.sleep(kwargs.get('daemon'))
