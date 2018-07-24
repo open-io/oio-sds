@@ -97,9 +97,8 @@ func putData(out io.Writer, ul *upload) error {
 	return nil
 }
 
-func putFinish(rr *rawxRequest, out FileWriter, h string) error {
+func putFinishChecksum(rr *rawxRequest, h string) error {
 
-	// If a hash has been sent, it must match the hash computed
 	h = strings.ToUpper(h)
 	if h0, ok := rr.xattr[AttrNameChecksum]; ok && len(h0) > 0 {
 		if strings.ToUpper(h0) != h {
@@ -109,6 +108,12 @@ func putFinish(rr *rawxRequest, out FileWriter, h string) error {
 		rr.xattr[AttrNameChecksum] = h
 	}
 
+	return nil
+}
+
+func putFinishXattr(rr *rawxRequest, out FileWriter) error {
+
+	logger_error.Printf("Decorating with xattr: %v", rr.xattr)
 	for k, v := range rr.xattr {
 		if err := out.SetAttr(AttrPrefix+k, []byte(v)); err != nil {
 			return err
@@ -162,10 +167,17 @@ func uploadChunk(rr *rawxRequest, chunkid string) {
 		}
 	}
 
-	// Finish with the XATTR management
-	if err != nil {
-		if err = putFinish(rr, out, ul.h); err != nil {
-			logger_error.Print("Chunk close error: ", err)
+	// If a hash has been sent, it must match the hash computed
+	if err == nil {
+		if err = putFinishChecksum(rr, ul.h); err != nil {
+			logger_error.Print("Chunk checksum error: ", err)
+		}
+	}
+
+	// If everything went well, finish with the chunks XATTR management
+	if err == nil {
+		if err = putFinishXattr(rr, out); err != nil {
+			logger_error.Print("Chunk xattr error: ", err)
 		}
 	}
 
