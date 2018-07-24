@@ -177,16 +177,18 @@ The attributes of the chunk will be returned as headers of the reply.
 
    * - Header
      - Description
+   * - X-oio-chunk-meta-full-path
+     - A string representing a complete OpenIO URL
    * - X-oio-chunk-meta-container-id
      - String of 64 hexadecimal characters
    * - X-oio-chunk-meta-content-path
      - A string
-   * - X-oio-chunk-meta-content-id
-     - String of hexadecimal characters, usually of 32 characters. The only constraint
-       is that the number must be even, to be convertible to a binary form.
    * - X-oio-chunk-meta-content-version
      - A strictly positive integer, less than (2^63). That integer SHOULD match the
        number of bytes of the targeted chunk.
+   * - X-oio-chunk-meta-content-id
+     - String of hexadecimal characters, usually of 32 characters. The only constraint
+       is that the length must be even, to be convertible to a binary form.
    * - X-oio-chunk-meta-content-storage-policy
      - A string, no check will be performed, at the RAWX level the string might even
        represent a non-existing storage policy
@@ -200,17 +202,15 @@ The attributes of the chunk will be returned as headers of the reply.
    * - X-oio-chunk-meta-chunk-id
      - A string of 64 hexadecimal characters that must math the CHUNKID present in
        the URL
+   * - X-oio-chunk-meta-chunk-pos
+     - Either a positive integer (including 0) or a compound of 2 positive integers
+       gathered with a dot.
    * - X-oio-chunk-meta-chunk-size
      - A null or positive integer
    * - X-oio-chunk-meta-chunk-hash
      - A string of 32 hexadecimal characters
-   * - X-oio-chunk-meta-chunk-pos
-     - Either a positive integer (including 0) or a compound of 2 positive integers
-       gathered with a dot.
    * - X-oio-chunk-meta-oio-version
      - A string describing the versin of the headers.
-   * - X-oio-chunk-meta-full-path
-     - A string representing a complete OpenIO URL
 
 
 Example
@@ -232,20 +232,20 @@ Example
    ETag: "55e808daf7710"
    Accept-Ranges: bytes
    Content-Length: 100
+   X-oio-chunk-meta-full-path: ACCT/JFS/magic/1511281109448048/5835AF8D805E0500AAB7F6808F50900A
    X-oio-chunk-meta-container-id: 9006CE70B59E5777D6BB410C57944812EB05FCDB5BA85D520A14B3051D1D094F
    X-oio-chunk-meta-content-path: magic
-   X-oio-chunk-meta-content-id: 5835AF8D805E0500AAB7F6808F50900A
    X-oio-chunk-meta-content-version: 1511281109448048
+   X-oio-chunk-meta-content-id: 5835AF8D805E0500AAB7F6808F50900A
    X-oio-chunk-meta-content-storage-policy: EC
    X-oio-chunk-meta-content-chunk-method: ec/algo=liberasurecode_rs_vand,k=6,m=3
    X-oio-chunk-meta-metachunk-size: 111
    X-oio-chunk-meta-metachunk-hash: 272913026300E7AE9B5E2D51F138E674
    X-oio-chunk-meta-chunk-id: CE456217C7DBAC618A7F0EBFBCDB6C8F184ED8ADCBC6F0B6F493A51EE095D86A
+   X-oio-chunk-meta-chunk-pos: 0.3
    X-oio-chunk-meta-chunk-size: 100
    X-oio-chunk-meta-chunk-hash: 527EC56D67EF8DA68E3FB93158552272
-   X-oio-chunk-meta-chunk-pos: 0.3
    X-oio-chunk-meta-oio-version: 4.2
-   X-oio-chunk-meta-full-path: ACCT/JFS/magic/1511281109448048/5835AF8D805E0500AAB7F6808F50900A
 
    ...
 
@@ -281,40 +281,55 @@ Upload a chunk on the target RAWX service.
 
    * - Header
      - Description
+     - Mandatory
+   * - X-oio-chunk-meta-full-path
+     - A string representing a complete OpenIO URL
+     - True
    * - X-oio-chunk-meta-container-id
      - String of 64 hexadecimal characters
+     - False
    * - X-oio-chunk-meta-content-path
      - A string
-   * - X-oio-chunk-meta-content-id
-     - String of hexadecimal characters, usually of 32 characters. The only constraint
-       is that the number must be even, to be convertible to a binary form.
+     - False
    * - X-oio-chunk-meta-content-version
      - A strictly positive integer, less than (2^63). That integer SHOULD match the
        number of bytes of the targeted chunk.
+     - False
+   * - X-oio-chunk-meta-content-id
+     - String of hexadecimal characters, usually of 32 characters. The only constraint
+       is that the length must be even, to be convertible to a binary form.
+     - False
    * - X-oio-chunk-meta-content-storage-policy
      - A string, no check will be performed, at the RAWX level the string might even
        represent a non-existing storage policy
+     - True
    * - X-oio-chunk-meta-content-chunk-method
      - A string. At the RAWX level no check will be performed and that string
        might even be an invalid chunk-method description.
+     - True
    * - X-oio-chunk-meta-metachunk-size
      - A null or positive number
+     - True if the storage policy is EC, False otherwise
    * - X-oio-chunk-meta-metachunk-hash
      - A string of 32 hexadecimal characters
+     - True if the storage policy is EC, False otherwise
    * - X-oio-chunk-meta-chunk-id
      - A string of 64 hexadecimal characters that must math the CHUNKID present in
        the URL
-   * - X-oio-chunk-meta-chunk-size
-     - A null or positive integer
-   * - X-oio-chunk-meta-chunk-hash
-     - A string of 32 hexadecimal characters
+     - False
    * - X-oio-chunk-meta-chunk-pos
      - Either a positive integer (including 0) or a compound of 2 positive integers
        gathered with a dot.
+     - True
+   * - X-oio-chunk-meta-chunk-size
+     - A null or positive integer
+     - False
+   * - X-oio-chunk-meta-chunk-hash
+     - A string of 32 hexadecimal characters
+     - False
    * - X-oio-chunk-meta-oio-version
      - A string describing the versin of the headers.
-   * - X-oio-chunk-meta-full-path
-     - A string representing a complete OpenIO URL
+     - False
 
 
 Example
@@ -324,20 +339,20 @@ Example
 
    PUT /0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF HTTP/1.1
    Content-Length: 12345
+   X-oio-chunk-meta-full-path: ACCT/JFS/magic/1511281109448048/5835AF8D805E0500AAB7F6808F50900A
    X-oio-chunk-meta-container-id: 9006CE70B59E5777D6BB410C57944812EB05FCDB5BA85D520A14B3051D1D094F
    X-oio-chunk-meta-content-path: magic
-   X-oio-chunk-meta-content-id: 5835AF8D805E0500AAB7F6808F50900A
    X-oio-chunk-meta-content-version: 1511281109448048
+   X-oio-chunk-meta-content-id: 5835AF8D805E0500AAB7F6808F50900A
    X-oio-chunk-meta-content-storage-policy: EC
    X-oio-chunk-meta-content-chunk-method: ec/algo=liberasurecode_rs_vand,k=6,m=3
    X-oio-chunk-meta-metachunk-size: 111
    X-oio-chunk-meta-metachunk-hash: 272913026300E7AE9B5E2D51F138E674
    X-oio-chunk-meta-chunk-id: CE456217C7DBAC618A7F0EBFBCDB6C8F184ED8ADCBC6F0B6F493A51EE095D86A
+   X-oio-chunk-meta-chunk-pos: 0.3
    X-oio-chunk-meta-chunk-size: 100
    X-oio-chunk-meta-chunk-hash: 527EC56D67EF8DA68E3FB93158552272
-   X-oio-chunk-meta-chunk-pos: 0.3
    X-oio-chunk-meta-oio-version: 4.2
-   X-oio-chunk-meta-full-path: ACCT/JFS/magic/1511281109448048/5835AF8D805E0500AAB7F6808F50900A
 
    -snip-
 
