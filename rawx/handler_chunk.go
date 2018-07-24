@@ -21,6 +21,7 @@ import (
 	"compress/zlib"
 	"crypto/md5"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -29,28 +30,75 @@ import (
 	"strings"
 )
 
+const bufSize = 1024 * 1024
+
 type attrMapping struct {
 	attr   string
 	header string
 }
 
-const bufSize = 1024 * 1024
+const (
+	AttrNameChecksum     = "user.grid.chunk.hash"
+	AttrNamePosition     = "user.grid.chunk.position"
+	AttrNameSize         = "user.grid.chunk.size"
+	AttrNameChunkId      = "user.grid.chunk.id"
+	AttrNameChunkMethod  = "user.grid.content.chunk_method"
+	AttrNameMimeType     = "user.grid.content.mime_type"
+	AttrNameStgPol       = "user.grid.content.storage_policy"
+	AttrNameAlias        = "user.grid.content"
+	AttrNameCompression  = "user.grid.compression"
+	AttrNameXattrVersion = "user.grid.oio.version"
+)
+
+const (
+	AttrNameFullPrefix = "user.grid.oio:"
+)
+
+const (
+	HeaderNameAlias             = "X-oio-Alias"
+	HeaderNameStgPol            = "X-oio-Chunk-Meta-Content-Storage-Policy"
+	HeaderNameMimeType          = "X-oio-Chunk-Meta-Content-Mime-Type"
+	HeaderNameChunkMethod       = "X-oio-Chunk-Meta-Content-Chunk-Method"
+	HeaderNameChunkId           = "X-oio-Chunk-Meta-Chunk-Id"
+	HeaderNamePosition          = "X-oio-Chunk-Meta-Chunk-Pos"
+	HeaderNameSize              = "X-oio-Chunk-Meta-Chunk-Size"
+	HeaderNameChecksum          = "X-oio-Chunk-Meta-Chunk-Hash"
+	HeaderNameMetachunkSize     = "X-oio-Chunk-Meta-Metachunk-Size"
+	HeaderNameMetachunkChecksum = "X-oio-Chunk-Meta-Metachunk-Hash"
+	HeaderNameFullPath          = "X-oio-Chunk-Meta-Full-Path"
+)
+
+var (
+	AttrValueZLib []byte = []byte{'z', 'l', 'i', 'b'}
+)
+
+var (
+	ErrNotImplemented        = errors.New("Not implemented")
+	ErrChunkExists           = errors.New("Chunk already exists")
+	ErrInvalidChunkName      = errors.New("Invalid chunk name")
+	ErrCompressionNotManaged = errors.New("Compression mode not managed")
+	ErrMissingHeader         = errors.New("Missing mandatory header")
+	ErrMd5Mismatch           = errors.New("MD5 sum mismatch")
+	ErrInvalidRange          = errors.New("Invalid range")
+	ErrRangeNotSatisfiable   = errors.New("Range not satisfiable")
+	ErrListMarker            = errors.New("Invalid listing marker")
+	ErrListPrefix            = errors.New("Invalid listing prefix")
+)
 
 var AttrMap []attrMapping = []attrMapping{
-	{AttrNameAlias, "Alias"},
-	{AttrNameStgPol, "Chunk-Meta-Content-Storage-Policy"},
-	{AttrNameMimeType, "Chunk-Meta-Content-Mime-Type"},
-	{AttrNameChunkMethod, "Chunk-Meta-Content-Chunk-Method"},
-	{AttrNameChunkId, "Chunk-Meta-Chunk-Id"},
-	{AttrNameSize, "Chunk-Meta-Chunk-Size"},
-	{AttrNamePosition, "Chunk-Meta-Chunk-Pos"},
-	{AttrNameChecksum, "Chunk-Meta-Chunk-Hash"},
+	{AttrNameAlias, HeaderNameAlias},
+	{AttrNameStgPol, HeaderNameStgPol},
+	{AttrNameMimeType, HeaderNameMimeType},
+	{AttrNameChunkMethod, HeaderNameChunkMethod},
+	{AttrNameChunkId, HeaderNameChunkId},
+	{AttrNameSize, HeaderNameSize},
+	{AttrNamePosition, HeaderNamePosition},
+	{AttrNameChecksum, HeaderNameChecksum},
 }
 
 var mandatoryHeaders = []string{
 	AttrNameStgPol,
 	AttrNameChunkMethod,
-	AttrNameChunkId,
 	AttrNameSize,
 	AttrNamePosition,
 }
@@ -115,7 +163,7 @@ func putFinishXattr(rr *rawxRequest, out FileWriter) error {
 
 	logger_error.Printf("Decorating with xattr: %v", rr.xattr)
 	for k, v := range rr.xattr {
-		if err := out.SetAttr(AttrPrefix+k, []byte(v)); err != nil {
+		if err := out.SetAttr(k, []byte(v)); err != nil {
 			return err
 		}
 	}
@@ -125,9 +173,9 @@ func putFinishXattr(rr *rawxRequest, out FileWriter) error {
 
 func uploadChunk(rr *rawxRequest, chunkid string) {
 
-	// Check all the mandatory headers are present
+	// Load the upload-related headers
 	for _, pair := range AttrMap {
-		if v := rr.req.Header.Get(HeaderPrefix + pair.header); v != "" {
+		if v := rr.req.Header.Get(pair.header); v != "" {
 			rr.xattr[pair.attr] = v
 		}
 	}
@@ -240,7 +288,7 @@ func downloadChunk(rr *rawxRequest, chunkid string) {
 	// Check if there is some compression
 	var v []byte
 	var in io.ReadCloser
-	v, err = inChunk.GetAttr(AttrPrefix + AttrNameCompression)
+	v, err = inChunk.GetAttr(AttrNameCompression)
 	if err != nil {
 		if has_range() && offset > 0 {
 			err = inChunk.Seek(offset)
@@ -271,7 +319,7 @@ func downloadChunk(rr *rawxRequest, chunkid string) {
 	}
 
 	for _, pair := range AttrMap {
-		v, err := inChunk.GetAttr(AttrPrefix + pair.attr)
+		v, err := inChunk.GetAttr(pair.attr)
 		if err != nil {
 			rr.rep.Header().Set(pair.header, string(v))
 		}

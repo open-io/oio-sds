@@ -47,6 +47,7 @@ type rawxRequest struct {
 	stats_hits int
 	stats_time int
 	reqid      string
+
 	xattr      map[string]string
 
 	// for the reply's purpose
