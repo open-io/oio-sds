@@ -240,8 +240,7 @@ func (w *RealFileWriter) Seek(o int64) error {
 }
 
 func (w *RealFileWriter) SetAttr(n string, v []byte) error {
-	err := syscall.Setxattr(w.path_temp, n, v, 0)
-	return err
+	return syscall.Setxattr(w.path_temp, n, v, 0)
 }
 
 func (w *RealFileWriter) Sync() error {
