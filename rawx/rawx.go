@@ -121,7 +121,6 @@ func (self *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 	if len(req.Host) > 0 && (req.Host != self.id && req.Host != self.url) {
 		rawxreq.replyCode(http.StatusTeapot)
 	} else {
-		// TODO(jfs): sanitize the path
 		if req.URL.Path == "/info" || req.URL.Path == "/stat" {
 			rawxreq.serveStat(rep, req)
 		} else {
