@@ -36,7 +36,7 @@ class WebhookFilter(Filter):
                 headers={'Content-Type': 'application/json'},
                 body=data)
             if resp.status >= 400:
-                raise exceptions.from_response(resp, '')
+                raise exceptions.from_response(resp)
         except urllib3.exceptions.HTTPError as exc:
             oio_exception_from_httperror(exc)
 
