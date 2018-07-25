@@ -17,9 +17,9 @@ from urllib import quote, unquote, quote_plus, unquote_plus
 
 
 def encode_fullpath(account, container, path, version, content_id):
-    if not account or not container or not path or not version \
-            or not content_id:
-        raise ValueError("Can't encode fullpath")
+    for k, v in locals().items():
+        if not v:
+            raise ValueError("Can't encode fullpath: missing %s" % k)
     return '{0}/{1}/{2}/{3}/{4}'.format(quote(account, ''),
                                         quote(container, ''),
                                         quote(path, ''),
