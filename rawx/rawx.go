@@ -48,10 +48,17 @@ type rawxRequest struct {
 	stats_time int
 	reqid      string
 
-	xattr      map[string]string
+	// field mapped as XATTR and HEADERS
+	metachunk_hash      string
+	metachunk_size      string
+	chunk_hash          string
+	chunk_size          string
+	chunk_position      string
+	content_chunkmethod string
+	content_stgpol      string
+	content_fullpath    string
 
 	// for the reply's purpose
-
 	status    int
 	bytes_out uint64
 }
@@ -111,7 +118,6 @@ func (self *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 	// Forward to the request method
 	rawxreq := rawxRequest{
 		rawx:       self,
-		xattr:      make(map[string]string),
 		req:        req,
 		rep:        rep,
 		stats_time: TimeOther,
