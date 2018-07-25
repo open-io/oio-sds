@@ -40,3 +40,7 @@ use = egg:oio#noop
 
 [filter:content_rebuild]
 use = egg:oio#content_rebuild
+
+[filter:webook]
+use = egg:oio#webhook
+endpoint = http://localhost:8000/invoke
