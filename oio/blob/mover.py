@@ -78,8 +78,8 @@ class BlobMoverWorker(object):
 
             now = time.time()
             if now - self.last_usage_check >= self.usage_check_interval:
-                used, total = statfs(self.volume)
-                usage = (float(used) / total) * 100
+                free_ratio = statfs(self.volume)
+                usage = (1-float(free_ratio)) * 100
                 if usage <= self.usage_target:
                     self.logger.info(
                         'current usage %.2f%%: target reached (%.2f%%)', usage,
