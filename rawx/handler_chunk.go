@@ -20,13 +20,16 @@ import (
 	"bytes"
 	"compress/zlib"
 	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -54,6 +57,11 @@ const (
 )
 
 const (
+	HeaderNameFullpath           = "X-oio-Chunk-Meta-Full-Path"
+	HeaderNameContainerID        = "X-oio-Chunk-Meta-Container-Id"
+	HeaderNameContentPath        = "X-oio-Chunk-Meta-Content-Path"
+	HeaderNameContentVersion     = "X-oio-Chunk-Meta-Content-Version"
+	HeaderNameContentID          = "X-oio-Chunk-Meta-Content-Id"
 	HeaderNameContentStgPol      = "X-oio-Chunk-Meta-Content-Storage-Policy"
 	HeaderNameContentChunkMethod = "X-oio-Chunk-Meta-Content-Chunk-Method"
 	HeaderNameChunkPosition      = "X-oio-Chunk-Meta-Chunk-Pos"
@@ -62,7 +70,6 @@ const (
 	HeaderNameMetachunkSize      = "X-oio-Chunk-Meta-Metachunk-Size"
 	HeaderNameMetachunkChecksum  = "X-oio-Chunk-Meta-Metachunk-Hash"
 	HeaderNameChunkID            = "X-oio-Chunk-Meta-Chunk-Id"
-	HeaderNameFullPath           = "X-oio-Chunk-Meta-Full-Path"
 )
 
 var (
@@ -75,7 +82,7 @@ var (
 	ErrInvalidChunkID        = errors.New("Invalid chunk ID")
 	ErrCompressionNotManaged = errors.New("Compression mode not managed")
 	ErrMissingHeader         = errors.New("Missing mandatory header")
-	ErrMd5Mismatch           = errors.New("MD5 sum mismatch")
+	ErrInvalidHeader         = errors.New("Invalid header")
 	ErrInvalidRange          = errors.New("Invalid range")
 	ErrRangeNotSatisfiable   = errors.New("Range not satisfiable")
 	ErrListMarker            = errors.New("Invalid listing marker")
@@ -86,6 +93,115 @@ type upload struct {
 	in     io.Reader
 	length int64
 	h      string
+}
+
+func returnError(err error, message string) error {
+	logger_error.Printf("%s: %s", err, message)
+	return err
+}
+
+func cidFromName(account, container string) string {
+	h := sha256.New()
+	h.Write([]byte(account))
+	h.Write([]byte{0})
+	h.Write([]byte(container))
+	return strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
+}
+
+// Check and load a canonic form of the ID of the chunk.
+func (rr *rawxRequest) checkChunkID() error {
+	chunkID := filepath.Base(rr.req.URL.Path)
+	if !isHexaString(chunkID, 64) {
+		return returnError(ErrInvalidChunkID, chunkID)
+	}
+	rr.chunk_id = strings.ToUpper(chunkID)
+	return nil
+}
+
+// Check and load the content fullpath of the chunk.
+func (rr *rawxRequest) checkChunkContentFullpath() error {
+	headerFullpath := rr.req.Header.Get(HeaderNameFullpath)
+	if headerFullpath == "" {
+		return returnError(ErrMissingHeader, HeaderNameFullpath)
+	}
+	fullpath := strings.Split(headerFullpath, "/")
+	if len(fullpath) != 5 {
+		return returnError(ErrInvalidHeader, HeaderNameFullpath)
+	}
+
+	account, err := url.PathUnescape(fullpath[0])
+	if err != nil || account == "" {
+		return returnError(ErrInvalidHeader, HeaderNameFullpath)
+	}
+	container, err := url.PathUnescape(fullpath[1])
+	if err != nil || container == "" {
+		return returnError(ErrInvalidHeader, HeaderNameFullpath)
+	}
+	containerID := cidFromName(account, container)
+	headerContainerID := rr.req.Header.Get(HeaderNameContainerID)
+	if headerContainerID != "" {
+		if err != nil || !strings.EqualFold(containerID, headerContainerID) {
+			return returnError(ErrInvalidHeader, HeaderNameContainerID)
+		}
+	}
+
+	path, err := url.PathUnescape(fullpath[2])
+	if err != nil || path == "" {
+		return returnError(ErrInvalidHeader, HeaderNameFullpath)
+	}
+	headerPath := rr.req.Header.Get(HeaderNameContentPath)
+	if headerPath != "" && headerPath != path {
+		return returnError(ErrInvalidHeader, HeaderNameContentPath)
+	}
+
+	version, err := url.PathUnescape(fullpath[3])
+	if err != nil {
+		return returnError(ErrInvalidHeader, HeaderNameFullpath)
+	}
+	if _, err := strconv.ParseInt(version, 10, 64); err != nil {
+		return returnError(ErrInvalidHeader, HeaderNameFullpath)
+	}
+	headerVersion := rr.req.Header.Get(HeaderNameContentVersion)
+	if headerVersion != "" && headerVersion != version {
+		return returnError(ErrInvalidHeader, HeaderNameContentVersion)
+	}
+
+	contentID, err := url.PathUnescape(fullpath[4])
+	if err != nil || !isHexaString(contentID, 0) {
+		return returnError(ErrInvalidHeader, HeaderNameFullpath)
+	}
+	headerContentID := rr.req.Header.Get(HeaderNameContentID)
+	if headerContentID != "" && !strings.EqualFold(headerContentID, contentID) {
+		return returnError(ErrInvalidHeader, HeaderNameContentID)
+	}
+
+	beginContentID := strings.LastIndex(headerFullpath, "/") + 1
+	rr.content_fullpath = headerFullpath[:beginContentID] +
+		strings.ToUpper(contentID)
+	return nil
+}
+
+// Check and load the info of the chunk.
+func (rr *rawxRequest) checkChunkInfo() error {
+	rr.content_stgpol = rr.req.Header.Get(HeaderNameContentStgPol)
+	if rr.content_stgpol == "" {
+		return returnError(ErrMissingHeader, HeaderNameContentStgPol)
+	}
+	rr.content_chunkmethod = rr.req.Header.Get(HeaderNameContentChunkMethod)
+	if rr.content_chunkmethod == "" {
+		return returnError(ErrMissingHeader, HeaderNameContentChunkMethod)
+	}
+
+	chunkID := rr.req.Header.Get(HeaderNameChunkID)
+	if chunkID == "" && !strings.EqualFold(chunkID, rr.chunk_id) {
+		return returnError(ErrInvalidHeader, HeaderNameChunkID)
+	}
+	rr.chunk_position = rr.req.Header.Get(HeaderNameChunkPosition)
+	if rr.chunk_position == "" {
+		return returnError(ErrMissingHeader, HeaderNameChunkPosition)
+	}
+
+	return rr.checkChunkContentFullpath()
 }
 
 func putData(out io.Writer, ul *upload) error {
@@ -191,32 +307,11 @@ func putFinishXattr(rr *rawxRequest, out FileWriter, chunkid string) error {
 }
 
 func (rr *rawxRequest) uploadChunk() {
-	// Load the HEADERS destined to be XATTR
-	type hdrLoader struct {
-		ptr       *string
-		key       string
-		mandatory bool
+	if err := rr.checkChunkInfo(); err != nil {
+		logger_error.Print("Chunk checking error: ", err)
+		rr.replyError(err)
+		return
 	}
-	loaders := []hdrLoader{
-		{&rr.metachunk_hash, HeaderNameMetachunkChecksum, false},
-		{&rr.metachunk_size, HeaderNameMetachunkSize, false},
-		{&rr.chunk_hash, HeaderNameChunkChecksum, false},
-		{&rr.chunk_size, HeaderNameChunkSize, false},
-		{&rr.chunk_position, HeaderNameChunkPosition, true},
-		{&rr.content_chunkmethod, HeaderNameContentChunkMethod, true},
-		{&rr.content_stgpol, HeaderNameContentStgPol, true},
-		{&rr.content_fullpath, HeaderNameFullPath, true},
-	}
-	for _, hl := range loaders {
-		*(hl.ptr) = rr.req.Header.Get(hl.key)
-		if len(*(hl.ptr)) <= 0 && hl.mandatory {
-			logger_error.Print("Missing header: ", hl.key)
-			rr.replyError(ErrMissingHeader)
-			return
-		}
-	}
-
-	// TODO(jfs): check the format of each header
 
 	// Attempt a PUT in the repository
 	out, err := rr.rawx.repo.Put(rr.chunk_id)
@@ -380,7 +475,7 @@ func (rr *rawxRequest) downloadChunk() {
 	set(HeaderNameMetachunkSize, rr.metachunk_size)
 	set(HeaderNameContentStgPol, rr.content_stgpol)
 	set(HeaderNameContentChunkMethod, rr.content_chunkmethod)
-	set(HeaderNameFullPath, rr.content_fullpath)
+	set(HeaderNameFullpath, rr.content_fullpath)
 	set(HeaderNameChunkID, rr.chunk_id)
 
 	// Prepare the headers of the reply
@@ -425,16 +520,6 @@ func (rr *rawxRequest) removeChunk() {
 	} else {
 		rr.replyCode(http.StatusNoContent)
 	}
-}
-
-// Check and load a canonic form of the ID of the chunk.
-func (rr *rawxRequest) checkChunkID() error {
-	chunkID := filepath.Base(rr.req.URL.Path)
-	if !isHexaString(chunkID, 64) {
-		return ErrInvalidChunkID
-	}
-	rr.chunk_id = strings.ToUpper(chunkID)
-	return nil
 }
 
 func (rr *rawxRequest) serveChunk(rep http.ResponseWriter, req *http.Request) {

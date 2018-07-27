@@ -26,17 +26,21 @@ func init() {
 	}
 	hexa := []byte{
 		'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-               'a', 'b', 'c', 'd', 'e', 'f', 'A', 'B', 'C', 'D', 'E', 'F'}
+		'a', 'b', 'c', 'd', 'e', 'f', 'A', 'B', 'C', 'D', 'E', 'F'}
 	for _, c := range hexa {
 		accepted[c/8] |= (1 << (c % 8))
 	}
 }
 
 func isHexaString(name string, length int) bool {
+	if name == "" {
+		return false
+	}
+
 	var i int
 	var n rune
 	for i, n = range name {
-               if !isHexaChar(byte(n)) {
+		if !isHexaChar(byte(n)) {
 			return false
 		}
 	}

@@ -51,7 +51,7 @@ type rawxRequest struct {
 	// field mapped as XATTR and HEADERS
 	metachunk_hash      string
 	metachunk_size      string
-       chunk_id            string
+	chunk_id            string
 	chunk_hash          string
 	chunk_size          string
 	chunk_position      string
@@ -82,13 +82,13 @@ func (self *rawxRequest) replyError(err error) {
 			self.replyCode(http.StatusBadRequest)
 		} else {
 			switch err {
-                       case ErrInvalidChunkID:
+			case ErrInvalidChunkID:
 				self.replyCode(http.StatusBadRequest)
 			case ErrMissingHeader:
 				self.replyCode(http.StatusBadRequest)
-			case ErrInvalidRange:
+			case ErrInvalidHeader:
 				self.replyCode(http.StatusBadRequest)
-			case ErrMd5Mismatch:
+			case ErrInvalidRange:
 				self.replyCode(http.StatusBadRequest)
 			default:
 				panic("wot?!")
