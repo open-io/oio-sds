@@ -26,17 +26,17 @@ func init() {
 	}
 	hexa := []byte{
 		'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-		'A', 'B', 'C', 'D', 'E', 'F'}
+               'a', 'b', 'c', 'd', 'e', 'f', 'A', 'B', 'C', 'D', 'E', 'F'}
 	for _, c := range hexa {
 		accepted[c/8] |= (1 << (c % 8))
 	}
 }
 
-func isValidString(name string, length int) bool {
+func isHexaString(name string, length int) bool {
 	var i int
 	var n rune
 	for i, n = range name {
-		if !isValidChar(byte(n)) {
+               if !isHexaChar(byte(n)) {
 			return false
 		}
 	}
@@ -46,6 +46,6 @@ func isValidString(name string, length int) bool {
 	return true
 }
 
-func isValidChar(b byte) bool {
+func isHexaChar(b byte) bool {
 	return 0 != (accepted[b/8] & (1 << (b % 8)))
 }
