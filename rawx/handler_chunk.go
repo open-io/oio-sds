@@ -70,6 +70,7 @@ const (
 	HeaderNameMetachunkSize      = "X-oio-Chunk-Meta-Metachunk-Size"
 	HeaderNameMetachunkChecksum  = "X-oio-Chunk-Meta-Metachunk-Hash"
 	HeaderNameChunkID            = "X-oio-Chunk-Meta-Chunk-Id"
+	HeaderNameXattrVersion       = "X-oio-Chunk-Meta-Oio-Version"
 )
 
 var (
@@ -144,6 +145,7 @@ func (rr *rawxRequest) checkChunkContentFullpath() error {
 			return returnError(ErrInvalidHeader, HeaderNameContainerID)
 		}
 	}
+	rr.container_id = containerID
 
 	path, err := url.PathUnescape(fullpath[2])
 	if err != nil || path == "" {
@@ -153,6 +155,7 @@ func (rr *rawxRequest) checkChunkContentFullpath() error {
 	if headerPath != "" && headerPath != path {
 		return returnError(ErrInvalidHeader, HeaderNameContentPath)
 	}
+	rr.content_path = path
 
 	version, err := url.PathUnescape(fullpath[3])
 	if err != nil {
@@ -165,6 +168,7 @@ func (rr *rawxRequest) checkChunkContentFullpath() error {
 	if headerVersion != "" && headerVersion != version {
 		return returnError(ErrInvalidHeader, HeaderNameContentVersion)
 	}
+	rr.content_version = version
 
 	contentID, err := url.PathUnescape(fullpath[4])
 	if err != nil || !isHexaString(contentID, 0) {
@@ -174,10 +178,10 @@ func (rr *rawxRequest) checkChunkContentFullpath() error {
 	if headerContentID != "" && !strings.EqualFold(headerContentID, contentID) {
 		return returnError(ErrInvalidHeader, HeaderNameContentID)
 	}
+	rr.content_id = strings.ToUpper(contentID)
 
 	beginContentID := strings.LastIndex(headerFullpath, "/") + 1
-	rr.content_fullpath = headerFullpath[:beginContentID] +
-		strings.ToUpper(contentID)
+	rr.content_fullpath = headerFullpath[:beginContentID] + rr.content_id
 	return nil
 }
 
@@ -359,6 +363,10 @@ func putFinishXattr(rr *rawxRequest, out FileWriter, chunkid string) error {
 		return err
 	}
 
+	if err := set(AttrNameXattrVersion, "4.2"); err != nil {
+		return err
+	}
+
 	// TODO(jfs): svave the compression status
 
 	return nil
@@ -439,8 +447,36 @@ func (rr *rawxRequest) checkChunk() {
 	}
 }
 
+func (rr *rawxRequest) loadXattrChunkInfo(inChunk FileReader, chunkID string) {
+	get := func(k string) string {
+		v, _ := inChunk.GetAttr(k)
+		return string(v)
+	}
+
+	rr.content_fullpath = get(AttrNameFullPrefix + chunkID)
+	fullpath := strings.Split(rr.content_fullpath, "/")
+	if len(fullpath) == 5 {
+		account, _ := url.PathUnescape(fullpath[0])
+		container, _ := url.PathUnescape(fullpath[1])
+		rr.container_id = cidFromName(account, container)
+		rr.content_path, _ = url.PathUnescape(fullpath[2])
+		rr.content_version, _ = url.PathUnescape(fullpath[3])
+		rr.content_id, _ = url.PathUnescape(fullpath[4])
+	}
+	rr.content_chunkmethod = get(AttrNameContentChunkMethod)
+	rr.content_stgpol = get(AttrNameContentStgPol)
+
+	rr.metachunk_size = get(AttrNameMetachunkSize)
+	rr.metachunk_hash = get(AttrNameMetachunkChecksum)
+
+	rr.chunk_position = get(AttrNameChunkPosition)
+	rr.chunk_size = get(AttrNameChunkSize)
+	rr.chunk_hash = get(AttrNameChunkChecksum)
+
+	rr.xattr_version = get(AttrNameXattrVersion)
+}
+
 func (rr *rawxRequest) downloadChunk() {
-	// Get a handle on the chunk then load all its XATTR
 	inChunk, err := rr.rawx.repo.Get(rr.chunk_id)
 	if inChunk != nil {
 		defer inChunk.Close()
@@ -449,22 +485,9 @@ func (rr *rawxRequest) downloadChunk() {
 		logger_error.Print("File error: ", err)
 		rr.replyError(err)
 		return
-	} else {
-		get := func(k string) string {
-			v, _ := inChunk.GetAttr(k)
-			logger_error.Printf("GetAttr %s -> %s", k, string(v))
-			return string(v)
-		}
-		// Load all the chunks attr
-		rr.chunk_size = get(AttrNameChunkSize)
-		rr.chunk_hash = get(AttrNameChunkChecksum)
-		rr.chunk_position = get(AttrNameChunkPosition)
-		rr.content_chunkmethod = get(AttrNameContentChunkMethod)
-		rr.content_stgpol = get(AttrNameContentStgPol)
-		rr.metachunk_size = get(AttrNameMetachunkSize)
-		rr.metachunk_hash = get(AttrNameMetachunkChecksum)
-		rr.content_fullpath = get(AttrNameFullPrefix + rr.chunk_id)
 	}
+
+	rr.loadXattrChunkInfo(inChunk, rr.chunk_id)
 
 	// Load a possible range in the request
 	// !!!(jfs): we do not manage requests on multiple ranges
@@ -527,14 +550,20 @@ func (rr *rawxRequest) downloadChunk() {
 			rr.rep.Header().Set(k, v)
 		}
 	}
-	set(HeaderNameChunkChecksum, rr.chunk_hash)
-	set(HeaderNameChunkSize, rr.chunk_size)
-	set(HeaderNameMetachunkChecksum, rr.metachunk_hash)
-	set(HeaderNameMetachunkSize, rr.metachunk_size)
+	set(HeaderNameFullpath, rr.content_fullpath)
+	set(HeaderNameContainerID, rr.container_id)
+	set(HeaderNameContentPath, rr.content_path)
+	set(HeaderNameContentVersion, rr.content_version)
+	set(HeaderNameContentID, rr.content_id)
 	set(HeaderNameContentStgPol, rr.content_stgpol)
 	set(HeaderNameContentChunkMethod, rr.content_chunkmethod)
-	set(HeaderNameFullpath, rr.content_fullpath)
+	set(HeaderNameMetachunkChecksum, rr.metachunk_hash)
+	set(HeaderNameMetachunkSize, rr.metachunk_size)
 	set(HeaderNameChunkID, rr.chunk_id)
+	set(HeaderNameChunkPosition, rr.chunk_position)
+	set(HeaderNameChunkChecksum, rr.chunk_hash)
+	set(HeaderNameChunkSize, rr.chunk_size)
+	set(HeaderNameXattrVersion, rr.xattr_version)
 
 	// Prepare the headers of the reply
 	if has_range() {
