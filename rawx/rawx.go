@@ -49,15 +49,20 @@ type rawxRequest struct {
 	reqid      string
 
 	// field mapped as XATTR and HEADERS
+	content_fullpath    string
+	container_id        string
+	content_path        string
+	content_version     string
+	content_id          string
+	content_chunkmethod string
+	content_stgpol      string
 	metachunk_hash      string
 	metachunk_size      string
 	chunk_id            string
+	chunk_position      string
 	chunk_hash          string
 	chunk_size          string
-	chunk_position      string
-	content_chunkmethod string
-	content_stgpol      string
-	content_fullpath    string
+	xattr_version       string
 
 	// for the reply's purpose
 	status    int
