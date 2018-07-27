@@ -91,8 +91,8 @@ var (
 
 type upload struct {
 	in     io.Reader
-	length int64
-	h      string
+	length *int64
+	hash   string
 }
 
 func returnError(err error, message string) error {
@@ -201,12 +201,96 @@ func (rr *rawxRequest) checkChunkInfo() error {
 		return returnError(ErrMissingHeader, HeaderNameChunkPosition)
 	}
 
+	rr.metachunk_hash = rr.req.Header.Get(HeaderNameMetachunkChecksum)
+	if rr.metachunk_hash != "" {
+		if !isHexaString(rr.metachunk_hash, 0) {
+			return returnError(ErrInvalidHeader, HeaderNameMetachunkChecksum)
+		}
+		rr.metachunk_hash = strings.ToUpper(rr.metachunk_hash)
+	}
+	rr.metachunk_size = rr.req.Header.Get(HeaderNameMetachunkSize)
+	if rr.metachunk_size != "" {
+		if _, err := strconv.ParseInt(rr.metachunk_size, 10, 64); err != nil {
+			return returnError(ErrInvalidHeader, HeaderNameMetachunkSize)
+		}
+	}
+
+	rr.chunk_hash = rr.req.Header.Get(HeaderNameChunkChecksum)
+	if rr.chunk_hash != "" {
+		if !isHexaString(rr.chunk_hash, 0) {
+			return returnError(ErrInvalidHeader, HeaderNameChunkChecksum)
+		}
+		rr.chunk_hash = strings.ToUpper(rr.chunk_hash)
+	}
+	rr.chunk_size = rr.req.Header.Get(HeaderNameChunkSize)
+	if rr.chunk_size != "" {
+		if _, err := strconv.ParseInt(rr.chunk_size, 10, 64); err != nil {
+			return returnError(ErrInvalidHeader, HeaderNameChunkSize)
+		}
+	}
+
 	return rr.checkChunkContentFullpath()
+}
+
+// Check and load the checksum and the size of the chunk and the metachunk
+func (rr *rawxRequest) checkChunkChecksumWithTrailers(ul *upload) error {
+	trailerMetachunkHash := rr.req.Trailer.Get(HeaderNameMetachunkChecksum)
+	if trailerMetachunkHash != "" {
+		rr.metachunk_hash = trailerMetachunkHash
+		if rr.metachunk_hash != "" {
+			if !isHexaString(rr.metachunk_hash, 0) {
+				return returnError(ErrInvalidHeader, HeaderNameMetachunkChecksum)
+			}
+			rr.metachunk_hash = strings.ToUpper(rr.metachunk_hash)
+		}
+	}
+	trailerMetachunkSize := rr.req.Trailer.Get(HeaderNameMetachunkSize)
+	if trailerMetachunkSize != "" {
+		rr.metachunk_size = trailerMetachunkSize
+		if rr.metachunk_size != "" {
+			if _, err := strconv.ParseInt(rr.metachunk_size, 10, 64); err != nil {
+				return returnError(ErrInvalidHeader, HeaderNameMetachunkSize)
+			}
+		}
+	}
+	if strings.HasPrefix(rr.content_chunkmethod, "ec/") {
+		if rr.metachunk_hash == "" {
+			return returnError(ErrMissingHeader, HeaderNameMetachunkChecksum)
+		}
+		if rr.metachunk_size == "" {
+			return returnError(ErrMissingHeader, HeaderNameMetachunkSize)
+		}
+	}
+
+	trailerChunkHash := rr.req.Trailer.Get(HeaderNameChunkChecksum)
+	if trailerChunkHash != "" {
+		rr.chunk_hash = trailerChunkHash
+		rr.chunk_hash = strings.ToUpper(rr.chunk_hash)
+	}
+	ul.hash = strings.ToUpper(ul.hash)
+	if rr.chunk_hash != "" {
+		if !strings.EqualFold(rr.chunk_hash, ul.hash) {
+			return returnError(ErrInvalidHeader, HeaderNameChunkChecksum)
+		}
+	} else {
+		rr.chunk_hash = ul.hash
+	}
+	trailerChunkSize := rr.req.Trailer.Get(HeaderNameChunkSize)
+	if trailerChunkSize != "" {
+		rr.chunk_size = trailerChunkSize
+	}
+	if rr.chunk_size != "" {
+		if _, err := strconv.ParseInt(rr.chunk_size, 10, 64); err != nil {
+			return returnError(ErrInvalidHeader, HeaderNameChunkSize)
+		}
+	}
+
+	return nil
 }
 
 func putData(out io.Writer, ul *upload) error {
 	running := true
-	remaining := ul.length
+	remaining := *(ul.length)
 	logger_error.Printf("Uploading %v bytes", remaining)
 	chunkHash := md5.New()
 	buf := make([]byte, bufSize)
@@ -236,33 +320,7 @@ func putData(out io.Writer, ul *upload) error {
 	}
 
 	sum := chunkHash.Sum(make([]byte, 0))
-	ul.h = strings.ToUpper(hex.EncodeToString(sum))
-	return nil
-}
-
-func putFinishChecksum(rr *rawxRequest, h string) error {
-
-	h = strings.ToUpper(h)
-
-	// Reload the hash from the (maybe) trailing headers
-	get := func(k string) string {
-		v := rr.req.Header.Get(k)
-		logger_error.Printf("GetHdr %s -> %s", k, v)
-		return v
-	}
-	rr.chunk_hash = get(HeaderNameChunkChecksum)
-	rr.chunk_size = get(HeaderNameChunkSize)
-	rr.metachunk_hash = get(HeaderNameMetachunkChecksum)
-	rr.metachunk_size = get(HeaderNameMetachunkSize)
-
-	if len(rr.chunk_hash) > 0 {
-		if strings.ToUpper(rr.chunk_hash) != h {
-			return ErrMd5Mismatch
-		}
-	} else {
-		rr.chunk_hash = h
-	}
-
+	ul.hash = strings.ToUpper(hex.EncodeToString(sum))
 	return nil
 }
 
@@ -324,7 +382,7 @@ func (rr *rawxRequest) uploadChunk() {
 	// Upload, and maybe manage compression
 	var ul upload
 	ul.in = rr.req.Body
-	ul.length = rr.req.ContentLength
+	ul.length = &rr.req.ContentLength
 
 	if rr.rawx.compress {
 		z := zlib.NewWriter(out)
@@ -341,7 +399,7 @@ func (rr *rawxRequest) uploadChunk() {
 
 	// If a hash has been sent, it must match the hash computed
 	if err == nil {
-		if err = putFinishChecksum(rr, ul.h); err != nil {
+		if err = rr.checkChunkChecksumWithTrailers(&ul); err != nil {
 			logger_error.Print("Chunk checksum error: ", err)
 		}
 	}
@@ -359,7 +417,7 @@ func (rr *rawxRequest) uploadChunk() {
 		out.Abort()
 	} else {
 		out.Commit()
-		rr.rep.Header().Set("chunkhash", ul.h)
+		rr.rep.Header().Set("chunkhash", ul.hash)
 		rr.replyCode(http.StatusCreated)
 	}
 }
