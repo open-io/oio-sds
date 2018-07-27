@@ -61,7 +61,7 @@ const (
 	HeaderNameChunkChecksum      = "X-oio-Chunk-Meta-Chunk-Hash"
 	HeaderNameMetachunkSize      = "X-oio-Chunk-Meta-Metachunk-Size"
 	HeaderNameMetachunkChecksum  = "X-oio-Chunk-Meta-Metachunk-Hash"
-	HeaderNameChunkId            = "X-oio-Chunk-Meta-Chunk-Id"
+	HeaderNameChunkID            = "X-oio-Chunk-Meta-Chunk-Id"
 	HeaderNameFullPath           = "X-oio-Chunk-Meta-Full-Path"
 )
 
@@ -72,7 +72,7 @@ var (
 var (
 	ErrNotImplemented        = errors.New("Not implemented")
 	ErrChunkExists           = errors.New("Chunk already exists")
-	ErrInvalidChunkName      = errors.New("Invalid chunk name")
+	ErrInvalidChunkID        = errors.New("Invalid chunk ID")
 	ErrCompressionNotManaged = errors.New("Compression mode not managed")
 	ErrMissingHeader         = errors.New("Missing mandatory header")
 	ErrMd5Mismatch           = errors.New("MD5 sum mismatch")
@@ -190,7 +190,7 @@ func putFinishXattr(rr *rawxRequest, out FileWriter, chunkid string) error {
 	return nil
 }
 
-func uploadChunk(rr *rawxRequest, chunkid string) {
+func (rr *rawxRequest) uploadChunk() {
 	// Load the HEADERS destined to be XATTR
 	type hdrLoader struct {
 		ptr       *string
@@ -219,7 +219,7 @@ func uploadChunk(rr *rawxRequest, chunkid string) {
 	// TODO(jfs): check the format of each header
 
 	// Attempt a PUT in the repository
-	out, err := rr.rawx.repo.Put(chunkid)
+	out, err := rr.rawx.repo.Put(rr.chunk_id)
 	if err != nil {
 		logger_error.Print("Chunk opening error: ", err)
 		rr.replyError(err)
@@ -253,7 +253,7 @@ func uploadChunk(rr *rawxRequest, chunkid string) {
 
 	// If everything went well, finish with the chunks XATTR management
 	if err == nil {
-		if err = putFinishXattr(rr, out, chunkid); err != nil {
+		if err = putFinishXattr(rr, out, rr.chunk_id); err != nil {
 			logger_error.Print("Chunk xattr error: ", err)
 		}
 	}
@@ -269,8 +269,8 @@ func uploadChunk(rr *rawxRequest, chunkid string) {
 	}
 }
 
-func checkChunk(rr *rawxRequest, chunkid string) {
-	in, err := rr.rawx.repo.Get(chunkid)
+func (rr *rawxRequest) checkChunk() {
+	in, err := rr.rawx.repo.Get(rr.chunk_id)
 	if in != nil {
 		defer in.Close()
 	}
@@ -286,9 +286,9 @@ func checkChunk(rr *rawxRequest, chunkid string) {
 	}
 }
 
-func downloadChunk(rr *rawxRequest, chunkid string) {
+func (rr *rawxRequest) downloadChunk() {
 	// Get a handle on the chunk then load all its XATTR
-	inChunk, err := rr.rawx.repo.Get(chunkid)
+	inChunk, err := rr.rawx.repo.Get(rr.chunk_id)
 	if inChunk != nil {
 		defer inChunk.Close()
 	}
@@ -310,7 +310,7 @@ func downloadChunk(rr *rawxRequest, chunkid string) {
 		rr.content_stgpol = get(AttrNameContentStgPol)
 		rr.metachunk_size = get(AttrNameMetachunkSize)
 		rr.metachunk_hash = get(AttrNameMetachunkChecksum)
-		rr.content_fullpath = get(AttrNameFullPrefix + chunkid)
+		rr.content_fullpath = get(AttrNameFullPrefix + rr.chunk_id)
 	}
 
 	// Load a possible range in the request
@@ -381,7 +381,7 @@ func downloadChunk(rr *rawxRequest, chunkid string) {
 	set(HeaderNameContentStgPol, rr.content_stgpol)
 	set(HeaderNameContentChunkMethod, rr.content_chunkmethod)
 	set(HeaderNameFullPath, rr.content_fullpath)
-	set(HeaderNameChunkId, chunkid)
+	set(HeaderNameChunkID, rr.chunk_id)
 
 	// Prepare the headers of the reply
 	if has_range() {
@@ -419,33 +419,47 @@ func downloadChunk(rr *rawxRequest, chunkid string) {
 	}
 }
 
-func removeChunk(rr *rawxRequest, chunkid string) {
-	if err := rr.rawx.repo.Del(chunkid); err != nil {
+func (rr *rawxRequest) removeChunk() {
+	if err := rr.rawx.repo.Del(rr.chunk_id); err != nil {
 		rr.replyError(err)
 	} else {
 		rr.replyCode(http.StatusNoContent)
 	}
 }
 
+// Check and load a canonic form of the ID of the chunk.
+func (rr *rawxRequest) checkChunkID() error {
+	chunkID := filepath.Base(rr.req.URL.Path)
+	if !isHexaString(chunkID, 64) {
+		return ErrInvalidChunkID
+	}
+	rr.chunk_id = strings.ToUpper(chunkID)
+	return nil
+}
+
 func (rr *rawxRequest) serveChunk(rep http.ResponseWriter, req *http.Request) {
-	chunkid := filepath.Base(req.URL.Path)
+	err := rr.checkChunkID()
+	if err != nil {
+		rr.replyError(err)
+		return
+	}
 	switch req.Method {
 	case "PUT":
 		rr.stats_time = TimePut
 		rr.stats_hits = HitsPut
-		uploadChunk(rr, chunkid)
+		rr.uploadChunk()
 	case "HEAD":
 		rr.stats_time = TimeHead
 		rr.stats_hits = HitsHead
-		checkChunk(rr, chunkid)
+		rr.checkChunk()
 	case "GET":
 		rr.stats_time = TimeGet
 		rr.stats_hits = HitsGet
-		downloadChunk(rr, chunkid)
+		rr.downloadChunk()
 	case "DELETE":
 		rr.stats_time = TimeDel
 		rr.stats_hits = HitsDel
-		removeChunk(rr, chunkid)
+		rr.removeChunk()
 	default:
 		rr.replyCode(http.StatusMethodNotAllowed)
 	}

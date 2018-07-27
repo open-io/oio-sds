@@ -160,12 +160,15 @@ class RawxAbstractTestSuite(object):
         self.assertEqual(400, resp.status)
 
     def _cycle_put(self, length, expected, remove_headers=None, path=None,
-                   old_fullpath=False):
+                   old_fullpath=False, chunkid_lowercase=False):
         if path:
             self.path = path
         chunkid = random_chunk_id()
         chunkdata = random_buffer(string.printable, length)
-        chunkurl = self._rawx_url(chunkid)
+        if chunkid_lowercase:
+            chunkurl = self._rawx_url(chunkid.lower())
+        else:
+            chunkurl = self._rawx_url(chunkid)
         chunkpath = self._chunk_path(chunkid)
         headers = self._chunk_attr(chunkid, chunkdata)
         fullpath = headers['x-oio-chunk-meta-full-path']
@@ -342,6 +345,9 @@ class RawxAbstractTestSuite(object):
     def test_bad_chunkid(self):
         self._check_bad_headers(
             32, bad_headers={'x-oio-chunk-meta-chunk-id': '00'*32})
+
+    def test_chunkid_lowercase(self):
+        self._cycle_put(32, 201, chunkid_lowercase=True)
 
     def _cycle_copy(self, path):
         if path:
