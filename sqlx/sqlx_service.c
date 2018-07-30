@@ -834,8 +834,8 @@ sqlx_service_set_defaults(void)
 	SRV.flag_delete_on = TRUE;
 	SRV.flag_cached_bases = TRUE;
 
-	SRV.sync_mode_solo = 1;
-	SRV.sync_mode_repli = 0;
+	SRV.sync_mode_solo = SQLX_SYNC_NORMAL;
+	SRV.sync_mode_repli = SQLX_SYNC_OFF;
 	SRV.service_id = NULL;
 
 	if (SRV.service_config->set_defaults)
