@@ -10,3 +10,7 @@ log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log
 syslog_prefix = OIO,OPENIO,blob-index,1
+# oio-blob-converter
+# convert_chunks = False
+# backup = True
+# backup_dir = /tmp

@@ -44,8 +44,8 @@ class VolumeClientCli(object):
     def volume_admin_show(self, volume):
         return self.volume.admin_show(volume)
 
-    def volume_admin_clear(self, volume):
-        return self.volume.admin_clear(volume)
+    def volume_admin_clear(self, volume, **kwargs):
+        return self.volume.admin_clear(volume, **kwargs)
 
     def volume_show(self, volume):
         from oio.common.json import json
@@ -53,7 +53,7 @@ class VolumeClientCli(object):
         info = self.volume.status(volume)
         data = {}
         containers = info.get('container')
-        data['chunk'] = info.get('chunk').get('total')
+        data['chunk'] = info.get('chunk')
         for ct in containers:
             data['container.%s' % ct] = json.dumps(containers[ct])
         return data

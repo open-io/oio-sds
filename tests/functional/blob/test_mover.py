@@ -70,8 +70,8 @@ class TestBlobMover(BaseTestCase):
     def test_move_old_chunk(self):
         for c in self.chunks:
             convert_to_old_chunk(
-                self._chunk_path(c), self.cid, self.path, self.version,
-                self.content_id)
+                self._chunk_path(c), self.account, self.container, self.path,
+                self.version, self.content_id)
 
         chunk = random.choice(self.chunks)
         chunk_volume = chunk['url'].split('/')[2]

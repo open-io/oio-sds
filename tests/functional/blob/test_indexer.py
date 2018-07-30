@@ -133,7 +133,8 @@ class TestBlobIndexer(BaseTestCase):
         self.assertEqual(expected_chunk_id, chunk_id)
 
     def test_blob_indexer_with_old_chunk(self):
-        _, _, expected_cid, expected_content_path, expected_content_version, \
+        expected_account, expected_container, expected_cid, \
+            expected_content_path, expected_content_version, \
             expected_content_id, expected_chunk_id = self._put_chunk()
 
         chunks = self.rdir_client.chunk_fetch(self.rawx_id)
@@ -145,8 +146,9 @@ class TestBlobIndexer(BaseTestCase):
         self.assertEqual(expected_chunk_id, chunk_id)
 
         convert_to_old_chunk(
-            self._chunk_path(chunk_id), expected_cid, expected_content_path,
-            expected_content_version, expected_content_id)
+            self._chunk_path(chunk_id), expected_account, expected_container,
+            expected_content_path, expected_content_version,
+            expected_content_id)
 
         self.rdir_client.admin_clear(self.rawx_id, clear_all=True)
         self.blob_indexer.index_pass()

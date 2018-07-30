@@ -272,8 +272,11 @@ class RdirClient(HttpApi):
 
     @ensure_headers
     @ensure_request_id
-    def _rdir_request(self, volume, method, action, create=False, **kwargs):
-        params = {'vol': volume}
+    def _rdir_request(self, volume, method, action, create=False, params=None,
+                      **kwargs):
+        if params is None:
+            params = dict()
+        params['vol'] = volume
         if create:
             params['create'] = '1'
         uri = self._make_uri(action, volume, req_id=kwargs.get('X-oio-req-id'))
@@ -379,10 +382,12 @@ class RdirClient(HttpApi):
                                          **kwargs)
         return body
 
-    def admin_clear(self, volume, clear_all=False, **kwargs):
-        body = {'all': clear_all}
+    def admin_clear(self, volume, clear_all=False, before_incident=False,
+                    repair=False, **kwargs):
+        params = {'all': clear_all, 'before_incident': before_incident,
+                  'repair': repair}
         _resp, resp_body = self._rdir_request(
-            volume, 'POST', 'admin/clear', json=body, **kwargs)
+            volume, 'POST', 'admin/clear', params=params, **kwargs)
         return resp_body
 
     def status(self, volume, **kwargs):

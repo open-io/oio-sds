@@ -68,6 +68,57 @@ class SetPropertyCommandMixin(object):
         )
 
 
+class ContainerCommandMixin(object):
+    """Command taking a container or CID as parameter"""
+
+    def patch_parser_container(self, parser):
+        parser.add_argument(
+            '--cid',
+            dest='is_cid',
+            default=False,
+            help="Interpret container as a CID",
+            action='store_true'
+        )
+        parser.add_argument(
+            'container',
+            metavar='<container>',
+            help=("Name or CID of the container to interact with.\n")
+        )
+
+    def take_action_container(self, parsed_args):
+        parsed_args.cid = None
+        if parsed_args.is_cid:
+            parsed_args.cid = parsed_args.container
+            parsed_args.container = None
+
+    def resolve_cid(self, cid):
+        data = self.app.client_manager.storage.container_get_properties(
+                self.app.client_manager.account,
+                None,
+                cid=cid
+            )
+        return data['system']['sys.user.name']
+
+
+class ContainersCommandMixin(object):
+    """Command taking some containers or CIDs as parameter"""
+
+    def patch_parser_container(self, parser):
+        parser.add_argument(
+            '--cid',
+            dest='is_cid',
+            default=False,
+            help="Interpret containers as a CID",
+            action='store_true'
+        )
+        parser.add_argument(
+            'containers',
+            metavar='<containers>',
+            nargs='+',
+            help=("Names or CIDs of the containers to interact with.\n")
+        )
+
+
 class CreateContainer(SetPropertyCommandMixin, lister.Lister):
     """Create an object container."""
 
@@ -120,7 +171,8 @@ class CreateContainer(SetPropertyCommandMixin, lister.Lister):
         return ('Name', 'Created'), (r for r in results)
 
 
-class SetContainer(SetPropertyCommandMixin, command.Command):
+class SetContainer(SetPropertyCommandMixin,
+                   ContainerCommandMixin, command.Command):
     """
     Set container properties, quota, storage policy, status or versioning.
     """
@@ -130,11 +182,7 @@ class SetContainer(SetPropertyCommandMixin, command.Command):
     def get_parser(self, prog_name):
         parser = super(SetContainer, self).get_parser(prog_name)
         self.patch_parser(parser)
-        parser.add_argument(
-            'container',
-            metavar='<container>',
-            help='Container to modify'
-        )
+        self.patch_parser_container(parser)
         parser.add_argument(
             '--clear',
             dest='clear',
@@ -152,6 +200,7 @@ class SetContainer(SetPropertyCommandMixin, command.Command):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
+        super(SetContainer, self).take_action_container(parsed_args)
         properties = parsed_args.property
         system = dict()
         if parsed_args.quota is not None:
@@ -176,72 +225,72 @@ class SetContainer(SetPropertyCommandMixin, command.Command):
             parsed_args.container,
             properties,
             clear=parsed_args.clear,
-            system=system
+            system=system,
+            cid=parsed_args.cid
         )
 
 
-class TouchContainer(command.Command):
+class TouchContainer(ContainersCommandMixin, command.Command):
     """Touch an object container, triggers asynchronous treatments on it."""
 
     log = getLogger(__name__ + '.TouchContainer')
 
     def get_parser(self, prog_name):
         parser = super(TouchContainer, self).get_parser(prog_name)
-        parser.add_argument(
-            'containers',
-            metavar='<container>',
-            nargs='+',
-            help='Container(s) to touch'
-        )
+        self.patch_parser_container(parser)
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
+        if parsed_args.is_cid:
+            for container in parsed_args.containers:
+                self.app.client_manager.storage.container_touch(
+                    self.app.client_manager.account,
+                    None, cid=container
+                )
+        else:
+            for container in parsed_args.containers:
+                self.app.client_manager.storage.container_touch(
+                    self.app.client_manager.account,
+                    container
+                )
 
-        for container in parsed_args.containers:
-            self.app.client_manager.storage.container_touch(
-                self.app.client_manager.account,
-                container
-            )
 
-
-class DeleteContainer(command.Command):
+class DeleteContainer(ContainersCommandMixin, command.Command):
     """Delete an object container."""
 
     log = getLogger(__name__ + '.DeleteContainer')
 
     def get_parser(self, prog_name):
         parser = super(DeleteContainer, self).get_parser(prog_name)
-        parser.add_argument(
-            'containers',
-            metavar='<container>',
-            nargs='+',
-            help='Container(s) to delete'
-        )
+        self.patch_parser_container(parser)
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
-        for container in parsed_args.containers:
-            self.app.client_manager.storage.container_delete(
-                self.app.client_manager.account,
-                container
-            )
+        if parsed_args.is_cid:
+            for container in parsed_args.containers:
+                self.app.client_manager.storage.container_delete(
+                    self.app.client_manager.account,
+                    None, cid=container
+                )
+        else:
+            for container in parsed_args.containers:
+                self.app.client_manager.storage.container_delete(
+                    self.app.client_manager.account,
+                    container
+                )
 
 
-class FlushContainer(command.Command):
+class FlushContainer(ContainerCommandMixin, command.Command):
     """Flush an object container."""
 
     log = getLogger(__name__ + '.FlushContainer')
 
     def get_parser(self, prog_name):
         parser = super(FlushContainer, self).get_parser(prog_name)
-        parser.add_argument(
-            'container',
-            metavar='<container>',
-            help='Container to flush'
-        )
+        self.patch_parser_container(parser)
         parser.add_argument(
             '--quickly',
             action='store_true',
@@ -253,38 +302,36 @@ class FlushContainer(command.Command):
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
-
+        self.take_action_container(parsed_args)
+        if parsed_args.cid is not None:
+            parsed_args.container = self.resolve_cid(parsed_args.cid)
         self.app.client_manager.storage.container_flush(
             self.app.client_manager.account, parsed_args.container,
             fast=parsed_args.quick)
 
 
-class ShowContainer(show.ShowOne):
+class ShowContainer(ContainerCommandMixin, show.ShowOne):
     """Display information about an object container."""
 
     log = getLogger(__name__ + '.ShowContainer')
 
     def get_parser(self, prog_name):
         parser = super(ShowContainer, self).get_parser(prog_name)
-        parser.add_argument(
-            'container',
-            metavar='<container>',
-            help='Name of the container to display information about'
-        )
-
+        self.patch_parser_container(parser)
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
         account = self.app.client_manager.account
-
+        self.take_action_container(parsed_args)
         # The command is named 'show' but we must call
         # container_get_properties() because container_show() does
         # not return system properties (and we need them).
         data = self.app.client_manager.storage.container_get_properties(
             account,
-            parsed_args.container
+            parsed_args.container,
+            cid=parsed_args.cid
         )
 
         sys = data['system']
@@ -405,18 +452,14 @@ class ListContainer(lister.Lister):
         return columns, ((v[0], v[2], v[1]) for v in listing)
 
 
-class UnsetContainer(command.Command):
+class UnsetContainer(ContainerCommandMixin, command.Command):
     """Unset container properties."""
 
     log = getLogger(__name__ + '.UnsetContainer')
 
     def get_parser(self, prog_name):
         parser = super(UnsetContainer, self).get_parser(prog_name)
-        parser.add_argument(
-            'container',
-            metavar='<container>',
-            help='Container to modify'
-        )
+        self.patch_parser_container(parser)
         parser.add_argument(
             '--property',
             metavar='<key>',
@@ -453,6 +496,7 @@ class UnsetContainer(command.Command):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
+        self.take_action_container(parsed_args)
         properties = parsed_args.property
         system = dict()
         if parsed_args.storage_policy:
@@ -468,41 +512,40 @@ class UnsetContainer(command.Command):
             self.app.client_manager.storage.container_del_properties(
                 self.app.client_manager.account,
                 parsed_args.container,
-                properties)
+                properties, cid=parsed_args.cid)
         if system:
             self.app.client_manager.storage.container_set_properties(
                 self.app.client_manager.account,
                 parsed_args.container,
-                system=system)
+                system=system, cid=parsed_args.cid)
 
 
-class SaveContainer(command.Command):
+class SaveContainer(ContainerCommandMixin, command.Command):
     """Save all objects of a container locally."""
 
     log = getLogger(__name__ + '.SaveContainer')
 
     def get_parser(self, prog_name):
         parser = super(SaveContainer, self).get_parser(prog_name)
-        parser.add_argument(
-            'container',
-            metavar='<container>',
-            help='Container to save')
+        self.patch_parser_container(parser)
         return parser
 
     def take_action(self, parsed_args):
         import os
 
         self.log.debug('take_action(%s)', parsed_args)
+        self.take_action_container(parsed_args)
 
         account = self.app.client_manager.account
         container = parsed_args.container
+        cid = parsed_args.cid
         objs = self.app.client_manager.storage.object_list(
-            account, container)
+            account, container, cid=cid)
 
         for obj in objs['objects']:
             obj_name = obj['name']
             _, stream = self.app.client_manager.storage.object_fetch(
-                account, container, obj_name, properties=False)
+                account, container, obj_name, properties=False, cid=cid)
 
             if not os.path.exists(os.path.dirname(obj_name)):
                 if len(os.path.dirname(obj_name)) > 0:
@@ -512,32 +555,28 @@ class SaveContainer(command.Command):
                     f.write(chunk)
 
 
-class LocateContainer(show.ShowOne):
+class LocateContainer(ContainerCommandMixin, show.ShowOne):
     """Locate the services in charge of a container."""
 
     log = getLogger(__name__ + '.LocateContainer')
 
     def get_parser(self, prog_name):
         parser = super(LocateContainer, self).get_parser(prog_name)
-        parser.add_argument(
-            'container',
-            metavar='<container>',
-            help='Container to show'
-        )
-
+        self.patch_parser_container(parser)
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
+        self.take_action_container(parsed_args)
 
         account = self.app.client_manager.account
         container = parsed_args.container
-
+        cid = parsed_args.cid
         data = self.app.client_manager.storage.container_get_properties(
-            account, container)
+            account, container, cid=cid)
 
         data_dir = self.app.client_manager.storage.directory.list(
-            account, container)
+            account, container, cid=cid)
 
         info = {
             'account': data['system']['sys.account'],
@@ -565,18 +604,14 @@ class LocateContainer(show.ShowOne):
         return zip(*sorted(info.iteritems()))
 
 
-class PurgeContainer(command.Command):
+class PurgeContainer(ContainerCommandMixin, command.Command):
     """Purge exceeding object versions."""
 
     log = getLogger(__name__ + '.PurgeContainer')
 
     def get_parser(self, prog_name):
         parser = super(PurgeContainer, self).get_parser(prog_name)
-        parser.add_argument(
-            'container',
-            metavar='<container>',
-            help='Container to purge',
-        )
+        self.patch_parser_container(parser)
         parser.add_argument(
             '--max-versions',
             metavar='<n>',
@@ -592,38 +627,39 @@ class PurgeContainer(command.Command):
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
+        self.take_action_container(parsed_args)
 
         account = self.app.client_manager.account
         self.app.client_manager.storage.container_purge(
-            account, parsed_args.container, maxvers=parsed_args.max_versions
+            account, parsed_args.container,
+            maxvers=parsed_args.max_versions,
+            cid=parsed_args.cid
         )
 
 
-class RefreshContainer(command.Command):
+class RefreshContainer(ContainerCommandMixin, command.Command):
     """ Refresh counters of an account (triggers asynchronous treatments) """
 
     log = getLogger(__name__ + '.RefreshContainer')
 
     def get_parser(self, prog_name):
         parser = super(RefreshContainer, self).get_parser(prog_name)
-        parser.add_argument(
-            'container',
-            metavar='<container>',
-            help='Container to refresh',
-        )
+        self.patch_parser_container(parser)
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
-
+        self.take_action_container(parsed_args)
         account = self.app.client_manager.account
+        if parsed_args.cid is not None:
+            parsed_args.container = self.resolve_cid(parsed_args.cid)
         self.app.client_manager.storage.container_refresh(
             account=account,
             container=parsed_args.container
         )
 
 
-class SnapshotContainer(lister.Lister):
+class SnapshotContainer(ContainerCommandMixin, lister.Lister):
     """
     Take a snapshot of a container.
 
@@ -636,11 +672,7 @@ class SnapshotContainer(lister.Lister):
 
     def get_parser(self, prog_name):
         parser = super(SnapshotContainer, self).get_parser(prog_name)
-        parser.add_argument(
-            'container',
-            metavar='<container>',
-            help='Container to snapshot'
-        )
+        self.patch_parser_container(parser)
         parser.add_argument(
             '--dst-account',
             metavar='<account>',
@@ -664,15 +696,19 @@ class SnapshotContainer(lister.Lister):
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
-
+        self.take_action_container(parsed_args)
         account = self.app.client_manager.account
         container = parsed_args.container
+        cid = parsed_args.cid
         dst_account = parsed_args.dst_account or account
+        if cid is not None:
+            container = self.resolve_cid(cid)
         dst_container = (parsed_args.dst_container or
                          (container + "-" + Timestamp(time()).normal))
         batch = parsed_args.chunk_batch_size
 
         self.app.client_manager.storage.container_snapshot(
-            account, container, dst_account, dst_container, batch=batch)
+            account, container, dst_account,
+            dst_container, batch=batch)
         lines = [(dst_account, dst_container, "OK")]
         return ('Account', 'Container', 'Status'), lines

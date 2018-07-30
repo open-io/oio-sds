@@ -50,9 +50,10 @@ def check_volume(volume_path):
     return namespace, server_id
 
 
-def read_chunk_metadata(fd, chunk_id):
+def read_chunk_metadata(fd, chunk_id, check_chunk_id=True):
     chunk_id = chunk_id.upper()
     raw_meta = read_user_xattr(fd)
+    raw_meta_copy = None
     meta = {}
     meta['links'] = dict()
     raw_chunk_id = container_id = path = version = content_id = None
@@ -69,6 +70,7 @@ def read_chunk_metadata(fd, chunk_id):
             else:
                 meta['links'][chunkid] = v
     if raw_chunk_id:
+        raw_meta_copy = raw_meta.copy()
         raw_meta[chunk_xattr_keys['chunk_id']] = raw_chunk_id
         raw_meta[chunk_xattr_keys['container_id']] = container_id
         raw_meta[chunk_xattr_keys['content_path']] = path
@@ -80,6 +82,6 @@ def read_chunk_metadata(fd, chunk_id):
                 raise exc.MissingAttribute(v)
         else:
             meta[k] = raw_meta[v]
-    if meta['chunk_id'] != chunk_id:
-        raise exc.MissingAttribute(chunk_xattr_keys('chunk_id'))
-    return meta
+    if check_chunk_id and meta['chunk_id'] != chunk_id:
+        raise exc.MissingAttribute(chunk_xattr_keys['chunk_id'])
+    return meta, raw_meta_copy if raw_meta_copy else raw_meta

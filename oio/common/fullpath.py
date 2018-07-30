@@ -13,13 +13,13 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from urllib import quote, unquote
+from urllib import quote, unquote, quote_plus, unquote_plus
 
 
 def encode_fullpath(account, container, path, version, content_id):
-    if not account or not container or not path or not version \
-            or not content_id:
-        raise ValueError("Can't encode fullpath")
+    for k, v in locals().items():
+        if not v:
+            raise ValueError("Can't encode fullpath: missing %s" % k)
     return '{0}/{1}/{2}/{3}/{4}'.format(quote(account, ''),
                                         quote(container, ''),
                                         quote(path, ''),
@@ -30,8 +30,27 @@ def encode_fullpath(account, container, path, version, content_id):
 def decode_fullpath(fullpath):
     fp = fullpath.split('/')
     if len(fp) != 5:
-        raise ValueError("'fullpath': Wrong format")
+        raise ValueError("fullpath: Wrong format")
     decoded = list()
     for part in fp:
         decoded.append(unquote(part))
+    return tuple(decoded)
+
+
+def encode_old_fullpath(account, container, path, version):
+    if not account or not container or not path or not version:
+        raise ValueError("Can't encode old fullpath")
+    return '{0}/{1}/{2}/{3}'.format(quote_plus(account, ''),
+                                    quote_plus(container, ''),
+                                    quote_plus(path, ''),
+                                    quote_plus(str(version), ''))
+
+
+def decode_old_fullpath(fullpath):
+    fp = fullpath.split('/')
+    if len(fp) != 4:
+        raise ValueError("old fullpath: Wrong format")
+    decoded = list()
+    for part in fp:
+        decoded.append(unquote_plus(part))
     return tuple(decoded)

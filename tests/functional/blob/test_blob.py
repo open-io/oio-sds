@@ -71,12 +71,13 @@ class TestBlobFunctional(BaseTestCase):
         rawx_num, rawx_path, rawx_addr, _ = self.get_service_url('rawx')
         self.rawx = 'http://' + rawx_addr
         self.rawx_path = rawx_path + '/'
-        self.cid = cid_from_name('test', 'blob')
+        self.container = 'blob'
+        self.cid = cid_from_name(self.account, 'blob')
         self.content_path = 'test-plop'
         self.content_version = '1456938361143740'
         self.content_id = '0123456789ABCDEF'
         self.fullpath = encode_fullpath(
-            'test', 'blob', self.content_path, self.content_version,
+            self.account, 'blob', self.content_path, self.content_version,
             self.content_id)
 
     def tearDown(self):
@@ -162,7 +163,6 @@ class TestBlobFunctional(BaseTestCase):
         if old_fullpath:
             headers['x-oio-chunk-meta-full-path'] = \
                 headers['x-oio-chunk-meta-full-path'].rsplit('/', 1)[0]
-            print(headers['x-oio-chunk-meta-full-path'])
         if remove_headers:
             for h in remove_headers:
                 del headers[h]
@@ -375,7 +375,7 @@ class TestBlobFunctional(BaseTestCase):
                          resp.getheader('x-oio-chunk-meta-full-path'))
 
         with open(chunkpath, 'r') as fd:
-            meta = read_chunk_metadata(fd, chunkid)
+            meta, _ = read_chunk_metadata(fd, chunkid)
             self.assertEqual(headers1['x-oio-chunk-meta-full-path'],
                              meta['full_path'])
             self.assertEqual(1, len(meta['links']))
@@ -383,7 +383,7 @@ class TestBlobFunctional(BaseTestCase):
                              meta['links'][copyid])
 
         with open(copypath, 'r') as fd:
-            meta = read_chunk_metadata(fd, copyid)
+            meta, _ = read_chunk_metadata(fd, copyid)
             self.assertEqual(headers2['x-oio-chunk-meta-full-path'],
                              meta['full_path'])
             self.assertEqual(1, len(meta['links']))
@@ -401,7 +401,7 @@ class TestBlobFunctional(BaseTestCase):
                          resp.getheader('x-oio-chunk-meta-full-path'))
 
         with open(copypath, 'r') as fd:
-            meta = read_chunk_metadata(fd, copyid)
+            meta, _ = read_chunk_metadata(fd, copyid)
             self.assertEqual(headers2['x-oio-chunk-meta-full-path'],
                              meta['full_path'])
             self.assertEqual(0, len(meta['links']))
@@ -522,7 +522,7 @@ class TestBlobFunctional(BaseTestCase):
 
         headers = hdrs.copy()
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'test', 'blob', self.content_path, self.content_version,
+            self.account, 'blob', self.content_path, self.content_version,
             self.content_id) + "/too_long"
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
@@ -530,7 +530,7 @@ class TestBlobFunctional(BaseTestCase):
 
         headers = hdrs.copy()
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'test', 'blob', self.content_path, self.content_version,
+            self.account, 'blob', self.content_path, self.content_version,
             self.content_id).rsplit('/', 2)[0]
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
@@ -546,7 +546,15 @@ class TestBlobFunctional(BaseTestCase):
 
         headers = hdrs.copy()
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'test', 'wrong-container', self.content_path, self.content_version,
+            self.account, 'wrong-container', self.content_path,
+            self.content_version, self.content_id)
+        resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
+                                     trailers)
+        self.assertEqual(400, resp.status)
+
+        headers = hdrs.copy()
+        headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
+            self.account, 'blob', 'wrong-path', self.content_version,
             self.content_id)
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
@@ -554,7 +562,7 @@ class TestBlobFunctional(BaseTestCase):
 
         headers = hdrs.copy()
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'test', 'blob', 'wrong-path', self.content_version,
+            self.account, 'blob', self.content_path, 9999999999999999,
             self.content_id)
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
@@ -562,15 +570,7 @@ class TestBlobFunctional(BaseTestCase):
 
         headers = hdrs.copy()
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'test', 'blob', self.content_path, 9999999999999999,
-            self.content_id)
-        resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
-                                     trailers)
-        self.assertEqual(400, resp.status)
-
-        headers = hdrs.copy()
-        headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'test', 'blob', self.content_path, self.content_version,
+            self.account, 'blob', self.content_path, self.content_version,
             '9999999999999999')
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
@@ -588,7 +588,7 @@ class TestBlobFunctional(BaseTestCase):
         headers = hdrs.copy()
         del headers['x-oio-chunk-meta-container-id']
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'test', 'empty', self.content_path, self.content_version,
+            self.account, 'empty', self.content_path, self.content_version,
             self.content_id).replace('empty', '')
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
@@ -597,7 +597,7 @@ class TestBlobFunctional(BaseTestCase):
         headers = hdrs.copy()
         del headers['x-oio-chunk-meta-content-path']
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'test', 'blob', 'empty', self.content_version,
+            self.account, 'blob', 'empty', self.content_version,
             self.content_id).replace('empty', '')
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
@@ -606,7 +606,7 @@ class TestBlobFunctional(BaseTestCase):
         headers = hdrs.copy()
         del headers['x-oio-chunk-meta-content-version']
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'test', 'blob', self.content_path, 'empty',
+            self.account, 'blob', self.content_path, 'empty',
             self.content_id).replace('empty', '')
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
@@ -615,7 +615,7 @@ class TestBlobFunctional(BaseTestCase):
         headers = hdrs.copy()
         del headers['x-oio-chunk-meta-content-id']
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'test', 'blob', self.content_path, self.content_version,
+            self.account, 'blob', self.content_path, self.content_version,
             'empty').replace('empty', '')
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
@@ -624,7 +624,7 @@ class TestBlobFunctional(BaseTestCase):
         headers = hdrs.copy()
         del headers['x-oio-chunk-meta-content-version']
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'test', 'blob', self.content_path, 'digit', self.content_id)
+            self.account, 'blob', self.content_path, 'digit', self.content_id)
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
         self.assertEqual(400, resp.status)
@@ -632,7 +632,8 @@ class TestBlobFunctional(BaseTestCase):
         headers = hdrs.copy()
         del headers['x-oio-chunk-meta-content-id']
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            'test', 'blob', self.content_path, self.content_version, 'hexa')
+            self.account, 'blob', self.content_path, self.content_version,
+            'hexa')
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                      trailers)
         self.assertEqual(400, resp.status)
@@ -660,17 +661,17 @@ class TestBlobFunctional(BaseTestCase):
         self.assertEqual(200, resp1.status)
         headers1 = dict(resp1.getheaders())
         with open(chunkpath, 'r') as fd:
-            meta1 = read_chunk_metadata(fd, chunkid)
+            meta1, _ = read_chunk_metadata(fd, chunkid)
 
         convert_to_old_chunk(
-            chunkpath, self.cid, self.content_path, self.content_version,
-            self.content_id)
+            chunkpath, self.account, self.container, self.content_path,
+            self.content_version, self.content_id)
 
         resp2, data2 = self._http_request(chunkurl, 'GET', '', {})
         self.assertEqual(200, resp2.status)
         headers2 = dict(resp2.getheaders())
         with open(chunkpath, 'r') as fd:
-            meta2 = read_chunk_metadata(fd, chunkid)
+            meta2, _ = read_chunk_metadata(fd, chunkid)
 
         self.assertEqual(data1, data2)
         del headers1[CHUNK_HEADERS['full_path']]
@@ -700,7 +701,7 @@ class TestBlobFunctional(BaseTestCase):
         self.assertEqual(200, resp2.status)
         headers2 = dict(resp2.getheaders())
         with open(chunkpath, 'r') as fd:
-            meta2 = read_chunk_metadata(fd, chunkid)
+            meta2, _ = read_chunk_metadata(fd, chunkid)
 
         self.assertEqual(1, len(meta2['links']))
         self.assertEqual(copyheaders['x-oio-chunk-meta-full-path'],
@@ -717,7 +718,7 @@ class TestBlobFunctional(BaseTestCase):
         self.assertEqual(200, resp3.status)
         headers3 = dict(resp3.getheaders())
         with open(copypath, 'r') as fd:
-            meta3 = read_chunk_metadata(fd, copyid)
+            meta3, _ = read_chunk_metadata(fd, copyid)
 
         self.assertEqual(
             copyheaders['x-oio-chunk-meta-full-path'],

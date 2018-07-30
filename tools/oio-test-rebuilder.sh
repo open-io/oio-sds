@@ -432,7 +432,7 @@ oio_blob_rebuilder()
     exit 1
   else
     echo >&2 "Remove the incident for the rawx ${RAWX_ID_TO_REBUILD}"
-    $CLI volume admin clear "${RAWX_ID_TO_REBUILD}"
+    $CLI volume admin clear "${RAWX_ID_TO_REBUILD} --before-incident"
 
     printf "${GREEN}\noio-blob-rebuilder: OK\n${NO_COLOR}"
   fi

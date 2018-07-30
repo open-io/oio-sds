@@ -34,15 +34,8 @@ class ContentFactory(object):
             ContainerClient(conf, logger=self.logger, **kwargs)
         self.blob_client = BlobClient(conf, **kwargs)
 
-    def get(self, container_id, content_id, account=None,
-            container_name=None):
-        try:
-            meta, chunks = self.container_client.content_locate(
-                cid=container_id, content=content_id)
-        except NotFound:
-            raise ContentNotFound("Content %s/%s not found" % (container_id,
-                                  content_id))
-
+    def _get(self, container_id, meta, chunks,
+             account=None, container_name=None):
         chunk_method = meta['chunk_method']
         storage_method = STORAGE_METHODS.load(chunk_method)
         if not account or not container_name:
@@ -58,6 +51,30 @@ class ContentFactory(object):
                    container_client=self.container_client,
                    blob_client=self.blob_client,
                    logger=self.logger)
+
+    def get(self, container_id, content_id, account=None,
+            container_name=None):
+        try:
+            meta, chunks = self.container_client.content_locate(
+                cid=container_id, content=content_id)
+        except NotFound:
+            raise ContentNotFound("Content %s/%s not found" % (container_id,
+                                  content_id))
+
+        return self._get(container_id, meta, chunks,
+                         account=account, container_name=container_name)
+
+    def get_by_path_and_version(self, container_id, path, version,
+                                account=None, container_name=None):
+        try:
+            meta, chunks = self.container_client.content_locate(
+                cid=container_id, path=path, version=version)
+        except NotFound:
+            raise ContentNotFound("Content %s/%s/%s not found" % (container_id,
+                                  path, str(version)))
+
+        return self._get(container_id, meta, chunks,
+                         account=account, container_name=container_name)
 
     def new(self, container_id, path, size, policy, account=None,
             container_name=None, **kwargs):

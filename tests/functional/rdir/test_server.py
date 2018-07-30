@@ -123,7 +123,7 @@ class RdirTestCase(CommonTestCase):
         return {"container_id": random_id(64),
                 "content_id": random_id(32),
                 "chunk_id": random_id(64),
-                "mtime": 17}
+                "mtime": int(time.time())}
 
     def _rdir_url(self, tail):
         return 'http://{0}:{1}{2}'.format(self.host, self.port, tail)
@@ -202,7 +202,7 @@ class TestRdirServer(RdirTestCase):
         resp = self._post("/v1/rdir/fetch", params={'vol': self.vol})
         self.assertEqual(resp.status, 200)
         reference = [
-            [_key(rec), {'mtime': rec['mtime'], 'rtime': 0}]
+            [_key(rec), {'mtime': rec['mtime']}]
         ]
         self.assertListEqual(self.json_loads(resp.data), reference)
 
@@ -243,7 +243,7 @@ class TestRdirServer(RdirTestCase):
         resp = self._post("/v1/rdir/fetch", params={'vol': self.vol})
         self.assertEqual(resp.status, 200)
         self.assertEqual(self.json_loads(resp.data), [
-            [_key(rec), {'mtime': rec['mtime'], 'rtime': 0}]
+            [_key(rec), {'mtime': rec['mtime']}]
         ])
 
     def test_push_missing_fields(self):
@@ -322,8 +322,7 @@ class TestRdirServer(RdirTestCase):
         who = random_id(32)
 
         # clear without volume
-        resp = self._post("/v1/rdir/admin/clear",
-                          data=json.dumps({'all': True}))
+        resp = self._post("/v1/rdir/admin/clear", params={'all': True})
         self.assertEqual(resp.status, 400)
 
         # push with autocreate
@@ -339,7 +338,8 @@ class TestRdirServer(RdirTestCase):
         self.assertEqual(resp.status, 204)
 
         # try to clear while the lock is held
-        resp = self._post("/v1/rdir/admin/clear", params={'vol': self.vol})
+        resp = self._post("/v1/rdir/admin/clear",
+                          params={'vol': self.vol, 'all': True})
         self.assertEqual(resp.status, 403)
 
         # unlock
@@ -347,11 +347,97 @@ class TestRdirServer(RdirTestCase):
         self.assertEqual(resp.status, 204)
 
         # clear all entries
-        resp = self._post(
-                "/v1/rdir/admin/clear", params={'vol': self.vol},
-                data=json.dumps({'all': True}))
+        resp = self._post("/v1/rdir/admin/clear",
+                          params={'vol': self.vol, 'all': True})
         self.assertEqual(resp.status, 200)
-        self.assertEqual(self.json_loads(resp.data), {'removed': 1})
+        self.assertDictEqual(self.json_loads(resp.data),
+                             {'removed': 1, 'repaired': 0, 'errors': 0})
+
+    def test_rdir_clear_with_repair(self):
+        rec = self._record()
+        who = random_id(32)
+
+        # clear without volume
+        resp = self._post("/v1/rdir/admin/clear", params={'repair': True})
+        self.assertEqual(resp.status, 400)
+
+        # push with autocreate
+        resp = self._post(
+                "/v1/rdir/push", params={'vol': self.vol, 'create': True},
+                data=json.dumps(rec))
+        self.assertEqual(resp.status, 204)
+
+        # lock
+        resp = self._post(
+                "/v1/rdir/admin/lock", params={'vol': self.vol},
+                data=json.dumps({'who': who}))
+        self.assertEqual(resp.status, 204)
+
+        # try to clear while the lock is held
+        resp = self._post("/v1/rdir/admin/clear",
+                          params={'vol': self.vol, 'repair': True})
+        self.assertEqual(resp.status, 403)
+
+        # unlock
+        resp = self._post("/v1/rdir/admin/unlock", params={'vol': self.vol})
+        self.assertEqual(resp.status, 204)
+
+        # repair all entries
+        resp = self._post("/v1/rdir/admin/clear",
+                          params={'vol': self.vol, 'repair': True})
+        self.assertEqual(resp.status, 200)
+        self.assertDictEqual(self.json_loads(resp.data),
+                             {'removed': 0, 'repaired': 1, 'errors': 0})
+
+    def test_rdir_clear_with_before_incident(self):
+        rec = self._record()
+        who = random_id(32)
+
+        # clear without volume
+        resp = self._post("/v1/rdir/admin/clear",
+                          params={'before_incident': True})
+        self.assertEqual(resp.status, 400)
+
+        # push with autocreate
+        resp = self._post(
+                "/v1/rdir/push", params={'vol': self.vol, 'create': True},
+                data=json.dumps(rec))
+        self.assertEqual(resp.status, 204)
+
+        # create incident
+        resp = self._post("/v1/rdir/admin/incident", params={'vol': self.vol},
+                          data=json.dumps({'date': int(time.time())}))
+        self.assertEqual(resp.status, 204)
+
+        # push with autocreate after incident
+        time.sleep(1)
+        rec2 = self._record()
+        resp = self._post(
+                "/v1/rdir/push", params={'vol': self.vol, 'create': True},
+                data=json.dumps(rec2))
+        self.assertEqual(resp.status, 204)
+
+        # lock
+        resp = self._post(
+                "/v1/rdir/admin/lock", params={'vol': self.vol},
+                data=json.dumps({'who': who}))
+        self.assertEqual(resp.status, 204)
+
+        # try to clear while the lock is held
+        resp = self._post("/v1/rdir/admin/clear",
+                          params={'vol': self.vol, 'before_incident': True})
+        self.assertEqual(resp.status, 403)
+
+        # unlock
+        resp = self._post("/v1/rdir/admin/unlock", params={'vol': self.vol})
+        self.assertEqual(resp.status, 204)
+
+        # clear all entries before incident date
+        resp = self._post("/v1/rdir/admin/clear",
+                          params={'vol': self.vol, 'before_incident': True})
+        self.assertEqual(resp.status, 200)
+        self.assertDictEqual(self.json_loads(resp.data),
+                             {'removed': 1, 'repaired': 0, 'errors': 0})
 
     def test_vol_status(self):
         # Status without volume
@@ -369,8 +455,70 @@ class TestRdirServer(RdirTestCase):
         # Status on an empty DB
         resp = self._get("/v1/rdir/status", params={'vol': self.vol})
         self.assertEqual(resp.status, 200)
-        self.assertEqual(self.json_loads(resp.data),
-                         {'chunk': {'total': 0}, 'container': {}})
+        self.assertDictEqual(self.json_loads(resp.data),
+                             {'chunk': {'total': 0}, 'container': {}})
+
+        # push with autocreate
+        rec = self._record()
+        resp = self._post(
+                "/v1/rdir/push", params={'vol': self.vol, 'create': True},
+                data=json.dumps(rec))
+        self.assertEqual(resp.status, 204)
+
+        # Status with 1 entries
+        resp = self._get("/v1/rdir/status", params={'vol': self.vol})
+        self.assertEqual(resp.status, 200)
+        self.assertDictEqual(self.json_loads(resp.data),
+                             {'chunk': {'total': 1}, 'container': {
+                                 rec['container_id']: {'total': 1}}})
+
+        # create incident
+        incident_date = int(time.time())
+        resp = self._post("/v1/rdir/admin/incident", params={'vol': self.vol},
+                          data=json.dumps({'date': incident_date}))
+        self.assertEqual(resp.status, 204)
+
+        # Status with 1 entries and incident
+        resp = self._get("/v1/rdir/status", params={'vol': self.vol})
+        self.assertEqual(resp.status, 200)
+        self.assertDictEqual(self.json_loads(resp.data),
+                             {'chunk': {'total': 1, 'to_rebuild': 1},
+                              'container': {
+                                  rec['container_id']: {'total': 1,
+                                                        'to_rebuild': 1}},
+                              'rebuild': {'incident_date': incident_date}})
+
+        # push with autocreate after incident
+        time.sleep(1)
+        rec2 = self._record()
+        resp = self._post(
+                "/v1/rdir/push", params={'vol': self.vol, 'create': True},
+                data=json.dumps(rec2))
+        self.assertEqual(resp.status, 204)
+
+        # Status with 2 entries and incident
+        resp = self._get("/v1/rdir/status", params={'vol': self.vol})
+        self.assertEqual(resp.status, 200)
+        self.assertDictEqual(self.json_loads(resp.data),
+                             {'chunk': {'total': 2, 'to_rebuild': 1},
+                              'container': {
+                                  rec['container_id']: {'total': 1,
+                                                        'to_rebuild': 1},
+                                  rec2['container_id']: {'total': 1}},
+                              'rebuild': {'incident_date': incident_date}})
+
+        # clear incident
+        resp = self._post("/v1/rdir/admin/clear", params={'vol': self.vol})
+        self.assertEqual(resp.status, 200)
+
+        # Status with 2 entries
+        resp = self._get("/v1/rdir/status", params={'vol': self.vol})
+        self.assertEqual(resp.status, 200)
+        self.assertDictEqual(self.json_loads(resp.data),
+                             {'chunk': {'total': 2},
+                              'container': {
+                                  rec['container_id']: {'total': 1},
+                                  rec2['container_id']: {'total': 1}}})
 
 
 class TestRdirServer2(RdirTestCase):
