@@ -47,6 +47,9 @@ class WebhookFilter(Filter):
         alias = extract_from_event('aliases', env)
         content_header = extract_from_event('contents_headers', env)
 
+        if not all((alias, content_header)):
+            return self.app(env, cb)
+
         body = {
             'eventId': env['job_id'],
             'eventType': env['event'],
