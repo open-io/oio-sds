@@ -60,9 +60,8 @@ enum oio_sds_config_e
 	 * Expects an integer used for its boolean value. */
 	OIOSDS_CFG_FLAG_NO_SHUFFLE,
 
-	/** Defines the chunk size in bytes.
-	 *  Expects an <int64_t>.
-	 *  If 0, uses the default size. */
+	/** Define the chunk size in bytes.
+	 * Expects an <int64_t>. If 0, use the default size. */
 	OIOSDS_CFG_FLAG_CHUNKSIZE,
 };
 
