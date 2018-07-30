@@ -82,7 +82,7 @@ class ContainerCommandMixin(object):
         parser.add_argument(
             'container',
             metavar='<container>',
-            help=("Name or cid of the container to interact with.\n")
+            help=("Name or CID of the container to interact with.\n")
         )
 
     def take_action_container(self, parsed_args):
@@ -115,7 +115,7 @@ class ContainersCommandMixin(object):
             'containers',
             metavar='<containers>',
             nargs='+',
-            help=("Names or cids of the containers to interact with.\n")
+            help=("Names or CIDs of the containers to interact with.\n")
         )
 
 
@@ -173,8 +173,9 @@ class CreateContainer(SetPropertyCommandMixin, lister.Lister):
 
 class SetContainer(SetPropertyCommandMixin,
                    ContainerCommandMixin, command.Command):
-    """Set container properties, quota, storage policy,
-    status or versioning."""
+    """
+    Set container properties, quota, storage policy, status or versioning.
+    """
 
     log = getLogger(__name__ + '.SetContainer')
 
