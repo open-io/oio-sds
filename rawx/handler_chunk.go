@@ -20,58 +20,17 @@ import (
 	"bytes"
 	"compress/zlib"
 	"crypto/md5"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
-	"net/url"
 	"path/filepath"
-	"strconv"
 	"strings"
 )
 
 const bufSize = 1024 * 1024
-
-type attrMapping struct {
-	attr   string
-	header string
-}
-
-const (
-	AttrNameMetachunkChecksum  = "user.grid.metachunk.hash"
-	AttrNameMetachunkSize      = "user.grid.metachunk.size"
-	AttrNameChunkChecksum      = "user.grid.chunk.hash"
-	AttrNameChunkSize          = "user.grid.chunk.size"
-	AttrNameChunkPosition      = "user.grid.chunk.position"
-	AttrNameContentChunkMethod = "user.grid.content.chunk_method"
-	AttrNameContentStgPol      = "user.grid.content.storage_policy"
-	AttrNameCompression        = "user.grid.compression"
-	AttrNameXattrVersion       = "user.grid.oio.version"
-)
-
-const (
-	AttrNameFullPrefix = "user.grid.oio:"
-)
-
-const (
-	HeaderNameFullpath           = "X-oio-Chunk-Meta-Full-Path"
-	HeaderNameContainerID        = "X-oio-Chunk-Meta-Container-Id"
-	HeaderNameContentPath        = "X-oio-Chunk-Meta-Content-Path"
-	HeaderNameContentVersion     = "X-oio-Chunk-Meta-Content-Version"
-	HeaderNameContentID          = "X-oio-Chunk-Meta-Content-Id"
-	HeaderNameContentStgPol      = "X-oio-Chunk-Meta-Content-Storage-Policy"
-	HeaderNameContentChunkMethod = "X-oio-Chunk-Meta-Content-Chunk-Method"
-	HeaderNameChunkPosition      = "X-oio-Chunk-Meta-Chunk-Pos"
-	HeaderNameChunkSize          = "X-oio-Chunk-Meta-Chunk-Size"
-	HeaderNameChunkChecksum      = "X-oio-Chunk-Meta-Chunk-Hash"
-	HeaderNameMetachunkSize      = "X-oio-Chunk-Meta-Metachunk-Size"
-	HeaderNameMetachunkChecksum  = "X-oio-Chunk-Meta-Metachunk-Hash"
-	HeaderNameChunkID            = "X-oio-Chunk-Meta-Chunk-Id"
-	HeaderNameXattrVersion       = "X-oio-Chunk-Meta-Oio-Version"
-)
 
 var (
 	AttrValueZLib []byte = []byte{'z', 'l', 'i', 'b'}
@@ -96,199 +55,13 @@ type upload struct {
 	hash   string
 }
 
-func returnError(err error, message string) error {
-	logger_error.Printf("%s: %s", err, message)
-	return err
-}
-
-func cidFromName(account, container string) string {
-	h := sha256.New()
-	h.Write([]byte(account))
-	h.Write([]byte{0})
-	h.Write([]byte(container))
-	return strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
-}
-
 // Check and load a canonic form of the ID of the chunk.
-func (rr *rawxRequest) checkChunkID() error {
+func (rr *rawxRequest) retrieveChunkID() error {
 	chunkID := filepath.Base(rr.req.URL.Path)
 	if !isHexaString(chunkID, 64) {
-		return returnError(ErrInvalidChunkID, chunkID)
+		return ErrInvalidChunkID
 	}
-	rr.chunk_id = strings.ToUpper(chunkID)
-	return nil
-}
-
-// Check and load the content fullpath of the chunk.
-func (rr *rawxRequest) checkChunkContentFullpath() error {
-	headerFullpath := rr.req.Header.Get(HeaderNameFullpath)
-	if headerFullpath == "" {
-		return returnError(ErrMissingHeader, HeaderNameFullpath)
-	}
-	fullpath := strings.Split(headerFullpath, "/")
-	if len(fullpath) != 5 {
-		return returnError(ErrInvalidHeader, HeaderNameFullpath)
-	}
-
-	account, err := url.PathUnescape(fullpath[0])
-	if err != nil || account == "" {
-		return returnError(ErrInvalidHeader, HeaderNameFullpath)
-	}
-	container, err := url.PathUnescape(fullpath[1])
-	if err != nil || container == "" {
-		return returnError(ErrInvalidHeader, HeaderNameFullpath)
-	}
-	containerID := cidFromName(account, container)
-	headerContainerID := rr.req.Header.Get(HeaderNameContainerID)
-	if headerContainerID != "" {
-		if err != nil || !strings.EqualFold(containerID, headerContainerID) {
-			return returnError(ErrInvalidHeader, HeaderNameContainerID)
-		}
-	}
-	rr.container_id = containerID
-
-	path, err := url.PathUnescape(fullpath[2])
-	if err != nil || path == "" {
-		return returnError(ErrInvalidHeader, HeaderNameFullpath)
-	}
-	headerPath := rr.req.Header.Get(HeaderNameContentPath)
-	if headerPath != "" && headerPath != path {
-		return returnError(ErrInvalidHeader, HeaderNameContentPath)
-	}
-	rr.content_path = path
-
-	version, err := url.PathUnescape(fullpath[3])
-	if err != nil {
-		return returnError(ErrInvalidHeader, HeaderNameFullpath)
-	}
-	if _, err := strconv.ParseInt(version, 10, 64); err != nil {
-		return returnError(ErrInvalidHeader, HeaderNameFullpath)
-	}
-	headerVersion := rr.req.Header.Get(HeaderNameContentVersion)
-	if headerVersion != "" && headerVersion != version {
-		return returnError(ErrInvalidHeader, HeaderNameContentVersion)
-	}
-	rr.content_version = version
-
-	contentID, err := url.PathUnescape(fullpath[4])
-	if err != nil || !isHexaString(contentID, 0) {
-		return returnError(ErrInvalidHeader, HeaderNameFullpath)
-	}
-	headerContentID := rr.req.Header.Get(HeaderNameContentID)
-	if headerContentID != "" && !strings.EqualFold(headerContentID, contentID) {
-		return returnError(ErrInvalidHeader, HeaderNameContentID)
-	}
-	rr.content_id = strings.ToUpper(contentID)
-
-	beginContentID := strings.LastIndex(headerFullpath, "/") + 1
-	rr.content_fullpath = headerFullpath[:beginContentID] + rr.content_id
-	return nil
-}
-
-// Check and load the info of the chunk.
-func (rr *rawxRequest) checkChunkInfo() error {
-	rr.content_stgpol = rr.req.Header.Get(HeaderNameContentStgPol)
-	if rr.content_stgpol == "" {
-		return returnError(ErrMissingHeader, HeaderNameContentStgPol)
-	}
-	rr.content_chunkmethod = rr.req.Header.Get(HeaderNameContentChunkMethod)
-	if rr.content_chunkmethod == "" {
-		return returnError(ErrMissingHeader, HeaderNameContentChunkMethod)
-	}
-
-	chunkID := rr.req.Header.Get(HeaderNameChunkID)
-	if chunkID == "" && !strings.EqualFold(chunkID, rr.chunk_id) {
-		return returnError(ErrInvalidHeader, HeaderNameChunkID)
-	}
-	rr.chunk_position = rr.req.Header.Get(HeaderNameChunkPosition)
-	if rr.chunk_position == "" {
-		return returnError(ErrMissingHeader, HeaderNameChunkPosition)
-	}
-
-	rr.metachunk_hash = rr.req.Header.Get(HeaderNameMetachunkChecksum)
-	if rr.metachunk_hash != "" {
-		if !isHexaString(rr.metachunk_hash, 0) {
-			return returnError(ErrInvalidHeader, HeaderNameMetachunkChecksum)
-		}
-		rr.metachunk_hash = strings.ToUpper(rr.metachunk_hash)
-	}
-	rr.metachunk_size = rr.req.Header.Get(HeaderNameMetachunkSize)
-	if rr.metachunk_size != "" {
-		if _, err := strconv.ParseInt(rr.metachunk_size, 10, 64); err != nil {
-			return returnError(ErrInvalidHeader, HeaderNameMetachunkSize)
-		}
-	}
-
-	rr.chunk_hash = rr.req.Header.Get(HeaderNameChunkChecksum)
-	if rr.chunk_hash != "" {
-		if !isHexaString(rr.chunk_hash, 0) {
-			return returnError(ErrInvalidHeader, HeaderNameChunkChecksum)
-		}
-		rr.chunk_hash = strings.ToUpper(rr.chunk_hash)
-	}
-	rr.chunk_size = rr.req.Header.Get(HeaderNameChunkSize)
-	if rr.chunk_size != "" {
-		if _, err := strconv.ParseInt(rr.chunk_size, 10, 64); err != nil {
-			return returnError(ErrInvalidHeader, HeaderNameChunkSize)
-		}
-	}
-
-	return rr.checkChunkContentFullpath()
-}
-
-// Check and load the checksum and the size of the chunk and the metachunk
-func (rr *rawxRequest) checkChunkChecksumWithTrailers(ul *upload) error {
-	trailerMetachunkHash := rr.req.Trailer.Get(HeaderNameMetachunkChecksum)
-	if trailerMetachunkHash != "" {
-		rr.metachunk_hash = trailerMetachunkHash
-		if rr.metachunk_hash != "" {
-			if !isHexaString(rr.metachunk_hash, 0) {
-				return returnError(ErrInvalidHeader, HeaderNameMetachunkChecksum)
-			}
-			rr.metachunk_hash = strings.ToUpper(rr.metachunk_hash)
-		}
-	}
-	trailerMetachunkSize := rr.req.Trailer.Get(HeaderNameMetachunkSize)
-	if trailerMetachunkSize != "" {
-		rr.metachunk_size = trailerMetachunkSize
-		if rr.metachunk_size != "" {
-			if _, err := strconv.ParseInt(rr.metachunk_size, 10, 64); err != nil {
-				return returnError(ErrInvalidHeader, HeaderNameMetachunkSize)
-			}
-		}
-	}
-	if strings.HasPrefix(rr.content_chunkmethod, "ec/") {
-		if rr.metachunk_hash == "" {
-			return returnError(ErrMissingHeader, HeaderNameMetachunkChecksum)
-		}
-		if rr.metachunk_size == "" {
-			return returnError(ErrMissingHeader, HeaderNameMetachunkSize)
-		}
-	}
-
-	trailerChunkHash := rr.req.Trailer.Get(HeaderNameChunkChecksum)
-	if trailerChunkHash != "" {
-		rr.chunk_hash = trailerChunkHash
-		rr.chunk_hash = strings.ToUpper(rr.chunk_hash)
-	}
-	ul.hash = strings.ToUpper(ul.hash)
-	if rr.chunk_hash != "" {
-		if !strings.EqualFold(rr.chunk_hash, ul.hash) {
-			return returnError(ErrInvalidHeader, HeaderNameChunkChecksum)
-		}
-	} else {
-		rr.chunk_hash = ul.hash
-	}
-	trailerChunkSize := rr.req.Trailer.Get(HeaderNameChunkSize)
-	if trailerChunkSize != "" {
-		rr.chunk_size = trailerChunkSize
-	}
-	if rr.chunk_size != "" {
-		if _, err := strconv.ParseInt(rr.chunk_size, 10, 64); err != nil {
-			return returnError(ErrInvalidHeader, HeaderNameChunkSize)
-		}
-	}
-
+	rr.chunkID = strings.ToUpper(chunkID)
 	return nil
 }
 
@@ -328,59 +101,15 @@ func putData(out io.Writer, ul *upload) error {
 	return nil
 }
 
-func putFinishXattr(rr *rawxRequest, out FileWriter, chunkid string) error {
-	type hdrSaver struct {
-		ptr *string
-		key string
-	}
-
-	savers := []hdrSaver{
-		{&rr.metachunk_hash, AttrNameMetachunkChecksum},
-		{&rr.metachunk_size, AttrNameMetachunkSize},
-		{&rr.chunk_hash, AttrNameChunkChecksum},
-		{&rr.chunk_size, AttrNameChunkSize},
-		{&rr.chunk_position, AttrNameChunkPosition},
-		{&rr.content_chunkmethod, AttrNameContentChunkMethod},
-		{&rr.content_stgpol, AttrNameContentStgPol},
-	}
-
-	set := func(k, v string) error {
-		logger_error.Printf("SetAttr %v -> %v", k, v)
-		if len(v) <= 0 {
-			return nil
-		} else {
-			return out.SetAttr(k, []byte(v))
-		}
-	}
-
-	for _, hs := range savers {
-		if err := set(hs.key, *(hs.ptr)); err != nil {
-			return err
-		}
-	}
-
-	if err := set(AttrNameFullPrefix+chunkid, rr.content_fullpath); err != nil {
-		return err
-	}
-
-	if err := set(AttrNameXattrVersion, "4.2"); err != nil {
-		return err
-	}
-
-	// TODO(jfs): svave the compression status
-
-	return nil
-}
-
 func (rr *rawxRequest) uploadChunk() {
-	if err := rr.checkChunkInfo(); err != nil {
-		logger_error.Print("Chunk checking error: ", err)
+	if err := rr.chunk.retrieveHeaders(&rr.req.Header, rr.chunkID); err != nil {
+		logger_error.Print("Header error: ", err)
 		rr.replyError(err)
 		return
 	}
 
 	// Attempt a PUT in the repository
-	out, err := rr.rawx.repo.Put(rr.chunk_id)
+	out, err := rr.rawx.repo.Put(rr.chunkID)
 	if err != nil {
 		logger_error.Print("Chunk opening error: ", err)
 		rr.replyError(err)
@@ -407,15 +136,15 @@ func (rr *rawxRequest) uploadChunk() {
 
 	// If a hash has been sent, it must match the hash computed
 	if err == nil {
-		if err = rr.checkChunkChecksumWithTrailers(&ul); err != nil {
-			logger_error.Print("Chunk checksum error: ", err)
+		if err = rr.chunk.retrieveTrailers(&rr.req.Trailer, &ul); err != nil {
+			logger_error.Print("Trailer error: ", err)
 		}
 	}
 
 	// If everything went well, finish with the chunks XATTR management
 	if err == nil {
-		if err = putFinishXattr(rr, out, rr.chunk_id); err != nil {
-			logger_error.Print("Chunk xattr error: ", err)
+		if err = rr.chunk.saveAttr(out); err != nil {
+			logger_error.Print("Save attr error: ", err)
 		}
 	}
 
@@ -431,7 +160,7 @@ func (rr *rawxRequest) uploadChunk() {
 }
 
 func (rr *rawxRequest) checkChunk() {
-	in, err := rr.rawx.repo.Get(rr.chunk_id)
+	in, err := rr.rawx.repo.Get(rr.chunkID)
 	if in != nil {
 		defer in.Close()
 	}
@@ -447,37 +176,8 @@ func (rr *rawxRequest) checkChunk() {
 	}
 }
 
-func (rr *rawxRequest) loadXattrChunkInfo(inChunk FileReader, chunkID string) {
-	get := func(k string) string {
-		v, _ := inChunk.GetAttr(k)
-		return string(v)
-	}
-
-	rr.content_fullpath = get(AttrNameFullPrefix + chunkID)
-	fullpath := strings.Split(rr.content_fullpath, "/")
-	if len(fullpath) == 5 {
-		account, _ := url.PathUnescape(fullpath[0])
-		container, _ := url.PathUnescape(fullpath[1])
-		rr.container_id = cidFromName(account, container)
-		rr.content_path, _ = url.PathUnescape(fullpath[2])
-		rr.content_version, _ = url.PathUnescape(fullpath[3])
-		rr.content_id, _ = url.PathUnescape(fullpath[4])
-	}
-	rr.content_chunkmethod = get(AttrNameContentChunkMethod)
-	rr.content_stgpol = get(AttrNameContentStgPol)
-
-	rr.metachunk_size = get(AttrNameMetachunkSize)
-	rr.metachunk_hash = get(AttrNameMetachunkChecksum)
-
-	rr.chunk_position = get(AttrNameChunkPosition)
-	rr.chunk_size = get(AttrNameChunkSize)
-	rr.chunk_hash = get(AttrNameChunkChecksum)
-
-	rr.xattr_version = get(AttrNameXattrVersion)
-}
-
 func (rr *rawxRequest) downloadChunk() {
-	inChunk, err := rr.rawx.repo.Get(rr.chunk_id)
+	inChunk, err := rr.rawx.repo.Get(rr.chunkID)
 	if inChunk != nil {
 		defer inChunk.Close()
 	}
@@ -487,7 +187,11 @@ func (rr *rawxRequest) downloadChunk() {
 		return
 	}
 
-	rr.loadXattrChunkInfo(inChunk, rr.chunk_id)
+	if err = rr.chunk.loadAttr(inChunk, rr.chunkID); err != nil {
+		logger_error.Print("Load attr error: ", err)
+		rr.replyError(err)
+		return
+	}
 
 	// Load a possible range in the request
 	// !!!(jfs): we do not manage requests on multiple ranges
@@ -543,27 +247,8 @@ func (rr *rawxRequest) downloadChunk() {
 		in = &limitedReader{sub: in, remaining: size}
 	}
 
-	// Fill the headers of the reply with the attributes of the chunk
-	set := func(k, v string) {
-		logger_error.Printf("SetHdr %v -> %v", k, v)
-		if len(v) > 0 {
-			rr.rep.Header().Set(k, v)
-		}
-	}
-	set(HeaderNameFullpath, rr.content_fullpath)
-	set(HeaderNameContainerID, rr.container_id)
-	set(HeaderNameContentPath, rr.content_path)
-	set(HeaderNameContentVersion, rr.content_version)
-	set(HeaderNameContentID, rr.content_id)
-	set(HeaderNameContentStgPol, rr.content_stgpol)
-	set(HeaderNameContentChunkMethod, rr.content_chunkmethod)
-	set(HeaderNameMetachunkChecksum, rr.metachunk_hash)
-	set(HeaderNameMetachunkSize, rr.metachunk_size)
-	set(HeaderNameChunkID, rr.chunk_id)
-	set(HeaderNameChunkPosition, rr.chunk_position)
-	set(HeaderNameChunkChecksum, rr.chunk_hash)
-	set(HeaderNameChunkSize, rr.chunk_size)
-	set(HeaderNameXattrVersion, rr.xattr_version)
+	headers := rr.rep.Header()
+	rr.chunk.fillHeaders(&headers)
 
 	// Prepare the headers of the reply
 	if has_range() {
@@ -602,7 +287,7 @@ func (rr *rawxRequest) downloadChunk() {
 }
 
 func (rr *rawxRequest) removeChunk() {
-	if err := rr.rawx.repo.Del(rr.chunk_id); err != nil {
+	if err := rr.rawx.repo.Del(rr.chunkID); err != nil {
 		rr.replyError(err)
 	} else {
 		rr.replyCode(http.StatusNoContent)
@@ -610,7 +295,7 @@ func (rr *rawxRequest) removeChunk() {
 }
 
 func (rr *rawxRequest) serveChunk(rep http.ResponseWriter, req *http.Request) {
-	err := rr.checkChunkID()
+	err := rr.retrieveChunkID()
 	if err != nil {
 		rr.replyError(err)
 		return
