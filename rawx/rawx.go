@@ -48,21 +48,8 @@ type rawxRequest struct {
 	stats_time int
 	reqid      string
 
-	// field mapped as XATTR and HEADERS
-	content_fullpath    string
-	container_id        string
-	content_path        string
-	content_version     string
-	content_id          string
-	content_chunkmethod string
-	content_stgpol      string
-	metachunk_hash      string
-	metachunk_size      string
-	chunk_id            string
-	chunk_position      string
-	chunk_hash          string
-	chunk_size          string
-	xattr_version       string
+	chunkID string
+	chunk   chunkInfo
 
 	// for the reply's purpose
 	status    int
@@ -96,7 +83,6 @@ func (self *rawxRequest) replyError(err error) {
 			case ErrInvalidRange:
 				self.replyCode(http.StatusBadRequest)
 			default:
-				panic("wot?!")
 				self.replyCode(http.StatusInternalServerError)
 			}
 		}
