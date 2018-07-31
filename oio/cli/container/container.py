@@ -572,20 +572,21 @@ class LocateContainer(ContainerCommandMixin, show.ShowOne):
         account = self.app.client_manager.account
         container = parsed_args.container
         cid = parsed_args.cid
-        data = self.app.client_manager.storage.container_get_properties(
-            account, container, cid=cid)
+        m2_sys = self.app.client_manager.storage.container_get_properties(
+            account, container, cid=cid)['system']
 
         data_dir = self.app.client_manager.storage.directory.list(
             account, container, cid=cid)
 
         info = {
-            'account': data['system']['sys.account'],
-            'base_name': data['system']['sys.name'],
-            'name': data['system']['sys.user.name'],
+            'account': m2_sys['sys.account'],
+            'base_name': m2_sys['sys.name'],
+            'name': m2_sys['sys.user.name'],
             'meta0': list(),
             'meta1': list(),
             'meta2': list(),
-            'status': OIO_DB_STATUS_NAME.get(data['system'].get('sys.status'),
+            'meta2.sys.peers': list(),
+            'status': OIO_DB_STATUS_NAME.get(m2_sys.get('sys.status'),
                                              "Unknown"),
         }
 
@@ -593,13 +594,16 @@ class LocateContainer(ContainerCommandMixin, show.ShowOne):
             if d['type'] == 'meta2':
                 info['meta2'].append(d['host'])
 
+        for peer in m2_sys.get('sys.peers', 'Unknown').split(','):
+            info['meta2.sys.peers'].append(peer)
+
         for d in data_dir['dir']:
             if d['type'] == 'meta0':
                 info['meta0'].append(d['host'])
             if d['type'] == 'meta1':
                 info['meta1'].append(d['host'])
 
-        for stype in ["meta0", "meta1", "meta2"]:
+        for stype in ["meta0", "meta1", "meta2", 'meta2.sys.peers']:
             info[stype] = ', '.join(info[stype])
         return zip(*sorted(info.iteritems()))
 
