@@ -26,6 +26,7 @@ type Repository interface {
 	Has(name string) (bool, error)
 	Get(name string) (FileReader, error)
 	Put(name string) (FileWriter, error)
+	Link(fromName, toName string) (FileWriter, error)
 	Del(name string) error
 	List(marker, prefix string, max int) (ListSlice, error)
 }
@@ -36,7 +37,6 @@ type ListSlice struct {
 }
 
 type FileReader interface {
-	Name() string
 	Size() int64
 	Seek(int64) error
 	Close() error
@@ -45,7 +45,6 @@ type FileReader interface {
 }
 
 type FileWriter interface {
-	Name() string
 	Seek(int64) error
 	Commit() error
 	Abort() error

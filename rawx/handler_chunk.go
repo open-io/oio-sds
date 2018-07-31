@@ -159,6 +159,41 @@ func (rr *rawxRequest) uploadChunk() {
 	}
 }
 
+func (rr *rawxRequest) copyChunk() {
+	if err := rr.chunk.retrieveDestinationHeader(&rr.req.Header,
+		rr.rawx, rr.chunkID); err != nil {
+		logger_error.Print("Header error: ", err)
+		rr.replyError(err)
+		return
+	}
+	if err := rr.chunk.retrieveContentFullpathHeader(&rr.req.Header); err != nil {
+		logger_error.Print("Header error: ", err)
+		rr.replyError(err)
+		return
+	}
+
+	// Attempt a LINK in the repository
+	out, err := rr.rawx.repo.Link(rr.chunkID, rr.chunk.chunkID)
+	if err != nil {
+		logger_error.Print("Link error: ", err)
+		rr.replyError(err)
+		return
+	}
+
+	if err = rr.chunk.saveContentFullpathAttr(out); err != nil {
+		logger_error.Print("Save attr error: ", err)
+	}
+
+	// Then reply
+	if err != nil {
+		rr.replyError(err)
+		out.Abort()
+	} else {
+		out.Commit()
+		rr.replyCode(http.StatusCreated)
+	}
+}
+
 func (rr *rawxRequest) checkChunk() {
 	in, err := rr.rawx.repo.Get(rr.chunkID)
 	if in != nil {
@@ -305,6 +340,10 @@ func (rr *rawxRequest) serveChunk(rep http.ResponseWriter, req *http.Request) {
 		rr.stats_time = TimePut
 		rr.stats_hits = HitsPut
 		rr.uploadChunk()
+	case "COPY":
+		rr.stats_time = TimeCopy
+		rr.stats_hits = HitsCopy
+		rr.copyChunk()
 	case "HEAD":
 		rr.stats_time = TimeHead
 		rr.stats_hits = HitsHead
