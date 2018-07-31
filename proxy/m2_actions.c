@@ -1894,7 +1894,7 @@ static enum http_rc_e action_m2_content_touch (struct req_args_s *args,
 		return _reply_format_error(args, BADREQ("container unspecified"));
 	if (!oio_url_has(args->url, OIOURL_PATH) &&
 			!oio_url_has(args->url, OIOURL_CONTENTID))
-		return _reply_format_error(args, BADREQ("missing content path of ID"));
+		return _reply_format_error(args, BADREQ("missing content path or ID"));
 
 	PACKER_VOID(_pack) { return m2v2_remote_pack_TOUCHC (args->url, DL()); }
 	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);

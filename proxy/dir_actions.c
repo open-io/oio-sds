@@ -503,6 +503,11 @@ enum http_rc_e action_ref_show (struct req_args_s *args) {
 			g_string_append_static (out, "null");
 		g_string_append_static (out, ",\"srv\":");
 		out = _pack_and_freev_m1url_list (out, urlv);
+
+		g_string_append_c(out, ',');
+		oio_str_gstring_append_json_pair(out, "cid",
+				oio_url_get(args->url, OIOURL_HEXID));
+
 		g_string_append_static (out, "}");
 		return _reply_success_json (args, out);
 	}
