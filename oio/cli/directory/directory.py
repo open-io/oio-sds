@@ -22,6 +22,10 @@ from oio.common import green
 from oio.directory.meta0 import generate_prefixes, count_prefixes
 
 
+M0_CONN_TIMEOUT = 30.0
+M0_READ_TIMEOUT = 60.0
+
+
 class DirectoryCmd(Command):
     """Base class for directory subcommands"""
 
@@ -35,11 +39,16 @@ class DirectoryCmd(Command):
         parser.add_argument('--min-dist', type=int, default=1,
                             help="Minimum distance between replicas")
         parser.add_argument(
-            '--meta0-timeout', metavar='<SECONDS>', type=float, default=60.0,
-            help="Timeout for meta0-related operations (60.0s by default)")
+            '--meta0-timeout', metavar='<SECONDS>',
+            type=float, default=M0_READ_TIMEOUT,
+            help=("Timeout for meta0-related operations (%.3fs by default)" %
+                  M0_READ_TIMEOUT))
         return parser
 
     def get_prefix_mapping(self, parsed_args):
+        """
+        Create a meta0 prefix mapping with the parsed parameters.
+        """
         from oio.directory.meta0 import Meta0PrefixMapping
 
         meta0_client = self.app.client_manager.directory.meta0
@@ -51,6 +60,32 @@ class DirectoryCmd(Command):
                                   digits=digits,
                                   min_dist=parsed_args.min_dist,
                                   logger=self.log)
+
+    def _apply_mapping(self, mapping, moved=None,
+                       max_attempts=7, read_timeout=M0_READ_TIMEOUT):
+        """
+        Upload the specified mapping to the meta0 service,
+        retry in case or error.
+        """
+        from time import sleep
+        self.log.info("Saving...")
+        for i in range(max_attempts):
+            try:
+                mapping.apply(moved=moved,
+                              connection_timeout=M0_CONN_TIMEOUT,
+                              read_timeout=read_timeout)
+                break
+            except ClientException as ex:
+                # Manage several unretriable errors
+                retry = (503, 504)
+                if ex.status >= 400 and ex.status not in retry:
+                    raise
+                # Monotonic backoff (retriable and net errors)
+                if i < max_attempts - 1:
+                    sleep(i * 1.0)
+                    continue
+                # Too many attempts
+                raise
 
 
 class DirectoryInit(DirectoryCmd):
@@ -107,25 +142,8 @@ class DirectoryInit(DirectoryCmd):
                 break
 
         if checked:
-            from time import sleep
-            self.log.info("Saving...")
-            max_attempts = 7
-            for i in range(max_attempts):
-                try:
-                    mapping.apply(connection_timeout=30.0,
-                                  read_timeout=parsed_args.meta0_timeout)
-                    break
-                except ClientException as ex:
-                    # Manage several unretriable errors
-                    retry = (503, 504)
-                    if ex.status >= 400 and ex.status not in retry:
-                        raise
-                    # Monotonic backoff (retriable and net errors)
-                    if i < max_attempts - 1:
-                        sleep(i * 1.0)
-                        continue
-                    # Too many attempts
-                    raise
+            self._apply_mapping(mapping,
+                                read_timeout=parsed_args.meta0_timeout)
         else:
             raise Exception("Failed to initialize prefix mapping")
         return checked
@@ -146,6 +164,7 @@ class DirectoryInit(DirectoryCmd):
 class DirectoryList(DirectoryCmd):
     """
     List the content of meta0 database as a JSON object.
+    The output can be used later to restore the database.
 
     WARNING: output is >2MB.
     """
@@ -153,7 +172,7 @@ class DirectoryList(DirectoryCmd):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         mapping = self.get_prefix_mapping(parsed_args)
-        mapping.load(connection_timeout=30.0,
+        mapping.load(connection_timeout=M0_CONN_TIMEOUT,
                      read_timeout=parsed_args.meta0_timeout)
         print mapping.to_json()
 
@@ -166,8 +185,52 @@ class DirectoryRebalance(DirectoryCmd):
         mapping = self.get_prefix_mapping(parsed_args)
         mapping.load(read_timeout=parsed_args.meta0_timeout)
         moved = mapping.rebalance()
-        mapping.apply(moved, read_timeout=parsed_args.meta0_timeout)
+        self._apply_mapping(mapping, moved=moved,
+                            read_timeout=parsed_args.meta0_timeout)
         self.log.info("Moved %s", moved)
+
+
+class DirectoryRestore(DirectoryCmd):
+    """
+    Restore the content of meta0 database from a JSON object.
+
+    Use with caution.
+    """
+
+    def get_parser(self, prog_name):
+        parser = super(DirectoryRestore, self).get_parser(prog_name)
+        parser.add_argument(
+            'backup', help='Path to the JSON-formatted backup file, or "-".')
+        parser.add_argument(
+            '--I-know-what-I-am-doing', action='store_true',
+            help='Confirm that you know what you are doing.')
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+        if parsed_args.backup == '-':
+            self.log.info('Loading from stdin...')
+            from sys import stdin
+            backup = stdin.read()
+        else:
+            with open(parsed_args.backup, 'r') as inputf:
+                self.log.info('Loading from %s...', parsed_args.backup)
+                backup = inputf.read()
+        mapping = self.get_prefix_mapping(parsed_args)
+        mapping.load(backup, swap_bytes=False)
+        self.log.info('Checking...')
+        if mapping.check_replicas():
+            self.log.info('OK')
+        elif parsed_args.I_know_what_I_am_doing:
+            self.log.info('Errors encountered, but "I know what I am doing".')
+        else:
+            raise Exception('Bad meta1 prefix mapping')
+        if parsed_args.I_know_what_I_am_doing:
+            self.log.info('Applying...')
+            self._apply_mapping(mapping,
+                                read_timeout=parsed_args.meta0_timeout)
+        else:
+            self.log.info('Please tell me that you know what you are doing.')
 
 
 class DirectoryDecommission(DirectoryCmd):
@@ -187,7 +250,8 @@ class DirectoryDecommission(DirectoryCmd):
         mapping.load(read_timeout=parsed_args.meta0_timeout)
         moved = mapping.decommission(parsed_args.addr,
                                      bases_to_remove=parsed_args.base)
-        mapping.apply(moved, read_timeout=parsed_args.meta0_timeout)
+        self._apply_mapping(mapping, moved=moved,
+                            read_timeout=parsed_args.meta0_timeout)
         self.log.info("Moved %s", moved)
 
 
@@ -224,10 +288,10 @@ class DirectoryWarmup(DirectoryCmd):
             prefix_queue = Queue(16)
 
             # Prepare some workers
-            for i in range(workers_count):
-                w = WarmupWorker(conf, self.log)
-                workers.append(w)
-                pile.spawn(w.run, prefix_queue)
+            for _ in range(workers_count):
+                worker = WarmupWorker(conf, self.log)
+                workers.append(worker)
+                pile.spawn(worker.run, prefix_queue)
 
             # Feed the queue
             trace_increment = 0.01
