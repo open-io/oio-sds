@@ -45,49 +45,46 @@ func (self *chunkRepository) Lock(ns, url string) error {
 }
 
 func (self *chunkRepository) Has(name string) (bool, error) {
-       v, _ := self.sub.Has(name)
-       return v, nil
+	v, _ := self.sub.Has(name)
+	return v, nil
 }
 
 func (self *chunkRepository) Del(name string) error {
-       err := self.sub.Del(name)
-       if err == nil {
-               return nil
-       } else if err != os.ErrNotExist && !os.IsNotExist(err) {
+	err := self.sub.Del(name)
+	if err == nil {
+		return nil
+	} else if err != os.ErrNotExist && !os.IsNotExist(err) {
 		return err
 	} else {
-               return os.ErrNotExist
+		return os.ErrNotExist
 	}
 }
 
 func (self *chunkRepository) Get(name string) (FileReader, error) {
-       r, err := self.sub.Get(name)
-       if err == nil {
-               return r, nil
-       } else if err != os.ErrNotExist && !os.IsNotExist(err) {
+	r, err := self.sub.Get(name)
+	if err == nil {
+		return r, nil
+	} else if err != os.ErrNotExist && !os.IsNotExist(err) {
 		return nil, err
 	} else {
-               return nil, os.ErrNotExist
+		return nil, os.ErrNotExist
 	}
 }
 
 func (self *chunkRepository) Put(name string) (FileWriter, error) {
-       w, err := self.sub.Put(name)
-       if err == nil {
-               return w, nil
-       } else if err != os.ErrNotExist {
-		return nil, err
-	} else {
-               return nil, os.ErrNotExist
-	}
+	return self.sub.Put(name)
+}
+
+func (self *chunkRepository) Link(fromName, toName string) (FileWriter, error) {
+	return self.sub.Link(fromName, toName)
 }
 
 func (self *chunkRepository) List(marker, prefix string, max int) (ListSlice, error) {
-       if len(marker) > 0 && !isHexaString(marker, 0) {
+	if len(marker) > 0 && !isHexaString(marker, 0) {
 		out := ListSlice{make([]string, 0), false}
 		return out, ErrListMarker
 	}
-       if len(prefix) > 0 && !isHexaString(prefix, 0) {
+	if len(prefix) > 0 && !isHexaString(prefix, 0) {
 		out := ListSlice{make([]string, 0), false}
 		return out, ErrListPrefix
 	}

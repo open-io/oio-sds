@@ -19,8 +19,11 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -96,6 +99,14 @@ type detailedAttr struct {
 	ptr *string
 }
 
+func (chunk *chunkInfo) saveContentFullpathAttr(out FileWriter) error {
+	if chunk.chunkID == "" || chunk.contentFullpath == "" {
+		return errors.New("Missing chunk ID or fullpath")
+	}
+
+	return out.SetAttr(AttrNameFullPrefix+chunk.chunkID, []byte(chunk.contentFullpath))
+}
+
 func (chunk *chunkInfo) saveAttr(out FileWriter) error {
 	setAttr := func(k, v string) error {
 		if v == "" {
@@ -104,7 +115,7 @@ func (chunk *chunkInfo) saveAttr(out FileWriter) error {
 		return out.SetAttr(k, []byte(v))
 	}
 
-	if err := setAttr(AttrNameFullPrefix+chunk.chunkID, chunk.contentFullpath); err != nil {
+	if err := chunk.saveContentFullpathAttr(out); err != nil {
 		return err
 	}
 
@@ -234,6 +245,31 @@ func (chunk *chunkInfo) retrieveContentFullpathHeader(headers *http.Header) erro
 
 	beginContentID := strings.LastIndex(headerFullpath, "/") + 1
 	chunk.contentFullpath = headerFullpath[:beginContentID] + chunk.contentID
+	return nil
+}
+
+// Check and load the content fullpath of the chunk.
+func (chunk *chunkInfo) retrieveDestinationHeader(headers *http.Header,
+	rawx *rawxService, srcChunkID string) error {
+	destination := headers.Get("Destination")
+	if destination == "" {
+		return returnError(ErrMissingHeader, "Destination")
+	}
+	dstURL, err := url.ParseRequestURI(destination)
+	if err != nil {
+		return returnError(ErrInvalidHeader, "Destination")
+	}
+	if dstURL.Host != rawx.url {
+		return os.ErrPermission
+	}
+	chunk.chunkID = filepath.Base(filepath.Clean(dstURL.Path))
+	if !isHexaString(chunk.chunkID, 64) {
+		return returnError(ErrInvalidHeader, "Destination")
+	}
+	chunk.chunkID = strings.ToUpper(chunk.chunkID)
+	if chunk.chunkID == srcChunkID {
+		return os.ErrPermission
+	}
 	return nil
 }
 

@@ -153,41 +153,83 @@ func (r *FileRepository) Get(name string) (FileReader, error) {
 	}
 }
 
-func (r *FileRepository) realPut(n, p string) (FileWriter, error) {
-	path_temp := p + ".pending"
-	f, err := os.OpenFile(path_temp, r.putOpenFlags, r.putOpenMode)
-	if err == nil {
-		// Tempfile now open, ready to work with
-		if _, err = os.Stat(p); err == nil {
-			os.Remove(path_temp)
-			f.Close()
-			return nil, os.ErrExist
-		}
+func (r *FileRepository) realPut(path string) (FileWriter, error) {
+	// Check if the path doesn't exist yet
+	if _, err := os.Stat(path); err == nil {
+		return nil, os.ErrExist
+	}
 
-		return &RealFileWriter{
-			name: p, path_final: p, path_temp: path_temp,
-			impl: f, notifier: r.notifier,
-			sync_file: r.sync_file, sync_dir: r.sync_dir,
-		}, nil
-	} else if os.IsNotExist(err) {
-		// Lazy dir creation
-		err = os.MkdirAll(filepath.Dir(p), r.putMkdirMode)
-		if err == nil {
-			return r.realPut(n, p)
-		} else {
-			return nil, err
+	pathTemp := path + ".pending"
+	f, err := os.OpenFile(pathTemp, r.putOpenFlags, r.putOpenMode)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Lazy dir creation
+			err = os.MkdirAll(filepath.Dir(path), r.putMkdirMode)
+			if err == nil {
+				return r.realPut(path)
+			}
 		}
-	} else {
 		return nil, err
 	}
+
+	return &RealFileWriter{
+		path_final: path, path_temp: pathTemp,
+		impl: f, notifier: r.notifier,
+		sync_file: r.sync_file, sync_dir: r.sync_dir,
+	}, nil
 }
 
 func (r *FileRepository) Put(name string) (FileWriter, error) {
-	if p, err := r.nameToPath(name); err != nil {
+	path, err := r.nameToPath(name)
+	if err != nil {
 		return nil, err
-	} else {
-		return r.realPut(name, p)
 	}
+	return r.realPut(path)
+}
+
+func (r *FileRepository) realLink(fromPath, toPath string) (FileWriter, error) {
+	// Check if the source already exists
+	if _, err := os.Stat(fromPath); os.IsNotExist(err) {
+		return nil, os.ErrNotExist
+	}
+	// Check if the destination doesn't exist yet
+	if _, err := os.Stat(toPath); err == nil {
+		return nil, os.ErrExist
+	}
+
+	pathTemp := toPath + ".pending"
+	if err := os.Link(fromPath, pathTemp); err != nil {
+		if os.IsNotExist(err) {
+			// Lazy dir creation
+			err = os.MkdirAll(filepath.Dir(toPath), r.putMkdirMode)
+			if err == nil {
+				return r.realLink(fromPath, toPath)
+			}
+		}
+		return nil, err
+	}
+
+	f, err := os.OpenFile(pathTemp, os.O_WRONLY, 0)
+	if err != nil {
+		os.Remove(pathTemp)
+		f.Close()
+		return nil, err
+	}
+	return &RealFileWriter{
+		path_final: toPath, path_temp: pathTemp, impl: f,
+		notifier: r.notifier, sync_file: r.sync_file, sync_dir: r.sync_dir}, nil
+}
+
+func (r *FileRepository) Link(fromName, toName string) (FileWriter, error) {
+	fromPath, err := r.nameToPath(fromName)
+	if err != nil {
+		return nil, err
+	}
+	toPath, err := r.nameToPath(toName)
+	if err != nil {
+		return nil, err
+	}
+	return r.realLink(fromPath, toPath)
 }
 
 func (r *FileRepository) nameToPathTokens(name string) ([]string, error) {
@@ -221,17 +263,12 @@ func (r *FileRepository) nameToPath(name string) (string, error) {
 }
 
 type RealFileWriter struct {
-	name       string
 	path_final string
 	path_temp  string
 	impl       *os.File
 	notifier   Notifier
 	sync_file  bool
 	sync_dir   bool
-}
-
-func (w *RealFileWriter) Name() string {
-	return w.name
 }
 
 func (w *RealFileWriter) Seek(o int64) error {
@@ -282,7 +319,7 @@ func (w *RealFileWriter) Commit() error {
 		err = os.Rename(w.path_temp, w.path_final)
 		if err == nil {
 			w.syncDir()
-			w.notifier.NotifyPut(w.name)
+			// TODO(adu) w.notifier.NotifyPut(w.name)
 		} else {
 			logger_error.Print("Rename error: ", err)
 		}
@@ -298,10 +335,6 @@ func (w *RealFileWriter) Commit() error {
 type RealFileReader struct {
 	path string
 	impl *os.File
-}
-
-func (r *RealFileReader) Name() string {
-	return filepath.Base(r.path)
 }
 
 func (r *RealFileReader) Size() int64 {

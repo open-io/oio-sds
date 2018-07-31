@@ -23,32 +23,34 @@ import (
 )
 
 const (
-	BytesRead    = iota
-	BytesWritten = iota
+	BytesRead = iota
+	BytesWritten
 
-	Hits2XX = iota
-	Hits403 = iota
-	Hits404 = iota
-	Hits4XX = iota
-	Hits5XX = iota
+	Hits2XX
+	Hits403
+	Hits404
+	Hits4XX
+	Hits5XX
 
-	HitsPut   = iota
-	HitsGet   = iota
-	HitsHead  = iota
-	HitsDel   = iota
-	HitsList  = iota
-	HitsOther = iota
-	HitsTotal = iota
+	HitsPut
+	HitsCopy
+	HitsGet
+	HitsHead
+	HitsDel
+	HitsList
+	HitsOther
+	HitsTotal
 
-	TimePut   = iota
-	TimeGet   = iota
-	TimeHead  = iota
-	TimeDel   = iota
-	TimeList  = iota
-	TimeOther = iota
-	TimeTotal = iota
+	TimePut
+	TimeCopy
+	TimeGet
+	TimeHead
+	TimeDel
+	TimeList
+	TimeOther
+	TimeTotal
 
-	LastStat = iota
+	LastStat
 )
 
 var statNames = [LastStat]string{
