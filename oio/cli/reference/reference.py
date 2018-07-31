@@ -390,6 +390,7 @@ class LocateReference(show.ShowOne):
 
         info = {'account': account,
                 'name': reference,
+                'cid': data.get('cid'),
                 'meta0': [],
                 'meta1': []}
         for d in data['dir']:
