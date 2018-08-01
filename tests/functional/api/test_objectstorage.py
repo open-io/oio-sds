@@ -109,6 +109,11 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # clean
         self._delete(name)
 
+    def test_container_create_invalid_name(self):
+        # Ah, those latin1 users!
+        name = "Beno\xeet-" + random_str(8)
+        self.assertRaises(exc.ClientException, self._create, name)
+
     def test_create_properties(self):
         name = random_str(32)
 
@@ -401,6 +406,14 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertRaises(
             exc.NoSuchContainer, self.api.container_del_properties,
             self.account, name, metadata.keys())
+
+    def test_object_create_invalid_name(self):
+        ct = random_str(32)
+        obj = "Beno\xeet"  # Latin1, not UTF-8
+        self._create(ct)
+        self.assertRaises(exc.ClientException, self.api.object_create,
+                          self.account, ct, data="data", obj_name=obj)
+        self._clean(ct)
 
     def test_object_create_mime_type(self):
         name = random_str(32)
