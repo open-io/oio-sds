@@ -123,15 +123,20 @@ func (r *FileRepository) Has(name string) (bool, error) {
 }
 
 func (r *FileRepository) Del(name string) error {
-	if p, err := r.nameToPath(name); err != nil {
-		return err
-	} else {
-		err = os.Remove(p)
-		if err == nil {
-			r.notifier.NotifyDel(name)
-		}
+	path, err := r.nameToPath(name)
+	if err != nil {
 		return err
 	}
+	err = syscall.Removexattr(path, AttrNameFullPrefix+name)
+	if err != nil {
+		logger_error.Printf("Error to remove content fullpath: %s", err)
+		err = nil
+	}
+	err = os.Remove(path)
+	if err == nil {
+		r.notifier.NotifyDel(name)
+	}
+	return err
 }
 
 func realGet(p string) (FileReader, error) {
