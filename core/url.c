@@ -24,6 +24,8 @@ License along with this library.
 #include <core/oiostr.h>
 #include <core/oioext.h>
 #include <core/url_ext.h>
+#include <core/client_variables.h>
+#include <core/oiolog.h>
 
 struct oio_url_s
 {
@@ -637,28 +639,51 @@ oio_url_to_json (GString *out, struct oio_url_s *u)
 }
 
 gboolean
-oio_url_check(const struct oio_url_s *u, const char *namespace, const gchar **err )
+oio_url_check(const struct oio_url_s *u, const char *namespace,
+		const gchar **err)
 {
 #define _ERR(v)  \
-    if (err) { \
-        *err = v; \
-    }
+	if (err) { \
+		*err = v; \
+	}
 
-    _ERR(NULL);
-    if (namespace && u->ns && strcmp(namespace, u->ns)) {
-        _ERR("namespace");
-        return 0;
-    }
-    if (u->version && !oio_str_is_number(u->version, NULL)) {
-        _ERR("version");
-        return 0;
-    }
+	_ERR(NULL);
+	if (namespace && u->ns && strcmp(namespace, u->ns)) {
+		_ERR("'namespace'");
+		return FALSE;
+	}
+	if (u->version && !oio_str_is_number(u->version, NULL)) {
+		_ERR("'version', not a number");
+		return FALSE;
+	}
 
-    if (u->path && !g_utf8_validate(u->path, -1, NULL)) {
-        _ERR("path");
-        return 0;
-    }
-    return 1;
+	if (u->user && !g_utf8_validate(u->user, -1, NULL)) {
+		if (oio_url_must_be_unicode) {
+			_ERR("'user', not UTF-8");
+			return FALSE;
+		}
+#if GLIB_CHECK_VERSION(2,52,0)
+		else {
+			gchar *tmp = g_utf8_make_valid(u->user, -1);
+			GRID_WARN("Non UTF-8 'user' received: %s", tmp);
+			g_free(tmp);
+		}
+#endif
+	}
+	if (u->path && !g_utf8_validate(u->path, -1, NULL)) {
+		if (oio_url_must_be_unicode) {
+			_ERR("'path', not UTF-8");
+			return FALSE;
+		}
+#if GLIB_CHECK_VERSION(2,52,0)
+		else {
+			gchar *tmp = g_utf8_make_valid(u->path, -1);
+			GRID_WARN("Non UTF-8 'path' received: %s", tmp);
+			g_free(tmp);
+		}
+#endif
+	}
+	return TRUE;
 
 #undef _ERR
 }

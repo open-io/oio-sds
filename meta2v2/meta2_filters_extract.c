@@ -78,12 +78,12 @@ meta2_filter_extract_header_url(struct gridd_filter_ctx_s *ctx,
 	TRACE_FILTER();
 	const gchar *err = NULL;
 	struct oio_url_s *url = metautils_message_extract_url (reply->request);
-    if (!oio_url_check(url, NULL, &err)) {
+	if (!oio_url_check(url, NULL, &err)) {
 		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_BAD_REQUEST,
-					"Invalid request, Invalid %s", err));
+				"Invalid request: invalid %s", err));
 		oio_url_pclean(&url);
 		return FILTER_KO;
-    }
+	}
 	meta2_filter_ctx_set_url(ctx, url);
 	return FILTER_OK;
 }
@@ -135,7 +135,7 @@ meta2_filter_extract_header_chunk_beans(struct gridd_filter_ctx_s *ctx,
 
 int
 meta2_filter_extract_body_beans(struct gridd_filter_ctx_s *ctx,
-                struct gridd_reply_ctx_s *reply)
+		struct gridd_reply_ctx_s *reply)
 {
 	GSList *l = NULL;
 	const char *opt = meta2_filter_ctx_get_param(ctx, "BODY_OPT");
@@ -242,7 +242,7 @@ meta2_filter_extract_header_string_size(struct gridd_filter_ctx_s *ctx,
 
 int
 meta2_filter_extract_header_optional_overwrite(struct gridd_filter_ctx_s *ctx,
-        struct gridd_reply_ctx_s *reply)
+		struct gridd_reply_ctx_s *reply)
 {
 	GError *e = NULL;
 	gchar buf[64];
@@ -265,7 +265,7 @@ meta2_filter_extract_header_string_maxvers(struct gridd_filter_ctx_s *ctx,
 
 int
 meta2_filter_extract_admin(struct gridd_filter_ctx_s *ctx,
-			     struct gridd_reply_ctx_s *reply)
+		struct gridd_reply_ctx_s *reply)
 {
 	GError *e = NULL;
 	gchar buf[1024];
@@ -278,7 +278,7 @@ meta2_filter_extract_admin(struct gridd_filter_ctx_s *ctx,
 
 int
 meta2_filter_extract_list_params(struct gridd_filter_ctx_s *ctx,
-        struct gridd_reply_ctx_s *reply)
+		struct gridd_reply_ctx_s *reply)
 {
 	GError *e = NULL;
 	gchar buf[1024];

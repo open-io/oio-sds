@@ -150,26 +150,31 @@ test_configure_invalid(void)
 
 	url = oio_url_init("badNS/ACCT/MB//thisisparta");
 	g_assert_false(oio_url_check(url, "NS", &err));
-	g_assert_cmpstr(err, ==, "namespace");
+	g_assert_cmpstr(err, ==, "'namespace'");
 	oio_url_pclean (&url);
 
 	url = oio_url_init("NS/ACCT/MB//thisisparta");
 	g_assert_true(oio_url_check(url, "NS", &err));
 	oio_url_set(url, OIOURL_VERSION, "aabbcc");
 	g_assert_false(oio_url_check(url, "NS", &err));
-	g_assert_cmpstr(err, ==, "version");
+	g_assert_cmpstr(err, ==, "'version', not a number");
+	oio_url_pclean (&url);
+
+	url = oio_url_init("NS/ACCT/Beno\xEEt//obj");
+	g_assert_false(oio_url_check(url, "NS", &err));
+	g_assert_cmpstr(err, ==, "'user', not UTF-8");
 	oio_url_pclean (&url);
 
 	url = oio_url_init("NS/ACCT/MB//\x33\x44\x55\x66\x77\x88");
 	g_assert_false(oio_url_check(url, "NS", &err));
-	g_assert_cmpstr(err, ==, "path");
+	g_assert_cmpstr(err, ==, "'path', not UTF-8");
 	oio_url_pclean (&url);
 
 	url = oio_url_init("NS/ACCT/MB//PATH");
 	g_assert_true(oio_url_check(url, "NS", &err));
 	oio_url_set(url, OIOURL_PATH, "\x33\x44\x55\x66\x77\x88");
 	g_assert_false(oio_url_check(url, "NS", &err));
-	g_assert_cmpstr(err, ==, "path");
+	g_assert_cmpstr(err, ==, "'path', not UTF-8");
 	oio_url_pclean (&url);
 }
 

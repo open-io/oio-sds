@@ -929,7 +929,13 @@
 			{ "type": "bool", "name": "oio_sds_client_patch_metachunk_size",
 				"key": "core.sds.adapt_metachunk_size",
 				"def": "true",
-				"descr": "Should the client adapt metachunk size to EC policy parameters? Letting this on will make bigger metachunks, but chunks on storage will stay at normal chunk size. Disabling this option allows clients to do write alignment." }
+				"descr": "Should the client adapt metachunk size to EC policy parameters? Letting this on will make bigger metachunks, but chunks on storage will stay at normal chunk size. Disabling this option allows clients to do write alignment." },
+
+			{ "type": "bool", "name": "oio_url_must_be_unicode",
+				"key": "core.sds.strict_utf8",
+				"def": "true",
+				"descr": "Should the object URLs be checked for non-UTF-8 characters? Disable this only if you have trouble reading old objects, uploaded before we check for invalid names."
+			}
 
 		]
 	},
