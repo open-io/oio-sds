@@ -76,7 +76,7 @@ func checkMakeFileRepo(dir string) *FileRepository {
 	if !filepath.IsAbs(basedir) {
 		log.Fatalf("Filerepo path must be absolute, got %s", basedir)
 	}
-	return MakeFileRepository(basedir, nil)
+	return MakeFileRepository(basedir)
 }
 
 func main() {
@@ -122,15 +122,21 @@ func main() {
 		logger_error.Fatal("Volume lock error: ", err.Error())
 	}
 
+	notifier, err := MakeBeanstalkNotifier("127.0.0.1:6009", "oio") // TODO(adu)
+	if err != nil {
+		logger_error.Fatal("Notifier error: ", err)
+	}
+
 	rawx := rawxService{
 		ns:       opts["ns"],
 		id:       opts["id"],
 		url:      opts["addr"],
 		repo:     chunkrepo,
 		compress: opts.getBool("compress", false),
+		notifier: notifier,
 	}
 
-	if err := http.ListenAndServe(rawx.url, &rawx); err != nil {
-		logger_error.Fatal("HTTP error: ", err.Error())
+	if err = http.ListenAndServe(rawx.url, &rawx); err != nil {
+		logger_error.Fatal("HTTP error: ", err)
 	}
 }

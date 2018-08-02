@@ -148,6 +148,13 @@ func (rr *rawxRequest) uploadChunk() {
 		}
 	}
 
+	if err == nil {
+		if err = rr.rawx.notifier.NotifyNew("", &rr.chunk, rr.rawx); err != nil {
+			logger_error.Print("Notify new error: ", err)
+			err = nil
+		}
+	}
+
 	// Then reply
 	if err != nil {
 		rr.replyError(err)
@@ -173,7 +180,7 @@ func (rr *rawxRequest) copyChunk() {
 	}
 
 	// Attempt a LINK in the repository
-	out, err := rr.rawx.repo.Link(rr.chunkID, rr.chunk.chunkID)
+	out, err := rr.rawx.repo.Link(rr.chunkID, rr.chunk.ChunkID)
 	if err != nil {
 		logger_error.Print("Link error: ", err)
 		rr.replyError(err)

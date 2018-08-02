@@ -38,6 +38,7 @@ type rawxService struct {
 	id       string
 	repo     Repository
 	compress bool
+	notifier Notifier
 }
 
 type rawxRequest struct {

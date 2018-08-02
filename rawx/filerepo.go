@@ -35,18 +35,7 @@ const (
 	putMkdirMode = 0755
 )
 
-type NoopNotifier struct{}
-
-func (self *NoopNotifier) NotifyPut(n string) {}
-func (self *NoopNotifier) NotifyDel(n string) {}
-
-type Notifier interface {
-	NotifyPut(name string)
-	NotifyDel(name string)
-}
-
 type FileRepository struct {
-	notifier       Notifier
 	root           string
 	putOpenMode    os.FileMode
 	putMkdirMode   os.FileMode
@@ -58,13 +47,8 @@ type FileRepository struct {
 	fallocate_file bool
 }
 
-func MakeFileRepository(root string, notifier Notifier) *FileRepository {
+func MakeFileRepository(root string) *FileRepository {
 	r := new(FileRepository)
-	if notifier == nil {
-		r.notifier = &NoopNotifier{}
-	} else {
-		r.notifier = notifier
-	}
 	r.root = root
 	r.HashWidth = hashWidth
 	r.HashDepth = hashDepth
@@ -132,11 +116,7 @@ func (r *FileRepository) Del(name string) error {
 		logger_error.Printf("Error to remove content fullpath: %s", err)
 		err = nil
 	}
-	err = os.Remove(path)
-	if err == nil {
-		r.notifier.NotifyDel(name)
-	}
-	return err
+	return os.Remove(path)
 }
 
 func realGet(p string) (FileReader, error) {
@@ -178,10 +158,8 @@ func (r *FileRepository) realPut(path string) (FileWriter, error) {
 	}
 
 	return &RealFileWriter{
-		path_final: path, path_temp: pathTemp,
-		impl: f, notifier: r.notifier,
-		sync_file: r.sync_file, sync_dir: r.sync_dir,
-	}, nil
+		path_final: path, path_temp: pathTemp, impl: f,
+		sync_file: r.sync_file, sync_dir: r.sync_dir}, nil
 }
 
 func (r *FileRepository) Put(name string) (FileWriter, error) {
@@ -222,7 +200,7 @@ func (r *FileRepository) realLink(fromPath, toPath string) (FileWriter, error) {
 	}
 	return &RealFileWriter{
 		path_final: toPath, path_temp: pathTemp, impl: f,
-		notifier: r.notifier, sync_file: r.sync_file, sync_dir: r.sync_dir}, nil
+		sync_file: r.sync_file, sync_dir: r.sync_dir}, nil
 }
 
 func (r *FileRepository) Link(fromName, toName string) (FileWriter, error) {
@@ -271,7 +249,6 @@ type RealFileWriter struct {
 	path_final string
 	path_temp  string
 	impl       *os.File
-	notifier   Notifier
 	sync_file  bool
 	sync_dir   bool
 }
@@ -324,7 +301,6 @@ func (w *RealFileWriter) Commit() error {
 		err = os.Rename(w.path_temp, w.path_final)
 		if err == nil {
 			w.syncDir()
-			// TODO(adu) w.notifier.NotifyPut(w.name)
 		} else {
 			logger_error.Print("Rename error: ", err)
 		}
