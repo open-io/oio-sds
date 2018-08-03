@@ -32,7 +32,7 @@ def make_arg_parser():
     parser.add_argument('--edit-config', action='store_true',
                         help="Edit configuration file with given arguments")
     parser.add_argument('--limit', type=int,
-                        help="Number of chunks to move")
+                        help="Limit of chunks to move")
     parser.add_argument('--usage-target', type=int,
                         help="Target percentage of volume usage")
     parser.add_argument('--daemon', action='store_true',
@@ -86,6 +86,7 @@ def generate_config_file(path, mode):
         add_value(cont, 'bytes_per_second', args.bytes_per_second)
         add_value(cont, 'chunks_per_second', args.chunks_per_second)
         add_value(cont, 'user', args.user)
+        add_value(cont, 'limit', args.limit)
         return dic_to_string(cont, header)
 
     with open(path, mode) as conf:
@@ -96,18 +97,15 @@ def generate_config_file(path, mode):
 
 def main():
     args = make_arg_parser().parse_args()
-    limit = args.limit
-    usage_target = args.usage_target
     daemon = args.daemon
     verbose = args.verbose
     config = args.config
+
     if args.generate_config:
         config = generate_config_file(config, 'w')
     if args.edit_config:
         config = generate_config_file(config, 'a')
-    run_daemon(BlobMover, config, limit=limit,
-               usage_target=usage_target, daemon=daemon,
-               verbose=verbose)
+    run_daemon(BlobMover, config, daemon=daemon, verbose=verbose)
 
 
 if __name__ == '__main__':
