@@ -60,12 +60,13 @@ class BlobMoverWorker(object):
             conf.get('chunks_per_second'), 30)
         self.max_bytes_per_second = int_value(
             conf.get('bytes_per_second'), 10000000)
+        self.limit = int_value(conf.get('limit'), 0)
         self.allow_links = true_value(conf.get('allow_links', True))
         self.blob_client = BlobClient(conf)
         self.container_client = ContainerClient(conf, logger=self.logger)
         self.content_factory = ContentFactory(conf)
 
-    def mover_pass(self, usage_target=None, limit=None, **kwargs):
+    def mover_pass(self, **kwargs):
         start_time = report_time = time.time()
 
         total_errors = 0
@@ -121,7 +122,7 @@ class BlobMoverWorker(object):
                 self.bytes_processed = 0
                 self.last_reported = now
             mover_time += (now - loop_time)
-            if limit is not None and self.total_chunks_processed >= limit:
+            if self.limit !=0 and self.total_chunks_processed >= self.limit:
                 break
         elapsed = (time.time() - start_time) or 0.000001
         self.logger.info(
@@ -199,7 +200,7 @@ class BlobMoverWorker(object):
 
 
 class BlobMover(Daemon):
-    def __init__(self, conf, daemon=False, **kwargs):
+    def __init__(self, conf, **kwargs):
         super(BlobMover, self).__init__(conf)
         self.logger = get_logger(conf)
         volume = conf.get('volume')
@@ -215,6 +216,7 @@ class BlobMover(Daemon):
         while work:
             try:
                 worker = BlobMoverWorker(self.conf, self.logger, self.volume)
+                usage_target = self.conf.get('usage_target')
                 worker.mover_pass(**kwargs)
                 work = False
             except Exception as e:
