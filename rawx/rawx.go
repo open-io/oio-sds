@@ -82,7 +82,7 @@ func (self *rawxRequest) replyError(err error) {
 			case ErrInvalidHeader:
 				self.replyCode(http.StatusBadRequest)
 			case ErrInvalidRange:
-				self.replyCode(http.StatusBadRequest)
+				self.replyCode(http.StatusRequestedRangeNotSatisfiable)
 			default:
 				self.replyCode(http.StatusInternalServerError)
 			}
