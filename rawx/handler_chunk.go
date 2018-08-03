@@ -229,27 +229,29 @@ func (rr *rawxRequest) downloadChunk() {
 		return
 	}
 
-	if err = rr.chunk.loadAttr(inChunk, rr.chunkID); err != nil {
-		logger_error.Print("Load attr error: ", err)
-		rr.replyError(err)
-		return
-	}
-
 	// Load a possible range in the request
 	// !!!(jfs): we do not manage requests on multiple ranges
 	// TODO(jfs): is a multiple range is encountered, we should follow the norm
 	// that allows us to answer a "200 OK" with the complete content.
+	length := inChunk.Size()
 	hdr_range := rr.req.Header.Get("Range")
 	var offset, size int64
 	if len(hdr_range) > 0 {
 		var nb int
 		var last int64
 		nb, err := fmt.Fscanf(strings.NewReader(hdr_range), "bytes=%d-%d", &offset, &last)
-		if err != nil || nb != 2 || last <= offset {
+		if err != nil || nb != 2 ||
+			offset < 0 || last >= length || last < offset {
 			rr.replyError(ErrInvalidRange)
 			return
 		}
 		size = last - offset + 1
+	}
+
+	if err = rr.chunk.loadAttr(inChunk, rr.chunkID); err != nil {
+		logger_error.Print("Load attr error: ", err)
+		rr.replyError(err)
+		return
 	}
 
 	has_range := func() bool {
@@ -263,10 +265,9 @@ func (rr *rawxRequest) downloadChunk() {
 	if err != nil {
 		if has_range() && offset > 0 {
 			err = inChunk.Seek(offset)
-		} else {
-			in = ioutil.NopCloser(inChunk)
-			err = nil
 		}
+		in = ioutil.NopCloser(inChunk)
+		err = nil
 	} else if bytes.Equal(v, AttrValueZLib) {
 		//in, err = zlib.NewReader(in)
 		// TODO(jfs): manage the Range offset
@@ -294,7 +295,7 @@ func (rr *rawxRequest) downloadChunk() {
 
 	// Prepare the headers of the reply
 	if has_range() {
-		rr.rep.Header().Set("Content-Range", fmt.Sprintf("bytes %v-%v/%v", offset, offset+size, size))
+		rr.rep.Header().Set("Content-Range", fmt.Sprintf("bytes %v-%v/%v", offset, offset+size-1, size))
 		rr.rep.Header().Set("Content-Length", fmt.Sprintf("%v", size))
 		if size <= 0 {
 			rr.replyCode(http.StatusNoContent)
@@ -302,7 +303,6 @@ func (rr *rawxRequest) downloadChunk() {
 			rr.replyCode(http.StatusPartialContent)
 		}
 	} else {
-		length := inChunk.Size()
 		rr.rep.Header().Set("Content-Length", fmt.Sprintf("%v", length))
 		if length <= 0 {
 			rr.replyCode(http.StatusNoContent)
