@@ -53,7 +53,7 @@ location_from_chunk_id(const gchar *chunk_id, const gchar *ns_name,
 		}
 	}
 
-	addr_info_t ai = {{0}};
+	addr_info_t ai = {{0}, 0, 0};
 	if (!err && !grid_string_to_addrinfo(netloc, &ai))
 		err = NEWERROR(CODE_INTERNAL_ERROR,
 				"could not parse [%s] to addrinfo", netloc);
@@ -94,10 +94,9 @@ get_spare_chunks(struct oio_lb_s *lb, const char *pool,
 {
 	GError *err = NULL;
 	GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
-	void _on_id(oio_location_t loc, const char *id, const char *addr UNUSED)
+	void _on_id(struct oio_lb_selected_item_s *sel, gpointer u UNUSED)
 	{
-		(void)loc;
-		char *shifted = g_strdup(id);
+		char *shifted = g_strdup(sel->item->id);
 		meta1_url_shift_addr(shifted);
 		g_ptr_array_add(ids, shifted);
 	}
@@ -160,10 +159,9 @@ get_conditioned_spare_chunks(struct oio_lb_s *lb, const char *pool,
 			ns_name, already);
 	g_rw_lock_reader_unlock(&lb->lock);
 
-	void _on_id(oio_location_t loc, const char *id, const char *addr UNUSED)
+	void _on_id(struct oio_lb_selected_item_s *sel, gpointer u UNUSED)
 	{
-		(void)loc;
-		char *shifted = g_strdup(id);
+		char *shifted = g_strdup(sel->item->id);
 		meta1_url_shift_addr(shifted);
 		g_ptr_array_add(ids, shifted);
 	}

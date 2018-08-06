@@ -330,10 +330,17 @@ struct oio_lb_pool_LOCAL_s
 
 struct polling_ctx_s
 {
-	void (*on_id) (oio_location_t location, const char *id, const char *addr);
+	/* Locations that should be avoided. */
 	const oio_location_t * avoids;
+	/* Locations that have already been selected
+	 * (before or during the request). */
 	const oio_location_t * polled;
+	/* Pointer where to save the next selected location.
+	 * At the beginning, it may point to already selected services.
+	 * In that case, these have to be checked and reorganized to
+	 * match targets. */
 	oio_location_t *next_polled;
+	/* Number of services to select. */
 	guint n_targets;
 
 	/* Count how often each location has been chosen. */
@@ -384,6 +391,30 @@ _item_make (oio_location_t location, const char *id, const char *addr)
 	g_strlcpy(out->addr, addr, sizeof(out->addr));
 	g_strlcpy(out->id, id, sizeof(out->id));
 	return out;
+}
+
+static struct oio_lb_selected_item_s *
+_item_select(const struct _lb_item_s *src)
+{
+	struct oio_lb_selected_item_s *res =  g_malloc0(sizeof *res);
+	if (src != NULL) {
+		res->item = g_malloc0(sizeof(struct oio_lb_item_s));
+		g_strlcpy(res->item->addr, src->addr, sizeof(res->item->addr));
+		g_strlcpy(res->item->id, src->id, sizeof(res->item->id));
+		res->item->location = src->location;
+		res->item->weight = src->weight;
+	}
+	return res;
+}
+
+static void
+_selected_item_free(struct oio_lb_selected_item_s *src)
+{
+	g_free((gpointer)src->item);
+	g_free((gpointer)src->expected_slot);
+	g_free((gpointer)src->final_slot);
+	memset(src, 0, sizeof(*src));
+	g_free(src);
 }
 
 static struct oio_lb_slot_s *
@@ -705,7 +736,7 @@ _search_closest_weight (GArray *tab, const guint32 needle,
 	return _search_closest_weight (tab, needle, i_pivot+1, end);
 }
 
-static gboolean
+static struct oio_lb_selected_item_s *
 _accept_item(struct oio_lb_slot_s *slot, const guint16 bit_shift,
 		gboolean reversed, struct polling_ctx_s *ctx, guint i)
 {
@@ -713,31 +744,31 @@ _accept_item(struct oio_lb_slot_s *slot, const guint16 bit_shift,
 	const oio_location_t loc = item->location;
 	// Check the item is not in "avoids" list
 	if (_item_is_too_close(ctx->avoids, loc, 0))
-		return FALSE;
+		return NULL;
 	if (reversed) {
 		// Check the item is not too far from already polled items
 		if (_item_is_too_far(ctx->polled, loc, bit_shift))
-			return FALSE;
+			return NULL;
 		// Check item has not been already polled
 		if (_item_is_too_close(ctx->polled, loc, 0))
-			return FALSE;
+			return NULL;
 	} else {
 		// Check the item is not too close to already polled items
 		if (_item_is_too_close(ctx->polled, loc,
 				ctx->check_distance? bit_shift : 0))
-			return FALSE;
+			return NULL;
 		// Check the item has not been chosen too much already
 		if (ctx->check_popularity && _item_is_too_popular(ctx, loc, slot))
-			return FALSE;
+			return NULL;
 	}
 	GRID_TRACE("Accepting item %s (0x%"OIO_LOC_FORMAT") from slot %s",
 			item->id, loc, slot->name);
-	ctx->on_id((oio_location_t)loc, item->id, item->addr);
 	*(ctx->next_polled) = loc;
 
 	_level_datalist_incr_loc(ctx->counters, loc);
 
-	return TRUE;
+	struct oio_lb_selected_item_s *selected = _item_select(item);
+	return selected;
 }
 
 /* Perform a weighted-random polling in the slot.
@@ -745,7 +776,7 @@ _accept_item(struct oio_lb_slot_s *slot, const guint16 bit_shift,
  * each item check the polled item is not in the set to be avoided.
  * The purpose of the shuffled lookup is to jump to an item with
  * a distant location. */
-static gboolean
+static struct oio_lb_selected_item_s *
 _local_slot__poll(struct oio_lb_slot_s *slot, const guint16 bit_shift,
 		gboolean reversed, struct polling_ctx_s *ctx)
 {
@@ -760,11 +791,11 @@ _local_slot__poll(struct oio_lb_slot_s *slot, const guint16 bit_shift,
 
 	if (slot->items->len == 0) {
 		GRID_TRACE2("%s slot empty", __FUNCTION__);
-		return FALSE;
+		return NULL;
 	}
 	if (slot->sum_weight == 0) {
 		GRID_TRACE2("%s no service available", __FUNCTION__);
-		return FALSE;
+		return NULL;
 	}
 
 	/* If we need to pick more items than the number of different locations,
@@ -794,24 +825,27 @@ _local_slot__poll(struct oio_lb_slot_s *slot, const guint16 bit_shift,
 	EXTRA_ASSERT ((guint)i < slot->items->len);
 
 	guint iter = 0;
+	struct oio_lb_selected_item_s *selected = NULL;
 	while (iter++ < slot->items->len) {
-		if (_accept_item(slot, bit_shift, reversed, ctx, i))
-			return TRUE;
+		if ((selected =
+				_accept_item(slot, bit_shift, reversed, ctx, i))) {
+			return selected;
+		}
 		i = (i + slot->jump) % slot->items->len;
 	}
 
 	GRID_TRACE("%s avoided everything in slot=%s", __FUNCTION__, slot->name);
-	return FALSE;
+	return NULL;
 }
 
-static gboolean
+static struct oio_lb_selected_item_s *
 _local_target__poll(struct oio_lb_pool_LOCAL_s *lb,
 		const char *target, guint16 bit_shift, struct polling_ctx_s *ctx)
 {
 	GRID_TRACE2("%s pool=%s shift=%d target=%s",
 			__FUNCTION__, lb->name, bit_shift, target);
-	gboolean res = FALSE;
 	gboolean fallback = FALSE;
+	struct oio_lb_selected_item_s *selected = NULL;
 
 	g_rw_lock_reader_lock(&lb->world->lock);
 	/* Each target is a sequence of '\0'-separated strings, terminated with
@@ -823,39 +857,46 @@ _local_target__poll(struct oio_lb_pool_LOCAL_s *lb,
 				lb->world, name);
 		if (!slot) {
 			GRID_DEBUG ("Slot [%s] not ready", name);
-		} else if (_local_slot__poll(slot, bit_shift, lb->nearby_mode, ctx)) {
-			res = TRUE;
+		} else if ((selected =
+				_local_slot__poll(slot, bit_shift, lb->nearby_mode, ctx))) {
+			selected->expected_slot = g_strdup(target);
+			selected->final_slot = g_strdup(name);
 			break;
 		}
 		fallback = TRUE;
 	}
 	g_rw_lock_reader_unlock(&lb->world->lock);
-	if (res && fallback)
+	if (selected && fallback)
 		ctx->fallback_used = TRUE;
-	return res;
+	return selected;
 }
 
 static GError*
 _local__poll (struct oio_lb_pool_s *self,
 		const oio_location_t * avoids,
-		void (*on_id) (oio_location_t, const char *, const char *),
+		oio_lb_on_id_f on_id,
 		gboolean *flawed)
 {
 	return _local__patch(self, avoids, NULL, on_id, flawed);
 }
 
-static gboolean
+static struct oio_lb_selected_item_s*
 _local_target__is_satisfied(struct oio_lb_pool_LOCAL_s *lb,
 		const char *target, struct polling_ctx_s *ctx)
 {
+	struct oio_lb_selected_item_s *selected = NULL;
+
 	if (!*(ctx->next_polled))
-		return FALSE;
+		return NULL;
 
 	/* Whatever the service is, the client provided it only for its location.
 	 * We don't check if it really exists, and consider this special target
 	 * as satisfied by default. */
-	if (!g_strcmp0(target, OIO_LB_JOKER_SVC_TARGET))
-		return TRUE;
+	if (!g_strcmp0(target, OIO_LB_JOKER_SVC_TARGET)) {
+		selected = _item_select(NULL);
+		selected->expected_slot = g_strdup(target);
+		return selected;
+	}
 
 	/* Iterate over the slots of the target to find if one of the
 	** already known locations is inside, and thus satisfies the target. */
@@ -870,6 +911,7 @@ _local_target__is_satisfied(struct oio_lb_pool_LOCAL_s *lb,
 			GRID_WARN("BUG: %s: LB reload not followed by rehash",
 					__FUNCTION__);
 		}
+		// FIXME(FVE): input should be service IDs, not locations.
 		oio_location_t *known = ctx->next_polled;
 		do {
 			guint pos = _search_first_at_location(slot->items,
@@ -883,11 +925,17 @@ _local_target__is_satisfied(struct oio_lb_pool_LOCAL_s *lb,
 					*(ctx->next_polled) = *known;
 					*known = prev;
 				}
-				return TRUE;
+				// The client does not expect already known services.
+				//const struct _lb_item_s *item = _slot_get(slot, pos);
+				//selected = _item_select(item);
+				selected = _item_select(NULL);
+				selected->expected_slot = g_strdup(target);
+				selected->final_slot = g_strdup(name);
+				return selected;
 			}
 		} while (*(++known));
 	}
-	return FALSE;
+	return NULL;
 }
 
 static inline guint16
@@ -899,8 +947,7 @@ _dist_to_bit_shift(guint16 dist, gboolean nearby_mode)
 static GError*
 _local__patch(struct oio_lb_pool_s *self,
 		const oio_location_t *avoids, const oio_location_t *known,
-		void (*on_id) (oio_location_t location, const char *id, const char *addr),
-		gboolean *flawed)
+		oio_lb_on_id_f on_id, gboolean *flawed)
 {
 	struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *) self;
 	EXTRA_ASSERT(lb != NULL);
@@ -924,8 +971,10 @@ _local__patch(struct oio_lb_pool_s *self,
 	for (; i < count_targets; i++)
 		polled[i] = 0;
 
+	GPtrArray *selection = g_ptr_array_new_with_free_func(
+			(GDestroyNotify)_selected_item_free);
+
 	struct polling_ctx_s ctx = {
-		.on_id = on_id,
 		.avoids = avoids,
 		.polled = (const oio_location_t *) polled,
 		.next_polled = polled,
@@ -952,17 +1001,21 @@ _local__patch(struct oio_lb_pool_s *self,
 	guint count = 0;
 	GError *err = NULL;
 	for (gchar **ptarget = lb->targets; *ptarget; ++ptarget) {
-		gboolean done = _local_target__is_satisfied(lb, *ptarget, &ctx);
+		struct oio_lb_selected_item_s *selected = NULL;
+		selected = _local_target__is_satisfied(lb, *ptarget, &ctx);
 		guint16 dist;
-		for (dist = start_dist; !done && dist != end_dist; dist += incr) {
-			done = _local_target__poll(lb, *ptarget,
+		for (dist = start_dist; !selected && dist != end_dist; dist += incr) {
+			selected = _local_target__poll(lb, *ptarget,
 					_dist_to_bit_shift(dist, lb->nearby_mode), &ctx);
 		}
 		dist -= incr;
 		if ((lb->nearby_mode && dist > reached_dist) ||
 				(!lb->nearby_mode && dist < reached_dist))
 			reached_dist = dist;
-		if (!done) {
+		if (selected) {
+			selected->expected_dist = start_dist;
+			selected->final_dist = dist;
+		} else {
 			/* the strings are '\0' separated, printf won't display them */
 			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "no service polled "
 					"from [%s], %u/%d services polled, %u services in slot",
@@ -972,6 +1025,7 @@ _local__patch(struct oio_lb_pool_s *self,
 		}
 		++ctx.next_polled;
 		++count;
+		g_ptr_array_add(selection, selected);
 	}
 
 	if (unlikely(GRID_DEBUG_ENABLED())) {
@@ -986,6 +1040,18 @@ _local__patch(struct oio_lb_pool_s *self,
 		for (int level = 1; level < OIO_LB_LOC_LEVELS; level++)
 			g_datalist_foreach(&ctx.counters[level],
 					_display, GUINT_TO_POINTER(level));
+		i = 0;
+		void _display_selected(gpointer element, gpointer udata UNUSED) {
+			struct oio_lb_selected_item_s *sel = element;
+			GRID_DEBUG("Selected %s at loc %016"G_GINT64_MODIFIER
+					"X, dist: %u/%u, slot: %s/%s",
+					sel->item? sel->item->id : "known service",
+					sel->item? sel->item->location : polled[i],
+					sel->final_dist, sel->expected_dist,
+					sel->final_slot, sel->expected_slot);
+			i++;
+		}
+		g_ptr_array_foreach(selection, _display_selected, NULL);
 	}
 
 	for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
@@ -993,18 +1059,27 @@ _local__patch(struct oio_lb_pool_s *self,
 	}
 	if (err != NULL) {
 		GRID_WARN("%s", err->message);
-		return err;
+	} else {
+		if (flawed) {
+			GRID_DEBUG(
+					"nearby_mode=%d, reached_dist=%u, "
+					"warn_dist=%u, fallbacks=%d",
+					lb->nearby_mode, reached_dist,
+					lb->warn_dist, ctx.fallback_used);
+			*flawed = (lb->nearby_mode && reached_dist >= lb->warn_dist) ||
+					(!lb->nearby_mode && reached_dist <= lb->warn_dist) ||
+					ctx.fallback_used;
+		}
+		void _forward(struct oio_lb_selected_item_s *sel, gpointer udata) {
+			if (sel->item)
+				on_id(sel, udata);
+			// Do not forward "known" items
+		}
+		// FIXME(FVE): change signature, specify last parameter
+		g_ptr_array_foreach(selection, (GFunc)_forward, NULL);
 	}
-	if (flawed) {
-		GRID_DEBUG(
-				"nearby_mode=%d, reached_dist=%u, warn_dist=%u, fallbacks=%d",
-				lb->nearby_mode, reached_dist, lb->warn_dist,
-				ctx.fallback_used);
-		*flawed = (lb->nearby_mode && reached_dist >= lb->warn_dist) ||
-				(!lb->nearby_mode && reached_dist <= lb->warn_dist) ||
-				ctx.fallback_used;
-	}
-	return NULL;
+	g_ptr_array_free(selection, TRUE);
+	return err;
 }
 
 struct oio_lb_item_s *

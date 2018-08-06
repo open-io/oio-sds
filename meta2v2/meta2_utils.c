@@ -1920,10 +1920,9 @@ _m2_generate_chunks(struct gen_ctx_s *ctx,
 	gint64 esize = MAX(ctx->size, 1);
 	for (gint64 s = 0; s < esize && !err; s += mcs, ++pos) {
 		GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
-		void _on_id(oio_location_t loc, const char *id, const char *addr UNUSED)
+		void _on_id(struct oio_lb_selected_item_s *sel, gpointer u UNUSED)
 		{
-			(void)loc;
-			char *shifted = g_strdup(id);
+			char *shifted = g_strdup(sel->item->id);
 			meta1_url_shift_addr(shifted);
 			g_ptr_array_add(ids, shifted);
 		}

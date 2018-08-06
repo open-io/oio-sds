@@ -507,10 +507,9 @@ __poll_services(struct meta1_backend_s *m1, guint replicas,
 		known = __locations_from_m1srvurl(m1, inplace);
 		meta1_service_url_clean(inplace[0]);
 	}
-	void _on_id(oio_location_t loc, const char *id, const char *addr UNUSED)
+	void _on_id(struct oio_lb_selected_item_s *sel, gpointer u UNUSED)
 	{
-		(void)loc;
-		g_ptr_array_add(ids, g_strdup(id));
+		g_ptr_array_add(ids, g_strdup(sel->item->id));
 	}
 	*err = oio_lb__patch_with_pool(
 			m1->lb, ct->baretype, avoid, known, _on_id, NULL);
@@ -814,8 +813,8 @@ __relink_container_services(struct m1v2_relink_input_s *in, gchar ***out)
 		if (g_strv_length((char**)known) >= max_svc) {
 			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "Too many services kept");
 		} else {
-			void _on_id(oio_location_t loc UNUSED, const char *id, const char *addr UNUSED) {
-				g_ptr_array_add(ids, g_strdup(id));
+			void _on_id(struct oio_lb_selected_item_s *sel, gpointer u UNUSED) {
+				g_ptr_array_add(ids, g_strdup(sel->item->id));
 			}
 			err = oio_lb__patch_with_pool(in->m1->lb, in->ct->baretype,
 					avoids, known, _on_id, NULL);

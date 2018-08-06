@@ -67,10 +67,11 @@ test_local_poll (void)
 	/* now poll some pools */
 	for (int i = 0; i < 4096; i++) {
 		guint count = 0;
-		void _on_item (oio_location_t location, const char *id, const char *addr UNUSED) {
-			(void) location, (void) id;
-			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT, id, location);
-			++ count;
+		void _on_item(struct oio_lb_selected_item_s *sel, gpointer u UNUSED) {
+			(void) sel;
+			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT,
+					sel->item->id, sel->item->location);
+			++count;
 		}
 		GError *err = oio_lb_pool__poll(pool, NULL, _on_item, NULL);
 		g_assert_no_error(err);
@@ -111,9 +112,10 @@ test_local_poll_same_low_bits(void)
 	/* now poll some pools */
 	for (int i = 0; i < 4096; i++) {
 		guint count = 0;
-		void _on_item (oio_location_t location, const char *id, const char *addr UNUSED) {
-			(void) location, (void) id;
-			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT, id, location);
+		void _on_item(struct oio_lb_selected_item_s *sel, gpointer u UNUSED) {
+			(void) sel;
+			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT,
+					sel->item->id, sel->item->location);
 			++ count;
 		}
 		GError *err = oio_lb_pool__poll(pool, NULL, _on_item, NULL);
@@ -188,11 +190,11 @@ _test_uniform_repartition(int services, int slots, int targets)
 	/* now poll some pools */
 	for (int i = 0; i < shots; i++) {
 		guint count = 0;
-		void _on_item(oio_location_t location, const char *id, const char *addr UNUSED) {
-			(void) location, (void) id;
-			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT, id, location);
+		void _on_item(struct oio_lb_selected_item_s *sel, gpointer u UNUSED) {
+			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT,
+					sel->item->id, sel->item->location);
 			++count;
-			counts[atoi(id+3)]++;
+			counts[atoi(sel->item->id+3)]++;
 		}
 		GError *err = oio_lb_pool__poll(pool, NULL, _on_item, NULL);
 		g_assert_no_error(err);
@@ -355,19 +357,21 @@ _test_repartition_by_loc_level(struct oio_lb_world_s *world,
 	int services = oio_lb_world__count_items(world);
 	// int counts[services];
 	// memset(counts, 0, services * sizeof(int));
-	GHashTable *counts = g_hash_table_new(g_str_hash, g_str_equal);
+	GHashTable *counts = g_hash_table_new_full(
+			g_str_hash, g_str_equal, g_free, NULL);
 	for (int i = 0; i < shots; i++) {
 		GData *count_by_level_by_host[4];
 		for (int j = 1; j < 4; j++) {
 			g_datalist_init(&count_by_level_by_host[j]);
 		}
 		guint count = 0;
-		void _on_item(oio_location_t location, const char *id, const char *addr UNUSED) {
-			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT, id, location);
+		void _on_item(struct oio_lb_selected_item_s *sel, gpointer u UNUSED) {
+			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT,
+					sel->item->id, sel->item->location);
 			++count;
 			// Count how many times an "area" is selected, for each area level.
 			for (int j = 1; j < 4; j++) {
-				GQuark host_key = key_from_loc_level(location, j);
+				GQuark host_key = key_from_loc_level(sel->item->location, j);
 				GData **datalist = &count_by_level_by_host[j];
 				guint32 host_count = GPOINTER_TO_UINT(
 						g_datalist_id_get_data(datalist, host_key));
@@ -375,8 +379,10 @@ _test_repartition_by_loc_level(struct oio_lb_world_s *world,
 				g_datalist_id_set_data(datalist,
 						host_key, GUINT_TO_POINTER(host_count));
 			}
-			gint icount = 1 + GPOINTER_TO_INT(g_hash_table_lookup(counts, id));
-			g_hash_table_replace(counts, (gpointer)id, GINT_TO_POINTER(icount));
+			gint icount = 1 + GPOINTER_TO_INT(
+					g_hash_table_lookup(counts, sel->item->id));
+			g_hash_table_replace(counts,
+					g_strdup(sel->item->id), GINT_TO_POINTER(icount));
 		}
 		GError *err = oio_lb_pool__poll(pool, NULL, _on_item, NULL);
 		g_assert_no_error(err);

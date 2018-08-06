@@ -28,8 +28,6 @@ typedef guint8 oio_weight_t;
  * an oio_weight_acc_t. We internally need this to enweight pools */
 typedef guint32 oio_weight_acc_t;
 
-typedef void (*oio_lb_on_id_f) (oio_location_t, const char *, const char*);
-
 // Defined in metautils/lib/metatypes.h
 #ifndef LIMIT_LENGTH_SRVID
 # define LIMIT_LENGTH_SRVID 64
@@ -44,6 +42,23 @@ struct oio_lb_item_s
 	gchar addr[STRLEN_ADDRINFO];
 	gchar id[LIMIT_LENGTH_SRVID];
 };
+
+struct oio_lb_selected_item_s
+{
+	struct oio_lb_item_s *item;
+	const gchar *expected_slot;
+	const gchar *final_slot;
+	guint16 expected_dist;
+	guint16 final_dist;
+};
+
+/* Signature for callbacks from `oio_lb_pool__poll` or `oio_lb_pool__patch`.
+ *
+ * First parameter represents a service which has been selected, plus the
+ * quality of the selection. Do not free it, is is owned by the load-balancer.
+ * Second parameter is a user-defined pointer passed to the polling function.
+ */
+typedef void (*oio_lb_on_id_f) (struct oio_lb_selected_item_s*, gpointer);
 
 struct oio_lb_pool_s;
 
