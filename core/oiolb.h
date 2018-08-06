@@ -30,6 +30,11 @@ typedef guint32 oio_weight_acc_t;
 
 typedef void (*oio_lb_on_id_f) (oio_location_t, const char *, const char*);
 
+// Defined in metautils/lib/metatypes.h
+#ifndef LIMIT_LENGTH_SRVID
+# define LIMIT_LENGTH_SRVID 64
+#endif
+
 #define STRLEN_ADDRINFO    sizeof("[XXXX:XXXX:XXXX:XXXX:XXXX:XXXX]:SSSSS")
 
 struct oio_lb_item_s
@@ -37,7 +42,7 @@ struct oio_lb_item_s
 	oio_location_t location;
 	oio_weight_t weight;
 	gchar addr[STRLEN_ADDRINFO];
-	gchar id[];
+	gchar id[LIMIT_LENGTH_SRVID];
 };
 
 struct oio_lb_pool_s;
