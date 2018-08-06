@@ -16,6 +16,7 @@
 # License along with this library.
 
 import string
+import time
 from os.path import isfile
 from os import remove
 from shutil import rmtree
@@ -835,6 +836,7 @@ class RawxV2TestSuite(CommonTestCase, RawxAbstractTestSuite):
             raise Exception("The RDIR server is too long to start")
         else:
             self.garbage_procs.append(child)
+            time.sleep(2)
 
         # Prepare the test env variables
         _, rawx_path, rawx_addr, _ = self.get_service_url('rawx')
