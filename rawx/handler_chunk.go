@@ -105,6 +105,8 @@ func (rr *rawxRequest) uploadChunk() {
 	if err := rr.chunk.retrieveHeaders(&rr.req.Header, rr.chunkID); err != nil {
 		logger_error.Print("Header error: ", err)
 		rr.replyError(err)
+		// Discard request body
+		io.Copy(ioutil.Discard, rr.req.Body)
 		return
 	}
 
@@ -113,6 +115,8 @@ func (rr *rawxRequest) uploadChunk() {
 	if err != nil {
 		logger_error.Print("Chunk opening error: ", err)
 		rr.replyError(err)
+		// Discard request body
+		io.Copy(ioutil.Discard, rr.req.Body)
 		return
 	}
 
