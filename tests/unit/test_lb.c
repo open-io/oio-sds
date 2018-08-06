@@ -26,16 +26,14 @@ License along with this library.
 #define LB_TESTS_DATASETS "tests/datasets"
 #endif
 
-static struct oio_lb_item_s *
-_srv (int i)
+static void
+_srv(int i, struct oio_lb_item_s *srv)
 {
 	oio_location_t loc = i+1; // discard 0
-	size_t len = LIMIT_LENGTH_SRVID + sizeof (struct oio_lb_item_s);
-	struct oio_lb_item_s *srv = g_malloc0 (len);
+	memset(srv, 0, sizeof(struct oio_lb_item_s));
 	srv->location = ((loc & ~0xFF) << 16) | (loc & 0xFF);
 	srv->weight = 90 + i;
 	sprintf(srv->id, "ID-%04d", i);
-	return srv;
 }
 
 static void
@@ -48,13 +46,13 @@ test_local_poll (void)
 	oio_lb_world__create_slot (world, "*");
 
 	/* fill some services */
+	struct oio_lb_item_s srv;
 	for (int i = 0; i < 1024; ++i) {
-		struct oio_lb_item_s *srv = _srv (i);
-		oio_lb_world__feed_slot (world, (i%2)? "1":"0", srv);
+		_srv(i, &srv);
+		oio_lb_world__feed_slot(world, (i%2)? "1":"0", &srv);
 		if (!(i%3))
-			oio_lb_world__feed_slot (world, "2", srv);
-		oio_lb_world__feed_slot (world, "*", srv);
-		g_free (srv);
+			oio_lb_world__feed_slot(world, "2", &srv);
+		oio_lb_world__feed_slot(world, "*", &srv);
 	}
 
 	oio_lb_world__purge_old_generations(world);
@@ -93,11 +91,11 @@ test_local_poll_same_low_bits(void)
 	oio_lb_world__create_slot(world, "*");
 
 	/* fill some services */
+	struct oio_lb_item_s srv;
 	for (int i = 0; i < 3; ++i) {
-		struct oio_lb_item_s *srv = _srv((i << 16) + 0x66);
-		oio_lb_world__feed_slot(world, "0", srv);
-		oio_lb_world__feed_slot(world, "*", srv);
-		g_free(srv);
+		_srv((i << 16) + 0x66, &srv);
+		oio_lb_world__feed_slot(world, "0", &srv);
+		oio_lb_world__feed_slot(world, "*", &srv);
 	}
 
 	oio_lb_world__purge_old_generations(world);
@@ -132,8 +130,7 @@ test_local_poll_same_low_bits(void)
 static struct oio_lb_item_s *
 _srv2(int i, int svc_per_slot)
 {
-	size_t len = LIMIT_LENGTH_SRVID + sizeof (struct oio_lb_item_s);
-	struct oio_lb_item_s *srv = g_malloc0 (len);
+	struct oio_lb_item_s *srv = g_malloc0(sizeof(struct oio_lb_item_s));
 	oio_location_t loc = i;
 	srv->location = loc % svc_per_slot + loc / svc_per_slot * 65536 + 1;
 	srv->weight = 80;
@@ -253,17 +250,15 @@ test_uniform_repartition(gconstpointer raw_test_data)
 			test_data->slots, test_data->targets);
 }
 
-static struct oio_lb_item_s *
-_srv3(int i, const char *loc)
+static void
+_srv3(int i, const char *loc, struct oio_lb_item_s *srv)
 {
-	size_t len = LIMIT_LENGTH_SRVID + sizeof(struct oio_lb_item_s);
-	struct oio_lb_item_s *srv = g_malloc0(len);
+	memset(srv, 0, sizeof(struct oio_lb_item_s));
 	srv->location = location_from_dotted_string(loc);
 	srv->weight = 80;
 	sprintf(srv->id, "ID-%04d", i);
 	GRID_TRACE("Built service id=%s,location=%lu,weight=%d",
 			srv->id, srv->location, srv->weight);
-	return srv;
 }
 
 static struct oio_lb_world_s *
@@ -273,9 +268,10 @@ _world_from_loc_strings(const char **locations)
 	oio_lb_world__create_slot(world, "*");
 
 	int i = 0;
+	struct oio_lb_item_s srv;
 	for (const char **loc = locations; locations && *loc; loc++, i++) {
-		struct oio_lb_item_s *srv = _srv3(i, *loc);
-		oio_lb_world__feed_slot(world, "*", srv);
+		_srv3(i, *loc, &srv);
+		oio_lb_world__feed_slot(world, "*", &srv);
 	}
 	oio_lb_world__purge_old_generations(world);
 
@@ -298,6 +294,7 @@ _world_from_file(const char *src_file)
 		g_assert_not_reached();
 	}
 
+	struct oio_lb_item_s *srv = g_alloca(sizeof(struct oio_lb_item_s));
 	gchar **lines = g_strsplit(file_contents, "\n", -1);
 	for (gchar **line = lines; lines && *line; line++) {
 		*line = g_strstrip(*line);
@@ -308,14 +305,13 @@ _world_from_file(const char *src_file)
 		char **id_loc = g_strsplit(*line, " ", 4);
 		guint elements = g_strv_length(id_loc);
 		if (elements > 0) {
-			int item_sz = sizeof(struct oio_lb_item_s) + strlen(id_loc[0]) + 1;
-			struct oio_lb_item_s *srv = g_malloc0(item_sz);
+			memset(srv, 0, sizeof(struct oio_lb_item_s));
 			strcpy(srv->id, id_loc[0]);
 
 			if (elements > 1) {
 				srv->location = location_from_dotted_string(id_loc[1]);
 			} else {
-				addr_info_t ai = {{0}};
+				addr_info_t ai = {{0}, 0, 0};
 				grid_string_to_addrinfo(id_loc[0], &ai);
 				srv->location = location_from_addr_info(&ai);
 			}
@@ -453,6 +449,7 @@ _test_repartition_by_loc_level(struct oio_lb_world_s *world,
 		GRID_WARN("%d/%d services over selected", over_selected, services);
 	if (under_selected)
 		GRID_WARN("%d/%d services under selected", under_selected, services);
+	oio_lb_pool__destroy(pool);
 }
 
 static void
@@ -501,8 +498,8 @@ static void
 test_local_feed_twice(void)
 {
 	struct oio_lb_world_s *world = oio_lb_local__create_world();
-	struct oio_lb_item_s *srv0 = g_malloc0(LIMIT_LENGTH_SRVID + sizeof (struct oio_lb_item_s));
-	struct oio_lb_item_s *srv1 = g_malloc0(LIMIT_LENGTH_SRVID + sizeof (struct oio_lb_item_s));
+	struct oio_lb_item_s *srv0 = g_malloc0(sizeof(struct oio_lb_item_s));
+	struct oio_lb_item_s *srv1 = g_malloc0(sizeof(struct oio_lb_item_s));
 	srv0->location = 42 + 65536;
 	srv0->weight = 42;
 	g_sprintf(srv0->id, "ID-%d", 42);
@@ -539,7 +536,7 @@ test_local_feed (void)
 	g_assert_cmpuint (oio_lb_world__count_slots (world), ==, 5);
 
 	for (int j = 0; j < 8; ++j) {
-		struct oio_lb_item_s *srv = g_malloc0 (LIMIT_LENGTH_SRVID + sizeof (struct oio_lb_item_s));
+		struct oio_lb_item_s *srv = g_malloc0(sizeof(struct oio_lb_item_s));
 		for (int i = 0; i < 8; ++i) {
 			srv->location = 65430 - i;
 			srv->weight = 90 + i;
@@ -566,12 +563,9 @@ static void
 test_local_feed_zero_scored(void)
 {
 	struct oio_lb_world_s *world = oio_lb_local__create_world();
-	struct oio_lb_item_s *srv0 = g_malloc0(
-			LIMIT_LENGTH_SRVID + sizeof (struct oio_lb_item_s));
-	struct oio_lb_item_s *srv1 = g_malloc0(
-			LIMIT_LENGTH_SRVID + sizeof (struct oio_lb_item_s));
-	struct oio_lb_item_s *srv2 = g_malloc0(
-			LIMIT_LENGTH_SRVID + sizeof (struct oio_lb_item_s));
+	struct oio_lb_item_s *srv0 = g_malloc0(sizeof(struct oio_lb_item_s));
+	struct oio_lb_item_s *srv1 = g_malloc0(sizeof(struct oio_lb_item_s));
+	struct oio_lb_item_s *srv2 = g_malloc0(sizeof(struct oio_lb_item_s));
 	srv0->location = 42 + 65536;
 	srv0->weight = 0;
 	g_sprintf(srv0->id, "ID-%d", 42);
@@ -639,8 +633,7 @@ _test_service_info_to_lb_item(const char *source0, oio_location_t expect)
 	err = service_info_load_json(source0, &svc0, TRUE);
 	g_assert_no_error(err);
 
-	size_t item_size = sizeof(struct oio_lb_item_s) + LIMIT_LENGTH_SRVID;
-	struct oio_lb_item_s *item0 = g_alloca(item_size);
+	struct oio_lb_item_s *item0 = g_alloca(sizeof(struct oio_lb_item_s));
 	service_info_to_lb_item(svc0, item0);
 
 	g_assert_cmpuint(78u, ==, item0->weight);

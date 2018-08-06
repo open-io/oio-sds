@@ -218,14 +218,16 @@ oio_lb_resolve_service_id(const gchar* service_id)
 
 /* -------------------------------------------------------------------------- */
 
-/* A service item, as known by the world. */
+// TODO(FVE): reorganize fields, but keep compatibility with the other struct.
+/* A service item, as known by the world.
+ * See struct oio_lb_item_s. */
 struct _lb_item_s
 {
 	oio_location_t location;
-	oio_refcount_t refcount;
 	oio_weight_t weight;
 	gchar addr[STRLEN_ADDRINFO];
-	gchar id[];
+	gchar id[LIMIT_LENGTH_SRVID];
+	oio_refcount_t refcount;
 };
 
 /* An indirection to the service item, as known by a slot.
@@ -377,11 +379,10 @@ static struct oio_lb_pool_vtable_s vtable_LOCAL =
 static struct _lb_item_s *
 _item_make (oio_location_t location, const char *id, const char *addr)
 {
-	const size_t len = strlen (id);
-	struct _lb_item_s *out = g_malloc0 (sizeof(struct _lb_item_s) + len + 1);
+	struct _lb_item_s *out = g_malloc0(sizeof(struct _lb_item_s));
 	out->location = location;
-	g_strlcpy (out->addr, addr, sizeof(out->addr));
-	memcpy(out->id, id, len + 1);
+	g_strlcpy(out->addr, addr, sizeof(out->addr));
+	g_strlcpy(out->id, id, sizeof(out->id));
 	return out;
 }
 
@@ -1288,12 +1289,11 @@ oio_lb_world__get_item(struct oio_lb_world_s *self, const char *id)
 	g_rw_lock_reader_lock(&self->lock);
 	struct _lb_item_s *item0 = g_tree_lookup(self->items, id);
 	if (item0) {
-		const size_t len = strlen(id);
-		item = g_malloc0(sizeof(struct oio_lb_item_s) + len + 1);
+		item = g_malloc0(sizeof(struct oio_lb_item_s));
 		item->location = item0->location;
 		item->weight = item0->weight;
 		memcpy(item->addr, item0->addr, sizeof(item->addr));
-		memcpy(item->id, id, len + 1);
+		g_strlcpy(item->id, id, sizeof(item->id));
 	}
 	g_rw_lock_reader_unlock(&self->lock);
 	return item;
