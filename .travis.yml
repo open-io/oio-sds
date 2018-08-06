@@ -1,6 +1,8 @@
 sudo: required
 dist: trusty
-language: c
+language: go
+go:
+  - 1.10.x
 install:
   - sudo apt-add-repository "deb http://archive.ubuntu.com/ubuntu trusty-backports main restricted universe multiverse"
   - sudo apt-add-repository "deb http://mirror.openio.io/pub/repo/openio/sds/17.04/ubuntu/trusty ./"
@@ -13,6 +15,7 @@ install:
   - pip install --upgrade pip setuptools virtualenv tox
   - pip install --upgrade -r all-requirements.txt -r test-requirements.txt
   - pip install --upgrade zkpython
+  - go get github.com/kr/beanstalk
 env:
   - TEST_SUITE=3copies,with-service-id
   - TEST_SUITE=ec,with-random-service-id
