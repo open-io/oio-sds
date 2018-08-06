@@ -1587,22 +1587,187 @@ static GError * _list_loop (struct req_args_s *args,
 	return err;
 }
 
+// CONTAINER{{
+// POST /v3.0/{NS}/container/snapshot?acct={account}&ref={container}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// .. code-block:: json
+//
+//    {
+//      "account":"destination account name",
+//      "container":"destination container name"
+//    }
+//
+// Take a snapshot of a container. Create a separate database containing all
+// information about the contents from the original database, but with copies of
+// the chunks at the time of the snapshot. This new database is not replicated.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/container/snapshot?acct=my_account&ref=mycontainer HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 44
+//    Content-Type: application/x-www-form-urlencoded
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}CONTAINER
 enum http_rc_e action_container_snapshot(struct req_args_s *args) {
 	return rest_action(args, _m2_container_snapshot);
 }
 
+// CONTAINER{{
+// POST /v3.0/{NS}/container/create_many?acct={account}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// For each container, you can specify system and properties value
+// by adding them on dictionnary after container name.
+// Syntax is same as "container create"
+//
+// .. code-block:: json
+//
+//    {
+//      "containers":[{"name":"cont0"}, {"name":"cont1", "properties":{"test":"1"}}]
+//    }
+//
+// Create containers with given configuration and name.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/container/create_many?acct=my_account HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 78
+//    Content-Type: application/x-www-form-urlencoded
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 106
+//
+// .. code-block:: json
+//
+//    {
+//      "containers":[
+//                     {"name":"cont0","status":201,"message":"ok"},
+//                     {"name":"cont1","status":201,"message":"ok"}
+//                   ]
+//    }
+//
+// }}CONTAINER
 enum http_rc_e action_container_create_many (struct req_args_s *args) {
 	return rest_action(args, _m2_container_create_many);
 }
 
+// CONTAINER{{
+// POST /v3.0/{NS}/container/create?acct={account}&ref={container}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// System and properties value are optional
+//
+// .. code-block:: text
+//
+//    {
+//      "system":{"sys.m2.quota": val, "sys.m2.policy.storage": policy, ...},
+//      "properties":{"test":"1", ...}
+//    }
+//
+// Create container with given configuration.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/container/create?acct=my_account&ref=mycontainer HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 30
+//    Content-Type: application/x-www-form-urlencoded
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 201 CREATED
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}CONTAINER
 enum http_rc_e action_container_create (struct req_args_s *args) {
 	return rest_action(args, _m2_container_create);
 }
 
+// CONTAINER{{
+// POST /v3.0/{NS}/container/destroy?acct={account}&ref={container}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// Delete container.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/container/destroy?acct=my_account&ref=mycontainer HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}CONTAINER
 enum http_rc_e action_container_destroy (struct req_args_s *args) {
 	return action_m2_container_destroy (args);
 }
 
+// CONTAINER{{
+// GET /v3.0/{NS}/container/list?acct={account}&ref={container}&properties={bool}&max={int}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// List object of container.
+// In this example, only 2 objects are given without their properties
+//
+// .. code-block:: http
+//
+//    GET /v3.0/OPENIO/container/list?acct=my_account&ref=mycontainer&properties=False%max=2 HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 857
+//    x-oio-container-meta-sys-account: my_account
+//    x-oio-container-meta-sys-m2-ctime: 1533286343746147
+//    x-oio-container-meta-sys-m2-init: 1
+//    x-oio-container-meta-sys-m2-objects: 2
+//    x-oio-container-meta-sys-m2-usage: 360
+//    x-oio-container-meta-sys-m2-version: 2
+//    x-oio-container-meta-sys-name: B6A905025EBA78C555B4437321C176B4F9CC1EF49A45BBA8FA561D7F08592D2D.1
+//    x-oio-container-meta-sys-ns: OPENIO
+//    x-oio-container-meta-sys-status: 0
+//    x-oio-container-meta-sys-type: meta2
+//    x-oio-container-meta-sys-user-name: mycontainer
+//    x-oio-list-marker: obj2
+//    x-oio-list-truncated: true
+//
+// .. code-block:: text
+//
+//    {"prefixes":[], ...}
+//
+// }}CONTAINER
 enum http_rc_e action_container_list (struct req_args_s *args) {
 	struct list_result_s list_out = {0};
 	struct list_params_s list_in = {0};
@@ -1679,6 +1844,47 @@ enum http_rc_e action_container_list (struct req_args_s *args) {
 	return rc;
 }
 
+// CONTAINER{{
+// GET /v3.0/{NS}/container/show?acct={account}&ref={container}&properties={bool}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Show container information, and return container properties
+//
+// .. code-block:: http
+//
+//    GET /v3.0/OPENIO/container/show?acct=my_account&ref=mycontainer HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 17
+//    x-oio-container-meta-sys-account: my_account
+//    x-oio-container-meta-sys-m2-ctime: 1533286343746147
+//    x-oio-container-meta-sys-m2-init: 1
+//    x-oio-container-meta-sys-m2-objects: 2
+//    x-oio-container-meta-sys-m2-usage: 360
+//    x-oio-container-meta-sys-m2-version: 2
+//    x-oio-container-meta-sys-name: B6A905025EBA78C555B4437321C176B4F9CC1EF49A45BBA8FA561D7F08592D2D.1
+//    x-oio-container-meta-sys-ns: OPENIO
+//    x-oio-container-meta-sys-status: 0
+//    x-oio-container-meta-sys-type: meta2
+//    x-oio-container-meta-sys-user-name: mycontainer
+//    x-oio-container-meta-x-schema-version: 1.8
+//    x-oio-container-meta-x-version-main-admin: 1%3A0
+//    x-oio-container-meta-x-version-main-aliases: 1%3A0
+//    x-oio-container-meta-x-version-main-chunks: 1%3A0
+//    x-oio-container-meta-x-version-main-contents: 1%3A0
+//    x-oio-container-meta-x-version-main-properties: 1%3A0
+//
+// .. code-block:: json
+//
+//   {"properties":{}}
+//
+// }}CONTAINER
 enum http_rc_e action_container_show (struct req_args_s *args) {
 	GError *err = NULL;
 
@@ -1737,30 +1943,195 @@ enum http_rc_e action_container_show (struct req_args_s *args) {
 	return _reply_success_json (args, body);
 }
 
+// CONTAINER{{
+// POST /v3.0/{NS}/container/touch?acct={account}&ref={container}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// Send an event to update object and object size on container.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/container/touch?acct=my_account&ref=mycontainer HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}CONTAINER
 enum http_rc_e action_container_touch (struct req_args_s *args) {
 	return rest_action (args, action_m2_container_touch);
 }
 
+// CONTAINER{{
+// POST /v3.0/{NS}/container/dedup?acct={account}&ref={container}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/container/dedup?acct=my_account&ref=mycontainer HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}CONTAINER
 enum http_rc_e action_container_dedup (struct req_args_s *args) {
 	return rest_action (args, action_m2_container_dedup);
 }
 
+// CONTAINER{{
+// POST /v3.0/{NS}/container/purge?acct={account}&ref={container}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Purge exceeding object versions.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/container/purge?acct=my_account&ref=mycontainer HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}CONTAINER
 enum http_rc_e action_container_purge (struct req_args_s *args) {
 	return rest_action (args, action_m2_container_purge);
 }
 
+// CONTAINER{{
+// POST /v3.0/{NS}/container/flush?acct={account}&ref={container}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Remove object of container.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/container/flush?acct=my_account&ref=mycontainer HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}CONTAINER
 enum http_rc_e action_container_flush (struct req_args_s *args) {
 	return rest_action (args, action_m2_container_flush);
 }
 
+// CONTAINER{{
+// POST /v3.0/{NS}/container/get_properties?acct={account}&ref={container}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Get container properties.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/container/get_properties?acct=my_account&ref=mycontainer HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 515
+//
+// .. code-block:: text
+//
+//   {"properties":[], ...}
+//
+// }}CONTAINER
 enum http_rc_e action_container_prop_get (struct req_args_s *args) {
 	return rest_action (args, action_m2_container_propget);
 }
 
+// CONTAINER{{
+// POST /v3.0/{NS}/container/set_properties?acct={account}&ref={container}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// .. code-block:: json
+//
+//    {
+//      "system":{},
+//      "properties":{"test":"1"}
+//    }
+//
+// Set container properties.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/container/set_properties?acct=my_account&ref=mycontainer HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 40
+//    Content-Type: application/x-www-form-urlencoded
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 2
+//
+// .. code-block:: json
+//
+//   {}
+//
+// }}CONTAINER
 enum http_rc_e action_container_prop_set (struct req_args_s *args) {
 	return rest_action (args, action_m2_container_propset);
 }
 
+// CONTAINER{{
+// POST /v3.0/{NS}/container/del_properties?acct={account}&ref={container}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// .. code-block:: json
+//
+//    ["test"]
+//
+// Delete container properties.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/container/del_properties?acct=my_account&ref=mycontainer HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 8
+//    Content-Type: application/x-www-form-urlencoded
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 2
+//
+// .. code-block:: json
+//
+//   {}
+//
+// }}CONTAINER
 enum http_rc_e action_container_prop_del (struct req_args_s *args) {
 	return rest_action (args, action_m2_container_propdel);
 }
@@ -1785,6 +2156,7 @@ static enum http_rc_e action_m2_content_prepare (struct req_args_s *args,
 	struct json_object *jsize = NULL, *jpol = NULL;
 	json_object_object_get_ex(jargs, "size", &jsize);
 	json_object_object_get_ex(jargs, "policy", &jpol);
+
 	const gchar *strsize = !jsize ? NULL : json_object_get_string (jsize);
 	const gchar *stgpol = !jpol ? NULL : json_object_get_string (jpol);
 
@@ -2054,21 +2426,123 @@ action_m2_content_purge (struct req_args_s *args, struct json_object *j UNUSED)
 
 /* CONTENT resources ------------------------------------------------------- */
 
-/*
-CONTAINER{{
-POST /v3.0/{NS}/content/create
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-}}CONTAINER
-*/
+// CONTENT{{
+// POST /v3.0/{NS}/content/create?acct=<account_name>&ref=<container_name>&path=<file_path>
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// .. code-block:: json
+//
+//    [
+//      {
+//        "url":"http://127.0.0.1:6012/D3F2...",
+//        "pos":"0",
+//        "size":1048576,
+//        "hash":"00000000000000000000000000000000"
+//      }
+//    ]
+//
+// You must specify content length and ID on header
+//
+// .. code-block:: text
+//
+//    "x-oio-content-meta-id: 2996752DFD7205006B73F17AD315AA2B"
+//    "x-oio-content-meta-length: 64"
+//
+// Create a new object. This method does not upload any data, it just
+// registers object metadata in the database.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/content/create?acct=my_account&ref=mycontainer&path=mycontent HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    x-oio-content-meta-length: 64
+//    x-oio-content-meta-id: 2996752DFD7205006B73F17AD315AA2B
+//    Content-Length: 165
+//    Content-Type: application/x-www-form-urlencoded
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}CONTENT
 enum http_rc_e action_content_put (struct req_args_s *args) {
 	return rest_action(args, action_m2_content_create);
 }
 
+// CONTENT{{
+// POST /v3.0/{NS}/content/update?acct=<account_name>&ref=<container_name>&path=<file_path>
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// .. code-block:: json
+//
+//    [
+//      {
+//        "url":"http://127.0.0.1:6012/D3F2...",
+//        "pos":"0",
+//        "size":1048576,
+//        "hash":"00000000000000000000000000000000"
+//      }
+//    ]
+//
+// You must specify content length and ID on header
+//
+// .. code-block:: text
+//
+//    "x-oio-content-meta-id: 2996752DFD7205006B73F17AD315AA2B"
+//    "x-oio-content-meta-length: 64"
+//
+// Update existing object. This method does not upload any data, it just
+// registers updated object metadata in the database.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/content/update?acct=my_account&ref=mycontainer&path=mycontent HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    x-oio-content-meta-length: 64
+//    x-oio-content-meta-id: 2996752DFD7205006B73F17AD315AA2B
+//    Content-Length: 165
+//    Content-Type: application/x-www-form-urlencoded
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}CONTENT
 enum http_rc_e action_content_update(struct req_args_s *args) {
 	return rest_action(args, _m2_content_update);
 }
 
+
+// CONTENT{{
+// POST /v3.0/{NS}/content/truncate?acct={account}&ref={container}&path={file path}&size={int}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Truncate object at specified size.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/content/truncate?acct=my_account&ref=mycontainer&path=mycontent&size=180 HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connetion: Close
+//    Content-Length: 0
+//
+// }}CONTENT
 enum http_rc_e action_content_truncate(struct req_args_s *args) {
 	GError *err = NULL;
 	const char *size_str = OPT("size");
@@ -2086,10 +2560,87 @@ enum http_rc_e action_content_truncate(struct req_args_s *args) {
 	return _reply_m2_error(args, err);
 }
 
+// CONTENT{{
+// POST /v3.0/{NS}/content/prepare?acct={account}&ref={container}&path={file path}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// .. code-block:: json
+//
+//    {
+//      "size": 42,
+//      "policy": "SINGLE"
+//    }
+//
+// Prepare an upload: get URLs of chunks on available rawx.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/content/prepare?acct=my_account&ref=mycontainer&path=mycontent HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 31
+//    Content-Type: application/x-www-form-urlencoded
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 276
+//    x-oio-ns-chunk-size: 1048576
+//    x-oio-content-meta-chunk-method: plain/nb_copy=1
+//    x-oio-content-meta-ctime: 1533215985
+//    x-oio-content-meta-deleted: False
+//    x-oio-content-meta-hash-method: md5
+//    x-oio-content-meta-id: B03A29AA737205002C4D414D4C12FDC5
+//    x-oio-content-meta-length: 180
+//    x-oio-content-meta-mime-type: application/octet-stream
+//    x-oio-content-meta-name: mycontent
+//    x-oio-content-meta-policy: SINGLE
+//    x-oio-content-meta-version: 1533215985187506
+//
+// }}CONTENT
 enum http_rc_e action_content_prepare (struct req_args_s *args) {
 	return rest_action (args, action_m2_content_prepare);
 }
 
+// CONTENT{{
+// GET /v3.0/{NS}/content/show?acct={account}&ref={container}&path={file path}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Get a description of the content along with its user properties.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/content/show?acct=my_account&ref=mycontainer&path=mycontent HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 272
+//    x-oio-content-meta-chunk-method: plain/nb_copy=1
+//    x-oio-content-meta-ctime: 1533546157
+//    x-oio-content-meta-deleted: False
+//    x-oio-content-meta-hash: 26CBCBBF52F37322FAC57B8AC0E4E130
+//    x-oio-content-meta-hash-method: md5
+//    x-oio-content-meta-id: FB35FC89C072050065F28C69311740F6
+//    x-oio-content-meta-length: 180
+//    x-oio-content-meta-mime-type: application/octet-stream
+//    x-oio-content-meta-name: mycontent
+//    x-oio-content-meta-policy: SINGLE
+//    x-oio-content-meta-version: 1533546157848061
+//
+// .. code-block:: text
+//
+//    [{"url":"http://127.0.0.1:6012/BADD4...", ...}]
+//
+// }}CONTENT
 enum http_rc_e action_content_show (struct req_args_s *args) {
 	GSList *beans = NULL;
 	guint32 flags = flag_force_master ? M2V2_FLAG_MASTER : 0;
@@ -2102,6 +2653,25 @@ enum http_rc_e action_content_show (struct req_args_s *args) {
 	return _reply_simplified_beans (args, err, beans, TRUE);
 }
 
+// CONTENT{{
+// POST /v3.0/{NS}/content/delete?acct={account}&ref={container}&path={file path}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Unreference object from container
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/content/delete?acct=my_account&ref=mycontainer&path=mycontent HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}CONTENT
 enum http_rc_e action_content_delete (struct req_args_s *args) {
 	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url, DL()); }
 	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
@@ -2161,36 +2731,255 @@ _m2_content_delete_many (struct req_args_s *args, struct json_object * jbody) {
 	return _reply_success_json(args, gresponse);
 }
 
+// CONTENT{{
+// POST /v3.0/{NS}/content/delete_many?acct={account}&ref={container}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// .. code-block:: json
+//
+//    {
+//      "contents":[{"name":"content0"}, {"name":"content1"}]
+//    }
+//
+// Unreference many object from container
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/content/delete_many?acct=my_account&ref=mycontainer HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 55
+//    Content-Type: application/x-www-form-urlencoded
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 146
+//
+// .. code-block:: json
+//
+//    {
+//      "contents":[{"name":"content0","status":204,"message":"ok"},{"name":"content1","status":204,"message":"ok"}]
+//    }
+//
+// }}CONTENT
 enum http_rc_e action_content_delete_many (struct req_args_s *args) {
 	return rest_action(args, _m2_content_delete_many);
 }
 
+// CONTENT{{
+// POST /v3.0/{NS}/content/touch?acct={account}&ref={container}&path={file path}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Send an event to update object and object size on container.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/content/touch?acct=my_account&ref=mycontainer&path=mycontent HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}CONTENT
 enum http_rc_e action_content_touch (struct req_args_s *args) {
 	return rest_action (args, action_m2_content_touch);
 }
 
+// CONTENT{{
+// POST /v3.0/{NS}/content/spare?acct={account_name}&ref={container_name}&path={file_path}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// .. code-block:: text
+//
+//    {"notin": <list of actual chunk>, "broken": <list of broken chunk>}
+//
+//
+// Get other chunks if chunks are broken. Don't work with single storage policy
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/content/spare?acct=my_account&ref=mycontainer&path=mycontent HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    x-oio-content-meta-length: 64
+//    x-oio-content-meta-id: 2996752DFD7205006B73F17AD315AA2B
+//    Content-Length: 182
+//    Content-Type: application/x-www-form-urlencoded
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 292
+//
+// .. code-block:: json
+//
+//    {
+//      "aliases":[],
+//      "headers":[],
+//      "chunks":[{"id":"http:\/\/127.0.0.1:6011\/FFD794D6527AC176..."}]
+//    }
+//
+// }}CONTENT
 enum http_rc_e action_content_spare (struct req_args_s *args) {
 	return rest_action (args, action_m2_content_spare);
 }
 
+// CONTENT{{
+// POST /v3.0/{NS}/content/get_properties?acct={account}&ref={container}&path={file path}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Get object properties.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/content/get_properties?acct=my_account&ref=mycontainer&path=mycontent HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 17
+//    x-oio-content-meta-chunk-method: plain/nb_copy=1
+//    x-oio-content-meta-ctime: 1533215985
+//    x-oio-content-meta-deleted: False
+//    x-oio-content-meta-hash: 26CBCBBF52F37322FAC57B8AC0E4E130
+//    x-oio-content-meta-hash-method: md5
+//    x-oio-content-meta-id: B03A29AA737205002C4D414D4C12FDC5
+//    x-oio-content-meta-length: 180
+//    x-oio-content-meta-mime-type: application/octet-stream
+//    x-oio-content-meta-name: mycontent
+//    x-oio-content-meta-policy: SINGLE
+//    x-oio-content-meta-version: 1533215985187506
+//
+//    {"properties":{}}
+//
+// }}CONTENT
 enum http_rc_e action_content_prop_get (struct req_args_s *args) {
 	return rest_action (args, action_m2_content_propget);
 }
 
+// CONTENT{{
+// POST /v3.0/{NS}/content/set_properties?acct={account}&ref={container}?&path={file path}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// .. code-block:: json
+//
+//    {
+//      "properties":{"test":"1"}
+//    }
+//
+// Set object properties.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/content/set_properties?acct=my_account&ref=mycontainer&path=mycontent HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 27
+//    Content-Type: application/x-www-form-urlencoded
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}CONTENT
 enum http_rc_e action_content_prop_set (struct req_args_s *args) {
 	return rest_action (args, action_m2_content_propset);
 }
 
+// CONTENT{{
+// POST /v3.0/{NS}/content/del_properties?acct={account}&ref={container}?&path={file path}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// .. code-block:: json
+//
+//    ["test"]
+//
+// Delete object properties.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/content/del_properties?acct=my_account&ref=mycontainer&path=mycontent HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 8
+//    Content-Type: application/x-www-form-urlencoded
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}CONTENT
 enum http_rc_e action_content_prop_del (struct req_args_s *args) {
 	return rest_action (args, action_m2_content_propdel);
 }
 
+// CONTENT{{
+// POST /v3.0/{NS}/content/drain?acct={account}&ref={container}&path={file path}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Remove all the chunks of a content but keep the properties. We can replace the
+// data or the properties of the content but no action needing the removed chunks
+// are accepted
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/content/drain?acct=my_account&ref=mycontainer&path=mycontent HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}CONTENT
 enum http_rc_e action_content_drain(struct req_args_s *args) {
 	PACKER_VOID(_pack) {return m2v2_remote_pack_DRAIN(args->url, DL());}
 	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	return _reply_m2_error(args, err);
 }
 
+// CONTENT{{
+// POST /v3.0/{NS}/content/purge?acct={account}&ref={container}&path={file path}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Purge object content.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/content/purge?acct=my_account&ref=mycontainer&path=mycontent HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}CONTENT
 enum http_rc_e action_content_purge (struct req_args_s *args) {
 	return rest_action (args, action_m2_content_purge);
 }
