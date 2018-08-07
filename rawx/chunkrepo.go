@@ -17,7 +17,7 @@
 package main
 
 /*
-Wraps the sile repository to add chunk-related handlings, e.g. transparent compression,
+Wraps the file repository to add chunk-related handlings, e.g. transparent compression,
 alternative file names, etc.
 */
 
