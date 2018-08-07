@@ -96,7 +96,8 @@ func main() {
 		log.Fatal("Exiting with error: ", err.Error())
 	}
 
-	checkNS(opts["ns"])
+	namespace := opts["ns"]
+	checkNS(namespace)
 	checkURL(opts["addr"])
 
 	// No service ID specified, using the service address instead
@@ -113,17 +114,21 @@ func main() {
 	filerepo.fallocate_file = opts.getBool("fallocate", filerepo.fallocate_file)
 
 	chunkrepo := MakeChunkRepository(filerepo)
-	if err := chunkrepo.Lock(opts["ns"], opts["id"]); err != nil {
+	if err := chunkrepo.Lock(namespace, opts["id"]); err != nil {
 		logger_error.Fatal("Volume lock error: ", err.Error())
 	}
 
-	notifier, err := MakeBeanstalkNotifier("127.0.0.1:6009", "oio") // TODO(adu)
+	eventAgent := OioGetEventAgent(namespace)
+	if eventAgent == "" {
+		logger_error.Fatal("Notifier error: no address")
+	}
+	notifier, err := MakeBeanstalkNotifier(eventAgent, "oio") // TODO(adu)
 	if err != nil {
 		logger_error.Fatal("Notifier error: ", err)
 	}
 
 	rawx := rawxService{
-		ns:       opts["ns"],
+		ns:       namespace,
 		id:       opts["id"],
 		url:      opts["addr"],
 		repo:     chunkrepo,

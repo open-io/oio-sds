@@ -15,6 +15,7 @@ install:
   - pip install --upgrade pip setuptools virtualenv tox
   - pip install --upgrade -r all-requirements.txt -r test-requirements.txt
   - pip install --upgrade zkpython
+  - go get gopkg.in/ini.v1
   - go get github.com/kr/beanstalk
 env:
   - TEST_SUITE=3copies,with-service-id
