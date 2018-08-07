@@ -66,11 +66,6 @@ func checkUrl(url string) bool {
 	return true
 }
 
-func checkNamespace(ns string) bool {
-	ok, _ := regexp.MatchString("[0-9a-zA-Z]+(\\.[0-9a-zA-Z]+)*", ns)
-	return ok
-}
-
 func checkMakeFileRepo(dir string) *FileRepository {
 	basedir := filepath.Clean(dir)
 	if !filepath.IsAbs(basedir) {
