@@ -13,7 +13,7 @@ func TestList_empty(t *testing.T) {
 	} else {
 		defer os.RemoveAll(tmpdir)
 		var rc ListSlice
-		filerepo := MakeFileRepository(tmpdir, nil)
+		filerepo := MakeFileRepository(tmpdir)
 		rc, err = filerepo.List("", "", 100)
 		if err != nil {
 			t.Error("List fail: ", err)

@@ -42,55 +42,55 @@ type rawxService struct {
 }
 
 type rawxRequest struct {
-	rawx       *rawxService
-	req        *http.Request
-	rep        http.ResponseWriter
-	stats_hits int
-	stats_time int
-	reqid      string
+	rawx      *rawxService
+	req       *http.Request
+	rep       http.ResponseWriter
+	statsHits int
+	statsTime int
+	reqid     string
 
 	chunkID string
 	chunk   chunkInfo
 
 	// for the reply's purpose
-	status    int
-	bytes_out uint64
+	status   int
+	bytesOut uint64
 }
 
-func (self *rawxRequest) replyCode(code int) {
-	self.status = code
-	self.rep.WriteHeader(self.status)
+func (rr *rawxRequest) replyCode(code int) {
+	rr.status = code
+	rr.rep.WriteHeader(rr.status)
 }
 
-func (self *rawxRequest) replyError(err error) {
+func (rr *rawxRequest) replyError(err error) {
 	if os.IsExist(err) {
-		self.replyCode(http.StatusConflict)
+		rr.replyCode(http.StatusConflict)
 	} else if os.IsPermission(err) {
-		self.replyCode(http.StatusForbidden)
+		rr.replyCode(http.StatusForbidden)
 	} else if os.IsNotExist(err) {
-		self.replyCode(http.StatusNotFound)
+		rr.replyCode(http.StatusNotFound)
 	} else {
-		setError(self.rep, err)
+		setError(rr.rep, err)
 		if err == os.ErrInvalid {
-			self.replyCode(http.StatusBadRequest)
+			rr.replyCode(http.StatusBadRequest)
 		} else {
 			switch err {
 			case ErrInvalidChunkID:
-				self.replyCode(http.StatusBadRequest)
+				rr.replyCode(http.StatusBadRequest)
 			case ErrMissingHeader:
-				self.replyCode(http.StatusBadRequest)
+				rr.replyCode(http.StatusBadRequest)
 			case ErrInvalidHeader:
-				self.replyCode(http.StatusBadRequest)
+				rr.replyCode(http.StatusBadRequest)
 			case ErrInvalidRange:
-				self.replyCode(http.StatusRequestedRangeNotSatisfiable)
+				rr.replyCode(http.StatusRequestedRangeNotSatisfiable)
 			default:
-				self.replyCode(http.StatusInternalServerError)
+				rr.replyCode(http.StatusInternalServerError)
 			}
 		}
 	}
 }
 
-func (self *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
+func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 	pre := time.Now()
 
 	// Sanitizes the Path, trim repeated separators, etc
@@ -110,15 +110,15 @@ func (self *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 
 	// Forward to the request method
 	rawxreq := rawxRequest{
-		rawx:       self,
-		req:        req,
-		rep:        rep,
-		stats_time: TimeOther,
-		stats_hits: HitsOther,
-		reqid:      reqid,
+		rawx:      rawx,
+		req:       req,
+		rep:       rep,
+		statsTime: TimeOther,
+		statsHits: HitsOther,
+		reqid:     reqid,
 	}
 
-	if len(req.Host) > 0 && (req.Host != self.id && req.Host != self.url) {
+	if len(req.Host) > 0 && (req.Host != rawx.id && req.Host != rawx.url) {
 		rawxreq.replyCode(http.StatusTeapot)
 	} else {
 		if req.URL.Path == "/info" || req.URL.Path == "/stat" {
@@ -131,15 +131,15 @@ func (self *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 	spent := uint64(time.Since(pre).Nanoseconds() / 1000)
 
 	// Increment counters and log the request
-	counters.Increment(rawxreq.stats_hits)
-	counters.Add(rawxreq.stats_time, spent)
+	counters.Increment(rawxreq.statsHits)
+	counters.Add(rawxreq.statsTime, spent)
 	counters.Increment(HitsTotal)
 	counters.Add(TimeTotal, spent)
 
 	trace := fmt.Sprintf(
 		"%d - INF %s %s %s %d %d %d %s %s",
-		os.Getpid(), self.url, req.RemoteAddr, req.Method,
-		rawxreq.status, spent, rawxreq.bytes_out,
+		os.Getpid(), rawx.url, req.RemoteAddr, req.Method,
+		rawxreq.status, spent, rawxreq.bytesOut,
 		rawxreq.reqid, req.URL.Path)
-	logger_access.Print(trace)
+	loggerAccess.Print(trace)
 }

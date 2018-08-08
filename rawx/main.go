@@ -32,8 +32,8 @@ import (
 )
 
 var (
-	logger_access *log.Logger = nil
-	logger_error  *log.Logger = nil
+	loggerAccess *log.Logger
+	loggerError  *log.Logger
 )
 
 func checkURL(url string) {
@@ -55,17 +55,6 @@ func usage(why string) {
 	log.Fatal(why)
 }
 
-func checkUrl(url string) bool {
-	addr, err := net.ResolveTCPAddr("tcp", url)
-	if err != nil {
-		return false
-	}
-	if addr.Port <= 0 {
-		return false
-	}
-	return true
-}
-
 func checkMakeFileRepo(dir string) *FileRepository {
 	basedir := filepath.Clean(dir)
 	if !filepath.IsAbs(basedir) {
@@ -83,8 +72,8 @@ func main() {
 		log.Fatal("Unexpected positional argument detected")
 	}
 
-	logger_access, _ = syslog.NewLogger(syslog.LOG_INFO|syslog.LOG_LOCAL0, 0)
-	logger_error, _ = syslog.NewLogger(syslog.LOG_INFO|syslog.LOG_LOCAL1, 0)
+	loggerAccess, _ = syslog.NewLogger(syslog.LOG_INFO|syslog.LOG_LOCAL0, 0)
+	loggerError, _ = syslog.NewLogger(syslog.LOG_INFO|syslog.LOG_LOCAL1, 0)
 
 	var opts optionsMap
 
@@ -103,28 +92,28 @@ func main() {
 	// No service ID specified, using the service address instead
 	if len(opts["id"]) <= 0 {
 		opts["id"] = opts["addr"]
-		logger_error.Print("No service ID, using ADDR ", opts["addr"])
+		loggerError.Print("No service ID, using ADDR ", opts["addr"])
 	}
 
 	filerepo := checkMakeFileRepo(opts["basedir"])
 	filerepo.HashWidth = opts.getInt("hash_width", filerepo.HashWidth)
 	filerepo.HashDepth = opts.getInt("hash_depth", filerepo.HashDepth)
-	filerepo.sync_file = opts.getBool("fsync_file", filerepo.sync_file)
-	filerepo.sync_dir = opts.getBool("fsync_dir", filerepo.sync_dir)
-	filerepo.fallocate_file = opts.getBool("fallocate", filerepo.fallocate_file)
+	filerepo.SyncFile = opts.getBool("fsync_file", filerepo.SyncFile)
+	filerepo.SyncDir = opts.getBool("fsync_dir", filerepo.SyncDir)
+	filerepo.FallocateFile = opts.getBool("fallocate", filerepo.FallocateFile)
 
 	chunkrepo := MakeChunkRepository(filerepo)
 	if err := chunkrepo.Lock(namespace, opts["id"]); err != nil {
-		logger_error.Fatal("Volume lock error: ", err.Error())
+		loggerError.Fatal("Volume lock error: ", err.Error())
 	}
 
 	eventAgent := OioGetEventAgent(namespace)
 	if eventAgent == "" {
-		logger_error.Fatal("Notifier error: no address")
+		loggerError.Fatal("Notifier error: no address")
 	}
 	notifier, err := MakeNotifier(eventAgent)
 	if err != nil {
-		logger_error.Fatal("Notifier error: ", err)
+		loggerError.Fatal("Notifier error: ", err)
 	}
 
 	rawx := rawxService{
@@ -137,6 +126,6 @@ func main() {
 	}
 
 	if err = http.ListenAndServe(rawx.url, &rawx); err != nil {
-		logger_error.Fatal("HTTP error: ", err)
+		loggerError.Fatal("HTTP error: ", err)
 	}
 }

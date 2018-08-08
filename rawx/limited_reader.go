@@ -25,9 +25,9 @@ type limitedReader struct {
 	remaining int64
 }
 
-func (self *limitedReader) Read(p []byte) (int, error) {
+func (reader *limitedReader) Read(p []byte) (int, error) {
 
-	if self.remaining <= 0 {
+	if reader.remaining <= 0 {
 		return 0, io.EOF
 	}
 
@@ -35,25 +35,25 @@ func (self *limitedReader) Read(p []byte) (int, error) {
 	var err error
 
 	// Determine the max numer of bytes that can be read
-	if int64(len(p)) > self.remaining {
-		l := int(self.remaining)
+	if int64(len(p)) > reader.remaining {
+		l := int(reader.remaining)
 		buf := make([]byte, l, l)
-		n, err = self.sub.Read(buf)
+		n, err = reader.sub.Read(buf)
 		if err == nil {
 			copy(p, buf)
 		}
 	} else {
-		n, err = self.sub.Read(p)
+		n, err = reader.sub.Read(p)
 	}
 
-	if err == io.EOF && self.remaining > 0 {
+	if err == io.EOF && reader.remaining > 0 {
 		err = ErrRangeNotSatisfiable
 	} else if err == nil {
-		self.remaining = self.remaining - int64(n)
+		reader.remaining = reader.remaining - int64(n)
 	}
 	return n, err
 }
 
-func (self *limitedReader) Close() error {
+func (reader *limitedReader) Close() error {
 	return nil
 }
