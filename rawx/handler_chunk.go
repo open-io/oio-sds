@@ -33,7 +33,7 @@ import (
 const bufSize = 1024 * 1024
 
 var (
-	AttrValueZLib []byte = []byte{'z', 'l', 'i', 'b'}
+	AttrValueZLib = []byte{'z', 'l', 'i', 'b'}
 )
 
 var (
@@ -68,7 +68,7 @@ func (rr *rawxRequest) retrieveChunkID() error {
 func putData(out io.Writer, ul *upload) error {
 	running := true
 	remaining := *(ul.length)
-	logger_error.Printf("Uploading %v bytes", remaining)
+	loggerError.Printf("Uploading %v bytes", remaining)
 	chunkHash := md5.New()
 	buf := make([]byte, bufSize)
 	for running && remaining != 0 {
@@ -77,7 +77,7 @@ func putData(out io.Writer, ul *upload) error {
 			max = remaining
 		}
 		n, err := ul.in.Read(buf[:max])
-		logger_error.Printf("consumed %v / %s", n, err)
+		loggerError.Printf("consumed %v / %s", n, err)
 		if n > 0 {
 			if remaining > 0 {
 				remaining = remaining - int64(n)
@@ -103,7 +103,7 @@ func putData(out io.Writer, ul *upload) error {
 
 func (rr *rawxRequest) uploadChunk() {
 	if err := rr.chunk.retrieveHeaders(&rr.req.Header, rr.chunkID); err != nil {
-		logger_error.Print("Header error: ", err)
+		loggerError.Print("Header error: ", err)
 		rr.replyError(err)
 		// Discard request body
 		io.Copy(ioutil.Discard, rr.req.Body)
@@ -113,7 +113,7 @@ func (rr *rawxRequest) uploadChunk() {
 	// Attempt a PUT in the repository
 	out, err := rr.rawx.repo.Put(rr.chunkID)
 	if err != nil {
-		logger_error.Print("Chunk opening error: ", err)
+		loggerError.Print("Chunk opening error: ", err)
 		rr.replyError(err)
 		// Discard request body
 		io.Copy(ioutil.Discard, rr.req.Body)
@@ -134,27 +134,27 @@ func (rr *rawxRequest) uploadChunk() {
 		}
 	} else {
 		if err = putData(out, &ul); err != nil {
-			logger_error.Print("Chunk upload error: ", err)
+			loggerError.Print("Chunk upload error: ", err)
 		}
 	}
 
 	// If a hash has been sent, it must match the hash computed
 	if err == nil {
 		if err = rr.chunk.retrieveTrailers(&rr.req.Trailer, &ul); err != nil {
-			logger_error.Print("Trailer error: ", err)
+			loggerError.Print("Trailer error: ", err)
 		}
 	}
 
 	// If everything went well, finish with the chunks XATTR management
 	if err == nil {
 		if err = rr.chunk.saveAttr(out); err != nil {
-			logger_error.Print("Save attr error: ", err)
+			loggerError.Print("Save attr error: ", err)
 		}
 	}
 
 	if err == nil {
 		if err = NotifyNew(rr.rawx.notifier, "", &rr.chunk, rr.rawx); err != nil {
-			logger_error.Print("Notify new error: ", err)
+			loggerError.Print("Notify new error: ", err)
 			err = nil
 		}
 	}
@@ -173,12 +173,12 @@ func (rr *rawxRequest) uploadChunk() {
 func (rr *rawxRequest) copyChunk() {
 	if err := rr.chunk.retrieveDestinationHeader(&rr.req.Header,
 		rr.rawx, rr.chunkID); err != nil {
-		logger_error.Print("Header error: ", err)
+		loggerError.Print("Header error: ", err)
 		rr.replyError(err)
 		return
 	}
 	if err := rr.chunk.retrieveContentFullpathHeader(&rr.req.Header); err != nil {
-		logger_error.Print("Header error: ", err)
+		loggerError.Print("Header error: ", err)
 		rr.replyError(err)
 		return
 	}
@@ -186,13 +186,13 @@ func (rr *rawxRequest) copyChunk() {
 	// Attempt a LINK in the repository
 	out, err := rr.rawx.repo.Link(rr.chunkID, rr.chunk.ChunkID)
 	if err != nil {
-		logger_error.Print("Link error: ", err)
+		loggerError.Print("Link error: ", err)
 		rr.replyError(err)
 		return
 	}
 
 	if err = rr.chunk.saveContentFullpathAttr(out); err != nil {
-		logger_error.Print("Save attr error: ", err)
+		loggerError.Print("Save attr error: ", err)
 	}
 
 	// Then reply
@@ -228,7 +228,7 @@ func (rr *rawxRequest) downloadChunk() {
 		defer inChunk.Close()
 	}
 	if err != nil {
-		logger_error.Print("File error: ", err)
+		loggerError.Print("File error: ", err)
 		rr.replyError(err)
 		return
 	}
@@ -238,12 +238,12 @@ func (rr *rawxRequest) downloadChunk() {
 	// TODO(jfs): is a multiple range is encountered, we should follow the norm
 	// that allows us to answer a "200 OK" with the complete content.
 	length := inChunk.Size()
-	hdr_range := rr.req.Header.Get("Range")
+	headerRange := rr.req.Header.Get("Range")
 	var offset, size int64
-	if len(hdr_range) > 0 {
+	if len(headerRange) > 0 {
 		var nb int
 		var last int64
-		nb, err := fmt.Fscanf(strings.NewReader(hdr_range), "bytes=%d-%d", &offset, &last)
+		nb, err := fmt.Fscanf(strings.NewReader(headerRange), "bytes=%d-%d", &offset, &last)
 		if err != nil || nb != 2 ||
 			offset < 0 || last >= length || last < offset {
 			rr.replyError(ErrInvalidRange)
@@ -253,13 +253,13 @@ func (rr *rawxRequest) downloadChunk() {
 	}
 
 	if err = rr.chunk.loadAttr(inChunk, rr.chunkID); err != nil {
-		logger_error.Print("Load attr error: ", err)
+		loggerError.Print("Load attr error: ", err)
 		rr.replyError(err)
 		return
 	}
 
-	has_range := func() bool {
-		return len(hdr_range) > 0
+	hasRange := func() bool {
+		return len(headerRange) > 0
 	}
 
 	// Check if there is some compression
@@ -267,7 +267,7 @@ func (rr *rawxRequest) downloadChunk() {
 	var in io.ReadCloser
 	v, err = inChunk.GetAttr(AttrNameCompression)
 	if err != nil {
-		if has_range() && offset > 0 {
+		if hasRange() && offset > 0 {
 			err = inChunk.Seek(offset)
 		}
 		in = ioutil.NopCloser(inChunk)
@@ -290,7 +290,7 @@ func (rr *rawxRequest) downloadChunk() {
 	}
 
 	// If the range specified a size, let's wrap (again) the input
-	if has_range() && size > 0 {
+	if hasRange() && size > 0 {
 		in = &limitedReader{sub: in, remaining: size}
 	}
 
@@ -298,7 +298,7 @@ func (rr *rawxRequest) downloadChunk() {
 	rr.chunk.fillHeaders(&headers)
 
 	// Prepare the headers of the reply
-	if has_range() {
+	if hasRange() {
 		rr.rep.Header().Set("Content-Range", fmt.Sprintf("bytes %v-%v/%v", offset, offset+size-1, size))
 		rr.rep.Header().Set("Content-Length", fmt.Sprintf("%v", size))
 		if size <= 0 {
@@ -320,12 +320,12 @@ func (rr *rawxRequest) downloadChunk() {
 	for {
 		n, err := in.Read(buf)
 		if n > 0 {
-			rr.bytes_out = rr.bytes_out + uint64(n)
+			rr.bytesOut = rr.bytesOut + uint64(n)
 			rr.rep.Write(buf[:n])
 		}
 		if err != nil {
 			if err != io.EOF {
-				logger_error.Print("Write() error: ", err)
+				loggerError.Print("Write() error: ", err)
 			}
 			break
 		}
@@ -348,24 +348,24 @@ func (rr *rawxRequest) serveChunk(rep http.ResponseWriter, req *http.Request) {
 	}
 	switch req.Method {
 	case "PUT":
-		rr.stats_time = TimePut
-		rr.stats_hits = HitsPut
+		rr.statsTime = TimePut
+		rr.statsHits = HitsPut
 		rr.uploadChunk()
 	case "COPY":
-		rr.stats_time = TimeCopy
-		rr.stats_hits = HitsCopy
+		rr.statsTime = TimeCopy
+		rr.statsHits = HitsCopy
 		rr.copyChunk()
 	case "HEAD":
-		rr.stats_time = TimeHead
-		rr.stats_hits = HitsHead
+		rr.statsTime = TimeHead
+		rr.statsHits = HitsHead
 		rr.checkChunk()
 	case "GET":
-		rr.stats_time = TimeGet
-		rr.stats_hits = HitsGet
+		rr.statsTime = TimeGet
+		rr.statsHits = HitsGet
 		rr.downloadChunk()
 	case "DELETE":
-		rr.stats_time = TimeDel
-		rr.stats_hits = HitsDel
+		rr.statsTime = TimeDel
+		rr.statsHits = HitsDel
 		rr.removeChunk()
 	default:
 		rr.replyCode(http.StatusMethodNotAllowed)

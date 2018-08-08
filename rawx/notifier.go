@@ -82,7 +82,7 @@ func (notifier *beanstalkNotifier) notify(eventType, requestID string,
 		return err
 	}
 	defer conn.Close()
-	tube := beanstalk.Tube{conn, notifier.tube}
+	tube := beanstalk.Tube{Conn: conn, Name: notifier.tube}
 
 	eventJSON, _ := json.Marshal(eventInfo{
 		EventType: eventType,

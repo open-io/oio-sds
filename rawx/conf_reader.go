@@ -53,12 +53,12 @@ func (m optionsMap) getInt(k string, def int) int {
 	if len(v) <= 0 {
 		return def
 	}
-	if i64, err := strconv.ParseInt(v, 0, 32); err != nil {
+	i64, err := strconv.ParseInt(v, 0, 32)
+	if err != nil {
 		log.Fatalf("Invalid integer option for %s: %s (%s)", k, v, err.Error())
 		return 0
-	} else {
-		return int(i64)
 	}
+	return int(i64)
 }
 
 func (m optionsMap) getBool(k string, def bool) bool {

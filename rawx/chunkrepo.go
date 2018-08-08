@@ -40,17 +40,17 @@ func MakeChunkRepository(sub Repository) *chunkRepository {
 	return r
 }
 
-func (self *chunkRepository) Lock(ns, url string) error {
-	return self.sub.Lock(ns, url)
+func (chunkrepo *chunkRepository) Lock(ns, url string) error {
+	return chunkrepo.sub.Lock(ns, url)
 }
 
-func (self *chunkRepository) Has(name string) (bool, error) {
-	v, _ := self.sub.Has(name)
+func (chunkrepo *chunkRepository) Has(name string) (bool, error) {
+	v, _ := chunkrepo.sub.Has(name)
 	return v, nil
 }
 
-func (self *chunkRepository) Del(name string) error {
-	err := self.sub.Del(name)
+func (chunkrepo *chunkRepository) Del(name string) error {
+	err := chunkrepo.sub.Del(name)
 	if err == nil {
 		return nil
 	} else if err != os.ErrNotExist && !os.IsNotExist(err) {
@@ -60,8 +60,8 @@ func (self *chunkRepository) Del(name string) error {
 	}
 }
 
-func (self *chunkRepository) Get(name string) (FileReader, error) {
-	r, err := self.sub.Get(name)
+func (chunkrepo *chunkRepository) Get(name string) (FileReader, error) {
+	r, err := chunkrepo.sub.Get(name)
 	if err == nil {
 		return r, nil
 	} else if err != os.ErrNotExist && !os.IsNotExist(err) {
@@ -71,15 +71,17 @@ func (self *chunkRepository) Get(name string) (FileReader, error) {
 	}
 }
 
-func (self *chunkRepository) Put(name string) (FileWriter, error) {
-	return self.sub.Put(name)
+func (chunkrepo *chunkRepository) Put(name string) (FileWriter, error) {
+	return chunkrepo.sub.Put(name)
 }
 
-func (self *chunkRepository) Link(fromName, toName string) (FileWriter, error) {
-	return self.sub.Link(fromName, toName)
+func (chunkrepo *chunkRepository) Link(fromName,
+	toName string) (FileWriter, error) {
+	return chunkrepo.sub.Link(fromName, toName)
 }
 
-func (self *chunkRepository) List(marker, prefix string, max int) (ListSlice, error) {
+func (chunkrepo *chunkRepository) List(marker, prefix string,
+	max int) (ListSlice, error) {
 	if len(marker) > 0 && !isHexaString(marker, 0) {
 		out := ListSlice{make([]string, 0), false}
 		return out, ErrListMarker
@@ -88,5 +90,5 @@ func (self *chunkRepository) List(marker, prefix string, max int) (ListSlice, er
 		out := ListSlice{make([]string, 0), false}
 		return out, ErrListPrefix
 	}
-	return self.sub.List(marker, prefix, max)
+	return chunkrepo.sub.List(marker, prefix, max)
 }
