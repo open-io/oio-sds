@@ -79,19 +79,23 @@ def main():
     for addr in dic:
         infos_srv = {"addr": addr, "type": "rawx"}
         print("Lock rawx at " + addr)
-        cs.lock_score(infos_srv)
-        print("Run mover on rawx at " + addr)
-        try:
-            output = move_rawx(dic[addr], target_use,
-                               args.user, args.namespace, conf)
-            if(args.dry_run):
+        if not args.dry_run:
+            cs.lock_score(infos_srv)
+        print("Run mover on rawx at " + addr +
+              " to get disk usage under " + str(target_use))
+        if not args.dry_run:
+            try:
+                output = move_rawx(dic[addr], target_use,
+                                   args.user, args.namespace, conf)
                 print(output)
-        except Exception as err:
-            print("ERROR: " + str(err))
+            except Exception as err:
+                print("ERROR: " + str(err))
         print("Unlock rawx at " + addr)
-        cs.unlock_score(infos_srv)
+        if not args.dry_run:
+            cs.unlock_score(infos_srv)
     # Delete mover configuration file
-    remove(conf)
+    if not args.dry_run:
+        remove(conf)
 
 
 if __name__ == '__main__':
