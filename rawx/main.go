@@ -122,7 +122,7 @@ func main() {
 	if eventAgent == "" {
 		logger_error.Fatal("Notifier error: no address")
 	}
-	notifier, err := MakeBeanstalkNotifier(eventAgent, "oio") // TODO(adu)
+	notifier, err := MakeNotifier(eventAgent)
 	if err != nil {
 		logger_error.Fatal("Notifier error: ", err)
 	}

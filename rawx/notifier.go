@@ -18,6 +18,8 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
+	"strings"
 	"time"
 
 	"github.com/kr/beanstalk"
@@ -42,14 +44,14 @@ type Notifier interface {
 	NotifyDel(requestID string, chunk *chunkInfo, rawx *rawxService) error
 }
 
-type BeanstalkNotifier struct {
-	url  string
-	tube string
+type beanstalkNotifier struct {
+	endpoint string
+	tube     string
 }
 
 const (
-	EventTypeNewChunk = "storage.chunk.new"
-	EventTypeDelChunk = "storage.chunk.deleted"
+	eventTypeNewChunk = "storage.chunk.new"
+	eventTypeDelChunk = "storage.chunk.deleted"
 )
 
 const (
@@ -57,18 +59,26 @@ const (
 	defaultTTR      = 120
 )
 
-func MakeBeanstalkNotifier(url, tubename string) (*BeanstalkNotifier, error) {
+const (
+	beanstalkNotifierDefaultTube = "oio"
+)
+
+var (
+	ErrNoNotiifer = errors.New("No notifier")
+)
+
+func makeBeanstalkNotifier(endpoint string) (*beanstalkNotifier, error) {
 	// TODO(adu) Use connection pool
-	notifier := new(BeanstalkNotifier)
-	notifier.url = url
-	notifier.tube = tubename
-	// TODO(adu) Check URL
+	notifier := new(beanstalkNotifier)
+	notifier.endpoint = endpoint
+	notifier.tube = beanstalkNotifierDefaultTube
+	// TODO(adu) Check endpoint
 	return notifier, nil
 }
 
-func (notifier *BeanstalkNotifier) notify(eventType, requestID string,
+func (notifier *beanstalkNotifier) notify(eventType, requestID string,
 	chunk *chunkInfo, rawx *rawxService) error {
-	conn, err := beanstalk.Dial("tcp", notifier.url)
+	conn, err := beanstalk.Dial("tcp", notifier.endpoint)
 	if err != nil {
 		return err
 	}
@@ -89,12 +99,27 @@ func (notifier *BeanstalkNotifier) notify(eventType, requestID string,
 	return err
 }
 
-func (notifier *BeanstalkNotifier) NotifyNew(requestID string,
+func (notifier *beanstalkNotifier) NotifyNew(requestID string,
 	chunk *chunkInfo, rawx *rawxService) error {
-	return notifier.notify(EventTypeNewChunk, requestID, chunk, rawx)
+	return notifier.notify(eventTypeNewChunk, requestID, chunk, rawx)
 }
 
-func (notifier *BeanstalkNotifier) NotifyDel(requestID string,
+func (notifier *beanstalkNotifier) NotifyDel(requestID string,
 	chunk *chunkInfo, rawx *rawxService) error {
-	return notifier.notify(EventTypeDelChunk, requestID, chunk, rawx)
+	return notifier.notify(eventTypeDelChunk, requestID, chunk, rawx)
+}
+
+func hasPrefix(s, prefix string) (string, bool) {
+	if strings.HasPrefix(s, prefix) {
+		return s[len(prefix):], true
+	}
+	return "", false
+}
+
+func MakeNotifier(config string) (Notifier, error) {
+	if endpoint, ok := hasPrefix(config, "beanstalk://"); ok {
+		return makeBeanstalkNotifier(endpoint)
+	}
+	// TODO(adu) makeZMQNotifier
+	return nil, ErrNoNotiifer
 }
