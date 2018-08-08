@@ -15,75 +15,84 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
+from os import remove
+from oio.conscience.client import ConscienceClient
 import argparse
-import shlex
 import subprocess
-from oio.common.json import json as jsonlib
 
-def execute(cmd, stdin=None):
-    """Executes command."""
-    cmdlist = shlex.split(cmd)
+
+def move_rawx(volume, target_use, user, namespace, conf):
     result = ''
     result_err = ''
-    print(cmd)
     stdout = subprocess.PIPE
     stderr = subprocess.PIPE
-    in_ = subprocess.PIPE if stdin else None
-    proc = subprocess.Popen(cmdlist, stdin=in_, stdout=stdout, stderr=stderr)
-    result, result_err = proc.communicate(stdin)
+    cmd = 'oio-blob-mover ' + conf + ' --generate-config --user ' + user
+    cmd += ' --ns ' + namespace + ' --usage-target ' + target_use
+    cmd += ' --volume ' + volume + ' -vvv'
+    proc = subprocess.Popen(cmd, stdin=None, stdout=stdout,
+                            stderr=stderr, shell=True)
+    result, result_err = proc.communicate()
+    if result == "":
+        result = result_err
     result = result.decode('utf-8')
     if proc.returncode != 0:
-        print result_err
-        raise
+        raise Exception("Mover failed on rawx " + volume)
     return result
 
-def openio(cmd):
-    """Executes openio CLI command."""
-    return execute('openio ' + cmd)
-
-
-
-def json_loads(data):
-    try:
-        return jsonlib.loads(data)
-    except ValueError:
-        raise
 
 def make_arg_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('user', help="System user")
     parser.add_argument('namespace', help="Namespace")
+    parser.add_argument('--dry-run', action="store_true",
+                        help="Show rebalanced rawx")
+    parser.add_argument('--conf-file',
+                        help="Path to store configuration file.")
     return parser
+
 
 def main():
     args = make_arg_parser().parse_args()
-    output = openio('cluster list rawx --stats --format json')
-    data = json_loads(output)
+    conf = args.conf_file if args.conf_file else "mover.conf"
+    cs = ConscienceClient({"namespace": args.namespace})
+    all_rawx = cs.all_services('rawx', full=True)
     # Sort rawx by disk usage
-    data.sort(key=lambda c:c['Stats'].split(' ')[2].split('=')[1])
+    all_rawx.sort(key=lambda c: c['tags']['stat.space'])
     dic = dict()
     sum_size = 0
     nrawx = 0
-    for rawx in data:
-        addr = rawx['Addr']
-        stats = rawx['Stats'].split(' ')
-        volume = rawx['Volume']
-        du = float(stats[2].split('=')[1])
+    for rawx in all_rawx:
+        addr = rawx['addr']
+        volume = rawx['tags']['tag.vol']
+        du = float(rawx['tags']['stat.space'])
         # Keep only rawx with big disk usage
-        if nrawx < len(data)/2:
-            dic[du] = (addr, volume)
+        if nrawx < len(all_rawx)/2:
+            dic[addr] = volume
         sum_size += du
         nrawx += 1
+    if nrawx == 0:
+        return
     av = sum_size/nrawx
     # Lock rawx, run blob-mover and unlock rawx
-    for du in dic:
-            openio('cluster lock rawx ' + dic[du][0])
-            output = execute('oio-blob-mover mover-conf.cfg --generate-config ' +
-                    '--user ' + args.user + ' --ns ' + args.namespace +
-                    ' --usage-target ' + str(int(av))+ ' --volume ' +
-                    dic[du][1] + ' -v')
-            print(output)
-            openio('cluster unlock rawx ' +  dic[du][0])
+    target_use = str(int(av))
+    for addr in dic:
+        infos_srv = {"addr": addr, "type": "rawx"}
+        print("Lock rawx at " + addr)
+        cs.lock_score(infos_srv)
+        print("Run mover on rawx at " + addr)
+        try:
+            output = move_rawx(dic[addr], target_use,
+                               args.user, args.namespace, conf)
+            if(args.dry_run):
+                print(output)
+        except Exception as err:
+            print("ERROR: " + str(err))
+        print("Unlock rawx at " + addr)
+        cs.unlock_score(infos_srv)
+    # Delete mover configuration file
+    remove(conf)
+
 
 if __name__ == '__main__':
     main()
