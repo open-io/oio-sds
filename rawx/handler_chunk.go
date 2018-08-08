@@ -153,7 +153,7 @@ func (rr *rawxRequest) uploadChunk() {
 	}
 
 	if err == nil {
-		if err = rr.rawx.notifier.NotifyNew("", &rr.chunk, rr.rawx); err != nil {
+		if err = NotifyNew(rr.rawx.notifier, "", &rr.chunk, rr.rawx); err != nil {
 			logger_error.Print("Notify new error: ", err)
 			err = nil
 		}
