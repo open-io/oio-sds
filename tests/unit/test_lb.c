@@ -478,6 +478,14 @@ struct level_repartition_test_s {
 };
 
 static void
+level_repartition_test_free(gpointer data)
+{
+	struct level_repartition_test_s *test = data;
+	g_free((gpointer)test->file);
+	g_free(data);
+}
+
+static void
 test_uniform_level_repartition(gconstpointer raw_test_data)
 {
 	const struct level_repartition_test_s *test_data = raw_test_data;
@@ -762,7 +770,8 @@ _add_level_repartition_test_file(const char *service_file, int targets)
 	test_data->file = service_file;
 	test_data->targets = targets;
 	g_test_add_data_func_full(name, test_data,
-			test_uniform_level_repartition, g_free);
+			test_uniform_level_repartition,
+			(GDestroyNotify)level_repartition_test_free);
 }
 
 static void
