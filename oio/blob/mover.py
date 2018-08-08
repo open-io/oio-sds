@@ -122,7 +122,7 @@ class BlobMoverWorker(object):
                 self.bytes_processed = 0
                 self.last_reported = now
             mover_time += (now - loop_time)
-            if self.limit !=0 and self.total_chunks_processed >= self.limit:
+            if self.limit != 0 and self.total_chunks_processed >= self.limit:
                 break
         elapsed = (time.time() - start_time) or 0.000001
         self.logger.info(
@@ -216,11 +216,10 @@ class BlobMover(Daemon):
         while work:
             try:
                 worker = BlobMoverWorker(self.conf, self.logger, self.volume)
-                usage_target = self.conf.get('usage_target')
                 worker.mover_pass(**kwargs)
                 work = False
-            except Exception as e:
-                self.logger.exception('ERROR in mover: %s' % e)
+            except Exception as err:
+                self.logger.exception('ERROR in mover: %s', err)
             if kwargs.get('daemon'):
                 work = True
                 self._sleep()

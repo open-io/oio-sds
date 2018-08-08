@@ -87,6 +87,11 @@ def paths_gen(volume_path):
 
 
 def statfs(volume):
+    """
+    :param volume: path to the mount point to get stats from.
+    :returns: the free space ratio.
+    :rtype: `float`
+    """
     st = os.statvfs(volume)
     free_inodes = st.f_ffree
     total_inodes = st.f_files
