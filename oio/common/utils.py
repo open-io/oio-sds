@@ -87,10 +87,25 @@ def paths_gen(volume_path):
 
 
 def statfs(volume):
+    """
+    :param volume: path to the mount point to get stats from.
+    :returns: the free space ratio.
+    :rtype: `float`
+    """
     st = os.statvfs(volume)
-    total = st.f_blocks * st.f_frsize
-    used = (st.f_blocks - st.f_bfree) * st.f_frsize
-    return used, total
+    free_inodes = st.f_ffree
+    total_inodes = st.f_files
+    free_blocks = st.f_bavail
+    total_blocks = st.f_blocks
+    if total_inodes > 0:
+        inode_ratio = float(free_inodes)/float(total_inodes)
+    else:
+        inode_ratio = 1
+    if total_blocks > 0:
+        block_ratio = float(free_blocks)/float(total_blocks)
+    else:
+        block_ratio = 1
+    return min(inode_ratio, block_ratio)
 
 
 class RingBuffer(list):

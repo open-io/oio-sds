@@ -60,12 +60,13 @@ class BlobMoverWorker(object):
             conf.get('chunks_per_second'), 30)
         self.max_bytes_per_second = int_value(
             conf.get('bytes_per_second'), 10000000)
+        self.limit = int_value(conf.get('limit'), 0)
         self.allow_links = true_value(conf.get('allow_links', True))
         self.blob_client = BlobClient(conf)
         self.container_client = ContainerClient(conf, logger=self.logger)
         self.content_factory = ContentFactory(conf)
 
-    def mover_pass(self):
+    def mover_pass(self, **kwargs):
         start_time = report_time = time.time()
 
         total_errors = 0
@@ -78,8 +79,8 @@ class BlobMoverWorker(object):
 
             now = time.time()
             if now - self.last_usage_check >= self.usage_check_interval:
-                used, total = statfs(self.volume)
-                usage = (float(used) / total) * 100
+                free_ratio = statfs(self.volume)
+                usage = (1-float(free_ratio)) * 100
                 if usage <= self.usage_target:
                     self.logger.info(
                         'current usage %.2f%%: target reached (%.2f%%)', usage,
@@ -121,6 +122,8 @@ class BlobMoverWorker(object):
                 self.bytes_processed = 0
                 self.last_reported = now
             mover_time += (now - loop_time)
+            if self.limit != 0 and self.total_chunks_processed >= self.limit:
+                break
         elapsed = (time.time() - start_time) or 0.000001
         self.logger.info(
             '%(elapsed).02f '
@@ -210,13 +213,17 @@ class BlobMover(Daemon):
             SLEEP_TIME = int(conf.get('report_interval', 3600))
 
     def run(self, *args, **kwargs):
-        while True:
+        work = True
+        while work:
             try:
                 worker = BlobMoverWorker(self.conf, self.logger, self.volume)
-                worker.mover_pass()
-            except Exception as e:
-                self.logger.exception('ERROR in mover: %s' % e)
-            self._sleep()
+                worker.mover_pass(**kwargs)
+                work = False
+            except Exception as err:
+                self.logger.exception('ERROR in mover: %s', err)
+            if kwargs.get('daemon'):
+                work = True
+                self._sleep()
 
     def _sleep(self):
         time.sleep(SLEEP_TIME)

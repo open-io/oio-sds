@@ -232,6 +232,14 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_CORE_SDS_NOSHUFFLE*
 
+### core.sds.strict_utf8
+
+> Should the object URLs be checked for non-UTF-8 characters? Disable this only if you have trouble reading old objects, uploaded before we check for invalid names.
+
+ * default: **TRUE**
+ * type: gboolean
+ * cmake directive: *OIO_CORE_SDS_STRICT_UTF8*
+
 ### core.sds.timeout.cnx.rawx
 
 > Sets the connection timeout for requests issued to rawx services.
