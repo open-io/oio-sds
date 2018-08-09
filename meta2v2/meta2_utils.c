@@ -1872,7 +1872,7 @@ is_stgpol_backblaze(const struct storage_policy_s *pol)
 }
 
 static void
-_gen_chunk(struct gen_ctx_s *ctx, gchar *straddr,
+_gen_chunk(struct gen_ctx_s *ctx, struct oio_lb_selected_item_s *sel,
 		gint64 cs, guint pos, gint subpos)
 {
 	guint8 binid[32];
@@ -1888,10 +1888,14 @@ _gen_chunk(struct gen_ctx_s *ctx, gchar *straddr,
 	else
 		g_snprintf(strpos, sizeof(strpos), "%u.%d", pos, subpos);
 
-	if (straddr)
-		chunkid = m2v2_build_chunk_url (straddr, strid);
-	else
-		chunkid = m2v2_build_chunk_url_storage (ctx->pol, strid);
+	if (sel->item->id) {
+		gchar shifted_id[LIMIT_LENGTH_SRVID];
+		g_strlcpy(shifted_id, sel->item->id, sizeof(shifted_id));
+		meta1_url_shift_addr(shifted_id);
+		chunkid = m2v2_build_chunk_url(shifted_id, strid);
+	} else {
+		chunkid = m2v2_build_chunk_url_storage(ctx->pol, strid);
+	}
 
 	struct bean_CHUNKS_s *chunk = _bean_create(&descr_struct_CHUNKS);
 	CHUNKS_set2_id(chunk, chunkid);
@@ -1902,6 +1906,27 @@ _gen_chunk(struct gen_ctx_s *ctx, gchar *straddr,
 	CHUNKS_set2_position(chunk, strpos);
 	ctx->cb(ctx->cb_data, chunk);
 
+	/* Create a property to represent the quality of the selected chunk. */
+	GString *qual = g_string_new("{");
+	oio_str_gstring_append_json_pair_int(qual,
+			"expected_dist", sel->expected_dist);
+	g_string_append_c(qual, ',');
+	oio_str_gstring_append_json_pair_int(qual,
+			"final_dist", sel->final_dist);
+	g_string_append_c(qual, ',');
+	oio_str_gstring_append_json_pair(qual,
+			"expected_slot", sel->expected_slot);
+	g_string_append_c(qual, ',');
+	oio_str_gstring_append_json_pair(qual,
+			"final_slot", sel->final_slot);
+	g_string_append_c(qual, '}');
+	struct bean_PROPERTIES_s *prop = _bean_create(&descr_struct_PROPERTIES);
+	PROPERTIES_set2_alias(prop, oio_url_get(ctx->url, OIOURL_PATH));
+	PROPERTIES_set2_key(prop, chunkid);
+	PROPERTIES_set2_value(prop, (guint8*)qual->str, qual->len);
+	ctx->cb(ctx->cb_data, prop);
+
+	g_string_free(qual, TRUE);
 	g_free(chunkid);
 }
 
@@ -1919,30 +1944,24 @@ _m2_generate_chunks(struct gen_ctx_s *ctx,
 	guint pos = 0;
 	gint64 esize = MAX(ctx->size, 1);
 	for (gint64 s = 0; s < esize && !err; s += mcs, ++pos) {
-		GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
+		int i = 0;
 		void _on_id(struct oio_lb_selected_item_s *sel, gpointer u UNUSED)
 		{
-			char *shifted = g_strdup(sel->item->id);
-			meta1_url_shift_addr(shifted);
-			g_ptr_array_add(ids, shifted);
-		}
-		const char *pool = storage_policy_get_service_pool(ctx->pol);
-		// FIXME(FVE): set last argument
-		if ((err = oio_lb__poll_pool(ctx->lb, pool, NULL, _on_id, NULL))) {
-			g_prefix_error(&err, "at position %u: "
-					"found only %u services matching the criteria (pool=%s): ",
-					pos, ids->len, pool);
-		} else {
 			if (is_stgpol_backblaze(ctx->pol)) {
 				// Shortcut for backblaze
 				_gen_chunk(ctx, NULL, ctx->chunk_size, pos, -1);
 			} else {
-				for (int i = 0; i < (int)ids->len; i++)
-					_gen_chunk(ctx, g_ptr_array_index(ids, i),
-							ctx->chunk_size, pos, subpos? i : -1);
+				_gen_chunk(ctx, sel, ctx->chunk_size, pos, subpos? i : -1);
 			}
+			i++;
 		}
-		g_ptr_array_free(ids, TRUE);
+		const char *pool = storage_policy_get_service_pool(ctx->pol);
+		// FIXME(FVE): set last argument
+		if ((err = oio_lb__poll_pool(ctx->lb, pool, NULL, _on_id, NULL))) {
+			g_prefix_error(&err, "at position %u: did not find enough "
+					"services matching the criteria for pool [%s]: ",
+					pos, pool);
+		}
 	}
 
 	return err;
