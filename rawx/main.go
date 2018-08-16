@@ -86,13 +86,15 @@ func main() {
 	}
 
 	namespace := opts["ns"]
+	rawxURL := opts["addr"]
+	rawxID := opts["id"]
 	checkNS(namespace)
-	checkURL(opts["addr"])
+	checkURL(rawxURL)
 
 	// No service ID specified, using the service address instead
-	if len(opts["id"]) <= 0 {
-		opts["id"] = opts["addr"]
-		loggerError.Print("No service ID, using ADDR ", opts["addr"])
+	if len(rawxID) <= 0 {
+		rawxID = rawxURL
+		loggerError.Print("No service ID, using ADDR ", rawxURL)
 	}
 
 	filerepo := checkMakeFileRepo(opts["basedir"])
@@ -103,29 +105,32 @@ func main() {
 	filerepo.FallocateFile = opts.getBool("fallocate", filerepo.FallocateFile)
 
 	chunkrepo := MakeChunkRepository(filerepo)
-	if err := chunkrepo.Lock(namespace, opts["id"]); err != nil {
+	if err := chunkrepo.Lock(namespace, rawxID); err != nil {
 		loggerError.Fatal("Volume lock error: ", err.Error())
+	}
+
+	rawx := rawxService{
+		ns:       namespace,
+		id:       rawxID,
+		url:      rawxURL,
+		repo:     chunkrepo,
+		compress: opts.getBool("compress", false),
 	}
 
 	eventAgent := OioGetEventAgent(namespace)
 	if eventAgent == "" {
 		loggerError.Fatal("Notifier error: no address")
 	}
-	notifier, err := MakeNotifier(eventAgent)
+	notifier, err := MakeNotifier(eventAgent, &rawx)
 	if err != nil {
 		loggerError.Fatal("Notifier error: ", err)
 	}
-
-	rawx := rawxService{
-		ns:       namespace,
-		id:       opts["id"],
-		url:      opts["addr"],
-		repo:     chunkrepo,
-		compress: opts.getBool("compress", false),
-		notifier: notifier,
-	}
+	rawx.notifier = notifier
+	rawx.notifier.start()
 
 	if err = http.ListenAndServe(rawx.url, &rawx); err != nil {
 		loggerError.Fatal("HTTP error: ", err)
 	}
+
+	rawx.notifier.stop()
 }

@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kr/beanstalk"
@@ -40,7 +41,9 @@ type eventInfo struct {
 }
 
 type Notifier interface {
-	notify(eventType, requestID string, chunk *chunkInfo, rawx *rawxService) error
+	start()
+	stop()
+	asyncNotify(eventType, requestID string, chunk *chunkInfo)
 }
 
 const (
@@ -62,40 +65,68 @@ var (
 )
 
 type beanstalkNotifier struct {
+	rawx     *rawxService
+	wg       sync.WaitGroup
+	queue    chan []byte
 	endpoint string
 	tube     string
 }
 
-func makeBeanstalkNotifier(endpoint string) (*beanstalkNotifier, error) {
+func makeBeanstalkNotifier(endpoint string,
+	rawx *rawxService) (*beanstalkNotifier, error) {
 	// TODO(adu) Use connection pool
 	notifier := new(beanstalkNotifier)
+	notifier.rawx = rawx
+	notifier.queue = make(chan []byte, 1024)
 	notifier.endpoint = endpoint
 	notifier.tube = beanstalkNotifierDefaultTube
 	// TODO(adu) Check endpoint
 	return notifier, nil
 }
 
-func (notifier *beanstalkNotifier) notify(eventType, requestID string,
-	chunk *chunkInfo, rawx *rawxService) error {
+func (notifier *beanstalkNotifier) start() {
+	// A single notifier by goroutine.
+	notifier.wg.Wait()
+
+	notifier.wg.Add(1)
+	go func() {
+		defer notifier.wg.Done()
+		for eventJSON := range notifier.queue {
+			err := notifier.syncNotify(eventJSON)
+			loggerError.Print("Notify error: ", err)
+		}
+	}()
+}
+
+func (notifier *beanstalkNotifier) stop() {
+	close(notifier.queue)
+	notifier.wg.Wait()
+}
+
+func (notifier *beanstalkNotifier) syncNotify(eventJSON []byte) error {
 	conn, err := beanstalk.Dial("tcp", notifier.endpoint)
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
 	tube := beanstalk.Tube{Conn: conn, Name: notifier.tube}
+	_, err = tube.Put(eventJSON, defaultPriority, 0, defaultTTR)
+	return err
+}
 
+func (notifier *beanstalkNotifier) asyncNotify(eventType, requestID string,
+	chunk *chunkInfo) {
 	eventJSON, _ := json.Marshal(eventInfo{
 		EventType: eventType,
 		When:      time.Now().UnixNano() / 1000,
 		RequestID: requestID,
 		Data: eventData{
-			VolumeAddr: rawx.url,
-			VolumeID:   rawx.id,
+			VolumeAddr: notifier.rawx.url,
+			VolumeID:   notifier.rawx.id,
 			chunkInfo:  *chunk,
 		},
 	})
-	_, err = tube.Put(eventJSON, defaultPriority, 0, defaultTTR)
-	return err
+	notifier.queue <- eventJSON
 }
 
 type multiNotifier struct {
@@ -103,11 +134,11 @@ type multiNotifier struct {
 	index     int
 }
 
-func makeMultiNotifier(config string) (*multiNotifier, error) {
+func makeMultiNotifier(config string, rawx *rawxService) (*multiNotifier, error) {
 	notifier := new(multiNotifier)
 	confs := strings.Split(config, ";")
 	for _, conf := range confs {
-		notif, err := MakeNotifier(conf)
+		notif, err := MakeNotifier(conf, rawx)
 		if err != nil {
 			return nil, err
 		}
@@ -116,12 +147,24 @@ func makeMultiNotifier(config string) (*multiNotifier, error) {
 	return notifier, nil
 }
 
-func (notifier *multiNotifier) notify(eventType, requestID string,
-	chunk *chunkInfo, rawx *rawxService) error {
+func (notifier *multiNotifier) start() {
+	for _, notif := range notifier.notifiers {
+		notif.start()
+	}
+}
+
+func (notifier *multiNotifier) stop() {
+	for _, notif := range notifier.notifiers {
+		notif.stop()
+	}
+}
+
+func (notifier *multiNotifier) asyncNotify(eventType, requestID string,
+	chunk *chunkInfo) {
 	notif := notifier.notifiers[notifier.index]
 	// Round-robin
 	notifier.index = (notifier.index + 1) % len(notifier.notifiers)
-	return notif.notify(eventType, requestID, chunk, rawx)
+	notif.asyncNotify(eventType, requestID, chunk)
 }
 
 func hasPrefix(s, prefix string) (string, bool) {
@@ -131,24 +174,22 @@ func hasPrefix(s, prefix string) (string, bool) {
 	return "", false
 }
 
-func MakeNotifier(config string) (Notifier, error) {
+func MakeNotifier(config string, rawx *rawxService) (Notifier, error) {
 	if strings.Contains(config, ";") {
-		return makeMultiNotifier(config)
+		return makeMultiNotifier(config, rawx)
 	}
 
 	if endpoint, ok := hasPrefix(config, "beanstalk://"); ok {
-		return makeBeanstalkNotifier(endpoint)
+		return makeBeanstalkNotifier(endpoint, rawx)
 	}
 	// TODO(adu) makeZMQNotifier
 	return nil, ErrNoNotiifer
 }
 
-func NotifyNew(notifier Notifier, requestID string,
-	chunk *chunkInfo, rawx *rawxService) error {
-	return notifier.notify(eventTypeNewChunk, requestID, chunk, rawx)
+func NotifyNew(notifier Notifier, requestID string, chunk *chunkInfo) {
+	notifier.asyncNotify(eventTypeNewChunk, requestID, chunk)
 }
 
-func NotifyDel(notifier Notifier, requestID string,
-	chunk *chunkInfo, rawx *rawxService) error {
-	return notifier.notify(eventTypeDelChunk, requestID, chunk, rawx)
+func NotifyDel(notifier Notifier, requestID string, chunk *chunkInfo) {
+	notifier.asyncNotify(eventTypeDelChunk, requestID, chunk)
 }
