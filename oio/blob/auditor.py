@@ -232,13 +232,17 @@ class BlobAuditor(Daemon):
         self.volume = volume
 
     def run(self, *args, **kwargs):
-        while True:
+        work = True
+        while work:
+            work = False
             try:
                 worker = BlobAuditorWorker(self.conf, self.logger, self.volume)
                 worker.audit_pass()
             except Exception as e:
                 self.logger.exception('ERROR in audit: %s' % e)
-            self._sleep()
+            if kwargs.get('daemon'):
+                work = True
+                self._sleep()
 
     def _sleep(self):
         time.sleep(SLEEP_TIME)
