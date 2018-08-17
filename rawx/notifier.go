@@ -92,8 +92,9 @@ func (notifier *beanstalkNotifier) start() {
 	go func() {
 		defer notifier.wg.Done()
 		for eventJSON := range notifier.queue {
-			err := notifier.syncNotify(eventJSON)
-			loggerError.Print("Notify error: ", err)
+			if err := notifier.syncNotify(eventJSON); err != nil {
+				LogWarning("Notify error: %s", err)
+			}
 		}
 	}()
 }

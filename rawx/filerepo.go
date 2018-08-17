@@ -112,7 +112,7 @@ func (fileRepo *FileRepository) Del(name string) error {
 	}
 	err = syscall.Removexattr(path, AttrNameFullPrefix+name)
 	if err != nil {
-		loggerError.Printf("Error to remove content fullpath: %s", err)
+		LogWarning("Error to remove content fullpath: %s", err)
 		err = nil
 	}
 	return os.Remove(path)
@@ -332,7 +332,7 @@ func (fileWriter *RealFileWriter) syncDir() {
 			f.Sync()
 			f.Close()
 		} else {
-			loggerError.Print("Directory sync error: ", err)
+			LogWarning("Directory sync error: %s", err)
 		}
 	}
 }
@@ -345,10 +345,10 @@ func (fileWriter *RealFileWriter) Commit() error {
 		if err == nil {
 			fileWriter.syncDir()
 		} else {
-			loggerError.Print("Rename error: ", err)
+			LogError("Rename error: %s", err)
 		}
 	} else {
-		loggerError.Print("Close error: ", err)
+		LogError("Close error: %s", err)
 	}
 	if err != nil {
 		os.Remove(fileWriter.pathTemp)

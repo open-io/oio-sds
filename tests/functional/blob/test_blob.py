@@ -829,8 +829,8 @@ class RawxV2TestSuite(CommonTestCase, RawxAbstractTestSuite):
         config = {'addr': '{0}:{1}'.format(self.host, self.port),
                   'ns': self.ns, 'basedir': self.dir_path}
         _write_config(self.cfg_path, config)
-        child = Popen(('oio-rawx', '-f', self.cfg_path),
-                      close_fds=True)
+        child = Popen(('oio-rawx', '-s', 'OIO,OPENIO,rawx,0', '-f',
+                       self.cfg_path), close_fds=True)
         if not wait_for_slow_startup(self.port):
             child.kill()
             raise Exception("The RDIR server is too long to start")

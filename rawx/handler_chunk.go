@@ -68,7 +68,7 @@ func (rr *rawxRequest) retrieveChunkID() error {
 func putData(out io.Writer, ul *upload) error {
 	running := true
 	remaining := *(ul.length)
-	loggerError.Printf("Uploading %v bytes", remaining)
+	LogDebug("Uploading %v bytes", remaining)
 	chunkHash := md5.New()
 	buf := make([]byte, bufSize)
 	for running && remaining != 0 {
@@ -77,7 +77,7 @@ func putData(out io.Writer, ul *upload) error {
 			max = remaining
 		}
 		n, err := ul.in.Read(buf[:max])
-		loggerError.Printf("consumed %v / %s", n, err)
+		LogDebug("consumed %v / %s", n, err)
 		if n > 0 {
 			if remaining > 0 {
 				remaining = remaining - int64(n)
@@ -103,7 +103,7 @@ func putData(out io.Writer, ul *upload) error {
 
 func (rr *rawxRequest) uploadChunk() {
 	if err := rr.chunk.retrieveHeaders(&rr.req.Header, rr.chunkID); err != nil {
-		loggerError.Print("Header error: ", err)
+		LogError("Header error: %s", err)
 		rr.replyError(err)
 		// Discard request body
 		io.Copy(ioutil.Discard, rr.req.Body)
@@ -113,7 +113,7 @@ func (rr *rawxRequest) uploadChunk() {
 	// Attempt a PUT in the repository
 	out, err := rr.rawx.repo.Put(rr.chunkID)
 	if err != nil {
-		loggerError.Print("Chunk opening error: ", err)
+		LogError("Chunk opening error: %s", err)
 		rr.replyError(err)
 		// Discard request body
 		io.Copy(ioutil.Discard, rr.req.Body)
@@ -134,21 +134,21 @@ func (rr *rawxRequest) uploadChunk() {
 		}
 	} else {
 		if err = putData(out, &ul); err != nil {
-			loggerError.Print("Chunk upload error: ", err)
+			LogError("Chunk upload error: %s", err)
 		}
 	}
 
 	// If a hash has been sent, it must match the hash computed
 	if err == nil {
 		if err = rr.chunk.retrieveTrailers(&rr.req.Trailer, &ul); err != nil {
-			loggerError.Print("Trailer error: ", err)
+			LogError("Trailer error: %s", err)
 		}
 	}
 
 	// If everything went well, finish with the chunks XATTR management
 	if err == nil {
 		if err = rr.chunk.saveAttr(out); err != nil {
-			loggerError.Print("Save attr error: ", err)
+			LogError("Save attr error: %s", err)
 		}
 	}
 
@@ -170,12 +170,12 @@ func (rr *rawxRequest) uploadChunk() {
 func (rr *rawxRequest) copyChunk() {
 	if err := rr.chunk.retrieveDestinationHeader(&rr.req.Header,
 		rr.rawx, rr.chunkID); err != nil {
-		loggerError.Print("Header error: ", err)
+		LogError("Header error: %s", err)
 		rr.replyError(err)
 		return
 	}
 	if err := rr.chunk.retrieveContentFullpathHeader(&rr.req.Header); err != nil {
-		loggerError.Print("Header error: ", err)
+		LogError("Header error: %s", err)
 		rr.replyError(err)
 		return
 	}
@@ -183,13 +183,13 @@ func (rr *rawxRequest) copyChunk() {
 	// Attempt a LINK in the repository
 	out, err := rr.rawx.repo.Link(rr.chunkID, rr.chunk.ChunkID)
 	if err != nil {
-		loggerError.Print("Link error: ", err)
+		LogError("Link error: %s", err)
 		rr.replyError(err)
 		return
 	}
 
 	if err = rr.chunk.saveContentFullpathAttr(out); err != nil {
-		loggerError.Print("Save attr error: ", err)
+		LogError("Save attr error: %s", err)
 	}
 
 	// Then reply
@@ -225,7 +225,7 @@ func (rr *rawxRequest) downloadChunk() {
 		defer inChunk.Close()
 	}
 	if err != nil {
-		loggerError.Print("File error: ", err)
+		LogError("File error: %s", err)
 		rr.replyError(err)
 		return
 	}
@@ -250,7 +250,7 @@ func (rr *rawxRequest) downloadChunk() {
 	}
 
 	if err = rr.chunk.loadAttr(inChunk, rr.chunkID); err != nil {
-		loggerError.Print("Load attr error: ", err)
+		LogError("Load attr error: %s", err)
 		rr.replyError(err)
 		return
 	}
@@ -322,7 +322,7 @@ func (rr *rawxRequest) downloadChunk() {
 		}
 		if err != nil {
 			if err != io.EOF {
-				loggerError.Print("Write() error: ", err)
+				LogError("Write() error: %s", err)
 			}
 			break
 		}

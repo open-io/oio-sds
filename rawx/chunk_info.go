@@ -83,7 +83,7 @@ const (
 )
 
 func returnError(err error, message string) error {
-	loggerError.Printf("%s: %s", err, message)
+	LogWarning("%s: %s", err, message)
 	return err
 }
 
