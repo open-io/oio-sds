@@ -17,7 +17,6 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -136,10 +135,7 @@ func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 	counters.Increment(HitsTotal)
 	counters.Add(TimeTotal, spent)
 
-	trace := fmt.Sprintf(
-		"%d - INF %s %s %s %d %d %d %s %s",
-		os.Getpid(), rawx.url, req.RemoteAddr, req.Method,
-		rawxreq.status, spent, rawxreq.bytesOut,
-		rawxreq.reqid, req.URL.Path)
-	loggerAccess.Print(trace)
+	LogIncoming("%s %s %s %d %d %d %s %s", rawx.url, req.RemoteAddr,
+		req.Method, rawxreq.status, spent, rawxreq.bytesOut, rawxreq.reqid,
+		req.URL.Path)
 }

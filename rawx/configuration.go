@@ -45,10 +45,9 @@ var optsParser = ini.LoadOptions{
 func oioLoadFile(file string) {
 	cfg, err := ini.LoadSources(optsParser, file)
 	if err != nil {
-		loggerError.Printf("Failed to load config file [%s] : %s", file, err)
+		LogDebug("Failed to load config file [%s] : %s", file, err)
 		return
 	}
-	loggerError.Printf("Load config file [%s]", file)
 
 	sections := cfg.Sections()
 	for _, section := range sections {
@@ -65,10 +64,9 @@ func oioLoadFile(file string) {
 func oioLoadDir(directory string) {
 	files, err := ioutil.ReadDir(directory)
 	if err != nil {
-		loggerError.Printf("Failed to load config directory [%s] : %s", directory, err)
+		LogDebug("Failed to load config directory [%s] : %s", directory, err)
 		return
 	}
-	loggerError.Printf("Load config directory [%s]", directory)
 
 	for _, fi := range files {
 		if fi.Mode().IsRegular() {

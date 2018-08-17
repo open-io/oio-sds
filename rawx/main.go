@@ -24,16 +24,10 @@ http handler.
 import (
 	"flag"
 	"log"
-	"log/syslog"
 	"net"
 	"net/http"
 	"path/filepath"
 	"regexp"
-)
-
-var (
-	loggerAccess *log.Logger
-	loggerError  *log.Logger
 )
 
 func checkURL(url string) {
@@ -65,6 +59,8 @@ func checkMakeFileRepo(dir string) *FileRepository {
 
 func main() {
 	_ = flag.String("D", "UNUSED", "Unused compatibility flag")
+	verbosePtr := flag.Bool("v", false, "Verbose mode, this activates stderr traces")
+	syslogIDPtr := flag.String("s", "", "Activates syslog traces with the given identifier")
 	confPtr := flag.String("f", "", "Path to configuration file")
 	flag.Parse()
 
@@ -72,8 +68,13 @@ func main() {
 		log.Fatal("Unexpected positional argument detected")
 	}
 
-	loggerAccess, _ = syslog.NewLogger(syslog.LOG_INFO|syslog.LOG_LOCAL0, 0)
-	loggerError, _ = syslog.NewLogger(syslog.LOG_INFO|syslog.LOG_LOCAL1, 0)
+	if *verbosePtr {
+		InitStderrLogger()
+	} else if *syslogIDPtr != "" {
+		InitSysLogger(*syslogIDPtr)
+	} else {
+		InitNoopLogger()
+	}
 
 	var opts optionsMap
 
@@ -94,7 +95,7 @@ func main() {
 	// No service ID specified, using the service address instead
 	if len(rawxID) <= 0 {
 		rawxID = rawxURL
-		loggerError.Print("No service ID, using ADDR ", rawxURL)
+		LogInfo("No service ID, using ADDR %s", rawxURL)
 	}
 
 	filerepo := checkMakeFileRepo(opts["basedir"])
@@ -106,7 +107,7 @@ func main() {
 
 	chunkrepo := MakeChunkRepository(filerepo)
 	if err := chunkrepo.Lock(namespace, rawxID); err != nil {
-		loggerError.Fatal("Volume lock error: ", err.Error())
+		log.Fatal("Volume lock error: ", err.Error())
 	}
 
 	rawx := rawxService{
@@ -119,17 +120,17 @@ func main() {
 
 	eventAgent := OioGetEventAgent(namespace)
 	if eventAgent == "" {
-		loggerError.Fatal("Notifier error: no address")
+		log.Fatal("Notifier error: no address")
 	}
 	notifier, err := MakeNotifier(eventAgent, &rawx)
 	if err != nil {
-		loggerError.Fatal("Notifier error: ", err)
+		log.Fatal("Notifier error: ", err)
 	}
 	rawx.notifier = notifier
 	rawx.notifier.start()
 
 	if err = http.ListenAndServe(rawx.url, &rawx); err != nil {
-		loggerError.Fatal("HTTP error: ", err)
+		log.Fatal("HTTP error: ", err)
 	}
 
 	rawx.notifier.stop()
