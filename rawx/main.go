@@ -26,8 +26,12 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
 	"path/filepath"
 	"regexp"
+	"syscall"
+	"time"
 )
 
 func checkURL(url string) {
@@ -57,6 +61,37 @@ func checkMakeFileRepo(dir string) *FileRepository {
 	return MakeFileRepository(basedir)
 }
 
+func sigHandlerUSR1() {
+	increaseVerbosity()
+	go func() {
+		time.Sleep(time.Minute * 15)
+		resetVerbosity()
+	}()
+}
+
+func sigHandlerUSR2() {
+	resetVerbosity()
+}
+
+func installSigHandlers() {
+	signalChan := make(chan os.Signal, 1)
+	signal.Notify(signalChan,
+		syscall.SIGUSR1,
+		syscall.SIGUSR2)
+
+	go func() {
+		for {
+			sig := <-signalChan
+			switch sig {
+			case syscall.SIGUSR1:
+				sigHandlerUSR1()
+			case syscall.SIGUSR2:
+				sigHandlerUSR2()
+			}
+		}
+	}()
+}
+
 func main() {
 	_ = flag.String("D", "UNUSED", "Unused compatibility flag")
 	verbosePtr := flag.Bool("v", false, "Verbose mode, this activates stderr traces")
@@ -75,6 +110,8 @@ func main() {
 	} else {
 		InitNoopLogger()
 	}
+
+	installSigHandlers()
 
 	var opts optionsMap
 
