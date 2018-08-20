@@ -23,6 +23,6 @@ License along with this library.
 # include <glib.h>
 
 GError* volume_service_lock(const char *vol, const char *type,
-		const char *id, const char *ns);
+		const char *id, const char *ns, const gboolean servicing);
 
 #endif /*OIO_SDS__metautils__lib__volume_lock_h*/
