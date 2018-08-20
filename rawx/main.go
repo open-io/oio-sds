@@ -97,6 +97,7 @@ func main() {
 	verbosePtr := flag.Bool("v", false, "Verbose mode, this activates stderr traces")
 	syslogIDPtr := flag.String("s", "", "Activates syslog traces with the given identifier")
 	confPtr := flag.String("f", "", "Path to configuration file")
+	servicingPtr := flag.Bool("servicing", false, "Don't lock volume")
 	flag.Parse()
 
 	if flag.NArg() != 0 {
@@ -143,8 +144,11 @@ func main() {
 	filerepo.FallocateFile = opts.getBool("fallocate", filerepo.FallocateFile)
 
 	chunkrepo := MakeChunkRepository(filerepo)
-	if err := chunkrepo.Lock(namespace, rawxID); err != nil {
-		log.Fatal("Volume lock error: ", err.Error())
+
+	if !*servicingPtr {
+		if err := chunkrepo.Lock(namespace, rawxID); err != nil {
+			log.Fatal("Volume lock error: ", err.Error())
+		}
 	}
 
 	rawx := rawxService{
