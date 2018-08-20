@@ -30,6 +30,27 @@ type oioLogger interface {
 }
 
 var logger oioLogger
+var logDefaultSeverity = syslog.LOG_CRIT
+var logSeverity = logDefaultSeverity
+
+func severityAllowed(severity syslog.Priority) bool {
+	return severity <= logSeverity
+}
+
+func initVerbosity(severity syslog.Priority) {
+	logDefaultSeverity = severity
+	logSeverity = severity
+}
+
+func increaseVerbosity() {
+	if logSeverity < syslog.LOG_DEBUG {
+		logSeverity = logSeverity + 1
+	}
+}
+
+func resetVerbosity() {
+	logSeverity = logDefaultSeverity
+}
 
 func getFacility(domain string) (syslog.Priority, string) {
 	if domain == "" {
@@ -63,12 +84,15 @@ func getSeverity(priority syslog.Priority) (syslog.Priority, string) {
 	}
 }
 
-func getLog(domain string, priority syslog.Priority,
-	format string, v ...interface{}) (syslog.Priority, string) {
+func writeLog(domain string, priority syslog.Priority,
+	format string, v ...interface{}) {
+	severity, severityName := getSeverity(priority)
+	if !severityAllowed(severity) {
+		return
+	}
 
 	pid := os.Getpid()
 	facility, facilityName := getFacility(domain)
-	severity, severityName := getSeverity(priority)
 	var prefix string
 	if facilityName == "log" {
 		if domain == "" {
@@ -81,17 +105,7 @@ func getLog(domain string, priority syslog.Priority,
 	}
 	message := fmt.Sprintf(format, v...)
 
-	return severity | facility, prefix + message
-}
-
-func writeLog(domain string, priority syslog.Priority,
-	format string, v ...interface{}) {
-	priority, message := getLog(domain, priority, format, v...)
-	logger.write(priority, message)
-}
-
-func LogCritical(format string, v ...interface{}) {
-	writeLog("", syslog.LOG_CRIT, format, v...)
+	logger.write(severity|facility, prefix+message)
 }
 
 func LogError(format string, v ...interface{}) {
@@ -137,6 +151,7 @@ type SysLogger struct {
 }
 
 func InitSysLogger(syslogID string) {
+	initVerbosity(syslog.LOG_INFO)
 	sysLogger := new(SysLogger)
 	sysLogger.syslogID = syslogID
 	logger = sysLogger
@@ -156,6 +171,7 @@ type StderrLogger struct {
 }
 
 func InitStderrLogger() {
+	initVerbosity(syslog.LOG_DEBUG)
 	stderrLogger := new(StderrLogger)
 	stderrLogger.logger = log.New(os.Stderr, "", 0)
 	logger = stderrLogger
