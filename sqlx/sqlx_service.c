@@ -129,6 +129,9 @@ static struct grid_main_option_s common_options[] =
 	{"ServiceId", OT_STRING, {.str = &SRV.service_id},
 		"Set Service Id of the service"},
 
+	{"Servicing", OT_BOOL, {.b = &SRV.flag_servicing},
+		"If set, xattrs lock will be unset on volume"},
+
 	{NULL, 0, {.any=0}, NULL}
 };
 
@@ -727,7 +730,7 @@ sqlx_service_action(void)
 
 	if (!SRV.flag_nolock) {
 		err = volume_service_lock (SRV.volume, SRV.service_config->srvtype,
-				_get_url(&SRV), SRV.ns_name);
+				_get_url(&SRV), SRV.ns_name, SRV.flag_servicing);
 		if (err)
 			return _action_report_error(err, "Volume lock failed");
 	}
