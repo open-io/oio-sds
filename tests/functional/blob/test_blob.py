@@ -16,27 +16,19 @@
 # License along with this library.
 
 import string
-import time
 from os.path import isfile
-from os import remove
-from shutil import rmtree
-from uuid import uuid4
-from tempfile import mktemp, mkdtemp
 from hashlib import md5
-from subprocess import Popen
 from urlparse import urlparse
 from urllib import unquote
 from oio.common.http import headers_from_object_metadata
 from oio.common.http_eventlet import http_connect
-from oio.common.http_urllib3 import get_pool_manager
 from oio.common.constants import OIO_VERSION, CHUNK_HEADERS
 from oio.common.fullpath import encode_fullpath
 from oio.common.utils import cid_from_name
 from oio.blob.utils import read_chunk_metadata
 from tests.utils import CommonTestCase, random_id
-from tests.functional.blob import convert_to_old_chunk, random_buffer, \
+from tests.functional.blob import random_buffer, \
     random_chunk_id
-from tests.proc import wait_for_slow_startup
 
 
 map_cfg = {'addr': 'Listen',
@@ -161,7 +153,7 @@ class RawxAbstractTestSuite(object):
         self.assertEqual(400, resp.status)
 
     def _cycle_put(self, length, expected, remove_headers=None, path=None,
-                   old_fullpath=False, chunkid_lowercase=False):
+                   chunkid_lowercase=False):
         if path:
             self.path = path
         chunkid = random_chunk_id()
@@ -173,9 +165,6 @@ class RawxAbstractTestSuite(object):
         chunkpath = self._chunk_path(chunkid)
         headers = self._chunk_attr(chunkid, chunkdata)
         fullpath = headers['x-oio-chunk-meta-full-path']
-        if old_fullpath:
-            headers['x-oio-chunk-meta-full-path'] = \
-                headers['x-oio-chunk-meta-full-path'].rsplit('/', 1)[0]
         if remove_headers:
             for h in remove_headers:
                 del headers[h]
@@ -654,209 +643,16 @@ class RawxAbstractTestSuite(object):
                                      trailers)
         self.assertEqual(400, resp.status)
 
-    def test_old_fullpath(self):
-        if isinstance(self, RawxV2TestSuite):
-            self.skipTest('Rawx V2 read only new fullpath')
-        self._cycle_put(32, 201, old_fullpath=True)
-
-    def test_read_old_chunk(self):
-        if isinstance(self, RawxV2TestSuite):
-            self.skipTest('Rawx V2 read only new chunks')
-        metachunk_hash = md5().hexdigest()
-        trailers = {'x-oio-chunk-meta-metachunk-size': 1,
-                    'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
-
-        chunkid = random_chunk_id()
-        chunkdata = random_buffer(string.printable, 1)
-        chunkurl = self._rawx_url(chunkid)
-        chunkpath = self._chunk_path(chunkid)
-        headers = self._chunk_attr(chunkid, chunkdata)
-        self._check_not_present(chunkurl)
-
-        resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers,
-                                     trailers)
-        self.assertEqual(201, resp.status)
-
-        resp1, data1 = self._http_request(chunkurl, 'GET', '', {})
-        self.assertEqual(200, resp1.status)
-        headers1 = dict(resp1.getheaders())
-        with open(chunkpath, 'r') as fd:
-            meta1, _ = read_chunk_metadata(fd, chunkid)
-
-        convert_to_old_chunk(
-            chunkpath, self.account, self.container, self.content_path,
-            self.content_version, self.content_id)
-
-        resp2, data2 = self._http_request(chunkurl, 'GET', '', {})
-        self.assertEqual(200, resp2.status)
-        headers2 = dict(resp2.getheaders())
-        with open(chunkpath, 'r') as fd:
-            meta2, _ = read_chunk_metadata(fd, chunkid)
-
-        self.assertEqual(data1, data2)
-        del headers1[CHUNK_HEADERS['full_path']]
-        del headers1[CHUNK_HEADERS['oio_version']]
-        del headers2[CHUNK_HEADERS['oio_version']]
-        self.assertDictEqual(headers1, headers2)
-        del meta1['full_path']
-        del meta1['oio_version']
-        del meta2['oio_version']
-        self.assertDictEqual(meta1, meta2)
-
-        # Copy old chunk
-        copyid = random_chunk_id()
-        copyid = chunkid[:-60] + copyid[-60:]
-        copyurl = self._rawx_url(copyid)
-        copypath = self._chunk_path(copyid)
-        copycontentid = random_id(32)
-        copyheaders = {}
-        copyheaders["Destination"] = copyurl
-        copyheaders['x-oio-chunk-meta-full-path'] = encode_fullpath(
-            "account-snapshot", "container-snapshot",
-            self.content_path+"-snapshot", 1456938361143741, copycontentid)
-        resp, _ = self._http_request(chunkurl, 'COPY', '', copyheaders)
-        self.assertEqual(201, resp.status)
-
-        resp2, data2 = self._http_request(chunkurl, 'GET', '', {})
-        self.assertEqual(200, resp2.status)
-        headers2 = dict(resp2.getheaders())
-        with open(chunkpath, 'r') as fd:
-            meta2, _ = read_chunk_metadata(fd, chunkid)
-
-        self.assertEqual(1, len(meta2['links']))
-        self.assertEqual(copyheaders['x-oio-chunk-meta-full-path'],
-                         meta2['links'][copyid])
-        meta2['links'] = dict()
-
-        self.assertEqual(data1, data2)
-        del headers2[CHUNK_HEADERS['oio_version']]
-        self.assertDictEqual(headers1, headers2)
-        del meta2['oio_version']
-        self.assertDictEqual(meta1, meta2)
-
-        resp3, data3 = self._http_request(copyurl, 'GET', '', {})
-        self.assertEqual(200, resp3.status)
-        headers3 = dict(resp3.getheaders())
-        with open(copypath, 'r') as fd:
-            meta3, _ = read_chunk_metadata(fd, copyid)
-
-        self.assertEqual(
-            copyheaders['x-oio-chunk-meta-full-path'],
-            headers3['x-oio-chunk-meta-full-path'])
-        del headers3['x-oio-chunk-meta-full-path']
-        self.assertEqual(
-            cid_from_name("account-snapshot", "container-snapshot"),
-            headers3['x-oio-chunk-meta-container-id'])
-        del headers1['x-oio-chunk-meta-container-id']
-        del headers3['x-oio-chunk-meta-container-id']
-        self.assertEqual(
-            self.content_path+"-snapshot",
-            unquote(headers3['x-oio-chunk-meta-content-path']))
-        del headers1['x-oio-chunk-meta-content-path']
-        del headers3['x-oio-chunk-meta-content-path']
-        self.assertEqual(
-            '1456938361143741',
-            headers3['x-oio-chunk-meta-content-version'])
-        del headers1['x-oio-chunk-meta-content-version']
-        del headers3['x-oio-chunk-meta-content-version']
-        self.assertEqual(
-            copycontentid, headers3['x-oio-chunk-meta-content-id'])
-        del headers1['x-oio-chunk-meta-content-id']
-        del headers3['x-oio-chunk-meta-content-id']
-        self.assertEqual(copyid, headers3['x-oio-chunk-meta-chunk-id'])
-        del headers1['x-oio-chunk-meta-chunk-id']
-        del headers3['x-oio-chunk-meta-chunk-id']
-
-        self.assertEqual(
-            copyheaders['x-oio-chunk-meta-full-path'], meta3['full_path'])
-        del meta3['full_path']
-        self.assertEqual(
-            cid_from_name("account-snapshot", "container-snapshot"),
-            meta3['container_id'])
-        del meta1['container_id']
-        del meta3['container_id']
-        self.assertEqual(self.content_path+"-snapshot", meta3['content_path'])
-        del meta1['content_path']
-        del meta3['content_path']
-        self.assertEqual('1456938361143741', meta3['content_version'])
-        del meta1['content_version']
-        del meta3['content_version']
-        self.assertEqual(copycontentid, meta3['content_id'])
-        del meta1['content_id']
-        del meta3['content_id']
-        self.assertEqual(copyid, meta3['chunk_id'])
-        del meta1['chunk_id']
-        del meta3['chunk_id']
-        # FIXME the old chunk is invisible
-        self.assertEqual(0, len(meta3['links']))
-
-        self.assertEqual(data1, data3)
-        del headers3[CHUNK_HEADERS['oio_version']]
-        self.assertDictEqual(headers1, headers3)
-        del meta3['oio_version']
-        self.assertDictEqual(meta1, meta3)
-
-
-class RawxV1TestSuite(CommonTestCase, RawxAbstractTestSuite):
-
-    def setUp(self):
-        super(RawxV1TestSuite, self).setUp()
-        self._setup()
-        _, rawx_path, rawx_addr, _ = self.get_service_url('rawx')
-        self.rawx = 'http://' + rawx_addr
-        self.rawx_path = rawx_path + '/'
-
-    def tearDown(self):
-        super(RawxV1TestSuite, self).tearDown()
-        self._teardown()
-
 
 class RawxV2TestSuite(CommonTestCase, RawxAbstractTestSuite):
 
     def setUp(self):
         super(RawxV2TestSuite, self).setUp()
         self._setup()
-        self.http_pool = get_pool_manager(max_retries=10, backoff_factor=0.05)
-        self.garbage_files = list()
-        self.garbage_procs = list()
-
-        # Start a sandbox rawx
-        self.num, self.host, self.port = 17, '127.0.0.1', 5999
-        self.cfg_path = mktemp()
-        self.dir_path = mkdtemp()
-        self.service_id = str(uuid4())
-        self.garbage_files.extend((self.cfg_path, self.dir_path))
-        config = {'addr': '{0}:{1}'.format(self.host, self.port),
-                  'ns': self.ns, 'basedir': self.dir_path}
-        _write_config(self.cfg_path, config)
-        child = Popen(('oio-rawx', '-s', 'OIO,OPENIO,rawx,0', '-f',
-                       self.cfg_path), close_fds=True)
-        if not wait_for_slow_startup(self.port):
-            child.kill()
-            raise Exception("The RDIR server is too long to start")
-        else:
-            self.garbage_procs.append(child)
-            time.sleep(2)
-
-        # Prepare the test env variables
         _, rawx_path, rawx_addr, _ = self.get_service_url('rawx')
-        self.rawx = 'http://' + self.host + ':' + str(self.port)
-        self.rawx_path = self.dir_path + '/'
+        self.rawx = 'http://' + rawx_addr
+        self.rawx_path = rawx_path + '/'
 
     def tearDown(self):
         super(RawxV2TestSuite, self).tearDown()
         self._teardown()
-        self.http_pool.clear()
-        for p in self.garbage_procs:
-            try:
-                p.terminate()
-                p.kill()
-            except Exception:
-                pass
-        for f in self.garbage_files:
-            ignore_errors = True
-            try:
-                rmtree(f, ignore_errors)
-                remove(f)
-            except Exception:
-                pass

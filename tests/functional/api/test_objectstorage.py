@@ -42,12 +42,12 @@ class ObjectStorageApiTestBase(BaseTestCase):
 
     def tearDown(self):
         super(ObjectStorageApiTestBase, self).tearDown()
-        for ct, name in self.created:
-            try:
-                self.api.object_delete(self.account, ct, name)
-            except Exception:
-                logging.exception("Failed to delete %s/%s/%s//%s",
-                                  self.ns, self.account, ct, name)
+        # for ct, name in self.created:
+        #     try:
+        #         self.api.object_delete(self.account, ct, name)
+        #     except Exception:
+        #         logging.exception("Failed to delete %s/%s/%s//%s",
+        #                           self.ns, self.account, ct, name)
 
     def _create(self, name, metadata=None):
         return self.api.container_create(self.account, name,

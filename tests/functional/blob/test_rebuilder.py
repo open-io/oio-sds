@@ -13,18 +13,11 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import os
-import random
-
 from oio.api.object_storage import ObjectStorageApi
 from oio.conscience.client import ConscienceClient
 from oio.blob.client import BlobClient
 from oio.common.utils import cid_from_name
-from oio.common.constants import OIO_VERSION
-from oio.common.fullpath import encode_fullpath
-from oio.rebuilder.blob_rebuilder import BlobRebuilderWorker
 from tests.utils import BaseTestCase, random_str
-from tests.functional.blob import convert_to_old_chunk
 
 
 class TestBlobRebuilder(BaseTestCase):
@@ -67,59 +60,3 @@ class TestBlobRebuilder(BaseTestCase):
         chunk_id = url.split('/', 3)[3]
         volume = self.rawx_volumes[volume_id]
         return volume + '/' + chunk_id[:3] + '/' + chunk_id
-
-    def test_rebuild_old_chunk(self):
-        for c in self.chunks:
-            convert_to_old_chunk(
-                self._chunk_path(c), self.account, self.container, self.path,
-                self.version, self.content_id)
-
-        chunk = random.choice(self.chunks)
-        chunk_volume = chunk['url'].split('/')[2]
-        chunk_id = chunk['url'].split('/')[3]
-        chunk_headers, chunk_stream = self.blob_client.chunk_get(
-            chunk['url'])
-        os.remove(self._chunk_path(chunk))
-        chunks_kept = list(self.chunks)
-        chunks_kept.remove(chunk)
-
-        conf = self.conf.copy()
-        conf['allow_same_rawx'] = True
-        rebuilder = BlobRebuilderWorker(conf, None, chunk_volume)
-        rebuilder.chunk_rebuild(self.cid, self.content_id, chunk_id)
-
-        _, new_chunks = self.api.object_locate(
-            self.account, self.container, self.path)
-        new_chunk = list(new_chunks)
-
-        self.assertEqual(len(new_chunks), len(chunks_kept) + 1)
-        url_kept = [c['url'] for c in chunks_kept]
-        new_chunk = None
-        for c in new_chunks:
-            if c['url'] not in url_kept:
-                self.assertIsNone(new_chunk)
-                new_chunk = c
-
-        self.assertNotEqual(chunk['real_url'], new_chunk['real_url'])
-        self.assertNotEqual(chunk['url'], new_chunk['url'])
-        self.assertEqual(chunk['pos'], new_chunk['pos'])
-        self.assertEqual(chunk['size'], new_chunk['size'])
-        self.assertEqual(chunk['hash'], new_chunk['hash'])
-
-        new_chunk_headers, new_chunk_stream = self.blob_client.chunk_get(
-            new_chunk['url'])
-        self.assertEqual(chunk_stream.read(), new_chunk_stream.read())
-        fullpath = encode_fullpath(self.account, self.container, self.path,
-                                   self.version, self.content_id)
-        self.assertEqual(fullpath, new_chunk_headers['full_path'])
-        del new_chunk_headers['full_path']
-        self.assertNotEqual(chunk_headers['chunk_id'],
-                            new_chunk_headers['chunk_id'])
-        new_chunk_id = new_chunk['url'].split('/')[3]
-        self.assertEqual(new_chunk_id, new_chunk_headers['chunk_id'])
-        del chunk_headers['chunk_id']
-        del new_chunk_headers['chunk_id']
-        self.assertEqual(OIO_VERSION, new_chunk_headers['oio_version'])
-        del chunk_headers['oio_version']
-        del new_chunk_headers['oio_version']
-        self.assertEqual(chunk_headers, new_chunk_headers)
