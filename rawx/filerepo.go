@@ -380,7 +380,7 @@ func (fileReader *RealFileReader) Read(buffer []byte) (int, error) {
 }
 
 func (fileReader *RealFileReader) GetAttr(key string) ([]byte, error) {
-	tmp := make([]byte, 256)
+	tmp := make([]byte, 2048)
 	sz, err := syscall.Getxattr(fileReader.path, key, tmp)
 	if err != nil {
 		return nil, err
