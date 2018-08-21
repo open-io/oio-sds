@@ -52,9 +52,12 @@ retry:
 
 	if (!err) {
 		if (strlen(v) != (gsize)realsize)
-			err = NEWERROR(CODE_INTERNAL_ERROR, "XATTR size differ");
+			err = NEWERROR(CODE_INTERNAL_ERROR,
+					"XATTR size differ, expected IP is %s",
+					buf);
 		else if (0 != memcmp(v,buf,realsize))
-			err = NEWERROR(CODE_INTERNAL_ERROR, "XATTR differ");
+			err = NEWERROR(CODE_INTERNAL_ERROR,
+				        "XATTR differ, expected IP is %s", buf);
 	}
 
 	g_free(buf);
