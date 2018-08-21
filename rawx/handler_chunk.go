@@ -30,7 +30,7 @@ import (
 	"strings"
 )
 
-const bufSize = 1024 * 1024
+const bufferSize int64 = 1024 * 1024
 
 var (
 	AttrValueZLib = []byte{'z', 'l', 'i', 'b'}
@@ -47,11 +47,11 @@ var (
 	ErrRangeNotSatisfiable   = errors.New("Range not satisfiable")
 	ErrListMarker            = errors.New("Invalid listing marker")
 	ErrListPrefix            = errors.New("Invalid listing prefix")
+	ErrContentLength         = errors.New("Invalid content length")
 )
 
-type upload struct {
-	in     io.Reader
-	length *int64
+type uploadInfo struct {
+	length int64
 	hash   string
 }
 
@@ -65,40 +65,50 @@ func (rr *rawxRequest) retrieveChunkID() error {
 	return nil
 }
 
-func putData(out io.Writer, ul *upload) error {
-	running := true
-	remaining := *(ul.length)
-	LogDebug("Uploading %v bytes", remaining)
+func (rr *rawxRequest) putData(out io.Writer) (*uploadInfo, error) {
+	contentLength := rr.req.ContentLength
+	buffer := make([]byte, bufferSize)
+	chunkIn := rr.req.Body
+	var chunkLength int64
 	chunkHash := md5.New()
-	buf := make([]byte, bufSize)
-	for running && remaining != 0 {
-		max := int64(bufSize)
-		if remaining > 0 && remaining < bufSize {
-			max = remaining
+	LogDebug("Uploading %v bytes", contentLength)
+
+	for {
+		max := bufferSize
+		if contentLength > 0 {
+			remaining := contentLength - chunkLength
+			if remaining < bufferSize {
+				max = remaining + 1
+			}
 		}
-		n, err := ul.in.Read(buf[:max])
+		n, err := chunkIn.Read(buffer[:max])
 		LogDebug("consumed %v / %s", n, err)
 		if n > 0 {
-			if remaining > 0 {
-				remaining = remaining - int64(n)
-			}
-			out.Write(buf[:n])
-			chunkHash.Write(buf[:n])
+			chunkLength += int64(n)
+			out.Write(buffer[:n])
+			chunkHash.Write(buffer[:n])
 		}
 		if err != nil {
-			if err == io.EOF && remaining < 0 {
+			if err == io.EOF {
 				// Clean end of chunked stream
-				running = false
+				break
 			} else {
 				// Any other error
-				return err
+				return nil, err
 			}
 		}
+		if contentLength >= 0 && chunkLength > contentLength {
+			return nil, ErrContentLength
+		}
+	}
+	if contentLength >= 0 && chunkLength != contentLength {
+		return nil, ErrContentLength
 	}
 
-	sum := chunkHash.Sum(make([]byte, 0))
-	ul.hash = strings.ToUpper(hex.EncodeToString(sum))
-	return nil
+	ul := new(uploadInfo)
+	ul.hash = strings.ToUpper(hex.EncodeToString(chunkHash.Sum(make([]byte, 0))))
+	ul.length = chunkLength
+	return ul, nil
 }
 
 func (rr *rawxRequest) uploadChunk() {
@@ -121,26 +131,23 @@ func (rr *rawxRequest) uploadChunk() {
 	}
 
 	// Upload, and maybe manage compression
-	var ul upload
-	ul.in = rr.req.Body
-	ul.length = &rr.req.ContentLength
-
+	var ul *uploadInfo
 	if rr.rawx.compress {
 		z := zlib.NewWriter(out)
-		err = putData(z, &ul)
+		ul, err = rr.putData(z)
 		errClose := z.Close()
 		if err == nil {
 			err = errClose
 		}
 	} else {
-		if err = putData(out, &ul); err != nil {
+		if ul, err = rr.putData(out); err != nil {
 			LogError("Chunk upload error: %s", err)
 		}
 	}
 
 	// If a hash has been sent, it must match the hash computed
 	if err == nil {
-		if err = rr.chunk.retrieveTrailers(&rr.req.Trailer, &ul); err != nil {
+		if err = rr.chunk.retrieveTrailers(&rr.req.Trailer, ul); err != nil {
 			LogError("Trailer error: %s", err)
 		}
 	}
@@ -160,6 +167,8 @@ func (rr *rawxRequest) uploadChunk() {
 	if err != nil {
 		rr.replyError(err)
 		out.Abort()
+		// Discard request body
+		io.Copy(ioutil.Discard, rr.req.Body)
 	} else {
 		out.Commit()
 		rr.rep.Header().Set("chunkhash", ul.hash)
@@ -313,12 +322,12 @@ func (rr *rawxRequest) downloadChunk() {
 	}
 
 	// Now transmit the clear data to the client
-	buf := make([]byte, bufSize)
+	buffer := make([]byte, bufferSize)
 	for {
-		n, err := in.Read(buf)
+		n, err := in.Read(buffer)
 		if n > 0 {
 			rr.bytesOut = rr.bytesOut + uint64(n)
-			rr.rep.Write(buf[:n])
+			rr.rep.Write(buffer[:n])
 		}
 		if err != nil {
 			if err != io.EOF {
