@@ -328,7 +328,7 @@ func (chunk *chunkInfo) retrieveHeaders(headers *http.Header, chunkID string) er
 }
 
 // Check and load the checksum and the size of the chunk and the metachunk
-func (chunk *chunkInfo) retrieveTrailers(trailers *http.Header, ul *upload) error {
+func (chunk *chunkInfo) retrieveTrailers(trailers *http.Header, ul *uploadInfo) error {
 	trailerMetachunkHash := trailers.Get(HeaderNameMetachunkChecksum)
 	if trailerMetachunkHash != "" {
 		chunk.MetachunkHash = trailerMetachunkHash
@@ -361,7 +361,6 @@ func (chunk *chunkInfo) retrieveTrailers(trailers *http.Header, ul *upload) erro
 	if trailerChunkHash != "" {
 		chunk.ChunkHash = strings.ToUpper(trailerChunkHash)
 	}
-	ul.hash = strings.ToUpper(ul.hash)
 	if chunk.ChunkHash != "" {
 		if !strings.EqualFold(chunk.ChunkHash, ul.hash) {
 			return returnError(ErrInvalidHeader, HeaderNameChunkChecksum)
@@ -374,9 +373,12 @@ func (chunk *chunkInfo) retrieveTrailers(trailers *http.Header, ul *upload) erro
 		chunk.ChunkSize = trailerChunkSize
 	}
 	if chunk.ChunkSize != "" {
-		if _, err := strconv.ParseInt(chunk.ChunkSize, 10, 64); err != nil {
+		if chunkSize, err := strconv.ParseInt(chunk.ChunkSize, 10, 64); err != nil ||
+			chunkSize != ul.length {
 			return returnError(ErrInvalidHeader, HeaderNameChunkSize)
 		}
+	} else {
+		chunk.ChunkSize = strconv.FormatInt(ul.length, 10)
 	}
 
 	return nil
