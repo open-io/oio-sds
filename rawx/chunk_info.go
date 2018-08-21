@@ -216,8 +216,11 @@ func (chunk *chunkInfo) retrieveContentFullpathHeader(headers *http.Header) erro
 		return returnError(ErrInvalidHeader, HeaderNameFullpath)
 	}
 	headerPath := headers.Get(HeaderNameContentPath)
-	if headerPath != "" && headerPath != path {
-		return returnError(ErrInvalidHeader, HeaderNameContentPath)
+	if headerPath != "" {
+		headerPath, err = url.PathUnescape(headerPath)
+		if err != nil || headerPath != path {
+			return returnError(ErrInvalidHeader, HeaderNameContentPath)
+		}
 	}
 	chunk.ContentPath = path
 
@@ -393,7 +396,7 @@ func (chunk *chunkInfo) fillHeaders(headers *http.Header) {
 	}
 	setHeader(HeaderNameFullpath, chunk.ContentFullpath)
 	setHeader(HeaderNameContainerID, chunk.ContainerID)
-	setHeader(HeaderNameContentPath, chunk.ContentPath)
+	setHeader(HeaderNameContentPath, url.PathEscape(chunk.ContentPath))
 	setHeader(HeaderNameContentVersion, chunk.ContentVersion)
 	setHeader(HeaderNameContentID, chunk.ContentID)
 	setHeader(HeaderNameContentStgPol, chunk.ContentStgPol)
