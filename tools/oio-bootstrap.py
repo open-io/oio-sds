@@ -697,6 +697,15 @@ start_at_boot=false
 on_die=cry
 """
 
+template_gridinit_rawx = """
+[Service.${NS}-${SRVTYPE}-${SRVNUM}]
+group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+command=oio-rawx -s OIO,${NS},${SRVTYPE},${SRVNUM} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.httpd.conf
+enabled=true
+start_at_boot=false
+on_die=cry
+"""
+
 template_gridinit_httpd = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
@@ -1361,7 +1370,7 @@ def generate(options):
                           })
             add_service(env)
             # gridinit (rawx)
-            tpl = Template(template_gridinit_httpd)
+            tpl = Template(template_gridinit_rawx)
             with open(gridinit(env), 'a+') as f:
                 f.write(tpl.safe_substitute(env))
             # service
