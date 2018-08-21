@@ -216,16 +216,24 @@ func (rr *rawxRequest) checkChunk() {
 	if in != nil {
 		defer in.Close()
 	}
-
-	length := in.Size()
-	rr.rep.Header().Set("Content-Length", fmt.Sprintf("%v", length))
-	rr.rep.Header().Set("Accept-Ranges", "bytes")
-
 	if err != nil {
 		rr.replyError(err)
-	} else {
-		rr.replyCode(http.StatusNoContent)
+		return
 	}
+
+	err = rr.chunk.loadAttr(in, rr.chunkID)
+	if err != nil {
+		LogError("Load attr error: %s", err)
+		rr.replyError(err)
+		return
+	}
+
+	headers := rr.rep.Header()
+	rr.chunk.fillHeaders(&headers)
+	headers.Set("Content-Length", fmt.Sprintf("%v", in.Size()))
+	headers.Set("Accept-Ranges", "bytes")
+
+	rr.replyCode(http.StatusNoContent)
 }
 
 func (rr *rawxRequest) downloadChunk() {
