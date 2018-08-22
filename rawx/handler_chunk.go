@@ -315,18 +315,10 @@ func (rr *rawxRequest) downloadChunk() {
 	if hasRange() {
 		rr.rep.Header().Set("Content-Range", fmt.Sprintf("bytes %v-%v/%v", offset, offset+size-1, size))
 		rr.rep.Header().Set("Content-Length", fmt.Sprintf("%v", size))
-		if size <= 0 {
-			rr.replyCode(http.StatusNoContent)
-		} else {
-			rr.replyCode(http.StatusPartialContent)
-		}
+		rr.replyCode(http.StatusPartialContent)
 	} else {
 		rr.rep.Header().Set("Content-Length", fmt.Sprintf("%v", length))
-		if length <= 0 {
-			rr.replyCode(http.StatusNoContent)
-		} else {
-			rr.replyCode(http.StatusOK)
-		}
+		rr.replyCode(http.StatusOK)
 	}
 
 	// Now transmit the clear data to the client
