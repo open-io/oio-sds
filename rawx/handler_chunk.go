@@ -55,6 +55,12 @@ type uploadInfo struct {
 	hash   string
 }
 
+type rangeInfo struct {
+	offset int64
+	last   int64
+	size   int64
+}
+
 // Check and load a canonic form of the ID of the chunk.
 func (rr *rawxRequest) retrieveChunkID() error {
 	chunkID := filepath.Base(rr.req.URL.Path)
@@ -236,6 +242,33 @@ func (rr *rawxRequest) checkChunk() {
 	rr.replyCode(http.StatusNoContent)
 }
 
+func (rr *rawxRequest) getRange(chunkSize int64) (*rangeInfo, error) {
+	headerRange := rr.req.Header.Get("Range")
+	if headerRange == "" || chunkSize == 0 {
+		return nil, nil
+	}
+
+	var offset int64
+	var last int64
+	if nb, err := fmt.Sscanf(headerRange, "bytes=%d-%d", &offset, &last); err != nil || nb != 2 {
+		return nil, nil
+	}
+	if offset < 0 || last < 0 || offset > last {
+		return nil, nil
+	}
+	if offset >= chunkSize {
+		return nil, ErrInvalidRange
+	}
+	if last >= chunkSize {
+		last = chunkSize - 1
+	}
+	rangeInf := new(rangeInfo)
+	rangeInf.offset = offset
+	rangeInf.last = last
+	rangeInf.size = last - offset + 1
+	return rangeInf, nil
+}
+
 func (rr *rawxRequest) downloadChunk() {
 	inChunk, err := rr.rawx.repo.Get(rr.chunkID)
 	if inChunk != nil {
@@ -251,19 +284,11 @@ func (rr *rawxRequest) downloadChunk() {
 	// !!!(jfs): we do not manage requests on multiple ranges
 	// TODO(jfs): is a multiple range is encountered, we should follow the norm
 	// that allows us to answer a "200 OK" with the complete content.
-	length := inChunk.Size()
-	headerRange := rr.req.Header.Get("Range")
-	var offset, size int64
-	if len(headerRange) > 0 {
-		var nb int
-		var last int64
-		nb, err := fmt.Fscanf(strings.NewReader(headerRange), "bytes=%d-%d", &offset, &last)
-		if err != nil || nb != 2 ||
-			offset < 0 || last >= length || last < offset {
-			rr.replyError(ErrInvalidRange)
-			return
-		}
-		size = last - offset + 1
+	chunkSize := inChunk.Size()
+	rangeInf, err := rr.getRange(chunkSize)
+	if err != nil {
+		LogError("Range error: %s", err)
+		rr.replyError(err)
 	}
 
 	if err = rr.chunk.loadAttr(inChunk, rr.chunkID); err != nil {
@@ -272,17 +297,13 @@ func (rr *rawxRequest) downloadChunk() {
 		return
 	}
 
-	hasRange := func() bool {
-		return len(headerRange) > 0
-	}
-
 	// Check if there is some compression
 	var v []byte
 	var in io.ReadCloser
 	v, err = inChunk.GetAttr(AttrNameCompression)
 	if err != nil {
-		if hasRange() && offset > 0 {
-			err = inChunk.Seek(offset)
+		if rangeInf != nil {
+			err = inChunk.Seek(rangeInf.offset)
 		}
 		in = ioutil.NopCloser(inChunk)
 		err = nil
@@ -304,20 +325,21 @@ func (rr *rawxRequest) downloadChunk() {
 	}
 
 	// If the range specified a size, let's wrap (again) the input
-	if hasRange() && size > 0 {
-		in = &limitedReader{sub: in, remaining: size}
+	if rangeInf != nil {
+		in = &limitedReader{sub: in, remaining: rangeInf.size}
 	}
 
 	headers := rr.rep.Header()
 	rr.chunk.fillHeaders(&headers)
 
 	// Prepare the headers of the reply
-	if hasRange() {
-		rr.rep.Header().Set("Content-Range", fmt.Sprintf("bytes %v-%v/%v", offset, offset+size-1, size))
-		rr.rep.Header().Set("Content-Length", fmt.Sprintf("%v", size))
+	if rangeInf != nil {
+		rr.rep.Header().Set("Content-Range", fmt.Sprintf("bytes %v-%v/%v",
+			rangeInf.offset, rangeInf.last, rangeInf.size))
+		rr.rep.Header().Set("Content-Length", fmt.Sprintf("%v", rangeInf.size))
 		rr.replyCode(http.StatusPartialContent)
 	} else {
-		rr.rep.Header().Set("Content-Length", fmt.Sprintf("%v", length))
+		rr.rep.Header().Set("Content-Length", fmt.Sprintf("%v", chunkSize))
 		rr.replyCode(http.StatusOK)
 	}
 
