@@ -19,123 +19,148 @@ package main
 import (
 	"fmt"
 	"net/http"
-	"sync"
+	"reflect"
+	"sync/atomic"
 )
 
-const (
-	BytesRead = iota
-	BytesWritten
+type statInfo struct {
+	ReqTimeAll   uint64 `tag:"req.time"`
+	ReqTimePut   uint64 `tag:"req.time.put"`
+	ReqTimeCopy  uint64 `tag:"req.time.copy"`
+	ReqTimeGet   uint64 `tag:"req.time.get"`
+	ReqTimeHead  uint64 `tag:"req.time.head"`
+	ReqTimeDel   uint64 `tag:"req.time.del"`
+	ReqTimeStat  uint64 `tag:"req.time.stat"`
+	ReqTimeInfo  uint64 `tag:"req.time.info"`
+	ReqTimeRaw   uint64 `tag:"req.time.raw"`
+	ReqTimeOther uint64 `tag:"req.time.other"`
 
-	Hits2XX
-	Hits403
-	Hits404
-	Hits4XX
-	Hits5XX
+	ReqHitsAll   uint64 `tag:"req.hits"`
+	ReqHitsPut   uint64 `tag:"req.hits.put"`
+	ReqHitsCopy  uint64 `tag:"req.hits.copy"`
+	ReqHitsGet   uint64 `tag:"req.hits.get"`
+	ReqHitsHead  uint64 `tag:"req.hits.head"`
+	ReqHitsDel   uint64 `tag:"req.hits.del"`
+	ReqHitsStat  uint64 `tag:"req.hits.stat"`
+	ReqHitsInfo  uint64 `tag:"req.hits.info"`
+	ReqHitsRaw   uint64 `tag:"req.hits.raw"`
+	ReqHitsOther uint64 `tag:"req.hits.other"`
 
-	HitsPut
-	HitsCopy
-	HitsGet
-	HitsHead
-	HitsDel
-	HitsList
-	HitsOther
-	HitsTotal
+	RepHits2XX   uint64 `tag:"rep.hits.2xx"`
+	RepHits4XX   uint64 `tag:"rep.hits.4xx"`
+	RepHits5XX   uint64 `tag:"rep.hits.5xx"`
+	RepHitsOther uint64 `tag:"rep.hits.other"`
+	RepHits403   uint64 `tag:"rep.hits.403"`
+	RepHits404   uint64 `tag:"rep.hits.404"`
 
-	TimePut
-	TimeCopy
-	TimeGet
-	TimeHead
-	TimeDel
-	TimeList
-	TimeOther
-	TimeTotal
-
-	LastStat
-)
-
-var statNames = [LastStat]string{
-	"rep.bread",
-	"rep.bwritten",
-
-	"rep.hits.2xx",
-	"rep.hits.403",
-	"rep.hits.404",
-	"rep.hits.4xx",
-	"rep.hits.5xx",
-
-	"rep.hits.put",
-	"rep.hits.get",
-	"rep.hits.head",
-	"rep.hits.del",
-	"rep.hits.stat",
-	"rep.hits.other",
-	"rep.hits",
-
-	"rep.time.put",
-	"rep.time.get",
-	"rep.time.head",
-	"rep.time.del",
-	"rep.time.stat",
-	"rep.time.other",
-	"rep.time",
+	RepBread    uint64 `tag:"rep.bread"`
+	RepBwritten uint64 `tag:"rep.bwritten"`
 }
 
-type StatSet struct {
-	lock   sync.RWMutex
-	values [LastStat]uint64
-}
+var counters statInfo
 
-var counters, timers StatSet
+func incrementStatReq(rr *rawxRequest) uint64 {
+	spent := rr.getSpent()
+	atomic.AddUint64(&counters.ReqTimeAll, spent)
+	atomic.AddUint64(&counters.ReqHitsAll, 1)
 
-func (ss *StatSet) Increment(which int) {
-	ss.lock.Lock()
-	defer ss.lock.Unlock()
-
-	if which < 0 || which >= LastStat {
-		panic("BUG: stat does not exist")
+	if rr.status == 0 {
+		LogWarning("Wrong HTTP status: %d", rr.status)
+		atomic.AddUint64(&counters.RepHitsOther, 1)
+		return spent
 	}
-	ss.values[which]++
-}
-
-func (ss *StatSet) Add(which int, inc uint64) {
-	ss.lock.Lock()
-	defer ss.lock.Unlock()
-
-	if which < 0 || which >= LastStat {
-		panic("BUG: stat does not exist")
+	switch rr.status / 100 {
+	case 2:
+		atomic.AddUint64(&counters.RepHits2XX, 1)
+	case 4:
+		atomic.AddUint64(&counters.RepHits4XX, 1)
+		switch rr.status {
+		case 403:
+			atomic.AddUint64(&counters.RepHits403, 1)
+		case 404:
+			atomic.AddUint64(&counters.RepHits404, 1)
+		}
+	case 5:
+		atomic.AddUint64(&counters.RepHits5XX, 1)
+	default:
+		atomic.AddUint64(&counters.RepHitsOther, 1)
 	}
-	ss.values[which] += inc
+
+	return spent
 }
 
-func (ss *StatSet) Get() [LastStat]uint64 {
-	ss.lock.RLock()
-	defer ss.lock.RUnlock()
-
-	var tab [LastStat]uint64
-	tab = ss.values
-	return tab
+func IncrementStatReqPut(rr *rawxRequest) uint64 {
+	spent := incrementStatReq(rr)
+	atomic.AddUint64(&counters.ReqTimePut, spent)
+	atomic.AddUint64(&counters.ReqHitsPut, 1)
+	atomic.AddUint64(&counters.RepBwritten, rr.bytesIn)
+	return spent
 }
 
-type statHandler struct {
-	rawx *rawxService
+func IncrementStatReqCopy(rr *rawxRequest) uint64 {
+	spent := incrementStatReq(rr)
+	atomic.AddUint64(&counters.ReqTimeCopy, spent)
+	atomic.AddUint64(&counters.ReqHitsCopy, 1)
+	return spent
 }
 
-// FIXME(jfs): Shouldn't a HEAD return the Content-Length of the GET on the
-// same resource, but without the body?
-func doCheckStats(rr *rawxRequest) {
-	rr.rep.Header().Set("Accept-Ranges", "none")
-	rr.rep.Header().Set("Content-Length", "0")
-	rr.replyCode(http.StatusOK)
+func IncrementStatReqHead(rr *rawxRequest) uint64 {
+	spent := incrementStatReq(rr)
+	atomic.AddUint64(&counters.ReqTimeHead, spent)
+	atomic.AddUint64(&counters.ReqHitsHead, 1)
+	return spent
+}
+
+func IncrementStatReqGet(rr *rawxRequest) uint64 {
+	spent := incrementStatReq(rr)
+	atomic.AddUint64(&counters.ReqTimeGet, spent)
+	atomic.AddUint64(&counters.ReqHitsGet, 1)
+	atomic.AddUint64(&counters.RepBread, rr.bytesOut)
+	return spent
+}
+
+func IncrementStatReqDel(rr *rawxRequest) uint64 {
+	spent := incrementStatReq(rr)
+	atomic.AddUint64(&counters.ReqTimeDel, spent)
+	atomic.AddUint64(&counters.ReqHitsDel, 1)
+	return spent
+}
+
+func IncrementStatReqStat(rr *rawxRequest) uint64 {
+	spent := incrementStatReq(rr)
+	atomic.AddUint64(&counters.ReqTimeStat, spent)
+	atomic.AddUint64(&counters.ReqHitsStat, 1)
+	return spent
+}
+
+func IncrementStatReqInfo(rr *rawxRequest) uint64 {
+	spent := incrementStatReq(rr)
+	atomic.AddUint64(&counters.ReqTimeInfo, spent)
+	atomic.AddUint64(&counters.ReqHitsInfo, 1)
+	return spent
+}
+
+func IncrementStatReqOther(rr *rawxRequest) uint64 {
+	spent := incrementStatReq(rr)
+	atomic.AddUint64(&counters.ReqTimeOther, spent)
+	atomic.AddUint64(&counters.ReqHitsOther, 1)
+	return spent
 }
 
 func doGetStats(rr *rawxRequest) {
-	allCounters := counters.Get()
-	allTimers := timers.Get()
-
 	rr.replyCode(http.StatusOK)
-	for i, n := range statNames {
-		rr.rep.Write([]byte(fmt.Sprintf("timer.%s %v\n", n, allTimers[i])))
-		rr.rep.Write([]byte(fmt.Sprintf("counter.%s %v\n", n, allCounters[i])))
+
+	values := reflect.ValueOf(&counters).Elem()
+	keys := values.Type()
+	for i := 0; i < values.NumField(); i++ {
+		value := values.Field(i).Interface()
+		key := keys.Field(i).Tag.Get("tag")
+		rr.rep.Write([]byte(fmt.Sprintf("counter %s %v\n", key, value)))
+	}
+
+	rr.rep.Write([]byte(fmt.Sprintf("config volume %s\n", rr.rawx.path)))
+	if rr.rawx.id != "" {
+		rr.rep.Write([]byte(fmt.Sprintf("config service_id %s\n", rr.rawx.id)))
 	}
 }
 
@@ -143,9 +168,9 @@ func (rr *rawxRequest) serveStat(rep http.ResponseWriter, req *http.Request) {
 	switch req.Method {
 	case "GET":
 		doGetStats(rr)
-	case "HEAD":
-		doCheckStats(rr)
+		IncrementStatReqStat(rr)
 	default:
 		rr.replyCode(http.StatusMethodNotAllowed)
+		IncrementStatReqOther(rr)
 	}
 }

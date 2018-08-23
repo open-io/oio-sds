@@ -81,7 +81,7 @@ func (rr *rawxRequest) putData(out io.Writer) (*uploadInfo, error) {
 
 	for {
 		max := bufferSize
-		if contentLength > 0 {
+		if contentLength >= 0 {
 			remaining := contentLength - chunkLength
 			if remaining < bufferSize {
 				max = remaining + 1
@@ -100,20 +100,24 @@ func (rr *rawxRequest) putData(out io.Writer) (*uploadInfo, error) {
 				break
 			} else {
 				// Any other error
+				rr.bytesIn = uint64(chunkLength)
 				return nil, err
 			}
 		}
 		if contentLength >= 0 && chunkLength > contentLength {
+			rr.bytesIn = uint64(chunkLength)
 			return nil, ErrContentLength
 		}
 	}
 	if contentLength >= 0 && chunkLength != contentLength {
+		rr.bytesIn = uint64(chunkLength)
 		return nil, ErrContentLength
 	}
 
 	ul := new(uploadInfo)
 	ul.hash = strings.ToUpper(hex.EncodeToString(chunkHash.Sum(make([]byte, 0))))
 	ul.length = chunkLength
+	rr.bytesIn = uint64(chunkLength)
 	return ul, nil
 }
 
@@ -374,28 +378,28 @@ func (rr *rawxRequest) serveChunk(rep http.ResponseWriter, req *http.Request) {
 		rr.replyError(err)
 		return
 	}
+
+	var spent uint64
 	switch req.Method {
 	case "PUT":
-		rr.statsTime = TimePut
-		rr.statsHits = HitsPut
 		rr.uploadChunk()
+		spent = IncrementStatReqPut(rr)
 	case "COPY":
-		rr.statsTime = TimeCopy
-		rr.statsHits = HitsCopy
 		rr.copyChunk()
+		spent = IncrementStatReqCopy(rr)
 	case "HEAD":
-		rr.statsTime = TimeHead
-		rr.statsHits = HitsHead
 		rr.checkChunk()
+		spent = IncrementStatReqHead(rr)
 	case "GET":
-		rr.statsTime = TimeGet
-		rr.statsHits = HitsGet
 		rr.downloadChunk()
+		spent = IncrementStatReqGet(rr)
 	case "DELETE":
-		rr.statsTime = TimeDel
-		rr.statsHits = HitsDel
 		rr.removeChunk()
+		spent = IncrementStatReqDel(rr)
 	default:
 		rr.replyCode(http.StatusMethodNotAllowed)
+		spent = IncrementStatReqOther(rr)
 	}
+	LogIncoming("%s %s %s %d %d %d %s %s", rr.rawx.url, req.RemoteAddr,
+		req.Method, rr.status, spent, rr.bytesOut, rr.reqid, req.URL.Path)
 }
