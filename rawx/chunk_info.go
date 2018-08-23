@@ -263,7 +263,7 @@ func (chunk *chunkInfo) retrieveDestinationHeader(headers *http.Header,
 	if err != nil {
 		return returnError(ErrInvalidHeader, "Destination")
 	}
-	if dstURL.Host != rawx.url {
+	if dstURL.Host != rawx.id && dstURL.Host != rawx.url {
 		return os.ErrPermission
 	}
 	chunk.ChunkID = filepath.Base(filepath.Clean(dstURL.Path))

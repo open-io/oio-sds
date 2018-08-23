@@ -131,7 +131,7 @@ func main() {
 	checkURL(rawxURL)
 
 	// No service ID specified, using the service address instead
-	if len(rawxID) <= 0 {
+	if rawxID == "" {
 		rawxID = rawxURL
 		LogInfo("No service ID, using ADDR %s", rawxURL)
 	}
