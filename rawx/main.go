@@ -153,8 +153,9 @@ func main() {
 
 	rawx := rawxService{
 		ns:       namespace,
-		id:       rawxID,
 		url:      rawxURL,
+		path:     filerepo.root,
+		id:       rawxID,
 		repo:     chunkrepo,
 		compress: opts.getBool("compress", false),
 	}

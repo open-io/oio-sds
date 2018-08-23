@@ -34,6 +34,7 @@ func setError(rep http.ResponseWriter, e error) {
 type rawxService struct {
 	ns       string
 	url      string
+	path     string
 	id       string
 	repo     Repository
 	compress bool
@@ -44,21 +45,25 @@ type rawxRequest struct {
 	rawx      *rawxService
 	req       *http.Request
 	rep       http.ResponseWriter
-	statsHits int
-	statsTime int
 	reqid     string
+	startTime time.Time
 
 	chunkID string
 	chunk   chunkInfo
 
 	// for the reply's purpose
 	status   int
+	bytesIn  uint64
 	bytesOut uint64
 }
 
 func (rr *rawxRequest) replyCode(code int) {
 	rr.status = code
 	rr.rep.WriteHeader(rr.status)
+}
+
+func (rr *rawxRequest) getSpent() uint64 {
+	return uint64(time.Since(rr.startTime).Nanoseconds() / 1000)
 }
 
 func (rr *rawxRequest) replyError(err error) {
@@ -90,7 +95,7 @@ func (rr *rawxRequest) replyError(err error) {
 }
 
 func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
-	pre := time.Now()
+	startTime := time.Now()
 
 	// Sanitizes the Path, trim repeated separators, etc
 	req.URL.Path = filepath.Clean(req.URL.Path)
@@ -112,30 +117,20 @@ func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 		rawx:      rawx,
 		req:       req,
 		rep:       rep,
-		statsTime: TimeOther,
-		statsHits: HitsOther,
 		reqid:     reqid,
+		startTime: startTime,
 	}
 
 	if len(req.Host) > 0 && (req.Host != rawx.id && req.Host != rawx.url) {
 		rawxreq.replyCode(http.StatusTeapot)
 	} else {
-		if req.URL.Path == "/info" || req.URL.Path == "/stat" {
+		switch req.URL.Path {
+		case "/info":
+			rawxreq.serveInfo(rep, req)
+		case "/stat":
 			rawxreq.serveStat(rep, req)
-		} else {
+		default:
 			rawxreq.serveChunk(rep, req)
 		}
 	}
-
-	spent := uint64(time.Since(pre).Nanoseconds() / 1000)
-
-	// Increment counters and log the request
-	counters.Increment(rawxreq.statsHits)
-	counters.Add(rawxreq.statsTime, spent)
-	counters.Increment(HitsTotal)
-	counters.Add(TimeTotal, spent)
-
-	LogIncoming("%s %s %s %d %d %d %s %s", rawx.url, req.RemoteAddr,
-		req.Method, rawxreq.status, spent, rawxreq.bytesOut, rawxreq.reqid,
-		req.URL.Path)
 }
