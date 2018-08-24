@@ -43,7 +43,8 @@ class HttpChecker(BaseChecker):
             else:
                 raise Exception("status code != 200: %s" % resp.status)
         except Exception as e:
-            self.logger.warn('ERROR performing http check: %s', e)
+            self.logger.warn('ERROR performing http check (%s): %s',
+                             self.url, e)
         finally:
             if resp:
                 try:
