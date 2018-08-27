@@ -34,8 +34,7 @@ static enum http_rc_e
 _sqlx_action_noreturn_TAIL (struct req_args_s *args, struct client_ctx_s *ctx,
 		request_packer_f pack)
 {
-	GError *err = gridd_request_replicated (args, ctx, pack);
-
+	GError *err = gridd_request_replicated_with_retry(args, ctx, pack);
 	if (err) {
 		client_clean (ctx);
 		return _reply_common_error (args, err);
@@ -226,8 +225,7 @@ action_sqlx_propget (struct req_args_s *args, struct json_object *jargs)
 	CLIENT_CTX(ctx, args, dirtype, seq);
 
 	PACKER_VOID(_pack) { return sqlx_pack_PROPGET(_u, DL()); }
-	err = gridd_request_replicated (args, &ctx, _pack);
-
+	err = gridd_request_replicated_with_retry(args, &ctx, _pack);
 	if (err) {
 		client_clean (&ctx);
 		return _reply_common_error (args, err);

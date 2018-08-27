@@ -229,7 +229,7 @@ static gboolean _on_reply (gpointer p, MESSAGE reply) {
 	return TRUE;
 }
 
-GError *
+static GError *
 gridd_request_replicated (struct req_args_s *args, struct client_ctx_s *ctx,
 		request_packer_f pack)
 {
@@ -271,7 +271,6 @@ label_retry:
 		}
 	} else {
 		EXTRA_ASSERT(m1uv != NULL);
-
 		if (*ctx->type == '#' && ctx->which != CLIENT_SPECIFIED) {
 			/* when looking for a directory service, the resolver always replies
 			 * all the services involved. Let's keep only the services with the
@@ -460,6 +459,35 @@ label_retry:
 	return err;
 }
 
+GError *
+gridd_request_replicated_with_retry (struct req_args_s *args,
+		struct client_ctx_s *ctx, request_packer_f pack)
+{
+	GError *err = NULL;
+	gboolean retryable = TRUE;
+retry:
+	err = gridd_request_replicated(args, ctx, pack);
+	if (err && err->code == CODE_CONTAINER_NOTFOUND) {
+		GRID_DEBUG("Suspected stale cache entry for [%s] [%s]",
+				ctx->type, oio_url_get(args->url, OIOURL_WHOLE));
+		/* TODO(jfs): CODE_CONTAINER_NOTFOUND is used for missing databases,
+		 * whatever the type of the service. This is ugly and would benefit a
+		 * fix. */
+		if (ctx->type[0] == '#') {
+			hc_decache_reference (resolver, args->url);
+		} else {
+			hc_decache_reference_service (resolver, args->url, ctx->type);
+		}
+
+		if (retryable) {
+			client_clean(ctx);
+			retryable = FALSE;
+			goto retry;
+		}
+	}
+	return err;
+}
+
 /* -------------------------------------------------------------------------- */
 
 static gboolean _has_flag_in_headers (struct req_args_s *args,
@@ -551,16 +579,20 @@ void client_init (struct client_ctx_s *ctx, struct req_args_s *args,
 }
 
 void client_clean (struct client_ctx_s *ctx) {
-	if (ctx->urlv)
+	if (ctx->urlv) {
 		g_strfreev (ctx->urlv);
+		ctx->urlv = NULL;
+	}
 	if (ctx->errorv) {
 		for (GError **pe=ctx->errorv; *pe ;pe++)
 			g_clear_error(pe);
 		g_free (ctx->errorv);
+		ctx->errorv = NULL;
 	}
-	if (ctx->bodyv)
+	if (ctx->bodyv) {
 		metautils_gba_cleanv (ctx->bodyv);
-	memset (ctx, 0, sizeof(*ctx));
+		ctx->bodyv = NULL;
+	}
 }
 
 GError * KV_read_properties (struct json_object *j, gchar ***out,
