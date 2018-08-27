@@ -578,7 +578,7 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 	}
 	void _send_reply(gint code, gchar *msg) {
 		EXTRA_ASSERT(!req_ctx->final_sent);
-		GRID_DEBUG("fd=%d REPLY code=%d message=%s", req_ctx->client->fd, code, msg);
+		GRID_TRACE("fd=%d REPLY code=%d message=%s", req_ctx->client->fd, code, msg);
 
 		MESSAGE answer = metaXServer_reply_simple(req_ctx->request, code, msg);
 		if (body) {
