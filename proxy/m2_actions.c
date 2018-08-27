@@ -73,7 +73,7 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 		*out_list = NULL;
 	}
 
-	GError *err = gridd_request_replicated (args, &ctx, pack);
+	GError *err = gridd_request_replicated_with_retry(args, &ctx, pack);
 
 	if (err) {
 		GRID_DEBUG("M2V2 call failed: %d %s", err->code, err->message);
@@ -1891,7 +1891,7 @@ enum http_rc_e action_container_show (struct req_args_s *args) {
 	CLIENT_CTX(ctx,args,NAME_SRVTYPE_META2,1);
 
 	PACKER_VOID(_pack) { return sqlx_pack_PROPGET(_u, DL()); }
-	err = gridd_request_replicated (args, &ctx, _pack);
+	err = gridd_request_replicated_with_retry (args, &ctx, _pack);
 	if (err) {
 		client_clean (&ctx);
 		return _reply_m2_error (args, err);
