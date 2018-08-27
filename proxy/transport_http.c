@@ -634,7 +634,7 @@ http_notify_input(struct network_client_s *clt)
 				done = TRUE;
 			}
 			else if (r.close_after_request) {
-				GRID_DEBUG("No connection keep-alive, closing.");
+				GRID_TRACE("No connection keep-alive, closing.");
 				network_client_allow_input(clt, FALSE);
 				network_client_close_output(clt, 0);
 				done = TRUE;
