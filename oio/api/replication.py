@@ -16,6 +16,7 @@
 import logging
 import hashlib
 from eventlet import Timeout, GreenPile
+from socket import error as SocketError
 from eventlet.queue import Queue
 from urlparse import urlparse
 from oio.common import exceptions as exc
@@ -178,12 +179,12 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                     parsed.netloc, 'PUT', parsed.path, hdrs)
                 conn.chunk = chunk
             return conn, chunk
-        except Timeout as err:
+        except (SocketError, Timeout) as err:
             msg = str(err)
-            logger.error("Failed to connect to %s (%s)", chunk, msg)
+            logger.error("Failed to connect to %s: %s", chunk, err)
         except Exception as err:
             msg = str(err)
-            logger.exception("Failed to connect to %s (%s)", chunk, msg)
+            logger.exception("Failed to connect to %s", chunk)
         chunk['error'] = msg
         return None, chunk
 
