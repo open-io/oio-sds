@@ -254,8 +254,8 @@ typedef GByteArray * (request_packer_f) (const struct sqlx_name_s *);
 
 #define PACKER_VOID(N) GByteArray * N (const struct sqlx_name_s *_u UNUSED)
 
-GError * gridd_request_replicated (struct req_args_s *args,
-		struct client_ctx_s *, request_packer_f);
+GError * gridd_request_replicated_with_retry (struct req_args_s *args,
+		struct client_ctx_s *ctx, request_packer_f pack);
 
 GError * KV_read_properties (struct json_object *j, gchar ***out,
 		const char *section, gboolean fail_if_empty);
