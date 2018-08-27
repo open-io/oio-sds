@@ -19,6 +19,7 @@ import itertools
 import logging
 from urlparse import urlparse
 from eventlet import sleep, Timeout
+from socket import error as SocketError
 from oio.common import exceptions as exc
 from oio.common.http import parse_content_type,\
     parse_content_range, ranges_from_http_header, http_header_from_ranges
@@ -283,10 +284,15 @@ class ChunkReader(object):
             with green.OioTimeout(self.read_timeout):
                 source = conn.getresponse()
                 source.conn = conn
-        except (Exception, Timeout) as error:
+        except (SocketError, Timeout) as err:
+            logger.error('Connection failed to %s (reqid=%s): %s',
+                         chunk, self.reqid, err)
+            self._resp_by_chunk[chunk["url"]] = (0, str(err))
+            return False
+        except Exception as err:
             logger.exception('Connection failed to %s (reqid=%s)',
                              chunk, self.reqid)
-            self._resp_by_chunk[chunk["url"]] = (0, str(error))
+            self._resp_by_chunk[chunk["url"]] = (0, str(err))
             return False
 
         if source.status in (200, 206):
