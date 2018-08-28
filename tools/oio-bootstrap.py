@@ -697,10 +697,13 @@ start_at_boot=false
 on_die=cry
 """
 
+template_gridinit_rawx_command_options = \
+    '-s OIO,${NS},${SRVTYPE},${SRVNUM} -D FOREGROUND ' \
+    '-f ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.httpd.conf'
 template_gridinit_rawx = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-command=oio-rawx -s OIO,${NS},${SRVTYPE},${SRVNUM} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.httpd.conf
+command=oio-rawx %s
 enabled=true
 start_at_boot=false
 on_die=cry
@@ -1370,7 +1373,8 @@ def generate(options):
                           })
             add_service(env)
             # gridinit (rawx)
-            tpl = Template(template_gridinit_rawx)
+            tpl = Template(
+                template_gridinit_rawx % template_gridinit_rawx_command_options)
             with open(gridinit(env), 'a+') as f:
                 f.write(tpl.safe_substitute(env))
             # service
@@ -1608,6 +1612,12 @@ def main():
             [template_wsgi_service_coverage_start,
              template_wsgi_service_descr,
              template_wsgi_service_coverage_stop])
+        global template_gridinit_rawx_command_options
+        template_gridinit_rawx_command_options = \
+            '-test.coverprofile ' \
+            '{HOME}/go_coverage.output.${NS}.${SRVTYPE}.${SRVNUM}.${IP}.${PORT} ' \
+            '-test.syslog OIO,${NS},${SRVTYPE},${SRVNUM} ' \
+            '-test.conf ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.httpd.conf'
     parser = argparse.ArgumentParser(description='OpenIO bootstrap tool')
     parser.add_argument("-c", "--conf",
                         action="append", dest='config',
