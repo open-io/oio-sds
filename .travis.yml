@@ -17,6 +17,7 @@ install:
   - pip install --upgrade zkpython
   - go get gopkg.in/ini.v1
   - go get github.com/kr/beanstalk
+  - go get gopkg.in/tylerb/graceful.v1
 env:
   - TEST_SUITE=3copies,with-service-id
   - TEST_SUITE=ec,with-random-service-id
@@ -50,3 +51,5 @@ script:
 after_success:
   - bash <(curl -s https://codecov.io/bash) -f cmake_coverage.output
   - codecov
+  - if cat ${HOME}/go_coverage.output.* > go_coverage.output; then rm ${HOME}/go_coverage.output.*; else echo "" > go_coverage.output; fi
+  - bash <(curl -s https://codecov.io/bash) -f go_coverage.output

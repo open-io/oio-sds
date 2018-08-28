@@ -25,13 +25,14 @@ import (
 	"flag"
 	"log"
 	"net"
-	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"regexp"
 	"syscall"
 	"time"
+
+	graceful "gopkg.in/tylerb/graceful.v1"
 )
 
 func checkURL(url string) {
@@ -171,7 +172,7 @@ func main() {
 	rawx.notifier = notifier
 	rawx.notifier.start()
 
-	if err = http.ListenAndServe(rawx.url, &rawx); err != nil {
+	if err = graceful.RunWithErr(rawx.url, 0, &rawx); err != nil {
 		log.Fatal("HTTP error: ", err)
 	}
 

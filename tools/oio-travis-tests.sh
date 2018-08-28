@@ -366,6 +366,9 @@ func_tests_rebuilder_mover () {
 	if [ -n "${MOVER}" ]; then
 		${SRCDIR}/tools/oio-test-mover.sh -n "${OIO_NS}"
 	fi
+
+	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
+	sleep 0.5
 }
 
 if is_running_test_suite "rebuilder" ; then

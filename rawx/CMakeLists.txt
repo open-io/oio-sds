@@ -1,6 +1,11 @@
 
 add_custom_target(oio-rawx ALL)
 
+set(GO_BUILD ${GO_EXECUTABLE} build -o ${CMAKE_CURRENT_BINARY_DIR}/oio-rawx .)
+if ( ENABLE_CODECOVERAGE )
+	set(GO_BUILD ${GO_EXECUTABLE} test -c -covermode=count -coverpkg . -o ${CMAKE_CURRENT_BINARY_DIR}/oio-rawx)
+endif ( ENABLE_CODECOVERAGE )
+
 add_custom_command(
 	TARGET oio-rawx
 	DEPENDS
@@ -20,7 +25,7 @@ add_custom_command(
 		${CMAKE_CURRENT_SOURCE_DIR}/rawx.go
 		${CMAKE_CURRENT_SOURCE_DIR}/repo.go
 	COMMAND
-	cd ${CMAKE_CURRENT_SOURCE_DIR} && ${GO_EXECUTABLE} build -o ${CMAKE_CURRENT_BINARY_DIR}/oio-rawx .
+	cd ${CMAKE_CURRENT_SOURCE_DIR} && ${GO_BUILD}
 	COMMENT
 		"Build RAWX v2, written in Golang"
 )
