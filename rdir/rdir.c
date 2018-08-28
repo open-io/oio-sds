@@ -1844,7 +1844,8 @@ grid_main_get_options(void)
 			"Load the given file and overload the central variables"},
 
 		{"Servicing", OT_BOOL, {.b = &servicing},
-		        "If set, xattrs lock will be unset on volume"},
+			"Tell the service is going to production.\n"
+			"\t\tCheck the volume is already locked and belongs to us."},
 
 		{NULL, 0, {.i = 0}, NULL}
 	};
