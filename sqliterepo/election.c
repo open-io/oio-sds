@@ -2198,12 +2198,13 @@ static void
 _result_PIPEFROM (GError *e, struct election_member_s *m, guint reqid)
 {
 	if (!e || CODE_IS_OK(e->code)) {
-		GRID_DEBUG("PIPEFROM ok [%s.%s] [%s]",
-				m->inline_name.base, m->inline_name.type, m->key);
+		GRID_DEBUG("PIPEFROM %s ok [%s.%s] [%s]",
+				m->master_url, m->inline_name.base, m->inline_name.type,
+				m->key);
 	} else {
-		GRID_WARN("PIPEFROM failed [%s.%s] [%s]: (%d) %s",
-				m->inline_name.base, m->inline_name.type, m->key,
-				e->code, e->message);
+		GRID_WARN("PIPEFROM %s failed [%s.%s] [%s]: (%d) %s",
+				m->master_url, m->inline_name.base, m->inline_name.type,
+				m->key, e->code, e->message);
 	}
 
 	member_lock(m);
