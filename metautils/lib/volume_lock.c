@@ -51,13 +51,15 @@ retry:
 	}
 
 	if (!err) {
-		if (strlen(v) != (gsize)realsize)
+		if (strlen(v) != (gsize)realsize) {
 			err = NEWERROR(CODE_INTERNAL_ERROR,
-					"XATTR size differ, expected IP is %s",
-					buf);
-		else if (0 != memcmp(v,buf,realsize))
+					"XATTR size differ, expected value for %s is %s, got %*s",
+					n, v, (int)realsize, buf);
+		} else if (0 != memcmp(v, buf, realsize)) {
 			err = NEWERROR(CODE_INTERNAL_ERROR,
-				        "XATTR differ, expected IP is %s", buf);
+					"XATTR differ, expected value for %s is %s, got %*s",
+					n, v, (int)realsize, buf);
+		}
 	}
 
 	g_free(buf);
@@ -72,8 +74,7 @@ _set_lock(const char *vol, const char *n, const char *v,
 		int rc = setxattr(vol, n, v, strlen(v), XATTR_CREATE);
 		if (!rc)
 			return NULL;
-	}
-	else {
+	} else {
 		errno = EEXIST;
 	}
 	return (errno == EEXIST) ? _check_lock(vol, n, v)
