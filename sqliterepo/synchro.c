@@ -595,7 +595,7 @@ struct sqlx_peering_direct_s
 {
 	struct sqlx_peering_vtable_s *vtable;
 
-	/* pool'ifies the client sockets to avoid reserving to many file
+	/* poolifies the client sockets to avoid reserving to many file
 	 * descriptors. */
 	struct gridd_client_pool_s *pool;
 
