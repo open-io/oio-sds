@@ -22,6 +22,11 @@ License along with this library.
 
 # include <glib.h>
 
+/**
+ * Lock a volume by setting some extended attributes.
+ * If `servicing` is true, do not set the attributes, just check they are
+ * already there and match type, id and namespace.
+ */
 GError* volume_service_lock(const char *vol, const char *type,
 		const char *id, const char *ns, const gboolean servicing);
 
