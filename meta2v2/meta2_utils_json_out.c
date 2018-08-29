@@ -71,7 +71,7 @@ encode_chunk (GString *g, gpointer bean)
 }
 
 static void
-encode_property (GString *g, gpointer bean)
+encode_property(GString *g, gpointer bean)
 {
 	OIO_JSON_append_gstr(g, "alias", PROPERTIES_get_alias(bean));
 	g_string_append_c(g, ',');
@@ -79,8 +79,8 @@ encode_property (GString *g, gpointer bean)
 	g_string_append_c(g, ',');
 	OIO_JSON_append_gstr(g, "key", PROPERTIES_get_key(bean));
 	g_string_append_c(g, ',');
-	GByteArray *properties = PROPERTIES_get_value(bean);
-	OIO_JSON_append_blob(g, "value", (gchar*)properties->data, properties->len);
+	GByteArray *property = PROPERTIES_get_value(bean);
+	OIO_JSON_append_blob(g, "value", (gchar*)property->data, property->len);
 }
 
 static void
@@ -140,6 +140,12 @@ meta2_json_chunks_only(GString *gstr, GSList *l, gboolean extend)
 }
 
 void
+meta2_json_properties_only(GString *gstr, GSList *l, gboolean extend)
+{
+	_json_BEAN_only(gstr, l, &descr_struct_PROPERTIES, extend, encode_property);
+}
+
+void
 meta2_json_dump_all_xbeans(GString *gstr, GSList *beans)
 {
 	_json_BEAN_only (gstr, beans, NULL, TRUE, encode_bean);
@@ -154,6 +160,8 @@ meta2_json_dump_all_beans(GString *gstr, GSList *beans)
 	meta2_json_headers_only(gstr, beans, FALSE);
 	g_string_append_static(gstr, "],\"chunks\":[");
 	meta2_json_chunks_only(gstr, beans, FALSE);
+	g_string_append_static(gstr, "],\"properties\":[");
+	meta2_json_properties_only(gstr, beans, FALSE);
 	g_string_append_c(gstr, ']');
 }
 

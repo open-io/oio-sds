@@ -43,16 +43,20 @@ GError * m2v2_json_load_setof_xbean (struct json_object *j, GSList **out);
 void meta2_json_alias_only(GString *gstr, GSList *l, gboolean extend);
 
 /** Convert header beans to their JSON representation.
- * Ignores beans os other types. */
+ * Ignores beans of other types. */
 void meta2_json_headers_only(GString *gstr, GSList *l, gboolean extend);
 
 /** Convert chunk beans to their JSON representation.
- * Ignores beans os other types. */
+ * Ignores beans of other types. */
 void meta2_json_chunks_only(GString *gstr, GSList *l, gboolean extend);
+
+/** Convert property beans to their JSON representation.
+ * Ignores beans of other types. */
+void meta2_json_properties_only(GString *gstr, GSList *l, gboolean extend);
 
 /** Serialize beans to JSON.
  * The output has the form:
- *   "chunks":[],"aliases":[],"headers":[]
+ *   "chunks":[],"aliases":[],"headers":[],"properties":[]
  * The output does not contain the outer curly brackets, to allow easier
  * inclusion in an existing dictionary. */
 void meta2_json_dump_all_beans(GString *gstr, GSList *beans);
