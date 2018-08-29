@@ -1782,7 +1782,8 @@ _handler_RESTORE(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 	if (dump_size < 1024) {
-		reply->send_error(0, NEWERROR(CODE_BAD_REQUEST, "Body too short"));
+		reply->send_error(0, NEWERROR(CODE_BAD_REQUEST,
+				"Body too short (%zd bytes)", dump_size));
 		return TRUE;
 	}
 
