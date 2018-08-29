@@ -891,7 +891,7 @@ Used by `gcc`
 
 ### server.fd_max_passive
 
-> Maximum number of simultaneous incoming connections. Set to 0 for an automatic detection (40% of available file descriptors).
+> Maximum number of simultaneous incoming connections. Set to 0 for an automatic detection (50% of available file descriptors).
 
  * default: **0**
  * type: guint
@@ -1475,7 +1475,7 @@ Used by `gcc`
 
 ### sqliterepo.repo.hard_max
 
-> Sets how many databases can be kept simultaneously open (in use or idle) in the current service. If defined to 0, it is set to 30% of available file descriptors.
+> Sets how many databases can be kept simultaneously open (in use or idle) in the current service. If defined to 0, it is set to 48% of available file descriptors.
 
  * default: **0**
  * type: guint
