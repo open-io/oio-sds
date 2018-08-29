@@ -575,10 +575,20 @@ class ContainerClient(ProxyClient):
         if stgpol:
             data['policy'] = stgpol
         data = json.dumps(data)
-        resp, body = self._direct_request(
-            'POST', uri, data=data, params=params, **kwargs)
-        obj_meta = extract_content_headers_meta(resp.headers)
-        return obj_meta, body
+        try:
+            resp, body = self._direct_request(
+                'POST', uri + '2', data=data, params=params, **kwargs)
+            chunks = body['chunks']
+            obj_meta = extract_content_headers_meta(resp.headers)
+            obj_meta['properties'] = dict()
+            for prop_dict in obj_meta.get('properties', []):
+                obj_meta['properties'][prop_dict['key']] = prop_dict['value']
+        except exceptions.NotFound:
+            # Proxy does not support v2 request (oio < 4.3)
+            resp, chunks = self._direct_request(
+                'POST', uri, data=data, params=params, **kwargs)
+            obj_meta = extract_content_headers_meta(resp.headers)
+        return obj_meta, chunks
 
     def content_get_properties(
             self, account=None, reference=None, path=None, properties=None,

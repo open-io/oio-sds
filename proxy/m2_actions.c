@@ -107,7 +107,7 @@ static void
 _json_dump_all_beans (GString * gstr, GSList * beans)
 {
 	g_string_append_c (gstr, '{');
-	meta2_json_dump_all_beans (gstr, beans);
+	meta2_json_dump_all_beans(gstr, beans);
 	g_string_append_c (gstr, '}');
 }
 
@@ -193,6 +193,82 @@ _sort_aliases_by_name (struct bean_ALIASES_s *a0, struct bean_ALIASES_s *a1)
 	return g_strcmp0 (ALIASES_get_alias(a0)->str, ALIASES_get_alias(a1)->str);
 }
 
+static gint32
+_score_from_chunk_id (const char *id)
+{
+	gchar *key = NULL, *type = NULL, *netloc = NULL;
+
+	// FIXME: probably broken with B2 URLs
+	oio_parse_chunk_url(id, &type, &netloc, NULL);
+	key = oio_make_service_key(ns_name, type, netloc);
+
+	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, key);
+	gint32 res = item ? item->weight : 0;
+
+	g_free(item);
+	g_free(key);
+	g_free(netloc);
+	g_free(type);
+	return res;
+}
+
+static gchar*
+_real_url_from_chunk_id (const char *id)
+{
+	gchar *out = NULL;
+	gchar *key = NULL, *type = NULL, *netloc = NULL;
+
+	oio_parse_chunk_url(id, &type, &netloc, NULL);
+	key = oio_make_service_key(ns_name, type, netloc);
+	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, key);
+
+	/* generate real_url, only if item was found */
+	if (item) {
+		out = g_strdup_printf("http://%s/%s",
+			item->addr, id + strlen("http://") + strlen(netloc) + 1);
+		g_free(item);
+	} else {
+		GRID_WARN("no rawx matching '%s'", key);
+	}
+	g_free(key);
+	g_free(netloc);
+	g_free(type);
+	return out;
+}
+
+static void
+_serialize_chunk(struct bean_CHUNKS_s *chunk, GString *gstr)
+{
+	/* Unfortunately, we have two different formats for chunks.
+	 * See encode_chunk() function in meta2_utils_json_out.c. */
+	const char *chunk_id = CHUNKS_get_id(chunk)->str;
+	gint32 score = _score_from_chunk_id(chunk_id);
+	g_string_append_printf(gstr, "{\"url\":\"%s\"", chunk_id);
+
+	gchar *real_url = _real_url_from_chunk_id(chunk_id);
+	if (real_url) {
+		g_string_append_printf(gstr, ",\"real_url\":\"%s\"", real_url);
+		g_free(real_url);
+	}
+
+	g_string_append_printf(gstr, ",\"pos\":\"%s\"", CHUNKS_get_position(chunk)->str);
+	g_string_append_printf(gstr, ",\"size\":%"G_GINT64_FORMAT, CHUNKS_get_size(chunk));
+	g_string_append_static(gstr, ",\"hash\":\"");
+	metautils_gba_to_hexgstr(gstr, CHUNKS_get_hash(chunk));
+	g_string_append_printf(gstr, "\",\"score\":%d}", score);
+}
+
+static void
+_serialize_property(struct bean_PROPERTIES_s *prop, GString *gstr)
+{
+	oio_str_gstring_append_json_quote(gstr, PROPERTIES_get_key(prop)->str);
+	g_string_append_c(gstr, ':');
+	g_string_append_c(gstr, '"');
+	GByteArray *val = PROPERTIES_get_value(prop);
+	oio_str_gstring_append_json_blob(gstr, (gchar*)val->data, val->len);
+	g_string_append_c(gstr, '"');
+}
+
 static void
 _dump_json_aliases_and_headers(GString *gstr, GSList *aliases,
 		GTree *headers, GTree *props)
@@ -255,12 +331,7 @@ _dump_json_aliases_and_headers(GString *gstr, GSList *aliases,
 					prop = prop->next) {
 				struct bean_PROPERTIES_s *bprop = prop->data;
 				COMA(gstr, inner_first);
-				g_string_append_printf(gstr, "\"%s\":\"",
-						PROPERTIES_get_key(bprop)->str);
-				GByteArray *val = PROPERTIES_get_value(bprop);
-				oio_str_gstring_append_json_blob(gstr,
-						(gchar*)val->data, val->len);
-				g_string_append_c(gstr, '"');
+				_serialize_property(bprop, gstr);
 			}
 			g_string_append_c(gstr, '}');
 		}
@@ -384,7 +455,7 @@ _reply_beans (struct req_args_s *args, GError * err, GSList * beans)
 		return _reply_m2_error (args, err);
 
 	GString *gstr = g_string_sized_new (2048);
-	_json_dump_all_beans (gstr, beans);
+	_json_dump_all_beans(gstr, beans);
 	_bean_cleanl2 (beans);
 	return _reply_success_json (args, gstr);
 }
@@ -441,64 +512,23 @@ _populate_headers_with_alias (struct req_args_s *args, struct bean_ALIASES_s *al
 			g_strdup_printf("%"G_GINT64_FORMAT, ALIASES_get_mtime(alias)));
 }
 
-static gint32
-_score_from_chunk_id (const char *id)
-{
-	gchar *key = NULL, *type = NULL, *netloc = NULL;
-
-	// FIXME: probably broken with B2 URLs
-	oio_parse_chunk_url(id, &type, &netloc, NULL);
-	key = oio_make_service_key(ns_name, type, netloc);
-
-	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, key);
-	gint32 res = item ? item->weight : 0;
-
-	g_free(item);
-	g_free(key);
-	g_free(netloc);
-	g_free(type);
-	return res;
-}
-
-static gchar*
-_real_url_from_chunk_id (const char *id)
-{
-	gchar *out = NULL;
-	gchar *key = NULL, *type = NULL, *netloc = NULL;
-
-	oio_parse_chunk_url(id, &type, &netloc, NULL);
-	key = oio_make_service_key(ns_name, type, netloc);
-	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, key);
-
-	/* generate real_url, only if item was found */
-	if (item) {
-		out = g_strdup_printf("http://%s/%s",
-			item->addr, id + strlen("http://") + strlen(netloc) + 1);
-		g_free(item);
-	} else {
-		GRID_WARN("no rawx matching '%s'", key);
-	}
-	g_free(key);
-	g_free(netloc);
-	g_free(type);
-	return out;
-}
-
 static enum http_rc_e
-_reply_simplified_beans (struct req_args_s *args, GError *err,
-		GSList *beans, gboolean body)
+_reply_simplified_beans_ext(struct req_args_s *args, GError *err,
+		GSList *beans, gboolean legacy_format)
 {
 	if (err)
 		return _reply_m2_error(args, err);
 
 	struct bean_ALIASES_s *alias = NULL;
 	struct bean_CONTENTS_HEADERS_s *header = NULL;
-	gboolean first = TRUE;
-	GString *gstr = NULL;
-	if (body) {
-		gstr = g_string_sized_new (2048);
-		g_string_append_c (gstr, '[');
-	}
+	gboolean first = TRUE, first_prop = TRUE;
+
+	GString *gstr, *props_gstr = NULL;
+	if (!legacy_format)
+		props_gstr = g_string_sized_new(1024);
+
+	GString *chunks_gstr = g_string_sized_new(2048);
+	g_string_append_c(chunks_gstr, '[');
 
 	beans = g_slist_sort(beans, _bean_compare_kind);
 
@@ -506,39 +536,22 @@ _reply_simplified_beans (struct req_args_s *args, GError *err,
 		if (!l0->data)
 			continue;
 
-		if (&descr_struct_CHUNKS == DESCR(l0->data) && gstr) {
+		if (&descr_struct_CHUNKS == DESCR(l0->data)) {
 			if (!first)
-				g_string_append_static (gstr, ",\n");
+				g_string_append_c(chunks_gstr, ',');
 			first = FALSE;
 
-			// Serialize the chunk
 			struct bean_CHUNKS_s *chunk = l0->data;
-
-			const char *chunk_id = CHUNKS_get_id(chunk)->str;
-			gint32 score = _score_from_chunk_id(chunk_id);
-			g_string_append_printf (gstr, "{\"url\":\"%s\"", chunk_id);
-
-			/* XXX we should use a flag received from meta2 or generate id and url inside meta2 ? */
-			gchar *real_url = _real_url_from_chunk_id(chunk_id);
-
-			if (real_url) {
-				g_string_append_printf (gstr, ",\"real_url\":\"%s\"", real_url);
-				g_free(real_url);
-			}
-
-			g_string_append_printf (gstr, ",\"pos\":\"%s\"", CHUNKS_get_position (chunk)->str);
-			g_string_append_printf (gstr, ",\"size\":%"G_GINT64_FORMAT, CHUNKS_get_size (chunk));
-			g_string_append_static (gstr, ",\"hash\":\"");
-			metautils_gba_to_hexgstr (gstr, CHUNKS_get_hash (chunk));
-			g_string_append_printf(gstr, "\",\"score\":%d}", score);
+			_serialize_chunk(chunk, chunks_gstr);
 		}
 		else if (&descr_struct_ALIASES == DESCR(l0->data)) {
 			alias = l0->data;
-			if (ALIASES_get_deleted(alias) && !oio_str_parse_bool(OPT("deleted"),FALSE)) {
-				if (gstr)
-					g_string_free (gstr, TRUE);
+			if (ALIASES_get_deleted(alias) &&
+					!oio_str_parse_bool(OPT("deleted"), FALSE)) {
+				g_string_free(chunks_gstr, TRUE);
 				_bean_cleanl2(beans);
-				return _reply_notfound_error(args, NEWERROR(CODE_CONTENT_DELETED, "Alias deleted"));
+				return _reply_notfound_error(args,
+						NEWERROR(CODE_CONTENT_DELETED, "Alias deleted"));
 			}
 		}
 		else if (&descr_struct_CONTENTS_HEADERS == DESCR(l0->data)) {
@@ -546,29 +559,55 @@ _reply_simplified_beans (struct req_args_s *args, GError *err,
 		}
 		else if (&descr_struct_PROPERTIES == DESCR(l0->data)) {
 			struct bean_PROPERTIES_s *prop = l0->data;
-			gchar *k = g_strdup_printf (PROXYD_HEADER_PREFIX "content-meta-%s",
-					PROPERTIES_get_key(prop)->str);
-			GByteArray *v = PROPERTIES_get_value (prop);
-			g_byte_array_append(v, (guint8*)"", 1);  // Ensure nul-terminated
-			args->rp->add_header(k,
-					g_uri_escape_string((gchar*)v->data, NULL, FALSE));
-			g_free (k);
+			if (legacy_format) {
+				gchar *k = g_strdup_printf(
+						PROXYD_HEADER_PREFIX "content-meta-%s",
+						PROPERTIES_get_key(prop)->str);
+				GByteArray *v = PROPERTIES_get_value(prop);
+				g_byte_array_append(v, (guint8*)"", 1);  // Ensure nul-terminated
+				args->rp->add_header(k,
+						g_uri_escape_string((gchar*)v->data, NULL, FALSE));
+				g_free (k);
+			} else {
+				if (!first_prop)
+					g_string_append_c(props_gstr, ',');
+				first_prop = FALSE;
+				_serialize_property(prop, props_gstr);
+			}
 		}
 	}
-	if (body)
-		g_string_append_c (gstr, ']');
+	g_string_append_c(chunks_gstr, ']');
+
+	gstr = chunks_gstr;
+	if (!legacy_format) {
+		g_string_prepend(gstr, "{\"chunks\":");
+		g_string_append(gstr, ",\"properties\":{");
+		g_string_append_len(gstr, props_gstr->str, props_gstr->len);
+		g_string_append(gstr, "}");
+		g_string_free(props_gstr, TRUE);
+		g_string_append_c(gstr, '}');
+	}
 
 	// Not set all the header
 	_populate_headers_with_header (args, header);
 	_populate_headers_with_alias (args, alias);
 
 	_bean_cleanl2 (beans);
-	if (!body && gstr) {
-		g_string_free (gstr, TRUE);
-		gstr = NULL;
-	}
 
 	return _reply_success_json (args, gstr);
+}
+
+static enum http_rc_e
+_reply_simplified_beans_legacy(struct req_args_s *args, GError *err,
+		GSList *beans)
+{
+	return _reply_simplified_beans_ext(args, err, beans, TRUE);
+}
+
+static enum http_rc_e
+_reply_simplified_beans(struct req_args_s *args, GError *err, GSList *beans)
+{
+	return _reply_simplified_beans_ext(args, err, beans, FALSE);
 }
 
 static GError *
@@ -841,13 +880,7 @@ _reply_properties (struct req_args_s *args, GError * err, GSList * beans)
 		if (!first) g_string_append_c(gs, ',');
 		first = FALSE;
 		struct bean_PROPERTIES_s *bean = l->data;
-		oio_str_gstring_append_json_quote(gs, PROPERTIES_get_key(bean)->str);
-		g_string_append_c(gs, ':');
-		g_string_append_c(gs, '"');
-		oio_str_gstring_append_json_blob(gs,
-										 (gchar*)PROPERTIES_get_value(bean)->data,
-										 PROPERTIES_get_value(bean)->len);
-		g_string_append_c(gs, '"');
+		_serialize_property(bean, gs);
 	}
 	for (int i=0; i<2 ;++i) g_string_append_c(gs, '}');
 
@@ -2153,8 +2186,10 @@ enum http_rc_e action_container_raw_delete (struct req_args_s *args) {
 
 /* CONTENT action resource -------------------------------------------------- */
 
-static enum http_rc_e action_m2_content_prepare (struct req_args_s *args,
-		struct json_object *jargs) {
+static enum http_rc_e
+_action_m2_content_prepare(struct req_args_s *args, struct json_object *jargs,
+		enum http_rc_e (*_reply_beans_func)(struct req_args_s *, GError *, GSList *))
+{
 	struct json_object *jsize = NULL, *jpol = NULL;
 	json_object_object_get_ex(jargs, "size", &jsize);
 	json_object_object_get_ex(jargs, "policy", &jpol);
@@ -2212,7 +2247,20 @@ retry:
 				g_strdup_printf("%"G_GINT64_FORMAT, chunk_size));
 	}
 
-	return _reply_simplified_beans (args, err, beans, TRUE);
+	return _reply_beans_func(args, err, beans);
+}
+
+static enum http_rc_e
+action_m2_content_prepare(struct req_args_s *args, struct json_object *jargs)
+{
+	return _action_m2_content_prepare(args, jargs,
+			_reply_simplified_beans_legacy);
+}
+
+static enum http_rc_e
+action_m2_content_prepare_v2(struct req_args_s *args, struct json_object *jargs)
+{
+	return _action_m2_content_prepare(args, jargs, _reply_simplified_beans);
 }
 
 static GError *_m2_json_spare (struct req_args_s *args,
@@ -2609,6 +2657,52 @@ enum http_rc_e action_content_prepare (struct req_args_s *args) {
 }
 
 // CONTENT{{
+// POST /v3.0/{NS}/content/prepare2?acct={account}&ref={container}&path={file path}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// Prepare an upload: get URLs of chunks on available rawx.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/content/prepare2?acct=my_account&ref=mycontainer&path=mycontent HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 31
+//    Content-Type: application/x-www-form-urlencoded
+//
+// .. code-block:: json
+//
+//    {
+//      "size": 42,
+//      "policy": "SINGLE"
+//    }
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 276
+//    x-oio-ns-chunk-size: 1048576
+//    x-oio-content-meta-chunk-method: plain/nb_copy=1
+//    x-oio-content-meta-ctime: 1533215985
+//    x-oio-content-meta-deleted: False
+//    x-oio-content-meta-hash-method: md5
+//    x-oio-content-meta-id: B03A29AA737205002C4D414D4C12FDC5
+//    x-oio-content-meta-length: 180
+//    x-oio-content-meta-mime-type: application/octet-stream
+//    x-oio-content-meta-name: mycontent
+//    x-oio-content-meta-policy: SINGLE
+//    x-oio-content-meta-version: 1533215985187506
+//
+// }}CONTENT
+enum http_rc_e action_content_prepare_v2(struct req_args_s *args) {
+	return rest_action(args, action_m2_content_prepare_v2);
+}
+
+// CONTENT{{
 // GET /v3.0/{NS}/content/show?acct={account}&ref={container}&path={file path}
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Get a description of the content along with its user properties.
@@ -2652,7 +2746,7 @@ enum http_rc_e action_content_show (struct req_args_s *args) {
 		flags |= M2V2_FLAG_NOPROPS;
 	PACKER_VOID(_pack) { return m2v2_remote_pack_GET (args->url, flags, DL()); }
 	GError *err = _resolve_meta2(args, _prefer_slave(), _pack, &beans, NULL);
-	return _reply_simplified_beans (args, err, beans, TRUE);
+	return _reply_simplified_beans_legacy(args, err, beans);
 }
 
 // CONTENT{{

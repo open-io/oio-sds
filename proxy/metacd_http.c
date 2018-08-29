@@ -52,7 +52,7 @@ GRWLock reg_rwlock = {0};
 struct lru_tree_s *srv_registered = NULL;
 
 GRWLock nsinfo_rwlock = {0};
-struct namespace_info_s nsinfo = {{0}};
+struct namespace_info_s nsinfo = {{0}, 0, 0, 0};
 gchar **srvtypes = NULL;
 
 GRWLock master_rwlock = {0};
@@ -90,7 +90,7 @@ action_status(struct req_args_s *args)
 	g_array_free (array, TRUE);
 
 	/* some stats about the internal cache */
-	struct hc_resolver_stats_s s = {{0}};
+	struct hc_resolver_stats_s s = {{0}, {0}};
 	hc_resolver_info(resolver, &s);
 
 	g_string_append_printf(gstr, "gauge cache.dir.count = %"G_GINT64_FORMAT"\n", s.csm0.count);
@@ -988,7 +988,10 @@ configure_request_handlers (void)
 	SET("/$NS/content/delete_many/#POST", action_content_delete_many);
 	SET("/$NS/content/show/#GET", action_content_show);
 	SET("/$NS/content/locate/#GET", action_content_show);
+	/* Prepare chunks addresses (returns a list) */
 	SET("/$NS/content/prepare/#POST", action_content_prepare);
+	/* Prepare chunks addresses (returns a dictionary) */
+	SET("/$NS/content/prepare2/#POST", action_content_prepare_v2);
 	SET("/$NS/content/get_properties/#POST", action_content_prop_get);
 	SET("/$NS/content/set_properties/#POST", action_content_prop_set);
 	SET("/$NS/content/del_properties/#POST", action_content_prop_del);

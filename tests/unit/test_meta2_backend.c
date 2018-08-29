@@ -117,12 +117,16 @@ static GSList*
 _create_alias2(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		const gchar *polname, int chunks_per_metachunks)
 {
+	GSList *properties = NULL;
 	void _onbean(gpointer u, gpointer bean) {
-		*((GSList**)u) = g_slist_prepend(*((GSList**)u), bean);
+		if (DESCR(bean) == &descr_struct_PROPERTIES)
+			properties = g_slist_prepend(properties, bean);
+		else
+			*((GSList**)u) = g_slist_prepend(*((GSList**)u), bean);
 	}
 
 	GError *err;
-	guint expected, generated;
+	guint expected, generated, expected_props, generated_props;
 	GSList *beans = NULL;
 
 	g_assert(chunks_count > 1);
@@ -130,14 +134,19 @@ _create_alias2(struct meta2_backend_s *m2b, struct oio_url_s *url,
 			(oio_ns_chunk_size*(chunks_count-1))+1,
 			polname, FALSE, _onbean, &beans);
 	generated = g_slist_length(beans);
+	generated_props = g_slist_length(properties);
 	expected = 1 + 1 + chunks_count * chunks_per_metachunks;
-	GRID_DEBUG("BEANS policy=%s generated=%u expected=%u",
-			polname, generated, expected);
+	expected_props = chunks_count * chunks_per_metachunks;
+	GRID_DEBUG("BEANS policy=%s generated=%u expected=%u properties=%u",
+			polname, generated, expected, generated_props);
 	_bean_debugl2(__FUNCTION__, beans);
 	g_assert_no_error(err);
-	g_assert(generated == expected);
+	g_assert_cmpuint(generated, ==, expected);
+	g_assert_cmpuint(generated_props, ==, expected_props);
 
 	_debug_beans_list(beans);
+	_debug_beans_list(properties);
+	_bean_cleanl2(properties);
 	return beans;
 }
 
