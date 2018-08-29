@@ -1,5 +1,5 @@
 
-#line 1 "routes.c.rl"
+#line 1 "rdir/routes.c.rl"
 /*
 OpenIO SDS rdir
 Copyright (C) 2017 OpenIO SAS, original work as part of OpenIO SDS
@@ -34,64 +34,72 @@ struct rdir_router_result_s {
 };
 
 
-#line 60 "routes.c.rl"
+#line 64 "rdir/routes.c.rl"
 
 
 
-#line 42 "routes.c"
+#line 42 "rdir/routes.c"
 static const char _rdir_router_s_actions[] = {
-	0, 1, 14, 1, 15, 3, 1, 0, 
-	16, 3, 2, 0, 16, 3, 3, 0, 
-	16, 3, 4, 0, 16, 3, 5, 0, 
-	16, 3, 6, 0, 16, 3, 7, 0, 
-	16, 3, 8, 0, 16, 3, 9, 0, 
-	16, 3, 10, 0, 16, 3, 11, 0, 
-	16, 3, 12, 0, 16, 3, 13, 0, 
-	16
+	0, 1, 17, 1, 18, 3, 1, 0, 
+	19, 3, 2, 0, 19, 3, 3, 0, 
+	19, 3, 4, 0, 19, 3, 5, 0, 
+	19, 3, 6, 0, 19, 3, 7, 0, 
+	19, 3, 8, 0, 19, 3, 9, 0, 
+	19, 3, 10, 0, 19, 3, 11, 0, 
+	19, 3, 12, 0, 19, 3, 13, 0, 
+	19, 3, 14, 0, 19, 3, 15, 0, 
+	19, 3, 16, 0, 19
 };
 
 static const char _rdir_router_s_key_offsets[] = {
 	0, 0, 3, 4, 5, 6, 7, 8, 
 	9, 10, 11, 12, 13, 14, 15, 17, 
-	18, 19, 20, 21, 27, 28, 29, 30, 
-	31, 32, 37, 38, 39, 40, 41, 42, 
-	43, 44, 45, 46, 47, 48, 49, 50, 
-	51, 52, 53, 54, 55, 56, 57, 58, 
-	59, 60, 61, 62, 63, 64, 65, 66, 
-	67, 68, 69, 70, 71, 72, 73, 74, 
-	75, 76, 77, 78, 79, 80, 81, 82, 
-	83, 84, 85, 86, 87, 87, 87, 87, 
-	87, 87, 87, 87, 87, 87, 87, 87, 
-	87
+	18, 19, 20, 21, 28, 29, 30, 31, 
+	32, 33, 38, 39, 40, 41, 42, 43, 
+	44, 45, 46, 47, 48, 49, 50, 51, 
+	52, 53, 54, 55, 56, 57, 58, 59, 
+	60, 61, 62, 63, 64, 65, 66, 67, 
+	68, 69, 70, 71, 72, 73, 74, 75, 
+	76, 77, 78, 79, 82, 83, 84, 85, 
+	86, 87, 88, 89, 90, 91, 92, 93, 
+	94, 95, 96, 97, 98, 99, 100, 101, 
+	102, 103, 104, 105, 106, 107, 108, 108, 
+	108, 108, 108, 108, 108, 108, 108, 108, 
+	108, 108, 108, 108, 108, 108
 };
 
 static const char _rdir_router_s_trans_keys[] = {
 	99, 115, 118, 111, 110, 102, 105, 103, 
 	116, 97, 116, 117, 115, 49, 47, 114, 
 	115, 100, 105, 114, 47, 97, 99, 100, 
-	102, 112, 115, 100, 109, 105, 110, 47, 
-	99, 105, 108, 115, 117, 108, 101, 97, 
-	114, 110, 99, 105, 100, 101, 110, 116, 
-	111, 99, 107, 104, 111, 119, 110, 108, 
-	111, 99, 107, 114, 101, 97, 116, 101, 
-	101, 108, 101, 116, 101, 101, 116, 99, 
-	104, 117, 115, 104, 116, 97, 116, 117, 
-	115, 116, 97, 116, 117, 115, 47, 0
+	102, 109, 112, 115, 100, 109, 105, 110, 
+	47, 99, 105, 108, 115, 117, 108, 101, 
+	97, 114, 110, 99, 105, 100, 101, 110, 
+	116, 111, 99, 107, 104, 111, 119, 110, 
+	108, 111, 99, 107, 114, 101, 97, 116, 
+	101, 101, 108, 101, 116, 101, 101, 116, 
+	99, 104, 101, 116, 97, 50, 47, 99, 
+	102, 112, 114, 101, 97, 116, 101, 101, 
+	116, 99, 104, 117, 115, 104, 117, 115, 
+	104, 116, 97, 116, 117, 115, 116, 97, 
+	116, 117, 115, 47, 0
 };
 
 static const char _rdir_router_s_single_lengths[] = {
 	0, 3, 1, 1, 1, 1, 1, 1, 
 	1, 1, 1, 1, 1, 1, 2, 1, 
-	1, 1, 1, 6, 1, 1, 1, 1, 
+	1, 1, 1, 7, 1, 1, 1, 1, 
 	1, 5, 1, 1, 1, 1, 1, 1, 
 	1, 1, 1, 1, 1, 1, 1, 1, 
 	1, 1, 1, 1, 1, 1, 1, 1, 
 	1, 1, 1, 1, 1, 1, 1, 1, 
 	1, 1, 1, 1, 1, 1, 1, 1, 
+	1, 1, 1, 3, 1, 1, 1, 1, 
 	1, 1, 1, 1, 1, 1, 1, 1, 
-	1, 1, 1, 1, 0, 0, 0, 0, 
+	1, 1, 1, 1, 1, 1, 1, 1, 
+	1, 1, 1, 1, 1, 1, 0, 0, 
 	0, 0, 0, 0, 0, 0, 0, 0, 
-	0
+	0, 0, 0, 0, 0, 0
 };
 
 static const char _rdir_router_s_range_lengths[] = {
@@ -106,49 +114,59 @@ static const char _rdir_router_s_range_lengths[] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 
 	0, 0, 0, 0, 0, 0, 0, 0, 
 	0, 0, 0, 0, 0, 0, 0, 0, 
-	0
+	0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0
 };
 
 static const short _rdir_router_s_index_offsets[] = {
 	0, 0, 4, 6, 8, 10, 12, 14, 
 	16, 18, 20, 22, 24, 26, 28, 31, 
-	33, 35, 37, 39, 46, 48, 50, 52, 
-	54, 56, 62, 64, 66, 68, 70, 72, 
-	74, 76, 78, 80, 82, 84, 86, 88, 
-	90, 92, 94, 96, 98, 100, 102, 104, 
-	106, 108, 110, 112, 114, 116, 118, 120, 
-	122, 124, 126, 128, 130, 132, 134, 136, 
-	138, 140, 142, 144, 146, 148, 150, 152, 
-	154, 156, 158, 160, 162, 163, 164, 165, 
-	166, 167, 168, 169, 170, 171, 172, 173, 
-	174
+	33, 35, 37, 39, 47, 49, 51, 53, 
+	55, 57, 63, 65, 67, 69, 71, 73, 
+	75, 77, 79, 81, 83, 85, 87, 89, 
+	91, 93, 95, 97, 99, 101, 103, 105, 
+	107, 109, 111, 113, 115, 117, 119, 121, 
+	123, 125, 127, 129, 131, 133, 135, 137, 
+	139, 141, 143, 145, 149, 151, 153, 155, 
+	157, 159, 161, 163, 165, 167, 169, 171, 
+	173, 175, 177, 179, 181, 183, 185, 187, 
+	189, 191, 193, 195, 197, 199, 201, 202, 
+	203, 204, 205, 206, 207, 208, 209, 210, 
+	211, 212, 213, 214, 215, 216
 };
 
 static const char _rdir_router_s_trans_targs[] = {
 	2, 7, 12, 0, 3, 0, 4, 0, 
-	5, 0, 6, 0, 76, 0, 8, 0, 
-	9, 0, 10, 0, 11, 0, 77, 0, 
-	13, 0, 14, 0, 15, 70, 0, 16, 
+	5, 0, 6, 0, 94, 0, 8, 0, 
+	9, 0, 10, 0, 11, 0, 95, 0, 
+	13, 0, 14, 0, 15, 88, 0, 16, 
 	0, 17, 0, 18, 0, 19, 0, 20, 
-	48, 53, 58, 62, 65, 0, 21, 0, 
-	22, 0, 23, 0, 24, 0, 25, 0, 
-	26, 30, 37, 40, 43, 0, 27, 0, 
-	28, 0, 29, 0, 78, 0, 31, 0, 
-	32, 0, 33, 0, 34, 0, 35, 0, 
-	36, 0, 79, 0, 38, 0, 39, 0, 
-	80, 0, 41, 0, 42, 0, 81, 0, 
-	44, 0, 45, 0, 46, 0, 47, 0, 
-	82, 0, 49, 0, 50, 0, 51, 0, 
-	52, 0, 83, 0, 54, 0, 55, 0, 
-	56, 0, 57, 0, 84, 0, 59, 0, 
-	60, 0, 61, 0, 85, 0, 63, 0, 
-	64, 0, 86, 0, 66, 0, 67, 0, 
-	68, 0, 69, 0, 87, 0, 71, 0, 
-	72, 0, 73, 0, 74, 0, 88, 0, 
-	1, 0, 75, 75, 75, 75, 75, 75, 
-	75, 75, 75, 75, 75, 75, 75, 75, 
-	75, 75, 75, 75, 75, 75, 75, 75, 
-	75, 75, 75, 75, 0
+	48, 53, 58, 62, 80, 83, 0, 21, 
+	0, 22, 0, 23, 0, 24, 0, 25, 
+	0, 26, 30, 37, 40, 43, 0, 27, 
+	0, 28, 0, 29, 0, 96, 0, 31, 
+	0, 32, 0, 33, 0, 34, 0, 35, 
+	0, 36, 0, 97, 0, 38, 0, 39, 
+	0, 98, 0, 41, 0, 42, 0, 99, 
+	0, 44, 0, 45, 0, 46, 0, 47, 
+	0, 100, 0, 49, 0, 50, 0, 51, 
+	0, 52, 0, 101, 0, 54, 0, 55, 
+	0, 56, 0, 57, 0, 102, 0, 59, 
+	0, 60, 0, 61, 0, 103, 0, 63, 
+	0, 64, 0, 65, 0, 66, 0, 67, 
+	0, 68, 73, 77, 0, 69, 0, 70, 
+	0, 71, 0, 72, 0, 104, 0, 74, 
+	0, 75, 0, 76, 0, 105, 0, 78, 
+	0, 79, 0, 106, 0, 81, 0, 82, 
+	0, 107, 0, 84, 0, 85, 0, 86, 
+	0, 87, 0, 108, 0, 89, 0, 90, 
+	0, 91, 0, 92, 0, 109, 0, 1, 
+	0, 93, 93, 93, 93, 93, 93, 93, 
+	93, 93, 93, 93, 93, 93, 93, 93, 
+	93, 93, 93, 93, 93, 93, 93, 93, 
+	93, 93, 93, 93, 93, 93, 93, 93, 
+	93, 0
 };
 
 static const char _rdir_router_s_trans_actions[] = {
@@ -172,10 +190,16 @@ static const char _rdir_router_s_trans_actions[] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 
 	0, 0, 0, 0, 0, 0, 0, 0, 
 	0, 0, 0, 0, 0, 0, 0, 0, 
-	0, 0, 9, 5, 33, 29, 21, 17, 
-	25, 37, 45, 49, 41, 53, 13, 9, 
-	5, 33, 29, 21, 17, 25, 37, 45, 
-	49, 41, 53, 13, 0
+	0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 9, 5, 33, 29, 21, 17, 25, 
+	37, 45, 49, 61, 57, 65, 41, 53, 
+	13, 9, 5, 33, 29, 21, 17, 25, 
+	37, 45, 49, 61, 57, 65, 41, 53, 
+	13, 0
 };
 
 static const char _rdir_router_s_to_state_actions[] = {
@@ -188,9 +212,11 @@ static const char _rdir_router_s_to_state_actions[] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 
 	0, 0, 0, 0, 0, 0, 0, 0, 
 	0, 0, 0, 0, 0, 0, 0, 0, 
-	0, 0, 0, 1, 0, 0, 0, 0, 
 	0, 0, 0, 0, 0, 0, 0, 0, 
-	0
+	0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 1, 0, 0, 
+	0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0
 };
 
 static const char _rdir_router_s_from_state_actions[] = {
@@ -203,9 +229,11 @@ static const char _rdir_router_s_from_state_actions[] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 
 	0, 0, 0, 0, 0, 0, 0, 0, 
 	0, 0, 0, 0, 0, 0, 0, 0, 
-	0, 0, 0, 3, 0, 0, 0, 0, 
 	0, 0, 0, 0, 0, 0, 0, 0, 
-	0
+	0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 3, 0, 0, 
+	0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0
 };
 
 static const short _rdir_router_s_eof_trans[] = {
@@ -218,19 +246,21 @@ static const short _rdir_router_s_eof_trans[] = {
 	0, 0, 0, 0, 0, 0, 0, 0, 
 	0, 0, 0, 0, 0, 0, 0, 0, 
 	0, 0, 0, 0, 0, 0, 0, 0, 
-	0, 0, 0, 0, 176, 177, 178, 179, 
-	180, 181, 182, 183, 184, 185, 186, 187, 
-	188
+	0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0, 0, 0, 
+	0, 0, 0, 0, 0, 0, 218, 219, 
+	220, 221, 222, 223, 224, 225, 226, 227, 
+	228, 229, 230, 231, 232, 233
 };
 
-static const int rdir_router_s_start = 75;
-static const int rdir_router_s_first_final = 75;
+static const int rdir_router_s_start = 93;
+static const int rdir_router_s_first_final = 93;
 static const int rdir_router_s_error = 0;
 
-static const int rdir_router_s_en_route_rdir_request = 75;
+static const int rdir_router_s_en_route_rdir_request = 93;
 
 
-#line 63 "routes.c.rl"
+#line 67 "rdir/routes.c.rl"
 
 static struct rdir_router_result_s _parse(const char *p, const size_t len) {
 	struct rdir_router_s parser = {};
@@ -240,7 +270,7 @@ static struct rdir_router_result_s _parse(const char *p, const size_t len) {
 	rc.result = OIO_RDIR_NOT_MATCHED;
     (void) eof; /* JFS: kept to be ready in case of a FSM change */
     
-#line 244 "routes.c"
+#line 274 "rdir/routes.c"
 	{
 	 parser.cs = rdir_router_s_start;
 	 parser.ts = 0;
@@ -248,9 +278,9 @@ static struct rdir_router_result_s _parse(const char *p, const size_t len) {
 	 parser.act = 0;
 	}
 
-#line 72 "routes.c.rl"
+#line 76 "rdir/routes.c.rl"
     
-#line 254 "routes.c"
+#line 284 "rdir/routes.c"
 	{
 	int _klen;
 	unsigned int _trans;
@@ -267,11 +297,11 @@ _resume:
 	_nacts = (unsigned int) *_acts++;
 	while ( _nacts-- > 0 ) {
 		switch ( *_acts++ ) {
-	case 15:
+	case 18:
 #line 1 "NONE"
 	{ parser.ts = p;}
 	break;
-#line 275 "routes.c"
+#line 305 "rdir/routes.c"
 		}
 	}
 
@@ -337,66 +367,78 @@ _eof_trans:
 		switch ( *_acts++ )
 		{
 	case 0:
-#line 38 "routes.c.rl"
+#line 38 "rdir/routes.c.rl"
 	{ rc.last = p; }
 	break;
 	case 1:
-#line 40 "routes.c.rl"
+#line 40 "rdir/routes.c.rl"
 	{ rc.result = OIO_ROUTE_STATUS; }
 	break;
 	case 2:
-#line 41 "routes.c.rl"
+#line 41 "rdir/routes.c.rl"
 	{ rc.result = OIO_ROUTE_CONFIG; }
 	break;
 	case 3:
-#line 42 "routes.c.rl"
+#line 42 "rdir/routes.c.rl"
 	{ rc.result = OIO_RDIR_STATUS; }
 	break;
 	case 4:
-#line 43 "routes.c.rl"
+#line 43 "rdir/routes.c.rl"
 	{ rc.result = OIO_RDIR_ADMIN_SHOW; }
 	break;
 	case 5:
-#line 44 "routes.c.rl"
+#line 44 "rdir/routes.c.rl"
 	{ rc.result = OIO_RDIR_ADMIN_LOCK; }
 	break;
 	case 6:
-#line 45 "routes.c.rl"
+#line 45 "rdir/routes.c.rl"
 	{ rc.result = OIO_RDIR_ADMIN_UNLOCK; }
 	break;
 	case 7:
-#line 46 "routes.c.rl"
+#line 46 "rdir/routes.c.rl"
 	{ rc.result = OIO_RDIR_ADMIN_INCIDENT; }
 	break;
 	case 8:
-#line 47 "routes.c.rl"
+#line 47 "rdir/routes.c.rl"
 	{ rc.result = OIO_RDIR_ADMIN_CLEAR; }
 	break;
 	case 9:
-#line 48 "routes.c.rl"
+#line 48 "rdir/routes.c.rl"
 	{ rc.result = OIO_RDIR_VOL_CREATE; }
 	break;
 	case 10:
-#line 49 "routes.c.rl"
+#line 49 "rdir/routes.c.rl"
 	{ rc.result = OIO_RDIR_VOL_PUSH; }
 	break;
 	case 11:
-#line 50 "routes.c.rl"
+#line 50 "rdir/routes.c.rl"
 	{ rc.result = OIO_RDIR_VOL_DELETE; }
 	break;
 	case 12:
-#line 51 "routes.c.rl"
+#line 51 "rdir/routes.c.rl"
 	{ rc.result = OIO_RDIR_VOL_FETCH; }
 	break;
 	case 13:
-#line 52 "routes.c.rl"
+#line 52 "rdir/routes.c.rl"
 	{ rc.result = OIO_RDIR_VOL_STATUS; }
 	break;
+	case 14:
+#line 53 "rdir/routes.c.rl"
+	{ rc.result = OIO_RDIR_META2_FETCH; }
+	break;
+	case 15:
+#line 54 "rdir/routes.c.rl"
+	{ rc.result = OIO_RDIR_META2_CREATE; }
+	break;
 	case 16:
-#line 58 "routes.c.rl"
+#line 55 "rdir/routes.c.rl"
+	{ rc.result = OIO_RDIR_META2_PUSH; }
+	break;
+	case 19:
+#line 62 "rdir/routes.c.rl"
 	{ parser.te = p;p--;}
 	break;
-#line 400 "routes.c"
+#line 442 "rdir/routes.c"
 		}
 	}
 
@@ -405,11 +447,11 @@ _again:
 	_nacts = (unsigned int) *_acts++;
 	while ( _nacts-- > 0 ) {
 		switch ( *_acts++ ) {
-	case 14:
+	case 17:
 #line 1 "NONE"
 	{ parser.ts = 0;}
 	break;
-#line 413 "routes.c"
+#line 455 "rdir/routes.c"
 		}
 	}
 
@@ -429,7 +471,7 @@ _again:
 	_out: {}
 	}
 
-#line 73 "routes.c.rl"
+#line 77 "rdir/routes.c.rl"
 	return rc;
 }
 
