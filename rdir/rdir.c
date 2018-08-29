@@ -59,6 +59,7 @@ static GTree *tree_bases = NULL;
 
 #define CHUNK_PREFIX "chunk|"
 #define ADMIN_PREFIX "admin|"
+#define CONTAINER_PREFIX "container|"
 
 #define KEY_LOCK	 ADMIN_PREFIX "lock"
 #define KEY_INCIDENT ADMIN_PREFIX "incident_date"
@@ -367,15 +368,16 @@ _db_open(const char *volid, gboolean autocreate, leveldb_t **pdb)
 }
 
 static GError *
-_db_get(const char *volid, gboolean autocreate, struct rdir_base_s **pbase)
+_db_get_generic(GTree *db_tree, GMutex *db_tree_lock, GCond *db_tree_cond,
+		const char *volid, gboolean autocreate, struct rdir_base_s **pbase)
 {
 	GError *err = NULL;
 	struct rdir_base_s *b = NULL;
 	int errsav = 0;
 
-	g_mutex_lock(&lock_bases);
+	g_mutex_lock(db_tree_lock);
 retry:
-	b = g_tree_lookup(tree_bases, volid);
+	b = g_tree_lookup(db_tree, volid);
 	if (b) {
 		/* already handled once */
 		if (!b->base) {
@@ -384,7 +386,7 @@ retry:
 				goto open;
 			} else {
 				/* being opened */
-				g_cond_wait(&cond_bases, &lock_bases);
+				g_cond_wait(db_tree_cond, db_tree_lock);
 				goto retry;
 			}
 		}
@@ -393,28 +395,35 @@ retry:
 		g_tree_replace(tree_bases, g_strdup(volid), b);
 open:
 		b->owner = g_thread_self();
-		g_mutex_unlock(&lock_bases);
+		g_mutex_unlock(db_tree_lock);
 
 		leveldb_t *db = NULL;
 		err = _db_open(volid, autocreate, &db);
 		if (err)
 			errsav = errno;
 
-		g_mutex_lock(&lock_bases);
+		g_mutex_lock(db_tree_lock);
 		if (!db) {
 			b = NULL;
-			g_tree_remove(tree_bases, volid);
+			g_tree_remove(db_tree, volid);
 		} else {
 			b->base = db;
 			b->owner = NULL;
 		}
 	}
-	g_cond_signal(&cond_bases);
-	g_mutex_unlock(&lock_bases);
+	g_cond_signal(db_tree_cond);
+	g_mutex_unlock(db_tree_lock);
 
 	errno = errsav;
 	*pbase = b;
 	return err;
+}
+
+static GError *
+_db_get(const char *volid, gboolean autocreate, struct rdir_base_s **pbase)
+{
+	return _db_get_generic(tree_bases, &lock_bases, &cond_bases,
+						   volid, autocreate, pbase);
 }
 
 static GError *
@@ -483,11 +492,13 @@ _db_admin_set_incident(const char *volid, gint64 when)
 }
 
 static GError *
-_db_vol_push(const char *volid, gboolean autocreate, GString *key,
-		GString *value)
+_db_insert_generic(GTree *db_tree, GMutex *db_tree_lock, GCond *db_tree_cond,
+				   const char *volid, gboolean autocreate, GString *key,
+				   GString *value)
 {
 	struct rdir_base_s *base = NULL;
-	GError *err = _db_get(volid, autocreate, &base);
+	GError *err = _db_get_generic(db_tree, db_tree_lock, db_tree_cond,
+			volid, autocreate, &base);
 	if (err)
 		return err;
 
@@ -503,6 +514,14 @@ _db_vol_push(const char *volid, gboolean autocreate, GString *key,
 	if (!errmsg)
 		return NULL;
 	return _map_errno_to_gerror(errno, errmsg);
+}
+
+static GError *
+_db_vol_push(const char *volid, gboolean autocreate, GString *key,
+			 GString *value)
+{
+	return _db_insert_generic(tree_bases, &lock_bases, &cond_bases, volid,
+							  autocreate, key, value);
 }
 
 static GError *
@@ -971,6 +990,8 @@ _db_admin_clear(const char *volid, gboolean all, gboolean before_incident,
 	return errmsg ? _map_errno_to_gerror(errsav, errmsg) : NULL;
 }
 
+/* ------------------------------------------------------------------------- */
+/*							  Chunk records 								 */
 /* ------------------------------------------------------------------------- */
 
 struct req_args_s
@@ -1549,6 +1570,419 @@ _route_admin_set_incident(struct req_args_s *args, struct json_object *jbody,
 	return _reply_ok(args->rp, NULL);
 }
 
+/* ------------------------------------------------------------------------- */
+/*							  Meta2 records 								 */
+/* ------------------------------------------------------------------------- */
+/*
+ * An event is generated every time a meta2 database is created in a meta2 server.
+ * We receive an event of that happening and we register it.
+ *
+ * If an existing base is removed from the meta2 server, then we remove the
+ * record citing it in the rdir, and we reference the fact that it used to be
+ * on that meta2 server (?)
+ *
+ * We're reusing the functions used to open/close databases, and trying to
+ * replicate to a maximum the way the rdir operated for the chunks.
+ */
+
+/*
+ * We could technically use the same ones for the chunk logs. However,
+ * each time we lock, it's applied to the whole tree for example, so it could
+ * potentially make the rdir slower.
+ * So we'll keep the same logic used to insert/retrieve/lock database handles
+ * but use our own tree/lock/condition. It's probably safer this way, and can
+ * be quickly rolled back.
+ */
+GMutex meta2_db_lock;
+GTree *meta2_db_tree = NULL;
+GCond meta2_db_cond;
+
+/*
+ * This is the structure we're storing. As per the OB-181 ticket, this is what
+ * we need to store in the rdir.
+ */
+struct rdir_meta2_record_s
+{
+	gint64 mtime;
+	gchar container[STRLEN_CONTAINERID];
+	gchar *content_url;
+	gchar *extra_data;
+};
+
+/*
+ * A structure that packs the parameters for a fetch request.
+ */
+struct rdir_meta2_record_subset_s
+{
+	GString *prefix;
+	gint64 lower_bound;
+	gint64 upper_bound;
+};
+
+
+/*
+ * Extracts data from a JSON string to initialize an rdir_meta2_record_s
+ */
+static GError *
+_meta2_record_extract(struct rdir_meta2_record_s *rec, struct json_object *jrecord)
+{
+	struct json_object *jcontainer, *jmtime, *jcontenturl, *jextradata;
+	struct oio_ext_json_mapping_s map[] = {
+		{"container_id", &jcontainer, json_type_string, 1},
+		{"content_url", &jcontenturl, json_type_string, 1},
+		{"mtime",        &jmtime,     json_type_int,    0},
+		{"extra_data",        &jextradata,     json_type_string,    0},
+		{NULL, NULL, 0, 0}
+	};
+	GError *err = oio_ext_extract_json(jrecord, map);
+	if (!err) {
+		g_strlcpy(rec->container, json_object_get_string(jcontainer),
+				  sizeof(rec->container));
+		rec->mtime = jmtime ? json_object_get_int64(jmtime) : 0;
+		const char *content_url = json_object_get_string(jcontenturl);
+		g_strlcpy(rec->content_url, content_url, strlen(content_url));
+	}
+	return err;
+}
+
+///*
+// * A wrapper around _meta2_record_extract to parse JSON data and pass it along.
+// */
+//static GError *
+//_meta2_record_parse(struct rdir_meta2_record_s *rec, const char *value,
+//					size_t length)
+//{
+//	GError *err = NULL;
+//	struct json_object *jrecord = NULL;
+//
+//	if (!(err = JSON_parse_buffer((const guint8*)value, length, &jrecord)))
+//		err = _meta2_record_extract(rec, jrecord);
+//
+//	json_object_put(jrecord);
+//	return err;
+//}
+
+/*
+ * Computes the key for an rdir_meta2_record_s
+ */
+static GString *
+_meta2_record_to_key(struct rdir_meta2_record_s *rec)
+{
+	GString *key = g_string_sized_new(sizeof(CONTAINER_PREFIX) +
+			STRLEN_CONTAINERID);
+	g_string_printf(key, CONTAINER_PREFIX "%s",
+			rec->content_url);
+	return key;
+}
+
+/*
+ * Compiles a rdir_meta2_record_s into a JSON object.
+ */
+static void
+_meta2_record_encode(struct rdir_meta2_record_s *rec, GString *value)
+{
+	g_string_append_c(value, '{');
+	oio_str_gstring_append_json_pair(value, "container_id", rec->container);
+	g_string_append_c(value, ',');
+	oio_str_gstring_append_json_pair(value, "content_url", rec->content_url);
+	g_string_append_c(value, ',');
+	oio_str_gstring_append_json_pair(value, "extra_data", rec->extra_data);
+	g_string_append_c(value, ',');
+	oio_str_gstring_append_json_pair_int(value, "mtime", rec->mtime);
+	g_string_append_c(value, '}');
+}
+
+/*
+ * Extracts a description of the desired record subset from the JSON
+ * body.
+ */
+static GError *
+_meta2_record_subset_extract(struct rdir_meta2_record_subset_s *subset,
+		struct json_object *jrecord)
+{
+	struct json_object *jprefix, *jlbound, *jubound;
+	struct oio_ext_json_mapping_s map[] = {
+		{"prefix", &jprefix, json_type_string, 0},
+		{"lbound", &jlbound, json_type_int, 0},
+		{"ubound", &jubound, json_type_int, 0},
+		{NULL, NULL, 0, 0}
+	};
+	GError *err = oio_ext_extract_json(jrecord, map);
+	if (!err) {
+		if(jprefix){
+			//TODO: Sanity checks on the prefix.
+			const char *prefix = json_object_get_string(jprefix);
+			g_string_new_len(prefix, strlen(prefix));
+		}else{
+			subset->prefix = NULL;
+		}
+		subset->lower_bound = jlbound ? json_object_get_int64(jlbound) : 0;
+		subset->upper_bound =
+				jubound ? CLAMP(json_object_get_int64(jubound), 1, 4096) : 4096;
+	}
+	return err;
+}
+
+
+/*
+ * Computes the META2 server RDIR database filename.
+ *
+ * If the meta2_address is an IP:PORT, the filename is meta2-ip-port, otherwise
+ * if the meta2_address is a service ID, then the filename is meta2-service_id.
+ */
+static GError *
+_meta2_db_address_to_filename(const gchar *meta2_address, gchar **filename)
+{
+	GError *err = NULL;
+	gchar *local_copy = g_strdup(meta2_address);
+	gchar *colon_char = strchr(local_copy, ':');
+	if(colon_char != NULL) {
+		// We have an IP:PORT
+		*colon_char = '-';
+		*filename = g_strconcat("meta2-", local_copy, NULL);
+		g_free(local_copy);
+	}else{
+		// We have a service ID
+		*filename = g_strconcat("meta2-", local_copy, NULL);
+		g_free(local_copy);
+	}
+	return err;
+}
+
+///*
+// * Given an IP:PORT or a service ID of a META2 server, we try opening the
+// * associated database.
+// */
+//static GError *
+//_meta2_db_open(gchar *meta2_address, gboolean autocreate, leveldb_t **pdb)
+//{
+//	GError *err = NULL;
+//	gchar *filename = NULL;
+//	err = _meta2_db_address_to_filename(meta2_address, &filename);
+//	if(err == NULL) {
+//		err = _db_open(filename, autocreate, pdb);
+//		g_free(filename);
+//	}
+//	return err;
+//}
+
+/*
+ * Given a META2 server address, we try to fetch a handle on the associated
+ * database if it's already available, otherwise we open a new one.
+ */
+static GError *
+_meta2_db_get(const gchar *meta2_address, gboolean autocreate,
+		struct rdir_base_s **pbase)
+{
+	GError *err = NULL;
+	gchar *filename = NULL;
+	err = _meta2_db_address_to_filename(meta2_address, &filename);
+	if(err == NULL){
+		err = _db_get_generic(meta2_db_tree, &meta2_db_lock, &meta2_db_cond,
+			filename, autocreate, pbase);
+		g_free(filename);
+	}
+	return err;
+}
+
+/*
+ * Given an rdir_meta2_record_subset_s, this functions iterates through
+ * the LevelDB database to return the wanted subset.
+ *
+ * If prefix is NULL, then no particular seeking is done before the iteration,
+ * and we will return (ubound-lbound+1) records starting from and including the
+ * first record.
+ *
+ * If prefix is non-NULL, and there is an upper bound and lower bound, the
+ * lower bound is ignored and what will be returned is (ubound-lbound+1) record
+ * from and including the first record after we seek to the prefix.
+ */
+static GError *
+_meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *subset,
+				GString *json_reponse)
+{
+	GError *err = NULL;
+	struct rdir_base_s *base = NULL;
+
+	if (NULL != (err = _meta2_db_get(meta2_address, FALSE, &base)))
+		return err;
+
+	// The prefix is only used here so we can edit it in-place.
+	if(subset->prefix)
+		g_string_prepend(subset->prefix, CONTAINER_PREFIX);
+
+	leveldb_readoptions_t *options = leveldb_readoptions_create();
+	leveldb_readoptions_set_fill_cache(options, 0);
+	leveldb_readoptions_set_verify_checksums(options, 0);
+	leveldb_iterator_t *it = leveldb_create_iterator(base->base, options);
+	leveldb_readoptions_destroy(options);
+
+	if(subset->prefix){
+		// We have a prefix.
+		leveldb_iter_seek(it, subset->prefix->str, strlen(subset->prefix->str));
+	}
+	else if (subset->lower_bound){
+		// We don't have a prefix but we have a lower bound
+		for (int i=0; i < subset->lower_bound-1; i++)
+			leveldb_iter_next(it);
+	}
+	// Now we're at the first record that has the prefix provided.
+	// We start iterating.
+	for (guint nb=0 ; leveldb_iter_valid(it); leveldb_iter_next(it))
+	{
+		size_t vallen = 0;
+
+		if (nb++ > 0)
+			g_string_append_c(json_reponse, ',');
+
+		const char *val = leveldb_iter_value(it, &vallen);
+
+		//FIXME: Maybe validate the format as is done in the chunk part or rdir.
+		// It would consume a bit more CPU, so wether it's useful or not is
+		// debatable especially given that we don't cherry-pick data as in the
+		// chunk part of rdir.
+
+		g_string_append(json_reponse, val);
+
+		if (nb >= (subset ->upper_bound-subset->lower_bound+1))
+			break;
+	}
+
+	leveldb_iter_destroy(it);
+	return err;
+
+}
+
+/*
+ * Adds a container to the meta2 server pointed by the meta2_address
+ */
+static GError*
+_meta2_db_push(const char *meta2_address, gboolean autocreate, GString * key,
+		GString *val)
+{
+	return _db_insert_generic(meta2_db_tree, &meta2_db_lock, &meta2_db_cond,
+			meta2_address, autocreate, key, val);
+}
+
+/*
+ * Fetch specific records, or a range of records.
+ *
+ * The record are ordered by content_url, so we can seek a very specific
+ * prefix and start iterating from there.
+ *
+ * For example, if we want to iterate through the containers that belong to
+ * account A, we'll seek NS/A and start iterating.
+ *
+ * Another one is if for example the containers follow a specific naming
+ * convention that can be ordered lexicographically, we can seek a specific
+ * prefix and go from there.
+ *
+ * Otherwise, the specified ranged will be fetched starting from the 1st record.
+ *
+ * If the a range is specified with a prefix, the lower bound of the range
+ * is ignored and the request will return (higher_bound-lower_bound+1) records
+ * after the 1st record matching the prefix, including that 1st record.
+ *
+ * If no range is specified, the default range will be 0 to 4096.
+ *
+ * The maximum allowed number of records to be returned is 4096.
+ * (I don't know why that's the case with chunks, but my guess is to reduce
+ * contention as there can only be one handle to the leveldb at a time)
+ *
+ */
+static enum http_rc_e
+_route_meta2_fetch(struct req_args_s *args, struct json_object *jbody,
+					const char *meta2_address)
+{
+	if (!jbody || !json_object_is_type(jbody, json_type_object))
+		return _reply_format_error(args->rp, BADREQ("null body"));
+	if (!meta2_address)
+		return _reply_format_error(args->rp, BADREQ("no META2 id"));
+
+	GError *err = NULL;
+
+	struct rdir_meta2_record_subset_s subset = {0};
+	err = _meta2_record_subset_extract(&subset, jbody);
+	if (err)
+		return _reply_format_error(args->rp, err);
+
+	GString *response_list = g_string_sized_new(1024);
+	g_string_append_c(response_list, '[');
+	err = _meta2_db_fetch(meta2_address, &subset, response_list);
+	g_string_append_c(response_list, ']');
+
+	if(err){
+		g_string_free(response_list, TRUE);
+		return _reply_format_error(args->rp, err);
+	}
+
+	return _reply_ok(args->rp, response_list);
+}
+
+/*
+ * Creates a new META2 RDIR database.
+ *
+ * If a database already exists, an HTTP 201 CREATED will be returned.
+ *
+ * According to @michael and @sebastien.lapierre, there is no IP re-use, so the
+ * IP addresses of the META2 servers are used to reference them.
+ */
+static enum http_rc_e
+_route_meta2_create(struct req_args_s *args, const char *meta2_address)
+{
+	if (!oio_str_is_set(meta2_address))
+		return _reply_format_error(args->rp, BADREQ("No META2 ID"));
+
+	//FIXME: Check for an IP:PORT format.
+
+	struct rdir_base_s *base = NULL;
+	GError *err = _meta2_db_get(meta2_address, TRUE, &base);
+	if (err)
+		return _reply_common_error(args->rp, err);
+	return _reply_created(args->rp);
+}
+
+/*
+ * Upon the creation of a container (a META2 database), the EventAgent will
+ * handle an event that will call upon this route to add the newly created
+ * container to the list of containers handled by the META2 server in question.
+ */
+static enum http_rc_e
+_route_meta2_push(struct req_args_s *args, struct json_object *jbody,
+		const char *meta2_address, const char *str_autocreate)
+{
+	if (!jbody || !json_object_is_type(jbody, json_type_object))
+		return _reply_format_error(args->rp, BADREQ("null body"));
+	if (!meta2_address)
+		return _reply_format_error(args->rp, BADREQ("no META2 id"));
+
+	gboolean autocreate = oio_str_parse_bool(str_autocreate, FALSE);
+
+	GError *err = NULL;
+	struct rdir_meta2_record_s rec = {0};
+	if (NULL != (err = _meta2_record_extract(&rec, jbody)))
+		return _reply_format_error(args->rp, err);
+
+	GString *key = _meta2_record_to_key(&rec);
+	GString *value = g_string_sized_new(1024);
+	args->rp->subject(key->str);
+	_meta2_record_encode(&rec, value);
+
+
+	/* Eventually push the record in the database */
+	err = _meta2_db_push(meta2_address, autocreate, key, value);
+	g_string_free(key, TRUE);
+	g_string_free(value, TRUE);
+
+	if (err)
+		return _reply_common_error(args->rp, err);
+	return _reply_ok(args->rp, NULL);
+}
+
+
+/* ------------------------------------------------------------------------- */
+/*							  General rdir routes 							 */
+/* ------------------------------------------------------------------------- */
 
 // RDIR{{
 // GET /status
@@ -1709,6 +2143,20 @@ _handler_decode_route(struct req_args_s *args, struct json_object *jbody,
 			if (!strcmp(args->rq->cmd, "GET") || !strcmp(args->rq->cmd, "POST"))
 				return _route_vol_status(args, OPT("vol"));
 			return _reply_method_error(args->rp);
+
+		case OIO_RDIR_META2_CREATE:
+			CHECK_METHOD("POST");
+			return _route_meta2_create(args, OPT("meta2_address"));
+
+		case OIO_RDIR_META2_PUSH:
+			args->rp->no_access();
+			CHECK_METHOD("POST");
+			return _route_meta2_push(args, jbody, OPT("meta2_address"),
+					OPT("auto_create"));
+
+		case OIO_RDIR_META2_FETCH:
+			CHECK_METHOD("POST");
+			return _route_meta2_fetch(args, jbody, OPT("meta2_address"));
 
 		case OIO_RDIR_NOT_MATCHED:
 			return _reply_format_error(args->rp, BADREQ("Route not found"));
@@ -1883,9 +2331,14 @@ grid_main_specific_fini(void)
 
 	g_tree_destroy(tree_bases);
 	tree_bases = NULL;
-
 	g_cond_clear(&cond_bases);
 	g_mutex_clear(&lock_bases);
+
+	g_tree_destroy(meta2_db_tree);
+	tree_bases = NULL;
+	g_cond_clear(&meta2_db_cond);
+	g_mutex_clear(&meta2_db_lock);
+
 	oio_str_clean(&basedir);
 	oio_str_clean(&service_id);
 }
@@ -2024,6 +2477,11 @@ grid_main_configure(int argc, char **argv)
 	g_cond_init(&cond_bases);
 	g_mutex_init(&lock_bases);
 	tree_bases = g_tree_new_full(metautils_strcmp3, NULL,
+			g_free, (GDestroyNotify)_base_destroy);
+
+	g_cond_init(&meta2_db_cond);
+	g_mutex_init(&meta2_db_lock);
+	meta2_db_tree = g_tree_new_full(metautils_strcmp3, NULL,
 			g_free, (GDestroyNotify)_base_destroy);
 
 	/* Ask for a periodic release of the memory slices kept by the process */
