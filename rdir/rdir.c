@@ -619,13 +619,8 @@ _db_vol_fetch(const char *volid, GString *value,
 }
 
 static GError *
-_db_vol_delete(const char *volid, GString *key)
+_db_vol_delete_generic(struct rdir_base_s *base, GString *key)
 {
-	struct rdir_base_s *base = NULL;
-	GError *err = _db_get(volid, FALSE, &base);
-	if (err)
-		return err;
-
 	char *errmsg = NULL;
 
 	leveldb_writeoptions_t *options = leveldb_writeoptions_create();
@@ -636,6 +631,15 @@ _db_vol_delete(const char *volid, GString *key)
 	if (!errmsg)
 		return NULL;
 	return _map_errno_to_gerror(errno, errmsg);
+}
+
+static GError *
+_db_vol_delete(const char *volid, GString *key){
+	struct rdir_base_s *base = NULL;
+	GError *err = _db_get(volid, FALSE, &base);
+	if (err)
+		return err;
+	return _db_vol_delete_generic(base, key);
 }
 
 static void
@@ -1604,7 +1608,7 @@ GCond meta2_db_cond;
 struct rdir_meta2_record_s
 {
 	gint64 mtime;
-	gchar container[STRLEN_CONTAINERID];
+	gchar *container;
 	gchar *content_url;
 	gchar *extra_data;
 };
@@ -1615,8 +1619,8 @@ struct rdir_meta2_record_s
 struct rdir_meta2_record_subset_s
 {
 	GString *prefix;
-	gint64 lower_bound;
-	gint64 upper_bound;
+	gint64 marker;
+	gint64 limit;
 };
 
 
@@ -1636,11 +1640,22 @@ _meta2_record_extract(struct rdir_meta2_record_s *rec, struct json_object *jreco
 	};
 	GError *err = oio_ext_extract_json(jrecord, map);
 	if (!err) {
-		g_strlcpy(rec->container, json_object_get_string(jcontainer),
-				  sizeof(rec->container));
-		rec->mtime = jmtime ? json_object_get_int64(jmtime) : 0;
+		const char *container = json_object_get_string(jcontainer);
 		const char *content_url = json_object_get_string(jcontenturl);
-		g_strlcpy(rec->content_url, content_url, strlen(content_url));
+		const char *extra = json_object_get_string(jextradata);
+		if(container && content_url){
+			// FIXME: Default to current time ?
+			rec->mtime = jmtime ? json_object_get_int64(jmtime) : 0;
+			rec->container = g_strdup(container);
+			rec->content_url = g_strdup(content_url);
+			if (extra)
+				rec->extra_data = g_strdup(extra);
+			else
+				rec->extra_data = NULL;
+		}else{
+			err = NEWERROR(CODE_BAD_REQUEST, "[_meta2_record_extract] Container"
+					"ID and Content URL are mandatory to add record");
+		}
 	}
 	return err;
 }
@@ -1665,14 +1680,17 @@ _meta2_record_extract(struct rdir_meta2_record_s *rec, struct json_object *jreco
 /*
  * Computes the key for an rdir_meta2_record_s
  */
-static GString *
-_meta2_record_to_key(struct rdir_meta2_record_s *rec)
+static GError *
+_meta2_record_to_key(struct rdir_meta2_record_s *rec, GString *key)
 {
-	GString *key = g_string_sized_new(sizeof(CONTAINER_PREFIX) +
-			STRLEN_CONTAINERID);
-	g_string_printf(key, CONTAINER_PREFIX "%s",
-			rec->content_url);
-	return key;
+	GError *err = NULL;
+	if(rec->content_url){
+		g_string_printf(key, CONTAINER_PREFIX "%s", rec->content_url);
+	}else{
+		err = NEWERROR(CODE_BAD_REQUEST, "[_meta2_record_to_key] Content URL"
+				" mandatory to compute key.");
+	}
+	return err;
 }
 
 /*
@@ -1700,11 +1718,11 @@ static GError *
 _meta2_record_subset_extract(struct rdir_meta2_record_subset_s *subset,
 		struct json_object *jrecord)
 {
-	struct json_object *jprefix, *jlbound, *jubound;
+	struct json_object *jprefix, *jmarker, *jlimit;
 	struct oio_ext_json_mapping_s map[] = {
 		{"prefix", &jprefix, json_type_string, 0},
-		{"lbound", &jlbound, json_type_int, 0},
-		{"ubound", &jubound, json_type_int, 0},
+		{"marker", &jmarker, json_type_int, 0},
+		{"limit", &jlimit, json_type_int, 0},
 		{NULL, NULL, 0, 0}
 	};
 	GError *err = oio_ext_extract_json(jrecord, map);
@@ -1712,13 +1730,13 @@ _meta2_record_subset_extract(struct rdir_meta2_record_subset_s *subset,
 		if(jprefix){
 			//TODO: Sanity checks on the prefix.
 			const char *prefix = json_object_get_string(jprefix);
-			g_string_new_len(prefix, strlen(prefix));
+			subset->prefix = g_string_new_len(prefix, strlen(prefix));
 		}else{
 			subset->prefix = NULL;
 		}
-		subset->lower_bound = jlbound ? json_object_get_int64(jlbound) : 0;
-		subset->upper_bound =
-				jubound ? CLAMP(json_object_get_int64(jubound), 1, 4096) : 4096;
+		subset->marker = jmarker ? json_object_get_int64(jmarker) : 0;
+		subset->limit =
+				jlimit ? CLAMP(json_object_get_int64(jlimit), 0, 4096) : 4096;
 	}
 	return err;
 }
@@ -1790,16 +1808,18 @@ _meta2_db_get(const gchar *meta2_address, gboolean autocreate,
  * the LevelDB database to return the wanted subset.
  *
  * If prefix is NULL, then no particular seeking is done before the iteration,
- * and we will return (ubound-lbound+1) records starting from and including the
+ * and we will return (limit-marker+1) records starting from and including the
  * first record.
  *
- * If prefix is non-NULL, and there is an upper bound and lower bound, the
- * lower bound is ignored and what will be returned is (ubound-lbound+1) record
- * from and including the first record after we seek to the prefix.
+ * If prefix is non-NULL, and there is an limit and marker, the
+ * marker is ignored and what will be returned is (limit) record
+ * from and including the first record after we seek the prefix.
+ * In this case, all the records are guaranteed to have the prefix
+ * in the content URL.
  */
 static GError *
 _meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *subset,
-				GString *json_reponse)
+				GString *json_reponse, gboolean *end_of_prefix)
 {
 	GError *err = NULL;
 	struct rdir_base_s *base = NULL;
@@ -1820,17 +1840,32 @@ _meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *s
 	if(subset->prefix){
 		// We have a prefix.
 		leveldb_iter_seek(it, subset->prefix->str, strlen(subset->prefix->str));
+		subset->marker = 1;
 	}
-	else if (subset->lower_bound){
-		// We don't have a prefix but we have a lower bound
-		for (int i=0; i < subset->lower_bound-1; i++)
-			leveldb_iter_next(it);
+	else {
+		// LevelDB quirk apparently, you have to seek somewhere no matter what
+		// before iterating.
+		leveldb_iter_seek_to_first(it);
+		if (subset->marker) {
+			// We don't have a prefix but we have a marker
+			for (int i = 0; i < subset->marker; i++)
+				leveldb_iter_next(it);
+		}
 	}
+
 	// Now we're at the first record that has the prefix provided.
 	// We start iterating.
-	for (guint nb=0 ; leveldb_iter_valid(it); leveldb_iter_next(it))
+	guint nb;
+	for (nb = 0; leveldb_iter_valid(it); leveldb_iter_next(it))
 	{
-		size_t vallen = 0;
+		size_t klen, vallen = 0;
+
+		const char *key = leveldb_iter_key(it, &klen);
+		if(subset->prefix)
+			if (strncmp(subset->prefix->str, key, subset->prefix->len)){
+				*end_of_prefix = TRUE;
+				break;
+			}
 
 		if (nb++ > 0)
 			g_string_append_c(json_reponse, ',');
@@ -1844,9 +1879,28 @@ _meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *s
 
 		g_string_append(json_reponse, val);
 
-		if (nb >= (subset ->upper_bound-subset->lower_bound+1))
+		if (nb >= (subset ->limit-subset->marker+1))
 			break;
 	}
+
+
+	/*
+	 * We can exit the loop on three cases:
+	 * - We have reached the end of the database.
+	 * - We have exhausted the records containing the prefix.
+	 * - We have reached the specified paging limit.
+	 *
+	 * In the first case, we can easily detect that there is no more records.
+	 * In the second one, we have also detected that no more records are there.
+	 * The third one on the other hand, we need to take a single step further to
+	 * see if there are any more records to read.
+	 *
+	 * That's why this ugly hack is here. Please suggest something better ...
+	 */
+	if (nb >= (subset ->limit-subset->marker+1))
+		leveldb_iter_next(it);
+	if (!leveldb_iter_valid(it))
+		*end_of_prefix = TRUE;
 
 	leveldb_iter_destroy(it);
 	return err;
@@ -1860,8 +1914,29 @@ static GError*
 _meta2_db_push(const char *meta2_address, gboolean autocreate, GString * key,
 		GString *val)
 {
-	return _db_insert_generic(meta2_db_tree, &meta2_db_lock, &meta2_db_cond,
-			meta2_address, autocreate, key, val);
+	GError *err = NULL;
+	gchar *filename = NULL;
+	err = _meta2_db_address_to_filename(meta2_address, &filename);
+	if(!err){
+		err = _db_insert_generic(meta2_db_tree, &meta2_db_lock, &meta2_db_cond,
+			filename, autocreate, key, val);
+	}
+	if(filename)
+		g_free(filename);
+	return err;
+}
+
+/*
+ * Removes a record from the database.
+ */
+static GError *
+_meta2_db_delete(const gchar *meta2_address, GString *key)
+{
+	struct rdir_base_s *base = NULL;
+	GError *err = _meta2_db_get(meta2_address, FALSE, &base);
+	if (err)
+		return err;
+	return _db_vol_delete_generic(base, key);
 }
 
 /*
@@ -1879,9 +1954,14 @@ _meta2_db_push(const char *meta2_address, gboolean autocreate, GString * key,
  *
  * Otherwise, the specified ranged will be fetched starting from the 1st record.
  *
- * If the a range is specified with a prefix, the lower bound of the range
- * is ignored and the request will return (higher_bound-lower_bound+1) records
+ * If the a range is specified with a prefix, the marker of the range
+ * is ignored and the request will return (higher_bound-marker+1) records
  * after the 1st record matching the prefix, including that 1st record.
+ * In this case, all the records are guaranteed to have the prefix
+ * in the content URL.
+ *
+ * If no more records are available for the requested subset, end_of_records
+ * will be true, otherwise it will be false.
  *
  * If no range is specified, the default range will be 0 to 4096.
  *
@@ -1907,9 +1987,15 @@ _route_meta2_fetch(struct req_args_s *args, struct json_object *jbody,
 		return _reply_format_error(args->rp, err);
 
 	GString *response_list = g_string_sized_new(1024);
+	gboolean end_of_prefix = FALSE;
+	g_string_append(response_list, "{\"records\":");
 	g_string_append_c(response_list, '[');
-	err = _meta2_db_fetch(meta2_address, &subset, response_list);
-	g_string_append_c(response_list, ']');
+	err = _meta2_db_fetch(meta2_address, &subset, response_list, &end_of_prefix);
+	g_string_append(response_list, "], \"end_of_prefix\": ");
+	if (end_of_prefix)
+		g_string_append(response_list, "true }");
+	else
+		g_string_append(response_list, "false }");
 
 	if(err){
 		g_string_free(response_list, TRUE);
@@ -1963,7 +2049,12 @@ _route_meta2_push(struct req_args_s *args, struct json_object *jbody,
 	if (NULL != (err = _meta2_record_extract(&rec, jbody)))
 		return _reply_format_error(args->rp, err);
 
-	GString *key = _meta2_record_to_key(&rec);
+	GString *key = g_string_new("");
+	err = _meta2_record_to_key(&rec, key);
+	if (err){
+		g_string_free(key, TRUE);
+		return _reply_format_error(args->rp, err);
+	}
 	GString *value = g_string_sized_new(1024);
 	args->rp->subject(key->str);
 	_meta2_record_encode(&rec, value);
@@ -1976,9 +2067,43 @@ _route_meta2_push(struct req_args_s *args, struct json_object *jbody,
 
 	if (err)
 		return _reply_common_error(args->rp, err);
+
 	return _reply_ok(args->rp, NULL);
 }
 
+
+static enum http_rc_e
+_route_meta2_delete(struct req_args_s *args, struct json_object *jbody,
+				  const char *meta2_address)
+{
+	if (!jbody || !json_object_is_type(jbody, json_type_object))
+		return _reply_format_error(args->rp, BADREQ("null body"));
+	if (!meta2_address)
+		return _reply_format_error(args->rp, BADREQ("no META2 id"));
+
+	GError *err = NULL;
+	struct rdir_meta2_record_s rec = {0};
+	if (NULL != (err = _meta2_record_extract(&rec, jbody)))
+		return _reply_format_error(args->rp, err);
+
+	GString *key = g_string_new("");
+	err = _meta2_record_to_key(&rec, key);
+	if (err){
+		g_string_free(key, TRUE);
+		return _reply_format_error(args->rp, err);
+	}
+
+	args->rp->subject(key->str);
+
+	/* Eventually delete the record from the database */
+	err = _meta2_db_delete(meta2_address, key);
+	g_string_free(key, TRUE);
+
+	if (err)
+		return _reply_common_error(args->rp, err);
+
+	return _reply_ok(args->rp, NULL);
+}
 
 /* ------------------------------------------------------------------------- */
 /*							  General rdir routes 							 */
@@ -2157,6 +2282,10 @@ _handler_decode_route(struct req_args_s *args, struct json_object *jbody,
 		case OIO_RDIR_META2_FETCH:
 			CHECK_METHOD("POST");
 			return _route_meta2_fetch(args, jbody, OPT("meta2_address"));
+
+		case OIO_RDIR_META2_DELETE:
+			CHECK_METHOD("POST");
+			return _route_meta2_delete(args, jbody, OPT("meta2_address"));
 
 		case OIO_RDIR_NOT_MATCHED:
 			return _reply_format_error(args->rp, BADREQ("Route not found"));
