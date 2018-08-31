@@ -133,8 +133,11 @@ GError* meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *beans,
 		m2_onbean_cb cb, gpointer u0);
 
+typedef void (*meta2_send_event_cb)(gchar *event, gpointer udata);
+
 GError* meta2_backend_check_content(struct meta2_backend_s *m2b,
-		GSList *beans, GString *message, gboolean update);
+		struct oio_url_s *url, GSList **beans, meta2_send_event_cb send_event,
+		gboolean update);
 
 /** Update a content with the given chunks replacing the existing chunks
  *  at the same position. */

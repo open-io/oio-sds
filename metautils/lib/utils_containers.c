@@ -1,7 +1,7 @@
 /*
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015,2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015,2017-2018 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -77,6 +77,29 @@ gslist_chunks_destroy(GSList * list_of_lists, GDestroyNotify destroy_func)
 	}
 
 	g_slist_free(list_of_lists);
+}
+
+GSList *
+gslist_extract(GSList *beans, GSList **out,
+		GCompareFunc keep, gconstpointer udata)
+{
+	EXTRA_ASSERT(out != NULL);
+	GSList *prev = beans;
+	GSList *cur = beans;
+	while (cur != NULL) {
+		if (!keep(cur->data, udata)) {
+			GSList *link = cur;
+			prev = g_slist_remove_link(prev, link);
+			if (unlikely(beans == link))
+				beans = cur;  // the first element changed
+			*out = g_slist_concat(link, *out);
+			cur = prev->next;
+		} else {
+			prev = cur;
+			cur = cur->next;
+		}
+	}
+	return beans;
 }
 
 GSList*

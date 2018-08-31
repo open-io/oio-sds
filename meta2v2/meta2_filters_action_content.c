@@ -80,7 +80,8 @@ _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		gchar tmp[256];
 		g_snprintf (tmp, sizeof(tmp), "%s.%s", META2_EVENTS_PREFIX, name);
 
-		GString *gs = oio_event__create(tmp, url2);
+		GString *gs = oio_event__create_with_id(tmp,
+				url2, oio_ext_get_reqid());
 		g_string_append_c(gs, ',');
 		oio_str_gstring_append_json_pair_int(gs, "part", cur_event++);
 		g_string_append_c(gs, ',');
@@ -226,15 +227,14 @@ meta2_filter_action_check_content(struct gridd_filter_ctx_s * ctx,
 	if (update != NULL)
 		is_update=TRUE;
 
+	void _send_event(gchar *event, gpointer udata UNUSED) {
+		meta2_filter_ctx_defer_event(ctx, event);
+	}
 	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
-	GString *message= g_string_new("");
-	e = meta2_backend_check_content(m2b, beans, message, is_update);
+	e = meta2_backend_check_content(m2b, url, &beans, _send_event, is_update);
+	meta2_filter_ctx_set_input_udata2(ctx, beans,
+			(GDestroyNotify)_bean_cleanl2, FALSE);
 	if (e) {
-		GString *gs = oio_event__create("storage.content.broken", url);
-		g_string_append(gs, ",\"data\":{");
-		g_string_append(gs, message->str);
-		g_string_append(gs, "}}");
-		oio_events_queue__send (m2b->notifier, g_string_free (gs, FALSE));
 		if (e->code == CODE_CONTENT_CORRUPTED) {
 			meta2_filter_ctx_set_error(ctx, e);
 			e = NULL;
@@ -243,7 +243,6 @@ meta2_filter_action_check_content(struct gridd_filter_ctx_s * ctx,
 			g_clear_error(&e);
 		}
 	}
-	g_string_free(message, TRUE);
 	return rc;
 }
 

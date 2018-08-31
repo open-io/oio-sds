@@ -29,6 +29,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <server/transport_gridd.h>
 #include <server/gridd_dispatcher_filters.h>
 
+#include <events/oio_events_queue.h>
+
 #include <meta2v2/meta2_macros.h>
 #include <meta2v2/meta2_filter_context.h>
 #include <meta2v2/meta2_filters.h>
@@ -124,5 +126,24 @@ meta2_filter_reply_not_implemented(struct gridd_filter_ctx_s *ctx,
 	TRACE_FILTER();
 	(void) ctx;
 	reply->send_reply(CODE_NOT_IMPLEMENTED, "NOT IMPLEMENTED");
+	return FILTER_OK;
+}
+
+int
+meta2_filter_send_deferred_events(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply UNUSED)
+{
+	TRACE_FILTER();
+
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	GSList *events = meta2_filter_ctx_get_deferred_events(ctx);
+	if (events && m2b->notifier) {
+		for (GSList *l = events; l != NULL; l = l->next) {
+			EXTRA_ASSERT(l->data != NULL);
+			oio_events_queue__send(m2b->notifier, l->data);
+			l->data = NULL;  // will be freed by the event queue
+		}
+	}
+
 	return FILTER_OK;
 }

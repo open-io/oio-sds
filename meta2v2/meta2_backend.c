@@ -1496,16 +1496,59 @@ m2b_get_prepare_data(struct meta2_backend_s *m2b,
 	return err;
 }
 
+static gint
+_prop_is_not_prefixed(gpointer a, gpointer b)
+{
+	if (DESCR(a) != &descr_struct_PROPERTIES)
+		return 1;
+	struct bean_PROPERTIES_s *prop = a;
+	const gchar *prefix = b;
+	return prefix != NULL &&
+		!g_str_has_prefix(PROPERTIES_get_key(prop)->str, prefix);
+}
+
 GError *
-meta2_backend_check_content(struct meta2_backend_s *m2b,
-		GSList *beans, GString *message, gboolean update)
+meta2_backend_check_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
+		GSList **beans, meta2_send_event_cb send_event, gboolean update)
 {
 	GError *err = NULL;
 	struct namespace_info_s *nsinfo = NULL;
 	if (!(nsinfo = meta2_backend_get_nsinfo(m2b)))
 		return NEWERROR(CODE_INTERNAL_ERROR, "NS not ready");
 
-	err = m2db_check_content(beans, nsinfo, message, update);
+	struct m2v2_sorted_content_s *sorted = NULL;
+	m2v2_sort_content(*beans, &sorted);
+	GString *message = g_string_sized_new(1024);
+	err = m2db_check_content(sorted, nsinfo, message, update);
+	if (err && send_event) {
+		GString *gs = oio_event__create_with_id(
+				"storage.content.broken", url, oio_ext_get_reqid());
+		g_string_append(gs, ",\"data\":{");
+		g_string_append(gs, message->str);
+		g_string_append(gs, "}}");
+		send_event(g_string_free(gs, FALSE), NULL);
+	}
+	if (!err || err->code == CODE_CONTENT_UNCOMPLETE) {
+		GSList *chunk_meta = NULL;
+		*beans = gslist_extract(*beans, &chunk_meta,
+				(GCompareFunc)_prop_is_not_prefixed, OIO_CHUNK_SYSMETA_PREFIX);
+		GSList *messages = NULL;
+		m2db_check_content_quality(sorted, chunk_meta, &messages);
+		for (GSList *msgs = messages; msgs != NULL; msgs = msgs->next) {
+			gchar *msg = msgs->data;
+			GString *gs = oio_event__create_with_id(
+					"storage.content.perfectible", url, oio_ext_get_reqid());
+			g_string_append(gs, ",\"data\":");
+			g_string_append(gs, msg);
+			g_string_append(gs, "}");
+			send_event(g_string_free(gs, FALSE), NULL);
+		}
+		g_slist_free_full(messages, g_free);
+		_bean_cleanl2(chunk_meta);
+	}
+
+	g_string_free(message, TRUE);
+	m2v2_sorted_content_free(sorted);
 	namespace_info_free(nsinfo);
 	return err;
 }

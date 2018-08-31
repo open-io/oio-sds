@@ -48,20 +48,27 @@ GSList * metautils_gslist_precat (GSList *l0, GSList *l1);
 GSList *gslist_split(GSList * list, gsize max);
 
 /**
- * Convinient func to use with g_slist_foreach
+ * Convenient func to use with g_slist_foreach
  * Pass the clean func has data arguement */
 void gslist_free_element(gpointer d, gpointer u);
 
 /**
  * Frees a list of lists, at least the list elements structures and also
  * their elements if the destructor callback has been provided.
- * 
+ *
  * Assumes the list parameter itself contains lists (a GSList* of GSlist*).
  *
  * @param list_of_lists a single linked list (may be NULL)
  * @param destroy_func a desturctor function pointer
  */
 void gslist_chunks_destroy(GSList * list_of_lists, GDestroyNotify destroy_func);
+
+/* Extract links from one list and prepend them to the second.
+ * `keep` function is applied on each element, and an element is
+ * removed from the first list when it returns 0.
+ * @return the new head of the input list. */
+GSList *gslist_extract(GSList *in, GSList **out,
+		GCompareFunc keep, gconstpointer udata);
 
 /**
  * agregate the given list of chunk_info_t

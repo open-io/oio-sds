@@ -23,6 +23,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <glib.h>
 #include <json-c/json.h>
 
+#include <core/oiolb.h>
+
 GError* m2v2_json_load_single_alias (struct json_object *j, gpointer *pbean);
 GError* m2v2_json_load_single_header (struct json_object *j, gpointer *pbean);
 GError* m2v2_json_load_single_chunk (struct json_object *j, gpointer *pbean);
@@ -37,6 +39,9 @@ GError * meta2_json_load_setof_beans(struct json_object *j, GSList **out);
 
 /**  */
 GError * m2v2_json_load_setof_xbean (struct json_object *j, GSList **out);
+
+GError *meta2_json_fill_item_quality(struct json_object *jqual,
+		struct oio_lb_selected_item_s *item);
 
 /** Convert alias beans to their JSON representation.
  * Ignores beans of other types. */
@@ -69,5 +74,9 @@ void meta2_json_dump_all_beans(GString *gstr, GSList *beans);
  * The output does not contain the outer square brackets, to allow easier
  * inclusion in an existing array. */
 void meta2_json_dump_all_xbeans(GString *gstr, GSList *beans);
+
+/* Encode a single bean to the content of a json dictionary.
+ * Does not prepend or append brackets. */
+void meta2_json_encode_bean(GString *g, gpointer bean);
 
 #endif /*OIO_SDS__meta2v2__meta2_utils_json_h*/

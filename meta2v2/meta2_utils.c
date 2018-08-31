@@ -255,17 +255,49 @@ m2db_set_obj_count(struct sqlx_sqlite3_s *sq3, gint64 count)
 
 /* GET ---------------------------------------------------------------------- */
 
-struct _sorted_content_s {
-	struct bean_CONTENTS_HEADERS_s *header;
-	GSList *aliases;    // GSList<struct bean_ALIASES_s*>
-	GSList *properties; // GSList<struct bean_PROPERTIES_s*>
-	GTree *metachunks;  // GTree<gint,GSList<struct bean_CHUNKS_s*>>
-};
+static void
+_load_chunk_quality(GHashTable *qualities, struct bean_PROPERTIES_s *prop)
+{
+	GError *err = NULL;
+	GByteArray *val = PROPERTIES_get_value(prop);
+	json_tokener *parser = json_tokener_new();
+	json_object *jbody = json_tokener_parse_ex(
+			parser, (const char*)val->data, val->len);
+	if (json_tokener_get_error(parser) != json_tokener_success) {
+		err = NEWERROR(0, "%s",
+				json_tokener_error_desc(json_tokener_get_error(parser)));
+	} else {
+		struct oio_lb_selected_item_s *item = g_malloc0(sizeof *item);
+		err = meta2_json_fill_item_quality(jbody, item);
+		if (!err) {
+			GString *key = PROPERTIES_get_key(prop);
+			EXTRA_ASSERT(g_str_has_prefix(key->str, OIO_CHUNK_SYSMETA_PREFIX));
+			g_hash_table_insert(qualities,
+					g_strdup(key->str + strlen(OIO_CHUNK_SYSMETA_PREFIX)), item);
+		} else {
+			g_free(item);
+		}
+	}
+
+	if (jbody)
+		json_object_put(jbody);
+	json_tokener_free(parser);
+	if (err)
+		GRID_WARN("Failed to parse chunk quality: %s", err->message);
+	g_clear_error(&err);
+}
+
+static void
+_load_chunk_qualities(GHashTable *qualities, GSList *properties)
+{
+	for (GSList *l = properties; l != NULL; l = l->	next)
+		_load_chunk_quality(qualities, l->data);
+}
 
 static void
 _sort_content_cb(gpointer sorted_content, gpointer bean)
 {
-	struct _sorted_content_s *content = sorted_content;
+	struct m2v2_sorted_content_s *content = sorted_content;
 	if (DESCR(bean) == &descr_struct_CHUNKS) {
 		gint64 pos = g_ascii_strtoll(
 				CHUNKS_get_position(bean)->str, NULL, 10);
@@ -280,6 +312,40 @@ _sort_content_cb(gpointer sorted_content, gpointer bean)
 		content->properties = g_slist_prepend(content->properties, bean);
 	} else {
 		g_assert_not_reached();
+	}
+}
+
+static gboolean
+_foreach_free_list(gpointer key, gpointer value, gpointer data){
+	(void) data;
+	(void) key;
+	if (value)
+		g_slist_free((GSList *)value);
+	return FALSE;
+}
+
+void
+m2v2_sorted_content_free(struct m2v2_sorted_content_s *content)
+{
+	g_slist_free(content->aliases);
+	g_slist_free(content->properties);
+	g_tree_foreach(content->metachunks, _foreach_free_list, NULL);
+	g_tree_destroy(content->metachunks);
+	g_free(content);
+}
+
+void
+m2v2_sort_content(GSList *beans, struct m2v2_sorted_content_s **content)
+{
+	EXTRA_ASSERT(content != NULL);
+	EXTRA_ASSERT(*content == NULL);
+	*content = g_malloc0(sizeof(struct m2v2_sorted_content_s));
+	/* Do not set value free func, we will insert linked lists
+	 * containing the previous values. */
+	(*content)->metachunks = g_tree_new(_tree_compare_int);
+	for (GSList *l = beans; l; l = l->next) {
+		gpointer bean = l->data;
+		_sort_content_cb(*content, bean);
 	}
 }
 
@@ -1075,7 +1141,7 @@ m2db_truncate_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		gint64 truncate_size, GSList **out_deleted, GSList **out_added)
 {
 	GError *err = NULL;
-	struct _sorted_content_s content = {
+	struct m2v2_sorted_content_s content = {
 		.header = NULL,
 		.aliases = NULL,
 		.properties = NULL,
@@ -1871,6 +1937,27 @@ is_stgpol_backblaze(const struct storage_policy_s *pol)
 	return FALSE;
 }
 
+static GString*
+_selected_item_quality_to_json(GString *inout,
+		struct oio_lb_selected_item_s *sel)
+{
+	GString *qual = inout? : g_string_sized_new(128);
+	g_string_append_c(qual, '{');
+	oio_str_gstring_append_json_pair_int(qual,
+			"expected_dist", sel->expected_dist);
+	g_string_append_c(qual, ',');
+	oio_str_gstring_append_json_pair_int(qual,
+			"final_dist", sel->final_dist);
+	g_string_append_c(qual, ',');
+	oio_str_gstring_append_json_pair(qual,
+			"expected_slot", sel->expected_slot);
+	g_string_append_c(qual, ',');
+	oio_str_gstring_append_json_pair(qual,
+			"final_slot", sel->final_slot);
+	g_string_append_c(qual, '}');
+	return qual;
+}
+
 static void
 _gen_chunk(struct gen_ctx_s *ctx, struct oio_lb_selected_item_s *sel,
 		gint64 cs, guint pos, gint subpos)
@@ -1907,19 +1994,7 @@ _gen_chunk(struct gen_ctx_s *ctx, struct oio_lb_selected_item_s *sel,
 	ctx->cb(ctx->cb_data, chunk);
 
 	/* Create a property to represent the quality of the selected chunk. */
-	GString *qual = g_string_new("{");
-	oio_str_gstring_append_json_pair_int(qual,
-			"expected_dist", sel->expected_dist);
-	g_string_append_c(qual, ',');
-	oio_str_gstring_append_json_pair_int(qual,
-			"final_dist", sel->final_dist);
-	g_string_append_c(qual, ',');
-	oio_str_gstring_append_json_pair(qual,
-			"expected_slot", sel->expected_slot);
-	g_string_append_c(qual, ',');
-	oio_str_gstring_append_json_pair(qual,
-			"final_slot", sel->final_slot);
-	g_string_append_c(qual, '}');
+	GString *qual = _selected_item_quality_to_json(NULL, sel);
 	struct bean_PROPERTIES_s *prop = _bean_create(&descr_struct_PROPERTIES);
 	gchar *prop_key = g_alloca(
 			sizeof(OIO_CHUNK_SYSMETA_PREFIX) + strlen(chunkid));
@@ -2153,7 +2228,7 @@ _foreach_check_ec_content(gpointer key, gpointer value, gpointer data)
 }
 
 static enum _content_broken_state_e
-_check_plain_content(struct _sorted_content_s *content,
+_check_plain_content(struct m2v2_sorted_content_s *content,
 		const struct data_security_s *dsec, GString *message, gboolean partial)
 {
 	gint nb_copy = data_security_get_int64_param(dsec, DS_KEY_COPY_COUNT, 1);
@@ -2181,7 +2256,7 @@ _check_plain_content(struct _sorted_content_s *content,
 }
 
 static enum _content_broken_state_e
-_check_ec_content(struct _sorted_content_s *content,
+_check_ec_content(struct m2v2_sorted_content_s *content,
 		struct storage_policy_s *pol, GString *message, gboolean partial)
 {
 	if (!content->header)
@@ -2209,48 +2284,20 @@ _check_ec_content(struct _sorted_content_s *content,
 	return cec.ecb;
 }
 
-static gboolean
-_foreach_free_list(gpointer key, gpointer value, gpointer data){
-	(void) data;
-	(void) key;
-	if (value)
-		g_slist_free((GSList *)value);
-	return FALSE;
-}
-
-GError *m2db_check_content(GSList *beans, struct namespace_info_s *nsinfo,
-		GString *message, gboolean partial)
+static GError *
+_m2db_check_content_validity(struct m2v2_sorted_content_s *sorted_content,
+		struct storage_policy_s *pol, GString *message, gboolean partial)
 {
 	GError *err = NULL;
-	struct _sorted_content_s sorted_content = {
-		.header = NULL,
-		.aliases = NULL,
-		.properties = NULL,
-		.metachunks = g_tree_new(_tree_compare_int),
-	};
-
-	struct storage_policy_s *pol = NULL;
-	GString *polname = NULL;
-	for (GSList *l = beans; l; l = l->next) {
-		gpointer bean = l->data;
-		_sort_content_cb(&sorted_content, bean);
-		if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
-			polname = CONTENTS_HEADERS_get_policy(bean);
-		}
-	}
-
-	if (polname && polname->str && polname->len)
-		pol = storage_policy_init(nsinfo, polname->str);
-
-	enum _content_broken_state_e  cbroken = NONE;
+	enum _content_broken_state_e cbroken = NONE;
 	const struct data_security_s *dsec = storage_policy_get_data_security(pol);
 	switch (data_security_get_type(dsec)) {
 		case STGPOL_DS_BACKBLAZE:
 		case STGPOL_DS_PLAIN:
-			cbroken = _check_plain_content(&sorted_content, dsec, message, partial);
+			cbroken = _check_plain_content(sorted_content, dsec, message, partial);
 			break;
 		case STGPOL_DS_EC:
-			cbroken = _check_ec_content(&sorted_content, pol, message, partial);
+			cbroken = _check_ec_content(sorted_content, pol, message, partial);
 			break;
 		default:
 			err = NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy type");
@@ -2266,15 +2313,83 @@ GError *m2db_check_content(GSList *beans, struct namespace_info_s *nsinfo,
 			err = NEWERROR(CODE_CONTENT_CORRUPTED, "Content broken and irreparable");
 			break;
 	}
+	return err;
+}
 
-	if (sorted_content.aliases)
-		g_slist_free(sorted_content.aliases);
-	if (sorted_content.properties)
-		g_slist_free(sorted_content.properties);
+void
+m2db_check_content_quality(struct m2v2_sorted_content_s *sorted_content,
+		GSList *chunk_meta, GSList **to_be_improved)
+{
+	EXTRA_ASSERT(to_be_improved != NULL);
+	GHashTable *chunk_items = g_hash_table_new_full(g_str_hash, g_str_equal,
+			g_free, g_free);
+	_load_chunk_qualities(chunk_items, chunk_meta);
 
-	g_tree_foreach(sorted_content.metachunks, _foreach_free_list, NULL);
-	g_tree_destroy(sorted_content.metachunks);
-	if(pol)
+	gboolean _on_metachunk(gpointer ppos, GSList *chunks, gpointer udata UNUSED) {
+		gint mc_pos = GPOINTER_TO_INT(ppos);
+		GString *out = g_string_sized_new(1024);
+		g_string_append_c(out, '{');
+		oio_str_gstring_append_json_pair_int(out, "pos", mc_pos);
+		g_string_append_c(out, ',');
+		oio_str_gstring_append_json_quote(out, "chunks");
+		g_string_append(out, ":[");
+		gboolean must_send_event = FALSE;
+		for (GSList *cur = chunks; cur; cur = cur->next) {
+			GString *chunk_id = CHUNKS_get_id(cur->data);
+			if (cur != chunks)
+				g_string_append_c(out, ',');
+			struct oio_lb_selected_item_s *item = g_hash_table_lookup(
+					chunk_items, chunk_id->str);
+			if (item) {
+				g_string_append_c(out, '{');
+				meta2_json_encode_bean(out, cur->data);
+				g_string_append_c(out, ',');
+				oio_str_gstring_append_json_quote(out, "quality");
+				g_string_append_c(out, ':');
+				_selected_item_quality_to_json(out, item);
+				if (item->final_dist < item->expected_dist ||
+						strcmp(item->final_slot, item->expected_slot)) {
+					must_send_event = TRUE;
+				}
+				g_string_append_c(out, '}');
+			}
+		}
+		g_string_append(out, "]}");
+		if (must_send_event) {
+			*to_be_improved = g_slist_prepend(*to_be_improved,
+					g_string_free(out, FALSE));
+		} else {
+			GRID_DEBUG("Event avoided (sufficient quality): %s", out->str);
+			g_string_free(out, TRUE);
+		}
+		return FALSE;
+	}
+	g_tree_foreach(sorted_content->metachunks,
+			(GTraverseFunc)_on_metachunk, NULL);
+}
+
+GError *
+m2db_check_content(struct m2v2_sorted_content_s *sorted_content,
+		struct namespace_info_s *nsinfo, GString *message, gboolean partial)
+{
+	GError *err = NULL;
+
+	struct storage_policy_s *pol = NULL;
+	GString *polname = NULL;
+
+	if (sorted_content->header != NULL)
+		polname = CONTENTS_HEADERS_get_policy(sorted_content->header);
+	if (polname && polname->str && polname->len)
+		pol = storage_policy_init(nsinfo, polname->str);
+	if (!pol)
+		err = NEWERROR(CODE_POLICY_NOT_SUPPORTED,
+				"Invalid policy: %s", polname->str);
+
+	if (!err)
+		err = _m2db_check_content_validity(sorted_content, pol,
+				message, partial);
+
+	if (pol)
 		storage_policy_clean(pol);
 
 	return err;
