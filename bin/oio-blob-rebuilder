@@ -129,10 +129,7 @@ def main():
             conf, logger, args.volume, input_file=args.input_file,
             try_chunk_delete=args.delete_faulty_chunks,
             beanstalkd_addr=args.beanstalkd)
-        if args.volume:
-            success = blob_rebuilder.rebuilder_pass_with_lock()
-        else:
-            success = blob_rebuilder.rebuilder_pass()
+        success = blob_rebuilder.rebuilder_pass()
     except KeyboardInterrupt:
         logger.info('Exiting')
     except Exception as exc:

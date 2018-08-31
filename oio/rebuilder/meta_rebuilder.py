@@ -28,9 +28,10 @@ class MetaRebuilder(Rebuilder):
     Abstract class for directory rebuilders.
     """
 
-    def __init__(self, conf, logger, **kwargs):
-        super(MetaRebuilder, self).__init__(conf, logger, **kwargs)
-        self.api = ObjectStorageApi(self.conf['namespace'], logger=self.logger)
+    def __init__(self, conf, logger, volume, **kwargs):
+        super(MetaRebuilder, self).__init__(conf, logger, volume, **kwargs)
+        self.api = ObjectStorageApi(self.namespace, logger=self.logger,
+                                    **kwargs)
 
     def _fill_queue_from_file(self, queue, **kwargs):
         if self.input_file is None:
@@ -54,17 +55,11 @@ class MetaRebuilder(Rebuilder):
                 for element in listing:
                     yield element
 
-    def _init_info(self, **kwargs):
-        return None
-
-    def _compute_info(self, worker, info, **kwargs):
-        return None
-
 
 class MetaRebuilderWorker(RebuilderWorker):
 
-    def __init__(self, conf, logger, type_, max_attempts=5, **kwargs):
-        super(MetaRebuilderWorker, self).__init__(conf, logger, **kwargs)
+    def __init__(self, rebuilder, type_, max_attempts=5, **kwargs):
+        super(MetaRebuilderWorker, self).__init__(rebuilder, **kwargs)
         self.type = type_
         self.max_attempts = max_attempts
         self.admin_client = AdminClient(self.conf, logger=self.logger)
@@ -88,7 +83,6 @@ class MetaRebuilderWorker(RebuilderWorker):
                     properties = {'sys.last_rebuild': str(int(time.time()))}
                     self.admin_client.set_properties(self.type, cid=cid,
                                                      properties=properties)
-                self.passes += 1
                 break
             except Exception as err:
                 if attempts < self.max_attempts - 1:
@@ -101,6 +95,5 @@ class MetaRebuilderWorker(RebuilderWorker):
                         time.sleep(attempts * 0.5)
                         continue
                 self.logger.error('ERROR while rebuilding %s: %s', cid, err)
-                self.errors += 1
                 sys.stdout.write(cid+'\n')
                 break
