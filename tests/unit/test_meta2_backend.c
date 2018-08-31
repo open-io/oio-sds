@@ -533,23 +533,17 @@ test_content_check_all_beans_correct(void)
 		_init_pool_ec_2cpy_3cpy(m2);
 		GError *err;
 		GSList *beans_3cpy = _create_alias2(m2, u, "THREECOPIES", 3);
-		GString *message = g_string_new("");
-		err = meta2_backend_check_content(m2, beans_3cpy, message, FALSE);
-		g_string_free(message, TRUE);
+		err = meta2_backend_check_content(m2, u, &beans_3cpy, NULL, FALSE);
 		_bean_cleanl2(beans_3cpy);
 		g_assert_no_error(err);
 
 		GSList *beans_2cpy = _create_alias2(m2, u, "TWOCOPIES", 2);
-		message = g_string_new("");
-		err = meta2_backend_check_content(m2, beans_2cpy, message, FALSE);
-		g_string_free(message, TRUE);
+		err = meta2_backend_check_content(m2, u, &beans_2cpy, NULL, FALSE);
 		_bean_cleanl2(beans_2cpy);
 		g_assert_no_error(err);
 
-		message = g_string_new("");
 		GSList *beans_ec = _create_alias2(m2, u, "EC", 3);
-		err = meta2_backend_check_content(m2, beans_ec, message, FALSE);
-		g_string_free(message, TRUE);
+		err = meta2_backend_check_content(m2, u, &beans_ec, NULL, FALSE);
 		_bean_cleanl2(beans_ec);
 		g_assert_no_error(err);
 
@@ -574,11 +568,9 @@ test_content_check_1_missing_bean_plain_irreparable(void)
 			}
 		}
 		GRID_DEBUG("TEST nb_beans=%u", g_slist_length(beans));
-		GString *message = g_string_new("");
-		err = meta2_backend_check_content(m2, beans, message, FALSE);
+		err = meta2_backend_check_content(m2, u, &beans, NULL, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
 		g_error_free(err);
-		g_string_free(message, TRUE);
 		_bean_cleanl2(beans);
 	}
 	_container_wraper_allversions("NS", test);
@@ -592,26 +584,29 @@ test_content_check_1_missing_bean_plain_copy_reparable(void)
 		_init_pool_ec_2cpy_3cpy(m2);
 		GError *err;
 		GSList *beans_2cpy = _create_alias2(m2, u, "TWOCOPIES", 2);
-		GString *message_2cpy = g_string_new("");
+		GString *gmessage = g_string_new("");
+		void _save_message(gchar *message, gpointer udata UNUSED) {
+			g_string_append(gmessage, message);
+		}
 		_remove_bean(&beans_2cpy, 1, NULL);
-		err = meta2_backend_check_content(m2, beans_2cpy, message_2cpy, FALSE);
+		err = meta2_backend_check_content(m2, u, &beans_2cpy, _save_message, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
-		gchar *missing_chunks = g_strrstr(message_2cpy->str, "\"missing_chunks\":[2]");
+		gchar *missing_chunks = g_strrstr(gmessage->str, "\"missing_chunks\":[2]");
 		g_assert_nonnull(missing_chunks);
 		_bean_cleanl2(beans_2cpy);
-		g_string_free(message_2cpy, TRUE);
+		g_string_free(gmessage, TRUE);
 
 		GSList *beans_3cpy = _create_alias2(m2, u, "THREECOPIES", 3);
-		GString *message_3cpy = g_string_new("");
+		gmessage = g_string_new("");
 		_remove_bean(&beans_3cpy, 1, NULL);
-		err = meta2_backend_check_content(m2, beans_3cpy, message_3cpy, FALSE);
+		err = meta2_backend_check_content(m2, u, &beans_3cpy, _save_message, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
-		missing_chunks = g_strrstr(message_3cpy->str, "\"missing_chunks\":[2]");
+		missing_chunks = g_strrstr(gmessage->str, "\"missing_chunks\":[2]");
 		g_assert_nonnull(missing_chunks);
 		_bean_cleanl2(beans_3cpy);
-		g_string_free(message_3cpy, TRUE);
+		g_string_free(gmessage, TRUE);
 	}
 	_container_wraper_allversions("NS", test);
 
@@ -625,15 +620,18 @@ test_content_check_2_missing_bean_plain_copy_reparable(void)
 		_init_pool_ec_2cpy_3cpy(m2);
 		GError *err;
 		GSList *beans_3cpy = _create_alias2(m2, u, "THREECOPIES", 3);
-		GString *message_3cpy = g_string_new("");
+		GString *gmessage = g_string_new("");
+		void _save_message(gchar *message, gpointer udata UNUSED) {
+			g_string_append(gmessage, message);
+		}
 		_remove_bean(&beans_3cpy, 2, NULL);
-		err = meta2_backend_check_content(m2, beans_3cpy, message_3cpy, FALSE);
+		err = meta2_backend_check_content(m2, u, &beans_3cpy, _save_message, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
-		gchar *missing_chunks = g_strrstr(message_3cpy->str, "\"missing_chunks\":[2,2]");
+		gchar *missing_chunks = g_strrstr(gmessage->str, "\"missing_chunks\":[2,2]");
 		g_assert_nonnull(missing_chunks);
 		g_slist_free_full(beans_3cpy, _bean_clean);
-		g_string_free(message_3cpy, TRUE);
+		g_string_free(gmessage, TRUE);
 
 	}
 	_container_wraper_allversions("NS", test);
@@ -647,22 +645,18 @@ test_content_check_missing_bean_plain_copy_irreparable(void)
 		_init_pool_ec_2cpy_3cpy(m2);
 		GError *err;
 		GSList *beans_2cpy = _create_alias2(m2, u, "TWOCOPIES", 2);
-		GString *message_2cpy = g_string_new("");
 		_remove_bean(&beans_2cpy, 2, NULL);
-		err = meta2_backend_check_content(m2, beans_2cpy, message_2cpy, FALSE);
+		err = meta2_backend_check_content(m2, u, &beans_2cpy, NULL, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
 		g_error_free(err);
-		g_string_free(message_2cpy, TRUE);
 		_bean_cleanl2(beans_2cpy);
 
 		GSList *beans_3cpy = _create_alias2(m2, u, "THREECOPIES", 3);
-		GString *message_3cpy = g_string_new("");
 		_remove_bean(&beans_3cpy, 3, NULL);
-		err = meta2_backend_check_content(m2, beans_3cpy, message_3cpy, FALSE);
+		err = meta2_backend_check_content(m2, u, &beans_3cpy, NULL, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
 		g_error_free(err);
 		_bean_cleanl2(beans_3cpy);
-		g_string_free(message_3cpy, TRUE);
 	}
 	_container_wraper_allversions("NS", test);
 }
@@ -674,27 +668,23 @@ test_content_check_missing_first_pos(void)
 		(void) maxver;
 		_init_pool_ec_2cpy_3cpy(m2);
 		GError *err;
-		GString *message_nocpy = g_string_new("");
 		GSList *beans_nocpy = _create_alias(m2, u, NULL);
 		_remove_bean(&beans_nocpy, 1, "0");
-		err = meta2_backend_check_content(m2, beans_nocpy, message_nocpy, FALSE);
+		err = meta2_backend_check_content(m2, u, &beans_nocpy, NULL, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
 		g_error_free(err);
 		_bean_cleanl2(beans_nocpy);
-		g_string_free(message_nocpy, TRUE);
 
 		GSList *beans_2cpy = _create_alias2(m2, u, "TWOCOPIES", 2);
-		GString *message_2cpy = g_string_new("");
 		_remove_bean(&beans_2cpy, 1, "0");
-		err = meta2_backend_check_content(m2, beans_2cpy, message_2cpy, FALSE);
+		err = meta2_backend_check_content(m2, u, &beans_2cpy, NULL, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
 		_remove_bean(&beans_2cpy, 1, "0");
-		err = meta2_backend_check_content(m2, beans_2cpy, message_2cpy, FALSE);
+		err = meta2_backend_check_content(m2, u, &beans_2cpy, NULL, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
 		g_error_free(err);
 		_bean_cleanl2(beans_2cpy);
-		g_string_free(message_2cpy, TRUE);
 	}
 	_container_wraper_allversions("NS", test);
 }
@@ -706,34 +696,28 @@ test_content_check_ec_missing_1_chunk(void)
 		(void) maxver;
 		_init_pool_ec_2cpy_3cpy(m2);
 		GError *err;
-		GString *message_ec1 = g_string_new("");
 		GSList *beans_ec1 = _create_alias2(m2, u, "EC", 3);
 		_remove_bean(&beans_ec1, 1, NULL);
-		err = meta2_backend_check_content(m2, beans_ec1, message_ec1, FALSE);
+		err = meta2_backend_check_content(m2, u, &beans_ec1, NULL, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
 		_bean_cleanl2(beans_ec1);
-		g_string_free(message_ec1, TRUE);
 
-		GString *message_ecm  = g_string_new("");
 		GSList *beans_ecm = _create_alias2(m2, u, "EC", 3);
 		int m = 3;
 		_remove_bean(&beans_ecm, m, NULL);
-		err = meta2_backend_check_content(m2, beans_ecm, message_ecm, FALSE);
+		err = meta2_backend_check_content(m2, u, &beans_ecm, NULL, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
 		_bean_cleanl2(beans_ecm);
-		g_string_free(message_ecm, TRUE);
 
-		GString *message_ecm1  = g_string_new("");
 		GSList *beans_ecm1 = _create_alias2(m2, u, "EC", 3);
 		int m1 = m + 1;
 		_remove_bean(&beans_ecm1, m1, NULL);
-		err = meta2_backend_check_content(m2, beans_ecm1, message_ecm1, FALSE);
+		err = meta2_backend_check_content(m2, u, &beans_ecm1, NULL, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
 		g_error_free(err);
 		_bean_cleanl2(beans_ecm1);
-		g_string_free(message_ecm1, TRUE);
 	}
 	_container_wraper_allversions("NS", test);
 }

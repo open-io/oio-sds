@@ -83,8 +83,8 @@ encode_property(GString *g, gpointer bean)
 	OIO_JSON_append_blob(g, "value", (gchar*)property->data, property->len);
 }
 
-static void
-encode_bean (GString *g, gpointer bean)
+void
+meta2_json_encode_bean(GString *g, gpointer bean)
 {
 	if (DESCR(bean) == &descr_struct_CHUNKS)
 		return encode_chunk (g, bean);
@@ -148,7 +148,7 @@ meta2_json_properties_only(GString *gstr, GSList *l, gboolean extend)
 void
 meta2_json_dump_all_xbeans(GString *gstr, GSList *beans)
 {
-	_json_BEAN_only (gstr, beans, NULL, TRUE, encode_bean);
+	_json_BEAN_only(gstr, beans, NULL, TRUE, meta2_json_encode_bean);
 }
 
 void

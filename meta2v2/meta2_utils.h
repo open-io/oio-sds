@@ -61,10 +61,24 @@ struct m2v2_position_s {
 	unsigned int flag_ok : 1;
 };
 
+struct m2v2_sorted_content_s {
+	struct bean_CONTENTS_HEADERS_s *header;
+	GSList *aliases;    // GSList<struct bean_ALIASES_s*>
+	GSList *properties; // GSList<struct bean_PROPERTIES_s*>
+	GTree *metachunks;  // GTree<gint,GSList<struct bean_CHUNKS_s*>>
+};
+
+
 struct m2v2_position_s m2v2_position_decode (const char *str);
 
 void m2v2_position_encode (GString *out, struct m2v2_position_s *p);
 
+/* Sort the beans of a content. Use m2v2_sorted_content_free to free
+ * the result. The beans must be freed separately. */
+void m2v2_sort_content(GSList *beans, struct m2v2_sorted_content_s **content);
+
+/* Free a sorted content (the beans must be freed separately). */
+void m2v2_sorted_content_free(struct m2v2_sorted_content_s *content);
 
 typedef void (*m2_onbean_cb) (gpointer u, gpointer bean);
 
@@ -151,8 +165,12 @@ GError* m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 GError* m2db_link_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		GBytes *id);
 
-GError* m2db_check_content(GSList *beans, struct namespace_info_s *nsinfo,
-		GString* message, gboolean update);
+GError* m2db_check_content(struct m2v2_sorted_content_s *sorted_content,
+		struct namespace_info_s *nsinfo, GString* message, gboolean update);
+
+void m2db_check_content_quality(
+		struct m2v2_sorted_content_s *sorted_content, GSList *chunk_meta,
+        GSList **to_be_improved);
 
 GError* m2db_update_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		GSList *beans, m2_onbean_cb cb_deleted, gpointer u0_deleted,

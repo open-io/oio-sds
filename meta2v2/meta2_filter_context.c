@@ -38,6 +38,7 @@ struct gridd_filter_input_data_s
 struct gridd_filter_output_data_s
 {
 	GError *error;
+	GSList *events;
 };
 
 struct gridd_filter_ctx_s
@@ -75,9 +76,10 @@ _input_data_clean(struct gridd_filter_input_data_s *input_data)
 static void
 _output_data_clean(struct gridd_filter_output_data_s *output_data)
 {
-	if(!output_data)
+	if (!output_data)
 		return;
 
+	g_slist_free_full(output_data->events, g_free);
 	g_free(output_data);
 }
 
@@ -94,10 +96,9 @@ _input_data_init(struct gridd_filter_ctx_s *ctx)
 static void
 _output_data_init(struct gridd_filter_ctx_s *ctx)
 {
-	if(!ctx)
+	if (!ctx)
 		return;
 	ctx->output_data = g_malloc0(sizeof(struct gridd_filter_output_data_s));
-	ctx->output_data->error = NULL;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -121,12 +122,12 @@ meta2_filter_ctx_clean(struct gridd_filter_ctx_s *ctx)
 		_input_data_clean(ctx->input_data);
 		ctx->input_data = NULL;
 	}
-	
+
 	if (NULL != ctx->output_data) {
 		_output_data_clean(ctx->output_data);
 		ctx->output_data = NULL;
 	}
-	
+
 	g_free(ctx);
 }
 
@@ -154,26 +155,29 @@ meta2_filter_ctx_get_url(const struct gridd_filter_ctx_s *ctx)
 }
 
 void
-meta2_filter_ctx_add_param(struct gridd_filter_ctx_s *ctx, const char *k, const char *v)
+meta2_filter_ctx_add_param(struct gridd_filter_ctx_s *ctx,
+		const char *k, const char *v)
 {
-	if(!ctx || !ctx->input_data || !ctx->input_data->params || !k || !v)
+	if (!ctx || !ctx->input_data || !ctx->input_data->params || !k || !v)
 		return;
 
 	g_hash_table_insert(ctx->input_data->params, g_strdup(k), g_strdup(v));
 }
 
 const char *
-meta2_filter_ctx_get_param(const struct gridd_filter_ctx_s *ctx, const char *name)
+meta2_filter_ctx_get_param(const struct gridd_filter_ctx_s *ctx,
+		const char *name)
 {
-	if(!ctx || !ctx->input_data || !ctx->input_data->params || !name)
+	if (!ctx || !ctx->input_data || !ctx->input_data->params || !name)
 		return NULL;
 	return g_hash_table_lookup(ctx->input_data->params, name);
 }
 
 void
-meta2_filter_ctx_set_backend(struct gridd_filter_ctx_s *ctx, struct meta2_backend_s *backend)
+meta2_filter_ctx_set_backend(struct gridd_filter_ctx_s *ctx,
+		struct meta2_backend_s *backend)
 {
-	if(!ctx || !ctx->input_data)
+	if (!ctx || !ctx->input_data)
 		return;
 	ctx->input_data->backend = backend;
 }
@@ -203,8 +207,9 @@ meta2_filter_ctx_get_error(const struct gridd_filter_ctx_s *ctx)
 		GRID_DEBUG("uninitialized pointer : %p", ctx);
 		return NULL;
 	}
-	if(NULL != ctx->output_data->error) {
-		GRID_DEBUG("ctx error : %d, %s", ctx->output_data->error->code, ctx->output_data->error->message);
+	if (ctx->output_data->error) {
+		GRID_DEBUG("ctx error: (%d) %s", ctx->output_data->error->code,
+				ctx->output_data->error->message);
 	} else {
 		GRID_DEBUG("No error found in context");
 	}
@@ -239,3 +244,26 @@ meta2_filter_ctx_set_input_udata2(const struct gridd_filter_ctx_s *ctx,
 	ctx->input_data->cleaner = in_cleaner;
 }
 
+void
+meta2_filter_ctx_defer_event(const struct gridd_filter_ctx_s *ctx,
+		gchar *event)
+{
+	if (!ctx) {
+		g_free(event);
+		return;
+	}
+
+	// List will be reversed before sending events
+	ctx->output_data->events = g_slist_prepend(
+			ctx->output_data->events, event);
+}
+
+GSList *
+meta2_filter_ctx_get_deferred_events(const struct gridd_filter_ctx_s *ctx)
+{
+	if (!ctx || !ctx->output_data)
+		return NULL;
+
+	ctx->output_data->events = g_slist_reverse(ctx->output_data->events);
+	return ctx->output_data->events;
+}

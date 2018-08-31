@@ -60,4 +60,13 @@ void meta2_filter_ctx_set_input_udata2(const struct gridd_filter_ctx_s *ctx,
 
 gpointer meta2_filter_ctx_get_input_udata(const struct gridd_filter_ctx_s * ctx);
 
+/* Defer an event to be sent only if the request succeeds.
+ * Event ownership is given to the filter context. */
+void meta2_filter_ctx_defer_event(const struct gridd_filter_ctx_s *ctx,
+		gchar *event);
+
+/* Get the list of deferred events. The list os built in reverse order,
+ * but this function will reverse it before returning (not idempotent). */
+GSList *meta2_filter_ctx_get_deferred_events(const struct gridd_filter_ctx_s *ctx);
+
 #endif /*OIO_SDS__meta2v2__meta2_filter_context_h*/
