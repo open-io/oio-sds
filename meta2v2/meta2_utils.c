@@ -1921,8 +1921,11 @@ _gen_chunk(struct gen_ctx_s *ctx, struct oio_lb_selected_item_s *sel,
 			"final_slot", sel->final_slot);
 	g_string_append_c(qual, '}');
 	struct bean_PROPERTIES_s *prop = _bean_create(&descr_struct_PROPERTIES);
+	gchar *prop_key = g_alloca(
+			sizeof(OIO_CHUNK_SYSMETA_PREFIX) + strlen(chunkid));
+	sprintf(prop_key, OIO_CHUNK_SYSMETA_PREFIX"%s", chunkid);
 	PROPERTIES_set2_alias(prop, oio_url_get(ctx->url, OIOURL_PATH));
-	PROPERTIES_set2_key(prop, chunkid);
+	PROPERTIES_set2_key(prop, prop_key);
 	PROPERTIES_set2_value(prop, (guint8*)qual->str, qual->len);
 	ctx->cb(ctx->cb_data, prop);
 

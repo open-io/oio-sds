@@ -50,7 +50,7 @@ License along with this library.
  * i.e. a size enough to store the C string */
 #define LIMIT_LENGTH_TAGNAME 32
 
-/** One plus the maximum length of a content name
+/** One plus the maximum length of a chunk URL
  * i.e. a size enough to store the C string */
 #define LIMIT_LENGTH_CHUNKURL 512
 

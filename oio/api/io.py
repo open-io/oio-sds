@@ -600,6 +600,8 @@ class MetachunkPreparer(object):
         self.stg_method = STORAGE_METHODS.load(self.obj_meta['chunk_method'])
 
         self._all_chunks = list()
+        if 'properties' not in self.obj_meta:
+            self.obj_meta['properties'] = dict()
 
     def _fix_mc_pos(self, chunks, mc_pos):
         for chunk in chunks:
@@ -617,9 +619,10 @@ class MetachunkPreparer(object):
         yield self.first_body
         while True:
             mc_pos += 1
-            _, next_body = self.container_client.content_prepare(
+            meta, next_body = self.container_client.content_prepare(
                     self.account, self.container, self.obj_name, 1,
                     stgpol=self.policy, **self.extra_kwargs)
+            self.obj_meta['properties'].update(meta.get('properties', {}))
             self._fix_mc_pos(next_body, mc_pos)
             self._all_chunks.extend(next_body)
             yield next_body

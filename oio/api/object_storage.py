@@ -1149,7 +1149,11 @@ class ObjectStorageApi(object):
                 "given etag %s != computed %s" % (etag, obj_checksum))
         obj_meta['etag'] = obj_checksum
 
-        data = {'chunks': ul_chunks, 'properties': properties or {}}
+        # obj_meta['properties'] contains special properties
+        # describing the quality of selected chunks.
+        if properties:
+            obj_meta['properties'].update(properties)
+        data = {'chunks': ul_chunks, 'properties': obj_meta['properties']}
         try:
             # FIXME: we may just pass **obj_meta
             self.container.content_create(
