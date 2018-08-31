@@ -626,24 +626,24 @@ meta2_filter_action_generate_beans(struct gridd_filter_ctx_s *ctx,
 
 int
 meta2_filter_action_touch_content(struct gridd_filter_ctx_s *ctx,
-        struct gridd_reply_ctx_s *reply UNUSED)
+		struct gridd_reply_ctx_s *reply UNUSED)
 {
-    struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
-    struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 
 	GSList *beans = NULL;
 	GError *err = meta2_backend_get_alias(
 			m2b, url, M2V2_FLAG_ALLPROPS|M2V2_FLAG_HEADERS,
 			_bean_list_cb, &beans);
-    if (!err) {
+	if (!err) {
 		_m2b_notify_beans(m2b, url, beans, "content.new", FALSE);
 		_bean_cleanl2(beans);
 		return FILTER_OK;
 	}
 
 	_bean_cleanl2(beans);
-    meta2_filter_ctx_set_error(ctx, err);
-    return FILTER_KO;
+	meta2_filter_ctx_set_error(ctx, err);
+	return FILTER_KO;
 }
 
 int

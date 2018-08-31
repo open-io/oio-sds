@@ -110,6 +110,10 @@ extern "C" {
 #  define OIO_STAT_PREFIX_TIME "counter req.time"
 # endif
 
+# ifndef  OIO_CHUNK_SYSMETA_PREFIX
+#  define OIO_CHUNK_SYSMETA_PREFIX "__OIO_CHUNK__"
+# endif
+
 # define OIO_CFG_PROXY        "proxy"
 # define OIO_CFG_PROXYLOCAL   "proxy-local"
 # define OIO_CFG_PROXY_CONSCIENCE "proxy-conscience"
