@@ -416,8 +416,8 @@ _perform_REPLICATE(struct sqlx_repctx_s *ctx)
 	if (likely(err == NULL))
 		return 0;
 
-	GRID_WARN("%s(%p) FAILED: (%d) %s", __FUNCTION__, ctx, err->code,
-			err->message);
+	GRID_WARN("%s(%p, reqid=%s) FAILED: (%d) %s", __FUNCTION__, ctx,
+			oio_ext_get_reqid(), err->code, err->message);
 	g_error_free(err);
 	ctx->any_change = 0;
 	return 1;
@@ -504,8 +504,8 @@ sqlx_synchronous_resync(struct sqlx_repctx_s *ctx, gchar **peers)
 	// Now send it to the SLAVES
 	NAME2CONST(n, ctx->sq3->name);
 	peers_restore(peers, &n, dump, oio_ext_get_deadline());
-	GRID_INFO("RESTORED on SLAVES [%s][%s]", ctx->sq3->name.base,
-			ctx->sq3->name.type);
+	GRID_INFO("RESTORED on SLAVES [%s][%s] reqid=%s",
+			ctx->sq3->name.base, ctx->sq3->name.type, oio_ext_get_reqid());
 }
 
 static void
@@ -686,8 +686,9 @@ sqlx_transaction_end(struct sqlx_repctx_s *ctx, GError *err)
 			sqlx_admin_reload(ctx->sq3);
 		}
 		if (ctx->errors->len > 0) {
-			GRID_WARN("COMMIT errors on [%s.%s]:%s", ctx->sq3->name.base,
-					ctx->sq3->name.type, ctx->errors->str);
+			GRID_WARN("COMMIT errors on [%s.%s]:%s reqid=%s",
+					ctx->sq3->name.base, ctx->sq3->name.type,
+					ctx->errors->str, oio_ext_get_reqid());
 		}
 		if (ctx->resync_todo && ctx->resync_todo->len) {
 			// Detected the need of an explicit RESYNC on some SLAVES.

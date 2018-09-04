@@ -654,9 +654,10 @@ retry:
 							break;
 						} else if (_cache_alert_on_heavy_load) {
 							GRID_WARN("Load too high on [%s] "
-									"(%"G_GUINT32_FORMAT"/%"G_GUINT32_FORMAT")",
-									hashstr_str(hname),
-									base->count_waiting, _cache_max_waiting);
+									"(%"G_GUINT32_FORMAT"/%"G_GUINT32_FORMAT")"
+									" reqid=%s", hashstr_str(hname),
+									base->count_waiting, _cache_max_waiting,
+									oio_ext_get_reqid());
 						}
 					}
 
