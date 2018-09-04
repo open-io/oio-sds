@@ -1432,7 +1432,8 @@ meta2_backend_change_callback(struct sqlx_sqlite3_s *sq3,
 	gchar *user = sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME);
 	if (!account || !user) {
 		GRID_WARN("Missing "SQLX_ADMIN_ACCOUNT" or "SQLX_ADMIN_USERNAME
-				" in database %s", sq3->path_inline);
+				" in database %s (reqid=%s)", sq3->path_inline,
+				oio_ext_get_reqid());
 	} else {
 		struct oio_url_s *url = oio_url_empty();
 		oio_url_set(url, OIOURL_NS, m2b->ns_name);
