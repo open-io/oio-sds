@@ -212,7 +212,7 @@ func_tests () {
 
 	# Create a file just bigger than chunk size
 	SOURCE=$(mktemp)
-	dd if=/dev/urandom of=$SOURCE bs=128K count=9
+	dd if=/dev/urandom of=$SOURCE bs=128K count=100
 
 	# Run the test-suite of the C API
 	${WRKDIR}/core/tool_roundtrip $SOURCE
