@@ -339,7 +339,7 @@ func (rr *rawxRequest) downloadChunk() {
 	// Prepare the headers of the reply
 	if rangeInf != nil {
 		rr.rep.Header().Set("Content-Range", fmt.Sprintf("bytes %v-%v/%v",
-			rangeInf.offset, rangeInf.last, rangeInf.size))
+			rangeInf.offset, rangeInf.last, chunkSize))
 		rr.rep.Header().Set("Content-Length", fmt.Sprintf("%v", rangeInf.size))
 		rr.replyCode(http.StatusPartialContent)
 	} else {
