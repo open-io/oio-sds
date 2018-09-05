@@ -299,6 +299,7 @@ class ChunkReader(object):
                         chunk, self.reqid, source.status, source.reason)
             self._resp_by_chunk[chunk["url"]] = (source.status,
                                                  str(source.reason))
+            close_source(source)
         return False
 
     def _get_source(self):
