@@ -635,9 +635,38 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 	/* Fire an event to notify the world this container exists */
 	const enum election_status_e s = sq3->election;
 	if (!params->local && m2->notifier && (!s || s == ELECTION_LEADER)) {
+		gchar **peers = NULL;
+		// Necessary evil.
+		struct sqlx_name_s name = {0};
+		name.base = (const char *)sq3->name.base;
+		name.ns = (const char *)sq3->name.ns;
+		name.type = (const char *)sq3->name.type;
+
+		sqlx_repository_get_peers(m2->repo, &name, &peers);
+
+		// This is a NULL terminated array of all the peers.
+		// FIXME: Memleak ? Cleaned at the end but verify later to be safe
+		peers = oio_strv_append(peers,
+								g_strdup(sqlx_repository_get_local_addr(m2->repo)));
+
+		GString *peer_list = g_string_new("");
+		// We know we have at least this META2 server so we're safe doing this.
+		int i = 0;
+		gchar *peer = peers[i];
+		g_string_append_c(peer_list, '[');
+		while (peer != NULL){
+			const char *terminate = (peers[i+1] == NULL) ? "" : ",";
+			g_string_append_printf(peer_list, "\"%s\"%s", peer, terminate);
+			i++;
+			g_free(peer);
+			peer = peers[i];
+		}
+		g_string_append_c(peer_list, ']');
+
 		GString *gs = oio_event__create (META2_EVENTS_PREFIX".container.new", url);
-		g_string_append_static (gs, ",\"data\":null}");
+		g_string_append_printf(gs, ",\"data\": { \"peers\" : %s } }", peer_list->str);
 		oio_events_queue__send (m2->notifier, g_string_free (gs, FALSE));
+		g_string_free(peer_list, TRUE);
 	}
 
 	/* Reload any cache maybe already associated with the container.
