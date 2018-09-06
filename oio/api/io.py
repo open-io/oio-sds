@@ -47,7 +47,7 @@ def close_source(source):
     try:
         source.conn.close()
     except Exception:
-        pass
+        logger.exception("Failed to close %s", source)
 
 
 class IOBaseWrapper(RawIOBase):
