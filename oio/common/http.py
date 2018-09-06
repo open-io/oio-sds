@@ -21,8 +21,7 @@ from urllib import quote, quote_plus
 from urlparse import urlparse
 
 from eventlet import patcher
-from eventlet.green.httplib import HTTPConnection, HTTPResponse, _UNKNOWN, \
-        CONTINUE, HTTPMessage
+from eventlet.green.httplib import HTTPConnection, HTTPResponse, _UNKNOWN
 
 from oio.common.constants import chunk_headers, OIO_VERSION
 from oio.common.utils import oio_reraise
@@ -59,22 +58,6 @@ class CustomHTTPResponse(HTTPResponse):
         self.length = _UNKNOWN
         self.will_close = _UNKNOWN
 
-    def expect_response(self):
-        if self.fp:
-            self.fp.close()
-            self.fp = None
-        self.fp = self.sock.makefile('rb', 0)
-        version, status, reason = self._read_status()
-        if status != CONTINUE:
-            self._read_status = lambda: (version, status, reason)
-            self.begin()
-        else:
-            self.status = status
-            self.reason = reason
-            self.version = 11
-            self.msg = HTTPMessage(self.fp, 0)
-            self.msg.fp = None
-
     def read(self, amount=None):
         return HTTPResponse.read(self, amount)
 
@@ -86,6 +69,12 @@ class CustomHTTPResponse(HTTPResponse):
 
     def close(self):
         HTTPResponse.close(self)
+        if self.sock:
+            try:
+                # Prevent long CLOSE_WAIT state
+                self.sock.shutdown(socket.SHUT_RDWR)
+            except socket.error:
+                pass
         self.sock = None
         self._actual_socket = None
 
@@ -95,6 +84,7 @@ class CustomHttpConnection(HTTPConnection):
 
     def connect(self):
         r = HTTPConnection.connect(self)
+        # TODO(FVE): remove this line when eventlet>=0.20.0
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         return r
 
