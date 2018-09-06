@@ -19,7 +19,7 @@ License along with this library.
 
 #include <errno.h>
 #include <sys/types.h>
-#include <attr/xattr.h>
+#include <sys/xattr.h>
 
 #include "metautils.h"
 #include "volume_lock.h"
