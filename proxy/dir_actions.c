@@ -460,17 +460,63 @@ action_dir_ref_create (struct req_args_s *args, struct json_object *jargs) {
 
 /* -------------------------------------------------------------------------- */
 
-/*
-DIR{{
-POST /v3.0/{NS}/reference/create
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-}}DIR
- */
+// DIR{{
+// POST /v3.0/{NS}/reference/create?acct={account}&ref={reference name}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// .. code-block:: json
+//
+//    {"properties":{}}
+//
+// Create new reference with given properties.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/reference/create?acct=my_account&ref=myreference HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 13
+//    Content-Type: application/x-www-form-urlencoded
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 201 Created
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}DIR
 enum http_rc_e action_ref_create (struct req_args_s *args) {
 	return rest_action(args, action_dir_ref_create);
 }
 
+// DIR{{
+// GET /v3.0/{NS}/reference/show?acct={account}&ref={reference name}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Get informations about reference.
+//
+// .. code-block:: http
+//
+//    GET /v3.0/OPENIO/reference/show?acct=my_account&ref=myreference HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 194
+//
+// .. code-block:: json
+//
+//    {
+//      "dir":[{"seq":1,"type":"meta0","host":"127.0.0.1:6006","args":""},{"seq":1,"type":"meta1","host":"127.0.0.1:6007","args":""}],
+//      "srv":[{"seq":1,"type":"meta2","host":"127.0.0.1:6008","args":""}]
+//    }
+//
+// }}DIR
 enum http_rc_e action_ref_show (struct req_args_s *args) {
 	const char *type = TYPE();
 
@@ -514,6 +560,25 @@ enum http_rc_e action_ref_show (struct req_args_s *args) {
 	return _reply_common_error (args, err);
 }
 
+// DIR{{
+// POST /v3.0/{NS}/reference/destroy?acct={account}&ref={reference name}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Destroy reference.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/reference/destroy?acct=my_account&ref=myreference HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}DIR
 enum http_rc_e action_ref_destroy (struct req_args_s *args) {
 	gboolean force = _request_get_flag (args, "force");
 
@@ -539,14 +604,100 @@ enum http_rc_e action_ref_destroy (struct req_args_s *args) {
 	return _reply_common_error (args, err);
 }
 
+// DIR{{
+// POST /v3.0/{NS}/reference/relink?acct={account}&ref={reference name}&type={type}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// .. code-block:: json
+//
+//    {
+//      "kept":{"seq":1,"type":"rdir","host":"","args":""},
+//      "replaced":{"seq":1,"type":"rdir","host":"127.0.0.1:6011,127.0.0.1:6014","args":""}
+//    }
+//
+// Find replacement for some linked services to a reference
+//
+// "kept" is the description of services that must be kept.
+// "replaced" is the description of services that must be replaced.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/reference/relink?acct=my_account&ref=myreference&type=rdir HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 143
+//    Content-Type: application/x-www-form-urlencoded
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 117
+//
+// .. code-block:: json
+//
+//    [
+//      {"seq":1,"type":"rdir","host":"127.0.0.1:6012","args":""},
+//      {"seq":1,"type":"rdir","host":"127.0.0.1:6015","args":""}
+//    ]
+//
+// }}DIR
 enum http_rc_e action_ref_relink (struct req_args_s *args) {
 	return rest_action (args, action_dir_srv_relink);
 }
 
+// DIR{{
+// POST /v3.0/{NS}/reference/link?acct={account}&ref={reference name}&type={type}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Link services to a reference
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/reference/link?acct=my_account&ref=myreference&type=rdir HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 117
+//
+// .. code-block:: json
+//
+//    [
+//      {"seq":1,"type":"rdir","host":"127.0.0.1:6010","args":""},
+//      {"seq":1,"type":"rdir","host":"127.0.0.1:6015","args":""}
+//    ]
+//
+// }}DIR
 enum http_rc_e action_ref_link (struct req_args_s *args) {
 	return rest_action (args, action_dir_srv_link);
 }
 
+// DIR{{
+// POST /v3.0/{NS}/reference/unlink?acct={account}&ref={reference name}&type={type}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Unlink service from a reference
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/reference/unlink?acct=my_account&ref=myreference&type=rdir HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}DIR
 enum http_rc_e action_ref_unlink (struct req_args_s *args) {
 	const char *type = TYPE();
 	if (!type)
@@ -571,22 +722,152 @@ enum http_rc_e action_ref_unlink (struct req_args_s *args) {
 	return _reply_common_error (args, err);
 }
 
+// DIR{{
+// POST /v3.0/{NS}/reference/renew?acct={account}&ref={reference name}&type={type}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/reference/renew?acct=my_account&ref=myreference&type=rdir HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 117
+//
+// .. code-block:: json
+//
+//    [
+//      {"seq":1,"type":"rdir","host":"127.0.0.1:6010","args":""},
+//      {"seq":1,"type":"rdir","host":"127.0.0.1:6015","args":""}
+//    ]
+//
+// }}DIR
 enum http_rc_e action_ref_renew (struct req_args_s *args) {
 	return rest_action (args, action_dir_srv_renew);
 }
 
+// DIR{{
+// POST /v3.0/{NS}/reference/force?acct={account}&ref={reference name}&type={type}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// .. code-block:: json
+//
+//    {"seq":1,"type":"rdir","host":"127.0.0.1:6010","args":""}
+//
+// Force service to be linked to a reference
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/reference/force?acct=my_account&ref=myreference&type=rdir HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 59
+//    Content-Type: application/x-www-form-urlencoded
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}DIR
 enum http_rc_e action_ref_force (struct req_args_s *args) {
 	return rest_action (args, action_dir_srv_force);
 }
 
+// DIR{{
+// POST /v3.0/{NS}/reference/get_properties?acct={account}&ref={container name}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Get reference properties.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/reference/get_properties?acct=my_account&ref=myreference HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 90
+//
+// .. code-block:: json
+//
+//    {
+//      "cid":"B6A905025EBA78C555B4437321C176B4F9CC1EF49A45BBA8FA561D7F08592D2D",
+//      "properties":{}
+//    }
+//
+// }}DIR
 enum http_rc_e action_ref_prop_get (struct req_args_s *args) {
 	return rest_action (args, action_dir_prop_get);
 }
 
+// DIR{{
+// POST /v3.0/{NS}/reference/set_properties?acct={account}&ref={container name}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// .. code-block:: json
+//
+//    {
+//      "properties":{"test":"1"}
+//    }
+//
+// Set reference properties.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/reference/set_properties?acct=my_account&ref=myreference HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 27
+//    Content-Type: application/x-www-form-urlencoded
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}DIR
 enum http_rc_e action_ref_prop_set (struct req_args_s *args) {
 	return rest_action (args, action_dir_prop_set);
 }
 
+// POST /v3.0/{NS}/reference/del_properties?acct={account}&ref={container name}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// .. code-block:: json
+//
+//    ["test"]
+//
+// Set reference properties.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/reference/del_properties?acct=my_account&ref=myreference HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 8
+//    Content-Type: application/x-www-form-urlencoded
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}DIR
 enum http_rc_e action_ref_prop_del (struct req_args_s *args) {
 	return rest_action (args, action_dir_prop_del);
 }

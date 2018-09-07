@@ -350,6 +350,31 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 
 /* -------------------------------------------------------------------------- */
 
+// CS{{
+// GET /v3.0/{NS}/conscience/info?what=<>
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// Get information about conscience. You can select information using "what".
+//
+// .. code-block:: http
+//
+//    GET /v3.0/OPENIO/conscience/info?what=types HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 79
+//
+// .. code-block:: json
+//
+//    ["account","echo","meta0","meta1","meta2","oiofs","rawx","rdir","redis","sqlx"]
+//
+// }}CS
 enum http_rc_e
 action_conscience_info (struct req_args_s *args)
 {
@@ -425,6 +450,31 @@ action_local_list (struct req_args_s *args)
 	return _reply_success_json (args, gs);
 }
 
+// CS{{
+// GET /v3.0/{NS}/conscience/list?type=<services type>
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// Get list of services registered
+//
+// .. code-block:: http
+//
+//    GET /v3.0/OPENIO/conscience/list?type=rawx HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 509
+//
+// .. code-block:: text
+//
+//    [{"addr":"127.0.0.1:6010","score":81,...}]
+//
+// }}CS
 enum http_rc_e
 action_conscience_list (struct req_args_s *args)
 {
@@ -480,6 +530,31 @@ action_conscience_list (struct req_args_s *args)
 	return _reply_success_json (args, _cs_pack_and_free_srvinfo_list (sl));
 }
 
+// CS{{
+// GET /v3.0/{NS}/conscience/resolve?type=<service type>&service_id=<service id>
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// Get service address from ID
+//
+// .. code-block:: http
+//
+//    GET /v3.0/OPENIO/conscience/resolve?type=rawx&service_id=363794e0-a2fc-47d9-94d8-90615dc0fdb8 HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 27
+//
+// .. code-block:: json
+//
+//    { "addr": "127.0.0.1:6010"}
+//
+// }}CS
 enum http_rc_e
 action_conscience_resolve_service_id (struct req_args_s *args)
 {
@@ -520,6 +595,31 @@ action_conscience_resolve_service_id (struct req_args_s *args)
 	return _reply_success_json (args, gstr);
 }
 
+// CS{{
+// POST /v3.0/{NS}/conscience/flush?type=<services_type>
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// Deregister all services with given type
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/conscience/flush?type=rawx HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 29
+//
+// .. code-block:: json
+//
+//    {"status":200,"message":"OK"}
+//
+// }}CS
 enum http_rc_e
 action_conscience_flush (struct req_args_s *args)
 {
@@ -546,6 +646,31 @@ action_conscience_flush (struct req_args_s *args)
 	return _reply_success_json (args, _create_status (CODE_FINAL_OK, "OK"));
 }
 
+// CS{{
+// POST /v3.0/{NS}/conscience/deregister?type=<services type>
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// Deregister service with given type, same as flush
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/conscience/deregister?type=rawx HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 29
+//
+// .. code-block:: json
+//
+//    {"status":200,"message":"OK"}
+//
+// }}CS
 enum http_rc_e
 action_conscience_deregister (struct req_args_s *args)
 {
@@ -570,33 +695,50 @@ _rest_conscience_register (struct req_args_s *args, struct json_object *jargs)
 	return _registration (args, REGOP_PUSH, jargs);
 }
 
-/*
-CS{{
-POST /v3.0/{NS}/conscience/register
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Register one service:
-
-.. code-block:: json
-
-   {
-     "addr": "127.0.0.1:6000",
-     "tags": { "stat.cpu": 100, "stat.idle": 100, "stat.io": 100 }
-   }
-
-Register several services at once:
-
-.. code-block:: json
-
-   [
-     { "addr": "127.0.0.1:6000",
-       "tags": { "stat.cpu": 100, "stat.idle": 100, "stat.io": 100 } },
-     { "addr": "127.0.0.1:6000",
-       "tags": { "stat.cpu": 100, "stat.idle": 100, "stat.io": 100 } }
-   ]
-
-}}CS
- */
+// CS{{
+// POST /v3.0/{NS}/conscience/register
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// Register one service:
+//
+// .. code-block:: json
+//
+//    {
+//      "addr": "127.0.0.1:6010",
+//      "tags": { "stat.cpu": 100, "stat.idle": 100, "stat.io": 100 },
+//      "type": "rawx"
+//    }
+//
+// Register several services at once:
+//
+// .. code-block:: json
+//
+//    [
+//      { "addr": "127.0.0.1:6010",
+//        "tags": { "stat.cpu": 100, "stat.idle": 100, "stat.io": 100 },
+//        "type": "rawx" },
+//      { "addr": "127.0.0.1:6011",
+//        "tags": { "stat.cpu": 100, "stat.idle": 100, "stat.io": 100 },
+//        "type": "127.0.0.1:6011"}
+//    ]
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/conscience/register HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 189
+//    Content-Type: application/x-www-form-urlencoded
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}CS
 enum http_rc_e
 action_conscience_register (struct req_args_s *args)
 {
@@ -610,6 +752,46 @@ _rest_conscience_lock (struct req_args_s *args, struct json_object *jargs)
 	return _registration (args, REGOP_LOCK, jargs);
 }
 
+// CS{{
+// POST /v3.0/{NS}/conscience/lock
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// Lock one service:
+//
+// .. code-block:: json
+//
+//    {
+//      "addr": "127.0.0.1:6010",
+//      "type": "rawx"
+//    }
+//
+// Lock several services at once:
+//
+// .. code-block:: json
+//
+//    [
+//      { "addr": "127.0.0.1:6010",
+//        "type": "rawx" },
+//      { "addr": "127.0.0.1:6011",
+//        "type": "127.0.0.1:6011"}
+//    ]
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/conscience/lock HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 39
+//    Content-Type: application/x-www-form-urlencoded
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}CS
 enum http_rc_e
 action_conscience_lock (struct req_args_s *args)
 {
@@ -622,6 +804,46 @@ _rest_conscience_unlock (struct req_args_s *args, struct json_object *jargs)
 	return _registration (args, REGOP_UNLOCK, jargs);
 }
 
+// CS{{
+// POST /v3.0/{NS}/conscience/unlock
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// Unlock one service:
+//
+// .. code-block:: json
+//
+//    {
+//      "addr": "127.0.0.1:6010",
+//      "type": "rawx"
+//    }
+//
+// Unlock several services at once:
+//
+// .. code-block:: json
+//
+//    [
+//      { "addr": "127.0.0.1:6010",
+//        "type": "rawx" },
+//      { "addr": "127.0.0.1:6011",
+//        "type": "127.0.0.1:6011"}
+//    ]
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/conscience/unlock HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 39
+//    Content-Type: application/x-www-form-urlencoded
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}CS
 enum http_rc_e
 action_conscience_unlock (struct req_args_s *args)
 {

@@ -129,6 +129,10 @@ static struct grid_main_option_s common_options[] =
 	{"ServiceId", OT_STRING, {.str = &SRV.service_id},
 		"Set Service Id of the service"},
 
+	{"Servicing", OT_BOOL, {.b = &SRV.flag_servicing},
+		"Tell the service is going to production.\n"
+		"\t\tCheck the volume is already locked and belongs to us."},
+
 	{NULL, 0, {.any=0}, NULL}
 };
 
@@ -710,7 +714,7 @@ _configure_network(struct sqlx_service_s *ss)
 static void
 _action_report_error(GError *err, const gchar *msg)
 {
-	GRID_ERROR("%s : (%d) %s", msg, !err?0:err->code, !err?"":err->message);
+	GRID_ERROR("%s: (%d) %s", msg, !err?0:err->code, !err?"":err->message);
 	if (err)
 		g_clear_error(&err);
 	grid_main_stop();
@@ -727,7 +731,7 @@ sqlx_service_action(void)
 
 	if (!SRV.flag_nolock) {
 		err = volume_service_lock (SRV.volume, SRV.service_config->srvtype,
-				_get_url(&SRV), SRV.ns_name);
+				_get_url(&SRV), SRV.ns_name, SRV.flag_servicing);
 		if (err)
 			return _action_report_error(err, "Volume lock failed");
 	}

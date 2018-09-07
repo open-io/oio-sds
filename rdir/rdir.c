@@ -43,7 +43,7 @@ static GSList *config_urlv = NULL;
 static struct network_server_s *server = NULL;
 static struct grid_task_queue_s *gtq_admin = NULL;
 static GThread *th_gtq_admin = NULL;
-
+static gboolean servicing = FALSE;
 static GCond cond_bases;
 static GMutex lock_bases;
 static GTree *tree_bases = NULL;
@@ -991,6 +991,38 @@ _request_to_key(struct json_object *jbody, GString **pkey)
 	return NULL;
 }
 
+
+// RDIR{{
+// DELETE /v1/rdir/delete?vol=<volume ip>%3A<volume port>
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// .. code-block:: json
+//
+//    {
+//      "container_id":"<container id>",
+//      "content_id":"<object content id>",
+//      "chunk_id":"chunk id"
+//    }
+//
+// Unreference a chunk from the volume.
+//
+// .. code-block:: http
+//
+//    DELETE /v1/rdir/delete?vol=127.0.0.1%3A6020 HTTP/1.1
+//    Host: 127.0.0.1:15
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 135
+//    Content-Type: application/x-www-form-urlencoded
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 OK
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}RDIR
 static enum http_rc_e
 _route_vol_delete(struct req_args_s *args, struct json_object *jbody,
 		const char *volid)
@@ -1014,6 +1046,38 @@ _route_vol_delete(struct req_args_s *args, struct json_object *jbody,
 	return _reply_ok(args->rp, NULL);
 }
 
+
+// RDIR{{
+// POST /v1/rdir/push?vol=<volume ip>%3A<volume port>
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// .. code-block:: json
+//
+//    {
+//      "container_id":"<container id>",
+//      "content_id":"<object content id>",
+//      "chunk_id":"chunk id"
+//    }
+//
+// Push the target volume.
+//
+// .. code-block:: http
+//
+//    POST /v1/rdir/push?vol=127.0.0.1%3A6020 HTTP/1.1
+//    Host: 127.0.0.1:15
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 150
+//    Content-Type: application/x-www-form-urlencoded
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 OK
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}RDIR
 static enum http_rc_e
 _route_vol_push(struct req_args_s *args, struct json_object *jbody,
 		const char *volid, const char *str_autocreate)
@@ -1046,6 +1110,27 @@ _route_vol_push(struct req_args_s *args, struct json_object *jbody,
 	return _reply_ok(args->rp, NULL);
 }
 
+
+// RDIR{{
+// POST /v1/rdir/fetch?vol=<volume ip>%3A<volume port>
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Fetch the target volume.
+//
+// .. code-block:: http
+//
+//    POST /v1/rdir/fetch?vol=127.0.0.1%3A6020 HTTP/1.1
+//    Host: 127.0.0.1:15
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Length: 2
+//
+// }}RDIR
 static enum http_rc_e
 _route_vol_fetch(struct req_args_s *args, struct json_object *jbody,
 		const char *volid)
@@ -1087,6 +1172,27 @@ _route_vol_fetch(struct req_args_s *args, struct json_object *jbody,
 	return _reply_ok(args->rp, value);
 }
 
+
+// RDIR{{
+// POST /v1/rdir/create?vol=<volume ip>%3A<volume port>
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Create the target volume.
+//
+// .. code-block:: http
+//
+//    POST /v1/rdir/create?vol=127.0.0.1%3A6020 HTTP/1.1
+//    Host: 127.0.0.1:15
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 201 Base Created
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}RDIR
 static enum http_rc_e
 _route_vol_create(struct req_args_s *args, const char *volid)
 {
@@ -1102,6 +1208,30 @@ _route_vol_create(struct req_args_s *args, const char *volid)
 	return _reply_created(args->rp);
 }
 
+
+// RDIR{{
+// POST /v1/rdir/status?vol=<volume ip>%3A<volume port>
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Show the target volume status
+//
+// .. code-block:: http
+//
+//    POST /v1/rdir/status?vol=127.0.0.1%3A6020 HTTP/1.1
+//    Host: 127.0.0.1:15
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 36
+//
+//    {"chunk":{"total":0},"container":{}}
+//
+// }}RDIR
 static enum http_rc_e
 _route_vol_status(struct req_args_s *args, const char *volid)
 {
@@ -1118,6 +1248,28 @@ _route_vol_status(struct req_args_s *args, const char *volid)
 	return _reply_common_error(args->rp, err);
 }
 
+
+// RDIR{{
+// POST /v1/rdir/admin/show?vol=<volume ip>%3A<volume port>
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Show the target service.
+//
+// .. code-block:: http
+//
+//    POST /v1/rdir/admin/show?vol=127.0.0.1%3A6020 HTTP/1.1
+//    Host: 127.0.0.1:15
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 2
+//
+// }}RDIR
 static enum http_rc_e
 _route_admin_show(struct req_args_s *args, const char *volid)
 {
@@ -1135,6 +1287,27 @@ _route_admin_show(struct req_args_s *args, const char *volid)
 	return _reply_ok(args->rp, value);
 }
 
+
+// RDIR{{
+// POST /v1/rdir/admin/unlock?vol=<volume ip>%3A<volume port>
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Unlock the target service.
+//
+// .. code-block:: http
+//
+//    POST /v1/rdir/admin/unlock?vol=127.0.0.1%3A6020 HTTP/1.1
+//    Host: 127.0.0.1:15
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 OK
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}RDIR
 static enum http_rc_e
 _route_admin_unlock(struct req_args_s *args, const char *volid)
 {
@@ -1149,6 +1322,37 @@ _route_admin_unlock(struct req_args_s *args, const char *volid)
 	return _reply_ok(args->rp, NULL);
 }
 
+
+// RDIR{{
+// POST /v1/rdir/admin/lock?vol=<volume ip>%3A<volume port>
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// .. code-block:: json
+//
+//    {
+//      "who": "<volume address>"
+//      "key": 0
+//    }
+//
+// Lock the target service with given key.
+//
+// .. code-block:: http
+//
+//    POST /v1/rdir/admin/lock?vol=127.0.0.1%3A6020 HTTP/1.1
+//    Host: 127.0.0.1:15
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 34
+//    Content-Type: application/x-www-form-urlencoded
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 OK
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}RDIR
 static enum http_rc_e
 _route_admin_lock(struct req_args_s *args, struct json_object *jbody,
 	const char *volid)
@@ -1177,6 +1381,30 @@ _route_admin_lock(struct req_args_s *args, struct json_object *jbody,
 	return _reply_ok(args->rp, NULL);
 }
 
+
+// RDIR{{
+// POST /v1/rdir/admin/clear?vol=<volume ip>%3A<volume port>
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Clear the target service.
+//
+// .. code-block:: http
+//
+//    POST /v1/rdir/admin/clear?vol=127.0.0.1%3A6020 HTTP/1.1
+//    Host: 127.0.0.1:15
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 13
+//
+//    {"removed":0}
+//
+// }}RDIR
 static enum http_rc_e
 _route_admin_clear(struct req_args_s *args, const char *volid, const char *all,
 		const char *before_incident, const char *repair)
@@ -1218,6 +1446,30 @@ _route_admin_clear(struct req_args_s *args, const char *volid, const char *all,
 	return _reply_common_error(args->rp, err);
 }
 
+
+// RDIR{{
+// GET /v1/rdir/admin/incident?vol=<volume ip>%3A<volume port>
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Return target service incident.
+//
+// .. code-block:: http
+//
+//    GET /v1/rdir/admin/incident?vol=127.0.0.1%3A6020 HTTP/1.1
+//    Host: 127.0.0.1:15
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 11
+//
+//    {"date":1533039131}
+//
+// }}RDIR
 static enum http_rc_e
 _route_admin_get_incident(struct req_args_s *args, const char *volid)
 {
@@ -1237,6 +1489,37 @@ _route_admin_get_incident(struct req_args_s *args, const char *volid)
 	return _reply_ok(args->rp, value);
 }
 
+
+// RDIR{{
+// POST /v1/rdir/admin/incident?vol=<volume ip>%3A<volume port>
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// .. code-block:: json
+//
+//    {
+//      "date": 123456789
+//    }
+//
+// Set target service incident.
+//
+// .. code-block:: http
+//
+//    POST /v1/rdir/admin/incident?vol=127.0.0.1%3A6020 HTTP/1.1
+//    Host: 127.0.0.1:15
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 11
+//    Content-Type: application/x-www-form-urlencoded
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 0
+//
+// }}RDIR
 static enum http_rc_e
 _route_admin_set_incident(struct req_args_s *args, struct json_object *jbody,
 		const char *volid)
@@ -1309,9 +1592,10 @@ _route_srv_status(struct req_args_s *args)
 	return _reply_ok(args->rp, gstr);
 }
 
+
 // RDIR{{
 // GET /config
-// ~~~~~~~~~~~~~~~~~~~~
+// ~~~~~~~~~~~
 //
 // Return the live configuration of the target RDIR service.
 //
@@ -1322,12 +1606,15 @@ _route_srv_status(struct req_args_s *args)
 //    User-Agent: curl/7.55.1
 //    Accept: */*
 //
+//
 // .. code-block:: http
 //
 //    HTTP/1.1 200 OK
 //    Connection: Close
 //    Content-Type: application/json
 //    Content-Length: 2015
+//
+// .. code-block:: text
 //
 //    {"core.http.user_agent":"", ...}
 //
@@ -1556,6 +1843,10 @@ grid_main_get_options(void)
 		{"Config", OT_LIST, {.lst = &config_paths},
 			"Load the given file and overload the central variables"},
 
+		{"Servicing", OT_BOOL, {.b = &servicing},
+			"Tell the service is going to production.\n"
+			"\t\tCheck the volume is already locked and belongs to us."},
+
 		{NULL, 0, {.i = 0}, NULL}
 	};
 
@@ -1715,7 +2006,8 @@ grid_main_configure(int argc, char **argv)
 	STRING_STACKIFY(cfg_main_url);
 
 	/* Validate the volume was never used for another rdir */
-	err = volume_service_lock(basedir, NAME_SRVTYPE_RDIR, cfg_main_url, ns_name);
+	err = volume_service_lock(basedir, NAME_SRVTYPE_RDIR,
+				  cfg_main_url, ns_name, servicing);
 	if (err != NULL)
 		return _config_error("Volume lock error", err);
 

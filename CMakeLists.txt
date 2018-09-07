@@ -357,7 +357,7 @@ option_or_system(JSONC json-c json.h)
 
 if (NOT SDK_ONLY)
 option_or_system(APACHE2 modules/mod_webdav.so httpd.h)
-option_or_system(ATTR attr attr/xattr.h)
+option_or_system(ATTR attr attr/libattr.h)
 option_or_system(ZK zookeeper_mt zookeeper.h)
 option_or_system(ZLIB z zlib.h)
 option_or_system(ZMQ zmq zmq.h zmq_utils.h)

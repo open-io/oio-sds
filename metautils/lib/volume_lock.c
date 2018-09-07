@@ -19,7 +19,7 @@ License along with this library.
 
 #include <errno.h>
 #include <sys/types.h>
-#include <attr/xattr.h>
+#include <sys/xattr.h>
 
 #include "metautils.h"
 #include "volume_lock.h"
@@ -51,10 +51,15 @@ retry:
 	}
 
 	if (!err) {
-		if (strlen(v) != (gsize)realsize)
-			err = NEWERROR(CODE_INTERNAL_ERROR, "XATTR size differ");
-		else if (0 != memcmp(v,buf,realsize))
-			err = NEWERROR(CODE_INTERNAL_ERROR, "XATTR differ");
+		if (strlen(v) != (gsize)realsize) {
+			err = NEWERROR(CODE_INTERNAL_ERROR,
+					"XATTR size differ, expected value for %s is %s, got %*s",
+					n, v, (int)realsize, buf);
+		} else if (0 != memcmp(v, buf, realsize)) {
+			err = NEWERROR(CODE_INTERNAL_ERROR,
+					"XATTR differ, expected value for %s is %s, got %*s",
+					n, v, (int)realsize, buf);
+		}
 	}
 
 	g_free(buf);
@@ -62,18 +67,23 @@ retry:
 }
 
 static GError*
-_set_lock(const char *vol, const char *n, const char *v)
+_set_lock(const char *vol, const char *n, const char *v,
+	const gboolean servicing)
 {
-	int rc = setxattr(vol, n, v, strlen(v), XATTR_CREATE);
-	if (!rc)
-		return NULL;
+	if (!servicing) {
+		int rc = setxattr(vol, n, v, strlen(v), XATTR_CREATE);
+		if (!rc)
+			return NULL;
+	} else {
+		errno = EEXIST;
+	}
 	return (errno == EEXIST) ? _check_lock(vol, n, v)
 		: NEWERROR(errno, "XATTR set error: %s", strerror(errno));
 }
 
 GError*
 volume_service_lock(const char *vol, const char *type, const char *id,
-		const char *ns)
+		const char *ns, const gboolean servicing)
 {
 	EXTRA_ASSERT (vol != NULL);
 	EXTRA_ASSERT (ns != NULL);
@@ -81,11 +91,11 @@ volume_service_lock(const char *vol, const char *type, const char *id,
 	EXTRA_ASSERT (type != NULL);
 
 	GError *err;
-	if (NULL != (err = _set_lock(vol, "user.server.ns", ns)))
+	if (NULL != (err = _set_lock(vol, "user.server.ns", ns, servicing)))
 		return err;
-	if (NULL != (err = _set_lock(vol, "user.server.id", id)))
+	if (NULL != (err = _set_lock(vol, "user.server.id", id, servicing)))
 		return err;
-	if (NULL != (err = _set_lock(vol, "user.server.type", type)))
+	if (NULL != (err = _set_lock(vol, "user.server.type", type, servicing)))
 		return err;
 	return NULL;
 }

@@ -146,6 +146,9 @@ struct sqlx_service_s
 	// TRUE :  ELECTION_MODE_QUORUM
 	// FALSE : ELECTION_MODE_NONE
 	gboolean flag_replicable;
+
+	// Turn to TRUE for servicing phase
+	gboolean flag_servicing;
 };
 
 /* -------------------------------------------------------------------------- */

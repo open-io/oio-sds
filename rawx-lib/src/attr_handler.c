@@ -25,7 +25,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sys/types.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <attr/xattr.h>
+#include <sys/xattr.h>
 
 #include <metautils/lib/metautils.h>
 
@@ -309,7 +309,8 @@ get_compression_info_in_attr(const char *p, GError ** error, GHashTable *table)
 
 	int rc = lgetxattr(p, ATTR_DOMAIN "." ATTR_NAME_CHUNK_METADATA_COMPRESS, buf, sizeof(buf));
 	if (rc < 0) {
-		if (errno != ENOATTR) {
+		// ENOATTR == ENODATA
+		if (errno != ENODATA) {
 			GSETCODE(error, errno, "Failed to get compression attr: %s", strerror(errno));
 			return FALSE;
 		}

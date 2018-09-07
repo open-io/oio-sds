@@ -1,4 +1,4 @@
-# Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2017-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,8 +17,7 @@ import logging
 import socket
 
 from urllib import quote
-from eventlet.green.httplib import HTTPConnection, HTTPResponse, _UNKNOWN, \
-        CONTINUE, HTTPMessage
+from eventlet.green.httplib import HTTPConnection, HTTPResponse, _UNKNOWN
 
 
 class CustomHTTPResponse(HTTPResponse):
@@ -41,22 +40,6 @@ class CustomHTTPResponse(HTTPResponse):
         self.length = _UNKNOWN
         self.will_close = _UNKNOWN
 
-    def expect_response(self):
-        if self.fp:
-            self.fp.close()
-            self.fp = None
-        self.fp = self.sock.makefile('rb', 0)
-        version, status, reason = self._read_status()
-        if status != CONTINUE:
-            self._read_status = lambda: (version, status, reason)
-            self.begin()
-        else:
-            self.status = status
-            self.reason = reason
-            self.version = 11
-            self.msg = HTTPMessage(self.fp, 0)
-            self.msg.fp = None
-
     def read(self, amount=None):
         return HTTPResponse.read(self, amount)
 
@@ -68,6 +51,12 @@ class CustomHTTPResponse(HTTPResponse):
 
     def close(self):
         HTTPResponse.close(self)
+        if self.sock:
+            try:
+                # Prevent long CLOSE_WAIT state
+                self.sock.shutdown(socket.SHUT_RDWR)
+            except socket.error:
+                pass
         self.sock = None
         self._actual_socket = None
 

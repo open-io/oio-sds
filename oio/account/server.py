@@ -98,6 +98,30 @@ class Account(WerkzeugApp):
         status = self.backend.status()
         return Response(json.dumps(status), mimetype='text/json')
 
+    # ACCT{{
+    # PUT /v1.0/account/create?id=<account_name>
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Create new account named account_name
+    #
+    # .. code-block:: http
+    #
+    #    PUT /v1.0/account/create?id=myaccount HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 201 CREATED
+    #    Server: gunicorn/19.9.0
+    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Connection: keep-alive
+    #    Content-Type: text/plain; charset=utf-8
+    #    Content-Length: 9
+    #
+    #    myaccount
+    #
+    # }}ACCT
     def on_account_create(self, req):
         account_id = self._get_account_id(req)
         id = self.backend.create_account(account_id)
@@ -106,6 +130,30 @@ class Account(WerkzeugApp):
         else:
             return Response(status=202)
 
+    # ACCT{{
+    # GET /v1.0/account/list
+    # ~~~~~~~~~~~~~~~~~~~~~~
+    # Get list of existing accounts
+    #
+    # .. code-block:: http
+    #
+    #    GET /v1.0/account/list HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 200 OK
+    #    Server: gunicorn/19.9.0
+    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Connection: keep-alive
+    #    Content-Type: text/json; charset=utf-8
+    #    Content-Length: 13
+    #
+    #    ["myaccount"]
+    #
+    # }}ACCT
     @access_log
     def on_account_list(self, req):
         accounts = self.backend.list_account()
@@ -113,6 +161,27 @@ class Account(WerkzeugApp):
             return NotFound('No account found')
         return Response(json.dumps(accounts), mimetype='text/json')
 
+    # ACCT{{
+    # PUT /v1.0/account/delete?id=<account_name>
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Delete account named account_name
+    #
+    # .. code-block:: http
+    #
+    #    PUT /v1.0/account/delete?id=myaccount HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 204 NO CONTENT
+    #    Server: gunicorn/19.9.0
+    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Connection: keep-alive
+    #    Content-Type: text/plain; charset=utf-8
+    #
+    # }}ACCT
     def on_account_delete(self, req):
         account_id = self._get_account_id(req)
         result = self.backend.delete_account(account_id)
@@ -123,6 +192,37 @@ class Account(WerkzeugApp):
         else:
             return Response(status=204)
 
+    # ACCT{{
+    # PUT /v1.0/account/update?id=<account_name>
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    #
+    # .. code-block:: json
+    #
+    #    {
+    #      "metadata": {"key":"value"},
+    #      "to_delete": ["key"]
+    #    }
+    #
+    # Update metadata of account named account_name
+    #
+    # .. code-block:: http
+    #
+    #    PUT /v1.0/account/update?id=myaccount HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #    Content-Length: 41
+    #    Content-Type: application/x-www-for-urlencoded
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 204 NO CONTENT
+    #    Server: gunicorn/19.9.0
+    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Connection: keep-alive
+    #    Content-Type: text/plain; charset=utf-8
+    #
+    # }}ACCT
     def on_account_update(self, req):
         account_id = self._get_account_id(req)
         decoded = json.loads(req.get_data())
@@ -134,6 +234,39 @@ class Account(WerkzeugApp):
             return Response(status=204)
         return NotFound('Account not found')
 
+    # ACCT{{
+    # GET /v1.0/account/show?id=<account_name>
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Get information about an account named account_name
+    #
+    # .. code-block:: http
+    #
+    #    GET /v1.0/account/show?id=myaccount HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 200 OK
+    #    Server: gunicorn/19.9.0
+    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Connection: keep-alive
+    #    Content-Type: text/plain; charset=utf-8
+    #    Content-Length: 107
+    #
+    # .. code-block:: json
+    #
+    #    {
+    #      "ctime": "1533127401.08165",
+    #      "bytes": 0,
+    #      "objects": 0,
+    #      "id": "myaccount",
+    #      "containers": 0,
+    #      "metadata": {}
+    #     }
+    #
+    # }}ACCT
     @access_log
     def on_account_show(self, req):
         account_id = self._get_account_id(req)
@@ -142,6 +275,40 @@ class Account(WerkzeugApp):
             return Response(json.dumps(raw), mimetype='text/json')
         return NotFound('Account not found')
 
+    # ACCT{{
+    # GET /v1.0/account/containers?id=<account_name>
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Get information about containers on account named account_name
+    #
+    # .. code-block:: http
+    #
+    #    GET /v1.0/account/containers?id=myaccount HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 200 OK
+    #    Server: gunicorn/19.9.0
+    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Connection: keep-alive
+    #    Content-Type: text/plain; charset=utf-8
+    #    Content-Length: 122
+    #
+    # .. code-block:: json
+    #
+    #    {
+    #      "ctime": "1533127401.08165",
+    #      "bytes": 0,
+    #      "objects": 0,
+    #      "listing": [],
+    #      "id": "account",
+    #      "containers": 0,
+    #      "metadata": {}
+    #     }
+    #
+    # }}ACCT
     @access_log
     def on_account_containers(self, req):
         account_id = self._get_account_id(req)
@@ -164,6 +331,41 @@ class Account(WerkzeugApp):
         result = json.dumps(info)
         return Response(result, mimetype='text/json')
 
+    # ACCT{{
+    # POST /v1.0/account/container/update?id=<account_name>
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    #
+    # .. code-block:: json
+    #
+    #    {
+    #      "mtime": "123456789",
+    #      "dtime": "1223456789",
+    #      "name": "container name",
+    #      "objects": 0,
+    #      "bytes": 0
+    #    }
+    #
+    # Update account with container-related metadata.
+    #
+    # .. code-block:: http
+    #
+    #    POST /v1.0/account/container/update?id=myaccount HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #    Content-Length: 84
+    #    Content-Type: application/x-www-form-urlencoded
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 200 OK
+    #    Server: gunicorn/19.9.0
+    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Connection: keep-alive
+    #    Content-Type: text/plain; charset=utf-8
+    #    Content-Length: 117
+    #
+    # }}ACCT
     def on_account_container_update(self, req):
         account_id = self._get_account_id(req)
         d = json.loads(req.get_data())
@@ -178,6 +380,37 @@ class Account(WerkzeugApp):
         result = json.dumps(info)
         return Response(result)
 
+    # ACCT{{
+    # GET /v1.0/account/container/reset?id=<account_name>
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    #
+    # .. code-block:: json
+    #
+    #    {
+    #      "name": "container name",
+    #      "mtime": 1234567891011
+    #    }
+    #
+    # Reset container of an account named account_name
+    #
+    # .. code-block:: http
+    #
+    #    GET /v1.0/account/container/reset?id=myaccount HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #    Content-Length: 45
+    #    Content-Type: application/x-www-form-urlencoded
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 204 NO CONTENT
+    #    Server: gunicorn/19.9.0
+    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Connection: keep-alive
+    #    Content-Type: text/plain; charset=utf-8
+    #
+    # }}ACCT
     def on_account_container_reset(self, req):
         account_id = self._get_account_id(req)
         data = json.loads(req.get_data())
@@ -192,11 +425,53 @@ class Account(WerkzeugApp):
             autocreate_container=False)
         return Response(status=204)
 
+    # ACCT{{
+    # POST /v1.0/account/refresh?id=<account_name>
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Refresh counter of an account named account_name
+    #
+    # .. code-block:: http
+    #
+    #    POST /v1.0/account/refresh?id=myaccount HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 204 NO CONTENT
+    #    Server: gunicorn/19.9.0
+    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Connection: keep-alive
+    #    Content-Type: text/plain; charset=utf-8
+    #
+    # }}ACCT
     def on_account_refresh(self, req):
         account_id = self._get_account_id(req)
         self.backend.refresh_account(account_id)
         return Response(status=204)
 
+    # ACCT{{
+    # POST /v1.0/account/flush?id=<account_name>
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Flush all container of an account named account_name
+    #
+    # .. code-block:: http
+    #
+    #    POST /v1.0/account/flush?id=myaccount HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 204 NO CONTENT
+    #    Server: gunicorn/19.9.0
+    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Connection: keep-alive
+    #    Content-Type: text/plain; charset=utf-8
+    #
+    # }}ACCT
     def on_account_flush(self, req):
         account_id = self._get_account_id(req)
         self.backend.flush_account(account_id)

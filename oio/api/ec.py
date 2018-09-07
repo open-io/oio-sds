@@ -19,6 +19,7 @@ import hashlib
 import logging
 from urlparse import urlparse
 from eventlet import Queue, Timeout, GreenPile
+from socket import error as SocketError
 from greenlet import GreenletExit
 from oio.common import exceptions
 from oio.common.exceptions import SourceReadError
@@ -963,8 +964,8 @@ class ECRebuildHandler(object):
                 logger.warning('Invalid GET response from %s: %s %s',
                                chunk, resp.status, resp.reason)
                 resp = None
-        except Timeout as to:
-            logger.error('ERROR fetching %s: %s', chunk, to)
+        except (SocketError, Timeout) as err:
+            logger.error('ERROR fetching %s: %s', chunk, err)
         except Exception:
             logger.exception('ERROR fetching %s', chunk)
         return resp

@@ -2011,8 +2011,10 @@ wait_for_final_status(struct election_member_s *m, const gint64 deadline)
 
 		/* compare internal timers to our fake'able clock */
 		if (now > deadline) {
-			GRID_WARN("TIMEOUT! (waiting for election status) [%s.%s] step=%d/%s",
-					m->inline_name.base, m->inline_name.type, m->step, _step2str(m->step));
+			GRID_WARN("TIMEOUT! (waiting for election status) [%s.%s] "
+					"step=%d/%s reqid=%s",
+					m->inline_name.base, m->inline_name.type, m->step,
+					_step2str(m->step), oio_ext_get_reqid());
 			return FALSE;
 		}
 
@@ -2022,8 +2024,10 @@ wait_for_final_status(struct election_member_s *m, const gint64 deadline)
 		if (oio_election_enable_nowait_pending &&
 				m->when_unstable > 0 && m->when_unstable < OLDEST(
 					now, oio_election_delay_nowait_pending)) {
-			GRID_WARN("TIMEOUT! (election pending for too long) [%s.%s] step=%d/%s",
-					m->inline_name.base, m->inline_name.type, m->step, _step2str(m->step));
+			GRID_WARN("TIMEOUT! (election pending for too long) [%s.%s] "
+					"step=%d/%s reqid=%s",
+					m->inline_name.base, m->inline_name.type, m->step,
+					_step2str(m->step), oio_ext_get_reqid());
 			return FALSE;
 		}
 
@@ -2198,12 +2202,13 @@ static void
 _result_PIPEFROM (GError *e, struct election_member_s *m, guint reqid)
 {
 	if (!e || CODE_IS_OK(e->code)) {
-		GRID_DEBUG("PIPEFROM ok [%s.%s] [%s]",
-				m->inline_name.base, m->inline_name.type, m->key);
+		GRID_DEBUG("PIPEFROM %s ok [%s.%s] [%s]",
+				m->master_url, m->inline_name.base, m->inline_name.type,
+				m->key);
 	} else {
-		GRID_WARN("PIPEFROM failed [%s.%s] [%s]: (%d) %s",
-				m->inline_name.base, m->inline_name.type, m->key,
-				e->code, e->message);
+		GRID_WARN("PIPEFROM %s failed [%s.%s] [%s]: (%d) %s",
+				m->master_url, m->inline_name.base, m->inline_name.type,
+				m->key, e->code, e->message);
 	}
 
 	member_lock(m);

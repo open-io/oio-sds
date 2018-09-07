@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -43,7 +43,8 @@ class HttpChecker(BaseChecker):
             else:
                 raise Exception("status code != 200: %s" % resp.status)
         except Exception as e:
-            self.logger.warn('ERROR performing http check: %s', e)
+            self.logger.warn('ERROR performing http check (%s): %s',
+                             self.url, e)
         finally:
             if resp:
                 try:
