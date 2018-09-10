@@ -131,7 +131,7 @@
 			{ "type": "bool", "name": "oio_resolver_cache_enabled",
 				"key": "resolver.cache.enabled",
 				"descr": "Allows the resolver instances to cache entries",
-				"def": true },
+				"def": false },
 
 			{ "type": "monotonic", "name": "oio_resolver_m0cs_default_ttl",
 				"key": "resolver.cache.csm0.ttl.default",
@@ -790,7 +790,7 @@
 
 			{ "type": "bool", "name": "flag_cache_enabled",
 				"key": "proxy.cache.enabled",
-				"descr": "In a proxy, sets if any form of caching is allowed",
+				"descr": "In a proxy, sets if any form of caching is allowed. Supersedes the value of resolver.cache.enabled.",
 				"def": true,
 				"aliases": ["Cache"]},
 
