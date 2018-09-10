@@ -25,7 +25,6 @@ from oio.conscience.client import ConscienceClient
 from oio.directory.client import DirectoryClient
 from time import sleep
 
-
 RDIR_ACCT = '_RDIR'
 
 # Special target that will match any service from the "known" service list
@@ -40,7 +39,7 @@ def _filter_rdir_host(allsrv):
     for srv in allsrv.get('srv', {}):
         if srv['type'] == 'rdir':
             return srv['host']
-    raise NotFound("No rdir service found in %s" % (allsrv, ))
+    raise NotFound("No rdir service found in %s" % (allsrv,))
 
 
 class RdirDispatcher(object):
@@ -154,7 +153,7 @@ class RdirDispatcher(object):
                      if x['score'] > 0]
         if len(opened_db) <= 0:
             raise ServiceUnavailable(
-                    "No valid rdir service found in %s" % self.ns)
+                "No valid rdir service found in %s" % self.ns)
         if not max_per_rdir:
             upper_limit = sum(opened_db) / float(len(opened_db))
         else:
@@ -182,20 +181,20 @@ class RdirDispatcher(object):
                 break
             except ClientException as ex:
                 # Already done
-                done = (455, )
+                done = (455,)
                 if ex.status in done:
                     break
                 if ex.message.startswith(
                         'META1 error: (SQLITE_CONSTRAINT) '
                         'UNIQUE constraint failed'):
                     self.logger.info(
-                            "Ignored exception (already0): %s", ex)
+                        "Ignored exception (already0): %s", ex)
                     break
                 if ex.message.startswith(
                         'META1 error: (SQLITE_CONSTRAINT) '
                         'columns cid, srvtype, seq are not unique'):
                     self.logger.info(
-                            "Ignored exception (already1): %s", ex)
+                        "Ignored exception (already1): %s", ex)
                     break
                 # Manage several unretriable errors
                 retry = (406, 450, 503, 504)
@@ -285,6 +284,23 @@ class RdirClient(HttpApi):
                                               **kwargs)
         except OioNetworkException:
             self._clear_cache(volume)
+            raise
+
+        return resp, body
+
+    def _rdir_meta2_request(self, meta2_address, method, action,
+                            auto_create=True, **kwargs):
+        params = {'meta2_address': meta2_address}
+        if auto_create:
+            params['autocreate'] = 1
+        # Assuming we'll use the same facility to fetch assigned rdirs to META2
+        # Since technically speaking it's a KV store so it shouldn't matter.
+        uri = 'http://%s/v1/rdir/meta2/%s' % ("127.0.0.2:6027", action)
+        try:
+            resp, body = self._direct_request(method, uri, params=params,
+                                              **kwargs)
+        except OioNetworkException:
+            self._clear_cache(meta2_address)
             raise
 
         return resp, body
@@ -393,3 +409,36 @@ class RdirClient(HttpApi):
     def status(self, volume, **kwargs):
         _resp, body = self._rdir_request(volume, 'GET', 'status', **kwargs)
         return body
+
+    def meta2_index_create(self, meta2_address, **kwargs):
+        return self._rdir_meta2_request(meta2_address, 'POST', 'create',
+                                        **kwargs)
+
+    def meta2_index_push(self, meta2_address, content_path, content_id, mtime,
+                         headers=None, **kwargs):
+        body = {'content_url': content_path,
+                'container_id': content_id,
+                'mtime': int(mtime)}
+
+        for key, value in kwargs.iteritems():
+            body[key] = value
+
+        return self._rdir_meta2_request(meta2_address, 'POST', 'push',
+                                        create=True,
+                                        json=body, headers=headers)
+
+    def meta2_index_delete(self, meta2_address, content_path, content_id,
+                           **kwargs):
+        body = {'content_url': content_path,
+                'container_id': content_id}
+
+        for key, value in kwargs.iteritems():
+            body[key] = value
+
+        return self._rdir_meta2_request(meta2_address, 'POST', 'delete',
+                                        create=False,
+                                        json=body)
+
+    def meta2_index_fetch(self, meta2_address, prefix='', marker=0, limit=4096,
+                          **kwargs):
+        raise ClientException("Not Yet Implemented.")

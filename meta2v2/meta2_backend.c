@@ -598,8 +598,8 @@ _init_container(struct sqlx_sqlite3_s *sq3,
 }
 
 static GString *
-_get_meta2_peers(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2){
-
+_get_meta2_peers(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2)
+{
 	gchar **peers = NULL;
 	// Necessary evil.
 	struct sqlx_name_s name = {0};
@@ -607,13 +607,23 @@ _get_meta2_peers(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2){
 	name.ns = (const char *)sq3->name.ns;
 	name.type = (const char *)sq3->name.type;
 
-	sqlx_repository_get_peers(m2->repo, &name, &peers);
+	const enum election_status_e s = sq3->election;
+	if(!s || s == ELECTION_LEADER)
+		sqlx_repository_get_peers(m2->repo, &name, &peers);
 
-	// This is a NULL terminated array of all the peers.
-	peers = oio_strv_append(peers,
-							g_strdup(sqlx_repository_get_local_addr(m2->repo)));
-	(void)m2;
-	(void)sq3;
+	// This is either a NULL terminated array of all the peers or a NULL ptr.
+	// If there's no elections or no peers, then we find ourselves with
+	// a NULL ptr.
+	// TODO: There's maybe a cleaner way to do this.
+	gchar *local_addr = g_strdup(sqlx_repository_get_local_addr(m2->repo));
+	EXTRA_ASSERT(local_addr != NULL);
+	if(peers != NULL)
+		peers = oio_strv_append(peers,local_addr);
+	else {
+		peers = g_malloc(2*sizeof(gchar *));
+		peers[0] = local_addr;
+		peers[1] = NULL;
+	}
 
 	GString *peers_array = g_string_new("");
 	// We know we have at least this META2 server so we're safe doing this.
@@ -630,6 +640,7 @@ _get_meta2_peers(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2){
 		peer = peers[i];
 	}
 	g_string_append_c(peers_array, ']');
+	g_free(peers);
 	return peers_array;
 }
 
@@ -722,13 +733,17 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 
 		if (!err) {
 			GString *gs = NULL;
+			GString *peers_list = NULL;
 			if (m2->notifier && event) {
+				peers_list = _get_meta2_peers(sq3, m2);
 				gs = oio_event__create (META2_EVENTS_PREFIX ".container.deleted", url);
-				g_string_append_static (gs, ",\"data\":null}");
+				g_string_append_printf(gs, ",\"data\": %s }", peers_list->str);
 			}
 			m2b_destroy(sq3);
 			if(gs) {
 				oio_events_queue__send (m2->notifier, g_string_free (gs, FALSE));
+				if (peers_list)
+					g_string_free(peers_list, TRUE);
 			}
 		} else {
 			m2b_close(sq3);
