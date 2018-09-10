@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from oio.common.json import json
+from oio.common.http_urllib3 import urllibexc
 from oio.conscience.stats.base import BaseStat
 
 
@@ -68,7 +69,11 @@ class HttpStat(BaseStat):
         result = {}
         resp = None
         try:
-            resp = self.agent.pool_manager.request("GET", self.url)
+            # We have troubles identifying connections that have been closed
+            # on the remote side but not on the local side, thus we
+            # explicitely require the connection to be closed.
+            resp = self.agent.pool_manager.request(
+                'GET', self.url, headers={'Connection': 'close'})
             if resp.status == 200:
                 result = self._parse_func(resp.data)
             else:
@@ -77,6 +82,6 @@ class HttpStat(BaseStat):
         finally:
             if resp:
                 try:
-                    resp.force_close()
-                except Exception:
+                    resp.close()
+                except urllibexc.HTTPError:
                     pass
