@@ -15,8 +15,7 @@
 
 from urlparse import urlparse
 from eventlet import patcher
-from urllib3.exceptions import MaxRetryError, TimeoutError, \
-    NewConnectionError, ProtocolError, ProxyError, ClosedPoolError
+from urllib3 import exceptions as urllibexc
 from oio.common.exceptions import reraise, \
     OioException, OioNetworkException, OioTimeout
 
@@ -68,15 +67,17 @@ def oio_exception_from_httperror(exc, reqid=None, url=None):
     if url:
         extra_dict['host'] = urlparse(url).netloc
     extra = ', '.join('%s=%s' % x for x in extra_dict.items())
-    if isinstance(exc, MaxRetryError):
-        if isinstance(exc.reason, NewConnectionError):
+    if isinstance(exc, urllibexc.MaxRetryError):
+        if isinstance(exc.reason, urllibexc.NewConnectionError):
             reraise(OioNetworkException, exc.reason, extra)
-        if isinstance(exc.reason, TimeoutError):
+        if isinstance(exc.reason, urllibexc.TimeoutError):
             reraise(OioTimeout, exc.reason, extra)
         reraise(OioNetworkException, exc, extra)
-    elif isinstance(exc, (ProtocolError, ProxyError, ClosedPoolError)):
+    elif isinstance(exc, (urllibexc.ProtocolError,
+                          urllibexc.ProxyError,
+                          urllibexc.ClosedPoolError)):
         reraise(OioNetworkException, exc, extra)
-    elif isinstance(exc, TimeoutError):
+    elif isinstance(exc, urllibexc.TimeoutError):
         reraise(OioTimeout, exc, extra)
     else:
         reraise(OioException, exc, extra)
