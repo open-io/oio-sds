@@ -32,6 +32,8 @@ class Rebuilder(object):
     """
 
     def __init__(self, conf, logger, volume, input_file=None, **kwargs):
+        eventlet.monkey_patch(os=False)
+
         self.conf = conf
         self.logger = logger or get_logger(conf)
         self.namespace = conf['namespace']
@@ -51,7 +53,6 @@ class Rebuilder(object):
         self.report_interval = int_value(conf.get('report_interval'), 3600)
 
     def rebuilder_pass(self, **kwargs):
-        eventlet.monkey_patch(os=False)
         self.start_time = self.last_report = time.time()
         self.log_report('START', force=True)
 

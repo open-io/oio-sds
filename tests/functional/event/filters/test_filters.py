@@ -48,8 +48,8 @@ class TestContentRebuildFilter(BaseTestCase):
         self.container_id = syst['sys.name'].split('.', 1)[0]
         self.object_storage_api = ObjectStorageApi(namespace=self.namespace)
         queue_addr = choice(self.conf['services']['beanstalkd'])['addr']
-        self.queue_url = 'beanstalk://' + queue_addr
-        self.conf['queue_url'] = self.queue_url
+        self.queue_url = queue_addr
+        self.conf['queue_url'] = 'beanstalk://' + self.queue_url
         self.conf['tube'] = DEFAULT_REBUILDER_TUBE
         self.notify_filter = NotifyFilter(app=_App, conf=self.conf)
 

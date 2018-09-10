@@ -14,15 +14,18 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-import json
 import time
 from datetime import datetime
 from socket import gethostname
 
+from oio.api.base import HttpApi
+from oio.common.json import json
+from oio.common.green import threading
 from oio.common.easy_value import int_value, true_value
-from oio.common.exceptions import ContentNotFound, NotFound, OrphanChunk
+from oio.common.exceptions import ContentNotFound, NotFound, OrphanChunk, \
+    ConfigurationException
 from oio.content.factory import ContentFactory
-from oio.event.beanstalk import Beanstalk, ConnectionError
+from oio.event.beanstalk import Beanstalk, BeanstalkError, ConnectionError
 from oio.rdir.client import RdirClient
 from oio.rebuilder.rebuilder import Rebuilder, RebuilderWorker
 
@@ -35,6 +38,7 @@ class BlobRebuilder(Rebuilder):
     def __init__(self, conf, logger, volume, try_chunk_delete=False,
                  beanstalkd_addr=None, **kwargs):
         super(BlobRebuilder, self).__init__(conf, logger, volume, **kwargs)
+        self.http = HttpApi(**kwargs)
         # rdir
         self.rdir_client = RdirClient(conf, logger=self.logger)
         self.rdir_fetch_limit = int_value(conf.get('rdir_fetch_limit'), 100)
@@ -44,17 +48,18 @@ class BlobRebuilder(Rebuilder):
         self.beanstalkd_addr = beanstalkd_addr
         self.beanstalkd_tube = conf.get('beanstalkd_tube',
                                         DEFAULT_REBUILDER_TUBE)
-        self.beanstalkd = None
         # counters
         self.bytes_processed = 0
         self.total_bytes_processed = 0
+        # distributed
+        self.distributed = False
 
     def _create_worker(self, **kwargs):
         return BlobRebuilderWorker(
             self, try_chunk_delete=self.try_chunk_delete, **kwargs)
 
     def _fill_queue(self, queue, **kwargs):
-        chunks = self._fetch_chunks()
+        chunks = self._fetch_chunks(**kwargs)
         for chunk in chunks:
             queue.put(chunk)
 
@@ -115,78 +120,160 @@ class BlobRebuilder(Rebuilder):
         return chunks_processed, bytes_processed, errors, \
             total_chunks_processed, self.total_bytes_processed, total_errors
 
+    def _rebuilder_pass(self, **kwargs):
+        return super(BlobRebuilder, self).rebuilder_pass(**kwargs)
+
     def rebuilder_pass(self, **kwargs):
+        success = False
         if self.volume:
-            success = False
             self.rdir_client.admin_lock(self.volume,
                                         "rebuilder on %s" % gethostname())
         try:
-            success = super(BlobRebuilder, self).rebuilder_pass(**kwargs)
+            success = self._rebuilder_pass(**kwargs)
         finally:
             if self.volume:
                 self.rdir_client.admin_unlock(self.volume)
         return success
 
-    def _fetch_chunks_from_event(self, job_id, data):
-        env = json.loads(data)
-        for chunk_id_or_pos in env['data']['missing_chunks']:
-            yield [env['url']['id'], env['url']['content'],
-                   str(chunk_id_or_pos), None]
+    def _event_from_broken_chunk(self, chunk, reply, **kwargs):
+        cid, content_id, chunk_id_or_pos, _ = chunk
+        event = {}
+        event['when'] = time.time()
+        event['event'] = 'storage.content.broken'
+        event['data'] = {'missing_chunks': [chunk_id_or_pos]}
+        event['url'] = {'ns': self.namespace,
+                        'id': cid, 'content': content_id}
+        event['reply'] = reply
+        return json.dumps(event)
 
-    def _connect_to_beanstalk(self):
-        self.logger.debug('Connecting to %s', self.beanstalkd_addr)
-        self.beanstalkd = Beanstalk.from_url(self.beanstalkd_addr)
-        self.logger.debug('Using tube %s', self.beanstalkd_tube)
-        self.beanstalkd.use(self.beanstalkd_tube)
-        self.beanstalkd.watch(self.beanstalkd_tube)
+    def _chunks_from_event(self, job_id, data, **kwargs):
+        decoded = json.loads(data)
+        container_id = decoded['url']['id']
+        content_id = decoded['url']['content']
+        more = None
+        reply = decoded.get('reply', None)
+        if reply:
+            more = {'reply': reply}
+        for chunk_id_or_pos in decoded['data']['missing_chunks']:
+            yield [container_id, content_id,
+                   str(chunk_id_or_pos), more]
 
-    def _handle_beanstalk_event(self, conn_error):
-        try:
-            job_id, data = self.beanstalkd.reserve()
-            if conn_error:
-                self.logger.warn("beanstalk reconnected")
-        except ConnectionError:
-            if not conn_error:
-                self.logger.warn("beanstalk connection error")
-            raise
-        try:
-            for chunk in self._fetch_chunks_from_event(job_id, data):
-                yield chunk
-            self.beanstalkd.delete(job_id)
-        except Exception:
-            self.logger.exception("handling event %s (bury)", job_id)
-            self.beanstalkd.bury(job_id)
+    def _rebuilt_chunk_from_event(self, job_id, data, **kwargs):
+        decoded = json.loads(data)
+        beanstalkd_addr = decoded['beanstalkd']
+        chunk = (decoded['cid'], decoded['content_id'],
+                 decoded['chunk_id_or_pos'], None)
+        bytes_processed = decoded.get('bytes_processed', None)
+        error = decoded.get('error', None)
+        yield beanstalkd_addr, chunk, bytes_processed, error
 
-    def _fetch_chunks_from_beanstalk(self):
-        conn_error = False
-        while 1:
-            try:
-                self._connect_to_beanstalk()
-                for chunk in self._handle_beanstalk_event(conn_error):
-                    conn_error = False
-                    yield chunk
-            except ConnectionError as exc:
-                self.logger.warn('Disconnected: %s', exc)
-                if 'Invalid URL' in str(exc):
-                    raise
-                conn_error = True
-                time.sleep(1.0)
+    def _fetch_events_from_beanstalk(self, **kwargs):
+        beanstalkd = BeanstalkdListener(
+            self.beanstalkd_addr, self.beanstalkd_tube, self.logger, **kwargs)
+        return beanstalkd.fetch_events(self._chunks_from_event, **kwargs)
 
-    def _fetch_chunks_from_file(self):
+    def _fetch_chunks_from_file(self, **kwargs):
         with open(self.input_file, 'r') as ifile:
             for line in ifile:
                 stripped = line.strip()
                 if stripped and not stripped.startswith('#'):
                     yield stripped.split('|', 3)[:3] + [None]
 
-    def _fetch_chunks(self):
+    def _fetch_chunks(self, **kwargs):
         if self.input_file:
-            return self._fetch_chunks_from_file()
-        elif self.beanstalkd_addr:
-            return self._fetch_chunks_from_beanstalk()
-        else:
+            return self._fetch_chunks_from_file(**kwargs)
+        if self.beanstalkd_addr and not self.distributed:
+            return self._fetch_events_from_beanstalk(**kwargs)
+        if self.volume:
             return self.rdir_client.chunk_fetch(
-                self.volume, limit=self.rdir_fetch_limit, rebuild=True)
+                self.volume, limit=self.rdir_fetch_limit, rebuild=True,
+                **kwargs)
+        raise ConfigurationException('No source to fetch chunks from')
+
+
+class DistributedBlobRebuilder(BlobRebuilder):
+
+    def __init__(self, conf, logger, volume, distributed_addr, **kwargs):
+        super(DistributedBlobRebuilder, self).__init__(
+            conf, logger, volume, **kwargs)
+        self.distributed = True
+        self.distributed_addr = distributed_addr
+        self.distributed_tube = conf.get('distributed_tube',
+                                         DEFAULT_REBUILDER_TUBE)
+        self.sending = False
+
+        if not self.beanstalkd_addr:
+            raise ConfigurationException(
+                "No beanstalkd to fetch responses from")
+        if self.beanstalkd_tube == self.distributed_tube:
+            raise ConfigurationException(
+                "The beanstalkd tubes must be different")
+
+    def _rebuilder_pass(self, **kwargs):
+        self.start_time = self.last_report = time.time()
+        self.log_report('START', force=True)
+
+        listener = BeanstalkdListener(
+            self.beanstalkd_addr, self.beanstalkd_tube, self.logger, **kwargs)
+        senders = dict()
+        for distributed_addr in self.distributed_addr.split(';'):
+            senders[distributed_addr] = BeanstalkdSender(
+                distributed_addr, self.distributed_tube, self.logger, **kwargs)
+
+        reply = {'addr': self.beanstalkd_addr, 'tube': self.beanstalkd_tube}
+        thread = threading.Thread(target=self._distribute_broken_chunks,
+                                  args=(senders, reply), kwargs=kwargs)
+        thread.start()
+
+        def is_finish():
+            total_events = 0
+            for _, sender in senders.iteritems():
+                total_events += sender.nb_events
+            return total_events <= 0
+
+        while thread.is_alive():
+            if self.sending:
+                break
+            else:
+                time.sleep(0.1)
+
+        while thread.is_alive() or not is_finish():
+            event_info = listener.fetch_event(
+                self._rebuilt_chunk_from_event, **kwargs)
+            for beanstalkd_addr, chunk, bytes_processed, error in event_info:
+                senders[beanstalkd_addr].event_done()
+                self.update_processed(chunk, bytes_processed, error=error,
+                                      **kwargs)
+
+        self.log_report('DONE', force=True)
+        return self.total_errors == 0
+
+    def _distribute_broken_chunks(self, senders, reply, **kwargs):
+        index = 0
+        senders = senders.values()
+        n = len(senders)
+
+        def _send_broken_chunk(broken_chunk, index):
+            event = self._event_from_broken_chunk(
+                broken_chunk, reply, **kwargs)
+            # Send the event with a non-full sender
+            while True:
+                for _ in range(n):
+                    success = senders[index].send_event(
+                        event, **kwargs)
+                    index = (index + 1) % n
+                    if success:
+                        return index
+                time.sleep(5)
+
+        broken_chunks = self._fetch_chunks(**kwargs)
+        try:
+            index = _send_broken_chunk(next(broken_chunks), index)
+            self.sending = True
+        except StopIteration:
+            return
+        for broken_chunk in broken_chunks:
+            index = _send_broken_chunk(broken_chunk, index)
 
 
 class BlobRebuilderWorker(RebuilderWorker):
@@ -206,18 +293,46 @@ class BlobRebuilderWorker(RebuilderWorker):
         container_id, content_id, chunk_id_or_pos, _ = chunk
         if self.dry_run:
             self.dryrun_chunk_rebuild(container_id, content_id,
-                                      chunk_id_or_pos)
+                                      chunk_id_or_pos, **kwargs)
             return 0
         else:
             return self.chunk_rebuild(container_id, content_id,
-                                      chunk_id_or_pos)
+                                      chunk_id_or_pos, **kwargs)
 
-    def dryrun_chunk_rebuild(self, container_id, content_id, chunk_id_or_pos):
+    def update_processed(self, chunk, bytes_processed, error=None, **kwargs):
+        container_id, content_id, chunk_id_or_pos, more = chunk
+        if more is not None:
+            reply = more.get('reply', None)
+            if reply is not None:
+                event = {'beanstalkd': self.rebuilder.beanstalkd_addr,
+                         'cid': container_id, 'content_id': content_id,
+                         'chunk_id_or_pos': chunk_id_or_pos}
+                if error is not None:
+                    event['error'] = error
+                if bytes_processed is not None:
+                    event['bytes_processed'] = bytes_processed
+                try:
+                    sender = BeanstalkdSender(
+                        reply['addr'], reply['tube'], self.logger,
+                        **kwargs)
+                    sender.send_event(json.dumps(event))
+                    sender.close()
+                except Exception as exc:
+                    self.logger.warn(
+                        'reply failed %s: %s',
+                        self.rebuilder._item_to_string(chunk, **kwargs), exc)
+
+        super(BlobRebuilderWorker, self).update_processed(
+            chunk, bytes_processed, error=error, **kwargs)
+
+    def dryrun_chunk_rebuild(self, container_id, content_id, chunk_id_or_pos,
+                             **kwargs):
         self.logger.info("[dryrun] Rebuilding "
                          "container %s, content %s, chunk %s",
                          container_id, content_id, chunk_id_or_pos)
 
-    def chunk_rebuild(self, container_id, content_id, chunk_id_or_pos):
+    def chunk_rebuild(self, container_id, content_id, chunk_id_or_pos,
+                      **kwargs):
         self.logger.info('Rebuilding (container %s, content %s, chunk %s)',
                          container_id, content_id, chunk_id_or_pos)
         try:
@@ -251,7 +366,7 @@ class BlobRebuilderWorker(RebuilderWorker):
 
         if self.try_chunk_delete:
             try:
-                content.blob_client.chunk_delete(chunk.url)
+                content.blob_client.chunk_delete(chunk.url, **kwargs)
                 self.logger.info("Chunk %s deleted", chunk.url)
             except NotFound as exc:
                 self.logger.debug("Chunk %s: %s", chunk.url, exc)
@@ -259,6 +374,116 @@ class BlobRebuilderWorker(RebuilderWorker):
         # This call does not raise exception if chunk is not referenced
         if chunk_id is not None:
             self.rdir_client.chunk_delete(chunk.host, container_id,
-                                          content_id, chunk_id)
+                                          content_id, chunk_id, **kwargs)
 
         return chunk_size
+
+
+class Beanstalkd(object):
+
+    def __init__(self, addr, tube, logger, **kwargs):
+        self.addr = addr
+        self.tube = tube
+        self.logger = logger
+        self.beanstalkd = None
+        self.connected = False
+        self._connect()
+
+    def _connect(self, **kwargs):
+        self.close()
+        self.beanstalkd = Beanstalk.from_url('beanstalk://' + self.addr)
+        self.beanstalkd.use(self.tube)
+        self.beanstalkd.watch(self.tube)
+        self.connected = True
+
+    def close(self):
+        if self.connected:
+            try:
+                self.beanstalkd.close()
+            except BeanstalkError:
+                pass
+            self.connected = False
+
+
+class BeanstalkdListener(Beanstalkd):
+
+    def fetch_event(self, on_event, **kwargs):
+        job_id = None
+        try:
+            if not self.connected:
+                self.logger.debug('Connecting to %s using tube %s',
+                                  self.addr, self.tube)
+                self._connect(**kwargs)
+
+            job_id, data = self.beanstalkd.reserve()
+            for event_info in on_event(job_id, data, **kwargs):
+                yield event_info
+            self.beanstalkd.delete(job_id)
+        except ConnectionError as exc:
+            self.connected = False
+            self.logger.debug(
+                'Disconnected from %s using tube %s (job=%s): %s',
+                self.addr, self.tube, job_id, exc)
+            if 'Invalid URL' in str(exc):
+                raise
+            time.sleep(1.0)
+        except Exception:
+            self.logger.exception("ERROR on %s using tube %s (job=%s)",
+                                  self.addr, self.tube, job_id)
+            if job_id:
+                try:
+                    self.beanstalkd.bury(job_id)
+                except BeanstalkError:
+                    pass
+
+    def fetch_events(self, on_event, **kwargs):
+        while True:
+            for event_info in self.fetch_event(on_event, **kwargs):
+                yield event_info
+
+
+class BeanstalkdSender(Beanstalkd):
+
+    def __init__(self, addr, tube, logger,
+                 threshold=512, limit=1024, **kwargs):
+        super(BeanstalkdSender, self).__init__(addr, tube, logger)
+        self.threshold = threshold
+        self.limit = limit
+        self.fill = True
+        self.nb_events = 0
+        self.lock_nb_events = threading.Lock()
+
+    def send_event(self, event, **kwargs):
+        if self.nb_events <= self.threshold:
+            self.fill = True
+        elif not self.fill or self.nb_events > self.limit:
+            return False
+
+        job_id = None
+        try:
+            if not self.connected:
+                self.logger.debug('Connecting to %s using tube %s',
+                                  self.addr, self.tube)
+                self._connect(**kwargs)
+
+            with self.lock_nb_events:
+                job_id = self.beanstalkd.put(event)
+                self.nb_events += 1
+                if self.nb_events == self.limit:
+                    self.fill = False
+            return True
+        except ConnectionError as exc:
+            self.connected = False
+            self.logger.debug(
+                'Disconnected from %s using tube %s (job=%s): %s',
+                self.addr, self.tube, job_id, exc)
+            if 'Invalid URL' in str(exc):
+                raise
+        except Exception:
+            self.logger.exception("ERROR on %s using tube %s (job=%s)",
+                                  self.addr, self.tube, job_id)
+        return False
+
+    def event_done(self):
+        with self.lock_nb_events:
+            self.nb_events -= 1
