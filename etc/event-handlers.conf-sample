@@ -11,6 +11,9 @@ pipeline = content_rebuild
 [handler:storage.content.deleted]
 pipeline = content_cleaner
 
+[handler:storage.content.perfectible]
+pipeline = content_improve
+
 [handler:storage.container.new]
 pipeline = account_update
 
@@ -41,8 +44,15 @@ use = egg:oio#volume_index
 [filter:noop]
 use = egg:oio#noop
 
+[filter:content_improve]
+use = egg:oio#notify
+tube = oio-improve
+queue_url = beanstalk://127.0.0.1:6009
+
 [filter:content_rebuild]
-use = egg:oio#content_rebuild
+use = egg:oio#notify
+tube = oio-rebuild
+queue_url = beanstalk://127.0.0.1:6009
 
 [filter:webook]
 use = egg:oio#webhook

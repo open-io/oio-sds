@@ -558,10 +558,12 @@ targets=1,rawx-even;1,rawx-odd
 [pool:rawx2]
 # As with rawxevenodd, but with permissive fallback on any rawx
 targets=1,rawx-even,rawx;1,rawx-odd,rawx
+warn_dist=${WARN_DIST}
 
 [pool:rawx3]
 # Try to pick one "even" and one "odd" rawx, and a generic one
 targets=1,rawx-even,rawx;1,rawx-odd,rawx;1,rawx
+warn_dist=${WARN_DIST}
 
 [pool:zonedrawx3]
 # Pick one rawx in Europe, one in USA, one in Asia, or anywhere if none available
@@ -795,6 +797,9 @@ pipeline = content_cleaner
 # pipeline = content_cleaner replication
 pipeline = content_cleaner
 
+[handler:storage.content.perfectible]
+pipeline = logger content_improve
+
 [handler:storage.container.new]
 pipeline = account_update
 
@@ -816,6 +821,11 @@ pipeline = account_update
 [filter:content_cleaner]
 use = egg:oio#content_cleaner
 key_file = ${KEY_FILE}
+
+[filter:content_improve]
+use = egg:oio#notify
+tube = oio-improve
+queue_url = ${QUEUE_URL}
 
 [filter:content_rebuild]
 use = egg:oio#notify
@@ -1253,6 +1263,7 @@ def generate(options):
             tpl = Template(template_conscience_policies)
             f.write(tpl.safe_substitute(ENV))
         with open('{CFGDIR}/{NS}-service-pools.conf'.format(**ENV), 'w+') as f:
+            ENV['WARN_DIST'] = 1 if len(hosts) > 1 else 0
             tpl = Template(template_service_pools)
             f.write(tpl.safe_substitute(ENV))
         with open('{CFGDIR}/{NS}-service-types.conf'.format(**ENV), 'w+') as f:
