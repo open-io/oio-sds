@@ -50,6 +50,7 @@ struct oio_lb_selected_item_s
 	const gchar *final_slot;
 	guint16 expected_dist;
 	guint16 final_dist;
+	guint16 warn_dist;
 };
 
 /* Signature for callbacks from `oio_lb_pool__poll` or `oio_lb_pool__patch`.

@@ -509,12 +509,19 @@ _compare_stored_items_by_location (const void *k0, const void *k)
 	return CMP(v0,v);
 }
 
+static inline guint16
+_dist_to_bit_shift(guint16 dist, gboolean nearby_mode)
+{
+	return (dist - (!nearby_mode)) * OIO_LB_BITS_PER_LOC_LEVEL;
+}
+
 static gboolean
 _item_is_too_close(const oio_location_t * avoids,
-		const oio_location_t item, const guint16 bit_shift)
+		const oio_location_t item, const guint16 distance)
 {
-	if (!avoids)
+	if (!avoids || distance == 0)
 		return FALSE;
+	const guint16 bit_shift = _dist_to_bit_shift(distance, FALSE);
 	const oio_location_t loc = item >> bit_shift;
 	for (const oio_location_t *pp=avoids; *pp; ++pp) {
 		if (loc == (*pp >> bit_shift))
@@ -525,16 +532,28 @@ _item_is_too_close(const oio_location_t * avoids,
 
 static gboolean
 _item_is_too_far(const oio_location_t *known,
-		const oio_location_t item, const guint16 bit_shift)
+		const oio_location_t item, const guint16 distance)
 {
-	if (!known)
+	if (!known || distance > OIO_LB_LOC_LEVELS)
 		return FALSE;
+	const guint16 bit_shift = _dist_to_bit_shift(distance, TRUE);
 	const oio_location_t loc = item >> bit_shift;
 	for (const oio_location_t *pp=known; *pp; ++pp) {
 		if (loc != (*pp >> bit_shift))
 			return TRUE;
 	}
 	return FALSE;
+}
+
+static guint16
+_find_min_dist(const oio_location_t *known,
+		const oio_location_t item)
+{
+	guint16 dist = OIO_LB_LOC_LEVELS;
+	while (_item_is_too_close(known, item, dist)) {
+		dist--;
+	}
+	return dist;
 }
 
 static gboolean
@@ -737,25 +756,25 @@ _search_closest_weight (GArray *tab, const guint32 needle,
 }
 
 static struct oio_lb_selected_item_s *
-_accept_item(struct oio_lb_slot_s *slot, const guint16 bit_shift,
+_accept_item(struct oio_lb_slot_s *slot, const guint16 distance,
 		gboolean reversed, struct polling_ctx_s *ctx, guint i)
 {
 	const struct _lb_item_s *item = _slot_get (slot, i);
 	const oio_location_t loc = item->location;
 	// Check the item is not in "avoids" list
-	if (_item_is_too_close(ctx->avoids, loc, 0))
+	if (_item_is_too_close(ctx->avoids, loc, 1))
 		return NULL;
 	if (reversed) {
 		// Check the item is not too far from already polled items
-		if (_item_is_too_far(ctx->polled, loc, bit_shift))
+		if (_item_is_too_far(ctx->polled, loc, distance))
 			return NULL;
 		// Check item has not been already polled
-		if (_item_is_too_close(ctx->polled, loc, 0))
+		if (_item_is_too_close(ctx->polled, loc, 1))
 			return NULL;
 	} else {
 		// Check the item is not too close to already polled items
 		if (_item_is_too_close(ctx->polled, loc,
-				ctx->check_distance? bit_shift : 0))
+				ctx->check_distance? distance : 1))
 			return NULL;
 		// Check the item has not been chosen too much already
 		if (ctx->check_popularity && _item_is_too_popular(ctx, loc, slot))
@@ -763,11 +782,21 @@ _accept_item(struct oio_lb_slot_s *slot, const guint16 bit_shift,
 	}
 	GRID_TRACE("Accepting item %s (0x%"OIO_LOC_FORMAT") from slot %s",
 			item->id, loc, slot->name);
+
+	struct oio_lb_selected_item_s *selected = _item_select(item);
+	/* In case we do not enforce the distance check, we still need to find
+	 * the lowest distance reached, for hypothetical future improvement. */
+	if (ctx->check_distance) {
+		selected->final_dist = distance;
+	} else {
+		selected->final_dist = _find_min_dist(ctx->polled,
+				selected->item->location);
+	}
+
 	*(ctx->next_polled) = loc;
 
 	_level_datalist_incr_loc(ctx->counters, loc);
 
-	struct oio_lb_selected_item_s *selected = _item_select(item);
 	return selected;
 }
 
@@ -777,7 +806,7 @@ _accept_item(struct oio_lb_slot_s *slot, const guint16 bit_shift,
  * The purpose of the shuffled lookup is to jump to an item with
  * a distant location. */
 static struct oio_lb_selected_item_s *
-_local_slot__poll(struct oio_lb_slot_s *slot, const guint16 bit_shift,
+_local_slot__poll(struct oio_lb_slot_s *slot, const guint16 distance,
 		gboolean reversed, struct polling_ctx_s *ctx)
 {
 	if (unlikely(_slot_needs_rehash(slot)))
@@ -785,9 +814,9 @@ _local_slot__poll(struct oio_lb_slot_s *slot, const guint16 bit_shift,
 
 	GRID_TRACE2(
 			"%s slot=%s sum=%"G_GUINT32_FORMAT
-			" items=%d shift=%"G_GUINT16_FORMAT,
+			" items=%d dist=%"G_GUINT16_FORMAT,
 			__FUNCTION__, slot->name, slot->sum_weight, slot->items->len,
-			bit_shift);
+			distance);
 
 	if (slot->items->len == 0) {
 		GRID_TRACE2("%s slot empty", __FUNCTION__);
@@ -804,9 +833,8 @@ _local_slot__poll(struct oio_lb_slot_s *slot, const guint16 bit_shift,
 	 * XXX: here we compare the overall number of targets to the number
 	 * of different locations IN THE CURRENT SLOT. We bet that in most
 	 * pools there will be only one targetted slot. */
-	if (!reversed && ctx->check_distance &&
-			bit_shift >= OIO_LB_BITS_PER_LOC_LEVEL) {
-		guint16 level = bit_shift / OIO_LB_BITS_PER_LOC_LEVEL;
+	if (!reversed && ctx->check_distance && distance > 1) {
+		guint16 level = distance - 1;
 		if (ctx->n_targets > slot->locs_by_level[level]) {
 			GRID_TRACE("%u targets and %u locations at level %u: "
 					"disabling distance check",
@@ -828,7 +856,7 @@ _local_slot__poll(struct oio_lb_slot_s *slot, const guint16 bit_shift,
 	struct oio_lb_selected_item_s *selected = NULL;
 	while (iter++ < slot->items->len) {
 		if ((selected =
-				_accept_item(slot, bit_shift, reversed, ctx, i))) {
+				_accept_item(slot, distance, reversed, ctx, i))) {
 			return selected;
 		}
 		i = (i + slot->jump) % slot->items->len;
@@ -840,10 +868,10 @@ _local_slot__poll(struct oio_lb_slot_s *slot, const guint16 bit_shift,
 
 static struct oio_lb_selected_item_s *
 _local_target__poll(struct oio_lb_pool_LOCAL_s *lb,
-		const char *target, guint16 bit_shift, struct polling_ctx_s *ctx)
+		const char *target, guint16 distance, struct polling_ctx_s *ctx)
 {
-	GRID_TRACE2("%s pool=%s shift=%d target=%s",
-			__FUNCTION__, lb->name, bit_shift, target);
+	GRID_TRACE2("%s pool=%s dist=%u target=%s",
+			__FUNCTION__, lb->name, distance, target);
 	gboolean fallback = FALSE;
 	struct oio_lb_selected_item_s *selected = NULL;
 
@@ -858,7 +886,7 @@ _local_target__poll(struct oio_lb_pool_LOCAL_s *lb,
 		if (!slot) {
 			GRID_DEBUG ("Slot [%s] not ready", name);
 		} else if ((selected =
-				_local_slot__poll(slot, bit_shift, lb->nearby_mode, ctx))) {
+				_local_slot__poll(slot, distance, lb->nearby_mode, ctx))) {
 			selected->expected_slot = g_strdup(target);
 			selected->final_slot = g_strdup(name);
 			break;
@@ -938,12 +966,6 @@ _local_target__is_satisfied(struct oio_lb_pool_LOCAL_s *lb,
 	return NULL;
 }
 
-static inline guint16
-_dist_to_bit_shift(guint16 dist, gboolean nearby_mode)
-{
-	return (dist - (!nearby_mode)) * OIO_LB_BITS_PER_LOC_LEVEL;
-}
-
 static GError*
 _local__patch(struct oio_lb_pool_s *self,
 		const oio_location_t *avoids, const oio_location_t *known,
@@ -1005,8 +1027,7 @@ _local__patch(struct oio_lb_pool_s *self,
 		selected = _local_target__is_satisfied(lb, *ptarget, &ctx);
 		guint16 dist;
 		for (dist = start_dist; !selected && dist != end_dist; dist += incr) {
-			selected = _local_target__poll(lb, *ptarget,
-					_dist_to_bit_shift(dist, lb->nearby_mode), &ctx);
+			selected = _local_target__poll(lb, *ptarget, dist, &ctx);
 		}
 		dist -= incr;
 		if ((lb->nearby_mode && dist > reached_dist) ||
@@ -1014,7 +1035,7 @@ _local__patch(struct oio_lb_pool_s *self,
 			reached_dist = dist;
 		if (selected) {
 			selected->expected_dist = start_dist;
-			selected->final_dist = dist;
+			selected->warn_dist = lb->warn_dist;
 		} else {
 			/* the strings are '\0' separated, printf won't display them */
 			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "no service polled "
@@ -1044,10 +1065,10 @@ _local__patch(struct oio_lb_pool_s *self,
 		void _display_selected(gpointer element, gpointer udata UNUSED) {
 			struct oio_lb_selected_item_s *sel = element;
 			GRID_DEBUG("Selected %s at loc %016"G_GINT64_MODIFIER
-					"X, dist: %u/%u, slot: %s/%s",
+					"X, dist: %u/%u/%u, slot: %s/%s",
 					sel->item? sel->item->id : "known service",
 					sel->item? sel->item->location : polled[i],
-					sel->final_dist, sel->expected_dist,
+					sel->final_dist, sel->warn_dist, sel->expected_dist,
 					sel->final_slot, sel->expected_slot);
 			i++;
 		}

@@ -281,12 +281,13 @@ meta2_json_fill_item_quality(struct json_object *jqual,
 {
 	EXTRA_ASSERT(item != NULL);
 
-	struct json_object *jedist = NULL, *jfdist = NULL,
+	struct json_object *jedist = NULL, *jfdist = NULL, *jwdist = NULL,
 			*jeslot = NULL, *jfslot = NULL;
 
 	struct oio_ext_json_mapping_s jmap[] = {
 		{"expected_dist", &jedist, json_type_int,    TRUE},
 		{"final_dist",    &jfdist, json_type_int,    TRUE},
+		{"warn_dist",     &jwdist, json_type_int,    TRUE},
 		{"expected_slot", &jeslot, json_type_string, TRUE},
 		{"final_slot",    &jfslot, json_type_string, TRUE},
 		{NULL, NULL, json_type_null, FALSE}
@@ -296,6 +297,7 @@ meta2_json_fill_item_quality(struct json_object *jqual,
 	if (!err) {
 		item->expected_dist = json_object_get_int(jedist);
 		item->final_dist = json_object_get_int(jfdist);
+		item->warn_dist = json_object_get_int(jwdist);
 		item->expected_slot = g_strdup(json_object_get_string(jeslot));
 		item->final_slot = g_strdup(json_object_get_string(jfslot));
 	}
