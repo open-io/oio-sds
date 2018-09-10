@@ -560,7 +560,7 @@ Used by `gcc`
 
 ### proxy.cache.enabled
 
-> In a proxy, sets if any form of caching is allowed
+> In a proxy, sets if any form of caching is allowed. Supersedes the value of resolver.cache.enabled.
 
  * default: **TRUE**
  * type: gboolean
@@ -814,7 +814,7 @@ Used by `gcc`
 
 > Allows the resolver instances to cache entries
 
- * default: **TRUE**
+ * default: **FALSE**
  * type: gboolean
  * cmake directive: *OIO_RESOLVER_CACHE_ENABLED*
 
