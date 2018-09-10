@@ -19,7 +19,8 @@
 import argparse
 import sys
 
-from oio.rebuilder.blob_rebuilder import BlobRebuilder, DEFAULT_REBUILDER_TUBE
+from oio.rebuilder.blob_rebuilder import DEFAULT_REBUILDER_TUBE, \
+    BlobRebuilder, DistributedBlobRebuilder
 from oio.common.logger import get_logger
 
 
@@ -72,14 +73,30 @@ tube for broken chunks events.
                  "'container_id|content_id|short_chunk_id_or_position'."
     parser.add_argument('--input-file', nargs='?',
                         help=ifile_help)
-    beanstalk_help = "Listen to broken chunks events from a beanstalkd tube " \
-                     "instead of querying rdir."
+    beanstalkd_help = "Listen to broken chunks events from a beanstalkd tube " \
+                      "instead of querying rdir. If --distributed is in use, " \
+                      "listen to rebuilt chunk events from a beanstalkd tube."
     parser.add_argument('--beanstalkd',
                         metavar='IP:PORT',
-                        help=beanstalk_help)
+                        help=beanstalkd_help)
     parser.add_argument(
         '--beanstalkd-tube',
-        help='The beanstalk tube to use (default: "oio-rebuild")')
+        metavar='LISTENER_TUBE',
+        help='The beanstalkd tube to use to listen (default: "%s")' \
+            % DEFAULT_REBUILDER_TUBE)
+    distributed_help = "Send broken chunks to beanstalkd tubes " \
+                       "instead of rebuilding them locally " \
+                       "(the following options are ignored: " \
+                       "--dry-run, --workers, --chunks-per-second, " \
+                       "--allow-same-rawx, --delete-faulty-chunks)"
+    parser.add_argument('--distributed',
+                        metavar='IP:PORT;IP:PORT;...',
+                        help=distributed_help)
+    parser.add_argument(
+        '--distributed-tube',
+        metavar='SENDER_TUBE',
+        help='The beanstalkd tube to use to send the broken chunks (default: "%s")' \
+            % DEFAULT_REBUILDER_TUBE)
 
     return parser
 
@@ -114,6 +131,8 @@ def main():
 
     if args.beanstalkd_tube is not None:
         conf['beanstalkd_tube'] = args.beanstalkd_tube
+    if args.distributed_tube is not None:
+        conf['distributed_tube'] = args.distributed_tube
     if args.rdir_fetch_limit is not None:
         conf['rdir_fetch_limit'] = args.rdir_fetch_limit
     if args.report_interval is not None:
@@ -125,10 +144,18 @@ def main():
 
     success = False
     try:
-        blob_rebuilder = BlobRebuilder(
-            conf, logger, args.volume, input_file=args.input_file,
-            try_chunk_delete=args.delete_faulty_chunks,
-            beanstalkd_addr=args.beanstalkd)
+        if args.distributed:
+            blob_rebuilder = DistributedBlobRebuilder(
+                conf, logger, args.volume, args.distributed,
+                beanstalkd_addr=args.beanstalkd,
+                input_file=args.input_file,
+                try_chunk_delete=args.delete_faulty_chunks)
+        else:
+            blob_rebuilder = BlobRebuilder(
+                conf, logger, args.volume,
+                beanstalkd_addr=args.beanstalkd,
+                input_file=args.input_file,
+                try_chunk_delete=args.delete_faulty_chunks)
         success = blob_rebuilder.rebuilder_pass()
     except KeyboardInterrupt:
         logger.info('Exiting')
