@@ -803,10 +803,10 @@ pipeline = content_cleaner
 pipeline = logger content_improve
 
 [handler:storage.container.new]
-pipeline = account_update
+pipeline = meta2_index account_update
 
 [handler:storage.container.deleted]
-pipeline = account_update
+pipeline = meta2_index account_update
 
 [handler:storage.container.state]
 pipeline = account_update
@@ -842,6 +842,9 @@ use = egg:oio#volume_index
 
 [filter:webhook]
 use = egg:oio#webhook
+
+[filter:meta2_index]
+use = egg:oio#meta2_index
 
 [filter:replication]
 use = egg:oio#notify
@@ -1215,7 +1218,7 @@ def generate(options):
         return env
 
     ENV['MONITOR_PERIOD'] = getint(
-            options.get(MONITOR_PERIOD), defaults[MONITOR_PERIOD])
+        options.get(MONITOR_PERIOD), defaults[MONITOR_PERIOD])
     if options.get(ZOOKEEPER):
         ENV['NOZK'] = ''
     else:
@@ -1316,8 +1319,8 @@ def generate(options):
                     f.write("%s=%s\n" % (key, env[key]))
 
         beanstalkd_cnxstring = ';'.join(
-                "beanstalk://" + str(h) + ":" + str(p)
-                for _, h, p in all_beanstalkd)
+            "beanstalk://" + str(h) + ":" + str(p)
+            for _, h, p in all_beanstalkd)
         ENV.update({'BEANSTALKD_CNXSTRING': beanstalkd_cnxstring,
                     'NOBS': ''})
     else:
@@ -1715,3 +1718,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

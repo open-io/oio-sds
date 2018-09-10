@@ -1916,6 +1916,7 @@ _meta2_db_push(const char *meta2_address, gboolean autocreate, GString * key,
 {
 	GError *err = NULL;
 	gchar *filename = NULL;
+	autocreate = TRUE;
 	err = _meta2_db_address_to_filename(meta2_address, &filename);
 	if(!err){
 		err = _db_insert_generic(meta2_db_tree, &meta2_db_lock, &meta2_db_cond,

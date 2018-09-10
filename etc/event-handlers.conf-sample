@@ -15,10 +15,10 @@ pipeline = content_cleaner
 pipeline = content_improve
 
 [handler:storage.container.new]
-pipeline = account_update
+pipeline = account_update meta2_index
 
 [handler:storage.container.deleted]
-pipeline = account_update
+pipeline = account_update meta2_index
 
 [handler:storage.container.state]
 pipeline = account_update
@@ -40,6 +40,9 @@ use = egg:oio#account_update
 
 [filter:volume_index]
 use = egg:oio#volume_index
+
+[filter:meta2_index]
+use = egg:oio#meta2_index
 
 [filter:noop]
 use = egg:oio#noop
