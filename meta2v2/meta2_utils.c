@@ -1949,6 +1949,9 @@ _selected_item_quality_to_json(GString *inout,
 	oio_str_gstring_append_json_pair_int(qual,
 			"final_dist", sel->final_dist);
 	g_string_append_c(qual, ',');
+	oio_str_gstring_append_json_pair_int(qual,
+			"warn_dist", sel->warn_dist);
+	g_string_append_c(qual, ',');
 	oio_str_gstring_append_json_pair(qual,
 			"expected_slot", sel->expected_slot);
 	g_string_append_c(qual, ',');
@@ -2347,7 +2350,7 @@ m2db_check_content_quality(struct m2v2_sorted_content_s *sorted_content,
 				oio_str_gstring_append_json_quote(out, "quality");
 				g_string_append_c(out, ':');
 				_selected_item_quality_to_json(out, item);
-				if (item->final_dist < item->expected_dist ||
+				if (item->final_dist <= item->warn_dist ||
 						strcmp(item->final_slot, item->expected_slot)) {
 					must_send_event = TRUE;
 				}
