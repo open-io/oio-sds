@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 
-NAMESPACE=$($(which oio-test-config.py) -n)
-WORKERS=10
 CLI=$(which openio)
+CONFIG=$(which oio-test-config.py)
+NAMESPACE=$($CONFIG -n)
+WORKERS=10
 
 SVCID_ENABLED=$(openio cluster list rawx -c 'Service Id' -f value | grep -v 'n/a')
 GRIDINIT="gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock"
@@ -38,7 +39,7 @@ while getopts ":n:w:p:" opt; do
   esac
 done
 
-PROXY=$($(which oio-test-config.py) -t proxy -1)
+PROXY=$($CONFIG -t proxy -1)
 
 FAIL=false
 
@@ -328,10 +329,44 @@ oio_blob_rebuilder()
   update_timeout 1
   set +e
 
+  COMMON_OPTIONS=( --workers "${WORKERS}" --allow-same-rawx )
+  MAIN_OPTIONS=("${COMMON_OPTIONS[@]}")
+
+  BEANSTALKD=$($CONFIG -t beanstalkd)
+  MULTIBEANSTALKD=$(test $(echo "${BEANSTALKD}" | wc -l) -gt 1 && echo "true" || echo "false")
+  if "${MULTIBEANSTALKD}" = true; then
+    DISTRIBUTED=""
+    SLAVE_REBUILDERS=()
+
+    OLD_IFS=$IFS
+    IFS=$'\n'
+    for BEANSTALKD_URL in $(echo "${BEANSTALKD}"); do
+      DISTRIBUTED="${DISTRIBUTED};${BEANSTALKD_URL}"
+      $(which oio-blob-rebuilder) "${COMMON_OPTIONS[@]}" \
+          --beanstalkd "${BEANSTALKD_URL}" "${NAMESPACE}" 2> /dev/null &
+      SLAVE_REBUILDERS+=($!)
+    done
+    IFS=$OLD_IFS
+
+    DISTRIBUTED=$(echo "${DISTRIBUTED}" | cut -c 2-)
+    MAIN_OPTIONS=( --distributed "${DISTRIBUTED}" \
+        --beanstalkd "$(echo "${BEANSTALKD}" | head -n 1)" \
+        --beanstalkd-tube oio-rebuilt )
+  fi
+
   echo >&2 "Start the rebuilding for the rawx ${RAWX_ID_TO_REBUILD}"
-  if ! $(which oio-blob-rebuilder) --volume "${RAWX_ID_TO_REBUILD}" \
-      --workers "${WORKERS}" --allow-same-rawx "${NAMESPACE}"; then
+  if ! $(which oio-blob-rebuilder) "${MAIN_OPTIONS[@]}" \
+      --volume "${RAWX_ID_TO_REBUILD}" "${NAMESPACE}"; then
     FAIL=true
+  fi
+
+  if "${MULTIBEANSTALKD}" = true; then
+    OLD_IFS=$IFS
+    IFS=$'\n'
+    for REBUILDER_PID in "${SLAVE_REBUILDERS[@]}"; do
+      kill "${REBUILDER_PID}"
+    done
+    IFS=$OLD_IFS
   fi
 
   set -e
