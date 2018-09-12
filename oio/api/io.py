@@ -41,6 +41,7 @@ PUT_QUEUE_DEPTH = 10
 
 
 def close_source(source):
+    """Safely close the connection behind `source`."""
     try:
         source.conn.close()
     except Exception:
