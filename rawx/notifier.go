@@ -22,8 +22,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/kr/beanstalk"
 )
 
 type eventData struct {
@@ -41,19 +39,14 @@ type eventInfo struct {
 }
 
 type Notifier interface {
-	start()
-	stop()
+	Start()
+	Stop()
 	asyncNotify(eventType, requestID string, chunk *chunkInfo)
 }
 
 const (
 	eventTypeNewChunk = "storage.chunk.new"
 	eventTypeDelChunk = "storage.chunk.deleted"
-)
-
-const (
-	defaultPriority = 1 << 31
-	defaultTTR      = 120
 )
 
 const (
@@ -65,11 +58,13 @@ var (
 )
 
 type beanstalkNotifier struct {
-	rawx     *rawxService
-	wg       sync.WaitGroup
-	queue    chan []byte
-	endpoint string
-	tube     string
+	rawx       *rawxService
+	run        bool
+	wg         sync.WaitGroup
+	queue      chan []byte
+	endpoint   string
+	tube       string
+	beanstalkd *Beanstalkd
 }
 
 func makeBeanstalkNotifier(endpoint string,
@@ -77,42 +72,65 @@ func makeBeanstalkNotifier(endpoint string,
 	// TODO(adu) Use connection pool
 	notifier := new(beanstalkNotifier)
 	notifier.rawx = rawx
-	notifier.queue = make(chan []byte, 1024)
+	notifier.run = false
+	notifier.queue = make(chan []byte)
 	notifier.endpoint = endpoint
 	notifier.tube = beanstalkNotifierDefaultTube
 	// TODO(adu) Check endpoint
+	notifier.beanstalkd = nil
 	return notifier, nil
 }
 
-func (notifier *beanstalkNotifier) start() {
-	// A single notifier by goroutine.
-	notifier.wg.Wait()
-
+func (notifier *beanstalkNotifier) Start() {
 	notifier.wg.Add(1)
 	go func() {
 		defer notifier.wg.Done()
 		for eventJSON := range notifier.queue {
-			if err := notifier.syncNotify(eventJSON); err != nil {
-				LogWarning("Notify error: %s", err)
-			}
+			notifier.syncNotify(eventJSON)
 		}
 	}()
+	notifier.run = true
 }
 
-func (notifier *beanstalkNotifier) stop() {
+func (notifier *beanstalkNotifier) Stop() {
+	notifier.run = false
 	close(notifier.queue)
 	notifier.wg.Wait()
+	notifier.closeBeanstalkd()
 }
 
-func (notifier *beanstalkNotifier) syncNotify(eventJSON []byte) error {
-	conn, err := beanstalk.Dial("tcp", notifier.endpoint)
+func (notifier *beanstalkNotifier) connectBeanstalkd() error {
+	if notifier.beanstalkd != nil {
+		return nil
+	}
+	LogDebug("Connecting to %s using tube %s", notifier.endpoint, notifier.tube)
+	beanstalkd, err := DialBeanstalkd(notifier.endpoint)
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
-	tube := beanstalk.Tube{Conn: conn, Name: notifier.tube}
-	_, err = tube.Put(eventJSON, defaultPriority, 0, defaultTTR)
-	return err
+	notifier.beanstalkd = beanstalkd
+	return nil
+}
+
+func (notifier *beanstalkNotifier) closeBeanstalkd() {
+	notifier.beanstalkd.Close()
+	notifier.beanstalkd = nil
+}
+
+func (notifier *beanstalkNotifier) syncNotify(eventJSON []byte) {
+	err := notifier.connectBeanstalkd()
+	if err != nil {
+		LogWarning("ERROR to connect to %s using tube %s: %s",
+			notifier.endpoint, notifier.tube, err)
+		return
+	}
+	_, err = notifier.beanstalkd.Put(eventJSON)
+	if err != nil {
+		LogWarning("ERROR to notify to %s using tube %s: %s",
+			notifier.endpoint, notifier.tube, err)
+		notifier.closeBeanstalkd()
+		return
+	}
 }
 
 func (notifier *beanstalkNotifier) asyncNotify(eventType, requestID string,
@@ -127,6 +145,11 @@ func (notifier *beanstalkNotifier) asyncNotify(eventType, requestID string,
 			chunkInfo:  *chunk,
 		},
 	})
+	if !notifier.run {
+		LogWarning("Can't send a event to %s using tube %s: closed",
+			notifier.endpoint, notifier.tube)
+		return
+	}
 	notifier.queue <- eventJSON
 }
 
@@ -148,15 +171,15 @@ func makeMultiNotifier(config string, rawx *rawxService) (*multiNotifier, error)
 	return notifier, nil
 }
 
-func (notifier *multiNotifier) start() {
+func (notifier *multiNotifier) Start() {
 	for _, notif := range notifier.notifiers {
-		notif.start()
+		notif.Start()
 	}
 }
 
-func (notifier *multiNotifier) stop() {
+func (notifier *multiNotifier) Stop() {
 	for _, notif := range notifier.notifiers {
-		notif.stop()
+		notif.Stop()
 	}
 }
 

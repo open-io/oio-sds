@@ -170,11 +170,11 @@ func main() {
 		log.Fatal("Notifier error: ", err)
 	}
 	rawx.notifier = notifier
-	rawx.notifier.start()
+	rawx.notifier.Start()
 
 	if err = graceful.RunWithErr(rawx.url, 0, &rawx); err != nil {
 		log.Fatal("HTTP error: ", err)
 	}
 
-	rawx.notifier.stop()
+	rawx.notifier.Stop()
 }
