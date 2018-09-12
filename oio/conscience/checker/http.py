@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from oio.common import exceptions as exc
+from oio.common.http_urllib3 import urllibexc
 from oio.conscience.checker.base import BaseChecker
 
 
@@ -37,6 +38,8 @@ class HttpChecker(BaseChecker):
         success = False
         resp = None
         try:
+            # We have clues that the connection will be reused quickly to get
+            # stats, thus we do not explicitely require its closure.
             resp = self.agent.pool_manager.request("GET", self.url)
             if resp.status == 200:
                 success = True
@@ -48,8 +51,8 @@ class HttpChecker(BaseChecker):
         finally:
             if resp:
                 try:
-                    resp.force_close()
-                except Exception:
+                    resp.close()
+                except urllibexc.HTTPError:
                     pass
             if not success:
                 self.logger.warn('%s check failed', self.name)

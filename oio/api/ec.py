@@ -809,6 +809,27 @@ class EcMetachunkWriter(io.MetachunkWriter):
             chunk['error'] = 'connect: %s' % msg
             return None, chunk
 
+    def _dispatch_response(self, writer, resp, success_chunks, failed_chunks):
+        if resp:
+            if resp.status == 201:
+                checksum = resp.getheader(CHUNK_HEADERS['chunk_hash'])
+                if checksum and writer.checksum and \
+                        checksum.lower() != writer.checksum.hexdigest():
+                    writer.chunk['error'] = \
+                        "checksum mismatch: %s (local), %s (rawx)" % \
+                        (checksum.lower(), writer.checksum.hexdigest())
+                    failed_chunks.append(writer.chunk)
+                else:
+                    success_chunks.append(writer.chunk)
+            else:
+                logger.error("Wrong status code from %s (%s) %s",
+                             writer.chunk, resp.status, resp.reason)
+                writer.chunk['error'] = 'resp: HTTP %s' % resp.status
+                failed_chunks.append(writer.chunk)
+        else:
+            failed_chunks.append(writer.chunk)
+        io.close_source(writer)
+
     def _get_results(self, writers):
         # get the results from writers
         success_chunks = []
@@ -823,28 +844,9 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 continue
             pile.spawn(self._get_response, writer)
 
-        def _handle_resp(writer, resp):
-            if resp:
-                if resp.status == 201:
-                    checksum = resp.getheader(CHUNK_HEADERS['chunk_hash'])
-                    if checksum and writer.checksum and \
-                            checksum.lower() != writer.checksum.hexdigest():
-                        writer.chunk['error'] = \
-                            "checksum mismatch: %s (local), %s (rawx)" % \
-                            (checksum.lower(), writer.checksum.hexdigest())
-                        failed_chunks.append(writer.chunk)
-                    else:
-                        success_chunks.append(writer.chunk)
-                else:
-                    logger.error("Wrong status code from %s (%s) %s",
-                                 writer.chunk, resp.status, resp.reason)
-                    writer.chunk['error'] = 'resp: HTTP %s' % resp.status
-                    failed_chunks.append(writer.chunk)
-            else:
-                failed_chunks.append(writer.chunk)
-
         for (writer, resp) in pile:
-            _handle_resp(writer, resp)
+            self._dispatch_response(writer, resp,
+                                    success_chunks, failed_chunks)
 
         self.quorum_or_fail(success_chunks, failed_chunks)
 
