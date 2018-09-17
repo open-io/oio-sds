@@ -169,10 +169,6 @@ func (rr *rawxRequest) uploadChunk() {
 		}
 	}
 
-	if err == nil {
-		NotifyNew(rr.rawx.notifier, rr.reqid, &rr.chunk)
-	}
-
 	// Then reply
 	if err != nil {
 		rr.replyError(err)
@@ -180,6 +176,7 @@ func (rr *rawxRequest) uploadChunk() {
 		// Discard request body
 		io.Copy(ioutil.Discard, rr.req.Body)
 	} else {
+		NotifyNew(rr.rawx.notifier, rr.reqid, &rr.chunk)
 		out.Commit()
 		rr.rep.Header().Set("chunkhash", ul.hash)
 		rr.replyCode(http.StatusCreated)
@@ -365,9 +362,28 @@ func (rr *rawxRequest) downloadChunk() {
 }
 
 func (rr *rawxRequest) removeChunk() {
-	if err := rr.rawx.repo.Del(rr.chunkID); err != nil {
+	in, err := rr.rawx.repo.Get(rr.chunkID)
+	if in != nil {
+		defer in.Close()
+	}
+	if err != nil {
+		rr.replyError(err)
+		return
+	}
+
+	err = rr.chunk.loadAttr(in, rr.chunkID)
+	if err != nil {
+		LogError("Load attr error: %s", err)
+		rr.replyError(err)
+		return
+	}
+
+	err = rr.rawx.repo.Del(rr.chunkID)
+
+	if err != nil {
 		rr.replyError(err)
 	} else {
+		NotifyDel(rr.rawx.notifier, rr.reqid, &rr.chunk)
 		rr.replyCode(http.StatusNoContent)
 	}
 }
