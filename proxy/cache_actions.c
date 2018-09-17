@@ -25,11 +25,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 enum http_rc_e
 action_forward_stats (struct req_args_s *args)
 {
+	args->rp->no_access();
+
 	const char *id = OPT("id");
 	if (!id)
 		return _reply_format_error (args, BADREQ("Missing SRVID"));
-
-	args->rp->no_access();
 
 	MESSAGE req = metautils_message_create_named("REQ_STATS",
 			oio_clamp_deadline(proxy_timeout_stat, oio_ext_get_deadline()));
@@ -80,6 +80,8 @@ action_cache_flush_high (struct req_args_s *args)
 enum http_rc_e
 action_cache_status (struct req_args_s *args)
 {
+	args->rp->no_access();
+
 	struct hc_resolver_stats_s s = {{0}};
 	hc_resolver_info (resolver, &s);
 
@@ -98,6 +100,8 @@ action_cache_status (struct req_args_s *args)
 enum http_rc_e
 action_cache_show (struct req_args_s *args)
 {
+	args->rp->no_access();
+
 	GString *gstr = g_string_sized_new (256);
 
 	void _on_item(const char *id, const char *addr, void *user UNUSED) {
@@ -120,12 +124,15 @@ enum http_rc_e
 action_get_config (struct req_args_s *args)
 {
 	args->rp->no_access();
+
 	return _reply_success_json (args, oio_var_list_as_json());
 }
 
 static enum http_rc_e
 _set_config (struct req_args_s *args, struct json_object *jargs)
 {
+	args->rp->no_access();
+
 	if (!json_object_is_type(jargs, json_type_object))
 		return _reply_format_error (args, BADREQ("Object argument expected"));
 	if (json_object_object_length(jargs) <= 0)
