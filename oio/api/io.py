@@ -495,16 +495,11 @@ class ChunkReader(object):
                     yield result
             except StopIteration:
                 pass
-            finally:
-                if body_iter:
-                    body_iter.close()
 
         except green.ChunkReadTimeout:
             logger.exception("Failure during chunk read (reqid=%s)",
                              self.reqid)
             raise
-        except GeneratorExit:
-            pass
         except Exception:
             logger.exception("Failure during read")
             raise
