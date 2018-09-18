@@ -163,7 +163,8 @@ class RegexContainerBuilder(object):
         for pattern in self.patterns:
             match = pattern.search(path)
             if match:
-                return self.builder(''.join(match.groups()))
+                return self.builder(''.join([x for x in match.groups()
+                                             if x is not None]))
         raise NoMatchFound(
             "'%s' does not match any configured patterns" % path)
 
@@ -176,7 +177,8 @@ class RegexContainerBuilder(object):
         for pattern in self.patterns:
             match = pattern.search(path)
             if match:
-                yield self.builder(''.join(match.groups()))
+                yield self.builder(''.join([x for x in match.groups()
+                                            if x is not None]))
         raise StopIteration
 
     def verify(self, name):
