@@ -21,6 +21,7 @@ from oio.event.filters.base import Filter
 
 
 class NotifyFilter(Filter):
+
     def init(self):
         queue_url = self.conf.get('queue_url')
         if not queue_url:

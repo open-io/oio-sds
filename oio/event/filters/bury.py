@@ -21,9 +21,6 @@ from oio.common.exceptions import ExplicitBury
 class BuryFilter(Filter):
     """Bury all events"""
 
-    def init(self):
-        pass
-
     def process(self, env, cb):
         raise ExplicitBury()
 

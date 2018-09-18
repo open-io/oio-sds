@@ -28,8 +28,7 @@ from oio.common.utils import request_id
 class ContentReaperFilter(Filter):
     """Filter that deletes chunks on content deletion events"""
 
-    def __init__(self, *args, **kwargs):
-        super(ContentReaperFilter, self).__init__(*args, **kwargs)
+    def init(self):
         self.handlers = {
                 "plain": self._handle_rawx,
                 "ec": self._handle_rawx,
