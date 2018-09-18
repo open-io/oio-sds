@@ -19,9 +19,6 @@ from oio.event.filters.base import Filter
 class LoggerFilter(Filter):
     """Log all events with 'info' level"""
 
-    def init(self):
-        pass
-
     def process(self, env, cb):
         self.logger.info("got event: %s", str(env))
         return self.app(env, cb)

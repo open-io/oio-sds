@@ -23,6 +23,7 @@ from oio.event.filters.base import Filter
 
 
 class WebhookFilter(Filter):
+
     def init(self):
         self.endpoint = self.conf.get('endpoint')
         # TODO configure pool manager
