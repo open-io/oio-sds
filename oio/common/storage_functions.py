@@ -229,7 +229,11 @@ def fetch_stream_ec(chunks, ranges, storage_method, **kwargs):
                 storage_method, chunks[pos],
                 meta_start, meta_end, **kwargs)
             stream = handler.get_stream()
-            for part_info in stream:
-                for dat in part_info['iter']:
-                    yield dat
-            stream.close()
+            try:
+                for part_info in stream:
+                    for dat in part_info['iter']:
+                        yield dat
+            finally:
+                # This must be done in a finally block to handle the case
+                # when the reader does not read until the end of the stream.
+                stream.close()
