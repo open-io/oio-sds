@@ -152,6 +152,7 @@ class Closeable(object):
             close_method = getattr(iterator, 'close', None)
             if close_method:
                 close_method()
+        self.iterables = None
 
 
 def chain(iterable):
