@@ -98,10 +98,21 @@ _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	if (!send_chunks) {
 		GSList *non_chunks = NULL;
 		for (GSList *l = beans; l; l = l->next) {
-			if (DESCR(l->data) != &descr_struct_CHUNKS)
+			if (DESCR(l->data) == &descr_struct_ALIASES) {
+				if (alias) {
+					GRID_WARN(
+						"Several aliases in same event:"
+						" selected=%s:%" G_GUINT64_FORMAT
+						" other=%s:%" G_GUINT64_FORMAT,
+						ALIASES_get_alias(alias)->str, ALIASES_get_version(alias),
+						ALIASES_get_alias(l->data)->str, ALIASES_get_version(l->data));
+				} else {
+					alias = l->data;
+				}
 				non_chunks = g_slist_prepend(non_chunks, l->data);
-			else if (DESCR(l->data) == &descr_struct_ALIASES)
-				alias = l->data;
+			} else if (DESCR(l->data) != &descr_struct_CHUNKS) {
+				non_chunks = g_slist_prepend(non_chunks, l->data);
+			}
 		}
 		load_url_from_alias();
 		forward(non_chunks);
@@ -121,13 +132,33 @@ _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		struct bean_CONTENTS_HEADERS_s *header = NULL;
 		for (GSList *l = beans; l; l = l->next) {
 			if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS) {
-				if (header)
-					GRID_WARN("Several content headers in same event!");
-				else
+				if (header) {
+					GString *selected_header = metautils_gba_to_hexgstr(NULL,
+						CONTENTS_HEADERS_get_id(header));
+					GString *other_header = metautils_gba_to_hexgstr(NULL,
+						CONTENTS_HEADERS_get_id(l->data));
+					GRID_WARN(
+						"Several content headers in same event:"
+						" selected=%s other=%s",
+						selected_header->str, other_header->str);
+					g_string_free(selected_header, TRUE);
+					g_string_free(other_header, TRUE);
+				} else {
 					header = l->data;
+				}
 				non_chunks = g_slist_prepend (non_chunks, l->data);
 			} else if (DESCR(l->data) == &descr_struct_ALIASES) {
-				alias = l->data;
+				if (alias) {
+					GRID_WARN(
+						"Several aliases in same event:"
+						" selected=%s:%" G_GUINT64_FORMAT
+						" other=%s:%" G_GUINT64_FORMAT,
+						ALIASES_get_alias(alias)->str, ALIASES_get_version(alias),
+						ALIASES_get_alias(l->data)->str, ALIASES_get_version(l->data));
+				} else {
+					alias = l->data;
+				}
+				non_chunks = g_slist_prepend (non_chunks, l->data);
 			} else if (&descr_struct_CHUNKS != DESCR(l->data)) {
 				non_chunks = g_slist_prepend (non_chunks, l->data);
 			}
