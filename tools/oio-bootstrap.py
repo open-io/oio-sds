@@ -776,6 +776,10 @@ template_event_agent_handlers = """
 # pipeline = replication
 pipeline = noop
 
+[handler:storage.content.update]
+# pipeline = webhook
+pipeline = noop
+
 [handler:storage.content.append]
 # pipeline = replication
 pipeline = noop
@@ -823,6 +827,9 @@ use = egg:oio#account_update
 
 [filter:volume_index]
 use = egg:oio#volume_index
+
+[filter:webhook]
+use = egg:oio#webhook
 
 [filter:replication]
 use = egg:oio#notify
