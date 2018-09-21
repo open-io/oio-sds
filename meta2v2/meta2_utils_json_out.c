@@ -79,7 +79,8 @@ encode_property (GString *g, gpointer bean)
 	g_string_append_c(g, ',');
 	OIO_JSON_append_gstr(g, "key", PROPERTIES_get_key(bean));
 	g_string_append_c(g, ',');
-	OIO_JSON_append_gba(g, "value", PROPERTIES_get_value(bean));
+	GByteArray *properties = PROPERTIES_get_value(bean);
+	OIO_JSON_append_blob(g, "value", (gchar*)properties->data, properties->len);
 }
 
 static void
