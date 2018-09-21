@@ -725,8 +725,10 @@ m2db_get_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 
 GError*
 m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
-		gboolean flush, GSList *beans, m2_onbean_cb cb, gpointer u0)
+		gboolean flush, GSList *beans, struct bean_ALIASES_s **out)
 {
+	EXTRA_ASSERT(out != NULL);
+
 	struct bean_ALIASES_s *alias = NULL;
 	GError *err = m2db_get_alias1(sq3, url, M2V2_FLAG_NOPROPS
 			|M2V2_FLAG_NORECURSION, &alias);
@@ -758,45 +760,50 @@ m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 			err = _db_delete_bean (sq3->db, prop);
 		} else {
 			err = _db_save_bean (sq3->db, prop);
-			if (!err && cb)
-				cb(u0, _bean_dup(prop));
 		}
 	}
 
-	_bean_clean(alias);
+	*out = alias;
 	return err;
 }
 
 GError*
-m2db_del_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url, gchar **namev)
+m2db_del_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
+		gchar **namev, struct bean_ALIASES_s **out)
 {
-	GError *err;
-	GPtrArray *tmp;
-
 	EXTRA_ASSERT(sq3 != NULL);
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(namev != NULL);
+	EXTRA_ASSERT(out != NULL);
 
-	tmp = g_ptr_array_new();
-	err = m2db_get_properties(sq3, url, _bean_buffer_cb, tmp);
+	struct bean_ALIASES_s *alias = NULL;
+	GPtrArray *tmp = g_ptr_array_new();
+	GError *err = m2db_get_properties(sq3, url, _bean_buffer_cb, tmp);
 	if (!err) {
-		for (guint i = 0; !err && i < tmp->len; ++i) {
+		for (guint i = 0; i < tmp->len; ++i) {
 			struct bean_PROPERTIES_s *bean = tmp->pdata[i];
-			if (DESCR(bean) != &descr_struct_PROPERTIES)
+			if (DESCR(bean) != &descr_struct_PROPERTIES) {
+				if (alias == NULL && DESCR(bean) == &descr_struct_ALIASES) {
+					alias = _bean_dup(bean);
+				}
 				continue;
+			}
 			if (namev && *namev) {
 				/* explicit properties to be deleted */
 				for (gchar **p = namev; *p; ++p) {
-					if (!strcmp(*p, PROPERTIES_get_key(bean)->str))
-						_db_delete_bean (sq3->db, bean);
+					if (!strcmp(*p, PROPERTIES_get_key(bean)->str)) {
+						_db_delete_bean(sq3->db, bean);
+						break;
+					}
 				}
 			} else {
 				/* all properties to be deleted */
-				_db_delete_bean (sq3->db, bean);
+				_db_delete_bean(sq3->db, bean);
 			}
 		}
 	}
 
+	*out = alias;
 	_bean_cleanv2(tmp);
 	return err;
 }

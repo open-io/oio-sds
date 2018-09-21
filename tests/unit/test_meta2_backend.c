@@ -734,6 +734,7 @@ test_content_put_prop_get(void)
 {
 	void test(struct meta2_backend_s *m2, struct oio_url_s *u, gint64 maxver) {
 		GSList *beans;
+		struct bean_ALIASES_s *alias = NULL;
 		guint expected;
 		GPtrArray *tmp;
 		GError *err;
@@ -754,9 +755,10 @@ test_content_put_prop_get(void)
 
 		/* set some properties */
 		beans = _props_generate(u, 1, 10);
-		err = meta2_backend_set_properties(m2, u, TRUE, beans, NULL, NULL);
+		err = meta2_backend_set_properties(m2, u, TRUE, beans, &alias);
 		g_assert_no_error(err);
 		_bean_cleanl2(beans);
+		_bean_clean(alias);
 
 		/* versioned or not, a container doesn't generate a new version of the
 		 * content when a property is set on it. */
@@ -1164,6 +1166,7 @@ test_props_gotchas()
 	void test(struct meta2_backend_s *m2, struct oio_url_s *u, gint64 maxver) {
 		GError *err;
 		GSList *beans;
+		struct bean_ALIASES_s *alias = NULL;
 		(void) maxver;
 
 		err = meta2_backend_get_properties(m2, u, 0, NULL, NULL);
@@ -1171,10 +1174,11 @@ test_props_gotchas()
 		g_clear_error(&err);
 
 		beans = _props_generate(u, 1, 10);
-		err = meta2_backend_set_properties(m2, u, FALSE, beans, NULL, NULL);
+		err = meta2_backend_set_properties(m2, u, FALSE, beans, &alias);
 		g_assert_error(err, GQ(), CODE_CONTENT_NOTFOUND);
 		g_clear_error(&err);
 		_bean_cleanl2(beans);
+		_bean_clean(alias);
 	}
 	_container_wraper_allversions("NS", test);
 }
@@ -1185,6 +1189,7 @@ test_props_set_simple()
 	void test(struct meta2_backend_s *m2, struct oio_url_s *u, gint64 maxver) {
 		GError *err;
 		GSList *beans;
+		struct bean_ALIASES_s *alias = NULL;
 		(void) maxver;
 
 		CLOCK_START = CLOCK = oio_ext_rand_int();
@@ -1202,10 +1207,11 @@ test_props_set_simple()
 		/* set it properties */
 		beans = _props_generate(u, 1, 10);
 		CLOCK ++;
-		err = meta2_backend_set_properties(m2, u, FALSE, beans, NULL, NULL);
+		err = meta2_backend_set_properties(m2, u, FALSE, beans, &alias);
 		CLOCK ++;
 		g_assert_no_error(err);
 		_bean_cleanl2(beans);
+		_bean_clean(alias);
 
 		CHECK_ALIAS_VERSION(m2,u,CLOCK_START);
 	}

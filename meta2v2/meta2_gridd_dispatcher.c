@@ -383,6 +383,7 @@ static gridd_filter M2V2_PROPSET_FILTERS[] =
 	meta2_filter_extract_body_beans,
 	meta2_filter_check_ns_is_master,
 	meta2_filter_action_set_content_properties,
+	meta2_filter_reply_success,
 	NULL
 };
 

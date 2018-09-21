@@ -172,12 +172,12 @@ GError* meta2_backend_get_properties(struct meta2_backend_s *m2b,
 		m2_onbean_cb cb, gpointer u0);
 
 GError* meta2_backend_del_properties(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, gchar **propv);
+		struct oio_url_s *url, gchar **propv, struct bean_ALIASES_s **out);
 
 /** Helper for testing purpose */
 GError* meta2_backend_set_properties(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gboolean flush, GSList *beans,
-		m2_onbean_cb cb, gpointer u0);
+		struct bean_ALIASES_s **out);
 
 /* Back-Links listing ------------------------------------------------------- */
 
