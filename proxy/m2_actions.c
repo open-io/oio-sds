@@ -437,6 +437,8 @@ _populate_headers_with_alias (struct req_args_s *args, struct bean_ALIASES_s *al
 			g_strdup(ALIASES_get_deleted(alias) ? "True" : "False"));
 	args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-ctime",
 			g_strdup_printf("%"G_GINT64_FORMAT, ALIASES_get_ctime(alias)));
+	args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-mtime",
+			g_strdup_printf("%"G_GINT64_FORMAT, ALIASES_get_mtime(alias)));
 }
 
 static gint32
