@@ -34,7 +34,7 @@ def extract_content_headers_meta(headers):
             short_key = key[len(CONTENT_HEADER_PREFIX):]
             # FIXME(FVE): this will fail when someone creates a property with
             # same name as one of our system metadata.
-            # content_prepare() and content_show() are safe but
+            # content_prepare() and content_get_properties() are safe but
             # content_locate() protocol has to send properties in the body
             # instead of the response headers.
             if short_key.startswith("x-") or short_key not in SYSMETA_KEYS:
@@ -579,9 +579,9 @@ class ContainerClient(ProxyClient):
         obj_meta = extract_content_headers_meta(resp.headers)
         return obj_meta, body
 
-    def content_show(self, account=None, reference=None, path=None,
-                     properties=None, cid=None, content=None, version=None,
-                     **kwargs):
+    def content_get_properties(
+            self, account=None, reference=None, path=None, properties=None,
+            cid=None, content=None, version=None, **kwargs):
         """
         Get a description of the content along with its user properties.
         """
@@ -595,16 +595,6 @@ class ContainerClient(ProxyClient):
         obj_meta = extract_content_headers_meta(resp.headers)
         obj_meta.update(body)
         return obj_meta
-
-    def content_get_properties(self, account=None, reference=None, path=None,
-                               properties=[], cid=None, version=None,
-                               **kwargs):
-        """
-        Get the dictionary of properties set on a content.
-        """
-        return self.content_show(account, reference, path,
-                                 properties=properties, cid=cid,
-                                 version=version, **kwargs)
 
     def content_set_properties(self, account=None, reference=None, path=None,
                                properties={}, cid=None, version=None,

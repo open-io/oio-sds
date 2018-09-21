@@ -146,7 +146,7 @@ class BlobConverter(object):
         if content_id or not search:
             return content_id
 
-        properties = self.container_client.content_show(
+        properties = self.container_client.content_get_properties(
             cid=cid, path=path, version=version)
         content_id = properties['id']
         cid, path, version, content_id = self._save_content(

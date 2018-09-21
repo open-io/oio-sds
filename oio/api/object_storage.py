@@ -1027,7 +1027,7 @@ class ObjectStorageApi(object):
         # stacklevel=5 because we are using 3 decorators
         warnings.warn("You'd better use object_get_properties()",
                       DeprecationWarning, stacklevel=5)
-        return self.container.content_show(
+        return self.container.content_get_properties(
             account, container, obj, version=version, **kwargs)
 
     def object_update(self, account, container, obj, metadata,
