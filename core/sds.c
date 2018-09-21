@@ -133,6 +133,8 @@ struct metachunk_s
 	/* offset in the original segment */
 	gsize offset;
 	GSList *chunks;
+	/* for each chunk URL, a string representing the quality of the chunk */
+	GHashTable *chunks_qualities;
 };
 
 static gint
@@ -151,7 +153,12 @@ _metachunk_clean (struct metachunk_s *mc)
 {
 	if (!mc)
 		return;
-	g_slist_free (mc->chunks);
+	g_slist_free(mc->chunks);
+	mc->chunks = NULL;
+	if (mc->chunks_qualities) {
+		g_hash_table_destroy(mc->chunks_qualities);
+		mc->chunks_qualities = NULL;
+	}
 	g_free (mc);
 }
 
@@ -249,6 +256,54 @@ _chunks_load (GSList **out, struct json_object *jtab)
 		*out = chunks;
 	else
 		g_slist_free_full (chunks, g_free);
+	return err;
+}
+
+/* Load properties from a JSON object.
+ * `props` will be created if referencing a NULL pointer.
+ * The array won't be NULL-terminated, thus this function may
+ * be called several times with the same array. */
+static void
+_properties_load(GPtrArray **props, struct json_object *jprops,
+		gchar *(*val_dup)(const gchar *))
+{
+	EXTRA_ASSERT(props != NULL);
+	EXTRA_ASSERT(jprops != NULL);
+	EXTRA_ASSERT(json_object_is_type(jprops, json_type_object));
+
+	if (*props == NULL)
+		*props = g_ptr_array_new();
+
+	json_object_object_foreach(jprops, key, val) {
+		g_ptr_array_add(*props, val_dup(key));
+		g_ptr_array_add(*props, val_dup(json_object_get_string(val)));
+	}
+}
+
+/* Load chunks and properties from a JSON dictionary.
+ * {
+ *   "chunks": [ <list of chunks> ],
+ *   "properties": [ <dictionary of properties> ]
+ * }
+ */
+static GError *
+_chunks_load_ext(GSList **chunks, GPtrArray **props, struct json_object *jobj)
+{
+	GError *err = NULL;
+
+	struct json_object *jchunks = NULL, *jproperties = NULL;
+
+	struct oio_ext_json_mapping_s map[] = {
+		{"chunks",     &jchunks,     json_type_array,  0},
+		{"properties", &jproperties, json_type_object, 0},
+		{NULL,NULL,0,0}
+	};
+
+	err = oio_ext_extract_json(jobj, map);
+	if (!err)
+		err = _chunks_load(chunks, jchunks);
+	if (!err && jproperties)
+		_properties_load(props, jproperties, g_strdup);
 	return err;
 }
 
@@ -1132,6 +1187,7 @@ struct oio_sds_ul_s
 	GList *metachunk_done;
 	GSList *chunks_done;
 	GSList *chunks_failed;
+	GPtrArray *sys_props;
 
 	/* set at the first prepare */
 	gint64 chunk_size;
@@ -1208,6 +1264,7 @@ oio_sds_upload_init (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst)
 		EXTRA_ASSERT(oio_str_ishexa1 (dst->content_id));
 		oio_str_replace (&ul->hexid, dst->content_id);
 	}
+	ul->sys_props = g_ptr_array_new_with_free_func(g_free);
 	return ul;
 }
 
@@ -1229,6 +1286,11 @@ oio_sds_upload_clean (struct oio_sds_ul_s *ul)
 		g_list_free_full (ul->metachunk_done, (GDestroyNotify)_metachunk_clean);
 		ul->metachunk_done = NULL;
 	}
+	if (ul->sys_props) {
+		g_ptr_array_free(ul->sys_props, TRUE);
+		ul->sys_props = NULL;
+	}
+
 	g_slist_free_full (ul->chunks_done, g_free);
 	g_slist_free_full (ul->chunks_failed, g_free);
 	oio_str_clean (&ul->hexid);
@@ -1318,16 +1380,20 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 
 	EXTRA_ASSERT(!ul->hexid || oio_str_ishexa1(ul->hexid));
 
-	GSList *_chunks = NULL;
-	/* Parse the output, as a JSON array of objects with fields
-	 * depicting chunks */
+	GSList *_chunks = NULL;  // GSList<struct chunk_s*>
+	/* Parse the output, as a (JSON object with a) JSON array of objects
+	 * with fields depicting chunks */
 	if (!err) {
 		struct json_tokener *tok = json_tokener_new ();
 		struct json_object *jbody = json_tokener_parse_ex (tok,
 				reply_body->str, reply_body->len);
-		if (!json_object_is_type(jbody, json_type_array))
+		if (json_object_is_type(jbody, json_type_array))
+			err = _chunks_load(&_chunks, jbody);
+		else if (json_object_is_type(jbody, json_type_object))
+			err = _chunks_load_ext(&_chunks, &ul->sys_props, jbody);
+		else
 			err = SYSERR("Invalid JSON from the OIO proxy");
-		else if ((err = _chunks_load(&_chunks, jbody)))
+		if (err)
 			g_prefix_error (&err, "Parsing: ");
 		json_object_put (jbody);
 		json_tokener_free (tok);
@@ -1498,7 +1564,7 @@ _sds_upload_add_headers(struct oio_sds_ul_s *ul, struct http_put_dest_s *dest)
 	oio_url_set(url, OIOURL_VERSION, version);
 	oio_url_set(url, OIOURL_CONTENTID, ul->hexid);
 	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "full-path", "%s",
-			g_strdup(oio_url_get(url, OIOURL_FULLPATH)));
+			oio_url_get(url, OIOURL_FULLPATH));
 	oio_url_clean(url);
 
 	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "oio-version", "%s",
@@ -1762,6 +1828,18 @@ oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 	gchar hash[STRLEN_CHUNKHASH];
 	g_strlcpy (hash, g_checksum_get_string (ul->checksum_content), sizeof(hash));
 	oio_str_upper (hash);
+
+	/* XXX: this may be unsafe if we allow to retry a failed commit. */
+	if (ul->dst->properties) {
+		for (int i = 0;
+				ul->dst->properties[i] && ul->dst->properties[i+1];
+				i += 2) {
+			g_ptr_array_add(ul->sys_props, g_strdup(ul->dst->properties[i]));
+			g_ptr_array_add(ul->sys_props, g_strdup(ul->dst->properties[i+1]));
+		}
+	}
+	g_ptr_array_add(ul->sys_props, NULL);
+
 	struct oio_proxy_content_create_in_s in = {
 		.size = size,
 		.version = ul->version,
@@ -1772,7 +1850,7 @@ oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 		.chunk_method = ul->chunk_method,
 		.append = BOOL(ul->dst->append),
 		.update = BOOL(ul->dst->partial),
-		.properties = ul->dst->properties
+		.properties = (const char * const *)ul->sys_props->pdata,
 	};
 
 	GRID_TRACE("%s (%p) Saving %s", __FUNCTION__, ul, request_body->str);
@@ -2052,12 +2130,12 @@ _notify_list_item (struct oio_sds_list_listener_s *listener,
 	item.size = json_object_get_int64 (js);
 	item.version = json_object_get_int64 (jv);
 
+	gchar *_fake_strdup(const gchar *src) {
+		return (gchar*)src;
+	}
 	if (jp) {
-		GPtrArray *props = g_ptr_array_new();
-		json_object_object_foreach(jp, key, val) {
-			g_ptr_array_add(props, key);
-			g_ptr_array_add(props, (gpointer)json_object_get_string(val));
-		}
+		GPtrArray *props = NULL;
+		_properties_load(&props, jp, _fake_strdup);
 		g_ptr_array_add(props, NULL);
 		item.properties = (const char * const *)g_ptr_array_free(props, FALSE);
 	} else {

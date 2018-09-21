@@ -2185,13 +2185,16 @@ static gboolean
 _foreach_check_plain_content(gpointer key, gpointer value, gpointer data)
 {
 	struct _check_content_s *content = data;
-	if (content->last_pos != GPOINTER_TO_INT(key) - 1 && content->last_pos != -1
-			&& !content->partial) {
+	gint cur_pos = GPOINTER_TO_INT(key);
+	if (content->last_pos != cur_pos - 1 &&
+			content->last_pos != -1 &&
+			!content->partial) {
+		// There is a hole in the sequence of metachunks.
 		content->ecb = IRREPARABLE;
 		return TRUE;
 	}
 
-	content->last_pos = GPOINTER_TO_INT(key);
+	content->last_pos = cur_pos;
 	guint nb_chunks = 0;
 
 	if (content->present_chunks->len > 0)
@@ -2220,13 +2223,16 @@ static gboolean
 _foreach_check_ec_content(gpointer key, gpointer value, gpointer data)
 {
 	struct _check_content_s *content = data;
-	if (content->last_pos != GPOINTER_TO_INT(key) - 1 && content->last_pos != -1
-		&& !content->partial) {
+	gint cur_pos = GPOINTER_TO_INT(key);
+	if (content->last_pos !=  cur_pos - 1 &&
+			content->last_pos != -1 &&
+			!content->partial) {
+		// There is a hole in the sequence of metachunks
 		content->ecb = IRREPARABLE;
 		return TRUE;
 	}
 
-	content->last_pos = GPOINTER_TO_INT(key);
+	content->last_pos = cur_pos;
 	return _check_metachunk_number(value, content);
 }
 

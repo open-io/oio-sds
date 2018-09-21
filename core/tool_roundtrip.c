@@ -281,16 +281,17 @@ _roundtrip_tail (struct file_info_s *fi0, const char * content_id,
 	NOERROR(err);
 
 	/* list the properties on the content */
-	GPtrArray *val = g_ptr_array_new();
+	GPtrArray *actual_props = g_ptr_array_new();
 	void save_elements(void *u UNUSED, const char *k, const char *v) {
-		g_ptr_array_add(val, g_strdup(k));
-		g_ptr_array_add(val, g_strdup(v));
+		g_ptr_array_add(actual_props, g_strdup(k));
+		g_ptr_array_add(actual_props, g_strdup(v));
 	}
 	err = oio_sds_get_content_properties(client, url, save_elements, NULL);
 	NOERROR(err);
-	g_assert_cmpuint (val->len, ==, oio_strv_length(properties));
-	g_ptr_array_set_free_func (val, g_free);
-	g_ptr_array_free (val, TRUE);
+	(void) properties;
+	g_assert_cmpuint(actual_props->len, ==, oio_strv_length(properties));
+	g_ptr_array_set_free_func(actual_props, g_free);
+	g_ptr_array_free(actual_props, TRUE);
 
 	/* get details on the content */
 	gsize max_offset = 0, max_size = 0;

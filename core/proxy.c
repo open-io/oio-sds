@@ -632,7 +632,8 @@ oio_proxy_call_content_prepare (CURL *h, struct oio_url_s *u,
 		gsize size, gboolean autocreate,
 		struct oio_proxy_content_prepare_out_s *out)
 {
-	GString *http_url = _curl_content_url (u, "prepare");
+	// FIXME(FVE): fallback on content/prepare
+	GString *http_url = _curl_content_url(u, "prepare2");
 	if (!http_url) return BADNS();
 
 	gchar *hdrin[] = {

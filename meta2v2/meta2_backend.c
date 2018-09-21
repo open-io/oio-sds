@@ -1509,7 +1509,7 @@ _prop_is_not_prefixed(gpointer a, gpointer b)
 
 GError *
 meta2_backend_check_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		GSList **beans, meta2_send_event_cb send_event, gboolean update)
+		GSList **beans, meta2_send_event_cb send_event, gboolean is_update)
 {
 	GError *err = NULL;
 	struct namespace_info_s *nsinfo = NULL;
@@ -1519,7 +1519,7 @@ meta2_backend_check_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	struct m2v2_sorted_content_s *sorted = NULL;
 	m2v2_sort_content(*beans, &sorted);
 	GString *message = g_string_sized_new(1024);
-	err = m2db_check_content(sorted, nsinfo, message, update);
+	err = m2db_check_content(sorted, nsinfo, message, is_update);
 	if (err && send_event) {
 		GString *gs = oio_event__create_with_id(
 				"storage.content.broken", url, oio_ext_get_reqid());
