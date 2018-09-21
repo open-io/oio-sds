@@ -260,10 +260,10 @@ class TestContentFactory(BaseTestCase):
         changed_content = self.content_factory.change_policy(
             old_content.container_id, old_content.content_id, new_policy)
 
-        self.assertRaises(NotFound, self.container_client.content_show,
-                          self.account,
-                          cid=old_content.container_id,
-                          content=old_content.content_id)
+        self.assertRaises(
+            NotFound, self.container_client.content_get_properties,
+            self.account, cid=old_content.container_id,
+            content=old_content.content_id)
 
         new_content = self.content_factory.get(self.container_id,
                                                changed_content.content_id)
