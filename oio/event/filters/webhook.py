@@ -19,12 +19,15 @@ from oio.common.http_urllib3 import urllib3, get_pool_manager, \
     oio_exception_from_httperror
 from oio.common.json import json
 from oio.event.evob import Event, EventError
+from oio.event.consumer import EventTypes
 from oio.event.filters.base import Filter
+from oio.container.client import ContainerClient
 
 
 class WebhookFilter(Filter):
 
     def init(self):
+        self.container_client = ContainerClient(self.conf, logger=self.logger)
         self.endpoint = self.conf.get('endpoint')
         # TODO configure pool manager
         self.http = get_pool_manager()
@@ -45,21 +48,17 @@ class WebhookFilter(Filter):
         event = Event(env)
 
         url = env['url']
-        alias = extract_from_event('aliases', env)
-        content_header = extract_from_event('contents_headers', env)
+        alias, content_header, properties = extract_data_from_event(env)
 
-        if not all((alias, content_header)):
-            return self.app(env, cb)
-
-        body = {
-            'eventId': env['job_id'],
-            'eventType': env['event'],
-            'timestamp': env['when'],
-            'data': {
-                'id': url['content'],
-                'account': url['account'],
-                'container': url['user'],
-                'name': url['path'],
+        data = {
+            'id': url['content'],
+            'account': url['account'],
+            'container': url['user'],
+            'name': url['path'],
+        }
+        if all((alias, content_header)) \
+                and event.event_type == EventTypes.CONTENT_NEW:
+            data.update({
                 'md5Hash': content_header['hash'],
                 'contentType': content_header['mime-type'],
                 'policy': content_header['policy'],
@@ -68,8 +67,29 @@ class WebhookFilter(Filter):
                 'creationTime': alias['ctime'],
                 'modificationTime': alias['mtime'],
                 'version': alias['version'],
-                'metadata': {},
-            },
+                'metadata': properties,
+            })
+        else:
+            all_properties = self.container_client.content_get_properties(
+                account=url['account'], reference=url['user'],
+                content=url['content'])
+            data.update({
+                'md5Hash': all_properties['hash'],
+                'contentType': all_properties['mime_type'],
+                'policy': all_properties['policy'],
+                'chunkMethod': all_properties['chunk_method'],
+                'size': all_properties['length'],
+                'creationTime': all_properties['ctime'],
+                'modificationTime': all_properties['mtime'],
+                'version': all_properties['version'],
+                'metadata': all_properties['properties'],
+            })
+
+        body = {
+            'eventId': env['job_id'],
+            'eventType': env['event'],
+            'timestamp': env['when'],
+            'data': data
         }
 
         try:
@@ -82,11 +102,19 @@ class WebhookFilter(Filter):
         return self.app(env, cb)
 
 
-def extract_from_event(data_type, env):
+def extract_data_from_event(env):
+    alias = None
+    content_header = None
+    properties = dict()
+
     for item in env['data']:
-        if item.get('type') == data_type:
-            return item
-    return {}
+        if alias is None and item.get('type') == 'aliases':
+            alias = item
+        elif content_header is None and item.get('type') == 'contents_headers':
+            content_header = item
+        elif item.get('type') == 'properties':
+            properties[item['key']] = item['value']
+    return alias, content_header, properties
 
 
 def filter_factory(global_conf, **local_conf):
