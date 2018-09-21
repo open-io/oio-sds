@@ -47,6 +47,8 @@ enum content_action_e
 	DELETE,
 };
 
+#define _MAX_BEANS_BY_EVENT 16
+
 void
 _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		GSList *beans, const char *name, gboolean send_chunks)
@@ -117,7 +119,7 @@ _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		load_url_from_alias();
 		forward(non_chunks);
 		g_slist_free(non_chunks);
-	} else if (beans_len < 16) {
+	} else if (beans_len <= _MAX_BEANS_BY_EVENT) {
 		for (GSList *l = beans; l; l = l->next) {
 			if (DESCR(l->data) == &descr_struct_ALIASES) {
 				alias = l->data;
@@ -165,7 +167,9 @@ _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		}
 		load_url_from_alias();
 
-		n_events += 1 + (beans_len - g_slist_length(non_chunks)) / 16;
+		// Ceiling of an integer division
+		n_events += (beans_len - g_slist_length(non_chunks)
+				+ _MAX_BEANS_BY_EVENT - 1) / _MAX_BEANS_BY_EVENT;
 		if (non_chunks) {
 			forward (non_chunks);
 			g_slist_free (non_chunks);
@@ -181,19 +185,24 @@ _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 			if (&descr_struct_CHUNKS != DESCR(l->data))
 				continue;
 			batch = g_slist_prepend (batch, l->data);
-			if (!((++count)%16)) {
+			if ((++count) == _MAX_BEANS_BY_EVENT) {
 				/* We send the header each time because the event handlers
 				 * may need the chunk method, which is not saved in chunks. */
 				if (header)
 					batch = g_slist_prepend(batch, header);
+				if (alias)
+					batch = g_slist_prepend(batch, alias);
 				forward (batch);
 				g_slist_free (batch);
 				batch = NULL;
+				count = 0;
 			}
 		}
 		if (batch) {
 			if (header)
 				batch = g_slist_prepend(batch, header);
+			if (alias)
+				batch = g_slist_prepend(batch, alias);
 			forward (batch);
 			g_slist_free (batch);
 			batch = NULL;
