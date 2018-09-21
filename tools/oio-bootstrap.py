@@ -764,6 +764,10 @@ template_event_agent_handlers = """
 # pipeline = replication
 pipeline = noop
 
+[handler:storage.content.update]
+# pipeline = replication
+pipeline = noop
+
 [handler:storage.content.append]
 # pipeline = replication
 pipeline = noop

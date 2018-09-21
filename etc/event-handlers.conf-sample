@@ -2,6 +2,9 @@
 [handler:storage.content.new]
 pipeline = noop
 
+[handler:storage.content.update]
+pipeline = noop
+
 [handler:storage.content.broken]
 pipeline = content_rebuild
 
