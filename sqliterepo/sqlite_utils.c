@@ -98,8 +98,10 @@ sqlx_admin_set_str(struct sqlx_sqlite3_s *sq3, const gchar *k, const gchar *v)
 
 	/* Avoid replacing the value if the same is already present */
 	struct _cache_entry_s *prev = g_tree_lookup(sq3->admin, k);
-	if (prev && len == prev->len && (!len || !memcmp(v, prev->buffer, len)))
+	if (prev && !prev->flag_deleted && len == prev->len
+			&& (!len || !memcmp(v, prev->buffer, len))) {
 		return FALSE;
+	}
 
 	/* If the new value is not longer than the previous, we can even reuse
 	 * the same buffer */
