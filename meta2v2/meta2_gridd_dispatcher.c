@@ -304,9 +304,11 @@ static gridd_filter M2V2_APPEND_FILTERS[] =
 	meta2_filter_check_backend,
 	meta2_filter_check_ns_name,
 	meta2_filter_check_ns_is_master,
+	meta2_filter_check_events_not_stalled,
 	meta2_filter_extract_body_beans,
-	meta2_filter_extract_header_storage_policy,
+	meta2_filter_action_check_content,
 	meta2_filter_action_append_content,
+	meta2_filter_send_deferred_events,
 	NULL
 };
 
