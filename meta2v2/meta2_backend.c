@@ -1253,7 +1253,7 @@ meta2_backend_get_properties(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_del_properties(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, gchar **propv)
+		struct oio_url_s *url, gchar **propv, struct bean_ALIASES_s **out)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1265,7 +1265,7 @@ meta2_backend_del_properties(struct meta2_backend_s *m2b,
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			if (!(err = m2db_del_properties(sq3, url, propv)))
+			if (!(err = m2db_del_properties(sq3, url, propv, out)))
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
 		}
@@ -1277,7 +1277,7 @@ meta2_backend_del_properties(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_set_properties(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		gboolean flush, GSList *beans, m2_onbean_cb cb, gpointer u0)
+		gboolean flush, GSList *beans, struct bean_ALIASES_s **out)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1291,7 +1291,7 @@ meta2_backend_set_properties(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			if (!(err = m2db_set_properties(sq3, url, flush, beans, cb, u0)))
+			if (!(err = m2db_set_properties(sq3, url, flush, beans, out)))
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
 		}
