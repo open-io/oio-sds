@@ -281,6 +281,31 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             exc.NoSuchContainer, self.api.container_set_properties,
             self.account, name, metadata)
 
+    def test_container_unset_set_same_property(self):
+        name = random_str(32)
+
+        metadata = {
+            random_str(32): random_str(32),
+        }
+
+        res = self._create(name)
+        self.assertEqual(res, True)
+
+        # container_set_properties a property
+        self.api.container_set_properties(self.account, name, metadata)
+        data = self._get_properties(name)
+        self.assertEqual(data['properties'], metadata)
+
+        # container_unset_properties the property
+        self.api.container_del_properties(self.account, name, metadata.keys())
+        data = self._get_properties(name)
+        self.assertEqual(len(data['properties']), 0)
+
+        # container_set_properties the same property with the same value
+        self.api.container_set_properties(self.account, name, metadata)
+        data = self._get_properties(name)
+        self.assertEqual(data['properties'], metadata)
+
     def _wait_account_meta2(self):
         # give account and meta2 time to catch their breath
         wait = False
