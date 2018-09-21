@@ -137,10 +137,10 @@ GError* m2db_get_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		m2_onbean_cb cb, gpointer u);
 
 GError* m2db_del_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
-		gchar **namev);
+		gchar **namev, struct bean_ALIASES_s **out);
 
 GError* m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
-		gboolean flush, GSList *beans, m2_onbean_cb cb, gpointer u0);
+		gboolean flush, GSList *beans, struct bean_ALIASES_s **out);
 
 GError* m2db_drain_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		m2_onbean_cb cb, gpointer u0);
