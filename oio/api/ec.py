@@ -204,6 +204,7 @@ class ECStream(object):
         self.range_infos = range_infos
         self.meta_length = meta_length
         self.fragment_length = fragment_length
+        self._iter = None
 
     def start(self):
         self._iter = io.chain(self._stream())
@@ -211,8 +212,11 @@ class ECStream(object):
     def close(self):
         if self._iter:
             self._iter.close()
-        for reader in self.readers:
-            reader.close()
+            self._iter = None
+        if self.readers:
+            for reader in self.readers:
+                reader.close()
+            self.readers = None
 
     def _next(self):
         fragment_iterators = []

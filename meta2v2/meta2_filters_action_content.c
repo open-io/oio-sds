@@ -47,6 +47,8 @@ enum content_action_e
 	DELETE,
 };
 
+#define _MAX_BEANS_BY_EVENT 16
+
 void
 _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		GSList *beans, const char *name, gboolean send_chunks)
@@ -98,15 +100,26 @@ _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	if (!send_chunks) {
 		GSList *non_chunks = NULL;
 		for (GSList *l = beans; l; l = l->next) {
-			if (DESCR(l->data) != &descr_struct_CHUNKS)
+			if (DESCR(l->data) == &descr_struct_ALIASES) {
+				if (alias) {
+					GRID_WARN(
+						"Several aliases in same event:"
+						" selected=%s:%" G_GUINT64_FORMAT
+						" other=%s:%" G_GUINT64_FORMAT,
+						ALIASES_get_alias(alias)->str, ALIASES_get_version(alias),
+						ALIASES_get_alias(l->data)->str, ALIASES_get_version(l->data));
+				} else {
+					alias = l->data;
+				}
 				non_chunks = g_slist_prepend(non_chunks, l->data);
-			else if (DESCR(l->data) == &descr_struct_ALIASES)
-				alias = l->data;
+			} else if (DESCR(l->data) != &descr_struct_CHUNKS) {
+				non_chunks = g_slist_prepend(non_chunks, l->data);
+			}
 		}
 		load_url_from_alias();
 		forward(non_chunks);
 		g_slist_free(non_chunks);
-	} else if (beans_len < 16) {
+	} else if (beans_len <= _MAX_BEANS_BY_EVENT) {
 		for (GSList *l = beans; l; l = l->next) {
 			if (DESCR(l->data) == &descr_struct_ALIASES) {
 				alias = l->data;
@@ -121,20 +134,42 @@ _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		struct bean_CONTENTS_HEADERS_s *header = NULL;
 		for (GSList *l = beans; l; l = l->next) {
 			if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS) {
-				if (header)
-					GRID_WARN("Several content headers in same event!");
-				else
+				if (header) {
+					GString *selected_header = metautils_gba_to_hexgstr(NULL,
+						CONTENTS_HEADERS_get_id(header));
+					GString *other_header = metautils_gba_to_hexgstr(NULL,
+						CONTENTS_HEADERS_get_id(l->data));
+					GRID_WARN(
+						"Several content headers in same event:"
+						" selected=%s other=%s",
+						selected_header->str, other_header->str);
+					g_string_free(selected_header, TRUE);
+					g_string_free(other_header, TRUE);
+				} else {
 					header = l->data;
+				}
 				non_chunks = g_slist_prepend (non_chunks, l->data);
 			} else if (DESCR(l->data) == &descr_struct_ALIASES) {
-				alias = l->data;
+				if (alias) {
+					GRID_WARN(
+						"Several aliases in same event:"
+						" selected=%s:%" G_GUINT64_FORMAT
+						" other=%s:%" G_GUINT64_FORMAT,
+						ALIASES_get_alias(alias)->str, ALIASES_get_version(alias),
+						ALIASES_get_alias(l->data)->str, ALIASES_get_version(l->data));
+				} else {
+					alias = l->data;
+				}
+				non_chunks = g_slist_prepend (non_chunks, l->data);
 			} else if (&descr_struct_CHUNKS != DESCR(l->data)) {
 				non_chunks = g_slist_prepend (non_chunks, l->data);
 			}
 		}
 		load_url_from_alias();
 
-		n_events += 1 + (beans_len - g_slist_length(non_chunks)) / 16;
+		// Ceiling of an integer division
+		n_events += (beans_len - g_slist_length(non_chunks)
+				+ _MAX_BEANS_BY_EVENT - 1) / _MAX_BEANS_BY_EVENT;
 		if (non_chunks) {
 			forward (non_chunks);
 			g_slist_free (non_chunks);
@@ -150,19 +185,24 @@ _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 			if (&descr_struct_CHUNKS != DESCR(l->data))
 				continue;
 			batch = g_slist_prepend (batch, l->data);
-			if (!((++count)%16)) {
+			if ((++count) == _MAX_BEANS_BY_EVENT) {
 				/* We send the header each time because the event handlers
 				 * may need the chunk method, which is not saved in chunks. */
 				if (header)
 					batch = g_slist_prepend(batch, header);
+				if (alias)
+					batch = g_slist_prepend(batch, alias);
 				forward (batch);
 				g_slist_free (batch);
 				batch = NULL;
+				count = 0;
 			}
 		}
 		if (batch) {
 			if (header)
 				batch = g_slist_prepend(batch, header);
+			if (alias)
+				batch = g_slist_prepend(batch, alias);
 			forward (batch);
 			g_slist_free (batch);
 			batch = NULL;

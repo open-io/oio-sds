@@ -1404,7 +1404,7 @@ _load_sqlx_name (struct gridd_reply_ctx_s *ctx,
 
 static gboolean
 _handler_GETVERS(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GTree *version = NULL;
@@ -1412,7 +1412,8 @@ _handler_GETVERS(struct gridd_reply_ctx_s *reply,
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
-	(void) ignored;
+	reply->no_access();
+
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -1450,14 +1451,15 @@ _handler_GETVERS(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_REPLICATE(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 	GError *err = NULL;
 
-	(void) ignored;
+	reply->no_access();
+
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -1497,14 +1499,13 @@ _handler_REPLICATE(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_HAS(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	GError *err = NULL;
 	gchar *bddname=NULL;
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
-	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -1534,13 +1535,14 @@ _handler_HAS(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_STATUS(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	GError *err;
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
-	(void) ignored;
+	reply->no_access();
+
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -1556,13 +1558,14 @@ _handler_STATUS(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_ISMASTER(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	GError *err;
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
-	(void) ignored;
+	reply->no_access();
+
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -1585,13 +1588,14 @@ _handler_ISMASTER(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_DESCR(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	GError *err = NULL;
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
-	(void) ignored;
+	reply->no_access();
+
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -1609,13 +1613,14 @@ _handler_DESCR(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_USE(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	GError *err;
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
-	(void) ignored;
+	reply->no_access();
+
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -1630,13 +1635,12 @@ _handler_USE(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_EXIT(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	GError *err;
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
-	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -1651,7 +1655,7 @@ _handler_EXIT(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_PIPETO(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	GError *err = NULL;
 	GByteArray *dump = NULL;
@@ -1659,7 +1663,6 @@ _handler_PIPETO(struct gridd_reply_ctx_s *reply,
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
-	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -1687,14 +1690,13 @@ _handler_PIPETO(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_REMOVE(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
-	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -1715,14 +1717,13 @@ _handler_REMOVE(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_DUMP(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	GError *err = NULL;
 	guint32 flags = 0;
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
-	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, &flags))) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -1762,13 +1763,12 @@ _handler_DUMP(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_RESTORE(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	GError *err;
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
-	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -1798,14 +1798,13 @@ _handler_RESTORE(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_PIPEFROM(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	GError *err;
 	gchar source[64];
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
-	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -1823,7 +1822,7 @@ _handler_PIPEFROM(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_SNAPSHOT(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	GError *err;
 	gchar source[64];
@@ -1832,7 +1831,7 @@ _handler_SNAPSHOT(struct gridd_reply_ctx_s *reply,
 	gchar *full_base_name;
 	struct sqlx_name_inline_s name;
 	NAME2CONST(no, name);
-	(void) ignored;
+
 	if ((err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -1855,13 +1854,12 @@ _handler_SNAPSHOT(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_RESYNC(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	GError *err = NULL;
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
-	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -1891,7 +1889,7 @@ _handler_RESYNC(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_PROPDEL(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_name_inline_s name;
@@ -1899,7 +1897,6 @@ _handler_PROPDEL(struct gridd_reply_ctx_s *reply,
 	GError *err = NULL;
 	guint32 flags = 0;
 
-	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, &flags))) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -1957,7 +1954,7 @@ _handler_PROPDEL(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_PROPGET(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_name_inline_s name;
@@ -1966,7 +1963,6 @@ _handler_PROPGET(struct gridd_reply_ctx_s *reply,
 	guint32 flags = 0;
 
 	/* Extraction */
-	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, &flags))) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -2005,7 +2001,7 @@ _handler_PROPGET(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_PROPSET(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_name_inline_s name;
@@ -2014,7 +2010,6 @@ _handler_PROPSET(struct gridd_reply_ctx_s *reply,
 	guint32 flags = 0;
 
 	/* Extraction */
-	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, &flags))) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -2084,7 +2079,7 @@ label_exit:
 
 static gboolean
 _handler_ENABLE(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_name_inline_s name;
@@ -2092,7 +2087,6 @@ _handler_ENABLE(struct gridd_reply_ctx_s *reply,
 	GError *err;
 	guint32 flags = 0;
 
-	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, &flags))) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -2133,7 +2127,7 @@ _handler_ENABLE(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_FREEZE(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_name_inline_s name;
@@ -2141,7 +2135,6 @@ _handler_FREEZE(struct gridd_reply_ctx_s *reply,
 	GError *err;
 	guint32 flags = 0;
 
-	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, &flags))) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -2185,7 +2178,7 @@ _handler_FREEZE(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_DISABLE(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_name_inline_s name;
@@ -2193,7 +2186,6 @@ _handler_DISABLE(struct gridd_reply_ctx_s *reply,
 	GError *err;
 	guint32 flags = 0;
 
-	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, &flags))) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -2237,7 +2229,7 @@ _handler_DISABLE(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_DISABLE2(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_name_inline_s name;
@@ -2245,7 +2237,6 @@ _handler_DISABLE2(struct gridd_reply_ctx_s *reply,
 	GError *err;
 	guint32 flags = 0;
 
-	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -2376,6 +2367,8 @@ static gboolean
 _handler_INFO(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
+	reply->no_access();
+
 	GString *gstr = g_string_sized_new(2048);
 	g_string_append_c(gstr, '{');
 	_info_sqlite(gstr);
@@ -2398,10 +2391,8 @@ _handler_INFO(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_LEANIFY(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo UNUSED, gpointer ignored UNUSED)
 {
-	(void) ignored, (void) repo;
-
 	guint size = 0;
 	GError *err = metautils_message_extract_struint (reply->request,
 			NAME_MSGKEY_SIZE, &size);
@@ -2435,7 +2426,7 @@ _extract_params(MESSAGE msg, TableSequence_t **params)
 
 static gboolean
 _handler_QUERY(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	GError *err;
 	guint32 flags = 0;
@@ -2444,7 +2435,6 @@ _handler_QUERY(struct gridd_reply_ctx_s *reply,
 	NAME2CONST(n0, name);
 
 	/* unpack the parameters */
-	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, &flags))) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -2499,9 +2489,8 @@ _handler_QUERY(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_DESTROY(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
-	(void) ignored;
 	GError *err = NULL;
 	guint32 flags = 0;
 	struct sqlx_name_inline_s name;
