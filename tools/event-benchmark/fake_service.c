@@ -280,7 +280,7 @@ configure_request_handlers(void)
 
 	SET("v1/rdir/push/#POST", action_chunk_new);
 	SET("v1/rdir/delete/#DELETE", action_chunk_delete);
-	SET("v1.0/account/container/update/#POST", action_account);
+	SET("v1.0/account/container/update/#PUT", action_account);
 	SET("rawx/#DELETE", action_rawx);
 }
 

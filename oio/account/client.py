@@ -144,7 +144,7 @@ class AccountClient(HttpApi):
         :type to_delete: `list`
         """
         data = json.dumps({"metadata": metadata, "to_delete": to_delete})
-        self.account_request(account, 'POST', 'update', data=data, **kwargs)
+        self.account_request(account, 'PUT', 'update', data=data, **kwargs)
 
     def container_list(self, account, limit=None, marker=None,
                        end_marker=None, prefix=None, delimiter=None,
@@ -191,7 +191,7 @@ class AccountClient(HttpApi):
         :type metadata: `dict`
         """
         metadata['name'] = container
-        _resp, body = self.account_request(account, 'POST', 'container/update',
+        _resp, body = self.account_request(account, 'PUT', 'container/update',
                                            data=json.dumps(metadata), **kwargs)
         return body
 
@@ -208,7 +208,7 @@ class AccountClient(HttpApi):
         metadata = dict()
         metadata["name"] = container
         metadata["mtime"] = mtime
-        self.account_request(account, 'POST', 'container/reset',
+        self.account_request(account, 'PUT', 'container/reset',
                              data=json.dumps(metadata), **kwargs)
 
     def account_refresh(self, account, **kwargs):

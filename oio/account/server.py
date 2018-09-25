@@ -50,18 +50,28 @@ class Account(WerkzeugApp):
 
         self.url_map = Map([
             Rule('/status', endpoint='status'),
-            Rule('/v1.0/account/create', endpoint='account_create'),
-            Rule('/v1.0/account/delete', endpoint='account_delete'),
-            Rule('/v1.0/account/list', endpoint='account_list'),
-            Rule('/v1.0/account/update', endpoint='account_update'),
-            Rule('/v1.0/account/show', endpoint='account_show'),
-            Rule('/v1.0/account/containers', endpoint='account_containers'),
-            Rule('/v1.0/account/refresh', endpoint='account_refresh'),
-            Rule('/v1.0/account/flush', endpoint='account_flush'),
+            Rule('/v1.0/account/create', endpoint='account_create',
+                 methods=['PUT']),
+            Rule('/v1.0/account/delete', endpoint='account_delete',
+                 methods=['POST']),
+            Rule('/v1.0/account/list', endpoint='account_list',
+                 methods=['GET']),
+            Rule('/v1.0/account/update', endpoint='account_update',
+                 methods=['PUT', 'POST']),  # FIXME(adu) only PUT
+            Rule('/v1.0/account/show', endpoint='account_show',
+                 methods=['GET']),
+            Rule('/v1.0/account/containers', endpoint='account_containers',
+                 methods=['GET']),
+            Rule('/v1.0/account/refresh', endpoint='account_refresh',
+                 methods=['POST']),
+            Rule('/v1.0/account/flush', endpoint='account_flush',
+                 methods=['POST']),
             Rule('/v1.0/account/container/update',
-                 endpoint='account_container_update'),
+                 endpoint='account_container_update',
+                 methods=['PUT', 'POST']),  # FIXME(adu) only PUT
             Rule('/v1.0/account/container/reset',
-                 endpoint='account_container_reset')
+                 endpoint='account_container_reset',
+                 methods=['PUT', 'POST']),  # FIXME(adu) only PUT
         ])
         super(Account, self).__init__(self.url_map, self.logger)
 
@@ -186,7 +196,7 @@ class Account(WerkzeugApp):
     #
     # .. code-block:: http
     #
-    #    PUT /v1.0/account/delete?id=myaccount HTTP/1.1
+    #    POST /v1.0/account/delete?id=myaccount HTTP/1.1
     #    Host: 127.0.0.1:6013
     #    User-Agent: curl/7.47.0
     #    Accept: */*
@@ -366,7 +376,7 @@ class Account(WerkzeugApp):
         return Response(result, mimetype='text/json')
 
     # ACCT{{
-    # POST /v1.0/account/container/update?id=<account_name>
+    # PUT /v1.0/account/container/update?id=<account_name>
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     #
     # .. code-block:: json
@@ -383,7 +393,7 @@ class Account(WerkzeugApp):
     #
     # .. code-block:: http
     #
-    #    POST /v1.0/account/container/update?id=myaccount HTTP/1.1
+    #    PUT /v1.0/account/container/update?id=myaccount HTTP/1.1
     #    Host: 127.0.0.1:6013
     #    User-Agent: curl/7.47.0
     #    Accept: */*
@@ -415,7 +425,7 @@ class Account(WerkzeugApp):
         return Response(result)
 
     # ACCT{{
-    # POST /v1.0/account/container/reset?id=<account_name>
+    # PUT /v1.0/account/container/reset?id=<account_name>
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     #
     # Reset statistics of the specified container.
@@ -425,7 +435,7 @@ class Account(WerkzeugApp):
     #
     # .. code-block:: http
     #
-    #    POST /v1.0/account/container/reset?id=myaccount HTTP/1.1
+    #    PUT /v1.0/account/container/reset?id=myaccount HTTP/1.1
     #    Host: 127.0.0.1:6013
     #    User-Agent: curl/7.47.0
     #    Accept: */*

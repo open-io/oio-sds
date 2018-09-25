@@ -127,7 +127,7 @@ class TestMeta2Containers(BaseTestCase):
         args = {'id': self.account, 'prefix': 'container-'}
         url = ''.join(['http://', self.conf['services']['account'][0]['addr'],
                        '/v1.0/account/containers'])
-        resp = self.request('POST', url, params=args)
+        resp = self.request('GET', url, params=args)
         self.assertEqual(resp.status, 200)
         data = self.json_loads(resp.data)
 
