@@ -383,35 +383,37 @@ def parse_body(connection, response, **kwargs):
 
 
 class Beanstalk(object):
-    RESPONSE_CALLBACKS = dict_merge(
-        {'reserve': parse_body,
-         'stats-tube': parse_yaml}
-    )
-    EXPECTED_OK = dict_merge(
-        {'reserve': ['RESERVED'],
-         'delete': ['DELETED'],
-         'release': ['RELEASED'],
-         'bury': ['BURIED'],
-         'put': ['INSERTED'],
-         'use': ['USING'],
-         'watch': ['WATCHING'],
-         'stats-tube': ['OK'],
-         'kick': ['KICKED'],
-         'kick-job': ['KICKED']}
-
-    )
-    EXPECTED_ERR = dict_merge(
-        {'reserve': ['DEADLINE_SOON', 'TIMED_OUT'],
-         'delete': ['NOT_FOUND'],
-         'release': ['BURIED', 'NOT_FOUND', 'OUT_OF_MEMORY'],
-         'bury': ['NOT_FOUND', 'OUT_OF_MEMORY'],
-         'stats-tube': ['NOT_FOUND'],
-         'use': [],
-         'watch': [],
-         'put': ['JOB_TOO_BIG', 'BURIED', 'DRAINING', 'OUT_OF_MEMORY'],
-         'kick': ['OUT_OF_MEMORY'],
-         'kick-job': ['NOT_FOUND', 'OUT_OF_MEMORY']}
-    )
+    RESPONSE_CALLBACKS = dict_merge({
+        'reserve': parse_body,
+        'reserve-with-timeout': parse_body,
+        'stats-tube': parse_yaml
+    })
+    EXPECTED_OK = dict_merge({
+        'reserve': ['RESERVED'],
+        'reserve-with-timeout': ['RESERVED'],
+        'delete': ['DELETED'],
+        'release': ['RELEASED'],
+        'bury': ['BURIED'],
+        'put': ['INSERTED'],
+        'use': ['USING'],
+        'watch': ['WATCHING'],
+        'stats-tube': ['OK'],
+        'kick': ['KICKED'],
+        'kick-job': ['KICKED'],
+    })
+    EXPECTED_ERR = dict_merge({
+        'reserve': ['DEADLINE_SOON', 'TIMED_OUT'],
+        'reserve-with-timeout': ['DEADLINE_SOON', 'TIMED_OUT'],
+        'delete': ['NOT_FOUND'],
+        'release': ['BURIED', 'NOT_FOUND', 'OUT_OF_MEMORY'],
+        'bury': ['NOT_FOUND', 'OUT_OF_MEMORY'],
+        'stats-tube': ['NOT_FOUND'],
+        'use': [],
+        'watch': [],
+        'put': ['JOB_TOO_BIG', 'BURIED', 'DRAINING', 'OUT_OF_MEMORY'],
+        'kick': ['OUT_OF_MEMORY'],
+        'kick-job': ['NOT_FOUND', 'OUT_OF_MEMORY']
+    })
 
     @classmethod
     def from_url(cls, url, **kwargs):
@@ -513,6 +515,17 @@ class Beanstalk(object):
     def delete(self, job_id):
         self.execute_command('delete', job_id)
 
+    def drain_tube(self, tube):
+        """Delete all jobs from the specified tube."""
+        self.watch(tube)
+        try:
+            job_id = True
+            while job_id is not None:
+                job_id, _ = self.reserve(timeout=0)
+                self.delete(job_id)
+        except ResponseError:
+            pass
+
     def kick_job(self, job_id):
         """
         Variant of` kick` that operates with a single job.
@@ -540,3 +553,4 @@ class Beanstalk(object):
     def close(self):
         if self._connection:
             self._connection.disconnect()
+            self._connection = None

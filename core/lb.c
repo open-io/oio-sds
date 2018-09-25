@@ -1230,6 +1230,32 @@ oio_lb_world__add_pool_targets(struct oio_lb_pool_s *self,
 	g_strfreev(toks);
 }
 
+GString *
+oio_lb_world__dump_pool_options(struct oio_lb_pool_s *self)
+{
+	struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *) self;
+	GString *dump = g_string_sized_new(128);
+	for (gchar **ptarget = lb->targets; *ptarget; ++ptarget) {
+		if (dump->len > 0)
+			g_string_append_c(dump, OIO_CSV_SEP2_C);
+		g_string_append(dump, "1"OIO_CSV_SEP);
+		for (const char *name = *ptarget; *name; name += 1 + strlen(name)) {
+			if (name != *ptarget)
+				g_string_append_c(dump, OIO_CSV_SEP_C);
+			g_string_append(dump, name);
+		}
+	}
+
+	if (lb->nearby_mode)
+		g_string_append_static(dump, OIO_CSV_SEP2"nearby_mode=true");
+
+	g_string_append_printf(dump, "%c%s=%u%c%s=%u",
+			OIO_CSV_SEP2_C, OIO_LB_OPT_WARN_DIST, lb->warn_dist,
+			OIO_CSV_SEP2_C, OIO_LB_OPT_MIN_DIST, lb->min_dist);
+
+	return dump;
+}
+
 /* -------------------------------------------------------------------------- */
 
 struct oio_lb_world_s *

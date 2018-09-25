@@ -181,10 +181,15 @@ def fix_ranges(ranges, length):
     return result
 
 
-def request_id():
-    """Build a 128-bit request id string"""
+def request_id(prefix=None):
+    """
+    Build a 128-bit request id string.
+
+    :param prefix: optional prefix to the request id.
+    """
+    pref_bits = min(112, len(prefix) * 8 if prefix else 0)
     return "%04X%028X" % (os.getpid(),
-                          getrandbits(112))
+                          getrandbits(112 - pref_bits))
 
 
 class GeneratorIO(RawIOBase):

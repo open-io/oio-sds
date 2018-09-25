@@ -177,6 +177,9 @@ void oio_lb_world__add_pool_target (struct oio_lb_pool_s *self, const char *to);
 void oio_lb_world__add_pool_targets(struct oio_lb_pool_s *self,
 		const gchar *targets);
 
+/* Dump the pool targets and options. */
+GString *oio_lb_world__dump_pool_options(struct oio_lb_pool_s *self);
+
 /* -- LB pools management ------------------------------------------------- */
 
 struct oio_lb_s {
