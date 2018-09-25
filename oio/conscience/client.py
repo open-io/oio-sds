@@ -122,6 +122,15 @@ class ConscienceClient(ProxyClient):
         return self.lb.poll(pool, **kwargs)
 
     def all_services(self, type_, full=False, **kwargs):
+        """
+        Get the list of all services of a specific type.
+
+        :param type_: the type of services to get (ex: 'rawx')
+        :type type_: `str`
+        :param full: whether to get all metrics for each service
+        :returns: the list of all services of the specified type
+        :rtype: `list` of `dict`
+        """
         params = {'type': type_}
         if full:
             params['full'] = '1'
@@ -158,14 +167,30 @@ class ConscienceClient(ProxyClient):
         resp, body = self._request("GET", '/info')
         return body
 
-    def lock_score(self, infos_srv):
-        resp, body = self._request('POST', '/lock',
-                                   data=json.dumps(infos_srv))
+    def lock_score(self, srv_or_list):
+        """
+        Lock the score of a service.
+
+        :param srv_or_list: dictionary containing:
+            - 'addr': the service address,
+            - 'type': the service type,
+            - 'score': optional, the score to set the service to.
+        :type srv_or_list: `dict` or list of `dict`.
+        """
+        _, body = self._request('POST', '/lock',
+                                data=json.dumps(srv_or_list))
         return body
 
-    def unlock_score(self, infos_srv):
-        resp, body = self._request('POST', '/unlock',
-                                   data=json.dumps(infos_srv))
+    def unlock_score(self, srv_or_list):
+        """
+        Unlock the score of a service, let the Conscience compute it.
+
+        :param srv_or_list: dictionary containing:
+            - 'addr': the service address,
+            - 'type': the service type,
+        :type srv_or_list: `dict` or list of `dict`.
+        """
+        self._request('POST', '/unlock', data=json.dumps(srv_or_list))
 
     def flush(self, srv_type):
         resp, body = self._request('POST', '/flush',

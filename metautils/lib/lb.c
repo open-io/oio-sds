@@ -100,8 +100,10 @@ oio_lb_world__reload_storage_policies(struct oio_lb_world_s *lbw,
 			} else if (!oio_lb__has_pool(lb, pool_name)) {
 				struct oio_lb_pool_s *pool =
 					oio_lb_pool__from_storage_policy(lbw, stgpol);
+				GString *opts = oio_lb_world__dump_pool_options(pool);
 				GRID_INFO("No service pool [%s] for storage policy [%s], "
-						"creating one", pool_name, polname);
+						"creating it with %s", pool_name, polname, opts->str);
+				g_string_free(opts, TRUE);
 				oio_lb__force_pool(lb, pool);
 			}
 			storage_policy_clean(stgpol);
@@ -192,6 +194,12 @@ oio_lb_pool__from_storage_policy(struct oio_lb_world_s *lbw,
 	g_snprintf(min_dist, sizeof(min_dist), "%"G_GINT64_FORMAT,
 			storage_policy_get_distance(stgpol));
 	oio_lb_world__set_pool_option(pool, OIO_LB_OPT_MIN_DIST, min_dist);
+
+	/* Set warning distance parameter */
+	gchar warn_dist[16] = {0};
+	g_snprintf(warn_dist, sizeof(warn_dist), "%"G_GINT64_FORMAT,
+			storage_policy_get_warn_dist(stgpol));
+	oio_lb_world__set_pool_option(pool, OIO_LB_OPT_WARN_DIST, warn_dist);
 
 	return pool;
 }

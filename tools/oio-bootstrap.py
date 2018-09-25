@@ -473,6 +473,7 @@ TWOCOPIES=rawx2:DUPONETWO
 THREECOPIES=rawx3:DUPONETHREE
 17COPIES=rawx17:DUP17
 EC=NONE:EC
+EC21=NONE:EC21
 BACKBLAZE=NONE:BACKBLAZE
 
 [DATA_SECURITY]
@@ -482,11 +483,12 @@ BACKBLAZE=NONE:BACKBLAZE
 # The first word is the kind of data security ("plain", "ec" or "backblaze"),
 # after the '/' are the parameters of the data security.
 
-DUPONETWO=plain/distance=1,nb_copy=2
-DUPONETHREE=plain/distance=1,nb_copy=3
-DUP17=plain/distance=1,nb_copy=17
+DUPONETWO=plain/min_dist=1,nb_copy=2
+DUPONETHREE=plain/min_dist=1,nb_copy=3
+DUP17=plain/min_dist=1,nb_copy=17
 
-EC=ec/k=6,m=3,algo=liberasurecode_rs_vand,distance=1
+EC=ec/k=6,m=3,algo=liberasurecode_rs_vand,min_dist=1
+EC21=ec/k=2,m=1,algo=liberasurecode_rs_vand,min_dist=1,warn_dist=${WARN_DIST}
 
 # List of possible values for the "algo" parameter of "ec" data security:
 # "jerasure_rs_vand"       EC_BACKEND_JERASURE_RS_VAND
@@ -496,7 +498,7 @@ EC=ec/k=6,m=3,algo=liberasurecode_rs_vand,distance=1
 # "shss"                   EC_BACKEND_SHSS
 # "liberasurecode_rs_vand" EC_BACKEND_LIBERASURECODE_RS_VAND
 
-BACKBLAZE=backblaze/account_id=${BACKBLAZE_ACCOUNT_ID},bucket_name=${BACKBLAZE_BUCKET_NAME},distance=0,nb_copy=1
+BACKBLAZE=backblaze/account_id=${BACKBLAZE_ACCOUNT_ID},bucket_name=${BACKBLAZE_BUCKET_NAME},min_dist=0,nb_copy=1
 """
 
 template_credentials = """
@@ -1259,11 +1261,12 @@ def generate(options):
                            defaults['NB_CS'])
     if nb_conscience:
         cs = list()
+        # This is to trigger "content.perfectible" events during tests
+        ENV['WARN_DIST'] = 1 if len(hosts) > 1 else 0
         with open('{CFGDIR}/{NS}-policies.conf'.format(**ENV), 'w+') as f:
             tpl = Template(template_conscience_policies)
             f.write(tpl.safe_substitute(ENV))
         with open('{CFGDIR}/{NS}-service-pools.conf'.format(**ENV), 'w+') as f:
-            ENV['WARN_DIST'] = 1 if len(hosts) > 1 else 0
             tpl = Template(template_service_pools)
             f.write(tpl.safe_substitute(ENV))
         with open('{CFGDIR}/{NS}-service-types.conf'.format(**ENV), 'w+') as f:

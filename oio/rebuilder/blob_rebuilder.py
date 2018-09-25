@@ -31,6 +31,7 @@ from oio.rebuilder.rebuilder import Rebuilder, RebuilderWorker
 
 
 DEFAULT_REBUILDER_TUBE = 'oio-rebuild'
+DEFAULT_IMPROVER_TUBE = 'oio-improve'
 
 
 class BlobRebuilder(Rebuilder):

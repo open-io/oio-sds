@@ -40,6 +40,7 @@ class Event(object):
     event_type = _event_env_property('event')
     data = _event_env_property('data')
     reqid = _event_env_property('request_id')
+    url = _event_env_property('url')
     when = _event_env_property('when')
 
     def __init__(self, env):

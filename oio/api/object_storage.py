@@ -581,7 +581,7 @@ class ObjectStorageApi(object):
             or `read_timeout` keyword arguments.
         :type deadline: `float` seconds
 
-        :returns: `list` of chunks, size and hash of the what has been uploaded
+        :returns: `list` of chunks, size and hash of what has been uploaded
         """
         if (data, file_or_path) == (None, None):
             raise exc.MissingData()

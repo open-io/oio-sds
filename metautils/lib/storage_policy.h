@@ -21,6 +21,8 @@ License along with this library.
 # define OIO_SDS__metautils__lib__storage_policy_h 1
 
 #define DS_KEY_DISTANCE "distance"
+#define DS_KEY_MIN_DIST "min_dist"
+#define DS_KEY_WARN_DIST "warn_dist"
 #define DS_KEY_COPY_COUNT "nb_copy"
 #define DS_KEY_K "k"
 #define DS_KEY_M "m"
@@ -71,6 +73,9 @@ gint64 storage_policy_get_nb_chunks(const struct storage_policy_s *sp);
 
 /** Get the minimum distance between chunks required by the storage policy. */
 gint64 storage_policy_get_distance(const struct storage_policy_s *sp);
+
+/** Get the distance between chunks at which a warning will be emitted. */
+gint64 storage_policy_get_warn_dist(const struct storage_policy_s *sp);
 
 const struct data_security_s *storage_policy_get_data_security(
 		const struct storage_policy_s *sp);

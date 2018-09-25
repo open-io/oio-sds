@@ -756,7 +756,16 @@ _rest_conscience_lock (struct req_args_s *args, struct json_object *jargs)
 // POST /v3.0/{NS}/conscience/lock
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Lock one service:
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/conscience/lock HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 39
+//    Content-Type: application/x-www-form-urlencoded
+//
+// Body when locking one service:
 //
 // .. code-block:: json
 //
@@ -765,7 +774,7 @@ _rest_conscience_lock (struct req_args_s *args, struct json_object *jargs)
 //      "type": "rawx"
 //    }
 //
-// Lock several services at once:
+// Body when locking several services at once:
 //
 // .. code-block:: json
 //
@@ -776,14 +785,7 @@ _rest_conscience_lock (struct req_args_s *args, struct json_object *jargs)
 //        "type": "127.0.0.1:6011"}
 //    ]
 //
-// .. code-block:: http
-//
-//    POST /v3.0/OPENIO/conscience/lock HTTP/1.1
-//    Host: 127.0.0.1:6000
-//    User-Agent: curl/7.47.0
-//    Accept: */*
-//    Content-Length: 39
-//    Content-Type: application/x-www-form-urlencoded
+// Standard response:
 //
 // .. code-block:: http
 //
@@ -808,7 +810,17 @@ _rest_conscience_unlock (struct req_args_s *args, struct json_object *jargs)
 // POST /v3.0/{NS}/conscience/unlock
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Unlock one service:
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/conscience/unlock HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 39
+//    Content-Type: application/x-www-form-urlencoded
+//
+//
+// Body when unlocking one service:
 //
 // .. code-block:: json
 //
@@ -817,7 +829,7 @@ _rest_conscience_unlock (struct req_args_s *args, struct json_object *jargs)
 //      "type": "rawx"
 //    }
 //
-// Unlock several services at once:
+// Body when unlocking several services at once:
 //
 // .. code-block:: json
 //
@@ -828,14 +840,7 @@ _rest_conscience_unlock (struct req_args_s *args, struct json_object *jargs)
 //        "type": "127.0.0.1:6011"}
 //    ]
 //
-// .. code-block:: http
-//
-//    POST /v3.0/OPENIO/conscience/unlock HTTP/1.1
-//    Host: 127.0.0.1:6000
-//    User-Agent: curl/7.47.0
-//    Accept: */*
-//    Content-Length: 39
-//    Content-Type: application/x-www-form-urlencoded
+// Standard response:
 //
 // .. code-block:: http
 //

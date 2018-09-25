@@ -388,5 +388,15 @@ gint64
 storage_policy_get_distance(const struct storage_policy_s *sp)
 {
 	const struct data_security_s *dsec = storage_policy_get_data_security(sp);
-	return data_security_get_int64_param(dsec, DS_KEY_DISTANCE, 1);
+	/* DS_KEY_DISTANCE was the original keyword,
+	 * DS_KEY_MIN_DIST was introduced with service pools. */
+	gint64 min_dist = data_security_get_int64_param(dsec, DS_KEY_DISTANCE, 1);
+	return data_security_get_int64_param(dsec, DS_KEY_MIN_DIST, min_dist);
+}
+
+gint64
+storage_policy_get_warn_dist(const struct storage_policy_s *sp)
+{
+	const struct data_security_s *dsec = storage_policy_get_data_security(sp);
+	return data_security_get_int64_param(dsec, DS_KEY_WARN_DIST, 0);
 }

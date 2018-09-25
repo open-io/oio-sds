@@ -320,7 +320,8 @@ fi
 
 if is_running_test_suite "3copies" ; then
 	echo -e "\n### 3copies tests"
-	func_tests -f "${SRCDIR}/etc/bootstrap-preset-3COPIES-11RAWX.yml"
+	func_tests -f "${SRCDIR}/etc/bootstrap-preset-3COPIES-11RAWX.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-3hosts.yml"
 fi
 
 if is_running_test_suite "ec" ; then
