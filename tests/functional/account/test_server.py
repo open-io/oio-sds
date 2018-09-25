@@ -65,22 +65,22 @@ class TestAccountServer(BaseTestCase):
     def test_account_update(self):
         data = {'metadata': {'foo': 'bar'}, 'to_delete': []}
         data = json.dumps(data)
-        resp = self.app.post('/v1.0/account/update',
-                             data=data, query_string={'id': self.account_id})
+        resp = self.app.put('/v1.0/account/update',
+                            data=data, query_string={'id': self.account_id})
         self.assertEqual(resp.status_code, 204)
 
     def test_account_container_update(self):
         data = {'name': 'foo', 'mtime': Timestamp(time()).normal,
                 'objects': 0, 'bytes': 0}
         data = json.dumps(data)
-        resp = self.app.post('/v1.0/account/container/update',
-                             data=data, query_string={'id': self.account_id})
+        resp = self.app.put('/v1.0/account/container/update',
+                            data=data, query_string={'id': self.account_id})
         self.assertEqual(resp.status_code, 200)
 
     def test_account_containers(self):
         args = {'id': self.account_id}
-        resp = self.app.post('/v1.0/account/containers',
-                             query_string=args)
+        resp = self.app.get('/v1.0/account/containers',
+                            query_string=args)
         self.assertEqual(resp.status_code, 200)
         data = self.json_loads(resp.data)
         for f in ["ctime", "objects", "bytes", "listing", "containers",
@@ -94,21 +94,23 @@ class TestAccountServer(BaseTestCase):
         data = {'name': 'foo', 'mtime': Timestamp(time()).normal,
                 'objects': 12, 'bytes': 42}
         dataj = json.dumps(data)
-        resp = self.app.post('/v1.0/account/container/update',
-                             data=dataj, query_string={'id': self.account_id})
+        resp = self.app.put('/v1.0/account/container/update',
+                            data=dataj, query_string={'id': self.account_id})
 
         data = {'name': 'foo', 'mtime': Timestamp(time()).normal}
         dataj = json.dumps(data)
-        resp = self.app.post('/v1.0/account/container/reset',
-                             data=dataj, query_string={'id': self.account_id})
+        resp = self.app.put('/v1.0/account/container/reset',
+                            data=dataj, query_string={'id': self.account_id})
         self.assertEqual(resp.status_code, 204)
 
-        dataj = json.dumps({'prefix': 'foo'})
-        resp = self.app.post('/v1.0/account/containers',
-                             data=dataj, query_string={'id': self.account_id})
+        resp = self.app.get('/v1.0/account/containers',
+                            query_string={'id': self.account_id,
+                                          'prefix': 'foo'})
         resp = self.json_loads(resp.data)
         for container in resp["listing"]:
             name, nb_objects, nb_bytes, _, mtime = container
+            if not name.startswith('foo'):
+                self.fail("No prefix foo: %s" % name)
             if name == 'foo':
                 self.assertEqual(0, nb_objects)
                 self.assertEqual(0, nb_bytes)
@@ -120,15 +122,15 @@ class TestAccountServer(BaseTestCase):
         data = {'name': 'foo', 'mtime': Timestamp(time()).normal,
                 'objects': 12, 'bytes': 42}
         data = json.dumps(data)
-        resp = self.app.post('/v1.0/account/container/update',
-                             data=data, query_string={'id': self.account_id})
+        resp = self.app.put('/v1.0/account/container/update',
+                            data=data, query_string={'id': self.account_id})
 
         resp = self.app.post('/v1.0/account/refresh',
                              query_string={'id': self.account_id})
         self.assertEqual(resp.status_code, 204)
 
-        resp = self.app.post('/v1.0/account/show',
-                             query_string={'id': self.account_id})
+        resp = self.app.get('/v1.0/account/show',
+                            query_string={'id': self.account_id})
         resp = self.json_loads(resp.data)
         self.assertEqual(resp["bytes"], 42)
         self.assertEqual(resp["objects"], 12)
@@ -137,20 +139,20 @@ class TestAccountServer(BaseTestCase):
         data = {'name': 'foo', 'mtime': Timestamp(time()).normal,
                 'objects': 12, 'bytes': 42}
         data = json.dumps(data)
-        resp = self.app.post('/v1.0/account/container/update',
-                             data=data, query_string={'id': self.account_id})
+        resp = self.app.put('/v1.0/account/container/update',
+                            data=data, query_string={'id': self.account_id})
 
         resp = self.app.post('/v1.0/account/flush',
                              query_string={'id': self.account_id})
         self.assertEqual(resp.status_code, 204)
 
-        resp = self.app.post('/v1.0/account/show',
-                             query_string={'id': self.account_id})
+        resp = self.app.get('/v1.0/account/show',
+                            query_string={'id': self.account_id})
         resp = self.json_loads(resp.data)
         self.assertEqual(resp["bytes"], 0)
         self.assertEqual(resp["objects"], 0)
 
-        resp = self.app.post('/v1.0/account/containers',
-                             query_string={'id': self.account_id})
+        resp = self.app.get('/v1.0/account/containers',
+                            query_string={'id': self.account_id})
         resp = self.json_loads(resp.data)
         self.assertEqual(len(resp["listing"]), 0)
