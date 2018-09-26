@@ -304,10 +304,11 @@ _container_state (struct sqlx_sqlite3_s *sq3)
 	struct oio_url_s *u = sqlx_admin_get_url (sq3);
 	GString *gs = oio_event__create (META2_EVENTS_PREFIX ".container.state", u);
 	g_string_append_static (gs, ",\"data\":{");
-	append_const (gs, "policy", sqlx_admin_get_str(sq3, M2V2_ADMIN_STORAGE_POLICY));
-	append_int64 (gs, "ctime", m2db_get_ctime(sq3));
-	append_int64 (gs, "bytes-count", m2db_get_size(sq3));
-	append_int64 (gs, "object-count", m2db_get_obj_count(sq3));
+	append_const(gs, "policy", sqlx_admin_get_str(sq3, M2V2_ADMIN_STORAGE_POLICY));
+	append_int64(gs, "ctime", m2db_get_ctime(sq3));
+	append_int64(gs, "bytes-count", m2db_get_size(sq3));
+	append_int64(gs, "object-count", m2db_get_obj_count(sq3));
+	append_int64(gs, "missing-chunks", m2db_get_missing_chunks(sq3));
 	g_string_append_static (gs, "}}");
 
 	oio_url_clean (u);
@@ -568,6 +569,7 @@ _init_container(struct sqlx_sqlite3_s *sq3,
 		m2db_set_ctime (sq3, oio_ext_real_time());
 		m2db_set_size(sq3, 0);
 		m2db_set_obj_count(sq3, 0);
+		m2db_set_missing_chunks(sq3, 0);
 		sqlx_admin_set_status(sq3, ADMIN_STATUS_ENABLED);
 		sqlx_admin_init_i64(sq3, META2_INIT_FLAG, 1);
 	}
