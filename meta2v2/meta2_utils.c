@@ -252,6 +252,17 @@ m2db_set_obj_count(struct sqlx_sqlite3_s *sq3, gint64 count)
 	sqlx_admin_set_i64(sq3, M2V2_ADMIN_OBJ_COUNT, count);
 }
 
+gint64
+m2db_get_missing_chunks(struct sqlx_sqlite3_s *sq3)
+{
+	return sqlx_admin_get_i64(sq3, M2V2_ADMIN_MISSING_CHUNKS, 0);
+}
+
+void
+m2db_set_missing_chunks(struct sqlx_sqlite3_s *sq3, gint64 missing)
+{
+	sqlx_admin_set_i64(sq3, M2V2_ADMIN_MISSING_CHUNKS, missing);
+}
 
 /* GET ---------------------------------------------------------------------- */
 
