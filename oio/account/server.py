@@ -412,15 +412,17 @@ class Account(WerkzeugApp):
     # }}ACCT
     def on_account_container_update(self, req):
         account_id = self._get_account_id(req)
-        d = json.loads(req.get_data())
-        name = d.get('name')
-        mtime = d.get('mtime')
-        dtime = d.get('dtime')
-        object_count = d.get('objects')
-        bytes_used = d.get('bytes')
+        data = json.loads(req.get_data())
+        name = data.get('name')
+        mtime = data.get('mtime')
+        dtime = data.get('dtime')
+        object_count = data.get('objects')
+        bytes_used = data.get('bytes')
+        missing_chunks = data.get('missing-chunks')
         # Exceptions are catched by dispatch_request
         info = self.backend.update_container(
-            account_id, name, mtime, dtime, object_count, bytes_used)
+            account_id, name, mtime, dtime,
+            object_count, bytes_used, missing_chunks)
         result = json.dumps(info)
         return Response(result)
 
@@ -468,9 +470,11 @@ class Account(WerkzeugApp):
         dtime = None
         object_count = 0
         bytes_used = 0
+        missing_chunks = 0
         # Exceptions are catched by dispatch_request
         self.backend.update_container(
-            account_id, name, mtime, dtime, object_count, bytes_used,
+            account_id, name, mtime, dtime,
+            object_count, bytes_used, missing_chunks,
             autocreate_container=False)
         return Response(status=204)
 
