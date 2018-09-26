@@ -277,6 +277,10 @@ class BootstrapVolume(lister.Lister):
             all_rawx = self.app.client_manager.volume.rdir_lb.assign_all_rawx(
                     parsed_args.max_per_rdir,
                     connection_timeout=30.0, read_timeout=90.0)
+            self.app.client_manager.volume.rdir_lb.assign_all_meta2(
+                parsed_args.max_per_rdir,
+                connection_timeout=30.0, read_timeout=90.0
+            )
         except OioException as exc:
             self.log.warn("Failed to assign all rawx: %s", exc)
             self.error = exc
