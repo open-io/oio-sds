@@ -84,6 +84,58 @@ class RdirDispatcher(object):
                                  rawx['addr'], exc)
         return all_rawx, all_rdir
 
+    def assign_all_meta2(self, max_per_rdir=None, **kwargs):
+        all_meta2 = self.cs.all_services('meta2', **kwargs)
+        all_rdir = self.cs.all_services('rdir', True, **kwargs)
+        if len(all_rdir) <= 0:
+            raise ServiceUnavailable("No rdir service found in %s" % self.ns)
+
+        by_id = {_make_id(self.ns, 'rdir', x['addr']): x
+                 for x in all_rdir}
+
+        errors = list()
+        for meta2 in all_meta2:
+            meta2_address = meta2['tags'].get('tag.service_id', meta2['addr'])
+
+            try:
+                resp = self.directory.list(RDIR_ACCT, meta2_address,
+                                           service_type='rdir', **kwargs)
+                rdir_host = _filter_rdir_host(resp)
+                try:
+                    meta2['rdir'] = by_id[_make_id(self.ns, 'rdir', rdir_host)]
+                except KeyError:
+                    self.logger.warn("rdir %s linked to meta2 %s seems down",
+                                     rdir_host, meta2_address)
+            except NotFound:
+                try:
+                    rdir = self._smart_link_rdir(meta2_address, all_rdir,
+                                                 service_type='meta2',
+                                                 max_per_rdir=max_per_rdir,
+                                                 **kwargs)
+                except OioException as exc:
+                    self.logger.warn("Failed to link an rdir to meta2 %s: %s",
+                                     meta2_address, exc)
+                    errors.append((meta2_address, exc))
+                    continue
+                n_bases = by_id[rdir]['tags'].get("stat.opened_db_count", 0)
+                by_id[rdir]['tags']["stat.opened_db_count"] = n_bases + 1
+                meta2['rdir'] = by_id[rdir]
+            except OioException as exc:
+                self.logger.warn("Failed to check rdir linked to rawx %s "
+                                 "(thus won't try to make the link): %s",
+                                 meta2_address, exc)
+                errors.append((meta2_address, exc))
+        if errors:
+            # group_chunk_errors is flexible enough to accept service addresses
+            errors = group_chunk_errors(errors)
+            if len(errors) == 1:
+                err, addrs = errors.popitem()
+                oio_reraise(type(err), err, str(addrs))
+            else:
+                raise OioException('Several errors encountered: %s' %
+                                   errors)
+        return all_meta2
+
     def assign_all_rawx(self, max_per_rdir=None, **kwargs):
         """
         Find a rdir service for all rawx that don't have one already.
@@ -143,7 +195,7 @@ class RdirDispatcher(object):
         return all_rawx
 
     def _smart_link_rdir(self, volume_id, all_rdir, max_per_rdir=None,
-                         max_attempts=7, **kwargs):
+                         max_attempts=7, service_type='rawx', **kwargs):
         """
         Force the load balancer to avoid services that already host more
         bases than the average (or more than `max_per_rdir`)
@@ -162,7 +214,7 @@ class RdirDispatcher(object):
                   for x in all_rdir
                   if x['score'] > 0 and
                   x['tags'].get('stat.opened_db_count', 0) > upper_limit]
-        known = [_make_id(self.ns, "rawx", volume_id)]
+        known = [_make_id(self.ns, service_type, volume_id)]
         try:
             polled = self._poll_rdir(avoid=avoids, known=known, **kwargs)
         except ClientException as exc:
@@ -295,7 +347,9 @@ class RdirClient(HttpApi):
             params['autocreate'] = 1
         # Assuming we'll use the same facility to fetch assigned rdirs to META2
         # Since technically speaking it's a KV store so it shouldn't matter.
-        uri = 'http://%s/v1/rdir/meta2/%s' % ("127.0.0.2:6027", action)
+        uri = self._make_uri('meta2/%s' % action, meta2_address,
+                             req_id=kwargs.get('X-oio-req-id'))
+
         try:
             resp, body = self._direct_request(method, uri, params=params,
                                               **kwargs)

@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from oio.common.exceptions import ClientException, OioTimeout
+from oio.common.exceptions import ClientException, OioTimeout, VolumeException
 from oio.common.logger import get_logger
 from oio.account.client import AccountClient
 from oio.rdir.client import RdirClient
@@ -24,7 +24,7 @@ from oio.event.filters.base import Filter
 # We still don't have a working implementation of META2 assignment to RDIR.
 # So we keep this in passthrough mode for the moment.
 
-PASSTHROUGH = True
+PASSTHROUGH = False
 
 
 class Meta2IndexFilter(Filter):
@@ -57,6 +57,13 @@ class Meta2IndexFilter(Filter):
                                                    content_path=content_url,
                                                    content_id=content_id,
                                                    mtime=mtime)
+                except VolumeException:
+                    msg = '[Meta2IndexFilter] No RDIR is assigned to META2 ' \
+                          'server %s. Unable to push new container.' % peer
+                    self.logger.warn(msg)
+                    # resp = EventError(event=Event(env), body=msg)
+                    # return resp(env, cb)
+                    pass
                 except OioTimeout:
                     msg = '[Meta2IndexFilter] Pusing new containers to index' \
                           'timed out.'
