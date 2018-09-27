@@ -356,8 +356,11 @@ class Meta0PrefixMapping(MetaMapping):
             svc = self.services[svc]
         saved_score = svc["score"]
         svc["score"] = 0
-        if not bases_to_remove:
-            bases_to_remove = list(svc.get("bases", list()))
+        if bases_to_remove:
+            # Remove extra digits and duplicates
+            bases_to_remove = {b[:self.digits] for b in bases_to_remove}
+        else:
+            bases_to_remove = set(svc.get('bases', list()))
         if not strategy:
             strategy = self.find_services_less_bases
         for base in bases_to_remove:
@@ -372,7 +375,7 @@ class Meta0PrefixMapping(MetaMapping):
             new_svcs = strategy(known=self.services_by_base[base])
             self.assign_services(base, new_svcs)
         svc["score"] = saved_score
-        return set(bases_to_remove)
+        return bases_to_remove
 
     def rebalance(self, max_loops=65536):
         """Reassign bases from the services which manage the most"""
