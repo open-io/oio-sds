@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from logging import getLogger
+from logging import getLogger, INFO
 from cliff.command import Command
 from eventlet import Queue, GreenPile
 from oio.common.configuration import load_namespace_conf
@@ -234,7 +234,9 @@ class DirectoryRestore(DirectoryCmd):
 
 
 class DirectoryDecommission(DirectoryCmd):
-    """Decommission a Meta1 service (or only some bases)."""
+    """
+    Decommission a Meta1 service (or only some bases).
+    """
 
     def get_parser(self, prog_name):
         parser = super(DirectoryDecommission, self).get_parser(prog_name)
@@ -242,17 +244,33 @@ class DirectoryDecommission(DirectoryCmd):
                             help='Address of service to decommission')
         parser.add_argument('base', metavar='<BASE>', nargs='*',
                             help="Name of bases to decommission")
+        parser.add_argument('--ignore-replicas-number-errors',
+                            action='store_true',
+                            help=("Continue even if the number of replicas "
+                                  "is not as expected. Dangerous."))
+
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
+        # Ensure we see 'info' logs.
+        if self.log.getEffectiveLevel() > INFO:
+            self.log.setLevel(INFO)
         mapping = self.get_prefix_mapping(parsed_args)
         mapping.load(read_timeout=parsed_args.meta0_timeout)
+        self.log.info("meta1_digits=%d", mapping.digits)
         moved = mapping.decommission(parsed_args.addr,
                                      bases_to_remove=parsed_args.base)
-        self._apply_mapping(mapping, moved=moved,
-                            read_timeout=parsed_args.meta0_timeout)
-        self.log.info("Moved %s", moved)
+        if (mapping.check_replicas() or
+                parsed_args.ignore_replicas_number_errors):
+            self._apply_mapping(mapping, moved=moved,
+                                read_timeout=parsed_args.meta0_timeout)
+            self.log.info("Moved %s", sorted(moved))
+        else:
+            self.log.warn("Did nothing due to errors.")
+            self.log.warn("If the errors are not related to the bases "
+                          "you want to decommission, try to rebalance.")
+            return 1
 
 
 class DirectoryWarmup(DirectoryCmd):
