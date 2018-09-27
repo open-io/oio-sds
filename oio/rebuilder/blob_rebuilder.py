@@ -51,6 +51,7 @@ class BlobRebuilder(Rebuilder):
         # counters
         self.bytes_processed = 0
         self.total_bytes_processed = 0
+        self.total_expected_chunks = None
         # distributed
         self.distributed = False
 
@@ -72,7 +73,8 @@ class BlobRebuilder(Rebuilder):
             total_bytes_processed, total_errors = counters
         time_since_last_report = (end_time - self.last_report) or 0.00001
         total_time = (end_time - self.start_time) or 0.00001
-        return ('%(status)s volume=%(volume)s '
+        report = (
+                '%(status)s volume=%(volume)s '
                 'last_report=%(last_report)s %(time_since_last_report).2fs '
                 'chunks=%(chunks)d %(chunks_rate).2f/s '
                 'bytes=%(bytes)d %(bytes_rate).2fB/s '
@@ -103,6 +105,12 @@ class BlobRebuilder(Rebuilder):
                     'total_errors_rate':
                         100 * total_errors / float(total_chunks_processed or 1)
                 })
+        if self.total_expected_chunks is not None:
+            progress = 100 * total_chunks_processed / \
+                float(self.total_expected_chunks or 1)
+            report += ' progress=%d/%d %.2f%%' % \
+                (total_chunks_processed, self.total_expected_chunks, progress)
+        return report
 
     def _update_processed_without_lock(self, bytes_processed, error=None,
                                        **kwargs):
@@ -128,6 +136,9 @@ class BlobRebuilder(Rebuilder):
         if self.volume:
             self.rdir_client.admin_lock(self.volume,
                                         "rebuilder on %s" % gethostname())
+            info = self.rdir_client.status(self.volume)
+            self.total_expected_chunks = info.get(
+                    'chunk', dict()).get('to_rebuild', None)
         try:
             success = self._rebuilder_pass(**kwargs)
         finally:
