@@ -445,8 +445,9 @@ class BeanstalkdListener(Beanstalkd):
             if job_id:
                 try:
                     self.beanstalkd.bury(job_id)
-                except BeanstalkError:
-                    pass
+                except BeanstalkError as exc2:
+                    self.logger.error("Could not bury job %s: %s",
+                                      job_id, exc2)
 
     def fetch_events(self, on_event, **kwargs):
         while True:

@@ -358,7 +358,7 @@ func_tests_rebuilder_mover () {
 		dd if=/dev/urandom of=/tmp/openio_object_$i bs=1K \
 				count=$(shuf -i 1-2000 -n 1) 2> /dev/null
 		echo "object create container-${RANDOM} /tmp/openio_object_$i" \
-				"--name object-${RANDOM}"
+				"--name object-${RANDOM} -f value"
 	done | ${PYTHON} $(which openio)
 
 	if [ -n "${REBUILDER}" ]; then
