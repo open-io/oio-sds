@@ -51,6 +51,14 @@ class TestPerfectibleContent(BaseTestCase):
             self.cs.unlock_score(self.locked_svc)
         super(TestPerfectibleContent, self).tearDown()
 
+    @classmethod
+    def tearDownClass(cls):
+        # Be kind with the next test suites
+        cls._cls_reload_proxy()
+        time.sleep(1)
+        cls._cls_reload_meta()
+        time.sleep(3)
+
     def _aggregate_services(self, type_, key):
         """
         Build lists of services indexed by `key`.

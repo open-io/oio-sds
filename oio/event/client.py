@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import random
 
 from oio.common.configuration import load_namespace_conf
 from oio.event.beanstalk import Beanstalk
@@ -21,13 +22,14 @@ from oio.event.beanstalk import Beanstalk
 class EventClient(object):
     def __init__(self, conf, **kwargs):
         self.ns_conf = load_namespace_conf(conf["namespace"])
-        self.queue_url = self.ns_conf['event-agent']
+        self.queue_url = self.ns_conf['event-agent'].split(';')
         self._beanstalk = None
 
     @property
     def beanstalk(self):
         if not self._beanstalk:
-            self._beanstalk = Beanstalk.from_url(self.queue_url)
+            self._beanstalk = Beanstalk.from_url(
+                random.choice(self.queue_url))
         return self._beanstalk
 
     def exhume(self, limit=1000, tube=None):
