@@ -803,10 +803,10 @@ pipeline = content_cleaner
 pipeline = logger content_improve
 
 [handler:storage.container.new]
-pipeline = meta2_index account_update
+pipeline = account_update meta2_index
 
 [handler:storage.container.deleted]
-pipeline = meta2_index account_update
+pipeline = account_update meta2_index
 
 [handler:storage.container.state]
 pipeline = account_update
