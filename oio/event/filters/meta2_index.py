@@ -53,43 +53,47 @@ class Meta2IndexFilter(Filter):
             if event.event_type == EventTypes.CONTAINER_NEW:
                 try:
                     for peer in peers:
-                        self.rdir.meta2_index_push(meta2_address=peer,
+                        self.rdir.meta2_index_push(volume_id=peer,
                                                    content_path=content_url,
                                                    content_id=content_id,
                                                    mtime=mtime)
                 except VolumeException:
                     msg = '[Meta2IndexFilter] No RDIR is assigned to META2 ' \
                           'server %s. Unable to push new container.' % peer
-                    self.logger.warn(msg)
-                    # resp = EventError(event=Event(env), body=msg)
-                    # return resp(env, cb)
-                    pass
+                    resp = EventError(event=env, body=msg)
+                    return resp(env, cb)
                 except OioTimeout:
                     msg = '[Meta2IndexFilter] Pusing new containers to index' \
                           'timed out.'
-                    resp = EventError(event=Event(env), body=msg)
+                    resp = EventError(event=env, body=msg)
                     return resp(env, cb)
                 except ClientException:
                     msg = '[Meta2IndexFilter] Unable to push new containers ' \
                           'to index'
-                    resp = EventError(event=Event(env), body=msg)
+                    resp = EventError(event=env, body=msg)
                     return resp(env, cb)
 
             elif event.event_type == EventTypes.CONTAINER_DELETED:
                 try:
                     for peer in peers:
-                        self.rdir.meta2_index_delete(meta2_address=peer,
+                        self.rdir.meta2_index_delete(volume_id=peer,
                                                      content_path=content_url,
                                                      content_id=content_id)
+                except VolumeException:
+                    msg = '[Meta2IndexFilter] No RDIR is assigned to META2 ' \
+                          'server %s. Unable to push new container.' % peer
+                    resp = EventError(event=env, body=msg)
+                    return resp(env, cb)
+                    pass
                 except OioTimeout:
                     msg = '[Meta2IndexFilter] Deleting containers from index' \
                           ' timed out.'
-                    resp = EventError(event=Event(env), body=msg)
+                    resp = EventError(event=env, body=msg)
                     return resp(env, cb)
                 except ClientException:
                     msg = '[Meta2IndexFilter] Unable to delete containers ' \
                           'from index'
-                    resp = EventError(event=Event(env), body=msg)
+                    resp = EventError(event=env, body=msg)
                     return resp(env, cb)
 
         return self.app(env, cb)

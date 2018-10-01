@@ -33,7 +33,7 @@ The same is valid for container deletion, the fired event in that case being
 
 ### API Endpoints:
 Four endpoints are available for the META2 RDIR API:
-- __/v1/meta2/create__: Creating a database to hold the records relating to a 
+- __/v1/meta2/create__: Create a database to hold the records relating to a 
 certain META2 server.
 - __/v1/meta2/push__: Add a record pointing to a container on a specified META2
 server.

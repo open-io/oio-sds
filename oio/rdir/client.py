@@ -347,8 +347,10 @@ class RdirClient(HttpApi):
             params['autocreate'] = 1
         # Assuming we'll use the same facility to fetch assigned rdirs to META2
         # Since technically speaking it's a KV store so it shouldn't matter.
+        req_id = kwargs.get('headers')['X-oio-req-id'] \
+            if kwargs.get('headers') is not None else None
         uri = self._make_uri('meta2/%s' % action, meta2_address,
-                             req_id=kwargs.get('X-oio-req-id'))
+                             req_id=req_id)
 
         try:
             resp, body = self._direct_request(method, uri, params=params,
@@ -464,11 +466,11 @@ class RdirClient(HttpApi):
         _resp, body = self._rdir_request(volume, 'GET', 'status', **kwargs)
         return body
 
-    def meta2_index_create(self, meta2_address, **kwargs):
-        return self._rdir_meta2_request(meta2_address, 'POST', 'create',
+    def meta2_index_create(self, volume_id, **kwargs):
+        return self._rdir_meta2_request(volume_id, 'POST', 'create',
                                         **kwargs)
 
-    def meta2_index_push(self, meta2_address, content_path, content_id, mtime,
+    def meta2_index_push(self, volume_id, content_path, content_id, mtime,
                          headers=None, **kwargs):
         body = {'content_url': content_path,
                 'container_id': content_id,
@@ -477,11 +479,11 @@ class RdirClient(HttpApi):
         for key, value in kwargs.iteritems():
             body[key] = value
 
-        return self._rdir_meta2_request(meta2_address, 'POST', 'push',
+        return self._rdir_meta2_request(volume_id, 'POST', 'push',
                                         create=True,
                                         json=body, headers=headers)
 
-    def meta2_index_delete(self, meta2_address, content_path, content_id,
+    def meta2_index_delete(self, volume_id, content_path, content_id,
                            **kwargs):
         body = {'content_url': content_path,
                 'container_id': content_id}
@@ -489,10 +491,10 @@ class RdirClient(HttpApi):
         for key, value in kwargs.iteritems():
             body[key] = value
 
-        return self._rdir_meta2_request(meta2_address, 'POST', 'delete',
+        return self._rdir_meta2_request(volume_id, 'POST', 'delete',
                                         create=False,
                                         json=body)
 
-    def meta2_index_fetch(self, meta2_address, prefix='', marker=0, limit=4096,
+    def meta2_index_fetch(self, volume_id, prefix='', marker=0, limit=4096,
                           **kwargs):
         raise ClientException("Not Yet Implemented.")

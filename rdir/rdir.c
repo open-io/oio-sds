@@ -73,6 +73,7 @@ static GTree *tree_bases = NULL;
 	} \
 } while (0)
 
+#define RDIR_LISTING_LIMIT 4096
 /* ------------------------------------------------------------------------- */
 
 static enum http_rc_e
@@ -492,16 +493,8 @@ _db_admin_set_incident(const char *volid, gint64 when)
 }
 
 static GError *
-_db_insert_generic(GTree *db_tree, GMutex *db_tree_lock, GCond *db_tree_cond,
-				   const char *volid, gboolean autocreate, GString *key,
-				   GString *value)
+_db_insert_generic(struct rdir_base_s *base, GString *key, GString *value)
 {
-	struct rdir_base_s *base = NULL;
-	GError *err = _db_get_generic(db_tree, db_tree_lock, db_tree_cond,
-			volid, autocreate, &base);
-	if (err)
-		return err;
-
 	char *errmsg = NULL;
 
 	leveldb_writeoptions_t *options = leveldb_writeoptions_create();
@@ -513,6 +506,7 @@ _db_insert_generic(GTree *db_tree, GMutex *db_tree_lock, GCond *db_tree_cond,
 
 	if (!errmsg)
 		return NULL;
+
 	return _map_errno_to_gerror(errno, errmsg);
 }
 
@@ -520,8 +514,13 @@ static GError *
 _db_vol_push(const char *volid, gboolean autocreate, GString *key,
 			 GString *value)
 {
-	return _db_insert_generic(tree_bases, &lock_bases, &cond_bases, volid,
-							  autocreate, key, value);
+	struct rdir_base_s *base = NULL;
+	GError *err = _db_get_generic(tree_bases, &lock_bases, &cond_bases,
+								  volid, autocreate, &base);
+	if (err)
+		return err;
+
+	return _db_insert_generic(base, key, value);
 }
 
 static GError *
@@ -1597,9 +1596,9 @@ _route_admin_set_incident(struct req_args_s *args, struct json_object *jbody,
  * but use our own tree/lock/condition. It's probably safer this way, and can
  * be quickly rolled back.
  */
-GMutex meta2_db_lock;
-GTree *meta2_db_tree = NULL;
-GCond meta2_db_cond;
+static GMutex meta2_db_lock;
+static GTree *meta2_db_tree = NULL;
+static GCond meta2_db_cond;
 
 /*
  * This is the structure we're storing. As per the OB-181 ticket, this is what
@@ -1710,6 +1709,15 @@ _meta2_record_encode(struct rdir_meta2_record_s *rec, GString *value)
 	g_string_append_c(value, '}');
 }
 
+static void
+_meta2_record_free(struct rdir_meta2_record_s *rec)
+{
+	g_free(rec->container);
+	g_free(rec->content_url);
+	if(rec->extra_data)
+		g_free(rec->extra_data);
+}
+
 /*
  * Extracts a description of the desired record subset from the JSON
  * body.
@@ -1736,7 +1744,8 @@ _meta2_record_subset_extract(struct rdir_meta2_record_subset_s *subset,
 		}
 		subset->marker = jmarker ? json_object_get_int64(jmarker) : 0;
 		subset->limit =
-				jlimit ? CLAMP(json_object_get_int64(jlimit), 0, 4096) : 4096;
+				jlimit ? CLAMP(json_object_get_int64(jlimit), 0,
+				RDIR_LISTING_LIMIT) : RDIR_LISTING_LIMIT;
 	}
 	return err;
 }
@@ -1758,12 +1767,11 @@ _meta2_db_address_to_filename(const gchar *meta2_address, gchar **filename)
 		// We have an IP:PORT
 		*colon_char = '-';
 		*filename = g_strconcat("meta2-", local_copy, NULL);
-		g_free(local_copy);
 	}else{
 		// We have a service ID
 		*filename = g_strconcat("meta2-", local_copy, NULL);
-		g_free(local_copy);
 	}
+	g_free(local_copy);
 	return err;
 }
 
@@ -1914,17 +1922,11 @@ static GError*
 _meta2_db_push(const char *meta2_address, gboolean autocreate, GString * key,
 		GString *val)
 {
-	GError *err = NULL;
-	gchar *filename = NULL;
-	autocreate = TRUE;
-	err = _meta2_db_address_to_filename(meta2_address, &filename);
-	if(!err){
-		err = _db_insert_generic(meta2_db_tree, &meta2_db_lock, &meta2_db_cond,
-			filename, autocreate, key, val);
-	}
-	if(filename)
-		g_free(filename);
-	return err;
+	struct rdir_base_s *base = NULL;
+	GError *err = _meta2_db_get(meta2_address, autocreate, &base);
+	if (err)
+		return err;
+	return _db_insert_generic(base, key, val);
 }
 
 /*
@@ -2065,6 +2067,7 @@ _route_meta2_push(struct req_args_s *args, struct json_object *jbody,
 	err = _meta2_db_push(meta2_address, autocreate, key, value);
 	g_string_free(key, TRUE);
 	g_string_free(value, TRUE);
+	_meta2_record_free(&rec);
 
 	if (err)
 		return _reply_common_error(args->rp, err);
@@ -2099,6 +2102,7 @@ _route_meta2_delete(struct req_args_s *args, struct json_object *jbody,
 	/* Eventually delete the record from the database */
 	err = _meta2_db_delete(meta2_address, key);
 	g_string_free(key, TRUE);
+	_meta2_record_free(&rec);
 
 	if (err)
 		return _reply_common_error(args->rp, err);
