@@ -597,19 +597,25 @@ _init_container(struct sqlx_sqlite3_s *sq3,
 	return err;
 }
 
-static GString *
-_get_meta2_peers(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2)
+static GError *
+_get_meta2_peers(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2,
+		GString *peers_array)
 {
+	GError *err = NULL;
 	gchar **peers = NULL;
 	// Necessary evil.
-	struct sqlx_name_s name = {0};
-	name.base = (const char *)sq3->name.base;
-	name.ns = (const char *)sq3->name.ns;
-	name.type = (const char *)sq3->name.type;
+	NAME2CONST(name, sq3->name);
 
-	const enum election_status_e s = sq3->election;
-	if(!s || s == ELECTION_LEADER)
-		sqlx_repository_get_peers(m2->repo, &name, &peers);
+	if (peers_array == NULL)
+		return NEWERROR(ERRCODE_PARAM, "[%s] Received NULL pointer !",
+				__FUNCTION__);
+
+	const enum election_status_e election_status = sq3->election;
+	if(election_status == ELECTION_LEADER){
+		err = sqlx_repository_get_peers(m2->repo, &name, &peers);
+		if (err)
+			return err;
+	}
 
 	// This is either a NULL terminated array of all the peers or a NULL ptr.
 	// If there's no elections or no peers, then we find ourselves with
@@ -617,31 +623,20 @@ _get_meta2_peers(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2)
 	// TODO: There's maybe a cleaner way to do this.
 	gchar *local_addr = g_strdup(sqlx_repository_get_local_addr(m2->repo));
 	EXTRA_ASSERT(local_addr != NULL);
-	if(peers != NULL)
-		peers = oio_strv_append(peers,local_addr);
-	else {
-		peers = g_malloc(2*sizeof(gchar *));
-		peers[0] = local_addr;
-		peers[1] = NULL;
-	}
 
-	GString *peers_array = g_string_new("");
-	// We know we have at least this META2 server so we're safe doing this.
-	int i = 0;
-	gchar *peer = NULL;
-	if(peers != NULL)
-		peer = peers[i];
 	g_string_append_c(peers_array, '[');
-	while (peer != NULL){
-		const char *terminate = (peers[i+1] == NULL) ? "" : ",";
-		g_string_append_printf(peers_array, "\"%s\"%s", peer, terminate);
-		i++;
-		g_free(peer);
-		peer = peers[i];
+	if(peers != NULL){
+		for (size_t i = 0; i < oio_strv_length((const char * const *)peers); i++){
+			oio_str_gstring_append_json_quote(peers_array, peers[i]);
+			g_string_append_c(peers_array, ',');
+		}
+
 	}
+	oio_str_gstring_append_json_quote(peers_array, local_addr);
 	g_string_append_c(peers_array, ']');
 	g_free(peers);
-	return peers_array;
+	g_free(local_addr);
+	return err;
 }
 
 GError *
@@ -682,7 +677,13 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 	/* Fire an event to notify the world this container exists */
 	const enum election_status_e s = sq3->election;
 	if (!params->local && m2->notifier && (!s || s == ELECTION_LEADER)) {
-		GString *peers_list = _get_meta2_peers(sq3, m2);
+		GString *peers_list = g_string_sized_new(1024);
+		err = _get_meta2_peers(sq3, m2, peers_list);
+		if(err != NULL){
+			m2b_destroy(sq3);
+			g_string_free(peers_list, TRUE);
+			return err;
+		}
 		GString *gs = oio_event__create (META2_EVENTS_PREFIX".container.new", url);
 		g_string_append_printf(gs, ",\"data\": %s }", peers_list->str);
 		oio_events_queue__send (m2->notifier, g_string_free (gs, FALSE));
@@ -733,9 +734,14 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 
 		if (!err) {
 			GString *gs = NULL;
-			GString *peers_list = NULL;
+			GString *peers_list = g_string_sized_new(1024);
 			if (m2->notifier && event) {
-				peers_list = _get_meta2_peers(sq3, m2);
+				err = _get_meta2_peers(sq3, m2, peers_list);
+				if (err != NULL){
+					m2b_close(sq3);
+					g_string_free(peers_list, TRUE);
+					return err;
+				}
 				gs = oio_event__create (META2_EVENTS_PREFIX ".container.deleted", url);
 				g_string_append_printf(gs, ",\"data\": %s }", peers_list->str);
 			}
