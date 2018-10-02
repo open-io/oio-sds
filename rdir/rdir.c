@@ -393,7 +393,7 @@ retry:
 		}
 	} else {
 		b = g_malloc0(sizeof(*b));
-		g_tree_replace(tree_bases, g_strdup(volid), b);
+		g_tree_replace(db_tree, g_strdup(volid), b);
 open:
 		b->owner = g_thread_self();
 		g_mutex_unlock(db_tree_lock);
@@ -515,8 +515,7 @@ _db_vol_push(const char *volid, gboolean autocreate, GString *key,
 			 GString *value)
 {
 	struct rdir_base_s *base = NULL;
-	GError *err = _db_get_generic(tree_bases, &lock_bases, &cond_bases,
-								  volid, autocreate, &base);
+	GError *err = _db_get(volid, autocreate, &base);
 	if (err)
 		return err;
 
@@ -1939,7 +1938,8 @@ _meta2_db_delete(const gchar *meta2_address, GString *key)
 	GError *err = _meta2_db_get(meta2_address, FALSE, &base);
 	if (err)
 		return err;
-	return _db_vol_delete_generic(base, key);
+	return _db_vol_delete_generic(base, g_string_prepend(key,
+			CONTAINER_PREFIX));
 }
 
 /*
@@ -2022,7 +2022,7 @@ _route_meta2_create(struct req_args_s *args, const char *meta2_address)
 	if (!oio_str_is_set(meta2_address))
 		return _reply_format_error(args->rp, BADREQ("No META2 ID"));
 
-	//FIXME: Check for an IP:PORT format.
+	//FIXME: Check for an IP:PORT or service ID format.
 
 	struct rdir_base_s *base = NULL;
 	GError *err = _meta2_db_get(meta2_address, TRUE, &base);
@@ -2045,7 +2045,7 @@ _route_meta2_push(struct req_args_s *args, struct json_object *jbody,
 	if (!meta2_address)
 		return _reply_format_error(args->rp, BADREQ("no META2 id"));
 
-	gboolean autocreate = oio_str_parse_bool(str_autocreate, FALSE);
+	gboolean autocreate = oio_str_parse_bool(str_autocreate, TRUE);
 
 	GError *err = NULL;
 	struct rdir_meta2_record_s rec = {0};

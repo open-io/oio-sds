@@ -60,17 +60,17 @@ class Meta2IndexFilter(Filter):
                 except VolumeException:
                     msg = '[Meta2IndexFilter] No RDIR is assigned to META2 ' \
                           'server %s. Unable to push new container.' % peer
-                    resp = EventError(event=env, body=msg)
+                    resp = EventError(event=Event(env), body=msg)
                     return resp(env, cb)
                 except OioTimeout:
                     msg = '[Meta2IndexFilter] Pusing new containers to index' \
                           'timed out.'
-                    resp = EventError(event=env, body=msg)
+                    resp = EventError(event=Event(env), body=msg)
                     return resp(env, cb)
-                except ClientException:
+                except ClientException as e:
                     msg = '[Meta2IndexFilter] Unable to push new containers ' \
-                          'to index'
-                    resp = EventError(event=env, body=msg)
+                          'to index: %s' % e.message
+                    resp = EventError(event=Event(env), body=msg)
                     return resp(env, cb)
 
             elif event.event_type == EventTypes.CONTAINER_DELETED:
@@ -82,18 +82,17 @@ class Meta2IndexFilter(Filter):
                 except VolumeException:
                     msg = '[Meta2IndexFilter] No RDIR is assigned to META2 ' \
                           'server %s. Unable to push new container.' % peer
-                    resp = EventError(event=env, body=msg)
+                    resp = EventError(event=Event(env), body=msg)
                     return resp(env, cb)
-                    pass
                 except OioTimeout:
                     msg = '[Meta2IndexFilter] Deleting containers from index' \
                           ' timed out.'
-                    resp = EventError(event=env, body=msg)
+                    resp = EventError(event=Event(env), body=msg)
                     return resp(env, cb)
-                except ClientException:
+                except ClientException as e:
                     msg = '[Meta2IndexFilter] Unable to delete containers ' \
-                          'from index'
-                    resp = EventError(event=env, body=msg)
+                          'from index: %s' % e.message
+                    resp = EventError(event=Event(env), body=msg)
                     return resp(env, cb)
 
         return self.app(env, cb)
