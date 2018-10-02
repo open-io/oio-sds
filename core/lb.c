@@ -359,6 +359,9 @@ struct polling_ctx_s
 	 * platforms where there is less locations than targets
 	 * (for the specified distance). */
 	gboolean check_popularity : 8;
+
+	/* Maximum distance. */
+	guint16 max_dist;
 };
 
 static void _local__destroy (struct oio_lb_pool_s *self);
@@ -547,9 +550,9 @@ _item_is_too_far(const oio_location_t *known,
 
 static guint16
 _find_min_dist(const oio_location_t *known,
-		const oio_location_t item)
+		const oio_location_t item, guint16 max_dist)
 {
-	guint16 dist = OIO_LB_LOC_LEVELS;
+	guint16 dist = max_dist;
 	while (_item_is_too_close(known, item, dist)) {
 		dist--;
 	}
@@ -790,7 +793,7 @@ _accept_item(struct oio_lb_slot_s *slot, const guint16 distance,
 		selected->final_dist = distance;
 	} else {
 		selected->final_dist = _find_min_dist(ctx->polled,
-				selected->item->location);
+				selected->item->location, ctx->max_dist);
 	}
 
 	*(ctx->next_polled) = loc;
@@ -996,19 +999,6 @@ _local__patch(struct oio_lb_pool_s *self,
 	GPtrArray *selection = g_ptr_array_new_with_free_func(
 			(GDestroyNotify)_selected_item_free);
 
-	struct polling_ctx_s ctx = {
-		.avoids = avoids,
-		.polled = (const oio_location_t *) polled,
-		.next_polled = polled,
-		.n_targets = count_targets,
-		.check_distance = TRUE,
-		.check_popularity = TRUE,
-	};
-
-	for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
-		g_datalist_init(&ctx.counters[level]);
-	}
-
 	/* In normal mode (resp. nearby mode), bit shifts start high
 	 * (resp. low), because we want services with different
 	 * (resp. equal) most significant bits. Then we reduce (resp. increase)
@@ -1019,6 +1009,21 @@ _local__patch(struct oio_lb_pool_s *self,
 	guint16 start_dist = lb->nearby_mode? lb->min_dist : max_dist;
 	guint16 end_dist = (lb->nearby_mode? max_dist + 1 : lb->min_dist - 1);
 	guint16 reached_dist = start_dist;
+
+	struct polling_ctx_s ctx = {
+		.avoids = avoids,
+		.polled = (const oio_location_t *) polled,
+		.next_polled = polled,
+		.n_targets = count_targets,
+		.check_distance = TRUE,
+		.check_popularity = TRUE,
+		.max_dist = max_dist,
+	};
+
+	for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
+		g_datalist_init(&ctx.counters[level]);
+	}
+
 	gint16 incr = lb->nearby_mode? 1 : -1;
 	guint count = 0;
 	GError *err = NULL;
