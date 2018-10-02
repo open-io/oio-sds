@@ -277,7 +277,7 @@ Upload a chunk on the target RAWX service.
 
 .. list-table:: RAWX Headers
    :header-rows: 1
-   :widths: 10 20
+   :widths: 10 20 10
 
    * - Header
      - Description
