@@ -1607,7 +1607,7 @@ struct rdir_meta2_record_s
 {
 	gint64 mtime;
 	gchar *container;
-	gchar *content_url;
+	gchar *container_url;
 	gchar *extra_data;
 };
 
@@ -1631,7 +1631,7 @@ _meta2_record_extract(struct rdir_meta2_record_s *rec, struct json_object *jreco
 	struct json_object *jcontainer, *jmtime, *jcontenturl, *jextradata;
 	struct oio_ext_json_mapping_s map[] = {
 		{"container_id", &jcontainer, json_type_string, 1},
-		{"content_url", &jcontenturl, json_type_string, 1},
+		{"container_url", &jcontenturl, json_type_string, 1},
 		{"mtime",        &jmtime,     json_type_int,    0},
 		{"extra_data",        &jextradata,     json_type_string,    0},
 		{NULL, NULL, 0, 0}
@@ -1639,20 +1639,20 @@ _meta2_record_extract(struct rdir_meta2_record_s *rec, struct json_object *jreco
 	GError *err = oio_ext_extract_json(jrecord, map);
 	if (!err) {
 		const char *container = json_object_get_string(jcontainer);
-		const char *content_url = json_object_get_string(jcontenturl);
+		const char *container_url = json_object_get_string(jcontenturl);
 		const char *extra = json_object_get_string(jextradata);
-		if(container && content_url){
+		if(container && container_url){
 			// FIXME: Default to current time ?
 			rec->mtime = jmtime ? json_object_get_int64(jmtime) : 0;
 			rec->container = g_strdup(container);
-			rec->content_url = g_strdup(content_url);
+			rec->container_url = g_strdup(container_url);
 			if (extra)
 				rec->extra_data = g_strdup(extra);
 			else
 				rec->extra_data = NULL;
 		}else{
-			err = NEWERROR(CODE_BAD_REQUEST, "[_meta2_record_extract] Container"
-					"ID and Content URL are mandatory to add record");
+			err = NEWERROR(CODE_BAD_REQUEST, "[%s] Container ID and Content URL"
+					"are mandatory to add record", __FUNCTION__);
 		}
 	}
 	return err;
@@ -1682,11 +1682,11 @@ static GError *
 _meta2_record_to_key(struct rdir_meta2_record_s *rec, GString *key)
 {
 	GError *err = NULL;
-	if(rec->content_url){
-		g_string_printf(key, CONTAINER_PREFIX "%s", rec->content_url);
+	if(rec->container_url){
+		g_string_printf(key, CONTAINER_PREFIX "%s", rec->container_url);
 	}else{
-		err = NEWERROR(CODE_BAD_REQUEST, "[_meta2_record_to_key] Content URL"
-				" mandatory to compute key.");
+		err = NEWERROR(CODE_BAD_REQUEST, "[%s] Content URL mandatory to compute"
+				"key.", __FUNCTION__);
 	}
 	return err;
 }
@@ -1700,7 +1700,7 @@ _meta2_record_encode(struct rdir_meta2_record_s *rec, GString *value)
 	g_string_append_c(value, '{');
 	oio_str_gstring_append_json_pair(value, "container_id", rec->container);
 	g_string_append_c(value, ',');
-	oio_str_gstring_append_json_pair(value, "content_url", rec->content_url);
+	oio_str_gstring_append_json_pair(value, "container_url", rec->container_url);
 	g_string_append_c(value, ',');
 	oio_str_gstring_append_json_pair(value, "extra_data", rec->extra_data);
 	g_string_append_c(value, ',');
@@ -1712,7 +1712,7 @@ static void
 _meta2_record_free(struct rdir_meta2_record_s *rec)
 {
 	g_free(rec->container);
-	g_free(rec->content_url);
+	g_free(rec->container_url);
 	if(rec->extra_data)
 		g_free(rec->extra_data);
 }
@@ -1945,7 +1945,7 @@ _meta2_db_delete(const gchar *meta2_address, GString *key)
 /*
  * Fetch specific records, or a range of records.
  *
- * The record are ordered by content_url, so we can seek a very specific
+ * The record are ordered by container_url, so we can seek a very specific
  * prefix and start iterating from there.
  *
  * For example, if we want to iterate through the containers that belong to

@@ -316,7 +316,10 @@ class RdirClient(HttpApi):
             params['autocreate'] = 1
         # Assuming we'll use the same facility to fetch assigned rdirs to META2
         # Since technically speaking it's a KV store so it shouldn't matter.
-        req_id = kwargs.get('headers', {}).get('X-oio-req-id')
+        if kwargs and kwargs.get('headers', None):
+            req_id = kwargs.get('headers').get('X-oio-req-id', None)
+        else:
+            req_id = None
         uri = self._make_uri('meta2/%s' % action, meta2_address,
                              req_id=req_id)
 
@@ -438,10 +441,10 @@ class RdirClient(HttpApi):
         return self._rdir_meta2_request(volume_id, 'POST', 'create',
                                         **kwargs)
 
-    def meta2_index_push(self, volume_id, content_path, content_id, mtime,
+    def meta2_index_push(self, volume_id, container_url, container_id, mtime,
                          headers=None, **kwargs):
-        body = {'content_url': content_path,
-                'container_id': content_id,
+        body = {'container_url': container_url,
+                'container_id': container_id,
                 'mtime': int(mtime)}
 
         for key, value in kwargs.iteritems():
@@ -449,19 +452,19 @@ class RdirClient(HttpApi):
 
         return self._rdir_meta2_request(volume_id, 'POST', 'push',
                                         create=True,
-                                        json=body, headers=headers)
+                                        json=body, headers=headers, **kwargs)
 
-    def meta2_index_delete(self, volume_id, content_path, content_id,
+    def meta2_index_delete(self, volume_id, container_path, container_id,
                            **kwargs):
-        body = {'content_url': content_path,
-                'container_id': content_id}
+        body = {'container_url': container_path,
+                'container_id': container_id}
 
         for key, value in kwargs.iteritems():
             body[key] = value
 
         return self._rdir_meta2_request(volume_id, 'POST', 'delete',
                                         create=False,
-                                        json=body)
+                                        json=body, **kwargs)
 
     def meta2_index_fetch(self, volume_id, prefix='', marker=0, limit=4096,
                           **kwargs):
