@@ -41,11 +41,12 @@ class Meta2IndexFilter(Filter):
 
         mtime = event.when / 1000000.0
         url = event.env.get('url')
-        content_url = "/".join([
+        container_url = "/".join([
             url.get('ns'),
             url.get('account'),
             url.get('user')])
-        content_id = url.get('id')
+        container_id = url.get('id')
+
         peers = event.data
 
         if not PASSTHROUGH:
@@ -53,10 +54,11 @@ class Meta2IndexFilter(Filter):
             if event.event_type == EventTypes.CONTAINER_NEW:
                 try:
                     for peer in peers:
-                        self.rdir.meta2_index_push(volume_id=peer,
-                                                   content_path=content_url,
-                                                   content_id=content_id,
-                                                   mtime=mtime)
+                        self.rdir.meta2_index_push(
+                            volume_id=peer,
+                            container_url=container_url,
+                            container_id=container_id,
+                            mtime=mtime)
                 except VolumeException:
                     msg = '[Meta2IndexFilter] No RDIR is assigned to META2 ' \
                           'server %s. Unable to push new container.' % peer
@@ -76,9 +78,10 @@ class Meta2IndexFilter(Filter):
             elif event.event_type == EventTypes.CONTAINER_DELETED:
                 try:
                     for peer in peers:
-                        self.rdir.meta2_index_delete(volume_id=peer,
-                                                     content_path=content_url,
-                                                     content_id=content_id)
+                        self.rdir.meta2_index_delete(
+                            volume_id=peer,
+                            container_path=container_url,
+                            container_id=container_id)
                 except VolumeException:
                     msg = '[Meta2IndexFilter] No RDIR is assigned to META2 ' \
                           'server %s. Unable to push new container.' % peer
