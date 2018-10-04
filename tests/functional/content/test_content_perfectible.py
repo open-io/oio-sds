@@ -55,9 +55,9 @@ class TestPerfectibleContent(BaseTestCase):
     def tearDownClass(cls):
         # Be kind with the next test suites
         cls._cls_reload_proxy()
-        time.sleep(1)
-        cls._cls_reload_meta()
         time.sleep(3)
+        cls._cls_reload_meta()
+        time.sleep(1)
 
     def _aggregate_services(self, type_, key):
         """

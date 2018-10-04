@@ -1532,18 +1532,21 @@ meta2_backend_check_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		GSList *chunk_meta = NULL;
 		*beans = gslist_extract(*beans, &chunk_meta,
 				(GCompareFunc)_prop_is_not_prefixed, OIO_CHUNK_SYSMETA_PREFIX);
-		GSList *messages = NULL;
-		m2db_check_content_quality(sorted, chunk_meta, &messages);
-		for (GSList *msgs = messages; msgs != NULL; msgs = msgs->next) {
-			gchar *msg = msgs->data;
-			GString *gs = oio_event__create_with_id(
-					"storage.content.perfectible", url, oio_ext_get_reqid());
-			g_string_append(gs, ",\"data\":");
-			g_string_append(gs, msg);
-			g_string_append(gs, "}");
-			send_event(g_string_free(gs, FALSE), NULL);
+		if (send_event) {
+			GSList *messages = NULL;
+			m2db_check_content_quality(sorted, chunk_meta, &messages);
+			for (GSList *msgs = messages; msgs != NULL; msgs = msgs->next) {
+				gchar *msg = msgs->data;
+				GString *gs = oio_event__create_with_id(
+						"storage.content.perfectible",
+						url, oio_ext_get_reqid());
+				g_string_append(gs, ",\"data\":");
+				g_string_append(gs, msg);
+				g_string_append(gs, "}");
+				send_event(g_string_free(gs, FALSE), NULL);
+			}
+			g_slist_free_full(messages, g_free);
 		}
-		g_slist_free_full(messages, g_free);
 		_bean_cleanl2(chunk_meta);
 	}
 

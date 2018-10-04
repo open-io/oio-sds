@@ -2330,6 +2330,8 @@ m2db_check_content_quality(struct m2v2_sorted_content_s *sorted_content,
 		GSList *chunk_meta, GSList **to_be_improved)
 {
 	EXTRA_ASSERT(to_be_improved != NULL);
+	/* keys are chunk URLs,
+	 * values are <struct oio_lb_selected_item_s *> */
 	GHashTable *chunk_items = g_hash_table_new_full(g_str_hash, g_str_equal,
 			g_free, g_free);
 	_load_chunk_qualities(chunk_items, chunk_meta);
@@ -2345,11 +2347,11 @@ m2db_check_content_quality(struct m2v2_sorted_content_s *sorted_content,
 		gboolean must_send_event = FALSE;
 		for (GSList *cur = chunks; cur; cur = cur->next) {
 			GString *chunk_id = CHUNKS_get_id(cur->data);
-			if (cur != chunks)
-				g_string_append_c(out, ',');
 			struct oio_lb_selected_item_s *item = g_hash_table_lookup(
 					chunk_items, chunk_id->str);
 			if (item) {
+				if (cur != chunks)
+					g_string_append_c(out, ',');
 				g_string_append_c(out, '{');
 				meta2_json_encode_bean(out, cur->data);
 				g_string_append_c(out, ',');
@@ -2361,6 +2363,9 @@ m2db_check_content_quality(struct m2v2_sorted_content_s *sorted_content,
 					must_send_event = TRUE;
 				}
 				g_string_append_c(out, '}');
+			} else {
+				GRID_DEBUG("%s: no quality description for chunk %s",
+						__FUNCTION__, chunk_id->str);
 			}
 		}
 		g_string_append(out, "]}");
@@ -2375,6 +2380,7 @@ m2db_check_content_quality(struct m2v2_sorted_content_s *sorted_content,
 	}
 	g_tree_foreach(sorted_content->metachunks,
 			(GTraverseFunc)_on_metachunk, NULL);
+	g_hash_table_destroy(chunk_items);
 }
 
 GError *
