@@ -195,6 +195,8 @@ $cmd_openio cluster wait -d 30 -u -n "$COUNT" meta1
 
 $cmd_openio volume admin bootstrap
 
+$cmd_openio directory bootstrap meta2 --max-per-rdir 10
+
 echo -e "\n### Wait for the services to have a score"
 $cmd_openio cluster unlockall
 oio-flush-all.sh -n "$NS" >/dev/null
