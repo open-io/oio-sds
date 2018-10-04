@@ -15,6 +15,7 @@
 
 from logging import getLogger, INFO
 from cliff.command import Command
+from cliff.lister import Lister
 from eventlet import Queue, GreenPile
 from oio.common.configuration import load_namespace_conf
 from oio.common.exceptions import ClientException
@@ -88,7 +89,7 @@ class DirectoryCmd(Command):
                 raise
 
 
-class DirectoryInit(DirectoryCmd):
+class DirectoryInit(DirectoryCmd, Lister):
     """
     Initialize the service directory.
 
@@ -107,7 +108,37 @@ class DirectoryInit(DirectoryCmd):
             '--check',
             action='store_true',
             help="Check that all prefixes have the right number of replicas")
+        parser.add_argument(
+            'meta_type',
+            nargs='?',
+            choices=['meta1', 'meta2'],
+            default='meta1',
+            help='Whether to assign RDIR services to META2 servers, or '
+                 'to bootstrap META1 services as usual. Defaults to meta1.')
+        parser.add_argument(
+            '--max-per-rdir',
+            metavar='<N>',
+            type=int,
+            help="Maximum number of services per rdir service. Required for"
+                 " bootstrapping META2.",
+            default=-1,
+            nargs='?')
         return parser
+
+    def _format_meta2_assignation(self, all_meta2):
+        """Prepare the list of results for display"""
+        # FIXME: Copypasta from RDIR/RAWX assignment, possible factorization?
+        results = list()
+        for meta2 in all_meta2:
+            rdir = meta2.get('rdir', {'addr': 'n/a', 'tags': {}})
+            results.append(
+                (rdir['tags'].get('tag.service_id') or rdir['addr'],
+                 meta2['tags'].get('tag.service_id') or meta2['addr'],
+                 rdir['tags'].get('tag.loc'),
+                 meta2['tags'].get('tag.loc')))
+        results.sort()
+        columns = ('RDIR', 'META2', 'RDIR location', 'META2 location')
+        return columns, results
 
     def _assign_meta1(self, parsed_args):
         mapping = self.get_prefix_mapping(parsed_args)
@@ -148,17 +179,33 @@ class DirectoryInit(DirectoryCmd):
             raise Exception("Failed to initialize prefix mapping")
         return checked
 
-    def take_action(self, parsed_args):
-        self.log.debug('take_action(%s)', parsed_args)
-        if parsed_args.no_rdir:
-            self.log.warn('--no-rdir option is deprecated')
-        checked = self._assign_meta1(parsed_args)
+    def _assign_meta2(self, parsed_args):
+        all_meta2 = self.app.client_manager.directory.rdir_lb.assign_all_meta2(
+            parsed_args.max_per_rdir,
+            connection_timeout=30.0, read_timeout=90.0
+        )
+        (colums, data) = self._format_meta2_assignation(all_meta2)
+        self.produce_output(parsed_args, colums, data)
 
-        if checked:
-            self.log.info("Done")
-        else:
-            self.log.warn("Errors encountered")
-            raise Exception("Bad meta1 prefix mapping")
+    def take_action(self, parsed_args):
+        if parsed_args.meta_type == 'meta1':
+            self.log.debug('take_action(%s)', parsed_args)
+            if parsed_args.no_rdir:
+                self.log.warn('--no-rdir option is deprecated')
+            checked = self._assign_meta1(parsed_args)
+
+            if checked:
+                self.log.info("Done")
+            else:
+                self.log.warn("Errors encountered")
+                raise Exception("Bad meta1 prefix mapping")
+        elif parsed_args.meta_type == 'meta2':
+            if parsed_args.max_per_rdir == -1:
+                raise Exception("Cannot bootstrap META2 without "
+                                "--max-per-rdir parameter !")
+            self._assign_meta2(parsed_args)
+        # Dirty fix to have a working command in both cases.
+        return [[], []]
 
 
 class DirectoryList(DirectoryCmd):
