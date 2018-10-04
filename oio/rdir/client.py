@@ -57,32 +57,41 @@ class RdirDispatcher(object):
             self._cs = ConscienceClient(self.conf, logger=self.logger)
         return self._cs
 
-    def get_assignation(self, **kwargs):
-        all_rawx = self.cs.all_services('rawx', **kwargs)
+    def get_assignments_generic(self, service_type, **kwargs):
+        all_service_servers = self.cs.all_services(service_type, **kwargs)
         all_rdir = self.cs.all_services('rdir', True, **kwargs)
         by_id = {_make_id(self.ns, 'rdir', x['addr']): x
                  for x in all_rdir}
 
-        for rawx in all_rawx:
+        for service_provider in all_service_servers:
             try:
-                ref = rawx.get('tags', {}).get('tag.service_id')
-                resp = self.directory.list(RDIR_ACCT, ref or rawx['addr'],
+                ref = service_provider.get('tags', {}).get('tag.service_id')
+                resp = self.directory.list(RDIR_ACCT,
+                                           ref or service_provider['addr'],
                                            service_type='rdir',
                                            **kwargs)
                 rdir_host = _filter_rdir_host(resp)
                 try:
-                    rawx['rdir'] = by_id[_make_id(self.ns, 'rdir', rdir_host)]
+                    service_provider['rdir'] = by_id[
+                        _make_id(self.ns, 'rdir', rdir_host)]
                 except KeyError:
-                    self.logger.warn("rdir %s linked to rawx %s seems down",
-                                     rdir_host, rawx['addr'])
-                    rawx['rdir'] = {"addr": rdir_host, "tags": dict()}
-                    by_id[_make_id(self.ns, 'rdir', rdir_host)] = rawx['rdir']
+                    self.logger.warn("rdir %s linked to %s %s seems down",
+                                     rdir_host, service_type,
+                                     service_provider['addr'])
+                    service_provider['rdir'] = {"addr": rdir_host,
+                                                "tags": dict()}
+                    loc_rdir = service_provider['rdir']
+                    by_id[_make_id(self.ns, 'rdir', rdir_host)] = loc_rdir
             except NotFound:
-                self.logger.info("No rdir linked to %s", rawx['addr'])
+                self.logger.info("No rdir linked to %s",
+                                 service_provider['addr'])
             except OioException as exc:
                 self.logger.warn('Failed to get rdir linked to %s: %s',
-                                 rawx['addr'], exc)
-        return all_rawx, all_rdir
+                                 service_provider['addr'], exc)
+        return all_service_servers, all_rdir
+
+    def get_assignation(self, **kwargs):
+        return self.get_assignments_generic('rawx', **kwargs)
 
     def assign_services_generic(self, service_providers, service_type,
                                 max_per_rdir=None, **kwargs):
