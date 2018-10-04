@@ -1387,12 +1387,12 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 		struct json_tokener *tok = json_tokener_new ();
 		struct json_object *jbody = json_tokener_parse_ex (tok,
 				reply_body->str, reply_body->len);
-		if (json_object_is_type(jbody, json_type_array))
-			err = _chunks_load(&_chunks, jbody);
-		else if (json_object_is_type(jbody, json_type_object))
+		if (json_object_is_type(jbody, json_type_object))
 			err = _chunks_load_ext(&_chunks, &ul->sys_props, jbody);
+		else if (json_object_is_type(jbody, json_type_array))
+			err = _chunks_load(&_chunks, jbody);
 		else
-			err = SYSERR("Invalid JSON from the OIO proxy");
+			err = SYSERR("Invalid JSON received from OIO proxy");
 		if (err)
 			g_prefix_error (&err, "Parsing: ");
 		json_object_put (jbody);

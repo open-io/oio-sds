@@ -632,9 +632,16 @@ oio_proxy_call_content_prepare (CURL *h, struct oio_url_s *u,
 		gsize size, gboolean autocreate,
 		struct oio_proxy_content_prepare_out_s *out)
 {
-	// FIXME(FVE): fallback on content/prepare
-	GString *http_url = _curl_content_url(u, "prepare2");
-	if (!http_url) return BADNS();
+	gboolean use_legacy = FALSE;
+	GString *http_url = NULL;
+retry:
+	if (use_legacy)
+		http_url = _curl_content_url(u, "prepare");
+	else
+		http_url = _curl_content_url(u, "prepare2");
+
+	if (!http_url)
+		return BADNS();
 
 	gchar *hdrin[] = {
 		PROXYD_HEADER_MODE, autocreate ? "autocreate" : NULL,
@@ -667,9 +674,20 @@ oio_proxy_call_content_prepare (CURL *h, struct oio_url_s *u,
 				oio_str_replace (&out->header_chunk_method, *(p+1));
 		}
 	}
-	g_string_free (http_url, TRUE);
+
+	g_string_free(http_url, TRUE);
 	g_string_free(i.body, TRUE);
-	g_strfreev (o.headers);
+	g_strfreev(o.headers);
+	if (err && err->code == HTTP_CODE_NOT_FOUND && !use_legacy) {
+		GRID_DEBUG("configured proxy does not support content/prepare2, "
+				"trying with legacy content/prepare (reqid=%s)",
+				oio_ext_get_reqid());
+		if (out->body)
+			g_string_set_size(out->body, 0);
+		use_legacy = TRUE;
+		g_clear_error(&err);
+		goto retry;
+	}
 	return err;
 }
 
