@@ -475,6 +475,16 @@ class RdirClient(HttpApi):
                                         create=False,
                                         json=body, **kwargs)
 
-    def meta2_index_fetch(self, volume_id, prefix='', marker=0, limit=4096,
+    def meta2_index_fetch(self, volume_id, prefix=None, marker=None, limit=4096,
                           **kwargs):
-        raise ClientException("Not Yet Implemented.")
+        params = {}
+        if prefix:
+            params['prefix'] = prefix
+        if marker:
+            # FIXME: Validate this one.
+            params['marker'] = marker
+        if limit:
+            params['limit'] = limit
+        resp, body = self._rdir_meta2_request(volume_id, 'POST', 'fetch',
+                                              json=params, **kwargs)
+        return body

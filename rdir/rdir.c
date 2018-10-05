@@ -620,7 +620,6 @@ static GError *
 _db_vol_delete_generic(struct rdir_base_s *base, GString *key)
 {
 	char *errmsg = NULL;
-
 	leveldb_writeoptions_t *options = leveldb_writeoptions_create();
 	leveldb_writeoptions_set_sync(options, 0);
 	leveldb_delete(base->base, options, key->str, key->len, &errmsg);
@@ -1617,7 +1616,7 @@ struct rdir_meta2_record_s
 struct rdir_meta2_record_subset_s
 {
 	GString *prefix;
-	gint64 marker;
+	GString *marker;
 	gint64 limit;
 };
 
@@ -1657,23 +1656,6 @@ _meta2_record_extract(struct rdir_meta2_record_s *rec, struct json_object *jreco
 	}
 	return err;
 }
-
-///*
-// * A wrapper around _meta2_record_extract to parse JSON data and pass it along.
-// */
-//static GError *
-//_meta2_record_parse(struct rdir_meta2_record_s *rec, const char *value,
-//					size_t length)
-//{
-//	GError *err = NULL;
-//	struct json_object *jrecord = NULL;
-//
-//	if (!(err = JSON_parse_buffer((const guint8*)value, length, &jrecord)))
-//		err = _meta2_record_extract(rec, jrecord);
-//
-//	json_object_put(jrecord);
-//	return err;
-//}
 
 /*
  * Computes the key for an rdir_meta2_record_s
@@ -1728,7 +1710,7 @@ _meta2_record_subset_extract(struct rdir_meta2_record_subset_s *subset,
 	struct json_object *jprefix, *jmarker, *jlimit;
 	struct oio_ext_json_mapping_s map[] = {
 		{"prefix", &jprefix, json_type_string, 0},
-		{"marker", &jmarker, json_type_int, 0},
+		{"marker", &jmarker, json_type_string, 0},
 		{"limit", &jlimit, json_type_int, 0},
 		{NULL, NULL, 0, 0}
 	};
@@ -1741,7 +1723,13 @@ _meta2_record_subset_extract(struct rdir_meta2_record_subset_s *subset,
 		}else{
 			subset->prefix = NULL;
 		}
-		subset->marker = jmarker ? json_object_get_int64(jmarker) : 0;
+		if(jmarker){
+			//TODO: Sanity checks on the prefix.
+			const char *marker= json_object_get_string(jmarker);
+			subset->marker = g_string_new_len(marker, strlen(marker));
+		}else{
+			subset->marker = NULL;
+		}
 		subset->limit =
 				jlimit ? CLAMP(json_object_get_int64(jlimit), 0,
 				RDIR_LISTING_LIMIT) : RDIR_LISTING_LIMIT;
@@ -1774,23 +1762,6 @@ _meta2_db_address_to_filename(const gchar *meta2_address, gchar **filename)
 	return err;
 }
 
-///*
-// * Given an IP:PORT or a service ID of a META2 server, we try opening the
-// * associated database.
-// */
-//static GError *
-//_meta2_db_open(gchar *meta2_address, gboolean autocreate, leveldb_t **pdb)
-//{
-//	GError *err = NULL;
-//	gchar *filename = NULL;
-//	err = _meta2_db_address_to_filename(meta2_address, &filename);
-//	if(err == NULL) {
-//		err = _db_open(filename, autocreate, pdb);
-//		g_free(filename);
-//	}
-//	return err;
-//}
-
 /*
  * Given a META2 server address, we try to fetch a handle on the associated
  * database if it's already available, otherwise we open a new one.
@@ -1815,14 +1786,13 @@ _meta2_db_get(const gchar *meta2_address, gboolean autocreate,
  * the LevelDB database to return the wanted subset.
  *
  * If prefix is NULL, then no particular seeking is done before the iteration,
- * and we will return (limit-marker+1) records starting from and including the
+ * and we will return {limit} records starting from and including the
  * first record.
  *
- * If prefix is non-NULL, and there is an limit and marker, the
- * marker is ignored and what will be returned is (limit) record
- * from and including the first record after we seek the prefix.
- * In this case, all the records are guaranteed to have the prefix
- * in the content URL.
+ * If prefix is non-NULL, and there is an limit and marker, what will be
+ * returned is (limit) record from and including the first record after
+ * we seek the marker. In this case, all the records are guaranteed to have
+ * the prefix in the container URL.
  */
 static GError *
 _meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *subset,
@@ -1834,9 +1804,11 @@ _meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *s
 	if (NULL != (err = _meta2_db_get(meta2_address, FALSE, &base)))
 		return err;
 
-	// The prefix is only used here so we can edit it in-place.
+	// The prefix/marker is only used here so we can edit it in-place.
 	if(subset->prefix)
-		g_string_prepend(subset->prefix, CONTAINER_PREFIX);
+		subset->prefix = g_string_prepend(subset->prefix, CONTAINER_PREFIX);
+	if(subset->marker)
+		subset->marker = g_string_prepend(subset->marker, CONTAINER_PREFIX);
 
 	leveldb_readoptions_t *options = leveldb_readoptions_create();
 	leveldb_readoptions_set_fill_cache(options, 0);
@@ -1844,20 +1816,19 @@ _meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *s
 	leveldb_iterator_t *it = leveldb_create_iterator(base->base, options);
 	leveldb_readoptions_destroy(options);
 
-	if(subset->prefix){
-		// We have a prefix.
+	if (subset->marker) {
+		// We have a marker.
+		leveldb_iter_seek(it, subset->marker->str, strlen(subset->marker->str));
+		// According to @fvennetier, we shouldn't include the marker in the
+		// returned results.
+		leveldb_iter_next(it);
+	} else if (subset->prefix) {
+		// No marker but we still have a prefix
 		leveldb_iter_seek(it, subset->prefix->str, strlen(subset->prefix->str));
-		subset->marker = 1;
-	}
-	else {
+	} else {
 		// LevelDB quirk apparently, you have to seek somewhere no matter what
 		// before iterating.
 		leveldb_iter_seek_to_first(it);
-		if (subset->marker) {
-			// We don't have a prefix but we have a marker
-			for (int i = 0; i < subset->marker; i++)
-				leveldb_iter_next(it);
-		}
 	}
 
 	// Now we're at the first record that has the prefix provided.
@@ -1869,6 +1840,8 @@ _meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *s
 
 		const char *key = leveldb_iter_key(it, &klen);
 		if(subset->prefix)
+			// LevelDB's keys are ordered lexicographically, so on the first
+			// key that does not have the prefix, we can stop iterating.
 			if (strncmp(subset->prefix->str, key, subset->prefix->len)){
 				*end_of_prefix = TRUE;
 				break;
@@ -1884,13 +1857,11 @@ _meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *s
 		// debatable especially given that we don't cherry-pick data as in the
 		// chunk part of rdir.
 
-		g_string_append(json_reponse, val);
+		g_string_append_len(json_reponse, val, vallen);
 
-		if (nb >= (subset ->limit-subset->marker+1))
+		if (nb >= subset->limit)
 			break;
 	}
-
-
 	/*
 	 * We can exit the loop on three cases:
 	 * - We have reached the end of the database.
@@ -1904,7 +1875,7 @@ _meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *s
 	 *
 	 * That's why this ugly hack is here. Please suggest something better ...
 	 */
-	if (nb >= (subset ->limit-subset->marker+1))
+	if (nb >= subset->limit)
 		leveldb_iter_next(it);
 	if (!leveldb_iter_valid(it))
 		*end_of_prefix = TRUE;
@@ -1938,39 +1909,36 @@ _meta2_db_delete(const gchar *meta2_address, GString *key)
 	GError *err = _meta2_db_get(meta2_address, FALSE, &base);
 	if (err)
 		return err;
-	return _db_vol_delete_generic(base, g_string_prepend(key,
-			CONTAINER_PREFIX));
+	return _db_vol_delete_generic(base, key);
 }
 
 /*
  * Fetch specific records, or a range of records.
  *
- * The record are ordered by container_url, so we can seek a very specific
- * prefix and start iterating from there.
+ * The record are ordered by container_url, so we can seek a specific prefix
+ * and start iterating from there.
  *
  * For example, if we want to iterate through the containers that belong to
  * account A, we'll seek NS/A and start iterating.
  *
- * Another one is if for example the containers follow a specific naming
- * convention that can be ordered lexicographically, we can seek a specific
- * prefix and go from there.
+ * If a prefix is provided, only records whose keys contain this prefix
+ * will be returned.
  *
- * Otherwise, the specified ranged will be fetched starting from the 1st record.
+ * We can also seek a specific marker and start iterating from the record
+ * following the marker.
  *
- * If the a range is specified with a prefix, the marker of the range
- * is ignored and the request will return (higher_bound-marker+1) records
- * after the 1st record matching the prefix, including that 1st record.
- * In this case, all the records are guaranteed to have the prefix
- * in the content URL.
+ * The marker is never included in the results.
  *
- * If no more records are available for the requested subset, end_of_records
- * will be true, otherwise it will be false.
+ * A limit for the number of records to be returned can be specified.
  *
- * If no range is specified, the default range will be 0 to 4096.
+ * If no limit is specified, the default limit be 4096.
  *
  * The maximum allowed number of records to be returned is 4096.
  * (I don't know why that's the case with chunks, but my guess is to reduce
  * contention as there can only be one handle to the leveldb at a time)
+ *
+ * If no more records are available for the requested subset, end_of_records
+ * will be true, otherwise it will be false.
  *
  */
 static enum http_rc_e
