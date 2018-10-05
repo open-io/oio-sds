@@ -47,7 +47,12 @@ class Meta2IndexFilter(Filter):
             url.get('user')])
         container_id = url.get('id')
 
-        peers = event.data
+        peers = event.data.get('peers')
+
+        if not peers:
+            msg = '[Meta2IndexFilter] Malformed event ! No peers received !'
+            resp = EventError(event=Event(env), body=msg)
+            return resp(env, cb)
 
         if not PASSTHROUGH:
             # Just to be sure
