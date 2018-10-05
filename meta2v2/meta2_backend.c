@@ -603,7 +603,7 @@ _get_meta2_peers(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2,
 {
 	GError *err = NULL;
 	gchar **peers = NULL;
-	// Necessary evil.
+
 	NAME2CONST(name, sq3->name);
 
 	if (peers_array == NULL)
@@ -624,7 +624,7 @@ _get_meta2_peers(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2,
 	gchar *local_addr = g_strdup(sqlx_repository_get_local_addr(m2->repo));
 	EXTRA_ASSERT(local_addr != NULL);
 
-	g_string_append_c(peers_array, '[');
+	g_string_append(peers_array, "{\"peers\": [");
 	if(peers != NULL){
 		for (size_t i = 0; i < oio_strv_length((const char * const *)peers); i++){
 			oio_str_gstring_append_json_quote(peers_array, peers[i]);
@@ -633,7 +633,7 @@ _get_meta2_peers(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2,
 
 	}
 	oio_str_gstring_append_json_quote(peers_array, local_addr);
-	g_string_append_c(peers_array, ']');
+	g_string_append(peers_array, "]}");
 	g_free(peers);
 	g_free(local_addr);
 	return err;

@@ -475,8 +475,8 @@ class RdirClient(HttpApi):
                                         create=False,
                                         json=body, **kwargs)
 
-    def meta2_index_fetch(self, volume_id, prefix=None, marker=None, limit=4096,
-                          **kwargs):
+    def meta2_index_fetch(self, volume_id, prefix=None, marker=None,
+                          limit=4096, **kwargs):
         params = {}
         if prefix:
             params['prefix'] = prefix
