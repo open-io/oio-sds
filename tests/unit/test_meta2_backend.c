@@ -909,7 +909,6 @@ static void
 test_content_put_lower_version(void)
 {
 	void test(struct meta2_backend_s *m2, struct oio_url_s *u, gint64 maxver) {
-		(void) maxver;
 		GSList *beans = NULL;
 		GError *err;
 
@@ -931,7 +930,11 @@ test_content_put_lower_version(void)
 		CLOCK++;
 		_set_content_id(u);
 		err = meta2_backend_put_alias(m2, u, beans, NULL, NULL, NULL, NULL);
-		g_assert_error(err, GQ(), CODE_CONTENT_PRECONDITION);
+		if (VERSIONS_ENABLED(maxver)) {
+			g_assert_no_error(err);
+		} else {
+			g_assert_error(err, GQ(), CODE_CONTENT_PRECONDITION);
+		}
 		_bean_cleanl2(beans);
 		g_clear_error(&err);
 
