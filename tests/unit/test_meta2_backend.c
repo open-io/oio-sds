@@ -526,12 +526,17 @@ _remove_bean(GSList **beans, guint nb, gchar *pos)
 }
 
 static void
-test_content_check_all_chunks_correct(void)
+test_content_check_plain_all_present_chunks(void)
 {
 	void test(struct meta2_backend_s * m2, struct oio_url_s * u, gint64 maxver) {
 		(void) maxver;
 		_init_pool_ec_2cpy_3cpy(m2);
 		GError *err;
+
+		GSList *beans_nocpy = _create_alias(m2, u, NULL);
+		err = meta2_backend_check_content(m2, u, &beans_nocpy, NULL, FALSE);
+		_bean_cleanl2(beans_nocpy);
+		g_assert_no_error(err);
 
 		GSList *beans_3cpy = _create_alias2(m2, u, "THREECOPIES", 3);
 		err = meta2_backend_check_content(m2, u, &beans_3cpy, NULL, FALSE);
@@ -542,12 +547,6 @@ test_content_check_all_chunks_correct(void)
 		err = meta2_backend_check_content(m2, u, &beans_2cpy, NULL, FALSE);
 		_bean_cleanl2(beans_2cpy);
 		g_assert_no_error(err);
-
-		GSList *beans_ec = _create_alias2(m2, u, "EC", 3);
-		err = meta2_backend_check_content(m2, u, &beans_ec, NULL, FALSE);
-		_bean_cleanl2(beans_ec);
-		g_assert_no_error(err);
-
 	}
 	_container_wraper_allversions("NS", test);
 }
@@ -661,6 +660,16 @@ test_content_check_plain_first_missing_chunks(void)
 		gchar *missing_chunks = g_strrstr(gmessage->str,
 				"\"missing_chunks\":[0]");
 		g_assert_nonnull(missing_chunks);
+		g_string_set_size(gmessage, 0);
+
+		_remove_bean(&beans_2cpy, 1, "1");
+		err = meta2_backend_check_content(m2, u, &beans_2cpy, _save_message,
+				FALSE);
+		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
+		g_error_free(err);
+		missing_chunks = g_strrstr(gmessage->str,
+				"\"missing_chunks\":[0,1]");
+		g_assert_nonnull(missing_chunks);
 		g_string_free(gmessage, TRUE);
 
 		_remove_bean(&beans_2cpy, 1, "0");
@@ -668,6 +677,23 @@ test_content_check_plain_first_missing_chunks(void)
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
 		g_error_free(err);
 		_bean_cleanl2(beans_2cpy);
+	}
+	_container_wraper_allversions("NS", test);
+}
+
+static void
+test_content_check_ec_all_present_chunks(void)
+{
+	void test(struct meta2_backend_s * m2, struct oio_url_s * u, gint64 maxver) {
+		(void) maxver;
+		_init_pool_ec_2cpy_3cpy(m2);
+		GError *err;
+
+		GSList *beans_ec = _create_alias2(m2, u, "EC", 3);
+		err = meta2_backend_check_content(m2, u, &beans_ec, NULL, FALSE);
+		_bean_cleanl2(beans_ec);
+		g_assert_no_error(err);
+
 	}
 	_container_wraper_allversions("NS", test);
 }
@@ -695,16 +721,14 @@ test_content_check_ec_missing_chunks_reparable(void)
 		g_assert_nonnull(missing_chunks);
 		g_string_set_size(gmessage, 0);
 
-		_remove_bean(&beans_ec, 1, "1.1");
-		_remove_bean(&beans_ec, 1, "1.3");
-		_remove_bean(&beans_ec, 1, "1.4");
-		_remove_bean(&beans_ec, 1, "2.2");
+		_remove_bean(&beans_ec, 1, "0.2");
+		_remove_bean(&beans_ec, 1, "0.3");
 		err = meta2_backend_check_content(m2, u, &beans_ec, _save_message,
 				FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
 		missing_chunks = g_strrstr(gmessage->str,
-				"\"missing_chunks\":[1.1,1.3,1.4,2.2]");
+				"\"missing_chunks\":[0.1,0.2,0.3]");
 		g_assert_nonnull(missing_chunks);
 		g_string_free(gmessage, TRUE);
 		_bean_cleanl2(beans_ec);
@@ -721,13 +745,48 @@ test_content_check_ec_missing_chunks_irreparable(void)
 		GError *err;
 
 		GSList *beans_ec = _create_alias2(m2, u, "EC", 3);
-		_remove_bean(&beans_ec, 1, "1.1");
-		_remove_bean(&beans_ec, 1, "1.3");
-		_remove_bean(&beans_ec, 1, "1.4");
-		_remove_bean(&beans_ec, 1, "1.5");
+		_remove_bean(&beans_ec, 1, "0.1");
+		_remove_bean(&beans_ec, 1, "0.2");
+		_remove_bean(&beans_ec, 1, "0.3");
+		_remove_bean(&beans_ec, 1, "0.5");
 		err = meta2_backend_check_content(m2, u, &beans_ec, NULL, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
 		g_error_free(err);
+		_bean_cleanl2(beans_ec);
+	}
+	_container_wraper_allversions("NS", test);
+}
+
+static void
+test_content_check_ec_first_missing_chunks(void)
+{
+	void test(struct meta2_backend_s * m2, struct oio_url_s * u, gint64 maxver) {
+		(void) maxver;
+		_init_pool_ec_2cpy_3cpy(m2);
+		GError *err;
+		GString *gmessage = g_string_new("");
+		void _save_message(gchar *message, gpointer udata UNUSED) {
+			g_string_append(gmessage, message);
+		}
+
+		GSList *beans_ec = _create_alias2(m2, u, "EC", 3);
+		_remove_bean(&beans_ec, 1, "0.0");
+		err = meta2_backend_check_content(m2, u, &beans_ec, _save_message, FALSE);
+		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
+		g_error_free(err);
+		gchar *missing_chunks = g_strrstr(gmessage->str,
+				"\"missing_chunks\":[0.0]");
+		g_assert_nonnull(missing_chunks);
+		g_string_set_size(gmessage, 0);
+
+		_remove_bean(&beans_ec, 1, "0.3");
+		err = meta2_backend_check_content(m2, u, &beans_ec, _save_message, FALSE);
+		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
+		g_error_free(err);
+		missing_chunks = g_strrstr(gmessage->str,
+				"\"missing_chunks\":[0.0,0.3");
+		g_assert_nonnull(missing_chunks);
+		g_string_free(gmessage, TRUE);
 		_bean_cleanl2(beans_ec);
 	}
 	_container_wraper_allversions("NS", test);
@@ -1323,24 +1382,22 @@ main(int argc, char **argv)
 			test_content_append_not_found);
 	g_test_add_func("/meta2v2/backend/content/dedup",
 			test_content_dedup);
-	g_test_add_func("/meta2v2/backend/content/check_all_chunks_correct",
-			test_content_check_all_chunks_correct);
+	g_test_add_func("/meta2v2/backend/content/check_plain_all_present_chunks",
+			test_content_check_plain_all_present_chunks);
 	g_test_add_func("/meta2v2/backend/content/check_plain_missing_chunks_reparable",
 			test_content_check_plain_missing_chunks_reparable);
 	g_test_add_func("/meta2v2/backend/content/check_plain_missing_chunks_irreparable",
 			test_content_check_plain_missing_chunks_irreparable);
 	g_test_add_func("/meta2v2/backend/content/check_plain_first_missing_chunks",
 			test_content_check_plain_first_missing_chunks);
-	// g_test_add_func("/meta2v2/backend/content/check_plain_last_missing_chunks",
-	// 		test_content_check_plain_last_missing_chunks); TODO(adu)
+	g_test_add_func("/meta2v2/backend/content/check_ec_all_present_chunks",
+			test_content_check_ec_all_present_chunks);
 	g_test_add_func("/meta2v2/backend/content/check_ec_missing_chunks_reparable",
 			test_content_check_ec_missing_chunks_reparable);
 	g_test_add_func("/meta2v2/backend/content/check_ec_missing_chunks_irreparable",
 			test_content_check_ec_missing_chunks_irreparable);
-	// g_test_add_func("/meta2v2/backend/content/check_ec_first_missing_chunks",
-	// 		test_content_check_ec_first_missing_chunks); TODO(adu)
-	// g_test_add_func("/meta2v2/backend/content/check_ec_last_missing_chunks",
-	// 		test_content_check_ec_last_missing_chunks); TODO(adu)
+	g_test_add_func("/meta2v2/backend/content/check_ec_first_missing_chunks",
+			test_content_check_ec_first_missing_chunks);
 
 	return g_test_run();
 }
