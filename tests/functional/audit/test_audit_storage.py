@@ -123,7 +123,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
             self.account, self.ref, self.content.path,
             content_id=self.content.id,
             size=self.content.size, checksum=self.content.hash,
-            data={'chunks': [chunk_proxy]})
+            data={'chunks': [chunk_proxy]}, stgpol="SINGLE")
 
     def test_chunk_audit(self):
         self.init_content()
