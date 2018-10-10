@@ -1648,13 +1648,16 @@ GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 		g_clear_error(&err);
 	}
 
+	gint64 max_versions = m2db_get_max_versions(args->sq3,
+	                                            args->ns_max_versions);
+
 	/* Manage the potential conflict with the latest alias in place. */
 	if (version > 0) {
 		const gint64 latest_version = latest? ALIASES_get_version(latest) : 0;
 		/* version explicitely specified */
 		if (version == latest_version) {
 			err = NEWERROR(CODE_CONTENT_EXISTS, "Alias already saved");
-		} else if (version < latest_version) {
+		} else if (version < latest_version && !VERSIONS_ENABLED(max_versions)) {
 			err = NEWERROR(CODE_CONTENT_PRECONDITION,
 					"New object version is older than latest version");
 		}
@@ -1665,11 +1668,8 @@ GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 			version ++;
 	}
 
-	gint64 max_versions = m2db_get_max_versions(args->sq3,
-												args->ns_max_versions);
-
 	/* Check the operation respects the rules of versioning for the container */
-	if (latest) {
+	if (!err && latest) {
 		if (VERSIONS_DISABLED(max_versions)) {
 			if (ALIASES_get_deleted(latest) || ALIASES_get_version(latest) > 0) {
 				GRID_DEBUG("Versioning DISABLED but clues of SUSPENDED");

@@ -669,7 +669,12 @@ class SnapshotContainer(ContainerCommandMixin, lister.Lister):
 
     Create a separate database containing all information about the contents
     from the original database, but with copies of the chunks at the time
-    of the snapshot. This new database is not replicated.
+    of the snapshot. This new database is not replicated, and is frozen
+    (you cannot write into it).
+
+    Pay attention to the fact that the source container is frozen during
+    the snapshot capture. The capture may take some time, depending on
+    the number of objects hosted by the container.
     """
 
     log = getLogger(__name__ + '.SnapshotContainer')

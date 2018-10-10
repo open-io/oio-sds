@@ -362,15 +362,24 @@ class ObjectStorageApi(object):
     def container_snapshot(self, account, container, dst_account,
                            dst_container, batch=100, **kwargs):
         """
-        Create a copy of the container (only the content of the database)
+        Take a snapshot of a container.
 
-        :param account: account in which the target is
+        Create a separate database containing all information about the
+        contents from the original database, but with copies of the chunks
+        at the time of the snapshot. This new database is not replicated,
+        and is frozen (you cannot write into it).
+
+        Pay attention to the fact that the source container is frozen during
+        the snapshot capture. The capture may take some time, depending on
+        the number of objects hosted by the container.
+
+        :param account: account in which the source container is.
         :type account: `str`
-        :param container: name of the target
+        :param container: name of the source container.
         :type container: `str`
-        :param dst_account: account in which the snapshot will be.
+        :param dst_account: account in which the snapshot will be created.
         :type dst_account: `str`
-        :param dst_container: name of the snapshot
+        :param dst_container: name of the new container (i.e. the snapshot).
         :type dst_container: `str`
         """
         try:
