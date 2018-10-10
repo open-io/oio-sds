@@ -716,6 +716,16 @@ test_content_check_plain_last_missing_chunks(void)
 		g_assert_nonnull(missing_chunks);
 		g_string_set_size(gmessage, 0);
 
+		_remove_bean(&beans_2cpy, 1, "1");
+		err = meta2_backend_check_content(m2, u, &beans_2cpy, _save_message,
+				FALSE);
+		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
+		g_error_free(err);
+		missing_chunks = g_strrstr(gmessage->str,
+				"\"missing_chunks\":[2,1]");
+		g_assert_nonnull(missing_chunks);
+		g_string_free(gmessage, TRUE);
+
 		_remove_bean(&beans_2cpy, 1, "2");
 		err = meta2_backend_check_content(m2, u, &beans_2cpy, NULL, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
@@ -885,6 +895,15 @@ test_content_check_ec_last_missing_chunks(void)
 
 		_remove_bean(&beans_ec, 1, "2.3");
 		_remove_bean(&beans_ec, 1, "2.5");
+		_remove_bean(&beans_ec, 1, "1.5");
+		err = meta2_backend_check_content(m2, u, &beans_ec, _save_message, FALSE);
+		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
+		g_error_free(err);
+		missing_chunks = g_strrstr(gmessage->str,
+				"\"missing_chunks\":[2.8,2.5,2.3,1.5]");
+		g_assert_nonnull(missing_chunks);
+		g_string_free(gmessage, TRUE);
+
 		_remove_bean(&beans_ec, 1, "2.1");
 		err = meta2_backend_check_content(m2, u, &beans_ec, NULL, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_CORRUPTED);
