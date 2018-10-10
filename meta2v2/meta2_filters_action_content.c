@@ -217,7 +217,7 @@ int
 meta2_filter_action_check_content(struct gridd_filter_ctx_s * ctx,
 		struct gridd_reply_ctx_s *reply) {
 	(void) reply;
-	GError *e = NULL;
+	GError *err = NULL;
 	int rc = FILTER_OK;
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
@@ -231,16 +231,15 @@ meta2_filter_action_check_content(struct gridd_filter_ctx_s * ctx,
 		meta2_filter_ctx_defer_event(ctx, event);
 	}
 	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
-	e = meta2_backend_check_content(m2b, url, &beans, _send_event, is_update);
+	err = meta2_backend_check_content(m2b, url, &beans, _send_event, is_update);
 	meta2_filter_ctx_set_input_udata2(ctx, beans,
 			(GDestroyNotify)_bean_cleanl2, FALSE);
-	if (e) {
-		if (e->code == CODE_CONTENT_CORRUPTED) {
-			meta2_filter_ctx_set_error(ctx, e);
-			e = NULL;
+	if (err) {
+		if (err->code != CODE_CONTENT_UNCOMPLETE) {
+			meta2_filter_ctx_set_error(ctx, err);
 			rc = FILTER_KO;
 		} else {
-			g_clear_error(&e);
+			g_error_free(err);
 		}
 	}
 	return rc;

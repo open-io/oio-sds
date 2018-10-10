@@ -68,6 +68,8 @@ struct m2v2_sorted_content_s {
 	GTree *metachunks;  // GTree<gint,GSList<struct bean_CHUNKS_s*>>
 };
 
+struct checked_content_s;
+
 
 struct m2v2_position_s m2v2_position_decode (const char *str);
 
@@ -165,8 +167,14 @@ GError* m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 GError* m2db_link_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		GBytes *id);
 
+void checked_content_free(struct checked_content_s *checked_content);
+
+void checked_content_append_json_string(struct checked_content_s *checked_content,
+		GString *message);
+
 GError* m2db_check_content(struct m2v2_sorted_content_s *sorted_content,
-		struct namespace_info_s *nsinfo, GString* message, gboolean update);
+		struct namespace_info_s *nsinfo,
+		struct checked_content_s **checked_content, gboolean update);
 
 void m2db_check_content_quality(
 		struct m2v2_sorted_content_s *sorted_content, GSList *chunk_meta,

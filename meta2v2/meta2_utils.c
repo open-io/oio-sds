@@ -2106,7 +2106,7 @@ enum _content_broken_state_e
 	IRREPARABLE
 };
 
-struct _checked_content_s
+struct checked_content_s
 {
 	gboolean partial;
 	guint nb_copy;
@@ -2114,51 +2114,61 @@ struct _checked_content_s
 	guint m;
 	gint expected_metapos;
 	gint64 size;
-	GString *present_chunks;
-	GString *missing_pos;
+	GSList *present_chunks;
+	GSList *missing_pos;
 	enum _content_broken_state_e broken_state;
 };
 
-static struct _checked_content_s *
+static struct checked_content_s *
 _checked_content_new(gboolean partial, guint nb_copy, guint k, guint m)
 {
-	struct _checked_content_s *checked_content = g_malloc0(
-			sizeof(struct _checked_content_s));
+	struct checked_content_s *checked_content = g_malloc0(
+			sizeof(struct checked_content_s));
 	checked_content->partial = partial;
 	checked_content->nb_copy = nb_copy;
 	checked_content->k = k;
 	checked_content->m = m;
-	checked_content->present_chunks = g_string_new("");
-	checked_content->missing_pos = g_string_new("");
 	return checked_content;
 }
 
-static void
-_checked_content_free(struct _checked_content_s *checked_content)
+void
+checked_content_free(struct checked_content_s *checked_content)
 {
-	g_string_free(checked_content->missing_pos, TRUE);
-	g_string_free(checked_content->present_chunks, TRUE);
+	g_slist_free_full(checked_content->missing_pos, g_free);
+	g_slist_free(checked_content->present_chunks);
 	g_free(checked_content);
 }
 
-static void
-_checked_content_to_string(struct _checked_content_s *content, GString *message)
+void
+checked_content_append_json_string(struct checked_content_s *checked_content,
+		GString *message)
 {
 	g_string_append(message, "\"present_chunks\":[");
-	g_string_append(message, content->present_chunks->str);
+	meta2_json_chunks_only(message, checked_content->present_chunks, FALSE);
+
 	g_string_append(message, "], \"missing_chunks\":[");
-	g_string_append(message, content->missing_pos->str);
+	gboolean first_missing_pos = TRUE;
+	for (GSList *missing_pos = checked_content->missing_pos; missing_pos;
+			missing_pos = missing_pos->next) {
+		if (first_missing_pos) {
+			first_missing_pos = FALSE;
+		} else {
+			g_string_append(message, ",");
+		}
+		oio_str_gstring_append_json_string(message, missing_pos->data);
+	}
 	g_string_append_c(message, ']');
 }
 
 static gboolean
-_check_metachunk_plain_content(GSList *chunks, struct _checked_content_s *plain)
+_check_metachunk_plain_content(GSList *chunks, struct checked_content_s *plain)
 {
 	guint nb_chunks = 0;
 
 	for (GSList *l = chunks; l; l = l->next) {
 		gpointer chunk = l->data;
 
+		plain->present_chunks = g_slist_prepend(plain->present_chunks, chunk);
 		plain->size += CHUNKS_get_size(chunk);
 		nb_chunks++;
 	}
@@ -2166,9 +2176,8 @@ _check_metachunk_plain_content(GSList *chunks, struct _checked_content_s *plain)
 	if (plain->nb_copy > nb_chunks) {
 		gchar *pos = CHUNKS_get_position(chunks->data)->str;
 		for (guint i = nb_chunks; i < plain->nb_copy; i++) {
-			if (plain->missing_pos->len)
-				g_string_append(plain->missing_pos, ",");
-			oio_str_gstring_append_json_string(plain->missing_pos, pos);
+			plain->missing_pos = g_slist_prepend(plain->missing_pos,
+				g_strdup(pos));
 		}
 		plain->broken_state = REPARABLE;
 	}
@@ -2177,7 +2186,7 @@ _check_metachunk_plain_content(GSList *chunks, struct _checked_content_s *plain)
 }
 
 static gboolean
-_check_metachunk_ec_content(GSList *chunks, struct _checked_content_s *ec)
+_check_metachunk_ec_content(GSList *chunks, struct checked_content_s *ec)
 {
 	guint expected_nb_chunk = ec->k + ec->m;
 	guint nb_chunks = 0;
@@ -2207,6 +2216,7 @@ _check_metachunk_ec_content(GSList *chunks, struct _checked_content_s *ec)
 		}
 		present_subpos[subpos] = 1;
 
+		ec->present_chunks = g_slist_prepend(ec->present_chunks, chunk);
 		ec->size += CHUNKS_get_size(chunk);
 		nb_chunks++;
 	}
@@ -2224,12 +2234,8 @@ _check_metachunk_ec_content(GSList *chunks, struct _checked_content_s *ec)
 			continue;
 		}
 
-		if (ec->missing_pos->len)
-			g_string_append(ec->missing_pos, ",");
-		gchar *missing_pos = g_strdup_printf(
-				"%d.%d", ec->expected_metapos, subpos);
-		oio_str_gstring_append_json_string(ec->missing_pos, missing_pos);
-		g_free(missing_pos);
+		ec->missing_pos = g_slist_prepend(ec->missing_pos,
+			g_strdup_printf("%d.%d", ec->expected_metapos, subpos));
 	}
 	ec->broken_state = REPARABLE;
 	return TRUE;
@@ -2238,7 +2244,7 @@ _check_metachunk_ec_content(GSList *chunks, struct _checked_content_s *ec)
 static gboolean
 _foreach_check_plain_content(gpointer key, gpointer value, gpointer data)
 {
-	struct _checked_content_s *checked_content = data;
+	struct checked_content_s *checked_content = data;
 	gint metapos = GPOINTER_TO_INT(key);
 	if (checked_content->expected_metapos != metapos &&
 			!checked_content->partial) {
@@ -2246,11 +2252,6 @@ _foreach_check_plain_content(gpointer key, gpointer value, gpointer data)
 		checked_content->broken_state = IRREPARABLE;
 		return TRUE;
 	}
-
-	if (checked_content->present_chunks->len > 0)
-		g_string_append_c(checked_content->present_chunks, ',');
-	meta2_json_chunks_only(checked_content->present_chunks, value,
-			FALSE);
 
 	gboolean res = _check_metachunk_plain_content(value, checked_content);
 	checked_content->expected_metapos++;
@@ -2260,7 +2261,7 @@ _foreach_check_plain_content(gpointer key, gpointer value, gpointer data)
 static gboolean
 _foreach_check_ec_content(gpointer key, gpointer value, gpointer data)
 {
-	struct _checked_content_s *checked_content = data;
+	struct checked_content_s *checked_content = data;
 	gint metapos = GPOINTER_TO_INT(key);
 	if (checked_content->expected_metapos != metapos &&
 			!checked_content->partial) {
@@ -2269,11 +2270,6 @@ _foreach_check_ec_content(gpointer key, gpointer value, gpointer data)
 		return TRUE;
 	}
 
-	if (checked_content->present_chunks->len > 0)
-		g_string_append_c(checked_content->present_chunks, ',');
-	meta2_json_chunks_only(checked_content->present_chunks, value,
-			FALSE);
-
 	gboolean res = _check_metachunk_ec_content(value, checked_content);
 	checked_content->expected_metapos++;
 	return !res;
@@ -2281,61 +2277,70 @@ _foreach_check_ec_content(gpointer key, gpointer value, gpointer data)
 
 static enum _content_broken_state_e
 _check_plain_content(struct m2v2_sorted_content_s *content,
-		const struct data_security_s *dsec, GString *message, gboolean partial)
+		const struct data_security_s *dsec,
+		struct checked_content_s **checked_content_p, gboolean partial)
 {
+	EXTRA_ASSERT(checked_content_p != NULL);
+	EXTRA_ASSERT(*checked_content_p == NULL);
+
 	gint nb_copy = data_security_get_int64_param(dsec, DS_KEY_COPY_COUNT, 1);
 	if (!content->header)
 		return IRREPARABLE;
 
 	gint64 size = CONTENTS_HEADERS_get_size(content->header);
-	struct _checked_content_s *checked_content = _checked_content_new(
+	struct checked_content_s *checked_content = _checked_content_new(
 			partial, nb_copy, 0, 0);
 
 	g_tree_foreach(content->metachunks, _foreach_check_plain_content,
 			checked_content);
-	_checked_content_to_string(checked_content, message);
 	/*If the size of all the chunks is inferior to the size indicate in the header
 	 *it means that some missing chunks could not be detected and so irreparable */
 	if (checked_content->size < size * nb_copy &&
-			checked_content->broken_state == NONE && !checked_content->partial)
-		checked_content->broken_state = IRREPARABLE;
+			checked_content->broken_state == NONE && !checked_content->partial) {
+		checked_content_free(checked_content);
+		return IRREPARABLE;
+	}
 
-	enum _content_broken_state_e broken_state = checked_content->broken_state;
-	_checked_content_free(checked_content);
-	return broken_state;
+	*checked_content_p = checked_content;
+	return checked_content->broken_state;
 }
 
 static enum _content_broken_state_e
 _check_ec_content(struct m2v2_sorted_content_s *content,
-               struct storage_policy_s *pol, GString *message, gboolean partial)
+		struct storage_policy_s *pol,
+		struct checked_content_s **checked_content_p, gboolean partial)
 {
+	EXTRA_ASSERT(checked_content_p != NULL);
+	EXTRA_ASSERT(*checked_content_p == NULL);
+
 	if (!content->header)
 		return IRREPARABLE;
 
 	gint64 size = CONTENTS_HEADERS_get_size(content->header);
-	struct _checked_content_s *checked_content = _checked_content_new(
+	struct checked_content_s *checked_content = _checked_content_new(
 			partial, 0, _policy_parameter(pol, DS_KEY_K, 6),
 			_policy_parameter(pol, DS_KEY_M, 3));
 
 	g_tree_foreach(content->metachunks, _foreach_check_ec_content,
 			checked_content);
-	_checked_content_to_string(checked_content, message);
 	/* Check if the size is at least superior to the minimum necessary to
 	* size needed by the storage policy*/
 	if (checked_content->size
 			< size * (checked_content->k + checked_content->m) / checked_content->k
 			&& checked_content->broken_state == NONE
-			&& !checked_content->partial)
+			&& !checked_content->partial) {
+		checked_content_free(checked_content);
 		return IRREPARABLE;
+	}
 
-	enum _content_broken_state_e broken_state = checked_content->broken_state;
-	_checked_content_free(checked_content);
-	return broken_state;
+	*checked_content_p = checked_content;
+	return checked_content->broken_state;
 }
 
 static GError *
 _m2db_check_content_validity(struct m2v2_sorted_content_s *sorted_content,
-		struct storage_policy_s *pol, GString *message, gboolean partial)
+		struct storage_policy_s *pol,
+		struct checked_content_s **checked_content_p, gboolean partial)
 {
 	GError *err = NULL;
 	enum _content_broken_state_e cbroken = NONE;
@@ -2343,10 +2348,12 @@ _m2db_check_content_validity(struct m2v2_sorted_content_s *sorted_content,
 	switch (data_security_get_type(dsec)) {
 		case STGPOL_DS_BACKBLAZE:
 		case STGPOL_DS_PLAIN:
-			cbroken = _check_plain_content(sorted_content, dsec, message, partial);
+			cbroken = _check_plain_content(sorted_content, dsec,
+					checked_content_p, partial);
 			break;
 		case STGPOL_DS_EC:
-			cbroken = _check_ec_content(sorted_content, pol, message, partial);
+			cbroken = _check_ec_content(sorted_content, pol,
+					checked_content_p, partial);
 			break;
 		default:
 			err = NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy type");
@@ -2425,7 +2432,8 @@ m2db_check_content_quality(struct m2v2_sorted_content_s *sorted_content,
 
 GError *
 m2db_check_content(struct m2v2_sorted_content_s *sorted_content,
-		struct namespace_info_s *nsinfo, GString *message, gboolean partial)
+		struct namespace_info_s *nsinfo,
+		struct checked_content_s **checked_content_p, gboolean partial)
 {
 	GError *err = NULL;
 
@@ -2442,7 +2450,7 @@ m2db_check_content(struct m2v2_sorted_content_s *sorted_content,
 
 	if (!err)
 		err = _m2db_check_content_validity(sorted_content, pol,
-				message, partial);
+				checked_content_p, partial);
 
 	if (pol)
 		storage_policy_clean(pol);
