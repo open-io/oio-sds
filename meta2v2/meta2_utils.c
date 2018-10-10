@@ -2164,13 +2164,18 @@ static gboolean
 _check_metachunk_plain_content(GSList *chunks, struct checked_content_s *plain)
 {
 	guint nb_chunks = 0;
+	gint64 chunk_size = CHUNKS_get_size(chunks->data);
 
 	for (GSList *l = chunks; l; l = l->next) {
 		gpointer chunk = l->data;
 
 		plain->present_chunks = g_slist_prepend(plain->present_chunks, chunk);
-		plain->size += CHUNKS_get_size(chunk);
 		nb_chunks++;
+
+		if (CHUNKS_get_size(chunk) != chunk_size) {
+			plain->broken_state = IRREPARABLE;
+			return FALSE;
+		}
 	}
 
 	if (plain->nb_copy > nb_chunks) {
@@ -2182,6 +2187,7 @@ _check_metachunk_plain_content(GSList *chunks, struct checked_content_s *plain)
 		plain->broken_state = REPARABLE;
 	}
 
+	plain->size += plain->nb_copy * chunk_size;
 	return TRUE;
 }
 
@@ -2190,6 +2196,7 @@ _check_metachunk_ec_content(GSList *chunks, struct checked_content_s *ec)
 {
 	guint expected_nb_chunk = ec->k + ec->m;
 	guint nb_chunks = 0;
+	gint64 chunk_size = CHUNKS_get_size(chunks->data);
 	guint8 present_subpos[expected_nb_chunk];
 	for (guint i=0; i < expected_nb_chunk; i++) {
 		present_subpos[i] = 0;
@@ -2217,10 +2224,15 @@ _check_metachunk_ec_content(GSList *chunks, struct checked_content_s *ec)
 		present_subpos[subpos] = 1;
 
 		ec->present_chunks = g_slist_prepend(ec->present_chunks, chunk);
-		ec->size += CHUNKS_get_size(chunk);
 		nb_chunks++;
+
+		if (CHUNKS_get_size(chunk) != chunk_size) {
+			ec->broken_state = IRREPARABLE;
+			return FALSE;
+		}
 	}
 
+	ec->size += expected_nb_chunk * chunk_size;
 	if (nb_chunks == expected_nb_chunk) {
 		return TRUE;
 	}
@@ -2293,10 +2305,15 @@ _check_plain_content(struct m2v2_sorted_content_s *content,
 
 	g_tree_foreach(content->metachunks, _foreach_check_plain_content,
 			checked_content);
-	/*If the size of all the chunks is inferior to the size indicate in the header
-	 *it means that some missing chunks could not be detected and so irreparable */
-	if (checked_content->size < size * nb_copy &&
-			checked_content->broken_state == NONE && !checked_content->partial) {
+
+	if (checked_content->broken_state == IRREPARABLE) {
+		checked_content_free(checked_content);
+		return IRREPARABLE;
+	}
+	/* Check if the last metachunks are present
+	 * or check if the chunk sizes match the content size */
+	if (!checked_content->partial
+			&& checked_content->size < size * checked_content->nb_copy) {
 		checked_content_free(checked_content);
 		return IRREPARABLE;
 	}
@@ -2323,12 +2340,15 @@ _check_ec_content(struct m2v2_sorted_content_s *content,
 
 	g_tree_foreach(content->metachunks, _foreach_check_ec_content,
 			checked_content);
-	/* Check if the size is at least superior to the minimum necessary to
-	* size needed by the storage policy*/
-	if (checked_content->size
-			< size * (checked_content->k + checked_content->m) / checked_content->k
-			&& checked_content->broken_state == NONE
-			&& !checked_content->partial) {
+
+	if (checked_content->broken_state == IRREPARABLE) {
+		checked_content_free(checked_content);
+		return IRREPARABLE;
+	}
+	/* Check if the last metachunks are present
+	 * or check if the chunk sizes match the content size */
+	if (!checked_content->partial
+			&& checked_content->size < size * (checked_content->k + checked_content->m) / checked_content->k) {
 		checked_content_free(checked_content);
 		return IRREPARABLE;
 	}
