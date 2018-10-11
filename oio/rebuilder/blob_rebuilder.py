@@ -23,15 +23,17 @@ from oio.common.json import json
 from oio.common.green import threading
 from oio.common.easy_value import int_value, true_value
 from oio.common.exceptions import ContentNotFound, NotFound, OrphanChunk, \
-    ConfigurationException
+    ConfigurationException, OioTimeout
 from oio.content.factory import ContentFactory
-from oio.event.beanstalk import Beanstalk, BeanstalkError, ConnectionError
+from oio.event.beanstalk import Beanstalk, BeanstalkError, ConnectionError, \
+    ResponseError
 from oio.rdir.client import RdirClient
 from oio.rebuilder.rebuilder import Rebuilder, RebuilderWorker
 
 
 DEFAULT_REBUILDER_TUBE = 'oio-rebuild'
 DEFAULT_IMPROVER_TUBE = 'oio-improve'
+DISTRIBUTED_REBUILDER_TIMEOUT = 300
 
 
 class BlobRebuilder(Rebuilder):
@@ -250,12 +252,20 @@ class DistributedBlobRebuilder(BlobRebuilder):
                 time.sleep(0.1)
 
         while thread.is_alive() or not is_finish():
-            event_info = listener.fetch_event(
-                self._rebuilt_chunk_from_event, **kwargs)
-            for beanstalkd_addr, chunk, bytes_processed, error in event_info:
-                senders[beanstalkd_addr].event_done()
-                self.update_processed(chunk, bytes_processed, error=error,
-                                      **kwargs)
+            try:
+                event_info = listener.fetch_event(
+                    self._rebuilt_chunk_from_event,
+                    timeout=DISTRIBUTED_REBUILDER_TIMEOUT, **kwargs)
+                for beanstalkd_addr, chunk, bytes_processed, error \
+                        in event_info:
+                    senders[beanstalkd_addr].event_done()
+                    self.update_processed(
+                        chunk, bytes_processed, error=error, **kwargs)
+            except OioTimeout:
+                self.logger.error("No response since %d secondes",
+                                  DISTRIBUTED_REBUILDER_TIMEOUT)
+                self.log_report('DONE', force=True)
+                return False
 
         self.log_report('DONE', force=True)
         return self.total_errors == 0
@@ -421,15 +431,14 @@ class Beanstalkd(object):
 
 class BeanstalkdListener(Beanstalkd):
 
-    def fetch_event(self, on_event, **kwargs):
+    def fetch_event(self, on_event, timeout=None, **kwargs):
         job_id = None
         try:
             if not self.connected:
                 self.logger.debug('Connecting to %s using tube %s',
                                   self.addr, self.tube)
                 self._connect(**kwargs)
-
-            job_id, data = self.beanstalkd.reserve()
+            job_id, data = self.beanstalkd.reserve(timeout=timeout)
             for event_info in on_event(job_id, data, **kwargs):
                 yield event_info
             self.beanstalkd.delete(job_id)
@@ -441,7 +450,10 @@ class BeanstalkdListener(Beanstalkd):
             if 'Invalid URL' in str(exc):
                 raise
             time.sleep(1.0)
-        except Exception:
+        except BeanstalkError as exc:
+            if isinstance(exc, ResponseError) and 'TIMED_OUT' in str(exc):
+                raise OioTimeout()
+
             self.logger.exception("ERROR on %s using tube %s (job=%s)",
                                   self.addr, self.tube, job_id)
             if job_id:
