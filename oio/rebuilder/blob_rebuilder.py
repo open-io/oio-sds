@@ -394,6 +394,8 @@ class BlobRebuilderWorker(RebuilderWorker):
 class Beanstalkd(object):
 
     def __init__(self, addr, tube, logger, **kwargs):
+        if addr is not None and addr.startswith('beanstalk://'):
+            addr = addr[12:]
         self.addr = addr
         self.tube = tube
         self.logger = logger
