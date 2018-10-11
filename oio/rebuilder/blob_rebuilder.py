@@ -412,6 +412,8 @@ class Beanstalkd(object):
         self.beanstalkd = None
         self.connected = False
         self._connect()
+        # Check the connection
+        self.beanstalkd.stats_tube(self.tube)
 
     def _connect(self, **kwargs):
         self.close()
@@ -444,7 +446,7 @@ class BeanstalkdListener(Beanstalkd):
             self.beanstalkd.delete(job_id)
         except ConnectionError as exc:
             self.connected = False
-            self.logger.debug(
+            self.logger.warn(
                 'Disconnected from %s using tube %s (job=%s): %s',
                 self.addr, self.tube, job_id, exc)
             if 'Invalid URL' in str(exc):
@@ -501,7 +503,7 @@ class BeanstalkdSender(Beanstalkd):
             return True
         except ConnectionError as exc:
             self.connected = False
-            self.logger.debug(
+            self.logger.warn(
                 'Disconnected from %s using tube %s (job=%s): %s',
                 self.addr, self.tube, job_id, exc)
             if 'Invalid URL' in str(exc):
