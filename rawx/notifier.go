@@ -108,6 +108,10 @@ func (notifier *beanstalkNotifier) connectBeanstalkd() error {
 	if err != nil {
 		return err
 	}
+	err = beanstalkd.Use(notifier.tube)
+	if err != nil {
+		return err
+	}
 	notifier.beanstalkd = beanstalkd
 	return nil
 }
