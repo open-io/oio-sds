@@ -197,7 +197,7 @@ def main():
 
         # Load the assigned rdir services
         client = RdirDispatcher({"namespace": args.ns})
-        all_rawx, all_rdir = client.get_assignation()
+        all_rawx, all_rdir = client.get_assignments('rawx')
         assert not any(r['rdir'] is None for r in all_rawx)
         logging.info("All the RAWX have a RDIR assigned")
 

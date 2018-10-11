@@ -15,38 +15,40 @@
 
 from logging import getLogger
 from cliff import lister
-from oio.cli.volume.volume import BootstrapVolume
-from oio.cli.common.clientmanager import get_plugin_module
 
 
-def _format_assignments(service_providers, service_type):
+def _format_assignments(all_services, svc_col_title='Rawx'):
     """Prepare the list of results for display"""
-    # FIXME: Copypasta from RDIR/RAWX assignment, possible factorization?
+    # Possible improvement: if we do not sort by rdir,
+    # we can yield results instead of building a list.
     results = list()
-    for service_provider in service_providers:
-        rdir = service_provider.get('rdir', {'addr': 'n/a', 'tags': {}})
+    for svc in all_services:
+        rdir = svc.get('rdir', {'addr': 'n/a', 'tags': {}})
         results.append(
             (rdir['tags'].get('tag.service_id') or rdir['addr'],
-             service_provider['tags'].get('tag.service_id') or
-             service_provider['addr'],
+             svc['tags'].get('tag.service_id') or svc['addr'],
              rdir['tags'].get('tag.loc'),
-             service_provider['tags'].get('tag.loc')))
+             svc['tags'].get('tag.loc')))
     results.sort()
-    columns = ('RDIR', 'META2', 'RDIR location', 'META2 location')
+    columns = ('Rdir', svc_col_title,
+               'Rdir location', '%s location' % svc_col_title)
     return columns, results
 
 
-class BootstrapMeta2(lister.Lister):
-    """Assign an rdir service to all meta2"""
+class RdirBootstrap(lister.Lister):
+    """Assign an rdir services"""
 
-    log = getLogger(__name__ + '.BootstrapMeta2')
+    log = getLogger(__name__ + '.RdirBootstrap')
 
     def __init__(self, *args, **kwargs):
-        super(BootstrapMeta2, self).__init__(*args, **kwargs)
+        super(RdirBootstrap, self).__init__(*args, **kwargs)
         self.error = None
 
     def get_parser(self, prog_name):
-        parser = super(BootstrapMeta2, self).get_parser(prog_name)
+        parser = super(RdirBootstrap, self).get_parser(prog_name)
+        parser.add_argument(
+            'service_type',
+            help="Which service type to assign rdir to")
         parser.add_argument(
             '--max-per-rdir',
             metavar='<N>',
@@ -56,29 +58,69 @@ class BootstrapMeta2(lister.Lister):
 
     def take_action(self, parsed_args):
         from oio.common.exceptions import OioException
+        dispatcher = self.app.client_manager.rdir.rdir_lb
         try:
-            all_meta2 = self.app.client_manager.rdir.rdir_lb.assign_all_meta2(
-                parsed_args.max_per_rdir,
-                connection_timeout=30.0, read_timeout=90.0
-            )
+            all_services = dispatcher.assign_services(
+                parsed_args.service_type, parsed_args.max_per_rdir,
+                connection_timeout=30.0, read_timeout=90.0)
         except OioException as exc:
-            self.log.warn("Failed to assign all META2 servers: %s", exc)
+            self.log.warn('Failed to assign all %s services: %s',
+                          parsed_args.service_type, exc)
             self.error = exc
-            all_meta2, _ = \
-                self.app.client_manager.rdir.rdir_lb.get_assignments_generic(
-                    "meta2",
-                    connection_timeout=30.0,
-                    read_timeout=90.0
-                )
-        return _format_assignments(all_meta2, "meta2")
+            all_services, _ = dispatcher.get_assignments(
+                "meta2", connection_timeout=30.0, read_timeout=90.0)
+        return _format_assignments(all_services,
+                                   parsed_args.service_type.capitalize())
 
 
-class BootstrapRawx(BootstrapVolume):
-    log = getLogger(__name__ + '.BootstrapRawx')
+class RdirAssignments(lister.Lister):
+    """Display which rdir service is linked to each other service"""
 
-    def __init__(self, *args, **kwargs):
-        super(BootstrapRawx, self).__init__(*args, **kwargs)
-        self.error = None
-        # MONKEY PAAAAAATCH ! (But not really)
-        # Yes I'm very aware this is illegal and jail worthy.
-        get_plugin_module('oio.cli.volume.client')
+    log = getLogger(__name__ + '.DisplayVolumeAssignation')
+
+    def get_parser(self, prog_name):
+        parser = super(RdirAssignments, self).get_parser(prog_name)
+        parser.add_argument(
+            'service_type',
+            help="Which service type to diplay rdir assignments")
+        parser.add_argument(
+            '--aggregated',
+            action="store_true",
+            help="Display an aggregation of the assignation")
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        all_services, all_rdir = \
+            self.app.client_manager.rdir.rdir_lb.get_assignments(
+                parsed_args.service_type,
+                connection_timeout=30.0, read_timeout=90.0)
+
+        results = list()
+        if not parsed_args.aggregated:
+            columns, results = _format_assignments(
+                all_services, parsed_args.service_type.capitalize())
+        else:
+            dummy_rdir = {"addr": "n/a", "tags": {}}
+            rdir_by_id = dict()
+            for svc in all_services:
+                rdir = svc.get('rdir', dummy_rdir)
+                rdir_id = rdir['tags'].get('tag.service_id') or rdir['addr']
+                rdir_by_id[rdir_id] = rdir
+                managed_svc = rdir.get('managed_svc') or list()
+                svc_id = svc['tags'].get('tag.service_id') or svc['addr']
+                managed_svc.append(svc_id)
+                rdir['managed_svc'] = managed_svc
+            for rdir in all_rdir:
+                rdir_id = rdir['tags'].get('tag.service_id') or rdir['addr']
+                if rdir_id not in rdir_by_id:
+                    rdir['managed_svc'] = list()
+                    rdir_by_id[rdir_id] = rdir
+            for addr, rdir in rdir_by_id.iteritems():
+                results.append((addr,
+                                len(rdir['managed_svc']),
+                                ' '.join(rdir['managed_svc'])))
+            results.sort()
+            columns = ('Rdir', 'Number of bases', 'Bases')
+        return columns, results

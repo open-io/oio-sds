@@ -39,7 +39,7 @@ def _filter_rdir_host(allsrv):
     for srv in allsrv.get('srv', {}):
         if srv['type'] == 'rdir':
             return srv['host']
-    raise NotFound("No rdir service found in %s" % (allsrv,))
+    raise NotFound("No rdir service found in %s" % (allsrv, ))
 
 
 class RdirDispatcher(object):
@@ -57,44 +57,49 @@ class RdirDispatcher(object):
             self._cs = ConscienceClient(self.conf, logger=self.logger)
         return self._cs
 
-    def get_assignments_generic(self, service_type, **kwargs):
-        all_service_servers = self.cs.all_services(service_type, **kwargs)
+    def get_assignments(self, service_type, **kwargs):
+        """
+        Get rdir assignments for all services of the specified type.
+
+        :returns: a tuple with a list all services of the specified type,
+            and a list of all rdir services.
+        :rtype: `tuple<list<dict>,list<dict>>`
+        """
+        all_services = self.cs.all_services(service_type, **kwargs)
         all_rdir = self.cs.all_services('rdir', True, **kwargs)
         by_id = {_make_id(self.ns, 'rdir', x['addr']): x
                  for x in all_rdir}
 
-        for service_provider in all_service_servers:
+        for service in all_services:
             try:
-                ref = service_provider.get('tags', {}).get('tag.service_id')
+                ref = service.get('tags', {}).get('tag.service_id')
                 resp = self.directory.list(RDIR_ACCT,
-                                           ref or service_provider['addr'],
+                                           ref or service['addr'],
                                            service_type='rdir',
                                            **kwargs)
                 rdir_host = _filter_rdir_host(resp)
                 try:
-                    service_provider['rdir'] = by_id[
+                    service['rdir'] = by_id[
                         _make_id(self.ns, 'rdir', rdir_host)]
                 except KeyError:
                     self.logger.warn("rdir %s linked to %s %s seems down",
                                      rdir_host, service_type,
-                                     service_provider['addr'])
-                    service_provider['rdir'] = {"addr": rdir_host,
-                                                "tags": dict()}
-                    loc_rdir = service_provider['rdir']
+                                     service['addr'])
+                    service['rdir'] = {"addr": rdir_host,
+                                       "tags": dict()}
+                    loc_rdir = service['rdir']
                     by_id[_make_id(self.ns, 'rdir', rdir_host)] = loc_rdir
             except NotFound:
                 self.logger.info("No rdir linked to %s",
-                                 service_provider['addr'])
+                                 service['addr'])
             except OioException as exc:
                 self.logger.warn('Failed to get rdir linked to %s: %s',
-                                 service_provider['addr'], exc)
-        return all_service_servers, all_rdir
+                                 service['addr'], exc)
+        return all_services, all_rdir
 
-    def get_assignation(self, **kwargs):
-        return self.get_assignments_generic('rawx', **kwargs)
-
-    def assign_services_generic(self, service_providers, service_type,
-                                max_per_rdir=None, **kwargs):
+    def assign_services(self, service_type,
+                        max_per_rdir=None, **kwargs):
+        all_services = self.cs.all_services(service_type, **kwargs)
         all_rdir = self.cs.all_services('rdir', True, **kwargs)
         if len(all_rdir) <= 0:
             raise ServiceUnavailable("No rdir service found in %s" % self.ns)
@@ -103,12 +108,12 @@ class RdirDispatcher(object):
                  for x in all_rdir}
 
         errors = list()
-        for provider in service_providers:
-            provider_address = provider['tags'].get('tag.service_id',
-                                                    provider['addr'])
+        for provider in all_services:
+            provider_id = provider['tags'].get('tag.service_id',
+                                               provider['addr'])
 
             try:
-                resp = self.directory.list(RDIR_ACCT, provider_address,
+                resp = self.directory.list(RDIR_ACCT, provider_id,
                                            service_type='rdir', **kwargs)
                 rdir_host = _filter_rdir_host(resp)
                 try:
@@ -117,17 +122,17 @@ class RdirDispatcher(object):
                 except KeyError:
                     self.logger.warn("rdir %s linked to %s %s seems down",
                                      rdir_host, service_type,
-                                     provider_address)
+                                     provider_id)
             except NotFound:
                 try:
-                    rdir = self._smart_link_rdir(provider_address, all_rdir,
+                    rdir = self._smart_link_rdir(provider_id, all_rdir,
                                                  service_type=service_type,
                                                  max_per_rdir=max_per_rdir,
                                                  **kwargs)
                 except OioException as exc:
                     self.logger.warn("Failed to link an rdir to %s %s: %s",
-                                     service_type, provider_address, exc)
-                    errors.append((provider_address, exc))
+                                     service_type, provider_id, exc)
+                    errors.append((provider_id, exc))
                     continue
                 n_bases = by_id[rdir]['tags'].get("stat.opened_db_count", 0)
                 by_id[rdir]['tags']["stat.opened_db_count"] = n_bases + 1
@@ -135,8 +140,8 @@ class RdirDispatcher(object):
             except OioException as exc:
                 self.logger.warn("Failed to check rdir linked to %s %s "
                                  "(thus won't try to make the link): %s",
-                                 service_type, provider_address, exc)
-                errors.append((provider_address, exc))
+                                 service_type, provider_id, exc)
+                errors.append((provider_id, exc))
         if errors:
             # group_chunk_errors is flexible enough to accept service addresses
             errors = group_chunk_errors(errors)
@@ -146,31 +151,28 @@ class RdirDispatcher(object):
             else:
                 raise OioException('Several errors encountered: %s' %
                                    errors)
-        return service_providers
+        return all_services
 
     def assign_all_meta2(self, max_per_rdir=None, **kwargs):
         """
-        Assign an RDIR service to all META2 servers that aren't already
+        Assign an rdir service to all meta2 servers that aren't already
         assigned one.
-        :param max_per_rdir: Maximum number of services an RDIR can handle.
-        :type: int
-        :return The list of META2 that were assigned RDIR services.
+
+        :param max_per_rdir: Maximum number of services an rdir can handle.
+        :type max_per_rdir: `int`
+        :returns: The list of meta2 that were assigned rdir services.
         """
-        all_meta2 = self.cs.all_services('meta2', **kwargs)
-        return self.assign_services_generic(all_meta2, "meta2", max_per_rdir,
-                                            **kwargs)
+        return self.assign_services("meta2", max_per_rdir, **kwargs)
 
     def assign_all_rawx(self, max_per_rdir=None, **kwargs):
         """
-        Find a rdir service for all rawx that don't have one already.
+        Find an rdir service for all rawx that don't have one already.
 
         :param max_per_rdir: maximum number or rawx services that an rdir
                              can be linked to
         :type max_per_rdir: `int`
         """
-        all_rawx = self.cs.all_services('rawx', **kwargs)
-        return self.assign_services_generic(all_rawx, "rawx", max_per_rdir,
-                                            **kwargs)
+        return self.assign_services("rawx", max_per_rdir, **kwargs)
 
     def _smart_link_rdir(self, volume_id, all_rdir, max_per_rdir=None,
                          max_attempts=7, service_type='rawx', **kwargs):
@@ -211,7 +213,7 @@ class RdirDispatcher(object):
                 break
             except ClientException as ex:
                 # Already done
-                done = (455,)
+                done = (455, )
                 if ex.status in done:
                     break
                 if ex.message.startswith(
@@ -270,6 +272,11 @@ class RdirClient(HttpApi):
     Client class for rdir services.
     """
 
+    base_url = {
+        'rawx': 'rdir',
+        'meta2': 'rdir/meta2',
+    }
+
     def __init__(self, conf, **kwargs):
         super(RdirClient, self).__init__(conf, **kwargs)
         self.directory = DirectoryClient(conf, **kwargs)
@@ -295,48 +302,29 @@ class RdirClient(HttpApi):
         except NotFound:
             raise VolumeException('No rdir assigned to volume %s' % volume_id)
 
-    def _make_uri(self, action, volume_id, req_id=None):
+    def _make_uri(self, action, volume_id, req_id=None, service_type='rawx'):
         rdir_host = self._get_rdir_addr(volume_id, req_id)
-        return 'http://%s/v1/rdir/%s' % (rdir_host, action)
+        return 'http://%s/v1/%s/%s' % (rdir_host,
+                                       self.__class__.base_url[service_type],
+                                       action)
 
     @ensure_headers
     @ensure_request_id
     def _rdir_request(self, volume, method, action, create=False, params=None,
-                      **kwargs):
+                      service_type='rawx', **kwargs):
         if params is None:
             params = dict()
         params['vol'] = volume
         if create:
             params['create'] = '1'
-        uri = self._make_uri(action, volume, req_id=kwargs.get('X-oio-req-id'))
+        uri = self._make_uri(action, volume,
+                             req_id=kwargs['headers']['X-oio-req-id'],
+                             service_type=service_type)
         try:
             resp, body = self._direct_request(method, uri, params=params,
                                               **kwargs)
         except OioNetworkException:
             self._clear_cache(volume)
-            raise
-
-        return resp, body
-
-    def _rdir_meta2_request(self, meta2_address, method, action,
-                            auto_create=True, **kwargs):
-        params = {'meta2_address': meta2_address}
-        if auto_create:
-            params['autocreate'] = 1
-        # Assuming we'll use the same facility to fetch assigned rdirs to META2
-        # Since technically speaking it's a KV store so it shouldn't matter.
-        if kwargs and kwargs.get('headers', None):
-            req_id = kwargs.get('headers').get('X-oio-req-id', None)
-        else:
-            req_id = None
-        uri = self._make_uri('meta2/%s' % action, meta2_address,
-                             req_id=req_id)
-
-        try:
-            resp, body = self._direct_request(method, uri, params=params,
-                                              **kwargs)
-        except OioNetworkException:
-            self._clear_cache(meta2_address)
             raise
 
         return resp, body
@@ -447,8 +435,8 @@ class RdirClient(HttpApi):
         return body
 
     def meta2_index_create(self, volume_id, **kwargs):
-        return self._rdir_meta2_request(volume_id, 'POST', 'create',
-                                        **kwargs)
+        return self._rdir_request(volume_id, 'POST', 'create',
+                                  service_type='meta2', **kwargs)
 
     def meta2_index_push(self, volume_id, container_url, container_id, mtime,
                          headers=None, **kwargs):
@@ -459,9 +447,9 @@ class RdirClient(HttpApi):
         for key, value in kwargs.iteritems():
             body[key] = value
 
-        return self._rdir_meta2_request(volume_id, 'POST', 'push',
-                                        create=True,
-                                        json=body, headers=headers, **kwargs)
+        return self._rdir_request(volume_id, 'POST', 'push',
+                                  create=True, json=body, headers=headers,
+                                  service_type='meta2', **kwargs)
 
     def meta2_index_delete(self, volume_id, container_path, container_id,
                            **kwargs):
@@ -471,9 +459,9 @@ class RdirClient(HttpApi):
         for key, value in kwargs.iteritems():
             body[key] = value
 
-        return self._rdir_meta2_request(volume_id, 'POST', 'delete',
-                                        create=False,
-                                        json=body, **kwargs)
+        return self._rdir_request(volume_id, 'POST', 'delete',
+                                  create=False, json=body,
+                                  service_type='meta2', **kwargs)
 
     def meta2_index_fetch(self, volume_id, prefix=None, marker=None,
                           limit=4096, **kwargs):
@@ -485,6 +473,7 @@ class RdirClient(HttpApi):
             params['marker'] = marker
         if limit:
             params['limit'] = limit
-        resp, body = self._rdir_meta2_request(volume_id, 'POST', 'fetch',
-                                              json=params, **kwargs)
+        resp, body = self._rdir_request(volume_id, 'POST', 'fetch',
+                                        json=params, service_type='meta2',
+                                        **kwargs)
         return body
