@@ -424,7 +424,7 @@ static GError *
 _db_get(const char *volid, gboolean autocreate, struct rdir_base_s **pbase)
 {
 	return _db_get_generic(tree_bases, &lock_bases, &cond_bases,
-						   volid, autocreate, pbase);
+			volid, autocreate, pbase);
 }
 
 static GError *
@@ -471,7 +471,7 @@ _db_admin_set_incident(const char *volid, gint64 when)
 	struct rdir_base_s *base = NULL;
 	GError *err = NULL;
 
-	if (NULL != (err = _db_get(volid, FALSE, &base)))
+	if ((err = _db_get(volid, FALSE, &base)))
 		return err;
 
 	char *errmsg = NULL;
@@ -533,7 +533,7 @@ _db_vol_fetch(const char *volid, GString *value,
 
 	limit = CLAMP(limit, 1, 4096);
 
-	if (NULL != (err = _db_admin_get_incident(volid, &incident_date)))
+	if ((err = _db_admin_get_incident(volid, &incident_date)))
 		return err;
 
 	if (rebuild && incident_date <= 0) {
@@ -542,7 +542,7 @@ _db_vol_fetch(const char *volid, GString *value,
 		return NULL;
 	}
 
-	if (NULL != (err = _db_get(volid, FALSE, &base)))
+	if ((err = _db_get(volid, FALSE, &base)))
 		return err;
 
 	gchar prefix[128], after[512];
@@ -672,10 +672,10 @@ _db_vol_status(const char *volid, GString *value)
 	struct rdir_base_s *base = NULL;
 	GError *err = NULL;
 
-	if (NULL != (err = _db_admin_get_incident(volid, &incident_date)))
+	if ((err = _db_admin_get_incident(volid, &incident_date)))
 		return err;
 
-	if (NULL != (err = _db_get(volid, FALSE, &base)))
+	if ((err = _db_get(volid, FALSE, &base)))
 		return err;
 
 	GTree *tree_containers =
@@ -787,7 +787,7 @@ _db_admin_show(const char *volid, GString *value)
 	GError *err = NULL;
 	gboolean first = TRUE;
 
-	if (NULL != (err = _db_get(volid, FALSE, &base)))
+	if ((err = _db_get(volid, FALSE, &base)))
 		return err;
 
 	leveldb_readoptions_t *options = leveldb_readoptions_create();
@@ -833,7 +833,7 @@ _db_admin_lock(const char *volid, const char *who)
 	struct rdir_base_s *base = NULL;
 	GError *err = NULL;
 
-	if (NULL != (err = _db_get(volid, FALSE, &base)))
+	if ((err = _db_get(volid, FALSE, &base)))
 		return err;
 
 	char *errmsg = NULL, *value = NULL;
@@ -883,7 +883,7 @@ _db_admin_unlock(const char *volid)
 	char *errmsg = NULL;
 	int errsav = 0;
 
-	if (NULL != (err = _db_get(volid, FALSE, &base)))
+	if ((err = _db_get(volid, FALSE, &base)))
 		return err;
 
 	leveldb_writeoptions_t *options = leveldb_writeoptions_create();
@@ -910,11 +910,11 @@ _db_admin_clear(const char *volid, gboolean all, gboolean before_incident,
 	gint64 incident = 0;
 
 	if (before_incident) {
-		if (NULL != (err = _db_admin_get_incident(volid, &incident)))
+		if ((err = _db_admin_get_incident(volid, &incident)))
 			return err;
 	}
 
-	if (NULL != (err = _db_get(volid, FALSE, &base)))
+	if ((err = _db_get(volid, FALSE, &base)))
 		return err;
 
 	leveldb_writebatch_t *batch = leveldb_writebatch_create();
@@ -991,9 +991,9 @@ _db_admin_clear(const char *volid, gboolean all, gboolean before_incident,
 	return errmsg ? _map_errno_to_gerror(errsav, errmsg) : NULL;
 }
 
-/* ------------------------------------------------------------------------- */
-/*							  Chunk records 								 */
-/* ------------------------------------------------------------------------- */
+/* ------------------------------------------------------------------------- *
+ *                            Chunk records                                  *
+ * ------------------------------------------------------------------------- */
 
 struct req_args_s
 {
@@ -1056,7 +1056,7 @@ _route_vol_delete(struct req_args_s *args, struct json_object *jbody,
 	/* extraction of the parameters */
 	GError *err = NULL;
 	GString *key = NULL;
-	if (NULL != (err = _request_to_key(jbody, &key)))
+	if ((err = _request_to_key(jbody, &key)))
 		return _reply_format_error(args->rp, err);
 
 	/* Eventually remove the record from the database */
@@ -1114,7 +1114,7 @@ _route_vol_push(struct req_args_s *args, struct json_object *jbody,
 	/* extract all the record's fields */
 	GError *err = NULL;
 	struct rdir_record_s rec = {0};
-	if (NULL != (err = _record_extract(&rec, jbody)))
+	if ((err = _record_extract(&rec, jbody)))
 		return _reply_format_error(args->rp, err);
 
 	GString *key = _record_to_key(&rec);
@@ -1174,7 +1174,7 @@ _route_vol_fetch(struct req_args_s *args, struct json_object *jbody,
 			{"container_id", &jcid,     json_type_string,  0},
 			{NULL, NULL, 0, 0}
 		};
-		if (NULL != (err = oio_ext_extract_json(jbody, map)))
+		if ((err = oio_ext_extract_json(jbody, map)))
 			return _reply_format_error(args->rp, err);
 	}
 
@@ -1302,7 +1302,7 @@ _route_admin_show(struct req_args_s *args, const char *volid)
 	/* forwardd to the backend */
 	GError *err = NULL;
 	GString *value = g_string_sized_new(1024);
-	if (NULL != (err = _db_admin_show(volid, value))) {
+	if ((err = _db_admin_show(volid, value))) {
 		g_string_free(value, TRUE);
 		return _reply_common_error(args->rp, err);
 	}
@@ -1339,7 +1339,7 @@ _route_admin_unlock(struct req_args_s *args, const char *volid)
 
 	/* forward to the backend */
 	GError *err = NULL;
-	if (NULL != (err = _db_admin_unlock(volid)))
+	if ((err = _db_admin_unlock(volid)))
 		return _reply_common_error(args->rp, err);
 	return _reply_ok(args->rp, NULL);
 }
@@ -1387,7 +1387,7 @@ _route_admin_lock(struct req_args_s *args, struct json_object *jbody,
 		{"who", &jwho, json_type_string, 1},
 		{NULL, NULL, 0, 0}
 	};
-	if (NULL != (err = oio_ext_extract_json(jbody, map)))
+	if ((err = oio_ext_extract_json(jbody, map)))
 		return _reply_format_error(args->rp, err);
 	const char *who = json_object_get_string(jwho);
 
@@ -1398,7 +1398,7 @@ _route_admin_lock(struct req_args_s *args, struct json_object *jbody,
 		return _reply_format_error(args->rp, BADREQ("'who' not set"));
 
 	/* forward to the backend */
-	if (NULL != (err = _db_admin_lock(volid, who)))
+	if ((err = _db_admin_lock(volid, who)))
 		return _reply_common_error(args->rp, err);
 	return _reply_ok(args->rp, NULL);
 }
@@ -1438,7 +1438,7 @@ _route_admin_clear(struct req_args_s *args, const char *volid, const char *all,
 		return _reply_format_error(args->rp, BADREQ("no volume id"));
 
 	/* forward to the backend, within a soft lock */
-	if (NULL != (err = _db_admin_lock(volid, "admin_clear")))
+	if ((err = _db_admin_lock(volid, "admin_clear")))
 		return _reply_common_error(args->rp, err);
 
 	gint64 nb_removed = 0;
@@ -1450,7 +1450,7 @@ _route_admin_clear(struct req_args_s *args, const char *volid, const char *all,
 			&errors);
 
 	GError *_e;
-	if (NULL != (_e = _db_admin_unlock(volid))) {
+	if ((_e = _db_admin_unlock(volid))) {
 		g_clear_error(&_e);
 	}
 
@@ -1501,7 +1501,7 @@ _route_admin_get_incident(struct req_args_s *args, const char *volid)
 
 	GError *err = NULL;
 	gint64 incident = 0;
-	if (NULL != (err = _db_admin_get_incident(volid, &incident)))
+	if ((err = _db_admin_get_incident(volid, &incident)))
 		return _reply_common_error(args->rp, err);
 
 	GString *value = g_string_sized_new(64);
@@ -1554,7 +1554,7 @@ _route_admin_set_incident(struct req_args_s *args, struct json_object *jbody,
 		{"date", &jwhen, json_type_int, 1},
 		{NULL, NULL, 0, 0}
 	};
-	if (NULL != (err = oio_ext_extract_json(jbody, map)))
+	if ((err = oio_ext_extract_json(jbody, map)))
 		return _reply_format_error(args->rp, err);
 	const gint64 when = json_object_get_int64(jwhen);
 
@@ -1566,15 +1566,15 @@ _route_admin_set_incident(struct req_args_s *args, struct json_object *jbody,
 	err = _db_admin_set_incident(volid, when);
 
 	/* reply to the client */
-	if (NULL != err)
+	if (err)
 		return _reply_common_error(args->rp, err);
 	return _reply_ok(args->rp, NULL);
 }
 
-/* ------------------------------------------------------------------------- */
-/*							  Meta2 records 								 */
-/* ------------------------------------------------------------------------- */
-/*
+/* ------------------------------------------------------------------------- *
+ *                            Meta2 records                                  *
+ * ------------------------------------------------------------------------- *
+ *
  * An event is generated every time a meta2 database is created in a meta2 server.
  * We receive an event of that happening and we register it.
  *
@@ -1629,10 +1629,10 @@ _meta2_record_extract(struct rdir_meta2_record_s *rec, struct json_object *jreco
 {
 	struct json_object *jcontainer, *jmtime, *jcontenturl, *jextradata;
 	struct oio_ext_json_mapping_s map[] = {
-		{"container_id", &jcontainer, json_type_string, 1},
+		{"container_id",  &jcontainer,  json_type_string, 1},
 		{"container_url", &jcontenturl, json_type_string, 1},
-		{"mtime",        &jmtime,     json_type_int,    0},
-		{"extra_data",        &jextradata,     json_type_string,    0},
+		{"mtime",         &jmtime,      json_type_int,    0},
+		{"extra_data",    &jextradata,  json_type_string, 0},
 		{NULL, NULL, 0, 0}
 	};
 	GError *err = oio_ext_extract_json(jrecord, map);
@@ -1640,8 +1640,8 @@ _meta2_record_extract(struct rdir_meta2_record_s *rec, struct json_object *jreco
 		const char *container = json_object_get_string(jcontainer);
 		const char *container_url = json_object_get_string(jcontenturl);
 		const char *extra = json_object_get_string(jextradata);
-		if(container && container_url){
-			// FIXME: Default to current time ?
+		if (container && container_url){
+			// FIXME(ABO): Default to current time ?
 			rec->mtime = jmtime ? json_object_get_int64(jmtime) : 0;
 			rec->container = g_strdup(container);
 			rec->container_url = g_strdup(container_url);
@@ -1649,9 +1649,10 @@ _meta2_record_extract(struct rdir_meta2_record_s *rec, struct json_object *jreco
 				rec->extra_data = g_strdup(extra);
 			else
 				rec->extra_data = NULL;
-		}else{
-			err = NEWERROR(CODE_BAD_REQUEST, "[%s] Container ID and Content URL"
-					"are mandatory to add record", __FUNCTION__);
+		} else {
+			err = NEWERROR(CODE_BAD_REQUEST,
+				"[%s] container_id and container_url are mandatory",
+				__FUNCTION__);
 		}
 	}
 	return err;
@@ -1664,11 +1665,10 @@ static GError *
 _meta2_record_to_key(struct rdir_meta2_record_s *rec, GString *key)
 {
 	GError *err = NULL;
-	if(rec->container_url){
+	if (rec->container_url) {
 		g_string_printf(key, CONTAINER_PREFIX "%s", rec->container_url);
-	}else{
-		err = NEWERROR(CODE_BAD_REQUEST, "[%s] Content URL mandatory to compute"
-				"key.", __FUNCTION__);
+	} else {
+		err = BADREQ("[%s] container_url is mandatory", __FUNCTION__);
 	}
 	return err;
 }
@@ -1695,8 +1695,7 @@ _meta2_record_free(struct rdir_meta2_record_s *rec)
 {
 	g_free(rec->container);
 	g_free(rec->container_url);
-	if(rec->extra_data)
-		g_free(rec->extra_data);
+	g_free(rec->extra_data);
 }
 
 /*
@@ -1716,30 +1715,30 @@ _meta2_record_subset_extract(struct rdir_meta2_record_subset_s *subset,
 	};
 	GError *err = oio_ext_extract_json(jrecord, map);
 	if (!err) {
-		if(jprefix){
-			//TODO: Sanity checks on the prefix.
+		if (jprefix) {
+			// TODO(ABO): Sanity checks on the prefix.
 			const char *prefix = json_object_get_string(jprefix);
-			subset->prefix = g_string_new_len(prefix, strlen(prefix));
-		}else{
+			subset->prefix = g_string_new(prefix);
+		} else {
 			subset->prefix = NULL;
 		}
-		if(jmarker){
-			//TODO: Sanity checks on the prefix.
-			const char *marker= json_object_get_string(jmarker);
-			subset->marker = g_string_new_len(marker, strlen(marker));
-		}else{
+		if (jmarker) {
+			// TODO(ABO): Sanity checks on the prefix.
+			const char *marker = json_object_get_string(jmarker);
+			subset->marker = g_string_new(marker);
+		} else {
 			subset->marker = NULL;
 		}
-		subset->limit =
-				jlimit ? CLAMP(json_object_get_int64(jlimit), 0,
-				RDIR_LISTING_LIMIT) : RDIR_LISTING_LIMIT;
+		subset->limit = jlimit ?
+				CLAMP(json_object_get_int64(jlimit), 0, RDIR_LISTING_LIMIT)
+				: RDIR_LISTING_LIMIT;
 	}
 	return err;
 }
 
 
 /*
- * Computes the META2 server RDIR database filename.
+ * Computes the meta2 server RDIR database filename.
  *
  * If the meta2_address is an IP:PORT, the filename is meta2-ip-port, otherwise
  * if the meta2_address is a service ID, then the filename is meta2-service_id.
@@ -1747,23 +1746,22 @@ _meta2_record_subset_extract(struct rdir_meta2_record_subset_s *subset,
 static GError *
 _meta2_db_address_to_filename(const gchar *meta2_address, gchar **filename)
 {
-	GError *err = NULL;
 	gchar *local_copy = g_strdup(meta2_address);
 	gchar *colon_char = strchr(local_copy, ':');
-	if(colon_char != NULL) {
+	if (colon_char != NULL) {
 		// We have an IP:PORT
 		*colon_char = '-';
 		*filename = g_strconcat("meta2-", local_copy, NULL);
-	}else{
+	} else {
 		// We have a service ID
 		*filename = g_strconcat("meta2-", local_copy, NULL);
 	}
 	g_free(local_copy);
-	return err;
+	return NULL;
 }
 
 /*
- * Given a META2 server address, we try to fetch a handle on the associated
+ * Given a meta2 server address, we try to fetch a handle on the associated
  * database if it's already available, otherwise we open a new one.
  */
 static GError *
@@ -1773,7 +1771,7 @@ _meta2_db_get(const gchar *meta2_address, gboolean autocreate,
 	GError *err = NULL;
 	gchar *filename = NULL;
 	err = _meta2_db_address_to_filename(meta2_address, &filename);
-	if(err == NULL){
+	if (err == NULL) {
 		err = _db_get_generic(meta2_db_tree, &meta2_db_lock, &meta2_db_cond,
 			filename, autocreate, pbase);
 		g_free(filename);
@@ -1796,18 +1794,18 @@ _meta2_db_get(const gchar *meta2_address, gboolean autocreate,
  */
 static GError *
 _meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *subset,
-				GString *json_reponse, gboolean *end_of_prefix)
+				GString *json_reponse, gboolean *truncated)
 {
 	GError *err = NULL;
 	struct rdir_base_s *base = NULL;
 
-	if (NULL != (err = _meta2_db_get(meta2_address, FALSE, &base)))
+	if ((err = _meta2_db_get(meta2_address, FALSE, &base)))
 		return err;
 
 	// The prefix/marker is only used here so we can edit it in-place.
-	if(subset->prefix)
+	if (subset->prefix)
 		subset->prefix = g_string_prepend(subset->prefix, CONTAINER_PREFIX);
-	if(subset->marker)
+	if (subset->marker)
 		subset->marker = g_string_prepend(subset->marker, CONTAINER_PREFIX);
 
 	leveldb_readoptions_t *options = leveldb_readoptions_create();
@@ -1818,13 +1816,13 @@ _meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *s
 
 	if (subset->marker) {
 		// We have a marker.
-		leveldb_iter_seek(it, subset->marker->str, strlen(subset->marker->str));
+		leveldb_iter_seek(it, subset->marker->str, subset->marker->len);
 		// According to @fvennetier, we shouldn't include the marker in the
 		// returned results.
 		leveldb_iter_next(it);
 	} else if (subset->prefix) {
 		// No marker but we still have a prefix
-		leveldb_iter_seek(it, subset->prefix->str, strlen(subset->prefix->str));
+		leveldb_iter_seek(it, subset->prefix->str, subset->prefix->len);
 	} else {
 		// LevelDB quirk apparently, you have to seek somewhere no matter what
 		// before iterating.
@@ -1833,56 +1831,41 @@ _meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *s
 
 	// Now we're at the first record that has the prefix provided.
 	// We start iterating.
-	guint nb;
-	for (nb = 0; leveldb_iter_valid(it); leveldb_iter_next(it))
-	{
-		size_t klen, vallen = 0;
+	guint nb = 0;
+	for (; leveldb_iter_valid(it); leveldb_iter_next(it), nb++) {
+		size_t klen = 0, vallen = 0;
 
 		const char *key = leveldb_iter_key(it, &klen);
-		if(subset->prefix)
+		if (subset->prefix) {
 			// LevelDB's keys are ordered lexicographically, so on the first
 			// key that does not have the prefix, we can stop iterating.
-			if (strncmp(subset->prefix->str, key, subset->prefix->len)){
-				*end_of_prefix = TRUE;
+			size_t maxlen = MIN(klen, subset->prefix->len);
+			if (strncmp(subset->prefix->str, key, maxlen))
 				break;
-			}
+		}
 
-		if (nb++ > 0)
+		if (nb > subset->limit) {
+			// The current item is valid but we reached the limit during the
+			// previous iteration, thus we don't return it.
+			*truncated = TRUE;
+			break;
+		} else if (nb > 0) {
 			g_string_append_c(json_reponse, ',');
+		}
 
 		const char *val = leveldb_iter_value(it, &vallen);
 
-		//FIXME: Maybe validate the format as is done in the chunk part or rdir.
+		// FIXME(ABO): Maybe validate the format as is done in the chunk part
+		// of rdir.
 		// It would consume a bit more CPU, so wether it's useful or not is
 		// debatable especially given that we don't cherry-pick data as in the
 		// chunk part of rdir.
 
 		g_string_append_len(json_reponse, val, vallen);
-
-		if (nb >= subset->limit)
-			break;
 	}
-	/*
-	 * We can exit the loop on three cases:
-	 * - We have reached the end of the database.
-	 * - We have exhausted the records containing the prefix.
-	 * - We have reached the specified paging limit.
-	 *
-	 * In the first case, we can easily detect that there is no more records.
-	 * In the second one, we have also detected that no more records are there.
-	 * The third one on the other hand, we need to take a single step further to
-	 * see if there are any more records to read.
-	 *
-	 * That's why this ugly hack is here. Please suggest something better ...
-	 */
-	if (nb >= subset->limit)
-		leveldb_iter_next(it);
-	if (!leveldb_iter_valid(it))
-		*end_of_prefix = TRUE;
 
 	leveldb_iter_destroy(it);
 	return err;
-
 }
 
 /*
@@ -1931,15 +1914,14 @@ _meta2_db_delete(const gchar *meta2_address, GString *key)
  *
  * A limit for the number of records to be returned can be specified.
  *
- * If no limit is specified, the default limit be 4096.
+ * If no limit is specified, the default limit be RDIR_LISTING_LIMIT.
  *
- * The maximum allowed number of records to be returned is 4096.
+ * The maximum allowed number of records to be returned is RDIR_LISTING_LIMIT.
  * (I don't know why that's the case with chunks, but my guess is to reduce
  * contention as there can only be one handle to the leveldb at a time)
  *
  * If no more records are available for the requested subset, end_of_records
  * will be true, otherwise it will be false.
- *
  */
 static enum http_rc_e
 _route_meta2_fetch(struct req_args_s *args, struct json_object *jbody,
@@ -1948,7 +1930,7 @@ _route_meta2_fetch(struct req_args_s *args, struct json_object *jbody,
 	if (!jbody || !json_object_is_type(jbody, json_type_object))
 		return _reply_format_error(args->rp, BADREQ("null body"));
 	if (!meta2_address)
-		return _reply_format_error(args->rp, BADREQ("no META2 id"));
+		return _reply_format_error(args->rp, BADREQ("no meta2 id"));
 
 	GError *err = NULL;
 
@@ -1958,17 +1940,15 @@ _route_meta2_fetch(struct req_args_s *args, struct json_object *jbody,
 		return _reply_format_error(args->rp, err);
 
 	GString *response_list = g_string_sized_new(1024);
-	gboolean end_of_prefix = FALSE;
-	g_string_append(response_list, "{\"records\":");
-	g_string_append_c(response_list, '[');
-	err = _meta2_db_fetch(meta2_address, &subset, response_list, &end_of_prefix);
-	g_string_append(response_list, "], \"end_of_prefix\": ");
-	if (end_of_prefix)
-		g_string_append(response_list, "true }");
-	else
-		g_string_append(response_list, "false }");
+	gboolean truncated = FALSE;
+	g_string_append_static(response_list, "{\"records\":[");
+	err = _meta2_db_fetch(meta2_address, &subset, response_list, &truncated);
+	g_string_append_static(response_list, "], ");
+	oio_str_gstring_append_json_pair_boolean(
+			response_list, "truncated", truncated);
+	g_string_append_c(response_list, '}');
 
-	if(err){
+	if (err) {
 		g_string_free(response_list, TRUE);
 		return _reply_format_error(args->rp, err);
 	}
@@ -1977,20 +1957,20 @@ _route_meta2_fetch(struct req_args_s *args, struct json_object *jbody,
 }
 
 /*
- * Creates a new META2 RDIR database.
+ * Creates a new meta2 RDIR database.
  *
  * If a database already exists, an HTTP 201 CREATED will be returned.
  *
  * According to @michael and @sebastien.lapierre, there is no IP re-use, so the
- * IP addresses of the META2 servers are used to reference them.
+ * IP addresses of the meta2 servers are used to reference them.
  */
 static enum http_rc_e
 _route_meta2_create(struct req_args_s *args, const char *meta2_address)
 {
 	if (!oio_str_is_set(meta2_address))
-		return _reply_format_error(args->rp, BADREQ("No META2 ID"));
+		return _reply_format_error(args->rp, BADREQ("No meta2 ID"));
 
-	//FIXME: Check for an IP:PORT or service ID format.
+	// FIXME(ABO): Check for an IP:PORT or service ID format.
 
 	struct rdir_base_s *base = NULL;
 	GError *err = _meta2_db_get(meta2_address, TRUE, &base);
@@ -2000,9 +1980,9 @@ _route_meta2_create(struct req_args_s *args, const char *meta2_address)
 }
 
 /*
- * Upon the creation of a container (a META2 database), the EventAgent will
+ * Upon the creation of a container (a meta2 database), the event-agent will
  * handle an event that will call upon this route to add the newly created
- * container to the list of containers handled by the META2 server in question.
+ * container to the list of containers handled by the meta2 server in question.
  */
 static enum http_rc_e
 _route_meta2_push(struct req_args_s *args, struct json_object *jbody,
@@ -2011,13 +1991,13 @@ _route_meta2_push(struct req_args_s *args, struct json_object *jbody,
 	if (!jbody || !json_object_is_type(jbody, json_type_object))
 		return _reply_format_error(args->rp, BADREQ("null body"));
 	if (!meta2_address)
-		return _reply_format_error(args->rp, BADREQ("no META2 id"));
+		return _reply_format_error(args->rp, BADREQ("no meta2 id"));
 
 	gboolean autocreate = oio_str_parse_bool(str_autocreate, TRUE);
 
 	GError *err = NULL;
 	struct rdir_meta2_record_s rec = {0};
-	if (NULL != (err = _meta2_record_extract(&rec, jbody)))
+	if ((err = _meta2_record_extract(&rec, jbody)))
 		return _reply_format_error(args->rp, err);
 
 	GString *key = g_string_new("");
@@ -2051,11 +2031,11 @@ _route_meta2_delete(struct req_args_s *args, struct json_object *jbody,
 	if (!jbody || !json_object_is_type(jbody, json_type_object))
 		return _reply_format_error(args->rp, BADREQ("null body"));
 	if (!meta2_address)
-		return _reply_format_error(args->rp, BADREQ("no META2 id"));
+		return _reply_format_error(args->rp, BADREQ("no meta2 id"));
 
 	GError *err = NULL;
 	struct rdir_meta2_record_s rec = {0};
-	if (NULL != (err = _meta2_record_extract(&rec, jbody)))
+	if ((err = _meta2_record_extract(&rec, jbody)))
 		return _reply_format_error(args->rp, err);
 
 	GString *key = g_string_new("");
@@ -2078,9 +2058,9 @@ _route_meta2_delete(struct req_args_s *args, struct json_object *jbody,
 	return _reply_ok(args->rp, NULL);
 }
 
-/* ------------------------------------------------------------------------- */
-/*							  General rdir routes 							 */
-/* ------------------------------------------------------------------------- */
+/* ------------------------------------------------------------------------- *
+ *                          General rdir routes                              *
+ * ------------------------------------------------------------------------- */
 
 // RDIR{{
 // GET /status
@@ -2244,21 +2224,20 @@ _handler_decode_route(struct req_args_s *args, struct json_object *jbody,
 
 		case OIO_RDIR_META2_CREATE:
 			CHECK_METHOD("POST");
-			return _route_meta2_create(args, OPT("meta2_address"));
+			return _route_meta2_create(args, OPT("vol"));
 
 		case OIO_RDIR_META2_PUSH:
 			args->rp->no_access();
 			CHECK_METHOD("POST");
-			return _route_meta2_push(args, jbody, OPT("meta2_address"),
-					OPT("auto_create"));
+			return _route_meta2_push(args, jbody, OPT("vol"), OPT("create"));
 
 		case OIO_RDIR_META2_FETCH:
 			CHECK_METHOD("POST");
-			return _route_meta2_fetch(args, jbody, OPT("meta2_address"));
+			return _route_meta2_fetch(args, jbody, OPT("vol"));
 
 		case OIO_RDIR_META2_DELETE:
 			CHECK_METHOD("POST");
-			return _route_meta2_delete(args, jbody, OPT("meta2_address"));
+			return _route_meta2_delete(args, jbody, OPT("vol"));
 
 		case OIO_RDIR_NOT_MATCHED:
 			return _reply_format_error(args->rp, BADREQ("Route not found"));
@@ -2363,7 +2342,7 @@ grid_main_action(void)
 {
 	GError *err = NULL;
 
-	if (NULL != (err = network_server_open_servers(server))) {
+	if ((err = network_server_open_servers(server))) {
 		_main_error(err);
 		return;
 	}
@@ -2373,7 +2352,7 @@ grid_main_action(void)
 		return;
 	}
 
-	if (NULL != (err = network_server_run(server, _reconfigure_on_SIGHUP))) {
+	if ((err = network_server_run(server, _reconfigure_on_SIGHUP))) {
 		_main_error(err);
 		return;
 	}

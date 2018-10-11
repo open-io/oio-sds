@@ -193,8 +193,7 @@ gridinit_cmd -S "$GRIDINIT_SOCK" restart "@meta1" >/dev/null
 COUNT=$(oio-test-config.py -c -t meta1)
 $cmd_openio cluster wait -d 30 -u -n "$COUNT" meta1
 
-$cmd_openio volume admin bootstrap
-
+$cmd_openio rdir bootstrap rawx
 $cmd_openio rdir bootstrap meta2
 
 echo -e "\n### Wait for the services to have a score"

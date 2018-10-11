@@ -17,6 +17,7 @@ from logging import getLogger
 from cliff import lister, show
 
 from oio.common.exceptions import OioException
+from oio.cli.rdir.rdir import _format_assignments
 
 
 class ShowAdminVolume(show.ShowOne):
@@ -235,25 +236,11 @@ class UnlockAdminVolume(lister.Lister):
         return columns, results
 
 
-def _format_assignation(all_rawx):
-    """Prepare the list of results for display"""
-    # Possible improvement: if we do not sort by rdir,
-    # we can yield results instead of building a list.
-    results = list()
-    for rawx in all_rawx:
-        rdir = rawx.get('rdir', {'addr': 'n/a', 'tags': {}})
-        results.append(
-            (rdir['tags'].get('tag.service_id') or rdir['addr'],
-             rawx['tags'].get('tag.service_id') or rawx['addr'],
-             rdir['tags'].get('tag.loc'),
-             rawx['tags'].get('tag.loc')))
-    results.sort()
-    columns = ('Rdir', 'Rawx', 'Rdir location', 'Rawx location')
-    return columns, results
-
-
 class BootstrapVolume(lister.Lister):
-    """Assign an rdir service to all rawx"""
+    """
+    Assign an rdir service to all rawx.
+    Deprecated, prefer using 'openio rdir bootstrap rawx'.
+    """
 
     log = getLogger(__name__ + '.BootstrapVolume')
 
@@ -272,6 +259,7 @@ class BootstrapVolume(lister.Lister):
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
+        self.log.warn("Deprecated, prefer using 'openio rdir bootstrap rawx'.")
 
         try:
             all_rawx = self.app.client_manager.volume.rdir_lb.assign_all_rawx(
@@ -281,16 +269,19 @@ class BootstrapVolume(lister.Lister):
             self.log.warn("Failed to assign all rawx: %s", exc)
             self.error = exc
             all_rawx, _ = \
-                self.app.client_manager.volume.rdir_lb.get_assignation(
-                        connection_timeout=30.0, read_timeout=90.0)
+                self.app.client_manager.volume.rdir_lb.get_assignments(
+                        'rawx', connection_timeout=30.0, read_timeout=90.0)
 
-        columns, results = _format_assignation(all_rawx)
+        columns, results = _format_assignments(all_rawx, 'Rawx')
         # FIXME(FVE): return 1 if self.error
         return columns, results
 
 
 class DisplayVolumeAssignation(lister.Lister):
-    """Display which rdir service is linked to each rawx service"""
+    """
+    Display which rdir service is linked to each rawx service.
+    Deprecated, prefer using 'openio rdir assigments rawx'.
+    """
 
     log = getLogger(__name__ + '.DisplayVolumeAssignation')
 
@@ -304,14 +295,16 @@ class DisplayVolumeAssignation(lister.Lister):
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
+        self.log.warn(
+            "Deprecated, prefer using 'openio rdir assigments rawx'.")
 
         all_rawx, all_rdir = \
-            self.app.client_manager.volume.rdir_lb.get_assignation(
-                    connection_timeout=30.0, read_timeout=90.0)
+            self.app.client_manager.volume.rdir_lb.get_assignments(
+                    'rawx', connection_timeout=30.0, read_timeout=90.0)
 
         results = list()
         if not parsed_args.aggregated:
-            columns, results = _format_assignation(all_rawx)
+            columns, results = _format_assignments(all_rawx, 'Rawx')
         else:
             dummy_rdir = {"addr": "n/a", "tags": {}}
             rdir_by_id = dict()

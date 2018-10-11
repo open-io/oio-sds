@@ -38,10 +38,10 @@ enum rdir_route_e {
     OIO_RDIR_VOL_DELETE,
     OIO_RDIR_VOL_FETCH,
     OIO_RDIR_VOL_STATUS,
-	OIO_RDIR_META2_CREATE,
-	OIO_RDIR_META2_PUSH,
-	OIO_RDIR_META2_FETCH,
-	OIO_RDIR_META2_DELETE,
+    OIO_RDIR_META2_CREATE,
+    OIO_RDIR_META2_PUSH,
+    OIO_RDIR_META2_FETCH,
+    OIO_RDIR_META2_DELETE,
 };
 
 enum rdir_route_e oio_rdir_parse_route(const char *url);

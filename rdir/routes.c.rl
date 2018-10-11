@@ -1,6 +1,6 @@
 /*
 OpenIO SDS rdir
-Copyright (C) 2017 OpenIO SAS, original work as part of OpenIO SDS
+Copyright (C) 2017-2018 OpenIO SAS, original work as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -22,8 +22,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 /** @private */
 struct rdir_router_s {
-    const char *ts, *te;
-    int cs, act;
+	const char *ts, *te;
+	int cs, act;
 };
 
 struct rdir_router_result_s {
@@ -68,22 +68,22 @@ route_rdir_request := |*
 
 static struct rdir_router_result_s _parse(const char *p, const size_t len) {
 	struct rdir_router_s parser = {};
-    const char* pe = p + len;
-    const char* eof = pe;
+	const char* pe = p + len;
+	const char* eof = pe;
 	struct rdir_router_result_s rc = {};
 	rc.result = OIO_RDIR_NOT_MATCHED;
-    (void) eof; /* JFS: kept to be ready in case of a FSM change */
-    %%write init;
-    %%write exec;
+	(void) eof; /* JFS: kept to be ready in case of a FSM change */
+	%%write init;
+	%%write exec;
 	return rc;
 }
 
 enum rdir_route_e oio_rdir_parse_route(const char *p) {
-    if (!p)
-        return OIO_RDIR_NOT_MATCHED;
-    const size_t len = strlen(p);
-    struct rdir_router_result_s rc = _parse(p, len);
+	if (!p)
+		return OIO_RDIR_NOT_MATCHED;
+	const size_t len = strlen(p);
+	struct rdir_router_result_s rc = _parse(p, len);
 
-    /* the FSM embed actions that return, here we are when the parsing fails */
-    return (p+len) == rc.last ? rc.result : OIO_RDIR_NOT_MATCHED;
+	/* the FSM embed actions that return, here we are when the parsing fails */
+	return (p+len) == rc.last ? rc.result : OIO_RDIR_NOT_MATCHED;
 }
