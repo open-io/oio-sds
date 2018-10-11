@@ -310,6 +310,7 @@ class BlobRebuilderWorker(RebuilderWorker):
         self.rdir_client = self.rebuilder.rdir_client
         self.content_factory = ContentFactory(self.rebuilder.conf,
                                               logger=self.logger)
+        self.sender = None
 
     def _rebuild_one(self, chunk, **kwargs):
         container_id, content_id, chunk_id_or_pos, _ = chunk
@@ -334,12 +335,19 @@ class BlobRebuilderWorker(RebuilderWorker):
                 if bytes_processed is not None:
                     event['bytes_processed'] = bytes_processed
                 try:
-                    sender = BeanstalkdSender(
-                        reply['addr'], reply['tube'], self.logger,
-                        **kwargs)
-                    sender.send_event(json.dumps(event))
-                    sender.close()
-                except Exception as exc:
+                    if self.sender is None:
+                        self.sender = BeanstalkdSender(
+                            reply['addr'], reply['tube'], self.logger,
+                            **kwargs)
+                    elif self.sender.addr != reply['addr'] \
+                            or self.sender.addr != reply['tube']:
+                        self.sender.close()
+                        self.sender = BeanstalkdSender(
+                            reply['addr'], reply['tube'], self.logger,
+                            **kwargs)
+
+                    self.sender.send_event(json.dumps(event))
+                except BeanstalkError as exc:
                     self.logger.warn(
                         'reply failed %s: %s',
                         self.rebuilder._item_to_string(chunk, **kwargs), exc)
