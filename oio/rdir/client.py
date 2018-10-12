@@ -435,11 +435,18 @@ class RdirClient(HttpApi):
         return body
 
     def meta2_index_create(self, volume_id, **kwargs):
+        """
+        Create a new meta2 rdir database.
+        """
         return self._rdir_request(volume_id, 'POST', 'create',
                                   service_type='meta2', **kwargs)
 
     def meta2_index_push(self, volume_id, container_url, container_id, mtime,
                          headers=None, **kwargs):
+        """
+        Add a newly created container to the list of containers handled
+        by the meta2 server in question.
+        """
         body = {'container_url': container_url,
                 'container_id': container_id,
                 'mtime': int(mtime)}
@@ -453,6 +460,9 @@ class RdirClient(HttpApi):
 
     def meta2_index_delete(self, volume_id, container_path, container_id,
                            **kwargs):
+        """
+        Remove a meta2 record from the database.
+        """
         body = {'container_url': container_path,
                 'container_id': container_id}
 
@@ -465,15 +475,18 @@ class RdirClient(HttpApi):
 
     def meta2_index_fetch(self, volume_id, prefix=None, marker=None,
                           limit=4096, **kwargs):
+        """
+        Fetch specific meta2 records, or a range of records.
+        """
         params = {}
         if prefix:
             params['prefix'] = prefix
         if marker:
-            # FIXME: Validate this one.
+            # FIXME(ABO): Validate this one.
             params['marker'] = marker
         if limit:
             params['limit'] = limit
-        resp, body = self._rdir_request(volume_id, 'POST', 'fetch',
-                                        json=params, service_type='meta2',
-                                        **kwargs)
+        _resp, body = self._rdir_request(volume_id, 'POST', 'fetch',
+                                         json=params, service_type='meta2',
+                                         **kwargs)
         return body
