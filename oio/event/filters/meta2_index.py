@@ -59,7 +59,7 @@ class Meta2IndexFilter(Filter):
                         container_id=container_id,
                         mtime=mtime)
             except VolumeException:
-                msg = '[Meta2IndexFilter] No RDIR is assigned to META2 ' \
+                msg = '[Meta2IndexFilter] No rdir is assigned to meta2 ' \
                       'server %s. Unable to push new container.' % peer
                 resp = EventError(event=Event(env), body=msg)
                 return resp(env, cb)
@@ -82,7 +82,7 @@ class Meta2IndexFilter(Filter):
                         container_path=container_url,
                         container_id=container_id)
             except VolumeException:
-                msg = '[Meta2IndexFilter] No RDIR is assigned to META2 ' \
+                msg = '[Meta2IndexFilter] No rdir is assigned to meta2 ' \
                       'server %s. Unable to push new container.' % peer
                 resp = EventError(event=Event(env), body=msg)
                 return resp(env, cb)

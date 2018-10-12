@@ -728,7 +728,7 @@ _load_alias_from_headers(struct req_args_s *args, GSList **pbeans)
 				CONTENTS_HEADERS_set_id (header, h);
 				/* JFS: this is clean to have uniform CONTENT ID among all
 				 * the beans, but it is a bit useless since this requires more
-				 * bytes on the network and can be done in the META2 server */
+				 * bytes on the network and can be done in the meta2 server */
 				for (GSList *l=beans; l ;l=l->next) {
 					if (DESCR(l->data) != &descr_struct_CHUNKS)
 						continue;

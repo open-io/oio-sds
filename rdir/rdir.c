@@ -201,14 +201,14 @@ _reply_common_error(struct http_reply_ctx_s *rp, GError *err)
 static enum http_rc_e
 _reply_created(struct http_reply_ctx_s *rp)
 {
-	return _reply_json(rp, HTTP_CODE_CREATED, "Base created", NULL);
+	return _reply_json(rp, HTTP_CODE_CREATED, "Created", NULL);
 }
 
 static enum http_rc_e
 _reply_ok(struct http_reply_ctx_s *rp, GString *body)
 {
 	if (!body)
-		return _reply_json(rp, HTTP_CODE_NO_CONTENT, "OK", body);
+		return _reply_json(rp, HTTP_CODE_NO_CONTENT, "No Content", body);
 	return _reply_json(rp, HTTP_CODE_OK, "OK", body);
 }
 
@@ -1018,14 +1018,6 @@ _request_to_key(struct json_object *jbody, GString **pkey)
 // DELETE /v1/rdir/delete?vol=<volume ip>%3A<volume port>
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// .. code-block:: json
-//
-//    {
-//      "container_id":"<container id>",
-//      "content_id":"<object content id>",
-//      "chunk_id":"chunk id"
-//    }
-//
 // Unreference a chunk from the volume.
 //
 // .. code-block:: http
@@ -1037,6 +1029,17 @@ _request_to_key(struct json_object *jbody, GString **pkey)
 //    Content-Length: 135
 //    Content-Type: application/x-www-form-urlencoded
 //
+//
+// .. code-block:: json
+//
+//    {
+//      "container_id":"<container id>",
+//      "content_id":"<object content id>",
+//      "chunk_id":"chunk id"
+//    }
+//
+//
+// Standard response:
 //
 // .. code-block:: http
 //
@@ -1073,14 +1076,6 @@ _route_vol_delete(struct req_args_s *args, struct json_object *jbody,
 // POST /v1/rdir/push?vol=<volume ip>%3A<volume port>
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// .. code-block:: json
-//
-//    {
-//      "container_id":"<container id>",
-//      "content_id":"<object content id>",
-//      "chunk_id":"chunk id"
-//    }
-//
 // Push the target volume.
 //
 // .. code-block:: http
@@ -1092,6 +1087,17 @@ _route_vol_delete(struct req_args_s *args, struct json_object *jbody,
 //    Content-Length: 150
 //    Content-Type: application/x-www-form-urlencoded
 //
+//
+// .. code-block:: json
+//
+//    {
+//      "container_id":"<container id>",
+//      "content_id":"<object content id>",
+//      "chunk_id":"chunk id"
+//    }
+//
+//
+// Standard response:
 //
 // .. code-block:: http
 //
@@ -1146,6 +1152,8 @@ _route_vol_push(struct req_args_s *args, struct json_object *jbody,
 //    Accept: */*
 //
 //
+// Standard response:
+//
 // .. code-block:: http
 //
 //    HTTP/1.1 200 OK
@@ -1198,6 +1206,7 @@ _route_vol_fetch(struct req_args_s *args, struct json_object *jbody,
 // RDIR{{
 // POST /v1/rdir/create?vol=<volume ip>%3A<volume port>
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
 // Create the target volume.
 //
 // .. code-block:: http
@@ -1208,9 +1217,11 @@ _route_vol_fetch(struct req_args_s *args, struct json_object *jbody,
 //    Accept: */*
 //
 //
+// Standard response:
+//
 // .. code-block:: http
 //
-//    HTTP/1.1 201 Base Created
+//    HTTP/1.1 201 Created
 //    Connection: Close
 //    Content-Length: 0
 //
@@ -1244,6 +1255,8 @@ _route_vol_create(struct req_args_s *args, const char *volid)
 //    Accept: */*
 //
 //
+// Standard response:
+//
 // .. code-block:: http
 //
 //    HTTP/1.1 200 OK
@@ -1274,6 +1287,7 @@ _route_vol_status(struct req_args_s *args, const char *volid)
 // RDIR{{
 // POST /v1/rdir/admin/show?vol=<volume ip>%3A<volume port>
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
 // Show the target service.
 //
 // .. code-block:: http
@@ -1283,6 +1297,8 @@ _route_vol_status(struct req_args_s *args, const char *volid)
 //    User-Agent: curl/7.47.0
 //    Accept: */*
 //
+//
+// Standard response:
 //
 // .. code-block:: http
 //
@@ -1313,6 +1329,7 @@ _route_admin_show(struct req_args_s *args, const char *volid)
 // RDIR{{
 // POST /v1/rdir/admin/unlock?vol=<volume ip>%3A<volume port>
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
 // Unlock the target service.
 //
 // .. code-block:: http
@@ -1322,6 +1339,8 @@ _route_admin_show(struct req_args_s *args, const char *volid)
 //    User-Agent: curl/7.47.0
 //    Accept: */*
 //
+//
+// Standard response:
 //
 // .. code-block:: http
 //
@@ -1349,13 +1368,6 @@ _route_admin_unlock(struct req_args_s *args, const char *volid)
 // POST /v1/rdir/admin/lock?vol=<volume ip>%3A<volume port>
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// .. code-block:: json
-//
-//    {
-//      "who": "<volume address>"
-//      "key": 0
-//    }
-//
 // Lock the target service with given key.
 //
 // .. code-block:: http
@@ -1367,6 +1379,15 @@ _route_admin_unlock(struct req_args_s *args, const char *volid)
 //    Content-Length: 34
 //    Content-Type: application/x-www-form-urlencoded
 //
+// .. code-block:: json
+//
+//    {
+//      "who": "<volume address>"
+//      "key": 0
+//    }
+//
+//
+// Standard response:
 //
 // .. code-block:: http
 //
@@ -1416,6 +1437,8 @@ _route_admin_lock(struct req_args_s *args, struct json_object *jbody,
 //    User-Agent: curl/7.47.0
 //    Accept: */*
 //
+//
+// Standard response:
 //
 // .. code-block:: http
 //
@@ -1482,6 +1505,8 @@ _route_admin_clear(struct req_args_s *args, const char *volid, const char *all,
 //    Accept: */*
 //
 //
+// Standard response:
+//
 // .. code-block:: http
 //
 //    HTTP/1.1 200 OK
@@ -1516,12 +1541,6 @@ _route_admin_get_incident(struct req_args_s *args, const char *volid)
 // POST /v1/rdir/admin/incident?vol=<volume ip>%3A<volume port>
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// .. code-block:: json
-//
-//    {
-//      "date": 123456789
-//    }
-//
 // Set target service incident.
 //
 // .. code-block:: http
@@ -1533,6 +1552,14 @@ _route_admin_get_incident(struct req_args_s *args, const char *volid)
 //    Content-Length: 11
 //    Content-Type: application/x-www-form-urlencoded
 //
+// .. code-block:: json
+//
+//    {
+//      "date": 123456789
+//    }
+//
+//
+// Standard response:
 //
 // .. code-block:: http
 //
@@ -1817,8 +1844,7 @@ _meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *s
 	if (subset->marker) {
 		// We have a marker.
 		leveldb_iter_seek(it, subset->marker->str, subset->marker->len);
-		// According to @fvennetier, we shouldn't include the marker in the
-		// returned results.
+		// We shouldn't include the marker in the returned results.
 		leveldb_iter_next(it);
 	} else if (subset->prefix) {
 		// No marker but we still have a prefix
@@ -1869,7 +1895,7 @@ _meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *s
 }
 
 /*
- * Adds a container to the meta2 server pointed by the meta2_address
+ * Add a container to the meta2 server pointed by the meta2_address
  */
 static GError*
 _meta2_db_push(const char *meta2_address, gboolean autocreate, GString * key,
@@ -1883,7 +1909,7 @@ _meta2_db_push(const char *meta2_address, gboolean autocreate, GString * key,
 }
 
 /*
- * Removes a record from the database.
+ * Remove a record from the database.
  */
 static GError *
 _meta2_db_delete(const gchar *meta2_address, GString *key)
@@ -1895,34 +1921,60 @@ _meta2_db_delete(const gchar *meta2_address, GString *key)
 	return _db_vol_delete_generic(base, key);
 }
 
-/*
- * Fetch specific records, or a range of records.
- *
- * The record are ordered by container_url, so we can seek a specific prefix
- * and start iterating from there.
- *
- * For example, if we want to iterate through the containers that belong to
- * account A, we'll seek NS/A and start iterating.
- *
- * If a prefix is provided, only records whose keys contain this prefix
- * will be returned.
- *
- * We can also seek a specific marker and start iterating from the record
- * following the marker.
- *
- * The marker is never included in the results.
- *
- * A limit for the number of records to be returned can be specified.
- *
- * If no limit is specified, the default limit be RDIR_LISTING_LIMIT.
- *
- * The maximum allowed number of records to be returned is RDIR_LISTING_LIMIT.
- * (I don't know why that's the case with chunks, but my guess is to reduce
- * contention as there can only be one handle to the leveldb at a time)
- *
- * If no more records are available for the requested subset, end_of_records
- * will be true, otherwise it will be false.
- */
+// RDIR{{
+// POST /v1/rdir/meta2/fetch?vol=<volume ip>%3A<volume port>
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// Fetch specific meta2 records, or a range of records.
+//
+// The record are ordered by container_url, so we can seek a specific prefix
+// and start iterating from there.
+//
+// For example, if we want to iterate through the containers that belong to
+// account A, we'll seek NS/A and start iterating.
+//
+// If a prefix is provided, only records whose keys contain this prefix
+// will be returned.
+//
+// We can also seek a specific marker and start iterating from the record
+// following the marker.
+//
+// The marker is never included in the results.
+//
+// A limit for the number of records to be returned can be specified.
+//
+// If no limit is specified, the default limit be 4096.
+//
+// The maximum allowed number of records to be returned is 4096.
+//
+// If no more records are available for the requested subset, 'truncated'
+// will be true, otherwise it will be false.
+//
+// .. code-block:: http
+//
+//    POST /v1/rdir/meta2/fetch?vol=127.0.0.1%3A6020 HTTP/1.1
+//    Host: 127.0.0.1:15
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: json
+//
+//    {
+//      "prefix":"<container url prefix>",
+//      "marker":"<last entry of the previous response>",
+//      "limit":<number of entries to return>
+//    }
+//
+//
+// Standard response:
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Length: 2
+//
+// }}RDIR
 static enum http_rc_e
 _route_meta2_fetch(struct req_args_s *args, struct json_object *jbody,
 					const char *meta2_address)
@@ -1956,14 +2008,31 @@ _route_meta2_fetch(struct req_args_s *args, struct json_object *jbody,
 	return _reply_ok(args->rp, response_list);
 }
 
-/*
- * Creates a new meta2 RDIR database.
- *
- * If a database already exists, an HTTP 201 CREATED will be returned.
- *
- * According to @michael and @sebastien.lapierre, there is no IP re-use, so the
- * IP addresses of the meta2 servers are used to reference them.
- */
+// RDIR{{
+// POST /v1/rdir/meta2/create?vol=<volume ip>%3A<volume port>
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// Create a new meta2 rdir database.
+// There is no IP re-use, so the IP addresses of the meta2 servers
+// are used to reference them.
+//
+// .. code-block:: http
+//
+//    POST /v1/rdir/meta2/create?vol=127.0.0.1%3A6020 HTTP/1.1
+//    Host: 127.0.0.1:15
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+//
+// Standard response:
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 201 Created
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}RDIR
 static enum http_rc_e
 _route_meta2_create(struct req_args_s *args, const char *meta2_address)
 {
@@ -1979,11 +2048,41 @@ _route_meta2_create(struct req_args_s *args, const char *meta2_address)
 	return _reply_created(args->rp);
 }
 
-/*
- * Upon the creation of a container (a meta2 database), the event-agent will
- * handle an event that will call upon this route to add the newly created
- * container to the list of containers handled by the meta2 server in question.
- */
+// RDIR{{
+// POST /v1/rdir/meta2/push?vol=<volume ip>%3A<volume port>
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// Add a newly created container to the list of containers handled
+// by the meta2 server in question.
+//
+// .. code-block:: http
+//
+//    POST /v1/rdir/meta2/push?vol=127.0.0.1%3A6020 HTTP/1.1
+//    Host: 127.0.0.1:15
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 150
+//    Content-Type: application/x-www-form-urlencoded
+//
+//
+// .. code-block:: json
+//
+//    {
+//      "container_id":"<container id>",
+//      "container_url":"<container url>",
+//      "mtime":"<last modification timestamp>"
+//    }
+//
+//
+// Standard response:
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}RDIR
 static enum http_rc_e
 _route_meta2_push(struct req_args_s *args, struct json_object *jbody,
 		const char *meta2_address, const char *str_autocreate)
@@ -2024,6 +2123,39 @@ _route_meta2_push(struct req_args_s *args, struct json_object *jbody,
 }
 
 
+// RDIR{{
+// DELETE /v1/rdir/meta2/delete?vol=<volume ip>%3A<volume port>
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// Remove a meta2 record from the database.
+//
+// .. code-block:: http
+//
+//    DELETE /v1/rdir/meta2/delete?vol=127.0.0.1%3A6020 HTTP/1.1
+//    Host: 127.0.0.1:15
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//    Content-Length: 135
+//    Content-Type: application/x-www-form-urlencoded
+//
+//
+// .. code-block:: json
+//
+//    {
+//      "container_id":"<container id>",
+//      "container_url":"<container url>",
+//    }
+//
+//
+// Standard response:
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}RDIR
 static enum http_rc_e
 _route_meta2_delete(struct req_args_s *args, struct json_object *jbody,
 				  const char *meta2_address)
@@ -2236,6 +2368,7 @@ _handler_decode_route(struct req_args_s *args, struct json_object *jbody,
 			return _route_meta2_fetch(args, jbody, OPT("vol"));
 
 		case OIO_RDIR_META2_DELETE:
+			args->rp->no_access();
 			CHECK_METHOD("POST");
 			return _route_meta2_delete(args, jbody, OPT("vol"));
 

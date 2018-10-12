@@ -493,7 +493,7 @@ class TestRdirServer2(RdirTestCase):
                                  close_fds=True)
         if not wait_for_slow_startup(self.port):
             child.kill()
-            raise Exception("The RDIR server is too long to start")
+            raise Exception("The rdir server is too long to start")
         else:
             self.garbage_procs.append(child)
 
