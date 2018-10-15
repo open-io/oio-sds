@@ -278,7 +278,10 @@ class Account(WerkzeugApp):
     # ACCT{{
     # GET /v1.0/account/containers?id=<account_name>
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    # Get information about containers on account named account_name
+    #
+    # Get information about the containers belonging to the specified account.
+    #
+    # Sample request:
     #
     # .. code-block:: http
     #
@@ -286,6 +289,8 @@ class Account(WerkzeugApp):
     #    Host: 127.0.0.1:6013
     #    User-Agent: curl/7.47.0
     #    Accept: */*
+    #
+    # Sample response:
     #
     # .. code-block:: http
     #
@@ -328,6 +333,7 @@ class Account(WerkzeugApp):
             prefix=prefix, delimiter=delimiter)
 
         info['listing'] = user_list
+        # TODO(FVE): add "truncated" entry telling if the listing is truncated
         result = json.dumps(info)
         return Response(result, mimetype='text/json')
 

@@ -561,6 +561,7 @@ class ListObject(ContainerCommandMixin, lister.Lister):
                         account=account, **kwargs),
                 depaginate(self.app.client_manager.storage.container_list,
                            item_key=lambda x: x[0],
+                           marker_key=lambda x: x[-1][0],
                            account=account,
                            marker=container_marker)):
             for element in object_list:
