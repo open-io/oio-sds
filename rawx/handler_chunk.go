@@ -178,7 +178,8 @@ func (rr *rawxRequest) uploadChunk() {
 	} else {
 		NotifyNew(rr.rawx.notifier, rr.reqid, &rr.chunk)
 		out.Commit()
-		rr.rep.Header().Set("chunkhash", ul.hash)
+		headers := rr.rep.Header()
+		rr.chunk.fillHeadersLight(&headers)
 		rr.replyCode(http.StatusCreated)
 	}
 }

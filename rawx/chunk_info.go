@@ -387,27 +387,35 @@ func (chunk *chunkInfo) retrieveTrailers(trailers *http.Header, ul *uploadInfo) 
 	return nil
 }
 
+func setHeader(headers *http.Header, k, v string) {
+	if len(v) > 0 {
+		headers.Set(k, v)
+	}
+}
+
 // Fill the headers of the reply with the attributes of the chunk
 func (chunk *chunkInfo) fillHeaders(headers *http.Header) {
-	setHeader := func(k, v string) {
-		if len(v) > 0 {
-			headers.Set(k, v)
-		}
-	}
-	setHeader(HeaderNameFullpath, chunk.ContentFullpath)
-	setHeader(HeaderNameContainerID, chunk.ContainerID)
-	setHeader(HeaderNameContentPath, url.PathEscape(chunk.ContentPath))
-	setHeader(HeaderNameContentVersion, chunk.ContentVersion)
-	setHeader(HeaderNameContentID, chunk.ContentID)
-	setHeader(HeaderNameContentStgPol, chunk.ContentStgPol)
-	setHeader(HeaderNameContentChunkMethod, chunk.ContentChunkMethod)
-	setHeader(HeaderNameMetachunkChecksum, chunk.MetachunkHash)
-	setHeader(HeaderNameChunkID, chunk.ChunkID)
-	setHeader(HeaderNameMetachunkSize, chunk.MetachunkSize)
-	setHeader(HeaderNameChunkPosition, chunk.ChunkPosition)
-	setHeader(HeaderNameChunkChecksum, chunk.ChunkHash)
-	setHeader(HeaderNameChunkSize, chunk.ChunkSize)
-	setHeader(HeaderNameXattrVersion, chunk.OioVersion)
+	setHeader(headers, HeaderNameFullpath, chunk.ContentFullpath)
+	setHeader(headers, HeaderNameContainerID, chunk.ContainerID)
+	setHeader(headers, HeaderNameContentPath, url.PathEscape(chunk.ContentPath))
+	setHeader(headers, HeaderNameContentVersion, chunk.ContentVersion)
+	setHeader(headers, HeaderNameContentID, chunk.ContentID)
+	setHeader(headers, HeaderNameContentStgPol, chunk.ContentStgPol)
+	setHeader(headers, HeaderNameContentChunkMethod, chunk.ContentChunkMethod)
+	setHeader(headers, HeaderNameMetachunkChecksum, chunk.MetachunkHash)
+	setHeader(headers, HeaderNameChunkID, chunk.ChunkID)
+	setHeader(headers, HeaderNameMetachunkSize, chunk.MetachunkSize)
+	setHeader(headers, HeaderNameChunkPosition, chunk.ChunkPosition)
+	setHeader(headers, HeaderNameChunkChecksum, chunk.ChunkHash)
+	setHeader(headers, HeaderNameChunkSize, chunk.ChunkSize)
+	setHeader(headers, HeaderNameXattrVersion, chunk.OioVersion)
+}
+
+// Fill the headers of the reply with the chunk info calculated by the rawx
+func (chunk *chunkInfo) fillHeadersLight(headers *http.Header) {
+	setHeader(headers, HeaderNameChunkChecksum, chunk.ChunkHash)
+	setHeader(headers, HeaderNameChunkSize, chunk.ChunkSize)
+	setHeader(headers, HeaderNameXattrVersion, chunk.OioVersion)
 }
 
 func (chunk *chunkInfo) getJSON(rawx *rawxService) string {
