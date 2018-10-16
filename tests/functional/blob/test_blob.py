@@ -56,13 +56,13 @@ class RawxAbstractTestSuite(object):
                 'ec/algo=liberasurecode_rs_vand,k=6,m=3',
             'policy': 'TESTPOLICY',
             'container_id': self.cid,
-            'chunk_hash': md5(data).hexdigest().upper(),
+            'chunk_hash': md5(data).hexdigest(),
             'full_path': self.fullpath,
             'oio_version': OIO_VERSION
         })
         headers[CHUNK_HEADERS['chunk_pos']] = 0
         headers[CHUNK_HEADERS['chunk_id']] = chunk_id
-        headers[CHUNK_HEADERS['chunk_size']] = len(data)
+        headers[CHUNK_HEADERS['chunk_size']] = str(len(data))
         return headers
 
     def _rawx_url(self, chunkid):
@@ -130,8 +130,11 @@ class RawxAbstractTestSuite(object):
         # Initial put that must succeed
         resp, body = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                         trailers)
-        expected = 201
-        self.assertEqual(expected, resp.status)
+        self.assertEqual(201, resp.status)
+        self.assertEqual(headers['x-oio-chunk-meta-chunk-hash'].upper(),
+                         resp.getheader('x-oio-chunk-meta-chunk-hash'))
+        self.assertEqual(headers['x-oio-chunk-meta-chunk-size'],
+                         resp.getheader('x-oio-chunk-meta-chunk-size'))
         copyid = random_chunk_id()
         copyid = chunkid[:-60] + copyid[-60:]
         copyurl = self._rawx_url(copyid)
@@ -186,6 +189,14 @@ class RawxAbstractTestSuite(object):
         if expected / 100 != 2:
             self.assertFalse(isfile(chunkpath))
             return
+        chunk_hash = headers.get('x-oio-chunk-meta-chunk-hash',
+                                 md5(chunkdata).hexdigest()).upper()
+        chunk_size = headers.get('x-oio-chunk-meta-chunk-size', str(length))
+        self.assertEqual(chunk_hash,
+                         resp.getheader('x-oio-chunk-meta-chunk-hash'))
+        self.assertEqual(chunk_size,
+                         resp.getheader('x-oio-chunk-meta-chunk-size'))
+
         # the first PUT succeeded, the second MUST fail
         resp, body = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                         trailers)
@@ -206,6 +217,8 @@ class RawxAbstractTestSuite(object):
 
         headers['x-oio-chunk-meta-metachunk-size'] = metachunk_size
         headers['x-oio-chunk-meta-metachunk-hash'] = metachunk_hash.upper()
+        headers['x-oio-chunk-meta-chunk-hash'] = chunk_hash
+        headers['x-oio-chunk-meta-chunk-size'] = chunk_size
         for k, v in headers.items():
             if k == 'x-oio-chunk-meta-content-path':
                 self.assertEqual(unquote(resp.getheader(k)), unquote(str(v)))
@@ -269,6 +282,8 @@ class RawxAbstractTestSuite(object):
         self._cycle_put(32, 400,
                         remove_headers=['x-oio-chunk-meta-chunk-pos'])
         self._cycle_put(32, 201,
+                        remove_headers=['x-oio-chunk-meta-chunk-hash'])
+        self._cycle_put(32, 201,
                         remove_headers=['x-oio-chunk-meta-chunk-size'])
         self._cycle_put(32, 201,
                         remove_headers=['x-oio-chunk-meta-chunk-id'])
@@ -309,6 +324,8 @@ class RawxAbstractTestSuite(object):
             trailers = {}
             for k, v in bad_trailers.items():
                 trailers[k] = v
+                if headers.get(k, None):
+                    del headers[k]
 
         self._check_not_present(chunkurl)
 
@@ -324,13 +341,17 @@ class RawxAbstractTestSuite(object):
             32, bad_headers={'x-oio-chunk-meta-chunk-hash': '0'})
         self._check_bad_headers(
             32, bad_headers={'x-oio-chunk-meta-chunk-hash': 'xx'})
-        # TODO FIXME the rawx should accept only MD5/SHA hashes ...
+        self._check_bad_headers(
+            32, bad_headers={'x-oio-chunk-meta-chunk-hash':
+                             'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'})
 
-        # TODO
-        # self._check_bad_headers(
-        #     32, bad_trailers={'x-oio-chunk-meta-chunk-hash': 'xx'})
-        # self._check_bad_headers(
-        #     32, bad_trailers={'x-oio-chunk-meta-chunk-hash': 'xx'})
+        self._check_bad_headers(
+            32, bad_trailers={'x-oio-chunk-meta-chunk-hash': 'xx'})
+        self._check_bad_headers(
+            32, bad_trailers={'x-oio-chunk-meta-chunk-hash': 'xx'})
+        self._check_bad_headers(
+            32, bad_trailers={'x-oio-chunk-meta-chunk-hash':
+                              'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'})
 
     def test_bad_chunkid(self):
         self._check_bad_headers(
@@ -355,6 +376,10 @@ class RawxAbstractTestSuite(object):
         resp, _ = self._http_request(chunkurl, 'PUT', chunkdata, headers1,
                                      trailers)
         self.assertEqual(201, resp.status)
+        self.assertEqual(headers1['x-oio-chunk-meta-chunk-hash'].upper(),
+                         resp.getheader('x-oio-chunk-meta-chunk-hash'))
+        self.assertEqual(headers1['x-oio-chunk-meta-chunk-size'],
+                         resp.getheader('x-oio-chunk-meta-chunk-size'))
 
         copyid = random_chunk_id()
         copyid = chunkid[:-60] + copyid[-60:]
@@ -363,21 +388,43 @@ class RawxAbstractTestSuite(object):
 
         headers2 = {}
         headers2["Destination"] = copyurl
-        headers2['x-oio-chunk-meta-full-path'] = encode_fullpath(
-                "account-snapshot", "container-snapshot", path+"-snapshot",
-                1456938361143741, random_id(32))
+        copy_account = "account-snapshot"
+        copy_container = "container-snapshot"
+        copy_container_id = cid_from_name(copy_account, copy_container)
+        copy_path = path+"-snapshot"
+        copy_version = 1456938361143741
+        copy_id = random_id(32)
+        copy_fullpath = encode_fullpath(
+            copy_account, copy_container, copy_path, copy_version, copy_id)
+        headers2['x-oio-chunk-meta-full-path'] = copy_fullpath
         resp, _ = self._http_request(chunkurl, 'COPY', '', headers2)
         self.assertEqual(201, resp.status)
 
         resp, body = self._http_request(chunkurl, 'GET', '', {})
         self.assertEqual(200, resp.status)
-        self.assertEqual(headers1['x-oio-chunk-meta-full-path'],
-                         resp.getheader('x-oio-chunk-meta-full-path'))
+        headers1['x-oio-chunk-meta-chunk-hash'] = \
+            headers1['x-oio-chunk-meta-chunk-hash'].upper()
+        for k, v in headers1.items():
+            if k == 'x-oio-chunk-meta-content-path':
+                self.assertEqual(unquote(resp.getheader(k)), unquote(str(v)))
+            else:
+                self.assertEqual(resp.getheader(k), str(v))
 
         resp, body = self._http_request(copyurl, 'GET', '', {})
         self.assertEqual(200, resp.status)
-        self.assertEqual(headers2['x-oio-chunk-meta-full-path'],
-                         resp.getheader('x-oio-chunk-meta-full-path'))
+        headers2_bis = headers1.copy()
+        headers2_bis['x-oio-chunk-meta-full-path'] = \
+            headers2['x-oio-chunk-meta-full-path']
+        headers2_bis['x-oio-chunk-meta-content-path'] = copy_path
+        headers2_bis['x-oio-chunk-meta-content-version'] = copy_version
+        headers2_bis['x-oio-chunk-meta-content-id'] = copy_id
+        headers2_bis['x-oio-chunk-meta-container-id'] = copy_container_id
+        headers2_bis['x-oio-chunk-meta-chunk-id'] = copyid
+        for k, v in headers2_bis.items():
+            if k == 'x-oio-chunk-meta-content-path':
+                self.assertEqual(unquote(resp.getheader(k)), unquote(str(v)))
+            else:
+                self.assertEqual(resp.getheader(k), str(v))
 
         with open(chunkpath, 'r') as fd:
             meta, _ = read_chunk_metadata(fd, chunkid)
@@ -449,6 +496,10 @@ class RawxAbstractTestSuite(object):
         resp, _ = self._http_request(chunkurl1, 'PUT', chunkdata1, headers1,
                                      trailers)
         self.assertEqual(201, resp.status)
+        self.assertEqual(headers1['x-oio-chunk-meta-chunk-hash'].upper(),
+                         resp.getheader('x-oio-chunk-meta-chunk-hash'))
+        self.assertEqual(headers1['x-oio-chunk-meta-chunk-size'].upper(),
+                         resp.getheader('x-oio-chunk-meta-chunk-size'))
 
         headers = {}
         headers["Destination"] = chunkurl1
@@ -471,6 +522,10 @@ class RawxAbstractTestSuite(object):
         resp, _ = self._http_request(chunkurl1, 'PUT', chunkdata1, headers1,
                                      trailers)
         self.assertEqual(201, resp.status)
+        self.assertEqual(headers1['x-oio-chunk-meta-chunk-hash'].upper(),
+                         resp.getheader('x-oio-chunk-meta-chunk-hash'))
+        self.assertEqual(headers1['x-oio-chunk-meta-chunk-size'],
+                         resp.getheader('x-oio-chunk-meta-chunk-size'))
 
         chunkid2 = random_chunk_id()
         chunkdata2 = random_buffer(string.printable, 1)
@@ -480,6 +535,10 @@ class RawxAbstractTestSuite(object):
         resp, _ = self._http_request(chunkurl2, 'PUT', chunkdata2, headers2,
                                      trailers)
         self.assertEqual(201, resp.status)
+        self.assertEqual(headers2['x-oio-chunk-meta-chunk-hash'].upper(),
+                         resp.getheader('x-oio-chunk-meta-chunk-hash'))
+        self.assertEqual(headers2['x-oio-chunk-meta-chunk-size'],
+                         resp.getheader('x-oio-chunk-meta-chunk-size'))
 
         headers = {}
         headers["Destination"] = chunkurl2
@@ -505,6 +564,10 @@ class RawxAbstractTestSuite(object):
         resp, _ = self._http_request(chunkurl2, 'PUT', chunkdata2, headers2,
                                      trailers)
         self.assertEqual(201, resp.status)
+        self.assertEqual(headers2['x-oio-chunk-meta-chunk-hash'].upper(),
+                         resp.getheader('x-oio-chunk-meta-chunk-hash'))
+        self.assertEqual(headers2['x-oio-chunk-meta-chunk-size'],
+                         resp.getheader('x-oio-chunk-meta-chunk-size'))
 
         headers = {}
         headers["Destination"] = chunkurl2
