@@ -2391,7 +2391,7 @@ _purge_exceeding_aliases(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 			"HAVING COUNT(*) > ?";
 	}
 	const gchar *sql_delete = " rowid IN "
-		"(SELECT rowid FROM aliases WHERE alias = ? "
+		"(SELECT rowid FROM aliases WHERE NOT deleted AND alias = ? "
 		" ORDER BY version ASC LIMIT ? ) ";
 
 	int rc = SQLITE_OK;
