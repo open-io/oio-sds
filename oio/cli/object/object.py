@@ -675,7 +675,7 @@ class ListObject(ContainerCommandMixin, lister.Lister):
                             obj['hash'],
                             obj['version'])
                     except KeyError as exc:
-                        self.log.warn("Bad object entry, missing '%s': %s",
+                        self.log.warn("Bad object entry, missing %s: %s",
                                       exc, obj)
             columns = ('Name', 'Size', 'Hash', 'Version')
         results = _gen_results(obj_gen)
