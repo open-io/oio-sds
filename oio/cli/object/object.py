@@ -438,6 +438,7 @@ class SaveObject(ObjectCommandMixin, command.Command):
             self.app.client_manager.account,
             container,
             obj,
+            version=parsed_args.object_version,
             key_file=key_file,
             properties=False,
             cid=cid
@@ -897,7 +898,7 @@ class LinkObject(ObjectCommandMixin, command.Command):
         self.app.client_manager.storage.object_link(
             account, container, parsed_args.object,
             parsed_args.link_account, parsed_args.link_container,
-            parsed_args.link_object, maxvers=parsed_args.object_version,
+            parsed_args.link_object, target_version=parsed_args.object_version,
             target_content_id=parsed_args.content_id,
             link_content_id=parsed_args.link_content_id,
             properties_directive=directive, cid=cid, **kwargs
