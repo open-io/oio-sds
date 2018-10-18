@@ -19,6 +19,7 @@ from cliff import command, lister, show
 from eventlet import GreenPool
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.utils import depaginate
+from oio.common import exceptions
 
 
 class ContainerCommandMixin(object):
@@ -578,13 +579,17 @@ class ListObject(ContainerCommandMixin, lister.Lister):
                            container)
             return object_list
         self.log.debug("Listing autocontainer %s", container)
-        for i in depaginate(
-                self.app.client_manager.storage.object_list,
-                listing_key=lambda x: x['objects'],
-                marker_key=lambda x: x.get('next_marker'),
-                truncated_key=lambda x: x['truncated'],
-                account=account, container=container, **kwargs):
-            object_list.append(i)
+        try:
+            for i in depaginate(
+                    self.app.client_manager.storage.object_list,
+                    listing_key=lambda x: x['objects'],
+                    marker_key=lambda x: x.get('next_marker'),
+                    truncated_key=lambda x: x['truncated'],
+                    account=account, container=container, **kwargs):
+                object_list.append(i)
+        except exceptions.OioException as err:
+            self.log.warn('Listing may be incomplete: container %s: %s',
+                          container, err)
         return object_list
 
     def take_action(self, parsed_args):
