@@ -1639,7 +1639,7 @@ def main():
         global template_gridinit_rawx_command_options
         template_gridinit_rawx_command_options = \
             '-test.coverprofile ' \
-            '{HOME}/go_coverage.output.${NS}.${SRVTYPE}.${SRVNUM}.${IP}.${PORT} ' \
+            '${HOME}/go_coverage.output.${NS}.${SRVTYPE}.${SRVNUM}.${IP}.${PORT} ' \
             '-test.syslog OIO,${NS},${SRVTYPE},${SRVNUM} ' \
             '-test.conf ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.httpd.conf'
     parser = argparse.ArgumentParser(description='OpenIO bootstrap tool')
