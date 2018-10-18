@@ -119,29 +119,70 @@ class TestContentVersioning(BaseTestCase):
         self.assertEqual(5, len(objects))
 
     def test_delete_exceeding_version(self):
-        def check_num_objects_and_get_oldest_version(expected):
+        def check_num_objects_and_get_oldest_version(
+                expected_objects, expected_deleted_aliases, oldest_version):
             listing = self.api.object_list(self.account, self.container,
                                            versions=True)
             objects = listing['objects']
-            self.assertEqual(expected, len(objects))
-            return min(objects, key=lambda x: x['version'])
+            nb_objects = 0
+            nb_deleted = 0
+            new_oldest_version = 0
+            for obj in objects:
+                if obj['deleted']:
+                    nb_deleted += 1
+                else:
+                    nb_objects += 1
+                    if new_oldest_version == 0 \
+                            or new_oldest_version > obj['version']:
+                        new_oldest_version = obj['version']
+            self.assertEqual(expected_objects, nb_objects)
+            self.assertEqual(expected_deleted_aliases, nb_deleted)
+            if oldest_version is not None:
+                self.assertLess(oldest_version,
+                                new_oldest_version)
+            return new_oldest_version
 
         system = {'sys.m2.policy.version.delete_exceeding': '1'}
         self.api.container_set_properties(self.account, self.container,
                                           system=system)
         self.api.object_create(self.account, self.container,
                                obj_name="versioned", data="content0")
+        oldest_version = check_num_objects_and_get_oldest_version(
+            1, 0, None)
         self.api.object_create(self.account, self.container,
                                obj_name="versioned", data="content1")
+        self.assertEqual(oldest_version,
+                         check_num_objects_and_get_oldest_version(2, 0, None))
         self.api.object_create(self.account, self.container,
                                obj_name="versioned", data="content2")
-        oldest_version = check_num_objects_and_get_oldest_version(3)
+        self.assertEqual(oldest_version,
+                         check_num_objects_and_get_oldest_version(3, 0, None))
 
         self.api.object_create(self.account, self.container,
                                obj_name="versioned", data="content3")
-        new_oldest_version = check_num_objects_and_get_oldest_version(3)
-        self.assertLess(oldest_version['version'],
-                        new_oldest_version['version'])
+        oldest_version = check_num_objects_and_get_oldest_version(
+            3, 0, oldest_version)
+
+        self.api.object_delete(self.account, self.container, "versioned")
+        self.assertEqual(oldest_version,
+                         check_num_objects_and_get_oldest_version(3, 1, None))
+        self.api.object_create(self.account, self.container,
+                               obj_name="versioned", data="content4")
+        oldest_version = check_num_objects_and_get_oldest_version(
+            3, 1, oldest_version)
+        self.api.object_create(self.account, self.container,
+                               obj_name="versioned", data="content5")
+        oldest_version = check_num_objects_and_get_oldest_version(
+            3, 1, oldest_version)
+        self.api.object_create(self.account, self.container,
+                               obj_name="versioned", data="content6")
+        # FIXME(adu) The deleted alias should be deleted at the same time
+        oldest_version = check_num_objects_and_get_oldest_version(
+            3, 1, oldest_version)
+        self.api.object_create(self.account, self.container,
+                               obj_name="versioned", data="content7")
+        oldest_version = check_num_objects_and_get_oldest_version(
+            3, 1, oldest_version)
 
     def test_change_flag_delete_exceeding_versions(self):
         def check_num_objects(expected):
