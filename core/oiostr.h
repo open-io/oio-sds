@@ -201,6 +201,9 @@ void oio_str_gstring_append_json_pair_boolean (GString *base,
 	} \
 } while (0)
 
+#define OIO_JSON_append_null(g,k) do { \
+	g_string_append_static(g, "\"" k "\":null"); \
+} while (0)
 
 static inline int oio_str_is_set (const char *s) { return NULL!=s && 0!=*s; }
 

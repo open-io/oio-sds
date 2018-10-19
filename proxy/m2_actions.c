@@ -301,28 +301,29 @@ _dump_json_aliases_and_headers(GString *gstr, GSList *aliases,
 		OIO_JSON_append_gba(gstr, "content", ALIASES_get_content(a));
 
 		if (h) {
-			g_string_append_c (gstr, ',');
-			GString *pol = CONTENTS_HEADERS_get_policy(h);
-			GByteArray *hh = CONTENTS_HEADERS_get_hash(h);
-
-			if (pol)
-				g_string_append_printf(gstr, "\"policy\":\"%s\",\"hash\":",
-						pol->str);
-			else
-				g_string_append_printf(gstr, "\"policy\":null,\"hash\":");
-			if (hh) {
-				g_string_append_c (gstr, '"');
-				metautils_gba_to_hexgstr(gstr, hh);
-				g_string_append_c (gstr, '"');
-			} else {
-				g_string_append_static(gstr, "null");
-			}
-
-			g_string_append_printf(gstr, ",\"size\":%"G_GINT64_FORMAT,
+			g_string_append_c(gstr, ',');
+			OIO_JSON_append_gstr(gstr, "policy",
+					CONTENTS_HEADERS_get_policy(h));
+			g_string_append_c(gstr, ',');
+			OIO_JSON_append_gba(gstr, "hash",
+					CONTENTS_HEADERS_get_hash(h));
+			g_string_append_c(gstr, ',');
+			OIO_JSON_append_int(gstr, "size",
 					CONTENTS_HEADERS_get_size(h));
-			g_string_append_printf(gstr, ",\"mime-type\":\"%s\"",
-					CONTENTS_HEADERS_get_mime_type(h)->str);
+			g_string_append_c(gstr, ',');
+			OIO_JSON_append_gstr(gstr, "mime-type",
+					CONTENTS_HEADERS_get_mime_type(h));
+		} else {
+			g_string_append_c(gstr, ',');
+			OIO_JSON_append_null(gstr, "policy");
+			g_string_append_c(gstr, ',');
+			OIO_JSON_append_null(gstr, "hash");
+			g_string_append_c(gstr, ',');
+			OIO_JSON_append_null(gstr, "size");
+			g_string_append_c(gstr, ',');
+			OIO_JSON_append_null(gstr, "mime-type");
 		}
+
 		if (prop_list) {
 			g_string_append_static(gstr, ",\"properties\":{");
 			gboolean inner_first = TRUE;
