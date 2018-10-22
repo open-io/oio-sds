@@ -16,6 +16,7 @@
 import uuid
 from tempfile import NamedTemporaryFile
 from tests.functional.cli import CliTestCase
+from oio.container.lifecycle import TAGGING_KEY
 
 
 class LifecycleCliTest(CliTestCase):
@@ -73,7 +74,12 @@ class LifecycleCliTest(CliTestCase):
                 'object create %s %s --name test1' % (self.NAME, file_.name))
             self.openio(
                 'object create %s %s --name test2 ' % (self.NAME, file_.name) +
-                '--property status=deprecated')
+                '--property "%s=' % TAGGING_KEY +
+                '<Tagging ' +
+                'xmlns=\\"http://s3.amazonaws.com/doc/2006-03-01/\\">' +
+                '<TagSet><Tag>' +
+                '<Value>deprecated</Value><Key>status</Key>' +
+                '</Tag></TagSet></Tagging>"')
         opts = self.get_opts(['Name', 'Result'])
         output = self.openio('lifecycle apply ' + self.NAME + opts)
         output = output.split('\n')

@@ -18,7 +18,8 @@ import time
 from mock import patch
 
 from oio import ObjectStorageApi
-from oio.container.lifecycle import ContainerLifecycle, LIFECYCLE_PROPERTY_KEY
+from oio.container.lifecycle import ContainerLifecycle, \
+    LIFECYCLE_PROPERTY_KEY, TAGGING_KEY
 from tests.utils import BaseTestCase, random_str
 
 
@@ -262,7 +263,17 @@ class TestContainerLifecycle(BaseTestCase):
 
     def test_immediate_expiration_filtered_by_tag(self):
         obj_meta = self._upload_something()
-        obj_meta2 = self._upload_something(properties={'status': 'deprecated'})
+        obj_meta2 = self._upload_something(
+            properties={TAGGING_KEY: """
+            <Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                <TagSet>
+                    <Tag>
+                        <Key>status</Key>
+                        <Value>deprecated</Value>
+                    </Tag>
+                </TagSet>
+            </Tagging>
+            """})
         self.lifecycle.load_xml("""
         <LifecycleConfiguration>
             <Rule>
@@ -289,8 +300,17 @@ class TestContainerLifecycle(BaseTestCase):
 
     def test_immediate_transition_filtered_by_tag(self):
         obj_meta = self._upload_something(policy='SINGLE')
-        obj_meta2 = self._upload_something(policy='SINGLE',
-                                           properties={'status': 'deprecated'})
+        obj_meta2 = self._upload_something(
+            policy='SINGLE', properties={TAGGING_KEY: """
+            <Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                <TagSet>
+                    <Tag>
+                        <Key>status</Key>
+                        <Value>deprecated</Value>
+                    </Tag>
+                </TagSet>
+            </Tagging>
+            """})
         self.lifecycle.load_xml("""
         <LifecycleConfiguration>
             <Rule>
