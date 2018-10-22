@@ -19,6 +19,7 @@ from cliff import command, lister, show
 from eventlet import GreenPool
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.utils import depaginate
+from oio.common.json import json as jsonlib
 from oio.common import exceptions
 
 
@@ -374,6 +375,11 @@ class SetObject(ObjectCommandMixin, command.Command):
             help='Property to add to this object'
         )
         parser.add_argument(
+            '--tagging',
+            metavar='<JSON object>',
+            help='Replaces S3 tags on this object'
+        )
+        parser.add_argument(
             '--clear',
             default=False,
             help='Clear previous properties',
@@ -389,6 +395,22 @@ class SetObject(ObjectCommandMixin, command.Command):
         if parsed_args.auto:
             container = self.flatns_manager(obj)
         properties = parsed_args.property
+        if parsed_args.tagging:
+            try:
+                tags = jsonlib.loads(parsed_args.tagging)
+                if not isinstance(tags, dict):
+                    raise ValueError()
+            except ValueError:
+                from oio.common.exceptions import CommandError
+                raise CommandError('--tags: Not a JSON object')
+            tags_xml = '<Tagging><TagSet>'
+            for k, v in tags.iteritems():
+                tags_xml += '<Tag><Key>%s</Key><Value>%s</Value></Tag>' \
+                    % (k, v)
+            tags_xml += '</TagSet></Tagging>'
+            properties = properties or dict()
+            from oio.container.lifecycle import TAGGING_KEY
+            properties[TAGGING_KEY] = tags_xml
         self.app.client_manager.storage.object_set_properties(
             self.app.client_manager.account,
             container,
@@ -700,9 +722,12 @@ class UnsetObject(ObjectCommandMixin, command.Command):
             metavar='<key>',
             default=[],
             action='append',
-            help='Property to remove from object',
-            required=True
-        )
+            help='Property to remove from object')
+        parser.add_argument(
+            '--tagging',
+            default=False,
+            help='Clear previous S3 tags',
+            action='store_true')
         return parser
 
     def take_action(self, parsed_args):
@@ -711,9 +736,12 @@ class UnsetObject(ObjectCommandMixin, command.Command):
         container = parsed_args.container
         cid = parsed_args.cid
         obj = parsed_args.object
-        properties = parsed_args.property
+        properties = parsed_args.property or list()
         if parsed_args.auto:
             container = self.flatns_manager(obj)
+        if parsed_args.tagging:
+            from oio.container.lifecycle import TAGGING_KEY
+            properties.append(TAGGING_KEY)
         self.app.client_manager.storage.object_del_properties(
             self.app.client_manager.account,
             container,
