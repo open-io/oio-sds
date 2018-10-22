@@ -161,7 +161,7 @@ class LifecycleRule(object):
         if filter_elt is None:
             raise ValueError("Missing 'Filter' element")
         rule_filter = LifecycleRuleFilter.from_element(filter_elt)
-        id_elt = rule_elt.find('./ID')
+        id_elt = rule_elt.find('ID')
         id_ = id_elt.text if id_elt is not None else None
         status_elt = rule_elt.find('Status')
         if status_elt is None:
@@ -223,8 +223,19 @@ class LifecycleRuleFilter(object):
 
         :type filter_elt: `lxml.etree.Element`
         """
-        prefix_elt = filter_elt.find('.//Prefix')
-        prefix = prefix_elt.text if prefix_elt is not None else None
+        and_elt = filter_elt.find('And')
+        if and_elt is None:
+            if len(list(filter_elt)) > 1:
+                raise ValueError("Too many filters, use <And>")
+        else:
+            filter_elt = and_elt
+        prefix_elts = filter_elt.findall('Prefix')
+        if len(prefix_elts) == 0:
+            prefix = None
+        elif len(prefix_elts) > 1:
+            raise ValueError("Too many prefixes, only one is allowed")
+        else:
+            prefix = prefix_elts[0].text
         tags = cls._convert_tags_elt_to_tags_dict(filter_elt)
         return cls(prefix=prefix, tags=tags, **kwargs)
 
@@ -252,9 +263,20 @@ class LifecycleRuleFilter(object):
         # Check the tags
         if self.tags:
             tags = dict()
-            tags_elt = obj_meta.get('properties', {}).get(TAGGING_KEY, None)
-            if tags_elt is not None:
-                tags_elt = etree.fromstring(tags_elt)
+            tagging_xml = obj_meta.get('properties', {}).get(TAGGING_KEY, None)
+            if tagging_xml is not None:
+                tagging_elt = etree.fromstring(tagging_xml)
+                expected_tag = 'Tagging'
+                root_ns = tagging_elt.nsmap.get(None)
+                if root_ns is not None:
+                    expected_tag = '{%s}%s' % (root_ns, expected_tag)
+                if tagging_elt.tag != expected_tag:
+                    raise ValueError(
+                        "Expected 'Tagging' as root tag, got '%s'" %
+                        tagging_elt.tag)
+                tags_elt = tagging_elt.find('TagSet', tagging_elt.nsmap)
+                if tags_elt is None:
+                    raise ValueError("Missing 'TagSet' element in 'Tagging'")
                 tags = self._convert_tags_elt_to_tags_dict(tags_elt)
             for tagk in self.tags.keys():
                 if tags.get(tagk) != self.tags[tagk]:
@@ -265,7 +287,7 @@ class LifecycleRuleFilter(object):
     @staticmethod
     def _convert_tags_elt_to_tags_dict(tags_elt):
         tags = dict()
-        for tag_elt in tags_elt.findall('.//Tag', tags_elt.nsmap):
+        for tag_elt in tags_elt.findall('Tag', tags_elt.nsmap):
             key_elt = tag_elt.find('Key', tags_elt.nsmap)
             if key_elt is None:
                 raise ValueError("Missing 'Key' element in 'Tag'")

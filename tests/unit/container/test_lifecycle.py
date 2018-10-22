@@ -117,7 +117,7 @@ class TestContainerLifecycle(unittest.TestCase):
         self.assertIsNotNone(trans)
         self.assertEqual(trans.filter.date, 1155513600)
 
-    def test_LifecycleRuleFilter_from_element_broken_tag(self):
+    def test_LifecycleRuleFilter_from_element_broken(self):
         filter_elt = etree.XML(
             """
             <Filter>
@@ -135,6 +135,45 @@ class TestContainerLifecycle(unittest.TestCase):
                 <Tag>
                     <Value>value</Value>
                 </Tag>
+            </Filter>
+            """)
+        self.assertRaises(ValueError,
+                          LifecycleRuleFilter.from_element, filter_elt)
+
+        filter_elt = etree.XML(
+            """
+            <Filter>
+                <Tag>
+                    <Key>key1</Key>
+                    <Value>value1</Value>
+                </Tag>
+                <Tag>
+                    <Key>key2</Key>
+                    <Value>value2</Value>
+                </Tag>
+            </Filter>
+            """)
+        self.assertRaises(ValueError,
+                          LifecycleRuleFilter.from_element, filter_elt)
+
+        filter_elt = etree.XML(
+            """
+            <Filter>
+                <Prefix>documents/</Prefix>
+                <Tag>
+                    <Key>key2</Key>
+                    <Value>value2</Value>
+                </Tag>
+            </Filter>
+            """)
+        self.assertRaises(ValueError,
+                          LifecycleRuleFilter.from_element, filter_elt)
+
+        filter_elt = etree.XML(
+            """
+            <Filter>
+                <Prefix>documents1/</Prefix>
+                <Prefix>documents2/</Prefix>
             </Filter>
             """)
         self.assertRaises(ValueError,
@@ -172,7 +211,7 @@ class TestContainerLifecycle(unittest.TestCase):
         filter_ = LifecycleRuleFilter.from_element(filter_elt)
         self.assertIsNotNone(filter_)
         self.assertIsNone(filter_.prefix)
-        self.assertIn('key', filter_.tags)
+        self.assertDictEqual({'key': 'value'}, filter_.tags)
         self.assertEqual(filter_.generate_id(), "key=value")
 
         filter_elt = etree.XML(
