@@ -464,7 +464,9 @@ m2db_get_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *u,
 		}
 	}
 
-	err = _alias_fetch_info(sq3, flags, tmp, cb, u0);
+	if (!err) {
+		err = _alias_fetch_info(sq3, flags, tmp, cb, u0);
+	}
 
 	_bean_cleanv2(tmp);
 	return err;
