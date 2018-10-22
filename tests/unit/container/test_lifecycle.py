@@ -23,7 +23,7 @@ except ImportError:
 
 from oio.container.lifecycle import Expiration, \
     LifecycleRule, LifecycleRuleFilter, Transition, \
-    NoncurrentVersionExpiration
+    NoncurrentVersionExpiration, TAGGING_KEY
 
 
 class TestContainerLifecycle(unittest.TestCase):
@@ -351,7 +351,20 @@ class TestContainerLifecycle(unittest.TestCase):
         filter_ = LifecycleRuleFilter.from_element(filter_elt)
         obj_meta = self.obj_meta.copy()
         obj_meta['name'] = 'documents/toto'
-        obj_meta['properties'] = {'key1': 'value1', 'key2': 'value2'}
+        obj_meta['properties'] = {TAGGING_KEY: """
+            <Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                <TagSet>
+                    <Tag>
+                        <Key>key1</Key>
+                        <Value>value1</Value>
+                    </Tag>
+                    <Tag>
+                        <Key>key2</Key>
+                        <Value>value2</Value>
+                    </Tag>
+                </TagSet>
+            </Tagging>
+            """}
         self.assertTrue(filter_.match(obj_meta))
 
     def test_LifecycleRuleFilter_match_bad_prefix(self):
@@ -374,7 +387,20 @@ class TestContainerLifecycle(unittest.TestCase):
         filter_ = LifecycleRuleFilter.from_element(filter_elt)
         obj_meta = self.obj_meta.copy()
         obj_meta['name'] = 'downloads/toto'
-        obj_meta['properties'] = {'key1': 'value1', 'key2': 'value2'}
+        obj_meta['properties'] = {TAGGING_KEY: """
+            <Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                <TagSet>
+                    <Tag>
+                        <Key>key1</Key>
+                        <Value>value1</Value>
+                    </Tag>
+                    <Tag>
+                        <Key>key2</Key>
+                        <Value>value2</Value>
+                    </Tag>
+                </TagSet>
+            </Tagging>
+            """}
         self.assertFalse(filter_.match(obj_meta))
 
     def test_LifecycleRuleFilter_match_missing_tag(self):
@@ -397,7 +423,16 @@ class TestContainerLifecycle(unittest.TestCase):
         filter_ = LifecycleRuleFilter.from_element(filter_elt)
         obj_meta = self.obj_meta.copy()
         obj_meta['name'] = 'documents/toto'
-        obj_meta['properties'] = {'key1': 'value1'}
+        obj_meta['properties'] = {TAGGING_KEY: """
+            <Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                <TagSet>
+                    <Tag>
+                        <Key>key1</Key>
+                        <Value>value1</Value>
+                    </Tag>
+                </TagSet>
+            </Tagging>
+            """}
         self.assertFalse(filter_.match(obj_meta))
 
     def test_LifecycleRuleFilter_match_only_prefix(self):
@@ -412,7 +447,20 @@ class TestContainerLifecycle(unittest.TestCase):
         filter_ = LifecycleRuleFilter.from_element(filter_elt)
         obj_meta = self.obj_meta.copy()
         obj_meta['name'] = 'documents/toto'
-        obj_meta['properties'] = {'key1': 'value1', 'key2': 'value2'}
+        obj_meta['properties'] = {TAGGING_KEY: """
+            <Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                <TagSet>
+                    <Tag>
+                        <Key>key1</Key>
+                        <Value>value1</Value>
+                    </Tag>
+                    <Tag>
+                        <Key>key2</Key>
+                        <Value>value2</Value>
+                    </Tag>
+                </TagSet>
+            </Tagging>
+            """}
         self.assertTrue(filter_.match(obj_meta))
 
     def test_LifecycleRuleFilter_match_only_tags(self):
@@ -434,7 +482,20 @@ class TestContainerLifecycle(unittest.TestCase):
         filter_ = LifecycleRuleFilter.from_element(filter_elt)
         obj_meta = self.obj_meta.copy()
         obj_meta['name'] = 'documents/toto'
-        obj_meta['properties'] = {'key1': 'value1', 'key2': 'value2'}
+        obj_meta['properties'] = {TAGGING_KEY: """
+            <Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                <TagSet>
+                    <Tag>
+                        <Key>key1</Key>
+                        <Value>value1</Value>
+                    </Tag>
+                    <Tag>
+                        <Key>key2</Key>
+                        <Value>value2</Value>
+                    </Tag>
+                </TagSet>
+            </Tagging>
+            """}
         self.assertTrue(filter_.match(obj_meta))
 
     def test_Expiration_match_days(self):
@@ -504,7 +565,29 @@ class TestContainerLifecycle(unittest.TestCase):
         self.assertFalse(rule.match(obj_meta))
         obj_meta['name'] = "documents/foo"
         self.assertFalse(rule.match(obj_meta))
-        obj_meta['properties']['key1'] = 'value1'
+        obj_meta['properties'][TAGGING_KEY] = """
+            <Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                <TagSet>
+                    <Tag>
+                        <Key>key1</Key>
+                        <Value>value1</Value>
+                    </Tag>
+                </TagSet>
+            </Tagging>
+            """
         self.assertFalse(rule.match(obj_meta))
-        obj_meta['properties']['key2'] = 'value2'
+        obj_meta['properties'][TAGGING_KEY] = """
+            <Tagging xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+                <TagSet>
+                    <Tag>
+                        <Key>key1</Key>
+                        <Value>value1</Value>
+                    </Tag>
+                    <Tag>
+                        <Key>key2</Key>
+                        <Value>value2</Value>
+                    </Tag>
+                </TagSet>
+            </Tagging>
+            """
         self.assertTrue(rule.match(obj_meta))
