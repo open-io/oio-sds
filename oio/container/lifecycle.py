@@ -26,6 +26,8 @@ from oio.common.utils import cid_from_name, depaginate
 
 
 LIFECYCLE_PROPERTY_KEY = "X-Container-Sysmeta-Swift3-Lifecycle"
+TAGGING_KEY = "x-object-sysmeta-swift3-tagging"
+XMLNS_S3 = 'http://s3.amazonaws.com/doc/2006-03-01/'
 
 
 def iso8601_to_int(text):
@@ -223,18 +225,7 @@ class LifecycleRuleFilter(object):
         """
         prefix_elt = filter_elt.find('.//Prefix')
         prefix = prefix_elt.text if prefix_elt is not None else None
-
-        tags = dict()
-        for tag_elt in filter_elt.findall('.//Tag'):
-            key_elt = tag_elt.find('Key')
-            if key_elt is None:
-                raise ValueError("Missing 'Key' element in 'Tag'")
-            val_elt = tag_elt.find('Value')
-            if val_elt is None:
-                raise ValueError("Missing 'Value' element in 'Tag' (key=%s)" %
-                                 key_elt.text)
-            tags[key_elt.text] = val_elt.text
-
+        tags = cls._convert_tags_elt_to_tags_dict(filter_elt)
         return cls(prefix=prefix, tags=tags, **kwargs)
 
     def generate_id(self):
@@ -254,12 +245,36 @@ class LifecycleRuleFilter(object):
         """
         Check if an object matches the conditions defined by this filter.
         """
+        # Check the prefix
         if self.prefix and not obj_meta['name'].startswith(self.prefix):
             return False
-        for tagk in self.tags.keys():
-            if obj_meta.get('properties', {}).get(tagk) != self.tags[tagk]:
-                return False
+
+        # Check the tags
+        if self.tags:
+            tags = dict()
+            tags_elt = obj_meta.get('properties', {}).get(TAGGING_KEY, None)
+            if tags_elt is not None:
+                tags_elt = etree.fromstring(tags_elt)
+                tags = self._convert_tags_elt_to_tags_dict(tags_elt)
+            for tagk in self.tags.keys():
+                if tags.get(tagk) != self.tags[tagk]:
+                    return False
+
         return True
+
+    @staticmethod
+    def _convert_tags_elt_to_tags_dict(tags_elt):
+        tags = dict()
+        for tag_elt in tags_elt.findall('.//Tag', tags_elt.nsmap):
+            key_elt = tag_elt.find('Key', tags_elt.nsmap)
+            if key_elt is None:
+                raise ValueError("Missing 'Key' element in 'Tag'")
+            val_elt = tag_elt.find('Value', tags_elt.nsmap)
+            if val_elt is None:
+                raise ValueError("Missing 'Value' element in 'Tag' (key=%s)" %
+                                 key_elt.text)
+            tags[key_elt.text] = val_elt.text
+        return tags
 
 
 class LifecycleActionFilter(object):
