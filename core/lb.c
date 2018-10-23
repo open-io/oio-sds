@@ -396,6 +396,14 @@ _item_make (oio_location_t location, const char *id, const char *addr)
 	return out;
 }
 
+void
+oio_lb_selected_item_free(struct oio_lb_selected_item_s *_item)
+{
+	g_free((char *) _item->expected_slot);
+	g_free((char *) _item->final_slot);
+	g_free(_item);
+}
+
 static struct oio_lb_selected_item_s *
 _item_select(const struct _lb_item_s *src)
 {

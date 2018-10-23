@@ -53,6 +53,9 @@ struct oio_lb_selected_item_s
 	guint16 warn_dist;
 };
 
+
+void oio_lb_selected_item_free(struct oio_lb_selected_item_s *item);
+
 /* Signature for callbacks from `oio_lb_pool__poll` or `oio_lb_pool__patch`.
  *
  * First parameter represents a service which has been selected, plus the
