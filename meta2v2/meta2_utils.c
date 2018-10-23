@@ -275,7 +275,7 @@ _load_chunk_quality(GHashTable *qualities, struct bean_PROPERTIES_s *prop)
 			g_hash_table_insert(qualities,
 					g_strdup(key->str + strlen(OIO_CHUNK_SYSMETA_PREFIX)), item);
 		} else {
-			g_free(item);
+			oio_lb_selected_item_free(item);
 		}
 	}
 
@@ -2400,7 +2400,7 @@ m2db_check_content_quality(struct m2v2_sorted_content_s *sorted_content,
 	/* keys are chunk URLs,
 	 * values are <struct oio_lb_selected_item_s *> */
 	GHashTable *chunk_items = g_hash_table_new_full(g_str_hash, g_str_equal,
-			g_free, g_free);
+			g_free, (GDestroyNotify) oio_lb_selected_item_free);
 	_load_chunk_qualities(chunk_items, chunk_meta);
 
 	gboolean _on_metachunk(gpointer ppos, GSList *chunks, gpointer udata UNUSED) {
@@ -2445,6 +2445,7 @@ m2db_check_content_quality(struct m2v2_sorted_content_s *sorted_content,
 		}
 		return FALSE;
 	}
+
 	g_tree_foreach(sorted_content->metachunks,
 			(GTraverseFunc)_on_metachunk, NULL);
 	g_hash_table_destroy(chunk_items);
