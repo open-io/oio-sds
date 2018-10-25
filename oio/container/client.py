@@ -24,8 +24,8 @@ from oio.common.easy_value import boolean_value
 
 CONTENT_HEADER_PREFIX = 'x-oio-content-meta-'
 SYSMETA_KEYS = ("chunk-method", "ctime", "mtime", "deleted", "hash",
-                "hash-method", "id", "length", "mime-type", "name", "policy",
-                "version")
+                "hash-method", "id", "size", "length", "mime-type",
+                "name", "policy", "version")
 
 
 def extract_content_headers_meta(headers):

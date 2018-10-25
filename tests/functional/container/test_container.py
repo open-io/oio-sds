@@ -418,7 +418,7 @@ class TestMeta2Containers(BaseTestCase):
 
         stgpol = resp.getheader('x-oio-content-meta-policy')
         headers = {'x-oio-action-mode': 'autocreate',
-                   'x-oio-content-meta-length': '1024',
+                   'x-oio-content-meta-size': '1024',
                    'x-oio-content-meta-policy': stgpol,
                    'x-oio-content-meta-id': random_id(32)}
         resp = self.request('POST', self.url_content('create'), params=params,
@@ -586,7 +586,7 @@ class TestMeta2Contents(BaseTestCase):
 
         stgpol = resp.getheader('x-oio-content-meta-policy')
         headers = {'x-oio-action-mode': 'autocreate',
-                   'x-oio-content-meta-length': '1024',
+                   'x-oio-content-meta-size': '1024',
                    'x-oio-content-meta-policy': stgpol}
         resp = self.request('POST', self.url_content('create'), params=params,
                             headers=headers, data=json.dumps(chunks))
@@ -618,7 +618,7 @@ class TestMeta2Contents(BaseTestCase):
 
         stgpol = resp.getheader('x-oio-content-meta-policy')
         headers = {'x-oio-action-mode': 'autocreate',
-                   'x-oio-content-meta-length': '1024',
+                   'x-oio-content-meta-size': '1024',
                    'x-oio-content-meta-policy': stgpol,
                    'x-oio-content-meta-id': random_id(32)}
         resp = self.request('POST', self.url_content('create'), params=params,
@@ -790,7 +790,7 @@ class TestMeta2Contents(BaseTestCase):
 
         stgpol = resp.getheader('x-oio-content-meta-policy')
         headers = {'x-oio-action-mode': 'autocreate',
-                   'x-oio-content-meta-length': '1024',
+                   'x-oio-content-meta-size': '1024',
                    'x-oio-content-meta-policy': stgpol,
                    'x-oio-content-meta-id': random_id(32)}
         resp = self.request('POST', self.url_content('create'),
@@ -845,7 +845,7 @@ class TestMeta2Contents(BaseTestCase):
         append_param.update(params)
         stgpol = resp.getheader('x-oio-content-meta-policy')
         headers = {'x-oio-action-mode': 'autocreate',
-                   'x-oio-content-meta-length': '1024',
+                   'x-oio-content-meta-size': '1024',
                    'x-oio-content-meta-policy': stgpol,
                    'x-oio-content-meta-id': random_id(32)}
         resp = self.request('POST', self.url_content('create'),
@@ -873,7 +873,7 @@ class TestMeta2Contents(BaseTestCase):
         stgpol = resp.getheader('x-oio-content-meta-policy')
         headers = {'x-oio-action-mode': 'autocreate',
                    'x-oio-content-meta-policy': stgpol,
-                   'x-oio-content-meta-length': '1024'}
+                   'x-oio-content-meta-size': '1024'}
         resp = self.request('POST', self.url_content('update'),
                             params=params, headers=headers,
                             data=json.dumps(chunks))
