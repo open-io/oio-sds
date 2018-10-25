@@ -67,7 +67,7 @@ class ContainerTest(CliTestCase):
             cid_opt = '--cid '
             name = self.CID
         output = self.openio('container show ' + cid_opt + name + opts)
-        regex = "|\s*%s\s*|\s*%s\s*|"
+        regex = r"|\s*%s\s*|\s*%s\s*|"
         self.assertIsNotNone(re.match(regex % ("bytes_usage", "0B"), output))
         self.assertIsNotNone(re.match(regex % ("objects", "0"), output))
 
