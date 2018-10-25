@@ -697,7 +697,7 @@ GError *
 meta2_backend_destroy_container(struct meta2_backend_s *m2,
 		struct oio_url_s *url, guint32 flags)
 {
-	gboolean event = BOOL(flags & M2V2_DESTROY_EVENT);
+	gboolean send_event = BOOL(flags & M2V2_DESTROY_EVENT);
 	gboolean force = BOOL(flags & M2V2_DESTROY_FORCE);
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = NULL;
@@ -713,7 +713,7 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 		hc_decache_reference_service(m2->resolver, url, NAME_SRVTYPE_META2);
 
 #ifdef HAVE_ENBUG
-		if (event && !err) {
+		if (send_event && !err) {
 			gint32 random = oio_ext_rand_int_range(0,3);
 			switch (random) {
 				case 0:
@@ -727,23 +727,19 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 #endif
 
 		if (!err) {
-			GString *gs = NULL;
-			GString *peers_list = g_string_sized_new(1024);
-			if (m2->notifier && event) {
-				err = _get_meta2_peers(sq3, m2, peers_list);
-				if (err != NULL){
-					m2b_close(sq3);
-					g_string_free(peers_list, TRUE);
-					return err;
-				}
-				gs = oio_event__create (META2_EVENTS_PREFIX ".container.deleted", url);
-				g_string_append_printf(gs, ",\"data\": %s }", peers_list->str);
-			}
 			m2b_destroy(sq3);
-			if (gs) {
-				oio_events_queue__send (m2->notifier, g_string_free (gs, FALSE));
-				if (peers_list)
-					g_string_free(peers_list, TRUE);
+			if (m2->notifier && send_event) {
+				/* This request handler is local, it will be called on each
+				 * service hosting the base. We must only signal our own
+				 * address; the other peers will do the same. */
+				const gchar *me = sqlx_repository_get_local_addr(m2->repo);
+				/* FIXME(FVE): do this at sqliterepo level, to be consistent
+				 * with DB_REMOVE request. */
+				GString *gs = oio_event__create(
+						META2_EVENTS_PREFIX ".container.deleted", url);
+				g_string_append_printf(
+						gs, ",\"data\":{\"peers\":[\"%s\"]}}", me);
+				oio_events_queue__send(m2->notifier, g_string_free(gs, FALSE));
 			}
 		} else {
 			m2b_close(sq3);
