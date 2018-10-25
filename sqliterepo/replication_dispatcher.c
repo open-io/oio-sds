@@ -1711,6 +1711,9 @@ _handler_REMOVE(struct gridd_reply_ctx_s *reply,
 	sq3->deleted = TRUE;
 	sqlx_repository_unlock_and_close_noerror(sq3);
 
+	/* TODO(FVE): send an event telling this service is no more responsible
+	 * for the base, and use this event to deindex the base from rdir. */
+
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }

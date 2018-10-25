@@ -1031,7 +1031,7 @@ configure_request_handlers (void)
 	 * and DB_PIPETO will be used. */
 	SET("/$NS/admin/copy/#POST", action_admin_copy);
 
-	/* Remove specific base ("DB_REMEOVE") */
+	/* Remove specific base ("DB_REMOVE") */
 	SET("/$NS/admin/remove/#POST", action_admin_remove);
 
 	/* Get, set or delete properties from the admin table

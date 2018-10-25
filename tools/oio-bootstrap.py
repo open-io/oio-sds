@@ -803,10 +803,10 @@ pipeline = content_cleaner
 pipeline = logger content_improve
 
 [handler:storage.container.new]
-pipeline = account_update meta2_index
+pipeline = account_update volume_index
 
 [handler:storage.container.deleted]
-pipeline = account_update meta2_index
+pipeline = account_update volume_index
 
 [handler:storage.container.state]
 pipeline = account_update
@@ -818,7 +818,7 @@ pipeline = volume_index
 pipeline = volume_index
 
 [handler:account.services]
-pipeline = account_update
+pipeline = account_update volume_index
 
 [filter:content_cleaner]
 use = egg:oio#content_cleaner
