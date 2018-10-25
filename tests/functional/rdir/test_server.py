@@ -78,6 +78,13 @@ class RdirTestCase(CommonTestCase):
                 "chunk_id": random_id(64),
                 "mtime": int(time.time())}
 
+    def _meta2_record(self):
+        return {"container_id": random_id(64),
+                "container_url": "{0}/{1}/{2}".format(random_str(12),
+                                                       random_str(12),
+                                                       random_str(12)),
+                "mtime": int(time.time())}
+
     def _rdir_url(self, tail):
         return 'http://{0}:{1}{2}'.format(self.host, self.port, tail)
 
@@ -531,7 +538,11 @@ class TestRdirServer2(RdirTestCase):
                   '/v1/rdir/push',
                   '/v1/rdir/delete',
                   '/v1/rdir/fetch',
-                  '/v1/rdir/status')
+                  '/v1/rdir/status',
+                  '/v1/rdir/meta2/create',
+                  '/v1/rdir/meta2/push',
+                  '/v1/rdir/meta2/delete',
+                  '/v1/rdir/meta2/fetch')
         for r in routes:
             resp = self._get('/' + r)
             self.assertEqual(resp.status, 404)
@@ -568,7 +579,15 @@ class TestRdirServer2(RdirTestCase):
                    ('/v1/rdir/delete', self._post),
                    ('/v1/rdir/fetch', self._get),
                    ('/v1/rdir/fetch', self._delete),
-                   ('/v1/rdir/status', self._delete))
+                   ('/v1/rdir/status', self._delete),
+                   ('/v1/rdir/meta2/create', self._get),
+                   ('/v1/rdir/meta2/create', self._delete),
+                   ('/v1/rdir/meta2/push', self._get),
+                   ('/v1/rdir/meta2/push', self._delete),
+                   ('/v1/rdir/meta2/delete', self._get),
+                   ('/v1/rdir/meta2/delete', self._delete),
+                   ('/v1/rdir/meta2/fetch', self._get),
+                   ('/v1/rdir/meta2/fetch', self._delete))
         for route, method in actions:
             resp = method(route)
             self.assertEqual(resp.status, 405)
@@ -666,3 +685,109 @@ class TestRdirServer3(RdirTestCase):
         proc1 = subprocess.Popen(['oio-rdir-server', cfg], stderr=fd)
         self.garbage_procs.append(proc1)
         self.assertTrue(check_process_absent(proc1))
+
+
+class TestRdirServer4(RdirTestCase):
+    def setUp(self):
+        super(TestRdirServer4, self).setUp()
+        self.num, self.db_path, self.host, self.port = self.get_service('rdir')
+        self.port = int(self.port)
+        self.vol = self._volume()
+
+    def tearDown(self):
+        super(TestRdirServer4, self).tearDown()
+
+    def test_meta2_create(self):
+        rec = self._meta2_record()
+
+        # fetch without volume
+        resp = self._post("/v1/rdir/meta2/fetch")
+        self.assertEqual(resp.status, 400)
+
+        # fetch with non-json body
+        resp = self._post("/v1/rdir/meta2/fetch", params={'vol': self.vol},
+                          data='this is not json')
+        self.assertEqual(resp.status, 400)
+
+        # The fetch fails (No JSON body)
+        resp = self._post("/v1/rdir/meta2/fetch", params={'vol': self.vol})
+        self.assertEqual(resp.status, 400)
+
+        # create volume without the volume
+        resp = self._post("/v1/rdir/meta2/create")
+        self.assertEqual(resp.status, 400)
+
+        # create volume
+        resp = self._post("/v1/rdir/meta2/create", params={'vol': self.vol})
+        self.assertEqual(resp.status, 201)
+
+        # the fetch returns an empty array
+        resp = self._post("/v1/rdir/meta2/fetch", params={'vol': self.vol},
+                          data=json.dumps({}))
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(self.json_loads(resp.data), {"records": [],
+                                                      "truncated": False})
+
+        # now the push must succeed
+        resp = self._post(
+            "/v1/rdir/meta2/push", params={'vol': self.vol},
+            data=json.dumps(rec))
+        self.assertEqual(resp.status, 204)
+
+        # we must fetch the same data with an additional empty extra_data
+        resp = self._post("/v1/rdir/meta2/fetch", params={'vol': self.vol},
+                          data=json.dumps({}))
+        self.assertEqual(resp.status, 200)
+        rec["extra_data"] = None
+        reference = {
+            "records": [rec],
+            "truncated": False
+        }
+        self.assertEqual(self.json_loads(resp.data), reference)
+
+        # delete without volume
+        resp = self._post("/v1/rdir/meta2/delete")
+        self.assertEqual(resp.status, 400)
+
+        resp = self._post("/v1/rdir/meta2/delete", params={'vol': ''})
+        self.assertEqual(resp.status, 400)
+
+        # deleting must succeed
+        resp = self._post(
+            "/v1/rdir/meta2/delete", params={'vol': self.vol},
+            data=json.dumps(rec))
+        self.assertEqual(resp.status, 204)
+
+        # fetching must return an empty array
+        resp = self._post("/v1/rdir/meta2/fetch", params={'vol': self.vol},
+                          data=json.dumps({}))
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(self.json_loads(resp.data), {"records": [],
+                                                      "truncated": False})
+
+    def test_meta2_push_missing_fields(self):
+        rec = self._meta2_record()
+
+        # Push without volume
+        resp = self._post("/v1/rdir/meta2/push")
+        self.assertEqual(resp.status, 400)
+
+        # DB creation
+        resp = self._post("/v1/rdir/meta2/create", params={'vol': self.vol})
+        self.assertEqual(resp.status, 201)
+
+        # mtime is optional
+        for k in ['container_url', 'container_id']:
+            save = rec.pop(k)
+            # push an incomplete record
+            resp = self._post(
+                "/v1/rdir/meta2/push", params={'vol': self.vol},
+            data=json.dumps(rec))
+            self.assertEqual(resp.status, 400)
+            # check we list nothing
+            resp = self._post("/v1/rdir/meta2/fetch", params={'vol': self.vol},
+                              data=json.dumps({}))
+            self.assertEqual(resp.status, 200)
+            self.assertEqual(self.json_loads(resp.data),
+                                 {"records": [], "truncated": False})
+            rec[k] = save
