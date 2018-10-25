@@ -25,8 +25,7 @@ ACCOUNT_TIMEOUT = 30
 
 CONTAINER_EVENTS = [
         EventTypes.CONTAINER_STATE,
-        EventTypes.CONTAINER_NEW,
-        EventTypes.CONTAINER_DELETED]
+        EventTypes.CONTAINER_NEW]
 
 
 class AccountUpdateFilter(Filter):
@@ -46,8 +45,6 @@ class AccountUpdateFilter(Filter):
                 body['bytes'] = data.get('bytes-count', 0)
                 body['objects'] = data.get('object-count', 0)
                 body['mtime'] = mtime
-            elif event.event_type == EventTypes.CONTAINER_DELETED:
-                body['dtime'] = mtime
             elif event.event_type == EventTypes.CONTAINER_NEW:
                 body['mtime'] = mtime
             try:
@@ -71,8 +68,22 @@ class AccountUpdateFilter(Filter):
                     return resp(env, cb)
         elif event.event_type == EventTypes.ACCOUNT_SERVICES:
             url = event.env.get('url')
-            self.account.account_create(
-                url.get('account'), read_timeout=ACCOUNT_TIMEOUT)
+            if isinstance(event.data, list):
+                # Legacy format: list of services
+                new_services = event.data
+            else:
+                # New format: dictionary with new and deleted services
+                new_services = event.data.get('services') or list()
+            m2_services = [x for x in new_services if x.get('type') == 'meta2']
+            if not m2_services:
+                # No service in charge, container has been deleted
+                self.account.container_update(
+                        url.get('account'), url.get('user'),
+                        {'dtime': event.when / 1000000.0},
+                        read_timeout=ACCOUNT_TIMEOUT)
+            else:
+                self.account.account_create(
+                    url.get('account'), read_timeout=ACCOUNT_TIMEOUT)
         return self.app(env, cb)
 
 
