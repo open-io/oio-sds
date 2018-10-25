@@ -468,6 +468,9 @@ _populate_headers_with_header (struct req_args_s *args,
 	if (!header)
 		return;
 
+	args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-size",
+			g_strdup_printf("%"G_GINT64_FORMAT, CONTENTS_HEADERS_get_size(header)));
+	// TODO(adu) Remove this when all clients will only use `content-meta-size`
 	args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-length",
 			g_strdup_printf("%"G_GINT64_FORMAT, CONTENTS_HEADERS_get_size(header)));
 
@@ -751,15 +754,20 @@ _load_alias_from_headers(struct req_args_s *args, GSList **pbeans)
 		}
 	}
 
-	if (!err) { // Content length
+	if (!err) { // Content size
 		gchar *s = g_tree_lookup(args->rq->tree_headers,
-								 PROXYD_HEADER_PREFIX "content-meta-length");
-		if (!s)
-			err = BADREQ("Header: missing content length");
-		else {
+				PROXYD_HEADER_PREFIX "content-meta-size");
+		if (!s) {
+			// TODO(adu) Remove this when all clients will only use `content-meta-size`
+			s = g_tree_lookup(args->rq->tree_headers,
+					PROXYD_HEADER_PREFIX "content-meta-length");
+		}
+		if (!s) {
+			err = BADREQ("Header: missing content size");
+		} else {
 			gint64 s64 = 0;
 			if (!oio_str_is_number(s, &s64))
-				err = BADREQ("Header: bad content length");
+				err = BADREQ("Header: bad content size");
 			else
 				CONTENTS_HEADERS_set_size (header, s64);
 		}
@@ -2498,7 +2506,7 @@ action_m2_content_purge (struct req_args_s *args, struct json_object *j UNUSED)
 // .. code-block:: text
 //
 //    "x-oio-content-meta-id: 2996752DFD7205006B73F17AD315AA2B"
-//    "x-oio-content-meta-length: 64"
+//    "x-oio-content-meta-size: 64"
 //
 // Create a new object. This method does not upload any data, it just
 // registers object metadata in the database.
@@ -2509,7 +2517,7 @@ action_m2_content_purge (struct req_args_s *args, struct json_object *j UNUSED)
 //    Host: 127.0.0.1:6000
 //    User-Agent: curl/7.47.0
 //    Accept: */*
-//    x-oio-content-meta-length: 64
+//    x-oio-content-meta-size: 64
 //    x-oio-content-meta-id: 2996752DFD7205006B73F17AD315AA2B
 //    Content-Length: 165
 //    Content-Type: application/x-www-form-urlencoded
@@ -2546,7 +2554,7 @@ enum http_rc_e action_content_put (struct req_args_s *args) {
 // .. code-block:: text
 //
 //    "x-oio-content-meta-id: 2996752DFD7205006B73F17AD315AA2B"
-//    "x-oio-content-meta-length: 64"
+//    "x-oio-content-meta-size: 64"
 //
 // Update existing object. This method does not upload any data, it just
 // registers updated object metadata in the database.
@@ -2557,7 +2565,7 @@ enum http_rc_e action_content_put (struct req_args_s *args) {
 //    Host: 127.0.0.1:6000
 //    User-Agent: curl/7.47.0
 //    Accept: */*
-//    x-oio-content-meta-length: 64
+//    x-oio-content-meta-size: 64
 //    x-oio-content-meta-id: 2996752DFD7205006B73F17AD315AA2B
 //    Content-Length: 165
 //    Content-Type: application/x-www-form-urlencoded
@@ -2646,7 +2654,7 @@ enum http_rc_e action_content_truncate(struct req_args_s *args) {
 //    x-oio-content-meta-deleted: False
 //    x-oio-content-meta-hash-method: md5
 //    x-oio-content-meta-id: B03A29AA737205002C4D414D4C12FDC5
-//    x-oio-content-meta-length: 180
+//    x-oio-content-meta-size: 180
 //    x-oio-content-meta-mime-type: application/octet-stream
 //    x-oio-content-meta-name: mycontent
 //    x-oio-content-meta-policy: SINGLE
@@ -2692,7 +2700,7 @@ enum http_rc_e action_content_prepare (struct req_args_s *args) {
 //    x-oio-content-meta-deleted: False
 //    x-oio-content-meta-hash-method: md5
 //    x-oio-content-meta-id: B03A29AA737205002C4D414D4C12FDC5
-//    x-oio-content-meta-length: 180
+//    x-oio-content-meta-size: 180
 //    x-oio-content-meta-mime-type: application/octet-stream
 //    x-oio-content-meta-name: mycontent
 //    x-oio-content-meta-policy: SINGLE
@@ -2727,7 +2735,7 @@ enum http_rc_e action_content_prepare_v2(struct req_args_s *args) {
 //    x-oio-content-meta-hash: 26CBCBBF52F37322FAC57B8AC0E4E130
 //    x-oio-content-meta-hash-method: md5
 //    x-oio-content-meta-id: FB35FC89C072050065F28C69311740F6
-//    x-oio-content-meta-length: 180
+//    x-oio-content-meta-size: 180
 //    x-oio-content-meta-mime-type: application/octet-stream
 //    x-oio-content-meta-name: mycontent
 //    x-oio-content-meta-policy: SINGLE
@@ -2907,7 +2915,7 @@ enum http_rc_e action_content_touch (struct req_args_s *args) {
 //    Host: 127.0.0.1:6000
 //    User-Agent: curl/7.47.0
 //    Accept: */*
-//    x-oio-content-meta-length: 64
+//    x-oio-content-meta-size: 64
 //    x-oio-content-meta-id: 2996752DFD7205006B73F17AD315AA2B
 //    Content-Length: 182
 //    Content-Type: application/x-www-form-urlencoded
@@ -2956,7 +2964,7 @@ enum http_rc_e action_content_spare (struct req_args_s *args) {
 //    x-oio-content-meta-hash: 26CBCBBF52F37322FAC57B8AC0E4E130
 //    x-oio-content-meta-hash-method: md5
 //    x-oio-content-meta-id: B03A29AA737205002C4D414D4C12FDC5
-//    x-oio-content-meta-length: 180
+//    x-oio-content-meta-size: 180
 //    x-oio-content-meta-mime-type: application/octet-stream
 //    x-oio-content-meta-name: mycontent
 //    x-oio-content-meta-policy: SINGLE
