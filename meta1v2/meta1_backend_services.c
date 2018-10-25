@@ -1185,6 +1185,27 @@ out:
 
 /* ------------------------------------------------------------------------- */
 
+static void
+__ensure_url_is_qualified(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
+{
+	if (!oio_url_has(url, OIOURL_ACCOUNT) || !oio_url_has(url, OIOURL_USER)) {
+		struct oio_url_s **fqurl = NULL;
+		GError *err = __info_user(sq3, url, FALSE, &fqurl);
+		if (!err) {
+			oio_url_set(url, OIOURL_ACCOUNT,
+					oio_url_get(fqurl[0], OIOURL_ACCOUNT));
+			oio_url_set(url, OIOURL_USER,
+					oio_url_get(fqurl[0], OIOURL_USER));
+			oio_url_get(url, OIOURL_HEXID);  // force CID recompute
+			oio_url_cleanv(fqurl);
+		} else {
+			GRID_NOTICE("Failed to load account and name for container %s: %s",
+					oio_url_get(url, OIOURL_HEXID), err->message);
+			g_clear_error(&err);
+		}
+	}
+}
+
 static GError *
 __notify_services(struct meta1_backend_s *m1, struct sqlx_sqlite3_s *sq3,
 		struct oio_url_s *url)
@@ -1195,8 +1216,11 @@ __notify_services(struct meta1_backend_s *m1, struct sqlx_sqlite3_s *sq3,
 	struct meta1_service_url_s **services = NULL;
 	GError *err = __get_container_all_services(sq3, url, NULL, &services);
 	if (!err) {
+		__ensure_url_is_qualified(sq3, url);
 		struct meta1_service_url_s **services2 = expand_urlv(services);
-		GString *notif = oio_event__create ("account.services", url);
+		/* This event type is prefixed with "account" because it originally
+		 * targetted account services only. */
+		GString *notif = oio_event__create("account.services", url);
 		g_string_append_static (notif, ",\"data\":[");
 		if (services2) {
 			for (struct meta1_service_url_s **svc = services2; *svc ; svc++) {
