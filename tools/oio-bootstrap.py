@@ -843,9 +843,6 @@ use = egg:oio#volume_index
 [filter:webhook]
 use = egg:oio#webhook
 
-[filter:meta2_index]
-use = egg:oio#meta2_index
-
 [filter:replication]
 use = egg:oio#notify
 tube = oio-repli
