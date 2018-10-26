@@ -1,9 +1,9 @@
 
 [handler:storage.content.new]
-pipeline = noop
+pipeline =
 
 [handler:storage.content.update]
-pipeline = noop
+pipeline =
 
 [handler:storage.content.broken]
 pipeline = content_rebuild
@@ -15,10 +15,10 @@ pipeline = content_cleaner
 pipeline = content_improve
 
 [handler:storage.container.new]
-pipeline = account_update meta2_index
+pipeline = account_update volume_index
 
 [handler:storage.container.deleted]
-pipeline = account_update meta2_index
+pipeline = account_update volume_index
 
 [handler:storage.container.state]
 pipeline = account_update
@@ -30,7 +30,7 @@ pipeline = volume_index
 pipeline = volume_index
 
 [handler:account.services]
-pipeline = noop
+pipeline = account_update volume_index
 
 [filter:content_cleaner]
 use = egg:oio#content_cleaner
@@ -40,9 +40,6 @@ use = egg:oio#account_update
 
 [filter:volume_index]
 use = egg:oio#volume_index
-
-[filter:meta2_index]
-use = egg:oio#meta2_index
 
 [filter:noop]
 use = egg:oio#noop
