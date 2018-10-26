@@ -55,7 +55,7 @@ class AccountTest(CliTestCase):
         self.openio('account create ' + self.NAME)
         opts = self.get_opts([], 'table')
         output = self.openio('account show ' + self.NAME + opts)
-        regex = "|\s*%s\s*|\s*%s\s*|"
+        regex = r"|\s*%s\s*|\s*%s\s*|"
         self.assertIsNotNone(re.match(regex % ("bytes", "0B"), output))
         self.assertIsNotNone(re.match(regex % ("objects", "0"), output))
 
