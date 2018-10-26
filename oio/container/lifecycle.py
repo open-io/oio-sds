@@ -191,7 +191,7 @@ class LifecycleRule(object):
             a class and an exception instance
         """
         results = list()
-        if self.match(obj_meta):
+        if self.enabled and self.match(obj_meta):
             for action in self.actions.values():
                 try:
                     res = action.apply(obj_meta, **kwargs)
