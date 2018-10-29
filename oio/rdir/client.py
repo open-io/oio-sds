@@ -39,7 +39,7 @@ def _filter_rdir_host(allsrv):
     for srv in allsrv.get('srv', {}):
         if srv['type'] == 'rdir':
             return srv['host']
-    raise NotFound("No rdir service found in %s" % (allsrv, ))
+    raise NotFound("No rdir service found in %s" % (allsrv,))
 
 
 class RdirDispatcher(object):
@@ -213,7 +213,7 @@ class RdirDispatcher(object):
                 break
             except ClientException as ex:
                 # Already done
-                done = (455, )
+                done = (455,)
                 if ex.status in done:
                     break
                 if ex.message.startswith(
@@ -438,8 +438,9 @@ class RdirClient(HttpApi):
         """
         Create a new meta2 rdir database.
         """
-        return self._rdir_request(volume_id, 'POST', 'create',
-                                  service_type='meta2', **kwargs)
+        return self._rdir_request(volume=volume_id, method='POST',
+                                  action='create', service_type='meta2',
+                                  **kwargs)
 
     def meta2_index_push(self, volume_id, container_url, container_id, mtime,
                          headers=None, **kwargs):
@@ -454,9 +455,10 @@ class RdirClient(HttpApi):
         for key, value in kwargs.iteritems():
             body[key] = value
 
-        return self._rdir_request(volume_id, 'POST', 'push',
-                                  create=True, json=body, headers=headers,
-                                  service_type='meta2', **kwargs)
+        return self._rdir_request(volume=volume_id, method='POST',
+                                  action='push', create=True, json=body,
+                                  headers=headers, service_type='meta2',
+                                  **kwargs)
 
     def meta2_index_delete(self, volume_id, container_path, container_id,
                            **kwargs):
@@ -469,8 +471,8 @@ class RdirClient(HttpApi):
         for key, value in kwargs.iteritems():
             body[key] = value
 
-        return self._rdir_request(volume_id, 'POST', 'delete',
-                                  create=False, json=body,
+        return self._rdir_request(volume=volume_id, method='POST',
+                                  action='delete', create=False, json=body,
                                   service_type='meta2', **kwargs)
 
     def meta2_index_fetch(self, volume_id, prefix=None, marker=None,
@@ -486,7 +488,7 @@ class RdirClient(HttpApi):
             params['marker'] = marker
         if limit:
             params['limit'] = limit
-        _resp, body = self._rdir_request(volume_id, 'POST', 'fetch',
-                                         json=params, service_type='meta2',
-                                         **kwargs)
+        _resp, body = self._rdir_request(volume=volume_id, method='POST',
+                                         action='fetch', json=params,
+                                         service_type='meta2', **kwargs)
         return body
