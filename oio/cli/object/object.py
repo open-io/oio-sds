@@ -868,7 +868,9 @@ class PurgeObject(ObjectCommandMixin, command.Command):
 
 
 class LinkObject(ObjectCommandMixin, command.Command):
-    """Make a shallow copy of an object."""
+    """
+    Make a shallow copy of an object (similar to a hardlink).
+    """
 
     log = getLogger(__name__ + '.LinkObject')
 
@@ -878,30 +880,33 @@ class LinkObject(ObjectCommandMixin, command.Command):
         parser = super(LinkObject, self).get_parser(prog_name)
         self.patch_parser(parser)
         parser.add_argument(
-            '--link-account',
-            metavar='<account>',
-            help='Name of the link account.')
+            '--dest-account', '--link-account',
+            metavar='<destination account>',
+            help='Name of the destination account.')
         parser.add_argument(
-            '--link-container',
-            metavar='<container>',
-            help='Name of the link container.')
+            '--dest-container', '--link-container',
+            metavar='<destination container>',
+            help=('Name of the destination container. If not specified, the '
+                  'name of the destination container is the same as the source'
+                  ' container, unless --auto is also specified in which case '
+                  'the name will be computed from the destination object.'))
         parser.add_argument(
-            'link_object',
-            metavar='<object>',
-            help='Name of the link object.')
+            'dest_object',
+            metavar='<destination object>',
+            help='Name of the destination object.')
         parser.add_argument(
             '--content-id',
             metavar='<content ID>',
             help='Content ID.')
         parser.add_argument(
-            '--link-content-id',
-            metavar='<content ID>',
-            help='link content ID.')
+            '--dest-content-id', '--link-content-id',
+            metavar='<destination content ID>',
+            help='destination content ID.')
         parser.add_argument(
             '--property',
             metavar='<key=value>',
             action=KeyValueAction,
-            help='Property to add to the link')
+            help='Property to add to the destination object.')
         return parser
 
     def take_action(self, parsed_args):
@@ -918,10 +923,14 @@ class LinkObject(ObjectCommandMixin, command.Command):
         if parsed_args.property:
             directive = 'REPLACE'
             kwargs['properties'] = parsed_args.property
-        if not parsed_args.link_account:
-            parsed_args.link_account = account
-        if not parsed_args.link_container:
-            parsed_args.link_container = container
+        if not parsed_args.dest_account:
+            parsed_args.dest_account = account
+        if not parsed_args.dest_container:
+            if parsed_args.auto:
+                parsed_args.dest_container = \
+                    self.flatns_manager(parsed_args.dest_object)
+            else:
+                parsed_args.dest_container = container
             parsed_args.cid = None
         cid = None
         if parsed_args.is_cid:
@@ -930,9 +939,9 @@ class LinkObject(ObjectCommandMixin, command.Command):
 
         self.app.client_manager.storage.object_link(
             account, container, parsed_args.object,
-            parsed_args.link_account, parsed_args.link_container,
-            parsed_args.link_object, target_version=parsed_args.object_version,
+            parsed_args.dest_account, parsed_args.dest_container,
+            parsed_args.dest_object, target_version=parsed_args.object_version,
             target_content_id=parsed_args.content_id,
-            link_content_id=parsed_args.link_content_id,
+            link_content_id=parsed_args.dest_content_id,
             properties_directive=directive, cid=cid, **kwargs
         )
