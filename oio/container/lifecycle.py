@@ -108,7 +108,7 @@ class ContainerLifecycle(object):
             if res:
                 for action in res:
                     yield obj_meta, rule.id, action[0], action[1]
-                    if action[1] == 'Deleted':
+                    if action[1] == 'Kept':
                         return
             else:
                 yield obj_meta, rule.id, "n/a", "Kept"
@@ -301,7 +301,7 @@ class LifecycleRule(object):
                 try:
                     res = action.apply(obj_meta, **kwargs)
                     results.append((action.__class__.__name__, res))
-                    if res == 'Deleted':
+                    if res != 'Kept':
                         break
                 except OioException as exc:
                     results.append((action.__class__.__name__, exc))
