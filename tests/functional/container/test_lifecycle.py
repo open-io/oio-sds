@@ -19,7 +19,9 @@ from mock import patch
 
 from oio import ObjectStorageApi
 from oio.container.lifecycle import ContainerLifecycle, \
-    LIFECYCLE_PROPERTY_KEY, TAGGING_KEY
+    LIFECYCLE_PROPERTY_KEY, TAGGING_KEY, \
+    Expiration, Transition, \
+    NoncurrentVersionExpiration, NoncurrentVersionTransition
 from oio.common.exceptions import NoSuchObject
 from tests.utils import BaseTestCase, random_str
 
@@ -112,20 +114,21 @@ class TestContainerLifecycle(BaseTestCase):
         self.assertDictEqual({'key1': 'value1', 'key2': 'value2'},
                              rule.filter.tags)
         self.assertTrue(rule.enabled)
-        transition = rule.actions.get('Transition')
-        self.assertIsNotNone(transition)
+        self.assertEqual(4, len(rule.actions))
+        expiration = rule.actions[0]
+        self.assertEqual(Expiration, type(expiration))
+        self.assertEqual(60, expiration.filter.days)
+        transition = rule.actions[1]
+        self.assertEqual(Transition, type(transition))
         self.assertEqual(1, transition.filter.days)
         self.assertEqual('THREECOPIES', transition.policy)
-        expiration = rule.actions.get('Expiration')
-        self.assertIsNotNone(expiration)
+        expiration = rule.actions[2]
+        self.assertEqual(NoncurrentVersionExpiration, type(expiration))
         self.assertEqual(60, expiration.filter.days)
-        transition = rule.actions.get('NoncurrentVersionTransition')
-        self.assertIsNotNone(transition)
+        transition = rule.actions[3]
+        self.assertEqual(NoncurrentVersionTransition, type(transition))
         self.assertEqual(1, transition.filter.days)
         self.assertEqual('THREECOPIES', transition.policy)
-        expiration = rule.actions.get('NoncurrentVersionExpiration')
-        self.assertIsNotNone(expiration)
-        self.assertEqual(60, expiration.filter.days)
 
     def test_save_to_container_property(self):
         source = """
@@ -213,31 +216,10 @@ class TestContainerLifecycle(BaseTestCase):
         self.assertEqual(obj_meta, obj_meta_copy)
         self.assertEqual('Kept', status)
         self.api.object_show(self.account, self.container, obj_meta['name'])
+
         self.api.object_delete(self.account, self.container, obj_meta['name'])
 
-    def test_immediate_expiration_by_delay(self):
-        obj_meta = self._upload_something()
-        self.lifecycle.load_xml("""
-        <LifecycleConfiguration>
-            <Rule>
-                <Filter>
-                </Filter>
-                <Expiration>
-                    <Days>0</Days>
-                </Expiration>
-                <Status>enabled</Status>
-            </Rule>
-        </LifecycleConfiguration>
-        """)
-        results = [x for x in self.lifecycle.apply(obj_meta)]
-        self.assertEqual(1, len(results))
-        obj_meta_copy, _, _, status = results[0]
-        self.assertEqual(obj_meta, obj_meta_copy)
-        self.assertEqual('Deleted', status)
-        self.assertRaises(NoSuchObject, self.api.object_show,
-                          self.account, self.container, obj_meta['name'])
-
-    def test_future_expiration_by_delay(self):
+    def test_expiration_by_delay(self):
         obj_meta = self._upload_something()
         self.lifecycle.load_xml("""
         <LifecycleConfiguration>
@@ -251,15 +233,24 @@ class TestContainerLifecycle(BaseTestCase):
             </Rule>
         </LifecycleConfiguration>
         """)
+
         results = [x for x in self.lifecycle.apply(obj_meta)]
         self.assertEqual(1, len(results))
         obj_meta_copy, _, _, status = results[0]
         self.assertEqual(obj_meta, obj_meta_copy)
         self.assertEqual('Kept', status)
         self.api.object_show(self.account, self.container, obj_meta['name'])
-        self.api.object_delete(self.account, self.container, obj_meta['name'])
 
-    def test_immediate_expiration_filtered_by_prefix(self):
+        results = [x for x in self.lifecycle.apply(
+            obj_meta, now=time.time()+86400)]
+        self.assertEqual(1, len(results))
+        obj_meta_copy, _, _, status = results[0]
+        self.assertEqual(obj_meta, obj_meta_copy)
+        self.assertEqual('Deleted', status)
+        self.assertRaises(NoSuchObject, self.api.object_show,
+                          self.account, self.container, obj_meta['name'])
+
+    def test_expiration_filtered_by_prefix(self):
         obj_meta = self._upload_something(prefix="photos/")
         obj_meta2 = self._upload_something(prefix="documents/")
         self.lifecycle.load_xml("""
@@ -269,30 +260,45 @@ class TestContainerLifecycle(BaseTestCase):
                     <Prefix>documents/</Prefix>
                 </Filter>
                 <Expiration>
-                    <Days>0</Days>
+                    <Days>1</Days>
                 </Expiration>
                 <Status>enabled</Status>
             </Rule>
         </LifecycleConfiguration>
         """)
+
         results = [x for x in self.lifecycle.apply(obj_meta)]
         self.assertEqual(1, len(results))
         obj_meta_copy, _, _, status = results[0]
         self.assertEqual(obj_meta, obj_meta_copy)
-        self.assertEqual('n/a', status)
-
+        self.assertEqual('Kept', status)
         results = [x for x in self.lifecycle.apply(obj_meta2)]
         self.assertEqual(1, len(results))
         obj_meta2_copy, _, _, status = results[0]
         self.assertEqual(obj_meta2, obj_meta2_copy)
-        self.assertEqual('Deleted', status)
+        self.assertEqual('Kept', status)
+        self.api.object_show(self.account, self.container, obj_meta['name'])
+        self.api.object_show(self.account, self.container, obj_meta2['name'])
 
+        results = [x for x in self.lifecycle.apply(
+            obj_meta, now=time.time()+86400)]
+        self.assertEqual(1, len(results))
+        obj_meta_copy, _, _, status = results[0]
+        self.assertEqual(obj_meta, obj_meta_copy)
+        self.assertEqual('Kept', status)
+        results = [x for x in self.lifecycle.apply(
+            obj_meta2, now=time.time()+86400)]
+        self.assertEqual(1, len(results))
+        obj_meta2_copy, _, _, status = results[0]
+        self.assertEqual(obj_meta2, obj_meta2_copy)
+        self.assertEqual('Deleted', status)
         self.api.object_show(self.account, self.container, obj_meta['name'])
         self.assertRaises(NoSuchObject, self.api.object_show,
                           self.account, self.container, obj_meta2['name'])
+
         self.api.object_delete(self.account, self.container, obj_meta['name'])
 
-    def test_immediate_expiration_filtered_by_tag(self):
+    def test_expiration_filtered_by_tag(self):
         obj_meta = self._upload_something()
         obj_meta2 = self._upload_something(
             properties={TAGGING_KEY: """
@@ -326,38 +332,59 @@ class TestContainerLifecycle(BaseTestCase):
                     </Tag>
                 </Filter>
                 <Expiration>
-                    <Days>0</Days>
+                    <Days>1</Days>
                 </Expiration>
                 <Status>enabled</Status>
             </Rule>
         </LifecycleConfiguration>
         """)
+
         results = [x for x in self.lifecycle.apply(obj_meta)]
         self.assertEqual(1, len(results))
         obj_meta_copy, _, _, status = results[0]
         self.assertEqual(obj_meta, obj_meta_copy)
-        self.assertEqual('n/a', status)
-
+        self.assertEqual('Kept', status)
         results = [x for x in self.lifecycle.apply(obj_meta2)]
         self.assertEqual(1, len(results))
         obj_meta2_copy, _, _, status = results[0]
         self.assertEqual(obj_meta2, obj_meta2_copy)
-        self.assertEqual('Deleted', status)
-
+        self.assertEqual('Kept', status)
         results = [x for x in self.lifecycle.apply(obj_meta3)]
         self.assertEqual(1, len(results))
         obj_meta3_copy, _, _, status = results[0]
         self.assertEqual(obj_meta3, obj_meta3_copy)
-        self.assertEqual('n/a', status)
+        self.assertEqual('Kept', status)
+        self.api.object_show(self.account, self.container, obj_meta['name'])
+        self.api.object_show(self.account, self.container, obj_meta2['name'])
+        self.api.object_show(self.account, self.container, obj_meta3['name'])
 
+        results = [x for x in self.lifecycle.apply(
+            obj_meta, now=time.time()+86400)]
+        self.assertEqual(1, len(results))
+        obj_meta_copy, _, _, status = results[0]
+        self.assertEqual(obj_meta, obj_meta_copy)
+        self.assertEqual('Kept', status)
+        results = [x for x in self.lifecycle.apply(
+            obj_meta2, now=time.time()+86400)]
+        self.assertEqual(1, len(results))
+        obj_meta2_copy, _, _, status = results[0]
+        self.assertEqual(obj_meta2, obj_meta2_copy)
+        self.assertEqual('Deleted', status)
+        results = [x for x in self.lifecycle.apply(
+            obj_meta3, now=time.time()+86400)]
+        self.assertEqual(1, len(results))
+        obj_meta3_copy, _, _, status = results[0]
+        self.assertEqual(obj_meta3, obj_meta3_copy)
+        self.assertEqual('Kept', status)
         self.api.object_show(self.account, self.container, obj_meta['name'])
         self.assertRaises(NoSuchObject, self.api.object_show,
                           self.account, self.container, obj_meta2['name'])
         self.api.object_show(self.account, self.container, obj_meta3['name'])
+
         self.api.object_delete(self.account, self.container, obj_meta['name'])
         self.api.object_delete(self.account, self.container, obj_meta3['name'])
 
-    def test_immediate_transition_filtered_by_tag(self):
+    def test_transition_filtered_by_tag(self):
         obj_meta = self._upload_something(policy='SINGLE')
         obj_meta2 = self._upload_something(
             policy='SINGLE', properties={TAGGING_KEY: """
@@ -391,31 +418,60 @@ class TestContainerLifecycle(BaseTestCase):
                     </Tag>
                 </Filter>
                 <Transition>
-                    <Days>0</Days>
+                    <Days>1</Days>
                     <StorageClass>THREECOPIES</StorageClass>
                 </Transition>
                 <Status>enabled</Status>
             </Rule>
         </LifecycleConfiguration>
         """)
+
         results = [x for x in self.lifecycle.apply(obj_meta)]
         self.assertEqual(1, len(results))
         obj_meta_copy, _, _, status = results[0]
         self.assertEqual(obj_meta, obj_meta_copy)
-        self.assertEqual('n/a', status)
-
+        self.assertEqual('Kept', status)
         results = [x for x in self.lifecycle.apply(obj_meta2)]
         self.assertEqual(1, len(results))
         obj_meta2_copy, _, _, status = results[0]
         self.assertEqual(obj_meta2, obj_meta2_copy)
-        self.assertEqual('Policy changed to THREECOPIES', status)
-
+        self.assertEqual('Kept', status)
         results = [x for x in self.lifecycle.apply(obj_meta3)]
         self.assertEqual(1, len(results))
         obj_meta3_copy, _, _, status = results[0]
         self.assertEqual(obj_meta3, obj_meta3_copy)
-        self.assertEqual('n/a', status)
+        self.assertEqual('Kept', status)
+        obj_meta_after, chunks = self.api.object_locate(
+            self.account, self.container, obj_meta['name'])
+        self.assertEqual('SINGLE', obj_meta_after['policy'])
+        self.assertEqual(1, len(chunks))
+        obj_meta2_after, chunks2 = self.api.object_locate(
+            self.account, self.container, obj_meta2['name'])
+        self.assertEqual('SINGLE', obj_meta2_after['policy'])
+        self.assertEqual(1, len(chunks2))
+        obj_meta3_after, chunks3 = self.api.object_locate(
+            self.account, self.container, obj_meta3['name'])
+        self.assertEqual('SINGLE', obj_meta3_after['policy'])
+        self.assertEqual(1, len(chunks3))
 
+        results = [x for x in self.lifecycle.apply(
+            obj_meta, now=time.time()+86400)]
+        self.assertEqual(1, len(results))
+        obj_meta_copy, _, _, status = results[0]
+        self.assertEqual(obj_meta, obj_meta_copy)
+        self.assertEqual('Kept', status)
+        results = [x for x in self.lifecycle.apply(
+            obj_meta2, now=time.time()+86400)]
+        self.assertEqual(1, len(results))
+        obj_meta2_copy, _, _, status = results[0]
+        self.assertEqual(obj_meta2, obj_meta2_copy)
+        self.assertEqual('Policy changed to THREECOPIES', status)
+        results = [x for x in self.lifecycle.apply(
+            obj_meta3, now=time.time()+86400)]
+        self.assertEqual(1, len(results))
+        obj_meta3_copy, _, _, status = results[0]
+        self.assertEqual(obj_meta3, obj_meta3_copy)
+        self.assertEqual('Kept', status)
         obj_meta_after, chunks = self.api.object_locate(
             self.account, self.container, obj_meta['name'])
         self.assertEqual('SINGLE', obj_meta_after['policy'])
@@ -433,7 +489,7 @@ class TestContainerLifecycle(BaseTestCase):
         self.api.object_delete(self.account, self.container, obj_meta2['name'])
         self.api.object_delete(self.account, self.container, obj_meta3['name'])
 
-    def test_immediate_transition_filtered_by_tags(self):
+    def test_transition_filtered_by_tags(self):
         obj_meta = self._upload_something(policy='SINGLE')
         obj_meta2 = self._upload_something(
             policy='SINGLE', properties={TAGGING_KEY: """
@@ -477,31 +533,60 @@ class TestContainerLifecycle(BaseTestCase):
                     </And>
                 </Filter>
                 <Transition>
-                    <Days>0</Days>
+                    <Days>1</Days>
                     <StorageClass>THREECOPIES</StorageClass>
                 </Transition>
                 <Status>enabled</Status>
             </Rule>
         </LifecycleConfiguration>
         """)
+
         results = [x for x in self.lifecycle.apply(obj_meta)]
         self.assertEqual(1, len(results))
         obj_meta_copy, _, _, status = results[0]
         self.assertEqual(obj_meta, obj_meta_copy)
-        self.assertEqual('n/a', status)
-
+        self.assertEqual('Kept', status)
         results = [x for x in self.lifecycle.apply(obj_meta2)]
         self.assertEqual(1, len(results))
         obj_meta2_copy, _, _, status = results[0]
         self.assertEqual(obj_meta2, obj_meta2_copy)
-        self.assertEqual('Policy changed to THREECOPIES', status)
-
+        self.assertEqual('Kept', status)
         results = [x for x in self.lifecycle.apply(obj_meta3)]
         self.assertEqual(1, len(results))
         obj_meta3_copy, _, _, status = results[0]
         self.assertEqual(obj_meta3, obj_meta3_copy)
-        self.assertEqual('n/a', status)
+        self.assertEqual('Kept', status)
+        obj_meta_after, chunks = self.api.object_locate(
+            self.account, self.container, obj_meta['name'])
+        self.assertEqual('SINGLE', obj_meta_after['policy'])
+        self.assertEqual(1, len(chunks))
+        obj_meta2_after, chunks2 = self.api.object_locate(
+            self.account, self.container, obj_meta2['name'])
+        self.assertEqual('SINGLE', obj_meta2_after['policy'])
+        self.assertEqual(1, len(chunks2))
+        obj_meta3_after, chunks3 = self.api.object_locate(
+            self.account, self.container, obj_meta3['name'])
+        self.assertEqual('SINGLE', obj_meta3_after['policy'])
+        self.assertEqual(1, len(chunks3))
 
+        results = [x for x in self.lifecycle.apply(
+            obj_meta, now=time.time()+86400)]
+        self.assertEqual(1, len(results))
+        obj_meta_copy, _, _, status = results[0]
+        self.assertEqual(obj_meta, obj_meta_copy)
+        self.assertEqual('Kept', status)
+        results = [x for x in self.lifecycle.apply(
+            obj_meta2, now=time.time()+86400)]
+        self.assertEqual(1, len(results))
+        obj_meta2_copy, _, _, status = results[0]
+        self.assertEqual(obj_meta2, obj_meta2_copy)
+        self.assertEqual('Policy changed to THREECOPIES', status)
+        results = [x for x in self.lifecycle.apply(
+            obj_meta3, now=time.time()+86400)]
+        self.assertEqual(1, len(results))
+        obj_meta3_copy, _, _, status = results[0]
+        self.assertEqual(obj_meta3, obj_meta3_copy)
+        self.assertEqual('Kept', status)
         obj_meta_after, chunks = self.api.object_locate(
             self.account, self.container, obj_meta['name'])
         self.assertEqual('SINGLE', obj_meta_after['policy'])
@@ -519,7 +604,7 @@ class TestContainerLifecycle(BaseTestCase):
         self.api.object_delete(self.account, self.container, obj_meta2['name'])
         self.api.object_delete(self.account, self.container, obj_meta3['name'])
 
-    def test_immediate_transition_filtered_by_prefix_and_tags(self):
+    def test_transition_filtered_by_prefix_and_tags(self):
         obj_meta = self._upload_something(policy='SINGLE', prefix="documents/")
         obj_meta2 = self._upload_something(
             policy='SINGLE', prefix="documents/", properties={TAGGING_KEY: """
@@ -568,31 +653,60 @@ class TestContainerLifecycle(BaseTestCase):
                     </And>
                 </Filter>
                 <Transition>
-                    <Days>0</Days>
+                    <Days>1</Days>
                     <StorageClass>THREECOPIES</StorageClass>
                 </Transition>
                 <Status>enabled</Status>
             </Rule>
         </LifecycleConfiguration>
         """)
+
         results = [x for x in self.lifecycle.apply(obj_meta)]
         self.assertEqual(1, len(results))
         obj_meta_copy, _, _, status = results[0]
         self.assertEqual(obj_meta, obj_meta_copy)
-        self.assertEqual('n/a', status)
-
+        self.assertEqual('Kept', status)
         results = [x for x in self.lifecycle.apply(obj_meta2)]
         self.assertEqual(1, len(results))
         obj_meta2_copy, _, _, status = results[0]
         self.assertEqual(obj_meta2, obj_meta2_copy)
-        self.assertEqual('Policy changed to THREECOPIES', status)
-
+        self.assertEqual('Kept', status)
         results = [x for x in self.lifecycle.apply(obj_meta3)]
         self.assertEqual(1, len(results))
         obj_meta3_copy, _, _, status = results[0]
         self.assertEqual(obj_meta3, obj_meta3_copy)
-        self.assertEqual('n/a', status)
+        self.assertEqual('Kept', status)
+        obj_meta_after, chunks = self.api.object_locate(
+            self.account, self.container, obj_meta['name'])
+        self.assertEqual('SINGLE', obj_meta_after['policy'])
+        self.assertEqual(1, len(chunks))
+        obj_meta2_after, chunks2 = self.api.object_locate(
+            self.account, self.container, obj_meta2['name'])
+        self.assertEqual('SINGLE', obj_meta2_after['policy'])
+        self.assertEqual(1, len(chunks2))
+        obj_meta3_after, chunks3 = self.api.object_locate(
+            self.account, self.container, obj_meta3['name'])
+        self.assertEqual('SINGLE', obj_meta3_after['policy'])
+        self.assertEqual(1, len(chunks3))
 
+        results = [x for x in self.lifecycle.apply(
+            obj_meta, now=time.time()+86400)]
+        self.assertEqual(1, len(results))
+        obj_meta_copy, _, _, status = results[0]
+        self.assertEqual(obj_meta, obj_meta_copy)
+        self.assertEqual('Kept', status)
+        results = [x for x in self.lifecycle.apply(
+            obj_meta2, now=time.time()+86400)]
+        self.assertEqual(1, len(results))
+        obj_meta2_copy, _, _, status = results[0]
+        self.assertEqual(obj_meta2, obj_meta2_copy)
+        self.assertEqual('Policy changed to THREECOPIES', status)
+        results = [x for x in self.lifecycle.apply(
+            obj_meta3, now=time.time()+86400)]
+        self.assertEqual(1, len(results))
+        obj_meta3_copy, _, _, status = results[0]
+        self.assertEqual(obj_meta3, obj_meta3_copy)
+        self.assertEqual('Kept', status)
         obj_meta_after, chunks = self.api.object_locate(
             self.account, self.container, obj_meta['name'])
         self.assertEqual('SINGLE', obj_meta_after['policy'])
@@ -610,7 +724,7 @@ class TestContainerLifecycle(BaseTestCase):
         self.api.object_delete(self.account, self.container, obj_meta2['name'])
         self.api.object_delete(self.account, self.container, obj_meta3['name'])
 
-    def test_immediate_noncurrent_expiration(self):
+    def test_noncurrent_expiration(self):
         self._enable_versioning()
         obj_meta = self._upload_something()
         obj_meta_v2 = self._upload_something(path=obj_meta['name'])
@@ -619,34 +733,51 @@ class TestContainerLifecycle(BaseTestCase):
             <Rule>
                 <Filter></Filter>
                 <NoncurrentVersionExpiration>
-                    <NoncurrentDays>0</NoncurrentDays>
+                    <NoncurrentDays>1</NoncurrentDays>
                 </NoncurrentVersionExpiration>
                 <Status>enabled</Status>
             </Rule>
         </LifecycleConfiguration>
         """)
+
         results = [x for x in self.lifecycle.apply(obj_meta)]
         self.assertEqual(1, len(results))
         obj_meta_copy, _, _, status = results[0]
         self.assertEqual(obj_meta, obj_meta_copy)
-        self.assertEqual('Deleted', status)
-
+        self.assertEqual('Kept', status)
         results = [x for x in self.lifecycle.apply(obj_meta_v2)]
         self.assertEqual(1, len(results))
         obj_meta_v2_copy, _, _, status = results[0]
         self.assertEqual(obj_meta_v2, obj_meta_v2_copy)
         self.assertEqual('Kept', status)
+        self.api.object_show(self.account, self.container, obj_meta['name'],
+                             version=obj_meta['version'])
+        self.api.object_show(self.account, self.container, obj_meta_v2['name'],
+                             version=obj_meta_v2['version'])
 
+        results = [x for x in self.lifecycle.apply(
+            obj_meta, now=time.time()+86400)]
+        self.assertEqual(1, len(results))
+        obj_meta_copy, _, _, status = results[0]
+        self.assertEqual(obj_meta, obj_meta_copy)
+        self.assertEqual('Deleted', status)
+        results = [x for x in self.lifecycle.apply(
+            obj_meta_v2, now=time.time()+86400)]
+        self.assertEqual(1, len(results))
+        obj_meta_v2_copy, _, _, status = results[0]
+        self.assertEqual(obj_meta_v2, obj_meta_v2_copy)
+        self.assertEqual('Kept', status)
         self.assertRaises(NoSuchObject, self.api.object_show,
                           self.account, self.container, obj_meta['name'],
                           version=obj_meta['version'])
         self.api.object_show(self.account, self.container, obj_meta_v2['name'],
                              version=obj_meta_v2['version'])
+
         self.api.object_delete(
             self.account, self.container, obj_meta_v2['name'],
             version=obj_meta_v2['version'])
 
-    def test_execute_immediate_expiration(self):
+    def test_execute_expiration(self):
         self.api.container_create(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: """
             <LifecycleConfiguration>
@@ -656,7 +787,7 @@ class TestContainerLifecycle(BaseTestCase):
                     </Filter>
                     <Status>Enabled</Status>
                     <Expiration>
-                        <Days>0</Days>
+                        <Days>1</Days>
                     </Expiration>
                 </Rule>
             </LifecycleConfiguration>
@@ -664,14 +795,22 @@ class TestContainerLifecycle(BaseTestCase):
         for _ in range(3):
             self._upload_something()
         self.lifecycle.load()
+
         results = [x for x in self.lifecycle.execute()]
+        self.assertEqual(3, len(results))
+        for res in results:
+            self.assertEqual('Kept', res[3])
+        listing = self.api.object_list(self.account, self.container)
+        self.assertEqual(3, len(listing['objects']))
+
+        results = [x for x in self.lifecycle.execute(now=time.time()+86400)]
         self.assertEqual(3, len(results))
         for res in results:
             self.assertEqual('Deleted', res[3])
         listing = self.api.object_list(self.account, self.container)
         self.assertEqual(0, len(listing['objects']))
 
-    def test_execute_immediate_expiration_with_disabled_status(self):
+    def test_execute_expiration_with_disabled_status(self):
         self.api.container_create(
             self.account, self.container, properties={LIFECYCLE_PROPERTY_KEY: """
             <LifecycleConfiguration>
@@ -681,7 +820,7 @@ class TestContainerLifecycle(BaseTestCase):
                     </Filter>
                     <Status>Disabled</Status>
                     <Expiration>
-                        <Days>0</Days>
+                        <Days>1</Days>
                     </Expiration>
                 </Rule>
             </LifecycleConfiguration>
@@ -689,10 +828,18 @@ class TestContainerLifecycle(BaseTestCase):
         for _ in range(3):
             self._upload_something()
         self.lifecycle.load()
+
         results = [x for x in self.lifecycle.execute()]
         self.assertEqual(3, len(results))
         for res in results:
-            self.assertEqual('n/a', res[3])
+            self.assertEqual('Kept', res[3])
+        listing = self.api.object_list(self.account, self.container)
+        self.assertEqual(3, len(listing['objects']))
+
+        results = [x for x in self.lifecycle.execute(now=time.time()+86400)]
+        self.assertEqual(3, len(results))
+        for res in results:
+            self.assertEqual('Kept', res[3])
         listing = self.api.object_list(self.account, self.container)
         self.assertEqual(3, len(listing['objects']))
 
@@ -706,7 +853,7 @@ class TestContainerLifecycle(BaseTestCase):
                     </Filter>
                     <Status>Enabled</Status>
                     <Expiration>
-                        <Days>0</Days>
+                        <Days>1</Days>
                     </Expiration>
                 </Rule>
             </LifecycleConfiguration>
@@ -722,10 +869,11 @@ class TestContainerLifecycle(BaseTestCase):
         with patch.object(self.api, 'object_list',
                           side_effect=[fake_listing]):
             self.lifecycle.load()
+
             results = [x for x in self.lifecycle.execute()]
-        self.assertEqual(4, len(results))
-        for res in results:
-            self.assertIsInstance(res[3], Exception)
+            self.assertEqual(4, len(results))
+            for res in results:
+                self.assertIsInstance(res[3], Exception)
 
     def test_execute_exceeding_version_expiration_without_versioning(self):
         self.api.container_create(
@@ -745,6 +893,7 @@ class TestContainerLifecycle(BaseTestCase):
         for _ in range(5):
             self._upload_something()
         self.lifecycle.load()
+
         results = [x for x in self.lifecycle.execute()]
         self.assertEqual(5, len(results))
         for res in results:
@@ -776,6 +925,7 @@ class TestContainerLifecycle(BaseTestCase):
                                        versions=True)
         self.assertEqual(10, len(listing['objects']))
         self.lifecycle.load()
+
         results = [x for x in self.lifecycle.execute()]
         self.assertEqual(10, len(results))
         listing = self.api.object_list(self.account, self.container,
@@ -794,7 +944,7 @@ class TestContainerLifecycle(BaseTestCase):
                         </Tag>
                     </Filter>
                     <Expiration>
-                        <Days>0</Days>
+                        <Days>1</Days>
                     </Expiration>
                     <Status>enabled</Status>
                 </Rule>
@@ -803,7 +953,7 @@ class TestContainerLifecycle(BaseTestCase):
                         <Prefix>documents/</Prefix>
                     </Filter>
                     <Expiration>
-                        <Days>0</Days>
+                        <Days>1</Days>
                     </Expiration>
                     <Status>Enabled</Status>
                 </Rule>
@@ -824,9 +974,17 @@ class TestContainerLifecycle(BaseTestCase):
         obj_meta3 = self._upload_something(prefix="documents/",
                                            policy='SINGLE')
         self.lifecycle.load()
-        results = [x for x in self.lifecycle.execute()]
-        self.assertEqual(5, len(results))
 
+        results = [x for x in self.lifecycle.execute()]
+        self.assertEqual(6, len(results))
+        for res in results:
+            self.assertEqual('Kept', res[3])
+        self.api.object_show(self.account, self.container, obj_meta['name'])
+        self.api.object_show(self.account, self.container, obj_meta2['name'])
+        self.api.object_show(self.account, self.container, obj_meta3['name'])
+
+        results = [x for x in self.lifecycle.execute(now=time.time()+86400)]
+        self.assertEqual(5, len(results))
         self.api.object_show(self.account, self.container, obj_meta['name'])
         self.assertRaises(NoSuchObject, self.api.object_show,
                           self.account, self.container, obj_meta2['name'])
