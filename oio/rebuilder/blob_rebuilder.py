@@ -19,7 +19,6 @@ import uuid
 from datetime import datetime
 from socket import gethostname
 
-from oio.api.base import HttpApi
 from oio.common.json import json
 from oio.common.green import threading
 from oio.common.easy_value import int_value, true_value
@@ -42,7 +41,6 @@ class BlobRebuilder(Rebuilder):
     def __init__(self, conf, logger, volume, try_chunk_delete=False,
                  beanstalkd_addr=None, **kwargs):
         super(BlobRebuilder, self).__init__(conf, logger, volume, **kwargs)
-        self.http = HttpApi(**kwargs)
         # rdir
         self.rdir_client = RdirClient(conf, logger=self.logger)
         self.rdir_fetch_limit = int_value(conf.get('rdir_fetch_limit'), 100)

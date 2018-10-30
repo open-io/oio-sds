@@ -36,32 +36,7 @@ import importlib
 import sys
 
 
-class LazyLoader(object):
-    """Delay module or class loading."""
-
-    def __init__(self, module, name=None):
-        self.mod_name = module
-        self.class_name = name
-        self.value = None
-
-    def __ensure_value(self):
-        if self.value is None:
-            mod = importlib.import_module(self.mod_name)
-            if self.class_name:
-                self.value = getattr(mod, self.class_name)
-            else:
-                self.value = mod
-
-    def __getattr__(self, name):
-        self.__ensure_value()
-        return getattr(self.value, name)
-
-    def __call__(self, *args, **kwargs):
-        self.__ensure_value()
-        return self.value(*args, **kwargs)
-
-
-class OioModule(object):
+class ObjectStorageApi(object):
 
     oio = importlib.import_module('oio')
     object_storage = None
@@ -88,5 +63,5 @@ except pkg_resources.DistributionNotFound:
     __canonical_version__ = _version_info.version_string()
 
 
-sys.modules[__name__] = OioModule()
+sys.modules[__name__] = ObjectStorageApi()
 __all__ = ["ObjectStorageApi"]
