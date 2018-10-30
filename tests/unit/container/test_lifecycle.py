@@ -21,9 +21,10 @@ try:
 except ImportError:
     from xml.etree import cElementTree as etree
 
-from oio.container.lifecycle import Expiration, \
-    LifecycleRule, LifecycleRuleFilter, Transition, \
-    NoncurrentVersionExpiration, TAGGING_KEY
+from oio.container.lifecycle import LifecycleRule, LifecycleRuleFilter, \
+    Expiration, Transition, \
+    NoncurrentVersionExpiration, NoncurrentVersionTransition, \
+    TAGGING_KEY
 
 
 class TestContainerLifecycle(unittest.TestCase):
@@ -140,45 +141,6 @@ class TestContainerLifecycle(unittest.TestCase):
         self.assertRaises(ValueError,
                           LifecycleRuleFilter.from_element, filter_elt)
 
-        filter_elt = etree.XML(
-            """
-            <Filter>
-                <Tag>
-                    <Key>key1</Key>
-                    <Value>value1</Value>
-                </Tag>
-                <Tag>
-                    <Key>key2</Key>
-                    <Value>value2</Value>
-                </Tag>
-            </Filter>
-            """)
-        self.assertRaises(ValueError,
-                          LifecycleRuleFilter.from_element, filter_elt)
-
-        filter_elt = etree.XML(
-            """
-            <Filter>
-                <Prefix>documents/</Prefix>
-                <Tag>
-                    <Key>key2</Key>
-                    <Value>value2</Value>
-                </Tag>
-            </Filter>
-            """)
-        self.assertRaises(ValueError,
-                          LifecycleRuleFilter.from_element, filter_elt)
-
-        filter_elt = etree.XML(
-            """
-            <Filter>
-                <Prefix>documents1/</Prefix>
-                <Prefix>documents2/</Prefix>
-            </Filter>
-            """)
-        self.assertRaises(ValueError,
-                          LifecycleRuleFilter.from_element, filter_elt)
-
     def test_LifecycleRuleFilter_from_element(self):
         filter_elt = etree.XML(
             """
@@ -197,7 +159,6 @@ class TestContainerLifecycle(unittest.TestCase):
         filter_ = LifecycleRuleFilter.from_element(filter_elt)
         self.assertIsNotNone(filter_)
         self.assertEqual(filter_.prefix, "documents/")
-        self.assertEqual(filter_.generate_id(), "prefix=documents/")
 
         filter_elt = etree.XML(
             """
@@ -212,7 +173,6 @@ class TestContainerLifecycle(unittest.TestCase):
         self.assertIsNotNone(filter_)
         self.assertIsNone(filter_.prefix)
         self.assertDictEqual({'key': 'value'}, filter_.tags)
-        self.assertEqual(filter_.generate_id(), "key=value")
 
         filter_elt = etree.XML(
             """
@@ -234,7 +194,6 @@ class TestContainerLifecycle(unittest.TestCase):
         self.assertIsNone(filter_.prefix)
         self.assertDictEqual({'key1': 'value1', 'key2': 'value2'},
                              filter_.tags)
-        self.assertEqual(filter_.generate_id(), "key1=value1,key2=value2")
 
         filter_elt = etree.XML(
             """
@@ -257,8 +216,6 @@ class TestContainerLifecycle(unittest.TestCase):
         self.assertEqual(filter_.prefix, "documents/")
         self.assertDictEqual({'key1': 'value1', 'key2': 'value2'},
                              filter_.tags)
-        self.assertEqual(filter_.generate_id(),
-                         "prefix=documents/,key1=value1,key2=value2")
 
     def test_LifecycleRule_from_element(self):
         rule_elt = etree.XML(
@@ -298,10 +255,11 @@ class TestContainerLifecycle(unittest.TestCase):
         self.assertIsNotNone(rule)
         self.assertIsNotNone(rule.filter)
         self.assertTrue(rule.enabled)
-        self.assertIn('Expiration', rule.actions)
-        self.assertIn('Transition', rule.actions)
-        self.assertIn('NoncurrentVersionExpiration', rule.actions)
-        self.assertIn('NoncurrentVersionTransition', rule.actions)
+        self.assertEqual(4, len(rule.actions))
+        self.assertEqual(Expiration, type(rule.actions[0]))
+        self.assertEqual(Transition, type(rule.actions[1]))
+        self.assertEqual(NoncurrentVersionExpiration, type(rule.actions[2]))
+        self.assertEqual(NoncurrentVersionTransition, type(rule.actions[3]))
         self.assertIsNotNone(rule.id)
 
     def test_LifecycleRule_from_element_no_action(self):

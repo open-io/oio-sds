@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import time
 import uuid
 from tempfile import NamedTemporaryFile
 from tests.functional.cli import CliTestCase
@@ -31,12 +32,13 @@ class LifecycleCliTest(CliTestCase):
                     </Tag>
                 </Filter>
                 <Expiration>
-                    <Days>0</Days>
+                    <Date>%s</Date>
                 </Expiration>
                 <Status>enabled</Status>
             </Rule>
         </LifecycleConfiguration>
-        """
+        """ % time.strftime("%Y-%m-%dT%H:%M:%S",
+                            time.localtime(time.time()-86400))
 
     @classmethod
     def setUpClass(cls):
@@ -80,7 +82,7 @@ class LifecycleCliTest(CliTestCase):
         output = self.openio('lifecycle apply ' + self.NAME + opts)
         output = output.split('\n')
         self.assertIn('test1', output[0])
-        self.assertIn('n/a', output[0])  # Not matched by filter
+        self.assertIn('Kept', output[0])  # Not matched by filter
         self.assertIn('test2', output[1])
         self.assertIn('Deleted', output[1])
         self.openio('object delete %s test1' % self.NAME)
