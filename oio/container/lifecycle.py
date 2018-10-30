@@ -37,6 +37,47 @@ def iso8601_to_int(text):
     return int(time.mktime(time.strptime(text, "%Y-%m-%dT%H:%M:%S")))
 
 
+class ProcessedVersions(object):
+    """
+    Save the processed versions of the last object
+    """
+
+    def __init__(self, **kwargs):
+        self.name = None
+        self.versions = None
+
+    def is_already_processed(self, obj_meta, **kwargs):
+        """
+        Check if the version of this object is already processed.
+        """
+        return obj_meta['name'] == self.name \
+            and int(obj_meta['version']) in self.versions
+
+    def is_current(self, obj_meta, **kwargs):
+        """
+        Check if the object is the current version.
+        """
+        return self.name != obj_meta['name']
+
+    def save_object(self, obj_meta, **kwargs):
+        """
+        Save object as processed.
+        """
+        if obj_meta['name'] != self.name:
+            self.name = obj_meta['name']
+            self.versions = [int(obj_meta['version'])]
+        else:
+            self.versions.append(int(obj_meta['version']))
+
+    def nb_processed(self, obj_meta, **kwargs):
+        """
+        Get the number of processed versions.
+        """
+        if obj_meta['name'] != self.name:
+            return 0
+        return len(self.versions)
+
+
 class ContainerLifecycle(object):
 
     def __init__(self, api, account, container, logger=None):
@@ -46,6 +87,7 @@ class ContainerLifecycle(object):
         self.logger = logger or get_logger(None, name=str(self.__class__))
         self._rules = dict()
         self.src_xml = None
+        self.processed_versions = None
 
     def load(self):
         """
@@ -113,7 +155,7 @@ class ContainerLifecycle(object):
             else:
                 yield obj_meta, rule.id, "n/a", "Kept"
 
-    def execute(self, **kwargs):
+    def execute(self, use_precessed_versions=True, **kwargs):
         """
         Match then apply the set of rules of the lifecycle configuration
         on all objects of the container.
@@ -122,6 +164,8 @@ class ContainerLifecycle(object):
         :rtype: generator of 4-tuples
         :notice: you must consume the results or the rules won't be applied.
         """
+        if use_precessed_versions:
+            self.processed_versions = ProcessedVersions()
         for obj_meta in depaginate(
                 self.api.object_list,
                 listing_key=lambda x: x['objects'],
@@ -133,7 +177,10 @@ class ContainerLifecycle(object):
                 versions=True,
                 **kwargs):
             try:
-                if obj_meta['deleted']:
+                if obj_meta['deleted'] \
+                        or (self.processed_versions is not None
+                            and self.processed_versions.is_already_processed(
+                                obj_meta, **kwargs)):
                     continue
                 results = self.apply(obj_meta, **kwargs)
                 for res in results:
@@ -143,6 +190,20 @@ class ContainerLifecycle(object):
                         "Failed to apply lifecycle rules on %s/%s/%s: %s",
                         self.account, self.container, obj_meta['name'], exc)
                 yield obj_meta, "n/a", "n/a", exc
+            if self.processed_versions is not None:
+                self.processed_versions.save_object(obj_meta, **kwargs)
+        self.processed_versions = None
+
+    def is_current_version(self, obj_meta, **kwargs):
+        """
+        Check if the object is the current version
+        """
+        if self.processed_versions is None:
+            current_obj = self.api.object_get_properties(
+                self.account, self.container, obj_meta['name'])
+            return current_obj['id'] == obj_meta['id']
+        else:
+            return self.processed_versions.is_current(obj_meta, **kwargs)
 
 
 class LifecycleRule(object):
@@ -155,7 +216,7 @@ class LifecycleRule(object):
         self.actions = actions
 
     @classmethod
-    def from_element(cls, rule_elt, lifecycle=None):
+    def from_element(cls, rule_elt, **kwargs):
         """
         Load the rule from an XML element.
 
@@ -188,7 +249,7 @@ class LifecycleRule(object):
         actions = list()
         try:
             expiration = Expiration.from_element(
-                rule_elt.findall('Expiration')[-1], lifecycle=lifecycle)
+                rule_elt.findall('Expiration')[-1], **kwargs)
             action_filter_type = type(expiration.filter)
             actions.append(expiration)
         except IndexError:
@@ -197,8 +258,7 @@ class LifecycleRule(object):
 
         transitions = list()
         for transition_elt in rule_elt.findall('Transition'):
-            transition = Transition.from_element(transition_elt,
-                                                 lifecycle=lifecycle)
+            transition = Transition.from_element(transition_elt, **kwargs)
             if action_filter_type is None:
                 action_filter_type = type(transition.filter)
             elif type(transition.filter) != action_filter_type:
@@ -230,8 +290,7 @@ class LifecycleRule(object):
 
         try:
             expiration = NoncurrentVersionExpiration.from_element(
-                rule_elt.findall('NoncurrentVersionExpiration')[-1],
-                lifecycle=lifecycle)
+                rule_elt.findall('NoncurrentVersionExpiration')[-1], **kwargs)
             action_filter_type = type(expiration.filter)
             actions.append(expiration)
         except IndexError:
@@ -241,7 +300,7 @@ class LifecycleRule(object):
         transitions = list()
         for transition_elt in rule_elt.findall('NoncurrentVersionTransition'):
             transition = NoncurrentVersionTransition.from_element(
-                transition_elt, lifecycle=lifecycle)
+                transition_elt, **kwargs)
             if action_filter_type is None:
                 action_filter_type = type(transition.filter)
             elif type(transition.filter) != action_filter_type:
@@ -486,6 +545,9 @@ class CountActionFilter(LifecycleActionFilter):
     def __init__(self, count, **kwargs):
         super(CountActionFilter, self).__init__(**kwargs)
         self.count = count
+        if self.lifecycle is None or self.lifecycle.processed_versions is None:
+            self.last_object_name = None
+            self.nb_noncurrent_version = 0
 
     @classmethod
     def from_element(cls, count_elt, **kwargs):
@@ -498,20 +560,38 @@ class CountActionFilter(LifecycleActionFilter):
                 "The count must be greater than or equal to zero")
         return cls(count, **kwargs)
 
+    def match(self, obj_meta, **kwargs):
+        if self.lifecycle is None or self.lifecycle.processed_versions is None:
+            if obj_meta['name'] != self.last_object_name:
+                self.last_object_name = obj_meta['name']
+                self.nb_noncurrent_version = 1
+            else:
+                self.nb_noncurrent_version += 1
+            return self.count < self.nb_noncurrent_version
+
+        processed = self.lifecycle.processed_versions.nb_processed(obj_meta)
+        return self.count < processed
+
 
 class LifecycleAction(LifecycleActionFilter):
     """
     Interface for Lifecycle actions.
+
+    Apply the action on the latest version.
     """
 
     def __init__(self, filter_, **kwargs):
         super(LifecycleAction, self).__init__(**kwargs)
         self.filter = filter_
 
-    def match(self, obj_meta, now=None, **kwargs):
+    def _match_filter(self, obj_meta, **kwargs):
         if self.filter is None:
             return True
-        return self.filter.match(obj_meta, now=now, **kwargs)
+        return self.filter.match(obj_meta, **kwargs)
+
+    def match(self, obj_meta, **kwargs):
+        return self.lifecycle.is_current_version(obj_meta, **kwargs) \
+            and self._match_filter(obj_meta, **kwargs)
 
     def apply(self, obj_meta, **kwargs):
         """
@@ -633,60 +713,14 @@ class Transition(LifecycleAction):
         return "Kept"
 
 
-class NoncurrentVersionActionFilter(LifecycleActionFilter):
-    """
-    Apply the action on all versions of an obejct, except the latest.
-    """
-
-    def __init__(self, **kwargs):
-        super(NoncurrentVersionActionFilter, self).__init__(**kwargs)
-        self.versioning = None
-
-    def _match(self, obj_meta, now=None, **kwargs):
-        """
-        Check if versioning is enabled.
-        """
-        if self.versioning is None:
-            data = self.lifecycle.api.container_get_properties(
-                self.lifecycle.account, self.lifecycle.container)
-            sys = data['system']
-            version = sys.get('sys.m2.policy.version', None)
-            if version is None:
-                from oio.common.client import ProxyClient
-                proxy_client = ProxyClient(
-                    {"namespace": self.lifecycle.api.namespace},
-                    no_ns_in_url=True)
-                _, data = proxy_client._request('GET', "config")
-                version = data['meta2.max_versions']
-            version = int(version)
-            self.versioning = version > 1 or version < 0
-        return self.versioning
-
-    def match(self, obj_meta, now=None, **kwargs):
-        if self._match(obj_meta, now=now, **kwargs):
-            # Load the description of the latest object version
-            # TODO: use a cache to avoid requesting each time
-            descr = self.lifecycle.api.object_show(self.lifecycle.account,
-                                                   self.lifecycle.container,
-                                                   obj_meta['name'])
-            return str(descr['version']) != str(obj_meta['version'])
-        return False
-
-
 class NoncurrentVersionExpiration(Expiration):
     """
     Delete objects old versions.
     """
 
-    def __init__(self, filter_, **kwargs):
-        super(NoncurrentVersionExpiration, self).__init__(filter_, **kwargs)
-        self.noncurrent_version = NoncurrentVersionActionFilter(**kwargs)
-
-    def match(self, obj_meta, now=None, **kwargs):
-        if self.noncurrent_version.match(obj_meta, now=now, **kwargs):
-            return super(NoncurrentVersionExpiration, self).match(
-                obj_meta, now=now, **kwargs)
-        return False
+    def match(self, obj_meta, **kwargs):
+        return not self.lifecycle.is_current_version(
+            obj_meta, **kwargs) and self._match_filter(obj_meta, **kwargs)
 
     @classmethod
     def from_element(cls, expiration_elt, **kwargs):
@@ -724,35 +758,7 @@ class NoncurrentVersionExpiration(Expiration):
             return cls(action_filter, **kwargs)
         elif count_elt is not None:
             action_filter = CountActionFilter.from_element(count_elt, **kwargs)
-            return NoncurrentCountExpiration(action_filter, **kwargs)
-
-
-class NoncurrentCountExpiration(NoncurrentVersionExpiration):
-    """
-    Delete exceeding versions, and keep a maximum number of versions.
-    """
-
-    def __init__(self, filter_, **kwargs):
-        super(NoncurrentCountExpiration, self).__init__(filter_, **kwargs)
-        self.last_object_name = None
-
-    def match(self, obj_meta, now=None, **kwargs):
-        return self.noncurrent_version._match(obj_meta, now=now, **kwargs)
-
-    def apply(self, obj_meta, **kwargs):
-        if self.match(obj_meta, **kwargs):
-            object_name = obj_meta['name']
-            if object_name != self.last_object_name:
-                self.lifecycle.api.container.content_purge(
-                    self.lifecycle.account, self.lifecycle.container,
-                    object_name, maxvers=self.filter.count+1)
-                self.last_object_name = object_name
-            if not self.lifecycle.api.object_head(self.lifecycle.account,
-                                                  self.lifecycle.container,
-                                                  object_name,
-                                                  version=obj_meta['version']):
-                return "Deleted"
-        return "Kept"
+            return cls(action_filter, **kwargs)
 
 
 class NoncurrentVersionTransition(Transition):
@@ -760,16 +766,9 @@ class NoncurrentVersionTransition(Transition):
     Change object storage policy for old versions of the object only.
     """
 
-    def __init__(self, filter_, policy, **kwargs):
-        super(NoncurrentVersionTransition, self).__init__(
-            filter_, policy, **kwargs)
-        self.noncurrent = NoncurrentVersionActionFilter(**kwargs)
-
-    def match(self, obj_meta, now=None, **kwargs):
-        if self.noncurrent.match(obj_meta, now=now, **kwargs):
-            return super(NoncurrentVersionTransition, self).match(
-                obj_meta, now=now, **kwargs)
-        return False
+    def match(self, obj_meta, **kwargs):
+        return not self.lifecycle.is_current_version(
+            obj_meta, **kwargs) and self._match_filter(obj_meta, **kwargs)
 
     @classmethod
     def from_element(cls, transition_elt, **kwargs):
