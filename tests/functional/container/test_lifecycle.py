@@ -724,6 +724,59 @@ class TestContainerLifecycle(BaseTestCase):
         self.api.object_delete(self.account, self.container, obj_meta2['name'])
         self.api.object_delete(self.account, self.container, obj_meta3['name'])
 
+    def test_expiration_with_versioning(self):
+        self._enable_versioning()
+        obj_meta = self._upload_something()
+        obj_meta_v2 = self._upload_something(path=obj_meta['name'])
+        self.lifecycle.load_xml("""
+        <LifecycleConfiguration>
+            <Rule>
+                <Filter></Filter>
+                <Expiration>
+                    <Days>1</Days>
+                </Expiration>
+                <Status>enabled</Status>
+            </Rule>
+        </LifecycleConfiguration>
+        """)
+
+        results = [x for x in self.lifecycle.apply(obj_meta_v2)]
+        self.assertEqual(1, len(results))
+        obj_meta_v2_copy, _, _, status = results[0]
+        self.assertEqual(obj_meta_v2, obj_meta_v2_copy)
+        self.assertEqual('Kept', status)
+        results = [x for x in self.lifecycle.apply(obj_meta)]
+        self.assertEqual(1, len(results))
+        obj_meta_copy, _, _, status = results[0]
+        self.assertEqual(obj_meta, obj_meta_copy)
+        self.assertEqual('Kept', status)
+        self.api.object_show(self.account, self.container, obj_meta_v2['name'],
+                             version=obj_meta_v2['version'])
+        self.api.object_show(self.account, self.container, obj_meta['name'],
+                             version=obj_meta['version'])
+
+        results = [x for x in self.lifecycle.apply(
+            obj_meta_v2, now=time.time()+86400)]
+        self.assertEqual(1, len(results))
+        obj_meta_v2_copy, _, _, status = results[0]
+        self.assertEqual(obj_meta_v2, obj_meta_v2_copy)
+        self.assertEqual('Deleted', status)
+        results = [x for x in self.lifecycle.apply(
+            obj_meta, now=time.time()+86400)]
+        self.assertEqual(1, len(results))
+        obj_meta_copy, _, _, status = results[0]
+        self.assertEqual(obj_meta, obj_meta_copy)
+        self.assertEqual('Kept', status)
+        self.assertRaises(NoSuchObject, self.api.object_show,
+                          self.account, self.container, obj_meta_v2['name'],
+                          version=obj_meta_v2['version'])
+        self.api.object_show(self.account, self.container, obj_meta['name'],
+                             version=obj_meta['version'])
+
+        self.api.object_delete(
+            self.account, self.container, obj_meta['name'],
+            version=obj_meta['version'])
+
     def test_noncurrent_expiration(self):
         self._enable_versioning()
         obj_meta = self._upload_something()
@@ -740,38 +793,38 @@ class TestContainerLifecycle(BaseTestCase):
         </LifecycleConfiguration>
         """)
 
-        results = [x for x in self.lifecycle.apply(obj_meta)]
-        self.assertEqual(1, len(results))
-        obj_meta_copy, _, _, status = results[0]
-        self.assertEqual(obj_meta, obj_meta_copy)
-        self.assertEqual('Kept', status)
         results = [x for x in self.lifecycle.apply(obj_meta_v2)]
         self.assertEqual(1, len(results))
         obj_meta_v2_copy, _, _, status = results[0]
         self.assertEqual(obj_meta_v2, obj_meta_v2_copy)
         self.assertEqual('Kept', status)
-        self.api.object_show(self.account, self.container, obj_meta['name'],
-                             version=obj_meta['version'])
-        self.api.object_show(self.account, self.container, obj_meta_v2['name'],
-                             version=obj_meta_v2['version'])
-
-        results = [x for x in self.lifecycle.apply(
-            obj_meta, now=time.time()+86400)]
+        results = [x for x in self.lifecycle.apply(obj_meta)]
         self.assertEqual(1, len(results))
         obj_meta_copy, _, _, status = results[0]
         self.assertEqual(obj_meta, obj_meta_copy)
-        self.assertEqual('Deleted', status)
+        self.assertEqual('Kept', status)
+        self.api.object_show(self.account, self.container, obj_meta_v2['name'],
+                             version=obj_meta_v2['version'])
+        self.api.object_show(self.account, self.container, obj_meta['name'],
+                             version=obj_meta['version'])
+
         results = [x for x in self.lifecycle.apply(
             obj_meta_v2, now=time.time()+86400)]
         self.assertEqual(1, len(results))
         obj_meta_v2_copy, _, _, status = results[0]
         self.assertEqual(obj_meta_v2, obj_meta_v2_copy)
         self.assertEqual('Kept', status)
+        results = [x for x in self.lifecycle.apply(
+            obj_meta, now=time.time()+86400)]
+        self.assertEqual(1, len(results))
+        obj_meta_copy, _, _, status = results[0]
+        self.assertEqual(obj_meta, obj_meta_copy)
+        self.assertEqual('Deleted', status)
+        self.api.object_show(self.account, self.container, obj_meta_v2['name'],
+                             version=obj_meta_v2['version'])
         self.assertRaises(NoSuchObject, self.api.object_show,
                           self.account, self.container, obj_meta['name'],
                           version=obj_meta['version'])
-        self.api.object_show(self.account, self.container, obj_meta_v2['name'],
-                             version=obj_meta_v2['version'])
 
         self.api.object_delete(
             self.account, self.container, obj_meta_v2['name'],
@@ -860,10 +913,14 @@ class TestContainerLifecycle(BaseTestCase):
             """})
         fake_listing = {
             'objects': [
-                {'name': 'a', 'ctime': '12', 'deleted': False},
-                {'name': 'b', 'ctime': '12', 'deleted': False},
-                {'name': 'c', 'ctime': '12', 'deleted': False},
-                {'name': 'd', 'ctime': '12', 'deleted': False}],
+                {'name': 'a', 'version': 1540933092888883, 'ctime': '12',
+                 'deleted': False},
+                {'name': 'b', 'version': 1540933092888883, 'ctime': '12',
+                 'deleted': False},
+                {'name': 'c', 'version': 1540933092888883, 'ctime': '12',
+                 'deleted': False},
+                {'name': 'd', 'version': 1540933092888883, 'ctime': '12',
+                 'deleted': False}],
             'truncated': False
         }
         with patch.object(self.api, 'object_list',
