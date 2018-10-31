@@ -73,11 +73,11 @@ def ratelimit(run_time, max_rate, increment=1, rate_buffer=5):
     if now - run_time > rate_buffer * clock_accuracy:
         run_time = now
     elif run_time - now > time_per_request:
-        eventlet.sleep((run_time - now) / clock_accuracy)
+        sleep((run_time - now) / clock_accuracy)
     return run_time + time_per_request
 
 
-class ContextPool(eventlet.GreenPool):
+class ContextPool(GreenPool):
     def __enter__(self):
         return self
 

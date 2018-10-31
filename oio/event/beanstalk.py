@@ -14,11 +14,12 @@
 # License along with this library.
 
 
-from oio.common.green import socket, Empty, LifoQueue
+from oio.common.green import socket, Empty, LifoQueue, sleep
 
 import os
 import sys
 import yaml
+from time import time
 from urlparse import urlparse
 from cStringIO import StringIO as BytesIO
 
@@ -384,35 +385,47 @@ def parse_body(connection, response, **kwargs):
 
 class Beanstalk(object):
     RESPONSE_CALLBACKS = dict_merge({
+        'peek': parse_body,
+        'peek-buried': parse_body,
+        'peek-delayed': parse_body,
+        'peek-ready': parse_body,
         'reserve': parse_body,
         'reserve-with-timeout': parse_body,
         'stats-tube': parse_yaml
     })
     EXPECTED_OK = dict_merge({
-        'reserve': ['RESERVED'],
-        'reserve-with-timeout': ['RESERVED'],
-        'delete': ['DELETED'],
-        'release': ['RELEASED'],
         'bury': ['BURIED'],
-        'put': ['INSERTED'],
-        'use': ['USING'],
-        'watch': ['WATCHING'],
-        'stats-tube': ['OK'],
+        'delete': ['DELETED'],
         'kick': ['KICKED'],
         'kick-job': ['KICKED'],
+        'peek': ['FOUND'],
+        'peek-buried': ['FOUND'],
+        'peek-delayed': ['FOUND'],
+        'peek-ready': ['FOUND'],
+        'put': ['INSERTED'],
+        'release': ['RELEASED'],
+        'reserve': ['RESERVED'],
+        'reserve-with-timeout': ['RESERVED'],
+        'stats-tube': ['OK'],
+        'use': ['USING'],
+        'watch': ['WATCHING'],
     })
     EXPECTED_ERR = dict_merge({
+        'bury': ['NOT_FOUND', 'OUT_OF_MEMORY'],
+        'delete': ['NOT_FOUND'],
+        'kick': ['OUT_OF_MEMORY'],
+        'kick-job': ['NOT_FOUND', 'OUT_OF_MEMORY'],
+        'peek': ['NOT_FOUND'],
+        'peek-buried': ['NOT_FOUND'],
+        'peek-delayed': ['NOT_FOUND'],
+        'peek-ready': ['NOT_FOUND'],
+        'put': ['JOB_TOO_BIG', 'BURIED', 'DRAINING', 'OUT_OF_MEMORY'],
         'reserve': ['DEADLINE_SOON', 'TIMED_OUT'],
         'reserve-with-timeout': ['DEADLINE_SOON', 'TIMED_OUT'],
-        'delete': ['NOT_FOUND'],
         'release': ['BURIED', 'NOT_FOUND', 'OUT_OF_MEMORY'],
-        'bury': ['NOT_FOUND', 'OUT_OF_MEMORY'],
         'stats-tube': ['NOT_FOUND'],
         'use': [],
         'watch': [],
-        'put': ['JOB_TOO_BIG', 'BURIED', 'DRAINING', 'OUT_OF_MEMORY'],
-        'kick': ['OUT_OF_MEMORY'],
-        'kick-job': ['NOT_FOUND', 'OUT_OF_MEMORY']
     })
 
     @classmethod
@@ -546,6 +559,29 @@ class Beanstalk(object):
         """
         kicked = int(self.execute_command('kick', str(bound))[1][0])
         return kicked
+
+    def peek_ready(self):
+        """
+        Read the next ready job without reserving it.
+        """
+        try:
+            return self.execute_command('peek-ready')
+        except ResponseError as err:
+            if err.args[0] == 'peek-ready' and err.args[1] == 'NOT_FOUND':
+                return None, None
+            else:
+                raise
+
+    def wait_until_empty(self, tube, timeout=float('inf'), poll_interval=0.2):
+        """
+        Wait until the the specified tube is empty, or the timeout expires.
+        """
+        self.watch(tube)
+        job_id, _ = self.peek_ready()
+        deadline = time() + timeout
+        while job_id is not None and time() < deadline:
+            sleep(poll_interval)
+            job_id, _ = self.peek_ready()
 
     def stats_tube(self, tube):
         return self.execute_command('stats-tube', tube)
