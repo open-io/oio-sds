@@ -535,7 +535,7 @@ class DateActionFilter(LifecycleActionFilter):
 
     def match(self, obj_meta, now=None, **kwargs):
         now = now or time.time()
-        return now > self.date
+        return now > self.date and float(obj_meta['ctime']) < self.date
 
 
 class CountActionFilter(LifecycleActionFilter):

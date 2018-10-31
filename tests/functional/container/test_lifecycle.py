@@ -187,14 +187,38 @@ class TestContainerLifecycle(BaseTestCase):
                 <Status>enabled</Status>
             </Rule>
         </LifecycleConfiguration>
-        """ % self._time_to_date(time.time() - 86400))
-        results = [x for x in self.lifecycle.apply(obj_meta)]
+        """ % self._time_to_date(time.time() + 86400))
+        results = [x for x in self.lifecycle.apply(
+            obj_meta, now=time.time()+172800)]
         self.assertEqual(1, len(results))
         obj_meta_copy, _, _, status = results[0]
         self.assertEqual(obj_meta, obj_meta_copy)
         self.assertEqual('Deleted', status)
         self.assertRaises(NoSuchObject, self.api.object_show,
                           self.account, self.container, obj_meta['name'])
+
+    def test_immediate_expiration_by_date_after_new_object(self):
+        obj_meta = self._upload_something()
+        self.lifecycle.load_xml("""
+        <LifecycleConfiguration>
+            <Rule>
+                <Filter>
+                </Filter>
+                <Expiration>
+                    <Date>%s</Date>
+                </Expiration>
+                <Status>enabled</Status>
+            </Rule>
+        </LifecycleConfiguration>
+        """ % self._time_to_date(time.time() + 172800))
+        results = [x for x in self.lifecycle.apply(
+            obj_meta, now=time.time()+86400)]
+        self.assertEqual(1, len(results))
+        obj_meta_copy, _, _, status = results[0]
+        self.assertEqual(obj_meta, obj_meta_copy)
+        self.assertEqual('Kept', status)
+        self.api.object_show(
+            self.account, self.container, obj_meta['name'])
 
     def test_future_expiration_by_date(self):
         obj_meta = self._upload_something()

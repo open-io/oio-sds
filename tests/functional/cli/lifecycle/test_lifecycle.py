@@ -13,7 +13,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import time
 import uuid
 from tempfile import NamedTemporaryFile
 from tests.functional.cli import CliTestCase
@@ -26,19 +25,15 @@ class LifecycleCliTest(CliTestCase):
         <LifecycleConfiguration>
             <Rule>
                 <Filter>
-                    <Tag>
-                        <Key>status</Key>
-                        <Value>deprecated</Value>
-                    </Tag>
+                    <Prefix>documents/</Prefix>
                 </Filter>
-                <Expiration>
-                    <Date>%s</Date>
-                </Expiration>
+                <NoncurrentVersionExpiration>
+                    <NoncurrentCount>1</NoncurrentCount>
+                </NoncurrentVersionExpiration>
                 <Status>enabled</Status>
             </Rule>
         </LifecycleConfiguration>
-        """ % time.strftime("%Y-%m-%dT%H:%M:%S",
-                            time.localtime(time.time()-86400))
+        """
 
     @classmethod
     def setUpClass(cls):
@@ -67,22 +62,42 @@ class LifecycleCliTest(CliTestCase):
         self.assertEqual(self.CONF, output)
 
     def test_lifecycle_apply(self):
+        self.openio('container set --max-versions -1 ' + self.NAME)
         self.openio('lifecycle set %s "%s"' % (self.NAME, self.CONF))
         with NamedTemporaryFile() as file_:
             file_.write('test')
             file_.flush()
-            self.openio(
-                'object create %s %s --name test1' % (self.NAME, file_.name))
-            self.openio(
-                'object create %s %s --name test2 ' % (self.NAME, file_.name))
-            self.openio(
-                'object set %s test2 --tagging \'{"status":"deprecated"}\''
-                % (self.NAME))
+            for _ in range(5):
+                self.openio(
+                    'object create %s %s --name documents/test' %
+                    (self.NAME, file_.name))
+                self.openio(
+                    'object create %s %s --name images/test ' %
+                    (self.NAME, file_.name))
+        output = self.openio('object list --versions -f value ' + self.NAME)
+        output = output[:-1].split('\n')
+        self.assertEqual(10, len(output))
+        expected_output = output[0:2] + output[5:10]
         opts = self.get_opts(['Name', 'Result'])
         output = self.openio('lifecycle apply ' + self.NAME + opts)
-        output = output.split('\n')
-        self.assertIn('test1', output[0])
-        self.assertIn('Kept', output[0])  # Not matched by filter
-        self.assertIn('test2', output[1])
-        self.assertIn('Deleted', output[1])
-        self.openio('object delete %s test1' % self.NAME)
+        output = output[:-1].split('\n')
+        self.assertEqual(10, len(output))
+        for i in range(0, 2):
+            self.assertIn('documents/test', output[i])
+            self.assertIn('Kept', output[i])
+        for i in range(2, 5):
+            self.assertIn('documents/test', output[i])
+            self.assertIn('Deleted', output[i])
+        for i in range(5, 10):
+            self.assertIn('images/test', output[i])
+            self.assertIn('Kept', output[i])
+        output = self.openio('object list --versions -f value ' + self.NAME)
+        output = output[:-1].split('\n')
+        self.assertEqual(7, len(output))
+        self.assertEqual(expected_output, output)
+
+        for line in output:
+            obj = line.split(' ')
+            self.openio(
+                'object delete --object-version ' + obj[3] + ' '
+                + self.NAME + ' ' + obj[0])
