@@ -124,6 +124,10 @@ class FileNotFound(OioException):
     pass
 
 
+class LifecycleNotFound(OioException):
+    pass
+
+
 class ContainerNotEmpty(OioException):
     pass
 

@@ -139,12 +139,8 @@ class TestContainerLifecycle(BaseTestCase):
                     <And>
                         <Prefix>documents/</Prefix>
                         <Tag>
-                            <Key>key1</Key>
-                            <Value>value1</Value>
-                        </Tag>
-                        <Tag>
-                            <Key>key2</Key>
-                            <Value>value2</Value>
+                            <Key>key</Key>
+                            <Value>value</Value>
                         </Tag>
                     </And>
                 </Filter>
@@ -156,6 +152,10 @@ class TestContainerLifecycle(BaseTestCase):
                 <Expiration>
                     <Days>60</Days>
                 </Expiration>
+                <Transition>
+                    <Days>30</Days>
+                    <StorageClass>SINGLE</StorageClass>
+                </Transition>
                 <NoncurrentVersionTransition>
                     <NoncurrentDays>1</NoncurrentDays>
                     <StorageClass>THREECOPIES</StorageClass>
@@ -166,13 +166,50 @@ class TestContainerLifecycle(BaseTestCase):
             </Rule>
         </LifecycleConfiguration>
         """
+
+        expected_source = """
+        <LifecycleConfiguration>
+            <Rule>
+                <ID>rule1</ID>
+                <Filter>
+                    <And>
+                        <Prefix>documents/</Prefix>
+                        <Tag>
+                            <Key>key</Key>
+                            <Value>value</Value>
+                        </Tag>
+                    </And>
+                </Filter>
+                <Status>Enabled</Status>
+                <Expiration>
+                    <Days>60</Days>
+                </Expiration>
+                <Transition>
+                    <StorageClass>SINGLE</StorageClass>
+                    <Days>30</Days>
+                </Transition>
+                <Transition>
+                    <StorageClass>THREECOPIES</StorageClass>
+                    <Days>1</Days>
+                </Transition>
+                <NoncurrentVersionExpiration>
+                    <NoncurrentDays>60</NoncurrentDays>
+                </NoncurrentVersionExpiration>
+                <NoncurrentVersionTransition>
+                    <StorageClass>THREECOPIES</StorageClass>
+                    <NoncurrentDays>1</NoncurrentDays>
+                </NoncurrentVersionTransition>
+            </Rule>
+        </LifecycleConfiguration>
+        """
+
         self.api.container_create(self.account, self.container)
         self.lifecycle.load_xml(source)
         self.lifecycle.save()
-        props = self.api.container_get_properties(
-            self.account, self.container)['properties']
-        self.assertIn(LIFECYCLE_PROPERTY_KEY, props)
-        self.assertEqual(source, props[LIFECYCLE_PROPERTY_KEY])
+        xml = self.lifecycle.get_configuration()
+        self.assertEqual(
+            expected_source.replace(' ', '').replace('\n', ''),
+            xml)
 
     def test_immediate_expiration_by_date(self):
         obj_meta = self._upload_something()

@@ -15,7 +15,7 @@
 
 import uuid
 from tempfile import NamedTemporaryFile
-from tests.functional.cli import CliTestCase
+from tests.functional.cli import CliTestCase, CommandFailed
 
 
 class LifecycleCliTest(CliTestCase):
@@ -27,10 +27,23 @@ class LifecycleCliTest(CliTestCase):
                 <Filter>
                     <Prefix>documents/</Prefix>
                 </Filter>
+                <Status>Enabled</Status>
                 <NoncurrentVersionExpiration>
                     <NoncurrentCount>1</NoncurrentCount>
                 </NoncurrentVersionExpiration>
-                <Status>enabled</Status>
+            </Rule>
+        </LifecycleConfiguration>
+        """
+
+    WRONG_CONF = """
+        <LifecycleConfiguration>
+            <Rule>
+                <Filter>
+                    <Prefix>documents/</Prefix>
+                </Filter>
+                <NoncurrentVersionExpiration>
+                    <NoncurrentCount>1</NoncurrentCount>
+                </NoncurrentVersionExpiration>
             </Rule>
         </LifecycleConfiguration>
         """
@@ -56,10 +69,19 @@ class LifecycleCliTest(CliTestCase):
             self.openio('lifecycle set %s --from-file %s' %
                         (self.NAME, file_.name))
 
+        with NamedTemporaryFile() as file_:
+            file_.write(self.WRONG_CONF)
+            file_.flush()
+            self.assertRaises(
+                CommandFailed, self.openio,
+                'lifecycle set %s --from-file %s' % (self.NAME, file_.name))
+
     def test_lifecycle_get(self):
         self.openio('lifecycle set %s "%s"' % (self.NAME, self.CONF))
         output = self.openio('lifecycle get ' + self.NAME)
-        self.assertEqual(self.CONF, output)
+        self.assertEqual(
+            self.CONF.replace(' ', '').replace('\n', ''),
+            output.replace(' ', '').replace('\n', ''))
 
     def test_lifecycle_apply(self):
         self.openio('container set --max-versions -1 ' + self.NAME)
