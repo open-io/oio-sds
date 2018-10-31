@@ -791,9 +791,10 @@ class TestContainerLifecycle(BaseTestCase):
         obj_meta_copy, _, _, status = results[0]
         self.assertEqual(obj_meta, obj_meta_copy)
         self.assertEqual('Kept', status)
-        self.assertRaises(NoSuchObject, self.api.object_show,
-                          self.account, self.container, obj_meta_v2['name'],
-                          version=obj_meta_v2['version'])
+        self.assertRaises(NoSuchObject, self.api.object_locate,
+                          self.account, self.container, obj_meta_v2['name'])
+        self.api.object_show(self.account, self.container, obj_meta_v2['name'],
+                             version=obj_meta_v2['version'])
         self.api.object_show(self.account, self.container, obj_meta['name'],
                              version=obj_meta['version'])
 
@@ -1066,10 +1067,28 @@ class TestContainerLifecycle(BaseTestCase):
 
         results = [x for x in self.lifecycle.execute(now=time.time()+86400)]
         self.assertEqual(6, len(results))
-        self.api.object_show(self.account, self.container, obj_meta['name'])
-        self.assertRaises(NoSuchObject, self.api.object_show,
+        self.api.object_locate(
+            self.account, self.container, obj_meta['name'])
+        self.api.object_show(
+            self.account, self.container, obj_meta['name'],
+            version=obj_meta['version'])
+        self.assertRaises(NoSuchObject, self.api.object_locate,
                           self.account, self.container, obj_meta2['name'])
-        self.assertRaises(NoSuchObject, self.api.object_show,
+        self.api.object_show(
+            self.account, self.container, obj_meta2['name'],
+            version=obj_meta2['version'])
+        self.assertRaises(NoSuchObject, self.api.object_locate,
                           self.account, self.container, obj_meta3['name'])
+        self.api.object_show(
+            self.account, self.container, obj_meta3['name'],
+            version=obj_meta3['version'])
 
-        self.api.object_delete(self.account, self.container, obj_meta['name'])
+        self.api.object_delete(
+            self.account, self.container, obj_meta['name'],
+            version=obj_meta['version'])
+        self.api.object_delete(
+            self.account, self.container, obj_meta2['name'],
+            version=obj_meta2['version'])
+        self.api.object_delete(
+            self.account, self.container, obj_meta3['name'],
+            version=obj_meta3['version'])

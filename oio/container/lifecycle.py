@@ -639,11 +639,11 @@ class Expiration(LifecycleAction):
             action_filter = DateActionFilter.from_element(date_elt, **kwargs)
         return cls(action_filter, **kwargs)
 
-    def apply(self, obj_meta, **kwargs):
+    def apply(self, obj_meta, version=None, **kwargs):
         if self.match(obj_meta, **kwargs):
             res = self.lifecycle.api.object_delete(
                 self.lifecycle.account, self.lifecycle.container,
-                obj_meta['name'], version=obj_meta.get('version'))
+                obj_meta['name'], version=version)
             return "Deleted" if res else "Kept"
         return "Kept"
 
@@ -718,10 +718,6 @@ class NoncurrentVersionExpiration(Expiration):
     Delete objects old versions.
     """
 
-    def match(self, obj_meta, **kwargs):
-        return not self.lifecycle.is_current_version(
-            obj_meta, **kwargs) and self._match_filter(obj_meta, **kwargs)
-
     @classmethod
     def from_element(cls, expiration_elt, **kwargs):
         """
@@ -760,15 +756,19 @@ class NoncurrentVersionExpiration(Expiration):
             action_filter = CountActionFilter.from_element(count_elt, **kwargs)
             return cls(action_filter, **kwargs)
 
+    def match(self, obj_meta, **kwargs):
+        return not self.lifecycle.is_current_version(
+            obj_meta, **kwargs) and self._match_filter(obj_meta, **kwargs)
+
+    def apply(self, obj_meta, **kwargs):
+        return super(NoncurrentVersionExpiration, self).apply(
+            obj_meta, version=obj_meta['version'], **kwargs)
+
 
 class NoncurrentVersionTransition(Transition):
     """
     Change object storage policy for old versions of the object only.
     """
-
-    def match(self, obj_meta, **kwargs):
-        return not self.lifecycle.is_current_version(
-            obj_meta, **kwargs) and self._match_filter(obj_meta, **kwargs)
 
     @classmethod
     def from_element(cls, transition_elt, **kwargs):
@@ -799,3 +799,7 @@ class NoncurrentVersionTransition(Transition):
                 (DaysActionFilter.XML_NONCURRENT_TAG))
         action_filter = DaysActionFilter.from_element(days_elt, **kwargs)
         return cls(action_filter, policy, **kwargs)
+
+    def match(self, obj_meta, **kwargs):
+        return not self.lifecycle.is_current_version(
+            obj_meta, **kwargs) and self._match_filter(obj_meta, **kwargs)
