@@ -38,7 +38,8 @@ class HttpApi(object):
     towards the same endpoint, with a pool of connections.
     """
 
-    def __init__(self, endpoint=None, pool_manager=None, **kwargs):
+    def __init__(self, endpoint=None, pool_manager=None,
+                 connection='keep-alive', **kwargs):
         """
         :param pool_manager: an optional pool manager that will be reused
         :type pool_manager: `urllib3.PoolManager`
@@ -51,6 +52,8 @@ class HttpApi(object):
             metrics of time spent to resolve the meta2 address and
             to do the meta2 request.
         :type perfdata: `dict`
+        :keyword connection: 'keep-alive' to keep connections open (default)
+            or 'close' to explicitly close them.
         """
         super(HttpApi, self).__init__()
         self.endpoint = endpoint
@@ -64,6 +67,7 @@ class HttpApi(object):
 
         self.admin_mode = true_value(kwargs.get('admin_mode', False))
         self.perfdata = kwargs.get('perfdata')
+        self.connection = connection
 
     def _direct_request(self, method, url, headers=None, data=None, json=None,
                         params=None, admin_mode=False, pool_manager=None,
@@ -142,6 +146,10 @@ class HttpApi(object):
         perfdata = kwargs.get('perfdata', self.perfdata)
         if perfdata is not None:
             out_headers[PERFDATA_HEADER] = 'enabled'
+
+        # Explicitly keep or close the connection
+        if 'Connection' not in out_headers:
+            out_headers['Connection'] = self.connection
 
         out_kwargs['headers'] = out_headers
         out_kwargs['body'] = data
