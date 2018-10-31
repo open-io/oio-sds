@@ -15,9 +15,12 @@
 
 """Lifecycle-related commands"""
 
+
 from logging import getLogger
 from cliff import command, lister
-from oio.container.lifecycle import ContainerLifecycle, LIFECYCLE_PROPERTY_KEY
+
+from oio.common.exceptions import LifecycleNotFound
+from oio.container.lifecycle import etree, ContainerLifecycle
 
 
 class LifecycleApply(lister.Lister):
@@ -41,7 +44,7 @@ class LifecycleApply(lister.Lister):
                                 parsed_args.container,
                                 self.log)
         if not lc.load():
-            raise Exception(
+            raise LifecycleNotFound(
                 "No lifecycle configuration for container %s in account %s" %
                 (parsed_args.container, self.app.client_manager.account))
         raw_res = lc.execute()
@@ -83,12 +86,12 @@ class LifecycleSet(command.Command):
         else:
             conf = parsed_args.configuration
 
-        props = {LIFECYCLE_PROPERTY_KEY: conf}
-        self.app.client_manager.storage.container_set_properties(
-            self.app.client_manager.account,
-            parsed_args.container,
-            properties=props
-        )
+        lc = ContainerLifecycle(self.app.client_manager.storage,
+                                self.app.client_manager.account,
+                                parsed_args.container,
+                                self.log)
+        lc.load_xml(conf)
+        lc.save()
 
 
 class LifecycleGet(command.Command):
@@ -107,8 +110,14 @@ class LifecycleGet(command.Command):
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
-        md = self.app.client_manager.storage.container_get_properties(
-            self.app.client_manager.account,
-            parsed_args.container
-        )
-        self.app.stdout.write(md['properties'].get(LIFECYCLE_PROPERTY_KEY, ''))
+        lc = ContainerLifecycle(self.app.client_manager.storage,
+                                self.app.client_manager.account,
+                                parsed_args.container,
+                                self.log)
+        xml = lc.get_configuration()
+        if xml is None:
+            raise LifecycleNotFound(
+                "No lifecycle configuration for container %s in account %s" %
+                (parsed_args.container, self.app.client_manager.account))
+        tree = etree.fromstring(xml)
+        self.app.stdout.write(etree.tostring(tree, pretty_print=True))

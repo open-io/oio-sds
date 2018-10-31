@@ -22,8 +22,8 @@ except ImportError:
     from xml.etree import cElementTree as etree
 
 from oio.container.lifecycle import LifecycleRule, LifecycleRuleFilter, \
-    DaysActionFilter, DateActionFilter, CountActionFilter, \
-    Expiration, Transition, \
+    DaysActionFilter, DateActionFilter, NoncurrentCountActionFilter, \
+    NoncurrentDaysActionFilter, Expiration, Transition, \
     NoncurrentVersionExpiration, NoncurrentVersionTransition, \
     TAGGING_KEY
 
@@ -92,6 +92,51 @@ class TestContainerLifecycle(unittest.TestCase):
         self.assertIsNotNone(days)
         self.assertEqual(12, days.days)
 
+    def test_NoncurrentDaysActionFilter_from_element(self):
+        days_elt = etree.XML(
+            """
+            <NoncurrentDays></NoncurrentDays>
+            """)
+        self.assertRaises(ValueError, DaysActionFilter.from_element, days_elt)
+
+        days_elt = etree.XML(
+            """
+            <NoncurrentDays>10.5</NoncurrentDays>
+            """)
+        self.assertRaises(ValueError, DaysActionFilter.from_element, days_elt)
+
+        days_elt = etree.XML(
+            """
+            <NoncurrentDays>0</NoncurrentDays>
+            """)
+        self.assertRaises(ValueError, DaysActionFilter.from_element, days_elt)
+
+        days_elt = etree.XML(
+            """
+            <NoncurrentDays>-2</NoncurrentDays>
+            """)
+        self.assertRaises(ValueError, DaysActionFilter.from_element, days_elt)
+
+        days_elt = etree.XML(
+            """
+            <NoncurrentDays>test</NoncurrentDays>
+            """)
+        self.assertRaises(ValueError, DaysActionFilter.from_element, days_elt)
+
+        days_elt = etree.XML(
+            """
+            <NoncurrentDays>2018-10-30T02:34:56</NoncurrentDays>
+            """)
+        self.assertRaises(ValueError, DaysActionFilter.from_element, days_elt)
+
+        days_elt = etree.XML(
+            """
+            <NoncurrentDays>12</NoncurrentDays>
+            """)
+        days = DaysActionFilter.from_element(days_elt)
+        self.assertIsNotNone(days)
+        self.assertEqual(12, days.days)
+
     def test_DateActionFilter_from_element(self):
         date_elt = etree.XML(
             """
@@ -119,47 +164,47 @@ class TestContainerLifecycle(unittest.TestCase):
         self.assertIsNotNone(date)
         self.assertEqual(1540857600, date.date)
 
-    def test_CountActionFilter_from_element(self):
+    def test_NoncurrentCountActionFilter_from_element(self):
         count_elt = etree.XML(
             """
             <Count></Count>
             """)
-        self.assertRaises(ValueError, CountActionFilter.from_element,
+        self.assertRaises(ValueError, NoncurrentCountActionFilter.from_element,
                           count_elt)
 
         count_elt = etree.XML(
             """
             <Count>10.5</Count>
             """)
-        self.assertRaises(ValueError, CountActionFilter.from_element,
+        self.assertRaises(ValueError, NoncurrentCountActionFilter.from_element,
                           count_elt)
 
         count_elt = etree.XML(
             """
             <Count>-2</Count>
             """)
-        self.assertRaises(ValueError, CountActionFilter.from_element,
+        self.assertRaises(ValueError, NoncurrentCountActionFilter.from_element,
                           count_elt)
 
         count_elt = etree.XML(
             """
             <Count>test</Count>
             """)
-        self.assertRaises(ValueError, CountActionFilter.from_element,
+        self.assertRaises(ValueError, NoncurrentCountActionFilter.from_element,
                           count_elt)
 
         count_elt = etree.XML(
             """
             <Count>2018-10-30T02:34:56</Count>
             """)
-        self.assertRaises(ValueError, CountActionFilter.from_element,
+        self.assertRaises(ValueError, NoncurrentCountActionFilter.from_element,
                           count_elt)
 
         count_elt = etree.XML(
             """
             <Count>12</Count>
             """)
-        count = CountActionFilter.from_element(count_elt)
+        count = NoncurrentCountActionFilter.from_element(count_elt)
         self.assertIsNotNone(count)
         self.assertEqual(12, count.count)
 
@@ -690,17 +735,6 @@ class TestContainerLifecycle(unittest.TestCase):
                 <ID></ID>
                 <Status>Enabled</Status>
                 <Filter>
-                    <And>
-                        <Prefix>documents/</Prefix>
-                        <Tag>
-                            <Key>key1</Key>
-                            <Value>value1</Value>
-                        </Tag>
-                        <Tag>
-                            <Key>key2</Key>
-                            <Value>value2</Value>
-                        </Tag>
-                    </And>
                 </Filter>
                 <Transition>
                     <Days>1</Days>
@@ -717,17 +751,6 @@ class TestContainerLifecycle(unittest.TestCase):
             """
             <Rule>
                 <Filter>
-                    <And>
-                        <Prefix>documents/</Prefix>
-                        <Tag>
-                            <Key>key1</Key>
-                            <Value>value1</Value>
-                        </Tag>
-                        <Tag>
-                            <Key>key2</Key>
-                            <Value>value2</Value>
-                        </Tag>
-                    </And>
                 </Filter>
                 <Transition>
                     <Days>1</Days>
@@ -745,17 +768,23 @@ class TestContainerLifecycle(unittest.TestCase):
             <Rule>
                 <Status></Status>
                 <Filter>
-                    <And>
-                        <Prefix>documents/</Prefix>
-                        <Tag>
-                            <Key>key1</Key>
-                            <Value>value1</Value>
-                        </Tag>
-                        <Tag>
-                            <Key>key2</Key>
-                            <Value>value2</Value>
-                        </Tag>
-                    </And>
+                </Filter>
+                <Transition>
+                    <Days>1</Days>
+                    <StorageClass>THREECOPIES</StorageClass>
+                </Transition>
+                <Expiration>
+                    <Days>60</Days>
+                </Expiration>
+            </Rule>
+            """)
+        self.assertRaises(ValueError, LifecycleRule.from_element, rule_elt)
+
+        rule_elt = etree.XML(
+            """
+            <Rule>
+                <Status>Test</Status>
+                <Filter>
                 </Filter>
                 <Transition>
                     <Days>1</Days>
@@ -1252,6 +1281,95 @@ class TestContainerLifecycle(unittest.TestCase):
         self.assertEqual(Transition, type(transition))
         self.assertEqual(1539561600, transition.filter.date)
         self.assertEqual('THREECOPIES', transition.policy)
+
+    def test_DaysActionFilter_to_string(self):
+        EXPECTED = '<Days>10</Days>'
+        days = DaysActionFilter(10)
+        self.assertEqual(EXPECTED, str(days))
+
+    def test_NoncurrentDaysActionFilter_to_string(self):
+        EXPECTED = '<NoncurrentDays>10</NoncurrentDays>'
+        days = NoncurrentDaysActionFilter(10)
+        self.assertEqual(EXPECTED, str(days))
+
+    def test_DateActionFilter_to_string(self):
+        EXPECTED = '<Date>2018-10-31T00:00:00</Date>'
+        date = DateActionFilter(1540944000)
+        self.assertEqual(EXPECTED, str(date))
+
+    def test_NoncurrentCountActionFilter_to_string(self):
+        EXPECTED = '<NoncurrentCount>1</NoncurrentCount>'
+        count = NoncurrentCountActionFilter(1)
+        self.assertEqual(EXPECTED, str(count))
+
+    def test_Expiration_to_string(self):
+        EXPECTED = '<Expiration><Days>10</Days></Expiration>'
+        days = DaysActionFilter(10)
+        exp = Expiration(days)
+        self.assertEqual(EXPECTED, str(exp))
+
+    def test_Transition_to_string(self):
+        EXPECTED = '<Transition><StorageClass>SINGLE</StorageClass>' \
+            + '<Days>10</Days></Transition>'
+        days = DaysActionFilter(10)
+        trans = Transition(days, 'SINGLE')
+        self.assertEqual(EXPECTED, str(trans))
+
+    def test_NoncurrentVersionExpiration_to_string(self):
+        EXPECTED = '<NoncurrentVersionExpiration>' \
+            + '<Days>10</Days></NoncurrentVersionExpiration>'
+        days = DaysActionFilter(10)
+        exp = NoncurrentVersionExpiration(days)
+        self.assertEqual(EXPECTED, str(exp))
+
+    def test_NoncurrentVersionTransition_to_string(self):
+        EXPECTED = '<NoncurrentVersionTransition>' \
+            + '<StorageClass>SINGLE</StorageClass>' \
+            + '<Days>10</Days></NoncurrentVersionTransition>'
+        days = DaysActionFilter(10)
+        trans = NoncurrentVersionTransition(days, 'SINGLE')
+        self.assertEqual(EXPECTED, str(trans))
+
+    def test_LifecycleRuleFilter_to_string(self):
+        EXPECTED = '<Filter></Filter>'
+        filter_ = LifecycleRuleFilter(None, {})
+        self.assertEqual(EXPECTED, str(filter_))
+
+        EXPECTED = '<Filter><Prefix>documents/</Prefix></Filter>'
+        filter_ = LifecycleRuleFilter('documents/', {})
+        self.assertEqual(EXPECTED, str(filter_))
+
+        EXPECTED = '<Filter><Tag><Key>key</Key><Value>value</Value>' \
+            + '</Tag></Filter>'
+        filter_ = LifecycleRuleFilter(None, {'key': 'value'})
+        self.assertEqual(EXPECTED, str(filter_))
+
+        EXPECTED = '<Filter><And>' \
+            + '<Prefix>documents/</Prefix>' \
+            + '<Tag><Key>key</Key><Value>value</Value></Tag>' \
+            + '</And></Filter>'
+        filter_ = LifecycleRuleFilter(
+            'documents/', {'key': 'value'})
+        self.assertEqual(EXPECTED, str(filter_))
+
+    def test_LifecycleRule_to_string(self):
+        EXPECTED = '<Rule><Filter></Filter>' \
+            + '<Status>Disabled</Status>' \
+            + '<Expiration><Days>10</Days></Expiration>' \
+            + '</Rule>'
+        filter_ = LifecycleRuleFilter(None, {})
+        actions = [Expiration(DaysActionFilter(10))]
+        rule = LifecycleRule('anonymous-rule-01234', filter_, False, actions)
+        self.assertEqual(EXPECTED, str(rule))
+
+        EXPECTED = '<Rule><ID>Test</ID><Filter></Filter>' \
+            + '<Status>Enabled</Status>' \
+            + '<Expiration><Days>10</Days></Expiration>' \
+            + '</Rule>'
+        filter_ = LifecycleRuleFilter(None, {})
+        actions = [Expiration(DaysActionFilter(10))]
+        rule = LifecycleRule('Test', filter_, True, actions)
+        self.assertEqual(EXPECTED, str(rule))
 
     def test_LifecycleRuleFilter_match(self):
         filter_elt = etree.XML(

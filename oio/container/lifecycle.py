@@ -15,6 +15,7 @@
 
 import time
 import uuid
+from datetime import datetime
 
 try:
     from lxml import etree
@@ -32,9 +33,13 @@ TAGGING_KEY = 'x-object-sysmeta-swift3-tagging'
 XMLNS_S3 = 'http://s3.amazonaws.com/doc/2006-03-01/'
 
 
-def iso8601_to_int(text):
+def iso8601_to_int(when):
     # FIXME: use dateutil.parser?
-    return int(time.mktime(time.strptime(text, "%Y-%m-%dT%H:%M:%S")))
+    return int(time.mktime(time.strptime(when, "%Y-%m-%dT%H:%M:%S")))
+
+
+def int_to_iso8601(when):
+    return datetime.utcfromtimestamp(when).isoformat()
 
 
 class ProcessedVersions(object):
@@ -86,8 +91,14 @@ class ContainerLifecycle(object):
         self.container = container
         self.logger = logger or get_logger(None, name=str(self.__class__))
         self._rules = dict()
-        self.src_xml = None
         self.processed_versions = None
+
+    def get_configuration(self):
+        """
+        Get lifecycle configuration from container property.
+        """
+        props = self.api.container_get_properties(self.account, self.container)
+        return props['properties'].get(LIFECYCLE_PROPERTY_KEY)
 
     def load(self):
         """
@@ -95,15 +106,14 @@ class ContainerLifecycle(object):
 
         :returns: True if a lifecycle configuration has been loaded
         """
-        props = self.api.container_get_properties(self.account, self.container)
-        xml_str = props['properties'].get(LIFECYCLE_PROPERTY_KEY)
-        if xml_str:
-            self.load_xml(xml_str)
-            return True
-        else:
+        xml = self.get_configuration()
+        if xml is None:
             self.logger.info("No Lifecycle configuration for %s/%s",
                              self.account, self.container)
             return False
+        else:
+            self.load_xml(xml)
+            return True
 
     def load_xml(self, xml_str):
         """
@@ -117,7 +127,18 @@ class ContainerLifecycle(object):
         for rule_elt in tree.findall('Rule'):
             rule = LifecycleRule.from_element(rule_elt, lifecycle=self)
             self._rules[rule.id] = rule
-        self.src_xml = xml_str
+
+    def _to_element_tree(self, **kwargs):
+        lifecycle_elt = etree.Element('LifecycleConfiguration')
+
+        for rule in self._rules.values():
+            rule_elt = rule._to_element_tree(**kwargs)
+            lifecycle_elt.append(rule_elt)
+
+        return lifecycle_elt
+
+    def __str__(self):
+        return etree.tostring(self._to_element_tree())
 
     def save(self, xml_str=None):
         """
@@ -127,13 +148,12 @@ class ContainerLifecycle(object):
         configuration that has been loaded previously
         :type xml_str: `str`
         """
-        xml_str = xml_str or self.src_xml
-        if not xml_str:
-            raise ValueError('You must call `load_xml()` or provide `xml_str`'
+        if not self._rules:
+            raise ValueError('You must call `load_xml()`'
                              ' parameter before saving')
         self.api.container_set_properties(
             self.account, self.container,
-            properties={LIFECYCLE_PROPERTY_KEY: xml_str})
+            properties={LIFECYCLE_PROPERTY_KEY: str(self)})
 
     def apply(self, obj_meta, **kwargs):
         """
@@ -308,25 +328,25 @@ class LifecycleRule(object):
                     "'NoncurrentDays' and 'NoncurrentCount' in the same Rule")
             transitions.append(transition)
         if transitions:
-            if action_filter_type == DaysActionFilter:
+            if action_filter_type == NoncurrentDaysActionFilter:
                 transitions = sorted(
                     transitions,
                     key=lambda transition: transition.filter.days,
                     reverse=True)
-            elif action_filter_type == CountActionFilter:
+            elif action_filter_type == NoncurrentCountActionFilter:
                 transitions = sorted(
                     transitions,
                     key=lambda transition: transition.filter.count,
                     reverse=True)
             if expiration:
-                if action_filter_type == DaysActionFilter:
+                if action_filter_type == NoncurrentDaysActionFilter:
                     if expiration.filter.days <= transitions[0].filter.days:
                         raise ValueError(
                             "'NoncurrentDays' "
                             "in the NoncurrentVersionExpiration "
                             "action must be greater than 'NoncurrentDays' "
                             "in the NoncurrentVersionTransition action")
-                elif action_filter_type == CountActionFilter:
+                elif action_filter_type == NoncurrentCountActionFilter:
                     if expiration.filter.count <= transitions[0].filter.count:
                         raise ValueError(
                             "'NoncurrentCount' "
@@ -339,6 +359,33 @@ class LifecycleRule(object):
             raise ValueError(
                 "At least one action needs to be specified in a Rule")
         return cls(id_, filter_, enabled, actions)
+
+    def _to_element_tree(self, **kwargs):
+        rule_elt = etree.Element("Rule")
+
+        if not self.id.startswith('anonymous-rule-'):
+            id_elt = etree.Element("ID")
+            id_elt.text = self.id
+            rule_elt.append(id_elt)
+
+        filter_elt = self.filter._to_element_tree(**kwargs)
+        rule_elt.append(filter_elt)
+
+        status_elt = etree.Element("Status")
+        if self.enabled:
+            status_elt.text = 'Enabled'
+        else:
+            status_elt.text = 'Disabled'
+        rule_elt.append(status_elt)
+
+        for action in self.actions:
+            action_elt = action._to_element_tree(**kwargs)
+            rule_elt.append(action_elt)
+
+        return rule_elt
+
+    def __str__(self):
+        return etree.tostring(self._to_element_tree())
 
     def match(self, obj_meta, **kwargs):
         """
@@ -413,6 +460,40 @@ class LifecycleRuleFilter(object):
 
         return cls(prefix, tags, **kwargs)
 
+    def _to_element_tree(self, **kwargs):
+        filter_elt = _filter_elt = etree.Element('Filter')
+
+        nb_filters = len(self.tags)
+        if self.prefix is not None:
+            nb_filters += 1
+        if nb_filters == 0:
+            filter_elt.text = ''
+            return filter_elt
+        if nb_filters > 1:
+            and_elt = etree.Element('And')
+            _filter_elt = and_elt
+            filter_elt.append(and_elt)
+
+        if self.prefix is not None:
+            prefix_elt = etree.Element('Prefix')
+            prefix_elt.text = self.prefix
+            _filter_elt.append(prefix_elt)
+
+        for k, v in self.tags.iteritems():
+            tag_elt = etree.Element('Tag')
+            key_elt = etree.Element('Key')
+            key_elt.text = k
+            tag_elt.append(key_elt)
+            value_elt = etree.Element('Value')
+            value_elt.text = v
+            tag_elt.append(value_elt)
+            _filter_elt.append(tag_elt)
+
+        return filter_elt
+
+    def __str__(self):
+        return etree.tostring(self._to_element_tree())
+
     def match(self, obj_meta, **kwargs):
         """
         Check if an object matches the conditions defined by this filter.
@@ -480,6 +561,12 @@ class LifecycleActionFilter(object):
     def __init__(self, lifecycle=None, **kwargs):
         self.lifecycle = lifecycle
 
+    def _to_element_tree(self, **kwargs):
+        raise NotImplementedError
+
+    def __str__(self):
+        return etree.tostring(self._to_element_tree())
+
     def match(self, obj_meta, now=None, **kwargs):
         """
         Check if an object matches the conditions.
@@ -492,9 +579,6 @@ class DaysActionFilter(LifecycleActionFilter):
     Specify the number of days after object creation
     when the specific rule action takes effect.
     """
-
-    XML_TAG = 'Days'
-    XML_NONCURRENT_TAG = 'NoncurrentDays'
 
     def __init__(self, days, **kwargs):
         super(DaysActionFilter, self).__init__(**kwargs)
@@ -511,17 +595,28 @@ class DaysActionFilter(LifecycleActionFilter):
                 "The days must be a positive integer")
         return cls(days, **kwargs)
 
+    def _to_element_tree(self, **kwargs):
+        days_elt = etree.Element('Days')
+        days_elt.text = str(self.days)
+        return days_elt
+
     def match(self, obj_meta, now=None, **kwargs):
         now = now or time.time()
         return float(obj_meta['ctime']) + self.days * 86400 < now
+
+
+class NoncurrentDaysActionFilter(DaysActionFilter):
+
+    def _to_element_tree(self, **kwargs):
+        days_elt = etree.Element('NoncurrentDays')
+        days_elt.text = str(self.days)
+        return days_elt
 
 
 class DateActionFilter(LifecycleActionFilter):
     """
     Specify the date when the specific rule action takes effect.
     """
-
-    XML_TAG = 'Date'
 
     def __init__(self, date, **kwargs):
         super(DateActionFilter, self).__init__(**kwargs)
@@ -533,17 +628,20 @@ class DateActionFilter(LifecycleActionFilter):
         date = (date - (date % 86400))
         return cls(date, **kwargs)
 
+    def _to_element_tree(self, **kwargs):
+        date_elt = etree.Element('Date')
+        date_elt.text = int_to_iso8601(self.date)
+        return date_elt
+
     def match(self, obj_meta, now=None, **kwargs):
         now = now or time.time()
         return now > self.date and float(obj_meta['ctime']) < self.date
 
 
-class CountActionFilter(LifecycleActionFilter):
-
-    XML_NONCURRENT_TAG = 'NoncurrentCount'
+class NoncurrentCountActionFilter(LifecycleActionFilter):
 
     def __init__(self, count, **kwargs):
-        super(CountActionFilter, self).__init__(**kwargs)
+        super(NoncurrentCountActionFilter, self).__init__(**kwargs)
         self.count = count
         if self.lifecycle is None or self.lifecycle.processed_versions is None:
             self.last_object_name = None
@@ -559,6 +657,11 @@ class CountActionFilter(LifecycleActionFilter):
             raise ValueError(
                 "The count must be greater than or equal to zero")
         return cls(count, **kwargs)
+
+    def _to_element_tree(self, **kwargs):
+        count_elt = etree.Element('NoncurrentCount')
+        count_elt.text = str(self.count)
+        return count_elt
 
     def match(self, obj_meta, **kwargs):
         if self.lifecycle is None or self.lifecycle.processed_versions is None:
@@ -616,28 +719,32 @@ class Expiration(LifecycleAction):
         :type expiration_elt: `lxml.etree.Element`
         """
         try:
-            days_elt = expiration_elt.findall(DaysActionFilter.XML_TAG)[-1]
+            days_elt = expiration_elt.findall('Days')[-1]
         except IndexError:
             days_elt = None
         try:
-            date_elt = expiration_elt.findall(DateActionFilter.XML_TAG)[-1]
+            date_elt = expiration_elt.findall('Date')[-1]
         except IndexError:
             date_elt = None
 
         if days_elt is None and date_elt is None:
             raise ValueError(
-                "Missing '%s' or '%s' element in Expiration action" %
-                (DaysActionFilter.XML_TAG, DateActionFilter.XML_TAG))
+                "Missing 'Days' or 'Date' element in Expiration action")
         elif days_elt is not None and date_elt is not None:
             raise ValueError(
-                "'%s' and '%s' in same Expiration action" %
-                (DaysActionFilter.XML_TAG, DateActionFilter.XML_TAG))
+                "'Days' and 'Date' in same Expiration action")
 
         if days_elt is not None:
             action_filter = DaysActionFilter.from_element(days_elt, **kwargs)
         elif date_elt is not None:
             action_filter = DateActionFilter.from_element(date_elt, **kwargs)
         return cls(action_filter, **kwargs)
+
+    def _to_element_tree(self, **kwargs):
+        exp_elt = etree.Element('Expiration')
+        filter_elt = self.filter._to_element_tree(**kwargs)
+        exp_elt.append(filter_elt)
+        return exp_elt
 
     def apply(self, obj_meta, version=None, **kwargs):
         if self.match(obj_meta, **kwargs):
@@ -680,28 +787,35 @@ class Transition(LifecycleAction):
                              cls.XML_POLICY)
 
         try:
-            days_elt = transition_elt.findall(DaysActionFilter.XML_TAG)[-1]
+            days_elt = transition_elt.findall('Days')[-1]
         except IndexError:
             days_elt = None
         try:
-            date_elt = transition_elt.findall(DateActionFilter.XML_TAG)[-1]
+            date_elt = transition_elt.findall('Date')[-1]
         except IndexError:
             date_elt = None
 
         if days_elt is None and date_elt is None:
             raise ValueError(
-                "Missing '%s' or '%s' element in Transition action" %
-                (DaysActionFilter.XML_TAG, DateActionFilter.XML_TAG))
+                "Missing 'Days' or 'Date' element in Transition action")
         elif days_elt is not None and date_elt is not None:
             raise ValueError(
-                "'%s' and '%s' in same Transition action" %
-                (DaysActionFilter.XML_TAG, DateActionFilter.XML_TAG))
+                "'Days' and 'Date' in same Transition action")
 
         if days_elt is not None:
             action_filter = DaysActionFilter.from_element(days_elt, **kwargs)
         elif date_elt is not None:
             action_filter = DateActionFilter.from_element(date_elt, **kwargs)
         return cls(action_filter, policy, **kwargs)
+
+    def _to_element_tree(self, **kwargs):
+        trans_elt = etree.Element('Transition')
+        policy_elt = etree.Element(self.XML_POLICY)
+        policy_elt.text = self.policy
+        trans_elt.append(policy_elt)
+        filter_elt = self.filter._to_element_tree(**kwargs)
+        trans_elt.append(filter_elt)
+        return trans_elt
 
     def apply(self, obj_meta, **kwargs):
         if self.match(obj_meta, **kwargs):
@@ -726,35 +840,37 @@ class NoncurrentVersionExpiration(Expiration):
         :type expiration_elt: `lxml.etree.Element`
         """
         try:
-            days_elt = expiration_elt.findall(
-                DaysActionFilter.XML_NONCURRENT_TAG)[-1]
+            days_elt = expiration_elt.findall('NoncurrentDays')[-1]
         except IndexError:
             days_elt = None
         try:
-            count_elt = expiration_elt.findall(
-                CountActionFilter.XML_NONCURRENT_TAG)[-1]
+            count_elt = expiration_elt.findall('NoncurrentCount')[-1]
         except IndexError:
             count_elt = None
 
         if days_elt is None and count_elt is None:
             raise ValueError(
-                "Missing '%s' or '%s' element " %
-                (DaysActionFilter.XML_NONCURRENT_TAG,
-                 CountActionFilter.XML_NONCURRENT_TAG)
-                + "in NoncurrentVersionExpiration action")
+                "Missing 'NoncurrentDays' or 'NoncurrentCount' element "
+                "in NoncurrentVersionExpiration action")
         elif days_elt is not None and count_elt is not None:
             raise ValueError(
-                "'%s' and '%s' " %
-                (DaysActionFilter.XML_NONCURRENT_TAG,
-                 CountActionFilter.XML_NONCURRENT_TAG)
-                + "in same NoncurrentVersionExpiration action")
+                "'NoncurrentDays' and 'NoncurrentCount' "
+                "in same NoncurrentVersionExpiration action")
 
         if days_elt is not None:
-            action_filter = DaysActionFilter.from_element(days_elt, **kwargs)
+            action_filter = NoncurrentDaysActionFilter.from_element(
+                days_elt, **kwargs)
             return cls(action_filter, **kwargs)
         elif count_elt is not None:
-            action_filter = CountActionFilter.from_element(count_elt, **kwargs)
+            action_filter = NoncurrentCountActionFilter.from_element(
+                count_elt, **kwargs)
             return cls(action_filter, **kwargs)
+
+    def _to_element_tree(self, **kwargs):
+        exp_elt = etree.Element('NoncurrentVersionExpiration')
+        filter_elt = self.filter._to_element_tree(**kwargs)
+        exp_elt.append(filter_elt)
+        return exp_elt
 
     def match(self, obj_meta, **kwargs):
         return not self.lifecycle.is_current_version(
@@ -788,17 +904,26 @@ class NoncurrentVersionTransition(Transition):
                 (cls.XML_POLICY))
 
         try:
-            days_elt = transition_elt.findall(
-                DaysActionFilter.XML_NONCURRENT_TAG)[-1]
+            days_elt = transition_elt.findall('NoncurrentDays')[-1]
         except IndexError:
             days_elt = None
 
         if days_elt is None:
             raise ValueError(
-                "Missing '%s' element in NoncurrentVersionTransition action" %
-                (DaysActionFilter.XML_NONCURRENT_TAG))
-        action_filter = DaysActionFilter.from_element(days_elt, **kwargs)
+                "Missing 'NoncurrentDays' element "
+                "in NoncurrentVersionTransition action")
+        action_filter = NoncurrentDaysActionFilter.from_element(
+            days_elt, **kwargs)
         return cls(action_filter, policy, **kwargs)
+
+    def _to_element_tree(self, **kwargs):
+        trans_elt = etree.Element('NoncurrentVersionTransition')
+        policy_elt = etree.Element(self.XML_POLICY)
+        policy_elt.text = self.policy
+        trans_elt.append(policy_elt)
+        filter_elt = self.filter._to_element_tree(**kwargs)
+        trans_elt.append(filter_elt)
+        return trans_elt
 
     def match(self, obj_meta, **kwargs):
         return not self.lifecycle.is_current_version(
