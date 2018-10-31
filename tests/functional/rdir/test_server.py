@@ -747,7 +747,8 @@ class TestRdirServer4(RdirTestCase):
                 data=json.dumps(rec))
             self.assertEqual(resp.status, 400)
             # check we list nothing
-            resp = self._post("/v1/rdir/meta2/fetch", params={'vol': self.vol_4},
+            resp = self._post("/v1/rdir/meta2/fetch",
+                              params={'vol': self.vol_4},
                               data=json.dumps({}))
             self.assertEqual(resp.status, 200)
             self.assertEqual(self.json_loads(resp.data),
@@ -755,8 +756,6 @@ class TestRdirServer4(RdirTestCase):
             rec[k] = save
 
     def test_meta2_create(self):
-        rec = self._meta2_record()
-
         # create volume
         resp = self._post("/v1/rdir/meta2/create", params={'vol': self.vol_1})
         self.assertEqual(resp.status, 201)
