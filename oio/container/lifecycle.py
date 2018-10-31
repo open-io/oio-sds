@@ -90,7 +90,7 @@ class ContainerLifecycle(object):
         self.account = account
         self.container = container
         self.logger = logger or get_logger(None, name=str(self.__class__))
-        self._rules = dict()
+        self.rules = list()
         self.processed_versions = None
 
     def get_configuration(self):
@@ -126,12 +126,12 @@ class ContainerLifecycle(object):
                 tree.tag)
         for rule_elt in tree.findall('Rule'):
             rule = LifecycleRule.from_element(rule_elt, lifecycle=self)
-            self._rules[rule.id] = rule
+            self.rules.append(rule)
 
     def _to_element_tree(self, **kwargs):
         lifecycle_elt = etree.Element('LifecycleConfiguration')
 
-        for rule in self._rules.values():
+        for rule in self.rules:
             rule_elt = rule._to_element_tree(**kwargs)
             lifecycle_elt.append(rule_elt)
 
@@ -148,7 +148,7 @@ class ContainerLifecycle(object):
         configuration that has been loaded previously
         :type xml_str: `str`
         """
-        if not self._rules:
+        if not self.rules:
             raise ValueError('You must call `load_xml()`'
                              ' parameter before saving')
         self.api.container_set_properties(
@@ -165,7 +165,7 @@ class ContainerLifecycle(object):
 
         :notice: you must consume the results or the rules won't be applied.
         """
-        for rule in self._rules.values():
+        for rule in self.rules:
             res = rule.apply(obj_meta, **kwargs)
             if res:
                 for action in res:

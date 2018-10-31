@@ -105,8 +105,8 @@ class TestContainerLifecycle(BaseTestCase):
         self.api.container_create(self.account, self.container,
                                   properties=props)
         self.lifecycle.load()
-        self.assertEqual(1, len(self.lifecycle._rules))
-        rule = self.lifecycle._rules.get('rule1')
+        self.assertEqual(1, len(self.lifecycle.rules))
+        rule = self.lifecycle.rules[0]
         self.assertIsNotNone(rule)
         self.assertEqual('rule1', rule.id)
         self.assertIsNotNone(rule.filter)
