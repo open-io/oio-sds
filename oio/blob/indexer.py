@@ -30,6 +30,7 @@ from oio.common.easy_value import int_value, true_value
 from oio.common.logger import get_logger
 from oio.common.exceptions import OioNetworkException, VolumeException
 from oio.common.constants import STRLEN_CHUNKID
+from oio.common.http_urllib3 import get_pool_manager
 from oio.blob.converter import BlobConverter
 
 
@@ -53,10 +54,16 @@ class BlobIndexer(Daemon):
             conf.get('report_interval'), 3600)
         self.max_chunks_per_second = int_value(
             conf.get('chunks_per_second'), 30)
-        self.index_client = RdirClient(conf, logger=self.logger)
+        pm = get_pool_manager(pool_connections=10)
+        self.index_client = RdirClient(conf, logger=self.logger,
+                                       pool_manager=pm)
         self.namespace, self.volume_id = check_volume(self.volume)
         self.convert_chunks = true_value(conf.get('convert_chunks'))
-        self.converter = None
+        if self.convert_chunks:
+            self.converter = BlobConverter(self.conf, logger=self.logger,
+                                           pool_manager=pm)
+        else:
+            self.converter = None
 
     def index_pass(self):
 
@@ -116,9 +123,6 @@ class BlobIndexer(Daemon):
         self.last_reported = start_time
         self.errors = 0
         self.successes = 0
-
-        if self.convert_chunks:
-            self.converter = BlobConverter(self.conf, logger=self.logger)
 
         paths = paths_gen(self.volume)
         report('started')
