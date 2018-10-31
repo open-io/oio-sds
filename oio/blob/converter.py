@@ -74,8 +74,9 @@ class BlobConverter(object):
         self.name_by_cid = CacheDict()
         self.content_id_by_name = CacheDict()
         # client
-        self.container_client = ContainerClient(conf)
-        self.content_factory = ContentFactory(conf, logger=self.logger)
+        self.container_client = ContainerClient(conf, **kwargs)
+        self.content_factory = ContentFactory(conf, self.container_client,
+                                              logger=self.logger)
         # stats/logs
         self.errors = 0
         self.passes = 0
