@@ -24,7 +24,6 @@ from oio.common.storage_functions import _sort_chunks as sort_chunks
 from oio.common import exceptions as exc
 from oio.common.utils import cid_from_name
 from oio.common.fullpath import encode_fullpath
-from oio.conscience.client import ConscienceClient
 from tests.utils import random_str, random_data, random_id, BaseTestCase
 
 
@@ -42,12 +41,12 @@ class ObjectStorageApiTestBase(BaseTestCase):
 
     def tearDown(self):
         super(ObjectStorageApiTestBase, self).tearDown()
-        # for ct, name in self.created:
-        #     try:
-        #         self.api.object_delete(self.account, ct, name)
-        #     except Exception:
-        #         logging.exception("Failed to delete %s/%s/%s//%s",
-        #                           self.ns, self.account, ct, name)
+        for ct, name in self.created:
+            try:
+                self.api.object_delete(self.account, ct, name)
+            except Exception:
+                logging.exception("Failed to delete %s/%s/%s//%s",
+                                  self.ns, self.account, ct, name)
 
     def _create(self, name, metadata=None):
         return self.api.container_create(self.account, name,
@@ -309,16 +308,15 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
     def _wait_account_meta2(self):
         # give account and meta2 time to catch their breath
         wait = False
-        cluster = ConscienceClient({"namespace": self.ns})
         while True:
             try:
-                for service in cluster.all_services("account"):
-                    if int(service['score']) < 50:
+                for service in self.conscience.all_services("account"):
+                    if int(service['score']) < 35:
                         wait = True
                         continue
                 if not wait:
-                    for service in cluster.all_services("meta2"):
-                        if int(service['score']) < 50:
+                    for service in self.conscience.all_services("meta2"):
+                        if int(service['score']) < 35:
                             wait = True
                             continue
                     if not wait:
@@ -326,7 +324,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             except exc.OioException:
                 pass
             wait = False
-            time.sleep(5)
+            time.sleep(1)
 
     def test_container_flush(self):
         name = random_str(32)
@@ -356,7 +354,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # many contents
         for i in range(1024):
             self.api.object_create(self.account, name,
-                                   obj_name='content'+str(i), data='data')
+                                   obj_name='content'+str(i), data='data',
+                                   chunk_checksum_algo=None)
         flush_and_check()
 
     def test_container_flush_fast(self):
@@ -387,7 +386,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # many contents
         for i in range(1024):
             self.api.object_create(self.account, name,
-                                   obj_name='content'+str(i), data='data')
+                                   obj_name='content'+str(i), data='data',
+                                   chunk_checksum_algo=None)
         flush_and_check()
 
     def test_del_properties(self):
@@ -581,6 +581,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertEqual(meta.get('hash', "").lower(), checksum.lower())
 
     def test_object_create_conflict_delete_chunks(self):
+        # pylint: disable=no-member
         name = random_str(16)
         # Simulate a conflict error
         self.api.container.content_create = \
@@ -603,6 +604,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
                 chunk.get('real_url', chunk['url']))
 
     def test_object_create_commit_deadline_delete_chunks(self):
+        # pylint: disable=no-member
         name = random_str(16)
         # Simulate a deadline during commit
         self.api.container.content_create = \
@@ -626,6 +628,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
                 chunk.get('real_url', chunk['url']))
 
     def test_object_create_prepare_deadline_delete_chunks(self):
+        # pylint: disable=no-member
         name = random_str(16)
 
         class _Preparer(object):
@@ -656,6 +659,11 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.blob_client.chunk_delete_many.assert_called_once()
 
     def test_container_refresh(self):
+        # FIXME(FVE): for this test to pass properly, we should implement
+        # some kind of back notification mechanism, e.g. a tube where all
+        # events are sent after being handled by event-agent.
+        self.beanstalk.use('oio')
+        self.beanstalk.watch('oio')
         account = random_str(32)
         # container_refresh on unknown container
         name = random_str(32)
@@ -664,10 +672,14 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
         self.api.container_create(account, name)
         ref_time = time.time()
-        time.sleep(1)  # ensure container event have been processed
+        # ensure container event has been emitted and processed
+        self.beanstalk.wait_until_empty('oio', initial_delay=0.2)
+
         # container_refresh on existing container
         self.api.container_refresh(account, name)
-        time.sleep(1)  # ensure container event have been processed
+        # Container events are buffered 1s by default.
+        # See "events.common.pending.delay" configuration parameter.
+        self.beanstalk.wait_until_empty('oio', initial_delay=1.2)
         res = self.api.container_list(account, prefix=name)
         name_container, nb_objects, nb_bytes, _, mtime = res[0]
         self.assertEqual(name, name_container)
@@ -677,10 +689,11 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
         ref_time = mtime
         self.api.object_create(account, name, data="data", obj_name=name)
-        time.sleep(1)  # ensure container event have been processed
+        self.beanstalk.wait_until_empty('oio', initial_delay=0.2)
         # container_refresh on existing container with data
         self.api.container_refresh(account, name)
-        time.sleep(15)  # ensure container event have been processed
+        self.beanstalk.wait_until_empty('oio', initial_delay=1.0)
+        time.sleep(1.0)
         res = self.api.container_list(account, prefix=name)
         name_container, nb_objects, nb_bytes, _, mtime = res[0]
         self.assertEqual(name, name_container)
@@ -689,9 +702,9 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertGreater(mtime, ref_time)
 
         self.api.object_delete(account, name, name)
-        time.sleep(1)  # ensure container event have been processed
         self.api.container_delete(account, name)
-        time.sleep(1)  # ensure container event have been processed
+        # Again, wait for the container event to be processed.
+        self.beanstalk.wait_until_empty('oio', initial_delay=1.2)
         # container_refresh on deleted container
         self.assertRaises(
             exc.NoSuchContainer, self.api.container_refresh, account, name)
@@ -700,9 +713,9 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_container_refresh_user_not_found(self):
         name = random_str(32)
+        self._wait_account_meta2()
         self.api.account.container_update(name, name, {"mtime": time.time()})
         self.api.container_refresh(name, name)
-        time.sleep(0.5)  # ensure container event have been processed
         containers = self.api.container_list(name)
         self.assertEqual(0, len(containers))
         self.api.account_delete(name)
@@ -710,13 +723,14 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
     def test_account_refresh(self):
         # account_refresh on unknown account
         account = random_str(32)
+        self._wait_account_meta2()
         self.assertRaises(
             exc.NoSuchAccount, self.api.account_refresh, account)
 
         # account_refresh on existing account
         self.api.account_create(account)
         self.api.account_refresh(account)
-        time.sleep(0.5)  # ensure container event have been processed
+        self.beanstalk.wait_until_empty('oio')
         res = self.api.account_show(account)
         self.assertEqual(res["bytes"], 0)
         self.assertEqual(res["objects"], 0)
@@ -724,18 +738,20 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
         name = random_str(32)
         self.api.object_create(account, name, data="data", obj_name=name)
-        time.sleep(0.5)  # ensure container event have been processed
+        self.beanstalk.wait_until_empty('oio')
         self.api.account_refresh(account)
-        time.sleep(0.5)  # ensure container event have been processed
+        # Container events are buffered 1s by default.
+        # See "events.common.pending.delay" configuration parameter.
+        self.beanstalk.wait_until_empty('oio', initial_delay=1.2)
         res = self.api.account_show(account)
         self.assertEqual(res["bytes"], 4)
         self.assertEqual(res["objects"], 1)
         self.assertEqual(res["containers"], 1)
 
         self.api.object_delete(account, name, name)
-        time.sleep(0.5)  # ensure container event have been processed
         self.api.container_delete(account, name)
-        time.sleep(0.5)  # ensure container event have been processed
+        # Again, wait for the container event to be processed.
+        self.beanstalk.wait_until_empty('oio', initial_delay=1.2)
         self.api.account_delete(account)
         # account_refresh on deleted account
         self.assertRaises(
@@ -783,7 +799,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.container_create(account, name1)
         name2 = random_str(32)
         self.api.container_create(account, name2)
-        time.sleep(0.5)  # ensure container event have been processed
+        self.beanstalk.wait_until_empty('oio')
+        time.sleep(0.1)
         self.api.account_flush(account)
         containers = self.api.container_list(account)
         self.assertEqual(len(containers), 0)
@@ -794,7 +811,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
         self.api.container_delete(account, name1)
         self.api.container_delete(account, name2)
-        time.sleep(0.5)  # ensure container event have been processed
+        self.beanstalk.wait_until_empty('oio')
+        time.sleep(0.1)
         self.api.account_delete(account)
 
         # account_flush on deleted account
@@ -1070,7 +1088,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         test_object = "test_object_%d"
         for i in range(100):
             self.api.object_create(self.account, container, data="0"*128,
-                                   obj_name=test_object % i)
+                                   obj_name=test_object % i,
+                                   chunk_checksum_algo=None)
 
         # Snapshot cannot have same name and same account
         self.assertRaises(exc.ClientException,

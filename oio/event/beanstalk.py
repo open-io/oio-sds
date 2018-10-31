@@ -572,11 +572,16 @@ class Beanstalk(object):
             else:
                 raise
 
-    def wait_until_empty(self, tube, timeout=float('inf'), poll_interval=0.2):
+    def wait_until_empty(self, tube, timeout=float('inf'), poll_interval=0.2,
+                         initial_delay=0.0):
         """
         Wait until the the specified tube is empty, or the timeout expires.
         """
+        # TODO(FVE): check tube stats to ensure some jobs have passed through
+        # and then get rid of the initial_delay
         self.watch(tube)
+        if initial_delay > 0.0:
+            sleep(initial_delay)
         job_id, _ = self.peek_ready()
         deadline = time() + timeout
         while job_id is not None and time() < deadline:

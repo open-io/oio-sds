@@ -18,7 +18,6 @@ from time import sleep
 
 from oio import ObjectStorageApi
 from oio.directory.meta1 import Meta1RefMapping
-from oio.conscience.client import ConscienceClient
 from tests.functional.cli import execute
 from tests.utils import BaseTestCase, random_str
 
@@ -28,7 +27,6 @@ class TestMeta1RefMapping(BaseTestCase):
     def setUp(self):
         super(TestMeta1RefMapping, self).setUp()
         self.api = ObjectStorageApi(self.ns)
-        self.conscience = ConscienceClient({"namespace": self.ns})
         self.account = "test_refmapping"
         self.reference = "refmapping-" + random_str(4)
         self.logger = logging.getLogger('test')

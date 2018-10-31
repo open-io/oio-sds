@@ -16,7 +16,6 @@
 import random
 
 from oio.api.object_storage import ObjectStorageApi
-from oio.conscience.client import ConscienceClient
 from oio.common.utils import cid_from_name
 from oio.common.fullpath import encode_fullpath
 from oio.common.constants import chunk_xattr_keys, \
@@ -34,7 +33,6 @@ class TestBlobConverter(BaseTestCase):
         self.container = random_str(16)
         self.path = random_str(16)
         self.api = ObjectStorageApi(self.ns)
-        self.conscience = ConscienceClient(self.conf)
 
         self.api.container_create(self.account, self.container)
         _, chunks = self.api.container.content_prepare(

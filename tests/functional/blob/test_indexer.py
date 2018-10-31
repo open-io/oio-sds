@@ -21,7 +21,6 @@ from time import sleep
 from oio.rdir.client import RdirClient
 from oio.blob.client import BlobClient
 from oio.blob.indexer import BlobIndexer
-from oio.conscience.client import ConscienceClient
 from oio.common.constants import OIO_VERSION
 from oio.common.fullpath import encode_fullpath
 from oio.common.utils import cid_from_name, paths_gen
@@ -38,7 +37,6 @@ class TestBlobIndexer(BaseTestCase):
         self.blob_client = BlobClient(self.conf)
         _, self.rawx_path, rawx_addr, _ = \
             self.get_service_url('rawx')
-        self.conscience = ConscienceClient(self.conf)
         services = self.conscience.all_services('rawx')
         self.rawx_id = None
         for rawx in services:
