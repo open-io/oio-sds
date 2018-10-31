@@ -18,14 +18,13 @@
 import json
 import time
 import os
-from random import choice
 from subprocess import check_call
 from oio.api.object_storage import ObjectStorageApi
 from oio.event.beanstalk import Beanstalk, ResponseError
-from oio.event.consumer import DEFAULT_TUBE, ACCOUNT_SERVICE, EventTypes
+from oio.event.consumer import DEFAULT_TUBE, EventTypes
 from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
-from tests.utils import BaseTestCase, random_id
+from tests.utils import BaseTestCase
 
 
 class TestMeta2EventsEmission(BaseTestCase):
@@ -74,11 +73,11 @@ class TestMeta2EventsEmission(BaseTestCase):
                     action, name])
         """
         The current gridinit version that's running on travis returns before
-        the child process terminates. As such we have to introduce an 
-        artificial pause to account for the child process termination. Remove 
+        the child process terminates. As such we have to introduce an
+        artificial pause to account for the child process termination. Remove
         this once gridinit is upgraded.
         """
-        time.sleep(3)
+        time.sleep(10)
 
     def test_container_create(self):
         # First shutdown the event-agent
