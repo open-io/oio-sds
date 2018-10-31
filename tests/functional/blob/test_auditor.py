@@ -16,7 +16,6 @@
 import random
 
 from oio.api.object_storage import ObjectStorageApi
-from oio.conscience.client import ConscienceClient
 from oio.blob.client import BlobClient
 from oio.common.utils import cid_from_name
 from oio.common.exceptions import OrphanChunk
@@ -33,7 +32,6 @@ class TestBlobAuditor(BaseTestCase):
         self.cid = cid_from_name(self.account, self.container)
         self.path = random_str(16)
         self.api = ObjectStorageApi(self.ns)
-        self.conscience = ConscienceClient(self.conf)
         self.blob_client = BlobClient(self.conf)
 
         self.api.container_create(self.account, self.container)

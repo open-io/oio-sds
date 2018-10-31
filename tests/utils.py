@@ -183,7 +183,11 @@ class CommonTestCase(testtools.TestCase):
         self.uri = 'http://' + self.conf['proxy']
         self.ns = self.conf['namespace']
         self.account = self.conf['account']
-        self.http_pool = get_pool_manager()
+        queue_addr = random.choice(self.conf['services']['beanstalkd'])['addr']
+        self.conf['queue_url'] = 'beanstalk://' + queue_addr
+        self._beanstalk = None
+        self._conscience = None
+        self._http_pool = None
 
     def tearDown(self):
         super(CommonTestCase, self).tearDown()
@@ -191,6 +195,27 @@ class CommonTestCase(testtools.TestCase):
     @classmethod
     def tearDownClass(cls):
         super(CommonTestCase, cls).tearDownClass()
+
+    @property
+    def conscience(self):
+        if not self._conscience:
+            from oio.conscience.client import ConscienceClient
+            self._conscience = ConscienceClient(self.conf,
+                                                pool_manager=self.http_pool)
+        return self._conscience
+
+    @property
+    def http_pool(self):
+        if not self._http_pool:
+            self._http_pool = get_pool_manager()
+        return self._http_pool
+
+    @property
+    def beanstalk(self):
+        if not self._beanstalk:
+            from oio.event.beanstalk import Beanstalk
+            self._beanstalk = Beanstalk.from_url(self.conf['queue_url'])
+        return self._beanstalk
 
     def _flush_cs(self, srvtype):
         params = {'type': srvtype}
