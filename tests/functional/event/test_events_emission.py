@@ -77,9 +77,12 @@ class TestMeta2EventsEmission(BaseTestCase):
         artificial pause to account for the child process termination. Remove
         this once gridinit is upgraded.
         """
-        time.sleep(10)
+        time.sleep(3)
 
     def test_container_create(self):
+        if len(self.bt_connections) > 1:
+            self.skipTest("Unsupported on multi-beanstalk setups.")
+
         # First shutdown the event-agent
         self._service(self.event_agent_name, 'stop')
         self._bt_watch(DEFAULT_TUBE)
@@ -122,9 +125,11 @@ class TestMeta2EventsEmission(BaseTestCase):
             map(lambda x: x.get('host'), received_peers_list))
 
         self.assertListEqual(received_peers_list, expected_peers_list)
-        self._service(self.event_agent_name, 'restart')
+        self._service(self.event_agent_name, 'start')
 
     def test_container_delete(self):
+        if len(self.bt_connections) > 1:
+            self.skipTest("Unsupported on multi-beanstalk setups.")
         self._service(self.event_agent_name, 'stop')
         self._bt_watch(DEFAULT_TUBE)
 
@@ -146,8 +151,6 @@ class TestMeta2EventsEmission(BaseTestCase):
         self.container_client.container_delete(self.account,
                                                self.container_name)
 
-        # Sleep to wait for sqliterepo propagation
-        time.sleep(5)
         # Grab all events and filter for the needed event type
         wanted_events = self._bt_pull_events_by_type(
             EventTypes.CONTAINER_DELETED)
@@ -170,4 +173,4 @@ class TestMeta2EventsEmission(BaseTestCase):
         )))
 
         self.assertListEqual(received_peers, expected_peers_list)
-        self._service(self.event_agent_name, 'restart')
+        self._service(self.event_agent_name, 'start')
