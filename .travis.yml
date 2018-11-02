@@ -3,20 +3,25 @@ dist: trusty
 language: go
 go:
   - 1.10.x
-install:
-  - sudo apt-add-repository "deb http://archive.ubuntu.com/ubuntu trusty-backports main restricted universe multiverse"
-  - sudo apt-add-repository "deb http://mirror.openio.io/pub/repo/openio/sds/17.04/ubuntu/trusty ./"
+addons:
+  apt:
+    sources:
+    - sourceline: 'deb http://archive.ubuntu.com/ubuntu trusty-backports main restricted universe multiverse'
+    - sourceline: 'deb http://mirror.openio.io/pub/repo/openio/sds/17.04/ubuntu/trusty ./'
+    update: true
+
+before_install:
   - sudo apt-get update -qq
-  - sudo apt-get install -y --force-yes openio-gridinit openio-asn1c
-  - sudo apt-get install -y --force-yes flex bison curl lcov libglib2.0-dev libzookeeper-mt-dev libzmq3-dev libcurl4-gnutls-dev libapreq2-dev libsqlite3-dev attr libattr1-dev apache2 apache2-dev libapache2-mod-wsgi liblzo2-dev libjson-c-dev libleveldb1 libleveldb-dev libattr1-dev python-all-dev python-virtualenv liberasurecode-dev zookeeper zookeeper-bin zookeeperd beanstalkd
-  - sudo apt-get install -y --force-yes gdb
+  - sudo apt-get install -y --force-yes flex bison curl lcov libglib2.0-dev libzookeeper-mt-dev libzmq3-dev libcurl4-gnutls-dev libapreq2-dev libsqlite3-dev attr libattr1-dev apache2 apache2-dev libapache2-mod-wsgi liblzo2-dev libjson-c-dev libleveldb1 libleveldb-dev libattr1-dev python-all-dev python-virtualenv liberasurecode-dev zookeeper zookeeper-bin zookeeperd beanstalkd openio-gridinit openio-asn1c gdb
+
+install:
   - sudo service beanstalkd stop
   - virtualenv $HOME/oio && source $HOME/oio/bin/activate
   - pip install --upgrade pip setuptools virtualenv tox
   - pip install --upgrade -r all-requirements.txt -r test-requirements.txt
   - pip install --upgrade zkpython
-  - go get gopkg.in/ini.v1
-  - go get gopkg.in/tylerb/graceful.v1
+  - go get gopkg.in/ini.v1 gopkg.in/tylerb/graceful.v1
+
 env:
   - TEST_SUITE=3copies,with-service-id
   - TEST_SUITE=ec,with-random-service-id
@@ -30,6 +35,7 @@ env:
   - TEST_SUITE=worm
   - TEST_SUITE=build,unit,copyright,variables
   - TEST_SUITE=rebuilder,mover,with-service-id
+
 script:
   - sudo bash -c "echo '/tmp/core.%p.%E' > /proc/sys/kernel/core_pattern"
   - ulimit -c unlimited -S
@@ -46,6 +52,7 @@ script:
   - make coverage_init
   - ./tools/oio-travis-tests.sh
   - make coverage
+
 after_success:
   - bash <(curl -s https://codecov.io/bash) -f cmake_coverage.output
   - codecov
