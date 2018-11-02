@@ -1206,6 +1206,15 @@ Used by `gcc`
  * cmake directive: *OIO_SQLITEREPO_CLIENT_TIMEOUT_ALERT_IF_LONGER*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
+### sqliterepo.dump.chunk_size
+
+> Size of data chunks when copying a database using the chunked DB_PIPEFROM/DB_DUMP mechanism.
+
+ * default: **8388608**
+ * type: gint64
+ * cmake directive: *OIO_SQLITEREPO_DUMP_CHUNK_SIZE*
+ * range: 4096 -> 2146435072
+
 ### sqliterepo.election.allow_master
 
 > Allow the role of MASTER in any election.
@@ -1340,7 +1349,7 @@ Used by `gcc`
 
 ### sqliterepo.election.wait.quantum
 
-> In the current sqliterepo repository, while loop-waiting for a final election status to be reached, this value sets the unit amount of time of eacch unit wait on the lock. Keep this value rather small to avoid waitin for too long, but not too small to avoid dumping CPU cycles in active waiting.
+> In the current sqliterepo repository, while loop-waiting for a final election status to be reached, this value sets the unit amount of time of eacch unit wait on the lock. Keep this value rather small to avoid waiting for too long, but not too small to avoid dumping CPU cycles in active waiting.
 
  * default: **4 * G_TIME_SPAN_SECOND**
  * type: gint64
@@ -1408,7 +1417,7 @@ Used by `gcc`
  * default: **30.0**
  * type: gdouble
  * cmake directive: *OIO_SQLITEREPO_OUTGOING_TIMEOUT_REQ_RESYNC*
- * range: 0.01 -> 60.0
+ * range: 0.01 -> 300.0
 
 ### sqliterepo.outgoing.timeout.req.use
 
