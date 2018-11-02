@@ -692,10 +692,7 @@ class TestRdirServer4(RdirTestCase):
         super(TestRdirServer4, self).setUp()
         self.num, self.db_path, self.host, self.port = self.get_service('rdir')
         self.port = int(self.port)
-        self.vol_1 = self._volume()
-        self.vol_2 = self._volume()
-        self.vol_3 = self._volume()
-        self.vol_4 = self._volume()
+        self.vol = self._volume()
 
     def tearDown(self):
         super(TestRdirServer4, self).tearDown()
@@ -706,12 +703,12 @@ class TestRdirServer4(RdirTestCase):
         self.assertEqual(resp.status, 400)
 
         # fetch with non-json body
-        resp = self._post("/v1/rdir/meta2/fetch", params={'vol': self.vol_4},
+        resp = self._post("/v1/rdir/meta2/fetch", params={'vol': self.vol},
                           data='this is not json')
         self.assertEqual(resp.status, 400)
 
         # The fetch fails (No JSON body)
-        resp = self._post("/v1/rdir/meta2/fetch", params={'vol': self.vol_4})
+        resp = self._post("/v1/rdir/meta2/fetch", params={'vol': self.vol})
         self.assertEqual(resp.status, 400)
 
     def test_meta2_delete_invalid_parameters(self):
@@ -735,7 +732,7 @@ class TestRdirServer4(RdirTestCase):
         self.assertEqual(resp.status, 400)
 
         # DB creation
-        resp = self._post("/v1/rdir/meta2/create", params={'vol': self.vol_4})
+        resp = self._post("/v1/rdir/meta2/create", params={'vol': self.vol})
         self.assertEqual(resp.status, 201)
 
         # mtime is optional
@@ -743,12 +740,12 @@ class TestRdirServer4(RdirTestCase):
             save = rec.pop(k)
             # push an incomplete record
             resp = self._post(
-                "/v1/rdir/meta2/push", params={'vol': self.vol_4},
+                "/v1/rdir/meta2/push", params={'vol': self.vol},
                 data=json.dumps(rec))
             self.assertEqual(resp.status, 400)
             # check we list nothing
             resp = self._post("/v1/rdir/meta2/fetch",
-                              params={'vol': self.vol_4},
+                              params={'vol': self.vol},
                               data=json.dumps({}))
             self.assertEqual(resp.status, 200)
             self.assertEqual(self.json_loads(resp.data),
@@ -757,11 +754,11 @@ class TestRdirServer4(RdirTestCase):
 
     def test_meta2_create(self):
         # create volume
-        resp = self._post("/v1/rdir/meta2/create", params={'vol': self.vol_1})
+        resp = self._post("/v1/rdir/meta2/create", params={'vol': self.vol})
         self.assertEqual(resp.status, 201)
 
         # the fetch returns an empty array
-        resp = self._post("/v1/rdir/meta2/fetch", params={'vol': self.vol_1},
+        resp = self._post("/v1/rdir/meta2/fetch", params={'vol': self.vol},
                           data=json.dumps({}))
         self.assertEqual(resp.status, 200)
         self.assertEqual(self.json_loads(resp.data), {"records": [],
@@ -771,17 +768,17 @@ class TestRdirServer4(RdirTestCase):
         rec = self._meta2_record()
 
         # create volume
-        resp = self._post("/v1/rdir/meta2/create", params={'vol': self.vol_2})
+        resp = self._post("/v1/rdir/meta2/create", params={'vol': self.vol})
         self.assertEqual(resp.status, 201)
 
         # now the push must succeed
         resp = self._post(
-            "/v1/rdir/meta2/push", params={'vol': self.vol_2},
+            "/v1/rdir/meta2/push", params={'vol': self.vol},
             data=json.dumps(rec))
         self.assertEqual(resp.status, 204)
 
         # we must fetch the same data with an additional empty extra_data
-        resp = self._post("/v1/rdir/meta2/fetch", params={'vol': self.vol_2},
+        resp = self._post("/v1/rdir/meta2/fetch", params={'vol': self.vol},
                           data=json.dumps({}))
         self.assertEqual(resp.status, 200)
 
@@ -796,11 +793,11 @@ class TestRdirServer4(RdirTestCase):
         rec = self._meta2_record()
 
         # create volume
-        resp = self._post("/v1/rdir/meta2/create", params={'vol': self.vol_3})
+        resp = self._post("/v1/rdir/meta2/create", params={'vol': self.vol})
         self.assertEqual(resp.status, 201)
 
         # the fetch returns an empty array
-        resp = self._post("/v1/rdir/meta2/fetch", params={'vol': self.vol_3},
+        resp = self._post("/v1/rdir/meta2/fetch", params={'vol': self.vol},
                           data=json.dumps({}))
         self.assertEqual(resp.status, 200)
         self.assertEqual(self.json_loads(resp.data), {"records": [],
@@ -808,12 +805,12 @@ class TestRdirServer4(RdirTestCase):
 
         # deleting must succeed
         resp = self._post(
-            "/v1/rdir/meta2/delete", params={'vol': self.vol_3},
+            "/v1/rdir/meta2/delete", params={'vol': self.vol},
             data=json.dumps(rec))
         self.assertEqual(resp.status, 204)
 
         # fetching must return an empty array
-        resp = self._post("/v1/rdir/meta2/fetch", params={'vol': self.vol_3},
+        resp = self._post("/v1/rdir/meta2/fetch", params={'vol': self.vol},
                           data=json.dumps({}))
         self.assertEqual(resp.status, 200)
         self.assertEqual(self.json_loads(resp.data), {"records": [],
