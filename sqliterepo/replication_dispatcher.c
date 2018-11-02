@@ -522,7 +522,7 @@ _dump_chunked(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 		return NULL;
 	}
 
-	err = sqlx_repository_dump_base_chunked(sq3, SQLX_DUMP_CHUNK_SIZE,
+	err = sqlx_repository_dump_base_chunked(sq3, sqliterepo_dump_chunk_size,
 			_dump_chunked_cb, NULL);
 
 	sqlx_repository_unlock_and_close_noerror(sq3);

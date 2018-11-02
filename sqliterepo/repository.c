@@ -1442,10 +1442,8 @@ _read_file_chunk(int fd, guint64 chunk_size, GByteArray *gba)
 {
 	ssize_t r;
 	guint64 tot = 0;
-	guint8 *d;
+	guint8 d[SQLX_DUMP_BUFFER_SIZE];
 	GError *err = NULL;
-
-	d = g_malloc(SQLX_DUMP_BUFFER_SIZE);
 
 	do {
 		r = read(fd, d, MIN(chunk_size - tot, SQLX_DUMP_BUFFER_SIZE));
@@ -1457,7 +1455,6 @@ _read_file_chunk(int fd, guint64 chunk_size, GByteArray *gba)
 		}
 	} while (r > 0 && tot < chunk_size && !err);
 
-	g_free(d);
 	return err;
 }
 

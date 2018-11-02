@@ -342,7 +342,7 @@
 			{ "type": "float", "name": "oio_election_resync_timeout_req",
 				"key": "sqliterepo.outgoing.timeout.req.resync",
 				"descr": "Sets the global timeout of a RESYNC request sent to a 'meta' service. Sent to a SLAVE DB, the RESYNC operation involves a RPC from the SLAVE to the MASTER, then a DB dump on the MASTER and restoration on the SLAVE. Thus that operation might be rather long, due to the possibility of network/disk latency/bandwidth, etc.",
-				"def": 30.0, "min": 0.01, "max": 60.0 }
+				"def": 30.0, "min": 0.01, "max": 300.0 }
 		]
 	},
 	"sqliterepo": {
@@ -377,7 +377,7 @@
 
 			{ "type": "monotonic", "name": "oio_election_period_cond_wait",
 				"key": "sqliterepo.election.wait.quantum",
-				"descr": "In the current sqliterepo repository, while loop-waiting for a final election status to be reached, this value sets the unit amount of time of eacch unit wait on the lock. Keep this value rather small to avoid waitin for too long, but not too small to avoid dumping CPU cycles in active waiting.",
+				"descr": "In the current sqliterepo repository, while loop-waiting for a final election status to be reached, this value sets the unit amount of time of eacch unit wait on the lock. Keep this value rather small to avoid waiting for too long, but not too small to avoid dumping CPU cycles in active waiting.",
 				"def": "4s", "min": "100ms", "max": "1h" },
 
 			{ "type": "monotonic", "name": "oio_election_delay_wait",
@@ -570,7 +570,12 @@
 			{ "type": "string", "name": "sqliterepo_election_2master_db",
 				"key": "enbug.election.double_master.db",
 				"descr": "CID of the base to force a double master condition on.",
-				"def": "", "limit": 256 }
+				"def": "", "limit": 256 },
+
+			{ "type": "int64", "name": "sqliterepo_dump_chunk_size",
+				"key": "sqliterepo.dump.chunk_size",
+				"descr": "Size of data chunks when copying a database using the chunked DB_PIPEFROM/DB_DUMP mechanism.",
+				"def": "8Mi", "min": 4096, "max": "2047Mi" }
 		]
 	},
 	"rdir": {
