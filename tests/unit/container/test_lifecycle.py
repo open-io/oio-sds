@@ -1165,7 +1165,6 @@ class TestContainerLifecycle(unittest.TestCase):
         rule = LifecycleRule.from_element(rule_elt)
         self.assertIsNotNone(rule)
         self.assertIsNotNone(rule.id)
-        self.assertTrue(rule.id.startswith('anonymous-rule-'))
         self.assertIsNotNone(rule.filter)
         self.assertTrue(rule.enabled)
         self.assertEqual(6, len(rule.actions))
@@ -1353,13 +1352,13 @@ class TestContainerLifecycle(unittest.TestCase):
         self.assertEqual(EXPECTED, str(filter_))
 
     def test_LifecycleRule_to_string(self):
-        EXPECTED = '<Rule><Filter></Filter>' \
+        EXPECTED = '<Rule><ID>Test</ID><Filter></Filter>' \
             + '<Status>Disabled</Status>' \
             + '<Expiration><Days>10</Days></Expiration>' \
             + '</Rule>'
         filter_ = LifecycleRuleFilter(None, {})
         actions = [Expiration(DaysActionFilter(10))]
-        rule = LifecycleRule('anonymous-rule-01234', filter_, False, actions)
+        rule = LifecycleRule('Test', filter_, False, actions)
         self.assertEqual(EXPECTED, str(rule))
 
         EXPECTED = '<Rule><ID>Test</ID><Filter></Filter>' \
