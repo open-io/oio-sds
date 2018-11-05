@@ -24,6 +24,7 @@ class LifecycleCliTest(CliTestCase):
     CONF = """
         <LifecycleConfiguration>
             <Rule>
+                <ID>0123456789abcdef</ID>
                 <Filter>
                     <Prefix>documents/</Prefix>
                 </Filter>

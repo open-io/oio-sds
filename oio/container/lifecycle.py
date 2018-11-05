@@ -247,7 +247,7 @@ class LifecycleRule(object):
             if id_ is None:
                 raise ValueError("Missing value for 'ID' element")
         except IndexError:
-            id_ = "anonymous-rule-%s" % uuid.uuid4().hex
+            id_ = uuid.uuid4().hex
 
         try:
             filter_ = LifecycleRuleFilter.from_element(
@@ -363,10 +363,9 @@ class LifecycleRule(object):
     def _to_element_tree(self, **kwargs):
         rule_elt = etree.Element("Rule")
 
-        if not self.id.startswith('anonymous-rule-'):
-            id_elt = etree.Element("ID")
-            id_elt.text = self.id
-            rule_elt.append(id_elt)
+        id_elt = etree.Element("ID")
+        id_elt.text = self.id
+        rule_elt.append(id_elt)
 
         filter_elt = self.filter._to_element_tree(**kwargs)
         rule_elt.append(filter_elt)
