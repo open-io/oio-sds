@@ -16,14 +16,16 @@
 from mock import MagicMock as Mock
 
 from oio.rdir.client import RdirClient
-from tests.utils import BaseTestCase, random_id
+from tests.utils import random_id
+import unittest
 
 
-class TestRdirClient(BaseTestCase):
+class TestRdirClient(unittest.TestCase):
     def setUp(self):
         super(TestRdirClient, self).setUp()
-        self.namespace = self.conf['namespace']
-        self.rdir_client = RdirClient({'namespace': self.namespace})
+        self.namespace = "dummy"
+        self.rdir_client = RdirClient({'namespace': self.namespace},
+                                      endpoint='127.0.0.0:6000')
         self.rdir_client._get_rdir_addr = Mock(return_value="0.1.2.3:4567")
         self.container_id_1 = random_id(64)
         self.container_id_2 = random_id(64)
@@ -101,15 +103,16 @@ class TestRdirClient(BaseTestCase):
         self.assertEqual(self.rdir_client._direct_request.call_count, 3)
 
 
-class TestRdirMeta2Client(BaseTestCase):
+class TestRdirMeta2Client(unittest.TestCase):
     def setUp(self):
         super(TestRdirMeta2Client, self).setUp()
-        self.namespace = self.conf['namespace']
+        self.namespace = "dummy"
         self.volid = "e29b4c56-8522-4118-82ea"
         self.container_url = "OPENIO/testing/test1"
         self.container_id = "random833999id"
         self.mtime = 2874884.47
-        self.rdir_client = RdirClient({'namespace': self.namespace})
+        self.rdir_client = RdirClient({'namespace': self.namespace},
+                                      endpoint='127.0.0.0:6000')
 
     def tearDown(self):
         super(TestRdirMeta2Client, self).tearDown()

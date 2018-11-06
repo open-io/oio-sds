@@ -112,11 +112,13 @@ class TestMeta2EventsEmission(BaseTestCase):
                                                        self.container_name,
                                                        cid=self.container_id)
         raw_dir_info = raw_dir_info['srv']
-        expected_peers_list = sorted([x.get('host') for x in raw_dir_info if
-                               x.get('type') == 'meta2'])
+        expected_peers_list = sorted(
+            [x.get('host') for x in raw_dir_info if x.get('type') == 'meta2']
+        )
 
-        received_peers_list = sorted([x.get('host') for x in ev.get('data') if
-                               x.get('type') == 'meta2'])
+        received_peers_list = sorted(
+            [x.get('host') for x in ev.get('data') if x.get('type') == 'meta2']
+        )
 
         self.assertListEqual(received_peers_list, expected_peers_list)
 
@@ -135,8 +137,9 @@ class TestMeta2EventsEmission(BaseTestCase):
                                                        self.container_name,
                                                        cid=self.container_id)
         raw_dir_info = raw_dir_info['srv']
-        expected_peers_list = sorted([x.get('host') for x in raw_dir_info if
-                               x.get('type') == 'meta2'])
+        expected_peers_list = sorted(
+            [x.get('host') for x in raw_dir_info if x.get('type') == 'meta2']
+        )
 
         # Fire up the event
         self.container_client.container_delete(self.account,

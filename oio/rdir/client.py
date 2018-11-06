@@ -278,7 +278,7 @@ class RdirClient(HttpApi):
     }
 
     def __init__(self, conf, **kwargs):
-        super(RdirClient, self).__init__(conf, **kwargs)
+        super(RdirClient, self).__init__(**kwargs)
         self.directory = DirectoryClient(conf, **kwargs)
         self._addr_cache = dict()
 
