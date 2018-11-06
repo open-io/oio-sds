@@ -13,6 +13,9 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+
+from oio.common.green import eventlet
+
 import logging
 import hashlib
 from tempfile import TemporaryFile
@@ -20,7 +23,8 @@ from urlparse import urlparse
 from oio.api import io
 from oio.common.exceptions import SourceReadError, OioException
 from oio.api.backblaze_http import Backblaze, BackblazeException
-import eventlet
+
+
 logger = logging.getLogger(__name__)
 WORD_LENGTH = 10
 TRY_REQUEST_NUMBER = 3

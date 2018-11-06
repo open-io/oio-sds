@@ -13,10 +13,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
+from oio.common.green import GreenPool
+
 import os
 from logging import getLogger
 from cliff import command, lister, show
-from eventlet import GreenPool
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.utils import depaginate
 from oio.common import exceptions

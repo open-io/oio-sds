@@ -13,11 +13,12 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+
+from oio.common.green import socket, HTTPConnection, HTTPResponse, _UNKNOWN
+
 import logging
-import socket
 
 from urllib import quote
-from eventlet.green.httplib import HTTPConnection, HTTPResponse, _UNKNOWN
 
 
 class CustomHTTPResponse(HTTPResponse):

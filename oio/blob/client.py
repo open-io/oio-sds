@@ -14,11 +14,12 @@
 # License along with this library.
 
 
+from oio.common.green import GreenPile
+
 import random
 from functools import wraps
 from urllib import unquote
 
-from eventlet import GreenPile
 from oio.common.http_urllib3 import get_pool_manager, \
     oio_exception_from_httperror, urllib3
 from oio.common import exceptions as exc, utils

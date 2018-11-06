@@ -16,10 +16,11 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import eventlet.hubs
+
+from oio.common.green import eventlet_hubs, get_hub
+
 from optparse import OptionParser
 from oio.common.configuration import parse_options, read_conf
-from oio.common.green import get_hub
 from oio.account.server import create_app
 from oio.common.wsgi import Application, ServiceLogger
 
@@ -27,7 +28,7 @@ from oio.common.wsgi import Application, ServiceLogger
 if __name__ == '__main__':
     parser = OptionParser("%prog CONFIG [options]")
     conf_file, options = parse_options(parser)
-    eventlet.hubs.use_hub(get_hub())
+    eventlet_hubs.use_hub(get_hub())
     conf = read_conf(conf_file, 'account-server')
     app = create_app(conf)
     Application(app, conf, logger_class=ServiceLogger).run()

@@ -14,6 +14,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+from oio.common.green import ratelimit
+
 import time
 from datetime import datetime
 from random import random
@@ -26,7 +28,6 @@ from oio.common import exceptions as exc
 from oio.common.utils import paths_gen, request_id
 from oio.common.easy_value import int_value, true_value
 from oio.common.logger import get_logger
-from oio.common.green import ratelimit
 from oio.common.exceptions import OioNetworkException, VolumeException
 from oio.common.constants import STRLEN_CHUNKID
 from oio.blob.converter import BlobConverter

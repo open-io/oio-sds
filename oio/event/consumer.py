@@ -14,15 +14,13 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+from oio.common.green import eventlet, Timeout, greenthread
+
 import time
 import signal
 import os
 import sys
-
 import greenlet
-import eventlet
-from eventlet import Timeout, greenthread
-from oio.common.exceptions import OioNetworkException, ClientException
 
 from oio.conscience.client import ConscienceClient
 from oio.rdir.client import RdirClient
@@ -32,7 +30,8 @@ from oio.common.easy_value import int_value
 from oio.common.json import json
 from oio.event.evob import is_success, is_error
 from oio.event.loader import loadhandlers
-from oio.common.exceptions import ExplicitBury
+from oio.common.exceptions import ExplicitBury, OioNetworkException, \
+    ClientException
 
 
 SLEEP_TIME = 1
@@ -139,7 +138,6 @@ class EventWorker(Worker):
         self.app_env = dict()
 
     def init(self):
-        eventlet.monkey_patch(os=False)
         self.tube = self.conf.get("tube", DEFAULT_TUBE)
         self.cs = ConscienceClient(self.conf, logger=self.logger)
         self.rdir = RdirClient(self.conf, logger=self.logger)

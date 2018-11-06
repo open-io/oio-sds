@@ -14,11 +14,11 @@
 # License along with this library.
 
 
+from oio.common.green import socket, Empty, LifoQueue
+
 import os
 import sys
 import yaml
-from eventlet.green import socket
-from eventlet.queue import Empty, LifoQueue
 from urlparse import urlparse
 from cStringIO import StringIO as BytesIO
 

@@ -17,15 +17,15 @@
 Recursively check account, container, content and chunk integrity.
 """
 
+
 from __future__ import print_function
+from oio.common.green import Event, GreenPool
+
 import os
 import csv
 import sys
 import cStringIO
 import argparse
-
-from eventlet.event import Event
-from eventlet.greenpool import GreenPool
 
 from oio.common import exceptions as exc
 from oio.common.storage_method import STORAGE_METHODS

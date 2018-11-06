@@ -13,7 +13,9 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from eventlet import sleep
+
+from oio.common.green import sleep
+
 from oio.check_service.common import CheckService, random_buffer
 from oio.account.client import AccountClient
 from oio.container.client import ContainerClient

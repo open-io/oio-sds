@@ -13,11 +13,13 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+
+from oio.common.green import Timeout
+
 import unittest
 from collections import defaultdict
 from io import BytesIO
 import hashlib
-from eventlet import Timeout
 from mock import patch
 
 from oio.common import exceptions as exc

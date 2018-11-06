@@ -14,10 +14,11 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+from oio.common.green import ratelimit, eventlet, ContextPool
+
 import time
 
 from oio.common.easy_value import int_value
-from oio.common.green import ratelimit, eventlet, ContextPool
 from oio.common.logger import get_logger
 
 

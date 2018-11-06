@@ -14,17 +14,17 @@
 # License along with this library.
 
 
+from oio.common.green import eventlet_hubs, get_hub
+
 import sys
 import signal
 
 import os
 from re import sub
 
-import eventlet.hubs
 from oio.common.utils import drop_privileges
 from oio.common.configuration import read_conf
 from oio.common.logger import redirect_stdio, get_logger
-from oio.common.green import get_hub
 
 
 class Daemon(object):
@@ -67,7 +67,7 @@ class Daemon(object):
 
 
 def run_daemon(klass, conf_file, section_name=None, **kwargs):
-    eventlet.hubs.use_hub(get_hub())
+    eventlet_hubs.use_hub(get_hub())
     if section_name is None:
         section_name = sub(r'([a-z])([A-Z])', r'\1-\2', klass.__name__).lower()
     conf = read_conf(
