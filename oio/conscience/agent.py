@@ -13,11 +13,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
+from oio.common.green import GreenPool, sleep
+
 import re
 import os
-
 import pkg_resources
-from eventlet import GreenPool, sleep
 
 from oio.common.daemon import Daemon
 from oio.common.http_urllib3 import get_pool_manager

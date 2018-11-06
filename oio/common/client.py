@@ -13,12 +13,14 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+
+from oio.common.green import sleep
+
 from oio.common.logger import get_logger
 from oio.common.configuration import load_namespace_conf, validate_service_conf
 from oio.api.base import HttpApi
 from oio.common.exceptions import Conflict, OioException, ServiceBusy
 from random import randrange
-from eventlet import sleep
 
 
 REQUEST_ATTEMPTS = 1

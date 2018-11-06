@@ -14,6 +14,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+from oio.common.green import ratelimit
+
 import time
 import os
 import tempfile
@@ -30,7 +32,6 @@ from oio.common.xattr import modify_xattr
 from oio.common.exceptions import ContentNotFound, OrphanChunk, \
     ConfigurationException
 from oio.common.logger import get_logger
-from oio.common.green import ratelimit
 from oio.common.easy_value import int_value, is_hexa, true_value
 from oio.container.client import ContainerClient
 from oio.content.factory import ContentFactory

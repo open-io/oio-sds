@@ -15,13 +15,14 @@
 
 
 from __future__ import print_function
+from oio.common.green import eventlet
+
 import sys
 import random
 import errno
 import signal
 import time
 import os
-import eventlet
 from oio.common.utils import CPU_COUNT, drop_privileges
 from oio.common.easy_value import int_value
 from oio.common.configuration import read_conf

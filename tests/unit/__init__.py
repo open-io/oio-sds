@@ -12,7 +12,7 @@
 # License along with this library.
 
 
-from eventlet import Timeout, sleep
+from oio.common.green import Timeout, sleep
 
 from contextlib import contextmanager
 from oio.common.http import HeadersDict

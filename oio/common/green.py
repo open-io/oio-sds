@@ -14,13 +14,20 @@
 # License along with this library.
 
 
-import time
-import logging
 import eventlet
 
-import eventlet.semaphore
-from eventlet.green import threading
-from eventlet import Timeout
+import time
+import logging
+
+import eventlet.hubs as eventlet_hubs # noqa
+from eventlet import sleep, patcher, greenthread # noqa
+from eventlet import Queue, Timeout, GreenPile, GreenPool # noqa
+from eventlet.green import threading, socket # noqa
+from eventlet.green.httplib import HTTPConnection, HTTPResponse, _UNKNOWN # noqa
+from eventlet.event import Event # noqa
+from eventlet.queue import Empty, LifoQueue # noqa
+
+eventlet.monkey_patch(os=False)
 
 logging.thread = eventlet.green.thread
 logging.threading = threading

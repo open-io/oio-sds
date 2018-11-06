@@ -16,11 +16,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import eventlet.hubs
+
+from oio.common.green import eventlet_hubs, get_hub
+
 from optparse import OptionParser
 from oio.common.configuration import parse_options
 from oio import __canonical_version__
-from oio.common.green import get_hub
 from oio.event.agent import Runner
 from oio.event.consumer import EventWorker
 
@@ -31,5 +32,5 @@ For a sample configuration file, see
 https://github.com/open-io/oio-sds/blob/%s/etc/event-agent.conf-sample"""
     parser = OptionParser(doc % __canonical_version__)
     config, options = parse_options(parser)
-    eventlet.hubs.use_hub(get_hub())
+    eventlet_hubs.use_hub(get_hub())
     Runner(config, EventWorker, **options).run()

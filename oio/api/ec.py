@@ -13,12 +13,13 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from oio.common.green import Queue, Timeout, GreenPile
+
 import collections
 import math
 import hashlib
 import logging
 from urlparse import urlparse
-from eventlet import Queue, Timeout, GreenPile
 from socket import error as SocketError
 from greenlet import GreenletExit
 from oio.common import exceptions

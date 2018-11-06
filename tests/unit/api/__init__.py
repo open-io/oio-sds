@@ -13,8 +13,10 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+
+from oio.common.green import sleep
+
 from io import BytesIO
-from eventlet import sleep
 from oio.common.http import HeadersDict
 from oio.common.http_urllib3 import urllib3
 from oio.api.object_storage import ObjectStorageApi
