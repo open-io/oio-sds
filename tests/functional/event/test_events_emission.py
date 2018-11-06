@@ -30,8 +30,6 @@ from tests.utils import BaseTestCase
 class TestMeta2EventsEmission(BaseTestCase):
     def setUp(self):
         super(TestMeta2EventsEmission, self).setUp()
-        self.account = self.conf['account']
-        self.namespace = self.conf['namespace']
         self.container_name = 'TestEventsEmission%f' % time.time()
         self.container_id = cid_from_name(self.account, self.container_name)
         self.container_client = ContainerClient(self.conf)
@@ -39,6 +37,10 @@ class TestMeta2EventsEmission(BaseTestCase):
         self.event_agent_name = 'event-agent-1'
         self.bt_connections = []
         self._bt_make_connections(self.conf['services']['beanstalkd'])
+
+    def tearDown(self):
+        super(TestMeta2EventsEmission, self).tearDown()
+        self._service(self.event_agent_name, 'start')
 
     def _bt_make_connections(self, bt_list):
         for bt_entry in bt_list:
@@ -49,7 +51,7 @@ class TestMeta2EventsEmission(BaseTestCase):
         for bt in self.bt_connections:
             bt.watch(tube)
 
-    def _bt_pull_events_by_type(self, type):
+    def _bt_pull_events_by_type(self, event_type):
         pulled_events = []
 
         for bt in self.bt_connections:
@@ -61,10 +63,7 @@ class TestMeta2EventsEmission(BaseTestCase):
                     bt.delete(job_id)
                 except ResponseError:
                     break
-
-        return list(
-            filter(lambda x: x.get("event") == type,
-                   pulled_events))
+        return [x for x in pulled_events if x.get("event") == event_type]
 
     def _service(self, name, action):
         name = "%s-%s" % (self.conf['namespace'], name)
@@ -101,7 +100,7 @@ class TestMeta2EventsEmission(BaseTestCase):
 
         # Basic info
         self.assertEqual(ev.get("url"), {
-            'ns': self.namespace,
+            'ns': self.ns,
             'account': self.account,
             'user': self.container_name,
             'id': self.container_id,
@@ -113,19 +112,13 @@ class TestMeta2EventsEmission(BaseTestCase):
                                                        self.container_name,
                                                        cid=self.container_id)
         raw_dir_info = raw_dir_info['srv']
-        expected_peers_list = list(
-            filter(lambda x: x.get('type') == 'meta2', raw_dir_info))
-        expected_peers_list = list(
-            map(lambda x: x.get('host'), expected_peers_list))
+        expected_peers_list = sorted([x.get('host') for x in raw_dir_info if
+                               x.get('type') == 'meta2'])
 
-        received_peers_list = list(
-            filter(lambda x: x.get('type') == 'meta2',
-                   ev.get('data')))
-        received_peers_list = list(
-            map(lambda x: x.get('host'), received_peers_list))
+        received_peers_list = sorted([x.get('host') for x in ev.get('data') if
+                               x.get('type') == 'meta2'])
 
         self.assertListEqual(received_peers_list, expected_peers_list)
-        self._service(self.event_agent_name, 'start')
 
     def test_container_delete(self):
         if len(self.bt_connections) > 1:
@@ -142,10 +135,8 @@ class TestMeta2EventsEmission(BaseTestCase):
                                                        self.container_name,
                                                        cid=self.container_id)
         raw_dir_info = raw_dir_info['srv']
-        expected_peers_list = list(
-            filter(lambda x: x.get('type') == 'meta2', raw_dir_info))
-        expected_peers_list = sorted(list(
-            map(lambda x: x.get('host'), expected_peers_list)))
+        expected_peers_list = sorted([x.get('host') for x in raw_dir_info if
+                               x.get('type') == 'meta2'])
 
         # Fire up the event
         self.container_client.container_delete(self.account,
@@ -161,16 +152,13 @@ class TestMeta2EventsEmission(BaseTestCase):
         # Basic info
         for ev in wanted_events:
             self.assertEqual(ev.get("url"), {
-                'ns': self.namespace,
+                'ns': self.ns,
                 'account': self.account,
                 'user': self.container_name,
                 'id': self.container_id,
             })
 
-        received_peers = sorted(list(map(
-            lambda x: str(x.get("data").get("peers")[0]),
-            wanted_events
-        )))
+        received_peers = sorted(
+            [str(x.get("data").get("peers")[0]) for x in wanted_events])
 
         self.assertListEqual(received_peers, expected_peers_list)
-        self._service(self.event_agent_name, 'start')
