@@ -17,9 +17,13 @@ import os
 from logging import getLogger
 from cliff import command, lister, show
 from eventlet import GreenPool
+import eventlet
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.utils import depaginate
 from oio.common import exceptions
+
+
+eventlet.monkey_patch()
 
 
 class ContainerCommandMixin(object):
