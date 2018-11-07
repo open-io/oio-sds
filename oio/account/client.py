@@ -134,8 +134,15 @@ class AccountClient(HttpApi):
         _resp, body = self.account_request(account, 'GET', 'show', **kwargs)
         return body
 
-    # FIXME: document this
     def account_update(self, account, metadata, to_delete, **kwargs):
+        """
+        Update metadata of the specified account.
+
+        :param metadata: dictionary of properties that must be set or updated.
+        :type metadata: `dict`
+        :param to_delete: list of property keys that must be removed.
+        :type to_delete: `list`
+        """
         data = json.dumps({"metadata": metadata, "to_delete": to_delete})
         self.account_request(account, 'POST', 'update', data=data, **kwargs)
 
