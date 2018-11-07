@@ -100,7 +100,7 @@ class CreateAccount(lister.Lister):
 
 
 class SetAccount(command.Command):
-    """Set account properties"""
+    """Set account properties."""
 
     log = getLogger(__name__ + '.SetAccount')
 
@@ -118,7 +118,7 @@ class SetAccount(command.Command):
             '--property',
             metavar='<key=value>',
             action=KeyValueAction,
-            help='Property to add/update for this account'
+            help='Property to add/update to this account'
         )
         return parser
 
@@ -132,7 +132,7 @@ class SetAccount(command.Command):
 
 
 class UnsetAccount(command.Command):
-    """Unset account properties"""
+    """Unset account properties."""
 
     log = getLogger(__name__ + '.UnsetAccount')
 
@@ -144,7 +144,7 @@ class UnsetAccount(command.Command):
             help='Account to modify',
         )
         parser.add_argument(
-            '--property',
+            '-p', '--property',
             metavar='<key>',
             action='append',
             default=[],

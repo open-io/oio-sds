@@ -1242,6 +1242,11 @@ class ObjectStorageApi(object):
     @ensure_headers
     @ensure_request_id
     def container_refresh(self, account, container, attempts=3, **kwargs):
+        """
+        Reset statistics of the specified container,
+        and trigger an event that will update them.
+        If the container does not exist, remove it from account.
+        """
         for i in range(attempts):
             try:
                 self.account.container_reset(account, container, time.time(),
@@ -1251,8 +1256,8 @@ class ObjectStorageApi(object):
                     raise
         try:
             self.container.container_touch(account, container, **kwargs)
-        except exc.ClientException as e:
-            if e.status != 406 and e.status != 431:
+        except exc.ClientException as err:
+            if err.status != 406 and err.status != 431:
                 raise
             # CODE_USER_NOTFOUND or CODE_CONTAINER_NOTFOUND
             metadata = dict()

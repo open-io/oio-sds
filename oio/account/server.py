@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -40,6 +40,9 @@ def access_log(func):
 
 
 class Account(WerkzeugApp):
+
+    # pylint: disable=no-member
+
     def __init__(self, conf, backend, logger=None):
         self.conf = conf
         self.backend = backend
@@ -63,6 +66,7 @@ class Account(WerkzeugApp):
         super(Account, self).__init__(self.url_map, self.logger)
 
     def _get_account_id(self, req):
+        """Fetch account name from request query string."""
         account_id = req.args.get('id')
         if not account_id:
             raise BadRequest('Missing Account ID')
@@ -71,9 +75,11 @@ class Account(WerkzeugApp):
     # ACCT{{
     # GET /status
     # ~~~~~~~~~~~
-    # Return a summary of the target ACCOUNT service. The body of the reply
+    # Return a summary of the target account service. The body of the reply
     # will present a count of the objects in the databse, formatted as a JSON
     # object.
+    #
+    # Sample request:
     #
     # .. code-block:: http
     #
@@ -81,6 +87,8 @@ class Account(WerkzeugApp):
     #    Host: 127.0.0.1:6021
     #    User-Agent: curl/7.55.1
     #    Accept: */*
+    #
+    # Sample response:
     #
     # .. code-block:: http
     #
@@ -101,7 +109,9 @@ class Account(WerkzeugApp):
     # ACCT{{
     # PUT /v1.0/account/create?id=<account_name>
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    # Create new account named account_name
+    # Create a new account with the specified name.
+    #
+    # Sample request:
     #
     # .. code-block:: http
     #
@@ -109,6 +119,8 @@ class Account(WerkzeugApp):
     #    Host: 127.0.0.1:6013
     #    User-Agent: curl/7.47.0
     #    Accept: */*
+    #
+    # Sample response:
     #
     # .. code-block:: http
     #
@@ -133,7 +145,9 @@ class Account(WerkzeugApp):
     # ACCT{{
     # GET /v1.0/account/list
     # ~~~~~~~~~~~~~~~~~~~~~~
-    # Get list of existing accounts
+    # Get the list of existing accounts.
+    #
+    # Sample request:
     #
     # .. code-block:: http
     #
@@ -141,6 +155,8 @@ class Account(WerkzeugApp):
     #    Host: 127.0.0.1:6013
     #    User-Agent: curl/7.47.0
     #    Accept: */*
+    #
+    # Sample response:
     #
     # .. code-block:: http
     #
@@ -162,9 +178,11 @@ class Account(WerkzeugApp):
         return Response(json.dumps(accounts), mimetype='text/json')
 
     # ACCT{{
-    # PUT /v1.0/account/delete?id=<account_name>
+    # POST /v1.0/account/delete?id=<account_name>
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    # Delete account named account_name
+    # Delete the specified account.
+    #
+    # Sample request:
     #
     # .. code-block:: http
     #
@@ -173,9 +191,11 @@ class Account(WerkzeugApp):
     #    User-Agent: curl/7.47.0
     #    Accept: */*
     #
+    # Sample response:
+    #
     # .. code-block:: http
     #
-    #    HTTP/1.1 204 NO CONTENT
+    #    HTTP/1.1 204 No Content
     #    Server: gunicorn/19.9.0
     #    Date: Wed, 01 Aug 2018 12:17:25 GMT
     #    Connection: keep-alive
@@ -193,17 +213,12 @@ class Account(WerkzeugApp):
             return Response(status=204)
 
     # ACCT{{
-    # PUT /v1.0/account/update?id=<account_name>
+    # POST /v1.0/account/update?id=<account_name>
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     #
-    # .. code-block:: json
+    # Update metadata of the specified account.
     #
-    #    {
-    #      "metadata": {"key":"value"},
-    #      "to_delete": ["key"]
-    #    }
-    #
-    # Update metadata of account named account_name
+    # Sample request:
     #
     # .. code-block:: http
     #
@@ -213,6 +228,15 @@ class Account(WerkzeugApp):
     #    Accept: */*
     #    Content-Length: 41
     #    Content-Type: application/x-www-for-urlencoded
+    #
+    # .. code-block:: json
+    #
+    #    {
+    #      "metadata": {"key":"value"},
+    #      "to_delete": ["key"]
+    #    }
+    #
+    # Sample response:
     #
     # .. code-block:: http
     #
@@ -237,7 +261,9 @@ class Account(WerkzeugApp):
     # ACCT{{
     # GET /v1.0/account/show?id=<account_name>
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    # Get information about an account named account_name
+    # Get information about the specified account.
+    #
+    # Sample request:
     #
     # .. code-block:: http
     #
@@ -245,6 +271,8 @@ class Account(WerkzeugApp):
     #    Host: 127.0.0.1:6013
     #    User-Agent: curl/7.47.0
     #    Accept: */*
+    #
+    # Sample response:
     #
     # .. code-block:: http
     #
@@ -387,8 +415,22 @@ class Account(WerkzeugApp):
         return Response(result)
 
     # ACCT{{
-    # GET /v1.0/account/container/reset?id=<account_name>
+    # POST /v1.0/account/container/reset?id=<account_name>
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    #
+    # Reset statistics of the specified container.
+    # Usually followed by a "container touch" operation.
+    #
+    # Request example:
+    #
+    # .. code-block:: http
+    #
+    #    POST /v1.0/account/container/reset?id=myaccount HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #    Content-Length: 45
+    #    Content-Type: application/x-www-form-urlencoded
     #
     # .. code-block:: json
     #
@@ -397,16 +439,7 @@ class Account(WerkzeugApp):
     #      "mtime": 1234567891011
     #    }
     #
-    # Reset container of an account named account_name
-    #
-    # .. code-block:: http
-    #
-    #    GET /v1.0/account/container/reset?id=myaccount HTTP/1.1
-    #    Host: 127.0.0.1:6013
-    #    User-Agent: curl/7.47.0
-    #    Accept: */*
-    #    Content-Length: 45
-    #    Content-Type: application/x-www-form-urlencoded
+    # Response example:
     #
     # .. code-block:: http
     #
