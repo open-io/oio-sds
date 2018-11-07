@@ -759,7 +759,7 @@ class Transition(LifecycleAction):
     Change object storage policy.
     """
 
-    XML_POLICY = 'StorageClass'
+    STORAGE_POLICY_XML_TAG = 'StorageClass'
 
     def __init__(self, filter_, policy, **kwargs):
         super(Transition, self).__init__(filter_, **kwargs)
@@ -777,13 +777,14 @@ class Transition(LifecycleAction):
         :type transition_elt: `lxml.etree.Element`
         """
         try:
-            policy = transition_elt.findall(cls.XML_POLICY)[-1].text
+            policy = transition_elt.findall(
+                cls.STORAGE_POLICY_XML_TAG)[-1].text
             if policy is None:
                 raise ValueError("Missing value for '%s' element" %
-                                 cls.XML_POLICY)
+                                 cls.STORAGE_POLICY_XML_TAG)
         except IndexError:
             raise ValueError("Missing '%s' element in Transition action" %
-                             cls.XML_POLICY)
+                             cls.STORAGE_POLICY_XML_TAG)
 
         try:
             days_elt = transition_elt.findall('Days')[-1]
@@ -809,7 +810,7 @@ class Transition(LifecycleAction):
 
     def _to_element_tree(self, **kwargs):
         trans_elt = etree.Element('Transition')
-        policy_elt = etree.Element(self.XML_POLICY)
+        policy_elt = etree.Element(self.STORAGE_POLICY_XML_TAG)
         policy_elt.text = self.policy
         trans_elt.append(policy_elt)
         filter_elt = self.filter._to_element_tree(**kwargs)
@@ -893,14 +894,15 @@ class NoncurrentVersionTransition(Transition):
         :type transition_elt: `lxml.etree.Element`
         """
         try:
-            policy = transition_elt.findall(cls.XML_POLICY)[-1].text
+            policy = transition_elt.findall(
+                cls.STORAGE_POLICY_XML_TAG)[-1].text
             if policy is None:
                 raise ValueError("Missing value for '%s' element" %
-                                 cls.XML_POLICY)
+                                 cls.STORAGE_POLICY_XML_TAG)
         except IndexError:
             raise ValueError(
                 "Missing '%s' element in NoncurrentVersionTransition action" %
-                (cls.XML_POLICY))
+                (cls.STORAGE_POLICY_XML_TAG))
 
         try:
             days_elt = transition_elt.findall('NoncurrentDays')[-1]
@@ -917,7 +919,7 @@ class NoncurrentVersionTransition(Transition):
 
     def _to_element_tree(self, **kwargs):
         trans_elt = etree.Element('NoncurrentVersionTransition')
-        policy_elt = etree.Element(self.XML_POLICY)
+        policy_elt = etree.Element(self.STORAGE_POLICY_XML_TAG)
         policy_elt.text = self.policy
         trans_elt.append(policy_elt)
         filter_elt = self.filter._to_element_tree(**kwargs)
