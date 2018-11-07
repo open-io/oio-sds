@@ -13,6 +13,9 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
+from oio.common.green import ratelimit
+
 from string import hexdigits
 import time
 
@@ -25,7 +28,6 @@ from oio.common import exceptions as exc
 from oio.common.utils import paths_gen, statfs, cid_from_name
 from oio.common.easy_value import int_value, true_value
 from oio.common.logger import get_logger
-from oio.common.green import ratelimit
 from oio.common.constants import STRLEN_CHUNKID
 from oio.common.fullpath import decode_fullpath
 from oio.content.factory import ContentFactory

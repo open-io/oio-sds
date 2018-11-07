@@ -13,7 +13,9 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from eventlet import Timeout
+
+from oio.common.green import Timeout
+
 from oio.common.utils import RingBuffer
 from oio.common.easy_value import float_value
 

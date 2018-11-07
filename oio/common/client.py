@@ -13,12 +13,14 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+
+from oio.common.green import sleep
+
 from oio.common.logger import get_logger
 from oio.common.configuration import load_namespace_conf, validate_service_conf
 from oio.api.base import HttpApi
 from oio.common.exceptions import Conflict, OioException, ServiceBusy
 from random import randrange
-from eventlet import sleep
 
 
 REQUEST_ATTEMPTS = 1
@@ -31,13 +33,11 @@ class ProxyClient(HttpApi):
 
     _slot_time = 0.5
 
-    def __init__(self, conf, pool_manager=None, request_prefix="",
+    def __init__(self, conf, request_prefix="",
                  no_ns_in_url=False, endpoint=None,
                  request_attempts=REQUEST_ATTEMPTS,
                  logger=None, **kwargs):
         """
-        :param pool_manager: an optional pool manager that will be reused
-        :type pool_manager: `urllib3.PoolManager`
         :param request_prefix: text to insert in between endpoint and
             requested URL
         :type request_prefix: `str`

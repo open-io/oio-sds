@@ -13,9 +13,11 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
+from oio.common.green import Queue, GreenPile, sleep
+
 from logging import getLogger, INFO
 from cliff.command import Command
-from eventlet import Queue, GreenPile
 from oio.common.configuration import load_namespace_conf
 from oio.common.exceptions import ClientException
 from oio.common import green
@@ -353,7 +355,6 @@ class WarmupWorker(object):
                 return
             self.log.warn("%d %s", rep.status, prefix)
             if rep.status == 503:
-                from eventlet import sleep
                 sleep(i * 0.5)
             else:
                 break

@@ -14,10 +14,11 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+from oio.common.green import ratelimit, eventlet, threading, ContextPool
+
 import time
 
 from oio.common.easy_value import int_value
-from oio.common.green import ratelimit, eventlet, threading, ContextPool
 from oio.common.logger import get_logger
 
 
@@ -32,8 +33,6 @@ class Rebuilder(object):
     """
 
     def __init__(self, conf, logger, volume, input_file=None, **kwargs):
-        eventlet.monkey_patch(os=False)
-
         self.conf = conf
         self.logger = logger or get_logger(conf)
         self.namespace = conf['namespace']

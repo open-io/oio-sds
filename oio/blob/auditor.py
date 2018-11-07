@@ -14,6 +14,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+from oio.common.green import ratelimit
+
 from contextlib import closing
 from string import hexdigits
 import hashlib
@@ -26,7 +28,6 @@ from oio.common import exceptions as exc
 from oio.common.utils import paths_gen
 from oio.common.easy_value import int_value
 from oio.common.logger import get_logger
-from oio.common.green import ratelimit
 from oio.common.constants import STRLEN_CHUNKID
 
 

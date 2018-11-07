@@ -13,8 +13,10 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+
+from oio.common.green import patcher
+
 from urlparse import urlparse
-from eventlet import patcher
 from urllib3 import exceptions as urllibexc
 from oio.common.exceptions import reraise, \
     OioException, OioNetworkException, OioTimeout

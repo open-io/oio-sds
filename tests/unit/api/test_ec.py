@@ -13,13 +13,15 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+
+from oio.common.green import Timeout
+
 import unittest
 import random
 from io import BytesIO
 from collections import defaultdict
 import hashlib
 from copy import deepcopy
-from eventlet import Timeout
 from mock import patch
 from oio.common.storage_method import STORAGE_METHODS
 from oio.api.ec import EcMetachunkWriter, ECChunkDownloadHandler, \

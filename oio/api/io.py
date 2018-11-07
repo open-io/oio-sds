@@ -13,12 +13,14 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+
 from __future__ import absolute_import
+from oio.common.green import sleep, Timeout
+
 from io import BufferedReader, RawIOBase, IOBase
 import itertools
 import logging
 from urlparse import urlparse
-from eventlet import sleep, Timeout
 from socket import error as SocketError
 from oio.common import exceptions as exc
 from oio.common.http import parse_content_type,\
