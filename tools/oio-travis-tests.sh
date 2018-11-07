@@ -50,6 +50,8 @@ function trap_exit {
 	#pip list
 	BEANSTALK=$(oio-test-config.py -t beanstalkd)
 	if [ ! -z "${BEANSTALK}" ]; then
+		# some tests stop all services, we must start beanstalk to dump events
+		gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock start @beanstalkd
 		oio-dump-buried-events.py ${BEANSTALK}
 	fi
 	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock status3
