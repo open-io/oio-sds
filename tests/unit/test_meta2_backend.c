@@ -877,8 +877,9 @@ test_content_put_get_delete(void)
 				_bean_buffer_cb, tmp);
 		if (VERSIONS_ENABLED(maxver)) {
 			g_assert_no_error(err);
-			// nb_versions * (1 alias + 1 content header + chunks_count * (1 chunk))
-			expected = 2 * (2 + chunks_count);
+			// 1 alias + 1 content header + chunks_count * (1 chunk)
+			// + 1 deleted alias
+			expected = (1 + 1 + chunks_count) + (1);
 			GRID_DEBUG("TEST Got %u beans for all versions, expected %u"
 					" (chunks count: %"G_GINT64_FORMAT")",
 					tmp->len, expected, chunks_count);
@@ -1051,7 +1052,9 @@ test_content_append(void)
 		GRID_DEBUG("TEST Found %u beans (ALLVERSION)", tmp->len);
 		if (VERSIONS_ENABLED(maxver)) {
 			g_assert_no_error(err);
-			expected = 2*(1+1+(2*chunks_count));
+			// 1 alias + 1 content header + chunks_count * (2 chunks)
+			// + 1 deleted alias
+			expected = (1 + 1 + 2 * chunks_count) + (1);
 		} else {
 			g_assert_error(err, GQ(), CODE_CONTENT_NOTFOUND);
 			g_clear_error (&err);
