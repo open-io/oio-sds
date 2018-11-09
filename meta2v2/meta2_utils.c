@@ -1100,9 +1100,13 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 	} else {
 		gint64 now = oio_ext_real_time () / G_TIME_SPAN_SECOND;
 		/* Create a new version marked as deleted */
-		struct bean_ALIASES_s *new_alias = _bean_dup(alias);
+		struct bean_ALIASES_s *new_alias = _bean_create(&descr_struct_ALIASES);
 		ALIASES_set_deleted(new_alias, TRUE);
+		ALIASES_set_alias(new_alias, ALIASES_get_alias(alias));
 		ALIASES_set_version(new_alias, 1 + ALIASES_get_version(alias));
+		GByteArray *content = g_byte_array_new_take((guint8 *) "DELETED", 7);
+		ALIASES_set_content(new_alias, content);
+		g_byte_array_free(content, FALSE);
 		ALIASES_set_ctime(new_alias, now);
 		ALIASES_set_mtime(new_alias, now);
 		err = _db_save_bean(sq3->db, new_alias);
