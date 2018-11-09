@@ -1529,7 +1529,15 @@ static GError * _list_loop (struct req_args_s *args,
 		err = _resolve_meta2(args, _prefer_slave(), _pack, &out,
 				m2v2_list_result_extract);
 		if (err) {
-			m2v2_list_result_clean (&out);
+			if (err->code == CODE_UNAVAILABLE &&
+					strstr(err->message, "deadline reached")) {
+				// We reached request deadline, just tell the caller the
+				// listing is truncated, it will call us again with the
+				// appropriate marker.
+				out0->truncated = TRUE;
+				g_clear_error(&err);
+			}
+			m2v2_list_result_clean(&out);
 			break;
 		}
 
