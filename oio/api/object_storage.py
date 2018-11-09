@@ -793,14 +793,11 @@ class ObjectStorageApi(object):
             **kwargs)
 
         for obj in resp_body['objects']:
-            mtype = obj.get('mime-type')
-            if mtype is not None:
-                obj['mime_type'] = mtype
+            try:
+                obj['mime_type'] = obj['mime-type']
                 del obj['mime-type']
-            version = obj.get('ver')
-            if version is not None:
-                obj['version'] = version
-                del obj['ver']
+            except KeyError:
+                obj['mime_type'] = None
 
         resp_body['truncated'] = true_value(
             hdrs.get(HEADER_PREFIX + 'list-truncated'))
