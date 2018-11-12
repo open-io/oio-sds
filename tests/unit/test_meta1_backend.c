@@ -233,7 +233,10 @@ _count_services(struct meta1_backend_s *m1, struct oio_url_s *url, const char *s
 			oio_ext_monotonic_time() + 30 * G_TIME_SPAN_SECOND);
 	g_assert_no_error(err);
 	g_assert_nonnull(out);
-	guint count = g_strv_length(out);
+	// (ABO) The -2 is there because we started to include the ref account and
+	// name in the services list. Hence to keep compatibility with most of the
+	// tests, this seemed the most simple way.
+	guint count = g_strv_length(out)-2;
 	g_strfreev(out);
 	out = NULL;
 	return count;
