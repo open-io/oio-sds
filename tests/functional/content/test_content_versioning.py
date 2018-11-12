@@ -13,8 +13,12 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+
+import time
+
 from oio.api.object_storage import ObjectStorageApi
 from tests.utils import BaseTestCase, random_str
+from oio.common.exceptions import NoSuchObject
 
 
 class TestContentVersioning(BaseTestCase):
@@ -213,3 +217,35 @@ class TestContentVersioning(BaseTestCase):
         self.api.object_create(self.account, self.container,
                                obj_name="versioned", data="content11")
         check_num_objects(4)
+
+    def test_purge_objects_with_delete_marker(self):
+        def check_num_objects(expected):
+            listing = self.api.object_list(self.account, self.container,
+                                           versions=True)
+            objects = listing['objects']
+            self.assertEqual(expected, len(objects))
+
+        for i in range(5):
+            self.api.object_create(self.account, self.container,
+                                   obj_name="versioned", data="content"+str(i))
+        check_num_objects(5)
+
+        self.api.object_delete(self.account, self.container, "versioned")
+        self.assertRaises(NoSuchObject, self.api.object_locate, self.account,
+                          self.container, "versioned")
+        check_num_objects(6)
+
+        self.api.container.content_purge(
+            self.account, self.container, "versioned")
+        self.assertRaises(NoSuchObject, self.api.object_locate, self.account,
+                          self.container, "versioned")
+        check_num_objects(4)
+
+        system = {'sys.m2.keep_deleted_delay': '1'}
+        self.api.container_set_properties(self.account, self.container,
+                                          system=system)
+        time.sleep(2)
+
+        self.api.container.content_purge(
+            self.account, self.container, "versioned")
+        check_num_objects(0)
