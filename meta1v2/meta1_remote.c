@@ -20,6 +20,8 @@ License along with this library.
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/common_variables.h>
 
+#include <sqliterepo/sqlite_utils.h>
+
 #include "./internals.h"
 #include "./meta1_remote.h"
 
@@ -107,10 +109,49 @@ meta1v2_remote_list_reference_services(const char *to, struct oio_url_s *url,
 		const char *srvtype, gchar ***result, gint64 deadline)
 {
 	EXTRA_ASSERT(url != NULL);
+	GError *err = NULL;
 	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVLIST, deadline);
 	metautils_message_add_url_no_type (req, url);
 	metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, srvtype);
-	return STRV_request(to, message_marshall_gba_and_clean(req), result, deadline);
+
+	gchar **_tmp_result = NULL;
+	GPtrArray *srv_arry = g_ptr_array_new();
+
+	err = STRV_request(to, message_marshall_gba_and_clean(req), &_tmp_result,
+			deadline);
+
+	const char acc_prefix[] = SQLX_ADMIN_PREFIX_SYS "account:";
+	const int acc_prefix_len = (int)(sizeof(acc_prefix)/sizeof(*acc_prefix));
+	const char ref_prefix[] = SQLX_ADMIN_PREFIX_SYS "reference:";
+	const int ref_prefix_len = (int)(sizeof(ref_prefix)/sizeof(*ref_prefix));
+
+	// Fill oio_url_s from the response and returned the usual results
+	if(!err) {
+		gchar **srvc=_tmp_result;
+		while (*srvc != NULL) {
+			if (g_str_has_prefix(*srvc, acc_prefix)) {
+				if(oio_url_get(url, OIOURL_ACCOUNT) == NULL)
+					oio_url_set(url, OIOURL_ACCOUNT,
+							(*srvc)+acc_prefix_len-1);
+				gchar *old = *(srvc++);
+				g_free(old);
+			} else if (g_str_has_prefix(*srvc, ref_prefix)) {
+				if(oio_url_get(url, OIOURL_USER) == NULL)
+					oio_url_set(url, OIOURL_USER,
+							(*srvc)+ref_prefix_len-1);
+				gchar *old = *(srvc++);
+				g_free(old);
+			} else {
+				g_ptr_array_add(srv_arry, *srvc);
+				srvc++;
+			}
+		}
+
+		g_ptr_array_add(srv_arry, NULL);
+
+		*result = (gchar **) g_ptr_array_free(srv_arry, FALSE);
+	}
+	return err;
 }
 
 GError *

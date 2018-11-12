@@ -37,6 +37,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define M1U(P) ((struct meta1_service_url_s*)(P))
 
+static void __ensure_url_is_qualified(struct sqlx_sqlite3_s *sq3,
+		struct oio_url_s *url);
+
 static void __notify_services_by_cid(struct meta1_backend_s *m1,
 		struct sqlx_sqlite3_s *sq3, struct oio_url_s *url);
 
@@ -1019,6 +1022,38 @@ meta1_backend_services_poll(struct meta1_backend_s *m1,
 	return err;
 }
 
+static GError *
+__services_list_append_account_and_container(gchar ***interm_result,
+		struct oio_url_s *url)
+{
+	GError *err = NULL;
+
+	const char *acc = oio_url_get(url, OIOURL_ACCOUNT);
+	if (acc == NULL) {
+		err = NEWERROR(CODE_INTERNAL_ERROR, "[%s] Unable to add account "
+				"to services list.", __FUNCTION__);
+		goto end;
+	}
+
+	gchar *packed_acc = g_strdup_printf(SQLX_ADMIN_PREFIX_SYS "account:%s",
+			acc);
+	*interm_result = oio_strv_append(*interm_result, packed_acc);
+
+	const char *cont = oio_url_get(url, OIOURL_USER);
+	if (cont == NULL) {
+		err = NEWERROR(CODE_INTERNAL_ERROR, "[%s] Unable to add reference name"
+				" to services list.", __FUNCTION__);
+		goto end;
+	}
+
+	gchar *packed_cont = g_strdup_printf(SQLX_ADMIN_PREFIX_SYS "reference:%s",
+			cont);
+	*interm_result = oio_strv_append(*interm_result, packed_cont);
+
+end:
+	return err;
+}
+
 GError *
 meta1_backend_services_list(struct meta1_backend_s *m1,
 		struct oio_url_s *url, const char *srvtype, gchar ***result,
@@ -1057,6 +1092,7 @@ label_retry:
 	struct sqlx_repctx_s *repctx = NULL;
 	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 		if (!(err = __info_user(sq3, url, FALSE, NULL))) {
+			__ensure_url_is_qualified(sq3, url);
 			struct meta1_service_url_s **uv = NULL;
 			err = __get_container_all_services(sq3, url, srvtype, &uv);
 			if (NULL != err)
@@ -1065,6 +1101,8 @@ label_retry:
 				struct meta1_service_url_s **expanded;
 				expanded = expand_urlv(uv);
 				*result = pack_urlv(expanded);
+				err = __services_list_append_account_and_container(result,
+						url);
 				meta1_service_url_cleanv(expanded);
 				meta1_service_url_cleanv(uv);
 			}

@@ -17,6 +17,7 @@ import random
 import time
 from mock import MagicMock as Mock, ANY, call
 from oio.directory.client import DirectoryClient
+from oio.common.utils import cid_from_name
 from oio.common import exceptions as exc
 from oio.conscience.client import ConscienceClient
 from oio.rdir.client import RdirDispatcher, RdirClient, RDIR_ACCT, _make_id
@@ -60,10 +61,25 @@ class TestDirectoryAPI(BaseTestCase):
         res = self.api.list(self.account, name)
         self.assertIsNot(res['dir'], None)
         self.assertIsNot(res['srv'], None)
+        self.assertEqual(res['name'], name)
+        self.assertEqual(res['account'], self.account)
 
         self._delete(name)
         # get on deleted reference
         self.assertRaises(exc.NotFound, self.api.list, self.account, name)
+
+    def test_show_by_cid(self):
+        name = random_str(32)
+
+        self._create(name)
+
+        res = self.api.list(cid=cid_from_name(self.account, name))
+        self.assertIsNotNone(res['dir'])
+        self.assertIsNotNone(res['srv'])
+        self.assertEqual(res['name'], name)
+        self.assertEqual(res['account'], self.account)
+
+        self._delete(name)
 
     def test_create(self):
         name = random_str(32)
@@ -270,6 +286,8 @@ class TestDirectoryAPI(BaseTestCase):
         res = self.api.list(self.account, name, service_type=echo)
         self.assertIsNot(res['dir'], None)
         self.assertIsNot(res['srv'], None)
+        self.assertEqual(res['name'], name)
+        self.assertEqual(res['account'], self.account)
 
         self._delete(name)
         # get on deleted reference
