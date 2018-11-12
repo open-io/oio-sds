@@ -1095,7 +1095,7 @@ class TestContainerLifecycle(BaseTestCase):
         self.lifecycle.load()
 
         results = [x for x in self.lifecycle.execute()]
-        self.assertEqual(5, len(results))
+        self.assertEqual(6, len(results))
         for res in results:
             self.assertEqual('Kept', res[3])
         self.api.object_show(self.account, self.container, obj_meta['name'])
@@ -1103,7 +1103,7 @@ class TestContainerLifecycle(BaseTestCase):
         self.api.object_show(self.account, self.container, obj_meta3['name'])
 
         results = [x for x in self.lifecycle.execute(now=time.time()+86400)]
-        self.assertEqual(6, len(results))
+        self.assertEqual(5, len(results))
         self.api.object_locate(
             self.account, self.container, obj_meta['name'])
         self.api.object_show(
