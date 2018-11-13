@@ -25,6 +25,7 @@ except ImportError:
 from oio.common.exceptions import OioException
 from oio.common.logger import get_logger
 from oio.common.utils import cid_from_name, depaginate
+from oio.common.easy_value import true_value
 
 
 ALLOWED_STATUSES = ['enabled', 'disabled']
@@ -165,12 +166,14 @@ class ContainerLifecycle(object):
 
         :notice: you must consume the results or the rules won't be applied.
         """
+        if true_value(obj_meta['deleted']):
+            return
         for rule in self.rules:
             res = rule.apply(obj_meta, **kwargs)
             if res:
                 for action in res:
                     yield obj_meta, rule.id, action[0], action[1]
-                    if action[1] == 'Kept':
+                    if action[1] != 'Kept':
                         return
             else:
                 yield obj_meta, rule.id, "n/a", "Kept"
@@ -197,10 +200,9 @@ class ContainerLifecycle(object):
                 versions=True,
                 **kwargs):
             try:
-                if obj_meta['deleted'] \
-                        or (self.processed_versions is not None
-                            and self.processed_versions.is_already_processed(
-                                obj_meta, **kwargs)):
+                if self.processed_versions is not None \
+                    and self.processed_versions.is_already_processed(
+                        obj_meta, **kwargs):
                     continue
                 results = self.apply(obj_meta, **kwargs)
                 for res in results:
@@ -221,7 +223,7 @@ class ContainerLifecycle(object):
         if self.processed_versions is None:
             current_obj = self.api.object_get_properties(
                 self.account, self.container, obj_meta['name'])
-            return current_obj['id'] == obj_meta['id']
+            return current_obj['version'] == obj_meta['version']
         else:
             return self.processed_versions.is_current(obj_meta, **kwargs)
 

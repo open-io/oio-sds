@@ -987,7 +987,8 @@ _real_delete_and_save_deleted_beans(struct sqlx_sqlite3_s *sq3, GSList *beans,
 			cb(u0, _bean_dup(bean->data));
 		}
 		/* Header hasn't been deleted but contains useful information */
-		if (!header_encountered)
+		/* The delete marker doesn't have a header */
+		if (!header_encountered && header)
 			cb(u0, _bean_dup(header));
 	}
 	// deleted_beans contains direct pointers to the original beans
@@ -1035,7 +1036,9 @@ _real_delete_aliases(struct sqlx_sqlite3_s *sq3, GPtrArray *aliases,
 				deleted_beans = NULL;
 				err = _real_delete_and_save_deleted_beans(sq3, beans, alias,
 						header, _bean_list_cb, &deleted_beans);
-				cb(u0, deleted_beans);
+				if (deleted_beans != NULL) {
+					cb(u0, deleted_beans);
+				}
 			} else {
 				err = _real_delete_and_save_deleted_beans(sq3, beans, alias,
 						header, NULL, NULL);
