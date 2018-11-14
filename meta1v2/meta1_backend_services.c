@@ -1035,8 +1035,7 @@ __services_list_append_account_and_container(gchar ***interm_result,
 		goto end;
 	}
 
-	gchar *packed_acc = g_strdup_printf(SQLX_ADMIN_PREFIX_SYS "account:%s",
-			acc);
+	gchar *packed_acc = g_strdup_printf(SQLX_ADMIN_ACCOUNT ":%s", acc);
 	*interm_result = oio_strv_append(*interm_result, packed_acc);
 
 	const char *cont = oio_url_get(url, OIOURL_USER);
@@ -1046,8 +1045,7 @@ __services_list_append_account_and_container(gchar ***interm_result,
 		goto end;
 	}
 
-	gchar *packed_cont = g_strdup_printf(SQLX_ADMIN_PREFIX_SYS "reference:%s",
-			cont);
+	gchar *packed_cont = g_strdup_printf(SQLX_ADMIN_USERNAME":%s", cont);
 	*interm_result = oio_strv_append(*interm_result, packed_cont);
 
 end:
@@ -1059,7 +1057,9 @@ meta1_backend_services_list(struct meta1_backend_s *m1,
 		struct oio_url_s *url, const char *srvtype, gchar ***result,
 		gint64 deadline)
 {
-	if (!result) return SYSERR("BUG: invalid output array");
+	if (!result)
+		return SYSERR("BUG: invalid output array");
+	EXTRA_ASSERT(*result == NULL);
 
 	gboolean retry = TRUE;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1095,14 +1095,16 @@ label_retry:
 			__ensure_url_is_qualified(sq3, url);
 			struct meta1_service_url_s **uv = NULL;
 			err = __get_container_all_services(sq3, url, srvtype, &uv);
-			if (NULL != err)
+			if (err) {
 				g_prefix_error(&err, "Query error: ");
-			else {
-				struct meta1_service_url_s **expanded;
-				expanded = expand_urlv(uv);
-				*result = pack_urlv(expanded);
-				err = __services_list_append_account_and_container(result,
-						url);
+			} else {
+				struct meta1_service_url_s **expanded = expand_urlv(uv);
+				gchar **urlv = pack_urlv(expanded);
+				err = __services_list_append_account_and_container(&urlv, url);
+				if (!err)
+					*result = urlv;
+				else
+					g_strfreev(urlv);
 				meta1_service_url_cleanv(expanded);
 				meta1_service_url_cleanv(uv);
 			}
