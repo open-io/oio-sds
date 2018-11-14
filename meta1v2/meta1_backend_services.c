@@ -1035,15 +1035,15 @@ __services_list_append_account_and_container(gchar ***interm_result,
 		goto end;
 	}
 
-	gchar *packed_acc = g_strdup_printf(SQLX_ADMIN_ACCOUNT ":%s", acc);
-	*interm_result = oio_strv_append(*interm_result, packed_acc);
-
 	const char *cont = oio_url_get(url, OIOURL_USER);
 	if (cont == NULL) {
 		err = NEWERROR(CODE_INTERNAL_ERROR, "[%s] Unable to add reference name"
 				" to services list.", __FUNCTION__);
 		goto end;
 	}
+
+	gchar *packed_acc = g_strdup_printf(SQLX_ADMIN_ACCOUNT ":%s", acc);
+	*interm_result = oio_strv_append(*interm_result, packed_acc);
 
 	gchar *packed_cont = g_strdup_printf(SQLX_ADMIN_USERNAME":%s", cont);
 	*interm_result = oio_strv_append(*interm_result, packed_cont);

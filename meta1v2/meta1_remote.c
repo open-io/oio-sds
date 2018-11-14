@@ -121,7 +121,7 @@ meta1v2_remote_list_reference_services(const char *to, struct oio_url_s *url,
 
 	// Fill oio_url_s from the response and return the usual results
 	if (!err) {
-		GPtrArray *srv_arry = g_ptr_array_new();
+		GPtrArray *srv_array = g_ptr_array_new();
 		for (gchar **srvc = _tmp_result; *srvc; srvc++) {
 			if (g_str_has_prefix(*srvc, SQLX_ADMIN_ACCOUNT)) {
 				if (!oio_url_has(url, OIOURL_ACCOUNT)) {
@@ -136,14 +136,14 @@ meta1v2_remote_list_reference_services(const char *to, struct oio_url_s *url,
 				}
 				g_free(*srvc);
 			} else {
-				g_ptr_array_add(srv_arry, *srvc);
+				g_ptr_array_add(srv_array, *srvc);
 			}
 			*srvc = NULL;  // Either freed or sent to the other array
 		}
-		g_ptr_array_add(srv_arry, NULL);
+		g_ptr_array_add(srv_array, NULL);
 		g_free(_tmp_result);
 
-		*result = (gchar **) g_ptr_array_free(srv_arry, FALSE);
+		*result = (gchar **) g_ptr_array_free(srv_array, FALSE);
 	}
 	return err;
 }
