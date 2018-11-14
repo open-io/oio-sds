@@ -255,6 +255,7 @@ class DistributedBlobRebuilder(BlobRebuilder):
                     senders[beanstalkd_addr].event_done()
                     self.update_processed(
                         chunk, bytes_processed, error=error, **kwargs)
+                self.log_report('RUN', **kwargs)
             except OioTimeout:
                 self.logger.error("No response since %d secondes",
                                   DISTRIBUTED_REBUILDER_TIMEOUT)
