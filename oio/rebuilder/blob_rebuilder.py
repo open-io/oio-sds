@@ -49,9 +49,13 @@ class BlobRebuilder(Rebuilder):
         # rawx
         self.try_chunk_delete = try_chunk_delete
         # beanstalk
-        self.beanstalkd_addr = beanstalkd_addr
-        self.beanstalkd_tube = conf.get('beanstalkd_tube',
-                                        DEFAULT_REBUILDER_TUBE)
+        if beanstalkd_addr:
+            self.beanstalkd_listener = BeanstalkdListener(
+                beanstalkd_addr,
+                conf.get('beanstalkd_tube', DEFAULT_REBUILDER_TUBE),
+                self.logger, **kwargs)
+        else:
+            self.beanstalkd_listener = None
         # counters
         self.bytes_processed = 0
         self.total_bytes_processed = 0
@@ -174,9 +178,8 @@ class BlobRebuilder(Rebuilder):
                    str(chunk_id_or_pos), more]
 
     def _fetch_events_from_beanstalk(self, **kwargs):
-        beanstalkd = BeanstalkdListener(
-            self.beanstalkd_addr, self.beanstalkd_tube, self.logger, **kwargs)
-        return beanstalkd.fetch_events(self._chunks_from_event, **kwargs)
+        return self.beanstalkd_listener.fetch_events(
+            self._chunks_from_event, **kwargs)
 
     def _fetch_chunks_from_file(self, **kwargs):
         with open(self.input_file, 'r') as ifile:
@@ -188,7 +191,7 @@ class BlobRebuilder(Rebuilder):
     def _fetch_chunks(self, **kwargs):
         if self.input_file:
             return self._fetch_chunks_from_file(**kwargs)
-        if self.beanstalkd_addr and not self.distributed:
+        if self.beanstalkd_listener and not self.distributed:
             return self._fetch_events_from_beanstalk(**kwargs)
         if self.volume:
             return self.rdir_client.chunk_fetch(
@@ -202,40 +205,38 @@ class DistributedBlobRebuilder(BlobRebuilder):
     def __init__(self, conf, logger, volume, distributed_addr, **kwargs):
         super(DistributedBlobRebuilder, self).__init__(
             conf, logger, volume, **kwargs)
-        self.distributed = True
-        self.distributed_addr = distributed_addr
-        self.distributed_tube = conf.get('distributed_tube',
-                                         DEFAULT_REBUILDER_TUBE)
-        self.sending = False
-        self.rebuilder_id = str(uuid.uuid4())
 
-        if not self.beanstalkd_addr:
+        if not self.beanstalkd_listener:
             raise ConfigurationException(
                 "No beanstalkd to fetch responses from")
-        if self.beanstalkd_tube == self.distributed_tube:
+        distributed_tube = conf.get('distributed_tube', DEFAULT_REBUILDER_TUBE)
+        if self.beanstalkd_listener.tube == distributed_tube:
             raise ConfigurationException(
                 "The beanstalkd tubes must be different")
+
+        self.distributed = True
+        self.beanstalkd_senders = dict()
+        for addr in distributed_addr.split(';'):
+            sender = BeanstalkdSender(
+                addr, distributed_tube, self.logger, **kwargs)
+            self.beanstalkd_senders[sender.addr] = sender
+        self.sending = False
+        self.rebuilder_id = str(uuid.uuid4())
 
     def _rebuilder_pass(self, **kwargs):
         self.start_time = self.last_report = time.time()
         self.log_report('START', force=True)
 
-        listener = BeanstalkdListener(
-            self.beanstalkd_addr, self.beanstalkd_tube, self.logger, **kwargs)
-        senders = dict()
-        for distributed_addr in self.distributed_addr.split(';'):
-            senders[distributed_addr] = BeanstalkdSender(
-                distributed_addr, self.distributed_tube, self.logger, **kwargs)
-
-        reply = {'addr': self.beanstalkd_addr, 'tube': self.beanstalkd_tube,
+        reply = {'addr': self.beanstalkd_listener.addr,
+                 'tube': self.beanstalkd_listener.tube,
                  'rebuilder_id': self.rebuilder_id}
         thread = threading.Thread(target=self._distribute_broken_chunks,
-                                  args=(senders, reply), kwargs=kwargs)
+                                  args=(reply,), kwargs=kwargs)
         thread.start()
 
         def is_finish():
             total_events = 0
-            for _, sender in senders.iteritems():
+            for _, sender in self.beanstalkd_senders.iteritems():
                 total_events += sender.nb_events
             return total_events <= 0
 
@@ -247,12 +248,12 @@ class DistributedBlobRebuilder(BlobRebuilder):
 
         while thread.is_alive() or not is_finish():
             try:
-                event_info = listener.fetch_event(
+                event_info = self.beanstalkd_listener.fetch_event(
                     self._rebuilt_chunk_from_event,
                     timeout=DISTRIBUTED_REBUILDER_TIMEOUT, **kwargs)
                 for beanstalkd_addr, chunk, bytes_processed, error \
                         in event_info:
-                    senders[beanstalkd_addr].event_done()
+                    self.beanstalkd_senders[beanstalkd_addr].event_done()
                     self.update_processed(
                         chunk, bytes_processed, error=error, **kwargs)
                 self.log_report('RUN', **kwargs)
@@ -265,9 +266,9 @@ class DistributedBlobRebuilder(BlobRebuilder):
         self.log_report('DONE', force=True)
         return self.total_errors == 0
 
-    def _distribute_broken_chunks(self, senders, reply, **kwargs):
+    def _distribute_broken_chunks(self, reply, **kwargs):
         index = 0
-        senders = senders.values()
+        senders = self.beanstalkd_senders.values()
         n = len(senders)
 
         def _send_broken_chunk(broken_chunk, index):
@@ -336,7 +337,7 @@ class BlobRebuilderWorker(RebuilderWorker):
             reply = more.get('reply', None)
             if reply is not None:
                 event = {'rebuilder_id': reply['rebuilder_id'],
-                         'beanstalkd': self.rebuilder.beanstalkd_addr,
+                         'beanstalkd': self.rebuilder.beanstalkd_listener.addr,
                          'cid': container_id, 'content_id': content_id,
                          'chunk_id_or_pos': chunk_id_or_pos}
                 if error is not None:
@@ -421,7 +422,8 @@ class BlobRebuilderWorker(RebuilderWorker):
 class Beanstalkd(object):
 
     def __init__(self, addr, tube, logger, **kwargs):
-        if addr is not None and addr.startswith('beanstalk://'):
+        addr = addr.strip()
+        if addr.startswith('beanstalk://'):
             addr = addr[12:]
         self.addr = addr
         self.tube = tube
