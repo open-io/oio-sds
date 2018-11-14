@@ -176,7 +176,9 @@ get_conditioned_spare_chunks(struct oio_lb_s *lb, const char *pool,
 	if (!err) {
 		if ((int)ids->len == 0)
 			err = NEWERROR(CODE_BAD_REQUEST,
-				"too much beans in the blacklist");
+				"too many locations in the blacklist "
+				"(%u already used, %u to avoid)",
+				g_slist_length(already), g_slist_length(broken));
 		for (int i = 0; i < (int)ids->len; i++) {
 			*result = g_slist_prepend(*result,
 					_gen_chunk_bean(g_ptr_array_index(ids, i)));
