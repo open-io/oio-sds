@@ -1,0 +1,126 @@
+#!/usr/bin/env python
+
+# oio-meta2-indexer
+# Copyright (C) 2018 OpenIO SAS, as part of OpenIO SDS
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+from oio.directory.indexer import Meta2Indexer
+from oio.common.daemon import run_daemon
+import argparse
+
+def make_arg_parser():
+    log_parser = argparse.ArgumentParser(add_help=False)
+    levels = ['DEBUG', 'INFO', 'WARN', 'ERROR']
+    log_parser.add_argument('--log-level', choices=levels,
+                            help="Log level")
+    log_parser.add_argument('--log-syslog-prefix',
+                            help="Syslog prefix")
+    log_parser.add_argument('--log-facility',
+                            help="Log facility")
+    log_parser.add_argument('--log-address',
+                            help="Log address")
+    descr = """
+        Periodically scan through volumes to index all meta2 databases that are
+        present there.
+    """
+    main_parser = argparse.ArgumentParser(description=descr,
+                                          parents=[log_parser])
+
+    main_parser.add_argument(
+        'config_file',
+        help="""
+        A file containing an oio-meta2-indexer configuration file.
+        Any arguments passed alongside a configuration file will be ignored.
+        Alternatively, this can be a writable file, to which you want to
+        write the configuration you will pass through the parameters by using
+        the --generate-config flag.
+        """
+    )
+    main_parser.add_argument(
+        '--generate-config',
+        action='store_true',
+        help="""
+        Generate configuration file with given arguments.
+        If the file already exists, it will be overwritten.
+        """
+    )
+    main_parser.add_argument(
+        '--user',
+        help="The name of the OS user this process will run as"
+    )
+    main_parser.add_argument(
+        '--namespace',
+        help="Namespace of the volumes"
+    )
+    main_parser.add_argument(
+        '--volume-list',
+        action='append',
+        help="List of paths pointing to meta2 volumes to index",
+        nargs="+"
+    )
+    main_parser.add_argument(
+        '--interval',
+        type=int,
+        help="Time between two full scans for each volume"
+    )
+    main_parser.add_argument(
+        '--report-interval',
+        type=int,
+        help="Time between progress reports for each volume"
+    )
+    main_parser.add_argument(
+        '--scanned-per-second',
+        type=int,
+        help="Maximum of scanned databases per second per volume, beyond which"
+             " the scanning process is throttled for said volume."
+    )
+    main_parser.add_argument(
+        '--try-removing-faulty-indexes',
+        action='store_true',
+        help="""
+        If true, in the event where an indexing worker detects that
+        a volume it's trying to index does not manage a database it stumbled
+        upon, the indexer will attempt to remove any existing index for this
+        database from the volume's rdir index. USE AT YOUR OWN RISK.
+        Inconsistencies in the proxy cache can for example help induce this
+        effect even when unwarranted.
+        """
+    )
+
+    return main_parser
+
+def gen_configuration(options, path):
+    file_content = "[meta2-indexer]\n"
+    for k,v in options.items():
+        if v is not None:
+            if k == "volume_list":
+                v = ",".join(v[0])
+            file_content += k + " = " + str(v) + "\n"
+    with open(path, "w") as f:
+        f.write(file_content)
+
+
+if __name__ == '__main__':
+    parser = make_arg_parser()
+    options = vars(parser.parse_args())
+
+    path = options.pop('config_file')
+
+    if options.get('generate_config'):
+        options.pop('generate_config')
+        gen_configuration(options, path)
+
+    run_daemon(Meta2Indexer, conf_file=path, section_name="meta2-indexer",
+               **options)

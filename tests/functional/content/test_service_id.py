@@ -49,11 +49,6 @@ class BaseServiceIdTest(BaseTestCase):
     def tearDown(self):
         super(BaseServiceIdTest, self).tearDown()
 
-    def _service(self, name, action):
-        name = "%s-%s" % (self.conf['namespace'], name)
-        check_call(['gridinit_cmd', '-S',
-                    exp('~/.oio/sds/run/gridinit.sock'), action, name])
-
     def _update_apache(self, port):
         path = HTTPD_CONF % (self.ns, self.name)
         with open(path, "r") as fp:

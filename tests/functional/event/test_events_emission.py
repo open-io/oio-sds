@@ -17,8 +17,6 @@
 
 import json
 import time
-import os
-from subprocess import check_call
 from oio.api.object_storage import ObjectStorageApi
 from oio.event.beanstalk import Beanstalk, ResponseError
 from oio.event.consumer import DEFAULT_TUBE, EventTypes
@@ -40,7 +38,7 @@ class TestMeta2EventsEmission(BaseTestCase):
 
     def tearDown(self):
         super(TestMeta2EventsEmission, self).tearDown()
-        self._service(self.event_agent_name, 'start')
+        self._service(self.event_agent_name, 'start', wait=3)
 
     def _bt_make_connections(self, bt_list):
         for bt_entry in bt_list:
@@ -65,25 +63,12 @@ class TestMeta2EventsEmission(BaseTestCase):
                     break
         return [x for x in pulled_events if x.get("event") == event_type]
 
-    def _service(self, name, action):
-        name = "%s-%s" % (self.conf['namespace'], name)
-        check_call(['gridinit_cmd', '-S',
-                    os.path.expanduser('~/.oio/sds/run/gridinit.sock'),
-                    action, name])
-        """
-        The current gridinit version that's running on travis returns before
-        the child process terminates. As such we have to introduce an
-        artificial pause to account for the child process termination. Remove
-        this once gridinit is upgraded.
-        """
-        time.sleep(3)
-
     def test_container_create(self):
         if len(self.bt_connections) > 1:
             self.skipTest("Unsupported on multi-beanstalk setups.")
 
         # First shutdown the event-agent
-        self._service(self.event_agent_name, 'stop')
+        self._service(self.event_agent_name, 'stop', wait=3)
         self._bt_watch(DEFAULT_TUBE)
 
         # Fire up the event
@@ -125,7 +110,7 @@ class TestMeta2EventsEmission(BaseTestCase):
     def test_container_delete(self):
         if len(self.bt_connections) > 1:
             self.skipTest("Unsupported on multi-beanstalk setups.")
-        self._service(self.event_agent_name, 'stop')
+        self._service(self.event_agent_name, 'stop', wait=3)
         self._bt_watch(DEFAULT_TUBE)
 
         # Create the container first
