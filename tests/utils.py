@@ -14,17 +14,23 @@
 # License along with this library.
 
 from __future__ import print_function
+
 import logging
 import sys
 import os
-import yaml
-import testtools
 import random
 import string
+
+from subprocess import check_call
 from functools import wraps
-from oio.common.http_urllib3 import get_pool_manager
 from urllib import urlencode
+
+import yaml
+import testtools
+
+from oio.common.http_urllib3 import get_pool_manager
 from oio.common.json import json as jsonlib
+from oio.common.green import time
 
 random_chars = string.ascii_letters + string.digits
 random_chars_id = 'ABCDEF' + string.digits
@@ -326,6 +332,23 @@ class BaseTestCase(CommonTestCase):
     def tearDown(self):
         super(BaseTestCase, self).tearDown()
         self._flush_cs('echo')
+
+    def _service(self, name, action, wait=0, socket=None):
+        """
+        Execute a gridinit action on a service, and optionally sleep for
+        some seconds before returning.
+        :param name: The service upon which the command should be executed.
+        :param action: The command to send. (E.g. 'start' or 'stop')
+        :param wait: The amount of time in seconds to wait after the command.
+        :param socket: The unix socket on which gridinit is listenting.
+                        defaults to ~/.oio/sds/run/gridinit.sock
+        """
+        if not socket:
+            socket = os.path.expanduser('~/.oio/sds/run/gridinit.sock')
+        name = "%s-%s" % (self.ns, name)
+        check_call(['gridinit_cmd', '-S', socket, action, name])
+        if wait > 0:
+            time.sleep(wait)
 
     @classmethod
     def tearDownClass(cls):

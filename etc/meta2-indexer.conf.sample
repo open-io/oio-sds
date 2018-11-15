@@ -1,0 +1,26 @@
+[meta2-indexer]
+namespace = OPENIO
+user = openio
+# Comma separated list of volumes to watch
+volume_list = /var/lib/oio/sds/vol1/NS/meta2-1/,/var/lib/oio/sds/vol1/NS/meta2-2/
+# In seconds, the interval between two full scans. Defaults to half an hour.
+interval = 1800
+# In seconds, the interval between two logs entries (for each volume)
+# Defaults to 300 seconds.
+report_interval = 100
+# Maximum containers to be scanned per second. Defaults to 3000.
+scanned_per_second = 10000
+# Autocreate the rdir index if it doesn't exist yet.
+autocreate = true
+# If true, in the event where an indexing worker detects that a volume it's
+# trying to index does not manage a database it stumbled  upon, the indexer
+# will attempt to remove any existing index for this database from the volume's
+# rdir index. USE AT YOUR OWN RISK.
+# Inconsistencies in the proxy cache can for example help induce this effect
+# even when unwarranted.
+try_removing_faulty_indexes = False
+# Common log stuff
+log_level = INFO
+log_facility = LOG_LOCAL0
+log_address = /dev/log
+syslog_prefix = OIO,OPENIO,meta2-indexer,1

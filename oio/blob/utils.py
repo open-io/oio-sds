@@ -30,15 +30,29 @@ def check_volume(volume_path):
     :raises oio.common.exceptions.OioException: when the specified path
         does not belong to a rawx service or misses some attributes.
     """
+    return check_volume_for_service_type(volume_path, "rawx")
+
+
+def check_volume_for_service_type(volume_path, required_type):
+    """
+    Check if `volume_path` points to a directory for the specified service
+    type.
+
+    :returns: the namespace name and the service ID
+    :raises oio.common.exceptions.OioException: when the specified path
+        does not belong to a service from the specified type or is missing
+        some attributes.
+    """
     msg_pfx = 'Invalid volume path [%s]: ' % volume_path
     meta = read_user_xattr(volume_path)
     server_type = meta.get(volume_xattr_keys['type'])
     if server_type is None:
         raise exc.OioException(msg_pfx + 'missing %s xattr' %
                                volume_xattr_keys['type'])
-    if server_type != 'rawx':
-        raise exc.OioException(msg_pfx +
-                               'service is a %s, not a rawx' % server_type)
+    if server_type != required_type:
+        raise exc.OioException(
+            msg_pfx + 'service is a {0}, not a {1}'.format(server_type,
+                                                           required_type))
     namespace = meta.get(volume_xattr_keys['namespace'])
     server_id = meta.get(volume_xattr_keys['id'])
     if server_id is None:

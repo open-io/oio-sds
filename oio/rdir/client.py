@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
 from oio.api.base import HttpApi
 from oio.common.exceptions import ClientException, NotFound, VolumeException
 from oio.common.exceptions import ServiceUnavailable, ServerException
@@ -23,7 +24,8 @@ from oio.common.logger import get_logger
 from oio.common.decorators import ensure_headers, ensure_request_id
 from oio.conscience.client import ConscienceClient
 from oio.directory.client import DirectoryClient
-from time import sleep
+from oio.common.utils import depaginate
+from oio.common.green import sleep
 
 RDIR_ACCT = '_RDIR'
 
@@ -492,3 +494,21 @@ class RdirClient(HttpApi):
                                          action='fetch', json=params,
                                          service_type='meta2', **kwargs)
         return body
+
+    def meta2_index_fetch_all(self, volume_id, **kwargs):
+        """
+        A wrapper around meta2_index_fetch that loops until no more records
+        are available, returning all the records in a certain volume's index.
+
+        WARNING: For testing purposes only
+        """
+        return depaginate(
+            self.meta2_index_fetch,
+            volume_id=volume_id,
+            listing_key=lambda x: x['records'],
+            truncated_key=lambda x: x['truncated'],
+            # The following is only called when the list is truncated
+            # So we can assume there are records in the list
+            marker_key=lambda x: x['records'][-1]['container_url'],
+            **kwargs
+        )
