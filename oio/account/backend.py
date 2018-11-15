@@ -323,8 +323,8 @@ class AccountBackend(RedisConn):
                 ("containers:%s" % (account_id)),
                 ("account:%s" % (account_id))]
         args = [name, mtime, dtime, object_count, bytes_used,
-                autocreate_account, Timestamp(time()).normal, EXPIRE_TIME,
-                autocreate_container]
+                str(autocreate_account), Timestamp(time()).normal, EXPIRE_TIME,
+                str(autocreate_container)]
         try:
             self.script_update_container(keys=keys, args=args, client=conn)
         except redis.exceptions.ResponseError as exc:
