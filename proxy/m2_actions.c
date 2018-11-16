@@ -187,12 +187,6 @@ _container_new_props_to_headers (struct req_args_s *args, GTree *props)
 	g_tree_foreach (props, (GTraverseFunc)_run, NULL);
 }
 
-static gint
-_sort_aliases_by_name (struct bean_ALIASES_s *a0, struct bean_ALIASES_s *a1)
-{
-	return g_strcmp0 (ALIASES_get_alias(a0)->str, ALIASES_get_alias(a1)->str);
-}
-
 static void
 _dump_json_aliases_and_headers(GString *gstr, GSList *aliases,
 		GTree *headers, GTree *props)
@@ -296,7 +290,6 @@ _dump_json_beans (GString *gstr, GSList *beans)
 		}
 	}
 
-	aliases = g_slist_sort (aliases, (GCompareFunc)_sort_aliases_by_name);
 	_dump_json_aliases_and_headers(gstr, aliases, headers, props);
 
 	gboolean _props_cleaner(gpointer key UNUSED,
