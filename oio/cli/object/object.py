@@ -46,6 +46,11 @@ class ContainerCommandMixin(object):
             action="store_true",
         )
         parser.add_argument(
+            '--flat-bits',
+            type=int,
+            help="Number of bits for flat-NS computation",
+        )
+        parser.add_argument(
             '--cid',
             dest='is_cid',
             default=False,
@@ -62,6 +67,9 @@ class ContainerCommandMixin(object):
         if parsed_args.is_cid:
             parsed_args.cid = parsed_args.container
             parsed_args.container = None
+
+        if parsed_args.flat_bits:
+            self.app.client_manager.flatns_set_bits(parsed_args.flat_bits)
 
 
 class ObjectCommandMixin(ContainerCommandMixin):
