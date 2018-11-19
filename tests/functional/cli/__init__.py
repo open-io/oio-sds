@@ -11,6 +11,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import os
 import shlex
 import subprocess
 from tests.utils import BaseTestCase
@@ -33,7 +34,7 @@ class CommandFailed(Exception):
                                  self.stderr))
 
 
-def execute(cmd, stdin=None):
+def execute(cmd, stdin=None, env=None):
     """Executes command."""
     cmdlist = shlex.split(cmd)
     result = ''
@@ -41,7 +42,11 @@ def execute(cmd, stdin=None):
     stdout = subprocess.PIPE
     stderr = subprocess.PIPE
     in_ = subprocess.PIPE if stdin else None
-    proc = subprocess.Popen(cmdlist, stdin=in_, stdout=stdout, stderr=stderr)
+    _env = os.environ.copy()
+    if env:
+        _env.update(env)
+    proc = subprocess.Popen(cmdlist, stdin=in_, stdout=stdout, stderr=stderr,
+                            env=_env)
     result, result_err = proc.communicate(stdin)
     result = result.decode('utf-8')
     if proc.returncode != 0:
@@ -51,14 +56,14 @@ def execute(cmd, stdin=None):
 
 class CliTestCase(BaseTestCase):
     @classmethod
-    def openio(cls, cmd):
+    def openio(cls, cmd, env=None):
         """Executes openio CLI command."""
-        return execute('openio ' + cmd)
+        return execute('openio ' + cmd, env=env)
 
     @classmethod
-    def openio_batch(cls, commands):
+    def openio_batch(cls, commands, env=None):
         """Execute several commands in the same openio CLI process."""
-        return execute('openio', stdin='\n'.join(commands))
+        return execute('openio', stdin='\n'.join(commands), env=env)
 
     @classmethod
     def get_opts(cls, fields, format='value'):

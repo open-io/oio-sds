@@ -27,6 +27,7 @@ class ClientManager(object):
         self._sds_conf = None
         self._namespace = None
         self._admin_mode = None
+        self._flatns_bits = None
         self._flatns_manager = None
         self._meta1_digits = None
         self._nsinfo = None
@@ -60,6 +61,9 @@ class ClientManager(object):
             self._admin_mode = self._options.get('admin_mode')
         return self._admin_mode
 
+    def flatns_set_bits(self, bits):
+        self._flatns_bits = bits
+
     @property
     def flatns_manager(self):
         if self._flatns_manager:
@@ -68,7 +72,7 @@ class ClientManager(object):
         options = self.nsinfo['options']
         bitlength, offset, size = None, 0, None
         try:
-            bitlength = int(options['flat_bitlength'])
+            bitlength = int(self._flatns_bits or options['flat_bitlength'])
         except Exception:
             from oio.common.exceptions import ConfigurationException
             raise ConfigurationException(
