@@ -241,7 +241,7 @@ class RdirDispatcher(object):
 
         # Do the creation in the rdir itself
         try:
-            self.rdir.create(volume_id, **kwargs)
+            self.rdir.create(volume_id, service_type=service_type, **kwargs)
         except Exception as exc:
             self.logger.warn("Failed to create database for %s on %s: %s",
                              volume_id, polled['addr'], exc)
@@ -329,9 +329,10 @@ class RdirClient(HttpApi):
 
         return resp, body
 
-    def create(self, volume_id, **kwargs):
+    def create(self, volume_id, service_type='rawx', **kwargs):
         """Create the database for `volume_id` on the appropriate rdir"""
-        self._rdir_request(volume_id, 'POST', 'create', **kwargs)
+        self._rdir_request(volume_id, 'POST', 'create',
+                           service_type=service_type, **kwargs)
 
     def chunk_push(self, volume_id, container_id, content_id, chunk_id,
                    headers=None, **data):
@@ -438,8 +439,7 @@ class RdirClient(HttpApi):
         """
         Create a new meta2 rdir database.
         """
-        return self._rdir_request(volume_id, 'POST', 'create',
-                                  service_type='meta2', **kwargs)
+        return self.create(volume_id, service_type='meta2', **kwargs)
 
     def meta2_index_push(self, volume_id, container_url, container_id, mtime,
                          headers=None, **kwargs):
