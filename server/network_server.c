@@ -1110,7 +1110,7 @@ _cb_tcp_worker(struct network_client_s *clt, struct network_server_s *srv)
 	}
 
 	/* The event stayed *really* long in the queue of the thread pool.
-	 * Let's close the connection, and let the client retry it's request. */
+	 * Let's close the connection, and let the client retry its request. */
 	if (clt->events & CLT_READ) {
 #ifdef HAVE_ENBUG
 		if (oio_server_request_failure_threshold >= oio_ext_rand_int_range(1,100)) {
@@ -1120,16 +1120,24 @@ _cb_tcp_worker(struct network_client_s *clt, struct network_server_s *srv)
 #endif
 		const gint64 now = oio_ext_monotonic_time();
 		if (clt->time.evt_in < OLDEST(now, server_queue_max_delay)) {
-			GRID_INFO("STARVING fd %d peer %s delay %"G_GINT64_FORMAT"ms",
-					clt->fd, clt->peer_name,
-					(now - clt->time.evt_in) / G_TIME_SPAN_MILLISECOND);
+			GRID_WARN("A request from %s (fd=%d) has been queued "
+					"for %"G_GINT64_FORMAT"ms (server.queue.max_delay=%"
+					G_GINT64_FORMAT"ms), closing it",
+					clt->peer_name, clt->fd,
+					(now - clt->time.evt_in) / G_TIME_SPAN_MILLISECOND,
+					server_queue_max_delay / G_TIME_SPAN_MILLISECOND);
 			_client_clean(srv, clt);
 			return;
 		}
 		if (clt->time.evt_in < OLDEST(now, server_queue_warn_delay)) {
-			GRID_INFO("CLOGGED fd %d peer %s delay %"G_GINT64_FORMAT"ms",
-					clt->fd, clt->peer_name,
-					(now - clt->time.evt_in) / G_TIME_SPAN_MILLISECOND);
+			GRID_NOTICE("A request from %s (fd=%d) has been queued "
+					"for %"G_GINT64_FORMAT"ms "
+					"(server.queue.warn_delay=%"G_GINT64_FORMAT"ms). "
+					"Too many simultaneous requests? (server.pool.max_tcp=%d)",
+					clt->peer_name, clt->fd,
+					(now - clt->time.evt_in) / G_TIME_SPAN_MILLISECOND,
+					server_queue_max_delay / G_TIME_SPAN_MILLISECOND,
+					server_threadpool_max_tcp);
 		}
 	}
 
