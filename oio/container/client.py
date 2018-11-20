@@ -549,7 +549,7 @@ class ContainerClient(ProxyClient):
             # TODO(FVE): this special behavior can be removed when
             # the 'content/locate' protocol is changed to include
             # object properties in the response body instead of headers.
-            if properties and 'got more than 100 headers' in str(exc):
+            if properties and 'got more than ' in str(exc):
                 params['properties'] = False
                 _resp, chunks = self._direct_request(
                     'GET', uri, params=params, **kwargs)
