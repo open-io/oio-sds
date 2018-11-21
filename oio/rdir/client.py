@@ -484,8 +484,8 @@ class RdirClient(HttpApi):
             resp['name']
         )
 
-    def meta2_index_delete(self, volume_id, container_id=None, container_path=None,
-                           **kwargs):
+    def meta2_index_delete(self, volume_id, container_path=None,
+                           container_id=None, **kwargs):
         """
         Remove a meta2 record from the volume's index. Either the container ID
         or the container path have to be given.
@@ -499,7 +499,7 @@ class RdirClient(HttpApi):
         elif container_path and not container_id:
             _tmp = container_path.rsplit("/")
             container_id = cid_from_name(_tmp[1], _tmp[3])
-        else:
+        elif not container_path and not container_id:
             raise ValueError("At least the container ID or the container path "
                              "should be given.")
 

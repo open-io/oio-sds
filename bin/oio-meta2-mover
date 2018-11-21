@@ -54,7 +54,8 @@ if __name__ == '__main__':
         mapping = Meta1RefMapping(args.namespace)
         moved = mapping.move(args.src_service, args.dest_service, args.base,
                              'meta2')
-        moved_ok = mapping.apply(moved)
+        kwargs = {'src_service': args.src_service}
+        moved_ok = mapping.apply(moved, **kwargs)
     except Exception as exc:
         print("ERROR: " + str(exc))
     if not moved_ok:
