@@ -778,11 +778,11 @@ queue_url=${QUEUE_URL}
 template_event_agent_handlers = """
 [handler:storage.content.new]
 # pipeline = replication
-pipeline = noop
+pipeline = ${WEBHOOK}
 
 [handler:storage.content.update]
 # pipeline = replication webhook
-pipeline = noop
+pipeline = ${WEBHOOK}
 
 [handler:storage.content.append]
 # pipeline = replication
@@ -793,7 +793,7 @@ pipeline = content_rebuild
 
 [handler:storage.content.deleted]
 # pipeline = content_cleaner replication
-pipeline = content_cleaner
+pipeline = ${WEBHOOK} content_cleaner
 
 [handler:storage.content.drained]
 # pipeline = content_cleaner replication
@@ -844,6 +844,7 @@ use = egg:oio#volume_index
 
 [filter:webhook]
 use = egg:oio#webhook
+endpoint = ${WEBHOOK_ENDPOINT}
 
 [filter:replication]
 use = egg:oio#notify
@@ -1140,6 +1141,8 @@ def generate(options):
     want_service_id = '' if options.get('with_service_id') else '#'
 
     DATADIR = options.get('DATADIR', SDSDIR + '/data')
+    WEBHOOK = 'webhook' if options.get('webhook_enabled', False) else ''
+    WEBHOOK_ENDPOINT = options.get('webhook_endpoint', '')
 
     key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
     ENV = dict(ZK_CNXSTRING=options.get('ZK'),
@@ -1178,7 +1181,9 @@ def generate(options):
                KEY_FILE=key_file,
                HTTPD_BINARY=HTTPD_BINARY,
                META_HEADER=META_HEADER,
-               WANT_SERVICE_ID=want_service_id)
+               WANT_SERVICE_ID=want_service_id,
+               WEBHOOK=WEBHOOK,
+               WEBHOOK_ENDPOINT=WEBHOOK_ENDPOINT)
 
     def merge_env(add):
         env = dict(ENV)
