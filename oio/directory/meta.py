@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from oio.directory.admin import AdminClient
+from oio.rdir.client import RdirClient
 from oio.conscience.client import ConscienceClient
 from oio.common.exceptions import OioException, ServiceBusy
 from oio.common.logger import get_logger
@@ -24,10 +25,11 @@ class MetaMapping(object):
 
     def __init__(self, conf, service_types,
                  admin_client=None, conscience_client=None, logger=None,
-                 **kwargs):
+                 rdir_client=None, **kwargs):
         self.conf = conf
         self._admin = admin_client
         self._conscience = conscience_client
+        self._rdir = rdir_client
         self.logger = logger or get_logger(self.conf)
         self.raw_services_by_base = dict()
         self.services_by_base = dict()
@@ -47,6 +49,12 @@ class MetaMapping(object):
         if not self._conscience:
             self._conscience = ConscienceClient(self.conf)
         return self._conscience
+
+    @property
+    def rdir(self):
+        if not self._rdir:
+            self._rdir = RdirClient(self.conf)
+        return self._rdir
 
     def reset(self):
         """

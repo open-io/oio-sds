@@ -53,6 +53,19 @@ class Meta1RefMapping(MetaMapping):
                     service_type=service_type, cid=cid,  replace=True,
                     services=dict(host=','.join(peers), type=service_type,
                                   args=args, seq=seq))
+                """
+                FIXME(ABO): This part can be removed when, either:
+                - meta1 sends the removed services bundled with the
+                  account.services events.
+                - meta2 sends a storage.container.deleted event when the
+                  sqliterepo layer is the one that notifies the deletion of
+                  the databases.
+                """
+                if service_type == 'meta2' and kwargs.get('src_service'):
+                    self.rdir.meta2_index_delete(
+                        volume_id=kwargs.get('src_service'),
+                        container_id=cid
+                    )
             except OioException as exc:
                 self.logger.warn(
                     "Failed to link services for base %s (seq=%d): %s",
