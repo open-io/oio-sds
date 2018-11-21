@@ -24,7 +24,7 @@ from oio.common.logger import get_logger
 from oio.common.decorators import ensure_headers, ensure_request_id
 from oio.conscience.client import ConscienceClient
 from oio.directory.client import DirectoryClient
-from oio.common.utils import depaginate
+from oio.common.utils import depaginate, cid_from_name
 from oio.common.green import sleep
 
 RDIR_ACCT = '_RDIR'
@@ -282,6 +282,7 @@ class RdirClient(HttpApi):
     def __init__(self, conf, **kwargs):
         super(RdirClient, self).__init__(**kwargs)
         self.directory = DirectoryClient(conf, **kwargs)
+        self.ns = conf['namespace']
         self._addr_cache = dict()
 
     def _clear_cache(self, volume_id):
@@ -438,7 +439,9 @@ class RdirClient(HttpApi):
 
     def meta2_index_create(self, volume_id, **kwargs):
         """
-        Create a new meta2 rdir database.
+        Create a new meta2 rdir index.
+
+        :param volume_id: The meta2 volume.
         """
         return self._rdir_request(volume=volume_id, method='POST',
                                   action='create', service_type='meta2',
@@ -449,6 +452,12 @@ class RdirClient(HttpApi):
         """
         Add a newly created container to the list of containers handled
         by the meta2 server in question.
+
+        :param volume_id: The meta2 volume.
+        :param container_url: The container path (NS/account/container)
+        :param container_id: The container ID.
+        :param mtime: The last time it was spotted on this volume.
+        :param headers: Optional headers to pass along to the request.
         """
         body = {'container_url': container_url,
                 'container_id': container_id,
@@ -462,11 +471,39 @@ class RdirClient(HttpApi):
                                   headers=headers, service_type='meta2',
                                   **kwargs)
 
-    def meta2_index_delete(self, volume_id, container_path, container_id,
+    def _resolve_cid_to_path(self, cid):
+        """
+        Resolves a container ID into a a container path.
+
+        :param cid: The container ID.
+        :return: NS/account/container path.
+        """
+        resp = self.directory.list(cid=cid)
+        return '{0}/{1}/{2}'.format(
+            self.ns,
+            resp['account'],
+            resp['name']
+        )
+
+    def meta2_index_delete(self, volume_id, container_id=None, container_path=None,
                            **kwargs):
         """
-        Remove a meta2 record from the database.
+        Remove a meta2 record from the volume's index. Either the container ID
+        or the container path have to be given.
+
+        :param volume_id: The meta2 volume.
+        :param container_id: The container ID.
+        :param container_path: The container path
         """
+        if not container_path and container_id:
+            container_path = self._resolve_cid_to_path(container_id)
+        elif container_path and not container_id:
+            _tmp = container_path.rsplit("/")
+            container_id = cid_from_name(_tmp[1], _tmp[3])
+        else:
+            raise ValueError("At least the container ID or the container path "
+                             "should be given.")
+
         body = {'container_url': container_path,
                 'container_id': container_id}
 
@@ -481,6 +518,16 @@ class RdirClient(HttpApi):
                           limit=4096, **kwargs):
         """
         Fetch specific meta2 records, or a range of records.
+
+        :param volume_id: The meta2 volume.
+        :param prefix: The prefix all meta2 records should have.
+        :param marker: The container path from which the API will start the
+                        listing. The marker will not be included in the result.
+        :param limit: The number of records to be returned. Capped at 4096
+        :return: A dictionary containing the following entries:
+                  - records: A list containing the actual records.
+                  - truncated: A boolean value representing whether there
+                  are still records left that fulfill this query.
         """
         params = {}
         if prefix:
