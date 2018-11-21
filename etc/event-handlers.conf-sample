@@ -2,6 +2,7 @@
 [handler:storage.content.new]
 # pipeline = replication
 pipeline =
+# pipeline = webhook
 
 [handler:storage.content.update]
 # pipeline = replication
@@ -10,6 +11,7 @@ pipeline =
 [handler:storage.content.append]
 # pipeline = replication
 pipeline =
+# pipeline = webhook
 
 [handler:storage.content.broken]
 pipeline = content_rebuild
@@ -21,6 +23,7 @@ pipeline = content_cleaner
 [handler:storage.content.drained]
 # pipeline = content_cleaner replication
 pipeline = content_cleaner
+# pipeline = webhook content_cleaner
 
 [handler:storage.content.perfectible]
 pipeline = content_improve
