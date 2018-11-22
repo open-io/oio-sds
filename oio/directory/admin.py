@@ -172,7 +172,7 @@ class AdminClient(ProxyClient):
         """
         Force the new peer set in the replicas of the old peer set.
         """
-        data = {'system': {'sys.peers': ','.join(peers)}}
+        data = {'system': {'sys.peers': ','.join(sorted(peers))}}
         self._request('POST', "/set_properties",
                       params=params, json=data, **kwargs)
 
