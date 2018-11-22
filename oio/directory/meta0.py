@@ -74,10 +74,10 @@ class Meta0PrefixMapping(MetaMapping):
         return self.services_by_service_type['meta1']
 
     def _get_old_peers_by_base(self, base):
-        return self.raw_services_by_base.get(base, list())
+        return set(self.raw_services_by_base.get(base))
 
     def _get_peers_by_base(self, base):
-        return [v['addr'] for v in self.services_by_base.get(base, list())]
+        return {v['addr'] for v in self.services_by_base.get(base, list())}
 
     def _get_service_type_by_base(self, base):
         return 'meta1'
@@ -356,6 +356,7 @@ class Meta0PrefixMapping(MetaMapping):
             svc = self.services[svc]
         saved_score = svc["score"]
         svc["score"] = 0
+        bases_to_remove_checked = set()
         if bases_to_remove:
             # Remove extra digits and duplicates
             bases_to_remove = {b[:self.digits] for b in bases_to_remove}
@@ -367,15 +368,18 @@ class Meta0PrefixMapping(MetaMapping):
             try:
                 self.services_by_base[base].remove(svc)
             except ValueError:
-                pass
+                self.logger.warn('Base %s was not managed by %s',
+                                 base, svc['addr'])
+                continue
             try:
                 svc["bases"].remove(base)
             except KeyError:
                 pass
             new_svcs = strategy(known=self.services_by_base[base])
             self.assign_services(base, new_svcs)
+            bases_to_remove_checked.add(base)
         svc["score"] = saved_score
-        return bases_to_remove
+        return bases_to_remove_checked
 
     def rebalance(self, max_loops=65536):
         """Reassign bases from the services which manage the most"""
