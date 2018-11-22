@@ -19,6 +19,7 @@ import time
 from oio.api.object_storage import ObjectStorageApi
 from tests.utils import BaseTestCase, random_str
 from oio.common.exceptions import NoSuchObject
+from oio.common.easy_value import true_value
 
 
 class TestContentVersioning(BaseTestCase):
@@ -249,3 +250,436 @@ class TestContentVersioning(BaseTestCase):
         self.api.container.content_purge(
             self.account, self.container, "versioned")
         check_num_objects(0)
+
+    def test_list_objects(self):
+        resp = self.api.object_list(self.account, self.container)
+        self.assertEqual(0, len(list(resp['objects'])))
+        self.assertFalse(resp.get('truncated'))
+
+        def _check_objects(expected_objects, objects):
+            self.assertEqual(len(expected_objects), len(objects))
+            for i in range(len(expected_objects)):
+                self.assertEqual(
+                    expected_objects[i]['name'], objects[i]['name'])
+                self.assertEqual(
+                    int(expected_objects[i]['version']),
+                    int(objects[i]['version']))
+                self.assertEqual(
+                    true_value(expected_objects[i]['deleted']),
+                    true_value(objects[i]['deleted']))
+
+        all_versions = dict()
+
+        def _create_object(obj_name, all_versions):
+            self.api.object_create(
+                self.account, self.container, obj_name=obj_name, data="test")
+            versions = all_versions.get(obj_name, list())
+            versions.append(self.api.object_show(
+                self.account, self.container, obj_name))
+            all_versions[obj_name] = versions
+
+        def _delete_object(obj_name, all_versions):
+            self.api.object_delete(
+                self.account, self.container, obj_name)
+            versions = all_versions.get(obj_name, list())
+            versions.append(self.api.object_show(
+                self.account, self.container, obj_name))
+            all_versions[obj_name] = versions
+
+        def _get_current_objects(all_versions):
+            current_objects = list()
+            obj_names = sorted(all_versions.keys())
+            for obj_name in obj_names:
+                obj = all_versions[obj_name][-1]
+                if not true_value(obj['deleted']):
+                    current_objects.append(obj)
+            return current_objects
+
+        def _get_object_versions(all_versions):
+            object_versions = list()
+            obj_names = sorted(all_versions.keys())
+            for obj_name in obj_names:
+                versions = all_versions[obj_name]
+                versions.reverse()
+                object_versions += versions
+                versions.reverse()
+            return object_versions
+
+        # 0 object
+        expected_current_objects = _get_current_objects(all_versions)
+        expected_object_versions = _get_object_versions(all_versions)
+
+        resp = self.api.object_list(self.account, self.container,
+                                    limit=3)
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    limit=2)
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    limit=1)
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    versions=True)
+        _check_objects(expected_object_versions, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    versions=True, limit=3)
+        _check_objects(expected_object_versions, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        # 3 objects with 1 version
+        for i in range(3):
+            _create_object("versioned"+str(i), all_versions)
+        expected_current_objects = _get_current_objects(all_versions)
+        expected_object_versions = _get_object_versions(all_versions)
+
+        resp = self.api.object_list(self.account, self.container)
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    limit=3)
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    limit=2)
+        _check_objects(expected_current_objects[:2], list(resp['objects']))
+        self.assertTrue(resp.get('truncated'))
+        self.assertEqual('versioned1', resp['next_marker'])
+
+        resp = self.api.object_list(self.account, self.container,
+                                    limit=1)
+        _check_objects(expected_current_objects[:1], list(resp['objects']))
+        self.assertTrue(resp.get('truncated'))
+        self.assertEqual('versioned0', resp['next_marker'])
+
+        resp = self.api.object_list(self.account, self.container,
+                                    versions=True)
+        _check_objects(expected_object_versions, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    versions=True, limit=3)
+        _check_objects(expected_object_versions[:3], list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    marker='versioned0')
+        _check_objects(expected_current_objects[1:], list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    marker='versioned0', limit=1)
+        _check_objects(expected_current_objects[1:2], list(resp['objects']))
+        self.assertTrue(resp.get('truncated'))
+        self.assertEqual('versioned1', resp['next_marker'])
+
+        resp = self.api.object_list(self.account, self.container,
+                                    marker='versioned0', versions=True)
+        _check_objects(expected_object_versions[1:], list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    marker='versioned0', versions=True,
+                                    limit=3)
+        _check_objects(expected_object_versions[1:], list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        # 3 objects with 2 versions
+        for i in range(3):
+            _create_object("versioned"+str(i), all_versions)
+        expected_current_objects = _get_current_objects(all_versions)
+        expected_object_versions = _get_object_versions(all_versions)
+
+        resp = self.api.object_list(self.account, self.container)
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    limit=3)
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    limit=2)
+        _check_objects(expected_current_objects[:2], list(resp['objects']))
+        self.assertTrue(resp.get('truncated'))
+        self.assertEqual('versioned1', resp['next_marker'])
+
+        resp = self.api.object_list(self.account, self.container,
+                                    limit=1)
+        _check_objects(expected_current_objects[:1], list(resp['objects']))
+        self.assertTrue(resp.get('truncated'))
+        self.assertEqual('versioned0', resp['next_marker'])
+
+        resp = self.api.object_list(self.account, self.container,
+                                    versions=True)
+        _check_objects(expected_object_versions, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    versions=True, limit=3)
+        _check_objects(expected_object_versions[:3], list(resp['objects']))
+        self.assertTrue(resp.get('truncated'))
+        self.assertEqual('versioned1', resp['next_marker'])
+
+        resp = self.api.object_list(self.account, self.container,
+                                    marker='versioned0')
+        _check_objects(expected_current_objects[1:], list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    marker='versioned0', limit=1)
+        _check_objects(expected_current_objects[1:2], list(resp['objects']))
+        self.assertTrue(resp.get('truncated'))
+        self.assertEqual('versioned1', resp['next_marker'])
+
+        resp = self.api.object_list(self.account, self.container,
+                                    marker='versioned0', versions=True)
+        _check_objects(expected_object_versions[2:], list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    marker='versioned0', versions=True,
+                                    limit=3)
+        _check_objects(expected_object_versions[2:5], list(resp['objects']))
+        self.assertTrue(resp.get('truncated'))
+        self.assertEqual('versioned2', resp['next_marker'])
+
+        # 3 objects with 2 versions and 1 object with delete marker
+        _delete_object("versioned1", all_versions)
+        expected_current_objects = _get_current_objects(all_versions)
+        expected_object_versions = _get_object_versions(all_versions)
+
+        resp = self.api.object_list(self.account, self.container)
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    limit=3)
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    limit=2)
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    limit=1)
+        _check_objects(expected_current_objects[:1], list(resp['objects']))
+        self.assertTrue(resp.get('truncated'))
+        self.assertEqual('versioned0', resp['next_marker'])
+
+        resp = self.api.object_list(self.account, self.container,
+                                    versions=True)
+        _check_objects(expected_object_versions, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    versions=True, limit=3)
+        _check_objects(expected_object_versions[:3], list(resp['objects']))
+        self.assertTrue(resp.get('truncated'))
+        self.assertEqual('versioned1', resp['next_marker'])
+
+        resp = self.api.object_list(self.account, self.container,
+                                    marker='versioned0')
+        _check_objects(expected_current_objects[1:], list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    marker='versioned0', limit=1)
+        _check_objects(expected_current_objects[1:], list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    marker='versioned0', versions=True)
+        _check_objects(expected_object_versions[2:], list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    marker='versioned0', versions=True,
+                                    limit=3)
+        _check_objects(expected_object_versions[2:5], list(resp['objects']))
+        self.assertTrue(resp.get('truncated'))
+        self.assertEqual('versioned1', resp['next_marker'])
+
+        # 3 objects with 2 versions and 2 objects with delete marker
+        _delete_object("versioned0", all_versions)
+        expected_current_objects = _get_current_objects(all_versions)
+        expected_object_versions = _get_object_versions(all_versions)
+
+        resp = self.api.object_list(self.account, self.container)
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    limit=3)
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    limit=2)
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    limit=1)
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    versions=True)
+        _check_objects(expected_object_versions, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    versions=True, limit=3)
+        _check_objects(expected_object_versions[:3], list(resp['objects']))
+        self.assertTrue(resp.get('truncated'))
+        self.assertEqual('versioned0', resp['next_marker'])
+
+        resp = self.api.object_list(self.account, self.container,
+                                    marker='versioned0')
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    marker='versioned0', limit=1)
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    marker='versioned0', versions=True)
+        _check_objects(expected_object_versions[3:], list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    marker='versioned0', versions=True,
+                                    limit=3)
+        _check_objects(expected_object_versions[3:6], list(resp['objects']))
+        self.assertTrue(resp.get('truncated'))
+        self.assertEqual('versioned1', resp['next_marker'])
+
+        # 3 objects with 2 versions and 3 objects with delete marker
+        _delete_object("versioned2", all_versions)
+        expected_current_objects = _get_current_objects(all_versions)
+        expected_object_versions = _get_object_versions(all_versions)
+
+        resp = self.api.object_list(self.account, self.container)
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    limit=3)
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    limit=2)
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    limit=1)
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    versions=True)
+        _check_objects(expected_object_versions, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    versions=True, limit=3)
+        _check_objects(expected_object_versions[:3], list(resp['objects']))
+        self.assertTrue(resp.get('truncated'))
+        self.assertEqual('versioned0', resp['next_marker'])
+
+        resp = self.api.object_list(self.account, self.container,
+                                    marker='versioned0')
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    marker='versioned0', limit=1)
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    marker='versioned0', versions=True)
+        _check_objects(expected_object_versions[3:], list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    marker='versioned0', versions=True,
+                                    limit=3)
+        _check_objects(expected_object_versions[3:6], list(resp['objects']))
+        self.assertTrue(resp.get('truncated'))
+        self.assertEqual('versioned1', resp['next_marker'])
+
+        # 3 objects with 2 versions and 3 objects with delete marker
+        # (1 current version and 2 non current versions)
+        _create_object("versioned0", all_versions)
+        expected_current_objects = _get_current_objects(all_versions)
+        expected_object_versions = _get_object_versions(all_versions)
+
+        resp = self.api.object_list(self.account, self.container)
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    limit=3)
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    limit=2)
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    limit=1)
+        _check_objects(expected_current_objects, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    versions=True)
+        _check_objects(expected_object_versions, list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    versions=True, limit=3)
+        _check_objects(expected_object_versions[:3], list(resp['objects']))
+        self.assertTrue(resp.get('truncated'))
+        self.assertEqual('versioned0', resp['next_marker'])
+
+        resp = self.api.object_list(self.account, self.container,
+                                    marker='versioned0')
+        _check_objects(expected_current_objects[1:], list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    marker='versioned0', limit=1)
+        _check_objects(expected_current_objects[1:], list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    marker='versioned0', versions=True)
+        _check_objects(expected_object_versions[4:], list(resp['objects']))
+        self.assertFalse(resp.get('truncated'))
+
+        resp = self.api.object_list(self.account, self.container,
+                                    marker='versioned0', versions=True,
+                                    limit=3)
+        _check_objects(expected_object_versions[4:7], list(resp['objects']))
+        self.assertTrue(resp.get('truncated'))
+        self.assertEqual('versioned1', resp['next_marker'])

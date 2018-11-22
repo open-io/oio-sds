@@ -284,7 +284,7 @@ _manage_requests(struct gridd_client_pool_s *pool)
 
 		if (!gridd_client_start(ec->client)) {
 			GError *err = gridd_client_error(ec->client);
-			if (NULL != err) {
+			if (err) {
 				GRID_WARN("STARTUP Client fd=%d [%s]: (%d) %s",
 						gridd_client_fd(ec->client), gridd_client_url(ec->client),
 						err->code, err->message);
@@ -300,8 +300,12 @@ _manage_requests(struct gridd_client_pool_s *pool)
 		}
 	}
 
-	if (count_dropped > 0)
-		GRID_WARN("%u syncing RPC dropped (queued for too long)", count_dropped);
+	if (count_dropped > 0) {
+		GRID_WARN("%u syncing RPC dropped (queued for too long, "
+				"sqliterepo.repo.active_queue_ttl=%"G_GINT64_FORMAT"ms)",
+				count_dropped,
+				sqliterepo_active_queue_ttl / G_TIME_SPAN_MILLISECOND);
+	}
 
 	gint64 elapsed = oio_ext_monotonic_time() - start;
 	if (elapsed > 5 * G_TIME_SPAN_SECOND) {
@@ -415,7 +419,7 @@ gridd_client_pool_defer(struct gridd_client_pool_s *pool, struct event_client_s 
 		event_client_free(ev);
 	} else {
 		gint64 now = oio_ext_monotonic_time();
-		ev->deadline_start = now + 4 * G_TIME_SPAN_SECOND;
+		ev->deadline_start = now + sqliterepo_active_queue_ttl;
 		g_async_queue_push(pool->pending_clients, ev);
 	}
 }
