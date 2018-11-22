@@ -260,19 +260,25 @@ meta2_filter_action_put_content(struct gridd_filter_ctx_s *ctx,
 
 	GSList *added = NULL, *deleted = NULL;
 
-	GRID_DEBUG("Putting %d beans in [%s]%s%s", g_slist_length(beans),
+	GRID_DEBUG("Putting %d beans in [%s]%s%s%s", g_slist_length(beans),
 			oio_url_get(url, OIOURL_WHOLE),
 			meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_OVERWRITE)?
 			" (overwrite)":"",
 			meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_UPDATE)?
-			" (update)":"");
+			" (update)":"",
+			meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_CHANGE_POLICY)?
+			" (policy change)":"");
 
-	if (NULL != meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_OVERWRITE)) {
+	if (meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_OVERWRITE)) {
 		e = meta2_backend_force_alias(m2b, url, beans, _bean_list_cb, &deleted,
 				_bean_list_cb, &added);
 	} else if (meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_UPDATE)) {
 		reply->subject("(update)");
 		e = meta2_backend_update_content(m2b, url, beans,
+				_bean_list_cb, &deleted, _bean_list_cb, &added);
+	} else if (meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_CHANGE_POLICY)) {
+		reply->subject("(policy change)");
+		e = meta2_backend_change_alias_policy(m2b, url, beans,
 				_bean_list_cb, &deleted, _bean_list_cb, &added);
 	} else {
 		e = meta2_backend_put_alias(m2b, url, beans, _bean_list_cb, &deleted,

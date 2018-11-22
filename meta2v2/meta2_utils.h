@@ -202,6 +202,11 @@ GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 		m2_onbean_cb cb_deleted, gpointer u0_deleted,
 		m2_onbean_cb cb_added, gpointer u0_added);
 
+GError* m2db_change_alias_policy(struct m2db_put_args_s *args,
+		GSList *new_beans,
+		m2_onbean_cb cb_deleted, gpointer u0_deleted,
+		m2_onbean_cb cb_added, gpointer u0_added);
+
 GError* m2db_force_alias(struct m2db_put_args_s *args, GSList *in,
 		m2_onbean_cb cb_deleted, gpointer u0_deleted,
 		m2_onbean_cb cb_added, gpointer u0_added);

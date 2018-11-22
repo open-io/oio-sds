@@ -16,6 +16,7 @@
 import hashlib
 
 import os
+import time
 
 from oio.common.utils import cid_from_name
 from oio.common.xattr import xattr
@@ -121,7 +122,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
             "size": self.chunk.metachunk_size}
         self.container_client.content_create(
             self.account, self.ref, self.content.path,
-            content_id=self.content.id,
+            version=int(time.time()*1000000), content_id=self.content.id,
             size=self.content.size, checksum=self.content.hash,
             data={'chunks': [chunk_proxy]}, stgpol="SINGLE")
 
