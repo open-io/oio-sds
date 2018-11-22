@@ -1647,7 +1647,8 @@ sqlx_repository_get_peers2(sqlx_repository_t *repo,
 	EXTRA_ASSERT(result != NULL);
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	GError *err = sqlx_repository_open_and_lock(repo, n, SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK, &sq3, NULL);
+	GError *err = sqlx_repository_open_and_lock(repo, n,
+			SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK|SQLX_OPEN_URGENT, &sq3, NULL);
 	if (err) {
 		*result = NULL;
 	} else {

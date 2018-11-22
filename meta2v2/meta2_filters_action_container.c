@@ -261,6 +261,7 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	lp->maxkeys ++;
 	e = meta2_backend_list_aliases(m2b, url, lp, headers, s3_list_cb, NULL,
 			&properties);
+	obc->l = g_slist_reverse(obc->l);
 
 	if (NULL != e) {
 		GRID_DEBUG("Fail to return alias for url: %s", oio_url_get(url, OIOURL_WHOLE));

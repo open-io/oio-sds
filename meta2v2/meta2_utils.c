@@ -640,8 +640,7 @@ _list_params_to_sql_clause(struct list_params_s *lp, GString *clause,
 	if (clause->len == 0)
 		clause = g_string_append_static (clause, " 1");
 
-	if (!lp->flag_allversion || lp->maxkeys>0 || lp->marker_start || lp->marker_end)
-		g_string_append_static(clause, " ORDER BY alias ASC, version ASC");
+	g_string_append_static(clause, " ORDER BY alias ASC, version DESC");
 
 	if (lp->maxkeys > 0)
 		g_string_append_printf(clause, " LIMIT %"G_GINT64_FORMAT, lp->maxkeys);
@@ -677,82 +676,96 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 		GSList *headers, m2_onbean_cb cb, gpointer u)
 {
 	GError *err = NULL;
-	GSList *aliases = NULL;
-	guint count_aliases = 0;
+	gint64 count_aliases = 0;
+	// Last encountered alias, for pagination
+	gchar *last_alias_name = NULL;
 	struct list_params_s lp = *lp0;
 	gboolean done = FALSE;
+	GPtrArray *cur_aliases = NULL;
 
-	while (!done && (lp.maxkeys <= 0 || count_aliases < lp.maxkeys)) {
-		GPtrArray *tmp = g_ptr_array_new();
-		void cleanup (void) {
-			g_ptr_array_set_free_func (tmp, _bean_clean);
-			g_ptr_array_free (tmp, TRUE);
-			tmp = NULL;
+	void _load_header_and_send(struct bean_ALIASES_s *alias) {
+		if (lp.flag_headers)
+			_load_fk_by_name(sq3, alias, "image", cb, u);
+		if (lp.flag_properties)
+			_load_fk_by_name(sq3, alias, "properties", cb, u);
+		cb(u, alias);
+	}
+	void cleanup (void) {
+		if (cur_aliases) {
+			g_ptr_array_set_free_func(cur_aliases, _bean_clean);
+			g_ptr_array_free(cur_aliases, TRUE);
+			cur_aliases = NULL;
 		}
+	}
 
-		if (aliases)
-			lp.marker_start = ALIASES_get_alias(aliases->data)->str;
+	while (!done) {
+		cur_aliases = g_ptr_array_new();
+
 		if (lp.maxkeys > 0)
 			lp.maxkeys -= count_aliases;
+		count_aliases = 0;
+		if (last_alias_name)
+			lp.marker_start = last_alias_name;
 
 		// List the next items
 		GString *clause = g_string_sized_new(128);
 		GVariant **params = _list_params_to_sql_clause (&lp, clause, headers);
-		err = ALIASES_load(sq3->db, clause->str, params, _bean_buffer_cb, tmp);
-		metautils_gvariant_unrefv (params);
-		g_free (params), params = NULL;
-		g_string_free (clause, TRUE);
-		if (err) { cleanup (); goto label_error; }
-		if (!tmp->len) { cleanup (); goto label_ok; }
+		err = ALIASES_load(sq3->db, clause->str, params,
+				_bean_buffer_cb, cur_aliases);
+		metautils_gvariant_unrefv(params);
+		g_free(params), params = NULL;
+		g_string_free(clause, TRUE);
+		if (err || !cur_aliases->len)
+			break;
+		done = lp.maxkeys <= 0 || cur_aliases->len < lp.maxkeys;
 
-		metautils_gpa_reverse (tmp);
+		metautils_gpa_reverse(cur_aliases);
 
-		for (guint i = tmp->len; i > 0; i--) {
-			struct bean_ALIASES_s *alias = tmp->pdata[i-1];
+		if (lp.flag_allversion) {
+			g_free(last_alias_name);
+			last_alias_name = g_strdup(
+				ALIASES_get_alias(cur_aliases->pdata[0])->str);
+		}
+		for (guint i = cur_aliases->len; i > 0; i--) {
+			struct bean_ALIASES_s *alias = cur_aliases->pdata[i-1];
 			const gchar *name = ALIASES_get_alias(alias)->str;
 
-			if ((lp.prefix && !g_str_has_prefix(name, lp.prefix)) ||
-					(lp.maxkeys > 0 && count_aliases > lp.maxkeys)) {
-				cleanup (); goto label_ok;
-			}
+			if (lp.prefix && !g_str_has_prefix(name, lp.prefix))
+				goto label_end;
 
-			g_ptr_array_remove_index_fast (tmp, i-1);
+			g_ptr_array_remove_index_fast(cur_aliases, i-1);
 
-			if (!aliases || lp.flag_allversion) {
-				aliases = g_slist_prepend(aliases, alias);
-				++ count_aliases;
+			if (lp.flag_allversion) {
+				_load_header_and_send(alias);
+				count_aliases++;
+				if (lp.maxkeys > 0 && count_aliases >= lp.maxkeys) {
+					goto label_end;
+				}
 			} else {
-				const gchar *last_name = ALIASES_get_alias(aliases->data)->str;
-				if (!strcmp(last_name, name)) {
-					_bean_clean (aliases->data);
-					aliases->data = alias;
+				if (last_alias_name && !strcmp(last_alias_name, name)) {
+					_bean_clean(alias);
 				} else {
-					aliases = g_slist_prepend(aliases, alias);
-					++ count_aliases;
+					g_free(last_alias_name);
+					last_alias_name = g_strdup(name);
+					if (!lp.flag_nodeleted || !ALIASES_get_deleted(alias)) {
+						_load_header_and_send(alias);
+						count_aliases++;
+						if (lp.maxkeys > 0 && count_aliases >= lp.maxkeys) {
+							goto label_end;
+						}
+					} else {
+						_bean_clean(alias);
+					}
 				}
 			}
 		}
 
-		done = (lp.maxkeys <= 0) || (lp.maxkeys > tmp->len);
 		cleanup();
 	}
 
-label_ok:
-	aliases = g_slist_reverse(aliases);
-	for (GSList *l = aliases; l; l = l->next) {
-		struct bean_ALIASES_s *alias = l->data;
-		if (!lp.flag_nodeleted || !ALIASES_get_deleted(alias) || lp.flag_allversion){
-			if (lp.flag_headers)
-				_load_fk_by_name(sq3, alias, "image", cb, u);
-			if (lp.flag_properties)
-				_load_fk_by_name(sq3, alias, "properties", cb, u);
-			cb(u, alias);
-			l->data = NULL;
-		}
-	}
-
-label_error:
-	g_slist_free_full (aliases, _bean_clean);
+label_end:
+	cleanup();
+	g_free(last_alias_name);
 	return err;
 }
 
@@ -1656,8 +1669,8 @@ GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 		g_clear_error(&err);
 	}
 
-	gint64 max_versions = m2db_get_max_versions(args->sq3,
-	                                            args->ns_max_versions);
+	gint64 max_versions = m2db_get_max_versions(
+			args->sq3, args->ns_max_versions);
 
 	/* Manage the potential conflict with the latest alias in place. */
 	if (version > 0) {

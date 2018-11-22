@@ -238,7 +238,7 @@ class ObjectTest(CliTestCase):
     def test_drain_with_cid(self):
         self._test_drain(with_cid=True)
 
-    def test_autocontainer_object_listing(self):
+    def _test_autocontainer_object_listing(self, args='', env=None):
         obj_count = 7
         with tempfile.NamedTemporaryFile() as myfile:
             myfile.write('something')
@@ -249,13 +249,15 @@ class ObjectTest(CliTestCase):
             for i in range(obj_count):
                 obj_name = '%s_%d' % (prefix, i)
                 commands.append(' '.join(['object create --auto ',
-                                          myfile.name, '--name ', obj_name]))
-            self.openio_batch(commands)
+                                          myfile.name, '--name ',
+                                          obj_name, args]))
+            self.openio_batch(commands, env=env)
 
         # Default listing
         opts = self.get_opts([], 'json')
         output = self.openio('object list --auto --prefix ' +
-                             prefix + ' ' + opts)
+                             prefix + ' ' + opts + ' ' + args,
+                             env=env)
         listing = self.json_loads(output)
         self.assertEqual(obj_count, len(listing))
         for obj in listing:
@@ -265,7 +267,7 @@ class ObjectTest(CliTestCase):
         # Listing with properties
         opts = self.get_opts([], 'json')
         output = self.openio('object list --auto --properties --prefix ' +
-                             prefix + ' ' + opts)
+                             prefix + ' ' + opts + ' ' + args, env=env)
         listing = self.json_loads(output)
         self.assertEqual(obj_count, len(listing))
         for obj in listing:
@@ -275,12 +277,24 @@ class ObjectTest(CliTestCase):
         # Unpaged listing
         opts = self.get_opts([], 'json')
         output = self.openio('object list --auto --no-paging --prefix ' +
-                             prefix + ' ' + opts)
+                             prefix + ' ' + opts + ' ' + args, env=env)
         listing = self.json_loads(output)
         self.assertEqual(obj_count, len(listing))
         for obj in listing:
             # 4 columns
             self.assertEqual(4, len(obj))
+
+    def test_autocontainer_object_listing(self):
+        self._test_autocontainer_object_listing()
+
+    def test_autocontainer_object_listing_other_flatns(self):
+        env = {"OIO_ACCOUNT": "ACT-%s" % uuid.uuid4().hex}
+        self._test_autocontainer_object_listing(
+            '--flat-bits 8', env=env)
+        opts = self.get_opts([], 'json')
+        output = self.openio('container list ' + opts, env=env)
+        for entry in self.json_loads(output):
+            self.assertEqual(len(entry['Name']), 2)
 
     def _test_object_link(self, with_cid=False):
         with tempfile.NamedTemporaryFile() as myfile:

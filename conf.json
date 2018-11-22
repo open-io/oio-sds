@@ -560,7 +560,12 @@
 			{ "type": "uint", "name": "sqliterepo_fd_min_active",
 				"key": "sqliterepo.repo.fd_min_active",
 				"descr": "Minimum number of simultaneous outgoing connections.",
-				"def": 32, "min": 0, "max": "64ki" }
+				"def": 32, "min": 0, "max": "64ki" },
+
+			{ "type": "monotonic", "name": "sqliterepo_active_queue_ttl",
+				"key": "sqliterepo.repo.active_queue_ttl",
+				"descr": "In the current server, sets the maximum amount of time a queued DB_USE, DB_GETVERS or DB_PIPEFROM request may remain in the queue. If the message was queued for too long before being sent, it will be dropped. The purpose of such a mechanism is to avoid clogging the queue and the whole election/cache mechanisms with old messages, those messages having already been resent.",
+				"def": "4s", "min": "100ms", "max": "60s" }
 		]
 	},
 	"rdir": {
@@ -655,12 +660,12 @@
 
 			{ "type": "monotonic", "name": "server_udp_queue_ttl",
 				"key": "server.udp_queue.ttl",
-				"descr": "In the current server, sets the maximum amount of time a queued UDP frame may remain in the queue. When unqueued, if the message was queued for too long, it will be dropped. The purpose of such a mechanism is to avoid clogging the queue and the whole election/cache mechanisms with old messages, thoses message having already been resent.",
+				"descr": "In the current server, sets the maximum amount of time a queued UDP frame may remain in the queue. When unqueued, if the message was queued for too long, it will be dropped. The purpose of such a mechanism is to avoid clogging the queue and the whole election/cache mechanisms with old messages, those messages having already been resent.",
 				"def": "1s", "min": "100ms", "max": "1d" },
 
 			{ "type": "uint", "name": "server_udp_queue_maxlen",
 				"key": "server.udp_queue.max",
-				"descr": "In the current server, sets the maximumu length of the queue for UDP messages. When that number has been reached and a new message arrives, the message will be dropped.",
+				"descr": "In the current server, sets the maximum length of the queue for UDP messages. When that number has been reached and a new message arrives, the message will be dropped.",
 				"def": 512, "min": 0, "max": "1 << 32 - 1" },
 
 			{ "type": "monotonic", "name": "server_queue_max_delay",

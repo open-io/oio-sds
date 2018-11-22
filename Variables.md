@@ -1034,7 +1034,7 @@ Used by `gcc`
 
 ### server.udp_queue.max
 
-> In the current server, sets the maximumu length of the queue for UDP messages. When that number has been reached and a new message arrives, the message will be dropped.
+> In the current server, sets the maximum length of the queue for UDP messages. When that number has been reached and a new message arrives, the message will be dropped.
 
  * default: **512**
  * type: guint
@@ -1043,7 +1043,7 @@ Used by `gcc`
 
 ### server.udp_queue.ttl
 
-> In the current server, sets the maximum amount of time a queued UDP frame may remain in the queue. When unqueued, if the message was queued for too long, it will be dropped. The purpose of such a mechanism is to avoid clogging the queue and the whole election/cache mechanisms with old messages, thoses message having already been resent.
+> In the current server, sets the maximum amount of time a queued UDP frame may remain in the queue. When unqueued, if the message was queued for too long, it will be dropped. The purpose of such a mechanism is to avoid clogging the queue and the whole election/cache mechanisms with old messages, those messages having already been resent.
 
  * default: **1 * G_TIME_SPAN_SECOND**
  * type: gint64
@@ -1436,6 +1436,15 @@ Used by `gcc`
  * type: guint
  * cmake directive: *OIO_SQLITEREPO_RELEASE_SIZE*
  * range: 1 -> 2147483648
+
+### sqliterepo.repo.active_queue_ttl
+
+> In the current server, sets the maximum amount of time a queued DB_USE, DB_GETVERS or DB_PIPEFROM request may remain in the queue. If the message was queued for too long before being sent, it will be dropped. The purpose of such a mechanism is to avoid clogging the queue and the whole election/cache mechanisms with old messages, those messages having already been resent.
+
+ * default: **4 * G_TIME_SPAN_SECOND**
+ * type: gint64
+ * cmake directive: *OIO_SQLITEREPO_REPO_ACTIVE_QUEUE_TTL*
+ * range: 100 * G_TIME_SPAN_MILLISECOND -> 60 * G_TIME_SPAN_SECOND
 
 ### sqliterepo.repo.fd_max_active
 

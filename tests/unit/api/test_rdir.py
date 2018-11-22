@@ -121,14 +121,9 @@ class TestRdirMeta2Client(unittest.TestCase):
     def test_volume_create(self):
         # We should normally receive an HTTPResponse with an empty body
         self.rdir_client._rdir_request = Mock(side_effect=(None, ''))
-        expected_args = {
-            'volume': self.volid,
-            'method': 'POST',
-            'action': 'create',
-            'service_type': 'meta2'
-        }
         self.rdir_client.meta2_index_create(self.volid)
-        self.rdir_client._rdir_request.assert_called_once_with(**expected_args)
+        self.rdir_client._rdir_request.assert_called_once_with(
+            self.volid, 'POST', 'create', service_type='meta2')
         del self.rdir_client._rdir_request
 
     def test_volume_fetch(self):
