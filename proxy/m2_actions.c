@@ -2403,6 +2403,7 @@ static GError *_m2_json_put (struct req_args_s *args,
 
 	const gboolean append = _request_get_flag (args, "append");
 	const gboolean force = _request_get_flag (args, "force");
+	const gboolean change_policy = _request_get_flag (args, "change_policy");
 	GSList *ibeans = NULL, *obeans = NULL;
 	GError *err;
 
@@ -2423,6 +2424,7 @@ static GError *_m2_json_put (struct req_args_s *args,
 	PACKER_VOID(_pack) {
 		if (force) return m2v2_remote_pack_OVERWRITE (args->url, ibeans, DL());
 		if (append) return m2v2_remote_pack_APPEND (args->url, ibeans, DL());
+		if (change_policy) return m2v2_remote_pack_CHANGE_POLICY (args->url, ibeans, DL());
 		return m2v2_remote_pack_PUT (args->url, ibeans, DL());
 	}
 	err = _resolve_meta2(args, _prefer_master(), _pack, &obeans, NULL);
