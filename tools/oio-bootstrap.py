@@ -726,7 +726,7 @@ conscience=${CS_ALL_PUB}
 ecd=${IP}:${PORT_ECD}
 ${NOBS}event-agent=${BEANSTALKD_CNXSTRING}
 
-meta1_digits=${M1_DIGITS}
+ns.meta1_digits=${M1_DIGITS}
 
 admin=${IP}:${PORT_ADMIN}
 
