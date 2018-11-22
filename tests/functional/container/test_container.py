@@ -209,7 +209,7 @@ class TestMeta2Containers(BaseTestCase):
             p = "X-oio-content-meta-"
             headers = {p+"policy": "NONE",
                        p+"id": h,
-                       p+"version": "0",
+                       p+"version": "1",
                        p+"hash": "0"*32,
                        p+"length": "0",
                        p+"mime-type": "application/octet-stream",
@@ -420,6 +420,7 @@ class TestMeta2Containers(BaseTestCase):
         headers = {'x-oio-action-mode': 'autocreate',
                    'x-oio-content-meta-size': '1024',
                    'x-oio-content-meta-policy': stgpol,
+                   'x-oio-content-meta-version': int(time.time()*1000000),
                    'x-oio-content-meta-id': random_id(32)}
         resp = self.request('POST', self.url_content('create'), params=params,
                             headers=headers, data=json.dumps(chunks))
@@ -620,6 +621,7 @@ class TestMeta2Contents(BaseTestCase):
         headers = {'x-oio-action-mode': 'autocreate',
                    'x-oio-content-meta-size': '1024',
                    'x-oio-content-meta-policy': stgpol,
+                   'x-oio-content-meta-version': int(time.time()*1000000),
                    'x-oio-content-meta-id': random_id(32)}
         resp = self.request('POST', self.url_content('create'), params=params,
                             headers=headers, data=json.dumps(chunks))
@@ -792,6 +794,7 @@ class TestMeta2Contents(BaseTestCase):
         headers = {'x-oio-action-mode': 'autocreate',
                    'x-oio-content-meta-size': '1024',
                    'x-oio-content-meta-policy': stgpol,
+                   'x-oio-content-meta-version': int(time.time()*1000000),
                    'x-oio-content-meta-id': random_id(32)}
         resp = self.request('POST', self.url_content('create'),
                             params=params, headers=headers,

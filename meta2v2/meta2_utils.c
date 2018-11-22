@@ -1009,7 +1009,7 @@ _real_delete_and_save_deleted_beans(struct sqlx_sqlite3_s *sq3, GSList *beans,
 
 	// sqliterepo might disable foreign keys management, so that we have
 	// to manage this by ourselves.
-	if (!err)
+	if (!err && alias)
 		err = _db_del_FK_by_name (alias, "properties", sq3->db);
 
 	return err;
@@ -1639,13 +1639,16 @@ GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 	if (oio_url_has(args->url, OIOURL_VERSION))
 		return NEWERROR(CODE_BAD_REQUEST, "URL version is present");
 
-	/* Needed later several times, we extract now the content-id if specified */
 	gint64 version = _fetch_alias_version(beans);
-	const char *content_hexid = oio_url_get (args->url, OIOURL_CONTENTID);
-	if (!content_hexid) {
-		return BADREQ("Invalid URL (missing CONTENTID)");
+	if (version <= 0) {
+		return BADREQ("Missing or invalid alias bean (no version found)");
 	}
 
+	/* Needed later several times, we extract now the content-id */
+	const char *content_hexid = oio_url_get (args->url, OIOURL_CONTENTID);
+	if (!content_hexid) {
+		return BADREQ("Invalid URL (missing content ID)");
+	}
 	gsize content_idlen = strlen(content_hexid) / 2;
 	guint8 *content_id = g_alloca(1 + strlen(content_hexid));
 	if (!oio_str_hex2bin(content_hexid, content_id, content_idlen))
@@ -1673,20 +1676,13 @@ GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 			args->sq3, args->ns_max_versions);
 
 	/* Manage the potential conflict with the latest alias in place. */
-	if (version > 0) {
-		const gint64 latest_version = latest? ALIASES_get_version(latest) : 0;
-		/* version explicitely specified */
-		if (version == latest_version) {
-			err = NEWERROR(CODE_CONTENT_EXISTS, "Alias already saved");
-		} else if (version < latest_version && !VERSIONS_ENABLED(max_versions)) {
-			err = NEWERROR(CODE_CONTENT_PRECONDITION,
-					"New object version is older than latest version");
-		}
-	} else {
-		/* version unset, let's deduce it from the alias in place */
-		version = oio_ext_real_time();
-		if (latest && ALIASES_get_version(latest) == version)
-			version ++;
+	const gint64 latest_version = latest? ALIASES_get_version(latest) : 0;
+	/* version explicitely specified */
+	if (version == latest_version) {
+		err = NEWERROR(CODE_CONTENT_EXISTS, "Alias already saved");
+	} else if (version < latest_version && !VERSIONS_ENABLED(max_versions)) {
+		err = NEWERROR(CODE_CONTENT_PRECONDITION,
+				"New object version is older than latest version");
 	}
 
 	/* Check the operation respects the rules of versioning for the container */
@@ -1760,6 +1756,139 @@ suspended:
 
 	if (latest)
 		_bean_clean(latest);
+	return err;
+}
+
+GError*
+m2db_change_alias_policy(struct m2db_put_args_s *args, GSList *new_beans,
+		m2_onbean_cb cb_deleted, gpointer u0_deleted,
+		m2_onbean_cb cb_added, gpointer u0_added)
+{
+	GError *err;
+	struct bean_ALIASES_s *current_alias = NULL;
+	struct bean_CONTENTS_HEADERS_s *current_header = NULL;
+	struct bean_ALIASES_s *new_alias = NULL;
+	struct bean_CONTENTS_HEADERS_s *new_header = NULL;
+	GSList *beans_to_delete = NULL;
+	GSList *deleted_beans = NULL;
+	guint8 *content_id = NULL;
+
+	for (GSList *l = new_beans; l; l = l->next) {
+		if (DESCR(l->data) == &descr_struct_ALIASES) {
+			new_alias = l->data;
+		} else if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS) {
+			new_header = l->data;
+		}
+	}
+
+	/* Search the specific version */
+	gint64 version = ALIASES_get_version(new_alias);
+	if (version <= 0) {
+		return BADREQ("Invalid alias version");
+	}
+	void _search_alias_and_size(gpointer ignored, gpointer bean) {
+		(void) ignored;
+		if (DESCR(bean) == &descr_struct_ALIASES) {
+			current_alias = bean;
+		} else if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
+			current_header = bean;
+			beans_to_delete = g_slist_prepend(beans_to_delete, bean);
+		} else if (DESCR(bean) == &descr_struct_CHUNKS) {
+			beans_to_delete = g_slist_prepend(beans_to_delete, bean);
+		}
+	}
+	struct oio_url_s *url_with_version = oio_url_dup(args->url);
+	gchar *version_str = g_strdup_printf("%"G_GINT64_FORMAT, version);
+	oio_url_set(url_with_version, OIOURL_VERSION, version_str);
+	g_free(version_str);
+	err = m2db_get_alias(args->sq3, url_with_version,
+			M2V2_FLAG_NOPROPS|M2V2_FLAG_HEADERS, _search_alias_and_size, NULL);
+	oio_url_clean(url_with_version);
+	if (err) {
+		goto label_end;
+	}
+
+	if (ALIASES_get_deleted(current_alias)) {
+		err = BADREQ("The specified object version is a delete marker");
+		goto label_end;
+	}
+
+	if (CONTENTS_HEADERS_get_size(current_header) !=
+			CONTENTS_HEADERS_get_size(new_header) ||
+			!metautils_gba_equal(CONTENTS_HEADERS_get_hash(current_header),
+				CONTENTS_HEADERS_get_hash(new_header))) {
+		GString *current_hash = metautils_gba_to_hexgstr(
+				NULL, CONTENTS_HEADERS_get_hash(current_header));
+		GString *new_hash = metautils_gba_to_hexgstr(
+				NULL, CONTENTS_HEADERS_get_hash(new_header));
+		err = BADREQ("Different content "
+				"(current: size=%ld, hash=%s ; new: size=%ld, hash=%s)",
+				CONTENTS_HEADERS_get_size(current_header),
+				current_hash->str,
+				CONTENTS_HEADERS_get_size(new_header),
+				new_hash->str);
+		g_string_free(current_hash, TRUE);
+		g_string_free(new_hash, TRUE);
+		goto label_end;
+	}
+
+	/* Needed later several times, we extract now the content-id */
+	const char *content_hexid = oio_url_get(args->url, OIOURL_CONTENTID);
+	if (!content_hexid) {
+		err = BADREQ("Invalid URL (missing content ID)");
+		goto label_end;
+	}
+	gsize content_idlen = strlen(content_hexid) / 2;
+	content_id = g_alloca(1 + strlen(content_hexid));
+	if (!oio_str_hex2bin(content_hexid, content_id, content_idlen)) {
+		err = BADREQ("Invalid content ID (not hexa)");
+		goto label_end;
+	}
+
+	/* The content-id has been specified, we MUST check it will be UNIQUE */
+	err = m2db_check_content_absent(args->sq3, content_id, content_idlen);
+	if (err) {
+		goto label_end;
+	}
+
+	if (args->worm_mode) {
+		err = NEWERROR(CODE_CONTENT_EXISTS, "NS wormed! Cannot overwrite.");
+		goto label_end;
+	}
+
+	err = _real_delete_and_save_deleted_beans(args->sq3,
+			beans_to_delete, NULL, current_header,
+			_bean_list_cb, &deleted_beans);
+	if (err) {
+		goto label_end;
+	}
+
+	/* Patch the beans, before inserting */
+	_patch_beans_defaults(new_beans);
+	_patch_beans_with_time(new_beans, oio_ext_real_seconds());
+	/* Ensure the beans are all linked to the content (with their content-id) */
+	_patch_beans_with_contentid(new_beans, content_id, content_idlen);
+	/* Keep the same ctime and the same mtime */
+	ALIASES_set_ctime(new_alias, ALIASES_get_ctime(current_alias));
+	ALIASES_set_mtime(new_alias, ALIASES_get_mtime(current_alias));
+
+	err = m2db_real_put_alias(args->sq3, new_beans, cb_added, u0_added);
+	if (!err) {
+		m2db_set_size(args->sq3,
+				m2db_get_size(args->sq3) +
+				CONTENTS_HEADERS_get_size(new_header));
+		m2db_set_obj_count(args->sq3, m2db_get_obj_count(args->sq3) + 1);
+	}
+
+label_end:
+	_bean_clean(current_alias);
+	_bean_cleanl2(beans_to_delete);
+
+	if (!err && cb_deleted && deleted_beans)
+		cb_deleted(u0_deleted, deleted_beans);
+	else
+		_bean_cleanl2(deleted_beans);
+
 	return err;
 }
 
@@ -1923,7 +2052,14 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 
 	struct bean_ALIASES_s *alias = _bean_create(&descr_struct_ALIASES);
 	ALIASES_set2_alias(alias, oio_url_get(ctx->url, OIOURL_PATH));
-	ALIASES_set_version(alias, now);
+	gint64 version;
+	if (oio_url_has(ctx->url, OIOURL_VERSION) &&
+			(version = g_ascii_strtoll(
+				oio_url_get(ctx->url, OIOURL_VERSION), NULL, 10)) > 0) {
+		ALIASES_set_version(alias, version);
+	} else {
+		ALIASES_set_version(alias, now);
+	}
 	ALIASES_set_ctime(alias, now / G_TIME_SPAN_SECOND);
 	ALIASES_set_mtime(alias, now / G_TIME_SPAN_SECOND);
 	ALIASES_set_deleted(alias, FALSE);

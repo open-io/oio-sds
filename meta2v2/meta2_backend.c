@@ -987,6 +987,44 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	return err;
 }
 
+GError*
+meta2_backend_change_alias_policy(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, GSList *in,
+		m2_onbean_cb cb_deleted, gpointer u0_deleted,
+		m2_onbean_cb cb_added, gpointer u0_added)
+{
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	struct sqlx_repctx_s *repctx = NULL;
+
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+	if (!in)
+		return NEWERROR(CODE_BAD_REQUEST, "No bean");
+
+	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
+	if (!err) {
+		struct m2db_put_args_s args;
+		memset(&args, 0, sizeof(args));
+		args.sq3 = sq3;
+		args.url = url;
+		args.ns_max_versions = meta2_max_versions;
+		args.worm_mode = oio_ns_mode_worm && !oio_ext_is_admin();
+
+		if (!(err = _transaction_begin(sq3, url, &repctx))) {
+			if (!(err = m2db_change_alias_policy(
+					&args, in, cb_deleted, u0_deleted, cb_added, u0_added)))
+				m2db_increment_version(sq3);
+			err = sqlx_transaction_end(repctx, err);
+			if (!err)
+				m2b_add_modified_container(m2b, sq3);
+		}
+		m2b_close(sq3);
+	}
+
+	return err;
+}
+
 GError *
 meta2_backend_update_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		GSList *in, m2_onbean_cb cb_deleted, gpointer u0_deleted,

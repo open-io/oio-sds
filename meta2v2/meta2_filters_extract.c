@@ -249,6 +249,7 @@ meta2_filter_extract_header_optional_overwrite(struct gridd_filter_ctx_s *ctx,
 	TRACE_FILTER();
 	EXTRACT_OPT(NAME_MSGKEY_OVERWRITE);
 	EXTRACT_OPT(NAME_MSGKEY_UPDATE);
+	EXTRACT_OPT(NAME_MSGKEY_CHANGE_POLICY);
 	return FILTER_OK;
 }
 
