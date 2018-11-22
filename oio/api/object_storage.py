@@ -667,6 +667,17 @@ class ObjectStorageApi(object):
                     properties=properties, policy=policy,
                     key_file=key_file, append=append, **kwargs)
 
+    @handle_object_not_found
+    @ensure_headers
+    @ensure_request_id
+    def object_change_policy(self, account, container, obj, version, policy,
+                             **kwargs):
+        _, stream = self.object_fetch(
+            account, container, obj, version=version, **kwargs)
+        return self.object_create(
+            account, container, obj_name=obj, version=version,
+            data=stream, policy=policy, change_policy=True, **kwargs)
+
     @ensure_headers
     @ensure_request_id
     def object_touch(self, account, container, obj,
@@ -1153,8 +1164,9 @@ class ObjectStorageApi(object):
             policy=policy, key_file=key_file,
             **kwargs)
 
-        # XXX content_id is necessary to update an existing object
+        # XXX content_id and version are necessary to update an existing object
         kwargs['content_id'] = obj_meta['id']
+        kwargs['version'] = obj_meta['version']
 
         try:
             ul_chunks, ul_bytes, obj_checksum = self._object_upload(
@@ -1184,8 +1196,7 @@ class ObjectStorageApi(object):
             self.container.content_create(
                 account, container, obj_name, size=ul_bytes,
                 checksum=obj_checksum, data=data,
-                stgpol=obj_meta['policy'],
-                version=obj_meta['version'], mime_type=obj_meta['mime_type'],
+                stgpol=obj_meta['policy'], mime_type=obj_meta['mime_type'],
                 chunk_method=obj_meta['chunk_method'],
                 **kwargs)
         except (exc.Conflict, exc.DeadlineReached) as ex:
