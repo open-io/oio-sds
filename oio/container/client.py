@@ -397,7 +397,8 @@ class ContainerClient(ProxyClient):
                        size=None, checksum=None, data=None, cid=None,
                        content_id=None, stgpol=None, version=None,
                        mime_type=None, chunk_method=None, headers=None,
-                       append=False, force=False, **kwargs):
+                       append=False, change_policy=False, force=False,
+                       **kwargs):
         """
         Create a new object. This method does not upload any data, it just
         registers object metadata in the database.
@@ -422,11 +423,15 @@ class ContainerClient(ProxyClient):
         :param headers: extra headers to send to the proxy
         :param append: append to an existing object instead of creating it
         :type append: `bool`
+        :param change_policy: change policy of an existing object
+        :type change_policy: `bool`
         """
         uri = self._make_uri('content/create')
         params = self._make_params(account, reference, path, cid=cid)
         if append:
             params['append'] = '1'
+        if change_policy:
+            params['change_policy'] = '1'
         # TODO(FVE): implement 'force' parameter
         if not isinstance(data, dict):
             warnings.simplefilter('once')
@@ -562,7 +567,7 @@ class ContainerClient(ProxyClient):
 
     def content_prepare(self, account=None, reference=None, path=None,
                         size=None, cid=None, stgpol=None, content_id=None,
-                        **kwargs):
+                        version=None, **kwargs):
         """
         Prepare an upload: get URLs of chunks on available rawx.
 
@@ -570,7 +575,7 @@ class ContainerClient(ProxyClient):
         """
         uri = self._make_uri('content/prepare')
         params = self._make_params(account, reference, path, cid=cid,
-                                   content=content_id)
+                                   content=content_id, version=version)
         data = {'size': size}
         if stgpol:
             data['policy'] = stgpol
