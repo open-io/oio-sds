@@ -18,6 +18,9 @@ from oio import ObjectStorageApi
 from tests.utils import random_str, BaseTestCase
 
 
+PROPERTIES_COUNT = 2048
+
+
 class ObjectStoragePropertiesTest(BaseTestCase):
     """
     Test various scenarios with properties,
@@ -30,6 +33,8 @@ class ObjectStoragePropertiesTest(BaseTestCase):
         cls.logger = logging.getLogger('test')
         cls.api = ObjectStorageApi(cls._cls_ns, cls.logger)
         cls.obj_cname = "obj_props_" + random_str(8)
+
+    # --- Container properties ----------------------------------------
 
     def _test_set_container_property_with_size(self, size):
         cname = random_str(16)
@@ -78,6 +83,35 @@ class ObjectStoragePropertiesTest(BaseTestCase):
 
     def test_container_set_properties_key_1Mi(self):
         self._test_set_container_property_with_key_size(1024*1024)
+
+    def test_container_set_many_properties(self):
+        cname = "many_properties" + random_str(8)
+        properties = {'long_enough_property_key_%04d' % i:
+                      'long_enough_property_value_%d' % i
+                      for i in range(PROPERTIES_COUNT)}
+        res = self.api.container_create(self.account, cname,
+                                        properties=properties)
+        self.assertEqual(res, True)
+
+        data = self.api.container_get_properties(self.account, cname)
+        self.assertDictEqual(data['properties'], properties)
+
+        self.api.container_del_properties(
+            self.account, cname, properties.keys())
+        data = self.api.container_get_properties(self.account, cname)
+        self.assertDictEqual(data['properties'], {})
+
+        self.api.container_set_properties(self.account, cname, properties)
+        data = self.api.container_get_properties(self.account, cname)
+        self.assertDictEqual(data['properties'], properties)
+
+        self.api.container_del_properties(
+            self.account, cname, properties.keys())
+        data = self.api.container_get_properties(self.account, cname)
+        self.assertDictEqual(data['properties'], {})
+        self.api.container_delete(self.account, cname)
+
+    # --- Object properties -------------------------------------------
 
     def _test_set_object_property_with_size(self, size):
         oname = random_str(16)
@@ -152,3 +186,34 @@ class ObjectStoragePropertiesTest(BaseTestCase):
 
     def test_object_set_properties_key_1Mi(self):
         self._test_set_object_property_with_size(1024*1024)
+
+    def test_object_set_many_properties(self):
+        oname = "many_properties" + random_str(8)
+        properties = {'long_enough_property_key_%04d' % i:
+                      'long_enough_property_value_%d' % i
+                      for i in range(PROPERTIES_COUNT)}
+        self.api.object_create(self.account, self.obj_cname,
+                               obj_name=oname, data=oname,
+                               properties=properties)
+        data = self.api.object_get_properties(
+            self.account, self.obj_cname, oname)
+        self.assertDictEqual(data['properties'], properties)
+
+        self.api.object_del_properties(
+            self.account, self.obj_cname, oname, properties.keys())
+        data = self.api.object_get_properties(
+            self.account, self.obj_cname, oname)
+        self.assertDictEqual(data['properties'], {})
+
+        self.api.object_set_properties(self.account, self.obj_cname, oname,
+                                       properties=properties)
+        data = self.api.object_get_properties(
+            self.account, self.obj_cname, oname)
+        self.assertDictEqual(data['properties'], properties)
+
+        self.api.object_del_properties(
+            self.account, self.obj_cname, oname, properties.keys())
+        data = self.api.object_get_properties(
+            self.account, self.obj_cname, oname)
+        self.assertDictEqual(data['properties'], {})
+        self.api.object_delete(self.account, self.obj_cname, oname)
