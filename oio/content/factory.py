@@ -15,7 +15,6 @@
 
 from oio.common.exceptions import ContentNotFound
 from oio.common.exceptions import NotFound
-from oio.common.utils import GeneratorIO
 from oio.common.logger import get_logger
 from oio.container.client import ContainerClient
 from oio.blob.client import BlobClient
@@ -120,16 +119,3 @@ class ContentFactory(object):
         return cls(self.conf, origin.container_id,
                    metadata, chunks, storage_method,
                    origin.account, origin.container_name)
-
-    def change_policy(self, container_id, content_id, new_policy):
-        old_content = self.get(container_id, content_id)
-        if old_content.policy == new_policy:
-            return old_content
-
-        new_content = self.copy(old_content, policy=new_policy)
-
-        stream = old_content.fetch()
-        new_content.create(GeneratorIO(stream))
-        # the old content is automatically deleted because the new content has
-        # the same name (but not the same id)
-        return new_content

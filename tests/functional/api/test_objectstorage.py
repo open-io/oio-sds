@@ -1249,7 +1249,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
                      if cont_info[0] == name]
 
         self.api.object_change_policy(
-            self.account, name, name, obj1['version'], new_policy)
+            self.account, name, name, new_policy, version=obj1['version'])
         obj2, chunks2 = self.api.object_locate(
             self.account, name, name, version=obj1['version'])
         cnt_props2 = self.api.container_get_properties(self.account, name)
@@ -1357,7 +1357,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
         obj = self.api.object_get_properties(self.account, name, name)
         self.assertRaises(
             exc.ClientException, self.api.object_change_policy,
-            self.account, name, name, obj['version'], 'UNKNOWN')
+            self.account, name, name, 'UNKNOWN', version=obj['version'])
 
     def test_change_policy_with_delete_marker(self):
         name = random_str(32)
@@ -1370,7 +1370,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
         obj = self.api.object_get_properties(self.account, name, name)
         self.assertRaises(
             exc.NoSuchObject, self.api.object_change_policy,
-            self.account, name, name, obj['version'], 'SINGLE')
+            self.account, name, name, 'SINGLE', version=obj['version'])
         self.assertRaises(
             exc.ClientException, self.api.object_create,
             self.account, name, obj_name=name, version=obj['version'],
