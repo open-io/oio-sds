@@ -170,7 +170,9 @@ oio_meta_rebuilder()
   REBULD_TIME=$(date +%s)
   set +e
 
-  echo >&2 "Start the rebuilding for the ${TYPE} ${META_IP_TO_REBUILD}" \
+  sleep 3s
+
+  echo >&2 "Start the rebuilding for ${TYPE} ${META_IP_TO_REBUILD}" \
       "with ${WORKERS} workers"
   if ! $(which oio-"${TYPE}"-rebuilder) --workers "${WORKERS}" \
       "${NAMESPACE}"; then
@@ -187,7 +189,7 @@ oio_meta_rebuilder()
     if [ "${TYPE}" == "meta1" ]; then
       if ! USER=$(/usr/bin/sqlite3 "${META}" "SELECT user FROM users LIMIT 1" \
           2> /dev/null); then
-        echo >&2 "${META}: sqlite3 failed for the ${TYPE} ${META_IP_TO_REBUILD}"
+        echo >&2 "${META}: sqlite3 failed for ${TYPE} ${META_IP_TO_REBUILD}"
         FAIL=true
         continue
       fi
@@ -199,7 +201,7 @@ oio_meta_rebuilder()
 
     META_AFTER=${META//"${TMP_VOLUME}"/"${META_LOC_TO_REBUILD}"}
     if ! [ -f "${META_AFTER}" ]; then
-      echo >&2 "${META}: No such file for the ${TYPE} ${META_IP_TO_REBUILD}"
+      echo >&2 "${META}: No such file for ${TYPE} ${META_IP_TO_REBUILD}"
       FAIL=true
       continue
     fi
@@ -207,13 +209,17 @@ oio_meta_rebuilder()
     if ! LAST_REBUILD=$(/usr/bin/sqlite3 "${META_AFTER}" \
         "SELECT v FROM admin where k == 'user.sys.last_rebuild'" \
         2> /dev/null); then
-      echo >&2 "${META}: sqlite3 failed for the ${TYPE} ${META_IP_TO_REBUILD}"
+      echo >&2 "${META}: sqlite3 failed for ${TYPE} ${META_IP_TO_REBUILD}"
       FAIL=true
       continue
     fi
-    if [ -z "${LAST_REBUILD}" ] \
-        || [ "${REBULD_TIME}" -gt "${LAST_REBUILD}" ]; then
-      echo >&2 "${META}: Last rebuild too old for the ${TYPE} ${META_IP_TO_REBUILD}"
+    if [ -z "${LAST_REBUILD}" ]
+    then
+      echo >&2 "${META}: no rebuild date found for ${TYPE} ${META_IP_TO_REBUILD}"
+      FAIL=true
+    elif [ "${REBULD_TIME}" -gt "${LAST_REBUILD}" ]
+    then
+      echo >&2 "${META}: last rebuild date too old for ${TYPE} ${META_IP_TO_REBUILD}: ${LAST_REBUILD} < ${REBULD_TIME}"
       FAIL=true
       continue
     fi
@@ -223,7 +229,7 @@ oio_meta_rebuilder()
     if ! /usr/bin/sqlite3 "${TMP_FILE_BEFORE}" \
         "DELETE FROM admin WHERE k == 'version:main.admin';
         DELETE FROM admin WHERE k == 'user.sys.last_rebuild'" &> /dev/null; then
-      echo >&2 "${META}: sqlite3 failed for the ${TYPE} ${META_IP_TO_REBUILD}"
+      echo >&2 "${META}: sqlite3 failed for ${TYPE} ${META_IP_TO_REBUILD}"
       FAIL=true
       continue
     fi
@@ -233,18 +239,18 @@ oio_meta_rebuilder()
     if ! /usr/bin/sqlite3 "${TMP_FILE_AFTER}" \
         "DELETE FROM admin WHERE k == 'version:main.admin';
         DELETE FROM admin WHERE k == 'user.sys.last_rebuild'" &> /dev/null; then
-      echo >&2 "${META}: sqlite3 failed for the ${TYPE} ${META_IP_TO_REBUILD}"
+      echo >&2 "${META}: sqlite3 failed for ${TYPE} ${META_IP_TO_REBUILD}"
       FAIL=true
       continue
     fi
     if ! DIFF=$(mysqldiff "${TMP_FILE_BEFORE}" "${TMP_FILE_AFTER}" \
         2> /dev/null); then
-      echo >&2 "${META}: sqldiff failed for the ${TYPE} ${META_IP_TO_REBUILD}"
+      echo >&2 "${META}: sqldiff failed for ${TYPE} ${META_IP_TO_REBUILD}"
       FAIL=true
       continue
     fi
     if [ -n "${DIFF}" ]; then
-      echo >&2 "${META}: Wrong content for the ${TYPE} ${META_IP_TO_REBUILD}"
+      echo >&2 "${META}: Wrong content for ${TYPE} ${META_IP_TO_REBUILD}"
       FAIL=true
       continue
     fi
@@ -323,7 +329,7 @@ oio_blob_rebuilder()
     IFS=$OLD_IFS
   fi
 
-  echo >&2 "Create an incident for the rawx ${RAWX_ID_TO_REBUILD}"
+  echo >&2 "Create an incident for rawx ${RAWX_ID_TO_REBUILD}"
   $CLI volume admin incident "${RAWX_ID_TO_REBUILD}"
 
   update_timeout 1
@@ -354,7 +360,7 @@ oio_blob_rebuilder()
         --beanstalkd-tube oio-rebuilt )
   fi
 
-  echo >&2 "Start the rebuilding for the rawx ${RAWX_ID_TO_REBUILD}"
+  echo >&2 "Start the rebuilding for rawx ${RAWX_ID_TO_REBUILD}"
   if ! $(which oio-blob-rebuilder) "${MAIN_OPTIONS[@]}" \
       --volume "${RAWX_ID_TO_REBUILD}" "${NAMESPACE}"; then
     FAIL=true
@@ -390,13 +396,13 @@ oio_blob_rebuilder()
     CHUNK_ID=${CHUNK##*/}
     if ! FULLPATH=$(/usr/bin/getfattr -n "user.oio.content.fullpath:${CHUNK_ID}" \
         --only-values "${CHUNK}" 2> /dev/null); then
-      echo >&2 "${CHUNK}: Missing fullpath attribute for the rawx ${RAWX_ID_TO_REBUILD}"
+      echo >&2 "${CHUNK}: Missing fullpath attribute for rawx ${RAWX_ID_TO_REBUILD}"
       FAIL=true
       continue
     fi
     if ! POSITION=$(/usr/bin/getfattr -n "user.grid.chunk.position" \
         --only-values "${CHUNK}" 2> /dev/null); then
-      echo >&2 "${CHUNK}: Missing attribute for the rawx ${RAWX_ID_TO_REBUILD}"
+      echo >&2 "${CHUNK}: Missing attribute for rawx ${RAWX_ID_TO_REBUILD}"
       FAIL=true
       continue
     fi
@@ -410,7 +416,7 @@ oio_blob_rebuilder()
         --object-version "${VERSION}" -f value -c Pos -c Id \
         | /bin/grep "^${POSITION} " | /usr/bin/cut -d' ' -f2) \
         || [ -z "${CHUNK_URLS}" ]; then
-      echo >&2 "${CHUNK}: Location failed for the rawx ${RAWX_ID_TO_REBUILD}"
+      echo >&2 "${CHUNK}: Location failed for rawx ${RAWX_ID_TO_REBUILD}"
       FAIL=true
       continue
     fi
@@ -418,15 +424,13 @@ oio_blob_rebuilder()
     IFS=$'\n'
     for CHUNK_URL in $(echo "${CHUNK_URLS}"); do
       if [ "${CHUNK_URL##*/}" = "${CHUNK_ID}" ]; then
-        echo >&2 "${CHUNK}: (${CHUNK_URL}) meta2 not updated for the rawx " \
-            "${RAWX_ID_TO_REBUILD}"
+        echo >&2 "${CHUNK}: (${CHUNK_URL}) meta2 not updated for rawx ${RAWX_ID_TO_REBUILD}"
         FAIL=true
         continue
       fi
       if ! $(which oio-crawler-integrity) "${NAMESPACE}" "${ACCOUNT}" \
           "${CONTAINER}" "${CONTENT}" "${CHUNK_URL}" &> /dev/null; then
-        echo >&2 "${CHUNK}: (${CHUNK_URL}) oio-crawler-integrity failed for the" \
-            "rawx ${RAWX_ID_TO_REBUILD}"
+        echo >&2 "${CHUNK}: (${CHUNK_URL}) oio-crawler-integrity failed for rawx ${RAWX_ID_TO_REBUILD}"
         FAIL=true
         continue
       fi
@@ -438,21 +442,18 @@ oio_blob_rebuilder()
       fi
       if ! /usr/bin/wget -O "${TMP_FILE_AFTER}" "${CURLABLE}" \
           &> /dev/null; then
-        echo >&2 "${CHUNK}: (${CURLABLE}) wget failed for the rawx" \
-            "${RAWX_ID_TO_REBUILD}"
+        echo >&2 "${CHUNK}: (${CURLABLE}) wget failed for rawx ${RAWX_ID_TO_REBUILD}"
         FAIL=true
         continue
       fi
       if ! DIFF=$(/usr/bin/diff "${CHUNK}" "${TMP_FILE_AFTER}" \
           2> /dev/null); then
-        echo >&2 "${CHUNK}: (${CHUNK_URL}) diff failed for the rawx" \
-            "${RAWX_ID_TO_REBUILD}"
+        echo >&2 "${CHUNK}: (${CHUNK_URL}) diff failed for rawx ${RAWX_ID_TO_REBUILD}"
         FAIL=true
         continue
       fi
       if [ -n "${DIFF}" ]; then
-        echo >&2 "${CHUNK}: (${CHUNK_URL}) Wrong content for the rawx" \
-            "${RAWX_ID_TO_REBUILD}"
+        echo >&2 "${CHUNK}: (${CHUNK_URL}) difference found for rawx ${RAWX_ID_TO_REBUILD}"
         FAIL=true
         continue
       fi
@@ -466,7 +467,7 @@ oio_blob_rebuilder()
     printf "${RED}\noio-blob-rebuilder: FAILED\n${NO_COLOR}"
     exit 1
   else
-    echo >&2 "Remove the incident for the rawx ${RAWX_ID_TO_REBUILD}"
+    echo >&2 "Remove the incident for rawx ${RAWX_ID_TO_REBUILD}"
     $CLI volume admin clear --before-incident "${RAWX_ID_TO_REBUILD}"
 
     printf "${GREEN}\noio-blob-rebuilder: OK\n${NO_COLOR}"

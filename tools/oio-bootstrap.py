@@ -145,6 +145,22 @@ log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
 """
 
+template_meta2_indexer_service = """
+[meta2-indexer]
+namespace = ${NS}
+user = ${USER}
+volume_list = ${META2_VOLUMES}
+interval = 3000
+report_interval = 5
+scanned_per_second = 3
+try_removing_faulty_indexes = False
+autocreate = true
+log_level = INFO
+log_facility = LOG_LOCAL0
+log_address = /dev/log
+syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
+"""
+
 template_rawx_service = """
 LoadModule mpm_worker_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mpm_worker.so
 LoadModule authz_core_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_authz_core.so
@@ -696,6 +712,15 @@ template_gridinit_indexer = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 command=oio-blob-indexer ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+enabled=true
+start_at_boot=false
+on_die=cry
+"""
+
+template_gridinit_meta2_indexer = """
+[Service.${NS}-${SRVTYPE}-${SRVNUM}]
+group=${NS},localhost,${GROUPTYPE}
+command=oio-meta2-indexer ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 enabled=true
 start_at_boot=false
 on_die=cry
@@ -1323,6 +1348,8 @@ def generate(options):
     else:
         ENV.update({'BEANSTALKD_CNXSTRING': '***disabled***', 'NOBS': '#'})
 
+    meta2_volumes = []
+
     # meta* + sqlx
     def generate_meta(t, n, tpl, ext_opt="", service_id=False):
         env = subenv({'SRVTYPE': t, 'SRVNUM': n, 'PORT': next(ports),
@@ -1346,6 +1373,11 @@ def generate(options):
         tpl = Template(template_meta_watch)
         with open(watch(env), 'w+') as f:
             f.write(tpl.safe_substitute(env))
+
+        if t == "meta2":
+            meta2_volumes.append("{DATADIR}/{NS}-{SRVTYPE}-{SRVNUM}".format(
+                **env
+            ))
 
     # meta0
     nb_meta0 = max(getint(options['meta0'].get(SVC_NB), defaults['NB_M0']),
@@ -1371,6 +1403,24 @@ def generate(options):
             generate_meta('meta2', i + 1, template_gridinit_meta,
                           options['meta2'].get(SVC_PARAMS, ""),
                           service_id=options['with_service_id'])
+
+    # oio-meta2-indexer
+    _tmp_env = subenv({
+        'META2_VOLUMES': ",".join(meta2_volumes),
+        'SRVTYPE': 'meta2-indexer',
+        'SRVNUM': '1',
+        'GROUPTYPE': 'indexer',
+    })
+    # first the conf
+    tpl = Template(template_meta2_indexer_service)
+    to_write = tpl.safe_substitute(_tmp_env)
+    path = '{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.conf'.format(**_tmp_env)
+    with open(path, 'w+') as f:
+        f.write(to_write)
+    # then the gridinit conf
+    tpl = Template(template_gridinit_meta2_indexer)
+    with open(gridinit(_tmp_env), 'a+') as f:
+        f.write(tpl.safe_substitute(_tmp_env))
 
     # sqlx
     nb_sqlx = getint(options['sqlx'].get(SVC_NB), sqlx_replicas)
