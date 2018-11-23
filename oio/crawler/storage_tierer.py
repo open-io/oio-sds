@@ -15,16 +15,13 @@
 
 import time
 
-from oio.account.client import AccountClient
+from oio import ObjectStorageApi
 from oio.common import exceptions as exc
 from oio.common.daemon import Daemon
 from oio.common.exceptions import NotFound
-from oio.common.utils import cid_from_name
-from oio.common.easy_value import int_value
+from oio.common.easy_value import int_value, true_value
 from oio.common.logger import get_logger
 from oio.common.green import ratelimit
-from oio.container.client import ContainerClient
-from oio.content.factory import ContentFactory
 
 SLEEP_TIME = 30
 
@@ -39,9 +36,9 @@ class StorageTiererWorker(object):
         self.conf = conf
         self.logger = logger
         self.account = conf[CONF_ACCOUNT]
-        self.container_client = ContainerClient(self.conf, logger=self.logger)
-        self.account_client = AccountClient(self.conf, logger=self.logger)
-        self.content_factory = ContentFactory(self.conf)
+        self.api = ObjectStorageApi(conf['namespace'], logger=self.logger)
+        self.container_client = self.api.container
+        self.account_client = self.api.account
         self.passes = 0
         self.errors = 0
         self.last_reported = 0
@@ -92,16 +89,18 @@ class StorageTiererWorker(object):
                         continue
                     if obj["policy"] == self.new_policy:
                         continue
-                    container_id = cid_from_name(self.account, container)
-                    yield (container_id, obj["content"])
+                    if true_value(obj['deleted']):
+                        continue
+                    yield (self.account, container,
+                           obj["name"], obj["version"])
 
     def run(self):
         start_time = report_time = time.time()
 
         total_errors = 0
 
-        for (container_id, content_id) in self._list_contents():
-            self.safe_change_policy(container_id, content_id)
+        for (account, container, obj, version) in self._list_contents():
+            self.safe_change_policy(account, container, obj, version)
 
             self.contents_run_time = ratelimit(
                 self.contents_run_time,
@@ -140,20 +139,21 @@ class StorageTiererWorker(object):
             }
         )
 
-    def safe_change_policy(self, container_id, content_id):
+    def safe_change_policy(self, account, container, obj, version):
         try:
-            self.change_policy(container_id, content_id)
+            self.change_policy(account, container, obj, version)
         except Exception:
             self.errors += 1
             self.logger.exception("ERROR while changing policy for content "
-                                  "%s/%s", container_id, content_id)
+                                  "%s/%s/%s/%s", account, container, obj,
+                                  str(version))
         self.passes += 1
 
-    def change_policy(self, container_id, content_id):
-        self.logger.info("Changing policy for content %s/%s",
-                         container_id, content_id)
-        self.content_factory.change_policy(
-            container_id, content_id, self.new_policy)
+    def change_policy(self, account, container, obj, version):
+        self.logger.info("Changing policy for content %s/%s/%s/%s",
+                         account, container, obj, str(version))
+        self.api.object_change_policy(
+            self, account, container, obj, self.new_policy, version=version)
 
 
 class StorageTierer(Daemon):

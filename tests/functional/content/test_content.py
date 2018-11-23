@@ -25,8 +25,7 @@ from testtools.matchers import Not
 from testtools.testcase import ExpectedException
 
 from oio.blob.client import BlobClient
-from oio.common.exceptions import NotFound, \
-    ContentNotFound, ClientException, OrphanChunk
+from oio.common.exceptions import ContentNotFound, OrphanChunk
 from oio.common.utils import cid_from_name
 from oio.common.fullpath import encode_fullpath
 from oio.container.client import ContainerClient
@@ -242,105 +241,6 @@ class TestContentFactory(BaseTestCase):
         old_content.create(BytesIO(data))
         return self.content_factory.get(self.container_id,
                                         old_content.content_id)
-
-    def _test_change_policy(self, data_size, old_policy, new_policy):
-        data = random_data(data_size)
-        obj_type = {
-            self.stgpol: PlainContent,
-            self.stgpol_twocopies: PlainContent,
-            self.stgpol_threecopies: PlainContent,
-            self.stgpol_ec: ECContent
-        }
-        mime_type = "application/test"
-        props = {'a': 'b'}
-        old_content = self._new_content(
-            old_policy, data, mime_type=mime_type, properties=props)
-        self.assertEqual(type(old_content), obj_type[old_policy])
-
-        changed_content = self.content_factory.change_policy(
-            old_content.container_id, old_content.content_id, new_policy)
-
-        self.assertRaises(
-            NotFound, self.container_client.content_get_properties,
-            self.account, cid=old_content.container_id,
-            content=old_content.content_id)
-
-        new_content = self.content_factory.get(self.container_id,
-                                               changed_content.content_id)
-        self.assertEqual(type(new_content), obj_type[new_policy])
-
-        downloaded_data = "".join(new_content.fetch())
-
-        self.assertEqual(downloaded_data, data)
-        self.assertEqual(mime_type, new_content.mime_type)
-        self.assertDictEqual(props, new_content.properties)
-
-    @ec
-    def test_change_content_0_byte_policy_single_to_ec(self):
-        self._test_change_policy(0, self.stgpol, self.stgpol_ec)
-
-    @ec
-    def test_change_content_0_byte_policy_ec_to_twocopies(self):
-        self._test_change_policy(0, self.stgpol_ec, self.stgpol_twocopies)
-
-    @ec
-    def test_change_content_1_byte_policy_single_to_ec(self):
-        self._test_change_policy(1, self.stgpol, self.stgpol_ec)
-
-    @ec
-    def test_change_content_chunksize_bytes_policy_twocopies_to_ec(self):
-        self._test_change_policy(
-            self.chunk_size, self.stgpol_twocopies, self.stgpol_ec)
-
-    @ec
-    def test_change_content_2xchunksize_bytes_policy_threecopies_to_ec(self):
-        self._test_change_policy(
-            self.chunk_size * 2, self.stgpol_threecopies, self.stgpol_ec)
-
-    @ec
-    def test_change_content_1_byte_policy_ec_to_threecopies(self):
-        self._test_change_policy(
-            1, self.stgpol_ec, self.stgpol_threecopies)
-
-    @ec
-    def test_change_content_chunksize_bytes_policy_ec_to_twocopies(self):
-        self._test_change_policy(
-            self.chunk_size, self.stgpol_ec, self.stgpol_twocopies)
-
-    @ec
-    def test_change_content_2xchunksize_bytes_policy_ec_to_single(self):
-        self._test_change_policy(
-            self.chunk_size * 2, self.stgpol_ec, self.stgpol)
-
-    def test_change_content_0_byte_policy_twocopies_to_threecopies(self):
-        self._test_change_policy(
-            0, self.stgpol_twocopies, self.stgpol_threecopies)
-
-    def test_change_content_chunksize_bytes_policy_single_to_twocopies(self):
-        self._test_change_policy(
-            self.chunk_size, self.stgpol, self.stgpol_twocopies)
-
-    def test_change_content_2xchunksize_bytes_policy_3copies_to_single(self):
-        self._test_change_policy(
-            self.chunk_size * 2, self.stgpol_threecopies, self.stgpol)
-
-    def test_change_content_with_same_policy(self):
-        data = random_data(10)
-        old_content = self._new_content(self.stgpol_twocopies, data)
-        changed_content = self.content_factory.change_policy(
-            old_content.container_id, old_content.content_id,
-            self.stgpol_twocopies)
-        self.assertEqual(old_content.content_id, changed_content.content_id)
-
-    def test_change_policy_unknown_content(self):
-        self.assertRaises(ContentNotFound, self.content_factory.change_policy,
-                          self.container_id, "1234", self.stgpol)
-
-    def test_change_policy_unknown_storage_policy(self):
-        data = random_data(10)
-        old_content = self._new_content(self.stgpol_twocopies, data)
-        self.assertRaises(ClientException, self.content_factory.change_policy,
-                          self.container_id, old_content.content_id, "UnKnOwN")
 
     def _test_move_chunk(self, policy):
         data = random_data(self.chunk_size)

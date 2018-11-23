@@ -662,12 +662,26 @@ class ObjectStorageApi(object):
     @handle_object_not_found
     @ensure_headers
     @ensure_request_id
-    def object_change_policy(self, account, container, obj, version, policy,
-                             **kwargs):
-        _, stream = self.object_fetch(
-            account, container, obj, version=version, **kwargs)
+    def object_change_policy(self, account, container, obj, policy, **kwargs):
+        """
+        Change the storage policy of an object
+
+        :param account: name of the account where to change
+            the policy of the object
+        :type account: `str`
+        :param container: name of the container where to change
+            the policy of the object
+        :type container: `str`
+        :param obj: name of the object to change the policy
+        :type obj: `str`
+        :param policy: name of the new storage policy
+        :type policy: `str`
+        """
+        meta, stream = self.object_fetch(
+            account, container, obj, **kwargs)
+        kwargs['version'] = meta['version']
         return self.object_create(
-            account, container, obj_name=obj, version=version,
+            account, container, obj_name=meta['name'],
             data=stream, policy=policy, change_policy=True, **kwargs)
 
     @ensure_headers
@@ -678,11 +692,12 @@ class ObjectStorageApi(object):
         Trigger a notification about an object
         (as if it just had been created).
 
-        :param account: name of the account where to create the object
+        :param account: name of the account where to touch the object
         :type account: `str`
-        :param container: name of the container where to create the object
+        :param container: name of the container where to touch the object
         :type container: `str`
         :param obj: name of the object to touch
+        :type obj: `str`
         """
         self.container.content_touch(account, container, obj,
                                      version=version, **kwargs)

@@ -24,7 +24,7 @@ except ImportError:
 
 from oio.common.exceptions import OioException
 from oio.common.logger import get_logger
-from oio.common.utils import cid_from_name, depaginate
+from oio.common.utils import depaginate
 from oio.common.easy_value import true_value
 
 
@@ -821,10 +821,11 @@ class Transition(LifecycleAction):
 
     def apply(self, obj_meta, **kwargs):
         if self.match(obj_meta, **kwargs):
-            cid = cid_from_name(self.lifecycle.account,
-                                self.lifecycle.container)
-            # TODO: avoid loading content description a second time
-            self.factory.change_policy(cid, obj_meta['id'], self.policy)
+            if obj_meta['policy'] == self.policy:
+                return "Policy already changed to %s" % self.policy
+            self.lifecycle.api.object_change_policy(
+                self.lifecycle.account, self.lifecycle.container,
+                obj_meta['name'], self.policy, version=obj_meta['version'])
             return "Policy changed to %s" % self.policy
         return "Kept"
 
