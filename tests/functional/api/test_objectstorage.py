@@ -19,11 +19,12 @@ import time
 from mock import MagicMock as Mock
 from functools import partial
 from urllib3 import HTTPResponse
-from oio.api.object_storage import ObjectStorageApi
+from oio.api.object_storage import ObjectStorageApi, _sort_chunks
 from oio.common.storage_functions import _sort_chunks as sort_chunks
 from oio.common import exceptions as exc
 from oio.common.utils import cid_from_name
 from oio.common.fullpath import encode_fullpath
+from oio.common.storage_method import STORAGE_METHODS
 from tests.utils import random_str, random_data, random_id, BaseTestCase
 
 
@@ -1195,6 +1196,234 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertFalse(self.api.object_head(self.account, cname, path,
                                               trust_level=2))
 
+    def test_object_create_without_autocreate_and_missing_container(self):
+        name = random_str(32)
+        self.assertRaises(
+            exc.NoSuchContainer, self.api.object_create, self.account, name,
+            data="data", obj_name=name, autocreate=False)
+
+    def test_object_create_without_autocreate_and_existing_container(self):
+        name = random_str(32)
+        self._create(name)
+        self.api.object_create(self.account, name, data="data", obj_name=name,
+                               autocreate=False)
+
+
+class TestObjectChangePolicy(ObjectStorageApiTestBase):
+
+    def setUp(self):
+        super(TestObjectChangePolicy, self).setUp()
+        self.chunk_size = self.conf['chunk_size']
+        self.nb_rawx = len(self.conf['services']['rawx'])
+
+    def _test_change_policy(self, data_size, old_policy, new_policy,
+                            versioning=False):
+        if 'EC' in (old_policy, new_policy) and self.nb_rawx < 9:
+            self.skipTest("need at least 9 rawx to run")
+        elif 'THREECOPIES' in (old_policy, new_policy) and self.nb_rawx < 3:
+            self.skipTest("need at least 3 rawx to run")
+        elif 'TWOCOPIES' in (old_policy, new_policy) and self.nb_rawx < 2:
+            self.skipTest("need at least 2 rawx to run")
+        elif 'SINGLE' in (old_policy, new_policy) and self.nb_rawx < 1:
+            self.skipTest("need at least 1 rawx to run")
+
+        name = random_str(32)
+        self._create(name)
+
+        if versioning:
+            self.api.container_set_properties(
+                self.account, name, system={'sys.m2.policy.version': '-1'})
+            self.api.object_create(
+                self.account, name, obj_name=name, data=random_data(42))
+        data = random_data(data_size)
+        self.api.object_create(
+            self.account, name, obj_name=name,
+            data=data, policy=old_policy, properties={'test': 'it works'})
+        obj1, chunks1 = self.api.object_locate(self.account, name, name)
+        cnt_props1 = self.api.container_get_properties(self.account, name)
+        if versioning:
+            self.api.object_delete(self.account, name, name)
+        time.sleep(1)  # ensure the events have been processed
+        cnt_info1 = [cont_info
+                     for cont_info in self.api.container_list(self.account)
+                     if cont_info[0] == name]
+
+        self.api.object_change_policy(
+            self.account, name, name, obj1['version'], new_policy)
+        obj2, chunks2 = self.api.object_locate(
+            self.account, name, name, version=obj1['version'])
+        cnt_props2 = self.api.container_get_properties(self.account, name)
+        time.sleep(1)  # ensure the events have been processed
+        cnt_info2 = [cont_info
+                     for cont_info in self.api.container_list(self.account)
+                     if cont_info[0] == name]
+
+        self.assertNotEqual(obj1['id'], obj2['id'])
+        self.assertEqual(old_policy, obj1['policy'])
+        self.assertEqual(new_policy, obj2['policy'])
+        obj1['id'] = obj2['id']
+        obj1['chunk_method'] = obj2['chunk_method']
+        obj1['policy'] = obj2['policy']
+        self.assertDictEqual(obj1, obj2)
+        self.assertEqual(cnt_props1['system']['sys.m2.objects'],
+                         cnt_props2['system']['sys.m2.objects'])
+        self.assertEqual(cnt_props1['system']['sys.m2.usage'],
+                         cnt_props2['system']['sys.m2.usage'])
+        self.assertListEqual(cnt_info1[:-1], cnt_info2[:-1])
+
+        _, stream = self.api.object_fetch(
+            self.account, name, name, version=obj2['version'])
+        self.assertEqual(data, ''.join(stream))
+
+        stg_met2 = STORAGE_METHODS.load(obj2['chunk_method'])
+        chunks_by_pos2 = _sort_chunks(chunks2, stg_met2.ec)
+        if stg_met2.ec:
+            required = stg_met2.ec_nb_data + stg_met2.ec_nb_parity
+        else:
+            required = stg_met2.nb_copy
+        for pos, clist in chunks_by_pos2.iteritems():
+            self.assertEqual(required, len(clist))
+
+        for chunk in chunks1:
+            self.assertRaises(
+                exc.NotFound, self.api.blob_client.chunk_head, chunk['url'])
+        for chunk in chunks2:
+            meta = self.api.blob_client.chunk_head(chunk['url'])
+            self.assertEqual(chunk['url'].rsplit('/', 1)[-1], meta['chunk_id'])
+            self.assertEqual(chunk['pos'], meta['chunk_pos'])
+            self.assertGreaterEqual(self.chunk_size, int(meta['chunk_size']))
+            self.assertEqual(
+                cid_from_name(self.account, name), meta['container_id'])
+            self.assertEqual(obj2['chunk_method'], meta['content_chunkmethod'])
+            self.assertEqual(obj2['id'], meta['content_id'])
+            self.assertEqual(obj2['name'], meta['content_path'])
+            self.assertEqual(obj2['policy'], meta['content_policy'])
+            self.assertEqual(obj2['version'], meta['content_version'])
+
+    def test_change_content_0_byte_policy_single_to_ec(self):
+        self._test_change_policy(0, 'SINGLE', 'EC')
+
+    def test_change_content_0_byte_policy_ec_to_twocopies(self):
+        self._test_change_policy(0, 'EC', 'TWOCOPIES')
+
+    def test_change_content_1_byte_policy_single_to_ec(self):
+        self._test_change_policy(1, 'SINGLE', 'EC')
+
+    def test_change_content_chunksize_bytes_policy_twocopies_to_ec(self):
+        self._test_change_policy(
+            self.chunk_size, 'TWOCOPIES', 'EC')
+
+    def test_change_content_2xchunksize_bytes_policy_threecopies_to_ec(self):
+        self._test_change_policy(
+            self.chunk_size * 2, 'THREECOPIES', 'EC')
+
+    def test_change_content_1_byte_policy_ec_to_threecopies(self):
+        self._test_change_policy(
+            1, 'EC', 'THREECOPIES')
+
+    def test_change_content_chunksize_bytes_policy_ec_to_twocopies(self):
+        self._test_change_policy(
+            self.chunk_size, 'EC', 'TWOCOPIES')
+
+    def test_change_content_2xchunksize_bytes_policy_ec_to_single(self):
+        self._test_change_policy(
+            self.chunk_size * 2, 'EC', 'SINGLE')
+
+    def test_change_content_0_byte_policy_twocopies_to_threecopies(self):
+        self._test_change_policy(
+            0, 'TWOCOPIES', 'THREECOPIES')
+
+    def test_change_content_chunksize_bytes_policy_single_to_twocopies(self):
+        self._test_change_policy(
+            self.chunk_size, 'SINGLE', 'TWOCOPIES')
+
+    def test_change_content_2xchunksize_bytes_policy_3copies_to_single(self):
+        self._test_change_policy(
+            self.chunk_size * 2, 'THREECOPIES', 'SINGLE')
+
+    def test_change_content_with_same_policy(self):
+        self._test_change_policy(
+            1, 'TWOCOPIES', 'TWOCOPIES')
+
+    def test_change_policy_with_versioning(self):
+        self._test_change_policy(
+            1, 'SINGLE', 'TWOCOPIES', versioning=True)
+
+    def test_change_policy_unknown_storage_policy(self):
+        name = random_str(32)
+        self._create(name)
+
+        self.api.object_create(self.account, name, obj_name=name, data='data')
+        obj = self.api.object_get_properties(self.account, name, name)
+        self.assertRaises(
+            exc.ClientException, self.api.object_change_policy,
+            self.account, name, name, obj['version'], 'UNKNOWN')
+
+    def test_change_policy_with_delete_marker(self):
+        name = random_str(32)
+        self._create(name)
+        self.api.container_set_properties(
+            self.account, name, system={'sys.m2.policy.version': '-1'})
+
+        self.api.object_create(self.account, name, obj_name=name, data='data')
+        self.api.object_delete(self.account, name, name)
+        obj = self.api.object_get_properties(self.account, name, name)
+        self.assertRaises(
+            exc.NoSuchObject, self.api.object_change_policy,
+            self.account, name, name, obj['version'], 'SINGLE')
+        self.assertRaises(
+            exc.ClientException, self.api.object_create,
+            self.account, name, obj_name=name, version=obj['version'],
+            data='data', policy='SINGLE', change_policy=True)
+
+    def test_change_policy_without_version(self):
+        name = random_str(32)
+        self._create(name)
+
+        self.api.object_create(self.account, name, data='data', obj_name=name)
+        self.assertRaises(
+            exc.NoSuchContainer, self.api.object_create,
+            self.account, name, data='data', obj_name=name,
+            policy='SINGLE', change_policy=True)
+
+    def test_change_policy_with_unknow_version(self):
+        name = random_str(32)
+        self._create(name)
+
+        self.api.object_create(self.account, name, data='data', obj_name=name)
+        self.assertRaises(
+            exc.NoSuchContainer, self.api.object_create,
+            self.account, name, obj_name=name, version='12344567890',
+            data='data', policy='SINGLE', change_policy=True)
+
+    def test_change_policy_with_unknow_object(self):
+        name = random_str(32)
+        self._create(name)
+
+        self.assertRaises(
+            exc.NoSuchContainer, self.api.object_create,
+            self.account, name, obj_name=name, version='12344567890',
+            data='data', policy='SINGLE', change_policy=True)
+
+    def test_change_policy_with_unknow_container(self):
+        name = random_str(32)
+
+        self.assertRaises(
+            exc.NoSuchContainer, self.api.object_create,
+            self.account, name, obj_name=name, version='12344567890',
+            data='data', policy='SINGLE', change_policy=True)
+
+    def test_change_policy_with_different_data(self):
+        name = random_str(32)
+        self._create(name)
+
+        self.api.object_create(self.account, name, obj_name=name, data='data')
+        obj = self.api.object_get_properties(self.account, name, name)
+        self.assertRaises(
+            exc.ClientException, self.api.object_create,
+            self.account, name, obj_name=name, version=obj['version'],
+            data='test', policy='SINGLE', change_policy=True)
+
 
 class TestObjectList(ObjectStorageApiTestBase):
 
@@ -1300,18 +1529,6 @@ class TestObjectList(ObjectStorageApiTestBase):
         self.assertIn('truncated', res)
         self.assertFalse(res['objects'])
         self.assertListEqual(['2/'], res['prefixes'])
-
-    def test_object_create_without_autocreate_and_missing_container(self):
-        name = random_str(32)
-        self.assertRaises(
-            exc.NoSuchContainer, self.api.object_create, self.account, name,
-            data="data", obj_name=name, autocreate=False)
-
-    def test_object_create_without_autocreate_and_existing_container(self):
-        name = random_str(32)
-        self._create(name)
-        self.api.object_create(self.account, name, data="data", obj_name=name,
-                               autocreate=False)
 
     def test_object_create_ext(self):
         name = random_str(32)
