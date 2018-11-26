@@ -1639,6 +1639,23 @@ completion_LISTING(int zrc, const struct String_vector *sv, const void *d)
 	gboolean has_first = FALSE;
 	gint32 first = -1;
 	GArray *i32v = nodev_to_int32v(sv, member->key);
+#ifdef HAVE_ENBUG
+	GRID_WARN("2Master? %s vs %s", sqliterepo_election_2master_db, member->inline_name.base);
+	if (sqliterepo_election_2master_db[0] && !g_ascii_strcasecmp(
+				member->inline_name.base, sqliterepo_election_2master_db)) {
+		/* We try to fake the double-master condition */
+		const gint32 local = member->local_id;
+		GRID_WARN("Yes! local %u len %u", local, i32v->len);
+		if (i32v->len > 1 && g_array_index(i32v, gint32, 0) != local) {
+			/* If the current base is 2nd, we make it think it is first */
+			if (g_array_index(i32v, gint32, 1) == local) {
+				g_array_remove_index(i32v, 0);
+			}
+		}
+		/* avoid looping and do the trick just once, on only one member */
+		sqliterepo_election_2master_db[0] = '\0';
+	}
+#endif  /* HAVE_ENBUG */
 	if (i32v->len > 0) {
 		first = g_array_index(i32v, gint32, 0);
 		has_first = TRUE;
