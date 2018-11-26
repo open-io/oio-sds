@@ -266,6 +266,7 @@ GError* sqlx_repository_exit_election(sqlx_repository_t *repo,
 /** Triggers the global election mechanism on a base given its name */
 GError* sqlx_repository_use_base(sqlx_repository_t *repo,
 		const struct sqlx_name_s *n,
+		gboolean notify_master,
 		gboolean allow_autocreate,
 		gboolean *replicated);
 
