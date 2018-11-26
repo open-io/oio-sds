@@ -2103,7 +2103,7 @@ _election_get_status(struct election_manager_s *mgr,
 /* ------------------------------------------------------------------------- */
 
 static gboolean
-defer_USE(struct election_member_s *member)
+defer_USE(struct election_member_s *member, const gboolean master)
 {
 	const gint64 now = oio_ext_monotonic_time();
 
@@ -2111,9 +2111,11 @@ defer_USE(struct election_member_s *member)
 	 * last_USE), sometimes not. When there is already a check, the delay is
 	 * ~ always longer than the following G_TIME_SPAN_SECOND, so this check
 	 * is harmless.
-	 * However, having a hard limit to a minimum of 1s between 2 USE for the
-	 * same election is a good thing, IMO (jfs). */
-	if ((now - member->last_USE) < G_TIME_SPAN_SECOND) {
+	 * JFS: However, having a hard limit to a minimum of 1s between 2 USE for
+	 * the same election is a good thing, IMO.
+	 * JFS: However, when preventing the double MASTER problem we do not want
+	 * to prevent that message, whatever the last occurence. */
+	if (!master && (now - member->last_USE) < G_TIME_SPAN_SECOND) {
 		member_trace("avoid:USE", member);
 		return TRUE;
 	}
@@ -2122,7 +2124,8 @@ defer_USE(struct election_member_s *member)
 		member->last_USE = oio_ext_monotonic_time();
 		for (gchar **p = member->peers; *p; p++) {
 			member->manager->deferred_peering_notify |= sqlx_peering__use(
-					member->manager->peering, *p, &member->inline_name);
+					member->manager->peering, *p, &member->inline_name,
+					master);
 			TRACE_EXECUTION(member->manager);
 		}
 	}
@@ -2354,7 +2357,7 @@ member_action_to_CREATING(struct election_member_s *member)
 	if (member->manager->exiting)
 		return member_action_to_NONE(member);
 
-	if (!defer_USE(member))
+	if (!defer_USE(member, FALSE))
 		return member_action_to_FAILED(member);
 
 	const char *myurl = member_get_url(member);
