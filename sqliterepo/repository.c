@@ -1349,7 +1349,7 @@ sqlx_repository_use_base(sqlx_repository_t *repo, const struct sqlx_name_s *n,
 		}
 
 		if (status == STEP_MASTER && notify_master) {
-			GRID_WARN("Possible double master");
+			GRID_WARN("Exiting suspicious double master [%s][%s]", n->base, n->type);
 			err = election_exit(repo->election_manager, n);
 		}
 
