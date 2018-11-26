@@ -383,7 +383,7 @@ action_conscience_info (struct req_args_s *args)
 	const char *v = OPT("what");
 
 #ifdef HAVE_ENBUG
-	if (10 >= oio_ext_rand_int_range(1,100))
+	if (proxy_enbug_cs_failure_rate >= oio_ext_rand_int_range(1,100))
 		return _reply_retry(args, NEWERROR(CODE_UNAVAILABLE, "FAKE"));
 #endif
 
@@ -485,7 +485,7 @@ action_conscience_list (struct req_args_s *args)
 		return _reply_format_error (args, BADREQ("Missing type"));
 
 #ifdef HAVE_ENBUG
-	if (10 >= oio_ext_rand_int_range(1,100))
+	if (proxy_enbug_cs_failure_rate >= oio_ext_rand_int_range(1,100))
 		return _reply_retry(args, NEWERROR(CODE_UNAVAILABLE, "FAKE"));
 #endif
 
@@ -569,7 +569,7 @@ action_conscience_resolve_service_id (struct req_args_s *args)
 		return _reply_format_error (args, BADREQ("Missing service id"));
 
 #ifdef HAVE_ENBUG
-	if (10 >= oio_ext_rand_int_range(1,100))
+	if (proxy_enbug_cs_failure_rate >= oio_ext_rand_int_range(1,100))
 		return _reply_retry(args, NEWERROR(CODE_UNAVAILABLE, "FAKE"));
 #endif
 
@@ -628,7 +628,7 @@ action_conscience_flush (struct req_args_s *args)
 		return _reply_notfound_error (args, err);
 
 #ifdef HAVE_ENBUG
-	if (10 >= oio_ext_rand_int_range(1,100))
+	if (proxy_enbug_cs_failure_rate >= oio_ext_rand_int_range(1,100))
 		return _reply_retry(args, NEWERROR(CODE_UNAVAILABLE, "FAKE"));
 #endif
 

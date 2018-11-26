@@ -327,23 +327,6 @@ static inline gint64 DL(void) {
 	return oio_clamp_deadline(proxy_timeout_common, oio_ext_get_deadline());
 }
 
-/* -------------------------------------------------------------------------- */
-
-#ifdef HAVE_ENBUG
-/* each time a request to a replicated service is issued, we allow that
- * 'oio_proxy_request_failure_threshold_* / 100' chance the request fails
- * without any attempt ... */
-
-/* only applied to the first request when there is only one */
-extern gint32 oio_proxy_request_failure_threshold_alone;
-/* only applied to the first request */
-extern gint32 oio_proxy_request_failure_threshold_first;
-/* only applied to the last request */
-extern gint32 oio_proxy_request_failure_threshold_last;
-/* only applied to all but the first and the last requests */
-extern gint32 oio_proxy_request_failure_threshold_middle;
-#endif
-
 /* ------------------------------------------------------------------------- */
 
 /* Execute the request without avoidance, and discard the output */
