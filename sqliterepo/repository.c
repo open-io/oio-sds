@@ -1213,7 +1213,7 @@ sqlx_repository_status_base(sqlx_repository_t *repo,
 
 	/* Kick the election off */
 	gboolean replicated = FALSE;
-	GError *err = sqlx_repository_use_base(repo, n, TRUE, &replicated);
+	GError *err = sqlx_repository_use_base(repo, n, FALSE, TRUE, &replicated);
 	if (err)
 		return err;
 	if (!replicated)
@@ -1317,7 +1317,8 @@ _base_lazy_recover(sqlx_repository_t *repo, const struct sqlx_name_s *n,
 
 GError*
 sqlx_repository_use_base(sqlx_repository_t *repo, const struct sqlx_name_s *n,
-		gboolean allow_autocreate, gboolean *replicated)
+		gboolean notify_master, gboolean allow_autocreate,
+		gboolean *replicated)
 {
 	REPO_CHECK(repo);
 	SQLXNAME_CHECK(n);
@@ -1345,6 +1346,11 @@ sqlx_repository_use_base(sqlx_repository_t *repo, const struct sqlx_name_s *n,
 		 * allowed by both the request type AND the application */
 		if (allow_autocreate && sqliterepo_election_lazy_recover) {
 			err = _base_lazy_recover(repo, n, status);
+		}
+
+		if (status == STEP_MASTER && notify_master) {
+			GRID_WARN("Possible double master");
+			err = election_exit(repo->election_manager, n);
 		}
 
 		if (!err)
