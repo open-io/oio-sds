@@ -29,7 +29,7 @@ CONTAINER_FIELDS = ['account', 'base_name', 'bytes_usage', 'quota',
                     'container', 'ctime', 'storage_policy', 'objects',
                     'max_versions', 'status']
 OBJ_FIELDS = ['account', 'container', 'ctime', 'hash', 'id', 'mime-type',
-              'object', 'policy', 'size', 'version']
+              'mtime', 'object', 'policy', 'size', 'version']
 
 
 class ObjectTest(CliTestCase):

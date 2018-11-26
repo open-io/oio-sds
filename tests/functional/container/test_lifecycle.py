@@ -975,13 +975,13 @@ class TestContainerLifecycle(BaseTestCase):
             """})
         fake_listing = {
             'objects': [
-                {'name': 'a', 'version': 1540933092888883, 'ctime': '12',
+                {'name': 'a', 'version': 1540933092888883, 'mtime': '12',
                  'deleted': False},
-                {'name': 'b', 'version': 1540933092888883, 'ctime': '12',
+                {'name': 'b', 'version': 1540933092888883, 'mtime': '12',
                  'deleted': False},
-                {'name': 'c', 'version': 1540933092888883, 'ctime': '12',
+                {'name': 'c', 'version': 1540933092888883, 'mtime': '12',
                  'deleted': False},
-                {'name': 'd', 'version': 1540933092888883, 'ctime': '12',
+                {'name': 'd', 'version': 1540933092888883, 'mtime': '12',
                  'deleted': False}],
             'truncated': False
         }

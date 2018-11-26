@@ -1311,11 +1311,18 @@ static void _patch_beans_with_contentid (GSList *beans,
 
 }
 
-static void _patch_beans_with_time (GSList *beans, gint64 now) {
+static void _patch_beans_with_time (GSList *beans,
+		struct bean_ALIASES_s *latest) {
+	gint64 now = oio_ext_real_seconds();
+	gint64 ctime = now;
+	if (latest) {
+		/* Keep the same ctime if the object already exists */
+		ctime = ALIASES_get_ctime(latest);
+	}
 	for (GSList *l = beans; l; l = l->next) {
 		gpointer bean = l->data;
 		if (DESCR(bean) == &descr_struct_ALIASES) {
-			ALIASES_set_ctime(bean, now);
+			ALIASES_set_ctime(bean, ctime);
 			ALIASES_set_mtime(bean, now);
 		} else if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
 			CONTENTS_HEADERS_set_ctime(bean, now);
@@ -1471,7 +1478,7 @@ GError* m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 	}
 
 	_patch_beans_defaults(beans);
-	_patch_beans_with_time(beans, oio_ext_real_seconds());
+	_patch_beans_with_time(beans, latest);
 
 	gint64 added_size = 0;
 	gint64 obj_count = m2db_get_obj_count(args->sq3);
@@ -1715,7 +1722,7 @@ suspended:
 	if (!err) {
 		/* Patch the beans, before inserting */
 		_patch_beans_defaults(beans);
-		_patch_beans_with_time(beans, oio_ext_real_seconds());
+		_patch_beans_with_time(beans, latest);
 		_patch_beans_with_version(beans, version);
 
 		err = m2db_real_put_alias(args->sq3, beans, cb_added, u0_added);
@@ -1865,11 +1872,10 @@ m2db_change_alias_policy(struct m2db_put_args_s *args, GSList *new_beans,
 
 	/* Patch the beans, before inserting */
 	_patch_beans_defaults(new_beans);
-	_patch_beans_with_time(new_beans, oio_ext_real_seconds());
+	_patch_beans_with_time(new_beans, current_alias);
 	/* Ensure the beans are all linked to the content (with their content-id) */
 	_patch_beans_with_contentid(new_beans, content_id, content_idlen);
-	/* Keep the same ctime and the same mtime */
-	ALIASES_set_ctime(new_alias, ALIASES_get_ctime(current_alias));
+	/* Keep the same mtime */
 	ALIASES_set_mtime(new_alias, ALIASES_get_mtime(current_alias));
 
 	err = m2db_real_put_alias(args->sq3, new_beans, cb_added, u0_added);

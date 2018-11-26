@@ -603,7 +603,7 @@ class DaysActionFilter(LifecycleActionFilter):
 
     def match(self, obj_meta, now=None, **kwargs):
         now = now or time.time()
-        return float(obj_meta['ctime']) + self.days * 86400 < now
+        return float(obj_meta['mtime']) + self.days * 86400 < now
 
 
 class NoncurrentDaysActionFilter(DaysActionFilter):
@@ -636,7 +636,7 @@ class DateActionFilter(LifecycleActionFilter):
 
     def match(self, obj_meta, now=None, **kwargs):
         now = now or time.time()
-        return now > self.date and float(obj_meta['ctime']) < self.date
+        return now > self.date and float(obj_meta['mtime']) < self.date
 
 
 class NoncurrentCountActionFilter(LifecycleActionFilter):

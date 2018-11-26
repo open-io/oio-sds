@@ -35,6 +35,7 @@ class TestContainerLifecycle(unittest.TestCase):
     obj_meta = {
         'hash': '262C4009B642DE2F7A95EFD4FCD0A465',
         'ctime': '554119200',
+        'mtime': '554119200',
         'deleted': 'False',
         'id': 'DA5BEBD37F5705004FFD42A9B275AB84',
         'length': '44065',
@@ -1511,7 +1512,7 @@ class TestContainerLifecycle(unittest.TestCase):
         obj_meta = self.obj_meta.copy()
         self.assertTrue(days.match(obj_meta))
 
-        obj_meta['ctime'] = time.time()
+        obj_meta['mtime'] = time.time()
         self.assertFalse(days.match(obj_meta))
 
     def test_DateActionFilter_match(self):
