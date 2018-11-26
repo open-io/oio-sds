@@ -110,7 +110,8 @@ static void _peering_notify (struct sqlx_peering_s *self UNUSED) {}
 
 static gboolean _peering_use (struct sqlx_peering_s *self,
 			const char *url,
-			const struct sqlx_name_inline_s *n);
+			const struct sqlx_name_inline_s *n,
+			const gboolean master);
 
 static gboolean _peering_getvers (struct sqlx_peering_s *self,
 		/* in */
@@ -142,10 +143,11 @@ static void _peering_destroy (struct sqlx_peering_s *self) { g_free (self); }
 static gboolean
 _peering_use (struct sqlx_peering_s *self,
 		const char *url,
-		const struct sqlx_name_inline_s *n)
+		const struct sqlx_name_inline_s *n,
+		const gboolean master)
 {
-	(void) self, (void) url, (void) n;
-	GRID_DEBUG (">>> %s (%s)", __FUNCTION__, url);
+	(void) self, (void) url, (void) n, (void) master;
+	GRID_DEBUG (">>> %s (%s%s)", __FUNCTION__, url, master ? ", MASTER" : "");
 	return FALSE;
 }
 

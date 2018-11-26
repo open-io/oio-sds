@@ -66,6 +66,7 @@ License along with this library.
 #define NAME_MSGKEY_FULL               "FULL"
 #define NAME_MSGKEY_KEY                "K"
 #define NAME_MSGKEY_LOCAL              "LOCAL"
+#define NAME_MSGKEY_MASTER             "MASTER"
 #define NAME_MSGKEY_MARKER             "MRK"
 #define NAME_MSGKEY_MARKER_END         "MRK_END"
 #define NAME_MSGKEY_MAX_KEYS           "MAX_KEYS"
