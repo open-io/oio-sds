@@ -2603,6 +2603,12 @@ static void
 member_action_to_MASTER(struct election_member_s *member)
 {
 	member->when_unstable = 0;
+
+	/* JFS: ping the peers to tell we are the new MASTER. Other will be able
+	 * to react on this message, an alert if they are also MASTER. Maybe they
+	 * could also restart the election if they are MASTER too. */
+	defer_USE(member, TRUE);
+
 	return member_set_status(member, STEP_MASTER);
 }
 
