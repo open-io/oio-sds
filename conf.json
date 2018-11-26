@@ -565,7 +565,12 @@
 			{ "type": "monotonic", "name": "sqliterepo_active_queue_ttl",
 				"key": "sqliterepo.repo.active_queue_ttl",
 				"descr": "In the current server, sets the maximum amount of time a queued DB_USE, DB_GETVERS or DB_PIPEFROM request may remain in the queue. If the message was queued for too long before being sent, it will be dropped. The purpose of such a mechanism is to avoid clogging the queue and the whole election/cache mechanisms with old messages, those messages having already been resent.",
-				"def": "4s", "min": "100ms", "max": "60s" }
+				"def": "4s", "min": "100ms", "max": "60s" },
+
+			{ "type": "string", "name": "sqliterepo_election_2master_db",
+				"key": "enbug.election.double_master.db",
+				"descr": "CID of the base to force a double master condition on.",
+				"def": "", "limit": 256 }
 		]
 	},
 	"rdir": {
