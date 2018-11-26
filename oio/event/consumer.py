@@ -121,6 +121,7 @@ class EventTypes(object):
     CONTENT_BROKEN = 'storage.content.broken'
     CONTENT_NEW = 'storage.content.new'
     CONTENT_DELETED = 'storage.content.deleted'
+    CONTENT_APPEND = 'storage.content.append'
 
 
 def _stop(client, server):
