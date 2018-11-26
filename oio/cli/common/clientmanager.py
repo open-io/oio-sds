@@ -91,7 +91,8 @@ class ClientManager(object):
     @property
     def meta1_digits(self):
         if not self._meta1_digits:
-            m1d = self.sds_conf.get("meta1_digits", None)
+            m1d = (self.sds_conf.get("ns.meta1_digits") or
+                   self.sds_conf.get("meta1_digits"))
             if m1d:
                 self._meta1_digits = int(m1d)
         return self._meta1_digits

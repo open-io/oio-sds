@@ -13,6 +13,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from collections import defaultdict
+
 from oio.directory.admin import AdminClient
 from oio.conscience.client import ConscienceClient
 from oio.common.exceptions import OioException, ServiceBusy
@@ -29,7 +31,7 @@ class MetaMapping(object):
         self._admin = admin_client
         self._conscience = conscience_client
         self.logger = logger or get_logger(self.conf)
-        self.raw_services_by_base = dict()
+        self.raw_services_by_base = defaultdict(list)
         self.services_by_base = dict()
         self.services_by_service_type = dict()
         for svc_type in service_types:
