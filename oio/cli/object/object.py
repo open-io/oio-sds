@@ -360,7 +360,7 @@ class ShowObject(ObjectCommandMixin, show.ShowOne):
                 'object': obj}
         conv = {'id': 'id', 'version': 'version', 'mime-type': 'mime_type',
                 'size': 'length', 'hash': 'hash', 'ctime': 'ctime',
-                'policy': 'policy'}
+                'mtime': 'mtime', 'policy': 'policy'}
         for key0, key1 in conv.items():
             info[key0] = data.get(key1, 'n/a')
         for k, v in data['properties'].iteritems():
@@ -693,7 +693,7 @@ class ListObject(ContainerCommandMixin, lister.Lister):
                         result = (obj['name'], obj['size'],
                                   obj['hash'], obj['version'],
                                   obj['deleted'], obj['mime_type'],
-                                  Timestamp(obj['ctime']).isoformat,
+                                  Timestamp(obj['mtime']).isoformat,
                                   obj['policy'],
                                   _format_props(obj.get('properties', {})))
                         yield result
