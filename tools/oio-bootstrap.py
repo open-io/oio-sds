@@ -786,7 +786,7 @@ pipeline = ${WEBHOOK}
 
 [handler:storage.content.append]
 # pipeline = replication
-pipeline = noop
+pipeline = ${WEBHOOK} noop
 
 [handler:storage.content.broken]
 pipeline = content_rebuild
@@ -1611,6 +1611,7 @@ def generate(options):
     final_conf['config'] = options['config']
     final_conf['with_service_id'] = options['with_service_id']
     final_conf['random_service_id'] = bool(options['random_service_id'])
+    final_conf['webhook'] = WEBHOOK_ENDPOINT
     with open('{CFGDIR}/test.yml'.format(**ENV), 'w+') as f:
         f.write(yaml.dump(final_conf))
     return final_conf
