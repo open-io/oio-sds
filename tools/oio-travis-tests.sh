@@ -102,6 +102,18 @@ test_oio_tool () {
 	oio-tool hash XXX | head -n 2 >/dev/null
 }
 
+test_oio_file_tool () {
+    head -c 1M </dev/urandom > /tmp/test_oio_file.txt
+    oio-file-tool --upload -n $OIO_NS -a $OIO_ACCOUNT -c testfiletool -f /tmp/test_oio_file.txt -o remote_file_test.txt
+    oio-file-tool -n $OIO_NS -a $OIO_ACCOUNT -c testfiletool -f /tmp/test_oio_file2.txt -o remote_file_test.txt
+    DIFF=$(diff /tmp/test_oio_file2.txt /tmp/test_oio_file.txt)
+    rm /tmp/test_oio_file2.txt
+    rm /tmp/test_oio_file.txt
+    openio object delete testfiletool remote_file_test.txt
+    openio container delete testfiletool
+    if [ "$DIFF" != "" ] ; then exit 1; fi
+}
+
 test_proxy_forward () {
 	proxy=$(oio-test-config.py -t proxy -1)
 
@@ -222,6 +234,7 @@ func_tests () {
 
 	test_oio_cluster
 	test_oio_tool
+	test_oio_file_tool
 
 	# Must be final, it removes the system config
 	rm "/$HOME/.oio/sds.conf"
