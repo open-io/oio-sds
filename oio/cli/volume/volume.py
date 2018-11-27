@@ -280,7 +280,7 @@ class BootstrapVolume(lister.Lister):
 class DisplayVolumeAssignation(lister.Lister):
     """
     Display which rdir service is linked to each rawx service.
-    Deprecated, prefer using 'openio rdir assigments rawx'.
+    Deprecated, prefer using 'openio rdir assignments rawx'.
     """
 
     log = getLogger(__name__ + '.DisplayVolumeAssignation')
@@ -290,13 +290,13 @@ class DisplayVolumeAssignation(lister.Lister):
         parser.add_argument(
             '--aggregated',
             action="store_true",
-            help="Display an aggregation of the assignation")
+            help="Display an aggregation of the assignment")
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         self.log.warn(
-            "Deprecated, prefer using 'openio rdir assigments rawx'.")
+            "Deprecated, prefer using 'openio rdir assignments rawx'.")
 
         all_rawx, all_rdir = \
             self.app.client_manager.volume.rdir_lb.get_assignments(
