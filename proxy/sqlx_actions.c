@@ -292,7 +292,7 @@ action_sqlx_propdel (struct req_args_s *args, struct json_object *jargs)
 enum http_rc_e
 action_admin_ping (struct req_args_s *args)
 {
-	PACKER_VOID(_pack) { return sqlx_pack_USE (_u, DL()); }
+	PACKER_VOID(_pack) { return sqlx_pack_USE (_u, FALSE, DL()); }
 	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, _pack);
 }
 

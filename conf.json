@@ -254,8 +254,8 @@
 
 			{ "type": "int32", "name": "oio_client_fake_timeout_threshold",
 				"key": "enbug.client.fake_timeout.threshold",
-				"def": "10",
-				"descr": "Set the probability of fake timeout failures, in any client RPC to a 'meta' service" },
+				"descr": "Set the probability of fake timeout failures, in any client RPC to a 'meta' service",
+				"def": 0, "min": 0, "max": 100 },
 
 			{ "type": "bool", "name": "oio_client_down_avoid",
 				"key": "client.down_cache.avoid",
@@ -428,7 +428,7 @@
 			{ "type": "int32", "name": "oio_sqlx_request_failure_threshold",
 				"key": "enbug.sqliterepo.client.failure.threshold",
 				"descr": "In testing situations, sets the average ratio of requests failing for a fake reason (from the peer). This helps testing the retrial mechanisms.",
-				"def": 10, "min": 0, "max": 100 },
+				"def": 0, "min": 0, "max": 100 },
 
 			{ "type": "monotonic", "name": "oio_sqlx_timeout_check_period",
 				"key": "enbug.sqliterepo.client.timeout.period",
@@ -478,7 +478,7 @@
 			{ "type": "int32", "name": "oio_sync_failure_threshold_action",
 				"key": "enbug.sqliterepo.synchro.failure",
 				"descr": "Fake Error rate on synchronism RPC (a.k.a. ZK) ",
-				"def": 10, "min": 0, "max": 100 },
+				"def": 0, "min": 0, "max": 100 },
 
 			{ "type": "bool", "name": "_cache_fail_on_heavy_load",
 				"key": "sqliterepo.cache.heavyload.fail",
@@ -565,7 +565,12 @@
 			{ "type": "monotonic", "name": "sqliterepo_active_queue_ttl",
 				"key": "sqliterepo.repo.active_queue_ttl",
 				"descr": "In the current server, sets the maximum amount of time a queued DB_USE, DB_GETVERS or DB_PIPEFROM request may remain in the queue. If the message was queued for too long before being sent, it will be dropped. The purpose of such a mechanism is to avoid clogging the queue and the whole election/cache mechanisms with old messages, those messages having already been resent.",
-				"def": "4s", "min": "100ms", "max": "60s" }
+				"def": "4s", "min": "100ms", "max": "60s" },
+
+			{ "type": "string", "name": "sqliterepo_election_2master_db",
+				"key": "enbug.election.double_master.db",
+				"descr": "CID of the base to force a double master condition on.",
+				"def": "", "limit": 256 }
 		]
 	},
 	"rdir": {
@@ -686,7 +691,7 @@
 			{ "type": "int32", "name": "oio_server_request_failure_threshold",
 				"key": "enbug.server.request.failure.threshold",
 				"descr": "In testing situations, sets the average ratio of requests failing for a fake reason (from the peer). This helps testing the retrial mechanisms.",
-				"def": 30, "min": 0, "max": 100 },
+				"def": 0, "min": 0, "max": 100 },
 
 			{ "type": "uint", "name": "malloc_trim_size_ondemand",
 				"key": "server.malloc_trim_size.ondemand",
@@ -862,7 +867,32 @@
 			{ "type": "float", "name": "proxy_timeout_common",
 				"key": "proxy.outgoing.timeout.common",
 				"descr": "In a proxy, sets the global timeout for all the other RPC issued (not conscience, not stats-related)",
-				"def": 30.0, "min": 0.1, "max": 60.0 }
+				"def": 30.0, "min": 0.1, "max": 60.0 },
+
+			{ "type": "int32", "name": "proxy_enbug_cs_failure_rate",
+				"key": "enbug.proxy.cs.failure_rate",
+				"descr": "Proxy probability to fail with 503 on a /cs route",
+				"def": 0, "min": 0, "max": 100 },
+
+			{ "type": "int32", "name": "oio_proxy_request_failure_threshold_alone",
+				"key": "enbug.proxy.request_failure.alone",
+				"descr": "Really, do not use this!",
+				"def": 0, "min": 0, "max": 100 },
+
+			{ "type": "int32", "name": "oio_proxy_request_failure_threshold_first",
+				"key": "enbug.proxy.request_failure.first",
+				"descr": "Really, do not use this!",
+				"def": 0, "min": 0, "max": 100 },
+
+			{ "type": "int32", "name": "oio_proxy_request_failure_threshold_middle",
+				"key": "enbug.proxy.request_failure.middle",
+				"descr": "Really, do not use this!",
+				"def": 0, "min": 0, "max": 100 },
+
+			{ "type": "int32", "name": "oio_proxy_request_failure_threshold_last",
+				"key": "enbug.proxy.request_failure.last",
+				"descr": "Really, do not use this!",
+				"def": 0, "min": 0, "max": 100 }
 		]
 	},
 	"client": {
