@@ -23,6 +23,11 @@ target_link_libraries(oio-tool
 	meta2v2utils
 	${GLIB2_LIBRARIES})
 
+add_executable(oio-file oio-file.c)
+bin_prefix(oio-file -file-tool)
+target_link_libraries(oio-file
+		oiosds ${GLIB2_LIBRARIES})
+
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/oio-sds.pc.in
 	${CMAKE_CURRENT_BINARY_DIR}/oio-sds.pc @ONLY)
 
@@ -34,6 +39,8 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/oio-sds.pc
 		PERMISSIONS OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
 
 install(TARGETS oio-tool DESTINATION bin)
+
+install(TARGETS oio-file DESTINATION bin)
 
 install(PROGRAMS
             zk-bootstrap.py
