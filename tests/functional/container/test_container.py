@@ -15,6 +15,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+# pylint: disable=no-member
+
 import time
 import binascii
 import logging
@@ -29,14 +31,17 @@ from oio.conscience.client import ConscienceClient
 
 
 def random_content():
-    return 'content-' + random_str(32)
+    """Generate an object name."""
+    return 'content-' + random_str(8)
 
 
 def random_container():
-    return 'container-' + random_str(64)
+    """Generate a container name."""
+    return 'container-' + random_str(16)
 
 
 def merge(s0, s1):
+    """Create a new dict with entries from both input dicts."""
     out = dict()
     out.update(s0)
     out.update(s1)
@@ -44,10 +49,11 @@ def merge(s0, s1):
 
 
 def gen_chunks(n):
+    """Yield dummy chunk descriptions."""
     for i in range(n):
         h = binascii.hexlify(struct.pack("q", i))
         yield {"type": "chunk",
-               "id": "http://127.0.0.1:6008/"+h,
+               "id": "http://127.0.0.1:6008/" + h,
                "hash": "0"*32,
                "pos": "0.0",
                "size": 0,
@@ -537,7 +543,12 @@ class TestMeta2Contents(BaseTestCase):
     def setUp(self):
         super(TestMeta2Contents, self).setUp()
         self.ref = random_container()
-        self._reload()
+
+    @classmethod
+    def setUpClass(cls):
+        super(TestMeta2Contents, cls).setUpClass()
+        cls._cls_reload_meta()
+        cls._cls_reload_proxy()
 
     def tearDown(self):
         super(TestMeta2Contents, self).tearDown()
@@ -593,7 +604,65 @@ class TestMeta2Contents(BaseTestCase):
                             headers=headers, data=json.dumps(chunks))
         self.assertEqual(resp.status, 400)
 
-    def test_spare(self):
+    def test_spare_with_one_missing(self):
+        headers = {'X-oio-action-mode': 'autocreate'}
+        params = self.param_content(self.ref, random_content())
+        resp = self.request('POST', self.url_content('prepare2'),
+                            params=params, data=json.dumps({'size': 1024}),
+                            headers=headers)
+        obj_meta = self.json_loads(resp.data)
+        # Get a list of chunks for future spare request
+        chunks = obj_meta['chunks']
+        # Extract one chunk from the list
+        chunks.pop()
+        if len(chunks) < 1:
+            self.skip(
+                'Must run with a storage policy requiring more than 1 chunk')
+            return
+
+        # Do the spare request, specify that we already know some chunks
+        resp = self.request('POST', self.url_content('spare'), params=params,
+                            data=json.dumps({"notin": chunks, "broken": []}))
+        self.assertEqual(resp.status, 200)
+        spare_data = self.json_loads(resp.data)
+        # Since we extracted one chunk, there must be exactly one chunk in
+        # the response (plus one property telling the "quality" of the chunk)
+        self.assertEqual(1, len(spare_data['chunks']))
+        self.assertEqual(1, len(spare_data['properties']))
+
+    def test_spare_with_one_broken(self):
+        headers = {'X-oio-action-mode': 'autocreate'}
+        params = self.param_content(self.ref, random_content())
+        resp = self.request('POST', self.url_content('prepare2'),
+                            params=params, data=json.dumps({'size': 1024}),
+                            headers=headers)
+        obj_meta = self.json_loads(resp.data)
+        # Get a list of chunks for future spare request
+        chunks = obj_meta['chunks']
+        if len(self.conf['services']['rawx']) < len(chunks) + 1:
+            self.skip('Not enough rawx services (%d+1 required)' % len(chunks))
+            return
+
+        # Extract one chunk from the list, keep it for later
+        broken = chunks.pop()
+
+        # Do the spare request, specify that we already know some chunks,
+        # and we know some chunk location is broken.
+        resp = self.request('POST', self.url_content('spare'), params=params,
+                            data=json.dumps(
+                                {"notin": chunks,
+                                 "broken": [broken]}))
+        self.assertEqual(resp.status, 200)
+        spare_data = self.json_loads(resp.data)
+        # Since we extracted one chunk, there must be exactly one chunk in
+        # the response (plus one property telling the "quality" of the chunk)
+        self.assertEqual(1, len(spare_data['chunks']))
+        self.assertEqual(1, len(spare_data['properties']))
+        broken_netloc = broken['url'].split('/')[2]
+        spare_netloc = spare_data['chunks'][0]['id'].split('/')[2]
+        self.assertNotEqual(broken_netloc, spare_netloc)
+
+    def test_spare_errors(self):
         params = self.param_content(self.ref, random_content())
         resp = self.request('POST', self.url_content('spare'), params=params)
         self.assertError(resp, 400, 400)
@@ -606,8 +675,6 @@ class TestMeta2Contents(BaseTestCase):
         resp = self.request('POST', self.url_content('spare'), params=params,
                             data=json.dumps({"notin": [], "broken": []}))
         self.assertError(resp, 400, 400)
-
-        # TODO check SPARE requests reaching the meta2 server
 
     def _create_content(self, name):
         headers = {'X-oio-action-mode': 'autocreate'}

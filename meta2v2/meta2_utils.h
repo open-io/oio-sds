@@ -51,7 +51,7 @@ struct list_params_s
 	guint8 flag_local     :1;
 };
 
-gchar* m2v2_build_chunk_url (const char *srv, const char *id);
+gchar* m2v2_build_chunk_url(const char *srv, const char *id);
 
 
 struct m2v2_position_s {
@@ -71,9 +71,9 @@ struct m2v2_sorted_content_s {
 struct checked_content_s;
 
 
-struct m2v2_position_s m2v2_position_decode (const char *str);
+struct m2v2_position_s m2v2_position_decode(const char *str);
 
-void m2v2_position_encode (GString *out, struct m2v2_position_s *p);
+void m2v2_position_encode(GString *out, struct m2v2_position_s *p);
 
 /* Sort the beans of a content. Use m2v2_sorted_content_free to free
  * the result. The beans must be freed separately. */
@@ -178,7 +178,7 @@ GError* m2db_check_content(struct m2v2_sorted_content_s *sorted_content,
 
 void m2db_check_content_quality(
 		struct m2v2_sorted_content_s *sorted_content, GSList *chunk_meta,
-        GSList **to_be_improved);
+		GSList **to_be_improved);
 
 GError* m2db_update_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		GSList *beans, m2_onbean_cb cb_deleted, gpointer u0_deleted,
@@ -248,5 +248,16 @@ GError* m2db_flush_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb,
 
 GError* m2db_deduplicate_contents(struct sqlx_sqlite3_s *sq3,
 		struct oio_url_s *url);
+
+/* --- Low level ----------------------------------------------------------- */
+
+/** Generate a chunk "bean", filled with only an address and ctime. */
+struct bean_CHUNKS_s *generate_chunk_bean(struct oio_lb_selected_item_s *sel,
+		const struct storage_policy_s *policy);
+
+/** Generate a property "bean", with details about the quality of a chunk. */
+struct bean_PROPERTIES_s *generate_chunk_quality_bean(
+		struct oio_lb_selected_item_s *sel,
+		const gchar *chunkid, struct oio_url_s *url);
 
 #endif /*OIO_SDS__meta2v2__meta2_utils_h*/
