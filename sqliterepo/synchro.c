@@ -564,7 +564,8 @@ static void _direct_notify (struct sqlx_peering_s *self);
 static gboolean _direct_use (struct sqlx_peering_s *self,
 		/* in */
 		const char *url,
-		const struct sqlx_name_inline_s *n);
+		const struct sqlx_name_inline_s *n,
+		const gboolean master);
 
 static gboolean _direct_getvers (struct sqlx_peering_s *self,
 		/* in */
@@ -612,13 +613,14 @@ struct use_request_s {
 	gsize addr_len;
 	struct sockaddr_in6 addr;
 	struct sqlx_name_inline_s name;
+	gboolean master;
 };
 
 static void
 _use_by_udp_no_free(struct use_request_s *req, struct sqlx_peering_direct_s *self)
 {
 	NAME2CONST(n, req->name);
-	GByteArray *msg = sqlx_pack_USE(&n, req->deadline);
+	GByteArray *msg = sqlx_pack_USE(&n, req->master, req->deadline);
 	const ssize_t len = msg->len;
 	const ssize_t sent = sendto(self->fd_udp, msg->data, msg->len,
 			MSG_NOSIGNAL, (struct sockaddr*) &req->addr, req->addr_len);
@@ -681,7 +683,8 @@ static gboolean
 _direct_use (struct sqlx_peering_s *self,
 		/* in */
 		const char *url,
-		const struct sqlx_name_inline_s *ni)
+		const struct sqlx_name_inline_s *ni,
+		const gboolean master)
 {
 	struct sqlx_peering_direct_s *p = (struct sqlx_peering_direct_s*) self;
 	EXTRA_ASSERT(p != NULL && p->vtable == &vtable_peering_DIRECT);
@@ -692,10 +695,13 @@ _direct_use (struct sqlx_peering_s *self,
 	const gint64 deadline = now + (G_TIME_SPAN_SECOND * oio_election_use_timeout_req);
 
 	if (p->fd_udp >= 0) {
+		/* A UDP socket has been configured, so we skip the queue and the pool
+		 * for TCP RPC */
 		struct use_request_s req = {0};
 		req.deadline = deadline;
 		req.addr_len = sizeof(req.addr);
 		memcpy(&req.name, ni, sizeof(req.name));
+		req.master = master;
 		if (!grid_string_to_sockaddr(url,
 					(struct sockaddr*)&req.addr, &req.addr_len)) {
 			GRID_WARN("Invalid peer addr [%s]", url);
@@ -709,6 +715,8 @@ _direct_use (struct sqlx_peering_s *self,
 		}
 		return FALSE;
 	} else {
+		/* No UDP socket was configured, thus we prepare a handle for a defered
+		 * TCP RPC */
 		struct event_client_s *mc =
 			g_slice_alloc0(sizeof(struct event_client_s));
 		mc->struct_size = sizeof(struct event_client_s);
@@ -725,7 +733,7 @@ _direct_use (struct sqlx_peering_s *self,
 			return FALSE;
 		} else {
 			NAME2CONST(n, *ni);
-			GByteArray *req = sqlx_pack_USE(&n, deadline);
+			GByteArray *req = sqlx_pack_USE(&n, master, deadline);
 			err = gridd_client_request (mc->client, req, NULL, NULL);
 			g_byte_array_unref(req);
 			if (err) {
@@ -950,12 +958,13 @@ gboolean
 sqlx_peering__use (struct sqlx_peering_s *self,
 		/* in */
 		const char *url,
-		const struct sqlx_name_inline_s *n)
+		const struct sqlx_name_inline_s *n,
+		const gboolean master)
 {
 #ifdef HAVE_EXTRA_DEBUG
-	PEER_CALL(self,use)(self, url, n);
+	PEER_CALL(self,use)(self, url, n, master);
 #else
-	return _direct_use(self, url, n);
+	return _direct_use(self, url, n, master);
 #endif
 }
 

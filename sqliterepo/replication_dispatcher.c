@@ -1626,7 +1626,10 @@ _handler_USE(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	if (NULL != (err = sqlx_repository_use_base(repo, &n0, TRUE, NULL)))
+	const gboolean master = metautils_message_extract_flag(
+			reply->request, NAME_MSGKEY_MASTER, FALSE);
+
+	if (NULL != (err = sqlx_repository_use_base(repo, &n0, master, TRUE, NULL)))
 		reply->send_error(0, err);
 	else
 		reply->send_reply(CODE_FINAL_OK, "OK");

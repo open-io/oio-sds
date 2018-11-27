@@ -18,11 +18,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "common.h"
 
-gint32 oio_proxy_request_failure_threshold_alone = 0;
-gint32 oio_proxy_request_failure_threshold_first = 100;
-gint32 oio_proxy_request_failure_threshold_middle = 50;
-gint32 oio_proxy_request_failure_threshold_last = 0;
-
 gchar **
 proxy_get_cs_urlv (void)
 {

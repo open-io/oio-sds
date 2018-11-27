@@ -134,7 +134,8 @@ struct sqlx_peering_vtable_s
 	gboolean (*use) (struct sqlx_peering_s *self,
 			/* in */
 			const char *url,
-			const struct sqlx_name_inline_s *n);
+			const struct sqlx_name_inline_s *n,
+			const gboolean master);
 
 	/** @return FALSE if no notify() is necessary (i.e. no command deferred) */
 	gboolean (*getvers) (struct sqlx_peering_s *self,
@@ -170,7 +171,8 @@ void sqlx_peering__notify (struct sqlx_peering_s *self);
 gboolean sqlx_peering__use (struct sqlx_peering_s *self,
 		/* in */
 		const char *url,
-		const struct sqlx_name_inline_s *n);
+		const struct sqlx_name_inline_s *n,
+		const gboolean master);
 
 gboolean sqlx_peering__getvers (struct sqlx_peering_s *self,
 		/* in */

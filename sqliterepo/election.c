@@ -1639,6 +1639,23 @@ completion_LISTING(int zrc, const struct String_vector *sv, const void *d)
 	gboolean has_first = FALSE;
 	gint32 first = -1;
 	GArray *i32v = nodev_to_int32v(sv, member->key);
+#ifdef HAVE_ENBUG
+	GRID_WARN("2Master? %s vs %s", sqliterepo_election_2master_db, member->inline_name.base);
+	if (sqliterepo_election_2master_db[0] && !g_ascii_strcasecmp(
+				member->inline_name.base, sqliterepo_election_2master_db)) {
+		/* We try to fake the double-master condition */
+		const gint32 local = member->local_id;
+		GRID_WARN("Yes! local %u len %u", local, i32v->len);
+		if (i32v->len > 1 && g_array_index(i32v, gint32, 0) != local) {
+			/* If the current base is 2nd, we make it think it is first */
+			if (g_array_index(i32v, gint32, 1) == local) {
+				g_array_remove_index(i32v, 0);
+			}
+		}
+		/* avoid looping and do the trick just once, on only one member */
+		sqliterepo_election_2master_db[0] = '\0';
+	}
+#endif  /* HAVE_ENBUG */
 	if (i32v->len > 0) {
 		first = g_array_index(i32v, gint32, 0);
 		has_first = TRUE;
@@ -2103,7 +2120,7 @@ _election_get_status(struct election_manager_s *mgr,
 /* ------------------------------------------------------------------------- */
 
 static gboolean
-defer_USE(struct election_member_s *member)
+defer_USE(struct election_member_s *member, const gboolean master)
 {
 	const gint64 now = oio_ext_monotonic_time();
 
@@ -2111,9 +2128,11 @@ defer_USE(struct election_member_s *member)
 	 * last_USE), sometimes not. When there is already a check, the delay is
 	 * ~ always longer than the following G_TIME_SPAN_SECOND, so this check
 	 * is harmless.
-	 * However, having a hard limit to a minimum of 1s between 2 USE for the
-	 * same election is a good thing, IMO (jfs). */
-	if ((now - member->last_USE) < G_TIME_SPAN_SECOND) {
+	 * JFS: However, having a hard limit to a minimum of 1s between 2 USE for
+	 * the same election is a good thing, IMO.
+	 * JFS: However, when preventing the double MASTER problem we do not want
+	 * to prevent that message, whatever the last occurence. */
+	if (!master && (now - member->last_USE) < G_TIME_SPAN_SECOND) {
 		member_trace("avoid:USE", member);
 		return TRUE;
 	}
@@ -2122,7 +2141,8 @@ defer_USE(struct election_member_s *member)
 		member->last_USE = oio_ext_monotonic_time();
 		for (gchar **p = member->peers; *p; p++) {
 			member->manager->deferred_peering_notify |= sqlx_peering__use(
-					member->manager->peering, *p, &member->inline_name);
+					member->manager->peering, *p, &member->inline_name,
+					master);
 			TRACE_EXECUTION(member->manager);
 		}
 	}
@@ -2354,7 +2374,7 @@ member_action_to_CREATING(struct election_member_s *member)
 	if (member->manager->exiting)
 		return member_action_to_NONE(member);
 
-	if (!defer_USE(member))
+	if (!defer_USE(member, FALSE))
 		return member_action_to_FAILED(member);
 
 	const char *myurl = member_get_url(member);
@@ -2600,6 +2620,12 @@ static void
 member_action_to_MASTER(struct election_member_s *member)
 {
 	member->when_unstable = 0;
+
+	/* JFS: ping the peers to tell we are the new MASTER. Other will be able
+	 * to react on this message, an alert if they are also MASTER. Maybe they
+	 * could also restart the election if they are MASTER too. */
+	defer_USE(member, TRUE);
+
 	return member_set_status(member, STEP_MASTER);
 }
 

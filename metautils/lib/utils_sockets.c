@@ -571,7 +571,7 @@ sock_connect_and_send (const char *url, GError **err,
 		goto label_simple_connect;
 
 #ifdef HAVE_ENBUG
-	if (len > 1)
+	if (*len > 1)
 		*len = *len / 2;
 #endif
 

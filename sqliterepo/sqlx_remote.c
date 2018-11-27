@@ -70,9 +70,12 @@ sqlx_encode_TableSequence(struct TableSequence *tabseq, GError **err)
 /* ------------------------------------------------------------------------- */
 
 GByteArray*
-sqlx_pack_USE(const struct sqlx_name_s *name, gint64 deadline)
+sqlx_pack_USE(const struct sqlx_name_s *name, const gboolean master,
+		gint64 deadline)
 {
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_USE, name, deadline);
+	if (master)
+		metautils_message_add_field_strint(req, NAME_MSGKEY_MASTER, 1);
 	return message_marshall_gba_and_clean(req);
 }
 

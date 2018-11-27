@@ -349,12 +349,22 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx, gint64 deadline)
 		++ count_success; // XXX JFS: don't forget the local success!
 		guint groupsize = 1 + g_strv_length(peers);
 		if (election_manager_get_mode(ctx->sq3->manager) == ELECTION_MODE_GROUP) {
-			if (count_success < groupsize)
-				err = NEWERROR(CODE_UNAVAILABLE, "Not enough successes, no group");
+			if (count_success < groupsize) {
+				err = NEWERROR(CODE_UNAVAILABLE,
+						"Not enough successes, no group (%u/%u)",
+						count_success, groupsize);
+				g_string_append_printf(ctx->errors, " %s",
+						err->message);
+			}
 		}
 		else {
-			if (count_success < group_to_quorum(groupsize))
-				err = NEWERROR(CODE_UNAVAILABLE, "Not enough successes, no quorum");
+			if (count_success < group_to_quorum(groupsize)) {
+				err = NEWERROR(CODE_UNAVAILABLE,
+						"Not enough successes, no quorum (%u/%u)",
+						count_success, groupsize);
+				g_string_append_printf(ctx->errors, " %s",
+						err->message);
+			}
 		}
 	}
 

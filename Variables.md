@@ -1597,16 +1597,69 @@ the cmake command line.
 
 > Set the probability of fake timeout failures, in any client RPC to a 'meta' service
 
- * default: **10**
+ * default: **0**
  * type: gint32
  * cmake directive: *OIO_ENBUG_CLIENT_FAKE_TIMEOUT_THRESHOLD*
- * range: 0 -> 0
+ * range: 0 -> 100
+
+### enbug.election.double_master.db
+
+> CID of the base to force a double master condition on.
+
+ * default: ****
+ * type: string
+ * cmake directive: *OIO_ENBUG_ELECTION_DOUBLE_MASTER_DB*
+
+### enbug.proxy.cs.failure_rate
+
+> Proxy probability to fail with 503 on a /cs route
+
+ * default: **0**
+ * type: gint32
+ * cmake directive: *OIO_ENBUG_PROXY_CS_FAILURE_RATE*
+ * range: 0 -> 100
+
+### enbug.proxy.request_failure.alone
+
+> Really, do not use this!
+
+ * default: **0**
+ * type: gint32
+ * cmake directive: *OIO_ENBUG_PROXY_REQUEST_FAILURE_ALONE*
+ * range: 0 -> 100
+
+### enbug.proxy.request_failure.first
+
+> Really, do not use this!
+
+ * default: **0**
+ * type: gint32
+ * cmake directive: *OIO_ENBUG_PROXY_REQUEST_FAILURE_FIRST*
+ * range: 0 -> 100
+
+### enbug.proxy.request_failure.last
+
+> Really, do not use this!
+
+ * default: **0**
+ * type: gint32
+ * cmake directive: *OIO_ENBUG_PROXY_REQUEST_FAILURE_LAST*
+ * range: 0 -> 100
+
+### enbug.proxy.request_failure.middle
+
+> Really, do not use this!
+
+ * default: **0**
+ * type: gint32
+ * cmake directive: *OIO_ENBUG_PROXY_REQUEST_FAILURE_MIDDLE*
+ * range: 0 -> 100
 
 ### enbug.server.request.failure.threshold
 
 > In testing situations, sets the average ratio of requests failing for a fake reason (from the peer). This helps testing the retrial mechanisms.
 
- * default: **30**
+ * default: **0**
  * type: gint32
  * cmake directive: *OIO_ENBUG_SERVER_REQUEST_FAILURE_THRESHOLD*
  * range: 0 -> 100
@@ -1615,7 +1668,7 @@ the cmake command line.
 
 > In testing situations, sets the average ratio of requests failing for a fake reason (from the peer). This helps testing the retrial mechanisms.
 
- * default: **10**
+ * default: **0**
  * type: gint32
  * cmake directive: *OIO_ENBUG_SQLITEREPO_CLIENT_FAILURE_THRESHOLD*
  * range: 0 -> 100
@@ -1633,7 +1686,7 @@ the cmake command line.
 
 > Fake Error rate on synchronism RPC (a.k.a. ZK) 
 
- * default: **10**
+ * default: **0**
  * type: gint32
  * cmake directive: *OIO_ENBUG_SQLITEREPO_SYNCHRO_FAILURE*
  * range: 0 -> 100
