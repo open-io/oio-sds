@@ -67,51 +67,29 @@ out:
 
 //------------------------------------------------------------------------------
 
-// TODO: factorize with _gen_chunk() from meta2_utils.c
-static gpointer
-_gen_chunk_bean(const char *straddr)
-{
-	guint8 binid[32];
-	gchar strid[65];
-	gchar *chunkid = NULL;
-	struct bean_CHUNKS_s *chunk = NULL;
-
-	oio_buf_randomize (binid, sizeof(binid));
-	oio_str_bin2hex (binid, sizeof(binid), strid, sizeof(strid));
-	chunk = _bean_create(&descr_struct_CHUNKS);
-	chunkid = m2v2_build_chunk_url (straddr, strid);
-	CHUNKS_set2_id(chunk, chunkid);
-
-	g_free(chunkid);
-	return (gpointer)chunk;
-}
-
-//------------------------------------------------------------------------------
-
 GError*
 get_spare_chunks(struct oio_lb_s *lb, const char *pool,
 		GSList **result)
 {
 	GError *err = NULL;
-	GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
+	GSList *beans = NULL;
 	void _on_id(struct oio_lb_selected_item_s *sel, gpointer u UNUSED)
 	{
-		char *shifted = g_strdup(sel->item->id);
-		meta1_url_shift_addr(shifted);
-		g_ptr_array_add(ids, shifted);
+		struct bean_CHUNKS_s *chunk = generate_chunk_bean(sel, NULL);
+		struct bean_PROPERTIES_s *prop = generate_chunk_quality_bean(
+				sel, CHUNKS_get_id(chunk)->str, NULL);
+		beans = g_slist_prepend(beans, prop);
+		beans = g_slist_prepend(beans, chunk);
 	}
 	err = oio_lb__poll_pool(lb, pool, NULL, _on_id, NULL);
 	if (err) {
 		g_prefix_error(&err,
 				"found only %u services matching the criteria (pool=%s): ",
-				ids->len, pool);
+				g_slist_length(beans) / 2, pool);
+		_bean_cleanl2(beans);
 	} else {
-		for (int i = 0; i < (int)ids->len; i++) {
-			*result = g_slist_prepend(*result,
-					_gen_chunk_bean(g_ptr_array_index(ids, i)));
-		}
+		*result = beans;
 	}
-	g_ptr_array_free(ids, TRUE);
 	return err;
 }
 
@@ -149,7 +127,7 @@ get_conditioned_spare_chunks(struct oio_lb_s *lb, const char *pool,
 		GSList **result)
 {
 	GError *err = NULL;
-	GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
+	GSList *beans = NULL;
 
 	g_rw_lock_reader_lock(&lb->lock);
 	struct oio_lb_pool_s *pool_obj = g_hash_table_lookup(lb->pools, pool);
@@ -161,29 +139,29 @@ get_conditioned_spare_chunks(struct oio_lb_s *lb, const char *pool,
 
 	void _on_id(struct oio_lb_selected_item_s *sel, gpointer u UNUSED)
 	{
-		char *shifted = g_strdup(sel->item->id);
-		meta1_url_shift_addr(shifted);
-		g_ptr_array_add(ids, shifted);
+		struct bean_CHUNKS_s *chunk = generate_chunk_bean(sel, NULL);
+		struct bean_PROPERTIES_s *prop = generate_chunk_quality_bean(
+				sel, CHUNKS_get_id(chunk)->str, NULL);
+		beans = g_slist_prepend(beans, prop);
+		beans = g_slist_prepend(beans, chunk);
 	}
 	err = oio_lb__patch_with_pool(lb, pool, avoid, known, _on_id, NULL);
+	guint chunks_count = g_slist_length(beans) / 2;
 	if (err) {
 		g_prefix_error(&err,
-				"found only %u services matching the criteria: ",
-				ids->len);
-	}
-	if (!err) {
-		if ((int)ids->len == 0)
-			err = NEWERROR(CODE_BAD_REQUEST,
-				"too many locations in the blacklist "
-				"(%u already used, %u to avoid)",
-				g_slist_length(already), g_slist_length(broken));
-		for (int i = 0; i < (int)ids->len; i++) {
-			*result = g_slist_prepend(*result,
-					_gen_chunk_bean(g_ptr_array_index(ids, i)));
-		}
+				"found only %u services matching the criteria (pool=%s): ",
+				chunks_count, pool);
+		_bean_cleanl2(beans);
+	} else if (chunks_count == 0) {
+		err = NEWERROR(CODE_BAD_REQUEST,
+			"too many locations in the blacklist "
+			"(%u already used, %u to avoid)",
+			g_slist_length(already), g_slist_length(broken));
+		_bean_cleanl2(beans);
+	} else {
+		*result = beans;
 	}
 
-	g_ptr_array_free(ids, TRUE);
 	g_free(avoid);
 	g_free(known);
 	return err;

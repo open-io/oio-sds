@@ -2124,22 +2124,15 @@ _selected_item_quality_to_json(GString *inout,
 	return qual;
 }
 
-static void
-_gen_chunk(struct gen_ctx_s *ctx, struct oio_lb_selected_item_s *sel,
-		gint64 cs, guint pos, gint subpos)
+struct bean_CHUNKS_s *
+generate_chunk_bean(struct oio_lb_selected_item_s *sel,
+		const struct storage_policy_s *policy)
 {
 	guint8 binid[32];
-	gchar *chunkid, strpos[24], strid[65];
+	gchar *chunkid, strid[65];
 
-	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
-
-	oio_buf_randomize (binid, sizeof(binid));
-	oio_str_bin2hex (binid, sizeof(binid), strid, sizeof(strid));
-
-	if (subpos < 0)
-		g_snprintf(strpos, sizeof(strpos), "%u", pos);
-	else
-		g_snprintf(strpos, sizeof(strpos), "%u.%d", pos, subpos);
+	oio_buf_randomize(binid, sizeof(binid));
+	oio_str_bin2hex(binid, sizeof(binid), strid, sizeof(strid));
 
 	if (sel->item->id) {
 		gchar shifted_id[LIMIT_LENGTH_SRVID];
@@ -2147,31 +2140,60 @@ _gen_chunk(struct gen_ctx_s *ctx, struct oio_lb_selected_item_s *sel,
 		meta1_url_shift_addr(shifted_id);
 		chunkid = m2v2_build_chunk_url(shifted_id, strid);
 	} else {
-		chunkid = m2v2_build_chunk_url_storage(ctx->pol, strid);
+		EXTRA_ASSERT(policy != NULL);
+		chunkid = m2v2_build_chunk_url_storage(policy, strid);
 	}
 
 	struct bean_CHUNKS_s *chunk = _bean_create(&descr_struct_CHUNKS);
 	CHUNKS_set2_id(chunk, chunkid);
-	CHUNKS_set2_content(chunk, ctx->uid, ctx->uid_size);
 	CHUNKS_set_ctime(chunk, oio_ext_real_time() / G_TIME_SPAN_SECOND);
+
+	return chunk;
+}
+
+struct bean_PROPERTIES_s *
+generate_chunk_quality_bean(struct oio_lb_selected_item_s *sel,
+		const gchar *chunkid, struct oio_url_s *url)
+{
+	GString *qual = _selected_item_quality_to_json(NULL, sel);
+	struct bean_PROPERTIES_s *prop = _bean_create(&descr_struct_PROPERTIES);
+	gchar *prop_key = g_alloca(
+			sizeof(OIO_CHUNK_SYSMETA_PREFIX) + strlen(chunkid));
+	sprintf(prop_key, OIO_CHUNK_SYSMETA_PREFIX"%s", chunkid);
+	PROPERTIES_set2_key(prop, prop_key);
+	PROPERTIES_set2_value(prop, (guint8*)qual->str, qual->len);
+	if (url && oio_url_has(url, OIOURL_PATH))
+		PROPERTIES_set2_alias(prop, oio_url_get(url, OIOURL_PATH));
+
+	g_string_free(qual, TRUE);
+	return prop;
+}
+
+static void
+_gen_chunk(struct gen_ctx_s *ctx, struct oio_lb_selected_item_s *sel,
+		gint64 cs, guint pos, gint subpos)
+{
+	gchar strpos[24];
+
+	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
+
+	if (subpos < 0)
+		g_snprintf(strpos, sizeof(strpos), "%u", pos);
+	else
+		g_snprintf(strpos, sizeof(strpos), "%u.%d", pos, subpos);
+
+	struct bean_CHUNKS_s *chunk = generate_chunk_bean(sel, ctx->pol);
+	CHUNKS_set2_content(chunk, ctx->uid, ctx->uid_size);
 	CHUNKS_set2_hash(chunk, ctx->h, sizeof(ctx->h));
 	CHUNKS_set_size(chunk, cs);
 	CHUNKS_set2_position(chunk, strpos);
 	ctx->cb(ctx->cb_data, chunk);
 
 	/* Create a property to represent the quality of the selected chunk. */
-	GString *qual = _selected_item_quality_to_json(NULL, sel);
-	struct bean_PROPERTIES_s *prop = _bean_create(&descr_struct_PROPERTIES);
-	gchar *prop_key = g_alloca(
-			sizeof(OIO_CHUNK_SYSMETA_PREFIX) + strlen(chunkid));
-	sprintf(prop_key, OIO_CHUNK_SYSMETA_PREFIX"%s", chunkid);
-	PROPERTIES_set2_alias(prop, oio_url_get(ctx->url, OIOURL_PATH));
-	PROPERTIES_set2_key(prop, prop_key);
-	PROPERTIES_set2_value(prop, (guint8*)qual->str, qual->len);
+	struct bean_PROPERTIES_s *prop = generate_chunk_quality_bean(
+			sel, CHUNKS_get_id(chunk)->str, ctx->url);
 	ctx->cb(ctx->cb_data, prop);
 
-	g_string_free(qual, TRUE);
-	g_free(chunkid);
 }
 
 static GError*

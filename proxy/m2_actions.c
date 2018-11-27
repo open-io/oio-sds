@@ -2908,12 +2908,10 @@ enum http_rc_e action_content_touch (struct req_args_s *args) {
 // POST /v3.0/{NS}/content/spare?acct={account_name}&ref={container_name}&path={file_path}
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// .. code-block:: text
+// Get spare chunk addresses, in order to replace broken or missing chunks.
+// Doesn't work with "single" storage policy.
 //
-//    {"notin": <list of actual chunk>, "broken": <list of broken chunk>}
-//
-//
-// Get other chunks if chunks are broken. Don't work with single storage policy
+// Sample request:
 //
 // .. code-block:: http
 //
@@ -2925,6 +2923,16 @@ enum http_rc_e action_content_touch (struct req_args_s *args) {
 //    x-oio-content-meta-id: 2996752DFD7205006B73F17AD315AA2B
 //    Content-Length: 182
 //    Content-Type: application/x-www-form-urlencoded
+//
+// .. code-block:: text
+//
+//    {
+//      "notin": <list of current chunks>,
+//      "broken": <list of broken chunks>
+//    }
+//
+//
+// Sample response:
 //
 // .. code-block:: http
 //
