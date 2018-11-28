@@ -262,7 +262,7 @@ class ObjectStorageTest(unittest.TestCase):
     def test_object_create_from_file(self):
         self.api._object_create = Mock(return_value=None)
         src = NamedTemporaryFile()
-        self.api.object_create(
+        self.api.object_create_ext(
             self.account, self.container, file_or_path=src)
         self.api._object_create.assert_called_once()
         call_args = self.api._object_create.call_args
@@ -274,7 +274,7 @@ class ObjectStorageTest(unittest.TestCase):
     def test_object_create_from_file_path(self):
         self.api._object_create = Mock(return_value=None)
         src = NamedTemporaryFile()
-        self.api.object_create(
+        self.api.object_create_ext(
             self.account, self.container, file_or_path=src.name)
         self.api._object_create.assert_called_once()
         call_args = self.api._object_create.call_args
@@ -301,7 +301,7 @@ class ObjectStorageTest(unittest.TestCase):
 
         self.api._object_create = Mock(return_value=None)
         name = random_str(32)
-        self.api.object_create(
+        self.api.object_create_ext(
             self.account, self.container, data=DataGen(), obj_name=name)
         self.api._object_create.assert_called_once()
         call_args = self.api._object_create.call_args
@@ -314,7 +314,7 @@ class ObjectStorageTest(unittest.TestCase):
     def test_object_create_from_string(self):
         self.api._object_create = Mock(return_value=None)
         name = random_str(32)
-        self.api.object_create(
+        self.api.object_create_ext(
             self.account, self.container, data=name, obj_name=name)
         self.api._object_create.assert_called_once()
         call_args = self.api._object_create.call_args
@@ -448,8 +448,8 @@ class ObjectStorageTest(unittest.TestCase):
 
         # Verify that kwargs are forwarded to method call
         api._object_create = Mock()
-        api.object_create(self.account, self.container,
-                          data='data', obj_name='dummy')
+        api.object_create_ext(self.account, self.container,
+                              data='data', obj_name='dummy')
         api._object_create.assert_called_with(
             self.account, self.container, 'dummy', ANY, ANY,
             append=ANY, headers=ANY, key_file=ANY, policy=ANY, properties=ANY,

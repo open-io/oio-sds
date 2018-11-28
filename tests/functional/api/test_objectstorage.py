@@ -1312,3 +1312,15 @@ class TestObjectList(ObjectStorageApiTestBase):
         self._create(name)
         self.api.object_create(self.account, name, data="data", obj_name=name,
                                autocreate=False)
+
+    def test_object_create_ext(self):
+        name = random_str(32)
+        self._create(name)
+        _, size, _, metadata = self.api.object_create_ext(
+            self.account, name, data="data", obj_name=name)
+        self.assertEqual(metadata['ns'], self.ns)
+        self.assertIn('version', metadata)
+
+        props = self.api.object_get_properties(self.account, name, name)
+        self.assertEqual(metadata['version'], props['version'])
+        self.assertEqual(int(props['length']), size)

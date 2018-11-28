@@ -540,14 +540,24 @@ class ObjectStorageApi(object):
             self.container_set_properties(
                 account, container, metadata, clear, **kwargs)
 
+    def object_create(self, account, container, *args, **kwargs):
+        """
+        See documentation of object_create_ext for parameters
+
+        :returns: `list` of chunks, size and hash of what has been uploaded
+        """
+        ul_chunks, ul_bytes, obj_checksum, _ = \
+            self.object_create_ext(account, container, *args, **kwargs)
+        return ul_chunks, ul_bytes, obj_checksum
+
     @handle_container_not_found
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
-    def object_create(self, account, container, file_or_path=None, data=None,
-                      etag=None, obj_name=None, mime_type=None,
-                      metadata=None, policy=None, key_file=None,
-                      append=False, properties=None, **kwargs):
+    def object_create_ext(self, account, container, file_or_path=None,
+                          data=None, etag=None, obj_name=None, mime_type=None,
+                          metadata=None, policy=None, key_file=None,
+                          append=False, properties=None, **kwargs):
         """
         Create an object or append data to object in *container* of *account*
         with data taken from either *data* (`str` or `generator`) or
@@ -590,7 +600,8 @@ class ObjectStorageApi(object):
             or `read_timeout` keyword arguments.
         :type deadline: `float` seconds
 
-        :returns: `list` of chunks, size and hash of what has been uploaded
+        :returns: `list` of chunks, size, hash and metadata of what has been
+            uploaded
         """
         if (data, file_or_path) == (None, None):
             raise exc.MissingData()
@@ -1175,7 +1186,7 @@ class ObjectStorageApi(object):
             self._delete_orphan_chunks(ul_chunks, obj_meta['container_id'],
                                        **kwargs)
             raise
-        return ul_chunks, ul_bytes, obj_checksum
+        return ul_chunks, ul_bytes, obj_checksum, obj_meta
 
     def _delete_orphan_chunks(self, chunks, cid, **kwargs):
         """Delete chunks that have been orphaned by an unfinished upload."""
