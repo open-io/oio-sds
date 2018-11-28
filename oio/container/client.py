@@ -26,6 +26,15 @@ CONTENT_HEADER_PREFIX = 'x-oio-content-meta-'
 SYSMETA_KEYS = ("chunk-method", "ctime", "mtime", "deleted", "hash",
                 "hash-method", "id", "length", "mime-type", "name", "policy",
                 "size", "version")
+CHUNK_SYSMETA_PREFIX = '__OIO_CHUNK__'
+
+
+def extract_chunk_qualities(properties):
+    """Extract chunk quality information from a dictionary of properties."""
+    qualities = {k[len(CHUNK_SYSMETA_PREFIX):]: json.loads(v)
+                 for k, v in properties.items()
+                 if k.startswith(CHUNK_SYSMETA_PREFIX)}
+    return qualities
 
 
 def extract_content_headers_meta(headers):
@@ -586,6 +595,7 @@ class ContainerClient(ProxyClient):
             chunks = body['chunks']
             obj_meta = extract_content_headers_meta(resp.headers)
             obj_meta['properties'] = dict()
+            # pylint: disable=no-member
             obj_meta['properties'].update(body.get('properties', {}))
         except exceptions.NotFound:
             # Proxy does not support v2 request (oio < 4.3)

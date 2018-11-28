@@ -14,12 +14,46 @@
 # License along with this library.
 
 from oio.common import exceptions as exc
-from oio.common.exceptions import ClientException, OrphanChunk
 from oio.common.logger import get_logger
 from oio.blob.client import BlobClient
-from oio.container.client import ContainerClient
+from oio.container.client import ContainerClient, extract_chunk_qualities
 from oio.common.constants import OIO_VERSION
 from oio.common.fullpath import encode_fullpath
+
+
+def compare_chunk_quality(current, candidate):
+    """
+    Compare the qualities of two chunks.
+
+    :returns: 1 if the candidate is better quality,
+        0 if they are equal, -1 if the candidate is worse.
+    """
+    balance = 0
+    # Compare distance between chunks.
+    balance += candidate.get('final_dist', 1) - current.get('final_dist', 1)
+    # Compare use of fallback mechanisms.
+    if (current.get('final_slot') != current.get('expected_slot') and
+            candidate.get('final_slot') == candidate.get('expected_slot')):
+        balance += 1
+    elif (current.get('final_slot') == current.get('expected_slot') and
+            candidate.get('final_slot') != candidate.get('expected_slot')):
+        balance -= 1
+    return balance
+
+
+def ensure_better_chunk_qualities(current_chunks, candidates, threshold=1):
+    """
+    Ensure that the set of spare chunks is really an improvement over
+    the set of current chunks, raise SpareChunkException if it is not.
+    """
+    balance = 0
+    for current, candidate in zip(current_chunks, candidates.keys()):
+        balance += compare_chunk_quality(current.quality,
+                                         candidates[candidate])
+    if balance < threshold:
+        raise exc.SpareChunkException(
+            "the spare chunks found would not improve the quality "
+            "(balance=%d, threshold=%d)" % (balance, threshold))
 
 
 class Content(object):
@@ -81,21 +115,38 @@ class Content(object):
             raise ValueError("'value' must be a dict")
         self.metadata['properties'] = value
 
-    def _get_spare_chunk(self, chunks_notin, chunks_broken):
+    def _get_spare_chunk(self, chunks_notin, chunks_broken,
+                         max_attempts=3, check_quality=False):
         spare_data = {
             "notin": ChunksHelper(chunks_notin, False).raw(),
             "broken": ChunksHelper(chunks_broken, False).raw()
         }
-        try:
-            spare_resp = self.container_client.content_spare(
-                cid=self.container_id, path=self.content_id,
-                data=spare_data, stgpol=self.policy)
-        except ClientException as e:
-            raise exc.SpareChunkException("No spare chunk (%s)" % e.message)
+        last_exc = None
+        for attempt in range(max_attempts):
+            try:
+                spare_resp = self.container_client.content_spare(
+                    cid=self.container_id, path=self.content_id,
+                    data=spare_data, stgpol=self.policy)
+                if check_quality:
+                    qualities = extract_chunk_qualities(
+                        spare_resp.get('properties', {}))
+                    ensure_better_chunk_qualities(chunks_broken, qualities)
+                break
+            except (exc.ClientException, exc.SpareChunkException) as err:
+                self.logger.info(
+                    "Failed to find spare chunk (attempt %d/%d): %s",
+                    attempt + 1, max_attempts, err)
+                last_exc = err
+                # TODO(FVE): exponential backoff?
+        else:
+            if isinstance(last_exc, exc.SpareChunkException):
+                raise last_exc  # pylint: disable=raising-bad-type
+            raise exc.SpareChunkException(
+                "No spare chunk: %s" % last_exc.message)
 
         url_list = []
-        for c in spare_resp["chunks"]:
-            url_list.append(c["id"])
+        for chunk in spare_resp["chunks"]:
+            url_list.append(chunk["id"])
 
         return url_list
 
@@ -166,7 +217,7 @@ class Content(object):
     def move_chunk(self, chunk_id):
         current_chunk = self.chunks.filter(id=chunk_id).one()
         if current_chunk is None:
-            raise OrphanChunk("Chunk not found in content")
+            raise exc.OrphanChunk("Chunk not found in content")
 
         other_chunks = self.chunks.filter(
             metapos=current_chunk.metapos).exclude(id=chunk_id).all()
@@ -195,7 +246,7 @@ class Content(object):
     def move_linked_chunk(self, chunk_id, from_url):
         current_chunk = self.chunks.filter(id=chunk_id).one()
         if current_chunk is None:
-            raise OrphanChunk("Chunk not found in content")
+            raise exc.OrphanChunk("Chunk not found in content")
 
         _, to_url = self.blob_client.chunk_link(from_url, None, self.full_path)
         self.logger.debug("link chunk %s from %s to %s", chunk_id, from_url,
@@ -283,6 +334,14 @@ class Chunk(object):
     def raw(self):
         return self._data
 
+    @property
+    def quality(self):
+        """
+        Get the "quality" of the chunk, i.e. a dictionary telling how it
+        matched the request criteria when it has been selected.
+        """
+        return self._data.setdefault('quality', {'final_dist': 0})
+
     def __str__(self):
         return "[Chunk %s (%s)]" % (self.url, self.pos)
 
@@ -299,9 +358,7 @@ class Chunk(object):
 class ChunksHelper(object):
     def __init__(self, chunks, raw_chunk=True):
         if raw_chunk:
-            self.chunks = []
-            for c in chunks:
-                self.chunks.append(Chunk(c))
+            self.chunks = [Chunk(c) for c in chunks]
         else:
             self.chunks = chunks
         self.chunks.sort()
