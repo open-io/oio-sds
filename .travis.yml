@@ -20,7 +20,7 @@ install:
 env:
   - TEST_SUITE=3copies,with-service-id
   - TEST_SUITE=ec,with-random-service-id
-  - TEST_SUITE=repli
+  - TEST_SUITE=repli,go-rawx
   - TEST_SUITE=ec
   - TEST_SUITE=3copies
   - TEST_SUITE=multi-beanstalk
