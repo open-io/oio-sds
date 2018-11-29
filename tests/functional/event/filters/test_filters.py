@@ -112,9 +112,8 @@ class TestContentRebuildFilter(BaseTestCase):
         _, after = self.object_storage_api.object_locate(
                         container=self.container, obj=content_name,
                         account=self.account)
-        self.assertIs(chunk_created, self._is_chunks_created(chunks,
-                                                             after,
-                                                             missing_pos))
+        self.assertIs(chunk_created,
+                      self._is_chunks_created(chunks, after, missing_pos))
 
     def test_nothing_missing(self):
         content_name = "test_nothing_missing"
@@ -146,6 +145,7 @@ class TestContentRebuildFilter(BaseTestCase):
         meta, chunks = self.object_storage_api.object_locate(
                         container=self.container, obj=content_name,
                         account=self.account)
+        chunks = list(chunks)
         chunks_to_remove = []
         chunks_to_remove.append(chunks.pop(0))
         for chunk in chunks:
@@ -167,6 +167,7 @@ class TestContentRebuildFilter(BaseTestCase):
         meta, chunks = self.object_storage_api.object_locate(
                         container=self.container, obj=content_name,
                         account=self.account)
+        chunks = list(chunks)
         chunks_to_remove = []
         chunks_to_remove.append(chunks.pop(0))
         for chunk in chunks:
@@ -187,6 +188,7 @@ class TestContentRebuildFilter(BaseTestCase):
         meta, chunks = self.object_storage_api.object_locate(
                         container=self.container, obj=content_name,
                         account=self.account)
+        chunks = list(chunks)
         chunks_to_remove = []
         for i in range(0, 2):
             chunks_to_remove.append(chunks.pop(0))
@@ -208,6 +210,7 @@ class TestContentRebuildFilter(BaseTestCase):
         meta, chunks = self.object_storage_api.object_locate(
                         container=self.container, obj=content_name,
                         account=self.account)
+        chunks = list(chunks)
         chunks_to_remove = []
         chunks_to_remove.append(chunks.pop(0))
         for chunk in chunks:
@@ -228,6 +231,7 @@ class TestContentRebuildFilter(BaseTestCase):
         meta, chunks = self.object_storage_api.object_locate(
                         container=self.container, obj=content_name,
                         account=self.account)
+        chunks = list(chunks)
         chunks_to_remove = []
         for i in range(0, 3):
             chunks_to_remove.append(chunks.pop(0))
@@ -250,6 +254,7 @@ class TestContentRebuildFilter(BaseTestCase):
         meta, chunks = self.object_storage_api.object_locate(
                         container=self.container, obj=content_name,
                         account=self.account)
+        chunks = list(chunks)
         chunks_to_remove = []
         chunks_to_remove.append(chunks.pop(9))
         chunks_to_remove.append(chunks.pop(6))
@@ -276,6 +281,7 @@ class TestContentRebuildFilter(BaseTestCase):
         meta, chunks = self.object_storage_api.object_locate(
                         container=self.container, obj=content_name,
                         account=self.account)
+        chunks = list(chunks)
         chunks_to_remove = []
         chunks_to_remove.append(chunks.pop(0))
         for chunk in chunks:
@@ -298,6 +304,7 @@ class TestContentRebuildFilter(BaseTestCase):
         meta, chunks = self.object_storage_api.object_locate(
                         container=self.container, obj=content_name,
                         account=self.account)
+        chunks = list(chunks)
         chunks_to_remove = []
         for i in range(0, 3):
             chunks_to_remove.append(chunks.pop(0))
@@ -321,6 +328,7 @@ class TestContentRebuildFilter(BaseTestCase):
         meta, chunks = self.object_storage_api.object_locate(
                         container=self.container, obj=content_name,
                         account=self.account)
+        chunks = list(chunks)
         chunks_to_remove = []
         chunks_to_remove.append(chunks.pop(0))
         chunks_to_remove.append(chunks.pop(3))
@@ -345,6 +353,7 @@ class TestContentRebuildFilter(BaseTestCase):
         meta, chunks = self.object_storage_api.object_locate(
                         container=self.container, obj=content_name,
                         account=self.account)
+        chunks = list(chunks)
         chunks_to_remove = []
         chunks_to_remove.append(chunks.pop(0))
         chunks_to_remove.append(chunks.pop(0))

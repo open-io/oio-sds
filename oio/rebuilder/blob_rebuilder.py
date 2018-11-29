@@ -13,7 +13,6 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
 import time
 import uuid
 from datetime import datetime
@@ -37,6 +36,9 @@ DISTRIBUTED_REBUILDER_TIMEOUT = 300
 
 
 class BlobRebuilder(Rebuilder):
+    """
+    Rebuild chunks that were on the specified volume.
+    """
 
     def __init__(self, conf, logger, volume, try_chunk_delete=False,
                  beanstalkd_addr=None, **kwargs):
@@ -199,6 +201,10 @@ class BlobRebuilder(Rebuilder):
 
 
 class DistributedBlobRebuilder(BlobRebuilder):
+    """
+    Send broken chunk events to a set of beanstalkd queues,
+    and wait for responses on a single queue.
+    """
 
     def __init__(self, conf, logger, volume, distributed_addr, **kwargs):
         super(DistributedBlobRebuilder, self).__init__(
@@ -221,6 +227,13 @@ class DistributedBlobRebuilder(BlobRebuilder):
         self.sending = False
         self.rebuilder_id = str(uuid.uuid4())
 
+    def is_finished(self):
+        """Tell is all senders have finished to send their events."""
+        total_events = 0
+        for sender in self.beanstalkd_senders.values():
+            total_events += sender.nb_events
+        return total_events <= 0
+
     def _rebuilder_pass(self, **kwargs):
         self.start_time = self.last_report = time.time()
         self.log_report('START', force=True)
@@ -232,19 +245,13 @@ class DistributedBlobRebuilder(BlobRebuilder):
                                   args=(reply,), kwargs=kwargs)
         thread.start()
 
-        def is_finish():
-            total_events = 0
-            for _, sender in self.beanstalkd_senders.iteritems():
-                total_events += sender.nb_events
-            return total_events <= 0
-
         while thread.is_alive():
             if self.sending:
                 break
             else:
                 time.sleep(0.1)
 
-        while thread.is_alive() or not is_finish():
+        while thread.is_alive() or not self.is_finished():
             try:
                 event_info = self.beanstalkd_listener.fetch_event(
                     self._rebuilt_chunk_from_event,
@@ -256,7 +263,7 @@ class DistributedBlobRebuilder(BlobRebuilder):
                         chunk, bytes_processed, error=error, **kwargs)
                 self.log_report('RUN', **kwargs)
             except OioTimeout:
-                self.logger.error("No response since %d secondes",
+                self.logger.error("No response for %d seconds",
                                   DISTRIBUTED_REBUILDER_TIMEOUT)
                 self.log_report('DONE', force=True)
                 return False
@@ -267,19 +274,19 @@ class DistributedBlobRebuilder(BlobRebuilder):
     def _distribute_broken_chunks(self, reply, **kwargs):
         index = 0
         senders = self.beanstalkd_senders.values()
-        n = len(senders)
+        sender_count = len(senders)
 
-        def _send_broken_chunk(broken_chunk, index):
+        def _send_broken_chunk(broken_chunk, local_index):
             event = self._event_from_broken_chunk(
                 broken_chunk, reply, **kwargs)
             # Send the event with a non-full sender
             while True:
-                for _ in range(n):
-                    success = senders[index].send_event(
+                for _ in range(sender_count):
+                    success = senders[local_index].send_event(
                         event, **kwargs)
-                    index = (index + 1) % n
+                    local_index = (local_index + 1) % sender_count
                     if success:
-                        return index
+                        return local_index
                 time.sleep(5)
 
         broken_chunks = self._fetch_chunks(**kwargs)
@@ -371,6 +378,10 @@ class BlobRebuilderWorker(RebuilderWorker):
 
     def chunk_rebuild(self, container_id, content_id, chunk_id_or_pos,
                       **kwargs):
+        """
+        Try to find the chunk in the metadata of the specified object,
+        then rebuild it.
+        """
         self.logger.info('Rebuilding (container %s, content %s, chunk %s)',
                          container_id, content_id, chunk_id_or_pos)
         try:
@@ -495,20 +506,29 @@ class BeanstalkdListener(Beanstalkd):
 
 
 class BeanstalkdSender(Beanstalkd):
+    """
+    Send events to the specified beanstalkd tube, until the specified
+    high_limit is reached.
+    """
 
     def __init__(self, addr, tube, logger,
-                 threshold=512, limit=1024, **kwargs):
+                 low_limit=512, high_limit=1024, **kwargs):
         super(BeanstalkdSender, self).__init__(addr, tube, logger)
-        self.threshold = threshold
-        self.limit = limit
-        self.fill = True
+        self.low_limit = low_limit
+        self.high_limit = high_limit
+        self.accepts_events = True
         self.nb_events = 0
-        self.lock_nb_events = threading.Lock()
+        self.nb_events_lock = threading.Lock()
 
     def send_event(self, event, **kwargs):
-        if self.nb_events <= self.threshold:
-            self.fill = True
-        elif not self.fill or self.nb_events > self.limit:
+        """
+        Send an event, if the queue has not reached its size limit.
+
+        :returns: True if the event has been sent, False otherwise.
+        """
+        if self.nb_events <= self.low_limit:
+            self.accepts_events = True
+        elif not self.accepts_events or self.nb_events > self.high_limit:
             return False
 
         job_id = None
@@ -518,11 +538,11 @@ class BeanstalkdSender(Beanstalkd):
                                   self.addr, self.tube)
                 self._connect(**kwargs)
 
-            with self.lock_nb_events:
+            with self.nb_events_lock:
                 job_id = self.beanstalkd.put(event)
                 self.nb_events += 1
-                if self.nb_events == self.limit:
-                    self.fill = False
+                if self.nb_events >= self.high_limit:
+                    self.accepts_events = False
             return True
         except ConnectionError as exc:
             self.connected = False
@@ -537,5 +557,9 @@ class BeanstalkdSender(Beanstalkd):
         return False
 
     def event_done(self):
-        with self.lock_nb_events:
+        """
+        Declare that an event previously sent by this sender
+        has been fully processed.
+        """
+        with self.nb_events_lock:
             self.nb_events -= 1
