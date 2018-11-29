@@ -334,13 +334,13 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
                           self.api.container_flush, self.account, name)
 
         def flush_and_check():
-            self.api.container_flush(self.account, name)
+            self.api.container_flush(self.account, name, limit=50)
             self._wait_account_meta2()
             properties = self.api.container_get_properties(self.account, name)
             self.assertEqual(properties['system']['sys.m2.objects'], '0')
             self.assertEqual(properties['system']['sys.m2.usage'], '0')
-            list_objects = self.api.object_list(self.account, name)
-            self.assertEqual(len(list_objects['objects']), 0)
+            all_objects = self.api.object_list(self.account, name)
+            self.assertEqual(0, len(all_objects['objects']))
 
         # empty container
         self.api.container_create(self.account, name)
@@ -351,8 +351,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
                                data='data')
         flush_and_check()
 
-        # many contents
-        for i in range(1024):
+        # many contents (must be more than the listing limit)
+        for i in range(128):
             self.api.object_create(self.account, name,
                                    obj_name='content'+str(i), data='data',
                                    chunk_checksum_algo=None)
@@ -366,13 +366,13 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
                           self.api.container_flush, self.account, name, True)
 
         def flush_and_check():
-            self.api.container_flush(self.account, name, fast=True)
+            self.api.container_flush(self.account, name, fast=True, limit=50)
             self._wait_account_meta2()
             properties = self.api.container_get_properties(self.account, name)
             self.assertEqual(properties['system']['sys.m2.objects'], '0')
             self.assertEqual(properties['system']['sys.m2.usage'], '0')
-            list_objects = self.api.object_list(self.account, name)
-            self.assertEqual(len(list_objects['objects']), 0)
+            all_objects = self.api.object_list(self.account, name)
+            self.assertEqual(0, len(all_objects['objects']))
 
         # empty container
         self.api.container_create(self.account, name)
@@ -383,8 +383,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
                                data='data')
         flush_and_check()
 
-        # many contents
-        for i in range(1024):
+        # many contents (must be more than the listing limit)
+        for i in range(128):
             self.api.object_create(self.account, name,
                                    obj_name='content'+str(i), data='data',
                                    chunk_checksum_algo=None)
