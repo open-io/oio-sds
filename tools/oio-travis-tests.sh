@@ -173,6 +173,9 @@ func_tests () {
 	if is_running_test_suite "with-random-service-id"; then
 		args="${args} -R"
 	fi
+	if is_running_test_suite "go-rawx"; then
+		args="${args} -f "${SRCDIR}/etc/bootstrap-option-go-rawx.yml""
+	fi
 	$OIO_RESET ${args} -N $OIO_NS $@
 
 	test_proxy_forward
@@ -347,6 +350,9 @@ func_tests_rebuilder_mover () {
 	fi
 	if is_running_test_suite "with-random-service-id"; then
 		args="${args} -R"
+	fi
+	if is_running_test_suite "go-rawx"; then
+		args="${args} -f "${SRCDIR}/etc/bootstrap-option-go-rawx.yml""
 	fi
 	$OIO_RESET ${args} -N $OIO_NS $@
 

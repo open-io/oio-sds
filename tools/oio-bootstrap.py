@@ -1011,6 +1011,7 @@ SVC_PARAMS = 'params'
 ALLOW_REDIS = 'redis'
 OPENSUSE = 'opensuse'
 ZOOKEEPER = 'zookeeper'
+GO_RAWX = 'go_rawx'
 MONITOR_PERIOD = 'monitor_period'
 M1_DIGITS = 'meta1_digits'
 M1_REPLICAS = 'directory_replicas'
@@ -1394,8 +1395,11 @@ def generate(options):
                           })
             add_service(env)
             # gridinit (rawx)
-            tpl = Template(
-                template_gridinit_rawx % template_gridinit_rawx_command_options)
+            if options[GO_RAWX]:
+                tpl = Template(
+                    template_gridinit_rawx % template_gridinit_rawx_command_options)
+            else:
+                tpl = Template(template_gridinit_httpd)
             with open(gridinit(env), 'a+') as f:
                 f.write(tpl.safe_substitute(env))
             # service
@@ -1680,6 +1684,7 @@ def main():
     opts['meta2'] = {SVC_NB: None, SVC_HOSTS: None}
     opts['sqlx'] = {SVC_NB: None, SVC_HOSTS: None}
     opts['rawx'] = {SVC_NB: None, SVC_HOSTS: None}
+    opts[GO_RAWX] = False
     opts['rdir'] = {SVC_NB: None, SVC_HOSTS: None}
     opts['beanstalkd'] = {SVC_NB: None, SVC_HOSTS: None}
 
