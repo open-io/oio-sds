@@ -526,9 +526,9 @@ class TestMeta2Containers(BaseTestCase):
         flush_and_check()
 
         # many contents
-        for i in range(1024):
-            self._create_content("content"+str(i))
-        flush_and_check(truncated=True, objects=24, usage=24576)
+        for i in range(80):
+            self._create_content("content%02d" % i)
+        flush_and_check(truncated=True, objects=16, usage=16384)
         flush_and_check()
 
 

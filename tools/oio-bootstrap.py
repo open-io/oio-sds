@@ -769,6 +769,9 @@ ${NOBS}event-agent=${BEANSTALKD_CNXSTRING}
 
 ns.meta1_digits=${M1_DIGITS}
 
+# Small pagination to avoid time-consuming tests
+meta2.flush_limit=64
+
 admin=${IP}:${PORT_ADMIN}
 
 """
