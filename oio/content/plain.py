@@ -47,6 +47,7 @@ class PlainContent(Content):
         return final_chunks, bytes_transferred, content_checksum
 
     def rebuild_chunk(self, chunk_id, allow_same_rawx=False, chunk_pos=None):
+        # Identify the chunk to rebuild
         current_chunk = self.chunks.filter(id=chunk_id).one()
         if current_chunk is None and chunk_pos is None:
             raise exc.OrphanChunk("Chunk not found in content")
@@ -66,34 +67,36 @@ class PlainContent(Content):
             chunk['pos'] = chunk_pos
             current_chunk = Chunk(chunk)
 
+        # Find a spare chunk address
         broken_list = list()
         if not allow_same_rawx and chunk_id is not None:
             broken_list.append(current_chunk)
-        spare_urls = self._get_spare_chunk(
-            duplicate_chunks, broken_list)
+        spare_url = self._get_spare_chunk(duplicate_chunks, broken_list)[0]
 
+        # Actually create the spare chunk, by duplicating a good one
         uploaded = False
         for src in duplicate_chunks:
             try:
                 self.blob_client.chunk_copy(
-                    src.url, spare_urls[0], chunk_id=chunk_id,
+                    src.url, spare_url, chunk_id=chunk_id,
                     fullpath=self.full_path, cid=self.container_id,
                     path=self.path, version=self.version,
                     content_id=self.content_id)
                 self.logger.debug('Chunk copied from %s to %s, registering it',
-                                  src.url, spare_urls[0])
+                                  src.url, spare_url)
                 uploaded = True
                 break
             except Exception as err:
                 self.logger.warn(
                     "Failed to copy chunk from %s to %s: %s %s", src.url,
-                    spare_urls[0], type(err), str(err.message))
+                    spare_url, type(err), str(err.message))
         if not uploaded:
             raise UnrecoverableContent("No copy available of missing chunk")
 
+        # Register the spare chunk in object's metadata
         if chunk_id is None:
-            self._add_raw_chunk(current_chunk, spare_urls[0])
+            self._add_raw_chunk(current_chunk, spare_url)
         else:
-            self._update_spare_chunk(current_chunk, spare_urls[0])
+            self._update_spare_chunk(current_chunk, spare_url)
         self.logger.info('Chunk %s repaired in %s',
-                         chunk_id or chunk_pos, spare_urls[0])
+                         chunk_id or chunk_pos, spare_url)

@@ -23,6 +23,7 @@ from oio.common.constants import OIO_VERSION
 
 class ECContent(Content):
     def rebuild_chunk(self, chunk_id, allow_same_rawx=False, chunk_pos=None):
+        # Identify the chunk to rebuild
         current_chunk = self.chunks.filter(id=chunk_id).one()
 
         if current_chunk is None and chunk_pos is None:
@@ -44,17 +45,19 @@ class ECContent(Content):
             current_chunk.size = chunks[0].size
             current_chunk.checksum = chunks[0].checksum
 
+        # Find a spare chunk address
         broken_list = list()
         if not allow_same_rawx and chunk_id is not None:
             broken_list.append(current_chunk)
         spare_url = self._get_spare_chunk(chunks.all(), broken_list)
+        new_chunk = Chunk({'pos': current_chunk.pos, 'url': spare_url[0]})
 
+        # Regenerate the lost chunk's data, from existing chunks
         handler = ECRebuildHandler(
             chunks.raw(), current_chunk.subpos, self.storage_method)
-
-        new_chunk = Chunk({'pos': current_chunk.pos, 'url': spare_url[0]})
         stream = handler.rebuild()
 
+        # Actually create the spare chunk
         meta = {}
         meta['chunk_id'] = new_chunk.id
         meta['chunk_pos'] = current_chunk.pos
@@ -83,6 +86,8 @@ class ECContent(Content):
         meta['full_path'] = self.full_path
         meta['oio_version'] = OIO_VERSION
         self.blob_client.chunk_put(spare_url[0], meta, GeneratorIO(stream))
+
+        # Register the spare chunk in object's metadata
         if chunk_id is None:
             self._add_raw_chunk(current_chunk, spare_url[0])
         else:

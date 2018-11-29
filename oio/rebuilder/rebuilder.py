@@ -1,4 +1,4 @@
-# Copyright (C) 2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -14,10 +14,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-from oio.common.green import ratelimit, eventlet, threading, ContextPool
-
 import random
-import time
+from oio.common.green import ratelimit, eventlet, threading, ContextPool, time
 
 from oio.common.easy_value import int_value
 from oio.common.logger import get_logger
@@ -25,7 +23,7 @@ from oio.common.logger import get_logger
 
 class Rebuilder(object):
     """
-    Base class for rebuilders.
+    Base class for rebuilders or movers.
     Subclass and implement
       `_create_worker()`
       `_fill_queue()`
@@ -73,6 +71,9 @@ class Rebuilder(object):
         return self.total_errors == 0
 
     def _create_worker(self, **kwargs):
+        """
+        Spawn a worker, subclass of `RebuilderWorker`.
+        """
         raise NotImplementedError()
 
     def _fill_queue(self, queue, **kwargs):
@@ -83,6 +84,9 @@ class Rebuilder(object):
         raise NotImplementedError()
 
     def _item_to_string(self, item, **kwargs):
+        """
+        Pretty-print an item that is being worked on.
+        """
         raise NotImplementedError()
 
     def _update_processed_without_lock(self, info, error=None, **kwargs):
@@ -130,7 +134,7 @@ class Rebuilder(object):
 
 class RebuilderWorker(object):
     """
-    Base class for rebuilder workers.
+    Base class for rebuilder or mover workers.
     Subclass and implement `_rebuild_one()`.
     """
 
