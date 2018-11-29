@@ -161,7 +161,7 @@ class BlobClient(object):
         except urllib3.exceptions.HTTPError as ex:
             oio_exception_from_httperror(ex, reqid=headers['X-oio-req-id'],
                                          url=url)
-        if resp.status == 204:
+        if resp.status == 200:
             if not _xattr:
                 return dict()
             return extract_headers_meta(resp.headers)
