@@ -22,7 +22,7 @@ from oio.common.utils import cid_from_name
 from oio.common.exceptions import OrphanChunk
 from oio.blob.auditor import BlobAuditorWorker
 from tests.utils import BaseTestCase, random_str
-from tests.functional.blob import copy_chunk
+from tests.functional.blob import convert_to_old_chunk, copy_chunk
 
 
 class TestBlobAuditor(BaseTestCase):
@@ -64,6 +64,20 @@ class TestBlobAuditor(BaseTestCase):
         return volume + '/' + chunk_id[:3] + '/' + chunk_id
 
     def test_audit(self):
+        chunk = random.choice(self.chunks)
+        chunk_volume = chunk['url'].split('/')[2]
+        chunk_id = chunk['url'].split('/')[3]
+
+        auditor = BlobAuditorWorker(self.conf, None,
+                                    self.rawx_volumes[chunk_volume])
+        auditor.chunk_audit(self._chunk_path(chunk), chunk_id)
+
+    def test_audit_old_chunk(self):
+        for c in self.chunks:
+            convert_to_old_chunk(
+                self._chunk_path(c), self.account, self.container, self.path,
+                self.version, self.content_id)
+
         chunk = random.choice(self.chunks)
         chunk_volume = chunk['url'].split('/')[2]
         chunk_id = chunk['url'].split('/')[3]

@@ -25,6 +25,7 @@ from oio.blob.converter import BlobConverter
 from oio.blob.utils import read_chunk_metadata
 from oio.crawler.integrity import Checker, Target
 from tests.utils import BaseTestCase, random_str
+from tests.functional.blob import convert_to_old_chunk
 
 
 class TestBlobConverter(BaseTestCase):
@@ -123,9 +124,258 @@ class TestBlobConverter(BaseTestCase):
             {chunk_id: (self.account, self.container, self.path, self.version,
                         self.content_id)})
 
+    def test_converter_old_chunk(self):
+        for c in self.chunks:
+            convert_to_old_chunk(
+                self._chunk_path(c), self.account, self.container, self.path,
+                self.version, self.content_id)
+
+        chunk = random.choice(self.chunks)
+        chunk_volume = chunk['url'].split('/')[2]
+        chunk_id = chunk['url'].split('/')[3]
+        chunk_path = self._chunk_path(chunk)
+
+        self._converter_and_check(
+            chunk_volume, chunk_path,
+            {chunk_id: (self.account, self.container, self.path, self.version,
+                        self.content_id)})
+
+    def test_converter_old_chunk_with_wrong_path(self):
+        for c in self.chunks:
+            convert_to_old_chunk(
+                self._chunk_path(c), self.account, self.container,
+                self.path + '+', self.version, self.content_id)
+
+        chunk = random.choice(self.chunks)
+        chunk_volume = chunk['url'].split('/')[2]
+        chunk_id = chunk['url'].split('/')[3]
+        chunk_path = self._chunk_path(chunk)
+
+        self._converter_and_check(
+            chunk_volume, chunk_path,
+            {chunk_id: (self.account, self.container, self.path, self.version,
+                        self.content_id)})
+
+    def test_converter_old_chunk_with_wrong_content_id(self):
+        for c in self.chunks:
+            convert_to_old_chunk(
+                self._chunk_path(c), self.account, self.container, self.path,
+                self.version, '0123456789ABCDEF0123456789ABCDEF')
+
+        chunk = random.choice(self.chunks)
+        chunk_volume = chunk['url'].split('/')[2]
+        chunk_id = chunk['url'].split('/')[3]
+        chunk_path = self._chunk_path(chunk)
+
+        self._converter_and_check(
+            chunk_volume, chunk_path,
+            {chunk_id: (self.account, self.container, self.path, self.version,
+                        self.content_id)})
+
+    def test_converter_old_chunk_with_old_fullpath(self):
+        for c in self.chunks:
+            convert_to_old_chunk(
+                self._chunk_path(c), self.account, self.container, self.path,
+                self.version, self.content_id, add_old_fullpath=True)
+
+        chunk = random.choice(self.chunks)
+        chunk_volume = chunk['url'].split('/')[2]
+        chunk_id = chunk['url'].split('/')[3]
+        chunk_path = self._chunk_path(chunk)
+
+        self._converter_and_check(
+            chunk_volume, chunk_path,
+            {chunk_id: (self.account, self.container, self.path, self.version,
+                        self.content_id)})
+
+    def test_converter_old_chunk_with_old_fullpath_and_wrong_path(self):
+        for c in self.chunks:
+            convert_to_old_chunk(
+                self._chunk_path(c), self.account, self.container,
+                self.path, self.version, self.content_id,
+                add_old_fullpath=True)
+            convert_to_old_chunk(
+                self._chunk_path(c), self.account, self.container,
+                self.path + '+', self.version, self.content_id)
+
+        chunk = random.choice(self.chunks)
+        chunk_volume = chunk['url'].split('/')[2]
+        chunk_id = chunk['url'].split('/')[3]
+        chunk_path = self._chunk_path(chunk)
+
+        self._converter_and_check(
+            chunk_volume, chunk_path,
+            {chunk_id: (self.account, self.container, self.path, self.version,
+                        self.content_id)})
+
+    def test_converter_old_chunk_with_wrong_fullpath(self):
+        for c in self.chunks:
+            convert_to_old_chunk(
+                self._chunk_path(c), self.account, self.container,
+                self.path, 'None', '0123456789ABCDEF0123456789ABCDEF',
+                add_old_fullpath=True)
+            convert_to_old_chunk(
+                self._chunk_path(c), self.account, self.container,
+                self.path, self.version, self.content_id)
+
+        chunk = random.choice(self.chunks)
+        chunk_volume = chunk['url'].split('/')[2]
+        chunk_id = chunk['url'].split('/')[3]
+        chunk_path = self._chunk_path(chunk)
+
+        self._converter_and_check(
+            chunk_volume, chunk_path,
+            {chunk_id: (self.account, self.container, self.path, self.version,
+                        self.content_id)})
+
     def test_converter_linked_chunk(self):
         self.api.object_link(
             self.account, self.container, self.path,
+            self.account, self.container, self.path + '.link')
+
+        linked_meta, linked_chunks = self.api.object_locate(
+            self.account, self.container, self.path + '.link')
+        self.assertNotEqual(self.content_id, linked_meta['id'])
+
+        chunk = random.choice(self.chunks)
+        chunk_volume = chunk['url'].split('/')[2]
+        chunk_id = chunk['url'].split('/')[3]
+        chunk_path = self._chunk_path(chunk)
+        for c in linked_chunks:
+            if chunk_volume == c['url'].split('/')[2]:
+                linked_chunk_id2 = c['url'].split('/')[3]
+                break
+
+        linked_chunk = random.choice(linked_chunks)
+        linked_chunk_volume = linked_chunk['url'].split('/')[2]
+        linked_chunk_id = linked_chunk['url'].split('/')[3]
+        linked_chunk_path = self._chunk_path(linked_chunk)
+        for c in self.chunks:
+            if linked_chunk_volume == c['url'].split('/')[2]:
+                chunk_id2 = c['url'].split('/')[3]
+                break
+
+        self._converter_and_check(
+            chunk_volume, chunk_path,
+            {chunk_id: (self.account, self.container, self.path, self.version,
+                        self.content_id),
+             linked_chunk_id2: (self.account, self.container,
+                                self.path + '.link', linked_meta['version'],
+                                linked_meta['id'])})
+
+        self._converter_and_check(
+            linked_chunk_volume, linked_chunk_path,
+            {chunk_id2: (self.account, self.container, self.path, self.version,
+                         self.content_id),
+             linked_chunk_id: (self.account, self.container,
+                               self.path + '.link', linked_meta['version'],
+                               linked_meta['id'])})
+
+    def test_converter_old_linked_chunk(self):
+        self.api.object_link(
+            self.account, self.container, self.path,
+            self.account, self.container, self.path + '.link')
+
+        linked_meta, linked_chunks = self.api.object_locate(
+            self.account, self.container, self.path + '.link')
+        self.assertNotEqual(self.content_id, linked_meta['id'])
+
+        for c in linked_chunks:
+            convert_to_old_chunk(
+                self._chunk_path(c), self.account, self.container,
+                self.path + '.link', 'None',
+                '0123456789ABCDEF0123456789ABCDEF', add_old_fullpath=True)
+        for c in self.chunks:
+            convert_to_old_chunk(
+                self._chunk_path(c), self.account, self.container, self.path,
+                self.version, self.content_id)
+
+        chunk = random.choice(self.chunks)
+        chunk_volume = chunk['url'].split('/')[2]
+        chunk_id = chunk['url'].split('/')[3]
+        chunk_path = self._chunk_path(chunk)
+        for c in linked_chunks:
+            if chunk_volume == c['url'].split('/')[2]:
+                linked_chunk_id2 = c['url'].split('/')[3]
+                break
+
+        linked_chunk = random.choice(linked_chunks)
+        linked_chunk_volume = linked_chunk['url'].split('/')[2]
+        linked_chunk_id = linked_chunk['url'].split('/')[3]
+        linked_chunk_path = self._chunk_path(linked_chunk)
+        for c in self.chunks:
+            if linked_chunk_volume == c['url'].split('/')[2]:
+                chunk_id2 = c['url'].split('/')[3]
+                break
+
+        self._converter_and_check(
+            chunk_volume, chunk_path,
+            {chunk_id: (self.account, self.container, self.path, self.version,
+                        self.content_id),
+             linked_chunk_id2: (self.account, self.container,
+                                self.path + '.link', linked_meta['version'],
+                                linked_meta['id'])})
+
+        self._converter_and_check(
+            linked_chunk_volume, linked_chunk_path,
+            {chunk_id2: (self.account, self.container, self.path, self.version,
+                         self.content_id),
+             linked_chunk_id: (self.account, self.container,
+                               self.path + '.link', linked_meta['version'],
+                               linked_meta['id'])})
+
+    def test_converter_old_chunk_with_link_on_same_object(self):
+        for c in self.chunks:
+            convert_to_old_chunk(
+                self._chunk_path(c), self.account, self.container, self.path,
+                self.version, self.content_id)
+
+        self.api.object_link(
+            self.account, self.container, self.path,
+            self.account, self.container, self.path)
+
+        linked_meta, linked_chunks = self.api.object_locate(
+            self.account, self.container, self.path)
+        self.assertNotEqual(self.content_id, linked_meta['id'])
+
+        linked_chunk = random.choice(linked_chunks)
+        linked_chunk_volume = linked_chunk['url'].split('/')[2]
+        linked_chunk_id = linked_chunk['url'].split('/')[3]
+        linked_chunk_path = self._chunk_path(linked_chunk)
+
+        # old xattr not removed
+        _, expected_raw_meta = read_chunk_metadata(linked_chunk_path,
+                                                   linked_chunk_id)
+        expected_raw_meta[chunk_xattr_keys['oio_version']] = OIO_VERSION
+
+        self._converter_and_check(
+            linked_chunk_volume, linked_chunk_path,
+            {linked_chunk_id: (self.account, self.container,
+                               self.path, linked_meta['version'],
+                               linked_meta['id'])},
+            expected_raw_meta=expected_raw_meta, expected_errors=1)
+
+    def test_converter_old_linked_chunk_with_link_on_same_object(self):
+        self.api.object_link(
+            self.account, self.container, self.path,
+            self.account, self.container, self.path + '.link')
+
+        linked_meta, linked_chunks = self.api.object_locate(
+            self.account, self.container, self.path + '.link')
+        self.assertNotEqual(self.content_id, linked_meta['id'])
+
+        for c in linked_chunks:
+            convert_to_old_chunk(
+                self._chunk_path(c), self.account, self.container,
+                self.path + '.link', 'None',
+                '0123456789ABCDEF0123456789ABCDEF', add_old_fullpath=True)
+        for c in self.chunks:
+            convert_to_old_chunk(
+                self._chunk_path(c), self.account, self.container, self.path,
+                self.version, self.content_id, add_old_fullpath=True)
+
+        self.api.object_link(
+            self.account, self.container, self.path + '.link',
             self.account, self.container, self.path + '.link')
 
         linked_meta, linked_chunks = self.api.object_locate(
@@ -176,6 +426,47 @@ class TestBlobConverter(BaseTestCase):
         versioned_meta, versioned_chunks = self.api.object_locate(
             self.account, self.container, self.path)
         self.assertNotEqual(self.content_id, versioned_meta['id'])
+
+        chunk = random.choice(self.chunks)
+        chunk_volume = chunk['url'].split('/')[2]
+        chunk_id = chunk['url'].split('/')[3]
+        chunk_path = self._chunk_path(chunk)
+
+        versioned_chunk = random.choice(versioned_chunks)
+        versioned_chunk_volume = versioned_chunk['url'].split('/')[2]
+        versioned_chunk_id = versioned_chunk['url'].split('/')[3]
+        versioned_chunk_path = self._chunk_path(versioned_chunk)
+
+        self._converter_and_check(
+            chunk_volume, chunk_path,
+            {chunk_id: (self.account, self.container, self.path, self.version,
+                        self.content_id)})
+
+        self._converter_and_check(
+            versioned_chunk_volume, versioned_chunk_path,
+            {versioned_chunk_id: (self.account, self.container, self.path,
+                                  versioned_meta['version'],
+                                  versioned_meta['id'])})
+
+    def test_converter_old_chunk_with_versioning(self):
+        for c in self.chunks:
+            convert_to_old_chunk(
+                self._chunk_path(c), self.account, self.container, self.path,
+                self.version, self.content_id)
+
+        self.api.container_set_properties(
+            self.account, self.container,
+            system={'sys.m2.policy.version': '2'})
+        self.api.object_create(
+            self.account, self.container, obj_name=self.path, data='version')
+
+        versioned_meta, versioned_chunks = self.api.object_locate(
+            self.account, self.container, self.path)
+        self.assertNotEqual(self.content_id, versioned_meta['id'])
+        for c in versioned_chunks:
+            convert_to_old_chunk(
+                self._chunk_path(c), self.account, self.container, self.path,
+                versioned_meta['version'], versioned_meta['id'])
 
         chunk = random.choice(self.chunks)
         chunk_volume = chunk['url'].split('/')[2]
