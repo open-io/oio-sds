@@ -763,7 +763,7 @@ rawx_repo_commit_upload(dav_stream *stream)
 			 * computed over the input */
 			if (0 != strcasecmp(fake.chunk_hash, hex)) {
 				return server_create_and_stat_error(
-						conf, stream->p, HTTP_UNPROCESSABLE_ENTITY, 0,
+						conf, stream->p, HTTP_BAD_REQUEST, 0,
 						apr_pstrcat(stream->p, "MD5 mismatch hdr=", fake.chunk_hash, " body=", hex, NULL));
 			} else {
 				DAV_DEBUG_REQ(stream->r->info->request, 0, "MD5 match for %s",

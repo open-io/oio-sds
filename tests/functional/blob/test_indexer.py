@@ -27,7 +27,8 @@ from oio.common.fullpath import encode_fullpath
 from oio.common.utils import cid_from_name, paths_gen
 
 from tests.utils import BaseTestCase, random_str, random_id
-from tests.functional.blob import random_chunk_id, random_buffer
+from tests.functional.blob import random_chunk_id, random_buffer, \
+    convert_to_old_chunk
 
 
 class TestBlobIndexer(BaseTestCase):
@@ -140,6 +141,37 @@ class TestBlobIndexer(BaseTestCase):
         chunks = self.rdir_client.chunk_fetch(self.rawx_id)
         chunks = list(chunks)
         self.assertEqual(0, len(chunks))
+
+    def test_blob_indexer_with_old_chunk(self):
+        expected_account, expected_container, expected_cid, \
+            expected_content_path, expected_content_version, \
+            expected_content_id, expected_chunk_id = self._put_chunk()
+
+        chunks = self.rdir_client.chunk_fetch(self.rawx_id)
+        chunks = list(chunks)
+        self.assertEqual(1, len(chunks))
+        cid, content_id, chunk_id, _ = chunks[0]
+        self.assertEqual(expected_cid, cid)
+        self.assertEqual(expected_content_id, content_id)
+        self.assertEqual(expected_chunk_id, chunk_id)
+
+        convert_to_old_chunk(
+            self._chunk_path(chunk_id), expected_account, expected_container,
+            expected_content_path, expected_content_version,
+            expected_content_id)
+
+        self.rdir_client.admin_clear(self.rawx_id, clear_all=True)
+        self.blob_indexer.index_pass()
+        self.assertEqual(1, self.blob_indexer.successes)
+        self.assertEqual(0, self.blob_indexer.errors)
+
+        chunks = self.rdir_client.chunk_fetch(self.rawx_id)
+        chunks = list(chunks)
+        self.assertEqual(1, len(chunks))
+        cid, content_id, chunk_id, _ = chunks[0]
+        self.assertEqual(expected_cid, cid)
+        self.assertEqual(expected_content_id, content_id)
+        self.assertEqual(expected_chunk_id, chunk_id)
 
     def test_blob_indexer_with_linked_chunk(self):
         _, _, expected_cid, _, _, expected_content_id, expected_chunk_id = \

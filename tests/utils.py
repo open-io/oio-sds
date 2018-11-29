@@ -184,6 +184,10 @@ class CommonTestCase(testtools.TestCase):
         self.ns = self.conf['namespace']
         self.account = self.conf['account']
         self.http_pool = get_pool_manager()
+        resp = self.http_pool.request(
+            'GET',
+            'http://' + self.conf['services']['rawx'][0]['addr'] + '/info')
+        self.conf['go_rawx'] = resp.headers.get('Server') != 'Apache'
 
     def tearDown(self):
         super(CommonTestCase, self).tearDown()
