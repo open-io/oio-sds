@@ -17,7 +17,15 @@ import unittest
 from mock import MagicMock as Mock, patch
 
 from oio.common.exceptions import Conflict, ServiceBusy
+from oio.container.client import CHUNK_SYSMETA_PREFIX, extract_chunk_qualities
 from tests.unit.api import FakeStorageApi
+from tests.utils import random_id
+
+DUMMY_QUAL = {u'final_dist': 2, u'expected_slot': u'rawx-odd',
+              u'warn_dist': 1, u'expected_dist': 2, u'final_slot': u'rawx'}
+DUMMY_QUAL_JSON = "{\"expected_dist\":2,\"final_dist\":2," \
+                  "\"warn_dist\":1,\"expected_slot\":\"rawx-odd\"," \
+                  "\"final_slot\":\"rawx\"}"
 
 
 class ContainerClientTest(unittest.TestCase):
@@ -71,3 +79,40 @@ class ContainerClientTest(unittest.TestCase):
                 ServiceBusy,
                 self.api.container.content_create,
                 self.account, self.container, "test", size=1, data={})
+
+    def _gen_chunk_qual(self, host='127.0.0.1:6021'):
+        key = '%shttp://%s/%s' % (CHUNK_SYSMETA_PREFIX, host, random_id(64))
+        return key, DUMMY_QUAL_JSON
+
+    def test_extract_chunk_qualities(self):
+        properties = dict()
+        properties.update((self._gen_chunk_qual(), ))
+        properties.update((self._gen_chunk_qual('127.0.0.2:6022'), ))
+        properties.update((self._gen_chunk_qual('127.0.0.3:6023'), ))
+        keys = properties.keys()
+        properties.update({'a': 'b'})
+
+        quals = extract_chunk_qualities(properties)
+
+        self.assertNotIn('a', quals)
+        for key in keys:
+            self.assertIn(key[len(CHUNK_SYSMETA_PREFIX):], quals)
+        for val in quals.values():
+            self.assertDictEqual(DUMMY_QUAL, val)
+
+    def test_extract_chunk_qualities_raw(self):
+        properties = list()
+        keys = list()
+        for i in range(1, 4):
+            key, val = self._gen_chunk_qual('127.0.0.%d:602%d' % (i, i))
+            properties.append({'key': key, 'value': val})
+            keys.append(key)
+        properties.append({'key': 'a', 'value': 'b'})
+
+        quals = extract_chunk_qualities(properties, raw=True)
+
+        self.assertNotIn('a', quals)
+        for key in keys:
+            self.assertIn(key[len(CHUNK_SYSMETA_PREFIX):], quals)
+        for val in quals.values():
+            self.assertDictEqual(DUMMY_QUAL, val)

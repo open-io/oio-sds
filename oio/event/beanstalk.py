@@ -14,7 +14,7 @@
 # License along with this library.
 
 
-from oio.common.green import socket, Empty, LifoQueue, sleep
+from oio.common.green import socket, Empty, LifoQueue, sleep, threading
 
 import os
 import sys
@@ -22,6 +22,8 @@ import yaml
 from time import time
 from urlparse import urlparse
 from cStringIO import StringIO as BytesIO
+
+from oio.common import exceptions
 
 
 SYM_CRLF = '\r\n'
@@ -260,7 +262,7 @@ class Connection(object):
                     sock.close()
 
         if err is not None:
-            raise err
+            raise err  # pylint: disable=raising-bad-type
         raise socket.error("socket.getaddrinfo returned empty list")
 
     def _error_message(self, exception):
@@ -442,22 +444,20 @@ class Beanstalk(object):
 
     def __init__(self, host=None, port=None, socket_timeout=None,
                  socket_connect_timeout=None, socket_keepalive=None,
-                 retry_on_timeout=False, socket_keepalive_options=None,
-                 max_connections=None, connection=None):
+                 socket_keepalive_options=None, connection=None,
+                 **kwargs):
         if not connection:
             self.socket_timeout = socket_timeout
-            kwargs = {
+            kwargs2 = {
                 'host': host,
                 'port': int(port),
                 'socket_connect_timeout': socket_connect_timeout,
                 'socket_keepalive': socket_keepalive,
                 'socket_keepalive_options': socket_keepalive_options,
                 'socket_timeout': socket_timeout,
-                'retry_on_timeout': retry_on_timeout,
-                'max_connections': max_connections
             }
 
-            connection = Connection(**kwargs)
+            connection = Connection(**kwargs2)
         self.conn_queue = LifoQueue()
         self.conn_queue.put_nowait(connection)
         self._connection = connection
@@ -595,3 +595,148 @@ class Beanstalk(object):
         if self._connection:
             self._connection.disconnect()
             self._connection = None
+
+
+class TubedBeanstalkd(object):
+    """
+    Beanstalkd wrapper that will talk to a single tube.
+    """
+
+    def __init__(self, addr, tube, logger, **kwargs):
+        addr = addr.strip()
+        if addr.startswith('beanstalk://'):
+            addr = addr[12:]
+        self.addr = addr
+        self.tube = tube
+        self.logger = logger
+        self.beanstalkd = None
+        self.connected = False
+        self._connect()
+        # Check the connection
+        self.beanstalkd.stats_tube(self.tube)
+
+    def _connect(self, **kwargs):
+        self.close()
+        self.beanstalkd = Beanstalk.from_url('beanstalk://' + self.addr)
+        self.beanstalkd.use(self.tube)
+        self.beanstalkd.watch(self.tube)
+        self.connected = True
+
+    def close(self):
+        """Disconnect the wrapped Beanstalkd client."""
+        if self.connected:
+            try:
+                self.beanstalkd.close()
+            except BeanstalkError:
+                pass
+            self.connected = False
+
+
+class BeanstalkdListener(TubedBeanstalkd):
+
+    def fetch_job(self, on_job, timeout=None, **kwargs):
+        job_id = None
+        try:
+            if not self.connected:
+                self.logger.debug('Connecting to %s using tube %s',
+                                  self.addr, self.tube)
+                self._connect(**kwargs)
+            job_id, data = self.beanstalkd.reserve(timeout=timeout)
+            for job_info in on_job(job_id, data, **kwargs):
+                yield job_info
+            self.beanstalkd.delete(job_id)
+            return
+        except ConnectionError as exc:
+            self.connected = False
+            self.logger.warn(
+                'Disconnected from %s using tube %s (job=%s): %s',
+                self.addr, self.tube, job_id, exc)
+            if 'Invalid URL' in str(exc):
+                raise
+            time.sleep(1.0)
+        except exceptions.ExplicitBury as exc:
+            self.logger.warn("Job bury on %s using tube %s (job=%s): %s",
+                             self.addr, self.tube, job_id, exc)
+        except BeanstalkError as exc:
+            if isinstance(exc, ResponseError) and 'TIMED_OUT' in str(exc):
+                raise exceptions.OioTimeout()
+
+            self.logger.exception("ERROR on %s using tube %s (job=%s)",
+                                  self.addr, self.tube, job_id)
+        except Exception:
+            self.logger.exception("ERROR on %s using tube %s (job=%s)",
+                                  self.addr, self.tube, job_id)
+        if job_id:
+            try:
+                self.beanstalkd.bury(job_id)
+            except BeanstalkError as exc:
+                self.logger.error("Could not bury job %s: %s", job_id, exc)
+
+    def fetch_jobs(self, on_job, **kwargs):
+        while True:
+            for job_info in self.fetch_job(on_job, **kwargs):
+                yield job_info
+
+
+class BeanstalkdSender(TubedBeanstalkd):
+    """
+    Send jobs to the specified beanstalkd tube, until the specified
+    high_limit is reached.
+    """
+
+    def __init__(self, addr, tube, logger,
+                 low_limit=512, high_limit=1024, **kwargs):
+        super(BeanstalkdSender, self).__init__(addr, tube, logger)
+        self.low_limit = low_limit
+        self.high_limit = high_limit
+        self.accepts_jobs = True
+        self.nb_jobs = 0
+        self.nb_jobs_lock = threading.Lock()
+
+    def send_job(self, job, **kwargs):
+        """
+        Send a job, if the queue has not reached its size limit.
+
+        :returns: True if the job has been sent, False otherwise.
+        """
+        if self.nb_jobs <= self.low_limit:
+            self.accepts_jobs = True
+        elif not self.accepts_jobs or self.nb_jobs > self.high_limit:
+            return False
+
+        job_id = None
+        try:
+            if not self.connected:
+                self.logger.debug('Connecting to %s using tube %s',
+                                  self.addr, self.tube)
+                self._connect(**kwargs)
+
+            with self.nb_jobs_lock:
+                job_id = self.beanstalkd.put(job)
+                self.nb_jobs += 1
+                if self.nb_jobs >= self.high_limit:
+                    self.accepts_jobs = False
+            return True
+        except ConnectionError as exc:
+            self.connected = False
+            self.logger.warn(
+                'Disconnected from %s using tube %s (job=%s): %s',
+                self.addr, self.tube, job_id, exc)
+            if 'Invalid URL' in str(exc):
+                raise
+        except Exception:
+            self.logger.exception("ERROR on %s using tube %s (job=%s)",
+                                  self.addr, self.tube, job_id)
+        return False
+
+    def send_event(self, event, **kwargs):
+        """Deprecated"""
+        return self.send_job(job=event, **kwargs)
+
+    def job_done(self):
+        """
+        Declare that a job previously sent by this sender
+        has been fully processed.
+        """
+        with self.nb_jobs_lock:
+            self.nb_jobs -= 1

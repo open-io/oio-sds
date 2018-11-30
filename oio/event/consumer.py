@@ -14,9 +14,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-from oio.common.green import eventlet, Timeout, greenthread
+from oio.common.green import eventlet, Timeout, greenthread, time
 
-import time
 import signal
 import os
 import sys

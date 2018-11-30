@@ -28,7 +28,7 @@ from oio.common.json import json
 from oio.event.beanstalk import ResponseError
 from oio.event.client import EventClient
 from oio.event.evob import Event
-from oio.rebuilder.blob_rebuilder import DEFAULT_IMPROVER_TUBE
+from oio.rebuilder.blob_improver import DEFAULT_IMPROVER_TUBE
 
 
 REASONABLE_EVENT_DELAY = 3.0

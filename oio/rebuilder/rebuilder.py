@@ -21,6 +21,7 @@ from oio.common.easy_value import int_value
 from oio.common.logger import get_logger
 
 
+# TODO(FVE): rename class and module
 class Rebuilder(object):
     """
     Base class for rebuilders or movers.
@@ -61,7 +62,7 @@ class Rebuilder(object):
             for i in range(self.nworkers):
                 worker = self._create_worker(**kwargs)
                 workers.append(worker)
-                pool.spawn(worker.rebuilder_pass, i, queue)
+                pool.spawn(worker.rebuilder_pass, i, queue, **kwargs)
             # fill the queue
             self._fill_queue(queue, **kwargs)
             # block until all items are rebuilt
@@ -89,17 +90,19 @@ class Rebuilder(object):
         """
         raise NotImplementedError()
 
-    def _update_processed_without_lock(self, info, error=None, **kwargs):
-        self.items_processed += 1
+    def _update_processed_without_lock(self, info, error=None, increment=1,
+                                       **kwargs):
+        self.items_processed += increment
         if error is not None:
             self.errors += 1
 
-    def update_processed(self, item, info, error=None, **kwargs):
+    def update_processed(self, item, info, error=None, increment=1, **kwargs):
         if error is not None:
             self.logger.error('ERROR while rebuilding %s: %s',
                               self._item_to_string(item, **kwargs), error)
         with self.lock_counters:
-            self._update_processed_without_lock(info, error=error, **kwargs)
+            self._update_processed_without_lock(info, error=error,
+                                                increment=increment, **kwargs)
 
     def _update_totals_without_lock(self, **kwargs):
         items_processed = self.items_processed

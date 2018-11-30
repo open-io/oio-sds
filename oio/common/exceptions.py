@@ -57,6 +57,10 @@ class Meta2Exception(OioException):
 
 
 class SpareChunkException(Meta2Exception):
+    """
+    Exception raised when no spare chunk has been found,
+    or some may have been found but they don't match all criteria.
+    """
     pass
 
 
