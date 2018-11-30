@@ -676,11 +676,13 @@ class ObjectStorageApi(object):
         :type obj: `str`
         :param policy: name of the new storage policy
         :type policy: `str`
+
+        :returns: `list` of chunks, size, hash and metadata of object
         """
         meta, stream = self.object_fetch(
             account, container, obj, **kwargs)
         kwargs['version'] = meta['version']
-        return self.object_create(
+        return self.object_create_ext(
             account, container, obj_name=meta['name'],
             data=stream, policy=policy, change_policy=True, **kwargs)
 
