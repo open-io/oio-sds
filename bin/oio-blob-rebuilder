@@ -19,23 +19,13 @@
 import argparse
 import sys
 
+from oio.cli import make_logger_args_parser, get_logger_from_args
 from oio.rebuilder.blob_rebuilder import DEFAULT_REBUILDER_TUBE, \
     BlobRebuilder, DistributedBlobRebuilder
-from oio.common.logger import get_logger
 
 
 def make_arg_parser():
-    log_parser = argparse.ArgumentParser(add_help=False)
-    levels = ['DEBUG', 'INFO', 'WARN', 'ERROR']
-    log_parser.add_argument('--log-level', choices=levels,
-                            help="Log level")
-    log_parser.add_argument('--log-syslog-prefix',
-                            help="Syslog prefix")
-    log_parser.add_argument('--log-facility',
-                            help="Log facility")
-    log_parser.add_argument('--log-address',
-                            help="Log address")
-
+    log_parser = make_logger_args_parser()
     descr = """
 Rebuild chunks that were on the specified volume, or chunks listed in
 the input file. If no input file is provided, the list of chunks is
@@ -60,9 +50,7 @@ tube for broken chunks events.
     parser.add_argument('--chunks-per-second', type=int,
                         help="Max chunks per second per worker (30)")
     parser.add_argument("--random-wait", type=int,
-                        help="Random wait (in μs)")
-    parser.add_argument('-q', '--quiet', action='store_true',
-                        help="Don't print log on console")
+                        help="Random wait (in microseconds)")
     parser.add_argument('--allow-same-rawx', action='store_true',
                         help="Allow rebuilding a chunk on the original rawx")
     dft_help = "Try to delete faulty chunks after they have been rebuilt " \
@@ -75,17 +63,17 @@ tube for broken chunks events.
                  "'container_id|content_id|short_chunk_id_or_position'."
     parser.add_argument('--input-file', nargs='?',
                         help=ifile_help)
-    beanstalkd_help = "Listen to broken chunks events from a beanstalkd tube " \
-                      "instead of querying rdir. If --distributed is in use, " \
-                      "listen to rebuilt chunk events from a beanstalkd tube."
+    beanstalkd_help = """Listen to broken chunks events from a beanstalkd tube
+                      instead of querying rdir. If --distributed is in use,
+                      listen to rebuilt chunk events from a beanstalkd tube."""
     parser.add_argument('--beanstalkd',
                         metavar='IP:PORT',
                         help=beanstalkd_help)
     parser.add_argument(
         '--beanstalkd-tube',
         metavar='LISTENER_TUBE',
-        help='The beanstalkd tube to use to listen (default: "%s")' \
-            % DEFAULT_REBUILDER_TUBE)
+        help='The beanstalkd tube to use to listen (default: "%s")'
+             % DEFAULT_REBUILDER_TUBE)
     distributed_help = "Send broken chunks to beanstalkd tubes " \
                        "instead of rebuilding them locally " \
                        "(the following options are ignored: " \
@@ -97,8 +85,8 @@ tube for broken chunks events.
     parser.add_argument(
         '--distributed-tube',
         metavar='SENDER_TUBE',
-        help='The beanstalkd tube to use to send the broken chunks (default: "%s")' \
-            % DEFAULT_REBUILDER_TUBE)
+        help=('The beanstalkd tube to use to send the broken chunks '
+              '(default: "%s")' % DEFAULT_REBUILDER_TUBE))
 
     return parser
 
@@ -114,22 +102,13 @@ def main():
     conf['dry_run'] = args.dry_run
     conf['namespace'] = args.namespace
 
-    if args.log_level is not None:
-        conf['log_level'] = args.log_level
-    if args.log_facility is not None:
-        conf['log_facility'] = args.log_facility
-    if args.log_address is not None:
-        conf['log_address'] = args.log_address
-    if args.log_syslog_prefix is not None:
-        conf['syslog_prefix'] = args.log_syslog_prefix
-    else:
-        conf['syslog_prefix'] = 'OIO,%s,blob-rebuilder,%s' % \
-            (args.namespace,
-             args.volume or
-             args.input_file or
-             ('tube:' + (args.beanstalkd_tube or DEFAULT_REBUILDER_TUBE)))
+    conf['syslog_prefix'] = 'OIO,%s,blob-rebuilder,%s' % \
+        (args.namespace,
+         args.volume or
+         args.input_file or
+         ('tube:' + (args.beanstalkd_tube or DEFAULT_REBUILDER_TUBE)))
 
-    logger = get_logger(conf, 'log', not args.quiet)
+    logger = get_logger_from_args(args, default_conf=conf)
 
     if args.beanstalkd_tube is not None:
         conf['beanstalkd_tube'] = args.beanstalkd_tube

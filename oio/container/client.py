@@ -29,8 +29,18 @@ SYSMETA_KEYS = ("chunk-method", "ctime", "mtime", "deleted", "hash",
 CHUNK_SYSMETA_PREFIX = '__OIO_CHUNK__'
 
 
-def extract_chunk_qualities(properties):
-    """Extract chunk quality information from a dictionary of properties."""
+def extract_chunk_qualities(properties, raw=False):
+    """
+    Extract chunk quality information from a dictionary (or a list)
+    of properties.
+
+    :param properties: properties object.
+    :param raw: False if `properties` is a dictionary, True if
+        `properties` is a list of "raw" properties.
+    """
+    if raw:
+        properties = {x['key']: x['value']
+                      for x in properties}
     qualities = {k[len(CHUNK_SYSMETA_PREFIX):]: json.loads(v)
                  for k, v in properties.items()
                  if k.startswith(CHUNK_SYSMETA_PREFIX)}

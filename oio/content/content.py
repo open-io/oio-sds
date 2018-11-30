@@ -54,6 +54,7 @@ def ensure_better_chunk_qualities(current_chunks, candidates, threshold=1):
         raise exc.SpareChunkException(
             "the spare chunks found would not improve the quality "
             "(balance=%d, threshold=%d)" % (balance, threshold))
+    return balance
 
 
 class Content(object):
@@ -122,15 +123,16 @@ class Content(object):
             "broken": ChunksHelper(chunks_broken, False).raw()
         }
         last_exc = None
+        bal = 0
         for attempt in range(max_attempts):
             try:
                 spare_resp = self.container_client.content_spare(
                     cid=self.container_id, path=self.content_id,
                     data=spare_data, stgpol=self.policy)
                 if check_quality:
-                    qualities = extract_chunk_qualities(
-                        spare_resp.get('properties', {}))
-                    ensure_better_chunk_qualities(chunks_broken, qualities)
+                    quals = extract_chunk_qualities(
+                        spare_resp.get('properties', {}), raw=True)
+                    bal = ensure_better_chunk_qualities(chunks_broken, quals)
                 break
             except (exc.ClientException, exc.SpareChunkException) as err:
                 self.logger.info(
@@ -140,13 +142,17 @@ class Content(object):
                 # TODO(FVE): exponential backoff?
         else:
             if isinstance(last_exc, exc.SpareChunkException):
-                raise last_exc  # pylint: disable=raising-bad-type
+                exc.reraise(exc.SpareChunkException, last_exc)
             raise exc.SpareChunkException(
                 "No spare chunk: %s" % last_exc.message)
 
         url_list = []
         for chunk in spare_resp["chunks"]:
             url_list.append(chunk["id"])
+
+        if check_quality:
+            self.logger.info("Found %d spare chunks, that will improve "
+                             "metachunk quality by %d", len(url_list), bal)
 
         return url_list
 
@@ -214,30 +220,44 @@ class Content(object):
         self.container_client.content_delete(
             cid=self.container_id, path=self.path, **kwargs)
 
-    def move_chunk(self, chunk_id):
-        current_chunk = self.chunks.filter(id=chunk_id).one()
-        if current_chunk is None:
+    def move_chunk(self, chunk_id, check_quality=False, dry_run=False):
+        """
+        Move a chunk to another place. Optionally ensure that the
+        new place is an improvement over the current one.
+        """
+        if isinstance(chunk_id, Chunk):
+            current_chunk = chunk_id
+            chunk_id = current_chunk.id
+        else:
+            current_chunk = self.chunks.filter(id=chunk_id).one()
+        if current_chunk is None or current_chunk not in self.chunks:
             raise exc.OrphanChunk("Chunk not found in content")
 
         other_chunks = self.chunks.filter(
             metapos=current_chunk.metapos).exclude(id=chunk_id).all()
 
-        spare_urls = self._get_spare_chunk(other_chunks, [current_chunk])
+        spare_urls = self._get_spare_chunk(other_chunks, [current_chunk],
+                                           check_quality=check_quality)
 
-        self.logger.debug("copy chunk from %s to %s",
-                          current_chunk.url, spare_urls[0])
-        self.blob_client.chunk_copy(
-            current_chunk.url, spare_urls[0], chunk_id=chunk_id,
-            fullpath=self.full_path, cid=self.container_id,
-            path=self.path, version=self.version, content_id=self.content_id)
+        if dry_run:
+            self.logger.info("Dry-run: would copy chunk from %s to %s",
+                             current_chunk.url, spare_urls[0])
+        else:
+            self.logger.info("Copying chunk from %s to %s",
+                             current_chunk.url, spare_urls[0])
+            self.blob_client.chunk_copy(
+                current_chunk.url, spare_urls[0], chunk_id=chunk_id,
+                fullpath=self.full_path, cid=self.container_id,
+                path=self.path, version=self.version,
+                content_id=self.content_id)
 
-        self._update_spare_chunk(current_chunk, spare_urls[0])
+            self._update_spare_chunk(current_chunk, spare_urls[0])
 
-        try:
-            self.blob_client.chunk_delete(current_chunk.url)
-        except Exception as err:
-            self.logger.warn(
-                "Failed to delete chunk %s: %s", current_chunk.url, err)
+            try:
+                self.blob_client.chunk_delete(current_chunk.url)
+            except Exception as err:
+                self.logger.warn(
+                    "Failed to delete chunk %s: %s", current_chunk.url, err)
 
         current_chunk.url = spare_urls[0]
 
@@ -285,7 +305,7 @@ class Chunk(object):
 
     @property
     def url(self):
-        return self._data["url"]
+        return self._data.get('url') or self._data['id']
 
     @url.setter
     def url(self, new_url):
@@ -331,8 +351,26 @@ class Chunk(object):
     def data(self):
         return self._data
 
-    def raw(self):
-        return self._data
+    @property
+    def imperfections(self):
+        """
+        List imperfections of this chunk.
+        Tell how much the quality of this chunk can be improved.
+
+        :returns: a positive number telling how many criteria can be improved
+        (0 if all criteria are met).
+        """
+        qual = self.quality
+        imperfections = list()
+        if qual.get('final_slot') != qual.get('expected_slot'):
+            imperfections.append('slot %s != %s' % (
+                                 qual.get('final_slot'),
+                                 qual.get('expected_slot')))
+        if qual['final_dist'] < qual['expected_dist']:
+            imperfections.append('dist %d < %d' % (
+                                 qual['final_dist'],
+                                 qual['expected_dist']))
+        return imperfections
 
     @property
     def quality(self):
@@ -340,10 +378,22 @@ class Chunk(object):
         Get the "quality" of the chunk, i.e. a dictionary telling how it
         matched the request criteria when it has been selected.
         """
-        return self._data.setdefault('quality', {'final_dist': 0})
+        return self._data.setdefault('quality',
+                                     {'final_dist': 0,
+                                      'expected_dist': 1})
+
+    @quality.setter
+    def quality(self, value):
+        self._data['quality'] = value
+
+    def raw(self):
+        return self._data
 
     def __str__(self):
         return "[Chunk %s (%s)]" % (self.url, self.pos)
+
+    def __repr__(self):
+        return str(self)
 
     def __cmp__(self, other):
         if self.metapos != other.metapos:
@@ -363,7 +413,8 @@ class ChunksHelper(object):
             self.chunks = chunks
         self.chunks.sort()
 
-    def filter(self, id=None, pos=None, metapos=None, subpos=None, host=None):
+    def filter(self, id=None, pos=None, metapos=None, subpos=None, host=None,
+               url=None):
         found = []
         for c in self.chunks:
             if id is not None and c.id != id:
@@ -376,10 +427,13 @@ class ChunksHelper(object):
                 continue
             if host is not None and c.host != host:
                 continue
+            if url is not None and c.url != url:
+                continue
             found.append(c)
         return ChunksHelper(found, False)
 
-    def exclude(self, id=None, pos=None, metapos=None, subpos=None, host=None):
+    def exclude(self, id=None, pos=None, metapos=None, subpos=None, host=None,
+                url=None):
         found = []
         for c in self.chunks:
             if id is not None and c.id == id:
@@ -391,6 +445,8 @@ class ChunksHelper(object):
             if subpos is not None and c.subpos == subpos:
                 continue
             if host is not None and c.host == host:
+                continue
+            if url is not None and c.url == url:
                 continue
             found.append(c)
         return ChunksHelper(found, False)
