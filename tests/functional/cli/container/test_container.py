@@ -234,3 +234,47 @@ class ContainerTest(CliTestCase):
 
     def test_container_set_status_with_cid(self):
         self._test_container_set_status(with_cid=True)
+
+    def _test_container_set_properties(self, with_cid=False):
+        cid_opt = ''
+        name = self.NAME
+        if with_cid:
+            cid_opt = '--cid '
+            name = self.CID
+        opts = ' -f json'
+
+        output = self.openio('container set ' + cid_opt + name +
+                             ' --property test1=1 --property test2=2')
+        self.assertEqual(output, '')
+        output = self.openio('container show ' + cid_opt + name + opts)
+        output = self.json_loads(output)
+        self.assertEqual(self.NAME, output['container'])
+        self.assertEqual('1', output['meta.test1'])
+        self.assertEqual('2', output['meta.test2'])
+
+        output = self.openio('container set ' + cid_opt + name +
+                             ' --property test3=3')
+        self.assertEqual(output, '')
+        output = self.openio('container show ' + cid_opt + name + opts)
+        output = self.json_loads(output)
+        self.assertEqual(self.NAME, output['container'])
+        self.assertEqual('1', output['meta.test1'])
+        self.assertEqual('2', output['meta.test2'])
+        self.assertEqual('3', output['meta.test3'])
+
+        output = self.openio('container set ' + cid_opt + name +
+                             ' --clear --property test4=4')
+        self.assertEqual(output, '')
+        output = self.openio('container show ' + cid_opt + name + opts)
+        output = self.json_loads(output)
+        self.assertEqual(self.NAME, output['container'])
+        self.assertNotIn('meta.test1', output)
+        self.assertNotIn('meta.test2', output)
+        self.assertNotIn('meta.test3', output)
+        self.assertEqual('4', output['meta.test4'])
+
+    def test_container_set_properties(self):
+        self._test_container_set_properties()
+
+    def test_container_set_properties_with_cid(self):
+        self._test_container_set_properties(with_cid=True)
