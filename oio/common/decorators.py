@@ -16,7 +16,7 @@
 from functools import wraps
 from oio.common.utils import request_id
 from oio.common.exceptions import NotFound, NoSuchAccount, NoSuchObject, \
-    NoSuchContainer
+    NoSuchContainer, reraise
 
 
 def ensure_headers(func):
@@ -41,10 +41,10 @@ def handle_account_not_found(fnc):
     @wraps(fnc)
     def _wrapped(self, account=None, *args, **kwargs):
         try:
-            return fnc(self, account=account, *args, **kwargs)
-        except NotFound as e:
-            e.message = "Account '%s' does not exist." % account
-            raise NoSuchAccount(e)
+            return fnc(self, account, *args, **kwargs)
+        except NotFound as err:
+            err.message = "Account '%s' does not exist." % account
+            reraise(NoSuchAccount, err)
     return _wrapped
 
 
@@ -53,9 +53,9 @@ def handle_container_not_found(fnc):
     def _wrapped(self, account, container, *args, **kwargs):
         try:
             return fnc(self, account, container, *args, **kwargs)
-        except NotFound as e:
-            e.message = "Container '%s' does not exist." % container
-            raise NoSuchContainer(e)
+        except NotFound as err:
+            err.message = "Container '%s' does not exist." % container
+            reraise(NoSuchContainer, err)
     return _wrapped
 
 
@@ -73,8 +73,8 @@ def handle_object_not_found(fnc):
         except NotFound as err:
             if err.status == 406:
                 err.message = "Container '%s' does not exist." % container
-                raise NoSuchContainer(err)
+                reraise(NoSuchContainer, err)
             else:
                 err.message = "Object '%s' does not exist." % obj
-                raise NoSuchObject(err)
+                reraise(NoSuchObject, err)
     return _wrapped
