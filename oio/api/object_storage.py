@@ -197,10 +197,18 @@ class ObjectStorageApi(object):
         return self.account.account_list(**kwargs)
 
     @handle_account_not_found
-    def account_update(self, account, metadata, to_delete=None, **kwargs):
-        warnings.warn("You'd better use account_set_properties()",
-                      DeprecationWarning, stacklevel=2)
-        self.account.account_update(account, metadata, to_delete, **kwargs)
+    @ensure_headers
+    @ensure_request_id
+    def account_get_properties(self, account, **kwargs):
+        """
+        Get information about an account, including account properties.
+        """
+        res = self.account.account_show(account, **kwargs)
+        # Deal with the previous protocol which
+        # returned 'metadata' instead of 'properties'.
+        props = res.pop('metadata', dict())
+        res.setdefault('properties', dict()).update(props)
+        return res
 
     @handle_account_not_found
     @ensure_headers
