@@ -301,20 +301,25 @@ class ObjectStorageApi(object):
             on the event system
         :type fast: `bool`
         """
-        if (fast):
-            while (True):
-                rep = self.container.container_flush(account, container,
-                                                     **kwargs)
-                if not rep['truncated']:
-                    return
+        if fast:
+            truncated = True
+            while truncated:
+                resp = self.container.container_flush(account, container,
+                                                      **kwargs)
+                truncated = resp['truncated']
+            return
 
-        while (True):
-            rep = self.object_list(account, container, **kwargs)
-            if not rep["objects"]:
+        while True:
+            # No need to keep a marker: we are deleting objects
+            resp = self.object_list(account, container, **kwargs)
+            if not resp['objects']:
                 break
-            self.object_delete_many(
-                account, container,
-                [object["name"] for object in rep["objects"]], **kwargs)
+            objects = [obj['name'] for obj in resp['objects']]
+            deleted = self.object_delete_many(
+                account, container, objects, **kwargs)
+            if not any(x[1] for x in deleted):
+                raise exc.OioException(
+                    'None of the %d objects could be deleted' % len(deleted))
 
     @handle_account_not_found
     @ensure_headers
