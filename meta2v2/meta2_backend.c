@@ -635,9 +635,11 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 	/* Fire an event to notify the world this container exists */
 	const enum election_status_e s = sq3->election;
 	if (!params->local && m2->notifier && (!s || s == ELECTION_LEADER)) {
-		GString *gs = oio_event__create (META2_EVENTS_PREFIX".container.new", url);
-		g_string_append_static (gs, ",\"data\":null}");
-		oio_events_queue__send (m2->notifier, g_string_free (gs, FALSE));
+		GString *gs = oio_event__create(META2_EVENTS_PREFIX".container.new", url);
+		g_string_append_static(gs, ",\"data\":{\"properties\":");
+		KV_encode_gstr2(gs, params->properties);
+		g_string_append_static(gs, "}}");
+		oio_events_queue__send(m2->notifier, g_string_free (gs, FALSE));
 	}
 
 	/* Reload any cache maybe already associated with the container.
