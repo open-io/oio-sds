@@ -39,10 +39,11 @@ class ContentReaperFilter(Filter):
     def _handle_rawx(self, url, chunks, content_headers,
                      storage_method, reqid):
         cid = url.get('id')
-        headers = {'X-oio-req-id': reqid}
+        headers = {'X-oio-req-id': reqid,
+                   'Connection': 'close'}
 
         resps = self.blob_client.chunk_delete_many(
-            chunks, cid=cid, headers=headers)
+            chunks, cid=cid, headers=headers, timeout=5.0)
         for resp in resps:
             if isinstance(resp, Exception):
                 self.logger.warn(
