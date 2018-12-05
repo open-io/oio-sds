@@ -277,6 +277,19 @@ meta2_filter_extract_admin(struct gridd_filter_ctx_s *ctx,
 }
 
 int
+meta2_filter_extract_user_agent(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GError *e = NULL;
+	gchar buf[1024];
+	TRACE_FILTER();
+	EXTRACT_OPT(NAME_MSGKEY_USER_AGENT);
+	const char *user_agent = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_USER_AGENT);
+	oio_ext_set_user_agent(user_agent);
+	return FILTER_OK;
+}
+
+int
 meta2_filter_extract_list_params(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {

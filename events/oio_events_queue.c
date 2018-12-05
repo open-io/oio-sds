@@ -189,7 +189,12 @@ oio_event__create_with_id(const char *type, struct oio_url_s *url,
 	oio_event__init (gs, type, url);
 	if (request_id && *request_id) {
 		g_string_append_c(gs, ',');
-		oio_str_gstring_append_json_pair(gs, "request_id", request_id);
+		oio_str_gstring_append_json_pair(gs, EVENT_FIELD_REQUEST_ID, request_id);
+	}
+	const gchar *user_agent = oio_ext_get_user_agent();
+	if (user_agent != NULL) {
+		g_string_append_c(gs, ',');
+		oio_str_gstring_append_json_pair(gs, EVENT_FIELD_ORIGIN, user_agent);
 	}
 	return gs;
 }
