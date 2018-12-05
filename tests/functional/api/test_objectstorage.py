@@ -327,69 +327,67 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             wait = False
             time.sleep(1)
 
-    def test_container_flush(self):
-        name = random_str(32)
+    def _flush_and_check(self, cname, fast=False):
+        self.api.container_flush(self.account, cname, limit=50)
+        self._wait_account_meta2()
+        properties = self.api.container_get_properties(self.account, cname)
+        self.assertEqual(properties['system']['sys.m2.objects'], '0')
+        self.assertEqual(properties['system']['sys.m2.usage'], '0')
+        all_objects = self.api.object_list(self.account, cname)
+        self.assertEqual(0, len(all_objects['objects']))
 
-        # no container
+    # These tests are numbered to force them to be run in order
+    def test_container_flush_0_no_container(self):
+        name = random_str(16)
         self.assertRaises(exc.NoSuchContainer,
                           self.api.container_flush, self.account, name)
 
-        def flush_and_check():
-            self.api.container_flush(self.account, name, limit=50)
-            self._wait_account_meta2()
-            properties = self.api.container_get_properties(self.account, name)
-            self.assertEqual(properties['system']['sys.m2.objects'], '0')
-            self.assertEqual(properties['system']['sys.m2.usage'], '0')
-            all_objects = self.api.object_list(self.account, name)
-            self.assertEqual(0, len(all_objects['objects']))
-
-        # empty container
-        self.api.container_create(self.account, name)
-        flush_and_check()
-
-        # one content
-        self.api.object_create(self.account, name, obj_name='content',
-                               data='data')
-        flush_and_check()
-
-        # many contents (must be more than the listing limit)
-        for i in range(128):
-            self.api.object_create(self.account, name,
-                                   obj_name='content'+str(i), data='data',
-                                   chunk_checksum_algo=None)
-        flush_and_check()
-
-    def test_container_flush_fast(self):
-        name = random_str(32)
-
-        # no container
+    def test_container_flush_0_no_container_fast(self):
+        name = random_str(16)
         self.assertRaises(exc.NoSuchContainer,
                           self.api.container_flush, self.account, name, True)
 
-        def flush_and_check():
-            self.api.container_flush(self.account, name, fast=True, limit=50)
-            self._wait_account_meta2()
-            properties = self.api.container_get_properties(self.account, name)
-            self.assertEqual(properties['system']['sys.m2.objects'], '0')
-            self.assertEqual(properties['system']['sys.m2.usage'], '0')
-            all_objects = self.api.object_list(self.account, name)
-            self.assertEqual(0, len(all_objects['objects']))
-
-        # empty container
+    def test_container_flush_1_empty_container(self):
+        name = random_str(16)
         self.api.container_create(self.account, name)
-        flush_and_check()
+        self._flush_and_check(name)
 
-        # one content
+    def test_container_flush_1_empty_container_fast(self):
+        name = random_str(16)
+        self.api.container_create(self.account, name)
+        self._flush_and_check(name, fast=True)
+
+    def test_container_flush_1_object(self):
+        name = random_str(16)
         self.api.object_create(self.account, name, obj_name='content',
                                data='data')
-        flush_and_check()
+        self._flush_and_check(name)
+
+    def test_container_flush_1_object_fast(self):
+        name = random_str(16)
+        self.api.object_create(self.account, name, obj_name='content',
+                               data='data')
+        self._flush_and_check(name, fast=True)
+
+    def test_container_flush_2_many_objects(self):
+        name = random_str(16)
 
         # many contents (must be more than the listing limit)
         for i in range(128):
             self.api.object_create(self.account, name,
                                    obj_name='content'+str(i), data='data',
                                    chunk_checksum_algo=None)
-        flush_and_check()
+        self._flush_and_check(name)
+
+    def test_container_flush_2_many_objects_fast(self):
+        name = random_str(16)
+
+        # many contents (must be more than the listing limit)
+        for i in range(128):
+            self.api.object_create(self.account, name,
+                                   obj_name='content'+str(i), data='data',
+                                   chunk_checksum_algo=None)
+        self._flush_and_check(name, fast=True)
 
     def test_del_properties(self):
         name = random_str(32)
