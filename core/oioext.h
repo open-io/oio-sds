@@ -97,6 +97,10 @@ gboolean oio_ext_is_admin(void);
 
 void oio_ext_set_admin(const gboolean admin);
 
+const gchar *oio_ext_get_user_agent(void);
+
+void oio_ext_set_user_agent(const gchar *user_agent);
+
 gint64 oio_ext_real_time (void);
 
 gint64 oio_ext_monotonic_time (void);

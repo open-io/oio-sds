@@ -219,6 +219,10 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 	const char *admin = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_ADMIN);
 	oio_ext_set_admin(oio_str_parse_bool(admin, FALSE));
 
+	/* Load the User-Agent */
+	const char *user_agent = g_tree_lookup(rq->tree_headers, USER_AGENT_HEADER);
+	oio_ext_set_user_agent(user_agent);
+
 	/* Load the optional deadline of the current request */
 	const char *tostr = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_TIMEOUT);
 	gint64 to = 0;
