@@ -721,12 +721,12 @@ class RawxTestSuite(CommonTestCase):
         self.assertEqual(400, resp.status)
 
     def test_old_fullpath(self):
-        if self.conf['go_rawx']:
+        if self._cls_conf['go_rawx']:
             self.skipTest('Rawx V2 read only new fullpath')
         self._cycle_put(32, 201, old_fullpath=True)
 
     def test_read_old_chunk(self):
-        if self.conf['go_rawx']:
+        if self._cls_conf['go_rawx']:
             self.skipTest('Rawx V2 read only new chunks')
         metachunk_hash = md5().hexdigest()
         trailers = {'x-oio-chunk-meta-metachunk-size': 1,
