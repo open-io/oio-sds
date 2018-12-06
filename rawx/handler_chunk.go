@@ -241,7 +241,7 @@ func (rr *rawxRequest) checkChunk() {
 	headers.Set("Content-Length", fmt.Sprintf("%v", in.Size()))
 	headers.Set("Accept-Ranges", "bytes")
 
-	rr.replyCode(http.StatusNoContent)
+	rr.replyCode(http.StatusOK)
 }
 
 func (rr *rawxRequest) getRange(chunkSize int64) (*rangeInfo, error) {

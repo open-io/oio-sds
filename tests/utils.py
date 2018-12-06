@@ -193,7 +193,11 @@ class CommonTestCase(testtools.TestCase):
         self.conf['queue_url'] = 'beanstalk://' + queue_addr
         self._beanstalk = None
         self._conscience = None
-        self._http_pool = None
+        self._http_pool = get_pool_manager()
+        resp = self.http_pool.request(
+            'GET',
+            'http://' + self.conf['services']['rawx'][0]['addr'] + '/info')
+        self.conf['go_rawx'] = resp.headers.get('Server') != 'Apache'
 
     def tearDown(self):
         super(CommonTestCase, self).tearDown()

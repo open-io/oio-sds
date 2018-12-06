@@ -13,7 +13,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import os
 import random
 
 from oio.api.object_storage import ObjectStorageApi
@@ -21,15 +20,15 @@ from oio.blob.client import BlobClient
 from oio.common.utils import cid_from_name
 from oio.common.constants import OIO_VERSION
 from oio.common.fullpath import encode_fullpath
-from oio.rebuilder.blob_rebuilder import BlobRebuilder
+from oio.blob.mover import BlobMoverWorker
 from tests.utils import BaseTestCase, random_str
 from tests.functional.blob import convert_to_old_chunk
 
 
-class TestBlobRebuilder(BaseTestCase):
+class TestBlobMover(BaseTestCase):
 
     def setUp(self):
-        super(TestBlobRebuilder, self).setUp()
+        super(TestBlobMover, self).setUp()
         self.container = random_str(16)
         self.cid = cid_from_name(self.account, self.container)
         self.path = random_str(16)
@@ -39,10 +38,10 @@ class TestBlobRebuilder(BaseTestCase):
         self.api.container_create(self.account, self.container)
         _, chunks = self.api.container.content_prepare(
             self.account, self.container, self.path, 1)
-        if len(chunks) < 2:
-            self.skipTest("need at least 2 chunks to run")
-
         services = self.conscience.all_services('rawx')
+        if len(chunks) >= len([s for s in services if s['score'] > 0]):
+            self.skipTest("need at least %d rawx to run" % (len(chunks) + 1))
+
         self.rawx_volumes = dict()
         for rawx in services:
             tags = rawx['tags']
@@ -66,9 +65,7 @@ class TestBlobRebuilder(BaseTestCase):
         volume = self.rawx_volumes[volume_id]
         return volume + '/' + chunk_id[:3] + '/' + chunk_id
 
-    def test_rebuild_old_chunk(self):
-        if self.conf['go_rawx']:
-            self.skipTest('Rawx V2 read only new fullpath')
+    def test_move_old_chunk(self):
         for c in self.chunks:
             convert_to_old_chunk(
                 self._chunk_path(c), self.account, self.container, self.path,
@@ -79,15 +76,12 @@ class TestBlobRebuilder(BaseTestCase):
         chunk_id = chunk['url'].split('/')[3]
         chunk_headers, chunk_stream = self.blob_client.chunk_get(
             chunk['url'])
-        os.remove(self._chunk_path(chunk))
         chunks_kept = list(self.chunks)
         chunks_kept.remove(chunk)
 
-        conf = self.conf.copy()
-        conf['allow_same_rawx'] = True
-        rebuilder = BlobRebuilder(conf, None, chunk_volume)
-        rebuilder_worker = rebuilder._create_worker()
-        rebuilder_worker.chunk_rebuild(self.cid, self.content_id, chunk_id)
+        mover = BlobMoverWorker(self.conf, None,
+                                self.rawx_volumes[chunk_volume])
+        mover.chunk_move(self._chunk_path(chunk), chunk_id)
 
         _, new_chunks = self.api.object_locate(
             self.account, self.container, self.path)

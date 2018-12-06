@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -306,11 +306,10 @@ class Meta0PrefixMapping(MetaMapping):
             base = "%0*X" % (self.digits, base_int)
             services = strategy()
             self.assign_services(base, services, fail_if_already_set=True)
-            if self.logger:
-                progress = ((base_int + 1) * 100) / self.num_bases()
-                if progress / 10 > last_percent:
-                    last_percent = progress / 10
-                    self.logger.info("%d%%", progress)
+            progress = ((base_int + 1) * 100) / self.num_bases()
+            if progress / 10 > last_percent:
+                last_percent = progress / 10
+                self.logger.info("%d%%", progress)
 
     def count_pfx_by_svc(self):
         """
@@ -329,22 +328,19 @@ class Meta0PrefixMapping(MetaMapping):
         grand_total = 0
         for base, services in self.services_by_base.iteritems():
             if len(services) < self.replicas:
-                if self.logger:
-                    self.logger.error(
-                        "Base %s is managed by %d services, %d required",
-                        base, len(services), self.replicas)
-                    self.logger.error("%s", [x["addr"] for x in services])
+                self.logger.error(
+                    "Base %s is managed by %d services, %d required",
+                    base, len(services), self.replicas)
+                self.logger.error("%s", [x["addr"] for x in services])
                 error = True
             elif len(services) > self.replicas:
-                if self.logger:
-                    self.logger.warn(
-                        "Base %s is managed by %d services, %d expected",
-                        base, len(services), self.replicas)
-                    self.logger.warn("%s", [x["addr"] for x in services])
+                self.logger.warn(
+                    "Base %s is managed by %d services, %d expected",
+                    base, len(services), self.replicas)
+                self.logger.warn("%s", [x["addr"] for x in services])
             grand_total += len(services)
-        if self.logger:
-            self.logger.info("Grand total: %d (expected: %d)",
-                             grand_total, self.num_bases() * self.replicas)
+        self.logger.info("Grand total: %d (expected: %d)",
+                         grand_total, self.num_bases() * self.replicas)
         return not error
 
     def decommission(self, svc, bases_to_remove=None, strategy=None):
@@ -385,27 +381,28 @@ class Meta0PrefixMapping(MetaMapping):
         """Reassign bases from the services which manage the most"""
 
         if self.digits == 0:
-            if self.logger:
-                self.logger.info("No equilibration possible when " +
-                                 "meta1_digits is set to 0")
+            self.logger.info("No equilibration possible when " +
+                             "meta1_digits is set to 0")
             return None
 
         loops = 0
         moved_bases = set()
+        all_available_services = [x for x in self.services.itervalues()
+                                  if self.get_score(x) > 0]
+        if len(all_available_services) < 2:
+            self.logger.warn("Less than 2 services have a positive score, "
+                             "we won't rebalance.")
+            return None
         ideal_bases_by_svc = (self.num_bases() * self.replicas /
-                              len([x for x in self.services.itervalues()
-                                   if self.get_score(x) > 0]))
+                              len(all_available_services))
         upper_limit = ideal_bases_by_svc + 1
-        if self.logger:
-            self.logger.info("META1 Digits = %d", self.digits)
-            self.logger.info("Replicas = %d", self.replicas)
-            self.logger.info(
-                "Scored positively = %d",
-                len([x for x in self.services.itervalues()
-                     if self.get_score(x) > 0]))
-            self.logger.info(
-                "Ideal number of bases per meta1: %d, limit: %d",
-                ideal_bases_by_svc, upper_limit)
+        self.logger.info("META1 Digits = %d", self.digits)
+        self.logger.info("Replicas = %d", self.replicas)
+        self.logger.info("Scored positively = %d",
+                         len(all_available_services))
+        self.logger.info(
+            "Ideal number of bases per meta1: %d, limit: %d",
+            ideal_bases_by_svc, upper_limit)
         while loops < max_loops:
             candidates = self.services.values()
             candidates.sort(key=(lambda x: len(self.get_managed_bases(x))))
@@ -416,9 +413,8 @@ class Meta0PrefixMapping(MetaMapping):
                 if len(svc_bases) <= upper_limit:
                     already_balanced += 1
                     continue
-                if self.logger:
-                    self.logger.info("meta1 %s has %d bases, moving some",
-                                     svc['addr'], len(svc_bases))
+                self.logger.info("meta1 %s has %d bases, moving some",
+                                 svc['addr'], len(svc_bases))
                 while (len(svc_bases) > upper_limit and
                        loops < max_loops):
                     bases = {base
@@ -434,13 +430,11 @@ class Meta0PrefixMapping(MetaMapping):
                         loops += 1  # safeguard against infinite loops
             if already_balanced >= len(self.services):
                 break
-        if self.logger:
-            self.logger.info("%s bases moved",
-                             len(moved_bases))
-            for svc in sorted(self.services.values(), key=lambda x: x['addr']):
-                svc_bases = self.get_managed_bases(svc)
-                self.logger.info("meta1 %s has %d bases",
-                                 svc['addr'], len(svc_bases))
+        self.logger.info("%s bases moved", len(moved_bases))
+        for svc in sorted(self.services.values(), key=lambda x: x['addr']):
+            svc_bases = self.get_managed_bases(svc)
+            self.logger.info("meta1 %s has %d bases",
+                             svc['addr'], len(svc_bases))
         return moved_bases
 
 
@@ -462,5 +456,5 @@ def generate_short_prefixes(digits):
 
 
 def generate_prefixes(digits):
-    for p in generate_short_prefixes(digits):
-        yield p.ljust(4, '0')
+    for pfx in generate_short_prefixes(digits):
+        yield pfx.ljust(4, '0')

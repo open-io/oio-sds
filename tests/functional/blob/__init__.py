@@ -15,8 +15,46 @@
 
 import random
 import shutil
+from hashlib import sha256
 
+from oio.common.constants import chunk_xattr_keys, \
+    CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
 from oio.common.xattr import xattr
+from oio.common.fullpath import encode_old_fullpath
+from oio.common.utils import cid_from_name
+
+
+def convert_to_old_chunk(chunk_path, account, container, path, version,
+                         content_id, add_old_fullpath=False):
+    chunk_id = chunk_path.rsplit('/', 1)[1]
+    cid = cid_from_name(account, container)
+    with open(chunk_path) as fd:
+        xattr.setxattr(
+            fd, 'user.' + chunk_xattr_keys['chunk_id'], chunk_id)
+        xattr.setxattr(
+            fd, 'user.' + chunk_xattr_keys['container_id'], cid)
+        xattr.setxattr(
+            fd, 'user.' + chunk_xattr_keys['content_path'], path)
+        xattr.setxattr(
+            fd, 'user.' + chunk_xattr_keys['content_version'],
+            str(version))
+        xattr.setxattr(
+            fd, 'user.' + chunk_xattr_keys['content_id'], content_id)
+        if add_old_fullpath:
+            old_fullpath = encode_old_fullpath(
+                account, container, path, version)
+            h = sha256()
+            h.update(old_fullpath)
+            hash_old_fullpath = h.hexdigest().upper()
+            xattr.setxattr(
+                fd, 'user.oio:' + hash_old_fullpath, old_fullpath)
+        xattr.setxattr(
+            fd, 'user.' + chunk_xattr_keys['oio_version'], '4.0')
+        try:
+            xattr.removexattr(
+                fd, 'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + chunk_id)
+        except IOError:
+            pass
 
 
 def random_buffer(dictionary, n):
