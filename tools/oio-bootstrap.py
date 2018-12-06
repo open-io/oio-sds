@@ -784,9 +784,11 @@ pipeline = content_cleaner
 pipeline = content_cleaner
 
 [handler:storage.container.new]
+# pipeline = account_update replication
 pipeline = account_update
 
 [handler:storage.container.deleted]
+# pipeline = account_update replication
 pipeline = account_update
 
 [handler:storage.container.state]
