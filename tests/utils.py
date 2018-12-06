@@ -178,10 +178,16 @@ class CommonTestCase(testtools.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        super(CommonTestCase, cls).setUpClass()
         cls._cls_conf = get_config()
         cls._cls_account = cls._cls_conf['account']
         cls._cls_ns = cls._cls_conf['namespace']
         cls._cls_uri = 'http://' + cls._cls_conf['proxy']
+        # TODO(FVE): we should mix Apache and Go rawx services.
+        # They could be in specific slots.
+        some_rawx = cls._cls_conf['services']['rawx'][0]['addr']
+        resp = cls.static_request('GET', 'http://%s/info' % some_rawx)
+        cls._cls_conf['go_rawx'] = resp.headers.get('Server') != 'Apache'
 
     def setUp(self):
         super(CommonTestCase, self).setUp()
@@ -193,11 +199,7 @@ class CommonTestCase(testtools.TestCase):
         self.conf['queue_url'] = 'beanstalk://' + queue_addr
         self._beanstalk = None
         self._conscience = None
-        self._http_pool = get_pool_manager()
-        resp = self.http_pool.request(
-            'GET',
-            'http://' + self.conf['services']['rawx'][0]['addr'] + '/info')
-        self.conf['go_rawx'] = resp.headers.get('Server') != 'Apache'
+        self._http_pool = None
 
     def tearDown(self):
         super(CommonTestCase, self).tearDown()

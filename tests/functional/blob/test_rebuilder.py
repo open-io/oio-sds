@@ -67,7 +67,7 @@ class TestBlobRebuilder(BaseTestCase):
         return volume + '/' + chunk_id[:3] + '/' + chunk_id
 
     def test_rebuild_old_chunk(self):
-        if self.conf['go_rawx']:
+        if self._cls_conf['go_rawx']:
             self.skipTest('Rawx V2 read only new fullpath')
         for c in self.chunks:
             convert_to_old_chunk(
