@@ -566,9 +566,11 @@ class EcChunkWriter(object):
 
         # in the trailer
         # metachunk_size & metachunk_hash
-        hdrs["Trailer"] = ', '.join((CHUNK_HEADERS["metachunk_size"],
-                                     CHUNK_HEADERS["metachunk_hash"],
-                                     CHUNK_HEADERS["chunk_hash"]))
+        trailers = (CHUNK_HEADERS["metachunk_size"],
+                    CHUNK_HEADERS["metachunk_hash"])
+        if kwargs.get('chunk_checksum_algo'):
+            trailers = trailers + (CHUNK_HEADERS["chunk_hash"], )
+        hdrs["Trailer"] = ', '.join(trailers)
         with green.ConnectionTimeout(
                 connection_timeout or io.CONNECTION_TIMEOUT):
             conn = io.http_connect(
@@ -626,8 +628,7 @@ class EcChunkWriter(object):
             '%s: %s\r\n' % (CHUNK_HEADERS['metachunk_size'],
                             metachunk_size),
             '%s: %s\r\n' % (CHUNK_HEADERS['metachunk_hash'],
-                            metachunk_hash),
-            '\r\n'
+                            metachunk_hash)
         ]
         if self.checksum:
             parts.append('%s: %s\r\n' % (CHUNK_HEADERS['chunk_hash'],
