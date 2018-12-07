@@ -1,23 +1,36 @@
 
 [handler:storage.content.new]
+# pipeline = replication
 pipeline =
 
 [handler:storage.content.update]
+# pipeline = replication
+pipeline =
+
+[handler:storage.content.append]
+# pipeline = replication
 pipeline =
 
 [handler:storage.content.broken]
 pipeline = content_rebuild
 
 [handler:storage.content.deleted]
+# pipeline = content_cleaner replication
+pipeline = content_cleaner
+
+[handler:storage.content.drained]
+# pipeline = content_cleaner replication
 pipeline = content_cleaner
 
 [handler:storage.content.perfectible]
 pipeline = content_improve
 
 [handler:storage.container.new]
+# pipeline = account_update volume_index replication
 pipeline = account_update volume_index
 
 [handler:storage.container.deleted]
+# pipeline = account_update volume_index replication
 pipeline = account_update volume_index
 
 [handler:storage.container.state]
@@ -41,6 +54,16 @@ use = egg:oio#account_update
 [filter:volume_index]
 use = egg:oio#volume_index
 
+[filter:content_rebuild]
+use = egg:oio#notify
+tube = oio-rebuild
+queue_url = ${QUEUE_URL}
+
+[filter:replication]
+use = egg:oio#notify
+tube = oio-repli
+queue_url = ${QUEUE_URL}
+
 [filter:noop]
 use = egg:oio#noop
 
@@ -49,11 +72,12 @@ use = egg:oio#notify
 tube = oio-improve
 queue_url = beanstalk://127.0.0.1:6009
 
-[filter:content_rebuild]
-use = egg:oio#notify
-tube = oio-rebuild
-queue_url = beanstalk://127.0.0.1:6009
-
 [filter:webook]
 use = egg:oio#webhook
 endpoint = http://localhost:8000/invoke
+
+[filter:logger]
+use = egg:oio#logger
+
+[filter:bury]
+use = egg:oio#bury

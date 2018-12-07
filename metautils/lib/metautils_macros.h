@@ -104,6 +104,7 @@ License along with this library.
 #define NS_STATE_VALUE_STANDALONE "standalone"
 
 #define NAME_MSGKEY_ADMIN_COMMAND "ADM"
+#define NAME_MSGKEY_USER_AGENT    "USR_AG"
 #define NAME_MSGKEY_NS_STATE      "STT"
 #define NAME_MSGKEY_WORMED        "WRM"
 

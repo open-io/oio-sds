@@ -809,7 +809,7 @@ template_event_agent_handlers = """
 pipeline = noop
 
 [handler:storage.content.update]
-# pipeline = webhook
+# pipeline = replication webhook
 pipeline = noop
 
 [handler:storage.content.append]
@@ -831,9 +831,11 @@ pipeline = content_cleaner
 pipeline = logger content_improve
 
 [handler:storage.container.new]
+# pipeline = account_update volume_index replication
 pipeline = account_update volume_index
 
 [handler:storage.container.deleted]
+# pipeline = account_update volume_index replication
 pipeline = account_update volume_index
 
 [handler:storage.container.state]

@@ -297,34 +297,100 @@ class ObjectTest(CliTestCase):
             self.assertEqual(len(entry['Name']), 2)
 
     def _test_object_link(self, with_cid=False):
+        cont_name = random_str(8)
+        obj_name = random_str(8)
+        lk_name = obj_name + '-link'
+        cid_opt = ''
+
+        output = self.openio('container create ' + cont_name)
+        if with_cid:
+            cont_name = self._get_cid_from_name(cont_name)
+            cid_opt = '--cid '
+
         with tempfile.NamedTemporaryFile() as myfile:
             myfile.write('something')
             myfile.flush()
-            cont_name = random_str(8)
-            cid_opt = ''
-            output = self.openio('container create ' + cid_opt + cont_name)
-            if with_cid:
-                cont_name = self._get_cid_from_name(cont_name)
-                cid_opt = '--cid '
-            obj_name = random_str(8)
             output = self.openio('object create ' + cid_opt + cont_name + ' ' +
                                  myfile.name + ' --name ' + obj_name +
                                  ' -f json')
-            output = self.openio('object show -f json ' + cid_opt +
-                                 cont_name + ' ' + obj_name)
-            output = self.json_loads(output)
-            self.assertEqual(output['object'], obj_name)
-            lk_name = obj_name + '-link'
-            output = self.openio('object link ' + cid_opt + cont_name +
-                                 ' ' + obj_name + ' ' + lk_name)
-            self.assertEqual(output, '')
-            output = self.openio('object show -f json ' + cid_opt +
-                                 cont_name + ' ' + lk_name)
-            output = self.json_loads(output)
-            self.assertEqual(output['object'], lk_name)
+        output = self.openio('object show -f json ' + cid_opt +
+                             cont_name + ' ' + obj_name)
+        output = self.json_loads(output)
+        self.assertEqual(output['object'], obj_name)
+
+        output = self.openio('object link ' + cid_opt + cont_name +
+                             ' ' + obj_name + ' ' + lk_name)
+        self.assertEqual(output, '')
+        output = self.openio('object show -f json ' + cid_opt +
+                             cont_name + ' ' + lk_name)
+        output = self.json_loads(output)
+        self.assertEqual(output['object'], lk_name)
 
     def test_object_link(self):
         self._test_object_link()
 
     def test_object_link_with_cid(self):
         self._test_object_link(with_cid=True)
+
+    def _test_object_set_properties(self, with_cid=False):
+        cont_name = random_str(8)
+        obj_name = random_str(8)
+        cid_opt = ''
+
+        output = self.openio('container create ' + cont_name)
+        if with_cid:
+            cont_name = self._get_cid_from_name(cont_name)
+            cid_opt = '--cid '
+
+        with tempfile.NamedTemporaryFile() as myfile:
+            myfile.write('something')
+            myfile.flush()
+            output = self.openio('object create ' + cid_opt + cont_name +
+                                 ' ' + myfile.name + ' --name ' + obj_name +
+                                 ' -f json')
+        output = self.openio('object show -f json ' + cid_opt + cont_name +
+                             ' ' + obj_name)
+        output = self.json_loads(output)
+        self.assertEqual(obj_name, output['object'])
+
+        output = self.openio('object set ' + cid_opt + cont_name +
+                             ' ' + obj_name +
+                             ' --property test1=1 --property test2=2')
+        self.assertEqual(output, '')
+        output = self.openio('object show -f json ' + cid_opt + cont_name +
+                             ' ' + obj_name)
+        output = self.json_loads(output)
+        self.assertEqual(obj_name, output['object'])
+        self.assertEqual('1', output['meta.test1'])
+        self.assertEqual('2', output['meta.test2'])
+
+        output = self.openio('object set ' + cid_opt + cont_name +
+                             ' ' + obj_name +
+                             ' --property test3=3')
+        self.assertEqual(output, '')
+        output = self.openio('object show -f json ' + cid_opt + cont_name +
+                             ' ' + obj_name)
+        output = self.json_loads(output)
+        self.assertEqual(obj_name, output['object'])
+        self.assertEqual('1', output['meta.test1'])
+        self.assertEqual('2', output['meta.test2'])
+        self.assertEqual('3', output['meta.test3'])
+
+        output = self.openio('object set ' + cid_opt + cont_name +
+                             ' ' + obj_name + ' --clear' +
+                             ' --property test4=4')
+        self.assertEqual(output, '')
+        output = self.openio('object show -f json ' + cid_opt + cont_name +
+                             ' ' + obj_name)
+        output = self.json_loads(output)
+        self.assertEqual(obj_name, output['object'])
+        self.assertNotIn('meta.test1', output)
+        self.assertNotIn('meta.test2', output)
+        self.assertNotIn('meta.test3', output)
+        self.assertEqual('4', output['meta.test4'])
+
+    def test_object_set_properties(self):
+        self._test_object_set_properties()
+
+    def test_object_set_properties_with_cid(self):
+        self._test_object_set_properties(with_cid=True)

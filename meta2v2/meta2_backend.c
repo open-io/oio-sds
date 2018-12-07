@@ -618,7 +618,7 @@ _get_meta2_peers(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2,
 	const gchar *local_addr = sqlx_repository_get_local_addr(m2->repo);
 	EXTRA_ASSERT(local_addr != NULL);
 
-	g_string_append_static(peers_array, "{\"peers\":[");
+	g_string_append_static(peers_array, "\"peers\":[");
 	oio_str_gstring_append_json_quote(peers_array, local_addr);
 
 	// This is either a NULL terminated array of all the peers or a NULL ptr.
@@ -628,7 +628,7 @@ _get_meta2_peers(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2,
 		g_string_append_c(peers_array, ',');
 		oio_str_gstring_append_json_quote(peers_array, *peer);
 	}
-	g_string_append(peers_array, "]}");
+	g_string_append(peers_array, "]");
 	g_free(peers);
 	return err;
 }
@@ -678,10 +678,14 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 			g_string_free(peers_list, TRUE);
 			return err;
 		}
-		GString *gs = oio_event__create (META2_EVENTS_PREFIX".container.new", url);
-		g_string_append_printf(gs, ",\"data\": %s }", peers_list->str);
-		oio_events_queue__send (m2->notifier, g_string_free (gs, FALSE));
+		GString *gs = oio_event__create(META2_EVENTS_PREFIX".container.new", url);
+		g_string_append_static(gs, ",\"data\":{\"properties\":");
+		KV_encode_gstr2(gs, params->properties);
+		g_string_append_c(gs, ',');
+		g_string_append(gs, peers_list->str);
 		g_string_free(peers_list, TRUE);
+		g_string_append_static(gs, "}}");
+		oio_events_queue__send(m2->notifier, g_string_free (gs, FALSE));
 	}
 
 	/* Reload any cache maybe already associated with the container.

@@ -1095,18 +1095,19 @@ class ObjectStorageApi(object):
         """
         warnings.warn("You'd better use object_set_properties()",
                       DeprecationWarning, stacklevel=2)
-        if clear:
+        if clear and not metadata:
             self.object_del_properties(
                 account, container, obj, [], version=version, **kwargs)
-        if metadata:
-            self.object_set_properties(
-                account, container, obj, metadata, version=version, **kwargs)
+            return
+        self.object_set_properties(
+            account, container, obj, metadata, version=version, clear=clear,
+            **kwargs)
 
     @handle_object_not_found
     @ensure_headers
     @ensure_request_id
     def object_set_properties(self, account, container, obj, properties,
-                              version=None, **kwargs):
+                              version=None, clear=False, **kwargs):
         """
         Set properties on an object.
 
@@ -1116,8 +1117,8 @@ class ObjectStorageApi(object):
         :param properties: dictionary of properties
         """
         return self.container.content_set_properties(
-            account, container, obj, properties={'properties': properties},
-            version=version, **kwargs)
+            account, container, obj, version=version,
+            properties={'properties': properties}, clear=clear, **kwargs)
 
     @handle_object_not_found
     @ensure_headers

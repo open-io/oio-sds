@@ -172,16 +172,21 @@ struct oio_ext_local_s {
 	GRand *prng;
 	gint64 deadline;
 	guint8 is_admin;
+	gchar *user_agent;
 	gchar reqid[LIMIT_LENGTH_REQID];
 };
 
-static void _local_free (gpointer p) {
+static void _local_free(gpointer p) {
 	struct oio_ext_local_s *l = p;
 	if (!l)
 		return;
 	if (l->prng) {
 		g_rand_free (l->prng);
 		l->prng = NULL;
+	}
+	if (l->user_agent) {
+		g_free(l->user_agent);
+		l->user_agent = NULL;
 	}
 	g_free (l);
 }
@@ -266,6 +271,15 @@ void oio_ext_set_admin (const gboolean admin) {
 	l->is_admin = BOOL(admin);
 }
 
+const gchar *oio_ext_get_user_agent(void) {
+	const struct oio_ext_local_s *l = _local_ensure ();
+	return l->user_agent;
+}
+
+void oio_ext_set_user_agent(const gchar *user_agent) {
+	struct oio_ext_local_s *l = _local_ensure();
+	l->user_agent = g_strdup(user_agent);
+}
 
 /* -------------------------------------------------------------------------- */
 

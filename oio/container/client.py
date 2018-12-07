@@ -24,8 +24,8 @@ from oio.common.easy_value import boolean_value
 
 CONTENT_HEADER_PREFIX = 'x-oio-content-meta-'
 SYSMETA_KEYS = ("chunk-method", "ctime", "mtime", "deleted", "hash",
-                "hash-method", "id", "size", "length", "mime-type",
-                "name", "policy", "version")
+                "hash-method", "id", "length", "mime-type", "name", "policy",
+                "size", "version")
 
 
 def extract_content_headers_meta(headers):
@@ -613,7 +613,7 @@ class ContainerClient(ProxyClient):
 
     def content_set_properties(self, account=None, reference=None, path=None,
                                properties={}, cid=None, version=None,
-                               **kwargs):
+                               clear=False, **kwargs):
         """
         Set properties on an object.
 
@@ -622,6 +622,8 @@ class ContainerClient(ProxyClient):
         uri = self._make_uri('content/set_properties')
         params = self._make_params(account, reference, path,
                                    cid=cid, version=version)
+        if clear:
+            params['flush'] = 1
         data = json.dumps(properties)
         _resp, _body = self._direct_request(
             'POST', uri, data=data, params=params, **kwargs)
