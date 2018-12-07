@@ -306,27 +306,28 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         data = self._get_properties(name)
         self.assertEqual(data['properties'], metadata)
 
-    def _wait_account_meta2(self):
+    def _wait_account_meta2(self, timeout=20.0, score_threshold=35):
         # give account and meta2 time to catch their breath
         wait = False
         cluster = ConscienceClient({"namespace": self.ns})
-        while True:
+        deadline = time.time() + timeout
+        while time.time() < deadline:
             try:
                 for service in cluster.all_services("account"):
-                    if int(service['score']) < 50:
+                    if int(service['score']) < score_threshold:
                         wait = True
-                        continue
+                        break
                 if not wait:
                     for service in cluster.all_services("meta2"):
-                        if int(service['score']) < 50:
+                        if int(service['score']) < score_threshold:
                             wait = True
-                            continue
+                            break
                     if not wait:
                         return
-            except exc.OioException:
-                pass
+            except exc.OioException as err:
+                logging.warn('Could not check service score: %s', err)
             wait = False
-            time.sleep(5)
+            time.sleep(1)
 
     def test_container_flush(self):
         name = random_str(32)

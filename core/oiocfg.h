@@ -126,6 +126,11 @@ extern "C" {
 # define OIO_CFG_SWIFT        "swift"
 # define OIO_CFG_ECD          "ecd"
 
+# define USER_AGENT_HEADER "user-agent"
+
+# define EVENT_FIELD_REQUEST_ID "request_id"
+# define EVENT_FIELD_ORIGIN     "origin"
+
 # define oio_cfg_get_eventagent(ns)     oio_cfg_get_value((ns), OIO_CFG_ACCOUNTAGENT)
 # define oio_cfg_get_proxy(ns)          oio_cfg_get_value((ns), OIO_CFG_PROXY)
 # define oio_cfg_get_proxylocal(ns)     oio_cfg_get_value((ns), OIO_CFG_PROXYLOCAL)

@@ -126,6 +126,10 @@ message_marshall_gba(MESSAGE m, GError **err)
 
 	if (oio_ext_is_admin())
 		metautils_message_add_field_strint(m, NAME_MSGKEY_ADMIN_COMMAND, 1);
+	const gchar *user_agent = oio_ext_get_user_agent();
+	if (user_agent != NULL)
+		metautils_message_add_field_str(
+			m, NAME_MSGKEY_USER_AGENT, user_agent);
 
 	/*try to encode */
 	guint32 u32 = 0;
