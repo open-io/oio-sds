@@ -18,6 +18,7 @@ import random
 from oio.common.green import ratelimit, eventlet, threading, ContextPool, time
 
 from oio.common.easy_value import int_value
+from oio.common import exceptions
 from oio.common.logger import get_logger
 
 
@@ -29,10 +30,12 @@ class Rebuilder(object):
       `_create_worker()`
       `_fill_queue()`
       `_item_to_string()`
-      `_get_report()`.
+      `_get_report()`
+      `_read_retry_queue()`
     """
 
     def __init__(self, conf, logger, volume, input_file=None, **kwargs):
+        # pylint: disable=no-member
         self.conf = conf
         self.logger = logger or get_logger(conf)
         self.namespace = conf['namespace']
@@ -56,17 +59,26 @@ class Rebuilder(object):
         self.log_report('START', force=True)
 
         workers = list()
-        with ContextPool(self.nworkers) as pool:
-            queue = eventlet.Queue(self.nworkers*10)
+        with ContextPool(self.nworkers + 1) as pool:
+            # spawn one worker for the retry queue
+            rqueue = eventlet.Queue(self.nworkers)
+            pool.spawn(self._read_retry_queue, rqueue, **kwargs)
+
             # spawn workers to rebuild
+            queue = eventlet.Queue(self.nworkers*10)
             for i in range(self.nworkers):
                 worker = self._create_worker(**kwargs)
                 workers.append(worker)
-                pool.spawn(worker.rebuilder_pass, i, queue, **kwargs)
-            # fill the queue
+                pool.spawn(worker.rebuilder_pass, i, queue,
+                           retry_queue=rqueue, **kwargs)
+
+            # fill the queue (with the main thread)
             self._fill_queue(queue, **kwargs)
+
             # block until all items are rebuilt
             queue.join()
+            # block until the retry queue is empty
+            rqueue.join()
 
         self.log_report('DONE', force=True)
         return self.total_errors == 0
@@ -83,6 +95,17 @@ class Rebuilder(object):
         `RebuilderWorker#_rebuild_one()`.
         """
         raise NotImplementedError()
+
+    def _read_retry_queue(self, queue, **kwargs):
+        """
+        Read `exceptions.RetryLater` items that return from workers,
+        because they cannot be handled at the moment. They can either be
+        put in the main queue again or be sent to an external one, or
+        just dropped (default implementation).
+        """
+        while True:
+            queue.get()
+            queue.task_done()
 
     def _item_to_string(self, item, **kwargs):
         """
@@ -159,13 +182,20 @@ class RebuilderWorker(object):
     def log_report(self, **kwargs):
         return self.rebuilder.log_report('RUN', **kwargs)
 
-    def rebuilder_pass(self, num, queue, **kwargs):
+    def rebuilder_pass(self, num, queue, retry_queue=None, **kwargs):
         while True:
             info = None
             err = None
             item = queue.get()
             try:
                 info = self._rebuild_one(item, **kwargs)
+            except exceptions.RetryLater as exc:
+                if retry_queue:
+                    self.logger.debug(
+                        "Putting an item in the retry queue: %s", exc.args[1])
+                    retry_queue.put(exc.args[0])
+                else:
+                    err = str(exc)
             except Exception as exc:
                 err = str(exc)
             queue.task_done()

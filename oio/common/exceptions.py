@@ -68,10 +68,6 @@ class ContentException(OioException):
     pass
 
 
-class InconsistentContent(ContentException):
-    pass
-
-
 class ContentNotFound(ContentException):
     pass
 
@@ -93,6 +89,14 @@ class CommandError(Exception):
 
 
 class ExplicitBury(OioException):
+    pass
+
+
+class RetryLater(OioException):
+    """
+    Exception raised by workers that want a task to be
+    rescheduled later.
+    """
     pass
 
 

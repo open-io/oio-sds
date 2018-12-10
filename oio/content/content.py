@@ -29,15 +29,25 @@ def compare_chunk_quality(current, candidate):
         0 if they are equal, -1 if the candidate is worse.
     """
     balance = 0
+
     # Compare distance between chunks.
     balance += candidate.get('final_dist', 1) - current.get('final_dist', 1)
+
     # Compare use of fallback mechanisms.
-    if (current.get('final_slot') != current.get('expected_slot') and
-            candidate.get('final_slot') == candidate.get('expected_slot')):
+    expected_slot = current.get('expected_slot')
+    if (current.get('final_slot') != expected_slot and
+            candidate.get('final_slot') == expected_slot):
+        # The current slot is not the expected one,
+        # and the candidate slot is the expected one.
         balance += 1
-    elif (current.get('final_slot') == current.get('expected_slot') and
-            candidate.get('final_slot') != candidate.get('expected_slot')):
+    elif (current.get('final_slot') == expected_slot and
+            candidate.get('final_slot') != expected_slot):
+        # The current slot is the expected one,
+        # but we are proposed to replace it with another one.
+        # The final balance may still be positive if the distance
+        # has been drastically increased.
         balance -= 1
+
     return balance
 
 
@@ -129,9 +139,9 @@ class Content(object):
                 spare_resp = self.container_client.content_spare(
                     cid=self.container_id, path=self.content_id,
                     data=spare_data, stgpol=self.policy)
+                quals = extract_chunk_qualities(
+                    spare_resp.get('properties', {}), raw=True)
                 if check_quality:
-                    quals = extract_chunk_qualities(
-                        spare_resp.get('properties', {}), raw=True)
                     bal = ensure_better_chunk_qualities(chunks_broken, quals)
                 break
             except (exc.ClientException, exc.SpareChunkException) as err:
@@ -154,7 +164,7 @@ class Content(object):
             self.logger.info("Found %d spare chunks, that will improve "
                              "metachunk quality by %d", len(url_list), bal)
 
-        return url_list
+        return url_list, quals
 
     def _add_raw_chunk(self, current_chunk, url):
         data = {'type': 'chunk',
@@ -236,8 +246,8 @@ class Content(object):
         other_chunks = self.chunks.filter(
             metapos=current_chunk.metapos).exclude(id=chunk_id).all()
 
-        spare_urls = self._get_spare_chunk(other_chunks, [current_chunk],
-                                           check_quality=check_quality)
+        spare_urls, qualities = self._get_spare_chunk(
+            other_chunks, [current_chunk], check_quality=check_quality)
 
         if dry_run:
             self.logger.info("Dry-run: would copy chunk from %s to %s",
@@ -260,6 +270,7 @@ class Content(object):
                     "Failed to delete chunk %s: %s", current_chunk.url, err)
 
         current_chunk.url = spare_urls[0]
+        current_chunk.quality = qualities[current_chunk.url]
 
         return current_chunk.raw()
 
@@ -310,6 +321,7 @@ class Chunk(object):
     @url.setter
     def url(self, new_url):
         self._data["url"] = new_url
+        self._data["real_url"] = new_url
 
     @property
     def pos(self):
