@@ -703,7 +703,7 @@ class BeanstalkdSender(TubedBeanstalkd):
         self.nb_jobs = 0
         self.nb_jobs_lock = threading.Lock()
 
-    def send_job(self, job, **kwargs):
+    def send_job(self, job, priority=DEFAULT_PRIORITY, delay=0, **kwargs):
         """
         Send a job, if the queue has not reached its size limit.
 
@@ -722,7 +722,8 @@ class BeanstalkdSender(TubedBeanstalkd):
                 self._connect(**kwargs)
 
             with self.nb_jobs_lock:
-                job_id = self.beanstalkd.put(job)
+                job_id = self.beanstalkd.put(
+                    job, priority=priority, delay=delay)
                 self.nb_jobs += 1
                 if self.nb_jobs >= self.high_limit:
                     self.accepts_jobs = False

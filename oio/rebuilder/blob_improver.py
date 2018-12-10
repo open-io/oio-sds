@@ -18,9 +18,11 @@ from datetime import datetime
 from oio.rebuilder.rebuilder import Rebuilder, RebuilderWorker
 from oio.common import exceptions
 from oio.common.fullpath import encode_fullpath
+from oio.common.green import sleep
 from oio.common.json import json
+from oio.common.easy_value import int_value
 from oio.content.factory import ContentFactory
-from oio.event.beanstalk import BeanstalkdListener
+from oio.event.beanstalk import BeanstalkdListener, BeanstalkdSender
 
 # TODO(FVE): move to a relevant module
 CONTENT_PERFECTIBLE = 'storage.content.perfectible'
@@ -43,11 +45,16 @@ class BlobImprover(Rebuilder):
                                         DEFAULT_IMPROVER_TUBE)
         self.listener = BeanstalkdListener(beanstalkd_addr, beanstalkd_tube,
                                            self.logger, **kwargs)
+        self.sender = BeanstalkdSender(beanstalkd_addr, beanstalkd_tube,
+                                       self.logger, **kwargs)
+        self.retry_delay = int_value(self.conf.get('retry_delay'), 30)
 
     def _event_from_job(self, job_id, data, **kwargs):
+        """Decode a JSON string into an event dictionary."""
         # pylint: disable=no-member
         event = json.loads(data)
         type_ = event.get('event')
+        # Bury events that should not be there
         if type_ not in self.__class__.supported_events:
             msg = 'Discarding event %s (type=%s)' % (
                 event.get('job_id'), type_)
@@ -62,6 +69,19 @@ class BlobImprover(Rebuilder):
         events = self.listener.fetch_jobs(self._event_from_job, **kwargs)
         for event in events:
             queue.put(event)
+
+    def _read_retry_queue(self, queue, **kwargs):
+        while True:
+            # Reschedule jobs we were not able to handle.
+            item = queue.get()
+            sent = False
+            while not sent:
+                sent = self.sender.send_job(json.dumps(item),
+                                            delay=self.retry_delay)
+                if not sent:
+                    sleep(1.0)
+            self.sender.job_done()
+            queue.task_done()
 
     def _item_to_string(self, item, **kwargs):
         url = item['url']
@@ -141,42 +161,43 @@ class BlobImproverWorker(RebuilderWorker):
             # metadata, thus we must fill it now.
             found.quality = chunk['quality']
 
-        moveable = dict()
-        for chunk in content.chunks:
-            imperfections = chunk.imperfections
-            n_imp = len(imperfections)
-            if n_imp > 0:
-                moveable.setdefault(n_imp, list()).append(chunk)
+        moveable = [chunk for chunk in content.chunks
+                    if chunk.imperfections]
+        moveable.sort(key=lambda x: x.imperfections)
 
         moves = list()
         errors = list()
-        for n_imperfections, chunks in moveable.items():
-            self.logger.debug("Chunks with %d imperfections: %s",
-                              n_imperfections, chunks)
-            for chunk in chunks:
-                try:
-                    src = str(chunk.url)
-                    self.logger.debug("Working on %s: %s",
-                                      src, chunk.imperfections)
-                    dst = content.move_chunk(chunk, check_quality=True,
-                                             dry_run=dry_run, **kwargs)
-                    self.logger.debug("%s replaced by %s", src, dst['url'])
-                    moves.append((src, dst))
-                except exceptions.OioException as err:
-                    self.logger.warn("Could not improve %s: %s", chunk, err)
-                    errors.append(err)
+        for chunk in moveable:
+            try:
+                src = str(chunk.url)
+                # Must do a copy or bad things will happen.
+                raw_src = dict(chunk.raw())
+                self.logger.debug("Working on %s: %s",
+                                  src, chunk.imperfections)
+                # TODO(FVE): try to improve all chunks of a metachunk
+                # in a single pass
+                dst = content.move_chunk(chunk, check_quality=True,
+                                         dry_run=dry_run, **kwargs)
+                self.logger.debug("%s replaced by %s", src, dst['url'])
+                moves.append((raw_src, dst))
+            except exceptions.OioException as err:
+                self.logger.warn("Could not improve %s: %s", chunk, err)
+                errors.append(err)
         return moves, errors
 
     def _rebuild_one(self, item, **kwargs):
         moves, errors = self.move_perfectible_from_event(item, **kwargs)
         if errors:
             if not moves:
-                raise exceptions.FaultyChunk(
-                    'Could not improve any chunk: %s', errors)
+                # Later we may want to limit handle attempts.
+                item['attempts'] = item.get('attempts', 0) + 1
+                raise exceptions.RetryLater(
+                    item, 'Could not improve any chunk: %s' % errors)
             else:
                 self.logger.info(
                     'Some chunks of %s have not been improved: %s',
                     self.rebuilder._item_to_string(item), errors)
+                # TODO(FVE): build a new event, send it back
         else:
             for move in moves:
                 self.logger.debug('%s moved to %s', move[0], move[1])

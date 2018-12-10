@@ -13,11 +13,9 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
-from oio.common.green import ratelimit
-
 from string import hexdigits
-import time
+
+from oio.common.green import ratelimit, time
 
 from oio.blob.client import BlobClient
 from oio.blob.utils import check_volume, read_chunk_metadata
@@ -33,7 +31,6 @@ from oio.common.fullpath import decode_fullpath
 from oio.content.factory import ContentFactory
 
 SLEEP_TIME = 30
-READ_BUFFER_SIZE = 65535
 
 
 class BlobMoverWorker(object):
@@ -148,20 +145,20 @@ class BlobMoverWorker(object):
         if len(chunk_id) != STRLEN_CHUNKID:
             self.logger.warn('WARN Not a chunk %s' % path)
             return
-        for c in chunk_id:
-            if c not in hexdigits:
+        for char in chunk_id:
+            if char not in hexdigits:
                 self.logger.warn('WARN Not a chunk %s' % path)
                 return
         try:
             self.chunk_move(path, chunk_id)
-        except Exception as e:
+        except Exception as err:
             self.errors += 1
-            self.logger.error('ERROR while moving chunk %s: %s', path, e)
+            self.logger.error('ERROR while moving chunk %s: %s', path, err)
         self.passes += 1
 
     def load_chunk_metadata(self, path, chunk_id):
-        with open(path) as f:
-            meta, _ = read_chunk_metadata(f, chunk_id)
+        with open(path) as file_:
+            meta, _ = read_chunk_metadata(file_, chunk_id)
             return meta
 
     def chunk_move(self, path, chunk_id):
@@ -184,6 +181,7 @@ class BlobMoverWorker(object):
         if self.allow_links:
             old_links = meta['links']
             for chunk_id, fullpath in old_links.iteritems():
+                # pylint: disable=unbalanced-tuple-unpacking
                 account, container, _, _, content_id = \
                     decode_fullpath(fullpath)
                 container_id = cid_from_name(account, container)
