@@ -643,6 +643,11 @@ oio_url_to_json (GString *out, struct oio_url_s *u)
 		if (len != out->len) g_string_append_c (out, ',');
 		oio_str_gstring_append_json_pair (out, "id", u->hexid);
 	}
+	if (oio_str_is_set(u->version)) {
+		if (len != out->len)
+			g_string_append_c(out, ',');
+		oio_str_gstring_append_json_pair(out, "version", u->version);
+	}
 }
 
 gboolean

@@ -260,4 +260,7 @@ struct bean_PROPERTIES_s *generate_chunk_quality_bean(
 		struct oio_lb_selected_item_s *sel,
 		const gchar *chunkid, struct oio_url_s *url);
 
+/** Get the version of the first alias bean from the list. */
+gint64 find_alias_version(GSList *bean);
+
 #endif /*OIO_SDS__meta2v2__meta2_utils_h*/
