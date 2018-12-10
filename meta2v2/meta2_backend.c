@@ -1597,6 +1597,17 @@ _prop_is_not_prefixed(gpointer a, gpointer b)
 		!g_str_has_prefix(PROPERTIES_get_key(prop)->str, prefix);
 }
 
+static void
+_patch_url_with_version(struct oio_url_s *url, GSList *beans)
+{
+	EXTRA_ASSERT(url != NULL);
+	gint64 version = find_alias_version(beans);
+	gchar str_version[24] = {0};
+	g_snprintf(str_version, sizeof(str_version),
+			"%"G_GINT64_FORMAT, version);
+	oio_url_set(url, OIOURL_VERSION, str_version);
+}
+
 GError *
 meta2_backend_check_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		GSList **beans, meta2_send_event_cb send_event, gboolean is_update)
@@ -1623,19 +1634,27 @@ meta2_backend_check_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 			GSList *chunk_meta = NULL;
 			*beans = gslist_extract(*beans, &chunk_meta,
 					(GCompareFunc)_prop_is_not_prefixed, OIO_CHUNK_SYSMETA_PREFIX);
-			GSList *messages = NULL;
-			m2db_check_content_quality(sorted, chunk_meta, &messages);
-			for (GSList *msgs = messages; msgs != NULL; msgs = msgs->next) {
-				gchar *msg = msgs->data;
-				GString *gs = oio_event__create_with_id(
-						"storage.content.perfectible",
-						url, oio_ext_get_reqid());
-				g_string_append(gs, ",\"data\":");
-				g_string_append(gs, msg);
-				g_string_append(gs, "}");
-				send_event(g_string_free(gs, FALSE), NULL);
+			GSList *flaws = NULL;
+			m2db_check_content_quality(sorted, chunk_meta, &flaws);
+			if (flaws) {
+				/* Ensure there is a version in the URL used to create the
+				 * event. We cannot patch the input URL because m2db_put_alias
+				 * checks there is NO version in the URL. */
+				struct oio_url_s *url2 = oio_url_dup(url);
+				_patch_url_with_version(url2, sorted->aliases);
+				for (GSList *msgs = flaws; msgs != NULL; msgs = msgs->next) {
+					gchar *msg = msgs->data;
+					GString *gs = oio_event__create_with_id(
+							"storage.content.perfectible",
+							url2, oio_ext_get_reqid());
+					g_string_append(gs, ",\"data\":");
+					g_string_append(gs, msg);
+					g_string_append(gs, "}");
+					send_event(g_string_free(gs, FALSE), NULL);
+				}
+				oio_url_clean(url2);
 			}
-			g_slist_free_full(messages, g_free);
+			g_slist_free_full(flaws, g_free);
 			_bean_cleanl2(chunk_meta);
 		}
 	}

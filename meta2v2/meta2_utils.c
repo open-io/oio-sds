@@ -1352,7 +1352,7 @@ for (GSList *l = beans; l; l = l->next) {
 }
 }
 
-static gint64 _fetch_alias_version (GSList *beans) {
+gint64 find_alias_version (GSList *beans) {
 	for (GSList *l = beans; l; l = l->next) {
 		gpointer bean = l->data;
 		if (DESCR(bean) == &descr_struct_ALIASES)
@@ -1487,7 +1487,7 @@ GError* m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 		/* put everything (and patch everything */
 		RANDOM_UID(uid, uid_size);
 		_patch_beans_with_contentid(beans, (guint8*)&uid, uid_size);
-		_patch_beans_with_version(beans, _fetch_alias_version(beans));
+		_patch_beans_with_version(beans, find_alias_version(beans));
 		err = m2db_real_put_alias(args->sq3, beans, cb_added, u0_added);
 		if (!err) {
 			added_size = _fetch_content_size(beans);
@@ -1643,12 +1643,20 @@ GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 	EXTRA_ASSERT(args->url != NULL);
 	if (!oio_url_has_fq_path(args->url))
 		return NEWERROR(CODE_BAD_REQUEST, "Missing fully qualified path");
-	if (oio_url_has(args->url, OIOURL_VERSION))
-		return NEWERROR(CODE_BAD_REQUEST, "URL version is present");
 
-	gint64 version = _fetch_alias_version(beans);
+	gint64 version = find_alias_version(beans);
 	if (version <= 0) {
 		return BADREQ("Missing or invalid alias bean (no version found)");
+	}
+	if (oio_url_has(args->url, OIOURL_VERSION)) {
+		/* If there is a version in the URL,
+		 * ensure it is the same as in the beans. */
+		gchar *endptr = NULL;
+		const gchar *sversion = oio_url_get(args->url, OIOURL_VERSION);
+		gint64 uversion = g_ascii_strtoll(sversion, &endptr, 10);
+		if (endptr != sversion && uversion != version)
+			return NEWERROR(CODE_BAD_REQUEST, "URL version is present (%s)",
+					oio_url_get(args->url, OIOURL_VERSION));
 	}
 
 	/* Needed later several times, we extract now the content-id */
