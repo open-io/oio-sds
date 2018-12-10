@@ -957,7 +957,8 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		GSList *in, m2_onbean_cb cb_deleted, gpointer u0_deleted,
+		GSList *in, gint64 missing_chunks,
+		m2_onbean_cb cb_deleted, gpointer u0_deleted,
 		m2_onbean_cb cb_added, gpointer u0_added)
 {
 	GError *err = NULL;
@@ -981,8 +982,11 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_put_alias(&args, in, cb_deleted, u0_deleted,
-					cb_added, u0_added)))
+					cb_added, u0_added))) {
+				m2db_set_missing_chunks(
+						sq3, m2db_get_missing_chunks(sq3) + missing_chunks);
 				m2db_increment_version(sq3);
+			}
 			err = sqlx_transaction_end(repctx, err);
 			if (!err)
 				m2b_add_modified_container(m2b, sq3);
@@ -995,7 +999,7 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 
 GError*
 meta2_backend_change_alias_policy(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, GSList *in,
+		struct oio_url_s *url, GSList *in, gint64 missing_chunks,
 		m2_onbean_cb cb_deleted, gpointer u0_deleted,
 		m2_onbean_cb cb_added, gpointer u0_added)
 {
@@ -1019,8 +1023,11 @@ meta2_backend_change_alias_policy(struct meta2_backend_s *m2b,
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_change_alias_policy(
-					&args, in, cb_deleted, u0_deleted, cb_added, u0_added)))
+					&args, in, cb_deleted, u0_deleted, cb_added, u0_added))) {
+				m2db_set_missing_chunks(
+						sq3, m2db_get_missing_chunks(sq3) + missing_chunks);
 				m2db_increment_version(sq3);
+			}
 			err = sqlx_transaction_end(repctx, err);
 			if (!err)
 				m2b_add_modified_container(m2b, sq3);
@@ -1033,7 +1040,8 @@ meta2_backend_change_alias_policy(struct meta2_backend_s *m2b,
 
 GError *
 meta2_backend_update_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		GSList *in, m2_onbean_cb cb_deleted, gpointer u0_deleted,
+		GSList *in, gint64 missing_chunks,
+		m2_onbean_cb cb_deleted, gpointer u0_deleted,
 		m2_onbean_cb cb_added, gpointer u0_added)
 {
 	GError *err = NULL;
@@ -1052,8 +1060,11 @@ meta2_backend_update_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	if (!err) {
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_update_content(sq3, url, in,
-					cb_deleted, u0_deleted, cb_added, u0_added)))
+					cb_deleted, u0_deleted, cb_added, u0_added))) {
+				m2db_set_missing_chunks(
+						sq3, m2db_get_missing_chunks(sq3) + missing_chunks);
 				m2db_increment_version(sq3);
+			}
 			err = sqlx_transaction_end(repctx, err);
 			if (!err)
 				m2b_add_modified_container(m2b, sq3);
@@ -1096,7 +1107,8 @@ meta2_backend_truncate_content(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		GSList *in, m2_onbean_cb cb_deleted, gpointer u0_deleted,
+		GSList *in, gint64 missing_chunks,
+		m2_onbean_cb cb_deleted, gpointer u0_deleted,
 		m2_onbean_cb cb_added, gpointer u0_added)
 {
 	GError *err = NULL;
@@ -1120,8 +1132,11 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 
 		if (!(err = _transaction_begin(sq3,url, &repctx))) {
 			if (!(err = m2db_force_alias(&args, in, cb_deleted, u0_deleted,
-					cb_added, u0_added)))
+					cb_added, u0_added))) {
+				m2db_set_missing_chunks(
+						sq3, m2db_get_missing_chunks(sq3) + missing_chunks);
 				m2db_increment_version(sq3);
+			}
 			err = sqlx_transaction_end(repctx, err);
 		}
 		if (!err)
@@ -1295,7 +1310,7 @@ meta2_backend_get_alias_version(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, GSList *beans,
+		struct oio_url_s *url, GSList *beans, gint64 missing_chunks,
 		m2_onbean_cb cb, gpointer u0)
 {
 	GError *err = NULL;
@@ -1313,8 +1328,11 @@ meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			if (!(err = m2db_append_to_alias(sq3, url, beans, cb, u0)))
+			if (!(err = m2db_append_to_alias(sq3, url, beans, cb, u0))) {
+				m2db_set_missing_chunks(
+						sq3, m2db_get_missing_chunks(sq3) + missing_chunks);
 				m2db_increment_version(sq3);
+			}
 			err = sqlx_transaction_end(repctx, err);
 		}
 		if (!err)
@@ -1612,7 +1630,8 @@ _patch_url_with_version(struct oio_url_s *url, GSList *beans)
 
 GError *
 meta2_backend_check_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		GSList **beans, meta2_send_event_cb send_event, gboolean is_update)
+		GSList **beans, gint64 *missing_chunks,
+		meta2_send_event_cb send_event, gboolean is_update)
 {
 	GError *err = NULL;
 	struct namespace_info_s *nsinfo = NULL;
@@ -1623,6 +1642,8 @@ meta2_backend_check_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	m2v2_sort_content(*beans, &sorted);
 	struct checked_content_s *checked_content = NULL;
 	err = m2db_check_content(sorted, nsinfo, &checked_content, is_update);
+	if (checked_content)
+		*missing_chunks = checked_content_get_missing_chunks(checked_content);
 	if (send_event) {
 		if (err && err->code == CODE_CONTENT_UNCOMPLETE) {
 			GString *event = oio_event__create_with_id(

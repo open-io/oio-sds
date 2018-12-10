@@ -176,6 +176,8 @@ void checked_content_free(struct checked_content_s *checked_content);
 void checked_content_append_json_string(struct checked_content_s *checked_content,
 		GString *message);
 
+guint checked_content_get_missing_chunks(struct checked_content_s *checked_content);
+
 GError* m2db_check_content(struct m2v2_sorted_content_s *sorted_content,
 		struct namespace_info_s *nsinfo,
 		struct checked_content_s **checked_content, gboolean update);
