@@ -2365,6 +2365,12 @@ checked_content_append_json_string(struct checked_content_s *checked_content,
 	g_string_append_c(message, ']');
 }
 
+guint
+checked_content_get_missing_chunks(struct checked_content_s *checked_content)
+{
+	return g_slist_length(checked_content->missing_pos);
+}
+
 static gboolean
 _check_metachunk_plain_content(GSList *chunks, struct checked_content_s *plain)
 {

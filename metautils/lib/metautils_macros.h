@@ -74,6 +74,7 @@ License along with this library.
 #define NAME_MSGKEY_MAXVERS            "MAXVERS"
 #define NAME_MSGKEY_MESSAGE            "MSG"
 #define NAME_MSGKEY_METAURL            "METAURL"
+#define NAME_MSGKEY_MISSING_CHUNKS     "MISSING_CHUNKS"
 #define NAME_MSGKEY_NAMESPACE          "NS"
 #define NAME_MSGKEY_NEXTMARKER         "MRK_NXT"
 #define NAME_MSGKEY_NEW                "NEW"
