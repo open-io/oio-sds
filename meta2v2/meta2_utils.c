@@ -315,6 +315,7 @@ _sort_content_cb(gpointer sorted_content, gpointer bean)
 		GSList *mc = g_tree_lookup(content->metachunks, GINT_TO_POINTER(pos));
 		mc = g_slist_prepend(mc, bean);
 		g_tree_insert(content->metachunks, GINT_TO_POINTER(pos), mc);
+		content->n_chunks++;
 	} else if (DESCR(bean) == &descr_struct_ALIASES) {
 		content->aliases = g_slist_prepend(content->aliases, bean);
 	} else if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
@@ -2603,6 +2604,32 @@ _m2db_check_content_validity(struct m2v2_sorted_content_s *sorted_content,
 	return err;
 }
 
+static GError *
+_m2db_get_content_missing_chunks(struct m2v2_sorted_content_s *sorted_content,
+		struct storage_policy_s *pol, gint64 *missing_chunks)
+{
+	gint64 expected_chunks = 0;
+	const struct data_security_s *dsec = storage_policy_get_data_security(pol);
+	switch (data_security_get_type(dsec)) {
+		case STGPOL_DS_BACKBLAZE:
+		case STGPOL_DS_PLAIN:
+			expected_chunks = data_security_get_int64_param(
+					dsec, DS_KEY_COPY_COUNT, 1);
+			break;
+		case STGPOL_DS_EC:
+			expected_chunks = data_security_get_int64_param(
+					dsec, DS_KEY_K, 1);
+			expected_chunks += data_security_get_int64_param(
+					dsec, DS_KEY_M, 1);
+			break;
+		default:
+			return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy type");
+	}
+	*missing_chunks = (expected_chunks * g_tree_nnodes(
+			sorted_content->metachunks)) - sorted_content->n_chunks;
+	return NULL;
+}
+
 void
 m2db_check_content_quality(struct m2v2_sorted_content_s *sorted_content,
 		GSList *chunk_meta, GSList **to_be_improved)
@@ -2678,11 +2705,38 @@ m2db_check_content(struct m2v2_sorted_content_s *sorted_content,
 		pol = storage_policy_init(nsinfo, polname->str);
 	if (!pol)
 		err = NEWERROR(CODE_POLICY_NOT_SUPPORTED,
-				"Invalid policy: %s", polname->str);
+				"Invalid policy: %s", polname ? polname->str : "not found");
 
 	if (!err)
 		err = _m2db_check_content_validity(sorted_content, pol,
 				checked_content_p, partial);
+
+	if (pol)
+		storage_policy_clean(pol);
+
+	return err;
+}
+
+GError *
+m2db_get_content_missing_chunks(struct m2v2_sorted_content_s *sorted_content,
+		struct namespace_info_s *nsinfo, gint64 *missing_chunks)
+{
+	GError *err = NULL;
+
+	struct storage_policy_s *pol = NULL;
+	GString *polname = NULL;
+
+	if (sorted_content->header != NULL)
+		polname = CONTENTS_HEADERS_get_policy(sorted_content->header);
+	if (polname && polname->str && polname->len)
+		pol = storage_policy_init(nsinfo, polname->str);
+	if (!pol)
+		err = NEWERROR(CODE_POLICY_NOT_SUPPORTED,
+				"Invalid policy: %s", polname ? polname->str : "not found");
+
+	if (!err)
+		err = _m2db_get_content_missing_chunks(sorted_content, pol,
+				missing_chunks);
 
 	if (pol)
 		storage_policy_clean(pol);

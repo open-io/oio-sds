@@ -824,14 +824,17 @@ meta2_backend_purge_container(struct meta2_backend_s *m2, struct oio_url_s *url,
 
 /* Contents --------------------------------------------------------------- */
 
+/**
+ * @param deleted_objects: list of lists of deleted beans
+ */
 static void
-_update_missing_chunks(struct meta2_backend_s *m2b,
-		struct sqlx_sqlite3_s *sq3, gint64 new_missing_chunks, GSList *deleted)
+_update_missing_chunks(struct meta2_backend_s *m2b, struct sqlx_sqlite3_s *sq3,
+		gint64 new_missing_chunks, GSList *deleted_objects)
 {
 	gint64 missing_chunks = m2db_get_missing_chunks(sq3);
 	missing_chunks += new_missing_chunks;
 
-	if (!deleted)
+	if (!deleted_objects)
 		goto end;
 
 	struct namespace_info_s *nsinfo = NULL;
@@ -841,22 +844,21 @@ _update_missing_chunks(struct meta2_backend_s *m2b,
 	}
 
 	struct m2v2_sorted_content_s *sorted = NULL;
-	struct checked_content_s *checked_content = NULL;
+	gint64 content_missing_chunks = 0;
 	GError *err = NULL;
-	for (GSList *l=deleted; l; l=l->next) {
-		m2v2_sort_content(l->data, &sorted);
-		err = m2db_check_content(
-				sorted, nsinfo, &checked_content, TRUE);
-		g_clear_error(&err);
-
-		if (checked_content) {
-			missing_chunks -= checked_content_get_missing_chunks(
-					checked_content);
-			checked_content_free(checked_content);
-			checked_content = NULL;
+	for (GSList *deleted_beans=deleted_objects; deleted_beans;
+			deleted_beans=deleted_beans->next) {
+		sorted = NULL;
+		content_missing_chunks = 0;
+		m2v2_sort_content(deleted_beans->data, &sorted);
+		err = m2db_get_content_missing_chunks(
+				sorted, nsinfo, &content_missing_chunks);
+		if (err) {
+			GRID_WARN("No update of missing chunks: %s", err->message);
+			g_clear_error(&err);
 		}
 		m2v2_sorted_content_free(sorted);
-		sorted = NULL;
+		missing_chunks -= content_missing_chunks;
 	}
 
 	namespace_info_free(nsinfo);
@@ -984,8 +986,17 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 	if (!err) {
 		struct sqlx_repctx_s *repctx = NULL;
 		const gint64 max_versions = _maxvers(sq3);
+		GSList *deleted_beans = NULL;
+		GSList *deleted_objects = NULL;
+
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			if (!(err = m2db_delete_alias(sq3, max_versions, url, cb, u0))) {
+			if (!(err = m2db_delete_alias(sq3, max_versions, url,
+					_bean_list_cb, &deleted_beans))) {
+				if (deleted_beans) {
+					deleted_objects = g_slist_append(
+							deleted_objects, deleted_beans);
+					_update_missing_chunks(m2b, sq3, 0, deleted_objects);
+				}
 				m2db_increment_version(sq3);
 			}
 			err = sqlx_transaction_end(repctx, err);
@@ -993,6 +1004,15 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 		if (!err)
 			m2b_add_modified_container(m2b, sq3);
 		m2b_close(sq3);
+
+		if (cb) {
+			for (GSList *deleted_bean=deleted_beans; deleted_bean;
+					deleted_bean=deleted_bean->next) {
+				cb(u0, deleted_bean->data);
+			}
+		}
+		g_slist_free(deleted_beans);
+		g_slist_free(deleted_objects);
 	}
 
 	return err;
@@ -1021,12 +1041,13 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		args.url = url;
 		args.ns_max_versions = meta2_max_versions;
 		args.worm_mode = oio_ns_mode_worm && !oio_ext_is_admin();
-		GSList *deleted = NULL;
+		GSList *deleted_objects = NULL;
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_put_alias(&args, in,
-					_bean_list_cb, &deleted, cb_added, u0_added))) {
-				_update_missing_chunks(m2b, sq3, missing_chunks, deleted);
+					_bean_list_cb, &deleted_objects, cb_added, u0_added))) {
+				_update_missing_chunks(m2b, sq3,
+						missing_chunks, deleted_objects);
 				m2db_increment_version(sq3);
 			}
 			err = sqlx_transaction_end(repctx, err);
@@ -1035,10 +1056,13 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		}
 		m2b_close(sq3);
 
-		for (GSList *l=deleted; l; l=l->next) {
-			cb_deleted(u0_deleted, l->data);
+		if (cb_deleted) {
+			for (GSList *deleted_beans=deleted_objects; deleted_beans;
+					deleted_beans=deleted_beans->next) {
+				cb_deleted(u0_deleted, deleted_beans->data);
+			}
 		}
-		g_slist_free(deleted);
+		g_slist_free(deleted_objects);
 	}
 
 	return err;
@@ -1067,12 +1091,13 @@ meta2_backend_change_alias_policy(struct meta2_backend_s *m2b,
 		args.url = url;
 		args.ns_max_versions = meta2_max_versions;
 		args.worm_mode = oio_ns_mode_worm && !oio_ext_is_admin();
-		GSList *deleted = NULL;
+		GSList *deleted_objects = NULL;
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_change_alias_policy(&args, in,
-					_bean_list_cb, &deleted, cb_added, u0_added))) {
-				_update_missing_chunks(m2b, sq3, missing_chunks, deleted);
+					_bean_list_cb, &deleted_objects, cb_added, u0_added))) {
+				_update_missing_chunks(m2b, sq3,
+						missing_chunks, deleted_objects);
 				m2db_increment_version(sq3);
 			}
 			err = sqlx_transaction_end(repctx, err);
@@ -1081,10 +1106,11 @@ meta2_backend_change_alias_policy(struct meta2_backend_s *m2b,
 		}
 		m2b_close(sq3);
 
-		for (GSList *l=deleted; l; l=l->next) {
-			cb_deleted(u0_deleted, l->data);
+		for (GSList *deleted_beans=deleted_objects; deleted_beans;
+				deleted_beans=deleted_beans->next) {
+			cb_deleted(u0_deleted, deleted_beans->data);
 		}
-		g_slist_free(deleted);
+		g_slist_free(deleted_objects);
 	}
 
 	return err;
@@ -1110,12 +1136,13 @@ meta2_backend_update_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
-		GSList *deleted = NULL;
+		GSList *deleted_objects = NULL;
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_update_content(sq3, url, in,
-					_bean_list_cb, &deleted, cb_added, u0_added))) {
-				_update_missing_chunks(m2b, sq3, missing_chunks, deleted);
+					_bean_list_cb, &deleted_objects, cb_added, u0_added))) {
+				_update_missing_chunks(m2b, sq3,
+						missing_chunks, deleted_objects);
 				m2db_increment_version(sq3);
 			}
 			err = sqlx_transaction_end(repctx, err);
@@ -1124,10 +1151,11 @@ meta2_backend_update_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		}
 		m2b_close(sq3);
 
-		for (GSList *l=deleted; l; l=l->next) {
-			cb_deleted(u0_deleted, l->data);
+		for (GSList *deleted_beans=deleted_objects; deleted_beans;
+				deleted_beans=deleted_beans->next) {
+			cb_deleted(u0_deleted, deleted_beans->data);
 		}
-		g_slist_free(deleted);
+		g_slist_free(deleted_objects);
 	}
 
 	return err;
@@ -1149,15 +1177,25 @@ meta2_backend_truncate_content(struct meta2_backend_s *m2b,
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
+		GSList *deleted_objects = NULL;
+
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_truncate_content(sq3, url, truncate_size,
-						out_deleted, out_added)))
+						out_deleted, out_added))) {
+				if (out_deleted) {
+					deleted_objects = g_slist_append(
+							deleted_objects, *out_deleted);
+					_update_missing_chunks(m2b, sq3, 0, deleted_objects);
+				}
 				m2db_increment_version(sq3);
+			}
 			err = sqlx_transaction_end(repctx, err);
 			if (!err)
 				m2b_add_modified_container(m2b, sq3);
 		}
 		m2b_close(sq3);
+
+		g_slist_free(deleted_objects);
 	}
 
 	return err;
@@ -1186,12 +1224,13 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		args.url = url;
 		args.ns_max_versions = meta2_max_versions;
 		args.worm_mode = oio_ns_mode_worm && !oio_ext_is_admin();
-		GSList *deleted = NULL;
+		GSList *deleted_objects = NULL;
 
 		if (!(err = _transaction_begin(sq3,url, &repctx))) {
 			if (!(err = m2db_force_alias(&args, in,
-					_bean_list_cb, &deleted, cb_added, u0_added))) {
-				_update_missing_chunks(m2b, sq3, missing_chunks, deleted);
+					_bean_list_cb, &deleted_objects, cb_added, u0_added))) {
+				_update_missing_chunks(m2b, sq3,
+						missing_chunks, deleted_objects);
 				m2db_increment_version(sq3);
 			}
 			err = sqlx_transaction_end(repctx, err);
@@ -1201,10 +1240,11 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 
 		m2b_close(sq3);
 
-		for (GSList *l=deleted; l; l=l->next) {
-			cb_deleted(u0_deleted, l->data);
+		for (GSList *deleted_beans=deleted_objects; deleted_beans;
+				deleted_beans=deleted_beans->next) {
+			cb_deleted(u0_deleted, deleted_beans->data);
 		}
-		g_slist_free(deleted);
+		g_slist_free(deleted_objects);
 	}
 
 	return err;
@@ -1227,6 +1267,8 @@ meta2_backend_purge_alias(struct meta2_backend_s *m2, struct oio_url_s *url,
 	err = m2b_open(m2, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
 		EXTRA_ASSERT(sq3 != NULL);
+		GSList *deleted_objects = NULL;
+
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			gint64 maxvers;
 			if (pmaxvers)
@@ -1234,13 +1276,22 @@ meta2_backend_purge_alias(struct meta2_backend_s *m2, struct oio_url_s *url,
 			else
 				maxvers = _maxvers(sq3);
 			if (!(err = m2db_purge(sq3, maxvers, _retention_delay(sq3),
-					oio_url_get(url, OIOURL_PATH), cb, u0)))
+					oio_url_get(url, OIOURL_PATH),
+					_bean_list_cb, &deleted_objects))) {
+				_update_missing_chunks(m2, sq3, 0, deleted_objects);
 				m2db_increment_version(sq3);
+			}
 			err = sqlx_transaction_end(repctx, err);
 		}
 		if (!err)
 			m2b_add_modified_container(m2, sq3);
 		m2b_close(sq3);
+
+		for (GSList *deleted_beans=deleted_objects; deleted_beans;
+				deleted_beans=deleted_beans->next) {
+			cb(u0, deleted_beans->data);
+		}
+		g_slist_free(deleted_objects);
 	}
 
 	return err;
