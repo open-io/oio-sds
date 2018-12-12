@@ -346,6 +346,10 @@ struct polling_ctx_s
 	/* Count how often each location has been chosen. */
 	GData *counters[OIO_LB_LOC_LEVELS];
 
+	/* Result from the selection of services.
+	 * Array<struct oio_lb_selected_item_s *> */
+	GPtrArray *selection;
+
 	/* Did we use a fallback slot while polling? */
 	gboolean fallback_used : 8;
 
@@ -360,7 +364,7 @@ struct polling_ctx_s
 	 * (for the specified distance). */
 	gboolean check_popularity : 8;
 
-	/* Maximum distance. */
+	/* Maximum achievable distance between selected services. */
 	guint16 max_dist;
 };
 
@@ -921,7 +925,8 @@ _local__poll (struct oio_lb_pool_s *self,
 
 static struct oio_lb_selected_item_s*
 _local_target__is_satisfied(struct oio_lb_pool_LOCAL_s *lb,
-		const char *target, struct polling_ctx_s *ctx)
+		const char *target, struct polling_ctx_s *ctx,
+		gboolean strict)
 {
 	struct oio_lb_selected_item_s *selected = NULL;
 
@@ -973,8 +978,32 @@ _local_target__is_satisfied(struct oio_lb_pool_LOCAL_s *lb,
 				return selected;
 			}
 		} while (*(++known));
+
+		if (strict) {
+			// Fallbacks not allowed.
+			break;
+		}
 	}
 	return NULL;
+}
+
+static void
+_match_known_services_with_targets(struct oio_lb_pool_LOCAL_s *lb,
+		struct polling_ctx_s *ctx, gchar **unmatched)
+{
+	EXTRA_ASSERT(unmatched != NULL);
+	for (gchar **ptarget = lb->targets; *ptarget; ++ptarget) {
+		struct oio_lb_selected_item_s *selected = NULL;
+		selected = _local_target__is_satisfied(lb, *ptarget, ctx, TRUE);
+		if (selected) {
+			++(ctx->next_polled);
+			g_ptr_array_add(ctx->selection, selected);
+		} else {
+			*unmatched = *ptarget;
+			unmatched++;
+		}
+	}
+	*unmatched = NULL;
 }
 
 static GError*
@@ -1004,15 +1033,10 @@ _local__patch(struct oio_lb_pool_s *self,
 	for (; i < count_targets; i++)
 		polled[i] = 0;
 
-	GPtrArray *selection = g_ptr_array_new_with_free_func(
-			(GDestroyNotify)_selected_item_free);
-
-	/* In normal mode (resp. nearby mode), bit shifts start high
-	 * (resp. low), because we want services with different
-	 * (resp. equal) most significant bits. Then we reduce (resp. increase)
-	 * the shifting so we compare more (resp. less) bits of the locations,
-	 * and thus have more chances to find differences (resp. similarities)
-	 * between service locations. */
+	/* In normal mode (resp. nearby mode), distance starts high
+	 * (resp. low), because we want services far from (resp. close to)
+	 * each other. Then we reduce (resp. increase) the distance and thus
+	 * have more chances to find services matching the other criteria. */
 	guint16 max_dist = MIN(lb->world->abs_max_dist, lb->initial_dist);
 	guint16 start_dist = lb->nearby_mode? lb->min_dist : max_dist;
 	guint16 end_dist = (lb->nearby_mode? max_dist + 1 : lb->min_dist - 1);
@@ -1026,18 +1050,23 @@ _local__patch(struct oio_lb_pool_s *self,
 		.check_distance = TRUE,
 		.check_popularity = TRUE,
 		.max_dist = max_dist,
+		.selection = g_ptr_array_new_with_free_func(
+			(GDestroyNotify)_selected_item_free),
 	};
 
 	for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
 		g_datalist_init(&ctx.counters[level]);
 	}
 
+	gchar *unmatched_targets[count_targets+1];
+	_match_known_services_with_targets(lb, &ctx, unmatched_targets);
+
 	gint16 incr = lb->nearby_mode? 1 : -1;
 	guint count = 0;
 	GError *err = NULL;
-	for (gchar **ptarget = lb->targets; *ptarget; ++ptarget) {
+	for (gchar **ptarget = unmatched_targets; *ptarget; ++ptarget) {
 		struct oio_lb_selected_item_s *selected = NULL;
-		selected = _local_target__is_satisfied(lb, *ptarget, &ctx);
+		selected = _local_target__is_satisfied(lb, *ptarget, &ctx, FALSE);
 		guint16 dist;
 		for (dist = start_dist; !selected && dist != end_dist; dist += incr) {
 			selected = _local_target__poll(lb, *ptarget, dist, &ctx);
@@ -1046,10 +1075,7 @@ _local__patch(struct oio_lb_pool_s *self,
 		if ((lb->nearby_mode && dist > reached_dist) ||
 				(!lb->nearby_mode && dist < reached_dist))
 			reached_dist = dist;
-		if (selected) {
-			selected->expected_dist = start_dist;
-			selected->warn_dist = lb->warn_dist;
-		} else {
+		if (!selected) {
 			/* the strings are '\0' separated, printf won't display them */
 			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "no service polled "
 					"from [%s], %u/%d services polled, %u services in slot",
@@ -1059,8 +1085,14 @@ _local__patch(struct oio_lb_pool_s *self,
 		}
 		++ctx.next_polled;
 		++count;
-		g_ptr_array_add(selection, selected);
+		g_ptr_array_add(ctx.selection, selected);
 	}
+	void _set_expected_dist(gpointer element, gpointer udata UNUSED) {
+		struct oio_lb_selected_item_s *sel = element;
+		sel->expected_dist = start_dist;
+		sel->warn_dist = lb->warn_dist;
+	}
+	g_ptr_array_foreach(ctx.selection, _set_expected_dist, NULL);
 
 	if (unlikely(GRID_DEBUG_ENABLED())) {
 		// FIXME: there is similar code in _slot_rehash()
@@ -1085,7 +1117,7 @@ _local__patch(struct oio_lb_pool_s *self,
 					sel->final_slot, sel->expected_slot);
 			i++;
 		}
-		g_ptr_array_foreach(selection, _display_selected, NULL);
+		g_ptr_array_foreach(ctx.selection, _display_selected, NULL);
 	}
 
 	for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
@@ -1107,12 +1139,12 @@ _local__patch(struct oio_lb_pool_s *self,
 		void _forward(struct oio_lb_selected_item_s *sel, gpointer udata) {
 			if (sel->item)
 				on_id(sel, udata);
-			// Do not forward "known" items
+			// Do not forward "known" items (sel->item == NULL)
 		}
 		// FIXME(FVE): change signature, specify last parameter
-		g_ptr_array_foreach(selection, (GFunc)_forward, NULL);
+		g_ptr_array_foreach(ctx.selection, (GFunc)_forward, NULL);
 	}
-	g_ptr_array_free(selection, TRUE);
+	g_ptr_array_free(ctx.selection, TRUE);
 	return err;
 }
 
