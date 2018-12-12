@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # oio-rdir-harass.py
-# Copyright (C) 2016-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2016-2017,2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -19,7 +19,7 @@
 import sys
 import time
 import random
-from oio.event.consumer import EventTypes
+from oio.event.evob import EventTypes
 from oio.conscience.client import ConscienceClient
 from oio.rdir.client import RdirClient
 

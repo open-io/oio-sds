@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -72,6 +72,21 @@ class EventException(Response, Exception):
     def __init__(self, *args, **kwargs):
         Response.__init__(self, *args, **kwargs)
         Exception.__init__(self, self.status)
+
+
+class EventTypes(object):
+    """Enum class for event type names."""
+
+    ACCOUNT_SERVICES = 'account.services'
+    CHUNK_DELETED = 'storage.chunk.deleted'
+    CHUNK_NEW = 'storage.chunk.new'
+    CONTAINER_DELETED = 'storage.container.deleted'
+    CONTAINER_NEW = 'storage.container.new'
+    CONTAINER_STATE = 'storage.container.state'
+    CONTENT_BROKEN = 'storage.content.broken'
+    CONTENT_DELETED = 'storage.content.deleted'
+    CONTENT_NEW = 'storage.content.new'
+    CONTENT_PERFECTIBLE = 'storage.content.perfectible'
 
 
 class StatusMap(object):

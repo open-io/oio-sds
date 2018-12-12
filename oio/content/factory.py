@@ -34,12 +34,12 @@ class ContentFactory(object):
         self.blob_client = BlobClient(conf, **kwargs)
 
     def _get(self, container_id, meta, chunks,
-             account=None, container_name=None):
+             account=None, container_name=None, **kwargs):
         chunk_method = meta['chunk_method']
         storage_method = STORAGE_METHODS.load(chunk_method)
         if not account or not container_name:
             container_info = self.container_client.container_get_properties(
-                cid=container_id)['system']
+                cid=container_id, **kwargs)['system']
             if not account:
                 account = container_info['sys.account']
             if not container_name:
@@ -52,28 +52,31 @@ class ContentFactory(object):
                    logger=self.logger)
 
     def get(self, container_id, content_id, account=None,
-            container_name=None):
+            container_name=None, **kwargs):
         try:
             meta, chunks = self.container_client.content_locate(
-                cid=container_id, content=content_id)
+                cid=container_id, content=content_id, **kwargs)
         except NotFound:
             raise ContentNotFound("Content %s/%s not found" % (container_id,
                                   content_id))
 
         return self._get(container_id, meta, chunks,
-                         account=account, container_name=container_name)
+                         account=account, container_name=container_name,
+                         **kwargs)
 
     def get_by_path_and_version(self, container_id, path, version,
-                                account=None, container_name=None):
+                                account=None, container_name=None,
+                                **kwargs):
         try:
             meta, chunks = self.container_client.content_locate(
-                cid=container_id, path=path, version=version)
+                cid=container_id, path=path, version=version, **kwargs)
         except NotFound:
             raise ContentNotFound("Content %s/%s/%s not found" % (container_id,
                                   path, str(version)))
 
         return self._get(container_id, meta, chunks,
-                         account=account, container_name=container_name)
+                         account=account, container_name=container_name,
+                         **kwargs)
 
     def new(self, container_id, path, size, policy, account=None,
             container_name=None, **kwargs):
