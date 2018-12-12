@@ -284,10 +284,10 @@ meta2_filter_action_put_content(struct gridd_filter_ctx_s *ctx,
 		meta2_filter_ctx_set_error(ctx, e);
 		rc = FILTER_KO;
 	} else {
-		_m2b_notify_beans(m2b, url, added, "content.new", FALSE);
 		for (GSList *l=deleted; l; l=l->next) {
 			_m2b_notify_beans(m2b, url, l->data, "content.deleted", TRUE);
 		}
+		_m2b_notify_beans(m2b, url, added, "content.new", FALSE);
 		_on_bean_ctx_send_list(obc);
 		rc = FILTER_OK;
 	}
