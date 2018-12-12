@@ -78,6 +78,7 @@ class BlobClient(object):
         return self.cache.resolve(url)
 
     @update_rawx_perfdata
+    @ensure_request_id
     def chunk_put(self, url, meta, data, **kwargs):
         if not hasattr(data, 'read'):
             data = utils.GeneratorIO(data)
@@ -94,6 +95,7 @@ class BlobClient(object):
         writer.stream(data, None)
 
     @update_rawx_perfdata
+    @ensure_request_id
     def chunk_delete(self, url, **kwargs):
         resp = self.http_pool.request('DELETE', self.resolve_url(url),
                                       **kwargs)
@@ -101,7 +103,6 @@ class BlobClient(object):
             raise exc.from_response(resp)
         return resp
 
-    @ensure_headers
     @ensure_request_id
     def chunk_delete_many(self, chunks, cid=None, **kwargs):
         """
@@ -135,20 +136,17 @@ class BlobClient(object):
         return resps
 
     @update_rawx_perfdata
+    @ensure_request_id
     def chunk_get(self, url, **kwargs):
-        req_id = kwargs.get('req_id')
-        if not req_id:
-            req_id = utils.request_id()
         url = self.resolve_url(url)
         reader = ChunkReader([{'url': url}], READ_BUFFER_SIZE,
-                             {'X-oio-req-id': req_id})
+                             **kwargs)
         # This must be done now if we want to access headers
         stream = reader.stream()
         headers = extract_headers_meta(reader.headers)
         return headers, stream
 
     @update_rawx_perfdata
-    @ensure_headers
     @ensure_request_id
     def chunk_head(self, url, **kwargs):
         _xattr = bool(kwargs.get('xattr', True))
@@ -169,7 +167,6 @@ class BlobClient(object):
             raise exc.from_response(resp)
 
     @update_rawx_perfdata
-    @ensure_headers
     @ensure_request_id
     def chunk_copy(self, from_url, to_url, chunk_id=None, fullpath=None,
                    cid=None, path=None, version=None, content_id=None,
