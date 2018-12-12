@@ -1,4 +1,4 @@
-# Copyright (C) 2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -15,17 +15,17 @@
 
 from datetime import datetime
 
-from oio.rebuilder.rebuilder import Rebuilder, RebuilderWorker
 from oio.common import exceptions
+from oio.common.easy_value import int_value
 from oio.common.fullpath import encode_fullpath
 from oio.common.green import sleep
 from oio.common.json import json
-from oio.common.easy_value import int_value
+from oio.common.utils import request_id
 from oio.content.factory import ContentFactory
 from oio.event.beanstalk import BeanstalkdListener, BeanstalkdSender
+from oio.event.evob import EventTypes
+from oio.rebuilder.rebuilder import Rebuilder, RebuilderWorker
 
-# TODO(FVE): move to a relevant module
-CONTENT_PERFECTIBLE = 'storage.content.perfectible'
 DEFAULT_IMPROVER_TUBE = 'oio-improve'
 
 
@@ -36,7 +36,7 @@ class BlobImprover(Rebuilder):
     better hosting service).
     """
 
-    supported_events = (CONTENT_PERFECTIBLE, )
+    supported_events = (EventTypes.CONTENT_PERFECTIBLE, )
 
     def __init__(self, conf, logger, beanstalkd_addr, **kwargs):
         super(BlobImprover, self).__init__(conf, logger, volume=None, **kwargs)
@@ -48,6 +48,7 @@ class BlobImprover(Rebuilder):
         self.sender = BeanstalkdSender(beanstalkd_addr, beanstalkd_tube,
                                        self.logger, **kwargs)
         self.retry_delay = int_value(self.conf.get('retry_delay'), 30)
+        self.req_id_prefix = 'blob-impr-'
 
     def _event_from_job(self, job_id, data, **kwargs):
         """Decode a JSON string into an event dictionary."""
@@ -89,7 +90,7 @@ class BlobImprover(Rebuilder):
             url['account'], url['user'], url['path'],
             url.get('version'), url['content'])
         # TODO(FVE): maybe tell some numbers about chunks
-        if item.get('event') == CONTENT_PERFECTIBLE:
+        if item.get('event') == EventTypes.CONTENT_PERFECTIBLE:
             return 'perfectible object %s' % (fullpath, )
         else:
             return 'object %s' % (fullpath, )
@@ -138,25 +139,28 @@ class BlobImproverWorker(RebuilderWorker):
     def content_factory(self):
         return self.rebuilder.content_factory
 
-    def move_perfectible_from_event(self, event, dry_run=False, **kwargs):
+    def move_perfectible_from_event(self, event, dry_run=False,
+                                    max_attempts=3, **kwargs):
         """
         Move one or more "perfectible" chunks described in a
         "storage.content.perfectible" event.
         """
         url = event['url']
+        req_id = request_id(self.rebuilder.req_id_prefix)
+        descr = self.rebuilder._item_to_string(event)
+        self.logger.info('Working on %s (req_id=%s)', descr, req_id)
         # There are chances that the set of chunks of the object has
         # changed between the time the event has been emitted and now.
         # It seems a good idea to reload the object metadata and compare.
         content = self.content_factory.get(url['id'], url['content'],
                                            account=url.get('account'),
-                                           container_name=url.get('user'))
-        fullpath = encode_fullpath(url['account'], url['user'], url['path'],
-                                   url.get('version'), url['content'])
+                                           container_name=url.get('user'),
+                                           req_id=req_id)
         for chunk in event['data']['chunks']:
             found = content.chunks.filter(url=chunk['id']).one()
             if not found:
                 raise exceptions.PreconditionFailed(
-                    "Chunk %s not found in %s" % (chunk['id'], fullpath))
+                    "Chunk %s not found in %s" % (chunk['id'], descr))
             # Chunk quality information is not saved along with object
             # metadata, thus we must fill it now.
             found.quality = chunk['quality']
@@ -167,6 +171,11 @@ class BlobImproverWorker(RebuilderWorker):
 
         moves = list()
         errors = list()
+
+        if not moveable:
+            self.logger.info('Nothing to do for %s', descr)
+            return moves, errors
+
         for chunk in moveable:
             try:
                 src = str(chunk.url)
@@ -177,7 +186,9 @@ class BlobImproverWorker(RebuilderWorker):
                 # TODO(FVE): try to improve all chunks of a metachunk
                 # in a single pass
                 dst = content.move_chunk(chunk, check_quality=True,
-                                         dry_run=dry_run, **kwargs)
+                                         dry_run=dry_run, req_id=req_id,
+                                         max_attempts=max_attempts,
+                                         **kwargs)
                 self.logger.debug("%s replaced by %s", src, dst['url'])
                 moves.append((raw_src, dst))
             except exceptions.OioException as err:
@@ -185,11 +196,12 @@ class BlobImproverWorker(RebuilderWorker):
                 errors.append(err)
         return moves, errors
 
-    def _rebuild_one(self, item, **kwargs):
-        moves, errors = self.move_perfectible_from_event(item, **kwargs)
+    def _rebuild_one(self, item, dry_run=False, move_attempts=3, **kwargs):
+        moves, errors = self.move_perfectible_from_event(
+            item, dry_run=dry_run, max_attempts=move_attempts, **kwargs)
         if errors:
             if not moves:
-                # Later we may want to limit handle attempts.
+                # Later we may want to limit attempts.
                 item['attempts'] = item.get('attempts', 0) + 1
                 raise exceptions.RetryLater(
                     item, 'Could not improve any chunk: %s' % errors)
@@ -199,5 +211,10 @@ class BlobImproverWorker(RebuilderWorker):
                     self.rebuilder._item_to_string(item), errors)
                 # TODO(FVE): build a new event, send it back
         else:
+            # TODO(FVE): if there are no moves, should we reschedule?
             for move in moves:
-                self.logger.debug('%s moved to %s', move[0], move[1])
+                self.logger.debug('%s%s moved to %s',
+                                  'dry-run: ' if dry_run else '',
+                                  move[0], move[1])
+        if dry_run:
+            raise exceptions.RetryLater(item, 'Rescheduled after dry-run')

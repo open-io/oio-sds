@@ -27,17 +27,10 @@ from oio.rebuilder.blob_improver import DEFAULT_IMPROVER_TUBE, \
 def make_arg_parser():
     log_parser = make_logger_args_parser()
     descr = """Listen to perfectible chunk events,
-               and try to place them more adequately."""
+               and try to place them more adequately.
+               Events that could not be handled will be rescheduled later."""
     parser = argparse.ArgumentParser(description=descr, parents=[log_parser])
     parser.add_argument('namespace', help="Namespace")
-    parser.add_argument('--dry-run', action='store_true',
-                        help="Display actions but do nothing")
-    parser.add_argument('--report-interval', type=int,
-                        help="Report interval in seconds (3600)")
-    parser.add_argument('--workers', type=int,
-                        help="Number of workers (1)")
-    parser.add_argument('--chunks-per-second', type=int,
-                        help="Max chunks per second per worker (30)")
     parser.add_argument('--beanstalkd',
                         metavar='IP:PORT',
                         help="Address of the beanstalkd service to listen to")
@@ -45,6 +38,22 @@ def make_arg_parser():
         '--beanstalkd-tube', metavar='LISTENER_TUBE',
         help='Listen to this beanstalkd tube (default: "%s").'
              % DEFAULT_IMPROVER_TUBE)
+    parser.add_argument('--chunks-per-second', type=int,
+                        help="Max chunks per second per worker (30)")
+    parser.add_argument('--dry-run', action='store_true',
+                        help="Display actions but do nothing")
+    parser.add_argument('--max-move-attempts', type=int, default=3,
+                        help=('Maximum number of attempts at finding a spare '
+                              'chunk and moving a perfectible chunk. '
+                              'Defaults to 3.'))
+    parser.add_argument('--report-interval', type=int,
+                        help="Report interval in seconds (3600)")
+    parser.add_argument('--retry-delay', type=int,
+                        help=('Delay to wait before rescheduling a job that '
+                              'could not be handled. Defaults to 3600s.'),
+                        default=3600)
+    parser.add_argument('--workers', type=int,
+                        help="Number of workers (1)")
     return parser
 
 
@@ -72,12 +81,15 @@ def main():
         conf['workers'] = args.workers
     if args.chunks_per_second is not None:
         conf['items_per_second'] = args.chunks_per_second
+    if args.retry_delay:
+        conf['retry_delay'] = args.retry_delay
 
     success = False
     try:
         blob_improver = BlobImprover(
             conf, logger, beanstalkd_addr=args.beanstalkd)
-        success = blob_improver.rebuilder_pass(dry_run=args.dry_run)
+        success = blob_improver.rebuilder_pass(
+            dry_run=args.dry_run, move_attempts=args.max_move_attempts)
     except KeyboardInterrupt:
         logger.info('Exiting')
     except Exception as exc:

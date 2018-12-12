@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -18,8 +18,7 @@ from oio.common import exceptions
 from oio.common.http_urllib3 import urllib3, get_pool_manager, \
     oio_exception_from_httperror
 from oio.common.json import json
-from oio.event.evob import Event, EventError
-from oio.event.consumer import EventTypes
+from oio.event.evob import Event, EventError, EventTypes
 from oio.event.filters.base import Filter
 from oio.container.client import ContainerClient
 

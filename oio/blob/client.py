@@ -136,6 +136,7 @@ class BlobClient(object):
         return resps
 
     @update_rawx_perfdata
+    @ensure_headers
     @ensure_request_id
     def chunk_get(self, url, **kwargs):
         url = self.resolve_url(url)

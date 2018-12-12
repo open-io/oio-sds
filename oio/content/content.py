@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -25,8 +25,8 @@ def compare_chunk_quality(current, candidate):
     """
     Compare the qualities of two chunks.
 
-    :returns: 1 if the candidate is better quality,
-        0 if they are equal, -1 if the candidate is worse.
+    :returns: > 0 if the candidate is better quality,
+        0 if they are equal, < 0 if the candidate is worse.
     """
     balance = 0
 
@@ -127,7 +127,8 @@ class Content(object):
         self.metadata['properties'] = value
 
     def _get_spare_chunk(self, chunks_notin, chunks_broken,
-                         max_attempts=3, check_quality=False):
+                         max_attempts=3, check_quality=False,
+                         **kwargs):
         spare_data = {
             "notin": ChunksHelper(chunks_notin, False).raw(),
             "broken": ChunksHelper(chunks_broken, False).raw()
@@ -138,7 +139,7 @@ class Content(object):
             try:
                 spare_resp = self.container_client.content_spare(
                     cid=self.container_id, path=self.content_id,
-                    data=spare_data, stgpol=self.policy)
+                    data=spare_data, stgpol=self.policy, **kwargs)
                 quals = extract_chunk_qualities(
                     spare_resp.get('properties', {}), raw=True)
                 if check_quality:
@@ -177,7 +178,7 @@ class Content(object):
         self.container_client.container_raw_insert(
             data, cid=self.container_id)
 
-    def _update_spare_chunk(self, current_chunk, new_url):
+    def _update_spare_chunk(self, current_chunk, new_url, **kwargs):
         old = {'type': 'chunk',
                'id': current_chunk.url,
                'hash': current_chunk.checksum,
@@ -191,7 +192,7 @@ class Content(object):
                'pos': current_chunk.pos,
                'content': self.content_id}
         self.container_client.container_raw_update(
-            [old], [new], cid=self.container_id)
+            [old], [new], cid=self.container_id, **kwargs)
 
     def _generate_sysmeta(self):
         sysmeta = dict()
@@ -230,7 +231,8 @@ class Content(object):
         self.container_client.content_delete(
             cid=self.container_id, path=self.path, **kwargs)
 
-    def move_chunk(self, chunk_id, check_quality=False, dry_run=False):
+    def move_chunk(self, chunk_id, check_quality=False, dry_run=False,
+                   max_attempts=3, **kwargs):
         """
         Move a chunk to another place. Optionally ensure that the
         new place is an improvement over the current one.
@@ -247,7 +249,8 @@ class Content(object):
             metapos=current_chunk.metapos).exclude(id=chunk_id).all()
 
         spare_urls, qualities = self._get_spare_chunk(
-            other_chunks, [current_chunk], check_quality=check_quality)
+            other_chunks, [current_chunk], check_quality=check_quality,
+            max_attempts=max_attempts, **kwargs)
 
         if dry_run:
             self.logger.info("Dry-run: would copy chunk from %s to %s",
@@ -255,16 +258,17 @@ class Content(object):
         else:
             self.logger.info("Copying chunk from %s to %s",
                              current_chunk.url, spare_urls[0])
+            # TODO(FVE): retry to copy (max_attempts times)
             self.blob_client.chunk_copy(
                 current_chunk.url, spare_urls[0], chunk_id=chunk_id,
                 fullpath=self.full_path, cid=self.container_id,
                 path=self.path, version=self.version,
-                content_id=self.content_id)
+                content_id=self.content_id, **kwargs)
 
             self._update_spare_chunk(current_chunk, spare_urls[0])
 
             try:
-                self.blob_client.chunk_delete(current_chunk.url)
+                self.blob_client.chunk_delete(current_chunk.url, **kwargs)
             except Exception as err:
                 self.logger.warn(
                     "Failed to delete chunk %s: %s", current_chunk.url, err)

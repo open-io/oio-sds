@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -108,18 +108,6 @@ class Worker(object):
             self.logger.warn("parent changed, shutting down")
             return False
         return True
-
-
-class EventTypes(object):
-    ACCOUNT_SERVICES = 'account.services'
-    CHUNK_NEW = 'storage.chunk.new'
-    CHUNK_DELETED = 'storage.chunk.deleted'
-    CONTAINER_NEW = 'storage.container.new'
-    CONTAINER_DELETED = 'storage.container.deleted'
-    CONTAINER_STATE = 'storage.container.state'
-    CONTENT_BROKEN = 'storage.content.broken'
-    CONTENT_NEW = 'storage.content.new'
-    CONTENT_DELETED = 'storage.content.deleted'
 
 
 def _stop(client, server):

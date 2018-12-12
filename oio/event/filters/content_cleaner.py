@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -15,8 +15,7 @@
 
 
 from oio.blob.client import BlobClient
-from oio.event.evob import Event
-from oio.event.consumer import EventTypes
+from oio.event.evob import Event, EventTypes
 from oio.event.filters.base import Filter
 from oio.common.exceptions import OioException
 from oio.api.backblaze import BackblazeDeleteHandler

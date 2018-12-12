@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,7 +19,8 @@ import json
 import time
 from oio.api.object_storage import ObjectStorageApi
 from oio.event.beanstalk import Beanstalk, ResponseError
-from oio.event.consumer import DEFAULT_TUBE, EventTypes
+from oio.event.consumer import DEFAULT_TUBE
+from oio.event.evob import EventTypes
 from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
 from tests.utils import BaseTestCase
