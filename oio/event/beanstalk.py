@@ -14,12 +14,11 @@
 # License along with this library.
 
 
-from oio.common.green import socket, Empty, LifoQueue, sleep, threading
+from oio.common.green import socket, Empty, LifoQueue, threading, time
 
 import os
 import sys
 import yaml
-from time import time
 from urlparse import urlparse
 from cStringIO import StringIO as BytesIO
 
@@ -68,6 +67,7 @@ class Reader(object):
         return self.bytes_written - self.bytes_read
 
     def _read_from_socket(self, length=None):
+        # pylint: disable=no-member
         socket_read_size = self.socket_read_size
         buf = self._buffer
         buf.seek(self.bytes_written)
@@ -161,6 +161,7 @@ class BaseParser(object):
         self.encoding = None
 
     def can_read(self):
+        # pylint: disable=no-member
         return self._buffer and bool(self._buffer_length)
 
     def read_response(self):
@@ -178,6 +179,7 @@ class BaseParser(object):
 
 
 class Connection(object):
+    # pylint: disable=no-member
     @classmethod
     def from_url(cls, url, **kwargs):
         url = urlparse(url)
@@ -580,14 +582,29 @@ class Beanstalk(object):
         """
         # TODO(FVE): check tube stats to ensure some jobs have passed through
         # and then get rid of the initial_delay
-        self.watch(tube)
+        # peek-ready requires "use", not "watch"
+        self.use(tube)
         if initial_delay > 0.0:
-            sleep(initial_delay)
+            time.sleep(initial_delay)
         job_id, _ = self.peek_ready()
-        deadline = time() + timeout
-        while job_id is not None and time() < deadline:
-            sleep(poll_interval)
+        deadline = time.time() + timeout
+        while job_id is not None and time.time() < deadline:
+            time.sleep(poll_interval)
             job_id, _ = self.peek_ready()
+
+    def wait_for_ready_job(self, tube, timeout=float('inf'),
+                           poll_interval=0.2):
+        """
+        Wait until the the specified tube has a ready job,
+        or the timeout expires.
+        """
+        self.use(tube)
+        job_id, _ = self.peek_ready()
+        deadline = time.time() + timeout
+        while job_id is None and time.time() < deadline:
+            time.sleep(poll_interval)
+            job_id, _ = self.peek_ready()
+        return job_id
 
     def stats_tube(self, tube):
         return self.execute_command('stats-tube', tube)
@@ -696,6 +713,7 @@ class BeanstalkdSender(TubedBeanstalkd):
 
     def __init__(self, addr, tube, logger,
                  low_limit=512, high_limit=1024, **kwargs):
+        # pylint: disable=no-member
         super(BeanstalkdSender, self).__init__(addr, tube, logger)
         self.low_limit = low_limit
         self.high_limit = high_limit
