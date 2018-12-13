@@ -340,6 +340,7 @@ set(ZK_INCLUDE_DIRS "${DEFAULT_INCLUDE_DIRS}/zookeeper")
 pkg_search_module(JSONC json json-c)
 pkg_check_modules(GLIB2 REQUIRED glib-2.0 gthread-2.0 gmodule-2.0)
 pkg_check_modules(CURL curl libcurl)
+pkg_check_modules(LIBEC erasurecode)
 
 if (NOT SDK_ONLY)
 pkg_check_modules(APR REQUIRED apr-1)
@@ -354,6 +355,7 @@ endif (NOT SDK_ONLY)
 # Load CLI-overriden configuration
 option_or_system(CURL curl curl/curl.h)
 option_or_system(JSONC json-c json.h)
+option_or_system(LIBEC erasurecode erasurecode.h)
 
 if (NOT SDK_ONLY)
 option_or_system(APACHE2 modules/mod_webdav.so httpd.h)
@@ -391,7 +393,7 @@ if (NOT DEFINED ALLOW_LIBMEMCACHED)
 endif ()
 print_found("LIBMEMCACHED")
 
-check_found("CURL" "GLIB2" "JSONC")
+check_found("CURL" "GLIB2" "JSONC" "LIBEC")
 
 if (NOT SDK_ONLY)
 check_found("APR" "APACHE2" "ATTR" "SQLITE3" "ZMQ" "ZK" "PYTHONINTERP" "LEVELDB" "ZLIB")
