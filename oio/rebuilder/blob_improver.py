@@ -67,9 +67,17 @@ class BlobImprover(Rebuilder):
         return BlobImproverWorker(self, **kwargs)
 
     def _fill_queue(self, queue, **kwargs):
+        max_events = kwargs.get('max_events')
+        sent_events = 0
         events = self.listener.fetch_jobs(self._event_from_job, **kwargs)
         for event in events:
             queue.put(event)
+            sent_events += 1
+            if max_events > 0 and sent_events >= max_events:
+                self.logger.info('Max events (%d) reached, exiting',
+                                 max_events)
+                break
+        events.close()
 
     def _read_retry_queue(self, queue, **kwargs):
         while True:

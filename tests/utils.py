@@ -1,4 +1,5 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# -*- coding: utf-8 -*-
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -196,6 +197,7 @@ class CommonTestCase(testtools.TestCase):
         self.ns = self.conf['namespace']
         self.account = self.conf['account']
         queue_addr = random.choice(self.conf['services']['beanstalkd'])['addr']
+        self.conf['queue_addr'] = queue_addr
         self.conf['queue_url'] = 'beanstalk://' + queue_addr
         self._beanstalk = None
         self._conscience = None
@@ -333,10 +335,13 @@ class BaseTestCase(CommonTestCase):
 
     def setUp(self):
         super(BaseTestCase, self).setUp()
+        self.locked_svc = list()
         self._flush_cs('echo')
 
     def tearDown(self):
         super(BaseTestCase, self).tearDown()
+        if self.locked_svc:
+            self.conscience.unlock_score(self.locked_svc)
         self._flush_cs('echo')
 
     def _service(self, name, action, wait=0, socket=None):
@@ -355,6 +360,21 @@ class BaseTestCase(CommonTestCase):
         check_call(['gridinit_cmd', '-S', socket, action, name])
         if wait > 0:
             time.sleep(wait)
+
+    def _lock_services(self, type_, services, wait=1.0, score=0):
+        """
+        Lock specified services, wait for the score to be propagated.
+        """
+        for svc in services:
+            self.locked_svc.append({'type': type_, 'addr': svc['addr'],
+                                    'score': score})
+        self.conscience.lock_score(self.locked_svc)
+        # In a perfect world™️ we do not need the time.sleep().
+        # For mysterious reason, all services are not reloaded immediately.
+        self._reload_proxy()
+        time.sleep(wait)
+        self._reload_meta()
+        time.sleep(wait)
 
     @classmethod
     def tearDownClass(cls):

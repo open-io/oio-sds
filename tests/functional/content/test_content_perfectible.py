@@ -17,16 +17,21 @@
 import logging
 import time
 
+try:
+    import subprocess32 as subprocess
+    SUBPROCESS32 = True
+except ImportError:
+    import subprocess
+    SUBPROCESS32 = False
+
 from collections import defaultdict
 
 from tests.utils import BaseTestCase
 
 from oio.api.object_storage import ObjectStorageApi
-from oio.conscience.client import ConscienceClient
 from oio.common.utils import request_id
 from oio.common.json import json
 from oio.event.beanstalk import ResponseError
-from oio.event.client import EventClient
 from oio.event.evob import Event
 from oio.rebuilder.blob_improver import DEFAULT_IMPROVER_TUBE
 
@@ -40,16 +45,8 @@ class TestPerfectibleContent(BaseTestCase):
         super(TestPerfectibleContent, self).setUp()
         self.api = ObjectStorageApi(self.ns, endpoint=self.uri,
                                     pool_manager=self.http_pool)
-        self.cs = ConscienceClient(self.conf, pool_manager=self.http_pool)
-        self.event = EventClient(self.conf)
-        self.locked_svc = list()
         # Ensure the tube is not clogged
-        self.event.beanstalk.drain_tube(DEFAULT_IMPROVER_TUBE)
-
-    def tearDown(self):
-        if self.locked_svc:
-            self.cs.unlock_score(self.locked_svc)
-        super(TestPerfectibleContent, self).tearDown()
+        self.beanstalk.drain_tube(DEFAULT_IMPROVER_TUBE)
 
     @classmethod
     def tearDownClass(cls):
@@ -61,52 +58,52 @@ class TestPerfectibleContent(BaseTestCase):
 
     def _aggregate_services(self, type_, key):
         """
-        Build lists of services indexed by `key`.
+        Build a dictionary of lists of services indexed by `key`.
+
+        :param type_: the type if services to index
+        :param key: a function
         """
-        all_svcs = self.cs.all_services(type_)
+        all_svcs = self.conscience.all_services(type_)
         out = defaultdict(list)
         for svc in all_svcs:
             out[key(svc)].append(svc)
         return out
 
-    def _lock_services(self, type_, services):
-        """
-        Lock specified services, wait for the score to be propagated.
-        """
-        for svc in services:
-            self.locked_svc.append({'type': type_, 'addr': svc['addr']})
-        self.cs.lock_score(self.locked_svc)
-        # In a perfect world™️ we do not need the time.sleep().
-        # For mysterious reason, all services are not reloaded immediately.
-        self._reload_proxy()
-        time.sleep(0.5)
-        self._reload_meta()
-        time.sleep(0.5)
+    def _aggregate_rawx_by_slot(self):
+        by_slot = self._aggregate_services('rawx',
+                                           lambda x: x['tags']
+                                           .get('tag.slots', 'rawx')
+                                           .rsplit(',', 2)[-1])
+        if 'rawx-even' not in by_slot or 'rawx-odd' not in by_slot:
+            self.skip('This test requires "rawx-even" and "rawx-odd" slots')
+        return by_slot
+
+    def _aggregate_rawx_by_place(self):
+        by_place = self._aggregate_services(
+            'rawx', lambda x: x['tags']['tag.loc'].rsplit('.', 2)[0])
+        if len(by_place) < 3:
+            self.skip('This test requires 3 different 2nd level locations')
+        return by_place
 
     def _wait_for_event(self, timeout=REASONABLE_EVENT_DELAY):
         """
         Wait for an event in the oio-improve tube.
         """
-        bt = self.event.beanstalk
-        bt.watch(DEFAULT_IMPROVER_TUBE)
+        self.beanstalk.watch(DEFAULT_IMPROVER_TUBE)
         try:
-            job_id, data = bt.reserve(timeout=timeout)
+            job_id, data = self.beanstalk.reserve(timeout=timeout)
         except ResponseError as exc:
             logging.warn('No event read from tube %s: %s',
                          DEFAULT_IMPROVER_TUBE, exc)
             self.fail()
-        bt.delete(job_id)
+        self.beanstalk.delete(job_id)
         return Event(json.loads(data))
 
     # This test must be executed first
     def test_0_upload_ok(self):
         """Check that no event is emitted when everything is ok."""
         # Check we have enough service locations.
-        by_place = self._aggregate_services(
-            'rawx', lambda x: x['tags']['tag.loc'].rsplit('.', 2)[0])
-        if len(by_place) < 3:
-            self.skip('This test requires 3 different 2nd level locations')
-            return
+        self._aggregate_rawx_by_place()
 
         # Upload an object.
         container = self._random_user()
@@ -118,10 +115,9 @@ class TestPerfectibleContent(BaseTestCase):
                                headers={'X-oio-req-id': reqid})
 
         # Wait on the oio-improve beanstalk tube.
-        bt = self.event.beanstalk
-        bt.watch(DEFAULT_IMPROVER_TUBE)
+        self.beanstalk.watch(DEFAULT_IMPROVER_TUBE)
         # Ensure we do not receive any event.
-        self.assertRaises(ResponseError, bt.reserve,
+        self.assertRaises(ResponseError, self.beanstalk.reserve,
                           timeout=REASONABLE_EVENT_DELAY)
 
     def test_upload_warn_dist(self):
@@ -174,14 +170,8 @@ class TestPerfectibleContent(BaseTestCase):
         """
         Test that an event is emitted when a fallback service slot is used.
         """
-        by_slot = self._aggregate_services('rawx',
-                                           lambda x: x['tags']
-                                           .get('tag.slots', 'rawx')
-                                           .rsplit(',', 2)[-1])
-        if len(by_slot) < 2:
-            self.skip('This test requires 2 different slots for rawx services')
-            return
-        elif len(by_slot['rawx-odd']) < 3:
+        by_slot = self._aggregate_rawx_by_slot()
+        if len(by_slot['rawx-odd']) < 3:
             self.skip('This test requires at least 3 services '
                       'in the "rawx-odd" slot')
 
@@ -215,3 +205,60 @@ class TestPerfectibleContent(BaseTestCase):
             slot_matches.append(qual['final_slot'] == qual['expected_slot'])
             self.assertNotEqual(qual['final_slot'], banned_slot)
         self.assertIn(False, slot_matches)
+
+    def _call_blob_improver_subprocess(self, run_time=3.0,
+                                       stop_after_events=1,
+                                       log_level='INFO'):
+        # FIXME(FVE): find a way to call coverage on the subprocess
+        blob_improver = subprocess.Popen(
+                    ['oio-blob-improver', self.ns,
+                     '--beanstalkd=' + self.conf['queue_addr'],
+                     '--retry-delay=1',
+                     '--log-level=' + log_level,
+                     '--stop-after-events=%d' % stop_after_events])
+        if SUBPROCESS32:
+            try:
+                blob_improver.wait(run_time)
+            except Exception:
+                blob_improver.kill()
+        else:
+            time.sleep(run_time)
+            blob_improver.kill()
+
+    def test_blob_improver_threecopies(self):
+        by_slot = self._aggregate_rawx_by_slot()
+        if len(by_slot['rawx-odd']) < 3:
+            self.skip('This test requires at least 3 services '
+                      'in the "rawx-odd" slot')
+        # Ensure the distance between services won't be a problem.
+        self._aggregate_rawx_by_place()
+
+        # Lock all services of the 'rawx-even' slot.
+        banned_slot = 'rawx-even'
+        self._lock_services('rawx', by_slot[banned_slot])
+
+        # Upload an object.
+        container = self._random_user()
+        reqid = request_id('perfectible-')
+        chunks, _, _ = self.api.object_create(
+            self.account, container, obj_name='perfectible',
+            data='whatever', policy='THREECOPIES', req_id=reqid)
+
+        # Wait for the "perfectible" event to be emitted,
+        # but do not consume it.
+        job = self.beanstalk.wait_for_ready_job(DEFAULT_IMPROVER_TUBE,
+                                                timeout=REASONABLE_EVENT_DELAY)
+        self.assertIsNotNone(job)
+        # "Unlock" the services of the 'rawx-even' slot.
+        self._lock_services('rawx', by_slot[banned_slot], score=100)
+
+        self._call_blob_improver_subprocess()
+
+        # Check some changes have been done on the object.
+        _, new_chunks = self.api.object_locate(
+            self.account, container, 'perfectible')
+        self.assertNotEqual(chunks, new_chunks)
+        # Ensure no new "perfectible" event is emitted.
+        job = self.beanstalk.wait_for_ready_job(DEFAULT_IMPROVER_TUBE,
+                                                timeout=REASONABLE_EVENT_DELAY)
+        self.assertIsNone(job)

@@ -52,6 +52,9 @@ def make_arg_parser():
                         help=('Delay to wait before rescheduling a job that '
                               'could not be handled. Defaults to 3600s.'),
                         default=3600)
+    parser.add_argument('--stop-after-events', type=int, default=0,
+                        help=('Stop the process after this number of events '
+                              'have been processed. Useful for testing.'))
     parser.add_argument('--workers', type=int,
                         help="Number of workers (1)")
     return parser
@@ -89,7 +92,8 @@ def main():
         blob_improver = BlobImprover(
             conf, logger, beanstalkd_addr=args.beanstalkd)
         success = blob_improver.rebuilder_pass(
-            dry_run=args.dry_run, move_attempts=args.max_move_attempts)
+            dry_run=args.dry_run, move_attempts=args.max_move_attempts,
+            max_events=args.stop_after_events)
     except KeyboardInterrupt:
         logger.info('Exiting')
     except Exception as exc:
