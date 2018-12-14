@@ -63,6 +63,10 @@ set_target_properties(oiocore PROPERTIES PUBLIC_HEADER "oio_core.h" VERSION 0.0.
 target_link_libraries(oiocore
 		${JSONC_LIBRARIES} ${GLIB2_LIBRARIES} ${LIBEC_LIBRARIES})
 
+include_directories(BEFORE
+		${CURL_INCLUDE_DIRS}
+)
+
 add_library(oiosds SHARED
 	http_put.c
 	http_del.c

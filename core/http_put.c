@@ -22,6 +22,7 @@ License along with this library.
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <math.h>
 #include <poll.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -32,6 +33,7 @@ License along with this library.
 #include <glib/gstdio.h>
 #include <curl/curl.h>
 #include <curl/multi.h>
+#include <erasurecode.h>
 
 #include <core/client_variables.h>
 #include <core/oioext.h>
@@ -39,6 +41,8 @@ License along with this library.
 
 #include "internals.h"
 #include "http_internals.h"
+
+#define EC_SEGMENT_SIZE 1048576
 
 enum http_single_put_e
 {
@@ -79,6 +83,10 @@ struct http_put_dest_s
 	gint64 bytes_sent;
 	guint http_code;
 	enum http_single_put_e state;
+
+	// In EC, we have to send the meta-chunk hash as trailing headers
+	GChecksum *checksum_metachunk;
+	GChecksum *checksum_chunk;
 };
 
 struct http_put_s
@@ -109,6 +117,12 @@ struct http_put_s
 	GQueue *buffer_tail; /* <GBytes*> */
 
 	enum http_whole_put_state_e state;
+
+	// We need this at the end of the stream.
+	GChecksum *checksum_metachunk;
+
+	// EC parameters.
+	int ec_k, ec_m, ec_handle;
 };
 
 #ifdef HAVE_EXTRA_DEBUG
@@ -167,6 +181,266 @@ http_put_create(gint64 content_length, gint64 soft_length)
 	return p;
 }
 
+
+/**
+ * There's a problem with libec_get_fragment_size where it returns a 80-bytes
+ * short length. So this is a hack around that problem.
+ * @param ec_handle The liberasurecode handle that was created for the request.
+ * @return The final fragment size that'll be pushed to RAWX.
+ */
+int
+http_put_ec_get_fragment_size(int ec_handle)
+{
+	char **data_frags, **parity_frags;
+	uint64_t frag_length;
+	char dummy_data[EC_SEGMENT_SIZE] = { 0 };
+	liberasurecode_encode(ec_handle, dummy_data, EC_SEGMENT_SIZE, &data_frags,
+			&parity_frags, &frag_length);
+	liberasurecode_encode_cleanup(ec_handle, data_frags, parity_frags);
+	return frag_length;
+}
+
+
+/**
+ * Wrapper around http_put_create that adjusts the soft_length and fills
+ * the EC parameters.
+ * @param content_length Designed for cases where the content length is already
+ * 			known. Not used in practice.
+ * @param soft_length The maximum allowed size for a chunk
+ * @param handle The liberasurecode handle used for this request
+ * @param k The K parameter for the EC
+ * @param m The M parameter for the EC
+ * @param chk The metachunk checksum handle, needed at the end of the request.
+ */
+struct http_put_s *
+http_put_create_with_ec(gint64 content_length, gint64 soft_length, int handle,
+		int k, int m, GChecksum * chk)
+{
+	int frag_length = http_put_ec_get_fragment_size(handle);
+	int segments_needed = round((double) soft_length / (double) frag_length);
+	soft_length = segments_needed * EC_SEGMENT_SIZE;
+	struct http_put_s *put = http_put_create(content_length, soft_length);
+	put->ec_handle = handle;
+	put->ec_m = m;
+	put->ec_k = k;
+	put->checksum_metachunk = chk;
+	return put;
+}
+
+/**
+ * Returns whether more than EC_SEGMENT_SIZE bytes are available in the queue,
+ * or that the termination buffer is present in the queue.
+ * @param buffer_queue The buffer queue to be analyzed.
+ * @return TRUE if enough data is available, FALSE otherwise.
+ */
+static int
+http_put_ec_enough_data_available(GQueue * buffer_queue)
+{
+	int queue_len = g_queue_get_length(buffer_queue);
+	unsigned int buffer_len = 0;
+	gsize i_buf_len = 0;
+	for (int i = 0; i < queue_len; i++) {
+		i_buf_len = g_bytes_get_size(g_queue_peek_nth(buffer_queue, i));
+		buffer_len += i_buf_len;
+		if (buffer_len >= EC_SEGMENT_SIZE || i_buf_len == 0)
+			return TRUE;
+	}
+	return FALSE;
+}
+
+/**
+ * Returns a buffer of data to be encoded.
+ *
+ * Generally only returns n*EC_SEGMENT_SIZE sized buffers, but if a termination
+ * buffer is detected in the queue, it will return a concatenation of the whole
+ * buffer queue.
+ *
+ * This assumes that either more than EC_SEGMENT_SIZE bytes are available in the
+ * queue, or that the termination buffer is present in the queue.
+ *
+ * @param put The metachunk upload handle.
+ * @return The bytes to be encoded.
+ */
+static GBytes *
+http_put_ec_get_encodable_data(struct http_put_s *put)
+{
+
+	/* FIXME: Verify that we have indeed more than EC_SEGMENT_SIZE or
+	 * termination buffer is present instead of assuming. */
+
+	// Figure out whether we need to encode everything left in buffer queue.
+	// If there is a termination buffer somewhere in the queue, it's bound
+	// to be at the tail of the queue.
+	int end_of_metachunk =
+			g_bytes_get_size(g_queue_peek_tail(put->buffer_tail)) == 0;
+
+	// Push everything into a byte array for further manipulation.
+	unsigned int buf_len = 0;
+	GByteArray *buf_builder = g_byte_array_new();
+
+	GBytes *head;
+	while ((head = g_queue_pop_head(put->buffer_tail))) {
+		if (g_bytes_get_size(head) != 0) {
+			buf_len += g_bytes_get_size(head);
+			g_byte_array_append(buf_builder, g_bytes_get_data(head, 0),
+					g_bytes_get_size(head));
+			g_bytes_unref(head);
+		} else {
+			// We no longer need to pop and we have a termination buffer so
+			// we re-enqueue it.
+			g_queue_push_head(put->buffer_tail, head);
+			break;
+		}
+	}
+
+	GBytes *concat_buffer = g_byte_array_free_to_bytes(buf_builder);
+
+	// If we have a byte array that's a multiple of EC_SEGMENT_SIZE or less than
+	// EC_SEGMENT_SIZE or it's EOF
+	if (buf_len % EC_SEGMENT_SIZE == 0 || end_of_metachunk) {
+		return concat_buffer;
+	}
+	// By now we are sure we have EC_SEGMENT_SIZE and some bytes.
+	// Get the n*EC_SEGMENT_SIZE slice and the rest and push them in order.
+	gsize first_slice_size = EC_SEGMENT_SIZE * (buf_len / EC_SEGMENT_SIZE);
+
+	// Fetch the encodable data we need.
+	GBytes *encodable_data = g_bytes_new_from_bytes(concat_buffer, 0,
+			first_slice_size);
+	GBytes *leftover_data = g_bytes_new_from_bytes(concat_buffer,
+			first_slice_size,
+			g_bytes_get_size(concat_buffer) - first_slice_size);
+
+	// Re-enqueue the leftovers
+	g_queue_push_head(put->buffer_tail, leftover_data);
+
+	// Unref GBytes
+	g_bytes_unref(concat_buffer);
+
+	return encodable_data;
+}
+
+/**
+ * Encodes all the data given in in buf, puts concatenated fragments in the
+ * fragments array.
+ *
+ * Assuming we have a (2*EC_SEGEMENT_SIZE) sized buf, the result of encoding
+ * each EC_SEGMENT_SIZE wil be an array of K+M ordered fragments,
+ * let's say frag_{segment_num}_{frag_num}.
+ *
+ * In this case the first element of the fragments array will have, in this
+ * order, frag_1_1+frag_2_1, and so on.
+ *
+ * Will encode everything it received as parameter, even if
+ * size(buf) % EC_SEGMENT_SIZE != 0
+ *
+ * @param put The metachunk upload handle
+ * @param buf The buffer to encode, typically obtained through
+ * 				http_put_ec_get_encodable_data
+ * @param fragments Pointer to an array of GBytes that will be allocated
+ * 					by this function
+ */
+static void
+http_put_ec_encode_data(struct http_put_s *put, GBytes * buf,
+		GBytes ** fragments)
+{
+
+	// We need an EC handle to exist, and we need to know the K+M value.
+	EXTRA_ASSERT(put->ec_handle && put->ec_handle > 0);
+	EXTRA_ASSERT(put->ec_k > 0);
+	EXTRA_ASSERT(put->ec_m > 0);
+
+	// Required for libec
+	char **data_fragments;
+	char **parity_fragments;
+	uint64_t fragments_length;
+
+	GByteArray *fragment_builders[put->ec_k + put->ec_m];
+
+	// Otherwise initialize our GByteArrays
+	for (int i = 0; i < put->ec_k + put->ec_m; i++)
+		fragment_builders[i] = g_byte_array_new();
+
+	// in case we don't have less than EC_SEGMENT_SIZE
+	unsigned int next_segment_length, bytes_left, buf_size = 0;
+	GBytes *temp_buf;
+	gsize temp_size;
+	buf_size = (unsigned int) g_bytes_get_size(buf);
+	bytes_left = buf_size;
+
+	do {
+		next_segment_length = bytes_left >=
+				EC_SEGMENT_SIZE ? EC_SEGMENT_SIZE : bytes_left;
+
+		temp_buf = g_bytes_new_from_bytes(buf, buf_size - bytes_left,
+				next_segment_length);
+
+		liberasurecode_encode(put->ec_handle,
+				g_bytes_get_data(temp_buf, &temp_size),
+				next_segment_length,
+				&data_fragments, &parity_fragments, &fragments_length);
+
+		bytes_left -= next_segment_length;
+
+		// Now to create GBytes from the fragments we received.
+		// We know for sure that we will have K data fragments and
+		// M parity fragments
+		for (int i = 0; i < put->ec_k; i++)
+			g_byte_array_append(fragment_builders[i],
+					(guint8 *) data_fragments[i], fragments_length);
+		for (int i = 0; i < put->ec_m; i++)
+			g_byte_array_append(fragment_builders[put->ec_k + i],
+					(guint8 *) parity_fragments[i], fragments_length);
+
+		// Cleanup.
+		liberasurecode_encode_cleanup(put->ec_handle, data_fragments,
+				parity_fragments);
+		g_bytes_unref(temp_buf);
+
+	} while (bytes_left > 0);
+
+	// Build the GBytes that we're going to return
+	for (int i = 0; i < put->ec_k + put->ec_m; i++)
+		fragments[i] = g_byte_array_free_to_bytes(fragment_builders[i]);
+
+	return;
+}
+
+/**
+ * Generates the trailing headers for the chunk represented by dest.
+ * At the time of writing, the trailing headers metachunk-hash and
+ * metachunk-size are obligatory for chunks using EC.
+ * @param put The metachunk upload handle
+ * @param dest The chunk upload handle
+ * @return A The trailing headers containing the size/hash of the metachunk
+ * 			and the chunk hash.
+// */
+static int
+http_put_ec_gen_checksums(struct curl_slist **trailers_list,
+		struct http_put_dest_s *dest)
+{
+
+	struct http_put_s *put = dest->http_put;
+
+	*trailers_list = curl_slist_append(*trailers_list,
+			g_strdup_printf("X-oio-chunk-meta-metachunk-size: %ld",
+					put->soft_length)
+			);
+
+	*trailers_list = curl_slist_append(*trailers_list,
+			g_strdup_printf("X-oio-chunk-meta-metachunk-hash: %s",
+					g_checksum_get_string(dest->checksum_metachunk)
+			)
+			);
+
+	*trailers_list = curl_slist_append(*trailers_list,
+			g_strdup_printf("X-oio-chunk-meta-chunk-hash: %s",
+					g_checksum_get_string(dest->checksum_chunk)
+			)
+			);
+	return CURL_TRAILERFUNC_OK;
+}
+
 struct http_put_dest_s *
 http_put_add_dest(struct http_put_s *p, const char *url, gpointer u)
 {
@@ -188,6 +462,10 @@ http_put_add_dest(struct http_put_s *p, const char *url, gpointer u)
 	dest->http_code = 0;
 	dest->state = HTTP_SINGLE_BEGIN;
 
+	// Proper cleanup is done in http_put_dest_destroy for the next
+	// two attributes.
+	dest->checksum_metachunk = p->checksum_metachunk;
+	dest->checksum_chunk = g_checksum_new(G_CHECKSUM_MD5);
 	p->dests = g_slist_append(p->dests, dest);
 
 	return dest;
@@ -242,6 +520,17 @@ http_put_dest_destroy(gpointer destination)
 		g_bytes_unref(dest->buffer);
 		dest->buffer = NULL;
 	}
+
+	// No need to free checksum_metachunk else we'll have a double free
+	// It's freed in _sds_upload_reset right before this is called.
+	if (dest->checksum_metachunk)
+		dest->checksum_metachunk = NULL;
+
+	if (dest->checksum_chunk) {
+		g_checksum_free(dest->checksum_chunk);
+		dest->checksum_chunk = NULL;
+	}
+
 
 	g_free(dest);
 }
@@ -467,6 +756,18 @@ _start_upload(struct http_put_s *p)
 			http_put_dest_add_header(dest, "Transfer-Encoding", "chunked");
 		http_put_dest_add_header(dest, "Expect", " ");
 
+		if (p->ec_handle > 0) {
+			http_put_dest_add_header(dest, "Trailer",
+					"X-oio-chunk-meta-metachunk-size, "
+					"X-oio-chunk-meta-metachunk-hash, "
+					"X-oio-chunk-meta-chunk-hash");
+			// Enable if using custom curl
+			curl_easy_setopt(dest->handle, CURLOPT_TRAILERDATA,
+					dest);
+			curl_easy_setopt(dest->handle, CURLOPT_TRAILERFUNCTION,
+					http_put_ec_gen_checksums);
+		}
+
 		curl_easy_setopt(dest->handle, CURLOPT_READFUNCTION,
 				(curl_read_callback)cb_read);
 		curl_easy_setopt(dest->handle, CURLOPT_READDATA, dest);
@@ -538,8 +839,8 @@ _count_up_dests (struct http_put_s *p)
 	return count;
 }
 
-GError *
-http_put_step (struct http_put_s *p)
+static GError *
+http_put_step_classic (struct http_put_s *p)
 {
 	int rc;
 	guint count_up = 0, count_waiting_for_data = 0;
@@ -653,6 +954,186 @@ retry:
 	}
 
 	return NULL;
+}
+
+/**
+ * Mirrors the http_put_classic code, but instead of pushing the the
+ * same buffer to all destinations, encodes data
+ * and pushes the right fragments to the right chunks.
+ *
+ * @param p The metachunk upload handle
+ * @return NULL if no error occured, a GError otherwise.
+ */
+static GError *
+http_put_step_ec(struct http_put_s *p)
+{
+
+	int rc;
+	guint count_up = 0, count_waiting_for_data = 0;
+	EXTRA_ASSERT(p != NULL);
+
+	if (!p->dests) {
+		GRID_TRACE("%s Empty upload detected", __FUNCTION__);
+		p->state = HTTP_WHOLE_FINISHED;
+		return NULL;
+	}
+	if (p->state == HTTP_WHOLE_FINISHED) {
+		GRID_TRACE("%s BUG: Stepping on a finished upload", __FUNCTION__);
+		return NULL;
+	}
+
+	register guint count_dests = g_slist_length(p->dests);
+	GRID_TRACE("%s STEP on %u destinations", __FUNCTION__, count_dests);
+
+	/* consume the CURL notifications for terminated actions */
+	_manage_curl_events(p);
+
+	/* Ensure the data-pipe doesn't become empty and maybe call for more */
+	for (GSList * l = p->dests; l; l = l->next) {
+		struct http_put_dest_s *d = l->data;
+		if (d->state == HTTP_SINGLE_FINISHED)
+			continue;
+		count_up++;
+		if (!d->buffer && d->state < HTTP_SINGLE_FINISHED)
+			count_waiting_for_data++;
+	}
+
+	EXTRA_ASSERT(count_waiting_for_data <= count_up);
+
+	// We needed to change from count_up to count_dest because we have to push
+	// a new buffer to all K+M dests.
+	// We could encode parts and do some magic but that is risky and unwarranted
+	if (count_waiting_for_data == count_dests) {
+
+		// Whether we reached a termination buffer at the top of the queue
+		int end_of_metachunk =
+				g_bytes_get_size(g_queue_peek_head(p->buffer_tail)) == 0;
+
+		// If we have enough data available, get the data, encode it and assign
+		// it to destinations.
+		if (http_put_ec_enough_data_available(p->buffer_tail) ||
+				end_of_metachunk) {
+
+			// Where the magic happens.
+			GBytes *fragments[p->ec_k + p->ec_m];
+			GBytes *buf = NULL;
+			// If we have an empty buffer at the top, push it to the cb_read
+			// callbacks.
+			if (end_of_metachunk) {
+				buf = g_queue_pop_head(p->buffer_tail);
+				for (int i = 0; i < (p->ec_m + p->ec_k); i++)
+					fragments[i] = g_bytes_ref(buf);
+			} else {
+				// We have potentially more than EC_SEGMENT_SIZE (or EOF),
+				// encode and push.
+				buf = http_put_ec_get_encodable_data(p);
+				http_put_ec_encode_data(p, buf, &fragments[0]);
+			}
+
+			g_bytes_unref(buf);
+
+			// Finally, push everything.
+			int fragment_index = 0;
+			for (GSList * l = p->dests; l; l = l->next) {
+				struct http_put_dest_s *d = l->data;
+				// FIXME: Redundant verification ?
+				if (d->buffer) {
+					g_bytes_unref(d->buffer);
+					d->buffer = NULL;
+				} else {
+					d->buffer = fragments[fragment_index];
+					gsize data_len;
+					const guchar *data =
+							g_bytes_get_data(fragments[fragment_index],
+							&data_len);
+					if (data_len != 0)
+						g_checksum_update(d->checksum_chunk, data, data_len);
+				}
+				fragment_index += 1;
+			}
+		}
+
+	}
+
+	if (p->state == HTTP_WHOLE_BEGIN) {
+		GRID_DEBUG("%s Starting %u uploads", __FUNCTION__, count_dests);
+		_start_upload(p);
+		p->state = HTTP_WHOLE_READY;
+	}
+
+	/* pause CURL actions that have no data to manage immediately,
+	 * and ensure the action with data ready are registered. */
+	for (GSList * l = p->dests; l; l = l->next) {
+		struct http_put_dest_s *d = l->data;
+		GRID_TRACE("%s %d/%s buf=%p url=%s", __FUNCTION__,
+				d->state, _single_put_state_to_string(d->state),
+				d->buffer, d->url);
+		if (d->state == HTTP_SINGLE_FINISHED)
+			continue;
+		if (d->buffer) {
+			if (d->state == HTTP_SINGLE_PAUSED) {
+				curl_easy_pause(d->handle, CURLPAUSE_CONT);
+				d->state =
+						d->bytes_sent ? HTTP_SINGLE_REQUEST : HTTP_SINGLE_BEGIN;
+			}
+		}
+	}
+
+	count_up = _count_up_dests(p);
+	p->state = count_up ? HTTP_WHOLE_READY : HTTP_WHOLE_PAUSED;
+
+	GRID_TRACE("%s Uploads: %u total, %u up (%u wanted to data)",
+			__FUNCTION__, count_dests, count_up, count_waiting_for_data);
+
+	if (count_up) {
+		int maxfd = -1;
+		long timeout = 0;
+		struct timeval tv = { 1, 0 };
+		fd_set fdread = { }, fdwrite = {
+		}, fdexcep = {
+		};
+
+		curl_multi_timeout(p->mhandle, &timeout);
+
+		/* timeout not set, libcurl recommend to wait for a few seconds */
+		if (timeout < 0)
+			timeout = 1000;
+
+		/* No need to wait if actions are ready */
+		if (timeout > 0) {
+			tv.tv_sec = timeout / 1000;
+			tv.tv_usec = (timeout * 1000) % 1000000;
+			curl_multi_fdset(p->mhandle, &fdread, &fdwrite, &fdexcep, &maxfd);
+
+retry:
+			rc = select(maxfd + 1, &fdread, &fdwrite, &fdexcep, &tv);
+			if (rc < 0) {
+				if (errno == EINTR)
+					goto retry;
+				return SYSERR("select() error: (%d) %s", errno,
+						strerror(errno));
+			}
+		}
+	}
+
+	/* Do the I/O things now */
+	curl_multi_perform(p->mhandle, &rc);
+
+	if (!(count_up = _count_up_dests(p))) {
+		GRID_TRACE("%s uploads finishing", __FUNCTION__);
+		_manage_curl_events(p);
+		p->state = HTTP_WHOLE_FINISHED;
+	}
+
+	return NULL;
+}
+
+GError *
+http_put_step(struct http_put_s * p)
+{
+	if (p->ec_handle > 0)
+		return http_put_step_ec(p);
+	return http_put_step_classic(p);
 }
 
 /* -------------------------------------------------------------------------- */

@@ -13,7 +13,7 @@ include(CheckLibraryExists)
 include(CheckTypeSize)
 include(FindFLEX)
 include(FindBISON)
-include(FindCURL)
+#include(FindCURL)
 include(FindPythonInterp)
 include(FindZLIB)
 find_package(PkgConfig)
@@ -197,9 +197,12 @@ macro (option_or_system _PREFIX _LIB)
 	if (DEFINED ${_PREFIX}_LIBDIR)
 		set (${_PREFIX}_LIBRARY_DIRS ${${_PREFIX}_LIBDIR} )
 	endif ()
+	if (DEFINED ${_PREFIX}_LIBS)
+		set (${_PREFIX}_LIBRARIES ${${_PREFIX}_LIBS} )
+	endif ()
 
 	# Check expected elements are present
-	find_library (${_PREFIX}_LIBRARIES ${_LIB} ${${_PREFIX}_LIBRARY_DIRS})
+	find_library (${_PREFIX}_LIBRARIES ${_LIB} PATHS ${${_PREFIX}_LIBRARY_DIRS})
 	set (_FOUND true)
 	set (_HEADERS "")
 	foreach (arg ${ARGN})
@@ -335,7 +338,10 @@ set(ZK_INCLUDE_DIRS "${DEFAULT_INCLUDE_DIRS}/zookeeper")
 # check system configuration
 pkg_search_module(JSONC json json-c)
 pkg_check_modules(GLIB2 REQUIRED glib-2.0 gthread-2.0 gmodule-2.0)
-pkg_check_modules(CURL curl libcurl)
+
+# Thanks to the addition of TRAILING HEADERS management in libcurl since
+# version 7.64, we can now 
+pkg_check_modules(CURL curl>=7.64 libcurl>=7.64)
 pkg_check_modules(LIBEC erasurecode)
 
 if (NOT SDK_ONLY)
