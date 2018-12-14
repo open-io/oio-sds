@@ -21,6 +21,8 @@ install:
   - pip install --upgrade -r all-requirements.txt -r test-requirements.txt
   - pip install --upgrade zkpython
   - go get gopkg.in/ini.v1 gopkg.in/tylerb/graceful.v1
+  - cd vendor/curl && ./buildconf && ./configure && sudo make install && cd ../../
+  - sudo ldconfig
 
 env:
   - TEST_SUITE=3copies,with-service-id

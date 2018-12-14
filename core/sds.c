@@ -30,7 +30,6 @@ License along with this library.
 #include <curl/curlver.h>
 #include <erasurecode.h>
 
-
 #include <core/client_variables.h>
 #include <metautils/lib/metautils.h>
 
@@ -416,7 +415,8 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result,
  * Mainly added to make the EC parameters parsing/instantiation common
  * between download and upload.
  */
-struct oio_sds_ec_s {
+struct oio_sds_ec_s
+{
 	int ec_handle;
 	int ec_k;
 	int ec_m;
@@ -424,7 +424,7 @@ struct oio_sds_ec_s {
 
 static bool oio_sds_ec_cache_check_for_handle(const char *chunk_method);
 
-static GError * oio_sds_ec_cache_add_handle(const char *chunk_method);
+static GError *oio_sds_ec_cache_add_handle(const char *chunk_method);
 
 /**
  * Parses a chunk method to extract the algorithm and the K/M parameters.
@@ -439,13 +439,13 @@ static GError * oio_sds_ec_cache_add_handle(const char *chunk_method);
  */
 static GError *
 oio_sds_ec_parse_method(const char *chunk_method, int *k, int *m,
-		gchar **algorithm)
+		gchar ** algorithm)
 {
 	GRegex *regex;
 	GMatchInfo *match_info;
 	GError *err = NULL;
 	const char *pattern =
-		"^ec\\/algo=(?P<algo>[a-z_]+),k=(?P<ec_k>[0-9]+),m=(?P<ec_m>[0-9]+)";
+			"^ec\\/algo=(?P<algo>[a-z_]+),k=(?P<ec_k>[0-9]+),m=(?P<ec_m>[0-9]+)";
 
 	regex = g_regex_new(pattern, 0, 0, &err);
 	if (regex == NULL && err != NULL) {
@@ -455,12 +455,11 @@ oio_sds_ec_parse_method(const char *chunk_method, int *k, int *m,
 	int matches = g_regex_match(regex, chunk_method, 0, &match_info);
 	if (!matches) {
 		return NEWERROR(CODE_INTERNAL_ERROR,
-						"[oio_sds_upload_ec_init_handle] Unable to parse "
-						"chunk method! : %s",
-						chunk_method);
+				"[oio_sds_upload_ec_init_handle] Unable to parse "
+				"chunk method! : %s", chunk_method);
 	}
 
-	*algorithm = g_match_info_fetch_named(match_info, (const gchar *)"algo");
+	*algorithm = g_match_info_fetch_named(match_info, (const gchar *) "algo");
 	*k = atoi(g_match_info_fetch_named(match_info, (const gchar *) "ec_k"));
 	*m = atoi(g_match_info_fetch_named(match_info, (const gchar *) "ec_m"));
 
@@ -477,16 +476,15 @@ oio_sds_ec_parse_method(const char *chunk_method, int *k, int *m,
  * @return A non-null GError if one occured, NULL otherwise.
  */
 static GError *
-oio_sds_ec_backend_type(const char *algorithm, ec_backend_id_t *backend_id)
+oio_sds_ec_backend_type(const char *algorithm, ec_backend_id_t * backend_id)
 {
 	// FIXME: Add the other backends supported by liberasurecode.
 	if (strcmp(algorithm, "liberasurecode_rs_vand") == 0)
 		*backend_id = EC_BACKEND_LIBERASURECODE_RS_VAND;
 	else
 		return NEWERROR(CODE_POLICY_NOT_SUPPORTED,
-						"[oio_sds_upload_ec_init_handle] The chosen EC driver "
-						"is not supported! : %s",
-						algorithm);
+				"[oio_sds_upload_ec_init_handle] The chosen EC driver "
+				"is not supported! : %s", algorithm);
 	return NULL;
 }
 
@@ -509,10 +507,8 @@ oio_sds_ec_init_handle_nocache(const char *chunk_method,
 	ec_backend_id_t backend;
 	GError *err = NULL;
 
-	err =
-		oio_sds_ec_parse_method(chunk_method, &ec_k, &ec_m, &algorithm);
-	if     (err)
-	{
+	err = oio_sds_ec_parse_method(chunk_method, &ec_k, &ec_m, &algorithm);
+	if (err) {
 		g_free(algorithm);
 		return err;
 	}
@@ -548,7 +544,7 @@ oio_sds_ec_init_handle_nocache(const char *chunk_method,
 	if (result->ec_handle <= 0) {
 		g_free(algorithm);
 		return NEWERROR(CODE_INTERNAL_ERROR,
-						"[%s] Unable to create EC" "driver instance!", __func__);
+				"[%s] Unable to create EC" "driver instance!", __func__);
 	}
 	g_free(algorithm);
 	return err;
@@ -568,34 +564,33 @@ oio_sds_ec_init_handle_nocache(const char *chunk_method,
  * @param result A pointer to the ec_handle that's contain the result.
  * @return A non-null GError if one occured, NULL otherwise.
  */
-static GError *oio_sds_ec_init_handle(const char *chunk_method,
-									  struct oio_sds_ec_s *result)
+static GError *
+oio_sds_ec_init_handle(const char *chunk_method, struct oio_sds_ec_s *result)
 {
 	GError *err = NULL;
-	if     (!oio_sds_ec_cache_check_for_handle(chunk_method))
-	{
+	if (!oio_sds_ec_cache_check_for_handle(chunk_method)) {
 		err = oio_sds_ec_cache_add_handle(chunk_method);
 		if (err)
 			return err;
 	}
-	return       oio_sds_ec_init_handle_nocache(chunk_method, result);
+	return oio_sds_ec_init_handle_nocache(chunk_method, result);
 }
 
 /**
  * Used to free elements of the cached handles GTree.
  */
-static GError *oio_sds_ec_cache_destroy_handle(struct oio_sds_ec_s *handle)
+static GError *
+oio_sds_ec_cache_destroy_handle(struct oio_sds_ec_s *handle)
 {
 	GError *err = NULL;
 	int res;
-	if  (handle->ec_handle)
-	{
+	if (handle->ec_handle) {
 		res = liberasurecode_instance_destroy(handle->ec_handle);
 		if (res)
 			return NEWERROR(CODE_INTERNAL_ERROR,
-							"[%s] Unable to destroy EC handle !", __func__);
+					"[%s] Unable to destroy EC handle !", __func__);
 	}
-	handle->     ec_handle = 0;
+	handle->ec_handle = 0;
 	g_free(handle);
 	return err;
 }
@@ -603,17 +598,19 @@ static GError *oio_sds_ec_cache_destroy_handle(struct oio_sds_ec_s *handle)
 /**
  * Allocates a new GTree to store dummy cache handles.
  */
-static void oio_sds_ec_cache_init()
+static void
+oio_sds_ec_cache_init()
 {
 	handle_cache_tree = g_tree_new_full(
-		(GCompareDataFunc) g_strcmp0, NULL,
-		g_free, (GDestroyNotify) oio_sds_ec_cache_destroy_handle);
+			(GCompareDataFunc) g_strcmp0, NULL,
+			g_free, (GDestroyNotify) oio_sds_ec_cache_destroy_handle);
 }
 
 /**
  * Checks wether there's already a dummy cached handle for this chunked method.
  */
-static bool oio_sds_ec_cache_check_for_handle(const char *chunk_method)
+static bool
+oio_sds_ec_cache_check_for_handle(const char *chunk_method)
 {
 	return g_tree_lookup(handle_cache_tree, chunk_method) != NULL;
 }
@@ -623,7 +620,8 @@ static bool oio_sds_ec_cache_check_for_handle(const char *chunk_method)
  *
  * See oio_sds_ec_init_handle_no_cache for the chunk_method format.
  */
-static GError *oio_sds_ec_cache_add_handle(const char *chunk_method)
+static GError *
+oio_sds_ec_cache_add_handle(const char *chunk_method)
 {
 	struct oio_sds_ec_s *cached_handle = NULL;
 	GError *err = NULL;
@@ -631,14 +629,14 @@ static GError *oio_sds_ec_cache_add_handle(const char *chunk_method)
 
 
 	err = oio_sds_ec_init_handle_nocache(chunk_method, cached_handle);
-	if           (err)
-	{
+	if (err) {
 		g_free(cached_handle);
 		return err;
 	}
 	g_tree_insert(handle_cache_tree, g_strdup(chunk_method), cached_handle);
 	return err;
 }
+
 
 /* Logging helpers ---------------------------------------------------------- */
 
@@ -1442,7 +1440,12 @@ struct oio_sds_ul_s
 	struct http_put_s *put;
 	GSList *http_dests;
 	size_t local_done;
-	GChecksum *checksum_chunk;
+	GChecksum *checksum_metachunk;
+
+	/* erasure coding */
+	int ec_handle;
+	int ec_k;
+	int ec_m;
 };
 
 static void
@@ -1452,16 +1455,16 @@ _assert_no_upload (struct oio_sds_ul_s *ul)
 	g_assert (NULL == ul->mc);
 	g_assert (NULL == ul->put);
 	g_assert (NULL == ul->http_dests);
-	g_assert (NULL == ul->checksum_chunk);
+	g_assert (NULL == ul->checksum_metachunk);
 	g_assert (0 == ul->local_done);
 }
 
 static void
 _sds_upload_reset (struct oio_sds_ul_s *ul)
 {
-	if (ul->checksum_chunk)
-		g_checksum_free (ul->checksum_chunk);
-	ul->checksum_chunk = NULL;
+	if (ul->checksum_metachunk)
+		g_checksum_free (ul->checksum_metachunk);
+	ul->checksum_metachunk = NULL;
 	_metachunk_clean (ul->mc);
 	ul->mc = NULL;
 	http_put_destroy (ul->put);
@@ -1492,7 +1495,7 @@ oio_sds_upload_init (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst)
 	ul->sds = sds;
 	ul->dst = dst;
 	ul->checksum_content = g_checksum_new (G_CHECKSUM_MD5);
-	ul->checksum_chunk = NULL;
+	ul->checksum_metachunk = NULL;
 	ul->buffer_tail = g_queue_new ();
 	ul->metachunk_ready = g_queue_new ();
 	if (dst->chunk_size > 0)
@@ -1531,6 +1534,14 @@ oio_sds_upload_clean (struct oio_sds_ul_s *ul)
 		ul->sys_props = NULL;
 	}
 
+	if (ul->ec_handle > 0) {
+		//FIXME: Handle the case where instance destruction is not possible.
+		int res = liberasurecode_instance_destroy(ul->ec_handle);
+		g_assert(res == 0);
+		ul->ec_handle = -1;
+	}
+
+
 	g_slist_free_full (ul->chunks_done, g_free);
 	g_slist_free_full (ul->chunks_failed, g_free);
 	oio_str_clean (&ul->hexid);
@@ -1565,6 +1576,20 @@ oio_sds_upload_needs_ecd(struct oio_sds_ul_s *ul)
 {
 	return _chunk_method_needs_ecd(ul->chunk_method);
 }
+
+static GError *
+oio_sds_upload_ec_init_handle(struct oio_sds_ul_s *ul)
+{
+
+	struct oio_sds_ec_s ec_info;
+	GError *err = oio_sds_ec_init_handle(ul->chunk_method, &ec_info);
+	// Fill the Upload with info.
+	ul->ec_k = ec_info.ec_k;
+	ul->ec_m = ec_info.ec_m;
+	ul->ec_handle = ec_info.ec_handle;
+	return err;
+}
+
 
 struct oio_error_s *
 oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
@@ -1639,28 +1664,19 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 		json_tokener_free (tok);
 	}
 
-	gint64 k = 1;
 
-	/* Verify either we are doing erasure coding or not */
+	/* Verify either we are doing erasure coding or not
+	 * and initialize parameters and handles */
 	if (!err && oio_sds_upload_needs_ecd(ul)) {
-		if (oio_str_is_set(ul->sds->ecd)) {
-			GRID_DEBUG("using ecd gateway");
-		} else {
-			err = NEWERROR(CODE_NOT_IMPLEMENTED,
-					"cannot upload this without ecd");
-		}
-
-		/* If we erasure-code, patch the metachunk-size */
-		if (oio_sds_client_patch_metachunk_size) {
-			k = data_security_decode_param_int64(ul->chunk_method, "k", 1);
-			ul->chunk_size = ul->chunk_size * k;
-		}
+		oio_sds_upload_ec_init_handle(ul);
 	}
 
 	/* Organize the set of chunks into metachunks. */
 	if (!err) {
 		struct metachunk_s **out = NULL;
-		if ((err = _organize_chunks(_chunks, &out, ul->sds->no_shuffle, k)))
+		// "Shuffling" in this case orders the chunks on a meta.intra basis, which is necessary for EC.
+		int shuffle = oio_sds_upload_needs_ecd(ul) || ul->sds->no_shuffle;
+		if ((err = _organize_chunks(_chunks, &out, shuffle, ul->ec_k)))
 			g_prefix_error (&err, "Logic: ");
 		else
 			for (struct metachunk_s **p = out; *p; ++p)
@@ -1721,8 +1737,8 @@ _finish_metachunk_upload(struct oio_sds_ul_s *ul)
 		c->flag_success = 2 == (http_put_get_http_code(ul->put, c) / 100);
 	}
 
-	if (ul->checksum_chunk) {
-		const char *h = g_checksum_get_string (ul->checksum_chunk);
+	if (ul->checksum_metachunk) {
+		const char *h = g_checksum_get_string (ul->checksum_metachunk);
 		for (GSList *l = ul->mc->chunks; l; l = l->next) {
 			struct chunk_s *c = l->data;
 			g_strlcpy (c->hexhash, h, sizeof(c->hexhash));
@@ -1827,7 +1843,7 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 
 	EXTRA_ASSERT (NULL == ul->put);
 	EXTRA_ASSERT (NULL == ul->http_dests);
-	EXTRA_ASSERT (NULL == ul->checksum_chunk);
+	EXTRA_ASSERT (NULL == ul->checksum_metachunk);
 
 	ul->started = TRUE;
 
@@ -1860,47 +1876,47 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 		c->position.meta = ul->mc->meta;
 	}
 
+	ul->checksum_metachunk = g_checksum_new (G_CHECKSUM_MD5);
+
 	/* Initiate the PolyPut (c) with all its targets */
-	ul->put = http_put_create (-1, ul->chunk_size);
 	if (oio_sds_upload_needs_ecd(ul)) {
-		// TODO: allow getting ecd from proxy
-		char ecd[128] = {0};
-		g_snprintf(ecd, sizeof(ecd), "http://%s/", ul->sds->ecd);
-		struct http_put_dest_s *dest = http_put_add_dest(ul->put, ecd, ul->mc);
+		/*
+		 * OH LAWD HERE COMES THE HEADACHE
+		 * So ul->chunk_size is actually used BOTH as chunk_size AND as
+		 * metachunk_size. (according to Florent). However, the only time I
+		 * could see it used as metachunk_size was in tool_roundtrip by
+		 * explicitly forcing the ul->chunk_size parameter to be the maximum
+		 * expected chunk size. So since that is effectively the only case
+		 * where that happens, it's better to add this tiny (read: ugly)
+		 * hack so that the tool_roundtrip stuff works.
+		 */
+		struct chunk_s *c = g_slist_nth_data(ul->mc->chunks, 0);
+		gint64 actual_chunk_size =
+				((gsize) ul->chunk_size !=
+				c->size) ? ul->chunk_size / ul->ec_k : (gint64) c->size;
+		ul->put =
+				http_put_create_with_ec(-1, actual_chunk_size, ul->ec_handle,
+				ul->ec_k, ul->ec_m, ul->checksum_metachunk);
+	} else
+		ul->put = http_put_create(-1, ul->chunk_size);
+
+	for (GSList * l = ul->mc->chunks; l; l = l->next) {
+		struct chunk_s *c = l->data;
+		struct http_put_dest_s *dest = http_put_add_dest(ul->put, c->url, c);
+
 		_sds_upload_add_headers(ul, dest);
-		int chunks_nb = 0;
-		for (GSList *l = ul->mc->chunks; l; l = l->next, chunks_nb++) {
-			struct chunk_s *chunk = l->data;
-			char key[64] = {0};
-			g_snprintf(key, sizeof(key), "%s%s-%u",
-					RAWX_HEADER_PREFIX, "chunk", chunk->position.intra);
-			http_put_dest_add_header(dest, key, "%s", chunk->url);
-		}
-		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunks-nb",
-				"%d", chunks_nb);
-		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-pos",
-				"%u", ul->mc->meta);
-		ul->http_dests = g_slist_append (ul->http_dests, dest);
-	} else {
-		for (GSList *l = ul->mc->chunks; l; l = l->next) {
-			struct chunk_s *c = l->data;
-			struct http_put_dest_s *dest = http_put_add_dest (ul->put, c->url, c);
 
-			_sds_upload_add_headers(ul, dest);
+		http_put_dest_add_header(dest, RAWX_HEADER_PREFIX "chunk-id",
+				"%s", strrchr(c->url, '/') + 1);
 
-			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-id",
-					"%s", strrchr(c->url, '/')+1);
+		gchar strpos[32];
+		_chunk_pack_position(c, strpos, sizeof(strpos));
+		http_put_dest_add_header(dest, RAWX_HEADER_PREFIX "chunk-pos",
+				"%s", strpos);
 
-			gchar strpos[32];
-			_chunk_pack_position (c, strpos, sizeof(strpos));
-			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-pos",
-					"%s", strpos);
-
-			ul->http_dests = g_slist_append (ul->http_dests, dest);
-		}
+		ul->http_dests = g_slist_append(ul->http_dests, dest);
 	}
 
-	ul->checksum_chunk = g_checksum_new (G_CHECKSUM_MD5);
 	GRID_TRACE("%s (%p) upload ready!", __FUNCTION__, ul);
 	return NULL;
 }
@@ -1938,7 +1954,7 @@ oio_sds_upload_step (struct oio_sds_ul_s *ul)
 	} else {
 		/* No upload running ... */
 		EXTRA_ASSERT (NULL == ul->http_dests);
-		EXTRA_ASSERT (NULL == ul->checksum_chunk);
+		EXTRA_ASSERT (NULL == ul->checksum_metachunk);
 		EXTRA_ASSERT (0 == ul->local_done);
 
 		/* Check if we need to start a new one */
@@ -2005,8 +2021,8 @@ oio_sds_upload_step (struct oio_sds_ul_s *ul)
 		gsize l = 0;
 		const void *b = g_bytes_get_data (buf, &l);
 		if (l) {
-			if (ul->checksum_chunk)
-				g_checksum_update (ul->checksum_chunk, b, l);
+			if (ul->checksum_metachunk)
+				g_checksum_update (ul->checksum_metachunk, b, l);
 			g_checksum_update (ul->checksum_content, b, l);
 			ul->local_done += l;
 		}

@@ -1,4 +1,5 @@
 add_definitions(-DG_LOG_DOMAIN="oio.core")
+add_definitions(-DCURL_STATICLIB)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
 include_directories(BEFORE
@@ -60,10 +61,14 @@ add_library(oiocore SHARED url.c cfg.c str.c ext.c log.c lb.c var.c
 	${CMAKE_CURRENT_BINARY_DIR}/lb_variables.c)
 
 target_link_libraries(oiocore
-		${JSONC_LIBRARIES} ${GLIB2_LIBRARIES} ${LIBEC_LIBRARIES})
+		${JSONC_LIBRARIES} ${GLIB2_LIBRARIES})
 set_target_properties(oiocore PROPERTIES
 		PUBLIC_HEADER "oio_core.h"
 		SOVERSION ${ABI_VERSION})
+
+include_directories(BEFORE
+		${CURL_INCLUDE_DIRS}
+)
 
 add_library(oiosds SHARED
 	http_put.c

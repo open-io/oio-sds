@@ -33,6 +33,11 @@ struct http_put_s;
 struct http_put_s * http_put_create (gint64 content_length,
 		gint64 soft_length);
 
+struct http_put_s *http_put_create_with_ec(gint64 content_length,
+		gint64 soft_length, int handle, int k, int m, GChecksum * chk);
+
+int http_put_ec_get_fragment_size(int ec_handle);
+
 /* Add a new destination where to send data.
  * @param p http request handle
  * @param url destination url
