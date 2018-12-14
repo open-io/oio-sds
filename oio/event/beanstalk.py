@@ -210,9 +210,13 @@ class Connection(object):
 
     def use(self, tube):
         self.use_tubes.append(tube)
+        if self._sock:
+            self._use(tube)
 
     def watch(self, tube):
         self.watch_tubes.append(tube)
+        if self._sock:
+            self._watch(tube)
 
     def connect(self):
         if self._sock:
@@ -317,21 +321,18 @@ class Connection(object):
         if not self._sock:
             self.connect()
         try:
-            if isinstance(command, str):
-                command = [command]
-            for item in command:
-                self._sock.sendall(item)
+            self._sock.sendall(command)
         except socket.timeout:
             self.disconnect()
             raise TimeoutError("Timeout writing to socket")
         except socket.error:
-            e = sys.exc_info()[1]
+            err = sys.exc_info()[1]
             self.disconnect()
-            if len(e.args) == 1:
-                errno, errmsg = 'UNKNOWN', e.args[0]
+            if len(err.args) == 1:
+                errno, errmsg = 'UNKNOWN', err.args[0]
             else:
-                errno = e.args[0]
-                errmsg = e.args[1]
+                errno = err.args[0]
+                errmsg = err.args[1]
             raise ConnectionError("Error %s while writing to socket. %s." %
                                   (errno, errmsg))
         except Exception:
@@ -642,9 +643,23 @@ class BeanstalkdListener(TubedBeanstalkd):
                                   self.addr, self.tube)
                 self._connect(**kwargs)
             job_id, data = self.beanstalkd.reserve(timeout=timeout)
-            for job_info in on_job(job_id, data, **kwargs):
-                yield job_info
-            self.beanstalkd.delete(job_id)
+            try:
+                for job_info in on_job(job_id, data, **kwargs):
+                    yield job_info
+            except GeneratorExit:
+                # If the reader finishes to handle the job, but does not want
+                # any new job, it will break the generator. This does not mean
+                # the current job has failed, thus we must delete it.
+                self.beanstalkd.delete(job_id)
+                raise
+            except Exception as err:
+                try:
+                    self.beanstalkd.bury(job_id)
+                except BeanstalkError as exc:
+                    self.logger.error("Could not bury job %s: %s", job_id, exc)
+                exceptions.reraise(err.__class__, err)
+            else:
+                self.beanstalkd.delete(job_id)
             return
         except ConnectionError as exc:
             self.connected = False
@@ -666,11 +681,6 @@ class BeanstalkdListener(TubedBeanstalkd):
         except Exception:
             self.logger.exception("ERROR on %s using tube %s (job=%s)",
                                   self.addr, self.tube, job_id)
-        if job_id:
-            try:
-                self.beanstalkd.bury(job_id)
-            except BeanstalkError as exc:
-                self.logger.error("Could not bury job %s: %s", job_id, exc)
 
     def fetch_jobs(self, on_job, **kwargs):
         while True:

@@ -27,10 +27,6 @@ from oio.common.constants import ADMIN_HEADER, \
 _POOL_MANAGER_OPTIONS_KEYS = ["pool_connections", "pool_maxsize",
                               "max_retries", "backoff_factor"]
 
-URLLIB3_REQUESTS_KWARGS = ('fields', 'headers', 'body', 'retries', 'redirect',
-                           'assert_same_host', 'timeout', 'pool_timeout',
-                           'release_conn', 'chunked')
-
 
 class HttpApi(object):
     """
@@ -101,9 +97,7 @@ class HttpApi(object):
         :raise oio.common.exceptions.ClientException: in case of HTTP status
         code >= 400
         """
-        # Filter arguments that are not recognized by urllib3
-        out_kwargs = {k: v for k, v in kwargs.items()
-                      if k in URLLIB3_REQUESTS_KWARGS}
+        out_kwargs = dict(kwargs)
 
         # Ensure headers are all strings
         if headers:

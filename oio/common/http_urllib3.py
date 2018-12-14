@@ -29,6 +29,26 @@ DEFAULT_POOLSIZE = 32
 DEFAULT_RETRIES = 0
 DEFAULT_BACKOFF = 0
 
+URLLIB3_REQUESTS_KWARGS = ('fields', 'headers', 'body', 'retries', 'redirect',
+                           'assert_same_host', 'timeout', 'pool_timeout',
+                           'release_conn', 'chunked')
+
+
+class SafePoolManager(urllib3.PoolManager):
+    """
+    `urllib3.PoolManager` wrapper that filters out keyword arguments
+    not recognized by urllib3.
+    """
+
+    def request(self, *args, **kwargs):
+        """
+        Filter out arguments that are not recognized by urllib3,
+        then call `urllib3.PoolManager.request`.
+        """
+        kwargs2 = {k: v for k, v in kwargs.items()
+                   if k in URLLIB3_REQUESTS_KWARGS}
+        return super(SafePoolManager, self).request(*args, **kwargs2)
+
 
 def get_pool_manager(pool_connections=DEFAULT_POOLSIZE,
                      pool_maxsize=DEFAULT_POOLSIZE,
@@ -53,9 +73,9 @@ def get_pool_manager(pool_connections=DEFAULT_POOLSIZE,
     else:
         max_retries = urllib3.Retry(total=max_retries,
                                     backoff_factor=backoff_factor)
-    return urllib3.PoolManager(num_pools=pool_connections,
-                               maxsize=pool_maxsize, retries=max_retries,
-                               block=False)
+    return SafePoolManager(num_pools=pool_connections,
+                           maxsize=pool_maxsize, retries=max_retries,
+                           block=False)
 
 
 def oio_exception_from_httperror(exc, reqid=None, url=None):
