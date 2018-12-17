@@ -261,6 +261,8 @@ m2db_get_missing_chunks(struct sqlx_sqlite3_s *sq3)
 void
 m2db_set_missing_chunks(struct sqlx_sqlite3_s *sq3, gint64 missing)
 {
+	if (missing < 0)
+		missing = 0;
 	sqlx_admin_set_i64(sq3, M2V2_ADMIN_MISSING_CHUNKS, missing);
 }
 

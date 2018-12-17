@@ -853,8 +853,6 @@ _update_missing_chunks(struct meta2_backend_s *m2b, struct sqlx_sqlite3_s *sq3,
 	namespace_info_free(nsinfo);
 
 end:
-	if (missing_chunks < 0)
-		missing_chunks = 0;
 	m2db_set_missing_chunks(sq3, missing_chunks);
 }
 
@@ -1305,9 +1303,15 @@ meta2_backend_insert_beans(struct meta2_backend_s *m2b,
 				err = _db_save_beans_list (sq3->db, beans);
 			else
 				err = _db_insert_beans_list (sq3->db, beans);
-			if (!err)
+			if (!err) {
+				gint64 missing_chunks = m2db_get_missing_chunks(sq3);
+				for (GSList *bean=beans; bean; bean=bean->next) {
+					if (DESCR(bean->data) == &descr_struct_CHUNKS)
+						missing_chunks--;
+				}
+				m2db_set_missing_chunks(sq3, missing_chunks);
 				m2db_increment_version(sq3);
-			else {
+			} else {
 				/* A constraint error is usually raised by an actual constraint
 				 * violation in the DB (inside the transaction) or also by a
 				 * failure of the commit hook (on the final COMMIT). */
