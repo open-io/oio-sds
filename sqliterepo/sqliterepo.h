@@ -300,11 +300,6 @@ typedef GError*(*dump_base_chunked_cb)(GByteArray *gba, gint64 remaining_bytes,
 GError* sqlx_repository_dump_base_chunked(struct sqlx_sqlite3_s *sq3,
 		gint chunk_size, dump_base_chunked_cb callback, gpointer callback_arg);
 
-/** Perform a SQLite backup on the sqlite handles underlying two sqliterepo
- * bases. */
-GError* sqlx_repository_backup_base(struct sqlx_sqlite3_s *src_sq3,
-		struct sqlx_sqlite3_s *dst_sq3);
-
 GError* sqlx_repository_restore_base(struct sqlx_sqlite3_s *sq3,
 		guint8 *raw, gsize rawsize);
 

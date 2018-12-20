@@ -1433,15 +1433,6 @@ _read_file(int fd, GByteArray *gba)
 }
 
 GError*
-sqlx_repository_backup_base(struct sqlx_sqlite3_s *src_sq3,
-		struct sqlx_sqlite3_s *dst_sq3)
-{
-	EXTRA_ASSERT(src_sq3 != NULL);
-	EXTRA_ASSERT(dst_sq3 != NULL);
-	return _backup_main(src_sq3->db, dst_sq3->db);
-}
-
-GError*
 sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 		dump_base_fd_cb read_file_cb, gpointer cb_arg)
 {
