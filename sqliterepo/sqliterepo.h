@@ -154,6 +154,10 @@ GError * sqlx_repository_init(const gchar *vol,
 		const struct sqlx_repo_config_s *cfg,
 		sqlx_repository_t **result);
 
+/* The cleanup is not performed during the sqlx_repository_init() because we
+ * prefer ensuring we are the only process with an access granted. */
+void sqlx_repository_initial_cleanup(sqlx_repository_t *repo);
+
 /** Cleans all the structures associated with the given repository.
  * For security purposes, it internally calls sqlx_repository_stop(). */
 void sqlx_repository_clean(sqlx_repository_t *repo);

@@ -18,10 +18,11 @@ License along with this library.
 */
 
 #include <stddef.h>
-#include <fcntl.h>
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <glob.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -357,6 +358,46 @@ sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
 	repo->running = BOOL(TRUE);
 	*result = repo;
 	return NULL;
+}
+
+void
+sqlx_repository_initial_cleanup(sqlx_repository_t *repo)
+{
+	gchar pattern[PATH_MAX] = {0};
+	glob_t buf = {0};
+	int rc;
+
+	g_assert_nonnull(repo);
+
+	g_snprintf(pattern, sizeof(pattern), "%s/tmp/dump.sqlite3.*",
+			repo->basedir);
+
+	rc = glob(pattern, GLOB_NOSORT, NULL, &buf);
+	switch (rc) {
+		case GLOB_NOSPACE:
+			GRID_WARN("Dump cleanup: glob error on %s: %s", pattern,
+					"Memory allocation error");
+			break;
+		case GLOB_ABORTED:
+			GRID_WARN("Dump cleanup: glob error on %s: %s", pattern,
+					"I/O error");
+			break;
+		case GLOB_NOMATCH:
+			GRID_DEBUG("Dump cleanup: no temp file found for %s", pattern);
+			break;
+		case 0:
+			for (size_t i=0; i<buf.gl_pathc ;++i) {
+				const char *path = buf.gl_pathv[i];
+				rc = unlink(path);
+				if (rc == 0) {
+					GRID_INFO("Dump cleanup: unlinked %s", path);
+				} else {
+					GRID_WARN("Dump cleanup: unlink error on %s: (%d) %s",
+							path, errno, strerror(errno));
+				}
+			}
+	}
+	globfree(&buf);
 }
 
 gboolean
