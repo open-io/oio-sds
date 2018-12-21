@@ -47,10 +47,7 @@ restore_ctx_clear(struct restore_ctx_s **ctx)
 {
 	if (!ctx || !*ctx)
 		return;
-	if ((*ctx)->fd >= 0) {
-		metautils_pclose(&((*ctx)->fd));
-		(*ctx)->fd = -1;
-	}
+	metautils_pclose(&((*ctx)->fd));
 	unlink((*ctx)->path);
 	g_free(*ctx);
 	*ctx = NULL;
