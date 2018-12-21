@@ -294,6 +294,12 @@ typedef GError*(*dump_base_fd_cb)(int fd, gpointer arg);
 GError* sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 		dump_base_fd_cb callback, gpointer callback_arg);
 
+/** Open the database file read-only,
+ *  and pass the file descriptor to a callback.
+ *  Falls back on sqlx_repository_dump_base_fd in case of error. */
+GError* sqlx_repository_dump_base_fd_no_copy(struct sqlx_sqlite3_s *sq3,
+		dump_base_fd_cb read_file_cb, gpointer cb_arg);
+
 /** Callback for sqlx_repository_dump_base_chunked() */
 typedef GError*(*dump_base_chunked_cb)(GByteArray *gba, gint64 remaining_bytes,
 		gpointer arg);
