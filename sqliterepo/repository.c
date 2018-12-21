@@ -1487,6 +1487,14 @@ _read_file(int fd, GByteArray *gba)
 	return err;
 }
 
+static void
+_fadvise_whole_seq(int fd, const char *path)
+{
+	int rc = posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
+	if (rc != 0)
+		GRID_INFO("fadvise failed for %s: (%d) %s", path, rc, strerror(rc));
+}
+
 GError*
 sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 		dump_base_fd_cb read_file_cb, gpointer cb_arg)
@@ -1542,6 +1550,7 @@ sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 	}
 
 	if (!err) {
+		_fadvise_whole_seq(fd, path);
 		err = read_file_cb(fd, cb_arg);
 	}
 
@@ -1590,10 +1599,7 @@ sqlx_repository_dump_base_fd_no_copy(struct sqlx_sqlite3_s *sq3,
 			}
 			err = sqlx_repository_dump_base_fd(sq3, read_file_cb, cb_arg);
 		} else {
-			rc = posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
-			if (rc != 0)
-				GRID_INFO("fadvise failed for %s: (%d) %s",
-						sq3->path_inline, rc, strerror(rc));
+			_fadvise_whole_seq(fd, sq3->path_inline);
 			err = read_file_cb(fd, cb_arg);
 			metautils_pclose(&fd);
 		}
