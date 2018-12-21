@@ -789,6 +789,8 @@ sqlx_service_action(void)
 		sqlx_peering_direct__set_udp(SRV.peering, fd_udp);
 	}
 
+	sqlx_repository_initial_cleanup(SRV.repository);
+
 	/* SERVER/GRIDD main run loop */
 	if (NULL != (err = network_server_run(SRV.server, _reconfigure_on_SIGHUP)))
 		return _action_report_error(err, "GRIDD run failure");
