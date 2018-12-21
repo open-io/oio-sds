@@ -1215,6 +1215,15 @@ Used by `gcc`
  * cmake directive: *OIO_SQLITEREPO_DUMP_CHUNK_SIZE*
  * range: 4096 -> 2146435072
 
+### sqliterepo.dump.max_size
+
+> Maximum size of a database dump. If a base is bigger than this size, it will be refused the synchronous DB_RESTORE mechanism, and will be ansynchronously restored with the DB_DUMP/DB_PIPEFROM mechanism.
+
+ * default: **1073741824**
+ * type: gint64
+ * cmake directive: *OIO_SQLITEREPO_DUMP_MAX_SIZE*
+ * range: 0 -> 2146435072
+
 ### sqliterepo.election.allow_master
 
 > Allow the role of MASTER in any election.
