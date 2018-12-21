@@ -1438,7 +1438,7 @@ sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 {
 	gchar path[LIMIT_LENGTH_VOLUMENAME+32] = {0};
 	gboolean try_slash_tmp = FALSE;
-	int rc, fd;
+	int rc, fd = -1;
 	sqlite3 *dst = NULL;
 	GError *err = NULL;
 
@@ -1447,6 +1447,8 @@ sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 	EXTRA_ASSERT(read_file_cb != NULL);
 
 	for (;;) {
+		EXTRA_ASSERT(fd < 0);
+
 		/* First try to dump on local volume, on error try /tmp */
 		g_snprintf(path, sizeof(path), "%s/tmp/dump.sqlite3.XXXXXX",
 				try_slash_tmp? "" : sq3->repo->basedir);
@@ -1477,6 +1479,7 @@ sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 			GRID_WARN("Failed to dump base into %s (%s), will try with /tmp",
 					path, err->message);
 			g_clear_error(&err);
+			metautils_pclose(&fd);
 			try_slash_tmp = TRUE;
 		} else {
 			break;
