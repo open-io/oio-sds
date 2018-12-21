@@ -1499,6 +1499,13 @@ GError*
 sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 		dump_base_fd_cb read_file_cb, gpointer cb_arg)
 {
+	static struct dump_context_s {
+		volatile int lazy_init;
+		gint counter;
+		GMutex mutex;
+		GCond cond;
+	} context = {1, 5, {}, {}};
+
 	gchar path[LIMIT_LENGTH_VOLUMENAME+32] = {0};
 	gboolean try_slash_tmp = FALSE;
 	int rc, fd = -1;
@@ -1509,10 +1516,35 @@ sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 	EXTRA_ASSERT(sq3 != NULL);
 	EXTRA_ASSERT(read_file_cb != NULL);
 
+	if (context.lazy_init) {
+		if (g_atomic_int_compare_and_exchange(&context.lazy_init, 1, 0)) {
+			g_cond_init(&context.cond);
+			g_mutex_init(&context.mutex);
+		}
+	}
+
+	/* Check the limit has not been reached */
+	g_mutex_lock(&context.mutex);
+retry:
+	if (context.counter <= 0) {
+		if (g_cond_wait_until(&context.cond, &context.mutex,
+					g_get_monotonic_time() + 4 * G_TIME_SPAN_MINUTE)) {
+			/* Signaled! */
+			goto retry;
+		} else {
+			err = BUSY("Too many concurrents DB dumps");
+		}
+	} else {
+		context.counter --;
+	}
+	g_mutex_unlock(&context.mutex);
+	if (err)
+		return err;
+
+	/* First try to dump on local volume, on error try /tmp */
 	for (;;) {
 		EXTRA_ASSERT(fd < 0);
 
-		/* First try to dump on local volume, on error try /tmp */
 		g_snprintf(path, sizeof(path), "%s/tmp/dump.sqlite3.XXXXXX",
 				try_slash_tmp? "" : sq3->repo->basedir);
 
@@ -1555,6 +1587,13 @@ sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 	}
 
 	metautils_pclose(&fd);
+
+	/* Notify a waiting thread that a slot is now available */
+	g_mutex_lock(&context.mutex);
+	context.counter ++;
+	g_cond_signal(&context.cond);
+	g_mutex_unlock(&context.mutex);
+
 	return err;
 }
 
