@@ -1520,6 +1520,7 @@ sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 		if (g_atomic_int_compare_and_exchange(&context.lazy_init, 1, 0)) {
 			g_cond_init(&context.cond);
 			g_mutex_init(&context.mutex);
+			context.counter = sqliterepo_dumps_max;
 		}
 	}
 
@@ -1528,7 +1529,7 @@ sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 retry:
 	if (context.counter <= 0) {
 		if (g_cond_wait_until(&context.cond, &context.mutex,
-					g_get_monotonic_time() + 4 * G_TIME_SPAN_MINUTE)) {
+					g_get_monotonic_time() + sqliterepo_dumps_timeout)) {
 			/* Signaled! */
 			goto retry;
 		} else {
