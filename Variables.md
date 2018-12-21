@@ -1224,6 +1224,24 @@ Used by `gcc`
  * cmake directive: *OIO_SQLITEREPO_DUMP_MAX_SIZE*
  * range: 0 -> 2146435072
 
+### sqliterepo.dumps.max
+
+> How many concurrent DB dumps may happen in a single process.
+
+ * default: **1024**
+ * type: gint
+ * cmake directive: *OIO_SQLITEREPO_DUMPS_MAX*
+ * range: 1 -> G_MAXINT
+
+### sqliterepo.dumps.timeout
+
+> How long to wait for a concurrent DB dump to finish. Should be set accordingly with sqliterepo.outgoing.timeout.req.resync.
+
+ * default: **4 * G_TIME_SPAN_MINUTE**
+ * type: gint64
+ * cmake directive: *OIO_SQLITEREPO_DUMPS_TIMEOUT*
+ * range: 1 * G_TIME_SPAN_SECOND -> 1 * G_TIME_SPAN_DAY
+
 ### sqliterepo.election.allow_master
 
 > Allow the role of MASTER in any election.
@@ -1421,9 +1439,9 @@ Used by `gcc`
 
 ### sqliterepo.outgoing.timeout.req.resync
 
-> Sets the global timeout of a RESYNC request sent to a 'meta' service. Sent to a SLAVE DB, the RESYNC operation involves a RPC from the SLAVE to the MASTER, then a DB dump on the MASTER and restoration on the SLAVE. Thus that operation might be rather long, due to the possibility of network/disk latency/bandwidth, etc.
+> Sets the global timeout of a RESYNC request sent to a 'meta' service. Sent to a SLAVE DB, the RESYNC operation involves a RPC from the SLAVE to the MASTER, then a DB dump on the MASTER and restoration on the SLAVE. Thus that operation might be rather long, due to the possibility of network/disk latency/bandwidth, etc. Should be set accordingly with sqliterepo.dumps.timeout
 
- * default: **30.0**
+ * default: **241.0**
  * type: gdouble
  * cmake directive: *OIO_SQLITEREPO_OUTGOING_TIMEOUT_REQ_RESYNC*
  * range: 0.01 -> 300.0
