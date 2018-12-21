@@ -1446,7 +1446,7 @@ sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 	EXTRA_ASSERT(sq3 != NULL);
 	EXTRA_ASSERT(read_file_cb != NULL);
 
-	do {
+	for (;;) {
 		/* First try to dump on local volume, on error try /tmp */
 		g_snprintf(path, sizeof(path), "%s/tmp/dump.sqlite3.XXXXXX",
 				try_slash_tmp? "" : sq3->repo->basedir);
@@ -1481,7 +1481,7 @@ sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 		} else {
 			break;
 		}
-	} while (1);
+	}
 
 	if (!err) {
 		err = read_file_cb(fd, cb_arg);
