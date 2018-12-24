@@ -369,11 +369,19 @@ sqlx_repository_initial_cleanup(sqlx_repository_t *repo)
 
 	g_assert_nonnull(repo);
 
-	g_snprintf(pattern, sizeof(pattern), "%s/tmp/dump.sqlite3.*",
-			repo->basedir);
+	/* There are 2 patterns to be managed */
+	g_snprintf(pattern, sizeof(pattern), "%s/tmp/%s.sqlite3.*",
+			repo->basedir, "dump");
+	rc = glob(pattern, GLOB_NOSORT|GLOB_APPEND, NULL, &buf);
+	if (rc != GLOB_NOSPACE && rc != GLOB_ABORTED) {
+		g_snprintf(pattern, sizeof(pattern), "%s/tmp/%s.sqlite3.*",
+				repo->basedir, "restore");
+		rc = glob(pattern, GLOB_NOSORT|GLOB_APPEND, NULL, &buf);
+	}
 
-	rc = glob(pattern, GLOB_NOSORT, NULL, &buf);
+	/* Manage the last error if any */
 	switch (rc) {
+
 		case GLOB_NOSPACE:
 			GRID_WARN("Dump cleanup: glob error on %s: %s", pattern,
 					"Memory allocation error");
@@ -382,10 +390,10 @@ sqlx_repository_initial_cleanup(sqlx_repository_t *repo)
 			GRID_WARN("Dump cleanup: glob error on %s: %s", pattern,
 					"I/O error");
 			break;
+
 		case GLOB_NOMATCH:
-			GRID_DEBUG("Dump cleanup: no temp file found for %s", pattern);
-			break;
 		case 0:
+			/* Then iterate on each file to remove it */
 			for (size_t i=0; i<buf.gl_pathc ;++i) {
 				const char *path = buf.gl_pathv[i];
 				rc = unlink(path);
@@ -397,6 +405,7 @@ sqlx_repository_initial_cleanup(sqlx_repository_t *repo)
 				}
 			}
 	}
+
 	globfree(&buf);
 }
 
