@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,7 +15,19 @@
 
 import sys
 from oio.common import exceptions
-from pyeclib.ec_iface import ECDriver, ECDriverError
+
+try:
+    from pyeclib.ec_iface import ECDriver, ECDriverError
+except ImportError as err:
+    EC_MSG = "Erasure coding not available: %s" % err
+
+    class ECDriverError(RuntimeError):
+        pass
+
+    class ECDriver(object):
+        """Dummy wrapper for ECDriver, when erasure-coding is not available."""
+        def __init__(self, *_args, **_kwargs):
+            raise ECDriverError(EC_MSG)
 
 
 EC_SEGMENT_SIZE = 1048576
