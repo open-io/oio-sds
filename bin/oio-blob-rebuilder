@@ -58,6 +58,8 @@ tube for broken chunks events.
                         help="Number of workers (1)")
     parser.add_argument('--chunks-per-second', type=int,
                         help="Max chunks per second per worker (30)")
+    parser.add_argument("--random-wait", type=int,
+                        help="Random wait (in μs)")
     parser.add_argument('-q', '--quiet', action='store_true',
                         help="Don't print log on console")
     parser.add_argument('--allow-same-rawx', action='store_true',
@@ -122,6 +124,8 @@ def main():
         conf['workers'] = args.workers
     if args.chunks_per_second is not None:
         conf['items_per_second'] = args.chunks_per_second
+    if args.random_wait:
+        conf['random_wait'] = args.random_wait
 
     success = False
     try:
