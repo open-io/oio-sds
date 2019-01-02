@@ -210,7 +210,7 @@ def fetch_stream(chunks, ranges, storage_method, headers=None,
                     "Cannot download position %d: %s" %
                     (pos, err))
             except Exception as err:
-                raise exc.OioException(
+                raise exc.ServiceUnavailable(
                     "Error while downloading position %d: %s" %
                     (pos, err))
             for part in it:
