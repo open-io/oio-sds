@@ -189,7 +189,9 @@ class ECChunkDownloadHandler(object):
             stream.start()
             return stream
         else:
-            raise exceptions.OioException("Not enough valid sources to read")
+            raise exceptions.ServiceUnavailable(
+                'Not enough valid sources to read (%d/%d)' % (
+                    len(readers), self.storage_method.ec_nb_data))
 
 
 class ECStream(object):
