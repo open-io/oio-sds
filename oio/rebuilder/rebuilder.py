@@ -16,6 +16,7 @@
 
 from oio.common.green import ratelimit, eventlet, ContextPool
 
+import random
 import time
 
 from oio.common.easy_value import int_value
@@ -123,6 +124,7 @@ class RebuilderWorker(object):
             conf.get('report_interval'), 3600)
         self.max_items_per_second = int_value(
             conf.get('items_per_second'), 30)
+        self.random_wait = conf.get('random_wait')
 
     def rebuilder_pass(self, num, queue, **kwargs):
         start_time = report_time = time.time()
@@ -149,6 +151,8 @@ class RebuilderWorker(object):
 
             self.items_run_time = ratelimit(self.items_run_time,
                                             self.max_items_per_second)
+            if self.random_wait:
+                eventlet.sleep(random.randint(0, self.random_wait) / 1.0e6)
 
     def _rebuild_one(self, item, **kwargs):
         """
