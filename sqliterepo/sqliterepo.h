@@ -154,6 +154,10 @@ GError * sqlx_repository_init(const gchar *vol,
 		const struct sqlx_repo_config_s *cfg,
 		sqlx_repository_t **result);
 
+/* The cleanup is not performed during the sqlx_repository_init() because we
+ * prefer ensuring we are the only process with an access granted. */
+void sqlx_repository_initial_cleanup(sqlx_repository_t *repo);
+
 /** Cleans all the structures associated with the given repository.
  * For security purposes, it internally calls sqlx_repository_stop(). */
 void sqlx_repository_clean(sqlx_repository_t *repo);
@@ -290,6 +294,12 @@ typedef GError*(*dump_base_fd_cb)(int fd, gpointer arg);
 GError* sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 		dump_base_fd_cb callback, gpointer callback_arg);
 
+/** Open the database file read-only,
+ *  and pass the file descriptor to a callback.
+ *  Falls back on sqlx_repository_dump_base_fd in case of error. */
+GError* sqlx_repository_dump_base_fd_no_copy(struct sqlx_sqlite3_s *sq3,
+		dump_base_fd_cb read_file_cb, gpointer cb_arg);
+
 /** Callback for sqlx_repository_dump_base_chunked() */
 typedef GError*(*dump_base_chunked_cb)(GByteArray *gba, gint64 remaining_bytes,
 		gpointer arg);
@@ -299,11 +309,6 @@ typedef GError*(*dump_base_chunked_cb)(GByteArray *gba, gint64 remaining_bytes,
  *  by caller). */
 GError* sqlx_repository_dump_base_chunked(struct sqlx_sqlite3_s *sq3,
 		gint chunk_size, dump_base_chunked_cb callback, gpointer callback_arg);
-
-/** Perform a SQLite backup on the sqlite handles underlying two sqliterepo
- * bases. */
-GError* sqlx_repository_backup_base(struct sqlx_sqlite3_s *src_sq3,
-		struct sqlx_sqlite3_s *dst_sq3);
 
 GError* sqlx_repository_restore_base(struct sqlx_sqlite3_s *sq3,
 		guint8 *raw, gsize rawsize);

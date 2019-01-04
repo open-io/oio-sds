@@ -18,10 +18,11 @@ License along with this library.
 */
 
 #include <stddef.h>
-#include <fcntl.h>
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <glob.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 
@@ -357,6 +358,55 @@ sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
 	repo->running = BOOL(TRUE);
 	*result = repo;
 	return NULL;
+}
+
+void
+sqlx_repository_initial_cleanup(sqlx_repository_t *repo)
+{
+	gchar pattern[PATH_MAX] = {0};
+	glob_t buf = {0};
+	int rc;
+
+	g_assert_nonnull(repo);
+
+	/* There are 2 patterns to be managed */
+	g_snprintf(pattern, sizeof(pattern), "%s/tmp/%s.sqlite3.*",
+			repo->basedir, "dump");
+	rc = glob(pattern, GLOB_NOSORT|GLOB_APPEND, NULL, &buf);
+	if (rc != GLOB_NOSPACE && rc != GLOB_ABORTED) {
+		g_snprintf(pattern, sizeof(pattern), "%s/tmp/%s.sqlite3.*",
+				repo->basedir, "restore");
+		rc = glob(pattern, GLOB_NOSORT|GLOB_APPEND, NULL, &buf);
+	}
+
+	/* Manage the last error if any */
+	switch (rc) {
+
+		case GLOB_NOSPACE:
+			GRID_WARN("Dump cleanup: glob error on %s: %s", pattern,
+					"Memory allocation error");
+			break;
+		case GLOB_ABORTED:
+			GRID_WARN("Dump cleanup: glob error on %s: %s", pattern,
+					"I/O error");
+			break;
+
+		case GLOB_NOMATCH:
+		case 0:
+			/* Then iterate on each file to remove it */
+			for (size_t i=0; i<buf.gl_pathc ;++i) {
+				const char *path = buf.gl_pathv[i];
+				rc = unlink(path);
+				if (rc == 0) {
+					GRID_INFO("Dump cleanup: unlinked %s", path);
+				} else {
+					GRID_WARN("Dump cleanup: unlink error on %s: (%d) %s",
+							path, errno, strerror(errno));
+				}
+			}
+	}
+
+	globfree(&buf);
 }
 
 gboolean
@@ -1396,7 +1446,6 @@ _read_file_chunk(int fd, guint64 chunk_size, GByteArray *gba)
 	GError *err = NULL;
 
 	d = g_malloc(SQLX_DUMP_BUFFER_SIZE);
-
 	do {
 		r = read(fd, d, MIN(chunk_size - tot, SQLX_DUMP_BUFFER_SIZE));
 		if (r < 0) {
@@ -1422,8 +1471,14 @@ _read_file(int fd, GByteArray *gba)
 	GRID_TRACE2("%s(%d,%p) size=%"G_GINT64_FORMAT, __FUNCTION__, fd,
 			gba, st.st_size);
 
-	if (0 > rc)
-		return NEWERROR(errno, "Failed to stat the temporary base");
+	if (rc < 0)
+		return NEWERROR(errno, "Failed to stat the database file (fd=%d)", fd);
+
+	if (st.st_size > sqliterepo_dump_max_size)
+		return NEWERROR(CODE_EXCESSIVE_LOAD, "Database is %"G_GINT64_FORMAT
+				" bytes, won't send it in one block. "
+				"(sqliterepo.dump.max_size=%"G_GINT64_FORMAT")",
+				(gint64) st.st_size, sqliterepo_dump_max_size);
 
 	g_byte_array_set_size(gba, st.st_size);
 	g_byte_array_set_size(gba, 0);
@@ -1432,22 +1487,28 @@ _read_file(int fd, GByteArray *gba)
 	return err;
 }
 
-GError*
-sqlx_repository_backup_base(struct sqlx_sqlite3_s *src_sq3,
-		struct sqlx_sqlite3_s *dst_sq3)
+static void
+_fadvise_whole_seq(int fd, const char *path)
 {
-	EXTRA_ASSERT(src_sq3 != NULL);
-	EXTRA_ASSERT(dst_sq3 != NULL);
-	return _backup_main(src_sq3->db, dst_sq3->db);
+	int rc = posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
+	if (rc != 0)
+		GRID_INFO("fadvise failed for %s: (%d) %s", path, rc, strerror(rc));
 }
 
 GError*
 sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 		dump_base_fd_cb read_file_cb, gpointer cb_arg)
 {
+	static struct dump_context_s {
+		volatile int lazy_init;
+		gint counter;
+		GMutex mutex;
+		GCond cond;
+	} context = {1, 5, {}, {}};
+
 	gchar path[LIMIT_LENGTH_VOLUMENAME+32] = {0};
 	gboolean try_slash_tmp = FALSE;
-	int rc, fd;
+	int rc, fd = -1;
 	sqlite3 *dst = NULL;
 	GError *err = NULL;
 
@@ -1455,8 +1516,36 @@ sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 	EXTRA_ASSERT(sq3 != NULL);
 	EXTRA_ASSERT(read_file_cb != NULL);
 
-	do {
-		/* First try to dump on local volume, on error try /tmp */
+	if (context.lazy_init) {
+		if (g_atomic_int_compare_and_exchange(&context.lazy_init, 1, 0)) {
+			g_cond_init(&context.cond);
+			g_mutex_init(&context.mutex);
+			context.counter = sqliterepo_dumps_max;
+		}
+	}
+
+	/* Check the limit has not been reached */
+	g_mutex_lock(&context.mutex);
+retry:
+	if (context.counter <= 0) {
+		if (g_cond_wait_until(&context.cond, &context.mutex,
+					g_get_monotonic_time() + sqliterepo_dumps_timeout)) {
+			/* Signaled! */
+			goto retry;
+		} else {
+			err = BUSY("Too many concurrents DB dumps");
+		}
+	} else {
+		context.counter --;
+	}
+	g_mutex_unlock(&context.mutex);
+	if (err)
+		return err;
+
+	/* First try to dump on local volume, on error try /tmp */
+	for (;;) {
+		EXTRA_ASSERT(fd < 0);
+
 		g_snprintf(path, sizeof(path), "%s/tmp/dump.sqlite3.XXXXXX",
 				try_slash_tmp? "" : sq3->repo->basedir);
 
@@ -1486,17 +1575,77 @@ sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 			GRID_WARN("Failed to dump base into %s (%s), will try with /tmp",
 					path, err->message);
 			g_clear_error(&err);
+			metautils_pclose(&fd);
 			try_slash_tmp = TRUE;
 		} else {
 			break;
 		}
-	} while (1);
+	}
 
 	if (!err) {
+		_fadvise_whole_seq(fd, path);
 		err = read_file_cb(fd, cb_arg);
 	}
 
 	metautils_pclose(&fd);
+
+	/* Notify a waiting thread that a slot is now available */
+	g_mutex_lock(&context.mutex);
+	context.counter ++;
+	g_cond_signal(&context.cond);
+	g_mutex_unlock(&context.mutex);
+
+	return err;
+}
+
+#if SQLITE_VERSION_NUMBER < 3010000
+static int
+sqlite3_db_cacheflush(sqlite3 *db UNUSED)
+{
+	return SQLITE_OK;
+}
+#endif
+
+GError*
+sqlx_repository_dump_base_fd_no_copy(struct sqlx_sqlite3_s *sq3,
+		dump_base_fd_cb read_file_cb, gpointer cb_arg)
+{
+	int rc = 0, fd = -1;
+	GError *err = NULL;
+	GRID_TRACE2("%s(%p,%p,%p)", __FUNCTION__, sq3, read_file_cb, cb_arg);
+	EXTRA_ASSERT(sq3 != NULL);
+	EXTRA_ASSERT(read_file_cb != NULL);
+	const char *fallback_msg = "falling back on legacy dump function";
+
+	if ((rc = sqlite3_db_cacheflush(sq3->db)) != SQLITE_OK) {
+		GRID_NOTICE("Failed to flush [%s][%s]: %s, %s",
+					sq3->name.base, sq3->name.type, sqlite_strerror(rc),
+					fallback_msg);
+		err = sqlx_repository_dump_base_fd(sq3, read_file_cb, cb_arg);
+	} else {
+		/* Suggestion: dig in sqlite VFS, and duplicate the already open file
+		 * descriptor, instead of reopening it by path. This would allow
+		 * serving a base that is still open but has been removed
+		 * from its directory. */
+		fd = open(sq3->path_inline, O_RDONLY);
+		if (fd < 0) {
+			if (errno == ENOENT) {
+				GRID_NOTICE("%s seems to be deleted, %s",
+						sq3->path_inline, fallback_msg);
+			} else {
+				GRID_NOTICE("Failed to open %s (%s), %s",
+						sq3->path_inline, strerror(errno),
+						fallback_msg);
+			}
+			err = sqlx_repository_dump_base_fd(sq3, read_file_cb, cb_arg);
+		} else {
+			_fadvise_whole_seq(fd, sq3->path_inline);
+			err = read_file_cb(fd, cb_arg);
+			metautils_pclose(&fd);
+		}
+	}
+
+	EXTRA_ASSERT(fd < 0);
 	return err;
 }
 
@@ -1515,7 +1664,7 @@ sqlx_repository_dump_base_gba(struct sqlx_sqlite3_s *sq3, GByteArray **dump)
 			g_byte_array_free(_dump, TRUE);
 		return _err;
 	}
-	return sqlx_repository_dump_base_fd(sq3, _monolytic_dump_cb, dump);
+	return sqlx_repository_dump_base_fd_no_copy(sq3, _monolytic_dump_cb, dump);
 }
 
 GError*
@@ -1531,8 +1680,9 @@ sqlx_repository_dump_base_chunked(struct sqlx_sqlite3_s *sq3,
 		GError *err = NULL;
 
 		rc = fstat(fd, &st);
-		if (0 > rc)
-			return NEWERROR(errno, "Failed to stat the temporary base");
+		if (rc < 0)
+			return NEWERROR(errno,
+					"Failed to stat the database file (fd=%d)", fd);
 		do {
 			GByteArray *gba = g_byte_array_sized_new(128 * 1024);
 			err = _read_file_chunk(fd, chunk_size, gba);
@@ -1543,7 +1693,7 @@ sqlx_repository_dump_base_chunked(struct sqlx_sqlite3_s *sq3,
 		} while (!err && bytes_read < st.st_size);
 		return err;
 	}
-	return sqlx_repository_dump_base_fd(sq3, _chunked_dump_cb, NULL);
+	return sqlx_repository_dump_base_fd_no_copy(sq3, _chunked_dump_cb, NULL);
 }
 
 GError*
@@ -1564,6 +1714,7 @@ sqlx_repository_restore_from_file(struct sqlx_sqlite3_s *sq3,
 				sqlite_strerror(rc), errno, strerror(errno));
 		g_prefix_error(&err, "Invalid raw SQLite base: ");
 	} else { /* Backup now! */
+		// TODO(FVE): we may want to unlink(path) now
 		err = _backup_main(src, sq3->db);
 		_close_handle(&src);
 		sqlx_admin_reload(sq3);
