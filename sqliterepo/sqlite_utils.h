@@ -59,6 +59,7 @@ License along with this library.
 #define SQLX_ADMIN_USERNAME SQLX_ADMIN_PREFIX_SYS "user.name"
 #endif
 
+// Deprecated since oio-sds 4.4.0
 #ifndef SQLX_ADMIN_USERTYPE
 #define SQLX_ADMIN_USERTYPE SQLX_ADMIN_PREFIX_SYS "user.type"
 #endif
