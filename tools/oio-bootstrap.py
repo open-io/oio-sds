@@ -24,7 +24,6 @@ import os
 import pwd
 from string import Template
 import re
-import uuid
 import argparse
 
 
@@ -1293,7 +1292,11 @@ def generate(options):
             out['addr'] = '%s:%s' % (env['IP'], env['PORT'])
         if 'VOLUME' in env:
             out['path'] = env['VOLUME']
-        if 'SERVICE_ID' in env:
+        # For some types of services, SERVICE_ID is always there, but we do
+        # not want it in the test configuration file if service IDs are not
+        # globally enabled.
+        if ('SERVICE_ID' in env and options.get('with_service_id') and
+                env.get('WANT_SERVICE_ID') != '#'):
             out['service_id'] = env['SERVICE_ID']
         final_services[t].append(out)
 
@@ -1378,7 +1381,7 @@ def generate(options):
                       'EXTRA': ext_opt})
         if service_id:
             env['WANT_SERVICE_ID'] = ''
-            env['SERVICE_ID'] = str(uuid.uuid4())
+            env['SERVICE_ID'] = "{NS}-{SRVTYPE}-{SRVNUM}".format(**env)
             env['OPTARGS'] = "-O ServiceId=%s" % env['SERVICE_ID']
         else:
             env['WANT_SERVICE_ID'] = '#'
@@ -1460,9 +1463,9 @@ def generate(options):
                           'SRVNUM': i + 1,
                           'PORT': next(ports),
                           'COMPRESSION': compression,
-                          'SERVICE_ID': str(uuid.uuid4()),
                           'EXTRASLOT': ('rawx-even' if i % 2 else 'rawx-odd')
                           })
+            env['SERVICE_ID'] = "{NS}-{SRVTYPE}-{SRVNUM}".format(**env)
             add_service(env)
             # gridinit (rawx)
             if options[GO_RAWX]:

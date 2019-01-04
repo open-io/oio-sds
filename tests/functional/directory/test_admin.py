@@ -17,14 +17,14 @@ import random
 import os
 
 from tests.utils import BaseTestCase, random_str
-from oio.directory.admin import AdminClient
 from oio import ObjectStorageApi
 
 
 class TestAdmin(BaseTestCase):
     def setUp(self):
         super(TestAdmin, self).setUp()
-        self.admin = AdminClient(self.conf)
+        # Created by superclass
+        # self.admin = AdminClient(self.conf)
         self.api = ObjectStorageApi(self.ns)
         self.account = "test_admin"
         self.container = "admin-"+random_str(4)
