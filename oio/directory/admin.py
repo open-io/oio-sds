@@ -46,6 +46,7 @@ class AdminClient(ProxyClient):
     def __init__(self, conf, **kwargs):
         super(AdminClient, self).__init__(
             conf, request_prefix="/admin", **kwargs)
+        kwargs.pop('pool_manager', None)
         self.forwarder = ProxyClient(
             conf, request_prefix="/forward", pool_manager=self.pool_manager,
             no_ns_in_url=True, **kwargs)
@@ -222,3 +223,12 @@ class AdminClient(ProxyClient):
     def service_flush_cache(self, svc_id, **kwargs):
         """Flush the resolver cache of an sqlx-bases service."""
         self._forward_service_action(svc_id, '/flush', **kwargs)
+
+    def service_set_live_config(self, svc_id, config, **kwargs):
+        """
+        Set some configuration parameters on the specified service.
+        Works on all services using ASN.1 protocol.
+        Notice that some parameters may not be taken into account,
+        and no parameter will survice a service restart.
+        """
+        self._forward_service_action(svc_id, '/config', json=config, **kwargs)
