@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,6 +15,19 @@
 
 import sys
 from oio.common import exceptions
+
+try:
+    from pyeclib.ec_iface import ECDriver, ECDriverError
+except ImportError as err:
+    EC_MSG = "Erasure coding not available: %s" % err
+
+    class ECDriverError(RuntimeError):
+        pass
+
+    class ECDriver(object):
+        """Dummy wrapper for ECDriver, when erasure-coding is not available."""
+        def __init__(self, *_args, **_kwargs):
+            raise ECDriverError(EC_MSG)
 
 
 EC_SEGMENT_SIZE = 1048576
@@ -46,6 +59,7 @@ def guess_storage_method(url):
 
 
 class StorageMethods(object):
+
     def __init__(self, methods):
         self.index = methods
         self.cache = {}
@@ -67,6 +81,7 @@ class StorageMethods(object):
 
 
 class StorageMethod(object):
+
     def __init__(self, name, ec=False, backblaze=False):
         self._name = name
         self._ec = ec
@@ -84,6 +99,18 @@ class StorageMethod(object):
     @property
     def backblaze(self):
         return self._backblaze
+
+    @property
+    def quorum(self):
+        raise NotImplementedError()
+
+    @property
+    def expected_chunks(self):
+        raise NotImplementedError()
+
+    @property
+    def min_chunks_to_read(self):
+        raise NotImplementedError()
 
 
 class ReplicatedStorageMethod(StorageMethod):
@@ -107,11 +134,20 @@ class ReplicatedStorageMethod(StorageMethod):
         return self._quorum
 
     @property
+    def expected_chunks(self):
+        return self._nb_copy
+
+    @property
+    def min_chunks_to_read(self):
+        return 1
+
+    @property
     def nb_copy(self):
         return self._nb_copy
 
 
 class ECStorageMethod(StorageMethod):
+
     def __init__(self, name, ec_segment_size, ec_type, ec_nb_data,
                  ec_nb_parity):
         super(ECStorageMethod, self).__init__(name=name, ec=True)
@@ -131,7 +167,6 @@ class ECStorageMethod(StorageMethod):
         self._ec_segment_size = ec_segment_size
         self._ec_type = ec_type
 
-        from pyeclib.ec_iface import ECDriver, ECDriverError
         try:
             self.driver = ECDriver(k=ec_nb_data, m=ec_nb_parity,
                                    ec_type=ec_type)
@@ -142,10 +177,6 @@ class ECStorageMethod(StorageMethod):
         self._ec_quorum_size = \
             self._ec_nb_data + self.driver.min_parity_fragments_needed()
 
-    @property
-    def quorum(self):
-        return self._ec_quorum_size
-
     @classmethod
     def build(cls, params):
         ec_nb_data = params.pop('k')
@@ -154,6 +185,18 @@ class ECStorageMethod(StorageMethod):
         return cls('ec', ec_segment_size=EC_SEGMENT_SIZE,
                    ec_type=ec_type, ec_nb_data=ec_nb_data,
                    ec_nb_parity=ec_nb_parity)
+
+    @property
+    def quorum(self):
+        return self._ec_quorum_size
+
+    @property
+    def expected_chunks(self):
+        return self._ec_nb_data + self._ec_nb_parity
+
+    @property
+    def min_chunks_to_read(self):
+        return self._ec_nb_data
 
     @property
     def ec_type(self):

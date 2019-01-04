@@ -713,6 +713,25 @@ _configure_network(struct sqlx_service_s *ss)
 	return TRUE;
 }
 
+static void
+_sqlite3_log(void *udata UNUSED, int err_code, const char *msg)
+{
+	switch (err_code) {
+	case SQLITE_WARNING:
+		GRID_WARN("sqlite3: (%d) %s", err_code, msg);
+		break;
+	default:
+		GRID_NOTICE("sqlite3: (%d) %s", err_code, msg);
+	}
+}
+
+static gboolean
+_configure_logging(struct sqlx_service_s *ss UNUSED)
+{
+	sqlite3_config(SQLITE_CONFIG_LOG, _sqlite3_log, NULL);
+	return TRUE;
+}
+
 // common_main hooks -----------------------------------------------------------
 
 static void
@@ -789,6 +808,8 @@ sqlx_service_action(void)
 		sqlx_peering_direct__set_udp(SRV.peering, fd_udp);
 	}
 
+	sqlx_repository_initial_cleanup(SRV.repository);
+
 	/* SERVER/GRIDD main run loop */
 	if (NULL != (err = network_server_run(SRV.server, _reconfigure_on_SIGHUP)))
 		return _action_report_error(err, "GRIDD run failure");
@@ -820,6 +841,7 @@ sqlx_service_configure(int argc, char **argv)
 		&& _configure_tasks(&SRV)
 		&& _configure_network(&SRV)
 		&& _configure_events_queue(&SRV)
+		&& _configure_logging(&SRV)
 		&& (!SRV.service_config->post_config
 				|| SRV.service_config->post_config(&SRV));
 	_patch_and_apply_configuration();

@@ -108,8 +108,11 @@ class Checker(object):
         self.list_cache = {}
         self.running = {}
 
-    def write_error(self, target):
-        error = [target.account]
+    def write_error(self, target, irreparable=False):
+        error = list()
+        if irreparable:
+            error.append('#IRREPARABLE')
+        error.append(target.account)
         if target.container:
             error.append(target.container)
         if target.obj:
@@ -118,23 +121,30 @@ class Checker(object):
             error.append(target.chunk)
         self.error_writer.writerow(error)
 
-    def write_rebuilder_input(self, target, obj_meta, ct_meta):
+    def write_rebuilder_input(self, target, obj_meta, irreparable=False):
+        ct_meta = self.list_cache[(target.account, target.container)][1]
         try:
             cid = ct_meta['system']['sys.name'].split('.', 1)[0]
         except KeyError:
             cid = ct_meta['properties']['sys.name'].split('.', 1)[0]
-        self.rebuild_writer.writerow((cid, obj_meta['id'], target.chunk))
+        error = list()
+        if irreparable:
+            error.append('#IRREPARABLE')
+        error.append(cid)
+        error.append(obj_meta['id'])
+        error.append(target.chunk)
+        self.rebuild_writer.writerow(error)
 
-    def write_chunk_error(self, target, obj_meta, chunk=None):
+    def write_chunk_error(self, target, obj_meta,
+                          chunk=None, irreparable=False):
         if chunk is not None:
             target = target.copy()
             target.chunk = chunk
         if self.error_file:
-            self.write_error(target)
+            self.write_error(target, irreparable=irreparable)
         if self.rebuild_file:
-            self.write_rebuilder_input(
-                target, obj_meta,
-                self.list_cache[(target.account, target.container)][1])
+            self.write_rebuilder_input(target, obj_meta,
+                                       irreparable=irreparable)
 
     def _check_chunk_xattr(self, target, obj_meta, xattr_meta):
         error = False
@@ -158,7 +168,7 @@ class Checker(object):
             error = True
         return error
 
-    def check_chunk(self, target):
+    def _check_chunk(self, target):
         chunk = target.chunk
 
         obj_listing, obj_meta = self.check_obj(target)
@@ -184,34 +194,57 @@ class Checker(object):
             if db_meta and self.full:
                 error = self._check_chunk_xattr(target, db_meta, xattr_meta)
 
+        self.chunks_checked += 1
+        return error, obj_meta
+
+    def check_chunk(self, target):
+        error, obj_meta = self._check_chunk(target)
         if error:
             self.write_chunk_error(target, obj_meta)
 
-        self.chunks_checked += 1
+    def _check_metachunk(self, target, obj_meta, stg_met, pos, chunks,
+                         recurse=False):
+        required = stg_met.expected_chunks
+        chunk_errors = list()
 
-    def check_obj_policy(self, target, obj_meta, chunks):
+        if len(chunks) < required:
+            missing_chunks = required - len(chunks)
+            print('  Missing %d chunks at position %s of %s' % (
+                  missing_chunks, pos, target))
+            if stg_met.ec:
+                subs = {x['num'] for x in chunks}
+                for sub in range(required):
+                    if sub not in subs:
+                        chunk_errors.append(
+                            (target, obj_meta, '%d.%d' % (pos, sub)))
+            else:
+                for _ in range(missing_chunks):
+                    chunk_errors.append((target, obj_meta, str(pos)))
+
+        if recurse:
+            for chunk in chunks:
+                t = target.copy()
+                t.chunk = chunk['url']
+                error, obj_meta = self._check_chunk(t)
+                if error:
+                    chunk_errors.append((t, obj_meta))
+
+        irreparable = required - len(chunk_errors) < stg_met.min_chunks_to_read
+        for chunk_error in chunk_errors:
+            self.write_chunk_error(*chunk_error, irreparable=irreparable)
+
+    def _check_obj_policy(self, target, obj_meta, chunks, recurse=False):
         """
         Check that the list of chunks of an object matches
         the object's storage policy.
         """
         stg_met = STORAGE_METHODS.load(obj_meta['chunk_method'])
         chunks_by_pos = _sort_chunks(chunks, stg_met.ec)
-        if stg_met.ec:
-            required = stg_met.ec_nb_data + stg_met.ec_nb_parity
-        else:
-            required = stg_met.nb_copy
-        for pos, clist in chunks_by_pos.iteritems():
-            if len(clist) < required:
-                print('  Missing %d chunks at position %s of %s' % (
-                    required - len(clist), pos, target))
-                if stg_met.ec:
-                    subs = {x['num'] for x in clist}
-                    for sub in range(required):
-                        if sub not in subs:
-                            self.write_chunk_error(target, obj_meta,
-                                                   '%d.%d' % (pos, sub))
-                else:
-                    self.write_chunk_error(target, obj_meta, str(pos))
+        for pos, chunks in chunks_by_pos.iteritems():
+            self.pool.spawn_n(
+                self._check_metachunk,
+                target.copy(), obj_meta, stg_met, pos, chunks,
+                recurse=recurse)
 
     def check_obj(self, target, recurse=False):
         account = target.account
@@ -254,20 +287,16 @@ class Checker(object):
         for chunk in results:
             chunk_listing[chunk['url']] = chunk
 
-        # Skip the check if we could not locate the object
         if meta:
-            self.check_obj_policy(target.copy(), meta, results)
             self.list_cache[(account, container, obj)] = (chunk_listing, meta)
-
         self.objects_checked += 1
         self.running[(account, container, obj)].send(True)
         del self.running[(account, container, obj)]
 
-        if recurse:
-            for chunk in chunk_listing:
-                t = target.copy()
-                t.chunk = chunk
-                self.pool.spawn_n(self.check_chunk, t)
+        # Skip the check if we could not locate the object
+        if meta:
+            self._check_obj_policy(target, meta, results, recurse=recurse)
+
         if error and self.error_file:
             self.write_error(target)
         return chunk_listing, meta

@@ -77,6 +77,10 @@ class UnrecoverableContent(ContentException):
 
 
 class ServiceUnavailable(OioException):
+    """
+    Exception raised when some services are temporarily
+    not available. This does not mean data is lost.
+    """
     pass
 
 

@@ -16,6 +16,7 @@
 
 from oio.common.green import ratelimit, eventlet, threading, ContextPool
 
+import random
 import time
 
 from oio.common.easy_value import int_value
@@ -142,6 +143,7 @@ class RebuilderWorker(object):
         self.items_run_time = 0
         self.max_items_per_second = int_value(
             rebuilder.conf.get('items_per_second'), 30)
+        self.random_wait = rebuilder.conf.get('random_wait')
 
     def update_processed(self, item, info, error=None, **kwargs):
         return self.rebuilder.update_processed(item, info, error=error,
@@ -166,6 +168,8 @@ class RebuilderWorker(object):
 
             self.items_run_time = ratelimit(self.items_run_time,
                                             self.max_items_per_second)
+            if self.random_wait:
+                eventlet.sleep(random.randint(0, self.random_wait) / 1.0e6)
 
     def _rebuild_one(self, item, **kwargs):
         """

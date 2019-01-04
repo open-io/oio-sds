@@ -299,6 +299,10 @@ class Meta0PrefixMapping(MetaMapping):
         using `strategy` to find new services.
         """
         self.reset()
+        if len(self.services) < self.replicas:
+            raise ValueError(
+                'Not enough meta1 services: nb_meta1=%d replicas=%d'
+                % (len(self.services), self.replicas))
         if not strategy:
             strategy = self.find_services_random
         last_percent = 0
