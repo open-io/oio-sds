@@ -14,6 +14,7 @@
 # License along with this library.
 
 import warnings
+from functools import wraps
 from urllib import unquote
 from oio.common.client import ProxyClient
 from oio.common.decorators import ensure_headers
@@ -69,6 +70,32 @@ def extract_content_headers_meta(headers):
     return resp_headers
 
 
+def extract_reference_params(func):
+    @wraps(func)
+    def _reference_params(self, account=None, reference=None, path=None,
+                          cid=None, **kwargs):
+        params = kwargs.pop('params', dict())
+        if cid:
+            params['cid'] = cid
+        else:
+            params['acct'] = account
+            params['ref'] = reference
+        if path:
+            params['path'] = path
+
+        if 'content' in kwargs:
+            params['content'] = kwargs['content']
+        elif 'content_id' in kwargs:
+            params['content'] = kwargs['content_id']
+
+        if 'version' in kwargs:
+            params['version'] = kwargs['version']
+
+        return func(self, account=account, reference=reference, path=path,
+                    cid=cid, params=params, **kwargs)
+    return _reference_params
+
+
 class ContainerClient(ProxyClient):
     """
     Intermediate level class to manage containers.
@@ -88,7 +115,7 @@ class ContainerClient(ProxyClient):
         return uri
 
     def _make_params(self, account=None, reference=None, path=None, cid=None,
-                     content=None, version=None):
+                     content=None, version=None, **kwargs):
         if cid:
             params = {'cid': cid}
         else:
@@ -293,8 +320,10 @@ class ContainerClient(ProxyClient):
         resp, _ = self._direct_request('POST', uri, params=params, **kwargs)
         return resp
 
+    @extract_reference_params
     def container_get_properties(self, account=None, reference=None,
-                                 properties=None, cid=None, **kwargs):
+                                 properties=None, cid=None, params=None,
+                                 **kwargs):
         """
         Get information about a container (user and system properties).
 
@@ -313,7 +342,6 @@ class ContainerClient(ProxyClient):
         """
         if not properties:
             properties = list()
-        params = self._make_params(account, reference, cid=cid)
         data = json.dumps(properties)
         _resp, body = self._request(
             'POST', '/get_properties', data=data, params=params, **kwargs)
@@ -398,17 +426,18 @@ class ContainerClient(ProxyClient):
         return {'truncated':
                 boolean_value(resp.getheader('x-oio-truncated', False))}
 
+    @extract_reference_params
     def content_list(self, account=None, reference=None, limit=None,
                      marker=None, end_marker=None, prefix=None,
                      delimiter=None, properties=False,
-                     cid=None, versions=False, deleted=False, **kwargs):
+                     cid=None, versions=False, deleted=False,
+                     params=None, **kwargs):
         """
         Get the list of contents of a container.
 
         :returns: a tuple with container metadata `dict` as first element
             and a `dict` with "object" and "prefixes" as second element
         """
-        params = self._make_params(account, reference, cid=cid)
         p_up = {'max': limit, 'marker': marker, 'end_marker': end_marker,
                 'prefix': prefix, 'delimiter': delimiter,
                 'properties': properties}
@@ -470,6 +499,7 @@ class ContainerClient(ProxyClient):
                           DeprecationWarning, stacklevel=3)
         if kwargs.get('meta_pos') is not None:
             data = data['chunks']
+            # TODO(FVE): change "id" into "content", and other occurrences
             params['id'] = content_id
             uri = self._make_uri('content/update')
         data = json.dumps(data)
@@ -557,8 +587,10 @@ class ContainerClient(ProxyClient):
         except Exception:
             raise
 
+    @extract_reference_params
     def content_locate(self, account=None, reference=None, path=None, cid=None,
-                       content=None, version=None, properties=True, **kwargs):
+                       content=None, version=None, properties=True,
+                       params=None, **kwargs):
         """
         Get a description of the content along with the list of its chunks.
 
@@ -574,8 +606,6 @@ class ContainerClient(ProxyClient):
             and chunk `list` as second element
         """
         uri = self._make_uri('content/locate')
-        params = self._make_params(account, reference, path, cid=cid,
-                                   content=content, version=version)
         params['properties'] = properties
         try:
             resp, chunks = self._direct_request(
@@ -596,17 +626,16 @@ class ContainerClient(ProxyClient):
                 raise
         return content_meta, chunks
 
+    @extract_reference_params
     def content_prepare(self, account=None, reference=None, path=None,
                         size=None, cid=None, stgpol=None, content_id=None,
-                        version=None, **kwargs):
+                        version=None, params=None, **kwargs):
         """
         Prepare an upload: get URLs of chunks on available rawx.
 
         :keyword autocreate: create container if it doesn't exist
         """
         uri = self._make_uri('content/prepare')
-        params = self._make_params(account, reference, path, cid=cid,
-                                   content=content_id, version=version)
         data = {'size': size}
         if stgpol:
             data['policy'] = stgpol
@@ -626,16 +655,14 @@ class ContainerClient(ProxyClient):
             obj_meta = extract_content_headers_meta(resp.headers)
         return obj_meta, chunks
 
+    @extract_reference_params
     def content_get_properties(
             self, account=None, reference=None, path=None, properties=None,
-            cid=None, content=None, version=None, **kwargs):
+            cid=None, content=None, version=None, params=None, **kwargs):
         """
         Get a description of the content along with its user properties.
         """
         uri = self._make_uri('content/get_properties')
-        params = self._make_params(account, reference, path,
-                                   cid=cid, content=content,
-                                   version=version)
         data = json.dumps(properties) if properties else None
         resp, body = self._direct_request(
             'POST', uri, data=data, params=params, **kwargs)
@@ -684,10 +711,10 @@ class ContainerClient(ProxyClient):
         params = self._make_params(account, reference, path, version=version)
         self._direct_request('POST', uri, params=params, **kwargs)
 
+    @extract_reference_params
     def content_spare(self, account=None, reference=None, path=None, data=None,
-                      cid=None, stgpol=None, **kwargs):
+                      cid=None, stgpol=None, params=None, **kwargs):
         uri = self._make_uri('content/spare')
-        params = self._make_params(account, reference, path, cid=cid)
         if stgpol:
             params['stgpol'] = stgpol
         data = json.dumps(data)

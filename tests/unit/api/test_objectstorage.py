@@ -118,7 +118,8 @@ class ObjectStorageTest(unittest.TestCase):
                   'end_marker': end_marker,
                   'properties': False}
         api.container._direct_request.assert_called_once_with(
-            'GET', uri, params=params, headers=self.headers)
+            'GET', uri, params=params, headers=self.headers,
+            path=ANY)
         self.assertEqual(len(listing['objects']), 2)
 
     def test_container_show(self):
@@ -236,7 +237,7 @@ class ObjectStorageTest(unittest.TestCase):
 
         uri = "%s/content/get_properties" % self.uri_base
         params = {'acct': self.account, 'ref': self.container,
-                  'path': name}
+                  'path': name, 'version': None}
         api.container._direct_request.assert_called_once_with(
             'POST', uri, params=params, data=None, headers=self.headers)
         self.assertIsNotNone(obj)

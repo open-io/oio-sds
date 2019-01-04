@@ -36,7 +36,7 @@ class TestBlobAuditor(BaseTestCase):
 
         self.api.container_create(self.account, self.container)
         _, chunks = self.api.container.content_prepare(
-            self.account, self.container, self.path, 1)
+            self.account, self.container, self.path, size=1)
         services = self.conscience.all_services('rawx')
         self.rawx_volumes = dict()
         for rawx in services:
