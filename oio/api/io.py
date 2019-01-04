@@ -622,7 +622,7 @@ class MetachunkPreparer(object):
         while True:
             mc_pos += 1
             meta, next_body = self.container_client.content_prepare(
-                    self.account, self.container, self.obj_name, 1,
+                    self.account, self.container, self.obj_name, size=1,
                     stgpol=self.policy, **self.extra_kwargs)
             self.obj_meta['properties'].update(meta.get('properties', {}))
             self._fix_mc_pos(next_body, mc_pos)

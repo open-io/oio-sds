@@ -570,7 +570,10 @@ void client_init (struct client_ctx_s *ctx, struct req_args_s *args,
 	ctx->seq = seq;
 	sqlx_inline_name_fill_type_asis (&ctx->name, args->url,
 			*srvtype == '#' ? srvtype+1 : srvtype, ctx->seq);
-	ctx->which = CLIENT_PREFER_NONE;
+	if (SERVICE_ID())
+		ctx->which = CLIENT_SPECIFIED;
+	else
+		ctx->which = CLIENT_PREFER_NONE;
 }
 
 void client_clean (struct client_ctx_s *ctx) {

@@ -94,7 +94,10 @@ _sqlx_action_noreturn (struct req_args_s *args, enum proxy_preference_e how,
 			ctx.name.base[i] = '0';
 	}
 
-	ctx.which = how;
+	if (SERVICE_ID())
+		ctx.which = CLIENT_SPECIFIED;
+	else
+		ctx.which = how;
 	enum http_rc_e rc = _sqlx_action_noreturn_TAIL (args, &ctx, pack);
 	client_clean(&ctx);
 	return rc;
@@ -335,11 +338,7 @@ enum http_rc_e
 action_admin_leave (struct req_args_s *args)
 {
 	PACKER_VOID(_pack) { return sqlx_pack_EXITELECTION (_u, DL()); }
-	const char *service_id = SERVICE_ID();
-	if (service_id)
-		return _sqlx_action_noreturn (args, CLIENT_SPECIFIED, _pack);
-	else
-		return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, _pack);
+	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, _pack);
 }
 
 enum http_rc_e

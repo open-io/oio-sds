@@ -37,7 +37,7 @@ class TestBlobMover(BaseTestCase):
 
         self.api.container_create(self.account, self.container)
         _, chunks = self.api.container.content_prepare(
-            self.account, self.container, self.path, 1)
+            self.account, self.container, self.path, size=1)
         services = self.conscience.all_services('rawx')
         if len(chunks) >= len([s for s in services if s['score'] > 0]):
             self.skipTest("need at least %d rawx to run" % (len(chunks) + 1))
