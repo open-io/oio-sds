@@ -1,4 +1,4 @@
-# Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -54,22 +54,22 @@ def read_conf(conf_path, section_name=None, defaults=None, use_yaml=False):
         return parse_config(conf_path)
     if defaults is None:
         defaults = {}
-    c = SafeConfigParser(defaults)
-    success = c.read(conf_path)
+    parser = SafeConfigParser(defaults)
+    success = parser.read(conf_path)
     if not success:
         print("Unable to read config from %s" % conf_path)
         exit(1)
     if section_name:
-        if c.has_section(section_name):
-            conf = dict(c.items(section_name))
+        if parser.has_section(section_name):
+            conf = dict(parser.items(section_name))
         else:
             print('Unable to find section %s in config %s' % (section_name,
                                                               conf_path))
             exit(1)
     else:
         conf = {}
-        for s in c.sections():
-            conf.update({s: dict(c.items(s))})
+        for section in parser.sections():
+            conf.update({section: dict(parser.items(section))})
     return conf
 
 
@@ -85,20 +85,24 @@ def validate_service_conf(conf):
         raise InvalidServiceConfigError()
 
 
-def load_namespace_conf(namespace):
-    def places():
-        yield '/etc/oio/sds.conf'
-        for f in glob('/etc/oio/sds.conf.d/*'):
-            yield f
-        yield path.expanduser('~/.oio/sds.conf')
+def config_paths():
+    """
+    Yield paths to potential namespace configuration files.
+    """
+    yield '/etc/oio/sds.conf'
+    for conf_path in glob('/etc/oio/sds.conf.d/*'):
+        yield conf_path
+    yield path.expanduser('~/.oio/sds.conf')
 
-    c = SafeConfigParser({})
-    success = c.read(places())
+
+def load_namespace_conf(namespace):
+    parser = SafeConfigParser({})
+    success = parser.read(config_paths())
     if not success:
         print('Unable to read namespace config')
         exit(1)
-    if c.has_section(namespace):
-        conf = dict(c.items(namespace))
+    if parser.has_section(namespace):
+        conf = dict(parser.items(namespace))
     else:
         print('Unable to find [%s] section config' % namespace)
         exit(1)
@@ -107,3 +111,32 @@ def load_namespace_conf(namespace):
         print("Missing field proxy in namespace config")
         exit(1)
     return conf
+
+
+def set_namespace_options(namespace, options, remove=None):
+    """
+    Set options in the local namespace configuration file.
+    Can have nasty effects, be careful, only use in test code.
+
+    :param namespace: the namespace to work with
+    :param options: a dictionary with options to set
+    :param remove: an iterable of options to remove
+    :returns: a dictionary with all options of the namespace
+    """
+    parser = SafeConfigParser({})
+    potential_confs = list(config_paths())
+    actual_confs = parser.read(potential_confs)
+    if not actual_confs:
+        raise ValueError(
+            "Could not read configuration from any of %s" % potential_confs)
+    if not parser.has_section(namespace):
+        print('Namespace %s was not found in %s' % (namespace, actual_confs))
+        parser.add_section(namespace)
+    for key, val in options.items():
+        parser.set(namespace, key, str(val))
+    if remove:
+        for key in remove:
+            parser.remove_option(namespace, key)
+    with open(actual_confs[0], 'w') as outfile:
+        parser.write(outfile)
+    return dict(parser.items(namespace))

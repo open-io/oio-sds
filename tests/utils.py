@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -29,6 +29,7 @@ from urllib import urlencode
 import yaml
 import testtools
 
+from oio.common.configuration import load_namespace_conf, set_namespace_options
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.json import json as jsonlib
 from oio.common.green import time
@@ -199,12 +200,22 @@ class CommonTestCase(testtools.TestCase):
         queue_addr = random.choice(self.conf['services']['beanstalkd'])['addr']
         self.conf['queue_addr'] = queue_addr
         self.conf['queue_url'] = 'beanstalk://' + queue_addr
+        self._admin = None
         self._beanstalk = None
         self._conscience = None
         self._http_pool = None
+        # Namespace configuration, from "sds.conf"
+        self._ns_conf = None
+        # Namespace configuration as it was when the test started
+        self._ns_conf_backup = None
 
     def tearDown(self):
         super(CommonTestCase, self).tearDown()
+        # Reset namespace configuration as it was before we mess with it
+        if self._ns_conf != self._ns_conf_backup:
+            remove = {x for x in self._ns_conf
+                      if x not in self._ns_conf_backup}
+            self.set_ns_opts(self._ns_conf_backup, remove=remove)
 
     @classmethod
     def tearDownClass(cls):
@@ -225,11 +236,36 @@ class CommonTestCase(testtools.TestCase):
         return self._http_pool
 
     @property
+    def admin(self):
+        """Get a client for admin operations (especially sqliterepo)."""
+        if not self._admin:
+            from oio.directory.admin import AdminClient
+            self._admin = AdminClient(self.conf, pool_manager=self.http_pool)
+        return self._admin
+
+    @property
     def beanstalk(self):
         if not self._beanstalk:
             from oio.event.beanstalk import Beanstalk
             self._beanstalk = Beanstalk.from_url(self.conf['queue_url'])
         return self._beanstalk
+
+    @property
+    def ns_conf(self):
+        """
+        Get the configuration of the local namespace ("sds.conf").
+        """
+        if self._ns_conf is None:
+            self._ns_conf = load_namespace_conf(self.ns)
+            self._ns_conf_backup = dict(self._ns_conf)
+        return self._ns_conf
+
+    def set_ns_opts(self, opts, remove=None):
+        """
+        Insert new options in the namespace configuration file,
+        and reload ns_conf.
+        """
+        self._ns_conf = set_namespace_options(self.ns, opts, remove=remove)
 
     def _flush_cs(self, srvtype):
         params = {'type': srvtype}
@@ -339,27 +375,12 @@ class BaseTestCase(CommonTestCase):
         self._flush_cs('echo')
 
     def tearDown(self):
+        if self.locked_svc:
+            self.conscience.unlock_score(self.locked_svc)
         super(BaseTestCase, self).tearDown()
         if self.locked_svc:
             self.conscience.unlock_score(self.locked_svc)
         self._flush_cs('echo')
-
-    def _service(self, name, action, wait=0, socket=None):
-        """
-        Execute a gridinit action on a service, and optionally sleep for
-        some seconds before returning.
-        :param name: The service upon which the command should be executed.
-        :param action: The command to send. (E.g. 'start' or 'stop')
-        :param wait: The amount of time in seconds to wait after the command.
-        :param socket: The unix socket on which gridinit is listenting.
-                        defaults to ~/.oio/sds/run/gridinit.sock
-        """
-        if not socket:
-            socket = os.path.expanduser('~/.oio/sds/run/gridinit.sock')
-        name = "%s-%s" % (self.ns, name)
-        check_call(['gridinit_cmd', '-S', socket, action, name])
-        if wait > 0:
-            time.sleep(wait)
 
     def _lock_services(self, type_, services, wait=1.0, score=0):
         """
@@ -377,5 +398,60 @@ class BaseTestCase(CommonTestCase):
         time.sleep(wait)
 
     @classmethod
+    def _service(cls, name, action, wait=0, socket=None):
+        """
+        Execute a gridinit action on a service, and optionally sleep for
+        some seconds before returning.
+
+        :param name: The service or group upon which the command
+            should be executed.
+        :param action: The command to send. (E.g. 'start' or 'stop')
+        :param wait: The amount of time in seconds to wait after the command.
+        :param socket: The unix socket on which gridinit is listenting.
+                        defaults to ~/.oio/sds/run/gridinit.sock
+        """
+        if not socket:
+            socket = os.path.expanduser('~/.oio/sds/run/gridinit.sock')
+        if not (name.startswith(cls._cls_ns) or name.startswith('@')):
+            name = "%s-%s" % (cls._cls_ns, name)
+        check_call(['gridinit_cmd', '-S', socket, action, name])
+        if wait > 0:
+            time.sleep(wait)
+
+    def service_to_gridinit_key(self, svc, type_):
+        """
+        Convert a service addr or ID to the gridinit key for the same service.
+        """
+        for descr in self.conf['services'][type_]:
+            svcid = descr.get('service_id')
+            if svc == svcid:
+                return svcid
+            elif svc == descr['addr']:
+                return '%s-%s-%s' % (self.ns, type_, descr['num'])
+        raise ValueError(
+            '%s not found in the list of %s services' % (svc, type_))
+
+    @classmethod
     def tearDownClass(cls):
         super(BaseTestCase, cls).tearDownClass()
+
+    def wait_for_score(self, types, timeout=20.0, score_threshold=35):
+        """Wait for services to have a score greater than the threshold."""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            wait = False
+            for type_ in types:
+                try:
+                    for service in self.conscience.all_services(type_):
+                        if int(service['score']) < score_threshold:
+                            wait = True
+                            break
+                except Exception as err:
+                    logging.warn('Could not check service score: %s', err)
+                    wait = True
+                if wait:
+                    # No need to check other types, we have to wait anyway
+                    break
+            if not wait:
+                return
+            time.sleep(1)
