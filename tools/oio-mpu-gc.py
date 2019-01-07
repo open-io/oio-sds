@@ -127,25 +127,40 @@ def parse_ns(ns, accounts, dryrun=False):
 
                 # MPU UUID is not in cache
                 if uuid not in mpus:
-                    # TODO: we should list all versions of objects,
-                    # not only last one
                     if obj in objects:
-                        info = objects[obj]['meta']
+                        info = objects[obj]['metas']
                         logging.debug("use properties cache on %s", obj)
                     else:
                         try:
-                            info = cnx.object_get_properties(account, bucket,
-                                                             obj)
-                        except NoSuchObject:
-                            info = None
-                        objects[obj] = {'meta': info, 'data': None}
+                            infos = []
+                            for props in object_list(cnx, account, bucket,
+                                                     prefix=obj, versions=True,
+                                                     properties=True):
+                                # only perfect matching
+                                if props['name'] != obj:
+                                    continue
 
-                    if not is_slo_or_missing(info):
+                                # get only manifests
+                                if props.get('properties', {}).get(
+                                        'x-static-large-object') == 'True':
+                                    _, data = cnx.object_fetch(
+                                        account, bucket, obj,
+                                        version=props['version'])
+                                    manifest = json.loads("".join(data))
+                                    infos.append(manifest)
+                        except NoSuchObject:
+                            infos = []
+                        objects[obj] = {'metas': infos}
+
+                    if not infos:
                         logging.info("object %s is missing or no more a SLO",
                                      obj)
                         mpus[uuid] = DELETE
                     else:
-                        manifest = objects[obj].get('data')
+                        manifest = []
+                        for entry in objects[obj]['metas']:
+                            if uuid in entry[0]['name']:
+                                manifest = entry
 
                         if not manifest:
                             _, data = cnx.object_fetch(account, bucket, obj)
