@@ -1,7 +1,7 @@
 /*
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -139,51 +139,14 @@ conscience_remote_remove_services(gchar **allcs, const char *type, GSList *ls, g
 }
 
 GError *
-conscience_resolve_service_id(gchar **cs UNUSED, const char *type, const char *service_id, gchar **out) {
-	*out = NULL;
-
-	gchar *key = oio_make_service_key(ns_name, type, service_id);
-	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, key);
-	g_free(key);
-	if (item) {
-		*out = g_strdup(item->addr);
+conscience_resolve_service_id(gchar **cs UNUSED, const char *type UNUSED,
+		const char *service_id, gchar **out)
+{
+	*out = oio_lb_resolve_service_id(service_id);
+	if (*out)
 		return NULL;
-	}
 
 	return NEWERROR(CODE_UNAVAILABLE, "Service ID [%s] not found", service_id);
-#if 0
-	GError *err = NULL;
-	GSList *sl = NULL;
-
-	/* FIXME: implement only direct request at this time */
-	err = conscience_remote_get_services (cs, type, FALSE, &sl, oio_ext_get_deadline());
-	if (err) {
-		g_slist_free_full (sl, (GDestroyNotify) service_info_clean);
-		return err;
-	}
-
-	/* FIXME: we should build a HASH table from Service ID to ADDR to find them quickly */
-	for (GSList *l = sl; l; l = l->next) {
-		const struct service_info_s *si = l->data;
-
-		if (si->tags && si->tags->len) {
-			for(guint i = 0; i < si->tags->len; ++i) {
-				struct service_tag_s *tag = si->tags->pdata[i];
-				if (g_strcmp0(tag->name, "tag.service_id") == 0 && g_strcmp0(tag->value.s, service_id) == 0) {
-					gchar straddr[STRLEN_ADDRINFO];
-					grid_addrinfo_to_string(&(si->addr), straddr, sizeof(straddr));
-					*out = g_strdup(straddr);
-
-					g_slist_free_full (sl, (GDestroyNotify) service_info_clean);
-					return NULL;
-				}
-			}
-		}
-	}
-
-	g_slist_free_full (sl, (GDestroyNotify) service_info_clean);
-	return NEWERROR(CODE_UNAVAILABLE, "Service ID [%s] not found", service_id);
-#endif
 }
 
 /* -------------------------------------------------------------------------- */
