@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -215,6 +215,7 @@ int oio_str_caseprefixed(const char *str, const char *prefix);
 gboolean oio_str_is_number (const char *s, gint64 *pi64);
 
 int oio_str_cmp3 (const void *a, const void *b, void *ignored);
+int oio_str_casecmp3(const void *a, const void *b, void *ignored);
 
 /* Light wrappers around json-c, to return GLib errors */
 GError* JSON_parse_buffer (const guint8 *b, gsize l, struct json_object **o);

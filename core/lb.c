@@ -132,7 +132,7 @@ _oio_service_id_cache_constructor(void)
 		if (g_atomic_int_compare_and_exchange(&lazy_init, 1, 0)) {
 			g_rw_lock_init(&service_id_to_addr_lock);
 			service_id_to_addr =
-				g_tree_new_full(oio_str_cmp3, NULL, g_free, g_free);
+				g_tree_new_full(oio_str_casecmp3, NULL, g_free, g_free);
 		}
 	}
 }
@@ -182,7 +182,8 @@ _oio_service_id_cache_flush(void)
 	g_rw_lock_writer_lock(&service_id_to_addr_lock);
 
 	g_tree_destroy(service_id_to_addr);
-	service_id_to_addr = g_tree_new_full(oio_str_cmp3, NULL, g_free, g_free);
+	service_id_to_addr = g_tree_new_full(
+			oio_str_casecmp3, NULL, g_free, g_free);
 
 	g_rw_lock_writer_unlock(&service_id_to_addr_lock);
 }
@@ -1590,6 +1591,12 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 		if (item0->weight != item->weight) {
 			item0->weight = item->weight;
 			slot->flag_dirty_weights = 1;
+		}
+
+		/* Address may have changed. If so, update the cache. */
+		if (g_strcmp0(item0->addr, item->addr)) {
+			g_strlcpy(item0->addr, item->addr, sizeof(item0->addr));
+			_oio_service_id_cache_add_addr(item0->id, item0->addr);
 		}
 
 		/* look for the slice of items AT THE OLD LOCATION (maybe it changed) */

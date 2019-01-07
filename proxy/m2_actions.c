@@ -30,18 +30,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 static gchar*
 _resolve_service_id(const char *service_id)
 {
-	gchar *out;
-	gchar *key = oio_make_service_key(ns_name, "meta2", service_id);
-	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, key);
-
-	if (item) {
-		out = g_strdup(item->addr);
-		g_free(item);
-	} else {
+	gchar *out = oio_lb_resolve_service_id(service_id);
+	if (!out)
 		out = g_strdup(service_id);
-	}
 	GRID_TRACE("Service [%s] resolved to [%s]", service_id, out);
-
 	return out;
 }
 
@@ -198,21 +190,15 @@ static gchar*
 _real_url_from_chunk_id (const char *id)
 {
 	gchar *out = NULL;
-	gchar *key = NULL, *type = NULL, *netloc = NULL;
+	gchar *addr = NULL, *type = NULL, *netloc = NULL;
 
 	oio_parse_chunk_url(id, &type, &netloc, NULL);
-	key = oio_make_service_key(ns_name, type, netloc);
-	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, key);
+	addr = _resolve_service_id(netloc);
 
 	/* generate real_url, only if item was found */
-	if (item) {
-		out = g_strdup_printf("http://%s/%s",
-			item->addr, id + strlen("http://") + strlen(netloc) + 1);
-		g_free(item);
-	} else {
-		GRID_WARN("no rawx matching '%s'", key);
-	}
-	g_free(key);
+	out = g_strdup_printf("http://%s/%s",
+			addr, id + strlen("http://") + strlen(netloc) + 1);
+	g_free(addr);
 	g_free(netloc);
 	g_free(type);
 	return out;
