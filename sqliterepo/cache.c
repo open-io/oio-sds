@@ -875,6 +875,7 @@ sqlx_cache_count(sqlx_cache_t *cache)
 	memset(&count, 0, sizeof(count));
 	if (cache) {
 		count.max = cache->bases_max_hard;
+		count.soft_max = cache->bases_max_soft;
 		count.cold = _count_beacon(cache, &cache->beacon_idle);
 		count.hot = _count_beacon(cache, &cache->beacon_idle_hot);
 		count.used = _count_beacon(cache, &cache->beacon_used);

@@ -64,6 +64,7 @@ guint sqlx_cache_expire(sqlx_cache_t *cache, guint max, gint64 duration);
 struct cache_counts_s
 {
 	guint max;
+	guint soft_max;
 	guint cold;
 	guint hot;
 	guint used;

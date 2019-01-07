@@ -2361,6 +2361,8 @@ _info_cache(struct sqlx_repository_s *repo, GString *gstr)
 	g_string_append_static(gstr, "\"cache\":{");
 	oio_str_gstring_append_json_pair_int(gstr, "max", count.max);
 	g_string_append_c(gstr, ',');
+	oio_str_gstring_append_json_pair_int(gstr, "soft_max", count.soft_max);
+	g_string_append_c(gstr, ',');
 	oio_str_gstring_append_json_pair_int(gstr, "hot", count.hot);
 	g_string_append_c(gstr, ',');
 	oio_str_gstring_append_json_pair_int(gstr, "cold", count.cold);
