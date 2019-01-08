@@ -447,9 +447,19 @@ m2v2_remote_pack_TOUCHC(struct oio_url_s *url, gint64 dl)
 }
 
 GByteArray*
-m2v2_remote_pack_TOUCHB(struct oio_url_s *url, guint32 flags, gint64 dl)
+m2v2_remote_pack_TOUCHB(struct oio_url_s *url, guint32 flags, gint64 dl,
+		gboolean recompute, gint64 missing_chunks)
 {
-	return _m2v2_pack_request_with_flags(NAME_MSGNAME_M2V1_TOUCH_CONTAINER, url, NULL, flags, dl);
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V1_TOUCH_CONTAINER,
+			url, NULL, dl);
+	flags = g_htonl(flags);
+	metautils_message_add_field(msg, NAME_MSGKEY_FLAGS,
+			&flags, sizeof(flags));
+	metautils_message_add_field_struint(msg, NAME_MSGKEY_RECOMPUTE,
+			BOOL(recompute));
+	metautils_message_add_field_strint64(msg, NAME_MSGKEY_MISSING_CHUNKS,
+			missing_chunks);
+	return message_marshall_gba_and_clean(msg);
 }
 
 GByteArray*
