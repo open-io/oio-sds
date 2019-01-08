@@ -1413,9 +1413,6 @@ _reload_lb_world(struct oio_lb_world_s *lbw, struct oio_lb_s *lb)
 		if (!any_loading_error) {
 			oio_lb_world__purge_old_generations(lbw);
 		} else {
-			/* This is better than nothing, but won't totally suppress
-			 * "LB reload not followed by rehash" messages, since we do not
-			 * lock the LB world between the update and the rehash. */
 			oio_lb_world__rehash_all_slots(lbw);
 		}
 	}
