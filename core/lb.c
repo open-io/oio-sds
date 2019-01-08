@@ -505,6 +505,39 @@ _item_is_too_far(const oio_location_t *known,
 	return FALSE;
 }
 
+static void
+__attribute__ ((format (printf, 1, 2)))
+_warn_dirty_poll(const char *fmt, ...)
+{
+	/* Initiate the mutex */
+	static volatile guint lazy_init = 1;
+	static GMutex lock = {};
+	if (lazy_init) {
+		if (g_atomic_int_compare_and_exchange(&lazy_init, 1, 0))
+			g_mutex_init(&lock);
+	}
+
+	if (g_mutex_trylock(&lock)) {
+		/* If the mutex is already held by another thread, an alert is maybe
+		 * going to be sent. No need to check if we need a strong level, that
+		 * check will be performed by the other thread, and there is even no
+		 * need to send any trace... */
+		static volatile gint64 last_alert = 0;
+		const gint64 now = oio_ext_monotonic_time();
+
+		GLogLevelFlags lvl = GRID_LOGLVL_DEBUG;
+		if (last_alert < OLDEST(now, 5 * G_TIME_SPAN_MINUTE))
+			lvl = GRID_LOGLVL_WARN;
+		last_alert = now;
+		g_mutex_unlock(&lock);
+
+		va_list va;
+		va_start(va, fmt);
+		g_logv(G_LOG_DOMAIN, lvl, fmt, va);
+		va_end(va);
+	}
+}
+
 static gboolean
 _item_is_too_popular(struct polling_ctx_s *ctx, const oio_location_t item,
 		struct oio_lb_slot_s *slot)
@@ -515,12 +548,12 @@ _item_is_too_popular(struct polling_ctx_s *ctx, const oio_location_t item,
 		guint32 n_leafs = GPOINTER_TO_UINT(
 				g_datalist_id_get_data(&(slot->items_by_loc[level]), key));
 		if (unlikely(n_leafs == 0)) {
-			GRID_WARN("BUG: %s: LB reload not followed by rehash, "
+			_warn_dirty_poll("BUG: %s: LB reload not followed by rehash, "
 					"item %"OIO_LOC_FORMAT" not found at level %d",
 					__FUNCTION__, item, level);
 			n_leafs = 1;
 		} else if (unlikely(n_leafs > slot->items->len)) {
-			GRID_WARN("BUG: %s: LB reload not followed by rehash, "
+			_warn_dirty_poll("BUG: %s: LB reload not followed by rehash, "
 					"more different locations than items in the slot %s "
 					"(%u/%u)",
 					__FUNCTION__, slot->name, n_leafs, slot->items->len);
@@ -747,7 +780,7 @@ _local_slot__poll(struct oio_lb_slot_s *slot, const guint16 bit_shift,
 		gboolean reversed, struct polling_ctx_s *ctx)
 {
 	if (unlikely(_slot_needs_rehash(slot)))
-		GRID_WARN("BUG: %s: LB reload not followed by rehash", __FUNCTION__);
+		_warn_dirty_poll("BUG: %s: LB reload not followed by rehash", __FUNCTION__);
 
 	GRID_TRACE2(
 			"%s slot=%s sum=%"G_GUINT32_FORMAT
@@ -864,7 +897,7 @@ _local_target__is_satisfied(struct oio_lb_pool_LOCAL_s *lb,
 			continue;
 		}
 		if (unlikely(_slot_needs_rehash(slot))) {
-			GRID_WARN("BUG: %s: LB reload not followed by rehash",
+			_warn_dirty_poll("BUG: %s: LB reload not followed by rehash",
 					__FUNCTION__);
 		}
 		oio_location_t *known = ctx->next_polled;
