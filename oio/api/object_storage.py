@@ -29,7 +29,8 @@ from oio.api.replication import ReplicatedWriteHandler
 from oio.api.backblaze_http import BackblazeUtilsException, BackblazeUtils
 from oio.api.backblaze import BackblazeWriteHandler, \
     BackblazeChunkDownloadHandler
-from oio.common.utils import cid_from_name, GeneratorIO, monotonic_time
+from oio.common.utils import cid_from_name, GeneratorIO, monotonic_time, \
+    depaginate
 from oio.common.easy_value import float_value, true_value
 from oio.common.logger import get_logger
 from oio.common.decorators import ensure_headers, ensure_request_id
@@ -241,10 +242,34 @@ class ObjectStorageApi(object):
         return self.container.container_create(
             account, container, properties=properties, **kwargs)
 
+    def _recompute_missing_chunks(self, account, container, **kwargs):
+        missing_chunks = 0
+        for obj_meta in depaginate(
+                self.object_list,
+                listing_key=lambda x: x['objects'],
+                marker_key=lambda x: x.get('next_marker'),
+                truncated_key=lambda x: x['truncated'],
+                account=account,
+                container=container,
+                properties=True,
+                versions=True,
+                **kwargs):
+            try:
+                obj_meta, chunks = self.object_locate(
+                    account, container, obj_meta['name'],
+                    version=obj_meta['version'], **kwargs)
+                stg_met = STORAGE_METHODS.load(obj_meta['chunk_method'])
+                chunks_by_pos = _sort_chunks(chunks, stg_met.ec)
+                expected_chunks = len(chunks_by_pos) * stg_met.expected_chunks
+                missing_chunks += expected_chunks - len(chunks)
+            except exc.NoSuchObject:
+                pass
+        return missing_chunks
+
     @handle_container_not_found
     @ensure_headers
     @ensure_request_id
-    def container_touch(self, account, container, **kwargs):
+    def container_touch(self, account, container, recompute=False, **kwargs):
         """
         Trigger a notification about the container state.
 
@@ -253,7 +278,13 @@ class ObjectStorageApi(object):
         :param container: name of the container
         :type container: `str`
         """
-        self.container.container_touch(account, container, **kwargs)
+        missing_chunks = None
+        if (recompute):
+            missing_chunks = self._recompute_missing_chunks(
+                account, container, **kwargs)
+        self.container.container_touch(
+                account, container,
+                recompute=recompute, missing_chunks=missing_chunks, **kwargs)
 
     @ensure_headers
     @ensure_request_id
