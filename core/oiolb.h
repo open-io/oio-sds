@@ -116,9 +116,14 @@ struct oio_lb_item_s *oio_lb_world__get_item(struct oio_lb_world_s *self,
 /* Ensure the slot exists in the  given world. */
 void oio_lb_world__create_slot (struct oio_lb_world_s *self, const char *name);
 
-/* Tell the world that the given service belong to the named slot. */
+/* Tell the world that the given service belongs to the named slot. */
 void oio_lb_world__feed_slot (struct oio_lb_world_s *self, const char *slot,
 		const struct oio_lb_item_s *item);
+
+/* Tell the world that all services of the list belong to the named slot.
+ * And rehash the slot. */
+void oio_lb_world__feed_slot_with_list(struct oio_lb_world_s *self,
+		const char *slot, GSList *items);
 
 /* Create a world-based implementation of a service pool. */
 struct oio_lb_pool_s * oio_lb_world__create_pool (
