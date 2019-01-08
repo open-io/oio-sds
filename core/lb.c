@@ -595,8 +595,6 @@ _slot_get (struct oio_lb_slot_s *slot, const int i)
 static inline gboolean
 _slot_needs_rehash (const struct oio_lb_slot_s * const slot)
 {
-	/* TODO maybe quicker to have all the flags in a single <guint8> and then
-	 * check for a given MASK */
 	return BOOL(slot->flag_dirty_order) || BOOL(slot->flag_dirty_weights);
 }
 
