@@ -1385,19 +1385,14 @@ _search_first_at_location (GArray *tab, const oio_location_t needle,
 
 static void
 oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
-		const char *name, const struct oio_lb_item_s *item)
+		struct oio_lb_slot_s *slot, const struct oio_lb_item_s *item)
 {
 	EXTRA_ASSERT (self != NULL);
 	EXTRA_ASSERT (item != NULL);
-	EXTRA_ASSERT (oio_str_is_set(name));
-	GRID_TRACE2 ("> Feeding [%s,%"G_GUINT64_FORMAT"] in slot=%s",
-			item->id, item->location, name);
+	GRID_TRACE2("> Feeding [%s,%"G_GUINT64_FORMAT"] in slot=%s",
+			item->id, item->location, slot->name);
 
 	gboolean found = FALSE;
-
-	struct oio_lb_slot_s *slot = oio_lb_world__get_slot_unlocked(self, name);
-	if (!slot)
-		return;
 
 	slot->generation = self->generation;
 
@@ -1484,8 +1479,28 @@ void
 oio_lb_world__feed_slot (struct oio_lb_world_s *self, const char *name,
 		const struct oio_lb_item_s *item)
 {
+	EXTRA_ASSERT(oio_str_is_set(name));
 	g_rw_lock_writer_lock(&self->lock);
-	oio_lb_world__feed_slot_unlocked(self, name, item);
+	struct oio_lb_slot_s *slot = oio_lb_world__get_slot_unlocked(self, name);
+	if (slot)
+		oio_lb_world__feed_slot_unlocked(self, slot, item);
+	g_rw_lock_writer_unlock(&self->lock);
+}
+
+void
+oio_lb_world__feed_slot_with_list(struct oio_lb_world_s *self,
+		const char *name, GSList *items)
+{
+	EXTRA_ASSERT(oio_str_is_set(name));
+	g_rw_lock_writer_lock(&self->lock);
+	struct oio_lb_slot_s *slot = oio_lb_world__get_slot_unlocked(self, name);
+	if (slot) {
+		for (GSList *cur = items; cur; cur = cur->next) {
+			struct oio_lb_item_s *item = cur->data;
+			oio_lb_world__feed_slot_unlocked(self, slot, item);
+		}
+		_slot_rehash(slot);
+	}
 	g_rw_lock_writer_unlock(&self->lock);
 }
 
