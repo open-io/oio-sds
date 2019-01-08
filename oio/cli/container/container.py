@@ -238,6 +238,13 @@ class TouchContainer(ContainersCommandMixin, command.Command):
     def get_parser(self, prog_name):
         parser = super(TouchContainer, self).get_parser(prog_name)
         self.patch_parser_container(parser)
+        parser.add_argument(
+            '--recompute',
+            dest='recompute',
+            default=False,
+            help='Recompute the statistics of the specified container',
+            action="store_true"
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -246,13 +253,13 @@ class TouchContainer(ContainersCommandMixin, command.Command):
             for container in parsed_args.containers:
                 self.app.client_manager.storage.container_touch(
                     self.app.client_manager.account,
-                    None, cid=container
+                    None, recompute=parsed_args.recompute, cid=container
                 )
         else:
             for container in parsed_args.containers:
                 self.app.client_manager.storage.container_touch(
                     self.app.client_manager.account,
-                    container
+                    container, recompute=parsed_args.recompute
                 )
 
 
