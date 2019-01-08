@@ -1199,8 +1199,31 @@ action_m2_container_dedup (struct req_args_s *args, struct json_object *j UNUSED
 static enum http_rc_e
 action_m2_container_touch (struct req_args_s *args, struct json_object *j UNUSED)
 {
-	PACKER_VOID(_pack) { return m2v2_remote_pack_TOUCHB (args->url, 0, DL()); }
-	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
+	GError *err = NULL;
+
+	gboolean recompute = oio_str_parse_bool(OPT("recompute"), FALSE);
+	gint64 missing_chunks = 0;
+
+	if (recompute) {
+		const char *missing_chunks_str = OPT("missing_chunks");
+		if (missing_chunks_str) {
+			char *end = NULL;
+			missing_chunks = g_ascii_strtoll(missing_chunks_str, &end, 10);
+			if (!missing_chunks && end == missing_chunks_str) {
+				err = BADREQ("Invalid missing chunks parameter: %s",
+						missing_chunks_str);
+				goto end;
+			}
+		}
+	}
+
+	PACKER_VOID(_pack) {
+		return m2v2_remote_pack_TOUCHB(args->url, 0, DL(),
+				recompute, missing_chunks);
+	}
+	err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
+
+end:
 	if (NULL != err) {
 		if (CODE_IS_NOTFOUND(err->code))
 			return _reply_forbidden_error (args, err);
