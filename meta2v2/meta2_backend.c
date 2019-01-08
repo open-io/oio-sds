@@ -901,22 +901,9 @@ meta2_backend_get_alias(struct meta2_backend_s *m2b,
 }
 
 /* TODO(jfs): maybe is there a way to keep this in a cache */
-GError *
-meta2_backend_notify_container_state(struct meta2_backend_s *m2b,
-		struct oio_url_s *url)
-{
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-	if (!(err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY, &sq3))) {
-		m2b_add_modified_container(m2b, sq3);
-		m2b_close(sq3);
-	}
-	return err;
-}
-
 GError*
-meta2_backend_refresh_container_size(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, gboolean recompute)
+meta2_backend_notify_container_state(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, gboolean recompute, gint64 missing_chunks)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -926,14 +913,21 @@ meta2_backend_refresh_container_size(struct meta2_backend_s *m2b,
 
 	if (!(err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY, &sq3))) {
 		if (recompute) {
-			guint64 size = 0u;
-			gint64 count = 0;
-			m2db_get_container_size_and_obj_count(sq3->db, FALSE,
-					&size, &count);
-			m2db_set_size(sq3, size);
-			m2db_set_obj_count(sq3, count);
+			struct sqlx_repctx_s *repctx = NULL;
+			if (!(err = _transaction_begin(sq3, url, &repctx))) {
+				guint64 size = 0u;
+				gint64 count = 0;
+				m2db_get_container_size_and_obj_count(sq3->db, FALSE,
+						&size, &count);
+				m2db_set_size(sq3, size);
+				m2db_set_obj_count(sq3, count);
+				m2db_set_missing_chunks(sq3, missing_chunks);
+				m2db_increment_version(sq3);
+				err = sqlx_transaction_end(repctx, err);
+			}
 		}
-		m2b_add_modified_container(m2b, sq3);
+		if (!err)
+			m2b_add_modified_container(m2b, sq3);
 		m2b_close(sq3);
 	}
 

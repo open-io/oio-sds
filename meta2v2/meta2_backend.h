@@ -118,11 +118,8 @@ GError* meta2_backend_update_beans(struct meta2_backend_s *m2b,
 GError* meta2_backend_delete_chunks(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *beans);
 
-GError * meta2_backend_notify_container_state(struct meta2_backend_s *m2b,
-		struct oio_url_s *url);
-
-GError* meta2_backend_refresh_container_size(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, gboolean bRecalc);
+GError* meta2_backend_notify_container_state(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, gboolean recompute, gint64 missing_chunks);
 
 GError* meta2_backend_put_alias(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *in, gint64 missing_chunks,

@@ -509,12 +509,20 @@ meta2_filter_action_update_beans(struct gridd_filter_ctx_s *ctx,
 
 int
 meta2_filter_action_touch_container(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply UNUSED)
+		struct gridd_reply_ctx_s *reply)
 {
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 
-	GError *err = meta2_backend_notify_container_state(m2b, url);
+	gboolean recompute = FALSE;
+	metautils_message_extract_boolean(reply->request,
+			NAME_MSGKEY_RECOMPUTE, FALSE, &recompute);
+	gint64 missing_chunks = 0;
+	metautils_message_extract_strint64(reply->request,
+			NAME_MSGKEY_MISSING_CHUNKS, &missing_chunks);
+
+	GError *err = meta2_backend_notify_container_state(m2b, url,
+			recompute, missing_chunks);
 	if (!err)
 		return FILTER_OK;
 	meta2_filter_ctx_set_error(ctx, err);
