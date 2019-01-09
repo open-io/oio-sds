@@ -95,11 +95,11 @@ if [ $verbose -ge 1 ] ; then set -x ; fi
 # Check the datadir is a directory the current user owns
 [ -n "$DATADIR" ]
 if [[ -e "$DATADIR" ]] ; then
-	[ -d "$DATADIR" ]
-	[ -O "$DATADIR" ]
-	[ -r "$DATADIR" ]
-	[ -x "$DATADIR" ]
-	[ -w "$DATADIR" ]
+    [ -d "$DATADIR" ]
+    [ -O "$DATADIR" ]
+    [ -r "$DATADIR" ]
+    [ -x "$DATADIR" ]
+    [ -w "$DATADIR" ]
 fi
 
 # Stop and clean a previous installation.
@@ -183,6 +183,12 @@ $cmd_openio cluster wait -d 30 -u -n "$COUNT" sqlx rawx meta2 meta0 meta1 rdir
 echo -e "\n### Init the meta0/meta1 directory"
 $cmd_openio directory bootstrap --check \
     --replicas $(oio-test-config.py -v directory_replicas)
+
+# Help debugging "The current META0 service is not ready yet [...]"
+if [ "$(oio-test-config.py -v directory_replicas)" -gt 1 ]
+then
+    $cmd_openio election status meta0 0000
+fi
 
 echo -e "\n### Assign rdir services"
 # Force meta1 services to reload meta0 cache

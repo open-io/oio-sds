@@ -488,6 +488,8 @@ meta0_backend_get_one(struct meta0_backend_s *m0, const guint8 *prefix,
 			return NULL;
 		return NEWERROR(CODE_UNAVAILABLE,
 				"The current META0 service is not ready yet, "
-				"it has been partially initiated.");
+				"it has been partially initiated. "
+				"Nothing found for prefix %02X%02X.",
+				prefix[0], prefix[1]);
 	}
 }
