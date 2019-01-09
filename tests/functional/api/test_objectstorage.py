@@ -390,7 +390,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
                                    chunk_checksum_algo=None)
         self._flush_and_check(name, fast=True)
 
-    def test_del_properties(self):
+    def test_container_del_properties(self):
         name = random_str(32)
 
         metadata = {
@@ -431,6 +431,57 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertRaises(
             exc.NoSuchContainer, self.api.container_del_properties,
             self.account, name, metadata.keys())
+
+    def test_container_touch(self):
+        name = random_str(32)
+
+        self._create(name)
+        for i in range(10):
+            self.api.object_create(
+                self.account, name, obj_name='content'+str(i), data='data')
+        meta = self.api.container_get_properties(self.account, name)
+        objects = meta['system']['sys.m2.objects']
+        self.assertEqual('10', objects)
+        usage = meta['system']['sys.m2.usage']
+        self.assertEqual('40', usage)
+        missing_chunks = meta['system']['sys.m2.chunks.missing']
+        self.beanstalk.wait_until_empty('oio', initial_delay=2)
+        containers = self.api.container_list(self.account)
+        for container in containers:
+            if container[0] == name:
+                self.assertListEqual(
+                    [name, int(objects), int(usage), 0, container[4]],
+                    container)
+                break
+        else:
+            self.fail("No container in account")
+
+        self.api.account_flush(self.account)
+        self.assertEqual([], self.api.container_list(self.account))
+
+        self.api.container_touch(self.account, name)
+        self.beanstalk.wait_until_empty('oio', initial_delay=2)
+        containers = self.api.container_list(self.account)
+        self.assertEqual(1, len(containers))
+        self.assertListEqual(
+            [name, int(objects), int(usage), 0, containers[0][4]],
+            containers[0])
+
+        self.api.account_flush(self.account)
+        self.assertEqual([], self.api.container_list(self.account))
+
+        self.api.container_touch(self.account, name, recompute=True)
+        self.beanstalk.wait_until_empty('oio', initial_delay=2)
+        meta = self.api.container_get_properties(self.account, name)
+        self.assertEqual(objects, meta['system']['sys.m2.objects'])
+        self.assertEqual(usage, meta['system']['sys.m2.usage'])
+        self.assertEqual(missing_chunks,
+                         meta['system']['sys.m2.chunks.missing'])
+        containers = self.api.container_list(self.account)
+        self.assertEqual(1, len(containers))
+        self.assertListEqual(
+            [name, int(objects), int(usage), 0, containers[0][4]],
+            containers[0])
 
     def test_object_create_invalid_name(self):
         ct = random_str(32)
