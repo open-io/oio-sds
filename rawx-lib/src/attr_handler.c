@@ -216,19 +216,20 @@ get_rawx_info_from_fd(int fd, GError **error, gchar *hex_chunkid,
 		}
 	}
 
+	gboolean rc = TRUE;
 	gchar *attr_name_content_fullpath = g_strconcat(
 			ATTR_DOMAIN_OIO "." ATTR_NAME_CONTENT_FULLPATH ":", hex_chunkid,
 			NULL);
 	_get(fd, attr_name_content_fullpath, &(chunk->content_fullpath));
-	g_free(attr_name_content_fullpath);
 	if (chunk->content_fullpath) {
 		// New chunk
 		chunk->chunk_id = g_strdup(hex_chunkid);
 		gchar **fullpath = g_strsplit(chunk->content_fullpath, "/", -1);
 		guint fullpath_len = g_strv_length(fullpath);
 		if (fullpath_len != 5) {
-			GSETCODE(error, EINVAL, "invalid xattr fullpath");
-			return FALSE;
+			GSETCODE(error, EINVAL, "invalid %s xattr",
+					attr_name_content_fullpath);
+			rc = FALSE;
 		}
 
 		char *account = g_uri_unescape_string(fullpath[0], NULL);
@@ -251,14 +252,19 @@ get_rawx_info_from_fd(int fd, GError **error, gchar *hex_chunkid,
 		// Old chunk
 		GET(ATTR_NAME_CHUNK_ID,          chunk->chunk_id);
 		if (g_strcmp0(hex_chunkid, chunk->chunk_id) != 0) {
-			GSETCODE(error, EINVAL, "invalid xattr chunk ID");
-			return FALSE;
+			GSETCODE(error, EINVAL,
+					"no %s xattr, invalid or missing %s xattr",
+					attr_name_content_fullpath,
+					ATTR_DOMAIN_OIO "." ATTR_NAME_CHUNK_ID);
+			rc = FALSE;
 		}
+		// Still try to load other attributes
 		GET(ATTR_NAME_CONTENT_CONTAINER, chunk->container_id);
 		GET(ATTR_NAME_CONTENT_PATH,      chunk->content_path);
 		GET(ATTR_NAME_CONTENT_VERSION,   chunk->content_version);
 		GET(ATTR_NAME_CONTENT_ID,        chunk->content_id);
 	}
+	g_free(attr_name_content_fullpath);
 
 	GET(ATTR_NAME_CONTENT_SIZE,    chunk->content_size);
 	GET(ATTR_NAME_CONTENT_NBCHUNK, chunk->content_chunk_nb);
@@ -278,7 +284,7 @@ get_rawx_info_from_fd(int fd, GError **error, gchar *hex_chunkid,
 
 	GET(ATTR_NAME_OIO_VERSION, chunk->oio_version);
 
-	return TRUE;
+	return rc;
 }
 
 gboolean
