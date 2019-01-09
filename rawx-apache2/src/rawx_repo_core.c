@@ -524,25 +524,26 @@ resource_stat_chunk(dav_resource *resource, int flags)
 	resource->collection = 0;
 	resource->exists = (status == APR_SUCCESS || status == APR_INCOMPLETE);
 
-	if (!resource->exists)
-		DAV_DEBUG_RES(resource, 0, "Resource does not exist [%s]", resource_get_pathname(resource));
-	else  {
-		gboolean rc;
+	if (!resource->exists) {
+		DAV_DEBUG_RES(resource, 0, "Resource does not exist [%s]",
+				resource_get_pathname(resource));
+	} else {
 		GError *err = NULL;
 
-		DAV_DEBUG_RES(resource, 0, "Resource exists [%s]", resource_get_pathname(resource));
+		DAV_DEBUG_RES(resource, 0, "Resource exists [%s]",
+				resource_get_pathname(resource));
 
 		memset(&(ctx->chunk), 0, sizeof(ctx->chunk));
 		if (flags & RESOURCE_STAT_CHUNK_READ_ATTRS) {
-			rc = get_rawx_info_from_file(resource_get_pathname(resource), &err,
+			gboolean rc = get_rawx_info_from_file(
+					resource_get_pathname(resource), &err,
 					resource->info->hex_chunkid, &(ctx->chunk));
 			if (!rc) {
-				DAV_DEBUG_RES(resource, 0, "Chunk xattr loading error [%s] : %s",
+				DAV_ERROR_RES(resource, 0, "Chunk xattr loading error [%s]: %s",
 						resource_get_pathname(resource),
 						apr_pstrdup(resource->pool, gerror_get_message(err)));
-			}
-			else {
-				chunk_info_fields__glib2apr (resource->pool, &resource->info->chunk);
+			} else {
+				chunk_info_fields__glib2apr(resource->pool, &resource->info->chunk);
 			}
 			if (err)
 				g_clear_error(&err);
