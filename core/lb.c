@@ -393,6 +393,17 @@ oio_lb_world__get_slot_unlocked(struct oio_lb_world_s *world, const char *name)
 	return g_tree_lookup (world->slots, name);
 }
 
+static guint
+oio_lb_world__count_slot_items_unlocked(struct oio_lb_world_s *self,
+		const char *name)
+{
+	guint len = 0;
+	struct oio_lb_slot_s *slot = oio_lb_world__get_slot_unlocked(self, name);
+	if (slot)
+		len = slot->items->len;
+	return len;
+}
+
 #define CSLOT(p) ((const struct _slot_item_s*)(p))
 #define CITEM(p) CSLOT(p)->item
 #define TAB_ITEM(t,i)  g_array_index ((t), struct _slot_item_s, i)
@@ -843,7 +854,6 @@ _local_target__poll(struct oio_lb_pool_LOCAL_s *lb,
 	gboolean res = FALSE;
 	gboolean fallback = FALSE;
 
-	g_rw_lock_reader_lock(&lb->world->lock);
 	/* Each target is a sequence of '\0'-separated strings, terminated with
 	 * an empty string. Each string is the name of a slot.
 	 * In most case we should not loop and consider only the first slot.
@@ -859,7 +869,6 @@ _local_target__poll(struct oio_lb_pool_LOCAL_s *lb,
 		}
 		fallback = TRUE;
 	}
-	g_rw_lock_reader_unlock(&lb->world->lock);
 	if (res && fallback)
 		ctx->fallback_used = TRUE;
 	return res;
@@ -981,6 +990,7 @@ _local__patch(struct oio_lb_pool_s *self,
 	gint16 incr = lb->nearby_mode? 1 : -1;
 	guint count = 0;
 	GError *err = NULL;
+	g_rw_lock_reader_lock(&lb->world->lock);
 	for (gchar **ptarget = lb->targets; *ptarget; ++ptarget) {
 		gboolean done = _local_target__is_satisfied(lb, *ptarget, &ctx);
 		guint16 dist;
@@ -997,12 +1007,14 @@ _local__patch(struct oio_lb_pool_s *self,
 			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "no service polled "
 					"from [%s], %u/%d services polled, %u services in slot",
 					*ptarget, count, count_targets,
-					oio_lb_world__count_slot_items(lb->world, *ptarget));
+					oio_lb_world__count_slot_items_unlocked(
+						lb->world, *ptarget));
 			break;
 		}
 		++ctx.next_polled;
 		++count;
 	}
+	g_rw_lock_reader_unlock(&lb->world->lock);
 
 	if (unlikely(GRID_DEBUG_ENABLED())) {
 		// FIXME: there is similar code in _slot_rehash()
@@ -1305,9 +1317,7 @@ oio_lb_world__count_slot_items(struct oio_lb_world_s *self, const char *name)
 	EXTRA_ASSERT (self != NULL);
 	guint len = 0;
 	g_rw_lock_reader_lock(&self->lock);
-	struct oio_lb_slot_s *slot = oio_lb_world__get_slot_unlocked(self, name);
-	if (slot)
-		len = slot->items->len;
+	len = oio_lb_world__count_slot_items_unlocked(self, name);
 	g_rw_lock_reader_unlock(&self->lock);
 	return len;
 }
