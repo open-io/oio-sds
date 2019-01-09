@@ -23,12 +23,13 @@ from oio.common.daemon import run_daemon
 
 
 def make_arg_parser():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(description=BlobAuditor.__doc__)
     parser.add_argument('--namespace', '--ns', help="Namespace")
     parser.add_argument('--volume', help="Volume to audit")
     parser.add_argument('config', help="Configuration file or empty file")
-    parser.add_argument('--generate-config', action='store_true',
-                        help="Generate configuration file with given arguments")
+    parser.add_argument(
+        '--generate-config', action='store_true',
+        help="Generate configuration file with given arguments")
     parser.add_argument('--append-config', action='store_true',
                         help="Append given arguments on configuration file")
     parser.add_argument('--daemon', action='store_true',

@@ -146,6 +146,7 @@ class BlobAuditorWorker(object):
 
     def safe_chunk_audit(self, path):
         chunk_id = path.rsplit('/', 1)[-1]
+        # TODO(FVE): if ".pending" suffix, check for stale upload
         if len(chunk_id) != STRLEN_CHUNKID:
             self.logger.warn('WARN Not a chunk %s' % path)
             return
@@ -171,59 +172,67 @@ class BlobAuditorWorker(object):
         self.passes += 1
 
     def chunk_audit(self, path, chunk_id):
-        with open(path) as f:
-            try:
-                meta, _ = read_chunk_metadata(f, chunk_id)
-            except exc.MissingAttribute as e:
-                raise exc.FaultyChunk(
-                    'Missing extended attribute %s' % e)
-            size = int(meta['chunk_size'])
-            md5_checksum = meta['chunk_hash'].lower()
-            reader = ChunkReader(f, size, md5_checksum)
-            with closing(reader):
-                for buf in reader:
-                    buf_len = len(buf)
-                    self.bytes_running_time = ratelimit(
-                        self.bytes_running_time,
-                        self.max_bytes_per_second,
-                        increment=buf_len)
-                    self.bytes_processed += buf_len
-                    self.total_bytes_processed += buf_len
+        with open(path) as chunk_file:
+            return self.chunk_file_audit(chunk_file, chunk_id)
 
-            try:
-                container_id = meta['container_id']
-                content_id = meta['content_id']
-                _obj_meta, data = self.container_client.content_locate(
-                    cid=container_id, content=content_id, properties=False)
+    def chunk_file_audit(self, chunk_file, chunk_id):
+        try:
+            meta, _ = read_chunk_metadata(chunk_file, chunk_id)
+        except exc.MissingAttribute as err:
+            raise exc.FaultyChunk(err)
+        size = int(meta['chunk_size'])
+        md5_checksum = meta['chunk_hash'].lower()
+        reader = ChunkReader(chunk_file, size, md5_checksum)
+        with closing(reader):
+            for buf in reader:
+                buf_len = len(buf)
+                self.bytes_running_time = ratelimit(
+                    self.bytes_running_time,
+                    self.max_bytes_per_second,
+                    increment=buf_len)
+                self.bytes_processed += buf_len
+                self.total_bytes_processed += buf_len
 
-                # Check chunk data
-                chunk_data = None
-                metachunks = set()
-                for c in data:
-                    if c['url'].endswith(meta['chunk_id']):
-                        metachunks.add(c['pos'].split('.', 2)[0])
-                        chunk_data = c
-                if not chunk_data:
-                    raise exc.OrphanChunk('Not found in content')
+        try:
+            container_id = meta['container_id']
+            content_id = meta['content_id']
+            _obj_meta, data = self.container_client.content_locate(
+                cid=container_id, content=content_id, properties=False)
 
-                metachunk_size = meta.get('metachunk_size')
-                if metachunk_size is not None \
-                        and chunk_data['size'] != int(metachunk_size):
-                    raise exc.FaultyChunk('Invalid metachunk size found')
+            # Check chunk data
+            chunk_data = None
+            metachunks = set()
+            for c in data:
+                if c['url'].endswith(meta['chunk_id']):
+                    metachunks.add(c['pos'].split('.', 2)[0])
+                    chunk_data = c
+            if not chunk_data:
+                raise exc.OrphanChunk('Not found in content')
 
-                metachunk_hash = meta.get('metachunk_hash')
-                if metachunk_hash is not None \
-                        and chunk_data['hash'] != meta['metachunk_hash']:
-                    raise exc.FaultyChunk('Invalid metachunk hash found')
+            metachunk_size = meta.get('metachunk_size')
+            if metachunk_size is not None \
+                    and chunk_data['size'] != int(metachunk_size):
+                raise exc.FaultyChunk('Invalid metachunk size found')
 
-                if chunk_data['pos'] != meta['chunk_pos']:
-                    raise exc.FaultyChunk('Invalid chunk position found')
+            metachunk_hash = meta.get('metachunk_hash')
+            if metachunk_hash is not None \
+                    and chunk_data['hash'] != meta['metachunk_hash']:
+                raise exc.FaultyChunk('Invalid metachunk hash found')
 
-            except exc.NotFound:
-                raise exc.OrphanChunk('Chunk not found in container')
+            if chunk_data['pos'] != meta['chunk_pos']:
+                raise exc.FaultyChunk('Invalid chunk position found')
+
+        except exc.NotFound:
+            raise exc.OrphanChunk('Chunk not found in container')
 
 
 class BlobAuditor(Daemon):
+    """
+    Walk through the chunks of a volume, and check for incoherencies:
+    missing extended attributes, invalid hash, position or size, or
+    orphaned chunk.
+    """
+
     def __init__(self, conf, **kwargs):
         super(BlobAuditor, self).__init__(conf)
         self.logger = get_logger(conf)
