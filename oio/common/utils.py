@@ -81,7 +81,10 @@ def drop_privileges(user):
 
 
 def paths_gen(volume_path):
-    for root, dirs, files in os.walk(volume_path):
+    """
+    Yield paths of all regular files under `volume_path`.
+    """
+    for root, _dirs, files in os.walk(volume_path):
         for name in files:
             yield os.path.join(root, name)
 

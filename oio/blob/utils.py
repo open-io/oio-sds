@@ -58,6 +58,8 @@ def read_chunk_metadata(fd, chunk_id, check_chunk_id=True):
     meta['links'] = dict()
     raw_chunk_id = container_id = path = version = content_id = None
     for k, v in raw_meta.iteritems():
+        # FIXME(FVE): check for chunk_xattr_keys['oio_version']
+        # and require fullpath
         # New chunk
         if k.startswith(CHUNK_XATTR_CONTENT_FULLPATH_PREFIX):
             chunkid = k[len(CHUNK_XATTR_CONTENT_FULLPATH_PREFIX):]
@@ -76,12 +78,15 @@ def read_chunk_metadata(fd, chunk_id, check_chunk_id=True):
         raw_meta[chunk_xattr_keys['content_path']] = path
         raw_meta[chunk_xattr_keys['content_version']] = version
         raw_meta[chunk_xattr_keys['content_id']] = content_id
+    missing = list()
     for k, v in chunk_xattr_keys.iteritems():
         if v not in raw_meta:
             if k not in chunk_xattr_keys_optional:
-                raise exc.MissingAttribute(v)
+                missing.append(exc.MissingAttribute(v))
         else:
             meta[k] = raw_meta[v]
+    if missing:
+        raise exc.FaultyChunk(*missing)
     if check_chunk_id and meta['chunk_id'] != chunk_id:
         raise exc.MissingAttribute(chunk_xattr_keys['chunk_id'])
     return meta, raw_meta_copy if raw_meta_copy else raw_meta

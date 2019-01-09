@@ -186,6 +186,10 @@ class Checker(object):
             self.chunk_not_found += 1
             error = True
             print('  Not found chunk "%s": %s' % (target, str(e)))
+        except exc.FaultyChunk as err:
+            self.chunk_exceptions += 1
+            error = True
+            print('  Exception chunk "%s": %r' % (target, err))
         except Exception as e:
             self.chunk_exceptions += 1
             error = True
