@@ -1,16 +1,33 @@
 [blob-indexer]
+
+# Namespace name
 namespace = NS
+
+# Run daemon as user
 user = openio
-volume = /var/lib/oio/sds/vol1/NS/rawx-1/
-interval = 300
-report_interval = 5
-chunks_per_second = 30
-autocreate = true
+
+# Logging configuration
 log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log
-syslog_prefix = OIO,OPENIO,blob-index,1
-# oio-blob-converter
+syslog_prefix = OIO,NS,blob-index,1
+
+# Volume to index
+volume = /var/lib/oio/sds/vol1/NS/rawx-1/
+
+# Interval between two passes (in seconds)
+interval = 300
+
+# Report interval (in seconds)
+report_interval = 5
+
+# Throttle: max chunks per second
+chunks_per_second = 30
+
+# Autocreate a new entry
+autocreate = true
+
+# oio-blob-converter configuration
 # convert_chunks = False
 # backup = True
 # backup_dir = /tmp
