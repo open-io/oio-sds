@@ -506,9 +506,8 @@ sqlx_service_resolve_peers(struct sqlx_service_s *ss,
 	struct oio_url_s *u = oio_url_empty ();
 	oio_url_set(u, OIOURL_NS, ss->ns_name);
 
-	if (!sqlx_name_extract(n, u, ss->service_config->srvtype, &seq)) {
-		err = BADREQ("Invalid type name: '%s'", n->type);
-	} else {
+	err = sqlx_name_extract(n, u, NAME_SRVTYPE_SQLX, &seq);
+	if (!err) {
 label_retry:
 		if (nocache)
 			hc_decache_reference_service(ss->resolver, u, n->type);

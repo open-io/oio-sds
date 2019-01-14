@@ -33,10 +33,9 @@ struct oio_url_s
 	gchar ns[LIMIT_LENGTH_NSNAME];
 	gchar account[LIMIT_LENGTH_ACCOUNTNAME];
 	gchar user[LIMIT_LENGTH_USER];
-	gchar *type;
-	gchar *path;
-
 	gchar version[LIMIT_LENGTH_VERSION];
+
+	gchar *path;
 	gchar *content;
 
 	/* secondary */
@@ -157,7 +156,7 @@ _parse_url(struct oio_url_s *url, const char *str, gboolean unescape)
 		_copy (url->user, sizeof(url->user), path_tokens[2], unescape);
 
 		if (!path_tokens[3]) break;
-		_replace (&url->type, path_tokens[3], unescape);
+		_copy (url->version, sizeof(url->version), path_tokens[3], unescape);
 
 		if (!path_tokens[4]) break;
 		_replace (&url->path, path_tokens[4], unescape);
@@ -176,9 +175,8 @@ _clean_url (struct oio_url_s *u)
 	u->ns[0] = '\0';
 	u->account[0] = '\0';
 	u->user[0] = '\0';
-	oio_str_clean(&u->type);
-	oio_str_clean(&u->path);
 	u->version[0] = '\0';
+	oio_str_clean(&u->path);
 	oio_str_clean(&u->content);
 	oio_str_clean(&u->whole);
 	oio_str_clean(&u->fullpath);
@@ -315,7 +313,6 @@ oio_url_dup(const struct oio_url_s *u)
 	struct oio_url_s *result = g_slice_new0(struct oio_url_s);
 	memcpy (result, u, sizeof(struct oio_url_s));
 
-	STRDUP(result, u, type);
 	STRDUP(result, u, path);
 	STRDUP(result, u, whole);
 	STRDUP(result, u, content);
@@ -349,11 +346,6 @@ oio_url_set(struct oio_url_s *u, enum oio_url_field_e f, const char *v)
 			oio_str_clean(&u->fullpath);
 			return u;
 
-		case OIOURL_TYPE:
-			oio_str_replace(&(u->type), v);
-			u->hexid[0] = 0;
-			return u;
-
 		case OIOURL_PATH:
 			oio_str_replace(&(u->path), v);
 			oio_str_clean(&u->fullpath);
@@ -375,10 +367,6 @@ oio_url_set(struct oio_url_s *u, enum oio_url_field_e f, const char *v)
 			u->hexid[0] = 0;
 			if (oio_str_ishexa(v, 64) && oio_str_hex2bin(v, u->id, 32)) {
 				memcpy(u->hexid, v, 64);
-				return u;
-			} else if (u->type && !strcmp(u->type, "meta1") &&
-					oio_str_ishexa(v, 4) && oio_str_hex2bin(v, u->id, 2)) {
-				memcpy(u->hexid, v, 4);
 				return u;
 			}
 			return NULL;
@@ -414,11 +402,6 @@ oio_url_unset(struct oio_url_s *u, enum oio_url_field_e f)
 		case OIOURL_USER:
 			u->user[0] = u->hexid[0] = 0;
 			oio_str_clean(&u->fullpath);
-			return;
-
-		case OIOURL_TYPE:
-			oio_str_clean(&u->type);
-			u->hexid[0] = 0;
 			return;
 
 		case OIOURL_PATH:
@@ -465,9 +448,6 @@ oio_url_has(const struct oio_url_s *u, enum oio_url_field_e f)
 			return u->account[0];
 		case OIOURL_USER:
 			return u->user[0];
-		case OIOURL_TYPE:
-			// the type has a default value
-			return TRUE;
 		case OIOURL_PATH:
 			return oio_str_is_set(u->path);
 		case OIOURL_VERSION:
@@ -511,9 +491,10 @@ _pack_url(struct oio_url_s *u)
 				g_string_append_c (gs, '/');
 				g_string_append_uri_escaped (gs, u->user, NULL, TRUE);
 				g_string_append_c (gs, '/');
-				if (u->type)
-					g_string_append_uri_escaped (gs, u->type, NULL, TRUE);
 				if (u->path) {
+					/* TODO(jfs): once there is no type anywhere, we can use the version here */
+					if (u->version[0])
+						g_string_append_uri_escaped (gs, u->version, NULL, TRUE);
 					g_string_append_c (gs, '/');
 					g_string_append_uri_escaped (gs, u->path, NULL, TRUE);
 				}
@@ -549,8 +530,6 @@ oio_url_get(struct oio_url_s *u, enum oio_url_field_e f)
 			return u->account[0] ? u->account : NULL;
 		case OIOURL_USER:
 			return u->user[0] ? u->user : NULL;
-		case OIOURL_TYPE:
-			return u->type ? u->type : OIOURL_DEFAULT_TYPE;
 		case OIOURL_PATH:
 			return u->path;
 
@@ -626,10 +605,6 @@ oio_url_to_json (GString *out, struct oio_url_s *u)
 	if (oio_str_is_set(u->user)) {
 		if (len != out->len) g_string_append_c (out, ',');
 		oio_str_gstring_append_json_pair (out, "user", u->user);
-	}
-	if (oio_str_is_set(u->type)) {
-		if (len != out->len) g_string_append_c (out, ',');
-		oio_str_gstring_append_json_pair (out, "type", u->type);
 	}
 	if (oio_str_is_set(u->path)) {
 		if (len != out->len) g_string_append_c (out, ',');

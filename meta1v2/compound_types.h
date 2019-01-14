@@ -21,15 +21,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define OIO_SDS__meta1v2__compound_types_h 1
 
 #include <glib.h>
+#include <metautils/lib/metatypes.h>
 
 struct service_update_policies_s;
 
 struct compound_type_s
 {
 	const gchar *fulltype;
-	gchar *baretype;
-	gchar *subtype;
-	gchar *type; // baretype . subtype
+	gchar type[LIMIT_LENGTH_SRVTYPE]; // type without args
 
 	struct { // <key,value> to be matched
 		gchar *k;

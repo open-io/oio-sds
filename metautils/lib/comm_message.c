@@ -369,7 +369,6 @@ static struct map_s
 	{NAME_MSGKEY_NAMESPACE,   OIOURL_NS,        NULL, LIMIT_LENGTH_NSNAME},
 	{NAME_MSGKEY_ACCOUNT,     OIOURL_ACCOUNT,   NULL, LIMIT_LENGTH_ACCOUNTNAME},
 	{NAME_MSGKEY_USER,        OIOURL_USER,      NULL, LIMIT_LENGTH_BASENAME},
-	{NAME_MSGKEY_TYPENAME,    OIOURL_TYPE,      OIOURL_DEFAULT_TYPE, LIMIT_LENGTH_SRVTYPE},
 	{NAME_MSGKEY_CONTENTPATH, OIOURL_PATH,      NULL, LIMIT_LENGTH_CONTENTPATH},
 	{NAME_MSGKEY_CONTENTID,   OIOURL_CONTENTID, NULL, STRLEN_CONTAINERID},
 	{NAME_MSGKEY_VERSION,     OIOURL_VERSION,   NULL, LIMIT_LENGTH_VERSION},
@@ -400,7 +399,7 @@ metautils_message_add_url_no_type (MESSAGE m, struct oio_url_s *url)
 	if (!m)
 		return;
 	for (struct map_s *p = url2msg_map; p->f ;++p) {
-		if (p->u != OIOURL_TYPE && oio_url_has (url, p->u)) {
+		if (oio_url_has (url, p->u)) {
 			const char *s = oio_url_get (url, p->u);
 			if (!p->avoid || strcmp(p->avoid, s))
 				metautils_message_add_field_str(m, p->f, s);

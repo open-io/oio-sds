@@ -60,15 +60,14 @@ struct sqlx_name_s
 	const char *type;
 };
 
-void sqlx_inline_name_fill  (struct sqlx_name_inline_s *n,
-		struct oio_url_s *url, const char *srvtype, gint64 seq);
+#define sqlx_inline_name_fill sqlx_inline_name_fill_type_asis
 
 void sqlx_inline_name_fill_type_asis  (struct sqlx_name_inline_s *n,
 		struct oio_url_s *url, const char *srvtype, gint64 seq);
 
 
-gboolean sqlx_name_extract (const struct sqlx_name_s *n, struct oio_url_s *url,
-		const char *srvtype, gint64 *pseq);
+GError* sqlx_name_extract (const struct sqlx_name_s *n,
+		struct oio_url_s *url, const char *srvtype, gint64 *pseq);
 
 // sqliterepo-related requests coders ------------------------------------------
 

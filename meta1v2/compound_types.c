@@ -26,26 +26,17 @@ compound_type_clean(struct compound_type_s *ct)
 {
 	if (!ct)
 		return;
-	if (ct->type)
-		g_free(ct->type);
 	if (ct->req.k)
 		g_free(ct->req.k);
 	if (ct->req.v)
 		g_free(ct->req.v);
-	if (ct->baretype)
-		g_free(ct->baretype);
-	if (ct->subtype)
-		g_free(ct->subtype);
-	memset(ct, 0, sizeof(*ct));
 }
 
 static void
 _parse_type(struct compound_type_s *ct, gchar *s)
 {
 	gchar **tokens = g_strsplit(s, ".", 2);
-	ct->type = s;
-	ct->baretype = tokens[0];
-	ct->subtype = tokens[1] ? tokens[1] : g_strdup("");
+	g_strlcpy(ct->type, s, sizeof(ct->type));
 	g_free(tokens);
 }
 
@@ -78,9 +69,8 @@ compound_type_parse(struct compound_type_s *ct, const gchar *srvtype)
 	_parse_args(ct, tokens[1]);
 	g_free(tokens);
 
-	GRID_TRACE("CT full[%s] type[%s] bare[%s] sub[%s] args[%s|%s]",
-			ct->fulltype, ct->type, ct->baretype, ct->subtype,
-			ct->req.k, ct->req.v);
+	GRID_TRACE("CT full[%s] type[%s] args[%s|%s]",
+			ct->fulltype, ct->type, ct->req.k, ct->req.v);
 
 	return NULL;
 }
@@ -91,7 +81,7 @@ compound_type_update_arg(struct compound_type_s *ct,
 {
 	gchar *k = NULL, *v = NULL;
 
-	if (service_update_tagfilter(pol, ct->baretype, &k, &v)) {
+	if (service_update_tagfilter(pol, ct->type, &k, &v)) {
 		if (override || !ct->req.k) {
 			oio_str_reuse(&(ct->req.k),  k);
 			oio_str_reuse(&(ct->req.v),  v);
@@ -104,4 +94,3 @@ compound_type_update_arg(struct compound_type_s *ct,
 	if (v)
 		g_free(v);
 }
-

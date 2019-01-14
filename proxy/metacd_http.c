@@ -169,9 +169,6 @@ _metacd_load_url (struct req_args_s *args, struct oio_url_s *url)
 	if (NULL != (s = REF()))
 		oio_url_set (url, OIOURL_USER, s);
 
-	if (NULL != (s = TYPE()))
-		oio_url_set (url, OIOURL_TYPE, s);
-
 	if (NULL != (s = PATH())) {
 		oio_url_set (url, OIOURL_PATH, s);
 		if (NULL != (s = VERSION()))

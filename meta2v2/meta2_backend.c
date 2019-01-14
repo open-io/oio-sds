@@ -302,16 +302,6 @@ _container_state (struct sqlx_sqlite3_s *sq3)
 	}
 
 	struct oio_url_s *u = sqlx_admin_get_url (sq3);
-
-	/* Patch the SUBTYPE: the URL must represent an object as managed by meta2
-	 * services (and also by end-user APIs). Unlike for sqlx services, the user
-	 * doesn't know anything about the meta2, and never mentions it in URL.
-	 * This is why we strip this from the service type. */
-	if (!strcmp(sq3->name.type, NAME_SRVTYPE_META2))
-		oio_url_set (u, OIOURL_TYPE, "");
-	else if (g_str_has_prefix (sq3->name.type, NAME_SRVTYPE_META2 "."))
-		oio_url_set (u, OIOURL_TYPE, sq3->name.type + sizeof(NAME_SRVTYPE_META2));
-
 	GString *gs = oio_event__create (META2_EVENTS_PREFIX ".container.state", u);
 	g_string_append_static (gs, ",\"data\":{");
 	append_const (gs, "policy", sqlx_admin_get_str(sq3, M2V2_ADMIN_STORAGE_POLICY));
@@ -433,7 +423,6 @@ m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
 	set (SQLX_ADMIN_NAMESPACE, OIOURL_NS);
 	set (SQLX_ADMIN_ACCOUNT, OIOURL_ACCOUNT);
 	set (SQLX_ADMIN_USERNAME, OIOURL_USER);
-	set (SQLX_ADMIN_USERTYPE, OIOURL_TYPE);
 
 	*result = sq3;
 	return NULL;
