@@ -515,7 +515,7 @@ __poll_services(struct meta1_backend_s *m1, guint replicas,
 		g_ptr_array_add(ids, g_strdup(sel->item->id));
 	}
 	*err = oio_lb__patch_with_pool(
-			m1->lb, ct->baretype, avoid, known, _on_id, NULL);
+			m1->lb, ct->type, avoid, known, _on_id, NULL);
 	if (*err) {
 		g_prefix_error(err, "found only %u services matching the criteria: ",
 				ids->len);
@@ -560,9 +560,9 @@ __get_services_up(struct meta1_backend_s *m1, struct meta1_service_url_s **src)
 			}
 			char key[128];
 			g_snprintf(key, sizeof(key), "%s|%s|%s",
-					m1->ns_name, ct.baretype, (*pe)->host);
+					m1->ns_name, ct.type, (*pe)->host);
 			struct oio_lb_item_s *item = oio_lb__get_item_from_pool(m1->lb,
-					ct.baretype, key);
+					ct.type, key);
 			one_is_up = item? item->weight > 0 : FALSE;
 			g_free(item);
 			compound_type_clean(&ct);
@@ -599,8 +599,8 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 	struct service_update_policies_s *pol;
 	if (!(pol = meta1_backend_get_svcupdate(m1)))
 		return NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "Bad NS/Policy pair");
-	policy = service_howto_update(pol, ct->baretype);
-	replicas = service_howmany_replicas(pol, ct->baretype);
+	policy = service_howto_update(pol, ct->type);
+	replicas = service_howmany_replicas(pol, ct->type);
 	replicas = (replicas > 0 ? replicas : 1);
 	// Patches the constraint on the service type (if not set in the request)
 	// by the constraint set in the NS-wide storage policy.
@@ -804,7 +804,7 @@ __relink_container_services(struct m1v2_relink_input_s *in, gchar ***out)
 		struct service_update_policies_s *pol = meta1_backend_get_svcupdate(in->m1);
 		EXTRA_ASSERT (pol != NULL);
 
-		guint max_svc = service_howmany_replicas(pol, in->ct->baretype);
+		guint max_svc = service_howmany_replicas(pol, in->ct->type);
 
 		oio_location_t *known = NULL;
 		oio_location_t *avoids = NULL;
@@ -819,7 +819,7 @@ __relink_container_services(struct m1v2_relink_input_s *in, gchar ***out)
 			void _on_id(struct oio_lb_selected_item_s *sel, gpointer u UNUSED) {
 				g_ptr_array_add(ids, g_strdup(sel->item->id));
 			}
-			err = oio_lb__patch_with_pool(in->m1->lb, in->ct->baretype,
+			err = oio_lb__patch_with_pool(in->m1->lb, in->ct->type,
 					avoids, known, _on_id, NULL);
 			if (err) {
 				g_prefix_error(&err,
@@ -1158,11 +1158,6 @@ meta1_backend_services_relink(struct meta1_backend_s *m1,
 	ukept = __parse_and_expand (kept);
 	urepl = __parse_and_expand (replaced);
 
-	/* prefetch the compound type (so it is parsed only once) */
-	if (!oio_url_has(url, OIOURL_TYPE)) {
-		err = BADREQ("Invalid OIOURL: missing service type");
-		goto out;
-	}
 	/* Sanity check: we must receive at least one service */
 	if ((!ukept || !*ukept) && (!urepl || !*urepl)) {
 		err = NEWERROR (CODE_BAD_REQUEST, "Missing URL set");
@@ -1189,7 +1184,7 @@ meta1_backend_services_relink(struct meta1_backend_s *m1,
 	/* Sanity check: all the kept/replaced services must have the type of
 	 * the oio_url */
 	for (struct meta1_service_url_s **p = urepl; urepl && *p; ++p) {
-		if (0 != strcmp((*p)->srvtype, ct.fulltype)) {
+		if (0 != strcmp((*p)->srvtype, ct.type)) {
 			err = BADREQ("Service type mismatch (URL vs. kept/replaced)");
 			goto out;
 		}

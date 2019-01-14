@@ -32,14 +32,11 @@ License along with this library.
 extern "C" {
 #endif
 
-#define OIOURL_DEFAULT_TYPE    ""
-
 enum oio_url_field_e
 {
 	OIOURL_NS=1,
 	OIOURL_ACCOUNT,
 	OIOURL_USER,
-	OIOURL_TYPE,
 	OIOURL_PATH,
 
 	OIOURL_VERSION,

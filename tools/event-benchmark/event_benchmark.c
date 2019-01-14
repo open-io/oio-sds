@@ -51,7 +51,6 @@ link_rawx_fake_service(void)
 	oio_url_set(rdir_rawx_url, OIOURL_NS, namespace);
 	oio_url_set(rdir_rawx_url, OIOURL_ACCOUNT, NAME_ACCOUNT_RDIR);
 	oio_url_set(rdir_rawx_url, OIOURL_USER, RAWX_ADDRESS);
-	oio_url_set(rdir_rawx_url, OIOURL_TYPE, NAME_SRVTYPE_RDIR);
 
 	char *id = g_strdup_printf("%s|" NAME_SRVTYPE_RDIR "|" FAKE_SERVICE_ADDRESS,
 			namespace);

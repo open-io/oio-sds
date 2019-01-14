@@ -164,7 +164,7 @@ meta1_backend_user_destroy(struct meta1_backend_s *m1,
 		if (!(err = __info_user(sq3, url, FALSE, NULL)))
 			err = __destroy_container(sq3, url, force, NULL);
 		if (NULL != err)
-			g_prefix_error(&err, "Query error: ");  
+			g_prefix_error(&err, "Query error: ");
 		err = sqlx_transaction_end(repctx, err);
 	}
 

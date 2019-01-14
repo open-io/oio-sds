@@ -131,17 +131,6 @@ oio_sqlx_client_factory__create_sds (const char *ns,
 /* -------------------------------------------------------------------------- */
 
 static void
-_sds_client_get_srvtype (struct oio_sqlx_client_SDS_s *self, gchar *d, gsize dlen)
-{
-	g_strlcpy (d, NAME_SRVTYPE_SQLX, dlen);
-	const char *subtype = oio_url_get (self->url, OIOURL_TYPE);
-	if (subtype && *subtype) {
-		g_strlcat (d, ".", dlen);
-		g_strlcat (d, subtype, dlen);
-	}
-}
-
-static void
 _sds_client_destroy (struct oio_sqlx_client_s *self)
 {
 	g_assert (self != NULL);
@@ -164,12 +153,9 @@ _sds_client_create_db (struct oio_sqlx_client_s *self)
 	g_assert (c->vtable == &vtable_SDS);
 
 	/* Link with the directory */
-	gchar srvtype[64] = "";
-	_sds_client_get_srvtype (c, srvtype, sizeof(srvtype));
-
 	gchar **allsrv = NULL;
 	GError *err = oio_directory__link (c->factory->dir,
-			c->url, srvtype, TRUE/*autocreate*/, &allsrv);
+			c->url, NAME_SRVTYPE_SQLX, TRUE/*autocreate*/, &allsrv);
 	if (err) {
 		g_prefix_error (&err, "Directory error: ");
 		EXTRA_ASSERT (allsrv == NULL);
@@ -373,12 +359,9 @@ _sds_client_batch (struct oio_sqlx_client_s *self,
 	g_assert (c->factory != NULL);
 
 	/* locate the sqlx server via the directory object */
-	gchar srvtype[64] = "";
-	_sds_client_get_srvtype (c, srvtype, sizeof(srvtype));
-
 	gchar **allsrv = NULL;
 	GError *err = oio_directory__list (c->factory->dir,
-			c->url, srvtype, NULL, &allsrv);
+			c->url, NAME_SRVTYPE_SQLX, NULL, &allsrv);
 	if (NULL != err) {
 		g_prefix_error (&err, "Directory error: ");
 		g_assert (allsrv == NULL);

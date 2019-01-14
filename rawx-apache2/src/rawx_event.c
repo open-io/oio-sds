@@ -22,6 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <events/oio_events_queue.h>
 #include <core/internals.h>
+#include <metautils/lib/metautils_macros.h>
 #include "rawx_event.h"
 
 struct oio_events_queue_s *q = NULL;

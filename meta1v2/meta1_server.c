@@ -158,9 +158,8 @@ _get_peers(struct sqlx_service_s *ss UNUSED, const struct sqlx_name_s *n,
 	struct oio_url_s *u = oio_url_empty();
 	oio_url_set(u, OIOURL_NS, ss->ns_name);
 
-	if (!sqlx_name_extract(n, u, ss->service_config->srvtype, &seq)) {
-		err = BADREQ("Invalid type name: '%s'", n->type);
-	} else {
+	err = sqlx_name_extract(n, u, NAME_SRVTYPE_META1, &seq);
+	if (!err) {
 		err = hc_resolve_reference_directory(ss->resolver, u, &peers, oio_ext_get_deadline());
 	}
 	if (!err) {

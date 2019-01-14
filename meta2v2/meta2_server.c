@@ -59,12 +59,15 @@ meta2_on_close(struct sqlx_sqlite3_s *sq3, gboolean deleted, gpointer cb_data)
 	struct oio_url_s *u = oio_url_empty ();
 	oio_url_set (u, OIOURL_NS, PSRV(cb_data)->ns_name);
 	NAME2CONST(n, sq3->name);
-	if (!sqlx_name_extract (&n, u, NAME_SRVTYPE_META2, &seq)) {
-		GRID_WARN("Invalid base name [%s]", sq3->name.base);
-		return;
+
+	GError *err = sqlx_name_extract (&n, u, NAME_SRVTYPE_META2, &seq);
+	if (err) {
+		GRID_WARN("Invalid base name [%s]: %s", sq3->name.base, err->message);
+		g_clear_error(&err);
+	} else {
+		hc_decache_reference_service(PSRV(cb_data)->resolver, u, NAME_SRVTYPE_META2);
+		oio_url_pclean(&u);
 	}
-	hc_decache_reference_service(PSRV(cb_data)->resolver, u, NAME_SRVTYPE_META2);
-	oio_url_pclean(&u);
 }
 
 static gboolean

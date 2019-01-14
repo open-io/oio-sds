@@ -45,25 +45,13 @@ _resolve_service_id(const char *service_id)
 	return out;
 }
 
-static void
-_get_meta2_realtype (struct req_args_s *args, gchar *d, gsize dlen)
-{
-	const char *type = oio_url_get (args->url, OIOURL_TYPE);
-	if (type && *type) {
-		g_snprintf(d, dlen, "%s.%s", NAME_SRVTYPE_META2, type);
-	} else {
-		g_strlcpy(d, NAME_SRVTYPE_META2, dlen);
-	}
-}
-
 static GError *
 _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 		request_packer_f pack, gpointer out, client_on_reply decoder)
 {
-	gchar realtype[64];
 	GSList **out_list = NULL;
-	_get_meta2_realtype(args, realtype, sizeof(realtype));
-	CLIENT_CTX(ctx, args, realtype, 1);
+
+	CLIENT_CTX(ctx, args, NAME_SRVTYPE_META2, 1);
 	ctx.which = how;
 	if (decoder) {
 		ctx.decoder_data = out;
@@ -1001,15 +989,14 @@ retry:
 			autocreate = FALSE; /* autocreate just once */
 			g_clear_error (&err);
 			GError *hook_dir (const char *m1) {
-				gchar **urlv = NULL, realtype[64];
-				_get_meta2_realtype (args, realtype, sizeof(realtype));
+				gchar **urlv = NULL;
 				GError *e = meta1v2_remote_link_service (
-						m1, args->url, realtype, FALSE, TRUE, &urlv,
+						m1, args->url, NAME_SRVTYPE_META2, FALSE, TRUE, &urlv,
 						oio_ext_get_deadline());
 				if (!e && urlv && *urlv) {
 					/* Explicitely feeding the meta1 avoids a subsequent
 					   call to meta1 to locate the meta2 */
-					hc_resolver_tell (resolver, args->url, realtype,
+					hc_resolver_tell (resolver, args->url, NAME_SRVTYPE_META2,
 									  (const char * const *) urlv);
 				}
 				if (urlv) g_strfreev (urlv);
@@ -1299,10 +1286,7 @@ action_m2_container_raw_update (struct req_args_s *args, struct json_object *jar
 static void
 _add_meta2_type (struct req_args_s *args)
 {
-	gchar realtype[64] = "type=";
-	gsize l = strlen(realtype);
-	_get_meta2_realtype (args, realtype+l, sizeof(realtype)-l);
-	OIO_STRV_APPEND_COPY (args->req_uri->query_tokens, realtype);
+	OIO_STRV_APPEND_COPY (args->req_uri->query_tokens, "type=" NAME_SRVTYPE_META2);
 	OIO_STRV_APPEND_COPY (args->req_uri->query_tokens, "seq=1");
 }
 
@@ -1333,8 +1317,6 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 	GError *err = NULL;
 	gchar **urlv = NULL;
 	gchar **urlv_snapshot = NULL;
-	char type[LIMIT_LENGTH_SRVTYPE] = {};
-	_get_meta2_realtype(args, type, sizeof(type));
 	const char *target_account, *target_container;
 	char target_cid[65] = {};
 	target_account = oio_url_get(args->url, OIOURL_ACCOUNT);
@@ -1386,7 +1368,7 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 
 	GError *hook_dir (const char *m1) {
 		GError *e = meta1v2_remote_link_service (
-				m1, args->url, type, FALSE, TRUE, &urlv_snapshot,
+				m1, args->url, NAME_SRVTYPE_META2, FALSE, TRUE, &urlv_snapshot,
 				oio_ext_get_deadline());
 		if (!e && urlv_snapshot && *urlv_snapshot) {
 			e = meta1v2_remote_force_reference_service(
@@ -1405,7 +1387,7 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 		goto cleanup;
 
 	meta1_urlv_shift_addr(urlv);
-	CLIENT_CTX(ctx, args, type, 1);
+	CLIENT_CTX(ctx, args, NAME_SRVTYPE_META2, 1);
 	gchar *url = _resolve_service_id(urlv[0]);
 	GByteArray * _pack(const struct sqlx_name_s *n) {
 		return sqlx_pack_SNAPSHOT(n, url, target_cid, seq_num, DL());

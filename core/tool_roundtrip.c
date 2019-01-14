@@ -782,18 +782,16 @@ main(int argc, char **argv)
 	oio_url_set (url, OIOURL_NS, g_getenv("OIO_NS"));
 	oio_url_set (url, OIOURL_ACCOUNT, g_getenv("OIO_ACCOUNT"));
 	oio_url_set (url, OIOURL_USER, g_getenv("OIO_USER"));
-	oio_url_set (url, OIOURL_TYPE, g_getenv("OIO_TYPE"));
 	oio_url_set (url, OIOURL_PATH, g_getenv("OIO_PATH"));
 
 	if (!oio_url_has_fq_path(url)) {
 		g_printerr ("Partial URL [%s]: requires a NS (%s), an ACCOUNT (%s),"
-				" an USER (%s) and a PATH (%s) (+ optional TYPE: %s)\n",
+				" an USER (%s) and a PATH (%s)\n",
 				oio_url_get (url, OIOURL_WHOLE),
 				oio_url_has (url, OIOURL_NS)?"ok":"missing",
 				oio_url_has (url, OIOURL_ACCOUNT)?"ok":"missing",
 				oio_url_has (url, OIOURL_USER)?"ok":"missing",
-				oio_url_has (url, OIOURL_PATH)?"ok":"missing",
-				oio_url_has (url, OIOURL_TYPE)?"ok":"missing");
+				oio_url_has (url, OIOURL_PATH)?"ok":"missing");
 		return 3;
 	}
 	GRID_DEBUG("URL valid [%s]", oio_url_get (url, OIOURL_WHOLE));

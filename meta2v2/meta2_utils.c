@@ -2773,7 +2773,6 @@ m2db_set_container_name(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 		{SQLX_ADMIN_NAMESPACE, OIOURL_NS},
 		{SQLX_ADMIN_ACCOUNT, OIOURL_ACCOUNT},
 		{SQLX_ADMIN_USERNAME, OIOURL_USER},
-		{SQLX_ADMIN_USERTYPE, OIOURL_TYPE},
 		{NULL,0},
 	};
 	for (struct map_s *p = map; p->f; ++p) {

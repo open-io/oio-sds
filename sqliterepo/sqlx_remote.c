@@ -296,22 +296,7 @@ sqlx_inline_name_fill_type_asis  (struct sqlx_name_inline_s *n,
 	}
 }
 
-void
-sqlx_inline_name_fill (struct sqlx_name_inline_s *n, struct oio_url_s *url,
-		const char *srvtype, gint64 seq)
-{
-	gchar tmp[LIMIT_LENGTH_BASETYPE];
-	const gchar *subtype = oio_url_get (url, OIOURL_TYPE);
-
-	if (subtype && 0 != strcmp(subtype, OIOURL_DEFAULT_TYPE))
-		g_snprintf(tmp, sizeof(tmp), "%s.%s", srvtype, subtype);
-	else
-		g_strlcpy(tmp, srvtype, sizeof(tmp));
-
-	return sqlx_inline_name_fill_type_asis(n, url, tmp, seq);
-}
-
-gboolean
+GError*
 sqlx_name_extract (const struct sqlx_name_s *n, struct oio_url_s *url,
 		const char *srvtype, gint64 *pseq)
 {
@@ -320,23 +305,24 @@ sqlx_name_extract (const struct sqlx_name_s *n, struct oio_url_s *url,
 	EXTRA_ASSERT (srvtype != NULL);
 	EXTRA_ASSERT (pseq != NULL);
 
-	int rc = 0;
-	gchar **tokens;
+	gchar **tokens = g_strsplit (n->base, ".", 2);
+	if (!tokens)
+		return SYSERR("String split error");
 
-	if (NULL != (tokens = g_strsplit (n->type, ".", 2))) {
-		if (tokens[0])
-			rc = !strcmp(tokens[0], srvtype);
-		oio_url_set (url, OIOURL_TYPE, tokens[1] ? tokens[1] : OIOURL_DEFAULT_TYPE);
-		g_strfreev (tokens);
-	}
-
-	if (NULL != (tokens = g_strsplit (n->base, ".", 2))) {
-		if (tokens[0]) {
-			if (strlen(tokens[0]) >= 64) {
-				oio_url_set(url, OIOURL_HEXID, tokens[0]);
+	GError *err = NULL;
+	if (!tokens[0]) {
+		err = BADREQ("Malformed base name");
+	} else {
+		/* Unpack the container ID */
+		register const gsize t0len = strlen(tokens[0]);
+		if (t0len == 64) {
+			oio_url_set(url, OIOURL_HEXID, tokens[0]);
+		} else if (t0len <= 4) {
+			/* Special case of meta1 databases that allow trimmed
+			 * container ID that we will pad with zeroes. */
+			if (0 != strcmp(srvtype, NAME_SRVTYPE_META1)) {
+				err = BADREQ("Short CID only valid for meta1");
 			} else {
-				// Special case of meta1 databases
-				EXTRA_ASSERT(!strcmp(srvtype, NAME_SRVTYPE_META1));
 				gchar hexid[STRLEN_CONTAINERID];
 				gchar *cur = g_stpcpy(hexid, tokens[0]);
 				for (; cur < hexid + STRLEN_CONTAINERID - 1; cur++)
@@ -344,10 +330,15 @@ sqlx_name_extract (const struct sqlx_name_s *n, struct oio_url_s *url,
 				*cur = '\0';
 				oio_url_set(url, OIOURL_HEXID, hexid);
 			}
+		} else {
+			err = BADREQ("Invalid container ID length (%u)", (guint)t0len);
 		}
-		*pseq = tokens[1] ? g_ascii_strtoll (tokens[1], NULL, 10) : 1;
-		g_strfreev (tokens);
+
+		if (!err) {
+			*pseq = tokens[1] ? g_ascii_strtoll (tokens[1], NULL, 10) : 1;
+		}
 	}
 
-	return BOOL(rc);
+	g_strfreev (tokens);
+	return err;
 }
