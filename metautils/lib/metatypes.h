@@ -20,27 +20,12 @@ License along with this library.
 #ifndef OIO_SDS__metautils__lib__metatypes_h
 # define OIO_SDS__metautils__lib__metatypes_h 1
 
+# include <core/oiourl.h>
 # include <glib.h>
 
 /** One plus the maximum length of a volume name
  * i.e. a size enough to store the C string */
 #define LIMIT_LENGTH_VOLUMENAME 256
-
-/** One plus the maximum length of a namespace name
- * i.e. a size enough to store the C string */
-#define LIMIT_LENGTH_NSNAME 64
-
-/** One plus the maximum length of an account name
- * i.e. a size enough to store the C string */
-#define LIMIT_LENGTH_ACCOUNTNAME 64
-
-/** One plus the maximum length of a content name
- * i.e. a size enough to store the C string */
-#define LIMIT_LENGTH_CONTENTPATH 1024
-
-/** One plus the maximum length of the string representation of a content version
- * i.e. a size enough to store the C string */
-#define LIMIT_LENGTH_VERSION 24
 
 /** One plus the maximum length of a storage policy name
  * i.e. a size enough to store the C string */

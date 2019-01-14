@@ -52,6 +52,26 @@ enum oio_url_field_e
 	OIOURL_FULLPATH
 };
 
+/** One plus the maximum length of a namespace name
+ * i.e. a size enough to store the C string */
+#define LIMIT_LENGTH_NSNAME 64
+
+/** One plus the maximum length of an account name
+ * i.e. a size enough to store the C string */
+#define LIMIT_LENGTH_ACCOUNTNAME 64
+
+/** One plus the maximum length of a content name
+ * i.e. a size enough to store the C string */
+#define LIMIT_LENGTH_CONTENTPATH 1024
+
+/** One plus the maximum length of the string representation of a content version
+ * i.e. a size enough to store the C string */
+#define LIMIT_LENGTH_VERSION 24
+
+/** One plus the maximum length of the string representation of a user
+ * i.e. a size enough to store the C string */
+#define LIMIT_LENGTH_USER 256
+
 
 struct oio_url_s;
 
