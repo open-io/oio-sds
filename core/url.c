@@ -30,13 +30,13 @@ License along with this library.
 struct oio_url_s
 {
 	/* primary */
-	gchar *ns;
-	gchar *account;
-	gchar *user;
+	gchar ns[LIMIT_LENGTH_NSNAME];
+	gchar account[LIMIT_LENGTH_ACCOUNTNAME];
+	gchar user[LIMIT_LENGTH_USER];
 	gchar *type;
 	gchar *path;
 
-	gchar *version;
+	gchar version[LIMIT_LENGTH_VERSION];
 	gchar *content;
 
 	/* secondary */
@@ -110,16 +110,30 @@ _check_parsed_url (struct oio_url_s *u)
 	return !u->path || u->path[0];
 }
 
+static void
+_replace (gchar **pp, const char *s, const gboolean unescape)
+{
+  if (unescape)
+    oio_str_reuse(pp, g_uri_unescape_string (s, NULL));
+  else
+    oio_str_reuse(pp, g_strdup(s));
+}
+
+static void
+_copy(gchar *dst, gsize dstlen, const char *src, const gboolean unescape)
+{
+  if (!unescape) {
+    g_strlcpy(dst, src, dstlen);
+  } else {
+    gchar *tmp = g_uri_unescape_string (src, NULL);
+    g_strlcpy(dst, tmp, dstlen);
+    g_free(tmp);
+  }
+}
+
 static int
 _parse_url(struct oio_url_s *url, const char *str, gboolean unescape)
 {
-	inline void _replace (gchar **pp, const char *s) {
-		if (unescape)
-			oio_str_reuse(pp, g_uri_unescape_string (s, NULL));
-		else
-			oio_str_reuse(pp, g_strdup(s));
-	}
-
 	struct oio_requri_s ruri = {NULL, NULL, NULL, NULL};
 
 	for (; *str && *str == '/' ;++str) {} // skip the leading slashes
@@ -134,19 +148,19 @@ _parse_url(struct oio_url_s *url, const char *str, gboolean unescape)
 		if (!path_tokens) break;
 
 		if (!path_tokens[0]) break;
-		_replace (&url->ns, path_tokens[0]);
+		_copy(url->ns, sizeof(url->ns), path_tokens[0], unescape);
 
 		if (!path_tokens[1]) break;
-		_replace (&url->account, path_tokens[1]);
+		_copy(url->account, sizeof(url->account), path_tokens[1], unescape);
 
 		if (!path_tokens[2]) break;
-		_replace (&url->user, path_tokens[2]);
+		_copy (url->user, sizeof(url->user), path_tokens[2], unescape);
 
 		if (!path_tokens[3]) break;
-		_replace (&url->type, path_tokens[3]);
+		_replace (&url->type, path_tokens[3], unescape);
 
 		if (!path_tokens[4]) break;
-		_replace (&url->path, path_tokens[4]);
+		_replace (&url->path, path_tokens[4], unescape);
 	} while (0);
 
 	if (path_tokens)
@@ -159,12 +173,12 @@ _parse_url(struct oio_url_s *url, const char *str, gboolean unescape)
 static void
 _clean_url (struct oio_url_s *u)
 {
-	oio_str_clean(&u->ns);
-	oio_str_clean(&u->account);
-	oio_str_clean(&u->user);
+	u->ns[0] = '\0';
+	u->account[0] = '\0';
+	u->user[0] = '\0';
 	oio_str_clean(&u->type);
 	oio_str_clean(&u->path);
-	oio_str_clean(&u->version);
+	u->version[0] = '\0';
 	oio_str_clean(&u->content);
 	oio_str_clean(&u->whole);
 	oio_str_clean(&u->fullpath);
@@ -175,7 +189,7 @@ _clean_url (struct oio_url_s *u)
 static int
 _compute_id (struct oio_url_s *url)
 {
-	if (!oio_str_is_set(url->ns) || !oio_str_is_set(url->account) || !oio_str_is_set(url->user))
+	if (!url->ns[0] || !url->account[0] || !url->user[0])
 		return 0;
 
 	url->hexid[0] = '\0';
@@ -187,7 +201,7 @@ _compute_id (struct oio_url_s *url)
 static gchar *
 _pack_fullpath(struct oio_url_s *u)
 {
-	if (!u->account || !u->user || !u->path || !u->version || !u->content)
+	if (!u->account[0] || !u->user[0] || !u->path || !u->version[0] || !u->content)
 		return NULL;
 
 	GString *gs = g_string_new("");
@@ -301,13 +315,9 @@ oio_url_dup(const struct oio_url_s *u)
 	struct oio_url_s *result = g_slice_new0(struct oio_url_s);
 	memcpy (result, u, sizeof(struct oio_url_s));
 
-	STRDUP(result, u, ns);
-	STRDUP(result, u, account);
-	STRDUP(result, u, user);
 	STRDUP(result, u, type);
 	STRDUP(result, u, path);
 	STRDUP(result, u, whole);
-	STRDUP(result, u, version);
 	STRDUP(result, u, content);
 	STRDUP(result, u, fullpath);
 	return result;
@@ -323,18 +333,18 @@ oio_url_set(struct oio_url_s *u, enum oio_url_field_e f, const char *v)
 
 	switch (f) {
 		case OIOURL_NS:
-			oio_str_replace(&(u->ns), v);
+			g_strlcpy(u->ns, v, sizeof(u->ns));
 			u->hexid[0] = 0;
 			return u;
 
 		case OIOURL_ACCOUNT:
-			oio_str_replace(&(u->account), v);
+			g_strlcpy(u->account, v, sizeof(u->account));
 			u->hexid[0] = 0;
 			oio_str_clean(&u->fullpath);
 			return u;
 
 		case OIOURL_USER:
-			oio_str_replace(&(u->user), v);
+			g_strlcpy(u->user, v, sizeof(u->user));
 			u->hexid[0] = 0;
 			oio_str_clean(&u->fullpath);
 			return u;
@@ -350,7 +360,7 @@ oio_url_set(struct oio_url_s *u, enum oio_url_field_e f, const char *v)
 			return u;
 
 		case OIOURL_VERSION:
-			oio_str_replace(&(u->version), v);
+			g_strlcpy(u->version, v, sizeof(u->version));
 			oio_str_clean(&u->fullpath);
 			return u;
 
@@ -393,19 +403,16 @@ oio_url_unset(struct oio_url_s *u, enum oio_url_field_e f)
 
 	switch (f) {
 		case OIOURL_NS:
-			oio_str_clean(&u->ns);
-			u->hexid[0] = 0;
+			u->ns[0] = u->hexid[0] = 0;
 			return;
 
 		case OIOURL_ACCOUNT:
-			oio_str_clean(&u->account);
-			u->hexid[0] = 0;
+			u->account[0] = u->hexid[0] = 0;
 			oio_str_clean(&u->fullpath);
 			return;
 
 		case OIOURL_USER:
-			oio_str_clean(&u->user);
-			u->hexid[0] = 0;
+			u->user[0] = u->hexid[0] = 0;
 			oio_str_clean(&u->fullpath);
 			return;
 
@@ -420,7 +427,7 @@ oio_url_unset(struct oio_url_s *u, enum oio_url_field_e f)
 			return;
 
 		case OIOURL_VERSION:
-			oio_str_clean(&u->version);
+			u->version[0] = '\0';
 			oio_str_clean(&u->fullpath);
 			return;
 
@@ -453,11 +460,11 @@ oio_url_has(const struct oio_url_s *u, enum oio_url_field_e f)
 
 	switch (f) {
 		case OIOURL_NS:
-			return oio_str_is_set(u->ns);
+			return u->ns[0];
 		case OIOURL_ACCOUNT:
-			return oio_str_is_set(u->account);
+			return u->account[0];
 		case OIOURL_USER:
-			return oio_str_is_set(u->user);
+			return u->user[0];
 		case OIOURL_TYPE:
 			// the type has a default value
 			return TRUE;
@@ -470,7 +477,7 @@ oio_url_has(const struct oio_url_s *u, enum oio_url_field_e f)
 		case OIOURL_FULLPATH:
 			return TRUE;
 		case OIOURL_HEXID:
-			return (u->ns && u->hexid[0]) || (u->ns && u->user);
+			return (u->ns[0] && u->hexid[0]) || (u->ns[0] && u->user[0]);
 		case OIOURL_CONTENTID:
 			return NULL != u->content;
 	}
@@ -495,12 +502,12 @@ static GString *
 _pack_url(struct oio_url_s *u)
 {
 	GString *gs = g_string_new ("");
-	if (u->ns) {
+	if (u->ns[0]) {
 		g_string_append_uri_escaped (gs, u->ns, NULL, TRUE);
-		if (u->account) {
+		if (u->account[0]) {
 			g_string_append_c (gs, '/');
 			g_string_append_uri_escaped (gs, u->account, NULL, TRUE);
-			if (u->user) {
+			if (u->user[0]) {
 				g_string_append_c (gs, '/');
 				g_string_append_uri_escaped (gs, u->user, NULL, TRUE);
 				g_string_append_c (gs, '/');
@@ -517,7 +524,7 @@ _pack_url(struct oio_url_s *u)
 					g_string_append_uri_escaped (gs, u->content, NULL, TRUE);
 					anyopt = TRUE;
 				}
-				if (u->version) {
+				if (u->version[0]) {
 					g_string_append_c (gs, anyopt ? '&' : '?');
 					g_string_append_len (gs, "v=", 2);
 					g_string_append_uri_escaped (gs, u->version, NULL, TRUE);
@@ -537,18 +544,18 @@ oio_url_get(struct oio_url_s *u, enum oio_url_field_e f)
 
 	switch (f) {
 		case OIOURL_NS:
-			return u->ns;
+			return u->ns[0] ? u->ns : NULL;
 		case OIOURL_ACCOUNT:
-			return u->account;
+			return u->account[0] ? u->account : NULL;
 		case OIOURL_USER:
-			return u->user;
+			return u->user[0] ? u->user : NULL;
 		case OIOURL_TYPE:
 			return u->type ? u->type : OIOURL_DEFAULT_TYPE;
 		case OIOURL_PATH:
 			return u->path;
 
 		case OIOURL_VERSION:
-			return u->version;
+			return u->version[0] ? u->version : NULL;
 
 		case OIOURL_WHOLE:
 			if (!u->whole)
@@ -609,9 +616,9 @@ oio_url_get_id_size(struct oio_url_s *u)
 void
 oio_url_to_json (GString *out, struct oio_url_s *u)
 {
-	guint len = out->len;
+	gsize len = out->len;
 
-	oio_str_gstring_append_json_pair (out, "ns", u->ns);
+	oio_str_gstring_append_json_pair (out, "ns", u->ns[0] ? u->ns : NULL);
 	if (oio_str_is_set(u->account)) {
 		if (len != out->len) g_string_append_c (out, ',');
 		oio_str_gstring_append_json_pair (out, "account", u->account);
@@ -648,16 +655,16 @@ oio_url_check(const struct oio_url_s *u, const char *namespace,
 	}
 
 	_ERR(NULL);
-	if (namespace && u->ns && strcmp(namespace, u->ns)) {
+	if (namespace && u->ns[0] && 0 != strcmp(namespace, u->ns)) {
 		_ERR("'namespace'");
 		return FALSE;
 	}
-	if (u->version && !oio_str_is_number(u->version, NULL)) {
+	if (u->version[0] && !oio_str_is_number(u->version, NULL)) {
 		_ERR("'version', not a number");
 		return FALSE;
 	}
 
-	if (u->user && !g_utf8_validate(u->user, -1, NULL)) {
+	if (u->user[0] && !g_utf8_validate(u->user, -1, NULL)) {
 		if (oio_url_must_be_unicode) {
 			_ERR("'user', not UTF-8");
 			return FALSE;
