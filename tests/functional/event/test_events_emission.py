@@ -90,7 +90,6 @@ class TestMeta2EventsEmission(BaseTestCase):
             'account': self.account,
             'user': self.container_name,
             'id': self.container_id,
-            'type': 'meta2'
         })
 
         # Get the peers list and verify it's the same as received
