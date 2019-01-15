@@ -29,6 +29,7 @@ class TestContentVersioning(BaseTestCase):
         self.api = ObjectStorageApi(self.conf['namespace'])
         self.container = random_str(8)
         system = {'sys.m2.policy.version': '3'}
+        self.wait_for_score(('meta2', ))
         self.api.container_create(self.account, self.container, system=system)
 
     def test_versioning_enabled(self):

@@ -56,6 +56,7 @@ class TestContentFactory(BaseTestCase):
     def setUp(self):
         super(TestContentFactory, self).setUp()
 
+        self.wait_for_score(('meta2', ))
         self.namespace = self.conf['namespace']
         self.chunk_size = self.conf['chunk_size']
         self.gridconf = {"namespace": self.namespace}

@@ -1,4 +1,4 @@
-# Copyright (C) 2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -35,8 +35,8 @@ class TestContainerReplication(BaseTestCase):
             self.skipTest('Container replication must be enabled')
         self.api = ObjectStorageApi(self.ns, pool_manager=self.http_pool)
         self.must_restart_meta2 = False
-        self._apply_conf_on_all('meta2', self.__class__.down_cache_opts)
         self.wait_for_score(('meta2', ))
+        self._apply_conf_on_all('meta2', self.__class__.down_cache_opts)
 
     @classmethod
     def tearDownClass(cls):
@@ -52,7 +52,8 @@ class TestContainerReplication(BaseTestCase):
         super(TestContainerReplication, self).tearDown()
         # Restart meta2 after configuration has been reset by parent tearDown
         if self.must_restart_meta2:
-            self._service('@meta2', 'restart', wait=2.0)
+            self._service('@meta2', 'restart')
+            self.wait_for_score(('meta2', ))
 
     def _apply_conf_on_all(self, type_, conf):
         all_svc = [x['addr'] for x in self.conf['services'][type_]]
@@ -81,9 +82,8 @@ class TestContainerReplication(BaseTestCase):
                                    obj_name=cname, data=cname)
         # Start the stopped peer
         self.api.logger.info('Starting meta2 %s', stopped)
-        # FIXME(FVE): review all the delays
-        self._service(self.service_to_gridinit_key(stopped, 'meta2'),
-                      'start', wait=2.0)
+        self._service(self.service_to_gridinit_key(stopped, 'meta2'), 'start')
+        self.wait_for_score(('meta2', ))
         # Create another object
         self.api.object_create_ext(self.account, cname,
                                    obj_name=cname + '_2', data=cname)
@@ -142,8 +142,8 @@ class TestContainerReplication(BaseTestCase):
         os.remove(path)
         # Start the stopped peer
         self.api.logger.info('Starting meta2 %s', stopped)
-        self._service(self.service_to_gridinit_key(stopped, 'meta2'),
-                      'start', wait=2.0)
+        self._service(self.service_to_gridinit_key(stopped, 'meta2'), 'start')
+        self.wait_for_score(('meta2', ))
         # Create an object (to trigger a database replication)
         self.api.object_create_ext(self.account, cname,
                                    obj_name=cname, data=cname)
