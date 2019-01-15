@@ -148,19 +148,25 @@ glvl_allowed(register GLogLevelFlags lvl)
 		|| (ALLOWED_LEVEL() >= REAL_LEVEL(lvl));
 }
 
-static void
-_purify(register gchar *s)
-{
-	static guint8 invalid[256] = {0};
-	if (!invalid[0]) {
-		for (int i=0; i<256 ;i++)
-			invalid[i] = g_ascii_isspace(i) || !g_ascii_isprint(i);
-	}
+static guint8 map_valid_ascii[256] = {0};
 
-	for (gchar c; (c=*s) ; s++) {
-		if (invalid[(guint8)c])
-			*s = ' ';
+void _constructor_map_valid_ascii (void);
+
+void __attribute__ ((constructor))
+_constructor_map_valid_ascii (void)
+{
+	/* 0 remains 0, and the array is already zero'ed */
+	for (int i=1; i<256 ;i++) {
+		map_valid_ascii[i] = (g_ascii_isspace(i) || !g_ascii_isprint(i))
+			? (guint8)' ' : (guint8)i;
 	}
+}
+
+static void
+_purify_in_place(register gchar *s)
+{
+	for (; *s ; s++)
+		*s = map_valid_ascii[(guint8)*s];
 	*(s-1) = '\n';
 }
 
@@ -240,7 +246,7 @@ _logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
 
 	g_string_append_c(gstr, '\n');
 
-	_purify(gstr->str);
+	_purify_in_place(gstr->str);
 
 	/* send the buffer */
 	fwrite(gstr->str, gstr->len, 1, stderr);
