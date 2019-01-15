@@ -355,6 +355,14 @@ class ContainerClient(ProxyClient):
 
     def container_raw_delete(self, account=None, reference=None, data=None,
                              cid=None, **kwargs):
+        """
+        Delete raw 'beans' from a container.
+
+        :param data: dictionaries representing the beans to delete. They must
+            have a key for each column of the meta2 database, plus a 'type'
+            telling which type of bean it is.
+        :type data: `list` of `dict` items
+        """
         params = self._make_params(account, reference, cid=cid)
         data = json.dumps(data)
         self._request(

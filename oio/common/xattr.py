@@ -38,27 +38,40 @@ def read_user_xattr(fd):
     it = {}
     try:
         it = xattr.get_all(fd)
-    except IOError as e:
-        for err in 'ENOTSUP', 'EOPNOTSUPP':
-            if hasattr(errno, err) and e.errno == getattr(errno, err):
-                raise e
+    except IOError as err:
+        for code in ('ENOTSUP', 'EOPNOTSUPP', 'ENOENT'):
+            if hasattr(errno, code) and err.errno == getattr(errno, code):
+                raise err
 
     meta = {k[5:]: v for k, v in it if k.startswith('user.')}
     return meta
 
 
-def modify_xattr(fd, new_fullpaths, remove_old_xattr, xattr_to_remove):
+def set_fullpath_xattr(fd, new_fullpaths, remove_old_xattr=False,
+                       xattr_to_remove=None):
+    """
+    Insert new fullpath extended attributes, remove deprecated ones.
+
+    :param new_fullpaths: dictionary of "fullpath" extended attributes
+        that should be set on file. The key is the chunk ID (required
+        to generate the attribute key), the value is the "fullpath".
+    :param remove_old_xattr: remove legacy attributes from file
+    :type remove_old_xattr: `bool`
+    :param xattr_to_remove: list of extra extended attributes
+        that should be removed from file
+    """
     for chunk_id, new_fullpath in new_fullpaths.iteritems():
         xattr.setxattr(
             fd,
             'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + chunk_id.upper(),
             new_fullpath)
 
-    for key in xattr_to_remove:
-        try:
-            xattr.removexattr(fd, 'user.' + key)
-        except IOError:
-            pass
+    if xattr_to_remove:
+        for key in xattr_to_remove:
+            try:
+                xattr.removexattr(fd, 'user.' + key)
+            except IOError:
+                pass
 
     if remove_old_xattr:
         for key in ['chunk_id', 'container_id', 'content_path',

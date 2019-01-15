@@ -57,6 +57,16 @@ def convert_to_old_chunk(chunk_path, account, container, path, version,
             pass
 
 
+def remove_fullpath_xattr(chunk_path):
+    key = 'user.%s%s' % (CHUNK_XATTR_CONTENT_FULLPATH_PREFIX,
+                         chunk_path.rsplit('/', 1)[-1])
+    with open(chunk_path, 'w') as fd:
+        try:
+            xattr.removexattr(fd, key)
+        except IOError as err:
+            print 'Failed to remove fullpath: %s' % err
+
+
 def random_buffer(dictionary, n):
     slot = 512
     pattern = ''.join(random.choice(dictionary) for _ in range(slot))
