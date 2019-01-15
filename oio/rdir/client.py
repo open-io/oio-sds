@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -317,25 +317,33 @@ class RdirClient(HttpApi):
                            json=body, **kwargs)
 
     def chunk_fetch(self, volume, limit=100, rebuild=False,
-                    container_id=None, max_attempts=3, **kwargs):
+                    container_id=None, max_attempts=3,
+                    start_after=None, **kwargs):
         """
         Fetch the list of chunks belonging to the specified volume.
 
         :param volume: the volume to get chunks from
         :type volume: `str`
-        :param limit: maximum number of results to return
+        :param limit: maximum number of results to return per request
+            to the rdir server.
         :type limit: `int`
-        :param rebuild:
+        :param rebuild: fetch only the chunks that were there
+            before the last incident.
         :type rebuild: `bool`
         :keyword container_id: get only chunks belonging to
            the specified container
         :type container_id: `str`
+        :keyword start_after: fetch only chunk that appear after
+            this container ID
+        :type start_after: `str`
         """
         req_body = {'limit': limit}
         if rebuild:
             req_body['rebuild'] = True
         if container_id:
             req_body['container_id'] = container_id
+        if start_after:
+            req_body['start_after'] = start_after
 
         while True:
             for i in range(max_attempts):
