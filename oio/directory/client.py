@@ -165,6 +165,10 @@ class DirectoryClient(ProxyClient):
               **kwargs):
         """
         Associate the specified services to the reference.
+
+        :param replace: do not require the list of services
+            of the specified type to be empty, overwrite it.
+        :type replace: `bool`
         """
         params = self._make_params(account, reference, service_type, cid=cid)
         if replace:
