@@ -514,20 +514,12 @@ __poll_services(struct meta1_backend_s *m1, guint replicas,
 	GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
 	/* `used` is a list of known services that we must replace, thus avoid. */
 	oio_location_t *avoid = __locations_from_m1srvurl(m1, used);
-	oio_location_t *known = NULL;
-	if (ct->req.k && !strcmp(ct->req.k, NAME_TAGNAME_USER_IS_SERVICE)) {
-		struct meta1_service_url_s *inplace[2] = {
-				meta1_unpack_url(ct->req.v), NULL};
-		/* If ct->req.v is not parseable, known will contain NULL */
-		known = __locations_from_m1srvurl(m1, inplace);
-		meta1_service_url_clean(inplace[0]);
-	}
 	void _on_id(struct oio_lb_selected_item_s *sel, gpointer u UNUSED)
 	{
 		g_ptr_array_add(ids, g_strdup(sel->item->id));
 	}
 	*err = oio_lb__patch_with_pool(
-			m1->lb, ct->type, avoid, known, _on_id, NULL);
+			m1->lb, ct->type, avoid, NULL, _on_id, NULL);
 	if (*err) {
 		g_prefix_error(err, "found only %u services matching the criteria: ",
 				ids->len);
@@ -542,9 +534,7 @@ __poll_services(struct meta1_backend_s *m1, guint replicas,
 	}
 
 	g_ptr_array_free(ids, TRUE);
-	g_free(known);
 	g_free(avoid);
-
 	return m1u;
 }
 
@@ -617,20 +607,6 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 	// Patches the constraint on the service type (if not set in the request)
 	// by the constraint set in the NS-wide storage policy.
 	compound_type_update_arg(ct, pol, FALSE);
-
-	/* This special "tag" is used for services types that are to be linked
-	 * to containers belonging to other services (e.g. there is a container
-	 * for each rawx in the special "_RDIR" account). It tells the load
-	 * balancer to compare the location of linked service against the
-	 * location of the container owner. The __poll_services() function
-	 * expects a string parseable as a meta1_service_url_s in ct->req.v,
-	 * so we must build one. */
-	if (ct->req.k && !strcmp(ct->req.k, NAME_TAGNAME_USER_IS_SERVICE)) {
-		gchar srvurl[64] = {0};
-		g_snprintf(srvurl, sizeof(srvurl), "1|%s|%s|",
-				ct->req.v, oio_url_get(url, OIOURL_USER));
-		oio_str_replace(&(ct->req.v), srvurl);
-	}
 
 	err = __get_container_all_services(sq3, url, ct->type, &used);
 	if (NULL != err) {

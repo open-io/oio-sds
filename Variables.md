@@ -616,7 +616,7 @@ Used by `gcc`
 
 > TODO: to be documented
 
- * default: **meta2=KEEP|3|1;sqlx=KEEP|1|1|;rdir=KEEP|1|1|user_is_a_service=rawx**
+ * default: **meta2=KEEP|3|1;sqlx=KEEP|1|1|;rdir=KEEP|1|1|**
  * type: string
  * cmake directive: *OIO_NS_SERVICE_UPDATE_POLICY*
 
