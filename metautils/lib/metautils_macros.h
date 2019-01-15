@@ -42,8 +42,6 @@ License along with this library.
 # define NAME_TAGNAME_RAWX_LOC "tag.loc"
 # define NAME_TAGNAME_SLOTS "tag.slots"
 
-# define NAME_TAGNAME_USER_IS_SERVICE "user_is_a_service"
-
 #define NAME_MSGNAME_METAREPLY         "RP"
 
 #define NAME_MSGKEY_ACCOUNT            "ACCT"

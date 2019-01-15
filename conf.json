@@ -253,7 +253,7 @@
 			{ "type": "string", "name": "oio_ns_service_update_policy",
 				"key": "ns.service_update_policy",
 				"limit": 1024,
-				"def": "meta2=KEEP|3|1;sqlx=KEEP|1|1|;rdir=KEEP|1|1|user_is_a_service=rawx",
+				"def": "meta2=KEEP|3|1;sqlx=KEEP|1|1|;rdir=KEEP|1|1|",
 				"descr": "" },
 
 			{ "type": "string", "name": "oio_ns_storage_policy",
