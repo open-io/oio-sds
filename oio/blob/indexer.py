@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -14,9 +14,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-from oio.common.green import ratelimit
+from oio.common.green import ratelimit, time
 
-import time
 from datetime import datetime
 from random import random
 from string import hexdigits
@@ -28,7 +27,6 @@ from oio.common import exceptions as exc
 from oio.common.utils import paths_gen, request_id
 from oio.common.easy_value import int_value, true_value
 from oio.common.logger import get_logger
-from oio.common.exceptions import OioNetworkException, VolumeException
 from oio.common.constants import STRLEN_CHUNKID
 from oio.blob.converter import BlobConverter
 
@@ -73,16 +71,19 @@ class BlobIndexer(Daemon):
                 self.update_index(path, chunk_id)
                 self.successes += 1
                 self.logger.debug('Updated %s', path)
-            except OioNetworkException as exc:
+            except exc.OioNetworkException as err:
                 self.errors += 1
-                self.logger.warn('ERROR while updating %s: %s', path, exc)
-            except VolumeException as exc:
+                self.logger.warn('ERROR while updating %s: %s', path, err)
+            except exc.VolumeException as err:
                 self.errors += 1
-                self.logger.error('Cannot index %s: %s', path, exc)
+                self.logger.error('Cannot index %s: %s', path, err)
                 # All chunks of this volume are indexed in the same service,
                 # no need to try another chunk, it will generate the same
                 # error. Let the upper level retry later.
                 raise
+            except (exc.ChunkException, exc.MissingAttribute) as err:
+                self.errors += 1
+                self.logger.error('ERROR while updating %s: %s', path, err)
             except Exception:
                 self.errors += 1
                 self.logger.exception('ERROR while updating %s', path)
@@ -134,18 +135,18 @@ class BlobIndexer(Daemon):
         report('ended')
 
     def update_index(self, path, chunk_id):
-        with open(path) as f:
+        with open(path) as file_:
             try:
                 meta = None
                 if self.convert_chunks and self.converter:
-                    _, meta = self.converter.convert_chunk(f, chunk_id)
+                    _, meta = self.converter.convert_chunk(file_, chunk_id)
                 if meta is None:
-                    meta, _ = read_chunk_metadata(f, chunk_id)
-            except exc.MissingAttribute as e:
-                raise exc.FaultyChunk(
-                    'Missing extended attribute %s' % e)
+                    meta, _ = read_chunk_metadata(file_, chunk_id)
+            except exc.MissingAttribute as err:
+                raise exc.FaultyChunk(err)
 
             data = {'mtime': int(time.time())}
+            # TODO(FVE): replace with the improved request_id() function
             headers = {'X-oio-req-id': 'blob-indexer-' + request_id()[:-13]}
             self.index_client.chunk_push(self.volume_id,
                                          meta['container_id'],
@@ -160,11 +161,11 @@ class BlobIndexer(Daemon):
             pre = time.time()
             try:
                 self.index_pass()
-            except VolumeException as exc:
+            except exc.VolumeException as err:
                 self.logger.error('Cannot index chunks, will retry later: %s',
-                                  exc)
-            except Exception as exc:
-                self.logger.exception('ERROR during indexing: %s', exc)
+                                  err)
+            except Exception as err:
+                self.logger.exception('ERROR during indexing: %s', err)
             else:
                 self.passes += 1
             elapsed = (time.time() - pre) or 0.000001
