@@ -53,6 +53,7 @@ install:
   - go get gopkg.in/ini.v1 gopkg.in/tylerb/graceful.v1
 
 env:
+  - TEST_SUITE=rebuilder,with-service-id
   - TEST_SUITE=3copies,with-service-id
   - TEST_SUITE=ec,with-random-service-id
   - TEST_SUITE=rebuilder,with-service-id
