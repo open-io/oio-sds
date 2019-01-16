@@ -59,8 +59,11 @@ compound_type_parse(struct compound_type_s *ct, const gchar *srvtype)
 	EXTRA_ASSERT(ct != NULL);
 	memset(ct, 0, sizeof(struct compound_type_s));
 
-	if (!srvtype || !*srvtype || *srvtype == '.' || *srvtype == ';')
-		return NEWERROR(CODE_BAD_REQUEST, "Bad service type [%s]", srvtype);
+	if (!srvtype || !*srvtype || *srvtype == '.')
+		return BADREQ("Bad service type [%s]", srvtype);
+
+	if (NULL != strchr(srvtype, ';'))
+		return BADREQ("No argument allowed on service type");
 
 	ct->fulltype = srvtype;
 
