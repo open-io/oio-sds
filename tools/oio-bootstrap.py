@@ -920,6 +920,16 @@ syslog_prefix = OIO,${NS},admin,${SRVNUM}
 redis_host = ${IP}
 """
 
+template_gridinit_webhook_server = """
+[service.${NS}-webhook]
+group=${NS},localhost,webhook
+on_die=cry
+enabled=true
+start_at_boot=true
+command=oio-webhook-test.py --port 9081
+env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
+"""
+
 sqlx_schema_dovecot = """
 CREATE TABLE IF NOT EXISTS box (
    name TEXT NOT NULL PRIMARY KEY,
@@ -1548,6 +1558,15 @@ def generate(options):
         with open(CFGDIR + '/event-handlers-'+str(num)+'.conf', 'w+') as f:
             tpl = Template(template_event_agent_handlers)
             f.write(tpl.safe_substitute(env))
+
+    # webhook test server
+    if WEBHOOK:
+        env = subenv({'SRVTYPE': 'webhook', 'SRVNUM': 1, 'PORT': 9081})
+        add_service(env)
+        with open(gridinit(env), 'a+') as f:
+            tpl = Template(template_gridinit_webhook_server)
+            f.write(tpl.safe_substitute(env))
+
 
     # Conscience agent configuration
     env = subenv({'SRVTYPE': 'conscience-agent', 'SRVNUM': 1})
