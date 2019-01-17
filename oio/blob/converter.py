@@ -29,7 +29,7 @@ from oio.common.fullpath import decode_fullpath, decode_old_fullpath, \
     encode_fullpath
 from oio.common.xattr import set_fullpath_xattr
 from oio.common.exceptions import ContentNotFound, OrphanChunk, \
-    ConfigurationException, FaultyChunk, MissingAttribute
+    ConfigurationException, FaultyChunk, MissingAttribute, NotFound
 from oio.common.logger import get_logger
 from oio.common.easy_value import int_value, is_hexa, true_value
 from oio.container.client import ContainerClient
@@ -372,12 +372,12 @@ class BlobConverter(object):
             set_fullpath_xattr(fd, new_fullpaths, success, xattr_to_remove)
         return success, None
 
-    def _is_fullpath_error(self, err):
+    def is_fullpath_error(self, err):
         if (isinstance(err, MissingAttribute) and
                 err.attribute.startswith(CHUNK_XATTR_CONTENT_FULLPATH_PREFIX)):
             return True
         elif isinstance(err, FaultyChunk):
-            return any(self._is_fullpath_error(x) for x in err.args)
+            return any(self.is_fullpath_error(x) for x in err.args)
         return False
 
     def safe_convert_chunk(self, path, chunk_id=None):
@@ -397,7 +397,7 @@ class BlobConverter(object):
             with open(path) as fd:
                 success, _ = self.convert_chunk(fd, chunk_id)
         except (FaultyChunk, MissingAttribute) as err:
-            if self._is_fullpath_error(err):
+            if self.is_fullpath_error(err):
                 self.logger.warn(
                     "Cannot convert %s: %s, will try to recover 'fullpath'",
                     path, err)
@@ -432,8 +432,11 @@ class BlobConverter(object):
         cid, content_id = entries[0][0:2]
         # 3a. Call ContainerClient.content_locate()
         #    with the container ID and content ID
-        meta, chunks = self.container_client.content_locate(
-            cid=cid, content=content_id)
+        try:
+            meta, chunks = self.container_client.content_locate(
+                cid=cid, content=content_id)
+        except NotFound as err:
+            raise OrphanChunk('Cannot check %s is valid: %s' % (path, err))
         # 3b. Resolve container ID into account and container names.
         # FIXME(FVE): get account and container names from meta1
         cmeta = self.container_client.container_get_properties(cid=cid)
