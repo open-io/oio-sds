@@ -81,7 +81,10 @@ def drop_privileges(user):
 
 
 def paths_gen(volume_path):
-    for root, dirs, files in os.walk(volume_path):
+    """
+    Yield paths of all regular files under `volume_path`.
+    """
+    for root, _dirs, files in os.walk(volume_path):
         for name in files:
             yield os.path.join(root, name)
 
@@ -147,10 +150,13 @@ class RingBuffer(list):
 
 
 def cid_from_name(account, ref):
-    h = sha256()
+    """
+    Compute a container ID from an account and a reference name.
+    """
+    hash_ = sha256()
     for v in [account, '\0', ref]:
-        h.update(v)
-    return h.hexdigest().upper()
+        hash_.update(v)
+    return hash_.hexdigest().upper()
 
 
 def fix_ranges(ranges, length):

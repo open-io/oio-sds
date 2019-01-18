@@ -436,6 +436,17 @@ oio_lb_world__get_slot_unlocked(struct oio_lb_world_s *world, const char *name)
 	return g_tree_lookup (world->slots, name);
 }
 
+static guint
+oio_lb_world__count_slot_items_unlocked(struct oio_lb_world_s *self,
+		const char *name)
+{
+	guint len = 0;
+	struct oio_lb_slot_s *slot = oio_lb_world__get_slot_unlocked(self, name);
+	if (slot)
+		len = slot->items->len;
+	return len;
+}
+
 #define CSLOT(p) ((const struct _slot_item_s*)(p))
 #define CITEM(p) CSLOT(p)->item
 #define TAB_ITEM(t,i)  g_array_index ((t), struct _slot_item_s, i)
@@ -567,6 +578,39 @@ _find_min_dist(const oio_location_t *known,
 	return dist;
 }
 
+static void
+__attribute__ ((format (printf, 1, 2)))
+_warn_dirty_poll(const char *fmt, ...)
+{
+	/* Initiate the mutex */
+	static volatile guint lazy_init = 1;
+	static GMutex lock = {};
+	if (lazy_init) {
+		if (g_atomic_int_compare_and_exchange(&lazy_init, 1, 0))
+			g_mutex_init(&lock);
+	}
+
+	if (g_mutex_trylock(&lock)) {
+		/* If the mutex is already held by another thread, an alert is maybe
+		 * going to be sent. No need to check if we need a strong level, that
+		 * check will be performed by the other thread, and there is even no
+		 * need to send any trace... */
+		static volatile gint64 last_alert = 0;
+		const gint64 now = oio_ext_monotonic_time();
+
+		GLogLevelFlags lvl = GRID_LOGLVL_DEBUG;
+		if (last_alert < OLDEST(now, 5 * G_TIME_SPAN_MINUTE))
+			lvl = GRID_LOGLVL_WARN;
+		last_alert = now;
+		g_mutex_unlock(&lock);
+
+		va_list va;
+		va_start(va, fmt);
+		g_logv(G_LOG_DOMAIN, lvl, fmt, va);
+		va_end(va);
+	}
+}
+
 static gboolean
 _item_is_too_popular(struct polling_ctx_s *ctx, const oio_location_t item,
 		struct oio_lb_slot_s *slot)
@@ -577,12 +621,12 @@ _item_is_too_popular(struct polling_ctx_s *ctx, const oio_location_t item,
 		guint32 n_leafs = GPOINTER_TO_UINT(
 				g_datalist_id_get_data(&(slot->items_by_loc[level]), key));
 		if (unlikely(n_leafs == 0)) {
-			GRID_WARN("BUG: %s: LB reload not followed by rehash, "
+			_warn_dirty_poll("BUG: %s: LB reload not followed by rehash, "
 					"item %"OIO_LOC_FORMAT" not found at level %d",
 					__FUNCTION__, item, level);
 			n_leafs = 1;
 		} else if (unlikely(n_leafs > slot->items->len)) {
-			GRID_WARN("BUG: %s: LB reload not followed by rehash, "
+			_warn_dirty_poll("BUG: %s: LB reload not followed by rehash, "
 					"more different locations than items in the slot %s "
 					"(%u/%u)",
 					__FUNCTION__, slot->name, n_leafs, slot->items->len);
@@ -657,8 +701,6 @@ _slot_get (struct oio_lb_slot_s *slot, const int i)
 static inline gboolean
 _slot_needs_rehash (const struct oio_lb_slot_s * const slot)
 {
-	/* TODO maybe quicker to have all the flags in a single <guint8> and then
-	 * check for a given MASK */
 	return BOOL(slot->flag_dirty_order) || BOOL(slot->flag_dirty_weights);
 }
 
@@ -821,7 +863,7 @@ _local_slot__poll(struct oio_lb_slot_s *slot, const guint16 distance,
 		gboolean reversed, struct polling_ctx_s *ctx)
 {
 	if (unlikely(_slot_needs_rehash(slot)))
-		GRID_WARN("BUG: %s: LB reload not followed by rehash", __FUNCTION__);
+		_warn_dirty_poll("BUG: %s: LB reload not followed by rehash", __FUNCTION__);
 
 	GRID_TRACE2(
 			"%s slot=%s sum=%"G_GUINT32_FORMAT
@@ -886,7 +928,6 @@ _local_target__poll(struct oio_lb_pool_LOCAL_s *lb,
 	gboolean fallback = FALSE;
 	struct oio_lb_selected_item_s *selected = NULL;
 
-	g_rw_lock_reader_lock(&lb->world->lock);
 	/* Each target is a sequence of '\0'-separated strings, terminated with
 	 * an empty string. Each string is the name of a slot.
 	 * In most case we should not loop and consider only the first slot.
@@ -904,7 +945,6 @@ _local_target__poll(struct oio_lb_pool_LOCAL_s *lb,
 		}
 		fallback = TRUE;
 	}
-	g_rw_lock_reader_unlock(&lb->world->lock);
 	if (selected && fallback)
 		ctx->fallback_used = TRUE;
 	return selected;
@@ -947,7 +987,7 @@ _local_target__is_satisfied(struct oio_lb_pool_LOCAL_s *lb,
 			continue;
 		}
 		if (unlikely(_slot_needs_rehash(slot))) {
-			GRID_WARN("BUG: %s: LB reload not followed by rehash",
+			_warn_dirty_poll("BUG: %s: LB reload not followed by rehash",
 					__FUNCTION__);
 		}
 		// FIXME(FVE): input should be service IDs, not locations.
@@ -1035,6 +1075,7 @@ _local__patch(struct oio_lb_pool_s *self,
 	gint16 incr = lb->nearby_mode? 1 : -1;
 	guint count = 0;
 	GError *err = NULL;
+	g_rw_lock_reader_lock(&lb->world->lock);
 	for (gchar **ptarget = lb->targets; *ptarget; ++ptarget) {
 		struct oio_lb_selected_item_s *selected = NULL;
 		selected = _local_target__is_satisfied(lb, *ptarget, &ctx);
@@ -1054,13 +1095,15 @@ _local__patch(struct oio_lb_pool_s *self,
 			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "no service polled "
 					"from [%s], %u/%d services polled, %u services in slot",
 					*ptarget, count, count_targets,
-					oio_lb_world__count_slot_items(lb->world, *ptarget));
+					oio_lb_world__count_slot_items_unlocked(
+						lb->world, *ptarget));
 			break;
 		}
 		++ctx.next_polled;
 		++count;
 		g_ptr_array_add(selection, selected);
 	}
+	g_rw_lock_reader_unlock(&lb->world->lock);
 
 	if (unlikely(GRID_DEBUG_ENABLED())) {
 		// FIXME: there is similar code in _slot_rehash()
@@ -1410,9 +1453,7 @@ oio_lb_world__count_slot_items(struct oio_lb_world_s *self, const char *name)
 	EXTRA_ASSERT (self != NULL);
 	guint len = 0;
 	g_rw_lock_reader_lock(&self->lock);
-	struct oio_lb_slot_s *slot = oio_lb_world__get_slot_unlocked(self, name);
-	if (slot)
-		len = slot->items->len;
+	len = oio_lb_world__count_slot_items_unlocked(self, name);
 	g_rw_lock_reader_unlock(&self->lock);
 	return len;
 }
@@ -1489,19 +1530,14 @@ _search_first_at_location (GArray *tab, const oio_location_t needle,
 
 static void
 oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
-		const char *name, const struct oio_lb_item_s *item)
+		struct oio_lb_slot_s *slot, const struct oio_lb_item_s *item)
 {
 	EXTRA_ASSERT (self != NULL);
 	EXTRA_ASSERT (item != NULL);
-	EXTRA_ASSERT (oio_str_is_set(name));
-	GRID_TRACE2 ("> Feeding [%s,%"G_GUINT64_FORMAT"] in slot=%s",
-			item->id, item->location, name);
+	GRID_TRACE2("> Feeding [%s,%"G_GUINT64_FORMAT"] in slot=%s",
+			item->id, item->location, slot->name);
 
 	gboolean found = FALSE;
-
-	struct oio_lb_slot_s *slot = oio_lb_world__get_slot_unlocked(self, name);
-	if (!slot)
-		return;
 
 	slot->generation = self->generation;
 
@@ -1588,8 +1624,28 @@ void
 oio_lb_world__feed_slot (struct oio_lb_world_s *self, const char *name,
 		const struct oio_lb_item_s *item)
 {
+	EXTRA_ASSERT(oio_str_is_set(name));
 	g_rw_lock_writer_lock(&self->lock);
-	oio_lb_world__feed_slot_unlocked(self, name, item);
+	struct oio_lb_slot_s *slot = oio_lb_world__get_slot_unlocked(self, name);
+	if (slot)
+		oio_lb_world__feed_slot_unlocked(self, slot, item);
+	g_rw_lock_writer_unlock(&self->lock);
+}
+
+void
+oio_lb_world__feed_slot_with_list(struct oio_lb_world_s *self,
+		const char *name, GSList *items)
+{
+	EXTRA_ASSERT(oio_str_is_set(name));
+	g_rw_lock_writer_lock(&self->lock);
+	struct oio_lb_slot_s *slot = oio_lb_world__get_slot_unlocked(self, name);
+	if (slot) {
+		for (GSList *cur = items; cur; cur = cur->next) {
+			struct oio_lb_item_s *item = cur->data;
+			oio_lb_world__feed_slot_unlocked(self, slot, item);
+		}
+		_slot_rehash(slot);
+	}
 	g_rw_lock_writer_unlock(&self->lock);
 }
 

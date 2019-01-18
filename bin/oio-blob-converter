@@ -36,8 +36,8 @@ def make_arg_parser():
                             help="Log address")
 
     descr = """
-Convert chunks that were on the specified volume. If an input file is provided,
-convert only the listed chunks.
+Convert chunks of the specified volume to the new extended attribute format.
+If an input file is provided, convert only the listed chunks.
 """
     parser = argparse.ArgumentParser(description=descr, parents=[log_parser])
     parser.add_argument('namespace', help="Namespace")
@@ -47,7 +47,7 @@ convert only the listed chunks.
     parser.add_argument('--chunks-per-second', type=int,
                         help="Max chunks per second per worker (30)")
     parser.add_argument('--no-backup', action='store_true',
-                        help="Don't save old xattr to a file")
+                        help="Don't save old extended attributes")
     parser.add_argument('--backup-dir',
                         help="Directory where to save backups "
                              "(tempory directory by default)")

@@ -64,7 +64,7 @@ endif()
 if ( ENABLE_CODECOVERAGE )
 
     if ( NOT DEFINED CODECOV_OUTPUTFILE )
-        set( CODECOV_OUTPUTFILE cmake_coverage.output )
+        set( CODECOV_OUTPUTFILE /tmp/cmake_coverage.output )
     endif ( NOT DEFINED CODECOV_OUTPUTFILE )
 
     if ( NOT DEFINED CODECOV_HTMLOUTPUTDIR )
@@ -88,11 +88,11 @@ if ( ENABLE_CODECOVERAGE )
         set( CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} --coverage )
 
         add_custom_target( coverage_init
-                           ${CODECOV_LCOV} --base-directory ${CMAKE_SOURCE_DIR}  --directory ${CMAKE_BINARY_DIR} --output-file ${CODECOV_OUTPUTFILE} --capture --initial
+                           ${CODECOV_LCOV} --base-directory ${CMAKE_SOURCE_DIR} --directory ${CMAKE_BINARY_DIR} --output-file ${CODECOV_OUTPUTFILE} --capture --initial
                            COMMAND coverage erase)
 
         add_custom_target( coverage
-						   ${CODECOV_LCOV} --base-directory ${CMAKE_SOURCE_DIR}  --directory ${CMAKE_BINARY_DIR} --no-external --output-file ${CODECOV_OUTPUTFILE} --capture
+						   ${CODECOV_LCOV} --base-directory ${CMAKE_SOURCE_DIR} --directory ${CMAKE_BINARY_DIR} --no-external --output-file ${CODECOV_OUTPUTFILE} --capture
                            COMMAND ${CODECOV_LCOV} --output ${CODECOV_OUTPUTFILE} --remove ${CODECOV_OUTPUTFILE} ${CODECOV_PATTERN_TO_IGNORE}
 						   COMMAND genhtml --ignore-errors source -o ${CODECOV_HTMLOUTPUTDIR} ${CODECOV_OUTPUTFILE}
                            COMMAND coverage combine

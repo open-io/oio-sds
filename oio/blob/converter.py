@@ -1,4 +1,4 @@
-# Copyright (C) 2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -14,9 +14,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-from oio.common.green import ratelimit
+from oio.common.green import ratelimit, time
 
-import time
 import os
 import tempfile
 from string import hexdigits
@@ -24,18 +23,19 @@ from datetime import datetime
 from collections import OrderedDict
 
 from oio.common.constants import chunk_xattr_keys, OIO_VERSION, \
-    STRLEN_CHUNKID
+    STRLEN_CHUNKID, CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
 from oio.common.utils import cid_from_name, paths_gen
 from oio.common.fullpath import decode_fullpath, decode_old_fullpath, \
     encode_fullpath
-from oio.common.xattr import modify_xattr
+from oio.common.xattr import set_fullpath_xattr
 from oio.common.exceptions import ContentNotFound, OrphanChunk, \
-    ConfigurationException
+    ConfigurationException, FaultyChunk, MissingAttribute, NotFound
 from oio.common.logger import get_logger
 from oio.common.easy_value import int_value, is_hexa, true_value
 from oio.container.client import ContainerClient
 from oio.content.factory import ContentFactory
 from oio.blob.utils import read_chunk_metadata, check_volume
+from oio.rdir.client import RdirClient
 
 
 XATTR_CHUNK_ID = chunk_xattr_keys['chunk_id']
@@ -43,6 +43,7 @@ XATTR_OLD_FULLPATH = 'oio:'
 XATTR_OLD_FULLPATH_SIZE = 4
 
 
+# FIXME(FVE): move to utility class and document
 class CacheDict(OrderedDict):
 
     def __init__(self, size=262144):
@@ -76,6 +77,7 @@ class BlobConverter(object):
         # client
         self.container_client = ContainerClient(conf)
         self.content_factory = ContentFactory(conf, logger=self.logger)
+        self._rdir = None  # we may never need it
         # stats/logs
         self.errors = 0
         self.passes = 0
@@ -95,6 +97,14 @@ class BlobConverter(object):
             % (self.volume_id, time.time())
         # dry run
         self.dry_run = true_value(conf.get('dry_run', False))
+
+    @property
+    def rdir(self):
+        """Get an instance of `RdirClient`."""
+        if self._rdir is None:
+            self._rdir = RdirClient(
+                self.conf, pool_manager=self.container_client.pool_manager)
+        return self._rdir
 
     def save_xattr(self, chunk_id, xattr):
         if self.no_backup:
@@ -155,6 +165,7 @@ class BlobConverter(object):
         return content_id
 
     def decode_fullpath(self, fullpath):
+        # pylint: disable=unbalanced-tuple-unpacking
         account, container, path, version, content_id = decode_fullpath(
             fullpath)
         cid = self.cid_from_name(account, container)
@@ -163,6 +174,7 @@ class BlobConverter(object):
         return account, container, cid, path, version, content_id
 
     def decode_old_fullpath(self, old_fullpath):
+        # pylint: disable=unbalanced-tuple-unpacking
         account, container, path, version = decode_old_fullpath(old_fullpath)
         cid = self.cid_from_name(account, container)
         content_id = self.content_id_from_name(cid, path, version)
@@ -357,36 +369,91 @@ class BlobConverter(object):
                 str(new_fullpaths), str(xattr_to_remove))
         else:
             # for security, if there is an error, we don't delete old xattr
-            modify_xattr(fd, new_fullpaths, success, xattr_to_remove)
+            set_fullpath_xattr(fd, new_fullpaths, success, xattr_to_remove)
         return success, None
 
-    def safe_convert_chunk(self, path, fd=None, chunk_id=None):
+    def is_fullpath_error(self, err):
+        if (isinstance(err, MissingAttribute) and
+                err.attribute.startswith(CHUNK_XATTR_CONTENT_FULLPATH_PREFIX)):
+            return True
+        elif isinstance(err, FaultyChunk):
+            return any(self.is_fullpath_error(x) for x in err.args)
+        return False
+
+    def safe_convert_chunk(self, path, chunk_id=None):
         if chunk_id is None:
             chunk_id = path.rsplit('/', 1)[-1]
             if len(chunk_id) != STRLEN_CHUNKID:
                 self.logger.warn('Not a chunk %s' % path)
                 return
-            for c in chunk_id:
-                if c not in hexdigits:
+            for char in chunk_id:
+                if char not in hexdigits:
                     self.logger.warn('Not a chunk %s' % path)
                     return
 
         success = False
         self.total_chunks_processed += 1
         try:
-            if fd is None:
-                with open(path) as fd:
-                    success, _ = self.convert_chunk(fd, chunk_id)
-            else:
+            with open(path) as fd:
                 success, _ = self.convert_chunk(fd, chunk_id)
+        except (FaultyChunk, MissingAttribute) as err:
+            if self.is_fullpath_error(err):
+                self.logger.warn(
+                    "Cannot convert %s: %s, will try to recover 'fullpath'",
+                    path, err)
+                try:
+                    success = self.recover_chunk_fullpath(path, chunk_id)
+                except Exception as err2:
+                    self.logger.error('Could not recover fullpath: %s', err2)
+            else:
+                self.logger.exception('ERROR while converting %s', path)
         except Exception:
-            self.logger.exception('ERROR while conversion %s', path)
+            self.logger.exception('ERROR while converting %s', path)
 
         if not success:
             self.errors += 1
         else:
             self.logger.debug('Converted %s', path)
         self.passes += 1
+
+    def recover_chunk_fullpath(self, path, chunk_id=None):
+        if not chunk_id:
+            chunk_id = path.rsplit('/', 1)[-1]
+        # 1. Fetch chunk list from rdir (could be cached).
+        # Unfortunately we cannot seek for a chunk ID.
+        entries = [x for x in self.rdir.chunk_fetch(self.volume_id, limit=-1)
+                   if x[2] == chunk_id]
+        if not entries:
+            raise KeyError(
+                'Chunk %s not found in rdir' % chunk_id)
+        elif len(entries) > 1:
+            self.logger.info('Chunk %s appears in %d objects', len(entries))
+        # 2. Find content and container IDs
+        cid, content_id = entries[0][0:2]
+        # 3a. Call ContainerClient.content_locate()
+        #    with the container ID and content ID
+        try:
+            meta, chunks = self.container_client.content_locate(
+                cid=cid, content=content_id)
+        except NotFound as err:
+            raise OrphanChunk('Cannot check %s is valid: %s' % (path, err))
+        # 3b. Resolve container ID into account and container names.
+        # FIXME(FVE): get account and container names from meta1
+        cmeta = self.container_client.container_get_properties(cid=cid)
+        aname = cmeta['system']['sys.account']
+        cname = cmeta['system']['sys.user.name']
+        fullpath = encode_fullpath(aname, cname, meta['name'],
+                                   meta['version'], content_id)
+        # 4. Check if the chunk actually belongs to the object
+        chunk_url = 'http://%s/%s' % (self.volume_id, chunk_id)
+        if chunk_url not in [x['url'] for x in chunks]:
+            raise OrphanChunk(
+                'Chunk %s not found in object %s',
+                chunk_url, fullpath)
+        # 5. Regenerate the fullpath
+        with open(path, 'w') as fd:
+            set_fullpath_xattr(fd, {chunk_id: fullpath})
+        return True
 
     def _fetch_chunks_from_file(self, input_file):
         with open(input_file, 'r') as ifile:
@@ -425,7 +492,7 @@ class BlobConverter(object):
                     'total_time': total_time,
                     'success_rate':
                         100 * ((self.total_chunks_processed - self.errors)
-                               / float(self.total_chunks_processed))
+                               / (float(self.total_chunks_processed) or 1.0))
                 }
             )
             self.passes = 0

@@ -1,4 +1,4 @@
-# Copyright (C) 2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,19 +13,24 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import os
 import random
+
+from mock import patch
 
 from oio.api.object_storage import ObjectStorageApi
 from oio.conscience.client import ConscienceClient
 from oio.common.utils import cid_from_name
+from oio.common.exceptions import OrphanChunk
 from oio.common.fullpath import encode_fullpath
 from oio.common.constants import chunk_xattr_keys, \
     CHUNK_XATTR_CONTENT_FULLPATH_PREFIX, OIO_VERSION
 from oio.blob.converter import BlobConverter
 from oio.blob.utils import read_chunk_metadata
 from oio.crawler.integrity import Checker, Target
+from oio.rdir.client import RdirClient
 from tests.utils import BaseTestCase, random_str
-from tests.functional.blob import convert_to_old_chunk
+from tests.functional.blob import convert_to_old_chunk, remove_fullpath_xattr
 
 
 class TestBlobConverter(BaseTestCase):
@@ -56,17 +61,35 @@ class TestBlobConverter(BaseTestCase):
             self.account, self.container, self.path)
         self.version = meta['version']
         self.content_id = meta['id']
+        self.container_id = cid_from_name(self.account, self.container)
+
+    def tearDown(self):
+        try:
+            self.api.object_delete(self.account, self.container, self.path)
+        except Exception:
+            pass
+        super(TestBlobConverter, self).tearDown()
 
     def _chunk_path(self, chunk):
         url = chunk['url']
-        volume_id = url.split('/', 3)[2]
         chunk_id = url.split('/', 3)[3]
-        volume = self.rawx_volumes[volume_id]
+        volume = self.rawx_volumes[self._chunk_volume_id(chunk)]
         return volume + '/' + chunk_id[:3] + '/' + chunk_id
 
-    def _converter_and_check(self, chunk_volume, chunk_path,
-                             chunk_id_info, expected_raw_meta=None,
-                             expected_errors=0):
+    def _chunk_volume_id(self, chunk):
+        return chunk['url'].split('/', 3)[2]
+
+    def _deindex_chunk(self, chunk):
+        rdir = RdirClient(self.conf, pool_manager=self.conscience.pool_manager)
+        url = chunk['url']
+        volume_id = url.split('/', 3)[2]
+        chunk_id = url.split('/', 3)[3]
+        rdir.chunk_delete(volume_id, self.container_id,
+                          self.content_id, chunk_id)
+
+    def _convert_and_check(self, chunk_volume, chunk_path,
+                           chunk_id_info, expected_raw_meta=None,
+                           expected_errors=0):
         conf = self.conf
         conf['volume'] = self.rawx_volumes[chunk_volume]
         converter = BlobConverter(conf)
@@ -107,22 +130,26 @@ class TestBlobConverter(BaseTestCase):
             self.assertNotIn(chunk_xattr_keys['content_id'], raw_meta)
             self.assertIn(CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + chunk_id,
                           raw_meta)
-            for k, v in raw_meta.iteritems():
+            for k in raw_meta.iterkeys():
                 if k.startswith('oio:'):
                     self.fail('old fullpath always existing')
             self.assertEqual(raw_meta[chunk_xattr_keys['oio_version']],
                              OIO_VERSION)
 
-    def test_converter(self):
-        chunk = random.choice(self.chunks)
+    def _test_converter_single_chunk(self, chunk, expected_errors=0):
         chunk_volume = chunk['url'].split('/')[2]
         chunk_id = chunk['url'].split('/')[3]
         chunk_path = self._chunk_path(chunk)
 
-        self._converter_and_check(
+        self._convert_and_check(
             chunk_volume, chunk_path,
             {chunk_id: (self.account, self.container, self.path, self.version,
-                        self.content_id)})
+                        self.content_id)},
+            expected_errors=expected_errors)
+
+    def test_converter(self):
+        chunk = random.choice(self.chunks)
+        self._test_converter_single_chunk(chunk)
 
     def test_converter_old_chunk(self):
         for c in self.chunks:
@@ -135,7 +162,7 @@ class TestBlobConverter(BaseTestCase):
         chunk_id = chunk['url'].split('/')[3]
         chunk_path = self._chunk_path(chunk)
 
-        self._converter_and_check(
+        self._convert_and_check(
             chunk_volume, chunk_path,
             {chunk_id: (self.account, self.container, self.path, self.version,
                         self.content_id)})
@@ -151,7 +178,7 @@ class TestBlobConverter(BaseTestCase):
         chunk_id = chunk['url'].split('/')[3]
         chunk_path = self._chunk_path(chunk)
 
-        self._converter_and_check(
+        self._convert_and_check(
             chunk_volume, chunk_path,
             {chunk_id: (self.account, self.container, self.path, self.version,
                         self.content_id)})
@@ -167,7 +194,7 @@ class TestBlobConverter(BaseTestCase):
         chunk_id = chunk['url'].split('/')[3]
         chunk_path = self._chunk_path(chunk)
 
-        self._converter_and_check(
+        self._convert_and_check(
             chunk_volume, chunk_path,
             {chunk_id: (self.account, self.container, self.path, self.version,
                         self.content_id)})
@@ -183,7 +210,7 @@ class TestBlobConverter(BaseTestCase):
         chunk_id = chunk['url'].split('/')[3]
         chunk_path = self._chunk_path(chunk)
 
-        self._converter_and_check(
+        self._convert_and_check(
             chunk_volume, chunk_path,
             {chunk_id: (self.account, self.container, self.path, self.version,
                         self.content_id)})
@@ -203,7 +230,7 @@ class TestBlobConverter(BaseTestCase):
         chunk_id = chunk['url'].split('/')[3]
         chunk_path = self._chunk_path(chunk)
 
-        self._converter_and_check(
+        self._convert_and_check(
             chunk_volume, chunk_path,
             {chunk_id: (self.account, self.container, self.path, self.version,
                         self.content_id)})
@@ -223,7 +250,7 @@ class TestBlobConverter(BaseTestCase):
         chunk_id = chunk['url'].split('/')[3]
         chunk_path = self._chunk_path(chunk)
 
-        self._converter_and_check(
+        self._convert_and_check(
             chunk_volume, chunk_path,
             {chunk_id: (self.account, self.container, self.path, self.version,
                         self.content_id)})
@@ -255,7 +282,7 @@ class TestBlobConverter(BaseTestCase):
                 chunk_id2 = c['url'].split('/')[3]
                 break
 
-        self._converter_and_check(
+        self._convert_and_check(
             chunk_volume, chunk_path,
             {chunk_id: (self.account, self.container, self.path, self.version,
                         self.content_id),
@@ -263,7 +290,7 @@ class TestBlobConverter(BaseTestCase):
                                 self.path + '.link', linked_meta['version'],
                                 linked_meta['id'])})
 
-        self._converter_and_check(
+        self._convert_and_check(
             linked_chunk_volume, linked_chunk_path,
             {chunk_id2: (self.account, self.container, self.path, self.version,
                          self.content_id),
@@ -308,7 +335,7 @@ class TestBlobConverter(BaseTestCase):
                 chunk_id2 = c['url'].split('/')[3]
                 break
 
-        self._converter_and_check(
+        self._convert_and_check(
             chunk_volume, chunk_path,
             {chunk_id: (self.account, self.container, self.path, self.version,
                         self.content_id),
@@ -316,7 +343,7 @@ class TestBlobConverter(BaseTestCase):
                                 self.path + '.link', linked_meta['version'],
                                 linked_meta['id'])})
 
-        self._converter_and_check(
+        self._convert_and_check(
             linked_chunk_volume, linked_chunk_path,
             {chunk_id2: (self.account, self.container, self.path, self.version,
                          self.content_id),
@@ -348,7 +375,7 @@ class TestBlobConverter(BaseTestCase):
                                                    linked_chunk_id)
         expected_raw_meta[chunk_xattr_keys['oio_version']] = OIO_VERSION
 
-        self._converter_and_check(
+        self._convert_and_check(
             linked_chunk_volume, linked_chunk_path,
             {linked_chunk_id: (self.account, self.container,
                                self.path, linked_meta['version'],
@@ -400,7 +427,7 @@ class TestBlobConverter(BaseTestCase):
                 chunk_id2 = c['url'].split('/')[3]
                 break
 
-        self._converter_and_check(
+        self._convert_and_check(
             chunk_volume, chunk_path,
             {chunk_id: (self.account, self.container, self.path, self.version,
                         self.content_id),
@@ -408,7 +435,7 @@ class TestBlobConverter(BaseTestCase):
                                 self.path + '.link', linked_meta['version'],
                                 linked_meta['id'])})
 
-        self._converter_and_check(
+        self._convert_and_check(
             linked_chunk_volume, linked_chunk_path,
             {chunk_id2: (self.account, self.container, self.path, self.version,
                          self.content_id),
@@ -437,12 +464,12 @@ class TestBlobConverter(BaseTestCase):
         versioned_chunk_id = versioned_chunk['url'].split('/')[3]
         versioned_chunk_path = self._chunk_path(versioned_chunk)
 
-        self._converter_and_check(
+        self._convert_and_check(
             chunk_volume, chunk_path,
             {chunk_id: (self.account, self.container, self.path, self.version,
                         self.content_id)})
 
-        self._converter_and_check(
+        self._convert_and_check(
             versioned_chunk_volume, versioned_chunk_path,
             {versioned_chunk_id: (self.account, self.container, self.path,
                                   versioned_meta['version'],
@@ -478,13 +505,79 @@ class TestBlobConverter(BaseTestCase):
         versioned_chunk_id = versioned_chunk['url'].split('/')[3]
         versioned_chunk_path = self._chunk_path(versioned_chunk)
 
-        self._converter_and_check(
+        self._convert_and_check(
             chunk_volume, chunk_path,
             {chunk_id: (self.account, self.container, self.path, self.version,
                         self.content_id)})
 
-        self._converter_and_check(
+        self._convert_and_check(
             versioned_chunk_volume, versioned_chunk_path,
             {versioned_chunk_id: (self.account, self.container, self.path,
                                   versioned_meta['version'],
                                   versioned_meta['id'])})
+
+    def test_converter_file_not_found(self):
+        """
+        Test what happens when the BlobConverter encounters a chunk with
+        neither a fullpath extended attribute, not any of the legacy
+        attributes.
+        """
+        victim = random.choice(self.chunks)
+        path = self._chunk_path(victim)
+        chunk_volume = victim['url'].split('/')[2]
+
+        os.remove(path)
+        with patch('oio.blob.converter.BlobConverter.recover_chunk_fullpath') \
+                as recover:
+            self._convert_and_check(chunk_volume, path, {}, expected_errors=1)
+            recover.assert_not_called()
+
+    def test_recover_missing_fullpath(self):
+        """
+        Test what happens when the BlobConverter encounters a chunk with
+        neither a fullpath extended attribute, not any of the legacy
+        attributes.
+        """
+        victim = random.choice(self.chunks)
+        path = self._chunk_path(victim)
+        remove_fullpath_xattr(path)
+        self._test_converter_single_chunk(victim)
+
+    def test_recover_missing_fullpath_not_indexed(self):
+        """
+        Test what happens when the BlobConverter encounters a chunk with
+        neither a fullpath extended attribute, not any of the legacy
+        attributes, and the chunk does not appear in rdir.
+        """
+        victim = random.choice(self.chunks)
+        path = self._chunk_path(victim)
+        remove_fullpath_xattr(path)
+        self._deindex_chunk(victim)
+        conf = dict(self.conf)
+        conf['volume'] = self.rawx_volumes[self._chunk_volume_id(victim)]
+        converter = BlobConverter(conf)
+        self.assertRaises(KeyError, converter.recover_chunk_fullpath, path)
+
+    def test_recover_missing_fullpath_orphan_chunk(self):
+        """
+        Test what happens when the BlobConverter encounters a chunk with
+        neither a fullpath extended attribute, not any of the legacy
+        attributes, and the chunk does not appear in object description.
+        """
+        victim = random.choice(self.chunks)
+        path = self._chunk_path(victim)
+        remove_fullpath_xattr(path)
+        cbean = {
+            'content': self.content_id,
+            'hash': victim['hash'],
+            'id': victim['url'],
+            'size': victim['size'],
+            'pos': victim['pos'],
+            'type': 'chunk'
+        }
+        self.api.container.container_raw_delete(
+            self.account, self.container, data=[cbean])
+        conf = dict(self.conf)
+        conf['volume'] = self.rawx_volumes[self._chunk_volume_id(victim)]
+        converter = BlobConverter(conf)
+        self.assertRaises(OrphanChunk, converter.recover_chunk_fullpath, path)

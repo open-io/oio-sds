@@ -38,41 +38,63 @@ void
 oio_lb_world__feed_service_info_list(struct oio_lb_world_s *lbw,
 		GSList *services)
 {
-	struct oio_lb_item_s *item =
-		g_alloca(sizeof(struct oio_lb_item_s) + LIMIT_LENGTH_SRVID);
+	GSList *items = NULL;
+	GHashTable *slots = g_hash_table_new_full(
+			g_str_hash, g_str_equal, g_free, NULL);
 
-	/* FIXME(FVE): this function should update slots in an atomic way.
-	 * Here, we are feeding them with services, but not rehashing them. */
-
+	/* First pass: create items, parse slot names. */
 	for (GSList *l = services; l; l = l->next) {
-		char slot_name[128] = {0};
 		struct service_info_s *srv = l->data;
-		service_info_to_lb_item(srv, item);
 
-		/* Insert the service in slots described in tag.slots */
+		struct oio_lb_item_s *item =
+			g_malloc0(sizeof(struct oio_lb_item_s) + LIMIT_LENGTH_SRVID);
+		service_info_to_lb_item(srv, item);
+		/* Keep a of all items, for easier garbage collection. */
+		items = g_slist_prepend(items, item);
+
+		/* Parse the service in slots described in tag.slots */
 		const gchar *slot_list_str = service_info_get_tag_value(srv,
 				NAME_TAGNAME_SLOTS, NULL);
+		gchar *slot_name = NULL;
 		if (slot_list_str) {
 			gchar **tokens = g_strsplit(slot_list_str, OIO_CSV_SEP, -1);
 			for (gchar **token = tokens; tokens && *token; token++) {
 				/* Ensure the slot name is prefixed by the type of service */
 				if (!g_str_has_prefix(*token, srv->type))
-					g_snprintf(slot_name, sizeof(slot_name), "%s-%s",
-							srv->type, *token);
+					slot_name = g_strdup_printf("%s-%s", srv->type, *token);
 				else
-					g_strlcpy(slot_name, *token, sizeof(slot_name));
-				oio_lb_world__create_slot(lbw, slot_name);
-				oio_lb_world__feed_slot(lbw, slot_name, item);
+					slot_name = g_strdup(*token);
+
+				GSList *slot_items = g_hash_table_lookup(slots, slot_name);
+				slot_items = g_slist_prepend(slot_items, item);
+				g_hash_table_insert(slots, slot_name, slot_items);
 			}
 			g_strfreev(tokens);
 		}
 
-		/* Insert the service in the main slot */
-		g_snprintf(slot_name, sizeof(slot_name), "%s", srv->type);
-		oio_lb_world__create_slot(lbw, slot_name);
-		oio_lb_world__feed_slot(lbw, slot_name, item);
-		memset(item, 0, sizeof(struct oio_lb_item_s) + LIMIT_LENGTH_SRVID);
+		/* Insert the service in the main slot
+		 * (named after the type of service). */
+		slot_name = g_strdup(srv->type);
+		GSList *slot_items = g_hash_table_lookup(slots, slot_name);
+		slot_items = g_slist_prepend(slot_items, item);
+		g_hash_table_insert(slots, slot_name, slot_items);
 	}
+
+	/* Second pass: feed slots. */
+	void _feed_slot(gpointer key, gpointer value, gpointer udata UNUSED) {
+		gchar *slot_name = key;
+		GSList *slot_items = value;
+
+		oio_lb_world__create_slot(lbw, slot_name);
+		oio_lb_world__feed_slot_with_list(lbw, slot_name, slot_items);
+		/* Items may be in several lists. Just clean the list structure,
+		 * and clear the items later. */
+		g_slist_free(slot_items);
+	}
+	g_hash_table_foreach(slots, _feed_slot, NULL);
+
+	g_slist_free_full(items, g_free);
+	g_hash_table_destroy(slots);
 }
 
 void

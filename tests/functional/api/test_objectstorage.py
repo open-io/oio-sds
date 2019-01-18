@@ -657,6 +657,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.blob_client.chunk_delete_many.assert_called_once()
 
     def test_container_refresh(self):
+        self._wait_account_meta2()
         account = random_str(32)
         # container_refresh on unknown container
         name = random_str(32)
@@ -700,6 +701,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.account_delete(account)
 
     def test_container_refresh_user_not_found(self):
+        self._wait_account_meta2()
         name = random_str(32)
         self.api.account.container_update(name, name, {"mtime": time.time()})
         self.api.container_refresh(name, name)
@@ -709,6 +711,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.account_delete(name)
 
     def test_account_refresh(self):
+        self._wait_account_meta2()
         # account_refresh on unknown account
         account = random_str(32)
         self.assertRaises(
@@ -743,6 +746,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             exc.NoSuchAccount, self.api.account_refresh, account)
 
     def test_account_refresh_all(self):
+        self._wait_account_meta2()
         # clear accounts
         accounts = self.api.account_list()
         for account in accounts:
@@ -774,6 +778,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.account_delete(account2)
 
     def test_account_flush(self):
+        self._wait_account_meta2()
         # account_flush on unknown account
         account = random_str(32)
         self.assertRaises(

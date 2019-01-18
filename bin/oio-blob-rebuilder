@@ -60,7 +60,7 @@ tube for broken chunks events.
     parser.add_argument('--chunks-per-second', type=int,
                         help="Max chunks per second per worker (30)")
     parser.add_argument("--random-wait", type=int,
-                        help="Random wait (in μs)")
+                        help="Random wait (in microseconds)")
     parser.add_argument('-q', '--quiet', action='store_true',
                         help="Don't print log on console")
     parser.add_argument('--allow-same-rawx', action='store_true',

@@ -1,16 +1,49 @@
 sudo: required
-dist: trusty
-language: go
-go:
-  - 1.10.x
+dist: xenial
+language: c
+addons:
+  apt:
+    sources:
+    - sourceline: 'deb http://archive.ubuntu.com/ubuntu/ xenial-backports main restricted universe multiverse'
+    - sourceline: 'deb http://mirror.openio.io/pub/repo/openio/sds/18.04/ubuntu/ xenial/'
+      key_url: 'http://mirror.openio.io/pub/repo/openio/APT-GPG-KEY-OPENIO-0'
+    packages:
+    - curl
+    - lcov
+    - flex
+    - bison
+    - libcurl4-gnutls-dev
+    - libglib2.0-dev
+    - libapreq2-dev
+    - libsqlite3-dev
+    - libjson-c-dev
+    - apache2
+    - apache2-dev
+    - libapache2-mod-wsgi
+    - liblzo2-dev
+    - libzmq3-dev
+    - libattr1-dev
+    - libzookeeper-mt-dev
+    - liberasurecode-dev
+    - python-dev
+    - python-pbr
+    - python-setuptools
+    - libleveldb-dev
+    - redis-server
+    - redis-tools
+    - zookeeper
+    - zookeeper-bin
+    - zookeeperd
+    - sqlite3
+    - beanstalkd
+    - python-virtualenv
+    - gdb
+    - attr
+    - openio-asn1c
+    - openio-gridinit
+services:
+  - zookeeper
 install:
-  - sudo apt-add-repository "deb http://archive.ubuntu.com/ubuntu trusty-backports main restricted universe multiverse"
-  - sudo apt-add-repository "deb http://mirror.openio.io/pub/repo/openio/sds/17.04/ubuntu/trusty ./"
-  - sudo apt-get update -qq
-  - sudo apt-get install -y --force-yes openio-gridinit openio-asn1c
-  - sudo apt-get install -y --force-yes flex bison curl lcov libglib2.0-dev libzookeeper-mt-dev libzmq3-dev libcurl4-gnutls-dev libapreq2-dev libsqlite3-dev attr libattr1-dev apache2 apache2-dev libapache2-mod-wsgi liblzo2-dev libjson-c-dev libleveldb1 libleveldb-dev libattr1-dev python-all-dev python-virtualenv liberasurecode-dev zookeeper zookeeper-bin zookeeperd beanstalkd
-  - sudo apt-get install -y --force-yes gdb
-  - sudo service beanstalkd stop
   - virtualenv $HOME/oio && source $HOME/oio/bin/activate
   - pip install --upgrade pip setuptools virtualenv tox
   - pip install --upgrade -r all-requirements.txt -r test-requirements.txt
@@ -49,7 +82,7 @@ script:
   - ./tools/oio-travis-tests.sh
   - make coverage
 after_success:
-  - bash <(curl -s https://codecov.io/bash) -f cmake_coverage.output
+  - bash <(curl -s https://codecov.io/bash) -f /tmp/cmake_coverage.output
   - codecov
   - if cat ${HOME}/go_coverage.output.* > go_coverage.output; then rm ${HOME}/go_coverage.output.*; else echo "" > go_coverage.output; fi
   - bash <(curl -s https://codecov.io/bash) -f go_coverage.output
