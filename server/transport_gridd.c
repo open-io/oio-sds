@@ -734,7 +734,7 @@ _request_get_cid (MESSAGE request)
 static gboolean
 _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 {
-	gchar hexid[65];
+	gchar reqid[LIMIT_LENGTH_REQID];
 	struct req_ctx_s req_ctx = {0};
 	gboolean rc = FALSE;
 	GError *err = NULL;
@@ -768,7 +768,7 @@ _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 	req_ctx.request = request;
 	req_ctx.reqname = _request_get_name(request);
 	req_ctx.uid = _request_get_cid(request);
-	req_ctx.reqid = _req_get_ID(request, hexid, sizeof(hexid));
+	req_ctx.reqid = _req_get_ID(request, reqid, sizeof(reqid));
 	oio_ext_set_reqid(req_ctx.reqid);
 	rc = TRUE;
 

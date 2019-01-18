@@ -22,7 +22,8 @@ from oio.common.http_urllib3 import urllib3, get_pool_manager, \
 from oio.common import exceptions
 from oio.common.utils import deadline_to_timeout
 from oio.common.constants import ADMIN_HEADER, \
-    TIMEOUT_HEADER, PERFDATA_HEADER, CONNECTION_TIMEOUT, READ_TIMEOUT
+    TIMEOUT_HEADER, PERFDATA_HEADER, CONNECTION_TIMEOUT, READ_TIMEOUT, \
+    STRLEN_REQID
 
 _POOL_MANAGER_OPTIONS_KEYS = ["pool_connections", "pool_maxsize",
                               "max_retries", "backoff_factor"]
@@ -64,6 +65,13 @@ class HttpApi(object):
         self.admin_mode = true_value(kwargs.get('admin_mode', False))
         self.perfdata = kwargs.get('perfdata')
         self.connection = connection
+
+    def __logger(self):
+        """Try to get a logger from a child class, or create one."""
+        if not hasattr(self, 'logger'):
+            from oio.common.logger import get_logger
+            setattr(self, 'logger', get_logger(None, self.__class__.__name__))
+        return getattr(self, 'logger')
 
     def _direct_request(self, method, url, headers=None, data=None, json=None,
                         params=None, admin_mode=False, pool_manager=None,
@@ -134,6 +142,12 @@ class HttpApi(object):
         # Look for a request ID
         if 'req_id' in kwargs:
             out_headers['X-oio-req-id'] = str(kwargs['req_id'])
+
+        if len(out_headers.get('X-oio-req-id', '')) > STRLEN_REQID:
+            out_headers['X-oio-req-id'] = \
+                out_headers['X-oio-req-id'][:STRLEN_REQID]
+            self.__logger().warn('Request ID truncated to %d characters',
+                                 STRLEN_REQID)
 
         # Convert json and add Content-Type
         if json:
