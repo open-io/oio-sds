@@ -1688,7 +1688,9 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 
 	/* Get the data needed for the beans preparation.
 	 * This call may return an open database. */
-	m2b_get_prepare_data(m2b, url, &pdata, &sq3);
+	err = m2b_get_prepare_data(m2b, url, &pdata, &sq3);
+	if (err)
+		goto end;
 
 	gboolean must_check_alias = m2b->flag_precheck_on_generate && (
 			 VERSIONS_DISABLED(pdata.max_versions) ||
@@ -1758,6 +1760,7 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 				policy, m2b->lb, cb, cb_data);
 	}
 
+end:
 	namespace_info_free(nsinfo);
 	storage_policy_clean(policy);
 	return err;

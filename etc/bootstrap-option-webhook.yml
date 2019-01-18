@@ -1,0 +1,2 @@
+webhook_enabled: true
+webhook_endpoint: http://localhost:9081

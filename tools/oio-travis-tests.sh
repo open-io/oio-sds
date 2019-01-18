@@ -357,6 +357,12 @@ if is_running_test_suite "multi-beanstalk" ; then
 		-f "${SRCDIR}/etc/bootstrap-option-3beanstalkd.yml"
 fi
 
+if is_running_test_suite "webhook" ; then
+	echo -e "\n### with webhooks"
+	func_tests -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
+        -f "${SRCDIR}/etc/bootstrap-option-webhook.yml"
+fi
+
 func_tests_rebuilder_mover () {
 	randomize_env
 	args=

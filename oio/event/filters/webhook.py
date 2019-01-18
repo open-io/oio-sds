@@ -68,7 +68,8 @@ class WebhookFilter(Filter):
                 'version': alias['version'],
                 'metadata': properties,
             })
-        else:
+        elif event.event_type not in (EventTypes.CONTENT_DELETED,
+                                      EventTypes.CONTENT_APPEND):
             all_properties = self.container_client.content_get_properties(
                 account=url['account'], reference=url['user'],
                 content=url['content'])

@@ -57,4 +57,5 @@ install(PROGRAMS
 			oio-test-config.py
 			oio-reset.sh
 			oio-dump-buried-events.py
+            oio-webhook-test.py
         DESTINATION bin)

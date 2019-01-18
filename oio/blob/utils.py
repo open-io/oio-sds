@@ -70,19 +70,24 @@ def read_chunk_metadata(fd, chunk_id, check_chunk_id=True):
     raw_meta_copy = None
     meta = {}
     meta['links'] = dict()
+    attr_vers = 0.0
     raw_chunk_id = container_id = path = version = content_id = None
+    missing = list()
     for k, v in raw_meta.iteritems():
-        # New chunk
-        if k.startswith(CHUNK_XATTR_CONTENT_FULLPATH_PREFIX):
-            chunkid = k[len(CHUNK_XATTR_CONTENT_FULLPATH_PREFIX):]
-            if chunkid == chunk_id:
-                raw_chunk_id = chunkid
+        # New chunks have a version
+        if k == chunk_xattr_keys['oio_version']:
+            attr_vers = float(v)
+        # Chunks with version >= 4.2 have a "full_path"
+        elif k.startswith(CHUNK_XATTR_CONTENT_FULLPATH_PREFIX):
+            parsed_chunk_id = k[len(CHUNK_XATTR_CONTENT_FULLPATH_PREFIX):]
+            if parsed_chunk_id == chunk_id:
+                raw_chunk_id = parsed_chunk_id
                 meta['full_path'] = v
                 account, container, path, version, content_id = \
                     decode_fullpath(v)
                 container_id = cid_from_name(account, container)
             else:
-                meta['links'][chunkid] = v
+                meta['links'][parsed_chunk_id] = v
     if raw_chunk_id:
         raw_meta_copy = raw_meta.copy()
         raw_meta[chunk_xattr_keys['chunk_id']] = raw_chunk_id
@@ -90,12 +95,19 @@ def read_chunk_metadata(fd, chunk_id, check_chunk_id=True):
         raw_meta[chunk_xattr_keys['content_path']] = path
         raw_meta[chunk_xattr_keys['content_version']] = version
         raw_meta[chunk_xattr_keys['content_id']] = content_id
+    if attr_vers >= 4.2 and 'full_path' not in meta:
+        # TODO(FVE): in that case, do not warn about other attributes
+        # that could be deduced from this one.
+        missing.append(exc.MissingAttribute(
+            CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + chunk_id))
     for k, v in chunk_xattr_keys.iteritems():
         if v not in raw_meta:
             if k not in chunk_xattr_keys_optional:
-                raise exc.MissingAttribute(v)
+                missing.append(exc.MissingAttribute(v))
         else:
             meta[k] = raw_meta[v]
+    if missing:
+        raise exc.FaultyChunk(*missing)
     if check_chunk_id and meta['chunk_id'] != chunk_id:
         raise exc.MissingAttribute(chunk_xattr_keys['chunk_id'])
     return meta, raw_meta_copy if raw_meta_copy else raw_meta

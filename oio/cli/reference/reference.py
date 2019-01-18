@@ -276,7 +276,9 @@ class ForceReference(command.Command):
             '--replace',
             dest='replace',
             default=False,
-            help='Replace',
+            help=('Do not require the list of services of the specified '
+                  'type to be empty, replace it. By default, refuse to '
+                  'overwrite.'),
             action='store_true'
         )
         return parser

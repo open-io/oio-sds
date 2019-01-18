@@ -38,15 +38,18 @@ PARALLEL_CHUNKS_DELETE = 3
 
 def extract_headers_meta(headers):
     meta = {}
-    for k in CHUNK_HEADERS.iterkeys():
+    missing = list()
+    for mkey, hkey in CHUNK_HEADERS.iteritems():
         try:
-            if k == 'full_path':
-                meta[k] = headers[CHUNK_HEADERS[k]]
+            if mkey == 'full_path':
+                meta[mkey] = headers[hkey]
             else:
-                meta[k] = unquote(headers[CHUNK_HEADERS[k]])
-        except KeyError as err:
-            if k not in chunk_xattr_keys_optional:
-                raise err
+                meta[mkey] = unquote(headers[hkey])
+        except KeyError:
+            if mkey not in chunk_xattr_keys_optional:
+                missing.append(exc.MissingAttribute(mkey))
+    if missing:
+        raise exc.FaultyChunk(*missing)
     return meta
 
 

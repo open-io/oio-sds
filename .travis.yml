@@ -1,21 +1,51 @@
 sudo: required
-dist: trusty
-language: go
-go:
-  - 1.10.x
+dist: xenial
+language: c
 addons:
   apt:
     sources:
-    - sourceline: 'deb http://archive.ubuntu.com/ubuntu trusty-backports main restricted universe multiverse'
-    - sourceline: 'deb http://mirror.openio.io/pub/repo/openio/sds/17.04/ubuntu/trusty ./'
-    update: true
-
-before_install:
-  - sudo apt-get update -qq
-  - sudo apt-get install -y --force-yes flex bison curl lcov libglib2.0-dev libzookeeper-mt-dev libzmq3-dev libcurl4-gnutls-dev libapreq2-dev libsqlite3-dev attr libattr1-dev apache2 apache2-dev libapache2-mod-wsgi liblzo2-dev libjson-c-dev libleveldb1 libleveldb-dev libattr1-dev python-all-dev python-virtualenv liberasurecode-dev zookeeper zookeeper-bin zookeeperd beanstalkd openio-gridinit openio-asn1c gdb
-
+    - sourceline: 'deb http://archive.ubuntu.com/ubuntu/ xenial-backports main restricted universe multiverse'
+    - sourceline: 'deb http://mirror.openio.io/pub/repo/openio/sds/18.04/ubuntu/ xenial/'
+      key_url: 'http://mirror.openio.io/pub/repo/openio/APT-GPG-KEY-OPENIO-0'
+# Please keep the following list sorted!
+    packages:
+    - apache2
+    - apache2-dev
+    - attr
+    - beanstalkd
+    - bison
+    - curl
+    - flex
+    - gdb
+    - lcov
+    - libapache2-mod-wsgi
+    - libapreq2-dev
+    - libattr1-dev
+    - libcurl4-gnutls-dev
+    - liberasurecode-dev
+    - libglib2.0-dev
+    - libjson-c-dev
+    - libleveldb-dev
+    - liblzo2-dev
+    - libsqlite3-dev
+    - libzmq3-dev
+    - libzookeeper-mt-dev
+    - openio-asn1c
+    - openio-gridinit
+    - python-all-dev
+    - python-dev
+    - python-pbr
+    - python-setuptools
+    - python-virtualenv
+    - redis-server
+    - redis-tools
+    - sqlite3
+    - zookeeper
+    - zookeeper-bin
+    - zookeeperd
+services:
+  - zookeeper
 install:
-  - sudo service beanstalkd stop
   - virtualenv $HOME/oio && source $HOME/oio/bin/activate
   - pip install --upgrade pip setuptools virtualenv tox
   - pip install --upgrade -r all-requirements.txt -r test-requirements.txt
@@ -35,6 +65,7 @@ env:
   - TEST_SUITE=worm
   - TEST_SUITE=build,unit,copyright,variables
   - TEST_SUITE=rebuilder,mover,with-service-id
+  - TEST_SUITE=webhook
 
 script:
   - sudo bash -c "echo '/tmp/core.%p.%E' > /proc/sys/kernel/core_pattern"
@@ -54,7 +85,7 @@ script:
   - make coverage
 
 after_success:
-  - bash <(curl -s https://codecov.io/bash) -f cmake_coverage.output
+  - bash <(curl -s https://codecov.io/bash) -f /tmp/cmake_coverage.output
   - codecov
   - if cat ${HOME}/go_coverage.output.* > go_coverage.output; then rm ${HOME}/go_coverage.output.*; else echo "" > go_coverage.output; fi
   - bash <(curl -s https://codecov.io/bash) -f go_coverage.output

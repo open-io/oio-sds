@@ -806,22 +806,22 @@ queue_url=${QUEUE_URL}
 template_event_agent_handlers = """
 [handler:storage.content.new]
 # pipeline = replication
-pipeline = noop
+pipeline = ${WEBHOOK}
 
 [handler:storage.content.update]
 # pipeline = replication webhook
-pipeline = noop
+pipeline = ${WEBHOOK}
 
 [handler:storage.content.append]
 # pipeline = replication
-pipeline = noop
+pipeline = ${WEBHOOK} noop
 
 [handler:storage.content.broken]
 pipeline = content_rebuild
 
 [handler:storage.content.deleted]
 # pipeline = content_cleaner replication
-pipeline = content_cleaner
+pipeline = ${WEBHOOK} content_cleaner
 
 [handler:storage.content.drained]
 # pipeline = content_cleaner replication
@@ -872,6 +872,7 @@ use = egg:oio#volume_index
 
 [filter:webhook]
 use = egg:oio#webhook
+endpoint = ${WEBHOOK_ENDPOINT}
 
 [filter:replication]
 use = egg:oio#notify
@@ -945,6 +946,16 @@ log_level = INFO
 log_address = /dev/log
 syslog_prefix = OIO,${NS},admin,${SRVNUM}
 redis_host = ${IP}
+"""
+
+template_gridinit_webhook_server = """
+[service.${NS}-webhook]
+group=${NS},localhost,webhook
+on_die=cry
+enabled=true
+start_at_boot=true
+command=oio-webhook-test.py --port 9081
+env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 """
 
 sqlx_schema_dovecot = """
@@ -1168,6 +1179,8 @@ def generate(options):
     want_service_id = '' if options.get('with_service_id') else '#'
 
     DATADIR = options.get('DATADIR', SDSDIR + '/data')
+    WEBHOOK = 'webhook' if options.get('webhook_enabled', False) else ''
+    WEBHOOK_ENDPOINT = options.get('webhook_endpoint', '')
 
     key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
     ENV = dict(ZK_CNXSTRING=options.get('ZK'),
@@ -1206,7 +1219,9 @@ def generate(options):
                KEY_FILE=key_file,
                HTTPD_BINARY=HTTPD_BINARY,
                META_HEADER=META_HEADER,
-               WANT_SERVICE_ID=want_service_id)
+               WANT_SERVICE_ID=want_service_id,
+               WEBHOOK=WEBHOOK,
+               WEBHOOK_ENDPOINT=WEBHOOK_ENDPOINT)
 
     def merge_env(add):
         env = dict(ENV)
@@ -1597,6 +1612,15 @@ def generate(options):
             tpl = Template(template_event_agent_handlers)
             f.write(tpl.safe_substitute(env))
 
+    # webhook test server
+    if WEBHOOK:
+        env = subenv({'SRVTYPE': 'webhook', 'SRVNUM': 1, 'PORT': 9081})
+        add_service(env)
+        with open(gridinit(env), 'a+') as f:
+            tpl = Template(template_gridinit_webhook_server)
+            f.write(tpl.safe_substitute(env))
+
+
     # Conscience agent configuration
     env = subenv({'SRVTYPE': 'conscience-agent', 'SRVNUM': 1})
     with open(CFGDIR + '/' + 'conscience-agent.yml', 'w+') as f:
@@ -1659,6 +1683,7 @@ def generate(options):
     final_conf['config'] = options['config']
     final_conf['with_service_id'] = options['with_service_id']
     final_conf['random_service_id'] = bool(options['random_service_id'])
+    final_conf['webhook'] = WEBHOOK_ENDPOINT
     with open('{CFGDIR}/test.yml'.format(**ENV), 'w+') as f:
         f.write(yaml.dump(final_conf))
     return final_conf

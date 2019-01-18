@@ -31,6 +31,9 @@ class MissingAttribute(OioException):
     def __str__(self):
         return '%s' % self.attribute
 
+    def __repr__(self):
+        return "%s(%r)" % (self.__class__.__name__, self.attribute)
+
 
 class ChunkException(OioException):
     pass
@@ -41,7 +44,16 @@ class CorruptedChunk(ChunkException):
 
 
 class FaultyChunk(ChunkException):
-    pass
+    """
+    Raised when a chunk misses some extended attributes,
+    or they have invalid values.
+    """
+
+    def __repr__(self):
+        if len(self.args) > 1:
+            return "%s%r" % (self.__class__.__name__, self.args)
+        else:
+            return super(FaultyChunk, self).__repr__()
 
 
 class OrphanChunk(ChunkException):

@@ -83,6 +83,7 @@ class EventTypes(object):
     CONTAINER_DELETED = 'storage.container.deleted'
     CONTAINER_NEW = 'storage.container.new'
     CONTAINER_STATE = 'storage.container.state'
+    CONTENT_APPEND = 'storage.content.append'
     CONTENT_BROKEN = 'storage.content.broken'
     CONTENT_DELETED = 'storage.content.deleted'
     CONTENT_NEW = 'storage.content.new'
