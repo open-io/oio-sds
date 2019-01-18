@@ -85,8 +85,6 @@ struct dav_stream
 #define RESOURCE_STAT_CHUNK_READ_ATTRS 0x01
 #define RESOURCE_STAT_CHUNK_PENDING    0x02
 
-dav_error * resource_init_decompression(dav_resource *resource, dav_rawx_server_conf *conf);
-
 void resource_stat_chunk(dav_resource *resource, int flags);
 
 void request_load_chunk_info_from_headers(request_rec *request,
