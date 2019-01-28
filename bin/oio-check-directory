@@ -107,7 +107,7 @@ def main():
     # Check the state of the META0 services
     if 'meta0' in args.actions:
         import zookeeper
-        from oio.zk.admin import get_meta0_paths, get_connected_handles
+        from oio.zk.client import get_meta0_paths, get_connected_handles
         logging.debug("Checking the META0 services")
 
         # TODO: tcp touch to the meta0 services
