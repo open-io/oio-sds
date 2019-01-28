@@ -28,7 +28,7 @@ LOG = logging.getLogger(__name__)
 
 GROUP_LIST = ["account", "container", "object", "reference", "volume",
               "directory", "events", "cluster", "election", "lifecycle",
-              "rdir"]
+              "rdir", "zk"]
 
 
 class OpenIOShell(App):

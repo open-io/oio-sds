@@ -43,12 +43,6 @@ install(TARGETS oio-tool DESTINATION bin)
 install(TARGETS oio-file DESTINATION bin)
 
 install(PROGRAMS
-            zk-bootstrap.py
-            zk-reset.py
-            oio-election-reset.py
-            oio-election-smudge.py
-            oio-election-stat.py
-            oio-election-dump.py
             oio-gdb.py
 			oio-unlock-all.sh
 			oio-flush-all.sh

@@ -54,7 +54,7 @@ class ZkHandle(object):
 
 
 def get_connected_handles(cnxstr):
-    zookeeper.set_debug_level(zookeeper.LOG_LEVEL_INFO)
+    zookeeper.set_debug_level(zookeeper.LOG_LEVEL_WARN)
     for shard in cnxstr.split(";"):
         zh = zookeeper.init(shard)
         yield ZkHandle(zh)
@@ -136,13 +136,13 @@ def generate_namespace_tree(ns, types, non_leaf=True):
             yield basedir
         if non_leaf:
             for x in _generate_hashed_tree(d, w):
-                yield basedir+'/'+x
+                yield (basedir+'/'+x).rstrip('/')
         else:
             for x in _generate_hashed_leafs(d, w):
-                yield basedir+'/'+x
+                yield (basedir+'/'+x).rstrip('/')
 
 
-def _create_tree(zh, nodes, batch_size):
+def _create_tree(zh, nodes, logger, batch_size):
     ok, ko = 0, 0
     for batch in _batch_split(nodes, batch_size):
         if not batch:
@@ -151,13 +151,13 @@ def _create_tree(zh, nodes, batch_size):
         _ok, _ko = _batch_create(zh, batch)
         post = now()
         ok, ko = ok + _ok, ko + _ko
-        logging.debug(" > batch(%d,%d) in %fs (batch[0] = %s)",
-                      _ok, _ko, post-pre, batch[0])
+        logger.info(" > batch(%d,%d) in %fs (batch[0] = %s)",
+                    _ok, _ko, post-pre, batch[0])
     return ok, ko
 
 
-def _probe(zh, ns):
-    logging.info("Probing for an existing namespace [%s]", ns)
+def _probe(zh, ns, logger):
+    logger.info("Probing for an existing namespace [%s]", ns)
     try:
         for t, _, _ in _srvtypes:
             _, _ = zookeeper.get(zh, _PREFIX_NS + '/' + ns + '/el/' + t)
@@ -168,39 +168,35 @@ def _probe(zh, ns):
         return False
 
 
-def create_namespace_tree(zh, ns, batch_size=2048, precheck=False):
-    if precheck and _probe(zh, ns):
+def create_namespace_tree(zh, ns, logger, batch_size=2048, precheck=False):
+    if precheck and _probe(zh, ns, logger):
         return 0, 0
 
     # Synchronous creation of the root, helps detecting a lot of
     # problems with the connection
     try:
         zookeeper.create(zh, _PREFIX, '', _acl_openbar, 0)
+        logger.info("Created %s", _PREFIX)
     except zookeeper.NodeExistsException:
+        logger.info("Already %s", _PREFIX)
         pass
 
     nodes = generate_namespace_tree(ns, [t for t, _, _ in _srvtypes])
-    return _create_tree(zh, nodes, batch_size=int(batch_size))
+    return _create_tree(zh, nodes, logger, int(batch_size))
 
 
-def _delete_children(zh, path):
-    logging.debug("Removing %s", path)
-    try:
-        for n in tuple(zookeeper.get_children(zh, path)):
-            p = path + '/' + n
-            _delete_children(zh, p)
+def _delete_children(zh, path, logger):
+    logger.debug("Removing %s", path)
+    for n in tuple(zookeeper.get_children(zh, path)):
+        p = path + '/' + n
+        _delete_children(zh, p, logger)
+        try:
             zookeeper.delete(zh, p)
-    except Exception as ex:
-        logging.warn("Removal failed: %s", ex)
+            logger.info('Deleted %s', p)
+        except Exception as ex:
+            logger.warn("Removal failed on %s: %s", p, ex)
 
 
-def delete_children(zh, ns, subdirs):
-    base = _PREFIX_NS + '/' + ns
-    for subdir in subdirs:
-        path = base + '/' + subdir
-        path = path.replace('//', '/')
-        _delete_children(zh, path)
-
-
-def expunge_any_ns(zh):
-    _delete_children(zh, _PREFIX_NS)
+def delete_children(zh, ns, logger):
+    base = (_PREFIX_NS + '/' + ns).rstrip('/')
+    _delete_children(zh, base, logger)
