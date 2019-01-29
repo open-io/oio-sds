@@ -1039,7 +1039,9 @@ remove_fullpath_from_attr(dav_resource *res,
 		const char *p, const char *hex_chunkid)
 {
 	GError *err = NULL;
-	gchar xname[256], xvalue[1024];
+	gchar xname[256], xvalue[LIMIT_LENGTH_ACCOUNTNAME + LIMIT_LENGTH_BASENAME
+		+ LIMIT_LENGTH_CONTENTPATH + LIMIT_LENGTH_VERSION + STRLEN_CONTENTID
+		+ 4];
 
 	int fd = open(p, O_WRONLY);
 	if (fd < 0) {
