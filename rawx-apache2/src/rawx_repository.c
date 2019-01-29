@@ -451,13 +451,13 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 				flags |= RESOURCE_STAT_CHUNK_READ_ATTRS;
 			break;
 		case M_OPTIONS:
-    case M_MOVE:
-      flags |= RESOURCE_STAT_CHUNK_READ_ATTRS;
-      break;
-    case M_DELETE:
-      /* Reading the XATTR for a DELETE is overkill, we can do better */
-      break;
-    case M_PUT:
+		case M_MOVE:
+			flags |= RESOURCE_STAT_CHUNK_READ_ATTRS;
+			break;
+		case M_DELETE:
+			/* Reading the XATTR for a DELETE is overkill, we can do better */
+			break;
+		case M_PUT:
 		case M_POST:
 			flags |= RESOURCE_STAT_CHUNK_PENDING;
 			break;
