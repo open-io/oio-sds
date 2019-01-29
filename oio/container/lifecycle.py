@@ -121,11 +121,15 @@ class ContainerLifecycle(object):
         Load lifecycle rules from LifecycleConfiguration XML document.
         """
         tree = etree.fromstring(xml_str)
-        if tree.tag != 'LifecycleConfiguration':
+        root_ns = tree.nsmap.get(None)
+        root_tag = 'LifecycleConfiguration'
+        if root_ns is not None:
+            root_tag = '{%s}%s' % (root_ns, root_tag)
+        if tree.tag != root_tag:
             raise ValueError(
                 "Expected 'LifecycleConfiguration' as root tag, got '%s'" %
                 tree.tag)
-        for rule_elt in tree.findall('Rule'):
+        for rule_elt in tree.findall('Rule', tree.nsmap):
             rule = LifecycleRule.from_element(rule_elt, lifecycle=self)
             self.rules.append(rule)
 
@@ -244,8 +248,9 @@ class LifecycleRule(object):
 
         :type rule_elt: `lxml.etree.Element`
         """
+        nsmap = rule_elt.nsmap
         try:
-            id_ = rule_elt.findall('ID')[-1].text
+            id_ = rule_elt.findall('ID', nsmap)[-1].text
             if id_ is None:
                 raise ValueError("Missing value for 'ID' element")
         except IndexError:
@@ -253,12 +258,12 @@ class LifecycleRule(object):
 
         try:
             filter_ = LifecycleRuleFilter.from_element(
-                rule_elt.findall('Filter')[-1])
+                rule_elt.findall('Filter', nsmap)[-1])
         except IndexError:
             raise ValueError("Missing 'Filter' element")
 
         try:
-            status = rule_elt.findall('Status')[-1].text
+            status = rule_elt.findall('Status', nsmap)[-1].text
             if status is None:
                 raise ValueError("Missing value for 'Status' element")
             status = status.lower()
@@ -271,7 +276,7 @@ class LifecycleRule(object):
         actions = list()
         try:
             expiration = Expiration.from_element(
-                rule_elt.findall('Expiration')[-1], **kwargs)
+                rule_elt.findall('Expiration', nsmap)[-1], **kwargs)
             action_filter_type = type(expiration.filter)
             actions.append(expiration)
         except IndexError:
@@ -279,7 +284,7 @@ class LifecycleRule(object):
             action_filter_type = None
 
         transitions = list()
-        for transition_elt in rule_elt.findall('Transition'):
+        for transition_elt in rule_elt.findall('Transition', nsmap):
             transition = Transition.from_element(transition_elt, **kwargs)
             if action_filter_type is None:
                 action_filter_type = type(transition.filter)
@@ -312,7 +317,8 @@ class LifecycleRule(object):
 
         try:
             expiration = NoncurrentVersionExpiration.from_element(
-                rule_elt.findall('NoncurrentVersionExpiration')[-1], **kwargs)
+                rule_elt.findall('NoncurrentVersionExpiration', nsmap)[-1],
+                **kwargs)
             action_filter_type = type(expiration.filter)
             actions.append(expiration)
         except IndexError:
@@ -320,7 +326,8 @@ class LifecycleRule(object):
             action_filter_type = None
 
         transitions = list()
-        for transition_elt in rule_elt.findall('NoncurrentVersionTransition'):
+        for transition_elt in rule_elt.findall('NoncurrentVersionTransition',
+                                               nsmap):
             transition = NoncurrentVersionTransition.from_element(
                 transition_elt, **kwargs)
             if action_filter_type is None:
@@ -435,10 +442,11 @@ class LifecycleRuleFilter(object):
 
         :type filter_elt: `lxml.etree.Element`
         """
+        nsmap = filter_elt.nsmap
         try:
-            and_elt = filter_elt.findall('And')[-1]
+            and_elt = filter_elt.findall('And', nsmap)[-1]
             try:
-                prefix = and_elt.findall('Prefix')[-1].text
+                prefix = and_elt.findall('Prefix', nsmap)[-1].text
                 if prefix is None:
                     raise ValueError("Missing value for 'Prefix' element")
             except IndexError:
@@ -446,13 +454,14 @@ class LifecycleRuleFilter(object):
             tags = cls._tags_from_element(and_elt)
         except IndexError:
             try:
-                prefix = filter_elt.findall('Prefix')[-1].text
+                prefix = filter_elt.findall('Prefix', nsmap)[-1].text
                 if prefix is None:
                     raise ValueError("Missing value for 'Prefix' element")
             except IndexError:
                 prefix = None
             try:
-                k, v = cls._tag_from_element(filter_elt.findall('Tag')[-1])
+                k, v = cls._tag_from_element(
+                    filter_elt.findall('Tag', nsmap)[-1])
                 tags = {k: v}
             except IndexError:
                 tags = {}
@@ -719,12 +728,13 @@ class Expiration(LifecycleAction):
 
         :type expiration_elt: `lxml.etree.Element`
         """
+        nsmap = expiration_elt.nsmap
         try:
-            days_elt = expiration_elt.findall('Days')[-1]
+            days_elt = expiration_elt.findall('Days', nsmap)[-1]
         except IndexError:
             days_elt = None
         try:
-            date_elt = expiration_elt.findall('Date')[-1]
+            date_elt = expiration_elt.findall('Date', nsmap)[-1]
         except IndexError:
             date_elt = None
 
@@ -778,9 +788,10 @@ class Transition(LifecycleAction):
 
         :type transition_elt: `lxml.etree.Element`
         """
+        nsmap = transition_elt.nsmap
         try:
             policy = transition_elt.findall(
-                cls.STORAGE_POLICY_XML_TAG)[-1].text
+                cls.STORAGE_POLICY_XML_TAG, nsmap)[-1].text
             if policy is None:
                 raise ValueError("Missing value for '%s' element" %
                                  cls.STORAGE_POLICY_XML_TAG)
@@ -789,11 +800,11 @@ class Transition(LifecycleAction):
                              cls.STORAGE_POLICY_XML_TAG)
 
         try:
-            days_elt = transition_elt.findall('Days')[-1]
+            days_elt = transition_elt.findall('Days', nsmap)[-1]
         except IndexError:
             days_elt = None
         try:
-            date_elt = transition_elt.findall('Date')[-1]
+            date_elt = transition_elt.findall('Date', nsmap)[-1]
         except IndexError:
             date_elt = None
 
@@ -841,12 +852,13 @@ class NoncurrentVersionExpiration(Expiration):
 
         :type expiration_elt: `lxml.etree.Element`
         """
+        nsmap = expiration_elt.nsmap
         try:
-            days_elt = expiration_elt.findall('NoncurrentDays')[-1]
+            days_elt = expiration_elt.findall('NoncurrentDays', nsmap)[-1]
         except IndexError:
             days_elt = None
         try:
-            count_elt = expiration_elt.findall('NoncurrentCount')[-1]
+            count_elt = expiration_elt.findall('NoncurrentCount', nsmap)[-1]
         except IndexError:
             count_elt = None
 
@@ -895,9 +907,10 @@ class NoncurrentVersionTransition(Transition):
 
         :type transition_elt: `lxml.etree.Element`
         """
+        nsmap = transition_elt.nsmap
         try:
             policy = transition_elt.findall(
-                cls.STORAGE_POLICY_XML_TAG)[-1].text
+                cls.STORAGE_POLICY_XML_TAG, nsmap)[-1].text
             if policy is None:
                 raise ValueError("Missing value for '%s' element" %
                                  cls.STORAGE_POLICY_XML_TAG)
@@ -907,7 +920,7 @@ class NoncurrentVersionTransition(Transition):
                 (cls.STORAGE_POLICY_XML_TAG))
 
         try:
-            days_elt = transition_elt.findall('NoncurrentDays')[-1]
+            days_elt = transition_elt.findall('NoncurrentDays', nsmap)[-1]
         except IndexError:
             days_elt = None
 
