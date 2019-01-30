@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2016-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -34,7 +34,7 @@ struct oio_events_queue_vtable_s
 	gint64 (*get_health) (struct oio_events_queue_s *self);
 	void (*set_max_pending) (struct oio_events_queue_s *self, guint v);
 	void (*set_buffering) (struct oio_events_queue_s *self, gint64 v);
-	GError * (*run) (struct oio_events_queue_s *self, gboolean (*) (gboolean));
+	GError * (*start) (struct oio_events_queue_s *self);
 };
 
 struct oio_events_queue_abstract_s
@@ -44,5 +44,8 @@ struct oio_events_queue_abstract_s
 
 void oio_events_queue_send_buffered(struct oio_events_queue_s *self,
 		struct oio_events_queue_buffer_s *buffer, guint max);
+
+/* Destined to run a queue in a thread */
+gpointer oio_events_queue__worker(gpointer p);
 
 #endif /*OIO_SDS__sqlx__oio_events_queue_internals_h*/

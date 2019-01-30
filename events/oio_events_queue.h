@@ -43,8 +43,7 @@ gint64 oio_events_queue__get_health(struct oio_events_queue_s *self);
 void oio_events_queue__set_buffering (struct oio_events_queue_s *self,
 		gint64 delay);
 
-GError * oio_events_queue__run (struct oio_events_queue_s *self,
-		gboolean (*running) (gboolean pending));
+GError * oio_events_queue__start (struct oio_events_queue_s *self);
 
 /* -------------------------------------------------------------------------- */
 

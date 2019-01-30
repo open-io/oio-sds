@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -33,12 +33,13 @@ oio_events_queue_send_buffered(struct oio_events_queue_s *self,
 		return TRUE;
 	}
 
-	gint64 start = oio_ext_monotonic_time();
+	const gint64 start = oio_ext_monotonic_time();
 	oio_events_queue_buffer_maybe_flush(buffer, __send, NULL, max);
-	gint64 duration = oio_ext_monotonic_time() - start;
+	const gint64 duration = oio_ext_monotonic_time() - start;
 	if (duration > G_TIME_SPAN_SECOND) {
 		GRID_WARN("Pushing %u buffered events to the send queue took %.3fs",
 				sent, duration / (gdouble)G_TIME_SPAN_SECOND);
 	}
 	EXTRA_ASSERT(sent <= max);
 }
+

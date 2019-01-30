@@ -82,10 +82,9 @@ oio_events_queue__set_buffering (struct oio_events_queue_s *self,
 }
 
 GError *
-oio_events_queue__run (struct oio_events_queue_s *self,
-		gboolean (*running) (gboolean pending))
+oio_events_queue__start (struct oio_events_queue_s *self)
 {
-	EVTQ_CALL(self,run)(self,running);
+	EVTQ_CALL(self,start)(self);
 }
 
 static const char *

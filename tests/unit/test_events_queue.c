@@ -23,8 +23,6 @@ License along with this library.
 #include <events/events_variables.h>
 #include <events/oio_events_queue.h>
 
-static gboolean immediately_done (gboolean p) { (void) p; return FALSE; }
-
 static void
 test_queue_stalled (void)
 {
@@ -45,7 +43,7 @@ test_queue_stalled (void)
 		oio_events_queue__send (q, g_strdup ("x"));
 	g_assert_true (oio_events_queue__is_stalled (q));
 
-	oio_events_queue__run (q, immediately_done);
+	oio_events_queue__start (q);
 	oio_events_queue__destroy (q);
 }
 

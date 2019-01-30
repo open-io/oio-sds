@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2016-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -52,8 +52,7 @@ static gboolean _q_is_stalled (struct oio_events_queue_s *self);
 static gint64 _q_get_health(struct oio_events_queue_s *self);
 
 static void _q_set_buffering (struct oio_events_queue_s *self, gint64 v);
-static GError * _q_run (struct oio_events_queue_s *self,
-		gboolean (*running) (gboolean pending));
+static GError * _q_start (struct oio_events_queue_s *self);
 
 static struct oio_events_queue_vtable_s vtable_FANOUT =
 {
@@ -63,18 +62,21 @@ static struct oio_events_queue_vtable_s vtable_FANOUT =
 	.is_stalled = _q_is_stalled,
 	.get_health = _q_get_health,
 	.set_buffering = _q_set_buffering,
-	.run = _q_run
+	.start = _q_start
 };
 
 struct _queue_FANOUT_s
 {
 	struct oio_events_queue_vtable_s *vtable;
 	GAsyncQueue *queue;
+	GThread *worker;
 
 	gint64 pending_events;
 
 	struct oio_events_queue_s **output_tab;
 	guint output_nb;
+
+	volatile gboolean running;
 
 	struct oio_events_queue_buffer_s buffer;
 };
@@ -120,54 +122,39 @@ _q_set_buffering(struct oio_events_queue_s *self, gint64 v)
 }
 
 static void
-_flush_buffered(struct oio_events_queue_s *self, struct _queue_FANOUT_s *q)
+_flush_buffered(struct _queue_FANOUT_s *q)
 {
-	gint avail =
+	const gint avail =
 		oio_events_common_max_pending - g_async_queue_length(q->queue);
 	if (avail < (gint) oio_events_common_max_pending / 100) {
 		GRID_WARN("Pending events queue is reaching maximum: %d/%d",
 				g_async_queue_length(q->queue),
 				oio_events_common_max_pending);
 	}
+
 	/* This is not an else clause, we want to send the buffered events
 	 * (even if we do it slowly). */
-	oio_events_queue_send_buffered(self, &q->buffer, MAX(1, avail / 2));
+	oio_events_queue_send_buffered(
+			(struct oio_events_queue_s*)q, &q->buffer, MAX(1, avail / 2));
 }
 
 static GError *
-_q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
+_q_run (struct _queue_FANOUT_s *q)
 {
-	struct _queue_FANOUT_s *q = (struct _queue_FANOUT_s *)self;
 	GError *err = NULL;
 	gchar *saved = NULL;
 	gint64 last_flush = 0;
 	guint next_output = 0;
 
-	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_FANOUT);
-	EXTRA_ASSERT (running != NULL);
-
-	/* start one thread for each sub-queue */
-	gpointer _worker_queue (gpointer p) {
-		metautils_ignore_signals();
-		oio_events_queue__run (p, running);
-		return p;
-	}
-	GPtrArray *threads = g_ptr_array_new();
-	for (guint i=0; i < q->output_nb ;++i) {
-		GThread *th = g_thread_try_new("queue", _worker_queue, q->output_tab[i], &err);
-		if (!th) goto label_exit;
-		g_ptr_array_add(threads, th);
-	}
-
 	/* run the agent loop of the current queue */
-	while ((*running)(0 < g_async_queue_length(q->queue))) {
+	while (q->running) {
 
 		const gint64 now = oio_ext_monotonic_time();
 
 		/* Build the deadline for the timed wait */
 		if (now - last_flush > q->buffer.delay / 10) {
 			last_flush = now;
-			_flush_buffered(self, q);
+			_flush_buffered(q);
 		}
 
 		/* find an event, prefering the last that failed */
@@ -192,10 +179,46 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 	if (saved)
 		g_async_queue_push (q->queue, saved);
 	saved = NULL;
-label_exit:
-	for (guint i=0; i<threads->len ;++i)
-		g_thread_join(threads->pdata[i]);
-	g_ptr_array_free(threads, FALSE);
+	return err;
+}
+
+static gpointer
+_q_worker(gpointer p)
+{
+	metautils_ignore_signals();
+	GError *err = _q_run((struct _queue_FANOUT_s*)p);
+	if (err) {
+		GRID_WARN("Events queue run error: (%d) %s", err->code, err->message);
+		g_clear_error(&err);
+	}
+	return p;
+}
+
+static GError *
+_q_start (struct oio_events_queue_s *self)
+{
+	struct _queue_FANOUT_s *q = (struct _queue_FANOUT_s*) self;
+	g_assert_nonnull(q);
+	g_assert(q->vtable == &vtable_FANOUT);
+	g_assert_null(q->worker);
+
+	GError *err = NULL;
+
+	/* Start each endpoint */
+	if (!q->output_tab)
+		err = NEWERROR(CODE_INTERNAL_ERROR, "No endpoint registered");
+
+	for (guint i=0; !err && i<q->output_nb ;++i)
+		err = oio_events_queue__start(q->output_tab[i]);
+
+	/* Start our worker */
+	if (!err) {
+		q->running = TRUE;
+		q->worker = g_thread_try_new("events|fanout", _q_worker, q, &err);
+		GRID_WARN("%s worker started %p: (%d) %s", __FUNCTION__, q->worker,
+				err ? err->code : 0, err ? err->message : "");
+	}
+
 	return err;
 }
 
@@ -206,9 +229,15 @@ _q_destroy (struct oio_events_queue_s *self)
 		return;
 
 	struct _queue_FANOUT_s *q = (struct _queue_FANOUT_s*) self;
-	EXTRA_ASSERT(q->vtable == &vtable_FANOUT);
-	g_async_queue_unref (q->queue);
-	oio_events_queue_buffer_clean(&(q->buffer));
+	g_assert(q->vtable == &vtable_FANOUT);
+
+	q->running = FALSE;
+
+	if (q->worker) {
+		g_thread_join(q->worker);
+		q->worker = NULL;
+	}
+
 	if (q->output_tab) {
 		for (guint i=0; i<q->output_nb ;++i) {
 			oio_events_queue__destroy(q->output_tab[i]);
@@ -216,6 +245,10 @@ _q_destroy (struct oio_events_queue_s *self)
 		}
 		g_free(q->output_tab);
 	}
+
+	g_async_queue_unref (q->queue);
+	oio_events_queue_buffer_clean(&(q->buffer));
+
 	q->vtable = NULL;
 	g_free (q);
 }

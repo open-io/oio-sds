@@ -24,60 +24,33 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 #include "event_worker.h"
 
 struct oio_events_queue_s *q = NULL;
-static GThread *th_queue = NULL;
-static volatile gboolean running = FALSE;
-static GError *s_err = NULL;
-
-static gboolean
-_running(gboolean pending)
-{
-	(void) pending; return running;
-}
-
-static gpointer
-_worker(gpointer p)
-{
-	EXTRA_ASSERT(running != FALSE);
-	if (q)
-		s_err = oio_events_queue__run(q, _running);
-	return p;
-}
 
 GError *
 event_worker_init(const char *addr)
 {
 	if (!addr) {
 		q = NULL;
-		th_queue = NULL;
 		return NULL;
 	}
 
-	GError *err = oio_events_queue_factory__create(addr, "benchmark", &q);
+	GError *err = oio_events_queue_factory__create(addr, "oio", &q);
 	if (err) {
 		g_prefix_error(&err, "Event queue creation failed: ");
 		return err;
 	}
 
-	th_queue = g_thread_try_new("oio-events-queue", _worker, NULL, &err);
+	err = oio_events_queue__start(q);
 	if (err) {
 		g_prefix_error(&err, "Thread creation failed: ");
 		return err;
 	}
 
-	running = TRUE;
 	return NULL;
 }
 
 void
 event_worker_destroy(void)
 {
-	running = FALSE;
-	if (th_queue) {
-		g_thread_join(th_queue);
-		th_queue = NULL;
-	}
-	if (s_err)
-		g_clear_error(&s_err);
 	if (q) {
 		oio_events_queue__destroy(q);
 		q = NULL;
@@ -88,7 +61,7 @@ GError *
 event_worker_send(const char *event_type, struct oio_url_s *url,
 		GString *data_json)
 {
-	if (q != NULL && th_queue != NULL) {
+	if (q != NULL) {
 		GString *json = oio_event__create(event_type, url);
 
 		if (data_json) {
