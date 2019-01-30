@@ -164,8 +164,7 @@ retry:
 	if (test_hook)
 		(*test_hook)(q);
 
-	gboolean _running (gboolean pending) { return pending; }
-	oio_events_queue__run (q, _running);
+	oio_events_queue__start (q);
 	oio_events_queue__destroy (q);
 
 	/* stop the server */

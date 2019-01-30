@@ -50,10 +50,8 @@ static void _q_send (struct oio_events_queue_s *self, gchar *msg);
 static void _q_send_overwritable(struct oio_events_queue_s *self, gchar *key, gchar *msg);
 static gboolean _q_is_stalled (struct oio_events_queue_s *self);
 static gint64 _q_get_health(struct oio_events_queue_s *self);
-
 static void _q_set_buffering (struct oio_events_queue_s *self, gint64 v);
-static GError * _q_run (struct oio_events_queue_s *self,
-		gboolean (*running) (gboolean pending));
+static GError * _q_start (struct oio_events_queue_s *self);
 
 static struct oio_events_queue_vtable_s vtable_BEANSTALKD =
 {
@@ -63,7 +61,7 @@ static struct oio_events_queue_vtable_s vtable_BEANSTALKD =
 	.is_stalled = _q_is_stalled,
 	.get_health = _q_get_health,
 	.set_buffering = _q_set_buffering,
-	.run = _q_run
+	.start = _q_start
 };
 
 /* Used by tests to intercept the result of the parsing of beanstalkd
@@ -76,9 +74,13 @@ struct _queue_BEANSTALKD_s
 {
 	struct oio_events_queue_vtable_s *vtable;
 	GAsyncQueue *queue;
+	GThread *worker;
+
 	gchar *endpoint;
 	gchar *tube;
 	gint64 pending_events;
+
+	volatile gboolean running;
 
 	struct oio_events_queue_buffer_s buffer;
 };
@@ -103,6 +105,7 @@ oio_events_queue_factory__create_beanstalkd (
 	self->queue = g_async_queue_new ();
 	self->tube = g_strdup(tube);
 	self->endpoint = g_strdup (endpoint);
+	self->running = FALSE;
 
 	oio_events_queue_buffer_init(&(self->buffer));
 
@@ -320,33 +323,33 @@ _poll_out (int fd)
 }
 
 static void
-_flush_buffered(struct oio_events_queue_s *self, struct _queue_BEANSTALKD_s *q)
+_flush_buffered(struct _queue_BEANSTALKD_s *q)
 {
-	gint avail =
+	const gint avail =
 		oio_events_common_max_pending - g_async_queue_length(q->queue);
 	if (avail < (gint) oio_events_common_max_pending / 100) {
 		GRID_WARN("Pending events queue is reaching maximum: %d/%d",
 				g_async_queue_length(q->queue),
 				oio_events_common_max_pending);
 	}
+
 	/* This is not an else clause, we want to send the buffered events
 	 * (even if we do it slowly). */
-	oio_events_queue_send_buffered(self, &(q->buffer), MAX(1, avail / 2));
+	oio_events_queue_send_buffered(
+			(struct oio_events_queue_s*)q, &(q->buffer), MAX(1, avail / 2));
 }
 
 static GError *
-_q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
+_q_run (struct _queue_BEANSTALKD_s *q)
 {
-	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s *)self;
 	gchar *saved = NULL;
 	int fd = -1;
 	guint attempts_connect = 0, attempts_check = 0, attempts_put = 0;
 	gint64 last_flush = 0, last_check = 0;
 
 	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_BEANSTALKD);
-	EXTRA_ASSERT (running != NULL);
 
-	while ((*running)(0 < g_async_queue_length(q->queue))) {
+	while (q->running) {
 
 		const gint64 now = oio_ext_monotonic_time();
 
@@ -399,7 +402,7 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 		/* Build the deadline for the timed wait */
 		if (now - last_flush > q->buffer.delay / 10) {
 			last_flush = now;
-			_flush_buffered(self, q);
+			_flush_buffered(q);
 		}
 
 		/* find an event, prefering the last that failed */
@@ -447,16 +450,56 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 	return NULL;
 }
 
+static gpointer
+_q_worker(gpointer p)
+{
+	metautils_ignore_signals();
+	GError *err = _q_run((struct _queue_BEANSTALKD_s*)p);
+	if (err) {
+		GRID_WARN("Events queue run error: (%d) %s", err->code, err->message);
+		g_clear_error(&err);
+	}
+	return p;
+}
+
+static GError *
+_q_start (struct oio_events_queue_s *self)
+{
+	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s*) self;
+	g_assert_nonnull(q);
+	g_assert(q->vtable == &vtable_BEANSTALKD);
+	g_assert_null(q->worker);
+
+	GError *err = NULL;
+
+	q->running = TRUE;
+	q->worker = g_thread_try_new("event|beanstalk", _q_worker, q, &err);
+	GRID_WARN("%s worker started %p: (%d) %s", __FUNCTION__, q->worker,
+			err ? err->code : 0, err ? err->message : "");
+
+	return err;
+}
+
 static void
 _q_destroy (struct oio_events_queue_s *self)
 {
 	if (!self) return;
+
 	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s*) self;
-	EXTRA_ASSERT(q->vtable == &vtable_BEANSTALKD);
+	g_assert(q->vtable == &vtable_BEANSTALKD);
+
+	q->running = FALSE;
+
+	if (q->worker) {
+		g_thread_join(q->worker);
+		q->worker = NULL;
+	}
+
 	g_async_queue_unref (q->queue);
 	oio_str_clean (&q->endpoint);
 	oio_str_clean (&q->tube);
 	oio_events_queue_buffer_clean(&(q->buffer));
+
 	q->vtable = NULL;
 	g_free (q);
 }
