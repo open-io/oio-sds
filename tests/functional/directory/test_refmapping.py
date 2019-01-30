@@ -142,7 +142,7 @@ class TestMeta1RefMapping(BaseTestCase):
         peers = properties['system']['sys.peers']
         new_services = peers.split(',')
         for expected_service in expected_services:
-                self.assertIn(expected_service, new_services)
+            self.assertIn(expected_service, new_services)
         self.assertNotIn(src_service, new_services)
         self.assertEqual(len(expected_services)+1, len(new_services))
 
