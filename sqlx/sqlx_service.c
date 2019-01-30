@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqlx
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -31,8 +31,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <cluster/lib/gridcluster.h>
 #include <events/oio_events_queue.h>
-#include <events/oio_events_queue_zmq.h>
-#include <events/oio_events_queue_beanstalkd.h>
 #include <server/network_server.h>
 #include <server/internals.h>
 #include <server/transport_gridd.h>
@@ -691,7 +689,7 @@ _configure_events_queue (struct sqlx_service_s *ss)
 		return TRUE;
 	}
 
-	GError *err = oio_events_queue_factory__create(url, &ss->events_queue);
+	GError *err = oio_events_queue_factory__create(url, "oio", &ss->events_queue);
 
 	if (!ss->events_queue) {
 		GRID_WARN("Events queue creation failure: (%d) %s", err->code, err->message);

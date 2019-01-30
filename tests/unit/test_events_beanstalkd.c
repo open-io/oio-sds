@@ -1,6 +1,6 @@
 /*
 OpenIO SDS unit tests
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -159,7 +159,7 @@ retry:
 	g_assert_nonnull (urlv);
 	g_assert_nonnull (*urlv);
 	GRID_DEBUG("beanstalkd url=%s", *urlv);
-	g_assert_no_error (oio_events_queue_factory__create_beanstalkd (*urlv, &q));
+	g_assert_no_error (oio_events_queue_factory__create_beanstalkd (*urlv, "fake", &q));
 	g_assert_nonnull (q);
 	if (test_hook)
 		(*test_hook)(q);
