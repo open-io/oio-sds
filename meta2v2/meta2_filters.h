@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -29,6 +29,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 struct gridd_filter_ctx_s;
 struct gridd_reply_ctx_s;
 struct meta2_backend_s;
+struct oio_events_queue_s;
 
 struct on_bean_ctx_s
 {
@@ -45,7 +46,9 @@ void _on_bean_ctx_send_list(struct on_bean_ctx_s *obc);
 
 void _on_bean_ctx_clean(struct on_bean_ctx_s *obc);
 
-void _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
+void _m2b_notify_beans(
+		struct oio_events_queue_s *notifier,
+		struct oio_url_s *url,
 		GSList *beans, const char *name, gboolean send_chunks);
 
 /* -------------------------------------------------------------------------- */
@@ -81,8 +84,6 @@ M2V2_DECLARE_FILTER(meta2_filter_fill_subject);
 M2V2_DECLARE_FILTER(meta2_filter_reply_success);
 M2V2_DECLARE_FILTER(meta2_filter_reply_fail);
 M2V2_DECLARE_FILTER(meta2_filter_reply_not_implemented);
-
-M2V2_DECLARE_FILTER(meta2_filter_send_deferred_events);
 
 M2V2_DECLARE_FILTER(meta2_filter_action_create_container);
 M2V2_DECLARE_FILTER(meta2_filter_action_empty_container);

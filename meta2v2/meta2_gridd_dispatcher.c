@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -304,7 +304,6 @@ static gridd_filter M2V2_PUT_FILTERS[] =
 	meta2_filter_extract_body_beans,
 	meta2_filter_action_check_content,
 	meta2_filter_action_put_content,
-	meta2_filter_send_deferred_events,
 	NULL
 };
 
@@ -323,7 +322,6 @@ static gridd_filter M2V2_APPEND_FILTERS[] =
 	meta2_filter_extract_body_beans,
 	meta2_filter_action_check_content,
 	meta2_filter_action_append_content,
-	meta2_filter_send_deferred_events,
 	NULL
 };
 

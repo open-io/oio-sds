@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -154,6 +154,13 @@ meta2_filter_check_url_cid (struct gridd_filter_ctx_s *ctx,
 	return FILTER_KO;
 }
 
+#define CHECK(N) do { \
+	if ((N) && oio_events_queue__is_stalled(N)) { \
+		meta2_filter_ctx_set_error(ctx, BUSY("Too many pending events")); \
+		return FILTER_KO; \
+	} \
+} while (0)
+
 int
 meta2_filter_check_events_not_stalled (struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
@@ -162,13 +169,16 @@ meta2_filter_check_events_not_stalled (struct gridd_filter_ctx_s *ctx,
 	TRACE_FILTER ();
 
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	if (m2b->notifier && meta2_backend_initiated (m2b)) {
-		if (oio_events_queue__is_stalled (m2b->notifier)) {
-			meta2_filter_ctx_set_error(ctx, BUSY("Too many pending events"));
-			return FILTER_KO;
-		}
-	}
+	CHECK(m2b->notifier_container_created);
+	CHECK(m2b->notifier_container_deleted);
+	CHECK(m2b->notifier_container_state);
 
+	CHECK(m2b->notifier_content_created);
+	CHECK(m2b->notifier_content_appended);
+	CHECK(m2b->notifier_content_deleted);
+	CHECK(m2b->notifier_content_updated);
+	CHECK(m2b->notifier_content_broken);
+	CHECK(m2b->notifier_content_drained);
 	return FILTER_OK;
 }
 

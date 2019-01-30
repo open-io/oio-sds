@@ -50,10 +50,10 @@ enum content_action_e
 #define _MAX_BEANS_BY_EVENT 16
 
 void
-_m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
+_m2b_notify_beans(struct oio_events_queue_s *notifier, struct oio_url_s *url,
 		GSList *beans, const char *name, gboolean send_chunks)
 {
-	if (!m2b->notifier)
+	if (!notifier)
 		return;
 
 	guint n_events = 1;
@@ -89,7 +89,7 @@ _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		g_string_append_static (gs, ",\"data\":[");
 		meta2_json_dump_all_xbeans (gs, list_of_beans);
 		g_string_append_static (gs, "]}");
-		oio_events_queue__send (m2b->notifier, g_string_free (gs, FALSE));
+		oio_events_queue__send (notifier, g_string_free (gs, FALSE));
 	}
 
 	if (url == NULL)
@@ -252,6 +252,23 @@ meta2_filter_action_check_content(struct gridd_filter_ctx_s * ctx,
 	return rc;
 }
 
+static int
+meta2_filter_send_deferred_events(struct gridd_filter_ctx_s *ctx,
+		struct oio_events_queue_s *notifier)
+{
+	TRACE_FILTER();
+
+	GSList *events = meta2_filter_ctx_get_deferred_events(ctx);
+	if (events) {
+		for (GSList *l = events; l != NULL; l = l->next) {
+			EXTRA_ASSERT(l->data != NULL);
+			oio_events_queue__send(notifier, l->data);
+			l->data = NULL;  // will be freed by the event queue
+		}
+	}
+
+	return FILTER_OK;
+}
 int
 meta2_filter_action_put_content(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
@@ -304,9 +321,9 @@ meta2_filter_action_put_content(struct gridd_filter_ctx_s *ctx,
 		rc = FILTER_KO;
 	} else {
 		for (GSList *l=deleted; l; l=l->next) {
-			_m2b_notify_beans(m2b, url, l->data, "content.deleted", TRUE);
+			_m2b_notify_beans(m2b->notifier_content_deleted, url, l->data, "content.deleted", TRUE);
 		}
-		_m2b_notify_beans(m2b, url, added, "content.new", FALSE);
+		_m2b_notify_beans(m2b->notifier_content_created, url, added, "content.new", FALSE);
 		_on_bean_ctx_send_list(obc);
 		rc = FILTER_OK;
 	}
@@ -314,6 +331,8 @@ meta2_filter_action_put_content(struct gridd_filter_ctx_s *ctx,
 	_bean_cleanl2(added);
 	g_slist_free_full(deleted, (GDestroyNotify)_bean_cleanl2);
 	_on_bean_ctx_clean(obc);
+
+	meta2_filter_send_deferred_events(ctx, m2b->notifier_content_created);
 	return rc;
 }
 
@@ -345,9 +364,11 @@ meta2_filter_action_append_content(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	_m2b_notify_beans(m2b, url, obc->l, "content.append", FALSE);
+	_m2b_notify_beans(m2b->notifier_content_appended, url, obc->l, "content.append", FALSE);
 	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);
+
+	meta2_filter_send_deferred_events(ctx, m2b->notifier_content_appended);
 	return FILTER_OK;
 }
 
@@ -411,7 +432,7 @@ meta2_filter_action_drain_content(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	_m2b_notify_beans(m2b, url, obc->l, "content.drained", TRUE);
+	_m2b_notify_beans(m2b->notifier_content_drained, url, obc->l, "content.drained", TRUE);
 	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;
@@ -436,7 +457,7 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	_m2b_notify_beans(m2b, url, obc->l, "content.deleted", TRUE);
+	_m2b_notify_beans(m2b->notifier_content_deleted, url, obc->l, "content.deleted", TRUE);
 	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;
@@ -465,9 +486,9 @@ meta2_filter_action_truncate_content(struct gridd_filter_ctx_s *ctx,
 	}
 
 	if (deleted)
-		_m2b_notify_beans(m2b, url, deleted, "content.deleted", TRUE);
+		_m2b_notify_beans(m2b->notifier_content_deleted, url, deleted, "content.deleted", TRUE);
 	if (added)
-		_m2b_notify_beans(m2b, url, added, "content.new", FALSE);
+		_m2b_notify_beans(m2b->notifier_content_created, url, added, "content.new", FALSE);
 
 	_bean_cleanl2(added);
 	_bean_cleanl2(deleted);
@@ -503,7 +524,7 @@ meta2_filter_action_set_content_properties(struct gridd_filter_ctx_s *ctx,
 	}
 
 	GSList *alias_beans = g_slist_append(NULL, alias);
-	_m2b_notify_beans(m2b, url, alias_beans, "content.update", FALSE);
+	_m2b_notify_beans(m2b->notifier_content_updated, url, alias_beans, "content.update", FALSE);
 	g_slist_free_full(alias_beans, _bean_clean);
 	return FILTER_OK;
 }
@@ -563,7 +584,7 @@ meta2_filter_action_del_content_properties(struct gridd_filter_ctx_s *ctx,
 	}
 
 	GSList *alias_beans = g_slist_append(NULL, alias);
-	_m2b_notify_beans(m2b, url, alias_beans, "content.update", FALSE);
+	_m2b_notify_beans(m2b->notifier_content_updated, url, alias_beans, "content.update", FALSE);
 	g_slist_free_full(alias_beans, _bean_clean);
 	return FILTER_OK;
 }
@@ -660,7 +681,7 @@ meta2_filter_action_touch_content(struct gridd_filter_ctx_s *ctx,
 			m2b, url, M2V2_FLAG_ALLPROPS|M2V2_FLAG_HEADERS,
 			_bean_list_cb, &beans);
 	if (!err) {
-		_m2b_notify_beans(m2b, url, beans, "content.new", FALSE);
+		_m2b_notify_beans(m2b->notifier_content_created, url, beans, "content.new", FALSE);
 		_bean_cleanl2(beans);
 		return FILTER_OK;
 	}
@@ -691,7 +712,7 @@ meta2_filter_action_purge_content(struct gridd_filter_ctx_s *ctx,
 			_bean_list_cb, &beans_list_list);
 
 	for (GSList *l = beans_list_list; l; l = l->next) {
-		_m2b_notify_beans(m2b, url, l->data, "content.deleted", TRUE);
+		_m2b_notify_beans(m2b->notifier_content_deleted, url, l->data, "content.deleted", TRUE);
 		_bean_cleanl2(l->data);
 	}
 	g_slist_free(beans_list_list);

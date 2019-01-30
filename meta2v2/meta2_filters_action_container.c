@@ -159,7 +159,7 @@ meta2_filter_action_purge_container(struct gridd_filter_ctx_s *ctx,
 			_bean_list_cb, &beans_list_list);
 
 	for (GSList *l = beans_list_list; l; l = l->next) {
-		_m2b_notify_beans(m2b, url, l->data, "content.deleted", TRUE);
+		_m2b_notify_beans(m2b->notifier_content_deleted, url, l->data, "content.deleted", TRUE);
 		_bean_cleanl2(l->data);
 	}
 	g_slist_free(beans_list_list);
@@ -185,7 +185,7 @@ meta2_filter_action_flush_container(struct gridd_filter_ctx_s *ctx,
 			&truncated);
 
 	for (GSList *l=beans_list_list; l; l=l->next) {
-		_m2b_notify_beans(m2b, url, l->data, "content.deleted", TRUE);
+		_m2b_notify_beans(m2b->notifier_content_deleted, url, l->data, "content.deleted", TRUE);
 		_bean_cleanl2(l->data);
 	}
 	g_slist_free(beans_list_list);

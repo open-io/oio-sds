@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -129,21 +129,3 @@ meta2_filter_reply_not_implemented(struct gridd_filter_ctx_s *ctx,
 	return FILTER_OK;
 }
 
-int
-meta2_filter_send_deferred_events(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply UNUSED)
-{
-	TRACE_FILTER();
-
-	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	GSList *events = meta2_filter_ctx_get_deferred_events(ctx);
-	if (events && m2b->notifier) {
-		for (GSList *l = events; l != NULL; l = l->next) {
-			EXTRA_ASSERT(l->data != NULL);
-			oio_events_queue__send(m2b->notifier, l->data);
-			l->data = NULL;  // will be freed by the event queue
-		}
-	}
-
-	return FILTER_OK;
-}
