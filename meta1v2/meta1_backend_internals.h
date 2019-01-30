@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta1v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -36,7 +36,9 @@ struct meta1_backend_s
 
 	struct service_update_policies_s *svcupdate;
 	struct meta1_prefixes_set_s *prefixes;
-	struct oio_events_queue_s *notifier;
+
+	struct oio_events_queue_s *notifier_srv;
+	struct oio_events_queue_s *notifier_ref;
 
 	guint nb_digits;
 	gchar ns_name[LIMIT_LENGTH_NSNAME];
@@ -45,8 +47,6 @@ struct meta1_backend_s
 void __exec_cid(sqlite3 *handle, const gchar *sql, const container_id_t cid);
 
 GError* __create_user(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url);
-
-GError * __check_backend_events (struct meta1_backend_s *m1);
 
 /*! check the container exists */
 GError * __info_user(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,

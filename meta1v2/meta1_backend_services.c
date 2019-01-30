@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta1v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -145,6 +145,18 @@ _ids_to_url(gchar **ids)
 	g_free(joined);
 	return m1u;
 }
+
+//------------------------------------------------------------------------------
+
+static GError *
+__check_backend_events (struct meta1_backend_s *m1)
+{
+	EXTRA_ASSERT(m1 != NULL);
+	if (m1->notifier_srv && oio_events_queue__is_stalled (m1->notifier_srv))
+		return BUSY("Too many pending events");
+	return NULL;
+}
+
 
 //------------------------------------------------------------------------------
 
@@ -1245,7 +1257,7 @@ static GError *
 __notify_services(struct meta1_backend_s *m1, struct sqlx_sqlite3_s *sq3,
 		struct oio_url_s *url)
 {
-	if (!m1->notifier)
+	if (!m1->notifier_srv)
 		return NULL;
 
 	struct meta1_service_url_s **services = NULL;
@@ -1266,7 +1278,7 @@ __notify_services(struct meta1_backend_s *m1, struct sqlx_sqlite3_s *sq3,
 		}
 		g_string_append_static(notif, "]}");
 
-		oio_events_queue__send (m1->notifier, g_string_free(notif, FALSE));
+		oio_events_queue__send (m1->notifier_srv, g_string_free(notif, FALSE));
 
 		meta1_service_url_cleanv(services2);
 		meta1_service_url_cleanv(services);

@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta1v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -49,6 +49,27 @@ const char * meta1_backend_basename(struct meta1_backend_s *m1,
 	return dst;
 }
 
+static GError *
+_init_notifiers(struct meta1_backend_s *m1, const char *ns)
+{
+#define INIT(Out,Tube) if (!err) { \
+	err = oio_events_queue_factory__create(url, (Tube), &(Out)); \
+	g_assert((err != NULL) ^ ((Out) != NULL)); \
+	if (!err) { \
+		err = oio_events_queue__start((Out)); \
+	} \
+}
+	gchar *url = oio_cfg_get_eventagent (ns);
+	if (!url)
+		return NULL;
+	STRING_STACKIFY(url);
+
+	GError *err = NULL;
+	INIT(m1->notifier_srv, "oio");
+	INIT(m1->notifier_ref, "oio");
+	return err;
+}
+
 GError *
 meta1_backend_init(struct meta1_backend_s **out, const char *ns,
 		struct sqlx_repository_s *repo, struct oio_lb_s *lb)
@@ -72,15 +93,32 @@ meta1_backend_init(struct meta1_backend_s **out, const char *ns,
 	m1->svcupdate = service_update_policies_create();
 	m1->nb_digits = oio_ns_meta1_digits;
 
+	GError *err;
+
+	err = _init_notifiers(m1, ns);
+	if (err) {
+		GRID_WARN("Events queue startup failed: (%d) %s", err->code, err->message);
+		goto exit;
+	}
+
 	*out = m1;
 	return NULL;
+exit:
+	meta1_backend_clean(m1);
+	g_prefix_error(&err, "Backend init error: ");
+	return err;
 }
+
+#define CLEAN(N) if (N) { oio_events_queue__destroy(N); N = NULL; }
 
 void
 meta1_backend_clean(struct meta1_backend_s *m1)
 {
 	if (!m1)
 		return;
+
+	CLEAN(m1->notifier_srv);
+	CLEAN(m1->notifier_ref);
 
 	if (m1->prefixes) {
 		meta1_prefixes_clean(m1->prefixes);
