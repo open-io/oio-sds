@@ -69,10 +69,8 @@ static void _task_react_NONE(gpointer p);
 static void _task_react_TIMERS(gpointer p);
 static void _task_reload_nsinfo(gpointer p);
 static void _task_reload_peers(gpointer p);
-static void _task_update_stats(gpointer p);
 static GQuark gq_events_health = 0;
 
-static gpointer _worker_queue (gpointer p);
 static gpointer _worker_clients (gpointer p);
 
 static const struct gridd_request_descr_s * _get_service_requests (void);
@@ -668,35 +666,7 @@ _configure_tasks(struct sqlx_service_s *ss)
 	grid_task_queue_register(ss->gtq_admin, 1, _task_react_NONE, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_react_TIMERS, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_malloc_trim, NULL, ss);
-	grid_task_queue_register(ss->gtq_admin, 5, _task_update_stats, NULL, ss);
 
-	return TRUE;
-}
-
-static gboolean
-_configure_events_queue (struct sqlx_service_s *ss)
-{
-	if (ss->flag_no_event) {
-		GRID_DEBUG("Events queue disabled, the service disabled it");
-		return TRUE;
-	}
-
-	gchar *url = oio_cfg_get_eventagent (SRV.ns_name);
-	STRING_STACKIFY (url);
-
-	if (!url) {
-		GRID_DEBUG("Events queue disabled, no URL configured");
-		return TRUE;
-	}
-
-	GError *err = oio_events_queue_factory__create(url, "oio", &ss->events_queue);
-
-	if (!ss->events_queue) {
-		GRID_WARN("Events queue creation failure: (%d) %s", err->code, err->message);
-		return FALSE;
-	}
-
-	GRID_INFO("Event queue ready, connected to [%s]", url);
 	return TRUE;
 }
 
@@ -782,11 +752,6 @@ sqlx_service_action(void)
 	if (!SRV.thread_client)
 		return _action_report_error(err, "Failed to start the CLIENT thread");
 
-	if (SRV.events_queue) {
-		SRV.thread_queue = g_thread_try_new("queue", _worker_queue, &SRV, &err);
-		if (!SRV.thread_queue)
-			return _action_report_error(err, "Failed to start the QUEUE thread");
-	}
 
 	/* open all the sockets */
 	if (!grid_main_is_running())
@@ -837,7 +802,6 @@ sqlx_service_configure(int argc, char **argv)
 		&& _configure_backend(&SRV)
 		&& _configure_tasks(&SRV)
 		&& _configure_network(&SRV)
-		&& _configure_events_queue(&SRV)
 		&& _configure_logging(&SRV)
 		&& (!SRV.service_config->post_config
 				|| SRV.service_config->post_config(&SRV));
@@ -882,8 +846,6 @@ sqlx_service_specific_fini(void)
 		g_thread_join(SRV.thread_admin);
 	if (SRV.thread_client)
 		g_thread_join(SRV.thread_client);
-	if (SRV.thread_queue)
-		g_thread_join(SRV.thread_queue);
 
 	if (SRV.repository) {
 		sqlx_repository_stop(SRV.repository);
@@ -968,11 +930,6 @@ sqlx_service_specific_fini(void)
 		SRV.lb_world = NULL;
 	}
 
-	if (SRV.events_queue) {
-		oio_events_queue__destroy (SRV.events_queue);
-		SRV.events_queue = NULL;
-	}
-
 	if (SRV.nsinfo) {
 		namespace_info_free(SRV.nsinfo);
 		SRV.nsinfo = NULL;
@@ -1037,23 +994,6 @@ sqlite_service_main(int argc, char **argv,
 }
 
 /* Tasks -------------------------------------------------------------------- */
-
-static gboolean
-_event_running (gboolean pending)
-{
-	(void) pending;
-	return grid_main_is_running ();
-}
-
-static gpointer
-_worker_queue (gpointer p)
-{
-	metautils_ignore_signals();
-	struct sqlx_service_s *ss = PSRV(p);
-	if (ss && ss->events_queue)
-		oio_events_queue__run (ss->events_queue, _event_running);
-	return p;
-}
 
 static gpointer
 _worker_clients(gpointer p)
@@ -1211,17 +1151,6 @@ _task_reload_nsinfo(gpointer p)
 		PSRV(p)->nsinfo = ni;
 		namespace_info_free(old);
 	}
-}
-
-static void
-_task_update_stats(gpointer p)
-{
-	if (!grid_main_is_running() || !PSRV(p)->events_queue)
-		return;
-
-	gint64 health = oio_events_queue__get_health(PSRV(p)->events_queue);
-	network_server_stat_push2(PSRV(p)->server, FALSE,
-			gq_events_health, health, 0, 0);
 }
 
 static gboolean
