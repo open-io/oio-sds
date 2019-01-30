@@ -1,4 +1,4 @@
-# Copyright (C) 2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,7 +16,7 @@
 import logging
 from time import sleep
 
-from oio import ObjectStorageApi
+from oio.api.object_storage import ObjectStorageApi
 from oio.directory.meta1 import Meta1RefMapping
 from oio.conscience.client import ConscienceClient
 from tests.functional.cli import execute
@@ -100,7 +100,7 @@ class TestMeta1RefMapping(BaseTestCase):
 
         self.api.object_create(self.account, self.reference,
                                data="move meta2", obj_name="test")
-        for i in range(0, 10):
+        for _ in range(0, 10):
             self.api.object_show(self.account, self.reference, "test")
 
         self.api.object_delete(self.account, self.reference, "test")
@@ -123,7 +123,7 @@ class TestMeta1RefMapping(BaseTestCase):
 
         self.api.object_create(self.account, self.reference,
                                data="move meta2", obj_name="test")
-        for i in range(0, 10):
+        for _ in range(0, 10):
             self.api.object_show(self.account, self.reference, "test")
 
         self.api.object_delete(self.account, self.reference, "test")
@@ -144,13 +144,13 @@ class TestMeta1RefMapping(BaseTestCase):
         peers = properties['system']['sys.peers']
         new_services = peers.split(',')
         for expected_service in expected_services:
-                self.assertIn(expected_service, new_services)
+            self.assertIn(expected_service, new_services)
         self.assertNotIn(src_service, new_services)
         self.assertEqual(len(expected_services)+1, len(new_services))
 
         self.api.object_create(self.account, self.reference,
                                data="move meta2", obj_name="test")
-        for i in range(0, 10):
+        for _ in range(0, 10):
             self.api.object_show(self.account, self.reference, "test")
 
         self.api.object_delete(self.account, self.reference, "test")
