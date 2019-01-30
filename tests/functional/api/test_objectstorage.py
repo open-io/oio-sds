@@ -688,7 +688,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.blob_client.chunk_delete_many.assert_called_once()
 
     def test_container_refresh(self):
-        self._wait_account_meta2()
+        self.wait_for_score(('account', 'meta2'))
         # FIXME(FVE): for this test to pass properly, we should implement
         # some kind of back notification mechanism, e.g. a tube where all
         # events are sent after being handled by event-agent.
@@ -742,7 +742,6 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.account_delete(account)
 
     def test_container_refresh_user_not_found(self):
-        self._wait_account_meta2()
         name = random_str(32)
         self.wait_for_score(('account', 'meta2'))
         self.api.account.container_update(name, name, {"mtime": time.time()})
@@ -752,7 +751,6 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.account_delete(name)
 
     def test_account_refresh(self):
-        self._wait_account_meta2()
         # account_refresh on unknown account
         account = random_str(32)
         self.wait_for_score(('account', 'meta2'))
@@ -790,7 +788,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             exc.NoSuchAccount, self.api.account_refresh, account)
 
     def test_account_refresh_all(self):
-        self._wait_account_meta2()
+        self.wait_for_score(('account', 'meta2'))
         # clear accounts
         accounts = self.api.account_list()
         for account in accounts:
@@ -822,7 +820,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.account_delete(account2)
 
     def test_account_flush(self):
-        self._wait_account_meta2()
+        self.wait_for_score(('account', 'meta2'))
         # account_flush on unknown account
         account = random_str(32)
         self.assertRaises(
