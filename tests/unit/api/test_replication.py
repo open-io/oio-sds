@@ -272,7 +272,8 @@ class TestReplication(unittest.TestCase):
             handler = ReplicatedMetachunkWriter(
                 self.sysmeta, self.meta_chunk(), global_checksum,
                 self.storage_method, **kwargs)
-            bytes_transferred, checksum, chunks = handler.stream(source, size)
+            bytes_transferred, checksum, chunks = \
+                handler.stream(source, size)
         self.assertEqual(len(meta_chunk), len(chunks))
         self.assertEqual(0, bytes_transferred)
         self.assertEqual(expected_checksum, checksum)

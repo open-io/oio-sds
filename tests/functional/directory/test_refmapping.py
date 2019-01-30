@@ -16,7 +16,7 @@
 import logging
 from time import sleep
 
-from oio import ObjectStorageApi
+from oio.api.object_storage import ObjectStorageApi
 from oio.directory.meta1 import Meta1RefMapping
 from tests.functional.cli import execute
 from tests.utils import BaseTestCase, random_str
@@ -98,7 +98,7 @@ class TestMeta1RefMapping(BaseTestCase):
 
         self.api.object_create(self.account, self.reference,
                                data="move meta2", obj_name="test")
-        for i in range(0, 10):
+        for _ in range(0, 10):
             self.api.object_show(self.account, self.reference, "test")
 
         self.api.object_delete(self.account, self.reference, "test")
@@ -121,7 +121,7 @@ class TestMeta1RefMapping(BaseTestCase):
 
         self.api.object_create(self.account, self.reference,
                                data="move meta2", obj_name="test")
-        for i in range(0, 10):
+        for _ in range(0, 10):
             self.api.object_show(self.account, self.reference, "test")
 
         self.api.object_delete(self.account, self.reference, "test")
@@ -148,7 +148,7 @@ class TestMeta1RefMapping(BaseTestCase):
 
         self.api.object_create(self.account, self.reference,
                                data="move meta2", obj_name="test")
-        for i in range(0, 10):
+        for _ in range(0, 10):
             self.api.object_show(self.account, self.reference, "test")
 
         self.api.object_delete(self.account, self.reference, "test")
