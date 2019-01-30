@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta1v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -79,16 +79,6 @@ m1_to_sqlx(enum m1v2_open_type_e t)
 
 	g_assert_not_reached();
 	return SQLX_OPEN_CREATE|SQLX_OPEN_LOCAL;
-}
-
-GError *
-__check_backend_events (struct meta1_backend_s *m1)
-{
-	if (!m1)
-		return SYSERR("backend not ready");
-	if (m1->notifier && oio_events_queue__is_stalled (m1->notifier))
-		return BUSY("Too many pending events");
-	return NULL;
 }
 
 GError*

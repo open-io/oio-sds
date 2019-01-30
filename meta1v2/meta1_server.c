@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta1v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -214,8 +214,6 @@ _post_config(struct sqlx_service_s *ss)
 			(GDestroyNotify)sqlx_task_reload_lb, NULL, ss);
 	grid_task_queue_register(ss->gtq_reload, 1,
 			_task_reload_prefixes, NULL, ss);
-
-	m1->notifier = ss->events_queue;
 
 	return TRUE;
 }
