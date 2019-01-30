@@ -137,6 +137,34 @@ meta2_backend_get_local_addr(struct meta2_backend_s *m2)
 	return sqlx_repository_get_local_addr(m2->repo);
 }
 
+static GError *
+_init_notifiers(struct meta2_backend_s *m2, const char *ns)
+{
+#define INIT(Out,Tube) if (!err) { \
+	err = oio_events_queue_factory__create(url, (Tube), &(Out)); \
+	g_assert((err != NULL) ^ ((Out) != NULL)); \
+	if (!err) \
+		err = oio_events_queue__start((Out)); \
+}
+	gchar *url = oio_cfg_get_eventagent(ns);
+	if (!url)
+		return NULL;
+	STRING_STACKIFY(url);
+
+	GError *err = NULL;
+	INIT(m2->notifier_container_created, "oio");
+	INIT(m2->notifier_container_deleted, "oio");
+	INIT(m2->notifier_container_state, "oio");
+
+	INIT(m2->notifier_content_created, "oio");
+	INIT(m2->notifier_content_appended, "oio");
+	INIT(m2->notifier_content_deleted, "oio");
+	INIT(m2->notifier_content_updated, "oio");
+	INIT(m2->notifier_content_broken, "oio");
+	INIT(m2->notifier_content_drained, "oio");
+	return err;
+}
+
 GError *
 meta2_backend_init(struct meta2_backend_s **result,
 		struct sqlx_repository_s *repo, const gchar *ns,
@@ -162,22 +190,31 @@ meta2_backend_init(struct meta2_backend_s **result,
 	m2->prepare_data_cache = g_hash_table_new_full(g_str_hash, g_str_equal,
 			g_free, g_free);
 	g_rw_lock_init(&(m2->prepare_data_lock));
+	m2->resolver = resolver;
 
-	GError *err = sqlx_repository_configure_type(m2->repo,
-			NAME_SRVTYPE_META2, schema);
+	GError *err;
+
+	err = sqlx_repository_configure_type(m2->repo, NAME_SRVTYPE_META2, schema);
 	if (NULL != err) {
-		meta2_backend_clean(m2);
-		g_prefix_error(&err, "Backend init error: ");
-		return err;
+		g_prefix_error(&err, "Schema error: ");
+		goto exit;
 	}
 
-	m2->resolver = resolver;
-	*result = m2;
+	err = _init_notifiers(m2, ns);
+	if (err) {
+		g_prefix_error(&err, "Events queue error: ");
+		goto exit;
+	}
 
-	GRID_DEBUG("M2V2 backend created for NS[%s] and repo[%p]",
-			m2->ns_name, m2->repo);
+	*result = m2;
 	return NULL;
+exit:
+	meta2_backend_clean(m2);
+	g_prefix_error(&err, "Backend init error: ");
+	return err;
 }
+
+#define CLEAN(N) if (N) { oio_events_queue__destroy(N); N = NULL; }
 
 void
 meta2_backend_clean(struct meta2_backend_s *m2)
@@ -188,6 +225,18 @@ meta2_backend_clean(struct meta2_backend_s *m2)
 		service_update_policies_destroy(m2->policies);
 	if (m2->resolver)
 		m2->resolver = NULL;
+
+	CLEAN(m2->notifier_container_created);
+	CLEAN(m2->notifier_container_deleted);
+	CLEAN(m2->notifier_container_state);
+
+	CLEAN(m2->notifier_content_created);
+	CLEAN(m2->notifier_content_appended);
+	CLEAN(m2->notifier_content_deleted);
+	CLEAN(m2->notifier_content_updated);
+	CLEAN(m2->notifier_content_broken);
+	CLEAN(m2->notifier_content_drained);
+
 	g_hash_table_unref(m2->prepare_data_cache);
 	m2->prepare_data_cache = NULL;
 	g_rw_lock_clear(&(m2->prepare_data_lock));
@@ -320,8 +369,9 @@ m2b_add_modified_container(struct meta2_backend_s *m2b,
 		struct sqlx_sqlite3_s *sq3)
 {
 	EXTRA_ASSERT(m2b != NULL);
-	if (m2b->notifier)
-		oio_events_queue__send_overwritable(m2b->notifier,
+	if (m2b->notifier_container_state)
+		oio_events_queue__send_overwritable(
+				m2b->notifier_container_state,
 				sqlx_admin_get_str(sq3, SQLX_ADMIN_BASENAME),
 				_container_state(sq3));
 
@@ -661,7 +711,8 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 
 	/* Fire an event to notify the world this container exists */
 	const enum election_status_e s = sq3->election;
-	if (!params->local && m2->notifier && (!s || s == ELECTION_LEADER)) {
+	if (!params->local && m2->notifier_container_created
+			&& (!s || s == ELECTION_LEADER)) {
 		GString *peers_list = g_string_sized_new(1024);
 		err = _get_meta2_peers(sq3, m2, peers_list);
 		if (err != NULL){
@@ -676,7 +727,7 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 		g_string_append(gs, peers_list->str);
 		g_string_free(peers_list, TRUE);
 		g_string_append_static(gs, "}}");
-		oio_events_queue__send(m2->notifier, g_string_free (gs, FALSE));
+		oio_events_queue__send(m2->notifier_container_created, g_string_free (gs, FALSE));
 	}
 
 	/* Reload any cache maybe already associated with the container.
@@ -723,7 +774,7 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 
 		if (!err) {
 			m2b_destroy(sq3);
-			if (m2->notifier && send_event) {
+			if (m2->notifier_container_deleted && send_event) {
 				/* This request handler is local, it will be called on each
 				 * service hosting the base. We must only signal our own
 				 * address; the other peers will do the same. */
@@ -734,7 +785,8 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 						META2_EVENTS_PREFIX ".container.deleted", url);
 				g_string_append_printf(
 						gs, ",\"data\":{\"peers\":[\"%s\"]}}", me);
-				oio_events_queue__send(m2->notifier, g_string_free(gs, FALSE));
+				oio_events_queue__send(
+						m2->notifier_container_deleted, g_string_free(gs, FALSE));
 			}
 		} else {
 			m2b_close(sq3);

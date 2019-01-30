@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -44,7 +44,17 @@ struct meta2_backend_s
 
 	struct service_update_policies_s *policies;
 	struct hc_resolver_s *resolver;
-	struct oio_events_queue_s *notifier;
+
+	struct oio_events_queue_s *notifier_container_created;
+	struct oio_events_queue_s *notifier_container_deleted;
+	struct oio_events_queue_s *notifier_container_state;
+
+	struct oio_events_queue_s *notifier_content_created;
+	struct oio_events_queue_s *notifier_content_appended;
+	struct oio_events_queue_s *notifier_content_deleted;
+	struct oio_events_queue_s *notifier_content_updated;
+	struct oio_events_queue_s *notifier_content_drained;
+	struct oio_events_queue_s *notifier_content_broken;
 
 	// Trigger pre-check on alias upon a BEANS generation request
 	gboolean flag_precheck_on_generate;
