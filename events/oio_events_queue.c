@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2016-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -27,7 +27,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "oio_events_queue.h"
 #include "oio_events_queue_internals.h"
 #include "oio_events_queue_fanout.h"
-#include "oio_events_queue_zmq.h"
 #include "oio_events_queue_beanstalkd.h"
 
 #define EVTQ_CALL(self,F) VTABLE_CALL(self,struct oio_events_queue_abstract_s*,F)
@@ -98,7 +97,8 @@ _has_prefix (const char *cfg, const char *prefix)
 }
 
 static GError *
-_parse_and_create_multi(const char *cfg, struct oio_events_queue_s **out)
+_parse_and_create_multi(const char *cfg, const char *tube,
+		struct oio_events_queue_s **out)
 {
 	gchar **tokens = g_strsplit(cfg, OIO_CSV_SEP2, -1);
 	if (!tokens)
@@ -109,7 +109,7 @@ _parse_and_create_multi(const char *cfg, struct oio_events_queue_s **out)
 
 	for (gchar **token = tokens; *token && !err ;++token) {
 		struct oio_events_queue_s *sub = NULL;
-		if (!(err = oio_events_queue_factory__create(*token, &sub)))
+		if (!(err = oio_events_queue_factory__create(*token, tube, &sub)))
 			g_ptr_array_add(sub_queuev, sub);
 	}
 
@@ -136,25 +136,22 @@ _parse_and_create_multi(const char *cfg, struct oio_events_queue_s **out)
 }
 
 GError *
-oio_events_queue_factory__create (const char *cfg, struct oio_events_queue_s **out)
+oio_events_queue_factory__create (const char *cfg, const char *tube,
+		struct oio_events_queue_s **out)
 {
 	EXTRA_ASSERT (cfg != NULL);
+	EXTRA_ASSERT (tube != NULL);
 	EXTRA_ASSERT (out != NULL);
 	*out = NULL;
 
 	if (NULL != strchr(cfg, OIO_CSV_SEP2_C)) {
 		// Sharding over several endpoints
-		return _parse_and_create_multi(cfg, out);
+		return _parse_and_create_multi(cfg, tube, out);
 	} else {
 		const char *tmp;
 
 		if (NULL != (tmp = _has_prefix (cfg, "beanstalk://")))
-			return oio_events_queue_factory__create_beanstalkd (tmp, out);
-
-		if (NULL != (tmp = _has_prefix (cfg, "ipc://"))
-				|| NULL != (tmp = _has_prefix (cfg, "tcp://"))
-				|| NULL != (tmp = _has_prefix (cfg, "inproc://")))
-			return oio_events_queue_factory__create_zmq (cfg, out);
+			return oio_events_queue_factory__create_beanstalkd(tmp, tube, out);
 
 		return BADREQ("implementation not recognized");
 	}

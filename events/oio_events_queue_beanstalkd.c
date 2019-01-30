@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2016-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -86,10 +86,12 @@ struct _queue_BEANSTALKD_s
 /* -------------------------------------------------------------------------- */
 
 GError *
-oio_events_queue_factory__create_beanstalkd (const char *endpoint,
+oio_events_queue_factory__create_beanstalkd (
+		const char *endpoint, const char *tube,
 		struct oio_events_queue_s **out)
 {
 	EXTRA_ASSERT(endpoint != NULL);
+	EXTRA_ASSERT(tube != NULL);
 	EXTRA_ASSERT(out != NULL);
 	*out = NULL;
 
@@ -99,7 +101,7 @@ oio_events_queue_factory__create_beanstalkd (const char *endpoint,
 	struct _queue_BEANSTALKD_s *self = g_malloc0 (sizeof(*self));
 	self->vtable = &vtable_BEANSTALKD;
 	self->queue = g_async_queue_new ();
-	self->tube = g_strdup(OIO_EVT_BEANSTALKD_DEFAULT_TUBE);
+	self->tube = g_strdup(tube);
 	self->endpoint = g_strdup (endpoint);
 
 	oio_events_queue_buffer_init(&(self->buffer));

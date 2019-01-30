@@ -1,6 +1,6 @@
 /*
 OpenIO SDS event queue
-Copyright (C) 2016-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -21,6 +21,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 struct oio_events_queue_s;
 
 void oio_events_queue__destroy (struct oio_events_queue_s *self);
+
+const char * oio_events_queue__tube (struct oio_events_queue_s *self);
 
 /* msg's ownership is given to the queue. msg has to be valid JSON */
 void oio_events_queue__send (struct oio_events_queue_s *self, gchar *msg);
@@ -59,8 +61,11 @@ GString* oio_event__create_with_id(const char *type, struct oio_url_s *url,
 /* -------------------------------------------------------------------------- */
 
 /* find the appropriate implementation of event queue for the configuration
- * given in 'cfg' */
-GError * oio_events_queue_factory__create (const char *cfg,
+ * given in 'cfg'.
+ * As of today, only configuration URL prefixed with 'beanstalk://' are
+ * accepted.
+ */
+GError * oio_events_queue_factory__create (const char *cfg, const char *tube,
 		struct oio_events_queue_s **out);
 
 #endif /*OIO_SDS__sqlx__oio_events_queue_h*/
