@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqlx
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -103,9 +103,6 @@ struct sqlx_service_s
 	struct hc_resolver_s *resolver;
 	struct oio_lb_s *lb;
 	struct oio_lb_world_s *lb_world;
-
-	struct oio_events_queue_s *events_queue;
-	GThread *thread_queue;
 
 	/* The tasks under this queue always follow a reload of the nsinfo field,
 	   and can safely play with it. This is the place for LB reloading,
