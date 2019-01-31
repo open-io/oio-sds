@@ -21,6 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <glib.h>
 
 #include <events/oio_events_queue.h>
+#include <events/events_variables.h>
 #include <core/internals.h>
 #include <metautils/lib/metautils_macros.h>
 #include "rawx_event.h"
@@ -41,8 +42,8 @@ if (!err) { \
 	if (!url)
 		return NULL;
 	GError *err = NULL;
-	INIT(q_created, "oio");
-	INIT(q_deleted, "oio");
+	INIT(q_created, oio_rawx_tube_chunk_created);
+	INIT(q_deleted, oio_rawx_tube_chunk_deleted);
 	return err;
 }
 

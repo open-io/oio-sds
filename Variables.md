@@ -410,6 +410,22 @@ Used by `gcc`
  * cmake directive: *OIO_META1_OUTGOING_TIMEOUT_COMMON_REQ*
  * range: 0.01 -> 60.0
 
+### meta1.tube.references
+
+> TODO: to be documented
+
+ * default: **oio**
+ * type: string
+ * cmake directive: *OIO_META1_TUBE_REFERENCES*
+
+### meta1.tube.services
+
+> TODO: to be documented
+
+ * default: **oio**
+ * type: string
+ * cmake directive: *OIO_META1_TUBE_SERVICES*
+
 ### meta2.batch.maxlen
 
 > When listing a container, limits the number of items to that value.
@@ -488,6 +504,78 @@ Used by `gcc`
  * type: gint64
  * cmake directive: *OIO_META2_RETENTION_PERIOD*
  * range: 1 -> 2592000
+
+### meta2.tube.container_deleted
+
+> TODO: to be documented
+
+ * default: **oio**
+ * type: string
+ * cmake directive: *OIO_META2_TUBE_CONTAINER_DELETED*
+
+### meta2.tube.container_new
+
+> TODO: to be documented
+
+ * default: **oio**
+ * type: string
+ * cmake directive: *OIO_META2_TUBE_CONTAINER_NEW*
+
+### meta2.tube.container_state
+
+> TODO: to be documented
+
+ * default: **oio**
+ * type: string
+ * cmake directive: *OIO_META2_TUBE_CONTAINER_STATE*
+
+### meta2.tube.content_appended
+
+> TODO: to be documented
+
+ * default: **oio**
+ * type: string
+ * cmake directive: *OIO_META2_TUBE_CONTENT_APPENDED*
+
+### meta2.tube.content_broken
+
+> TODO: to be documented
+
+ * default: **oio**
+ * type: string
+ * cmake directive: *OIO_META2_TUBE_CONTENT_BROKEN*
+
+### meta2.tube.content_created
+
+> TODO: to be documented
+
+ * default: **oio**
+ * type: string
+ * cmake directive: *OIO_META2_TUBE_CONTENT_CREATED*
+
+### meta2.tube.content_deleted
+
+> TODO: to be documented
+
+ * default: **oio**
+ * type: string
+ * cmake directive: *OIO_META2_TUBE_CONTENT_DELETED*
+
+### meta2.tube.content_drained
+
+> TODO: to be documented
+
+ * default: **oio**
+ * type: string
+ * cmake directive: *OIO_META2_TUBE_CONTENT_DRAINED*
+
+### meta2.tube.content_updated
+
+> TODO: to be documented
+
+ * default: **oio**
+ * type: string
+ * cmake directive: *OIO_META2_TUBE_CONTENT_UPDATED*
 
 ### ns.chunk_size
 
@@ -781,6 +869,22 @@ Used by `gcc`
  * default: **TRUE**
  * type: gboolean
  * cmake directive: *OIO_RAWX_EVENTS_ALLOWED*
+
+### rawx.tube.chunk_created
+
+> TODO: to be documented
+
+ * default: **oio**
+ * type: string
+ * cmake directive: *OIO_RAWX_TUBE_CHUNK_CREATED*
+
+### rawx.tube.chunk_deleted
+
+> TODO: to be documented
+
+ * default: **oio**
+ * type: string
+ * cmake directive: *OIO_RAWX_TUBE_CHUNK_DELETED*
 
 ### rdir.fd_per_base
 
