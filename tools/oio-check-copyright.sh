@@ -12,7 +12,7 @@ BASEDIR=$1
 		-name '*.h' -or -name '*.c' -or -name '*.py' -or -name '*.go' \
 	| while read F ; do
 		if ! [[ -s "$F" ]] ; then continue ; fi
-		if ! /usr/bin/git ls-files --error-unmatch "$F" ; then continue ; fi
+		if ! /usr/bin/git ls-files --error-unmatch "$F" >/dev/null ; then continue ; fi
 		if ! /bin/grep -q 'Copyright' "$F" ; then
 			echo "Missing Copyright section in $F" 1>&2
 			exit 1
@@ -29,6 +29,11 @@ then
 	echo "Checking copyright for year $YEAR."
 	for name in $FILES
 	do
+		# Ignore empty files
+		if ! [[ -s "$name" ]] ; then continue ; fi
+		# Ignore removed files
+		if ! [[ -e "$name" ]] ; then continue ; fi
+
 		COPYRIGHT_LINE=$(grep -E 'Copyright.+[[:digit:]]{4}.+OpenIO' "$name")
 		if [[ ! "$COPYRIGHT_LINE" =~ .+$YEAR.* ]]
 		then
