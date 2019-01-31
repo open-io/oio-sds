@@ -30,6 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/common_variables.h>
 #include <sqliterepo/sqliterepo.h>
 #include <sqliterepo/election.h>
+#include <events/events_variables.h>
 
 #include "./internals.h"
 #include "./meta1_prefixes.h"
@@ -65,8 +66,8 @@ _init_notifiers(struct meta1_backend_s *m1, const char *ns)
 	STRING_STACKIFY(url);
 
 	GError *err = NULL;
-	INIT(m1->notifier_srv, "oio");
-	INIT(m1->notifier_ref, "oio");
+	INIT(m1->notifier_srv, oio_meta1_tube_services);
+	INIT(m1->notifier_ref, oio_meta1_tube_references);
 	return err;
 }
 

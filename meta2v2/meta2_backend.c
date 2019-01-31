@@ -23,6 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/common_variables.h>
 #include <server/server_variables.h>
 #include <meta2v2/meta2_variables.h>
+#include <events/events_variables.h>
 
 #include <cluster/lib/gridcluster.h>
 
@@ -152,16 +153,16 @@ _init_notifiers(struct meta2_backend_s *m2, const char *ns)
 	STRING_STACKIFY(url);
 
 	GError *err = NULL;
-	INIT(m2->notifier_container_created, "oio");
-	INIT(m2->notifier_container_deleted, "oio");
-	INIT(m2->notifier_container_state, "oio");
+	INIT(m2->notifier_container_created, oio_meta2_tube_content_created);
+	INIT(m2->notifier_container_deleted, oio_meta2_tube_container_deleted);
+	INIT(m2->notifier_container_state, oio_meta2_tube_container_state);
 
-	INIT(m2->notifier_content_created, "oio");
-	INIT(m2->notifier_content_appended, "oio");
-	INIT(m2->notifier_content_deleted, "oio");
-	INIT(m2->notifier_content_updated, "oio");
-	INIT(m2->notifier_content_broken, "oio");
-	INIT(m2->notifier_content_drained, "oio");
+	INIT(m2->notifier_content_created, oio_meta2_tube_content_created);
+	INIT(m2->notifier_content_appended, oio_meta2_tube_content_appended);
+	INIT(m2->notifier_content_deleted, oio_meta2_tube_content_deleted);
+	INIT(m2->notifier_content_updated, oio_meta2_tube_content_updated);
+	INIT(m2->notifier_content_broken, oio_meta2_tube_content_broken);
+	INIT(m2->notifier_content_drained, oio_meta2_tube_content_drained);
 	return err;
 }
 
