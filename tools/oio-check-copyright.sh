@@ -25,10 +25,9 @@ then
 	INCLUDE='.+\.(c|go|h|py)$'
 	YEAR=$(date +%Y)
 	FAIL=0
-	FILES=$(git diff --name-only "$TRAVIS_COMMIT_RANGE" | grep -E "$INCLUDE")
 	echo "Checking copyright for year $YEAR."
-	for name in $FILES
-	do
+	git diff --name-only "$TRAVIS_COMMIT_RANGE" | grep -E "$INCLUDE" \
+	| while read name ; do
 		# Ignore empty files
 		if ! [[ -s "$name" ]] ; then continue ; fi
 		# Ignore removed files
@@ -37,11 +36,9 @@ then
 		COPYRIGHT_LINE=$(grep -E 'Copyright.+[[:digit:]]{4}.+OpenIO' "$name")
 		if [[ ! "$COPYRIGHT_LINE" =~ .+$YEAR.* ]]
 		then
-			echo "File $name has just been modified ($YEAR),"
-			echo "but copyright is '$COPYRIGHT_LINE'."
+			echo "ERROR $name ($YEAR) has \"$COPYRIGHT_LINE\""
 			FAIL=1
 		fi
 	done
-	exit $FAIL
-	echo "OK"
+	if [[ "$FAIL" != 0 ]] ; then exit $FAIL ; fi
 fi
