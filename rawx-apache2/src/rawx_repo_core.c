@@ -1,7 +1,7 @@
 /*
 OpenIO SDS rawx-apache2
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -814,7 +814,7 @@ rawx_repo_commit_upload(dav_stream *stream)
 
 	request_fill_headers(stream->r->info->request, &fake);
 
-	send_chunk_event("storage.chunk.new", stream->r);
+	send_chunk_event(OIO_RET_CREATED, stream->r);
 
 	return NULL;
 }

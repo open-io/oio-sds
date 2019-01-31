@@ -1,7 +1,7 @@
 /*
 OpenIO SDS rawx-apache2
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -110,6 +110,6 @@ void str_replace_by_pooled_str(apr_pool_t *pool, char ** pstr);
 
 void dav_format_time(int style, apr_time_t sec, char *buf);
 
-void send_chunk_event(const char *type, const dav_resource *resource);
+void send_chunk_event(enum rawx_event_type_e type, const dav_resource *resource);
 
 #endif /*OIO_SDS__rawx_apache2__src__rawx_internals_h*/

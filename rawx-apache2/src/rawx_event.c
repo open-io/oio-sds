@@ -25,72 +25,57 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metautils_macros.h>
 #include "rawx_event.h"
 
-struct oio_events_queue_s *q = NULL;
-static GThread *th_queue = NULL;
-static volatile gboolean running = FALSE;
-static GError *s_err = NULL;
-
-static gboolean
-_running (gboolean pending)
-{
-	(void) pending; return running;
-}
-
-static gpointer
-_worker (gpointer p)
-{
-	EXTRA_ASSERT(running != FALSE);
-	if (q)
-		s_err = oio_events_queue__run (q, _running);
-	return p;
-}
+struct oio_events_queue_s *q_created = NULL;
+struct oio_events_queue_s *q_deleted = NULL;
 
 GError *
-rawx_event_init (const char *addr)
+rawx_event_init (const char *url)
 {
-	if (!addr) {
-		q = NULL;
-		th_queue = NULL;
-		return NULL;
-	}
-
-	GError *err = oio_events_queue_factory__create (addr, "oio", &q);
-	if (err) {
-		g_prefix_error (&err, "Event queue creation failed: ");
-		return err;
-	}
-
-	th_queue = g_thread_try_new ("oio-events-queue", _worker, NULL, &err);
-	if (err) {
-		g_prefix_error (&err, "Thread creation failed: ");
-		return err;
-	}
-
-	running = TRUE;
-	return NULL;
+#define INIT(Out,Tube) \
+if (!err) { \
+	err = oio_events_queue_factory__create(url, (Tube), &(Out)); \
+	g_assert((err != NULL) ^ ((Out) != NULL)); \
+	if (!err) \
+		err = oio_events_queue__start((Out)); \
 }
+	if (!url)
+		return NULL;
+	GError *err = NULL;
+	INIT(q_created, "oio");
+	INIT(q_deleted, "oio");
+	return err;
+}
+
+#define CLEAN(N) if (N) { oio_events_queue__destroy(N); N = NULL; }
 
 void
 rawx_event_destroy (void)
 {
-	running = FALSE;
-	if (th_queue) {
-		g_thread_join (th_queue);
-		th_queue = NULL;
-	}
-	if (s_err)
-		g_clear_error(&s_err);
-	if (q) {
-		oio_events_queue__destroy (q);
-		q = NULL;
-	}
+	CLEAN(q_created);
+	CLEAN(q_deleted);
 }
 
 GError *
-rawx_event_send(const char *event_type, const char *request_id,
+rawx_event_send(
+		enum rawx_event_type_e type,
+		const char *request_id,
 		GString *data_json)
 {
-	if (q != NULL && th_queue != NULL) {
+	const char *event_type = rawx_event_type_name(type);
+
+	struct oio_events_queue_s *q = NULL;
+	switch (type) {
+		case OIO_RET_CREATED:
+			q = q_created;
+			break;
+		case OIO_RET_DELETED:
+			q = q_deleted;
+			break;
+		default:
+			return NEWERROR(500, "BUG: Unexpected event type");
+	}
+
+	if (q != NULL) {
 		GString *json = oio_event__create_with_id(
 				event_type, NULL, request_id);
 		g_string_append_printf(json, ",\"data\":%.*s}",

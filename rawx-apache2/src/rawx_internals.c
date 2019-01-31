@@ -1,7 +1,7 @@
 /*
 OpenIO SDS rawx-apache2
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -118,8 +118,10 @@ dav_format_time(int style, apr_time_t sec, char *buf)
 }
 
 void
-send_chunk_event(const char *type, const dav_resource *resource)
+send_chunk_event(enum rawx_event_type_e type, const dav_resource *resource)
 {
+	const char * event_type = rawx_event_type_name(type);
+
 	dav_rawx_server_conf *conf = resource_get_server_config(resource);
 
 	GString *json = g_string_sized_new(512);
@@ -166,14 +168,14 @@ send_chunk_event(const char *type, const dav_resource *resource)
 			DAV_ERROR_REQ(resource->info->request, 0,
 					"Sending event %s took %"G_GINT64_FORMAT
 					"ms (warning limit is %"G_GINT64_FORMAT"ms)",
-					type,
+					event_type,
 					(post-pre) / G_TIME_SPAN_MILLISECOND,
 					limit / G_TIME_SPAN_MILLISECOND);
 		} else {
-			DAV_DEBUG_REQ(resource->info->request, 0, "Event OK %s", type);
+			DAV_DEBUG_REQ(resource->info->request, 0, "Event OK %s", event_type);
 		}
 	} else {
-		DAV_ERROR_REQ(resource->info->request, err->code, "Event KO %s", type);
+		DAV_ERROR_REQ(resource->info->request, err->code, "Event KO %s", event_type);
 		g_clear_error (&err);
 	}
 }
