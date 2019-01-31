@@ -1,7 +1,7 @@
 /*
 OpenIO SDS rawx-apache2
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -967,7 +967,7 @@ dav_rawx_copy_resource(const dav_resource *src, dav_resource *dst, int depth,
 	}
 	struct chunk_textinfo_s chunk = dst->info->chunk;
 	dst->info->chunk = fake;
-	send_chunk_event("storage.chunk.new", dst);
+	send_chunk_event(OIO_RET_CREATED, dst);
 	dst->info->chunk = chunk;
 
 	server_inc_stat(srv_conf, RAWX_STATNAME_REP_2XX, 0);
@@ -1086,7 +1086,7 @@ dav_rawx_remove_resource(dav_resource *resource, dav_response **response)
 		goto end_remove;
 	}
 
-	send_chunk_event("storage.chunk.deleted", resource);
+	send_chunk_event(OIO_RET_DELETED, resource);
 
 	resource->exists = 0;
 	resource->collection = 0;
