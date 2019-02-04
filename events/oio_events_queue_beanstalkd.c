@@ -34,6 +34,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metautils_resolv.h>
 #include <metautils/lib/metautils_syscall.h>
 
+#define TEST_SHORTCUT
+
 #include "oio_events_queue.h"
 #include "oio_events_queue_internals.h"
 #include "oio_events_queue_beanstalkd.h"
@@ -64,12 +66,6 @@ static struct oio_events_queue_vtable_s vtable_BEANSTALKD =
 	.start = _q_start
 };
 
-/* Used by tests to intercept the result of the parsing of beanstalkd
- * replies */
-typedef void (*_queue_BEANSTALKD_interceptor_f) (GError *err);
-
-static _queue_BEANSTALKD_interceptor_f intercept_errors = NULL;
-
 struct _queue_BEANSTALKD_s
 {
 	struct oio_events_queue_vtable_s *vtable;
@@ -84,6 +80,22 @@ struct _queue_BEANSTALKD_s
 
 	struct oio_events_queue_buffer_s buffer;
 };
+
+#ifdef TEST_SHORTCUT
+/* Used by tests to intercept the result of the parsing of beanstalkd
+ * replies */
+typedef void (*_queue_BEANSTALKD_intercept_error_f) (GError *err);
+
+/* Used by tests to intercept the checks for completion */
+typedef gboolean (*_queue_BEANSTALKD_intercept_running_f) (
+		struct _queue_BEANSTALKD_s *q);
+
+static gboolean _q_is_empty(struct _queue_BEANSTALKD_s *q);
+
+static _queue_BEANSTALKD_intercept_error_f intercept_errors = NULL;
+
+static _queue_BEANSTALKD_intercept_running_f intercept_running = NULL;
+#endif
 
 /* -------------------------------------------------------------------------- */
 
@@ -323,7 +335,7 @@ _poll_out (int fd)
 }
 
 static void
-_flush_buffered(struct _queue_BEANSTALKD_s *q)
+_flush_buffered(struct _queue_BEANSTALKD_s *q, gboolean total)
 {
 	const gint avail =
 		oio_events_common_max_pending - g_async_queue_length(q->queue);
@@ -335,118 +347,230 @@ _flush_buffered(struct _queue_BEANSTALKD_s *q)
 
 	/* This is not an else clause, we want to send the buffered events
 	 * (even if we do it slowly). */
+	const guint half = MAX(1U, (guint)avail / 2);
 	oio_events_queue_send_buffered(
-			(struct oio_events_queue_s*)q, &(q->buffer), MAX(1, avail / 2));
+			(struct oio_events_queue_s*)q, &(q->buffer),
+			total ? G_MAXUINT : half);
+}
+
+static gboolean
+_is_running(struct _queue_BEANSTALKD_s *q)
+{
+#ifdef TEST_SHORTCUT
+	if (NULL != intercept_running) {
+		return (*intercept_running)(q);
+	}
+#endif
+	return q->running;
+}
+
+struct _running_ctx_s {
+	gint64 last_flush;
+	gint64 last_check;
+	gint64 now;
+	guint attempts_connect;
+	guint attempts_check;
+	guint attempts_put;
+	int fd;
+};
+
+static gboolean
+_q_reconnect(struct _queue_BEANSTALKD_s *q, struct _running_ctx_s *ctx)
+{
+	GError *err = NULL;
+
+	/* Try to reconnect and and reconfigure the tube */
+	ctx->fd = sock_connect(q->endpoint, &err);
+	if (!err)
+		err = _poll_out (ctx->fd);
+	if (err) {
+		g_prefix_error(&err, "Connection error: ");
+	} else {
+		err = _use_tube (ctx->fd, q->tube);
+#ifdef TEST_SHORTCUT
+		if (intercept_errors)
+			(*intercept_errors) (err);
+#endif
+		if (err)
+			g_prefix_error(&err, "USE command error: ");
+	}
+
+	if (err) {
+		metautils_pclose(&ctx->fd);
+		GRID_WARN("BEANSTALK error to %s: (%d) %s", q->endpoint,
+				err->code, err->message);
+		g_clear_error (&err);
+
+		return FALSE;
+	} else {
+		GRID_INFO("BEANSTALKD: connected to %s", q->endpoint);
+		ctx->attempts_connect = 0;
+		return TRUE;
+	}
+}
+
+static void
+_event_dropped(const char *msg, const size_t msglen)
+{
+	GRID_NOTICE("dropped %d %.*s", (int)msglen, (int)MIN(msglen,2048), msg);
+}
+
+/**
+ * Poll the next messge and manage it.
+ * Returns TRUE if the loop might continue or FALSE it the loop should
+ * pause a bit.
+ */
+static gboolean
+_q_manage_message(struct _queue_BEANSTALKD_s *q, struct _running_ctx_s *ctx)
+{
+	EXTRA_ASSERT(ctx->fd >= 0);
+
+	gboolean rc = TRUE;
+	gchar* msg = g_async_queue_timeout_pop (q->queue, 200 * G_TIME_SPAN_MILLISECOND);
+	if (!msg) goto exit;
+	if (!*msg) goto exit;
+
+	/* forward the event as a beanstalkd job */
+	const size_t msglen = strlen(msg);
+	GError *err = _put_job (ctx->fd, msg, msglen);
+#ifdef TEST_SHORTCUT
+	if (intercept_errors)
+		(*intercept_errors) (err);
+#endif
+
+	if (!err) {
+		ctx->attempts_put = 0;
+	} else {
+		if (CODE_IS_RETRY(err->code) || CODE_IS_NETWORK_ERROR(err->code)) {
+			g_async_queue_push_front(q->queue, msg);
+			msg = NULL;
+			rc = FALSE;
+		} else {
+			GRID_WARN("Unrecoverable error with beanstalkd at [%s]: (%d) %s",
+					q->endpoint, err->code, err->message);
+			_event_dropped(msg, msglen);
+			ctx->attempts_put = 0;
+		}
+		g_clear_error (&err);
+		sock_set_linger(ctx->fd, 1, 1);
+		metautils_pclose (&ctx->fd);
+	}
+
+exit:
+	oio_str_clean (&msg);
+	return rc;
+}
+
+/**
+ * Drain the queue of pending events.
+ * In addition, print a warning that some events have been lost.
+ */
+static void
+_q_flush_pending(struct _queue_BEANSTALKD_s *q)
+{
+	guint count = 0;
+	while (0 < g_async_queue_length(q->queue)) {
+		gchar *msg = g_async_queue_try_pop(q->queue);
+		if (msg) {
+			_event_dropped(msg, strlen(msg));
+			oio_str_clean(&msg);
+			++ count;
+		}
+	}
+	if (count > 0)
+		GRID_WARN("%u events lost", count);
+}
+
+/**
+ * Do a pseudo-periodic check of the backend.
+ * A STAT command is sent when a delay (since the last command) is reached.
+ */
+static gboolean
+_q_maybe_check(struct _queue_BEANSTALKD_s *q, struct _running_ctx_s *ctx)
+{
+	EXTRA_ASSERT(ctx->fd >= 0);
+
+	if (oio_events_beanstalkd_check_period <= 0 ||
+			ctx->last_check >= OLDEST(ctx->now, oio_events_beanstalkd_check_period))
+		return TRUE;
+
+	GError *err = _check_server(q, ctx->fd);
+#ifdef TEST_SHORTCUT
+	if (intercept_errors)
+		(*intercept_errors) (err);
+#endif
+
+	if (err) {
+		GRID_WARN("Beanstalkd error [%s]: (%d) %s", q->endpoint, err->code, err->message);
+		g_clear_error(&err);
+		return FALSE;
+	} else {
+		ctx->last_check = ctx->now;
+		ctx->attempts_check = 0;
+		return TRUE;
+	}
 }
 
 static GError *
 _q_run (struct _queue_BEANSTALKD_s *q)
 {
-	gchar *saved = NULL;
-	int fd = -1;
-	guint attempts_connect = 0, attempts_check = 0, attempts_put = 0;
-	gint64 last_flush = 0, last_check = 0;
+	struct _running_ctx_s ctx = {};
+	ctx.fd = -1;
 
-	EXTRA_ASSERT (q != NULL && q->vtable == &vtable_BEANSTALKD);
+	/* Loop until the (asked) end or until there is no event */
+	while (_is_running(q)) {
+		ctx.now = oio_ext_monotonic_time();
 
-	while (q->running) {
-
-		const gint64 now = oio_ext_monotonic_time();
-
-		/* Maybe reconnect to the beanstalkd */
-		if (fd < 0) {
-			GError *err = NULL;
-			fd = sock_connect(q->endpoint, &err);
-			if (!err)
-				err = _poll_out (fd);
-			if (err) {
-				g_prefix_error(&err, "Connection error: ");
-			} else {
-				err = _use_tube (fd, q->tube);
-				if (intercept_errors)
-					(*intercept_errors) (err);
-				if (err)
-					g_prefix_error(&err, "USE command error: ");
-			}
-			if (err) {
-				metautils_pclose(&fd);
-				GRID_WARN("BEANSTALK error to %s: (%d) %s", q->endpoint,
-						err->code, err->message);
-				g_clear_error (&err);
-
-				EXPO_BACKOFF(250 * G_TIME_SPAN_MILLISECOND, attempts_connect, 4);
-				continue;
-			} else {
-				GRID_INFO("BEANSTALKD: connected to %s", q->endpoint);
-				attempts_connect = 0;
-			}
+		/* Maybe do a periodic flush of buffered/delayed events. */
+		if (ctx.now - ctx.last_flush > q->buffer.delay / 10) {
+			ctx.last_flush = ctx.now;
+			_flush_buffered(q, FALSE);
 		}
 
-		/* Maybe do a periodic check of the beanstalkd tube */
-		if (oio_events_beanstalkd_check_period > 0 &&
-				last_check < OLDEST(now, oio_events_beanstalkd_check_period)) {
-			GError *err = _check_server(q, fd);
-			if (intercept_errors)
-				(*intercept_errors) (err);
-			if (err) {
-				GRID_WARN("Beanstalkd error [%s]: (%d) %s", q->endpoint, err->code, err->message);
-				g_clear_error(&err);
-				EXPO_BACKOFF(250 * G_TIME_SPAN_MILLISECOND, attempts_check, 4);
-				continue;
-			} else {
-				last_check = now;
-				attempts_check = 0;
-			}
+		if (ctx.fd < 0 && !_q_reconnect(q, &ctx)) {
+			EXPO_BACKOFF(100 * G_TIME_SPAN_MILLISECOND, ctx.attempts_connect, 5);
+			continue;
 		}
 
-		/* Build the deadline for the timed wait */
-		if (now - last_flush > q->buffer.delay / 10) {
-			last_flush = now;
-			_flush_buffered(q);
+		if (!_q_maybe_check(q, &ctx)) {
+			EXPO_BACKOFF(100 * G_TIME_SPAN_MILLISECOND, ctx.attempts_check, 5);
+			continue;
 		}
 
-		/* find an event, prefering the last that failed */
-		gchar *msg = saved;
-		saved = NULL;
-		if (!msg) msg = g_async_queue_timeout_pop (q->queue, G_TIME_SPAN_SECOND);
-		if (!msg) continue;
-
-		/* forward the event as a beanstalkd job */
-		if (*msg) {
-			const size_t msglen = strlen(msg);
-			GError *err = _put_job (fd, msg, msglen);
-			if (intercept_errors)
-				(*intercept_errors) (err);
-			if (!err) {
-				attempts_put = 0;
-			} else {
-				if (CODE_IS_RETRY(err->code) || CODE_IS_NETWORK_ERROR(err->code)) {
-					saved = msg;
-					msg = NULL;
-					EXPO_BACKOFF(250 * G_TIME_SPAN_MILLISECOND, attempts_put, 4);
-				} else {
-					GRID_WARN("Unrecoverable error with beanstalkd at [%s]: (%d) %s",
-							q->endpoint, err->code, err->message);
-					GRID_NOTICE("dropped %d %.*s",
-							(int)msglen, (int)MIN(msglen,2048), msg);
-					attempts_put = 0;
-				}
-				g_clear_error (&err);
-				sock_set_linger(fd, 1, 1);
-				metautils_pclose (&fd);
-			}
+		if (!_q_manage_message(q, &ctx)) {
+			EXPO_BACKOFF(100 * G_TIME_SPAN_MILLISECOND, ctx.attempts_put, 5);
 		}
-
-		oio_str_clean (&msg);
 	}
 
-	if (fd >= 0)
-		sock_set_linger(fd, 1, 1);
-	metautils_pclose (&fd);
+	/* Exit phase */
+	const gint64 deadline_exit = oio_ext_monotonic_time() + 5 * G_TIME_SPAN_SECOND;
+	while (!_q_is_empty(q)) {
+		ctx.now = oio_ext_monotonic_time();
+		GRID_WARN("exiting...");
 
-	if (saved)
-		g_async_queue_push (q->queue, saved);
-	saved = NULL;
+		/* The exit phase doesn't last forever */
+		if (ctx.now > deadline_exit)
+			break;
+
+		_flush_buffered(q, TRUE);
+
+		if (ctx.fd < 0 && !_q_reconnect(q, &ctx)) {
+			g_usleep(100 * G_TIME_SPAN_MILLISECOND);
+			continue;
+		}
+
+		if (!_q_manage_message(q, &ctx)) {
+			g_usleep(100 * G_TIME_SPAN_MILLISECOND);
+		}
+	}
+
+	_q_flush_pending(q);
+
+	/* close the socket to the beanstalkd */
+	if (ctx.fd >= 0)
+		sock_set_linger(ctx.fd, 1, 1);
+	metautils_pclose (&ctx.fd);
+
 	return NULL;
 }
 
@@ -474,9 +598,10 @@ _q_start (struct oio_events_queue_s *self)
 
 	q->running = TRUE;
 	q->worker = g_thread_try_new("event|beanstalk", _q_worker, q, &err);
-	GRID_WARN("%s worker started %p: (%d) %s", __FUNCTION__, q->worker,
-			err ? err->code : 0, err ? err->message : "");
-
+	if (!q->worker) {
+		GRID_WARN("%s worker startup error: (%d) %s", __FUNCTION__,
+				err ? err->code : 0, err ? err->message : "");
+	}
 	return err;
 }
 
@@ -539,3 +664,13 @@ _q_get_health(struct oio_events_queue_s *self)
 	gint64 res = (gint64) (100.0 / (1.0 + log(1.0 + q->pending_events * 0.1)));
 	return MIN(SCORE_MAX, res);
 }
+
+#ifdef TEST_SHORTCUT
+static inline gboolean
+_q_is_empty(struct _queue_BEANSTALKD_s *q)
+{
+	return oio_events_queue_buffer_is_empty(&q->buffer)
+		&& 0 >= g_async_queue_length(q->queue);
+}
+#endif
+

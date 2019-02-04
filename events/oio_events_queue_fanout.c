@@ -122,7 +122,7 @@ _q_set_buffering(struct oio_events_queue_s *self, gint64 v)
 }
 
 static void
-_flush_buffered(struct _queue_FANOUT_s *q)
+_flush_buffered(struct _queue_FANOUT_s *q, gboolean total)
 {
 	const gint avail =
 		oio_events_common_max_pending - g_async_queue_length(q->queue);
@@ -134,8 +134,10 @@ _flush_buffered(struct _queue_FANOUT_s *q)
 
 	/* This is not an else clause, we want to send the buffered events
 	 * (even if we do it slowly). */
+	const guint half = MAX(1U, (guint)avail / 2);
 	oio_events_queue_send_buffered(
-			(struct oio_events_queue_s*)q, &q->buffer, MAX(1, avail / 2));
+			(struct oio_events_queue_s*)q, &q->buffer,
+			total ? G_MAXUINT : half);
 }
 
 static GError *
@@ -147,23 +149,23 @@ _q_run (struct _queue_FANOUT_s *q)
 	guint next_output = 0;
 
 	/* run the agent loop of the current queue */
-	while (q->running) {
+	while (q->running
+			|| !oio_events_queue_buffer_is_empty(&q->buffer)
+			|| g_async_queue_length(q->queue) > 0	) {
 
 		const gint64 now = oio_ext_monotonic_time();
 
 		/* Build the deadline for the timed wait */
-		if (now - last_flush > q->buffer.delay / 10) {
+		if (now - last_flush > q->buffer.delay / 10 || !q->running) {
 			last_flush = now;
-			_flush_buffered(q);
+			_flush_buffered(q, !q->running);
 		}
 
 		/* find an event, prefering the last that failed */
 		gchar *msg = saved;
 		saved = NULL;
-		if (!msg)
-			msg = g_async_queue_timeout_pop (q->queue, G_TIME_SPAN_SECOND);
-		if (!msg)
-			continue;
+		if (!msg) msg = g_async_queue_timeout_pop (q->queue, 300 * G_TIME_SPAN_MILLISECOND);
+		if (!msg) continue;
 
 		/* forward the event as a beanstalkd job */
 		if (*msg) {

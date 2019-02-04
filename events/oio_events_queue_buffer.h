@@ -42,4 +42,6 @@ void oio_events_queue_buffer_put(struct oio_events_queue_buffer_s *buf,
 void oio_events_queue_buffer_maybe_flush(struct oio_events_queue_buffer_s *buf,
 		GHRFunc send, gpointer user_data, guint max);
 
+gboolean oio_events_queue_buffer_is_empty(struct oio_events_queue_buffer_s *buf);
+
 #endif

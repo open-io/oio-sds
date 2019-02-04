@@ -55,10 +55,21 @@ oio_events_queue_buffer_maybe_flush(struct oio_events_queue_buffer_s *buf,
 	g_mutex_unlock(&(buf->msg_by_key_lock));
 }
 
-void oio_events_queue_buffer_put(struct oio_events_queue_buffer_s *buf,
+void
+oio_events_queue_buffer_put(struct oio_events_queue_buffer_s *buf,
 		gchar *key, gchar *msg)
 {
 	g_mutex_lock(&(buf->msg_by_key_lock));
 	lru_tree_insert(buf->msg_by_key, key, msg);
 	g_mutex_unlock(&(buf->msg_by_key_lock));
 }
+
+gboolean
+oio_events_queue_buffer_is_empty(struct oio_events_queue_buffer_s *buf)
+{
+	g_mutex_lock(&(buf->msg_by_key_lock));
+	const gint64 nb = lru_tree_count(buf->msg_by_key);
+	g_mutex_unlock(&(buf->msg_by_key_lock));
+	return nb <= 0;
+}
+
