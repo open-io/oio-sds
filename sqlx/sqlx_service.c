@@ -895,7 +895,7 @@ sqlx_service_specific_fini(void)
 	}
 	if (election_manager_is_operational(SRV.election_manager))
 		election_manager_exit_all(SRV.election_manager,
-				sqliterepo_server_exit_ttl, TRUE);
+				sqliterepo_server_exit_ttl);
 	if (SRV.sync_tab) {
 		for (guint i=0; i<SRV.sync_tab->len ;++i)
 			sqlx_sync_close(SRV.sync_tab->pdata[i]);

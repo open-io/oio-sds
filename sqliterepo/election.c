@@ -1238,9 +1238,8 @@ _run_exit (gpointer k, gpointer v, gpointer i)
 	(void) k, (void) i;
 	struct election_member_s *m = v;
 	if (m->step != STEP_NONE
-			&& m->step != STEP_LEAVING
-			&& m->step != STEP_LEAVING_FAILING)
-		transition(m, EVT_LEAVE_REQ, NULL);
+			&& m->step != STEP_LEAVING)
+		transition(m, EVT_DISCONNECTED, NULL);
 	return FALSE;
 }
 
@@ -1255,8 +1254,7 @@ election_manager_is_operational(struct election_manager_s *manager)
 }
 
 void
-election_manager_exit_all(struct election_manager_s *manager, gint64 duration,
-		gboolean persist)
+election_manager_exit_all(struct election_manager_s *manager, gint64 duration)
 {
 	GRID_INFO("Voluntarily exiting all the elections...");
 	MANAGER_CHECK(manager);
@@ -1284,9 +1282,6 @@ election_manager_exit_all(struct election_manager_s *manager, gint64 duration,
 		if (count == 0)
 			GRID_INFO("No more active elections");
 	}
-
-	if (!persist)
-		manager->exiting = FALSE;
 }
 
 static void
@@ -1771,6 +1766,12 @@ deferred_watch_COMMON(struct deferred_watcher_context_s *d,
 	EXTRA_ASSERT(M != NULL);
 	EXTRA_ASSERT(DAT_LEFT == d->magic);
 
+	/* When the manager is exiting, all the elections will be reset to the
+	 * NONE state (via a fake DISCONNECTED event) and it is not worth poking
+	 * them. */
+	if (M->exiting)
+		return;
+
 	if (d->type == ZOO_SESSION_EVENT) {
 		struct election_member_s *member = _find_member(M, d->path, d->gen);
 		/* It happens, when a process has been paused, that d->path is empty,
@@ -1806,6 +1807,10 @@ watch_COMMON(const int type, const int state,
 			state != ZOO_AUTH_FAILED_STATE)
 		return;
 
+	struct election_manager_s *M = _thlocal_get_manager();
+	if (M->exiting)
+		return;
+
 	const char *slash = path ? strrchr(path, '/') : NULL;
 	const size_t len = slash ? strlen(slash) : 0;
 
@@ -1818,7 +1823,6 @@ watch_COMMON(const int type, const int state,
 	if (slash && len)
 		memcpy(ctx->path, slash, len);
 
-	struct election_manager_s *M = _thlocal_get_manager();
 	completion_do_or_defer(M, ctx);
 }
 
@@ -1943,6 +1947,9 @@ _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
 		*out_status = STEP_NONE;
 	if (replicated)
 		*replicated = FALSE;
+
+	if  (m->exiting)
+		return BUSY("service exiting");
 
 	if (op != ELOP_EXIT) {
 		/* Out of the critical section */

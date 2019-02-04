@@ -219,8 +219,7 @@ guint election_manager_play_exits (struct election_manager_s *m);
  * and returns a boolean instead of asserting. */
 gboolean election_manager_is_operational(struct election_manager_s *manager);
 
-void election_manager_exit_all (struct election_manager_s *m,
-		gint64 oldest, gboolean persist);
+void election_manager_exit_all (struct election_manager_s *m, gint64 oldest);
 
 void election_manager_whatabout (struct election_manager_s *m,
 		const struct sqlx_name_s *n, GString *out);
