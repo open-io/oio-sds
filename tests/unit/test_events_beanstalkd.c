@@ -42,6 +42,12 @@ License along with this library.
 #define USE_REQUEST "use"
 #define PORT_USED 4269
 
+static gboolean
+_intercept_running_hook(struct _queue_BEANSTALKD_s *q)
+{
+	return q->running || !_q_is_empty(q);
+}
+
 static void
 _wrap_with_beanstalkd (gchar ** requests, gchar ** replies,
 		void (*test_hook) (struct oio_events_queue_s *q))
@@ -161,15 +167,23 @@ retry:
 	GRID_DEBUG("beanstalkd url=%s", *urlv);
 	g_assert_no_error (oio_events_queue_factory__create_beanstalkd (*urlv, "fake", &q));
 	g_assert_nonnull (q);
+
+	intercept_running = _intercept_running_hook;
+
+	oio_events_queue__start (q);
+
 	if (test_hook)
 		(*test_hook)(q);
 
-	oio_events_queue__start (q);
+	/* Stop the thread of the queue.
+	 * Our interceptor function will make it stop when the queue
+	 * will be empty. */
 	oio_events_queue__destroy (q);
 
 	/* stop the server */
 	network_server_stop (srv);
 	g_thread_join (th);
+
 	network_server_close_servers (srv);
 	network_server_clean (srv);
 }
@@ -193,18 +207,18 @@ test_with_check (void)
 		NULL
 	};
 	gchar *replies[] = {
-		"USING oio\r\n",
+		"USING fake\r\n",
 		"OK 0\r\n",
 
 		"", "INSERTED 1\r\n",
 		"", "INSERTED 2\r\n",
 		"", "OUT_OF_MEMORY 3\r\n",
 		/* bad reply -> retry */
-		"USING oio\r\n",
+		"USING fake\r\n",
 		"", "INSERTED 3\r\n",
 		"", "ARGL 4\r\n",
 		/* bad reply -> no retry */
-		"USING oio\r\n",
+		"USING fake\r\n",
 		NULL
 	};
 
