@@ -379,7 +379,7 @@ _q_reconnect(struct _queue_BEANSTALKD_s *q, struct _running_ctx_s *ctx)
 {
 	GError *err = NULL;
 
-	/* Try to reconnect and and reconfigure the tube */
+	/* Try to reconnect and reconfigure the tube */
 	ctx->fd = sock_connect(q->endpoint, &err);
 	if (!err)
 		err = _poll_out (ctx->fd);
