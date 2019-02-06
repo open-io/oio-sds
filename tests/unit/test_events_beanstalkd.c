@@ -29,6 +29,10 @@ License along with this library.
 #include <events/oio_events_queue.h>
 #include <events/oio_events_queue_beanstalkd.h>
 
+#ifndef HAVE_EXTRA_DEBUG
+#define HAVE_EXTRA_DEBUG
+#endif
+
 #include "../../events/oio_events_queue_beanstalkd.c"
 
 #define BAD_FORMAT_STR "BAD_FORMAT\r\n"

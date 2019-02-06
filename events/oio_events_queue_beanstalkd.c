@@ -34,8 +34,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metautils_resolv.h>
 #include <metautils/lib/metautils_syscall.h>
 
-#define TEST_SHORTCUT
-
 #include "oio_events_queue.h"
 #include "oio_events_queue_internals.h"
 #include "oio_events_queue_beanstalkd.h"
@@ -81,7 +79,7 @@ struct _queue_BEANSTALKD_s
 	struct oio_events_queue_buffer_s buffer;
 };
 
-#ifdef TEST_SHORTCUT
+#ifdef HAVE_EXTRA_DEBUG
 /* Used by tests to intercept the result of the parsing of beanstalkd
  * replies */
 typedef void (*_queue_BEANSTALKD_intercept_error_f) (GError *err);
@@ -90,14 +88,19 @@ typedef void (*_queue_BEANSTALKD_intercept_error_f) (GError *err);
 typedef gboolean (*_queue_BEANSTALKD_intercept_running_f) (
 		struct _queue_BEANSTALKD_s *q);
 
-static gboolean _q_is_empty(struct _queue_BEANSTALKD_s *q);
-
 static _queue_BEANSTALKD_intercept_error_f intercept_errors = NULL;
 
 static _queue_BEANSTALKD_intercept_running_f intercept_running = NULL;
 #endif
 
 /* -------------------------------------------------------------------------- */
+
+static gboolean
+_q_is_empty(struct _queue_BEANSTALKD_s *q)
+{
+	return oio_events_queue_buffer_is_empty(&q->buffer)
+		&& 0 >= g_async_queue_length(q->queue);
+}
 
 GError *
 oio_events_queue_factory__create_beanstalkd (
@@ -356,7 +359,7 @@ _flush_buffered(struct _queue_BEANSTALKD_s *q, gboolean total)
 static gboolean
 _is_running(struct _queue_BEANSTALKD_s *q)
 {
-#ifdef TEST_SHORTCUT
+#ifdef HAVE_EXTRA_DEBUG
 	if (NULL != intercept_running) {
 		return (*intercept_running)(q);
 	}
@@ -387,7 +390,7 @@ _q_reconnect(struct _queue_BEANSTALKD_s *q, struct _running_ctx_s *ctx)
 		g_prefix_error(&err, "Connection error: ");
 	} else {
 		err = _use_tube (ctx->fd, q->tube);
-#ifdef TEST_SHORTCUT
+#ifdef HAVE_EXTRA_DEBUG
 		if (intercept_errors)
 			(*intercept_errors) (err);
 #endif
@@ -433,7 +436,7 @@ _q_manage_message(struct _queue_BEANSTALKD_s *q, struct _running_ctx_s *ctx)
 	/* forward the event as a beanstalkd job */
 	const size_t msglen = strlen(msg);
 	GError *err = _put_job (ctx->fd, msg, msglen);
-#ifdef TEST_SHORTCUT
+#ifdef HAVE_EXTRA_DEBUG
 	if (intercept_errors)
 		(*intercept_errors) (err);
 #endif
@@ -495,7 +498,7 @@ _q_maybe_check(struct _queue_BEANSTALKD_s *q, struct _running_ctx_s *ctx)
 		return TRUE;
 
 	GError *err = _check_server(q, ctx->fd);
-#ifdef TEST_SHORTCUT
+#ifdef HAVE_EXTRA_DEBUG
 	if (intercept_errors)
 		(*intercept_errors) (err);
 #endif
@@ -664,13 +667,4 @@ _q_get_health(struct oio_events_queue_s *self)
 	gint64 res = (gint64) (100.0 / (1.0 + log(1.0 + q->pending_events * 0.1)));
 	return MIN(SCORE_MAX, res);
 }
-
-#ifdef TEST_SHORTCUT
-static inline gboolean
-_q_is_empty(struct _queue_BEANSTALKD_s *q)
-{
-	return oio_events_queue_buffer_is_empty(&q->buffer)
-		&& 0 >= g_async_queue_length(q->queue);
-}
-#endif
 
