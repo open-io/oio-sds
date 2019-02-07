@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -177,7 +177,7 @@ class TestMeta0PrefixMapping(unittest.TestCase):
         mapping = self.make_mapping(replicas=replicas, digits=digits)
         mapping._admin = Mock()
         mapping._admin.election_status = Mock(return_value={'peers': {}})
-        mapping.load(mapping_str, swap_bytes=False)
+        mapping.load_json(mapping_str)
 
         svc = mapping.services.values()[0]
         self.logger.info("Decommissioning everything from %s", svc['addr'])
