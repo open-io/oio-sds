@@ -100,8 +100,6 @@ class DirectoryInit(DirectoryCmd):
     def get_parser(self, prog_name):
         parser = super(DirectoryInit, self).get_parser(prog_name)
         parser.add_argument(
-            '--no-rdir', action='store_true', help='Deprecated')
-        parser.add_argument(
             '--force',
             action='store_true',
             help="Do the bootstrap even if already done")
@@ -152,8 +150,6 @@ class DirectoryInit(DirectoryCmd):
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
-        if parsed_args.no_rdir:
-            self.log.warn('--no-rdir option is deprecated')
         checked = self._assign_meta1(parsed_args)
 
         if checked:
