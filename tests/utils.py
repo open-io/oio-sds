@@ -455,3 +455,5 @@ class BaseTestCase(CommonTestCase):
             if not wait:
                 return
             time.sleep(1)
+        logging.info('Service(s) fails to reach %d score (timeout %d)',
+                     score_threshold, timeout)
