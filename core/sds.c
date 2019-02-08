@@ -1122,6 +1122,8 @@ struct oio_sds_ul_s
 	gboolean started;
 	gboolean finished;
 	gboolean ready_for_data;
+	/* avoid to increase chunk_size in _sds_upload_renew */
+	gboolean chunk_size_updated;
 
 	/* set at _init() */
 	struct oio_sds_s *sds;
@@ -1199,8 +1201,6 @@ oio_sds_upload_init (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst)
 	ul->checksum_chunk = NULL;
 	ul->buffer_tail = g_queue_new ();
 	ul->metachunk_ready = g_queue_new ();
-
-	 g_printerr("PRE dst %ld sds %ld\n", dst->chunk_size, sds->chunk_size);
 
 	if (dst->chunk_size > 0)
 		ul->chunk_size = dst->chunk_size;
@@ -1362,7 +1362,11 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 		 * TODO(jfs): Find a way to get rd of this, with a fix in oio-fs */
 		if (oio_sds_client_patch_metachunk_size) {
 			k = data_security_decode_param_int64(ul->chunk_method, "k", 1);
-			ul->chunk_size = ul->chunk_size * k;
+			if (!ul->chunk_size_updated) {
+				ul->chunk_size = ul->chunk_size * k;
+				/* avoid to increase chunk_size in _sds_upload_renew loop */
+				ul->chunk_size_updated = TRUE;
+			}
 		}
 	}
 
