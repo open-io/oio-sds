@@ -990,7 +990,7 @@
 			{ "type": "int64", "name": "oio_chunk_size_minimum",
 				"key": "core.chunk_size.minimum",
 				"descr": "Should the C API adjust the chunk size when below this threshold. Set to 0 for no action",
-				"def": "10M", "min": 0, "max": "max"},
+				"def": 0, "min": 0, "max": "max"},
 
 			{ "type": "int64", "name": "oio_chunk_size_maximum",
 				"key": "core.chunk_size.maximum",
