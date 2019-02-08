@@ -69,3 +69,7 @@ add_executable(test_oio_cluster test_cluster.c)
 target_link_libraries(test_oio_cluster oiocore gridcluster)
 add_test(NAME cluster/lib COMMAND test_oio_cluster)
 
+add_executable(test_old_c_api test_old_c_api.c)
+target_link_libraries(test_old_c_api oiocore gridcluster)
+add_test(NAME core/sds/old COMMAND test_oio_cluster)
+
