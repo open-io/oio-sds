@@ -1199,10 +1199,24 @@ oio_sds_upload_init (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst)
 	ul->checksum_chunk = NULL;
 	ul->buffer_tail = g_queue_new ();
 	ul->metachunk_ready = g_queue_new ();
+
+	 g_printerr("PRE dst %ld sds %ld\n", dst->chunk_size, sds->chunk_size);
+
 	if (dst->chunk_size > 0)
 		ul->chunk_size = dst->chunk_size;
 	else
 		ul->chunk_size = sds->chunk_size;
+
+	/* Prevent odd configuration by the application. Check the minimum
+	 * after, because a too low value is worse than too big */
+	if (oio_chunk_size_maximum > 0) {
+		if (ul->chunk_size > oio_chunk_size_maximum)
+			ul->chunk_size = oio_chunk_size_maximum;
+	}
+	if (oio_chunk_size_minimum > 0) {
+		if (ul->chunk_size < oio_chunk_size_minimum)
+			ul->chunk_size = oio_chunk_size_minimum;
+	}
 
 	if (dst->content_id) {
 		EXTRA_ASSERT(oio_str_ishexa1 (dst->content_id));
@@ -1344,7 +1358,8 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 					"cannot upload this without ecd");
 		}
 
-		/* If we erasure-code, patch the metachunk-size */
+		/* If we erasure-code, patch the metachunk-size
+		 * TODO(jfs): Find a way to get rd of this, with a fix in oio-fs */
 		if (oio_sds_client_patch_metachunk_size) {
 			k = data_security_decode_param_int64(ul->chunk_method, "k", 1);
 			ul->chunk_size = ul->chunk_size * k;
