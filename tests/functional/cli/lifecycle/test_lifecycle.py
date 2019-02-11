@@ -36,6 +36,21 @@ class LifecycleCliTest(CliTestCase):
         </LifecycleConfiguration>
         """
 
+    CONF_WITH_NS = """
+        <LifecycleConfiguration
+                xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+            <Rule>
+                <ID>0123456789abcdef</ID>
+                <Filter>
+                    <Prefix>documents/</Prefix>
+                </Filter>
+                <Status>Enabled</Status>
+                <NoncurrentVersionExpiration>
+                    <NoncurrentCount>1</NoncurrentCount>
+                </NoncurrentVersionExpiration>
+            </Rule>
+        </LifecycleConfiguration>"""
+
     WRONG_CONF = """
         <LifecycleConfiguration>
             <Rule>
@@ -76,6 +91,9 @@ class LifecycleCliTest(CliTestCase):
             self.assertRaises(
                 CommandFailed, self.openio,
                 'lifecycle set %s --from-file %s' % (self.NAME, file_.name))
+
+    def test_lifecycle_set_with_ns(self):
+        self.openio("lifecycle set %s '%s'" % (self.NAME, self.CONF_WITH_NS))
 
     def test_lifecycle_get(self):
         self.openio('lifecycle set %s "%s"' % (self.NAME, self.CONF))
