@@ -16,7 +16,6 @@
 
 """Meta0 client and meta1 balancing operations"""
 import random
-from itertools import product
 
 from oio.directory.meta import MetaMapping
 from oio.common.client import ProxyClient
@@ -24,15 +23,12 @@ from oio.common.exceptions import ConfigurationException, OioException
 from oio.common.json import json
 
 
-hexa = "0123456789ABCDEF"
-
-
 def _location(svc):
     """
     Extract the location of the given service.
     It must be present and well formated.
     USEFUL for sorting by location-token instead of lexicographically
-
+    :param svc a service object
     :return a tuple of the split location
     """
     loc = svc.get("tags", {}).get("tag.loc", None)
@@ -46,13 +42,18 @@ def _location(svc):
     return tuple(tokens)
 
 
-def slice_services(allsrv, level):
+def _slice_services(allsrv, level):
     """
     Generate slices of services, where a slice is a set of services sharing
     the same level of location.
-    <allsrv> must be sorted by location
-    <level> must be greater than 0 and will be truncated to 3
+    :param allsrv A sorted sequence of services to extract the slices of.
+    :type allsrv a sequence of dictionnaries representing services.
+    :param level the position of the location token with the least
+                 significance. Tokens below that position will be ignored.
+    :type level a positive integer
+    :yield 2-tuples meaning <start, end>
     """
+    assert(level >= 0)
     assert(len(allsrv) > 0)
     masks = (lambda loc: (loc[0], None, None, None),
              lambda loc: (loc[0], loc[1], None, None),
@@ -65,17 +66,69 @@ def slice_services(allsrv, level):
     for idx, srv in enumerate(allsrv[1:], start=1):
         current = mask_func(_location(srv))
         if current != last:
-            yield last_index, idx, set()
+            yield last_index, idx
             last_index, last = idx, current
-    yield last_index, len(allsrv), set()
+    yield last_index, len(allsrv)
+
+
+def _patch_service(srv):
+    s = dict()
+    s.update(srv)
+    s['bases'] = set()
+    return s
+
+
+def _bootstrap(allsrv, allgroups, replicas, level):
+    """
+    Produce a list of services (dicts), with a fields named 'bases' in each
+    service containing the bases managed by that service.
+    :param allsrv an iterable of services
+    :param allgroups an interable of the prefixes to spread over the services
+    :param replicas how many replicas are expected for each base
+    :param level the position of the location token with the least
+                 significance. Tokens over that position are ignored
+    """
+    # Ensure we work on a sorted sequence of service
+    allsrv = tuple(sorted((_patch_service(s) for s in allsrv), key=_location))
+
+    # Extract the slices of service corresponding to the location levels
+    # to be perfectly balanced.
+    allslices = tuple(((s, e, set()) for s, e in
+                       _slice_services(allsrv, level=level)))
+    if replicas > len(allslices):
+        raise Exception("Balancing not satisfiable (repli={0}, slices={1})"
+                        .format(replicas, len(allslices)))
+
+    # First affect to each slice a set of short prefixes
+    for idx, group in enumerate(allgroups):
+        current_slices = _modulo_peek(allslices, idx, replicas)
+        for start, end, groups in current_slices:
+            groups.add(group)
+
+    # In each slice, spread the prefixes among the services of the slice.
+    for start, end, groups in allslices:
+        slen = end - start
+        assert(slen > 0)
+        for idx, group in enumerate(groups):
+            current_srv = allsrv[start + (idx % slen)]
+            current_srv['bases'].add(group)
+
+    return allsrv
 
 
 def _modulo_peek(tab, offset, num):
     """
-    Get <num> subsequent items from <tab>, starting at <offset>, restarting at
-    0 when the end of the array is reached.
+    Extract <num> subsequent items from <tab>, starting at <offset>, restarting
+    at 0 when the end of the array is reached.
+    :param tab a non-empty sequence with an accessor to a random element.
+    :param offset a positive natural number
+    :param num a strictly positive natural number
+    :return a new tuple of <num> elements from <tab>, starting at <offset>
     """
     result, tablen = list(), len(tab)
+    assert(tablen > 0)
+    assert(num > 0)
+    assert(offset >= 0)
     for i in range(offset, offset+num):
         result.append(tab[i % tablen])
     return tuple(result)
@@ -346,37 +399,21 @@ class Meta0PrefixMapping(MetaMapping):
 
     def bootstrap(self, level=0):
         """
+        Spread the prefixe to balance accross sites. By default the token
+        describing the site is <0>.
         Put one short_prefix into each slice (corresponding to a location
         level) and balance well into each level. At the end, expand each
         short prefixes into their complete prefixes.
+        :param level the position of the token describing the site
+                     in each service location.
+        :param level a positive integer
+        :return None
         """
-        allsrv = list()
-        for _, srv in self.services.iteritems():
-            srv = dict(srv)
-            srv['bases'] = set()
-            allsrv.append(srv)
-        allsrv = tuple(sorted(allsrv, key=_location))
+        assert(level >= 0)
+        # Perform a first bootstrap, producing a <srv,prefixes> mapping
         allgroups = tuple(generate_short_prefixes(self.digits))
-        allslices = tuple(slice_services(allsrv, level=level))
-
-        if self.replicas > len(allslices):
-            raise Exception(
-                    "Balancing not satisfiable (repli={0}, slices={1})"
-                    .format(self.replicas, len(allslices)))
-
-        # First affect to each slice a set of short prefixes
-        for idx, group in enumerate(allgroups):
-            current_slices = _modulo_peek(allslices, idx, self.replicas)
-            for start, end, groups in current_slices:
-                groups.add(group)
-
-        # In each slice, spread the prefixes among the services of the slice.
-        for start, end, groups in allslices:
-            slen = end - start
-            assert(slen > 0)
-            for idx, group in enumerate(groups):
-                current_srv = allsrv[start + (idx % slen)]
-                current_srv['bases'].add(group)
+        allsrv = _bootstrap(self.services.values(), allgroups,
+                            self.replicas, level)
 
         # Compute the reverse <base,srv> mapping (mandatory book-keeping)
         bases = dict((pfx, set()) for pfx in allgroups)
@@ -525,6 +562,8 @@ def generate_short_prefixes(digits):
     if digits == 0:
         return ('',)
     elif digits <= 4:
+        from itertools import product
+        hexa = "0123456789ABCDEF"
         return (''.join(pfx) for pfx in product(hexa, repeat=digits))
 
 
