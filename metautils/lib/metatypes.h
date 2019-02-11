@@ -76,6 +76,7 @@ License along with this library.
 
 #define TYPE_TO_STRLEN(T)  ((sizeof(T)*2)+1)
 #define STRLEN_CHUNKID     TYPE_TO_STRLEN(hash_sha256_t)
+#define STRLEN_CONTENTID   65
 #define STRLEN_CONTAINERID TYPE_TO_STRLEN(container_id_t)
 #define STRLEN_CHUNKHASH   TYPE_TO_STRLEN(hash_md5_t)
 #define STRLEN_ADDRINFO    sizeof("[XXXX:XXXX:XXXX:XXXX:XXXX:XXXX]:SSSSS")

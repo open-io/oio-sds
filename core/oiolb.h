@@ -1,6 +1,6 @@
 /*
 OpenIO SDS load-balancing
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -187,6 +187,9 @@ void oio_lb_world__add_pool_targets(struct oio_lb_pool_s *self,
 
 /* Dump the pool targets and options. */
 GString *oio_lb_world__dump_pool_options(struct oio_lb_pool_s *self);
+
+/* Count the expected number of targets of this pool. */
+guint oio_lb_world__count_pool_targets(struct oio_lb_pool_s *self);
 
 /* -- LB pools management ------------------------------------------------- */
 

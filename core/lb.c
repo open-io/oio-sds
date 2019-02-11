@@ -1,6 +1,6 @@
 /*
 OpenIO SDS load-balancing
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -1031,9 +1031,7 @@ _local__patch(struct oio_lb_pool_s *self,
 
 	/* Count the expected targets to build a temp storage for
 	 * polled locations */
-	guint count_targets = 0;
-	for (gchar **ptarget = lb->targets; *ptarget; ++ptarget)
-		count_targets++;
+	guint count_targets = oio_lb_world__count_pool_targets(self);
 
 	/* Copy the array of known locations because we don't know
 	 * if its allocated length is big enough */
@@ -1270,14 +1268,25 @@ oio_lb_world__add_pool_targets(struct oio_lb_pool_s *self,
 			*equal = '\0';
 			oio_lb_world__set_pool_option(self, *num_target, equal + 1);
 			continue;
+		} else if (**num_target == '\0') {
+			struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *)self;
+			GRID_DEBUG("Pool %s has empty targets or a trailing separator",
+					lb->name);
+			continue;
 		}
 		const char *target = strchr(*num_target, OIO_CSV_SEP_C);
 		char *end = NULL;
 		gint64 count = g_ascii_strtoll(*num_target, &end, 10u);
 		if (end != target) {
+			/* Number conversion failed.
+			 * Either there was no separator (target == NULL),
+			 * or there was garbage before the separator.
+			 * Consider the string as the name of a target. */
 			count = 1;
 			target = *num_target;
 		} else {
+			/* Number conversion ended on the separator, the name
+			 * of the target starts one character further. */
 			target++;
 		}
 		for (int j = 0; j < count; j++)
@@ -1310,6 +1319,16 @@ oio_lb_world__dump_pool_options(struct oio_lb_pool_s *self)
 			OIO_CSV_SEP2_C, OIO_LB_OPT_MIN_DIST, lb->min_dist);
 
 	return dump;
+}
+
+guint
+oio_lb_world__count_pool_targets(struct oio_lb_pool_s *self)
+{
+	struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *)self;
+	guint count_targets = 0;
+	for (gchar **ptarget = lb->targets; *ptarget; ++ptarget)
+		count_targets++;
+	return count_targets;
 }
 
 /* -------------------------------------------------------------------------- */

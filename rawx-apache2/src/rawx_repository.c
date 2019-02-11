@@ -28,6 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #endif
 
 #include <unistd.h>
+#include <sys/xattr.h>
 
 #include <apr.h>
 #include <apr_file_io.h>
@@ -45,8 +46,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metacomm.h>
 #include <cluster/lib/gridcluster.h>
 #include <rawx-lib/src/rawx.h>
-
-#include <glib.h>
 
 #include "mod_dav_rawx.h"
 #include "rawx_bucket.h"
@@ -452,9 +451,11 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 				flags |= RESOURCE_STAT_CHUNK_READ_ATTRS;
 			break;
 		case M_OPTIONS:
-		case M_DELETE:
 		case M_MOVE:
 			flags |= RESOURCE_STAT_CHUNK_READ_ATTRS;
+			break;
+		case M_DELETE:
+			/* Reading the XATTR for a DELETE is overkill, we can do better */
 			break;
 		case M_PUT:
 		case M_POST:
@@ -1033,6 +1034,56 @@ end_move:
 	return e;
 }
 
+static GError *
+remove_fullpath_from_attr(dav_resource *res,
+		const char *p, const char *hex_chunkid)
+{
+	GError *err = NULL;
+	gchar xname[256], xvalue[LIMIT_LENGTH_ACCOUNTNAME + LIMIT_LENGTH_BASENAME
+		+ LIMIT_LENGTH_CONTENTPATH + LIMIT_LENGTH_VERSION + STRLEN_CONTENTID
+		+ 4];
+
+	int fd = open(p, O_WRONLY);
+	if (fd < 0) {
+		return NEWERROR(errno, "open() error: (%d) %s", errno, strerror(errno));
+	}
+
+	/* Load the fullpath */
+	memset(xvalue, 0, sizeof(xvalue));
+	g_snprintf(xname, sizeof(xname), "%s:%s",
+			   ATTR_DOMAIN_OIO "." ATTR_NAME_CONTENT_FULLPATH, hex_chunkid);
+	ssize_t rc = fgetxattr(fd, xname, xvalue, sizeof(xvalue) - 1);
+	if (rc < 0) {
+		err = NEWERROR(errno, "fgetxattr() error: (%d) %s", errno, strerror(errno));
+		goto label_exit;
+	}
+
+	struct oio_url_s *url = oio_url_empty();
+	if (!oio_url_set(url, OIOURL_FULLPATH, xvalue)) {
+		err = ERRPTF("Invalid chunk XATTR");
+		goto label_exit;
+	}
+
+	res->info->chunk.chunk_id = apr_pstrdup(res->pool, hex_chunkid);
+	res->info->chunk.content_fullpath = apr_pstrdup(res->pool, xvalue);
+	res->info->chunk.container_id = apr_pstrdup(res->pool, oio_url_get(url, OIOURL_HEXID));
+	res->info->chunk.content_path = apr_pstrdup(res->pool, oio_url_get(url, OIOURL_PATH));
+	res->info->chunk.content_id = apr_pstrdup(res->pool, oio_url_get(url, OIOURL_CONTENTID));
+	res->info->chunk.content_version = apr_pstrdup(res->pool, oio_url_get(url, OIOURL_VERSION));
+
+	oio_url_clean(url);
+
+	/* Remove the xattr, now the fullpath has been validated */
+	rc = fremovexattr(fd, xname);
+	if (rc < 0) {
+		err = NEWERROR(errno, "fremovexattr() error: (%d) %s", errno, strerror(errno));
+	}
+
+label_exit:
+	close(fd);
+	return err;
+}
+
 static dav_error *
 dav_rawx_remove_resource(dav_resource *resource, dav_response **response)
 {
@@ -1045,6 +1096,7 @@ dav_rawx_remove_resource(dav_resource *resource, dav_response **response)
 	pool = resource->pool;
 	*response = NULL;
 
+	/* Sanity checks */
 	if (resource->info->request->method_number == M_COPY) {
 		// If the destination exists and isn't versioned,
 		// Apache2 removes the destination
@@ -1052,7 +1104,6 @@ dav_rawx_remove_resource(dav_resource *resource, dav_response **response)
 		// Ignore to create an error with 'copy_resource'
 		goto end_remove;
 	}
-
 	if (DAV_RESOURCE_TYPE_REGULAR != resource->type)  {
 		e = server_create_and_stat_error(resource_get_server_config(resource), pool,
 				HTTP_CONFLICT, 0, "Cannot DELETE this type of resource.");
@@ -1064,16 +1115,14 @@ dav_rawx_remove_resource(dav_resource *resource, dav_response **response)
 		goto end_remove;
 	}
 
-	GError *local_error = NULL;
-	if (remove_fullpath_from_attr(resource_get_pathname(resource), &local_error,
-			resource->info->hex_chunkid)) {
-		if (local_error) {
-			GRID_WARN("Error to remove content fullpath: (%d) %s",
-					local_error->code, local_error->message);
-			g_error_free(local_error);
-		} else {
-			GRID_WARN("Error to remove content fullpath");
-		}
+	/* Remove the soft link on the chunk: all the information is in an XATTR
+	 * that we want to remove. No need to load all the XATTR, just 1 is enough */
+	GError *local_error = remove_fullpath_from_attr(resource,
+			resource_get_pathname(resource), resource->info->hex_chunkid);
+	if (local_error) {
+		GRID_WARN("Error to remove content fullpath: (%d) %s",
+				  local_error->code, local_error->message);
+		g_error_free(local_error);
 	}
 
 	status = apr_file_remove(resource_get_pathname(resource), pool);

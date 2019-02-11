@@ -1,6 +1,6 @@
 /*
 OpenIO SDS unit tests
-Copyright (C) 2016-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -618,6 +618,26 @@ test_local_pool (void)
 }
 
 static void
+test_weird_pool_configurations(void)
+{
+	struct oio_lb_world_s *lb_world = oio_lb_local__create_world();
+
+	struct oio_lb_pool_s *trailing =
+			oio_lb_world__create_pool(lb_world, "trailing");
+	oio_lb_world__add_pool_targets(trailing, "3,rawx;");
+	g_assert_cmpuint(3, ==, oio_lb_world__count_pool_targets(trailing));
+	oio_lb_pool__destroy(trailing);
+
+	struct oio_lb_pool_s *middle_empty =
+			oio_lb_world__create_pool(lb_world, "middle_empty");
+	oio_lb_world__add_pool_targets(middle_empty, "2,rawx;;1,rawx");
+	g_assert_cmpuint(3, ==, oio_lb_world__count_pool_targets(middle_empty));
+	oio_lb_pool__destroy(middle_empty);
+
+	oio_lb_world__destroy(lb_world);
+}
+
+static void
 test_local_world (void)
 {
 	for (int i=0; i<8 ;++i) {
@@ -808,6 +828,7 @@ main(int argc, char **argv)
 	g_test_add_func("/metautils/lb/item/ipv6", test_lb_item_loc_ipv6);
 	g_test_add_func("/core/lb/local/world", test_local_world);
 	g_test_add_func("/core/lb/local/pool", test_local_pool);
+	g_test_add_func("/core/lb/local/weird_pool", test_weird_pool_configurations);
 	g_test_add_func("/core/lb/local/feed", test_local_feed);
 	g_test_add_func("/core/lb/local/feed_twice", test_local_feed_twice);
 	g_test_add_func("/core/lb/local/feed_zero_scored",

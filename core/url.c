@@ -175,11 +175,11 @@ _clean_url (struct oio_url_s *u)
 static int
 _compute_id (struct oio_url_s *url)
 {
-	if (!oio_str_is_set(url->ns) || !oio_str_is_set(url->account) || !oio_str_is_set(url->user))
+	if (!oio_str_is_set(url->account) || !oio_str_is_set(url->user))
 		return 0;
 
 	url->hexid[0] = '\0';
-	oio_str_hash_name(url->id, url->ns, url->account, url->user);
+	oio_str_hash_name(url->id, NULL, url->account, url->user);
 	oio_str_bin2hex(url->id, sizeof(url->id), url->hexid, sizeof(url->hexid));
 	return 1;
 }
@@ -203,9 +203,10 @@ _pack_fullpath(struct oio_url_s *u)
 	return g_string_free(gs, FALSE);
 }
 
-static void
+static gboolean
 _unpack_fullpath(struct oio_url_s *u, const gchar *strfullpath)
 {
+	gboolean rc = FALSE;
 	gchar **fullpath = g_strsplit(strfullpath, "/", -1);
 	if (g_strv_length(fullpath) == 5) {
 		char *account = g_uri_unescape_string(fullpath[0], NULL);
@@ -223,8 +224,10 @@ _unpack_fullpath(struct oio_url_s *u, const gchar *strfullpath)
 		char *content = g_uri_unescape_string(fullpath[4], NULL);
 		oio_url_set(u, OIOURL_CONTENTID, content);
 		g_free(content);
+		rc = TRUE;
 	}
 	g_strfreev(fullpath);
+	return rc;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -358,8 +361,9 @@ oio_url_set(struct oio_url_s *u, enum oio_url_field_e f, const char *v)
 			return NULL;
 
 		case OIOURL_FULLPATH:
-			_unpack_fullpath(u, v);
-			return u;
+			if (_unpack_fullpath(u, v))
+				return u;
+			return NULL;
 
 		case OIOURL_HEXID:
 			u->hexid[0] = 0;

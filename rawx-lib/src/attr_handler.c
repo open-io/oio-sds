@@ -32,7 +32,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "rawx.h"
 
 static volatile ssize_t longest_xattr = 2048;
-static volatile ssize_t longest_xattr_list = 16384;
 
 static gchar *
 _getxattr_from_fd(int fd, const char *attrname)
@@ -329,25 +328,6 @@ get_compression_info_in_attr(const char *p, GError ** error, GHashTable *table)
 	}
 
 	return TRUE;
-}
-
-gboolean
-remove_fullpath_from_attr(const char *p, GError **error,
-		const gchar *hex_chunkid)
-{
-	int fd = open(p, O_WRONLY);
-	if (fd < 0) {
-		GSETCODE(error, errno, "open() error: (%d) %s", errno, strerror(errno));
-		return FALSE;
-	} else {
-		gchar *xname = g_strconcat(
-				ATTR_DOMAIN_OIO "." ATTR_NAME_CONTENT_FULLPATH ":", hex_chunkid,
-				NULL);
-		const int rc = fremovexattr(fd, xname);
-		g_free(xname);
-		close(fd);
-		return rc != -1;
-	}
 }
 
 void
