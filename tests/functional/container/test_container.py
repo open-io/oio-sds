@@ -29,11 +29,11 @@ from oio.conscience.client import ConscienceClient
 
 
 def random_content():
-    return 'content-' + random_str(32)
+    return random_str(1023)
 
 
 def random_container():
-    return 'container-' + random_str(64)
+    return random_str(1023)
 
 
 def merge(s0, s1):
@@ -351,10 +351,6 @@ class TestMeta2Containers(BaseTestCase):
         data = self.json_loads(resp.data)
         self.assertEqual(OIO_DB_STATUS_NAME.get(_status(data), "Unknown"),
                          OIO_DB_STATUS_NAME[status])
-
-    def test_create_long_name(self):
-        self.ref = random_str(1023)
-        self._test_create_with_status(None)
 
     def test_create_without_status(self):
         self._test_create_with_status(None)
