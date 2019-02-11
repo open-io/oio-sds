@@ -352,6 +352,10 @@ class TestMeta2Containers(BaseTestCase):
         self.assertEqual(OIO_DB_STATUS_NAME.get(_status(data), "Unknown"),
                          OIO_DB_STATUS_NAME[status])
 
+    def test_create_long_name(self):
+        self.ref = random_str(1023)
+        self._test_create_with_status(None)
+
     def test_create_without_status(self):
         self._test_create_with_status(None)
 
