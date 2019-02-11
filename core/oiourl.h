@@ -53,6 +53,11 @@ enum oio_url_field_e
 };
 
 
+/** One plus the maximum length of the string representation of a user
+ *  i.e. a size enough to store the C string */
+#define LIMIT_LENGTH_USER 1024
+
+
 struct oio_url_s;
 
 /**
