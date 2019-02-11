@@ -78,6 +78,10 @@ def _patch_service(srv):
     return s
 
 
+def _prepare_for_bootstrap(allsrv):
+    return sorted((_patch_service(s) for s in allsrv), key=_location)
+
+
 def _bootstrap(allsrv, allgroups, replicas, level):
     """
     Produce a list of services (dicts), with a fields named 'bases' in each
@@ -89,7 +93,7 @@ def _bootstrap(allsrv, allgroups, replicas, level):
                  significance. Tokens over that position are ignored
     """
     # Ensure we work on a sorted sequence of service
-    allsrv = tuple(sorted((_patch_service(s) for s in allsrv), key=_location))
+    allsrv = tuple(_prepare_for_bootstrap(allsrv))
 
     # Extract the slices of service corresponding to the location levels
     # to be perfectly balanced.
