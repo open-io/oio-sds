@@ -29,33 +29,30 @@ class TestMeta0Bootstrap(unittest.TestCase):
     def setUp(self):
         super(TestMeta0Bootstrap, self).setUp()
 
-    def generate_services(self, count, nb_sites=1):
+    def generate_services(self, count, nb_sites=1, fill_token=2):
         assert(count > 0)
         assert(nb_sites > 0)
         sites = ['s' + str(i) for i in range(nb_sites)]
 
         def _loc(i):
-            return "{0}.0.0.h{1}".format(sites[i % len(sites)], i)
+            s = list()
+            s.append(sites[i % len(sites)])
+            for _ in range(fill_token):
+                s.append('0')
+            s.append('h' + str(i))
+            return '.'.join(s)
 
         for i in range(count):
             yield {'addr': '127.0.0.1:{0}'.format(6000+i),
                    'id': 'srv-{0}'.format(i),
                    'type': 'meta1', 'tags': {'tag.loc': _loc(i)}}
 
-    def test_bootstrap_not_enough_sites(self):
-        for groups in (prefixes(1),  # 16
-                       prefixes(2),  # 256
-                       prefixes(3),  # 4096
-                       prefixes(4)):  # 64ki
-            groups = list(groups)
-            for replicas in range(2, 8):
-                for nb in range(1, replicas):
-                    srv = self.generate_services(nb*3, nb_sites=nb)
-                    self.assertRaises(Exception, _bootstrap,
-                                      srv, groups, replicas, 0)
-
-    def _test_ok(self, groups, sites, replicas, level):
-        srv = list(self.generate_services(sites*3, nb_sites=sites))
+    def _test_ok(self, groups, sites=1, replicas=1, level=0, fill_token=0):
+        nb_services = sites * 3
+        print "srv =", nb_services, "sites =", sites, "repli =", replicas
+        srv = list(self.generate_services(nb_services, nb_sites=sites,
+                                          fill_token=fill_token))
+        print repr(srv)
         _after = _bootstrap(srv, groups, replicas, level)
         ideal_per_slice = (len(groups) * replicas) / sites
         for start, end in _slice_services(_after, level):
@@ -70,6 +67,18 @@ class TestMeta0Bootstrap(unittest.TestCase):
             for s in _after[start:end]:
                 self.assertIn(len(s['bases']), bounds)
 
+    def test_bootstrap_not_enough_sites(self):
+        for groups in (prefixes(1),  # 16
+                       prefixes(2),  # 256
+                       prefixes(3),  # 4096
+                       prefixes(4)):  # 64ki
+            groups = list(groups)
+            for replicas in range(2, 8):
+                for sites in range(1, replicas):
+                    srv = self.generate_services(sites*3, nb_sites=sites)
+                    self.assertRaises(Exception, _bootstrap, srv, groups,
+                                      replicas=replicas, level=0, fill_token=2)
+
     def test_bootstrap_enough_sites(self):
         for groups in (prefixes(1),  # 16
                        prefixes(2),  # 256
@@ -78,8 +87,25 @@ class TestMeta0Bootstrap(unittest.TestCase):
             groups = list(groups)
             max_replicas = 5
             for replicas in range(1, max_replicas+1):
-                for nb in range(replicas, max_replicas+1):
-                    self._test_ok(groups, nb, replicas, 0)
+                for sites in range(replicas, max_replicas+1):
+                    self._test_ok(groups, sites=sites, replicas=replicas,
+                                  level=0, fill_token=2)
+
+    def test_bootstrap_partial_locations(self):
+        for groups in (prefixes(1),  # 16
+                       prefixes(2),  # 256
+                       prefixes(3),  # 4096
+                       prefixes(4)):  # 64ki
+            groups = list(groups)
+            # whatever the number of bases to spread, a partial location
+            # is well padded left
+            srv = list(self.generate_services(9, nb_sites=3, fill_token=0))
+            self.assertRaises(Exception, _bootstrap,
+                              srv, groups, replicas=2, level=0)
+            self.assertRaises(Exception, _bootstrap,
+                              srv, groups, replicas=2, level=1)
+            self._test_ok(groups, sites=3, replicas=1,
+                          level=2, fill_token=2)
 
 
 class FakeConscienceClient(object):

@@ -19,7 +19,8 @@ from oio.common.green import Queue, GreenPile, sleep
 from logging import getLogger, INFO
 from cliff.command import Command
 from oio.common.configuration import load_namespace_conf
-from oio.common.exceptions import ClientException
+from oio.common.exceptions import \
+        ClientException, ConfigurationException, PreconditionFailed
 from oio.common import green
 from oio.directory.meta0 import generate_prefixes, count_prefixes
 
@@ -106,8 +107,8 @@ class DirectoryInit(DirectoryCmd):
         parser = super(DirectoryInit, self).get_parser(prog_name)
         parser.add_argument(
             '--level', metavar='<0,1,2,3>', dest='level',
-            type=int, default=0,
-            help='Which location token represent the SITE')
+            choices=(0, 1, 2, 3), default=3,
+            help='Which location token represent the site')
         parser.add_argument(
             '--force',
             action='store_true',
@@ -131,7 +132,16 @@ class DirectoryInit(DirectoryCmd):
 
         # Reset and bootstrap
         mapping = self.get_prefix_mapping(parsed_args)
-        mapping.bootstrap(level=parsed_args.level)
+        try:
+            mapping.bootstrap(level=parsed_args.level)
+        except ConfigurationException:
+            self.log.warn("Namespace poorly configured, some meta1 services "
+                          "carry no location or an invalid one.")
+            raise
+        except PreconditionFailed:
+            self.log.warn("Namespace too constrained, try using --level with "
+                          "a bigger value.")
+            raise
 
         if mapping.check_replicas():
             self._apply(mapping, read_timeout=parsed_args.meta0_timeout)

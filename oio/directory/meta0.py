@@ -19,27 +19,33 @@ import random
 
 from oio.directory.meta import MetaMapping
 from oio.common.client import ProxyClient
-from oio.common.exceptions import ConfigurationException, OioException
+from oio.common.exceptions import \
+        ConfigurationException, OioException, PreconditionFailed
 from oio.common.json import json
 
 
-def _location(svc):
-    """
-    Extract the location of the given service.
-    It must be present and well formated.
-    USEFUL for sorting by location-token instead of lexicographically
-    :param svc a service object
-    :return a tuple of the split location
-    """
+def _loc(svc):
+    """Extract the location of a service and ensure it is well formed."""
     loc = svc.get("tags", {}).get("tag.loc", None)
     if not loc:
-        raise Exception("Service without location {0}".format(svc))
+        raise ConfigurationException("No location on {0}".format(svc))
     tokens = loc.split('.')
     if len(tokens) > 4:
-        raise Exception("Malformed location '{0}' for {1}".format(loc, svc))
+        raise ConfigurationException("Malformed location for {1}"
+                                     .format(loc, svc))
+    return tokens
+
+
+def _loc_full(svc):
+    """
+    Extract the location of the given service and ensure it is well formed
+    and that it is composed of exactly 4 tokens
+    """
+    tokens = _loc(svc)
+    tokens = list(reversed(tokens))
     while len(tokens) < 4:
         tokens.append(None)
-    return tuple(tokens)
+    return tuple(reversed(tokens))
 
 
 def _slice_services(allsrv, level):
@@ -62,9 +68,9 @@ def _slice_services(allsrv, level):
     if level > 3:
         level = 3
     mask_func = masks[level]
-    last_index, last = 0, mask_func(_location(allsrv[0]))
+    last_index, last = 0, mask_func(_loc_full(allsrv[0]))
     for idx, srv in enumerate(allsrv[1:], start=1):
-        current = mask_func(_location(srv))
+        current = mask_func(_loc_full(srv))
         if current != last:
             yield last_index, idx
             last_index, last = idx, current
@@ -79,7 +85,7 @@ def _patch_service(srv):
 
 
 def _prepare_for_bootstrap(allsrv):
-    return sorted((_patch_service(s) for s in allsrv), key=_location)
+    return sorted((_patch_service(s) for s in allsrv), key=_loc_full)
 
 
 def _bootstrap(allsrv, allgroups, replicas, level):
@@ -90,18 +96,19 @@ def _bootstrap(allsrv, allgroups, replicas, level):
     :param allgroups an interable of the prefixes to spread over the services
     :param replicas how many replicas are expected for each base
     :param level the position of the location token with the least
-                 significance. Tokens over that position are ignored
+                 significance. Tokens over that position are ignored.
     """
+    assert(level >= 0)
     # Ensure we work on a sorted sequence of service
     allsrv = tuple(_prepare_for_bootstrap(allsrv))
-
     # Extract the slices of service corresponding to the location levels
     # to be perfectly balanced.
     allslices = tuple(((s, e, set()) for s, e in
                        _slice_services(allsrv, level=level)))
     if replicas > len(allslices):
-        raise Exception("Balancing not satisfiable (repli={0}, slices={1})"
-                        .format(replicas, len(allslices)))
+        raise PreconditionFailed("Balancing not satisfiable, " +
+                                 "{0} replicas wanted on {1} site(s)"
+                                 .format(replicas, len(allslices)))
 
     # First affect to each slice a set of short prefixes
     for idx, group in enumerate(allgroups):
