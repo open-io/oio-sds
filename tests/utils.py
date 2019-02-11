@@ -106,6 +106,10 @@ class CommonTestCase(testtools.TestCase):
         clues = (getenv("TRAVIS"), getenv("CIRCLECI"))
         return any(clue is not None for clue in clues)
 
+    def is_running_on_jenkins(self):
+        from os import getenv
+        return getenv("JENKINS_URL", None) is not None
+
     def _random_user(self):
         return "user-" + random_str(16, "0123456789ABCDEF")
 

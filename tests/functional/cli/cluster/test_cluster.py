@@ -71,7 +71,7 @@ class ClusterTest(CliTestCase):
         self.assertEqual(data[0]['Result'], 'locked to 0')
 
     def test_cluster_wait(self):
-        if self.is_running_on_public_ci():
+        if self.is_running_on_public_ci() or self.is_running_on_jenkins():
             self.skipTest("Too long to run on public CI")
 
         opts = self.get_opts([], 'json')
