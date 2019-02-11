@@ -18,7 +18,68 @@ import unittest
 
 from mock import MagicMock as Mock
 
-from oio.directory.meta0 import Meta0PrefixMapping
+from oio.directory.meta0 import \
+        Meta0PrefixMapping, \
+        generate_short_prefixes as prefixes, \
+        _slice_services, _bootstrap
+
+
+class TestMeta0Bootstrap(unittest.TestCase):
+
+    def setUp(self):
+        super(TestMeta0Bootstrap, self).setUp()
+
+    def generate_services(self, count, nb_sites=1):
+        assert(count > 0)
+        assert(nb_sites > 0)
+        sites = ['s' + str(i) for i in range(nb_sites)]
+
+        def _loc(i):
+            return "{0}.0.0.h{1}".format(sites[i % len(sites)], i)
+
+        for i in range(count):
+            yield {'addr': '127.0.0.1:{0}'.format(6000+i),
+                   'id': 'srv-{0}'.format(i),
+                   'type': 'meta1', 'tags': {'tag.loc': _loc(i)}}
+
+    def test_bootstrap_not_enough_sites(self):
+        for groups in (prefixes(1),  # 16
+                       prefixes(2),  # 256
+                       prefixes(3),  # 4096
+                       prefixes(4)):  # 64ki
+            groups = list(groups)
+            for replicas in range(2, 8):
+                for nb in range(1, replicas):
+                    srv = self.generate_services(nb*3, nb_sites=nb)
+                    self.assertRaises(Exception, _bootstrap,
+                                      srv, groups, replicas, 0)
+
+    def _test_ok(self, groups, sites, replicas, level):
+        srv = list(self.generate_services(sites*3, nb_sites=sites))
+        _after = _bootstrap(srv, groups, replicas, level)
+        ideal_per_slice = (len(groups) * replicas) / sites
+        for start, end in _slice_services(_after, level):
+            total = sum(len(s['bases']) for s in _after[start:end])
+            # Check the sites are evenly loaded
+            bounds = (ideal_per_slice, ideal_per_slice+1)
+            self.assertIn(total, bounds)
+            # Check services are uniformly balanced within the
+            # current slice.
+            ideal_per_node = total / (end - start)
+            bounds = (ideal_per_node, ideal_per_node+1)
+            for s in _after[start:end]:
+                self.assertIn(len(s['bases']), bounds)
+
+    def test_bootstrap_enough_sites(self):
+        for groups in (prefixes(1),  # 16
+                       prefixes(2),  # 256
+                       prefixes(3),  # 4096
+                       prefixes(4)):  # 64ki
+            groups = list(groups)
+            max_replicas = 5
+            for replicas in range(1, max_replicas+1):
+                for nb in range(replicas, max_replicas+1):
+                    self._test_ok(groups, nb, replicas, 0)
 
 
 class FakeConscienceClient(object):
