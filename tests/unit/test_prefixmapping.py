@@ -52,7 +52,6 @@ class TestMeta0Bootstrap(unittest.TestCase):
         print "srv =", nb_services, "sites =", sites, "repli =", replicas
         srv = list(self.generate_services(nb_services, nb_sites=sites,
                                           fill_token=fill_token))
-        print repr(srv)
         _after = _bootstrap(srv, groups, replicas, level)
         ideal_per_slice = (len(groups) * replicas) / sites
         for start, end in _slice_services(_after, level):
@@ -101,9 +100,9 @@ class TestMeta0Bootstrap(unittest.TestCase):
             # is well padded left
             srv = list(self.generate_services(9, nb_sites=3, fill_token=0))
             self.assertRaises(Exception, _bootstrap,
-                              srv, groups, replicas=2, level=0)
+                              srv, groups, replicas=2, level=0, degradation=1)
             self.assertRaises(Exception, _bootstrap,
-                              srv, groups, replicas=2, level=1)
+                              srv, groups, replicas=2, level=1, degradation=1)
             self._test_ok(groups, sites=3, replicas=1,
                           level=2, fill_token=2)
 

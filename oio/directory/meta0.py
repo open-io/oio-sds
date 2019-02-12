@@ -16,12 +16,16 @@
 
 """Meta0 client and meta1 balancing operations"""
 import random
+from math import ceil
 
 from oio.directory.meta import MetaMapping
 from oio.common.client import ProxyClient
 from oio.common.exceptions import \
         ConfigurationException, OioException, PreconditionFailed
 from oio.common.json import json
+
+
+_LEVELS = {'site': 0, 'rack': 1, 'host': 2, 'volume': 3}
 
 
 def _loc(svc):
@@ -52,21 +56,19 @@ def _slice_services(allsrv, level):
     """
     Generate slices of services, where a slice is a set of services sharing
     the same level of location.
-    :param allsrv A sorted sequence of services to extract the slices of.
-    :type allsrv a sequence of dictionnaries representing services.
-    :param level the position of the location token with the least
+    :param allsrv: A sorted sequence of services to extract the slices of.
+    :type allsrv: a sequence of dictionnaries representing services.
+    :param level: the position of the location token with the least
                  significance. Tokens below that position will be ignored.
-    :type level a positive integer
-    :yield 2-tuples meaning <start, end>
+    :type level: a positive integer
+    :yield: 2-tuples meaning <start, end>
     """
-    assert(level >= 0)
+    assert(level >= 0 and level <= 3)
     assert(len(allsrv) > 0)
     masks = (lambda loc: (loc[0], None, None, None),
              lambda loc: (loc[0], loc[1], None, None),
              lambda loc: (loc[0], loc[1], loc[2], None),
              lambda loc: loc)
-    if level > 3:
-        level = 3
     mask_func = masks[level]
     last_index, last = 0, mask_func(_loc_full(allsrv[0]))
     for idx, srv in enumerate(allsrv[1:], start=1):
@@ -88,27 +90,38 @@ def _prepare_for_bootstrap(allsrv):
     return sorted((_patch_service(s) for s in allsrv), key=_loc_full)
 
 
-def _bootstrap(allsrv, allgroups, replicas, level):
+def _bootstrap(allsrv, allgroups, replicas, level, degradation=0):
     """
     Produce a list of services (dicts), with a fields named 'bases' in each
     service containing the bases managed by that service.
-    :param allsrv an iterable of services
-    :param allgroups an interable of the prefixes to spread over the services
-    :param replicas how many replicas are expected for each base
-    :param level the position of the location token with the least
-                 significance. Tokens over that position are ignored.
+    :param allsrv: an iterable of services
+    :param allgroups: an interable of the prefixes to spread over the services
+    :param replicas: how many replicas are expected for each base
+    :param level: the position of the location token with the least
+                  significance. Tokens over that position are ignored.
+    :param degradation: how many 'location levels' (as a whole) might be lost.
     """
-    assert(level >= 0)
+    assert(degradation >= 0)
+    assert(level >= 0 and level <= 3)
+
     # Ensure we work on a sorted sequence of service
     allsrv = tuple(_prepare_for_bootstrap(allsrv))
+    for srv in allsrv:
+        print srv
+
     # Extract the slices of service corresponding to the location levels
     # to be perfectly balanced.
     allslices = tuple(((s, e, set()) for s, e in
-                       _slice_services(allsrv, level=level)))
-    if replicas > len(allslices):
-        raise PreconditionFailed("Balancing not satisfiable, " +
-                                 "{0} replicas wanted on {1} site(s)"
-                                 .format(replicas, len(allslices)))
+                       _slice_services(allsrv, level)))
+
+    # Check the resilience conditions are satisfied
+    quorum = int(replicas / 2) + 1
+    worst_load = ceil(float(replicas) / len(allslices))
+    if replicas - (worst_load * degradation) < quorum:
+        fmt = "Balancing not satisfiable, {0} replicas wanted on {1}" + \
+              " site(s), and an acceptable degradation of {2} site(s)."
+        raise PreconditionFailed(
+                fmt.format(replicas, len(allslices), degradation))
 
     # First affect to each slice a set of short prefixes
     for idx, group in enumerate(allgroups):
@@ -131,10 +144,10 @@ def _modulo_peek(tab, offset, num):
     """
     Extract <num> subsequent items from <tab>, starting at <offset>, restarting
     at 0 when the end of the array is reached.
-    :param tab a non-empty sequence with an accessor to a random element.
-    :param offset a positive natural number
-    :param num a strictly positive natural number
-    :return a new tuple of <num> elements from <tab>, starting at <offset>
+    :param tab: a non-empty sequence with an accessor to a random element.
+    :param offset: a positive natural number
+    :param num: a strictly positive natural number
+    :return: a new tuple of <num> elements from <tab>, starting at <offset>
     """
     result, tablen = list(), len(tab)
     assert(tablen > 0)
@@ -408,23 +421,27 @@ class Meta0PrefixMapping(MetaMapping):
             svc['bases'] = base_set
         self.services_by_base[base] = services
 
-    def bootstrap(self, level=0):
+    def bootstrap(self, level='volume', degradation=0):
         """
         Spread the prefixe to balance accross sites. By default the token
         describing the site is <0>.
         Put one short_prefix into each slice (corresponding to a location
         level) and balance well into each level. At the end, expand each
         short prefixes into their complete prefixes.
-        :param level the position of the token describing the site
-                     in each service location.
-        :param level a positive integer
-        :return None
+        :param level: the kind of location token describing the level of
+                     fair balancing.
+        :param degradation: how many location slices of the given level
+                            we should tolerate.
+        :return: None
         """
-        assert(level >= 0)
+        assert(degradation >= 0)
+        assert(level in _LEVELS)
+        level = _LEVELS[level]
+
         # Perform a first bootstrap, producing a <srv,prefixes> mapping
         allgroups = tuple(generate_short_prefixes(self.digits))
         allsrv = _bootstrap(self.services.values(), allgroups,
-                            self.replicas, level)
+                            self.replicas, level, degradation=degradation)
 
         # Compute the reverse <base,srv> mapping (mandatory book-keeping)
         bases = dict((pfx, set()) for pfx in allgroups)

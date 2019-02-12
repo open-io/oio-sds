@@ -106,9 +106,14 @@ class DirectoryInit(DirectoryCmd):
     def get_parser(self, prog_name):
         parser = super(DirectoryInit, self).get_parser(prog_name)
         parser.add_argument(
-            '--level', metavar='<0,1,2,3>', dest='level',
-            choices=(0, 1, 2, 3), default=3,
-            help='Which location token represent the site')
+            '--level', metavar='<LEVEL>', dest='level',
+            choices=('site', 'rack', 'host', 'volume'), default='site',
+            help='Which location level should be perfectly balanced')
+        parser.add_argument(
+            '--degradation', metavar='<DEGRADATION>', dest='degradation',
+            type=int, default=0,
+            help='How many location levels we accept to lose to keep the '
+                 'quorums valid.')
         parser.add_argument(
             '--force',
             action='store_true',
@@ -133,14 +138,16 @@ class DirectoryInit(DirectoryCmd):
         # Reset and bootstrap
         mapping = self.get_prefix_mapping(parsed_args)
         try:
-            mapping.bootstrap(level=parsed_args.level)
+            mapping.bootstrap(level=parsed_args.level,
+                              degradation=parsed_args.degradation)
         except ConfigurationException:
             self.log.warn("Namespace poorly configured, some meta1 services "
                           "carry no location or an invalid one.")
             raise
         except PreconditionFailed:
-            self.log.warn("Namespace too constrained, try using --level with "
-                          "a bigger value.")
+            self.log.warn("Namespace too constrained, please consider a "
+                          "less constrained setup, using either --level or "
+                          "--degradation with different values.")
             raise
 
         if mapping.check_replicas():
