@@ -29,11 +29,6 @@ struct compound_type_s
 {
 	const gchar *fulltype;
 	gchar type[LIMIT_LENGTH_SRVTYPE]; // type without args
-
-	struct { // <key,value> to be matched
-		gchar *k;
-		gchar *v;
-	} req;
 };
 
 // Calls g_free on each non NULL field of the structure.
@@ -45,10 +40,5 @@ void compound_type_clean(struct compound_type_s *ct);
 // with compound_type_clean().
 // format: TYPE[.SUBTYPE][;ARGS]
 GError* compound_type_parse(struct compound_type_s *ct, const gchar *srvtype);
-
-// Updates the 'arg' field of 'ct' with the help of
-// the information hold in the service_update policy.
-void compound_type_update_arg(struct compound_type_s *ct,
-		struct service_update_policies_s *pol, gboolean override);
 
 #endif /*OIO_SDS__meta1v2__compound_types_h*/

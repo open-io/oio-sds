@@ -604,9 +604,6 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 	policy = service_howto_update(pol, ct->type);
 	replicas = service_howmany_replicas(pol, ct->type);
 	replicas = (replicas > 0 ? replicas : 1);
-	// Patches the constraint on the service type (if not set in the request)
-	// by the constraint set in the NS-wide storage policy.
-	compound_type_update_arg(ct, pol, FALSE);
 
 	err = __get_container_all_services(sq3, url, ct->type, &used);
 	if (NULL != err) {
