@@ -14,7 +14,6 @@ link_directories(
 		${SQLITE3_LIBRARY_DIRS})
 
 add_library(meta1v2 SHARED
-		compound_types.c compound_types.h
 		meta1_backend_internals.h
 		meta1_backend.h
 		meta1_backend.c

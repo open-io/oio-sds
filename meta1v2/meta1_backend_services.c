@@ -30,7 +30,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sqliterepo/sqliterepo.h>
 
 #include "./internals.h"
-#include "./compound_types.h"
 #include "./meta1_prefixes.h"
 #include "./meta1_backend.h"
 #include "./meta1_backend_internals.h"
@@ -46,6 +45,16 @@ static void __notify_services_by_cid(struct meta1_backend_s *m1,
 static GError *__get_container_all_services(struct sqlx_sqlite3_s *sq3,
 		struct oio_url_s *url, const char *srvtype,
 		struct meta1_service_url_s ***result);
+
+static GError*
+validate_service_type(const gchar *srvtype)
+{
+	if (!srvtype || !*srvtype || *srvtype == '.')
+		return BADREQ("Bad service type [%s]", srvtype);
+	if (strchr(srvtype, ';'))
+		return BADREQ("No argument allowed on service type");
+	return NULL;
+}
 
 static struct meta1_service_url_s *
 meta1_url_dup(struct meta1_service_url_s *u)
@@ -505,10 +514,10 @@ __locations_from_m1srvurl(struct meta1_backend_s *m1,
 
 static struct meta1_service_url_s *
 __poll_services(struct meta1_backend_s *m1, guint replicas,
-		struct compound_type_s *ct, guint seq,
+		const char *srvtype, guint seq,
 		struct meta1_service_url_s **used, GError **err)
 {
-	GRID_DEBUG("Polling %u [%s]", replicas, ct->fulltype);
+	GRID_DEBUG("Polling %u [%s]", replicas, srvtype);
 
 	// ----------------------------------------------------------------------
 	GPtrArray *ids = g_ptr_array_new_with_free_func(g_free);
@@ -519,7 +528,7 @@ __poll_services(struct meta1_backend_s *m1, guint replicas,
 		g_ptr_array_add(ids, g_strdup(sel->item->id));
 	}
 	*err = oio_lb__patch_with_pool(
-			m1->lb, ct->type, avoid, NULL, _on_id, NULL);
+			m1->lb, srvtype, avoid, NULL, _on_id, NULL);
 	if (*err) {
 		g_prefix_error(err, "found only %u services matching the criteria: ",
 				ids->len);
@@ -529,7 +538,7 @@ __poll_services(struct meta1_backend_s *m1, guint replicas,
 	if (!*err) {
 		g_ptr_array_add(ids, NULL);
 		m1u = _ids_to_url((char**)ids->pdata);
-		g_strlcpy(m1u->srvtype, ct->type, sizeof(m1u->srvtype));
+		g_strlcpy(m1u->srvtype, srvtype, sizeof(m1u->srvtype));
 		m1u->seq = seq;
 	}
 
@@ -554,20 +563,19 @@ __get_services_up(struct meta1_backend_s *m1, struct meta1_service_url_s **src)
 		// of unitary URLs. Each unitary URL is checked as is.
 		extracted = expand_url(*src);
 		for (pe = extracted; !one_is_up && *pe; pe++) {
-			struct compound_type_s ct;
-			if ((err = compound_type_parse(&ct, (*pe)->srvtype))) {
+			const char *srvtype = (*pe)->srvtype;
+			if (NULL != (err = validate_service_type(srvtype))) {
 				GRID_WARN("Failed to parse service type: %s", err->message);
 				g_clear_error(&err);
 				continue;
 			}
 			char key[128];
 			g_snprintf(key, sizeof(key), "%s|%s|%s",
-					m1->ns_name, ct.type, (*pe)->host);
-			struct oio_lb_item_s *item = oio_lb__get_item_from_pool(m1->lb,
-					ct.type, key);
+					m1->ns_name, srvtype, (*pe)->host);
+			struct oio_lb_item_s *item =
+				oio_lb__get_item_from_pool(m1->lb, srvtype, key);
 			one_is_up = item? item->weight > 0 : FALSE;
 			g_free(item);
-			compound_type_clean(&ct);
 		}
 		if (one_is_up) {
 			for (pe = extracted; *pe; pe++)
@@ -589,7 +597,7 @@ __get_services_up(struct meta1_backend_s *m1, struct meta1_service_url_s **src)
 
 static GError *
 __get_container_service2(struct sqlx_sqlite3_s *sq3,
-		struct oio_url_s *url, struct compound_type_s *ct,
+		struct oio_url_s *url, const char *srvtype,
 		struct meta1_backend_s *m1, enum m1v2_getsrv_e mode,
 		gchar ***result, gboolean *renewed)
 {
@@ -601,11 +609,11 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 	struct service_update_policies_s *pol;
 	if (!(pol = meta1_backend_get_svcupdate(m1)))
 		return NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "Bad NS/Policy pair");
-	policy = service_howto_update(pol, ct->type);
-	replicas = service_howmany_replicas(pol, ct->type);
+	policy = service_howto_update(pol, srvtype);
+	replicas = service_howmany_replicas(pol, srvtype);
 	replicas = (replicas > 0 ? replicas : 1);
 
-	err = __get_container_all_services(sq3, url, ct->type, &used);
+	err = __get_container_all_services(sq3, url, srvtype, &used);
 	if (NULL != err) {
 		g_prefix_error(&err, "Preliminary lookup error : ");
 		return err;
@@ -639,11 +647,11 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 	gint seq = urlv_get_max_seq(used);
 	seq = (seq<0 ? 1 : seq+1);
 
-	if (NULL != (m1_url = __poll_services(m1, replicas, ct, seq, used, &err))) {
+	if (NULL != (m1_url = __poll_services(m1, replicas, srvtype, seq, used, &err))) {
 		if (mode != M1V2_GETSRV_DRYRUN) {
 			if (NULL == err) {
 				if (policy == SVCUPD_REPLACE)
-					err = __delete_service(sq3, url, ct->type);
+					err = __delete_service(sq3, url, srvtype);
 				if (NULL == err)
 					err = __save_service(sq3, url, m1_url, TRUE);
 			}
@@ -668,13 +676,10 @@ __get_container_service(struct sqlx_sqlite3_s *sq3,
 		struct meta1_backend_s *m1, enum m1v2_getsrv_e mode,
 		gchar ***result, gboolean *renewed)
 {
-	GError *err = NULL;
-	struct compound_type_s ct;
-
-	if (NULL != (err = compound_type_parse(&ct, srvtype)))
+	GError *err = validate_service_type(srvtype);
+	if (NULL != err)
 		return err;
-	err = __get_container_service2(sq3, url, &ct, m1, mode, result, renewed);
-	compound_type_clean(&ct);
+	err = __get_container_service2(sq3, url, srvtype, m1, mode, result, renewed);
 	return err;
 }
 
@@ -685,7 +690,7 @@ struct m1v2_relink_input_s {
 	struct meta1_backend_s *m1;
 	struct sqlx_sqlite3_s *sq3;
 	struct oio_url_s *url;
-	struct compound_type_s *ct;
+	const char *srvtype;
 	struct meta1_service_url_s **kept;
 	struct meta1_service_url_s **replaced;
 	gboolean dryrun;
@@ -789,7 +794,7 @@ __relink_container_services(struct m1v2_relink_input_s *in, gchar ***out)
 		struct service_update_policies_s *pol = meta1_backend_get_svcupdate(in->m1);
 		EXTRA_ASSERT (pol != NULL);
 
-		guint max_svc = service_howmany_replicas(pol, in->ct->type);
+		guint max_svc = service_howmany_replicas(pol, in->srvtype);
 
 		oio_location_t *known = NULL;
 		oio_location_t *avoids = NULL;
@@ -804,7 +809,7 @@ __relink_container_services(struct m1v2_relink_input_s *in, gchar ***out)
 			void _on_id(struct oio_lb_selected_item_s *sel, gpointer u UNUSED) {
 				g_ptr_array_add(ids, g_strdup(sel->item->id));
 			}
-			err = oio_lb__patch_with_pool(in->m1->lb, in->ct->type,
+			err = oio_lb__patch_with_pool(in->m1->lb, in->srvtype,
 					avoids, known, _on_id, NULL);
 			if (err) {
 				g_prefix_error(&err,
@@ -1138,7 +1143,6 @@ meta1_backend_services_relink(struct meta1_backend_s *m1,
 
 	struct meta1_service_url_s **ukept = NULL, **urepl = NULL;
 	/* fields to be prefetched */
-	struct compound_type_s ct = {0};
 
 	ukept = __parse_and_expand (kept);
 	urepl = __parse_and_expand (replaced);
@@ -1150,7 +1154,7 @@ meta1_backend_services_relink(struct meta1_backend_s *m1,
 	}
 
 	struct meta1_service_url_s *ref = ukept && *ukept ? *ukept : *urepl;
-	if (NULL != (err = compound_type_parse(&ct, ref->srvtype)))
+	if (NULL != (err = validate_service_type(ref->srvtype)))
 		goto out;
 
 	/* Sanity check: all the services must have the same <seq,type> */
@@ -1169,7 +1173,7 @@ meta1_backend_services_relink(struct meta1_backend_s *m1,
 	/* Sanity check: all the kept/replaced services must have the type of
 	 * the oio_url */
 	for (struct meta1_service_url_s **p = urepl; urepl && *p; ++p) {
-		if (0 != strcmp((*p)->srvtype, ct.type)) {
+		if (0 != strcmp((*p)->srvtype, ref->srvtype)) {
 			err = BADREQ("Service type mismatch (URL vs. kept/replaced)");
 			goto out;
 		}
@@ -1183,7 +1187,7 @@ meta1_backend_services_relink(struct meta1_backend_s *m1,
 			if (!(err = __info_user(sq3, url, FALSE, NULL))) {
 				struct m1v2_relink_input_s in = {
 					.m1 = m1, .sq3 = sq3, .url = url,
-					.ct = &ct, .kept = ukept, .replaced = urepl,
+					.srvtype = ref->srvtype, .kept = ukept, .replaced = urepl,
 					.dryrun = dryrun
 				};
 				err = __relink_container_services(&in, out);
@@ -1199,7 +1203,6 @@ meta1_backend_services_relink(struct meta1_backend_s *m1,
 out:
 	meta1_service_url_cleanv (ukept);
 	meta1_service_url_cleanv (urepl);
-	compound_type_clean (&ct);
 	return err;
 }
 
