@@ -106,8 +106,6 @@ def _bootstrap(allsrv, allgroups, replicas, level, degradation=0):
 
     # Ensure we work on a sorted sequence of service
     allsrv = tuple(_prepare_for_bootstrap(allsrv))
-    for srv in allsrv:
-        print srv
 
     # Extract the slices of service corresponding to the location levels
     # to be perfectly balanced.
