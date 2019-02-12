@@ -54,20 +54,19 @@ install:
 
 env:
   - TEST_SUITE=rebuilder,with-service-id
-  - TEST_SUITE=3copies,with-service-id
   - TEST_SUITE=ec,with-random-service-id
-  - TEST_SUITE=rebuilder,with-service-id
-  - TEST_SUITE=repli,go-rawx
   - TEST_SUITE=ec
+  - TEST_SUITE=repli,go-rawx
+  - TEST_SUITE=3copies,with-service-id
   - TEST_SUITE=3copies
   - TEST_SUITE=multi-beanstalk
   - TEST_SUITE=small-cache
+  - TEST_SUITE=webhook
   - TEST_SUITE=slave
   - TEST_SUITE=cli
   - TEST_SUITE=worm
   - TEST_SUITE=build,unit,copyright,variables
   - TEST_SUITE=mover,with-service-id
-  - TEST_SUITE=webhook
 
 script:
   - sudo bash -c "echo '/tmp/core.%p.%E' > /proc/sys/kernel/core_pattern"
