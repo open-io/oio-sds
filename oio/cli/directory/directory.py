@@ -107,13 +107,14 @@ class DirectoryInit(DirectoryCmd):
         parser = super(DirectoryInit, self).get_parser(prog_name)
         parser.add_argument(
             '--level', metavar='<LEVEL>', dest='level',
-            choices=('site', 'rack', 'host', 'volume'), default='site',
+            choices=('site', 'rack', 'host', 'volume'), default='volume',
             help='Which location level should be perfectly balanced')
         parser.add_argument(
             '--degradation', metavar='<DEGRADATION>', dest='degradation',
-            type=int, default=0,
+            type=int, default=None,
             help='How many location levels we accept to lose to keep the '
-                 'quorums valid.')
+                 'quorums valid. Not set by default, it is then autodetected '
+                 'to the replication set minus the quorum')
         parser.add_argument(
             '--force',
             action='store_true',
@@ -134,6 +135,10 @@ class DirectoryInit(DirectoryCmd):
                 return True
             self.log.info("Checking...")
             return mapping.check_replicas()
+
+        if parsed_args.degradation is None:
+            quorum = parsed_args.replicas / 2 + 1
+            parsed_args.degradation = parsed_args.replicas - quorum
 
         # Reset and bootstrap
         mapping = self.get_prefix_mapping(parsed_args)
