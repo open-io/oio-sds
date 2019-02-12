@@ -62,7 +62,6 @@ _url_prepare(void)
 	_url_set_random(url, OIOURL_ACCOUNT);
 	_url_set_random(url, OIOURL_USER);
 	_url_set_random(url, OIOURL_PATH);
-	g_printerr("\n%s\n", oio_url_get(url, OIOURL_WHOLE));
 	g_printerr("( export OIO_NS=%s OIO_ACCOUNT=%s ; openio object locate %s %s )\n",
 			oio_url_get(url, OIOURL_NS),
 			oio_url_get(url, OIOURL_ACCOUNT),
@@ -94,7 +93,7 @@ _content_check(struct oio_sds_s *sds, struct oio_url_s *url)
 
 /* ------------------------------------------------------------------------- */
 
-/* We simulate trash code 
+/* We simulate trash code
 struct oio_sds_ul_dst_1704_s
 {
 	struct oio_url_s *url;
@@ -110,7 +109,7 @@ struct oio_sds_ul_dst_1704_s
 */
 
 static void
-test_upload(size_t chunk_size)
+test_upload_2cs(gint64 explicit_chunk_size, gint64 config_chunk_size)
 {
 	const guint64 magic = g_random_int();
 	struct oio_url_s *url = NULL;
@@ -128,15 +127,17 @@ test_upload(size_t chunk_size)
 	_assert_no_error(err);
 	g_assert_nonnull(sds);
 
-	oio_sds_configure(sds, OIOSDS_CFG_FLAG_CHUNKSIZE,
-			&oio_ns_chunk_size, sizeof(oio_ns_chunk_size));
+	if (config_chunk_size > 0) {
+		oio_sds_configure(sds, OIOSDS_CFG_FLAG_CHUNKSIZE,
+				&config_chunk_size, sizeof(config_chunk_size));
+	}
 
 	g_assert_nonnull(buffer_base);
 	g_assert(buffer_length > 0);
 
 	dst.url = url;
 	dst.autocreate = 1;
-	dst.chunk_size = chunk_size;
+	dst.chunk_size = explicit_chunk_size >= 0 ? explicit_chunk_size : 0;
 	err = oio_sds_upload_from_buffer(sds, &dst, buffer_base, buffer_length);
 	_assert_no_error(err);
 	g_assert(pre == magic);
@@ -151,14 +152,56 @@ test_upload(size_t chunk_size)
 }
 
 static void
-test_upload_1704(void)
+test_upload_3cs(gint64 explicit_chunk_size,
+				gint64 global_chunk_size,
+				gint64 config_chunk_size)
 {
-	test_upload(0);
-	test_upload(oio_chunk_size_minimum - 1);
-	test_upload(oio_chunk_size_minimum);
-	test_upload(oio_chunk_size_maximum);
-	test_upload(oio_chunk_size_maximum + 1);
-	test_upload((size_t)-1);
+	g_printerr("\n### chunk_size:"
+			   " explicit=%" G_GINT64_FORMAT
+			   " global=%" G_GINT64_FORMAT
+			   " config=%"G_GINT64_FORMAT "\n",
+			  explicit_chunk_size, global_chunk_size, config_chunk_size);
+	const gint64 old_ns_chunk_size = oio_ns_chunk_size;
+	if (global_chunk_size >= 0)
+		oio_ns_chunk_size = global_chunk_size;
+	test_upload_2cs(explicit_chunk_size, config_chunk_size);
+	oio_ns_chunk_size = old_ns_chunk_size;
+}
+
+struct _test_context_s {
+	gint64 explicit, global, config;
+	gboolean thorough;
+};
+
+static void
+_fixture_1704(gconstpointer data)
+{
+	const struct _test_context_s *ctx = (struct _test_context_s*) data;
+	if (ctx->thorough && !g_test_thorough()) {
+		g_test_skip("Use '-m thorough' to activate");
+	} else {
+		test_upload_3cs(ctx->explicit, ctx->global, ctx->config);
+	}
+}
+
+static void
+_add_tests(gint64 *tab, size_t tablen, gboolean thorough)
+{
+	for (size_t i0=0; i0 < tablen ;i0++) {
+		for (size_t i1=0; i1 < tablen ;i1++) {
+			for (size_t i2=0; i2 < tablen ;i2++) {
+				struct _test_context_s ctx = {
+					tab[i0], tab[i1], tab[i2],
+					thorough
+				};
+				gchar *name = g_strdup_printf(
+						"/core/sds/old/upload/17.04/%d/%ld/%ld/%ld",
+						ctx.thorough, ctx.explicit, ctx.global, ctx.config);
+				g_test_add_data_func_full(
+						name, g_memdup(&ctx, sizeof(ctx)), _fixture_1704, g_free);
+			}
+		}
+	}
 }
 
 int
@@ -166,15 +209,23 @@ main(int argc, char **argv)
 {
 	HC_TEST_INIT(argc,argv);
 
-	oio_ns_chunk_size = 1027;
+	/* metachunks must be either <oio_chunk_size_minimum> or
+	 * <oio_chunk_size_maximum> because the NS configuration is either
+	 * smaller or greater than the minimum */
+	oio_sds_client_patch_metachunk_size = FALSE;
 	oio_chunk_size_minimum = 1024 * 1024;
 	oio_chunk_size_maximum = 2 * 1024 * 1024;
 	buffer_length = 10 * 1024 * 1024 + 7;
 	buffer_base = g_malloc(buffer_length);
-	/* metachunks must be <oio_chunk_size_minimum> because the NS
-	 * configuration is smaller than the minimum */
 
-	g_test_add_func("/core/sds/old/upload/17.04", test_upload_1704);
+	/* Add fixtures for the 17.04 */
+	gint64 _quick[] = { 0, 64};
+	gint64 _slow[] = {
+		-1, 0, 64, 1027,
+		oio_chunk_size_minimum-1,
+		oio_chunk_size_maximum+1};
+	_add_tests(_quick, sizeof(_quick) / sizeof(gint64), FALSE);
+	_add_tests(_slow, sizeof(_slow) / sizeof(gint64), TRUE);
 
 	return g_test_run();
 }
