@@ -1177,6 +1177,22 @@ _sds_upload_reset (struct oio_sds_ul_s *ul)
 	ul->local_done = 0;
 }
 
+static void
+_patch_chunk_size(gint64 *chunk_size)
+{
+	if (oio_chunk_size_maximum > 0) {
+		if (*chunk_size > oio_chunk_size_maximum)
+			*chunk_size = oio_chunk_size_maximum;
+	}
+	/* Check the minimum after, because a too low value is worse than too
+	 * big. And we are not sure than those 2 boundaries are not themselves
+	 * misconfured, paradoxal. */
+	if (oio_chunk_size_minimum > 0) {
+		if (*chunk_size < oio_chunk_size_minimum)
+			*chunk_size = oio_chunk_size_minimum;
+	}
+}
+
 struct oio_sds_ul_s *
 oio_sds_upload_init (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst)
 {
@@ -1202,20 +1218,17 @@ oio_sds_upload_init (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst)
 	ul->buffer_tail = g_queue_new ();
 	ul->metachunk_ready = g_queue_new ();
 
-	if (dst->chunk_size > 0)
+	if (dst->chunk_size > 0) {
 		ul->chunk_size = dst->chunk_size;
-	else
+	} else {
 		ul->chunk_size = sds->chunk_size;
-
-	/* Prevent odd configuration by the application. Check the minimum
-	 * after, because a too low value is worse than too big */
-	if (oio_chunk_size_maximum > 0) {
-		if (ul->chunk_size > oio_chunk_size_maximum)
-			ul->chunk_size = oio_chunk_size_maximum;
 	}
-	if (oio_chunk_size_minimum > 0) {
-		if (ul->chunk_size < oio_chunk_size_minimum)
-			ul->chunk_size = oio_chunk_size_minimum;
+
+	/* Prevent odd configuration by the application, if any.
+	 * If no configuration, do not patch and let the chunk_size of the NS
+	 * be considered (and then patched). */
+	if (ul->chunk_size) {
+		_patch_chunk_size(&ul->chunk_size);
 	}
 
 	if (dst->content_id) {
@@ -1306,11 +1319,17 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 		if (!err && out.header_content && !oio_str_ishexa1 (out.header_content))
 			err = SYSERR("returned content-id not hexadecimal");
 
-		if (err)
+		if (err) {
 			g_prefix_error (&err, "Proxy: ");
-		else {
-			if (out.header_chunk_size && !ul->chunk_size)
+		} else {
+			if (out.header_chunk_size && !ul->chunk_size) {
+#ifdef HAVE_ENBUG
+				/* Let's receive some trash from the proxy */
+				ul->chunk_size = 1;
+#else
 				ul->chunk_size = g_ascii_strtoll (out.header_chunk_size, NULL, 10);
+#endif
+			}
 			if (out.header_version && !ul->version)
 				ul->version = g_ascii_strtoll (out.header_version, NULL, 10);
 			if (out.header_content && !ul->hexid)
@@ -1359,15 +1378,20 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 		}
 
 		/* If we erasure-code, patch the metachunk-size
-		 * TODO(jfs): Find a way to get rd of this, with a fix in oio-fs */
+		 * TODO(jfs): Find a way to get rid of this, with a fix in oio-fs */
 		if (oio_sds_client_patch_metachunk_size) {
 			k = data_security_decode_param_int64(ul->chunk_method, "k", 1);
 			if (!ul->chunk_size_updated) {
+				_patch_chunk_size(&ul->chunk_size);
 				ul->chunk_size = ul->chunk_size * k;
 				/* avoid to increase chunk_size in _sds_upload_renew loop */
 				ul->chunk_size_updated = TRUE;
 			}
+		} else {
+			_patch_chunk_size(&ul->chunk_size);
 		}
+	} else if (!err) {
+		_patch_chunk_size(&ul->chunk_size);
 	}
 
 	/* Organize the set of chunks into metachunks. */
