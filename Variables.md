@@ -161,7 +161,7 @@ Used by `gcc`
 
 > Should the C API adjust the chunk size when below this threshold. Set to 0 for no action
 
- * default: **0**
+ * default: **10000000**
  * type: gint64
  * cmake directive: *OIO_CORE_CHUNK_SIZE_MINIMUM*
  * range: 0 -> G_MAXINT64
