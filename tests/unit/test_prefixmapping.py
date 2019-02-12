@@ -18,6 +18,7 @@ import unittest
 
 from mock import MagicMock as Mock
 
+from oio.common.exceptions import PreconditionFailed
 from oio.directory.meta0 import \
         Meta0PrefixMapping, \
         generate_short_prefixes as prefixes, \
@@ -72,11 +73,17 @@ class TestMeta0Bootstrap(unittest.TestCase):
                        prefixes(3),  # 4096
                        prefixes(4)):  # 64ki
             groups = list(groups)
-            for replicas in range(2, 8):
+            for replicas in range(2, 5):
                 for sites in range(1, replicas):
-                    srv = self.generate_services(sites*3, nb_sites=sites)
-                    self.assertRaises(Exception, _bootstrap, srv, groups,
-                                      replicas=replicas, level=0, fill_token=2)
+                    srv = list(self.generate_services(sites*3, \
+                                                      nb_sites=sites, \
+                                                      fill_token=2))
+                    print "srv =", len(srv), "sites =", sites, \
+                          "repli =", replicas
+                    for s in srv: print '>', s
+                    self.assertRaises(PreconditionFailed,
+                                      _bootstrap, srv, groups,
+                                      replicas=replicas, level=0, degradation=1)
 
     def test_bootstrap_enough_sites(self):
         for groups in (prefixes(1),  # 16
@@ -99,9 +106,9 @@ class TestMeta0Bootstrap(unittest.TestCase):
             # whatever the number of bases to spread, a partial location
             # is well padded left
             srv = list(self.generate_services(9, nb_sites=3, fill_token=0))
-            self.assertRaises(Exception, _bootstrap,
+            self.assertRaises(PreconditionFailed, _bootstrap,
                               srv, groups, replicas=2, level=0, degradation=1)
-            self.assertRaises(Exception, _bootstrap,
+            self.assertRaises(PreconditionFailed, _bootstrap,
                               srv, groups, replicas=2, level=1, degradation=1)
             self._test_ok(groups, sites=3, replicas=1,
                           level=2, fill_token=2)
