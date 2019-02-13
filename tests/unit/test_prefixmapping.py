@@ -75,15 +75,13 @@ class TestMeta0Bootstrap(unittest.TestCase):
             groups = list(groups)
             for replicas in range(2, 5):
                 for sites in range(1, replicas):
-                    srv = list(self.generate_services(sites*3, \
-                                                      nb_sites=sites, \
+                    srv = list(self.generate_services(sites*3,
+                                                      nb_sites=sites,
                                                       fill_token=2))
-                    print "srv =", len(srv), "sites =", sites, \
-                          "repli =", replicas
-                    for s in srv: print '>', s
                     self.assertRaises(PreconditionFailed,
                                       _bootstrap, srv, groups,
-                                      replicas=replicas, level=0, degradation=1)
+                                      replicas=replicas, level=0,
+                                      degradation=1)
 
     def test_bootstrap_enough_sites(self):
         for groups in (prefixes(1),  # 16
