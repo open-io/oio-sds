@@ -93,15 +93,18 @@ class BlobImprover(Rebuilder):
             queue.task_done()
 
     def _item_to_string(self, item, **kwargs):
-        url = item['url']
-        fullpath = encode_fullpath(
-            url['account'], url['user'], url['path'],
-            url.get('version'), url['content'])
-        # TODO(FVE): maybe tell some numbers about chunks
-        if item.get('event') == EventTypes.CONTENT_PERFECTIBLE:
-            return 'perfectible object %s' % (fullpath, )
-        else:
-            return 'object %s' % (fullpath, )
+        try:
+            url = item['url']
+            fullpath = encode_fullpath(
+                url['account'], url['user'], url['path'],
+                url.get('version', 1), url['content'])
+            # TODO(FVE): maybe tell some numbers about chunks
+            if item.get('event') == EventTypes.CONTENT_PERFECTIBLE:
+                return 'perfectible object %s' % (fullpath, )
+            else:
+                return 'object %s' % (fullpath, )
+        except (KeyError, ValueError) as err:
+            return '<unknown item> ({0})'.format(repr(err))
 
     def _get_report(self, status, end_time, counters, **kwargs):
         items_processed, errors, total_items_processed, total_errors = counters
