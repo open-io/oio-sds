@@ -15,8 +15,17 @@
 
 import os
 import time
+
+from flaky import flaky
+
 from oio.api.object_storage import ObjectStorageApi
+from oio.common import exceptions
 from tests.utils import BaseTestCase, random_str
+
+
+def is_election_error(err, *args):
+    """Tell if the first exception is related to an election error."""
+    return isinstance(err[0], exceptions.ServiceBusy)
 
 
 class TestContainerReplication(BaseTestCase):
@@ -52,7 +61,7 @@ class TestContainerReplication(BaseTestCase):
         super(TestContainerReplication, self).tearDown()
         # Restart meta2 after configuration has been reset by parent tearDown
         if self.must_restart_meta2:
-            self._service('@meta2', 'restart')
+            self._service('@meta2', 'restart', wait=1.0)
             self.wait_for_score(('meta2', ))
 
     def _apply_conf_on_all(self, type_, conf):
@@ -94,6 +103,7 @@ class TestContainerReplication(BaseTestCase):
             self.account, cname, params={'service_id': stopped})
         self.assertEqual(ref_props['system'], copy_props['system'])
 
+    @flaky(rerun_filter=is_election_error)
     def test_disabled_synchronous_restore(self):
         """
         Test what happens when the synchronous DB_RESTORE mechanism has been
@@ -109,6 +119,7 @@ class TestContainerReplication(BaseTestCase):
             self.must_restart_meta2 = True
         self._test_restore_after_missed_diff()
 
+    @flaky(rerun_filter=is_election_error)
     def test_synchronous_restore(self):
         """
         Test DB_RESTORE mechanism (the master send a dump of the whole
@@ -120,6 +131,7 @@ class TestContainerReplication(BaseTestCase):
             self.skipTest("Too buggy to run on public CI")
         self._test_restore_after_missed_diff()
 
+    @flaky(rerun_filter=is_election_error)
     def test_asynchronous_restore(self):
         """
         Test DB_DUMP/DB_PIPEFROM mechanism (a slave peer knows it needs
