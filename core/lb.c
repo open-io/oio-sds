@@ -888,10 +888,11 @@ _local_slot__poll(struct oio_lb_slot_s *slot, const guint16 distance,
 	/* If we need to pick more items than the number of different locations,
 	 * we can disable the distance checks, and rely only on the "popularity"
 	 * mechanism.
-	 * XXX: here we compare the overall number of targets to the number
+	 * FIXME: here we compare the overall number of targets to the number
 	 * of different locations IN THE CURRENT SLOT. We bet that in most
 	 * pools there will be only one targetted slot. */
-	if (!reversed && ctx->check_distance && distance > 1) {
+	if (oio_lb_allow_distance_bypass &&
+			!reversed && ctx->check_distance && distance > 1) {
 		guint16 level = distance - 1;
 		if (ctx->n_targets > slot->locs_by_level[level]) {
 			GRID_TRACE("%u targets and %u locations at level %u: "

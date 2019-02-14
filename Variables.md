@@ -174,6 +174,14 @@ Used by `gcc`
  * type: string
  * cmake directive: *OIO_CORE_HTTP_USER_AGENT*
 
+### core.lb.allow_distance_bypass
+
+> Compare the number of items to select to the number of items available at the current location level, and decide if it is desirable to bypass or slacken the time-consuming distance checks. Disable this if you detect too many situations where distance between selected items could have been bigger.
+
+ * default: **TRUE**
+ * type: gboolean
+ * cmake directive: *OIO_CORE_LB_ALLOW_DISTANCE_BYPASS*
+
 ### core.lb.writer_lock_alert_delay
 
 > Dump the time spent while holding the global writer lock, when the lock is held for longer than this threshold (in microseconds).

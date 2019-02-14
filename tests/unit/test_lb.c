@@ -325,6 +325,11 @@ _world_from_file(const char *src_file)
 			GRID_TRACE("Built service id=%s,location=%lu,weight=%d",
 					srv->id, srv->location, srv->weight);
 			oio_lb_world__feed_slot(world, "*", srv);
+
+			if (elements > 3) {
+				oio_lb_world__create_slot(world, id_loc[3]);
+				oio_lb_world__feed_slot(world, id_loc[3], srv);
+			}
 		} else {
 			GRID_DEBUG("Ignoring line [%s]", *line);
 		}
@@ -338,18 +343,35 @@ _world_from_file(const char *src_file)
 	return world;
 }
 
+// FIXME(FVE): autodetect if is_balanced
 static void
 _test_repartition_by_loc_level(struct oio_lb_world_s *world,
-		int targets, int shots)
+		int targets, int shots, gboolean is_balanced)
 {
 	int unbalanced = 0;
 
 	/* create a pool and poll it */
-	GRID_DEBUG("Creating a pool with %d targets", targets);
 	struct oio_lb_pool_s *pool = oio_lb_world__create_pool(world, "pool-test");
-	const char *target = "*";
-	for (int i = 0; i < targets; i++) {
-		oio_lb_world__add_pool_target(pool, target);
+	guint n_slots = oio_lb_world__count_slots(world) - 1;
+	if (is_balanced && n_slots > 1) {
+		// Ignore the '*' slot, thus -1
+		guint items_per_slot = targets / n_slots;
+		GRID_DEBUG("Creating a pool with %d targets on %u slots",
+				targets, n_slots);
+		for (guint i = 0; i < n_slots; i++) {
+			for (guint j = 0; j < items_per_slot; j++) {
+				char target[16];
+				// User-friendly site names, thus +1
+				g_snprintf(target, sizeof(target), "site%u", i + 1);
+				oio_lb_world__add_pool_target(pool, target);
+			}
+		}
+	} else {
+		GRID_DEBUG("Creating a pool with %d targets", targets);
+		const char *target = "*";
+		for (int i = 0; i < targets; i++) {
+			oio_lb_world__add_pool_target(pool, target);
+		}
 	}
 
 	oio_lb_world__debug(world);
@@ -417,8 +439,9 @@ _test_repartition_by_loc_level(struct oio_lb_world_s *world,
 	}
 	GRID_INFO("%d unbalanced situations on %d shots", unbalanced, shots);
 
-	// FIXME(FVE): add a boolean, some configuration are voluntarily unbalanced
-	g_assert_cmpint(unbalanced, <, shots);
+	// FIXME(FVE): unbalanced situations should be rare
+	if (is_balanced)
+		g_assert_cmpint(unbalanced, <, shots);
 
 	int ideal_count = targets * shots / services;
 	int acceptable_deviation_percent = 20;
@@ -459,10 +482,11 @@ _test_repartition_by_loc_level(struct oio_lb_world_s *world,
 }
 
 static void
-_test_repartition_by_level__locations(const char **locations, int targets)
+_test_repartition_by_level__locations(const char **locations, int targets,
+		gboolean is_balanced)
 {
 	struct oio_lb_world_s *world = _world_from_loc_strings(locations);
-	_test_repartition_by_loc_level(world, targets, 10000);
+	_test_repartition_by_loc_level(world, targets, 10000, is_balanced);
 	oio_lb_world__destroy(world);
 }
 
@@ -470,7 +494,8 @@ static void
 _test_repartition_by_level__file(const char *service_file, int targets)
 {
 	struct oio_lb_world_s *world = _world_from_file(service_file);
-	_test_repartition_by_loc_level(world, targets, 50000);
+	// FIXME(FVE): not all files are balanced
+	_test_repartition_by_loc_level(world, targets, 50000, TRUE);
 	oio_lb_world__destroy(world);
 }
 
@@ -478,6 +503,7 @@ struct level_repartition_test_s {
 	const char **locations;
 	const char *file;
 	int targets;
+	gboolean is_balanced;
 };
 
 static void
@@ -485,6 +511,7 @@ level_repartition_test_free(gpointer data)
 {
 	struct level_repartition_test_s *test = data;
 	g_free((gpointer)test->file);
+	test->file = NULL;
 	g_free(data);
 }
 
@@ -496,7 +523,7 @@ test_uniform_level_repartition(gconstpointer raw_test_data)
 		return _test_repartition_by_level__file(
 				test_data->file, test_data->targets);
 	return _test_repartition_by_level__locations(
-			test_data->locations, test_data->targets);
+			test_data->locations, test_data->targets, test_data->is_balanced);
 }
 
 
@@ -763,7 +790,8 @@ _add_repartition_test(int services, int slots, int targets)
 }
 
 static void
-_add_level_repartition_test(const char **locations, const char *config, int targets)
+_add_level_repartition_test2(const char **locations, const char *config,
+		int targets, gboolean is_balanced)
 {
 	char name[128] = {0};
 	snprintf(name, sizeof(name),
@@ -773,8 +801,15 @@ _add_level_repartition_test(const char **locations, const char *config, int targ
 			g_malloc0(sizeof(struct level_repartition_test_s));
 	test_data->locations = locations;
 	test_data->targets = targets;
+	test_data->is_balanced = is_balanced;
 	g_test_add_data_func_full(name, test_data,
 			test_uniform_level_repartition, g_free);
+}
+
+static void
+_add_level_repartition_test(const char **locations, const char *config, int targets)
+{
+	_add_level_repartition_test2(locations, config, targets, FALSE);
 }
 
 static void
@@ -788,6 +823,7 @@ _add_level_repartition_test_file(const char *service_file, int targets)
 			g_malloc0(sizeof(struct level_repartition_test_s));
 	test_data->file = service_file;
 	test_data->targets = targets;
+	test_data->is_balanced = FALSE;
 	g_test_add_data_func_full(name, test_data,
 			test_uniform_level_repartition,
 			(GDestroyNotify)level_repartition_test_free);
@@ -809,7 +845,7 @@ _add_tests_from_files(const char *dir_path)
 			gchar *full_path = g_build_filename(dir_path, entry, NULL);
 			// FIXME(FVE): get target count from file name,
 			//_add_level_repartition_test_file(full_path, 15);
-			_add_level_repartition_test_file(full_path, 3);
+			_add_level_repartition_test_file(full_path, 12);
 		} else {
 			GRID_DEBUG("Ignoring %s", entry);
 		}
@@ -1105,8 +1141,8 @@ main(int argc, char **argv)
 		NULL,
 	};
 
-	_add_level_repartition_test(lrt4, "6x30x4", 15); // 12+3
-	_add_level_repartition_test(lrt4, "6x30x4", 18); // 14+4
+	_add_level_repartition_test2(lrt4, "6x30x4", 15, FALSE); // 12+3
+	_add_level_repartition_test2(lrt4, "6x30x4", 18, TRUE); // 14+4
 
 	const char *lrt5[181] = {
 		"bay0.rack0",
@@ -1298,8 +1334,8 @@ main(int argc, char **argv)
 		NULL,
 	};
 
-	_add_level_repartition_test(lrt5, "6x30", 15); // 12+3
-	_add_level_repartition_test(lrt5, "6x30", 18); // 14+4
+	_add_level_repartition_test2(lrt5, "6x30", 15, FALSE); // 12+3
+	_add_level_repartition_test2(lrt5, "6x30", 18, TRUE); // 14+4
 
 	// Balanced platform: 3 racks, 5 host in each
 	const char *lrt6[16] = {
@@ -1323,9 +1359,9 @@ main(int argc, char **argv)
 			"rack8.srv0",
 			NULL,
 	};
-	_add_level_repartition_test(lrt7, "8x3+1x1", 15); // 12+3
-	_add_level_repartition_test(lrt7, "8x3+1x1", 16); // 12+4
-	_add_level_repartition_test(lrt7, "8x3+1x1", 18); // 14+4
+	_add_level_repartition_test2(lrt7, "8x3+1x1", 15, FALSE); // 12+3
+	_add_level_repartition_test2(lrt7, "8x3+1x1", 16, FALSE); // 12+4
+	_add_level_repartition_test2(lrt7, "8x3+1x1", 18, FALSE); // 14+4
 
 	_add_tests_from_files(LB_TESTS_DATASETS);
 
