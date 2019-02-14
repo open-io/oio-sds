@@ -1015,7 +1015,11 @@
 			{ "type": "monotonic", "name": "oio_lb_writer_lock_alert_delay",
 				"key": "core.lb.writer_lock_alert_delay",
 				"descr": "Dump the time spent while holding the global writer lock, when the lock is held for longer than this threshold (in microseconds).",
-				"def": "5000", "min": "1", "max": "60s" }
+				"def": "5000", "min": "1", "max": "60s" },
+			{ "type": "bool", "name": "oio_lb_allow_distance_bypass",
+				"key": "core.lb.allow_distance_bypass",
+				"def": "true",
+				"descr": "Compare the number of items to select to the number of items available at the current location level, and decide if it is desirable to bypass or slacken the time-consuming distance checks. Disable this if you detect too many situations where distance between selected items could have been bigger." }
 		]
 	}
 }
