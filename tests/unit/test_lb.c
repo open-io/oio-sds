@@ -360,9 +360,9 @@ _test_repartition_by_loc_level(struct oio_lb_world_s *world,
 				targets, n_slots);
 		for (guint i = 0; i < n_slots; i++) {
 			for (guint j = 0; j < items_per_slot; j++) {
-				char target[16];
+				gchar target[32];
 				// User-friendly site names, thus +1
-				g_snprintf(target, sizeof(target), "site%u", i + 1);
+				g_snprintf(target, sizeof(target), "site%u,*", i + 1);
 				oio_lb_world__add_pool_target(pool, target);
 			}
 		}
@@ -373,6 +373,9 @@ _test_repartition_by_loc_level(struct oio_lb_world_s *world,
 			oio_lb_world__add_pool_target(pool, target);
 		}
 	}
+	GString *pool_dump = oio_lb_world__dump_pool_options(pool);
+	GRID_INFO("Using pool: %s", pool_dump->str);
+	g_string_free(pool_dump, TRUE);
 
 	oio_lb_world__debug(world);
 
@@ -439,9 +442,8 @@ _test_repartition_by_loc_level(struct oio_lb_world_s *world,
 	}
 	GRID_INFO("%d unbalanced situations on %d shots", unbalanced, shots);
 
-	// FIXME(FVE): unbalanced situations should be rare
 	if (is_balanced)
-		g_assert_cmpint(unbalanced, <, shots);
+		g_assert_cmpint(unbalanced, ==, 0);
 
 	int ideal_count = targets * shots / services;
 	int acceptable_deviation_percent = 20;
@@ -803,13 +805,14 @@ _add_level_repartition_test2(const char **locations, const char *config,
 	test_data->targets = targets;
 	test_data->is_balanced = is_balanced;
 	g_test_add_data_func_full(name, test_data,
-			test_uniform_level_repartition, g_free);
+			test_uniform_level_repartition,
+			(GDestroyNotify)level_repartition_test_free);
 }
 
 static void
 _add_level_repartition_test(const char **locations, const char *config, int targets)
 {
-	_add_level_repartition_test2(locations, config, targets, FALSE);
+	_add_level_repartition_test2(locations, config, targets, TRUE);
 }
 
 static void
@@ -844,8 +847,9 @@ _add_tests_from_files(const char *dir_path)
 		if (g_str_has_prefix(entry, "lb-")) {
 			gchar *full_path = g_build_filename(dir_path, entry, NULL);
 			// FIXME(FVE): get target count from file name,
-			//_add_level_repartition_test_file(full_path, 15);
 			_add_level_repartition_test_file(full_path, 12);
+			full_path = g_build_filename(dir_path, entry, NULL);
+			_add_level_repartition_test_file(full_path, 3);
 		} else {
 			GRID_DEBUG("Ignoring %s", entry);
 		}
@@ -896,11 +900,11 @@ main(int argc, char **argv)
 	_add_level_repartition_test(lrt0, "3x4", 4);
 	_add_level_repartition_test(lrt0, "3x4", 5);
 	_add_level_repartition_test(lrt0, "3x4", 6);
-	_add_level_repartition_test(lrt0, "3x4", 7);
-	_add_level_repartition_test(lrt0, "3x4", 8);
+	_add_level_repartition_test2(lrt0, "3x4", 7, FALSE);
+	_add_level_repartition_test2(lrt0, "3x4", 8, FALSE);
 	_add_level_repartition_test(lrt0, "3x4", 9);
-	_add_level_repartition_test(lrt0, "3x4", 10);
-	_add_level_repartition_test(lrt0, "3x4", 11);
+	_add_level_repartition_test2(lrt0, "3x4", 10, FALSE);
+	_add_level_repartition_test2(lrt0, "3x4", 11, FALSE);
 	_add_level_repartition_test(lrt0, "3x4", 12);
 
 	const char *lrt1[13] = {
@@ -914,9 +918,9 @@ main(int argc, char **argv)
 	_add_level_repartition_test(lrt1, "4x3", 6);
 	_add_level_repartition_test(lrt1, "4x3", 7);
 	_add_level_repartition_test(lrt1, "4x3", 8);
-	_add_level_repartition_test(lrt1, "4x3", 9);
-	_add_level_repartition_test(lrt1, "4x3", 10);
-	_add_level_repartition_test(lrt1, "4x3", 11);
+	_add_level_repartition_test2(lrt1, "4x3", 9, FALSE);
+	_add_level_repartition_test2(lrt1, "4x3", 10, FALSE);
+	_add_level_repartition_test2(lrt1, "4x3", 11, FALSE);
 
 	const char *lrt2[13] = {
 			"rack0.srv0", "rack0.srv1",
@@ -948,9 +952,9 @@ main(int argc, char **argv)
 	_add_level_repartition_test(lrt3, "2x2x3", 6);
 	_add_level_repartition_test(lrt3, "2x2x3", 7);
 	_add_level_repartition_test(lrt3, "2x2x3", 8);
-	_add_level_repartition_test(lrt3, "2x2x3", 9);
+	_add_level_repartition_test2(lrt3, "2x2x3", 9, FALSE);
 	_add_level_repartition_test(lrt3, "2x2x3", 10);
-	_add_level_repartition_test(lrt3, "2x2x3", 11);
+	_add_level_repartition_test2(lrt3, "2x2x3", 11, FALSE);
 
 	const char *lrt4[721] = {
 		"bay0.rack0.srv0", "bay0.rack0.srv1", "bay0.rack0.srv2", "bay0.rack0.srv3",
