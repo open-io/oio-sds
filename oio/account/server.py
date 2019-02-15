@@ -421,7 +421,7 @@ class Account(WerkzeugApp):
         dtime = data.get('dtime')
         object_count = data.get('objects')
         bytes_used = data.get('bytes')
-        missing_chunks = data.get('missing-chunks')
+        missing_chunks = data.get('missing_chunks')
         # Exceptions are catched by dispatch_request
         info = self.backend.update_container(
             account_id, name, mtime, dtime,
