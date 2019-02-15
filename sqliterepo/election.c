@@ -1533,6 +1533,8 @@ deferred_completion_ASKING(struct exec_later_ASKING_context_s *d)
 	member_log_completion("ASK", d->zrc, d->member);
 
 	if (d->zrc != ZOK) {
+		if (d->zrc == ZNONODE)
+			transition(d->member, EVT_LEFT_MASTER, NULL);
 		transition_error(d->member, EVT_MASTER_KO, d->zrc);
 	} else {
 		const char * const * peers = (const char * const *) d->member->peers;
@@ -3322,6 +3324,15 @@ _member_react_ASKING(struct election_member_s *member, enum event_type_e evt,
 		case EVT_MASTER_KO:
 			member->pending_ZK_GET = 0;
 			EXTRA_ASSERT(url == NULL);
+			/* Our node disappeared or the app. requires we quit, no need to
+			 * go further, we exit the FSM. */
+			if (member->requested_LEFT_SELF || member->requested_LEAVE)
+				return member_action_to_LEAVING(member);
+			/* The master disappeared. But at this point we had no clue to
+			 * make us quit and we are still in the list -> let's check if
+			 * we are the next candidate to MASTER */
+			if (member->requested_LEFT_MASTER)
+				return member_action_to_LISTING(member);
 			/* No need to manage a clean LEAVE, we are about to leave
 			 * and then fail */
 			return member_action_to_LEAVING_FAILING(member);
