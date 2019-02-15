@@ -676,9 +676,8 @@ class TestMeta2Contents(BaseTestCase):
         # Extract one chunk from the list
         chunks.pop()
         if len(chunks) < 1:
-            self.skip(
+            self.skipTest(
                 'Must run with a storage policy requiring more than 1 chunk')
-            return
 
         # Do the spare request, specify that we already know some chunks
         resp = self.request('POST', self.url_content('spare'), params=params,
@@ -690,7 +689,7 @@ class TestMeta2Contents(BaseTestCase):
         self.assertEqual(1, len(spare_data['chunks']))
         self.assertEqual(1, len(spare_data['properties']))
 
-    def test_spare_with_one_broken(self):
+    def _test_spare_with_n_broken(self, count_broken):
         headers = {'X-oio-action-mode': 'autocreate'}
         params = self.param_content(self.ref, random_content())
         resp = self.request('POST', self.url_content('prepare2'),
@@ -699,28 +698,42 @@ class TestMeta2Contents(BaseTestCase):
         obj_meta = self.json_loads(resp.data)
         # Get a list of chunks for future spare request
         chunks = obj_meta['chunks']
-        if len(self.conf['services']['rawx']) < len(chunks) + 1:
-            self.skip('Not enough rawx services (%d+1 required)' % len(chunks))
-            return
+        if len(chunks) < count_broken + 1:
+            self.skipTest(
+                'Must run with a storage policy requiring more than %d chunk' %
+                count_broken)
+        elif len(self.conf['services']['rawx']) < len(chunks) + 1:
+            self.skipTest(
+                'Not enough rawx services (%d+1 required)' % len(chunks))
 
         # Extract one chunk from the list, keep it for later
-        broken = chunks.pop()
+        broken = [chunks.pop() for _ in range(count_broken)]
 
         # Do the spare request, specify that we already know some chunks,
         # and we know some chunk location is broken.
         resp = self.request('POST', self.url_content('spare'), params=params,
                             data=json.dumps(
                                 {"notin": chunks,
-                                 "broken": [broken]}))
+                                 "broken": broken}))
         self.assertEqual(resp.status, 200)
         spare_data = self.json_loads(resp.data)
-        # Since we extracted one chunk, there must be exactly one chunk in
-        # the response (plus one property telling the "quality" of the chunk)
-        self.assertEqual(1, len(spare_data['chunks']))
-        self.assertEqual(1, len(spare_data['properties']))
-        broken_netloc = broken['url'].split('/')[2]
-        spare_netloc = spare_data['chunks'][0]['id'].split('/')[2]
-        self.assertNotEqual(broken_netloc, spare_netloc)
+        # Since we extracted N chunks, there must be exactly N chunks in
+        # the response (plus N properties telling the "quality" of the chunks).
+        self.assertEqual(count_broken, len(spare_data['chunks']))
+        self.assertEqual(count_broken, len(spare_data['properties']))
+        broken_netlocs = {b['url'].split('/')[2] for b in broken}
+        spare_netlocs = {s['id'].split('/')[2] for s in spare_data['chunks']}
+        # There should be no elements in common.
+        self.assertFalse(broken_netlocs.intersection(spare_netlocs))
+
+    def test_spare_with_1_broken(self):
+        return self._test_spare_with_n_broken(1)
+
+    def test_spare_with_2_broken(self):
+        return self._test_spare_with_n_broken(2)
+
+    def test_spare_with_3_broken(self):
+        return self._test_spare_with_n_broken(3)
 
     def test_spare_errors(self):
         params = self.param_content(self.ref, random_content())
