@@ -99,7 +99,7 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(info['id'], account_id)
         self.assertEqual(info['objects'], 0)
         self.assertEqual(info['bytes'], 0)
-        self.assertEqual(info['missing-chunks'], 0)
+        self.assertEqual(info['missing_chunks'], 0)
         self.assertEqual(info['containers'], 0)
         self.assertTrue(info['ctime'])
 
@@ -110,7 +110,7 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(info['containers'], 1)
         self.assertEqual(info['objects'], 1)
         self.assertEqual(info['bytes'], 1)
-        self.assertEqual(info['missing-chunks'], 1)
+        self.assertEqual(info['missing_chunks'], 1)
 
         # second container
         sleep(.00001)
@@ -120,7 +120,7 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(info['containers'], 2)
         self.assertEqual(info['objects'], 1)
         self.assertEqual(info['bytes'], 1)
-        self.assertEqual(info['missing-chunks'], 1)
+        self.assertEqual(info['missing_chunks'], 1)
 
         # update second container
         sleep(.00001)
@@ -130,7 +130,7 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(info['containers'], 2)
         self.assertEqual(info['objects'], 2)
         self.assertEqual(info['bytes'], 2)
-        self.assertEqual(info['missing-chunks'], 2)
+        self.assertEqual(info['missing_chunks'], 2)
 
         # delete first container
         sleep(.00001)
@@ -140,7 +140,7 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(info['containers'], 1)
         self.assertEqual(info['objects'], 1)
         self.assertEqual(info['bytes'], 1)
-        self.assertEqual(info['missing-chunks'], 1)
+        self.assertEqual(info['missing_chunks'], 1)
 
         # delete second container
         sleep(.00001)
@@ -150,7 +150,7 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(info['containers'], 0)
         self.assertEqual(info['objects'], 0)
         self.assertEqual(info['bytes'], 0)
-        self.assertEqual(info['missing-chunks'], 0)
+        self.assertEqual(info['missing_chunks'], 0)
 
     def test_update_after_container_deletion(self):
         backend = AccountBackend({}, self.conn)
@@ -170,7 +170,7 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(info['containers'], 1)
         self.assertEqual(info['objects'], 3)
         self.assertEqual(info['bytes'], 30)
-        self.assertEqual(info['missing-chunks'], 5)
+        self.assertEqual(info['missing_chunks'], 5)
 
         # Container is flushed, but the event is deferred
         flush_timestamp = Timestamp(time()).normal
@@ -189,7 +189,7 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(info['containers'], 0)
         self.assertEqual(info['objects'], 0)
         self.assertEqual(info['bytes'], 0)
-        self.assertEqual(info['missing-chunks'], 0)
+        self.assertEqual(info['missing_chunks'], 0)
 
     def test_delete_container(self):
         backend = AccountBackend({}, self.conn)
@@ -495,17 +495,17 @@ class TestAccountBackend(BaseTestCase):
         # change values
         self.conn.hset(account_key, 'bytes', 1)
         self.conn.hset(account_key, 'objects', 2)
-        self.conn.hset(account_key, 'missing-chunks', 3)
+        self.conn.hset(account_key, 'missing_chunks', 3)
         self.assertEqual(self.conn.hget(account_key, 'bytes'), '1')
         self.assertEqual(self.conn.hget(account_key, 'objects'), '2')
-        self.assertEqual(self.conn.hget(account_key, 'missing-chunks'), '3')
+        self.assertEqual(self.conn.hget(account_key, 'missing_chunks'), '3')
 
         backend.refresh_account(account_id)
         self.assertEqual(self.conn.hget(account_key, 'bytes'),
                          str(total_bytes))
         self.assertEqual(self.conn.hget(account_key, 'objects'),
                          str(total_objects))
-        self.assertEqual(self.conn.hget(account_key, 'missing-chunks'),
+        self.assertEqual(self.conn.hget(account_key, 'missing_chunks'),
                          str(total_missing_chunks))
 
     def test_update_container_wrong_timestamp_format(self):
@@ -604,12 +604,12 @@ class TestAccountBackend(BaseTestCase):
                          str(total_bytes))
         self.assertEqual(self.conn.hget(account_key, 'objects'),
                          str(total_objects))
-        self.assertEqual(self.conn.hget(account_key, 'missing-chunks'),
+        self.assertEqual(self.conn.hget(account_key, 'missing_chunks'),
                          str(total_missing_chunks))
 
         backend.flush_account(account_id)
         self.assertEqual(self.conn.hget(account_key, 'bytes'), '0')
         self.assertEqual(self.conn.hget(account_key, 'objects'), '0')
-        self.assertEqual(self.conn.hget(account_key, 'missing-chunks'), '0')
+        self.assertEqual(self.conn.hget(account_key, 'missing_chunks'), '0')
         self.assertEqual(self.conn.zcard("containers:%s" % account_id), 0)
         self.assertEqual(self.conn.exists("container:test:*"), 0)

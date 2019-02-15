@@ -53,7 +53,7 @@ class AccountBackend(RedisConn):
                  if ARGV[7] == 'True' then
                    redis.call('HSET', 'accounts:', KEYS[1], 1);
                    redis.call('HMSET', KEYS[4], 'id', KEYS[1],
-                              'bytes', 0, 'objects', 0, 'missing-chunks', 0,
+                              'bytes', 0, 'objects', 0, 'missing_chunks', 0,
                               'ctime', ARGV[8]);
                  else
                    return redis.error_reply('no_account');
@@ -73,7 +73,7 @@ class AccountBackend(RedisConn):
                local objects = redis.call('HGET', KEYS[2], 'objects');
                local bytes = redis.call('HGET', KEYS[2], 'bytes');
                local missing_chunks = redis.call('HGET', KEYS[2],
-                                                 'missing-chunks');
+                                                 'missing_chunks');
 
                -- When the keys do not exist redis return false and not nil
                if dtime == false then
@@ -117,7 +117,7 @@ class AccountBackend(RedisConn):
                  inc_bytes = -bytes;
                  inc_missing_chunks = -missing_chunks;
                  redis.call('HMSET', KEYS[2],
-                            'bytes', 0, 'objects', 0, 'missing-chunks', 0);
+                            'bytes', 0, 'objects', 0, 'missing_chunks', 0);
                  redis.call('EXPIRE', KEYS[2], tonumber(ARGV[9]));
                  redis.call('ZREM', KEYS[3], name);
                elseif is_sup(mtime,old_mtime) then
@@ -128,7 +128,7 @@ class AccountBackend(RedisConn):
                  redis.call('HMSET', KEYS[2],
                             'objects', tonumber(ARGV[4]),
                             'bytes', tonumber(ARGV[5]),
-                            'missing-chunks', tonumber(ARGV[6]));
+                            'missing_chunks', tonumber(ARGV[6]));
                  redis.call('ZADD', KEYS[3], '0', name);
                else
                  return redis.error_reply('no_update_needed');
@@ -143,7 +143,7 @@ class AccountBackend(RedisConn):
                  redis.call('HINCRBY', KEYS[4], 'bytes', inc_bytes);
                end;
                if inc_missing_chunks ~= 0 then
-                 redis.call('HINCRBY', KEYS[4], 'missing-chunks',
+                 redis.call('HINCRBY', KEYS[4], 'missing_chunks',
                             inc_missing_chunks);
                end;
                """)
@@ -165,11 +165,11 @@ class AccountBackend(RedisConn):
                                                    'objects')
             bytes_sum = bytes_sum + redis.call('HGET', container_key, 'bytes')
             missing_chunks_sum = missing_chunks_sum
-                    + redis.call('HGET', container_key, 'missing-chunks')
+                    + redis.call('HGET', container_key, 'missing_chunks')
         end;
 
         redis.call('HMSET', KEYS[1], 'objects', objects_sum,
-                   'bytes', bytes_sum, 'missing-chunks', missing_chunks_sum)
+                   'bytes', bytes_sum, 'missing_chunks', missing_chunks_sum)
         """
 
     lua_flush_account = """
@@ -179,7 +179,7 @@ class AccountBackend(RedisConn):
         end;
 
         redis.call('HMSET', KEYS[1], 'objects', 0, 'bytes', 0,
-                   'missing-chunks', 0)
+                   'missing_chunks', 0)
 
         local containers = redis.call('ZRANGE', KEYS[2], 0, -1);
         redis.call('DEL', KEYS[2]);
@@ -222,7 +222,7 @@ class AccountBackend(RedisConn):
             'id': account_id,
             'objects': 0,
             'bytes': 0,
-            'missing-chunks': 0,
+            'missing_chunks': 0,
             'ctime': Timestamp(time()).normal
         })
         pipeline.execute()
@@ -305,7 +305,7 @@ class AccountBackend(RedisConn):
         pipeline.hgetall('metadata:%s' % account_id)
         data = pipeline.execute()
         info = data[0]
-        for r in ['bytes', 'objects', 'missing-chunks']:
+        for r in ['bytes', 'objects', 'missing_chunks']:
             info[r] = int_value(info.get(r), 0)
         info['containers'] = data[1]
         info['metadata'] = data[2]
