@@ -1227,7 +1227,7 @@ static void test_STEP_ASKING(void) {
 	m->requested_LEFT_MASTER = 1;
 	m->requested_LEFT_SELF = 1;
 	transition(m, EVT_MASTER_KO, NULL);
-	_member_assert_LEAVING_FAILING(m);
+	_member_assert_LEAVING(m);
 	g_assert_false(m->requested_LEFT_MASTER);
 	g_assert_false(m->requested_LEFT_SELF);
 	g_assert_false(m->requested_LEAVE);
@@ -1237,7 +1237,7 @@ static void test_STEP_ASKING(void) {
 	m->requested_LEFT_MASTER = 1;
 	m->requested_LEFT_SELF = 1;
 	transition(m, EVT_MASTER_KO, NULL);
-	_member_assert_LEAVING_FAILING(m);
+	_member_assert_LEAVING(m);
 	g_assert_false(m->requested_LEFT_MASTER);
 	g_assert_false(m->requested_LEFT_SELF);
 	g_assert_false(m->requested_LEAVE);
@@ -1246,7 +1246,7 @@ static void test_STEP_ASKING(void) {
 	RESET();
 	m->requested_LEFT_SELF = 1;
 	transition(m, EVT_MASTER_KO, NULL);
-	_member_assert_LEAVING_FAILING(m);
+	_member_assert_LEAVING(m);
 	g_assert_false(m->requested_LEFT_MASTER);
 	g_assert_false(m->requested_LEFT_SELF);
 	g_assert_false(m->requested_LEAVE);
@@ -1255,16 +1255,16 @@ static void test_STEP_ASKING(void) {
 	RESET();
 	m->requested_LEFT_MASTER = 1;
 	transition(m, EVT_MASTER_KO, NULL);
-	_member_assert_LEAVING_FAILING(m);
+	_member_assert_LISTING(m);
 	g_assert_false(m->requested_LEFT_MASTER);
 	g_assert_false(m->requested_LEFT_SELF);
 	g_assert_false(m->requested_LEAVE);
-	_pending(CMD_DELETE, 0);
+	_pending(CMD_LIST, 0);
 
 	RESET();
 	m->requested_LEAVE = 1;
 	transition(m, EVT_MASTER_KO, NULL);
-	_member_assert_LEAVING_FAILING(m);
+	_member_assert_LEAVING(m);
 	g_assert_false(m->requested_LEFT_MASTER);
 	g_assert_false(m->requested_LEFT_SELF);
 	g_assert_false(m->requested_LEAVE);

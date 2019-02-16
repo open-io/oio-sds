@@ -25,6 +25,7 @@ License along with this library.
 #include <core/oio_sds.h>
 #include <core/oio_core.h>
 #include <metautils/lib/storage_policy.h>
+#include <core/client_variables.h>
 
 #include "internals.h"
 
@@ -830,6 +831,9 @@ main(int argc, char **argv)
 	ADD_TEST ("put/file/asis", OIO_HDRCASE_1CAP,   _roundtrip_put_from_file);
 	ADD_TEST ("put/file/asis", OIO_HDRCASE_RANDOM, _roundtrip_put_from_file);
 	ADD_TEST ("put/buffer/chunksize", OIO_HDRCASE_RANDOM, check_chunksize);
+
+	oio_chunk_size_minimum = 0;
+	oio_chunk_size_maximum = 0;
 
 	int rc = g_test_run();
 	oio_sds_pfree (&client);
