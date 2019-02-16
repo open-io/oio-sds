@@ -988,14 +988,16 @@
 				"descr": "Should the client adapt metachunk size to EC policy parameters? Letting this on will make bigger metachunks, but chunks on storage will stay at normal chunk size. Disabling this option allows clients to do write alignment." },
 
 			{ "type": "int64", "name": "oio_chunk_size_minimum",
-				"key": "core.chunk_size.minimum",
+				"key": "core.chunk_size.min",
 				"descr": "Should the C API adjust the chunk size when below this threshold. Set to 0 for no action",
-				"def": "10M", "min": 0, "max": "max"},
+				"def": "10M", "min": 0, "max": "max",
+				"aliases":["core.chunk_size.minimum"]},
 
 			{ "type": "int64", "name": "oio_chunk_size_maximum",
-				"key": "core.chunk_size.maximum",
+				"key": "core.chunk_size.max",
 				"descr": "Should the C API adjust the chunk size when over this ceiling. Set to 0 for no action.",
-				"def": 0, "min": 0, "max": "max"},
+				"def": 0, "min": 0, "max": "max",
+				"aliases":["core.chunk_size.maximum"]},
 
 			{ "type": "bool", "name": "oio_url_must_be_unicode",
 				"key": "core.sds.strict_utf8",
