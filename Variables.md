@@ -148,6 +148,24 @@ Used by `gcc`
  * cmake directive: *OIO_COMMON_VERBOSITY_RESET_DELAY*
  * range: 1 * G_TIME_SPAN_SECOND -> 1 * G_TIME_SPAN_HOUR
 
+### core.chunk_size.max
+
+> Should the C API adjust the chunk size when over this ceiling. Set to 0 for no action.
+
+ * default: **0**
+ * type: gint64
+ * cmake directive: *OIO_CORE_CHUNK_SIZE_MAX*
+ * range: 0 -> G_MAXINT64
+
+### core.chunk_size.min
+
+> Should the C API adjust the chunk size when below this threshold. Set to 0 for no action
+
+ * default: **10000000**
+ * type: gint64
+ * cmake directive: *OIO_CORE_CHUNK_SIZE_MIN*
+ * range: 0 -> G_MAXINT64
+
 ### core.http.user_agent
 
 > HTTP User-Agent to be used between any C client and the proxy

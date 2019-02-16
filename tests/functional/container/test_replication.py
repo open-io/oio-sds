@@ -116,6 +116,8 @@ class TestContainerReplication(BaseTestCase):
         """
         if not self._synchronous_restore_allowed():
             self.skipTest('Synchronous replication is disabled')
+        if self.is_running_on_public_ci():
+            self.skipTest("Too buggy to run on public CI")
         self._test_restore_after_missed_diff()
 
     def test_asynchronous_restore(self):

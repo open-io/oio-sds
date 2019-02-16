@@ -2169,6 +2169,7 @@ generate_chunk_bean(struct oio_lb_selected_item_s *sel,
 	struct bean_CHUNKS_s *chunk = _bean_create(&descr_struct_CHUNKS);
 	CHUNKS_set2_id(chunk, chunkid);
 	CHUNKS_set_ctime(chunk, oio_ext_real_time() / G_TIME_SPAN_SECOND);
+	g_free(chunkid);
 
 	return chunk;
 }

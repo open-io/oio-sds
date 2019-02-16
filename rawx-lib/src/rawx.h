@@ -54,21 +54,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # define ATTR_NAME_OIO_VERSION "oio.version"
 
-# define ATTR_NAME_OIO_USER_PATH "oio.user"
-
-
-#define NS_RAWX_BUFSIZE_OPTION "rawx_bufsize"
-
 #define NS_COMPRESSION_OPTION "compression"
 #define NS_COMPRESS_ALGO_OPTION "compression_algorithm"
 #define NS_COMPRESS_BLOCKSIZE_OPTION "compression_blocksize"
 
-#define DEFAULT_STREAM_BUFF_SIZE 512000
-#define RAWX_CONF_TIMEOUT 10LLU
 #define NS_COMPRESSION_ON "on"
 
-typedef struct chunk_textinfo_s
-{
+struct chunk_textinfo_s {
 	gchar *container_id;
 
 	gchar *content_id;
@@ -96,7 +88,7 @@ typedef struct chunk_textinfo_s
 
 	gchar *content_fullpath;
 
-} chunk_textinfo_t;
+};
 
 void chunk_textinfo_free_content(struct chunk_textinfo_s *cti);
 
@@ -114,8 +106,5 @@ gboolean get_rawx_info_from_fd(int fd, GError **error, gchar *hex_chunkid,
 		struct chunk_textinfo_s *chunk);
 
 gboolean get_compression_info_in_attr(const char *p, GError **error, GHashTable *table);
-
-gboolean remove_fullpath_from_attr(const char *p, GError **error,
-		const gchar *hex_chunkid);
 
 #endif /*OIO_SDS__rawx_lib__src__rawx_h*/

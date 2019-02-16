@@ -32,12 +32,12 @@ from oio.conscience.client import ConscienceClient
 
 def random_content():
     """Generate an object name."""
-    return 'content-' + random_str(8)
+    return random_str(1023)
 
 
 def random_container():
     """Generate a container name."""
-    return 'container-' + random_str(16)
+    return random_str(1023)
 
 
 def merge(s0, s1):

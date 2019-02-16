@@ -1024,6 +1024,7 @@
 				"key": "core.sds.timeout.cnx.rawx",
 				"descr": "Sets the connection timeout for requests issued to rawx services.",
 				"def": 5.0, "min": 0.001, "max": 300.0 },
+
 			{ "type": "float", "name": "oio_client_rawx_timeout_req",
 				"key": "core.sds.timeout.req.rawx",
 				"descr": "Sets the global timeout when uploading a chunk to a rawx service.",
@@ -1050,6 +1051,18 @@
 				"key": "core.sds.adapt_metachunk_size",
 				"def": "true",
 				"descr": "Should the client adapt metachunk size to EC policy parameters? Letting this on will make bigger metachunks, but chunks on storage will stay at normal chunk size. Disabling this option allows clients to do write alignment." },
+
+			{ "type": "int64", "name": "oio_chunk_size_minimum",
+				"key": "core.chunk_size.min",
+				"descr": "Should the C API adjust the chunk size when below this threshold. Set to 0 for no action",
+				"def": "10M", "min": 0, "max": "max",
+				"aliases":["core.chunk_size.minimum"]},
+
+			{ "type": "int64", "name": "oio_chunk_size_maximum",
+				"key": "core.chunk_size.max",
+				"descr": "Should the C API adjust the chunk size when over this ceiling. Set to 0 for no action.",
+				"def": 0, "min": 0, "max": "max",
+				"aliases":["core.chunk_size.maximum"]},
 
 			{ "type": "bool", "name": "oio_url_must_be_unicode",
 				"key": "core.sds.strict_utf8",

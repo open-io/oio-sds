@@ -178,57 +178,6 @@ _write_data_crumble_COMP(dav_stream *stream, gulong *checksum)
 	return e;
 }
 
-/******************** RESOURCE UTILY FUNCTIONS *******************/
-
-dav_error *
-resource_init_decompression(dav_resource *resource, dav_rawx_server_conf *conf)
-{
-	char *c = NULL;
-	dav_error *r = NULL;
-	GError *e = NULL;
-
-	GHashTable *comp_opt =
-			g_hash_table_new_full( g_str_hash, g_str_equal, g_free, g_free);
-	if (!get_compression_info_in_attr(
-			resource_get_pathname(resource), &e, comp_opt)) {
-		if (comp_opt)
-			g_hash_table_destroy(comp_opt);
-		if (e)
-			g_clear_error(&e);
-		return server_create_and_stat_error(
-				conf, resource->pool, HTTP_CONFLICT, 0,
-				"Failed to get chunk compression from attr");
-	}
-	c = g_hash_table_lookup(comp_opt, NS_COMPRESSION_OPTION);
-	if (c && !g_ascii_strcasecmp(c, NS_COMPRESSION_ON)) {
-		resource->info->compression = TRUE;
-	} else {
-		resource->info->compression = FALSE;
-	}
-
-	if (resource->info->compression) {
-		// init compression method according to algo choice
-		char *algo = g_hash_table_lookup(comp_opt, NS_COMPRESS_ALGO_OPTION);
-		memset(resource->info->compress_algo, 0,
-				sizeof(resource->info->compress_algo));
-		memcpy(resource->info->compress_algo, algo, MIN(strlen(algo),
-					sizeof(resource->info->compress_algo)));
-		init_compression_ctx(&(resource->info->comp_ctx), algo);
-		if (resource->info->comp_ctx.chunk_initiator(
-				&(resource->info->cp_chunk), resource->info->fullpath)) {
-			r = server_create_and_stat_error(
-					resource_get_server_config(resource), resource->pool, HTTP_INTERNAL_SERVER_ERROR, 0,
-					"Failed to init chunk bucket");
-		}
-	}
-	if (comp_opt)
-		g_hash_table_destroy(comp_opt);
-
-	if (e)
-		g_clear_error(&e);
-
-	return r;
-}
 
 /******************** REQUEST UTILITY FUNCTIONS ******************/
 
