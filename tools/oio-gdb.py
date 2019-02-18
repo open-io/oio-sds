@@ -71,6 +71,9 @@ class Core(object):
 
 
 if __name__ == "__main__":
-    core = Core()
-    for item in core.list():
-        core.parse(item)
+    try:
+        core = Core()
+        for item in core.list():
+            core.parse(item)
+    except Exception as exc:
+        print(str(exc))

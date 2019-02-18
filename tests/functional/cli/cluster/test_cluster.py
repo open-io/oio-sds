@@ -73,9 +73,7 @@ class ClusterTest(CliTestCase):
     def test_cluster_wait(self):
         if self.is_running_on_public_ci() or self.is_running_on_jenkins():
             self.skipTest("Too long to run on public CI")
-
         opts = self.get_opts([], 'json')
-
         # Get one rawx service's ID
         output = self.openio('cluster list rawx' + opts)
         data = json.loads(output)

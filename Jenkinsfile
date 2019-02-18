@@ -10,6 +10,7 @@ pipeline {
             }
             steps {
                 sh '''
+                export
                 useradd --create-home openio
 
                 cp -rf . /home/openio/build
@@ -17,7 +18,7 @@ pipeline {
 
                 ./jenkins/prepare.sh
 
-                su - openio -c "cd /home/openio/build && ./jenkins/build.sh"
+                su - openio -c "export JENKINS_URL=${JENKINS_URL} && cd /home/openio/build && ./jenkins/build.sh"
                 '''
             }
         }

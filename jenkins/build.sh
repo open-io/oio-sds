@@ -1,5 +1,7 @@
 #!/bin/bash
 
+export
+
 go get gopkg.in/ini.v1 gopkg.in/tylerb/graceful.v1
 
 virtualenv $HOME/oio && source $HOME/oio/bin/activate
