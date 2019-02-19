@@ -357,7 +357,7 @@ class ObjectStorageApi(object):
     @ensure_request_id
     def container_list(self, account, limit=None, marker=None,
                        end_marker=None, prefix=None, delimiter=None,
-                       **kwargs):
+                       s3_buckets_only=False, **kwargs):
         """
         Get the list of containers of an account.
 
@@ -370,6 +370,9 @@ class ObjectStorageApi(object):
         :keyword end_marker:
         :keyword prefix:
         :keyword delimiter:
+        :keyword s3_buckets_only: only listing s3 buckets
+        :type s3_buckets_only: `bool`
+        :type marker: `bool`
         :return: the list of containers of an account
         :rtype: `list` of items (`list`) with 5 fields:
             name, number of objects, number of bytes, 1 if the item
@@ -381,6 +384,7 @@ class ObjectStorageApi(object):
                                            end_marker=end_marker,
                                            prefix=prefix,
                                            delimiter=delimiter,
+                                           s3_buckets_only=s3_buckets_only,
                                            **kwargs)
         return resp["listing"]
 

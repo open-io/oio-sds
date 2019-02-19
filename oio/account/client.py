@@ -148,7 +148,7 @@ class AccountClient(HttpApi):
 
     def container_list(self, account, limit=None, marker=None,
                        end_marker=None, prefix=None, delimiter=None,
-                       **kwargs):
+                       s3_buckets_only=False, **kwargs):
         """
         Get the list of containers of an account.
 
@@ -161,6 +161,8 @@ class AccountClient(HttpApi):
         :keyword end_marker:
         :keyword prefix:
         :keyword delimiter:
+        :keyword s3_buckets_only: only listing s3 buckets
+        :type s3_buckets_only: `bool`
         :rtype: `dict` with 'ctime' (`float`), 'bytes' (`int`),
             'objects' (`int`), 'containers' (`int`), 'id' (`str`),
             'metadata' (`dict`) and 'listing' (`list`).
@@ -173,7 +175,8 @@ class AccountClient(HttpApi):
                   "marker": marker,
                   "end_marker": end_marker,
                   "prefix": prefix,
-                  "delimiter": delimiter}
+                  "delimiter": delimiter,
+                  "s3_buckets_only": s3_buckets_only}
         _resp, body = self.account_request(account, 'GET', 'containers',
                                            params=params, **kwargs)
         return body
