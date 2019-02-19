@@ -23,6 +23,7 @@ from oio.account.backend import AccountBackend
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.wsgi import WerkzeugApp
+from oio.common.easy_value import true_value
 
 
 def access_log(func):
@@ -365,10 +366,12 @@ class Account(WerkzeugApp):
         prefix = req.args.get('prefix', '')
         limit = int(req.args.get('limit', '1000'))
         delimiter = req.args.get('delimiter', '')
+        s3_buckets_only = true_value(req.args.get('s3_buckets_only', False))
 
         user_list = self.backend.list_containers(
             account_id, limit=limit, marker=marker, end_marker=end_marker,
-            prefix=prefix, delimiter=delimiter)
+            prefix=prefix, delimiter=delimiter,
+            s3_buckets_only=s3_buckets_only)
 
         info['listing'] = user_list
         # TODO(FVE): add "truncated" entry telling if the listing is truncated

@@ -88,7 +88,8 @@ class ObjectStorageTest(unittest.TestCase):
             self.account, limit=limit, marker=marker, prefix=prefix,
             delimiter=delimiter, end_marker=end_marker, headers=self.headers)
         params = {"id": self.account, "prefix": prefix, "delimiter": delimiter,
-                  "marker": marker, "end_marker": end_marker, "limit": limit}
+                  "marker": marker, "end_marker": end_marker, "limit": limit,
+                  "s3_buckets_only": False}
         uri = "http://%s/v1.0/account/containers" % fake_endpoint
         self.api.account._direct_request.assert_called_once_with(
             'GET', uri, params=params, headers=self.headers)

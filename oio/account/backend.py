@@ -16,6 +16,7 @@
 
 from time import time
 
+import re
 import redis
 import redis.sentinel
 from werkzeug.exceptions import NotFound, Conflict, BadRequest
@@ -188,6 +189,21 @@ class AccountBackend(RedisConn):
             redis.call('DEL', KEYS[3] .. container);
         end;
         """
+
+    # This regex comes from https://stackoverflow.com/a/50484916
+    #
+    # The first group looks ahead to ensure that the match
+    # is between 3 and 63 characters long.
+    #
+    # The next group (?!^(\d+\.)+\d+$) looks ahead to forbid matching
+    # bucket names that look like IP addresses.
+    #
+    # <The last group matches zero or more labels followed by a dot *
+    buckets_pattern = re.compile(
+        r"""(?=^.{3,63}$)   # first group
+        (?!^(\d+\.)+\d+$) # second
+        (^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)* #third
+        ([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$)""", re.X)
 
     def __init__(self, conf, connection=None):
         self.conf = conf
@@ -362,8 +378,11 @@ class AccountBackend(RedisConn):
 
         return name
 
+    def _should_be_listed(self, c_id, s3_buckets_only):
+        return not s3_buckets_only or self.buckets_pattern.match(c_id)
+
     def _raw_listing(self, account_id, limit, marker, end_marker, delimiter,
-                     prefix):
+                     prefix, s3_buckets_only=False):
         """Fetch tuple list of containers matching options.
            Tuple is [(container|prefix),
                      0 *reserved for objects*,
@@ -393,15 +412,20 @@ class AccountBackend(RedisConn):
                              for cid in container_ids]
 
             if prefix is None:
-                containers = [[c_id, 0, 0, 0, 0] for c_id in container_ids]
+                containers = [[c_id, 0, 0, 0, 0] for c_id in container_ids
+                              if self._should_be_listed(c_id, s3_buckets_only)]
                 return containers
             if not delimiter:
                 if not prefix:
-                    containers = [[c_id, 0, 0, 0, 0] for c_id in container_ids]
+                    containers = [[c_id, 0, 0, 0, 0] for c_id in container_ids
+                                  if self._should_be_listed(c_id,
+                                                            s3_buckets_only)]
                     return containers
                 else:
                     containers = [[c_id, 0, 0, 0, 0] for c_id in container_ids
-                                  if c_id.startswith(prefix)]
+                                  if c_id.startswith(prefix) and
+                                  self._should_be_listed(c_id,
+                                                         s3_buckets_only)]
                     return containers
 
             count = 0
@@ -418,16 +442,19 @@ class AccountBackend(RedisConn):
                     if dir_name != orig_marker:
                         results.append([dir_name, 0, 0, 1, 0])
                     break
-                results.append([container_id, 0, 0, 0, 0])
+                if self._should_be_listed(container_id, s3_buckets_only):
+                    results.append([container_id, 0, 0, 0, 0])
             if not count:
                 break
         return results
 
     def list_containers(self, account_id, limit=1000, marker=None,
-                        end_marker=None, prefix=None, delimiter=None):
+                        end_marker=None, prefix=None, delimiter=None,
+                        s3_buckets_only=False):
         raw_list = self._raw_listing(account_id, limit=limit, marker=marker,
                                      end_marker=end_marker, prefix=prefix,
-                                     delimiter=delimiter)
+                                     delimiter=delimiter,
+                                     s3_buckets_only=s3_buckets_only)
         pipeline = self.conn.pipeline(True)
         # skip prefix
         for container in [entry for entry in raw_list if not entry[3]]:
