@@ -44,6 +44,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define M2V2_ADMIN_OBJ_COUNT M2V2_ADMIN_PREFIX_SYS "objects"
 # endif
 
+# ifndef M2V2_ADMIN_DAMAGED_OBJECTS
+# define M2V2_ADMIN_DAMAGED_OBJECTS M2V2_ADMIN_PREFIX_SYS "objects.damaged"
+# endif
+
 # ifndef M2V2_ADMIN_MISSING_CHUNKS
 # define M2V2_ADMIN_MISSING_CHUNKS M2V2_ADMIN_PREFIX_SYS "chunks.missing"
 # endif
