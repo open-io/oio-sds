@@ -1,4 +1,4 @@
-# Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2017,2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -13,15 +13,4 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from logging import getLogger
-from oio.directory.admin import AdminClient
-
-LOG = getLogger(__name__)
-
 API_NAME = 'election'
-
-
-def make_client(instance):
-    endpoint = instance.get_endpoint('election')
-    client = AdminClient({"namespace": instance.namespace}, endpoint=endpoint)
-    return client

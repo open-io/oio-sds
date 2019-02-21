@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -33,6 +33,8 @@ class ClientManager(object):
         self._nsinfo = None
         self._account = None
 
+        self._admin_client = None
+
         LOG.setLevel(getLogger('').getEffectiveLevel())
         LOG.debug('Using parameters %s' % self._options)
         self._options['log_level'] = getLevelName(LOG.getEffectiveLevel())
@@ -60,6 +62,14 @@ class ClientManager(object):
         if not self._admin_mode:
             self._admin_mode = self._options.get('admin_mode')
         return self._admin_mode
+
+    @property
+    def admin(self):
+        if self._admin_client is None:
+            from oio.directory.admin import AdminClient
+            self._admin_client = AdminClient({"namespace": self.namespace},
+                                             endpoint=self.get_endpoint())
+        return self._admin_client
 
     def flatns_set_bits(self, bits):
         self._flatns_bits = bits
@@ -116,7 +126,7 @@ class ClientManager(object):
             self._account = account_name
         return self._account
 
-    def get_endpoint(self, service_type):
+    def get_endpoint(self, service_type=None):
         endpoint = self._options.get('proxyd_url', None)
         if not endpoint:
             endpoint = self.sds_conf.get('proxy', None)

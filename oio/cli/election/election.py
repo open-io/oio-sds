@@ -1,4 +1,4 @@
-# Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -62,7 +62,7 @@ class ElectionCmd(Lister):
             account = None
             reference = None
         else:
-            account = self.app.client_manager.account
+            account = self.app.options.account
             reference = parsed_args.reference
             cid = None
         return service_type, account, reference, cid
@@ -76,7 +76,7 @@ class ElectionPing(ElectionCmd):
 
         service_type, account, reference, cid = self.get_params(parsed_args)
 
-        data = self.app.client_manager.election.election_ping(
+        data = self.app.client_manager.admin.election_ping(
             service_type=service_type, account=account, reference=reference,
             cid=cid, timeout=parsed_args.timeout)
 
@@ -95,7 +95,7 @@ class ElectionStatus(ElectionCmd):
 
         service_type, account, reference, cid = self.get_params(parsed_args)
 
-        data = self.app.client_manager.election.election_status(
+        data = self.app.client_manager.admin.election_status(
             service_type=service_type, account=account, reference=reference,
             cid=cid, timeout=parsed_args.timeout)
 
@@ -114,7 +114,7 @@ class ElectionDebug(ElectionCmd):
 
         service_type, account, reference, cid = self.get_params(parsed_args)
 
-        data = self.app.client_manager.election.election_debug(
+        data = self.app.client_manager.admin.election_debug(
             service_type=service_type, account=account, reference=reference,
             cid=cid, timeout=parsed_args.timeout)
 
@@ -134,7 +134,7 @@ class ElectionSync(ElectionCmd):
 
         service_type, account, reference, cid = self.get_params(parsed_args)
 
-        data = self.app.client_manager.election.election_sync(
+        data = self.app.client_manager.admin.election_sync(
             service_type, account=account, reference=reference, cid=cid,
             timeout=parsed_args.timeout)
 
@@ -162,7 +162,7 @@ class ElectionLeave(ElectionCmd):
 
         service_type, account, reference, cid = self.get_params(parsed_args)
 
-        data = self.app.client_manager.election.election_leave(
+        data = self.app.client_manager.admin.election_leave(
             service_type, account=account, reference=reference, cid=cid,
             timeout=parsed_args.timeout, service_id=parsed_args.service_id)
 
