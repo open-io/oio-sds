@@ -815,14 +815,58 @@ meta2_backend_purge_container(struct meta2_backend_s *m2, struct oio_url_s *url,
 
 /* Contents --------------------------------------------------------------- */
 
+static gboolean
+_is_damaged_object(struct meta2_backend_s *m2b, struct sqlx_sqlite3_s *sq3,
+		struct oio_url_s *url)
+{
+	struct namespace_info_s *nsinfo = NULL;
+	if (!(nsinfo = meta2_backend_get_nsinfo(m2b))) {
+		GRID_WARN("NS not ready");
+		return FALSE;
+	}
+
+	GSList *beans = NULL;
+	gint64 content_missing_chunks = 0;
+
+	GError *err = m2db_get_alias(sq3, url, 0,
+			_bean_list_cb, &beans);
+	if (!err) {
+		struct m2v2_sorted_content_s *sorted = NULL;
+		m2v2_sort_content(beans, &sorted);
+		err = m2db_get_content_missing_chunks(
+				sorted, nsinfo, &content_missing_chunks);
+		m2v2_sorted_content_free(sorted);
+		_bean_cleanl2(beans);
+	}
+
+	if (err) {
+		GRID_WARN("Impossible to know if object is damaged (%s): %s",
+				oio_url_get(url, OIOURL_WHOLE), err->message);
+		g_error_free(err);
+		return FALSE;
+	}
+	return content_missing_chunks > 0;
+}
+
 /**
  * @param deleted_objects: list of lists of deleted beans
  */
 static void
 _update_missing_chunks(struct meta2_backend_s *m2b, struct sqlx_sqlite3_s *sq3,
-		gint64 new_missing_chunks, GSList *deleted_objects)
+		struct oio_url_s *url, gint64 new_missing_chunks,
+		GSList *deleted_objects, gboolean partial, gboolean already_damaged)
 {
+	gboolean now_damaged = FALSE;
+	if (new_missing_chunks
+			|| (partial && _is_damaged_object(m2b, sq3, url))) {
+		now_damaged = TRUE;
+	}
+
+	gint64 damaged_objects = m2db_get_damaged_objects(sq3);
 	gint64 missing_chunks = m2db_get_missing_chunks(sq3);
+	if (now_damaged && !(partial && already_damaged)) {
+		damaged_objects++;
+	}
 	missing_chunks += new_missing_chunks;
 
 	if (!deleted_objects)
@@ -849,12 +893,17 @@ _update_missing_chunks(struct meta2_backend_s *m2b, struct sqlx_sqlite3_s *sq3,
 			g_clear_error(&err);
 		}
 		m2v2_sorted_content_free(sorted);
+		if ((!partial && content_missing_chunks)
+				|| (partial && already_damaged && !now_damaged)) {
+			damaged_objects--;
+		}
 		missing_chunks -= content_missing_chunks;
 	}
 
 	namespace_info_free(nsinfo);
 
 end:
+	m2db_set_damaged_objects(sq3, damaged_objects);
 	m2db_set_missing_chunks(sq3, missing_chunks);
 }
 
@@ -981,7 +1030,8 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 				if (deleted_beans) {
 					deleted_objects = g_slist_append(
 							deleted_objects, deleted_beans);
-					_update_missing_chunks(m2b, sq3, 0, deleted_objects);
+					_update_missing_chunks(m2b, sq3, url,
+							0, deleted_objects, FALSE, FALSE);
 				}
 				m2db_increment_version(sq3);
 			}
@@ -1032,8 +1082,8 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_put_alias(&args, in,
 					_bean_list_cb, &deleted_objects, cb_added, u0_added))) {
-				_update_missing_chunks(m2b, sq3,
-						missing_chunks, deleted_objects);
+				_update_missing_chunks(m2b, sq3, url,
+						missing_chunks, deleted_objects, FALSE, FALSE);
 				m2db_increment_version(sq3);
 			}
 			err = sqlx_transaction_end(repctx, err);
@@ -1082,8 +1132,8 @@ meta2_backend_change_alias_policy(struct meta2_backend_s *m2b,
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_change_alias_policy(&args, in,
 					_bean_list_cb, &deleted_objects, cb_added, u0_added))) {
-				_update_missing_chunks(m2b, sq3,
-						missing_chunks, deleted_objects);
+				_update_missing_chunks(m2b, sq3, url,
+						missing_chunks, deleted_objects, FALSE, FALSE);
 				m2db_increment_version(sq3);
 			}
 			err = sqlx_transaction_end(repctx, err);
@@ -1125,10 +1175,11 @@ meta2_backend_update_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		GSList *deleted_objects = NULL;
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
+			gboolean already_damaged = _is_damaged_object(m2b, sq3, url);
 			if (!(err = m2db_update_content(sq3, url, in,
 					_bean_list_cb, &deleted_objects, cb_added, u0_added))) {
-				_update_missing_chunks(m2b, sq3,
-						missing_chunks, deleted_objects);
+				_update_missing_chunks(m2b, sq3, url,
+						missing_chunks, deleted_objects, TRUE, already_damaged);
 				m2db_increment_version(sq3);
 			}
 			err = sqlx_transaction_end(repctx, err);
@@ -1166,12 +1217,14 @@ meta2_backend_truncate_content(struct meta2_backend_s *m2b,
 		GSList *deleted_objects = NULL;
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
+			gboolean already_damaged = _is_damaged_object(m2b, sq3, url);
 			if (!(err = m2db_truncate_content(sq3, url, truncate_size,
 						out_deleted, out_added))) {
 				if (out_deleted) {
 					deleted_objects = g_slist_append(
 							deleted_objects, *out_deleted);
-					_update_missing_chunks(m2b, sq3, 0, deleted_objects);
+					_update_missing_chunks(m2b, sq3, url,
+							0, deleted_objects, TRUE, already_damaged);
 				}
 				m2db_increment_version(sq3);
 			}
@@ -1215,8 +1268,8 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		if (!(err = _transaction_begin(sq3,url, &repctx))) {
 			if (!(err = m2db_force_alias(&args, in,
 					_bean_list_cb, &deleted_objects, cb_added, u0_added))) {
-				_update_missing_chunks(m2b, sq3,
-						missing_chunks, deleted_objects);
+				_update_missing_chunks(m2b, sq3, url,
+						missing_chunks, deleted_objects, FALSE, FALSE);
 				m2db_increment_version(sq3);
 			}
 			err = sqlx_transaction_end(repctx, err);
@@ -1264,7 +1317,8 @@ meta2_backend_purge_alias(struct meta2_backend_s *m2, struct oio_url_s *url,
 			if (!(err = m2db_purge(sq3, maxvers, _retention_delay(sq3),
 					oio_url_get(url, OIOURL_PATH),
 					_bean_list_cb, &deleted_objects))) {
-				_update_missing_chunks(m2, sq3, 0, deleted_objects);
+				_update_missing_chunks(m2, sq3, url,
+						0, deleted_objects, FALSE, FALSE);
 				m2db_increment_version(sq3);
 			}
 			err = sqlx_transaction_end(repctx, err);
@@ -1433,8 +1487,10 @@ meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
+			gboolean already_damaged = _is_damaged_object(m2b, sq3, url);
 			if (!(err = m2db_append_to_alias(sq3, url, beans, cb, u0))) {
-				_update_missing_chunks(m2b, sq3, missing_chunks, NULL);
+				_update_missing_chunks(m2b, sq3, url,
+						missing_chunks, NULL, TRUE, already_damaged);
 				m2db_increment_version(sq3);
 			}
 			err = sqlx_transaction_end(repctx, err);
