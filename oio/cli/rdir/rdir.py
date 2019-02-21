@@ -48,12 +48,18 @@ class RdirBootstrap(lister.Lister):
         parser = super(RdirBootstrap, self).get_parser(prog_name)
         parser.add_argument(
             'service_type',
-            help="Which service type to assign rdir to")
+            help="Which service type to assign rdir to.")
         parser.add_argument(
             '--max-per-rdir',
             metavar='<N>',
             type=int,
-            help="Maximum number of databases per rdir service")
+            help="Maximum number of databases per rdir service.")
+        parser.add_argument(
+            '--min-dist',
+            metavar='<N>',
+            type=int,
+            help=("Minimum required distance between any service and "
+                  "its assigned rdir service."))
         return parser
 
     def take_action(self, parsed_args):
@@ -62,6 +68,7 @@ class RdirBootstrap(lister.Lister):
         try:
             all_services = dispatcher.assign_services(
                 parsed_args.service_type, parsed_args.max_per_rdir,
+                min_dist=parsed_args.min_dist,
                 connection_timeout=30.0, read_timeout=90.0)
         except OioException as exc:
             self.log.warn('Failed to assign all %s services: %s',
