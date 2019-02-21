@@ -418,11 +418,12 @@ class Account(WerkzeugApp):
         dtime = data.get('dtime')
         object_count = data.get('objects')
         bytes_used = data.get('bytes')
+        damaged_objects = data.get('damaged_objects')
         missing_chunks = data.get('missing_chunks')
         # Exceptions are catched by dispatch_request
         info = self.backend.update_container(
             account_id, name, mtime, dtime,
-            object_count, bytes_used, missing_chunks)
+            object_count, bytes_used, damaged_objects, missing_chunks)
         result = json.dumps(info)
         return Response(result)
 
@@ -470,11 +471,12 @@ class Account(WerkzeugApp):
         dtime = None
         object_count = 0
         bytes_used = 0
+        damaged_objects = 0
         missing_chunks = 0
         # Exceptions are catched by dispatch_request
         self.backend.update_container(
             account_id, name, mtime, dtime,
-            object_count, bytes_used, missing_chunks,
+            object_count, bytes_used, damaged_objects, missing_chunks,
             autocreate_container=False)
         return Response(status=204)
 
