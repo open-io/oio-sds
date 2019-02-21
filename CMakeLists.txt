@@ -27,10 +27,6 @@ endif ()
 
 set(OIOSDS_PROJECT_VERSION "${OIOSDS_RELEASE}/${OIOSDS_PROJECT_VERSION_SHORT}")
 
-if (NOT ABI_VERSION)
-	set(ABI_VERSION 0)
-endif()
-
 set(CMAKE_C_FLAGS "-g -fPIC -pipe -Wall -Wextra -std=gnu99")
 set(PYTHON python)
 

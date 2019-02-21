@@ -16,8 +16,7 @@ add_library(rawx SHARED
 		compression.c
 		zlib_compress.c)
 
-set_target_properties(rawx PROPERTIES SOVERSION ${ABI_VERSION})
-
+set_target_properties(rawx PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(rawx
 		metautils gridcluster
 		${ATTR_LIBRARIES} ${ZLIB_LIBRARIES})

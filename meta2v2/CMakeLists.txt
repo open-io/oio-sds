@@ -70,10 +70,12 @@ add_library(meta2v2utils SHARED
 		meta2_utils_json.h
 )
 
+set_target_properties(meta2v2utils PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(meta2v2utils
 		metautils gridcluster sqliteutils
 		${LIBRAIN_LIBRARIES}
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES} ${JSONC_LIBRARIES})
+
 
 add_library(meta2v2 SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/autogen.h generic.h
@@ -82,12 +84,14 @@ add_library(meta2v2 SHARED
 		meta2_backend.h
 		meta2_backend.c)
 
+set_target_properties(meta2v2 PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(meta2v2
 		metautils sqliterepo
 		meta1remote meta0remote meta0utils
 		meta2v2utils
 		sqlxsrv
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
+
 
 add_executable(meta2_server
 		meta2_gridd_dispatcher.c

@@ -16,7 +16,7 @@ link_directories(
 
 
 add_library(sqlxsrv SHARED sqlx_service.c)
-set_target_properties(sqlxsrv PROPERTIES SOVERSION ${ABI_VERSION})
+set_target_properties(sqlxsrv PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(sqlxsrv
 		server metautils gridcluster sqliterepo
 		hcresolve meta0remote meta1remote
@@ -26,25 +26,19 @@ target_link_libraries(sqlxsrv
 
 
 add_library(oiosqlx SHARED sqlx_client.c)
-set_target_properties(oiosqlx PROPERTIES
-		PUBLIC_HEADER "sqlx_client.h"
-		SOVERSION ${ABI_VERSION})
+set_target_properties(oiosqlx PROPERTIES PUBLIC_HEADER "sqlx_client.h" VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(oiosqlx
 		oiocore oiosds
 		${GLIB2_LIBRARIES})
 
 add_library(oiosqlx_local SHARED sqlx_client_local.c)
-set_target_properties(oiosqlx_local PROPERTIES
-		PUBLIC_HEADER "sqlx_client_local.h"
-		SOVERSION ${ABI_VERSION})
+set_target_properties(oiosqlx_local PROPERTIES PUBLIC_HEADER "sqlx_client_local.h" VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(oiosqlx_local
 		oiosqlx ${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
 
 add_library(oiosqlx_direct SHARED sqlx_client_direct.c)
-set_target_properties(oiosqlx_direct PROPERTIES
-		PUBLIC_HEADER "sqlx_client_direct.h"
-		SOVERSION ${ABI_VERSION})
+set_target_properties(oiosqlx_direct PROPERTIES PUBLIC_HEADER "sqlx_client_direct.h" VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(oiosqlx_direct
 		oiosqlx sqlitereporemote ${GLIB2_LIBRARIES})
 

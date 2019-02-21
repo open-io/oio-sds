@@ -57,11 +57,9 @@ add_library(oiocore SHARED url.c cfg.c str.c ext.c log.c lb.c var.c
 	${CMAKE_CURRENT_BINARY_DIR}/lb_variables.h
 	${CMAKE_CURRENT_BINARY_DIR}/lb_variables.c)
 
+set_target_properties(oiocore PROPERTIES PUBLIC_HEADER "oio_core.h" VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(oiocore
 		${JSONC_LIBRARIES} ${GLIB2_LIBRARIES})
-set_target_properties(oiocore PROPERTIES
-		PUBLIC_HEADER "oio_core.h"
-		SOVERSION ${ABI_VERSION})
 
 add_library(oiosds SHARED
 	http_put.c
@@ -69,11 +67,10 @@ add_library(oiosds SHARED
 	headers.c
 	proxy.c
 	sds.c dir.c cs.c)
+
+set_target_properties(oiosds PROPERTIES PUBLIC_HEADER "oio_sds.h" VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(oiosds oiocore
 		${GLIB2_LIBRARIES} ${CURL_LIBRARIES} ${JSONC_LIBRARIES})
-set_target_properties(oiosds PROPERTIES
-		PUBLIC_HEADER "oio_sds.h"
-		SOVERSION ${ABI_VERSION})
 
 add_executable(tool_sdk_noconf tool_sdk_noconf.c)
 target_link_libraries(tool_sdk_noconf oiosds)

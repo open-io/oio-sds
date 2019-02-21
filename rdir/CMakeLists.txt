@@ -44,9 +44,9 @@ add_executable(rdir
 		../proxy/transport_http.c)
 
 bin_prefix(rdir -rdir-server)
-
-target_link_libraries(rdir metautils oiocore server
-	 ${LEVELDB_LIBRARIES})
+target_link_libraries(rdir
+		metautils oiocore server
+		${LEVELDB_LIBRARIES})
 
 install(TARGETS rdir
 		LIBRARY DESTINATION ${LD_LIBDIR}
