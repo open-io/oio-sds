@@ -16,11 +16,11 @@
 """Command-line interface to the OpenIO APIs"""
 
 import sys
-import os
 import logging
 from cliff.app import App
 
 from oio import __version__ as oio_version
+from oio.cli import add_common_parser_options
 from oio.cli.common.commandmanager import CommandManager
 from oio.cli.common.clientmanager import ClientManager, get_plugin_module
 
@@ -89,35 +89,11 @@ class OpenIOShell(App):
 
     def build_option_parser(self, description, version):
         parser = super(OpenIOShell, self).build_option_parser(
-            description,
-            version)
+            description, version)
+        add_common_parser_options(parser)
 
-        parser.add_argument(
-            '--oio-ns',
-            metavar='<namespace>',
-            dest='ns',
-            default=os.environ.get('OIO_NS', ''),
-            help='Namespace name (Env: OIO_NS)',
-        )
-        parser.add_argument(
-            '--oio-account',
-            metavar='<account>',
-            dest='account_name',
-            default=os.environ.get('OIO_ACCOUNT', ''),
-            help='Account name (Env: OIO_ACCOUNT)'
-        )
-        parser.add_argument(
-            '--oio-proxyd-url',
-            metavar='<proxyd url>',
-            dest='proxyd_url',
-            default=os.environ.get('OIO_PROXYD_URL', ''),
-            help='Proxyd URL (Env: OIO_PROXYD_URL)'
-        )
-        parser.add_argument(
-            "--admin",
-            dest='admin_mode',
-            action='store_true',
-            help="Add 'admin mode' flag to all proxy requests")
+        # This is specific to download/upload operation, thus should not
+        # be needed in the "admin" CLI.
         parser.add_argument(
             "--dump-perfdata",
             action='store_true',
@@ -152,7 +128,7 @@ class OpenIOShell(App):
 
         options = {
             'namespace': self.options.ns,
-            'account_name': self.options.account_name,
+            'account_name': self.options.account,
             'proxyd_url': self.options.proxyd_url,
             'admin_mode': self.options.admin_mode,
             'log_level': logging.getLevelName(
