@@ -242,7 +242,7 @@ class ObjectStorageApi(object):
         return self.container.container_create(
             account, container, properties=properties, **kwargs)
 
-    def _recompute_damaged_objects(self, account, container, **kwargs):
+    def _recompute_missing_chunks(self, account, container, **kwargs):
         damaged_objects = 0
         missing_chunks = 0
         for obj_meta in depaginate(

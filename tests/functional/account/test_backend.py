@@ -150,7 +150,7 @@ class TestAccountBackend(BaseTestCase):
         # delete second container
         sleep(.00001)
         backend.update_container(account_id, 'c2', 0, Timestamp(time()).normal,
-                                 0, 0, 0)
+                                 0, 0, 0, 0)
         info = backend.info_account(account_id)
         self.assertEqual(info['containers'], 0)
         self.assertEqual(info['objects'], 0)
@@ -223,7 +223,8 @@ class TestAccountBackend(BaseTestCase):
 
         # same event
         with ExpectedException(Conflict):
-            backend.update_container(account_id, name, mtime, dtime, 0, 0, 0, 0)
+            backend.update_container(account_id, name, mtime, dtime,
+                                     0, 0, 0, 0)
         res = self.conn.zrangebylex('containers:%s' % account_id, '-', '+')
         self.assertEqual(len(res), 0)
         self.assertTrue(
@@ -231,7 +232,8 @@ class TestAccountBackend(BaseTestCase):
 
         # old event
         with ExpectedException(Conflict):
-            backend.update_container(account_id, name, old_mtime, 0, 0, 0, 0, 0)
+            backend.update_container(account_id, name, old_mtime, 0,
+                                     0, 0, 0, 0)
         res = self.conn.zrangebylex('containers:%s' % account_id, '-', '+')
         self.assertEqual(len(res), 0)
         self.assertTrue(
@@ -311,7 +313,8 @@ class TestAccountBackend(BaseTestCase):
         # Old event
         old_mtime = Timestamp(time() - 1).normal
         with ExpectedException(Conflict):
-            backend.update_container(account_id, name, old_mtime, 0, 0, 0, 0, 0)
+            backend.update_container(account_id, name, old_mtime, 0,
+                                     0, 0, 0, 0)
 
         res = self.conn.zrangebylex('containers:%s' % account_id, '-', '+')
         self.assertEqual(res[0], name)
@@ -358,7 +361,8 @@ class TestAccountBackend(BaseTestCase):
             for cont2 in xrange(125):
                 name = '%d-%04d' % (cont1, cont2)
                 backend.update_container(account_id, name,
-                                         Timestamp(time()).normal, 0, 0, 0, 0, 0)
+                                         Timestamp(time()).normal, 0,
+                                         0, 0, 0, 0)
 
         for cont in xrange(125):
             name = '2-0051-%04d' % cont
@@ -368,7 +372,7 @@ class TestAccountBackend(BaseTestCase):
         for cont in xrange(125):
             name = '3-%04d-0049' % cont
             backend.update_container(
-                account_id, name, Timestamp(time()).normal, 0, 0, 0, 0)
+                account_id, name, Timestamp(time()).normal, 0, 0, 0, 0, 0)
 
         listing = backend.list_containers(account_id, marker='',
                                           delimiter='', limit=100)

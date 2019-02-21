@@ -60,7 +60,8 @@ class AccountTest(CliTestCase):
         regex = r"|\s*%s\s*|\s*%s\s*|"
         self.assertIsNotNone(re.match(regex % ("bytes", "0B"), output))
         self.assertIsNotNone(re.match(regex % ("objects", "0"), output))
-        self.assertIsNotNone(re.match(regex % ("damaged_objects", "0"), output))
+        self.assertIsNotNone(re.match(regex % ("damaged_objects", "0"),
+                                      output))
         self.assertIsNotNone(re.match(regex % ("missing_chunks", "0"), output))
 
     def test_account_refresh(self):
