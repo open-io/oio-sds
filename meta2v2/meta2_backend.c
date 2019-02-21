@@ -1356,11 +1356,37 @@ meta2_backend_insert_beans(struct meta2_backend_s *m2b,
 			else
 				err = _db_insert_beans_list (sq3->db, beans);
 			if (!err) {
+				gint64 damaged_objects = m2db_get_damaged_objects(sq3);
 				gint64 missing_chunks = m2db_get_missing_chunks(sq3);
+
+				GHashTable *content_ids = g_hash_table_new_full(
+						g_str_hash, g_str_equal, g_free, NULL);
+				struct oio_url_s *content_url = oio_url_dup(url);
+
 				for (GSList *bean=beans; bean; bean=bean->next) {
-					if (DESCR(bean->data) == &descr_struct_CHUNKS)
-						missing_chunks--;
+					if (DESCR(bean->data) != &descr_struct_CHUNKS)
+						continue;
+					missing_chunks--;
+
+					GString *content_id = metautils_gba_to_hexgstr(
+							NULL, CHUNKS_get_content(bean->data));
+					if (!g_hash_table_add(content_ids,
+							content_id->str)) {
+						g_string_free(content_id, TRUE);
+						continue;
+					}
+					oio_url_set(content_url, OIOURL_CONTENTID,
+							content_id->str);
+					g_string_free(content_id, FALSE);
+					if (_is_damaged_object(m2b, sq3, content_url))
+						continue;
+					damaged_objects--;
 				}
+
+				oio_url_clean(content_url);
+				g_hash_table_destroy(content_ids);
+
+				m2db_set_damaged_objects(sq3, damaged_objects);
 				m2db_set_missing_chunks(sq3, missing_chunks);
 				m2db_increment_version(sq3);
 			} else {
