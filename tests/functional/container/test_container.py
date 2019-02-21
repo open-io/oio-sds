@@ -540,12 +540,15 @@ class TestMeta2Containers(BaseTestCase):
         flush_and_check(truncated=True, objects=16, usage=16384)
         flush_and_check()
 
-    def _check_missing_chunks(self, expected_missing_chunks):
+    def _check_missing_chunks(self, expected_damaged_objects,
+                              expected_missing_chunks):
         params = self.param_ref(self.ref)
         resp = self.request('POST', self.url_container('get_properties'),
                             params=params)
         self.assertEqual(resp.status, 200)
         data = self.json_loads(resp.data)
+        self.assertEqual(str(expected_damaged_objects),
+                         data['system']['sys.m2.objects.damaged'])
         self.assertEqual(str(expected_missing_chunks),
                          data['system']['sys.m2.chunks.missing'])
 
@@ -561,42 +564,42 @@ class TestMeta2Containers(BaseTestCase):
             self.skipTest('The storage policy must be THREECOPIES or EC')
 
         self._create_content('content0', missing_chunks=0)
-        self._check_missing_chunks(0)
+        self._check_missing_chunks(0, 0)
 
         self._create_content('content1', missing_chunks=1)
-        self._check_missing_chunks(1)
+        self._check_missing_chunks(1, 1)
 
         self._create_content('content2', missing_chunks=0)
-        self._check_missing_chunks(1)
+        self._check_missing_chunks(1, 1)
         self._create_content('content2', missing_chunks=1)
-        self._check_missing_chunks(2)
+        self._check_missing_chunks(2, 2)
 
         self._create_content('content3', missing_chunks=1)
-        self._check_missing_chunks(3)
+        self._check_missing_chunks(3, 3)
         self._create_content('content3', missing_chunks=0)
-        self._check_missing_chunks(2)
+        self._check_missing_chunks(2, 2)
 
         self._delete_content('content1')
-        self._check_missing_chunks(1)
+        self._check_missing_chunks(1, 1)
 
         if stg_policy != "EC":
             return
 
         self._create_content('content4', missing_chunks=2)
-        self._check_missing_chunks(3)
+        self._check_missing_chunks(2, 3)
 
         self._create_content('content5', missing_chunks=0)
-        self._check_missing_chunks(3)
+        self._check_missing_chunks(2, 3)
         self._create_content('content5', missing_chunks=2)
-        self._check_missing_chunks(5)
+        self._check_missing_chunks(3, 5)
 
         self._create_content('content6', missing_chunks=2)
-        self._check_missing_chunks(7)
+        self._check_missing_chunks(4, 7)
         self._create_content('content6', missing_chunks=0)
-        self._check_missing_chunks(5)
+        self._check_missing_chunks(3, 5)
 
         self._delete_content('content4')
-        self._check_missing_chunks(3)
+        self._check_missing_chunks(2, 3)
 
 
 class TestMeta2Contents(BaseTestCase):
