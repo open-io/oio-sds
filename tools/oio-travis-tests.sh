@@ -270,6 +270,12 @@ if is_running_test_suite "variables" ; then
 	tox -e variables
 fi
 
+if is_running_test_suite "sdk" ; then
+	echo -e "\n### SDK tests"
+	cd $WRKDIR
+	make -C tests/unit test
+fi
+
 if is_running_test_suite "unit" ; then
 	echo -e "\n### UNIT tests"
 	cd $SRCDIR
