@@ -227,6 +227,7 @@ GByteArray* m2v2_remote_pack_TOUCHB(
 		guint32 flags,
 		gint64 deadline,
 		gboolean recompute,
+		gint64 damaged_objects,
 		gint64 missing_chunks);
 
 GByteArray* m2v2_remote_pack_TOUCHC(
