@@ -24,28 +24,28 @@ class ExceptionsTest(unittest.TestCase):
         fake_resp = FakeApiResponse()
         fake_resp.status = 500
         exc = exceptions.from_response(fake_resp, None)
-        self.assertTrue(isinstance(exc, exceptions.ClientException))
+        self.assertIsInstance(exc, exceptions.ClientException)
         self.assertEqual(exc.http_status, fake_resp.status)
         self.assertEqual(exc.message, "n/a")
-        self.assertTrue("HTTP 500" in str(exc))
+        self.assertIn("HTTP 500", str(exc))
 
     def test_from_response_with_body(self):
         fake_resp = FakeApiResponse()
         fake_resp.status = 500
         body = {"status": 300, "message": "Fake error"}
         exc = exceptions.from_response(fake_resp, body)
-        self.assertTrue(isinstance(exc, exceptions.ClientException))
+        self.assertIsInstance(exc, exceptions.ClientException)
         self.assertEqual(exc.http_status, fake_resp.status)
         self.assertEqual(exc.status, 300)
         self.assertEqual(exc.message, "Fake error")
-        self.assertTrue("HTTP 500" in str(exc))
-        self.assertTrue("STATUS 300" in str(exc))
+        self.assertIn("HTTP 500", str(exc))
+        self.assertIn("STATUS 300", str(exc))
 
     def test_from_response_http_status(self):
         fake_resp = FakeApiResponse()
         fake_resp.status = 404
         exc = exceptions.from_response(fake_resp, None)
-        self.assertTrue(isinstance(exc, exceptions.NotFound))
+        self.assertIsInstance(exc, exceptions.NotFound)
         fake_resp.status = 409
         exc = exceptions.from_response(fake_resp, None)
-        self.assertTrue(isinstance(exc, exceptions.Conflict))
+        self.assertIsInstance(exc, exceptions.Conflict)

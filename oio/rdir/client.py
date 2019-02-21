@@ -52,11 +52,13 @@ class RdirDispatcher(object):
         self.directory = DirectoryClient(conf, logger=self.logger, **kwargs)
         self.rdir = RdirClient(conf, logger=self.logger, **kwargs)
         self._cs = None
+        self._pool_options = None
 
     @property
     def cs(self):
         if not self._cs:
-            self._cs = ConscienceClient(self.conf, logger=self.logger)
+            self._cs = ConscienceClient(self.conf, logger=self.logger,
+                                        pool_manager=self.rdir.pool_manager)
         return self._cs
 
     def get_assignments(self, service_type, **kwargs):
@@ -100,7 +102,19 @@ class RdirDispatcher(object):
         return all_services, all_rdir
 
     def assign_services(self, service_type,
-                        max_per_rdir=None, **kwargs):
+                        max_per_rdir=None, min_dist=None, **kwargs):
+        """
+        Assign an rdir service to all `service_type` servers that aren't
+        already assigned one.
+
+        :param max_per_rdir: Maximum number of services an rdir can handle.
+        :type max_per_rdir: `int`
+        :param min_dist: minimum required distance between any service and
+            its assigned rdir service.
+        :type min_dist: `int`
+        :returns: The list of `service_type` services that were assigned
+            rdir services.
+        """
         all_services = self.cs.all_services(service_type, **kwargs)
         all_rdir = self.cs.all_services('rdir', True, **kwargs)
         if len(all_rdir) <= 0:
@@ -130,6 +144,7 @@ class RdirDispatcher(object):
                     rdir = self._smart_link_rdir(provider_id, all_rdir,
                                                  service_type=service_type,
                                                  max_per_rdir=max_per_rdir,
+                                                 min_dist=min_dist,
                                                  **kwargs)
                 except OioException as exc:
                     self.logger.warn("Failed to link an rdir to %s %s: %s",
@@ -177,7 +192,8 @@ class RdirDispatcher(object):
         return self.assign_services("rawx", max_per_rdir, **kwargs)
 
     def _smart_link_rdir(self, volume_id, all_rdir, max_per_rdir=None,
-                         max_attempts=7, service_type='rawx', **kwargs):
+                         max_attempts=7, service_type='rawx', min_dist=None,
+                         **kwargs):
         """
         Force the load balancer to avoid services that already host more
         bases than the average (or more than `max_per_rdir`)
@@ -198,12 +214,13 @@ class RdirDispatcher(object):
                   x['tags'].get('stat.opened_db_count', 0) > upper_limit]
         known = [_make_id(self.ns, service_type, volume_id)]
         try:
-            polled = self._poll_rdir(avoid=avoids, known=known, **kwargs)
+            polled = self._poll_rdir(avoid=avoids, known=known,
+                                     min_dist=min_dist, **kwargs)
         except ClientException as exc:
             if exc.status != 481 or max_per_rdir:
                 raise
             # Retry without `avoids`, hoping the next iteration will rebalance
-            polled = self._poll_rdir(known=known, **kwargs)
+            polled = self._poll_rdir(known=known, min_dist=min_dist, **kwargs)
 
         # Associate the rdir to the rawx
         forced = {'host': polled['addr'], 'type': 'rdir',
@@ -249,17 +266,42 @@ class RdirDispatcher(object):
                              volume_id, polled['addr'], exc)
         return polled['id']
 
-    def _poll_rdir(self, avoid=None, known=None, **kwargs):
-        """Call the special rdir service pool (created if missing)"""
+    def _create_special_pool(self, options=None, force=False, **kwargs):
+        """
+        Create the special pool for rdir services.
+
+        :param options: dictionary of custom options for the pool.
+        :param force: overwrite the pool if it exists already.
+        """
+        self.cs.lb.create_pool(
+            '__rawx_rdir', ((1, JOKER_SVC_TARGET), (1, 'rdir')),
+            options=options, force=force, **kwargs)
+
+    def _poll_rdir(self, avoid=None, known=None, min_dist=None, **kwargs):
+        """
+        Call the special rdir service pool (created if missing).
+
+        :param min_dist: minimum distance to ensure between the known
+            service and the selected rdir service.
+        """
+        if not known or len(known) > 1:
+            raise ValueError('There should be exactly one "known" service')
+
+        options = dict()
+        if min_dist is not None:
+            options['min_dist'] = min_dist
+        if options != self._pool_options:
+            # Options have changed, overwrite the pool.
+            self._pool_options = options
+            self._create_special_pool(self._pool_options, force=True, **kwargs)
+
         try:
             svcs = self.cs.poll('__rawx_rdir', avoid=avoid, known=known,
                                 **kwargs)
         except ClientException as exc:
             if exc.status != 400:
                 raise
-            self.cs.lb.create_pool(
-                '__rawx_rdir', ((1, JOKER_SVC_TARGET), (1, 'rdir')),
-                **kwargs)
+            self._create_special_pool(self._pool_options, **kwargs)
             svcs = self.cs.poll('__rawx_rdir', avoid=avoid, known=known,
                                 **kwargs)
         for svc in svcs:
