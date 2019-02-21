@@ -120,6 +120,10 @@ gint64 m2db_get_obj_count(struct sqlx_sqlite3_s *sq3);
 
 void m2db_set_obj_count(struct sqlx_sqlite3_s *sq3, gint64 count);
 
+gint64 m2db_get_damaged_objects(struct sqlx_sqlite3_s *sq3);
+
+void m2db_set_damaged_objects(struct sqlx_sqlite3_s *sq3, gint64 damaged);
+
 gint64 m2db_get_missing_chunks(struct sqlx_sqlite3_s *sq3);
 
 void m2db_set_missing_chunks(struct sqlx_sqlite3_s *sq3, gint64 missing);

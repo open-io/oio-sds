@@ -308,6 +308,7 @@ _container_state (struct sqlx_sqlite3_s *sq3)
 	append_int64(gs, "ctime", m2db_get_ctime(sq3));
 	append_int64(gs, "bytes-count", m2db_get_size(sq3));
 	append_int64(gs, "object-count", m2db_get_obj_count(sq3));
+	append_int64(gs, "damaged-objects", m2db_get_damaged_objects(sq3));
 	append_int64(gs, "missing-chunks", m2db_get_missing_chunks(sq3));
 	g_string_append_static (gs, "}}");
 
@@ -569,6 +570,7 @@ _init_container(struct sqlx_sqlite3_s *sq3,
 		m2db_set_ctime (sq3, oio_ext_real_time());
 		m2db_set_size(sq3, 0);
 		m2db_set_obj_count(sq3, 0);
+		m2db_set_damaged_objects(sq3, 0);
 		m2db_set_missing_chunks(sq3, 0);
 		sqlx_admin_set_status(sq3, ADMIN_STATUS_ENABLED);
 		sqlx_admin_init_i64(sq3, META2_INIT_FLAG, 1);
