@@ -1398,6 +1398,8 @@ meta2_backend_insert_beans(struct meta2_backend_s *m2b,
 			}
 			err = sqlx_transaction_end(repctx, err);
 		}
+		if (!err)
+			m2b_add_modified_container(m2b, sq3);
 		m2b_close(sq3);
 	}
 
