@@ -278,6 +278,20 @@ meta2_filter_extract_admin(struct gridd_filter_ctx_s *ctx,
 }
 
 int
+meta2_filter_extract_force_master(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GError *e = NULL;
+	gchar buf[64];
+	TRACE_FILTER();
+	EXTRACT_OPT(NAME_MSGKEY_FORCE_MASTER);
+	const char *force_master = meta2_filter_ctx_get_param(
+			ctx, NAME_MSGKEY_FORCE_MASTER);
+	oio_ext_set_force_master(oio_str_parse_bool(force_master, FALSE));
+	return FILTER_OK;
+}
+
+int
 meta2_filter_extract_user_agent(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
