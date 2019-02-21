@@ -51,17 +51,18 @@ class AccountBackend(RedisConn):
     lua_update_container = (lua_is_sup + """
                local account_id = redis.call('HGET', KEYS[4], 'id');
                if not account_id then
-                 if ARGV[7] == 'True' then
+                 if ARGV[8] == 'True' then
                    redis.call('HSET', 'accounts:', KEYS[1], 1);
                    redis.call('HMSET', KEYS[4], 'id', KEYS[1],
-                              'bytes', 0, 'objects', 0, 'missing_chunks', 0,
-                              'ctime', ARGV[8]);
+                              'bytes', 0, 'objects', 0,
+                              'damaged_objects', 0, 'missing_chunks', 0,
+                              'ctime', ARGV[9]);
                  else
                    return redis.error_reply('no_account');
                  end;
                end;
 
-               if ARGV[10] == 'False' then
+               if ARGV[11] == 'False' then
                  local container_name = redis.call('HGET', KEYS[2], 'name');
                  if not container_name then
                    return redis.error_reply('no_container');
@@ -73,6 +74,8 @@ class AccountBackend(RedisConn):
                local dtime = redis.call('HGET', KEYS[2], 'dtime');
                local objects = redis.call('HGET', KEYS[2], 'objects');
                local bytes = redis.call('HGET', KEYS[2], 'bytes');
+               local damaged_objects = redis.call('HGET', KEYS[2],
+                                                  'damaged_objects');
                local missing_chunks = redis.call('HGET', KEYS[2],
                                                  'missing_chunks');
 
@@ -89,17 +92,21 @@ class AccountBackend(RedisConn):
                if bytes == false then
                  bytes = 0
                end
+               if damaged_objects == false then
+                 damaged_objects = 0
+               end
                if missing_chunks == false then
                  missing_chunks = 0
                end
 
-               if ARGV[10] == 'False' and is_sup(dtime, mtime) then
+               if ARGV[11] == 'False' and is_sup(dtime, mtime) then
                  return redis.error_reply('no_container');
                end;
 
                local old_mtime = mtime;
                local inc_objects;
                local inc_bytes;
+               local inc_damaged_objects;
                local inc_missing_chunks;
 
                if not is_sup(ARGV[3],dtime) and not is_sup(ARGV[2],mtime) then
@@ -116,20 +123,24 @@ class AccountBackend(RedisConn):
                if is_sup(dtime,mtime) then
                  inc_objects = -objects;
                  inc_bytes = -bytes;
+                 inc_damaged_objects = -damaged_objects
                  inc_missing_chunks = -missing_chunks;
                  redis.call('HMSET', KEYS[2],
-                            'bytes', 0, 'objects', 0, 'missing_chunks', 0);
-                 redis.call('EXPIRE', KEYS[2], tonumber(ARGV[9]));
+                            'bytes', 0, 'objects', 0,
+                            'damaged_objects', 0, 'missing_chunks', 0);
+                 redis.call('EXPIRE', KEYS[2], tonumber(ARGV[10]));
                  redis.call('ZREM', KEYS[3], name);
                elseif is_sup(mtime,old_mtime) then
                  redis.call('PERSIST', KEYS[2]);
                  inc_objects = tonumber(ARGV[4]) - objects
                  inc_bytes = tonumber(ARGV[5]) - bytes
-                 inc_missing_chunks = tonumber(ARGV[6]) - missing_chunks
+                 inc_damaged_objects = tonumber(ARGV[6]) - damaged_objects
+                 inc_missing_chunks = tonumber(ARGV[7]) - missing_chunks
                  redis.call('HMSET', KEYS[2],
                             'objects', tonumber(ARGV[4]),
                             'bytes', tonumber(ARGV[5]),
-                            'missing_chunks', tonumber(ARGV[6]));
+                            'damaged_objects', tonumber(ARGV[6]),
+                            'missing_chunks', tonumber(ARGV[7]));
                  redis.call('ZADD', KEYS[3], '0', name);
                else
                  return redis.error_reply('no_update_needed');
@@ -142,6 +153,10 @@ class AccountBackend(RedisConn):
                end;
                if inc_bytes ~= 0 then
                  redis.call('HINCRBY', KEYS[4], 'bytes', inc_bytes);
+               end;
+               if inc_damaged_objects ~= 0 then
+                 redis.call('HINCRBY', KEYS[4], 'damaged_objects',
+                            inc_damaged_objects);
                end;
                if inc_missing_chunks ~= 0 then
                  redis.call('HINCRBY', KEYS[4], 'missing_chunks',
@@ -159,18 +174,23 @@ class AccountBackend(RedisConn):
         local container_key = ''
         local bytes_sum = 0;
         local objects_sum = 0;
+        local damaged_objects_sum = 0;
         local missing_chunks_sum = 0;
         for _,container in ipairs(containers) do
             container_key = KEYS[3] .. container;
             objects_sum = objects_sum + redis.call('HGET', container_key,
                                                    'objects')
             bytes_sum = bytes_sum + redis.call('HGET', container_key, 'bytes')
+            damaged_objects_sum = damaged_objects_sum
+                    + redis.call('HGET', container_key, 'damaged_objects')
             missing_chunks_sum = missing_chunks_sum
                     + redis.call('HGET', container_key, 'missing_chunks')
         end;
 
         redis.call('HMSET', KEYS[1], 'objects', objects_sum,
-                   'bytes', bytes_sum, 'missing_chunks', missing_chunks_sum)
+                   'bytes', bytes_sum,
+                   'damaged_objects', damaged_objects_sum,
+                   'missing_chunks', missing_chunks_sum)
         """
 
     lua_flush_account = """
@@ -180,7 +200,7 @@ class AccountBackend(RedisConn):
         end;
 
         redis.call('HMSET', KEYS[1], 'objects', 0, 'bytes', 0,
-                   'missing_chunks', 0)
+                   'damaged_objects', 0, 'missing_chunks', 0)
 
         local containers = redis.call('ZRANGE', KEYS[2], 0, -1);
         redis.call('DEL', KEYS[2]);
@@ -238,6 +258,7 @@ class AccountBackend(RedisConn):
             'id': account_id,
             'objects': 0,
             'bytes': 0,
+            'damaged_objects': 0,
             'missing_chunks': 0,
             'ctime': Timestamp(time()).normal
         })
@@ -321,7 +342,7 @@ class AccountBackend(RedisConn):
         pipeline.hgetall('metadata:%s' % account_id)
         data = pipeline.execute()
         info = data[0]
-        for r in ['bytes', 'objects', 'missing_chunks']:
+        for r in ['bytes', 'objects', 'damaged_objects', 'missing_chunks']:
             info[r] = int_value(info.get(r), 0)
         info['containers'] = data[1]
         info['metadata'] = data[2]
@@ -333,7 +354,8 @@ class AccountBackend(RedisConn):
         return accounts
 
     def update_container(self, account_id, name, mtime, dtime,
-                         object_count, bytes_used, missing_chunks,
+                         object_count, bytes_used,
+                         damaged_objects, missing_chunks,
                          autocreate_account=None, autocreate_container=True):
         conn = self.conn
         if not account_id or not name:
@@ -354,13 +376,16 @@ class AccountBackend(RedisConn):
             object_count = 0
         if bytes_used is None:
             bytes_used = 0
+        if damaged_objects is None:
+            damaged_objects = 0
         if missing_chunks is None:
             missing_chunks = 0
 
         keys = [account_id, AccountBackend.ckey(account_id, name),
                 ("containers:%s" % (account_id)),
                 ("account:%s" % (account_id))]
-        args = [name, mtime, dtime, object_count, bytes_used, missing_chunks,
+        args = [name, mtime, dtime, object_count, bytes_used,
+                damaged_objects, missing_chunks,
                 str(autocreate_account), Timestamp(time()).normal, EXPIRE_TIME,
                 str(autocreate_container)]
         try:

@@ -21,7 +21,7 @@ from testtools.matchers import Equals
 
 HEADERS = ['Name', 'Created']
 ACCOUNT_FIELDS = ['bytes', 'containers', 'ctime', 'account', 'metadata',
-                  'objects', 'missing_chunks']
+                  'objects', 'damaged_objects', 'missing_chunks']
 
 
 class AccountTest(CliTestCase):
@@ -47,6 +47,7 @@ class AccountTest(CliTestCase):
         self.assertThat(data['bytes'], Equals(0))
         self.assertThat(data['containers'], Equals(0))
         self.assertThat(data['objects'], Equals(0))
+        self.assertThat(data['damaged_objects'], Equals(0))
         self.assertThat(data['missing_chunks'], Equals(0))
         self.assertThat(data['metadata']['test'], Equals('1'))
         output = self.openio('account delete ' + self.NAME)
@@ -59,6 +60,7 @@ class AccountTest(CliTestCase):
         regex = r"|\s*%s\s*|\s*%s\s*|"
         self.assertIsNotNone(re.match(regex % ("bytes", "0B"), output))
         self.assertIsNotNone(re.match(regex % ("objects", "0"), output))
+        self.assertIsNotNone(re.match(regex % ("damaged_objects", "0"), output))
         self.assertIsNotNone(re.match(regex % ("missing_chunks", "0"), output))
 
     def test_account_refresh(self):
@@ -71,6 +73,7 @@ class AccountTest(CliTestCase):
         self.assertEqual(data['bytes'], 0)
         self.assertEqual(data['containers'], 0)
         self.assertEqual(data['objects'], 0)
+        self.assertEqual(data['damaged_objects'], 0)
         self.assertEqual(data['missing_chunks'], 0)
         self.openio('account delete ' + self.NAME)
 
@@ -84,6 +87,7 @@ class AccountTest(CliTestCase):
         self.assertEqual(data['bytes'], 0)
         self.assertEqual(data['containers'], 0)
         self.assertEqual(data['objects'], 0)
+        self.assertEqual(data['damaged_objects'], 0)
         self.assertEqual(data['missing_chunks'], 0)
         self.openio('account delete ' + self.NAME)
 
@@ -98,6 +102,7 @@ class AccountTest(CliTestCase):
         self.assertEqual(data['bytes'], 0)
         self.assertEqual(data['containers'], 0)
         self.assertEqual(data['objects'], 0)
+        self.assertEqual(data['damaged_objects'], 0)
         self.assertEqual(data['missing_chunks'], 0)
         self.openio('container delete ' + self.NAME)
         self.openio('account delete ' + self.NAME)
