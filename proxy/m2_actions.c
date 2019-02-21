@@ -1009,12 +1009,12 @@ action_m2_container_destroy (struct req_args_s *args)
 	const gboolean force = _request_get_flag (args, "force");
 
 	/* TODO FIXME manage container subtype */
-	struct sqlx_name_inline_s n0;
-	sqlx_inline_name_fill (&n0, args->url, NAME_SRVTYPE_META2, 1);
-	NAME2CONST(n, n0);
+	CLIENT_CTX(ctx,args,NAME_SRVTYPE_META2,1);
+	NAME2CONST(n, ctx.name);
 
 	/* 0. Pre-loads the locations of the container. We will need this at the
-	 * destroy step. */
+	 * destroy step. The decache helps working on recent information */
+	hc_decache_reference_service (resolver, args->url, n.type);
 	err = hc_resolve_reference_service (resolver, args->url, n.type, &urlv,
 			oio_ext_get_deadline());
 	if (!err && (!urlv || !*urlv))
@@ -1054,7 +1054,6 @@ action_m2_container_destroy (struct req_args_s *args)
 					m1, args->url, n.type, oio_ext_get_deadline());
 		}
 		err = _m1_locate_and_action (args->url, _unlink);
-		hc_decache_reference_service (resolver, args->url, n.type);
 		if (err != NULL) {
 			/* Rolling back will be hard if there is any chance the UNLINK has
 			 * been managed by the server, despite a time-out that occured. */
@@ -1103,6 +1102,9 @@ action_m2_container_destroy (struct req_args_s *args)
 	}
 
 clean_and_exit:
+	/* Whatever happened, decache anything related to that current user */
+	cache_flush_user(args, &ctx);
+
 	if (urlv)
 		g_strfreev (urlv);
 	if (err != NULL)
