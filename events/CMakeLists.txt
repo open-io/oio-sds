@@ -40,8 +40,10 @@ add_library(oioevents SHARED
 	oio_events_queue_beanstalkd.c
 	${CMAKE_CURRENT_BINARY_DIR}/events_variables.c)
 
-set_target_properties(oioevents PROPERTIES SOVERSION ${ABI_VERSION})
-target_link_libraries(oioevents metautils ${GLIB2_LIBRARIES} ${ZMQ_LIBRARIES})
+set_target_properties(oioevents PROPERTIES VERSION 0.0.0 SOVERSION 0)
+target_link_libraries(oioevents
+	metautils
+	${GLIB2_LIBRARIES} ${ZMQ_LIBRARIES})
 
 install(TARGETS oioevents
 		LIBRARY DESTINATION ${LD_LIBDIR}
