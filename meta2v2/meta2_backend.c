@@ -905,7 +905,8 @@ meta2_backend_get_alias(struct meta2_backend_s *m2b,
 /* TODO(jfs): maybe is there a way to keep this in a cache */
 GError*
 meta2_backend_notify_container_state(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, gboolean recompute, gint64 missing_chunks)
+		struct oio_url_s *url, gboolean recompute,
+		gint64 damaged_objects, gint64 missing_chunks)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -923,6 +924,7 @@ meta2_backend_notify_container_state(struct meta2_backend_s *m2b,
 						&size, &count);
 				m2db_set_size(sq3, size);
 				m2db_set_obj_count(sq3, count);
+				m2db_set_damaged_objects(sq3, damaged_objects);
 				m2db_set_missing_chunks(sq3, missing_chunks);
 				m2db_increment_version(sq3);
 				err = sqlx_transaction_end(repctx, err);
