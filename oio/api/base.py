@@ -22,7 +22,8 @@ from oio.common.http_urllib3 import urllib3, get_pool_manager, \
 from oio.common import exceptions
 from oio.common.utils import deadline_to_timeout
 from oio.common.constants import ADMIN_HEADER, \
-    TIMEOUT_HEADER, PERFDATA_HEADER, CONNECTION_TIMEOUT, READ_TIMEOUT
+    TIMEOUT_HEADER, PERFDATA_HEADER, FORCEMASTER_HEADER, \
+    CONNECTION_TIMEOUT, READ_TIMEOUT
 
 _POOL_MANAGER_OPTIONS_KEYS = ["pool_connections", "pool_maxsize",
                               "max_retries", "backoff_factor"]
@@ -62,12 +63,13 @@ class HttpApi(object):
         self.pool_manager = pool_manager
 
         self.admin_mode = true_value(kwargs.get('admin_mode', False))
+        self.force_master = true_value(kwargs.get('force_master', False))
         self.perfdata = kwargs.get('perfdata')
         self.connection = connection
 
     def _direct_request(self, method, url, headers=None, data=None, json=None,
                         params=None, admin_mode=False, pool_manager=None,
-                        **kwargs):
+                        force_master=False, **kwargs):
         """
         Make an HTTP request.
 
@@ -88,6 +90,8 @@ class HttpApi(object):
         :type timeout: `float` or `urllib3.Timeout`
         :keyword headers: optional headers to add to the request
         :type headers: `dict`
+        :keyword force_master: request will run on master service only.
+        :type force_master: `bool`
 
         :raise oio.common.exceptions.OioTimeout: in case of read, write
         or connection timeout
@@ -106,6 +110,8 @@ class HttpApi(object):
             out_headers = dict()
         if self.admin_mode or admin_mode:
             out_headers[ADMIN_HEADER] = '1'
+        if self.force_master or force_master:
+            out_headers[FORCEMASTER_HEADER] = '1'
 
         # Look for a request deadline, deduce the timeout from it.
         if kwargs.get('deadline', None) is not None:

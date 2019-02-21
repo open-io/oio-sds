@@ -97,6 +97,10 @@ gboolean oio_ext_is_admin(void);
 
 void oio_ext_set_admin(const gboolean admin);
 
+gboolean oio_ext_has_force_master(void);
+
+void oio_ext_set_force_master(const gboolean force_master);
+
 const gchar *oio_ext_get_user_agent(void);
 
 void oio_ext_set_user_agent(const gchar *user_agent);
