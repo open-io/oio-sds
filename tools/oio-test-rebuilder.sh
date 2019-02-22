@@ -97,7 +97,7 @@ check_and_remove_meta()
 
   echo >&2 "Restart the ${TYPE} ${META_IP_TO_REBUILD}"
   ${GRIDINIT} restart "${SERVICE}" > /dev/null
-  sleep 10
+  ${CLI} cluster wait -s 50 "${TYPE}" > /dev/null
 
   echo "${META_IP_TO_REBUILD} ${META_LOC_TO_REBUILD}"
 }
@@ -301,7 +301,7 @@ remove_rawx()
 
   echo >&2 "Restart the rawx ${RAWX_ID_TO_REBUILD}"
   ${GRIDINIT} restart "${SERVICE}" > /dev/null
-  sleep 10
+  ${CLI} cluster wait -s 50 rawx > /dev/null
 
   echo "${RAWX_ID_TO_REBUILD} ${RAWX_LOC_TO_REBUILD} ${TOTAL_CHUNKS}"
 }
@@ -335,44 +335,29 @@ oio_blob_rebuilder()
   update_timeout 1
   set +e
 
-  COMMON_OPTIONS=( --workers "${WORKERS}" --allow-same-rawx )
-  MAIN_OPTIONS=("${COMMON_OPTIONS[@]}")
-
+  BLOB_REBUILDER_OPTIONS=( --workers "${WORKERS}" --allow-same-rawx )
   BEANSTALKD=$($CONFIG -t beanstalkd)
   MULTIBEANSTALKD=$(test $(echo "${BEANSTALKD}" | wc -l) -gt 1 && echo "true" || echo "false")
   if "${MULTIBEANSTALKD}" = true; then
     DISTRIBUTED=""
-    SLAVE_REBUILDERS=()
 
     OLD_IFS=$IFS
     IFS=$'\n'
     for BEANSTALKD_URL in $(echo "${BEANSTALKD}"); do
       DISTRIBUTED="${DISTRIBUTED};${BEANSTALKD_URL}"
-      $(which oio-blob-rebuilder) "${COMMON_OPTIONS[@]}" \
-          --beanstalkd "${BEANSTALKD_URL}" "${NAMESPACE}" 2> /dev/null &
-      SLAVE_REBUILDERS+=($!)
     done
     IFS=$OLD_IFS
 
     DISTRIBUTED=$(echo "${DISTRIBUTED}" | cut -c 2-)
-    MAIN_OPTIONS=( --distributed "${DISTRIBUTED}" \
+    BLOB_REBUILDER_OPTIONS=( --distributed "${DISTRIBUTED}" \
         --beanstalkd "$(echo "${BEANSTALKD}" | head -n 1)" \
         --beanstalkd-tube oio-rebuilt )
   fi
 
   echo >&2 "Start the rebuilding for rawx ${RAWX_ID_TO_REBUILD}"
-  if ! $(which oio-blob-rebuilder) "${MAIN_OPTIONS[@]}" \
+  if ! $(which oio-blob-rebuilder) "${BLOB_REBUILDER_OPTIONS[@]}" \
       --volume "${RAWX_ID_TO_REBUILD}" "${NAMESPACE}"; then
     FAIL=true
-  fi
-
-  if "${MULTIBEANSTALKD}" = true; then
-    OLD_IFS=$IFS
-    IFS=$'\n'
-    for REBUILDER_PID in "${SLAVE_REBUILDERS[@]}"; do
-      kill "${REBUILDER_PID}"
-    done
-    IFS=$OLD_IFS
   fi
 
   set -e
