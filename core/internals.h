@@ -232,10 +232,10 @@ extern time_hook_f oio_time_real;
 
 enum oio_header_case_e
 {
-	OIO_HDRCASE_NONE,
-	OIO_HDRCASE_LOW,
-	OIO_HDRCASE_1CAP,
-	OIO_HDRCASE_RANDOM,
+	OIO_HDRCASE_NONE = 0,
+	OIO_HDRCASE_LOW = 1,
+	OIO_HDRCASE_1CAP = 2,
+	OIO_HDRCASE_RANDOM = 3,
 };
 
 enum oio_header_case_e oio_header_case;

@@ -63,7 +63,7 @@ service_invalidate (gconstpointer k)
 		GRID_DEBUG("invalid at %lu %s", oio_ext_monotonic_seconds(), (const char*)k);
 }
 
-gboolean
+static gboolean
 service_is_slave (const char *obj, const char *master)
 {
 	gboolean rc;
@@ -73,7 +73,7 @@ service_is_slave (const char *obj, const char *master)
 	return rc;
 }
 
-gboolean
+static gboolean
 service_is_master (const char *obj, const char *master)
 {
 	gboolean rc;
@@ -83,19 +83,17 @@ service_is_master (const char *obj, const char *master)
 	return rc;
 }
 
-void
+static void
 service_learn_master (const char *obj, const char *master)
 {
 	gchar *k = g_strdup (obj), *v = g_strdup (master);
 	MASTER_WRITE(lru_tree_insert(srv_master, k, v));
 }
 
-guint
-service_expire_masters (gint64 oldest)
+static void
+service_forget_master(const char *obj)
 {
-	guint count = 0;
-	MASTER_WRITE(count = lru_tree_remove_older (srv_master, oldest));
-	return count;
+	MASTER_WRITE(lru_tree_remove(srv_master, obj));
 }
 
 const char *
@@ -224,6 +222,63 @@ static gboolean _on_reply (gpointer p, MESSAGE reply) {
 	return TRUE;
 }
 
+static gchar *
+_election_key(struct client_ctx_s *ctx)
+{
+	return g_strconcat (ctx->name.base, "/", ctx->name.type, NULL);
+}
+
+static gboolean
+error_clue_for_decache(GError *err)
+{
+	if (!err)
+		return FALSE;
+	switch (err->code) {
+		case CODE_CONTAINER_NOTFOUND:
+		case CODE_USER_NOTFOUND:
+		case CODE_RANGE_NOTFOUND:
+		case CODE_SRVTYPE_NOTMANAGED:
+		case CODE_ACCOUNT_NOTFOUND:
+			return TRUE;
+		default:
+			return FALSE;
+	}
+}
+
+static gboolean
+context_clue_for_decache(struct client_ctx_s *ctx)
+{
+	for (guint i=0; i<ctx->count ;++i) {
+		if (error_clue_for_decache(ctx->errorv[i]))
+			return TRUE;
+	}
+	return FALSE;
+}
+
+void
+cache_flush_user(struct req_args_s *args, struct client_ctx_s *ctx)
+{
+	static const char types[][LIMIT_LENGTH_SRVTYPE] = {
+		NAME_SRVTYPE_META0,
+		NAME_SRVTYPE_META1,
+		NAME_SRVTYPE_META2,
+		NAME_SRVTYPE_SQLX,
+	};
+
+	GRID_DEBUG("Suspected stale cache entry for [%s] [%s]",
+			ctx->type, oio_url_get(args->url, OIOURL_WHOLE));
+
+	hc_decache_reference (resolver, args->url);
+	hc_decache_reference_service (resolver, args->url, NAME_SRVTYPE_META2);
+	hc_decache_reference_service (resolver, args->url, NAME_SRVTYPE_SQLX);
+
+	for (int i=0; i<3 ;++i) {
+		gchar *k = g_strconcat(ctx->name.base, "/", types[i], NULL);
+		service_forget_master(k);
+		g_free(k);
+	}
+}
+
 static GError *
 gridd_request_replicated (struct req_args_s *args, struct client_ctx_s *ctx,
 		request_packer_f pack)
@@ -233,7 +288,7 @@ gridd_request_replicated (struct req_args_s *args, struct client_ctx_s *ctx,
 	gchar **m1uv = NULL;
 	EXTRA_ASSERT (ctx != NULL);
 
-	gchar *election_key = g_strconcat (ctx->name.base, "/", ctx->name.type, NULL);
+	gchar *election_key = _election_key(ctx);
 	STRING_STACKIFY(election_key);
 
 	const gint64 deadline = oio_ext_get_deadline();
@@ -372,16 +427,16 @@ label_retry:
 		g_ptr_array_add (bodyv, body);
 		g_ptr_array_add (urlv, g_strdup(url));
 
-		/* Check for a possible redirection */
-		if (flag_prefer_master_for_read || flag_prefer_slave_for_read
-				|| flag_prefer_master_for_write) {
+		/* If there is no error that indicate a wrong cache entry, we can
+		 * check for a possible redirection to update the cache of master */
+		if ((!err || !error_clue_for_decache(err))
+				&& (flag_prefer_master_for_read ||
+					flag_prefer_slave_for_read ||
+					flag_prefer_master_for_write)) {
 			const char *actual = client ? gridd_client_url(client) : NULL;
-			// if (actual && 0 != strcmp(actual, _id)) {
 			if (actual && 0 != strcmp(actual, url)) {
-				gchar *k = g_strdup(election_key);
-				gchar *v = g_strdup(actual);
-				GRID_TRACE("MASTER %s %s", v, k);
-				MASTER_WRITE(lru_tree_insert(srv_master, k, v));
+				// TODO(jfs): maybe save the ID instead (or remove this mark)
+				service_learn_master(election_key, actual);
 			}
 		}
 
@@ -459,24 +514,15 @@ gridd_request_replicated_with_retry (struct req_args_s *args,
 		struct client_ctx_s *ctx, request_packer_f pack)
 {
 	GError *err = NULL;
-	gboolean retryable = TRUE;
+	gint attempts = 3;
 retry:
 	err = gridd_request_replicated(args, ctx, pack);
-	if (err && err->code == CODE_CONTAINER_NOTFOUND) {
-		GRID_DEBUG("Suspected stale cache entry for [%s] [%s]",
-				ctx->type, oio_url_get(args->url, OIOURL_WHOLE));
-		/* TODO(jfs): CODE_CONTAINER_NOTFOUND is used for missing databases,
-		 * whatever the type of the service. This is ugly and would benefit a
-		 * fix. */
-		if (ctx->type[0] == '#') {
-			hc_decache_reference (resolver, args->url);
-		} else {
-			hc_decache_reference_service (resolver, args->url, ctx->type);
-		}
-
-		if (retryable) {
+	if (error_clue_for_decache(err) || context_clue_for_decache(ctx)) {
+		cache_flush_user(args, ctx);
+		if (attempts-- > 0) {
+			if (err)
+				g_clear_error(&err);
 			client_clean(ctx);
-			retryable = FALSE;
 			goto retry;
 		}
 	}
