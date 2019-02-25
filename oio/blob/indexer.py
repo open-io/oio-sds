@@ -138,7 +138,9 @@ class BlobIndexer(Daemon):
         self.successes = 0
 
         if self.convert_chunks:
-            self.converter = BlobConverter(self.conf, logger=self.logger)
+            converter_conf = self.conf.copy()
+            converter_conf['no_backup'] = True
+            self.converter = BlobConverter(converter_conf, logger=self.logger)
 
         paths = paths_gen(self.volume)
         self.report('started', start_time)

@@ -29,5 +29,3 @@ autocreate = true
 
 # oio-blob-converter configuration
 # convert_chunks = False
-# backup = True
-# backup_dir = /tmp

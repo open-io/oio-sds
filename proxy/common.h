@@ -171,11 +171,6 @@ gboolean service_is_known (const char *key);
 extern GRWLock master_rwlock;
 extern struct lru_tree_s *srv_master;
 
-gboolean service_is_slave (const char *obj, const char *master);
-gboolean service_is_master (const char *obj, const char *master);
-void service_learn_master (const char *obj, const char *master);
-guint service_expire_masters (gint64 oldest);
-
 struct req_args_s
 {
 	struct oio_requri_s *req_uri; // parsed URI
@@ -223,6 +218,11 @@ struct client_ctx_s {
 	gint64 resolve_duration;
 	gint64 request_duration;
 };
+
+/**
+ * Flushes  the resolver cache (all levels) and the cache of known MASTER
+ */
+void cache_flush_user(struct req_args_s *args, struct client_ctx_s *ctx);
 
 void client_init (struct client_ctx_s *ctx, struct req_args_s *args,
 	   const char *srvtype, gint64 seq);
