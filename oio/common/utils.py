@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -339,3 +339,10 @@ def deadline_to_timeout(deadline, check=False):
     if check and dl_to <= 0.0:
         raise DeadlineReached()
     return dl_to
+
+
+def timeout_to_deadline(timeout, now=None):
+    """Convert a timeout (`float` seconds) to a deadline (`float` seconds)."""
+    if now is None:
+        now = monotonic_time()
+    return now + timeout
