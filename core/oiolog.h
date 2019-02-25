@@ -124,10 +124,10 @@ guint16 oio_log_thread_id(GThread *thread);
 guint16 oio_log_current_thread_id(void);
 
 enum oio_log_level_e {
-	OIO_LOG_ERROR,
-	OIO_LOG_WARNING,
-	OIO_LOG_INFO,
-	OIO_LOG_DEBUG,
+	OIO_LOG_ERROR = 0,
+	OIO_LOG_WARNING = 1,
+	OIO_LOG_INFO = 2,
+	OIO_LOG_DEBUG = 3,
 };
 
 typedef void (*oio_log_handler_f) (enum oio_log_level_e lvl, const char *fmt, ...)

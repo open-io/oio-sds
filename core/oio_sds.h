@@ -47,23 +47,23 @@ enum oio_sds_config_e
 	OIOSDS_CFG_TIMEOUT_PROXY = 1,
 
 	/** expects an integer as a number of seconds */
-	OIOSDS_CFG_TIMEOUT_RAWX,
+	OIOSDS_CFG_TIMEOUT_RAWX = 2,
 
 	/** expects an integer used for its boolean value */
-	OIOSDS_CFG_FLAG_SYNCATDOWNLOAD,
+	OIOSDS_CFG_FLAG_SYNCATDOWNLOAD = 3,
 
 	/** expects an integer used for its boolean value */
-	OIOSDS_CFG_FLAG_ADMIN,
+	OIOSDS_CFG_FLAG_ADMIN = 4,
 
 	/** Disable the shuffling of chunks before reading,
 	 * and instead sort them by score.
 	 * Expects an integer used for its boolean value. */
-	OIOSDS_CFG_FLAG_NO_SHUFFLE,
+	OIOSDS_CFG_FLAG_NO_SHUFFLE = 5,
 
 	/** Defines the chunk size in bytes.
 	 *  Expects an <int64_t>.
 	 *  If 0, uses the default size. */
-	OIOSDS_CFG_FLAG_CHUNKSIZE,
+	OIOSDS_CFG_FLAG_CHUNKSIZE = 6,
 };
 
 /**
@@ -237,8 +237,8 @@ typedef int (*oio_sds_dl_hook_f) (void*, const unsigned char*, size_t);
 enum oio_sds_dl_dst_type_e
 {
 	OIO_DL_DST_HOOK_SEQUENTIAL = 1,
-	OIO_DL_DST_BUFFER,
-	OIO_DL_DST_FILE,
+	OIO_DL_DST_BUFFER = 2,
+	OIO_DL_DST_FILE = 3,
 };
 
 struct oio_sds_dl_dst_s
