@@ -22,8 +22,8 @@ License along with this library.
 #include <core/oiocfg.h>
 
 enum oio_var_kind_e {
-	OIO_VARKIND_time,
-	OIO_VARKIND_size,
+	OIO_VARKIND_time = 0,
+	OIO_VARKIND_size = 1,
 };
 
 /**
