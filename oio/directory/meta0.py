@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -16,11 +16,144 @@
 
 """Meta0 client and meta1 balancing operations"""
 import random
+from math import ceil
 
 from oio.directory.meta import MetaMapping
 from oio.common.client import ProxyClient
-from oio.common.exceptions import ConfigurationException, OioException
+from oio.common.exceptions import \
+        ConfigurationException, OioException, PreconditionFailed
 from oio.common.json import json
+
+
+_LEVELS = {'site': 0, 'rack': 1, 'host': 2, 'volume': 3}
+
+
+def _loc(svc):
+    """Extract the location of a service and ensure it is well formed."""
+    loc = svc.get("tags", {}).get("tag.loc", None)
+    if not loc:
+        raise ConfigurationException("No location on {0}".format(svc))
+    tokens = loc.split('.')
+    if len(tokens) > 4:
+        raise ConfigurationException("Malformed location for {1}"
+                                     .format(loc, svc))
+    return tokens
+
+
+def _loc_full(svc):
+    """
+    Extract the location of the given service and ensure it is well formed
+    and that it is composed of exactly 4 tokens
+    """
+    tokens = _loc(svc)
+    tokens = list(reversed(tokens))
+    while len(tokens) < 4:
+        tokens.append(None)
+    return tuple(reversed(tokens))
+
+
+def _slice_services(allsrv, level):
+    """
+    Generate slices of services, where a slice is a set of services sharing
+    the same level of location.
+    :param allsrv: A sorted sequence of services to extract the slices of.
+    :type allsrv: a sequence of dictionnaries representing services.
+    :param level: the position of the location token with the least
+                 significance. Tokens below that position will be ignored.
+    :type level: a positive integer
+    :yield: 2-tuples meaning <start, end>
+    """
+    assert(level >= 0 and level <= 3)
+    assert(len(allsrv) > 0)
+    masks = (lambda loc: (loc[0], None, None, None),
+             lambda loc: (loc[0], loc[1], None, None),
+             lambda loc: (loc[0], loc[1], loc[2], None),
+             lambda loc: loc)
+    mask_func = masks[level]
+    last_index, last = 0, mask_func(_loc_full(allsrv[0]))
+    for idx, srv in enumerate(allsrv[1:], start=1):
+        current = mask_func(_loc_full(srv))
+        if current != last:
+            yield last_index, idx
+            last_index, last = idx, current
+    yield last_index, len(allsrv)
+
+
+def _patch_service(srv):
+    s = dict()
+    s.update(srv)
+    s['bases'] = set()
+    return s
+
+
+def _prepare_for_bootstrap(allsrv):
+    return sorted((_patch_service(s) for s in allsrv), key=_loc_full)
+
+
+def _bootstrap(allsrv, allgroups, replicas, level, degradation=0):
+    """
+    Produce a list of services (dicts), with a fields named 'bases' in each
+    service containing the bases managed by that service.
+    :param allsrv: an iterable of services
+    :param allgroups: an interable of the prefixes to spread over the services
+    :param replicas: how many replicas are expected for each base
+    :param level: the position of the location token with the least
+                  significance. Tokens over that position are ignored.
+    :param degradation: how many 'location levels' (as a whole) might be lost.
+    """
+    assert(degradation >= 0)
+    assert(level >= 0 and level <= 3)
+
+    # Ensure we work on a sorted sequence of service
+    allsrv = tuple(_prepare_for_bootstrap(allsrv))
+
+    # Extract the slices of service corresponding to the location levels
+    # to be perfectly balanced.
+    allslices = tuple(((s, e, set()) for s, e in
+                       _slice_services(allsrv, level)))
+
+    # Check the resilience conditions are satisfied
+    quorum = int(replicas / 2) + 1
+    worst_load = ceil(float(replicas) / len(allslices))
+    if replicas - (worst_load * degradation) < quorum:
+        fmt = "Balancing not satisfiable, {0} replicas wanted on {1}" + \
+              " site(s), and an acceptable degradation of {2} site(s)."
+        raise PreconditionFailed(
+                fmt.format(replicas, len(allslices), degradation))
+
+    # First affect to each slice a set of short prefixes
+    for idx, group in enumerate(allgroups):
+        current_slices = _modulo_peek(allslices, idx, replicas)
+        for start, end, groups in current_slices:
+            groups.add(group)
+
+    # In each slice, spread the prefixes among the services of the slice.
+    for start, end, groups in allslices:
+        slen = end - start
+        assert(slen > 0)
+        for idx, group in enumerate(groups):
+            current_srv = allsrv[start + (idx % slen)]
+            current_srv['bases'].add(group)
+
+    return allsrv
+
+
+def _modulo_peek(tab, offset, num):
+    """
+    Extract <num> subsequent items from <tab>, starting at <offset>, restarting
+    at 0 when the end of the array is reached.
+    :param tab: a non-empty sequence with an accessor to a random element.
+    :param offset: a positive natural number
+    :param num: a strictly positive natural number
+    :return: a new tuple of <num> elements from <tab>, starting at <offset>
+    """
+    result, tablen = list(), len(tab)
+    assert(tablen > 0)
+    assert(num > 0)
+    assert(offset >= 0)
+    for i in range(offset, offset+num):
+        result.append(tab[i % tablen])
+    return tuple(result)
 
 
 class Meta0Client(ProxyClient):
@@ -187,10 +320,18 @@ class Meta0PrefixMapping(MetaMapping):
             simplified[pfx] = [x['addr'] for x in services]
         return json.dumps(simplified)
 
-    def load(self, json_mapping=None, swap_bytes=True, **kwargs):
+    def _learn(self, base, addrs):
+        services = list()
+        for svc_addr in addrs:
+            svc = self.services.get(svc_addr, {"addr": svc_addr})
+            services.append(svc)
+        self.assign_services(base, services)
+        # Deep copy the list
+        self.raw_services_by_base[base] = [str(x) for x in addrs]
+
+    def load_json(self, json_mapping, **kwargs):
         """
-        Load the mapping from the cluster,
-        from a JSON string or from a dictionary.
+        Load the mapping from a JSON string
         """
         if isinstance(json_mapping, basestring):
             raw_mapping = json.loads(json_mapping)
@@ -201,21 +342,23 @@ class Meta0PrefixMapping(MetaMapping):
 
         # pylint: disable=no-member
         for pfx, services_addrs in raw_mapping.iteritems():
-            services = list()
+            base = pfx[:self.digits]
+            self._learn(base, services_addrs)
+
+    def load_meta0(self, json_mapping=None, **kwargs):
+        """
+        Load the mapping from dictionnary out of the cluster,
+        """
+        raw_mapping = self.m0.list(**kwargs)
+
+        # pylint: disable=no-member
+        for pfx, services_addrs in raw_mapping.iteritems():
             # FIXME: this is REALLY annoying
             # self.prefix_to_base() takes the beginning of the prefix,
             # but here we have to take the end, because meta0 does
             # some byte swapping.
-            if swap_bytes:
-                base = pfx[4-self.digits:]
-            else:
-                base = pfx[:self.digits]
-            for svc_addr in services_addrs:
-                svc = self.services.get(svc_addr, {"addr": svc_addr})
-                services.append(svc)
-            self.assign_services(base, services)
-            # Deep copy the list
-            self.raw_services_by_base[base] = [str(x) for x in services_addrs]
+            base = pfx[4-self.digits:]
+            self._learn(base, services_addrs)
 
     def _find_services(self, known=None, lookup=None, max_lookup=50):
         """
@@ -242,13 +385,6 @@ class Meta0PrefixMapping(MetaMapping):
                     break
         return services
 
-    def find_services_random(self, known=None, **_kwargs):
-        """Find `replicas` services, including the ones of `known`"""
-        return self._find_services(
-            known,
-            (lambda known2:
-             (self.services[random.choice(self.services.keys())], )))
-
     def find_services_less_bases(self, known=None, min_score=1, **_kwargs):
         """Find `replicas` services, including the ones of `known`"""
         if known is None:
@@ -268,16 +404,6 @@ class Meta0PrefixMapping(MetaMapping):
             return None
         return self._find_services(known, _lookup, len(filtered))
 
-    def find_services_m1_pool(self, known=None, **_kwargs):
-        """
-        Find `replicas` services, including the ones of `known`,
-        by calling the proxy's load balancer.
-        """
-        def _lookup(known2):
-            res = self.conscience.poll("meta1", known=known2)
-            return (self.services.get(svc['addr']) for svc in res)
-        return self._find_services(known, _lookup)
-
     def assign_services(self, base, services, fail_if_already_set=False):
         """
         Assign `services` to manage `base`.
@@ -293,27 +419,35 @@ class Meta0PrefixMapping(MetaMapping):
             svc['bases'] = base_set
         self.services_by_base[base] = services
 
-    def bootstrap(self, strategy=None):
+    def bootstrap(self, level='volume', degradation=0):
         """
-        Build `self.num_bases()` assignations from scratch,
-        using `strategy` to find new services.
+        Spread the prefixe to balance accross sites. By default the token
+        describing the site is <0>.
+        Put one short_prefix into each slice (corresponding to a location
+        level) and balance well into each level. At the end, expand each
+        short prefixes into their complete prefixes.
+        :param level: the kind of location token describing the level of
+                     fair balancing.
+        :param degradation: how many location slices of the given level
+                            we should tolerate.
+        :return: None
         """
-        self.reset()
-        if len(self.services) < self.replicas:
-            raise ValueError(
-                'Not enough meta1 services: nb_meta1=%d replicas=%d'
-                % (len(self.services), self.replicas))
-        if not strategy:
-            strategy = self.find_services_random
-        last_percent = 0
-        for base_int in xrange(0, self.num_bases()):
-            base = "%0*X" % (self.digits, base_int)
-            services = strategy()
-            self.assign_services(base, services, fail_if_already_set=True)
-            progress = ((base_int + 1) * 100) / self.num_bases()
-            if progress / 10 > last_percent:
-                last_percent = progress / 10
-                self.logger.info("%d%%", progress)
+        assert(degradation >= 0)
+        assert(level in _LEVELS)
+        level = _LEVELS[level]
+
+        # Perform a first bootstrap, producing a <srv,prefixes> mapping
+        allgroups = tuple(generate_short_prefixes(self.digits))
+        allsrv = _bootstrap(self.services.values(), allgroups,
+                            self.replicas, level, degradation=degradation)
+
+        # Compute the reverse <base,srv> mapping (mandatory book-keeping)
+        bases = dict((pfx, set()) for pfx in allgroups)
+        for srv in allsrv:
+            for prefix in srv['bases']:
+                bases[prefix].add(srv['addr'])
+        for base, srv in bases.iteritems():
+            self._learn(base, srv)
 
     def count_pfx_by_svc(self):
         """
@@ -451,11 +585,11 @@ def count_prefixes(digits):
 
 
 def generate_short_prefixes(digits):
-    from itertools import product
-    hexa = "0123456789ABCDEF"
     if digits == 0:
         return ('',)
     elif digits <= 4:
+        from itertools import product
+        hexa = "0123456789ABCDEF"
         return (''.join(pfx) for pfx in product(hexa, repeat=digits))
 
 

@@ -24,14 +24,14 @@ add_library(meta1v2 SHARED
 		meta1_prefixes.c meta1_prefixes.h
 		internals.h internals_sqlite.h)
 
-set_target_properties(meta1v2 PROPERTIES SOVERSION ${ABI_VERSION})
+	set_target_properties(meta1v2 PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(meta1v2
 		metautils gridcluster sqliterepo
 		meta0utils meta0remote
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
 add_library(meta1remote SHARED meta1_remote.c meta1_remote.h)
-set_target_properties(meta1remote PROPERTIES SOVERSION ${ABI_VERSION})
+set_target_properties(meta1remote PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(meta1remote
 		metautils
 		${GLIB2_LIBRARIES})

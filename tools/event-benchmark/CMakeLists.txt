@@ -14,7 +14,6 @@ add_executable(
 )
 
 bin_prefix(event_benchmark -event-benchmark)
-
 target_link_libraries(event_benchmark
 		oioevents
 		server gridcluster

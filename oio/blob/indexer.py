@@ -58,7 +58,9 @@ class BlobIndexer(Daemon):
         self.namespace, self.volume_id = check_volume(self.volume)
         self.convert_chunks = true_value(conf.get('convert_chunks'))
         if self.convert_chunks:
-            self.converter = BlobConverter(self.conf, logger=self.logger,
+            converter_conf = self.conf.copy()
+            converter_conf['no_backup'] = True
+            self.converter = BlobConverter(converter_conf, logger=self.logger,
                                            pool_manager=pm)
         else:
             self.converter = None

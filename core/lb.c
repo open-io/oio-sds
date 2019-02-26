@@ -367,6 +367,9 @@ struct polling_ctx_s
 
 	/* Maximum achievable distance between selected services. */
 	guint16 max_dist;
+
+	/* Minimum acceptable distance between selected services. */
+	guint16 min_dist;
 };
 
 static void _local__destroy (struct oio_lb_pool_s *self);
@@ -791,6 +794,20 @@ _slot_rehash (struct oio_lb_slot_s *slot)
 	}
 }
 
+static guint
+_count_similar_target_slots(struct oio_lb_pool_LOCAL_s *lb,
+		const char *target)
+{
+	guint count = 0;
+	for (gchar **ptarget = lb->targets; *ptarget; ++ptarget) {
+		/* The format of target and *ptarget is weird: they contain
+		 * a null character and then regular characters (the slot fallbacks).
+		 * We choose to compare only the main slot. */
+		count += !g_strcmp0(target, *ptarget);
+	}
+	return count;
+}
+
 /* return the position of the stored_item with the closest <acc_weight> to
  * the value of <needle> */
 static int
@@ -864,8 +881,8 @@ _accept_item(struct oio_lb_slot_s *slot, const guint16 distance,
  * The purpose of the shuffled lookup is to jump to an item with
  * a distant location. */
 static struct oio_lb_selected_item_s *
-_local_slot__poll(struct oio_lb_slot_s *slot, const guint16 distance,
-		gboolean reversed, struct polling_ctx_s *ctx)
+_local_slot__poll(struct oio_lb_slot_s *slot, guint16 distance,
+		gboolean reversed, struct polling_ctx_s *ctx, guint n_targets)
 {
 	if (unlikely(_slot_needs_rehash(slot)))
 		_warn_dirty_poll("BUG: %s: LB reload not followed by rehash", __FUNCTION__);
@@ -886,18 +903,19 @@ _local_slot__poll(struct oio_lb_slot_s *slot, const guint16 distance,
 	}
 
 	/* If we need to pick more items than the number of different locations,
-	 * we can disable the distance checks, and rely only on the "popularity"
-	 * mechanism.
-	 * XXX: here we compare the overall number of targets to the number
-	 * of different locations IN THE CURRENT SLOT. We bet that in most
-	 * pools there will be only one targetted slot. */
-	if (!reversed && ctx->check_distance && distance > 1) {
+	 * we can slacken the distance checks, and rely only on the "popularity"
+	 * mechanism. */
+	if (oio_lb_allow_distance_bypass &&
+			!reversed && ctx->check_distance && distance > 1) {
 		guint16 level = distance - 1;
-		if (ctx->n_targets > slot->locs_by_level[level]) {
-			GRID_TRACE("%u targets and %u locations at level %u: "
-					"disabling distance check",
-					ctx->n_targets, slot->locs_by_level[level], level);
-			ctx->check_distance = FALSE;
+		if (n_targets > slot->locs_by_level[level]) {
+			GRID_TRACE("%u targets, distance %u and %u locations at level %u: "
+					"reducing required distance",
+					n_targets, distance, slot->locs_by_level[level], level);
+			/* Reducing the distance constrain locally gives better results
+			 * than completely disabling the distance checks. */
+			// ctx->check_distance = FALSE;
+			distance = MAX(distance - 1, ctx->min_dist);
 		}
 	}
 
@@ -937,13 +955,15 @@ _local_target__poll(struct oio_lb_pool_LOCAL_s *lb,
 	 * an empty string. Each string is the name of a slot.
 	 * In most case we should not loop and consider only the first slot.
 	 * The other slots are fallbacks. */
+	guint n_targets = _count_similar_target_slots(lb, target);
 	for (const char *name = target; *name; name += 1+strlen(name)) {
 		struct oio_lb_slot_s *slot = oio_lb_world__get_slot_unlocked(
 				lb->world, name);
 		if (!slot) {
 			GRID_DEBUG ("Slot [%s] not ready", name);
 		} else if ((selected =
-				_local_slot__poll(slot, distance, lb->nearby_mode, ctx))) {
+				_local_slot__poll(slot, distance,
+						lb->nearby_mode, ctx, n_targets))) {
 			selected->expected_slot = g_strdup(target);
 			selected->final_slot = g_strdup(name);
 			break;
@@ -1089,6 +1109,7 @@ _local__patch(struct oio_lb_pool_s *self,
 		.check_distance = TRUE,
 		.check_popularity = TRUE,
 		.max_dist = max_dist,
+		.min_dist = lb->min_dist,
 		.selection = g_ptr_array_new_with_free_func(
 			(GDestroyNotify)_selected_item_free),
 	};
@@ -1111,11 +1132,14 @@ _local__patch(struct oio_lb_pool_s *self,
 		for (dist = start_dist; !selected && dist != end_dist; dist += incr) {
 			selected = _local_target__poll(lb, *ptarget, dist, &ctx);
 		}
-		dist -= incr;
-		if ((lb->nearby_mode && dist > reached_dist) ||
-				(!lb->nearby_mode && dist < reached_dist))
-			reached_dist = dist;
-		if (!selected) {
+		if (selected) {
+			/* Do not trust the loop counter, we may have slackened
+			 * the distance constraint in the polling function. */
+			dist = selected->final_dist;
+			if ((lb->nearby_mode && dist > reached_dist) ||
+					(!lb->nearby_mode && dist < reached_dist))
+				reached_dist = dist;
+		} else {
 			/* the strings are '\0' separated, printf won't display them */
 			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "no service polled "
 					"from [%s], %u/%d services polled, %u services in slot",
@@ -1221,13 +1245,17 @@ oio_lb_world__add_pool_target (struct oio_lb_pool_s *self, const char *to)
 	EXTRA_ASSERT (lb->world != NULL);
 	EXTRA_ASSERT (lb->targets != NULL);
 
-	/* prepare the string to be easy to parse. */
+	/* Prepare the string to be easy to parse:
+	 * replace commas with null characters. */
 	const size_t tolen = strlen (to);
 	gchar *copy = g_malloc (tolen + 2);
 	memcpy (copy, to, tolen + 1);
 	copy [tolen+1] = '\0';
-	for (gchar *p=copy; *p ;) {
-		if (!(p = strchr (p, OIO_CSV_SEP_C))) break; else *(p++) = '\0';
+	for (gchar *p = copy; *p; ) {
+		if (!(p = strchr(p, OIO_CSV_SEP_C)))
+			break;
+		else
+			*(p++) = '\0';
 	}
 
 	const gsize len = g_strv_length (lb->targets);

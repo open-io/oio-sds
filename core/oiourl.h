@@ -35,18 +35,19 @@ extern "C" {
 enum oio_url_field_e
 {
 	OIOURL_NS=1,
-	OIOURL_ACCOUNT,
-	OIOURL_USER,
-	OIOURL_PATH,
+	OIOURL_ACCOUNT = 2,
+	OIOURL_USER = 3,
+	/* DO NOT REUSE the value <4>, previously used as OIOURL_TYPE */
+	OIOURL_PATH = 5,
 
-	OIOURL_VERSION,
+	OIOURL_VERSION = 6,
 
-	OIOURL_WHOLE, /* read-only */
+	OIOURL_WHOLE = 7,  /* read-only */
 
-	OIOURL_HEXID,     /* read-write */
-	OIOURL_CONTENTID, /* read-write */
+	OIOURL_HEXID = 8,  /* read-write */
+	OIOURL_CONTENTID = 9,  /* read-write */
 
-	OIOURL_FULLPATH
+	OIOURL_FULLPATH = 10
 };
 
 /** One plus the maximum length of a namespace name

@@ -31,7 +31,7 @@ add_library(hcresolve SHARED
 	hc_resolver.c
 	${CMAKE_CURRENT_BINARY_DIR}/resolver_variables.c
 	${CMAKE_CURRENT_BINARY_DIR}/resolver_variables.h)
-
+set_target_properties(hcresolve PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(hcresolve
 		meta0remote meta1remote metautils gridcluster
 		${GLIB2_LIBRARIES})

@@ -54,7 +54,7 @@ add_custom_command(
 
 add_library(sqliteutils SHARED rc.c sqlite_utils.c)
 
-set_target_properties(sqliteutils PROPERTIES SOVERSION ${ABI_VERSION})
+set_target_properties(sqliteutils PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(sqliteutils metautils
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
@@ -65,7 +65,7 @@ add_library(sqlitereporemote SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_remote_variables.c
 		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_remote_variables.h)
 
-set_target_properties(sqlitereporemote PROPERTIES SOVERSION ${ABI_VERSION})
+set_target_properties(sqlitereporemote PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(sqlitereporemote metautils
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
@@ -84,7 +84,7 @@ add_library(sqliterepo SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_variables.c
 		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_variables.h)
 
-set_target_properties(sqliterepo PROPERTIES SOVERSION ${ABI_VERSION})
+	set_target_properties(sqliterepo PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(sqliterepo metautils
 		sqlitereporemote sqliteutils
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES} ${ZK_LIBRARIES})

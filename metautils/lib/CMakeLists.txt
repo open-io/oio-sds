@@ -339,7 +339,7 @@ add_library(metautils SHARED
 		comm_converter.c
 		comm_meta_reply.c
 )
-
+set_target_properties(metautils PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(metautils
 		oiocore
 		${GLIB2_LIBRARIES} ${JSONC_LIBRARIES}

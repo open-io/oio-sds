@@ -291,6 +291,7 @@ if is_running_test_suite "unit" ; then
 	tox -e pep8
 	tox -e py27
 	cd $WRKDIR
+	export G_DEBUG_LEVEL=W
 	make -C tests/unit test
 fi
 

@@ -27,10 +27,6 @@ endif ()
 
 set(OIOSDS_PROJECT_VERSION "${OIOSDS_RELEASE}/${OIOSDS_PROJECT_VERSION_SHORT}")
 
-if (NOT ABI_VERSION)
-	set(ABI_VERSION 0)
-endif()
-
 set(CMAKE_C_FLAGS "-g -fPIC -pipe -Wall -Wextra -std=gnu99")
 set(PYTHON python)
 
@@ -348,7 +344,6 @@ pkg_check_modules(ZMQ libzmq>=4.0.0)
 # Optional cache libraries
 pkg_search_module(HIREDIS hiredis)
 pkg_search_module(LIBMEMCACHED libmemcached)
-
 endif (NOT SDK_ONLY)
 
 # Load CLI-overriden configuration
@@ -413,6 +408,7 @@ include_directories(AFTER
 link_directories(${GLIB2_LIBRARY_DIRS})
 
 add_subdirectory(./core)
+add_subdirectory(./tests/unit)
 
 if (NOT SDK_ONLY)
 add_subdirectory(./metautils/lib)
@@ -436,10 +432,9 @@ add_subdirectory(./sqliterepo)
 add_subdirectory(./sqlx)
 add_subdirectory(./rdir)
 add_subdirectory(./tools)
-add_subdirectory(./tests/unit)
 add_subdirectory(./tests/func)
 add_subdirectory(./tools/event-benchmark)
-endif (NOT SDK_ONLY)
-
 add_custom_target(python-openio-docs
 	COMMAND epydoc -v --graph=all --docformat=restructuredtext -o python-openio-docs oio)
+endif (NOT SDK_ONLY)
+

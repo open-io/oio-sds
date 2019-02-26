@@ -53,11 +53,12 @@ install:
   - go get gopkg.in/ini.v1 gopkg.in/tylerb/graceful.v1
 
 env:
-  - TEST_SUITE=rebuilder,with-service-id
+  - TEST_SUITE=sdk
+  - TEST_SUITE=3copies,with-service-id
   - TEST_SUITE=ec,with-random-service-id
+  - TEST_SUITE=rebuilder,with-service-id
   - TEST_SUITE=ec
   - TEST_SUITE=repli,go-rawx
-  - TEST_SUITE=3copies,with-service-id
   - TEST_SUITE=3copies
   - TEST_SUITE=multi-beanstalk
   - TEST_SUITE=small-cache
@@ -73,7 +74,9 @@ script:
   - ulimit -c unlimited -S
   - set -e
   - mkdir /tmp/oio && source $HOME/oio/bin/activate
-  - export CMAKE_OPTS='-DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib -DZK_LIBDIR=/usr/lib -DZK_INCDIR=/usr/include/zookeeper -DAPACHE2_LIBDIR=/usr/lib/apache2 -DAPACHE2_INCDIR=/usr/include/apache2 -DAPACHE2_MODDIR=/tmp/oio/lib/apache2/module'
+  - export CMAKE_OPTS='-DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib'
+  - if [ "sdk" == "${TEST_SUITE/*sdk*/sdk}" ] ; then cmake ${CMAKE_OPTS} -D SDK_ONLY=on . && make all && make test ; exit 0 ; fi
+  - export CMAKE_OPTS="${CMAKE_OPTS} -DZK_LIBDIR=/usr/lib -DZK_INCDIR=/usr/include/zookeeper -DAPACHE2_LIBDIR=/usr/lib/apache2 -DAPACHE2_INCDIR=/usr/include/apache2 -DAPACHE2_MODDIR=/tmp/oio/lib/apache2/module"
   - if [ "build" == "${TEST_SUITE/*build*/build}" ] ; then cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Release" . && make all && make clean ; fi
   - export PYTHON_COVERAGE=1 CMAKE_OPTS="${CMAKE_OPTS} -DENABLE_CODECOVERAGE=on"
   - cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Debug" . && make all install

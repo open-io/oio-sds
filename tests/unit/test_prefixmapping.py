@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,7 +18,98 @@ import unittest
 
 from mock import MagicMock as Mock
 
-from oio.directory.meta0 import Meta0PrefixMapping
+from oio.common.exceptions import PreconditionFailed
+from oio.directory.meta0 import \
+        Meta0PrefixMapping, \
+        generate_short_prefixes as prefixes, \
+        _slice_services, _bootstrap
+
+
+class TestMeta0Bootstrap(unittest.TestCase):
+
+    def setUp(self):
+        super(TestMeta0Bootstrap, self).setUp()
+
+    def generate_services(self, count, nb_sites=1, fill_token=2):
+        assert(count > 0)
+        assert(nb_sites > 0)
+        sites = ['s' + str(i) for i in range(nb_sites)]
+
+        def _loc(i):
+            s = list()
+            s.append(sites[i % len(sites)])
+            for _ in range(fill_token):
+                s.append('0')
+            s.append('h' + str(i))
+            return '.'.join(s)
+
+        for i in range(count):
+            yield {'addr': '127.0.0.1:{0}'.format(6000+i),
+                   'id': 'srv-{0}'.format(i),
+                   'type': 'meta1', 'tags': {'tag.loc': _loc(i)}}
+
+    def _test_ok(self, groups, sites=1, replicas=1, level=0, fill_token=0):
+        nb_services = sites * 3
+        print "srv =", nb_services, "sites =", sites, "repli =", replicas
+        srv = list(self.generate_services(nb_services, nb_sites=sites,
+                                          fill_token=fill_token))
+        _after = _bootstrap(srv, groups, replicas, level)
+        ideal_per_slice = (len(groups) * replicas) / sites
+        for start, end in _slice_services(_after, level):
+            total = sum(len(s['bases']) for s in _after[start:end])
+            # Check the sites are evenly loaded
+            bounds = (ideal_per_slice, ideal_per_slice+1)
+            self.assertIn(total, bounds)
+            # Check services are uniformly balanced within the
+            # current slice.
+            ideal_per_node = total / (end - start)
+            bounds = (ideal_per_node, ideal_per_node+1)
+            for s in _after[start:end]:
+                self.assertIn(len(s['bases']), bounds)
+
+    def test_bootstrap_not_enough_sites(self):
+        for groups in (prefixes(1),  # 16
+                       prefixes(2),  # 256
+                       prefixes(3),  # 4096
+                       prefixes(4)):  # 64ki
+            groups = list(groups)
+            for replicas in range(2, 5):
+                for sites in range(1, replicas):
+                    srv = list(self.generate_services(sites*3,
+                                                      nb_sites=sites,
+                                                      fill_token=2))
+                    self.assertRaises(PreconditionFailed,
+                                      _bootstrap, srv, groups,
+                                      replicas=replicas, level=0,
+                                      degradation=1)
+
+    def test_bootstrap_enough_sites(self):
+        for groups in (prefixes(1),  # 16
+                       prefixes(2),  # 256
+                       prefixes(3),  # 4096
+                       prefixes(4)):  # 64ki
+            groups = list(groups)
+            max_replicas = 5
+            for replicas in range(1, max_replicas+1):
+                for sites in range(replicas, max_replicas+1):
+                    self._test_ok(groups, sites=sites, replicas=replicas,
+                                  level=0, fill_token=2)
+
+    def test_bootstrap_partial_locations(self):
+        for groups in (prefixes(1),  # 16
+                       prefixes(2),  # 256
+                       prefixes(3),  # 4096
+                       prefixes(4)):  # 64ki
+            groups = list(groups)
+            # whatever the number of bases to spread, a partial location
+            # is well padded left
+            srv = list(self.generate_services(9, nb_sites=3, fill_token=0))
+            self.assertRaises(PreconditionFailed, _bootstrap,
+                              srv, groups, replicas=2, level=0, degradation=1)
+            self.assertRaises(PreconditionFailed, _bootstrap,
+                              srv, groups, replicas=2, level=1, degradation=1)
+            self._test_ok(groups, sites=3, replicas=1,
+                          level=2, fill_token=2)
 
 
 class FakeConscienceClient(object):
@@ -177,7 +268,7 @@ class TestMeta0PrefixMapping(unittest.TestCase):
         mapping = self.make_mapping(replicas=replicas, digits=digits)
         mapping._admin = Mock()
         mapping._admin.election_status = Mock(return_value={'peers': {}})
-        mapping.load(mapping_str, swap_bytes=False)
+        mapping.load_json(mapping_str)
 
         svc = mapping.services.values()[0]
         self.logger.info("Decommissioning everything from %s", svc['addr'])

@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -19,7 +19,8 @@ from oio.common.green import Queue, GreenPile, sleep
 from logging import getLogger, INFO
 from cliff.command import Command
 from oio.common.configuration import load_namespace_conf
-from oio.common.exceptions import ClientException
+from oio.common.exceptions import \
+        ClientException, ConfigurationException, PreconditionFailed
 from oio.common import green
 from oio.directory.meta0 import generate_prefixes, count_prefixes
 
@@ -35,11 +36,16 @@ class DirectoryCmd(Command):
 
     def get_parser(self, prog_name):
         parser = super(DirectoryCmd, self).get_parser(prog_name)
-        parser.add_argument('--replicas', metavar='<N>', dest='replicas',
-                            type=int, default=3,
-                            help='Set the number of replicas (3 by default)')
-        parser.add_argument('--min-dist', type=int, default=1,
-                            help="Minimum distance between replicas")
+        parser.add_argument(
+            '--no-rdir', action='store_true', help='Deprecated')
+        parser.add_argument(
+            '--replicas', metavar='<N>', dest='replicas',
+            type=int, default=3,
+            help='Set the number of replicas (3 by default)')
+        parser.add_argument(
+            '--min-dist',
+            type=int, default=1,
+            help="Minimum distance between replicas")
         parser.add_argument(
             '--meta0-timeout', metavar='<SECONDS>',
             type=float, default=M0_READ_TIMEOUT,
@@ -63,8 +69,8 @@ class DirectoryCmd(Command):
                                   min_dist=parsed_args.min_dist,
                                   logger=self.log)
 
-    def _apply_mapping(self, mapping, moved=None,
-                       max_attempts=7, read_timeout=M0_READ_TIMEOUT):
+    def _apply(self, mapping, moved=None,
+               max_attempts=7, read_timeout=M0_READ_TIMEOUT):
         """
         Upload the specified mapping to the meta0 service,
         retry in case or error.
@@ -100,6 +106,16 @@ class DirectoryInit(DirectoryCmd):
     def get_parser(self, prog_name):
         parser = super(DirectoryInit, self).get_parser(prog_name)
         parser.add_argument(
+            '--level', metavar='<LEVEL>', dest='level',
+            choices=('site', 'rack', 'host', 'volume'), default='volume',
+            help='Which location level should be perfectly balanced')
+        parser.add_argument(
+            '--degradation', metavar='<DEGRADATION>', dest='degradation',
+            type=int, default=None,
+            help='How many location levels we accept to lose to keep the '
+                 'quorums valid. Not set by default, it is then autodetected '
+                 'to the replication set minus the quorum')
+        parser.add_argument(
             '--force',
             action='store_true',
             help="Do the bootstrap even if already done")
@@ -110,9 +126,9 @@ class DirectoryInit(DirectoryCmd):
         return parser
 
     def _assign_meta1(self, parsed_args):
+        # Pre-check
         mapping = self.get_prefix_mapping(parsed_args)
-        mapping.load(read_timeout=parsed_args.meta0_timeout)
-
+        mapping.load_meta0(read_timeout=parsed_args.meta0_timeout)
         if mapping and not parsed_args.force:
             self.log.info("Meta1 prefix mapping already initialized")
             if not parsed_args.check:
@@ -120,33 +136,30 @@ class DirectoryInit(DirectoryCmd):
             self.log.info("Checking...")
             return mapping.check_replicas()
 
-        # Bootstrap with the 'random' strategy, then rebalance with the
-        # 'less_prefixes' strategy to ensure the same number of prefixes
-        # per meta1. This is faster than bootstrapping directly with the
-        # 'less_prefixes' strategy.
-        checked = False
-        for i in range(3):
-            self.log.info("Computing meta1 prefix mapping (pass %d)", i)
-            mapping.bootstrap()
+        if parsed_args.degradation is None:
+            quorum = parsed_args.replicas / 2 + 1
+            parsed_args.degradation = parsed_args.replicas - quorum
 
-            self.log.info("Equilibrating...")
-            mapping.rebalance()
+        # Reset and bootstrap
+        mapping = self.get_prefix_mapping(parsed_args)
+        try:
+            mapping.bootstrap(level=parsed_args.level,
+                              degradation=parsed_args.degradation)
+        except ConfigurationException:
+            self.log.warn("Namespace poorly configured, some meta1 services "
+                          "carry no location or an invalid one.")
+            raise
+        except PreconditionFailed:
+            self.log.warn("Namespace too constrained, please consider a "
+                          "less constrained setup, using either --level or "
+                          "--degradation with different values.")
+            raise
 
-            if parsed_args.check:
-                self.log.info("Checking...")
-                checked = mapping.check_replicas()
-            else:
-                checked = True
-
-            if checked:
-                break
-
-        if checked:
-            self._apply_mapping(mapping,
-                                read_timeout=parsed_args.meta0_timeout)
+        if mapping.check_replicas():
+            self._apply(mapping, read_timeout=parsed_args.meta0_timeout)
+            return True
         else:
             raise Exception("Failed to initialize prefix mapping")
-        return checked
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
@@ -170,8 +183,8 @@ class DirectoryList(DirectoryCmd):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         mapping = self.get_prefix_mapping(parsed_args)
-        mapping.load(connection_timeout=M0_CONN_TIMEOUT,
-                     read_timeout=parsed_args.meta0_timeout)
+        mapping.load_meta0(connection_timeout=M0_CONN_TIMEOUT,
+                           read_timeout=parsed_args.meta0_timeout)
         print mapping.to_json()
 
 
@@ -181,10 +194,10 @@ class DirectoryRebalance(DirectoryCmd):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         mapping = self.get_prefix_mapping(parsed_args)
-        mapping.load(read_timeout=parsed_args.meta0_timeout)
+        mapping.load_meta0(read_timeout=parsed_args.meta0_timeout)
         moved = mapping.rebalance()
-        self._apply_mapping(mapping, moved=moved,
-                            read_timeout=parsed_args.meta0_timeout)
+        self._apply(mapping, moved=moved,
+                    read_timeout=parsed_args.meta0_timeout)
         self.log.info("Moved %s", moved)
 
 
@@ -215,7 +228,7 @@ class DirectoryRestore(DirectoryCmd):
                 self.log.info('Loading from %s...', parsed_args.backup)
                 backup = inputf.read()
         mapping = self.get_prefix_mapping(parsed_args)
-        mapping.load(backup, swap_bytes=False)
+        mapping.load_json(backup)
         self.log.info('Checking...')
         if mapping.check_replicas():
             self.log.info('OK')
@@ -225,8 +238,7 @@ class DirectoryRestore(DirectoryCmd):
             raise Exception('Bad meta1 prefix mapping')
         if parsed_args.I_know_what_I_am_doing:
             self.log.info('Applying...')
-            self._apply_mapping(mapping,
-                                read_timeout=parsed_args.meta0_timeout)
+            self._apply(mapping, read_timeout=parsed_args.meta0_timeout)
         else:
             self.log.info('Please tell me that you know what you are doing.')
 
@@ -255,14 +267,14 @@ class DirectoryDecommission(DirectoryCmd):
         if self.log.getEffectiveLevel() > INFO:
             self.log.setLevel(INFO)
         mapping = self.get_prefix_mapping(parsed_args)
-        mapping.load(read_timeout=parsed_args.meta0_timeout)
+        mapping.load_meta0(read_timeout=parsed_args.meta0_timeout)
         self.log.info("meta1_digits=%d", mapping.digits)
         moved = mapping.decommission(parsed_args.addr,
                                      bases_to_remove=parsed_args.base)
         if (mapping.check_replicas() or
                 parsed_args.ignore_replicas_number_errors):
-            self._apply_mapping(mapping, moved=moved,
-                                read_timeout=parsed_args.meta0_timeout)
+            self._apply(mapping, moved=moved,
+                        read_timeout=parsed_args.meta0_timeout)
             self.log.info("Moved %s", sorted(moved))
         else:
             self.log.warn("Did nothing due to errors.")

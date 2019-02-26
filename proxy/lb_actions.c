@@ -305,11 +305,12 @@ enum http_rc_e
 action_lb_create_pool(struct req_args_s *args)
 {
 	GError *err = NULL;
+	gboolean force = oio_str_parse_bool(OPT("force"), FALSE);
 	if (!validate_namespace(NS()))
 		err = NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Invalid NS");
 	else if	(!OPT("name"))
 		err = BADREQ("Missing name parameter");
-	else if (oio_lb__has_pool(lb, OPT("name")))
+	else if (oio_lb__has_pool(lb, OPT("name")) && !force)
 		err = NEWERROR(CODE_CONTENT_EXISTS, "A pool named [%s] already exists",
 				OPT("name"));
 	if (err)

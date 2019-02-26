@@ -8,12 +8,6 @@ include_directories(BEFORE
 		${CMAKE_BINARY_DIR}
 		${CMAKE_BINARY_DIR}/metautils/lib)
 
-include_directories(AFTER
-		${ZMQ_INCLUDE_DIRS})
-
-link_directories(
-		${ZMQ_LIBRARY_DIRS})
-
 add_custom_command(
 	OUTPUT
 		${CMAKE_CURRENT_BINARY_DIR}/events_variables.c
@@ -39,7 +33,7 @@ add_library(oioevents SHARED
 	oio_events_queue_beanstalkd.c
 	${CMAKE_CURRENT_BINARY_DIR}/events_variables.c)
 
-set_target_properties(oioevents PROPERTIES SOVERSION ${ABI_VERSION})
+set_target_properties(oioevents PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(oioevents metautils ${GLIB2_LIBRARIES})
 
 install(TARGETS oioevents

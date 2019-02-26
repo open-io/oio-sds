@@ -7,12 +7,11 @@ include_directories(BEFORE
 	${CMAKE_BINARY_DIR})
 
 add_library(gridcluster SHARED gridcluster.c)
-
-set_target_properties(gridcluster PROPERTIES SOVERSION ${ABI_VERSION})
-
+set_target_properties(gridcluster PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(gridcluster
 		metautils oiosds
-		-lm ${GLIB2_LIBRARIES})
+		${GLIB2_LIBRARIES}
+		-lm)
 
 install(TARGETS gridcluster
 	LIBRARY DESTINATION ${LD_LIBDIR}

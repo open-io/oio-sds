@@ -19,8 +19,7 @@ from mock import MagicMock as Mock, ANY, call
 from oio.directory.client import DirectoryClient
 from oio.common.utils import cid_from_name
 from oio.common import exceptions as exc
-from oio.conscience.client import ConscienceClient
-from oio.rdir.client import RdirDispatcher, RdirClient, RDIR_ACCT, _make_id
+from oio.rdir.client import RdirDispatcher, RDIR_ACCT, _make_id
 from oio.account.client import AccountClient
 from tests.utils import random_str, BaseTestCase
 
@@ -293,39 +292,9 @@ class TestDirectoryAPI(BaseTestCase):
         # get on deleted reference
         self.assertRaises(exc.NotFound, self.api.list, self.account, name)
 
-    def test_rdir_linking_old(self):
-        """
-        Tests that rdir services linked to rawx services
-        are not on the same locations
-        """
-        def _id(r):
-            return r['tags'].get('tag.service_id', r['addr'])
-
-        self.skipTest('Deprecated way of linking rdir services')
-        self._reload_proxy()
-
-        cs = ConscienceClient({'namespace': self.ns}, endpoint=self.uri)
-        rawx_list = cs.all_services('rawx')
-        rdir_dict = {x['addr']: x for x in cs.all_services('rdir')}
-        # Link the services
-        for rawx in rawx_list:
-            self.api.link('_RDIR_TEST', _id(rawx), 'rdir', autocreate=True)
-        # Do the checks
-        for rawx in rawx_list:
-            linked_rdir = self.api.list('_RDIR_TEST', _id(rawx),
-                                        service_type='rdir')['srv']
-            rdir = rdir_dict[linked_rdir[0]['host']]
-            rawx_loc = rawx['tags'].get('tag.loc')
-            rdir_loc = rdir['tags'].get('tag.loc')
-            self.assertNotEqual(rawx_loc, rdir_loc)
-        # Unlink the services
-        for rawx in rawx_list:
-            self.api.unlink('_RDIR_TEST', _id(rawx), 'rdir')
-            self.api.delete('_RDIR_TEST', _id(rawx))
-
     def test_link_rdir_to_zero_scored_rawx(self):
-        client = RdirClient({'namespace': self.ns})
-        disp = RdirDispatcher({'namespace': self.ns})
+        disp = RdirDispatcher({'namespace': self.ns},
+                              pool_manager=self.http_pool)
 
         # Register a service, with score locked to zero
         new_rawx = self._srv('rawx', {'tag.loc': 'whatever'})
@@ -336,7 +305,7 @@ class TestDirectoryAPI(BaseTestCase):
         all_rawx = disp.assign_all_rawx()
         all_rawx_keys = [x['addr'] for x in all_rawx]
         self.assertIn(new_rawx['addr'], all_rawx_keys)
-        rdir_addr = client._get_rdir_addr(new_rawx['addr'])
+        rdir_addr = disp.rdir._get_rdir_addr(new_rawx['addr'])
         self.assertIsNotNone(rdir_addr)
         try:
             self.api.unlink(RDIR_ACCT, new_rawx['addr'], 'rdir')
@@ -344,6 +313,24 @@ class TestDirectoryAPI(BaseTestCase):
             # self._flush_cs('rawx')
         except Exception:
             pass
+
+    def test_link_rdir_unachievable_min_dist(self):
+        disp = RdirDispatcher({'namespace': self.ns},
+                              pool_manager=self.http_pool)
+
+        # Register a service, with score locked to zero
+        new_rawx = self._srv('rawx', {'tag.loc': 'whatever'})
+        new_rawx['score'] = 90
+        self._register_srv(new_rawx)
+        self._reload_proxy()
+
+        self.assertRaises(exc.OioException,
+                          disp.assign_all_rawx, min_dist=4)
+        all_rawx, _ = disp.get_assignments('rawx')
+        all_rawx_keys = [x['addr'] for x in all_rawx]
+        self.assertIn(new_rawx['addr'], all_rawx_keys)
+        self.assertRaises(exc.VolumeException,
+                          disp.rdir._get_rdir_addr, new_rawx['addr'])
 
     def _generate_services(self, types, score=50):
         all_srvs = dict()
@@ -390,7 +377,8 @@ class TestDirectoryAPI(BaseTestCase):
 
         # But ensure all calls have been made
         link_calls = [call(rawx['addr'], ANY, max_per_rdir=ANY, max_attempts=1,
-                           service_type='rawx') for rawx in all_srvs['rawx']]
+                           min_dist=ANY, service_type='rawx')
+                      for rawx in all_srvs['rawx']]
         disp._smart_link_rdir.assert_has_calls(link_calls)
         force_calls = \
             [call(RDIR_ACCT, rawx['addr'], 'rdir', ANY, autocreate=True)

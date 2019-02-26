@@ -17,21 +17,21 @@ link_directories(
 		${SQLITE3_LIBRARY_DIRS})
 
 add_library(meta0remote SHARED meta0_remote.c meta0_remote.h)
-set_target_properties(meta0remote PROPERTIES SOVERSION ${ABI_VERSION})
+set_target_properties(meta0remote PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(meta0remote
 		metautils
 		${GLIB2_LIBRARIES})
 
 
 add_library(meta0utils SHARED meta0_utils.c meta0_utils.h)
-set_target_properties(meta0utils PROPERTIES SOVERSION ${ABI_VERSION})
+set_target_properties(meta0utils PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(meta0utils
 		metautils gridcluster
 		${GLIB2_LIBRARIES})
 
 
 add_library(meta0v2 SHARED meta0_backend.h meta0_backend.c)
-set_target_properties(meta0v2 PROPERTIES SOVERSION ${ABI_VERSION})
+set_target_properties(meta0v2 PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(meta0v2
 		meta0utils metautils gridcluster sqliterepo
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})

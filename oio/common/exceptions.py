@@ -214,7 +214,10 @@ class VolumeException(OioException):
     pass
 
 
-class ClientException(OioException):
+class StatusMessageException(OioException):
+    """
+    Error carrying an HTTP status, an OIO status and a message.
+    """
     def __init__(self, http_status, status=None, message=None):
         self.http_status = http_status
         self.message = message or 'n/a'
@@ -225,6 +228,10 @@ class ClientException(OioException):
         if self.status:
             s += ' (STATUS %s)' % self.status
         return s
+
+
+class ClientException(StatusMessageException):
+    pass
 
 
 class Forbidden(ClientException):
