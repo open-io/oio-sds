@@ -828,7 +828,7 @@ _is_damaged_object(struct meta2_backend_s *m2b, struct sqlx_sqlite3_s *sq3,
 	GSList *beans = NULL;
 	gint64 content_missing_chunks = 0;
 
-	GError *err = m2db_get_alias(sq3, url, 0,
+	GError *err = m2db_get_alias(sq3, url, M2V2_FLAG_NOPROPS,
 			_bean_list_cb, &beans);
 	if (!err) {
 		struct m2v2_sorted_content_s *sorted = NULL;
@@ -878,6 +878,16 @@ _update_missing_chunks(struct meta2_backend_s *m2b, struct sqlx_sqlite3_s *sq3,
 		goto end;
 	}
 
+	struct bean_CONTENTS_HEADERS_s *header = NULL;
+	void retrieve_header(gpointer unused UNUSED, gpointer bean)
+	{
+		if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
+			header = bean;
+		} else {
+			_bean_clean(bean);
+		}
+	}
+
 	struct m2v2_sorted_content_s *sorted = NULL;
 	gint64 content_missing_chunks = 0;
 	GError *err = NULL;
@@ -886,11 +896,29 @@ _update_missing_chunks(struct meta2_backend_s *m2b, struct sqlx_sqlite3_s *sq3,
 		sorted = NULL;
 		content_missing_chunks = 0;
 		m2v2_sort_content(deleted_beans->data, &sorted);
+		if (!sorted->header) {
+			if (!header) {
+				// "truncate" and "update" doesn't delete the header
+				err = m2db_get_alias(sq3, url, M2V2_FLAG_NOPROPS,
+						retrieve_header, NULL);
+			}
+			if (err || !header) {
+				if (err) {
+					GRID_WARN("No update of missing chunks: %s", err->message);
+					g_clear_error(&err);
+				}
+				m2v2_sorted_content_free(sorted);
+				continue;
+			}
+			sorted->header = _bean_dup(header);
+		}
 		err = m2db_get_content_missing_chunks(
 				sorted, nsinfo, &content_missing_chunks);
 		if (err) {
 			GRID_WARN("No update of missing chunks: %s", err->message);
 			g_clear_error(&err);
+			m2v2_sorted_content_free(sorted);
+			continue;
 		}
 		m2v2_sorted_content_free(sorted);
 		if ((!partial && content_missing_chunks)
@@ -900,6 +928,7 @@ _update_missing_chunks(struct meta2_backend_s *m2b, struct sqlx_sqlite3_s *sq3,
 		missing_chunks -= content_missing_chunks;
 	}
 
+	_bean_clean(header);
 	namespace_info_free(nsinfo);
 
 end:
