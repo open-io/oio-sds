@@ -434,6 +434,35 @@ class TestMeta2Containers(BaseTestCase):
                             headers=headers, data=json.dumps(chunks))
         self.assertEqual(204, resp.status)
 
+    def _append_content(self, name, missing_chunks=0):
+        headers = {'X-oio-action-mode': 'autocreate'}
+        params = self.param_content(self.ref, name)
+        resp = self.request('POST', self.url_content('prepare'), params=params,
+                            headers=headers, data=json.dumps({'size': '1024'}))
+        self.assertEqual(resp.status, 200)
+        chunks = self.json_loads(resp.data)
+        for _ in range(0, missing_chunks):
+            chunks.pop()
+
+        params['append'] = 1
+        stgpol = resp.getheader('x-oio-content-meta-policy')
+        chunk_method = resp.getheader('x-oio-content-meta-chunk-method')
+        headers = {'x-oio-action-mode': 'autocreate',
+                   'x-oio-content-meta-length': '1024',
+                   'x-oio-content-meta-policy': stgpol,
+                   'x-oio-content-meta-chunk-method': chunk_method,
+                   'x-oio-content-meta-id': random_id(32)}
+        resp = self.request('POST', self.url_content('create'), params=params,
+                            headers=headers, data=json.dumps(chunks))
+        self.assertEqual(204, resp.status)
+
+    def _truncate_content(self, name):
+        params = self.param_content(self.ref, name)
+        params['size'] = 1048576
+        resp = self.request('POST', self.url_content('truncate'),
+                            params=params)
+        self.assertEqual(204, resp.status)
+
     def test_purge(self):
         params = self.param_ref(self.ref)
 
@@ -600,6 +629,44 @@ class TestMeta2Containers(BaseTestCase):
 
         self._delete_content('content4')
         self._check_missing_chunks(2, 3)
+
+    def test_missing_chunks_append_truncate(self):
+        stg_policy = self.conscience.info().get(
+            'options', dict()).get('storage_policy')
+        if stg_policy != 'THREECOPIES' and stg_policy != 'EC':
+            self.skipTest('The storage policy must be THREECOPIES or EC')
+
+        self._create_content('content0', missing_chunks=0)
+        self._check_missing_chunks(0, 0)
+        self._append_content('content0', missing_chunks=0)
+        self._check_missing_chunks(0, 0)
+
+        self._create_content('content1', missing_chunks=0)
+        self._check_missing_chunks(0, 0)
+        self._append_content('content1', missing_chunks=1)
+        self._check_missing_chunks(1, 1)
+
+        self._create_content('content2', missing_chunks=1)
+        self._check_missing_chunks(2, 2)
+        self._append_content('content2', missing_chunks=0)
+        self._check_missing_chunks(2, 2)
+
+        self._create_content('content3', missing_chunks=1)
+        self._check_missing_chunks(3, 3)
+        self._append_content('content3', missing_chunks=1)
+        self._check_missing_chunks(3, 4)
+
+        self._truncate_content('content0')
+        self._check_missing_chunks(3, 4)
+
+        self._truncate_content('content1')
+        self._check_missing_chunks(2, 3)
+
+        self._truncate_content('content2')
+        self._check_missing_chunks(2, 3)
+
+        self._truncate_content('content3')
+        self._check_missing_chunks(2, 2)
 
 
 class TestMeta2Contents(BaseTestCase):
