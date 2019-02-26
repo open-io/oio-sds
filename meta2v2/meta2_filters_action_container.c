@@ -300,7 +300,8 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 }
 
 static void
-_load_list_params (struct list_params_s *lp, struct gridd_filter_ctx_s *ctx)
+_load_list_params(struct list_params_s *lp, struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
 {
 	memset(lp, '\0', sizeof(struct list_params_s));
 
@@ -320,6 +321,8 @@ _load_list_params (struct list_params_s *lp, struct gridd_filter_ctx_s *ctx)
 	const char *maxkeys_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MAX_KEYS);
 	if (NULL != maxkeys_str)
 		lp->maxkeys = g_ascii_strtoll(maxkeys_str, NULL, 10);
+	reply->subject("max=%"G_GINT64_FORMAT", marker=%s, prefix=%s",
+			lp->maxkeys, lp->marker_start, lp->prefix);
 }
 
 int
@@ -327,7 +330,7 @@ meta2_filter_action_list_contents(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	struct list_params_s lp;
-	_load_list_params (&lp, ctx);
+	_load_list_params(&lp, ctx, reply);
 	return _list_S3(ctx, reply, &lp, NULL);
 }
 
@@ -341,7 +344,7 @@ meta2_filter_action_list_by_chunk_id(struct gridd_filter_ctx_s *ctx,
 	int rc = FILTER_KO;
 
 	struct list_params_s lp;
-	_load_list_params (&lp, ctx);
+	_load_list_params(&lp, ctx, reply);
 
 	// Get the chunk id
 	c = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_KEY);
@@ -378,7 +381,7 @@ meta2_filter_action_list_by_header_hash(struct gridd_filter_ctx_s *ctx,
 	int rc = FILTER_KO;
 
 	struct list_params_s lp;
-	_load_list_params (&lp, ctx);
+	_load_list_params(&lp, ctx, reply);
 
 	// Get the header hash (binary form)
 	gsize hlen = 0;
@@ -418,7 +421,7 @@ meta2_filter_action_list_by_header_id(struct gridd_filter_ctx_s *ctx,
 	int rc = FILTER_KO;
 
 	struct list_params_s lp;
-	_load_list_params (&lp, ctx);
+	_load_list_params(&lp, ctx, reply);
 
 	// Get the header ID (binary form)
 	gsize hlen = 0;
