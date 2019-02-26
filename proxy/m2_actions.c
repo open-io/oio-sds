@@ -880,13 +880,22 @@ struct filter_ctx_s
 	const char *prefix;
 	const char *marker;
 	char delimiter;
+	const gchar *latest_prefix;  // do not free
+	const gchar *latest_name;  // do not free
 };
 
 static void
 _filter_list_result(struct filter_ctx_s *ctx, GSList *l)
 {
-	void forget (GSList *p) { if (p->data) _bean_clean (p->data); g_slist_free1 (p); }
-	void prepend (GSList *p) { p->next = ctx->beans; ctx->beans = p; }
+	void forget(GSList *p) {
+		if (p->data)
+			_bean_clean(p->data);
+		g_slist_free1(p);
+	}
+	void prepend(GSList *p) {
+		p->next = ctx->beans;
+		ctx->beans = p;
+	}
 
 	gsize prefix_len = ctx->prefix ? strlen(ctx->prefix) : 0;
 	for (GSList *tmp; l; l = tmp) {
@@ -914,18 +923,21 @@ _filter_list_result(struct filter_ctx_s *ctx, GSList *l)
 				// We must not respond a prefix equal to the marker.
 				if (!ctx->marker ||
 						strncmp(name, ctx->marker, (p - name) + 1)) {
-					g_tree_insert(ctx->prefixes,
-							g_strndup(name, (p - name) + 1),
-							GINT_TO_POINTER(1));
+					gchar *prefix = g_strndup(name, (p - name) + 1);
+					// Use replace (vs insert) to be sure prefix stays valid
+					g_tree_replace(ctx->prefixes, prefix, GINT_TO_POINTER(1));
+					ctx->latest_prefix = prefix;
 				}
 				forget (l);
 			} else {
 				ctx->count ++;
 				prepend (l);
+				ctx->latest_name = name;
 			}
 		} else {
 			ctx->count ++;
 			prepend (l);
+			ctx->latest_name = name;
 		}
 	}
 }
@@ -1500,6 +1512,49 @@ _m2_container_create_many(struct req_args_s *args, struct json_object *jbody)
 
 typedef GByteArray* (*list_packer_f) (struct list_params_s *);
 
+/* When listing with a delimiter, and the next_marker is further than the last
+ * object found, we can build a marker with the last prefix found. */
+static gchar *
+_build_next_marker(const char *req_marker, const gchar *obj_marker,
+		const gchar *prefix_marker)
+{
+	GRID_TRACE("Choosing marker among req=%s, obj=%s, prefix=%s",
+			req_marker, obj_marker, prefix_marker);
+	gchar *next_marker = NULL;
+	if (prefix_marker) {
+		if (obj_marker && g_strcmp0(obj_marker, prefix_marker) >= 0) {
+			next_marker = g_strdup(obj_marker);
+		} else {
+			/* HACK: "\xef\xbf\xbd" is the (UTF-8 encoded) unicode
+			 * replacement character. There are very few chances that an
+			 * object has it in its name, and even if it has, it won't
+			 * be listed (because it would be behind the delimiter).
+			 * With such a marker, we will force meta2 to skip objects
+			 * that won't be listed, and won't even be used to generate
+			 * new prefixes (they all share the current prefix).
+			 *
+			 * Here is a trivial example:
+			 * - a/b/0
+			 * - a/b/1
+			 * - a/b/2
+			 * - a/c/3
+			 * - d/e/4
+			 * With a page size of 3, and '/' as a delimiter:
+			 * - the first request will return "a/b/0", "a/b/1", "a/b/2",
+			 *   generating the prefix "a/";
+			 * - the marker for the next iteration will be "a/\xef\xbf\xbd";
+			 * - the second request will skip "a/c/3", and return "d/e/4",
+			 *   generating the prefix "d/". */
+			next_marker = g_strdup_printf("%s\xef\xbf\xbd", prefix_marker);
+		}
+	} else if (obj_marker) {
+		next_marker = g_strdup(obj_marker);
+	} else if (req_marker) {
+		next_marker = g_strdup(req_marker);
+	}
+	return next_marker;
+}
+
 static GError * _list_loop (struct req_args_s *args,
 		struct list_params_s *in0, struct list_result_s *out0,
 		GTree *tree_prefixes, list_packer_f packer) {
@@ -1516,6 +1571,7 @@ static GError * _list_loop (struct req_args_s *args,
 
 	PACKER_VOID(_pack) { return packer(&in); }
 
+	struct filter_ctx_s ctx = {0};
 	while (!err && !stop && grid_main_is_running()) {
 
 		struct list_result_s out = {0};
@@ -1524,12 +1580,14 @@ static GError * _list_loop (struct req_args_s *args,
 		/* patch the input parameters */
 		if (in0->maxkeys > 0)
 			in.maxkeys = in0->maxkeys - (count + g_tree_nnodes(tree_prefixes));
-		if (out0->next_marker)
-			in.marker_start = out0->next_marker;
+		in.marker_start = _build_next_marker(
+				out0->next_marker?: in0->marker_start,
+				ctx.latest_name, ctx.latest_prefix);
 
 		/* Action */
 		err = _resolve_meta2(args, _prefer_slave(), _pack, &out,
 				m2v2_list_result_extract);
+		oio_str_clean((gchar**)&(in.marker_start));
 		if (err) {
 			if (err->code == CODE_UNAVAILABLE &&
 					strstr(err->message, "deadline reached")) {
@@ -1558,7 +1616,6 @@ static GError * _list_loop (struct req_args_s *args,
 		oio_str_reuse (&out0->next_marker, out.next_marker);
 		out.next_marker = NULL;
 		if (out.beans) {
-			struct filter_ctx_s ctx;
 			ctx.beans = out0->beans;
 			ctx.prefixes = tree_prefixes;
 			ctx.count = count;
