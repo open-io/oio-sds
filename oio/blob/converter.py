@@ -374,7 +374,9 @@ class BlobConverter(object):
 
     def is_fullpath_error(self, err):
         if (isinstance(err, MissingAttribute) and
-                err.attribute.startswith(CHUNK_XATTR_CONTENT_FULLPATH_PREFIX)):
+            (err.attribute.startswith(CHUNK_XATTR_CONTENT_FULLPATH_PREFIX)
+             or err.attribute == chunk_xattr_keys['content_path']
+             or err.attribute.startswith(XATTR_OLD_FULLPATH))):
             return True
         elif isinstance(err, FaultyChunk):
             return any(self.is_fullpath_error(x) for x in err.args)
