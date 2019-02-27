@@ -15,6 +15,7 @@
 
 
 from oio.common.exceptions import ClientException, OioTimeout
+from oio.common.utils import request_id
 from oio.account.client import AccountClient
 from oio.event.evob import Event, EventError, EventTypes
 from oio.event.filters.base import Filter
@@ -34,6 +35,9 @@ class AccountUpdateFilter(Filter):
 
     def process(self, env, cb):
         event = Event(env)
+        headers = {
+            'X-oio-req-id': event.reqid or request_id('account-update-')
+        }
 
         if event.event_type in CONTAINER_EVENTS:
             mtime = event.when / 1000000.0  # convert to seconds
@@ -50,7 +54,7 @@ class AccountUpdateFilter(Filter):
             try:
                 self.account.container_update(
                     url.get('account'), url.get('user'), body,
-                    read_timeout=ACCOUNT_TIMEOUT)
+                    read_timeout=ACCOUNT_TIMEOUT, headers=headers)
             except OioTimeout as exc:
                 msg = 'account update failure: %s' % str(exc)
                 resp = EventError(event=Event(env), body=msg)
@@ -80,10 +84,11 @@ class AccountUpdateFilter(Filter):
                 self.account.container_update(
                         url.get('account'), url.get('user'),
                         {'dtime': event.when / 1000000.0},
-                        read_timeout=ACCOUNT_TIMEOUT)
+                        read_timeout=ACCOUNT_TIMEOUT, headers=headers)
             else:
                 self.account.account_create(
-                    url.get('account'), read_timeout=ACCOUNT_TIMEOUT)
+                    url.get('account'), read_timeout=ACCOUNT_TIMEOUT,
+                    headers=headers)
         return self.app(env, cb)
 
 

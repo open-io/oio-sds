@@ -86,7 +86,7 @@ class ContentReaperFilter(Filter):
                 if item.get("type") == 'contents_headers':
                     content_headers.append(item)
             if len(chunks):
-                reqid = request_id()
+                reqid = event.reqid or request_id('content-cleaner-')
                 if not content_headers:
                     chunk_method = guess_storage_method(chunks[0]['id']) + '/'
                 else:
