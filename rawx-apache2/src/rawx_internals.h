@@ -105,6 +105,9 @@ dav_rawx_server_conf * request_get_server_config(const request_rec *r);
 
 apr_uint64_t request_get_duration(const request_rec *req);
 
+/** Get the request ID from input headers.
+ * It is limited to LIMIT_LENGTH_REQID, including null terminator. */
+const char *request_get_id(const request_rec *req);
 
 void str_replace_by_pooled_str(apr_pool_t *pool, char ** pstr);
 
