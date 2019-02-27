@@ -1636,6 +1636,7 @@ static void
 completion_LISTING(int zrc, const struct String_vector *sv, const void *d)
 {
 	if (!d) return;
+	if (!sv) return;
 
 	struct election_member_s *member = (struct election_member_s*) d;
 	gboolean has_first = FALSE;
@@ -1726,6 +1727,7 @@ static struct election_member_s *
 _find_member (struct election_manager_s *M, const char *path, guint gen)
 {
 	if (!M) return NULL;
+	if (!path) return NULL;
 
 	const char *slash = strrchr(path, '/');
 	if (!slash) return NULL;
