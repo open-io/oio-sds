@@ -68,6 +68,17 @@ request_get_duration(const request_rec *req)
 	return t;
 }
 
+const char *
+request_get_id(const request_rec *req)
+{
+	const char *reqid = apr_table_get(req->headers_in, PROXYD_HEADER_REQID);
+	if (reqid != NULL && strlen(reqid) >= LIMIT_LENGTH_REQID) {
+		reqid = apr_pstrndup(req->pool, reqid, LIMIT_LENGTH_REQID - 1);
+		apr_table_setn(req->headers_in, PROXYD_HEADER_REQID, reqid);
+	}
+	return reqid;
+}
+
 /*************** OTHER *********************/
 
 void
@@ -157,8 +168,7 @@ send_chunk_event(enum rawx_event_type_e type, const dav_resource *resource)
 
 	g_string_append_c(json, '}');
 
-	const char *reqid = apr_table_get(
-			resource->info->request->headers_in, PROXYD_HEADER_REQID);
+	const char *reqid = request_get_id(resource->info->request);
 	const gint64 pre = oio_ext_monotonic_time ();
 	GError *err = rawx_event_send(type, reqid, json);
 	const gint64 post = oio_ext_monotonic_time ();
