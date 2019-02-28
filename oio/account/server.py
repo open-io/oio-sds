@@ -20,6 +20,7 @@ from werkzeug.exceptions import NotFound, BadRequest, Conflict
 from functools import wraps
 
 from oio.account.backend import AccountBackend
+from oio.common.constants import STRLEN_REQID
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.wsgi import WerkzeugApp
@@ -28,12 +29,15 @@ from oio.common.wsgi import WerkzeugApp
 def access_log(func):
 
     @wraps(func)
-    def _access_log_wrapper(self, *args, **kwargs):
+    def _access_log_wrapper(self, req, *args, **kwargs):
         from time import time
         pre = time()
-        rc = func(self, *args, **kwargs)
+        rc = func(self, req, *args, **kwargs)
         post = time()
-        self.logger.info("%s %0.6f", func.__name__, post - pre)
+        reqid = req.headers.get('X-oio-req-id', '-')[:STRLEN_REQID]
+        # func time size user reqid
+        self.logger.info("%s %0.6f %s %s %s",
+                         func.__name__, post - pre, '-', '-', reqid)
         return rc
 
     return _access_log_wrapper
