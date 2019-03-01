@@ -73,7 +73,7 @@ class ClientManager(object):
             ns = self._options.get('namespace', None)
             if not ns:
                 from oio.common.exceptions import CommandError
-                msg = 'Set a namespace with --oio-ns, OIO_NS\n'
+                msg = 'Set a namespace with --ns, OIO_NS\n'
                 raise CommandError('Missing parameter: \n%s' % msg)
             self._namespace = ns
         return self._namespace
@@ -173,7 +173,7 @@ class ClientManager(object):
             account_name = self._options.get('account_name', None)
             if not account_name:
                 from oio.common.exceptions import CommandError
-                msg = 'Set an account name with --oio-account, OIO_ACCOUNT\n'
+                msg = 'Set an account name with --account, OIO_ACCOUNT\n'
                 raise CommandError('Missing parameter: \n%s' % msg)
             self._account = account_name
         return self._account
