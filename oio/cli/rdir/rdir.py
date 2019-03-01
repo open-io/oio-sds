@@ -1,4 +1,4 @@
-# Copyright (C) 2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -64,7 +64,7 @@ class RdirBootstrap(lister.Lister):
 
     def take_action(self, parsed_args):
         from oio.common.exceptions import OioException
-        dispatcher = self.app.client_manager.rdir.rdir_lb
+        dispatcher = self.app.client_manager.rdir_dispatcher
         try:
             all_services = dispatcher.assign_services(
                 parsed_args.service_type, parsed_args.max_per_rdir,
@@ -100,7 +100,7 @@ class RdirAssignments(lister.Lister):
         self.log.debug('take_action(%s)', parsed_args)
 
         all_services, all_rdir = \
-            self.app.client_manager.rdir.rdir_lb.get_assignments(
+            self.app.client_manager.rdir_dispatcher.get_assignments(
                 parsed_args.service_type,
                 connection_timeout=30.0, read_timeout=90.0)
 

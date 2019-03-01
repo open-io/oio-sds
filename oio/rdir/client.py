@@ -45,12 +45,15 @@ def _filter_rdir_host(allsrv):
 
 
 class RdirDispatcher(object):
-    def __init__(self, conf, **kwargs):
+    def __init__(self, conf, rdir_client=None, **kwargs):
         self.conf = conf
         self.ns = conf['namespace']
         self.logger = get_logger(conf)
         self.directory = DirectoryClient(conf, logger=self.logger, **kwargs)
-        self.rdir = RdirClient(conf, logger=self.logger, **kwargs)
+        if rdir_client:
+            self.rdir = rdir_client
+        else:
+            self.rdir = RdirClient(conf, logger=self.logger, **kwargs)
         self._cs = None
         self._pool_options = None
 
