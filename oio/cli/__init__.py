@@ -53,32 +53,31 @@ def add_common_parser_options(parser):
     """
     Add optional parameters common to all openio CLIs to parser.
     """
-    # TODO(FVE): add short versions
     parser.add_argument(
         "--admin-flag", "--admin",
         dest='admin_mode',
         action='store_true',
         help="Add 'admin mode' flag to all requests to oio-proxy.")
     parser.add_argument(
-        '--oio-ns',
-        metavar='<namespace>',
-        dest='ns',
-        default=os.environ.get('OIO_NS', ''),
-        help='Namespace name (Env: OIO_NS).')
-    parser.add_argument(
-        '--oio-account',
+        '-a', '--account', '--oio-account',
         metavar='<account>',
         dest='account',
         default=os.environ.get('OIO_ACCOUNT', ''),
         help='Account name (Env: OIO_ACCOUNT).')
     parser.add_argument(
-        '--oio-proxyd-url', '--oio-proxy',
+        '--ns', '--oio-ns',
+        metavar='<namespace>',
+        dest='ns',
+        default=os.environ.get('OIO_NS', ''),
+        help='Namespace name (Env: OIO_NS).')
+    parser.add_argument(
+        '--oio-proxy', '--oio-proxyd-url',
         metavar='<proxy-url>',
         dest='proxyd_url',
         default=os.environ.get('OIO_PROXYD_URL', ''),
         help='URL of an oio-proxy service (Env: OIO_PROXYD_URL).')
     parser.add_argument(
-        '--request-id',
+        '--request-id', '--req-id',
         metavar='<request-id>',
         help=('Set a request ID. Maximum 63 characters. '
               'For looping commands, a suffix may be appended.'))
