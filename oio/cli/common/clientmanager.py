@@ -22,8 +22,13 @@ LOG = getLogger(__name__)
 
 
 class ClientManager(object):
+    """
+    OpenIO SDS command line god object.
+    """
+
     def __init__(self, options):
         self._options = options
+        self._client_conf = None
         self._sds_conf = None
         self._namespace = None
         self._admin_mode = None
@@ -33,21 +38,37 @@ class ClientManager(object):
         self._nsinfo = None
         self._account = None
 
+        # Various API client classes
         self._admin_client = None
+        self._conscience_client = None
+        self._rdir_client = None
+        self._rdir_dispatcher = None
+
+        self._pool_manager = None
 
         LOG.setLevel(getLogger('').getEffectiveLevel())
-        LOG.debug('Using parameters %s' % self._options)
+        LOG.debug('Using parameters %s', self._options)
         self._options['log_level'] = getLevelName(LOG.getEffectiveLevel())
 
     @property
+    def client_conf(self):
+        """Dict to be passed as first parameter to all *Client classes."""
+        if not self._sds_conf:
+            self._client_conf = {'namespace': self.namespace,
+                                 'proxyd_url': self.get_endpoint()}
+        return self._client_conf
+
+    @property
     def sds_conf(self):
+        """Dict holding what's in local configuration files."""
         if not self._sds_conf:
             from oio.common.configuration import load_namespace_conf
-            self._sds_conf = load_namespace_conf(self.namespace) or {}
+            self._sds_conf = load_namespace_conf(self.namespace, failsafe=True)
         return self._sds_conf
 
     @property
     def namespace(self):
+        """Name of the namespace set on the CLI or environment."""
         if not self._namespace:
             ns = self._options.get('namespace', None)
             if not ns:
@@ -67,9 +88,34 @@ class ClientManager(object):
     def admin(self):
         if self._admin_client is None:
             from oio.directory.admin import AdminClient
-            self._admin_client = AdminClient({"namespace": self.namespace},
-                                             endpoint=self.get_endpoint())
+            self._admin_client = AdminClient(self.sds_conf,
+                                             pool_manager=self.pool_manager)
         return self._admin_client
+
+    @property
+    def conscience(self):
+        if self._conscience_client is None:
+            from oio.conscience.client import ConscienceClient
+            self._conscience_client = ConscienceClient(
+                self.client_conf, pool_manager=self.pool_manager)
+        return self._conscience_client
+
+    @property
+    def rdir(self):
+        if self._rdir_client is None:
+            from oio.rdir.client import RdirClient
+            self._rdir_client = RdirClient(self.client_conf,
+                                           pool_manager=self.pool_manager)
+        return self._rdir_client
+
+    @property
+    def rdir_dispatcher(self):
+        if self._rdir_dispatcher is None:
+            from oio.rdir.client import RdirDispatcher
+            self._rdir_dispatcher = RdirDispatcher(
+                self.client_conf, rdir_client=self.rdir,
+                pool_manager=self.pool_manager)
+        return self._rdir_dispatcher
 
     def flatns_set_bits(self, bits):
         self._flatns_bits = bits
@@ -99,8 +145,16 @@ class ClientManager(object):
         return self._flatns_manager
 
     @property
+    def pool_manager(self):
+        if self._pool_manager is None:
+            from oio.common.http_urllib3 import get_pool_manager
+            # TODO(FVE): load parameters from self._options or self.ns_conf
+            self._pool_manager = get_pool_manager()
+        return self._pool_manager
+
+    @property
     def meta1_digits(self):
-        if not self._meta1_digits:
+        if self._meta1_digits is None:
             m1d = (self.sds_conf.get("ns.meta1_digits") or
                    self.sds_conf.get("meta1_digits"))
             if m1d:
@@ -110,9 +164,7 @@ class ClientManager(object):
     @property
     def nsinfo(self):
         if not self._nsinfo:
-            from oio.conscience.client import ConscienceClient
-            client = ConscienceClient({"namespace": self.namespace})
-            self._nsinfo = client.info()
+            self._nsinfo = self.conscience.info()
         return self._nsinfo
 
     @property
@@ -127,19 +179,17 @@ class ClientManager(object):
         return self._account
 
     def get_endpoint(self, service_type=None):
-        endpoint = self._options.get('proxyd_url', None)
-        if not endpoint:
-            endpoint = self.sds_conf.get('proxy', None)
-            if endpoint:
-                self._options['proxyd_url'] = 'http://%s' % endpoint
-                endpoint = self._options['proxyd_url']
+        if 'proxyd_url' not in self._options:
+            proxy_netloc = self.sds_conf.get('proxy', None)
+            if proxy_netloc:
+                self._options['proxyd_url'] = 'http://%s' % proxy_netloc
             else:
                 from oio.common.exceptions import CommandError
-                msg = """ Set a proxyd URL with --oio-proxyd-url,
-                          OIO_PROXYD_URL\n """
+                msg = """ Set a proxyd URL with --oio-proxy,
+                          OIO_PROXY_URL\n """
                 raise CommandError('Missing parameter(s): \n%s' % msg)
         # TODO: for the moment always return the proxyd URL
-        return endpoint
+        return self._options['proxyd_url']
 
     def cli_conf(self):
         """Get a copy of the CLI configuration options."""

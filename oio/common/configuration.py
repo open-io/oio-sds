@@ -13,8 +13,10 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from __future__ import print_function
+
+import sys
 from os import path
-from sys import exit
 from yaml import load
 from optparse import OptionParser
 from glob import glob
@@ -32,12 +34,12 @@ def parse_options(parser=None):
     if not args:
         parser.print_usage()
         print("Error: missing configuration file path")
-        exit(1)
+        sys.exit(1)
     config = path.abspath(args.pop(0))
     if not path.exists(config):
         parser.print_usage()
         print("Error: unable to locate %s" % config)
-        exit(1)
+        sys.exit(1)
 
     options = vars(options)
 
@@ -58,7 +60,7 @@ def read_conf(conf_path, section_name=None, defaults=None, use_yaml=False):
     success = parser.read(conf_path)
     if not success:
         print("Unable to read config from %s" % conf_path)
-        exit(1)
+        sys.exit(1)
     if section_name:
         if parser.has_section(section_name):
             conf = dict(parser.items(section_name))
@@ -95,21 +97,43 @@ def config_paths():
     yield path.expanduser('~/.oio/sds.conf')
 
 
-def load_namespace_conf(namespace):
+# Keep namespace configurations, avoid loading files everytime
+NS_CONF_CACHE = dict()
+
+
+def load_namespace_conf(namespace, failsafe=False, fresh=False):
+    """
+    Load configuration for the namespace from the local configuration files.
+
+    :param namespace: name of the namespace.
+    :param failsafe: in case of error, return a dummy configuration.
+    :param fresh: if True, reload configuration from files,
+        do not use the cache.
+    :returns: a dictionary with local namespace configuration.
+    """
+    if not fresh and namespace in NS_CONF_CACHE:
+        return NS_CONF_CACHE[namespace]
+
+    conf = {'namespace': namespace}
     parser = SafeConfigParser({})
-    success = parser.read(config_paths())
-    if not success:
+    success = False
+    loaded_files = parser.read(config_paths())
+    if not loaded_files:
         print('Unable to read namespace config')
-        exit(1)
-    if parser.has_section(namespace):
-        conf = dict(parser.items(namespace))
     else:
-        print('Unable to find [%s] section config' % namespace)
-        exit(1)
-    proxy = conf.get('proxy')
-    if not proxy:
-        print("Missing field proxy in namespace config")
-        exit(1)
+        if not parser.has_section(namespace):
+            print('Unable to find [%s] section in any of %s' % (
+                  namespace, loaded_files))
+        else:
+            conf.update(parser.items(namespace))
+            proxy = conf.get('proxy')
+            if not proxy:
+                print("Missing field proxy in namespace config")
+            else:
+                success = True
+                NS_CONF_CACHE[namespace] = conf
+    if not (success or failsafe):
+        sys.exit(1)
     return conf
 
 
