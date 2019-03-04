@@ -396,6 +396,7 @@ class Beanstalk(object):
         'peek-ready': parse_body,
         'reserve': parse_body,
         'reserve-with-timeout': parse_body,
+        'stats': parse_yaml,
         'stats-tube': parse_yaml
     })
     EXPECTED_OK = dict_merge({
@@ -411,6 +412,7 @@ class Beanstalk(object):
         'release': ['RELEASED'],
         'reserve': ['RESERVED'],
         'reserve-with-timeout': ['RESERVED'],
+        'stats': ['OK'],
         'stats-tube': ['OK'],
         'use': ['USING'],
         'watch': ['WATCHING'],
@@ -428,6 +430,7 @@ class Beanstalk(object):
         'reserve': ['DEADLINE_SOON', 'TIMED_OUT'],
         'reserve-with-timeout': ['DEADLINE_SOON', 'TIMED_OUT'],
         'release': ['BURIED', 'NOT_FOUND', 'OUT_OF_MEMORY'],
+        'stats': [],
         'stats-tube': ['NOT_FOUND'],
         'use': [],
         'watch': [],
@@ -605,6 +608,9 @@ class Beanstalk(object):
             time.sleep(poll_interval)
             job_id, _ = self.peek_ready()
         return job_id
+
+    def stats(self):
+        return self.execute_command('stats')
 
     def stats_tube(self, tube):
         return self.execute_command('stats-tube', tube)
