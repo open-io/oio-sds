@@ -426,6 +426,33 @@ stats:
     - {type: system}
 """
 
+template_beanstalkd_watch = """
+host: ${IP}
+port: ${PORT}
+type: beanstalkd
+location: ${LOC}
+checks:
+    - {type: beanstalkd}
+slots:
+    - beanstalkd
+stats:
+    - {type: system}
+    - {type: volume, path: ${VOLUME}}
+"""
+
+template_proxy_watch = """
+host: ${IP}
+port: ${PORT}
+type: proxy
+location: ${LOC}
+checks:
+    - {type: http, uri: /v3.0/status}
+slots:
+    - proxy
+stats:
+    - {type: system}
+"""
+
 template_conscience_service = """
 [General]
 to_op=1000
@@ -645,6 +672,16 @@ score_expr=(num stat.cpu)
 score_timeout=30
 
 [type:oiofs]
+score_expr=(num stat.cpu)
+score_timeout=120
+lock_at_first_register=false
+
+[type:proxy]
+score_expr=(num stat.cpu)
+score_timeout=120
+lock_at_first_register=false
+
+[type:beanstalkd]
 score_expr=(num stat.cpu)
 score_timeout=120
 lock_at_first_register=false
@@ -1371,6 +1408,10 @@ def generate(options):
                 f.write(tpl.safe_substitute(env))
                 for key in (k for k in env.iterkeys() if k.startswith("env.")):
                     f.write("%s=%s\n" % (key, env[key]))
+            # watcher
+            tpl = Template(template_beanstalkd_watch)
+            with open(watch(env), 'w+') as f:
+                f.write(tpl.safe_substitute(env))
 
         beanstalkd_cnxstring = ';'.join(
             "beanstalk://" + str(h) + ":" + str(p)
@@ -1532,6 +1573,9 @@ def generate(options):
         f.write(tpl.safe_substitute(env))
         for key in (k for k in env.iterkeys() if k.startswith("env.")):
             f.write("%s=%s\n" % (key, env[key]))
+    with open(watch(env), 'w+') as f:
+        tpl = Template(template_proxy_watch)
+        f.write(tpl.safe_substitute(env))
 
     # ecd
     env = subenv({'SRVTYPE': 'ecd', 'SRVNUM': 1, 'PORT': port_ecd})
