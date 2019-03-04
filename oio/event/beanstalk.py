@@ -390,6 +390,7 @@ def parse_body(connection, response, **kwargs):
 
 class Beanstalk(object):
     RESPONSE_CALLBACKS = dict_merge({
+        'list-tubes': parse_yaml,
         'peek': parse_body,
         'peek-buried': parse_body,
         'peek-delayed': parse_body,
@@ -402,6 +403,7 @@ class Beanstalk(object):
     EXPECTED_OK = dict_merge({
         'bury': ['BURIED'],
         'delete': ['DELETED'],
+        'list-tubes': ['OK'],
         'kick': ['KICKED'],
         'kick-job': ['KICKED'],
         'peek': ['FOUND'],
@@ -420,6 +422,7 @@ class Beanstalk(object):
     EXPECTED_ERR = dict_merge({
         'bury': ['NOT_FOUND', 'OUT_OF_MEMORY'],
         'delete': ['NOT_FOUND'],
+        'list-tubes': [],
         'kick': ['OUT_OF_MEMORY'],
         'kick-job': ['NOT_FOUND', 'OUT_OF_MEMORY'],
         'peek': ['NOT_FOUND'],
@@ -614,6 +617,9 @@ class Beanstalk(object):
 
     def stats_tube(self, tube):
         return self.execute_command('stats-tube', tube)
+
+    def tubes(self):
+        return self.execute_command('list-tubes')
 
     def close(self):
         if self._connection:
