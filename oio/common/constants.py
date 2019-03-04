@@ -31,6 +31,7 @@ READ_TIMEOUT = 30.0
 
 STRLEN_CHUNKID = 64
 
+# Version of the format of chunk extended attributes
 OIO_VERSION = '4.2'
 
 OIO_DB_ENABLED = 0
@@ -80,8 +81,6 @@ CHUNK_HEADERS = {
     "full_path": "%sfull-path" % CHUNK_METADATA_PREFIX,
     "oio_version": "%soio-version" % CHUNK_METADATA_PREFIX,
 }
-# TODO(FVE): remove from versions >= 4.2.0
-chunk_headers = CHUNK_HEADERS
 
 chunk_xattr_keys = {
     'chunk_hash': 'grid.chunk.hash',
@@ -115,3 +114,8 @@ volume_xattr_keys = {
     'namespace': 'server.ns',
     'type': 'server.type',
     'id': 'server.id'}
+
+# Suffix of chunk file names that have been declared corrupt
+CHUNK_SUFFIX_CORRUPT = '.corrupt'
+# Suffix of chunk file names that are not finished being uploaded
+CHUNK_SUFFIX_PENDING = '.pending'
