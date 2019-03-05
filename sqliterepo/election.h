@@ -205,11 +205,13 @@ struct election_counts_s election_manager_count (struct election_manager_s *m);
 guint election_manager_balance_masters(struct election_manager_s *M,
 		guint ratio, guint max, gint64 inactivity);
 
-/* When is the next timer to expire.
- * Return 0 if there is not timer. */
+/* When is the next action to fire (timer or expiration).
+ * Return 0 if there is none. */
 gint64 election_manager_next_timer(struct election_manager_s *m);
 
-void election_manager_play_timers(struct election_manager_s *m);
+void election_manager_play_timers(struct election_manager_s *m, const gint64 now);
+
+void election_manager_play_expirations(struct election_manager_s *m, const gint64 now);
 
 /* Similar to the MANAGER_CHECK macro, but not stripped in Release mode,
  * and returns a boolean instead of asserting. */
