@@ -1055,18 +1055,20 @@ _worker_timers(gpointer p)
 		return p;
 
 	while (grid_main_is_running()) {
-		election_manager_play_timers(M);
+		/* A little bias avoids looping too often */
+		const gint64 bias = G_TIME_SPAN_MILLISECOND;
+		election_manager_play_timers(M, oio_ext_monotonic_time() + bias);
+		election_manager_play_expirations(M, oio_ext_monotonic_time() + bias);
 
+		/* wait for the next timer */
 		const gint64 now = oio_ext_monotonic_time();
 		gint64 next = election_manager_next_timer(M);
-
 		if (next <= 0)
 			next = now + 500 * G_TIME_SPAN_MILLISECOND;
 		else if (now > next)
-			next = now + 100 * G_TIME_SPAN_MILLISECOND;
+			next = now + 10 * G_TIME_SPAN_MILLISECOND;
 		else if (next - now > G_TIME_SPAN_SECOND)
 			next = now + 500 * G_TIME_SPAN_MILLISECOND;
-
 		g_usleep(next - now);
 	}
 

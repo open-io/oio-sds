@@ -4002,15 +4002,13 @@ transition_error(struct election_member_s *member,
 static gboolean
 _member_expirable(struct election_member_s *m, const gint64 now)
 {
-	return m->step == STEP_NONE
-		&& m->refcount == 1
+	return m->refcount == 1
 		&& _is_over(now, m->last_status, oio_election_delay_expire_NONE);
 }
 
-static guint
-_play_exits(struct election_manager_s *M, const gint64 now)
+void
+election_manager_play_expirations(struct election_manager_s *M, const gint64 now)
 {
-	guint count = 0;
 	struct deque_beacon_s *beacon = M->members_by_state + STEP_NONE;
 
 	while (beacon->front) {
@@ -4020,7 +4018,6 @@ _play_exits(struct election_manager_s *M, const gint64 now)
 			_manager_unlock(M);
 			break;
 		} else {
-			++ count;
 			_DEQUE_remove (m);
 			g_tree_remove (M->members_by_key, m->key);
 			member_unref (m);
@@ -4028,41 +4025,13 @@ _play_exits(struct election_manager_s *M, const gint64 now)
 			_manager_unlock(M);
 		}
 	}
-
-	return count;
 }
 
 static void
-_debug_timer(const char *action, guint count, gint64 spent)
-{
-	if (count <= 0)
-		return;
-
-	if (spent > 100 * G_TIME_SPAN_MILLISECOND) {
-		GRID_WARN("%s %u elections in %" G_GINT64_FORMAT "ms",
-				action, count, spent / G_TIME_SPAN_MILLISECOND);
-	} else {
-		GRID_TRACE2("%s %u elections in %" G_GINT64_FORMAT "ms",
-				action, count, spent / G_TIME_SPAN_MILLISECOND);
-	}
-}
-
-static void
-_play_and_debug_exits(struct election_manager_s *M)
-{
-	const gint64 start = oio_ext_monotonic_time();
-	const guint count = _play_exits(M, start);
-	const gint64 stop = oio_ext_monotonic_time();
-	_debug_timer("Expired", count, stop - start);
-}
-
-static guint
-_send_NONE_to_step(struct election_manager_s *M, struct deque_beacon_s *beacon)
+_send_NONE_to_step(struct election_manager_s *M, struct deque_beacon_s *beacon,
+		const gint64 now)
 {
 	gboolean stop = FALSE;
-	guint count = 0;
-
-	const gint64 now = oio_ext_monotonic_time();
 
 	while (beacon->front && !stop) {
 		_manager_lock(M);
@@ -4083,19 +4052,11 @@ _send_NONE_to_step(struct election_manager_s *M, struct deque_beacon_s *beacon)
 					stop = TRUE;
 				} else {
 					transition (m, EVT_NONE, NULL);
-					count ++;
 				}
 			}
 		}
 		_manager_unlock(M);
 	}
-	return count;
-}
-
-static inline guint
-_send_NONE_to_step2 (struct election_manager_s *M, enum election_step_e step)
-{
-	return _send_NONE_to_step(M, M->members_by_state + step);
 }
 
 guint
@@ -4144,8 +4105,10 @@ election_manager_next_timer(struct election_manager_s *M)
 	static const int steps[] = {
 		STEP_NONE,
 		STEP_FAILED,
-		STEP_DELAYED_CHECKING_MASTER, STEP_DELAYED_CHECKING_SLAVES,
-		STEP_SLAVE, STEP_MASTER,
+		STEP_DELAYED_CHECKING_MASTER,
+		STEP_DELAYED_CHECKING_SLAVES,
+		STEP_SLAVE,
+		STEP_MASTER,
 		-1
 	};
 
@@ -4168,23 +4131,18 @@ election_manager_next_timer(struct election_manager_s *M)
 }
 
 void
-election_manager_play_timers(struct election_manager_s *M)
+election_manager_play_timers(struct election_manager_s *M, const gint64 now)
 {
 	static const int steps[] = {
 		STEP_FAILED,
-		STEP_DELAYED_CHECKING_MASTER, STEP_DELAYED_CHECKING_SLAVES,
-		STEP_SLAVE, STEP_MASTER,
+		STEP_DELAYED_CHECKING_MASTER,
+		STEP_DELAYED_CHECKING_SLAVES,
+		STEP_SLAVE,
+		STEP_MASTER,
 		-1
 	};
 
-	/* The logic for timers that do not expire the bases is simple, it just
-	 * trigger a NONE event */
-	for (int i=0; steps[i] != -1 ;i++) {
-		const gint64 start = oio_ext_monotonic_time();
-		const guint count = _send_NONE_to_step2(M, steps[i]);
-		_debug_timer("Kicked", count, oio_ext_monotonic_time() - start);
-	}
-
-	_play_and_debug_exits(M);
+	for (int i=0; steps[i] != -1 ;i++)
+		_send_NONE_to_step(M, M->members_by_state + steps[i], now);
 }
 
