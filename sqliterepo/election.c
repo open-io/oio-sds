@@ -3888,9 +3888,11 @@ _member_react_FAILED(struct election_member_s *member, enum event_type_e evt)
 }
 
 static gint64
-_member_next_timeout(struct election_member_s *m)
+_member_next_timeout(const struct election_member_s *m)
 {
 	switch (m->step) {
+		case STEP_NONE:
+			return m->last_status + oio_election_delay_expire_NONE;
 		case STEP_DELAYED_CHECKING_MASTER:
 			return m->last_status + sqliterepo_getvers_delay;
 		case STEP_DELAYED_CHECKING_SLAVES:
@@ -4001,57 +4003,61 @@ transition_error(struct election_member_s *member,
 	return transition(member, evt, NULL);
 }
 
-static GPtrArray *
-_DEQUE_extract (struct deque_beacon_s *beacon)
+static gboolean
+_member_expirable(struct election_member_s *m, const gint64 now)
 {
-	GPtrArray *out = g_ptr_array_sized_new(beacon->count);
-	for (struct election_member_s *m=beacon->front; m ;m=m->next)
-		g_ptr_array_add(out, m);
-	return out;
+	return m->step == STEP_NONE
+		&& m->refcount == 1
+		&& _is_over(now, m->last_status, oio_election_delay_expire_NONE);
 }
 
 static guint
-_play_exit_on_state(struct election_manager_s *M, struct deque_beacon_s *beacon)
+_play_exits(struct election_manager_s *M, const gint64 now)
 {
-	if (beacon->front == NULL)
-		return 0;
-
-	const gint64 now = oio_ext_monotonic_time();
 	guint count = 0;
-	GPtrArray *members = _DEQUE_extract (beacon);
-	for (guint i=0; i<members->len ;++i) {
-		struct election_member_s *m = members->pdata[i];
+	struct deque_beacon_s *beacon = M->members_by_state + STEP_NONE;
 
-		/* Election in NONE state ... */
-		if (!_is_over(now, m->last_status, oio_election_delay_expire_NONE))
-			continue;
-
-		/* ... for longer than acceptable */
-		if (m->refcount != 1)
-			continue;
-
-		/* ... but not referenced by anyone */
-		count ++;
-		_DEQUE_remove (m);
-		g_tree_remove (M->members_by_key, m->key);
-		member_unref (m);
-		member_destroy (m);
+	while (beacon->front) {
+		_manager_lock(M);
+		struct election_member_s *m = beacon->front;
+		if (!m || !_member_expirable(m, now)) {
+			_manager_unlock(M);
+			break;
+		} else {
+			++ count;
+			_DEQUE_remove (m);
+			g_tree_remove (M->members_by_key, m->key);
+			member_unref (m);
+			member_destroy (m);
+			_manager_unlock(M);
+		}
 	}
-	g_ptr_array_free (members, TRUE);
+
 	return count;
 }
 
-guint
-election_manager_play_exits (struct election_manager_s *manager)
+static void
+_debug_timer(const char *action, guint count, gint64 spent)
 {
-	guint count = 0;
-	struct deque_beacon_s *beacon = manager->members_by_state + STEP_NONE;
-	if (beacon->front) {
-		_manager_lock(manager);
-		count += _play_exit_on_state(manager, beacon);
-		_manager_unlock(manager);
+	if (count <= 0)
+		return;
+
+	if (spent > 100 * G_TIME_SPAN_MILLISECOND) {
+		GRID_WARN("%s %u elections in %" G_GINT64_FORMAT "ms",
+				action, count, spent / G_TIME_SPAN_MILLISECOND);
+	} else {
+		GRID_TRACE2("%s %u elections in %" G_GINT64_FORMAT "ms",
+				action, count, spent / G_TIME_SPAN_MILLISECOND);
 	}
-	return count;
+}
+
+static void
+_play_and_debug_exits(struct election_manager_s *M)
+{
+	const gint64 start = oio_ext_monotonic_time();
+	const guint count = _play_exits(M, start);
+	const gint64 stop = oio_ext_monotonic_time();
+	_debug_timer("Expired", count, stop - start);
 }
 
 static guint
@@ -4060,7 +4066,9 @@ _send_NONE_to_step(struct election_manager_s *M, struct deque_beacon_s *beacon)
 	gboolean stop = FALSE;
 	guint count = 0;
 
-	while (grid_main_is_running() && beacon->front && !stop) {
+	const gint64 now = oio_ext_monotonic_time();
+
+	while (beacon->front && !stop) {
 		_manager_lock(M);
 		struct election_member_s *m = beacon->front;
 		if (!m) {
@@ -4074,7 +4082,6 @@ _send_NONE_to_step(struct election_manager_s *M, struct deque_beacon_s *beacon)
 				 * function on such a queue. !!! */
 				stop = TRUE;
 			} else {
-				const gint64 now = oio_ext_monotonic_time();
 				if (now < deadline) {
 					/* The timer didn't fire */
 					stop = TRUE;
@@ -4093,36 +4100,6 @@ static inline guint
 _send_NONE_to_step2 (struct election_manager_s *M, enum election_step_e step)
 {
 	return _send_NONE_to_step(M, M->members_by_state + step);
-}
-
-guint
-election_manager_play_timers_FAILED (struct election_manager_s *M)
-{
-	return _send_NONE_to_step2(M, STEP_FAILED);
-}
-
-guint
-election_manager_play_timers_DELAYED_MASTER (struct election_manager_s *M)
-{
-	return _send_NONE_to_step2(M, STEP_DELAYED_CHECKING_MASTER);
-}
-
-guint
-election_manager_play_timers_DELAYED_SLAVE (struct election_manager_s *M)
-{
-	return _send_NONE_to_step2(M, STEP_DELAYED_CHECKING_SLAVES);
-}
-
-guint
-election_manager_play_timers_MASTER (struct election_manager_s *M)
-{
-	return _send_NONE_to_step2(M, STEP_MASTER);
-}
-
-guint
-election_manager_play_timers_SLAVE (struct election_manager_s *M)
-{
-	return _send_NONE_to_step2(M, STEP_SLAVE);
 }
 
 guint
@@ -4163,5 +4140,55 @@ election_manager_configured(const struct election_manager_s *m)
 		&& m->sync_tab != NULL
 		&& m->peering != NULL
 		&& (ELECTION_MODE_NONE != election_manager_get_mode (m));
+}
+
+gint64
+election_manager_next_timer(struct election_manager_s *M)
+{
+	static const int steps[] = {
+		STEP_NONE,
+		STEP_FAILED,
+		STEP_DELAYED_CHECKING_MASTER, STEP_DELAYED_CHECKING_SLAVES,
+		STEP_SLAVE, STEP_MASTER,
+		-1
+	};
+
+	if (!election_manager_configured(M))
+		return 0;
+
+	gint64 latest = G_MAXINT64;
+
+	_manager_lock(M);
+	for (int i=0; steps[i] != -1 ;i++) {
+		const struct election_member_s *m = M->members_by_state[steps[i]].front;
+		if (!m)
+			continue;
+		const gint64 expiration = _member_next_timeout(m);
+		latest = MIN(latest, expiration);
+	}
+	_manager_unlock(M);
+
+	return latest == G_MAXINT64 ? 0 : latest;
+}
+
+void
+election_manager_play_timers(struct election_manager_s *M)
+{
+	static const int steps[] = {
+		STEP_FAILED,
+		STEP_DELAYED_CHECKING_MASTER, STEP_DELAYED_CHECKING_SLAVES,
+		STEP_SLAVE, STEP_MASTER,
+		-1
+	};
+
+	/* The logic for timers that do not expire the bases is simple, it just
+	 * trigger a NONE event */
+	for (int i=0; steps[i] != -1 ;i++) {
+		const gint64 start = oio_ext_monotonic_time();
+		const guint count = _send_NONE_to_step2(M, steps[i]);
+		_debug_timer("Kicked", count, oio_ext_monotonic_time() - start);
+	}
+
+	_play_and_debug_exits(M);
 }
 
