@@ -67,13 +67,12 @@ static void _task_probe_repository(gpointer p);
 static void _task_malloc_trim(gpointer p);
 static void _task_expire_bases(gpointer p);
 static void _task_expire_resolver(gpointer p);
-static void _task_react_NONE(gpointer p);
-static void _task_react_TIMERS(gpointer p);
 static void _task_reload_nsinfo(gpointer p);
 static void _task_reload_peers(gpointer p);
 static void _task_update_stats(gpointer p);
 static GQuark gq_events_health = 0;
 
+static gpointer _worker_timers (gpointer p);
 static gpointer _worker_queue (gpointer p);
 static gpointer _worker_clients (gpointer p);
 
@@ -667,8 +666,6 @@ _configure_tasks(struct sqlx_service_s *ss)
 
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_bases, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_resolver, NULL, ss);
-	grid_task_queue_register(ss->gtq_admin, 1, _task_react_NONE, NULL, ss);
-	grid_task_queue_register(ss->gtq_admin, 1, _task_react_TIMERS, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_malloc_trim, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 5, _task_update_stats, NULL, ss);
 
@@ -790,6 +787,12 @@ sqlx_service_action(void)
 			return _action_report_error(err, "Failed to start the QUEUE thread");
 	}
 
+	if (SRV.election_manager) {
+		SRV.thread_timers = g_thread_try_new("timers", _worker_timers, &SRV, &err);
+		if (!SRV.thread_timers)
+			return _action_report_error(err, "Failed to start the TIMER thread");
+	}
+
 	/* open all the sockets */
 	if (!grid_main_is_running())
 		return;
@@ -886,6 +889,8 @@ sqlx_service_specific_fini(void)
 		g_thread_join(SRV.thread_client);
 	if (SRV.thread_queue)
 		g_thread_join(SRV.thread_queue);
+	if (SRV.thread_timers)
+		g_thread_join(SRV.thread_timers);
 
 	if (SRV.repository) {
 		sqlx_repository_stop(SRV.repository);
@@ -1040,6 +1045,34 @@ sqlite_service_main(int argc, char **argv,
 
 /* Tasks -------------------------------------------------------------------- */
 
+static gpointer
+_worker_timers(gpointer p)
+{
+	metautils_ignore_signals();
+
+	struct election_manager_s *M = PSRV(p)->election_manager;
+	if (!election_manager_configured(M))
+		return p;
+
+	while (grid_main_is_running()) {
+		election_manager_play_timers(M);
+
+		const gint64 now = oio_ext_monotonic_time();
+		gint64 next = election_manager_next_timer(M);
+
+		if (next <= 0)
+			next = now + 500 * G_TIME_SPAN_MILLISECOND;
+		else if (now > next)
+			next = now + 100 * G_TIME_SPAN_MILLISECOND;
+		else if (next - now > G_TIME_SPAN_SECOND)
+			next = now + 500 * G_TIME_SPAN_MILLISECOND;
+
+		g_usleep(next - now);
+	}
+
+	return p;
+}
+
 static gboolean
 _event_running (gboolean pending)
 {
@@ -1158,40 +1191,6 @@ _task_expire_resolver(gpointer p)
 		GRID_DEBUG ("Resolver: expired %u, purged %u",
 				count_expire, count_purge);
 	}
-}
-
-#define _task_alert_message(action) \
-	"Action %s on %u elections took %"G_GINT64_FORMAT"ms", \
-	#action, count, t / G_TIME_SPAN_MILLISECOND
-
-#define _task_timed_action(action,period,delay) do { \
-	if (!grid_main_is_running () || !PSRV(p)->flag_replicable) return; \
-	VARIABLE_PERIOD_DECLARE(); \
-	if (VARIABLE_PERIOD_SKIP(sqliterepo_election_task_##period)) return; \
-	gint64 t = oio_ext_monotonic_time(); \
-	guint count = election_manager_play_##action (PSRV(p)->election_manager); \
-	t = oio_ext_monotonic_time() - t; \
-	if (t > sqliterepo_election_task_##delay) { \
-		GRID_WARN(_task_alert_message(action)); \
-	} else { \
-		GRID_DEBUG(_task_alert_message(action)); \
-	} \
-} while (0)
-
-static void
-_task_react_NONE(gpointer p)
-{
-	_task_timed_action(exits, EXIT_period, EXIT_alert);
-}
-
-static void
-_task_react_TIMERS(gpointer p)
-{
-	_task_timed_action(timers_FAILED, TIMER_period, TIMER_alert);
-	_task_timed_action(timers_DELAYED_MASTER, TIMER_period, TIMER_alert);
-	_task_timed_action(timers_DELAYED_SLAVE, TIMER_period, TIMER_alert);
-	_task_timed_action(timers_MASTER, TIMER_period, TIMER_alert);
-	_task_timed_action(timers_SLAVE, TIMER_period, TIMER_alert);
 }
 
 static void

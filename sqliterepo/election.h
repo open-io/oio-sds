@@ -205,15 +205,11 @@ struct election_counts_s election_manager_count (struct election_manager_s *m);
 guint election_manager_balance_masters(struct election_manager_s *M,
 		guint ratio, guint max, gint64 inactivity);
 
-/* Reactivate some elections waiting for a timer to fire. */
-guint election_manager_play_timers_FAILED (struct election_manager_s *m);
-guint election_manager_play_timers_DELAYED_MASTER (struct election_manager_s *m);
-guint election_manager_play_timers_DELAYED_SLAVE (struct election_manager_s *m);
-guint election_manager_play_timers_MASTER (struct election_manager_s *m);
-guint election_manager_play_timers_SLAVE (struct election_manager_s *m);
+/* When is the next timer to expire.
+ * Return 0 if there is not timer. */
+gint64 election_manager_next_timer(struct election_manager_s *m);
 
-/* Free all the elections with no status (STEP_NONE) since too long */
-guint election_manager_play_exits (struct election_manager_s *m);
+void election_manager_play_timers(struct election_manager_s *m);
 
 /* Similar to the MANAGER_CHECK macro, but not stripped in Release mode,
  * and returns a boolean instead of asserting. */
