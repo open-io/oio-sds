@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -92,7 +92,8 @@ class ObjectStorageTest(unittest.TestCase):
                   "s3_buckets_only": False}
         uri = "http://%s/v1.0/account/containers" % fake_endpoint
         self.api.account._direct_request.assert_called_once_with(
-            'GET', uri, params=params, headers=self.headers)
+            'GET', uri, params=params, headers=self.headers,
+            autocreate=True)
         self.assertEqual(len(containers), 1)
 
     def test_object_list(self):
@@ -120,7 +121,7 @@ class ObjectStorageTest(unittest.TestCase):
                   'properties': False}
         api.container._direct_request.assert_called_once_with(
             'GET', uri, params=params, headers=self.headers,
-            path=ANY)
+            autocreate=True, path=ANY)
         self.assertEqual(len(listing['objects']), 2)
 
     def test_container_show(self):
@@ -136,7 +137,8 @@ class ObjectStorageTest(unittest.TestCase):
         uri = "%s/container/show" % self.uri_base
         params = {'acct': self.account, 'ref': name}
         api.container._direct_request.assert_called_once_with(
-            'GET', uri, params=params, headers=self.headers)
+            'GET', uri, params=params, headers=self.headers,
+            autocreate=True)
         self.assertEqual(info, {})
 
     def test_container_show_not_found(self):
@@ -163,7 +165,7 @@ class ObjectStorageTest(unittest.TestCase):
         data = json.dumps({'properties': {}, 'system': {}})
         api.container._direct_request.assert_called_once_with(
             'POST', uri, params=params, data=data,
-            headers=self.headers)
+            headers=self.headers, autocreate=True)
 
     def test_container_create_exist(self):
         api = self.api
@@ -188,7 +190,8 @@ class ObjectStorageTest(unittest.TestCase):
         uri = "%s/container/destroy" % self.uri_base
         params = {'acct': self.account, 'ref': name}
         api.container._direct_request.assert_called_once_with(
-            'POST', uri, params=params, headers=self.headers)
+            'POST', uri, params=params, headers=self.headers,
+            autocreate=True)
 
     def test_container_delete_not_empty(self):
         api = self.api
@@ -218,7 +221,8 @@ class ObjectStorageTest(unittest.TestCase):
         uri = "%s/container/set_properties" % self.uri_base
         params = {'acct': self.account, 'ref': name}
         api.container._direct_request.assert_called_once_with(
-            'POST', uri, data=data, params=params, headers=self.headers)
+            'POST', uri, data=data, params=params, headers=self.headers,
+            autocreate=True)
 
     def test_object_show(self):
         api = self.api
@@ -240,7 +244,8 @@ class ObjectStorageTest(unittest.TestCase):
         params = {'acct': self.account, 'ref': self.container,
                   'path': name, 'version': None}
         api.container._direct_request.assert_called_once_with(
-            'POST', uri, params=params, data=None, headers=self.headers)
+            'POST', uri, params=params, data=None, headers=self.headers,
+            autocreate=True)
         self.assertIsNotNone(obj)
 
     def test_object_create_no_data(self):
@@ -344,7 +349,8 @@ class ObjectStorageTest(unittest.TestCase):
         params = {'acct': self.account, 'ref': self.container,
                   'path': name}
         api.container._direct_request.assert_called_once_with(
-            'POST', uri, data=data, params=params, headers=self.headers)
+            'POST', uri, data=data, params=params, headers=self.headers,
+            autocreate=True)
 
     def test_object_del_properties(self):
         resp = FakeApiResponse()
@@ -357,7 +363,7 @@ class ObjectStorageTest(unittest.TestCase):
                   'path': 'a', 'version': '17'}
         self.api.container._direct_request.assert_called_once_with(
             'POST', uri, data=json.dumps(['a']), params=params,
-            headers=self.headers)
+            headers=self.headers, autocreate=True)
 
     def test_object_delete(self):
         api = self.api
@@ -375,7 +381,8 @@ class ObjectStorageTest(unittest.TestCase):
         params = {'acct': self.account, 'ref': self.container,
                   'path': name}
         api.container._direct_request.assert_called_once_with(
-            'POST', uri, params=params, headers=self.headers)
+            'POST', uri, params=params, headers=self.headers,
+            autocreate=True)
 
     def test_object_delete_not_found(self):
         api = self.api
@@ -394,7 +401,8 @@ class ObjectStorageTest(unittest.TestCase):
         params = {'acct': self.account, 'ref': self.container,
                   'path': 'obj', 'version': '31'}
         self.api.container._direct_request.assert_called_once_with(
-            'POST', uri, params=params, headers=self.headers)
+            'POST', uri, params=params, headers=self.headers,
+            autocreate=True)
 
     def test_sort_chunks(self):
         raw_chunks = [

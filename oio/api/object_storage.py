@@ -30,7 +30,7 @@ from oio.api.backblaze_http import BackblazeUtilsException, BackblazeUtils
 from oio.api.backblaze import BackblazeWriteHandler, \
     BackblazeChunkDownloadHandler
 from oio.common.utils import cid_from_name, GeneratorIO, monotonic_time, \
-    depaginate
+    depaginate, timeout_to_deadline
 from oio.common.easy_value import float_value, true_value
 from oio.common.logger import get_logger
 from oio.common.decorators import ensure_headers, ensure_request_id
@@ -43,16 +43,20 @@ from oio.common.storage_functions import _sort_chunks, fetch_stream, \
 from oio.common.fullpath import encode_fullpath
 
 
-# TODO(FVE): decorate more methods
 def patch_kwargs(fnc):
     """
     Patch keyword arguments with the ones passed to the class' constructor.
+    Compute a deadline if a timeout is provided and there is no deadline
+    already.
     """
     @wraps(fnc)
     def _patch_kwargs(self, *args, **kwargs):
         for argk, argv in self._global_kwargs.items():
             if argk not in kwargs:
                 kwargs[argk] = argv
+        to = kwargs.get('read_timeout')
+        if to and 'deadline' not in kwargs:
+            kwargs['deadline'] = timeout_to_deadline(to)
         return fnc(self, *args, **kwargs)
     return _patch_kwargs
 
@@ -109,6 +113,7 @@ class ObjectStorageApi(object):
         for key in self.__class__.EXTRA_KEYWORDS:
             if key in kwargs:
                 self._global_kwargs[key] = kwargs[key]
+        self.logger.debug("Global API parameters: %s", self._global_kwargs)
 
         from oio.account.client import AccountClient
         from oio.container.client import ContainerClient
@@ -153,6 +158,7 @@ class ObjectStorageApi(object):
                 logger=self.logger)
         return self._proxy_client
 
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def account_create(self, account, **kwargs):
@@ -166,6 +172,7 @@ class ObjectStorageApi(object):
         return self.account.account_create(account, **kwargs)
 
     @handle_account_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def account_delete(self, account, **kwargs):
@@ -178,6 +185,7 @@ class ObjectStorageApi(object):
         self.account.account_delete(account, **kwargs)
 
     @handle_account_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def account_show(self, account, **kwargs):
@@ -186,6 +194,7 @@ class ObjectStorageApi(object):
         """
         return self.account.account_show(account, **kwargs)
 
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def account_list(self, **kwargs):
@@ -198,6 +207,7 @@ class ObjectStorageApi(object):
         return self.account.account_list(**kwargs)
 
     @handle_account_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def account_get_properties(self, account, **kwargs):
@@ -212,17 +222,20 @@ class ObjectStorageApi(object):
         return res
 
     @handle_account_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def account_set_properties(self, account, properties, **kwargs):
         self.account.account_update(account, properties, None, **kwargs)
 
     @handle_account_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def account_del_properties(self, account, properties, **kwargs):
         self.account.account_update(account, None, properties, **kwargs)
 
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def container_create(self, account, container, properties=None,
@@ -271,6 +284,7 @@ class ObjectStorageApi(object):
         return damaged_objects, missing_chunks
 
     @handle_container_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def container_touch(self, account, container, recompute=False, **kwargs):
@@ -292,6 +306,7 @@ class ObjectStorageApi(object):
                 damaged_objects=damaged_objects, missing_chunks=missing_chunks,
                 **kwargs)
 
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def container_create_many(self, account, containers, properties=None,
@@ -310,6 +325,7 @@ class ObjectStorageApi(object):
             account, containers, properties=properties, **kwargs)
 
     @handle_container_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def container_delete(self, account, container, **kwargs):
@@ -324,6 +340,7 @@ class ObjectStorageApi(object):
         self.container.container_delete(account, container, **kwargs)
 
     @handle_container_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def container_flush(self, account, container, fast=False, **kwargs):
@@ -359,6 +376,7 @@ class ObjectStorageApi(object):
                     'None of the %d objects could be deleted' % len(deleted))
 
     @handle_account_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def container_list(self, account, limit=None, marker=None,
@@ -395,6 +413,7 @@ class ObjectStorageApi(object):
         return resp["listing"]
 
     @handle_container_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def container_show(self, account, container, **kwargs):
@@ -411,6 +430,7 @@ class ObjectStorageApi(object):
         return self.container.container_show(account, container, **kwargs)
 
     @handle_container_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def container_snapshot(self, account, container, dst_account,
@@ -472,6 +492,7 @@ class ObjectStorageApi(object):
             self.container.container_enable(account, container, **kwargs)
 
     @handle_container_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def container_get_properties(self, account, container, properties=None,
@@ -493,6 +514,7 @@ class ObjectStorageApi(object):
                                                        **kwargs)
 
     @handle_container_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def container_set_properties(self, account, container, properties=None,
@@ -515,6 +537,7 @@ class ObjectStorageApi(object):
             clear=clear, **kwargs)
 
     @handle_container_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def container_del_properties(self, account, container, properties,
@@ -542,6 +565,9 @@ class ObjectStorageApi(object):
                                **kwargs)
 
     @handle_container_not_found
+    @patch_kwargs
+    @ensure_headers
+    @ensure_request_id
     def container_purge(self, account, container, maxvers=None, **kwargs):
         if maxvers is None:
             props = self.container_get_properties(account, container, **kwargs)
@@ -714,6 +740,7 @@ class ObjectStorageApi(object):
                     key_file=key_file, append=append, **kwargs)
 
     @handle_object_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def object_change_policy(self, account, container, obj, policy, **kwargs):
@@ -740,6 +767,7 @@ class ObjectStorageApi(object):
             account, container, obj_name=meta['name'],
             data=stream, policy=policy, change_policy=True, **kwargs)
 
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def object_touch(self, account, container, obj,
@@ -758,6 +786,7 @@ class ObjectStorageApi(object):
         self.container.content_touch(account, container, obj,
                                      version=version, **kwargs)
 
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def object_drain(self, account, container, obj,
@@ -775,6 +804,7 @@ class ObjectStorageApi(object):
                                      version=version, **kwargs)
 
     @handle_object_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def object_delete(self, account, container, obj,
@@ -795,6 +825,7 @@ class ObjectStorageApi(object):
         return self.container.content_delete(account, container, obj,
                                              version=version, **kwargs)
 
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def object_delete_many(self, account, container, objs, **kwargs):
@@ -810,6 +841,7 @@ class ObjectStorageApi(object):
             account, container, objs, **kwargs)
 
     @handle_object_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def object_truncate(self, account, container, obj,
@@ -857,6 +889,7 @@ class ObjectStorageApi(object):
                                                **kwargs)
 
     @handle_container_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def object_list(self, account, container, limit=None, marker=None,
@@ -900,6 +933,7 @@ class ObjectStorageApi(object):
         return resp_body
 
     @handle_object_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def object_locate(self, account, container, obj,
@@ -1082,6 +1116,7 @@ class ObjectStorageApi(object):
         return meta, stream
 
     @handle_object_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def object_get_properties(self, account, container, obj, **kwargs):
@@ -1113,6 +1148,7 @@ class ObjectStorageApi(object):
             account, container, obj, **kwargs)
 
     @handle_object_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def object_show(self, account, container, obj, version=None, **kwargs):
@@ -1145,6 +1181,7 @@ class ObjectStorageApi(object):
             **kwargs)
 
     @handle_object_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def object_set_properties(self, account, container, obj, properties,
@@ -1162,6 +1199,7 @@ class ObjectStorageApi(object):
             properties={'properties': properties}, clear=clear, **kwargs)
 
     @handle_object_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def object_del_properties(self, account, container, obj, properties,
@@ -1330,6 +1368,7 @@ class ObjectStorageApi(object):
             current_offset += chunk_size
 
     @handle_container_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def container_refresh(self, account, container, attempts=3, **kwargs):
@@ -1357,6 +1396,7 @@ class ObjectStorageApi(object):
                                           **kwargs)
 
     @handle_account_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def account_refresh(self, account=None, **kwargs):
@@ -1406,6 +1446,7 @@ class ObjectStorageApi(object):
         return self.account_refresh(None, **kwargs)
 
     @handle_account_not_found
+    @patch_kwargs
     @ensure_headers
     @ensure_request_id
     def account_flush(self, account, **kwargs):
