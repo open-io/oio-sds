@@ -153,9 +153,9 @@ gridinit -s OIO,gridinit -d ${SDS}/conf/gridinit.conf
 # Initiate Zookeeper (if necessary)
 ZK=$(oio-cluster --local-cfg | grep "$NS/zookeeper" ; exit 0)
 if [ -n "$ZK" ] ; then
-    opts="--fuck-the-world"
-    if [ $verbose -ge 1 ] ; then opts="${opts} -v" ; fi
-    openio --oio-ns "$NS" zk armageddon ${opts}
+    #opts="--fuck-the-world"
+    #if [ $verbose -ge 1 ] ; then opts="${opts} -v" ; fi
+    #openio --oio-ns "$NS" zk armageddon ${opts}
 
     opts="--lazy"
     if [ $verbose -ge 1 ] ; then opts="${opts} -v" ; fi
