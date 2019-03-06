@@ -1204,7 +1204,7 @@ _LOCKED_init_member(struct election_manager_s *manager,
 		else {
 			const gsize len = strlen(key);
 			guint16 id = 0;
-			oio_str_hex2bin(key + len - 4, (guint8 *) &id, 4);
+			oio_str_hex2bin(key + len - 4, (guint8 *) &id, sizeof(id));
 			member->sync = manager->sync_tab[id % manager->sync_nb];
 		}
 
