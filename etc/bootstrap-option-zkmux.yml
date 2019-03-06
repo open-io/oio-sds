@@ -1,0 +1,2 @@
+config:
+  sqliterepo.zk.mux_factor: 4
