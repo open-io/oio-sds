@@ -111,6 +111,14 @@ struct election_manager_s
 	struct sqlx_sync_s **sync_tab;
 	guint sync_nb;
 
+	/* Copied from the managed variable. It is used for modulo compuations
+	 * and MUST remain constant during the process lifetime. */
+	guint mux_factor;
+
+	/* Also used for modulo computaitons, it is deduced from the value
+	 * of <mux_factor> and the total number of connector. */
+	guint nb_shards;
+
 	/* do not free or change the fields below */
 	const struct replication_config_s *config;
 
@@ -586,6 +594,8 @@ election_manager_create(struct replication_config_s *config,
 	struct election_manager_s *manager = g_malloc0(sizeof(*manager));
 	manager->vtable = &VTABLE;
 	manager->config = config;
+	manager->mux_factor = sqliterepo_zk_mux_factor;
+	manager->nb_shards = 0;
 
 	g_mutex_init(&manager->lock);
 
@@ -626,6 +636,7 @@ election_manager_add_sync(struct election_manager_s *M,
 
 	M->sync_tab[M->sync_nb] = sync;
 	M->sync_nb++;
+	M->nb_shards = M->sync_nb / M->mux_factor;
 }
 
 void
@@ -1194,20 +1205,49 @@ _LOCKED_init_member(struct election_manager_s *manager,
 
 	struct election_member_s *member = _LOCKED_get_member (manager, key);
 	if (!member && autocreate) {
-		member = g_malloc0 (sizeof(*member));
-		member->generation_id = oio_ext_rand_int();
 
-		if (manager->sync_nb <= 0)
-			member->sync = NULL;
-		else if (manager->sync_nb == 1)
-			member->sync = manager->sync_tab[0];
-		else {
+		/* Shard the election on the ZK ensembles, taking into account the
+		 * mux_factor that multiplies the number of connections toward each
+		 * ZK ensemble. */
+		struct sqlx_sync_s *sync = NULL;
+		if (manager->sync_nb == 1) {
+			sync = manager->sync_tab[0];
+		} else if (manager->sync_nb > 1) {
+			guint16 id_shard = 0, id_mux = 0;
+			gchar str_uint16[5];
+
+			EXTRA_ASSERT(manager->mux_factor * manager->nb_shards == manager->sync_nb);
+
+			/* The oio_str_bin2hex() requires the source string to be not
+			 * too long. */
 			const gsize len = strlen(key);
-			guint16 id = 0;
-			oio_str_hex2bin(key + len - 4, (guint8 *) &id, sizeof(id));
-			member->sync = manager->sync_tab[id % manager->sync_nb];
+			if (manager->nb_shards > 1) {
+				g_strlcpy(str_uint16, key + len - 4, sizeof(str_uint16));
+				if (!oio_str_hex2bin(str_uint16, (guint8 *) &id_shard, sizeof(id_shard)))
+					return NULL;
+			}
+			if (manager->mux_factor > 1) {
+				g_strlcpy(str_uint16, key + len - 8, sizeof(str_uint16));
+				if (!oio_str_hex2bin(str_uint16, (guint8 *) &id_mux, sizeof(id_mux)))
+					return NULL;
+			}
+
+			/* Imagine a setup with {mux_factor=3, cnx="A,B,C,D"}, it gives a
+			 * `sync_tab` like this: A0|A1|A2|B0|B1|B2|C0|C1|C2|D0|D1|D2.
+			 * Now, imagine the current base gives {id_shard=2, id_mux=2}, we
+			 * MUST use the second connection to the shard B, i.e. B1 to remain
+			 * backward compliant with the previous implementation that was not
+			 * consistant between the uses with and without `mux_factor`.
+			 */
+			id_shard = id_shard % manager->nb_shards;
+			id_mux = id_mux % manager->mux_factor;
+			sync = manager->sync_tab[id_shard * manager->mux_factor + id_mux];
 		}
 
+		/* Ok, ready to prepare the election */
+		member = g_malloc0 (sizeof(*member));
+		member->sync = sync;
+		member->generation_id = oio_ext_rand_int();
 		member->manager = manager;
 		member->last_status = oio_ext_monotonic_time ();
 		g_strlcpy(member->key, key, sizeof(member->key));
