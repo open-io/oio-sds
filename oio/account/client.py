@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -45,27 +45,27 @@ class AccountClient(HttpApi):
         self._refresh_delay = refresh_delay if not self.endpoint else -1.0
         self._last_refresh = 0.0
 
-    def _get_account_addr(self):
+    def _get_account_addr(self, **kwargs):
         """Fetch IP and port of an account service from Conscience."""
-        acct_instance = self.cs.next_instance('account')
+        acct_instance = self.cs.next_instance('account', **kwargs)
         acct_addr = acct_instance.get('addr')
         return acct_addr
 
-    def _refresh_endpoint(self, now=None):
+    def _refresh_endpoint(self, now=None, **kwargs):
         """Refresh account service endpoint."""
-        addr = self._get_account_addr()
+        addr = self._get_account_addr(**kwargs)
         self.endpoint = '/'. join(("http:/", addr, "v1.0/account"))
         if not now:
             now = time.time()
         self._last_refresh = now
 
-    def _maybe_refresh_endpoint(self):
+    def _maybe_refresh_endpoint(self, **kwargs):
         """Refresh account service endpoint if delay has been reached."""
         if self._refresh_delay >= 0.0 or not self.endpoint:
             now = time.time()
             if now - self._last_refresh > self._refresh_delay:
                 try:
-                    self._refresh_endpoint(now)
+                    self._refresh_endpoint(now, **kwargs)
                 except OioNetworkException as exc:
                     if not self.endpoint:
                         # Cannot use the previous one
@@ -80,7 +80,7 @@ class AccountClient(HttpApi):
 
     def account_request(self, account, method, action, params=None, **kwargs):
         """Make a request to the account service."""
-        self._maybe_refresh_endpoint()
+        self._maybe_refresh_endpoint(**kwargs)
         if not params:
             params = dict()
         if account:
@@ -94,7 +94,7 @@ class AccountClient(HttpApi):
                 self.logger.info(
                     "Refreshing account endpoint after error %s", exc)
                 try:
-                    self._refresh_endpoint()
+                    self._refresh_endpoint(**kwargs)
                 except Exception as exc:
                     self.logger.warn("%s", exc)
             raise exc_info[0], exc_info[1], exc_info[2]

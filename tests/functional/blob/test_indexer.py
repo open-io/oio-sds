@@ -1,4 +1,4 @@
-# Copyright (C) 2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -116,8 +116,7 @@ class TestBlobIndexer(BaseTestCase):
         _, _, expected_cid, _, _, expected_content_id, expected_chunk_id = \
             self._put_chunk()
 
-        chunks = self.rdir_client.chunk_fetch(self.rawx_id)
-        chunks = list(chunks)
+        chunks = list(self.rdir_client.chunk_fetch(self.rawx_id))
         self.assertEqual(1, len(chunks))
         cid, content_id, chunk_id, _ = chunks[0]
         self.assertEqual(expected_cid, cid)
@@ -147,8 +146,7 @@ class TestBlobIndexer(BaseTestCase):
             expected_content_path, expected_content_version, \
             expected_content_id, expected_chunk_id = self._put_chunk()
 
-        chunks = self.rdir_client.chunk_fetch(self.rawx_id)
-        chunks = list(chunks)
+        chunks = list(self.rdir_client.chunk_fetch(self.rawx_id))
         self.assertEqual(1, len(chunks))
         cid, content_id, chunk_id, _ = chunks[0]
         self.assertEqual(expected_cid, cid)

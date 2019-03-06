@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -25,27 +25,27 @@ class LbClient(ProxyClient):
         super(LbClient, self).__init__(
             conf, request_prefix="/lb", **kwargs)
 
-    def next_instances(self, pool, **kwargs):
+    def next_instances(self, pool, size=None, **kwargs):
         """
         Get the next service instances from the specified pool.
 
         :keyword size: number of services to get
         :type size: `int`
-        :keyword slot: comma-separated list of slots to poll
-        :type slot: `str`
         """
         params = {'type': pool}
-        params.update(kwargs)
-        resp, body = self._request('GET', '/choose', params=params)
+        if size is not None:
+            params['size'] = size
+        resp, body = self._request('GET', '/choose', params=params, **kwargs)
         if resp.status == 200:
             return body
         else:
             raise OioException(
                 'ERROR while getting next instance %s' % pool)
 
-    def next_instance(self, pool):
+    def next_instance(self, pool, **kwargs):
         """Get the next service instance from the specified pool"""
-        return self.next_instances(pool, size=1)[0]
+        kwargs.pop('size', None)
+        return self.next_instances(pool, size=1, **kwargs)[0]
 
     def poll(self, pool, **kwargs):
         """
@@ -106,9 +106,9 @@ class ConscienceClient(ProxyClient):
         """
         return self.lb.next_instance(pool, **kwargs)
 
-    def next_instance(self, pool):
+    def next_instance(self, pool, **kwargs):
         """Get the next service instance from the specified pool"""
-        return self.lb.next_instance(pool)
+        return self.lb.next_instance(pool, **kwargs)
 
     def poll(self, pool, **kwargs):
         """
