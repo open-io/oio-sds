@@ -224,6 +224,11 @@
 		"code": "common_variables.c",
 		"header": "common_variables.h",
 		"variables": [
+			{ "type": "int", "name": "oio_threadpool_max_stat",
+				"key": "server.pool.max_stat",
+				"descr": "In the current server, sets how many threads are allowed to the stats server. Keep this value really small, 1 should be enough for most usages, and consider increasing it if you have clues that the management of internal metrics is the bottleneck. Set to 0 for no limit.",
+				"def": "1", "min": 0, "max": "1 << 31 - 1" },
+
 			{ "type": "uint", "name": "oio_socket_gridd_rcvbuf",
 				"key": "socket.gridd.rcvbuf",
 				"descr": "Set to a non-zero value to explicitely force a RCVBUF option on client sockets to gridd services. Set to 0 to keep the OS default.",
@@ -697,11 +702,6 @@
 				"key": "server.pool.max_idle",
 				"descr": "In the current server, sets how long a thread can remain unused before considered as idle (and thus to be stopped)",
 				"def": "30s", "min": 1, "max": "1h" },
-
-			{ "type": "int", "name": "server_threadpool_max_stat",
-				"key": "server.pool.max_stat",
-				"descr": "In the current server, sets how many threads are allowed to the stats server. Keep this value really small, 1 should be enough for most usages, and consider increasing it if you have clues that the management of internal metrics is the bottleneck. Set to 0 for no limit.",
-				"def": "1", "min": 0, "max": "1 << 31 - 1" },
 
 			{ "type": "int", "name": "server_threadpool_max_tcp",
 				"key": "server.pool.max_tcp",

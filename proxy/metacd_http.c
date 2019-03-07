@@ -81,9 +81,10 @@ action_status(struct req_args_s *args)
 	GString *gstr = g_string_sized_new (128);
 
 	/* first, the stats about all the requests received */
-	GArray *array = network_server_stat_getall(args->rq->client->server);
+	GArray *array = network_server_stat_getall();
 	for (guint i=0; i<array->len ;++i) {
-		struct server_stat_s *st = &g_array_index (array, struct server_stat_s, i);
+		struct stat_record_s *st =
+				&g_array_index (array, struct stat_record_s, i);
 		g_string_append_printf (gstr, "%s = %"G_GUINT64_FORMAT"\n",
 				g_quark_to_string (st->which), st->value);
 	}
@@ -285,9 +286,9 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 
 	const gint64 spent = oio_ext_monotonic_time () - rq->client->time.evt_in;
 
-	network_server_stat_push4 (rq->client->server, TRUE,
+	oio_stats_add(
 			gq_count, 1, gq_count_all, 1,
-			gq_time, (guint64)spent, gq_time_all, (guint64)spent);
+			gq_time, (guint64) spent, gq_time_all, (guint64) spent);
 
 	path_matching_cleanv (matchings);
 	oio_requri_clear (&ruri);
@@ -1108,11 +1109,11 @@ grid_main_configure (int argc, char **argv)
 
 	/* ensure each Route as a pair of count/time stats */
 	void _runner (const struct trie_node_s *n) {
-		network_server_stat_push2 (server, FALSE,
-				n->gq_count, 0, n->gq_time, 0);
+		oio_stats_set(n->gq_count, 0, n->gq_time, 0,
+					  0, 0, 0, 0);
 	}
 	path_parser_foreach (path_parser, _runner);
-	network_server_stat_push4 (server, FALSE,
+	oio_stats_set(
 			gq_count_all, 0, gq_count_unexpected, 0,
 			gq_time_all, 0, gq_time_unexpected, 0);
 
