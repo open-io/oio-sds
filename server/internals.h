@@ -64,14 +64,10 @@ struct network_server_s
 
 	GThread *thread_udp;
 	GThread *thread_tcp;
-	GThreadPool *pool_stats;
 	GThreadPool *pool_tcp;
 	GThreadPool *pool_udp;
 
 	GAsyncQueue *queue_monitor; /* from the workers to the events_thread */
-
-	GMutex lock_stats;
-	GArray *stats; /* <struct server_stat_s> */
 
 	GMutex lock_threads;
 

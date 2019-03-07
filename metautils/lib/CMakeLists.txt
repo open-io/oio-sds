@@ -178,6 +178,7 @@ add_library(metautils SHARED
 		metautils.h
 		metautils_macros.h
 
+		stats.c
 		rrd.c rrd.h
 		volume_lock.c volume_lock.h
 		lb.c lb.h

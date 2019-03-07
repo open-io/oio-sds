@@ -23,7 +23,6 @@ License along with this library.
 # include <server/slab.h>
 
 struct network_server_s;
-struct grid_stats_holder_s;
 struct network_client_s;
 struct network_transport_s;
 struct gba_view_s;
@@ -36,19 +35,6 @@ enum {
 	RC_NODATA,
 	RC_NOTREADY,
 	RC_PROCESSED,
-};
-
-struct server_stat_s /* stored in the server */
-{
-	guint64 value;
-	GQuark  which;
-};
-
-struct server_stat_msg_s /* sent by the workers */
-{
-	guint64  value[4];
-	GQuark   which[4];
-	gboolean increment : 1; /* FALSE -> reset */
 };
 
 typedef void (*network_transport_cleaner_f) (
@@ -149,15 +135,6 @@ GError * network_server_run(struct network_server_s *srv,
 void network_server_stop(struct network_server_s *srv);
 
 void network_server_clean(struct network_server_s *srv);
-
-void network_server_stat_push2 (struct network_server_s *srv, gboolean inc,
-		GQuark k1, guint64 v1, GQuark k2, guint64 v2);
-
-void network_server_stat_push4 (struct network_server_s *srv, gboolean inc,
-		GQuark k1, guint64 v1, GQuark k2, guint64 v2,
-		GQuark k3, guint64 v3, GQuark k4, guint64 v4);
-
-GArray* network_server_stat_getall (struct network_server_s *srv);
 
 /* -------------------------------------------------------------------------- */
 

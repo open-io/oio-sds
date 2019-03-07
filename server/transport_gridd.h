@@ -31,7 +31,6 @@ struct network_transport_s;
 
 /* Hidden structures internally definied */
 struct gridd_request_dispatcher_s;
-struct grid_stats_holder_s;
 
 /* Given to the request dispatcher, it allows him to reply to
  * the client. */

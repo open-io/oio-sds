@@ -508,7 +508,7 @@ _notify_request(struct req_ctx_s *ctx, GQuark gq_count, GQuark gq_time)
 
 	gint64 diff = ctx->tv_end - ctx->tv_start;
 
-	network_server_stat_push4 (ctx->client->server, TRUE,
+	oio_stats_add(
 			gq_count, 1, gq_count_all, 1,
 			gq_time, diff, gq_time_all, diff);
 }
@@ -916,14 +916,14 @@ static gboolean
 dispatch_STATS(struct gridd_reply_ctx_s *reply,
 		gpointer gdata UNUSED, gpointer hdata UNUSED)
 {
-	GArray *array = network_server_stat_getall(reply->client->server);
+	GArray *array = network_server_stat_getall();
 	// Rough estimate, will be automatically resized if needed
 	GByteArray *body = g_byte_array_sized_new(array->len * 32);
 	for (guint i = 0; i < array->len; ++i) {
-		struct server_stat_s *st = &g_array_index(
-				array, struct server_stat_s, i);
+		const struct stat_record_s *st =
+				&g_array_index(array, struct stat_record_s, i);
 		gchar tmp[256];
-		gsize len = g_snprintf(tmp, sizeof(tmp), "%s=%"G_GUINT64_FORMAT"\n",
+		gint len = g_snprintf(tmp, sizeof(tmp), "%s=%"G_GUINT64_FORMAT"\n",
 				g_quark_to_string(st->which), st->value);
 		g_byte_array_append(body, (guint8*)tmp, len);
 	}
@@ -986,12 +986,13 @@ grid_daemon_bind_host(struct network_server_s *server, const gchar *url,
 	gboolean _traverser(gpointer k, gpointer v, gpointer u) {
 		(void) k; (void) u;
 		struct gridd_request_handler_s *h = (struct gridd_request_handler_s*) v;
-		network_server_stat_push2 (server, FALSE,
-				h->stat_name_req, 0, h->stat_name_time, 0);
+		oio_stats_set(
+				h->stat_name_req, 0, h->stat_name_time, 0,
+				0, 0, 0, 0);
 		return FALSE;
 	}
 	g_tree_foreach (dispatcher->tree_requests, _traverser, NULL);
-	network_server_stat_push4 (server, FALSE,
+	oio_stats_set(
 			gq_count_all, 0, gq_count_unexpected, 0,
 			gq_time_all, 0, gq_time_unexpected, 0);
 
