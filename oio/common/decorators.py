@@ -1,4 +1,4 @@
-# Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,6 +14,7 @@
 # License along with this library.
 
 from functools import wraps
+from oio.common.constants import REQID_HEADER
 from oio.common.utils import request_id
 from oio.common.exceptions import NotFound, NoSuchAccount, NoSuchObject, \
     NoSuchContainer, reraise
@@ -22,7 +23,8 @@ from oio.common.exceptions import NotFound, NoSuchAccount, NoSuchObject, \
 def ensure_headers(func):
     @wraps(func)
     def ensure_headers_wrapper(*args, **kwargs):
-        kwargs['headers'] = kwargs.get('headers') or dict()
+        if kwargs.setdefault('headers', dict()) is None:
+            kwargs['headers'] = dict()
         return func(*args, **kwargs)
     return ensure_headers_wrapper
 
@@ -30,13 +32,12 @@ def ensure_headers(func):
 def ensure_request_id(func):
     @wraps(func)
     def ensure_request_id_wrapper(*args, **kwargs):
-        headers = kwargs.get('headers', dict())
-        if 'X-oio-req-id' not in headers:
+        headers = kwargs.setdefault('headers', dict())
+        if REQID_HEADER not in headers:
             if 'req_id' in kwargs:
-                headers['X-oio-req-id'] = kwargs.pop('req_id')
+                headers[REQID_HEADER] = kwargs.pop('req_id')
             else:
-                headers['X-oio-req-id'] = request_id()
-            kwargs['headers'] = headers
+                headers[REQID_HEADER] = request_id()
         return func(*args, **kwargs)
     return ensure_request_id_wrapper
 

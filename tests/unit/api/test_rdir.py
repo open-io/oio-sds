@@ -156,7 +156,6 @@ class TestRdirMeta2Client(unittest.TestCase):
                 'container_id': self.container_id,
                 'mtime': int(self.mtime),
             },
-            'headers': None,
             'service_type': 'meta2'
         }
 

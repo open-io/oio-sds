@@ -122,7 +122,7 @@ class ClientManager(object):
 
     @property
     def flatns_manager(self):
-        if self._flatns_manager:
+        if self._flatns_manager is not None:
             return self._flatns_manager
         from oio.common.autocontainer import HashedContainerBuilder
         options = self.nsinfo['options']
@@ -163,7 +163,7 @@ class ClientManager(object):
 
     @property
     def nsinfo(self):
-        if not self._nsinfo:
+        if self._nsinfo is None:
             self._nsinfo = self.conscience.info()
         return self._nsinfo
 

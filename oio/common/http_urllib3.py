@@ -57,7 +57,7 @@ def get_pool_manager(pool_connections=DEFAULT_POOLSIZE,
     """
     Get `urllib3.PoolManager` to manage pools of connections
 
-    :param pool_connections: number of connection pools
+    :param pool_connections: number of connection pools (see "num_pools").
     :type pool_connections: `int`
     :param pool_maxsize: number of connections per connection pool
     :type pool_maxsize: `int`
