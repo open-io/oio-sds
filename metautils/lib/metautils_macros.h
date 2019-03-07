@@ -55,6 +55,7 @@ License along with this library.
 #define NAME_MSGKEY_CONTENTLENGTH      "CL"
 #define NAME_MSGKEY_CONTENTPATH        "CP"
 #define NAME_MSGKEY_CONTENTID          "CI"
+#define NAME_MSGKEY_DAMAGED_OBJECTS    "DAMAGED_OBJECTS"
 #define NAME_MSGKEY_DRYRUN             "DRYRUN"
 #define NAME_MSGKEY_DST                "DST"
 #define NAME_MSGKEY_EVENT              "E"
@@ -104,6 +105,7 @@ License along with this library.
 #define NS_STATE_VALUE_STANDALONE "standalone"
 
 #define NAME_MSGKEY_ADMIN_COMMAND "ADM"
+#define NAME_MSGKEY_FORCE_MASTER  "FRC_MSTR"
 #define NAME_MSGKEY_USER_AGENT    "USR_AG"
 #define NAME_MSGKEY_NS_STATE      "STT"
 #define NAME_MSGKEY_WORMED        "WRM"

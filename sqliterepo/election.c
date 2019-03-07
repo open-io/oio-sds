@@ -1635,35 +1635,38 @@ completion_LISTING(int zrc, const struct String_vector *sv, const void *d)
 	struct election_member_s *member = (struct election_member_s*) d;
 	gboolean has_first = FALSE;
 	gint32 first = -1;
-	GArray *i32v = nodev_to_int32v(sv, member->key);
+
+	if (sv) {
+		GArray *i32v = nodev_to_int32v(sv, member->key);
 #ifdef HAVE_ENBUG
-	GRID_WARN("2Master? %s vs %s", sqliterepo_election_2master_db, member->inline_name.base);
-	if (sqliterepo_election_2master_db[0] && !g_ascii_strcasecmp(
-				member->inline_name.base, sqliterepo_election_2master_db)) {
-		/* We try to fake the double-master condition */
-		const gint32 local = member->local_id;
-		GRID_WARN("Yes! local %u len %u", local, i32v->len);
-		if (i32v->len > 1 && g_array_index(i32v, gint32, 0) != local) {
-			/* If the current base is 2nd, we make it think it is first */
-			if (g_array_index(i32v, gint32, 1) == local) {
-				g_array_remove_index(i32v, 0);
+		GRID_WARN("2Master? %s vs %s",
+				sqliterepo_election_2master_db, member->inline_name.base);
+		if (sqliterepo_election_2master_db[0] && !g_ascii_strcasecmp(
+					member->inline_name.base, sqliterepo_election_2master_db)) {
+			/* We try to fake the double-master condition */
+			const gint32 local = member->local_id;
+			GRID_WARN("Yes! local %u len %u", local, i32v->len);
+			if (i32v->len > 1 && g_array_index(i32v, gint32, 0) != local) {
+				/* If the current base is 2nd, we make it think it is first */
+				if (g_array_index(i32v, gint32, 1) == local) {
+					g_array_remove_index(i32v, 0);
+				}
 			}
+			/* avoid looping and do the trick just once, on only one member */
+			sqliterepo_election_2master_db[0] = '\0';
 		}
-		/* avoid looping and do the trick just once, on only one member */
-		sqliterepo_election_2master_db[0] = '\0';
-	}
 #endif  /* HAVE_ENBUG */
-	if (i32v->len > 0) {
-		first = g_array_index(i32v, gint32, 0);
-		has_first = TRUE;
+		if (i32v->len > 0) {
+			first = g_array_index(i32v, gint32, 0);
+			has_first = TRUE;
+		}
+		g_array_free(i32v, TRUE);
 	}
-	g_array_free(i32v, TRUE);
 
 	struct exec_later_LISTING_context_s *ctx =
 		g_slice_alloc0(sizeof(struct exec_later_LISTING_context_s));
 	ctx->magic = DAT_LISTING;
-	if (ZOK == (ctx->zrc = zrc))
-		ctx->zrc = has_first ? ZOK : ZNONODE;
+	ctx->zrc = (zrc == ZOK) ? (has_first ? ZOK : ZNONODE) : zrc;
 	ctx->member = member;
 	ctx->master_id = first;
 
@@ -1721,6 +1724,7 @@ static struct election_member_s *
 _find_member (struct election_manager_s *M, const char *path, guint gen)
 {
 	if (!M) return NULL;
+	if (!path) return NULL;
 
 	const char *slash = strrchr(path, '/');
 	if (!slash) return NULL;
@@ -3891,9 +3895,11 @@ _member_react_FAILED(struct election_member_s *member, enum event_type_e evt)
 }
 
 static gint64
-_member_next_timeout(struct election_member_s *m)
+_member_next_timeout(const struct election_member_s *m)
 {
 	switch (m->step) {
+		case STEP_NONE:
+			return m->last_status + oio_election_delay_expire_NONE;
 		case STEP_DELAYED_CHECKING_MASTER:
 			return m->last_status + sqliterepo_getvers_delay;
 		case STEP_DELAYED_CHECKING_SLAVES:
@@ -4004,66 +4010,41 @@ transition_error(struct election_member_s *member,
 	return transition(member, evt, NULL);
 }
 
-static GPtrArray *
-_DEQUE_extract (struct deque_beacon_s *beacon)
+static gboolean
+_member_expirable(struct election_member_s *m, const gint64 now)
 {
-	GPtrArray *out = g_ptr_array_sized_new(beacon->count);
-	for (struct election_member_s *m=beacon->front; m ;m=m->next)
-		g_ptr_array_add(out, m);
-	return out;
+	return m->refcount == 1
+		&& _is_over(now, m->last_status, oio_election_delay_expire_NONE);
 }
 
-static guint
-_play_exit_on_state(struct election_manager_s *M, struct deque_beacon_s *beacon)
+void
+election_manager_play_expirations(struct election_manager_s *M, const gint64 now)
 {
-	if (beacon->front == NULL)
-		return 0;
+	struct deque_beacon_s *beacon = M->members_by_state + STEP_NONE;
 
-	const gint64 now = oio_ext_monotonic_time();
-	guint count = 0;
-	GPtrArray *members = _DEQUE_extract (beacon);
-	for (guint i=0; i<members->len ;++i) {
-		struct election_member_s *m = members->pdata[i];
-
-		/* Election in NONE state ... */
-		if (!_is_over(now, m->last_status, oio_election_delay_expire_NONE))
-			continue;
-
-		/* ... for longer than acceptable */
-		if (m->refcount != 1)
-			continue;
-
-		/* ... but not referenced by anyone */
-		count ++;
-		_DEQUE_remove (m);
-		g_tree_remove (M->members_by_key, m->key);
-		member_unref (m);
-		member_destroy (m);
+	while (beacon->front) {
+		_manager_lock(M);
+		struct election_member_s *m = beacon->front;
+		if (!m || !_member_expirable(m, now)) {
+			_manager_unlock(M);
+			break;
+		} else {
+			_DEQUE_remove (m);
+			g_tree_remove (M->members_by_key, m->key);
+			member_unref (m);
+			member_destroy (m);
+			_manager_unlock(M);
+		}
 	}
-	g_ptr_array_free (members, TRUE);
-	return count;
 }
 
-guint
-election_manager_play_exits (struct election_manager_s *manager)
-{
-	guint count = 0;
-	struct deque_beacon_s *beacon = manager->members_by_state + STEP_NONE;
-	if (beacon->front) {
-		_manager_lock(manager);
-		count += _play_exit_on_state(manager, beacon);
-		_manager_unlock(manager);
-	}
-	return count;
-}
-
-static guint
-_send_NONE_to_step(struct election_manager_s *M, struct deque_beacon_s *beacon)
+static void
+_send_NONE_to_step(struct election_manager_s *M, struct deque_beacon_s *beacon,
+		const gint64 now)
 {
 	gboolean stop = FALSE;
-	guint count = 0;
 
-	while (grid_main_is_running() && beacon->front && !stop) {
+	while (beacon->front && !stop) {
 		_manager_lock(M);
 		struct election_member_s *m = beacon->front;
 		if (!m) {
@@ -4077,55 +4058,16 @@ _send_NONE_to_step(struct election_manager_s *M, struct deque_beacon_s *beacon)
 				 * function on such a queue. !!! */
 				stop = TRUE;
 			} else {
-				const gint64 now = oio_ext_monotonic_time();
 				if (now < deadline) {
 					/* The timer didn't fire */
 					stop = TRUE;
 				} else {
 					transition (m, EVT_NONE, NULL);
-					count ++;
 				}
 			}
 		}
 		_manager_unlock(M);
 	}
-	return count;
-}
-
-static inline guint
-_send_NONE_to_step2 (struct election_manager_s *M, enum election_step_e step)
-{
-	return _send_NONE_to_step(M, M->members_by_state + step);
-}
-
-guint
-election_manager_play_timers_FAILED (struct election_manager_s *M)
-{
-	return _send_NONE_to_step2(M, STEP_FAILED);
-}
-
-guint
-election_manager_play_timers_DELAYED_MASTER (struct election_manager_s *M)
-{
-	return _send_NONE_to_step2(M, STEP_DELAYED_CHECKING_MASTER);
-}
-
-guint
-election_manager_play_timers_DELAYED_SLAVE (struct election_manager_s *M)
-{
-	return _send_NONE_to_step2(M, STEP_DELAYED_CHECKING_SLAVES);
-}
-
-guint
-election_manager_play_timers_MASTER (struct election_manager_s *M)
-{
-	return _send_NONE_to_step2(M, STEP_MASTER);
-}
-
-guint
-election_manager_play_timers_SLAVE (struct election_manager_s *M)
-{
-	return _send_NONE_to_step2(M, STEP_SLAVE);
 }
 
 guint
@@ -4166,5 +4108,52 @@ election_manager_configured(const struct election_manager_s *m)
 		&& m->sync_tab != NULL
 		&& m->peering != NULL
 		&& (ELECTION_MODE_NONE != election_manager_get_mode (m));
+}
+
+gint64
+election_manager_next_timer(struct election_manager_s *M)
+{
+	static const int steps[] = {
+		STEP_NONE,
+		STEP_FAILED,
+		STEP_DELAYED_CHECKING_MASTER,
+		STEP_DELAYED_CHECKING_SLAVES,
+		STEP_SLAVE,
+		STEP_MASTER,
+		-1
+	};
+
+	if (!election_manager_configured(M))
+		return 0;
+
+	gint64 latest = G_MAXINT64;
+
+	_manager_lock(M);
+	for (int i=0; steps[i] != -1 ;i++) {
+		const struct election_member_s *m = M->members_by_state[steps[i]].front;
+		if (!m)
+			continue;
+		const gint64 expiration = _member_next_timeout(m);
+		latest = MIN(latest, expiration);
+	}
+	_manager_unlock(M);
+
+	return latest == G_MAXINT64 ? 0 : latest;
+}
+
+void
+election_manager_play_timers(struct election_manager_s *M, const gint64 now)
+{
+	static const int steps[] = {
+		STEP_FAILED,
+		STEP_DELAYED_CHECKING_MASTER,
+		STEP_DELAYED_CHECKING_SLAVES,
+		STEP_SLAVE,
+		STEP_MASTER,
+		-1
+	};
+
+	for (int i=0; steps[i] != -1 ;i++)
+		_send_NONE_to_step(M, M->members_by_state + steps[i], now);
 }
 

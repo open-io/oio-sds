@@ -1420,7 +1420,7 @@ Used by `gcc`
 
 > In the current sqliterepo repository, sets the amount of time after which a failed election leaves its FAILED status and returns to the NONE status.
 
- * default: **2 * G_TIME_SPAN_SECOND**
+ * default: **250 * G_TIME_SPAN_MILLISECOND**
  * type: gint64
  * cmake directive: *OIO_SQLITEREPO_ELECTION_DELAY_RETRY_FAILED*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 7 * G_TIME_SPAN_DAY
@@ -1458,42 +1458,6 @@ Used by `gcc`
  * default: **FALSE**
  * type: gboolean
  * cmake directive: *OIO_SQLITEREPO_ELECTION_NOWAIT_ENABLE*
-
-### sqliterepo.election.task.exit.alert
-
-> When NONE elections are expired, report a warning if the background task holds the lock longer than this value.
-
- * default: **100 * G_TIME_SPAN_MILLISECOND**
- * type: gint64
- * cmake directive: *OIO_SQLITEREPO_ELECTION_TASK_EXIT_ALERT*
- * range: 0 -> G_MAXINT64
-
-### sqliterepo.election.task.exit.period
-
-> In jiffies, how often the removal of expired NONE elections happens
-
- * default: **5**
- * type: guint
- * cmake directive: *OIO_SQLITEREPO_ELECTION_TASK_EXIT_PERIOD*
- * range: 0 -> 86400
-
-### sqliterepo.election.task.timer.alert
-
-> When timers are raised on elections, report a warning if the background task holds the lock longer than this value.
-
- * default: **100 * G_TIME_SPAN_MILLISECOND**
- * type: gint64
- * cmake directive: *OIO_SQLITEREPO_ELECTION_TASK_TIMER_ALERT*
- * range: 0 -> G_MAXINT64
-
-### sqliterepo.election.task.timer.period
-
-> In jiffies, how often the elections waiting for timers are fired
-
- * default: **1**
- * type: guint
- * cmake directive: *OIO_SQLITEREPO_ELECTION_TASK_TIMER_PERIOD*
- * range: 0 -> 86400
 
 ### sqliterepo.election.wait.delay
 

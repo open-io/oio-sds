@@ -118,6 +118,8 @@ struct sqlx_service_s
 	struct gridd_client_pool_s *clients_pool;
 	GThread *thread_client;
 
+	GThread *thread_timers;
+
 	//-------------------------------------------------------------------
 	// Variables used during the startup time of the server, but not used
 	// anymore after that.

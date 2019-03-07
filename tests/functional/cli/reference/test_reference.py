@@ -14,7 +14,7 @@
 # License along with this library.
 
 import uuid
-from tests.functional.cli import CliTestCase
+from tests.functional.cli import CliTestCase, CommandFailed
 
 
 class ReferenceTest(CliTestCase):
@@ -51,6 +51,5 @@ class ReferenceTest(CliTestCase):
         output = self.openio(
             'reference unset ' + self.NAME + ' --property ' + key)
         self.assertOutput('', output)
-        output = self.openio(
-            'reference show ' + self.NAME + opts)
-        self.assertOutput('', output)
+        self.assertRaises(
+            CommandFailed, self.openio, 'reference show ' + self.NAME + opts)

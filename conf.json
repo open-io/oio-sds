@@ -493,7 +493,7 @@
 			{ "type": "monotonic", "name": "oio_election_delay_retry_FAILED",
 				"key": "sqliterepo.election.delay.retry_failed",
 				"descr": "In the current sqliterepo repository, sets the amount of time after which a failed election leaves its FAILED status and returns to the NONE status.",
-				"def": "2s", "min": "1ms", "max": "7d" },
+				"def": "250ms", "min": "1ms", "max": "7d" },
 
 			{ "type": "uint", "name": "_page_size",
 				"key": "sqliterepo.page_size",
@@ -514,26 +514,6 @@
 				"key": "sqliterepo.client.timeout.alert_if_longer",
 				"descr": "In the current sqliterepo repository, sets the maximum amount of time a periodical task may take, while checking for the timeouts on the outbound connections.",
 				"def": "5s", "min": "1ms", "max": "1h" },
-
-			{ "type": "uint", "name": "sqliterepo_election_task_EXIT_period",
-				"key": "sqliterepo.election.task.exit.period",
-				"descr": "In jiffies, how often the removal of expired NONE elections happens",
-				"def": "5", "min": 0, "max": "86400" },
-
-			{ "type": "uint", "name": "sqliterepo_election_task_TIMER_period",
-				"key": "sqliterepo.election.task.timer.period",
-				"descr": "In jiffies, how often the elections waiting for timers are fired",
-				"def": "1", "min": 0, "max": "86400" },
-
-			{ "type": "monotonic", "name": "sqliterepo_election_task_EXIT_alert",
-				"key": "sqliterepo.election.task.exit.alert",
-				"descr": "When NONE elections are expired, report a warning if the background task holds the lock longer than this value.",
-				"def": "100ms", "min": 0, "max": "max" },
-
-			{ "type": "monotonic", "name": "sqliterepo_election_task_TIMER_alert",
-				"key": "sqliterepo.election.task.timer.alert",
-				"descr": "When timers are raised on elections, report a warning if the background task holds the lock longer than this value.",
-				"def": "100ms", "min": 0, "max": "max" },
 
 			{ "type": "bool", "name": "sqliterepo_allow_master",
 				"key": "sqliterepo.election.allow_master",

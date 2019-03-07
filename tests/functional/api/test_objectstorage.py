@@ -422,6 +422,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertEqual('10', objects)
         usage = meta['system']['sys.m2.usage']
         self.assertEqual('40', usage)
+        damaged_objects = meta['system']['sys.m2.objects.damaged']
         missing_chunks = meta['system']['sys.m2.chunks.missing']
         self.beanstalk.wait_until_empty('oio', initial_delay=2)
         containers = self.api.container_list(self.account)
@@ -453,6 +454,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         meta = self.api.container_get_properties(self.account, name)
         self.assertEqual(objects, meta['system']['sys.m2.objects'])
         self.assertEqual(usage, meta['system']['sys.m2.usage'])
+        self.assertEqual(damaged_objects,
+                         meta['system']['sys.m2.objects.damaged'])
         self.assertEqual(missing_chunks,
                          meta['system']['sys.m2.chunks.missing'])
         containers = self.api.container_list(self.account)
@@ -686,6 +689,65 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             name, obj_name=name, data=name*4)
         # Ensure that the chunk deletion has been called with proper args
         self.api.blob_client.chunk_delete_many.assert_called_once()
+
+    def test_bucket_list(self):
+        account = random_str(32)
+        name_with_path = "%2F".join([random_str(32).lower(),
+                                     random_str(32).lower()])
+        name_with_segments = random_str(32).lower() + "+segments"
+        name = random_str(32).lower()
+        self.api.container_create(account, name)
+        self.api.container_create(account, name_with_path)
+        self.api.container_create(account, name_with_segments)
+        buckets = self.api.container_list(account, s3_buckets_only=True)
+        self.assertEqual(len(buckets), 1)
+        self.assertEqual(buckets[0][0], name)
+        containers = self.api.container_list(account)
+        self.assertEqual(len(containers), 3)
+
+    def test_buckets_list_with_prefix(self):
+        account = random_str(32)
+        name = random_str(32).lower()
+        name_2 = random_str(32).lower()
+        name_with_path = "%2F".join([name, random_str(32).lower()])
+        name_with_segments = name + "+segments"
+        self.api.container_create(account, name)
+        self.api.container_create(account, name_2)
+        self.api.container_create(account, name_with_path)
+        self.api.container_create(account, name_with_segments)
+        buckets = self.api.container_list(account, s3_buckets_only=True,
+                                          prefix=name)
+        self.assertEqual(len(buckets), 1)
+        self.assertEqual(buckets[0][0], name)
+        containers = self.api.container_list(account, prefix=name)
+        self.assertEqual(len(containers), 3)
+
+    def test_buckets_list_check_name(self):
+        account = random_str(32)
+        too_small_name = random_str(2).lower()
+        too_long_name = random_str(64).lower()
+        underscore_name = random_str(16).lower() + "_" + random_str(16).lower()
+        name = random_str(16).lower() + "." + random_str(16).lower()
+        start_with_dot = "." + random_str(16).lower()
+        upper_case = random_str(32)
+        ip_addr = "192.168.5.4"
+        ok_labels = random_str(10).lower() + '.' + random_str(10).lower()
+        ko_labels = random_str(10).lower() + '.' + random_str(10)
+        self.api.container_create(account, too_small_name)
+        self.api.container_create(account, too_long_name)
+        self.api.container_create(account, underscore_name)
+        self.api.container_create(account, name)
+        self.api.container_create(account, start_with_dot)
+        self.api.container_create(account, upper_case)
+        self.api.container_create(account, ip_addr)
+        self.api.container_create(account, ok_labels)
+        self.api.container_create(account, ko_labels)
+        buckets = self.api.container_list(account, s3_buckets_only=True)
+        self.assertEqual(len(buckets), 2)
+        self.assertIn(name, [b[0] for b in buckets])
+        self.assertIn(ok_labels, [b[0] for b in buckets])
+        containers = self.api.container_list(account)
+        self.assertEqual(len(containers), 9)
 
     def test_container_refresh(self):
         self.wait_for_score(('account', 'meta2'))

@@ -126,6 +126,10 @@ message_marshall_gba(MESSAGE m, GError **err)
 
 	if (oio_ext_is_admin())
 		metautils_message_add_field_strint(m, NAME_MSGKEY_ADMIN_COMMAND, 1);
+
+	if (oio_ext_has_force_master())
+		metautils_message_add_field_strint(m, NAME_MSGKEY_FORCE_MASTER, 1);
+
 	const gchar *user_agent = oio_ext_get_user_agent();
 	if (user_agent != NULL)
 		metautils_message_add_field_str(
@@ -603,7 +607,7 @@ metautils_message_extract_body_encoded(MESSAGE msg, gboolean mandatory,
 		if (mandatory)
 			return NEWERROR(CODE_BAD_REQUEST, "Missing body");
 		return NULL;
-    }
+	}
 
 	GError *err = NULL;
 	int rc = decoder(result, b, bsize, &err);

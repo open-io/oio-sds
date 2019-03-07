@@ -16,6 +16,7 @@
 
 from oio.common.green import ratelimit, time
 
+import errno
 from datetime import datetime
 from random import random
 from string import hexdigits
@@ -24,11 +25,11 @@ from oio.blob.utils import check_volume, read_chunk_metadata
 from oio.rdir.client import RdirClient
 from oio.common.daemon import Daemon
 from oio.common import exceptions as exc
-from oio.common.utils import paths_gen, request_id
+from oio.common.constants import STRLEN_CHUNKID, CHUNK_SUFFIX_PENDING
 from oio.common.easy_value import int_value, true_value
-from oio.common.logger import get_logger
-from oio.common.constants import STRLEN_CHUNKID
 from oio.common.http_urllib3 import get_pool_manager
+from oio.common.logger import get_logger
+from oio.common.utils import paths_gen, request_id
 from oio.blob.converter import BlobConverter
 
 
@@ -76,7 +77,10 @@ class BlobIndexer(Daemon):
     def safe_update_index(self, path):
         chunk_id = path.rsplit('/', 1)[-1]
         if len(chunk_id) != STRLEN_CHUNKID:
-            self.logger.warn('WARN Not a chunk %s', path)
+            if chunk_id.endswith(CHUNK_SUFFIX_PENDING):
+                self.logger.info('Skipping pending chunk %s', path)
+            else:
+                self.logger.warn('WARN Not a chunk %s', path)
             return
         for char in chunk_id:
             if char not in hexdigits:
@@ -111,9 +115,15 @@ class BlobIndexer(Daemon):
             else:
                 self.errors += 1
                 self.logger.error('ERROR while updating %s: %s', path, err)
-        except Exception:
-            self.errors += 1
-            self.logger.exception('ERROR while updating %s', path)
+        except Exception as err:
+            # We cannot compare errno in the 'except' line.
+            # pylint: disable=no-member
+            if isinstance(err, IOError) and err.errno == errno.ENOENT:
+                self.logger.debug('Chunk %s disappeared before indexing', path)
+                # Neither an error nor a success, do not touch counters.
+            else:
+                self.errors += 1
+                self.logger.exception('ERROR while updating %s', path)
         self.total_since_last_reported += 1
 
     def report(self, tag, start_time):

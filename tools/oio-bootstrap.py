@@ -746,6 +746,15 @@ start_at_boot=false
 on_die=cry
 """
 
+template_gridinit_blob_rebuilder = """
+[Service.${NS}-${SRVTYPE}-${SRVNUM}]
+group=${NS},localhost,${SRVTYPE}
+command=oio-blob-rebuilder --workers 10 --allow-same-rawx --beanstalkd ${QUEUE_URL} --log-facility local0 --log-syslog-prefix OIO,OPENIO,${SRVTYPE},${SRVNUM} ${NS}
+enabled=true
+start_at_boot=false
+on_die=cry
+"""
+
 template_local_header = """
 [default]
 """
@@ -784,7 +793,6 @@ enabled=true
 start_at_boot=false
 command=oio-event-agent ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
-
 """
 
 template_event_agent = """
@@ -1613,6 +1621,16 @@ def generate(options):
             f.write(tpl.safe_substitute(env))
         with open(CFGDIR + '/event-handlers-'+str(num)+'.conf', 'w+') as f:
             tpl = Template(template_event_agent_handlers)
+            f.write(tpl.safe_substitute(env))
+
+    # blob-rebuilder configuration -> one per beanstalkd
+    for num, host, port in all_beanstalkd:
+        bnurl = 'beanstalk://{0}:{1}'.format(host, port)
+        env = subenv({'SRVTYPE': 'blob-rebuilder', 'SRVNUM': num,
+                      'QUEUE_URL': bnurl})
+        add_service(env)
+        with open(gridinit(env), 'a+') as f:
+            tpl = Template(template_gridinit_blob_rebuilder)
             f.write(tpl.safe_substitute(env))
 
     # webhook test server

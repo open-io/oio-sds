@@ -29,7 +29,8 @@ from oio.blob.utils import read_chunk_metadata
 from oio.crawler.integrity import Checker, Target
 from oio.rdir.client import RdirClient
 from tests.utils import BaseTestCase, random_str
-from tests.functional.blob import convert_to_old_chunk, remove_fullpath_xattr
+from tests.functional.blob import convert_to_old_chunk, \
+    remove_fullpath_xattr, remove_xattr
 
 
 class TestBlobConverter(BaseTestCase):
@@ -529,6 +530,37 @@ class TestBlobConverter(BaseTestCase):
                 as recover:
             self._convert_and_check(chunk_volume, path, {}, expected_errors=1)
             recover.assert_not_called()
+
+    def test_recover_missing_old_fullpath(self):
+        for c in self.chunks:
+            convert_to_old_chunk(
+                self._chunk_path(c), self.account, self.container, self.path,
+                self.version, self.content_id)
+
+        victim = random.choice(self.chunks)
+        self._test_converter_single_chunk(victim)
+
+    def test_recover_missing_content_path(self):
+        for c in self.chunks:
+            convert_to_old_chunk(
+                self._chunk_path(c), self.account, self.container, self.path,
+                self.version, self.content_id, add_old_fullpath=True)
+
+        victim = random.choice(self.chunks)
+        path = self._chunk_path(victim)
+        remove_xattr(path, chunk_xattr_keys['content_path'])
+        self._test_converter_single_chunk(victim)
+
+    def test_recover_missing_old_fullpath_and_content_path(self):
+        for c in self.chunks:
+            convert_to_old_chunk(
+                self._chunk_path(c), self.account, self.container, self.path,
+                self.version, self.content_id)
+
+        victim = random.choice(self.chunks)
+        path = self._chunk_path(victim)
+        remove_xattr(path, chunk_xattr_keys['content_path'])
+        self._test_converter_single_chunk(victim)
 
     def test_recover_missing_fullpath(self):
         """

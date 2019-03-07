@@ -48,8 +48,9 @@ meta2_dispatch_all(struct gridd_reply_ctx_s *reply,
 	fl = (gridd_filter*)hdata;
 
 	/* Another thread may have changed the thread-local storage,
-	 * ensure the admin-mode flag is clean. */
+	 * ensure the admin-mode and force-master flags are clean. */
 	oio_ext_set_admin(FALSE);
+	oio_ext_set_force_master(FALSE);
 
 	ctx = meta2_filter_ctx_new();
 	meta2_filter_ctx_set_backend(ctx, (struct meta2_backend_s *) gdata);
@@ -80,6 +81,7 @@ meta2_dispatch_all(struct gridd_reply_ctx_s *reply,
 
 	meta2_filter_ctx_clean(ctx);
 	oio_ext_set_admin(FALSE);
+	oio_ext_set_force_master(FALSE);
 	return TRUE;
 }
 
@@ -219,6 +221,7 @@ static gridd_filter M2V2_LIST_FILTERS[] =
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_list_params,
 	meta2_filter_extract_header_localflag,
+	meta2_filter_extract_force_master,
 	meta2_filter_fill_subject,
 	meta2_filter_check_url_cid,
 	meta2_filter_check_backend,

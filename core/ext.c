@@ -170,8 +170,13 @@ void ** oio_ext_array_concat (void **t0, void **t1) {
 /** @private */
 struct oio_ext_local_s {
 	GRand *prng;
+	/** Deadline for the request, in monotonic microseconds. */
 	gint64 deadline;
+	/** Request originates from an administration tool. */
 	guint8 is_admin;
+	/** Request wants to talk only to the master service
+	 * (in case of master/slave replication). */
+	guint8 force_master;
 	gchar *user_agent;
 	gchar reqid[LIMIT_LENGTH_REQID];
 };
@@ -269,6 +274,16 @@ gboolean oio_ext_is_admin (void) {
 void oio_ext_set_admin (const gboolean admin) {
 	struct oio_ext_local_s *l = _local_ensure ();
 	l->is_admin = BOOL(admin);
+}
+
+gboolean oio_ext_has_force_master(void) {
+	const struct oio_ext_local_s *l = _local_ensure();
+	return BOOL(l->force_master);
+}
+
+void oio_ext_set_force_master(const gboolean force_master) {
+	struct oio_ext_local_s *l = _local_ensure();
+	l->force_master = BOOL(force_master);
 }
 
 const gchar *oio_ext_get_user_agent(void) {

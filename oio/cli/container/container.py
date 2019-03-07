@@ -345,6 +345,7 @@ class ShowContainer(ContainerCommandMixin, show.ShowOne):
         ctime = float(sys['sys.m2.ctime']) / 1000000.
         bytes_usage = sys.get('sys.m2.usage', 0)
         objects = sys.get('sys.m2.objects', 0)
+        damaged_objects = sys.get('sys.m2.objects.damaged', 0)
         missing_chunks = sys.get('sys.m2.chunks.missing', 0)
         if parsed_args.formatter == 'table':
             from oio.common.easy_value import convert_size
@@ -360,6 +361,7 @@ class ShowContainer(ContainerCommandMixin, show.ShowOne):
             'bytes_usage': bytes_usage,
             'quota': sys.get('sys.m2.quota', "Namespace default"),
             'objects': objects,
+            'damaged_objects': damaged_objects,
             'missing_chunks': missing_chunks,
             'storage_policy': sys.get('sys.m2.policy.storage',
                                       "Namespace default"),

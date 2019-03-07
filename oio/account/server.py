@@ -24,6 +24,7 @@ from oio.common.constants import STRLEN_REQID
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.wsgi import WerkzeugApp
+from oio.common.easy_value import true_value
 
 
 def access_log(func):
@@ -369,10 +370,12 @@ class Account(WerkzeugApp):
         prefix = req.args.get('prefix', '')
         limit = int(req.args.get('limit', '1000'))
         delimiter = req.args.get('delimiter', '')
+        s3_buckets_only = true_value(req.args.get('s3_buckets_only', False))
 
         user_list = self.backend.list_containers(
             account_id, limit=limit, marker=marker, end_marker=end_marker,
-            prefix=prefix, delimiter=delimiter)
+            prefix=prefix, delimiter=delimiter,
+            s3_buckets_only=s3_buckets_only)
 
         info['listing'] = user_list
         # TODO(FVE): add "truncated" entry telling if the listing is truncated
@@ -422,11 +425,12 @@ class Account(WerkzeugApp):
         dtime = data.get('dtime')
         object_count = data.get('objects')
         bytes_used = data.get('bytes')
-        missing_chunks = data.get('missing-chunks')
+        damaged_objects = data.get('damaged_objects')
+        missing_chunks = data.get('missing_chunks')
         # Exceptions are catched by dispatch_request
         info = self.backend.update_container(
             account_id, name, mtime, dtime,
-            object_count, bytes_used, missing_chunks)
+            object_count, bytes_used, damaged_objects, missing_chunks)
         result = json.dumps(info)
         return Response(result)
 
@@ -474,11 +478,12 @@ class Account(WerkzeugApp):
         dtime = None
         object_count = 0
         bytes_used = 0
+        damaged_objects = 0
         missing_chunks = 0
         # Exceptions are catched by dispatch_request
         self.backend.update_container(
             account_id, name, mtime, dtime,
-            object_count, bytes_used, missing_chunks,
+            object_count, bytes_used, damaged_objects, missing_chunks,
             autocreate_container=False)
         return Response(status=204)
 
