@@ -24,7 +24,7 @@ from oio.common.http_urllib3 import get_pool_manager, \
     oio_exception_from_httperror, urllib3
 from oio.common import exceptions as exc, utils
 from oio.common.constants import CHUNK_HEADERS, chunk_xattr_keys_optional, \
-        HEADER_PREFIX, OIO_VERSION
+        FETCHXATTR_HEADER, OIO_VERSION, REQID_HEADER
 from oio.common.decorators import ensure_headers, ensure_request_id
 from oio.api.io import ChunkReader
 from oio.api.replication import ReplicatedMetachunkWriter, FakeChecksum
@@ -153,15 +153,23 @@ class BlobClient(object):
     @update_rawx_perfdata
     @ensure_request_id
     def chunk_head(self, url, **kwargs):
+        """
+        Perform a HEAD request on a chunk.
+
+        :param url: URL of the chunk to request.
+        :keyword xattr: when False, ask the rawx not to read
+            extended attributes of the chunk.
+        :returns: a `dict` with chunk metadata (empty when xattr is False).
+        """
         _xattr = bool(kwargs.get('xattr', True))
         url = self.resolve_url(url)
         headers = kwargs['headers'].copy()
-        headers[HEADER_PREFIX + 'xattr'] = _xattr
+        headers[FETCHXATTR_HEADER] = _xattr
         try:
             resp = self.http_pool.request(
                 'HEAD', url, headers=headers)
         except urllib3.exceptions.HTTPError as ex:
-            oio_exception_from_httperror(ex, reqid=headers['X-oio-req-id'],
+            oio_exception_from_httperror(ex, reqid=headers[REQID_HEADER],
                                          url=url)
         if resp.status == 200:
             if not _xattr:

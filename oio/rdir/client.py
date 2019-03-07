@@ -500,7 +500,7 @@ class RdirClient(HttpApi):
         return self.create(volume_id, service_type='meta2', **kwargs)
 
     def meta2_index_push(self, volume_id, container_url, container_id, mtime,
-                         headers=None, **kwargs):
+                         **kwargs):
         """
         Add a newly created container to the list of containers handled
         by the meta2 server in question.
@@ -520,7 +520,7 @@ class RdirClient(HttpApi):
 
         return self._rdir_request(volume=volume_id, method='POST',
                                   action='push', create=True, json=body,
-                                  headers=headers, service_type='meta2',
+                                  service_type='meta2',
                                   **kwargs)
 
     def _resolve_cid_to_path(self, cid):

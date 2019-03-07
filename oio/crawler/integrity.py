@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -19,7 +19,7 @@ Recursively check account, container, content and chunk integrity.
 
 
 from __future__ import print_function
-from oio.common.green import Event, GreenPool
+from oio.common.green import Event, GreenPool, Queue
 
 import os
 import csv
@@ -28,6 +28,7 @@ import cStringIO
 import argparse
 
 from oio.common import exceptions as exc
+from oio.common.fullpath import decode_fullpath, decode_old_fullpath
 from oio.common.storage_method import STORAGE_METHODS
 from oio.account.client import AccountClient
 from oio.container.client import ContainerClient
@@ -36,10 +37,16 @@ from oio.api.object_storage import _sort_chunks
 
 
 class Target(object):
-    def __init__(self, account, container=None, obj=None, chunk=None):
+    """
+    Identify the target of a check.
+    """
+
+    def __init__(self, account, container=None, obj=None,
+                 version=None, chunk=None):
         self.account = account
         self.container = container
         self.obj = obj
+        self.version = version
         self.chunk = chunk
 
     def copy(self):
@@ -47,17 +54,70 @@ class Target(object):
             self.account,
             self.container,
             self.obj,
+            self.version,
             self.chunk)
 
+    def copy_object(self):
+        return Target(self.account, self.container, self.obj, self.version)
+
+    def copy_container(self):
+        return Target(self.account, self.container)
+
+    def copy_account(self):
+        return Target(self.account)
+
     def __repr__(self):
-        s = "account=" + self.account
+        if self.type == 'chunk':
+            return 'chunk=' + self.chunk
+        out = 'account=%s' % self.account
         if self.container:
-            s += ', container=' + self.container
+            out += ', container=' + self.container
         if self.obj:
-            s += ', obj=' + self.obj
+            out += ', obj=' + self.obj
+        if self.version:
+            out += ', version=' + self.version
         if self.chunk:
-            s += ', chunk=' + self.chunk
-        return s
+            out += ', chunk=' + self.chunk
+        return out
+
+    @property
+    def type(self):
+        """Tell which type of item this object targets."""
+        if self.chunk:
+            return 'chunk'
+        elif self.obj:
+            return 'object'
+        elif self.container:
+            return 'container'
+        else:
+            return 'account'
+
+
+class ItemResult(object):
+    """
+    Hold the result of a check.
+    Must be serializable to be used in the Checker's return queue.
+    """
+
+    def __init__(self, target, errors=None):
+        self.errors = errors if errors is not None else list()
+        self.target = target
+
+    @property
+    def health(self):
+        """
+        Tell the health of the item that has been checked.
+        """
+        # TODO(FVE): add an intermediate 'warning' level
+        return 'error' if self.errors else 'OK'
+
+    def errors_to_str(self, separator='\n'):
+        """
+        Pretty print errors stored in this result.
+        """
+        if not self.errors:
+            return str(None)
+        return separator.join(str(x) for x in self.errors)
 
 
 class Checker(object):
@@ -107,6 +167,33 @@ class Checker(object):
 
         self.list_cache = {}
         self.running = {}
+        self.result_queue = Queue()
+
+    def complete_target_from_chunk_metadata(self, target, xattr_meta):
+        """
+        Complete a Target object from metadata found in chunk's extended
+        attributes.
+        """
+        # pylint: disable=unbalanced-tuple-unpacking
+        try:
+            acct, ct, path, vers, _oid = \
+                decode_fullpath(xattr_meta['full_path'])
+        except ValueError:
+            acct, ct, path, vers = \
+                decode_old_fullpath(xattr_meta['full_path'])
+        # TODO(FVE): load old-style metadata
+        # TODO(FVE): support object ID
+        target.account = acct
+        target.container = ct
+        target.obj = path
+        target.version = vers
+
+    def send_result(self, target, errors=None):
+        """
+        Put an item in the result queue.
+        """
+        # TODO(FVE): send to an external queue.
+        self.result_queue.put(ItemResult(target, errors))
 
     def write_error(self, target, irreparable=False):
         error = list()
@@ -147,69 +234,90 @@ class Checker(object):
                                        irreparable=irreparable)
 
     def _check_chunk_xattr(self, target, obj_meta, xattr_meta):
-        error = False
+        """
+        Check coherency of chunk extended attributes with object metadata.
+
+        :returns: a list of errors
+        """
+        errors = list()
         # Composed position -> erasure coding
         attr_prefix = 'meta' if '.' in obj_meta['pos'] else ''
 
         attr_key = attr_prefix + 'chunk_size'
         if str(obj_meta['size']) != xattr_meta.get(attr_key):
-            print("  Chunk %s '%s' xattr (%s) "
-                  "differs from size in meta2 (%s)" %
-                  (target, attr_key, xattr_meta.get(attr_key),
-                   obj_meta['size']))
-            error = True
+            errors.append(
+                "Chunk %s '%s' xattr (%s) differs from size in meta2 (%s)" %
+                (target.chunk, attr_key, xattr_meta.get(attr_key),
+                 obj_meta['size']))
 
         attr_key = attr_prefix + 'chunk_hash'
         if obj_meta['hash'] != xattr_meta.get(attr_key):
-            print("  Chunk %s '%s' xattr (%s) "
-                  "differs from hash in meta2 (%s)" %
-                  (target, attr_key, xattr_meta.get(attr_key),
-                   obj_meta['hash']))
-            error = True
-        return error
+            errors.append(
+                "Chunk %s '%s' xattr (%s) differs from hash in meta2 (%s)" %
+                (target.chunk, attr_key, xattr_meta.get(attr_key),
+                 obj_meta['hash']))
+        return errors
 
     def _check_chunk(self, target):
-        chunk = target.chunk
+        """
+        Execute various checks on a chunk:
+        - does it appear in object's chunk list?
+        - is it reachable?
+        - are its extended attributes coherent?
 
-        obj_listing, obj_meta = self.check_obj(target)
-        error = False
-        if chunk not in obj_listing:
-            print('  Chunk %s missing from object listing' % target)
-            error = True
-            db_meta = dict()
-        else:
-            db_meta = obj_listing[chunk]
+        :returns: the list of errors encountered,
+            and the chunk's owner object metadata.
+        """
+        chunk = target.chunk
+        errors = list()
+        obj_meta = None
+        xattr_meta = None
 
         try:
             xattr_meta = self.blob_client.chunk_head(chunk, xattr=self.full)
-        except exc.NotFound as e:
+        except exc.NotFound as err:
             self.chunk_not_found += 1
-            error = True
-            print('  Not found chunk "%s": %s' % (target, str(e)))
+            errors.append('Chunk %s not found: %s' % (chunk, str(err)))
         except exc.FaultyChunk as err:
             self.chunk_exceptions += 1
-            error = True
-            print('  Exception chunk "%s": %r' % (target, err))
-        except Exception as e:
+            errors.append('Chunk %s is faulty: %r' % (chunk, err))
+        except Exception as err:
             self.chunk_exceptions += 1
-            error = True
-            print('  Exception chunk "%s": %s' % (target, str(e)))
-        else:
-            if db_meta and self.full:
-                error = self._check_chunk_xattr(target, db_meta, xattr_meta)
+            errors.append('Chunk %s failed to be checked: %s' % (
+                chunk, str(err)))
 
+        if not target.obj and xattr_meta:
+            self.complete_target_from_chunk_metadata(target, xattr_meta)
+
+        if target.obj:
+            obj_listing, obj_meta = self.check_obj(target.copy_object())
+            if chunk not in obj_listing:
+                errors.append('Chunk %s missing from object listing' % chunk)
+                db_meta = dict()
+            else:
+                db_meta = obj_listing[chunk]
+
+            if db_meta and xattr_meta and self.full:
+                errors.extend(
+                    self._check_chunk_xattr(target, db_meta, xattr_meta))
+
+        self.send_result(target, errors)
         self.chunks_checked += 1
-        return error, obj_meta
+        return errors, obj_meta
 
     def check_chunk(self, target):
-        error, obj_meta = self._check_chunk(target)
-        if error:
-            self.write_chunk_error(target, obj_meta)
+        errors, _obj_meta = self._check_chunk(target)
+        return errors
 
     def _check_metachunk(self, target, obj_meta, stg_met, pos, chunks,
                          recurse=False):
+        """
+        Check that a metachunk has the right number of chunks.
+
+        :returns: the list of errors
+        """
         required = stg_met.expected_chunks
-        chunk_errors = list()
+        errors = list()
 
         if len(chunks) < required:
             missing_chunks = required - len(chunks)
@@ -219,36 +327,53 @@ class Checker(object):
                 subs = {x['num'] for x in chunks}
                 for sub in range(required):
                     if sub not in subs:
-                        chunk_errors.append(
-                            (target, obj_meta, '%d.%d' % (pos, sub)))
+                        errors.append(
+                            "Missing chunk at position %d.%d" % (pos, sub))
             else:
                 for _ in range(missing_chunks):
-                    chunk_errors.append((target, obj_meta, str(pos)))
+                    errors.append("Missing chunk at position %d" % pos)
 
         if recurse:
             for chunk in chunks:
-                t = target.copy()
-                t.chunk = chunk['url']
-                error, obj_meta = self._check_chunk(t)
-                if error:
-                    chunk_errors.append((t, obj_meta))
+                tcopy = target.copy()
+                tcopy.chunk = chunk['url']
+                chunk_errors, _ = self._check_chunk(tcopy)
+                if chunk_errors:
+                    # The errors have already been reported by _check_chunk,
+                    # but we must count this chunk among the unusable chunks
+                    # of the current metachunk.
+                    errors.append("Unusable chunk %s at position %s" % (
+                        chunk['url'], chunk['pos']))
 
-        irreparable = required - len(chunk_errors) < stg_met.min_chunks_to_read
-        for chunk_error in chunk_errors:
-            self.write_chunk_error(*chunk_error, irreparable=irreparable)
+        irreparable = required - len(errors) < stg_met.min_chunks_to_read
+        if irreparable:
+            errors.append(
+                "Unavailable metachunk at position %s (%d/%d chunks)" % (
+                    pos, required - len(errors), stg_met.expected_chunks))
+        # Since the "metachunk" is not an official item type,
+        # this method does not report errors itself. Errors will
+        # be reported as object errors.
+        return errors
 
     def _check_obj_policy(self, target, obj_meta, chunks, recurse=False):
         """
         Check that the list of chunks of an object matches
         the object's storage policy.
+
+        :returns: the list of errors encountered
         """
         stg_met = STORAGE_METHODS.load(obj_meta['chunk_method'])
         chunks_by_pos = _sort_chunks(chunks, stg_met.ec)
+        tasks = list()
         for pos, chunks in chunks_by_pos.iteritems():
-            self.pool.spawn_n(
+            tasks.append(self.pool.spawn(
                 self._check_metachunk,
                 target.copy(), obj_meta, stg_met, pos, chunks,
-                recurse=recurse)
+                recurse=recurse))
+        errors = list()
+        for task in tasks:
+            errors.extend(task.wait())
+        return errors
 
     def check_obj(self, target, recurse=False):
         account = target.account
@@ -261,11 +386,11 @@ class Checker(object):
             return self.list_cache[(account, container, obj)]
         self.running[(account, container, obj)] = Event()
         print('Checking object "%s"' % target)
-        container_listing, ct_meta = self.check_container(target)
-        error = False
+        container_listing, _ = self.check_container(target.copy_container())
+        errors = list()
         if obj not in container_listing:
-            print('  Object %s missing from container listing' % target)
-            error = True
+            errors.append('Object %s/%s missing from container listing' % (
+                          target.obj, target.version))
             # checksum = None
         else:
             # TODO check checksum match
@@ -278,14 +403,14 @@ class Checker(object):
             meta, results = self.container_client.content_locate(
                 account=account, reference=container, path=obj,
                 properties=False)
-        except exc.NotFound as e:
+        except exc.NotFound as err:
             self.object_not_found += 1
-            error = True
-            print('  Not found object "%s": %s' % (target, str(e)))
-        except Exception as e:
+            errors.append('Object %s/%s not found: %s' % (
+                target.obj, target.version, str(err)))
+        except Exception as err:
             self.object_exceptions += 1
-            error = True
-            print(' Exception object "%s": %s' % (target, str(e)))
+            errors.append('Object %s/%s failed to be checked: %s' % (
+                target.obj, target.version, str(err)))
 
         chunk_listing = dict()
         for chunk in results:
@@ -299,10 +424,10 @@ class Checker(object):
 
         # Skip the check if we could not locate the object
         if meta:
-            self._check_obj_policy(target, meta, results, recurse=recurse)
+            errors.extend(
+                self._check_obj_policy(target, meta, results, recurse=recurse))
 
-        if error and self.error_file:
-            self.write_error(target)
+        self.send_result(target, errors)
         return chunk_listing, meta
 
     def check_container(self, target, recurse=False):
@@ -315,11 +440,12 @@ class Checker(object):
             return self.list_cache[(account, container)]
         self.running[(account, container)] = Event()
         print('Checking container "%s"' % target)
-        account_listing = self.check_account(target)
-        error = False
+        account_listing = self.check_account(target.copy_account())
+        errors = list()
         if container not in account_listing:
-            error = True
-            print('  Container %s missing from account listing' % target)
+            errors.append(
+                'Container %s missing from account listing' % (
+                    container))
 
         marker = None
         results = []
@@ -335,15 +461,15 @@ class Checker(object):
                 _, resp = self.container_client.content_list(
                     account=account, reference=container, marker=marker,
                     **extra_args)
-            except exc.NotFound as e:
+            except exc.NotFound as err:
                 self.container_not_found += 1
-                error = True
-                print('  Not found container "%s": %s' % (target, str(e)))
+                errors.append('Container %s not found: %s' % (
+                    container, str(err)))
                 break
-            except Exception as e:
+            except Exception as err:
                 self.container_exceptions += 1
-                error = True
-                print('  Exception container "%s": %s' % (target, str(e)))
+                errors.append('Container %s failed to be checked: %s' % (
+                    target, str(err)))
                 break
 
             if resp['objects']:
@@ -369,11 +495,10 @@ class Checker(object):
 
         if recurse:
             for obj in container_listing:
-                t = target.copy()
-                t.obj = obj
-                self.pool.spawn_n(self.check_obj, t, True)
-        if error and self.error_file:
-            self.write_error(target)
+                tcopy = target.copy()
+                tcopy.obj = obj
+                self.pool.spawn_n(self.check_obj, tcopy, True)
+        self.send_result(target, errors)
         return container_listing, ct_meta
 
     def check_account(self, target, recurse=False):
@@ -385,7 +510,7 @@ class Checker(object):
             return self.list_cache[account]
         self.running[account] = Event()
         print('Checking account "%s"' % target)
-        error = False
+        errors = list()
         marker = None
         results = []
         extra_args = dict()
@@ -399,10 +524,11 @@ class Checker(object):
             try:
                 resp = self.account_client.container_list(
                     account, marker=marker, **extra_args)
-            except Exception as e:
+            except Exception as err:
                 self.account_exceptions += 1
-                error = True
-                print('  Exception account "%s": %s' % (target, str(e)))
+                errors.append(
+                    'Account %s failed to be checked: %s' % (
+                        account, str(err)))
                 break
             if resp['listing']:
                 marker = resp['listing'][-1][0]
@@ -425,26 +551,32 @@ class Checker(object):
 
         if recurse:
             for container in containers:
-                t = target.copy()
-                t.container = container
-                self.pool.spawn_n(self.check_container, t, True)
+                tcopy = target.copy_account()
+                tcopy.container = container
+                self.pool.spawn_n(self.check_container, tcopy, True)
 
-        if error and self.error_file:
-            self.write_error(target)
+        self.send_result(target, errors)
         return containers
 
     def check(self, target):
-        if target.chunk and target.obj and target.container:
+        if target.type == 'chunk':
             self.pool.spawn_n(self.check_chunk, target)
-        elif target.obj and target.container:
+        elif target.type == 'object':
             self.pool.spawn_n(self.check_obj, target, True)
-        elif target.container:
+        elif target.type == 'container':
             self.pool.spawn_n(self.check_container, target, True)
         else:
             self.pool.spawn_n(self.check_account, target, True)
 
+    def handle_results(self):
+        while not self.result_queue.empty():
+            res = self.result_queue.get(True)
+            yield res
+
     def wait(self):
         self.pool.waitall()
+        # FIXME(FVE):
+        return self.handle_results()
 
     def report(self):
         success = True
