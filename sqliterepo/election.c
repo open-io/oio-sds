@@ -1234,8 +1234,8 @@ _LOCKED_init_member(struct election_manager_s *manager,
 
 			/* Imagine a setup with {mux_factor=3, cnx="A,B,C,D"}, it gives a
 			 * `sync_tab` like this: A0|A1|A2|B0|B1|B2|C0|C1|C2|D0|D1|D2.
-			 * Now, imagine the current base gives {id_shard=2, id_mux=2}, we
-			 * MUST use the second connection to the shard B, i.e. B1 to remain
+			 * Now, imagine the current base gives {id_shard=1, id_mux=1}, we
+			 * MUST use the second connection to the shard B, i.e. B1, to remain
 			 * backward compliant with the previous implementation that was not
 			 * consistant between the uses with and without `mux_factor`.
 			 */
