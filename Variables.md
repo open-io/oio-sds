@@ -1090,15 +1090,6 @@ Used by `gcc`
  * cmake directive: *OIO_SERVER_POOL_MAX_IDLE*
  * range: 1 -> 1 * G_TIME_SPAN_HOUR
 
-### server.pool.max_stat
-
-> In the current server, sets how many threads are allowed to the stats server. Keep this value really small, 1 should be enough for most usages, and consider increasing it if you have clues that the management of internal metrics is the bottleneck. Set to 0 for no limit.
-
- * default: **1**
- * type: gint
- * cmake directive: *OIO_SERVER_POOL_MAX_STAT*
- * range: 0 -> 1073741824
-
 ### server.pool.max_tcp
 
 > In the current server, sets the maximum number of threads for the pool responsible for the TCP connections (threading model is one thread per request being managed, and one request at once per TCP connection). Set to 0 for no limit.
