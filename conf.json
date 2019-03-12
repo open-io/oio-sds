@@ -350,6 +350,11 @@
 		"code": "sqliterepo_variables.c",
 		"header": "sqliterepo_variables.h",
 		"variables": [
+			{ "type": "int64", "name": "sqliterepo_max_rss",
+				"key": "sqliterepo.rss.max",
+				"descr": "Memory size ceiling we try to honor. The check is performed while opening databases. Set to 0 to autodetect the max RSS from the resource limits (see `man getrlimit` for more information). The autodetection considers the environment and is not aware of all the processes that could share that environment.",
+				"def": "0", "min": "0", "max": "max"},
+
 			{ "type": "int", "name": "sqliterepo_dumps_max",
 				"key": "sqliterepo.dumps.max",
 				"descr": "How many concurrent DB dumps may happen in a single process.",
