@@ -241,10 +241,11 @@ class ObjectTest(CliTestCase):
 
     def _test_autocontainer_object_listing(self, args='', env=None):
         obj_count = 7
+        prefix = random_str(8)
+        expected = list()
         with tempfile.NamedTemporaryFile() as myfile:
             myfile.write('something')
             myfile.flush()
-            prefix = random_str(8)
             # TODO(FVE): find a quicker way to upload several objects
             commands = list()
             for i in range(obj_count):
@@ -252,6 +253,7 @@ class ObjectTest(CliTestCase):
                 commands.append(' '.join(['object create --auto ',
                                           myfile.name, '--name ',
                                           obj_name, args]))
+                expected.append(obj_name)
             self.openio_batch(commands, env=env)
 
         # Default listing
@@ -280,7 +282,8 @@ class ObjectTest(CliTestCase):
         output = self.openio('object list --auto --no-paging --prefix ' +
                              prefix + ' ' + opts + ' ' + args, env=env)
         listing = self.json_loads(output)
-        self.assertEqual(obj_count, len(listing))
+        actual = sorted(x['Name'] for x in listing)
+        self.assertEqual(expected, actual)
         for obj in listing:
             # 4 columns
             self.assertEqual(4, len(obj))
