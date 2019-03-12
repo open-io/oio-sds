@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # confgen.py, a code generator foor OpenIO SDS
-# Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -21,7 +21,7 @@ from itertools import chain
 
 LICENSES = {
         'agpl' : """/*
-Copyright (C) 2017-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -39,7 +39,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """,
     'lgpl': """/*
-Copyright (C) 2017-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
