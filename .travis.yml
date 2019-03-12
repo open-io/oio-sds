@@ -51,7 +51,7 @@ install:
   - pip install --upgrade -r all-requirements.txt -r test-requirements.txt
   - pip install --upgrade zkpython
   - go get gopkg.in/ini.v1 gopkg.in/tylerb/graceful.v1
-  - cd vendor/curl && ./buildconf && ./configure && sudo make install && cd ../../
+  - cd vendor/curl && ./buildconf && ./configure --prefix=/usr/local --enable-static --disable-shared --without-ssl --disable-{ldap,ldaps,imap,ftp,gopher,smtp,smb,telnet,rtsp,file,dict,tftp,pop3} --enable-pthreads --without-zlib --disable-manual && sudo make install && cd ../../
   - sudo ldconfig
 
 env:
@@ -76,7 +76,7 @@ script:
   - ulimit -c unlimited -S
   - set -e
   - mkdir /tmp/oio && source $HOME/oio/bin/activate
-  - export CMAKE_OPTS='-DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib'
+  - export CMAKE_OPTS='-DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib -DCURL_LIBS=/usr/local/lib/libcurl.a -DCURL_INCIDR=/usr/local/include'
   - if [ "sdk" == "${TEST_SUITE/*sdk*/sdk}" ] ; then cmake ${CMAKE_OPTS} -D SDK_ONLY=on . && make all && make test ; exit 0 ; fi
   - export CMAKE_OPTS="${CMAKE_OPTS} -DZK_LIBDIR=/usr/lib -DZK_INCDIR=/usr/include/zookeeper -DAPACHE2_LIBDIR=/usr/lib/apache2 -DAPACHE2_INCDIR=/usr/include/apache2 -DAPACHE2_MODDIR=/tmp/oio/lib/apache2/module"
   - if [ "build" == "${TEST_SUITE/*build*/build}" ] ; then cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Release" . && make all && make clean ; fi
