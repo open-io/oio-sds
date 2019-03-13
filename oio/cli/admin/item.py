@@ -28,12 +28,28 @@ class CheckCommandMixin(object):
 
     def build_checker(self, parsed_args):
         """Build an instance of Checker."""
-        # TODO(FVE): when Checker is refactored, review the list of
-        # parameters we should pass.
-        checker = Checker(self.app.options.ns)
+        checker = Checker(
+            self.app.options.ns,
+            concurrency=parsed_args.concurrency,
+            error_file=parsed_args.output,
+            rebuild_file=parsed_args.output_for_blob_rebuilder,
+            request_attempts=parsed_args.attempts,
+        )
         return checker
 
     def patch_parser(self, parser):
+        parser.add_argument(
+            '--attempts',
+            type=int,
+            default=1,
+            help="Number of attempts for listing requests (default: 1)."
+        )
+        parser.add_argument(
+            '--checksum',
+            action='store_true',
+            help=("Perform checksum comparisons. This requires downloading "
+                  "data from rawx services.")
+        )
         parser.add_argument(
             '--depth',
             type=int,
@@ -43,14 +59,24 @@ class CheckCommandMixin(object):
                   " from namespace to chunk.")
         )
         parser.add_argument(
-            '--checksum',
-            action='store_true',
-            help=("Perform checksum comparisons. This requires downloading "
-                  "data from rawx services.")
+            '--concurrency', '--workers', type=int,
+            default=30,
+            help="Number of concurrent checks (default: 30)."
+        )
+        parser.add_argument(
+            '-o', '--output',
+            help=("Output file. Will contain elements in error. "
+                  "Can later be passed to stdin of the legacy "
+                  "oio-crawler-integrity to re-check only these elements.")
+        )
+        parser.add_argument(
+            '--output-for-blob-rebuilder',
+            help=("Write chunk errors in a file with a format "
+                  "suitable as oio-blob-rebuilder input.")
         )
 
     def _format_results(self, checker):
-        for res in checker.wait():
+        for res in checker.run():
             yield (res.target.type, repr(res.target),
                    res.health, res.errors_to_str())
 
@@ -149,7 +175,7 @@ class ObjectCheck(CheckCommandMixin, lister.Lister):
         checker = self.build_checker(parsed_args)
         for obj in parsed_args.objects:
             target = Target(self.app.options.account, parsed_args.container,
-                            obj, parsed_args.object_version)
+                            obj, version=parsed_args.object_version)
             checker.check(target)
         return self.format_results(checker)
 
