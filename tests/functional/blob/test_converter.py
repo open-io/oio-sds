@@ -115,7 +115,8 @@ class TestBlobConverter(BaseTestCase):
             checker.check(Target(
                 account, container=container, obj=path,
                 chunk='http://' + converter.volume_id + '/' + chunk_id))
-            checker.wait()
+            for _ in checker.run():
+                pass
             self.assertTrue(checker.report())
 
             if expected_raw_meta:

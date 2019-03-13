@@ -19,7 +19,7 @@ Recursively check account, container, content and chunk integrity.
 
 
 from __future__ import print_function
-from oio.common.green import Event, GreenPool, Queue
+from oio.common.green import Event, GreenPool, Queue, sleep
 
 import os
 import csv
@@ -30,9 +30,7 @@ import argparse
 from oio.common import exceptions as exc
 from oio.common.fullpath import decode_fullpath, decode_old_fullpath
 from oio.common.storage_method import STORAGE_METHODS
-from oio.account.client import AccountClient
-from oio.container.client import ContainerClient
-from oio.blob.client import BlobClient
+from oio.api.object_storage import ObjectStorageApi
 from oio.api.object_storage import _sort_chunks
 
 
@@ -42,10 +40,11 @@ class Target(object):
     """
 
     def __init__(self, account, container=None, obj=None,
-                 version=None, chunk=None):
+                 content_id=None, version=None, chunk=None):
         self.account = account
         self.container = container
         self.obj = obj
+        self.content_id = content_id
         self.version = version
         self.chunk = chunk
 
@@ -54,11 +53,13 @@ class Target(object):
             self.account,
             self.container,
             self.obj,
+            self.content_id,
             self.version,
             self.chunk)
 
     def copy_object(self):
-        return Target(self.account, self.container, self.obj, self.version)
+        return Target(self.account, self.container,
+                      self.obj, self.content_id, self.version)
 
     def copy_container(self):
         return Target(self.account, self.container)
@@ -74,6 +75,8 @@ class Target(object):
             out += ', container=' + self.container
         if self.obj:
             out += ', obj=' + self.obj
+        if self.content_id:
+            out += ', content_id=' + self.content_id
         if self.version:
             out += ', version=' + self.version
         if self.chunk:
@@ -134,23 +137,18 @@ class Checker(object):
         # 2 -> limit container listings (list of objects)
         self.limit_listings = limit_listings
         if self.error_file:
-            f = open(self.error_file, 'a')
-            self.error_writer = csv.writer(f, delimiter=' ')
+            outfile = open(self.error_file, 'a')
+            self.error_writer = csv.writer(outfile, delimiter=' ')
 
         self.rebuild_file = rebuild_file
         if self.rebuild_file:
             fd = open(self.rebuild_file, 'a')
             self.rebuild_writer = csv.writer(fd, delimiter='|')
 
-        conf = {'namespace': namespace}
-        self.account_client = AccountClient(
-            conf,
-            max_retries=request_attempts - 1)
-        self.container_client = ContainerClient(
-            conf,
+        self.api = ObjectStorageApi(
+            namespace,
             max_retries=request_attempts - 1,
             request_attempts=request_attempts)
-        self.blob_client = BlobClient(conf=conf)
 
         self.accounts_checked = 0
         self.containers_checked = 0
@@ -176,16 +174,17 @@ class Checker(object):
         """
         # pylint: disable=unbalanced-tuple-unpacking
         try:
-            acct, ct, path, vers, _oid = \
+            acct, ct, path, vers, content_id = \
                 decode_fullpath(xattr_meta['full_path'])
         except ValueError:
             acct, ct, path, vers = \
                 decode_old_fullpath(xattr_meta['full_path'])
+            content_id = None
         # TODO(FVE): load old-style metadata
-        # TODO(FVE): support object ID
         target.account = acct
         target.container = ct
         target.obj = path
+        target.content_id = content_id
         target.version = vers
 
     def send_result(self, target, errors=None):
@@ -196,6 +195,8 @@ class Checker(object):
         self.result_queue.put(ItemResult(target, errors))
 
     def write_error(self, target, irreparable=False):
+        if not self.error_file:
+            return
         error = list()
         if irreparable:
             error.append('#IRREPARABLE')
@@ -208,7 +209,8 @@ class Checker(object):
             error.append(target.chunk)
         self.error_writer.writerow(error)
 
-    def write_rebuilder_input(self, target, obj_meta, irreparable=False):
+    def write_rebuilder_input(self, target, irreparable=False):
+        # FIXME(FVE): cid can be computed from account and container names
         ct_meta = self.list_cache[(target.account, target.container)][1]
         try:
             cid = ct_meta['system']['sys.name'].split('.', 1)[0]
@@ -218,19 +220,20 @@ class Checker(object):
         if irreparable:
             error.append('#IRREPARABLE')
         error.append(cid)
-        error.append(obj_meta['id'])
+        # FIXME(FVE): ensure we always resolve content_id,
+        # or pass object version along with object name.
+        error.append(target.content_id or target.obj)
         error.append(target.chunk)
         self.rebuild_writer.writerow(error)
 
-    def write_chunk_error(self, target, obj_meta,
+    def write_chunk_error(self, target,
                           chunk=None, irreparable=False):
         if chunk is not None:
             target = target.copy()
             target.chunk = chunk
-        if self.error_file:
-            self.write_error(target, irreparable=irreparable)
+        self.write_error(target, irreparable=irreparable)
         if self.rebuild_file:
-            self.write_rebuilder_input(target, obj_meta,
+            self.write_rebuilder_input(target,
                                        irreparable=irreparable)
 
     def _check_chunk_xattr(self, target, obj_meta, xattr_meta):
@@ -274,7 +277,8 @@ class Checker(object):
         xattr_meta = None
 
         try:
-            xattr_meta = self.blob_client.chunk_head(chunk, xattr=self.full)
+            xattr_meta = self.api.blob_client.chunk_head(chunk,
+                                                         xattr=self.full)
         except exc.NotFound as err:
             self.chunk_not_found += 1
             errors.append('Chunk %s not found: %s' % (chunk, str(err)))
@@ -309,7 +313,7 @@ class Checker(object):
         errors, _obj_meta = self._check_chunk(target)
         return errors
 
-    def _check_metachunk(self, target, obj_meta, stg_met, pos, chunks,
+    def _check_metachunk(self, target, stg_met, pos, chunks,
                          recurse=False):
         """
         Check that a metachunk has the right number of chunks.
@@ -321,8 +325,8 @@ class Checker(object):
 
         if len(chunks) < required:
             missing_chunks = required - len(chunks)
-            print('  Missing %d chunks at position %s of %s' % (
-                  missing_chunks, pos, target))
+            # print('  Missing %d chunks at position %s of %s' % (
+            #       missing_chunks, pos, target))
             if stg_met.ec:
                 subs = {x['num'] for x in chunks}
                 for sub in range(required):
@@ -366,44 +370,56 @@ class Checker(object):
         chunks_by_pos = _sort_chunks(chunks, stg_met.ec)
         tasks = list()
         for pos, chunks in chunks_by_pos.iteritems():
-            tasks.append(self.pool.spawn(
+            tasks.append((pos, self.pool.spawn(
                 self._check_metachunk,
-                target.copy(), obj_meta, stg_met, pos, chunks,
-                recurse=recurse))
+                target.copy(), stg_met, pos, chunks,
+                recurse=recurse)))
         errors = list()
-        for task in tasks:
-            errors.extend(task.wait())
+        for pos, task in tasks:
+            try:
+                errors.extend(task.wait())
+            except Exception as err:
+                errors.append("Check failed: pos %d: %s" % (pos, err))
         return errors
 
-    def check_obj(self, target, recurse=False):
-        account = target.account
-        container = target.container
-        obj = target.obj
-
-        if (account, container, obj) in self.running:
-            self.running[(account, container, obj)].wait()
-        if (account, container, obj) in self.list_cache:
-            return self.list_cache[(account, container, obj)]
-        self.running[(account, container, obj)] = Event()
-        print('Checking object "%s"' % target)
-        container_listing, _ = self.check_container(target.copy_container())
+    def check_obj_versions(self, target, versions, recurse=False):
+        """
+        Run checks of all versions of the targeted object in parallel.
+        """
+        tasks = list()
+        for ov in versions:
+            tcopy = target.copy_object()
+            tcopy.content_id = ov['id']
+            tcopy.version = str(ov['version'])
+            tasks.append((tcopy.version,
+                          self.pool.spawn(self.check_obj,
+                                          tcopy,
+                                          recurse=recurse)))
         errors = list()
-        if obj not in container_listing:
-            errors.append('Object %s/%s missing from container listing' % (
-                          target.obj, target.version))
-            # checksum = None
-        else:
-            # TODO check checksum match
-            # checksum = container_listing[obj]['hash']
-            pass
+        for version, task in tasks:
+            try:
+                task.wait()
+            except Exception as err:
+                errors.append("Check failed: version %s: %s" % (version, err))
+        if errors:
+            # Send a result with the target without version to tell
+            # we were not able to check all versions of the object.
+            self.send_result(target, errors)
 
-        results = []
-        meta = dict()
+    def _load_obj_meta(self, target, errors):
+        """
+        Load object metadata and chunks.
+
+        :param target: which object to check.
+        :param errors: list of errors that will be appended
+            in case any error occurs.
+        :returns: a tuple with object metadata and a list of chunks.
+        """
         try:
-            meta, results = self.container_client.content_locate(
-                account=account, reference=container, path=obj,
-                properties=False)
-        except exc.NotFound as err:
+            return self.api.object_locate(
+                target.account, target.container, target.obj,
+                version=target.version, properties=False)
+        except exc.NoSuchObject as err:
             self.object_not_found += 1
             errors.append('Object %s/%s not found: %s' % (
                 target.obj, target.version, str(err)))
@@ -411,21 +427,75 @@ class Checker(object):
             self.object_exceptions += 1
             errors.append('Object %s/%s failed to be checked: %s' % (
                 target.obj, target.version, str(err)))
+        return None, []
 
-        chunk_listing = dict()
-        for chunk in results:
-            chunk_listing[chunk['url']] = chunk
+    def check_obj(self, target, recurse=False):
+        """
+        Check one object version.
+        If no version is specified, all versions of the object will be checked.
+        :returns: the result of the check of the most recent version,
+            or the one that is explicitly targeted.
+        """
+        account = target.account
+        container = target.container
+        obj = target.obj
+        vers = target.version  # can be None
 
+        if (account, container, obj, vers) in self.running:
+            self.running[(account, container, obj, vers)].wait()
+        if (account, container, obj, vers) in self.list_cache:
+            return self.list_cache[(account, container, obj, vers)]
+        self.running[(account, container, obj, vers)] = Event()
+        # print('Checking object "%s"' % target)
+        container_listing, _ = self.check_container(target.copy_container())
+        errors = list()
+        if obj not in container_listing:
+            errors.append('Object %s/%s missing from container listing' % (
+                          obj, vers))
+            # checksum = None
+        else:
+            versions = container_listing[obj]
+            if vers is None:
+                if target.content_id is None:
+                    # No version specified, check all versions
+                    self.check_obj_versions(target.copy_object(), versions,
+                                            recurse=recurse)
+                    # Now return the cached result of the most recent version
+                    target.content_id = versions[0]['id']
+                    target.version = str(versions[0]['version'])
+                    res = self.check_obj(target, recurse=False)
+                    self.running[(account, container, obj, vers)].send(True)
+                    del self.running[(account, container, obj, vers)]
+                    return res
+                else:
+                    for ov in versions:
+                        if ov['id'] == target.content_id:
+                            vers = str(ov['version'])
+                            target.version = vers
+                            break
+                    else:
+                        errors.append(
+                            'Object %s/%s missing from container listing' % (
+                                obj, target.content_id))
+
+            # TODO check checksum match
+            # checksum = container_listing[obj]['hash']
+            pass
+
+        meta, chunks = self._load_obj_meta(target, errors)
+
+        chunk_listing = {c['url']: c for c in chunks}
         if meta:
-            self.list_cache[(account, container, obj)] = (chunk_listing, meta)
+            self.list_cache[(account, container, obj, vers)] = \
+                (chunk_listing, meta)
         self.objects_checked += 1
-        self.running[(account, container, obj)].send(True)
-        del self.running[(account, container, obj)]
+        self.running[(account, container, obj, vers)].send(True)
+        del self.running[(account, container, obj, vers)]
 
         # Skip the check if we could not locate the object
         if meta:
             errors.extend(
-                self._check_obj_policy(target, meta, results, recurse=recurse))
+                self._check_obj_policy(target, meta, chunks, recurse=recurse))
 
         self.send_result(target, errors)
         return chunk_listing, meta
@@ -439,7 +509,7 @@ class Checker(object):
         if (account, container) in self.list_cache:
             return self.list_cache[(account, container)]
         self.running[(account, container)] = Event()
-        print('Checking container "%s"' % target)
+        # print('Checking container "%s"' % target)
         account_listing = self.check_account(target.copy_account())
         errors = list()
         if container not in account_listing:
@@ -453,13 +523,14 @@ class Checker(object):
         extra_args = dict()
         if self.limit_listings > 1 and target.obj:
             # When we are explicitly checking one object, start the listing
-            # where this object is supposed to be, and list only one object.
+            # where this object is supposed to be. Do not use a limit,
+            # but an end marker, in order to fetch all versions of the object.
             extra_args['prefix'] = target.obj
-            extra_args['limit'] = 1
+            extra_args['end_marker'] = target.obj + '\x00'  # HACK
         while True:
             try:
-                _, resp = self.container_client.content_list(
-                    account=account, reference=container, marker=marker,
+                resp = self.api.object_list(
+                    account, container, marker=marker, versions=True,
                     **extra_args)
             except exc.NotFound as err:
                 self.container_not_found += 1
@@ -472,8 +543,13 @@ class Checker(object):
                     target, str(err)))
                 break
 
+            if resp.get('truncated', False):
+                marker = resp['next_marker']
+
             if resp['objects']:
-                marker = resp['objects'][-1]['name']
+                # safeguard, probably useless
+                if not marker:
+                    marker = resp['objects'][-1]['name']
                 results.extend(resp['objects'])
                 if self.limit_listings > 1:
                     break
@@ -483,8 +559,11 @@ class Checker(object):
                 break
 
         container_listing = dict()
+        # Save all object versions, with the most recent first
         for obj in results:
-            container_listing[obj['name']] = obj
+            container_listing.setdefault(obj['name'], list()).append(obj)
+        for versions in container_listing.values():
+            versions.sort(key=lambda o: o['version'], reverse=True)
 
         if self.limit_listings <= 1:
             # We just listed the whole container, keep the result in a cache
@@ -494,10 +573,13 @@ class Checker(object):
         del self.running[(account, container)]
 
         if recurse:
-            for obj in container_listing:
-                tcopy = target.copy()
-                tcopy.obj = obj
-                self.pool.spawn_n(self.check_obj, tcopy, True)
+            for obj_vers in container_listing.values():
+                for obj in obj_vers:
+                    tcopy = target.copy_object()
+                    tcopy.obj = obj['name']
+                    tcopy.content_id = obj['id']
+                    tcopy.version = str(obj['version'])
+                    self.pool.spawn_n(self.check_obj, tcopy, True)
         self.send_result(target, errors)
         return container_listing, ct_meta
 
@@ -509,7 +591,7 @@ class Checker(object):
         if account in self.list_cache:
             return self.list_cache[account]
         self.running[account] = Event()
-        print('Checking account "%s"' % target)
+        # print('Checking account "%s"' % target)
         errors = list()
         marker = None
         results = []
@@ -522,7 +604,7 @@ class Checker(object):
             extra_args['limit'] = 1
         while True:
             try:
-                resp = self.account_client.container_list(
+                resp = self.api.container_list(
                     account, marker=marker, **extra_args)
             except Exception as err:
                 self.account_exceptions += 1
@@ -530,17 +612,18 @@ class Checker(object):
                     'Account %s failed to be checked: %s' % (
                         account, str(err)))
                 break
-            if resp['listing']:
-                marker = resp['listing'][-1][0]
-                results.extend(resp['listing'])
+            if resp:
+                marker = resp[-1][0]
+                results.extend(resp)
                 if self.limit_listings > 0:
                     break
             else:
                 break
 
         containers = dict()
-        for e in results:
-            containers[e[0]] = (e[1], e[2])
+        for container in results:
+            # Name, number of objects, number of bytes
+            containers[container[0]] = (container[1], container[2])
 
         if self.limit_listings <= 0:
             # We just listed the whole account, keep the result in a cache
@@ -568,15 +651,35 @@ class Checker(object):
         else:
             self.pool.spawn_n(self.check_account, target, True)
 
-    def handle_results(self):
+    def fetch_results(self):
         while not self.result_queue.empty():
             res = self.result_queue.get(True)
             yield res
 
-    def wait(self):
+    def log_result(self, result):
+        if result.errors:
+            if result.target.type == 'chunk':
+                # FIXME(FVE): check error criticity
+                # and set the irreparable flag.
+                self.write_chunk_error(result.target)
+            else:
+                self.write_error(result.target)
+
+    def run(self):
+        """
+        Fetch results and write logs until all jobs have finished.
+
+        :returns: a generator yielding check results.
+        """
+        while self.pool.running() + self.pool.waiting():
+            for result in self.fetch_results():
+                self.log_result(result)
+                yield result
+            sleep(0.1)
         self.pool.waitall()
-        # FIXME(FVE):
-        return self.handle_results()
+        for result in self.fetch_results():
+            self.log_result(result)
+            yield result
 
     def report(self):
         success = True
@@ -621,6 +724,9 @@ class Checker(object):
 
 
 def main():
+    """
+    Main function for legacy integrity crawler.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('namespace', help='Namespace name')
     parser.add_argument(
@@ -675,9 +781,10 @@ def main():
         limit_listings=limit_listings,
         request_attempts=args.attempts,
     )
-    args = csv.reader(source, delimiter=' ')
-    for entry in args:
+    entries = csv.reader(source, delimiter=' ')
+    for entry in entries:
         checker.check(Target(*entry))
-    checker.wait()
+    for _ in checker.run():
+        pass
     if not checker.report():
         sys.exit(1)
