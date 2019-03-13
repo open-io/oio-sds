@@ -52,42 +52,57 @@ install:
   - pip install --upgrade zkpython
   - go get gopkg.in/ini.v1 gopkg.in/tylerb/graceful.v1
   - go get golang.org/x/sys/unix
+  - sudo bash -c "echo '/tmp/core.%p.%E' > /proc/sys/kernel/core_pattern"
+  - mkdir /tmp/oio
+  - git fetch --tags
+  - git submodule update --init --recursive
 
 env:
-  - TEST_SUITE=sdk
-  - TEST_SUITE=3copies,with-service-id
-  - TEST_SUITE=ec,with-random-service-id
-  - TEST_SUITE=rebuilder,with-service-id
-  - TEST_SUITE=ec
-  - TEST_SUITE=repli,go-rawx,fsync
-  - TEST_SUITE=3copies
-  - TEST_SUITE=multi-beanstalk
-  - TEST_SUITE=small-cache,fsync
-  - TEST_SUITE=webhook
-  - TEST_SUITE=slave
-  - TEST_SUITE=cli
-  - TEST_SUITE=worm
-  - TEST_SUITE=build,unit,copyright,variables
-  - TEST_SUITE=mover,with-service-id
+  global:
+  - CMAKE_OPTS="-DENABLE_CODECOVERAGE=on -DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib -DZK_LIBDIR=/usr/lib -DZK_INCDIR=/usr/include/zookeeper -DAPACHE2_LIBDIR=/usr/lib/apache2 -DAPACHE2_INCDIR=/usr/include/apache2 -DAPACHE2_MODDIR=/tmp/oio/lib/apache2/module"
+  - G_DEBUG=fatal_warnings
+  - G_SLICE=always-malloc
+  - G_DEBUG_LEVEL=W
+  - ZK=127.0.0.1:2181
 
-script:
-  - sudo bash -c "echo '/tmp/core.%p.%E' > /proc/sys/kernel/core_pattern"
-  - ulimit -c unlimited -S
-  - set -e
-  - mkdir /tmp/oio && source $HOME/oio/bin/activate
-  - export CMAKE_OPTS='-DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib'
-  - if [ "sdk" == "${TEST_SUITE/*sdk*/sdk}" ] ; then cmake ${CMAKE_OPTS} -D SDK_ONLY=on . && make all && make test ; exit 0 ; fi
-  - export CMAKE_OPTS="${CMAKE_OPTS} -DZK_LIBDIR=/usr/lib -DZK_INCDIR=/usr/include/zookeeper -DAPACHE2_LIBDIR=/usr/lib/apache2 -DAPACHE2_INCDIR=/usr/include/apache2 -DAPACHE2_MODDIR=/tmp/oio/lib/apache2/module"
-  - if [ "build" == "${TEST_SUITE/*build*/build}" ] ; then cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Release" . && make all && make clean ; fi
-  - export PYTHON_COVERAGE=1 CMAKE_OPTS="${CMAKE_OPTS} -DENABLE_CODECOVERAGE=on"
-  - cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Debug" . && make all install
-  - git fetch --tags
-  - python setup.py develop
-  - bash ./tools/oio-check-version.sh
-  - export G_DEBUG_LEVEL=D PATH="$PATH:/tmp/oio/bin" LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/tmp/oio/lib"
-  - make coverage_init
-  - ./tools/oio-travis-tests.sh
-  - make coverage
+jobs:
+  fast_finish: true
+  include:
+    - stage: fail fast
+      script: ./tools/oio-travis-failfast.sh
+      name: Copyright, Version, Release build, SDK build
+    - script: ./tools/oio-travis-unit.sh
+      name: C unit/func, Python unit/pep8
+    - stage: Functional tests (fast)
+      script: ./tools/oio-travis-suites.sh
+      env: TEST_SUITE=slave
+    - script: ./tools/oio-travis-suites.sh
+      env: TEST_SUITE=cli
+    - script: ./tools/oio-travis-suites.sh
+      env: TEST_SUITE=worm
+    - stage: Functional tests
+      script: ./tools/oio-travis-suites.sh
+      env: TEST_SUITE=single
+    - script: ./tools/oio-travis-suites.sh
+      env: TEST_SUITE=repli,go-rawx
+    - script: ./tools/oio-travis-suites.sh
+      env: TEST_SUITE=ec
+    - script: ./tools/oio-travis-suites.sh
+      env: TEST_SUITE=3copies
+    - script: ./tools/oio-travis-suites.sh
+      env: TEST_SUITE=small-cache,fsync
+    - script: ./tools/oio-travis-suites.sh
+      env: TEST_SUITE=3copies,with-service-id
+    - script: ./tools/oio-travis-suites.sh
+      env: TEST_SUITE=ec,with-random-service-id
+    - script: ./tools/oio-travis-suites.sh
+      env: TEST_SUITE=rebuilder,with-service-id
+    - script: ./tools/oio-travis-suites.sh
+      env: TEST_SUITE=multi-beanstalk
+    - script: ./tools/oio-travis-suites.sh
+      env: TEST_SUITE=mover,with-service-id
+    - script: ./tools/oio-travis-suites.sh
+      env: TEST_SUITE=webhook
 
 after_success:
   - bash <(curl -s https://codecov.io/bash) -f /tmp/cmake_coverage.output
