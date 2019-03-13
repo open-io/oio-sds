@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # vim: ts=4 shiftwidth=4 noexpandtab
 
-# oio-travis-tests.sh
-# Copyright (C) 2016-2017 OpenIO SAS, as part of OpenIO SDS
+# oio-test-suites.sh
+# Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -16,25 +16,6 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-set -e
-set -x
-
-export G_DEBUG=fatal_warnings
-export G_SLICE=always-malloc
-
-export PYTHON=python
-if [ "${PYTHON_COVERAGE:-}" == "1" ]; then
-	PYTHON="coverage run -p --omit=/home/travis/oio/lib/python2.7/*"
-fi
-
-OIO_RESET="oio-reset.sh -v"
-
-SRCDIR=$PWD
-WRKDIR=$PWD
-if [ $# -eq 2 ] ; then
-	SRCDIR="$1"
-	WRKDIR="$2"
-fi
 
 function dump_syslog {
 	cmd=tail
@@ -280,27 +261,61 @@ test_cli () {
 	sleep 0.5
 }
 
-/sbin/sysctl net.ipv4.ip_local_port_range
+func_tests_rebuilder_mover () {
+	randomize_env
+	args=
+	if is_running_test_suite "with-service-id"; then
+		args="${args} -U"
+	fi
+	if is_running_test_suite "with-random-service-id"; then
+		args="${args} -R"
+	fi
+	if is_running_test_suite "go-rawx"; then
+		args="${args} -f "${SRCDIR}/etc/bootstrap-option-go-rawx.yml""
+	fi
+	$OIO_RESET ${args} -N $OIO_NS $@
 
-if is_running_test_suite "copyright" ; then
-	echo -e "\n### Checking the presence of Copyright mentions"
-	${SRCDIR}/tools/oio-check-copyright.sh ${SRCDIR}
+	test_proxy_forward
+
+	wait_proxy_cache
+
+	for i in $(seq 1 100); do
+		dd if=/dev/urandom of=/tmp/openio_object_$i bs=1K \
+				count=$(shuf -i 1-2000 -n 1) 2> /dev/null
+		echo "object create container-${RANDOM} /tmp/openio_object_$i" \
+				"--name object-${RANDOM} -f value"
+	done | ${PYTHON} $(which openio)
+
+	if [ -n "${REBUILDER}" ]; then
+		${SRCDIR}/tools/oio-test-rebuilder.sh -n "${OIO_NS}"
+	fi
+	if [ -n "${MOVER}" ]; then
+		${SRCDIR}/tools/oio-test-mover.sh -n "${OIO_NS}"
+	fi
+
+	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
+	sleep 0.5
+}
+
+#-------------------------------------------------------------------------------
+
+set -e
+set -x
+SRCDIR="$1" ; [[ -n "$SRCDIR" ]] ; [[ -d "$SRCDIR" ]]
+WRKDIR="$2" ; [[ -n "$WRKDIR" ]] ; [[ -d "$WRKDIR" ]]
+
+export PYTHON=python
+if [[ -n "$PYTHON_COVERAGE" ]] ; then
+	export PYTHON="coverage run -p --omit=/home/travis/oio/lib/python2.7/*"
 fi
 
-if is_running_test_suite "variables" ; then
-	echo -e "\n### Checking Variables.md"
-	cd $SRCDIR
-	tox -e variables
-fi
+OIO_RESET="oio-reset.sh -v"
 
-if is_running_test_suite "unit" ; then
-	echo -e "\n### UNIT tests"
-	cd $SRCDIR
-	tox -e pep8
-	tox -e py27
-	cd $WRKDIR
-	export G_DEBUG_LEVEL=W
-	make -C tests/unit test
+if is_running_test_suite "single" ; then
+	func_tests -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-udp.yml" \
+		-f "${SRCDIR}/etc/bootstrap-option-long-timeouts.yml" \
+		-f "${SRCDIR}/etc/bootstrap-meta1-1digits.yml"
 fi
 
 if is_running_test_suite "repli" ; then
@@ -371,42 +386,6 @@ if is_running_test_suite "webhook" ; then
 	func_tests -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-webhook.yml"
 fi
-
-func_tests_rebuilder_mover () {
-	randomize_env
-	args=
-	if is_running_test_suite "with-service-id"; then
-		args="${args} -U"
-	fi
-	if is_running_test_suite "with-random-service-id"; then
-		args="${args} -R"
-	fi
-	if is_running_test_suite "go-rawx"; then
-		args="${args} -f "${SRCDIR}/etc/bootstrap-option-go-rawx.yml""
-	fi
-	$OIO_RESET ${args} -N $OIO_NS $@
-
-	test_proxy_forward
-
-	wait_proxy_cache
-
-	for i in $(seq 1 100); do
-		dd if=/dev/urandom of=/tmp/openio_object_$i bs=1K \
-				count=$(shuf -i 1-2000 -n 1) 2> /dev/null
-		echo "object create container-${RANDOM} /tmp/openio_object_$i" \
-				"--name object-${RANDOM} -f value"
-	done | ${PYTHON} $(which openio)
-
-	if [ -n "${REBUILDER}" ]; then
-		${SRCDIR}/tools/oio-test-rebuilder.sh -n "${OIO_NS}"
-	fi
-	if [ -n "${MOVER}" ]; then
-		${SRCDIR}/tools/oio-test-mover.sh -n "${OIO_NS}"
-	fi
-
-	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
-	sleep 0.5
-}
 
 if is_running_test_suite "rebuilder" ; then
 	echo -e "\n### Tests all rebuilders"
