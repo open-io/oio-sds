@@ -242,6 +242,21 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 }
 
 static void
+_patch_configuration_maxrss(void)
+{
+	if (sqliterepo_max_rss <= 0) {
+		struct rlimit rl = {};
+		int rc = getrlimit(RLIMIT_DATA, &rl);
+		if (rc == 0) {
+			gint64 maxrss = rl.rlim_cur;
+		    if (maxrss <= 0)
+				maxrss = G_MAXINT64;
+			sqliterepo_max_rss = maxrss;
+		}
+	}
+}
+
+static void
 _patch_configuration_fd(void)
 {
 	/* By design, this function never returns less than 1024. */
@@ -327,6 +342,7 @@ static gboolean
 _patch_and_apply_configuration(void)
 {
 	_patch_configuration_fd();
+	_patch_configuration_maxrss();
 
 	if (SRV.server)
 		network_server_reconfigure(SRV.server);
