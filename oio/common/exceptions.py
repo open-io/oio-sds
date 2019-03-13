@@ -222,12 +222,13 @@ class StatusMessageException(OioException):
         self.http_status = http_status
         self.message = message or 'n/a'
         self.status = status
+        super(StatusMessageException, self).__init__(self.message)
 
     def __str__(self):
-        s = "%s (HTTP %s)" % (self.message, self.http_status)
+        out = "%s (HTTP %s)" % (self.message, self.http_status)
         if self.status:
-            s += ' (STATUS %s)' % self.status
-        return s
+            out += ' (STATUS %s)' % self.status
+        return out
 
 
 class ClientException(StatusMessageException):
@@ -321,6 +322,8 @@ def reraise(exc_type, exc_value, extra_message=None):
     plus maybe `extra_message` at the beginning.
     """
     args = exc_value.args
+    if isinstance(exc_value, StatusMessageException):
+        args = (exc_value.message, ) + args
     if extra_message:
         args = (extra_message, ) + args
     raise exc_type(*args), None, exc_info()[2]
