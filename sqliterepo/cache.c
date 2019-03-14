@@ -119,9 +119,15 @@ _ram_exhausted(void)
 		gint64 total = 0;
 		total += mi.arena;
 		total += mi.hblkhd;
-		GRID_WARN("RAM [MiB] used %" G_GINT64_FORMAT" max %" G_GINT64_FORMAT,
-				total / (1024 * 1024),
-				sqliterepo_max_rss / (1024 * 1024));
+		if (total > sqliterepo_max_rss) {
+			GRID_DEBUG("RAM [MiB] used %" G_GINT64_FORMAT" max %" G_GINT64_FORMAT,
+					total / (1024 * 1024),
+					sqliterepo_max_rss / (1024 * 1024));
+		} else {
+			GRID_TRACE2("RAM [MiB] used %" G_GINT64_FORMAT" max %" G_GINT64_FORMAT,
+					total / (1024 * 1024),
+					sqliterepo_max_rss / (1024 * 1024));
+		}
 		return total > sqliterepo_max_rss;
 	}
 #endif
