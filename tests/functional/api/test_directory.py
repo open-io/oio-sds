@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -22,6 +22,9 @@ from oio.common import exceptions as exc
 from oio.rdir.client import RdirDispatcher, RDIR_ACCT, _make_id
 from oio.account.client import AccountClient
 from tests.utils import random_str, BaseTestCase
+
+
+_fake_location = 'whatever'
 
 
 class TestDirectoryAPI(BaseTestCase):
@@ -297,7 +300,7 @@ class TestDirectoryAPI(BaseTestCase):
                               pool_manager=self.http_pool)
 
         # Register a service, with score locked to zero
-        new_rawx = self._srv('rawx', {'tag.loc': 'whatever'})
+        new_rawx = self._srv('rawx', {'tag.loc': _fake_location})
         new_rawx['score'] = 0
         self._register_srv(new_rawx)
         self._reload_proxy()
@@ -319,13 +322,14 @@ class TestDirectoryAPI(BaseTestCase):
                               pool_manager=self.http_pool)
 
         # Register a service, with score locked to zero
-        new_rawx = self._srv('rawx', {'tag.loc': 'whatever'})
+        new_rawx = self._srv('rawx', {'tag.loc': _fake_location})
         new_rawx['score'] = 90
         self._register_srv(new_rawx)
         self._reload_proxy()
 
         self.assertRaises(exc.OioException,
                           disp.assign_all_rawx, min_dist=4)
+        print 'plop'
         all_rawx, _ = disp.get_assignments('rawx')
         all_rawx_keys = [x['addr'] for x in all_rawx]
         self.assertIn(new_rawx['addr'], all_rawx_keys)

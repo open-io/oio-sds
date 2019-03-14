@@ -733,6 +733,22 @@
 		"code": "proxy_variables.c",
 		"header": "proxy_variables.h",
 		"variables": [
+			{ "type": "string", "name": "oio_proxy_location",
+				"key": "proxy.location",
+				"limit": 256,
+				"def": "",
+				"descr": "Specify the OpenIO SDS location of the service." },
+
+			{ "type": "bool", "name": "oio_proxy_local_prefer",
+				"key": "proxy.srv_local.patch",
+				"descr": "Should the proxy prefer local services for its own usage.",
+				"def": false },
+
+			{ "type": "bool", "name": "oio_proxy_local_patch",
+				"key": "proxy.srv_local.prefer",
+				"descr": "Should the proxy patch the services descriptions to let the caller prefer local services.",
+				"def": false },
+
 			{ "type": "monotonic", "name": "proxy_request_max_delay",
 				"key": "proxy.request.max_delay",
 				"descr": "How long a request might take to execute, when no specific deadline has been received. Used to compute a deadline transmitted to backend services, when no timeout is present in the request.",

@@ -167,17 +167,27 @@ _container_new_props_to_headers (struct req_args_s *args, GTree *props)
 	g_tree_foreach (props, (GTraverseFunc)_run, NULL);
 }
 
-static gint32
+/** @private */
+struct location_and_score_s {
+	oio_location_t location;
+	oio_weight_t score;
+};
+
+static struct location_and_score_s
 _score_from_chunk_id (const char *id)
 {
 	gchar *key = NULL, *type = NULL, *netloc = NULL;
+	struct location_and_score_s res = {};
 
 	// FIXME: probably broken with B2 URLs
 	oio_parse_chunk_url(id, &type, &netloc, NULL);
 	key = oio_make_service_key(ns_name, type, netloc);
 
 	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, key);
-	gint32 res = item ? item->weight : 0;
+	if (item) {
+		res.score = item->weight;
+		res.location = item->location;
+	}
 
 	g_free(item);
 	g_free(key);
@@ -204,13 +214,53 @@ _real_url_from_chunk_id (const char *id)
 	return out;
 }
 
+static oio_weight_t
+_remap(const oio_weight_t score, const oio_weight_t lo, const oio_weight_t hi)
+{
+	/* JFS: we could probably be much faster with an explicit lookup table or
+	 * with __attribute__ ((pure)) and __attribute__((hot)) */
+	return lo + ((score * (hi - lo)) / 100);
+}
+
 static void
-_serialize_chunk(struct bean_CHUNKS_s *chunk, GString *gstr)
+_serialize_chunk(struct bean_CHUNKS_s *chunk, GString *gstr,
+		const oio_location_t location)
 {
 	/* Unfortunately, we have two different formats for chunks.
 	 * See encode_chunk() function in meta2_utils_json_out.c. */
 	const char *chunk_id = CHUNKS_get_id(chunk)->str;
-	gint32 score = _score_from_chunk_id(chunk_id);
+	struct location_and_score_s srv = _score_from_chunk_id(chunk_id);
+
+	/* The caller asks us to patch the services so that the client will
+	 * prefer those locals. We do this with a mangling of the score */
+#ifdef HAVE_EXTRA_DEBUG
+	const oio_weight_t pre_score = srv.score;
+#endif
+	if (srv.score > 0 && location != 0) {
+		/* TODO(jfsmig): use __builtin_clzll instead */
+		if (location >> 16 == srv.location >> 16) {
+			/* same host (the case of the same volume is improbable */
+			srv.score = _remap(srv.score, 91, 100);
+		} else if (location >> 32 == srv.location >> 32) {
+			/* same rack */
+			srv.score = _remap(srv.score, 51, 80);
+		} else if (location >> 48 == srv.location >> 48) {
+			/* same room */
+			srv.score = _remap(srv.score, 11, 50);
+		} else if (location >> 56 == srv.location >> 56) {
+			/* same region */
+			srv.score = _remap(srv.score, 5, 10);
+		} else {
+			/* very far away */
+			srv.score = _remap(srv.score, 1, 4);
+		}
+	}
+#ifdef HAVE_EXTRA_DEBUG
+	if (pre_score != srv.score) {
+		GRID_TRACE("Score changed for %s: %d -> %d", chunk_id, pre_score, srv.score);
+	}
+#endif
+
 	g_string_append_printf(gstr, "{\"url\":\"%s\"", chunk_id);
 
 	gchar *real_url = _real_url_from_chunk_id(chunk_id);
@@ -223,7 +273,7 @@ _serialize_chunk(struct bean_CHUNKS_s *chunk, GString *gstr)
 	g_string_append_printf(gstr, ",\"size\":%"G_GINT64_FORMAT, CHUNKS_get_size(chunk));
 	g_string_append_static(gstr, ",\"hash\":\"");
 	metautils_gba_to_hexgstr(gstr, CHUNKS_get_hash(chunk));
-	g_string_append_printf(gstr, "\",\"score\":%d}", score);
+	g_string_append_printf(gstr, "\",\"score\":%d}", srv.score);
 }
 
 static void
@@ -490,6 +540,8 @@ static enum http_rc_e
 _reply_simplified_beans_ext(struct req_args_s *args, GError *err,
 		GSList *beans, gboolean legacy_format)
 {
+	const oio_location_t _loca = oio_proxy_local_patch ? location_num : 0;
+
 	if (err)
 		return _reply_m2_error(args, err);
 
@@ -516,7 +568,7 @@ _reply_simplified_beans_ext(struct req_args_s *args, GError *err,
 			first = FALSE;
 
 			struct bean_CHUNKS_s *chunk = l0->data;
-			_serialize_chunk(chunk, chunks_gstr);
+			_serialize_chunk(chunk, chunks_gstr, _loca);
 		}
 		else if (&descr_struct_ALIASES == DESCR(l0->data)) {
 			alias = l0->data;
@@ -2548,7 +2600,6 @@ action_m2_content_purge (struct req_args_s *args, struct json_object *j UNUSED)
 	}
 	return _reply_m2_error(args, err);
 }
-
 
 /* CONTENT resources ------------------------------------------------------- */
 

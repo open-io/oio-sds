@@ -616,6 +616,14 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_PROXY_FORCE_MASTER*
 
+### proxy.location
+
+> Specify the OpenIO SDS location of the service.
+
+ * default: ****
+ * type: string
+ * cmake directive: *OIO_PROXY_LOCATION*
+
 ### proxy.outgoing.timeout.common
 
 > In a proxy, sets the global timeout for all the other RPC issued (not conscience, not stats-related)
@@ -746,6 +754,22 @@ Used by `gcc`
  * type: gint64
  * cmake directive: *OIO_PROXY_REQUEST_MAX_DELAY*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
+
+### proxy.srv_local.patch
+
+> Should the proxy prefer local services for its own usage.
+
+ * default: **FALSE**
+ * type: gboolean
+ * cmake directive: *OIO_PROXY_SRV_LOCAL_PATCH*
+
+### proxy.srv_local.prefer
+
+> Should the proxy patch the services descriptions to let the caller prefer local services.
+
+ * default: **FALSE**
+ * type: gboolean
+ * cmake directive: *OIO_PROXY_SRV_LOCAL_PREFER*
 
 ### proxy.srv_shuffle
 
