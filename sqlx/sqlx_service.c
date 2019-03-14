@@ -244,16 +244,19 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 static void
 _patch_configuration_maxrss(void)
 {
+	const gint64 pre = sqliterepo_max_rss;
 	if (sqliterepo_max_rss <= 0) {
 		struct rlimit rl = {};
 		int rc = getrlimit(RLIMIT_DATA, &rl);
 		if (rc == 0) {
 			gint64 maxrss = rl.rlim_cur;
-		    if (maxrss <= 0)
+			if (maxrss <= 0)
 				maxrss = G_MAXINT64;
 			sqliterepo_max_rss = maxrss;
 		}
 	}
+	if (pre != sqliterepo_max_rss)
+		GRID_NOTICE("RSS limit set to %" G_GINT64_FORMAT, sqliterepo_max_rss);
 }
 
 static void
