@@ -29,6 +29,7 @@ import argparse
 
 from oio.common import exceptions as exc
 from oio.common.fullpath import decode_fullpath, decode_old_fullpath
+from oio.common.logger import get_logger
 from oio.common.storage_method import STORAGE_METHODS
 from oio.api.object_storage import ObjectStorageApi
 from oio.api.object_storage import _sort_chunks
@@ -114,19 +115,20 @@ class ItemResult(object):
         # TODO(FVE): add an intermediate 'warning' level
         return 'error' if self.errors else 'OK'
 
-    def errors_to_str(self, separator='\n'):
+    def errors_to_str(self, separator='\n', err_format='%s'):
         """
         Pretty print errors stored in this result.
         """
         if not self.errors:
             return str(None)
-        return separator.join(str(x) for x in self.errors)
+        return separator.join(err_format % x for x in self.errors)
 
 
 class Checker(object):
     def __init__(self, namespace, concurrency=50,
                  error_file=None, rebuild_file=None, full=True,
-                 limit_listings=0, request_attempts=1):
+                 limit_listings=0, request_attempts=1,
+                 logger=None, verbose=False):
         self.pool = GreenPool(concurrency)
         self.error_file = error_file
         self.full = bool(full)
@@ -145,8 +147,11 @@ class Checker(object):
             fd = open(self.rebuild_file, 'a')
             self.rebuild_writer = csv.writer(fd, delimiter='|')
 
+        self.logger = logger or get_logger({'namespace': namespace},
+                                           name='integrity', verbose=verbose)
         self.api = ObjectStorageApi(
             namespace,
+            logger=self.logger,
             max_retries=request_attempts - 1,
             request_attempts=request_attempts)
 
@@ -249,16 +254,14 @@ class Checker(object):
         attr_key = attr_prefix + 'chunk_size'
         if str(obj_meta['size']) != xattr_meta.get(attr_key):
             errors.append(
-                "Chunk %s '%s' xattr (%s) differs from size in meta2 (%s)" %
-                (target.chunk, attr_key, xattr_meta.get(attr_key),
-                 obj_meta['size']))
+                "'%s' xattr (%s) differs from size in meta2 (%s)" %
+                (attr_key, xattr_meta.get(attr_key), obj_meta['size']))
 
         attr_key = attr_prefix + 'chunk_hash'
         if obj_meta['hash'] != xattr_meta.get(attr_key):
             errors.append(
-                "Chunk %s '%s' xattr (%s) differs from hash in meta2 (%s)" %
-                (target.chunk, attr_key, xattr_meta.get(attr_key),
-                 obj_meta['hash']))
+                "'%s' xattr (%s) differs from hash in meta2 (%s)" %
+                (attr_key, xattr_meta.get(attr_key), obj_meta['hash']))
         return errors
 
     def _check_chunk(self, target):
@@ -281,14 +284,13 @@ class Checker(object):
                                                          xattr=self.full)
         except exc.NotFound as err:
             self.chunk_not_found += 1
-            errors.append('Chunk %s not found: %s' % (chunk, str(err)))
+            errors.append('Not found: %s' % (err, ))
         except exc.FaultyChunk as err:
             self.chunk_exceptions += 1
-            errors.append('Chunk %s is faulty: %r' % (chunk, err))
+            errors.append('Faulty: %r' % (err, ))
         except Exception as err:
             self.chunk_exceptions += 1
-            errors.append('Chunk %s failed to be checked: %s' % (
-                chunk, str(err)))
+            errors.append('Check failed: %s' % (err, ))
 
         if not target.obj and xattr_meta:
             self.complete_target_from_chunk_metadata(target, xattr_meta)
@@ -296,7 +298,7 @@ class Checker(object):
         if target.obj:
             obj_listing, obj_meta = self.check_obj(target.copy_object())
             if chunk not in obj_listing:
-                errors.append('Chunk %s missing from object listing' % chunk)
+                errors.append('Missing from object listing')
                 db_meta = dict()
             else:
                 db_meta = obj_listing[chunk]
@@ -325,8 +327,6 @@ class Checker(object):
 
         if len(chunks) < required:
             missing_chunks = required - len(chunks)
-            # print('  Missing %d chunks at position %s of %s' % (
-            #       missing_chunks, pos, target))
             if stg_met.ec:
                 subs = {x['num'] for x in chunks}
                 for sub in range(required):
@@ -421,12 +421,10 @@ class Checker(object):
                 version=target.version, properties=False)
         except exc.NoSuchObject as err:
             self.object_not_found += 1
-            errors.append('Object %s/%s not found: %s' % (
-                target.obj, target.version, str(err)))
+            errors.append('Not found: %s' % (err, ))
         except Exception as err:
             self.object_exceptions += 1
-            errors.append('Object %s/%s failed to be checked: %s' % (
-                target.obj, target.version, str(err)))
+            errors.append('Check failed: %s' % (err, ))
         return None, []
 
     def check_obj(self, target, recurse=False):
@@ -446,12 +444,11 @@ class Checker(object):
         if (account, container, obj, vers) in self.list_cache:
             return self.list_cache[(account, container, obj, vers)]
         self.running[(account, container, obj, vers)] = Event()
-        # print('Checking object "%s"' % target)
+        self.logger.info('Checking object "%s"', target)
         container_listing, _ = self.check_container(target.copy_container())
         errors = list()
         if obj not in container_listing:
-            errors.append('Object %s/%s missing from container listing' % (
-                          obj, vers))
+            errors.append('Missing from container listing')
             # checksum = None
         else:
             versions = container_listing[obj]
@@ -474,9 +471,7 @@ class Checker(object):
                             target.version = vers
                             break
                     else:
-                        errors.append(
-                            'Object %s/%s missing from container listing' % (
-                                obj, target.content_id))
+                        errors.append('Missing from container listing')
 
             # TODO check checksum match
             # checksum = container_listing[obj]['hash']
@@ -509,13 +504,11 @@ class Checker(object):
         if (account, container) in self.list_cache:
             return self.list_cache[(account, container)]
         self.running[(account, container)] = Event()
-        # print('Checking container "%s"' % target)
+        self.logger.info('Checking container "%s"', target)
         account_listing = self.check_account(target.copy_account())
         errors = list()
         if container not in account_listing:
-            errors.append(
-                'Container %s missing from account listing' % (
-                    container))
+            errors.append('Missing from account listing')
 
         marker = None
         results = []
@@ -532,15 +525,13 @@ class Checker(object):
                 resp = self.api.object_list(
                     account, container, marker=marker, versions=True,
                     **extra_args)
-            except exc.NotFound as err:
+            except exc.NoSuchContainer as err:
                 self.container_not_found += 1
-                errors.append('Container %s not found: %s' % (
-                    container, str(err)))
+                errors.append('Not found: %s' % (err, ))
                 break
             except Exception as err:
                 self.container_exceptions += 1
-                errors.append('Container %s failed to be checked: %s' % (
-                    target, str(err)))
+                errors.append('Check failed: %s' % (err, ))
                 break
 
             if resp.get('truncated', False):
@@ -591,7 +582,7 @@ class Checker(object):
         if account in self.list_cache:
             return self.list_cache[account]
         self.running[account] = Event()
-        # print('Checking account "%s"' % target)
+        self.logger.info('Checking account "%s"', target)
         errors = list()
         marker = None
         results = []
@@ -608,9 +599,7 @@ class Checker(object):
                     account, marker=marker, **extra_args)
             except Exception as err:
                 self.account_exceptions += 1
-                errors.append(
-                    'Account %s failed to be checked: %s' % (
-                        account, str(err)))
+                errors.append('Check failed: %s' % (err, ))
                 break
             if resp:
                 marker = resp[-1][0]
@@ -664,6 +653,8 @@ class Checker(object):
                 self.write_chunk_error(result.target)
             else:
                 self.write_error(result.target)
+            self.logger.warn('%s:\n%s', result.target,
+                             result.errors_to_str(err_format='  %s'))
 
     def run(self):
         """
@@ -750,8 +741,6 @@ def main():
     parser.add_argument('-p', '--presence',
                         action='store_true', default=False,
                         help="Presence check, the xattr check is skipped.")
-    parser.add_argument('-v', '--verbose',
-                        action='store_true', help='verbose output')
     parser.add_argument('--concurrency', '--workers', type=int,
                         default=50,
                         help='Number of concurrent checks (default: 50).')
@@ -780,6 +769,7 @@ def main():
         full=not args.presence,
         limit_listings=limit_listings,
         request_attempts=args.attempts,
+        verbose=True,
     )
     entries = csv.reader(source, delimiter=' ')
     for entry in entries:
