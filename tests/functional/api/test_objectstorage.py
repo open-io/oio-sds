@@ -20,8 +20,9 @@ from mock import MagicMock as Mock
 from functools import partial
 from urllib3 import HTTPResponse
 from oio.api.object_storage import ObjectStorageApi, _sort_chunks
-from oio.common.storage_functions import _sort_chunks as sort_chunks
 from oio.common import exceptions as exc
+from oio.common.constants import REQID_HEADER
+from oio.common.storage_functions import _sort_chunks as sort_chunks
 from oio.common.utils import cid_from_name
 from oio.common.fullpath import encode_fullpath
 from oio.common.storage_method import STORAGE_METHODS
@@ -89,7 +90,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self._create(name)
         # container_show on existing container
         res = self.api.container_show(self.account, name,
-                                      headers={'X-oio-req-id': 'Salut!'})
+                                      headers={REQID_HEADER: 'Salut!'})
         self.assertIsNot(res['properties'], None)
 
         self._delete(name)

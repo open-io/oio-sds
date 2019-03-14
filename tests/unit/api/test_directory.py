@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2017,2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -20,7 +20,7 @@ from mock import MagicMock as Mock
 
 from oio.common import exceptions
 from tests.unit.api import FakeDirectoryClient, FakeApiResponse
-from tests.utils import random_id, random_str
+from tests.utils import random_str
 
 
 class DirectoryTest(unittest.TestCase):
@@ -29,7 +29,6 @@ class DirectoryTest(unittest.TestCase):
         self.api = FakeDirectoryClient({'namespace': "NS"},
                                        endpoint=self.endpoint)
         self.account = "AUTH_test"
-        self.headers = {"x-req-id": random_id(64)}
         self.uri_base = "%s/v3.0/NS" % self.endpoint
         self.name = random_str(64)
 

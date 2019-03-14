@@ -23,6 +23,7 @@ from string import hexdigits
 
 from oio.blob.utils import check_volume, read_chunk_metadata
 from oio.rdir.client import RdirClient
+from oio.common.constants import REQID_HEADER
 from oio.common.daemon import Daemon
 from oio.common import exceptions as exc
 from oio.common.constants import STRLEN_CHUNKID, CHUNK_SUFFIX_PENDING
@@ -181,8 +182,7 @@ class BlobIndexer(Daemon):
                 raise exc.FaultyChunk(err)
 
             data = {'mtime': int(time.time())}
-            # TODO(FVE): replace with the improved request_id() function
-            headers = {'X-oio-req-id': 'blob-indexer-' + request_id()[:-13]}
+            headers = {REQID_HEADER: request_id('blob-indexer-')}
             self.index_client.chunk_push(self.volume_id,
                                          meta['container_id'],
                                          meta['content_id'],

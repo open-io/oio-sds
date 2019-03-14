@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -23,7 +23,7 @@ from oio.common import exceptions
 from oio.common.utils import deadline_to_timeout
 from oio.common.constants import ADMIN_HEADER, \
     TIMEOUT_HEADER, PERFDATA_HEADER, FORCEMASTER_HEADER, \
-    CONNECTION_TIMEOUT, READ_TIMEOUT, STRLEN_REQID
+    CONNECTION_TIMEOUT, READ_TIMEOUT, REQID_HEADER, STRLEN_REQID
 
 _POOL_MANAGER_OPTIONS_KEYS = ["pool_connections", "pool_maxsize",
                               "max_retries", "backoff_factor"]
@@ -146,11 +146,11 @@ class HttpApi(object):
 
         # Look for a request ID
         if 'req_id' in kwargs:
-            out_headers['X-oio-req-id'] = str(kwargs['req_id'])
+            out_headers[REQID_HEADER] = str(kwargs['req_id'])
 
-        if len(out_headers.get('X-oio-req-id', '')) > STRLEN_REQID:
-            out_headers['X-oio-req-id'] = \
-                out_headers['X-oio-req-id'][:STRLEN_REQID]
+        if len(out_headers.get(REQID_HEADER, '')) > STRLEN_REQID:
+            out_headers[REQID_HEADER] = \
+                out_headers[REQID_HEADER][:STRLEN_REQID]
             self.__logger().warn('Request ID truncated to %d characters',
                                  STRLEN_REQID)
 
@@ -200,7 +200,7 @@ class HttpApi(object):
                     perfdata[kv[0]] = pdat
         except urllib3.exceptions.HTTPError as exc:
             oio_exception_from_httperror(exc,
-                                         reqid=out_headers.get('X-oio-req-id'),
+                                         reqid=out_headers.get(REQID_HEADER),
                                          url=url)
         if resp.status >= 400:
             raise exceptions.from_response(resp, body)

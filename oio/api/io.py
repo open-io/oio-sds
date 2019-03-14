@@ -23,6 +23,7 @@ import logging
 from urlparse import urlparse
 from socket import error as SocketError
 from oio.common import exceptions as exc
+from oio.common.constants import REQID_HEADER
 from oio.common.http import parse_content_type,\
     parse_content_range, ranges_from_http_header, http_header_from_ranges
 from oio.common.http_eventlet import http_connect
@@ -229,7 +230,7 @@ class ChunkReader(object):
         """:returns: the request ID or None"""
         if not self.request_headers:
             return None
-        return self.request_headers.get('X-oio-req-id')
+        return self.request_headers.get(REQID_HEADER)
 
     def recover(self, nb_bytes):
         """
