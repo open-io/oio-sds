@@ -28,6 +28,7 @@ from collections import defaultdict
 from tests.utils import BaseTestCase
 
 from oio.api.object_storage import ObjectStorageApi
+from oio.common.constants import REQID_HEADER
 from oio.common.utils import request_id
 from oio.common.json import json
 from oio.event.beanstalk import ResponseError
@@ -111,7 +112,7 @@ class TestPerfectibleContent(BaseTestCase):
                                obj_name='perfect',
                                data='whatever',
                                policy='THREECOPIES',
-                               headers={'X-oio-req-id': reqid})
+                               headers={REQID_HEADER: reqid})
 
         # Wait on the oio-improve beanstalk tube.
         self.beanstalk.watch(DEFAULT_IMPROVER_TUBE)
@@ -141,7 +142,7 @@ class TestPerfectibleContent(BaseTestCase):
                                obj_name='perfectible',
                                data='whatever',
                                policy='THREECOPIES',
-                               headers={'X-oio-req-id': reqid})
+                               headers={REQID_HEADER: reqid})
 
         # Wait on the oio-improve beanstalk tube.
         event = self._wait_for_event()
@@ -185,7 +186,7 @@ class TestPerfectibleContent(BaseTestCase):
                                obj_name='perfectible',
                                data='whatever',
                                policy='THREECOPIES',
-                               headers={'X-oio-req-id': reqid})
+                               headers={REQID_HEADER: reqid})
 
         # Wait on the oio-improve beanstalk tube.
         event = self._wait_for_event()

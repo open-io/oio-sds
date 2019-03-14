@@ -15,6 +15,7 @@
 
 
 from oio.blob.client import BlobClient
+from oio.common.constants import REQID_HEADER
 from oio.event.evob import Event, EventTypes
 from oio.event.filters.base import Filter
 from oio.common.exceptions import OioException
@@ -38,7 +39,7 @@ class ContentReaperFilter(Filter):
     def _handle_rawx(self, url, chunks, content_headers,
                      storage_method, reqid):
         cid = url.get('id')
-        headers = {'X-oio-req-id': reqid,
+        headers = {REQID_HEADER: reqid,
                    'Connection': 'close'}
 
         resps = self.blob_client.chunk_delete_many(

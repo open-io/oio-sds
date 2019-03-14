@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+from oio.common.constants import REQID_HEADER
 from oio.event.evob import Event, EventError, EventTypes
 from oio.event.filters.base import Filter
 from oio.common.exceptions import OioException, VolumeException
@@ -30,7 +31,7 @@ class VolumeIndexFilter(Filter):
 
     def _chunk_delete(self, reqid,
                       volume_id, container_id, content_id, chunk_id):
-        headers = {'X-oio-req-id': reqid}
+        headers = {REQID_HEADER: reqid}
         try:
             return self.app.rdir.chunk_delete(
                     volume_id, container_id, content_id, chunk_id,
@@ -41,7 +42,7 @@ class VolumeIndexFilter(Filter):
     def _chunk_push(self, reqid,
                     volume_id, container_id, content_id, chunk_id,
                     args):
-        headers = {'X-oio-req-id': reqid}
+        headers = {REQID_HEADER: reqid}
         try:
             return self.app.rdir.chunk_push(
                     volume_id, container_id, content_id, chunk_id,
@@ -55,7 +56,7 @@ class VolumeIndexFilter(Filter):
             self.logger.debug(
                 'Indexing services of type %s is not supported', type_)
             return
-        headers = {'X-oio-req-id': reqid}
+        headers = {REQID_HEADER: reqid}
         try:
             return self.app.rdir.meta2_index_push(
                 volume_id, url, cid, mtime, headers=headers)
@@ -69,7 +70,7 @@ class VolumeIndexFilter(Filter):
             self.logger.debug(
                 'Indexing services of type %s is not supported', type_)
             return
-        headers = {'X-oio-req-id': reqid}
+        headers = {REQID_HEADER: reqid}
         try:
             return self.app.rdir.meta2_index_delete(
                 volume_id, url, cid, headers=headers)

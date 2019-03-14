@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -23,6 +23,7 @@ from urlparse import urlparse
 from socket import error as SocketError
 from greenlet import GreenletExit
 from oio.common import exceptions
+from oio.common.constants import REQID_HEADER
 from oio.common.exceptions import SourceReadError
 from oio.common.http import HeadersDict, parse_content_range, \
     ranges_from_http_header, headers_from_object_metadata
@@ -561,7 +562,7 @@ class EcChunkWriter(object):
         chunk_path = parsed.path.split('/')[-1]
         hdrs = headers_from_object_metadata(sysmeta)
         if reqid:
-            hdrs['X-oio-req-id'] = reqid
+            hdrs[REQID_HEADER] = reqid
 
         hdrs[CHUNK_HEADERS["chunk_pos"]] = chunk["pos"]
         hdrs[CHUNK_HEADERS["chunk_id"]] = chunk_path
@@ -920,7 +921,7 @@ class ECWriteHandler(io.WriteHandler):
             handler = EcMetachunkWriter(
                 self.sysmeta, meta_chunk,
                 global_checksum, self.storage_method,
-                reqid=self.headers.get('X-oio-req-id'),
+                reqid=self.headers.get(REQID_HEADER),
                 connection_timeout=self.connection_timeout,
                 write_timeout=self.write_timeout,
                 read_timeout=self.read_timeout,

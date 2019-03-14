@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+from oio.common.constants import REQID_HEADER
 from oio.common.exceptions import ClientException, OioTimeout
 from oio.common.utils import request_id
 from oio.account.client import AccountClient
@@ -36,7 +37,7 @@ class AccountUpdateFilter(Filter):
     def process(self, env, cb):
         event = Event(env)
         headers = {
-            'X-oio-req-id': event.reqid or request_id('account-update-')
+            REQID_HEADER: event.reqid or request_id('account-update-')
         }
 
         if event.event_type in CONTAINER_EVENTS:
