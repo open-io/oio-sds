@@ -1528,7 +1528,7 @@ Used by `gcc`
 
 ### sqliterepo.rss.max
 
-> Memory size ceiling we try to honor. The check is performed while opening databases. Set to 0 to autodetect the max RSS from the resource limits (see `man getrlimit` for more information). The autodetection considers the environment and is not aware of all the processes that could share that environment.
+> Memory size ceiling we try to honor. The check is performed while closing databases. Set to 0 to autodetect the max RSS from the resource limits (see `man getrlimit` for more information). The autodetection considers the environment and is not aware of all the processes that could share that environment.
 
  * default: **0**
  * type: gint64
