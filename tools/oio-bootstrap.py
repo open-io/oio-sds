@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # oio-bootstrap.py
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 # Copyright (C) 2015 Conrad Kleinespel
 #
 # This program is free software: you can redistribute it and/or modify
@@ -1295,7 +1295,7 @@ def generate(options):
                 _h = ensure(options[t].get(SVC_HOSTS), hosts)
             env['IP'] = _h[(num-1) % len(_h)]
         if 'LOC' not in env:
-            env['LOC'] = "srv%s.vol%d" % (env['IP'].rsplit('.', 1)[-1], num)
+            env['LOC'] = "host%s.vol%d" % (env['IP'].rsplit('.', 1)[-1], num)
         if 'PORT' in env:
             out['addr'] = '%s:%s' % (env['IP'], env['PORT'])
         if 'VOLUME' in env:

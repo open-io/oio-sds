@@ -1,7 +1,7 @@
 /*
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -126,6 +126,7 @@ extern gchar *ns_name;
 extern struct oio_lb_world_s *lb_world;
 extern struct oio_lb_s *lb;
 extern struct hc_resolver_s *resolver;
+extern oio_location_t location_num;
 
 /* Global NS info */
 extern GRWLock nsinfo_rwlock;
