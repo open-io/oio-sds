@@ -118,8 +118,6 @@ _ram_exhausted(void)
 		struct mallinfo mi = mallinfo();
 		gint64 total = 0;
 		total += mi.arena;
-		total += mi.ordblks;
-		total += mi.smblks;
 		total += mi.hblkhd;
 		GRID_WARN("RAM [MiB] used %" G_GINT64_FORMAT" max %" G_GINT64_FORMAT,
 				total / (1024 * 1024),
