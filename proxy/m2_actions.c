@@ -214,12 +214,28 @@ _real_url_from_chunk_id (const char *id)
 	return out;
 }
 
+#define _remap(score,lo,hi) (lo + ((score * (hi - lo)) / 100))
+
 static oio_weight_t
-_remap(const oio_weight_t score, const oio_weight_t lo, const oio_weight_t hi)
+_patch_score(const oio_weight_t score,
+		const oio_location_t location, const oio_location_t reference)
 {
-	/* JFS: we could probably be much faster with an explicit lookup table or
-	 * with __attribute__ ((pure)) and __attribute__((hot)) */
-	return lo + ((score * (hi - lo)) / 100);
+	if (score <= 0 || !location)
+		return score;
+	switch (oio_location_proximity(location, reference)) {
+		case OIO_LOC_PROX_VOLUME:
+		case OIO_LOC_PROX_HOST:
+			return _remap(score, 91, 100);
+		case OIO_LOC_PROX_RACK:
+			return _remap(score, 51, 80);
+		case OIO_LOC_PROX_ROOM:
+			return _remap(score, 11, 50);
+		case OIO_LOC_PROX_REGION:
+			return _remap(score, 5, 10);
+		case OIO_LOC_PROX_NONE:
+		default:
+			return _remap(score, 1, 4);
+	}
 }
 
 static void
@@ -236,25 +252,7 @@ _serialize_chunk(struct bean_CHUNKS_s *chunk, GString *gstr,
 #ifdef HAVE_EXTRA_DEBUG
 	const oio_weight_t pre_score = srv.score;
 #endif
-	if (srv.score > 0 && location != 0) {
-		/* TODO(jfsmig): use __builtin_clzll instead */
-		if (location >> 16 == srv.location >> 16) {
-			/* same host (the case of the same volume is improbable */
-			srv.score = _remap(srv.score, 91, 100);
-		} else if (location >> 32 == srv.location >> 32) {
-			/* same rack */
-			srv.score = _remap(srv.score, 51, 80);
-		} else if (location >> 48 == srv.location >> 48) {
-			/* same room */
-			srv.score = _remap(srv.score, 11, 50);
-		} else if (location >> 56 == srv.location >> 56) {
-			/* same region */
-			srv.score = _remap(srv.score, 5, 10);
-		} else {
-			/* very far away */
-			srv.score = _remap(srv.score, 1, 4);
-		}
-	}
+	srv.score = _patch_score(srv.score, srv.location, location);
 #ifdef HAVE_EXTRA_DEBUG
 	if (pre_score != srv.score) {
 		GRID_TRACE("Score changed for %s: %d -> %d", chunk_id, pre_score, srv.score);
