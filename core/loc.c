@@ -35,3 +35,36 @@ location_from_dotted_string(const char *dotted)
 	return location;
 }
 
+#if __SIZEOF_LONG__ == 8
+#define _loc_clz(l0,l1)  __builtin_clzl(loc0 ^ loc1)
+#elif __SIZEOF_LONG_LONG__ == 8
+#define _loc_clz(l0,l1)  __builtin_clzll(loc0 ^ loc1)
+#else
+#define _loc_clz(l0,l1)  __builtin_clz(loc0 ^ loc1)
+#endif
+
+enum oio_loc_proximity_level_e
+oio_location_proximity(const oio_location_t loc0, const oio_location_t loc1)
+{
+	static const enum oio_loc_proximity_level_e app[64] = {
+		[0 ... 7] = OIO_LOC_PROX_NONE,     /* the region differs */
+		[8 ... 15] = OIO_LOC_PROX_REGION,  /* the room differs */
+		[16 ... 31] = OIO_LOC_PROX_ROOM,   /* the rack differs */
+		[32 ... 47] = OIO_LOC_PROX_RACK,   /* the host differs */
+		[48 ... 63] = OIO_LOC_PROX_HOST,   /* the volume differs */
+	};
+	return app[_loc_clz(loc0, loc1)];
+}
+
+guint
+oio_location_distance(const oio_location_t loc0, const oio_location_t loc1)
+{
+	static const enum oio_loc_proximity_level_e app[64] = {
+		[0 ... 7] = OIO_LOC_DIST_FARAWAY,  /* the region differs */
+		[8 ... 15] = OIO_LOC_DIST_REGION,  /* the room differs */
+		[16 ... 31] = OIO_LOC_DIST_ROOM,   /* the rack differs */
+		[32 ... 47] = OIO_LOC_DIST_RACK,   /* the host differs */
+		[48 ... 63] = OIO_LOC_DIST_HOST,   /* the volume differs */
+	};
+	return loc0 == loc1 ? OIO_LOC_DIST_VOLUME : app[_loc_clz(loc0, loc1)];
+}

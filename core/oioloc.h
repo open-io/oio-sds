@@ -31,6 +31,32 @@ extern "C" {
 
 typedef guint64 oio_location_t;
 
+enum oio_loc_proximity_level_e {
+	OIO_LOC_PROX_NONE = 0,
+	OIO_LOC_PROX_REGION = 1,
+	OIO_LOC_PROX_ROOM = 2,
+	OIO_LOC_PROX_RACK = 3,
+	OIO_LOC_PROX_HOST = 4,
+	OIO_LOC_PROX_VOLUME = 5,
+};
+
+enum oio_loc_distance_level_e {
+	OIO_LOC_DIST_FARAWAY = 5,
+	OIO_LOC_DIST_REGION = 4,
+	OIO_LOC_DIST_ROOM = 3,
+	OIO_LOC_DIST_RACK = 2,
+	OIO_LOC_DIST_HOST = 1,
+	OIO_LOC_DIST_VOLUME = 0,
+};
+
+/* What is the least location level that both given locations share? */
+enum oio_loc_proximity_level_e oio_location_proximity(
+		const oio_location_t loc0, const oio_location_t loc1);
+
+/* What is the distance level between both locations? */
+enum oio_loc_distance_level_e oio_location_distance(
+		const oio_location_t loc0, const oio_location_t loc1);
+
 /* Make a 32bit identifier from a 64bit location.
  * Level is the number of blocks of 16 least significant bits
  * to discard. */
