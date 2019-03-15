@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -20,11 +20,11 @@ License along with this library.
 #ifndef OIO_SDS__core_oiolog_h
 # define OIO_SDS__core_oiolog_h 1
 
+# include <glib.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-# include <glib.h>
 
 # define GRID_LOGLVL_TRACE2 (64 << G_LOG_LEVEL_USER_SHIFT)
 # define GRID_LOGLVL_TRACE  (32 << G_LOG_LEVEL_USER_SHIFT)

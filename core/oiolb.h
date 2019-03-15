@@ -19,9 +19,8 @@ License along with this library.
 #ifndef OIO_SDS__core__oiolb_h
 # define OIO_SDS__core__oiolb_h 1
 # include <glib.h>
+# include <core/oioloc.h>
 
-#define OIO_LOC_FORMAT "016" G_GINT64_MODIFIER "X"
-typedef guint64 oio_location_t;
 typedef guint8 oio_weight_t;
 
 /* the sum of all the weights in a slot shall not overflow the capacity of
@@ -88,15 +87,6 @@ GError *oio_lb_pool__patch(struct oio_lb_pool_s *self,
  * The result must be freed with g_free(). */
 struct oio_lb_item_s *oio_lb_pool__get_item(struct oio_lb_pool_s *self,
 		const char *id);
-
-/* Take djb2 hash of each part of the '.'-separated string,
- * keep the 16 (or 8) LSB of each hash to build a 64 integer. */
-oio_location_t location_from_dotted_string(const char *dotted);
-
-/* Make a 32bit identifier from a 64bit location.
- * Level is the number of blocks of 16 least significant bits
- * to discard. */
-guint32 key_from_loc_level(oio_location_t location, int level);
 
 /* -------------------------------------------------------------------------- */
 
