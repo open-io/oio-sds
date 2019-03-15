@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -23,7 +23,6 @@ class Handler(object):
         self.app_env = app.app_env
         self.conf = conf
         self.logger = app.logger
-        self.rdir = self.app.rdir
 
     def process(self, event):
         return EventOk(event=event)

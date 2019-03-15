@@ -14,14 +14,14 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-from oio.common.green import eventlet, Timeout, greenthread, time
+from oio.common.green import eventlet, Timeout, greenthread
 
 import signal
 import os
 import sys
 import greenlet
 
-from oio.conscience.client import ConscienceClient
+from oio.account.client import AccountClient
 from oio.rdir.client import RdirClient
 from oio.event.beanstalk import Beanstalk, ConnectionError
 from oio.common.utils import drop_privileges
@@ -122,19 +122,29 @@ def _stop(client, server):
 class EventWorker(Worker):
     def __init__(self, *args, **kwargs):
         super(EventWorker, self).__init__(*args, **kwargs)
+        # Environment that will be passed between Handler an Filter instances
         self.app_env = dict()
+        self.concurrency = 1
+        self.graceful_timeout = 1
+        self.tube = None
 
     def init(self):
+        self.concurrency = int_value(self.conf.get('concurrency'), 10)
         self.tube = self.conf.get("tube", DEFAULT_TUBE)
-        self.cs = ConscienceClient(self.conf, logger=self.logger)
-        self.rdir = RdirClient(self.conf, logger=self.logger)
-        self._acct_addr = None
-        self.acct_update = 0
-        self.graceful_timeout = 1
-        self.acct_refresh_interval = int_value(
-            self.conf.get('acct_refresh_interval'), 60
+        acct_refresh_interval = int_value(
+            self.conf.get('acct_refresh_interval'), 3600)
+        self.app_env['account_client'] = AccountClient(
+            self.conf,
+            logger=self.logger,
+            refresh_delay=acct_refresh_interval,
+            pool_connections=3,  # 1 account, 1 proxy, 1 extra
         )
-        self.app_env['acct_addr'] = self.acct_addr
+        self.app_env['rdir_client'] = RdirClient(
+            self.conf,
+            logger=self.logger,
+            pool_maxsize=self.concurrency,  # 1 cnx per greenthread per host
+        )
+
         if 'handlers_conf' not in self.conf:
             raise ValueError("'handlers_conf' path not defined in conf")
         self.handlers = loadhandlers(self.conf.get('handlers_conf'),
@@ -165,12 +175,11 @@ class EventWorker(Worker):
     def run(self):
         coros = []
         queue_url = self.conf.get('queue_url', 'beanstalk://127.0.0.1:11300')
-        concurrency = int_value(self.conf.get('concurrency'), 10)
 
         server_gt = greenthread.getcurrent()
 
         for url in queue_url.split(';'):
-            for i in range(concurrency):
+            for _ in range(self.concurrency):
                 beanstalk = Beanstalk.from_url(url)
                 gt = eventlet.spawn(self.handle, beanstalk)
                 gt.link(_eventlet_stop, server_gt, beanstalk)
@@ -256,13 +265,3 @@ class EventWorker(Worker):
 
     def get_handler(self, event):
         return self.handlers.get(event.get('event'), None)
-
-    def acct_addr(self):
-        if not self._acct_addr or self.acct_refresh():
-            acct_instance = self.cs.next_instance(ACCOUNT_SERVICE)
-            self._acct_addr = acct_instance.get('addr')
-            self.acct_update = time.time()
-        return self._acct_addr
-
-    def acct_refresh(self):
-        return (time.time() - self.acct_update) > self.acct_refresh_interval

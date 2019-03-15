@@ -25,6 +25,10 @@ SERVICE_EVENTS = [EventTypes.ACCOUNT_SERVICES, EventTypes.CONTAINER_DELETED]
 
 class VolumeIndexFilter(Filter):
 
+    def __init__(self, *args, **kwargs):
+        super(VolumeIndexFilter, self).__init__(*args, **kwargs)
+        self.rdir = self.app_env['rdir_client']
+
     _attempts_push = 3
     _attempts_delete = 3
 
@@ -32,7 +36,7 @@ class VolumeIndexFilter(Filter):
                       volume_id, container_id, content_id, chunk_id):
         headers = {'X-oio-req-id': reqid}
         try:
-            return self.app.rdir.chunk_delete(
+            return self.rdir.chunk_delete(
                     volume_id, container_id, content_id, chunk_id,
                     headers=headers)
         except Exception as ex:
@@ -43,7 +47,7 @@ class VolumeIndexFilter(Filter):
                     args):
         headers = {'X-oio-req-id': reqid}
         try:
-            return self.app.rdir.chunk_push(
+            return self.rdir.chunk_push(
                     volume_id, container_id, content_id, chunk_id,
                     headers=headers, **args)
         except Exception as ex:
@@ -57,7 +61,7 @@ class VolumeIndexFilter(Filter):
             return
         headers = {'X-oio-req-id': reqid}
         try:
-            return self.app.rdir.meta2_index_push(
+            return self.rdir.meta2_index_push(
                 volume_id, url, cid, mtime, headers=headers)
         except Exception as ex:
             self.logger.warn("Failed to index %s from %s: %s",
@@ -71,7 +75,7 @@ class VolumeIndexFilter(Filter):
             return
         headers = {'X-oio-req-id': reqid}
         try:
-            return self.app.rdir.meta2_index_delete(
+            return self.rdir.meta2_index_delete(
                 volume_id, url, cid, headers=headers)
         except VolumeException as ex:
             self.logger.info("Cannot deinxed %s from %s: %s",
