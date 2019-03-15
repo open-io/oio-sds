@@ -118,6 +118,7 @@ class ObjectStorageApi(object):
         from oio.account.client import AccountClient
         from oio.container.client import ContainerClient
         from oio.directory.client import DirectoryClient
+        # TODO(FVE): we may want to share the PoolManager instance
         self.directory = DirectoryClient(conf, logger=self.logger, **kwargs)
         self.container = ContainerClient(conf, logger=self.logger, **kwargs)
 

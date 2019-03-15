@@ -13,7 +13,7 @@ workers = 2
 handlers_conf = /etc/oio/sds/OPENIO/event-agent/event-handlers.conf
 
 # How often to refresh the account service address (in seconds)
-#acct_refresh_interval = 60
+#acct_refresh_interval = 3600
 
 log_facility = LOG_LOCAL0
 log_level = INFO
