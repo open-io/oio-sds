@@ -16,15 +16,11 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#include <core/oiolb.h>
+#include <core/oio_core.h>
 
 #include <string.h>
 
 #include <json-c/json.h>
-
-#include <core/oiostr.h>
-#include <core/oioext.h>
-#include <core/oiolog.h>
 
 #include <core/lb_variables.h>
 
@@ -33,8 +29,6 @@ License along with this library.
 typedef guint32 generation_t;
 
 #define OIO_LB_SHUFFLE_JUMP ((1UL << 31) - 1)
-#define OIO_LB_LOC_LEVELS 4
-#define OIO_LB_BITS_PER_LOC_LEVEL (sizeof(oio_location_t)*8/OIO_LB_LOC_LEVELS)
 
 /* This special target matches any service, any location. */
 #define OIO_LB_JOKER_SVC_TARGET "__any_slot"
@@ -502,23 +496,6 @@ oio_ext_gdatalist_length(GData **datalist)
 	}
 	g_datalist_foreach(datalist, _datalist_count, NULL);
 	return counter;
-}
-
-/* Take djb2 hash of each part of the '.'-separated string,
- * keep the 16 LSB of each hash to build a 64b integer. */
-oio_location_t
-location_from_dotted_string(const char *dotted)
-{
-	gchar **toks = g_strsplit(dotted, ".", OIO_LB_LOC_LEVELS);
-	oio_location_t location = 0;
-	int ntoks = 0;
-	// according to g_strsplit documentation, toks cannot be NULL
-	for (gchar **tok = toks; *tok; tok++, ntoks++) {
-		location = (location << OIO_LB_BITS_PER_LOC_LEVEL) |
-				(djb_hash_str0(*tok) & 0xFFFF);
-	}
-	g_strfreev(toks);
-	return location;
 }
 
 uint32_t

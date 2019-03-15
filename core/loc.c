@@ -1,5 +1,5 @@
 /*
-OpenIO SDS core library
+OpenIO SDS load-balancing
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
@@ -16,16 +16,22 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#ifndef OIO_SDS__core__core_h
-# define OIO_SDS__core__core_h 1
-# include "core/oiostr.h"
-# include "core/oioext.h"
-# include "core/oiocfg.h"
-# include "core/oiovar.h"
-# include "core/oiolog.h"
-# include "core/oiourl.h"
-# include "core/oioloc.h"
-# include "core/oiocs.h"
-# include "core/oiodir.h"
-# include "core/oiolb.h"
-#endif /*OIO_SDS__core__core_h*/
+#include <core/oioloc.h>
+
+#include "internals.h"
+
+oio_location_t
+location_from_dotted_string(const char *dotted)
+{
+	gchar **toks = g_strsplit(dotted, ".", OIO_LB_LOC_LEVELS);
+	oio_location_t location = 0;
+	int ntoks = 0;
+	// according to g_strsplit documentation, toks cannot be NULL
+	for (gchar **tok = toks; *tok; tok++, ntoks++) {
+		location = (location << OIO_LB_BITS_PER_LOC_LEVEL) |
+				(djb_hash_str0(*tok) & 0xFFFF);
+	}
+	g_strfreev(toks);
+	return location;
+}
+
