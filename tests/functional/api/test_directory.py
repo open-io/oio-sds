@@ -329,7 +329,6 @@ class TestDirectoryAPI(BaseTestCase):
 
         self.assertRaises(exc.OioException,
                           disp.assign_all_rawx, min_dist=4)
-        print 'plop'
         all_rawx, _ = disp.get_assignments('rawx')
         all_rawx_keys = [x['addr'] for x in all_rawx]
         self.assertIn(new_rawx['addr'], all_rawx_keys)
