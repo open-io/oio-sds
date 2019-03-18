@@ -1136,7 +1136,7 @@ _cb_tcp_worker(struct network_client_s *clt, struct network_server_s *srv)
 					"Too many simultaneous requests? (server.pool.max_tcp=%d)",
 					clt->peer_name, clt->fd,
 					(now - clt->time.evt_in) / G_TIME_SPAN_MILLISECOND,
-					server_queue_max_delay / G_TIME_SPAN_MILLISECOND,
+					server_queue_warn_delay / G_TIME_SPAN_MILLISECOND,
 					server_threadpool_max_tcp);
 		}
 	}
