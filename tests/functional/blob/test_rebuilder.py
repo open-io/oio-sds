@@ -78,7 +78,7 @@ class TestBlobRebuilder(BaseTestCase):
         chunk_volume = chunk['url'].split('/')[2]
         chunk_id = chunk['url'].split('/')[3]
         chunk_headers, chunk_stream = self.blob_client.chunk_get(
-            chunk['url'])
+            chunk['url'], check_headers=False)
         os.remove(self._chunk_path(chunk))
         chunks_kept = list(self.chunks)
         chunks_kept.remove(chunk)

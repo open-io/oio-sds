@@ -23,7 +23,7 @@ from urllib import unquote
 from oio.common.http_urllib3 import get_pool_manager, \
     oio_exception_from_httperror, urllib3
 from oio.common import exceptions as exc, utils
-from oio.common.constants import CHUNK_HEADERS, chunk_xattr_keys_optional, \
+from oio.common.constants import CHUNK_HEADERS, CHUNK_XATTR_KEYS_OPTIONAL, \
         FETCHXATTR_HEADER, OIO_VERSION, REQID_HEADER
 from oio.common.decorators import ensure_headers, ensure_request_id
 from oio.api.io import ChunkReader
@@ -36,19 +36,28 @@ READ_BUFFER_SIZE = 65535
 PARALLEL_CHUNKS_DELETE = 3
 
 
-def extract_headers_meta(headers):
+def extract_headers_meta(headers, check=True):
+    """
+    Extract chunk metadata from a dictionary of rawx response headers.
+
+    :param headers: a dictionary of headers, as returned by a HEAD or GET
+        request to a rawx service.
+    :keyword check: if True (the default), raise FaultyChunk if one or
+        several mandatory response headers are missing.
+    :returns: a dictionary of chunk metadata.
+    """
     meta = {}
     missing = list()
-    for mkey, hkey in CHUNK_HEADERS.iteritems():
+    for mkey, hkey in CHUNK_HEADERS.items():
         try:
             if mkey == 'full_path':
                 meta[mkey] = headers[hkey]
             else:
                 meta[mkey] = unquote(headers[hkey])
         except KeyError:
-            if mkey not in chunk_xattr_keys_optional:
+            if check and mkey not in CHUNK_XATTR_KEYS_OPTIONAL:
                 missing.append(exc.MissingAttribute(mkey))
-    if missing:
+    if check and missing:
         raise exc.FaultyChunk(*missing)
     return meta
 
@@ -141,13 +150,19 @@ class BlobClient(object):
     @update_rawx_perfdata
     @ensure_headers
     @ensure_request_id
-    def chunk_get(self, url, **kwargs):
+    def chunk_get(self, url, check_headers=True, **kwargs):
+        """
+        :keyword check_headers: when True (the default), raise FaultyChunk
+            if a mandatory response header is missing.
+        :returns: a tuple with a dictionary of chunk metadata and a stream
+            to the chunk's data.
+        """
         url = self.resolve_url(url)
         reader = ChunkReader([{'url': url}], READ_BUFFER_SIZE,
                              **kwargs)
         # This must be done now if we want to access headers
         stream = reader.stream()
-        headers = extract_headers_meta(reader.headers)
+        headers = extract_headers_meta(reader.headers, check=check_headers)
         return headers, stream
 
     @update_rawx_perfdata
@@ -184,17 +199,19 @@ class BlobClient(object):
                    cid=None, path=None, version=None, content_id=None,
                    **kwargs):
         stream = None
+        # Check source headers only when new fullpath is not provided
+        kwargs['check_headers'] = not bool(fullpath)
         try:
             meta, stream = self.chunk_get(from_url, **kwargs)
             meta['oio_version'] = OIO_VERSION
             meta['chunk_id'] = chunk_id or to_url.split('/')[-1]
             meta['full_path'] = fullpath or meta['full_path']
-            meta['container_id'] = cid or meta['container_id']
-            meta['content_path'] = path or meta['content_path']
+            meta['container_id'] = cid or meta.get('container_id')
+            meta['content_path'] = path or meta.get('content_path')
             # FIXME: the original keys are the good ones.
             # ReplicatedMetachunkWriter should be modified to accept them.
-            meta['version'] = version or meta['content_version']
-            meta['id'] = content_id or meta['content_id']
+            meta['version'] = version or meta.get('content_version')
+            meta['id'] = content_id or meta.get('content_id')
             meta['chunk_method'] = meta['content_chunkmethod']
             meta['policy'] = meta['content_policy']
             copy_meta = self.chunk_put(to_url, meta, stream, **kwargs)

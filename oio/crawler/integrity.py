@@ -28,7 +28,7 @@ import cStringIO
 import argparse
 
 from oio.common import exceptions as exc
-from oio.common.fullpath import decode_fullpath, decode_old_fullpath
+from oio.common.fullpath import decode_fullpath
 from oio.common.logger import get_logger
 from oio.common.storage_method import STORAGE_METHODS
 from oio.api.object_storage import ObjectStorageApi
@@ -175,22 +175,41 @@ class Checker(object):
     def complete_target_from_chunk_metadata(self, target, xattr_meta):
         """
         Complete a Target object from metadata found in chunk's extended
-        attributes.
+        attributes. In case the "fullpath" is not available, try to read
+        legacy metadata, and maybe ask meta1 to resolve the CID into
+        account and container names.
         """
         # pylint: disable=unbalanced-tuple-unpacking
         try:
             acct, ct, path, vers, content_id = \
                 decode_fullpath(xattr_meta['full_path'])
-        except ValueError:
-            acct, ct, path, vers = \
-                decode_old_fullpath(xattr_meta['full_path'])
-            content_id = None
-        # TODO(FVE): load old-style metadata
-        target.account = acct
-        target.container = ct
-        target.obj = path
-        target.content_id = content_id
-        target.version = vers
+            target.account = acct
+            target.container = ct
+            target.obj = path
+            target.content_id = content_id
+            target.version = vers
+        except KeyError:
+            # No fullpath header, try legacy headers
+            if 'content_path' in xattr_meta:
+                target.obj = xattr_meta['content_path']
+            if 'content_id' in xattr_meta:
+                target.content_id = xattr_meta['content_id']
+            if 'content_version' in xattr_meta:
+                target.version = xattr_meta['content_version']
+            cid = xattr_meta.get('container_id')
+            if cid:
+                try:
+                    md = self.api.directory.show(cid=cid)
+                    acct = md.get('account')
+                    ct = md.get('name')
+                    if acct:
+                        target.account = acct
+                    if ct:
+                        target.container = ct
+                except Exception as err:
+                    self.logger.warn("Failed to resolve CID %s into account "
+                                     "and container names: %s",
+                                     cid, err)
 
     def send_result(self, target, errors=None):
         """
