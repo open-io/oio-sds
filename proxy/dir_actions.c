@@ -96,7 +96,8 @@ static GError * _m1_action (struct oio_url_s *url, gchar ** m1v,
 GError * _m1_locate_and_action (struct oio_url_s *url,
 		GError * (*hook) (const char * m1addr)) {
 	gchar **m1v = NULL;
-	GError *err = hc_resolve_reference_directory (resolver, url, &m1v, oio_ext_get_deadline());
+	GError *err = hc_resolve_reference_directory(
+			resolver, url, &m1v, oio_ext_get_deadline());
 	if (NULL != err) {
 		g_prefix_error (&err, "No META1: ");
 		return err;
@@ -368,6 +369,10 @@ action_dir_prop_get (struct req_args_s *args, struct json_object *jargs)
 	}
 	if (!err) {
 		GString *gs = g_string_sized_new(256);
+		// FIXME(FVE): this response should include account and container
+		// names. This requires adding headers in meta1 response (because
+		// passing these in the properties array would overwrite properties
+		// with the same keys).
 		g_string_append_static(gs, "{");
 		OIO_JSON_append_str(gs, "cid", oio_url_get(args->url, OIOURL_HEXID));
 		g_string_append_c(gs, ',');
@@ -464,11 +469,9 @@ action_dir_ref_create (struct req_args_s *args, struct json_object *jargs) {
 // POST /v3.0/{NS}/reference/create?acct={account}&ref={reference name}
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// .. code-block:: json
-//
-//    {"properties":{}}
-//
 // Create new reference with given properties.
+//
+// Sample request:
 //
 // .. code-block:: http
 //
@@ -478,6 +481,12 @@ action_dir_ref_create (struct req_args_s *args, struct json_object *jargs) {
 //    Accept: */*
 //    Content-Length: 13
 //    Content-Type: application/x-www-form-urlencoded
+//
+// .. code-block:: json
+//
+//    {"properties":{}}
+//
+// Sample response:
 //
 // .. code-block:: http
 //
@@ -493,7 +502,9 @@ enum http_rc_e action_ref_create (struct req_args_s *args) {
 // DIR{{
 // GET /v3.0/{NS}/reference/show?acct={account}&ref={reference name}
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// Get informations about reference.
+// Get information about a reference.
+//
+// Sample request:
 //
 // .. code-block:: http
 //
@@ -501,6 +512,8 @@ enum http_rc_e action_ref_create (struct req_args_s *args) {
 //    Host: 127.0.0.1:6000
 //    User-Agent: curl/7.47.0
 //    Accept: */*
+//
+// Sample response:
 //
 // .. code-block:: http
 //
@@ -513,7 +526,10 @@ enum http_rc_e action_ref_create (struct req_args_s *args) {
 //
 //    {
 //      "dir":[{"seq":1,"type":"meta0","host":"127.0.0.1:6006","args":""},{"seq":1,"type":"meta1","host":"127.0.0.1:6007","args":""}],
-//      "srv":[{"seq":1,"type":"meta2","host":"127.0.0.1:6008","args":""}]
+//      "srv":[{"seq":1,"type":"meta2","host":"127.0.0.1:6008","args":""}],
+//      "cid":"13C0470DBCE55371E6BD5975EFF23A18F658CDC1656A7474DEF1ED0B0EDDA9FC",
+//      "account":"my_account",
+//      "name":"myreference"
 //    }
 //
 // }}DIR
@@ -539,7 +555,8 @@ enum http_rc_e action_ref_show (struct req_args_s *args) {
 
 	if (!err) {
 		gchar **dirv = NULL;
-		err = hc_resolve_reference_directory (resolver, args->url, &dirv, oio_ext_get_deadline());
+		err = hc_resolve_reference_directory(
+				resolver, args->url, &dirv, oio_ext_get_deadline());
 		GString *out = g_string_sized_new (512);
 		g_string_append_c (out, '{');
 		g_string_append_static (out, "\"dir\":");
