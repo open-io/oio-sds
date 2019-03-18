@@ -44,12 +44,13 @@ class CheckCommandMixin(object):
             default=1,
             help="Number of attempts for listing requests (default: 1)."
         )
-        parser.add_argument(
-            '--checksum',
-            action='store_true',
-            help=("Perform checksum comparisons. This requires downloading "
-                  "data from rawx services.")
-        )
+        # TODO(FVE): implement chunk checksums
+        # parser.add_argument(
+        #     '--checksum',
+        #     action='store_true',
+        #     help=("Perform checksum comparisons. This requires downloading "
+        #           "data from rawx services.")
+        # )
         parser.add_argument(
             '--depth',
             type=int,

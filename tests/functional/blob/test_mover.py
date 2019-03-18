@@ -66,22 +66,22 @@ class TestBlobMover(BaseTestCase):
         return volume + '/' + chunk_id[:3] + '/' + chunk_id
 
     def test_move_old_chunk(self):
-        for c in self.chunks:
+        for chunk in self.chunks:
             convert_to_old_chunk(
-                self._chunk_path(c), self.account, self.container, self.path,
-                self.version, self.content_id)
+                self._chunk_path(chunk), self.account, self.container,
+                self.path, self.version, self.content_id)
 
-        chunk = random.choice(self.chunks)
-        chunk_volume = chunk['url'].split('/')[2]
-        chunk_id = chunk['url'].split('/')[3]
+        orig_chunk = random.choice(self.chunks)
+        chunk_volume = orig_chunk['url'].split('/')[2]
+        chunk_id = orig_chunk['url'].split('/')[3]
         chunk_headers, chunk_stream = self.blob_client.chunk_get(
-            chunk['url'])
+            orig_chunk['url'], check_headers=False)
         chunks_kept = list(self.chunks)
-        chunks_kept.remove(chunk)
+        chunks_kept.remove(orig_chunk)
 
         mover = BlobMoverWorker(self.conf, None,
                                 self.rawx_volumes[chunk_volume])
-        mover.chunk_move(self._chunk_path(chunk), chunk_id)
+        mover.chunk_move(self._chunk_path(orig_chunk), chunk_id)
 
         _, new_chunks = self.api.object_locate(
             self.account, self.container, self.path)
@@ -90,16 +90,16 @@ class TestBlobMover(BaseTestCase):
         self.assertEqual(len(new_chunks), len(chunks_kept) + 1)
         url_kept = [c['url'] for c in chunks_kept]
         new_chunk = None
-        for c in new_chunks:
-            if c['url'] not in url_kept:
+        for chunk in new_chunks:
+            if chunk['url'] not in url_kept:
                 self.assertIsNone(new_chunk)
-                new_chunk = c
+                new_chunk = chunk
 
-        self.assertNotEqual(chunk['real_url'], new_chunk['real_url'])
-        self.assertNotEqual(chunk['url'], new_chunk['url'])
-        self.assertEqual(chunk['pos'], new_chunk['pos'])
-        self.assertEqual(chunk['size'], new_chunk['size'])
-        self.assertEqual(chunk['hash'], new_chunk['hash'])
+        self.assertNotEqual(orig_chunk['real_url'], new_chunk['real_url'])
+        self.assertNotEqual(orig_chunk['url'], new_chunk['url'])
+        self.assertEqual(orig_chunk['pos'], new_chunk['pos'])
+        self.assertEqual(orig_chunk['size'], new_chunk['size'])
+        self.assertEqual(orig_chunk['hash'], new_chunk['hash'])
 
         new_chunk_headers, new_chunk_stream = self.blob_client.chunk_get(
             new_chunk['url'])

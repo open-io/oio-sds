@@ -28,9 +28,15 @@ def encode_fullpath(account, container, path, version, content_id):
 
 
 def decode_fullpath(fullpath):
+    """
+    Decode a "fullpath" string, extract its 5 parts.
+
+    :raises: ValueError if the string has invalid format.
+    :returns: account, container, path, version and content ID.
+    """
     fp = fullpath.split('/')
     if len(fp) != 5:
-        raise ValueError("fullpath: Wrong format")
+        raise ValueError("fullpath: invalid format")
     decoded = list()
     for part in fp:
         decoded.append(unquote(part))
