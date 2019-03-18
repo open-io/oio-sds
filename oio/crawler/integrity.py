@@ -335,7 +335,7 @@ class Checker(object):
         return errors
 
     def _check_metachunk(self, target, stg_met, pos, chunks,
-                         recurse=False):
+                         recurse=0):
         """
         Check that a metachunk has the right number of chunks.
 
@@ -356,7 +356,7 @@ class Checker(object):
                 for _ in range(missing_chunks):
                     errors.append("Missing chunk at position %d" % pos)
 
-        if recurse:
+        if recurse > 0:
             for chunk in chunks:
                 tcopy = target.copy()
                 tcopy.chunk = chunk['url']
@@ -378,7 +378,7 @@ class Checker(object):
         # be reported as object errors.
         return errors
 
-    def _check_obj_policy(self, target, obj_meta, chunks, recurse=False):
+    def _check_obj_policy(self, target, obj_meta, chunks, recurse=0):
         """
         Check that the list of chunks of an object matches
         the object's storage policy.
@@ -401,7 +401,7 @@ class Checker(object):
                 errors.append("Check failed: pos %d: %s" % (pos, err))
         return errors
 
-    def check_obj_versions(self, target, versions, recurse=False):
+    def check_obj_versions(self, target, versions, recurse=0):
         """
         Run checks of all versions of the targeted object in parallel.
         """
@@ -446,7 +446,7 @@ class Checker(object):
             errors.append('Check failed: %s' % (err, ))
         return None, []
 
-    def check_obj(self, target, recurse=False):
+    def check_obj(self, target, recurse=0):
         """
         Check one object version.
         If no version is specified, all versions of the object will be checked.
@@ -479,7 +479,7 @@ class Checker(object):
                     # Now return the cached result of the most recent version
                     target.content_id = versions[0]['id']
                     target.version = str(versions[0]['version'])
-                    res = self.check_obj(target, recurse=False)
+                    res = self.check_obj(target, recurse=0)
                     self.running[(account, container, obj, vers)].send(True)
                     del self.running[(account, container, obj, vers)]
                     return res
@@ -514,7 +514,7 @@ class Checker(object):
         self.send_result(target, errors)
         return chunk_listing, meta
 
-    def check_container(self, target, recurse=False):
+    def check_container(self, target, recurse=0):
         account = target.account
         container = target.container
 
@@ -582,18 +582,18 @@ class Checker(object):
         self.running[(account, container)].send(True)
         del self.running[(account, container)]
 
-        if recurse:
+        if recurse > 0:
             for obj_vers in container_listing.values():
                 for obj in obj_vers:
                     tcopy = target.copy_object()
                     tcopy.obj = obj['name']
                     tcopy.content_id = obj['id']
                     tcopy.version = str(obj['version'])
-                    self.pool.spawn_n(self.check_obj, tcopy, True)
+                    self.pool.spawn_n(self.check_obj, tcopy, recurse - 1)
         self.send_result(target, errors)
         return container_listing, ct_meta
 
-    def check_account(self, target, recurse=False):
+    def check_account(self, target, recurse=0):
         account = target.account
 
         if account in self.running:
@@ -640,24 +640,24 @@ class Checker(object):
         self.running[account].send(True)
         del self.running[account]
 
-        if recurse:
+        if recurse > 0:
             for container in containers:
                 tcopy = target.copy_account()
                 tcopy.container = container
-                self.pool.spawn_n(self.check_container, tcopy, True)
+                self.pool.spawn_n(self.check_container, tcopy, recurse - 1)
 
         self.send_result(target, errors)
         return containers
 
-    def check(self, target):
+    def check(self, target, recurse=0):
         if target.type == 'chunk':
             self.pool.spawn_n(self.check_chunk, target)
         elif target.type == 'object':
-            self.pool.spawn_n(self.check_obj, target, True)
+            self.pool.spawn_n(self.check_obj, target, recurse)
         elif target.type == 'container':
-            self.pool.spawn_n(self.check_container, target, True)
+            self.pool.spawn_n(self.check_container, target, recurse)
         else:
-            self.pool.spawn_n(self.check_account, target, True)
+            self.pool.spawn_n(self.check_account, target, recurse)
 
     def fetch_results(self):
         while not self.result_queue.empty():

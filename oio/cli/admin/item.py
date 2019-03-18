@@ -52,12 +52,13 @@ class CheckCommandMixin(object):
         #           "data from rawx services.")
         # )
         parser.add_argument(
-            '--depth',
+            '--depth', '--max-depth',
             type=int,
-            default=0,
+            default=5,
             help=("How deep to recurse. 0 means do not recurse. "
-                  "N > 0 means recurse N levels below the specified item type,"
-                  " from namespace to chunk.")
+                  "N > 0 means recurse N levels below the specified item type "
+                  "(namespace -> account -> container -> object -> chunk, "
+                  "default: 5).")
         )
         parser.add_argument(
             '--concurrency', '--workers', type=int,
@@ -111,13 +112,14 @@ class AccountCheck(CheckCommandMixin, lister.Lister):
             parsed_args.accounts = [self.app.options.account]
         for acct in parsed_args.accounts:
             target = Target(acct)
-            checker.check(target)
+            checker.check(target, parsed_args.depth)
         return self.format_results(checker)
 
 
 class ContainerCheck(CheckCommandMixin, lister.Lister):
     """
-    Check a container for problems.
+    Check a container for problems. Quick checks on the account owning
+    the container will also be performed.
     """
     base_level = 3
 
@@ -138,13 +140,14 @@ class ContainerCheck(CheckCommandMixin, lister.Lister):
         checker = self.build_checker(parsed_args)
         for ct in parsed_args.containers:
             target = Target(self.app.options.account, ct)
-            checker.check(target)
+            checker.check(target, parsed_args.depth)
         return self.format_results(checker)
 
 
 class ObjectCheck(CheckCommandMixin, lister.Lister):
     """
-    Check an object for problems.
+    Check an object for problems. Quick checks on the account and the container
+    owning the object will also be performed.
     """
     base_level = 2
 
@@ -177,13 +180,14 @@ class ObjectCheck(CheckCommandMixin, lister.Lister):
         for obj in parsed_args.objects:
             target = Target(self.app.options.account, parsed_args.container,
                             obj, version=parsed_args.object_version)
-            checker.check(target)
+            checker.check(target, parsed_args.depth)
         return self.format_results(checker)
 
 
 class ChunkCheck(CheckCommandMixin, lister.Lister):
     """
-    Check a chunk for problems.
+    Check a chunk for problems. Quick checks on the account, the container
+    and the object owning the chunk will also be performed.
     """
     base_level = 0
 
@@ -204,5 +208,5 @@ class ChunkCheck(CheckCommandMixin, lister.Lister):
         checker = self.build_checker(parsed_args)
         for chunk in parsed_args.chunks:
             target = Target(self.app.options.account, chunk=chunk)
-            checker.check(target)
+            checker.check(target, parsed_args.depth)
         return self.format_results(checker)
