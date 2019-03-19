@@ -483,10 +483,18 @@ resource_stat_chunk(dav_resource *resource, int flags)
 				resource_get_pathname(resource));
 
 		memset(&(ctx->chunk), 0, sizeof(ctx->chunk));
-		if (flags & RESOURCE_STAT_CHUNK_READ_ATTRS) {
-			gboolean rc = get_rawx_info_from_file(
-					resource_get_pathname(resource), &err,
-					resource->info->hex_chunkid, &(ctx->chunk));
+		if (flags & (RESOURCE_STAT_CHUNK_READ_ALL_ATTRS
+				| RESOURCE_STAT_CHUNK_READ_FULLPATH_ATTRS)) {
+			gboolean rc = TRUE;
+			if (flags & RESOURCE_STAT_CHUNK_READ_ALL_ATTRS) {
+				rc = get_rawx_info_from_file(
+						resource_get_pathname(resource), &err,
+						resource->info->hex_chunkid, &(ctx->chunk));
+			} else {
+				rc = get_rawx_fullpath_info_from_file(
+						resource_get_pathname(resource), &err,
+						resource->info->hex_chunkid, &(ctx->chunk));
+			}
 			if (!rc) {
 				DAV_ERROR_RES(resource, 0, "Chunk xattr loading error [%s]: %s",
 						resource_get_pathname(resource),

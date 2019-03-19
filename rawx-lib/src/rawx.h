@@ -100,6 +100,10 @@ gboolean set_rawx_info_to_fd(int fd, GError **error,
 gboolean set_compression_info_in_attr(const char *p, GError **error, const char *v);
 gboolean set_chunk_compressed_size_in_attr(const char *p, GError **error, guint32 v);
 
+gboolean get_rawx_fullpath_info_from_file(const char *p, GError **error, gchar *hex_chunkid,
+		struct chunk_textinfo_s *chunk);
+gboolean get_rawx_fullpath_info_from_fd(int fd, GError **error, gchar *hex_chunkid,
+        struct chunk_textinfo_s *chunk);
 gboolean get_rawx_info_from_file(const char *p, GError **error, gchar *hex_chunkid,
 		struct chunk_textinfo_s *chunk);
 gboolean get_rawx_info_from_fd(int fd, GError **error, gchar *hex_chunkid,
