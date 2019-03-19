@@ -15,7 +15,6 @@
 
 """Command-line interface for OpenIO SDS cluster administration."""
 
-import logging
 import sys
 
 from cliff.app import App
@@ -45,8 +44,6 @@ class OpenioAdminApp(App):
             'account_name': self.options.account,
             'proxyd_url': self.options.proxyd_url,
             'admin_mode': self.options.admin_mode,
-            'log_level': logging.getLevelName(
-                logging.getLogger('').getEffectiveLevel()),
             'is_cli': True,
         }
         self.client_manager = ClientManager(options)

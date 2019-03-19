@@ -76,7 +76,7 @@ def handle_object_not_found(fnc):
         try:
             return fnc(self, account, container, obj, *args, **kwargs)
         except NotFound as err:
-            if err.status == 406:
+            if err.status in (406, 431):
                 err.message = "Container '%s' does not exist." % container
                 reraise(NoSuchContainer, err)
             else:
