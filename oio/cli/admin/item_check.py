@@ -16,6 +16,7 @@
 
 from cliff import lister
 
+from oio.cli.admin.common import ContainerCommandMixin, ObjectCommandMixin
 from oio.crawler.integrity import Checker, Target
 
 
@@ -116,7 +117,7 @@ class AccountCheck(CheckCommandMixin, lister.Lister):
         return self.format_results(checker)
 
 
-class ContainerCheck(CheckCommandMixin, lister.Lister):
+class ContainerCheck(ContainerCommandMixin, CheckCommandMixin, lister.Lister):
     """
     Check a container for problems. Quick checks on the account owning
     the container will also be performed.
@@ -125,14 +126,8 @@ class ContainerCheck(CheckCommandMixin, lister.Lister):
 
     def get_parser(self, prog_name):
         parser = super(ContainerCheck, self).get_parser(prog_name)
-        self.patch_parser(parser)
-
-        parser.add_argument(
-            'containers',
-            nargs='+',
-            metavar='<container_name>',
-            help='Name of the container to check.'
-        )
+        CheckCommandMixin.patch_parser(self, parser)
+        ContainerCommandMixin.patch_parser(self, parser)
         return parser
 
     def take_action(self, parsed_args):
@@ -144,7 +139,7 @@ class ContainerCheck(CheckCommandMixin, lister.Lister):
         return self.format_results(checker)
 
 
-class ObjectCheck(CheckCommandMixin, lister.Lister):
+class ObjectCheck(ObjectCommandMixin, CheckCommandMixin, lister.Lister):
     """
     Check an object for problems. Quick checks on the account and the container
     owning the object will also be performed.
@@ -153,25 +148,8 @@ class ObjectCheck(CheckCommandMixin, lister.Lister):
 
     def get_parser(self, prog_name):
         parser = super(ObjectCheck, self).get_parser(prog_name)
-        self.patch_parser(parser)
-
-        parser.add_argument(
-            'container',
-            metavar='<container_name>',
-            help='Name of the container holding the object.'
-        )
-        parser.add_argument(
-            'objects',
-            metavar='<object_name>',
-            nargs='+',
-            help='Name of the object to check.'
-        )
-        parser.add_argument(
-            '--object-version',
-            metavar='<version>',
-            help=("Version of the object to check. Works when only one "
-                  "object is specified on command line.")
-        )
+        CheckCommandMixin.patch_parser(self, parser)
+        ObjectCommandMixin.patch_parser(self, parser)
         return parser
 
     def take_action(self, parsed_args):
