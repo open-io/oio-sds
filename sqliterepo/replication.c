@@ -638,11 +638,18 @@ sqlx_transaction_end(struct sqlx_repctx_s *ctx, GError *err)
 	EXTRA_ASSERT(ctx->sq3->db != NULL);
 
 	if (err) {
+		if (g_strrstr(err->message, "SQLITE_NOTADB") != NULL
+				|| g_strrstr(err->message, "SQLITE_CORRUPT") != NULL) {
+			ctx->sq3->corrupted = TRUE;
+		}
 		ctx->any_change = 0;
 		rc = sqlx_exec(ctx->sq3->db, "ROLLBACK");
 		if (rc != SQLITE_OK && rc != SQLITE_DONE) {
 			GRID_WARN("ROLLBACK failed! (%d/%s) %s", rc,
 					sqlite_strerror(rc), sqlite3_errmsg(ctx->sq3->db));
+			if (rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT) {
+				ctx->sq3->corrupted = TRUE;
+			}
 		}
 		sqlx_admin_reload(ctx->sq3);
 	} else {
@@ -692,6 +699,9 @@ sqlx_transaction_end(struct sqlx_repctx_s *ctx, GError *err)
 			err = NEWERROR(CODE_UNAVAILABLE, "COMMIT failed: (%s) %s%s",
 					sqlite_strerror(rc), sqlite3_errmsg(ctx->sq3->db),
 					ctx->errors->str);
+			if (rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT) {
+				ctx->sq3->corrupted = TRUE;
+			}
 			// Restore the in-RAM cache
 			sqlx_admin_reload(ctx->sq3);
 		}
