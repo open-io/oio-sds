@@ -46,6 +46,7 @@ class ClientManager(object):
         self._rdir_dispatcher = None
         self._storage = None
 
+        self._logger = None
         self._pool_manager = None
 
         LOG.setLevel(getLogger('').getEffectiveLevel())
@@ -109,6 +110,13 @@ class ClientManager(object):
             self._conscience_client = ConscienceClient(
                 self.client_conf, pool_manager=self.pool_manager)
         return self._conscience_client
+
+    @property
+    def logger(self):
+        if self._logger is None:
+            from oio.common.logger import get_logger
+            self._logger = get_logger(self._options, __name__)
+        return self._logger
 
     @property
     def rdir(self):
@@ -182,6 +190,9 @@ class ClientManager(object):
                    self.sds_conf.get("meta1_digits"))
             if m1d:
                 self._meta1_digits = int(m1d)
+            else:
+                LOG.warn("ns.meta1_digits not set or invalid, default is 4")
+                self._meta1_digits = 4
         return self._meta1_digits
 
     @property

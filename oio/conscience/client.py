@@ -137,6 +137,11 @@ class ConscienceClient(ProxyClient):
             params['full'] = '1'
         resp, body = self._request('GET', '/list', params=params, **kwargs)
         if resp.status == 200:
+            # TODO(FVE): do that in the proxy
+            for srv in body:
+                if 'id' not in srv:
+                    srv_id = srv['tags'].get('tag.service_id', srv['addr'])
+                    srv['id'] = srv_id
             return body
         else:
             raise OioException("failed to get list of %s services: %s"
