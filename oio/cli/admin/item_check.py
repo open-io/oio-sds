@@ -20,7 +20,7 @@ from oio.cli.admin.common import ContainerCommandMixin, ObjectCommandMixin
 from oio.crawler.integrity import Checker, Target
 
 
-class CheckCommandMixin(object):
+class ItemCheckCommand(lister.Lister):
     """
     Various parameters that apply to all check commands.
     """
@@ -38,7 +38,8 @@ class CheckCommandMixin(object):
         )
         return checker
 
-    def patch_parser(self, parser):
+    def get_parser(self, prog_name):
+        parser = super(ItemCheckCommand, self).get_parser(prog_name)
         parser.add_argument(
             '--attempts',
             type=int,
@@ -77,6 +78,7 @@ class CheckCommandMixin(object):
             help=("Write chunk errors in a file with a format "
                   "suitable as oio-blob-rebuilder input.")
         )
+        return parser
 
     def _format_results(self, checker):
         for res in checker.run():
@@ -87,15 +89,13 @@ class CheckCommandMixin(object):
         return self.__class__.columns, self._format_results(checker)
 
 
-class AccountCheck(CheckCommandMixin, lister.Lister):
+class AccountCheck(ItemCheckCommand):
     """
     Check an account for problems.
     """
-    base_level = 4
 
     def get_parser(self, prog_name):
         parser = super(AccountCheck, self).get_parser(prog_name)
-        self.patch_parser(parser)
 
         parser.add_argument(
             'accounts',
@@ -107,7 +107,6 @@ class AccountCheck(CheckCommandMixin, lister.Lister):
 
     def take_action(self, parsed_args):
         super(AccountCheck, self).take_action(parsed_args)
-        # FIXME(FVE): use parsed_args.depth
         checker = self.build_checker(parsed_args)
         if not parsed_args.accounts:
             parsed_args.accounts = [self.app.options.account]
@@ -117,17 +116,15 @@ class AccountCheck(CheckCommandMixin, lister.Lister):
         return self.format_results(checker)
 
 
-class ContainerCheck(ContainerCommandMixin, CheckCommandMixin, lister.Lister):
+class ContainerCheck(ContainerCommandMixin, ItemCheckCommand):
     """
     Check a container for problems. Quick checks on the account owning
     the container will also be performed.
     """
-    base_level = 3
 
     def get_parser(self, prog_name):
         parser = super(ContainerCheck, self).get_parser(prog_name)
-        CheckCommandMixin.patch_parser(self, parser)
-        ContainerCommandMixin.patch_parser(self, parser)
+        self.patch_parser(parser)
         return parser
 
     def take_action(self, parsed_args):
@@ -139,17 +136,15 @@ class ContainerCheck(ContainerCommandMixin, CheckCommandMixin, lister.Lister):
         return self.format_results(checker)
 
 
-class ObjectCheck(ObjectCommandMixin, CheckCommandMixin, lister.Lister):
+class ObjectCheck(ObjectCommandMixin, ItemCheckCommand):
     """
     Check an object for problems. Quick checks on the account and the container
     owning the object will also be performed.
     """
-    base_level = 2
 
     def get_parser(self, prog_name):
         parser = super(ObjectCheck, self).get_parser(prog_name)
-        CheckCommandMixin.patch_parser(self, parser)
-        ObjectCommandMixin.patch_parser(self, parser)
+        self.patch_parser(parser)
         return parser
 
     def take_action(self, parsed_args):
@@ -162,17 +157,14 @@ class ObjectCheck(ObjectCommandMixin, CheckCommandMixin, lister.Lister):
         return self.format_results(checker)
 
 
-class ChunkCheck(CheckCommandMixin, lister.Lister):
+class ChunkCheck(ItemCheckCommand):
     """
     Check a chunk for problems. Quick checks on the account, the container
     and the object owning the chunk will also be performed.
     """
-    base_level = 0
 
     def get_parser(self, prog_name):
         parser = super(ChunkCheck, self).get_parser(prog_name)
-        self.patch_parser(parser)
-
         parser.add_argument(
             'chunks',
             metavar='<chunk_url>',
