@@ -39,10 +39,12 @@ class ClientManager(object):
         self._account = None
 
         # Various API client classes
+        self._account_client = None
         self._admin_client = None
         self._conscience_client = None
         self._rdir_client = None
         self._rdir_dispatcher = None
+        self._storage = None
 
         self._pool_manager = None
 
@@ -85,10 +87,18 @@ class ClientManager(object):
         return self._admin_mode
 
     @property
+    def account_client(self):
+        if self._account_client is None:
+            from oio.account.client import AccountClient
+            self._account_client = AccountClient(
+                self.client_conf, pool_manager=self.pool_manager)
+        return self._account_client
+
+    @property
     def admin(self):
         if self._admin_client is None:
             from oio.directory.admin import AdminClient
-            self._admin_client = AdminClient(self.sds_conf,
+            self._admin_client = AdminClient(self.client_conf,
                                              pool_manager=self.pool_manager)
         return self._admin_client
 
@@ -116,6 +126,19 @@ class ClientManager(object):
                 self.client_conf, rdir_client=self.rdir,
                 pool_manager=self.pool_manager)
         return self._rdir_dispatcher
+
+    @property
+    def storage(self):
+        """
+        Get an instance of ObjectStorageApi.
+        """
+        if self._storage is None:
+            from oio.api.object_storage import ObjectStorageApi
+            self._storage = ObjectStorageApi(
+                self.namespace,
+                endpoint=self.get_endpoint(),
+                pool_manager=self.pool_manager)
+        return self._storage
 
     def flatns_set_bits(self, bits):
         self._flatns_bits = bits
