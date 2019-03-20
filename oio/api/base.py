@@ -138,8 +138,8 @@ class HttpApi(object):
             out_headers[TIMEOUT_HEADER] = int(to * 1000000.0)
 
         # Look for a request ID
-        if 'req_id' in kwargs:
-            out_headers['X-oio-req-id'] = str(kwargs['req_id'])
+        if 'reqid' in kwargs:
+            out_headers['X-oio-req-id'] = str(kwargs['reqid'])
 
         # Convert json and add Content-Type
         if json:

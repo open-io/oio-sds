@@ -12,3 +12,22 @@ zealous and modify more lines than expected.
 
 The code must comply with [PEP8](https://www.python.org/dev/peps/pep-0008/).
 Running ``tox -e pep8`` will tell what is wrong.
+
+
+## Abbreviations
+
+When using abbreviations, try to be consistent. Here is a list of
+abbreviation commonly used in the existing code base.
+
+- acct: account
+- cid: container ID
+- cs: conscience
+- err: error
+- exc: exception
+- m0: meta0
+- m1: meta1
+- m2: meta2
+- ns: namespace
+- req: request
+- reqid: request ID
+- resp: response

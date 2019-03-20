@@ -330,13 +330,13 @@ class RdirClient(HttpApi):
     def _clear_cache(self, volume_id):
         self._addr_cache.pop(volume_id, None)
 
-    def _get_rdir_addr(self, volume_id, req_id=None):
+    def _get_rdir_addr(self, volume_id, reqid=None):
         # Initial lookup in the cache
         if volume_id in self._addr_cache:
             return self._addr_cache[volume_id]
         # Not cached, try a direct lookup
         try:
-            headers = {'X-oio-req-id': req_id or request_id()}
+            headers = {'X-oio-req-id': reqid or request_id()}
             resp = self.directory.list(RDIR_ACCT, volume_id,
                                        service_type='rdir',
                                        headers=headers)
@@ -347,8 +347,8 @@ class RdirClient(HttpApi):
         except NotFound:
             raise VolumeException('No rdir assigned to volume %s' % volume_id)
 
-    def _make_uri(self, action, volume_id, req_id=None, service_type='rawx'):
-        rdir_host = self._get_rdir_addr(volume_id, req_id)
+    def _make_uri(self, action, volume_id, reqid=None, service_type='rawx'):
+        rdir_host = self._get_rdir_addr(volume_id, reqid)
         return 'http://%s/v1/%s/%s' % (rdir_host,
                                        self.__class__.base_url[service_type],
                                        action)
@@ -363,7 +363,7 @@ class RdirClient(HttpApi):
         if create:
             params['create'] = '1'
         uri = self._make_uri(action, volume,
-                             req_id=kwargs['headers']['X-oio-req-id'],
+                             reqid=kwargs['headers']['X-oio-req-id'],
                              service_type=service_type)
         try:
             resp, body = self._direct_request(method, uri, params=params,
