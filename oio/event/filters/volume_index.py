@@ -36,7 +36,10 @@ class VolumeIndexFilter(Filter):
                     volume_id, container_id, content_id, chunk_id,
                     headers=headers)
         except Exception as ex:
-            self.logger.warn("chunk delete failed: %s", ex)
+            self.logger.warn(
+                "deindexing of chunk failed (reqid=%s volume_id=%s "
+                "container_id=%s content_id=%s chunk_id=%s): %s", reqid,
+                volume_id, container_id, content_id, chunk_id, ex)
 
     def _chunk_push(self, reqid,
                     volume_id, container_id, content_id, chunk_id,
@@ -47,7 +50,10 @@ class VolumeIndexFilter(Filter):
                     volume_id, container_id, content_id, chunk_id,
                     headers=headers, **args)
         except Exception as ex:
-            self.logger.warn("chunk push failed: %s", ex)
+            self.logger.warn(
+                "indexing of chunk failed (reqid=%s volume_id=%s "
+                "container_id=%s content_id=%s chunk_id=%s): %s", reqid,
+                volume_id, container_id, content_id, chunk_id, ex)
 
     def process(self, env, cb):
         event = Event(env)
