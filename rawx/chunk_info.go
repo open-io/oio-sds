@@ -54,10 +54,15 @@ const (
 )
 
 const (
+	AttrNameContainerID        = "user.grid.content.container"
+	AttrNameContentPath        = "user.grid.content.path"
+	AttrNameContentVersion     = "user.grid.content.version"
+	AttrNameContentID          = "user.grid.content.id"
 	AttrNameContentChunkMethod = "user.grid.content.chunk_method"
 	AttrNameContentStgPol      = "user.grid.content.storage_policy"
 	AttrNameMetachunkChecksum  = "user.grid.metachunk.hash"
 	AttrNameMetachunkSize      = "user.grid.metachunk.size"
+	AttrNameChunkID            = "user.grid.chunk.id"
 	AttrNameChunkPosition      = "user.grid.chunk.position"
 	AttrNameChunkChecksum      = "user.grid.chunk.hash"
 	AttrNameChunkSize          = "user.grid.chunk.size"
@@ -146,22 +151,6 @@ func (chunk *chunkInfo) loadAttr(inChunk FileReader, chunkID string) error {
 		return string(v), err
 	}
 
-	contentFullpath, err := getAttr(AttrNameFullPrefix + chunkID)
-	if err != nil {
-		return err
-	}
-	chunk.ChunkID = chunkID
-	fullpath := strings.Split(contentFullpath, "/")
-	if len(fullpath) == 5 {
-		chunk.ContentFullpath = contentFullpath
-		account, _ := url.PathUnescape(fullpath[0])
-		container, _ := url.PathUnescape(fullpath[1])
-		chunk.ContainerID = cidFromName(account, container)
-		chunk.ContentPath, _ = url.PathUnescape(fullpath[2])
-		chunk.ContentVersion, _ = url.PathUnescape(fullpath[3])
-		chunk.ContentID, _ = url.PathUnescape(fullpath[4])
-	}
-
 	var detailedAttrs = []detailedAttr{
 		{AttrNameContentChunkMethod, &chunk.ContentChunkMethod},
 		{AttrNameContentStgPol, &chunk.ContentStgPol},
@@ -172,6 +161,42 @@ func (chunk *chunkInfo) loadAttr(inChunk FileReader, chunkID string) error {
 		{AttrNameChunkSize, &chunk.ChunkSize},
 		{AttrNameOioVersion, &chunk.OioVersion},
 	}
+
+	contentFullpath, err := getAttr(AttrNameFullPrefix  + chunkID)
+	if err == nil {
+		// New chunk
+		fullpath := strings.Split(contentFullpath, "/")
+		if len(fullpath) == 5 {
+			chunk.ContentFullpath = contentFullpath
+			account, _ := url.PathUnescape(fullpath[0])
+			container, _ := url.PathUnescape(fullpath[1])
+			chunk.ContainerID = cidFromName(account, container)
+			chunk.ContentPath, _ = url.PathUnescape(fullpath[2])
+			chunk.ContentVersion, _ = url.PathUnescape(fullpath[3])
+			chunk.ContentID, _ = url.PathUnescape(fullpath[4])
+		} else {
+			return errors.New("Invalid fullpath")
+		}
+	} else {
+		if err != syscall.ENODATA {
+			return err
+		}
+		// Old chunk
+		_chunkID, err := getAttr(AttrNameChunkID)
+		if err != nil {
+			return err
+		}
+		if _chunkID != chunkID {
+			return errors.New("Wrong chunk ID")
+		}
+		detailedAttrs = append(detailedAttrs,
+				detailedAttr{AttrNameContainerID, &chunk.ContainerID},
+				detailedAttr{AttrNameContentPath, &chunk.ContentPath},
+				detailedAttr{AttrNameContentVersion, &chunk.ContentVersion},
+				detailedAttr{AttrNameContentID, &chunk.ContentID})
+	}
+	chunk.ChunkID = chunkID
+
 	for _, hs := range detailedAttrs {
 		value, err := getAttr(hs.key)
 		if err != nil && err != syscall.ENODATA {
