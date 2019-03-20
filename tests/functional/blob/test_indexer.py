@@ -88,6 +88,11 @@ class TestBlobIndexer(BaseTestCase):
         return account, container, cid, content_path, content_version, \
             content_id, chunk_id
 
+    def _delete_chunk(self, chunk_id):
+        self.blob_client.chunk_delete(
+            'http://' + self.rawx_id + '/' + chunk_id)
+        sleep(1)  # ensure chunk event have been processed
+
     def _link_chunk(self, target_chunk_id):
         account = random_str(16)
         container = random_str(16)
@@ -131,6 +136,11 @@ class TestBlobIndexer(BaseTestCase):
         self.assertEqual(expected_content_id, content_id)
         self.assertEqual(expected_chunk_id, chunk_id)
 
+        self._delete_chunk(expected_chunk_id)
+        chunks = self.rdir_client.chunk_fetch(self.rawx_id)
+        chunks = list(chunks)
+        self.assertEqual(0, len(chunks))
+
     def test_blob_indexer_with_old_chunk(self):
         expected_account, expected_container, expected_cid, \
             expected_content_path, expected_content_version, \
@@ -160,6 +170,11 @@ class TestBlobIndexer(BaseTestCase):
         self.assertEqual(expected_cid, cid)
         self.assertEqual(expected_content_id, content_id)
         self.assertEqual(expected_chunk_id, chunk_id)
+
+        self._delete_chunk(expected_chunk_id)
+        chunks = self.rdir_client.chunk_fetch(self.rawx_id)
+        chunks = list(chunks)
+        self.assertEqual(0, len(chunks))
 
     def test_blob_indexer_with_linked_chunk(self):
         _, _, expected_cid, _, _, expected_content_id, expected_chunk_id = \
@@ -207,3 +222,17 @@ class TestBlobIndexer(BaseTestCase):
                 self.assertEqual(linked_cid, cid)
                 self.assertEqual(linked_content_id, content_id)
                 self.assertEqual(linked_chunk_id, chunk_id)
+
+        self._delete_chunk(expected_chunk_id)
+        chunks = self.rdir_client.chunk_fetch(self.rawx_id)
+        chunks = list(chunks)
+        self.assertEqual(1, len(chunks))
+        cid, content_id, chunk_id, _ = chunks[0]
+        self.assertEqual(linked_cid, cid)
+        self.assertEqual(linked_content_id, content_id)
+        self.assertEqual(linked_chunk_id, chunk_id)
+
+        self._delete_chunk(linked_chunk_id)
+        chunks = self.rdir_client.chunk_fetch(self.rawx_id)
+        chunks = list(chunks)
+        self.assertEqual(0, len(chunks))
