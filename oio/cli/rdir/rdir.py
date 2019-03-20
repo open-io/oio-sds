@@ -1,4 +1,4 @@
-# Copyright (C) 2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -79,6 +79,11 @@ class RdirBootstrap(lister.Lister):
                 read_timeout=90.0)
         return _format_assignments(all_services,
                                    parsed_args.service_type.capitalize())
+
+    def run(self, parsed_args):
+        super(RdirBootstrap, self).run(parsed_args)
+        if self.error:
+            return 1
 
 
 class RdirAssignments(lister.Lister):
