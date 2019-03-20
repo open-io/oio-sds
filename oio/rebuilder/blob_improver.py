@@ -48,7 +48,7 @@ class BlobImprover(Rebuilder):
         self.sender = BeanstalkdSender(beanstalkd_addr, beanstalkd_tube,
                                        self.logger, **kwargs)
         self.retry_delay = int_value(self.conf.get('retry_delay'), 30)
-        self.req_id_prefix = 'blob-impr-'
+        self.reqid_prefix = 'blob-impr-'
 
     def _event_from_job(self, job_id, data, **kwargs):
         """Decode a JSON string into an event dictionary."""
@@ -157,16 +157,16 @@ class BlobImproverWorker(RebuilderWorker):
         "storage.content.perfectible" event.
         """
         url = event['url']
-        req_id = request_id(self.rebuilder.req_id_prefix)
+        reqid = request_id(self.rebuilder.reqid_prefix)
         descr = self.rebuilder._item_to_string(event)
-        self.logger.info('Working on %s (req_id=%s)', descr, req_id)
+        self.logger.info('Working on %s (reqid=%s)', descr, reqid)
         # There are chances that the set of chunks of the object has
         # changed between the time the event has been emitted and now.
         # It seems a good idea to reload the object metadata and compare.
         content = self.content_factory.get(url['id'], url['content'],
                                            account=url.get('account'),
                                            container_name=url.get('user'),
-                                           req_id=req_id)
+                                           reqid=reqid)
         for chunk in event['data']['chunks']:
             found = content.chunks.filter(url=chunk['id']).one()
             if not found:
@@ -197,7 +197,7 @@ class BlobImproverWorker(RebuilderWorker):
                 # TODO(FVE): try to improve all chunks of a metachunk
                 # in a single pass
                 dst = content.move_chunk(chunk, check_quality=True,
-                                         dry_run=dry_run, req_id=req_id,
+                                         dry_run=dry_run, reqid=reqid,
                                          max_attempts=max_attempts,
                                          **kwargs)
                 self.logger.debug("%s replaced by %s", src, dst['url'])

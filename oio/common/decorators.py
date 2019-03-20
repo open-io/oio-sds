@@ -32,8 +32,8 @@ def ensure_request_id(func):
     def ensure_request_id_wrapper(*args, **kwargs):
         headers = kwargs.get('headers', dict())
         if 'X-oio-req-id' not in headers:
-            if 'req_id' in kwargs:
-                headers['X-oio-req-id'] = kwargs.pop('req_id')
+            if 'reqid' in kwargs:
+                headers['X-oio-req-id'] = kwargs.pop('reqid')
             else:
                 headers['X-oio-req-id'] = request_id()
             kwargs['headers'] = headers
