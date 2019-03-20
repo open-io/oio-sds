@@ -102,6 +102,8 @@ class ObjectStorageApi(object):
         :keyword autocreate: if set, container will be created automatically.
             Default value is True.
         :type autocreate: `bool`
+        :keyword endpoint: network location of the oio-proxy to talk to.
+        :type endpoint: `str`
         """
         self.namespace = namespace
         conf = {"namespace": self.namespace}
