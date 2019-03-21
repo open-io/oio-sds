@@ -182,7 +182,7 @@ _get (int fd, const char *k, gchar **pv)
 #define GET(K,R) _get(fd, ATTR_DOMAIN "." K, &(R))
 
 gboolean
-get_rawx_info_from_fd(int fd, GError **error, gchar *hex_chunkid,
+get_rawx_fullpath_info_from_fd(int fd, GError **error, gchar *hex_chunkid,
 		struct chunk_textinfo_s *chunk)
 {
 	if (fd < 0) {
@@ -190,32 +190,16 @@ get_rawx_info_from_fd(int fd, GError **error, gchar *hex_chunkid,
 		return FALSE;
 	}
 	if (!hex_chunkid) {
-		GSETCODE(error, EINVAL, "invalid chunk ID");
+		GSETCODE(error, EINVAL, "missing chunk ID");
+		return FALSE;
+	}
+	if (!chunk) {
+		GSETCODE(error, EINVAL, "missing chunk structure");
 		return FALSE;
 	}
 
-	if (!chunk) {
-		gchar *v = NULL;
-		if (!GET(ATTR_NAME_CONTENT_STGPOL, v)) {
-			if (errno == ENOTSUP) {
-				GSETCODE(error, errno, "xattr not supported");
-				return FALSE;
-			}
-		} else {
-			g_free0 (v);
-		}
-		return TRUE;
-	}
-
-	if (!GET(ATTR_NAME_CONTENT_STGPOL, chunk->content_storage_policy)) {
-		/* just one check to detect unsupported xattr */
-		if (errno == ENOTSUP) {
-			GSETCODE(error, errno, "xattr not supported");
-			return FALSE;
-		}
-	}
-
 	gboolean rc = TRUE;
+
 	gchar *attr_name_content_fullpath = g_strconcat(
 			ATTR_DOMAIN_OIO "." ATTR_NAME_CONTENT_FULLPATH ":", hex_chunkid,
 			NULL);
@@ -264,6 +248,57 @@ get_rawx_info_from_fd(int fd, GError **error, gchar *hex_chunkid,
 		GET(ATTR_NAME_CONTENT_ID,        chunk->content_id);
 	}
 	g_free(attr_name_content_fullpath);
+
+	return rc;
+}
+
+gboolean
+get_rawx_fullpath_info_from_file(const char *p, GError **error, gchar *hex_chunkid,
+		struct chunk_textinfo_s *chunk)
+{
+	int fd = open(p, O_RDONLY);
+	if (fd < 0) {
+		GSETCODE(error, errno, "open() error: (%d) %s", errno, strerror(errno));
+		return FALSE;
+	} else {
+		gboolean rc = get_rawx_fullpath_info_from_fd(fd, error, hex_chunkid, chunk);
+		int errsav = errno;
+		metautils_pclose (&fd);
+		errno = errsav;
+		return rc;
+	}
+}
+
+gboolean
+get_rawx_info_from_fd(int fd, GError **error, gchar *hex_chunkid,
+		struct chunk_textinfo_s *chunk)
+{
+	if (fd < 0) {
+		GSETCODE(error, EINVAL, "invalid FD");
+		return FALSE;
+	}
+	if (!hex_chunkid) {
+		GSETCODE(error, EINVAL, "missing chunk ID");
+		return FALSE;
+	}
+
+	gchar *v = NULL;
+	if (!GET(ATTR_NAME_CONTENT_STGPOL, v)) {
+		/* just one check to detect unsupported xattr */
+		if (errno == ENOTSUP) {
+			GSETCODE(error, errno, "xattr not supported");
+			return FALSE;
+		}
+	}
+	if (!chunk) {
+		g_free0(v);
+		return TRUE;
+	} else {
+		chunk->content_storage_policy = v;
+	}
+
+	gboolean rc = get_rawx_fullpath_info_from_fd(fd, error, hex_chunkid,
+			chunk);
 
 	GET(ATTR_NAME_CONTENT_SIZE,    chunk->content_size);
 	GET(ATTR_NAME_CONTENT_NBCHUNK, chunk->content_chunk_nb);
