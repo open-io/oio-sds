@@ -15,10 +15,16 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+
+from __future__ import print_function
+
 import argparse
 import sys
+import warnings
 
-from oio.directory.meta1 import Meta1RefMapping
+from oio.common.logger import get_logger
+from oio.directory.meta2 import Meta2Database
+
 
 def make_arg_parser():
     descr = """
@@ -36,29 +42,32 @@ def make_arg_parser():
  If the sequence is not set, apply to all sequences.
 """
     )
-    parser.add_argument('src_service',
-                        metavar='<src-service>',
-                        help="Host of the source service (IP:PORT)")
-    parser.add_argument('dest_service',
-                        metavar='<dest-service>',
+    parser.add_argument('src',
+                        metavar='<service_id>',
+                        help="ID of the source service")
+    parser.add_argument('dst',
+                        metavar='<service_id>',
                         nargs='?',
-                        help="Host of the destination service (IP:PORT)")
+                        help="ID of the destination service")
     return parser
 
 
 if __name__ == '__main__':
+    print("DEPRECATED: You'd better use 'openio-admin container move'",
+          file=sys.stderr)
+
     args = make_arg_parser().parse_args()
 
-    moved_ok = None
-    try:
-        mapping = Meta1RefMapping(args.namespace)
-        moved = mapping.move(args.src_service, args.dest_service, args.base,
-                             'meta2')
-        kwargs = {'src_service': args.src_service}
-        moved_ok = mapping.apply(moved, **kwargs)
-    except Exception as exc:
-        print("ERROR: " + str(exc))
-    if not moved_ok:
+    meta2 = Meta2Database({'namespace': args.namespace})
+    moved = meta2.move(args.base, args.src, dst=args.dst)
+
+    if moved is None:
         sys.exit(1)
-    for base in moved_ok:
-        print(base)
+    return_code = 0
+    for res in moved:
+        if res['err'] is None:
+            print(res['base'])
+        else:
+            print("ERROR: " + str(res['err']), file=sys.stderr)
+            return_code = 1
+    sys.exit(return_code)
