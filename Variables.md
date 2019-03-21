@@ -704,6 +704,14 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_PROXY_FORCE_MASTER*
 
+### proxy.location
+
+> Specify the OpenIO SDS location of the service.
+
+ * default: ****
+ * type: string
+ * cmake directive: *OIO_PROXY_LOCATION*
+
 ### proxy.outgoing.timeout.common
 
 > In a proxy, sets the global timeout for all the other RPC issued (not conscience, not stats-related)
@@ -834,6 +842,22 @@ Used by `gcc`
  * type: gint64
  * cmake directive: *OIO_PROXY_REQUEST_MAX_DELAY*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
+
+### proxy.srv_local.patch
+
+> Should the proxy prefer local services for its own usage.
+
+ * default: **FALSE**
+ * type: gboolean
+ * cmake directive: *OIO_PROXY_SRV_LOCAL_PATCH*
+
+### proxy.srv_local.prefer
+
+> Should the proxy patch the services descriptions to let the caller prefer local services.
+
+ * default: **FALSE**
+ * type: gboolean
+ * cmake directive: *OIO_PROXY_SRV_LOCAL_PREFER*
 
 ### proxy.srv_shuffle
 
@@ -1620,6 +1644,15 @@ Used by `gcc`
  * type: guint
  * cmake directive: *OIO_SQLITEREPO_REPO_SOFT_MAX*
  * range: 0 -> 131072
+
+### sqliterepo.rss.max
+
+> Memory size ceiling we try to honor. The check is performed while closing databases. Set to 0 to autodetect the max RSS from the resource limits (see `man getrlimit` for more information). The autodetection considers the environment and is not aware of all the processes that could share that environment.
+
+ * default: **0**
+ * type: gint64
+ * cmake directive: *OIO_SQLITEREPO_RSS_MAX*
+ * range: 0 -> G_MAXINT64
 
 ### sqliterepo.service.exit_ttl
 

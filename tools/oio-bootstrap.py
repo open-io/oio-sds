@@ -1332,7 +1332,7 @@ def generate(options):
                 _h = ensure(options[t].get(SVC_HOSTS), hosts)
             env['IP'] = _h[(num-1) % len(_h)]
         if 'LOC' not in env:
-            env['LOC'] = "srv%s.vol%d" % (env['IP'].rsplit('.', 1)[-1], num)
+            env['LOC'] = "host%s.vol%d" % (env['IP'].rsplit('.', 1)[-1], num)
         if 'PORT' in env:
             out['addr'] = '%s:%s' % (env['IP'], env['PORT'])
         if 'VOLUME' in env:

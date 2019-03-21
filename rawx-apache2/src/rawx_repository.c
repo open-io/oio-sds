@@ -448,14 +448,15 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 	switch (r->method_number) {
 		case M_GET:
 			if (oio_str_parse_bool(apr_table_get(r->headers_in, "X-oio-xattr"), TRUE))
-				flags |= RESOURCE_STAT_CHUNK_READ_ATTRS;
+				flags |= RESOURCE_STAT_CHUNK_READ_ALL_ATTRS;
 			break;
 		case M_OPTIONS:
 		case M_MOVE:
-			flags |= RESOURCE_STAT_CHUNK_READ_ATTRS;
+			flags |= RESOURCE_STAT_CHUNK_READ_ALL_ATTRS;
 			break;
 		case M_DELETE:
-			/* Reading the XATTR for a DELETE is overkill, we can do better */
+			/* Only the fullpath is used for the events */
+			flags |= RESOURCE_STAT_CHUNK_READ_FULLPATH_ATTRS;
 			break;
 		case M_PUT:
 		case M_POST:
@@ -1035,51 +1036,25 @@ end_move:
 }
 
 static GError *
-remove_fullpath_from_attr(dav_resource *res,
-		const char *p, const char *hex_chunkid)
+remove_fullpath_from_attr(const char *p, const char *hex_chunkid)
 {
-	GError *err = NULL;
-	gchar xname[256], xvalue[LIMIT_LENGTH_ACCOUNTNAME + LIMIT_LENGTH_USER
-		+ LIMIT_LENGTH_CONTENTPATH + LIMIT_LENGTH_VERSION + STRLEN_CONTENTID
-		+ 4];
-
 	int fd = open(p, O_WRONLY);
 	if (fd < 0) {
 		return NEWERROR(errno, "open() error: (%d) %s", errno, strerror(errno));
 	}
 
-	/* Load the fullpath */
+	/* Remove the xattr, now the fullpath has been validated */
+	GError *err = NULL;
+	gchar xname[256], xvalue[LIMIT_LENGTH_ACCOUNTNAME + LIMIT_LENGTH_USER
+			+ LIMIT_LENGTH_CONTENTPATH + LIMIT_LENGTH_VERSION
+			+ STRLEN_CONTENTID + 4];
 	memset(xvalue, 0, sizeof(xvalue));
 	g_snprintf(xname, sizeof(xname), "%s:%s",
-			   ATTR_DOMAIN_OIO "." ATTR_NAME_CONTENT_FULLPATH, hex_chunkid);
-	ssize_t rc = fgetxattr(fd, xname, xvalue, sizeof(xvalue) - 1);
-	if (rc < 0) {
-		err = NEWERROR(errno, "fgetxattr() error: (%d) %s", errno, strerror(errno));
-		goto label_exit;
-	}
-
-	struct oio_url_s *url = oio_url_empty();
-	if (!oio_url_set(url, OIOURL_FULLPATH, xvalue)) {
-		err = ERRPTF("Invalid chunk XATTR");
-		goto label_exit;
-	}
-
-	res->info->chunk.chunk_id = apr_pstrdup(res->pool, hex_chunkid);
-	res->info->chunk.content_fullpath = apr_pstrdup(res->pool, xvalue);
-	res->info->chunk.container_id = apr_pstrdup(res->pool, oio_url_get(url, OIOURL_HEXID));
-	res->info->chunk.content_path = apr_pstrdup(res->pool, oio_url_get(url, OIOURL_PATH));
-	res->info->chunk.content_id = apr_pstrdup(res->pool, oio_url_get(url, OIOURL_CONTENTID));
-	res->info->chunk.content_version = apr_pstrdup(res->pool, oio_url_get(url, OIOURL_VERSION));
-
-	oio_url_clean(url);
-
-	/* Remove the xattr, now the fullpath has been validated */
-	rc = fremovexattr(fd, xname);
-	if (rc < 0) {
+			ATTR_DOMAIN_OIO "." ATTR_NAME_CONTENT_FULLPATH, hex_chunkid);
+	if (fremovexattr(fd, xname) < 0) {
 		err = NEWERROR(errno, "fremovexattr() error: (%d) %s", errno, strerror(errno));
 	}
 
-label_exit:
 	close(fd);
 	return err;
 }
@@ -1116,8 +1091,8 @@ dav_rawx_remove_resource(dav_resource *resource, dav_response **response)
 	}
 
 	/* Remove the soft link on the chunk: all the information is in an XATTR
-	 * that we want to remove. No need to load all the XATTR, just 1 is enough */
-	GError *local_error = remove_fullpath_from_attr(resource,
+	 * that we want to remove. */
+	GError *local_error = remove_fullpath_from_attr(
 			resource_get_pathname(resource), resource->info->hex_chunkid);
 	if (local_error) {
 		GRID_WARN("Error to remove content fullpath: (%d) %s",

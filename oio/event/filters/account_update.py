@@ -17,7 +17,6 @@
 from oio.common.constants import REQID_HEADER
 from oio.common.exceptions import ClientException, OioTimeout
 from oio.common.utils import request_id
-from oio.account.client import AccountClient
 from oio.event.evob import Event, EventError, EventTypes
 from oio.event.filters.base import Filter
 
@@ -32,7 +31,7 @@ CONTAINER_EVENTS = [
 class AccountUpdateFilter(Filter):
 
     def init(self):
-        self.account = AccountClient(self.conf, logger=self.logger)
+        self.account = self.app_env['account_client']
 
     def process(self, env, cb):
         event = Event(env)

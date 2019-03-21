@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -21,6 +21,7 @@ License along with this library.
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <malloc.h>
 
 #include <metautils/lib/metautils.h>
 #include <sqliterepo/sqliterepo_variables.h>
@@ -104,6 +105,34 @@ struct sqlx_cache_s
 };
 
 /* ------------------------------------------------------------------------- */
+
+static gboolean
+_ram_exhausted(void)
+{
+#if HAVE_MALLINFO
+	/* JFS: check on the glibc level. It would not detect a memory exhaust
+	 * if another library would be in use (e.g. jemalloc, dietlib, etc). But
+	 * it causes no syscall and currently matches our usage on the field
+	 * (where the glibc is used). */
+	if (sqliterepo_max_rss > 0) {
+		struct mallinfo mi = mallinfo();
+		gint64 total = 0;
+		total += mi.arena;
+		total += mi.hblkhd;
+		if (total > sqliterepo_max_rss) {
+			GRID_DEBUG("RAM [MiB] used %" G_GINT64_FORMAT" max %" G_GINT64_FORMAT,
+					total / (1024 * 1024),
+					sqliterepo_max_rss / (1024 * 1024));
+		} else {
+			GRID_TRACE2("RAM [MiB] used %" G_GINT64_FORMAT" max %" G_GINT64_FORMAT,
+					total / (1024 * 1024),
+					sqliterepo_max_rss / (1024 * 1024));
+		}
+		return total > sqliterepo_max_rss;
+	}
+#endif
+	return FALSE;
+}
 
 static gboolean
 base_id_out(sqlx_cache_t *cache, gint bd)
@@ -337,7 +366,7 @@ sqlx_base_reserve(sqlx_cache_t *cache, const hashstr_t *hs,
 		if (_has_idle_unlocked(cache)) {
 			return NULL;  // No free base but we can recycle an idle one
 		} else {
-			return NEWERROR(CODE_UNAVAILABLE, "Max bases reached");
+			return BUSY("Max bases reached");
 		}
 	}
 
@@ -746,6 +775,14 @@ sqlx_cache_unlock_and_close_base(sqlx_cache_t *cache, gint bd, guint32 flags)
 						sqlx_base_move_to_list(cache, base, SQLX_BASE_IDLE_HOT);
 					else
 						sqlx_base_move_to_list(cache, base, SQLX_BASE_IDLE);
+
+					/* Optimistic memory ceiling management.
+					 * That logic will let an overhead on the limit: the base
+					 * that will be expired won't return its memory pages to
+					 * the kernel but to the sqlite3 pool. The pages will
+					 * become available to other bases. */
+					if (_ram_exhausted() && _has_idle_unlocked(cache))
+						sqlx_expire_first_idle_base(cache, 0);
 				}
 			}
 			break;

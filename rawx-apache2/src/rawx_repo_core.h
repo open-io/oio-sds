@@ -82,8 +82,9 @@ struct dav_stream
 	apr_size_t total_size;
 };
 
-#define RESOURCE_STAT_CHUNK_READ_ATTRS 0x01
-#define RESOURCE_STAT_CHUNK_PENDING    0x02
+#define RESOURCE_STAT_CHUNK_READ_ALL_ATTRS      0x01
+#define RESOURCE_STAT_CHUNK_READ_FULLPATH_ATTRS 0x02
+#define RESOURCE_STAT_CHUNK_PENDING             0x04
 
 void resource_stat_chunk(dav_resource *resource, int flags);
 

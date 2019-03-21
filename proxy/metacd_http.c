@@ -1,7 +1,7 @@
 /*
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -40,6 +40,8 @@ gchar *ns_name = NULL;
 struct oio_lb_world_s *lb_world = NULL;
 struct oio_lb_s *lb = NULL;
 struct hc_resolver_s *resolver = NULL;
+
+oio_location_t location_num = 0;
 
 GRWLock csurl_rwlock = {0};
 gchar **csurl = NULL;
@@ -716,6 +718,9 @@ _patch_and_apply_configuration(void)
 	_patch_configuration_fd();
 	oio_resolver_cache_enabled = BOOL(flag_cache_enabled);
 	network_server_reconfigure(server);
+
+	location_num = oio_proxy_location[0]
+		? location_from_dotted_string(oio_proxy_location) : 0;
 }
 
 static void

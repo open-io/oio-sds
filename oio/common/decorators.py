@@ -34,8 +34,8 @@ def ensure_request_id(func):
     def ensure_request_id_wrapper(*args, **kwargs):
         headers = kwargs.setdefault('headers', dict())
         if REQID_HEADER not in headers:
-            if 'req_id' in kwargs:
-                headers[REQID_HEADER] = kwargs.pop('req_id')
+            if 'reqid' in kwargs:
+                headers[REQID_HEADER] = kwargs.pop('reqid')
             else:
                 headers[REQID_HEADER] = request_id()
         return func(*args, **kwargs)

@@ -82,7 +82,7 @@ class BlobClient(object):
 
     def __init__(self, conf=None, connection_pool=None, perfdata=None,
                  **kwargs):
-        self.http_pool = connection_pool or get_pool_manager()
+        self.http_pool = connection_pool or get_pool_manager(**kwargs)
         self.perfdata = perfdata
         self.cache = ServiceCache(conf, self.http_pool)
 
