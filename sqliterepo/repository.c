@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -1617,6 +1617,22 @@ sqlx_repository_dump_base_fd_no_copy(struct sqlx_sqlite3_s *sq3,
 	EXTRA_ASSERT(read_file_cb != NULL);
 	const char *fallback_msg = "falling back on legacy dump function";
 
+	/* Detect a wrong/corrupted database file */
+	rc = sqlx_exec(sq3->db, "PRAGMA integrity_check");
+	if (rc != SQLITE_OK) {
+		if (rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT) {
+			err = NEWERROR(CODE_CORRUPT_DATABASE,
+					"invalid database file: (%d) %s",
+					rc, sqlite_strerror(rc));
+			sq3->corrupted = TRUE;
+		} else {
+			err = NEWERROR(CODE_INTERNAL_ERROR,
+					"failed to check base: (%d) %s",
+					rc, sqlite_strerror(rc));
+		}
+		goto end;
+	}
+
 	if ((rc = sqlite3_db_cacheflush(sq3->db)) != SQLITE_OK) {
 		GRID_NOTICE("Failed to flush [%s][%s]: %s, %s",
 					sq3->name.base, sq3->name.type, sqlite_strerror(rc),
@@ -1645,6 +1661,7 @@ sqlx_repository_dump_base_fd_no_copy(struct sqlx_sqlite3_s *sq3,
 		}
 	}
 
+end:
 	EXTRA_ASSERT(fd < 0);
 	return err;
 }
