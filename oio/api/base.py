@@ -25,7 +25,8 @@ from oio.common import exceptions
 from oio.common.utils import deadline_to_timeout, monotonic_time
 from oio.common.constants import ADMIN_HEADER, \
     TIMEOUT_HEADER, PERFDATA_HEADER, FORCEMASTER_HEADER, \
-    CONNECTION_TIMEOUT, READ_TIMEOUT, REQID_HEADER, STRLEN_REQID
+    CONNECTION_TIMEOUT, READ_TIMEOUT, REQID_HEADER, STRLEN_REQID, \
+    HTTP_CONTENT_TYPE_JSON
 
 
 class HttpApi(object):
@@ -154,7 +155,7 @@ class HttpApi(object):
 
         # Convert json and add Content-Type
         if json:
-            out_headers["Content-Type"] = "application/json"
+            out_headers["Content-Type"] = HTTP_CONTENT_TYPE_JSON
             data = jsonlib.dumps(json)
 
         # Trigger performance measurments
@@ -194,11 +195,15 @@ class HttpApi(object):
                 service_perfdata['overall'] = service_perfdata.get(
                     'overall', 0.0) + request_end - request_start
             body = resp.data
-            if body:
+            if body and resp.headers.get('Content-Type') \
+                    == HTTP_CONTENT_TYPE_JSON:
                 try:
                     body = jsonlib.loads(body.decode('utf-8'))
                 except (UnicodeDecodeError, ValueError):
-                    pass
+                    self.__logger().warn(
+                        "Response body isn't decodable JSON: %s", body)
+                    raise exceptions.OioException(
+                        "Response body isn't decodable JSON")
             if perfdata is not None and PERFDATA_HEADER in resp.headers:
                 service_perfdata = perfdata[self.service_type]
                 for header_val in resp.headers[PERFDATA_HEADER].split(','):
