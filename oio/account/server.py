@@ -19,7 +19,8 @@ from werkzeug.exceptions import NotFound, BadRequest, Conflict, HTTPException
 from functools import wraps
 
 from oio.account.backend import AccountBackend
-from oio.common.constants import REQID_HEADER, STRLEN_REQID
+from oio.common.constants import REQID_HEADER, STRLEN_REQID, \
+    HTTP_CONTENT_TYPE_JSON
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.wsgi import WerkzeugApp
@@ -154,7 +155,7 @@ class Account(WerkzeugApp):
     #    Server: gunicorn/19.7.1
     #    Date: Wed, 22 Nov 2017 09:45:03 GMT
     #    Connection: keep-alive
-    #    Content-Type: text/json; charset=utf-8
+    #    Content-Type: application/json
     #    Content-Length: 20
     #
     #    {"account_count": 0}
@@ -163,7 +164,7 @@ class Account(WerkzeugApp):
     @force_master
     def on_status(self, req, **kwargs):
         status = self.backend.status(**kwargs)
-        return Response(json.dumps(status), mimetype='text/json')
+        return Response(json.dumps(status), mimetype=HTTP_CONTENT_TYPE_JSON)
 
     # ACCT{{
     # PUT /v1.0/account/create?id=<account_name>
@@ -224,7 +225,7 @@ class Account(WerkzeugApp):
     #    Server: gunicorn/19.9.0
     #    Date: Wed, 01 Aug 2018 12:17:25 GMT
     #    Connection: keep-alive
-    #    Content-Type: text/json; charset=utf-8
+    #    Content-Type: application/json
     #    Content-Length: 13
     #
     #    ["myaccount"]
@@ -236,7 +237,7 @@ class Account(WerkzeugApp):
         accounts = self.backend.list_accounts(**kwargs)
         if accounts is None:
             return NotFound('No account found')
-        return Response(json.dumps(accounts), mimetype='text/json')
+        return Response(json.dumps(accounts), mimetype=HTTP_CONTENT_TYPE_JSON)
 
     # ACCT{{
     # POST /v1.0/account/delete?id=<account_name>
@@ -344,7 +345,7 @@ class Account(WerkzeugApp):
     #    Server: gunicorn/19.9.0
     #    Date: Wed, 01 Aug 2018 12:17:25 GMT
     #    Connection: keep-alive
-    #    Content-Type: text/plain; charset=utf-8
+    #    Content-Type: application/json
     #    Content-Length: 107
     #
     # .. code-block:: json
@@ -365,7 +366,7 @@ class Account(WerkzeugApp):
         account_id = self._get_account_id(req)
         raw = self.backend.info_account(account_id, **kwargs)
         if raw is not None:
-            return Response(json.dumps(raw), mimetype='text/json')
+            return Response(json.dumps(raw), mimetype=HTTP_CONTENT_TYPE_JSON)
         return NotFound('Account not found')
 
     # ACCT{{
@@ -391,7 +392,7 @@ class Account(WerkzeugApp):
     #    Server: gunicorn/19.9.0
     #    Date: Wed, 01 Aug 2018 12:17:25 GMT
     #    Connection: keep-alive
-    #    Content-Type: text/plain; charset=utf-8
+    #    Content-Type: application/json
     #    Content-Length: 122
     #
     # .. code-block:: json
@@ -450,7 +451,7 @@ class Account(WerkzeugApp):
         if next_marker is not None:
             info['next_marker'] = next_marker
         result = json.dumps(info)
-        return Response(result, mimetype='text/json')
+        return Response(result, mimetype=HTTP_CONTENT_TYPE_JSON)
 
     # ACCT{{
     # GET /v1.0/account/containers?id=<account_name>
@@ -475,7 +476,7 @@ class Account(WerkzeugApp):
     #    Server: gunicorn/19.9.0
     #    Date: Wed, 01 Aug 2018 12:17:25 GMT
     #    Connection: keep-alive
-    #    Content-Type: text/plain; charset=utf-8
+    #    Content-Type: application/json
     #    Content-Length: 122
     #
     # .. code-block:: json
@@ -519,7 +520,7 @@ class Account(WerkzeugApp):
         info['listing'] = user_list
         # TODO(FVE): add "truncated" entry telling if the listing is truncated
         result = json.dumps(info)
-        return Response(result, mimetype='text/json')
+        return Response(result, mimetype=HTTP_CONTENT_TYPE_JSON)
 
     # ACCT{{
     # PUT /v1.0/account/container/update?id=<account_name>
@@ -557,7 +558,7 @@ class Account(WerkzeugApp):
     #    Server: gunicorn/19.9.0
     #    Date: Wed, 01 Aug 2018 12:17:25 GMT
     #    Connection: keep-alive
-    #    Content-Type: text/plain; charset=utf-8
+    #    Content-Type: application/json
     #    Content-Length: 117
     #
     # }}ACCT
@@ -579,7 +580,7 @@ class Account(WerkzeugApp):
             object_count, bytes_used, damaged_objects, missing_chunks,
             bucket_name=bucket_name, **kwargs)
         result = json.dumps(info)
-        return Response(result)
+        return Response(result, mimetype=HTTP_CONTENT_TYPE_JSON)
 
     # ACCT{{
     # PUT /v1.0/account/container/reset?id=<account_name>
@@ -713,7 +714,7 @@ class Account(WerkzeugApp):
     #    Server: gunicorn/19.9.0
     #    Date: Wed, 01 Aug 2018 12:17:25 GMT
     #    Connection: keep-alive
-    #    Content-Type: text/plain; charset=utf-8
+    #    Content-Type: application/json
     #    Content-Length: 128
     #
     # .. code-block:: json
@@ -738,7 +739,7 @@ class Account(WerkzeugApp):
         bname = self._get_item_id(req, what='bucket')
         raw = self.backend.get_bucket_info(bname, **kwargs)
         if raw is not None:
-            return Response(json.dumps(raw), mimetype='text/json')
+            return Response(json.dumps(raw), mimetype=HTTP_CONTENT_TYPE_JSON)
         return NotFound('Bucket not found')
 
     # ACCT{{
@@ -773,7 +774,7 @@ class Account(WerkzeugApp):
     #    Server: gunicorn/19.9.0
     #    Date: Wed, 01 Aug 2018 12:17:25 GMT
     #    Connection: keep-alive
-    #    Content-Type: text/plain; charset=utf-8
+    #    Content-Type: application/json
     #
     # .. code-block:: json
     #
@@ -800,7 +801,7 @@ class Account(WerkzeugApp):
         info = self.backend.update_bucket_metadata(
             bname, metadata, to_delete, **kwargs)
         if info is not None:
-            return Response(json.dumps(info), mimetype='text/json')
+            return Response(json.dumps(info), mimetype=HTTP_CONTENT_TYPE_JSON)
         return NotFound('Bucket not found')
 
     # ACCT{{
@@ -860,7 +861,7 @@ class Account(WerkzeugApp):
     #    Server: gunicorn/19.9.0
     #    Date: Wed, 01 Aug 2018 12:17:25 GMT
     #    Connection: keep-alive
-    #    Content-Type: text/plain; charset=utf-8
+    #    Content-Type: application/json
     #    Content-Length: 128
     #
     # .. code-block:: json
@@ -885,7 +886,7 @@ class Account(WerkzeugApp):
         cname = self._get_item_id(req, key='container', what='container')
         raw = self.backend.get_container_info(account_id, cname, **kwargs)
         if raw is not None:
-            return Response(json.dumps(raw), mimetype='text/json')
+            return Response(json.dumps(raw), mimetype=HTTP_CONTENT_TYPE_JSON)
         return NotFound('Container not found')
 
 
