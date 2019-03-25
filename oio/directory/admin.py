@@ -1,17 +1,17 @@
-# Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
 #
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 3.0 of the License, or (at your option) any later version.
 #
-# This program is distributed in the hope that it will be useful,
+# This library is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
 #
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library.
 
 from functools import wraps
 from oio.common.client import ProxyClient
@@ -47,9 +47,33 @@ class AdminClient(ProxyClient):
         super(AdminClient, self).__init__(
             conf, request_prefix="/admin", **kwargs)
         kwargs.pop('pool_manager', None)
-        self.forwarder = ProxyClient(
-            conf, request_prefix="/forward", pool_manager=self.pool_manager,
-            no_ns_in_url=True, **kwargs)
+        self._kwargs = kwargs
+        self._cache_client = None
+        self._forwarder = None
+
+    @property
+    def cache_client(self):
+        """
+        Instanciate a client object for '/cache/*' proxy routes.
+        """
+        if self._cache_client is None:
+            self._cache_client = ProxyClient(
+                self.conf, request_prefix="/cache",
+                pool_manager=self.pool_manager,
+                no_ns_in_url=True, **self._kwargs)
+        return self._cache_client
+
+    @property
+    def forwarder(self):
+        """
+        Instanciate a client object for '/forward/*' proxy routes.
+        """
+        if self._forwarder is None:
+            self._forwarder = ProxyClient(
+                self.conf, request_prefix="/forward",
+                pool_manager=self.pool_manager,
+                no_ns_in_url=True, **self._kwargs)
+        return self._forwarder
 
     @loc_params
     def election_debug(self, params, **kwargs):
@@ -215,13 +239,49 @@ class AdminClient(ProxyClient):
         _, body = self._request('POST', '/remove', params=params, **kwargs)
         return body
 
+    # Proxy's cache actions ###########################################
+
+    def _proxy_endpoint(self, proxy_netloc=None):
+        if proxy_netloc and proxy_netloc != self.cache_client.proxy_netloc:
+            return self.cache_client.endpoint.replace(
+                self.cache_client.proxy_netloc, proxy_netloc)
+        else:
+            return self.cache_client.endpoint
+
+    def proxy_flush_cache(self, high=True, low=True, proxy_netloc=None,
+                          **kwargs):
+        """
+        Flush "high" and "low" proxy caches. By default, flush the cache of
+        the local proxy. If `proxy_netloc` is provided, flush the cache
+        of this proxy.
+        """
+        endpoint = self._proxy_endpoint(proxy_netloc)
+        if high:
+            url = endpoint + '/flush/high'
+            self.cache_client._direct_request('POST', url, **kwargs)
+        if low:
+            url = endpoint + '/flush/low'
+            self.cache_client._direct_request('POST', url, **kwargs)
+
+    def proxy_get_cache_status(self, proxy_netloc=None, **kwargs):
+        """
+        Get the status of the high (conscience and meta0) and low (meta1)
+        cache, including the current number of entries.
+        """
+        endpoint = self._proxy_endpoint(proxy_netloc)
+        url = endpoint + '/status'
+        _resp, body = self.cache_client._direct_request('GET', url, **kwargs)
+        return body
+
+    # Forwarded actions ###############################################
+
     def _forward_service_action(self, svc_id, action, **kwargs):
         """Execute service-specific actions."""
         self.forwarder._request('POST', action,
                                 params={'id': svc_id}, **kwargs)
 
     def service_flush_cache(self, svc_id, **kwargs):
-        """Flush the resolver cache of an sqlx-bases service."""
+        """Flush the resolver cache of an sqliterepo-based service."""
         self._forward_service_action(svc_id, '/flush', **kwargs)
 
     def service_set_live_config(self, svc_id, config, **kwargs):
