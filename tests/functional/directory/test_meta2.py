@@ -19,6 +19,7 @@ import random
 from oio.api.object_storage import ObjectStorageApi
 from oio.common.utils import cid_from_name
 from oio.directory.meta2 import Meta2Database
+from tests.functional.cli import execute
 from tests.utils import BaseTestCase, random_str
 
 
@@ -79,11 +80,12 @@ class TestMeta2Database(BaseTestCase):
             self.assertNotIn(src, new_peers)
             self.assertEqual(len(expected_peers)+1, len(new_peers))
 
-        properties = self.api.container_get_properties(
-            self.account, self.reference)
-        peers = properties['system']['sys.peers']
-        new_peers_bis = peers.split(',')
-        self.assertListEqual(sorted(new_peers), sorted(new_peers_bis))
+        if self.service_type == 'meta2':
+            properties = self.api.container_get_properties(
+                self.account, self.reference)
+            peers = properties['system']['sys.peers']
+            new_peers_bis = peers.split(',')
+            self.assertListEqual(sorted(new_peers), sorted(new_peers_bis))
 
         return (src, expected_peers)
 
@@ -247,3 +249,13 @@ class TestMeta2Database(BaseTestCase):
                                data="move meta2", obj_name="test2")
         for _ in range(0, 5):
             self.api.object_show(self.account, self.reference, "test2")
+
+    def test_move_sqlx(self):
+        self.meta2_database = Meta2Database(self.conf, sqlx=True)
+        self.service_type = 'sqlx'
+
+        execute('oio-sqlx -O AutoCreate %s/%s/%s '
+                '"create table foo (a INT, b TEXT)"'
+                % (self.ns, self.account, self.reference))
+
+        self._test_move()

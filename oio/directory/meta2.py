@@ -26,9 +26,12 @@ class Meta2Database(object):
 
     def __init__(self, conf, logger=None,
                  admin_client=None, conscience_client=None, rdir_client=None,
-                 directory_client=None):
+                 directory_client=None, sqlx=False):
         self.conf = conf
-        self.service_type = 'meta2'
+        if sqlx:
+            self.service_type = 'sqlx'
+        else:
+            self.service_type = 'meta2'
         self.logger = logger or get_logger(self.conf)
 
         self._admin = admin_client
