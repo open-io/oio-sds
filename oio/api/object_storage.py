@@ -395,7 +395,7 @@ class ObjectStorageApi(object):
         :keyword end_marker:
         :keyword prefix:
         :keyword delimiter:
-        :keyword s3_buckets_only: only listing s3 buckets
+        :keyword s3_buckets_only: list only S3 buckets.
         :type s3_buckets_only: `bool`
         :type marker: `bool`
         :return: the list of containers of an account
