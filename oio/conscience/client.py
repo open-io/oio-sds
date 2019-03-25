@@ -129,8 +129,12 @@ class ConscienceClient(ProxyClient):
         :param type_: the type of services to get (ex: 'rawx')
         :type type_: `str`
         :param full: whether to get all metrics for each service
-        :returns: the list of all services of the specified type
-        :rtype: `list` of `dict`
+        :returns: the list of all services of the specified type.
+        :rtype: `list` of `dict` objects, each containing at least
+            - 'addr' (`str`),
+            - 'id' (`str`),
+            - 'score' (`int`),
+            - 'tags' (`dict`).
         """
         params = {'type': type_}
         if full:
