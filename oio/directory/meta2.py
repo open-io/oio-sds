@@ -175,15 +175,50 @@ class Meta2Database(object):
                 "Destination service must be a %s service" % self.service_type)
         return dst
 
-    def _copy_base(self, base, src, dst):
-        """Step 1 of base reassignation algorithm."""
+    def _has_base(self, base, src, dst):
         cid, _ = self.get_cid_and_seq(base)
-        current_peers = self._get_peers(base)
+        peers_to_copy = list()
+        master = None
 
-        self._set_peers(base, src, dst)
+        has = self.admin.has_base(self.service_type, cid=cid)
+        for service, status in has.items():
+            if status['status']['status'] == 200:
+                peers_to_copy.append(service)
+                continue
+            self.logger.warn(
+                "Missing base (base=%s src=%s dst=%s service=%s "
+                "status=%s)", base, src, dst, service, status)
 
-        for true_src in current_peers:
-            # FIXME(adu): Copy only source if the source is master
+        if not peers_to_copy:
+            raise ValueError("No base to copy")
+
+        try:
+            election = self.admin.election_status(self.service_type, cid=cid)
+            for service, status in election['peers'].items():
+                if status['status']['status'] == 200:
+                    master = service
+                    break
+        except Exception as exc:
+            self.logger.warn(
+                "Failed to get election status (base=%s src=%s dst=%s): %s",
+                base, src, dst, exc)
+
+        if master is None:
+            self.logger.warn("No master")
+        elif master not in peers_to_copy:
+            self.logger.warn("Missing base for the master")
+        else:
+            # Prefer to copy the master
+            peers_to_copy.remove(master)
+            peers_to_copy.append(master)
+            peers_to_copy.reverse()
+
+        return peers_to_copy
+
+    def _copy_base(self, base, src, dst, peers_to_copy):
+        cid, _ = self.get_cid_and_seq(base)
+
+        for true_src in peers_to_copy:
             self.logger.debug(
                 "Copying base (base=%s src=%s dst=%s true_src=%s)",
                 base, src, dst, true_src)
@@ -195,11 +230,10 @@ class Meta2Database(object):
                 self.logger.warn(
                     "Failed to copy base (base=%s src=%s dst=%s true_src=%s): "
                     "%s", base, src, dst, true_src, exc)
-                if true_src == current_peers[-1]:
+                if true_src == peers_to_copy[-1]:
                     raise
 
     def _link_service(self, base, src, dst):
-        """Step 2 of base reassignation algorithm."""
         cid, seq = self.get_cid_and_seq(base)
         peers = self._get_peers(base)
         args = self._get_args(base)
@@ -220,7 +254,6 @@ class Meta2Database(object):
             self.rdir.meta2_index_delete(volume_id=src, container_id=cid)
 
     def _reset_election(self, base, src, dst):
-        """Step 3 of base reassignation algorithm."""
         cid, _ = self.get_cid_and_seq(base)
         peers = self._get_peers(base)
 
@@ -244,7 +277,7 @@ class Meta2Database(object):
                 if status['status']['status'] in (200, 303):
                     continue
                 self.logger.warn(
-                    "Election not started (base=%s src=%s dst=%s service=%s, "
+                    "Election not started (base=%s src=%s dst=%s service=%s "
                     "status=%s)", base, src, dst, service, status)
         except Exception as exc:
             self.logger.warn(
@@ -261,13 +294,31 @@ class Meta2Database(object):
                 "Moving base (base=%s src=%s dst=%s)", base, src, dst)
 
             try:
-                self._copy_base(base, src, dst)
+                """Step 1 of base reassignation algorithm."""
+                peers_to_copy = self._has_base(base, src, dst)
+            except Exception as exc:
+                self.logger.error(
+                    "Failed to check if each peer exists (base=%s src=%s "
+                    "dst=%s): %s", base, src, dst, exc)
+                raise
+            try:
+                """Step 2 of base reassignation algorithm."""
+                self._set_peers(base, src, dst)
+            except Exception as exc:
+                self.logger.error(
+                    "Failed to set new peers (base=%s src=%s dst=%s): %s",
+                    base, src, dst, exc)
+                raise
+            try:
+                """Step 3 of base reassignation algorithm."""
+                self._copy_base(base, src, dst, peers_to_copy)
             except Exception as exc:
                 self.logger.error(
                     "Failed to copy base (base=%s src=%s dst=%s): %s",
                     base, src, dst, exc)
                 raise
             try:
+                """Step 4 of base reassignation algorithm."""
                 self._link_service(base, src, dst)
             except Exception as exc:
                 self.logger.error(
@@ -275,6 +326,7 @@ class Meta2Database(object):
                     base, src, dst, exc)
                 raise
             try:
+                """Step 5 of base reassignation algorithm."""
                 self._reset_election(base, src, dst)
             except Exception as exc:
                 self.logger.error(
