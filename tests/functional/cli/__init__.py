@@ -66,6 +66,16 @@ class CliTestCase(BaseTestCase):
         return execute('openio', stdin='\n'.join(commands), env=env)
 
     @classmethod
+    def openio_admin(cls, cmd, env=None):
+        """Executes openio-admin CLI command."""
+        return execute('openio-admin ' + cmd, env=env)
+
+    @classmethod
+    def openio_admin_batch(cls, commands, env=None):
+        """Execute several commands in the same openio-admin CLI process."""
+        return execute('openio-admin', stdin='\n'.join(commands), env=env)
+
+    @classmethod
     def get_opts(cls, fields, format='value'):
         return ' -f {0} {1}'.format(
             format, ' '.join(['-c ' + it for it in fields]))
