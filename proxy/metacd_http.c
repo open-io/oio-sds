@@ -914,10 +914,16 @@ configure_request_handlers (void)
 	SET("/config/#POST", action_set_config);
 
 	SET("/forward/config/#POST", action_forward_set_config);
-
 	SET("/forward/config/#GET", action_forward_get_config);
+
+	/* Get the version of the service. */
 	SET("/forward/version/#GET", action_forward_get_version);
+
+	/* Get information about the (sqliterepo-based) service, like the number
+	 * of bases currently open, the number of managed elections. */
 	SET("/forward/info/#GET", action_forward_get_info);
+
+	/* Get request statistics for the specified service. */
 	SET("/forward/stats/#GET", action_forward_stats);
 
 	/* TODO(jfs): remove in a further release, present for the sake of backward
@@ -926,15 +932,33 @@ configure_request_handlers (void)
 
 	SET("/forward/ping/#GET", action_forward_get_ping);
 	SET("/forward/kill/#POST", action_forward_kill);
+
+	/* Reload the internal load balancer of the specified sqliterepo
+	 * service. */
 	SET("/forward/reload/#POST", action_forward_reload);
+
+	/* Flush the high and low caches of the specified sqliterepo service. */
 	SET("/forward/flush/#POST", action_forward_flush);
+
+	/* Ask a service to release memory to the system. */
 	SET("/forward/lean-glib/#POST", action_forward_lean_glib);
+	/* Ask sqlite3 to release memory. */
 	SET("/forward/lean-sqlx/#POST", action_forward_lean_sqlx);
 
+	/* Get a status of the high (conscience and meta0) and low (meta1)
+	 * cache, including the current number of entries. */
 	SET("/cache/status/#GET", action_cache_status);
+	/* Get the list of all services known to the internal load balancer,
+	 * with their ID and their network location. */
 	SET("/cache/show/#GET", action_cache_show);
+	/* Flush high and low caches and the internal load balancer.
+	 * DANGEROUS, LB requests will fail during the next few seconds! */
 	SET("/cache/flush/local/#POST", action_cache_flush_local);
+	/* Flush "high" cache, i.e. the list of all meta0 services
+	 * and the prefix/meta1 association (content of meta0 DB). */
 	SET("/cache/flush/high/#POST", action_cache_flush_high);
+	/* Flush "low" cache, i.e the reference/service association
+	 * (content of meta1 DB). */
 	SET("/cache/flush/low/#POST", action_cache_flush_low);
 
 	// New routes
@@ -1017,13 +1041,20 @@ configure_request_handlers (void)
 	/* Ask each peer if base exists ("DB_HAS"). */
 	SET("/$NS/admin/has/#POST", action_admin_has);
 
+	/* Get information about one of the services hosting the specified
+	 * container. Requires a CID and a service type.
+	 * Same as calling forward/info on the service hosting the CID. */
 	SET("/$NS/admin/info/#POST", action_admin_info);
 
 	/* Ask each peer for the status of the election.
 	 * 200 -> master, 303 -> slave. */
 	SET("/$NS/admin/status/#POST", action_admin_status);
 
+	/* Ask sqlite3 to release memory. Requires a CID and a service type.
+	 * Same as calling POST forward/lean-sqlx on the service
+	 * hosting the CID. */
 	SET("/$NS/admin/drop_cache/#POST", action_admin_drop_cache);
+
 	SET("/$NS/admin/sync/#POST", action_admin_sync);
 
 	/* Ask each peer to exit the election ("DB_LEAVE"). */
