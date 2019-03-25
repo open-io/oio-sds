@@ -61,7 +61,10 @@ class ContainerMove(ContainerCommandMixin, ItemMoveCommandMixin,
         meta2 = Meta2Database(self.app.client_manager.client_conf,
                               logger=self.log)
         for container in parsed_args.containers:
-            cid = cid_from_name(self.app.options.account, container)
+            if parsed_args.is_cid:
+                cid = container
+            else:
+                cid = cid_from_name(self.app.options.account, container)
             moved = meta2.move(cid, parsed_args.src, dst=parsed_args.dst)
             if moved is None:
                 continue
