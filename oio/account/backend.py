@@ -406,71 +406,66 @@ class AccountBackend(RedisConn):
     def _should_be_listed(self, c_id, s3_buckets_only):
         return not s3_buckets_only or self.buckets_pattern.match(c_id)
 
-    def _raw_listing(self, account_id, limit, marker, end_marker, delimiter,
-                     prefix, s3_buckets_only=False):
-        """Fetch tuple list of containers matching options.
-           Tuple is [(container|prefix),
-                     0 *reserved for objects*,
-                     0 *reserved for size*,
-                     0 for container, 1 for prefix]"""
-        conn = self.conn
-        if delimiter and not prefix:
-            prefix = ''
+    def _raw_listing(self, account_id, limit, marker=None, end_marker=None,
+                     delimiter=None, prefix=None, s3_buckets_only=False):
+        """
+        Fetch a list of tuples of containers matching the specified options.
+        Each tuple is formed like
+            [(container|prefix),
+             0 *reserved for objects*,
+             0 *reserved for size*,
+             0 for container, 1 for prefix,
+             0 *reserved for mtime*]
+        """
         orig_marker = marker
+        results = list()
+        beyond_prefix = False
+        if prefix is None:
+            prefix = ''
 
-        results = []
-        while len(results) < limit:
-            min = '-'
-            max = '+'
+        while len(results) < limit and not beyond_prefix:
+            min_k = '-'
+            max_k = '+'
             if end_marker:
-                max = '(' + end_marker
-            if marker and marker >= prefix:
-                min = '(' + marker
-            elif prefix:
-                min = '[' + prefix
-
-            offset = 0
-
-            container_ids = conn.zrangebylex('containers:%s' % account_id, min,
-                                             max, offset, limit - len(results))
-            container_ids = [cid.decode('utf8', errors='ignore')
-                             for cid in container_ids]
-
-            if prefix is None:
-                containers = [[c_id, 0, 0, 0, 0] for c_id in container_ids
-                              if self._should_be_listed(c_id, s3_buckets_only)]
-                return containers
-            if not delimiter:
-                if not prefix:
-                    containers = [[c_id, 0, 0, 0, 0] for c_id in container_ids
-                                  if self._should_be_listed(c_id,
-                                                            s3_buckets_only)]
-                    return containers
+                max_k = '(' + end_marker
+            if marker:
+                if marker < prefix:
+                    # Start on the prefix
+                    min_k = '[' + prefix
                 else:
-                    containers = [[c_id, 0, 0, 0, 0] for c_id in container_ids
-                                  if c_id.startswith(prefix) and
-                                  self._should_be_listed(c_id,
-                                                         s3_buckets_only)]
-                    return containers
+                    # Start just after the marker
+                    min_k = '(' + marker
+            elif prefix:
+                min_k = '[' + prefix
 
-            count = 0
-            for container_id in container_ids:
-                count += 1
-                marker = container_id
-                if len(results) >= limit\
-                        or not container_id.startswith(prefix):
-                    return results
-                end = container_id.find(delimiter, len(prefix))
-                if end > 0:
-                    marker = container_id[:end] + chr(ord(delimiter) + 1)
-                    dir_name = container_id[:end + 1]
-                    if dir_name != orig_marker:
-                        results.append([dir_name, 0, 0, 1, 0])
-                    break
-                if self._should_be_listed(container_id, s3_buckets_only):
-                    results.append([container_id, 0, 0, 0, 0])
-            if not count:
+            cnames = self.conn.zrangebylex(
+                'containers:%s' % account_id, min_k, max_k,
+                0, limit - len(results))
+            if not cnames:
                 break
+            cnames = [c.decode('utf8', errors='ignore') for c in cnames]
+
+            for cname in cnames:
+                marker = cname
+                if len(results) >= limit:
+                    break
+                elif prefix and not cname.startswith(prefix):
+                    beyond_prefix = True
+                    break
+                if delimiter:
+                    end = cname.find(delimiter, len(prefix))
+                    if end > 0:
+                        # Delimiter found after the prefix.
+                        # Build a new marker, and continue listing from there.
+                        # TODO(FVE): we can avoid another request to Redis by
+                        # analyzing the rest of the list ourselves.
+                        dir_name = cname[:end + 1]
+                        marker = dir_name + u'\ufffd'
+                        if dir_name != orig_marker:
+                            results.append([dir_name, 0, 0, 1, 0])
+                        break
+                if self._should_be_listed(cname, s3_buckets_only):
+                    results.append([cname, 0, 0, 0, 0])
         return results
 
     def list_containers(self, account_id, limit=1000, marker=None,

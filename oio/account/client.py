@@ -161,7 +161,7 @@ class AccountClient(HttpApi):
         :keyword end_marker:
         :keyword prefix:
         :keyword delimiter:
-        :keyword s3_buckets_only: only listing s3 buckets
+        :keyword s3_buckets_only: list only S3 buckets.
         :type s3_buckets_only: `bool`
         :rtype: `dict` with 'ctime' (`float`), 'bytes' (`int`),
             'objects' (`int`), 'containers' (`int`), 'id' (`str`),
