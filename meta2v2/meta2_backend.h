@@ -177,13 +177,19 @@ GError* meta2_backend_get_properties(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, guint32 flags,
 		m2_onbean_cb cb, gpointer u0);
 
+/** Delete the specified properties, or all properties if "propv" is empty.
+ * After success, "out" will contain an alias bean and the property beans
+ * that have been deleted (with null values). The caller is responsible for
+ * cleaning the list. */
 GError* meta2_backend_del_properties(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, gchar **propv, struct bean_ALIASES_s **out);
+		struct oio_url_s *url, gchar **propv, GSList **out);
 
-/** Helper for testing purpose */
+/** Insert the specified properties, delete the ones with no value.
+ * After success, "out" will contain an alias bean and the property beans
+ * that have been modified. The caller is responsible for cleaning the list. */
 GError* meta2_backend_set_properties(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gboolean flush, GSList *beans,
-		struct bean_ALIASES_s **out);
+		GSList **out);
 
 /* Back-Links listing ------------------------------------------------------- */
 

@@ -237,7 +237,7 @@ meta2_filter_action_check_content(struct gridd_filter_ctx_s * ctx,
 	meta2_filter_ctx_set_input_udata2(ctx, beans,
 			(GDestroyNotify)_bean_cleanl2, FALSE);
 	gchar *missing_chunks_str = g_strdup_printf(
-            "%"G_GINT64_FORMAT, missing_chunks);
+			"%"G_GINT64_FORMAT, missing_chunks);
 	meta2_filter_ctx_add_param(ctx, NAME_MSGKEY_MISSING_CHUNKS,
 			missing_chunks_str);
 	g_free(missing_chunks_str);
@@ -479,7 +479,7 @@ meta2_filter_action_set_content_properties(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply UNUSED)
 {
 	GError *e = NULL;
-	struct bean_ALIASES_s *alias;
+	GSList *modified = NULL;
 	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
@@ -493,18 +493,17 @@ meta2_filter_action_set_content_properties(struct gridd_filter_ctx_s *ctx,
 		e = BADREQ("Missing content path");
 	else
 		e = meta2_backend_set_properties(m2b, url, BOOL(flags&M2V2_FLAG_FLUSH),
-				beans, &alias);
+				beans, &modified);
 
 	if (e != NULL) {
-		GRID_DEBUG("Failed to set properties to [%s] : (%d) %s",
+		GRID_DEBUG("Failed to set properties on [%s]: (%d) %s",
 				oio_url_get(url, OIOURL_WHOLE), e->code, e->message);
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
 	}
 
-	GSList *alias_beans = g_slist_append(NULL, alias);
-	_m2b_notify_beans(m2b, url, alias_beans, "content.update", FALSE);
-	g_slist_free_full(alias_beans, _bean_clean);
+	_m2b_notify_beans(m2b, url, modified, "content.update", FALSE);
+	_bean_cleanl2(modified);
 	return FILTER_OK;
 }
 
@@ -541,7 +540,7 @@ meta2_filter_action_del_content_properties(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply UNUSED)
 {
 	GError *e = NULL;
-	struct bean_ALIASES_s *alias;
+	GSList *deleted = NULL;
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 
@@ -553,19 +552,24 @@ meta2_filter_action_del_content_properties(struct gridd_filter_ctx_s *ctx,
 	gchar **namev = NULL;
 	e = STRV_decode_buffer(buf, len, &namev);
 	if (!e) {
-		e = meta2_backend_del_properties(m2b, url, namev, &alias);
-		g_strfreev(namev);
+		e = meta2_backend_del_properties(m2b, url, namev, &deleted);
 	}
 
+	if (!e) {
+		/* Notify only if we changed something. */
+		gint prop_count = g_slist_length(deleted) - 1;  // Do not count alias
+		if (prop_count > 0)
+			_m2b_notify_beans(m2b, url, deleted, "content.update", FALSE);
+		g_slist_free_full(deleted, _bean_clean);
+	}
+
+	g_strfreev(namev);
 	if (e) {
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
+	} else {
+		return FILTER_OK;
 	}
-
-	GSList *alias_beans = g_slist_append(NULL, alias);
-	_m2b_notify_beans(m2b, url, alias_beans, "content.update", FALSE);
-	g_slist_free_full(alias_beans, _bean_clean);
-	return FILTER_OK;
 }
 
 static GError*
