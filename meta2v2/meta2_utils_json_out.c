@@ -80,7 +80,11 @@ encode_property(GString *g, gpointer bean)
 	OIO_JSON_append_gstr(g, "key", PROPERTIES_get_key(bean));
 	g_string_append_c(g, ',');
 	GByteArray *property = PROPERTIES_get_value(bean);
-	OIO_JSON_append_blob(g, "value", (gchar*)property->data, property->len);
+	if (property != NULL) {
+		OIO_JSON_append_blob(g, "value", (gchar*)property->data, property->len);
+	} else {
+		OIO_JSON_append_str(g, "value", NULL);
+	}
 }
 
 void
