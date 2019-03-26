@@ -1580,7 +1580,7 @@ meta2_backend_get_properties(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_del_properties(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, gchar **propv, struct bean_ALIASES_s **out)
+		struct oio_url_s *url, gchar **propv, GSList **out)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1604,7 +1604,7 @@ meta2_backend_del_properties(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_set_properties(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		gboolean flush, GSList *beans, struct bean_ALIASES_s **out)
+		gboolean flush, GSList *beans, GSList **out)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
