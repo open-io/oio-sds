@@ -75,9 +75,15 @@ class RdirBootstrap(lister.Lister):
                           parsed_args.service_type, exc)
             self.error = exc
             all_services, _ = dispatcher.get_assignments(
-                "meta2", connection_timeout=30.0, read_timeout=90.0)
+                parsed_args.service_type, connection_timeout=30.0,
+                read_timeout=90.0)
         return _format_assignments(all_services,
                                    parsed_args.service_type.capitalize())
+
+    def run(self, parsed_args):
+        super(RdirBootstrap, self).run(parsed_args)
+        if self.error:
+            return 1
 
 
 class RdirAssignments(lister.Lister):
