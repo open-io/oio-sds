@@ -276,7 +276,7 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 
 	enum http_rc_e rc;
 	if (!*matchings) {
-		rp->set_content_type ("application/json");
+		rp->set_content_type (HTTP_CONTENT_TYPE_JSON);
 		rp->set_body_gstr (g_string_new("{\"status\":404,\"message\":\"No handler found\"}"));
 		rp->set_status (HTTP_CODE_NOT_FOUND, "No handler found");
 		rp->finalize ();

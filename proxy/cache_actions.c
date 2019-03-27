@@ -50,8 +50,8 @@ action_forward_stats (struct req_args_s *args)
 
 	for (gchar *s=packed; *s ;++s) { if (*s == '=') *s = ' '; }
 
-	return _reply_success_bytes (
-			args, g_bytes_new_take((guint8*)packed, strlen(packed)));
+	return _reply_success_bytes(args, HTTP_CONTENT_TYPE_TEXT,
+			g_bytes_new_take((guint8*)packed, strlen(packed)));
 }
 
 enum http_rc_e
@@ -185,8 +185,8 @@ action_forward_set_config (struct req_args_s *args)
 		return _reply_common_error(args, err);
 	}
 
-	return _reply_success_bytes(
-			args, g_bytes_new_take((guint8*)packed, strlen(packed)));
+	return _reply_success_bytes(args, HTTP_CONTENT_TYPE_JSON,
+			g_bytes_new_take((guint8*)packed, strlen(packed)));
 }
 
 static enum http_rc_e
@@ -221,10 +221,9 @@ _forward_XXX(struct req_args_s *args, const char *reqname, const char **opts,
 		return _reply_common_error (args, err);
 	}
 
-	return _reply_success_bytes (
-			args, g_bytes_new_take((guint8*)packed, strlen(packed)));
+	return _reply_success_bytes(args, HTTP_CONTENT_TYPE_JSON,
+			g_bytes_new_take((guint8*)packed, strlen(packed)));
 }
-
 
 enum http_rc_e
 action_forward_get_config (struct req_args_s *args)

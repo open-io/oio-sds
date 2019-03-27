@@ -104,13 +104,18 @@ _option(struct req_args_s *args, const char *name)
 }
 
 static enum http_rc_e
-_reply_bytes(struct http_reply_ctx_s *rp,
-		int code, const gchar * msg, GBytes * bytes)
+_reply_bytes(struct http_reply_ctx_s *rp, int code, const gchar * msg,
+		const gchar *content_type, GBytes * bytes)
 {
 	rp->set_status(code, msg);
 	if (bytes) {
-		if (g_bytes_get_size(bytes) > 0)
-			rp->set_content_type("application/json");
+		if (g_bytes_get_size(bytes) > 0) {
+			if (content_type) {
+				rp->set_content_type(content_type);
+			} else {
+				rp->set_content_type(HTTP_CONTENT_TYPE_BINARY);
+			}
+		}
 		rp->set_body_bytes(bytes);
 	} else {
 		rp->set_body_bytes(NULL);
@@ -123,7 +128,7 @@ static enum http_rc_e
 _reply_json(struct http_reply_ctx_s *rp,
 		int code, const gchar * msg, GString * gstr)
 {
-	return _reply_bytes(rp, code, msg,
+	return _reply_bytes(rp, code, msg, HTTP_CONTENT_TYPE_JSON,
 			gstr ? g_string_free_to_bytes(gstr) : NULL);
 }
 

@@ -304,7 +304,8 @@ enum http_rc_e _reply_nocontent (struct req_args_s *args);
 enum http_rc_e _reply_accepted (struct req_args_s *args);
 enum http_rc_e _reply_created (struct req_args_s *args);
 
-enum http_rc_e _reply_success_bytes (struct req_args_s *args, GBytes * bytes);
+enum http_rc_e _reply_success_bytes (struct req_args_s *args,
+		const gchar *content_type, GBytes * bytes);
 enum http_rc_e _reply_success_json (struct req_args_s *args, GString * gstr);
 
 void _append_status (GString *out, gint code, const char * msg);
