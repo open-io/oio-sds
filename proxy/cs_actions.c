@@ -559,10 +559,10 @@ action_conscience_resolve_service_id (struct req_args_s *args)
 }
 
 // CS{{
-// POST /v3.0/{NS}/conscience/flush?type=<services_type>
+// POST /v3.0/{NS}/conscience/flush?type=<service_type>
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Deregister all services with given type
+// Deregister all services with the given type.
 //
 // .. code-block:: http
 //

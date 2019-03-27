@@ -19,7 +19,7 @@ from oio.common.exceptions import OioException
 
 
 class ClusterShow(show.ShowOne):
-    """Show information of all services in the cluster"""
+    """Show general information about the cluster."""
 
     log = getLogger(__name__ + '.ClusterShow')
 
@@ -42,7 +42,7 @@ class ClusterShow(show.ShowOne):
 
 
 class ClusterList(lister.Lister):
-    """List services of the namespace"""
+    """List services of the namespace."""
 
     log = getLogger(__name__ + '.ClusterList')
 
@@ -52,11 +52,11 @@ class ClusterList(lister.Lister):
             'srv_types',
             metavar='<srv_type>',
             nargs='*',
-            help='Type of services to list')
+            help='Type of services to list.')
         parser.add_argument(
             '--stats', '--full',
             action='store_true',
-            help='Display service statistics')
+            help='Display service statistics.')
         return parser
 
     def _list_services(self, parsed_args):
@@ -102,7 +102,7 @@ class ClusterList(lister.Lister):
 
 
 class ClusterLocalList(lister.Lister):
-    """List local services"""
+    """List local services."""
 
     log = getLogger(__name__ + '.ClusterLocalList')
 
@@ -112,7 +112,7 @@ class ClusterLocalList(lister.Lister):
             'srv_types',
             metavar='<srv_types>',
             nargs='*',
-            help='Service Type(s)')
+            help='Service type(s).')
         return parser
 
     def take_action(self, parsed_args):
@@ -140,7 +140,7 @@ class ClusterLocalList(lister.Lister):
 
 
 class ClusterUnlock(lister.Lister):
-    """Unlock score"""
+    """Unlock the score of a service."""
 
     log = getLogger(__name__ + '.ClusterUnlock')
 
@@ -149,11 +149,11 @@ class ClusterUnlock(lister.Lister):
         parser.add_argument(
             'srv_type',
             metavar='<srv_type>',
-            help='Service Type')
+            help='Service type.')
         parser.add_argument(
             'srv_addr',
             metavar='<srv_addr>',
-            help='Network address of the service'
+            help='Network address of the service.'
         )
         return parser
 
@@ -183,7 +183,7 @@ def _bounded_batches(src, size):
 
 
 class ClusterUnlockAll(lister.Lister):
-    """Unlock all services of the cluster"""
+    """Unlock all services of the cluster."""
 
     log = getLogger(__name__ + '.ClusterUnlockAll')
 
@@ -193,7 +193,7 @@ class ClusterUnlockAll(lister.Lister):
             'types',
             metavar='<types>',
             nargs='*',
-            help='Service Type(s) to unlock (or all if unset)')
+            help='Service type(s) to unlock (or all if unset).')
         return parser
 
     def _unlock_all(self, parsed_args):
@@ -224,7 +224,7 @@ class ClusterUnlockAll(lister.Lister):
 
 
 class ClusterWait(lister.Lister):
-    """Wait for services to get a score above specified value"""
+    """Wait for services to get a score above specified value."""
 
     log = getLogger(__name__ + '.ClusterWait')
 
@@ -234,25 +234,26 @@ class ClusterWait(lister.Lister):
             'types',
             metavar='<types>',
             nargs='*',
-            help='Service Type(s) to wait for (or all if unset)')
+            help='Service type(s) to wait for (or all if unset).')
         parser.add_argument(
             '-n', '--count',
             metavar='<count>',
             type=int,
             default=0,
-            help='How many services are expected')
+            help=('How many services are expected (0 by default).'))
         parser.add_argument(
             '-d', '--delay',
             metavar='<delay>',
             type=float,
             default=15.0,
-            help='How long to wait for a score')
+            help='How long to wait for a score (15s by default).')
         parser.add_argument(
             '-s', '--score',
             metavar='<score>',
             type=int,
-            default=0,
-            help='Minimum score value required for the chosen services')
+            default=1,
+            help=('Minimum score value required for the chosen services '
+                  '(1 by default).'))
         parser.add_argument(
             '-u', '--unlock',
             action='store_true',
@@ -271,7 +272,7 @@ class ClusterWait(lister.Lister):
         delay = parsed_args.delay
         deadline = now() + delay
         exc_msg = ("Timeout ({0}s) while waiting for the services to get a "
-                   "score > {1}, still {2} are not")
+                   "score >= {1}, still {2} are not.")
 
         def maybe_unlock(allsrv):
             if not parsed_args.unlock:
@@ -286,15 +287,15 @@ class ClusterWait(lister.Lister):
             descr = []
             for type_ in types:
                 tmp = self.app.client_manager.cluster.all_services(type_)
-                for s in tmp:
-                    s['type'] = type_
+                for srv in tmp:
+                    srv['type'] = type_
                 descr += tmp
-            ko = len([s['score'] for s in descr if s['score'] <= min_score])
+            ko = len([s['score'] for s in descr if s['score'] < min_score])
             if ko == 0:
                 # If a minimum has been specified, let's check we have enough
                 # services
                 if parsed_args.count:
-                    ok = len([s for s in descr if s['score'] > min_score])
+                    ok = len([s for s in descr if s['score'] >= min_score])
                     if ok < parsed_args.count:
                         self.log.debug("Only %d services up", ok)
                         check_deadline()
@@ -302,8 +303,8 @@ class ClusterWait(lister.Lister):
                         sleep(1.0)
                         continue
                 # No service down, and enough services, we are done.
-                for d in descr:
-                    yield d['type'], d['addr'], d['score']
+                for srv in descr:
+                    yield srv['type'], srv['addr'], srv['score']
                 return
             else:
                 self.log.debug("Still %d services down", ko)
@@ -317,7 +318,7 @@ class ClusterWait(lister.Lister):
 
 
 class ClusterLock(ClusterUnlock):
-    """Lock score"""
+    """Lock the score of a service."""
 
     log = getLogger(__name__ + '.ClusterLock')
 
@@ -328,7 +329,7 @@ class ClusterLock(ClusterUnlock):
             metavar='<score>',
             type=int,
             default=0,
-            help='score to set'
+            help='Score to set (0 by default).'
         )
         return parser
 
@@ -349,7 +350,7 @@ class ClusterLock(ClusterUnlock):
 
 
 class ClusterFlush(command.Command):
-    """Flush all services of the cluster"""
+    """Deregister all services of the cluster."""
 
     log = getLogger(__name__ + '.ClusterFlush')
 
@@ -359,21 +360,21 @@ class ClusterFlush(command.Command):
             'srv_types',
             metavar='<srv_types>',
             nargs='+',
-            help='Service Type(s)')
+            help='Service type(s).')
         return parser
 
     def take_action(self, parsed_args):
         for srv_type in parsed_args.srv_types:
             try:
                 self.app.client_manager.cluster.flush(srv_type)
-                self.log.warn('services %s flushed' % (srv_type))
-            except Exception as e:
+                self.log.warn('%s services flushed', srv_type)
+            except Exception as err:
                 raise Exception('Error while flushing service %s: %s' %
-                                (srv_type, str(e)))
+                                (srv_type, str(err)))
 
 
 class ClusterResolve(show.ShowOne):
-    """Resolve a service ID to an IP address and port"""
+    """Resolve a service ID to an IP address and port."""
 
     log = getLogger(__name__ + '.ClusterFlush')
 
@@ -381,10 +382,10 @@ class ClusterResolve(show.ShowOne):
         parser = super(ClusterResolve, self).get_parser(prog_name)
         parser.add_argument(
             'srv_type',
-            help='Service type')
+            help='Service type.')
         parser.add_argument(
             'srv_id',
-            help='ID of the service'
+            help='ID of the service.'
         )
 
         return parser
@@ -396,7 +397,7 @@ class ClusterResolve(show.ShowOne):
 
 
 class LocalNSConf(show.ShowOne):
-    """show namespace configuration values locally configured"""
+    """Show namespace configuration values locally configured."""
 
     log = getLogger(__name__ + '.LocalNSConf')
 
