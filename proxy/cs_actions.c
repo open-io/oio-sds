@@ -599,7 +599,7 @@ action_conscience_list (struct req_args_s *args)
 						__FUNCTION__, lmax - ltype);
 				GBytes *json = g_bytes_new_from_bytes (prepared, ltype, lmax-ltype);
 				g_bytes_unref (prepared);
-				return _reply_success_bytes (args, json);
+				return _reply_success_bytes(args, HTTP_CONTENT_TYPE_JSON, json);
 			} else {
 				GRID_TRACE("%s(%s) direct query: %s", __FUNCTION__, type, "cache miss");
 			}

@@ -381,7 +381,7 @@ http_manage_request(struct req_ctx_s *r)
 	int code = HTTP_CODE_INTERNAL_ERROR;
 	gchar *msg = NULL, *access = NULL;
 	GTree *headers = NULL;
-	const gchar *content_type = "octet/stream";
+	const gchar *content_type = NULL;
 
 	GBytes *body = NULL;
 

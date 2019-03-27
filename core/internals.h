@@ -215,6 +215,18 @@ enum {
 	HTTP_CODE_BANDWIDTH_LIMIT_EXCEEDED = 509,
 };
 
+# ifndef HTTP_CONTENT_TYPE_BINARY
+#  define HTTP_CONTENT_TYPE_BINARY "application/octet-stream"
+# endif
+
+# ifndef HTTP_CONTENT_TYPE_TEXT
+#  define HTTP_CONTENT_TYPE_TEXT "text/plain"
+# endif
+
+# ifndef HTTP_CONTENT_TYPE_JSON
+#  define HTTP_CONTENT_TYPE_JSON "application/json"
+# endif
+
 typedef gint64 (*time_hook_f) (void);
 
 /* Let/Set it to NULL for the system time.
