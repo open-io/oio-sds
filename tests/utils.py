@@ -204,6 +204,7 @@ class CommonTestCase(testtools.TestCase):
         self._beanstalk = None
         self._conscience = None
         self._http_pool = None
+        self._storage_api = None
         # Namespace configuration, from "sds.conf"
         self._ns_conf = None
         # Namespace configuration as it was when the test started
@@ -249,6 +250,14 @@ class CommonTestCase(testtools.TestCase):
             from oio.event.beanstalk import Beanstalk
             self._beanstalk = Beanstalk.from_url(self.conf['queue_url'])
         return self._beanstalk
+
+    @property
+    def storage(self):
+        if self._storage_api is None:
+            from oio.api.object_storage import ObjectStorageApi
+            self._storage_api = ObjectStorageApi(self.ns,
+                                                 pool_manager=self.http_pool)
+        return self._storage_api
 
     @property
     def ns_conf(self):
