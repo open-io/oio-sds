@@ -75,15 +75,27 @@ class CliTestCase(BaseTestCase):
         """Execute several commands in the same openio-admin CLI process."""
         return execute('openio-admin', stdin='\n'.join(commands), env=env)
 
+    # FIXME(FVE): deprecate this
     @classmethod
     def get_opts(cls, fields, format='value'):
+        return cls.get_format_opts(format_=format, fields=fields)
+
+    @classmethod
+    def get_format_opts(cls, format_='value', fields=[]):
+        """
+        Get formatting options for OpenIO CLIs,
+        to make them output the specified fields in the specified format.
+        """
         return ' -f {0} {1}'.format(
-            format, ' '.join(['-c ' + it for it in fields]))
+            format_, ' '.join(['-c ' + it for it in fields]))
 
     @classmethod
     def assertOutput(cls, expected, actual):
+        """
+        Compare command outputs, raise an exception if they are different.
+        """
         if expected != actual:
-            raise Exception(expected + ' != ' + actual)
+            raise Exception("'" + expected + "' != '" + actual + "'")
 
     def assert_show_fields(self, items, fields):
         for item in items:
