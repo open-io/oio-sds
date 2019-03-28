@@ -196,8 +196,20 @@ for addr in $(oio-test-config.py -t meta1); do
     $cmd_openio cluster lock meta1 $addr
 done
 gridinit_cmd -S "$GRIDINIT_SOCK" restart "@meta1" >/dev/null
-COUNT=$(oio-test-config.py -c -t meta1)
-$cmd_openio cluster wait -d 30 -u -n "$COUNT" meta1
+# Wait until the scores are at 0
+MAX_WAITING="30"
+COUNT_META1=$(oio-test-config.py -c -t meta1)
+for i in $(seq 1 "$MAX_WAITING"); do
+    COUNT_META1_0=$(openio cluster list meta1 -f value -c Score | grep -c "^0$" || true)
+    if [ "$COUNT_META1_0" -eq "$COUNT_META1" ]; then
+        break
+    fi
+    if [ "$i" -eq "$MAX_WAITING" ]; then
+        exit 1
+    fi
+    sleep 1
+done
+$cmd_openio cluster wait -d 30 -u -n "$COUNT_META1" meta1
 
 $cmd_openio rdir bootstrap rawx
 $cmd_openio rdir bootstrap meta2
