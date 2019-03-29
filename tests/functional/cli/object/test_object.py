@@ -257,7 +257,7 @@ class ObjectTest(CliTestCase):
             self.openio_batch(commands, env=env)
 
         # Default listing
-        opts = self.get_opts([], 'json')
+        opts = self.get_format_opts('json') + ' --attempts 3'
         output = self.openio('object list --auto --prefix ' +
                              prefix + ' ' + opts + ' ' + args,
                              env=env)
@@ -268,7 +268,6 @@ class ObjectTest(CliTestCase):
             self.assertEqual(4, len(obj))
 
         # Listing with properties
-        opts = self.get_opts([], 'json')
         output = self.openio('object list --auto --properties --prefix ' +
                              prefix + ' ' + opts + ' ' + args, env=env)
         listing = self.json_loads(output)
@@ -278,7 +277,6 @@ class ObjectTest(CliTestCase):
             self.assertEqual(9, len(obj))
 
         # Unpaged listing
-        opts = self.get_opts([], 'json')
         output = self.openio('object list --auto --no-paging --prefix ' +
                              prefix + ' ' + opts + ' ' + args, env=env)
         listing = self.json_loads(output)
@@ -289,7 +287,8 @@ class ObjectTest(CliTestCase):
             self.assertEqual(4, len(obj))
 
     def test_autocontainer_object_listing(self):
-        self._test_autocontainer_object_listing()
+        env = {"OIO_ACCOUNT": "ACT-%s" % uuid.uuid4().hex}
+        self._test_autocontainer_object_listing(env=env)
 
     def test_autocontainer_object_listing_other_flatns(self):
         env = {"OIO_ACCOUNT": "ACT-%s" % uuid.uuid4().hex}
