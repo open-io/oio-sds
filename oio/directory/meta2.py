@@ -22,16 +22,15 @@ from oio.rdir.client import RdirClient
 
 
 class Meta2Database(object):
-    """Represents the content of the meta2 database"""
+    """
+    Execute maintenance operations on meta2 databases (or compatible services).
+    """
 
     def __init__(self, conf, logger=None,
                  admin_client=None, conscience_client=None, rdir_client=None,
-                 directory_client=None, sqlx=False):
+                 directory_client=None, service_type='meta2'):
         self.conf = conf
-        if sqlx:
-            self.service_type = 'sqlx'
-        else:
-            self.service_type = 'meta2'
+        self.service_type = service_type
         self.logger = logger or get_logger(self.conf)
 
         self._admin = admin_client
@@ -75,12 +74,11 @@ class Meta2Database(object):
         self.services_by_base.clear()
 
     def reload_all_services(self):
-        self.all_service_ids = list()
-        for service in self.conscience.all_services(self.service_type):
-            service_id = service['tags'].get('tag.service_id', None)
-            if service_id is None:
-                service_id = service['addr']
-            self.all_service_ids.append(service_id)
+        """
+        Load the list of all services of type `self.service_type`.
+        """
+        self.all_service_ids = [
+            s['id'] for s in self.conscience.all_services(self.service_type)]
 
     @staticmethod
     def get_cid_and_seq(base):
@@ -97,8 +95,9 @@ class Meta2Database(object):
         else:
             return (base.ljust(64, '0'), None)
 
+    # FIXME(ADU): this is totally unclear
     def _load_peers(self, base):
-        bases = dict()
+        base_seqs = dict()
         cid, seq = self.get_cid_and_seq(base)
         linked_services = self.directory.list(cid=cid)
 
@@ -108,15 +107,15 @@ class Meta2Database(object):
             if seq is not None and seq != service['seq']:
                 continue
 
-            base = cid + "." + str(service['seq'])
-            services = bases.get(base, dict())
+            bseq = cid + "." + str(service['seq'])
+            services = base_seqs.get(bseq, dict())
             services[service.pop('host')] = service
-            bases[base] = services
+            base_seqs[bseq] = services
 
-        for base, services in bases.items():
-            self.services_by_base[base] = services
+        for bseq, services in base_seqs.items():
+            self.services_by_base[bseq] = services
             # FIXME(adu): Check nb of peers
-            yield base, None
+            yield bseq, None
 
     def _get_peers(self, base):
         return self.services_by_base[base].keys()
@@ -128,9 +127,9 @@ class Meta2Database(object):
         new_peers.append(dst)
 
         if len(current_peers) != len(new_peers):
-            raise ValueError(
-                "Not the same number of peers (current_peers=%s new_peers=%s)",
-                current_peers, new_peers)
+            raise ValueError("Not the same number of peers "
+                             "(current_peers=%s new_peers=%s)" % (
+                                 current_peers, new_peers))
 
         self.logger.debug(
             "Setting peers (base=%s new_peers=%s)", base, new_peers)
@@ -138,7 +137,7 @@ class Meta2Database(object):
         self.services_by_base[base][dst] = self.services_by_base[base].pop(src)
 
     def _get_args(self, base):
-        for host, service in self.services_by_base[base].items():
+        for _host, service in self.services_by_base[base].items():
             return service['args']
 
     def _check_src_service(self, base, src):
@@ -179,20 +178,23 @@ class Meta2Database(object):
         return dst
 
     def _has_base(self, base, src, dst):
+        """
+        Check which of the old peers actually host the database.
+        """
         cid, _ = self.get_cid_and_seq(base)
-        peers_to_copy = list()
+        peers_to_copy_from = list()
         master = None
 
         has = self.admin.has_base(self.service_type, cid=cid)
         for service, status in has.items():
             if status['status']['status'] == 200:
-                peers_to_copy.append(service)
+                peers_to_copy_from.append(service)
                 continue
             self.logger.warn(
                 "Missing base (base=%s src=%s dst=%s service=%s "
                 "status=%s)", base, src, dst, service, status)
 
-        if not peers_to_copy:
+        if not peers_to_copy_from:
             raise ValueError("No base to copy")
 
         try:
@@ -208,20 +210,22 @@ class Meta2Database(object):
 
         if master is None:
             self.logger.warn("No master")
-        elif master not in peers_to_copy:
-            self.logger.warn("Missing base for the master")
+        elif master not in peers_to_copy_from:
+            self.logger.warn(
+                "Master service %s for %s does not host the base!",
+                master, base)
         else:
             # Prefer to copy the master
-            peers_to_copy.remove(master)
-            peers_to_copy.append(master)
-            peers_to_copy.reverse()
+            peers_to_copy_from.remove(master)
+            peers_to_copy_from.append(master)
+            peers_to_copy_from.reverse()
 
-        return peers_to_copy
+        return peers_to_copy_from
 
-    def _copy_base(self, base, src, dst, peers_to_copy):
+    def _copy_base(self, base, src, dst, peers_to_copy_from):
         cid, _ = self.get_cid_and_seq(base)
 
-        for true_src in peers_to_copy:
+        for true_src in peers_to_copy_from:
             self.logger.debug(
                 "Copying base (base=%s src=%s dst=%s true_src=%s)",
                 base, src, dst, true_src)
@@ -233,7 +237,7 @@ class Meta2Database(object):
                 self.logger.warn(
                     "Failed to copy base (base=%s src=%s dst=%s true_src=%s): "
                     "%s", base, src, dst, true_src, exc)
-                if true_src == peers_to_copy[-1]:
+                if true_src == peers_to_copy_from[-1]:
                     raise
 
     def _link_service(self, base, src, dst):
@@ -242,26 +246,28 @@ class Meta2Database(object):
         args = self._get_args(base)
 
         self.directory.force(
-            cid=cid,  replace=True, service_type=self.service_type,
+            cid=cid, replace=True, service_type=self.service_type,
             services=dict(type=self.service_type, host=','.join(peers),
                           args=args, seq=seq))
-        """
-        FIXME(ABO): This part can be removed when, either:
-        - meta1 sends the removed services bundled with the
-            account.services events.
-        - meta2 sends a storage.container.deleted event when the
-            sqliterepo layer is the one that notifies the deletion of
-            the databases.
-        """
+        # FIXME(ABO): This part can be removed when, either:
+        # - meta1 sends the removed services bundled with the
+        #     account.services events.
+        # - meta2 sends a storage.container.deleted event when the
+        #     sqliterepo layer is the one that notifies the deletion of
+        #     the databases.
         if self.service_type == 'meta2':
             self.rdir.meta2_index_delete(volume_id=src, container_id=cid)
 
     def _reset_election(self, base, src, dst):
+        """
+        Reset the election, try to remove `base` from its old host,
+        then trigger an election with the new peers.
+        """
         cid, _ = self.get_cid_and_seq(base)
         peers = self._get_peers(base)
 
         if src in peers:
-            raise ValueError("Source service is always in peers")
+            raise ValueError("Source service is already among the peers")
 
         self.logger.debug(
             "Resetting election (base=%s src=%s dst=%s)", base, src, dst)
@@ -297,15 +303,15 @@ class Meta2Database(object):
                 "Moving base (base=%s src=%s dst=%s)", base, src, dst)
 
             try:
-                """Step 1 of base reassignation algorithm."""
-                peers_to_copy = self._has_base(base, src, dst)
+                self.logger.debug("Step 1: check sources.")
+                peers_to_copy_from = self._has_base(base, src, dst)
             except Exception as exc:
                 self.logger.error(
                     "Failed to check if each peer exists (base=%s src=%s "
                     "dst=%s): %s", base, src, dst, exc)
                 raise
             try:
-                """Step 2 of base reassignation algorithm."""
+                self.logger.debug("Step 2: set the new peers in the base.")
                 self._set_peers(base, src, dst)
             except Exception as exc:
                 self.logger.error(
@@ -313,15 +319,15 @@ class Meta2Database(object):
                     base, src, dst, exc)
                 raise
             try:
-                """Step 3 of base reassignation algorithm."""
-                self._copy_base(base, src, dst, peers_to_copy)
+                self.logger.debug("Step 3: copy the database.")
+                self._copy_base(base, src, dst, peers_to_copy_from)
             except Exception as exc:
                 self.logger.error(
                     "Failed to copy base (base=%s src=%s dst=%s): %s",
                     base, src, dst, exc)
                 raise
             try:
-                """Step 4 of base reassignation algorithm."""
+                self.logger.debug("Step 4: set the peers in meta1.")
                 self._link_service(base, src, dst)
             except Exception as exc:
                 self.logger.error(
@@ -329,7 +335,7 @@ class Meta2Database(object):
                     base, src, dst, exc)
                 raise
             try:
-                """Step 5 of base reassignation algorithm."""
+                self.logger.debug("Step 5: reset the election.")
                 self._reset_election(base, src, dst)
             except Exception as exc:
                 self.logger.error(
@@ -344,10 +350,15 @@ class Meta2Database(object):
         return dst, err
 
     def move(self, base, src, dst=None):
+        """
+        Move a database from `src` to `dst`.
+        If `dst` is None, find one automatically.
+        """
         self.reset_peers()
 
         try:
             bases_with_error = self._load_peers(base)
+            # FIXME(ADU): this is totally unclear
             if bases_with_error is None:
                 raise ValueError("No peers")
         except Exception as exc:
@@ -357,11 +368,11 @@ class Meta2Database(object):
             yield {'base': base, 'src': src, 'dst': dst, 'err': exc}
             return
 
-        for base, err in bases_with_error:
+        for bseq, err in bases_with_error:
             _dst = dst
             if err is None:
-                _dst, err = self._safe_move(base, src, dst)
-            yield {'base': base, 'src': src, 'dst': _dst, 'err': err}
+                _dst, err = self._safe_move(bseq, src, dst)
+            yield {'base': bseq, 'src': src, 'dst': _dst, 'err': err}
 
     def decommission(self, base, src, dst=None):
         self.reset_peers()
