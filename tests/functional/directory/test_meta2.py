@@ -58,8 +58,8 @@ class TestMeta2Database(BaseTestCase):
         dst = None
         if fixed_dst:
             for service in all_meta2_services:
-                if service['addr'] not in current_peers:
-                    dst = service['addr']
+                if service['id'] not in current_peers:
+                    dst = service['id']
             expected_peers.append(dst)
 
         moved = self.meta2_database.move(base, src, dst=dst)
@@ -144,8 +144,8 @@ class TestMeta2Database(BaseTestCase):
 
         all_meta2_services = self.conscience.all_services('meta2', True)
         for service in all_meta2_services:
-            if service['addr'] not in current_peers:
-                src = service['addr']
+            if service['id'] not in current_peers:
+                src = service['id']
         if src is None:
             self.skipTest("need at least 1 more meta2")
 
@@ -251,7 +251,7 @@ class TestMeta2Database(BaseTestCase):
             self.api.object_show(self.account, self.reference, "test2")
 
     def test_move_sqlx(self):
-        self.meta2_database = Meta2Database(self.conf, sqlx=True)
+        self.meta2_database = Meta2Database(self.conf, service_type='sqlx')
         self.service_type = 'sqlx'
 
         execute('oio-sqlx -O AutoCreate %s/%s/%s '
