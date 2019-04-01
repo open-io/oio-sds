@@ -57,6 +57,16 @@ _tree_compare_int(gconstpointer a, gconstpointer b)
 #define RANGE_ERROR(v) ((v) == G_MININT64 || (v) == G_MAXINT64)
 #define STRTOLL_ERROR(v,s,e) (FORMAT_ERROR(v,s,e) || RANGE_ERROR(v))
 
+/* Tell if a bean represents a property and has a NULL or empty value. */
+static gboolean
+_is_empty_prop(gpointer bean)
+{
+	if (DESCR(bean) != &descr_struct_PROPERTIES)
+		return FALSE;
+	GByteArray *val = PROPERTIES_get_value((struct bean_PROPERTIES_s *)bean);
+	return !val || !val->len || !val->data;
+}
+
 gchar*
 m2v2_build_chunk_url (const char *srv, const char *id)
 {
@@ -818,7 +828,7 @@ m2db_get_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 
 GError*
 m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
-		gboolean flush, GSList *beans, struct bean_ALIASES_s **out)
+		gboolean flush, GSList *beans, GSList **out)
 {
 	EXTRA_ASSERT(out != NULL);
 
@@ -832,14 +842,26 @@ m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 
 	const char *name = ALIASES_get_alias(alias)->str;
 	gint64 version = ALIASES_get_version(alias);
+	// Used to remove duplicate modified properties
+	GHashTable *modified = g_hash_table_new_full(
+			g_str_hash, g_str_equal, NULL, _bean_clean);
 
 	if (flush) {
-		const char *sql = "alias = ? AND version = ?";
-		GVariant *params[3] = {NULL, NULL, NULL};
-		params[0] = g_variant_new_string (name);
-		params[1] = g_variant_new_int64 (ALIASES_get_version(alias));
-		err = _db_delete (&descr_struct_PROPERTIES, sq3->db, sql, params);
-		metautils_gvariant_unrefv (params);
+		GSList *deleted = NULL;
+		gchar *namev = NULL;
+		err = m2db_del_properties(sq3, url, &namev, &deleted);
+		for (GSList *l = deleted; !err && l; l = l->next) {
+			if (DESCR(l->data) == &descr_struct_PROPERTIES) {
+				struct bean_PROPERTIES_s *prop = l->data;
+				g_hash_table_replace(
+						modified, PROPERTIES_get_key(prop)->str, prop);
+			} else {
+				// We already have a pointer to the alias
+				_bean_clean(l->data);
+			}
+		}
+		// Do not free values, they are in the hash table, or already freed
+		g_slist_free(deleted);
 	}
 
 	for (; !err && beans; beans = beans->next) {
@@ -848,27 +870,43 @@ m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 			continue;
 		PROPERTIES_set2_alias(prop, name);
 		PROPERTIES_set_version(prop, version);
-		GByteArray *v = PROPERTIES_get_value(prop);
-		if (!v || !v->len || !v->data) {
-			err = _db_delete_bean (sq3->db, prop);
+		if (_is_empty_prop(prop)) {
+			err = _db_delete_bean(sq3->db, prop);
+			// In case it is empty but not NULL
+			PROPERTIES_set_value(prop, NULL);
 		} else {
-			err = _db_save_bean (sq3->db, prop);
+			err = _db_save_bean(sq3->db, prop);
 		}
+		g_hash_table_replace(
+				modified, PROPERTIES_get_key(prop)->str, _bean_dup(prop));
 	}
 
-	*out = alias;
+	if (err) {
+		_bean_clean(alias);
+	} else {
+		gboolean _forward_bean(gpointer key UNUSED,
+				gpointer bean, gpointer udata UNUSED) {
+			*out = g_slist_prepend(*out, bean);
+			return TRUE;
+		}
+		g_hash_table_foreach_steal(modified, _forward_bean, NULL);
+		*out = g_slist_prepend(*out, alias);
+	}
+	g_hash_table_destroy(modified);
 	return err;
 }
 
 GError*
 m2db_del_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
-		gchar **namev, struct bean_ALIASES_s **out)
+		gchar **namev, GSList **out)
 {
 	EXTRA_ASSERT(sq3 != NULL);
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(namev != NULL);
 	EXTRA_ASSERT(out != NULL);
+	EXTRA_ASSERT(*out == NULL);
 
+	GSList *deleted = NULL;
 	struct bean_ALIASES_s *alias = NULL;
 	GPtrArray *tmp = g_ptr_array_new();
 	GError *err = m2db_get_properties(sq3, url, _bean_buffer_cb, tmp);
@@ -886,17 +924,23 @@ m2db_del_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 				for (gchar **p = namev; *p; ++p) {
 					if (!strcmp(*p, PROPERTIES_get_key(bean)->str)) {
 						_db_delete_bean(sq3->db, bean);
+						tmp->pdata[i] = NULL;  // Prevent double free
+						PROPERTIES_set_value(bean, NULL);  // Signal deletion
+						deleted = g_slist_prepend(deleted, bean);
 						break;
 					}
 				}
 			} else {
 				/* all properties to be deleted */
 				_db_delete_bean(sq3->db, bean);
+				tmp->pdata[i] = NULL;  // Prevent double free
+				PROPERTIES_set_value(bean, NULL);  // Signal deletion
+				deleted = g_slist_prepend(deleted, bean);
 			}
 		}
+		*out = g_slist_prepend(deleted, alias);
 	}
 
-	*out = alias;
 	_bean_cleanv2(tmp);
 	return err;
 }
@@ -1443,8 +1487,13 @@ static GError* m2db_purge_exceeding_versions(struct sqlx_sqlite3_s *sq3,
 static GError* m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, GSList *beans,
 		m2_onbean_cb cb, gpointer cb_data) {
 	GError *err = NULL;
-	for (GSList *l = beans; !err && l; l = l->next)
-		err = _db_save_bean(sq3->db, l->data);
+	for (GSList *l = beans; !err && l; l = l->next) {
+		/* FIXME(FVE): we could accept empty properties (but not NULL ones). */
+		if (_is_empty_prop(l->data))
+			PROPERTIES_set_value(l->data, NULL);
+		else
+			err = _db_save_bean(sq3->db, l->data);
+	}
 	if (!err && cb) {
 		for (GSList *l = beans; l; l = l->next)
 			cb(cb_data, _bean_dup(l->data));

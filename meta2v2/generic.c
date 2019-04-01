@@ -64,8 +64,12 @@ _gba_randomize(GByteArray *gba)
 static GByteArray *
 _gba_assign(GByteArray *base, GByteArray *gba)
 {
-	if (!base)
+	if (!base && gba) {
 		base = g_byte_array_sized_new(gba ? gba->len : 8);
+	} else if (base && !gba) {
+		g_byte_array_free(base, TRUE);
+		base = NULL;
+	}
 	if (base != gba) {
 		g_byte_array_set_size(base, 0);
 		g_byte_array_append(base, gba->data, gba->len);

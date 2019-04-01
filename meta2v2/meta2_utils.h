@@ -161,11 +161,18 @@ GError* m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp,
 GError* m2db_get_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		m2_onbean_cb cb, gpointer u);
 
+/* Delete the specified properties, or all properties if "namev" is empty.
+ * After success, "out" will contain an alias bean and the property beans
+ * that have been deleted (will null values). The caller is responsible for
+ * cleaning the list. */
 GError* m2db_del_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
-		gchar **namev, struct bean_ALIASES_s **out);
+		gchar **namev, GSList **out);
 
+/* Insert the specified properties, delete the ones with no value.
+ * After success, "out" will contain an alias bean and the property beans
+ * that have been modified. The caller is responsible for cleaning the list. */
 GError* m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
-		gboolean flush, GSList *beans, struct bean_ALIASES_s **out);
+		gboolean flush, GSList *beans, GSList **out);
 
 GError* m2db_drain_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		m2_onbean_cb cb, gpointer u0);
