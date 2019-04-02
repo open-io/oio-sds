@@ -23,8 +23,14 @@ import (
 	"time"
 )
 
+const (
+	HeaderNameOioReqId = "X-oio-req-id"
+	HeaderNameTransId  = "X-trans-id"
+	HeaderNameError    = "X-Error"
+)
+
 func setErrorString(rep http.ResponseWriter, s string) {
-	rep.Header().Set("X-Error", s)
+	rep.Header().Set(HeaderNameError, s)
 }
 
 func setError(rep http.ResponseWriter, e error) {
@@ -104,12 +110,12 @@ func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 	}
 
 	// Extract some common headers
-	rawxreq.reqid = req.Header.Get("X-oio-req-id")
+	rawxreq.reqid = req.Header.Get(HeaderNameOioReqId)
 	if len(rawxreq.reqid) <= 0 {
-		rawxreq.reqid = req.Header.Get("X-trans-id")
+		rawxreq.reqid = req.Header.Get(HeaderNameTransId)
 	}
 	if len(rawxreq.reqid) > 0 {
-		rep.Header().Set("X-trans-id", rawxreq.reqid)
+		rep.Header().Set(HeaderNameTransId, rawxreq.reqid)
 	} else {
 		// patch the reqid for pretty access log
 		rawxreq.reqid = "-"
