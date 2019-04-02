@@ -432,10 +432,11 @@ port: ${PORT}
 type: beanstalkd
 location: ${LOC}
 checks:
-    - {type: beanstalkd}
+    - {type: tcp}
 slots:
     - beanstalkd
 stats:
+    - {type: beanstalkd}
     - {type: system}
     - {type: volume, path: ${VOLUME}}
 """
@@ -443,13 +444,14 @@ stats:
 template_proxy_watch = """
 host: ${IP}
 port: ${PORT}
-type: proxy
+type: oioproxy
 location: ${LOC}
 checks:
-    - {type: http, uri: /v3.0/status}
+    - {type: tcp}
 slots:
-    - proxy
+    - oioproxy
 stats:
+    - {type: oioproxy}
     - {type: system}
 """
 
@@ -676,13 +678,14 @@ score_expr=(num stat.cpu)
 score_timeout=120
 lock_at_first_register=false
 
-[type:proxy]
+[type:oioproxy]
 score_expr=(num stat.cpu)
 score_timeout=120
 lock_at_first_register=false
 
 [type:beanstalkd]
-score_expr=(num stat.cpu)
+# 1000000 ready jobs -> score = 0
+score_expr=root(3, (num stat.cpu) * (num stat.space) * (100 - root(3, (num stat.jobs_ready))))
 score_timeout=120
 lock_at_first_register=false
 """

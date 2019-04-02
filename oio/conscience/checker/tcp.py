@@ -42,5 +42,9 @@ class TcpChecker(BaseChecker):
             result = True
         finally:
             if sock:
-                sock.close()
+                try:
+                    sock.shutdown(socket.SHUT_RDWR)
+                    sock.close()
+                except socket.error as err:
+                    self.logger.warn('Close error: %s', err)
             return result

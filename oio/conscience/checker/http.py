@@ -32,28 +32,33 @@ class HttpChecker(BaseChecker):
         self.path = self.checker_conf['uri']
         self.name = '%s|http|%s|%s|%s' % \
             (self.srv_type, self.host, self.port, self.path)
-        self.url = '%s:%s/%s' % (self.host, self.port, self.path)
+        self.url = '%s:%s%s%s' % (self.host, self.port,
+                                  '' if self.path.startswith('/') else '/',
+                                  self.path)
+        self.success = True
 
     def check(self):
-        success = False
         resp = None
         try:
             # We have clues that the connection will be reused quickly to get
             # stats, thus we do not explicitely require its closure.
             resp = self.agent.pool_manager.request("GET", self.url)
             if resp.status == 200:
-                success = True
+                self.success = True
             else:
                 raise Exception("status code != 200: %s" % resp.status)
-        except Exception as e:
-            self.logger.warn('ERROR performing http check (%s): %s',
-                             self.url, e)
+        except Exception as err:
+            # Avoid spamming the logs
+            if self.success:
+                self.logger.warn('ERROR performing http check (%s): %s',
+                                 self.url, err)
+            self.success = False
         finally:
             if resp:
                 try:
                     resp.close()
                 except urllibexc.HTTPError:
                     pass
-            if not success:
+            if not self.success:
                 self.logger.warn('%s check failed', self.name)
-            return success
+            return self.success

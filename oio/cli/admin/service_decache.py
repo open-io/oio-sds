@@ -67,7 +67,7 @@ class DecacheCommand(lister.Lister):
 class ProxyDecache(DecacheCommand):
     """Flush the cache of a proxy service."""
 
-    service_type = 'proxy'
+    service_type = 'oioproxy'
 
     def decache_services(self, services):
         for srv in services:

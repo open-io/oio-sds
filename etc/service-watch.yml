@@ -16,33 +16,59 @@ slots:
     - rawx-europe
     - rawx-ssd
     - rawx-europe-ssd
-# Checks configuration
+
+########################
+# Checks configuration #
+########################
 checks:
 # General check configuration
 # timeout: 1.0, timeout for check
+
+# ASN.1 ping check.
+# Can be used for meta0, meta1, meta2 or sqlx services.
+    - {type: asn1}
+
 # Http Check
 # Perform a GET on specified uri
 # Success if 200
 # uri: uri to check
 # Note: you can override host and port
     - {type: http, uri: /info}
+
 # TCP Check
 # Perform a connect on specified host:port
 # Note: you can override host and port
     - {type: tcp}
 
-# Stats configuration
+#######################
+# Stats configuration #
+#######################
 stats:
+# Collect statistics from a beanstalkd service.
+    - {type: beanstalkd}
+
 # Perform a GET on specified host:port/path
-# and decode one stat by line
+# and decode one statistic by line.
+# Only lines starting with "stat." will be reported to conscience.
     - {type: http, path: /stat}
+
 # Perform a GET on specified host:port/path
-# and decode a JSON object
+# and decode a JSON object.
+# Only records starting with "stat." will be reported to conscience.
     - {type: http, path: /status, parser: json}
+
+# Collect statistics from meta0, meta1, meta2 or sqlx services.
+    - {type: meta}
+
+# Collect statistics from an oioproxy service.
+    - {type: oioproxy}
+
 # Perform a GET on specified host:port/path
-# and decode known rawx statistics
+# and decode known rawx statistics.
     - {type: rawx, path: /stat}
+
 # Collect system statistics like CPU usage
     - {type: system}
+
 # Collect file system volume statistics like IO and space usage
     - {type: volume, path: /usr/lib/oio/rawx-1}

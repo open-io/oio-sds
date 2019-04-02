@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -13,26 +13,27 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from oio.conscience.stats.rawx import HttpStat
+from oio.conscience.stats.http import HttpStat
 
 
-class MetaStat(HttpStat):
+class ProxyStat(HttpStat):
     """
-    Fetch statistics from meta services using an HTTP request to the proxy.
-    Expects one stat per line
+    Fetch metrics from oioproxy services using an HTTP request.
+    Expect one stat per line.
     """
 
     def configure(self):
-        super(MetaStat, self).configure()
-        self.uri = '/forward/stats'
-        service_id = '%s:%s' % (self.stat_conf.get('host'),
-                                self.stat_conf.get('port'))
-        self.params = {'id': service_id}
+        self.stat_conf['path'] = '/v3.0/status'
+        super(ProxyStat, self).configure()
 
     def get_stats(self):
-        resp, _body = self.agent.client._request(
-                'POST', self.uri, params=self.params, retries=False)
-        stats = self._parse_stats_lines(resp.data)
+        stats = super(ProxyStat, self).get_stats()
+        # Deal with the legacy format
+        for key, val in stats.items():
+            if key.endswith(' ='):
+                stats[key[:-2]] = val
+                del stats[key]
+        # Keep only "gauge" metrics for the moment
         for key in stats.keys():
             if key.startswith('gauge'):
                 stat_key = 'stat.' + key.split(None, 1)[1]

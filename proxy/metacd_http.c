@@ -87,7 +87,7 @@ action_status(struct req_args_s *args)
 	for (guint i=0; i<array->len ;++i) {
 		struct stat_record_s *st =
 				&g_array_index (array, struct stat_record_s, i);
-		g_string_append_printf (gstr, "%s = %"G_GUINT64_FORMAT"\n",
+		g_string_append_printf (gstr, "%s %"G_GUINT64_FORMAT"\n",
 				g_quark_to_string (st->which), st->value);
 	}
 	g_array_free (array, TRUE);
@@ -96,18 +96,20 @@ action_status(struct req_args_s *args)
 	struct hc_resolver_stats_s s = {{0}, {0}};
 	hc_resolver_info(resolver, &s);
 
-	g_string_append_printf(gstr, "gauge cache.dir.count = %"G_GINT64_FORMAT"\n", s.csm0.count);
-	g_string_append_printf(gstr, "gauge cache.dir.max = %u\n", s.csm0.max);
-	g_string_append_printf(gstr, "gauge cache.dir.ttl = %lu\n", s.csm0.ttl);
+	g_string_append_printf(gstr, "gauge cache.dir.count %"G_GINT64_FORMAT"\n",
+			s.csm0.count);
+	g_string_append_printf(gstr, "gauge cache.dir.max %u\n", s.csm0.max);
+	g_string_append_printf(gstr, "gauge cache.dir.ttl %lu\n", s.csm0.ttl);
 
-	g_string_append_printf(gstr, "gauge cache.srv.count = %"G_GINT64_FORMAT"\n", s.services.count);
-	g_string_append_printf(gstr, "gauge cache.srv.max = %u\n", s.services.max);
-	g_string_append_printf(gstr, "gauge cache.srv.ttl = %lu\n", s.services.ttl);
+	g_string_append_printf(gstr, "gauge cache.srv.count %"G_GINT64_FORMAT"\n",
+			s.services.count);
+	g_string_append_printf(gstr, "gauge cache.srv.max %u\n", s.services.max);
+	g_string_append_printf(gstr, "gauge cache.srv.ttl %lu\n", s.services.ttl);
 
 	gint64 cd, ck;
 	SRV_READ(cd = lru_tree_count(srv_down); ck = lru_tree_count(srv_known));
-	g_string_append_printf(gstr, "gauge down.srv = %"G_GINT64_FORMAT"\n", cd);
-	g_string_append_printf(gstr, "gauge known.srv = %"G_GINT64_FORMAT"\n", ck);
+	g_string_append_printf(gstr, "gauge down.srv %"G_GINT64_FORMAT"\n", cd);
+	g_string_append_printf(gstr, "gauge known.srv %"G_GINT64_FORMAT"\n", ck);
 
 	args->rp->set_body_gstr(gstr);
 	args->rp->set_status(HTTP_CODE_OK, "OK");
