@@ -64,6 +64,8 @@ struct apr_bucket_type_t chunk_bucket_type = {
 	chunk_bucket_copy
 };
 
+#define CHECKHASH_HEADER "X-oio-check-hash"
+
 /* pull this in from the other source file */
 /*extern const dav_hooks_locks dav_hooks_locks_fs; */
 
@@ -449,6 +451,10 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 		case M_GET:
 			if (oio_str_parse_bool(apr_table_get(r->headers_in, "X-oio-xattr"), TRUE))
 				flags |= RESOURCE_STAT_CHUNK_READ_ALL_ATTRS;
+			if (r->header_only &&
+					oio_str_parse_bool(apr_table_get(r->headers_in, CHECKHASH_HEADER), FALSE))
+				/* TODO(mbo): force Chunk Hash to be loaded, it could be skip if x-oio-chunk-meta-chunk-hash is set */
+				flags |= RESOURCE_STAT_CHUNK_CHECK_HASH | RESOURCE_STAT_CHUNK_READ_ALL_ATTRS;
 			break;
 		case M_OPTIONS:
 		case M_MOVE:
@@ -464,6 +470,18 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 			break;
 	}
 	resource_stat_chunk(resource, flags);
+
+	if (resource->exists && (flags & RESOURCE_STAT_CHUNK_CHECK_HASH)) {
+		EXTRA_ASSERT(!(flags & RESOURCE_STAT_CHUNK_PENDING));
+
+		apr_status_t res = chunk_verify_checksum(resource, r);
+		if (res != APR_SUCCESS) {
+			return server_create_and_stat_error(
+				request_get_server_config(r), r->pool,
+				HTTP_PRECONDITION_FAILED, 0,
+				apr_pstrcat(r->pool, "checksum mismatch", NULL));
+		}
+	}
 
 	if (r->method_number == M_COPY) {
 		request_load_chunk_info_from_headers(r, &(resource->info->chunk));

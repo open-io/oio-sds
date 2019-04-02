@@ -445,6 +445,52 @@ check_chunk_info_with_trailers(apr_pool_t *pool,
 	return NULL;
 }
 
+apr_status_t
+chunk_verify_checksum(dav_resource *resource, request_rec *r)
+{
+	apr_file_t *fd = NULL;
+	apr_status_t status = apr_file_open(&fd, resource_get_pathname(resource),
+		APR_FOPEN_READ|
+		APR_FOPEN_BINARY,
+		0, resource->pool);
+	if (status != APR_SUCCESS) {
+		/* It should be already catched by resource_stat_chunk */
+		return status;
+	}
+
+	void *buf = apr_palloc(resource->pool, DEFAULT_BLOCK_SIZE);
+	apr_size_t nbytes = DEFAULT_BLOCK_SIZE;
+
+	GChecksum *md5 = g_checksum_new(G_CHECKSUM_MD5);
+	while ( (status = apr_file_read(fd, buf, &nbytes)) == APR_SUCCESS) {
+		g_checksum_update(md5, buf, nbytes);
+		nbytes = DEFAULT_BLOCK_SIZE;
+	}
+	apr_file_close(fd);
+
+	if (status != APR_EOF) {
+		g_checksum_free(md5);
+		return status;
+	}
+
+	/* use hash from x-oio-chunk-meta-chunk-hash or from xattr ?*/
+	const char *hash_to_verify = NULL;
+	if ( !(hash_to_verify = apr_table_get(r->headers_in, RAWX_HEADER_PREFIX"chunk-hash" )) ) {
+		EXTRA_ASSERT(resource->info);
+		struct chunk_textinfo_s *p = &resource->info->chunk;
+
+		EXTRA_ASSERT(p->chunk_hash);
+		hash_to_verify = p->chunk_hash;
+	}
+
+	const char *h = g_checksum_get_string (md5);
+
+	/* apr_status_t is maybe not the more useable return code */
+	apr_status_t code = g_ascii_strcasecmp(h, hash_to_verify) ? APR_EMISMATCH : APR_SUCCESS;
+	g_checksum_free(md5);
+	return code;
+}
+
 void
 resource_stat_chunk(dav_resource *resource, int flags)
 {
