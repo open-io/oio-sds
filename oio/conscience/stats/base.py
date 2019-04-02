@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -15,7 +15,7 @@
 
 
 class BaseStat(object):
-    """Base class for all service stat"""
+    """Base class for all service statistics collectors."""
 
     def __init__(self, agent, stat_conf, logger):
         self.agent = agent
@@ -24,9 +24,9 @@ class BaseStat(object):
         self.configure()
 
     def configure(self):
-        """Configuration handle"""
+        """Configure the statistics collector."""
         pass
 
-    def stat(self):
-        """Actually do the service stat"""
-        return {}
+    def get_stats(self):
+        """Actually collect the service statistics."""
+        raise NotImplementedError()
