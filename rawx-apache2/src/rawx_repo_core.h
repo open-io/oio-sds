@@ -85,6 +85,7 @@ struct dav_stream
 #define RESOURCE_STAT_CHUNK_READ_ALL_ATTRS      0x01
 #define RESOURCE_STAT_CHUNK_READ_FULLPATH_ATTRS 0x02
 #define RESOURCE_STAT_CHUNK_PENDING             0x04
+#define RESOURCE_STAT_CHUNK_CHECK_HASH          0x08
 
 void resource_stat_chunk(dav_resource *resource, int flags);
 
@@ -102,6 +103,8 @@ const char * check_chunk_info(apr_pool_t *pool,
 
 const char * check_chunk_info_with_trailers(apr_pool_t *pool,
 		struct chunk_textinfo_s * chunk);
+
+apr_status_t chunk_verify_checksum(dav_resource *resource, request_rec *r);
 
 void request_parse_query(request_rec *r, dav_resource *resource);
 
