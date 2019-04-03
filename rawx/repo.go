@@ -36,6 +36,7 @@ type fileReader interface {
 	size() int64
 	seek(int64) error
 	getAttr(n string) ([]byte, error)
+	check() (string, error)
 }
 
 type fileWriter interface {

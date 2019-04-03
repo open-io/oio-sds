@@ -18,7 +18,10 @@ package main
 
 import (
 	"bytes"
+	"crypto/md5"
+	"encoding/hex"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -318,4 +321,13 @@ func (fileReader *realFileReader) getAttr(key string) ([]byte, error) {
 		return nil, err
 	}
 	return tmp[:sz], nil
+}
+
+func (fileReader *realFileReader) check() (string, error) {
+	h := md5.New()
+	if _, err := io.Copy(h, fileReader.impl); err != nil {
+		return "", err
+	}
+
+	return strings.ToUpper(hex.EncodeToString(h.Sum(nil))), nil
 }

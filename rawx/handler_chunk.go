@@ -40,6 +40,10 @@ var (
 	attrValueZLib = []byte{'z', 'l', 'i', 'b'}
 )
 
+const (
+	HeaderNameCheckHash = "X-oio-check-hash"
+)
+
 var (
 	errNotImplemented        = errors.New("Not implemented")
 	errChunkExists           = errors.New("Chunk already exists")
@@ -207,6 +211,27 @@ func (rr *rawxRequest) checkChunk() {
 	}
 
 	headers := rr.rep.Header()
+	/* TODO(mbo): we should reuse getBool from conf_reader.go */
+	if rr.req.Header.Get(HeaderNameCheckHash) == "true" {
+		expected_hash := rr.req.Header.Get(HeaderNameChunkChecksum)
+		if expected_hash == "" {
+			expected_hash = rr.chunk.ChunkHash
+		}
+		checksum, err := in.check()
+		if err != nil {
+			/* how check return code ? */
+			LogError("Fail to compute md5sum: %s", err)
+			rr.replyError(err)
+			return
+		}
+		if checksum != expected_hash {
+			LogError("Md5sum doesn't match: computed:%s, expected:%s",
+				checksum, expected_hash)
+			rr.replyCode(http.StatusPreconditionFailed)
+			return
+		}
+	}
+
 	rr.chunk.fillHeaders(&headers)
 	headers.Set("Content-Length", strconv.FormatUint(uint64(in.size()), 10))
 	headers.Set("Accept-Ranges", "bytes")
