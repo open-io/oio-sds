@@ -1676,8 +1676,12 @@ static GError * _list_loop (struct req_args_s *args,
 //    }
 //
 // Take a snapshot of a container. Create a separate database containing all
-// information about the contents from the original database, but with copies of
-// the chunks at the time of the snapshot. This new database is not replicated.
+// information about the contents from the original database.
+//
+// WARNING: this command is not intended to be used as-is as source and destination
+// containers will share same chunks.
+//
+// Please use `openio container snapshot` command.
 //
 // .. code-block:: http
 //
