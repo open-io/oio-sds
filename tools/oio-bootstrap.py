@@ -1847,8 +1847,8 @@ def main():
 
     if options.config:
         for path in options.config:
-            with open(path, 'r') as f:
-                data = yaml.load(f)
+            with open(path, 'r') as infile:
+                data = yaml.load(infile, Loader=yaml.Loader)
                 if data:
                     opts = merge_config(opts, data)
 

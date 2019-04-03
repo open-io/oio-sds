@@ -82,8 +82,8 @@ def get_config(defaults=None):
     conf_file = os.environ.get('SDS_TEST_CONFIG_FILE', default_conf_path)
 
     try:
-        with open(conf_file, 'r') as f:
-            conf = yaml.load(f)
+        with open(conf_file, 'r') as infile:
+            conf = yaml.load(infile, Loader=yaml.Loader)
     except SystemExit:
         if not os.path.exists(conf_file):
             reason = 'file not found'
