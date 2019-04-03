@@ -200,7 +200,7 @@ gridinit_cmd -S "$GRIDINIT_SOCK" restart "@meta1" >/dev/null
 MAX_WAITING="30"
 COUNT_META1=$(oio-test-config.py -c -t meta1)
 for i in $(seq 1 "$MAX_WAITING"); do
-    COUNT_META1_0=$(openio cluster list meta1 -f value -c Score | grep -c "^0$" || true)
+    COUNT_META1_0=$($cmd_openio cluster list meta1 -f value -c Score | grep -c "^0$" || true)
     if [ "$COUNT_META1_0" -eq "$COUNT_META1" ]; then
         break
     fi
