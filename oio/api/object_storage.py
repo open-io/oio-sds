@@ -439,6 +439,7 @@ class ObjectStorageApi(object):
                     target_beans, copy_beans,
                     dst_account, dst_container,
                     frozen=True, **kwargs)
+            self.container.container_touch(dst_account, dst_container)
         finally:
             self.container.container_enable(account, container, **kwargs)
 
