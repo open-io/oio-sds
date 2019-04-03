@@ -95,7 +95,7 @@ class BaseServiceIdTest(BaseTestCase):
         conf = None
         path = WATCH_CONF % (self.ns, name)
         with open(path, "r") as fp:
-            conf = yaml.load(fp)
+            conf = yaml.load(fp, Loader=yaml.Loader)
 
         conf['port'] = port
 

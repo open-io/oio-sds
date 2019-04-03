@@ -375,7 +375,7 @@ def parse_yaml(connection, response, **kwargs):
     body = connection.read_body(int(size))
     if size > 0 and not body:
         raise ResponseError()
-    return yaml.load(body)
+    return yaml.load(body, Loader=yaml.Loader)
 
 
 def parse_body(connection, response, **kwargs):

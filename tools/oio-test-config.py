@@ -43,8 +43,8 @@ parser.add_option("-c", "--count", action="store_true", dest="COUNT",
                   default=False)
 
 options, args = parser.parse_args()
-with open(options.PATH, 'r') as f:
-    conf = yaml.load(f)
+with open(options.PATH, 'r') as infile:
+    conf = yaml.load(infile, Loader=yaml.Loader)
     if options.FETCH_NS:
         print conf['namespace']
     elif options.VALUE:
