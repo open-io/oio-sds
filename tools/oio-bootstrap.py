@@ -886,14 +886,17 @@ use = egg:oio#notify
 tube = oio-repli
 queue_url = ${QUEUE_URL}
 
+[filter:bury]
+use = egg:oio#bury
+
+[filter:dump]
+use = egg:oio#dump
+
 [filter:noop]
 use = egg:oio#noop
 
 [filter:logger]
 use = egg:oio#logger
-
-[filter:bury]
-use = egg:oio#bury
 """
 
 template_conscience_agent = """
