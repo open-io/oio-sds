@@ -19,6 +19,7 @@ from logging import getLogger
 from cliff import command, show, lister
 from time import time
 from oio.common.timestamp import Timestamp
+from oio.common.utils import timeout_to_deadline
 from oio.common.constants import OIO_DB_STATUS_NAME,\
     OIO_DB_ENABLED, OIO_DB_DISABLED, OIO_DB_FROZEN
 from oio.common.easy_value import boolean_value
@@ -680,8 +681,7 @@ class SnapshotContainer(ContainerCommandMixin, lister.Lister):
 
     Create a separate database containing all information about the contents
     from the original database, but with copies of the chunks at the time
-    of the snapshot. This new database is not replicated, and is frozen
-    (you cannot write into it).
+    of the snapshot. This new database is frozen (you cannot write into it).
 
     Pay attention to the fact that the source container is frozen during
     the snapshot capture. The capture may take some time, depending on
@@ -712,6 +712,12 @@ class SnapshotContainer(ContainerCommandMixin, lister.Lister):
             default=100,
             help=('The number of chunks updated at the same time.')
         )
+        parser.add_argument(
+            '--timeout',
+            default=60.0,
+            type=float,
+            help=('Timeout for the operation (default: 60.0s).')
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -720,15 +726,17 @@ class SnapshotContainer(ContainerCommandMixin, lister.Lister):
         account = self.app.client_manager.account
         container = parsed_args.container
         cid = parsed_args.cid
+        deadline = timeout_to_deadline(parsed_args.timeout)
         dst_account = parsed_args.dst_account or account
         if cid is not None:
             container = self.resolve_cid(cid)
         dst_container = (parsed_args.dst_container or
                          (container + "-" + Timestamp(time()).normal))
-        batch = parsed_args.chunk_batch_size
+        batch_size = parsed_args.chunk_batch_size
 
         self.app.client_manager.storage.container_snapshot(
             account, container, dst_account,
-            dst_container, batch=batch)
+            dst_container, batch_size=batch_size,
+            deadline=deadline)
         lines = [(dst_account, dst_container, "OK")]
         return ('Account', 'Container', 'Status'), lines

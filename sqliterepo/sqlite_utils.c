@@ -310,6 +310,21 @@ sqlx_admin_get_status(struct sqlx_sqlite3_s *sq3)
 			(gint64)ADMIN_STATUS_ENABLED);
 }
 
+const gchar*
+sqlx_admin_status2str(gint64 status)
+{
+	switch (status) {
+		case ADMIN_STATUS_FROZEN:
+			return "frozen";
+		case ADMIN_STATUS_DISABLED:
+			return "disabled";
+		case ADMIN_STATUS_ENABLED:
+			return "enabled";
+		default:
+			return "unknown";
+	}
+}
+
 gchar**
 sqlx_admin_get_keys(struct sqlx_sqlite3_s *sq3)
 {

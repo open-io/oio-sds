@@ -18,6 +18,7 @@ License along with this library.
 */
 
 #include <errno.h>
+#include <sys/stat.h>
 
 #include <glib.h>
 #include <sqlite3.h>
@@ -455,17 +456,40 @@ static GError *
 _restore_snapshot(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 		const gchar *path)
 {
+	struct stat bstats;
+	if (stat(path, &bstats) != 0) {
+		return NEWERROR(errno, "Failed to read snapshot: %s", strerror(errno));
+	}
+	/* Synchronous replication is only possible if the file is "small".
+	 * If it is not, do not start a transaction, write only in the local base,
+	 * and rely on asynchronous replication mechanisms. */
+	gboolean sync_repli = bstats.st_size < sqliterepo_dump_max_size;
 	struct sqlx_sqlite3_s *sq3 = NULL;
+	/* The database snapshot file is here, open the base locally to avoid
+	 * a redirection, in case the local service does not become the master. */
 	GError *err = sqlx_repository_open_and_lock(repo, name,
 			SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK|SQLX_OPEN_CREATE, &sq3, NULL);
 	if (!err) {
-		err = sqlx_repository_restore_from_file(sq3, path);
+		struct sqlx_repctx_s *repctx = NULL;
+		if (sync_repli)
+			err = sqlx_transaction_begin(sq3, &repctx);
 		if (!err) {
-			sqlx_repository_call_change_callback(sq3);
-			sqlx_admin_set_str(sq3, SQLX_ADMIN_PEERS,
-					sqlx_repository_get_local_addr(repo));
-			sqlx_admin_save_lazy(sq3);
+			err = sqlx_repository_restore_from_file(sq3, path);
+			if (!err) {
+				sqlx_repository_call_change_callback(sq3);
+				/* Reset the set of peers.
+				 * It will be loaded from meta1 when needed.
+				 * FIXME(FVE): the request should define the peer set. */
+				sqlx_admin_del(sq3, SQLX_ADMIN_PEERS);
+				sqlx_admin_save_lazy(sq3);
+				/* The slaves do not have the base, trigger synchronous
+				 * replication and prevent "Remote diff missed" errors. */
+				if (sync_repli)
+					sqlx_transaction_notify_huge_changes(repctx);
+			}
 		}
+		if (sync_repli)
+			err = sqlx_transaction_end(repctx, err);
 	}
 
 	sqlx_repository_unlock_and_close_noerror(sq3);

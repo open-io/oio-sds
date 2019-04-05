@@ -437,18 +437,19 @@ class ObjectStorageApi(object):
     @ensure_headers
     @ensure_request_id
     def container_snapshot(self, account, container, dst_account,
-                           dst_container, batch=100, **kwargs):
+                           dst_container, batch_size=100, **kwargs):
         """
         Take a snapshot of a container.
 
         Create a separate database containing all information about the
         contents from the original database, but with copies of the chunks
-        at the time of the snapshot. This new database is not replicated,
-        and is frozen (you cannot write into it).
+        at the time of the snapshot. This new database is frozen
+        (you cannot write into it).
 
         Pay attention to the fact that the source container is frozen during
         the snapshot capture. The capture may take some time, depending on
-        the number of objects hosted by the container.
+        the number of objects hosted by the container. You should consider
+        setting a long read_timeout on the request.
 
         :param account: account in which the source container is.
         :type account: `str`
@@ -458,13 +459,22 @@ class ObjectStorageApi(object):
         :type dst_account: `str`
         :param dst_container: name of the new container (i.e. the snapshot).
         :type dst_container: `str`
+        :keyword batch_size: number of chunks to copy at a time.
         """
         try:
             self.container.container_freeze(account, container, **kwargs)
             self.container.container_snapshot(
                 account, container, dst_account, dst_container, **kwargs)
-            resp = self.object_list(dst_account, dst_container, **kwargs)
-            obj_gen = resp['objects']
+            obj_gen = depaginate(
+                self.object_list,
+                listing_key=lambda x: x['objects'],
+                marker_key=lambda x: x.get('next_marker'),
+                truncated_key=lambda x: x['truncated'],
+                account=dst_account,
+                container=dst_container,
+                properties=False,
+                versions=True,
+                **kwargs)
             target_beans = []
             copy_beans = []
             for obj in obj_gen:
@@ -479,7 +489,7 @@ class ObjectStorageApi(object):
                     chunks, chunks_copies, obj['content'])
                 target_beans.extend(t_beans)
                 copy_beans.extend(c_beans)
-                if len(target_beans) > batch:
+                if len(target_beans) > batch_size:
                     self.container.container_raw_update(
                         target_beans, copy_beans,
                         dst_account, dst_container,
@@ -1478,6 +1488,7 @@ class ObjectStorageApi(object):
             be hard linked
         """
         new_chunks = list()
+        # TODO(FVE): use a GreenPool to parallelize
         for chunk in targets:
             resp, new_chunk_url = self.blob_client.chunk_link(
                 chunk['url'], None, fullpath, **kwargs)

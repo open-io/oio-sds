@@ -1456,16 +1456,11 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 	}
 
 	GError *hook_dir(const char *m1) {
-		/* Whether replication is enabled or not,
-		 * keep only one service to host the snapshot. */
 		GError *err2 = meta1v2_remote_link_service(
-				m1, args->url, NAME_SRVTYPE_META2, TRUE, TRUE, &urlv_snapshot,
+				m1, args->url, NAME_SRVTYPE_META2, FALSE, TRUE, &urlv_snapshot,
 				oio_ext_get_deadline());
-		if (!err2 && urlv_snapshot && *urlv_snapshot) {
-			err2 = meta1v2_remote_force_reference_service(
-				m1, args->url, urlv_snapshot[0], FALSE, TRUE,
-				oio_ext_get_deadline());
-		}
+		/* TODO(FVE): send this list along with the snapshot request.
+		 * This will prevent the meta2 from looking up in the meta1. */
 		if (urlv_snapshot) {
 			g_strfreev(urlv_snapshot);
 			urlv_snapshot = NULL;
