@@ -23,14 +23,18 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"hash"
 	"io"
 	"io/ioutil"
 	"net/http"
-	"path/filepath"
 	"strings"
+	"strconv"
 )
 
-const bufferSize int64 = 1024 * 1024
+const (
+	uploadBufferSize   int64 = 64 * 1024
+	downloadBufferSize int64 = 64 * 1024
+)
 
 var (
 	AttrValueZLib = []byte{'z', 'l', 'i', 'b'}
@@ -61,61 +65,27 @@ type rangeInfo struct {
 	size   int64
 }
 
-// Check and load a canonic form of the ID of the chunk.
-func (rr *rawxRequest) retrieveChunkID() error {
-	chunkID := filepath.Base(rr.req.URL.Path)
-	if !isHexaString(chunkID, 64) {
-		return ErrInvalidChunkID
-	}
-	rr.chunkID = strings.ToUpper(chunkID)
-	return nil
-}
+func (ri rangeInfo) Void() bool { return ri.offset == 0 && ri.size == 0 }
 
-func (rr *rawxRequest) putData(out io.Writer) (*uploadInfo, error) {
-	contentLength := rr.req.ContentLength
-	buffer := make([]byte, bufferSize)
-	chunkIn := rr.req.Body
-	var chunkLength int64
-	chunkHash := md5.New()
-	LogDebug("Uploading %v bytes", contentLength)
+func (rr *rawxRequest) putData(out io.Writer) (uploadInfo, error) {
+	var in io.Reader
+	var h hash.Hash
 
-	for {
-		max := bufferSize
-		if contentLength >= 0 {
-			remaining := contentLength - chunkLength
-			if remaining < bufferSize {
-				max = remaining + 1
-			}
-		}
-		n, err := chunkIn.Read(buffer[:max])
-		LogDebug("consumed %v / %s", n, err)
-		if n > 0 {
-			chunkLength += int64(n)
-			out.Write(buffer[:n])
-			chunkHash.Write(buffer[:n])
-		}
-		if err != nil {
-			if err == io.EOF {
-				// Clean end of chunked stream
-				break
-			} else {
-				// Any other error
-				rr.bytesIn = uint64(chunkLength)
-				return nil, err
-			}
-		}
-		if contentLength >= 0 && chunkLength > contentLength {
-			rr.bytesIn = uint64(chunkLength)
-			return nil, ErrContentLength
-		}
-	}
-	if contentLength >= 0 && chunkLength != contentLength {
-		rr.bytesIn = uint64(chunkLength)
-		return nil, ErrContentLength
+	// TODO(jfs): Maybe we can toggle the MD5 computation with configuration
+	h = md5.New()
+	in = io.TeeReader(rr.req.Body, h)
+
+	ul := uploadInfo{}
+	buffer := make([]byte, uploadBufferSize)
+	chunkLength, err := io.CopyBuffer(out, in, buffer)
+	if err != nil {
+		return ul, err
 	}
 
-	ul := new(uploadInfo)
-	ul.hash = strings.ToUpper(hex.EncodeToString(chunkHash.Sum(make([]byte, 0))))
+	if h != nil {
+		bin := make([]byte, 0, 32)
+		ul.hash = strings.ToUpper(hex.EncodeToString(h.Sum(bin)))
+	}
 	ul.length = chunkLength
 	rr.bytesIn = uint64(chunkLength)
 	return ul, nil
@@ -141,7 +111,7 @@ func (rr *rawxRequest) uploadChunk() {
 	}
 
 	// Upload, and maybe manage compression
-	var ul *uploadInfo
+	var ul uploadInfo
 	if rr.rawx.compress {
 		z := zlib.NewWriter(out)
 		ul, err = rr.putData(z)
@@ -157,7 +127,7 @@ func (rr *rawxRequest) uploadChunk() {
 
 	// If a hash has been sent, it must match the hash computed
 	if err == nil {
-		if err = rr.chunk.retrieveTrailers(&rr.req.Trailer, ul); err != nil {
+		if err = rr.chunk.retrieveTrailers(&rr.req.Trailer, &ul); err != nil {
 			LogError("Trailer error: %s", err)
 		}
 	}
@@ -176,11 +146,11 @@ func (rr *rawxRequest) uploadChunk() {
 		// Discard request body
 		io.Copy(ioutil.Discard, rr.req.Body)
 	} else {
-		NotifyNew(rr.rawx.notifier, rr.reqid, &rr.chunk)
 		out.Commit()
 		headers := rr.rep.Header()
 		rr.chunk.fillHeadersLight(&headers)
 		rr.replyCode(http.StatusCreated)
+		NotifyNew(rr.rawx.notifier, rr.reqid, &rr.chunk)
 	}
 }
 
@@ -238,37 +208,37 @@ func (rr *rawxRequest) checkChunk() {
 
 	headers := rr.rep.Header()
 	rr.chunk.fillHeaders(&headers)
-	headers.Set("Content-Length", fmt.Sprintf("%v", in.Size()))
+	headers.Set("Content-Length", strconv.FormatUint(uint64(in.Size()), 10))
 	headers.Set("Accept-Ranges", "bytes")
 
 	rr.replyCode(http.StatusOK)
 }
 
-func (rr *rawxRequest) getRange(chunkSize int64) (*rangeInfo, error) {
+func (rr *rawxRequest) getRange(chunkSize int64) (rangeInfo, error) {
+	ri := rangeInfo{}
 	headerRange := rr.req.Header.Get("Range")
 	if headerRange == "" || chunkSize == 0 {
-		return nil, nil
+		return ri, nil
 	}
 
 	var offset int64
 	var last int64
 	if nb, err := fmt.Sscanf(headerRange, "bytes=%d-%d", &offset, &last); err != nil || nb != 2 {
-		return nil, nil
+		return ri, nil
 	}
 	if offset < 0 || last < 0 || offset > last {
-		return nil, nil
+		return ri, nil
 	}
 	if offset >= chunkSize {
-		return nil, ErrInvalidRange
+		return ri, ErrInvalidRange
 	}
 	if last >= chunkSize {
 		last = chunkSize - 1
 	}
-	rangeInf := new(rangeInfo)
-	rangeInf.offset = offset
-	rangeInf.last = last
-	rangeInf.size = last - offset + 1
-	return rangeInf, nil
+	ri.offset = offset
+	ri.last = last
+	ri.size = last - offset + 1
+	return ri, nil
 }
 
 func (rr *rawxRequest) downloadChunk() {
@@ -291,6 +261,7 @@ func (rr *rawxRequest) downloadChunk() {
 	if err != nil {
 		LogError("Range error: %s", err)
 		rr.replyError(err)
+		return
 	}
 
 	if err = rr.chunk.loadAttr(inChunk, rr.chunkID); err != nil {
@@ -304,7 +275,7 @@ func (rr *rawxRequest) downloadChunk() {
 	var in io.ReadCloser
 	v, err = inChunk.GetAttr(AttrNameCompression)
 	if err != nil {
-		if rangeInf != nil {
+		if !rangeInf.Void() {
 			err = inChunk.Seek(rangeInf.offset)
 		}
 		in = ioutil.NopCloser(inChunk)
@@ -327,7 +298,7 @@ func (rr *rawxRequest) downloadChunk() {
 	}
 
 	// If the range specified a size, let's wrap (again) the input
-	if rangeInf != nil {
+	if !rangeInf.Void() {
 		in = &limitedReader{sub: in, remaining: rangeInf.size}
 	}
 
@@ -335,30 +306,23 @@ func (rr *rawxRequest) downloadChunk() {
 	rr.chunk.fillHeaders(&headers)
 
 	// Prepare the headers of the reply
-	if rangeInf != nil {
+	if !rangeInf.Void() {
 		rr.rep.Header().Set("Content-Range", fmt.Sprintf("bytes %v-%v/%v",
 			rangeInf.offset, rangeInf.last, chunkSize))
-		rr.rep.Header().Set("Content-Length", fmt.Sprintf("%v", rangeInf.size))
+		rr.rep.Header().Set("Content-Length", strconv.FormatUint(uint64(rangeInf.size), 10))
 		rr.replyCode(http.StatusPartialContent)
 	} else {
-		rr.rep.Header().Set("Content-Length", fmt.Sprintf("%v", chunkSize))
+		rr.rep.Header().Set("Content-Length", strconv.FormatUint(uint64(chunkSize), 10))
 		rr.replyCode(http.StatusOK)
 	}
 
 	// Now transmit the clear data to the client
-	buffer := make([]byte, bufferSize)
-	for {
-		n, err := in.Read(buffer)
-		if n > 0 {
-			rr.bytesOut = rr.bytesOut + uint64(n)
-			rr.rep.Write(buffer[:n])
-		}
-		if err != nil {
-			if err != io.EOF {
-				LogError("Write() error: %s", err)
-			}
-			break
-		}
+	buffer := make([]byte, downloadBufferSize)
+	nb, err := io.CopyBuffer(rr.rep, in, buffer)
+	if err == nil {
+		rr.bytesOut = rr.bytesOut + uint64(nb)
+	} else {
+		LogError("Write() error: %s", err)
 	}
 }
 
@@ -384,39 +348,43 @@ func (rr *rawxRequest) removeChunk() {
 	if err != nil {
 		rr.replyError(err)
 	} else {
-		NotifyDel(rr.rawx.notifier, rr.reqid, &rr.chunk)
 		rr.replyCode(http.StatusNoContent)
+		NotifyDel(rr.rawx.notifier, rr.reqid, &rr.chunk)
 	}
 }
 
-func (rr *rawxRequest) serveChunk(rep http.ResponseWriter, req *http.Request) {
-	err := rr.retrieveChunkID()
-	if err != nil {
-		rr.replyError(err)
+func (rr *rawxRequest) serveChunk() {
+	if !isHexaString(rr.req.URL.Path[1:], 64) {
+		rr.replyError(ErrInvalidChunkID)
 		return
 	}
+	rr.chunkID = strings.ToUpper(rr.req.URL.Path[1:])
 
 	var spent uint64
-	switch req.Method {
-	case "PUT":
-		rr.uploadChunk()
-		spent = IncrementStatReqPut(rr)
-	case "COPY":
-		rr.copyChunk()
-		spent = IncrementStatReqCopy(rr)
-	case "HEAD":
-		rr.checkChunk()
-		spent = IncrementStatReqHead(rr)
+	switch rr.req.Method {
 	case "GET":
 		rr.downloadChunk()
 		spent = IncrementStatReqGet(rr)
+	case "PUT":
+		rr.uploadChunk()
+		spent = IncrementStatReqPut(rr)
 	case "DELETE":
 		rr.removeChunk()
 		spent = IncrementStatReqDel(rr)
+	case "HEAD":
+		rr.checkChunk()
+		spent = IncrementStatReqHead(rr)
+	case "COPY":
+		rr.copyChunk()
+		spent = IncrementStatReqCopy(rr)
 	default:
 		rr.replyCode(http.StatusMethodNotAllowed)
 		spent = IncrementStatReqOther(rr)
 	}
-	LogIncoming("%s %s %s %d %d %d %s %s", rr.rawx.url, req.RemoteAddr,
-		req.Method, rr.status, spent, rr.bytesOut, rr.reqid, req.URL.Path)
+
+
+	LogIncoming(
+		rr.rawx.url, rr.req.RemoteAddr, rr.req.Method,
+		rr.status, spent, rr.bytesOut,
+		rr.reqid, rr.req.URL.Path)
 }

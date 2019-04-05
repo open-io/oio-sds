@@ -28,12 +28,6 @@ type Repository interface {
 	Put(name string) (FileWriter, error)
 	Link(fromName, toName string) (FileWriter, error)
 	Del(name string) error
-	List(marker, prefix string, max int) (ListSlice, error)
-}
-
-type ListSlice struct {
-	Items     []string
-	Truncated bool
 }
 
 type FileReader interface {

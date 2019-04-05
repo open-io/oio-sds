@@ -54,14 +54,6 @@ func usage(why string) {
 	log.Fatal(why)
 }
 
-func checkMakeFileRepo(dir string) *FileRepository {
-	basedir := filepath.Clean(dir)
-	if !filepath.IsAbs(basedir) {
-		log.Fatalf("Filerepo path must be absolute, got %s", basedir)
-	}
-	return MakeFileRepository(basedir)
-}
-
 func sigHandlerUSR1() {
 	increaseVerbosity()
 	go func() {
@@ -125,9 +117,11 @@ func main() {
 		log.Fatal("Exiting with error: ", err.Error())
 	}
 
+	chunkrepo := chunkRepository{}
 	namespace := opts["ns"]
 	rawxURL := opts["addr"]
 	rawxID := opts["id"]
+
 	checkNS(namespace)
 	checkURL(rawxURL)
 
@@ -137,14 +131,15 @@ func main() {
 		LogInfo("No service ID, using ADDR %s", rawxURL)
 	}
 
-	filerepo := checkMakeFileRepo(opts["basedir"])
-	filerepo.HashWidth = opts.getInt("hash_width", filerepo.HashWidth)
-	filerepo.HashDepth = opts.getInt("hash_depth", filerepo.HashDepth)
-	filerepo.SyncFile = opts.getBool("fsync_file", filerepo.SyncFile)
-	filerepo.SyncDir = opts.getBool("fsync_dir", filerepo.SyncDir)
-	filerepo.FallocateFile = opts.getBool("fallocate", filerepo.FallocateFile)
-
-	chunkrepo := MakeChunkRepository(filerepo)
+	// Init the actual chunk storage
+	if err := chunkrepo.sub.Init(opts["basedir"]); err != nil {
+		log.Fatal("Invalid directories: %v", err)
+	}
+	chunkrepo.sub.HashWidth = opts.getInt("hash_width", chunkrepo.sub.HashWidth)
+	chunkrepo.sub.HashDepth = opts.getInt("hash_depth", chunkrepo.sub.HashDepth)
+	chunkrepo.sub.SyncFile = opts.getBool("fsync_file", chunkrepo.sub.SyncFile)
+	chunkrepo.sub.SyncDir = opts.getBool("fsync_dir", chunkrepo.sub.SyncDir)
+	chunkrepo.sub.FallocateFile = opts.getBool("fallocate", chunkrepo.sub.FallocateFile)
 
 	if !*servicingPtr {
 		if err := chunkrepo.Lock(namespace, rawxID); err != nil {
@@ -155,9 +150,9 @@ func main() {
 	rawx := rawxService{
 		ns:       namespace,
 		url:      rawxURL,
-		path:     filerepo.root,
+		path:     chunkrepo.sub.root,
 		id:       rawxID,
-		repo:     chunkrepo,
+		repo:     &chunkrepo,
 		compress: opts.getBool("compress", false),
 	}
 

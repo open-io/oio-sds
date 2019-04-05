@@ -21,9 +21,9 @@ import (
 	"log"
 	"log/syslog"
 	"os"
+	"strings"
+	"strconv"
 )
-
-const severityMask = 0x07 // https://golang.org/src/log/syslog/syslog.go?s=540:566#L26
 
 type oioLogger interface {
 	write(priority syslog.Priority, message string)
@@ -52,25 +52,10 @@ func resetVerbosity() {
 	logSeverity = logDefaultSeverity
 }
 
-func getFacility(domain string) (syslog.Priority, string) {
-	if domain == "" {
-		return 0, "log"
-	}
-	switch domain {
-	case "access":
-		return syslog.LOG_LOCAL1, "access"
-	case "out":
-		return syslog.LOG_LOCAL2, "out"
-	default:
-		return syslog.LOG_LOCAL0, "log"
-	}
-}
-
 func getSeverity(priority syslog.Priority) (syslog.Priority, string) {
-	priority = syslog.Priority(int(priority) & severityMask)
 	switch priority {
 	case syslog.LOG_CRIT:
-		return syslog.LOG_CRIT, "CRI"
+		return syslog.LOG_ERR, "CRI"
 	case syslog.LOG_ERR:
 		return syslog.LOG_ERR, "ERR"
 	case syslog.LOG_WARNING:
@@ -84,56 +69,79 @@ func getSeverity(priority syslog.Priority) (syslog.Priority, string) {
 	}
 }
 
-func writeLog(domain string, priority syslog.Priority,
-	format string, v ...interface{}) {
+func writeLogFmt(priority syslog.Priority, format string, v ...interface{}) {
 	severity, severityName := getSeverity(priority)
 	if !severityAllowed(severity) {
 		return
 	}
 
-	pid := os.Getpid()
-	facility, facilityName := getFacility(domain)
-	var prefix string
-	if facilityName == "log" {
-		if domain == "" {
-			domain = "-"
-		}
-		prefix = fmt.Sprintf("%d %s %s %s ", pid, facilityName, severityName,
-			domain)
-	} else {
-		prefix = fmt.Sprintf("%d %s %s ", pid, facilityName, severityName)
-	}
-	message := fmt.Sprintf(format, v...)
-
-	logger.write(severity|facility, prefix+message)
+	sb := strings.Builder{}
+	sb.Grow(256)
+	sb.WriteString(strconv.Itoa(os.Getpid()))
+	sb.WriteString(" log ")
+	sb.WriteString(severityName)
+	sb.WriteString(" - ")
+	sb.WriteString(fmt.Sprintf(format, v...))
+	logger.write(syslog.LOG_LOCAL0|severity, sb.String())
 }
 
 func LogError(format string, v ...interface{}) {
-	writeLog("", syslog.LOG_ERR, format, v...)
+	writeLogFmt(syslog.LOG_ERR, format, v...)
 }
 
 func LogWarning(format string, v ...interface{}) {
-	writeLog("", syslog.LOG_WARNING, format, v...)
+	writeLogFmt(syslog.LOG_WARNING, format, v...)
 }
 
 func LogNotice(format string, v ...interface{}) {
-	writeLog("", syslog.LOG_NOTICE, format, v...)
+	writeLogFmt(syslog.LOG_NOTICE, format, v...)
 }
 
 func LogInfo(format string, v ...interface{}) {
-	writeLog("", syslog.LOG_INFO, format, v...)
+	writeLogFmt(syslog.LOG_INFO, format, v...)
 }
 
 func LogDebug(format string, v ...interface{}) {
-	writeLog("", syslog.LOG_DEBUG, format, v...)
+	writeLogFmt(syslog.LOG_DEBUG, format, v...)
 }
 
-func LogIncoming(format string, v ...interface{}) {
-	writeLog("access", syslog.LOG_INFO, format, v...)
+func LogIncoming(url, peer, method string, status int, spent, bytes uint64, id, path string) {
+	sb := strings.Builder{}
+	sb.Grow(128 + len(path))
+	// Preamble
+	sb.WriteString(strconv.Itoa(os.Getpid()))
+	sb.WriteString(" access INF - ")
+	// Payload
+	sb.WriteString(url)
+	sb.WriteRune(' ')
+	sb.WriteString(peer)
+	sb.WriteRune(' ')
+	sb.WriteString(method)
+	sb.WriteRune(' ')
+	sb.WriteString(itoa(status))
+	sb.WriteRune(' ')
+	sb.WriteString(utoa(spent))
+	sb.WriteRune(' ')
+	sb.WriteString(utoa(bytes))
+	sb.WriteRune(' ')
+	sb.WriteString(id)
+	sb.WriteRune(' ')
+	sb.WriteString(path)
+	logger.write(syslog.LOG_LOCAL1|syslog.LOG_INFO, sb.String())
 }
 
 func LogOutgoing(format string, v ...interface{}) {
-	writeLog("out", syslog.LOG_INFO, format, v...)
+	if !severityAllowed(syslog.LOG_DEBUG) {
+		return
+	}
+	sb := strings.Builder{}
+	sb.Grow(256)
+	// Preamble
+	sb.WriteString(strconv.Itoa(os.Getpid()))
+	sb.WriteString(" out INF - ")
+	// Payload
+	sb.WriteString(fmt.Sprintf(format, v...))
+	logger.write(syslog.LOG_LOCAL2|syslog.LOG_INFO, sb.String())
 }
 
 type NoopLogger struct {
