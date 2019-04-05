@@ -23,6 +23,8 @@ import (
 	"io"
 	"net"
 	"strings"
+	"strconv"
+	"time"
 )
 
 const (
@@ -71,8 +73,11 @@ type Job struct {
 	Data []byte
 }
 
+func itoa(i int) string { return strconv.Itoa(i); }
+func utoa(i uint64) string { return strconv.FormatUint(i, 10); }
+
 func DialBeanstalkd(addr string) (*Beanstalkd, error) {
-	conn, err := net.Dial("tcp", addr)
+	conn, err := net.DialTimeout("tcp", addr, 2 * time.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -90,8 +95,12 @@ func (beanstalkd *Beanstalkd) Close() {
 }
 
 func (beanstalkd *Beanstalkd) Watch(tubename string) error {
-	command := fmt.Sprintf("watch %s\r\n", tubename)
-	resp, err := beanstalkd.sendCommand(command)
+	cmd := strings.Builder{}
+	cmd.Grow(len(tubename) + 16)
+	cmd.WriteString("watch ")
+	cmd.WriteString(tubename)
+	cmd.WriteString("\r\n")
+	resp, err := beanstalkd.sendCommand(cmd.String())
 	if err != nil {
 		return err
 	}
@@ -105,31 +114,54 @@ func (beanstalkd *Beanstalkd) Watch(tubename string) error {
 }
 
 func (beanstalkd *Beanstalkd) Use(tubename string) error {
-	command := fmt.Sprintf("use %s\r\n", tubename)
+	cmd := strings.Builder{}
+	cmd.Grow(len(tubename) + 16)
+	cmd.WriteString("use ")
+	cmd.WriteString(tubename)
+	cmd.WriteString("\r\n")
 	expected := fmt.Sprintf("USING %s\r\n", tubename)
-	return beanstalkd.sendCommandAndCheck(command, expected)
+	return beanstalkd.sendCommandAndCheck(cmd.String(), expected)
 }
 
 func (beanstalkd *Beanstalkd) Put(data []byte) (uint64, error) {
-	command := fmt.Sprintf("put %d %d %d %d\r\n%s\r\n", defaultPriority,
-		0, defaultTTR, len(data), string(data))
-	resp, err := beanstalkd.sendCommand(command)
+	cmd := strings.Builder{}
+	cmd.Grow(len(data) + 64)
+	cmd.WriteString("put ")
+	cmd.WriteString(utoa(defaultPriority))
+	cmd.WriteString(" 0 ")
+	cmd.WriteString(utoa(defaultTTR))
+	cmd.WriteRune(' ')
+	cmd.WriteString(itoa(len(data)))
+	cmd.WriteString("\r\n")
+	cmd.Write(data)
+	cmd.WriteString("\r\n")
+	resp, err := beanstalkd.sendCommand(cmd.String())
 	if err != nil {
 		return 0, err
 	}
 
 	switch {
-	case strings.HasPrefix(resp, "INSERTED"):
+	case strings.HasPrefix(resp, "IN"):
 		var id uint64
 		_, err := fmt.Sscanf(resp, "INSERTED %d\r\n", &id)
 		return id, err
-	case strings.HasPrefix(resp, "BURIED"):
+	case strings.HasPrefix(resp, "BU"):
 		var id uint64
 		fmt.Sscanf(resp, "BURIED %d\r\n", &id)
 		return id, ErrBuried
 	default:
 		return 0, beanstalkd.parseError(resp)
 	}
+}
+
+func (beanstalkd *Beanstalkd) Delete(id uint64) error {
+	cmd := strings.Builder{}
+	cmd.Grow(128)
+	cmd.WriteString("delete ")
+	cmd.WriteString(utoa(id))
+	cmd.WriteString("\r\n")
+	expected := "DELETED\r\n"
+	return beanstalkd.sendCommandAndCheck(cmd.String(), expected)
 }
 
 func (beanstalkd *Beanstalkd) Reserve() (*Job, error) {
@@ -163,12 +195,6 @@ func (beanstalkd *Beanstalkd) Bury(id uint64) error {
 func (beanstalkd *Beanstalkd) Release(id uint64) error {
 	command := fmt.Sprintf("release %d %d %d\r\n", id, defaultPriority, 0)
 	expected := "RELEASED\r\n"
-	return beanstalkd.sendCommandAndCheck(command, expected)
-}
-
-func (beanstalkd *Beanstalkd) Delete(id uint64) error {
-	command := fmt.Sprintf("delete %d\r\n", id)
-	expected := "DELETED\r\n"
 	return beanstalkd.sendCommandAndCheck(command, expected)
 }
 
