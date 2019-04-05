@@ -19,7 +19,6 @@ package main
 import (
 	"net/http"
 	"os"
-	"path/filepath"
 	"time"
 )
 
@@ -95,30 +94,24 @@ func (rr *rawxRequest) replyError(err error) {
 }
 
 func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
-	startTime := time.Now()
-
-	// Sanitizes the Path, trim repeated separators, etc
-	req.URL.Path = filepath.Clean(req.URL.Path)
-
-	// Extract some common headers
-	reqid := req.Header.Get("X-oio-reqid")
-	if len(reqid) <= 0 {
-		reqid = req.Header.Get("X-trans-id")
-	}
-	if len(reqid) > 0 {
-		rep.Header().Set("X-trans-id", reqid)
-	} else {
-		// patch the reqid for pretty access log
-		reqid = "-"
-	}
-
-	// Forward to the request method
 	rawxreq := rawxRequest{
 		rawx:      rawx,
 		req:       req,
 		rep:       rep,
-		reqid:     reqid,
-		startTime: startTime,
+		reqid:     "",
+		startTime: time.Now(),
+	}
+
+	// Extract some common headers
+	rawxreq.reqid = req.Header.Get("X-oio-reqid")
+	if len(rawxreq.reqid) <= 0 {
+		rawxreq.reqid = req.Header.Get("X-trans-id")
+	}
+	if len(rawxreq.reqid) > 0 {
+		rep.Header().Set("X-trans-id", rawxreq.reqid)
+	} else {
+		// patch the reqid for pretty access log
+		rawxreq.reqid = "-"
 	}
 
 	if len(req.Host) > 0 && (req.Host != rawx.id && req.Host != rawx.url) {
@@ -130,7 +123,7 @@ func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 		case "/stat":
 			rawxreq.serveStat(rep, req)
 		default:
-			rawxreq.serveChunk(rep, req)
+			rawxreq.serveChunk()
 		}
 	}
 }

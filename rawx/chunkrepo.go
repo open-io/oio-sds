@@ -26,18 +26,7 @@ import (
 )
 
 type chunkRepository struct {
-	sub      Repository
-	accepted [32]byte
-}
-
-func MakeChunkRepository(sub Repository) *chunkRepository {
-	if sub == nil {
-		panic("BUG : bad repository initiation")
-	}
-	r := new(chunkRepository)
-	r.sub = sub
-
-	return r
+	sub FileRepository
 }
 
 func (chunkrepo *chunkRepository) Lock(ns, url string) error {
@@ -80,15 +69,3 @@ func (chunkrepo *chunkRepository) Link(fromName,
 	return chunkrepo.sub.Link(fromName, toName)
 }
 
-func (chunkrepo *chunkRepository) List(marker, prefix string,
-	max int) (ListSlice, error) {
-	if len(marker) > 0 && !isHexaString(marker, 0) {
-		out := ListSlice{make([]string, 0), false}
-		return out, ErrListMarker
-	}
-	if len(prefix) > 0 && !isHexaString(prefix, 0) {
-		out := ListSlice{make([]string, 0), false}
-		return out, ErrListPrefix
-	}
-	return chunkrepo.sub.List(marker, prefix, max)
-}

@@ -18,9 +18,7 @@ package main
 
 import (
 	"bytes"
-	"container/list"
 	"errors"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -37,6 +35,7 @@ const (
 
 type FileRepository struct {
 	root          string
+	rootFd        int
 	putOpenMode   os.FileMode
 	putOpenFlags  int
 	putMkdirMode  os.FileMode
@@ -47,18 +46,26 @@ type FileRepository struct {
 	FallocateFile bool
 }
 
-func MakeFileRepository(root string) *FileRepository {
-	fileRepo := new(FileRepository)
-	fileRepo.root = root
-	fileRepo.HashWidth = hashWidth
-	fileRepo.HashDepth = hashDepth
-	fileRepo.putOpenFlags = putOpenFlags
-	fileRepo.putOpenMode = putOpenMode
-	fileRepo.putMkdirMode = putMkdirMode
-	fileRepo.SyncFile = false
-	fileRepo.SyncDir = true
+func (fr *FileRepository) Init(root string) error {
+	var err error
+	basedir := filepath.Clean(root)
+	if !filepath.IsAbs(basedir) {
+		return errors.New("Filerepo path must be absolute")
+	}
+	fr.root = basedir
+	fr.HashWidth = hashWidth
+	fr.HashDepth = hashDepth
+	fr.putOpenFlags = putOpenFlags
+	fr.putOpenMode = putOpenMode
+	fr.putMkdirMode = putMkdirMode
+	fr.SyncFile = false
+	fr.SyncDir = true
 
-	return fileRepo
+	flags := syscall.O_DIRECTORY|syscall.O_RDONLY|syscall.O_NOATIME
+	if fr.rootFd, err = syscall.Open(fr.root, flags, 0); err != nil {
+		return err
+	}
+	return nil
 }
 
 func setOrHasXattr(path, key, value string) error {
@@ -96,9 +103,8 @@ func (fileRepo *FileRepository) Lock(ns, id string) error {
 }
 
 func (fileRepo *FileRepository) Has(name string) (bool, error) {
-	if p, err := fileRepo.nameToPath(name); err != nil {
-		return false, err
-	} else if _, err := os.Stat(p); err != nil {
+	path := fileRepo.nameToPath(name)
+	if _, err := os.Stat(path); err != nil {
 		return false, err
 	} else {
 		return true, nil
@@ -106,11 +112,8 @@ func (fileRepo *FileRepository) Has(name string) (bool, error) {
 }
 
 func (fileRepo *FileRepository) Del(name string) error {
-	path, err := fileRepo.nameToPath(name)
-	if err != nil {
-		return err
-	}
-	err = syscall.Removexattr(path, AttrNameFullPrefix+name)
+	path := fileRepo.nameToPath(name)
+	err := syscall.Removexattr(path, AttrNameFullPrefix+name)
 	if err != nil {
 		LogWarning("Error to remove content fullpath: %s", err)
 		err = nil
@@ -130,10 +133,7 @@ func (fileRepo *FileRepository) realGet(path string) (FileReader, error) {
 }
 
 func (fileRepo *FileRepository) Get(name string) (FileReader, error) {
-	path, err := fileRepo.nameToPath(name)
-	if err != nil {
-		return nil, err
-	}
+	path := fileRepo.nameToPath(name)
 	return fileRepo.realGet(path)
 }
 
@@ -162,10 +162,7 @@ func (fileRepo *FileRepository) realPut(path string) (FileWriter, error) {
 }
 
 func (fileRepo *FileRepository) Put(name string) (FileWriter, error) {
-	path, err := fileRepo.nameToPath(name)
-	if err != nil {
-		return nil, err
-	}
+	path := fileRepo.nameToPath(name)
 	return fileRepo.realPut(path)
 }
 
@@ -203,89 +200,24 @@ func (fileRepo *FileRepository) realLink(fromPath, toPath string) (FileWriter, e
 }
 
 func (fileRepo *FileRepository) Link(fromName, toName string) (FileWriter, error) {
-	fromPath, err := fileRepo.nameToPath(fromName)
-	if err != nil {
-		return nil, err
-	}
-	toPath, err := fileRepo.nameToPath(toName)
-	if err != nil {
-		return nil, err
-	}
+	fromPath := fileRepo.nameToPath(fromName)
+	toPath := fileRepo.nameToPath(toName)
 	return fileRepo.realLink(fromPath, toPath)
-}
-
-func (fileRepo *FileRepository) nameToPathTokens(name string) ([]string, error) {
-
-	// Sanity checks and cleanups
-	if len(name) <= 0 {
-		return make([]string, 0, 0), os.ErrInvalid
-	}
-	name = strings.Replace(filepath.Clean(name), "/", "@", -1)
-
-	// Hash computations
-	tokens := make([]string, 0, 5)
-	tokens = append(tokens, fileRepo.root)
-	for i := 0; i < fileRepo.HashDepth; i++ {
-		start := i * fileRepo.HashDepth
-		tokens = append(tokens, name[start:start+fileRepo.HashWidth])
-	}
-
-	return tokens, nil
 }
 
 // Takes only the basename, check it is hexadecimal with a length of 64,
 // and computes the hashed path
-func (fileRepo *FileRepository) nameToPath(name string) (string, error) {
-	tokens, err := fileRepo.nameToPathTokens(name)
-	if err != nil {
-		return "", err
+func (fileRepo *FileRepository) nameToPath(name string) string {
+	var result strings.Builder
+	result.WriteString(fileRepo.root)
+	for i := 0; i < fileRepo.HashDepth; i++ {
+		start := i * fileRepo.HashDepth
+		result.WriteRune('/')
+		result.WriteString(name[start:start+fileRepo.HashWidth])
 	}
-	tokens = append(tokens, name)
-	return filepath.Join(tokens...), nil
-}
-
-func (fileRepo *FileRepository) List(marker, prefix string, max int) (ListSlice, error) {
-	out := ListSlice{make([]string, 0, 0), false}
-
-	// If both a prefix and a marker are set, if the marker is already
-	// greater than the prefix, no need to continue
-	if len(prefix) > 0 && len(marker) > 0 {
-		if marker > prefix {
-			out.Truncated = true
-			return out, nil
-		}
-	}
-
-	// Compute a path that is long enough to compute a full hashed directory,
-	// that is lexicographically greater than the marker
-	minLength := fileRepo.HashWidth * fileRepo.HashDepth
-	start := string(marker)
-	if prefix > start {
-		start = string(prefix)
-	}
-	if len(start) < minLength {
-		start = start + strings.Repeat(" ", minLength)
-	}
-
-	tokens, err := fileRepo.nameToPathTokens(start)
-	if err != nil {
-		return out, err
-	}
-
-	// Iterate
-
-	stack := list.New()
-	if l0, err := ioutil.ReadDir(fileRepo.root); err == nil {
-		for _, item := range l0 {
-			if item.Name() < tokens[0] {
-				continue
-			}
-			stack.PushFront(item)
-		}
-	}
-
-	// Deduce the starting directory for the fi
-	return out, ErrNotImplemented
+	result.WriteRune('/')
+	result.WriteString(name)
+	return result.String()
 }
 
 type RealFileWriter struct {
