@@ -973,7 +973,7 @@ meta1_backend_services_link (struct meta1_backend_s *m1,
 				g_prefix_error(&err, "Query error: ");
 		}
 		if (!(err = sqlx_transaction_end(repctx, err))) {
-			if (renewed)
+			if (renewed && !dryrun)
 				__notify_services_by_cid(m1, sq3, url);
 		}
 	}
@@ -1010,7 +1010,7 @@ meta1_backend_services_poll(struct meta1_backend_s *m1,
 				g_prefix_error(&err, "Query error: ");
 		}
 		if (!(err = sqlx_transaction_end(repctx, err)) && renewed) {
-			if (renewed)
+			if (renewed && !dryrun)
 				__notify_services_by_cid(m1, sq3, url);
 		}
 	}
