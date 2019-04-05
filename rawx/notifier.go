@@ -51,6 +51,7 @@ const (
 
 const (
 	beanstalkNotifierDefaultTube = "oio"
+	beanstalkNotifierPipeSize    = 4096
 )
 
 var (
@@ -73,7 +74,7 @@ func makeBeanstalkNotifier(endpoint string,
 	notifier := new(beanstalkNotifier)
 	notifier.rawx = rawx
 	notifier.run = false
-	notifier.queue = make(chan []byte)
+	notifier.queue = make(chan []byte, beanstalkNotifierPipeSize)
 	notifier.endpoint = endpoint
 	notifier.tube = beanstalkNotifierDefaultTube
 	// TODO(adu) Check endpoint
