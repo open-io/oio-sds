@@ -159,7 +159,8 @@ sqlx_admin_del_all_user(struct sqlx_sqlite3_s *sq3)
 int
 sqlx_admin_has(struct sqlx_sqlite3_s *sq3, const gchar *k)
 {
-	return NULL != g_tree_lookup(sq3->admin, k);
+	struct _cache_entry_s *v = g_tree_lookup(sq3->admin, k);
+	return v != NULL && !v->flag_deleted;
 }
 
 gchar*
