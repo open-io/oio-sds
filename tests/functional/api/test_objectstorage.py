@@ -1195,6 +1195,11 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # Non existing snapshot should work
         self.api.container_snapshot(self.account, container, self.account,
                                     snapshot)
+        # Check sys.user.name is correct
+        ret = self.api.container_get_properties(self.account, snapshot)
+        self.assertEqual(snapshot, ret['system']['sys.user.name'])
+        self.assertEqual(self.account, ret['system']['sys.account'])
+
         # Already taken snapshot name should failed
         self.assertRaises(exc.ClientException,
                           self.api.container_snapshot,

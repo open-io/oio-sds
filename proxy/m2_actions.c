@@ -1435,40 +1435,43 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 	const gchar *account = json_object_get_string(jaccount);
 	const gchar *container = json_object_get_string(jcontainer);
 	const gchar *seq_num = jseq_num? json_object_get_string(jseq_num): ".1";
-	if(!strcmp(account, target_account) && !strcmp(container, target_container)) {
-		err = BADREQ("the snapshot should have a different account or reference");
+	if (!strcmp(account, target_account) &&
+			!strcmp(container, target_container)) {
+		err = BADREQ("The snapshot must either have a different name or "
+				"be placed in another account");
 		goto cleanup;
 	}
 
 	oio_url_set(args->url, OIOURL_ACCOUNT, account);
 	oio_url_set(args->url, OIOURL_USER, container);
 	oio_url_set(args->url, OIOURL_HEXID, NULL);
-	err = hc_resolve_reference_service (resolver, args->url,
+	err = hc_resolve_reference_service(resolver, args->url,
 			NAME_SRVTYPE_META2, &urlv_snapshot, oio_ext_get_deadline());
 	if (!err) {
 		err = BADREQ("Container already exists");
 		goto cleanup;
-	}else {
+	} else {
 		g_error_free(err);
 		err = NULL;
 	}
 
-	GError *hook_dir (const char *m1) {
-		GError *e = meta1v2_remote_link_service (
-				m1, args->url, NAME_SRVTYPE_META2, FALSE, TRUE, &urlv_snapshot,
+	GError *hook_dir(const char *m1) {
+		/* Whether replication is enabled or not,
+		 * keep only one service to host the snapshot. */
+		GError *err2 = meta1v2_remote_link_service(
+				m1, args->url, NAME_SRVTYPE_META2, TRUE, TRUE, &urlv_snapshot,
 				oio_ext_get_deadline());
-		if (!e && urlv_snapshot && *urlv_snapshot) {
-			e = meta1v2_remote_force_reference_service(
+		if (!err2 && urlv_snapshot && *urlv_snapshot) {
+			err2 = meta1v2_remote_force_reference_service(
 				m1, args->url, urlv_snapshot[0], FALSE, TRUE,
 				oio_ext_get_deadline());
 		}
 		if (urlv_snapshot) {
-			g_strfreev (urlv_snapshot);
+			g_strfreev(urlv_snapshot);
 			urlv_snapshot = NULL;
 		}
-		return e;
+		return err2;
 	}
-
 	err = _m1_locate_and_action(args->url, hook_dir);
 	if (err)
 		goto cleanup;
@@ -1476,18 +1479,29 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 	meta1_urlv_shift_addr(urlv);
 	CLIENT_CTX(ctx, args, NAME_SRVTYPE_META2, 1);
 	gchar *url = _resolve_service_id(urlv[0]);
-	GByteArray * _pack(const struct sqlx_name_s *n) {
+	GByteArray * _pack_snapshot(const struct sqlx_name_s *n) {
 		return sqlx_pack_SNAPSHOT(n, url, target_cid, seq_num, DL());
 	}
-
-	err = _resolve_meta2(args, CLIENT_PREFER_MASTER, _pack, NULL, NULL);
+	err = _resolve_meta2(args, CLIENT_PREFER_MASTER,
+			_pack_snapshot, NULL, NULL);
 	g_free(url);
-	if(err)
-		goto cleanup;
+
+	/* Give the snapshot its name. */
+	if (!err) {
+		gchar *props[5] = {
+			SQLX_ADMIN_ACCOUNT, (gchar*)account,
+			SQLX_ADMIN_USERNAME, (gchar*)container,
+			NULL
+		};
+		GByteArray * _pack_propset(const struct sqlx_name_s *n) {
+			return sqlx_pack_PROPSET_tab(n, FALSE, props, DL());
+		}
+		err = _resolve_meta2(args, CLIENT_PREFER_MASTER,
+				_pack_propset, NULL, NULL);
+	}
 
 cleanup:
-
-	if(urlv_snapshot)
+	if (urlv_snapshot)
 		g_strfreev(urlv_snapshot);
 	if (urlv)
 		g_strfreev(urlv);
@@ -1761,8 +1775,12 @@ static GError * _list_loop (struct req_args_s *args,
 //    }
 //
 // Take a snapshot of a container. Create a separate database containing all
-// information about the contents from the original database, but with copies of
-// the chunks at the time of the snapshot. This new database is not replicated.
+// information about the contents from the original database.
+//
+// WARNING: this command is not intended to be used as-is as source and destination
+// containers will share same chunks.
+//
+// Please use `openio container snapshot` command.
 //
 // .. code-block:: http
 //
