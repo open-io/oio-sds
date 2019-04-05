@@ -17,39 +17,30 @@
 package main
 
 var (
-	accepted [32]byte
+	notHexa [256]bool
 )
 
 func init() {
-	for i := 0; i < 32; i++ {
-		accepted[i] = 0
-	}
 	hexa := []byte{
 		'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
-		'a', 'b', 'c', 'd', 'e', 'f', 'A', 'B', 'C', 'D', 'E', 'F'}
+		'a', 'b', 'c', 'd', 'e', 'f',
+		'A', 'B', 'C', 'D', 'E', 'F'}
+	for i := 0; i < 256; i++ {
+		notHexa[i] = true
+	}
 	for _, c := range hexa {
-		accepted[c/8] |= (1 << (c % 8))
+		notHexa[c] = false
 	}
 }
 
 func isHexaString(name string, length int) bool {
-	if name == "" {
-		return false
-	}
-
 	var i int
 	var n rune
 	for i, n = range name {
-		if !isHexaChar(byte(n)) {
+		if notHexa[byte(n)] {
 			return false
 		}
 	}
-	if length > 0 && i+1 != length {
-		return false
-	}
-	return true
+	return length <= 0 || i+1 == length
 }
 
-func isHexaChar(b byte) bool {
-	return 0 != (accepted[b/8] & (1 << (b % 8)))
-}
