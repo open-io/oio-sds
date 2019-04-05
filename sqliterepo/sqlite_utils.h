@@ -179,6 +179,9 @@ guint sqlx_admin_save_lazy_tnx (struct sqlx_sqlite3_s *sq3);
 void sqlx_admin_set_status(struct sqlx_sqlite3_s *sq3, gint64 status);
 gint64 sqlx_admin_get_status(struct sqlx_sqlite3_s *sq3);
 
+/* Get a (static) string representing the status of the database. */
+const gchar* sqlx_admin_status2str(gint64 status);
+
 void sqlx_alert_dirty_base(struct sqlx_sqlite3_s *sq3, const char *msg);
 
 #endif /*OIO_SDS__sqliterepo__sqlite_utils_h*/

@@ -1160,7 +1160,8 @@ sqlx_repository_timed_open_and_lock(sqlx_repository_t *repo,
 				mode = SQLX_OPEN_DISABLED;
 
 			if (!(mode & expected_status)) {
-				err = NEWERROR(CODE_CONTAINER_FROZEN, "Invalid status");
+				err = NEWERROR(CODE_CONTAINER_FROZEN,
+						"Invalid status: %s", sqlx_admin_status2str(flags));
 				sqlx_repository_unlock_and_close_noerror(*result);
 			}
 		}
