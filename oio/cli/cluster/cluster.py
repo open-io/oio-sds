@@ -15,6 +15,7 @@
 
 from logging import getLogger
 from cliff import lister, show, command
+from oio.common.easy_value import boolean_value
 from oio.common.exceptions import OioException
 
 
@@ -78,26 +79,27 @@ class ClusterList(lister.Lister):
                 volume = tags.get('tag.vol', 'n/a')
                 service_id = tags.get('tag.service_id', 'n/a')
                 addr = srv['addr']
+                locked = boolean_value(tags.get('tag.lock', False))
                 up = tags.get('tag.up', 'n/a')
                 score = srv['score']
                 if parsed_args.stats:
                     stats = ["%s=%s" % (k, v) for k, v in tags.items()
                              if k.startswith('stat.')]
                     values = (srv_type, addr, service_id, volume, location,
-                              slots, up, score, " ".join(stats))
+                              slots, up, score, locked, " ".join(stats))
                 else:
                     values = (srv_type, addr, service_id, volume, location,
-                              slots, up, score)
+                              slots, up, score, locked)
                 yield values
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         if parsed_args.stats:
             columns = ('Type', 'Addr', 'Service Id', 'Volume', 'Location',
-                       'Slots', 'Up', 'Score', 'Stats')
+                       'Slots', 'Up', 'Score', 'Locked', 'Stats')
         else:
             columns = ('Type', 'Addr', 'Service Id', 'Volume', 'Location',
-                       'Slots', 'Up', 'Score')
+                       'Slots', 'Up', 'Score', 'Locked')
         return columns, self._list_services(parsed_args)
 
 
@@ -119,6 +121,12 @@ class ClusterLocalList(lister.Lister):
         self.log.debug('take_action(%s)', parsed_args)
         results = []
         srv_types = parsed_args.srv_types
+        local_scores = boolean_value(
+            self.app.client_manager.sds_conf.get('proxy.quirk.local_scores',
+                                                 False))
+        if not local_scores:
+            self.log.warn("'proxy.quirk.local_scores' not set, "
+                          "scores won't be realistic.")
         data = self.app.client_manager.cluster.local_services()
         for srv in data:
             tags = srv['tags']
@@ -129,12 +137,13 @@ class ClusterLocalList(lister.Lister):
             addr = srv['addr']
             up = tags.get('tag.up', 'n/a')
             score = srv['score']
+            locked = boolean_value(tags.get('tag.lock', False))
             srv_type = srv['type']
             if not srv_types or srv_type in srv_types:
                 results.append((srv_type, addr, service_id, volume, location,
-                                slots, up, score))
+                                slots, up, score, locked))
         columns = ('Type', 'Addr', 'Service Id', 'Volume', 'Location',
-                   'Slots', 'Up', 'Score')
+                   'Slots', 'Up', 'Score', 'Locked')
         result_gen = (r for r in results)
         return columns, result_gen
 
@@ -406,11 +415,9 @@ class LocalNSConf(show.ShowOne):
         return parser
 
     def take_action(self, parsed_args):
-        from oio.common.configuration import load_namespace_conf
-
         self.log.debug('take_action(%s)', parsed_args)
         namespace = self.app.client_manager.cluster.conf['namespace']
-        sds_conf = load_namespace_conf(namespace)
+        sds_conf = self.app.client_manager.sds_conf
         output = list()
         for k in sds_conf:
             output.append(("%s/%s" % (namespace, k), sds_conf[k]))
