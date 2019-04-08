@@ -56,7 +56,7 @@ class ClientManager(object):
     @property
     def client_conf(self):
         """Dict to be passed as first parameter to all *Client classes."""
-        if not self._sds_conf:
+        if not self._client_conf:
             self._client_conf = {'namespace': self.namespace,
                                  'proxyd_url': self.get_endpoint()}
         return self._client_conf
