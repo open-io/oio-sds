@@ -335,28 +335,18 @@ oio_blob_rebuilder()
   update_timeout 1
   set +e
 
-  BLOB_REBUILDER_OPTIONS=( --workers "${WORKERS}" --allow-same-rawx )
   BEANSTALKD=$($CONFIG -t beanstalkd)
   MULTIBEANSTALKD=$(test $(echo "${BEANSTALKD}" | wc -l) -gt 1 && echo "true" || echo "false")
   if "${MULTIBEANSTALKD}" = true; then
-    DISTRIBUTED=""
-
-    OLD_IFS=$IFS
-    IFS=$'\n'
-    for BEANSTALKD_URL in $(echo "${BEANSTALKD}"); do
-      DISTRIBUTED="${DISTRIBUTED};${BEANSTALKD_URL}"
-    done
-    IFS=$OLD_IFS
-
-    DISTRIBUTED=$(echo "${DISTRIBUTED}" | cut -c 2-)
-    BLOB_REBUILDER_OPTIONS=( --distributed "${DISTRIBUTED}" \
-        --beanstalkd "$(echo "${BEANSTALKD}" | head -n 1)" \
-        --beanstalkd-tube oio-rebuilt )
+    BLOB_REBUILDER_OPTIONS=( --distributed )
+  else
+    BLOB_REBUILDER_OPTIONS=( --workers "${WORKERS}" )
   fi
 
   echo >&2 "Start the rebuilding for rawx ${RAWX_ID_TO_REBUILD}"
   if ! $(which oio-blob-rebuilder) "${BLOB_REBUILDER_OPTIONS[@]}" \
       --volume "${RAWX_ID_TO_REBUILD}" "${NAMESPACE}"; then
+    echo >&2 "oio-blob-rebuilder FAILED"
     FAIL=true
   fi
 
