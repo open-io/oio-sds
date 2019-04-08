@@ -214,3 +214,45 @@ class TestConscienceFunctional(BaseTestCase):
         resp = self.request('POST', self._url_lb('poll'),
                             params={"pool": "echo"})
         self.assertError(resp, 500, 481)
+
+    def test_service_lock_tag(self):
+        """Ensure a 'tag.lock' tag is set on service whose score is locked."""
+        all_rawx = self.conscience.all_services('rawx')
+        one_rawx = all_rawx[0]
+        one_rawx['score'] = 1
+        one_rawx['type'] = 'rawx'
+        self.conscience.lock_score(one_rawx)
+
+        all_rawx = self.conscience.all_services('rawx')
+        my_rawx = [x for x in all_rawx if x['addr'] == one_rawx['addr']][0]
+        self.assertIn('tag.lock', my_rawx['tags'])
+        self.assertTrue(my_rawx['tags']['tag.lock'])
+        self.assertEqual(1, my_rawx['score'])
+
+        self.conscience.unlock_score(one_rawx)
+        all_rawx = self.conscience.all_services('rawx')
+        my_rawx = [x for x in all_rawx if x['addr'] == one_rawx['addr']][0]
+        self.assertIn('tag.lock', my_rawx['tags'])
+        self.assertFalse(my_rawx['tags']['tag.lock'])
+        self.assertGreaterEqual(my_rawx['score'], 1)
+
+    def test_lock_survives_conscience_restart(self):
+        """
+        Check that a locked service is still locked after a conscience restart.
+        """
+        all_rawx = self.conscience.all_services('rawx')
+        one_rawx = all_rawx[0]
+        one_rawx['score'] = 1
+        one_rawx['type'] = 'rawx'
+        self.conscience.lock_score(one_rawx)
+
+        self._service('conscience-1', 'stop')
+        self.assertRaises(Exception, self._service, 'conscience-1', 'status')
+        self._service('conscience-1', 'start')
+
+        all_rawx = self.conscience.all_services('rawx')
+        my_rawx = [x for x in all_rawx if x['addr'] == one_rawx['addr']][0]
+        self.assertIn('tag.lock', my_rawx['tags'])
+        self.assertTrue(my_rawx['tags']['tag.lock'])
+        self.assertEqual(1, my_rawx['score'])
+        self.conscience.unlock_score(one_rawx)
