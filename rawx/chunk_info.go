@@ -145,6 +145,51 @@ func (chunk *chunkInfo) saveAttr(out FileWriter) error {
 	return nil
 }
 
+func (chunk *chunkInfo) loadFullPath(inChunk FileReader, chunkID string) error {
+	getAttr := func(k string) (string, error) {
+		v, err := inChunk.GetAttr(k)
+		return string(v), err
+	}
+
+	chunk.ChunkID = chunkID
+
+	fp, err := getAttr(AttrNameFullPrefix  + chunkID)
+	if err == nil {
+		// New chunk
+		fpTokens := strings.Split(fp, "/")
+		if len(fpTokens) == 5 {
+			chunk.ContentFullpath = fp
+			account, _ := url.PathUnescape(fpTokens[0])
+			container, _ := url.PathUnescape(fpTokens[1])
+			chunk.ContainerID = cidFromName(account, container)
+			chunk.ContentPath, _ = url.PathUnescape(fpTokens[2])
+			chunk.ContentVersion, _ = url.PathUnescape(fpTokens[3])
+			chunk.ContentID, _ = url.PathUnescape(fpTokens[4])
+		} else {
+			return errors.New("Invalid fullpath")
+		}
+	} else {
+		if err != syscall.ENODATA {
+			return err
+		}
+		detailedAttrs := []detailedAttr{
+				{AttrNameContainerID, &chunk.ContainerID},
+				{AttrNameContentPath, &chunk.ContentPath},
+				{AttrNameContentVersion, &chunk.ContentVersion},
+				{AttrNameContentID, &chunk.ContentID},
+			}
+		for _, hs := range detailedAttrs {
+			value, err := getAttr(hs.key)
+			if err != nil && err != syscall.ENODATA {
+				return err
+			}
+			*(hs.ptr) = value
+		}
+	}
+
+	return nil
+}
+
 func (chunk *chunkInfo) loadAttr(inChunk FileReader, chunkID string) error {
 	getAttr := func(k string) (string, error) {
 		v, err := inChunk.GetAttr(k)

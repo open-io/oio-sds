@@ -76,7 +76,7 @@ func (rr *rawxRequest) putData(out io.Writer) (uploadInfo, error) {
 	in = io.TeeReader(rr.req.Body, h)
 
 	ul := uploadInfo{}
-	buffer := make([]byte, uploadBufferSize)
+	buffer := make([]byte, uploadBufferSize, uploadBufferSize)
 	chunkLength, err := io.CopyBuffer(out, in, buffer)
 	if err != nil {
 		return ul, err
@@ -317,7 +317,7 @@ func (rr *rawxRequest) downloadChunk() {
 	}
 
 	// Now transmit the clear data to the client
-	buffer := make([]byte, downloadBufferSize)
+	buffer := make([]byte, downloadBufferSize, downloadBufferSize)
 	nb, err := io.CopyBuffer(rr.rep, in, buffer)
 	if err == nil {
 		rr.bytesOut = rr.bytesOut + uint64(nb)
@@ -336,7 +336,8 @@ func (rr *rawxRequest) removeChunk() {
 		return
 	}
 
-	err = rr.chunk.loadAttr(in, rr.chunkID)
+	// Load only the fullpath
+	err = rr.chunk.loadFullPath(in, rr.chunkID)
 	if err != nil {
 		LogError("Load attr error: %s", err)
 		rr.replyError(err)
