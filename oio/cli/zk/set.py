@@ -16,7 +16,6 @@
 import zookeeper
 from logging import getLogger
 from cliff import lister, command
-from oio.common.configuration import load_namespace_conf
 from oio.zk.client import \
         get_connected_handles, \
         generate_namespace_tree as _run, \
@@ -38,7 +37,7 @@ class ElectionCmdMixin(object):
 
     def get_params(self, parsed_args):
         ns = self.app.client_manager.zk['ns']
-        cnxstr = load_namespace_conf(ns)['zookeeper']
+        cnxstr = self.app.client_manager.sds_conf['zookeeper']
         return ns, cnxstr
 
     def iterate_groups(self, parsed_args, non_leaf=False):

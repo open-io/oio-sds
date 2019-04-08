@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -406,11 +406,9 @@ class LocalNSConf(show.ShowOne):
         return parser
 
     def take_action(self, parsed_args):
-        from oio.common.configuration import load_namespace_conf
-
         self.log.debug('take_action(%s)', parsed_args)
         namespace = self.app.client_manager.cluster.conf['namespace']
-        sds_conf = load_namespace_conf(namespace)
+        sds_conf = self.app.client_manager.sds_conf
         output = list()
         for k in sds_conf:
             output.append(("%s/%s" % (namespace, k), sds_conf[k]))

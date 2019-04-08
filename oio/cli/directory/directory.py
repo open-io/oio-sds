@@ -18,7 +18,6 @@ from oio.common.green import Queue, GreenPile, sleep
 
 from logging import getLogger, INFO
 from cliff.command import Command
-from oio.common.configuration import load_namespace_conf
 from oio.common.exceptions import \
         ClientException, ConfigurationException, PreconditionFailed
 from oio.common import green
@@ -306,7 +305,7 @@ class DirectoryWarmup(DirectoryCmd):
         if parsed_args.proxy:
             conf.update({'proxyd_url': parsed_args.proxy})
         else:
-            ns_conf = load_namespace_conf(conf['namespace'])
+            ns_conf = self.app.client_manager.sds_conf
             proxy = ns_conf.get('proxy')
             conf.update({'proxyd_url': proxy})
 
@@ -317,7 +316,8 @@ class DirectoryWarmup(DirectoryCmd):
 
             # Prepare some workers
             for _ in range(workers_count):
-                worker = WarmupWorker(conf, self.log)
+                worker = WarmupWorker(self.app.client_manager.client_conf,
+                                      self.log)
                 workers.append(worker)
                 pile.spawn(worker.run, prefix_queue)
 

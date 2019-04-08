@@ -101,6 +101,21 @@ def config_paths():
 NS_CONF_CACHE = dict()
 
 
+class NamespaceConfiguration(dict):
+    """
+    Dictionary subclass that holds namespace configuration.
+    Displays a nice message if a key is missing.
+    """
+
+    def __init__(self, files, *args, **kwargs):
+        super(NamespaceConfiguration, self).__init__(*args, **kwargs)
+        self.files = files
+
+    def __missing__(self, key):
+        raise Exception("'%s' not found in configuration files:\n%s" % (
+            key, '\n'.join(self.files)))
+
+
 def load_namespace_conf(namespace, failsafe=False, fresh=False):
     """
     Load configuration for the namespace from the local configuration files.
@@ -114,10 +129,10 @@ def load_namespace_conf(namespace, failsafe=False, fresh=False):
     if not fresh and namespace in NS_CONF_CACHE:
         return NS_CONF_CACHE[namespace]
 
-    conf = {'namespace': namespace}
     parser = SafeConfigParser({})
     success = False
     loaded_files = parser.read(config_paths())
+    conf = NamespaceConfiguration(loaded_files, namespace=namespace)
     if not loaded_files:
         print('Unable to read namespace config')
     else:
