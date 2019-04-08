@@ -271,7 +271,7 @@ _conscience_srv_serialize(struct conscience_srv_s *srv)
 	GPtrArray *tags = NULL;
 
 	/* prepare the srvinfo */
-	struct service_info_s *si = g_malloc0(sizeof(struct service_info_s));
+	struct service_info_s *si = g_alloca(sizeof(struct service_info_s));
 	conscience_srv_fill_srvinfo(si, srv);
 
 	if ((!flag_serialize_srvinfo_stats && !flag_serialize_srvinfo_tags)
@@ -299,7 +299,7 @@ _conscience_srv_serialize(struct conscience_srv_s *srv)
 	GByteArray *gba = service_info_marshall_1(si, NULL);
 	if (tags)
 		si->tags = tags;
-	service_info_clean(si);
+	service_info_clean_tags(si);
 	return gba;
 }
 
@@ -591,6 +591,11 @@ conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype, struct service_
 			GRID_TRACE2("SRV locked [%s]", p_srv->description);
 		}
 	}
+	/* Set a tag to reflect the locked/unlocked state of the service.
+	 * Modifying service_info_s would cause upgrade issues. */
+	struct service_tag_s *lock_tag = service_info_ensure_tag(
+			p_srv->tags, NAME_TAGNAME_LOCK);
+	service_tag_set_value_boolean(lock_tag, p_srv->locked);
 
 	return p_srv;
 }
@@ -908,10 +913,10 @@ hub_flush_srvtype (const char *name)
 static GByteArray *
 _conscience_srv_serialize_full(struct conscience_srv_s *srv)
 {
-	struct service_info_s *si = g_malloc0(sizeof(struct service_info_s));
+	struct service_info_s *si = g_alloca(sizeof(struct service_info_s));
 	conscience_srv_fill_srvinfo(si, srv);
 	GByteArray *gba = service_info_marshall_1(si, NULL);
-	service_info_clean(si);
+	service_info_clean_tags(si);
 	return gba;
 }
 
@@ -1241,15 +1246,14 @@ write_status(gchar *path)
 	}
 
 	g_byte_array_append(all_encoded, footer, 2);
-	g_file_set_contents(path, (char *)all_encoded->data, all_encoded->len, &err);
 
-	if (err){
-		GRID_ERROR("Failed to write service status on file [%s]: (%d) %s",
+	if (!g_file_set_contents(
+			path, (const gchar *)all_encoded->data, all_encoded->len, &err)) {
+		GRID_ERROR("Failed to write service status in [%s]: (%d) %s",
 			path, err->code, err->message);
 	}
 end:
-	if (err != NULL)
-		g_error_free(err);
+	g_clear_error(&err);
 	g_byte_array_free(all_encoded, TRUE);
 	g_free(services_names);
 }
@@ -1269,8 +1273,7 @@ restart_srv_from_file(gchar *path)
 	if (!g_file_get_contents(path, &all_encoded, &length, &err)) {
 		GRID_ERROR("Failed to read services status from file [%s] (%d) %s",
 			path, err->code, err->message);
-
-	    goto restart_end;
+		goto restart_end;
 	}
 	GSList *si_l = NULL;
 
@@ -1286,9 +1289,9 @@ restart_srv_from_file(gchar *path)
 		struct service_info_s *si_data = si->data;
 		score_t old_score = si_data->score;
 
-		struct conscience_srvtype_s *srvtype = conscience_get_srvtype
-			(si_data->type, FALSE);
-		if(!srvtype) {
+		struct conscience_srvtype_s *srvtype = conscience_get_srvtype(
+				si_data->type, FALSE);
+		if (!srvtype) {
 			GRID_ERROR("Service type [%s/%s] not found",
 					nsname, si_data->type);
 		} else {
@@ -1297,8 +1300,16 @@ restart_srv_from_file(gchar *path)
 			struct conscience_srv_s *p_srv =
 				conscience_srvtype_refresh(srvtype, si_data);
 
-			/* FIXME should we unlock it if saved score is already 0 ? */
-			p_srv->locked = FALSE;
+			/* If the service was locked, lock it again. */
+			struct service_tag_s *tag_lock = service_info_get_tag(
+					si_data->tags, NAME_TAGNAME_LOCK);
+			if (tag_lock) {
+				service_tag_get_value_boolean(tag_lock, &(p_srv->locked), &err);
+				if (err) {
+					GRID_WARN("Failed to read lock tag: %s", err->message);
+					g_clear_error(&err);
+				}
+			}
 
 			/* force score to allow _task_expire to pass since
 			 * it should not possible to have unlocked service with score 0 */
@@ -1363,8 +1374,10 @@ _cs_action(void)
 static void
 _cs_specific_stop(void)
 {
-	grid_task_queue_stop (gtq_admin);
-	network_server_stop (server);
+	grid_task_queue_stop(gtq_admin);
+	if (persistence_path)
+		write_status(persistence_path->str);
+	network_server_stop(server);
 }
 
 static GError*
@@ -1766,7 +1779,7 @@ _cs_configure(int argc, char **argv)
 	network_server_bind_host(server, service_url, dispatcher, transport_gridd_factory);
 	grid_task_queue_register (gtq_admin, 1, _task_expire, NULL, NULL);
 
-	if (persistence_path){
+	if (persistence_path) {
 		restart_srv_from_file(persistence_path->str);
 		grid_task_queue_register(gtq_admin, persistence_period,
 				(GDestroyNotify)write_status,
