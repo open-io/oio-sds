@@ -14,12 +14,11 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+from oio.common.constants import CONNECTION_TIMEOUT, READ_TIMEOUT
 from oio.common.exceptions import ClientException, OioTimeout
 from oio.event.evob import Event, EventError, EventTypes
 from oio.event.filters.base import Filter
 
-
-ACCOUNT_TIMEOUT = 30
 
 CONTAINER_EVENTS = [
         EventTypes.CONTAINER_STATE,
@@ -27,9 +26,18 @@ CONTAINER_EVENTS = [
 
 
 class AccountUpdateFilter(Filter):
+    """
+    Fill in the account service with information coming from meta2 services
+    (number of objects in a container, etc.) and meta1 services
+    (a container has been created or removed).
+    """
 
     def init(self):
         self.account = self.app_env['account_client']
+        self.connection_timeout = float(self.conf.get('connection_timeout',
+                                                      CONNECTION_TIMEOUT))
+        self.read_timeout = float(self.conf.get('read_timeout',
+                                                READ_TIMEOUT))
 
     def process(self, env, cb):
         event = Event(env)
@@ -50,7 +58,8 @@ class AccountUpdateFilter(Filter):
             try:
                 self.account.container_update(
                     url.get('account'), url.get('user'), body,
-                    read_timeout=ACCOUNT_TIMEOUT)
+                    connection_timeout=self.connection_timeout,
+                    read_timeout=self.read_timeout)
             except OioTimeout as exc:
                 msg = 'account update failure: %s' % str(exc)
                 resp = EventError(event=Event(env), body=msg)
@@ -77,13 +86,28 @@ class AccountUpdateFilter(Filter):
             m2_services = [x for x in new_services if x.get('type') == 'meta2']
             if not m2_services:
                 # No service in charge, container has been deleted
-                self.account.container_update(
+                try:
+                    self.account.container_update(
                         url.get('account'), url.get('user'),
                         {'dtime': event.when / 1000000.0},
-                        read_timeout=ACCOUNT_TIMEOUT)
+                        connection_timeout=self.connection_timeout,
+                        read_timeout=self.read_timeout)
+                except OioTimeout as exc:
+                    msg = 'failed to remove %s from account %s: %s' % (
+                        url.get('user'), url.get('account'), str(exc))
+                    resp = EventError(event=event, body=msg)
+                    return resp(env, cb)
             else:
-                self.account.account_create(
-                    url.get('account'), read_timeout=ACCOUNT_TIMEOUT)
+                try:
+                    self.account.account_create(
+                        url.get('account'),
+                        connection_timeout=self.connection_timeout,
+                        read_timeout=self.read_timeout)
+                except OioTimeout as exc:
+                    # The account will be autocreated by the next event,
+                    # just warn and continue.
+                    self.logger.warn('Failed to create account %s: %s',
+                                     url.get('account'), exc)
         return self.app(env, cb)
 
 

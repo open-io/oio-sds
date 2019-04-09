@@ -53,6 +53,9 @@ use = egg:oio#content_cleaner
 
 [filter:account_update]
 use = egg:oio#account_update
+# Timeouts to the account service, in seconds
+#connection_timeout=2.0
+#read_timeout=30.0
 
 [filter:volume_index]
 use = egg:oio#volume_index
