@@ -210,9 +210,7 @@ func (rr *rawxRequest) checkChunk() {
 		return
 	}
 
-	headers := rr.rep.Header()
-	/* TODO(mbo): we should reuse getBool from conf_reader.go */
-	if rr.req.Header.Get(HeaderNameCheckHash) == "true" {
+	if GetBool(rr.req.Header.Get(HeaderNameCheckHash), false) {
 		expected_hash := rr.req.Header.Get(HeaderNameChunkChecksum)
 		if expected_hash == "" {
 			expected_hash = rr.chunk.ChunkHash
@@ -232,6 +230,7 @@ func (rr *rawxRequest) checkChunk() {
 		}
 	}
 
+	headers := rr.rep.Header()
 	rr.chunk.fillHeaders(&headers)
 	headers.Set("Content-Length", strconv.FormatUint(uint64(in.size()), 10))
 	headers.Set("Accept-Ranges", "bytes")
