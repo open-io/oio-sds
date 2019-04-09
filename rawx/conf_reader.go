@@ -78,12 +78,18 @@ func (m optionsMap) getInt(k string, def int) int {
 }
 
 func (m optionsMap) getBool(k string, def bool) bool {
-	ok := []string{"ok", "yes", "true", "enable", "enabled", "yeah"}
-	nok := []string{"ko", "no", "false", "disable", "disabled", "nope"}
 	v := m[k]
 	if len(v) <= 0 {
 		return def
 	}
+	/* TODO(mbo): emit a warning for invalid value */
+	return GetBool(v, def)
+}
+
+func GetBool(v string, def bool) bool {
+	ok := []string{"ok", "yes", "true", "enable", "enabled", "yeah"}
+	nok := []string{"ko", "no", "false", "disable", "disabled", "nope"}
+
 	lv := strings.ToLower(v)
 	for _, v0 := range ok {
 		if v0 == lv {
@@ -95,6 +101,5 @@ func (m optionsMap) getBool(k string, def bool) bool {
 			return false
 		}
 	}
-	log.Fatalf("Invalid boolean value for %s: %s", k, v)
-	return false
+	return def
 }
