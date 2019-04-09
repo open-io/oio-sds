@@ -24,7 +24,7 @@ from oio.common.http_urllib3 import get_pool_manager, \
     oio_exception_from_httperror, urllib3
 from oio.common import exceptions as exc, utils
 from oio.common.constants import CHUNK_HEADERS, CHUNK_XATTR_KEYS_OPTIONAL, \
-        FETCHXATTR_HEADER, OIO_VERSION, REQID_HEADER
+        FETCHXATTR_HEADER, OIO_VERSION, REQID_HEADER, CHECKHASH_HEADER
 from oio.common.decorators import ensure_headers, ensure_request_id
 from oio.api.io import ChunkReader
 from oio.api.replication import ReplicatedMetachunkWriter, FakeChecksum
@@ -174,12 +174,17 @@ class BlobClient(object):
         :param url: URL of the chunk to request.
         :keyword xattr: when False, ask the rawx not to read
             extended attributes of the chunk.
+        :keyword check_hash: when True, ask the rawx to validate
+            checksum of the chunk.
         :returns: a `dict` with chunk metadata (empty when xattr is False).
         """
         _xattr = bool(kwargs.get('xattr', True))
         url = self.resolve_url(url)
         headers = kwargs['headers'].copy()
         headers[FETCHXATTR_HEADER] = _xattr
+        if bool(kwargs.get('check_hash', False)):
+            headers[CHECKHASH_HEADER] = True
+
         try:
             resp = self.http_pool.request(
                 'HEAD', url, headers=headers)
