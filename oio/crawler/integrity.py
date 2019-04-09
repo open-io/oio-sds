@@ -128,10 +128,11 @@ class Checker(object):
     def __init__(self, namespace, concurrency=50,
                  error_file=None, rebuild_file=None, full=True,
                  limit_listings=0, request_attempts=1,
-                 logger=None, verbose=False):
+                 logger=None, verbose=False, integrity=False):
         self.pool = GreenPool(concurrency)
         self.error_file = error_file
         self.full = bool(full)
+        self.integrity = bool(integrity)
         # Optimisation for when we are only checking one object
         # or one container.
         # 0 -> do not limit
@@ -299,8 +300,8 @@ class Checker(object):
         xattr_meta = None
 
         try:
-            xattr_meta = self.api.blob_client.chunk_head(chunk,
-                                                         xattr=self.full)
+            xattr_meta = self.api.blob_client.chunk_head(
+                chunk, xattr=self.full, check_hash=self.integrity)
         except exc.NotFound as err:
             self.chunk_not_found += 1
             errors.append('Not found: %s' % (err, ))

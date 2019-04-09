@@ -35,6 +35,7 @@ class ItemCheckCommand(lister.Lister):
             error_file=parsed_args.output,
             rebuild_file=parsed_args.output_for_blob_rebuilder,
             request_attempts=parsed_args.attempts,
+            integrity=parsed_args.checksum
         )
         return checker
 
@@ -46,13 +47,11 @@ class ItemCheckCommand(lister.Lister):
             default=1,
             help="Number of attempts for listing requests (default: 1)."
         )
-        # TODO(FVE): implement chunk checksums
-        # parser.add_argument(
-        #     '--checksum',
-        #     action='store_true',
-        #     help=("Perform checksum comparisons. This requires downloading "
-        #           "data from rawx services.")
-        # )
+        parser.add_argument(
+            '--checksum',
+            action='store_true',
+            help=("Perform checksum comparisons.")
+        )
         parser.add_argument(
             '--depth', '--max-depth',
             type=int,
