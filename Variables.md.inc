@@ -69,7 +69,7 @@ Used by `gcc`
 
 | Macro | Default | Description |
 | ----- | ------- | ----------- |
-| RAWX_HEADER_PREFIX | "X-oio-chunk-meta-" | Prefix applied to proxyd's URL, second version (with accounts) |
+| RAWX_HEADER_PREFIX | "X-oio-chunk-meta-" | Prefix for all the headers sent/received with the rawx |
 
 | Macro | Default | Description |
 | ----- | ------- | ----------- |
