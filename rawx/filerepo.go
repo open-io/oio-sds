@@ -61,7 +61,7 @@ func (fr *FileRepository) Init(root string) error {
 	fr.SyncFile = false
 	fr.SyncDir = true
 
-	flags := syscall.O_DIRECTORY|syscall.O_RDONLY|syscall.O_NOATIME
+	flags := syscall.O_DIRECTORY | syscall.O_RDONLY | syscall.O_NOATIME
 	if fr.rootFd, err = syscall.Open(fr.root, flags, 0); err != nil {
 		return err
 	}
@@ -213,7 +213,7 @@ func (fileRepo *FileRepository) nameToPath(name string) string {
 	for i := 0; i < fileRepo.HashDepth; i++ {
 		start := i * fileRepo.HashDepth
 		result.WriteRune('/')
-		result.WriteString(name[start:start+fileRepo.HashWidth])
+		result.WriteString(name[start : start+fileRepo.HashWidth])
 	}
 	result.WriteRune('/')
 	result.WriteString(name)

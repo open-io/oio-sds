@@ -153,7 +153,7 @@ func (chunk *chunkInfo) loadFullPath(inChunk FileReader, chunkID string) error {
 
 	chunk.ChunkID = chunkID
 
-	fp, err := getAttr(AttrNameFullPrefix  + chunkID)
+	fp, err := getAttr(AttrNameFullPrefix + chunkID)
 	if err == nil {
 		// New chunk
 		fpTokens := strings.Split(fp, "/")
@@ -173,11 +173,11 @@ func (chunk *chunkInfo) loadFullPath(inChunk FileReader, chunkID string) error {
 			return err
 		}
 		detailedAttrs := []detailedAttr{
-				{AttrNameContainerID, &chunk.ContainerID},
-				{AttrNameContentPath, &chunk.ContentPath},
-				{AttrNameContentVersion, &chunk.ContentVersion},
-				{AttrNameContentID, &chunk.ContentID},
-			}
+			{AttrNameContainerID, &chunk.ContainerID},
+			{AttrNameContentPath, &chunk.ContentPath},
+			{AttrNameContentVersion, &chunk.ContentVersion},
+			{AttrNameContentID, &chunk.ContentID},
+		}
 		for _, hs := range detailedAttrs {
 			value, err := getAttr(hs.key)
 			if err != nil && err != syscall.ENODATA {
@@ -207,7 +207,7 @@ func (chunk *chunkInfo) loadAttr(inChunk FileReader, chunkID string) error {
 		{AttrNameOioVersion, &chunk.OioVersion},
 	}
 
-	contentFullpath, err := getAttr(AttrNameFullPrefix  + chunkID)
+	contentFullpath, err := getAttr(AttrNameFullPrefix + chunkID)
 	if err == nil {
 		// New chunk
 		fullpath := strings.Split(contentFullpath, "/")
@@ -235,10 +235,10 @@ func (chunk *chunkInfo) loadAttr(inChunk FileReader, chunkID string) error {
 			return errors.New("Wrong chunk ID")
 		}
 		detailedAttrs = append(detailedAttrs,
-				detailedAttr{AttrNameContainerID, &chunk.ContainerID},
-				detailedAttr{AttrNameContentPath, &chunk.ContentPath},
-				detailedAttr{AttrNameContentVersion, &chunk.ContentVersion},
-				detailedAttr{AttrNameContentID, &chunk.ContentID})
+			detailedAttr{AttrNameContainerID, &chunk.ContainerID},
+			detailedAttr{AttrNameContentPath, &chunk.ContentPath},
+			detailedAttr{AttrNameContentVersion, &chunk.ContentVersion},
+			detailedAttr{AttrNameContentID, &chunk.ContentID})
 	}
 	chunk.ChunkID = chunkID
 

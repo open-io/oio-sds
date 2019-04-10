@@ -27,8 +27,8 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"strings"
 	"strconv"
+	"strings"
 )
 
 const (
@@ -382,7 +382,6 @@ func (rr *rawxRequest) serveChunk() {
 		rr.replyCode(http.StatusMethodNotAllowed)
 		spent = IncrementStatReqOther(rr)
 	}
-
 
 	LogIncoming(
 		rr.rawx.url, rr.req.RemoteAddr, rr.req.Method,
