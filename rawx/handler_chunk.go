@@ -65,7 +65,7 @@ type rangeInfo struct {
 	size   int64
 }
 
-func (ri rangeInfo) Void() bool { return ri.offset == 0 && ri.size == 0 }
+func (ri rangeInfo) isVoid() bool { return ri.offset == 0 && ri.size == 0 }
 
 func (rr *rawxRequest) putData(out io.Writer) (uploadInfo, error) {
 	var in io.Reader
@@ -275,7 +275,7 @@ func (rr *rawxRequest) downloadChunk() {
 	var in io.ReadCloser
 	v, err = inChunk.getAttr(AttrNameCompression)
 	if err != nil {
-		if !rangeInf.Void() {
+		if !rangeInf.isVoid() {
 			err = inChunk.seek(rangeInf.offset)
 		}
 		in = ioutil.NopCloser(inChunk)
@@ -298,7 +298,7 @@ func (rr *rawxRequest) downloadChunk() {
 	}
 
 	// If the range specified a size, let's wrap (again) the input
-	if !rangeInf.Void() {
+	if !rangeInf.isVoid() {
 		in = &limitedReader{sub: in, remaining: rangeInf.size}
 	}
 
@@ -306,7 +306,7 @@ func (rr *rawxRequest) downloadChunk() {
 	rr.chunk.fillHeaders(&headers)
 
 	// Prepare the headers of the reply
-	if !rangeInf.Void() {
+	if !rangeInf.isVoid() {
 		rr.rep.Header().Set("Content-Range", fmt.Sprintf("bytes %v-%v/%v",
 			rangeInf.offset, rangeInf.last, chunkSize))
 		rr.rep.Header().Set("Content-Length", strconv.FormatUint(uint64(rangeInf.size), 10))

@@ -113,7 +113,7 @@ func main() {
 		log.Fatal("Missing configuration file")
 	} else if cfg, err := filepath.Abs(*confPtr); err != nil {
 		log.Fatal("Invalid configuration file path", err.Error())
-	} else if opts, err = ReadConfig(cfg); err != nil {
+	} else if opts, err = readConfig(cfg); err != nil {
 		log.Fatal("Exiting with error: ", err.Error())
 	}
 
