@@ -133,7 +133,7 @@ func main() {
 
 	// Init the actual chunk storage
 	if err := chunkrepo.sub.Init(opts["basedir"]); err != nil {
-		log.Fatal("Invalid directories: %v", err)
+		log.Fatal("Invalid directories: ", err)
 	}
 	chunkrepo.sub.HashWidth = opts.getInt("hash_width", chunkrepo.sub.HashWidth)
 	chunkrepo.sub.HashDepth = opts.getInt("hash_depth", chunkrepo.sub.HashDepth)
