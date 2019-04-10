@@ -19,6 +19,7 @@ package main
 import (
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -117,6 +118,9 @@ func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 	if len(req.Host) > 0 && (req.Host != rawx.id && req.Host != rawx.url) {
 		rawxreq.replyCode(http.StatusTeapot)
 	} else {
+		if strings.HasPrefix(req.URL.Path, "//") == true {
+			req.URL.Path = req.URL.Path[1:]
+		}
 		switch req.URL.Path {
 		case "/info":
 			rawxreq.serveInfo(rep, req)
