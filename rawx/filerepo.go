@@ -33,33 +33,33 @@ const (
 	putMkdirMode = 0755
 )
 
-type FileRepository struct {
+type fileRepository struct {
 	root          string
 	rootFd        int
 	putOpenMode   os.FileMode
 	putOpenFlags  int
 	putMkdirMode  os.FileMode
-	HashWidth     int
-	HashDepth     int
-	SyncFile      bool
-	SyncDir       bool
-	FallocateFile bool
+	hashWidth     int
+	hashDepth     int
+	syncFile      bool
+	syncDir       bool
+	fallocateFile bool
 }
 
-func (fr *FileRepository) Init(root string) error {
+func (fr *fileRepository) init(root string) error {
 	var err error
 	basedir := filepath.Clean(root)
 	if !filepath.IsAbs(basedir) {
 		return errors.New("Filerepo path must be absolute")
 	}
 	fr.root = basedir
-	fr.HashWidth = hashWidth
-	fr.HashDepth = hashDepth
+	fr.hashWidth = hashWidth
+	fr.hashDepth = hashDepth
 	fr.putOpenFlags = putOpenFlags
 	fr.putOpenMode = putOpenMode
 	fr.putMkdirMode = putMkdirMode
-	fr.SyncFile = false
-	fr.SyncDir = true
+	fr.syncFile = false
+	fr.syncDir = true
 
 	flags := syscall.O_DIRECTORY | syscall.O_RDONLY | syscall.O_NOATIME
 	if fr.rootFd, err = syscall.Open(fr.root, flags, 0); err != nil {
@@ -85,7 +85,7 @@ func setOrHasXattr(path, key, value string) error {
 	return errors.New("XATTR mismatch")
 }
 
-func (fileRepo *FileRepository) Lock(ns, id string) error {
+func (fileRepo *fileRepository) lock(ns, id string) error {
 	var err error
 	err = setOrHasXattr(fileRepo.root, "user.server.id", id)
 	if err != nil {
@@ -102,7 +102,7 @@ func (fileRepo *FileRepository) Lock(ns, id string) error {
 	return nil
 }
 
-func (fileRepo *FileRepository) Has(name string) (bool, error) {
+func (fileRepo *fileRepository) has(name string) (bool, error) {
 	path := fileRepo.nameToPath(name)
 	if _, err := os.Stat(path); err != nil {
 		return false, err
@@ -111,7 +111,7 @@ func (fileRepo *FileRepository) Has(name string) (bool, error) {
 	}
 }
 
-func (fileRepo *FileRepository) Del(name string) error {
+func (fileRepo *fileRepository) del(name string) error {
 	path := fileRepo.nameToPath(name)
 	err := syscall.Removexattr(path, AttrNameFullPrefix+name)
 	if err != nil {
@@ -121,23 +121,23 @@ func (fileRepo *FileRepository) Del(name string) error {
 	return os.Remove(path)
 }
 
-func (fileRepo *FileRepository) realGet(path string) (FileReader, error) {
+func (fileRepo *fileRepository) realGet(path string) (fileReader, error) {
 	f, err := os.OpenFile(path, os.O_RDONLY, 0)
 	if err != nil {
 		return nil, err
 	}
-	fileReader := new(RealFileReader)
+	fileReader := new(realFileReader)
 	fileReader.impl = f
 	fileReader.path = path
 	return fileReader, nil
 }
 
-func (fileRepo *FileRepository) Get(name string) (FileReader, error) {
+func (fileRepo *fileRepository) get(name string) (fileReader, error) {
 	path := fileRepo.nameToPath(name)
 	return fileRepo.realGet(path)
 }
 
-func (fileRepo *FileRepository) realPut(path string) (FileWriter, error) {
+func (fileRepo *fileRepository) realPut(path string) (fileWriter, error) {
 	// Check if the path doesn't exist yet
 	if _, err := os.Stat(path); err == nil {
 		return nil, os.ErrExist
@@ -156,17 +156,17 @@ func (fileRepo *FileRepository) realPut(path string) (FileWriter, error) {
 		return nil, err
 	}
 
-	return &RealFileWriter{
+	return &realFileWriter{
 		pathFinal: path, pathTemp: pathTemp, impl: f,
-		syncFileBool: fileRepo.SyncFile, syncDirBool: fileRepo.SyncDir}, nil
+		syncFileBool: fileRepo.syncFile, syncDirBool: fileRepo.syncDir}, nil
 }
 
-func (fileRepo *FileRepository) Put(name string) (FileWriter, error) {
+func (fileRepo *fileRepository) put(name string) (fileWriter, error) {
 	path := fileRepo.nameToPath(name)
 	return fileRepo.realPut(path)
 }
 
-func (fileRepo *FileRepository) realLink(fromPath, toPath string) (FileWriter, error) {
+func (fileRepo *fileRepository) realLink(fromPath, toPath string) (fileWriter, error) {
 	// Check if the source already exists
 	if _, err := os.Stat(fromPath); os.IsNotExist(err) {
 		return nil, os.ErrNotExist
@@ -194,12 +194,12 @@ func (fileRepo *FileRepository) realLink(fromPath, toPath string) (FileWriter, e
 		f.Close()
 		return nil, err
 	}
-	return &RealFileWriter{
+	return &realFileWriter{
 		pathFinal: toPath, pathTemp: pathTemp, impl: f,
-		syncFileBool: fileRepo.SyncFile, syncDirBool: fileRepo.SyncDir}, nil
+		syncFileBool: fileRepo.syncFile, syncDirBool: fileRepo.syncDir}, nil
 }
 
-func (fileRepo *FileRepository) Link(fromName, toName string) (FileWriter, error) {
+func (fileRepo *fileRepository) link(fromName, toName string) (fileWriter, error) {
 	fromPath := fileRepo.nameToPath(fromName)
 	toPath := fileRepo.nameToPath(toName)
 	return fileRepo.realLink(fromPath, toPath)
@@ -207,20 +207,20 @@ func (fileRepo *FileRepository) Link(fromName, toName string) (FileWriter, error
 
 // Takes only the basename, check it is hexadecimal with a length of 64,
 // and computes the hashed path
-func (fileRepo *FileRepository) nameToPath(name string) string {
+func (fileRepo *fileRepository) nameToPath(name string) string {
 	var result strings.Builder
 	result.WriteString(fileRepo.root)
-	for i := 0; i < fileRepo.HashDepth; i++ {
-		start := i * fileRepo.HashDepth
+	for i := 0; i < fileRepo.hashDepth; i++ {
+		start := i * fileRepo.hashDepth
 		result.WriteRune('/')
-		result.WriteString(name[start : start+fileRepo.HashWidth])
+		result.WriteString(name[start : start+fileRepo.hashWidth])
 	}
 	result.WriteRune('/')
 	result.WriteString(name)
 	return result.String()
 }
 
-type RealFileWriter struct {
+type realFileWriter struct {
 	pathFinal    string
 	pathTemp     string
 	impl         *os.File
@@ -228,36 +228,36 @@ type RealFileWriter struct {
 	syncDirBool  bool
 }
 
-func (fileWriter *RealFileWriter) Seek(offset int64) error {
+func (fileWriter *realFileWriter) seek(offset int64) error {
 	_, err := fileWriter.impl.Seek(offset, os.SEEK_SET)
 	return err
 }
 
-func (fileWriter *RealFileWriter) SetAttr(key string, value []byte) error {
+func (fileWriter *realFileWriter) setAttr(key string, value []byte) error {
 	return syscall.Setxattr(fileWriter.pathTemp, key, value, 0)
 }
 
-func (fileWriter *RealFileWriter) Sync() error {
+func (fileWriter *realFileWriter) sync() error {
 	return fileWriter.impl.Sync()
 }
 
-func (fileWriter *RealFileWriter) Write(buffer []byte) (int, error) {
+func (fileWriter *realFileWriter) Write(buffer []byte) (int, error) {
 	return fileWriter.impl.Write(buffer)
 }
 
-func (fileWriter *RealFileWriter) Abort() error {
+func (fileWriter *realFileWriter) abort() error {
 	os.Remove(fileWriter.pathTemp)
 	return fileWriter.impl.Close()
 }
 
-func (fileWriter *RealFileWriter) syncFile() {
+func (fileWriter *realFileWriter) syncFile() {
 	if fileWriter.syncFileBool {
 		//w.impl.Sync()
 		syscall.Fdatasync(int(fileWriter.impl.Fd()))
 	}
 }
 
-func (fileWriter *RealFileWriter) syncDir() {
+func (fileWriter *realFileWriter) syncDir() {
 	if fileWriter.syncDirBool {
 		dir := filepath.Dir(fileWriter.pathFinal)
 		if f, err := os.OpenFile(dir, os.O_RDONLY, 0); err == nil {
@@ -269,7 +269,7 @@ func (fileWriter *RealFileWriter) syncDir() {
 	}
 }
 
-func (fileWriter *RealFileWriter) Commit() error {
+func (fileWriter *realFileWriter) commit() error {
 	fileWriter.syncFile()
 	err := fileWriter.impl.Close()
 	if err == nil {
@@ -288,30 +288,30 @@ func (fileWriter *RealFileWriter) Commit() error {
 	return err
 }
 
-type RealFileReader struct {
+type realFileReader struct {
 	path string
 	impl *os.File
 }
 
-func (fileReader *RealFileReader) Size() int64 {
+func (fileReader *realFileReader) size() int64 {
 	fi, _ := fileReader.impl.Stat()
 	return fi.Size()
 }
 
-func (fileReader *RealFileReader) Seek(offset int64) error {
+func (fileReader *realFileReader) seek(offset int64) error {
 	_, err := fileReader.impl.Seek(offset, os.SEEK_SET)
 	return err
 }
 
-func (fileReader *RealFileReader) Close() error {
+func (fileReader *realFileReader) Close() error {
 	return fileReader.impl.Close()
 }
 
-func (fileReader *RealFileReader) Read(buffer []byte) (int, error) {
+func (fileReader *realFileReader) Read(buffer []byte) (int, error) {
 	return fileReader.impl.Read(buffer)
 }
 
-func (fileReader *RealFileReader) GetAttr(key string) ([]byte, error) {
+func (fileReader *realFileReader) getAttr(key string) ([]byte, error) {
 	tmp := make([]byte, 2048)
 	sz, err := syscall.Getxattr(fileReader.path, key, tmp)
 	if err != nil {
