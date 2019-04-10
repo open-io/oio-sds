@@ -17,7 +17,7 @@
 package main
 
 import (
-	"fmt"
+	"bytes"
 	"net/http"
 	"reflect"
 	"sync/atomic"
@@ -148,25 +148,36 @@ func IncrementStatReqOther(rr *rawxRequest) uint64 {
 }
 
 func doGetStats(rr *rawxRequest) {
-	rr.replyCode(http.StatusOK)
-
+	bb := bytes.Buffer{}
 	values := reflect.ValueOf(&counters).Elem()
 	keys := values.Type()
 	for i := 0; i < values.NumField(); i++ {
 		value := values.Field(i).Interface()
 		key := keys.Field(i).Tag.Get("tag")
-		rr.rep.Write([]byte(fmt.Sprintf("counter %s %v\n", key, value)))
+		bb.WriteString("counter ")
+		bb.WriteString(key)
+		bb.WriteRune(' ')
+		bb.WriteString(utoa(value.(uint64)))
+		bb.WriteRune('\n')
 	}
 
-	rr.rep.Write([]byte(fmt.Sprintf("config volume %s\n", rr.rawx.path)))
+	bb.WriteString("config volume ")
+	bb.WriteString(rr.rawx.path)
+	bb.WriteRune('\n')
+
 	if rr.rawx.id != "" {
-		rr.rep.Write([]byte(fmt.Sprintf("config service_id %s\n", rr.rawx.id)))
+		bb.WriteString("config service_id ")
+		bb.WriteString(rr.rawx.id)
+		bb.WriteRune('\n')
 	}
+
+	rr.replyCode(http.StatusOK)
+	rr.rep.Write(bb.Bytes())
 }
 
 func (rr *rawxRequest) serveStat(rep http.ResponseWriter, req *http.Request) {
 	switch req.Method {
-	case "GET":
+	case "GET", "HEAD":
 		doGetStats(rr)
 		IncrementStatReqStat(rr)
 	default:
