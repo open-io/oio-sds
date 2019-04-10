@@ -47,7 +47,7 @@ func (reader *limitedReader) Read(p []byte) (int, error) {
 	}
 
 	if err == io.EOF && reader.remaining > 0 {
-		err = ErrRangeNotSatisfiable
+		err = errRangeNotSatisfiable
 	} else if err == nil {
 		reader.remaining = reader.remaining - int64(n)
 	}

@@ -36,7 +36,7 @@ type rawxService struct {
 	url      string
 	path     string
 	id       string
-	repo     Repository
+	repo     repository
 	compress bool
 	notifier Notifier
 }
@@ -79,13 +79,13 @@ func (rr *rawxRequest) replyError(err error) {
 			rr.replyCode(http.StatusBadRequest)
 		} else {
 			switch err {
-			case ErrInvalidChunkID:
+			case errInvalidChunkID:
 				rr.replyCode(http.StatusBadRequest)
-			case ErrMissingHeader:
+			case errMissingHeader:
 				rr.replyCode(http.StatusBadRequest)
-			case ErrInvalidHeader:
+			case errInvalidHeader:
 				rr.replyCode(http.StatusBadRequest)
-			case ErrInvalidRange:
+			case errInvalidRange:
 				rr.replyCode(http.StatusRequestedRangeNotSatisfiable)
 			default:
 				rr.replyCode(http.StatusInternalServerError)

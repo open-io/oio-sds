@@ -132,17 +132,17 @@ func main() {
 	}
 
 	// Init the actual chunk storage
-	if err := chunkrepo.sub.Init(opts["basedir"]); err != nil {
+	if err := chunkrepo.sub.init(opts["basedir"]); err != nil {
 		log.Fatal("Invalid directories: ", err)
 	}
-	chunkrepo.sub.HashWidth = opts.getInt("hash_width", chunkrepo.sub.HashWidth)
-	chunkrepo.sub.HashDepth = opts.getInt("hash_depth", chunkrepo.sub.HashDepth)
-	chunkrepo.sub.SyncFile = opts.getBool("fsync_file", chunkrepo.sub.SyncFile)
-	chunkrepo.sub.SyncDir = opts.getBool("fsync_dir", chunkrepo.sub.SyncDir)
-	chunkrepo.sub.FallocateFile = opts.getBool("fallocate", chunkrepo.sub.FallocateFile)
+	chunkrepo.sub.hashWidth = opts.getInt("hash_width", chunkrepo.sub.hashWidth)
+	chunkrepo.sub.hashDepth = opts.getInt("hash_depth", chunkrepo.sub.hashDepth)
+	chunkrepo.sub.syncFile = opts.getBool("fsync_file", chunkrepo.sub.syncFile)
+	chunkrepo.sub.syncDir = opts.getBool("fsync_dir", chunkrepo.sub.syncDir)
+	chunkrepo.sub.fallocateFile = opts.getBool("fallocate", chunkrepo.sub.fallocateFile)
 
 	if !*servicingPtr {
-		if err := chunkrepo.Lock(namespace, rawxID); err != nil {
+		if err := chunkrepo.lock(namespace, rawxID); err != nil {
 			log.Fatal("Volume lock error: ", err.Error())
 		}
 	}

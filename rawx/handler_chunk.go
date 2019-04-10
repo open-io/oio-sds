@@ -37,21 +37,21 @@ const (
 )
 
 var (
-	AttrValueZLib = []byte{'z', 'l', 'i', 'b'}
+	attrValueZLib = []byte{'z', 'l', 'i', 'b'}
 )
 
 var (
-	ErrNotImplemented        = errors.New("Not implemented")
-	ErrChunkExists           = errors.New("Chunk already exists")
-	ErrInvalidChunkID        = errors.New("Invalid chunk ID")
-	ErrCompressionNotManaged = errors.New("Compression mode not managed")
-	ErrMissingHeader         = errors.New("Missing mandatory header")
-	ErrInvalidHeader         = errors.New("Invalid header")
-	ErrInvalidRange          = errors.New("Invalid range")
-	ErrRangeNotSatisfiable   = errors.New("Range not satisfiable")
-	ErrListMarker            = errors.New("Invalid listing marker")
-	ErrListPrefix            = errors.New("Invalid listing prefix")
-	ErrContentLength         = errors.New("Invalid content length")
+	errNotImplemented        = errors.New("Not implemented")
+	errChunkExists           = errors.New("Chunk already exists")
+	errInvalidChunkID        = errors.New("Invalid chunk ID")
+	errCompressionNotManaged = errors.New("Compression mode not managed")
+	errMissingHeader         = errors.New("Missing mandatory header")
+	errInvalidHeader         = errors.New("Invalid header")
+	errInvalidRange          = errors.New("Invalid range")
+	errRangeNotSatisfiable   = errors.New("Range not satisfiable")
+	errListMarker            = errors.New("Invalid listing marker")
+	errListPrefix            = errors.New("Invalid listing prefix")
+	errContentLength         = errors.New("Invalid content length")
 )
 
 type uploadInfo struct {
@@ -101,7 +101,7 @@ func (rr *rawxRequest) uploadChunk() {
 	}
 
 	// Attempt a PUT in the repository
-	out, err := rr.rawx.repo.Put(rr.chunkID)
+	out, err := rr.rawx.repo.put(rr.chunkID)
 	if err != nil {
 		LogError("Chunk opening error: %s", err)
 		rr.replyError(err)
@@ -142,11 +142,11 @@ func (rr *rawxRequest) uploadChunk() {
 	// Then reply
 	if err != nil {
 		rr.replyError(err)
-		out.Abort()
+		out.abort()
 		// Discard request body
 		io.Copy(ioutil.Discard, rr.req.Body)
 	} else {
-		out.Commit()
+		out.commit()
 		headers := rr.rep.Header()
 		rr.chunk.fillHeadersLight(&headers)
 		rr.replyCode(http.StatusCreated)
@@ -168,7 +168,7 @@ func (rr *rawxRequest) copyChunk() {
 	}
 
 	// Attempt a LINK in the repository
-	out, err := rr.rawx.repo.Link(rr.chunkID, rr.chunk.ChunkID)
+	out, err := rr.rawx.repo.link(rr.chunkID, rr.chunk.ChunkID)
 	if err != nil {
 		LogError("Link error: %s", err)
 		rr.replyError(err)
@@ -182,15 +182,15 @@ func (rr *rawxRequest) copyChunk() {
 	// Then reply
 	if err != nil {
 		rr.replyError(err)
-		out.Abort()
+		out.abort()
 	} else {
-		out.Commit()
+		out.commit()
 		rr.replyCode(http.StatusCreated)
 	}
 }
 
 func (rr *rawxRequest) checkChunk() {
-	in, err := rr.rawx.repo.Get(rr.chunkID)
+	in, err := rr.rawx.repo.get(rr.chunkID)
 	if in != nil {
 		defer in.Close()
 	}
@@ -208,7 +208,7 @@ func (rr *rawxRequest) checkChunk() {
 
 	headers := rr.rep.Header()
 	rr.chunk.fillHeaders(&headers)
-	headers.Set("Content-Length", strconv.FormatUint(uint64(in.Size()), 10))
+	headers.Set("Content-Length", strconv.FormatUint(uint64(in.size()), 10))
 	headers.Set("Accept-Ranges", "bytes")
 
 	rr.replyCode(http.StatusOK)
@@ -230,7 +230,7 @@ func (rr *rawxRequest) getRange(chunkSize int64) (rangeInfo, error) {
 		return ri, nil
 	}
 	if offset >= chunkSize {
-		return ri, ErrInvalidRange
+		return ri, errInvalidRange
 	}
 	if last >= chunkSize {
 		last = chunkSize - 1
@@ -242,7 +242,7 @@ func (rr *rawxRequest) getRange(chunkSize int64) (rangeInfo, error) {
 }
 
 func (rr *rawxRequest) downloadChunk() {
-	inChunk, err := rr.rawx.repo.Get(rr.chunkID)
+	inChunk, err := rr.rawx.repo.get(rr.chunkID)
 	if inChunk != nil {
 		defer inChunk.Close()
 	}
@@ -256,7 +256,7 @@ func (rr *rawxRequest) downloadChunk() {
 	// !!!(jfs): we do not manage requests on multiple ranges
 	// TODO(jfs): is a multiple range is encountered, we should follow the norm
 	// that allows us to answer a "200 OK" with the complete content.
-	chunkSize := inChunk.Size()
+	chunkSize := inChunk.size()
 	rangeInf, err := rr.getRange(chunkSize)
 	if err != nil {
 		LogError("Range error: %s", err)
@@ -273,19 +273,19 @@ func (rr *rawxRequest) downloadChunk() {
 	// Check if there is some compression
 	var v []byte
 	var in io.ReadCloser
-	v, err = inChunk.GetAttr(AttrNameCompression)
+	v, err = inChunk.getAttr(AttrNameCompression)
 	if err != nil {
 		if !rangeInf.Void() {
-			err = inChunk.Seek(rangeInf.offset)
+			err = inChunk.seek(rangeInf.offset)
 		}
 		in = ioutil.NopCloser(inChunk)
 		err = nil
-	} else if bytes.Equal(v, AttrValueZLib) {
+	} else if bytes.Equal(v, attrValueZLib) {
 		//in, err = zlib.NewReader(in)
 		// TODO(jfs): manage the Range offset
-		err = ErrCompressionNotManaged
+		err = errCompressionNotManaged
 	} else {
-		err = ErrCompressionNotManaged
+		err = errCompressionNotManaged
 	}
 
 	if in != nil {
@@ -327,7 +327,7 @@ func (rr *rawxRequest) downloadChunk() {
 }
 
 func (rr *rawxRequest) removeChunk() {
-	in, err := rr.rawx.repo.Get(rr.chunkID)
+	in, err := rr.rawx.repo.get(rr.chunkID)
 	if in != nil {
 		defer in.Close()
 	}
@@ -344,7 +344,7 @@ func (rr *rawxRequest) removeChunk() {
 		return
 	}
 
-	err = rr.rawx.repo.Del(rr.chunkID)
+	err = rr.rawx.repo.del(rr.chunkID)
 
 	if err != nil {
 		rr.replyError(err)
@@ -356,7 +356,7 @@ func (rr *rawxRequest) removeChunk() {
 
 func (rr *rawxRequest) serveChunk() {
 	if !isHexaString(rr.req.URL.Path[1:], 64) {
-		rr.replyError(ErrInvalidChunkID)
+		rr.replyError(errInvalidChunkID)
 		return
 	}
 	rr.chunkID = strings.ToUpper(rr.req.URL.Path[1:])
