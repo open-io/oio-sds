@@ -43,4 +43,3 @@ func isHexaString(name string, length int) bool {
 	}
 	return length <= 0 || i+1 == length
 }
-

@@ -21,8 +21,8 @@ import (
 	"log"
 	"log/syslog"
 	"os"
-	"strings"
 	"strconv"
+	"strings"
 )
 
 type oioLogger interface {

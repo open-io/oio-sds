@@ -22,8 +22,8 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"strings"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -73,11 +73,11 @@ type Job struct {
 	Data []byte
 }
 
-func itoa(i int) string { return strconv.Itoa(i); }
-func utoa(i uint64) string { return strconv.FormatUint(i, 10); }
+func itoa(i int) string    { return strconv.Itoa(i) }
+func utoa(i uint64) string { return strconv.FormatUint(i, 10) }
 
 func DialBeanstalkd(addr string) (*Beanstalkd, error) {
-	conn, err := net.DialTimeout("tcp", addr, 2 * time.Second)
+	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 	if err != nil {
 		return nil, err
 	}

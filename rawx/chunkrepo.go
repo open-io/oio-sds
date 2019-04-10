@@ -68,4 +68,3 @@ func (chunkrepo *chunkRepository) Link(fromName,
 	toName string) (FileWriter, error) {
 	return chunkrepo.sub.Link(fromName, toName)
 }
-
