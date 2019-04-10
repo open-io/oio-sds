@@ -33,33 +33,33 @@ const (
 )
 
 var (
-	ErrOutOfMemory    = errors.New("out of memory")
-	ErrInternalError  = errors.New("internal error")
-	ErrBadFormat      = errors.New("bad format")
-	ErrUnknownCommand = errors.New("unknown command")
-	ErrBuried         = errors.New("buried")
-	ErrExpectedCrlf   = errors.New("expected CRLF")
-	ErrJobTooBig      = errors.New("job too big")
-	ErrDraining       = errors.New("draining")
-	ErrDeadlineSoon   = errors.New("deadline soon")
-	ErrTimedOut       = errors.New("timed out")
-	ErrNotFound       = errors.New("not found")
+	errOutOfMemory    = errors.New("out of memory")
+	errInternalError  = errors.New("internal error")
+	errBadFormat      = errors.New("bad format")
+	errUnknownCommand = errors.New("unknown command")
+	errBuried         = errors.New("buried")
+	errExpectedCrlf   = errors.New("expected CRLF")
+	errJobTooBig      = errors.New("job too big")
+	errDraining       = errors.New("draining")
+	errDeadlineSoon   = errors.New("deadline soon")
+	errTimedOut       = errors.New("timed out")
+	errNotFound       = errors.New("not found")
 )
 
 var errorTable = map[string]error{
-	"DEADLINE_SOON\r\n": ErrDeadlineSoon,
-	"TIMED_OUT\r\n":     ErrTimedOut,
-	"EXPECTED_CRLF\r\n": ErrExpectedCrlf,
-	"JOB_TOO_BIG\r\n":   ErrJobTooBig,
-	"DRAINING\r\n":      ErrDraining,
-	"BURIED\r\n":        ErrBuried,
-	"NOT_FOUND\r\n":     ErrNotFound,
+	"DEADLINE_SOON\r\n": errDeadlineSoon,
+	"TIMED_OUT\r\n":     errTimedOut,
+	"EXPECTED_CRLF\r\n": errExpectedCrlf,
+	"JOB_TOO_BIG\r\n":   errJobTooBig,
+	"DRAINING\r\n":      errDraining,
+	"BURIED\r\n":        errBuried,
+	"NOT_FOUND\r\n":     errNotFound,
 
 	// common error
-	"OUT_OF_MEMORY\r\n":   ErrOutOfMemory,
-	"INTERNAL_ERROR\r\n":  ErrInternalError,
-	"BAD_FORMAT\r\n":      ErrBadFormat,
-	"UNKNOWN_COMMAND\r\n": ErrUnknownCommand,
+	"OUT_OF_MEMORY\r\n":   errOutOfMemory,
+	"INTERNAL_ERROR\r\n":  errInternalError,
+	"BAD_FORMAT\r\n":      errBadFormat,
+	"UNKNOWN_COMMAND\r\n": errUnknownCommand,
 }
 
 type Beanstalkd struct {
@@ -90,8 +90,11 @@ func DialBeanstalkd(addr string) (*Beanstalkd, error) {
 }
 
 func (beanstalkd *Beanstalkd) Close() {
-	beanstalkd.sendAll([]byte("quit \r\n"))
-	beanstalkd.conn.Close()
+	_, _ = beanstalkd.sendAll([]byte("quit \r\n"))
+	err := beanstalkd.conn.Close()
+	if err != nil {
+		LogWarning("Failed to close the cnx to beanstalkd: %s", err.Error())
+	}
 }
 
 func (beanstalkd *Beanstalkd) Watch(tubename string) error {
@@ -108,7 +111,7 @@ func (beanstalkd *Beanstalkd) Watch(tubename string) error {
 	var tubeCount int
 	_, err = fmt.Sscanf(resp, "WATCHING %d\r\n", &tubeCount)
 	if err != nil {
-		return beanstalkd.parseError(resp)
+		return parseBeanstalkError(resp)
 	}
 	return nil
 }
@@ -147,10 +150,10 @@ func (beanstalkd *Beanstalkd) Put(data []byte) (uint64, error) {
 		return id, err
 	case strings.HasPrefix(resp, "BU"):
 		var id uint64
-		fmt.Sscanf(resp, "BURIED %d\r\n", &id)
-		return id, ErrBuried
+		_, _ = fmt.Sscanf(resp, "BURIED %d\r\n", &id)
+		return id, errBuried
 	default:
-		return 0, beanstalkd.parseError(resp)
+		return 0, parseBeanstalkError(resp)
 	}
 }
 
@@ -182,7 +185,7 @@ func (beanstalkd *Beanstalkd) Reserve() (*Job, error) {
 		job.Data, err = beanstalkd.readData(dataLen)
 		return job, err
 	default:
-		return nil, beanstalkd.parseError(resp)
+		return nil, parseBeanstalkError(resp)
 	}
 }
 
@@ -214,10 +217,10 @@ func (beanstalkd *Beanstalkd) Kick(bound uint64) (uint64, error) {
 	switch {
 	case strings.HasPrefix(resp, "KICKED"):
 		var kicked uint64
-		fmt.Sscanf(resp, "KICKED %d\r\n", &kicked)
-		return kicked, nil
+		_, err := fmt.Sscanf(resp, "KICKED %d\r\n", &kicked)
+		return kicked, err
 	default:
-		return 0, beanstalkd.parseError(resp)
+		return 0, parseBeanstalkError(resp)
 	}
 }
 
@@ -228,7 +231,7 @@ func (beanstalkd *Beanstalkd) sendCommandAndCheck(command, expected string) erro
 	}
 
 	if resp != expected {
-		return beanstalkd.parseError(resp)
+		return parseBeanstalkError(resp)
 	}
 	return nil
 }
@@ -275,7 +278,7 @@ func (beanstalkd *Beanstalkd) readData(dataLen int) ([]byte, error) {
 	return data[:n-2], nil //strip \r\n trail
 }
 
-func (beanstalkd *Beanstalkd) parseError(str string) error {
+func parseBeanstalkError(str string) error {
 	if err, ok := errorTable[str]; ok {
 		return err
 	}
