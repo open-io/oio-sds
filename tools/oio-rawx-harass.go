@@ -1,3 +1,19 @@
+// OpenIO SDS oio-rawx-harass
+// Copyright (C) 2019 OpenIO SAS
+//
+// This library is free software; you can redistribute it and/or
+// modify it under the terms of the GNU Lesser General Public
+// License as published by the Free Software Foundation; either
+// version 3.0 of the License, or (at your option) any later version.
+//
+// This library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+// Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public
+// License along with this program. If not, see <http://www.gnu.org/licenses/>.
+
 package main
 
 import (
@@ -33,10 +49,10 @@ const (
 )
 
 var (
-	rawxUrl string = ""
-	nsName string = ""
-	bufferSize uint = 0
-	buffer []byte
+	rawxUrl    string = ""
+	nsName     string = ""
+	bufferSize uint   = 0
+	buffer     []byte
 )
 
 var transport http.Transport = http.Transport{
@@ -53,12 +69,12 @@ type Scenario interface {
 
 type RawxClient struct {
 	// Updated in refresh()
-	fullPath  string
+	fullPath    string
 	containerId string
 	contentId   string
 	contentPath string
 	chunkId     string
-	size uint
+	size        uint
 
 	// Managed by the controler
 	step uint
@@ -81,12 +97,12 @@ var (
 	statErrorPut uint64 = 0
 	statErrorGet uint64 = 0
 	statErrorDel uint64 = 0
-	statHitsPut uint64 = 0
-	statHitsGet uint64 = 0
-	statHitsDel uint64 = 0
-	statTimePut uint64 = 0
-	statTimeGet uint64 = 0
-	statTimeDel uint64 = 0
+	statHitsPut  uint64 = 0
+	statHitsGet  uint64 = 0
+	statHitsDel  uint64 = 0
+	statTimePut  uint64 = 0
+	statTimeGet  uint64 = 0
+	statTimeDel  uint64 = 0
 	statBytesPut uint64 = 0
 	statBytesGet uint64 = 0
 )
@@ -117,15 +133,15 @@ func (rc *RawxClient) put() (int, int64) {
 	url := "http://" + rawxUrl + "/" + rc.chunkId
 	client := &http.Client{Transport: &transport}
 	req, _ := http.NewRequest("PUT", url, bytes.NewReader(buffer))
-	req.Header.Add(PFX + "full-path", rc.fullPath)
-	req.Header.Add(PFX + "container-id", rc.containerId)
-	req.Header.Add(PFX + "content-id", rc.contentId)
-	req.Header.Add(PFX + "content-path", rc.contentPath)
-	req.Header.Add(PFX + "content-storage-policy", "SINGLE")
-	req.Header.Add(PFX + "content-mime-type", "octet/stream")
-	req.Header.Add(PFX + "content-chunk-method", "repli/k=6,m=3")
-	req.Header.Add(PFX + "chunk-pos", strconv.FormatUint(uint64(rc.index), 10))
-	req.Header.Add(PFX + "oio-version", "4.2")
+	req.Header.Add(PFX+"full-path", rc.fullPath)
+	req.Header.Add(PFX+"container-id", rc.containerId)
+	req.Header.Add(PFX+"content-id", rc.contentId)
+	req.Header.Add(PFX+"content-path", rc.contentPath)
+	req.Header.Add(PFX+"content-storage-policy", "SINGLE")
+	req.Header.Add(PFX+"content-mime-type", "octet/stream")
+	req.Header.Add(PFX+"content-chunk-method", "repli/k=6,m=3")
+	req.Header.Add(PFX+"chunk-pos", strconv.FormatUint(uint64(rc.index), 10))
+	req.Header.Add(PFX+"oio-version", "4.2")
 
 	resp, err := client.Do(req)
 	if resp != nil {
@@ -216,7 +232,7 @@ func (rc *RawxClient) Step() {
 		post := time.Now()
 		atomic.AddUint64(&statTimePut, uint64(post.Sub(pre)))
 		atomic.AddUint64(&statHitsPut, 1)
-		if status / 100 == 2 {
+		if status/100 == 2 {
 			rc.step = stepGet
 			atomic.AddUint64(&statBytesPut, uint64(size))
 		} else {
@@ -227,7 +243,7 @@ func (rc *RawxClient) Step() {
 		post := time.Now()
 		atomic.AddUint64(&statTimeGet, uint64(post.Sub(pre)))
 		atomic.AddUint64(&statHitsGet, 1)
-		if status / 100 == 2 {
+		if status/100 == 2 {
 			rc.step = stepDelete
 			atomic.AddUint64(&statBytesGet, uint64(size))
 		} else {
@@ -238,7 +254,7 @@ func (rc *RawxClient) Step() {
 		post := time.Now()
 		atomic.AddUint64(&statTimeDel, uint64(post.Sub(pre)))
 		atomic.AddUint64(&statHitsDel, 1)
-		if status / 100 == 2 {
+		if status/100 == 2 {
 			rc.step = stepPut
 		} else {
 			atomic.AddUint64(&statErrorDel, 1)
@@ -252,7 +268,7 @@ func main() {
 	var duration time.Duration
 
 	flag.UintVar(&bufferSize, "size", 64, "Set the size of the buffer to be sent")
-	flag.DurationVar(&duration, "duration", 30 * time.Second, "Set the duration of the whole test")
+	flag.DurationVar(&duration, "duration", 30*time.Second, "Set the duration of the whole test")
 	flag.UintVar(&nbScenarios, "scenarios", 1024, "Set the number of concurrent scenarios")
 	flag.UintVar(&nbWorkers, "concurrency", 16, "Set the number of concurrent coroutines")
 	flag.StringVar(&nsName, "ns", "OPENIO", "Set the namespace name")
@@ -262,7 +278,7 @@ func main() {
 		log.Fatal("Expected unique argument: RAWX_ADDR")
 	}
 	if bufferSize <= 0 {
-		log.Fatal("Invalid buffer size");
+		log.Fatal("Invalid buffer size")
 	}
 
 	bufferSize = bufferSize * 1024
@@ -275,7 +291,6 @@ func main() {
 	exited := make(chan bool)
 	waiting := list.New()
 	runningWorkers := 0
-
 
 	// Prepare the scenarios
 	for i := uint(0); i < nbScenarios; i++ {
@@ -303,7 +318,7 @@ func main() {
 	log.Printf("Running %d scenarios on %d workers", len(scenarios), nbWorkers)
 	bell := time.After(duration)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
-	func () {
+	func() {
 		// Using a function let us `return` from it much more easily than
 		// breaking a `for` loop from a `select` statement
 		for {
@@ -343,7 +358,7 @@ func main() {
 	for runningWorkers > 0 {
 		select {
 		case <-exited:
-			runningWorkers --
+			runningWorkers--
 		case s := <-done:
 			waiting.PushBack(s)
 		}
@@ -363,8 +378,8 @@ func main() {
 	if statHitsPut > 0 {
 		log.Printf("put: %d hits %d err %d bytes %d us/hit %f B/s",
 			statHitsPut, statErrorPut, statBytesPut,
-			(statTimePut / statHitsPut) / us,
-			float64(s) * (float64(statBytesPut) / float64(statTimePut)))
+			(statTimePut/statHitsPut)/us,
+			float64(s)*(float64(statBytesPut)/float64(statTimePut)))
 	} else {
 		log.Println("put: none")
 	}
@@ -372,8 +387,8 @@ func main() {
 	if statHitsGet > 0 {
 		log.Printf("get: %d hits %d err %d bytes %d us/hit %f B/s",
 			statHitsGet, statErrorGet, statBytesGet,
-			(statTimeGet / statHitsGet) / us,
-			float64(s) * (float64(statBytesGet) / float64(statTimeGet)))
+			(statTimeGet/statHitsGet)/us,
+			float64(s)*(float64(statBytesGet)/float64(statTimeGet)))
 	} else {
 		log.Println("get: none")
 	}
@@ -381,7 +396,7 @@ func main() {
 	if statHitsDel > 0 {
 		log.Printf("del: %d hits %d err %d us/hit",
 			statHitsDel, statErrorDel,
-			(statTimeDel / statHitsDel) / us)
+			(statTimeDel/statHitsDel)/us)
 	} else {
 		log.Println("del: none")
 	}
