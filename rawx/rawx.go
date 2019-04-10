@@ -104,7 +104,7 @@ func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 	}
 
 	// Extract some common headers
-	rawxreq.reqid = req.Header.Get("X-oio-reqid")
+	rawxreq.reqid = req.Header.Get("X-oio-req-id")
 	if len(rawxreq.reqid) <= 0 {
 		rawxreq.reqid = req.Header.Get("X-trans-id")
 	}
