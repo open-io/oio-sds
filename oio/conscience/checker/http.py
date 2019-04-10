@@ -29,7 +29,7 @@ class HttpChecker(BaseChecker):
 
         self.host = self.checker_conf['host']
         self.port = self.checker_conf['port']
-        self.path = self.checker_conf['uri']
+        self.path = self.checker_conf['uri'].lstrip('/')
         self.name = '%s|http|%s|%s|%s' % \
             (self.srv_type, self.host, self.port, self.path)
         self.url = '%s:%s/%s' % (self.host, self.port, self.path)
