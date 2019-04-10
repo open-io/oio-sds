@@ -26,8 +26,8 @@ import (
 
 type optionsMap map[string]string
 
-// ReadConfig -- fetch options from conf file
-func ReadConfig(conf string) (optionsMap, error) {
+// readConfig -- fetch options from conf file
+func readConfig(conf string) (optionsMap, error) {
 	loadedOpts := map[string]string{
 		"Listen":           "addr",
 		"grid_namespace":   "ns",
