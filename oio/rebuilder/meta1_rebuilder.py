@@ -28,7 +28,8 @@ class Meta1Rebuilder(MetaRebuilder):
         super(Meta1Rebuilder, self).__init__(conf, logger, **kwargs)
         self.conscience = ConscienceClient(self.conf, logger=self.logger)
         sds_conf = load_namespace_conf(self.conf['namespace']) or {}
-        self.meta1_digits = int(sds_conf.get('meta1_digits', 4))
+        self.meta1_digits = int(sds_conf.get('ns.meta1_digits',
+                                             sds_conf.get('meta1_digits', 4)))
 
     def _create_worker(self, **kwargs):
         return Meta1RebuilderWorker(self.conf, self.logger, **kwargs)
