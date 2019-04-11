@@ -23,11 +23,15 @@ some <key,value> properties.
 
 type repository interface {
 	lock(ns, url string) error
-	has(name string) (bool, error)
 	get(name string) (fileReader, error)
 	put(name string) (fileWriter, error)
-	link(fromName, toName string) (fileWriter, error)
+	link(fromName, toName string) (linkOperation, error)
 	del(name string) error
+	getAttr(name, key string, value []byte) (int, error)
+}
+
+type decorable interface {
+	setAttr(n string, v []byte) error
 }
 
 type fileReader interface {
@@ -35,14 +39,20 @@ type fileReader interface {
 	Close() error
 	size() int64
 	seek(int64) error
-	getAttr(n string) ([]byte, error)
+	getAttr(key string, value []byte) (int, error)
 	check() (string, error)
 }
 
 type fileWriter interface {
+	decorable
 	Write([]byte) (int, error)
 	seek(int64) error
 	commit() error
 	abort() error
-	setAttr(n string, v []byte) error
+}
+
+type linkOperation interface {
+	decorable
+	commit() error
+	rollback() error
 }
