@@ -839,6 +839,7 @@ _is_damaged_object(struct meta2_backend_s *m2b, struct sqlx_sqlite3_s *sq3,
 		_bean_cleanl2(beans);
 	}
 
+	namespace_info_free(nsinfo);
 	if (err) {
 		GRID_WARN("Impossible to know if object is damaged (%s): %s",
 				oio_url_get(url, OIOURL_WHOLE), err->message);
@@ -1075,8 +1076,10 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 					deleted_bean=deleted_bean->next) {
 				cb(u0, deleted_bean->data);
 			}
+			g_slist_free(deleted_beans);
+		} else {
+			_bean_cleanl2(deleted_beans);
 		}
-		g_slist_free(deleted_beans);
 		g_slist_free(deleted_objects);
 	}
 
