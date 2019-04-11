@@ -85,7 +85,7 @@ type RawxClient struct {
 
 const letterBytes = "0123456789ABCDEF"
 const (
-	letterIdxBits = 4                    // 6 bits to represent a letter index
+	letterIdxBits = 4                    // 4 bits to represent a letter index
 	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
 	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
 )
