@@ -312,6 +312,9 @@ func (chunk *chunkInfo) retrieveContentFullpathHeader(headers *http.Header) erro
 		return returnError(errInvalidHeader, HeaderNameFullpath)
 	}
 	headerContentID := headers.Get(HeaderNameContentID)
+	if headerContentID == "" && contentID == "" {
+		return returnError(errMissingHeader, HeaderNameContentID)
+	}
 	if headerContentID != "" && !strings.EqualFold(headerContentID, contentID) {
 		return returnError(errInvalidHeader, HeaderNameContentID)
 	}
