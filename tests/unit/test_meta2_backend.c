@@ -159,7 +159,15 @@ static GSList*
 _create_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		const gchar *polname)
 {
-	return _create_alias2(m2b, url, polname, 1);
+	if (polname) {
+		struct storage_policy_s *pol =
+				storage_policy_init(m2b->nsinfo, polname);
+		gint64 nb_chunks = storage_policy_get_nb_chunks(pol);
+		storage_policy_clean(pol);
+		return _create_alias2(m2b, url, polname, nb_chunks);
+	} else {
+		return _create_alias2(m2b, url, "SINGLE", 1);
+	}
 }
 
 static void
@@ -207,6 +215,8 @@ _init_nsinfo(const gchar *ns, gint64 maxvers)
 	g_snprintf(tmp, sizeof(tmp), "%" G_GINT64_FORMAT, maxvers);
 	g_assert_true(oio_var_value_one("meta2.max_versions", tmp));
 
+	g_hash_table_insert(nsinfo->storage_policy, g_strdup("SINGLE"),
+			metautils_gba_from_string("rawx:NONE"));
 	g_hash_table_insert(nsinfo->storage_policy, g_strdup("classic"),
 			metautils_gba_from_string("NONE:DUPONETWO"));
 	g_hash_table_insert(nsinfo->storage_policy, g_strdup("polcheck"),
@@ -241,6 +251,7 @@ _init_lb(int nb_services)
 	lb_world = oio_lb_local__create_world();
 	oio_lb_world__create_slot (lb_world, "*");
 	struct oio_lb_item_s *item = g_alloca(sizeof(*item) + LIMIT_LENGTH_SRVID);
+	memset(item->addr, 0, sizeof(item->addr));
 	for (int i = 0; i < nb_services; i++) {
 		item->location = 65536 + 6000 + i;
 		item->weight = 50;
@@ -576,6 +587,7 @@ test_content_check_plain_missing_chunks_reparable(void)
 		GString *gmessage = g_string_new("");
 		void _save_message(gchar *message, gpointer udata UNUSED) {
 			g_string_append(gmessage, message);
+			g_free(message);
 		}
 		gint64 nb_missing_chunks = 0;
 
@@ -667,6 +679,7 @@ test_content_check_plain_first_missing_chunks(void)
 		GString *gmessage = g_string_new("");
 		void _save_message(gchar *message, gpointer udata UNUSED) {
 			g_string_append(gmessage, message);
+			g_free(message);
 		}
 		gint64 nb_missing_chunks = 0;
 
@@ -725,6 +738,7 @@ test_content_check_plain_last_missing_chunks(void)
 		GString *gmessage = g_string_new("");
 		void _save_message(gchar *message, gpointer udata UNUSED) {
 			g_string_append(gmessage, message);
+			g_free(message);
 		}
 		gint64 nb_missing_chunks = 0;
 
@@ -803,6 +817,7 @@ test_content_check_ec_missing_chunks_reparable(void)
 		GString *gmessage = g_string_new("");
 		void _save_message(gchar *message, gpointer udata UNUSED) {
 			g_string_append(gmessage, message);
+			g_free(message);
 		}
 		gint64 nb_missing_chunks = 0;
 
@@ -879,6 +894,7 @@ test_content_check_ec_first_missing_chunks(void)
 		GString *gmessage = g_string_new("");
 		void _save_message(gchar *message, gpointer udata UNUSED) {
 			g_string_append(gmessage, message);
+			g_free(message);
 		}
 		gint64 nb_missing_chunks = 0;
 
@@ -939,6 +955,7 @@ test_content_check_ec_last_missing_chunks(void)
 		GString *gmessage = g_string_new("");
 		void _save_message(gchar *message, gpointer udata UNUSED) {
 			g_string_append(gmessage, message);
+			g_free(message);
 		}
 		gint64 nb_missing_chunks = 0;
 
