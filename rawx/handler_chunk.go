@@ -168,24 +168,24 @@ func (rr *rawxRequest) copyChunk() {
 	}
 
 	// Attempt a LINK in the repository
-	out, err := rr.rawx.repo.link(rr.chunkID, rr.chunk.ChunkID)
+	op, err := rr.rawx.repo.link(rr.chunkID, rr.chunk.ChunkID)
 	if err != nil {
 		LogError("Link error: %s", err)
 		rr.replyError(err)
-		return
-	}
-
-	if err = rr.chunk.saveContentFullpathAttr(out); err != nil {
-		LogError("Save attr error: %s", err)
-	}
-
-	// Then reply
-	if err != nil {
-		rr.replyError(err)
-		out.abort()
 	} else {
-		out.commit()
-		rr.replyCode(http.StatusCreated)
+		// Link created, try to place an xattr
+		err = rr.chunk.saveContentFullpathAttr(op)
+		if err != nil {
+			// Xattr failed, rollback the link itself
+			LogError("Save attr error: %s", err)
+			rr.replyError(err)
+			// If rollback fails, is lets an error
+			_ = op.rollback()
+		} else {
+			// The link already exists and has an xattr. Commit(à is a matter of sync.
+			_ = op.commit()
+			rr.replyCode(http.StatusCreated)
+		}
 	}
 }
 
@@ -271,16 +271,17 @@ func (rr *rawxRequest) downloadChunk() {
 	}
 
 	// Check if there is some compression
-	var v []byte
 	var in io.ReadCloser
-	v, err = inChunk.getAttr(AttrNameCompression)
+	var len int
+	buf := make([]byte, 32, 32)
+	len, err = inChunk.getAttr(AttrNameCompression, buf)
 	if err != nil {
 		if !rangeInf.isVoid() {
 			err = inChunk.seek(rangeInf.offset)
 		}
 		in = ioutil.NopCloser(inChunk)
 		err = nil
-	} else if bytes.Equal(v, attrValueZLib) {
+	} else if bytes.Equal(buf[:len], attrValueZLib) {
 		//in, err = zlib.NewReader(in)
 		// TODO(jfs): manage the Range offset
 		err = errCompressionNotManaged
@@ -327,17 +328,18 @@ func (rr *rawxRequest) downloadChunk() {
 }
 
 func (rr *rawxRequest) removeChunk() {
-	in, err := rr.rawx.repo.get(rr.chunkID)
-	if in != nil {
-		defer in.Close()
-	}
-	if err != nil {
-		rr.replyError(err)
-		return
+	tmp := make([]byte, 1024, 1024)
+	getter := func(name, key string) (string, error) {
+		nb, err := rr.rawx.repo.getAttr(name, key, tmp)
+		if nb <= 0 || err != nil {
+			return "", err
+		} else {
+			return string(tmp[:nb]), err
+		}
 	}
 
-	// Load only the fullpath
-	err = rr.chunk.loadFullPath(in, rr.chunkID)
+	// Load only the fullpath in an attempt to spare syscalls
+	err := rr.chunk.loadFullPath(getter, rr.chunkID)
 	if err != nil {
 		LogError("Load attr error: %s", err)
 		rr.replyError(err)
@@ -345,7 +347,6 @@ func (rr *rawxRequest) removeChunk() {
 	}
 
 	err = rr.rawx.repo.del(rr.chunkID)
-
 	if err != nil {
 		rr.replyError(err)
 	} else {

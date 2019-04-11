@@ -19,6 +19,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -28,16 +29,22 @@ import (
 const (
 	hashWidth    = 3
 	hashDepth    = 1
-	putOpenFlags = os.O_WRONLY | os.O_CREATE | os.O_EXCL
 	putOpenMode  = 0644
 	putMkdirMode = 0755
+)
+
+const (
+	openFlagsReadOnly  int = syscall.O_RDONLY | syscall.O_NOATIME | syscall.O_CLOEXEC
+	openFlagsWriteOnly int = syscall.O_WRONLY | syscall.O_CREAT | syscall.O_EXCL | syscall.O_NOATIME | syscall.O_CLOEXEC
+	openFlagsSyncDir   int = syscall.O_DIRECTORY | syscall.O_RDWR | syscall.O_NOATIME
+	openFlagsSyncFile  int = syscall.O_RDONLY | syscall.O_NOATIME | syscall.O_CLOEXEC
+	openFlagsLink      int = syscall.O_WRONLY | syscall.O_NOATIME | syscall.O_CLOEXEC
 )
 
 type fileRepository struct {
 	root          string
 	rootFd        int
-	putOpenMode   os.FileMode
-	putOpenFlags  int
+	putOpenMode   uint32
 	putMkdirMode  os.FileMode
 	hashWidth     int
 	hashDepth     int
@@ -55,7 +62,6 @@ func (fr *fileRepository) init(root string) error {
 	fr.root = basedir
 	fr.hashWidth = hashWidth
 	fr.hashDepth = hashDepth
-	fr.putOpenFlags = putOpenFlags
 	fr.putOpenMode = putOpenMode
 	fr.putMkdirMode = putMkdirMode
 	fr.syncFile = false
@@ -66,6 +72,298 @@ func (fr *fileRepository) init(root string) error {
 		return err
 	}
 	return nil
+}
+
+func (fr *fileRepository) getAttr(name, key string, value []byte) (int, error) {
+	absPath := fr.root + "/" + fr.nameToRelPath(name)
+	return syscall.Getxattr(absPath, key, value)
+}
+
+func (fr *fileRepository) lock(ns, id string) error {
+	var err error
+	err = setOrHasXattr(fr.root, "user.server.id", id)
+	if err != nil {
+		return err
+	}
+	err = setOrHasXattr(fr.root, "user.server.ns", ns)
+	if err != nil {
+		return err
+	}
+	err = setOrHasXattr(fr.root, "user.server.type", "rawx")
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (fr *fileRepository) del(name string) error {
+	var err error
+	relPath := fr.nameToRelPath(name)
+	err = syscall.Removexattr(fr.root+"/"+relPath, AttrNameFullPrefix+name)
+	if err != nil {
+		LogWarning("Error to remove content fullpath: %s", err)
+		err = nil
+	}
+	err = syscall.Unlinkat(fr.rootFd, relPath)
+	if err != nil && fr.syncDir {
+		dir := filepath.Dir(relPath)
+		err = fr.syncRelDir(dir)
+	}
+	return err
+}
+
+func (fr *fileRepository) getRelPath(path string) (fileReader, error) {
+	fd, err := syscall.Openat(fr.rootFd, path, openFlagsReadOnly, 0)
+	if err != nil {
+		return nil, err
+	}
+	return &realFileReader{fd: fd, path: path, repo: fr}, nil
+}
+
+func (fr *fileRepository) get(name string) (fileReader, error) {
+	path := fr.nameToRelPath(name)
+	return fr.getRelPath(path)
+}
+
+func (fr *fileRepository) putRelPath(path string) (fileWriter, error) {
+	pathTemp := path + ".pending"
+	fd, err := syscall.Openat(fr.rootFd, pathTemp, openFlagsWriteOnly, fr.putOpenMode)
+	if err != nil {
+		if os.IsNotExist(err) {
+			// Lazy dir creation
+			err = os.MkdirAll(filepath.Dir(fr.root+"/"+path), fr.putMkdirMode)
+			if err == nil {
+				return fr.putRelPath(path)
+			}
+		}
+		return nil, err
+	}
+
+	// Check that the final chunk doesn't exist yet
+	err = syscall.Faccessat(fr.rootFd, path, syscall.F_OK, 0)
+	if err == nil {
+		_ = syscall.Unlinkat(fr.rootFd, pathTemp)
+		_ = syscall.Close(fd)
+		return nil, os.ErrExist
+	}
+
+	return &realFileWriter{
+		fd:        fd,
+		pathFinal: path, pathTemp: pathTemp, repo: fr}, nil
+}
+
+func (fr *fileRepository) put(name string) (fileWriter, error) {
+	path := fr.nameToRelPath(name)
+	return fr.putRelPath(path)
+}
+
+func (fr *fileRepository) linkRelPath(fromPath, toPath string) (linkOperation, error) {
+	var err error
+	pathTemp := toPath + ".pending"
+
+	absSrc := fr.root + "/" + fromPath
+	absTemp := fr.root + "/" + pathTemp
+	absFinal := fr.root + "/" + toPath
+
+	// TODO(jfs): improve with Linkat
+	err = os.Link(absSrc, absTemp)
+	if err == nil {
+		defer func() { _ = syscall.Unlinkat(fr.rootFd, absTemp) }()
+		// TODO(jfs): improve with Linkat
+		err = os.Link(absSrc, absFinal)
+		if err == nil {
+			return &realLinkOp{relPath: toPath, repo: fr}, nil
+		}
+	}
+
+	if os.IsNotExist(err) {
+		err = os.MkdirAll(filepath.Dir(toPath), fr.putMkdirMode)
+		if err != nil {
+			return nil, err
+		} else {
+			return fr.linkRelPath(fromPath, toPath)
+		}
+	}
+
+	return nil, err
+}
+
+func (fr *fileRepository) link(src, dst string) (linkOperation, error) {
+	relSrc := fr.nameToRelPath(src)
+	relDst := fr.nameToRelPath(dst)
+	return fr.linkRelPath(relSrc, relDst)
+}
+
+// Synchronize the directory, based on its path
+func (fr *fileRepository) syncRelDir(relPath string) error {
+	fd, err := syscall.Openat(fr.rootFd, relPath, openFlagsSyncDir, 0)
+	if err == nil {
+		err = syscall.Fdatasync(fd)
+		syscall.Close(fd)
+		fd = -1
+	}
+	return err
+}
+
+// Synchronize just the file, based on its path
+func (fr *fileRepository) syncRelFile(relPath string) error {
+	fd, err := syscall.Openat(fr.rootFd, relPath, openFlagsSyncFile, 0)
+	if err == nil {
+		err = syscall.Fdatasync(fd)
+		syscall.Close(fd)
+		fd = -1
+	}
+	return err
+}
+
+type realLinkOp struct {
+	relPath string
+	repo    *fileRepository
+}
+
+func (lo *realLinkOp) setAttr(key string, value []byte) error {
+	return syscall.Setxattr(lo.repo.root+"/"+lo.relPath, key, value, 0)
+}
+
+func (lo *realLinkOp) commit() error {
+	var err error
+	if lo.repo.syncDir {
+		err = lo.repo.syncRelDir(filepath.Dir(lo.relPath))
+	}
+	if lo.repo.syncFile {
+		err = lo.repo.syncRelFile(lo.relPath)
+	}
+	return err
+}
+
+func (lo *realLinkOp) rollback() error {
+	err := syscall.Unlinkat(lo.repo.rootFd, lo.relPath)
+	if err == nil && lo.repo.syncDir {
+		err = lo.repo.syncRelDir(filepath.Dir(lo.relPath))
+	}
+	return err
+}
+
+type realFileWriter struct {
+	fd        int
+	pathFinal string
+	pathTemp  string
+	repo      *fileRepository
+}
+
+func (fw *realFileWriter) seek(offset int64) error {
+	_, err := syscall.Seek(fw.fd, offset, os.SEEK_SET)
+	return err
+}
+
+func (fw *realFileWriter) setAttr(key string, value []byte) error {
+	return syscall.Setxattr(fw.repo.root+"/"+fw.pathTemp, key, value, 0)
+}
+
+func (fw *realFileWriter) Write(buffer []byte) (int, error) {
+	return syscall.Write(fw.fd, buffer)
+}
+
+func (fw *realFileWriter) close() {
+	if fw.fd >= 0 {
+		fd := fw.fd
+		fw.fd = -1
+		_ = syscall.Close(fd)
+	}
+}
+
+func (fw *realFileWriter) abort() error {
+	defer fw.close()
+	return syscall.Unlinkat(fw.repo.rootFd, fw.pathTemp)
+}
+
+func (fw *realFileWriter) commit() error {
+	err := fw.syncFile()
+	if err == nil {
+		err := syscall.Renameat(fw.repo.rootFd, fw.pathTemp, fw.repo.rootFd, fw.pathFinal)
+		if err == nil {
+			_ = fw.syncDir()
+		}
+	}
+
+	if err != nil {
+		fw.abort()
+	} else {
+		fw.close()
+	}
+	return err
+}
+
+func (fw *realFileWriter) syncFile() error {
+	if !fw.repo.syncFile {
+		return nil
+	}
+	return syscall.Fdatasync(fw.fd)
+}
+
+func (fw *realFileWriter) syncDir() error {
+	if !fw.repo.syncDir {
+		return nil
+	}
+	dir := filepath.Dir(fw.pathFinal)
+	return fw.repo.syncRelDir(dir)
+}
+
+type realFileReader struct {
+	fd   int
+	stat syscall.Stat_t
+	path string
+	repo *fileRepository
+}
+
+func (fr *realFileReader) size() int64 {
+	if fr.stat.Ino == 0 {
+		err := syscall.Fstat(fr.fd, &fr.stat)
+		if err != nil {
+			return -1
+		}
+	}
+	return fr.stat.Size
+}
+
+func (fr *realFileReader) seek(offset int64) error {
+	_, err := syscall.Seek(fr.fd, offset, os.SEEK_SET)
+	return err
+}
+
+func (fr *realFileReader) Close() error {
+	if err := syscall.Close(fr.fd); err != nil {
+		return err
+	} else {
+		fr.fd = -1
+		return nil
+	}
+}
+
+func (fr *realFileReader) Read(buffer []byte) (int, error) {
+	n, err := syscall.Read(fr.fd, buffer)
+	if err != nil {
+		return n, err
+	}
+	if n == 0 {
+		return 0, io.EOF
+	}
+	return n, err
+}
+
+func (fr *realFileReader) getAttr(key string, value []byte) (int, error) {
+	return syscall.Getxattr(fr.repo.root+"/"+fr.path, key, value)
+}
+
+func (fr *fileRepository) nameToRelPath(name string) string {
+	var result strings.Builder
+	for i := 0; i < fr.hashDepth; i++ {
+		start := i * fr.hashDepth
+		result.WriteString(name[start : start+fr.hashWidth])
+		result.WriteRune('/')
+	}
+	result.WriteString(name)
+	return result.String()
 }
 
 func setOrHasXattr(path, key, value string) error {
@@ -83,239 +381,4 @@ func setOrHasXattr(path, key, value string) error {
 		return nil
 	}
 	return errors.New("XATTR mismatch")
-}
-
-func (fileRepo *fileRepository) lock(ns, id string) error {
-	var err error
-	err = setOrHasXattr(fileRepo.root, "user.server.id", id)
-	if err != nil {
-		return err
-	}
-	err = setOrHasXattr(fileRepo.root, "user.server.ns", ns)
-	if err != nil {
-		return err
-	}
-	err = setOrHasXattr(fileRepo.root, "user.server.type", "rawx")
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func (fileRepo *fileRepository) has(name string) (bool, error) {
-	path := fileRepo.nameToPath(name)
-	if _, err := os.Stat(path); err != nil {
-		return false, err
-	} else {
-		return true, nil
-	}
-}
-
-func (fileRepo *fileRepository) del(name string) error {
-	path := fileRepo.nameToPath(name)
-	err := syscall.Removexattr(path, AttrNameFullPrefix+name)
-	if err != nil {
-		LogWarning("Error to remove content fullpath: %s", err)
-		err = nil
-	}
-	return os.Remove(path)
-}
-
-func (fileRepo *fileRepository) realGet(path string) (fileReader, error) {
-	f, err := os.OpenFile(path, os.O_RDONLY, 0)
-	if err != nil {
-		return nil, err
-	}
-	fileReader := new(realFileReader)
-	fileReader.impl = f
-	fileReader.path = path
-	return fileReader, nil
-}
-
-func (fileRepo *fileRepository) get(name string) (fileReader, error) {
-	path := fileRepo.nameToPath(name)
-	return fileRepo.realGet(path)
-}
-
-func (fileRepo *fileRepository) realPut(path string) (fileWriter, error) {
-	// Check if the path doesn't exist yet
-	if _, err := os.Stat(path); err == nil {
-		return nil, os.ErrExist
-	}
-
-	pathTemp := path + ".pending"
-	f, err := os.OpenFile(pathTemp, fileRepo.putOpenFlags, fileRepo.putOpenMode)
-	if err != nil {
-		if os.IsNotExist(err) {
-			// Lazy dir creation
-			err = os.MkdirAll(filepath.Dir(path), fileRepo.putMkdirMode)
-			if err == nil {
-				return fileRepo.realPut(path)
-			}
-		}
-		return nil, err
-	}
-
-	return &realFileWriter{
-		pathFinal: path, pathTemp: pathTemp, impl: f,
-		syncFileBool: fileRepo.syncFile, syncDirBool: fileRepo.syncDir}, nil
-}
-
-func (fileRepo *fileRepository) put(name string) (fileWriter, error) {
-	path := fileRepo.nameToPath(name)
-	return fileRepo.realPut(path)
-}
-
-func (fileRepo *fileRepository) realLink(fromPath, toPath string) (fileWriter, error) {
-	// Check if the source already exists
-	if _, err := os.Stat(fromPath); os.IsNotExist(err) {
-		return nil, os.ErrNotExist
-	}
-	// Check if the destination doesn't exist yet
-	if _, err := os.Stat(toPath); err == nil {
-		return nil, os.ErrExist
-	}
-
-	pathTemp := toPath + ".pending"
-	if err := os.Link(fromPath, pathTemp); err != nil {
-		if os.IsNotExist(err) {
-			// Lazy dir creation
-			err = os.MkdirAll(filepath.Dir(toPath), fileRepo.putMkdirMode)
-			if err == nil {
-				return fileRepo.realLink(fromPath, toPath)
-			}
-		}
-		return nil, err
-	}
-
-	f, err := os.OpenFile(pathTemp, os.O_WRONLY, 0)
-	if err != nil {
-		os.Remove(pathTemp)
-		f.Close()
-		return nil, err
-	}
-	return &realFileWriter{
-		pathFinal: toPath, pathTemp: pathTemp, impl: f,
-		syncFileBool: fileRepo.syncFile, syncDirBool: fileRepo.syncDir}, nil
-}
-
-func (fileRepo *fileRepository) link(fromName, toName string) (fileWriter, error) {
-	fromPath := fileRepo.nameToPath(fromName)
-	toPath := fileRepo.nameToPath(toName)
-	return fileRepo.realLink(fromPath, toPath)
-}
-
-// Takes only the basename, check it is hexadecimal with a length of 64,
-// and computes the hashed path
-func (fileRepo *fileRepository) nameToPath(name string) string {
-	var result strings.Builder
-	result.WriteString(fileRepo.root)
-	for i := 0; i < fileRepo.hashDepth; i++ {
-		start := i * fileRepo.hashDepth
-		result.WriteRune('/')
-		result.WriteString(name[start : start+fileRepo.hashWidth])
-	}
-	result.WriteRune('/')
-	result.WriteString(name)
-	return result.String()
-}
-
-type realFileWriter struct {
-	pathFinal    string
-	pathTemp     string
-	impl         *os.File
-	syncFileBool bool
-	syncDirBool  bool
-}
-
-func (fileWriter *realFileWriter) seek(offset int64) error {
-	_, err := fileWriter.impl.Seek(offset, os.SEEK_SET)
-	return err
-}
-
-func (fileWriter *realFileWriter) setAttr(key string, value []byte) error {
-	return syscall.Setxattr(fileWriter.pathTemp, key, value, 0)
-}
-
-func (fileWriter *realFileWriter) sync() error {
-	return fileWriter.impl.Sync()
-}
-
-func (fileWriter *realFileWriter) Write(buffer []byte) (int, error) {
-	return fileWriter.impl.Write(buffer)
-}
-
-func (fileWriter *realFileWriter) abort() error {
-	os.Remove(fileWriter.pathTemp)
-	return fileWriter.impl.Close()
-}
-
-func (fileWriter *realFileWriter) syncFile() {
-	if fileWriter.syncFileBool {
-		//w.impl.Sync()
-		syscall.Fdatasync(int(fileWriter.impl.Fd()))
-	}
-}
-
-func (fileWriter *realFileWriter) syncDir() {
-	if fileWriter.syncDirBool {
-		dir := filepath.Dir(fileWriter.pathFinal)
-		if f, err := os.OpenFile(dir, os.O_RDONLY, 0); err == nil {
-			f.Sync()
-			f.Close()
-		} else {
-			LogWarning("Directory sync error: %s", err)
-		}
-	}
-}
-
-func (fileWriter *realFileWriter) commit() error {
-	fileWriter.syncFile()
-	err := fileWriter.impl.Close()
-	if err == nil {
-		err = os.Rename(fileWriter.pathTemp, fileWriter.pathFinal)
-		if err == nil {
-			fileWriter.syncDir()
-		} else {
-			LogError("Rename error: %s", err)
-		}
-	} else {
-		LogError("Close error: %s", err)
-	}
-	if err != nil {
-		os.Remove(fileWriter.pathTemp)
-	}
-	return err
-}
-
-type realFileReader struct {
-	path string
-	impl *os.File
-}
-
-func (fileReader *realFileReader) size() int64 {
-	fi, _ := fileReader.impl.Stat()
-	return fi.Size()
-}
-
-func (fileReader *realFileReader) seek(offset int64) error {
-	_, err := fileReader.impl.Seek(offset, os.SEEK_SET)
-	return err
-}
-
-func (fileReader *realFileReader) Close() error {
-	return fileReader.impl.Close()
-}
-
-func (fileReader *realFileReader) Read(buffer []byte) (int, error) {
-	return fileReader.impl.Read(buffer)
-}
-
-func (fileReader *realFileReader) getAttr(key string) ([]byte, error) {
-	tmp := make([]byte, 2048)
-	sz, err := syscall.Getxattr(fileReader.path, key, tmp)
-	if err != nil {
-		return nil, err
-	}
-	return tmp[:sz], nil
 }
