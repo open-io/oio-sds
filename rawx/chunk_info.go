@@ -105,7 +105,7 @@ type detailedAttr struct {
 	ptr *string
 }
 
-func (chunk *chunkInfo) saveContentFullpathAttr(out fileWriter) error {
+func (chunk *chunkInfo) saveContentFullpathAttr(out decorable) error {
 	if chunk.ChunkID == "" || chunk.ContentFullpath == "" {
 		return errors.New("Missing chunk ID or fullpath")
 	}
@@ -113,7 +113,7 @@ func (chunk *chunkInfo) saveContentFullpathAttr(out fileWriter) error {
 	return out.setAttr(AttrNameFullPrefix+chunk.ChunkID, []byte(chunk.ContentFullpath))
 }
 
-func (chunk *chunkInfo) saveAttr(out fileWriter) error {
+func (chunk *chunkInfo) saveAttr(out decorable) error {
 	setAttr := func(k, v string) error {
 		if v == "" {
 			return nil
@@ -145,11 +145,8 @@ func (chunk *chunkInfo) saveAttr(out fileWriter) error {
 	return nil
 }
 
-func (chunk *chunkInfo) loadFullPath(inChunk fileReader, chunkID string) error {
-	getAttr := func(k string) (string, error) {
-		v, err := inChunk.getAttr(k)
-		return string(v), err
-	}
+func (chunk *chunkInfo) loadFullPath(getter func(string, string) (string, error), chunkID string) error {
+	getAttr := func(k string) (string, error) { return getter(chunkID, k) }
 
 	chunk.ChunkID = chunkID
 
@@ -191,9 +188,14 @@ func (chunk *chunkInfo) loadFullPath(inChunk fileReader, chunkID string) error {
 }
 
 func (chunk *chunkInfo) loadAttr(inChunk fileReader, chunkID string) error {
+	buf := make([]byte, 1024, 1024)
 	getAttr := func(k string) (string, error) {
-		v, err := inChunk.getAttr(k)
-		return string(v), err
+		l, err := inChunk.getAttr(k, buf)
+		if l <= 0 || err != nil {
+			return "", err
+		} else {
+			return string(buf[:l]), nil
+		}
 	}
 
 	var detailedAttrs = []detailedAttr{

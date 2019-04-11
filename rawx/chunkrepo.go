@@ -29,17 +29,16 @@ type chunkRepository struct {
 	sub fileRepository
 }
 
-func (chunkrepo *chunkRepository) lock(ns, url string) error {
-	return chunkrepo.sub.lock(ns, url)
+func (cr *chunkRepository) getAttr(name, key string, value []byte) (int, error) {
+	return cr.sub.getAttr(name, key, value)
 }
 
-func (chunkrepo *chunkRepository) has(name string) (bool, error) {
-	v, _ := chunkrepo.sub.has(name)
-	return v, nil
+func (cr *chunkRepository) lock(ns, url string) error {
+	return cr.sub.lock(ns, url)
 }
 
-func (chunkrepo *chunkRepository) del(name string) error {
-	err := chunkrepo.sub.del(name)
+func (cr *chunkRepository) del(name string) error {
+	err := cr.sub.del(name)
 	if err == nil {
 		return nil
 	} else if err != os.ErrNotExist && !os.IsNotExist(err) {
@@ -49,8 +48,8 @@ func (chunkrepo *chunkRepository) del(name string) error {
 	}
 }
 
-func (chunkrepo *chunkRepository) get(name string) (fileReader, error) {
-	r, err := chunkrepo.sub.get(name)
+func (cr *chunkRepository) get(name string) (fileReader, error) {
+	r, err := cr.sub.get(name)
 	if err == nil {
 		return r, nil
 	} else if err != os.ErrNotExist && !os.IsNotExist(err) {
@@ -60,11 +59,10 @@ func (chunkrepo *chunkRepository) get(name string) (fileReader, error) {
 	}
 }
 
-func (chunkrepo *chunkRepository) put(name string) (fileWriter, error) {
-	return chunkrepo.sub.put(name)
+func (cr *chunkRepository) put(name string) (fileWriter, error) {
+	return cr.sub.put(name)
 }
 
-func (chunkrepo *chunkRepository) link(fromName,
-	toName string) (fileWriter, error) {
-	return chunkrepo.sub.link(fromName, toName)
+func (cr *chunkRepository) link(fromName, toName string) (linkOperation, error) {
+	return cr.sub.link(fromName, toName)
 }
