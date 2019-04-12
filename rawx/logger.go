@@ -105,7 +105,7 @@ func LogDebug(format string, v ...interface{}) {
 	writeLogFmt(syslog.LOG_DEBUG, format, v...)
 }
 
-func LogIncoming(url, peer, method string, status int, spent, bytes uint64, id, path string) {
+func LogHttp(url, peer, method string, status int, spent, bytes uint64, containerID, id, path string) {
 	sb := strings.Builder{}
 	sb.Grow(128 + len(path))
 	// Preamble
@@ -124,24 +124,16 @@ func LogIncoming(url, peer, method string, status int, spent, bytes uint64, id, 
 	sb.WriteRune(' ')
 	sb.WriteString(utoa(bytes))
 	sb.WriteRune(' ')
+	if len(containerID) > 0 {
+		sb.WriteString(containerID)
+	} else {
+		sb.WriteRune('-')
+	}
+	sb.WriteRune(' ')
 	sb.WriteString(id)
 	sb.WriteRune(' ')
 	sb.WriteString(path)
 	logger.write(syslog.LOG_LOCAL1|syslog.LOG_INFO, sb.String())
-}
-
-func LogOutgoing(format string, v ...interface{}) {
-	if !severityAllowed(syslog.LOG_DEBUG) {
-		return
-	}
-	sb := strings.Builder{}
-	sb.Grow(256)
-	// Preamble
-	sb.WriteString(strconv.Itoa(os.Getpid()))
-	sb.WriteString(" out INF - ")
-	// Payload
-	sb.WriteString(fmt.Sprintf(format, v...))
-	logger.write(syslog.LOG_LOCAL2|syslog.LOG_INFO, sb.String())
 }
 
 type NoopLogger struct {
