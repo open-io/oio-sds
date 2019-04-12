@@ -94,7 +94,7 @@ class ECChunkDownloadHandler(object):
     """
 
     def __init__(self, storage_method, chunks, meta_start, meta_end, headers,
-                 connection_timeout=None, read_timeout=None,
+                 connection_timeout=None, read_timeout=None, reqid=None,
                  **_kwargs):
         """
         :param connection_timeout: timeout to establish the connections
@@ -110,6 +110,7 @@ class ECChunkDownloadHandler(object):
         self.headers = headers
         self.connection_timeout = connection_timeout
         self.read_timeout = read_timeout
+        self.reqid = reqid
 
     def _get_range_infos(self):
         """
@@ -184,7 +185,8 @@ class ECChunkDownloadHandler(object):
             fragment_length = int(resp_headers.get('Content-Length'))
             read_iterators = [it for _, it in readers]
             stream = ECStream(self.storage_method, read_iterators, range_infos,
-                              self.meta_length, fragment_length)
+                              self.meta_length, fragment_length,
+                              reqid=self.reqid)
             # start the stream
             stream.start()
             return stream
@@ -201,13 +203,14 @@ class ECStream(object):
     Handles the different readers.
     """
     def __init__(self, storage_method, readers, range_infos, meta_length,
-                 fragment_length):
+                 fragment_length, reqid=None):
         self.storage_method = storage_method
         self.readers = readers
         self.range_infos = range_infos
         self.meta_length = meta_length
         self.fragment_length = fragment_length
         self._iter = None
+        self.reqid = reqid
 
     def start(self):
         self._iter = io.chain(self._stream())
@@ -291,9 +294,9 @@ class ECStream(object):
                 # ignore
                 pass
             except green.ChunkReadTimeout as err:
-                logger.error('%s', err)
+                logger.error('%s (reqid=%s)', err, self.reqid)
             except Exception:
-                logger.exception("Exception on reading")
+                logger.exception("Exception on reading (reqid=%s)", self.reqid)
             finally:
                 queue.resize(2)
                 # put None to indicate the decoding loop
@@ -326,7 +329,8 @@ class ECStream(object):
                     segment = self.storage_method.driver.decode(data)
                 except exceptions.ECError:
                     # something terrible happened
-                    logger.exception("ERROR decoding fragments")
+                    logger.exception("ERROR decoding fragments (reqid=%s)",
+                                     self.reqid)
                     raise
 
                 yield segment
@@ -431,9 +435,9 @@ class ECStream(object):
                 try:
                     range_info = results[(fragment_start, fragment_end)].pop(0)
                 except KeyError:
-                    logger.error("Invalid range: %s, available: %s",
+                    logger.error("Invalid range: %s, available: %s (reqid=%s)",
                                  repr((fragment_start, fragment_end)),
-                                 results.keys())
+                                 results.keys(), self.reqid)
                     raise
                 segment_iter = self._decode_segments(fragment_iters)
 
@@ -532,7 +536,7 @@ class EcChunkWriter(object):
     Writes an EC chunk
     """
     def __init__(self, chunk, conn, write_timeout=None,
-                 chunk_checksum_algo='md5', **_kwargs):
+                 chunk_checksum_algo='md5', **kwargs):
         self._chunk = chunk
         self._conn = conn
         self.failed = False
@@ -544,6 +548,7 @@ class EcChunkWriter(object):
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
         # we use eventlet Queue to pass data to the send coroutine
         self.queue = Queue(io.PUT_QUEUE_DEPTH)
+        self.reqid = kwargs.get('reqid')
 
     @property
     def chunk(self):
@@ -578,7 +583,8 @@ class EcChunkWriter(object):
             conn = io.http_connect(
                 parsed.netloc, 'PUT', parsed.path, hdrs)
             conn.chunk = chunk
-        return cls(chunk, conn, write_timeout=write_timeout, **kwargs)
+        return cls(chunk, conn, write_timeout=write_timeout,
+                   reqid=reqid, **kwargs)
 
     def start(self, pool):
         """Spawn the send coroutine"""
@@ -601,7 +607,8 @@ class EcChunkWriter(object):
                 except (Exception, green.ChunkWriteTimeout) as exc:
                     self.failed = True
                     msg = str(exc)
-                    logger.warn("Failed to write to %s (%s)", self.chunk, msg)
+                    logger.warn("Failed to write to %s (%s, reqid=%s)",
+                                self.chunk, msg, self.reqid)
                     self.chunk['error'] = 'write: %s' % msg
 
             self.queue.task_done()
@@ -650,7 +657,7 @@ class EcChunkWriter(object):
 
 class EcMetachunkWriter(io.MetachunkWriter):
     def __init__(self, sysmeta, meta_chunk, global_checksum, storage_method,
-                 reqid=None, connection_timeout=None, write_timeout=None,
+                 connection_timeout=None, write_timeout=None,
                  read_timeout=None, **kwargs):
         super(EcMetachunkWriter, self).__init__(
             storage_method=storage_method, **kwargs)
@@ -660,7 +667,6 @@ class EcMetachunkWriter(io.MetachunkWriter):
         # Unlike plain replication, we cannot use the checksum returned
         # by rawx services, whe have to compute the checksum client-side.
         self.checksum = hashlib.new(self.chunk_checksum_algo or 'md5')
-        self.reqid = reqid
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
         self.read_timeout = read_timeout or io.CLIENT_TIMEOUT
@@ -777,16 +783,16 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 return bytes_transferred
 
         except green.SourceReadTimeout as exc:
-            logger.warn('%s', exc)
+            logger.warn('%s (reqid=%s)', exc, self.reqid)
             raise exceptions.SourceReadTimeout(exc)
         except SourceReadError as exc:
-            logger.warn('Source read error: %s', exc)
+            logger.warn('Source read error (reqid=%s): %s', self.reqid, exc)
             raise
         except Timeout as to:
-            logger.error('Timeout writing data: %s', to)
+            logger.error('Timeout writing data (reqid=%s): %s', self.reqid, to)
             raise exceptions.OioTimeout(to)
         except Exception:
-            logger.exception('Exception writing data')
+            logger.exception('Exception writing data (reqid=%s)', self.reqid)
             raise
 
     def _get_writers(self):
@@ -813,7 +819,8 @@ class EcMetachunkWriter(io.MetachunkWriter):
             return writer, chunk
         except (Exception, Timeout) as exc:
             msg = str(exc)
-            logger.error("Failed to connect to %s (%s)", chunk, msg)
+            logger.error("Failed to connect to %s (%s, reqid=%s)",
+                         chunk, msg, self.reqid)
             chunk['error'] = 'connect: %s' % msg
             return None, chunk
 
@@ -830,8 +837,9 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 else:
                     success_chunks.append(writer.chunk)
             else:
-                logger.error("Wrong status code from %s (%s) %s",
-                             writer.chunk, resp.status, resp.reason)
+                logger.error(
+                    "Unexpected status code from %s (reqid=%s): (%s) %s)",
+                    writer.chunk, self.reqid, resp.status, resp.reason)
                 writer.chunk['error'] = 'resp: HTTP %s' % resp.status
                 failed_chunks.append(writer.chunk)
         else:
@@ -868,12 +876,12 @@ class EcMetachunkWriter(io.MetachunkWriter):
             resp = None
             msg = str(exc)
             if isinstance(exc, Timeout):
-                logger.warn("Timeout (%s) while writing %s",
-                            msg, writer.chunk)
+                logger.warn("Timeout (%s) while writing %s (reqid=%s)",
+                            msg, writer.chunk, self.reqid)
                 writer.chunk['error'] = 'resp: %s' % msg
             else:
-                logger.warn("Failed to read response for %s (%s)",
-                            writer.chunk, msg)
+                logger.warn("Failed to read response for %s (reqid=%s): %s",
+                            writer.chunk, self.reqid, msg)
                 writer.chunk['error'] = 'resp: %s' % msg
         return (writer, resp)
 

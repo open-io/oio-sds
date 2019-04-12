@@ -127,16 +127,16 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                         conn.queue.join()
 
         except green.SourceReadTimeout as err:
-            logger.warn('Source read timeout (%s)', err)
+            logger.warn('Source read timeout (reqid=%s): %s', self.reqid, err)
             raise exc.SourceReadTimeout(err)
-        except SourceReadError:
-            logger.warn('Source read error')
+        except SourceReadError as err:
+            logger.warn('Source read error (reqid=%s): %s', self.reqid, err)
             raise
         except Timeout as to:
-            logger.error('Timeout writing data (%s)', to)
+            logger.error('Timeout writing data (reqid=%s): %s', self.reqid, to)
             raise exc.OioTimeout(to)
         except Exception:
-            logger.exception('Exception writing data')
+            logger.exception('Exception writing data (reqid=%s)', self.reqid)
             raise
 
         success_chunks = []
@@ -182,10 +182,12 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
             return conn, chunk
         except (SocketError, Timeout) as err:
             msg = str(err)
-            logger.error("Failed to connect to %s: %s", chunk, err)
+            logger.error("Failed to connect to %s (reqid=%s): %s",
+                         chunk, self.reqid, err)
         except Exception as err:
             msg = str(err)
-            logger.exception("Failed to connect to %s", chunk)
+            logger.exception("Failed to connect to %s (reqid=%s)",
+                             chunk, self.reqid)
         chunk['error'] = msg
         return None, chunk
 
@@ -215,11 +217,12 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                 resp = conn.getresponse()
         except Timeout as err:
             resp = err
-            logger.error('Failed to read response from %s: %s',
-                         conn.chunk, err)
+            logger.error('Failed to read response from %s (reqid=%s): %s',
+                         conn.chunk, self.reqid, err)
         except Exception as err:
             resp = err
-            logger.exception("Failed to read response from %s", conn.chunk)
+            logger.exception("Failed to read response from %s (reqid=%s)",
+                             conn.chunk, self.reqid)
         return (conn, resp)
 
     def _handle_resp(self, conn, resp, checksum, successes, failures):
@@ -240,8 +243,8 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                 conn.failed = True
                 conn.chunk['error'] = 'HTTP %s' % resp.status
                 failures.append(conn.chunk)
-                logger.error("Wrong status code from %s (%s)",
-                             conn.chunk, resp.status)
+                logger.error("Unexpected status code from %s (reqid=%s): %s",
+                             conn.chunk, self.reqid, resp.status)
             else:
                 rawx_checksum = resp.getheader(CHUNK_HEADERS['chunk_hash'])
                 if rawx_checksum and checksum and \
@@ -251,8 +254,9 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                         "checksum mismatch: %s (local), %s (rawx)" % \
                         (checksum, rawx_checksum.lower())
                     failures.append(conn.chunk)
-                    logger.error("%s: %s",
-                                 conn.chunk['url'], conn.chunk['error'])
+                    logger.error("%s (reqid=%s): %s",
+                                 conn.chunk['url'], self.reqid,
+                                 conn.chunk['error'])
                 else:
                     conn.chunk['hash'] = checksum or rawx_checksum
                     successes.append(conn.chunk)
