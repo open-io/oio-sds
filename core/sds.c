@@ -822,13 +822,13 @@ _download_range_from_metachunk_ec(struct _download_ctx_s *dl,
 					RAWX_HEADER_PREFIX, chunk->position.intra));
 		g_ptr_array_add(headers, g_strdup(chunk->url));
 	}
-	g_ptr_array_add(headers, g_strdup(RAWX_HEADER_PREFIX"chunk-size"));
+	g_ptr_array_add(headers, g_strdup(RAWX_HEADER_CHUNK_SIZE));
 	g_ptr_array_add(headers, g_strdup_printf("%"G_GSIZE_FORMAT, meta->size));
-	g_ptr_array_add(headers, g_strdup(RAWX_HEADER_PREFIX"content-chunk-method"));
+	g_ptr_array_add(headers, g_strdup(RAWX_HEADER_CONTENT_CHUNK_METHOD));
 	g_ptr_array_add(headers, g_strdup(dl->chunk_method));
 
 	// FIXME: this should not be required
-	g_ptr_array_add(headers, g_strdup(RAWX_HEADER_PREFIX"container-id"));
+	g_ptr_array_add(headers, g_strdup(RAWX_HEADER_CONTAINER_ID));
 	g_ptr_array_add(headers, g_strdup(oio_url_get(dl->src->url, OIOURL_HEXID)));
 
 	g_ptr_array_add(headers, NULL);
@@ -1587,18 +1587,18 @@ _sds_upload_add_headers(struct oio_sds_ul_s *ul, struct http_put_dest_s *dest)
 		http_put_dest_add_header (dest, PROXYD_HEADER_ADMIN, "yes");
 	}
 
-	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "container-id",
+	http_put_dest_add_header (dest, RAWX_HEADER_CONTAINER_ID,
 			"%s", oio_url_get (ul->dst->url, OIOURL_HEXID));
 
 	gchar *escaped = g_uri_escape_string (oio_url_get (
 				ul->dst->url, OIOURL_PATH), NULL, TRUE);
-	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-path",
+	http_put_dest_add_header (dest, RAWX_HEADER_CONTENT_PATH,
 			"%s", escaped);
 	g_free (escaped);
 
-	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-version",
+	http_put_dest_add_header (dest, RAWX_HEADER_CONTENT_VERSION,
 			"%" G_GINT64_FORMAT, ul->version);
-	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-id",
+	http_put_dest_add_header (dest, RAWX_HEADER_CONTENT_ID,
 			"%s", ul->hexid);
 
 	struct oio_url_s *url = oio_url_dup(ul->dst->url);
@@ -1606,18 +1606,18 @@ _sds_upload_add_headers(struct oio_sds_ul_s *ul, struct http_put_dest_s *dest)
 	g_sprintf(version, "%"G_GINT64_FORMAT, ul->version);
 	oio_url_set(url, OIOURL_VERSION, version);
 	oio_url_set(url, OIOURL_CONTENTID, ul->hexid);
-	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "full-path", "%s",
+	http_put_dest_add_header (dest, RAWX_HEADER_FULLPATH, "%s",
 			oio_url_get(url, OIOURL_FULLPATH));
 	oio_url_clean(url);
 
-	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "oio-version", "%s",
+	http_put_dest_add_header (dest, RAWX_HEADER_OIO_VERSION, "%s",
 			oio_sds_client_version);
 
-	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-storage-policy",
+	http_put_dest_add_header (dest, RAWX_HEADER_CONTENT_POLICY,
 			"%s", ul->stgpol);
-	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-chunk-method",
+	http_put_dest_add_header (dest, RAWX_HEADER_CONTENT_CHUNK_METHOD,
 			"%s", ul->chunk_method);
-	http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-mime-type",
+	http_put_dest_add_header (dest, RAWX_HEADER_CONTENT_MIMETYPE,
 			"%s", ul->mime_type);
 }
 
@@ -1679,9 +1679,9 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 					RAWX_HEADER_PREFIX, "chunk", chunk->position.intra);
 			http_put_dest_add_header(dest, key, "%s", chunk->url);
 		}
-		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunks-nb",
+		http_put_dest_add_header (dest, RAWX_HEADER_CHUNKS_NB,
 				"%d", chunks_nb);
-		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-pos",
+		http_put_dest_add_header (dest, RAWX_HEADER_CHUNK_POS,
 				"%u", ul->mc->meta);
 		ul->http_dests = g_slist_append (ul->http_dests, dest);
 	} else {
@@ -1691,12 +1691,12 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 
 			_sds_upload_add_headers(ul, dest);
 
-			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-id",
+			http_put_dest_add_header (dest, RAWX_HEADER_CHUNK_ID,
 					"%s", strrchr(c->url, '/')+1);
 
 			gchar strpos[32];
 			_chunk_pack_position (c, strpos, sizeof(strpos));
-			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-pos",
+			http_put_dest_add_header (dest, RAWX_HEADER_CHUNK_POS,
 					"%s", strpos);
 
 			ul->http_dests = g_slist_append (ul->http_dests, dest);

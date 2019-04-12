@@ -64,8 +64,6 @@ struct apr_bucket_type_t chunk_bucket_type = {
 	chunk_bucket_copy
 };
 
-#define CHECKHASH_HEADER "X-oio-check-hash"
-
 /* pull this in from the other source file */
 /*extern const dav_hooks_locks dav_hooks_locks_fs; */
 
@@ -449,10 +447,10 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 	int flags = 0;
 	switch (r->method_number) {
 		case M_GET:
-			if (oio_str_parse_bool(apr_table_get(r->headers_in, "X-oio-xattr"), TRUE))
+			if (oio_str_parse_bool(apr_table_get(r->headers_in, RAWX_HEADER_FULLATTR), TRUE))
 				flags |= RESOURCE_STAT_CHUNK_READ_ALL_ATTRS;
 			if (r->header_only &&
-					oio_str_parse_bool(apr_table_get(r->headers_in, CHECKHASH_HEADER), FALSE))
+					oio_str_parse_bool(apr_table_get(r->headers_in, RAWX_HEADER_CHECKHASH), FALSE))
 				/* TODO(mbo): force Chunk Hash to be loaded, it could be skip if x-oio-chunk-meta-chunk-hash is set */
 				flags |= RESOURCE_STAT_CHUNK_CHECK_HASH | RESOURCE_STAT_CHUNK_READ_ALL_ATTRS;
 			break;
