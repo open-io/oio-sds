@@ -1,8 +1,8 @@
 // OpenIO SDS Go rawx
-// Copyright (C) 2015-2018 OpenIO SAS
+// Copyright (C) 2015-2019 OpenIO SAS
 //
 // This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
+// modify it under the terms of the GNU Affero General Public
 // License as published by the Free Software Foundation; either
 // version 3.0 of the License, or (at your option) any later version.
 //
@@ -51,6 +51,7 @@ const (
 
 const (
 	beanstalkNotifierDefaultTube = "oio"
+	beanstalkNotifierPipeSize    = 4096
 )
 
 var (
@@ -73,7 +74,7 @@ func makeBeanstalkNotifier(endpoint string,
 	notifier := new(beanstalkNotifier)
 	notifier.rawx = rawx
 	notifier.run = false
-	notifier.queue = make(chan []byte)
+	notifier.queue = make(chan []byte, beanstalkNotifierPipeSize)
 	notifier.endpoint = endpoint
 	notifier.tube = beanstalkNotifierDefaultTube
 	// TODO(adu) Check endpoint

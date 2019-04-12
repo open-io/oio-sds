@@ -235,23 +235,26 @@ service_tag_to_string(const struct service_tag_s *tag, gchar * dst, gsize dst_si
 	return 0;
 }
 
-void
-service_info_clean(struct service_info_s *si)
+void service_info_clean_tags(struct service_info_s *si)
 {
-	if (!si)
-		return;
 	if (si->tags) {
 		GPtrArray *pa = si->tags;
-
 		while (pa->len > 0) {
 			struct service_tag_s *tag;
-
 			tag = g_ptr_array_index(pa, 0);
 			g_ptr_array_remove_index_fast(pa, 0);
 			service_tag_destroy(tag);
 		}
 		g_ptr_array_free(pa, TRUE);
 	}
+}
+
+void
+service_info_clean(struct service_info_s *si)
+{
+	if (!si)
+		return;
+	service_info_clean_tags(si);
 	g_free(si);
 }
 

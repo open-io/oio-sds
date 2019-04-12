@@ -40,6 +40,7 @@ License along with this library.
 # define NAME_TAGNAME_RAWX_UP "tag.up"
 # define NAME_TAGNAME_RAWX_FIRST "tag.1"
 # define NAME_TAGNAME_RAWX_LOC "tag.loc"
+# define NAME_TAGNAME_LOCK "tag.lock"
 # define NAME_TAGNAME_SLOTS "tag.slots"
 
 #define NAME_MSGNAME_METAREPLY         "RP"

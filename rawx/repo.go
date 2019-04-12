@@ -1,8 +1,8 @@
 // OpenIO SDS Go rawx
-// Copyright (C) 2015-2018 OpenIO SAS
+// Copyright (C) 2015-2019 OpenIO SAS
 //
 // This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
+// modify it under the terms of the GNU Affero General Public
 // License as published by the Free Software Foundation; either
 // version 3.0 of the License, or (at your option) any later version.
 //
@@ -21,33 +21,27 @@ Minimal interface to a file repository, where each file might have
 some <key,value> properties.
 */
 
-type Repository interface {
-	Lock(ns, url string) error
-	Has(name string) (bool, error)
-	Get(name string) (FileReader, error)
-	Put(name string) (FileWriter, error)
-	Link(fromName, toName string) (FileWriter, error)
-	Del(name string) error
-	List(marker, prefix string, max int) (ListSlice, error)
+type repository interface {
+	lock(ns, url string) error
+	has(name string) (bool, error)
+	get(name string) (fileReader, error)
+	put(name string) (fileWriter, error)
+	link(fromName, toName string) (fileWriter, error)
+	del(name string) error
 }
 
-type ListSlice struct {
-	Items     []string
-	Truncated bool
-}
-
-type FileReader interface {
-	Size() int64
-	Seek(int64) error
-	Close() error
+type fileReader interface {
 	Read([]byte) (int, error)
-	GetAttr(n string) ([]byte, error)
+	Close() error
+	size() int64
+	seek(int64) error
+	getAttr(n string) ([]byte, error)
 }
 
-type FileWriter interface {
-	Seek(int64) error
-	Commit() error
-	Abort() error
+type fileWriter interface {
 	Write([]byte) (int, error)
-	SetAttr(n string, v []byte) error
+	seek(int64) error
+	commit() error
+	abort() error
+	setAttr(n string, v []byte) error
 }

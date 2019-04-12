@@ -1,8 +1,8 @@
 // OpenIO SDS Go rawx
-// Copyright (C) 2015-2018 OpenIO SAS
+// Copyright (C) 2015-2019 OpenIO SAS
 //
 // This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
+// modify it under the terms of the GNU Affero General Public
 // License as published by the Free Software Foundation; either
 // version 3.0 of the License, or (at your option) any later version.
 //
@@ -47,7 +47,7 @@ func (reader *limitedReader) Read(p []byte) (int, error) {
 	}
 
 	if err == io.EOF && reader.remaining > 0 {
-		err = ErrRangeNotSatisfiable
+		err = errRangeNotSatisfiable
 	} else if err == nil {
 		reader.remaining = reader.remaining - int64(n)
 	}

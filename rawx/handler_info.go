@@ -1,8 +1,8 @@
 // OpenIO SDS Go rawx
-// Copyright (C) 2015-2018 OpenIO SAS
+// Copyright (C) 2015-2019 OpenIO SAS
 //
 // This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
+// modify it under the terms of the GNU Affero General Public
 // License as published by the Free Software Foundation; either
 // version 3.0 of the License, or (at your option) any later version.
 //
@@ -17,22 +17,31 @@
 package main
 
 import (
-	"fmt"
+	"bytes"
 	"net/http"
 )
 
 func doGetInfo(rr *rawxRequest) {
-	rr.replyCode(http.StatusOK)
-	rr.rep.Write([]byte(fmt.Sprintf("namespace %s\n", rr.rawx.ns)))
-	rr.rep.Write([]byte(fmt.Sprintf("path %s\n", rr.rawx.path)))
+	bb := bytes.Buffer{}
+	bb.WriteString("namespace ")
+	bb.WriteString(rr.rawx.ns)
+	bb.WriteRune('\n')
+	bb.WriteString("path ")
+	bb.WriteString(rr.rawx.path)
+	bb.WriteRune('\n')
 	if rr.rawx.id != "" {
-		rr.rep.Write([]byte(fmt.Sprintf("service_id %s\n", rr.rawx.id)))
+		bb.WriteString("service_id ")
+		bb.WriteString(rr.rawx.id)
+		bb.WriteRune('\n')
 	}
+
+	rr.replyCode(http.StatusOK)
+	rr.rep.Write(bb.Bytes())
 }
 
 func (rr *rawxRequest) serveInfo(rep http.ResponseWriter, req *http.Request) {
 	switch req.Method {
-	case "GET":
+	case "GET", "HEAD":
 		doGetInfo(rr)
 		IncrementStatReqInfo(rr)
 	default:

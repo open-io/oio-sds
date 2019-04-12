@@ -1,8 +1,8 @@
 // OpenIO SDS Go rawx
-// Copyright (C) 2015-2018 OpenIO SAS
+// Copyright (C) 2015-2019 OpenIO SAS
 //
 // This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
+// modify it under the terms of the GNU Affero General Public
 // License as published by the Free Software Foundation; either
 // version 3.0 of the License, or (at your option) any later version.
 //
@@ -26,31 +26,20 @@ import (
 )
 
 type chunkRepository struct {
-	sub      Repository
-	accepted [32]byte
+	sub fileRepository
 }
 
-func MakeChunkRepository(sub Repository) *chunkRepository {
-	if sub == nil {
-		panic("BUG : bad repository initiation")
-	}
-	r := new(chunkRepository)
-	r.sub = sub
-
-	return r
+func (chunkrepo *chunkRepository) lock(ns, url string) error {
+	return chunkrepo.sub.lock(ns, url)
 }
 
-func (chunkrepo *chunkRepository) Lock(ns, url string) error {
-	return chunkrepo.sub.Lock(ns, url)
-}
-
-func (chunkrepo *chunkRepository) Has(name string) (bool, error) {
-	v, _ := chunkrepo.sub.Has(name)
+func (chunkrepo *chunkRepository) has(name string) (bool, error) {
+	v, _ := chunkrepo.sub.has(name)
 	return v, nil
 }
 
-func (chunkrepo *chunkRepository) Del(name string) error {
-	err := chunkrepo.sub.Del(name)
+func (chunkrepo *chunkRepository) del(name string) error {
+	err := chunkrepo.sub.del(name)
 	if err == nil {
 		return nil
 	} else if err != os.ErrNotExist && !os.IsNotExist(err) {
@@ -60,8 +49,8 @@ func (chunkrepo *chunkRepository) Del(name string) error {
 	}
 }
 
-func (chunkrepo *chunkRepository) Get(name string) (FileReader, error) {
-	r, err := chunkrepo.sub.Get(name)
+func (chunkrepo *chunkRepository) get(name string) (fileReader, error) {
+	r, err := chunkrepo.sub.get(name)
 	if err == nil {
 		return r, nil
 	} else if err != os.ErrNotExist && !os.IsNotExist(err) {
@@ -71,24 +60,11 @@ func (chunkrepo *chunkRepository) Get(name string) (FileReader, error) {
 	}
 }
 
-func (chunkrepo *chunkRepository) Put(name string) (FileWriter, error) {
-	return chunkrepo.sub.Put(name)
+func (chunkrepo *chunkRepository) put(name string) (fileWriter, error) {
+	return chunkrepo.sub.put(name)
 }
 
-func (chunkrepo *chunkRepository) Link(fromName,
-	toName string) (FileWriter, error) {
-	return chunkrepo.sub.Link(fromName, toName)
-}
-
-func (chunkrepo *chunkRepository) List(marker, prefix string,
-	max int) (ListSlice, error) {
-	if len(marker) > 0 && !isHexaString(marker, 0) {
-		out := ListSlice{make([]string, 0), false}
-		return out, ErrListMarker
-	}
-	if len(prefix) > 0 && !isHexaString(prefix, 0) {
-		out := ListSlice{make([]string, 0), false}
-		return out, ErrListPrefix
-	}
-	return chunkrepo.sub.List(marker, prefix, max)
+func (chunkrepo *chunkRepository) link(fromName,
+	toName string) (fileWriter, error) {
+	return chunkrepo.sub.link(fromName, toName)
 }

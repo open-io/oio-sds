@@ -2,7 +2,7 @@
 // Copyright (C) 2015-2019 OpenIO SAS
 //
 // This library is free software; you can redistribute it and/or
-// modify it under the terms of the GNU Lesser General Public
+// modify it under the terms of the GNU Affero General Public
 // License as published by the Free Software Foundation; either
 // version 3.0 of the License, or (at your option) any later version.
 //
@@ -26,8 +26,8 @@ import (
 
 type optionsMap map[string]string
 
-// ReadConfig -- fetch options from conf file
-func ReadConfig(conf string) (optionsMap, error) {
+// readConfig -- fetch options from conf file
+func readConfig(conf string) (optionsMap, error) {
 	loadedOpts := map[string]string{
 		"Listen":           "addr",
 		"grid_namespace":   "ns",

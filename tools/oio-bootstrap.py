@@ -726,7 +726,7 @@ group=${NS},localhost,conscience,${IP}:${PORT}
 on_die=cry
 enabled=true
 start_at_boot=true
-command=oio-daemon -s OIO,${NS},cs,${SRVNUM} ${CFGDIR}/${NS}-conscience-${SRVNUM}.conf
+command=oio-daemon -O PersistencePath=${DATADIR}/${NS}-conscience-${SRVNUM}/conscience.dat -O PersistencePeriod=15 -s OIO,${NS},cs,${SRVNUM} ${CFGDIR}/${NS}-conscience-${SRVNUM}.conf
 """
 
 template_gridinit_meta = """

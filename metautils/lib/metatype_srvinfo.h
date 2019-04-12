@@ -26,6 +26,9 @@ void service_info_clean(struct service_info_s *si);
 
 void service_info_cleanv(struct service_info_s **siv, gboolean content_only);
 
+/* Clean the tags array from the service_info_s object. */
+void service_info_clean_tags(struct service_info_s *si);
+
 void service_info_gclean(gpointer si, gpointer unused);
 
 struct service_info_s *service_info_dup(const struct service_info_s *si);
