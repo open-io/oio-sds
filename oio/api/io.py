@@ -409,7 +409,7 @@ class ChunkReader(object):
                     data = part.read(READ_CHUNK_SIZE)
                     count += 1
                     buf += data
-            except green.ChunkReadTimeout as crto:
+            except (green.ChunkReadTimeout, IOError) as crto:
                 try:
                     self.recover(bytes_consumed)
                 except (exc.UnsatisfiableRange, ValueError):
@@ -504,7 +504,7 @@ class ChunkReader(object):
                              self.reqid)
             raise
         except Exception:
-            logger.exception("Failure during read")
+            logger.exception("Failure during read (reqid=%s)", self.reqid)
             raise
         finally:
             close_source(source[0])
@@ -535,12 +535,13 @@ class MetachunkWriter(object):
     """Base class for metachunk writers"""
 
     def __init__(self, storage_method=None, quorum=None,
-                 chunk_checksum_algo='md5', **_kwargs):
+                 chunk_checksum_algo='md5', reqid=None, **_kwargs):
         self.storage_method = storage_method
         self._quorum = quorum
         if storage_method is None and quorum is None:
             raise ValueError('Missing storage_method or quorum')
         self.chunk_checksum_algo = chunk_checksum_algo
+        self.reqid = reqid
 
     @property
     def quorum(self):
