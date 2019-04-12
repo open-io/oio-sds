@@ -58,7 +58,7 @@ class TestContainerReplication(BaseTestCase):
     def _apply_conf_on_all(self, type_, conf):
         all_svc = [x['addr'] for x in self.conf['services'][type_]]
         for svc in all_svc:
-            self.admin.service_set_live_config(svc, conf)
+            self.admin.service_set_live_config(svc, conf, request_attempts=4)
 
     def _synchronous_restore_allowed(self):
         dump_max_size = int(self.ns_conf.get('sqliterepo.dump.max_size',

@@ -246,11 +246,15 @@ class TestConscienceFunctional(BaseTestCase):
         one_rawx['type'] = 'rawx'
         self.conscience.lock_score(one_rawx)
 
+        # Stop conscience.
         self._service('conscience-1', 'stop')
+        # Ensure conscience is stopped.
         self.assertRaises(Exception, self._service, 'conscience-1', 'status')
+        # Start it again.
         self._service('conscience-1', 'start')
-
-        all_rawx = self.conscience.all_services('rawx')
+        # Load all rawx services.
+        # Make several attempts in case conscience is slow to start.
+        all_rawx = self.conscience.all_services('rawx', request_attempts=4)
         my_rawx = [x for x in all_rawx if x['addr'] == one_rawx['addr']][0]
         self.assertIn('tag.lock', my_rawx['tags'])
         self.assertTrue(my_rawx['tags']['tag.lock'])
