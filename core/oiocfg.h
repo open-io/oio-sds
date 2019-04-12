@@ -106,6 +106,70 @@ extern "C" {
 #  define RAWX_HEADER_PREFIX "X-oio-chunk-meta-"
 # endif
 
+# ifndef RAWX_HEADER_OIO_VERSION
+#  define RAWX_HEADER_OIO_VERSION RAWX_HEADER_PREFIX "oio-version"
+# endif
+
+# ifndef RAWX_HEADER_CHUNK_ID
+#  define RAWX_HEADER_CHUNK_ID RAWX_HEADER_PREFIX "chunk-id"
+# endif
+
+# ifndef RAWX_HEADER_CHUNK_HASH
+#  define RAWX_HEADER_CHUNK_HASH RAWX_HEADER_PREFIX "chunk-hash"
+# endif
+
+# ifndef RAWX_HEADER_CHUNKS_NB
+#  define RAWX_HEADER_CHUNKS_NB RAWX_HEADER_PREFIX "chunks-nb"
+# endif
+
+# ifndef RAWX_HEADER_CHUNK_POS
+#  define RAWX_HEADER_CHUNK_POS RAWX_HEADER_PREFIX "chunk-pos"
+# endif
+
+# ifndef RAWX_HEADER_CHUNK_SIZE
+#  define RAWX_HEADER_CHUNK_SIZE RAWX_HEADER_PREFIX "chunk-size"
+# endif
+
+# ifndef RAWX_HEADER_CONTENT_CHUNK_METHOD
+#  define RAWX_HEADER_CONTENT_CHUNK_METHOD RAWX_HEADER_PREFIX "content-chunk-method"
+# endif
+
+# ifndef RAWX_HEADER_CONTENT_ID
+#  define RAWX_HEADER_CONTENT_ID RAWX_HEADER_PREFIX "content-id"
+# endif
+
+# ifndef RAWX_HEADER_CONTENT_MIMETYPE
+#  define RAWX_HEADER_CONTENT_MIMETYPE RAWX_HEADER_PREFIX "content-mime-type"
+# endif
+
+# ifndef RAWX_HEADER_CONTENT_PATH
+#  define RAWX_HEADER_CONTENT_PATH RAWX_HEADER_PREFIX "content-path"
+# endif
+
+# ifndef RAWX_HEADER_CONTENT_POLICY
+#  define RAWX_HEADER_CONTENT_POLICY RAWX_HEADER_PREFIX "content-storage-policy"
+# endif
+
+# ifndef RAWX_HEADER_CONTENT_VERSION
+#  define RAWX_HEADER_CONTENT_VERSION RAWX_HEADER_PREFIX "content-version"
+# endif
+
+# ifndef RAWX_HEADER_CONTAINER_ID
+#  define RAWX_HEADER_CONTAINER_ID RAWX_HEADER_PREFIX "container-id"
+# endif
+
+# ifndef RAWX_HEADER_CHECKHASH
+#  define RAWX_HEADER_CHECKHASH "X-oio-check-hash"
+# endif
+
+# ifndef RAWX_HEADER_FULLATTR
+#  define RAWX_HEADER_FULLATTR "X-oio-xattr"
+# endif
+
+# ifndef RAWX_HEADER_FULLPATH
+#  define RAWX_HEADER_FULLPATH RAWX_HEADER_PREFIX "full-path"
+# endif
+
 # ifndef  OIO_STAT_PREFIX_REQ
 #  define OIO_STAT_PREFIX_REQ "counter req.hits"
 # endif

@@ -282,7 +282,7 @@ request_load_chunk_info_from_headers(request_rec *request,
 	LAZY_LOAD_FIELD(oio_version,            "oio-version");
 
 	if (!cti->content_fullpath) {
-		_load_raw_field(pool, src, RAWX_HEADER_PREFIX  "full-path", &(cti->content_fullpath));
+		_load_raw_field(pool, src, RAWX_HEADER_FULLPATH, &(cti->content_fullpath));
 	}
 }
 
@@ -475,7 +475,7 @@ chunk_verify_checksum(dav_resource *resource, request_rec *r)
 
 	/* use hash from x-oio-chunk-meta-chunk-hash or from xattr ?*/
 	const char *hash_to_verify = NULL;
-	if ( !(hash_to_verify = apr_table_get(r->headers_in, RAWX_HEADER_PREFIX"chunk-hash" )) ) {
+	if ( !(hash_to_verify = apr_table_get(r->headers_in, RAWX_HEADER_CHUNK_HASH))) {
 		EXTRA_ASSERT(resource->info);
 		struct chunk_textinfo_s *p = &resource->info->chunk;
 
