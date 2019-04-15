@@ -239,7 +239,7 @@ class AdminClient(ProxyClient):
         _, body = self._request('POST', '/remove', params=params, **kwargs)
         return body
 
-    # Proxy's cache actions ###########################################
+    # Proxy's cache and config actions ################################
 
     def _proxy_endpoint(self, proxy_netloc=None):
         if proxy_netloc and proxy_netloc != self.cache_client.proxy_netloc:
@@ -273,16 +273,56 @@ class AdminClient(ProxyClient):
         _resp, body = self.cache_client._direct_request('GET', url, **kwargs)
         return body
 
+    def proxy_get_live_config(self, proxy_netloc=None, **kwargs):
+        """
+        Get all configuration parameters from the specified proxy service.
+
+        :returns: a dictionary with all configuration keys the
+            service recognizes, and their current value.
+        :rtype: `dict`
+        """
+        if not proxy_netloc:
+            proxy_netloc = self.proxy_netloc
+        _resp, body = self._direct_request(
+                'GET', 'http://' + proxy_netloc + '/v3.0/config', **kwargs)
+        return body
+
+    def proxy_set_live_config(self, proxy_netloc=None, config=None, **kwargs):
+        """
+        Set configuration parameters on the specified proxy service.
+        """
+        if not proxy_netloc:
+            proxy_netloc = self.proxy_netloc
+        if config is None:
+            raise ValueError("Missing value for 'config'")
+        _resp, body = self._direct_request(
+                'POST', 'http://' + proxy_netloc + '/v3.0/config',
+                json=config, **kwargs)
+        return body
+
     # Forwarded actions ###############################################
 
-    def _forward_service_action(self, svc_id, action, **kwargs):
+    def _forward_service_action(self, svc_id, action, method='POST', **kwargs):
         """Execute service-specific actions."""
-        self.forwarder._request('POST', action,
-                                params={'id': svc_id}, **kwargs)
+        _resp, body = self.forwarder._request(
+            method, action, params={'id': svc_id}, **kwargs)
+        return body
 
     def service_flush_cache(self, svc_id, **kwargs):
         """Flush the resolver cache of an sqliterepo-based service."""
         self._forward_service_action(svc_id, '/flush', **kwargs)
+
+    def service_get_live_config(self, svc_id, **kwargs):
+        """
+        Get all configuration parameters from the specified service.
+        Works on all services using ASN.1 protocol.
+
+        :returns: a dictionary with all configuration keys the
+            service recognizes, and their current value.
+        :rtype: `dict`
+        """
+        return self._forward_service_action(
+            svc_id, '/config', method='GET', **kwargs)
 
     def service_set_live_config(self, svc_id, config, **kwargs):
         """
