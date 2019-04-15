@@ -348,11 +348,13 @@ class CommonTestCase(testtools.TestCase):
 
     def _srv(self, srvtype, extra_tags={}, lowport=7000, highport=65535,
              ip="127.0.0.2"):
+        netloc = self._addr(low=lowport, high=highport, ip=ip)
         outd = {'ns': self.ns,
                 'type': str(srvtype),
-                'addr': self._addr(low=lowport, high=highport, ip=ip),
+                'addr': netloc,
                 'score': random.randint(1, 100),
-                'tags': {'stat.cpu': 1, 'tag.vol': 'test', 'tag.up': True}}
+                'tags': {'stat.cpu': 1, 'tag.vol': 'test',
+                         'tag.up': True, 'tag.id': netloc}}
         if extra_tags:
             outd["tags"].update(extra_tags)
         return outd
