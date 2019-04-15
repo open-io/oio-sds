@@ -21,7 +21,7 @@ from oio.blob.client import BlobClient
 from oio.common.utils import cid_from_name
 from oio.common.constants import OIO_VERSION
 from oio.common.fullpath import encode_fullpath
-from oio.rebuilder.blob_rebuilder import BlobRebuilder
+from oio.blob.rebuilder import BlobRebuilder
 from tests.utils import BaseTestCase, random_str
 from tests.functional.blob import convert_to_old_chunk
 
@@ -83,9 +83,10 @@ class TestBlobRebuilder(BaseTestCase):
 
         conf = self.conf.copy()
         conf['allow_same_rawx'] = True
-        rebuilder = BlobRebuilder(conf, None, chunk_volume)
-        rebuilder_worker = rebuilder._create_worker()
-        rebuilder_worker.chunk_rebuild(self.cid, self.content_id, chunk_id)
+        rebuilder = BlobRebuilder(conf, rawx_id=chunk_volume)
+        rebuilder_worker = rebuilder.create_worker(None)
+        rebuilder_worker._process_item(
+            (self.ns, self.cid, self.content_id, chunk_id))
 
         _, new_chunks = self.api.object_locate(
             self.account, self.container, self.path)

@@ -19,11 +19,11 @@ import time
 import subprocess
 from random import choice
 from oio.api.object_storage import ObjectStorageApi
+from oio.blob.rebuilder import BlobRebuilder
 from oio.container.client import ContainerClient
 from oio.event.beanstalk import Beanstalk
 from oio.event.filters.notify import NotifyFilter
 from tests.utils import BaseTestCase, random_str
-from oio.rebuilder.blob_rebuilder import DEFAULT_REBUILDER_TUBE
 
 
 class _App(object):
@@ -51,10 +51,10 @@ class TestContentRebuildFilter(BaseTestCase):
         queue_addr = choice(self.conf['services']['beanstalkd'])['addr']
         self.queue_url = queue_addr
         self.conf['queue_url'] = 'beanstalk://' + self.queue_url
-        self.conf['tube'] = DEFAULT_REBUILDER_TUBE
+        self.conf['tube'] = BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE
         self.notify_filter = NotifyFilter(app=_App, conf=self.conf)
         bt = Beanstalk.from_url(self.conf['queue_url'])
-        bt.drain_tube(DEFAULT_REBUILDER_TUBE)
+        bt.drain_tube(BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE)
         bt.close()
 
     def _create_event(self, content_name, present_chunks, missing_chunks,
