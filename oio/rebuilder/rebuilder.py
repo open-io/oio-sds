@@ -34,6 +34,10 @@ class Rebuilder(object):
       `_read_retry_queue()`
     """
 
+    DEFAULT_REPORT_INTERVAL = 3600
+    DEFAULT_ITEM_PER_SECOND = 30
+    DEFAULT_WORKERS = 1
+
     def __init__(self, conf, logger, volume, input_file=None, **kwargs):
         # pylint: disable=no-member
         self.conf = conf
@@ -41,7 +45,7 @@ class Rebuilder(object):
         self.namespace = conf['namespace']
         self.volume = volume
         self.input_file = input_file
-        self.nworkers = int_value(conf.get('workers'), 1)
+        self.nworkers = int_value(conf.get('workers'), self.DEFAULT_WORKERS)
         # counters
         self.lock_counters = threading.Lock()
         self.items_processed = 0
@@ -52,7 +56,8 @@ class Rebuilder(object):
         self.lock_report = threading.Lock()
         self.start_time = 0
         self.last_report = 0
-        self.report_interval = int_value(conf.get('report_interval'), 3600)
+        self.report_interval = int_value(conf.get('report_interval'),
+                                         self.DEFAULT_REPORT_INTERVAL)
 
     def rebuilder_pass(self, **kwargs):
         self.start_time = self.last_report = time.time()
@@ -172,7 +177,8 @@ class RebuilderWorker(object):
         self.volume = rebuilder.volume
         self.items_run_time = 0
         self.max_items_per_second = int_value(
-            rebuilder.conf.get('items_per_second'), 30)
+            rebuilder.conf.get('items_per_second'),
+            self.rebuilder.DEFAULT_ITEM_PER_SECOND)
         self.random_wait = rebuilder.conf.get('random_wait')
 
     def update_processed(self, item, info, error=None, **kwargs):
