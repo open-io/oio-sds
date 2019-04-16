@@ -33,7 +33,6 @@ import (
 
 const (
 	uploadBufferSize   int64 = 64 * 1024
-	downloadBufferSize int64 = 64 * 1024
 )
 
 var (
@@ -151,8 +150,7 @@ func (rr *rawxRequest) uploadChunk() {
 		io.Copy(ioutil.Discard, rr.req.Body)
 	} else {
 		out.commit()
-		headers := rr.rep.Header()
-		rr.chunk.fillHeadersLight(&headers)
+		rr.chunk.fillHeadersLight(rr.rep.Header())
 		rr.replyCode(http.StatusCreated)
 		NotifyNew(rr.rawx.notifier, rr.reqid, &rr.chunk)
 	}
@@ -231,7 +229,7 @@ func (rr *rawxRequest) checkChunk() {
 	}
 
 	headers := rr.rep.Header()
-	rr.chunk.fillHeaders(&headers)
+	rr.chunk.fillHeaders(headers)
 	headers.Set("Content-Length", strconv.FormatUint(uint64(in.size()), 10))
 	headers.Set("Accept-Ranges", "bytes")
 
@@ -267,14 +265,11 @@ func (rr *rawxRequest) getRange(chunkSize int64) (rangeInfo, error) {
 
 func (rr *rawxRequest) downloadChunk() {
 	inChunk, err := rr.rawx.repo.get(rr.chunkID)
-	if inChunk != nil {
-		defer inChunk.Close()
-	}
 	if err != nil {
-		LogError("File error: %s", err)
 		rr.replyError(err)
 		return
 	}
+	defer inChunk.Close()
 
 	// Load a possible range in the request
 	// !!!(jfs): we do not manage requests on multiple ranges
@@ -283,67 +278,52 @@ func (rr *rawxRequest) downloadChunk() {
 	chunkSize := inChunk.size()
 	rangeInf, err := rr.getRange(chunkSize)
 	if err != nil {
-		LogError("Range error: %s", err)
 		rr.replyError(err)
 		return
 	}
 
 	if err = rr.chunk.loadAttr(inChunk, rr.chunkID); err != nil {
-		LogError("Load attr error: %s", err)
 		rr.replyError(err)
 		return
 	}
 
 	// Check if there is some compression
-	var in io.ReadCloser
-	var len int
+	in := io.LimitedReader{R: inChunk, N: chunkSize}
+
 	buf := make([]byte, 32, 32)
-	len, err = inChunk.getAttr(AttrNameCompression, buf)
-	if err != nil {
+	if sz, err := inChunk.getAttr(AttrNameCompression, buf); err != nil {
+		// The range is easy to manage with non-compressed chunks
 		if !rangeInf.isVoid() {
 			err = inChunk.seek(rangeInf.offset)
+			in.N = rangeInf.size
 		}
-		in = ioutil.NopCloser(inChunk)
 		err = nil
-	} else if bytes.Equal(buf[:len], attrValueZLib) {
-		//in, err = zlib.NewReader(in)
-		// TODO(jfs): manage the Range offset
-		err = errCompressionNotManaged
 	} else {
-		err = errCompressionNotManaged
-	}
-
-	if in != nil {
-		defer in.Close()
-	}
-	if err != nil {
-		setError(rr.rep, err)
-		rr.replyCode(http.StatusInternalServerError)
-		return
-	}
-
-	// If the range specified a size, let's wrap (again) the input
-	if !rangeInf.isVoid() {
-		in = &limitedReader{sub: in, remaining: rangeInf.size}
+		// TODO(jfs): manage the Range offset
+		if bytes.Equal(buf[:sz], attrValueZLib) {
+			//in, err = zlib.NewReader(in)
+			err = errCompressionNotManaged
+		} else {
+			err = errCompressionNotManaged
+		}
 	}
 
 	headers := rr.rep.Header()
-	rr.chunk.fillHeaders(&headers)
+	rr.chunk.fillHeaders(headers)
 
 	// Prepare the headers of the reply
 	if !rangeInf.isVoid() {
-		rr.rep.Header().Set("Content-Range", fmt.Sprintf("bytes %v-%v/%v",
+		headers.Set("Content-Range", fmt.Sprintf("bytes %v-%v/%v",
 			rangeInf.offset, rangeInf.last, chunkSize))
-		rr.rep.Header().Set("Content-Length", strconv.FormatUint(uint64(rangeInf.size), 10))
+		headers.Set("Content-Length", strconv.FormatUint(uint64(rangeInf.size), 10))
 		rr.replyCode(http.StatusPartialContent)
 	} else {
-		rr.rep.Header().Set("Content-Length", strconv.FormatUint(uint64(chunkSize), 10))
+		headers.Set("Content-Length", strconv.FormatUint(uint64(chunkSize), 10))
 		rr.replyCode(http.StatusOK)
 	}
 
 	// Now transmit the clear data to the client
-	buffer := make([]byte, downloadBufferSize, downloadBufferSize)
-	nb, err := io.CopyBuffer(rr.rep, in, buffer)
+	nb, err := io.Copy(rr.rep, &in)
 	if err == nil {
 		rr.bytesOut = rr.bytesOut + uint64(nb)
 	} else {
