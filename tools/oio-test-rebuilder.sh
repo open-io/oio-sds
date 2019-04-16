@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 CLI=$(which openio)
+ADMIN_CLI=$(which openio-admin)
 CONFIG=$(which oio-test-config.py)
 NAMESPACE=$($CONFIG -n)
 WORKERS=10
@@ -102,7 +103,7 @@ check_and_remove_meta()
   echo "${META_IP_TO_REBUILD} ${META_LOC_TO_REBUILD}"
 }
 
-oio_meta_rebuilder()
+openioadmin_meta_rebuild()
 {
   set -e
 
@@ -148,7 +149,7 @@ oio_meta_rebuilder()
   }
 
   echo ""
-  echo "***** oio-${TYPE}-rebuilder *****"
+  echo "***** openio-admin ${TYPE} rebuild *****"
   echo ""
 
   if [ -n "$2" ] && [ -n "$3" ]; then
@@ -174,8 +175,7 @@ oio_meta_rebuilder()
 
   echo >&2 "Start the rebuilding for ${TYPE} ${META_IP_TO_REBUILD}" \
       "with ${WORKERS} workers"
-  if ! $(which oio-"${TYPE}"-rebuilder) --workers "${WORKERS}" \
-      "${NAMESPACE}"; then
+  if ! $ADMIN_CLI $TYPE rebuild --workers "${WORKERS}"; then
     FAIL=true
   fi
 
@@ -306,12 +306,12 @@ remove_rawx()
   echo "${RAWX_ID_TO_REBUILD} ${RAWX_LOC_TO_REBUILD} ${TOTAL_CHUNKS}"
 }
 
-oio_blob_rebuilder()
+openioadmin_rawx_rebuild()
 {
   set -e
 
   echo ""
-  echo "***** oio-blob-rebuilder *****"
+  echo "***** openio-admin rawx rebuild *****"
   echo ""
 
   if [ -n "$1" ] && [ -n "$2" ] && [ -n "$3" ]; then
@@ -338,15 +338,17 @@ oio_blob_rebuilder()
   BEANSTALKD=$($CONFIG -t beanstalkd)
   MULTIBEANSTALKD=$(test $(echo "${BEANSTALKD}" | wc -l) -gt 1 && echo "true" || echo "false")
   if "${MULTIBEANSTALKD}" = true; then
-    BLOB_REBUILDER_OPTIONS=( --distributed )
+    CLI_ACTION=distrebuild
+    BLOB_REBUILDER_OPTIONS=( )
   else
+    CLI_ACTION=rebuild
     BLOB_REBUILDER_OPTIONS=( --workers "${WORKERS}" )
   fi
 
   echo >&2 "Start the rebuilding for rawx ${RAWX_ID_TO_REBUILD}"
-  if ! $(which oio-blob-rebuilder) "${BLOB_REBUILDER_OPTIONS[@]}" \
-      --volume "${RAWX_ID_TO_REBUILD}" "${NAMESPACE}"; then
-    echo >&2 "oio-blob-rebuilder FAILED"
+  if ! $ADMIN_CLI rawx $CLI_ACTION "${BLOB_REBUILDER_OPTIONS[@]}" \
+      "${RAWX_ID_TO_REBUILD}"; then
+    echo >&2 "openio-admin rawx $CLI_ACTION FAILED"
     FAIL=true
   fi
 
@@ -449,7 +451,7 @@ oio_blob_rebuilder()
   fi
 }
 
-oio_all_rebuilders()
+openioadmin_all_rebuild()
 {
   set -e
 
@@ -492,18 +494,18 @@ oio_all_rebuilders()
 
   /bin/rm -rf "${TMP_VOLUME}"
   /bin/cp -a "${TMP_VOLUME}_meta1" "${TMP_VOLUME}"
-  oio_meta_rebuilder "meta1" "${META1_IP_TO_REBUILD}" "${META1_LOC_TO_REBUILD}"
+  openioadmin_meta_rebuild "meta1" "${META1_IP_TO_REBUILD}" "${META1_LOC_TO_REBUILD}"
 
   /bin/rm -rf "${TMP_VOLUME}"
   /bin/cp -a "${TMP_VOLUME}_meta2" "${TMP_VOLUME}"
-  oio_meta_rebuilder "meta2" "${META2_IP_TO_REBUILD}" "${META2_LOC_TO_REBUILD}"
+  openioadmin_meta_rebuild "meta2" "${META2_IP_TO_REBUILD}" "${META2_LOC_TO_REBUILD}"
 
   /bin/rm -rf "${TMP_VOLUME}"
   /bin/cp -a "${TMP_VOLUME}_rawx" "${TMP_VOLUME}"
-  oio_blob_rebuilder "${RAWX_ID_TO_REBUILD}" "${RAWX_LOC_TO_REBUILD}" "${TOTAL_CHUNKS}"
+  openioadmin_rawx_rebuild "${RAWX_ID_TO_REBUILD}" "${RAWX_LOC_TO_REBUILD}" "${TOTAL_CHUNKS}"
 }
 
-oio_meta_rebuilder "meta1"
-oio_meta_rebuilder "meta2"
-oio_blob_rebuilder
-oio_all_rebuilders
+openioadmin_meta_rebuild "meta1"
+openioadmin_meta_rebuild "meta2"
+openioadmin_rawx_rebuild
+openioadmin_all_rebuild
