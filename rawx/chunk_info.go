@@ -19,7 +19,6 @@ package main
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
@@ -462,14 +461,14 @@ func (chunk *chunkInfo) retrieveTrailers(trailers *http.Header, ul *uploadInfo) 
 	return nil
 }
 
-func setHeader(headers *http.Header, k, v string) {
+func setHeader(headers http.Header, k, v string) {
 	if len(v) > 0 {
 		headers.Set(k, v)
 	}
 }
 
 // Fill the headers of the reply with the attributes of the chunk
-func (chunk *chunkInfo) fillHeaders(headers *http.Header) {
+func (chunk *chunkInfo) fillHeaders(headers http.Header) {
 	setHeader(headers, HeaderNameFullpath, chunk.ContentFullpath)
 	setHeader(headers, HeaderNameContainerID, chunk.ContainerID)
 	setHeader(headers, HeaderNameContentPath, url.PathEscape(chunk.ContentPath))
@@ -487,21 +486,9 @@ func (chunk *chunkInfo) fillHeaders(headers *http.Header) {
 }
 
 // Fill the headers of the reply with the chunk info calculated by the rawx
-func (chunk *chunkInfo) fillHeadersLight(headers *http.Header) {
+func (chunk *chunkInfo) fillHeadersLight(headers http.Header) {
 	setHeader(headers, HeaderNameChunkChecksum, chunk.ChunkHash)
 	setHeader(headers, HeaderNameChunkSize, chunk.ChunkSize)
 	setHeader(headers, HeaderNameXattrVersion, chunk.OioVersion)
 }
 
-func (chunk *chunkInfo) getJSON(rawx *rawxService) string {
-	chunkJSON, _ := json.Marshal(struct {
-		chunkInfo
-		VolumeAddr string `json:"volume_id,omitempty"`
-		VolumeID   string `json:"volume_service_id,omitempty"`
-	}{
-		chunkInfo:  chunkInfo(*chunk),
-		VolumeAddr: rawx.url,
-		VolumeID:   rawx.id,
-	})
-	return string(chunkJSON)
-}
