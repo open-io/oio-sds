@@ -15,13 +15,13 @@
 
 from cliff import lister
 
-from oio.conscience.client import ConscienceClient
-
 
 class BaseCheckCommand(lister.Lister):
     """
     Base class for all check commands.
     """
+
+    SRV = None
 
     def __init__(self, *args, **kwargs):
         super(BaseCheckCommand, self).__init__(*args, **kwargs)
@@ -34,7 +34,7 @@ class BaseCheckCommand(lister.Lister):
         parser.add_argument(
             '--catalog',
             type=str,
-            help="Load catalog from file."
+            help="Load service catalog from file."
         )
         return parser
 
@@ -42,7 +42,7 @@ class BaseCheckCommand(lister.Lister):
         # Load the live services
         self.live = self.load_live_services()
         self.live = tuple(self.live)
-        self.logger.info("Catalog: Loaded %d services", len(self.live))
+        self.logger.info("Catalog: loaded %d services", len(self.live))
         for t, i, p, s in self.live:
             self.logger.debug("live> %s %s %d score=%d", t, i, p, s)
 
@@ -54,7 +54,7 @@ class BaseCheckCommand(lister.Lister):
             for t, i, p, s in self.live:
                 self.catalog.append((t, i, p, s))
         self.catalog = tuple(self.catalog)
-        self.logger.info("Catalog: Loaded %d services", len(self.catalog))
+        self.logger.info("Catalog: loaded %d services", len(self.catalog))
         for t, i, p, s in self.catalog:
             self.logger.debug("catalog> %s %s %d", t, i, p)
 
@@ -65,7 +65,7 @@ class BaseCheckCommand(lister.Lister):
                 yield t, i, p, s
 
     def load_live_services(self):
-        client = ConscienceClient({"namespace": self.app.options.ns})
+        client = self.app.client_manager.conscience
         for srvtype in client.service_types():
             for srv in client.all_services(srvtype):
                 ip, port = srv['addr'].split(':')
@@ -81,8 +81,7 @@ class BaseCheckCommand(lister.Lister):
                     t, i, p = line.split()
                     yield str(t), str(i), int(p), 0
                 except Exception as ex:
-                    self.logger.exception("Failed to loadthe NS services: %s",
-                                          ex)
+                    self.logger.exception("Failed to decode line: %s", ex)
 
     @property
     def logger(self):
@@ -99,6 +98,12 @@ class BaseCheckCommand(lister.Lister):
 
 
 class Meta0Check(BaseCheckCommand):
+    """
+    Check the state of the meta0 services.
+
+    Check registered instances in zookeeper.
+    """
+
     SRV = 'meta0'
 
     def take_action(self, parsed_args):
@@ -106,7 +111,7 @@ class Meta0Check(BaseCheckCommand):
         self.load_catalog(parsed_args)
         import zookeeper
         from oio.zk.client import get_meta0_paths, get_connected_handles
-        self.logger.debug("Checking the META0 services")
+        self.logger.debug("Checking meta0 services")
 
         # TODO: tcp touch to the meta0 services
 
@@ -126,8 +131,8 @@ class Meta0Check(BaseCheckCommand):
                                      len(known), len(registered))
                     assert registered == known
                 except Exception as ex:
-                    self.logger.exception(
-                            "Failed to list the M0 from the ZK: %s", ex)
+                    self.logger.exception("Failed to list the meta0 services "
+                                          "from zookeeper: %s", ex)
                 finally:
                     zh.close()
 
@@ -135,6 +140,11 @@ class Meta0Check(BaseCheckCommand):
 
 
 class Meta1Check(BaseCheckCommand):
+    """
+    Check the state of meta1 services.
+
+    Compare registered instances against deployed instances.
+    """
     SRV = 'meta1'
 
     def take_action(self, parsed_args):
@@ -145,16 +155,24 @@ class Meta1Check(BaseCheckCommand):
         c0 = list(self.filter_services(self.catalog, self.SRV))
         l0 = list(self.filter_services(self.live, self.SRV))
         assert len(c0) == len(l0)
-        self.logger.info("All the META1 are alive")
+        self.logger.info("All meta1 services are alive.")
 
         # They also need a positive score
         for _, _, _, m1_score in l0:
             assert m1_score > 0
-        self.logger.info("All the META1 have a positive score")
+        self.logger.info("All meta1 services have a positive score.")
         return ('Status',), [('Ok', )]
 
 
 class DirCheck(BaseCheckCommand):
+    """
+    Check the directory has been fully bootstraped.
+
+    Check all container prefixes are set, from oioproxy and meta0.
+    Check all meta0 show the same information.
+    Check all meta1 are assigned.
+    """
+
     def take_action(self, parsed_args):
         super(DirCheck, self).take_action(parsed_args)
         self.load_catalog(parsed_args)
@@ -162,13 +180,13 @@ class DirCheck(BaseCheckCommand):
         from oio.directory.meta0 import Meta0Client
         from oio.common.json import json
 
-        self.logger.debug("Checking the directory bootstrap")
+        self.logger.debug("Checking the directory bootstrap.")
 
         # Get an official dump from the proxy, check its size
         m0 = Meta0Client({"namespace": self.app.options.ns})
         prefixes = m0.list()
         assert len(prefixes) == 65536
-        self.logger.info("The proxy serves a full META0 dump")
+        self.logger.info("The proxy serves a full meta0 dump.")
 
         # contact each M0 to perform a check: any "get" command will
         # fail if the meta0 is not complete. Unfortunately we just have
@@ -176,7 +194,7 @@ class DirCheck(BaseCheckCommand):
         for t, i, p, s in self.filter_services(self.catalog, 'meta0'):
             url = '%s:%d' % (i, p)
             subprocess.check_call(['oio-meta0-client', url, 'get', '0000'])
-        self.logger.info("All the META0 are complete")
+        self.logger.info("All meta0 services are complete.")
 
         # contact each meta0 to check that all the dumps are identical
         dump0 = None
@@ -187,7 +205,7 @@ class DirCheck(BaseCheckCommand):
                 dump0 = dump
             else:
                 assert dump0 == dump
-        self.logger.info("All the META0 are the same")
+        self.logger.info("All meta0 services serve the same base.")
 
         # Check all the meta1 are concerned
         reverse_dump = set()
@@ -195,37 +213,45 @@ class DirCheck(BaseCheckCommand):
             for url in v:
                 reverse_dump.add(url)
         m1 = list(self.filter_services(self.catalog, 'meta1'))
+        # FIXME(FVE): this check does not guarantee items are the same
         assert len(m1) == len(reverse_dump)
-        self.logger.info("All the META1 have been assigned")
+        self.logger.info("All meta1 services have been assigned.")
         return ('Status', ), [('Ok', )]
 
 
 class RdirCheck(BaseCheckCommand):
+    """
+    Check rdir services.
+
+    Verify that all rawx and meta2 services are assigned.
+    Check registered rdir services against deployed rdir services.
+    """
+
     def take_action(self, parsed_args):
         super(RdirCheck, self).take_action(parsed_args)
         self.load_catalog(parsed_args)
         from oio.rdir.client import RdirDispatcher
 
-        self.logger.debug("Checking the RDIR services")
+        self.logger.debug("Checking rdir services.")
 
         # Load the assigned rdir services
         client = RdirDispatcher({"namespace": self.app.options.ns})
 
-        # RAWX
+        # rawx
         all_rawx, all_rdir = client.get_assignments('rawx')
         assert not any(r['rdir'] is None for r in all_rawx)
-        self.logger.info("All the RAWX have a RDIR assigned")
+        self.logger.info("All rawx services have an rdir service assigned.")
 
-        # META2
+        # meta2
         all_meta2, all_rdir = client.get_assignments('meta2')
         assert not any(r['rdir'] is None for r in all_meta2)
-        self.logger.info("All the META2 have a RDIR assigned")
+        self.logger.info("All meta2 services have an rdir service assigned.")
 
         # Compare with the number of expected services
         l0 = list(self.filter_services(self.live, 'rdir'))
         c0 = list(self.filter_services(self.catalog, 'rdir'))
         assert len(l0) == len(c0)
         assert len(l0) == len(all_rdir)
-        self.logger.info("All the RDIR are alive")
+        self.logger.info("All rdir services are alive.")
 
         return ('Status', ), [('Ok', )]
