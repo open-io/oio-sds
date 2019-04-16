@@ -365,14 +365,14 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 			}
 			if (err) {
 				metautils_pclose(&fd);
-				GRID_WARN("BEANSTALK error to %s: (%d) %s", q->endpoint,
-						err->code, err->message);
+				GRID_WARN("Beanstalkd error with [%s]: (%d) %s",
+						q->endpoint, err->code, err->message);
 				g_clear_error (&err);
 
 				EXPO_BACKOFF(250 * G_TIME_SPAN_MILLISECOND, attempts_connect, 4);
 				continue;
 			} else {
-				GRID_INFO("BEANSTALKD: connected to %s", q->endpoint);
+				GRID_INFO("Beanstalkd connected to [%s]", q->endpoint);
 				attempts_connect = 0;
 			}
 		}
@@ -384,7 +384,8 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 			if (intercept_errors)
 				(*intercept_errors) (err);
 			if (err) {
-				GRID_WARN("Beanstalkd error [%s]: (%d) %s", q->endpoint, err->code, err->message);
+				GRID_WARN("Beanstalkd error with [%s]: (%d) %s",
+						q->endpoint, err->code, err->message);
 				g_clear_error(&err);
 				EXPO_BACKOFF(250 * G_TIME_SPAN_MILLISECOND, attempts_check, 4);
 				continue;
@@ -416,16 +417,20 @@ _q_run (struct oio_events_queue_s *self, gboolean (*running) (gboolean pending))
 				attempts_put = 0;
 			} else {
 				if (CODE_IS_RETRY(err->code) || CODE_IS_NETWORK_ERROR(err->code)) {
+					GRID_NOTICE("Beanstalkd recoverable error with [%s]: "
+							"(%d) %s", q->endpoint, err->code, err->message);
 					saved = msg;
 					msg = NULL;
 					EXPO_BACKOFF(250 * G_TIME_SPAN_MILLISECOND, attempts_put, 4);
 				} else {
-					GRID_WARN("Unrecoverable error with beanstalkd at [%s]: (%d) %s",
-							q->endpoint, err->code, err->message);
-					GRID_NOTICE("dropped %d %.*s",
+					GRID_WARN("Beanstalkd unrecoverable error with [%s]: "
+							"(%d) %s", q->endpoint, err->code, err->message);
+					GRID_NOTICE("Dropped %d bytes event: %.*s",
 							(int)msglen, (int)MIN(msglen,2048), msg);
 					attempts_put = 0;
 				}
+				/* FIXME(FVE): I think we'd better do the EXPO_BACKOFF after
+				 * closing the socket. */
 				g_clear_error (&err);
 				sock_set_linger(fd, 1, 1);
 				metautils_pclose (&fd);
