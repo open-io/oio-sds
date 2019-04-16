@@ -92,7 +92,6 @@ class BaseCheckCommand(lister.Lister):
         if self._zkcnxstr:
             return self._zkcnxstr
 
-        print(self.app.client_manager.sds_conf['zookeeper'])
         conf = self.app.client_manager.sds_conf
         self._zkcnxstr = conf.get('zookeeper.%s' % self.SRV,
                                   conf.get('zookeeper'))
@@ -211,9 +210,16 @@ class RdirCheck(BaseCheckCommand):
 
         # Load the assigned rdir services
         client = RdirDispatcher({"namespace": self.app.options.ns})
+
+        # RAWX
         all_rawx, all_rdir = client.get_assignments('rawx')
         assert not any(r['rdir'] is None for r in all_rawx)
         self.logger.info("All the RAWX have a RDIR assigned")
+
+        # META2
+        all_meta2, all_rdir = client.get_assignments('meta2')
+        assert not any(r['rdir'] is None for r in all_meta2)
+        self.logger.info("All the META2 have a RDIR assigned")
 
         # Compare with the number of expected services
         l0 = list(self.filter_services(self.live, 'rdir'))
@@ -221,6 +227,5 @@ class RdirCheck(BaseCheckCommand):
         assert len(l0) == len(c0)
         assert len(l0) == len(all_rdir)
         self.logger.info("All the RDIR are alive")
-        return ('Status', ), [('Ok', )]
 
-        # TODO(mbo) Check all the meta2 have a RDIR assigned
+        return ('Status', ), [('Ok', )]
