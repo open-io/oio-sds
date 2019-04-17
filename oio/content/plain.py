@@ -100,5 +100,5 @@ class PlainContent(Content):
             self._add_raw_chunk(current_chunk, spare_url)
         else:
             self._update_spare_chunk(current_chunk, spare_url)
-        self.logger.info('Chunk %s repaired in %s',
-                         chunk_id or chunk_pos, spare_url)
+        self.logger.debug('Chunk %s repaired in %s',
+                          chunk_id or chunk_pos, spare_url)

@@ -131,7 +131,6 @@ def main():
 
     logger = get_logger_from_args(args, default_conf=conf)
 
-    success = False
     try:
         blob_rebuilder = BlobRebuilder(
             conf, input_file=args.input_file, rawx_id=args.volume,
@@ -140,12 +139,21 @@ def main():
             blob_rebuilder.prepare_distributed_dispatcher()
         else:
             blob_rebuilder.prepare_local_dispatcher()
-        success = blob_rebuilder.run()
+        tasks_res = blob_rebuilder.run()
+        for item, _, error in tasks_res:
+            if error:
+                logger.error(
+                    'ERROR while rebuilding chunk %s: %s',
+                    blob_rebuilder.string_from_item(item), error)
+            else:
+                logger.info('Successful rebuilding for chunk %s',
+                            blob_rebuilder.string_from_item(item))
     except KeyboardInterrupt:
         logger.info('Exiting')
     except Exception as exc:
         logger.exception('ERROR in rebuilder: %s', exc)
-    if not success:
+        sys.exit(1)
+    if not blob_rebuilder.is_success():
         sys.exit(1)
 
 

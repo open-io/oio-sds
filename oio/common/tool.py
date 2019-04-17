@@ -45,6 +45,7 @@ class Tool(object):
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
         self.namespace = conf['namespace']
+        self.success = True
 
         # counters
         self.lock_counters = threading.Lock()  # pylint: disable=no-member
@@ -149,10 +150,6 @@ class Tool(object):
         """
         Update all counters of the tool.
         """
-        item, _, error = task_res
-        if error is not None:
-            self.logger.error('ERROR while processing %s: %s',
-                              self.string_from_item(item), error)
         with self.lock_counters:
             self._update_counters(task_res)
 
@@ -188,7 +185,7 @@ class Tool(object):
             finally:
                 self.lock_report.release()
 
-    def create_worker(self, queue):
+    def create_worker(self, queue_workers, queue_reply):
         """
         Create worker to process the items.
         """
@@ -213,8 +210,13 @@ class Tool(object):
         """
         if self.dispatcher is None:
             raise ValueError('No dispatcher')
-        success = self.dispatcher.run()
-        if not success:
+        return self.dispatcher.run()
+
+    def is_success(self):
+        """
+        Check if there are any errors.
+        """
+        if not self.success:
             return False
         if self.total_items_processed == 0:
             self.logger.warn('No item to proccess')
@@ -226,10 +228,11 @@ class ToolWorker(object):
     Process all items given by the tool.
     """
 
-    def __init__(self, conf, tool, queue):
+    def __init__(self, conf, tool, queue_workers, queue_reply):
         self.conf = conf
         self.tool = tool
-        self.queue = queue
+        self.queue_workers = queue_workers
+        self.queue_reply = queue_reply
         self.logger = self.tool.logger
 
         # ratelimit
@@ -244,6 +247,8 @@ class ToolWorker(object):
         raise NotImplementedError()
 
     def _reply_task_res(self, beanstalkd_reply, task_res):
+        self.queue_reply.put(task_res)
+
         if beanstalkd_reply is None:
             return
 
@@ -277,7 +282,10 @@ class ToolWorker(object):
         Starting processing all items given by the tool.
         """
         while True:
-            item, beanstalkd_reply = self.queue.get()
+            item_with_beanstalkd_reply = self.queue_workers.get()
+            if item_with_beanstalkd_reply is None:  # end signal
+                break
+            item, beanstalkd_reply = item_with_beanstalkd_reply
             info = None
             error = None
             try:
@@ -287,7 +295,7 @@ class ToolWorker(object):
             task_res = (item, info, error)
             self.tool.update_counters_with_lock(task_res)
             self._reply_task_res(beanstalkd_reply, task_res)
-            self.queue.task_done()
+            self.queue_workers.task_done()
 
             self.tool.log_report('RUN')
             self.items_run_time = ratelimit(self.items_run_time,
@@ -307,6 +315,7 @@ class _Dispatcher(object):
     def run(self):
         """
         Start dispatching tasks.
+        :returns: the list (generator) of processed tasks
         """
         raise NotImplementedError()
 
@@ -321,11 +330,13 @@ class _LocalDispatcher(_Dispatcher):
 
         nb_workers = int_value(self.conf.get(
             'workers'), self.tool.DEFAULT_WORKERS)
-        self.queue = eventlet.Queue(nb_workers * 64)
+        self.queue_workers = eventlet.Queue(nb_workers * 64)
+        self.queue_reply = eventlet.Queue()
 
         self.workers = list()
         for _ in range(nb_workers):
-            worker = self.tool.create_worker(self.queue)
+            worker = self.tool.create_worker(
+                self.queue_workers, self.queue_reply)
             self.workers.append(worker)
 
     def _fill_queue(self):
@@ -335,34 +346,42 @@ class _LocalDispatcher(_Dispatcher):
         items_with_beanstalkd_reply = \
             self.tool.fetch_items_with_beanstalkd_reply()
         for item_with_beanstalkd_reply in items_with_beanstalkd_reply:
-            self.queue.put(item_with_beanstalkd_reply)
+            self.queue_workers.put(item_with_beanstalkd_reply)
 
-    def _wait_all_items(self):
+    def _fill_queue_and_wait_all_items(self):
         """
-        Wait for all items to be processed.
+        Fill the queue and wait for all items to be processed.
         """
-        self.queue.join()
+        self._fill_queue()
+        self.queue_workers.join()
+        for _ in self.workers:
+            self.queue_workers.put(None)
+        self.queue_reply.put(None)
 
     def run(self):
-        success = False
         self.tool.start_time = self.tool.last_report = time.time()
         self.tool.log_report('START', force=True)
 
         try:
-            with ContextPool(len(self.workers)) as pool:
+            with ContextPool(len(self.workers) + 1) as pool:
                 # spawn workers
                 for worker in self.workers:
                     pool.spawn(worker.run)
+                pool.spawn(self._fill_queue_and_wait_all_items)
 
                 # with the main thread
-                self._fill_queue()
-                self._wait_all_items()
-            success = True
+                while True:
+                    task_res = self.queue_reply.get()
+                    if task_res is None:  # end signal
+                        break
+                    yield task_res
         except Exception:  # pylint: disable=broad-except
             self.logger.exception('ERROR in local dispatcher')
+            self.tool.success = False
 
         self.tool.log_report('DONE', force=True)
-        return success
+        return
+        yield  # pylint: disable=unreachable
 
 
 class _DistributedDispatcher(_Dispatcher):
@@ -507,7 +526,6 @@ class _DistributedDispatcher(_Dispatcher):
             next_worker = _send_task_event(task_event, next_worker)
 
     def run(self):
-        success = False
         self.tool.start_time = self.tool.last_report = time.time()
         self.tool.log_report('START', force=True)
 
@@ -527,13 +545,16 @@ class _DistributedDispatcher(_Dispatcher):
                     timeout=DISTRIBUTED_DISPATCHER_TIMEOUT)
                 for task_res in tasks_res:
                     self.tool.update_counters_with_lock(task_res)
+                    yield task_res
                 self.tool.log_report('RUN')
-            success = True
         except OioTimeout:
             self.logger.error('No response for %d seconds',
                               DISTRIBUTED_DISPATCHER_TIMEOUT)
+            self.tool.success = False
         except Exception:  # pylint: disable=broad-except
             self.logger.exception('ERROR in distributed dispatcher')
+            self.tool.success = False
 
         self.tool.log_report('DONE', force=True)
-        return success
+        return
+        yield  # pylint: disable=unreachable

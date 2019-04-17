@@ -84,7 +84,7 @@ class TestBlobRebuilder(BaseTestCase):
         conf = self.conf.copy()
         conf['allow_same_rawx'] = True
         rebuilder = BlobRebuilder(conf, rawx_id=chunk_volume)
-        rebuilder_worker = rebuilder.create_worker(None)
+        rebuilder_worker = rebuilder.create_worker(None, None)
         rebuilder_worker._process_item(
             (self.ns, self.cid, self.content_id, chunk_id))
 

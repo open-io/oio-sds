@@ -118,7 +118,7 @@ class BlobRebuilder(Tool):
     @staticmethod
     def string_from_item(item):
         namespace, container_id, content_id, chunk_id_or_pos = item
-        return 'chunk %s|%s|%s|%s' % (
+        return '%s|%s|%s|%s' % (
             namespace, container_id, content_id, chunk_id_or_pos)
 
     @staticmethod
@@ -227,8 +227,8 @@ class BlobRebuilder(Tool):
             self.total_expected_chunks = info.get(
                 'chunk', dict()).get('to_rebuild', None)
 
-    def create_worker(self, queue):
-        return BlobRebuilderWorker(self.conf, self, queue)
+    def create_worker(self, queue_workers, queue_reply):
+        return BlobRebuilderWorker(self.conf, self, queue_workers, queue_reply)
 
     def run(self):
         if self.rawx_id:
@@ -245,8 +245,9 @@ class BlobRebuilder(Tool):
 
 class BlobRebuilderWorker(ToolWorker):
 
-    def __init__(self, conf, tool, queue):
-        super(BlobRebuilderWorker, self).__init__(conf, tool, queue)
+    def __init__(self, conf, tool, queue_workers, queue_reply):
+        super(BlobRebuilderWorker, self).__init__(
+            conf, tool, queue_workers, queue_reply)
 
         self.allow_same_rawx = true_value(self.tool.conf.get(
             'allow_same_rawx', self.tool.DEFAULT_ALLOW_SAME_RAWX))
@@ -316,8 +317,8 @@ class BlobRebuilderWorker(ToolWorker):
 
         log_rebuilding = 'Rebuilding %s' % self.tool.string_from_item(item)
         if self.dry_run:
-            self.logger.info('[dryrun] %s' % log_rebuilding)
+            self.logger.debug('[dryrun] %s', log_rebuilding)
             return None
 
-        self.logger.info(log_rebuilding)
+        self.logger.debug(log_rebuilding)
         return self._rebuild_chunk(container_id, content_id, chunk_id_or_pos)
