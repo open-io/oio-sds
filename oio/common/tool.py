@@ -55,7 +55,6 @@ class Tool(object):
         self.total_errors = 0
 
         # report
-        self.lock_report = threading.Lock()  # pylint: disable=no-member
         self.start_time = 0
         self.last_report = 0
         self.report_interval = int_value(self.conf.get(
@@ -175,15 +174,10 @@ class Tool(object):
         Log a report with a fixed interval.
         """
         end_time = time.time()
-        if (force and self.lock_report.acquire()) \
-                or (end_time - self.last_report >= self.report_interval
-                    and self.lock_report.acquire(False)):
-            try:
-                counters = self._update_total_counters_with_lock()
-                self.logger.info(self._get_report(status, end_time, counters))
-                self.last_report = end_time
-            finally:
-                self.lock_report.release()
+        if force or (end_time - self.last_report >= self.report_interval):
+            counters = self._update_total_counters_with_lock()
+            self.logger.info(self._get_report(status, end_time, counters))
+            self.last_report = end_time
 
     def create_worker(self, queue_workers, queue_reply):
         """
@@ -297,7 +291,6 @@ class ToolWorker(object):
             self._reply_task_res(beanstalkd_reply, task_res)
             self.queue_workers.task_done()
 
-            self.tool.log_report('RUN')
             self.items_run_time = ratelimit(self.items_run_time,
                                             self.max_items_per_second)
 
@@ -375,6 +368,8 @@ class _LocalDispatcher(_Dispatcher):
                     if task_res is None:  # end signal
                         break
                     yield task_res
+
+                    self.tool.log_report('RUN')
         except Exception:  # pylint: disable=broad-except
             self.logger.exception('ERROR in local dispatcher')
             self.tool.success = False
