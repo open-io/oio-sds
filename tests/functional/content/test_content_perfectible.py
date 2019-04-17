@@ -45,7 +45,7 @@ class TestPerfectibleContent(BaseTestCase):
         self.api = ObjectStorageApi(self.ns, endpoint=self.uri,
                                     pool_manager=self.http_pool)
         # Ensure the tube is not clogged
-        self.beanstalk.drain_tube(DEFAULT_IMPROVER_TUBE)
+        self.beanstalkd.drain_tube(DEFAULT_IMPROVER_TUBE)
 
     @classmethod
     def tearDownClass(cls):
@@ -88,14 +88,14 @@ class TestPerfectibleContent(BaseTestCase):
         """
         Wait for an event in the oio-improve tube.
         """
-        self.beanstalk.watch(DEFAULT_IMPROVER_TUBE)
+        self.beanstalkd.watch(DEFAULT_IMPROVER_TUBE)
         try:
-            job_id, data = self.beanstalk.reserve(timeout=timeout)
+            job_id, data = self.beanstalkd.reserve(timeout=timeout)
         except ResponseError as exc:
             logging.warn('No event read from tube %s: %s',
                          DEFAULT_IMPROVER_TUBE, exc)
             self.fail()
-        self.beanstalk.delete(job_id)
+        self.beanstalkd.delete(job_id)
         return Event(json.loads(data))
 
     # This test must be executed first
@@ -114,9 +114,9 @@ class TestPerfectibleContent(BaseTestCase):
                                headers={'X-oio-req-id': reqid})
 
         # Wait on the oio-improve beanstalk tube.
-        self.beanstalk.watch(DEFAULT_IMPROVER_TUBE)
+        self.beanstalkd.watch(DEFAULT_IMPROVER_TUBE)
         # Ensure we do not receive any event.
-        self.assertRaises(ResponseError, self.beanstalk.reserve,
+        self.assertRaises(ResponseError, self.beanstalkd.reserve,
                           timeout=REASONABLE_EVENT_DELAY)
 
     def test_upload_warn_dist(self):
@@ -245,8 +245,8 @@ class TestPerfectibleContent(BaseTestCase):
 
         # Wait for the "perfectible" event to be emitted,
         # but do not consume it.
-        job = self.beanstalk.wait_for_ready_job(DEFAULT_IMPROVER_TUBE,
-                                                timeout=REASONABLE_EVENT_DELAY)
+        job = self.beanstalkd.wait_for_ready_job(
+            DEFAULT_IMPROVER_TUBE, timeout=REASONABLE_EVENT_DELAY)
         self.assertIsNotNone(job)
         # "Unlock" the services of the 'rawx-even' slot.
         self._lock_services('rawx', by_slot[banned_slot], score=100)
@@ -258,6 +258,6 @@ class TestPerfectibleContent(BaseTestCase):
             self.account, container, 'perfectible')
         self.assertNotEqual(chunks, new_chunks)
         # Ensure no new "perfectible" event is emitted.
-        job = self.beanstalk.wait_for_ready_job(DEFAULT_IMPROVER_TUBE,
-                                                timeout=REASONABLE_EVENT_DELAY)
+        job = self.beanstalkd.wait_for_ready_job(
+            DEFAULT_IMPROVER_TUBE, timeout=REASONABLE_EVENT_DELAY)
         self.assertIsNone(job)

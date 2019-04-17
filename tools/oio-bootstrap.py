@@ -813,49 +813,49 @@ queue_url=${QUEUE_URL}
 template_event_agent_handlers = """
 [handler:storage.content.new]
 # pipeline = replication
-pipeline = ${WEBHOOK}
+pipeline = ${WEBHOOK} preserve
 
 [handler:storage.content.update]
 # pipeline = replication webhook
-pipeline = ${WEBHOOK}
+pipeline = ${WEBHOOK} preserve
 
 [handler:storage.content.append]
 # pipeline = replication
-pipeline = ${WEBHOOK} noop
+pipeline = ${WEBHOOK} preserve
 
 [handler:storage.content.broken]
-pipeline = content_rebuild
+pipeline = content_rebuild preserve
 
 [handler:storage.content.deleted]
 # pipeline = content_cleaner replication
-pipeline = ${WEBHOOK} content_cleaner
+pipeline = ${WEBHOOK} content_cleaner preserve
 
 [handler:storage.content.drained]
 # pipeline = content_cleaner replication
-pipeline = content_cleaner
+pipeline = content_cleaner preserve
 
 [handler:storage.content.perfectible]
-pipeline = logger content_improve
+pipeline = logger content_improve preserve
 
 [handler:storage.container.new]
 # pipeline = account_update volume_index replication
-pipeline = account_update volume_index
+pipeline = account_update volume_index preserve
 
 [handler:storage.container.deleted]
 # pipeline = account_update volume_index replication
-pipeline = account_update volume_index
+pipeline = account_update volume_index preserve
 
 [handler:storage.container.state]
-pipeline = account_update
+pipeline = account_update preserve
 
 [handler:storage.chunk.new]
-pipeline = volume_index
+pipeline = volume_index preserve
 
 [handler:storage.chunk.deleted]
-pipeline = volume_index
+pipeline = volume_index preserve
 
 [handler:account.services]
-pipeline = account_update volume_index
+pipeline = account_update volume_index preserve
 
 [filter:content_cleaner]
 use = egg:oio#content_cleaner
@@ -897,6 +897,14 @@ use = egg:oio#noop
 
 [filter:logger]
 use = egg:oio#logger
+
+[filter:preserve]
+# Preserve all events in the oio-preserved tube. This filter is intended
+# to be placed at the end of each pipeline, to allow tests to check an
+# event has been handled properly.
+use = egg:oio#notify
+tube = oio-preserved
+queue_url = ${MAIN_QUEUE_URL}
 """
 
 template_conscience_agent = """
@@ -1609,6 +1617,12 @@ def generate(options):
         with open(watch(env), 'w+') as f:
             tpl = Template(template_rdir_watch)
             f.write(tpl.safe_substitute(env))
+
+
+    # For testing purposes, some events must go to the main queue
+    if all_beanstalkd:
+        _, host, port = all_beanstalkd[0]
+        ENV['MAIN_QUEUE_URL'] = 'beanstalk://{0}:{1}'.format(host, port)
 
     # Event agent configuration -> one per beanstalkd
     for num, host, port in all_beanstalkd:

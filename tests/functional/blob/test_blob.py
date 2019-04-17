@@ -761,6 +761,8 @@ class RawxTestSuite(CommonTestCase):
         del headers1[CHUNK_HEADERS['full_path']]
         del headers1[CHUNK_HEADERS['oio_version']]
         del headers2[CHUNK_HEADERS['oio_version']]
+        del headers1["date"]
+        del headers2["date"]
         self.assertDictEqual(headers1, headers2)
         del meta1['full_path']
         del meta1['oio_version']
@@ -794,6 +796,7 @@ class RawxTestSuite(CommonTestCase):
 
         self.assertEqual(data1, data2)
         del headers2[CHUNK_HEADERS['oio_version']]
+        del headers2["date"]
         self.assertDictEqual(headers1, headers2)
         del meta2['oio_version']
         self.assertDictEqual(meta1, meta2)
@@ -856,6 +859,7 @@ class RawxTestSuite(CommonTestCase):
 
         self.assertEqual(data1, data3)
         del headers3[CHUNK_HEADERS['oio_version']]
+        del headers3["date"]
         self.assertDictEqual(headers1, headers3)
         del meta3['oio_version']
         self.assertDictEqual(meta1, meta3)
