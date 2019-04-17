@@ -33,6 +33,7 @@ from oio.common.configuration import load_namespace_conf, set_namespace_options
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.json import json as jsonlib
 from oio.common.green import time
+from oio.event.beanstalk import Beanstalk, ResponseError
 
 random_chars = string.ascii_letters + string.digits
 random_chars_id = 'ABCDEF' + string.digits
@@ -200,8 +201,11 @@ class CommonTestCase(testtools.TestCase):
         queue_addr = random.choice(self.conf['services']['beanstalkd'])['addr']
         self.conf['queue_addr'] = queue_addr
         self.conf['queue_url'] = 'beanstalk://' + queue_addr
+        main_queue_addr = self.conf['services']['beanstalkd'][0]['addr']
+        self.conf['main_queue_url'] = 'beanstalk://' + main_queue_addr
         self._admin = None
         self._beanstalk = None
+        self._beanstalkd0 = None
         self._conscience = None
         self._http_pool = None
         self._storage_api = None
@@ -245,11 +249,16 @@ class CommonTestCase(testtools.TestCase):
         return self._admin
 
     @property
-    def beanstalk(self):
+    def beanstalkd(self):
         if not self._beanstalk:
-            from oio.event.beanstalk import Beanstalk
             self._beanstalk = Beanstalk.from_url(self.conf['queue_url'])
         return self._beanstalk
+
+    @property
+    def beanstalkd0(self):
+        if not self._beanstalkd0:
+            self._beanstalkd0 = Beanstalk.from_url(self.conf['main_queue_url'])
+        return self._beanstalkd0
 
     @property
     def storage(self):
@@ -468,3 +477,29 @@ class BaseTestCase(CommonTestCase):
             time.sleep(1)
         logging.info('Service(s) fails to reach %d score (timeout %d)',
                      score_threshold, timeout)
+
+    def wait_for_event(self, tube, reqid=None, type_=None,
+                       timeout=30.0):
+        """
+        Wait for an event in the specified tube.
+        If reqid and/or type_ are specified, drain events until the specified
+        event is found.
+        """
+        self.beanstalkd0.wait_for_ready_job(tube, timeout=timeout)
+        self.beanstalkd0.watch(tube)
+        now = time.time()
+        deadline = now + timeout
+        try:
+            job_id = True
+            while now < deadline:
+                to = max(0.0, deadline - now)
+                job_id, data = self.beanstalkd0.reserve(timeout=to)
+                edata = jsonlib.loads(data)
+                self.beanstalkd0.delete(job_id)
+                if not type_ or edata['event'] == type_:
+                    if not reqid or edata.get('request_id') == reqid:
+                        return edata
+                now = time.time()
+        except ResponseError as err:
+            logging.info('%s', err)
+        return None
