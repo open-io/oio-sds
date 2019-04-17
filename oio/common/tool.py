@@ -48,7 +48,6 @@ class Tool(object):
         self.success = True
 
         # counters
-        self.lock_counters = threading.Lock()  # pylint: disable=no-member
         self.items_processed = 0
         self.total_items_processed = 0
         self.errors = 0
@@ -139,18 +138,14 @@ class Tool(object):
             return self._fetch_items_with_beanstalkd_reply_from_beanstalkd()
         return self._fetch_items_with_beanstalkd_reply()
 
-    def _update_counters(self, task_res):
+    def update_counters(self, task_res):
+        """
+        Update all counters of the tool.
+        """
         _, _, error = task_res
         self.items_processed += 1
         if error is not None:
             self.errors += 1
-
-    def update_counters_with_lock(self, task_res):
-        """
-        Update all counters of the tool.
-        """
-        with self.lock_counters:
-            self._update_counters(task_res)
 
     def _update_total_counters(self):
         items_processed = self.items_processed
@@ -162,10 +157,6 @@ class Tool(object):
         return items_processed, self.total_items_processed, \
             errors, self.total_errors
 
-    def _update_total_counters_with_lock(self):
-        with self.lock_counters:
-            return self._update_total_counters()
-
     def _get_report(self, status, end_time, counters):
         raise NotImplementedError()
 
@@ -175,7 +166,7 @@ class Tool(object):
         """
         end_time = time.time()
         if force or (end_time - self.last_report >= self.report_interval):
-            counters = self._update_total_counters_with_lock()
+            counters = self._update_total_counters()
             self.logger.info(self._get_report(status, end_time, counters))
             self.last_report = end_time
 
@@ -282,7 +273,6 @@ class ToolWorker(object):
             except Exception as exc:  # pylint: disable=broad-except
                 error = str(exc)
             task_res = (item, info, error)
-            self.tool.update_counters_with_lock(task_res)
             self._reply_task_res(beanstalkd_reply, task_res)
             self.queue_workers.task_done()
 
@@ -364,8 +354,8 @@ class _LocalDispatcher(_Dispatcher):
                     task_res = self.queue_reply.get()
                     if task_res is None:  # end signal
                         break
+                    self.tool.update_counters(task_res)
                     yield task_res
-
                     self.tool.log_report('RUN')
         except Exception:  # pylint: disable=broad-except
             self.logger.exception('ERROR in local dispatcher')
@@ -536,7 +526,7 @@ class _DistributedDispatcher(_Dispatcher):
                     self._tasks_res_from_res_event,
                     timeout=DISTRIBUTED_DISPATCHER_TIMEOUT)
                 for task_res in tasks_res:
-                    self.tool.update_counters_with_lock(task_res)
+                    self.tool.update_counters(task_res)
                     yield task_res
                 self.tool.log_report('RUN')
         except OioTimeout:
