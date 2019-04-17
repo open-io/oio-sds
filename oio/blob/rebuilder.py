@@ -161,8 +161,8 @@ class BlobRebuilder(Tool):
             yield  # pylint: disable=unreachable
         return _empty_generator()
 
-    def _update_counters(self, task_res):
-        super(BlobRebuilder, self)._update_counters(task_res)
+    def update_counters(self, task_res):
+        super(BlobRebuilder, self).update_counters(task_res)
         _, bytes_processed, _ = task_res
         if bytes_processed is not None:
             self.bytes_processed += bytes_processed
