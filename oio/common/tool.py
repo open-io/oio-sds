@@ -229,11 +229,6 @@ class ToolWorker(object):
         self.queue_reply = queue_reply
         self.logger = self.tool.logger
 
-        # ratelimit
-        self.items_run_time = 0
-        self.max_items_per_second = int_value(self.conf.get(
-            'items_per_second'), self.tool.DEFAULT_ITEM_PER_SECOND)
-
         # reply
         self.beanstalkd_reply = None
 
@@ -291,9 +286,6 @@ class ToolWorker(object):
             self._reply_task_res(beanstalkd_reply, task_res)
             self.queue_workers.task_done()
 
-            self.items_run_time = ratelimit(self.items_run_time,
-                                            self.max_items_per_second)
-
 
 class _Dispatcher(object):
     """
@@ -323,7 +315,9 @@ class _LocalDispatcher(_Dispatcher):
 
         nb_workers = int_value(self.conf.get(
             'workers'), self.tool.DEFAULT_WORKERS)
-        self.queue_workers = eventlet.Queue(nb_workers * 64)
+        self.max_items_per_second = int_value(self.conf.get(
+            'items_per_second'), self.tool.DEFAULT_ITEM_PER_SECOND)
+        self.queue_workers = eventlet.Queue(nb_workers * 2)
         self.queue_reply = eventlet.Queue()
 
         self.workers = list()
@@ -336,9 +330,12 @@ class _LocalDispatcher(_Dispatcher):
         """
         Fill the queue.
         """
+        items_run_time = 0
         items_with_beanstalkd_reply = \
             self.tool.fetch_items_with_beanstalkd_reply()
         for item_with_beanstalkd_reply in items_with_beanstalkd_reply:
+            items_run_time = ratelimit(items_run_time,
+                                       self.max_items_per_second)
             self.queue_workers.put(item_with_beanstalkd_reply)
 
     def _fill_queue_and_wait_all_items(self):

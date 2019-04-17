@@ -71,7 +71,7 @@ tube for broken chunks events.
              '(default=%d)' % BlobRebuilder.DEFAULT_WORKERS)
     parser.add_argument(
         '--chunks-per-second', type=int,
-        help='Max chunks per second per worker. '
+        help='Max chunks per second. '
              '(default=%d)' % BlobRebuilder.DEFAULT_ITEM_PER_SECOND)
     parser.add_argument(
         '--dry-run', action='store_true',
