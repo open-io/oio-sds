@@ -34,29 +34,17 @@ class ServiceListCommand(lister.Lister):
         from oio.cli.common.utils import ValueFormatStoreTrueAction
         parser = super(ServiceListCommand, self).get_parser(prog_name)
         parser.add_argument(
+            'service_id',
+            metavar='<service_id>',
+            help='ID of the service to query.'
+        )
+        parser.add_argument(
             '--no-paging',
             dest='no_paging',
             default=False,
             help=("List all elements without paging "
                   "(and set output format to 'value')"),
             action=ValueFormatStoreTrueAction,
-        )
-        parser.add_argument(
-            '--prefix',
-            metavar='<prefix>',
-            help='Filter list using <prefix>'
-        )
-        parser.add_argument(
-            '--marker',
-            metavar='<marker>',
-            help='Marker for paging'
-        )
-        parser.add_argument(
-            '--limit',
-            metavar='<limit>',
-            type=int,
-            default=1000,
-            help='Limit the number of objects returned (1000 by default)'
         )
         return parser
 
@@ -100,59 +88,76 @@ class ServiceListCommand(lister.Lister):
 class RawxListContainers(ServiceListCommand):
     """
     Get the names of all containers which have some chunks stored on the
-    specified rawx
+    specified rawx service.
     """
     reqid_prefix = 'ACLI-RLC-'
 
-    def _list_containers(self, rawx):
+    def _list_containers(self, rawx, translate=False):
         reqid = self.app.request_id(self.reqid_prefix)
-        info = self.rdir.status(rawx, reqid=reqid)
-        containers = info.get('container')
-        result = {self.translate_cid(cid=k): v['total']
-                  for k, v in containers.iteritems()}
-        result['Total'] = info.get('chunk')['total']
-        return result.iteritems()
+        status = self.rdir.status(rawx, reqid=reqid)
+        containers = status.get('container')
+        trans = self.translate_cid if translate else lambda x: x
+        for cid, info in containers.iteritems():
+            yield trans(cid), info['total']
+        yield 'Total', status['chunk']['total']
 
     def get_parser(self, prog_name):
         parser = super(RawxListContainers, self).get_parser(prog_name)
         parser.add_argument(
-            'rawx_id',
-            metavar='<rawx_id>',
-            help='ID of the rawx service',
+            '--no-translation',
+            action='store_true',
+            help=("Do not translate container ID to "
+                  "account and container names")
         )
         return parser
 
     def take_action(self, parsed_args):
         super(RawxListContainers, self).take_action(parsed_args)
-        return ('Name', 'Chunks'), self._list_containers(parsed_args.rawx_id)
+        return (('Name', 'Chunks'),
+                self._list_containers(
+                    parsed_args.service_id,
+                    translate=not parsed_args.no_translation))
 
 
 class Meta2ListContainers(ServiceListCommand):
     """
-    Get the names of all containers which are in the specified meta2
+    Get the names of all containers which are hosted by the specified meta2
+    service.
     """
     reqid_prefix = 'ACLI-M2LC-'
 
     def get_parser(self, prog_name):
         parser = super(Meta2ListContainers, self).get_parser(prog_name)
         parser.add_argument(
-            'meta2_id',
-            metavar='<meta2_id>',
-            help='ID of the meta2 service'
+            '--limit',
+            metavar='<limit>',
+            type=int,
+            default=1000,
+            help='Limit the number of results (1000 by default)'
+        )
+        parser.add_argument(
+            '--marker',
+            metavar='<marker>',
+            help='Marker for paging.'
+        )
+        parser.add_argument(
+            '--prefix',
+            metavar='<prefix>',
+            help='Filter the output list using <prefix>.'
         )
         return parser
 
     def _list_all_containers(self, meta2, prefix=None):
         reqid = self.app.request_id(self.reqid_prefix)
-        for r in self.rdir.meta2_index_fetch_all(
+        for item in self.rdir.meta2_index_fetch_all(
                 meta2, prefix=prefix, reqid=reqid):
-            yield r['container_url']
+            yield item['container_url']
 
     def _list_containers(self, meta2, **kwargs):
         reqid = self.app.request_id(self.reqid_prefix)
-        resp = self.rdir.meta2_index_fetch(meta2,  reqid=reqid, **kwargs)
-        for r in resp.get('records'):
-            yield r['container_url']
+        resp = self.rdir.meta2_index_fetch(meta2, reqid=reqid, **kwargs)
+        for item in resp.get('records'):
+            yield item['container_url']
 
     def take_action(self, parsed_args):
         super(Meta2ListContainers, self).take_action(parsed_args)
@@ -165,8 +170,9 @@ class Meta2ListContainers(ServiceListCommand):
             kwargs['limit'] = parsed_args.limit
 
         if parsed_args.no_paging:
-            containers = self._list_all_containers(parsed_args.meta2_id,
+            containers = self._list_all_containers(parsed_args.service_id,
                                                    prefix=parsed_args.prefix)
         else:
-            containers = self._list_containers(parsed_args.meta2_id, **kwargs)
+            containers = self._list_containers(parsed_args.service_id,
+                                               **kwargs)
         return ('Name',), ((v,) for v in containers)
