@@ -92,8 +92,8 @@ class ECContent(Content):
             self._add_raw_chunk(current_chunk, spare_url[0])
         else:
             self._update_spare_chunk(current_chunk, spare_url[0])
-        self.logger.info('Chunk %s repaired in %s',
-                         chunk_id or chunk_pos, spare_url[0])
+        self.logger.debug('Chunk %s repaired in %s',
+                          chunk_id or chunk_pos, spare_url[0])
 
     def fetch(self):
         chunks = _sort_chunks(self.chunks.raw(), self.storage_method.ec)
