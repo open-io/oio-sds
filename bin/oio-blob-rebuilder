@@ -75,7 +75,8 @@ tube for broken chunks events.
              '(default=%d)' % BlobRebuilder.DEFAULT_ITEM_PER_SECOND)
     parser.add_argument(
         '--dry-run', action='store_true',
-        help='Display actions but do nothing. '
+        help='Display actions but do nothing '
+             '(--distributed is ignored). '
              '(default=%s)' % BlobRebuilder.DEFAULT_DRY_RUN)
     parser.add_argument(
         '--delete-faulty-chunks', action='store_true',
@@ -96,8 +97,7 @@ tube for broken chunks events.
         help='Send broken chunks to beanstalkd tubes '
              'instead of rebuilding them locally '
              '(the following options are ignored: '
-             '--dry-run, --workers, --chunks-per-second, '
-             '--delete-faulty-chunks).')
+             '--workers, --chunks-per-second, --delete-faulty-chunks).')
     parser.add_argument(
         '--distributed-tube',
         help='The beanstalkd tube to use to send the broken chunks. '
@@ -135,7 +135,7 @@ def main():
         blob_rebuilder = BlobRebuilder(
             conf, input_file=args.input_file, rawx_id=args.volume,
             beanstalkd_addr=args.beanstalkd, logger=logger)
-        if args.distributed:
+        if args.distributed and not args.dry_run:
             blob_rebuilder.prepare_distributed_dispatcher()
         else:
             blob_rebuilder.prepare_local_dispatcher()
