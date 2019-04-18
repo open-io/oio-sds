@@ -61,8 +61,6 @@ if __name__ == '__main__':
     meta2 = Meta2Database({'namespace': args.namespace})
     moved = meta2.move(args.base, args.src, dst=args.dst)
 
-    if moved is None:
-        sys.exit(1)
     return_code = 0
     for res in moved:
         if res['err'] is None:

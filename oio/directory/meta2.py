@@ -95,8 +95,7 @@ class Meta2Database(object):
         else:
             return (base.ljust(64, '0'), None)
 
-    # FIXME(ADU): this is totally unclear
-    def _load_peers(self, base):
+    def _get_bases_seq(self, base):
         base_seqs = dict()
         cid, seq = self.get_cid_and_seq(base)
         linked_services = self.directory.list(cid=cid)
@@ -115,14 +114,14 @@ class Meta2Database(object):
         for bseq, services in base_seqs.items():
             self.services_by_base[bseq] = services
             # FIXME(adu): Check nb of peers
-            yield bseq, None
+            yield bseq
 
-    def _get_peers(self, base):
-        return self.services_by_base[base].keys()
+    def _get_peers(self, bseq):
+        return self.services_by_base[bseq].keys()
 
-    def _set_peers(self, base, src, dst):
-        cid, _ = self.get_cid_and_seq(base)
-        current_peers = self._get_peers(base)
+    def _set_peers(self, bseq, src, dst):
+        cid, _ = self.get_cid_and_seq(bseq)
+        current_peers = self._get_peers(bseq)
         new_peers = [v for v in current_peers if v != src]
         new_peers.append(dst)
 
@@ -132,16 +131,16 @@ class Meta2Database(object):
                                  current_peers, new_peers))
 
         self.logger.debug(
-            "Setting peers (base=%s new_peers=%s)", base, new_peers)
+            "Setting peers (base=%s new_peers=%s)", bseq, new_peers)
         self.admin.set_peers(self.service_type, cid=cid, peers=new_peers)
-        self.services_by_base[base][dst] = self.services_by_base[base].pop(src)
+        self.services_by_base[bseq][dst] = self.services_by_base[bseq].pop(src)
 
-    def _get_args(self, base):
-        for _host, service in self.services_by_base[base].items():
+    def _get_args(self, bseq):
+        for _host, service in self.services_by_base[bseq].items():
             return service['args']
 
-    def _check_src_service(self, base, src):
-        peers = self._get_peers(base)
+    def _check_src_service(self, bseq, src):
+        peers = self._get_peers(bseq)
 
         if src not in peers:
             raise ValueError(
@@ -150,8 +149,8 @@ class Meta2Database(object):
     def _get_service_full_id(self, service):
         return self.conf['namespace'] + "|" + self.service_type + "|" + service
 
-    def _check_dst_service(self, base, src, dst):
-        peers = self._get_peers(base)
+    def _check_dst_service(self, bseq, src, dst):
+        peers = self._get_peers(bseq)
 
         if dst is None:
             known = [self._get_service_full_id(v) for v in peers if v != src]
@@ -163,10 +162,10 @@ class Meta2Database(object):
                     'tag.service_id', None)
                 if dst is None:
                     dst = services_found[0]['addr']
-            except Exception as exc:
+            except Exception as exc:  # pylint: disable=broad-except
                 self.logger.error(
                     "Failed to poll service (base=%s src=%s peers=%s known=%s "
-                    "avoid=%s): %s", base, peers, src, known, avoid, exc)
+                    "avoid=%s): %s", bseq, peers, src, known, avoid, exc)
                 raise
 
         if dst in peers:
@@ -177,11 +176,11 @@ class Meta2Database(object):
                 "Destination service must be a %s service" % self.service_type)
         return dst
 
-    def _has_base(self, base, src, dst):
+    def _has_base(self, bseq):
         """
         Check which of the old peers actually host the database.
         """
-        cid, _ = self.get_cid_and_seq(base)
+        cid, _ = self.get_cid_and_seq(bseq)
         peers_to_copy_from = list()
         master = None
 
@@ -191,8 +190,8 @@ class Meta2Database(object):
                 peers_to_copy_from.append(service)
                 continue
             self.logger.warn(
-                "Missing base (base=%s src=%s dst=%s service=%s "
-                "status=%s)", base, src, dst, service, status)
+                "Missing base (base=%s service=%s status=%s)",
+                bseq, service, status)
 
         if not peers_to_copy_from:
             raise ValueError("No base to copy")
@@ -203,17 +202,16 @@ class Meta2Database(object):
                 if status['status']['status'] == 200:
                     master = service
                     break
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-except
             self.logger.warn(
-                "Failed to get election status (base=%s src=%s dst=%s): %s",
-                base, src, dst, exc)
+                "Failed to get election status (base=%s): %s", bseq, exc)
 
         if master is None:
             self.logger.warn("No master")
         elif master not in peers_to_copy_from:
             self.logger.warn(
                 "Master service %s for %s does not host the base!",
-                master, base)
+                master, bseq)
         else:
             # Prefer to copy the master
             peers_to_copy_from.remove(master)
@@ -222,28 +220,28 @@ class Meta2Database(object):
 
         return peers_to_copy_from
 
-    def _copy_base(self, base, src, dst, peers_to_copy_from):
-        cid, _ = self.get_cid_and_seq(base)
+    def _copy_base(self, bseq, dst, peers_to_copy_from):
+        cid, _ = self.get_cid_and_seq(bseq)
 
         for true_src in peers_to_copy_from:
             self.logger.debug(
-                "Copying base (base=%s src=%s dst=%s true_src=%s)",
-                base, src, dst, true_src)
+                "Copying base (base=%s true_src=%s dst=%s)",
+                bseq, true_src, dst)
             try:
                 self.admin.copy_base_from(
                     self.service_type, cid=cid, svc_from=true_src, svc_to=dst)
                 break
-            except Exception as exc:
+            except Exception as exc:  # pylint: disable=broad-except
                 self.logger.warn(
-                    "Failed to copy base (base=%s src=%s dst=%s true_src=%s): "
-                    "%s", base, src, dst, true_src, exc)
+                    "Failed to copy base (base=%s true_src=%s dst=%s): %s",
+                    bseq, true_src, dst, exc)
                 if true_src == peers_to_copy_from[-1]:
                     raise
 
-    def _link_service(self, base, src, dst):
-        cid, seq = self.get_cid_and_seq(base)
-        peers = self._get_peers(base)
-        args = self._get_args(base)
+    def _link_service(self, bseq, src, dst):
+        cid, seq = self.get_cid_and_seq(bseq)
+        peers = self._get_peers(bseq)
+        args = self._get_args(bseq)
 
         self.directory.force(
             cid=cid, replace=True, service_type=self.service_type,
@@ -258,27 +256,27 @@ class Meta2Database(object):
         if self.service_type == 'meta2':
             self.rdir.meta2_index_delete(volume_id=src, container_id=cid)
 
-    def _reset_election(self, base, src, dst):
+    def _reset_election(self, bseq, src, dst):
         """
         Reset the election, try to remove `base` from its old host,
         then trigger an election with the new peers.
         """
-        cid, _ = self.get_cid_and_seq(base)
-        peers = self._get_peers(base)
+        cid, _ = self.get_cid_and_seq(bseq)
+        peers = self._get_peers(bseq)
 
         if src in peers:
             raise ValueError("Source service is already among the peers")
 
         self.logger.debug(
-            "Resetting election (base=%s src=%s dst=%s)", base, src, dst)
+            "Resetting election (base=%s src=%s dst=%s)", bseq, src, dst)
         self.admin.election_leave(self.service_type, cid=cid)
 
         try:
             self.admin.remove_base(self.service_type, cid=cid, service_id=src)
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-except
             self.logger.warn(
                 "Failed to remove source base (base=%s src=%s dst=%s): %s",
-                base, src, dst, exc)
+                bseq, src, dst, exc)
 
         try:
             election = self.admin.election_status(self.service_type, cid=cid)
@@ -287,65 +285,65 @@ class Meta2Database(object):
                     continue
                 self.logger.warn(
                     "Election not started (base=%s src=%s dst=%s service=%s "
-                    "status=%s)", base, src, dst, service, status)
-        except Exception as exc:
+                    "status=%s)", bseq, src, dst, service, status)
+        except Exception as exc:  # pylint: disable=broad-except
             self.logger.warn(
                 "Failed to get election status (base=%s src=%s dst=%s): %s",
-                base, src, dst, exc)
+                bseq, src, dst, exc)
 
-    def _safe_move(self, base, src, dst):
+    def _safe_move(self, bseq, src, dst):
         err = None
         try:
-            self._check_src_service(base, src)
-            dst = self._check_dst_service(base, src, dst)
+            self._check_src_service(bseq, src)
+            dst = self._check_dst_service(bseq, src, dst)
 
             self.logger.debug(
-                "Moving base (base=%s src=%s dst=%s)", base, src, dst)
+                "Moving base (base=%s src=%s dst=%s)", bseq, src, dst)
 
             try:
-                self.logger.debug("Step 1: check sources.")
-                peers_to_copy_from = self._has_base(base, src, dst)
-            except Exception as exc:
+                self.logger.debug("Step 1: check available bases.")
+                peers_to_copy_from = self._has_base(bseq)
+            except Exception as exc:  # pylint: disable=broad-except
                 self.logger.error(
                     "Failed to check if each peer exists (base=%s src=%s "
-                    "dst=%s): %s", base, src, dst, exc)
+                    "dst=%s): %s", bseq, src, dst, exc)
                 raise
             try:
                 self.logger.debug("Step 2: set the new peers in the base.")
-                self._set_peers(base, src, dst)
-            except Exception as exc:
+                self._set_peers(bseq, src, dst)
+            except Exception as exc:  # pylint: disable=broad-except
                 self.logger.error(
                     "Failed to set new peers (base=%s src=%s dst=%s): %s",
-                    base, src, dst, exc)
+                    bseq, src, dst, exc)
                 raise
             try:
                 self.logger.debug("Step 3: copy the database.")
-                self._copy_base(base, src, dst, peers_to_copy_from)
-            except Exception as exc:
+                self._copy_base(bseq, dst, peers_to_copy_from)
+            except Exception as exc:  # pylint: disable=broad-except
                 self.logger.error(
                     "Failed to copy base (base=%s src=%s dst=%s): %s",
-                    base, src, dst, exc)
+                    bseq, src, dst, exc)
                 raise
             try:
                 self.logger.debug("Step 4: set the peers in meta1.")
-                self._link_service(base, src, dst)
-            except Exception as exc:
+                self._link_service(bseq, src, dst)
+            except Exception as exc:  # pylint: disable=broad-except
                 self.logger.error(
                     "Failed to link service (base=%s src=%s dst=%s): %s",
-                    base, src, dst, exc)
+                    bseq, src, dst, exc)
                 raise
             try:
                 self.logger.debug("Step 5: reset the election.")
-                self._reset_election(base, src, dst)
-            except Exception as exc:
+                self._reset_election(bseq, src, dst)
+            except Exception as exc:  # pylint: disable=broad-except
                 self.logger.error(
                     "Failed to reset election (base=%s src=%s dst=%s): %s",
-                    base, src, dst, exc)
+                    bseq, src, dst, exc)
                 raise
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-except
             self.logger.error(
                 "Failed to move base (base=%s src=%s dst=%s): %s",
-                base, src, dst, exc)
+                bseq, src, dst, exc)
             err = exc
         return dst, err
 
@@ -357,26 +355,17 @@ class Meta2Database(object):
         self.reset_peers()
 
         try:
-            bases_with_error = self._load_peers(base)
-            # FIXME(ADU): this is totally unclear
-            if bases_with_error is None:
-                raise ValueError("No peers")
-        except Exception as exc:
+            bases_seq = self._get_bases_seq(base)
+        except Exception as exc:  # pylint: disable=broad-except
             self.logger.error(
                 "Failed to load peers (base=%s src=%s dst=%s): %s",
                 base, src, dst, exc)
             yield {'base': base, 'src': src, 'dst': dst, 'err': exc}
             return
 
-        for bseq, err in bases_with_error:
-            _dst = dst
-            if err is None:
-                _dst, err = self._safe_move(bseq, src, dst)
+        for bseq in bases_seq:
+            _dst, err = self._safe_move(bseq, src, dst)
             yield {'base': bseq, 'src': src, 'dst': _dst, 'err': err}
-
-    def decommission(self, base, src, dst=None):
-        self.reset_peers()
-        raise NotImplementedError()
 
     def rebuild(self, base):
         self.reset_peers()
