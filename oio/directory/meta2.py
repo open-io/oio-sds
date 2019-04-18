@@ -367,6 +367,54 @@ class Meta2Database(object):
             _dst, err = self._safe_move(bseq, src, dst)
             yield {'base': bseq, 'src': src, 'dst': _dst, 'err': err}
 
+    def _safe_rebuild(self, bseq):
+        err = None
+        try:
+            self.logger.debug("Rebuilding base (base=%s)")
+
+            try:
+                self.logger.debug("Step 1: check available bases.")
+                available_bases = self._has_base(bseq)
+            except Exception as exc:  # pylint: disable=broad-except
+                self.logger.error(
+                    "Failed to check if each peer exists (base=%s): %s",
+                    bseq, exc)
+                raise
+            exceptions = list()
+            missing_bases = [x for x in self._get_peers(bseq)
+                             if x not in available_bases]
+            if missing_bases:
+                self.logger.debug("Step 2: copy the database.")
+            for dst in missing_bases:
+                try:
+                    self._copy_base(bseq, dst, available_bases)
+                except Exception as exc:  # pylint: disable=broad-except
+                    self.logger.error(
+                        "Failed to copy base (base=%s dst=%s): %s",
+                        bseq, dst, exc)
+                    exceptions.append(exc)
+            if exceptions:
+                raise Exception(exceptions)
+        except Exception as exc:  # pylint: disable=broad-except
+            self.logger.error(
+                "Failed to rebuild base (base=%s): %s", bseq, exc)
+            err = exc
+        return err
+
     def rebuild(self, base):
+        """
+        Rebuild a database.
+        """
         self.reset_peers()
-        raise NotImplementedError()
+
+        try:
+            bases_seq = self._get_bases_seq(base)
+        except Exception as exc:  # pylint: disable=broad-except
+            self.logger.error(
+                "Failed to load peers (base=%s): %s", base, exc)
+            yield {'base': base, 'err': exc}
+            return
+
+        for bseq in bases_seq:
+            err = self._safe_rebuild(bseq)
+            yield {'base': bseq, 'err': err}
