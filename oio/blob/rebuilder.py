@@ -17,11 +17,10 @@
 from datetime import datetime
 from socket import gethostname
 
+from oio.blob.operator import ChunkOperator
 from oio.common.easy_value import int_value, true_value
-from oio.common.exceptions import ContentNotFound, NotFound, OrphanChunk
 from oio.common.green import time
 from oio.common.tool import Tool, ToolWorker
-from oio.content.factory import ContentFactory
 from oio.event.evob import EventTypes
 from oio.rdir.client import RdirClient
 
@@ -243,58 +242,7 @@ class BlobRebuilderWorker(ToolWorker):
         self.dry_run = true_value(self.tool.conf.get(
             'dry_run', self.tool.DEFAULT_DRY_RUN))
 
-        self.rdir_client = self.tool.rdir_client
-        self.content_factory = ContentFactory(
-            self.tool.conf, logger=self.logger)
-
-    def _rebuild_chunk(self, container_id, content_id, chunk_id_or_pos):
-        """
-        Try to find the chunk in the metadata of the specified object,
-        then rebuild it.
-        """
-        try:
-            content = self.content_factory.get(container_id, content_id)
-        except ContentNotFound:
-            raise OrphanChunk('Content not found: possible orphan chunk')
-
-        chunk_size = 0
-        chunk_pos = None
-        if len(chunk_id_or_pos) < 32:
-            chunk_pos = chunk_id_or_pos
-            chunk_id = None
-            metapos = int(chunk_pos.split('.', 1)[0])
-            chunk_size = content.chunks.filter(metapos=metapos).all()[0].size
-        else:
-            if '/' in chunk_id_or_pos:
-                chunk_id = chunk_id_or_pos.rsplit('/', 1)[-1]
-            else:
-                chunk_id = chunk_id_or_pos
-
-            chunk = content.chunks.filter(id=chunk_id).one()
-            if chunk is None:
-                raise OrphanChunk(
-                    'Chunk not found in content: possible orphan chunk')
-            elif self.tool.rawx_id and chunk.host != self.tool.rawx_id:
-                raise ValueError('Chunk does not belong to this rawx')
-            chunk_size = chunk.size
-
-        content.rebuild_chunk(
-            chunk_id, allow_same_rawx=self.allow_same_rawx,
-            chunk_pos=chunk_pos)
-
-        if self.try_chunk_delete:
-            try:
-                content.blob_client.chunk_delete(chunk.url)
-                self.logger.info("Chunk %s deleted", chunk.url)
-            except NotFound as exc:
-                self.logger.debug("Chunk %s: %s", chunk.url, exc)
-
-        # This call does not raise exception if chunk is not referenced
-        if chunk_id is not None:
-            self.rdir_client.chunk_delete(
-                chunk.host, container_id, content_id, chunk_id)
-
-        return chunk_size
+        self.chunk_operator = ChunkOperator(self.conf, logger=self.logger)
 
     def _process_item(self, item):
         namespace, container_id, content_id, chunk_id_or_pos = item
@@ -308,4 +256,7 @@ class BlobRebuilderWorker(ToolWorker):
             return None
 
         self.logger.debug(log_rebuilding)
-        return self._rebuild_chunk(container_id, content_id, chunk_id_or_pos)
+        return self.chunk_operator.rebuild(
+            container_id, content_id, chunk_id_or_pos,
+            rawx_id=self.tool.rawx_id, try_chunk_delete=self.try_chunk_delete,
+            allow_same_rawx=self.allow_same_rawx)
