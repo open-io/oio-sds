@@ -14,12 +14,12 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-import time
 from datetime import datetime
 from socket import gethostname
 
 from oio.common.easy_value import int_value, true_value
 from oio.common.exceptions import ContentNotFound, NotFound, OrphanChunk
+from oio.common.green import time
 from oio.common.tool import Tool, ToolWorker
 from oio.content.factory import ContentFactory
 from oio.event.evob import EventTypes
@@ -28,7 +28,7 @@ from oio.rdir.client import RdirClient
 
 class BlobRebuilder(Tool):
     """
-    Rebuild chunks that were on the specified volume.
+    Rebuild chunks.
     """
 
     DEFAULT_BEANSTALKD_WORKER_TUBE = 'oio-rebuild'
@@ -45,11 +45,10 @@ class BlobRebuilder(Tool):
         # counters
         self.bytes_processed = 0
         self.total_bytes_processed = 0
-        self.total_expected_chunks = None
 
         # input
-        self.rawx_id = rawx_id
         self.input_file = input_file
+        self.rawx_id = rawx_id
 
         # rawx/rdir
         self.rdir_client = RdirClient(self.conf, logger=self.logger)
@@ -121,13 +120,6 @@ class BlobRebuilder(Tool):
         return '%s|%s|%s|%s' % (
             namespace, container_id, content_id, chunk_id_or_pos)
 
-    @staticmethod
-    def _error_from_task_res(task_res):
-        item, _, error = task_res
-        namespace, container_id, content_id, chunk_id_or_pos = item
-        return "ERROR while rebuilding chunk %s|%s|%s|%s: %s" % (
-            namespace, container_id, content_id, chunk_id_or_pos, error)
-
     def _fetch_items_from_input_file(self):
         with open(self.input_file, 'r') as ifile:
             for line in ifile:
@@ -139,16 +131,12 @@ class BlobRebuilder(Tool):
                     stripped.split('|', 3)[:3]
                 yield self.namespace, container_id, content_id, \
                     chunk_id_or_pos
-        return
-        yield  # pylint: disable=unreachable
 
     def _fetch_items_from_rawx_id(self):
         lost_chunks = self.rdir_client.chunk_fetch(
             self.rawx_id, limit=self.rdir_fetch_limit, rebuild=True)
         for container_id, content_id, chunk_id, _ in lost_chunks:
             yield self.namespace, container_id, content_id, chunk_id
-        return
-        yield  # pylint: disable=unreachable
 
     def _fetch_items(self):
         if self.input_file:
@@ -214,29 +202,28 @@ class BlobRebuilder(Tool):
                 'total_errors_rate':
                     100 * total_errors / float(total_chunks_processed or 1)
                 })
-        if self.total_expected_chunks is not None:
+        if self.total_expected_items is not None:
             progress = 100 * total_chunks_processed / \
-                float(self.total_expected_chunks or 1)
+                float(self.total_expected_items or 1)
             report += ' progress=%d/%d %.2f%%' % \
-                (total_chunks_processed, self.total_expected_chunks, progress)
+                (total_chunks_processed, self.total_expected_items, progress)
         return report
 
-    def _load_total_expected_chunks(self):
-        if self.rawx_id:
-            info = self.rdir_client.status(self.rawx_id)
-            self.total_expected_chunks = info.get(
-                'chunk', dict()).get('to_rebuild', None)
-
     def create_worker(self, queue_workers, queue_reply):
-        return BlobRebuilderWorker(self.conf, self, queue_workers, queue_reply)
+        return BlobRebuilderWorker(self, queue_workers, queue_reply)
+
+    def _load_total_expected_items(self):
+        if self.rawx_id:
+            info = self.rdir_client.status(
+                self.rawx_id,
+                read_timeout=600)  # FIXME(adu): Reduce the timeout
+            self.total_expected_items = info.get(
+                'chunk', dict()).get('to_rebuild', None)
 
     def run(self):
         if self.rawx_id:
-            self.rdir_client.admin_lock(self.rawx_id,
-                                        "rebuilder on %s" % gethostname())
-            info = self.rdir_client.status(self.rawx_id)
-            self.total_expected_chunks = info.get(
-                'chunk', dict()).get('to_rebuild', None)
+            self.rdir_client.admin_lock(
+                self.rawx_id, "rebuilder on %s" % gethostname())
         success = super(BlobRebuilder, self).run()
         if self.rawx_id:
             self.rdir_client.admin_unlock(self.rawx_id)
@@ -245,9 +232,9 @@ class BlobRebuilder(Tool):
 
 class BlobRebuilderWorker(ToolWorker):
 
-    def __init__(self, conf, tool, queue_workers, queue_reply):
+    def __init__(self, tool, queue_workers, queue_reply):
         super(BlobRebuilderWorker, self).__init__(
-            conf, tool, queue_workers, queue_reply)
+            tool, queue_workers, queue_reply)
 
         self.allow_same_rawx = true_value(self.tool.conf.get(
             'allow_same_rawx', self.tool.DEFAULT_ALLOW_SAME_RAWX))

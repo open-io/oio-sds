@@ -52,6 +52,7 @@ class Tool(object):
         self.total_items_processed = 0
         self.errors = 0
         self.total_errors = 0
+        self.total_expected_items = None
 
         # report
         self.start_time = 0
@@ -127,8 +128,6 @@ class Tool(object):
         items = self._fetch_items()
         for item in items:
             yield (item, None)
-        return
-        yield  # pylint: disable=unreachable
 
     def fetch_items_with_beanstalkd_reply(self):
         """
@@ -189,12 +188,17 @@ class Tool(object):
         self.dispatcher = _DistributedDispatcher(
             self.conf, self)
 
+    def _load_total_expected_items(self):
+        raise NotImplementedError()
+
     def run(self):
         """
         Start processing all found items.
         """
         if self.dispatcher is None:
             raise ValueError('No dispatcher')
+
+        self._load_total_expected_items()
         return self.dispatcher.run()
 
     def is_success(self):
@@ -213,12 +217,12 @@ class ToolWorker(object):
     Process all items given by the tool.
     """
 
-    def __init__(self, conf, tool, queue_workers, queue_reply):
-        self.conf = conf
+    def __init__(self, tool, queue_workers, queue_reply):
         self.tool = tool
+        self.conf = self.tool.conf
+        self.logger = self.tool.logger
         self.queue_workers = queue_workers
         self.queue_reply = queue_reply
-        self.logger = self.tool.logger
 
         # reply
         self.beanstalkd_reply = None
@@ -362,8 +366,6 @@ class _LocalDispatcher(_Dispatcher):
             self.tool.success = False
 
         self.tool.log_report('DONE', force=True)
-        return
-        yield  # pylint: disable=unreachable
 
 
 class _DistributedDispatcher(_Dispatcher):
@@ -456,8 +458,6 @@ class _DistributedDispatcher(_Dispatcher):
             self.tool.fetch_items_with_beanstalkd_reply()
         for item, _ in items_with_beanstalkd_reply:
             yield self.tool.task_event_from_item(item)
-        return
-        yield  # pylint: disable=unreachable
 
     def _tasks_res_from_res_event(self, job_id, data, **kwargs):
         res_event = json.loads(data)
@@ -538,5 +538,3 @@ class _DistributedDispatcher(_Dispatcher):
             self.tool.success = False
 
         self.tool.log_report('DONE', force=True)
-        return
-        yield  # pylint: disable=unreachable
