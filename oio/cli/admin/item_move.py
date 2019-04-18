@@ -66,8 +66,6 @@ class ContainerMove(ContainerCommandMixin, ItemMoveCommandMixin,
             else:
                 cid = cid_from_name(self.app.options.account, container)
             moved = meta2.move(cid, parsed_args.src, dst=parsed_args.dst)
-            if moved is None:
-                continue
             for res in moved:
                 res['container'] = container
                 yield res
