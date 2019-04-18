@@ -18,8 +18,9 @@ from cliff import lister
 from logging import getLogger
 
 
+from oio.container.repairer import ContainerRepairer
 from oio.content.repairer import ContentRepairer
-from oio.cli.admin.common import ObjectCommandMixin
+from oio.cli.admin.common import ContainerCommandMixin, ObjectCommandMixin
 
 
 class ItemRepairCommand(lister.Lister):
@@ -70,6 +71,49 @@ class ItemRepairCommand(lister.Lister):
         super(ItemRepairCommand, self).run(parsed_args)
         if not self.repairer.is_success():
             return 1
+
+
+class ContainerRepair(ContainerCommandMixin, ItemRepairCommand):
+    """
+    Repair a container by following these steps:
+    rebuild all missing, lost bases ;
+    synchronize its bases ;
+    update the counters for the account service.
+    """
+
+    log = getLogger(__name__ + '.ContainerRepair')
+    columns = ('Container', 'Status')
+    repairer_class = ContainerRepairer
+
+    def get_parser(self, prog_name):
+        parser = super(ContainerRepair, self).get_parser(prog_name)
+        self.patch_parser(parser)
+        return parser
+
+    def _take_action(self, parsed_args):
+        containers = list()
+        for container in parsed_args.containers:
+            obj = dict()
+            obj['namespace'] = self.app.options.ns
+            if parsed_args.is_cid:
+                obj['account'], obj['container'] = \
+                    self.app.client_manager.storage.resolve_cid(
+                        container)
+            else:
+                obj['account'] = self.app.options.account
+                obj['container'] = container
+            containers.append(obj)
+
+        self.repairer = ContainerRepairer(
+            self.conf, containers=containers, logger=self.log)
+        self.repairer.prepare_local_dispatcher()
+
+        for item, _, error in self.repairer.run():
+            if error is None:
+                status = 'OK'
+            else:
+                status = error
+            yield (self.repairer.string_from_item(item), status)
 
 
 class ObjectRepair(ObjectCommandMixin, ItemRepairCommand):
