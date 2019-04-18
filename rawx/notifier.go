@@ -17,26 +17,13 @@
 package main
 
 import (
-	"encoding/json"
+	"bytes"
 	"errors"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
-
-type eventData struct {
-	VolumeAddr string `json:"volume_id,omitempty"`
-	VolumeID   string `json:"volume_service_id,omitempty"`
-	chunkInfo
-}
-
-type eventInfo struct {
-	EventType string    `json:"event"`
-	When      int64     `json:"when"`
-	URL       *string   `json:"url"`
-	RequestID string    `json:"request_id,omitempty"`
-	Data      eventData `json:"data"`
-}
 
 type Notifier interface {
 	Start()
@@ -52,10 +39,6 @@ const (
 const (
 	beanstalkNotifierDefaultTube = "oio"
 	beanstalkNotifierPipeSize    = 4096
-)
-
-var (
-	ErrNoNotiifer = errors.New("No notifier")
 )
 
 type beanstalkNotifier struct {
@@ -140,22 +123,64 @@ func (notifier *beanstalkNotifier) syncNotify(eventJSON []byte) {
 
 func (notifier *beanstalkNotifier) asyncNotify(eventType, requestID string,
 	chunk *chunkInfo) {
-	eventJSON, _ := json.Marshal(eventInfo{
-		EventType: eventType,
-		When:      time.Now().UnixNano() / 1000,
-		RequestID: requestID,
-		Data: eventData{
-			VolumeAddr: notifier.rawx.url,
-			VolumeID:   notifier.rawx.id,
-			chunkInfo:  *chunk,
-		},
-	})
+
 	if !notifier.run {
 		LogWarning("Can't send a event to %s using tube %s: closed",
 			notifier.endpoint, notifier.tube)
 		return
 	}
-	notifier.queue <- eventJSON
+
+	sb := bytes.Buffer{}
+	sb.Grow(4096)
+	addQuoted:= func (n string) {
+		sb.WriteRune('"')
+		sb.WriteString(n)
+		sb.WriteRune('"')
+	}
+	addFieldRaw := func (k, v string) {
+		addQuoted(k)
+		sb.WriteRune(':')
+		sb.WriteString(v)
+	}
+	addFieldStr := func (k, v string) {
+		addQuoted(k)
+		sb.WriteRune(':')
+		addQuoted(v)
+	}
+	add := func (k, v string) {
+		if len(v) > 0 {
+			sb.WriteRune(',')
+			addFieldStr(k, v)
+		}
+	}
+
+	sb.WriteRune('{')
+	addFieldStr("event", eventType)
+	sb.WriteRune(',')
+	addFieldRaw("when", strconv.FormatInt(time.Now().UnixNano() / 1000, 10))
+	add("request_id", requestID)
+	sb.WriteRune(',')
+	sb.WriteString("\"data\":{")
+	addFieldStr("volume_id", notifier.rawx.url)
+	sb.WriteRune(',')
+	addFieldStr("volume_service_id", notifier.rawx.id)
+	add("full_path", chunk.ContentFullpath)
+	add("container_id", chunk.ContainerID)
+	add("content_path", chunk.ContentPath)
+	add("content_version", chunk.ContentVersion)
+	add("content_id", chunk.ContentID)
+	add("content_chunk_method", chunk.ContentChunkMethod)
+	add("content_storage_policy", chunk.ContentStgPol)
+	add("metachunk_hash", chunk.MetachunkHash)
+	add("metachunk_size", chunk.MetachunkSize)
+	add("chunk_id", chunk.ChunkID)
+	add("chunk_position", chunk.ChunkPosition)
+	add("chunk_hash", chunk.ChunkHash)
+	add("chunk_size", chunk.ChunkSize)
+	add("oio_version", chunk.OioVersion)
+	sb.WriteString("}}")
+
+	notifier.queue <- sb.Bytes()
 }
 
 type multiNotifier struct {
@@ -207,12 +232,10 @@ func MakeNotifier(config string, rawx *rawxService) (Notifier, error) {
 	if strings.Contains(config, ";") {
 		return makeMultiNotifier(config, rawx)
 	}
-
 	if endpoint, ok := hasPrefix(config, "beanstalk://"); ok {
 		return makeBeanstalkNotifier(endpoint, rawx)
 	}
-	// TODO(adu) makeZMQNotifier
-	return nil, ErrNoNotiifer
+	return nil, errors.New("Unexpected notification endpoint, only `beanstalk://...` is accepted")
 }
 
 func NotifyNew(notifier Notifier, requestID string, chunk *chunkInfo) {
