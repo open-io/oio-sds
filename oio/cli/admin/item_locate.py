@@ -98,11 +98,6 @@ class ItemLocateCommand(lister.Lister):
     def m2_item(self, acct, ct, cid):
         return '%s/%s (%s)' % (quote(acct), quote(ct), cid)
 
-    def resolve_cid(self, cid):
-        """Resolve a CID into account and container names."""
-        md = self.dir.show(cid=cid)
-        return md.get('account'), md.get('name')
-
     def locate_accounts(self, accounts):
         reqid = self.app.request_id(self.reqid_prefix)
         all_acct = self.all_services('account', reqid=reqid)
@@ -201,7 +196,7 @@ class ItemLocateCommand(lister.Lister):
                     cid = ct
                     # Unfortunately, self.dir.list() does not
                     # resolve container ID, we must do another request.
-                    acct, ct = self.resolve_cid(cid)
+                    acct, ct = self.app.client_manager.storage.resolve_cid(cid)
                 else:
                     acct = self.app.options.account
                     cid = cid_from_name(acct, ct)
@@ -353,19 +348,23 @@ class ObjectLocate(ObjectCommandMixin, ItemLocateCommand):
                 objects.append((ct, obj, parsed_args.object_version))
         else:
             if parsed_args.is_cid:
-                parsed_args.account, parsed_args.container = \
-                    self.resolve_cid(parsed_args.container)
-            containers.add(parsed_args.container)
+                account, container = \
+                    self.app.client_manager.storage.resolve_cid(
+                        parsed_args.container)
+            else:
+                account = self.app.options.account
+                container = parsed_args.container
+            containers.add(container)
             for obj in parsed_args.objects:
                 objects.append(
-                    (parsed_args.container, obj, parsed_args.object_version))
-        return containers, objects
+                    (container, obj, parsed_args.object_version))
+        return account, containers, objects
 
     def take_action(self, parsed_args):
         super(ObjectLocate, self).take_action(parsed_args)
-        containers, objects = self.resolve_objects(parsed_args)
+        account, containers, objects = self.resolve_objects(parsed_args)
         return self.columns, chain(
-            self.locate_accounts([self.app.options.account]),
+            self.locate_accounts([account]),
             self.locate_containers(containers),
             self.locate_objects(objects))
 
