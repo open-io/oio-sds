@@ -16,7 +16,8 @@
 
 from cliff import lister
 
-from oio.cli.admin.common import ContainerCommandMixin, ObjectCommandMixin
+from oio.cli.admin.common import AccountCommandMixin, ContainerCommandMixin, \
+    ObjectCommandMixin
 from oio.crawler.integrity import Checker, Target
 
 
@@ -88,20 +89,14 @@ class ItemCheckCommand(lister.Lister):
         return self.__class__.columns, self._format_results(checker)
 
 
-class AccountCheck(ItemCheckCommand):
+class AccountCheck(AccountCommandMixin, ItemCheckCommand):
     """
     Check an account for problems.
     """
 
     def get_parser(self, prog_name):
         parser = super(AccountCheck, self).get_parser(prog_name)
-
-        parser.add_argument(
-            'accounts',
-            nargs='*',
-            metavar='<account_name>',
-            help='Name of the account to check.'
-        )
+        self.patch_parser(parser)
         return parser
 
     def take_action(self, parsed_args):
