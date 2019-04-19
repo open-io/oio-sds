@@ -87,8 +87,7 @@ class ServiceListCommand(lister.Lister):
 
 class RawxListContainers(ServiceListCommand):
     """
-    Get the names of all containers which have some chunks stored on the
-    specified rawx service.
+    List containers having chunks stored on the specified rawx service.
     """
     reqid_prefix = 'ACLI-RLC-'
 
@@ -121,8 +120,7 @@ class RawxListContainers(ServiceListCommand):
 
 class Meta2ListContainers(ServiceListCommand):
     """
-    Get the names of all containers which are hosted by the specified meta2
-    service.
+    List containers hosted by the specified meta2 service.
     """
     reqid_prefix = 'ACLI-M2LC-'
 
