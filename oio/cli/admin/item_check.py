@@ -117,7 +117,9 @@ class AccountCheck(ItemCheckCommand):
 
 class ContainerCheck(ContainerCommandMixin, ItemCheckCommand):
     """
-    Check a container for problems. Quick checks on the account owning
+    Check a container for problems.
+
+    Quick checks on the account owning
     the container will also be performed.
     """
 
@@ -137,7 +139,9 @@ class ContainerCheck(ContainerCommandMixin, ItemCheckCommand):
 
 class ObjectCheck(ObjectCommandMixin, ItemCheckCommand):
     """
-    Check an object for problems. Quick checks on the account and the container
+    Check an object for problems.
+
+    Quick checks on the account and the container
     owning the object will also be performed.
     """
 
@@ -158,7 +162,9 @@ class ObjectCheck(ObjectCommandMixin, ItemCheckCommand):
 
 class ChunkCheck(ItemCheckCommand):
     """
-    Check a chunk for problems. Quick checks on the account, the container
+    Check a chunk for problems.
+
+    Quick checks on the account, the container
     and the object owning the chunk will also be performed.
     """
 

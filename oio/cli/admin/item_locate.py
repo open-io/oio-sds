@@ -302,8 +302,7 @@ class AccountLocate(ItemLocateCommand):
 
 class ContainerLocate(ContainerCommandMixin, ItemLocateCommand):
     """
-    Get location of the services involved
-    in hosting the specified container(s).
+    Get location of the services hosting the specified container(s).
     """
     reqid_prefix = 'ACLI-CL-'
 
@@ -327,8 +326,7 @@ class ContainerLocate(ContainerCommandMixin, ItemLocateCommand):
 
 class ObjectLocate(ObjectCommandMixin, ItemLocateCommand):
     """
-    Get location of the services involved
-    in hosting the specified object(s).
+    Get location of the services hosting the specified object(s).
     """
     reqid_prefix = 'ACLI-OL-'
 
@@ -371,8 +369,7 @@ class ObjectLocate(ObjectCommandMixin, ItemLocateCommand):
 
 class ChunkLocate(ItemLocateCommand):
     """
-    Get location of the services involved
-    in hosting the specified chunk(s).
+    Get location of the services hosting the specified chunk(s).
     """
     reqid_prefix = 'ACLI-CKL-'
 
