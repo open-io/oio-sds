@@ -14,6 +14,20 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+class AccountCommandMixin(object):
+    """
+    Add account-related argmuments to a cliff command.
+    """
+
+    def patch_parser(self, parser):
+        parser.add_argument(
+            'accounts',
+            nargs='*',
+            metavar='<account_name>',
+            help='Name of the account to work on.'
+        )
+
+
 class ContainerCommandMixin(object):
     """
     Add container-related argmuments to a cliff command.

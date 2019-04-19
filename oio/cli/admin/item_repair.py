@@ -18,9 +18,11 @@ from cliff import lister
 from logging import getLogger
 
 
+from oio.account.rebuilder import AccountRebuilder
 from oio.container.repairer import ContainerRepairer
 from oio.content.repairer import ContentRepairer
-from oio.cli.admin.common import ContainerCommandMixin, ObjectCommandMixin
+from oio.cli.admin.common import AccountCommandMixin, ContainerCommandMixin, \
+    ObjectCommandMixin
 
 
 class ItemRepairCommand(lister.Lister):
@@ -73,6 +75,44 @@ class ItemRepairCommand(lister.Lister):
             return 1
 
 
+class AccountRepair(AccountCommandMixin, ItemRepairCommand):
+    """
+    Repair a account by following these steps:
+    recompute the counter of this account ;
+    refresh the counter of all containers in this account.
+    """
+
+    log = getLogger(__name__ + '.AccountRepair')
+    columns = ('Account', 'Status')
+    repairer_class = AccountRebuilder
+
+    def get_parser(self, prog_name):
+        parser = super(AccountRepair, self).get_parser(prog_name)
+        self.patch_parser(parser)
+        return parser
+
+    def _take_action(self, parsed_args):
+        if not parsed_args.accounts:
+            parsed_args.accounts = [self.app.options.account]
+        accounts = list()
+        for account_name in parsed_args.accounts:
+            account = dict()
+            account['namespace'] = self.app.options.ns
+            account['account'] = account_name
+            accounts.append(account)
+
+        self.repairer = AccountRebuilder(
+            self.conf, accounts=accounts, logger=self.log)
+        self.repairer.prepare_local_dispatcher()
+
+        for item, _, error in self.repairer.run():
+            if error is None:
+                status = 'OK'
+            else:
+                status = error
+            yield (self.repairer.string_from_item(item), status)
+
+
 class ContainerRepair(ContainerCommandMixin, ItemRepairCommand):
     """
     Repair a container by following these steps:
@@ -92,17 +132,17 @@ class ContainerRepair(ContainerCommandMixin, ItemRepairCommand):
 
     def _take_action(self, parsed_args):
         containers = list()
-        for container in parsed_args.containers:
-            obj = dict()
-            obj['namespace'] = self.app.options.ns
+        for container_name in parsed_args.containers:
+            container = dict()
+            container['namespace'] = self.app.options.ns
             if parsed_args.is_cid:
-                obj['account'], obj['container'] = \
+                container['account'], container['container'] = \
                     self.app.client_manager.storage.resolve_cid(
-                        container)
+                        container_name)
             else:
-                obj['account'] = self.app.options.account
-                obj['container'] = container
-            containers.append(obj)
+                container['account'] = self.app.options.account
+                container['container'] = container_name
+            containers.append(container)
 
         self.repairer = ContainerRepairer(
             self.conf, containers=containers, logger=self.log)
