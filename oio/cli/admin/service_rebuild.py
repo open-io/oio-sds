@@ -17,6 +17,7 @@
 from cliff import lister
 from logging import getLogger
 
+from oio.account.rebuilder import AccountRebuilder
 from oio.blob.rebuilder import BlobRebuilder
 from oio.rebuilder.meta1_rebuilder import Meta1Rebuilder
 from oio.rebuilder.meta2_rebuilder import Meta2Rebuilder
@@ -30,8 +31,9 @@ class ServiceRebuildCommand(lister.Lister):
     log = None
     columns = None
     rebuilder_class = None
-    distributed = False
+    rebuilder = None
     conf = dict()
+    distributed = False
 
     @property
     def formatter_default(self):
@@ -82,6 +84,11 @@ The beanstalkd tube to use to send the items to rebuild. (default=%s)
             self.conf['items_per_second'] = parsed_args.items_per_second
 
         return self.columns, self._take_action(parsed_args)
+
+    def run(self, parsed_args):
+        super(ServiceRebuildCommand, self).run(parsed_args)
+        if self.rebuilder is not None and not self.rebuilder.is_success():
+            return 1
 
 
 class Meta1Rebuild(ServiceRebuildCommand):
@@ -134,7 +141,6 @@ class Meta2Rebuild(ServiceRebuildCommand):
 class RawxRebuildCommand(ServiceRebuildCommand):
 
     rebuilder_class = BlobRebuilder
-    rebuilder = None
 
     def get_parser(self, prog_name):
         parser = super(RawxRebuildCommand, self).get_parser(prog_name)
@@ -185,11 +191,6 @@ class RawxRebuildCommand(ServiceRebuildCommand):
                 status = error
             yield (self.rebuilder.string_from_item(item), status)
 
-    def run(self, parsed_args):
-        super(RawxRebuildCommand, self).run(parsed_args)
-        if not self.rebuilder.is_success():
-            return 1
-
 
 class RawxRebuild(RawxRebuildCommand):
     """
@@ -210,3 +211,26 @@ class RawxDistributedRebuild(RawxRebuildCommand):
 
     log = getLogger(__name__ + '.RawxDistributedRebuild')
     distributed = True
+
+
+class AccountServiceRebuild(ServiceRebuildCommand):
+    """
+    Rebuild account services by following these steps:
+    recompute the counter of all accounts ;
+    refresh the counter of all containers.
+    """
+
+    log = getLogger(__name__ + '.AccountServiceRebuild')
+    columns = ('Account', 'Status')
+    rebuilder_class = AccountRebuilder
+
+    def _take_action(self, parsed_args):
+        self.rebuilder = AccountRebuilder(self.conf, logger=self.log)
+        self.rebuilder.prepare_local_dispatcher()
+
+        for item, _, error in self.rebuilder.run():
+            if error is None:
+                status = 'OK'
+            else:
+                status = error
+            yield (self.rebuilder.string_from_item(item), status)
