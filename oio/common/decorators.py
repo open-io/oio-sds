@@ -33,11 +33,16 @@ def ensure_request_id(func):
     @wraps(func)
     def ensure_request_id_wrapper(*args, **kwargs):
         headers = kwargs.setdefault('headers', dict())
+        # Old style request ID
         if REQID_HEADER not in headers:
             if 'reqid' in kwargs:
                 headers[REQID_HEADER] = kwargs.pop('reqid')
             else:
                 headers[REQID_HEADER] = request_id()
+            kwargs['headers'] = headers
+        # New style request ID
+        if 'reqid' not in kwargs:
+            kwargs['reqid'] = kwargs['headers'][REQID_HEADER]
         return func(*args, **kwargs)
     return ensure_request_id_wrapper
 

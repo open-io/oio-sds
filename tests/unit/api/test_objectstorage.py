@@ -50,7 +50,9 @@ class ObjectStorageTest(unittest.TestCase):
         self.api = FakeStorageApi("NS", endpoint=self.fake_endpoint)
         self.account = "test"
         self.container = "fake"
-        self.headers = {REQID_HEADER: random_str(32)}
+        reqid = random_str(32)
+        self.headers = {REQID_HEADER: reqid}
+        self.common_kwargs = {'headers': self.headers, 'reqid': reqid}
         self.policy = "THREECOPIES"
         self.uri_base = self.fake_endpoint + "/v3.0/NS"
 
@@ -87,14 +89,14 @@ class ObjectStorageTest(unittest.TestCase):
         self.api.account._get_account_addr = Mock(return_value=fake_endpoint)
         containers = self.api.container_list(
             self.account, limit=limit, marker=marker, prefix=prefix,
-            delimiter=delimiter, end_marker=end_marker, headers=self.headers)
+            delimiter=delimiter, end_marker=end_marker, **self.common_kwargs)
         params = {"id": self.account, "prefix": prefix, "delimiter": delimiter,
                   "marker": marker, "end_marker": end_marker, "limit": limit,
                   "s3_buckets_only": False}
         uri = "http://%s/v1.0/account/containers" % fake_endpoint
         self.api.account._direct_request.assert_called_once_with(
-            'GET', uri, params=params, headers=self.headers,
-            autocreate=True)
+            'GET', uri, params=params,
+            autocreate=True, **self.common_kwargs)
         self.assertEqual(len(containers), 1)
 
     def test_object_list(self):
@@ -113,7 +115,7 @@ class ObjectStorageTest(unittest.TestCase):
         listing = api.object_list(
             self.account, self.container, limit=limit, marker=marker,
             prefix=prefix, delimiter=delimiter, end_marker=end_marker,
-            headers=self.headers)
+            **self.common_kwargs)
         uri = "%s/container/list" % self.uri_base
         params = {'acct': self.account, 'ref': self.container,
                   'marker': marker, 'max': limit,
@@ -121,8 +123,8 @@ class ObjectStorageTest(unittest.TestCase):
                   'end_marker': end_marker,
                   'properties': False}
         api.container._direct_request.assert_called_once_with(
-            'GET', uri, params=params, headers=self.headers,
-            autocreate=True, path=ANY)
+            'GET', uri, params=params,
+            autocreate=True, path=ANY, **self.common_kwargs)
         self.assertEqual(len(listing['objects']), 2)
 
     def test_container_show(self):
@@ -134,12 +136,12 @@ class ObjectStorageTest(unittest.TestCase):
             container_headers["size"]: cont_size
         }
         api.container._direct_request = Mock(return_value=(resp, {}))
-        info = api.container_show(self.account, name, headers=self.headers)
+        info = api.container_show(self.account, name, **self.common_kwargs)
         uri = "%s/container/show" % self.uri_base
         params = {'acct': self.account, 'ref': name}
         api.container._direct_request.assert_called_once_with(
-            'GET', uri, params=params, headers=self.headers,
-            autocreate=True)
+            'GET', uri, params=params,
+            autocreate=True, **self.common_kwargs)
         self.assertEqual(info, {})
 
     def test_container_show_not_found(self):
@@ -157,7 +159,7 @@ class ObjectStorageTest(unittest.TestCase):
         api.container._direct_request = Mock(return_value=(resp, None))
 
         name = random_str(32)
-        result = api.container_create(self.account, name, headers=self.headers)
+        result = api.container_create(self.account, name, **self.common_kwargs)
         self.assertEqual(result, True)
 
         uri = "%s/container/create" % self.uri_base
@@ -166,7 +168,7 @@ class ObjectStorageTest(unittest.TestCase):
         data = json.dumps({'properties': {}, 'system': {}})
         api.container._direct_request.assert_called_once_with(
             'POST', uri, params=params, data=data,
-            headers=self.headers, autocreate=True)
+            autocreate=True, **self.common_kwargs)
 
     def test_container_create_exist(self):
         api = self.api
@@ -186,13 +188,13 @@ class ObjectStorageTest(unittest.TestCase):
         api.container._direct_request = Mock(return_value=(resp, None))
         api.directory.unlink = Mock(return_value=None)
         name = random_str(32)
-        api.container_delete(self.account, name, headers=self.headers)
+        api.container_delete(self.account, name, **self.common_kwargs)
 
         uri = "%s/container/destroy" % self.uri_base
         params = {'acct': self.account, 'ref': name}
         api.container._direct_request.assert_called_once_with(
-            'POST', uri, params=params, headers=self.headers,
-            autocreate=True)
+            'POST', uri, params=params,
+            autocreate=True, **self.common_kwargs)
 
     def test_container_delete_not_empty(self):
         api = self.api
@@ -216,14 +218,14 @@ class ObjectStorageTest(unittest.TestCase):
         resp = FakeApiResponse()
         api.container._direct_request = Mock(return_value=(resp, None))
         api.container_set_properties(
-            self.account, name, meta, headers=self.headers)
+            self.account, name, meta, **self.common_kwargs)
 
         data = json.dumps({'properties': meta, 'system': {}})
         uri = "%s/container/set_properties" % self.uri_base
         params = {'acct': self.account, 'ref': name}
         api.container._direct_request.assert_called_once_with(
-            'POST', uri, data=data, params=params, headers=self.headers,
-            autocreate=True)
+            'POST', uri, data=data, params=params,
+            autocreate=True, **self.common_kwargs)
 
     def test_object_show(self):
         api = self.api
@@ -239,14 +241,14 @@ class ObjectStorageTest(unittest.TestCase):
         api.container._direct_request = Mock(
             return_value=(resp, {'properties': {}}))
         obj = api.object_show(
-            self.account, self.container, name, headers=self.headers)
+            self.account, self.container, name, **self.common_kwargs)
 
         uri = "%s/content/get_properties" % self.uri_base
         params = {'acct': self.account, 'ref': self.container,
                   'path': name, 'version': None}
         api.container._direct_request.assert_called_once_with(
-            'POST', uri, params=params, data=None, headers=self.headers,
-            autocreate=True)
+            'POST', uri, params=params, data=None,
+            autocreate=True, **self.common_kwargs)
         self.assertIsNotNone(obj)
 
     def test_object_create_no_data(self):
@@ -342,7 +344,7 @@ class ObjectStorageTest(unittest.TestCase):
         resp = FakeApiResponse()
         api.container._direct_request = Mock(return_value=(resp, None))
         api.object_set_properties(
-            self.account, self.container, name, meta, headers=self.headers)
+            self.account, self.container, name, meta, **self.common_kwargs)
 
         data = {'properties': meta}
         data = json.dumps(data)
@@ -350,21 +352,21 @@ class ObjectStorageTest(unittest.TestCase):
         params = {'acct': self.account, 'ref': self.container,
                   'path': name}
         api.container._direct_request.assert_called_once_with(
-            'POST', uri, data=data, params=params, headers=self.headers,
-            autocreate=True)
+            'POST', uri, data=data, params=params,
+            autocreate=True, **self.common_kwargs)
 
     def test_object_del_properties(self):
         resp = FakeApiResponse()
         self.api.container._direct_request = Mock(return_value=(resp, None))
         self.api.object_del_properties(self.account, self.container, 'a',
                                        ['a'], version='17',
-                                       headers=self.headers)
+                                       **self.common_kwargs)
         uri = '%s/content/del_properties' % self.uri_base
         params = {'acct': self.account, 'ref': self.container,
                   'path': 'a', 'version': '17'}
         self.api.container._direct_request.assert_called_once_with(
             'POST', uri, data=json.dumps(['a']), params=params,
-            headers=self.headers, autocreate=True)
+            autocreate=True, **self.common_kwargs)
 
     def test_object_delete(self):
         api = self.api
@@ -376,14 +378,14 @@ class ObjectStorageTest(unittest.TestCase):
         api.container._direct_request = Mock(return_value=(resp, resp_body))
 
         api.object_delete(
-            self.account, self.container, name, headers=self.headers)
+            self.account, self.container, name, **self.common_kwargs)
 
         uri = "%s/content/delete" % self.uri_base
         params = {'acct': self.account, 'ref': self.container,
                   'path': name}
         api.container._direct_request.assert_called_once_with(
-            'POST', uri, params=params, headers=self.headers,
-            autocreate=True)
+            'POST', uri, params=params,
+            autocreate=True, **self.common_kwargs)
 
     def test_object_delete_not_found(self):
         api = self.api
@@ -397,13 +399,13 @@ class ObjectStorageTest(unittest.TestCase):
     def test_object_touch(self):
         self.api.container._direct_request = Mock()
         self.api.object_touch(self.account, self.container, 'obj',
-                              version='31', headers=self.headers)
+                              version='31', **self.common_kwargs)
         uri = '%s/content/touch' % self.uri_base
         params = {'acct': self.account, 'ref': self.container,
                   'path': 'obj', 'version': '31'}
         self.api.container._direct_request.assert_called_once_with(
-            'POST', uri, params=params, headers=self.headers,
-            autocreate=True)
+            'POST', uri, params=params,
+            autocreate=True, **self.common_kwargs)
 
     def test_sort_chunks(self):
         raw_chunks = [
@@ -464,7 +466,7 @@ class ObjectStorageTest(unittest.TestCase):
         api._object_create.assert_called_with(
             self.account, self.container, 'dummy', ANY, ANY,
             append=ANY, headers=ANY, key_file=ANY, policy=ANY, properties=ANY,
-            **kwargs)
+            reqid=ANY, **kwargs)
 
     def test_container_flush_not_found_1(self):
         self.api.object_list = Mock(

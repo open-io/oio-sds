@@ -19,13 +19,14 @@ import time
 from mock import MagicMock as Mock
 from functools import partial
 from urllib3 import HTTPResponse
-from oio.api.object_storage import ObjectStorageApi, _sort_chunks
+from oio.api.object_storage import ObjectStorageApi
 from oio.common import exceptions as exc
 from oio.common.constants import REQID_HEADER
 from oio.common.storage_functions import _sort_chunks as sort_chunks
-from oio.common.utils import cid_from_name
+from oio.common.utils import cid_from_name, request_id
 from oio.common.fullpath import encode_fullpath
 from oio.common.storage_method import STORAGE_METHODS
+from oio.event.evob import EventTypes
 from tests.utils import random_str, random_data, random_id, BaseTestCase
 
 
@@ -40,6 +41,7 @@ class ObjectStorageApiTestBase(BaseTestCase):
         super(ObjectStorageApiTestBase, self).setUp()
         self.api = ObjectStorageApi(self.ns, endpoint=self.uri)
         self.created = list()
+        self.beanstalkd0.drain_tube('oio-preserved')
 
     def tearDown(self):
         super(ObjectStorageApiTestBase, self).tearDown()
@@ -416,8 +418,10 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
         self._create(name)
         for i in range(10):
+            reqid = 'content' + str(i)
             self.api.object_create(
-                self.account, name, obj_name='content'+str(i), data='data')
+                self.account, name, obj_name=reqid, data='data',
+                reqid=reqid)
         meta = self.api.container_get_properties(self.account, name)
         objects = meta['system']['sys.m2.objects']
         self.assertEqual('10', objects)
@@ -425,7 +429,10 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertEqual('40', usage)
         damaged_objects = meta['system']['sys.m2.objects.damaged']
         missing_chunks = meta['system']['sys.m2.chunks.missing']
-        self.beanstalk.wait_until_empty('oio', initial_delay=2)
+        self.wait_for_event(
+            'oio-preserved', reqid=reqid, type_=EventTypes.CONTENT_NEW)
+        self.wait_for_event(
+            'oio-preserved', type_=EventTypes.CONTAINER_STATE)
         containers = self.api.container_list(self.account)
         for container in containers:
             if container[0] == name:
@@ -439,8 +446,10 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.account_flush(self.account)
         self.assertEqual([], self.api.container_list(self.account))
 
-        self.api.container_touch(self.account, name)
-        self.beanstalk.wait_until_empty('oio', initial_delay=2)
+        reqid = request_id()
+        self.api.container_touch(self.account, name, reqid=reqid)
+        self.wait_for_event(
+            'oio-preserved', type_=EventTypes.CONTAINER_STATE)
         containers = self.api.container_list(self.account)
         self.assertEqual(1, len(containers))
         self.assertListEqual(
@@ -451,7 +460,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertEqual([], self.api.container_list(self.account))
 
         self.api.container_touch(self.account, name, recompute=True)
-        self.beanstalk.wait_until_empty('oio', initial_delay=2)
+        self.wait_for_event(
+            'oio-preserved', type_=EventTypes.CONTAINER_STATE)
         meta = self.api.container_get_properties(self.account, name)
         self.assertEqual(objects, meta['system']['sys.m2.objects'])
         self.assertEqual(usage, meta['system']['sys.m2.usage'])
@@ -752,44 +762,43 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_container_refresh(self):
         self.wait_for_score(('account', 'meta2'))
-        # FIXME(FVE): for this test to pass properly, we should implement
-        # some kind of back notification mechanism, e.g. a tube where all
-        # events are sent after being handled by event-agent.
-        self.beanstalk.use('oio')
-        self.beanstalk.watch('oio')
         account = random_str(32)
         # container_refresh on unknown container
         name = random_str(32)
         self.assertRaises(
             exc.NoSuchContainer, self.api.container_refresh, account, name)
 
-        self.api.container_create(account, name)
+        reqid = request_id()
+        self.api.container_create(account, name, reqid=reqid)
         ref_time = time.time()
         # ensure container event has been emitted and processed
-        self.beanstalk.wait_until_empty('oio', initial_delay=0.2)
+        self.wait_for_event('oio-preserved', type_=EventTypes.CONTAINER_NEW)
 
         # container_refresh on existing container
         self.api.container_refresh(account, name)
         # Container events are buffered 1s by default.
         # See "events.common.pending.delay" configuration parameter.
-        self.beanstalk.wait_until_empty('oio', initial_delay=1.2)
+        self.wait_for_event('oio-preserved', type_=EventTypes.CONTAINER_STATE)
         res = self.api.container_list(account, prefix=name)
-        name_container, nb_objects, nb_bytes, _, mtime = res[0]
-        self.assertEqual(name, name_container)
+        container_name, nb_objects, nb_bytes, _, mtime = res[0]
+        self.assertEqual(name, container_name)
         self.assertEqual(0, nb_objects)
         self.assertEqual(0, nb_bytes)
         self.assertGreater(mtime, ref_time)
 
         ref_time = mtime
-        self.api.object_create(account, name, data="data", obj_name=name)
-        self.beanstalk.wait_until_empty('oio', initial_delay=0.2)
+        reqid = request_id()
+        self.api.object_create(account, name, data="data", obj_name=name,
+                               reqid=reqid)
+        self.wait_for_event('oio-preserved', reqid=reqid)
+        self.wait_for_event('oio-preserved', type_=EventTypes.CONTAINER_STATE)
+        self.beanstalkd0.drain_tube('oio-preserved')
         # container_refresh on existing container with data
         self.api.container_refresh(account, name)
-        self.beanstalk.wait_until_empty('oio', initial_delay=1.0)
-        time.sleep(1.0)
+        self.wait_for_event('oio-preserved', type_=EventTypes.CONTAINER_STATE)
         res = self.api.container_list(account, prefix=name)
-        name_container, nb_objects, nb_bytes, _, mtime = res[0]
-        self.assertEqual(name, name_container)
+        container_name, nb_objects, nb_bytes, _, mtime = res[0]
+        self.assertEqual(name, container_name)
         self.assertEqual(1, nb_objects)
         self.assertEqual(4, nb_bytes)
         self.assertGreater(mtime, ref_time)
@@ -797,7 +806,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.object_delete(account, name, name)
         self.api.container_delete(account, name)
         # Again, wait for the container event to be processed.
-        self.beanstalk.wait_until_empty('oio', initial_delay=1.2)
+        self.wait_for_event('oio-preserved', type_=EventTypes.ACCOUNT_SERVICES)
         # container_refresh on deleted container
         self.assertRaises(
             exc.NoSuchContainer, self.api.container_refresh, account, name)
@@ -823,7 +832,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # account_refresh on existing account
         self.api.account_create(account)
         self.api.account_refresh(account)
-        self.beanstalk.wait_until_empty('oio')
+        self.beanstalkd.wait_until_empty('oio')
         res = self.api.account_show(account)
         self.assertEqual(res["bytes"], 0)
         self.assertEqual(res["objects"], 0)
@@ -831,11 +840,10 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
         name = random_str(32)
         self.api.object_create(account, name, data="data", obj_name=name)
-        self.beanstalk.wait_until_empty('oio')
+        self.wait_for_event('oio-preserved', type_=EventTypes.CONTAINER_STATE)
+        self.beanstalkd0.drain_tube('oio-preserved')
         self.api.account_refresh(account)
-        # Container events are buffered 1s by default.
-        # See "events.common.pending.delay" configuration parameter.
-        self.beanstalk.wait_until_empty('oio', initial_delay=1.2)
+        self.wait_for_event('oio-preserved', type_=EventTypes.CONTAINER_STATE)
         res = self.api.account_show(account)
         self.assertEqual(res["bytes"], 4)
         self.assertEqual(res["objects"], 1)
@@ -844,7 +852,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.object_delete(account, name, name)
         self.api.container_delete(account, name)
         # Again, wait for the container event to be processed.
-        self.beanstalk.wait_until_empty('oio', initial_delay=1.2)
+        self.wait_for_event('oio-preserved', type_=EventTypes.ACCOUNT_SERVICES)
         self.api.account_delete(account)
         # account_refresh on deleted account
         self.assertRaises(
@@ -894,7 +902,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.container_create(account, name1)
         name2 = random_str(32)
         self.api.container_create(account, name2)
-        self.beanstalk.wait_until_empty('oio')
+        self.beanstalkd.wait_until_empty('oio')
         time.sleep(0.1)
         self.api.account_flush(account)
         containers = self.api.container_list(account)
@@ -906,7 +914,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
         self.api.container_delete(account, name1)
         self.api.container_delete(account, name2)
-        self.beanstalk.wait_until_empty('oio')
+        self.beanstalkd.wait_until_empty('oio')
         time.sleep(0.1)
         self.api.account_delete(account)
 
@@ -1181,7 +1189,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         container = random_str(16)
         self.api.container_create(self.account, container)
         test_object = "test_object_%d"
-        for i in range(100):
+        for i in range(10):
             self.api.object_create(self.account, container, data="0"*128,
                                    obj_name=test_object % i,
                                    chunk_checksum_algo=None)
@@ -1211,7 +1219,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
                           data="1"*128,
                           obj_name="should_not_be_created")
 
-        for i in range(100):
+        for i in range(10):
             _, chunks = self.api.object_locate(self.account, container,
                                                test_object % i)
             _, chunks_copies = self.api.object_locate(self.account, snapshot,
@@ -1342,7 +1350,8 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
         cnt_props1 = self.api.container_get_properties(self.account, name)
         if versioning:
             self.api.object_delete(self.account, name, name)
-        time.sleep(1)  # ensure the events have been processed
+        self.wait_for_event('oio-preserved', type_=EventTypes.CONTAINER_STATE,
+                            timeout=1.0)
         cnt_info1 = [cont_info
                      for cont_info in self.api.container_list(self.account)
                      if cont_info[0] == name]
@@ -1352,7 +1361,8 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
         obj2, chunks2 = self.api.object_locate(
             self.account, name, name, version=obj1['version'])
         cnt_props2 = self.api.container_get_properties(self.account, name)
-        time.sleep(1)  # ensure the events have been processed
+        self.wait_for_event('oio-preserved', type_=EventTypes.CONTAINER_STATE,
+                            timeout=1.0)
         cnt_info2 = [cont_info
                      for cont_info in self.api.container_list(self.account)
                      if cont_info[0] == name]
@@ -1375,7 +1385,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
         self.assertEqual(data, ''.join(stream))
 
         stg_met2 = STORAGE_METHODS.load(obj2['chunk_method'])
-        chunks_by_pos2 = _sort_chunks(chunks2, stg_met2.ec)
+        chunks_by_pos2 = sort_chunks(chunks2, stg_met2.ec)
         if stg_met2.ec:
             required = stg_met2.ec_nb_data + stg_met2.ec_nb_parity
         else:

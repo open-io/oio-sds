@@ -177,7 +177,7 @@ class TestConscienceFunctional(BaseTestCase):
 
         def check_service_known(body):
             self.assertIsInstance(body, list)
-            self.assertEqual([srv['addr']], [s['addr'] for s in body])
+            self.assertListEqual([srv['addr']], [s['addr'] for s in body])
 
         # register the service with a positive score
         srv['score'] = 1

@@ -61,7 +61,8 @@ class TestContainerReplication(BaseTestCase):
         super(TestContainerReplication, self).tearDown()
         # Restart meta2 after configuration has been reset by parent tearDown
         if self.must_restart_meta2:
-            self._service('@meta2', 'restart', wait=1.0)
+            self._service('@meta2', 'stop')
+            self._service('@meta2', 'start')
             self.wait_for_score(('meta2', ))
 
     def _apply_conf_on_all(self, type_, conf):

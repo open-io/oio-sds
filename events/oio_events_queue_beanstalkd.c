@@ -400,13 +400,13 @@ _q_reconnect(struct _queue_BEANSTALKD_s *q, struct _running_ctx_s *ctx)
 
 	if (err) {
 		metautils_pclose(&ctx->fd);
-		GRID_WARN("BEANSTALK error to %s: (%d) %s", q->endpoint,
-				err->code, err->message);
+		GRID_WARN("Beanstalk error with [%s]: (%d) %s",
+				q->endpoint, err->code, err->message);
 		g_clear_error (&err);
 
 		return FALSE;
 	} else {
-		GRID_INFO("BEANSTALKD: connected to %s", q->endpoint);
+		GRID_INFO("Beanstalkd connected to [%s]", q->endpoint);
 		ctx->attempts_connect = 0;
 		return TRUE;
 	}
@@ -415,7 +415,8 @@ _q_reconnect(struct _queue_BEANSTALKD_s *q, struct _running_ctx_s *ctx)
 static void
 _event_dropped(const char *msg, const size_t msglen)
 {
-	GRID_NOTICE("dropped %d %.*s", (int)msglen, (int)MIN(msglen,2048), msg);
+	GRID_NOTICE("Dropped %d bytes event: %.*s",
+			(int)msglen, (int)MIN(msglen,2048), msg);
 }
 
 /**
@@ -445,11 +446,13 @@ _q_manage_message(struct _queue_BEANSTALKD_s *q, struct _running_ctx_s *ctx)
 		ctx->attempts_put = 0;
 	} else {
 		if (CODE_IS_RETRY(err->code) || CODE_IS_NETWORK_ERROR(err->code)) {
+			GRID_NOTICE("Beanstalkd recoverable error with [%s]: (%d) %s",
+					q->endpoint, err->code, err->message);
 			g_async_queue_push_front(q->queue, msg);
 			msg = NULL;
 			rc = FALSE;
 		} else {
-			GRID_WARN("Unrecoverable error with beanstalkd at [%s]: (%d) %s",
+			GRID_WARN("Beanstalkd unrecoverable error with [%s]: (%d) %s",
 					q->endpoint, err->code, err->message);
 			_event_dropped(msg, msglen);
 			ctx->attempts_put = 0;
@@ -504,7 +507,8 @@ _q_maybe_check(struct _queue_BEANSTALKD_s *q, struct _running_ctx_s *ctx)
 #endif
 
 	if (err) {
-		GRID_WARN("Beanstalkd error [%s]: (%d) %s", q->endpoint, err->code, err->message);
+		GRID_WARN("Beanstalkd error with [%s]: (%d) %s",
+				q->endpoint, err->code, err->message);
 		g_clear_error(&err);
 		return FALSE;
 	} else {

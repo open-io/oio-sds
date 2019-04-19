@@ -42,7 +42,15 @@ class CustomHTTPResponse(HTTPResponse):
         self.will_close = _UNKNOWN
 
     def read(self, amount=None):
-        return HTTPResponse.read(self, amount)
+        try:
+            return HTTPResponse.read(self, amount)
+        except AttributeError as err:
+            # We have seen that in production but could not reproduce.
+            # This message will help us track the error further.
+            if "no attribute 'recv'" in err.message:
+                raise IOError('reading socket after close')
+            else:
+                raise
 
     def force_close(self):
         if self._actual_socket:
@@ -66,9 +74,9 @@ class CustomHttpConnection(HTTPConnection):
     response_class = CustomHTTPResponse
 
     def connect(self):
-        r = HTTPConnection.connect(self)
+        conn = HTTPConnection.connect(self)
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        return r
+        return conn
 
     def putrequest(self, method, url, skip_host=0, skip_accept_encoding=0):
         self._method = method
