@@ -338,7 +338,7 @@ openioadmin_rawx_rebuild()
   BEANSTALKD=$($CONFIG -t beanstalkd)
   MULTIBEANSTALKD=$(test $(echo "${BEANSTALKD}" | wc -l) -gt 1 && echo "true" || echo "false")
   if "${MULTIBEANSTALKD}" = true; then
-    CLI_ACTION=distrebuild
+    CLI_ACTION=distributed-rebuild
     BLOB_REBUILDER_OPTIONS=( )
   else
     CLI_ACTION=rebuild

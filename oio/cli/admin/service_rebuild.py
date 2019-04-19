@@ -201,12 +201,12 @@ class RawxRebuild(RawxRebuildCommand):
     log = getLogger(__name__ + '.RawxRebuild')
 
 
-class RawxDistRebuild(RawxRebuildCommand):
+class RawxDistributedRebuild(RawxRebuildCommand):
     """
     Rebuild chunks that were on the specified volume across the platform.
     It is necessary to declare an incident (with 'openio volume admin
     incident') before running this command.
     """
 
-    log = getLogger(__name__ + '.RawxDistRebuild')
+    log = getLogger(__name__ + '.RawxDistributedRebuild')
     distributed = True
