@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# vim: ts=4 shiftwidth=4 noexpandtab
 
 # oio-travis-tests.sh
 # Copyright (C) 2016-2017 OpenIO SAS, as part of OpenIO SDS
@@ -103,15 +104,15 @@ test_oio_tool () {
 }
 
 test_oio_file_tool () {
-    head -c 1M </dev/urandom > /tmp/test_oio_file.txt
-    oio-file-tool --upload -n $OIO_NS -a $OIO_ACCOUNT -c testfiletool -f /tmp/test_oio_file.txt -o remote_file_test.txt
-    oio-file-tool -n $OIO_NS -a $OIO_ACCOUNT -c testfiletool -f /tmp/test_oio_file2.txt -o remote_file_test.txt
-    DIFF=$(diff /tmp/test_oio_file2.txt /tmp/test_oio_file.txt)
-    rm /tmp/test_oio_file2.txt
-    rm /tmp/test_oio_file.txt
-    openio object delete testfiletool remote_file_test.txt
-    openio container delete testfiletool
-    if [ "$DIFF" != "" ] ; then exit 1; fi
+	head -c 1M </dev/urandom > /tmp/test_oio_file.txt
+	oio-file-tool --upload -n $OIO_NS -a $OIO_ACCOUNT -c testfiletool -f /tmp/test_oio_file.txt -o remote_file_test.txt
+	oio-file-tool -n $OIO_NS -a $OIO_ACCOUNT -c testfiletool -f /tmp/test_oio_file2.txt -o remote_file_test.txt
+	DIFF=$(diff /tmp/test_oio_file2.txt /tmp/test_oio_file.txt)
+	rm /tmp/test_oio_file2.txt
+	rm /tmp/test_oio_file.txt
+	openio object delete testfiletool remote_file_test.txt
+	openio container delete testfiletool
+	if [ "$DIFF" != "" ] ; then exit 1; fi
 }
 
 test_proxy_forward () {
@@ -142,28 +143,28 @@ test_proxy_forward () {
 }
 
 wait_proxy_cache() {
-    cnt=$(oio-test-config.py -t rawx | wc -l)
-    while true; do
-        rawx=$(curl -s http://$proxy/v3.0/cache/show | python -m json.tool | grep -c rawx | cat)
-        if [ $cnt -eq $rawx ]; then
-            break
-        fi
-        sleep 0.1
-    done
+	cnt=$(oio-test-config.py -t rawx | wc -l)
+	while true; do
+		rawx=$(curl -s http://$proxy/v3.0/cache/show | python -m json.tool | grep -c rawx | cat)
+		if [ $cnt -eq $rawx ]; then
+			break
+		fi
+		sleep 0.1
+	done
 
-    cnt=$(oio-test-config.py -t meta2 | wc -l)
-    while true; do
-        meta2=$(curl -s http://$proxy/v3.0/cache/show | python -m json.tool | grep -c meta2 | cat)
-        if [ $cnt -eq $meta2 ]; then
-            break
-        fi
-        sleep 0.1
-    done
+	cnt=$(oio-test-config.py -t meta2 | wc -l)
+	while true; do
+		meta2=$(curl -s http://$proxy/v3.0/cache/show | python -m json.tool | grep -c meta2 | cat)
+		if [ $cnt -eq $meta2 ]; then
+			break
+		fi
+		sleep 0.1
+	done
 }
 
 ec_tests () {
 	randomize_env
-    $OIO_RESET -N $OIO_NS $@
+	$OIO_RESET -N $OIO_NS $@
 
 	SIZE0=$((256*1024*1024))
 	export OIO_USER=user-$RANDOM OIO_PATH=path-$RANDOM
@@ -174,13 +175,14 @@ ec_tests () {
 	/bin/rm "$OIO_PATH"
 	[ "$SIZE0" == "$SIZE" ]
 
-    gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
+	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
 	sleep 0.5
 }
 
 func_tests () {
 	randomize_env
-	args=
+	# Some functional tests require events to be preserved after being handled
+	args="-f ${SRCDIR}/etc/bootstrap-option-preserve-events.yml"
 	if is_running_test_suite "with-service-id"; then
 		args="${args} -U"
 	fi
@@ -219,13 +221,13 @@ func_tests () {
 	cd $WRKDIR
 	make -C tests/func test
 
-    # test a content with a strange name, through the CLI and the API
-    /usr/bin/fallocate -l $RANDOM /tmp/blob%
-    CNAME=$RANDOM
-    ${PYTHON} $(which openio) object create $CNAME /tmp/blob%
-    # At least spawn one oio-crawler-integrity on a container that exists
-    # TODO(jfs): Move in a tests/functional/cli python test
-    ${PYTHON} $(which oio-crawler-integrity) $OIO_NS $OIO_ACCOUNT $CNAME
+	# test a content with a strange name, through the CLI and the API
+	/usr/bin/fallocate -l $RANDOM /tmp/blob%
+	CNAME=$RANDOM
+	${PYTHON} $(which openio) object create $CNAME /tmp/blob%
+	# At least spawn one oio-crawler-integrity on a container that exists
+	# TODO(jfs): Move in a tests/functional/cli python test
+	${PYTHON} $(which oio-crawler-integrity) $OIO_NS $OIO_ACCOUNT $CNAME
 
 	# Create a file just bigger than chunk size
 	SOURCE=$(mktemp)
@@ -361,7 +363,7 @@ fi
 if is_running_test_suite "webhook" ; then
 	echo -e "\n### with webhooks"
 	func_tests -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
-        -f "${SRCDIR}/etc/bootstrap-option-webhook.yml"
+		-f "${SRCDIR}/etc/bootstrap-option-webhook.yml"
 fi
 
 func_tests_rebuilder_mover () {

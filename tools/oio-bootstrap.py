@@ -813,49 +813,49 @@ queue_url=${QUEUE_URL}
 template_event_agent_handlers = """
 [handler:storage.content.new]
 # pipeline = replication
-pipeline = ${WEBHOOK} preserve
+pipeline = ${WEBHOOK} ${PRESERVE}
 
 [handler:storage.content.update]
 # pipeline = replication webhook
-pipeline = ${WEBHOOK} preserve
+pipeline = ${WEBHOOK} ${PRESERVE}
 
 [handler:storage.content.append]
 # pipeline = replication
-pipeline = ${WEBHOOK} preserve
+pipeline = ${WEBHOOK} ${PRESERVE}
 
 [handler:storage.content.broken]
-pipeline = content_rebuild preserve
+pipeline = content_rebuild ${PRESERVE}
 
 [handler:storage.content.deleted]
 # pipeline = content_cleaner replication
-pipeline = ${WEBHOOK} content_cleaner preserve
+pipeline = ${WEBHOOK} content_cleaner ${PRESERVE}
 
 [handler:storage.content.drained]
 # pipeline = content_cleaner replication
-pipeline = content_cleaner preserve
+pipeline = content_cleaner ${PRESERVE}
 
 [handler:storage.content.perfectible]
-pipeline = logger content_improve preserve
+pipeline = logger content_improve ${PRESERVE}
 
 [handler:storage.container.new]
 # pipeline = account_update volume_index replication
-pipeline = account_update volume_index preserve
+pipeline = account_update volume_index ${PRESERVE}
 
 [handler:storage.container.deleted]
 # pipeline = account_update volume_index replication
-pipeline = account_update volume_index preserve
+pipeline = account_update volume_index ${PRESERVE}
 
 [handler:storage.container.state]
-pipeline = account_update preserve
+pipeline = account_update ${PRESERVE}
 
 [handler:storage.chunk.new]
-pipeline = volume_index preserve
+pipeline = volume_index ${PRESERVE}
 
 [handler:storage.chunk.deleted]
-pipeline = volume_index preserve
+pipeline = volume_index ${PRESERVE}
 
 [handler:account.services]
-pipeline = account_update volume_index preserve
+pipeline = account_update volume_index ${PRESERVE}
 
 [filter:content_cleaner]
 use = egg:oio#content_cleaner
@@ -1237,6 +1237,7 @@ def generate(options):
                KEY_FILE=key_file,
                HTTPD_BINARY=HTTPD_BINARY,
                META_HEADER=META_HEADER,
+               PRESERVE='preserve' if options.get('preserve_events') else '',
                WANT_SERVICE_ID=want_service_id,
                WEBHOOK=WEBHOOK,
                WEBHOOK_ENDPOINT=WEBHOOK_ENDPOINT)
