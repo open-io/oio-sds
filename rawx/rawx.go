@@ -85,11 +85,7 @@ func (rr *rawxRequest) replyError(err error) {
 			rr.replyCode(http.StatusBadRequest)
 		} else {
 			switch err {
-			case errInvalidChunkID:
-				rr.replyCode(http.StatusBadRequest)
-			case errMissingHeader:
-				rr.replyCode(http.StatusBadRequest)
-			case errInvalidHeader:
+			case errInvalidChunkID, errMissingHeader, errInvalidHeader:
 				rr.replyCode(http.StatusBadRequest)
 			case errInvalidRange:
 				rr.replyCode(http.StatusRequestedRangeNotSatisfiable)
