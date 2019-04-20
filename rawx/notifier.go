@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
@@ -138,6 +139,7 @@ func (notifier *beanstalkNotifier) asyncNotify(eventType, requestID string,
 		sb.WriteRune('"')
 	}
 	addFieldRaw := func (k, v string) {
+		sb.WriteRune(',')
 		addQuoted(k)
 		sb.WriteRune(':')
 		sb.WriteString(v)
@@ -153,20 +155,27 @@ func (notifier *beanstalkNotifier) asyncNotify(eventType, requestID string,
 			addFieldStr(k, v)
 		}
 	}
+	addEscaped := func (k, v string) {
+		if len(v) > 0 {
+			sb.WriteRune(',')
+			addQuoted(k)
+			sb.WriteRune(':')
+			sb.WriteRune('"')
+			json.HTMLEscape(&sb, []byte(v))
+			sb.WriteRune('"')
+		}
+	}
 
 	sb.WriteRune('{')
 	addFieldStr("event", eventType)
-	sb.WriteRune(',')
 	addFieldRaw("when", strconv.FormatInt(time.Now().UnixNano() / 1000, 10))
 	add("request_id", requestID)
-	sb.WriteRune(',')
-	sb.WriteString("\"data\":{")
+	addFieldRaw("data", "{")
 	addFieldStr("volume_id", notifier.rawx.url)
-	sb.WriteRune(',')
-	addFieldStr("volume_service_id", notifier.rawx.id)
-	add("full_path", chunk.ContentFullpath)
+	add("volume_service_id", notifier.rawx.id)
+	addEscaped("full_path", chunk.ContentFullpath)
+	addEscaped("content_path", chunk.ContentPath)
 	add("container_id", chunk.ContainerID)
-	add("content_path", chunk.ContentPath)
 	add("content_version", chunk.ContentVersion)
 	add("content_id", chunk.ContentID)
 	add("content_chunk_method", chunk.ContentChunkMethod)
