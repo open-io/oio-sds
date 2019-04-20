@@ -65,7 +65,7 @@ func getSeverity(priority syslog.Priority) (syslog.Priority, string) {
 	case syslog.LOG_INFO:
 		return syslog.LOG_INFO, "INF"
 	default:
-		return syslog.LOG_DEBUG, "DBG"
+		return syslog.LOG_INFO, "DBG"
 	}
 }
 
