@@ -198,7 +198,6 @@ func (rr *rawxRequest) checkChunk() {
 
 	err = rr.chunk.loadAttr(in, rr.chunkID)
 	if err != nil {
-		LogError("Load attr error: %s", err)
 		rr.replyError(err)
 		return
 	}
