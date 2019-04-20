@@ -179,7 +179,7 @@ func (rr *rawxRequest) copyChunk() {
 			// If rollback fails, is lets an error
 			_ = op.rollback()
 		} else {
-			// The link already exists and has an xattr. Commit(à is a matter of sync.
+			// The link already exists and has an xattr. Commit is a matter of sync.
 			_ = op.commit()
 			rr.replyCode(http.StatusCreated)
 		}
