@@ -87,7 +87,7 @@ const (
 )
 
 func returnError(err error, message string) error {
-	LogWarning("%s: %s", err, message)
+	LogDebug("%s: %s", err, message)
 	return err
 }
 
