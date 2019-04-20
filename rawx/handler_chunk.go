@@ -96,7 +96,6 @@ func (rr *rawxRequest) putData(out io.Writer) (uploadInfo, error) {
 
 func (rr *rawxRequest) uploadChunk() {
 	if err := rr.chunk.retrieveHeaders(&rr.req.Header, rr.chunkID); err != nil {
-		LogError("Header error: %s", err)
 		rr.replyError(err)
 		// Discard request body
 		io.Copy(ioutil.Discard, rr.req.Body)
@@ -106,7 +105,6 @@ func (rr *rawxRequest) uploadChunk() {
 	// Attempt a PUT in the repository
 	out, err := rr.rawx.repo.put(rr.chunkID)
 	if err != nil {
-		LogError("Chunk opening error: %s", err)
 		rr.replyError(err)
 		// Discard request body
 		io.Copy(ioutil.Discard, rr.req.Body)
@@ -159,12 +157,10 @@ func (rr *rawxRequest) uploadChunk() {
 func (rr *rawxRequest) copyChunk() {
 	if err := rr.chunk.retrieveDestinationHeader(&rr.req.Header,
 		rr.rawx, rr.chunkID); err != nil {
-		LogError("Header error: %s", err)
 		rr.replyError(err)
 		return
 	}
 	if err := rr.chunk.retrieveContentFullpathHeader(&rr.req.Header); err != nil {
-		LogError("Header error: %s", err)
 		rr.replyError(err)
 		return
 	}
@@ -172,7 +168,6 @@ func (rr *rawxRequest) copyChunk() {
 	// Attempt a LINK in the repository
 	op, err := rr.rawx.repo.link(rr.chunkID, rr.chunk.ChunkID)
 	if err != nil {
-		LogError("Link error: %s", err)
 		rr.replyError(err)
 	} else {
 		// Link created, try to place an xattr
@@ -345,7 +340,6 @@ func (rr *rawxRequest) removeChunk() {
 	// Load only the fullpath in an attempt to spare syscalls
 	err := rr.chunk.loadFullPath(getter, rr.chunkID)
 	if err != nil {
-		LogError("Load attr error: %s", err)
 		rr.replyError(err)
 		return
 	}
