@@ -16,11 +16,15 @@
 
 package main
 
+import (
+	"io"
+	"os"
+)
+
 /*
 Minimal interface to a file repository, where each file might have
 some <key,value> properties.
 */
-
 type repository interface {
 	lock(ns, url string) error
 	get(name string) (fileReader, error)
@@ -35,8 +39,11 @@ type decorable interface {
 }
 
 type fileReader interface {
-	Read([]byte) (int, error)
-	Close() error
+	io.ReadCloser
+
+	// Return the underlying os.File
+	File() *os.File
+
 	size() int64
 	seek(int64) error
 	getAttr(key string, value []byte) (int, error)

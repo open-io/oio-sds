@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	uploadBufferSize   int64 = 64 * 1024
+	uploadBufferSize int64 = 64 * 1024
 )
 
 var (
@@ -282,7 +282,7 @@ func (rr *rawxRequest) downloadChunk() {
 	}
 
 	// Check if there is some compression
-	in := io.LimitedReader{R: inChunk, N: chunkSize}
+	in := io.LimitedReader{R: inChunk.File(), N: chunkSize}
 
 	buf := make([]byte, 32, 32)
 	if sz, err := inChunk.getAttr(AttrNameCompression, buf); err != nil {

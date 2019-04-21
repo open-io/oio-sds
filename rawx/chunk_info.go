@@ -491,4 +491,3 @@ func (chunk *chunkInfo) fillHeadersLight(headers http.Header) {
 	setHeader(headers, HeaderNameChunkSize, chunk.ChunkSize)
 	setHeader(headers, HeaderNameXattrVersion, chunk.OioVersion)
 }
-
