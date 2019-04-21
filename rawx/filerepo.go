@@ -21,7 +21,6 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -101,8 +100,8 @@ func (fr *fileRepository) lock(ns, id string) error {
 
 func (fr *fileRepository) del(name string) error {
 	relPath := fr.nameToRelPath(name)
-	absPath := fr.root+"/"+relPath
-	xattrName := AttrNameFullPrefix+name
+	absPath := fr.root + "/" + relPath
+	xattrName := AttrNameFullPrefix + name
 
 	var err error
 	err = syscall.Removexattr(absPath, xattrName)
@@ -124,7 +123,7 @@ func (fr *fileRepository) getRelPath(path string) (fileReader, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &realFileReader{fd: fd, path: path, repo: fr}, nil
+	return &realFileReader{f: os.NewFile(uintptr(fd), path), repo: fr}, nil
 }
 
 func (fr *fileRepository) get(name string) (fileReader, error) {
@@ -327,49 +326,40 @@ func (fw *realFileWriter) syncDir() error {
 }
 
 type realFileReader struct {
-	fd   int
-	stat syscall.Stat_t
-	path string
+	f    *os.File
 	repo *fileRepository
 }
 
 func (fr *realFileReader) size() int64 {
-	if fr.stat.Ino == 0 {
-		err := syscall.Fstat(fr.fd, &fr.stat)
-		if err != nil {
-			return -1
-		}
+	fi, err := fr.f.Stat()
+	if err != nil {
+		return -1
+	} else {
+		return fi.Size()
 	}
-	return fr.stat.Size
 }
 
 func (fr *realFileReader) seek(offset int64) error {
-	_, err := syscall.Seek(fr.fd, offset, os.SEEK_SET)
+	_, err := fr.f.Seek(offset, os.SEEK_SET)
 	return err
 }
 
 func (fr *realFileReader) Close() error {
-	if err := syscall.Close(fr.fd); err != nil {
-		return err
-	} else {
-		fr.fd = -1
-		return nil
-	}
+	err := fr.f.Close()
+	fr.f = nil
+	return err
 }
 
 func (fr *realFileReader) Read(buffer []byte) (int, error) {
-	n, err := syscall.Read(fr.fd, buffer)
-	if err != nil {
-		return n, err
-	}
-	if n == 0 {
-		return 0, io.EOF
-	}
-	return n, err
+	return fr.f.Read(buffer)
+}
+
+func (fr *realFileReader) File() *os.File {
+	return fr.f
 }
 
 func (fr *realFileReader) getAttr(key string, value []byte) (int, error) {
-	return syscall.Fgetxattr(fr.fd, key, value)
+	return syscall.Fgetxattr(int(fr.f.Fd()), key, value)
 }
 
 func (fr *fileRepository) nameToRelPath(name string) string {

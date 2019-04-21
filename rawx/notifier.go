@@ -133,29 +133,29 @@ func (notifier *beanstalkNotifier) asyncNotify(eventType, requestID string,
 
 	sb := bytes.Buffer{}
 	sb.Grow(4096)
-	addQuoted:= func (n string) {
+	addQuoted := func(n string) {
 		sb.WriteRune('"')
 		sb.WriteString(n)
 		sb.WriteRune('"')
 	}
-	addFieldRaw := func (k, v string) {
+	addFieldRaw := func(k, v string) {
 		sb.WriteRune(',')
 		addQuoted(k)
 		sb.WriteRune(':')
 		sb.WriteString(v)
 	}
-	addFieldStr := func (k, v string) {
+	addFieldStr := func(k, v string) {
 		addQuoted(k)
 		sb.WriteRune(':')
 		addQuoted(v)
 	}
-	add := func (k, v string) {
+	add := func(k, v string) {
 		if len(v) > 0 {
 			sb.WriteRune(',')
 			addFieldStr(k, v)
 		}
 	}
-	addEscaped := func (k, v string) {
+	addEscaped := func(k, v string) {
 		if len(v) > 0 {
 			sb.WriteRune(',')
 			addQuoted(k)
@@ -168,7 +168,7 @@ func (notifier *beanstalkNotifier) asyncNotify(eventType, requestID string,
 
 	sb.WriteRune('{')
 	addFieldStr("event", eventType)
-	addFieldRaw("when", strconv.FormatInt(time.Now().UnixNano() / 1000, 10))
+	addFieldRaw("when", strconv.FormatInt(time.Now().UnixNano()/1000, 10))
 	add("request_id", requestID)
 	addFieldRaw("data", "{")
 	addFieldStr("volume_id", notifier.rawx.url)
