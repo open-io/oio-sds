@@ -247,10 +247,10 @@ grid_hash_width        3
 grid_hash_depth        1
 
 # At the end of an upload, perform a fsync() on the chunk file itself
-grid_fsync             disabled
+grid_fsync             ${FSYNC}
 
 # At the end of an upload, perform a fsync() on the directory holding the chunk
-grid_fsync_dir         disabled
+grid_fsync_dir         ${FSYNC}
 
 # Preallocate space for the chunk file (enabled by default)
 #grid_fallocate enabled
@@ -1111,6 +1111,7 @@ ALLOW_REDIS = 'redis'
 OPENSUSE = 'opensuse'
 ZOOKEEPER = 'zookeeper'
 GO_RAWX = 'go_rawx'
+FSYNC_RAWX = 'rawx_fsync'
 MONITOR_PERIOD = 'monitor_period'
 M1_DIGITS = 'meta1_digits'
 M1_REPLICAS = 'directory_replicas'
@@ -1527,8 +1528,10 @@ def generate(options):
                           'SRVNUM': i + 1,
                           'PORT': next(ports),
                           'COMPRESSION': compression,
-                          'EXTRASLOT': ('rawx-even' if i % 2 else 'rawx-odd')
-                          })
+                          'EXTRASLOT': ('rawx-even' if i % 2 else 'rawx-odd'),
+                          'FSYNC': ('enabled' if options[FSYNC_RAWX]
+                                    else 'disabled')
+                         })
             env['SERVICE_ID'] = "{NS}-{SRVTYPE}-{SRVNUM}".format(**env)
             add_service(env)
             # gridinit (rawx)
@@ -1855,6 +1858,7 @@ def main():
     opts['sqlx'] = {SVC_NB: None, SVC_HOSTS: None}
     opts['rawx'] = {SVC_NB: None, SVC_HOSTS: None}
     opts[GO_RAWX] = False
+    opts[FSYNC_RAWX] = False
     opts['rdir'] = {SVC_NB: None, SVC_HOSTS: None}
     opts['beanstalkd'] = {SVC_NB: None, SVC_HOSTS: None}
 
