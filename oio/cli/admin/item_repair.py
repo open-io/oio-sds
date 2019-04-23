@@ -77,13 +77,15 @@ class ItemRepairCommand(lister.Lister):
 
 class AccountRepair(AccountCommandMixin, ItemRepairCommand):
     """
-    Repair a account by following these steps:
+    Repair a account.
+
+    The steps of the repair:
     recompute the counter of this account ;
     refresh the counter of all containers in this account.
     """
 
     log = getLogger(__name__ + '.AccountRepair')
-    columns = ('Account', 'Status')
+    columns = ('Entry', 'Status')
     repairer_class = AccountRebuilder
 
     def get_parser(self, prog_name):
@@ -115,7 +117,9 @@ class AccountRepair(AccountCommandMixin, ItemRepairCommand):
 
 class ContainerRepair(ContainerCommandMixin, ItemRepairCommand):
     """
-    Repair a container by following these steps:
+    Repair a container.
+
+    The steps of the repair:
     rebuild all missing, lost bases ;
     synchronize its bases ;
     update the counters for the account service.
@@ -158,7 +162,9 @@ class ContainerRepair(ContainerCommandMixin, ItemRepairCommand):
 
 class ObjectRepair(ObjectCommandMixin, ItemRepairCommand):
     """
-    Repair an object by following these steps:
+    Repair an object.
+
+    The steps of the repair:
     rebuild all missing, lost or corrupt chunks ;
     update the counters for the account service.
     """

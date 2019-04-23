@@ -215,13 +215,15 @@ class RawxDistributedRebuild(RawxRebuildCommand):
 
 class AccountServiceRebuild(ServiceRebuildCommand):
     """
-    Rebuild account services by following these steps:
+    Rebuild account services.
+
+    The steps of the rebuilding:
     recompute the counter of all accounts ;
     refresh the counter of all containers.
     """
 
     log = getLogger(__name__ + '.AccountServiceRebuild')
-    columns = ('Account', 'Status')
+    columns = ('Entry', 'Status')
     rebuilder_class = AccountRebuilder
 
     def _take_action(self, parsed_args):
