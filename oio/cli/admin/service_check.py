@@ -14,6 +14,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from cliff import lister
+from oio.crawler.integrity import Target
+from oio.cli.admin.item_check import ItemCheckCommand
 
 
 class BaseCheckCommand(lister.Lister):
@@ -255,3 +257,65 @@ class RdirCheck(BaseCheckCommand):
         self.logger.info("All rdir services are alive.")
 
         return ('Status', ), [('Ok', )]
+
+
+class RawxCheck(ItemCheckCommand):
+    """
+    Check all rawx chunks.
+
+    Every chunk will also have his account, container and object quickly
+    checked. This is similar to 'openio-admin chunk check' but for every
+    chunk hosted by the service.
+
+    Default output format is 'value'.
+    """
+
+    columns = ('Chunk', 'Status', 'Errors')
+    reqid_prefix = 'ACLI-RC-'
+
+    @property
+    def formatter_default(self):
+        return 'value'
+
+    def _format_results(self, checker):
+        for res in checker.run():
+            if res.target.type == 'chunk':
+                yield repr(res.target)[len('chunk='):], \
+                    res.health,\
+                    res.errors_to_str()
+
+    def get_parser(self, prog_name):
+        parser = super(RawxCheck, self).get_parser(prog_name)
+        parser.add_argument(
+            'services',
+            nargs='+',
+            metavar='<service_id>',
+            help=('Rawx service to check.')
+        )
+        return parser
+
+    def _ensure_http_prefix(self, url):
+        if not url.startswith('http://'):
+            return 'http://' + url
+        return url
+
+    def check_services(self, parsed_args):
+        checker = self.build_checker(parsed_args)
+        for service in parsed_args.services:
+            reqid = self.app.request_id(self.reqid_prefix)
+            chunks = self.app.client_manager.rdir.chunk_fetch(service,
+                                                              reqid=reqid)
+            for res in self.check_chunks(service, chunks, checker):
+                yield res
+
+    def check_chunks(self, service, chunks, checker):
+        url = self._ensure_http_prefix(service)
+        for chunk in chunks:
+            checker.check(Target(self.app.options.account,
+                                 chunk=url + '/' + chunk[2]))
+            for res in self._format_results(checker):
+                yield res
+
+    def take_action(self, parsed_args):
+        super(RawxCheck, self).take_action(parsed_args)
+        return self.columns, self.check_services(parsed_args)
