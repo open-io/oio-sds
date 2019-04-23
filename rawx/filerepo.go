@@ -21,6 +21,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -392,7 +393,7 @@ func setOrHasXattr(path, key, value string) error {
 
 func (fileReader *realFileReader) check() (string, error) {
 	h := md5.New()
-	if _, err := io.Copy(h, fileReader.impl); err != nil {
+	if _, err := io.Copy(h, fileReader.f); err != nil {
 		return "", err
 	}
 
