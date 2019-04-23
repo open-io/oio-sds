@@ -198,6 +198,7 @@ func (rr *rawxRequest) checkChunk() {
 
 	err = rr.chunk.loadAttr(in, rr.chunkID)
 	if err != nil {
+		LogError("Failed to load xattr: %s", err)
 		rr.replyError(err)
 		return
 	}
@@ -326,7 +327,7 @@ func (rr *rawxRequest) downloadChunk() {
 }
 
 func (rr *rawxRequest) removeChunk() {
-	tmp := make([]byte, 1024, 1024)
+	tmp := make([]byte, 2048, 2048)
 	getter := func(name, key string) (string, error) {
 		nb, err := rr.rawx.repo.getAttr(name, key, tmp)
 		if nb <= 0 || err != nil {
@@ -339,12 +340,16 @@ func (rr *rawxRequest) removeChunk() {
 	// Load only the fullpath in an attempt to spare syscalls
 	err := rr.chunk.loadFullPath(getter, rr.chunkID)
 	if err != nil {
+		LogError("Failed to retrieve FullPath: %s", err)
 		rr.replyError(err)
 		return
 	}
 
 	err = rr.rawx.repo.del(rr.chunkID)
 	if err != nil {
+		if !os.IsNotExist(err) {
+			LogError("Failed to remove chunk %s", err)
+		}
 		rr.replyError(err)
 	} else {
 		rr.replyCode(http.StatusNoContent)
