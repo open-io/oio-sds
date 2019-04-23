@@ -187,7 +187,7 @@ func (chunk *chunkInfo) loadFullPath(getter func(string, string) (string, error)
 }
 
 func (chunk *chunkInfo) loadAttr(inChunk fileReader, chunkID string) error {
-	buf := make([]byte, 1024, 1024)
+	buf := make([]byte, 2048, 2048)
 	getAttr := func(k string) (string, error) {
 		l, err := inChunk.getAttr(k, buf)
 		if l <= 0 || err != nil {
