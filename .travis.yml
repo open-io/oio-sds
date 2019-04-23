@@ -59,10 +59,10 @@ env:
   - TEST_SUITE=ec,with-random-service-id
   - TEST_SUITE=rebuilder,with-service-id
   - TEST_SUITE=ec
-  - TEST_SUITE=repli,go-rawx
+  - TEST_SUITE=repli,go-rawx,fsync
   - TEST_SUITE=3copies
   - TEST_SUITE=multi-beanstalk
-  - TEST_SUITE=small-cache
+  - TEST_SUITE=small-cache,fsync
   - TEST_SUITE=webhook
   - TEST_SUITE=slave
   - TEST_SUITE=cli
