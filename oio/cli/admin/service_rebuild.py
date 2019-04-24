@@ -19,8 +19,8 @@ from logging import getLogger
 
 from oio.account.rebuilder import AccountRebuilder
 from oio.blob.rebuilder import BlobRebuilder
+from oio.directory.meta2_rebuilder import Meta2Rebuilder
 from oio.rebuilder.meta1_rebuilder import Meta1Rebuilder
-from oio.rebuilder.meta2_rebuilder import Meta2Rebuilder
 
 
 class ServiceRebuildCommand(lister.Lister):
@@ -124,17 +124,41 @@ class Meta2Rebuild(ServiceRebuildCommand):
     log = getLogger(__name__ + '.Meta2Rebuild')
     columns = ('Reference', 'Status')
     rebuilder_class = Meta2Rebuilder
-    success = False
+    rebuilder = None
+
+    def get_parser(self, prog_name):
+        parser = super(Meta2Rebuild, self).get_parser(prog_name)
+
+        # input
+        parser.add_argument(
+            'service_id',
+            metavar='<service_id>',
+            help='ID of the service to rebuild')
+        # common
+        parser.add_argument(
+            '--rdir-fetch-limit', type=int,
+            help='Maximum number of entries returned in each rdir response. '
+                 '(default=%d)'
+            % self.rebuilder_class.DEFAULT_RDIR_FETCH_LIMIT)
+        return parser
 
     def _take_action(self, parsed_args):
-        meta2_rebuilder = Meta2Rebuilder(self.conf, self.log)
-        self.success = meta2_rebuilder.rebuilder_pass()
-        return
-        yield  # pylint: disable=unreachable
+        self.conf['rdir_fetch_limit'] = parsed_args.rdir_fetch_limit
+
+        self.rebuilder = Meta2Rebuilder(
+            self.conf, service_id=parsed_args.service_id, logger=self.log)
+        self.rebuilder.prepare_local_dispatcher()
+
+        for item, _, error in self.rebuilder.run():
+            if error is None:
+                status = 'OK'
+            else:
+                status = error
+            yield (self.rebuilder.string_from_item(item), status)
 
     def run(self, parsed_args):
         super(Meta2Rebuild, self).run(parsed_args)
-        if not self.success:
+        if not self.rebuilder.is_success():
             return 1
 
 
@@ -153,8 +177,9 @@ class RawxRebuildCommand(ServiceRebuildCommand):
         # common
         parser.add_argument(
             '--rdir-fetch-limit', type=int,
-            help='Maximum of entries returned in each rdir response. '
-                 '(default=%d)' % BlobRebuilder.DEFAULT_RDIR_FETCH_LIMIT)
+            help='Maximum number of entries returned in each rdir response. '
+                 '(default=%d)'
+            % self.rebuilder_class.DEFAULT_RDIR_FETCH_LIMIT)
         if not self.distributed:  # local
             parser.add_argument(
                 '--dry-run', action='store_true',
@@ -166,7 +191,8 @@ class RawxRebuildCommand(ServiceRebuildCommand):
                      'rebuilt elsewhere. This option is useful if the chunks '
                      'you are rebuilding are not actually missing but are '
                      'corrupted. '
-                     '(default=%s)' % BlobRebuilder.DEFAULT_TRY_CHUNK_DELETE)
+                     '(default=%s)'
+                % self.rebuilder_class.DEFAULT_TRY_CHUNK_DELETE)
 
         return parser
 
@@ -178,7 +204,7 @@ class RawxRebuildCommand(ServiceRebuildCommand):
             self.conf['try_chunk_delete'] = parsed_args.delete_faulty_chunks
 
         self.rebuilder = BlobRebuilder(
-            self.conf, rawx_id=parsed_args.service_id, logger=self.log)
+            self.conf, service_id=parsed_args.service_id, logger=self.log)
         if self.distributed:
             self.rebuilder.prepare_distributed_dispatcher()
         else:

@@ -133,7 +133,7 @@ def main():
 
     try:
         blob_rebuilder = BlobRebuilder(
-            conf, input_file=args.input_file, rawx_id=args.volume,
+            conf, input_file=args.input_file, service_id=args.volume,
             beanstalkd_addr=args.beanstalkd, logger=logger)
         if args.distributed and not args.dry_run:
             blob_rebuilder.prepare_distributed_dispatcher()
