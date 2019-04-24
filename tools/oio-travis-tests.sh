@@ -209,7 +209,7 @@ func_tests () {
 	if is_running_test_suite "repli"; then
 		${PYTHON} $(which openio-admin) meta0 check
 		${PYTHON} $(which openio-admin) meta1 check
-		${PYTHON} $(which openio-admin) dir check
+		${PYTHON} $(which openio-admin) directory check
 		${PYTHON} $(which oio-check-master) --oio-account $OIO_USER --oio-ns $OIO_NS $CNAME
 	fi
 	${PYTHON} $(which openio-admin) rdir check
