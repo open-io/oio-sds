@@ -101,7 +101,7 @@ oio_meta2_mover()
   echo ""
 
   ALL_META2=$(${CLI} cluster list meta2 -c Addr -c "Service Id" -c Volume -f value)
-  META2_COPY=$(/usr/bin/curl -X POST \
+  META2_COPY=$(/usr/bin/curl -sS -X POST \
       "http://${PROXY}/v3.0/${NAMESPACE}/lb/poll?pool=meta2" 2> /dev/null \
       | /bin/grep -o "\"addr\":" | /usr/bin/wc -l)
   if [ "${META2_COPY}" -eq 0 ]; then

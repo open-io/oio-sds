@@ -127,34 +127,34 @@ test_oio_lb_benchmark() {
 test_proxy_forward () {
 	proxy=$(oio-test-config.py -t proxy -1)
 
-	curl -X GET "http://$proxy/v3.0/status" >/dev/null
-	curl -X GET "http://$proxy/v3.0/cache/status" >/dev/null
-	curl -X GET "http://$proxy/v3.0/config" >/dev/null
-	curl -X POST "http://$proxy/v3.0/cache/flush/local" >/dev/null
-	curl -X POST "http://$proxy/v3.0/cache/flush/high" >/dev/null
-	curl -X POST "http://$proxy/v3.0/cache/flush/low" >/dev/null
-	curl -X POST -d '{"socket.nodelay.enabled":"on"}' \
+	curl -sS  -X GET "http://$proxy/v3.0/status" >/dev/null
+	curl -sS  -X GET "http://$proxy/v3.0/cache/status" >/dev/null
+	curl -sS  -X GET "http://$proxy/v3.0/config" >/dev/null
+	curl -sS  -X POST "http://$proxy/v3.0/cache/flush/local" >/dev/null
+	curl -sS  -X POST "http://$proxy/v3.0/cache/flush/high" >/dev/null
+	curl -sS  -X POST "http://$proxy/v3.0/cache/flush/low" >/dev/null
+	curl -sS  -X POST -d '{"socket.nodelay.enabled":"on"}' \
 		"http://$proxy/v3.0/config" >/dev/null
 
 	for url in $(oio-test-config.py -t meta2 -t meta0 -t meta1) ; do
-		curl -X GET "http://$proxy/v3.0/forward/config?id=$url" >/dev/null
-		curl -X POST -d '{"socket.nodelay.enabled":"on"}' \
+		curl -sS  -X GET "http://$proxy/v3.0/forward/config?id=$url" >/dev/null
+		curl -sS  -X POST -d '{"socket.nodelay.enabled":"on"}' \
 			"http://$proxy/v3.0/forward/config?id=$url" >/dev/null
-		curl -X POST "http://$proxy/v3.0/forward/flush?id=$url" >/dev/null
-		curl -X POST "http://$proxy/v3.0/forward/reload?id=$url" >/dev/null
-		curl -X POST "http://$proxy/v3.0/forward/ping?id=$url" >/dev/null
-		curl -X POST "http://$proxy/v3.0/forward/lean-glib?id=$url" >/dev/null
-		curl -X POST "http://$proxy/v3.0/forward/lean-sqlx?id=$url" >/dev/null
-		curl -X POST "http://$proxy/v3.0/forward/version?id=$url" >/dev/null
-		curl -X POST "http://$proxy/v3.0/forward/handlers?id=$url" >/dev/null
-		curl -X POST "http://$proxy/v3.0/forward/info?id=$url" >/dev/null
+		curl -sS  -X POST "http://$proxy/v3.0/forward/flush?id=$url" >/dev/null
+		curl -sS  -X POST "http://$proxy/v3.0/forward/reload?id=$url" >/dev/null
+		curl -sS  -X POST "http://$proxy/v3.0/forward/ping?id=$url" >/dev/null
+		curl -sS  -X POST "http://$proxy/v3.0/forward/lean-glib?id=$url" >/dev/null
+		curl -sS  -X POST "http://$proxy/v3.0/forward/lean-sqlx?id=$url" >/dev/null
+		curl -sS  -X POST "http://$proxy/v3.0/forward/version?id=$url" >/dev/null
+		curl -sS  -X POST "http://$proxy/v3.0/forward/handlers?id=$url" >/dev/null
+		curl -sS  -X POST "http://$proxy/v3.0/forward/info?id=$url" >/dev/null
 	done
 }
 
 wait_proxy_cache() {
 	cnt=$(oio-test-config.py -t rawx | wc -l)
 	while true; do
-		rawx=$(curl -s http://$proxy/v3.0/cache/show | python -m json.tool | grep -c rawx | cat)
+		rawx=$(curl -sS  http://$proxy/v3.0/cache/show | python -m json.tool | grep -c rawx | cat)
 		if [ $cnt -eq $rawx ]; then
 			break
 		fi
@@ -163,7 +163,7 @@ wait_proxy_cache() {
 
 	cnt=$(oio-test-config.py -t meta2 | wc -l)
 	while true; do
-		meta2=$(curl -s http://$proxy/v3.0/cache/show | python -m json.tool | grep -c meta2 | cat)
+		meta2=$(curl -sS  http://$proxy/v3.0/cache/show | python -m json.tool | grep -c meta2 | cat)
 		if [ $cnt -eq $meta2 ]; then
 			break
 		fi
