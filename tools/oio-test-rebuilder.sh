@@ -58,7 +58,7 @@ update_timeout()
   for META_TYPE in meta0 meta1 meta2; do
     $CLI cluster list "${META_TYPE}" -f value -c Addr \
         | while read -r URL; do
-      curl -X POST -d "{\"resolver.cache.csm0.ttl.default\": ${TIMEOUT}, \"resolver.cache.srv.ttl.default\": ${TIMEOUT}}" \
+      curl -sS -X POST -d "{\"resolver.cache.csm0.ttl.default\": ${TIMEOUT}, \"resolver.cache.srv.ttl.default\": ${TIMEOUT}}" \
           "http://${PROXY}/v3.0/forward/config?id=${URL}"
     done
   done
@@ -69,7 +69,7 @@ check_and_remove_meta()
 {
   TYPE=$1
 
-  META_COPY=$(/usr/bin/curl -X POST \
+  META_COPY=$(/usr/bin/curl -sS -X POST \
       "http://${PROXY}/v3.0/${NAMESPACE}/lb/poll?pool=${TYPE}" 2> /dev/null \
       | /bin/grep -o "\"addr\":" | /usr/bin/wc -l)
   if [ "${META_COPY}" -le 0 ]; then
