@@ -46,6 +46,10 @@ class ServiceRebuildCommand(lister.Lister):
             '--report-interval', type=int,
             help='Report interval in seconds. '
                  '(default=%d)' % self.rebuilder_class.DEFAULT_REPORT_INTERVAL)
+        parser.add_argument(
+            '--items-per-second', type=int,
+            help='Max items per second. '
+                 '(default=%d)' % self.rebuilder_class.DEFAULT_ITEM_PER_SECOND)
         if self.distributed:  # distributed
             distributed_tube_help = """
 The beanstalkd tube to use to send the items to rebuild. (default=%s)
@@ -57,14 +61,7 @@ The beanstalkd tube to use to send the items to rebuild. (default=%s)
             parser.add_argument(
                 '--workers', type=int,
                 help='Number of workers. '
-                     '(default=%d)' % self.rebuilder_class.DEFAULT_WORKERS
-            )
-            parser.add_argument(
-                '--items-per-second', type=int,
-                help='Max items per second. '
-                     '(default=%d)'
-                % self.rebuilder_class.DEFAULT_ITEM_PER_SECOND
-            )
+                     '(default=%d)' % self.rebuilder_class.DEFAULT_WORKERS)
         return parser
 
     def _take_action(self, parsed_args):
@@ -76,12 +73,12 @@ The beanstalkd tube to use to send the items to rebuild. (default=%s)
         self.conf.update(self.app.client_manager.client_conf)
         self.conf['namespace'] = self.app.options.ns
         self.conf['report_interval'] = parsed_args.report_interval
+        self.conf['items_per_second'] = parsed_args.items_per_second
         if self.distributed:  # distributed
             self.conf['distributed_beanstalkd_worker_tube'] = \
                 parsed_args.distributed_tube
         else:  # local
             self.conf['workers'] = parsed_args.workers
-            self.conf['items_per_second'] = parsed_args.items_per_second
 
         return self.columns, self._take_action(parsed_args)
 
