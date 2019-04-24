@@ -64,8 +64,8 @@ class ItemRepairCommand(lister.Lister):
 
         self.conf.update(self.app.client_manager.client_conf)
         self.conf['report_interval'] = parsed_args.report_interval
-        self.conf['workers'] = parsed_args.workers
         self.conf['items_per_second'] = parsed_args.items_per_second
+        self.conf['workers'] = parsed_args.workers
 
         return self.columns, self._take_action(parsed_args)
 

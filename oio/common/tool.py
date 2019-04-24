@@ -311,7 +311,12 @@ class _LocalDispatcher(_Dispatcher):
             'workers'), self.tool.DEFAULT_WORKERS)
         self.max_items_per_second = int_value(self.conf.get(
             'items_per_second'), self.tool.DEFAULT_ITEM_PER_SECOND)
-        self.queue_workers = eventlet.Queue(nb_workers * 2)
+        if self.max_items_per_second > 0:
+            # Max 5 seconds in advance
+            queue_size = self.max_items_per_second * 5
+        else:
+            queue_size = nb_workers * 1024
+        self.queue_workers = eventlet.Queue(queue_size)
         self.queue_reply = eventlet.Queue()
 
         self.workers = list()
@@ -396,6 +401,9 @@ class _DistributedDispatcher(_Dispatcher):
         super(_DistributedDispatcher, self).__init__(conf, tool)
         self.sending = False
 
+        self.max_items_per_second = int_value(self.conf.get(
+            'items_per_second'), self.tool.DEFAULT_ITEM_PER_SECOND)
+
         # All available beanstalkd
         conscience_client = ConscienceClient(self.conf)
         all_beanstalkd = conscience_client.all_services('beanstalkd')
@@ -421,6 +429,14 @@ class _DistributedDispatcher(_Dispatcher):
                 beanstalkd_worker.addr, beanstalkd_worker.tube)
         if not self.beanstalkd_workers:
             raise OioException('No beanstalkd worker available')
+        nb_workers = len(self.beanstalkd_workers)
+        if self.max_items_per_second > 0:
+            # Max 5 seconds in advance
+            queue_size_per_worker = self.max_items_per_second * 5 / nb_workers
+        else:
+            queue_size_per_worker = 1024
+        for _, beanstalkd_worker in self.beanstalkd_workers.items():
+            beanstalkd_worker.high_limit = queue_size_per_worker
 
         # Beanstalkd reply
         beanstalkd_reply = dict()
@@ -508,14 +524,19 @@ class _DistributedDispatcher(_Dispatcher):
 
     def _distribute_events(self, reply_loc=None):
         next_worker = 0
+        items_run_time = 0
         tasks_events = self._fetch_tasks_events_to_send()
         try:
+            items_run_time = ratelimit(items_run_time,
+                                       self.max_items_per_second)
             next_worker = self._send_task_event(next(tasks_events), reply_loc,
                                                 next_worker)
             self.sending = True
         except StopIteration:
             return
         for task_event in tasks_events:
+            items_run_time = ratelimit(items_run_time,
+                                       self.max_items_per_second)
             next_worker = self._send_task_event(task_event, reply_loc,
                                                 next_worker)
 
