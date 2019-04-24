@@ -19,39 +19,48 @@
 import argparse
 import sys
 
-from oio.rebuilder.meta2_rebuilder import Meta2Rebuilder
-from oio.common.logger import get_logger
+from oio.cli import make_logger_args_parser, get_logger_from_args
+from oio.directory.meta2_rebuilder import Meta2Rebuilder
 
 
 def make_arg_parser():
-    log_parser = argparse.ArgumentParser(add_help=False)
-    levels = ['DEBUG', 'INFO', 'WARN', 'ERROR']
-    log_parser.add_argument('--log-level', choices=levels,
-                            help="Log level")
-    log_parser.add_argument('--log-syslog-prefix',
-                            help="Syslog prefix")
-    log_parser.add_argument('--log-facility',
-                            help="Log facility")
-    log_parser.add_argument('--log-address',
-                            help="Log address")
-
-    descr = "Rebuild meta2 databases by setting 'last_rebuild' " \
-            "property in admin table, thus triggering a replication. " \
-            "And print the failed container IDs."
+    log_parser = make_logger_args_parser()
+    descr = """
+Rebuild meta2 databases by replacing the missing replicas
+and triggering a synchronization.
+"""
     parser = argparse.ArgumentParser(description=descr, parents=[log_parser])
+
+    # common
     parser.add_argument('namespace', help="Namespace")
-    parser.add_argument('--report-interval', type=int,
-                        help="Report interval in seconds (3600)")
-    parser.add_argument('--workers', type=int,
-                        help="Number of workers (1)")
-    parser.add_argument('--references-per-second', type=int,
-                        help="Max references per second per workers (30)")
-    parser.add_argument('-q', '--quiet', action='store_true',
-                        help="Don't print log on console")
-    ifile_help = "Read container IDs from this file instead of redis. " \
-                 "Each line should be formatted like 'container_id'."
-    parser.add_argument('--input-file', nargs='?',
-                        help=ifile_help)
+    parser.add_argument(
+        '--rdir-fetch-limit', type=int,
+        help='Maximum number of entries returned in each rdir response. '
+             '(default=%d)' % Meta2Rebuilder.DEFAULT_RDIR_FETCH_LIMIT)
+    parser.add_argument(
+        '--report-interval', type=int,
+        help='Report interval in seconds. '
+             '(default=%d)' % Meta2Rebuilder.DEFAULT_REPORT_INTERVAL)
+
+    # input
+    parser.add_argument(
+        '--service-id', '--volume', metavar='IP:PORT',
+        dest='service_id',
+        help='ID of the meta2 to rebuild')
+    parser.add_argument(
+        '--input-file',
+        help='Read container IDs from this file instead of redis. '
+             'Each line should contain one container ID.')
+
+    # local
+    parser.add_argument(
+        '--workers', type=int,
+        help='Number of workers. '
+             '(default=%d)' % Meta2Rebuilder.DEFAULT_WORKERS)
+    parser.add_argument(
+        '--items-per-second', type=int,
+        help='Max items per second. '
+             '(default=%d)' % Meta2Rebuilder.DEFAULT_ITEM_PER_SECOND)
 
     return parser
 
@@ -59,37 +68,38 @@ def make_arg_parser():
 if __name__ == '__main__':
     args = make_arg_parser().parse_args()
 
+    if not any((args.service_id, args.input_file)):
+        raise ValueError('Missing service ID or input file')
+
     conf = {}
+    # common
     conf['namespace'] = args.namespace
+    conf['rdir_fetch_limit'] = args.rdir_fetch_limit
+    conf['report_interval'] = args.report_interval
+    # local
+    conf['workers'] = args.workers
+    conf['items_per_second'] = args.references_per_second
 
-    if args.log_level is not None:
-        conf['log_level'] = args.log_level
-    if args.log_syslog_prefix is not None:
-        conf['syslog_prefix'] = args.log_syslog_prefix
-    else:
-        conf['syslog_prefix'] = 'OIO,%s,meta2-rebuilder' % args.namespace
-    if args.log_facility is not None:
-        conf['log_facility'] = args.log_facility
-    if args.log_address is not None:
-        conf['log_address'] = args.log_address
+    logger = get_logger_from_args(args, default_conf=conf)
 
-    if args.report_interval is not None:
-        conf['report_interval'] = args.report_interval
-    if args.workers is not None:
-        conf['workers'] = args.workers
-    if args.references_per_second is not None:
-        conf['items_per_second'] = args.references_per_second
-
-    logger = get_logger(conf, None, not args.quiet)
-
-    success = False
     try:
-        meta2_rebuilder = Meta2Rebuilder(conf, logger,
-                                         input_file=args.input_file)
-        success = meta2_rebuilder.rebuilder_pass()
+        meta2_rebuilder = Meta2Rebuilder(
+            conf, input_file=args.input_file, service_id=args.service_id,
+            logger=logger)
+        meta2_rebuilder.prepare_local_dispatcher()
+        tasks_res = meta2_rebuilder.run()
+        for item, _, error in tasks_res:
+            if error:
+                logger.error(
+                    'ERROR while rebuilding meta2 databases %s: %s',
+                    meta2_rebuilder.string_from_item(item), error)
+            else:
+                logger.info('Successful rebuilding for meta2 databases %s',
+                            meta2_rebuilder.string_from_item(item))
     except KeyboardInterrupt:
         logger.info('Exiting')
-    except Exception as e:
-        logger.exception('ERROR in rebuilder: %s' % e)
-    if not success:
+    except Exception as exc:
+        logger.exception('ERROR in rebuilder: %s', exc)
+        sys.exit(1)
+    if not meta2_rebuilder.is_success():
         sys.exit(1)
