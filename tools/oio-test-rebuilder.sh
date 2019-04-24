@@ -6,7 +6,7 @@ CONFIG=$(which oio-test-config.py)
 NAMESPACE=$($CONFIG -n)
 WORKERS=10
 
-SVCID_ENABLED=$(openio cluster list rawx -c 'Service Id' -f value | grep -v 'n/a')
+SVCID_ENABLED=$(openio cluster list meta2 rawx -c 'Service Id' -f value | grep -v 'n/a')
 GRIDINIT="gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock"
 
 usage() {
@@ -81,26 +81,29 @@ check_and_remove_meta()
   fi
 
   OLD_IFS=$IFS
-  IFS=' ' read -r META_IP_TO_REBUILD META_LOC_TO_REBUILD <<< \
-      "$($CLI cluster list "${TYPE}" -c Addr -c Volume \
+  IFS=' ' read -r META_IP_TO_REBUILD META_ID_TO_REBUILD META_LOC_TO_REBUILD <<< \
+      "$($CLI cluster list "${TYPE}" -c Addr -c "Service Id" -c Volume \
       -f value | /usr/bin/shuf -n 1)"
   IFS=$OLD_IFS
+  if [ -z "$SVCID_ENABLED" ] || [ "${META_ID_TO_REBUILD}" = "n/a" ]; then
+    META_ID_TO_REBUILD=${META_IP_TO_REBUILD}
+  fi
 
   SERVICE="${META_LOC_TO_REBUILD##*/}"
-  echo >&2 "Stop the ${TYPE} ${META_IP_TO_REBUILD}"
+  echo >&2 "Stop the ${TYPE} ${META_ID_TO_REBUILD}"
   ${GRIDINIT} stop "${SERVICE}" > /dev/null
 
-  echo >&2 "Remove the ${TYPE} ${META_IP_TO_REBUILD}"
+  echo >&2 "Remove the ${TYPE} ${META_ID_TO_REBUILD}"
   /bin/rm -rf "${TMP_VOLUME}"
   /bin/cp -a "${META_LOC_TO_REBUILD}" "${TMP_VOLUME}"
   /bin/rm -rf "${META_LOC_TO_REBUILD}"
   /bin/mkdir "${META_LOC_TO_REBUILD}"
 
-  echo >&2 "Restart the ${TYPE} ${META_IP_TO_REBUILD}"
+  echo >&2 "Restart the ${TYPE} ${META_ID_TO_REBUILD}"
   ${GRIDINIT} restart "${SERVICE}" > /dev/null
   ${CLI} cluster wait -s 50 "${TYPE}" > /dev/null
 
-  echo "${META_IP_TO_REBUILD} ${META_LOC_TO_REBUILD}"
+  echo "${META_ID_TO_REBUILD} ${META_LOC_TO_REBUILD}"
 }
 
 openioadmin_meta_rebuild()
@@ -153,7 +156,7 @@ openioadmin_meta_rebuild()
   echo ""
 
   if [ -n "$2" ] && [ -n "$3" ]; then
-    META_IP_TO_REBUILD=$2
+    META_ID_TO_REBUILD=$2
     META_LOC_TO_REBUILD=$3
   else
     META=$(check_and_remove_meta "${TYPE}")
@@ -163,7 +166,7 @@ openioadmin_meta_rebuild()
       return
     fi
     OLD_IFS=$IFS
-    IFS=' ' read -r META_IP_TO_REBUILD META_LOC_TO_REBUILD <<< "${META}"
+    IFS=' ' read -r META_ID_TO_REBUILD META_LOC_TO_REBUILD <<< "${META}"
     IFS=$OLD_IFS
   fi
 
@@ -173,10 +176,16 @@ openioadmin_meta_rebuild()
 
   sleep 3s
 
-  echo >&2 "Start the rebuilding for ${TYPE} ${META_IP_TO_REBUILD}" \
+  echo >&2 "Start the rebuilding for ${TYPE} ${META_ID_TO_REBUILD}" \
       "with ${WORKERS} workers"
-  if ! $ADMIN_CLI $TYPE rebuild --workers "${WORKERS}"; then
-    FAIL=true
+  if [ "${TYPE}" == "meta1" ]; then
+    if ! $ADMIN_CLI $TYPE rebuild --workers "${WORKERS}"; then
+        FAIL=true
+    fi
+  else
+    if ! $ADMIN_CLI $TYPE rebuild --workers "${WORKERS}" "${META_ID_TO_REBUILD}"; then
+        FAIL=true
+    fi
   fi
 
   set -e
@@ -189,7 +198,7 @@ openioadmin_meta_rebuild()
     if [ "${TYPE}" == "meta1" ]; then
       if ! USER=$(/usr/bin/sqlite3 "${META}" "SELECT user FROM users LIMIT 1" \
           2> /dev/null); then
-        echo >&2 "${META}: sqlite3 failed for ${TYPE} ${META_IP_TO_REBUILD}"
+        echo >&2 "${META}: sqlite3 failed for ${TYPE} ${META_ID_TO_REBUILD}"
         FAIL=true
         continue
       fi
@@ -201,27 +210,27 @@ openioadmin_meta_rebuild()
 
     META_AFTER=${META//"${TMP_VOLUME}"/"${META_LOC_TO_REBUILD}"}
     if ! [ -f "${META_AFTER}" ]; then
-      echo >&2 "${META}: No such file for ${TYPE} ${META_IP_TO_REBUILD}"
+      echo >&2 "${META}: No such file for ${TYPE} ${META_ID_TO_REBUILD}"
       FAIL=true
       continue
     fi
 
-    if ! LAST_REBUILD=$(/usr/bin/sqlite3 "${META_AFTER}" \
-        "SELECT v FROM admin where k == 'user.sys.last_rebuild'" \
-        2> /dev/null); then
-      echo >&2 "${META}: sqlite3 failed for ${TYPE} ${META_IP_TO_REBUILD}"
-      FAIL=true
-      continue
-    fi
-    if [ -z "${LAST_REBUILD}" ]
-    then
-      echo >&2 "${META}: no rebuild date found for ${TYPE} ${META_IP_TO_REBUILD}"
-      FAIL=true
-    elif [ "${REBULD_TIME}" -gt "${LAST_REBUILD}" ]
-    then
-      echo >&2 "${META}: last rebuild date too old for ${TYPE} ${META_IP_TO_REBUILD}: ${LAST_REBUILD} < ${REBULD_TIME}"
-      FAIL=true
-      continue
+    if [ "${TYPE}" == "meta1" ]; then
+      if ! LAST_REBUILD=$(/usr/bin/sqlite3 "${META_AFTER}" \
+          "SELECT v FROM admin where k == 'user.sys.last_rebuild'" \
+          2> /dev/null); then
+        echo >&2 "${META}: sqlite3 failed for ${TYPE} ${META_ID_TO_REBUILD}"
+        FAIL=true
+        continue
+      fi
+      if [ -z "${LAST_REBUILD}" ]; then
+        echo >&2 "${META}: no rebuild date found for ${TYPE} ${META_ID_TO_REBUILD}"
+        FAIL=true
+      elif [ "${REBULD_TIME}" -gt "${LAST_REBUILD}" ]; then
+        echo >&2 "${META}: last rebuild date too old for ${TYPE} ${META_ID_TO_REBUILD}: ${LAST_REBUILD} < ${REBULD_TIME}"
+        FAIL=true
+        continue
+      fi
     fi
 
     /bin/cp -a "${META}" "${TMP_FILE_BEFORE}"
@@ -229,7 +238,7 @@ openioadmin_meta_rebuild()
     if ! /usr/bin/sqlite3 "${TMP_FILE_BEFORE}" \
         "DELETE FROM admin WHERE k == 'version:main.admin';
         DELETE FROM admin WHERE k == 'user.sys.last_rebuild'" &> /dev/null; then
-      echo >&2 "${META}: sqlite3 failed for ${TYPE} ${META_IP_TO_REBUILD}"
+      echo >&2 "${META}: sqlite3 failed for ${TYPE} ${META_ID_TO_REBUILD}"
       FAIL=true
       continue
     fi
@@ -239,28 +248,28 @@ openioadmin_meta_rebuild()
     if ! /usr/bin/sqlite3 "${TMP_FILE_AFTER}" \
         "DELETE FROM admin WHERE k == 'version:main.admin';
         DELETE FROM admin WHERE k == 'user.sys.last_rebuild'" &> /dev/null; then
-      echo >&2 "${META}: sqlite3 failed for ${TYPE} ${META_IP_TO_REBUILD}"
+      echo >&2 "${META}: sqlite3 failed for ${TYPE} ${META_ID_TO_REBUILD}"
       FAIL=true
       continue
     fi
     if ! DIFF=$(mysqldiff "${TMP_FILE_BEFORE}" "${TMP_FILE_AFTER}" \
         2> /dev/null); then
-      echo >&2 "${META}: sqldiff failed for ${TYPE} ${META_IP_TO_REBUILD}"
+      echo >&2 "${META}: sqldiff failed for ${TYPE} ${META_ID_TO_REBUILD}"
       FAIL=true
       continue
     fi
     if [ -n "${DIFF}" ]; then
-      echo >&2 "${META}: Wrong content for ${TYPE} ${META_IP_TO_REBUILD}"
+      echo >&2 "${META}: Wrong content for ${TYPE} ${META_ID_TO_REBUILD}"
       FAIL=true
       continue
     fi
   done
 
   if [ "${FAIL}" = true ]; then
-    printf "${RED}\noio-%s-rebuilder: FAILED\n${NO_COLOR}" "${TYPE}"
+    printf "${RED}\nopenio-admin %s rebuild: FAILED\n${NO_COLOR}" "${TYPE}"
     exit 1
   else
-    printf "${GREEN}\noio-%s-rebuilder: OK\n${NO_COLOR}" "${TYPE}"
+    printf "${GREEN}\nopenio-admin %s rebuild: OK\n${NO_COLOR}" "${TYPE}"
   fi
 }
 
@@ -278,8 +287,7 @@ remove_rawx()
       "$($CLI cluster list rawx -c Addr -c "Service Id" -c Volume -f value \
       | /usr/bin/shuf -n 1)"
   IFS=$OLD_IFS
-  if [ -z "$SVCID_ENABLED" ] || [ "${RAWX_ID_TO_REBUILD}" = "n/a" ]
-  then
+  if [ -z "$SVCID_ENABLED" ] || [ "${RAWX_ID_TO_REBUILD}" = "n/a" ]; then
     RAWX_ID_TO_REBUILD=${RAWX_IP_TO_REBUILD}
   fi
 
@@ -441,13 +449,13 @@ openioadmin_rawx_rebuild()
   echo
 
   if [ "${FAIL}" = true ]; then
-    printf "${RED}\noio-blob-rebuilder: FAILED\n${NO_COLOR}"
+    printf "${RED}\nopenio-admin rawx rebuild: FAILED\n${NO_COLOR}"
     exit 1
   else
     echo >&2 "Remove the incident for rawx ${RAWX_ID_TO_REBUILD}"
     $CLI volume admin clear --before-incident "${RAWX_ID_TO_REBUILD}"
 
-    printf "${GREEN}\noio-blob-rebuilder: OK\n${NO_COLOR}"
+    printf "${GREEN}\nopenio-admin rawx rebuild: OK\n${NO_COLOR}"
   fi
 }
 
@@ -465,7 +473,7 @@ openioadmin_all_rebuild()
     return
   fi
   OLD_IFS=$IFS
-  IFS=' ' read -r META1_IP_TO_REBUILD META1_LOC_TO_REBUILD <<< "${META1}"
+  IFS=' ' read -r META1_ID_TO_REBUILD META1_LOC_TO_REBUILD <<< "${META1}"
   IFS=$OLD_IFS
   /bin/rm -rf "${TMP_VOLUME}_meta1"
   /bin/cp -a "${TMP_VOLUME}" "${TMP_VOLUME}_meta1"
@@ -476,7 +484,7 @@ openioadmin_all_rebuild()
     return
   fi
   OLD_IFS=$IFS
-  IFS=' ' read -r META2_IP_TO_REBUILD META2_LOC_TO_REBUILD <<< "${META2}"
+  IFS=' ' read -r META2_ID_TO_REBUILD META2_LOC_TO_REBUILD <<< "${META2}"
   IFS=$OLD_IFS
   /bin/rm -rf "${TMP_VOLUME}_meta2"
   /bin/cp -a "${TMP_VOLUME}" "${TMP_VOLUME}_meta2"
@@ -494,11 +502,11 @@ openioadmin_all_rebuild()
 
   /bin/rm -rf "${TMP_VOLUME}"
   /bin/cp -a "${TMP_VOLUME}_meta1" "${TMP_VOLUME}"
-  openioadmin_meta_rebuild "meta1" "${META1_IP_TO_REBUILD}" "${META1_LOC_TO_REBUILD}"
+  openioadmin_meta_rebuild "meta1" "${META1_ID_TO_REBUILD}" "${META1_LOC_TO_REBUILD}"
 
   /bin/rm -rf "${TMP_VOLUME}"
   /bin/cp -a "${TMP_VOLUME}_meta2" "${TMP_VOLUME}"
-  openioadmin_meta_rebuild "meta2" "${META2_IP_TO_REBUILD}" "${META2_LOC_TO_REBUILD}"
+  openioadmin_meta_rebuild "meta2" "${META2_ID_TO_REBUILD}" "${META2_LOC_TO_REBUILD}"
 
   /bin/rm -rf "${TMP_VOLUME}"
   /bin/cp -a "${TMP_VOLUME}_rawx" "${TMP_VOLUME}"

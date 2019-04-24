@@ -38,7 +38,7 @@ class BlobRebuilder(Tool):
     DEFAULT_DRY_RUN = False
 
     def __init__(self, conf,
-                 input_file=None, rawx_id=None, **kwargs):
+                 input_file=None, service_id=None, **kwargs):
         super(BlobRebuilder, self).__init__(conf, **kwargs)
 
         # counters
@@ -47,7 +47,7 @@ class BlobRebuilder(Tool):
 
         # input
         self.input_file = input_file
-        self.rawx_id = rawx_id
+        self.rawx_id = service_id
 
         # rawx/rdir
         self.rdir_client = RdirClient(self.conf, logger=self.logger)
