@@ -2,12 +2,7 @@
 
 export
 
-go get gopkg.in/ini.v1 gopkg.in/tylerb/graceful.v1
-
-virtualenv $HOME/oio && source $HOME/oio/bin/activate
-pip install --upgrade pip setuptools virtualenv tox
-pip install --upgrade -r all-requirements.txt -r test-requirements.txt
-pip install --upgrade zkpython
+. ./tools/user-deps.sh
 
 export TEST_SUITE=build,3copies
 set -e
