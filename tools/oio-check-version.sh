@@ -34,8 +34,6 @@ echo "latest tag is                      $LATEST_TAG"
 export LATEST_TAG
 SHORT_VERSION=$(echo "$LATEST_TAG" | sed -E 's/^([[:digit:]]+\.)([[:digit:]]+).*$/\1\2/')
 
-PKG_CONFIG_PATH=/tmp/oio/lib/pkgconfig
-export PKG_CONFIG_PATH
 PKGCONFIG_VERSION=$(pkg-config --modversion oio-sds)
 
 echo "oio-sds short version is           $SHORT_VERSION"

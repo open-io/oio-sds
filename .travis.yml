@@ -64,13 +64,15 @@ env:
   - G_SLICE=always-malloc
   - G_DEBUG_LEVEL=W
   - ZK=127.0.0.1:2181
+  - LD_LIBRARY_PATH=/tmp/oio/lib
+  - PKG_CONFIG_PATH=/tmp/oio/lib/pkgconfig
 
 jobs:
   fast_finish: true
   include:
-    - stage: fail fast
+    - stage: Fail Fast tests
       script: ./tools/oio-travis-failfast.sh
-      name: Copyright, Version, Release build, SDK build
+      name: Copyright, Release build, SDK build
     - script: ./tools/oio-travis-unit.sh
       name: C unit/func, Python unit/pep8
     - stage: Functional tests (fast)
