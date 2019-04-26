@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 
-NAMESPACE=$($(which oio-test-config.py) -n)
-META1_DIGITS=$($(which oio-test-config.py) -v meta1_digits)
-CLI=$(which openio)
+NAMESPACE=$($(command -v oio-test-config.py) -n)
+META1_DIGITS=$($(command -v oio-test-config.py) -v meta1_digits)
+CLI=$(command -v openio)
+M2_MOVER="$(command -v oio-meta2-mover)"
 
 SVCID_ENABLED=$(openio cluster list rawx -c 'Service Id' -f value | grep -v 'n/a')
 
@@ -38,7 +39,7 @@ while getopts ":n:d:" opt; do
   esac
 done
 
-PROXY=$($(which oio-test-config.py) -t proxy -1)
+PROXY=$($(command -v oio-test-config.py) -t proxy -1)
 
 FAIL=false
 
@@ -73,7 +74,7 @@ oio_meta2_mover()
     fi
     OLD_IFS=$IFS
     IFS=' '
-    for TABLE in $(echo "${TABLES_1}"); do
+    for TABLE in ${TABLES_1}; do
       if ! TABLE_1=$(/usr/bin/sqlite3 "${1}" "SELECT * FROM ${TABLE}" \
           2> /dev/null); then
         IFS=$OLD_IFS
@@ -178,7 +179,7 @@ oio_meta2_mover()
       POSSIBLE_DESTS=$ALL_META2
       OLD_IFS=$IFS
       IFS=$'\n'
-      for PEER_ID in $(echo "${PEERS_BEFORE}"); do
+      for PEER_ID in ${PEERS_BEFORE}; do
         POSSIBLE_DESTS=$(echo "${POSSIBLE_DESTS}" | /bin/sed "/${PEER_ID}/d")
       done
       IFS=$OLD_IFS
@@ -199,7 +200,7 @@ oio_meta2_mover()
 
     if [ -z "${DEST_ID}" ]; then
       echo "oio-meta2-mover ${NAMESPACE} ${BASE}.${SEQ} ${META2_ID}"
-      if ! $(which oio-meta2-mover) "${NAMESPACE}" "${BASE}" \
+      if ! $M2_MOVER "${NAMESPACE}" "${BASE}" \
           "${META2_ID}" &> /dev/null; then
         echo "${META2}: oio-meta2-mover failed"
         FAIL=true
@@ -207,7 +208,7 @@ oio_meta2_mover()
     else
       echo "oio-meta2-mover ${NAMESPACE} ${BASE}.${SEQ} ${META2_ID}" \
           "${DEST_ID}"
-      if ! $(which oio-meta2-mover) "${NAMESPACE}" "${BASE}" \
+      if ! $M2_MOVER "${NAMESPACE}" "${BASE}" \
           "${META2_ID}" "${DEST_ID}" &> /dev/null; then
         echo "${META2}: oio-meta2-mover failed"
         FAIL=true
@@ -231,7 +232,7 @@ oio_meta2_mover()
     unset REAL_DEST_ID
     OLD_IFS=$IFS
     IFS=$'\n'
-    for META1_ID in $(echo "${META1_PEERS_ID}"); do
+    for META1_ID in ${META1_PEERS_ID}; do
       META1_LOC=$(echo "${ALL_META1}" | /bin/grep "${META1_ID}" \
           | /usr/bin/cut -d' ' -f3)
       META1=$(/bin/ls "${META1_LOC}/"*"/${BASE:0:${META1_DIGITS}}${EMPTY_META1_PREFIX:0:4-${META1_DIGITS}}.meta1")
@@ -250,7 +251,7 @@ oio_meta2_mover()
       PEERS_AFTER_COPY=$PEERS_AFTER
       OLD_IFS=$IFS
       IFS=$'\n'
-      for PEER_ID in $(echo "${PEERS_TO_KEEP}"); do
+      for PEER_ID in ${PEERS_TO_KEEP}; do
         if ! echo "${PEERS_AFTER_COPY}" | /bin/grep -q "${PEER_ID}" ; then
           echo "${META2}: Missing IP (${PEER_ID}) for the meta1 ${META1_ID}"
           FAIL=true
@@ -288,7 +289,7 @@ oio_meta2_mover()
     unset VERSION_AFTER
     OLD_IFS=$IFS
     IFS=$'\n'
-    for PEER_ID in $(echo "${PEERS_AFTER}"); do
+    for PEER_ID in ${PEERS_AFTER}; do
       PEER_LOC=$(echo "${ALL_META2}" | /bin/grep "${PEER_ID}" \
           | /usr/bin/cut -d' ' -f3)
       META2_AFTER=$(/bin/ls "${PEER_LOC}/"*"/${FILE}")
@@ -306,7 +307,7 @@ oio_meta2_mover()
       fi
       OLD_IFS=$IFS
       IFS=$'\n'
-      for PEER_ID_BIS in $(echo "${PEERS_AFTER}"); do
+      for PEER_ID_BIS in ${PEERS_AFTER}; do
         if ! echo "${PEERS_AFTER_BIS}" | /bin/grep -q "${PEER_ID_BIS}"; then
           echo "${META2}: Missing ID (${PEER_ID_BIS}) for the meta2 ${PEER_ID}"
           FAIL=true
@@ -380,7 +381,7 @@ oio_meta2_mover()
 
     OLD_IFS=$IFS
     IFS=$'\n'
-    for PEER_ID in $(echo "${PEERS_AFTER}"); do
+    for PEER_ID in ${PEERS_AFTER}; do
       if ! echo "${PEERS_AFTER_BIS}" | /bin/grep -q "${PEER_ID}"; then
         echo "${META2}: Missing ID (${PEER_ID}) for the 'container locate'"
         FAIL=true
