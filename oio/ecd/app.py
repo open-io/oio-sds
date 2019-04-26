@@ -25,9 +25,9 @@ from oio.api.ec import EcMetachunkWriter, ECChunkDownloadHandler
 from oio.api.replication import ReplicatedMetachunkWriter
 from oio.api.backblaze import BackblazeChunkWriteHandler, \
     BackblazeChunkDownloadHandler
-from oio.api.backblaze_http import BackblazeUtils, BackblazeUtilsException
+from oio.api.backblaze_http import BackblazeUtils
 from oio.api.io import ChunkReader
-from oio.common.exceptions import OioException
+from oio.common.exceptions import OioException, ConfigurationException
 from oio.common.wsgi import WerkzeugApp
 
 SYS_PREFIX = 'x-oio-chunk-meta-'
@@ -134,7 +134,7 @@ class ECD(WerkzeugApp):
         key_file = self.conf.get('key_file')
         try:
             creds = BackblazeUtils.get_credentials(storage_method, key_file)
-        except BackblazeUtilsException as exc:
+        except ConfigurationException as exc:
             return Response(exc, 500)
         handler = BackblazeChunkWriteHandler(sysmeta, upload_chunk,
                                              meta_checksum, storage_method,
@@ -175,7 +175,7 @@ class ECD(WerkzeugApp):
         key_file = self.conf.get('key_file')
         try:
             creds = BackblazeUtils.get_credentials(storage_method, key_file)
-        except BackblazeUtilsException as exc:
+        except ConfigurationException as exc:
             return Response(exc, 500)
         if meta_start is not None:
             if meta_start < 0:
