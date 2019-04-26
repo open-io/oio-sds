@@ -332,3 +332,15 @@ class AdminClient(ProxyClient):
         and no parameter will survice a service restart.
         """
         self._forward_service_action(svc_id, '/config', json=config, **kwargs)
+
+    def service_get_info(self, svc_id, **kwargs):
+        """
+        Get all information from the specified service.
+        Works on all services using ASN.1 protocol except conscience.
+
+        :returns: a dictionary with all information keys the
+            service recognizes, and their current value.
+        :rtype: `dict`
+        """
+        return self._forward_service_action(
+            svc_id, '/info', method='GET', **kwargs)
