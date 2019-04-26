@@ -46,72 +46,68 @@ class AccountUpdateFilter(Filter):
             REQID_HEADER: event.reqid or request_id('account-update-')
         }
 
-        if event.event_type in CONTAINER_EVENTS:
-            mtime = event.when / 1000000.0  # convert to seconds
-            data = event.data
-            url = event.env.get('url')
-            body = dict()
-            if event.event_type == EventTypes.CONTAINER_STATE:
-                body['objects'] = data.get('object-count', 0)
-                body['bytes'] = data.get('bytes-count', 0)
-                body['damaged_objects'] = data.get('damaged-objects', 0)
-                body['missing_chunks'] = data.get('missing-chunks', 0)
-                body['mtime'] = mtime
-            elif event.event_type == EventTypes.CONTAINER_NEW:
-                body['mtime'] = mtime
-            try:
+        try:
+            if event.event_type in CONTAINER_EVENTS:
+                mtime = event.when / 1000000.0  # convert to seconds
+                data = event.data
+                url = event.env.get('url')
+                body = dict()
+                if event.event_type == EventTypes.CONTAINER_STATE:
+                    body['objects'] = data.get('object-count', 0)
+                    body['bytes'] = data.get('bytes-count', 0)
+                    body['damaged_objects'] = data.get('damaged-objects', 0)
+                    body['missing_chunks'] = data.get('missing-chunks', 0)
+                    body['mtime'] = mtime
+                elif event.event_type == EventTypes.CONTAINER_NEW:
+                    body['mtime'] = mtime
                 self.account.container_update(
                     url.get('account'), url.get('user'), body,
                     connection_timeout=self.connection_timeout,
                     read_timeout=self.read_timeout, headers=headers)
-            except OioTimeout as exc:
-                msg = 'account update failure: %s' % str(exc)
-                resp = EventError(event=Event(env), body=msg)
-                return resp(env, cb)
-            except ClientException as exc:
-                if (exc.http_status == 409 and
-                        "No update needed" in exc.message):
-                    self.logger.info("Discarding event %s (%s): %s",
-                                     event.job_id,
-                                     event.event_type,
-                                     exc.message)
+            elif event.event_type == EventTypes.ACCOUNT_SERVICES:
+                url = event.env.get('url')
+                if isinstance(event.data, list):
+                    # Legacy format: list of services
+                    new_services = event.data
                 else:
-                    msg = 'account update failure: %s' % str(exc)
-                    resp = EventError(event=Event(env), body=msg)
-                    return resp(env, cb)
-        elif event.event_type == EventTypes.ACCOUNT_SERVICES:
-            url = event.env.get('url')
-            if isinstance(event.data, list):
-                # Legacy format: list of services
-                new_services = event.data
-            else:
-                # New format: dictionary with new and deleted services
-                new_services = event.data.get('services') or list()
-            m2_services = [x for x in new_services if x.get('type') == 'meta2']
-            if not m2_services:
-                # No service in charge, container has been deleted
-                try:
+                    # New format: dictionary with new and deleted services
+                    new_services = event.data.get('services') or list()
+                m2_services = [x for x in new_services
+                               if x.get('type') == 'meta2']
+                if not m2_services:
+                    # No service in charge, container has been deleted
                     self.account.container_update(
                         url.get('account'), url.get('user'),
                         {'dtime': event.when / 1000000.0},
                         connection_timeout=self.connection_timeout,
                         read_timeout=self.read_timeout, headers=headers)
-                except OioTimeout as exc:
-                    msg = 'failed to remove %s from account %s: %s' % (
-                        url.get('user'), url.get('account'), str(exc))
-                    resp = EventError(event=event, body=msg)
-                    return resp(env, cb)
+                else:
+                    try:
+                        self.account.account_create(
+                            url.get('account'),
+                            connection_timeout=self.connection_timeout,
+                            read_timeout=self.read_timeout, headers=headers)
+                    except OioTimeout as exc:
+                        # The account will be autocreated by the next event,
+                        # just warn and continue.
+                        self.logger.warn(
+                            'Failed to create account %s (reqid=%s): %s',
+                            url.get('account'), headers[REQID_HEADER], exc)
+        except OioTimeout as exc:
+            msg = 'account update failure: %s' % str(exc)
+            resp = EventError(event=Event(env), body=msg)
+            return resp(env, cb)
+        except ClientException as exc:
+            if (exc.http_status == 409 and
+                    "No update needed" in exc.message):
+                self.logger.info(
+                    "Discarding event %s (job_id=%s, reqid=%s): %s",
+                    event.job_id, headers[REQID_HEADER],
+                    event.event_type, exc.message)
             else:
-                try:
-                    self.account.account_create(
-                        url.get('account'),
-                        connection_timeout=self.connection_timeout,
-                        read_timeout=self.read_timeout, headers=headers)
-                except OioTimeout as exc:
-                    # The account will be autocreated by the next event,
-                    # just warn and continue.
-                    self.logger.warn('Failed to create account %s: %s',
-                                     url.get('account'), exc)
+                msg = 'account update failure: %s' % str(exc)
+                resp = EventError(event=Event(env), body=msg)
+                return resp(env, cb)
         return self.app(env, cb)
 
 
