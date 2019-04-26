@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 
-CLI=$(which openio)
-ADMIN_CLI=$(which openio-admin)
-CONFIG=$(which oio-test-config.py)
+CLI=$(command -v openio)
+ADMIN_CLI=$(command -v openio-admin)
+CONFIG=$(command -v oio-test-config.py)
 NAMESPACE=$($CONFIG -n)
+INTEGRITY="$(command -v oio-crawler-integrity)"
 WORKERS=10
 
 SVCID_ENABLED=$(openio cluster list meta2 rawx -c 'Service Id' -f value | grep -v 'n/a')
@@ -129,7 +130,7 @@ openioadmin_meta_rebuild()
     fi
     OLD_IFS=$IFS
     IFS=' '
-    for TABLE in $(echo "${TABLES_1}"); do
+    for TABLE in ${TABLES_1}; do
       if ! TABLE_1=$(/usr/bin/sqlite3 "${1}" "SELECT * FROM ${TABLE}" \
           2> /dev/null); then
         IFS=$OLD_IFS
@@ -373,6 +374,7 @@ openioadmin_rawx_rebuild()
   set +e
 
   echo >&2 "Check the differences"
+  START=$(date +%s)
 
   TOTAL_CHUNKS_AFTER=0
   while read -r RAWX_LOC; do
@@ -415,13 +417,13 @@ openioadmin_rawx_rebuild()
     fi
     OLD_IFS=$IFS
     IFS=$'\n'
-    for CHUNK_URL in $(echo "${CHUNK_URLS}"); do
+    for CHUNK_URL in ${CHUNK_URLS}; do
       if [ "${CHUNK_URL##*/}" = "${CHUNK_ID}" ]; then
         echo >&2 "${CHUNK}: (${CHUNK_URL}) meta2 not updated for rawx ${RAWX_ID_TO_REBUILD}"
         FAIL=true
         continue
       fi
-      if ! $(which oio-crawler-integrity) "${NAMESPACE}" "${ACCOUNT}" \
+      if ! $INTEGRITY "$NAMESPACE" "${ACCOUNT}" \
           "${CONTAINER}" "${CONTENT}" "${CHUNK_URL}" &> /dev/null; then
         echo >&2 "${CHUNK}: (${CHUNK_URL}) oio-crawler-integrity failed for rawx ${RAWX_ID_TO_REBUILD}"
         FAIL=true
@@ -455,6 +457,8 @@ openioadmin_rawx_rebuild()
     echo -n '.'
   done
   echo
+  END=$(date +%s)
+  echo "Verification duration: $((END - START))s"
 
   if [ "${FAIL}" = true ]; then
     printf "${RED}\nopenio-admin rawx rebuild: FAILED\n${NO_COLOR}"

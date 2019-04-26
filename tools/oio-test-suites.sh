@@ -18,25 +18,25 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 function dump_syslog {
-	cmd=tail
+	cmd="tail"
 	if ! [ -r /var/log/syslog ] ; then
 		cmd="sudo tail"
 	fi
 	$cmd -n 500 /var/log/syslog
 	pip list
-	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock status3
+	gridinit_cmd -S "$HOME/.oio/sds/run/gridinit.sock" status3
 }
 
 function trap_exit {
 	set +e
 	#pip list
 	BEANSTALK=$(oio-test-config.py -t beanstalkd)
-	if [ ! -z "${BEANSTALK}" ]; then
+	if [ -n "${BEANSTALK}" ]; then
 		# some tests stop all services, we must start beanstalk to dump events
-		gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock start @beanstalkd
+		gridinit_cmd -S "$HOME/.oio/sds/run/gridinit.sock" start @beanstalkd
 		oio-dump-buried-events.py ${BEANSTALK}
 	fi
-	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock status3
+	gridinit_cmd -S "$HOME/.oio/sds/run/gridinit.sock" status3
 	#dump_syslog
 	oio-gdb.py
 }
@@ -126,8 +126,8 @@ test_proxy_forward () {
 wait_proxy_cache() {
 	cnt=$(oio-test-config.py -t rawx | wc -l)
 	while true; do
-		rawx=$(curl -sS  http://$proxy/v3.0/cache/show | python -m json.tool | grep -c rawx | cat)
-		if [ $cnt -eq $rawx ]; then
+		rawx=$(curl -sS http://$proxy/v3.0/cache/show | python -m json.tool | grep -c rawx | cat)
+		if [ "$cnt" -eq "$rawx" ]; then
 			break
 		fi
 		sleep 0.1
@@ -135,8 +135,8 @@ wait_proxy_cache() {
 
 	cnt=$(oio-test-config.py -t meta2 | wc -l)
 	while true; do
-		meta2=$(curl -sS  http://$proxy/v3.0/cache/show | python -m json.tool | grep -c meta2 | cat)
-		if [ $cnt -eq $meta2 ]; then
+		meta2=$(curl -sS http://$proxy/v3.0/cache/show | python -m json.tool | grep -c meta2 | cat)
+		if [ "$cnt" -eq "$meta2" ]; then
 			break
 		fi
 		sleep 0.1
@@ -156,7 +156,7 @@ ec_tests () {
 	/bin/rm "$OIO_PATH"
 	[ "$SIZE0" == "$SIZE" ]
 
-	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
+	gridinit_cmd -S "$HOME/.oio/sds/run/gridinit.sock" stop
 	sleep 0.5
 }
 
@@ -185,22 +185,22 @@ func_tests () {
 	# test a content with a strange name, through the CLI and the API
 	/usr/bin/fallocate -l $RANDOM /tmp/blob%
 	CNAME=$RANDOM
-	${PYTHON} $(which openio) object create $CNAME /tmp/blob%
+	${PYTHON} $CLI object create $CNAME /tmp/blob%
 
 	if is_running_test_suite "repli"; then
-		${PYTHON} $(which openio-admin) meta0 check
-		${PYTHON} $(which openio-admin) meta1 check
-		${PYTHON} $(which openio-admin) directory check
-		${PYTHON} $(which oio-check-master) --oio-account $OIO_USER --oio-ns $OIO_NS $CNAME
+		${PYTHON} ${ADMIN_CLI} meta0 check
+		${PYTHON} ${ADMIN_CLI} meta1 check
+		${PYTHON} ${ADMIN_CLI} directory check
+		${PYTHON} $(command -v oio-check-master) --oio-account $OIO_USER --oio-ns $OIO_NS $CNAME
 	fi
-	${PYTHON} $(which openio-admin) rdir check
+	${PYTHON} ${ADMIN_CLI} rdir check
 
 	# At least spawn one oio-crawler-integrity on a container that exists
 	# TODO(jfs): Move in a tests/functional/cli python test
-	${PYTHON} $(which oio-crawler-integrity) $OIO_NS $OIO_ACCOUNT $CNAME
+	${PYTHON} $(command -v oio-crawler-integrity) $OIO_NS $OIO_ACCOUNT $CNAME
 
 	# Run the whole suite of functional tests (Python)
-	cd $SRCDIR
+	cd "$SRCDIR"
 	tox -e coverage
 	tox -e func
 
@@ -211,10 +211,10 @@ func_tests () {
 	# test a content with a strange name, through the CLI and the API
 	/usr/bin/fallocate -l $RANDOM /tmp/blob%
 	CNAME=$RANDOM
-	${PYTHON} $(which openio) object create $CNAME /tmp/blob%
+	${PYTHON} $CLI object create $CNAME /tmp/blob%
 	# At least spawn one oio-crawler-integrity on a container that exists
 	# TODO(jfs): Move in a tests/functional/cli python test
-	${PYTHON} $(which oio-crawler-integrity) $OIO_NS $OIO_ACCOUNT $CNAME
+	${PYTHON} $(command -v oio-crawler-integrity) $OIO_NS $OIO_ACCOUNT $CNAME
 
 	# Create a file just bigger than chunk size
 	SOURCE=$(mktemp)
@@ -244,7 +244,7 @@ test_meta2_filters () {
 
 	cd $SRCDIR
 	tox -e coverage
-	${PYTHON} $(which nosetests) tests.functional.m2_filters.test_filters
+	${PYTHON} $(command -v nosetests) tests.functional.m2_filters.test_filters
 
 	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
 	sleep 0.5
@@ -310,6 +310,8 @@ if [[ -n "$PYTHON_COVERAGE" ]] ; then
 fi
 
 OIO_RESET="oio-reset.sh -v"
+CLI=$(command -v openio)
+ADMIN_CLI=$(command -v openio-admin)
 
 if is_running_test_suite "single" ; then
 	func_tests -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
@@ -386,6 +388,42 @@ if is_running_test_suite "webhook" ; then
 	func_tests -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-webhook.yml"
 fi
+
+func_tests_rebuilder_mover () {
+	randomize_env
+	args=
+	if is_running_test_suite "with-service-id"; then
+		args="${args} -U"
+	fi
+	if is_running_test_suite "with-random-service-id"; then
+		args="${args} -R"
+	fi
+	if is_running_test_suite "go-rawx"; then
+		args="${args} -f "${SRCDIR}/etc/bootstrap-option-go-rawx.yml""
+	fi
+	$OIO_RESET ${args} -N $OIO_NS $@
+
+	test_proxy_forward
+
+	wait_proxy_cache
+
+	for i in $(seq 1 100); do
+		dd if=/dev/urandom of=/tmp/openio_object_$i bs=1K \
+				count=$(shuf -i 1-2000 -n 1) 2> /dev/null
+		echo "object create container-${RANDOM} /tmp/openio_object_$i" \
+				"--name object-${RANDOM} -f value"
+	done | ${PYTHON} $CLI
+
+	if [ -n "${REBUILDER}" ]; then
+		${SRCDIR}/tools/oio-test-rebuilder.sh -n "${OIO_NS}"
+	fi
+	if [ -n "${MOVER}" ]; then
+		${SRCDIR}/tools/oio-test-mover.sh -n "${OIO_NS}"
+	fi
+
+	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
+	sleep 0.5
+}
 
 if is_running_test_suite "rebuilder" ; then
 	echo -e "\n### Tests all rebuilders"
