@@ -263,6 +263,7 @@ openioadmin_meta_rebuild()
       FAIL=true
       continue
     fi
+    echo -n '.'
   done
 
   if [ "${FAIL}" = true ]; then
@@ -273,10 +274,17 @@ openioadmin_meta_rebuild()
   fi
 }
 
+declare -A -x ID_TO_NETLOC
+
 resolve_chunk()
 {
   ID=$(echo "$1" | sed -E -n -e 's,http://([^/]+)/.*,\1,p')
-  NETLOC=$($CLI cluster resolve -f value rawx "$ID")
+  NETLOC="${ID_TO_NETLOC[$ID]}"
+  if [ -z "$NETLOC" ]
+  then
+    NETLOC=$($CLI cluster resolve -f value rawx "$ID")
+    ID_TO_NETLOC[$ID]="$NETLOC"
+  fi
   echo "${1/$ID/$NETLOC}"
 }
 
