@@ -19,8 +19,6 @@ from oio.common.constants import REQID_HEADER
 from oio.event.evob import Event, EventTypes
 from oio.event.filters.base import Filter
 from oio.common.exceptions import OioException
-from oio.api.backblaze import BackblazeDeleteHandler
-from oio.api.backblaze_http import BackblazeUtils
 from oio.common.storage_method import STORAGE_METHODS, guess_storage_method
 from oio.common.utils import request_id
 
@@ -55,6 +53,8 @@ class ContentReaperFilter(Filter):
                     resp.chunk.get('real_url', resp.chunk['url']), resp.status)
 
     def _handle_b2(self, url, chunks, headers, storage_method, reqid):
+        from oio.api.backblaze import BackblazeDeleteHandler
+        from oio.api.backblaze_http import BackblazeUtils
         meta = {'container_id': url['id']}
         key_file = self.conf.get('key_file')
         b2_creds = BackblazeUtils.get_credentials(

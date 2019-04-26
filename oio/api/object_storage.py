@@ -26,9 +26,6 @@ from oio.common import exceptions as exc
 from oio.api.ec import ECWriteHandler
 from oio.api.io import MetachunkPreparer
 from oio.api.replication import ReplicatedWriteHandler
-from oio.api.backblaze_http import BackblazeUtilsException, BackblazeUtils
-from oio.api.backblaze import BackblazeWriteHandler, \
-    BackblazeChunkDownloadHandler
 from oio.common.utils import cid_from_name, GeneratorIO, monotonic_time, \
     depaginate, timeout_to_deadline
 from oio.common.easy_value import float_value, true_value
@@ -1270,7 +1267,10 @@ class ObjectStorageApi(object):
         if storage_method.ec:
             write_handler_cls = ECWriteHandler
         elif storage_method.backblaze:
-            backblaze_info = self._b2_credentials(storage_method, key_file)
+            from oio.api.backblaze import BackblazeWriteHandler
+            from oio.api.backblaze_http import BackblazeUtils
+            backblaze_info = BackblazeUtils.get_credentials(storage_method,
+                                                            key_file)
             write_handler_cls = partial(BackblazeWriteHandler,
                                         backblaze_info=backblaze_info)
         else:
@@ -1345,17 +1345,13 @@ class ObjectStorageApi(object):
                                  resp.chunk.get('real_url', resp.chunk['url']),
                                  resp.status)
 
-    def _b2_credentials(self, storage_method, key_file):
-        key_file = key_file or '/etc/oio/sds/b2-appkey.conf'
-        try:
-            return BackblazeUtils.get_credentials(storage_method, key_file)
-        except BackblazeUtilsException as err:
-            raise exc.ConfigurationException(str(err))
-
     def _fetch_stream_backblaze(self, meta, chunks, ranges,
                                 storage_method, key_file,
                                 **kwargs):
-        backblaze_info = self._b2_credentials(storage_method, key_file)
+        from oio.api.backblaze import BackblazeChunkDownloadHandler
+        from oio.api.backblaze_http import BackblazeUtils
+        backblaze_info = BackblazeUtils.get_credentials(storage_method,
+                                                        key_file)
         total_bytes = 0
         current_offset = 0
         size = None

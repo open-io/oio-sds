@@ -13,12 +13,15 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from requests import exceptions, Session, Request
 import base64
 import hashlib
 import ConfigParser
 import json as js
+
+from requests import exceptions, Session, Request
+
 from oio.api import io
+from oio.common import exceptions as oioexc
 
 
 def _format_autorization_required(account_id, application_key):
@@ -47,16 +50,18 @@ class BackblazeUtils(object):
     @staticmethod
     def get_credentials(storage_method, application_key_path=None,
                         renew=False):
+        if not application_key_path:
+            application_key_path = '/etc/oio/sds/b2-appkey.conf'
         if not storage_method.bucket_name:
             message = "missing backblaze parameters: %s" % ('bucket_name',)
-            raise BackblazeUtilsException(message)
+            raise oioexc.ConfigurationException(message)
         if not storage_method.account_id:
             message = "missing backblaze parameters: %s" % ('account_id',)
-            raise BackblazeUtilsException(message)
+            raise oioexc.ConfigurationException(message)
         if not application_key_path:
             message = "missing backblaze parameters: %s" % \
                       ('application_key_path',)
-            raise BackblazeUtilsException(message)
+            raise oioexc.ConfigurationException(message)
         key = '%s.%s' % (storage_method.account_id, storage_method.bucket_name)
         if not renew:
             authorization = BackblazeUtils.b2_authorization_list.get(key, None)
@@ -68,7 +73,7 @@ class BackblazeUtils(object):
             try:
                 config.readfp(app_key_f)
             except IOError as exc:
-                raise BackblazeUtilsException(
+                raise oioexc.ConfigurationException(
                     "Failed to load application key: %s"
                     % exc)
             app_key = config.get('backblaze',
@@ -76,7 +81,7 @@ class BackblazeUtils(object):
                                  % (storage_method.account_id,
                                     storage_method.bucket_name))
         if not app_key:
-            raise BackblazeUtilsException('application key not found')
+            raise oioexc.ConfigurationException('application key not found')
         meta = {}
         meta['backblaze.account_id'] = storage_method.account_id
         meta['backblaze.application_key'] = app_key
@@ -388,14 +393,6 @@ class Requests(object):
                                            header, file_descriptor)
         return self._get_response(content_type, url,
                                   header, file_descriptor).content
-
-
-class BackblazeUtilsException(Exception):
-    def __init__(self, string):
-        self._string = string
-
-    def __str__(self):
-        return self._string
 
 
 class BackblazeException(Exception):
