@@ -61,7 +61,6 @@ env:
   global:
   - CMAKE_OPTS="-DENABLE_CODECOVERAGE=on -DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib -DZK_LIBDIR=/usr/lib -DZK_INCDIR=/usr/include/zookeeper -DAPACHE2_LIBDIR=/usr/lib/apache2 -DAPACHE2_INCDIR=/usr/include/apache2 -DAPACHE2_MODDIR=/tmp/oio/lib/apache2/module"
   - G_DEBUG=fatal_warnings
-  - G_SLICE=always-malloc
   - G_DEBUG_LEVEL=W
   - ZK=127.0.0.1:2181
   - LD_LIBRARY_PATH=/tmp/oio/lib
