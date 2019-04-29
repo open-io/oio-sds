@@ -2412,8 +2412,9 @@ _handler_INFO(struct gridd_reply_ctx_s *reply,
 	_info_elections(repo, gstr);
 	g_string_append_c(gstr, ',');
 	_info_cache(repo, gstr);
+	g_string_append_c(gstr, ',');
+	oio_str_gstring_append_json_pair(gstr, "version", OIOSDS_PROJECT_VERSION);
 	g_string_append_c(gstr, '}');
-
 	reply->add_body(metautils_gba_from_string(gstr->str));
 	g_string_free(gstr, TRUE);
 
