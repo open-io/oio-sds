@@ -53,15 +53,7 @@ class ItemCheckCommand(lister.Lister):
             action='store_true',
             help=("Perform checksum comparisons.")
         )
-        parser.add_argument(
-            '--depth', '--max-depth',
-            type=int,
-            default=5,
-            help=("How deep to recurse. 0 means do not recurse. "
-                  "N > 0 means recurse N levels below the specified item type "
-                  "(namespace -> account -> container -> object -> chunk, "
-                  "default: 5).")
-        )
+
         parser.add_argument(
             '--concurrency', '--workers', type=int,
             default=30,
@@ -89,7 +81,24 @@ class ItemCheckCommand(lister.Lister):
         return self.__class__.columns, self._format_results(checker)
 
 
-class AccountCheck(AccountCommandMixin, ItemCheckCommand):
+class RecursiveCheckCommand(ItemCheckCommand):
+    """ItemCheckCommand with additional parameters to control recursion."""
+
+    def get_parser(self, prog_name):
+        parser = super(RecursiveCheckCommand, self).get_parser(prog_name)
+        parser.add_argument(
+            '--depth', '--max-depth',
+            type=int,
+            default=5,
+            help=("How deep to recurse. 0 means do not recurse. "
+                  "N > 0 means recurse N levels below the specified item type "
+                  "(namespace -> account -> container -> object -> chunk, "
+                  "default: 5).")
+        )
+        return parser
+
+
+class AccountCheck(AccountCommandMixin, RecursiveCheckCommand):
     """
     Check an account for problems.
     """
@@ -110,7 +119,7 @@ class AccountCheck(AccountCommandMixin, ItemCheckCommand):
         return self.format_results(checker)
 
 
-class ContainerCheck(ContainerCommandMixin, ItemCheckCommand):
+class ContainerCheck(ContainerCommandMixin, RecursiveCheckCommand):
     """
     Check a container for problems.
 
@@ -132,7 +141,7 @@ class ContainerCheck(ContainerCommandMixin, ItemCheckCommand):
         return self.format_results(checker)
 
 
-class ObjectCheck(ObjectCommandMixin, ItemCheckCommand):
+class ObjectCheck(ObjectCommandMixin, RecursiveCheckCommand):
     """
     Check an object for problems.
 
@@ -178,5 +187,5 @@ class ChunkCheck(ItemCheckCommand):
         checker = self.build_checker(parsed_args)
         for chunk in parsed_args.chunks:
             target = Target(self.app.options.account, chunk=chunk)
-            checker.check(target, parsed_args.depth)
+            checker.check(target)
         return self.format_results(checker)
