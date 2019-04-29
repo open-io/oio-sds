@@ -1,0 +1,49 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: ubuntu:bionic
+    environment:
+      CMAKE_OPTS: -DENABLE_CODECOVERAGE=on -DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib -DZK_LIBDIR=/usr/lib -DZK_INCDIR=/usr/include/zookeeper -DAPACHE2_LIBDIR=/usr/lib/apache2 -DAPACHE2_INCDIR=/usr/include/apache2 -DAPACHE2_MODDIR=/tmp/oio/lib/apache2/module
+      G_DEBUG: fatal_warnings
+      G_DEBUG_LEVEL: W
+      ZK: 127.0.0.1:2181
+      LD_LIBRARY_PATH: /tmp/oio/lib
+      PKG_CONFIG_PATH: /tmp/oio/lib/pkgconfig
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            set -x
+            apt-get update -qq
+            apt-get install -y -qq sudo
+            apt-get install -y -qq curl gnupg software-properties-common locales
+            curl http://mirror.openio.io/pub/repo/openio/APT-GPG-KEY-OPENIO-0 | apt-key add -
+            apt-add-repository "deb http://archive.ubuntu.com/ubuntu bionic-backports main restricted universe multiverse"
+            apt-add-repository "deb http://mirror.openio.io/pub/repo/openio/sds/18.04/ubuntu/ bionic/"
+            apt-get update -qq
+            apt-get install -y -qq $(awk '{print $1}' ci/deps-ubuntu-bionic.txt)
+            ./ci/install-user-deps.sh ${HOME}/oio
+      - run:
+          name: Updates the submodules
+          command: |
+            mkdir /tmp/oio
+            git submodule update --init
+      - run:
+          name: Build oio-sds
+          command: |
+            ./tools/oio-travis-failfast.sh
+      - run:
+          name: Detect coredumps and print backtraces
+          command: |
+            source ${HOME}/oio/bin/activate
+            ./tools/oio-gdb.py
+          when: on_fail
+      - run:
+          name: Detect coredumps and print backtraces
+          command: |
+            source ${HOME}/oio/bin/activate
+            bash <(curl -s https://codecov.io/bash) -f cmake_coverage.output
+            codecov
+          when: on_success

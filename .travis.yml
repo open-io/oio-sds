@@ -1,57 +1,18 @@
 sudo: required
 dist: xenial
 language: c
+
 addons:
   apt:
     sources:
     - sourceline: 'deb http://archive.ubuntu.com/ubuntu/ xenial-backports main restricted universe multiverse'
     - sourceline: 'deb http://mirror.openio.io/pub/repo/openio/sds/18.04/ubuntu/ xenial/'
       key_url: 'http://mirror.openio.io/pub/repo/openio/APT-GPG-KEY-OPENIO-0'
-# Please keep the following list sorted!
-    packages:
-    - apache2
-    - apache2-dev
-    - attr
-    - beanstalkd
-    - bison
-    - curl
-    - flex
-    - gdb
-    - lcov
-    - libapache2-mod-wsgi
-    - libapreq2-dev
-    - libattr1-dev
-    - libcurl4-gnutls-dev
-    - liberasurecode-dev
-    - libglib2.0-dev
-    - libjson-c-dev
-    - libleveldb-dev
-    - liblzo2-dev
-    - libsqlite3-dev
-    - libzmq3-dev
-    - libzookeeper-mt-dev
-    - openio-asn1c
-    - openio-gridinit
-    - python-all-dev
-    - python-dev
-    - python-pbr
-    - python-setuptools
-    - python-virtualenv
-    - redis-server
-    - redis-tools
-    - sqlite3
-    - zookeeper
-    - zookeeper-bin
-    - zookeeperd
-services:
-  - zookeeper
+
 install:
-  - virtualenv $HOME/oio && source $HOME/oio/bin/activate
-  - pip install --upgrade pip setuptools virtualenv tox
-  - pip install --upgrade -r all-requirements.txt -r test-requirements.txt
-  - pip install --upgrade zkpython
-  - go get gopkg.in/ini.v1 gopkg.in/tylerb/graceful.v1
-  - go get golang.org/x/sys/unix
+  - sudo apt-get update -qq
+  - sudo apt-get install -y -qq sudo $(awk '{print $1}' ci/deps-ubuntu-xenial.txt)
+  - ./ci/install-user-deps.sh $HOME/oio
   - sudo bash -c "echo '/tmp/core.%p.%E' > /proc/sys/kernel/core_pattern"
   - mkdir /tmp/oio
   - git fetch --tags

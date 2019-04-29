@@ -9,6 +9,6 @@ PyYAML>=3.10,<4.0
 redis>=2.10.3,<4.0.0
 requests!=2.13.0,<3.0.0
 simplejson>=2.0.9,<4.0.0
-urllib3>=1.13.1,<2.0.0
+urllib3>=1.13.1,<1.25
 werkzeug>=0.9.1,<1.0.0
 zkpython<1.0.0
