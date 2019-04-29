@@ -27,6 +27,8 @@ License along with this library.
 #include <metautils/lib/codec.h>
 
 #include <server/transport_gridd.h>
+#include <server/network_server.h>
+#include <server/internals.h>
 #include <sqliterepo/sqliterepo_variables.h>
 
 #include "sqliterepo.h"
@@ -2395,6 +2397,18 @@ _info_cache(struct sqlx_repository_s *repo, GString *gstr)
 	g_string_append_c(gstr, '}');
 }
 
+static void
+_info_server(struct gridd_reply_ctx_s *reply, GString *gstr)
+{
+	g_string_append_static(gstr, "\"server\":{\"threads\":{");
+	oio_str_gstring_append_json_pair_int(gstr, "active",
+			g_thread_pool_get_num_threads(reply->client->server->pool_tcp));
+	g_string_append_static(gstr, "},\"connections\":{");
+	oio_str_gstring_append_json_pair_int(gstr, "clients",
+			reply->client->server->cnx_clients);
+	g_string_append_static(gstr, "}}");
+}
+
 static gboolean
 _handler_INFO(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
@@ -2412,6 +2426,8 @@ _handler_INFO(struct gridd_reply_ctx_s *reply,
 	_info_elections(repo, gstr);
 	g_string_append_c(gstr, ',');
 	_info_cache(repo, gstr);
+	g_string_append_c(gstr, ',');
+	_info_server(reply, gstr);
 	g_string_append_c(gstr, ',');
 	oio_str_gstring_append_json_pair(gstr, "version", OIOSDS_PROJECT_VERSION);
 	g_string_append_c(gstr, '}');
