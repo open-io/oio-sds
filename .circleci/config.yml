@@ -1,0 +1,43 @@
+version: 2
+jobs:
+  build:
+    docker:
+      - image: jfsmig/oio-sds-ci
+    environment:
+      CMAKE_OPTS: -DENABLE_CODECOVERAGE=on -DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib -DZK_LIBDIR=/usr/lib -DZK_INCDIR=/usr/include/zookeeper
+      G_DEBUG: fatal_warnings
+      G_DEBUG_LEVEL: W
+      ZK: 127.0.0.1:2181
+      LD_LIBRARY_PATH: /tmp/oio/lib
+      PKG_CONFIG_PATH: /tmp/oio/lib/pkgconfig
+    steps:
+      - checkout
+      - run:
+          name: Install dependencies
+          command: |
+            ./ci/install-user-deps.sh ${HOME}/oio
+            echo "source ${HOME}/oio/bin/activate" >> ${BASH_ENV}
+      - run:
+          name: Updates the submodules
+          command: |
+            mkdir /tmp/oio
+            git fetch --tags
+            git submodule sync
+            git submodule update --init
+      - run:
+          name: Fail-Fast tests
+          command: ./ci/travis-failfast.sh
+      - run:
+          name: Unit tests
+          command: ./ci/travis-unit.sh
+      - run:
+          name: Unit tests
+          command: ./ci/travis-suites.sh
+      - run:
+          name: Detect coredumps and print backtraces
+          command: ./ci/post-failure.sh
+          when: on_fail
+      - run:
+          name: Detect coredumps and print backtraces
+          command: ./ci/post-success.sh
+          when: on_success

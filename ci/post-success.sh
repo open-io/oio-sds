@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
+# vim: ts=4 shiftwidth=4 noexpandtab
 
-# oio-travis-failfast.sh
-# Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# ci/post-success.sh
+# Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -16,19 +17,23 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 set -e
-source $HOME/oio/bin/activate
+set -x
 
-fold_start() { echo -e "travis_fold:start:$1\033[33;1m$2\033[0m" ; }
-fold_end() { echo -e "\ntravis_fold:end:$1\r" ; }
-fold() {
-	local tag ; tag="$1" ; shift
-	echo -e "\n### $tag : $(date '+%F %R:%S')"
-	time ( fold_start "$tag" ; set -x ; $@ ; set +x ; fold_end "$tag" )
-}
+bash <(curl -s https://codecov.io/bash) -f /tmp/cmake_coverage.output
 
-fold SDK ./tools/oio-build-sdk.sh ${PWD}
-fold Release ./tools/oio-build-release.sh ${PWD}
-fold Copyright ./tools/oio-check-copyright.sh ${PWD}
-fold Virtualenv python ./setup.py develop
-fold Variables tox -e variables
+codecov
+if cat ${HOME}/go_coverage.output.* > go_coverage.output; then
+	rm ${HOME}/go_coverage.output.*
+else
+	echo "" > go_coverage.output
+fi
+bash <(curl -s https://codecov.io/bash) -f go_coverage.output
 
+./tools/oio-gdb.py
+
+BEANSTALK=$(oio-test-config.py -t beanstalkd)
+if [ -n "${BEANSTALK}" ]; then
+	# some tests stop all services, we must start beanstalk to dump events
+	gridinit_cmd -S "$HOME/.oio/sds/run/gridinit.sock" start @beanstalkd
+	oio-dump-buried-events.py ${BEANSTALK}
+fi

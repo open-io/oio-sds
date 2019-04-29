@@ -1,0 +1,2 @@
+https://github.com/open-io/gridinit.git master 6a088e1ce4cc857655d0158bc02d18b915595b59 vendor/gridinit
+https://github.com/open-io/asn1c.git    master 94582098310e0e1a0801396fc7015289b39bf1dc vendor/asn1c

@@ -26,3 +26,13 @@ Please refer to [BUILD.md](./BUILD.md) for detailed information about how to com
 [repo]: https://travis-ci.org/open-io/oio-sds
 [codecov_svg]: https://codecov.io/gh/open-io/oio-sds/branch/master/graph/badge.svg
 [codecov]: https://codecov.io/gh/open-io/oio-sds
+
+## Rebuild the CI docker image
+
+```
+docker build -f ci/Dockerfile-ubuntu-bionic .
+IMAGE=0123456789
+UUID=$(uuidgen)
+docker tag $IMAGE jfsmig/oio-sds-ci:$UUID
+docker push jfsmig/oio-sds-ci:$UUID
+```

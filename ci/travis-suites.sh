@@ -29,13 +29,13 @@ fold() {
 	time ( fold_start "$tag" ; set -x ; $@ ; set +x ; fold_end "$tag" )
 }
 
-fold configure  cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Debug" ${PWD}
-fold build      make -j 8 all
-fold install    make install
+fold configure cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Debug" ${PWD}
+fold build make -j 8 all
+fold install make install
 fold virtualenv python ./setup.py develop
 
 export PYTHON_COVERAGE=1
 fold coverage_init make coverage_init
-./tools/oio-test-suites.sh ${PWD} ${PWD}
+./ci/test-suites.sh ${PWD} ${PWD}
 fold coverage_fini make coverage
 

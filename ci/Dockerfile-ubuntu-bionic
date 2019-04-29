@@ -1,0 +1,80 @@
+FROM ubuntu:18.04
+LABEL maintainer="jfsmig <jf.smigielski@gmail.com>"
+
+# Install the definitions of the dependencies
+# TODO(jfs): copy the go modules
+COPY all-requirements.txt test-requirements.txt /etc/oio/deps/
+COPY ci/submodules.txt /etc/oio/deps/
+COPY ci/deps-ubuntu-bionic.txt /etc/oio/deps/system-deps.txt
+
+## Install new packages sources
+## TODO(jfs): work with an official package
+#RUN set -x \
+#&& apt-get update -qq \
+#&& apt-get install -y -qq curl gnupg software-properties-common locales \
+#&& curl http://mirror.openio.io/pub/repo/openio/APT-GPG-KEY-OPENIO-0 | apt-key add - \
+#&& apt-add-repository "deb http://archive.ubuntu.com/ubuntu bionic-backports main restricted universe multiverse" \
+#&& apt-add-repository "deb http://mirror.openio.io/pub/repo/openio/sds/18.04/ubuntu/ bionic/"
+
+# Install the system dependencies
+RUN set -x \
+&& apt-get update -qq -y \
+&& apt-get dist-upgrade -y \
+&& apt-get install -y $(awk '!/^prod/ {print $2}' /etc/oio/deps/system-deps.txt)
+
+# Install the Python dependencies
+RUN set -x \
+&& mkdir /tmp/env \
+&& virtualenv /tmp/env \
+&& . /tmp/env/bin/activate \
+&& pip install --upgrade -r /etc/oio/deps/all-requirements.txt -r /etc/oio/deps/test-requirements.txt
+
+# Install Golang the ugly way
+RUN set -x \
+&& curl https://dl.google.com/go/go1.12.1.linux-amd64.tar.gz | tar -C /usr/local -xzf - \
+&& ( cd /usr/local/go/ && rm -rf doc test *.* ) \
+&& echo 'export PATH="/usr/local/go/bin:$PATH"' >> /etc/profile.d/golang.sh \
+&& echo 'export GOROOT=/usr/local/go' >> /etc/profile.d/golang.sh \
+&& echo 'export GOPATH=$HOME/go' >> /etc/profile.d/golang.sh \
+&& echo 'source /etc/profile.d/golang.sh' >> /etc/bash.bashrc
+
+# Checkout, build & install the submodules
+RUN set -x \
+&& cd /tmp \
+&& mkdir -p ${HOME}/.ssh \
+&& ssh-keygen -q -t rsa -N '' -f ${HOME}/.ssh/id_rsa \
+&& find $HOME/.ssh -ls \
+&& /bin/echo -e "Host *\n\tStrictHostKeyChecking no\n" > ${HOME}/.ssh/config \
+&& while read REPO BRANCH COMMIT TARGET ; do \
+  git clone --jobs 4 $REPO ; \
+  ( cd $(basename ${REPO%.git}) && git checkout $COMMIT ) \
+done < /etc/oio/deps/submodules.txt
+
+# Dependency: GRIDINIT
+RUN set -x \
+&& cd /tmp \
+&& ( cd gridinit && cmake \
+	-D CMAKE_BUILD_TYPE=MinSizeRel \
+	-D CMAKE_INSTALL_PREFIX=/usr/ \
+	. \
+	&& make ${MAKE_OPTS:-"-j4"} && make install ) && rm -rf gridinit
+
+# Dependency: ASN1C
+RUN set -x \
+&& cd /tmp \
+&& ( cd asn1c \
+	&& autoreconf -f -i \
+	&& ./configure --prefix=/usr \
+	&& make ${MAKE_OPTS:-"-j4"} && make install ) && rm -rf asn1c
+
+# Finalize & clean the env
+RUN set -x \
+&& useradd -l -U -G sudo,users -m ci \
+&& echo 'ci ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers.d/ci \
+&& apt-get autoremove --purge -y \
+&& apt-get clean \
+&& for i in $(find /var/log -type f -name '*.log') ; do > $i ;done
+
+USER ci
+WORKDIR /home/ci
+CMD ["/bin/bash"]
