@@ -10,8 +10,9 @@ addons:
 install:
   - sudo bash -c "echo '/tmp/core.%p.%E' > /proc/sys/kernel/core_pattern"
   - mkdir /tmp/oio
-  - sudo ./tools/system-deps.sh
-  - ./tools/user-deps.sh
+  - sudo apt update -qq
+  - sudo apt install -y --force-yes -qq $(awk '{print $1}' ci/deps-ubuntu-bionic.txt)
+  - ./ci/user-deps.sh
   - git fetch --tags
   - git submodule update --init --recursive
 

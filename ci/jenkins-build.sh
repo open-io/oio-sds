@@ -2,7 +2,7 @@
 
 export
 
-. ./tools/user-deps.sh
+. ./ci/user-deps.sh
 
 set -e
 mkdir /tmp/oio

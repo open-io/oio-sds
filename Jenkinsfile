@@ -16,7 +16,7 @@ pipeline {
                 cp -rf . /home/openio/build
                 chown -R openio:openio /home/openio/build
 
-                ./jenkins/prepare.sh
+                ./ci/jenkins-prepare.sh
 
                 su - openio -c "export JENKINS_URL=${JENKINS_URL} && cd /home/openio/build && ./jenkins/build.sh"
                 '''
