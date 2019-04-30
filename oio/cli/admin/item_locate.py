@@ -33,7 +33,8 @@ class ItemLocateCommand(lister.Lister):
     A command to display which service is in charge of hosting an item.
     """
 
-    columns = ('Type', 'Item', 'Service Id', 'Addr', 'Location', 'Status')
+    columns = ('Type', 'Item', 'Service Id', 'Addr', 'Location', 'Status',
+               'Errors')
     reqid_prefix = 'ACLI-LOC-'
 
     def __init__(self, *args, **kwargs):
@@ -106,7 +107,7 @@ class ItemLocateCommand(lister.Lister):
                 # TODO(FVE): do something with the result?
                 self.account.account_show(acct, reqid=reqid)
             except Exception as err:
-                yield ('account', acct, 'n/a', 'n/a', 'n/a', str(err))
+                yield ('account', acct, 'n/a', 'n/a', 'n/a', 'error', str(err))
                 continue
             finally:
                 reqid = self.app.request_id(self.reqid_prefix)
@@ -115,7 +116,7 @@ class ItemLocateCommand(lister.Lister):
                                               srv['score'])
                 yield ('account', acct, srv['id'], srv['addr'],
                        srv['tags'].get('tag.loc', 'n/a'),
-                       status)
+                       status, None)
 
     def locate_m0(self, cid='', known_m0=None, error=None):
         """
@@ -132,14 +133,17 @@ class ItemLocateCommand(lister.Lister):
             m0_srv = all_m0.values()
         cid = self.cid_to_m1(cid)
         for m0 in m0_srv:
-            status = 'up=%s, score=%s' % (m0['tags'].get('tag.up', False),
-                                          m0['score'])
+            if error is None:
+                status = 'up=%s, score=%s' % (m0['tags'].get('tag.up', False),
+                                              m0['score'])
+            else:
+                status = 'error'
             yield ('meta0',
                    '%s (%s.meta0)' % (cid, self.app.options.ns),
                    m0['id'],
                    m0['addr'],
                    m0['tags'].get('tag.loc', 'n/a'),
-                   str(error) if error else status)
+                   status, error)
 
     def format_m1(self, cid, m1_srv):
         reqid = self.app.request_id(self.reqid_prefix)
@@ -153,7 +157,7 @@ class ItemLocateCommand(lister.Lister):
                    m1['host'],
                    m1_descr['addr'],
                    m1_descr['tags'].get('tag.loc', 'n/a'),
-                   status)
+                   status, None)
 
     def format_m2(self, acct, ct, m2_srv):
         cid = cid_from_name(acct, ct)
@@ -167,7 +171,7 @@ class ItemLocateCommand(lister.Lister):
             yield ('meta2', m2_item,
                    m2['host'], m2_descr['addr'],
                    m2_descr['tags'].get('tag.loc', 'n/a'),
-                   status)
+                   status, None)
 
     def format_chunks(self, chunks, obj=None):
         reqid = self.app.request_id(self.reqid_prefix)
@@ -175,9 +179,12 @@ class ItemLocateCommand(lister.Lister):
         for chunk in chunks:
             host = urlparse(chunk['url']).netloc
             descr = all_rawx.get(host, DUMMY_SERVICE)
-            status = 'up=%s, score=%s' % (
-                descr['tags'].get('tag.up', False), descr['score'])
             error = chunk.get('error')
+            if error is None:
+                status = 'up=%s, score=%s' % (
+                    descr['tags'].get('tag.up', False), descr['score'])
+            else:
+                status = 'error'
             pos = chunk.get('pos') or chunk.get('chunk_pos')
             fp = chunk.get('full_path', obj)
             yield ('rawx',
@@ -185,7 +192,7 @@ class ItemLocateCommand(lister.Lister):
                    host,
                    descr['addr'],
                    descr['tags'].get('tag.loc', 'n/a'),
-                   str(error) if error else status)
+                   status, error)
 
     def locate_containers(self, containers, is_cid=False):
         reqid = self.app.request_id(self.reqid_prefix)
@@ -210,7 +217,7 @@ class ItemLocateCommand(lister.Lister):
                        'n/a',
                        'n/a',
                        'n/a',
-                       str(err))
+                       'error', err)
                 continue
             finally:
                 reqid = self.app.request_id(self.reqid_prefix)
@@ -229,7 +236,7 @@ class ItemLocateCommand(lister.Lister):
             if not m2_srv:
                 yield ('meta2',
                        self.m2_item(acct, ct, cid),
-                       None, None, None,
+                       None, None, None, 'error',
                        'Reference exists but no meta2 service is linked')
 
     def locate_objects(self, objects):
@@ -249,7 +256,7 @@ class ItemLocateCommand(lister.Lister):
                 # Already reported by upper level
                 continue
             except exceptions.NoSuchObject as err:
-                yield ('rawx', obj_item, None, None, None, str(err))
+                yield ('rawx', obj_item, None, None, None, 'error', err)
                 continue
             except Exception as err:
                 self.logger.warn('Failed to locate object %s: %s',

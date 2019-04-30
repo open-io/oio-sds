@@ -138,7 +138,7 @@ class Meta0Check(BaseCheckCommand):
                 finally:
                     zh.close()
 
-        return ('Status',), [('Ok', )]
+        return ('Status', 'Errors'), [('OK', None)]
 
 
 class Meta1Check(BaseCheckCommand):
@@ -163,7 +163,7 @@ class Meta1Check(BaseCheckCommand):
         for _, _, _, m1_score in l0:
             assert m1_score > 0
         self.logger.info("All meta1 services have a positive score.")
-        return ('Status',), [('Ok', )]
+        return ('Status', 'Errors'), [('OK', None)]
 
 
 class DirCheck(BaseCheckCommand):
@@ -218,7 +218,7 @@ class DirCheck(BaseCheckCommand):
         # FIXME(FVE): this check does not guarantee items are the same
         assert len(m1) == len(reverse_dump)
         self.logger.info("All meta1 services have been assigned.")
-        return ('Status', ), [('Ok', )]
+        return ('Status', 'Errors'), [('OK', None)]
 
 
 class RdirCheck(BaseCheckCommand):
@@ -256,7 +256,7 @@ class RdirCheck(BaseCheckCommand):
         assert len(l0) == len(all_rdir)
         self.logger.info("All rdir services are alive.")
 
-        return ('Status', ), [('Ok', )]
+        return ('Status', 'Errors'), [('OK', None)]
 
 
 class RawxCheck(ItemCheckCommand):

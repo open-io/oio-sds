@@ -77,7 +77,7 @@ class ContainerMove(ContainerCommandMixin, ItemMoveCommandMixin,
             if res['err'] is None:
                 status = 'OK'
             else:
-                status = 'KO'
+                status = 'error'
             yield (res['container'], res['base'], res['src'], res['dst'],
                    status, res['err'])
 
@@ -85,5 +85,5 @@ class ContainerMove(ContainerCommandMixin, ItemMoveCommandMixin,
         self.log.debug('take_action(%s)', parsed_args)
 
         columns = ('Container', 'Base', 'Source', 'Destination', 'Status',
-                   'Message')
+                   'Errors')
         return columns, self._format_results(self._run(parsed_args))

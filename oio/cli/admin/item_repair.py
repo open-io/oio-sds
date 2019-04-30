@@ -85,7 +85,7 @@ class AccountRepair(AccountCommandMixin, ItemRepairCommand):
     """
 
     log = getLogger(__name__ + '.AccountRepair')
-    columns = ('Entry', 'Status')
+    columns = ('Entry', 'Status', 'Errors')
     repairer_class = AccountRebuilder
 
     def get_parser(self, prog_name):
@@ -111,8 +111,8 @@ class AccountRepair(AccountCommandMixin, ItemRepairCommand):
             if error is None:
                 status = 'OK'
             else:
-                status = error
-            yield (self.repairer.string_from_item(item), status)
+                status = 'error'
+            yield (self.repairer.string_from_item(item), status, error)
 
 
 class ContainerRepair(ContainerCommandMixin, ItemRepairCommand):
@@ -126,7 +126,7 @@ class ContainerRepair(ContainerCommandMixin, ItemRepairCommand):
     """
 
     log = getLogger(__name__ + '.ContainerRepair')
-    columns = ('Container', 'Status')
+    columns = ('Container', 'Status', 'Errors')
     repairer_class = ContainerRepairer
 
     def get_parser(self, prog_name):
@@ -176,8 +176,8 @@ class ContainerRepair(ContainerCommandMixin, ItemRepairCommand):
             if error is None:
                 status = 'OK'
             else:
-                status = error
-            yield (self.repairer.string_from_item(item), status)
+                status = 'error'
+            yield (self.repairer.string_from_item(item), status, error)
 
 
 class ObjectRepair(ObjectCommandMixin, ItemRepairCommand):
@@ -190,7 +190,7 @@ class ObjectRepair(ObjectCommandMixin, ItemRepairCommand):
     """
 
     log = getLogger(__name__ + '.ObjectRepair')
-    columns = ('Object', 'Status')
+    columns = ('Object', 'Status', 'Errors')
     repairer_class = ContentRepairer
 
     def get_parser(self, prog_name):
@@ -224,8 +224,8 @@ class ObjectRepair(ObjectCommandMixin, ItemRepairCommand):
             if error is None:
                 status = 'OK'
             else:
-                status = error
-            yield (self.repairer.string_from_item(item), status)
+                status = 'error'
+            yield (self.repairer.string_from_item(item), status, error)
 
     def take_action(self, parsed_args):
         ObjectCommandMixin.take_action(self, parsed_args)
