@@ -28,8 +28,6 @@ from eventlet.green.httplib import HTTPConnection, HTTPResponse, _UNKNOWN # noqa
 from eventlet.event import Event # noqa
 from eventlet.queue import Empty, LifoQueue # noqa
 
-from oio.common.exceptions import OioException
-
 eventlet.monkey_patch(os=False)
 
 logging.thread = eventlet.green.thread
@@ -67,11 +65,11 @@ def get_hub():
     return 'poll'
 
 
-def ratelimit(run_time, max_rate, increment=1, rate_buffer=5):
+def ratelimit(run_time, max_rate, increment=1, rate_buffer=5, time_time=None):
     if max_rate <= 0 or increment <= 0:
         return run_time
     clock_accuracy = 1000.0
-    now = time.time() * clock_accuracy
+    now = (time_time or time.time()) * clock_accuracy
     time_per_request = clock_accuracy * (float(increment) / max_rate)
     if now - run_time > rate_buffer * clock_accuracy:
         run_time = now
@@ -83,64 +81,70 @@ def ratelimit(run_time, max_rate, increment=1, rate_buffer=5):
 def ratelimit_validate_policy(policy):
     """
     Validate a policy. The following rules are checked:
-    - We have a complete partition of 24 hours.
-    - Each partition has a positive max_rate
-    - Partition starts at 0H and ends at 0H. (Easier to program ..)
-
-    If one of these parameters are not respected, an OioException is thrown.
+    - Each partition has a positive max_rate.
+    - The start date of each partition is 0 or positive.
+    - The start date of each partition is lower than 24h.
 
     An example of a simple policy would be:
     [
-        [0, 0, 3],
+        (datetime.timedelta(0), 3),
     ]
 
     Which would be a policy to have a constant max_rate of 3. A more complex
     policy would be:
     [
-        [0, 7, 1],
-        [7, 9, 10],
-        [9, 15, 200],
-        [15, 20, 10],
-        [20, 0, 1],
+        (datetime.timedelta(0, 1800), 10),  #  0h30 to  6h45
+        (datetime.timedelta(0, 24300), 2),  #  6h45 to  9h45
+        (datetime.timedelta(0, 35100), 5),  #  9h45 to 15h30
+        (datetime.timedelta(0, 55800), 3),  # 15h30 to 20h00
+        (datetime.timedelta(0, 72000), 8),  # 20h00 to  0h30
     ]
 
-    :param policy: A dictionary containing the policy that follows the
-                  aforementioned description.
-    :type dict
-    :return:
+    :param policy: A list containing the policy that follows the
+                   aforementioned description.
+    :type policy: `list`
+    :raises: `ValueError` if one of the rules is not respected.
     """
+    if not policy:
+        raise ValueError('Policy must contain at least one rate')
 
-    def validate_entry(entry_index):
-        """
-        Validates a single entry of the policy partition
+    min_time = timedelta(0)
+    max_time = timedelta(hours=24)
 
-        :param entry_index: Policy entry index
-        :return: Whether the partition entry is valid or not.
-        """
-        if not 0 <= policy[entry_index][0] < 24:
-            return False
-        # If we're validating a middle record.
-        if len(policy) > 1 and entry_index != len(policy) - 1:
-            if policy[entry_index][0] > policy[entry_index][1]:
-                return False
-            if policy[entry_index][1] != policy[entry_index + 1][0]:
-                return False
-            return True
-        # Otherwise we're either validating a single record policy or the last
-        # record.
-        if policy[entry_index][1] != policy[0][0]:
-            return False
-        if policy[entry_index][1] != 0:
-            return False
-        return True
+    for entry in policy:
+        if len(entry) < 2:
+            raise ValueError('Ratelimit entries must be 2-tuples')
+        if entry[0] < min_time:
+            raise ValueError('Start time cannot be negative')
+        if entry[0] >= max_time:
+            raise ValueError('Start time cannot be more than 24 hours')
+        if entry[1] < 0:
+            raise ValueError('Rate must be zero or positive')
 
     policy.sort()
-    # Check the
-    for i in range(len(policy)):
-        if not validate_entry(i):
-            raise OioException("The given policy isn't valid !")
-
     return True
+
+
+def ratelimit_function_curr_rate(curr_date, policy):
+    """
+    Given a validated policy and a datetime, return the applicable max_rate
+
+    :param curr_date: The current date
+    :type curr_date datetime
+    :param policy: An array representing a validated policy
+    :return: The applicable max_rate (elements per second)
+    """
+    curr_partition = policy[-1]
+    # We have a partition, first occurrence is the only one.
+    if len(policy) > 1:
+        for partition in policy:
+            if (curr_date - partition[0]).date() < curr_date.date():
+                break
+            curr_partition = partition
+    else:
+        curr_partition = policy[0]
+
+    return curr_partition[1]
 
 
 def ratelimit_function_next_rate(curr_date, policy):
@@ -155,63 +159,44 @@ def ratelimit_function_next_rate(curr_date, policy):
     several comparisons to about a single comparison)
 
     :param curr_date: The current datetime
-    :type curr_date datetime
+    :type curr_date: `datetime`
     :param policy: A list representing a validated policy.
-    :return: A second-resolution unix epoch of the next scheduled rate change
+    :returns: the next scheduled rate and the `datetime` object for the next
+              scheduled rate change.
     """
-    curr_hour = curr_date.hour
-    curr_partition = None
-
-    # We have a partition, first occurrence is the only one.
-    if len(policy) > 1:
-        for partition in policy:
-            if partition[0] <= curr_hour <= partition[1]:
-                curr_partition = partition
-                break
+    next_day = False
+    for partition in policy:
+        curr_partition = partition
+        if (curr_date - partition[0]).date() < curr_date.date():
+            break
     else:
         curr_partition = policy[0]
-
-    # Reset to an hour resolution
-    curr_date = curr_date - timedelta(minutes=curr_date.minute,
-                                      seconds=curr_date.second,
-                                      microseconds=curr_date.microsecond)
-
-    delta = None
-    if curr_partition[1] == 0:
-        # Reset to midnight
-        curr_date = curr_date - timedelta(hours=curr_date.hour)
-        delta = timedelta(days=1)
-    else:
-        delta = timedelta(hours=curr_partition[1] - curr_hour)
-
-    next_rate_date = curr_date + delta
-
-    # Because Python 2
-    return (next_rate_date - datetime(1970, 1, 1)).total_seconds()
+        next_day = True
+    next_date = datetime(curr_date.year, curr_date.month, curr_date.day)
+    next_date += curr_partition[0]
+    if next_day:
+        next_date += timedelta(days=1)
+    return curr_partition[1], next_date
 
 
-def ratelimit_function_curr_rate(curr_date, policy):
+def ratelimit_policy_from_string(policy_str):
     """
-    Given a validated policy and a datetime, return the applicable max_rate
-
-    :param curr_date: The current date
-    :type curr_date datetime
-    :param policy: An array representing a validated policy
-    :return: The applicable max_rate (elements per second)
+    :rtype: `list` of 2-tuples with a `datetime.timedelta` and an integer.
     """
-    curr_hour = curr_date.hour
-    curr_partition = None
-    # We have a partition, first occurrence is the only one.
-    if len(policy) > 1:
-        for partition in policy:
-            if partition[0] <= curr_hour <= partition[1] or \
-                    (partition[0] <= curr_hour and partition[1] == 0):
-                curr_partition = partition
-                break
-    else:
-        curr_partition = policy[0]
-
-    return curr_partition[2]
+    policy = list()
+    changes = policy_str.split(';')
+    for change in changes:
+        try:
+            time_str, rate_str = change.split(':', 1)
+            hour_str, min_str = time_str.split('h', 1)
+            td = timedelta(hours=int(hour_str), minutes=int(min_str))
+            rate = int(rate_str)
+        except ValueError as err:
+            raise ValueError("Unparseable rate change '%s': %s" %
+                             (change, err))
+        policy.append((td, rate))
+    policy.sort()
+    return policy
 
 
 def ratelimit_function_build(policy):
@@ -223,20 +208,26 @@ def ratelimit_function_build(policy):
     :return: A callable function similar in signature to ratelimit but that
              ignores all parameters other than the first one.
     """
+    if isinstance(policy, basestring):
+        policy = ratelimit_policy_from_string(policy)
     ratelimit_validate_policy(policy)
 
-    def _ratelimiter(run_time, *args, **kwargs):
+    def _ratelimiter(run_time, _max_rate, increment=1, rate_buffer=5):
         """
         The ratelimit wrapper that takes into account the custom policy, and
         ignores all the other parameters other than run_time
         :param run_time: The last time the operation was executed in seconds.
         """
-        curr_date = datetime.today()
+        time_time = time.time()
+        curr_date = datetime.fromtimestamp(time_time)
 
-        return ratelimit(run_time=run_time,
-                         max_rate=ratelimit_function_curr_rate(
+        return ratelimit(run_time,
+                         ratelimit_function_curr_rate(
                              curr_date=curr_date,
-                             policy=_ratelimiter.policy))
+                             policy=_ratelimiter.policy),
+                         increment,
+                         rate_buffer,
+                         time_time)
 
     _ratelimiter.policy = policy
 
