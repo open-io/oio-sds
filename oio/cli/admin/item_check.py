@@ -27,6 +27,7 @@ class ItemCheckCommand(lister.Lister):
     """
 
     columns = ('Type', 'Item', 'Status', 'Errors')
+    success = True
 
     def build_checker(self, parsed_args):
         """Build an instance of Checker."""
@@ -74,11 +75,21 @@ class ItemCheckCommand(lister.Lister):
 
     def _format_results(self, checker):
         for res in checker.run():
+            if not res.errors:
+                status = 'OK'
+            else:
+                self.success = False
+                status = 'error'
             yield (res.target.type, repr(res.target),
-                   res.health, res.errors_to_str())
+                   status, res.errors_to_str())
 
     def format_results(self, checker):
         return self.__class__.columns, self._format_results(checker)
+
+    def run(self, parsed_args):
+        super(ItemCheckCommand, self).run(parsed_args)
+        if not self.success:
+            return 1
 
 
 class RecursiveCheckCommand(ItemCheckCommand):

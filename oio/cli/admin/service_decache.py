@@ -23,6 +23,7 @@ class DecacheCommand(lister.Lister):
 
     columns = ('Id', 'Status', 'Errors')
     service_type = None
+    success = True
 
     @property
     def admin(self):
@@ -63,6 +64,11 @@ class DecacheCommand(lister.Lister):
         services = self.get_services(parsed_args)
         return self.columns, self.decache_services(services)
 
+    def run(self, parsed_args):
+        super(DecacheCommand, self).run(parsed_args)
+        if not self.success:
+            return 1
+
 
 class ProxyDecache(DecacheCommand):
     """Flush the cache of a proxy service."""
@@ -75,6 +81,7 @@ class ProxyDecache(DecacheCommand):
                 self.admin.proxy_flush_cache(proxy_netloc=srv)
                 yield srv, 'OK', None
             except Exception as err:
+                self.success = False
                 yield srv, 'error', err
 
 
@@ -87,6 +94,7 @@ class SqliterepoDecacheCommand(DecacheCommand):
                 self.admin.service_flush_cache(srv)
                 yield srv, 'OK', None
             except Exception as err:
+                self.success = False
                 yield srv, 'error', err
 
 
