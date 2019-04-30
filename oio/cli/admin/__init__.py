@@ -15,26 +15,18 @@
 
 """Command-line interface for OpenIO SDS cluster administration."""
 
+
 import sys
 
-from cliff.app import App
-from cliff.commandmanager import CommandManager
-
-from oio import __version__ as oio_version
-from oio.cli import add_common_parser_options
 from oio.cli.common.clientmanager import ClientManager
+from oio.cli.common.shell import CommonShell
 from oio.common.utils import request_id
 
 
-class OpenioAdminApp(App):
+class OpenioAdminApp(CommonShell):
 
     def __init__(self):
-        super(OpenioAdminApp, self).__init__(
-            description=__doc__.strip() if __doc__ else None,
-            version=oio_version,
-            command_manager=CommandManager('openio.admin'),
-            deferred_help=True)
-        self.client_manager = None
+        super(OpenioAdminApp, self).__init__('openio.admin')
 
     def initialize_app(self, argv):
         super(OpenioAdminApp, self).initialize_app(argv)
@@ -47,18 +39,6 @@ class OpenioAdminApp(App):
             'is_cli': True,
         }
         self.client_manager = ClientManager(options)
-
-    def build_option_parser(self, description, version):
-        parser = super(OpenioAdminApp, self).build_option_parser(
-            description, version)
-        add_common_parser_options(parser)
-        return parser
-
-    def prepare_to_run_command(self, cmd):
-        pass
-
-    def clean_up(self, cmd, result, err):
-        pass
 
     def request_id(self, prefix='ACLI-'):
         """
