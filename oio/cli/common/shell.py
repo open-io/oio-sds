@@ -31,19 +31,18 @@ GROUP_LIST = ["account", "container", "object", "reference", "volume",
               "rdir", "zk"]
 
 
-class OpenIOShell(App):
+class CommonShell(App):
 
-    def __init__(self):
-        super(OpenIOShell, self).__init__(
+    def __init__(self, namespace):
+        super(CommonShell, self).__init__(
             description=__doc__.strip() if __doc__ else None,
             version=oio_version,
-            command_manager=CommandManager('oiopy.cli'),
+            command_manager=CommandManager(namespace),
             deferred_help=True)
-        self.api_version = {}
         self.client_manager = None
 
     def configure_logging(self):
-        super(OpenIOShell, self).configure_logging()
+        super(CommonShell, self).configure_logging()
 
         root_logger = logging.getLogger('')
 
@@ -76,6 +75,28 @@ class OpenIOShell(App):
         stevedore_log = logging.getLogger('stevedore')
         stevedore_log.setLevel(logging.ERROR)
 
+    def build_option_parser(self, description, version):
+        parser = super(CommonShell, self).build_option_parser(
+            description, version)
+        add_common_parser_options(parser)
+        return parser
+
+    def prepare_to_run_command(self, cmd):
+        LOG.debug(
+            'command: %s -> %s.%s',
+            getattr(cmd, 'cmd_name', '<none>'),
+            cmd.__class__.__module__,
+            cmd.__class__.__name__)
+
+    def clean_up(self, cmd, result, err):
+        LOG.debug('clean up %s: %s', cmd.__class__.__name__, err or '')
+
+
+class OpenIOShell(CommonShell):
+
+    def __init__(self):
+        super(OpenIOShell, self).__init__('oiopy.cli')
+
     def run(self, argv):
         try:
             res = super(OpenIOShell, self).run(argv)
@@ -90,7 +111,6 @@ class OpenIOShell(App):
     def build_option_parser(self, description, version):
         parser = super(OpenIOShell, self).build_option_parser(
             description, version)
-        add_common_parser_options(parser)
 
         # This is specific to download/upload operation, thus should not
         # be needed in the "admin" CLI.
@@ -138,17 +158,6 @@ class OpenIOShell(App):
         if self.options.dump_perfdata:
             options['perfdata'] = dict()
         self.client_manager = ClientManager(options)
-
-    def prepare_to_run_command(self, cmd):
-        LOG.debug(
-            'command: %s -> %s.%s',
-            getattr(cmd, 'cmd_name', '<none>'),
-            cmd.__class__.__module__,
-            cmd.__class__.__name__,
-        )
-
-    def clean_up(self, cmd, result, err):
-        LOG.debug('clean up %s: %s', cmd.__class__.__name__, err or '')
 
 
 def main(argv=sys.argv[1:]):
