@@ -18,7 +18,7 @@ pipeline {
 
                 ./ci/jenkins-prepare.sh
 
-                su - openio -c "export JENKINS_URL=${JENKINS_URL} && cd /home/openio/build && ./jenkins/build.sh"
+                su - openio -c "export JENKINS_URL=${JENKINS_URL} && cd /home/openio/build && ./ci/jenkins-build.sh"
                 '''
             }
         }
