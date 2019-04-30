@@ -24,7 +24,6 @@ from oio.common.green import Event, GreenPool, Queue, sleep
 import os
 import csv
 import sys
-import cStringIO
 import argparse
 
 from oio.common import exceptions as exc
@@ -660,6 +659,11 @@ class Checker(object):
         else:
             self.pool.spawn_n(self.check_account, target, recurse)
 
+    def check_all_accounts(self, recurse=0):
+        all_accounts = self.api.account_list()
+        for acct in all_accounts:
+            self.check(Target(acct), recurse=recurse)
+
     def fetch_results(self):
         while not self.result_queue.empty():
             res = self.result_queue.get(True)
@@ -741,7 +745,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('namespace', help='Namespace name')
     parser.add_argument(
-        'account', nargs='?', help="Account (optional if reading from stdin)")
+        'account', nargs='?', help="Account (if not set, check all accounts)")
     t_help = "Element whose integrity should be checked. " \
         "Can be empty (check the whole account), " \
         "CONTAINER (check all objects of the container), " \
@@ -776,11 +780,14 @@ def main():
     if not os.isatty(sys.stdin.fileno()):
         source = sys.stdin
         limit_listings = 0  # do full listings, cache the results
+        entries = csv.reader(source, delimiter=' ')
     else:
-        if not args.account:
-            raise ValueError('missing account argument')
-        source = cStringIO.StringIO(' '.join([args.account] + args.target))
-        limit_listings = len(args.target)
+        if args.account:
+            entries = [(args.account, )]
+            limit_listings = len(args.target)
+        else:
+            entries = None
+            limit_listings = 3
     checker = Checker(
         args.namespace,
         error_file=args.output,
@@ -791,9 +798,11 @@ def main():
         request_attempts=args.attempts,
         verbose=True,
     )
-    entries = csv.reader(source, delimiter=' ')
-    for entry in entries:
-        checker.check(Target(*entry))
+    if entries:
+        for entry in entries:
+            checker.check(Target(*entry), recurse=limit_listings)
+    else:
+        checker.check_all_accounts(recurse=limit_listings)
     for _ in checker.run():
         pass
     if not checker.report():
