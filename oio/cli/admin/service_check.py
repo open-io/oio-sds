@@ -280,9 +280,13 @@ class RawxCheck(ItemCheckCommand):
     def _format_results(self, checker):
         for res in checker.run():
             if res.target.type == 'chunk':
-                yield repr(res.target)[len('chunk='):], \
-                    res.health,\
-                    res.errors_to_str()
+                if not res.errors:
+                    status = 'OK'
+                else:
+                    status = 'error'
+                    self.success = False
+                yield (repr(res.target)[len('chunk='):],
+                       status, res.errors_to_str())
 
     def get_parser(self, prog_name):
         parser = super(RawxCheck, self).get_parser(prog_name)

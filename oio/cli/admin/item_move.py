@@ -50,6 +50,7 @@ class ContainerMove(ContainerCommandMixin, ItemMoveCommandMixin,
     """
 
     log = getLogger(__name__ + '.ContainerMove')
+    success = True
 
     def get_parser(self, prog_name):
         parser = super(ContainerMove, self).get_parser(prog_name)
@@ -77,6 +78,7 @@ class ContainerMove(ContainerCommandMixin, ItemMoveCommandMixin,
             if res['err'] is None:
                 status = 'OK'
             else:
+                self.success = False
                 status = 'error'
             yield (res['container'], res['base'], res['src'], res['dst'],
                    status, res['err'])
@@ -87,3 +89,8 @@ class ContainerMove(ContainerCommandMixin, ItemMoveCommandMixin,
         columns = ('Container', 'Base', 'Source', 'Destination', 'Status',
                    'Errors')
         return columns, self._format_results(self._run(parsed_args))
+
+    def run(self, parsed_args):
+        super(ContainerMove, self).run(parsed_args)
+        if not self.success:
+            return 1

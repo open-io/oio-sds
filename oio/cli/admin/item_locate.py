@@ -36,6 +36,7 @@ class ItemLocateCommand(lister.Lister):
     columns = ('Type', 'Item', 'Service Id', 'Addr', 'Location', 'Status',
                'Errors')
     reqid_prefix = 'ACLI-LOC-'
+    success = True
 
     def __init__(self, *args, **kwargs):
         super(ItemLocateCommand, self).__init__(*args, **kwargs)
@@ -107,6 +108,7 @@ class ItemLocateCommand(lister.Lister):
                 # TODO(FVE): do something with the result?
                 self.account.account_show(acct, reqid=reqid)
             except Exception as err:
+                self.success = False
                 yield ('account', acct, 'n/a', 'n/a', 'n/a', 'error', str(err))
                 continue
             finally:
@@ -209,6 +211,7 @@ class ItemLocateCommand(lister.Lister):
                     cid = cid_from_name(acct, ct)
                 dir_data = self.dir.list(cid=cid, reqid=reqid)
             except (exceptions.NotFound, exceptions.ServiceBusy) as err:
+                self.success = False
                 m0_err = err if 'meta0' in str(err) else None
                 for m0 in self.locate_m0(cid, error=m0_err):
                     yield m0
@@ -234,6 +237,7 @@ class ItemLocateCommand(lister.Lister):
             for m2 in self.format_m2(acct, ct, m2_srv):
                 yield m2
             if not m2_srv:
+                self.success = False
                 yield ('meta2',
                        self.m2_item(acct, ct, cid),
                        None, None, None, 'error',
@@ -251,14 +255,17 @@ class ItemLocateCommand(lister.Lister):
                 obj_item = encode_fullpath(self.app.options.account, ct, obj,
                                            obj_md['version'], obj_md['id'])
             except exceptions.NoSuchContainer as err:
+                self.success = False
                 self.logger.warn('Failed to locate object %s: %s',
                                  obj_item, err)
                 # Already reported by upper level
                 continue
             except exceptions.NoSuchObject as err:
+                self.success = False
                 yield ('rawx', obj_item, None, None, None, 'error', err)
                 continue
             except Exception as err:
+                self.success = False
                 self.logger.warn('Failed to locate object %s: %s',
                                  obj_item, err)
                 continue
@@ -276,11 +283,17 @@ class ItemLocateCommand(lister.Lister):
                     chunk, reqid=reqid)
                 chunk_obj.update(xattr_meta)
             except Exception as err:
+                self.success = False
                 chunk_obj['error'] = err
             finally:
                 reqid = self.app.request_id(self.reqid_prefix)
             for line in self.format_chunks((chunk_obj, )):
                 yield line
+
+    def run(self, parsed_args):
+        super(ItemLocateCommand, self).run(parsed_args)
+        if not self.success:
+            return 1
 
 
 class AccountLocate(ItemLocateCommand):

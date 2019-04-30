@@ -108,14 +108,6 @@ class ItemResult(object):
         self.errors = errors if errors is not None else list()
         self.target = target
 
-    @property
-    def health(self):
-        """
-        Tell the health of the item that has been checked.
-        """
-        # TODO(FVE): add an intermediate 'warning' level
-        return 'error' if self.errors else 'OK'
-
     def errors_to_str(self, separator='\n', err_format='%s'):
         """
         Pretty print errors stored in this result.
