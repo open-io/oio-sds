@@ -28,18 +28,11 @@ class ItemCheckCommand(lister.Lister):
 
     columns = ('Type', 'Item', 'Status', 'Errors')
     success = True
+    checker = None
 
-    def build_checker(self, parsed_args):
-        """Build an instance of Checker."""
-        checker = Checker(
-            self.app.options.ns,
-            concurrency=parsed_args.concurrency,
-            error_file=parsed_args.output,
-            rebuild_file=parsed_args.output_for_blob_rebuilder,
-            request_attempts=parsed_args.attempts,
-            integrity=parsed_args.checksum
-        )
-        return checker
+    @property
+    def logger(self):
+        return self.app.client_manager.logger
 
     def get_parser(self, prog_name):
         parser = super(ItemCheckCommand, self).get_parser(prog_name)
@@ -73,8 +66,25 @@ class ItemCheckCommand(lister.Lister):
         )
         return parser
 
-    def _format_results(self, checker):
-        for res in checker.run():
+    def _take_action(self, parsed_args):
+        raise NotImplementedError()
+
+    def take_action(self, parsed_args):
+        self.logger.debug('take_action(%s)', parsed_args)
+
+        self.checker = Checker(
+            self.app.options.ns,
+            concurrency=parsed_args.concurrency,
+            error_file=parsed_args.output,
+            rebuild_file=parsed_args.output_for_blob_rebuilder,
+            request_attempts=parsed_args.attempts,
+            integrity=parsed_args.checksum,
+            logger=self.logger)
+
+        return self.columns, self._take_action(parsed_args)
+
+    def _format_results(self):
+        for res in self.checker.run():
             if not res.errors:
                 status = 'OK'
             else:
@@ -82,9 +92,6 @@ class ItemCheckCommand(lister.Lister):
                 status = 'error'
             yield (res.target.type, repr(res.target),
                    status, res.errors_to_str())
-
-    def format_results(self, checker):
-        return self.__class__.columns, self._format_results(checker)
 
     def run(self, parsed_args):
         super(ItemCheckCommand, self).run(parsed_args)
@@ -119,15 +126,13 @@ class AccountCheck(AccountCommandMixin, RecursiveCheckCommand):
         self.patch_parser(parser)
         return parser
 
-    def take_action(self, parsed_args):
-        super(AccountCheck, self).take_action(parsed_args)
-        checker = self.build_checker(parsed_args)
+    def _take_action(self, parsed_args):
         if not parsed_args.accounts:
             parsed_args.accounts = [self.app.options.account]
         for acct in parsed_args.accounts:
             target = Target(acct)
-            checker.check(target, parsed_args.depth)
-        return self.format_results(checker)
+            self.checker.check(target, parsed_args.depth)
+        return self._format_results()
 
 
 class ContainerCheck(ContainerCommandMixin, RecursiveCheckCommand):
@@ -143,13 +148,11 @@ class ContainerCheck(ContainerCommandMixin, RecursiveCheckCommand):
         self.patch_parser(parser)
         return parser
 
-    def take_action(self, parsed_args):
-        super(ContainerCheck, self).take_action(parsed_args)
-        checker = self.build_checker(parsed_args)
+    def _take_action(self, parsed_args):
         for ct in parsed_args.containers:
             target = Target(self.app.options.account, ct)
-            checker.check(target, parsed_args.depth)
-        return self.format_results(checker)
+            self.checker.check(target, parsed_args.depth)
+        return self._format_results()
 
 
 class ObjectCheck(ObjectCommandMixin, RecursiveCheckCommand):
@@ -165,14 +168,16 @@ class ObjectCheck(ObjectCommandMixin, RecursiveCheckCommand):
         self.patch_parser(parser)
         return parser
 
-    def take_action(self, parsed_args):
-        super(ObjectCheck, self).take_action(parsed_args)
-        checker = self.build_checker(parsed_args)
+    def _take_action(self, parsed_args):
         for obj in parsed_args.objects:
             target = Target(self.app.options.account, parsed_args.container,
                             obj, version=parsed_args.object_version)
-            checker.check(target, parsed_args.depth)
-        return self.format_results(checker)
+            self.checker.check(target, parsed_args.depth)
+        return self._format_results()
+
+    def take_action(self, parsed_args):
+        ObjectCommandMixin.take_action(self, parsed_args)
+        return RecursiveCheckCommand.take_action(self, parsed_args)
 
 
 class ChunkCheck(ItemCheckCommand):
@@ -193,10 +198,8 @@ class ChunkCheck(ItemCheckCommand):
         )
         return parser
 
-    def take_action(self, parsed_args):
-        super(ChunkCheck, self).take_action(parsed_args)
-        checker = self.build_checker(parsed_args)
+    def _take_action(self, parsed_args):
         for chunk in parsed_args.chunks:
             target = Target(self.app.options.account, chunk=chunk)
-            checker.check(target)
-        return self.format_results(checker)
+            self.checker.check(target)
+        return self._format_results()

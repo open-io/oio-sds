@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
 from cliff import show
 
 from oio.cli.common.utils import KeyValueAction
@@ -26,6 +27,10 @@ class ServiceGetConfig(show.ShowOne):
     meta2, sqlx).
     """
 
+    @property
+    def logger(self):
+        return self.app.client_manager.logger
+
     def get_parser(self, prog_name):
         parser = super(ServiceGetConfig, self).get_parser(prog_name)
         parser.add_argument(
@@ -36,6 +41,8 @@ class ServiceGetConfig(show.ShowOne):
         return parser
 
     def take_action(self, parsed_args):
+        self.logger.debug('take_action(%s)', parsed_args)
+
         conf = self.app.client_manager.admin.service_get_live_config(
             parsed_args.service)
         return zip(*sorted(conf.items()))
@@ -45,6 +52,10 @@ class ProxyGetConfig(show.ShowOne):
     """
     Get all configuration parameters from the specified proxy service.
     """
+
+    @property
+    def logger(self):
+        return self.app.client_manager.logger
 
     def get_parser(self, prog_name):
         parser = super(ProxyGetConfig, self).get_parser(prog_name)
@@ -58,12 +69,18 @@ class ProxyGetConfig(show.ShowOne):
         return parser
 
     def take_action(self, parsed_args):
+        self.logger.debug('take_action(%s)', parsed_args)
+
         conf = self.app.client_manager.admin.proxy_get_live_config(
             parsed_args.service)
         return zip(*sorted(conf.items()))
 
 
 class SetConfigCommand(show.ShowOne):
+
+    @property
+    def logger(self):
+        return self.app.client_manager.logger
 
     def patch_parser(self, parser):
         parser.add_argument(
@@ -74,6 +91,14 @@ class SetConfigCommand(show.ShowOne):
             help='Configuration parameter to set on the service.'
         )
         return parser
+
+    def _take_action(self, parsed_args):
+        raise NotImplementedError()
+
+    def take_action(self, parsed_args):
+        self.logger.debug('take_action(%s)', parsed_args)
+
+        return self._take_action(parsed_args)
 
 
 class ServiceSetConfig(SetConfigCommand):
@@ -94,7 +119,7 @@ class ServiceSetConfig(SetConfigCommand):
         self.patch_parser(parser)
         return parser
 
-    def take_action(self, parsed_args):
+    def _take_action(self, parsed_args):
         self.app.client_manager.admin.service_set_live_config(
             parsed_args.service, parsed_args.params)
         return zip(*sorted(parsed_args.params.items()))
@@ -117,7 +142,7 @@ class ProxySetConfig(SetConfigCommand):
         self.patch_parser(parser)
         return parser
 
-    def take_action(self, parsed_args):
+    def _take_action(self, parsed_args):
         self.app.client_manager.admin.proxy_set_live_config(
             parsed_args.service, parsed_args.params)
         return zip(*sorted(parsed_args.params.items()))

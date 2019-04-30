@@ -15,8 +15,6 @@
 
 
 from cliff import lister
-from logging import getLogger
-
 
 from oio.account.rebuilder import AccountRebuilder
 from oio.container.repairer import ContainerRepairer
@@ -30,11 +28,14 @@ class ItemRepairCommand(lister.Lister):
     Various parameters that apply to all repair commands.
     """
 
-    log = None
     columns = None
     repairer_class = None
     repairer = None
     conf = dict()
+
+    @property
+    def logger(self):
+        return self.app.client_manager.logger
 
     def get_parser(self, prog_name):
         parser = super(ItemRepairCommand, self).get_parser(prog_name)
@@ -60,7 +61,7 @@ class ItemRepairCommand(lister.Lister):
         raise NotImplementedError()
 
     def take_action(self, parsed_args):
-        self.log.debug('take_action(%s)', parsed_args)
+        self.logger.debug('take_action(%s)', parsed_args)
 
         self.conf.update(self.app.client_manager.client_conf)
         self.conf['report_interval'] = parsed_args.report_interval
@@ -84,7 +85,6 @@ class AccountRepair(AccountCommandMixin, ItemRepairCommand):
     refresh the counter of all containers in this account.
     """
 
-    log = getLogger(__name__ + '.AccountRepair')
     columns = ('Entry', 'Status', 'Errors')
     repairer_class = AccountRebuilder
 
@@ -104,7 +104,7 @@ class AccountRepair(AccountCommandMixin, ItemRepairCommand):
             accounts.append(account)
 
         self.repairer = AccountRebuilder(
-            self.conf, accounts=accounts, logger=self.log)
+            self.conf, accounts=accounts, logger=self.logger)
         self.repairer.prepare_local_dispatcher()
 
         for item, _, error in self.repairer.run():
@@ -125,7 +125,6 @@ class ContainerRepair(ContainerCommandMixin, ItemRepairCommand):
     update the counters for the account service.
     """
 
-    log = getLogger(__name__ + '.ContainerRepair')
     columns = ('Container', 'Status', 'Errors')
     repairer_class = ContainerRepairer
 
@@ -169,7 +168,7 @@ class ContainerRepair(ContainerCommandMixin, ItemRepairCommand):
             containers.append(container)
 
         self.repairer = ContainerRepairer(
-            self.conf, containers=containers, logger=self.log)
+            self.conf, containers=containers, logger=self.logger)
         self.repairer.prepare_local_dispatcher()
 
         for item, _, error in self.repairer.run():
@@ -189,7 +188,6 @@ class ObjectRepair(ObjectCommandMixin, ItemRepairCommand):
     update the counters for the account service.
     """
 
-    log = getLogger(__name__ + '.ObjectRepair')
     columns = ('Object', 'Status', 'Errors')
     repairer_class = ContentRepairer
 
@@ -217,7 +215,7 @@ class ObjectRepair(ObjectCommandMixin, ItemRepairCommand):
             objects.append(obj)
 
         self.repairer = ContentRepairer(
-            self.conf, objects=objects, logger=self.log)
+            self.conf, objects=objects, logger=self.logger)
         self.repairer.prepare_local_dispatcher()
 
         for item, _, error in self.repairer.run():

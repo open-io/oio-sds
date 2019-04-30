@@ -15,7 +15,6 @@
 
 
 from cliff import lister
-from logging import getLogger
 
 from oio.account.rebuilder import AccountRebuilder
 from oio.blob.rebuilder import BlobRebuilder
@@ -28,7 +27,6 @@ class ServiceRebuildCommand(lister.Lister):
     Various parameters that apply to all rebuild commands.
     """
 
-    log = None
     columns = None
     rebuilder_class = None
     rebuilder = None
@@ -38,6 +36,10 @@ class ServiceRebuildCommand(lister.Lister):
     @property
     def formatter_default(self):
         return 'value'
+
+    @property
+    def logger(self):
+        return self.app.client_manager.logger
 
     def get_parser(self, prog_name):
         parser = super(ServiceRebuildCommand, self).get_parser(prog_name)
@@ -68,7 +70,7 @@ The beanstalkd tube to use to send the items to rebuild. (default=%s)
         raise NotImplementedError()
 
     def take_action(self, parsed_args):
-        self.log.debug('take_action(%s)', parsed_args)
+        self.logger.debug('take_action(%s)', parsed_args)
 
         self.conf.update(self.app.client_manager.client_conf)
         self.conf['namespace'] = self.app.options.ns
@@ -94,13 +96,12 @@ class Meta1Rebuild(ServiceRebuildCommand):
     thus triggering a replication. And print the failed container IDs.
     """
 
-    log = getLogger(__name__ + '.Meta1Rebuild')
     columns = ('Prefix', 'Status', 'Errors')
     rebuilder_class = Meta1Rebuilder
     success = False
 
     def _take_action(self, parsed_args):
-        meta1_rebuilder = Meta1Rebuilder(self.conf, self.log)
+        meta1_rebuilder = Meta1Rebuilder(self.conf, self.logger)
         self.success = meta1_rebuilder.rebuilder_pass()
         return
         yield  # pylint: disable=unreachable
@@ -118,7 +119,6 @@ class Meta2Rebuild(ServiceRebuildCommand):
     And print the failed container IDs.
     """
 
-    log = getLogger(__name__ + '.Meta2Rebuild')
     columns = ('Reference', 'Status', 'Errors')
     rebuilder_class = Meta2Rebuilder
     rebuilder = None
@@ -143,7 +143,7 @@ class Meta2Rebuild(ServiceRebuildCommand):
         self.conf['rdir_fetch_limit'] = parsed_args.rdir_fetch_limit
 
         self.rebuilder = Meta2Rebuilder(
-            self.conf, service_id=parsed_args.service_id, logger=self.log)
+            self.conf, service_id=parsed_args.service_id, logger=self.logger)
         self.rebuilder.prepare_local_dispatcher()
 
         for item, _, error in self.rebuilder.run():
@@ -202,7 +202,7 @@ class RawxRebuildCommand(ServiceRebuildCommand):
             self.conf['try_chunk_delete'] = parsed_args.delete_faulty_chunks
 
         self.rebuilder = BlobRebuilder(
-            self.conf, service_id=parsed_args.service_id, logger=self.log)
+            self.conf, service_id=parsed_args.service_id, logger=self.logger)
         if self.distributed:
             self.rebuilder.prepare_distributed_dispatcher()
         else:
@@ -223,8 +223,6 @@ class RawxRebuild(RawxRebuildCommand):
     this command.
     """
 
-    log = getLogger(__name__ + '.RawxRebuild')
-
 
 class RawxDistributedRebuild(RawxRebuildCommand):
     """
@@ -233,7 +231,6 @@ class RawxDistributedRebuild(RawxRebuildCommand):
     incident') before running this command.
     """
 
-    log = getLogger(__name__ + '.RawxDistributedRebuild')
     distributed = True
 
 
@@ -246,12 +243,11 @@ class AccountServiceRebuild(ServiceRebuildCommand):
     refresh the counter of all containers.
     """
 
-    log = getLogger(__name__ + '.AccountServiceRebuild')
     columns = ('Entry', 'Status', 'Errors')
     rebuilder_class = AccountRebuilder
 
     def _take_action(self, parsed_args):
-        self.rebuilder = AccountRebuilder(self.conf, logger=self.log)
+        self.rebuilder = AccountRebuilder(self.conf, logger=self.logger)
         self.rebuilder.prepare_local_dispatcher()
 
         for item, _, error in self.rebuilder.run():
