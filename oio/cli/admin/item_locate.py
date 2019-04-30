@@ -13,11 +13,11 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
+from cliff import lister
 from itertools import chain
 from urllib import quote
 from urlparse import urlparse
-
-from cliff import lister
 
 from oio.common import exceptions
 from oio.common.fullpath import encode_fullpath
@@ -290,6 +290,14 @@ class ItemLocateCommand(lister.Lister):
             for line in self.format_chunks((chunk_obj, )):
                 yield line
 
+    def _take_action(self, parsed_args):
+        raise NotImplementedError()
+
+    def take_action(self, parsed_args):
+        self.logger.debug('take_action(%s)', parsed_args)
+
+        return self.columns, self._take_action(parsed_args)
+
     def run(self, parsed_args):
         super(ItemLocateCommand, self).run(parsed_args)
         if not self.success:
@@ -313,11 +321,10 @@ class AccountLocate(ItemLocateCommand):
         )
         return parser
 
-    def take_action(self, parsed_args):
-        super(AccountLocate, self).take_action(parsed_args)
+    def _take_action(self, parsed_args):
         if not parsed_args.accounts:
             parsed_args.accounts = [self.app.options.account]
-        return self.columns, self.locate_accounts(parsed_args.accounts)
+        return self.locate_accounts(parsed_args.accounts)
 
 
 class ContainerLocate(ContainerCommandMixin, ItemLocateCommand):
@@ -331,14 +338,13 @@ class ContainerLocate(ContainerCommandMixin, ItemLocateCommand):
         self.patch_parser(parser)
         return parser
 
-    def take_action(self, parsed_args):
-        super(ContainerLocate, self).take_action(parsed_args)
+    def _take_action(self, parsed_args):
         # FIXME(FVE): inconsistent behavior: we locate the account
         # found in environment even though the specified container IDs
         # can be resolved as other accounts.
         # The locate_containers() method should be in charge of
         # calling locate_accounts() after container ID resolution.
-        return self.columns, chain(
+        return chain(
             self.locate_accounts([self.app.options.account]),
             self.locate_containers(parsed_args.containers,
                                    is_cid=parsed_args.is_cid))
@@ -378,13 +384,16 @@ class ObjectLocate(ObjectCommandMixin, ItemLocateCommand):
                     (container, obj, parsed_args.object_version))
         return account, containers, objects
 
-    def take_action(self, parsed_args):
-        super(ObjectLocate, self).take_action(parsed_args)
+    def _take_action(self, parsed_args):
         account, containers, objects = self.resolve_objects(parsed_args)
-        return self.columns, chain(
+        return chain(
             self.locate_accounts([account]),
             self.locate_containers(containers),
             self.locate_objects(objects))
+
+    def take_action(self, parsed_args):
+        ObjectCommandMixin.take_action(self, parsed_args)
+        return ItemLocateCommand.take_action(self, parsed_args)
 
 
 class ChunkLocate(ItemLocateCommand):
@@ -403,7 +412,5 @@ class ChunkLocate(ItemLocateCommand):
         )
         return parser
 
-    def take_action(self, parsed_args):
-        super(ChunkLocate, self).take_action(parsed_args)
-        return self.columns, chain(
-            self.locate_chunks(parsed_args.chunks))
+    def _take_action(self, parsed_args):
+        return self.locate_chunks(parsed_args.chunks)

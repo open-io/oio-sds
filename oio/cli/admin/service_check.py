@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
 from cliff import lister
 from oio.crawler.integrity import Target
 from oio.cli.admin.item_check import ItemCheckCommand
@@ -23,6 +24,7 @@ class BaseCheckCommand(lister.Lister):
     Base class for all check commands.
     """
 
+    columns = ('Status', 'Errors')
     SRV = None
 
     def __init__(self, *args, **kwargs):
@@ -30,6 +32,10 @@ class BaseCheckCommand(lister.Lister):
         self._zkcnxstr = None
         self.catalog = None
         self.live = None
+
+    @property
+    def logger(self):
+        return self.app.client_manager.logger
 
     def get_parser(self, prog_name):
         parser = super(BaseCheckCommand, self).get_parser(prog_name)
@@ -85,10 +91,6 @@ class BaseCheckCommand(lister.Lister):
                 except Exception as ex:
                     self.logger.exception("Failed to decode line: %s", ex)
 
-    @property
-    def logger(self):
-        return self.app.client_manager.logger
-
     def zookeeper(self):
         if self._zkcnxstr:
             return self._zkcnxstr
@@ -97,6 +99,15 @@ class BaseCheckCommand(lister.Lister):
         self._zkcnxstr = conf.get('zookeeper.%s' % self.SRV,
                                   conf.get('zookeeper'))
         return self._zkcnxstr
+
+    def _take_action(self, parsed_args):
+        raise NotImplementedError()
+
+    def take_action(self, parsed_args):
+        self.logger.debug('take_action(%s)', parsed_args)
+
+        self.load_catalog(parsed_args)
+        return self.columns, self._take_action(parsed_args)
 
 
 class Meta0Check(BaseCheckCommand):
@@ -108,9 +119,7 @@ class Meta0Check(BaseCheckCommand):
 
     SRV = 'meta0'
 
-    def take_action(self, parsed_args):
-        super(Meta0Check, self).take_action(parsed_args)
-        self.load_catalog(parsed_args)
+    def _take_action(self, parsed_args):
         import zookeeper
         from oio.zk.client import get_meta0_paths, get_connected_handles
         self.logger.debug("Checking meta0 services")
@@ -138,7 +147,7 @@ class Meta0Check(BaseCheckCommand):
                 finally:
                     zh.close()
 
-        return ('Status', 'Errors'), [('OK', None)]
+        yield ('OK', None)
 
 
 class Meta1Check(BaseCheckCommand):
@@ -149,10 +158,7 @@ class Meta1Check(BaseCheckCommand):
     """
     SRV = 'meta1'
 
-    def take_action(self, parsed_args):
-        super(Meta1Check, self).take_action(parsed_args)
-        self.load_catalog(parsed_args)
-
+    def _take_action(self, parsed_args):
         # All the services must have been declared
         c0 = list(self.filter_services(self.catalog, self.SRV))
         l0 = list(self.filter_services(self.live, self.SRV))
@@ -163,7 +169,7 @@ class Meta1Check(BaseCheckCommand):
         for _, _, _, m1_score in l0:
             assert m1_score > 0
         self.logger.info("All meta1 services have a positive score.")
-        return ('Status', 'Errors'), [('OK', None)]
+        yield ('OK', None)
 
 
 class DirCheck(BaseCheckCommand):
@@ -175,9 +181,7 @@ class DirCheck(BaseCheckCommand):
     Check all meta1 are assigned.
     """
 
-    def take_action(self, parsed_args):
-        super(DirCheck, self).take_action(parsed_args)
-        self.load_catalog(parsed_args)
+    def _take_action(self, parsed_args):
         import subprocess
         from oio.directory.meta0 import Meta0Client
         from oio.common.json import json
@@ -218,7 +222,7 @@ class DirCheck(BaseCheckCommand):
         # FIXME(FVE): this check does not guarantee items are the same
         assert len(m1) == len(reverse_dump)
         self.logger.info("All meta1 services have been assigned.")
-        return ('Status', 'Errors'), [('OK', None)]
+        yield ('OK', None)
 
 
 class RdirCheck(BaseCheckCommand):
@@ -229,9 +233,7 @@ class RdirCheck(BaseCheckCommand):
     Check registered rdir services against deployed rdir services.
     """
 
-    def take_action(self, parsed_args):
-        super(RdirCheck, self).take_action(parsed_args)
-        self.load_catalog(parsed_args)
+    def _take_action(self, parsed_args):
         from oio.rdir.client import RdirDispatcher
 
         self.logger.debug("Checking rdir services.")
@@ -255,8 +257,7 @@ class RdirCheck(BaseCheckCommand):
         assert len(l0) == len(c0)
         assert len(l0) == len(all_rdir)
         self.logger.info("All rdir services are alive.")
-
-        return ('Status', 'Errors'), [('OK', None)]
+        yield ('OK', None)
 
 
 class RawxCheck(ItemCheckCommand):
@@ -303,13 +304,12 @@ class RawxCheck(ItemCheckCommand):
             return 'http://' + url
         return url
 
-    def check_services(self, parsed_args):
-        checker = self.build_checker(parsed_args)
+    def _take_action(self, parsed_args):
         for service in parsed_args.services:
             reqid = self.app.request_id(self.reqid_prefix)
             chunks = self.app.client_manager.rdir.chunk_fetch(service,
                                                               reqid=reqid)
-            for res in self.check_chunks(service, chunks, checker):
+            for res in self.check_chunks(service, chunks, self.checker):
                 yield res
 
     def check_chunks(self, service, chunks, checker):
@@ -319,7 +319,3 @@ class RawxCheck(ItemCheckCommand):
                                  chunk=url + '/' + chunk[2]))
             for res in self._format_results(checker):
                 yield res
-
-    def take_action(self, parsed_args):
-        super(RawxCheck, self).take_action(parsed_args)
-        return self.columns, self.check_services(parsed_args)

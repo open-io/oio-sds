@@ -15,7 +15,6 @@
 
 
 from cliff import lister
-from logging import getLogger
 
 from oio.cli.admin.common import ContainerCommandMixin
 from oio.common.utils import cid_from_name
@@ -49,8 +48,11 @@ class ContainerMove(ContainerCommandMixin, ItemMoveCommandMixin,
     a destination service is automatically selected.
     """
 
-    log = getLogger(__name__ + '.ContainerMove')
     success = True
+
+    @property
+    def logger(self):
+        return self.app.client_manager.logger
 
     def get_parser(self, prog_name):
         parser = super(ContainerMove, self).get_parser(prog_name)
@@ -60,7 +62,7 @@ class ContainerMove(ContainerCommandMixin, ItemMoveCommandMixin,
 
     def _run(self, parsed_args):
         meta2 = Meta2Database(self.app.client_manager.client_conf,
-                              logger=self.log)
+                              logger=self.logger)
         for container in parsed_args.containers:
             if parsed_args.is_cid:
                 cid = container
@@ -84,7 +86,7 @@ class ContainerMove(ContainerCommandMixin, ItemMoveCommandMixin,
                    status, res['err'])
 
     def take_action(self, parsed_args):
-        self.log.debug('take_action(%s)', parsed_args)
+        self.logger.debug('take_action(%s)', parsed_args)
 
         columns = ('Container', 'Base', 'Source', 'Destination', 'Status',
                    'Errors')

@@ -22,6 +22,7 @@ class ServiceListCommand(lister.Lister):
     A command to display items of a specific service
     """
 
+    columns = None
     reqid_prefix = 'ACLI-LST-'
 
     def __init__(self, *args, **kwargs):
@@ -47,6 +48,14 @@ class ServiceListCommand(lister.Lister):
             action=ValueFormatStoreTrueAction,
         )
         return parser
+
+    def _take_action(self, parsed_args):
+        raise NotImplementedError()
+
+    def take_action(self, parsed_args):
+        self.logger.debug('take_action(%s)', parsed_args)
+
+        return self.columns, self._take_action(parsed_args)
 
     # Accessors #######################################################
 
@@ -89,6 +98,8 @@ class RawxListContainers(ServiceListCommand):
     """
     List containers having chunks stored on the specified rawx service.
     """
+
+    columns = ('Name', 'Chunks')
     reqid_prefix = 'ACLI-RLC-'
 
     def _list_containers(self, rawx, translate=False):
@@ -110,18 +121,17 @@ class RawxListContainers(ServiceListCommand):
         )
         return parser
 
-    def take_action(self, parsed_args):
-        super(RawxListContainers, self).take_action(parsed_args)
-        return (('Name', 'Chunks'),
-                self._list_containers(
-                    parsed_args.service_id,
-                    translate=not parsed_args.no_translation))
+    def _take_action(self, parsed_args):
+        return self._list_containers(
+            parsed_args.service_id, translate=not parsed_args.no_translation)
 
 
 class Meta2ListContainers(ServiceListCommand):
     """
     List containers hosted by the specified meta2 service.
     """
+
+    columns = ('Name',)
     reqid_prefix = 'ACLI-M2LC-'
 
     def get_parser(self, prog_name):
@@ -157,8 +167,7 @@ class Meta2ListContainers(ServiceListCommand):
         for item in resp.get('records'):
             yield item['container_url']
 
-    def take_action(self, parsed_args):
-        super(Meta2ListContainers, self).take_action(parsed_args)
+    def _take_action(self, parsed_args):
         kwargs = {}
         if parsed_args.marker:
             kwargs['marker'] = parsed_args.marker
@@ -173,4 +182,4 @@ class Meta2ListContainers(ServiceListCommand):
         else:
             containers = self._list_containers(parsed_args.service_id,
                                                **kwargs)
-        return ('Name',), ((v,) for v in containers)
+        return ((v,) for v in containers)

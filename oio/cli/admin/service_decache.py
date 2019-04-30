@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
 from cliff import lister
 
 
@@ -24,6 +25,10 @@ class DecacheCommand(lister.Lister):
     columns = ('Id', 'Status', 'Errors')
     service_type = None
     success = True
+
+    @property
+    def logger(self):
+        return self.app.client_manager.logger
 
     @property
     def admin(self):
@@ -61,6 +66,8 @@ class DecacheCommand(lister.Lister):
         raise NotImplementedError()
 
     def take_action(self, parsed_args):
+        self.logger.debug('take_action(%s)', parsed_args)
+
         services = self.get_services(parsed_args)
         return self.columns, self.decache_services(services)
 
