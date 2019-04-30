@@ -95,7 +95,7 @@ class Meta1Rebuild(ServiceRebuildCommand):
     """
 
     log = getLogger(__name__ + '.Meta1Rebuild')
-    columns = ('Prefix', 'Status')
+    columns = ('Prefix', 'Status', 'Errors')
     rebuilder_class = Meta1Rebuilder
     success = False
 
@@ -119,7 +119,7 @@ class Meta2Rebuild(ServiceRebuildCommand):
     """
 
     log = getLogger(__name__ + '.Meta2Rebuild')
-    columns = ('Reference', 'Status')
+    columns = ('Reference', 'Status', 'Errors')
     rebuilder_class = Meta2Rebuilder
     rebuilder = None
 
@@ -150,8 +150,8 @@ class Meta2Rebuild(ServiceRebuildCommand):
             if error is None:
                 status = 'OK'
             else:
-                status = error
-            yield (self.rebuilder.string_from_item(item), status)
+                status = 'error'
+            yield (self.rebuilder.string_from_item(item), status, error)
 
     def run(self, parsed_args):
         super(Meta2Rebuild, self).run(parsed_args)
@@ -161,6 +161,7 @@ class Meta2Rebuild(ServiceRebuildCommand):
 
 class RawxRebuildCommand(ServiceRebuildCommand):
 
+    columns = ('Chunk', 'Status', 'Errors')
     rebuilder_class = BlobRebuilder
 
     def get_parser(self, prog_name):
@@ -211,8 +212,8 @@ class RawxRebuildCommand(ServiceRebuildCommand):
             if error is None:
                 status = 'OK'
             else:
-                status = error
-            yield (self.rebuilder.string_from_item(item), status)
+                status = 'error'
+            yield (self.rebuilder.string_from_item(item), status, error)
 
 
 class RawxRebuild(RawxRebuildCommand):
@@ -246,7 +247,7 @@ class AccountServiceRebuild(ServiceRebuildCommand):
     """
 
     log = getLogger(__name__ + '.AccountServiceRebuild')
-    columns = ('Entry', 'Status')
+    columns = ('Entry', 'Status', 'Errors')
     rebuilder_class = AccountRebuilder
 
     def _take_action(self, parsed_args):
@@ -257,5 +258,5 @@ class AccountServiceRebuild(ServiceRebuildCommand):
             if error is None:
                 status = 'OK'
             else:
-                status = error
-            yield (self.rebuilder.string_from_item(item), status)
+                status = 'error'
+            yield (self.rebuilder.string_from_item(item), status, error)

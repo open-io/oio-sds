@@ -21,7 +21,7 @@ class DecacheCommand(lister.Lister):
     Base class for all decache commands.
     """
 
-    columns = ('Id', 'Status')
+    columns = ('Id', 'Status', 'Errors')
     service_type = None
 
     @property
@@ -73,9 +73,9 @@ class ProxyDecache(DecacheCommand):
         for srv in services:
             try:
                 self.admin.proxy_flush_cache(proxy_netloc=srv)
-                yield srv, 'OK'
+                yield srv, 'OK', None
             except Exception as err:
-                yield srv, err
+                yield srv, 'error', err
 
 
 class SqliterepoDecacheCommand(DecacheCommand):
@@ -85,9 +85,9 @@ class SqliterepoDecacheCommand(DecacheCommand):
         for srv in services:
             try:
                 self.admin.service_flush_cache(srv)
-                yield srv, 'OK'
+                yield srv, 'OK', None
             except Exception as err:
-                yield srv, err
+                yield srv, 'error', err
 
 
 class Meta1Decache(SqliterepoDecacheCommand):

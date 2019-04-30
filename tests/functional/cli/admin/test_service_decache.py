@@ -48,7 +48,7 @@ class ServiceDecacheTest(CliTestCase):
         status0 = self.admin.proxy_get_cache_status()
         output = self.openio_admin('oioproxy decache' + self.get_format_opts())
         # FIXME(FVE): this will fail when we will deploy several proxies
-        self.assertOutput('%s OK\n' % self.conf['proxy'], output)
+        self.assertOutput('%s OK None\n' % self.conf['proxy'], output)
         status1 = self.admin.proxy_get_cache_status()
         self.assertLess(status1['csm0']['count'], status0['csm0']['count'])
         self.assertLess(status1['meta1']['count'], status0['meta1']['count'])
