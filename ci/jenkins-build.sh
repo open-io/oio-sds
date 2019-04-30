@@ -16,8 +16,7 @@ python setup.py develop
 bash ./tools/oio-check-version.sh
 export G_DEBUG_LEVEL=D PATH="$PATH:/tmp/oio/bin" LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/tmp/oio/lib"
 
-export TEST_SUITE=3copies,with-service-id
-./tools/oio-travis-suites.sh
+echo "should launch proper test suite"
 
-export TEST_SUITE=rebuilder,with-service-id
+echo "${TEST_SUITE}"
 ./tools/oio-travis-suites.sh
