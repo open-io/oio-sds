@@ -176,6 +176,9 @@ func_tests () {
 	if is_running_test_suite "fsync"; then
 		args="${args} -f "${SRCDIR}/etc/bootstrap-option-rawx-fsync.yml""
 	fi
+	if is_running_test_suite "webhook"; then
+		args="${args} -f "${SRCDIR}/etc/bootstrap-option-webhook.yml""
+	fi
 	$OIO_RESET ${args} -N $OIO_NS $@
 
 	test_proxy_forward
@@ -381,12 +384,6 @@ if is_running_test_suite "multi-beanstalk" ; then
 	func_tests \
 		-f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-3beanstalkd.yml"
-fi
-
-if is_running_test_suite "webhook" ; then
-	echo -e "\n### with webhooks"
-	func_tests -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
-		-f "${SRCDIR}/etc/bootstrap-option-webhook.yml"
 fi
 
 func_tests_rebuilder_mover () {
