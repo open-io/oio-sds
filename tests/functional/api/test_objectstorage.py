@@ -512,7 +512,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
         self._create(name)
         for i in range(10):
-            reqid = 'content' + str(i)
+            reqid = 'content' + name + str(i)
             self.api.object_create(
                 self.account, name, obj_name=reqid, data='data',
                 reqid=reqid)
@@ -524,11 +524,12 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         damaged_objects = meta['system']['sys.m2.objects.damaged']
         missing_chunks = meta['system']['sys.m2.chunks.missing']
         for i in range(10):
-            reqid = 'content' + str(i)
+            reqid = 'content' + name + str(i)
             self.wait_for_event(
                 'oio-preserved', reqid=reqid, type_=EventTypes.CONTENT_NEW)
         self.wait_for_event(
-            'oio-preserved', type_=EventTypes.CONTAINER_STATE)
+            'oio-preserved', fields={'user': name},
+            type_=EventTypes.CONTAINER_STATE)
         containers = self.api.container_list(self.account)
         for container in containers:
             if container[0] == name:
@@ -546,7 +547,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         reqid = request_id()
         self.api.container_touch(self.account, name, reqid=reqid)
         self.wait_for_event(
-            'oio-preserved', type_=EventTypes.CONTAINER_STATE)
+            'oio-preserved', fields={'user': name},
+            type_=EventTypes.CONTAINER_STATE)
         containers = self.api.container_list(self.account)
         self.assertEqual(1, len(containers))
         self.assertListEqual(
@@ -558,7 +560,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
         self.api.container_touch(self.account, name, recompute=True)
         self.wait_for_event(
-            'oio-preserved', type_=EventTypes.CONTAINER_STATE)
+            'oio-preserved', fields={'user': name},
+            type_=EventTypes.CONTAINER_STATE)
         meta = self.api.container_get_properties(self.account, name)
         self.assertEqual(objects, meta['system']['sys.m2.objects'])
         self.assertEqual(usage, meta['system']['sys.m2.usage'])
@@ -972,10 +975,14 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
         name = random_str(32)
         self.api.object_create(account, name, data="data", obj_name=name)
-        self.wait_for_event('oio-preserved', type_=EventTypes.CONTAINER_STATE)
+        self.wait_for_event('oio-preserved',
+                            fields={'account': account},
+                            type_=EventTypes.CONTAINER_STATE)
         self.beanstalkd0.drain_tube('oio-preserved')
         self.api.account_refresh(account)
-        self.wait_for_event('oio-preserved', type_=EventTypes.CONTAINER_STATE)
+        self.wait_for_event('oio-preserved',
+                            fields={'account': account},
+                            type_=EventTypes.CONTAINER_STATE)
         res = self.api.account_show(account)
         self.assertEqual(res["bytes"], 4)
         self.assertEqual(res["objects"], 1)

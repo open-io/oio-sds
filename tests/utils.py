@@ -479,11 +479,11 @@ class BaseTestCase(CommonTestCase):
                      score_threshold, timeout)
 
     def wait_for_event(self, tube, reqid=None, type_=None,
-                       timeout=30.0):
+                       fields=None, timeout=30.0):
         """
         Wait for an event in the specified tube.
-        If reqid and/or type_ are specified, drain events until the specified
-        event is found.
+        If reqid, type_ and/or fields are specified, drain events until the
+        specified event is found.
         """
         self.beanstalkd0.wait_for_ready_job(tube, timeout=timeout)
         self.beanstalkd0.watch(tube)
@@ -496,10 +496,19 @@ class BaseTestCase(CommonTestCase):
                 job_id, data = self.beanstalkd0.reserve(timeout=to)
                 edata = jsonlib.loads(data)
                 self.beanstalkd0.delete(job_id)
-                if not type_ or edata['event'] == type_:
-                    if not reqid or edata.get('request_id') == reqid:
-                        return edata
                 now = time.time()
+                if type_ and edata['event'] != type_:
+                    logging.debug("ignore event %s (event mismatch)", data)
+                    continue
+                if reqid and edata.get('request_id') != reqid:
+                    logging.info("ignore event %s (request_id mismatch)", data)
+                    continue
+                if fields and any(fields[k] != edata.get('url', {}).get(k)
+                                  for k in fields):
+                    logging.info("ignore event %s (filter mismatch)", data)
+                    continue
+                logging.info("event %s", data)
+                return edata
         except ResponseError as err:
             logging.info('%s', err)
         return None
