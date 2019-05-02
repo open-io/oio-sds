@@ -16,6 +16,8 @@
 
 from cliff import show
 
+from oio.cli.admin.common import SingleServiceCommandMixin
+
 
 def _flat_dict_from_dict(parsed_args, dict_):
     """
@@ -47,7 +49,7 @@ def _flat_dict_from_dict(parsed_args, dict_):
     return flat_dict
 
 
-class ServiceInfo(show.ShowOne):
+class ServiceInfo(SingleServiceCommandMixin, show.ShowOne):
     """
     Get all information from the specified service.
 
@@ -55,16 +57,19 @@ class ServiceInfo(show.ShowOne):
     (meta0, meta1, meta2, sqlx).
     """
 
+    @property
+    def logger(self):
+        return self.app.client_manager.logger
+
     def get_parser(self, prog_name):
         parser = super(ServiceInfo, self).get_parser(prog_name)
-        parser.add_argument(
-            'service',
-            metavar='<service_id>',
-            help=("Service whose information to display."),
-        )
+        self.patch_parser(parser)
         return parser
 
     def take_action(self, parsed_args):
+        self.check_and_load_parsed_args(self.app, parsed_args)
+        self.logger.debug('take_action(%s)', parsed_args)
+
         conf = self.app.client_manager.admin.service_get_info(
             parsed_args.service)
         return zip(*sorted(_flat_dict_from_dict(parsed_args, conf).items()))

@@ -17,7 +17,7 @@
 from cliff import lister
 
 from oio.cli.admin.common import AccountCommandMixin, ContainerCommandMixin, \
-    ObjectCommandMixin
+    ObjectCommandMixin, ChunkCommandMixin
 from oio.crawler.integrity import Checker, Target, DEFAULT_DEPTH
 
 
@@ -127,12 +127,14 @@ class AccountCheck(AccountCommandMixin, RecursiveCheckCommand):
         return parser
 
     def _take_action(self, parsed_args):
-        if not parsed_args.accounts:
-            parsed_args.accounts = [self.app.options.account]
         for acct in parsed_args.accounts:
             target = Target(acct)
             self.checker.check(target, parsed_args.depth)
         return self._format_results()
+
+    def take_action(self, parsed_args):
+        self.check_and_load_parsed_args(self.app, parsed_args)
+        return super(AccountCheck, self).take_action(parsed_args)
 
 
 class ContainerCheck(ContainerCommandMixin, RecursiveCheckCommand):
@@ -149,10 +151,15 @@ class ContainerCheck(ContainerCommandMixin, RecursiveCheckCommand):
         return parser
 
     def _take_action(self, parsed_args):
-        for ct in parsed_args.containers:
-            target = Target(self.app.options.account, ct)
+        containers = self.resolve_containers(self.app, parsed_args, no_id=True)
+        for account, container_name, _ in containers:
+            target = Target(account, container_name)
             self.checker.check(target, parsed_args.depth)
         return self._format_results()
+
+    def take_action(self, parsed_args):
+        self.check_and_load_parsed_args(self.app, parsed_args)
+        return super(ContainerCheck, self).take_action(parsed_args)
 
 
 class ObjectCheck(ObjectCommandMixin, RecursiveCheckCommand):
@@ -169,18 +176,18 @@ class ObjectCheck(ObjectCommandMixin, RecursiveCheckCommand):
         return parser
 
     def _take_action(self, parsed_args):
-        for obj in parsed_args.objects:
-            target = Target(self.app.options.account, parsed_args.container,
-                            obj, version=parsed_args.object_version)
+        account, _, objects = self.resolve_objects(self.app, parsed_args)
+        for container, obj_name, version in objects:
+            target = Target(account, container, obj_name, version=version)
             self.checker.check(target, parsed_args.depth)
         return self._format_results()
 
     def take_action(self, parsed_args):
-        ObjectCommandMixin.take_action(self, parsed_args)
-        return RecursiveCheckCommand.take_action(self, parsed_args)
+        self.check_and_load_parsed_args(self.app, parsed_args)
+        return super(ObjectCheck, self).take_action(parsed_args)
 
 
-class ChunkCheck(ItemCheckCommand):
+class ChunkCheck(ChunkCommandMixin, ItemCheckCommand):
     """
     Check a chunk for problems.
 
@@ -190,12 +197,7 @@ class ChunkCheck(ItemCheckCommand):
 
     def get_parser(self, prog_name):
         parser = super(ChunkCheck, self).get_parser(prog_name)
-        parser.add_argument(
-            'chunks',
-            metavar='<chunk_url>',
-            nargs='+',
-            help='URL to the chunk to check.'
-        )
+        self.patch_parser(parser)
         return parser
 
     def _take_action(self, parsed_args):
@@ -203,3 +205,7 @@ class ChunkCheck(ItemCheckCommand):
             target = Target(self.app.options.account, chunk=chunk)
             self.checker.check(target)
         return self._format_results()
+
+    def take_action(self, parsed_args):
+        self.check_and_load_parsed_args(self.app, parsed_args)
+        return super(ChunkCheck, self).take_action(parsed_args)

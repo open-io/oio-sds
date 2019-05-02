@@ -22,7 +22,8 @@ from urlparse import urlparse
 from oio.common import exceptions
 from oio.common.fullpath import encode_fullpath
 from oio.common.utils import cid_from_name
-from oio.cli.admin.common import ContainerCommandMixin, ObjectCommandMixin
+from oio.cli.admin.common import AccountCommandMixin, ContainerCommandMixin, \
+    ObjectCommandMixin, ChunkCommandMixin
 
 
 DUMMY_SERVICE = {'addr': None, 'score': 0, 'tags': {}}
@@ -304,7 +305,7 @@ class ItemLocateCommand(lister.Lister):
             return 1
 
 
-class AccountLocate(ItemLocateCommand):
+class AccountLocate(AccountCommandMixin, ItemLocateCommand):
     """
     Get location of the account service(s) hosting the specified account.
     """
@@ -313,18 +314,17 @@ class AccountLocate(ItemLocateCommand):
 
     def get_parser(self, prog_name):
         parser = super(AccountLocate, self).get_parser(prog_name)
-        parser.add_argument(
-            'accounts',
-            nargs='*',
-            metavar='<account_name>',
-            help='Name of the account to check.'
-        )
+        self.patch_parser(parser)
         return parser
 
     def _take_action(self, parsed_args):
         if not parsed_args.accounts:
             parsed_args.accounts = [self.app.options.account]
         return self.locate_accounts(parsed_args.accounts)
+
+    def take_action(self, parsed_args):
+        self.check_and_load_parsed_args(self.app, parsed_args)
+        return super(AccountLocate, self).take_action(parsed_args)
 
 
 class ContainerLocate(ContainerCommandMixin, ItemLocateCommand):
@@ -349,6 +349,10 @@ class ContainerLocate(ContainerCommandMixin, ItemLocateCommand):
             self.locate_containers(parsed_args.containers,
                                    is_cid=parsed_args.is_cid))
 
+    def take_action(self, parsed_args):
+        self.check_and_load_parsed_args(self.app, parsed_args)
+        return super(ContainerLocate, self).take_action(parsed_args)
+
 
 class ObjectLocate(ObjectCommandMixin, ItemLocateCommand):
     """
@@ -361,42 +365,20 @@ class ObjectLocate(ObjectCommandMixin, ItemLocateCommand):
         self.patch_parser(parser)
         return parser
 
-    def resolve_objects(self, parsed_args):
-        containers = set()
-        objects = list()
-        if parsed_args.auto:
-            autocontainer = self.app.client_manager.flatns_manager
-            for obj in parsed_args.objects:
-                ct = autocontainer(obj)
-                containers.add(ct)
-                objects.append((ct, obj, parsed_args.object_version))
-        else:
-            if parsed_args.is_cid:
-                account, container = \
-                    self.app.client_manager.storage.resolve_cid(
-                        parsed_args.container)
-            else:
-                account = self.app.options.account
-                container = parsed_args.container
-            containers.add(container)
-            for obj in parsed_args.objects:
-                objects.append(
-                    (container, obj, parsed_args.object_version))
-        return account, containers, objects
-
     def _take_action(self, parsed_args):
-        account, containers, objects = self.resolve_objects(parsed_args)
+        account, containers, objects = self.resolve_objects(
+            self.app, parsed_args)
         return chain(
             self.locate_accounts([account]),
             self.locate_containers(containers),
             self.locate_objects(objects))
 
     def take_action(self, parsed_args):
-        ObjectCommandMixin.take_action(self, parsed_args)
-        return ItemLocateCommand.take_action(self, parsed_args)
+        self.check_and_load_parsed_args(self.app, parsed_args)
+        return super(ObjectLocate, self).take_action(parsed_args)
 
 
-class ChunkLocate(ItemLocateCommand):
+class ChunkLocate(ChunkCommandMixin, ItemLocateCommand):
     """
     Get location of the services hosting the specified chunk(s).
     """
@@ -404,13 +386,12 @@ class ChunkLocate(ItemLocateCommand):
 
     def get_parser(self, prog_name):
         parser = super(ChunkLocate, self).get_parser(prog_name)
-        parser.add_argument(
-            'chunks',
-            metavar='<chunk_url>',
-            nargs='+',
-            help='URL to the chunk to check.'
-        )
+        self.patch_parser(parser)
         return parser
 
     def _take_action(self, parsed_args):
         return self.locate_chunks(parsed_args.chunks)
+
+    def take_action(self, parsed_args):
+        self.check_and_load_parsed_args(self.app, parsed_args)
+        return super(ChunkLocate, self).take_action(parsed_args)

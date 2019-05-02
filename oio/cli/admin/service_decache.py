@@ -16,14 +16,15 @@
 
 from cliff import lister
 
+from oio.cli.admin.common import MultipleServicesCommandMixin
 
-class DecacheCommand(lister.Lister):
+
+class DecacheCommand(MultipleServicesCommandMixin, lister.Lister):
     """
     Base class for all decache commands.
     """
 
     columns = ('Id', 'Status', 'Errors')
-    service_type = None
     success = True
 
     @property
@@ -35,41 +36,20 @@ class DecacheCommand(lister.Lister):
         """Get an instance of AdminClient."""
         return self.app.client_manager.admin
 
-    @property
-    def cs(self):
-        """Get an instance of ConscienceClient."""
-        return self.app.client_manager.conscience
-
     def get_parser(self, prog_name):
         parser = super(DecacheCommand, self).get_parser(prog_name)
-        parser.add_argument(
-            'services',
-            metavar='<service_id>',
-            nargs='*',
-            help=("Service hosting the cache to empty. "
-                  "If no service is specified, flush them all."),
-        )
+        self.patch_parser(parser)
         return parser
-
-    def get_services(self, parsed_args):
-        """
-        Yield IDs of services that must flush their cache.
-        """
-        if not parsed_args.services:
-            parsed_args.services = [
-                s['id'] for s in self.cs.all_services(self.service_type)]
-        for srv in parsed_args.services:
-            yield srv
 
     def decache_services(self, services):
         """Send a decache request to each specified service."""
         raise NotImplementedError()
 
     def take_action(self, parsed_args):
+        self.check_and_load_parsed_args(self.app, parsed_args)
         self.logger.debug('take_action(%s)', parsed_args)
 
-        services = self.get_services(parsed_args)
-        return self.columns, self.decache_services(services)
+        return self.columns, self.decache_services(parsed_args.services)
 
     def run(self, parsed_args):
         super(DecacheCommand, self).run(parsed_args)

@@ -17,9 +17,11 @@
 from cliff import show
 
 from oio.cli.common.utils import KeyValueAction
+from oio.cli.admin.common import SingleServiceCommandMixin, \
+    ProxyCommandMixin
 
 
-class ServiceGetConfig(show.ShowOne):
+class ServiceGetConfig(SingleServiceCommandMixin, show.ShowOne):
     """
     Get all configuration parameters from the specified service.
 
@@ -33,14 +35,11 @@ class ServiceGetConfig(show.ShowOne):
 
     def get_parser(self, prog_name):
         parser = super(ServiceGetConfig, self).get_parser(prog_name)
-        parser.add_argument(
-            'service',
-            metavar='<service_id>',
-            help=("Service whose configuration to display."),
-        )
+        self.patch_parser(parser)
         return parser
 
     def take_action(self, parsed_args):
+        self.check_and_load_parsed_args(self.app, parsed_args)
         self.logger.debug('take_action(%s)', parsed_args)
 
         conf = self.app.client_manager.admin.service_get_live_config(
@@ -48,7 +47,7 @@ class ServiceGetConfig(show.ShowOne):
         return zip(*sorted(conf.items()))
 
 
-class ProxyGetConfig(show.ShowOne):
+class ProxyGetConfig(ProxyCommandMixin, show.ShowOne):
     """
     Get all configuration parameters from the specified proxy service.
     """
@@ -59,16 +58,11 @@ class ProxyGetConfig(show.ShowOne):
 
     def get_parser(self, prog_name):
         parser = super(ProxyGetConfig, self).get_parser(prog_name)
-        parser.add_argument(
-            'service',
-            metavar='<service_id>',
-            nargs='?',
-            help=("Proxy service whose configuration to display. "
-                  "If not specified, query the local one."),
-        )
+        self.patch_parser(parser)
         return parser
 
     def take_action(self, parsed_args):
+        self.check_and_load_parsed_args(self.app, parsed_args)
         self.logger.debug('take_action(%s)', parsed_args)
 
         conf = self.app.client_manager.admin.proxy_get_live_config(
@@ -82,7 +76,8 @@ class SetConfigCommand(show.ShowOne):
     def logger(self):
         return self.app.client_manager.logger
 
-    def patch_parser(self, parser):
+    def get_parser(self, prog_name):
+        parser = super(SetConfigCommand, self).get_parser(prog_name)
         parser.add_argument(
             '-p', '--param',
             dest='params',
@@ -101,7 +96,7 @@ class SetConfigCommand(show.ShowOne):
         return self._take_action(parsed_args)
 
 
-class ServiceSetConfig(SetConfigCommand):
+class ServiceSetConfig(SingleServiceCommandMixin, SetConfigCommand):
     """
     Set configuration parameters on the specified service.
 
@@ -111,11 +106,6 @@ class ServiceSetConfig(SetConfigCommand):
 
     def get_parser(self, prog_name):
         parser = super(ServiceSetConfig, self).get_parser(prog_name)
-        parser.add_argument(
-            'service',
-            metavar='<service_id>',
-            help=("Service whose configuration to set."),
-        )
         self.patch_parser(parser)
         return parser
 
@@ -124,21 +114,18 @@ class ServiceSetConfig(SetConfigCommand):
             parsed_args.service, parsed_args.params)
         return zip(*sorted(parsed_args.params.items()))
 
+    def take_action(self, parsed_args):
+        self.check_and_load_parsed_args(self.app, parsed_args)
+        return super(ServiceSetConfig, self).take_action(parsed_args)
 
-class ProxySetConfig(SetConfigCommand):
+
+class ProxySetConfig(ProxyCommandMixin, SetConfigCommand):
     """
     Set configuration parameters on the specified proxy service.
     """
 
     def get_parser(self, prog_name):
         parser = super(ProxySetConfig, self).get_parser(prog_name)
-        parser.add_argument(
-            'service',
-            metavar='<service_id>',
-            nargs='?',
-            help=("Proxy service whose configuration to set. "
-                  "If not specified, use the local one."),
-        )
         self.patch_parser(parser)
         return parser
 
@@ -146,3 +133,7 @@ class ProxySetConfig(SetConfigCommand):
         self.app.client_manager.admin.proxy_set_live_config(
             parsed_args.service, parsed_args.params)
         return zip(*sorted(parsed_args.params.items()))
+
+    def take_action(self, parsed_args):
+        self.check_and_load_parsed_args(self.app, parsed_args)
+        return super(ProxySetConfig, self).take_action(parsed_args)

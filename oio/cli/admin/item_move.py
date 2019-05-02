@@ -17,16 +17,48 @@
 from cliff import lister
 
 from oio.cli.admin.common import ContainerCommandMixin
-from oio.common.utils import cid_from_name
 from oio.directory.meta2 import Meta2Database
 
 
-class ItemMoveCommandMixin(object):
+class ItemMoveCommand(lister.Lister):
     """
     Various parameters that apply to all move commands.
     """
 
-    def patch_parser(self, parser):
+    columns = None
+    success = True
+
+    @property
+    def logger(self):
+        return self.app.client_manager.logger
+
+    def _take_action(self, parsed_args):
+        raise NotImplementedError()
+
+    def take_action(self, parsed_args):
+        self.logger.debug('take_action(%s)', parsed_args)
+
+        return self.columns, self._take_action(parsed_args)
+
+    def run(self, parsed_args):
+        super(ItemMoveCommand, self).run(parsed_args)
+        if not self.success:
+            return 1
+
+
+class ContainerMove(ContainerCommandMixin, ItemMoveCommand):
+    """
+    Move a container from source service to destination service.
+    If the destination service isn't set,
+    a destination service is automatically selected.
+    """
+
+    columns = ('Container', 'Base', 'Source', 'Destination', 'Status',
+               'Errors')
+
+    def get_parser(self, prog_name):
+        parser = super(ContainerMove, self).get_parser(prog_name)
+        self.patch_parser(parser)
         parser.add_argument(
             '--src',
             metavar='<service_id>',
@@ -38,61 +70,24 @@ class ItemMoveCommandMixin(object):
             metavar='<service_id>',
             help='ID of the destination service',
         )
-
-
-class ContainerMove(ContainerCommandMixin, ItemMoveCommandMixin,
-                    lister.Lister):
-    """
-    Move a container from source service to destination service.
-    If the destination service isn't set,
-    a destination service is automatically selected.
-    """
-
-    success = True
-
-    @property
-    def logger(self):
-        return self.app.client_manager.logger
-
-    def get_parser(self, prog_name):
-        parser = super(ContainerMove, self).get_parser(prog_name)
-        ContainerCommandMixin.patch_parser(self, parser)
-        ItemMoveCommandMixin.patch_parser(self, parser)
         return parser
 
-    def _run(self, parsed_args):
+    def _take_action(self, parsed_args):
+        containers = self.resolve_containers(self.app, parsed_args)
         meta2 = Meta2Database(self.app.client_manager.client_conf,
                               logger=self.logger)
-        for container in parsed_args.containers:
-            if parsed_args.is_cid:
-                cid = container
-            else:
-                cid = cid_from_name(self.app.options.account, container)
-            moved = meta2.move(cid, parsed_args.src, dst=parsed_args.dst)
+        for _, container_name, container_id in containers:
+            moved = meta2.move(container_id, parsed_args.src,
+                               dst=parsed_args.dst)
             for res in moved:
-                res['container'] = container
-                yield res
-
-    def _format_results(self, moved):
-        if moved is None:
-            return
-        for res in moved:
-            if res['err'] is None:
-                status = 'OK'
-            else:
-                self.success = False
-                status = 'error'
-            yield (res['container'], res['base'], res['src'], res['dst'],
-                   status, res['err'])
+                if res['err'] is None:
+                    status = 'OK'
+                else:
+                    self.success = False
+                    status = 'error'
+                yield (container_name, res['base'], res['src'], res['dst'],
+                       status, res['err'])
 
     def take_action(self, parsed_args):
-        self.logger.debug('take_action(%s)', parsed_args)
-
-        columns = ('Container', 'Base', 'Source', 'Destination', 'Status',
-                   'Errors')
-        return columns, self._format_results(self._run(parsed_args))
-
-    def run(self, parsed_args):
-        super(ContainerMove, self).run(parsed_args)
-        if not self.success:
-            return 1
+        self.check_and_load_parsed_args(self.app, parsed_args)
+        return super(ContainerMove, self).take_action(parsed_args)
