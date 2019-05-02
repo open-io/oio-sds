@@ -92,9 +92,17 @@ class ConscienceClient(ProxyClient):
     def __init__(self, conf, **kwargs):
         super(ConscienceClient, self).__init__(
             conf, request_prefix="/conscience", **kwargs)
-        lb_kwargs = dict(kwargs)
-        lb_kwargs.pop("pool_manager", None)
-        self.lb = LbClient(conf, pool_manager=self.pool_manager, **lb_kwargs)
+        self._lb_kwargs = dict(kwargs)
+        self._lb_kwargs.pop("pool_manager", None)
+        self._lb = None
+
+    @property
+    def lb(self):
+        """Get an instance of LbClient."""
+        if self._lb is None:
+            self._lb = LbClient(self.conf, pool_manager=self.pool_manager,
+                                **self._lb_kwargs)
+        return self._lb
 
     def next_instances(self, pool, **kwargs):
         """
