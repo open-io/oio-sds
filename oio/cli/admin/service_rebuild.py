@@ -18,6 +18,7 @@ from cliff import lister
 
 from oio.account.rebuilder import AccountRebuilder
 from oio.blob.rebuilder import BlobRebuilder
+from oio.cli.admin.common import SingleServiceCommandMixin
 from oio.directory.meta2_rebuilder import Meta2Rebuilder
 from oio.rebuilder.meta1_rebuilder import Meta1Rebuilder
 
@@ -112,7 +113,7 @@ class Meta1Rebuild(ServiceRebuildCommand):
             return 1
 
 
-class Meta2Rebuild(ServiceRebuildCommand):
+class Meta2Rebuild(SingleServiceCommandMixin, ServiceRebuildCommand):
     """
     Rebuild meta2 databases by setting 'last_rebuild'
     property in admin table, thus triggering a replication.
@@ -125,12 +126,8 @@ class Meta2Rebuild(ServiceRebuildCommand):
 
     def get_parser(self, prog_name):
         parser = super(Meta2Rebuild, self).get_parser(prog_name)
+        self.patch_parser(parser)
 
-        # input
-        parser.add_argument(
-            'service_id',
-            metavar='<service_id>',
-            help='ID of the service to rebuild')
         # common
         parser.add_argument(
             '--rdir-fetch-limit', type=int,
@@ -143,7 +140,7 @@ class Meta2Rebuild(ServiceRebuildCommand):
         self.conf['rdir_fetch_limit'] = parsed_args.rdir_fetch_limit
 
         self.rebuilder = Meta2Rebuilder(
-            self.conf, service_id=parsed_args.service_id, logger=self.logger)
+            self.conf, service_id=parsed_args.service, logger=self.logger)
         self.rebuilder.prepare_local_dispatcher()
 
         for item, _, error in self.rebuilder.run():
@@ -153,25 +150,20 @@ class Meta2Rebuild(ServiceRebuildCommand):
                 status = 'error'
             yield (self.rebuilder.string_from_item(item), status, error)
 
-    def run(self, parsed_args):
-        super(Meta2Rebuild, self).run(parsed_args)
-        if not self.rebuilder.is_success():
-            return 1
+    def take_action(self, parsed_args):
+        self.check_and_load_parsed_args(self.app, parsed_args)
+        return super(Meta2Rebuild, self).take_action(parsed_args)
 
 
-class RawxRebuildCommand(ServiceRebuildCommand):
+class RawxRebuildCommand(SingleServiceCommandMixin, ServiceRebuildCommand):
 
     columns = ('Chunk', 'Status', 'Errors')
     rebuilder_class = BlobRebuilder
 
     def get_parser(self, prog_name):
         parser = super(RawxRebuildCommand, self).get_parser(prog_name)
+        self.patch_parser(parser)
 
-        # input
-        parser.add_argument(
-            'service_id',
-            metavar='<service_id>',
-            help='ID of the service to rebuild')
         # common
         parser.add_argument(
             '--rdir-fetch-limit', type=int,
@@ -202,7 +194,7 @@ class RawxRebuildCommand(ServiceRebuildCommand):
             self.conf['try_chunk_delete'] = parsed_args.delete_faulty_chunks
 
         self.rebuilder = BlobRebuilder(
-            self.conf, service_id=parsed_args.service_id, logger=self.logger)
+            self.conf, service_id=parsed_args.service, logger=self.logger)
         if self.distributed:
             self.rebuilder.prepare_distributed_dispatcher()
         else:
@@ -214,6 +206,10 @@ class RawxRebuildCommand(ServiceRebuildCommand):
             else:
                 status = 'error'
             yield (self.rebuilder.string_from_item(item), status, error)
+
+    def take_action(self, parsed_args):
+        self.check_and_load_parsed_args(self.app, parsed_args)
+        return super(RawxRebuildCommand, self).take_action(parsed_args)
 
 
 class RawxRebuild(RawxRebuildCommand):

@@ -15,8 +15,10 @@
 
 
 from cliff import lister
+
 from oio.crawler.integrity import Target
 from oio.cli.admin.item_check import ItemCheckCommand
+from oio.cli.admin.common import MultipleServicesCommandMixin
 
 
 class BaseCheckCommand(lister.Lister):
@@ -260,7 +262,7 @@ class RdirCheck(BaseCheckCommand):
         yield ('OK', None)
 
 
-class RawxCheck(ItemCheckCommand):
+class RawxCheck(MultipleServicesCommandMixin, ItemCheckCommand):
     """
     Check all rawx chunks.
 
@@ -271,6 +273,7 @@ class RawxCheck(ItemCheckCommand):
     Default output format is 'value'.
     """
 
+    service_type = 'rawx'
     columns = ('Chunk', 'Status', 'Errors')
     reqid_prefix = 'ACLI-RC-'
 
@@ -291,18 +294,12 @@ class RawxCheck(ItemCheckCommand):
 
     def get_parser(self, prog_name):
         parser = super(RawxCheck, self).get_parser(prog_name)
-        parser.add_argument(
-            'services',
-            nargs='+',
-            metavar='<service_id>',
-            help=('Rawx service to check.')
-        )
+        self.patch_parser(parser)
         return parser
 
-    def _ensure_http_prefix(self, url):
-        if not url.startswith('http://'):
-            return 'http://' + url
-        return url
+    def take_action(self, parsed_args):
+        self.check_and_load_parsed_args(self.app, parsed_args)
+        return super(RawxCheck, self).take_action(parsed_args)
 
     def _take_action(self, parsed_args):
         for service in parsed_args.services:
@@ -313,7 +310,7 @@ class RawxCheck(ItemCheckCommand):
                 yield res
 
     def check_chunks(self, service, chunks, checker):
-        url = self._ensure_http_prefix(service)
+        url = 'http://' + service
         for chunk in chunks:
             checker.check(Target(self.app.options.account,
                                  chunk=url + '/' + chunk[2]))

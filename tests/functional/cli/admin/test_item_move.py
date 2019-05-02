@@ -160,4 +160,4 @@ class ItemMoveTest(CliTestCase):
         opts = self.get_opts(['Container', 'Source', 'Status'])
         output = self.openio_admin('container move %s --cid --src %s %s'
                                    % (cid, src, opts))
-        self.assertOutput('%s %s OK\n' % (cid, src), output)
+        self.assertOutput('%s %s OK\n' % (self.container, src), output)

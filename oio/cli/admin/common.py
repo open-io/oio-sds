@@ -14,7 +14,19 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-class AccountCommandMixin(object):
+from oio.common.utils import cid_from_name
+
+
+class CommandMixin(object):
+
+    def patch_parser(self, parser):
+        raise NotImplementedError()
+
+    def check_and_load_parsed_args(self, app, parsed_args):
+        raise NotImplementedError()
+
+
+class AccountCommandMixin(CommandMixin):
     """
     Add account-related argmuments to a cliff command.
     """
@@ -27,8 +39,12 @@ class AccountCommandMixin(object):
             help='Name of the account to work on.'
         )
 
+    def check_and_load_parsed_args(self, app, parsed_args):
+        if not parsed_args.accounts:
+            parsed_args.accounts = [app.options.account]
 
-class ContainerCommandMixin(object):
+
+class ContainerCommandMixin(CommandMixin):
     """
     Add container-related argmuments to a cliff command.
     """
@@ -47,8 +63,35 @@ class ContainerCommandMixin(object):
             help="Interpret <container_name> as a container ID",
         )
 
+    def check_and_load_parsed_args(self, app, parsed_args):
+        pass
 
-class ObjectCommandMixin(object):
+    def resolve_containers(self, app, parsed_args, no_name=False, no_id=False):
+        containers = list()
+        if parsed_args.is_cid:
+            for container_id in parsed_args.containers:
+                account = None
+                container_name = None
+                if not no_name:
+                    account, container_name = \
+                        app.client_manager.storage.resolve_cid(container_id)
+                if no_id:
+                    container_id = None
+                containers.append((account, container_name, container_id))
+        else:
+            for container_name in parsed_args.containers:
+                account = app.options.account
+                container_id = None
+                if not no_id:
+                    container_id = cid_from_name(account, container_name)
+                if no_name:
+                    account = None
+                    container_name = None
+                containers.append((account, container_name, container_id))
+        return containers
+
+
+class ObjectCommandMixin(CommandMixin):
     """
     Add object-related argmuments to a cliff command.
     """
@@ -92,7 +135,7 @@ class ObjectCommandMixin(object):
         )
 
     # TODO(FVE): merge with oio.cli.object.object.ContainerCommandMixin
-    def take_action(self, parsed_args):
+    def check_and_load_parsed_args(self, app, parsed_args):
         if not parsed_args.container and not parsed_args.auto:
             from argparse import ArgumentError
             raise ArgumentError(parsed_args.container,
@@ -101,9 +144,109 @@ class ObjectCommandMixin(object):
         # the first object name is in the container variable.
         if parsed_args.auto:
             parsed_args.objects.append(parsed_args.container)
-        if parsed_args.flat_bits:
-            self.app.client_manager.flatns_set_bits(parsed_args.flat_bits)
+            parsed_args.container = None
         if not parsed_args.objects:
             from argparse import ArgumentError
-            raise ArgumentError(None,
-                                "Missing value for object_name")
+            raise ArgumentError(None, 'Missing value for object_name')
+        if parsed_args.flat_bits:
+            app.client_manager.flatns_set_bits(parsed_args.flat_bits)
+
+    def resolve_objects(self, app, parsed_args):
+        containers = set()
+        objects = list()
+        if parsed_args.auto:
+            autocontainer = app.client_manager.flatns_manager
+            for obj in parsed_args.objects:
+                ct = autocontainer(obj)
+                containers.add(ct)
+                objects.append((ct, obj, parsed_args.object_version))
+        else:
+            if parsed_args.is_cid:
+                account, container = \
+                    app.client_manager.storage.resolve_cid(
+                        parsed_args.container)
+            else:
+                account = app.options.account
+                container = parsed_args.container
+            containers.add(container)
+            for obj in parsed_args.objects:
+                objects.append(
+                    (container, obj, parsed_args.object_version))
+        return account, containers, objects
+
+
+class ChunkCommandMixin(CommandMixin):
+    """
+    Add chunk-related argmuments to a cliff command.
+    """
+
+    def patch_parser(self, parser):
+        parser.add_argument(
+            'chunks',
+            metavar='<chunk_url>',
+            nargs='+',
+            help='URL of the chunk to work on.'
+        )
+
+    def check_and_load_parsed_args(self, app, parsed_args):
+        pass
+
+
+class SingleServiceCommandMixin(CommandMixin):
+    """
+    Add service-related argmuments to a cliff command.
+    """
+
+    def patch_parser(self, parser):
+        parser.add_argument(
+            'service',
+            metavar='<service_id>',
+            help=("ID of the service to work on."),
+        )
+
+    def check_and_load_parsed_args(self, app, parsed_args):
+        pass
+
+
+class MultipleServicesCommandMixin(CommandMixin):
+    """
+    Add service-related argmuments to a cliff command.
+    """
+
+    service_type = None
+
+    def patch_parser(self, parser):
+        parser.add_argument(
+            'services',
+            nargs='*',
+            metavar='<service_id>',
+            help=("ID of the service to work on. "
+                  "If no service is specified, work on all."),
+        )
+
+    def check_and_load_parsed_args(self, app, parsed_args):
+        """
+        Load IDs of services.
+        """
+        if not parsed_args.services:
+            parsed_args.services = [
+                s['id'] for s in app.client_manager.conscience.all_services(
+                    self.service_type)]
+
+
+class ProxyCommandMixin(CommandMixin):
+    """
+    Add proxy-related argmuments to a cliff command.
+    """
+
+    def patch_parser(self, parser):
+        parser.add_argument(
+            'service',
+            metavar='<service_id>',
+            nargs='?',
+            help=("ID of the proxy to work on. "
+                  "If not specified, use the local one."),
+        )
+
+    def check_and_load_parsed_args(self, app, parsed_args):
+        pass

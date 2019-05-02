@@ -13,11 +13,14 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
 from cliff import lister
+
 from oio.common.exceptions import ClientException
+from oio.cli.admin.common import SingleServiceCommandMixin
 
 
-class ServiceListCommand(lister.Lister):
+class ServiceListCommand(SingleServiceCommandMixin, lister.Lister):
     """
     A command to display items of a specific service
     """
@@ -34,11 +37,7 @@ class ServiceListCommand(lister.Lister):
     def get_parser(self, prog_name):
         from oio.cli.common.utils import ValueFormatStoreTrueAction
         parser = super(ServiceListCommand, self).get_parser(prog_name)
-        parser.add_argument(
-            'service_id',
-            metavar='<service_id>',
-            help='ID of the service to query.'
-        )
+        self.patch_parser(parser)
         parser.add_argument(
             '--no-paging',
             dest='no_paging',
@@ -53,6 +52,7 @@ class ServiceListCommand(lister.Lister):
         raise NotImplementedError()
 
     def take_action(self, parsed_args):
+        self.check_and_load_parsed_args(self.app, parsed_args)
         self.logger.debug('take_action(%s)', parsed_args)
 
         return self.columns, self._take_action(parsed_args)
@@ -123,7 +123,7 @@ class RawxListContainers(ServiceListCommand):
 
     def _take_action(self, parsed_args):
         return self._list_containers(
-            parsed_args.service_id, translate=not parsed_args.no_translation)
+            parsed_args.service, translate=not parsed_args.no_translation)
 
 
 class Meta2ListContainers(ServiceListCommand):
@@ -177,9 +177,9 @@ class Meta2ListContainers(ServiceListCommand):
             kwargs['limit'] = parsed_args.limit
 
         if parsed_args.no_paging:
-            containers = self._list_all_containers(parsed_args.service_id,
+            containers = self._list_all_containers(parsed_args.service,
                                                    prefix=parsed_args.prefix)
         else:
-            containers = self._list_containers(parsed_args.service_id,
+            containers = self._list_containers(parsed_args.service,
                                                **kwargs)
         return ((v,) for v in containers)

@@ -94,8 +94,6 @@ class AccountRepair(AccountCommandMixin, ItemRepairCommand):
         return parser
 
     def _take_action(self, parsed_args):
-        if not parsed_args.accounts:
-            parsed_args.accounts = [self.app.options.account]
         accounts = list()
         for account_name in parsed_args.accounts:
             account = dict()
@@ -113,6 +111,10 @@ class AccountRepair(AccountCommandMixin, ItemRepairCommand):
             else:
                 status = 'error'
             yield (self.repairer.string_from_item(item), status, error)
+
+    def take_action(self, parsed_args):
+        self.check_and_load_parsed_args(self.app, parsed_args)
+        return super(AccountRepair, self).take_action(parsed_args)
 
 
 class ContainerRepair(ContainerCommandMixin, ItemRepairCommand):
@@ -154,21 +156,17 @@ class ContainerRepair(ContainerCommandMixin, ItemRepairCommand):
         self.conf['sync_bases'] = parsed_args.sync_bases
         self.conf['update_account'] = parsed_args.update_account
 
-        containers = list()
-        for container_name in parsed_args.containers:
+        containers = self.resolve_containers(self.app, parsed_args, no_id=True)
+        containers_to_repair = list()
+        for account, container_name, _ in containers:
             container = dict()
             container['namespace'] = self.app.options.ns
-            if parsed_args.is_cid:
-                container['account'], container['container'] = \
-                    self.app.client_manager.storage.resolve_cid(
-                        container_name)
-            else:
-                container['account'] = self.app.options.account
-                container['container'] = container_name
-            containers.append(container)
+            container['account'] = account
+            container['container'] = container_name
+            containers_to_repair.append(container)
 
         self.repairer = ContainerRepairer(
-            self.conf, containers=containers, logger=self.logger)
+            self.conf, containers=containers_to_repair, logger=self.logger)
         self.repairer.prepare_local_dispatcher()
 
         for item, _, error in self.repairer.run():
@@ -177,6 +175,10 @@ class ContainerRepair(ContainerCommandMixin, ItemRepairCommand):
             else:
                 status = 'error'
             yield (self.repairer.string_from_item(item), status, error)
+
+    def take_action(self, parsed_args):
+        self.check_and_load_parsed_args(self.app, parsed_args)
+        return super(ContainerRepair, self).take_action(parsed_args)
 
 
 class ObjectRepair(ObjectCommandMixin, ItemRepairCommand):
@@ -197,25 +199,19 @@ class ObjectRepair(ObjectCommandMixin, ItemRepairCommand):
         return parser
 
     def _take_action(self, parsed_args):
-        if parsed_args.is_cid:
-            account, container = self.app.client_manager.storage.resolve_cid(
-                parsed_args.container)
-        else:
-            account = self.app.options.account
-            container = parsed_args.container
-
-        objects = list()
-        for obj_name in parsed_args.objects:
+        account, _, objects = self.resolve_objects(self.app, parsed_args)
+        objects_to_repair = list()
+        for container, obj_name, version in objects:
             obj = dict()
             obj['namespace'] = self.app.options.ns
             obj['account'] = account
             obj['container'] = container
             obj['name'] = obj_name
-            obj['version'] = parsed_args.object_version
-            objects.append(obj)
+            obj['version'] = version
+            objects_to_repair.append(obj)
 
         self.repairer = ContentRepairer(
-            self.conf, objects=objects, logger=self.logger)
+            self.conf, objects=objects_to_repair, logger=self.logger)
         self.repairer.prepare_local_dispatcher()
 
         for item, _, error in self.repairer.run():
@@ -226,5 +222,5 @@ class ObjectRepair(ObjectCommandMixin, ItemRepairCommand):
             yield (self.repairer.string_from_item(item), status, error)
 
     def take_action(self, parsed_args):
-        ObjectCommandMixin.take_action(self, parsed_args)
-        return ItemRepairCommand.take_action(self, parsed_args)
+        self.check_and_load_parsed_args(self.app, parsed_args)
+        return super(ObjectRepair, self).take_action(parsed_args)
