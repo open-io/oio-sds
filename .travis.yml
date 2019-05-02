@@ -83,7 +83,7 @@ jobs:
       env: TEST_SUITE=worm
     - stage: Functional tests
       script: ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=single
+      env: TEST_SUITE=single,webhook
     - script: ./tools/oio-travis-suites.sh
       env: TEST_SUITE=repli,go-rawx
     - script: ./tools/oio-travis-suites.sh
@@ -102,8 +102,6 @@ jobs:
       env: TEST_SUITE=multi-beanstalk
     - script: ./tools/oio-travis-suites.sh
       env: TEST_SUITE=mover,with-service-id
-    - script: ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=webhook
 
 after_success:
   - bash <(curl -s https://codecov.io/bash) -f /tmp/cmake_coverage.output
