@@ -399,7 +399,7 @@ class _DistributedDispatcher(_Dispatcher):
 
     def __init__(self, conf, tool):
         super(_DistributedDispatcher, self).__init__(conf, tool)
-        self.sending = False
+        self.sending = None
 
         self.max_items_per_second = int_value(self.conf.get(
             'items_per_second'), self.tool.DEFAULT_ITEM_PER_SECOND)
@@ -497,7 +497,7 @@ class _DistributedDispatcher(_Dispatcher):
         """
         Tell is all workers have finished to process their events.
         """
-        if not self.sending:
+        if self.sending:
             return False
 
         total_events = 0
@@ -533,12 +533,14 @@ class _DistributedDispatcher(_Dispatcher):
                                                 next_worker)
             self.sending = True
         except StopIteration:
+            self.sending = False
             return
         for task_event in tasks_events:
             items_run_time = ratelimit(items_run_time,
                                        self.max_items_per_second)
             next_worker = self._send_task_event(task_event, reply_loc,
                                                 next_worker)
+        self.sending = False
 
     def run(self):
         self.tool.start_time = self.tool.last_report = time.time()
@@ -551,12 +553,12 @@ class _DistributedDispatcher(_Dispatcher):
         thread.start()
 
         # Wait until the thread is started sending events
-        while thread.is_alive() and not self.sending:
+        while self.sending is None:
             sleep(0.1)
 
         # Retrieve responses until all events are processed
         try:
-            while thread.is_alive() or not self._all_events_are_processed():
+            while not self._all_events_are_processed():
                 tasks_res = self.beanstalkd_reply.fetch_job(
                     self._tasks_res_from_res_event,
                     timeout=DISTRIBUTED_DISPATCHER_TIMEOUT)
