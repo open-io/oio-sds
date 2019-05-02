@@ -15,7 +15,6 @@ jobs:
       - run:
           name: Install dependencies
           command: |
-            set -x
             apt-get update -qq
             apt-get install -y -qq sudo
             apt-get install -y -qq curl gnupg software-properties-common locales
@@ -25,25 +24,32 @@ jobs:
             apt-get update -qq
             apt-get install -y -qq $(awk '{print $1}' ci/deps-ubuntu-bionic.txt)
             ./ci/install-user-deps.sh ${HOME}/oio
+            echo "source ${HOME}/oio/bin/activate" >> ${BASH_ENV}
+            mkdir -p ${HOME}/.ssh
+            echo -e "Host *\n\tStrictHostKeyChecking no\n" > ${HOME}/.ssh/config
       - run:
           name: Updates the submodules
           command: |
             mkdir /tmp/oio
+            git fetch --tags
+            git submodule sync
             git submodule update --init
       - run:
-          name: Build oio-sds
+          name: Fail-Fast tests
           command: |
-            ./tools/oio-travis-failfast.sh
+            ./ci/travis-failfast.sh
+      - run:
+          name: Unit tests
+          command: |
+            ./ci/travis-unit.sh
       - run:
           name: Detect coredumps and print backtraces
           command: |
-            source ${HOME}/oio/bin/activate
             ./tools/oio-gdb.py
           when: on_fail
       - run:
           name: Detect coredumps and print backtraces
           command: |
-            source ${HOME}/oio/bin/activate
             bash <(curl -s https://codecov.io/bash) -f cmake_coverage.output
             codecov
           when: on_success

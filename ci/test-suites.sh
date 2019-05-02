@@ -278,10 +278,10 @@ func_tests_rebuilder_mover () {
 	done | ${PYTHON} $(which openio)
 
 	if [ -n "${REBUILDER}" ]; then
-		${SRCDIR}/tools/oio-test-rebuilder.sh -n "${OIO_NS}"
+		${SRCDIR}/ci/test-rebuilder.sh -n "${OIO_NS}"
 	fi
 	if [ -n "${MOVER}" ]; then
-		${SRCDIR}/tools/oio-test-mover.sh -n "${OIO_NS}"
+		${SRCDIR}/ci/test-mover.sh -n "${OIO_NS}"
 	fi
 
 	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
@@ -400,10 +400,10 @@ func_tests_rebuilder_mover () {
 	done | ${PYTHON} $CLI
 
 	if [ -n "${REBUILDER}" ]; then
-		${SRCDIR}/tools/oio-test-rebuilder.sh -n "${OIO_NS}"
+		${SRCDIR}/ci/test-rebuilder.sh -n "${OIO_NS}"
 	fi
 	if [ -n "${MOVER}" ]; then
-		${SRCDIR}/tools/oio-test-mover.sh -n "${OIO_NS}"
+		${SRCDIR}/ci/test-mover.sh -n "${OIO_NS}"
 	fi
 
 	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop

@@ -26,9 +26,11 @@ fold() {
 	time ( fold_start "$tag" ; set -x ; $@ ; set +x ; fold_end "$tag" )
 }
 
-fold SDK ./tools/oio-build-sdk.sh ${PWD}
-fold Release ./tools/oio-build-release.sh ${PWD}
-fold Copyright ./tools/oio-check-copyright.sh ${PWD}
 fold Virtualenv python ./setup.py develop
-fold Variables tox -e variables
+fold Versions   ./ci/check-version.sh ${PWD}
+fold Variables  tox -e variables
+fold Copyright  ./ci/check-copyright.sh ${PWD}
+
+fold SDK        ./ci/build-sdk.sh ${PWD}
+fold Release    ./ci/build-release.sh ${PWD}
 
