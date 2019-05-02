@@ -17,14 +17,14 @@
 from cliff import show
 
 
-def _flat_dict_from_dict(dict_):
+def _flat_dict_from_dict(parsed_args, dict_):
     """
     Create a dictionary without depth.
 
     {
         'depth0': {
             'depth1': {
-                'depth2':'test'
+                'depth2': 'test'
             }
         }
     }
@@ -36,12 +36,12 @@ def _flat_dict_from_dict(dict_):
     flat_dict = dict()
     for key, value in dict_.items():
         if not isinstance(value, dict):
-            if isinstance(value, list):
+            if isinstance(value, list) and parsed_args.formatter == 'table':
                 value = '\n'.join(value)
             flat_dict[key] = value
             continue
 
-        _flat_dict = _flat_dict_from_dict(value)
+        _flat_dict = _flat_dict_from_dict(parsed_args, value)
         for _key, _value in _flat_dict.items():
             flat_dict[key + '.' + _key] = _value
     return flat_dict
@@ -67,4 +67,4 @@ class ServiceInfo(show.ShowOne):
     def take_action(self, parsed_args):
         conf = self.app.client_manager.admin.service_get_info(
             parsed_args.service)
-        return zip(*sorted(_flat_dict_from_dict(conf).items()))
+        return zip(*sorted(_flat_dict_from_dict(parsed_args, conf).items()))
