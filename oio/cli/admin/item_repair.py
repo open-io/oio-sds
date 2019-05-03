@@ -132,9 +132,29 @@ class ContainerRepair(ContainerCommandMixin, ItemRepairCommand):
     def get_parser(self, prog_name):
         parser = super(ContainerRepair, self).get_parser(prog_name)
         self.patch_parser(parser)
+
+        parser.add_argument(
+            '--no-rebuild-bases', action='store_false', dest='rebuild_bases',
+            help='Don\'t rebuild the missing, lost bases. '
+                 '(default=%s)'
+            % (not self.repairer_class.DEFAULT_REBUILD_BASES))
+        parser.add_argument(
+            '--no-sync-bases', action='store_false', dest='sync_bases',
+            help='Don\'t synchronize its bases. '
+                 '(default=%s)'
+            % (not self.repairer_class.DEFAULT_SYNC_BASES))
+        parser.add_argument(
+            '--no-update-account', action='store_false', dest='update_account',
+            help='Don\'t update the counters for the account service. '
+                 '(default=%s)'
+            % (not self.repairer_class.DEFAULT_UPDATE_ACCOUNT))
         return parser
 
     def _take_action(self, parsed_args):
+        self.conf['rebuild_bases'] = parsed_args.rebuild_bases
+        self.conf['sync_bases'] = parsed_args.sync_bases
+        self.conf['update_account'] = parsed_args.update_account
+
         containers = list()
         for container_name in parsed_args.containers:
             container = dict()
