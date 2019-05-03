@@ -19,7 +19,7 @@ Recursively check account, container, content and chunk integrity.
 
 
 from __future__ import print_function
-from oio.common.green import Event, GreenPool, Queue, sleep
+from oio.common.green import eventlet, Event, GreenPool, Queue, sleep
 
 import os
 import csv
@@ -33,6 +33,8 @@ from oio.common.storage_method import STORAGE_METHODS
 from oio.api.object_storage import ObjectStorageApi
 from oio.api.object_storage import _sort_chunks
 
+DEFAULT_DEPTH = 4
+
 
 class Target(object):
     """
@@ -40,7 +42,7 @@ class Target(object):
     """
 
     def __init__(self, account, container=None, obj=None,
-                 content_id=None, version=None, chunk=None):
+                 chunk=None, content_id=None, version=None):
         self.account = account
         self.container = container
         self.obj = obj
@@ -53,13 +55,13 @@ class Target(object):
             self.account,
             self.container,
             self.obj,
+            self.chunk,
             self.content_id,
-            self.version,
-            self.chunk)
+            self.version)
 
     def copy_object(self):
-        return Target(self.account, self.container,
-                      self.obj, self.content_id, self.version)
+        return Target(self.account, self.container, self.obj,
+                      content_id=self.content_id, version=self.version)
 
     def copy_container(self):
         return Target(self.account, self.container)
@@ -170,6 +172,7 @@ class Checker(object):
 
         self.list_cache = {}
         self.running = {}
+        self.running_lock = eventlet.Semaphore(1)
         self.result_queue = Queue()
 
     def complete_target_from_chunk_metadata(self, target, xattr_meta):
@@ -388,10 +391,10 @@ class Checker(object):
         stg_met = STORAGE_METHODS.load(obj_meta['chunk_method'])
         chunks_by_pos = _sort_chunks(chunks, stg_met.ec)
         tasks = list()
-        for pos, chunks in chunks_by_pos.iteritems():
+        for pos, pchunks in chunks_by_pos.iteritems():
             tasks.append((pos, self.pool.spawn(
                 self._check_metachunk,
-                target.copy(), stg_met, pos, chunks,
+                target.copy(), stg_met, pos, pchunks,
                 recurse=recurse)))
         errors = list()
         for pos, task in tasks:
@@ -446,6 +449,37 @@ class Checker(object):
             errors.append('Check failed: %s' % (err, ))
         return None, []
 
+    def _get_cached_or_lock(self, lock_key):
+        # If something is running, wait for it
+        with self.running_lock:
+            event = self.running.get(lock_key)
+        if event:
+            event.wait()
+            event = None
+
+        # Maybe get a cached result
+        if lock_key in self.list_cache:
+            return self.list_cache[lock_key]
+
+        # No cached result, try to compute the thing ourselves
+        while True:
+            with self.running_lock:
+                # Another check while locked
+                if lock_key in self.list_cache:
+                    return self.list_cache[lock_key]
+                # Still nothing cached
+                event = self.running.get(lock_key)
+                if event is None:
+                    self.running[lock_key] = Event()
+                    return None
+            event.wait()
+
+    def _unlock(self, lock_key):
+        with self.running_lock:
+            event = self.running[lock_key]
+            del self.running[lock_key]
+            event.send(True)
+
     def check_obj(self, target, recurse=0):
         """
         Check one object version.
@@ -458,11 +492,10 @@ class Checker(object):
         obj = target.obj
         vers = target.version  # can be None
 
-        if (account, container, obj, vers) in self.running:
-            self.running[(account, container, obj, vers)].wait()
-        if (account, container, obj, vers) in self.list_cache:
-            return self.list_cache[(account, container, obj, vers)]
-        self.running[(account, container, obj, vers)] = Event()
+        cached = self._get_cached_or_lock((account, container, obj, vers))
+        if cached:
+            return cached
+
         self.logger.info('Checking object "%s"', target)
         container_listing, _ = self.check_container(target.copy_container())
         errors = list()
@@ -480,8 +513,7 @@ class Checker(object):
                     target.content_id = versions[0]['id']
                     target.version = str(versions[0]['version'])
                     res = self.check_obj(target, recurse=0)
-                    self.running[(account, container, obj, vers)].send(True)
-                    del self.running[(account, container, obj, vers)]
+                    self._unlock((account, container, obj, vers))
                     return res
                 else:
                     for ov in versions:
@@ -503,8 +535,7 @@ class Checker(object):
             self.list_cache[(account, container, obj, vers)] = \
                 (chunk_listing, meta)
         self.objects_checked += 1
-        self.running[(account, container, obj, vers)].send(True)
-        del self.running[(account, container, obj, vers)]
+        self._unlock((account, container, obj, vers))
 
         # Skip the check if we could not locate the object
         if meta:
@@ -518,11 +549,10 @@ class Checker(object):
         account = target.account
         container = target.container
 
-        if (account, container) in self.running:
-            self.running[(account, container)].wait()
-        if (account, container) in self.list_cache:
-            return self.list_cache[(account, container)]
-        self.running[(account, container)] = Event()
+        cached = self._get_cached_or_lock((account, container))
+        if cached:
+            return cached
+
         self.logger.info('Checking container "%s"', target)
         account_listing = self.check_account(target.copy_account())
         errors = list()
@@ -579,8 +609,7 @@ class Checker(object):
             # We just listed the whole container, keep the result in a cache
             self.containers_checked += 1
             self.list_cache[(account, container)] = container_listing, ct_meta
-        self.running[(account, container)].send(True)
-        del self.running[(account, container)]
+        self._unlock((account, container))
 
         if recurse > 0:
             for obj_vers in container_listing.values():
@@ -596,11 +625,10 @@ class Checker(object):
     def check_account(self, target, recurse=0):
         account = target.account
 
-        if account in self.running:
-            self.running[account].wait()
-        if account in self.list_cache:
-            return self.list_cache[account]
-        self.running[account] = Event()
+        cached = self._get_cached_or_lock(account)
+        if cached:
+            return cached
+
         self.logger.info('Checking account "%s"', target)
         errors = list()
         marker = None
@@ -637,8 +665,7 @@ class Checker(object):
             # We just listed the whole account, keep the result in a cache
             self.accounts_checked += 1
             self.list_cache[account] = containers
-        self.running[account].send(True)
-        del self.running[account]
+        self._unlock(account)
 
         if recurse > 0:
             for container in containers:
@@ -783,11 +810,11 @@ def main():
         entries = csv.reader(source, delimiter=' ')
     else:
         if args.account:
-            entries = [(args.account, )]
+            entries = [[args.account] + args.target]
             limit_listings = len(args.target)
         else:
             entries = None
-            limit_listings = 3
+            limit_listings = 0
     checker = Checker(
         args.namespace,
         error_file=args.output,
@@ -800,9 +827,9 @@ def main():
     )
     if entries:
         for entry in entries:
-            checker.check(Target(*entry), recurse=limit_listings)
+            checker.check(Target(*entry), recurse=DEFAULT_DEPTH)
     else:
-        checker.check_all_accounts(recurse=limit_listings)
+        checker.check_all_accounts(recurse=DEFAULT_DEPTH)
     for _ in checker.run():
         pass
     if not checker.report():

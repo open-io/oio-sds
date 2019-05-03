@@ -48,6 +48,7 @@ FAIL=false
 TMP_VOLUME="${TMPDIR:-/tmp}/openio_volume_before"
 TMP_FILE_BEFORE="${TMPDIR:-/tmp}/openio_file_before"
 TMP_FILE_AFTER="${TMPDIR:-/tmp}/openio_file_after"
+INTEGRITY_LOG="${TMPDIR:-/tmp}/integrity.log"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -325,6 +326,7 @@ remove_rawx()
 
 openioadmin_rawx_rebuild()
 {
+  rm -f "$INTEGRITY_LOG"
   set -e
 
   echo ""
@@ -424,7 +426,7 @@ openioadmin_rawx_rebuild()
         continue
       fi
       if ! $INTEGRITY "$NAMESPACE" "${ACCOUNT}" \
-          "${CONTAINER}" "${CONTENT}" "${CHUNK_URL}" &> /dev/null; then
+          "${CONTAINER}" "${CONTENT}" "${CHUNK_URL}" &>> "$INTEGRITY_LOG"; then
         echo >&2 "${CHUNK}: (${CHUNK_URL}) oio-crawler-integrity failed for rawx ${RAWX_ID_TO_REBUILD}"
         FAIL=true
         continue
