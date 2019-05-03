@@ -38,7 +38,7 @@ function trap_exit {
 	fi
 	gridinit_cmd -S "$HOME/.oio/sds/run/gridinit.sock" status3
 	#dump_syslog
-	oio-gdb.py
+	${SRCDIR}/tools/oio-gdb.py
 }
 
 trap trap_exit EXIT
