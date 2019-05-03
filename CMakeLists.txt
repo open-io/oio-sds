@@ -424,7 +424,6 @@ add_subdirectory(./cache)
 add_subdirectory(./cluster/lib)
 
 add_subdirectory(./cluster/module)
-add_subdirectory(./cluster/tools)
 add_subdirectory(./meta0v2)
 add_subdirectory(./meta1v2)
 add_subdirectory(./meta2v2)
