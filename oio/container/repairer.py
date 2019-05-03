@@ -16,6 +16,7 @@
 
 from datetime import datetime
 
+from oio.common.easy_value import true_value
 from oio.common.tool import Tool, ToolWorker
 from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
@@ -27,6 +28,10 @@ class ContainerRepairer(Tool):
     """
     Repair containers.
     """
+
+    DEFAULT_REBUILD_BASES = True
+    DEFAULT_SYNC_BASES = True
+    DEFAULT_UPDATE_ACCOUNT = True
 
     def __init__(self, conf, containers=None, **kwargs):
         super(ContainerRepairer, self).__init__(conf, **kwargs)
@@ -111,6 +116,13 @@ class ContainerRepairerWorker(ToolWorker):
         super(ContainerRepairerWorker, self).__init__(
             tool, queue_workers, queue_reply)
 
+        self.rebuild_bases = true_value(self.tool.conf.get(
+            'rebuild_bases', self.tool.DEFAULT_REBUILD_BASES))
+        self.sync_bases = true_value(self.tool.conf.get(
+            'sync_bases', self.tool.DEFAULT_SYNC_BASES))
+        self.update_account = true_value(self.tool.conf.get(
+            'update_account', self.tool.DEFAULT_UPDATE_ACCOUNT))
+
         self.admin_client = AdminClient(self.conf, logger=self.logger)
         self.container_client = ContainerClient(self.conf, logger=self.logger)
         self.meta2_database = Meta2Database(self.conf, logger=self.logger)
@@ -122,21 +134,26 @@ class ContainerRepairerWorker(ToolWorker):
                 namespace, self.tool.namespace))
 
         errors = list()
-        cid = cid_from_name(account, container)
-        for res in self.meta2_database.rebuild(cid):
-            if res['err']:
-                errors.append('%s: %s' % (res['base'], res['err']))
-        if errors:
-            raise Exception(errors)
 
-        data = self.admin_client.election_sync(
-            service_type='meta2', account=account, reference=container)
-        for host, info in data.items():
-            if info['status']['status'] not in (200, 301):
-                errors.append('%s (%d): %s' % (
-                    host, info['status']['status'], info['status']['message']))
-        if errors:
-            raise Exception(errors)
+        if self.rebuild_bases:
+            cid = cid_from_name(account, container)
+            for res in self.meta2_database.rebuild(cid):
+                if res['err']:
+                    errors.append('%s: %s' % (res['base'], res['err']))
+            if errors:
+                raise Exception(errors)
 
-        self.container_client.container_touch(
-            account=account, reference=container)
+        if self.sync_bases:
+            data = self.admin_client.election_sync(
+                service_type='meta2', account=account, reference=container)
+            for host, info in data.items():
+                if info['status']['status'] not in (200, 301):
+                    errors.append('%s (%d): %s' % (
+                        host, info['status']['status'],
+                        info['status']['message']))
+            if errors:
+                raise Exception(errors)
+
+        if self.update_account:
+            self.container_client.container_touch(
+                account=account, reference=container)
