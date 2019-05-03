@@ -18,7 +18,6 @@ from datetime import datetime
 
 from oio import ObjectStorageApi
 from oio.account.client import AccountClient
-from oio.common.exceptions import NotFound, NoSuchContainer
 from oio.common.green import eventlet
 from oio.common.tool import Tool, ToolWorker
 
@@ -53,10 +52,14 @@ class AccountRebuilder(Tool):
             yield item
 
     def _fetch_items_from_all_accounts(self):
-        accounts = self.account_client.account_list()
-        for account in accounts:
-            item = self.namespace, account, None
-            yield item
+        try:
+            accounts = self.account_client.account_list()
+            for account in accounts:
+                item = self.namespace, account, None
+                yield item
+        except Exception as exc:
+            self.success = False
+            self.logger.error('Failed to list accounts: %s', exc)
 
     def _fetch_items(self):
         if self.accounts:
@@ -71,11 +74,18 @@ class AccountRebuilder(Tool):
             if not self._accounts_to_refresh:
                 break
             item = self._accounts_refreshed.get()
-            self._accounts_to_refresh.remove(item)
-            namespace, account, _ = item
-            containers = self.account_client.container_list(account)
-            for container in containers["listing"]:
-                yield namespace, account, container[0]
+            namespace, account, error = item
+            self._accounts_to_refresh.remove((namespace, account, None))
+            if error:
+                continue
+            try:
+                containers = self.account_client.container_list(account)
+                for container in containers["listing"]:
+                    yield namespace, account, container[0]
+            except Exception as exc:
+                self.success = False
+                self.logger.error('Failed to list containers (account=%s): %s',
+                                  account, exc)
 
     def _get_report(self, status, end_time, counters):
         entries_processed, total_entries_processed, \
@@ -125,10 +135,9 @@ class AccountRebuilder(Tool):
         tasks_res = super(AccountRebuilder, self).run()
         for task_res in tasks_res:
             item, _, error = task_res
-            if error is None:
-                _, _, container = item
-                if container is None:
-                    self._accounts_refreshed.put(item)
+            namespace, account, container = item
+            if container is None:
+                self._accounts_refreshed.put((namespace, account, error))
             yield task_res
 
 
@@ -147,14 +156,6 @@ class AccountRebuilderWorker(ToolWorker):
                 namespace, self.tool.namespace))
 
         if container is None:
-            try:
-                self.api.account.account_refresh(account)
-            except NotFound:
-                # account remove in the meantime
-                pass
+            self.api.account.account_refresh(account)
         else:
-            try:
-                self.api.container_refresh(account, container)
-            except NoSuchContainer:
-                # container remove in the meantime
-                pass
+            self.api.container_refresh(account, container)
