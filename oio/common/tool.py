@@ -368,6 +368,25 @@ class _LocalDispatcher(_Dispatcher):
         self.tool.log_report('DONE', force=True)
 
 
+def locate_tube(services, tube):
+    """
+    Get a list of beanstalkd services hosting the specified tube.
+
+    :param services: known beanstalkd services.
+    :type services: iterable of dictionaries
+    :param tube: the tube to locate.
+    :returns: a list of beanstalkd services hosting the the specified tube.
+    :rtype: `list` of `dict`
+    """
+    available = list()
+    for bsd in services:
+        tubes = Beanstalk.from_url(
+            'beanstalk://' + bsd['addr']).tubes()
+        if tube in tubes:
+            available.append(bsd)
+    return available
+
+
 class _DistributedDispatcher(_Dispatcher):
     """
     Dispatch tasks on the platform.
@@ -392,19 +411,11 @@ class _DistributedDispatcher(_Dispatcher):
         workers_tube = self.conf.get('distributed_beanstalkd_worker_tube') \
             or self.tool.DEFAULT_DISTRIBUTED_BEANSTALKD_WORKER_TUBE
         self.beanstalkd_workers = dict()
-        for _, beanstalkd in all_available_beanstalkd.items():
-            beanstalkd_worker_addr = beanstalkd['addr']
-
-            # If the tube exists,
-            # there should be a service that listens to this tube
-            tubes = Beanstalk.from_url(
-                'beanstalk://' + beanstalkd_worker_addr).tubes()
-            if workers_tube not in tubes:
-                continue
-
+        for beanstalkd in locate_tube(all_available_beanstalkd.values(),
+                                      workers_tube):
             beanstalkd_worker = BeanstalkdSender(
-                beanstalkd_worker_addr, workers_tube, self.logger)
-            self.beanstalkd_workers[beanstalkd_worker_addr] = beanstalkd_worker
+                beanstalkd['addr'], workers_tube, self.logger)
+            self.beanstalkd_workers[beanstalkd['addr']] = beanstalkd_worker
             self.logger.info(
                 'Beanstalkd %s using tube %s is selected as a worker',
                 beanstalkd_worker.addr, beanstalkd_worker.tube)
@@ -478,41 +489,44 @@ class _DistributedDispatcher(_Dispatcher):
             total_events += worker.nb_jobs
         return total_events <= 0
 
-    def _distribute_events(self):
-        next_worker = 0
+    def _send_task_event(self, task_event, reply_loc, next_worker):
+        """
+        Send the event through a non-full sender.
+        """
+        task_event['beanstalkd_reply'] = reply_loc
         workers = self.beanstalkd_workers.values()
         nb_workers = len(workers)
-        beanstalkd_reply_event = {'addr': self.beanstalkd_reply.addr,
-                                  'tube': self.beanstalkd_reply.tube}
+        while True:
+            for _ in range(nb_workers):
+                success = workers[next_worker].send_job(
+                    json.dumps(task_event))
+                next_worker = (next_worker + 1) % nb_workers
+                if success:
+                    return next_worker
+            self.logger.warn("All beanstalkd workers are full")
+            sleep(5)
 
-        def _send_task_event(task_event, local_next_worker):
-            # Send the event with a non-full sender
-            task_event['beanstalkd_reply'] = beanstalkd_reply_event
-            while True:
-                for _ in range(nb_workers):
-                    success = workers[local_next_worker].send_job(
-                        json.dumps(task_event))
-                    local_next_worker = (local_next_worker + 1) % nb_workers
-                    if success:
-                        return local_next_worker
-                self.logger.warn("All beanstalkd workers are full")
-                sleep(5)
-
+    def _distribute_events(self, reply_loc=None):
+        next_worker = 0
         tasks_events = self._fetch_tasks_events_to_send()
         try:
-            next_worker = _send_task_event(next(tasks_events), next_worker)
+            next_worker = self._send_task_event(next(tasks_events), reply_loc,
+                                                next_worker)
             self.sending = True
         except StopIteration:
             return
         for task_event in tasks_events:
-            next_worker = _send_task_event(task_event, next_worker)
+            next_worker = self._send_task_event(task_event, reply_loc,
+                                                next_worker)
 
     def run(self):
         self.tool.start_time = self.tool.last_report = time.time()
         self.tool.log_report('START', force=True)
-
+        reply_loc = {'addr': self.beanstalkd_reply.addr,
+                     'tube': self.beanstalkd_reply.tube}
         # pylint: disable=no-member
-        thread = threading.Thread(target=self._distribute_events)
+        thread = threading.Thread(target=self._distribute_events,
+                                  args=[reply_loc])
         thread.start()
 
         # Wait until the thread is started sending events
