@@ -18,7 +18,7 @@ from cliff import lister
 
 from oio.cli.admin.common import AccountCommandMixin, ContainerCommandMixin, \
     ObjectCommandMixin
-from oio.crawler.integrity import Checker, Target
+from oio.crawler.integrity import Checker, Target, DEFAULT_DEPTH
 
 
 class ItemCheckCommand(lister.Lister):
@@ -89,11 +89,11 @@ class RecursiveCheckCommand(ItemCheckCommand):
         parser.add_argument(
             '--depth', '--max-depth',
             type=int,
-            default=5,
+            default=DEFAULT_DEPTH,
             help=("How deep to recurse. 0 means do not recurse. "
                   "N > 0 means recurse N levels below the specified item type "
                   "(namespace -> account -> container -> object -> chunk, "
-                  "default: 5).")
+                  "default: %d)." % DEFAULT_DEPTH)
         )
         return parser
 
