@@ -34,7 +34,7 @@ typedef guint32 generation_t;
 #define OIO_LB_JOKER_SVC_TARGET "__any_slot"
 
 guint64 _prime_numbers[] = {
-	524287u, 524269u, 524261u, 524257u,
+	524269u, 524261u, 524257u,
 	2147483629u, 2147483587u, 2147483579u, 2147483563u,
 	0u
 };
@@ -765,7 +765,10 @@ _slot_rehash (struct oio_lb_slot_s *slot)
 		if (jump_mod != 1 && jump_mod != slot->items->len - 1 &&
 				jump_mod > low && jump_mod < high) {
 			slot->jump = jump_mod;
-			GRID_TRACE("Selected jump: %"G_GUINT64_FORMAT, jump_mod);
+			GRID_TRACE("Selected jump: %"G_GUINT64_FORMAT
+					" (low=%"G_GUINT64_FORMAT", high=%"G_GUINT64_FORMAT", "
+					"len=%u, prime=%"G_GUINT64_FORMAT")",
+					jump_mod, low, high, slot->items->len, _prime_numbers[i]);
 			break;
 		}
 	}
