@@ -50,6 +50,7 @@ jobs:
       - run:
           name: Detect coredumps and print backtraces
           command: |
+            ./tools/oio-gdb.py
             bash <(curl -s https://codecov.io/bash) -f cmake_coverage.output
             codecov
           when: on_success
