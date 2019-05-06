@@ -65,7 +65,6 @@ jobs:
       env: TEST_SUITE=mover,with-service-id
 
 after_success:
-  - bash <(curl -s https://codecov.io/bash) -f /tmp/cmake_coverage.output
-  - codecov
-  - if cat ${HOME}/go_coverage.output.* > go_coverage.output; then rm ${HOME}/go_coverage.output.*; else echo "" > go_coverage.output; fi
-  - bash <(curl -s https://codecov.io/bash) -f go_coverage.output
+  - ./ci/post-success.sh
+after_failure:
+  - ./ci/post-failure.sh

@@ -36,21 +36,15 @@ jobs:
             git submodule update --init
       - run:
           name: Fail-Fast tests
-          command: |
-            ./ci/travis-failfast.sh
+          command: ./ci/travis-failfast.sh
       - run:
           name: Unit tests
-          command: |
-            ./ci/travis-unit.sh
+          command: ./ci/travis-unit.sh
       - run:
           name: Detect coredumps and print backtraces
-          command: |
-            ./tools/oio-gdb.py
+          command: ./ci/post-failure.sh
           when: on_fail
       - run:
           name: Detect coredumps and print backtraces
-          command: |
-            ./tools/oio-gdb.py
-            bash <(curl -s https://codecov.io/bash) -f cmake_coverage.output
-            codecov
+          command: ./ci/post-success.sh
           when: on_success

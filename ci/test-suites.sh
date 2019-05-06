@@ -17,32 +17,6 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-function dump_syslog {
-	cmd="tail"
-	if ! [ -r /var/log/syslog ] ; then
-		cmd="sudo tail"
-	fi
-	$cmd -n 500 /var/log/syslog
-	pip list
-	gridinit_cmd -S "$HOME/.oio/sds/run/gridinit.sock" status3
-}
-
-function trap_exit {
-	set +e
-	#pip list
-	BEANSTALK=$(oio-test-config.py -t beanstalkd)
-	if [ -n "${BEANSTALK}" ]; then
-		# some tests stop all services, we must start beanstalk to dump events
-		gridinit_cmd -S "$HOME/.oio/sds/run/gridinit.sock" start @beanstalkd
-		oio-dump-buried-events.py ${BEANSTALK}
-	fi
-	gridinit_cmd -S "$HOME/.oio/sds/run/gridinit.sock" status3
-	#dump_syslog
-	${SRCDIR}/tools/oio-gdb.py
-}
-
-trap trap_exit EXIT
-
 is_running_test_suite () {
 	[ -z "$TEST_SUITE" ] || [ "${TEST_SUITE/*$1*/$1}" == "$1" ]
 }
