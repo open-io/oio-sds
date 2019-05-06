@@ -153,7 +153,7 @@ _init_notifiers(struct meta2_backend_s *m2, const char *ns)
 	STRING_STACKIFY(url);
 
 	GError *err = NULL;
-	INIT(m2->notifier_container_created, oio_meta2_tube_content_created);
+	INIT(m2->notifier_container_created, oio_meta2_tube_container_new);
 	INIT(m2->notifier_container_deleted, oio_meta2_tube_container_deleted);
 	INIT(m2->notifier_container_state, oio_meta2_tube_container_state);
 
