@@ -97,7 +97,6 @@ on_die=respawn
 enabled=true
 start_at_boot=true
 command=beanstalkd -l ${IP} -p ${PORT} -b ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM} -f 1000 -s 10240000
-env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 """
 
 template_gridinit_account = """
@@ -107,7 +106,6 @@ on_die=cry
 enabled=true
 start_at_boot=false
 command=oio-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
-env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 """
 
 template_gridinit_rdir = """

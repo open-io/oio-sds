@@ -38,7 +38,7 @@ function trap_exit {
 	fi
 	gridinit_cmd -S "$HOME/.oio/sds/run/gridinit.sock" status3
 	#dump_syslog
-	oio-gdb.py
+	${SRCDIR}/tools/oio-gdb.py
 }
 
 trap trap_exit EXIT
@@ -50,17 +50,6 @@ is_running_test_suite () {
 randomize_env () {
 	export OIO_NS="NS-${RANDOM}" OIO_ACCOUNT="ACCT-$RANDOM" \
 		OIO_USER=USER-$RANDOM OIO_PATH=PATH-$RANDOM
-}
-
-test_oio_cluster () {
-	oio-cluster -h >/dev/null
-	oio-cluster --unlock-score -S "$OIO_NS|echo|127.0.0.2:80" >/dev/null
-	oio-cluster --set-score=0 -S "$OIO_NS|echo|127.0.0.2:80" >/dev/null
-	oio-cluster --unlock-score -S "$OIO_NS|echo|127.0.0.2:80" >/dev/null
-	oio-cluster --clear-services echo $OIO_NS >/dev/null
-	if oio-cluster --clear-services NotFoundXxX $OIO_NS >/dev/null ; then exit 1 ; fi
-	oio-cluster --local-cfg >/dev/null
-	oio-cluster --local-ns >/dev/null
 }
 
 test_oio_tool () {
@@ -227,7 +216,6 @@ func_tests () {
 	${WRKDIR}/core/tool_roundtrip $SOURCE
 	rm -f $SOURCE
 
-	test_oio_cluster
 	test_oio_tool
 	test_oio_file_tool
 

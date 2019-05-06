@@ -43,8 +43,6 @@ install(TARGETS oio-tool DESTINATION bin)
 install(TARGETS oio-file DESTINATION bin)
 
 install(PROGRAMS
-            oio-gdb.py
-			oio-unlock-all.sh
 			oio-flush-all.sh
 			oio-wait-scored.sh
 			${CMAKE_CURRENT_BINARY_DIR}/oio-bootstrap.py

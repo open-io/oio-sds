@@ -65,7 +65,6 @@ timeout () {
     num=$1 ; shift
     if [ $count -gt "$num" ] ; then
         echo "TIMEOUT! $*"
-        oio-cluster -r "$NS"
         ( ps -o pid,ppid,cmd $(pgrep -u $UID -P "$pidof_gridinit" | sed 's/^/-p /') || exit 0 )
         exit 1
     fi
@@ -151,8 +150,7 @@ rm -f /tmp/oio-bootstrap.$$
 gridinit -s OIO,gridinit -d ${SDS}/conf/gridinit.conf
 
 # Initiate Zookeeper (if necessary)
-ZK=$(oio-cluster --local-cfg | grep "$NS/zookeeper" ; exit 0)
-if [ -n "$ZK" ] ; then
+if grep -q ^zookeeper $HOME/.oio/sds.conf ; then
     #opts="--fuck-the-world"
     #if [ $verbose -ge 1 ] ; then opts="${opts} -v" ; fi
     #openio --oio-ns "$NS" zk armageddon ${opts}
@@ -224,6 +222,6 @@ oio-flush-all.sh -n "$NS" >/dev/null
 echo -e "\n### Congrats, it's a NS"
 find $SDS -type d | xargs chmod a+rx
 gridinit_cmd -S "$GRIDINIT_SOCK" status2
-oio-cluster -r "$NS"
+$cmd_openio cluster list
 
 echo -e "\nexport OIO_NS=$NS OIO_ACCT=ACCT-$RANDOM"
