@@ -265,7 +265,7 @@ class RawxTestSuite(CommonTestCase):
 
         # verify chunk checksum
         resp, body = self._http_request(chunkurl, 'HEAD', '',
-                                        {'X-oio-check-hash': 'true'})
+                                        {'x-oio-check-hash': True})
         self.assertEqual(200, resp.status)
 
         # delete the chunk, check it is missing as expected
@@ -890,29 +890,58 @@ class RawxTestSuite(CommonTestCase):
         resp, body = self._http_request(chunkurl, 'HEAD', "", {})
         self.assertEqual(200, resp.status)
 
-        resp, body = self._http_request(chunkurl, 'HEAD', '',
-                                        {'X-oio-check-hash': True})
+        # Check the hash
+        resp, body = self._http_request(
+            chunkurl, 'HEAD', '',
+            {'x-oio-check-hash': True})
         self.assertEqual(200, resp.status)
 
-        # Check with valid header
+        # Check the hash with valid header
         resp, body = self._http_request(
-            chunkurl, 'HEAD', "",
-            {'X-oio-check-hash': "true",
+            chunkurl, 'HEAD', '',
+            {'x-oio-check-hash': True,
              'x-oio-chunk-meta-chunk-hash':
-                headers['x-oio-chunk-meta-chunk-hash'].upper()})
+                headers['x-oio-chunk-meta-chunk-hash']})
         self.assertEqual(200, resp.status)
 
-        # Check with invalid header
+        # Check the hash with invalid header
         resp, body = self._http_request(
-            chunkurl, 'HEAD', "",
-            {'X-oio-check-hash': "true",
+            chunkurl, 'HEAD', '',
+            {'x-oio-check-hash': True,
              'x-oio-chunk-meta-chunk-hash': 'xxx'})
         self.assertEqual(412, resp.status)
-
-        # Check with corrupted chunk
-        with open(self._chunk_path(chunkid), "wb") as fp:
-            fp.write("chunk is dead")
         resp, body = self._http_request(
-            chunkurl, 'HEAD', "",
-            {'X-oio-check-hash': "true"})
+            chunkurl, 'HEAD', '',
+            {'x-oio-check-hash': True,
+             'x-oio-chunk-meta-chunk-hash': 'A'*32})
+        self.assertEqual(412, resp.status)
+
+        # Corrupt the chunk
+        corrupted_data = 'chunk is dead'
+        with open(self._chunk_path(chunkid), "wb") as fp:
+            fp.write(corrupted_data)
+
+        # Check the hash with corrupted chunk
+        resp, body = self._http_request(
+            chunkurl, 'HEAD', '',
+            {'x-oio-check-hash': True})
+        self.assertEqual(412, resp.status)
+
+        # Check the hash with corrupted chunk and valid header
+        resp, body = self._http_request(
+            chunkurl, 'HEAD', '',
+            {'x-oio-check-hash': True,
+             'x-oio-chunk-meta-chunk-hash': md5(corrupted_data).hexdigest()})
+        self.assertEqual(200, resp.status)
+
+        # Check the hash with corrupted chunk and invalid header
+        resp, body = self._http_request(
+            chunkurl, 'HEAD', '',
+            {'x-oio-check-hash': True,
+             'x-oio-chunk-meta-chunk-hash': 'xxx'})
+        self.assertEqual(412, resp.status)
+        resp, body = self._http_request(
+            chunkurl, 'HEAD', '',
+            {'x-oio-check-hash': True,
+             'x-oio-chunk-meta-chunk-hash': 'A'*32})
         self.assertEqual(412, resp.status)
