@@ -209,14 +209,14 @@ func (rr *rawxRequest) checkChunk() {
 		if expected_hash == "" {
 			expected_hash = rr.chunk.ChunkHash
 		}
-		checksum, err := in.check()
+		checksum, err := in.recomputeHash()
 		if err != nil {
 			/* how check return code ? */
 			LogError("Fail to compute md5sum: %s", err)
 			rr.replyError(err)
 			return
 		}
-		if checksum != expected_hash {
+		if !strings.EqualFold(checksum, expected_hash) {
 			LogError("Md5sum doesn't match: computed:%s, expected:%s",
 				checksum, expected_hash)
 			rr.replyCode(http.StatusPreconditionFailed)

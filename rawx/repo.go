@@ -47,7 +47,7 @@ type fileReader interface {
 	size() int64
 	seek(int64) error
 	getAttr(key string, value []byte) (int, error)
-	check() (string, error)
+	recomputeHash() (string, error)
 }
 
 type fileWriter interface {
