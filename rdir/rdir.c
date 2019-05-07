@@ -2620,6 +2620,8 @@ grid_main_configure(int argc, char **argv)
 	}
 
 	service_id = CFG("service_id");
+	if (err)
+		g_clear_error(&err);
 
 	gchar *cfg_ip = CFG("bind_addr");
 	STRING_STACKIFY(cfg_ip);
@@ -2636,6 +2638,8 @@ grid_main_configure(int argc, char **argv)
 	}
 
 	gchar *cfg_syslog = CFG("syslog_prefix");
+	if (err)
+		g_clear_error(&err);
 	STRING_STACKIFY(cfg_syslog);
 
 	g_key_file_free(gkf);
