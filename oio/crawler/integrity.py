@@ -42,13 +42,15 @@ class Target(object):
     """
 
     def __init__(self, account, container=None, obj=None,
-                 chunk=None, content_id=None, version=None):
+                 chunk=None, content_id=None, version=None,
+                 cid=None):
         self.account = account
         self.container = container
         self.obj = obj
         self.content_id = content_id
         self.version = version
         self.chunk = chunk
+        self.cid = cid
 
     def copy(self):
         return Target(
@@ -75,6 +77,8 @@ class Target(object):
         out = 'account=%s' % self.account
         if self.container:
             out += ', container=' + self.container
+        if self.cid:
+            out += ', cid=' + self.cid
         if self.obj:
             out += ', obj=' + self.obj
         if self.content_id:
@@ -230,11 +234,14 @@ class Checker(object):
 
     def write_rebuilder_input(self, target, irreparable=False):
         # FIXME(FVE): cid can be computed from account and container names
-        ct_meta = self.list_cache[(target.account, target.container)][1]
-        try:
-            cid = ct_meta['system']['sys.name'].split('.', 1)[0]
-        except KeyError:
-            cid = ct_meta['properties']['sys.name'].split('.', 1)[0]
+        if target.cid:
+            cid = target.cid
+        else:
+            ct_meta = self.list_cache[(target.account, target.container)][1]
+            try:
+                cid = ct_meta['system']['sys.name'].split('.', 1)[0]
+            except KeyError:
+                cid = ct_meta['properties']['sys.name'].split('.', 1)[0]
         error = list()
         if irreparable:
             error.append('#IRREPARABLE')
