@@ -25,6 +25,7 @@ import (
 
 const (
 	HeaderNameOioReqId = "X-oio-req-id"
+	HeaderLenOioReqId  = 63
 	HeaderNameTransId  = "X-trans-id"
 	HeaderNameError    = "X-Error"
 )
@@ -111,7 +112,10 @@ func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 		rawxreq.reqid = req.Header.Get(HeaderNameTransId)
 	}
 	if len(rawxreq.reqid) > 0 {
-		rep.Header().Set(HeaderNameTransId, rawxreq.reqid)
+		if len(rawxreq.reqid) > HeaderLenOioReqId {
+			rawxreq.reqid = rawxreq.reqid[0:HeaderLenOioReqId]
+		}
+		rep.Header().Set(HeaderNameOioReqId, rawxreq.reqid)
 	} else {
 		// patch the reqid for pretty access log
 		rawxreq.reqid = "-"
