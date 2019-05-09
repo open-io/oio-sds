@@ -146,7 +146,7 @@ class HttpApi(object):
 
         # Look for a request ID
         if 'reqid' in kwargs:
-            out_headers['X-oio-req-id'] = str(kwargs['reqid'])
+            out_headers[REQID_HEADER] = str(kwargs['reqid'])
 
         if len(out_headers.get(REQID_HEADER, '')) > STRLEN_REQID:
             out_headers[REQID_HEADER] = \
