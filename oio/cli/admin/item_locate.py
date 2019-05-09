@@ -375,6 +375,7 @@ class ObjectLocate(ObjectCommandMixin, ItemLocateCommand):
 
     def take_action(self, parsed_args):
         self.check_and_load_parsed_args(self.app, parsed_args)
+        parsed_args.fit_width = True
         return super(ObjectLocate, self).take_action(parsed_args)
 
 
@@ -394,4 +395,5 @@ class ChunkLocate(ChunkCommandMixin, ItemLocateCommand):
 
     def take_action(self, parsed_args):
         self.check_and_load_parsed_args(self.app, parsed_args)
+        parsed_args.fit_width = True
         return super(ChunkLocate, self).take_action(parsed_args)
