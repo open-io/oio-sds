@@ -200,6 +200,11 @@ class ItemLocateCommand(lister.Lister):
     def locate_containers(self, containers, is_cid=False):
         reqid = self.app.request_id(self.reqid_prefix)
         # FIXME(FVE): manage --cid here
+
+        if not is_cid:
+            for field in self.locate_accounts([self.app.options.account]):
+                yield field
+
         for ct in containers:
             try:
                 if is_cid:
@@ -225,6 +230,10 @@ class ItemLocateCommand(lister.Lister):
                 continue
             finally:
                 reqid = self.app.request_id(self.reqid_prefix)
+
+            if is_cid:
+                for field in chain(self.locate_accounts([acct])):
+                    yield field
 
             m0_srv = [x for x in dir_data['dir'] if x['type'] == 'meta0']
             for m0 in self.locate_m0(cid, m0_srv):
@@ -339,15 +348,8 @@ class ContainerLocate(ContainerCommandMixin, ItemLocateCommand):
         return parser
 
     def _take_action(self, parsed_args):
-        # FIXME(FVE): inconsistent behavior: we locate the account
-        # found in environment even though the specified container IDs
-        # can be resolved as other accounts.
-        # The locate_containers() method should be in charge of
-        # calling locate_accounts() after container ID resolution.
-        return chain(
-            self.locate_accounts([self.app.options.account]),
-            self.locate_containers(parsed_args.containers,
-                                   is_cid=parsed_args.is_cid))
+        return chain(self.locate_containers(parsed_args.containers,
+                                            is_cid=parsed_args.is_cid))
 
     def take_action(self, parsed_args):
         self.check_and_load_parsed_args(self.app, parsed_args)
