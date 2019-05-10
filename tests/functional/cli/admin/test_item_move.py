@@ -17,7 +17,7 @@
 import random
 
 from oio.common.utils import cid_from_name
-from tests.functional.cli import CliTestCase, CommandFailed
+from tests.functional.cli import CliTestCase
 from tests.utils import random_str
 
 
@@ -95,9 +95,11 @@ class ItemMoveTest(CliTestCase):
 
         src = '127.0.0.1:666'
         opts = self.get_opts(['Container', 'Source', 'Status'])
-        self.assertRaises(
-            CommandFailed, self.openio_admin,
-            'container move %s --src %s %s' % (self.container, src, opts))
+        output = self.openio_admin(
+            'container move %s --src %s %s' % (self.container, src, opts),
+            expected_returncode=1)
+        self.assertOutput('%s %s error' % (self.container, src),
+                          output.rstrip())
 
     def test_container_move_with_several_containers(self):
         opts = self.get_opts(['Name'])

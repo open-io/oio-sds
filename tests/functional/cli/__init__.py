@@ -34,7 +34,7 @@ class CommandFailed(Exception):
                                  self.stderr))
 
 
-def execute(cmd, stdin=None, env=None):
+def execute(cmd, stdin=None, env=None, expected_returncode=0):
     """Executes command."""
     cmdlist = shlex.split(cmd)
     result = ''
@@ -49,31 +49,31 @@ def execute(cmd, stdin=None, env=None):
                             env=_env)
     result, result_err = proc.communicate(stdin)
     result = result.decode('utf-8')
-    if proc.returncode != 0:
+    if proc.returncode != expected_returncode:
         raise CommandFailed(proc.returncode, cmd, result, result_err)
     return result
 
 
 class CliTestCase(BaseTestCase):
     @classmethod
-    def openio(cls, cmd, env=None):
+    def openio(cls, cmd, **kwargs):
         """Executes openio CLI command."""
-        return execute('openio ' + cmd, env=env)
+        return execute('openio ' + cmd, **kwargs)
 
     @classmethod
-    def openio_batch(cls, commands, env=None):
+    def openio_batch(cls, commands, **kwargs):
         """Execute several commands in the same openio CLI process."""
-        return execute('openio', stdin='\n'.join(commands), env=env)
+        return execute('openio', stdin='\n'.join(commands), **kwargs)
 
     @classmethod
-    def openio_admin(cls, cmd, env=None):
+    def openio_admin(cls, cmd, **kwargs):
         """Executes openio-admin CLI command."""
-        return execute('openio-admin ' + cmd, env=env)
+        return execute('openio-admin ' + cmd, **kwargs)
 
     @classmethod
-    def openio_admin_batch(cls, commands, env=None):
+    def openio_admin_batch(cls, commands, **kwargs):
         """Execute several commands in the same openio-admin CLI process."""
-        return execute('openio-admin', stdin='\n'.join(commands), env=env)
+        return execute('openio-admin', stdin='\n'.join(commands), **kwargs)
 
     # FIXME(FVE): deprecate this
     @classmethod
