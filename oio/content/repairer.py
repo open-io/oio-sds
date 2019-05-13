@@ -19,7 +19,7 @@ from datetime import datetime
 from oio.api.object_storage import _sort_chunks
 from oio.blob.operator import ChunkOperator
 from oio.blob.client import BlobClient
-from oio.common.exceptions import NotFound
+from oio.common.exceptions import NotFound, ClientPreconditionFailed
 from oio.common.storage_method import STORAGE_METHODS
 from oio.common.tool import Tool, ToolWorker
 from oio.common.utils import cid_from_name
@@ -116,12 +116,12 @@ class ContentRepairerWorker(ToolWorker):
         self.blob_client = BlobClient(self.conf)
         self.container_client = ContainerClient(self.conf, logger=self.logger)
 
-    def _safe_chunk_rebuild(self, item, content_id, chunk_id_or_pos):
+    def _safe_chunk_rebuild(self, item, content_id, chunk_id_or_pos, **kwargs):
         _, account, container, _, _ = item
         try:
             container_id = cid_from_name(account, container)
             self.chunk_operator.rebuild(
-                container_id, content_id, chunk_id_or_pos)
+                container_id, content_id, chunk_id_or_pos, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
             self.logger.error(
                 'ERROR when rebuilding chunk %s (%s): %s',
@@ -157,9 +157,11 @@ class ContentRepairerWorker(ToolWorker):
             try:
                 self.blob_client.chunk_head(
                     chunk['url'], xattr=True, check_hash=True)
-            except NotFound:
+            except (NotFound, ClientPreconditionFailed) as e:
+                kwargs = {'try_chunk_delete':
+                          isinstance(e, ClientPreconditionFailed)}
                 exc = self._safe_chunk_rebuild(
-                    item, content_id, chunk['url'])
+                    item, content_id, chunk['url'], **kwargs)
                 if exc:
                     exceptions.append(exc)
             except Exception as exc:  # pylint: disable=broad-except
