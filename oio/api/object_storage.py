@@ -30,7 +30,7 @@ from oio.api.backblaze_http import BackblazeUtilsException, BackblazeUtils
 from oio.api.backblaze import BackblazeWriteHandler, \
     BackblazeChunkDownloadHandler
 from oio.common.utils import cid_from_name, GeneratorIO, monotonic_time, \
-    depaginate, timeout_to_deadline
+    depaginate, set_deadline_from_read_timeout
 from oio.common.easy_value import float_value, true_value
 from oio.common.logger import get_logger
 from oio.common.decorators import ensure_headers, ensure_request_id
@@ -54,9 +54,7 @@ def patch_kwargs(fnc):
         for argk, argv in self._global_kwargs.items():
             if argk not in kwargs:
                 kwargs[argk] = argv
-        to = kwargs.get('read_timeout')
-        if to and 'deadline' not in kwargs:
-            kwargs['deadline'] = timeout_to_deadline(to)
+        set_deadline_from_read_timeout(kwargs)
         return fnc(self, *args, **kwargs)
     return _patch_kwargs
 
@@ -1294,6 +1292,13 @@ class ObjectStorageApi(object):
         # describing the quality of selected chunks.
         if properties:
             obj_meta['properties'].update(properties)
+
+        # If we are here, we know that the metadata server is fine
+        # (it provided us with chunk addresses) and the client is still
+        # listening (he just uploaded all data). It seems a good idea to
+        # postpone the deadline.
+        set_deadline_from_read_timeout(kwargs, force=True)
+
         data = {'chunks': ul_chunks, 'properties': obj_meta['properties']}
         try:
             # FIXME: we may just pass **obj_meta

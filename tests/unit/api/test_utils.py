@@ -16,7 +16,8 @@
 import unittest
 from oio.common.exceptions import DeadlineReached
 from oio.common.storage_functions import obj_range_to_meta_chunk_range
-from oio.common.utils import deadline_to_timeout, monotonic_time
+from oio.common.utils import deadline_to_timeout, \
+    set_deadline_from_read_timeout, monotonic_time
 
 
 class TestUtils(unittest.TestCase):
@@ -138,3 +139,29 @@ class TestUtils(unittest.TestCase):
         to = deadline_to_timeout(deadline, True)
         self.assertLessEqual(to, 1.0)
         self.assertGreater(to, 0.9)
+
+    def test_deadline_from_read_timeout(self):
+        kwargs = dict()
+        set_deadline_from_read_timeout(kwargs)
+        # nothing changed
+        self.assertFalse(kwargs)
+
+        now = monotonic_time()
+        kwargs['read_timeout'] = 10.0
+        set_deadline_from_read_timeout(kwargs)
+        # deadline is computed from read timeout
+        self.assertIn('deadline', kwargs)
+        self.assertLessEqual(kwargs['deadline'],
+                             now + kwargs['read_timeout'] + 0.1)
+
+        prev_deadline = kwargs['deadline']
+        set_deadline_from_read_timeout(kwargs)
+        # deadline is not recomputed
+        self.assertIn('deadline', kwargs)
+        self.assertEqual(prev_deadline, kwargs['deadline'])
+
+        prev_deadline = kwargs['read_timeout']
+        set_deadline_from_read_timeout(kwargs, force=True)
+        # deadline is recomputed
+        self.assertIn('deadline', kwargs)
+        self.assertNotEqual(prev_deadline, kwargs['deadline'])

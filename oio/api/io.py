@@ -27,7 +27,7 @@ from oio.common.http import parse_content_type,\
     parse_content_range, ranges_from_http_header, http_header_from_ranges
 from oio.common.http_eventlet import http_connect
 from oio.common.utils import GeneratorIO, group_chunk_errors, \
-    deadline_to_timeout
+    deadline_to_timeout, set_deadline_from_read_timeout
 from oio.common import green
 from oio.common.storage_method import STORAGE_METHODS
 
@@ -81,9 +81,8 @@ class IOBaseWrapper(RawIOBase):
 class WriteHandler(object):
     def __init__(self, source, sysmeta, chunk_preparer,
                  storage_method, headers=None,
-                 connection_timeout=None, write_timeout=None,
-                 read_timeout=None, deadline=None, chunk_checksum_algo='md5',
-                 **_kwargs):
+                 chunk_checksum_algo='md5',
+                 **kwargs):
         """
         :param connection_timeout: timeout to establish the connection
         :param write_timeout: timeout to send a buffer of data
@@ -106,25 +105,27 @@ class WriteHandler(object):
         self.sysmeta = sysmeta
         self.storage_method = storage_method
         self.headers = headers or dict()
-        self.connection_timeout = connection_timeout or CONNECTION_TIMEOUT
-        self.deadline = deadline
-        self._read_timeout = read_timeout or CLIENT_TIMEOUT
-        self._write_timeout = write_timeout or CHUNK_TIMEOUT
+        self.extra_kwargs = kwargs
+        self.connection_timeout = kwargs.get('connection_timeout',
+                                             CONNECTION_TIMEOUT)
+        self.deadline = kwargs.get('deadline')
         self.chunk_checksum_algo = chunk_checksum_algo
 
     @property
     def read_timeout(self):
-        if self.deadline is None:
-            return self._read_timeout
-        dl_to = deadline_to_timeout(self.deadline, True)
-        return min(dl_to, self._read_timeout)
+        if 'read_timeout' in self.extra_kwargs:
+            return self.extra_kwargs['read_timeout']
+        elif self.deadline is not None:
+            return deadline_to_timeout(self.deadline, True)
+        return CLIENT_TIMEOUT
 
     @property
     def write_timeout(self):
-        if self.deadline is None:
-            return self._write_timeout
-        dl_to = deadline_to_timeout(self.deadline, True)
-        return min(dl_to, self._write_timeout)
+        if 'write_timeout' in self.extra_kwargs:
+            return self.extra_kwargs['write_timeout']
+        elif self.deadline is not None:
+            return deadline_to_timeout(self.deadline, True)
+        return CHUNK_TIMEOUT
 
     def stream(self):
         """
@@ -622,6 +623,10 @@ class MetachunkPreparer(object):
         yield self.first_body
         while True:
             mc_pos += 1
+            # If we are here, we know that the client is still
+            # listening (he is uploading data). It seems a good idea to
+            # postpone the deadline.
+            set_deadline_from_read_timeout(self.extra_kwargs, force=True)
             meta, next_body = self.container_client.content_prepare(
                     self.account, self.container, self.obj_name, size=1,
                     stgpol=self.policy, **self.extra_kwargs)
