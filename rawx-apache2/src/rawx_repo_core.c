@@ -479,7 +479,10 @@ chunk_verify_checksum(dav_resource *resource, request_rec *r)
 		EXTRA_ASSERT(resource->info);
 		struct chunk_textinfo_s *p = &resource->info->chunk;
 
-		EXTRA_ASSERT(p->chunk_hash);
+		if (! p->chunk_hash) {
+			g_checksum_free(md5);
+			return APR_NOTFOUND;
+		}
 		hash_to_verify = p->chunk_hash;
 	}
 

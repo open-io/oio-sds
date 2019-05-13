@@ -474,9 +474,13 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 
 		apr_status_t res = chunk_verify_checksum(resource, r);
 		if (res != APR_SUCCESS) {
+			int http_code = HTTP_INTERNAL_SERVER_ERROR;
+			if (res == APR_EMISMATCH)
+				http_code = HTTP_PRECONDITION_FAILED;
+
 			return server_create_and_stat_error(
 				request_get_server_config(r), r->pool,
-				HTTP_PRECONDITION_FAILED, 0,
+				http_code, 0,
 				apr_pstrcat(r->pool, "checksum mismatch", NULL));
 		}
 	}
