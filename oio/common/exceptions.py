@@ -265,6 +265,12 @@ class Conflict(ClientException):
         super(Conflict, self).__init__(http_status, status, message)
 
 
+class ClientPreconditionFailed(ClientException):
+    def __init__(self, http_status=412, status=None, message=None):
+        super(ClientPreconditionFailed, self).__init__(
+            http_status, status, message)
+
+
 class TooLarge(ClientException):
     def __init__(self, http_status=413, status=None, message=None):
         super(TooLarge, self).__init__(http_status, status, message)
@@ -286,6 +292,7 @@ _http_status_map = {
     404: NotFound,
     405: MethodNotAllowed,
     409: Conflict,
+    412: ClientPreconditionFailed,
     413: TooLarge,
     416: UnsatisfiableRange,
     503: ServiceBusy,
