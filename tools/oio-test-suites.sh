@@ -243,7 +243,9 @@ test_meta2_filters () {
 
 test_cli () {
 	randomize_env
-	$OIO_RESET -N $OIO_NS $@
+	# Some tests require events to be preserved after being handled
+	args="-f ${SRCDIR}/etc/bootstrap-option-preserve-events.yml"
+	$OIO_RESET ${args} -N $OIO_NS $@
 
 	cd $SRCDIR
 	tox -e cli
