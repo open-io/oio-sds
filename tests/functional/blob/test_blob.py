@@ -945,3 +945,13 @@ class RawxTestSuite(CommonTestCase):
             {'x-oio-check-hash': True,
              'x-oio-chunk-meta-chunk-hash': 'A'*32})
         self.assertEqual(412, resp.status)
+
+        # Check without xattr
+        chunkid_woattr = chunkid[:3] + random_chunk_id()[3:]
+        chunkurl_woattr = self._rawx_url(chunkid_woattr)
+        with open(self._chunk_path(chunkid_woattr), "wb") as fp:
+            fp.write("without xattrs")
+        resp, body = self._http_request(
+            chunkurl_woattr, 'HEAD', "",
+            {'X-oio-check-hash': "true"})
+        self.assertEqual(500, resp.status)
