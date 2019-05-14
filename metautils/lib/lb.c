@@ -98,6 +98,73 @@ oio_lb_world__feed_service_info_list(struct oio_lb_world_s *lbw,
 }
 
 void
+oio_lb_world__feed_from_string(struct oio_lb_world_s *self,
+		const gchar *main_slot, const gchar *file_contents)
+{
+	oio_lb_world__create_slot(self, main_slot);
+	struct oio_lb_item_s *srv = g_alloca(sizeof(struct oio_lb_item_s));
+	gchar **lines = g_strsplit(file_contents, "\n", -1);
+	for (gchar **line = lines; lines && *line; line++) {
+		*line = g_strstrip(*line);
+		if (*line[0] == '#') {
+			GRID_DEBUG("Ignoring line [%s]", *line);
+			continue;
+		}
+		char **id_loc = g_strsplit(*line, " ", 4);
+		guint elements = g_strv_length(id_loc);
+		if (elements > 0) {
+			memset(srv, 0, sizeof(struct oio_lb_item_s));
+			strcpy(srv->id, id_loc[0]);
+
+			if (elements > 1) {
+				srv->location = location_from_dotted_string(id_loc[1]);
+			} else {
+				addr_info_t ai = {{0}, 0, 0};
+				grid_string_to_addrinfo(id_loc[0], &ai);
+				srv->location = location_from_addr_info(&ai);
+			}
+
+			if (elements > 2)
+				srv->weight = atoi(id_loc[2]);
+			else
+				srv->weight = 80;
+			GRID_TRACE("Built service id=%s,location=%lu,weight=%d",
+					srv->id, srv->location, srv->weight);
+			oio_lb_world__feed_slot(self, main_slot, srv);
+
+			if (elements > 3) {
+				oio_lb_world__create_slot(self, id_loc[3]);
+				oio_lb_world__feed_slot(self, id_loc[3], srv);
+			}
+		} else {
+			GRID_DEBUG("Ignoring line [%s]", *line);
+		}
+		g_strfreev(id_loc);
+	}
+	oio_lb_world__purge_old_generations(self);
+
+	g_strfreev(lines);
+}
+
+GError *
+oio_lb_world__feed_from_file(struct oio_lb_world_s *self,
+		const char *main_slot, const char *src_file)
+{
+	GRID_DEBUG("Loading LB world from %s", src_file);
+
+	GError *err = NULL;
+	gchar *file_contents = NULL;
+	if (!g_file_get_contents(src_file, &file_contents, NULL, &err)) {
+		GRID_ERROR("Failed to read file %s: (%d) %s",
+				src_file, err->code, err->message);
+	} else {
+		oio_lb_world__feed_from_string(self, main_slot, file_contents);
+		g_free(file_contents);
+	}
+	return err;
+}
+
+void
 oio_lb_world__reload_storage_policies(struct oio_lb_world_s *lbw,
 		struct oio_lb_s *lb, struct namespace_info_s *nsinfo)
 {
