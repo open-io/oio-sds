@@ -57,6 +57,12 @@ void oio_lb_world__reload_storage_policies(struct oio_lb_world_s *lbw,
 void oio_lb_world__reload_pools(struct oio_lb_world_s *lbw,
 		struct oio_lb_s *lb, struct namespace_info_s *nsinfo);
 
+/** Check how many times each service has been selected.
+ * `counts` is a hash table with service IDs as keys and the number
+ * of times they have been selected as values. */
+void oio_lb_world__check_repartition(struct oio_lb_world_s *world,
+		int targets, int shots, GHashTable *counts);
+
 /** Create a service pool returning sets of services satisfying
  * the specified service update policy */
 struct oio_lb_pool_s *oio_lb_pool__from_service_policy(
@@ -69,5 +75,10 @@ struct oio_lb_pool_s *oio_lb_pool__from_service_policy(
 struct oio_lb_pool_s *oio_lb_pool__from_storage_policy(
 		struct oio_lb_world_s *lbw,
 		const struct storage_policy_s *stgpol);
+
+/* Repeatedly call oio_lb_pool__poll(), check for unbalanced situations,
+ * and count how many times each service has been selected. */
+void oio_lb_pool__poll_many(struct oio_lb_pool_s *pool, int iterations,
+		GHashTable *services, int *unbalanced_situations);
 
 #endif /*OIO_SDS__metautils__lib__lb_h*/
