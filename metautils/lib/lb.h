@@ -30,6 +30,24 @@ struct namespace_info_s;
 void oio_lb_world__feed_service_info_list(struct oio_lb_world_s *lbw,
 		GSList *services);
 
+/** Insert or update a list of services in a LB world.
+ * Each line of the string should contain a service ID (or address),
+ * and optionally (space separated):
+ * - a location;
+ * - a score;
+ * - an additional slot. */
+void oio_lb_world__feed_from_string(struct oio_lb_world_s *self,
+		const gchar *main_slot, const gchar *file_contents);
+
+/** Insert or update a list of services in a LB world.
+ * Each line of the file should contain a service ID (or address),
+ * and optionally (space separated):
+ * - a location;
+ * - a score;
+ * - an additional slot. */
+GError *oio_lb_world__feed_from_file(struct oio_lb_world_s *self,
+		const gchar *main_slot, const gchar *src_file);
+
 /** Check there is a pool for each storage policy. If not, create a dummy one.
  * @see oio_lb_pool__from_storage_policy */
 void oio_lb_world__reload_storage_policies(struct oio_lb_world_s *lbw,
