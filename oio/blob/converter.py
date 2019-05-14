@@ -430,7 +430,8 @@ class BlobConverter(object):
             raise KeyError(
                 'Chunk %s not found in rdir' % chunk_id)
         elif len(entries) > 1:
-            self.logger.info('Chunk %s appears in %d objects', len(entries))
+            self.logger.info('Chunk %s appears in %d objects',
+                             chunk_id, len(entries))
         # 2. Find content and container IDs
         cid, content_id = entries[0][0:2]
         # 3a. Call ContainerClient.content_locate()

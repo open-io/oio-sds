@@ -32,6 +32,7 @@ from oio.common.logger import get_logger
 from oio.common.storage_method import STORAGE_METHODS
 from oio.api.object_storage import ObjectStorageApi
 from oio.api.object_storage import _sort_chunks
+from oio.rdir.client import RdirClient
 
 DEFAULT_DEPTH = 4
 
@@ -152,6 +153,8 @@ class Checker(object):
             logger=self.logger,
             max_retries=request_attempts - 1,
             request_attempts=request_attempts)
+        self.rdir_client = RdirClient(
+            {"namespace": namespace}, logger=self.logger)
 
         self.accounts_checked = 0
         self.containers_checked = 0
@@ -209,6 +212,28 @@ class Checker(object):
                     self.logger.warn("Failed to resolve CID %s into account "
                                      "and container names: %s",
                                      cid, err)
+
+    def recover_and_complete_object_meta(self, target, chunk):
+        _, rawx_service, chunk_id = chunk.rsplit('/', 2)
+        # 1. Fetch chunk list from rdir (could be cached).
+        # Unfortunately we cannot seek for a chunk ID.
+        entries = [x for x in self.rdir_client.chunk_fetch(
+                       rawx_service, limit=-1) if x[2] == chunk_id]
+        if not entries:
+            self.logger.warn(
+                'Chunk %s not found in rdir' % chunk_id)
+            return
+        elif len(entries) > 1:
+            self.logger.info('Chunk %s appears in %d objects',
+                             chunk_id, len(entries))
+        # 2. Find content and container IDs
+        target.cid, target.content_id = entries[0][0:2]
+        meta = self.api.object_get_properties(
+            None, None, None,
+            cid=target.cid, content=target.content_id)
+        target.obj = meta['name']
+        target.version = meta['version']
+        target.account, target.container = self.api.resolve_cid(target.cid)
 
     def send_result(self, target, errors=None):
         """
@@ -313,8 +338,11 @@ class Checker(object):
             self.chunk_exceptions += 1
             errors.append('Check failed: %s' % (err, ))
 
-        if not target.obj and xattr_meta:
-            self.complete_target_from_chunk_metadata(target, xattr_meta)
+        if not target.obj:
+            if xattr_meta:
+                self.complete_target_from_chunk_metadata(target, xattr_meta)
+            else:
+                self.recover_and_complete_object_meta(target, chunk)
 
         if target.obj:
             obj_listing, obj_meta = self.check_obj(target.copy_object())
