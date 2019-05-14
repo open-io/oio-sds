@@ -128,9 +128,14 @@ _node_deq_push_front(struct lru_tree_s *lt, struct _node_s *node)
 
 /* Red-Black tree handling ------------------------------------------------- */
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-function"
+
 RB_PROTOTYPE_STATIC(_tree_s, _node_s, entry, _node_compare);
 
 RB_GENERATE_STATIC(_tree_s, _node_s, entry, _node_compare);
+
+#pragma GCC diagnostic pop
 
 /* Main structure handling ------------------------------------------------- */
 
@@ -197,7 +202,7 @@ lru_tree_get(struct lru_tree_s *lt, gconstpointer k)
 	EXTRA_ASSERT(lt != NULL);
 	EXTRA_ASSERT(k != NULL);
 
-	const struct _node_s fake = {.k=k};
+	const struct _node_s fake = {.k = (gpointer)k };
 	struct _node_s *node = RB_FIND(_tree_s, lt, &(lt->base), &fake);
 
 	if (!node)
@@ -220,7 +225,7 @@ lru_tree_remove(struct lru_tree_s *lt, gconstpointer k)
 	EXTRA_ASSERT(lt != NULL);
 	EXTRA_ASSERT(k != NULL);
 
-	fake.k = k;
+	fake.k = (gpointer) k;
 	if (!(node = RB_FIND(_tree_s, lt, &(lt->base), &fake)))
 		return FALSE;
 
