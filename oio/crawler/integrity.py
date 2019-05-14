@@ -531,6 +531,10 @@ class Checker(object):
 
         chunk_listing = {c['url']: c for c in chunks}
         if meta:
+            if target.content_id is None:
+                target.content_id = meta['id']
+            if target.version is None:
+                target.version = str(meta['version'])
             self.list_cache[(account, container, obj, vers)] = \
                 (chunk_listing, meta)
         self.objects_checked += 1

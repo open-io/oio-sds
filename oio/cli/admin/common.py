@@ -155,6 +155,7 @@ class ObjectCommandMixin(CommandMixin):
         containers = set()
         objects = list()
         if parsed_args.auto:
+            account = app.options.account
             autocontainer = app.client_manager.flatns_manager
             for obj in parsed_args.objects:
                 ct = autocontainer(obj)
