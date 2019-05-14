@@ -1123,3 +1123,235 @@ class ItemCheckTest(CliTestCase):
             % (self.account, self.container, obj_meta['object'],
                second_obj, self.check_opts))
         self.assertCheckOutput(expected_items, output)
+
+    def test_chunk_check(self):
+        obj_meta, obj_chunks = self.create_object(
+            self.account, self.container, self.obj_name)
+
+        chunk = random.choice(obj_chunks)
+
+        expected_items = list()
+        expected_items.append('account account=%s OK' % self.account)
+        expected_items.append(
+            'container account=%s, container=%s OK'
+            % (self.account, self.container))
+        expected_items.append(
+            'object account=%s, container=%s, obj=%s, content_id=%s, '
+            'version=%s OK'
+            % (self.account, self.container, obj_meta['object'],
+               obj_meta['id'], obj_meta['version']))
+        expected_items.append('chunk chunk=%s OK' % (chunk))
+
+        # Check all items
+        output = self.openio_admin(
+            'chunk check %s %s'
+            % (chunk, self.check_opts))
+        self.assertCheckOutput(expected_items, output)
+
+    def test_chunk_check_with_checksum(self):
+        obj_meta, obj_chunks = self.create_object(
+            self.account, self.container, self.obj_name)
+
+        chunk = random.choice(obj_chunks)
+
+        expected_items = list()
+        expected_items.append('account account=%s OK' % self.account)
+        expected_items.append(
+            'container account=%s, container=%s OK'
+            % (self.account, self.container))
+        expected_items.append(
+            'object account=%s, container=%s, obj=%s, content_id=%s, '
+            'version=%s OK'
+            % (self.account, self.container, obj_meta['object'],
+               obj_meta['id'], obj_meta['version']))
+        expected_items.append('chunk chunk=%s OK' % (chunk))
+
+        # Check with checksum
+        output = self.openio_admin(
+            'chunk check %s --checksum %s'
+            % (chunk, self.check_opts))
+        self.assertCheckOutput(expected_items, output)
+
+        # Corrupt the chunk
+        self.corrupt_chunk(chunk)
+
+        # Check without checksum
+        output = self.openio_admin(
+            'chunk check %s %s'
+            % (chunk, self.check_opts))
+        self.assertCheckOutput(expected_items, output)
+
+        expected_items.remove('chunk chunk=%s OK' % (chunk))
+        expected_items.append('chunk chunk=%s error' % (chunk))
+
+        # Check with checksum
+        output = self.openio_admin(
+            'chunk check %s --checksum %s'
+            % (chunk, self.check_opts), expected_returncode=1)
+        self.assertCheckOutput(expected_items, output)
+
+    def test_chunk_check_with_missing_chunk(self):
+        obj_meta, obj_chunks = self.create_object(
+            self.account, self.container, self.obj_name)
+
+        missing_chunk = random.choice(obj_chunks)
+
+        expected_items = list()
+        expected_items.append('account account=%s OK' % self.account)
+        expected_items.append(
+            'container account=%s, container=%s OK'
+            % (self.account, self.container))
+        expected_items.append(
+            'object account=%s, container=%s, obj=%s, content_id=%s, '
+            'version=%s OK'
+            % (self.account, self.container, obj_meta['object'],
+               obj_meta['id'], obj_meta['version']))
+        expected_items.append('chunk chunk=%s error' % missing_chunk)
+
+        # Prevent the events
+        self._service('@event', 'stop', wait=3)
+
+        try:
+            # Delete chunk
+            self.blob_client.chunk_delete(missing_chunk)
+
+            # Check with missing chunk
+            output = self.openio_admin(
+                'chunk check %s %s'
+                % (missing_chunk, self.check_opts), expected_returncode=1)
+            self.assertCheckOutput(expected_items, output)
+        finally:
+            self._service('@event', 'start', wait=3)
+
+    def test_chunk_check_with_missing_object(self):
+        obj_meta, obj_chunks = self.create_object(
+            self.account, self.container, self.obj_name)
+
+        chunk = random.choice(obj_chunks)
+
+        expected_items = list()
+        expected_items.append('account account=%s OK' % self.account)
+        expected_items.append(
+            'container account=%s, container=%s OK'
+            % (self.account, self.container))
+        expected_items.append(
+            'object account=%s, container=%s, obj=%s, content_id=%s, '
+            'version=%s error'
+            % (self.account, self.container, obj_meta['object'],
+               obj_meta['id'], obj_meta['version']))
+        expected_items.append('chunk chunk=%s error' % (chunk))
+
+        # Prevent the deletion of chunks
+        self._service('@event', 'stop', wait=3)
+
+        try:
+            # Delete object
+            self.openio(
+                '--oio-account %s object delete %s %s'
+                % (self.account, self.container, obj_meta['object']))
+
+            # Check with missing object
+            output = self.openio_admin(
+                'chunk check %s %s'
+                % (chunk, self.check_opts), expected_returncode=1)
+            self.assertCheckOutput(expected_items, output)
+        finally:
+            self._service('@event', 'start', wait=3)
+
+    def test_chunk_check_with_missing_container(self):
+        obj_meta, obj_chunks = self.create_object(
+            self.account, self.container, self.obj_name)
+
+        chunk = random.choice(obj_chunks)
+
+        expected_items = list()
+        expected_items.append('account account=%s OK' % self.account)
+        expected_items.append(
+            'container account=%s, container=%s error'
+            % (self.account, self.container))
+        expected_items.append(
+            'object account=%s, container=%s, obj=%s, content_id=%s, '
+            'version=%s OK'
+            % (self.account, self.container, obj_meta['object'],
+               obj_meta['id'], obj_meta['version']))
+        expected_items.append('chunk chunk=%s OK' % (chunk))
+
+        # Remove container in account service
+        self.account_client.account_flush(self.account)
+
+        # Check with missing container
+        output = self.openio_admin(
+            'chunk check %s %s'
+            % (chunk, self.check_opts), expected_returncode=1)
+        self.assertCheckOutput(expected_items, output)
+
+    def test_chunk_check_with_missing_account(self):
+        obj_meta, obj_chunks = self.create_object(
+            self.account, self.container, self.obj_name)
+
+        chunk = random.choice(obj_chunks)
+
+        expected_items = list()
+        expected_items.append('account account=%s error' % self.account)
+        expected_items.append(
+            'container account=%s, container=%s error'
+            % (self.account, self.container))
+        expected_items.append(
+            'object account=%s, container=%s, obj=%s, content_id=%s, '
+            'version=%s OK'
+            % (self.account, self.container, obj_meta['object'],
+               obj_meta['id'], obj_meta['version']))
+        expected_items.append('chunk chunk=%s OK' % (chunk))
+
+        # Remove account
+        self.account_client.account_flush(self.account)
+        self.account_client.account_delete(self.account)
+
+        # Check with missing account
+        output = self.openio_admin(
+            'chunk check %s %s'
+            % (chunk, self.check_opts), expected_returncode=1)
+        self.assertCheckOutput(expected_items, output)
+
+    def test_chunk_check_with_multiple_objects(self):
+        obj_meta, obj_chunks = self.create_object(
+            self.account, self.container, self.obj_name)
+
+        chunk = random.choice(obj_chunks)
+        second_obj = "item_check_second_obj_" + random_str(4)
+
+        expected_items = list()
+        expected_items.append('account account=%s OK' % self.account)
+        expected_items.append(
+            'container account=%s, container=%s OK'
+            % (self.account, self.container))
+        expected_items.append(
+            'object account=%s, container=%s, obj=%s, content_id=%s, '
+            'version=%s OK'
+            % (self.account, self.container, obj_meta['object'],
+               obj_meta['id'], obj_meta['version']))
+        expected_items.append('chunk chunk=%s OK' % (chunk))
+
+        # Create a second object
+        second_obj_meta, second_obj_chunks = self.create_object(
+            self.account, self.container, second_obj)
+        second_chunk = random.choice(second_obj_chunks)
+
+        # Check only the first object
+        output = self.openio_admin(
+            'chunk check %s %s'
+            % (chunk, self.check_opts))
+        self.assertCheckOutput(expected_items, output)
+
+        expected_items.append(
+            'object account=%s, container=%s, obj=%s, content_id=%s, '
+            'version=%s OK'
+            % (self.account, self.container, second_obj_meta['object'],
+               second_obj_meta['id'], second_obj_meta['version']))
+        expected_items.append('chunk chunk=%s OK' % (second_chunk))
+
+        # Check two objects
+        output = self.openio_admin(
+            'chunk check %s %s %s'
+            % (chunk, second_chunk, self.check_opts))
+        self.assertCheckOutput(expected_items, output)
