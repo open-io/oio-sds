@@ -193,10 +193,7 @@ fi
 
 echo -e "\n### Assign rdir services"
 # Force meta1 services to reload meta0 cache
-for addr in $(oio-test-config.py -t meta1); do
-    $cmd_openio cluster lock meta1 $addr
-done
-gridinit_cmd -S "$GRIDINIT_SOCK" restart "@meta1" >/dev/null
+gridinit_cmd -S "$GRIDINIT_SOCK" stop "@meta1" >/dev/null
 # Wait until the scores are at 0
 MAX_WAITING="30"
 COUNT_META1=$(oio-test-config.py -c -t meta1)
@@ -210,7 +207,8 @@ for i in $(seq 1 "$MAX_WAITING"); do
     fi
     sleep 1
 done
-$cmd_openio cluster wait -d 30 -u -n "$COUNT_META1" meta1
+gridinit_cmd -S "$GRIDINIT_SOCK" start "@meta1" >/dev/null
+$cmd_openio cluster wait -d 30 -n "$COUNT_META1" meta1
 
 $cmd_openio rdir bootstrap rawx
 $cmd_openio rdir bootstrap meta2
