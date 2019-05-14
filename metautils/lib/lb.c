@@ -292,3 +292,104 @@ oio_lb_pool__from_storage_policy(struct oio_lb_world_s *lbw,
 
 	return pool;
 }
+
+void
+oio_lb_pool__poll_many(struct oio_lb_pool_s *pool, int shots,
+		GHashTable *services, int *unbalanced_situations)
+{
+	for (int i = 0; i < shots; i++) {
+		GData *count_by_level_by_host[4];
+		for (int j = 1; j < 4; j++) {
+			g_datalist_init(&count_by_level_by_host[j]);
+		}
+		guint count = 0;
+		void _on_item(struct oio_lb_selected_item_s *sel, gpointer u UNUSED) {
+			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT,
+					sel->item->id, sel->item->location);
+			++count;
+			// Count how many times an "area" is selected, for each area level.
+			for (int j = 1; j < 4; j++) {
+				GQuark host_key = key_from_loc_level(sel->item->location, j);
+				GData **datalist = &count_by_level_by_host[j];
+				guint32 host_count = GPOINTER_TO_UINT(
+						g_datalist_id_get_data(datalist, host_key));
+				host_count++;
+				g_datalist_id_set_data(datalist,
+						host_key, GUINT_TO_POINTER(host_count));
+			}
+			gint icount = 1 + GPOINTER_TO_INT(
+					g_hash_table_lookup(services, sel->item->id));
+			g_hash_table_replace(services,
+					g_strdup(sel->item->id), GINT_TO_POINTER(icount));
+		}
+		GError *err = oio_lb_pool__poll(pool, NULL, _on_item, NULL);
+		g_assert_no_error(err);
+
+		guint32 min[4] = {G_MAXUINT32, G_MAXUINT32, G_MAXUINT32, G_MAXUINT32};
+		guint32 max[4] = {0, 0, 0, 0};
+		for (int j = 1; j < 4; j++) {
+			void _set_min_max(GQuark k UNUSED, gpointer data, gpointer u UNUSED)
+			{
+				guint32 host_count = GPOINTER_TO_UINT(data);
+				if (host_count > max[j])
+					max[j] = host_count;
+				if (host_count < min[j])
+					min[j] = host_count;
+			}
+			GData **datalist = &count_by_level_by_host[j];
+			g_datalist_foreach(datalist, (GDataForeachFunc)_set_min_max, NULL);
+			GRID_DEBUG("For level %d, min=%u, max=%u", j, min[j], max[j]);
+		}
+		for (int j = 1; j < 4; j++) {
+			if (max[j] - min[j] > 1) {
+				GRID_DEBUG("Unbalanced situation at level %d at iteration %d: "
+						"min=%u, max=%u",
+						j, i, min[j], max[j]);
+				(*unbalanced_situations)++;
+				break;
+			}
+		}
+		for (int j = 1; j < 4; j++)
+			g_datalist_clear(&count_by_level_by_host[j]);
+	}
+}
+
+void
+oio_lb_world__check_repartition(struct oio_lb_world_s *world,
+		int targets, int shots, GHashTable *counts)
+{
+	int services = oio_lb_world__count_items(world);
+	int ideal_count = targets * shots / services;
+	int acceptable_deviation_percent = 20;
+	int min_count = ideal_count * (100 - acceptable_deviation_percent) / 100;
+	int max_count = ideal_count * (100 + acceptable_deviation_percent) / 100;
+	int over_selected = 0;
+	int under_selected = 0;
+
+	void _on_item_check(const char *id, gpointer pcount, gpointer d UNUSED) {
+		gint count = GPOINTER_TO_INT(pcount);
+		double deviation_percent =
+				count*100.0f/(float)ideal_count - 100.0f;
+		if (count < min_count || count > max_count) {
+			GRID_WARN("service %s chosen %d times "
+					"(min/ideal/max/diff: %d/%d/%d/%+2.2f%%)",
+					id, count, min_count, ideal_count, max_count,
+					deviation_percent);
+			if (count < min_count)
+				under_selected++;
+			else
+				over_selected++;
+		} else {
+			GRID_INFO("service %s chosen %d times "
+					"(min/ideal/max/diff: %d/%d/%d/%+2.2f%%)",
+					id, count, min_count, ideal_count, max_count,
+					deviation_percent);
+		}
+	}
+	g_hash_table_foreach(counts, (GHFunc)_on_item_check, NULL);
+
+	if (over_selected)
+		GRID_WARN("%d/%d services over selected", over_selected, services);
+	if (under_selected)
+		GRID_WARN("%d/%d services under selected", under_selected, services);
+}
