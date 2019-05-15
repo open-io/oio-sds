@@ -115,6 +115,15 @@ test_oio_file_tool () {
 	if [ "$DIFF" != "" ] ; then exit 1; fi
 }
 
+test_oio_lb_benchmark() {
+	# This is to test the tool, not the various datasets or pool
+	# configurations. The datasets are tested by tests/unit/test_lb.
+	${WRKDIR}/tools/oio-lb-benchmark -O iterations=1000 \
+		"${SRCDIR}/tests/datasets/lb-3-5-4.txt" "6,rawx;min_dist=2" \
+		2> lb-benchmark.log
+	if [ $(grep -qv 'no service polled from' lb-benchmark.log) ]; then exit 1; fi
+}
+
 test_proxy_forward () {
 	proxy=$(oio-test-config.py -t proxy -1)
 
@@ -272,6 +281,10 @@ test_cli () {
 
 	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
 	sleep 0.5
+
+	# This is tested here because we do not need to test it several times,
+	# and for some reason it cannot run with unit tests.
+	test_oio_lb_benchmark
 }
 
 /sbin/sysctl net.ipv4.ip_local_port_range
