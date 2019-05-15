@@ -137,10 +137,15 @@ _set_config (struct req_args_s *args, struct json_object *jargs)
 		return _reply_format_error (args, BADREQ("Object argument expected"));
 	if (json_object_object_length(jargs) <= 0)
 		return _reply_format_error (args, BADREQ("Empty object argument"));
+	GString *gstr = g_string_new("{");
 	json_object_object_foreach(jargs, k, jv) {
-		oio_var_value_one(k, json_object_get_string(jv));
+		if (gstr->len > 1)
+			g_string_append_c(gstr, ',');
+		oio_str_gstring_append_json_pair_boolean(gstr, k,
+				oio_var_value_one(k, json_object_get_string(jv)));
 	}
-	return _reply_success_json(args, NULL);
+	g_string_append_c(gstr, '}');
+	return _reply_success_json(args, gstr);
 }
 
 enum http_rc_e
