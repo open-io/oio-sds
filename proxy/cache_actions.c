@@ -170,19 +170,22 @@ action_forward_set_config (struct req_args_s *args)
 			oio_clamp_deadline(proxy_timeout_config, oio_ext_get_deadline()));
 	metautils_message_set_BODY(req, args->rq->body->data, args->rq->body->len);
 	GByteArray *encoded = message_marshall_gba_and_clean (req);
-	GError *err = gridd_client_exec(id,
+	gchar *packed = NULL;
+	GError *err = gridd_client_exec_and_concat_string(id,
 			oio_clamp_timeout(proxy_timeout_config, oio_ext_get_deadline()),
-			encoded);
+			encoded, &packed);
 	if (err) {
+		g_free0(packed);
 		if (CODE_IS_NETWORK_ERROR(err->code)) {
 			if (err->code == ERRCODE_CONN_TIMEOUT || err->code == ERRCODE_READ_TIMEOUT)
 				return _reply_gateway_timeout (args, err);
-			return _reply_srv_unavailable (args, err);
+			return _reply_srv_unavailable(args, err);
 		}
-		return _reply_common_error (args, err);
+		return _reply_common_error(args, err);
 	}
 
-	return _reply_success_json(args, NULL);
+	return _reply_success_bytes(
+			args, g_bytes_new_take((guint8*)packed, strlen(packed)));
 }
 
 static enum http_rc_e
