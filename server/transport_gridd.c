@@ -878,9 +878,16 @@ dispatch_SETCFG(struct gridd_reply_ctx_s *reply,
 		else if (json_object_object_length(jbody) <= 0)
 			reply->send_error(0, BADREQ("Empty object argument"));
 		else {
+			GString *gstr = g_string_new("{");
 			json_object_object_foreach(jbody, k, jv) {
-				oio_var_value_one(k, json_object_get_string(jv));
+				if (gstr->len > 1)
+					g_string_append_c(gstr, ',');
+				oio_str_gstring_append_json_pair_boolean(gstr, k,
+						oio_var_value_one(k, json_object_get_string(jv)));
 			}
+			g_string_append_c(gstr, '}');
+			reply->add_body(g_bytes_unref_to_array(
+					g_string_free_to_bytes(gstr)));
 			reply->send_reply(CODE_FINAL_OK, "OK");
 		}
 	}
