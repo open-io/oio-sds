@@ -331,7 +331,8 @@ class AdminClient(ProxyClient):
         Notice that some parameters may not be taken into account,
         and no parameter will survice a service restart.
         """
-        self._forward_service_action(svc_id, '/config', json=config, **kwargs)
+        return self._forward_service_action(
+            svc_id, '/config', json=config, **kwargs)
 
     def service_get_info(self, svc_id, **kwargs):
         """

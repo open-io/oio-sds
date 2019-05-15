@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+from cliff import lister
 from cliff import show
 
 from oio.cli.common.utils import KeyValueAction
@@ -70,7 +71,9 @@ class ProxyGetConfig(ProxyCommandMixin, show.ShowOne):
         return zip(*sorted(conf.items()))
 
 
-class SetConfigCommand(show.ShowOne):
+class SetConfigCommand(lister.Lister):
+
+    success = True
 
     @property
     def logger(self):
@@ -90,10 +93,22 @@ class SetConfigCommand(show.ShowOne):
     def _take_action(self, parsed_args):
         raise NotImplementedError()
 
+    def _check_success(self, parsed_args):
+        for result in self._take_action(parsed_args):
+            _, modified = result
+            if not modified:
+                self.success = False
+            yield result
+
     def take_action(self, parsed_args):
         self.logger.debug('take_action(%s)', parsed_args)
 
-        return self._take_action(parsed_args)
+        return ('Name', 'Modified'), self._check_success(parsed_args)
+
+    def run(self, parsed_args):
+        super(SetConfigCommand, self).run(parsed_args)
+        if not self.success:
+            return 1
 
 
 class ServiceSetConfig(SingleServiceCommandMixin, SetConfigCommand):
@@ -110,9 +125,9 @@ class ServiceSetConfig(SingleServiceCommandMixin, SetConfigCommand):
         return parser
 
     def _take_action(self, parsed_args):
-        self.app.client_manager.admin.service_set_live_config(
+        results = self.app.client_manager.admin.service_set_live_config(
             parsed_args.service, parsed_args.params)
-        return zip(*sorted(parsed_args.params.items()))
+        return results.items()
 
     def take_action(self, parsed_args):
         self.check_and_load_parsed_args(self.app, parsed_args)
@@ -130,9 +145,9 @@ class ProxySetConfig(ProxyCommandMixin, SetConfigCommand):
         return parser
 
     def _take_action(self, parsed_args):
-        self.app.client_manager.admin.proxy_set_live_config(
+        results = self.app.client_manager.admin.proxy_set_live_config(
             parsed_args.service, parsed_args.params)
-        return zip(*sorted(parsed_args.params.items()))
+        return results.items()
 
     def take_action(self, parsed_args):
         self.check_and_load_parsed_args(self.app, parsed_args)
