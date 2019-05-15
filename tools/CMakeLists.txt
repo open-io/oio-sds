@@ -28,6 +28,12 @@ bin_prefix(oio-file -file-tool)
 target_link_libraries(oio-file
 		oiosds ${GLIB2_LIBRARIES})
 
+add_executable(oio-lb-benchmark oio-lb-benchmark.c)
+bin_prefix(oio-lb-benchmark -lb-benchmark)
+target_link_libraries(oio-lb-benchmark
+		oiocore metautils
+		${GLIB2_LIBRARIES})
+
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/oio-sds.pc.in
 	${CMAKE_CURRENT_BINARY_DIR}/oio-sds.pc @ONLY)
 
@@ -57,5 +63,5 @@ install(PROGRAMS
 			oio-test-config.py
 			oio-reset.sh
 			oio-dump-buried-events.py
-            oio-webhook-test.py
-        DESTINATION bin)
+			oio-webhook-test.py
+		DESTINATION bin)
