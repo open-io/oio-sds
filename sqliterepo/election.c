@@ -567,8 +567,6 @@ election_manager_dump_delays(void)
 			oio_election_delay_expire_NONE / G_TIME_SPAN_MILLISECOND);
 	GRID_INFO("- retry_failed=%"G_GINT64_FORMAT"ms",
 			oio_election_delay_retry_FAILED / G_TIME_SPAN_MILLISECOND);
-	GRID_INFO("- ping_final=%"G_GINT64_FORMAT"ms",
-			oio_election_delay_ping_final / G_TIME_SPAN_MILLISECOND);
 }
 
 GError *
