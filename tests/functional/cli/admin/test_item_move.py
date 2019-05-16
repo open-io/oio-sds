@@ -24,15 +24,10 @@ from tests.utils import random_str
 class ItemMoveTest(CliTestCase):
     """Functionnal tests for item to move."""
 
-    @classmethod
-    def setUpClass(cls):
-        opts = cls.get_opts(['Addr'])
-        output = cls.openio('cluster list meta2 %s' % opts)
-        cls.all_meta2_services = output.rstrip('\n').split('\n')
-
     def setUp(self):
         super(ItemMoveTest, self).setUp()
         self.container = "item_move_" + random_str(4)
+        self.meta2_services = self.conf['services']['meta2']
 
     def test_container_move_without_dst(self):
         opts = self.get_opts(['Name'])
@@ -45,7 +40,7 @@ class ItemMoveTest(CliTestCase):
                              % (self.container, opts))
         current_peers = output.rstrip('\n').split(', ')
 
-        if len(current_peers) >= len(self.all_meta2_services):
+        if len(current_peers) >= len(self.meta2_services):
             self.skipTest("need at least 1 more meta2")
 
         src = random.choice(current_peers)
@@ -65,12 +60,15 @@ class ItemMoveTest(CliTestCase):
                              % (self.container, opts))
         current_peers = output.rstrip('\n').split(', ')
 
-        if len(current_peers) >= len(self.all_meta2_services):
+        if len(current_peers) >= len(self.meta2_services):
             self.skipTest("need at least 1 more meta2")
 
-        for service in self.all_meta2_services:
-            if service not in current_peers:
-                dst = service
+        for service in self.meta2_services:
+            service_id = service.get('service_id')
+            if service_id is None:
+                service_id = service['addr']
+            if service_id not in current_peers:
+                dst = service_id
 
         src = random.choice(current_peers)
         opts = self.get_opts(['Container', 'Source', 'Destination', 'Status'])
@@ -90,7 +88,7 @@ class ItemMoveTest(CliTestCase):
                              % (self.container, opts))
         current_peers = output.rstrip('\n').split(', ')
 
-        if len(current_peers) >= len(self.all_meta2_services):
+        if len(current_peers) >= len(self.meta2_services):
             self.skipTest("need at least 1 more meta2")
 
         src = '127.0.0.1:666'
@@ -112,7 +110,7 @@ class ItemMoveTest(CliTestCase):
                              % (self.container, opts))
         current_peers = output.rstrip('\n').split(', ')
 
-        if len(current_peers) >= len(self.all_meta2_services):
+        if len(current_peers) >= len(self.meta2_services):
             self.skipTest("need at least 1 more meta2")
 
         container_bis = self.container + '_bis'
@@ -154,7 +152,7 @@ class ItemMoveTest(CliTestCase):
             % (account, self.container, opts))
         current_peers = output.rstrip('\n').split(', ')
 
-        if len(current_peers) >= len(self.all_meta2_services):
+        if len(current_peers) >= len(self.meta2_services):
             self.skipTest("need at least 1 more meta2")
 
         cid = cid_from_name(account, self.container)
