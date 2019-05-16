@@ -13,8 +13,12 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+
+from urlparse import urlparse, urlunparse
+
 from oio.common.client import ProxyClient
 from oio.common.exceptions import OioException
+from oio.common.green import time
 from oio.common.json import json
 
 
@@ -89,12 +93,15 @@ class LbClient(ProxyClient):
 class ConscienceClient(ProxyClient):
     """Conscience client. Some calls are actually redirected to LbClient."""
 
-    def __init__(self, conf, **kwargs):
+    def __init__(self, conf, service_id_max_age=60, **kwargs):
         super(ConscienceClient, self).__init__(
             conf, request_prefix="/conscience", **kwargs)
         lb_kwargs = dict(kwargs)
         lb_kwargs.pop("pool_manager", None)
         self.lb = LbClient(conf, pool_manager=self.pool_manager, **lb_kwargs)
+
+        self._service_id_max_age = service_id_max_age
+        self._service_ids = dict()
 
     def next_instances(self, pool, **kwargs):
         """
@@ -206,3 +213,43 @@ class ConscienceClient(ProxyClient):
         else:
             raise OioException("failed to resolve servie id %s: %s" %
                                (service_id, resp.text))
+
+    def resolve_service_id(self, service_type, service_id,
+                           check_format=True):
+        """
+        :returns: Service address corresponding to the service ID
+        """
+        if check_format:
+            url = "http://" + service_id
+            parsed = urlparse(url)
+            if parsed.port is not None:
+                return service_id
+
+        cached_service_id = self._service_ids.get(service_id)
+        if cached_service_id \
+                and (time.time() - cached_service_id['mtime']
+                     < self._service_id_max_age):
+            return cached_service_id['addr']
+        result = self.resolve(
+            srv_type=service_type, service_id=service_id)
+        service_addr = result['addr']
+        self._service_ids[service_id] = {'addr': service_addr,
+                                         'mtime': time.time()}
+        return service_addr
+
+    def resolve_url(self, service_type, url):
+        """
+        :returns: Resolved URL of a service using a service ID
+        """
+        # FIXME(mb): some tests don't put scheme, should fix tests
+        if not url.startswith('http://'):
+            url = "http://" + url
+
+        parsed = urlparse(url)
+        if parsed.port is not None:
+            return url
+
+        service_addr = self.resolve_service_id(
+            service_type, parsed.hostname, check_format=False)
+        return urlunparse((parsed.scheme, service_addr, parsed.path,
+                           parsed.params, parsed.query, parsed.fragment))
