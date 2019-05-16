@@ -817,9 +817,11 @@ def main():
                         help=('Output file. Will contain elements in error. '
                               'Can later be passed to stdin to re-check only '
                               'these elements.'))
-    parser.add_argument('--output-for-blob-rebuilder',
+    parser.add_argument('--output-for-chunk-rebuild',
+                        '--output-for-blob-rebuilder',
+                        dest='output_for_chunk_rebuild',
                         help="Write chunk errors in a file with a format " +
-                        "suitable as oio-blob-rebuilder input.")
+                        "suitable as 'openio-admin chunk rebuild' input.")
     parser.add_argument('-p', '--presence',
                         action='store_true', default=False,
                         help="Presence check, the xattr check is skipped.")
@@ -850,7 +852,7 @@ def main():
         args.namespace,
         error_file=args.output,
         concurrency=args.concurrency,
-        rebuild_file=args.output_for_blob_rebuilder,
+        rebuild_file=args.output_for_chunk_rebuild,
         full=not args.presence,
         limit_listings=limit_listings,
         request_attempts=args.attempts,
