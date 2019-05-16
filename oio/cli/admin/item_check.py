@@ -123,7 +123,7 @@ class AccountCheck(AccountCommandMixin, RecursiveCheckCommand):
 
     def get_parser(self, prog_name):
         parser = super(AccountCheck, self).get_parser(prog_name)
-        self.patch_parser(parser)
+        AccountCommandMixin.patch_parser(self, parser)
         return parser
 
     def _take_action(self, parsed_args):
@@ -133,7 +133,8 @@ class AccountCheck(AccountCommandMixin, RecursiveCheckCommand):
         return self._format_results()
 
     def take_action(self, parsed_args):
-        self.check_and_load_parsed_args(self.app, parsed_args)
+        AccountCommandMixin.check_and_load_parsed_args(
+            self, self.app, parsed_args)
         return super(AccountCheck, self).take_action(parsed_args)
 
 
@@ -147,7 +148,7 @@ class ContainerCheck(ContainerCommandMixin, RecursiveCheckCommand):
 
     def get_parser(self, prog_name):
         parser = super(ContainerCheck, self).get_parser(prog_name)
-        self.patch_parser(parser)
+        ContainerCommandMixin.patch_parser(self, parser)
         return parser
 
     def _take_action(self, parsed_args):
@@ -158,7 +159,8 @@ class ContainerCheck(ContainerCommandMixin, RecursiveCheckCommand):
         return self._format_results()
 
     def take_action(self, parsed_args):
-        self.check_and_load_parsed_args(self.app, parsed_args)
+        ContainerCommandMixin.check_and_load_parsed_args(
+            self, self.app, parsed_args)
         return super(ContainerCheck, self).take_action(parsed_args)
 
 
@@ -172,7 +174,7 @@ class ObjectCheck(ObjectCommandMixin, RecursiveCheckCommand):
 
     def get_parser(self, prog_name):
         parser = super(ObjectCheck, self).get_parser(prog_name)
-        self.patch_parser(parser)
+        ObjectCommandMixin.patch_parser(self, parser)
         return parser
 
     def _take_action(self, parsed_args):
@@ -183,7 +185,8 @@ class ObjectCheck(ObjectCommandMixin, RecursiveCheckCommand):
         return self._format_results()
 
     def take_action(self, parsed_args):
-        self.check_and_load_parsed_args(self.app, parsed_args)
+        ObjectCommandMixin.check_and_load_parsed_args(
+            self, self.app, parsed_args)
         return super(ObjectCheck, self).take_action(parsed_args)
 
 
@@ -197,7 +200,7 @@ class ChunkCheck(ChunkCommandMixin, ItemCheckCommand):
 
     def get_parser(self, prog_name):
         parser = super(ChunkCheck, self).get_parser(prog_name)
-        self.patch_parser(parser)
+        ChunkCommandMixin.patch_parser(self, parser)
         return parser
 
     def _take_action(self, parsed_args):
@@ -207,5 +210,6 @@ class ChunkCheck(ChunkCommandMixin, ItemCheckCommand):
         return self._format_results()
 
     def take_action(self, parsed_args):
-        self.check_and_load_parsed_args(self.app, parsed_args)
+        ChunkCommandMixin.check_and_load_parsed_args(
+            self, self.app, parsed_args)
         return super(ChunkCheck, self).take_action(parsed_args)

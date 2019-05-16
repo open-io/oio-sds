@@ -38,7 +38,7 @@ class DecacheCommand(MultipleServicesCommandMixin, lister.Lister):
 
     def get_parser(self, prog_name):
         parser = super(DecacheCommand, self).get_parser(prog_name)
-        self.patch_parser(parser)
+        MultipleServicesCommandMixin.patch_parser(self, parser)
         return parser
 
     def decache_services(self, services):
@@ -46,7 +46,8 @@ class DecacheCommand(MultipleServicesCommandMixin, lister.Lister):
         raise NotImplementedError()
 
     def take_action(self, parsed_args):
-        self.check_and_load_parsed_args(self.app, parsed_args)
+        MultipleServicesCommandMixin.check_and_load_parsed_args(
+            self, self.app, parsed_args)
         self.logger.debug('take_action(%s)', parsed_args)
 
         return self.columns, self.decache_services(parsed_args.services)

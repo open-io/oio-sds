@@ -296,11 +296,12 @@ class RawxCheck(MultipleServicesCommandMixin, ItemCheckCommand):
 
     def get_parser(self, prog_name):
         parser = super(RawxCheck, self).get_parser(prog_name)
-        self.patch_parser(parser)
+        MultipleServicesCommandMixin.patch_parser(self, parser)
         return parser
 
     def take_action(self, parsed_args):
-        self.check_and_load_parsed_args(self.app, parsed_args)
+        MultipleServicesCommandMixin.check_and_load_parsed_args(
+            self, self.app, parsed_args)
         return super(RawxCheck, self).take_action(parsed_args)
 
     def _take_action(self, parsed_args):
