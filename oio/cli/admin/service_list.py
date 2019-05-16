@@ -37,7 +37,7 @@ class ServiceListCommand(SingleServiceCommandMixin, lister.Lister):
     def get_parser(self, prog_name):
         from oio.cli.common.utils import ValueFormatStoreTrueAction
         parser = super(ServiceListCommand, self).get_parser(prog_name)
-        self.patch_parser(parser)
+        SingleServiceCommandMixin.patch_parser(self, parser)
         parser.add_argument(
             '--no-paging',
             dest='no_paging',
@@ -52,7 +52,8 @@ class ServiceListCommand(SingleServiceCommandMixin, lister.Lister):
         raise NotImplementedError()
 
     def take_action(self, parsed_args):
-        self.check_and_load_parsed_args(self.app, parsed_args)
+        SingleServiceCommandMixin.check_and_load_parsed_args(
+            self, self.app, parsed_args)
         self.logger.debug('take_action(%s)', parsed_args)
 
         return self.columns, self._take_action(parsed_args)

@@ -58,7 +58,7 @@ class ContainerMove(ContainerCommandMixin, ItemMoveCommand):
 
     def get_parser(self, prog_name):
         parser = super(ContainerMove, self).get_parser(prog_name)
-        self.patch_parser(parser)
+        ContainerCommandMixin.patch_parser(self, parser)
         parser.add_argument(
             '--src',
             metavar='<service_id>',
@@ -89,5 +89,6 @@ class ContainerMove(ContainerCommandMixin, ItemMoveCommand):
                        status, res['err'])
 
     def take_action(self, parsed_args):
-        self.check_and_load_parsed_args(self.app, parsed_args)
+        ContainerCommandMixin.check_and_load_parsed_args(
+            self, self.app, parsed_args)
         return super(ContainerMove, self).take_action(parsed_args)

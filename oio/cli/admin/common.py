@@ -28,7 +28,7 @@ class CommandMixin(object):
 
 class AccountCommandMixin(CommandMixin):
     """
-    Add account-related argmuments to a cliff command.
+    Add account-related arguments to a cliff command.
     """
 
     def patch_parser(self, parser):
@@ -46,7 +46,7 @@ class AccountCommandMixin(CommandMixin):
 
 class ContainerCommandMixin(CommandMixin):
     """
-    Add container-related argmuments to a cliff command.
+    Add container-related arguments to a cliff command.
     """
 
     def patch_parser(self, parser):
@@ -93,7 +93,7 @@ class ContainerCommandMixin(CommandMixin):
 
 class ObjectCommandMixin(CommandMixin):
     """
-    Add object-related argmuments to a cliff command.
+    Add object-related arguments to a cliff command.
     """
 
     def patch_parser(self, parser):
@@ -178,7 +178,7 @@ class ObjectCommandMixin(CommandMixin):
 
 class ChunkCommandMixin(CommandMixin):
     """
-    Add chunk-related argmuments to a cliff command.
+    Add chunk-related arguments to a cliff command.
     """
 
     def patch_parser(self, parser):
@@ -195,7 +195,7 @@ class ChunkCommandMixin(CommandMixin):
 
 class SingleServiceCommandMixin(CommandMixin):
     """
-    Add service-related argmuments to a cliff command.
+    Add service-related arguments to a cliff command.
     """
 
     def patch_parser(self, parser):
@@ -211,7 +211,7 @@ class SingleServiceCommandMixin(CommandMixin):
 
 class MultipleServicesCommandMixin(CommandMixin):
     """
-    Add service-related argmuments to a cliff command.
+    Add service-related arguments to a cliff command.
     """
 
     service_type = None
@@ -237,7 +237,7 @@ class MultipleServicesCommandMixin(CommandMixin):
 
 class ProxyCommandMixin(CommandMixin):
     """
-    Add proxy-related argmuments to a cliff command.
+    Add proxy-related arguments to a cliff command.
     """
 
     def patch_parser(self, parser):
@@ -251,3 +251,47 @@ class ProxyCommandMixin(CommandMixin):
 
     def check_and_load_parsed_args(self, app, parsed_args):
         pass
+
+
+class ToolCommandMixin(CommandMixin):
+    """
+    Add tool-related arguments to a cliff command.
+    """
+
+    tool_conf = dict()
+    tool_class = None
+    distributed = False
+
+    def patch_parser(self, parser):
+        parser.add_argument(
+            '--report-interval', type=int,
+            help='Report interval in seconds. '
+                 '(default=%d)'
+                 % self.tool_class.DEFAULT_REPORT_INTERVAL)
+        parser.add_argument(
+            '--items-per-second', type=int,
+            help='Max items per second. '
+                 '(default=%d)'
+                 % self.tool_class.DEFAULT_ITEM_PER_SECOND)
+        if self.distributed:  # distributed
+            distributed_tube_help = """
+The beanstalkd tube to use to send the items to rebuild. (default=%s)
+""" % self.tool_class.DEFAULT_DISTRIBUTED_BEANSTALKD_WORKER_TUBE
+            parser.add_argument(
+                '--distributed-tube',
+                help=distributed_tube_help)
+        else:  # local
+            parser.add_argument(
+                '--workers', type=int,
+                help='Number of workers. '
+                     '(default=%d)' % self.tool_class.DEFAULT_WORKERS)
+
+    def check_and_load_parsed_args(self, app, parsed_args):
+        self.tool_conf.update(app.client_manager.client_conf)
+        self.tool_conf['report_interval'] = parsed_args.report_interval
+        self.tool_conf['items_per_second'] = parsed_args.items_per_second
+        if self.distributed:  # distributed
+            self.tool_conf['distributed_beanstalkd_worker_tube'] = \
+                parsed_args.distributed_tube
+        else:  # local
+            self.tool_conf['workers'] = parsed_args.workers

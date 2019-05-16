@@ -323,7 +323,7 @@ class AccountLocate(AccountCommandMixin, ItemLocateCommand):
 
     def get_parser(self, prog_name):
         parser = super(AccountLocate, self).get_parser(prog_name)
-        self.patch_parser(parser)
+        AccountCommandMixin.patch_parser(self, parser)
         return parser
 
     def _take_action(self, parsed_args):
@@ -332,7 +332,8 @@ class AccountLocate(AccountCommandMixin, ItemLocateCommand):
         return self.locate_accounts(parsed_args.accounts)
 
     def take_action(self, parsed_args):
-        self.check_and_load_parsed_args(self.app, parsed_args)
+        AccountCommandMixin.check_and_load_parsed_args(
+            self, self.app, parsed_args)
         return super(AccountLocate, self).take_action(parsed_args)
 
 
@@ -344,7 +345,7 @@ class ContainerLocate(ContainerCommandMixin, ItemLocateCommand):
 
     def get_parser(self, prog_name):
         parser = super(ContainerLocate, self).get_parser(prog_name)
-        self.patch_parser(parser)
+        ContainerCommandMixin.patch_parser(self, parser)
         return parser
 
     def _take_action(self, parsed_args):
@@ -352,7 +353,8 @@ class ContainerLocate(ContainerCommandMixin, ItemLocateCommand):
                                             is_cid=parsed_args.is_cid))
 
     def take_action(self, parsed_args):
-        self.check_and_load_parsed_args(self.app, parsed_args)
+        ContainerCommandMixin.check_and_load_parsed_args(
+            self, self.app, parsed_args)
         return super(ContainerLocate, self).take_action(parsed_args)
 
 
@@ -364,7 +366,7 @@ class ObjectLocate(ObjectCommandMixin, ItemLocateCommand):
 
     def get_parser(self, prog_name):
         parser = super(ObjectLocate, self).get_parser(prog_name)
-        self.patch_parser(parser)
+        ObjectCommandMixin.patch_parser(self, parser)
         return parser
 
     def _take_action(self, parsed_args):
@@ -376,7 +378,8 @@ class ObjectLocate(ObjectCommandMixin, ItemLocateCommand):
             self.locate_objects(objects))
 
     def take_action(self, parsed_args):
-        self.check_and_load_parsed_args(self.app, parsed_args)
+        ObjectCommandMixin.check_and_load_parsed_args(
+            self, self.app, parsed_args)
         parsed_args.fit_width = True
         return super(ObjectLocate, self).take_action(parsed_args)
 
@@ -389,13 +392,14 @@ class ChunkLocate(ChunkCommandMixin, ItemLocateCommand):
 
     def get_parser(self, prog_name):
         parser = super(ChunkLocate, self).get_parser(prog_name)
-        self.patch_parser(parser)
+        ChunkCommandMixin.patch_parser(self, parser)
         return parser
 
     def _take_action(self, parsed_args):
         return self.locate_chunks(parsed_args.chunks)
 
     def take_action(self, parsed_args):
-        self.check_and_load_parsed_args(self.app, parsed_args)
+        ChunkCommandMixin.check_and_load_parsed_args(
+            self, self.app, parsed_args)
         parsed_args.fit_width = True
         return super(ChunkLocate, self).take_action(parsed_args)

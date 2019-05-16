@@ -20,18 +20,16 @@ from oio.account.rebuilder import AccountRebuilder
 from oio.container.repairer import ContainerRepairer
 from oio.content.repairer import ContentRepairer
 from oio.cli.admin.common import AccountCommandMixin, ContainerCommandMixin, \
-    ObjectCommandMixin
+    ObjectCommandMixin, ToolCommandMixin
 
 
-class ItemRepairCommand(lister.Lister):
+class ItemRepairCommand(ToolCommandMixin, lister.Lister):
     """
     Various parameters that apply to all repair commands.
     """
 
     columns = None
-    repairer_class = None
     repairer = None
-    conf = dict()
 
     @property
     def logger(self):
@@ -39,34 +37,16 @@ class ItemRepairCommand(lister.Lister):
 
     def get_parser(self, prog_name):
         parser = super(ItemRepairCommand, self).get_parser(prog_name)
-        parser.add_argument(
-            '--report-interval', type=int,
-            help='Report interval in seconds. '
-                 '(default=%d)' % self.repairer_class.DEFAULT_REPORT_INTERVAL)
-
-        parser.add_argument(
-            '--workers', type=int,
-            help='Number of workers. '
-                 '(default=%d)' % self.repairer_class.DEFAULT_WORKERS
-        )
-        parser.add_argument(
-            '--items-per-second', type=int,
-            help='Max items per second. '
-                 '(default=%d)'
-            % self.repairer_class.DEFAULT_ITEM_PER_SECOND
-        )
+        ToolCommandMixin.patch_parser(self, parser)
         return parser
 
     def _take_action(self, parsed_args):
         raise NotImplementedError()
 
     def take_action(self, parsed_args):
+        ToolCommandMixin.check_and_load_parsed_args(
+            self, self.app, parsed_args)
         self.logger.debug('take_action(%s)', parsed_args)
-
-        self.conf.update(self.app.client_manager.client_conf)
-        self.conf['report_interval'] = parsed_args.report_interval
-        self.conf['items_per_second'] = parsed_args.items_per_second
-        self.conf['workers'] = parsed_args.workers
 
         return self.columns, self._take_action(parsed_args)
 
@@ -85,12 +65,12 @@ class AccountRepair(AccountCommandMixin, ItemRepairCommand):
     refresh the counter of all containers in this account.
     """
 
+    tool_class = AccountRebuilder
     columns = ('Entry', 'Status', 'Errors')
-    repairer_class = AccountRebuilder
 
     def get_parser(self, prog_name):
         parser = super(AccountRepair, self).get_parser(prog_name)
-        self.patch_parser(parser)
+        AccountCommandMixin.patch_parser(self, parser)
         return parser
 
     def _take_action(self, parsed_args):
@@ -102,7 +82,7 @@ class AccountRepair(AccountCommandMixin, ItemRepairCommand):
             accounts.append(account)
 
         self.repairer = AccountRebuilder(
-            self.conf, accounts=accounts, logger=self.logger)
+            self.tool_conf, accounts=accounts, logger=self.logger)
         self.repairer.prepare_local_dispatcher()
 
         for item, _, error in self.repairer.run():
@@ -113,7 +93,8 @@ class AccountRepair(AccountCommandMixin, ItemRepairCommand):
             yield (self.repairer.string_from_item(item), status, error)
 
     def take_action(self, parsed_args):
-        self.check_and_load_parsed_args(self.app, parsed_args)
+        AccountCommandMixin.check_and_load_parsed_args(
+            self, self.app, parsed_args)
         return super(AccountRepair, self).take_action(parsed_args)
 
 
@@ -127,34 +108,34 @@ class ContainerRepair(ContainerCommandMixin, ItemRepairCommand):
     update the counters for the account service.
     """
 
+    tool_class = ContainerRepairer
     columns = ('Container', 'Status', 'Errors')
-    repairer_class = ContainerRepairer
 
     def get_parser(self, prog_name):
         parser = super(ContainerRepair, self).get_parser(prog_name)
-        self.patch_parser(parser)
+        ContainerCommandMixin.patch_parser(self, parser)
 
         parser.add_argument(
             '--no-rebuild-bases', action='store_false', dest='rebuild_bases',
             help='Don\'t rebuild the missing, lost bases. '
                  '(default=%s)'
-            % (not self.repairer_class.DEFAULT_REBUILD_BASES))
+            % (not self.tool_class.DEFAULT_REBUILD_BASES))
         parser.add_argument(
             '--no-sync-bases', action='store_false', dest='sync_bases',
             help='Don\'t synchronize its bases. '
                  '(default=%s)'
-            % (not self.repairer_class.DEFAULT_SYNC_BASES))
+            % (not self.tool_class.DEFAULT_SYNC_BASES))
         parser.add_argument(
             '--no-update-account', action='store_false', dest='update_account',
             help='Don\'t update the counters for the account service. '
                  '(default=%s)'
-            % (not self.repairer_class.DEFAULT_UPDATE_ACCOUNT))
+            % (not self.tool_class.DEFAULT_UPDATE_ACCOUNT))
         return parser
 
     def _take_action(self, parsed_args):
-        self.conf['rebuild_bases'] = parsed_args.rebuild_bases
-        self.conf['sync_bases'] = parsed_args.sync_bases
-        self.conf['update_account'] = parsed_args.update_account
+        self.tool_conf['rebuild_bases'] = parsed_args.rebuild_bases
+        self.tool_conf['sync_bases'] = parsed_args.sync_bases
+        self.tool_conf['update_account'] = parsed_args.update_account
 
         containers = self.resolve_containers(self.app, parsed_args, no_id=True)
         containers_to_repair = list()
@@ -166,7 +147,8 @@ class ContainerRepair(ContainerCommandMixin, ItemRepairCommand):
             containers_to_repair.append(container)
 
         self.repairer = ContainerRepairer(
-            self.conf, containers=containers_to_repair, logger=self.logger)
+            self.tool_conf, containers=containers_to_repair,
+            logger=self.logger)
         self.repairer.prepare_local_dispatcher()
 
         for item, _, error in self.repairer.run():
@@ -177,7 +159,8 @@ class ContainerRepair(ContainerCommandMixin, ItemRepairCommand):
             yield (self.repairer.string_from_item(item), status, error)
 
     def take_action(self, parsed_args):
-        self.check_and_load_parsed_args(self.app, parsed_args)
+        ContainerCommandMixin.check_and_load_parsed_args(
+            self, self.app, parsed_args)
         return super(ContainerRepair, self).take_action(parsed_args)
 
 
@@ -190,12 +173,12 @@ class ObjectRepair(ObjectCommandMixin, ItemRepairCommand):
     update the counters for the account service.
     """
 
+    tool_class = ContentRepairer
     columns = ('Object', 'Status', 'Errors')
-    repairer_class = ContentRepairer
 
     def get_parser(self, prog_name):
         parser = super(ObjectRepair, self).get_parser(prog_name)
-        self.patch_parser(parser)
+        ObjectCommandMixin.patch_parser(self, parser)
         return parser
 
     def _take_action(self, parsed_args):
@@ -211,7 +194,8 @@ class ObjectRepair(ObjectCommandMixin, ItemRepairCommand):
             objects_to_repair.append(obj)
 
         self.repairer = ContentRepairer(
-            self.conf, objects=objects_to_repair, logger=self.logger)
+            self.tool_conf, objects=objects_to_repair,
+            logger=self.logger)
         self.repairer.prepare_local_dispatcher()
 
         for item, _, error in self.repairer.run():
@@ -222,5 +206,6 @@ class ObjectRepair(ObjectCommandMixin, ItemRepairCommand):
             yield (self.repairer.string_from_item(item), status, error)
 
     def take_action(self, parsed_args):
-        self.check_and_load_parsed_args(self.app, parsed_args)
+        ObjectCommandMixin.check_and_load_parsed_args(
+            self, self.app, parsed_args)
         return super(ObjectRepair, self).take_action(parsed_args)
