@@ -60,9 +60,9 @@ class ItemCheckCommand(lister.Lister):
                   "oio-crawler-integrity to re-check only these elements.")
         )
         parser.add_argument(
-            '--output-for-blob-rebuilder',
+            '--output-for-chunk-rebuild',
             help=("Write chunk errors in a file with a format "
-                  "suitable as oio-blob-rebuilder input.")
+                  "suitable as 'openio-admin chunk rebuild' input.")
         )
         return parser
 
@@ -76,7 +76,7 @@ class ItemCheckCommand(lister.Lister):
             self.app.options.ns,
             concurrency=parsed_args.concurrency,
             error_file=parsed_args.output,
-            rebuild_file=parsed_args.output_for_blob_rebuilder,
+            rebuild_file=parsed_args.output_for_chunk_rebuild,
             request_attempts=parsed_args.attempts,
             integrity=parsed_args.checksum,
             logger=self.logger)
