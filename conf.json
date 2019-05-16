@@ -420,14 +420,9 @@
 				"descr": "In the current sqliterepo repository, sets the amount of time after which a SLAVE election will drop its status and return to the NONE status. This helps recycling established-but-unused elections, and save Zookeeper nodes.",
 				"def": "210m", "min": "1s", "max": "7d" },
 
-			{ "type": "monotonic", "name": "oio_election_delay_ping_final",
-				"key": "sqliterepo.election.delay.ping_final",
-				"descr": "In the current sqliterepo repository, sets the average amount of time after which a PING will be sent for an established election. This is an average, in facts a jitter is introduced to avoid resonance effects on large-scale platforms. Should be greater than sqliterepo.election.delay.expire_slave if you want the slaves to actually expire.",
-				"def": "30m", "min": "1ms", "max": "1d" },
-
 			{ "type": "monotonic", "name": "oio_election_delay_expire_MASTER",
 				"key": "sqliterepo.election.delay.expire_master",
-				"descr": "In the current sqliterepo repository, sets the amount of time after which a MASTER election will drop its status and return to the NONE status. This helps recycling established-but-unused elections, and save Zookeeper nodes. Keep this value between sqliterepo.election.delay.expire_slave and sqliterepo.election.delay.ping_final if you want the election to never expire.",
+				"descr": "In the current sqliterepo repository, sets the amount of time after which a MASTER election will drop its status and return to the NONE status. This helps recycling established-but-unused elections, and save Zookeeper nodes. Keep this value greater than sqliterepo.election.delay.expire_slave to avoid rotating the master service.",
 				"def": "240m", "min": "1ms", "max": "7d" },
 
 			{ "type": "monotonic", "name": "oio_election_delay_retry_FAILED",

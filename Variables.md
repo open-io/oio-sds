@@ -1302,7 +1302,7 @@ Used by `gcc`
 
 ### sqliterepo.election.delay.expire_master
 
-> In the current sqliterepo repository, sets the amount of time after which a MASTER election will drop its status and return to the NONE status. This helps recycling established-but-unused elections, and save Zookeeper nodes. Keep this value between sqliterepo.election.delay.expire_slave and sqliterepo.election.delay.ping_final if you want the election to never expire.
+> In the current sqliterepo repository, sets the amount of time after which a MASTER election will drop its status and return to the NONE status. This helps recycling established-but-unused elections, and save Zookeeper nodes. Keep this value greater than sqliterepo.election.delay.expire_slave to avoid rotating the master service.
 
  * default: **240 * G_TIME_SPAN_MINUTE**
  * type: gint64
@@ -1326,15 +1326,6 @@ Used by `gcc`
  * type: gint64
  * cmake directive: *OIO_SQLITEREPO_ELECTION_DELAY_EXPIRE_SLAVE*
  * range: 1 * G_TIME_SPAN_SECOND -> 7 * G_TIME_SPAN_DAY
-
-### sqliterepo.election.delay.ping_final
-
-> In the current sqliterepo repository, sets the average amount of time after which a PING will be sent for an established election. This is an average, in facts a jitter is introduced to avoid resonance effects on large-scale platforms. Should be greater than sqliterepo.election.delay.expire_slave if you want the slaves to actually expire.
-
- * default: **30 * G_TIME_SPAN_MINUTE**
- * type: gint64
- * cmake directive: *OIO_SQLITEREPO_ELECTION_DELAY_PING_FINAL*
- * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_DAY
 
 ### sqliterepo.election.delay.retry_failed
 
