@@ -63,6 +63,7 @@ static GByteArray *nsinfo_cache = NULL;
 static gchar *service_url = NULL;
 static gchar *hub_me = NULL;
 static gchar *hub_group = NULL;
+static gint hub_group_size = 0;
 static gchar *path_stgpol = NULL;
 static gchar *path_srvcfg = NULL;
 static gchar *nsname = NULL;
@@ -652,6 +653,7 @@ conscience_run_srvtypes(const gchar *type, service_callback_f * callback, gpoint
 /* ------------------------------------------------------------------------- */
 
 static volatile gboolean hub_running = FALSE;
+static volatile gboolean hub_working = FALSE;
 static void *hub_zctx = NULL;
 static void *hub_zpub = NULL;
 static void *hub_zsub = NULL;
@@ -869,6 +871,7 @@ hub_worker_sub (gpointer p)
 				}
 			}
 			zmq_msg_close (&msg);
+			hub_working = TRUE;
 		}
 	}
 
@@ -1158,6 +1161,7 @@ _init_hub (void)
 					return SYSERR("HUB connect error [%s]: (%d) %s",
 							*t, zerr, zmq_strerror(zerr));
 				} else {
+					hub_group_size++;
 					GRID_NOTICE("HUB connected to [%s]", *t);
 				}
 			}
@@ -1265,8 +1269,18 @@ restart_srv_from_file(gchar *path)
 	GError *err = NULL;
 	gsize length;
 
-	if (!g_file_test(path, G_FILE_TEST_EXISTS))
+	if (!g_file_test(path, G_FILE_TEST_EXISTS)) {
 		return FALSE;
+	} else if (hub_group_size > 0) {
+		GRID_NOTICE("Conscience hub enabled "
+				"(%"G_GINT64_FORMAT" other nodes), "
+				"ignoring persistence file %s, "
+				"waiting to receive a service list.",
+				path);
+		for (int i = 8; i > 0 && !hub_working; i--)
+			g_usleep(250 * G_TIME_SPAN_MILLISECOND);
+		return FALSE;
+	}
 
 	gboolean ret = FALSE;
 
