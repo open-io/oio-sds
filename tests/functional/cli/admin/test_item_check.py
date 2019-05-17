@@ -17,10 +17,8 @@
 import random
 import time
 
-from oio.account.client import AccountClient
-from oio.blob.client import BlobClient
+from oio import ObjectStorageApi
 from oio.common.autocontainer import HashedContainerBuilder
-from oio.common.json import json
 from oio.common.utils import cid_from_name
 from oio.event.evob import EventTypes
 from tests.functional.cli import CliTestCase
@@ -32,6 +30,13 @@ class ItemCheckTest(CliTestCase):
 
     FLAT_BITS = 5
 
+    @classmethod
+    def setUpClass(cls):
+        super(ItemCheckTest, cls).setUpClass()
+        cls.check_opts = cls.get_opts(['Type', 'Item', 'Status'])
+        cls.api = ObjectStorageApi(cls._cls_ns, endpoint=cls._cls_uri)
+        cls.autocontainer = HashedContainerBuilder(bits=cls.FLAT_BITS)
+
     def setUp(self):
         super(ItemCheckTest, self).setUp()
         self.rawx_services = None
@@ -39,18 +44,8 @@ class ItemCheckTest(CliTestCase):
         self.account = "item_check_account_" + random_str(4)
         self.container = "item_check_container" + random_str(4)
         self.obj_name = "item_check_obj_" + random_str(4)
-        self.check_opts = self.get_opts(['Type', 'Item', 'Status'])
 
         self.beanstalkd0.drain_tube('oio-preserved')
-
-        self.account_client = AccountClient(self.conf)
-        self.blob_client = BlobClient(self.conf)
-        self.autocontainer = HashedContainerBuilder(bits=self.FLAT_BITS)
-
-    def assertCheckOutput(self, expected_items, actual_output):
-        super(ItemCheckTest, self).assertListEqual(
-            sorted(expected_items),
-            sorted(actual_output.rstrip('\n').split('\n')))
 
     def _wait_events(self, account, container, obj_name):
         self.wait_for_event(
@@ -63,42 +58,19 @@ class ItemCheckTest(CliTestCase):
             type_=EventTypes.CONTAINER_STATE)
 
     def create_object(self, account, container, obj_name):
-        opts = self.get_opts(['Name'])
-        output = self.openio(
-            '--oio-account %s object create %s /etc/passwd --name %s %s'
-            % (account, container, obj_name, opts))
-        self.assertOutput('%s\n' % obj_name, output)
-        opts = self.get_opts([], format='json')
-        output = self.openio(
-            '--oio-account %s object show %s %s %s'
-            % (account, container, obj_name, opts))
-        obj_meta = json.loads(output)
-        opts = self.get_opts(['Id'])
-        output = self.openio(
-            '--oio-account %s object locate %s %s %s'
-            % (account, container, obj_name, opts))
-        obj_chunks = output.rstrip('\n').split('\n')
+        self.api.object_create(
+            account, container, obj_name=obj_name, data='test_item_check')
+        obj_meta, obj_chunks = self.api.object_locate(
+            account, container, obj_name)
         self._wait_events(account, container, obj_name)
         return obj_meta, obj_chunks
 
     def create_object_auto(self, account, obj_name):
-        opts = self.get_opts(['Name'])
-        output = self.openio(
-            '--oio-account %s object create /etc/passwd --name %s '
-            '--auto --flat-bits %d %s'
-            % (account, obj_name, self.FLAT_BITS, opts))
-        self.assertOutput('%s\n' % obj_name, output)
-        opts = self.get_opts([], format='json')
-        output = self.openio(
-            '--oio-account %s object show %s --auto --flat-bits %d %s'
-            % (account, obj_name, self.FLAT_BITS, opts))
-        obj_meta = json.loads(output)
-        opts = self.get_opts(['Id'])
-        output = self.openio(
-            '--oio-account %s object locate %s --auto --flat-bits %d %s'
-            % (account, obj_name, self.FLAT_BITS, opts))
-        obj_chunks = output.rstrip('\n').split('\n')
         container = self.autocontainer(obj_name)
+        self.api.object_create(
+            account, container, obj_name=obj_name, data='test_item_check')
+        obj_meta, obj_chunks = self.api.object_locate(
+            account, container, obj_name)
         self._wait_events(account, container, obj_name)
         return container, obj_meta, obj_chunks
 
@@ -134,22 +106,22 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
 
         # Check all items
         output = self.openio_admin(
             'account check %s %s'
             % (self.account, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         output = self.openio_admin(
             '--oio-account %s account check %s'
             % (self.account, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
     def test_account_with_depth(self):
         obj_meta, obj_chunks = self.create_object(
@@ -162,7 +134,7 @@ class ItemCheckTest(CliTestCase):
         output = self.openio_admin(
             'account check %s --depth 0 %s'
             % (self.account, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         expected_items.append(
             'container account=%s, container=%s OK'
@@ -170,30 +142,30 @@ class ItemCheckTest(CliTestCase):
         output = self.openio_admin(
             'account check %s --depth 1 %s'
             % (self.account, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         output = self.openio_admin(
             'account check %s --depth 2 %s'
             % (self.account, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         for chunk in obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
         output = self.openio_admin(
             'account check %s --depth 3 %s'
             % (self.account, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         output = self.openio_admin(
             'account check %s --depth 4 %s'
             % (self.account, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
     def test_account_check_with_checksum(self):
         obj_meta, obj_chunks = self.create_object(
@@ -207,46 +179,47 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
 
         # Check with checksum
         output = self.openio_admin(
             'account check %s --checksum %s'
             % (self.account, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         # Corrupt the chunk
         corrupted_chunk = random.choice(obj_chunks)
-        self.corrupt_chunk(corrupted_chunk)
+        self.corrupt_chunk(corrupted_chunk['url'])
 
         # Check without checksum
         output = self.openio_admin(
             'account check %s %s'
             % (self.account, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
-        expected_items.remove('chunk chunk=%s OK' % (corrupted_chunk))
-        expected_items.append('chunk chunk=%s error' % (corrupted_chunk))
+        expected_items.remove('chunk chunk=%s OK' % (corrupted_chunk['url']))
+        expected_items.append(
+            'chunk chunk=%s error' % (corrupted_chunk['url']))
         expected_items.remove(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s error'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
 
         # Check with checksum
         output = self.openio_admin(
             'account check %s --checksum %s'
             % (self.account, self.check_opts), expected_returncode=1)
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
     def test_account_check_with_missing_chunk(self):
         obj_meta, obj_chunks = self.create_object(
@@ -262,24 +235,24 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s error'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
-            if chunk == missing_chunk:
+            if chunk['url'] == missing_chunk['url']:
                 status = 'error'
             else:
                 status = 'OK'
             expected_items.append(
-                'chunk chunk=%s %s' % (chunk, status))
+                'chunk chunk=%s %s' % (chunk['url'], status))
 
         # Delete chunk
-        self.blob_client.chunk_delete(missing_chunk)
+        self.api.blob_client.chunk_delete(missing_chunk['url'])
 
         # Check with missing chunk
         output = self.openio_admin(
             'account check %s %s'
             % (self.account, self.check_opts), expected_returncode=1)
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
     def test_account_check_with_missing_container(self):
         obj_meta, obj_chunks = self.create_object(
@@ -295,11 +268,11 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
         expected_items.append(
             'container account=%s, container=%s error'
             % (self.account, missing_container))
@@ -309,14 +282,14 @@ class ItemCheckTest(CliTestCase):
         metadata["mtime"] = time.time()
         metadata["bytes"] = 0
         metadata["objects"] = 0
-        self.account_client.container_update(
+        self.api.account.container_update(
             self.account, missing_container, metadata=metadata)
 
         # Check with missing container
         output = self.openio_admin(
             'account check %s %s'
             % (self.account, self.check_opts), expected_returncode=1)
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
     def test_account_check_with_missing_account(self):
         obj_meta, obj_chunks = self.create_object(
@@ -331,7 +304,7 @@ class ItemCheckTest(CliTestCase):
         output = self.openio_admin(
             'account check %s %s'
             % (mising_account, self.check_opts), expected_returncode=1)
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         expected_items.append('account account=%s OK' % self.account)
         expected_items.append(
@@ -340,17 +313,17 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
 
         output = self.openio_admin(
             'account check %s %s %s'
             % (self.account, mising_account, self.check_opts),
             expected_returncode=1)
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
     def test_account_check_with_multiple_accounts(self):
         obj_meta, obj_chunks = self.create_object(
@@ -366,27 +339,27 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
 
         # Create a second account
-        self.account_client.account_create(second_account)
+        self.api.account_create(second_account)
 
         # Check only the first account
         output = self.openio_admin(
             'account check %s %s'
             % (self.account, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         # Check two accounts
         expected_items.append('account account=%s OK' % second_account)
         output = self.openio_admin(
             'account check %s %s %s'
             % (self.account, second_account, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
     def test_container_check(self):
         obj_meta, obj_chunks = self.create_object(
@@ -400,17 +373,17 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
 
         # Check all items
         output = self.openio_admin(
             '--oio-account %s container check %s %s'
             % (self.account, self.container, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
     def test_container_check_with_cid(self):
         obj_meta, obj_chunks = self.create_object(
@@ -424,18 +397,18 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
 
         # Check all items
         container_id = cid_from_name(self.account, self.container)
         output = self.openio_admin(
             'container check %s --cid %s'
             % (container_id, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
     def test_container_with_depth(self):
         obj_meta, obj_chunks = self.create_object(
@@ -451,35 +424,35 @@ class ItemCheckTest(CliTestCase):
         output = self.openio_admin(
             '--oio-account %s container check %s --depth 0 %s'
             % (self.account, self.container, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         output = self.openio_admin(
             '--oio-account %s container check %s --depth 1 %s'
             % (self.account, self.container, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         for chunk in obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
         output = self.openio_admin(
             '--oio-account %s container check %s --depth 2 %s'
             % (self.account, self.container, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         output = self.openio_admin(
             '--oio-account %s container check %s --depth 3 %s'
             % (self.account, self.container, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         output = self.openio_admin(
             '--oio-account %s container check %s --depth 4 %s'
             % (self.account, self.container, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
     def test_container_check_with_checksum(self):
         obj_meta, obj_chunks = self.create_object(
@@ -493,39 +466,40 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
 
         # Check with checksum
         output = self.openio_admin(
             '--oio-account %s container check %s --checksum %s'
             % (self.account, self.container, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         # Corrupt the chunk
         corrupted_chunk = random.choice(obj_chunks)
-        self.corrupt_chunk(corrupted_chunk)
+        self.corrupt_chunk(corrupted_chunk['url'])
 
         # Check without checksum
         output = self.openio_admin(
             '--oio-account %s container check %s %s'
             % (self.account, self.container, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
-        expected_items.remove('chunk chunk=%s OK' % (corrupted_chunk))
-        expected_items.append('chunk chunk=%s error' % (corrupted_chunk))
+        expected_items.remove('chunk chunk=%s OK' % (corrupted_chunk['url']))
+        expected_items.append(
+            'chunk chunk=%s error' % (corrupted_chunk['url']))
         expected_items.remove(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s error'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
 
         # Check with checksum
@@ -533,7 +507,7 @@ class ItemCheckTest(CliTestCase):
             '--oio-account %s container check %s --checksum %s'
             % (self.account, self.container, self.check_opts),
             expected_returncode=1)
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
     def test_container_check_with_missing_chunk(self):
         obj_meta, obj_chunks = self.create_object(
@@ -549,25 +523,25 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s error'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
-            if chunk == missing_chunk:
+            if chunk['url'] == missing_chunk['url']:
                 status = 'error'
             else:
                 status = 'OK'
             expected_items.append(
-                'chunk chunk=%s %s' % (chunk, status))
+                'chunk chunk=%s %s' % (chunk['url'], status))
 
         # Delete chunk
-        self.blob_client.chunk_delete(missing_chunk)
+        self.api.blob_client.chunk_delete(missing_chunk['url'])
 
         # Check with missing chunk
         output = self.openio_admin(
             '--oio-account %s container check %s %s'
             % (self.account, self.container, self.check_opts),
             expected_returncode=1)
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
     def test_container_check_with_missing_container(self):
         obj_meta, obj_chunks = self.create_object(
@@ -586,14 +560,14 @@ class ItemCheckTest(CliTestCase):
             '--oio-account %s container check %s %s'
             % (self.account, missing_container, self.check_opts),
             expected_returncode=1)
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         # Create a container only in account service
         metadata = dict()
         metadata["mtime"] = time.time()
         metadata["bytes"] = 0
         metadata["objects"] = 0
-        self.account_client.container_update(
+        self.api.account.container_update(
             self.account, missing_container, metadata=metadata)
 
         # Check with missing container
@@ -601,7 +575,7 @@ class ItemCheckTest(CliTestCase):
             '--oio-account %s container check %s %s'
             % (self.account, missing_container, self.check_opts),
             expected_returncode=1)
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         expected_items.append(
             'container account=%s, container=%s OK'
@@ -609,17 +583,17 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
 
         output = self.openio_admin(
             '--oio-account %s container check %s %s %s'
             % (self.account, self.container, missing_container,
                self.check_opts), expected_returncode=1)
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
     def test_container_check_with_missing_account(self):
         obj_meta, obj_chunks = self.create_object(
@@ -633,22 +607,22 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
 
         # Remove account
-        self.account_client.account_flush(self.account)
-        self.account_client.account_delete(self.account)
+        self.api.account_flush(self.account)
+        self.api.account_delete(self.account)
 
         # Check with missing account
         output = self.openio_admin(
             '--oio-account %s container check %s %s'
             % (self.account, self.container, self.check_opts),
             expected_returncode=1)
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
     def test_container_check_with_multiple_containers(self):
         obj_meta, obj_chunks = self.create_object(
@@ -664,21 +638,20 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
 
         # Create a second container
-        self.openio('--oio-account %s container create %s'
-                    % (self.account, second_container))
+        self.api.container_create(self.account, second_container)
 
         # Check only the first container
         output = self.openio_admin(
             '--oio-account %s container check %s %s'
             % (self.account, self.container, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         # Check two containers
         expected_items.append(
@@ -688,7 +661,7 @@ class ItemCheckTest(CliTestCase):
             '--oio-account %s container check %s %s %s'
             % (self.account, self.container, second_container,
                self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
     def test_object_check(self):
         obj_meta, obj_chunks = self.create_object(
@@ -702,18 +675,18 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
 
         # Check all items
         output = self.openio_admin(
             '--oio-account %s object check %s %s %s'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
     def test_object_check_with_cid(self):
         obj_meta, obj_chunks = self.create_object(
@@ -727,18 +700,18 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
 
         # Check all items
         container_id = cid_from_name(self.account, self.container)
         output = self.openio_admin(
             'object check --cid %s %s %s'
-            % (container_id, obj_meta['object'], self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+            % (container_id, self.obj_name, self.check_opts))
+        self.assert_list_output(expected_items, output)
 
     def test_object_check_with_object_version(self):
         obj_meta, obj_chunks = self.create_object(
@@ -752,35 +725,35 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
 
         # Check all items
         output = self.openio_admin(
             '--oio-account %s object check %s %s --object-version %s %s'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['version'], self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         # Enable versioning
-        output = self.openio(
-            '--oio-account %s container set %s --max-version -1'
-            % (self.account, self.container))
-        self.assertOutput('', output)
+        system = dict()
+        system['sys.m2.policy.version'] = '-1'
+        self.api.container_set_properties(
+            self.account, self.container, system=system)
 
         # Create a second version of the object
         second_version_meta, second_version_chunks = self.create_object(
-            self.account, self.container, obj_meta['object'])
+            self.account, self.container, self.obj_name)
 
         # Check first version
         output = self.openio_admin(
             '--oio-account %s object check %s %s --object-version %s %s'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['version'], self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         expected_items = list()
         expected_items.append('account account=%s OK' % self.account)
@@ -790,34 +763,34 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, second_version_meta['object'],
+            % (self.account, self.container, self.obj_name,
                second_version_meta['id'], second_version_meta['version']))
         for chunk in second_version_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
 
         # Check second version
         output = self.openio_admin(
             '--oio-account %s object check %s %s --object-version %s %s'
-            % (self.account, self.container, second_version_meta['object'],
+            % (self.account, self.container, self.obj_name,
                second_version_meta['version'], self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
 
         # Check all versions
         output = self.openio_admin(
             '--oio-account %s object check %s %s %s'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
     def test_object_check_with_auto(self):
         self.container, obj_meta, obj_chunks = self.create_object_auto(
@@ -831,18 +804,18 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
 
         # Check all items
         output = self.openio_admin(
             '--oio-account %s object check %s --auto --flat-bits %d %s'
-            % (self.account, obj_meta['object'], self.FLAT_BITS,
+            % (self.account, self.obj_name, self.FLAT_BITS,
                self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
     def test_object_with_depth(self):
         obj_meta, obj_chunks = self.create_object(
@@ -858,40 +831,40 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         output = self.openio_admin(
             '--oio-account %s object check %s %s --depth 0 %s'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         for chunk in obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
         output = self.openio_admin(
             '--oio-account %s object check %s %s --depth 1 %s'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         output = self.openio_admin(
             '--oio-account %s object check %s %s --depth 2 %s'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         output = self.openio_admin(
             '--oio-account %s object check %s %s --depth 3 %s'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         output = self.openio_admin(
             '--oio-account %s object check %s %s --depth 4 %s'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
     def test_object_check_with_checksum(self):
         obj_meta, obj_chunks = self.create_object(
@@ -905,49 +878,50 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
 
         # Check with checksum
         output = self.openio_admin(
             '--oio-account %s object check %s %s --checksum %s'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         # Corrupt the chunk
         corrupted_chunk = random.choice(obj_chunks)
-        self.corrupt_chunk(corrupted_chunk)
+        self.corrupt_chunk(corrupted_chunk['url'])
 
         # Check without checksum
         output = self.openio_admin(
             '--oio-account %s object check %s %s %s'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
-        expected_items.remove('chunk chunk=%s OK' % (corrupted_chunk))
-        expected_items.append('chunk chunk=%s error' % (corrupted_chunk))
+        expected_items.remove('chunk chunk=%s OK' % (corrupted_chunk['url']))
+        expected_items.append(
+            'chunk chunk=%s error' % (corrupted_chunk['url']))
         expected_items.remove(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s error'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
 
         # Check with checksum
         output = self.openio_admin(
             '--oio-account %s object check %s %s --checksum %s'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                self.check_opts), expected_returncode=1)
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
     def test_object_check_with_missing_chunk(self):
         obj_meta, obj_chunks = self.create_object(
@@ -963,25 +937,25 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s error'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
-            if chunk == missing_chunk:
+            if chunk['url'] == missing_chunk['url']:
                 status = 'error'
             else:
                 status = 'OK'
             expected_items.append(
-                'chunk chunk=%s %s' % (chunk, status))
+                'chunk chunk=%s %s' % (chunk['url'], status))
 
         # Delete chunk
-        self.blob_client.chunk_delete(missing_chunk)
+        self.api.blob_client.chunk_delete(missing_chunk['url'])
 
         # Check with missing chunk
         output = self.openio_admin(
             '--oio-account %s object check %s %s %s'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                self.check_opts), expected_returncode=1)
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
     def test_object_check_with_missing_object(self):
         obj_meta, obj_chunks = self.create_object(
@@ -1003,22 +977,22 @@ class ItemCheckTest(CliTestCase):
             '--oio-account %s object check %s %s %s'
             % (self.account, self.container, missing_obj, self.check_opts),
             expected_returncode=1)
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
 
         output = self.openio_admin(
             '--oio-account %s object check %s %s %s %s'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                missing_obj, self.check_opts), expected_returncode=1)
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
     def test_object_check_with_missing_container(self):
         obj_meta, obj_chunks = self.create_object(
@@ -1032,21 +1006,21 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
 
         # Remove container in account service
-        self.account_client.account_flush(self.account)
+        self.api.account_flush(self.account)
 
         # Check with missing container
         output = self.openio_admin(
             '--oio-account %s object check %s %s %s'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                self.check_opts), expected_returncode=1)
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
     def test_object_check_with_missing_account(self):
         obj_meta, obj_chunks = self.create_object(
@@ -1060,22 +1034,22 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
 
         # Remove account
-        self.account_client.account_flush(self.account)
-        self.account_client.account_delete(self.account)
+        self.api.account_flush(self.account)
+        self.api.account_delete(self.account)
 
         # Check with missing account
         output = self.openio_admin(
             '--oio-account %s object check %s %s %s'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                self.check_opts), expected_returncode=1)
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
     def test_object_check_with_multiple_objects(self):
         obj_meta, obj_chunks = self.create_object(
@@ -1091,11 +1065,11 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
 
         # Create a second object
         second_obj_meta, second_obj_chunks = self.create_object(
@@ -1104,25 +1078,27 @@ class ItemCheckTest(CliTestCase):
         # Check only the first object
         output = self.openio_admin(
             '--oio-account %s object check %s %s %s'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        self.assert_list_output(expected_items, output)
 
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, second_obj_meta['object'],
+            % (self.account, self.container, second_obj,
                second_obj_meta['id'], second_obj_meta['version']))
         for chunk in second_obj_chunks:
             expected_items.append(
-                'chunk chunk=%s OK' % (chunk))
+                'chunk chunk=%s OK' % (chunk['url']))
 
         # Check two objects
         output = self.openio_admin(
             '--oio-account %s object check %s %s %s %s'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                second_obj, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+        print(expected_items)
+        print(output)
+        self.assert_list_output(expected_items, output)
 
     def test_chunk_check(self):
         obj_meta, obj_chunks = self.create_object(
@@ -1138,15 +1114,15 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
-        expected_items.append('chunk chunk=%s OK' % (chunk))
+        expected_items.append('chunk chunk=%s OK' % (chunk['url']))
 
         # Check all items
         output = self.openio_admin(
             'chunk check %s %s'
-            % (chunk, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+            % (chunk['url'], self.check_opts))
+        self.assert_list_output(expected_items, output)
 
     def test_chunk_check_with_checksum(self):
         obj_meta, obj_chunks = self.create_object(
@@ -1162,33 +1138,33 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
-        expected_items.append('chunk chunk=%s OK' % (chunk))
+        expected_items.append('chunk chunk=%s OK' % (chunk['url']))
 
         # Check with checksum
         output = self.openio_admin(
             'chunk check %s --checksum %s'
-            % (chunk, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+            % (chunk['url'], self.check_opts))
+        self.assert_list_output(expected_items, output)
 
         # Corrupt the chunk
-        self.corrupt_chunk(chunk)
+        self.corrupt_chunk(chunk['url'])
 
         # Check without checksum
         output = self.openio_admin(
             'chunk check %s %s'
-            % (chunk, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+            % (chunk['url'], self.check_opts))
+        self.assert_list_output(expected_items, output)
 
-        expected_items.remove('chunk chunk=%s OK' % (chunk))
-        expected_items.append('chunk chunk=%s error' % (chunk))
+        expected_items.remove('chunk chunk=%s OK' % (chunk['url']))
+        expected_items.append('chunk chunk=%s error' % (chunk['url']))
 
         # Check with checksum
         output = self.openio_admin(
             'chunk check %s --checksum %s'
-            % (chunk, self.check_opts), expected_returncode=1)
-        self.assertCheckOutput(expected_items, output)
+            % (chunk['url'], self.check_opts), expected_returncode=1)
+        self.assert_list_output(expected_items, output)
 
     def test_chunk_check_with_missing_chunk(self):
         obj_meta, obj_chunks = self.create_object(
@@ -1204,22 +1180,23 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
-        expected_items.append('chunk chunk=%s error' % missing_chunk)
+        expected_items.append('chunk chunk=%s error' % missing_chunk['url'])
 
         # Prevent the events
         self._service('@event', 'stop', wait=3)
 
         try:
             # Delete chunk
-            self.blob_client.chunk_delete(missing_chunk)
+            self.api.blob_client.chunk_delete(missing_chunk['url'])
 
             # Check with missing chunk
             output = self.openio_admin(
                 'chunk check %s %s'
-                % (missing_chunk, self.check_opts), expected_returncode=1)
-            self.assertCheckOutput(expected_items, output)
+                % (missing_chunk['url'], self.check_opts),
+                expected_returncode=1)
+            self.assert_list_output(expected_items, output)
         finally:
             self._service('@event', 'start', wait=3)
 
@@ -1237,24 +1214,22 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s error'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
-        expected_items.append('chunk chunk=%s error' % (chunk))
+        expected_items.append('chunk chunk=%s error' % (chunk['url']))
 
         # Prevent the deletion of chunks
         self._service('@event', 'stop', wait=3)
 
         try:
             # Delete object
-            self.openio(
-                '--oio-account %s object delete %s %s'
-                % (self.account, self.container, obj_meta['object']))
+            self.api.object_delete(self.account, self.container, self.obj_name)
 
             # Check with missing object
             output = self.openio_admin(
                 'chunk check %s %s'
-                % (chunk, self.check_opts), expected_returncode=1)
-            self.assertCheckOutput(expected_items, output)
+                % (chunk['url'], self.check_opts), expected_returncode=1)
+            self.assert_list_output(expected_items, output)
         finally:
             self._service('@event', 'start', wait=3)
 
@@ -1272,18 +1247,18 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
-        expected_items.append('chunk chunk=%s OK' % (chunk))
+        expected_items.append('chunk chunk=%s OK' % (chunk['url']))
 
         # Remove container in account service
-        self.account_client.account_flush(self.account)
+        self.api.account_flush(self.account)
 
         # Check with missing container
         output = self.openio_admin(
             'chunk check %s %s'
-            % (chunk, self.check_opts), expected_returncode=1)
-        self.assertCheckOutput(expected_items, output)
+            % (chunk['url'], self.check_opts), expected_returncode=1)
+        self.assert_list_output(expected_items, output)
 
     def test_chunk_check_with_missing_account(self):
         obj_meta, obj_chunks = self.create_object(
@@ -1299,19 +1274,18 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
-        expected_items.append('chunk chunk=%s OK' % (chunk))
-
+        expected_items.append('chunk chunk=%s OK' % (chunk['url']))
         # Remove account
-        self.account_client.account_flush(self.account)
-        self.account_client.account_delete(self.account)
+        self.api.account_flush(self.account)
+        self.api.account_delete(self.account)
 
         # Check with missing account
         output = self.openio_admin(
             'chunk check %s %s'
-            % (chunk, self.check_opts), expected_returncode=1)
-        self.assertCheckOutput(expected_items, output)
+            % (chunk['url'], self.check_opts), expected_returncode=1)
+        self.assert_list_output(expected_items, output)
 
     def test_chunk_check_with_multiple_objects(self):
         obj_meta, obj_chunks = self.create_object(
@@ -1328,9 +1302,9 @@ class ItemCheckTest(CliTestCase):
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, obj_meta['object'],
+            % (self.account, self.container, self.obj_name,
                obj_meta['id'], obj_meta['version']))
-        expected_items.append('chunk chunk=%s OK' % (chunk))
+        expected_items.append('chunk chunk=%s OK' % (chunk['url']))
 
         # Create a second object
         second_obj_meta, second_obj_chunks = self.create_object(
@@ -1340,18 +1314,18 @@ class ItemCheckTest(CliTestCase):
         # Check only the first object
         output = self.openio_admin(
             'chunk check %s %s'
-            % (chunk, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+            % (chunk['url'], self.check_opts))
+        self.assert_list_output(expected_items, output)
 
         expected_items.append(
             'object account=%s, container=%s, obj=%s, content_id=%s, '
             'version=%s OK'
-            % (self.account, self.container, second_obj_meta['object'],
+            % (self.account, self.container, second_obj,
                second_obj_meta['id'], second_obj_meta['version']))
-        expected_items.append('chunk chunk=%s OK' % (second_chunk))
+        expected_items.append('chunk chunk=%s OK' % (second_chunk['url']))
 
         # Check two objects
         output = self.openio_admin(
             'chunk check %s %s %s'
-            % (chunk, second_chunk, self.check_opts))
-        self.assertCheckOutput(expected_items, output)
+            % (chunk['url'], second_chunk['url'], self.check_opts))
+        self.assert_list_output(expected_items, output)

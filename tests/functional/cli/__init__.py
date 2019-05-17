@@ -97,6 +97,11 @@ class CliTestCase(BaseTestCase):
         if expected != actual:
             raise Exception("'" + expected + "' != '" + actual + "'")
 
+    def assert_list_output(self, expected_list, actual_output):
+        self.assertListEqual(
+            sorted(expected_list),
+            sorted(actual_output.rstrip('\n').split('\n')))
+
     def assert_show_fields(self, items, fields):
         for item in items:
             self.assertIn(item, fields)
