@@ -555,6 +555,12 @@ sqlx_sync_awget_siblings (struct sqlx_sync_s *ss, const char *path,
 #endif
 }
 
+int
+sqlx_sync_uses_handle(struct sqlx_sync_s *ss, zhandle_t *zh)
+{
+	return ss? ss->zh == zh: FALSE;
+}
+
 /* -------------------------------------------------------------------------- */
 
 static void _direct_destroy (struct sqlx_peering_s *self);

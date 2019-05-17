@@ -105,6 +105,10 @@ void sqlx_sync_set_prefix(struct sqlx_sync_s *ss, const gchar *prefix);
 
 void sqlx_sync_set_hash(struct sqlx_sync_s *ss, guint witdth, guint depth);
 
+/** Tell if the current synchronizer handle is using the specified
+ * Zookeeper handle. */
+int sqlx_sync_uses_handle(struct sqlx_sync_s *ss, zhandle_t *zh);
+
 /* -------------------------------------------------------------------------- */
 
 struct sqlx_name_s;
