@@ -1380,7 +1380,7 @@ election_manager_whatabout (struct election_manager_s *m,
 /* --- Zookeeper callbacks ----------------------------------------------------
  * All of them are called from the zookeeper's thread.
  * We chose to set the election manager in a thread-local slot because ZK
- * contexts for callbackks currently (3.4.6) require that no memory is
+ * contexts for callbacks currently (3.4.6) require that no memory is
  * allocated, especially because of a memory leak on discarded clone watchers.
  * We are forced to pass an integer cast into pointer so that watchers can use
  * them to recover the right election.
@@ -1758,6 +1758,32 @@ _find_member (struct election_manager_s *M, const char *path, guint gen)
 	return NULL;
 }
 
+/* Reset the election members that are in the specified step and
+ * are using the specified Zookeeper handle (it is not necessarily
+ * the case since we use multiple Zookeeper connections). */
+static guint
+_reset_matching_members(struct election_manager_s *M, zhandle_t *zh,
+		enum election_step_e step)
+{
+	guint count = 0;
+	_manager_lock(M);
+	struct deque_beacon_s *beacon = M->members_by_state + step;
+	struct election_member_s *member = beacon->front;
+	while (member != NULL) {
+		if (step == member->step && sqlx_sync_uses_handle(member->sync, zh)) {
+			count++;
+			member_reset(member);
+			member_log_change(member, EVT_DISCONNECTED,
+					member_set_status(member, STEP_NONE));
+			member = beacon->front;
+		} else {
+			member = member->next;
+		}
+	}
+	_manager_unlock(M);
+	return count;
+}
+
 /* @private */
 struct deferred_watcher_context_s
 {
@@ -1766,6 +1792,9 @@ struct deferred_watcher_context_s
 	int state;
 	guint gen;
 	enum event_type_e evt;
+	/* Zookeeper handle from which the callback originates. It is used
+	 * to match members when no 'path' is provided to the callback. */
+	zhandle_t *zh;
 	char path[];
 };
 
@@ -1785,16 +1814,35 @@ deferred_watch_COMMON(struct deferred_watcher_context_s *d,
 			member_reset(member);
 			member_log_change(member, EVT_DISCONNECTED,
 					member_set_status(member, STEP_NONE));
+		// Not under lock but it's just a read operation
+		} else if (M->members_by_state[STEP_MASTER].count > 0) {
+#if ZOO_MAJOR_VERSION > 3 || (ZOO_MAJOR_VERSION == 3 && ZOO_MINOR_VERSION >= 5)
+			GRID_WARN("Got ZK session event for an unknown election, "
+					"resetting all local elections using %s and "
+					"currently in MASTER state",
+					zoo_get_current_server(d->zh));
+#else
+			GRID_WARN("Got ZK session event for an unknown election, "
+					"resetting all local elections using %p and "
+					"currently in MASTER state",
+					d->zh);
+#endif
+			guint reset = _reset_matching_members(M, d->zh, STEP_MASTER);
+			GRID_WARN("%u MASTER elections reset", reset);
+		} else {
+			GRID_DEBUG("Got ZK session event for an unknown election, "
+					"but we already stopped all MASTER elections.");
 		}
-		/* We cannot run all the election and reset everything, because we
-		 * introduced a sharding of the elections across several ZK clusters
-		 * and the problem concerns only one cluster */
 	} else if (d->type == ZOO_DELETED_EVENT) {
 		struct election_member_s *member = _find_member(M, d->path, d->gen);
 		if (member != NULL) {
 			transition(member, d->evt, NULL);
 			member_unref(member);
 			member_unlock(member);
+		} else {
+			GRID_WARN("Got %s event for an unknown member, "
+					"check for 'double master' situations!",
+					_evt2str(d->evt));
 		}
 	}
 
@@ -1802,7 +1850,7 @@ deferred_watch_COMMON(struct deferred_watcher_context_s *d,
 }
 
 static void
-watch_COMMON(const int type, const int state,
+watch_COMMON(zhandle_t *h, const int type, const int state,
 		const char *path, void *d, const int evt)
 {
 	if (type != ZOO_SESSION_EVENT && type != ZOO_DELETED_EVENT)
@@ -1821,6 +1869,7 @@ watch_COMMON(const int type, const int state,
 	ctx->state = state;
 	ctx->gen = GPOINTER_TO_UINT(d);
 	ctx->evt = evt;
+	ctx->zh = h;
 	if (slash && len)
 		memcpy(ctx->path, slash, len);
 
@@ -1829,21 +1878,22 @@ watch_COMMON(const int type, const int state,
 }
 
 static void
-watch_MASTER(zhandle_t *h UNUSED, int type, int state, const char *path, void *d)
+watch_MASTER(zhandle_t *h, int type, int state, const char *path, void *d)
 {
-	return watch_COMMON(type, state, path, d, EVT_LEFT_MASTER);
+	return watch_COMMON(h, type, state, path, d, EVT_LEFT_MASTER);
 }
 
 static void
-watch_SELF(zhandle_t *h UNUSED, int type, int state, const char *path, void *d)
+watch_SELF(zhandle_t *h, int type, int state, const char *path, void *d)
 {
-	return watch_COMMON(type, state, path, d, EVT_LEFT_SELF);
+	return watch_COMMON(h, type, state, path, d, EVT_LEFT_SELF);
 }
 
 static void
 _completion_router(gpointer p, struct election_manager_s *M)
 {
 	oio_ext_set_deadline(oio_ext_monotonic_time() + 2 * G_TIME_SPAN_SECOND);
+	oio_ext_set_prefixed_random_reqid("zk-comp-");
 
 	switch (*((enum deferred_action_type_e*)p)) {
 		case DAT_CREATING:
