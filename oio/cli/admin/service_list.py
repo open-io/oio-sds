@@ -166,7 +166,9 @@ class Meta2ListContainers(ServiceListCommand):
         reqid = self.app.request_id(self.reqid_prefix)
         resp = self.rdir.meta2_index_fetch(meta2, reqid=reqid, **kwargs)
         for item in resp.get('records'):
-            yield item['container_url']
+            # Get rid of the namespace name
+            res = item['container_url'].split('/', 1)[1]
+            yield res
 
     def _take_action(self, parsed_args):
         kwargs = {}
