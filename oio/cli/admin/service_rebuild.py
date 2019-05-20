@@ -93,7 +93,8 @@ The beanstalkd tube to use to send the items to rebuild. (default=%s)
 
 class Meta1Rebuild(ServiceRebuildCommand):
     """
-    Rebuild meta1 databases by setting 'last_rebuild' property in admin table,
+    Rebuild meta1 databases.
+    To rebuild, the 'last_rebuild' property is set in admin table,
     thus triggering a replication. And print the failed container IDs.
     """
 
@@ -115,9 +116,10 @@ class Meta1Rebuild(ServiceRebuildCommand):
 
 class Meta2Rebuild(SingleServiceCommandMixin, ServiceRebuildCommand):
     """
-    Rebuild meta2 databases by setting 'last_rebuild'
-    property in admin table, thus triggering a replication.
-    And print the failed container IDs.
+    Rebuild meta2 databases that were on the specified volume.
+    The steps of the rebuilding:
+    rebuild all missing, lost bases ;
+    synchronize the bases.
     """
 
     columns = ('Reference', 'Status', 'Errors')
@@ -214,9 +216,9 @@ class RawxRebuildCommand(SingleServiceCommandMixin, ServiceRebuildCommand):
 
 class RawxRebuild(RawxRebuildCommand):
     """
-    Rebuild chunks that were on the specified volume. It is necessary to
-    declare an incident (with 'openio volume admin incident') before running
-    this command.
+    Rebuild chunks that were on the specified volume.
+    It is necessary to declare an incident (with 'openio volume admin
+    incident') before running this command.
     """
 
 
@@ -233,7 +235,6 @@ class RawxDistributedRebuild(RawxRebuildCommand):
 class AccountServiceRebuild(ServiceRebuildCommand):
     """
     Rebuild account services.
-
     The steps of the rebuilding:
     recompute the counter of all accounts ;
     refresh the counter of all containers.
