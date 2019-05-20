@@ -188,6 +188,26 @@ ec_tests () {
 	sleep 0.5
 }
 
+test_zookeeper_failure() {
+	openio container create test_zookeeper_failure
+	openio election debug meta2 test_zookeeper_failure
+
+	date "+%s.%N"
+	echo "Simulating a Zookeeper outage"
+	# Old systemd versions do not recognize --value, whence the eval hack
+	#MainPID=$(sudo systemctl show -p MainPID --value zookeeper)
+	eval $(sudo systemctl show -p MainPID zookeeper)
+	sudo kill -STOP $MainPID
+	openio election debug meta2 test_zookeeper_failure
+	sleep 11
+	sudo kill -CONT $MainPID
+
+	openio election debug meta2 test_zookeeper_failure
+	openio container locate test_zookeeper_failure
+	openio election debug meta2 test_zookeeper_failure
+	openio container delete test_zookeeper_failure
+}
+
 func_tests () {
 	randomize_env
 	# Some functional tests require events to be preserved after being handled
@@ -215,6 +235,7 @@ func_tests () {
 	if is_running_test_suite "repli"; then
 		oio-check-directory ${OIO_NS} meta0 meta1 dir rdir
 		oio-check-master --oio-account $OIO_USER --oio-ns $OIO_NS $CNAME
+		test_zookeeper_failure
 	fi
 
 	# At least spawn one oio-crawler-integrity on a container that exists
