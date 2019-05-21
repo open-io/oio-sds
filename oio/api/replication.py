@@ -105,7 +105,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                         if len(data) == 0:
                             for conn in current_conns:
                                 if not conn.failed:
-                                    conn.queue.put('0\r\n\r\n')
+                                    conn.queue.put('')
                             break
                     self.checksum.update(data)
                     if meta_checksum:
@@ -114,7 +114,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                     # copy current_conns to be able to remove a failed conn
                     for conn in current_conns[:]:
                         if not conn.failed:
-                            conn.queue.put('%x\r\n%s\r\n' % (len(data), data))
+                            conn.queue.put(data)
                         else:
                             current_conns.remove(conn)
                             failed_chunks.append(conn.chunk)
@@ -178,6 +178,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
             with green.ConnectionTimeout(self.connection_timeout):
                 conn = io.http_connect(
                     parsed.netloc, 'PUT', parsed.path, hdrs)
+                conn.set_cork(True)
                 conn.chunk = chunk
             return conn, chunk
         except (SocketError, Timeout) as err:
@@ -200,7 +201,12 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
             if not conn.failed:
                 try:
                     with green.ChunkWriteTimeout(self.write_timeout):
+                        conn.send('%x\r\n' % len(data))
                         conn.send(data)
+                        conn.send('\r\n')
+                    if not data:
+                        # Last segment sent, disable TCP_CORK to flush buffers
+                        conn.set_cork(False)
                 except (Exception, green.ChunkWriteTimeout) as err:
                     conn.failed = True
                     conn.chunk['error'] = str(err)
