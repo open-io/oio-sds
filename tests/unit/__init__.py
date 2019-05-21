@@ -27,6 +27,9 @@ def set_http_requests(cb):
             self.req = req
             self.resp = None
 
+        def set_cork(self, enabled=False):
+            pass
+
         def getresponse(self):
             self.resp = cb(self.req)
             return self.resp
@@ -120,6 +123,9 @@ def fake_http_connect(*status_iter, **kwargs):
         def send(self, data):
             if self.cb_body:
                 self.cb_body(self.conn_id, data)
+
+        def set_cork(self, enabled=False):
+            pass
 
         def close(self):
             self.closed = True

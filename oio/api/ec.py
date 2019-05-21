@@ -582,6 +582,7 @@ class EcChunkWriter(object):
                 connection_timeout or io.CONNECTION_TIMEOUT):
             conn = io.http_connect(
                 parsed.netloc, 'PUT', parsed.path, hdrs)
+            conn.set_cork(True)
             conn.chunk = chunk
         return cls(chunk, conn, write_timeout=write_timeout,
                    reqid=reqid, **kwargs)
@@ -598,11 +599,11 @@ class EcChunkWriter(object):
             # use HTTP transfer encoding chunked
             # to write data to RAWX
             if not self.failed:
-                # format the chunk
-                to_send = "%x\r\n%s\r\n" % (len(data), data)
                 try:
                     with green.ChunkWriteTimeout(self.write_timeout):
-                        self.conn.send(to_send)
+                        self.conn.send("%x\r\n" % len(data))
+                        self.conn.send(data)
+                        self.conn.send("\r\n")
                         self.bytes_transferred += len(data)
                 except (Exception, green.ChunkWriteTimeout) as exc:
                     self.failed = True
@@ -645,6 +646,8 @@ class EcChunkWriter(object):
         parts.append('\r\n')
         to_send = "".join(parts)
         self.conn.send(to_send)
+        # Last segment sent, disable TCP_CORK to flush buffers
+        self.conn.set_cork(False)
 
     def getresponse(self):
         """Read the HTTP response from the connection"""
