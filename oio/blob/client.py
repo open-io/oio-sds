@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -20,6 +20,7 @@ import random
 from functools import wraps
 from urllib import unquote
 
+from oio.common.logger import get_logger
 from oio.common.http_urllib3 import get_pool_manager, \
     oio_exception_from_httperror, urllib3
 from oio.common import exceptions as exc, utils
@@ -29,7 +30,7 @@ from oio.common.decorators import ensure_headers, ensure_request_id
 from oio.api.io import ChunkReader
 from oio.api.replication import ReplicatedMetachunkWriter, FakeChecksum
 from oio.common.storage_method import STORAGE_METHODS
-from oio.blob.cache import ServiceCache
+from oio.conscience.client import ConscienceClient
 
 CHUNK_TIMEOUT = 60
 READ_BUFFER_SIZE = 65535
@@ -80,14 +81,20 @@ def update_rawx_perfdata(func):
 class BlobClient(object):
     """A low-level client to rawx services."""
 
-    def __init__(self, conf=None, connection_pool=None, perfdata=None,
-                 **kwargs):
-        self.http_pool = connection_pool or get_pool_manager(**kwargs)
+    def __init__(self, conf=None, perfdata=None,
+                 logger=None, connection_pool=None, **kwargs):
+        self.conf = conf
         self.perfdata = perfdata
-        self.cache = ServiceCache(conf, self.http_pool)
+
+        self.logger = logger or get_logger(self.conf)
+        # FIXME(FVE): we do not target the same set of services,
+        # we should use a separate connection pool for rawx services.
+        self.http_pool = connection_pool or get_pool_manager(**kwargs)
+        self.conscience_client = ConscienceClient(conf, logger=self.logger,
+                                                  pool_manager=self.http_pool)
 
     def resolve_url(self, url):
-        return self.cache.resolve(url)
+        return self.conscience_client.resolve_url('rawx', url)
 
     @update_rawx_perfdata
     @ensure_request_id

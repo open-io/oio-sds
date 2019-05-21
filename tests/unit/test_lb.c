@@ -286,71 +286,16 @@ _world_from_file(const char *src_file)
 	GRID_DEBUG("Loading LB world from %s", src_file);
 
 	struct oio_lb_world_s *world = oio_lb_local__create_world();
-	oio_lb_world__create_slot(world, "*");
-
-	GError *err = NULL;
-	gchar *file_contents = NULL;
-	if (!g_file_get_contents(src_file, &file_contents, NULL, &err)) {
-		GRID_ERROR("Failed to read file %s: (%d) %s",
-				src_file, err->code, err->message);
-		g_assert_not_reached();
-	}
-
-	struct oio_lb_item_s *srv = g_alloca(sizeof(struct oio_lb_item_s));
-	gchar **lines = g_strsplit(file_contents, "\n", -1);
-	for (gchar **line = lines; lines && *line; line++) {
-		*line = g_strstrip(*line);
-		if (*line[0] == '#') {
-			GRID_DEBUG("Ignoring line [%s]", *line);
-			continue;
-		}
-		char **id_loc = g_strsplit(*line, " ", 4);
-		guint elements = g_strv_length(id_loc);
-		if (elements > 0) {
-			memset(srv, 0, sizeof(struct oio_lb_item_s));
-			strcpy(srv->id, id_loc[0]);
-
-			if (elements > 1) {
-				srv->location = location_from_dotted_string(id_loc[1]);
-			} else {
-				addr_info_t ai = {{0}, 0, 0};
-				grid_string_to_addrinfo(id_loc[0], &ai);
-				srv->location = location_from_addr_info(&ai);
-			}
-
-			if (elements > 2)
-				srv->weight = atoi(id_loc[2]);
-			else
-				srv->weight = 80;
-			GRID_TRACE("Built service id=%s,location=%lu,weight=%d",
-					srv->id, srv->location, srv->weight);
-			oio_lb_world__feed_slot(world, "*", srv);
-
-			if (elements > 3) {
-				oio_lb_world__create_slot(world, id_loc[3]);
-				oio_lb_world__feed_slot(world, id_loc[3], srv);
-			}
-		} else {
-			GRID_DEBUG("Ignoring line [%s]", *line);
-		}
-		g_strfreev(id_loc);
-	}
-	oio_lb_world__purge_old_generations(world);
-
-	g_strfreev(lines);
-	g_free(file_contents);
+	GError *err = oio_lb_world__feed_from_file(world, "*", src_file);
+	g_assert_no_error(err);
 
 	return world;
 }
 
-// FIXME(FVE): autodetect if is_balanced
-static void
-_test_repartition_by_loc_level(struct oio_lb_world_s *world,
-		int targets, int shots, gboolean is_balanced)
+static struct oio_lb_pool_s *
+_create_test_pool(struct oio_lb_world_s *world,
+		int targets, gboolean is_balanced)
 {
-	int unbalanced = 0;
-
-	/* create a pool and poll it */
 	struct oio_lb_pool_s *pool = oio_lb_world__create_pool(world, "pool-test");
 	guint n_slots = oio_lb_world__count_slots(world) - 1;
 	if (is_balanced && n_slots > 1) {
@@ -373,113 +318,36 @@ _test_repartition_by_loc_level(struct oio_lb_world_s *world,
 			oio_lb_world__add_pool_target(pool, target);
 		}
 	}
+	return pool;
+}
+
+// FIXME(FVE): autodetect if is_balanced
+static void
+_test_repartition_by_loc_level(struct oio_lb_world_s *world,
+		int targets, int shots, gboolean is_balanced)
+{
+	int unbalanced = 0;
+
+	/* create a pool and poll it */
+	struct oio_lb_pool_s *pool = _create_test_pool(
+			world, targets, is_balanced);
+
 	GString *pool_dump = oio_lb_world__dump_pool_options(pool);
 	GRID_INFO("Using pool: %s", pool_dump->str);
 	g_string_free(pool_dump, TRUE);
 
 	oio_lb_world__debug(world);
 
-	int services = oio_lb_world__count_items(world);
-	// int counts[services];
-	// memset(counts, 0, services * sizeof(int));
 	GHashTable *counts = g_hash_table_new_full(
 			g_str_hash, g_str_equal, g_free, NULL);
-	for (int i = 0; i < shots; i++) {
-		GData *count_by_level_by_host[4];
-		for (int j = 1; j < 4; j++) {
-			g_datalist_init(&count_by_level_by_host[j]);
-		}
-		guint count = 0;
-		void _on_item(struct oio_lb_selected_item_s *sel, gpointer u UNUSED) {
-			GRID_TRACE("Polled %s/%"OIO_LOC_FORMAT,
-					sel->item->id, sel->item->location);
-			++count;
-			// Count how many times an "area" is selected, for each area level.
-			for (int j = 1; j < 4; j++) {
-				GQuark host_key = key_from_loc_level(sel->item->location, j);
-				GData **datalist = &count_by_level_by_host[j];
-				guint32 host_count = GPOINTER_TO_UINT(
-						g_datalist_id_get_data(datalist, host_key));
-				host_count++;
-				g_datalist_id_set_data(datalist,
-						host_key, GUINT_TO_POINTER(host_count));
-			}
-			gint icount = 1 + GPOINTER_TO_INT(
-					g_hash_table_lookup(counts, sel->item->id));
-			g_hash_table_replace(counts,
-					g_strdup(sel->item->id), GINT_TO_POINTER(icount));
-		}
-		GError *err = oio_lb_pool__poll(pool, NULL, _on_item, NULL);
-		g_assert_no_error(err);
-		g_assert_cmpuint(count, ==, targets);
-
-		guint32 min[4] = {G_MAXUINT32, G_MAXUINT32, G_MAXUINT32, G_MAXUINT32};
-		guint32 max[4] = {0, 0, 0, 0};
-		for (int j = 1; j < 4; j++) {
-			void _set_min_max(GQuark k UNUSED, gpointer data, gpointer u UNUSED)
-			{
-				guint32 host_count = GPOINTER_TO_UINT(data);
-				if (host_count > max[j])
-					max[j] = host_count;
-				if (host_count < min[j])
-					min[j] = host_count;
-			}
-			GData **datalist = &count_by_level_by_host[j];
-			g_datalist_foreach(datalist, (GDataForeachFunc)_set_min_max, NULL);
-			GRID_DEBUG("For level %d, min=%u, max=%u", j, min[j], max[j]);
-		}
-		for (int j = 1; j < 4; j++) {
-			if (max[j] - min[j] > 1) {
-				GRID_DEBUG("Unbalanced situation at level %d at iteration %d: "
-						"min=%u, max=%u",
-						j, i, min[j], max[j]);
-				unbalanced++;
-				break;
-			}
-		}
-		for (int j = 1; j < 4; j++)
-			g_datalist_clear(&count_by_level_by_host[j]);
-	}
+	oio_lb_pool__poll_many(pool, shots, counts, &unbalanced);
 	GRID_INFO("%d unbalanced situations on %d shots", unbalanced, shots);
 
 	if (is_balanced)
 		g_assert_cmpint(unbalanced, ==, 0);
-
-	int ideal_count = targets * shots / services;
-	int acceptable_deviation_percent = 20;
-	int min_count = ideal_count * (100 - acceptable_deviation_percent) / 100;
-	int max_count = ideal_count * (100 + acceptable_deviation_percent) / 100;
-	int over_selected = 0;
-	int under_selected = 0;
-
-	void _on_item_check(const char *id, gpointer pcount, gpointer d UNUSED) {
-		gint count = GPOINTER_TO_INT(pcount);
-		double deviation_percent =
-				count*100.0f/(float)ideal_count - 100.0f;
-		if (count < min_count || count > max_count) {
-			GRID_WARN("service %s chosen %d times "
-					"(min/ideal/max/diff: %d/%d/%d/%+2.2f%%)",
-					id, count, min_count, ideal_count, max_count,
-					deviation_percent);
-			if (count < min_count)
-				under_selected++;
-			else
-				over_selected++;
-		} else {
-			GRID_DEBUG("service %s chosen %d times "
-					"(min/ideal/max/diff: %d/%d/%d/%+2.2f%%)",
-					id, count, min_count, ideal_count, max_count,
-					deviation_percent);
-		}
-	}
-	g_hash_table_foreach(counts, (GHFunc)_on_item_check, NULL);
+	oio_lb_world__check_repartition(world, targets, shots, counts);
 
 	g_hash_table_destroy(counts);
-
-	if (over_selected)
-		GRID_WARN("%d/%d services over selected", over_selected, services);
-	if (under_selected)
-		GRID_WARN("%d/%d services under selected", under_selected, services);
 	oio_lb_pool__destroy(pool);
 }
 

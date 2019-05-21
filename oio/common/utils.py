@@ -352,3 +352,13 @@ def timeout_to_deadline(timeout, now=None):
     if now is None:
         now = monotonic_time()
     return now + timeout
+
+
+def set_deadline_from_read_timeout(kwargs, force=False):
+    """
+    Compute a deadline from a read timeout, and set it in a keyword
+    argument dictionary if there is none (or `force` is set).
+    """
+    to = kwargs.get('read_timeout')
+    if to is not None and (force or 'deadline' not in kwargs):
+        kwargs['deadline'] = timeout_to_deadline(to)

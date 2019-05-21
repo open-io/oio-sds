@@ -280,6 +280,7 @@ class ClusterWait(lister.Lister):
         min_score = parsed_args.score
         delay = parsed_args.delay
         deadline = now() + delay
+        descr = []
         exc_msg = ("Timeout ({0}s) while waiting for the services to get a "
                    "score >= {1}, still {2} are not.")
 
@@ -290,7 +291,13 @@ class ClusterWait(lister.Lister):
 
         def check_deadline():
             if now() > deadline:
-                raise Exception(exc_msg.format(delay, min_score, ko))
+                msg = exc_msg.format(delay, min_score, ko)
+                for srv in descr:
+                    if srv['score'] < min_score:
+                        self.log.warn(
+                            "%s %s %s",
+                            srv['type'], srv['id'], srv['score'])
+                raise Exception(msg)
 
         while True:
             descr = []

@@ -85,6 +85,15 @@ test_oio_file_tool () {
 	if [ "$DIFF" != "" ] ; then exit 1; fi
 }
 
+test_oio_lb_benchmark() {
+	# This is to test the tool, not the various datasets or pool
+	# configurations. The datasets are tested by tests/unit/test_lb.
+	${WRKDIR}/tools/oio-lb-benchmark -O iterations=1000 \
+		"${SRCDIR}/tests/datasets/lb-3-5-4.txt" "6,rawx;min_dist=2" \
+		2> lb-benchmark.log
+	if [ $(grep -qv 'no service polled from' lb-benchmark.log) ]; then exit 1; fi
+}
+
 test_proxy_forward () {
 	proxy=$(oio-test-config.py -t proxy -1)
 
@@ -149,6 +158,26 @@ ec_tests () {
 	sleep 0.5
 }
 
+test_zookeeper_failure() {
+	openio container create test_zookeeper_failure
+	openio election debug meta2 test_zookeeper_failure
+
+	date "+%s.%N"
+	echo "Simulating a Zookeeper outage"
+	# Old systemd versions do not recognize --value, whence the eval hack
+	#MainPID=$(sudo systemctl show -p MainPID --value zookeeper)
+	eval $(sudo systemctl show -p MainPID zookeeper)
+	sudo kill -STOP $MainPID
+	openio election debug meta2 test_zookeeper_failure
+	sleep 11
+	sudo kill -CONT $MainPID
+
+	openio election debug meta2 test_zookeeper_failure
+	openio container locate test_zookeeper_failure
+	openio election debug meta2 test_zookeeper_failure
+	openio container delete test_zookeeper_failure
+}
+
 func_tests () {
 	randomize_env
 	# Some functional tests require events to be preserved after being handled
@@ -184,6 +213,7 @@ func_tests () {
 		${PYTHON} ${ADMIN_CLI} meta1 check
 		${PYTHON} ${ADMIN_CLI} directory check
 		${PYTHON} $(command -v oio-check-master) --oio-account $OIO_USER --oio-ns $OIO_NS $CNAME
+		test_zookeeper_failure
 	fi
 	${PYTHON} ${ADMIN_CLI} rdir check
 
@@ -252,6 +282,10 @@ test_cli () {
 
 	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
 	sleep 0.5
+
+	# This is tested here because we do not need to test it several times,
+	# and for some reason it cannot run with unit tests.
+	test_oio_lb_benchmark
 }
 
 func_tests_rebuilder_mover () {
@@ -277,7 +311,7 @@ func_tests_rebuilder_mover () {
 				count=$(shuf -i 1-2000 -n 1) 2> /dev/null
 		echo "object create container-${RANDOM} /tmp/openio_object_$i" \
 				"--name object-${RANDOM} -f value"
-	done | ${PYTHON} $(which openio)
+	done | ${PYTHON} $(command -v openio)
 
 	if [ -n "${REBUILDER}" ]; then
 		${SRCDIR}/tools/oio-test-rebuilder.sh -n "${OIO_NS}"

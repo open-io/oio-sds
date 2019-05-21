@@ -243,16 +243,25 @@ void oio_ext_set_reqid (const char *reqid) {
 		g_strlcpy(l->reqid, reqid, sizeof(l->reqid));
 }
 
-void oio_ext_set_random_reqid (void) {
+void oio_ext_set_random_reqid(void) {
+	oio_ext_set_prefixed_random_reqid(NULL);
+}
+
+void oio_ext_set_prefixed_random_reqid(const char *prefix) {
 	struct {
 		pid_t pid:16;
 		guint8 buf[14];
 	} bulk;
 	bulk.pid = getpid();
-	oio_buf_randomize(bulk.buf, sizeof(bulk.buf));
 
 	char hex[33];
-	oio_str_bin2hex((guint8*)&bulk, sizeof(bulk), hex, sizeof(hex));
+	size_t plen = 0;
+	if (prefix != NULL) {
+		plen = MIN(strlen(prefix), 16);
+		strncpy(hex, prefix, plen);
+	}
+	oio_buf_randomize(bulk.buf, sizeof(bulk.buf) - plen/2);
+	oio_str_bin2hex((guint8*)&bulk, sizeof(bulk), hex+plen, sizeof(hex) - plen);
 	oio_ext_set_reqid(hex);
 }
 
