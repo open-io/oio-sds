@@ -337,6 +337,8 @@ set(ZK_INCLUDE_DIRS "${DEFAULT_INCLUDE_DIRS}/zookeeper")
 pkg_search_module(JSONC json json-c)
 pkg_check_modules(GLIB2 REQUIRED glib-2.0 gthread-2.0 gmodule-2.0)
 pkg_check_modules(CURL curl libcurl)
+pkg_check_modules(PYTHON REQUIRED python)
+pkg_check_modules(EC REQUIRED erasurecode-1)
 
 if (NOT SDK_ONLY)
 pkg_check_modules(APR REQUIRED apr-1)
@@ -417,6 +419,7 @@ link_directories(${GLIB2_LIBRARY_DIRS})
 
 add_subdirectory(./core)
 add_subdirectory(./tests/unit)
+add_subdirectory(./ecp)
 
 if (NOT SDK_ONLY)
 add_subdirectory(./metautils/lib)
