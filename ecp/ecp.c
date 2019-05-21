@@ -16,6 +16,8 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
+#include <unistd.h>
+#include <sys/sysinfo.h>
 #include <sys/uio.h>
 #include <sys/eventfd.h>
 
@@ -24,16 +26,6 @@ License along with this library.
 #include <python2.7/Python.h>
 
 #include "ecp.h"
-
-#define MAXBLOCKS 24
-
-const int algo_JERASURE_RS_VAND = EC_BACKEND_JERASURE_RS_VAND;
-const int algo_JERASURE_RS_CAUCHY = EC_BACKEND_JERASURE_RS_CAUCHY;
-const int algo_ISA_L_RS_VAND = EC_BACKEND_ISA_L_RS_VAND;
-const int algo_ISA_L_RS_CAUCHY = EC_BACKEND_ISA_L_RS_CAUCHY;
-const int algo_SHSS = EC_BACKEND_SHSS;
-const int algo_LIBERASURECODE_RS_VAND = EC_BACKEND_LIBERASURECODE_RS_VAND;
-const int algo_LIBPHAZR = EC_BACKEND_LIBPHAZR;
 
 struct ec_handle_s {
 	ec_backend_id_t backend;
@@ -56,7 +48,7 @@ enum ecp_action_e {
 
 struct ecp_job_s {
 	struct iovec original;
-	struct iovec encoded[24];
+	guint8 *encoded[EC_MAX_FRAGMENTS];
 
 	int algo;
 	int k;
@@ -81,7 +73,8 @@ static void _action_common(struct ecp_job_s *job, struct ecp_ctx_s *ctx);
 
 
 static void ecp_init(void) {
-	thp = g_thread_pool_new((GFunc)_action_common, &ecp_ctx, 1, TRUE, NULL);
+	thp = g_thread_pool_new((GFunc)_action_common, &ecp_ctx,
+							get_nprocs(), FALSE, NULL);
 	g_assert_nonnull(thp);
 
 	g_mutex_init(&ecp_ctx.lock_ec_handles);
@@ -147,7 +140,6 @@ static int _get_instance(struct ecp_job_s *job, struct ecp_ctx_s *ctx) {
 static void _action_encode(struct ecp_job_s *job, struct ecp_ctx_s *ctx) {
 	char **data = NULL, **parity = NULL;
 	int instance = _get_instance(job, ctx);
-
 	int rc = liberasurecode_encode(instance,
 			job->original.iov_base, job->original.iov_len,
 			&data, &parity, &job->fragment_size);
@@ -156,13 +148,11 @@ static void _action_encode(struct ecp_job_s *job, struct ecp_ctx_s *ctx) {
 	if (rc == 0) {
 		int i = 0;
 		for (int j=0; j<job->k ;j++,i++) {
-			job->encoded[i].iov_base = data[j];
-			job->encoded[i].iov_len = job->fragment_size;
+			job->encoded[i] = (guint8*) data[j];
 			data[j] = NULL;
 		}
 		for (int j=0; j<job->m ;j++,i++) {
-			job->encoded[i].iov_base = parity[j];
-			job->encoded[i].iov_len = job->fragment_size;
+			job->encoded[i] = (guint8*) parity[j];
 			parity[j] = NULL;
 		}
 		rc = liberasurecode_encode_cleanup(instance, data, parity);
@@ -202,7 +192,6 @@ static gboolean _job_check(struct ecp_job_s *job) {
 		case EC_BACKEND_SHSS:
 		case EC_BACKEND_LIBERASURECODE_RS_VAND:
 		case EC_BACKEND_ISA_L_RS_CAUCHY:
-		case EC_BACKEND_LIBPHAZR:
 			break;
 		default:
 			return FALSE;
@@ -210,7 +199,7 @@ static gboolean _job_check(struct ecp_job_s *job) {
 
 	if (job->k <= 0 || job->m <= 0)
 		return FALSE;
-	if (job->k + job->m > MAXBLOCKS)
+	if (job->k + job->m > EC_MAX_FRAGMENTS)
 		return FALSE;
 	if (job->m > 6)
 		return FALSE;
@@ -234,7 +223,7 @@ struct ecp_job_s * ecp_job_init(int algo, int k, int m) {
 	h->k = k;
 	h->m = m;
 	h->status = -1;
-	h->fd_wakeup = eventfd(0, EFD_SEMAPHORE);
+	h->fd_wakeup = eventfd(0, EFD_SEMAPHORE | EFD_NONBLOCK);
 	return h;
 }
 
@@ -257,7 +246,10 @@ void ecp_job_close(struct ecp_job_s *job) {
 		job->fd_wakeup = -1;
 	}
 
-	/* TODO(jfs): memory cleanup */
+	for (int i = 0; i < job->k + job->m ;i++) {
+		if (job->encoded[i])
+			free(job->encoded[i]);
+	}
 
 	g_free(job);
 }
@@ -281,7 +273,6 @@ void ecp_job_decode(struct ecp_job_s *job) {
 	return _submit(job, THP_DECODE);
 }
 
-
 void ecp_job_set_original(struct ecp_job_s *job, void *base, int len) {
 	g_assert_nonnull(job);
 	job->original.iov_base = base;
@@ -291,12 +282,14 @@ void ecp_job_set_original(struct ecp_job_s *job, void *base, int len) {
 PyObject* ecp_job_get_fragments(struct ecp_job_s *job) {
 	g_assert_nonnull(job);
 	g_assert_cmpint(job->action, ==, THP_ENCODE);
+
 	const int max = job->k + job->m;
+
 	PyObject *out = PyTuple_New(max);
 	for (int i=0; i<max ;i++) {
-		PyObject *buf = PyBuffer_FromMemory(
-				job->encoded[i].iov_base, job->encoded[i].iov_len);
-		PyTuple_SetItem(out, i, buf);
+		PyObject *fragment = PyBytes_FromStringAndSize(
+				(const char*) job->encoded[i], job->fragment_size);
+		PyTuple_SetItem(out, i, fragment);
 	}
 	return out;
 }

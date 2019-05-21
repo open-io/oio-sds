@@ -13,11 +13,24 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import errno
 from os import read
+import eventlet
+
 from ctypes import CDLL, c_int, c_void_p, py_object
 
+try:
+    from pyeclib.ec_iface import ECDriver, ECDriverError
+except ImportError as err:
+    EC_MSG = "Erasure coding not available: %s" % err
 
-__author__ = "jfsmig"
+    class ECDriverError(RuntimeError):
+        pass
+
+    class ECDriver(object):
+        """Dummy wrapper for ECDriver, when erasure-coding is not available."""
+        def __init__(self, *_args, **_kwargs):
+            raise ECDriverError(EC_MSG)
 
 
 # Prepare the env
@@ -36,53 +49,47 @@ _lib.ecp_job_get_fragments.argtypes = (c_void_p, )
 _lib.ecp_job_get_fragments.restype = py_object
 
 
-# Export one variable per algorithm
-algo_LIBERASURECODE_RS_VAND = c_int.in_dll(_lib, "algo_LIBERASURECODE_RS_VAND")
-algo_JERASURE_RS_VAND = c_int.in_dll(_lib, "algo_JERASURE_RS_VAND")
-algo_JERASURE_RS_CAUCHY = c_int.in_dll(_lib, "algo_JERASURE_RS_CAUCHY")
-algo_ISA_L_RS_VAND = c_int.in_dll(_lib, "algo_ISA_L_RS_VAND")
-algo_ISA_L_RS_CAUCHY = c_int.in_dll(_lib, "algo_ISA_L_RS_CAUCHY")
-algo_SHSS = c_int.in_dll(_lib, "algo_SHSS")
-algo_LIBPHAZR = c_int.in_dll(_lib, "algo_LIBPHAZR")
+def _raise_errcode(err):
+    raise Exception("EC encode failure")
 
 
 def encode(algo, k, m, data):
     """
     Apply the given EC algorithm and return the fragments.
+    But do not block the current thread doing it
     """
     job = _lib.ecp_job_init(algo, k, m)
     _lib.ecp_job_set_original(job, data, len(data))
     try:
         _lib.ecp_job_encode(job)
         fd = _lib.ecp_job_fd(job)
-        read(fd, 8)
-        if 0 == _lib.ecp_job_status(job):
+        done = False
+        a = 0
+        # Loop until the non-blocking FD, loop until we have errno=EAGAIN
+        while not done:
+            # create a listener on fd and swithc to another greenlet
+            eventlet.hubs.trampoline(fd, read=True)
+            try:
+                if len(read(fd, 8)):
+                    done = True
+            except OSError as ex:
+                if ex.errno == errno.EAGAIN:
+                    continue
+                raise
+        rc = _lib.ecp_job_status(job)
+        if 0 == rc:
             return _lib.ecp_job_get_fragments(job)
-        raise Exception("EC encode failure")
+        _raise_errcode(rc)
     finally:
         _lib.ecp_job_close(job)
 
 
-class ECDriver(object):
+class OioEcDriver(ECDriver):
     """Mimic the pyeclib driver interface"""
 
-    def __init__(self, k=1, m=1, ec_type=None):
-        self.k = k
-        self.m = m
-        self.algo = ec_type
-
-    def min_parity_fragments_needed(self):
-        return 0
-
-    def get_segment_info(self, size, _ignored):
-        # return {"fragment_size": 0}
-        raise Exception("NYI")
+    def __init__(self, **kwargs):
+        super(OioEcDriver, self).__init__(**kwargs)
 
     def encode(self, data):
-        return encode(self.algo, k, m, data)
+        return encode(self.ec_type.value, self.k, self.m, data)
 
-    def decode(self, fragments):
-        raise Exception("NYI")
-
-    def reconstruct(self, fragments, missing):
-        raise Exception("NYI")

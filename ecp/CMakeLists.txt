@@ -19,7 +19,7 @@ link_directories(
 
 add_library(oioecp SHARED ecp.c)
 
-set_target_properties(oioecp PROPERTIES PUBLIC_HEADER "oio_core.h" VERSION 0.0.0 SOVERSION 0)
+set_target_properties(oioecp PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(oioecp
 		${JSONC_LIBRARIES} ${GLIB2_LIBRARIES}
 		${EC_LIBRARIES} ${PYTHON_LIBRARIES})

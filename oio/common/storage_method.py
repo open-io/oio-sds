@@ -15,6 +15,7 @@
 
 import sys
 from oio.common import exceptions
+from oio.ecp import OioEcDriver
 
 try:
     from pyeclib.ec_iface import ECDriver, ECDriverError
@@ -23,11 +24,6 @@ except ImportError as err:
 
     class ECDriverError(RuntimeError):
         pass
-
-    class ECDriver(object):
-        """Dummy wrapper for ECDriver, when erasure-coding is not available."""
-        def __init__(self, *_args, **_kwargs):
-            raise ECDriverError(EC_MSG)
 
 
 EC_SEGMENT_SIZE = 1048576
@@ -168,8 +164,10 @@ class ECStorageMethod(StorageMethod):
         self._ec_type = ec_type
 
         try:
-            self.driver = ECDriver(k=ec_nb_data, m=ec_nb_parity,
-                                   ec_type=ec_type)
+            self.driver = OioEcDriver(k=ec_nb_data, m=ec_nb_parity,
+                                      ec_type=ec_type)
+            #self.driver = ECDriver(k=ec_nb_data, m=ec_nb_parity,
+            #                       ec_type=ec_type)
         except ECDriverError as exc:
             msg = "'%s' (%s: %s) Check erasure code packages." % (
                 ec_type, exc.__class__.__name__, exc)
