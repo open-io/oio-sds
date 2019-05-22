@@ -236,13 +236,17 @@ static gboolean
 meta1_dispatch_v2_SRV_LIST(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, struct oio_url_s *url)
 {
-	gchar *srvtype = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
-	reply->subject("%s|%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID), srvtype);
+	gchar *srvtype = metautils_message_extract_string_copy(
+			reply->request, NAME_MSGKEY_TYPENAME);
+	gboolean extended = metautils_message_extract_flag(
+			reply->request, NAME_MSGKEY_EXTEND, FALSE);
+	reply->subject("%s|%s|%s", oio_url_get(url, OIOURL_WHOLE),
+			oio_url_get(url, OIOURL_HEXID), srvtype);
 	STRING_STACKIFY(srvtype);
 
 	gchar **result = NULL;
 	GError *err = meta1_backend_services_list(
-			m1, url, srvtype, &result, oio_ext_get_deadline());
+			m1, url, srvtype, &result, oio_ext_get_deadline(), extended);
 	if (NULL != err) {
 		_strfreev(&result);
 		reply->send_error(0, err);

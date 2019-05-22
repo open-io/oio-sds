@@ -230,13 +230,10 @@ _count_services(struct meta1_backend_s *m1, struct oio_url_s *url, const char *s
 {
 	gchar **out = NULL;
 	GError *err = meta1_backend_services_list(m1, url, srvtype, &out,
-			oio_ext_monotonic_time() + 30 * G_TIME_SPAN_SECOND);
+			oio_ext_monotonic_time() + 30 * G_TIME_SPAN_SECOND, FALSE);
 	g_assert_no_error(err);
 	g_assert_nonnull(out);
-	// (ABO) The -2 is there because we started to include the ref account and
-	// name in the services list. Hence to keep compatibility with most of the
-	// tests, this seemed the most simple way.
-	guint count = g_strv_length(out)-2;
+	guint count = g_strv_length(out);
 	g_strfreev(out);
 	out = NULL;
 	return count;
@@ -252,9 +249,9 @@ test_services_cycle_nolast(void)
 		err = meta1_backend_user_create(m1, url, NULL);
 		g_assert_no_error(err);
 
-		for (guint i=0; i<MAXITER ;++i) {
+		for (guint i = 0; i < MAXITER; ++i) {
 			err = meta1_backend_services_list(m1, url, "", NULL,
-					oio_ext_monotonic_time() + 30 * G_TIME_SPAN_SECOND);
+					oio_ext_monotonic_time() + 30 * G_TIME_SPAN_SECOND, FALSE);
 			g_assert_error(err, GQ(), CODE_INTERNAL_ERROR);
 			g_clear_error(&err);
 
