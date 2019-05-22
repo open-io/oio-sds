@@ -26,6 +26,7 @@ from oio.common.http import headers_from_object_metadata
 from oio.api import io
 from oio.common.constants import CHUNK_HEADERS
 from oio.common import green
+from eventlet import sleep
 
 logger = logging.getLogger(__name__)
 
@@ -207,6 +208,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                     if not data:
                         # Last segment sent, disable TCP_CORK to flush buffers
                         conn.set_cork(False)
+                    sleep(0)
                 except (Exception, green.ChunkWriteTimeout) as err:
                     conn.failed = True
                     conn.chunk['error'] = str(err)
