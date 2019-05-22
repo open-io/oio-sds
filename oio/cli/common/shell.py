@@ -17,6 +17,7 @@
 
 import sys
 import os
+import importlib
 import logging
 from cliff.app import App
 
@@ -41,6 +42,7 @@ class OpenIOShell(App):
             deferred_help=True)
         self.api_version = {}
         self.client_manager = None
+        self.profiler = None
 
     def configure_logging(self):
         super(OpenIOShell, self).configure_logging()
@@ -122,11 +124,51 @@ class OpenIOShell(App):
             "--dump-perfdata",
             action='store_true',
             help="Force the API to dump performance data")
+        parser.add_argument(
+            "--profile",
+            help=("Profile code, save profiling data in the specified file. "
+                  "'%%(pid)s' in the name will be replaced by the PID."))
+        parser.add_argument(
+            "--profiler",
+            default='cProfile',
+            help=("Which profiler to use (default: cProfile, "
+                  "supported: GreenletProfiler, cProfile, profile)."))
+        parser.add_argument(
+            "--profile-early",
+            action='store_true',
+            help=("Start profiling early, before subcommand loading."))
 
         return parser
 
+    def start_profiling(self):
+        if self.options.profiler in ('cProfile', 'profile'):
+            prof_mod = importlib.import_module(self.options.profiler)
+            self.profiler = prof_mod.Profile()
+            self.profiler.enable()
+        elif self.options.profiler == 'GreenletProfiler':
+            prof_mod = importlib.import_module(self.options.profiler)
+            self.profiler = prof_mod
+            self.profiler.start()
+        else:
+            raise ValueError('Unknown profiler: %s' % self.options.profiler)
+
+    def stop_profiling(self):
+        fname = self.options.profile % {'pid': os.getpid()}
+        if self.options.profiler in ('cProfile', 'profile'):
+            self.profiler.disable()
+            self.profiler.dump_stats(fname)
+            LOG.info('Profiling data saved in %s', fname)
+        elif self.options.profiler == 'GreenletProfiler':
+            stats = self.profiler.get_func_stats()
+            stats.save(fname, type='callgrind')
+            LOG.info('Profiling data saved in %s', fname)
+        else:
+            LOG.error('Something bad happened with profiling data!')
+
     def initialize_app(self, argv):
         super(OpenIOShell, self).initialize_app(argv)
+        if self.options.profile and self.options.profile_early:
+            self.start_profiling()
 
         try:
             api = argv[0]
@@ -170,9 +212,13 @@ class OpenIOShell(App):
             cmd.__class__.__module__,
             cmd.__class__.__name__,
         )
+        if self.options.profile and not self.options.profile_early:
+            self.start_profiling()
 
     def clean_up(self, cmd, result, err):
         LOG.debug('clean up %s: %s', cmd.__class__.__name__, err or '')
+        if self.profiler:
+            self.stop_profiling()
 
 
 def main(argv=sys.argv[1:]):
