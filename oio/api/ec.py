@@ -30,6 +30,7 @@ from oio.common.utils import fix_ranges
 from oio.api import io
 from oio.common.constants import CHUNK_HEADERS
 from oio.common import green
+from eventlet import sleep
 
 
 logger = logging.getLogger(__name__)
@@ -605,6 +606,7 @@ class EcChunkWriter(object):
                         self.conn.send(data)
                         self.conn.send("\r\n")
                         self.bytes_transferred += len(data)
+                    sleep(0)
                 except (Exception, green.ChunkWriteTimeout) as exc:
                     self.failed = True
                     msg = str(exc)
@@ -648,6 +650,7 @@ class EcChunkWriter(object):
         self.conn.send(to_send)
         # Last segment sent, disable TCP_CORK to flush buffers
         self.conn.set_cork(False)
+        sleep(0)
 
     def getresponse(self):
         """Read the HTTP response from the connection"""
@@ -724,6 +727,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 else:
                     current_writers.remove(writer)
                     failed_chunks.append(writer.chunk)
+            sleep(0)
             self.quorum_or_fail([w.chunk for w in current_writers],
                                 failed_chunks)
 
