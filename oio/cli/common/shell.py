@@ -24,7 +24,9 @@ from cliff.app import App
 from oio import __version__ as oio_version
 from oio.cli.common.commandmanager import CommandManager
 from oio.cli.common.clientmanager import ClientManager, get_plugin_module
+from oio.common.json import json
 
+json.encoder.FLOAT_REPR = lambda o: format(o, '.6f')
 LOG = logging.getLogger(__name__)
 
 GROUP_LIST = ["account", "container", "object", "reference", "volume",
@@ -81,9 +83,10 @@ class OpenIOShell(App):
     def run(self, argv):
         try:
             res = super(OpenIOShell, self).run(argv)
-            pdata = self.client_manager.cli_conf().get('perfdata')
-            if pdata:
-                LOG.warn("Performance data: %s", pdata)
+            perfdata = self.client_manager.cli_conf().get('perfdata')
+            if perfdata:
+                LOG.warn("Performance data: %s",
+                         json.dumps(perfdata, sort_keys=True, indent=4))
             return res
         except Exception as e:
             LOG.error('Exception raised: ' + str(e))
