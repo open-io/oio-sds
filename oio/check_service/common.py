@@ -38,7 +38,7 @@ class CheckService(HttpApi):
         """
         Collect the list of hosts for a service type
         """
-        super(CheckService, self).__init__(**kwargs)
+        super(CheckService, self).__init__(service_type=service_type, **kwargs)
         self.ns = namespace
         self.service_type = service_type
         self.all_services = ConscienceClient(

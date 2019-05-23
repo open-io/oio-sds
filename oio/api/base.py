@@ -20,7 +20,7 @@ from oio.common.json import json as jsonlib
 from oio.common.http_urllib3 import urllib3, get_pool_manager, \
     oio_exception_from_httperror
 from oio.common import exceptions
-from oio.common.utils import deadline_to_timeout
+from oio.common.utils import deadline_to_timeout, monotonic_time
 from oio.common.constants import ADMIN_HEADER, \
     TIMEOUT_HEADER, PERFDATA_HEADER, FORCEMASTER_HEADER, \
     CONNECTION_TIMEOUT, READ_TIMEOUT
@@ -33,7 +33,7 @@ class HttpApi(object):
     """
 
     def __init__(self, endpoint=None, pool_manager=None,
-                 connection='keep-alive', **kwargs):
+                 connection='keep-alive', service_type='unknown', **kwargs):
         """
         :param pool_manager: an optional pool manager that will be reused
         :type pool_manager: `urllib3.PoolManager`
@@ -49,7 +49,6 @@ class HttpApi(object):
         :keyword connection: 'keep-alive' to keep connections open (default)
             or 'close' to explicitly close them.
         """
-        super(HttpApi, self).__init__()
         self.endpoint = endpoint
 
         if not pool_manager:
@@ -58,8 +57,9 @@ class HttpApi(object):
 
         self.admin_mode = true_value(kwargs.get('admin_mode', False))
         self.force_master = true_value(kwargs.get('force_master', False))
-        self.perfdata = kwargs.get('perfdata')
         self.connection = connection
+
+        self.service_type = service_type
 
     def _direct_request(self, method, url, headers=None, data=None, json=None,
                         params=None, admin_mode=False, pool_manager=None,
@@ -141,7 +141,7 @@ class HttpApi(object):
             data = jsonlib.dumps(json)
 
         # Trigger performance measurments
-        perfdata = kwargs.get('perfdata', self.perfdata)
+        perfdata = kwargs.get('perfdata', None)
         if perfdata is not None:
             out_headers[PERFDATA_HEADER] = 'enabled'
 
@@ -167,7 +167,15 @@ class HttpApi(object):
             pool_manager = self.pool_manager
 
         try:
+            if perfdata is not None:
+                request_start = monotonic_time()
             resp = pool_manager.request(method, url, **out_kwargs)
+            if perfdata is not None:
+                request_end = monotonic_time()
+                service_perfdata = perfdata.setdefault(
+                    self.service_type, dict())
+                service_perfdata['total'] = service_perfdata.get(
+                    'total', 0.0) + request_end - request_start
             body = resp.data
             if body:
                 try:
@@ -175,10 +183,11 @@ class HttpApi(object):
                 except ValueError:
                     pass
             if perfdata is not None and PERFDATA_HEADER in resp.headers:
+                service_perfdata = perfdata[self.service_type]
                 for header_val in resp.headers[PERFDATA_HEADER].split(','):
                     kv = header_val.split('=', 1)
-                    pdat = perfdata.get(kv[0], 0.0) + float(kv[1]) / 1000000.0
-                    perfdata[kv[0]] = pdat
+                    service_perfdata[kv[0]] = service_perfdata.get(
+                        kv[0], 0.0) + float(kv[1]) / 1000000.0
         except urllib3.exceptions.HTTPError as exc:
             oio_exception_from_httperror(exc,
                                          reqid=out_headers.get('X-oio-req-id'),

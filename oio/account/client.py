@@ -38,7 +38,8 @@ class AccountClient(HttpApi):
         account service endpoint (if not provided at instantiation)
         :type refresh_interval: `float` seconds
         """
-        super(AccountClient, self).__init__(endpoint=endpoint, **kwargs)
+        super(AccountClient, self).__init__(
+            endpoint=endpoint, service_type='account-service', **kwargs)
         self.logger = logger or get_logger(conf)
         self.cs = ConscienceClient(conf, endpoint=proxy_endpoint,
                                    logger=self.logger, **kwargs)
