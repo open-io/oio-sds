@@ -35,6 +35,11 @@ struct ec_handle_s {
 };
 
 struct ecp_ctx_s {
+	/* Cache of steady file descriptors
+	 * No lock, they are supposed to be called from the same thread
+	 * a.k.a. the main python thread */
+	GArray *array_fd_wake;
+
 	/* Cache of open liberasurecode handles */
 	GArray *array_ec_handles;
 	GMutex lock_ec_handles;
@@ -61,7 +66,7 @@ struct ecp_job_s {
 	enum ecp_action_e action;
 };
 
-static struct ecp_ctx_s ecp_ctx = {};
+static struct ecp_ctx_s ctx = {};
 
 static GThreadPool *thp = NULL;
 
@@ -69,34 +74,37 @@ static void __attribute__((constructor)) ecp_init(void);
 
 static void __attribute__((destructor)) ecp_fini(void);
 
-static void _action_common(struct ecp_job_s *job, struct ecp_ctx_s *ctx);
+static void _action_common(struct ecp_job_s *, gpointer);
 
 
 static void ecp_init(void) {
-	thp = g_thread_pool_new((GFunc)_action_common, &ecp_ctx,
+	thp = g_thread_pool_new((GFunc)_action_common, NULL,
 							get_nprocs(), FALSE, NULL);
 	g_assert_nonnull(thp);
 
-	g_mutex_init(&ecp_ctx.lock_ec_handles);
-	ecp_ctx.array_ec_handles =
+	g_mutex_init(&ctx.lock_ec_handles);
+
+	ctx.array_ec_handles =
 		g_array_sized_new(FALSE, FALSE, sizeof(struct ec_handle_s), 16);
+	ctx.array_fd_wake =
+		g_array_sized_new(FALSE, FALSE, sizeof(int), 64);
 }
 
 static void ecp_fini(void) {
 	g_thread_pool_free(thp, FALSE, FALSE);
 	thp = NULL;
 
-	g_mutex_lock(&ecp_ctx.lock_ec_handles);
-	g_mutex_unlock(&ecp_ctx.lock_ec_handles);
-	g_mutex_clear(&ecp_ctx.lock_ec_handles);
+	g_mutex_lock(&ctx.lock_ec_handles);
+	g_mutex_unlock(&ctx.lock_ec_handles);
+	g_mutex_clear(&ctx.lock_ec_handles);
 
-	while (ecp_ctx.array_ec_handles->len > 0) {
-		const guint last_idx = ecp_ctx.array_ec_handles->len - 1;
+	while (ctx.array_ec_handles->len > 0) {
+		const guint last_idx = ctx.array_ec_handles->len - 1;
 		struct ec_handle_s *last = &g_array_index(
-				ecp_ctx.array_ec_handles, struct ec_handle_s, last_idx);
+				ctx.array_ec_handles, struct ec_handle_s, last_idx);
 		int rc = liberasurecode_instance_destroy(last->instance);
 		g_assert_cmpint(rc, ==, 0);
-		g_array_remove_index_fast(ecp_ctx.array_ec_handles, last_idx);
+		g_array_remove_index_fast(ctx.array_ec_handles, last_idx);
 	}
 }
 
@@ -105,14 +113,14 @@ static void _job_ping(struct ecp_job_s *job) {
 	(void) write(job->fd_wakeup, &evt, 8);
 }
 
-static int _get_instance(struct ecp_job_s *job, struct ecp_ctx_s *ctx) {
-	g_mutex_lock(&ctx->lock_ec_handles);
-	for (guint i=0; i<ctx->array_ec_handles->len ;i++) {
+static int _get_instance(struct ecp_job_s *job) {
+	g_mutex_lock(&ctx.lock_ec_handles);
+	for (guint i=0; i<ctx.array_ec_handles->len ;i++) {
 		struct ec_handle_s *h = &g_array_index(
-				ctx->array_ec_handles, struct ec_handle_s, i);
+				ctx.array_ec_handles, struct ec_handle_s, i);
 		int b = (int) h->backend;
 		if (b == job->algo && h->k == job->k && h->m == job->m) {
-			g_mutex_unlock(&ctx->lock_ec_handles);
+			g_mutex_unlock(&ctx.lock_ec_handles);
 			return h->instance;
 		}
 	}
@@ -130,16 +138,16 @@ static int _get_instance(struct ecp_job_s *job, struct ecp_ctx_s *ctx) {
 		h.k = ea.k;
 		h.m = ea.m;
 		h.instance = instance;
-		g_array_append_vals(ctx->array_ec_handles, &h, 1);
+		g_array_append_vals(ctx.array_ec_handles, &h, 1);
 	}
 
-	g_mutex_unlock(&ctx->lock_ec_handles);
+	g_mutex_unlock(&ctx.lock_ec_handles);
 	return instance;
 }
 
-static void _action_encode(struct ecp_job_s *job, struct ecp_ctx_s *ctx) {
+static void _action_encode(struct ecp_job_s *job) {
 	char **data = NULL, **parity = NULL;
-	int instance = _get_instance(job, ctx);
+	int instance = _get_instance(job);
 	int rc = liberasurecode_encode(instance,
 			job->original.iov_base, job->original.iov_len,
 			&data, &parity, &job->fragment_size);
@@ -162,21 +170,21 @@ static void _action_encode(struct ecp_job_s *job, struct ecp_ctx_s *ctx) {
 	return _job_ping(job);
 }
 
-static void _action_decode(struct ecp_job_s *job, struct ecp_ctx_s *ctx) {
-	int instance = _get_instance(job, ctx);
+static void _action_decode(struct ecp_job_s *job) {
+	int instance = _get_instance(job);
 	(void) instance;
 	job->status = -1;
 	return _job_ping(job);
 }
 
-static void _action_common(struct ecp_job_s *job, struct ecp_ctx_s *ctx) {
+static void _action_common(struct ecp_job_s *job,
+		gpointer i __attribute__((unused))) {
 	g_assert_nonnull(job);
-	g_assert_nonnull(ctx);
 	switch (job->action) {
 		case THP_ENCODE:
-			return _action_encode(job, ctx);
+			return _action_encode(job);
 		case THP_DECODE:
-			return _action_decode(job, ctx);
+			return _action_decode(job);
 		default:
 			job->status = G_MININT;
 			return _job_ping(job);
@@ -218,12 +226,22 @@ static gboolean _job_check(struct ecp_job_s *job) {
 }
 
 struct ecp_job_s * ecp_job_init(int algo, int k, int m) {
+	/* Get a FD from the cache, if possible */
+	int fd = -1;
+	if (ctx.array_fd_wake->len > 0) {
+		guint idx = ctx.array_fd_wake->len - 1;
+		fd = g_array_index(ctx.array_fd_wake, int, idx);
+		g_array_remove_index_fast(ctx.array_fd_wake, idx);
+	} else {
+		fd = eventfd(0, EFD_SEMAPHORE | EFD_NONBLOCK);
+	}
+
 	struct ecp_job_s *h = g_malloc0(sizeof(*h));
 	h->algo = algo;
 	h->k = k;
 	h->m = m;
 	h->status = -1;
-	h->fd_wakeup = eventfd(0, EFD_SEMAPHORE | EFD_NONBLOCK);
+	h->fd_wakeup = fd;
 	return h;
 }
 
@@ -242,7 +260,7 @@ void ecp_job_close(struct ecp_job_s *job) {
 		return;
 
 	if (job->fd_wakeup >= 0) {
-		close(job->fd_wakeup);
+		g_array_append_vals(ctx.array_fd_wake, &job->fd_wakeup, 1);
 		job->fd_wakeup = -1;
 	}
 
