@@ -201,7 +201,9 @@ class DirCheck(BaseCheckCommand):
         # oio-meta0-client to target a specific service.
         for t, i, p, s in self.filter_services(self.catalog, 'meta0'):
             url = '%s:%d' % (i, p)
-            subprocess.check_call(['oio-meta0-client', url, 'get', '0000'])
+            res = subprocess.check_output(
+                ['oio-meta0-client', url, 'get', '0000'])
+            self.logger.info(res)
         self.logger.info("All meta0 services are complete.")
 
         # contact each meta0 to check that all the dumps are identical
