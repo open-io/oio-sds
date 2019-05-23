@@ -1045,13 +1045,17 @@ class ObjectStorageApi(object):
         return link_meta
 
     @staticmethod
-    def _ttfb_wrapper(stream, req_start, perfdata):
+    def _ttfb_wrapper(stream, req_start, download_start, perfdata):
         """Keep track of time-to-first-byte and time-to-last-byte"""
+        perfdata_rawx = perfdata.setdefault('rawx', dict())
         for dat in stream:
             if 'ttfb' not in perfdata:
                 perfdata['ttfb'] = monotonic_time() - req_start
             yield dat
-        perfdata['ttlb'] = monotonic_time() - req_start
+        req_end = monotonic_time()
+        perfdata['ttlb'] = req_end - req_start
+        perfdata_rawx['total'] = perfdata_rawx.get('total', 0.0) \
+            + req_end - download_start
 
     @patch_kwargs
     @ensure_headers
@@ -1105,6 +1109,8 @@ class ObjectStorageApi(object):
         meta['container_id'] = (
             cid_arg or cid_from_name(account, container).upper())
         meta['ns'] = self.namespace
+        if perfdata is not None:
+            download_start = monotonic_time()
         if storage_method.ec:
             stream = fetch_stream_ec(chunks, ranges, storage_method, **kwargs)
         elif storage_method.backblaze:
@@ -1115,7 +1121,8 @@ class ObjectStorageApi(object):
             stream = fetch_stream(chunks, ranges, storage_method, **kwargs)
 
         if perfdata is not None:
-            return meta, self._ttfb_wrapper(stream, req_start, perfdata)
+            return meta, self._ttfb_wrapper(
+                stream, req_start, download_start, perfdata)
         return meta, stream
 
     @handle_object_not_found
@@ -1226,8 +1233,9 @@ class ObjectStorageApi(object):
         ul_chunks, ul_bytes, obj_checksum = ul_handler.stream()
         if perfdata is not None:
             upload_end = monotonic_time()
-            val = perfdata.get('rawx', 0.0) + upload_end - upload_start
-            perfdata['rawx'] = val
+            perfdata_rawx = perfdata.setdefault('rawx', dict())
+            perfdata_rawx['total'] = perfdata_rawx.get('total', 0.0) \
+                + upload_end - upload_start
         return ul_chunks, ul_bytes, obj_checksum
 
     def _object_prepare(self, account, container, obj_name, source,
