@@ -322,7 +322,7 @@ class RdirClient(HttpApi):
     }
 
     def __init__(self, conf, **kwargs):
-        super(RdirClient, self).__init__(**kwargs)
+        super(RdirClient, self).__init__(service_type='rdir', **kwargs)
         self.directory = DirectoryClient(conf, **kwargs)
         self.ns = conf['namespace']
         self._addr_cache = dict()

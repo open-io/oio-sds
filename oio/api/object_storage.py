@@ -78,7 +78,7 @@ class ObjectStorageApi(object):
     EXTRA_KEYWORDS = ('chunk_checksum_algo', 'autocreate',
                       'chunk_buffer_min', 'chunk_buffer_max')
 
-    def __init__(self, namespace, logger=None, **kwargs):
+    def __init__(self, namespace, logger=None, perfdata=None, **kwargs):
         """
         Initialize the object storage API.
 
@@ -105,10 +105,13 @@ class ObjectStorageApi(object):
         self.namespace = namespace
         conf = {"namespace": self.namespace}
         self.logger = logger or get_logger(conf)
+        self.perfdata = perfdata
         self._global_kwargs = {tok: float_value(tov, None)
                                for tok, tov in kwargs.items()
                                if tok in self.__class__.TIMEOUT_KEYS}
         self._global_kwargs['autocreate'] = True
+        if self.perfdata is not None:
+            self._global_kwargs['perfdata'] = self.perfdata
         for key in self.__class__.EXTRA_KEYWORDS:
             if key in kwargs:
                 self._global_kwargs[key] = kwargs[key]
@@ -137,11 +140,10 @@ class ObjectStorageApi(object):
         """
         if self._blob_client is None:
             from oio.blob.client import BlobClient
-            perfdata = self.container.perfdata
             connection_pool = self.container.pool_manager
             self._blob_client = BlobClient(
                 conf={"namespace": self.namespace},
-                connection_pool=connection_pool, perfdata=perfdata)
+                connection_pool=connection_pool, perfdata=self.perfdata)
         return self._blob_client
 
     # FIXME(FVE): this method should not exist
@@ -1079,7 +1081,7 @@ class ObjectStorageApi(object):
             a stream of object data
         :rtype: tuple
         """
-        perfdata = kwargs.get('perfdata', self.container.perfdata)
+        perfdata = kwargs.get('perfdata', None)
         if perfdata is not None:
             req_start = monotonic_time()
 
@@ -1218,7 +1220,7 @@ class ObjectStorageApi(object):
 
     def _object_upload(self, ul_handler, **kwargs):
         """Upload data to rawx, measure time it takes."""
-        perfdata = kwargs.get('perfdata', self.container.perfdata)
+        perfdata = kwargs.get('perfdata', None)
         if perfdata is not None:
             upload_start = monotonic_time()
         ul_chunks, ul_bytes, obj_checksum = ul_handler.stream()
