@@ -64,7 +64,6 @@ def encode(algo, k, m, data):
         _lib.ecp_job_encode(job)
         fd = _lib.ecp_job_fd(job)
         done = False
-        a = 0
         # Loop until the non-blocking FD, loop until we have errno=EAGAIN
         while not done:
             # create a listener on fd and swithc to another greenlet
@@ -92,4 +91,3 @@ class OioEcDriver(ECDriver):
 
     def encode(self, data):
         return encode(self.ec_type.value, self.k, self.m, data)
-

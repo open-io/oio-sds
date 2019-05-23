@@ -28,6 +28,9 @@ except ImportError as err:
 
 EC_SEGMENT_SIZE = 1048576
 
+# Set to True to use a thread pool (oio.ecp) to compute the EC strips
+EC_SYNC = True
+
 
 def parse_chunk_method(chunk_method):
     param_list = dict()
@@ -164,10 +167,12 @@ class ECStorageMethod(StorageMethod):
         self._ec_type = ec_type
 
         try:
-            self.driver = OioEcDriver(k=ec_nb_data, m=ec_nb_parity,
-                                      ec_type=ec_type)
-            #self.driver = ECDriver(k=ec_nb_data, m=ec_nb_parity,
-            #                       ec_type=ec_type)
+            if EC_SYNC:
+                self.driver = ECDriver(k=ec_nb_data, m=ec_nb_parity,
+                                       ec_type=ec_type)
+            else:
+                self.driver = OioEcDriver(k=ec_nb_data, m=ec_nb_parity,
+                                          ec_type=ec_type)
         except ECDriverError as exc:
             msg = "'%s' (%s: %s) Check erasure code packages." % (
                 ec_type, exc.__class__.__name__, exc)
