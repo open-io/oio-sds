@@ -753,9 +753,10 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 # the main write loop
                 if size:
                     while True:
+                        buffer_size = self.buffer_size()
                         remaining_bytes = size - bytes_transferred
-                        if io.WRITE_CHUNK_SIZE < remaining_bytes:
-                            read_size = io.WRITE_CHUNK_SIZE
+                        if buffer_size < remaining_bytes:
+                            read_size = buffer_size
                         else:
                             read_size = remaining_bytes
                         data = read(read_size)
@@ -765,7 +766,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
                         send(data)
                 else:
                     while True:
-                        data = read(io.WRITE_CHUNK_SIZE)
+                        data = read(self.buffer_size())
                         bytes_transferred += len(data)
                         if len(data) == 0:
                             break
@@ -931,6 +932,7 @@ class ECWriteHandler(io.WriteHandler):
         #
         # iterate through the meta chunks
         bytes_transferred = -1
+        kwargs = EcMetachunkWriter.filter_kwargs(self.extra_kwargs)
         for meta_chunk in self.chunk_prep():
             handler = EcMetachunkWriter(
                 self.sysmeta, meta_chunk,
@@ -939,7 +941,7 @@ class ECWriteHandler(io.WriteHandler):
                 connection_timeout=self.connection_timeout,
                 write_timeout=self.write_timeout,
                 read_timeout=self.read_timeout,
-                chunk_checksum_algo=self.chunk_checksum_algo)
+                **kwargs)
             bytes_transferred, checksum, chunks = handler.stream(self.source,
                                                                  max_size)
 

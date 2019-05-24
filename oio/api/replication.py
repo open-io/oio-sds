@@ -90,14 +90,15 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                     pool.spawn(self._send_data, conn)
 
                 while True:
+                    buffer_size = self.buffer_size()
                     if size is not None:
                         remaining_bytes = size - bytes_transferred
-                        if io.WRITE_CHUNK_SIZE < remaining_bytes:
-                            read_size = io.WRITE_CHUNK_SIZE
+                        if buffer_size < remaining_bytes:
+                            read_size = buffer_size
                         else:
                             read_size = remaining_bytes
                     else:
-                        read_size = io.WRITE_CHUNK_SIZE
+                        read_size = buffer_size
                     with green.SourceReadTimeout(self.read_timeout):
                         try:
                             data = source.read(read_size)
@@ -281,6 +282,7 @@ class ReplicatedWriteHandler(io.WriteHandler):
         global_checksum = hashlib.md5()
         total_bytes_transferred = 0
         content_chunks = []
+        kwargs = ReplicatedMetachunkWriter.filter_kwargs(self.extra_kwargs)
 
         for meta_chunk in self.chunk_prep():
             size = self.sysmeta['chunk_size']
@@ -290,7 +292,7 @@ class ReplicatedWriteHandler(io.WriteHandler):
                 write_timeout=self.write_timeout,
                 read_timeout=self.read_timeout,
                 headers=self.headers,
-                chunk_checksum_algo=self.chunk_checksum_algo)
+                **kwargs)
             bytes_transferred, _h, chunks = handler.stream(self.source, size)
             content_chunks += chunks
 

@@ -81,7 +81,6 @@ class IOBaseWrapper(RawIOBase):
 class WriteHandler(object):
     def __init__(self, source, sysmeta, chunk_preparer,
                  storage_method, headers=None,
-                 chunk_checksum_algo='md5',
                  **kwargs):
         """
         :param connection_timeout: timeout to establish the connection
@@ -109,7 +108,6 @@ class WriteHandler(object):
         self.connection_timeout = kwargs.get('connection_timeout',
                                              CONNECTION_TIMEOUT)
         self.deadline = kwargs.get('deadline')
-        self.chunk_checksum_algo = chunk_checksum_algo
 
     @property
     def read_timeout(self):
@@ -532,17 +530,46 @@ class ChunkReader(object):
         raise StopIteration
 
 
+def exp_ramp_gen(start, maximum):
+    """
+    Yield exponentially increasing numbers.
+
+    Multiply the yielded number by 2 in each iteration
+    after the second one, until maximum is reached.
+
+    :param start: the first number to be yielded.
+    :param maximum: the maximum number to yield.
+    """
+    # Yield the minimum twice in order to keep things aligned
+    yield start
+    current = start
+    while True:
+        yield current
+        current = min(current * 2, maximum)
+
+
 class MetachunkWriter(object):
     """Base class for metachunk writers"""
 
     def __init__(self, storage_method=None, quorum=None,
-                 chunk_checksum_algo='md5', reqid=None, **_kwargs):
+                 chunk_checksum_algo='md5', reqid=None,
+                 chunk_buffer_min=32768, chunk_buffer_max=262144,
+                 **_kwargs):
         self.storage_method = storage_method
         self._quorum = quorum
         if storage_method is None and quorum is None:
             raise ValueError('Missing storage_method or quorum')
         self.chunk_checksum_algo = chunk_checksum_algo
         self.reqid = reqid
+        self._buffer_size_gen = exp_ramp_gen(chunk_buffer_min,
+                                             chunk_buffer_max)
+
+    @classmethod
+    def filter_kwargs(cls, kwargs):
+        return {k: v for k, v in kwargs.items()
+                if k in ('chunk_checksum_algo',
+                         'chunk_buffer_min',
+                         'chunk_buffer_max')}
 
     @property
     def quorum(self):
@@ -583,6 +610,15 @@ class MetachunkWriter(object):
                 elif isinstance(err, (exc.OioTimeout, green.OioTimeout)):
                     raise exc.OioTimeout(new_exc)
             raise new_exc
+
+    def buffer_size(self):
+        """
+        Return a progressive buffer size.
+
+        Start small to minimize initial dead time and parallelize early,
+        then grow to avoid too much context switches.
+        """
+        return self._buffer_size_gen.next()
 
 
 class MetachunkPreparer(object):
