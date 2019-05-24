@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.common.green import Queue, Timeout, GreenPile
+from oio.common.green import sleep, LightQueue, Timeout, GreenPile
 
 import collections
 import math
@@ -30,7 +30,6 @@ from oio.common.utils import fix_ranges
 from oio.api import io
 from oio.common.constants import CHUNK_HEADERS
 from oio.common import green
-from eventlet import sleep
 
 
 logger = logging.getLogger(__name__)
@@ -279,7 +278,7 @@ class ECStream(object):
         queues = []
         # each iterators has its queue
         for _j in range(len(fragment_iterators)):
-            queues.append(Queue(1))
+            queues.append(LightQueue(1))
 
         def put_in_queue(fragment_iterator, queue):
             """
@@ -318,7 +317,6 @@ class ECStream(object):
                 # get the fragments from the queues
                 for queue in queues:
                     fragment = queue.get()
-                    queue.task_done()
                     data.append(fragment)
 
                 if not all(data):
@@ -548,7 +546,7 @@ class EcChunkWriter(object):
             self.checksum = None
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
         # we use eventlet Queue to pass data to the send coroutine
-        self.queue = Queue(io.PUT_QUEUE_DEPTH)
+        self.queue = LightQueue(io.PUT_QUEUE_DEPTH)
         self.reqid = kwargs.get('reqid')
 
     @property
@@ -614,15 +612,13 @@ class EcChunkWriter(object):
                                 self.chunk, msg, self.reqid)
                     self.chunk['error'] = 'write: %s' % msg
 
-            self.queue.task_done()
-
     def wait(self):
         """
         Wait until all data in the queue
         has been processed by the send coroutine
         """
-        if self.queue.unfinished_tasks:
-            self.queue.join()
+        while self.queue.qsize():
+            sleep(0)
 
     def send(self, data):
         # do not send empty data because
