@@ -14,7 +14,7 @@
 # License along with this library.
 
 
-from oio.common.green import Queue, Timeout, GreenPile
+from oio.common.green import sleep, LightQueue, Timeout, GreenPile
 
 import logging
 import hashlib
@@ -26,7 +26,6 @@ from oio.common.http import headers_from_object_metadata
 from oio.api import io
 from oio.common.constants import CHUNK_HEADERS
 from oio.common import green
-from eventlet import sleep
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +85,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
             with green.ContextPool(len(meta_chunk)) as pool:
                 for conn in current_conns:
                     conn.failed = False
-                    conn.queue = Queue(io.PUT_QUEUE_DEPTH)
+                    conn.queue = LightQueue(io.PUT_QUEUE_DEPTH)
                     pool.spawn(self._send_data, conn)
 
                 while True:
@@ -125,8 +124,8 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                                         failed_chunks)
 
                 for conn in current_conns:
-                    if conn.queue.unfinished_tasks:
-                        conn.queue.join()
+                    while conn.queue.qsize():
+                        sleep(0)
 
         except green.SourceReadTimeout as err:
             logger.warn('Source read timeout (reqid=%s): %s', self.reqid, err)
@@ -213,7 +212,6 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                 except (Exception, green.ChunkWriteTimeout) as err:
                     conn.failed = True
                     conn.chunk['error'] = str(err)
-            conn.queue.task_done()
 
     def _get_response(self, conn):
         """
