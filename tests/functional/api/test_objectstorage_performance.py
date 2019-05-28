@@ -16,6 +16,7 @@
 import logging
 
 from oio.api.object_storage import ObjectStorageApi
+from oio.common.utils import monotonic_time
 from tests.utils import random_str, BaseTestCase
 
 
@@ -23,20 +24,21 @@ class TestObjectStorageApiPerformance(BaseTestCase):
 
     def setUp(self):
         super(TestObjectStorageApiPerformance, self).setUp()
-        self.api = ObjectStorageApi(self.ns, endpoint=self.uri)
+        self.api = ObjectStorageApi(self.ns, endpoint=self.uri,
+                                    source_address=('127.0.0.8', 0))
         self.created = list()
+        self.containers = set()
 
     def tearDown(self):
         super(TestObjectStorageApiPerformance, self).tearDown()
-        containers = set()
         for ct, name in self.created:
             try:
                 self.api.object_delete(self.account, ct, name)
-                containers.add(ct)
+                self.containers.add(ct)
             except Exception:
                 logging.exception("Failed to delete %s/%s/%s//%s",
                                   self.ns, self.account, ct, name)
-        for ct in containers:
+        for ct in self.containers:
             try:
                 self.api.container_delete(self.account, ct)
             except Exception:
@@ -60,3 +62,17 @@ class TestObjectStorageApiPerformance(BaseTestCase):
                                    obj_name=obj, data=obj,
                                    chunk_checksum_algo=None)
             self.created.append((container, obj))
+
+    def test_object_list_empty_container(self):
+        """
+        Ensure object listing of an empty container takes less than 35ms.
+        """
+        container = self.__class__.__name__ + random_str(8)
+        self.api.container_create(self.account, container)
+        self.containers.add(container)
+        for _ in range(8):
+            start = monotonic_time()
+            self.api.object_list(self.account, container)
+            duration = monotonic_time() - start
+            logging.info("Object list took %.6fs", duration)
+            self.assertLess(duration, 0.035)
