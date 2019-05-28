@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -24,9 +24,6 @@ from oio.common.utils import deadline_to_timeout
 from oio.common.constants import ADMIN_HEADER, \
     TIMEOUT_HEADER, PERFDATA_HEADER, FORCEMASTER_HEADER, \
     CONNECTION_TIMEOUT, READ_TIMEOUT
-
-_POOL_MANAGER_OPTIONS_KEYS = ["pool_connections", "pool_maxsize",
-                              "max_retries", "backoff_factor"]
 
 
 class HttpApi(object):
@@ -56,10 +53,7 @@ class HttpApi(object):
         self.endpoint = endpoint
 
         if not pool_manager:
-            pool_manager_conf = {k: int(v)
-                                 for k, v in kwargs.iteritems()
-                                 if k in _POOL_MANAGER_OPTIONS_KEYS}
-            pool_manager = get_pool_manager(**pool_manager_conf)
+            pool_manager = get_pool_manager(**kwargs)
         self.pool_manager = pool_manager
 
         self.admin_mode = true_value(kwargs.get('admin_mode', False))
