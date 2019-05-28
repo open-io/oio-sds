@@ -148,7 +148,9 @@ class OpenIOShell(App):
         elif self.options.profiler == 'GreenletProfiler':
             prof_mod = importlib.import_module(self.options.profiler)
             self.profiler = prof_mod
-            self.profiler.start()
+            LOG.debug("Using %s, clock type: %s",
+                      self.profiler, self.profiler.get_clock_type())
+            self.profiler.start(builtins=True)
         else:
             raise ValueError('Unknown profiler: %s' % self.options.profiler)
 
