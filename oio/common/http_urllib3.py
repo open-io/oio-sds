@@ -1,4 +1,4 @@
-# Copyright (C) 2017-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -12,7 +12,6 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
-
 
 from oio.common.green import patcher
 
@@ -32,6 +31,9 @@ DEFAULT_BACKOFF = 0
 URLLIB3_REQUESTS_KWARGS = ('fields', 'headers', 'body', 'retries', 'redirect',
                            'assert_same_host', 'timeout', 'pool_timeout',
                            'release_conn', 'chunked')
+URLLIB3_POOLMANAGER_KWARGS = ('pool_connections', 'pool_maxsize',
+                              'max_retries', 'backoff_factor',
+                              'socket_options', 'source_address')
 
 
 class SafePoolManager(urllib3.PoolManager):
@@ -53,7 +55,8 @@ class SafePoolManager(urllib3.PoolManager):
 def get_pool_manager(pool_connections=DEFAULT_POOLSIZE,
                      pool_maxsize=DEFAULT_POOLSIZE,
                      max_retries=DEFAULT_RETRIES,
-                     backoff_factor=DEFAULT_BACKOFF):
+                     backoff_factor=DEFAULT_BACKOFF,
+                     **kwargs):
     """
     Get `urllib3.PoolManager` to manage pools of connections
 
@@ -73,9 +76,11 @@ def get_pool_manager(pool_connections=DEFAULT_POOLSIZE,
     else:
         max_retries = urllib3.Retry(total=max_retries,
                                     backoff_factor=backoff_factor)
+    kw = {k: v for k, v in kwargs.items()
+          if k in URLLIB3_POOLMANAGER_KWARGS[4:]}
     return SafePoolManager(num_pools=pool_connections,
                            maxsize=pool_maxsize, retries=max_retries,
-                           block=False)
+                           block=False, **kw)
 
 
 def oio_exception_from_httperror(exc, reqid=None, url=None):
