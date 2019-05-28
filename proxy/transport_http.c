@@ -477,11 +477,16 @@ http_manage_request(struct req_ctx_s *r)
 
 		// Finalize and send the headers
 		g_string_append_static(buf, "\r\n");
+		if (body) {
+			sock_set_cork(r->client->fd, TRUE);
+		}
 		network_client_send_slab(r->client, data_slab_make_gstr(buf));
 
 		// Now send the body
-		if (body)
+		if (body) {
 			network_client_send_slab(r->client, data_slab_make_gbytes(body));
+			sock_set_cork(r->client->fd, FALSE);
+		}
 		body = NULL;
 
 		_access_log(r, code, body_len, access);
