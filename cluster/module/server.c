@@ -1273,10 +1273,10 @@ restart_srv_from_file(gchar *path)
 		return FALSE;
 	} else if (hub_group_size > 0) {
 		GRID_NOTICE("Conscience hub enabled "
-				"(%"G_GINT64_FORMAT" other nodes), "
+				"(%d other nodes), "
 				"ignoring persistence file %s, "
 				"waiting to receive a service list.",
-				path);
+				hub_group_size, path);
 		for (int i = 8; i > 0 && !hub_working; i--)
 			g_usleep(250 * G_TIME_SPAN_MILLISECOND);
 		return FALSE;
