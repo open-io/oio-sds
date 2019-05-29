@@ -428,8 +428,10 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertEqual('40', usage)
         damaged_objects = meta['system']['sys.m2.objects.damaged']
         missing_chunks = meta['system']['sys.m2.chunks.missing']
-        self.wait_for_event(
-            'oio-preserved', reqid=reqid, type_=EventTypes.CONTENT_NEW)
+        for i in range(10):
+            reqid = 'content' + str(i)
+            self.wait_for_event(
+                'oio-preserved', reqid=reqid, type_=EventTypes.CONTENT_NEW)
         self.wait_for_event(
             'oio-preserved', type_=EventTypes.CONTAINER_STATE)
         containers = self.api.container_list(self.account)
@@ -443,8 +445,9 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             self.fail("No container in account")
 
         self.api.account_flush(self.account)
-        self.assertEqual([], self.api.container_list(self.account))
+        self.assertFalse(self.api.container_list(self.account))
 
+        self.beanstalkd0.drain_tube('oio-preserved')
         reqid = request_id()
         self.api.container_touch(self.account, name, reqid=reqid)
         self.wait_for_event(
@@ -456,7 +459,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             containers[0])
 
         self.api.account_flush(self.account)
-        self.assertEqual([], self.api.container_list(self.account))
+        self.assertFalse(self.api.container_list(self.account))
 
         self.api.container_touch(self.account, name, recompute=True)
         self.wait_for_event(
