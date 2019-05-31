@@ -133,8 +133,12 @@ oio_lb_world__feed_from_string(struct oio_lb_world_s *self,
 			oio_lb_world__feed_slot(self, main_slot, srv);
 
 			if (elements > 3) {
-				oio_lb_world__create_slot(self, id_loc[3]);
-				oio_lb_world__feed_slot(self, id_loc[3], srv);
+				gchar **slots = g_strsplit(id_loc[3], ",", -1);
+				for (gchar **slot = slots; slots && *slot; slot++) {
+					oio_lb_world__create_slot(self, *slot);
+					oio_lb_world__feed_slot(self, *slot, srv);
+				}
+				g_strfreev(slots);
 			}
 		} else {
 			GRID_DEBUG("Ignoring line [%s]", *line);
