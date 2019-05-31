@@ -488,7 +488,7 @@ def ec_encode(storage_method, n):
         total_len += len(data)
 
         if total_len >= segment_size:
-            data_to_encode = []
+            encode_result = []
 
             while total_len >= segment_size:
                 # take data from buf
@@ -505,12 +505,9 @@ def ec_encode(storage_method, n):
                     parts.append(part)
                     amount -= len(part)
                     total_len -= len(part)
-                data_to_encode.append(''.join(parts))
-
-            # let's encode!
-            encode_result = []
-            for d in data_to_encode:
-                encode_result.append(storage_method.driver.encode(d))
+                # let's encode!
+                encode_result.append(
+                    storage_method.driver.encode(''.join(parts)))
 
             # transform the result
             #
