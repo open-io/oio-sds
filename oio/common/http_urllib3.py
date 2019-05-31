@@ -31,9 +31,14 @@ DEFAULT_BACKOFF = 0
 URLLIB3_REQUESTS_KWARGS = ('fields', 'headers', 'body', 'retries', 'redirect',
                            'assert_same_host', 'timeout', 'pool_timeout',
                            'release_conn', 'chunked')
-URLLIB3_POOLMANAGER_KWARGS = ('pool_connections', 'pool_maxsize',
-                              'max_retries', 'backoff_factor',
-                              'socket_options', 'source_address')
+URLLIB3_POOLMANAGER_KWARGS = (
+    # Integers
+    'pool_connections', 'pool_maxsize', 'max_retries', 'backoff_factor',
+    # List or tuple
+    'socket_options',
+    # Tuple
+    'source_address'
+)
 
 
 class SafePoolManager(urllib3.PoolManager):
@@ -74,10 +79,12 @@ def get_pool_manager(pool_connections=DEFAULT_POOLSIZE,
     if max_retries == DEFAULT_RETRIES:
         max_retries = urllib3.Retry(0, read=False)
     else:
-        max_retries = urllib3.Retry(total=max_retries,
-                                    backoff_factor=backoff_factor)
+        max_retries = urllib3.Retry(total=int(max_retries),
+                                    backoff_factor=int(backoff_factor))
     kw = {k: v for k, v in kwargs.items()
           if k in URLLIB3_POOLMANAGER_KWARGS[4:]}
+    pool_connections = int(pool_connections)
+    pool_maxsize = int(pool_maxsize)
     return SafePoolManager(num_pools=pool_connections,
                            maxsize=pool_maxsize, retries=max_retries,
                            block=False, **kw)
