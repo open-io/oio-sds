@@ -429,8 +429,10 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertEqual('40', usage)
         damaged_objects = meta['system']['sys.m2.objects.damaged']
         missing_chunks = meta['system']['sys.m2.chunks.missing']
-        self.wait_for_event(
-            'oio-preserved', reqid=reqid, type_=EventTypes.CONTENT_NEW)
+        for i in range(10):
+            reqid = 'content' + name + str(i)
+            self.wait_for_event(
+                'oio-preserved', reqid=reqid, type_=EventTypes.CONTENT_NEW)
         self.wait_for_event(
             'oio-preserved', fields={'user': name},
             type_=EventTypes.CONTAINER_STATE)
@@ -445,8 +447,9 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             self.fail("No container in account")
 
         self.api.account_flush(self.account)
-        self.assertEqual([], self.api.container_list(self.account))
+        self.assertFalse(self.api.container_list(self.account))
 
+        self.beanstalkd0.drain_tube('oio-preserved')
         reqid = request_id()
         self.api.container_touch(self.account, name, reqid=reqid)
         self.wait_for_event(
@@ -459,7 +462,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             containers[0])
 
         self.api.account_flush(self.account)
-        self.assertEqual([], self.api.container_list(self.account))
+        self.assertFalse(self.api.container_list(self.account))
 
         self.api.container_touch(self.account, name, recompute=True)
         self.wait_for_event(
@@ -704,64 +707,99 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # Ensure that the chunk deletion has been called with proper args
         self.api.blob_client.chunk_delete_many.assert_called_once()
 
-    def test_bucket_list(self):
+    def test_buckets_list(self):
         account = random_str(32)
-        name_with_path = "%2F".join([random_str(32).lower(),
-                                     random_str(32).lower()])
-        name_with_segments = random_str(32).lower() + "+segments"
-        name = random_str(32).lower()
-        self.api.container_create(account, name)
-        self.api.container_create(account, name_with_path)
-        self.api.container_create(account, name_with_segments)
+
+        bucket_names = list()
+        bucket_names.append(random_str(32).lower())
+        bucket_names.append(random_str(32).lower())
+
+        container_names = list()
+        container_names += bucket_names
+        container_names.append(  # path (CH)
+            "%2F".join([random_str(32).lower(), random_str(32).lower()]))
+        container_names.append(  # segments (MPU)
+            random_str(32).lower() + "+segments")
+
+        for container_name in container_names:
+            self.api.container_create(account, container_name)
+        for _ in container_names:
+            self.wait_for_event(
+                'oio-preserved', type_=EventTypes.CONTAINER_NEW)
+
         buckets = self.api.container_list(account, s3_buckets_only=True)
-        self.assertEqual(len(buckets), 1)
-        self.assertEqual(buckets[0][0], name)
+        self.assertListEqual(
+            sorted(bucket_names), [b[0] for b in buckets])
+
         containers = self.api.container_list(account)
-        self.assertEqual(len(containers), 3)
+        self.assertListEqual(
+            sorted(container_names), [b[0] for b in containers])
 
     def test_buckets_list_with_prefix(self):
         account = random_str(32)
-        name = random_str(32).lower()
-        name_2 = random_str(32).lower()
-        name_with_path = "%2F".join([name, random_str(32).lower()])
-        name_with_segments = name + "+segments"
-        self.api.container_create(account, name)
-        self.api.container_create(account, name_2)
-        self.api.container_create(account, name_with_path)
-        self.api.container_create(account, name_with_segments)
+        prefix = random_str(32).lower()
+
+        bucket_names_with_prefix = list()
+        bucket_names_with_prefix.append(prefix)
+        bucket_names_with_prefix.append(prefix + "test")
+
+        container_names = list()
+        container_names += bucket_names_with_prefix
+        container_names.append(random_str(32).lower())  # No prefix
+        container_names.append(  # path (CH) with prefix
+            "%2F".join([prefix, random_str(32).lower()]))
+        container_names.append(  # segments (MPU) with prefix
+            prefix + "+segments")
+
+        for container_name in container_names:
+            self.api.container_create(account, container_name)
+        for _ in container_names:
+            self.wait_for_event(
+                'oio-preserved', type_=EventTypes.CONTAINER_NEW)
+
         buckets = self.api.container_list(account, s3_buckets_only=True,
-                                          prefix=name)
-        self.assertEqual(len(buckets), 1)
-        self.assertEqual(buckets[0][0], name)
-        containers = self.api.container_list(account, prefix=name)
-        self.assertEqual(len(containers), 3)
+                                          prefix=prefix)
+        self.assertListEqual(
+            sorted(bucket_names_with_prefix), [b[0] for b in buckets])
+
+        containers = self.api.container_list(account)
+        self.assertListEqual(
+            sorted(container_names), [b[0] for b in containers])
 
     def test_buckets_list_check_name(self):
         account = random_str(32)
-        too_small_name = random_str(2).lower()
-        too_long_name = random_str(64).lower()
-        underscore_name = random_str(16).lower() + "_" + random_str(16).lower()
-        name = random_str(16).lower() + "." + random_str(16).lower()
-        start_with_dot = "." + random_str(16).lower()
-        upper_case = random_str(32)
-        ip_addr = "192.168.5.4"
-        ok_labels = random_str(10).lower() + '.' + random_str(10).lower()
-        ko_labels = random_str(10).lower() + '.' + random_str(10)
-        self.api.container_create(account, too_small_name)
-        self.api.container_create(account, too_long_name)
-        self.api.container_create(account, underscore_name)
-        self.api.container_create(account, name)
-        self.api.container_create(account, start_with_dot)
-        self.api.container_create(account, upper_case)
-        self.api.container_create(account, ip_addr)
-        self.api.container_create(account, ok_labels)
-        self.api.container_create(account, ko_labels)
+
+        bucket_names = list()
+        bucket_names.append(  # Name
+            random_str(16).lower() + "." + random_str(16).lower())
+        bucket_names.append(  # OK label
+            random_str(10).lower() + '.' + random_str(10).lower())
+
+        container_names = list()
+        container_names += bucket_names
+        container_names.append(random_str(2).lower())  # Too small name
+        container_names.append(random_str(64).lower())  # Too long name
+        container_names.append(  # Underscore name
+            random_str(16).lower() + "_" + random_str(16).lower())
+        container_names.append("." + random_str(16).lower())  # Start with dot
+        container_names.append(random_str(32).upper())  # Uppercase
+        container_names.append("192.168.5.4")  # IP address
+        container_names.append(  # KO label
+            random_str(10).lower() + '.' + random_str(10))
+
+        for container_name in container_names:
+            self.api.container_create(account, container_name)
+        for _ in container_names:
+            self.wait_for_event(
+                'oio-preserved', type_=EventTypes.CONTAINER_NEW)
+
         buckets = self.api.container_list(account, s3_buckets_only=True)
-        self.assertEqual(len(buckets), 2)
-        self.assertIn(name, [b[0] for b in buckets])
-        self.assertIn(ok_labels, [b[0] for b in buckets])
+        self.assertListEqual(
+            sorted(bucket_names), [b[0] for b in buckets])
+
         containers = self.api.container_list(account)
-        self.assertEqual(len(containers), 9)
+        self.assertListEqual(
+            sorted(container_names), [b[0] for b in containers])
 
     def test_container_refresh(self):
         self.wait_for_score(('account', 'meta2'))
@@ -1365,6 +1403,12 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
 
         self.api.object_change_policy(
             self.account, name, name, new_policy, version=obj1['version'])
+        # One of the checks below verifies that the old chunks have actually
+        # been deleted. Since this is an asynchronous process, we used to see
+        # random failures when the event treatment was a little slow.
+        self.wait_for_event('oio-preserved', type_=EventTypes.CHUNK_DELETED,
+                            timeout=1.0)
+
         obj2, chunks2 = self.api.object_locate(
             self.account, name, name, version=obj1['version'])
         cnt_props2 = self.api.container_get_properties(self.account, name)

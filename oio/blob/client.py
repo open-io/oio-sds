@@ -72,8 +72,9 @@ def update_rawx_perfdata(func):
         res = func(self, *args, **kwargs)
         if perfdata is not None:
             req_end = utils.monotonic_time()
-            val = perfdata.get('rawx', 0.0) + req_end - req_start
-            perfdata['rawx'] = val
+            perfdata_rawx = perfdata.setdefault('rawx', dict())
+            total_rawx = perfdata_rawx.get('total', 0.0) + req_end - req_start
+            perfdata_rawx['total'] = total_rawx
         return res
     return _update_rawx_perfdata
 
@@ -110,7 +111,7 @@ class BlobClient(object):
                         else 'chunk_hash']
         writer = ReplicatedMetachunkWriter(
             meta, [chunk], FakeChecksum(checksum),
-            storage_method, quorum=1)
+            storage_method, quorum=1, perfdata=self.perfdata)
         writer.stream(data, None)
 
     @update_rawx_perfdata

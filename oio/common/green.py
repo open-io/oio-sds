@@ -26,7 +26,7 @@ from eventlet import Queue, Timeout, GreenPile, GreenPool # noqa
 from eventlet.green import threading, socket # noqa
 from eventlet.green.httplib import HTTPConnection, HTTPResponse, _UNKNOWN # noqa
 from eventlet.event import Event # noqa
-from eventlet.queue import Empty, LifoQueue # noqa
+from eventlet.queue import Empty, LifoQueue, LightQueue # noqa
 
 eventlet.monkey_patch(os=False)
 

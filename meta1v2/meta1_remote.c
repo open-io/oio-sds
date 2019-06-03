@@ -113,6 +113,9 @@ meta1v2_remote_list_reference_services(const char *to, struct oio_url_s *url,
 	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVLIST, deadline);
 	metautils_message_add_url_no_type (req, url);
 	metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, srvtype);
+	/* Ask the server for the "extended" version, which adds account and
+	 * container names to the response. */
+	metautils_message_add_field_str(req, NAME_MSGKEY_EXTEND, "1");
 
 	gchar **_tmp_result = NULL;
 

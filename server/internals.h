@@ -31,6 +31,7 @@ License along with this library.
 #define OIO_SERVER_UDP_QUEUE_MAXAGE (2 * G_TIME_SPAN_SECOND)
 #endif
 
+/** Deprecated. Will be removed in 5.0.x versions. */
 enum {
 	NETSERVER_THROUGHPUT = 0x0001,
 	NETSERVER_LATENCY    = 0x0002,

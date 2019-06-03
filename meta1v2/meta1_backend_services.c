@@ -1045,7 +1045,7 @@ end:
 GError *
 meta1_backend_services_list(struct meta1_backend_s *m1,
 		struct oio_url_s *url, const char *srvtype, gchar ***result,
-		gint64 deadline)
+		gint64 deadline, gboolean append_cname)
 {
 	if (!result)
 		return SYSERR("BUG: invalid output array");
@@ -1090,7 +1090,10 @@ label_retry:
 			} else {
 				struct meta1_service_url_s **expanded = expand_urlv(uv);
 				gchar **urlv = pack_urlv(expanded);
-				err = __services_list_append_account_and_container(&urlv, url);
+				if (append_cname) {
+					err = __services_list_append_account_and_container(
+							&urlv, url);
+				}
 				if (!err)
 					*result = urlv;
 				else

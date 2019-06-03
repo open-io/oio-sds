@@ -72,9 +72,10 @@ class ObjectStorageApi(object):
         - `write_timeout`: `float`
     """
     TIMEOUT_KEYS = ('connection_timeout', 'read_timeout', 'write_timeout')
-    EXTRA_KEYWORDS = ('chunk_checksum_algo', 'autocreate')
+    EXTRA_KEYWORDS = ('chunk_checksum_algo', 'autocreate',
+                      'chunk_buffer_min', 'chunk_buffer_max')
 
-    def __init__(self, namespace, logger=None, **kwargs):
+    def __init__(self, namespace, logger=None, perfdata=None, **kwargs):
         """
         Initialize the object storage API.
 
@@ -103,10 +104,13 @@ class ObjectStorageApi(object):
         self.namespace = namespace
         conf = {"namespace": self.namespace}
         self.logger = logger or get_logger(conf)
+        self.perfdata = perfdata
         self._global_kwargs = {tok: float_value(tov, None)
                                for tok, tov in kwargs.items()
                                if tok in self.__class__.TIMEOUT_KEYS}
         self._global_kwargs['autocreate'] = True
+        if self.perfdata is not None:
+            self._global_kwargs['perfdata'] = self.perfdata
         for key in self.__class__.EXTRA_KEYWORDS:
             if key in kwargs:
                 self._global_kwargs[key] = kwargs[key]
@@ -135,11 +139,10 @@ class ObjectStorageApi(object):
         """
         if self._blob_client is None:
             from oio.blob.client import BlobClient
-            perfdata = self.container.perfdata
             connection_pool = self.container.pool_manager
             self._blob_client = BlobClient(
                 conf={"namespace": self.namespace},
-                connection_pool=connection_pool, perfdata=perfdata)
+                connection_pool=connection_pool, perfdata=self.perfdata)
         return self._blob_client
 
     # FIXME(FVE): this method should not exist
@@ -1059,13 +1062,17 @@ class ObjectStorageApi(object):
         return link_meta
 
     @staticmethod
-    def _ttfb_wrapper(stream, req_start, perfdata):
+    def _ttfb_wrapper(stream, req_start, download_start, perfdata):
         """Keep track of time-to-first-byte and time-to-last-byte"""
+        perfdata_rawx = perfdata.setdefault('rawx', dict())
         for dat in stream:
             if 'ttfb' not in perfdata:
                 perfdata['ttfb'] = monotonic_time() - req_start
             yield dat
-        perfdata['ttlb'] = monotonic_time() - req_start
+        req_end = monotonic_time()
+        perfdata['ttlb'] = req_end - req_start
+        perfdata_rawx['total'] = perfdata_rawx.get('total', 0.0) \
+            + req_end - download_start
 
     @patch_kwargs
     @ensure_headers
@@ -1095,7 +1102,7 @@ class ObjectStorageApi(object):
             a stream of object data
         :rtype: tuple
         """
-        perfdata = kwargs.get('perfdata', self.container.perfdata)
+        perfdata = kwargs.get('perfdata', None)
         if perfdata is not None:
             req_start = monotonic_time()
 
@@ -1119,6 +1126,8 @@ class ObjectStorageApi(object):
         meta['container_id'] = (
             cid_arg or cid_from_name(account, container).upper())
         meta['ns'] = self.namespace
+        if perfdata is not None:
+            download_start = monotonic_time()
         if storage_method.ec:
             stream = fetch_stream_ec(chunks, ranges, storage_method, **kwargs)
         elif storage_method.backblaze:
@@ -1129,7 +1138,8 @@ class ObjectStorageApi(object):
             stream = fetch_stream(chunks, ranges, storage_method, **kwargs)
 
         if perfdata is not None:
-            return meta, self._ttfb_wrapper(stream, req_start, perfdata)
+            return meta, self._ttfb_wrapper(
+                stream, req_start, download_start, perfdata)
         return meta, stream
 
     @handle_object_not_found
@@ -1234,14 +1244,15 @@ class ObjectStorageApi(object):
 
     def _object_upload(self, ul_handler, **kwargs):
         """Upload data to rawx, measure time it takes."""
-        perfdata = kwargs.get('perfdata', self.container.perfdata)
+        perfdata = kwargs.get('perfdata', None)
         if perfdata is not None:
             upload_start = monotonic_time()
         ul_chunks, ul_bytes, obj_checksum = ul_handler.stream()
         if perfdata is not None:
             upload_end = monotonic_time()
-            val = perfdata.get('rawx', 0.0) + upload_end - upload_start
-            perfdata['rawx'] = val
+            perfdata_rawx = perfdata.setdefault('rawx', dict())
+            perfdata_rawx['total'] = perfdata_rawx.get('total', 0.0) \
+                + upload_end - upload_start
         return ul_chunks, ul_bytes, obj_checksum
 
     def _object_prepare(self, account, container, obj_name, source,

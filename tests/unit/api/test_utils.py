@@ -16,6 +16,7 @@
 import unittest
 from oio.common.exceptions import DeadlineReached
 from oio.common.storage_functions import obj_range_to_meta_chunk_range
+from oio.common.http_urllib3 import get_pool_manager
 from oio.common.utils import deadline_to_timeout, \
     set_deadline_from_read_timeout, monotonic_time
 
@@ -165,3 +166,23 @@ class TestUtils(unittest.TestCase):
         # deadline is recomputed
         self.assertIn('deadline', kwargs)
         self.assertNotEqual(prev_deadline, kwargs['deadline'])
+
+    def test_pool_manager_parameters(self):
+        get_pool_manager(pool_connections=5)
+        get_pool_manager(pool_connections='5')
+        self.assertRaises(ValueError,
+                          get_pool_manager, pool_connections='cinq')
+        get_pool_manager(pool_maxsize=5)
+        get_pool_manager(pool_maxsize='5')
+        self.assertRaises(ValueError,
+                          get_pool_manager, pool_maxsize='cinq')
+        get_pool_manager(max_retries=5)
+        get_pool_manager(max_retries='5')
+        self.assertRaises(ValueError,
+                          get_pool_manager, max_retries='cinq')
+        get_pool_manager(backoff_factor=5, max_retries=5)
+        get_pool_manager(backoff_factor='5', max_retries=5)
+        self.assertRaises(ValueError,
+                          get_pool_manager,
+                          backoff_factor='cinq', max_retries=5)
+        get_pool_manager(ignored='ignored')

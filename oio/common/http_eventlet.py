@@ -78,6 +78,13 @@ class CustomHttpConnection(HTTPConnection):
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         return conn
 
+    def set_cork(self, enabled=True):
+        """
+        Enable or disable TCP_CORK on the underlying socket.
+        """
+        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK,
+                             1 if enabled else 0)
+
     def putrequest(self, method, url, skip_host=0, skip_accept_encoding=0):
         self._method = method
         self._path = url

@@ -14,16 +14,18 @@
 # License along with this library.
 
 
-from oio.common.green import Queue, Timeout, GreenPile
+from oio.common.green import sleep, LightQueue, Timeout, GreenPile
 
 import logging
 import hashlib
 from socket import error as SocketError
 from urlparse import urlparse
-from oio.common import exceptions as exc
-from oio.common.exceptions import SourceReadError
-from oio.common.http import headers_from_object_metadata
+
 from oio.api import io
+from oio.common.exceptions import OioTimeout, SourceReadError, \
+    SourceReadTimeout
+from oio.common.http import headers_from_object_metadata
+from oio.common.utils import monotonic_time
 from oio.common.constants import CHUNK_HEADERS
 from oio.common import green
 
@@ -58,7 +60,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         self.read_timeout = read_timeout or io.CLIENT_TIMEOUT
         self.headers = headers or {}
 
-    def stream(self, source, size=None):
+    def stream(self, source, size):
         bytes_transferred = 0
         meta_chunk = self.meta_chunk
         if self.chunk_checksum_algo:
@@ -72,7 +74,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         for chunk in meta_chunk:
             pile.spawn(self._connect_put, chunk)
 
-        for conn, chunk in [d for d in pile]:
+        for conn, chunk in pile:
             if not conn:
                 failed_chunks.append(chunk)
             else:
@@ -85,27 +87,28 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
             with green.ContextPool(len(meta_chunk)) as pool:
                 for conn in current_conns:
                     conn.failed = False
-                    conn.queue = Queue(io.PUT_QUEUE_DEPTH)
+                    conn.queue = LightQueue(io.PUT_QUEUE_DEPTH)
                     pool.spawn(self._send_data, conn)
 
                 while True:
+                    buffer_size = self.buffer_size()
                     if size is not None:
                         remaining_bytes = size - bytes_transferred
-                        if io.WRITE_CHUNK_SIZE < remaining_bytes:
-                            read_size = io.WRITE_CHUNK_SIZE
+                        if buffer_size < remaining_bytes:
+                            read_size = buffer_size
                         else:
                             read_size = remaining_bytes
                     else:
-                        read_size = io.WRITE_CHUNK_SIZE
+                        read_size = buffer_size
                     with green.SourceReadTimeout(self.read_timeout):
                         try:
                             data = source.read(read_size)
-                        except (ValueError, IOError) as e:
-                            raise SourceReadError(str(e))
+                        except (ValueError, IOError) as err:
+                            raise SourceReadError(str(err))
                         if len(data) == 0:
                             for conn in current_conns:
                                 if not conn.failed:
-                                    conn.queue.put('0\r\n\r\n')
+                                    conn.queue.put('')
                             break
                     self.checksum.update(data)
                     if meta_checksum:
@@ -114,7 +117,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                     # copy current_conns to be able to remove a failed conn
                     for conn in current_conns[:]:
                         if not conn.failed:
-                            conn.queue.put('%x\r\n%s\r\n' % (len(data), data))
+                            conn.queue.put(data)
                         else:
                             current_conns.remove(conn)
                             failed_chunks.append(conn.chunk)
@@ -123,18 +126,18 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                                         failed_chunks)
 
                 for conn in current_conns:
-                    if conn.queue.unfinished_tasks:
-                        conn.queue.join()
+                    while conn.queue.qsize():
+                        sleep(0)
 
         except green.SourceReadTimeout as err:
             logger.warn('Source read timeout (reqid=%s): %s', self.reqid, err)
-            raise exc.SourceReadTimeout(err)
+            raise SourceReadTimeout(err)
         except SourceReadError as err:
             logger.warn('Source read error (reqid=%s): %s', self.reqid, err)
             raise
         except Timeout as to:
             logger.error('Timeout writing data (reqid=%s): %s', self.reqid, to)
-            raise exc.OioTimeout(to)
+            raise OioTimeout(to)
         except Exception:
             logger.exception('Exception writing data (reqid=%s)', self.reqid)
             raise
@@ -176,8 +179,17 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
             hdrs.update(self.headers)
 
             with green.ConnectionTimeout(self.connection_timeout):
+                if self.perfdata is not None:
+                    connect_start = monotonic_time()
                 conn = io.http_connect(
                     parsed.netloc, 'PUT', parsed.path, hdrs)
+                conn.set_cork(True)
+                if self.perfdata is not None:
+                    connect_end = monotonic_time()
+                    perfdata_rawx = self.perfdata.setdefault('rawx', dict())
+                    perfdata_rawx[chunk['url']] = \
+                        perfdata_rawx.get(chunk['url'], 0.0) \
+                        + connect_end - connect_start
                 conn.chunk = chunk
             return conn, chunk
         except (SocketError, Timeout) as err:
@@ -195,16 +207,25 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         """
         Send data to an open connection, taking data blocks from `conn.queue`.
         """
+        conn.upload_start = None
         while True:
             data = conn.queue.get()
             if not conn.failed:
                 try:
                     with green.ChunkWriteTimeout(self.write_timeout):
+                        if self.perfdata is not None \
+                                and conn.upload_start is None:
+                            conn.upload_start = monotonic_time()
+                        conn.send('%x\r\n' % len(data))
                         conn.send(data)
+                        conn.send('\r\n')
+                    if not data:
+                        # Last segment sent, disable TCP_CORK to flush buffers
+                        conn.set_cork(False)
+                    sleep(0)
                 except (Exception, green.ChunkWriteTimeout) as err:
                     conn.failed = True
                     conn.chunk['error'] = str(err)
-            conn.queue.task_done()
 
     def _get_response(self, conn):
         """
@@ -215,6 +236,13 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         try:
             with green.ChunkWriteTimeout(self.write_timeout):
                 resp = conn.getresponse()
+                if self.perfdata is not None:
+                    upload_end = monotonic_time()
+                    perfdata_rawx = self.perfdata.setdefault('rawx', dict())
+                    url_chunk = conn.chunk['url']
+                    perfdata_rawx[url_chunk] = \
+                        perfdata_rawx.get(url_chunk, 0.0) \
+                        + upload_end - conn.upload_start
         except Timeout as err:
             resp = err
             logger.error('Failed to read response from %s (reqid=%s): %s',
@@ -273,6 +301,7 @@ class ReplicatedWriteHandler(io.WriteHandler):
         global_checksum = hashlib.md5()
         total_bytes_transferred = 0
         content_chunks = []
+        kwargs = ReplicatedMetachunkWriter.filter_kwargs(self.extra_kwargs)
 
         for meta_chunk in self.chunk_prep():
             size = self.sysmeta['chunk_size']
@@ -282,7 +311,7 @@ class ReplicatedWriteHandler(io.WriteHandler):
                 write_timeout=self.write_timeout,
                 read_timeout=self.read_timeout,
                 headers=self.headers,
-                chunk_checksum_algo=self.chunk_checksum_algo)
+                **kwargs)
             bytes_transferred, _h, chunks = handler.stream(self.source, size)
             content_chunks += chunks
 

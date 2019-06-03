@@ -28,7 +28,7 @@ from oio.common.http import parse_content_type,\
     parse_content_range, ranges_from_http_header, http_header_from_ranges
 from oio.common.http_eventlet import http_connect
 from oio.common.utils import GeneratorIO, group_chunk_errors, \
-    deadline_to_timeout, set_deadline_from_read_timeout
+    deadline_to_timeout, monotonic_time, set_deadline_from_read_timeout
 from oio.common import green
 from oio.common.storage_method import STORAGE_METHODS
 
@@ -82,7 +82,6 @@ class IOBaseWrapper(RawIOBase):
 class WriteHandler(object):
     def __init__(self, source, sysmeta, chunk_preparer,
                  storage_method, headers=None,
-                 chunk_checksum_algo='md5',
                  **kwargs):
         """
         :param connection_timeout: timeout to establish the connection
@@ -110,7 +109,6 @@ class WriteHandler(object):
         self.connection_timeout = kwargs.get('connection_timeout',
                                              CONNECTION_TIMEOUT)
         self.deadline = kwargs.get('deadline')
-        self.chunk_checksum_algo = chunk_checksum_algo
 
     @property
     def read_timeout(self):
@@ -201,7 +199,7 @@ class ChunkReader(object):
 
     def __init__(self, chunk_iter, buf_size, headers,
                  connection_timeout=None, read_timeout=None,
-                 align=False, **_kwargs):
+                 align=False, perfdata=None, **_kwargs):
         """
         :param chunk_iter:
         :param buf_size: size of the read buffer
@@ -225,6 +223,7 @@ class ChunkReader(object):
         self.connection_timeout = connection_timeout or CONNECTION_TIMEOUT
         self.read_timeout = read_timeout or CHUNK_TIMEOUT
         self._resp_by_chunk = dict()
+        self.perfdata = perfdata
 
     @property
     def reqid(self):
@@ -285,8 +284,16 @@ class ChunkReader(object):
             with green.ConnectionTimeout(self.connection_timeout):
                 raw_url = chunk.get("real_url", chunk["url"])
                 parsed = urlparse(raw_url)
+                if self.perfdata is not None:
+                    connect_start = monotonic_time()
                 conn = http_connect(parsed.netloc, 'GET', parsed.path,
                                     self.request_headers)
+                if self.perfdata is not None:
+                    connect_end = monotonic_time()
+                    perfdata_rawx = self.perfdata.setdefault('rawx', dict())
+                    perfdata_rawx[chunk['url']] = \
+                        perfdata_rawx.get(chunk['url'], 0.0) \
+                        + connect_end - connect_start
             with green.OioTimeout(self.read_timeout):
                 source = conn.getresponse()
                 source.conn = conn
@@ -405,10 +412,20 @@ class ChunkReader(object):
         bytes_consumed = 0
         count = 0
         buf = ''
+        if self.perfdata is not None:
+            perfdata_rawx = self.perfdata.setdefault('rawx', dict())
+            url_chunk = chunk['url']
         while True:
             try:
                 with green.ChunkReadTimeout(self.read_timeout):
+                    if self.perfdata is not None:
+                        download_start = monotonic_time()
                     data = part.read(READ_CHUNK_SIZE)
+                    if self.perfdata is not None:
+                        download_end = monotonic_time()
+                        perfdata_rawx[url_chunk] = \
+                            perfdata_rawx.get(url_chunk, 0.0) \
+                            + download_end - download_start
                     count += 1
                     buf += data
             except (green.ChunkReadTimeout, IOError) as crto:
@@ -533,17 +550,48 @@ class ChunkReader(object):
         raise StopIteration
 
 
+def exp_ramp_gen(start, maximum):
+    """
+    Yield exponentially increasing numbers.
+
+    Multiply the yielded number by 2 in each iteration
+    after the second one, until maximum is reached.
+
+    :param start: the first number to be yielded.
+    :param maximum: the maximum number to yield.
+    """
+    # Yield the minimum twice in order to keep things aligned
+    yield start
+    current = start
+    while True:
+        yield current
+        current = min(current * 2, maximum)
+
+
 class MetachunkWriter(object):
     """Base class for metachunk writers"""
 
     def __init__(self, storage_method=None, quorum=None,
-                 chunk_checksum_algo='md5', reqid=None, **_kwargs):
+                 chunk_checksum_algo='md5', reqid=None,
+                 chunk_buffer_min=32768, chunk_buffer_max=262144,
+                 perfdata=None, **_kwargs):
         self.storage_method = storage_method
         self._quorum = quorum
         if storage_method is None and quorum is None:
             raise ValueError('Missing storage_method or quorum')
         self.chunk_checksum_algo = chunk_checksum_algo
+        self.perfdata = perfdata
         self.reqid = reqid
+        self._buffer_size_gen = exp_ramp_gen(chunk_buffer_min,
+                                             chunk_buffer_max)
+
+    @classmethod
+    def filter_kwargs(cls, kwargs):
+        return {k: v for k, v in kwargs.items()
+                if k in ('chunk_checksum_algo',
+                         'chunk_buffer_min',
+                         'chunk_buffer_max',
+                         'perfdata')}
 
     @property
     def quorum(self):
@@ -584,6 +632,15 @@ class MetachunkWriter(object):
                 elif isinstance(err, (exc.OioTimeout, green.OioTimeout)):
                     raise exc.OioTimeout(new_exc)
             raise new_exc
+
+    def buffer_size(self):
+        """
+        Return a progressive buffer size.
+
+        Start small to minimize initial dead time and parallelize early,
+        then grow to avoid too much context switches.
+        """
+        return self._buffer_size_gen.next()
 
 
 class MetachunkPreparer(object):

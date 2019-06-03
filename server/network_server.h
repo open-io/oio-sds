@@ -121,6 +121,7 @@ gchar** network_server_endpoints (struct network_server_s *srv);
 
 int network_server_first_udp (struct network_server_s *srv);
 
+/** Deprecated */
 void network_server_bind_host_lowlatency(struct network_server_s *srv,
 		const gchar *url, gpointer factory_udata,
 		network_transport_factory factory);

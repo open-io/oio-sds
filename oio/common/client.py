@@ -76,8 +76,8 @@ class ProxyClient(HttpApi):
 
         self._request_attempts = request_attempts
 
-        super(ProxyClient, self).__init__(endpoint='/'.join(ep_parts),
-                                          **kwargs)
+        super(ProxyClient, self).__init__(
+            endpoint='/'.join(ep_parts), service_type='proxy', **kwargs)
 
     def _direct_request(self, method, url, headers=None, request_attempts=None,
                         **kwargs):

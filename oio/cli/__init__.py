@@ -81,3 +81,17 @@ def add_common_parser_options(parser):
         metavar='<request-id>',
         help=('Set a request ID. Maximum 63 characters. '
               'For looping commands, a suffix may be appended.'))
+
+    parser.add_argument(
+        "--profile",
+        help=("Profile code, save profiling data in the specified file. "
+              "'%%(pid)s' in the name will be replaced by the PID."))
+    parser.add_argument(
+        "--profiler",
+        default='cProfile',
+        help=("Which profiler to use (default: cProfile, "
+              "supported: GreenletProfiler, cProfile, profile)."))
+    parser.add_argument(
+        "--profile-early",
+        action='store_true',
+        help=("Start profiling early, before subcommand loading."))

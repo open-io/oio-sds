@@ -16,6 +16,7 @@
 import logging
 
 from oio.api.object_storage import ObjectStorageApi
+from oio.common.storage_method import STORAGE_METHODS
 from tests.utils import random_str, BaseTestCase
 
 
@@ -41,28 +42,54 @@ class TestObjectStorageApiPerfdata(BaseTestCase):
         obj = random_str(8)
         self.api.object_create(self.account, container, obj_name=obj, data=obj,
                                perfdata=perfdata)
-        self.assertIn('resolve', perfdata)
-        self.assertIn('meta2', perfdata)
+        meta, chunks = self.api.object_locate(self.account, container, obj)
+        self.assertIn('proxy', perfdata)
+        self.assertIn('resolve', perfdata['proxy'])
+        self.assertIn('meta2', perfdata['proxy'])
+        self.assertIn('total', perfdata['proxy'])
         self.assertIn('rawx', perfdata)
+        if meta['policy'] == 'EC':
+            self.assertIn('ec', perfdata['rawx'])
+        for chunk in chunks:
+            self.assertIn(chunk['url'], perfdata['rawx'])
+        self.assertIn('total', perfdata['rawx'])
 
         perfdata.clear()
         self.api.object_delete(self.account, container, obj, perfdata=perfdata)
-        self.assertIn('resolve', perfdata)
-        self.assertIn('meta2', perfdata)
+        self.assertIn('proxy', perfdata)
+        self.assertIn('resolve', perfdata['proxy'])
+        self.assertIn('meta2', perfdata['proxy'])
+        self.assertIn('total', perfdata['proxy'])
 
     def test_object_fetch_perfdata(self):
         perfdata = dict()
         container = random_str(8)
         obj = random_str(8)
         self.api.object_create(self.account, container, obj_name=obj, data=obj)
+        meta, chunks = self.api.object_locate(self.account, container, obj)
+        stg_method = STORAGE_METHODS.load(meta['chunk_method'])
         _, stream = self.api.object_fetch(self.account, container, obj,
                                           perfdata=perfdata)
-        self.assertIn('resolve', perfdata)
-        self.assertIn('meta2', perfdata)
+        self.assertIn('proxy', perfdata)
+        self.assertIn('resolve', perfdata['proxy'])
+        self.assertIn('meta2', perfdata['proxy'])
+        self.assertIn('total', perfdata['proxy'])
         self.assertNotIn('ttfb', perfdata)
+        self.assertNotIn('ttlb', perfdata)
 
         buf = ''.join(stream)
         self.assertEqual(obj, buf)
+        self.assertIn('rawx', perfdata)
+        if stg_method.ec:
+            self.assertIn('ec', perfdata['rawx'])
+        nb_chunks_to_read = 0
+        for chunk in chunks:
+            if chunk['url'] in perfdata['rawx']:
+                nb_chunks_to_read += 1
+        self.assertLessEqual(stg_method.min_chunks_to_read,
+                             nb_chunks_to_read)
+        self.assertIn('total', perfdata['rawx'])
         self.assertIn('ttfb', perfdata)
+        self.assertIn('ttlb', perfdata)
 
         self.api.object_delete(self.account, container, obj)

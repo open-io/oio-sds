@@ -13,7 +13,9 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.common.green import Queue, Timeout, GreenPile
+from oio.common.green import sleep, ChunkReadTimeout, ChunkWriteTimeout, \
+    ContextPool, ConnectionTimeout, GreenPile, LightQueue, Timeout, \
+    SourceReadTimeout
 
 import collections
 import math
@@ -22,15 +24,15 @@ import logging
 from urlparse import urlparse
 from socket import error as SocketError
 from greenlet import GreenletExit
+
+from oio.api import io
 from oio.common import exceptions
 from oio.common.constants import REQID_HEADER
 from oio.common.exceptions import SourceReadError
 from oio.common.http import HeadersDict, parse_content_range, \
     ranges_from_http_header, headers_from_object_metadata
-from oio.common.utils import fix_ranges
-from oio.api import io
+from oio.common.utils import fix_ranges, monotonic_time
 from oio.common.constants import CHUNK_HEADERS
-from oio.common import green
 
 
 logger = logging.getLogger(__name__)
@@ -96,7 +98,7 @@ class ECChunkDownloadHandler(object):
 
     def __init__(self, storage_method, chunks, meta_start, meta_end, headers,
                  connection_timeout=None, read_timeout=None, reqid=None,
-                 **_kwargs):
+                 perfdata=None, **_kwargs):
         """
         :param connection_timeout: timeout to establish the connections
         :param read_timeout: timeout to read a buffer of data
@@ -112,6 +114,7 @@ class ECChunkDownloadHandler(object):
         self.connection_timeout = connection_timeout
         self.read_timeout = read_timeout
         self.reqid = reqid
+        self.perfdata = perfdata
 
     def _get_range_infos(self):
         """
@@ -156,7 +159,7 @@ class ECChunkDownloadHandler(object):
                     range_info['req_fragment_end'])
         reader = io.ChunkReader(chunk_iter, storage_method.ec_fragment_size,
                                 headers, self.connection_timeout,
-                                self.read_timeout,
+                                self.read_timeout, perfdata=self.perfdata,
                                 align=True)
         return (reader, reader.get_iter())
 
@@ -165,7 +168,7 @@ class ECChunkDownloadHandler(object):
         chunk_iter = iter(self.chunks)
 
         # we use eventlet GreenPool to manage readers
-        with green.ContextPool(self.storage_method.ec_nb_data) as pool:
+        with ContextPool(self.storage_method.ec_nb_data) as pool:
             pile = GreenPile(pool)
             # we use eventlet GreenPile to spawn readers
             for _j in range(self.storage_method.ec_nb_data):
@@ -187,7 +190,7 @@ class ECChunkDownloadHandler(object):
             read_iterators = [it for _, it in readers]
             stream = ECStream(self.storage_method, read_iterators, range_infos,
                               self.meta_length, fragment_length,
-                              reqid=self.reqid)
+                              reqid=self.reqid, perfdata=self.perfdata)
             # start the stream
             stream.start()
             return stream
@@ -204,7 +207,7 @@ class ECStream(object):
     Handles the different readers.
     """
     def __init__(self, storage_method, readers, range_infos, meta_length,
-                 fragment_length, reqid=None):
+                 fragment_length, reqid=None, perfdata=None):
         self.storage_method = storage_method
         self.readers = readers
         self.range_infos = range_infos
@@ -212,6 +215,7 @@ class ECStream(object):
         self.fragment_length = fragment_length
         self._iter = None
         self.reqid = reqid
+        self.perfdata = perfdata
 
     def start(self):
         self._iter = io.chain(self._stream())
@@ -279,7 +283,7 @@ class ECStream(object):
         queues = []
         # each iterators has its queue
         for _j in range(len(fragment_iterators)):
-            queues.append(Queue(1))
+            queues.append(LightQueue(1))
 
         def put_in_queue(fragment_iterator, queue):
             """
@@ -294,7 +298,7 @@ class ECStream(object):
             except GreenletExit:
                 # ignore
                 pass
-            except green.ChunkReadTimeout as err:
+            except ChunkReadTimeout as err:
                 logger.error('%s (reqid=%s)', err, self.reqid)
             except Exception:
                 logger.exception("Exception on reading (reqid=%s)", self.reqid)
@@ -307,7 +311,7 @@ class ECStream(object):
                 fragment_iterator.close()
 
         # we use eventlet GreenPool to manage the read of fragments
-        with green.ContextPool(len(fragment_iterators)) as pool:
+        with ContextPool(len(fragment_iterators)) as pool:
             # spawn coroutines to read the fragments
             for fragment_iterator, queue in zip(fragment_iterators, queues):
                 pool.spawn(put_in_queue, fragment_iterator, queue)
@@ -318,7 +322,6 @@ class ECStream(object):
                 # get the fragments from the queues
                 for queue in queues:
                     fragment = queue.get()
-                    queue.task_done()
                     data.append(fragment)
 
                 if not all(data):
@@ -440,7 +443,14 @@ class ECStream(object):
                                  repr((fragment_start, fragment_end)),
                                  results.keys(), self.reqid)
                     raise
+                if self.perfdata is not None:
+                    ec_start = monotonic_time()
                 segment_iter = self._decode_segments(fragment_iters)
+                if self.perfdata is not None:
+                    ec_end = monotonic_time()
+                    rawx_perfdata = self.perfdata.setdefault('rawx', dict())
+                    rawx_perfdata['ec'] = rawx_perfdata.get('ec', 0.0) \
+                        + ec_end - ec_start
 
                 if not range_info['satisfiable']:
                     io.consume(segment_iter)
@@ -537,7 +547,7 @@ class EcChunkWriter(object):
     Writes an EC chunk
     """
     def __init__(self, chunk, conn, write_timeout=None,
-                 chunk_checksum_algo='md5', **kwargs):
+                 chunk_checksum_algo='md5', perfdata=None, **kwargs):
         self._chunk = chunk
         self._conn = conn
         self.failed = False
@@ -548,8 +558,9 @@ class EcChunkWriter(object):
             self.checksum = None
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
         # we use eventlet Queue to pass data to the send coroutine
-        self.queue = Queue(io.PUT_QUEUE_DEPTH)
+        self.queue = LightQueue(io.PUT_QUEUE_DEPTH)
         self.reqid = kwargs.get('reqid')
+        self.perfdata = perfdata
 
     @property
     def chunk(self):
@@ -579,10 +590,20 @@ class EcChunkWriter(object):
         if kwargs.get('chunk_checksum_algo'):
             trailers = trailers + (CHUNK_HEADERS["chunk_hash"], )
         hdrs["Trailer"] = ', '.join(trailers)
-        with green.ConnectionTimeout(
+        with ConnectionTimeout(
                 connection_timeout or io.CONNECTION_TIMEOUT):
+            perfdata = kwargs.get('perfdata', None)
+            if perfdata is not None:
+                connect_start = monotonic_time()
             conn = io.http_connect(
                 parsed.netloc, 'PUT', parsed.path, hdrs)
+            conn.set_cork(True)
+            if perfdata is not None:
+                connect_end = monotonic_time()
+                perfdata_rawx = perfdata.setdefault('rawx', dict())
+                perfdata_rawx[chunk['url']] = \
+                    perfdata_rawx.get(chunk['url'], 0.0) \
+                    + connect_end - connect_start
             conn.chunk = chunk
         return cls(chunk, conn, write_timeout=write_timeout,
                    reqid=reqid, **kwargs)
@@ -593,34 +614,37 @@ class EcChunkWriter(object):
 
     def _send(self):
         """Send coroutine loop"""
+        self.conn.upload_start = None
         while True:
             # fetch input data from the queue
             data = self.queue.get()
             # use HTTP transfer encoding chunked
             # to write data to RAWX
             if not self.failed:
-                # format the chunk
-                to_send = "%x\r\n%s\r\n" % (len(data), data)
                 try:
-                    with green.ChunkWriteTimeout(self.write_timeout):
-                        self.conn.send(to_send)
+                    with ChunkWriteTimeout(self.write_timeout):
+                        if self.perfdata is not None \
+                                and self.conn.upload_start is None:
+                            self.conn.upload_start = monotonic_time()
+                        self.conn.send("%x\r\n" % len(data))
+                        self.conn.send(data)
+                        self.conn.send("\r\n")
                         self.bytes_transferred += len(data)
-                except (Exception, green.ChunkWriteTimeout) as exc:
+                    sleep(0)
+                except (Exception, ChunkWriteTimeout) as exc:
                     self.failed = True
                     msg = str(exc)
                     logger.warn("Failed to write to %s (%s, reqid=%s)",
                                 self.chunk, msg, self.reqid)
                     self.chunk['error'] = 'write: %s' % msg
 
-            self.queue.task_done()
-
     def wait(self):
         """
         Wait until all data in the queue
         has been processed by the send coroutine
         """
-        if self.queue.unfinished_tasks:
-            self.queue.join()
+        while self.queue.qsize():
+            sleep(0)
 
     def send(self, data):
         # do not send empty data because
@@ -646,6 +670,9 @@ class EcChunkWriter(object):
         parts.append('\r\n')
         to_send = "".join(parts)
         self.conn.send(to_send)
+        # Last segment sent, disable TCP_CORK to flush buffers
+        self.conn.set_cork(False)
+        sleep(0)
 
     def getresponse(self):
         """Read the HTTP response from the connection"""
@@ -653,7 +680,15 @@ class EcChunkWriter(object):
         # storage, we don't know if we have to wait while sending data or
         # while reading response, thus we apply the same timeout to both.
         with Timeout(self.write_timeout):
-            return self.conn.getresponse()
+            resp = self.conn.getresponse()
+            if self.perfdata is not None:
+                perfdata_rawx = self.perfdata.setdefault('rawx', dict())
+                url_chunk = self.conn.chunk['url']
+                upload_end = monotonic_time()
+                perfdata_rawx[url_chunk] = \
+                    perfdata_rawx.get(url_chunk, 0.0) \
+                    + upload_end - self.conn.upload_start
+            return resp
 
 
 class EcMetachunkWriter(io.MetachunkWriter):
@@ -706,7 +741,14 @@ class EcMetachunkWriter(io.MetachunkWriter):
             self.checksum.update(data)
             self.global_checksum.update(data)
             # get the encoded fragments
+            if self.perfdata is not None:
+                ec_start = monotonic_time()
             fragments = ec_stream.send(data)
+            if self.perfdata is not None:
+                ec_end = monotonic_time()
+                rawx_perfdata = self.perfdata.setdefault('rawx', dict())
+                rawx_perfdata['ec'] = rawx_perfdata.get('ec', 0.0) \
+                    + ec_end - ec_start
             if fragments is None:
                 # not enough data given
                 return
@@ -722,12 +764,13 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 else:
                     current_writers.remove(writer)
                     failed_chunks.append(writer.chunk)
+            sleep(0)
             self.quorum_or_fail([w.chunk for w in current_writers],
                                 failed_chunks)
 
         try:
             # we use eventlet GreenPool to manage writers
-            with green.ContextPool(len(writers)) as pool:
+            with ContextPool(len(writers)) as pool:
                 # convenient index to figure out which writer
                 # handles the resulting fragments
                 chunk_index = self._build_index(writers)
@@ -737,7 +780,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
                     writer.start(pool)
 
                 def read(read_size):
-                    with green.SourceReadTimeout(self.read_timeout):
+                    with SourceReadTimeout(self.read_timeout):
                         try:
                             data = source.read(read_size)
                         except (ValueError, IOError) as exc:
@@ -747,9 +790,10 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 # the main write loop
                 if size:
                     while True:
+                        buffer_size = self.buffer_size()
                         remaining_bytes = size - bytes_transferred
-                        if io.WRITE_CHUNK_SIZE < remaining_bytes:
-                            read_size = io.WRITE_CHUNK_SIZE
+                        if buffer_size < remaining_bytes:
+                            read_size = buffer_size
                         else:
                             read_size = remaining_bytes
                         data = read(read_size)
@@ -759,7 +803,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
                         send(data)
                 else:
                     while True:
-                        data = read(io.WRITE_CHUNK_SIZE)
+                        data = read(self.buffer_size())
                         bytes_transferred += len(data)
                         if len(data) == 0:
                             break
@@ -783,7 +827,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
 
                 return bytes_transferred
 
-        except green.SourceReadTimeout as exc:
+        except SourceReadTimeout as exc:
             logger.warn('%s (reqid=%s)', exc, self.reqid)
             raise exceptions.SourceReadTimeout(exc)
         except SourceReadError as exc:
@@ -813,15 +857,16 @@ class EcMetachunkWriter(io.MetachunkWriter):
         """Spawn a writer for the chunk and connect it"""
         try:
             writer = EcChunkWriter.connect(
-                chunk, self.sysmeta, self.reqid,
+                chunk, self.sysmeta, reqid=self.reqid,
                 connection_timeout=self.connection_timeout,
                 write_timeout=self.write_timeout,
-                chunk_checksum_algo=self.chunk_checksum_algo)
+                chunk_checksum_algo=self.chunk_checksum_algo,
+                perfdata=self.perfdata)
             return writer, chunk
         except (Exception, Timeout) as exc:
             msg = str(exc)
-            logger.error("Failed to connect to %s (%s, reqid=%s)",
-                         chunk, msg, self.reqid)
+            logger.error("Failed to connect to %s (%s, reqid=%s): %s",
+                         chunk, msg, self.reqid, exc)
             chunk['error'] = 'connect: %s' % msg
             return None, chunk
 
@@ -925,6 +970,7 @@ class ECWriteHandler(io.WriteHandler):
         #
         # iterate through the meta chunks
         bytes_transferred = -1
+        kwargs = EcMetachunkWriter.filter_kwargs(self.extra_kwargs)
         for meta_chunk in self.chunk_prep():
             handler = EcMetachunkWriter(
                 self.sysmeta, meta_chunk,
@@ -933,7 +979,7 @@ class ECWriteHandler(io.WriteHandler):
                 connection_timeout=self.connection_timeout,
                 write_timeout=self.write_timeout,
                 read_timeout=self.read_timeout,
-                chunk_checksum_algo=self.chunk_checksum_algo)
+                **kwargs)
             bytes_transferred, checksum, chunks = handler.stream(self.source,
                                                                  max_size)
 
@@ -973,7 +1019,7 @@ class ECRebuildHandler(object):
         resp = None
         parsed = urlparse(chunk.get('real_url', chunk['url']))
         try:
-            with green.ConnectionTimeout(self.connection_timeout):
+            with ConnectionTimeout(self.connection_timeout):
                 conn = io.http_connect(
                     parsed.netloc, 'GET', parsed.path, headers)
 

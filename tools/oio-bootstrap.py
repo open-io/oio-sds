@@ -664,7 +664,7 @@ score_expr=(num stat.cpu)
 score_timeout=120
 
 [type:account]
-score_expr=(num stat.cpu)
+score_expr=(1 + (num stat.cpu))
 score_timeout=120
 
 [type:echo]
@@ -677,7 +677,7 @@ score_timeout=120
 lock_at_first_register=false
 
 [type:oioproxy]
-score_expr=(num stat.cpu)
+score_expr=(1 + (num stat.cpu))
 score_timeout=120
 lock_at_first_register=false
 

@@ -292,7 +292,7 @@ _srv_append_endpoint (struct network_server_s *srv, struct endpoint_s *e)
 
 static void
 _srv_bind_host(struct network_server_s *srv, const gchar *url, gpointer u,
-		network_transport_factory factory, guint32 flags)
+		network_transport_factory factory)
 {
 	EXTRA_ASSERT(srv != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -303,7 +303,6 @@ _srv_bind_host(struct network_server_s *srv, const gchar *url, gpointer u,
 	e->magic = MAGIC_ENDPOINT;
 	e->fd = -1;
 	e->fd_udp = -1;
-	e->flags = flags;
 	e->factory_udata = u;
 	e->factory_hook = factory;
 	memcpy(e->url, url, len);
@@ -327,14 +326,15 @@ void
 network_server_bind_host(struct network_server_s *srv, const gchar *url, gpointer u,
 		network_transport_factory factory)
 {
-	_srv_bind_host(srv, url, u, factory, 0);
+	_srv_bind_host(srv, url, u, factory);
 }
 
+// FIXME(FVE): kept for ABI compatibility, remove in 5.0.x
 void
 network_server_bind_host_lowlatency(struct network_server_s *srv,
 		const gchar *url, gpointer u, network_transport_factory factory)
 {
-	_srv_bind_host(srv, url, u, factory, NETSERVER_LATENCY);
+	_srv_bind_host(srv, url, u, factory);
 }
 
 gchar**
@@ -854,7 +854,6 @@ _endpoint_open(struct endpoint_s *u, gboolean udp_allowed)
 	if (_endpoint_is_UNIX(u)) {
 		u->port_real = 0;
 		u->port_cfg = 0;
-		u->flags &= ~(NETSERVER_THROUGHPUT|NETSERVER_LATENCY);
 	}
 
 	/* Get a socket of the right type */
@@ -957,16 +956,9 @@ retry:
 		return NULL;
 	}
 
-	switch (e->flags) {
-		case NETSERVER_THROUGHPUT:
-			sock_set_cork(fd, TRUE);
-			break;
-		case NETSERVER_LATENCY:
-			sock_set_client_default(fd);
-			break;
-		default:
-			break;
-	}
+	/* There used to be a switch on e->flags here,
+	 * but now we thing the defaults are good. */
+	sock_set_client_default(fd);
 
 	struct network_client_s *clt = g_slice_new0(struct network_client_s);
 	if (NULL == clt) {

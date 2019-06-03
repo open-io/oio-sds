@@ -23,7 +23,9 @@ from oio import __version__ as oio_version
 from oio.cli import add_common_parser_options
 from oio.cli.common.commandmanager import CommandManager
 from oio.cli.common.clientmanager import ClientManager, get_plugin_module
+from oio.common.json import json
 
+json.encoder.FLOAT_REPR = lambda o: format(o, '.6f')
 LOG = logging.getLogger(__name__)
 
 GROUP_LIST = ["account", "container", "object", "reference", "volume",
@@ -40,6 +42,7 @@ class CommonShell(App):
             command_manager=CommandManager(namespace),
             deferred_help=True)
         self.client_manager = None
+        self.profiler = None
 
     def configure_logging(self):
         super(CommonShell, self).configure_logging()
@@ -75,11 +78,45 @@ class CommonShell(App):
         stevedore_log = logging.getLogger('stevedore')
         stevedore_log.setLevel(logging.ERROR)
 
+    def start_profiling(self):
+        import importlib
+        if self.options.profiler in ('cProfile', 'profile'):
+            prof_mod = importlib.import_module(self.options.profiler)
+            self.profiler = prof_mod.Profile()
+            self.profiler.enable()
+        elif self.options.profiler == 'GreenletProfiler':
+            prof_mod = importlib.import_module(self.options.profiler)
+            self.profiler = prof_mod
+            LOG.debug("Using %s, clock type: %s",
+                      self.profiler, self.profiler.get_clock_type())
+            self.profiler.start(builtins=True)
+        else:
+            raise ValueError('Unknown profiler: %s' % self.options.profiler)
+
+    def stop_profiling(self):
+        import os
+        fname = self.options.profile % {'pid': os.getpid()}
+        if self.options.profiler in ('cProfile', 'profile'):
+            self.profiler.disable()
+            self.profiler.dump_stats(fname)
+            LOG.info('Profiling data saved in %s', fname)
+        elif self.options.profiler == 'GreenletProfiler':
+            stats = self.profiler.get_func_stats()
+            stats.save(fname, type='callgrind')
+            LOG.info('Profiling data saved in %s', fname)
+        else:
+            LOG.error('Something bad happened with profiling data!')
+
     def build_option_parser(self, description, version):
         parser = super(CommonShell, self).build_option_parser(
             description, version)
         add_common_parser_options(parser)
         return parser
+
+    def initialize_app(self, argv):
+        super(CommonShell, self).initialize_app(argv)
+        if self.options.profile and self.options.profile_early:
+            self.start_profiling()
 
     def prepare_to_run_command(self, cmd):
         LOG.debug(
@@ -87,9 +124,13 @@ class CommonShell(App):
             getattr(cmd, 'cmd_name', '<none>'),
             cmd.__class__.__module__,
             cmd.__class__.__name__)
+        if self.options.profile and not self.options.profile_early:
+            self.start_profiling()
 
     def clean_up(self, cmd, result, err):
         LOG.debug('clean up %s: %s', cmd.__class__.__name__, err or '')
+        if self.profiler:
+            self.stop_profiling()
 
 
 class OpenIOShell(CommonShell):
@@ -100,9 +141,10 @@ class OpenIOShell(CommonShell):
     def run(self, argv):
         try:
             res = super(OpenIOShell, self).run(argv)
-            pdata = self.client_manager.cli_conf().get('perfdata')
-            if pdata:
-                LOG.warn("Performance data: %s", pdata)
+            perfdata = self.client_manager.cli_conf().get('perfdata')
+            if perfdata:
+                LOG.warn("Performance data: %s",
+                         json.dumps(perfdata, sort_keys=True, indent=4))
             return res
         except Exception as e:
             LOG.error('Exception raised: ' + str(e))
@@ -118,7 +160,6 @@ class OpenIOShell(CommonShell):
             "--dump-perfdata",
             action='store_true',
             help="Force the API to dump performance data")
-
         return parser
 
     def initialize_app(self, argv):
