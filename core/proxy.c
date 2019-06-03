@@ -408,8 +408,8 @@ _proxy_call_notime (CURL *h, const char *method, const char *url,
 }
 
 static GError *
-_proxy_call (CURL *h, const char *method, const char *url,
-		struct http_ctx_s *in, struct http_ctx_s *out)
+_proxy_call_with_retry (CURL *h, const char *method, const char *url,
+		struct http_ctx_s *in, struct http_ctx_s *out, guint request_attempts)
 {
 	if (!oio_ext_get_reqid ())
 		oio_ext_set_random_reqid();
@@ -417,7 +417,7 @@ _proxy_call (CURL *h, const char *method, const char *url,
 	GError *err = NULL;
 	guint retry_after = 0;
 
-	const guint max = 3;
+	const guint max = request_attempts;
 	for (guint i=0; i<max ;++i) {
 		const gint64 t = g_get_monotonic_time ();
 		err = _proxy_call_notime (h, method, url, in, out, &retry_after);
@@ -454,6 +454,13 @@ _proxy_call (CURL *h, const char *method, const char *url,
 		}
 	}
 	return err;
+}
+
+static GError *
+_proxy_call (CURL *h, const char *method, const char *url,
+		struct http_ctx_s *in, struct http_ctx_s *out)
+{
+	return _proxy_call_with_retry(h, method, url, in, out, 1);
 }
 
 static GError *
