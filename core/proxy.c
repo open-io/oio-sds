@@ -430,8 +430,17 @@ _proxy_call_with_retry (CURL *h, const char *method, const char *url,
 		if (err->code == 404 && i == 0) /* let's fake a retry */
 			err->code = 503, retry_after = 1;
 #endif
-		if (err->code != HTTP_CODE_SRV_UNAVAILABLE) /* not retryable */
+		if (err->code != HTTP_CODE_SRV_UNAVAILABLE) { /* not retryable */
+			if (i > 0 && err->code == CODE_CONTENT_EXISTS
+					&& g_strcmp0(method, "POST") == 0) {
+				// We were retrying a POST operation, it's highly probable
+				// that the original operation succeeded after we timed
+				// out. So we consider this a success and don't return
+				// the error.
+				g_clear_error(&err);
+			}
 			break;
+		}
 		if (!retry_after)  /* not told to retry */
 			break;
 		/* Let's retry! */
