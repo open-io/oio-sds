@@ -25,8 +25,6 @@ from oio.common.utils import request_id
 
 class OpenioAdminApp(CommonShell):
 
-    DEFAULT_VERBOSE_LEVEL = 2
-
     def __init__(self):
         super(OpenioAdminApp, self).__init__('openio.admin')
 
