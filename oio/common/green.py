@@ -27,6 +27,7 @@ from eventlet.green import threading, socket # noqa
 from eventlet.green.httplib import HTTPConnection, HTTPResponse, _UNKNOWN # noqa
 from eventlet.event import Event # noqa
 from eventlet.queue import Empty, LifoQueue, LightQueue # noqa
+from eventlet.semaphore import Semaphore # noqa
 
 eventlet.monkey_patch(os=False)
 

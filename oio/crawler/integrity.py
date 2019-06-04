@@ -19,7 +19,7 @@ Recursively check account, container, content and chunk integrity.
 
 
 from __future__ import print_function
-from oio.common.green import eventlet, Event, GreenPool, Queue, sleep
+from oio.common.green import Event, GreenPool, Queue, sleep, Semaphore
 
 import os
 import csv
@@ -171,7 +171,7 @@ class Checker(object):
 
         self.list_cache = {}
         self.running = {}
-        self.running_lock = eventlet.Semaphore(1)
+        self.running_lock = Semaphore(1)
         self.result_queue = Queue()
 
     def complete_target_from_chunk_metadata(self, target, xattr_meta):
