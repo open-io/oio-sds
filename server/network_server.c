@@ -957,7 +957,7 @@ retry:
 	}
 
 	/* There used to be a switch on e->flags here,
-	 * but now we thing the defaults are good. */
+	 * but now we think the defaults are good. */
 	sock_set_client_default(fd);
 
 	struct network_client_s *clt = g_slice_new0(struct network_client_s);
