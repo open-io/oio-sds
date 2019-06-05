@@ -397,8 +397,8 @@ _proxy_call_notime (CURL *h, const char *method, const char *url,
 }
 
 static GError *
-_proxy_call (CURL *h, const char *method, const char *url,
-		struct http_ctx_s *in, struct http_ctx_s *out)
+_proxy_call_with_retry (CURL *h, const char *method, const char *url,
+		struct http_ctx_s *in, struct http_ctx_s *out, guint request_attempts)
 {
 	if (!oio_ext_get_reqid ())
 		oio_ext_set_random_reqid();
@@ -406,7 +406,7 @@ _proxy_call (CURL *h, const char *method, const char *url,
 	GError *err = NULL;
 	guint retry_after = 0;
 
-	const guint max = 3;
+	const guint max = request_attempts;
 	for (guint i=0; i<max ;++i) {
 		const gint64 t = g_get_monotonic_time ();
 		err = _proxy_call_notime (h, method, url, in, out, &retry_after);
@@ -419,8 +419,17 @@ _proxy_call (CURL *h, const char *method, const char *url,
 		if (err->code == 404 && i == 0) /* let's fake a retry */
 			err->code = 503, retry_after = 1;
 #endif
-		if (err->code != HTTP_CODE_SRV_UNAVAILABLE) /* not retryable */
+		if (err->code != HTTP_CODE_SRV_UNAVAILABLE) { /* not retryable */
+			if (i > 0 && err->code == CODE_CONTENT_EXISTS
+					&& g_strcmp0(method, "POST") == 0) {
+				// We were retrying a POST operation, it's highly probable
+				// that the original operation succeeded after we timed
+				// out. So we consider this a success and don't return
+				// the error.
+				g_clear_error(&err);
+			}
 			break;
+		}
 		if (!retry_after)  /* not told to retry */
 			break;
 		/* Let's retry! */
@@ -443,6 +452,13 @@ _proxy_call (CURL *h, const char *method, const char *url,
 		}
 	}
 	return err;
+}
+
+static GError *
+_proxy_call (CURL *h, const char *method, const char *url,
+		struct http_ctx_s *in, struct http_ctx_s *out)
+{
+	return _proxy_call_with_retry(h, method, url, in, out, 1);
 }
 
 static GError *

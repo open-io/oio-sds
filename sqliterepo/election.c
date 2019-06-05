@@ -1837,9 +1837,24 @@ deferred_watch_COMMON(struct deferred_watcher_context_s *d,
 			transition(member, d->evt, NULL);
 			member_unref(member);
 			member_unlock(member);
+		} else if (M->members_by_state[STEP_MASTER].count > 0) {
+#if ZOO_MAJOR_VERSION > 3 || (ZOO_MAJOR_VERSION == 3 && ZOO_MINOR_VERSION >= 5)
+			GRID_WARN("Got %s event for an unknown election, "
+					"resetting all local elections using %s and "
+					"currently in MASTER state",
+					_evt2str(d->evt), zoo_get_current_server(d->zh));
+#else
+			GRID_WARN("Got %s event for an unknown election, "
+					"resetting all local elections using %p and "
+					"currently in MASTER state",
+					_evt2str(d->evt), d->zh);
+#endif
+			guint reset = _reset_matching_members(M, d->zh, STEP_MASTER);
+			GRID_WARN("%u MASTER elections reset", reset);
 		} else {
-			GRID_WARN("Got %s event for an unknown member, "
-					"check for 'double master' situations!",
+			GRID_INFO("Got %s event for an unknown member. "
+					"No local MASTER election, but check for "
+					"'free slave' situations!",
 					_evt2str(d->evt));
 		}
 	}
