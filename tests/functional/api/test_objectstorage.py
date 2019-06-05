@@ -1407,13 +1407,13 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
         # been deleted. Since this is an asynchronous process, we used to see
         # random failures when the event treatment was a little slow.
         self.wait_for_event('oio-preserved', type_=EventTypes.CHUNK_DELETED,
-                            timeout=1.0)
+                            timeout=5.0)
 
         obj2, chunks2 = self.api.object_locate(
             self.account, name, name, version=obj1['version'])
         cnt_props2 = self.api.container_get_properties(self.account, name)
         self.wait_for_event('oio-preserved', type_=EventTypes.CONTAINER_STATE,
-                            timeout=1.0)
+                            timeout=2.0)
         cnt_info2 = [cont_info
                      for cont_info in self.api.container_list(self.account)
                      if cont_info[0] == name]
