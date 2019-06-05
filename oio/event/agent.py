@@ -54,6 +54,8 @@ class Runner(object):
         redirect_stdio(self.logger)
         drop_privileges(self.conf.get('user', 'openio'))
         self.num_workers = int_value(self.conf.get('workers'), CPU_COUNT)
+        if self.num_workers <= 0:
+            self.num_workers = CPU_COUNT
         self.worker_class = worker_class
         self.workers = {}
         self.sig_queue = []
