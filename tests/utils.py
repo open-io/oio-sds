@@ -510,6 +510,10 @@ class BaseTestCase(CommonTestCase):
                     continue
                 logging.info("event %s", data)
                 return edata
+            logging.warn(
+                ('wait_for_event(reqid=%s, type_=%s, fields=%s, timeout=%s) '
+                 'reached its timeout'),
+                reqid, type_, fields, timeout)
         except ResponseError as err:
             logging.info('%s', err)
         return None
