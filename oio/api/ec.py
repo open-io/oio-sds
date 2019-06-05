@@ -691,7 +691,10 @@ class EcChunkWriter(object):
 class EcMetachunkWriter(io.MetachunkWriter):
     def __init__(self, sysmeta, meta_chunk, global_checksum, storage_method,
                  connection_timeout=None, write_timeout=None,
-                 read_timeout=None, **kwargs):
+                 read_timeout=None,
+                 **kwargs):
+        kwargs.setdefault('chunk_buffer_min', storage_method.ec_segment_size)
+        kwargs.setdefault('chunk_buffer_max', storage_method.ec_segment_size)
         super(EcMetachunkWriter, self).__init__(
             storage_method=storage_method, **kwargs)
         self.sysmeta = sysmeta
