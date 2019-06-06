@@ -1112,6 +1112,10 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		GSList *deleted_objects = NULL;
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
+			if (oio_ext_get_force_versioning()) {
+				GRID_DEBUG("Updating max_version: %s", oio_ext_get_force_versioning());
+				m2db_set_max_versions(sq3, atoi(oio_ext_get_force_versioning()));
+			}
 			if (!(err = m2db_put_alias(&args, in,
 					_bean_list_cb, &deleted_objects, cb_added, u0_added))) {
 				_update_missing_chunks(m2b, sq3, url,

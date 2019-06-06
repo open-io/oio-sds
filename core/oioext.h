@@ -109,6 +109,10 @@ const gchar *oio_ext_get_user_agent(void);
 
 void oio_ext_set_user_agent(const gchar *user_agent);
 
+const gchar *oio_ext_get_force_versioning(void);
+
+void oio_ext_set_force_versioning(const gchar *force_versioning);
+
 gint64 oio_ext_real_time (void);
 
 gint64 oio_ext_monotonic_time (void);
