@@ -19,12 +19,12 @@ Recursively check account, container, content and chunk integrity.
 
 
 from __future__ import print_function
-from oio.common.green import Event, GreenPool, Queue, sleep, Semaphore
+from oio.common.green import Event, GreenPool, Queue, sleep, Semaphore,\
+    ratelimit_function_build
 
 import os
 import csv
 import sys
-import argparse
 
 from oio.common import exceptions as exc
 from oio.common.fullpath import decode_fullpath
@@ -172,7 +172,23 @@ class Checker(object):
         self.list_cache = {}
         self.running = {}
         self.running_lock = Semaphore(1)
-        self.result_queue = Queue()
+        self.result_queue = Queue(concurrency)
+
+        self.run_time = 0
+
+    def reset_stats(self):
+        self.accounts_checked = 0
+        self.containers_checked = 0
+        self.objects_checked = 0
+        self.chunks_checked = 0
+        self.account_not_found = 0
+        self.container_not_found = 0
+        self.object_not_found = 0
+        self.chunk_not_found = 0
+        self.account_exceptions = 0
+        self.container_exceptions = 0
+        self.object_exceptions = 0
+        self.chunk_exceptions = 0
 
     def complete_target_from_chunk_metadata(self, target, xattr_meta):
         """
@@ -325,6 +341,7 @@ class Checker(object):
         obj_meta = None
         xattr_meta = None
 
+        self.logger.debug('Checking chunk "%s"', target)
         try:
             xattr_meta = self.api.blob_client.chunk_head(
                 chunk, xattr=self.full, check_hash=self.integrity)
@@ -520,7 +537,7 @@ class Checker(object):
         vers = target.version  # can be None
 
         cached = self._get_cached_or_lock((account, container, obj, vers))
-        if cached:
+        if cached is not None:
             return cached
 
         self.logger.info('Checking object "%s"', target)
@@ -581,7 +598,7 @@ class Checker(object):
         container = target.container
 
         cached = self._get_cached_or_lock((account, container))
-        if cached:
+        if cached is not None:
             return cached
 
         self.logger.info('Checking container "%s"', target)
@@ -657,7 +674,7 @@ class Checker(object):
         account = target.account
 
         cached = self._get_cached_or_lock(account)
-        if cached:
+        if cached is not None:
             return cached
 
         self.logger.info('Checking account "%s"', target)
@@ -722,10 +739,16 @@ class Checker(object):
         for acct in all_accounts:
             self.check(Target(acct), recurse=recurse)
 
-    def fetch_results(self):
+    def fetch_results(self, rate_limiter=None):
         while not self.result_queue.empty():
             res = self.result_queue.get(True)
             yield res
+            # Rate limiting is done on the result queue for now.
+            # Someday we could implement a submission queue instead of
+            # letting each worker submit tasks to the pool, and do
+            # the rate limiting on this queue.
+            if rate_limiter is not None:
+                self.run_time = rate_limiter(self.run_time)
 
     def log_result(self, result):
         if result.errors:
@@ -738,18 +761,19 @@ class Checker(object):
             self.logger.warn('%s:\n%s', result.target,
                              result.errors_to_str(err_format='  %s'))
 
-    def run(self):
+    def run(self, rate_limiter=None):
         """
         Fetch results and write logs until all jobs have finished.
 
         :returns: a generator yielding check results.
         """
         while self.pool.running() + self.pool.waiting():
-            for result in self.fetch_results():
+            for result in self.fetch_results(rate_limiter):
                 self.log_result(result)
                 yield result
             sleep(0.1)
         self.pool.waitall()
+        # No rate limiting
         for result in self.fetch_results():
             self.log_result(result)
             yield result
@@ -796,11 +820,42 @@ class Checker(object):
         return success
 
 
+def run_once(checker, entries=None, rate_limiter=None):
+    if entries:
+        for entry in entries:
+            checker.check(Target(*entry), recurse=DEFAULT_DEPTH)
+    else:
+        checker.check_all_accounts(recurse=DEFAULT_DEPTH)
+    for _ in checker.run():
+        pass
+    if not checker.report():
+        sys.exit(1)
+
+
+def run_indefinitely(checker, entries=None, rate_limiter=None):
+    while True:
+        if entries:
+            for entry in entries:
+                checker.check(Target(*entry), recurse=DEFAULT_DEPTH)
+        else:
+            checker.check_all_accounts(recurse=DEFAULT_DEPTH)
+        for _ in checker.run(rate_limiter):
+            # TODO(FVE): check if the ItemResult describes chunk errors
+            # and send an event to the oio-rebuild tube.
+            pass
+        checker.report()
+        checker.list_cache = dict()
+        checker.reset_stats()
+
+
 def main():
     """
     Main function for legacy integrity crawler.
     """
-    parser = argparse.ArgumentParser(description=__doc__)
+    import argparse
+    from oio.cli import get_logger_from_args, make_logger_args_parser
+    parser = argparse.ArgumentParser(description=__doc__,
+                                     parents=[make_logger_args_parser()])
     parser.add_argument('namespace', help='Namespace name')
     parser.add_argument(
         'account', nargs='?', help="Account (if not set, check all accounts)")
@@ -813,6 +868,15 @@ def main():
         "(starting with account)."
     parser.add_argument('target', metavar='T', nargs='*',
                         help=t_help)
+    parser.add_argument('--attempts', type=int, default=1,
+                        help=('Number of attempts for '
+                              'listing requests (default: 1).'))
+    parser.add_argument('--concurrency', '--workers', type=int,
+                        default=50,
+                        help='Number of concurrent checks (default: 50).')
+    parser.add_argument('--daemon',
+                        action='store_true',
+                        help=("Loop indefinitely, until killed."))
     parser.add_argument('-o', '--output',
                         help=('Output file. Will contain elements in error. '
                               'Can later be passed to stdin to re-check only '
@@ -825,12 +889,9 @@ def main():
     parser.add_argument('-p', '--presence',
                         action='store_true', default=False,
                         help="Presence check, the xattr check is skipped.")
-    parser.add_argument('--concurrency', '--workers', type=int,
-                        default=50,
-                        help='Number of concurrent checks (default: 50).')
-    parser.add_argument('--attempts', type=int, default=1,
-                        help=('Number of attempts for '
-                              'listing requests (default: 1).'))
+    parser.add_argument('-r', '--ratelimit',
+                        help=('Set the rate limiting policy. '
+                              'Ex: "0h30:10;6h45:2;15h30:3;9h45:5;20h00:8".'))
 
     args = parser.parse_args()
 
@@ -848,6 +909,7 @@ def main():
         else:
             entries = None
             limit_listings = 0
+    logger = get_logger_from_args(args)
     checker = Checker(
         args.namespace,
         error_file=args.output,
@@ -856,14 +918,16 @@ def main():
         full=not args.presence,
         limit_listings=limit_listings,
         request_attempts=args.attempts,
-        verbose=True,
+        logger=logger,
+        verbose=not args.quiet,
     )
-    if entries:
-        for entry in entries:
-            checker.check(Target(*entry), recurse=DEFAULT_DEPTH)
+
+    if args.ratelimit:
+        rate_limiter = ratelimit_function_build(args.ratelimit)
     else:
-        checker.check_all_accounts(recurse=DEFAULT_DEPTH)
-    for _ in checker.run():
-        pass
-    if not checker.report():
-        sys.exit(1)
+        rate_limiter = None
+
+    if args.daemon:
+        run_indefinitely(checker, entries, rate_limiter)
+    else:
+        run_once(checker, entries, rate_limiter)
