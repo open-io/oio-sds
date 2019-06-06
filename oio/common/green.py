@@ -190,6 +190,15 @@ def ratelimit_policy_from_string(policy_str):
     :rtype: `list` of 2-tuples with a `datetime.timedelta` and an integer.
     """
     policy = list()
+    if ';' not in policy_str:
+        try:
+            td = timedelta(0)
+            rate = int(policy_str)
+        except ValueError as err:
+            raise ValueError("Unparseable rate limit '%s': %s" %
+                             (policy_str, err))
+        policy.append((td, rate))
+        return policy
     changes = policy_str.split(';')
     for change in changes:
         try:
@@ -218,7 +227,7 @@ def ratelimit_function_build(policy):
         policy = ratelimit_policy_from_string(policy)
     ratelimit_validate_policy(policy)
 
-    def _ratelimiter(run_time, _max_rate, increment=1, rate_buffer=5):
+    def _ratelimiter(run_time, _max_rate=None, increment=1, rate_buffer=5):
         """
         The ratelimit wrapper that takes into account the custom policy, and
         ignores all the other parameters other than run_time
