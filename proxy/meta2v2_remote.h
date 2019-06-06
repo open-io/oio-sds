@@ -115,6 +115,7 @@ GByteArray* m2v2_remote_pack_SPARE(
 GByteArray* m2v2_remote_pack_PUT(
 		struct oio_url_s *url,
 		GSList *beans,
+		const char *force_versioning,
 		gint64 deadline);
 
 GByteArray* m2v2_remote_pack_OVERWRITE(

@@ -82,6 +82,7 @@ M2V2_DECLARE_FILTER(meta2_filter_fill_subject);
 M2V2_DECLARE_FILTER(meta2_filter_reply_success);
 M2V2_DECLARE_FILTER(meta2_filter_reply_fail);
 M2V2_DECLARE_FILTER(meta2_filter_reply_not_implemented);
+M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_force_versioning);
 
 M2V2_DECLARE_FILTER(meta2_filter_send_deferred_events);
 
