@@ -345,6 +345,8 @@ pkg_check_modules(ZMQ libzmq>=4.0.0)
 # Optional cache libraries
 pkg_search_module(HIREDIS hiredis)
 pkg_search_module(LIBMEMCACHED libmemcached)
+# Optional support for OFI's libfabric
+pkg_search_module(FABRIC libfabric)
 endif (NOT SDK_ONLY)
 
 # Load CLI-overriden configuration
@@ -429,6 +431,9 @@ add_subdirectory(./meta1v2)
 add_subdirectory(./meta2v2)
 add_subdirectory(./proxy)
 add_subdirectory(./events)
+if (FABRIC_FOUND)
+add_subdirectory(./fabx)
+endif(FABRIC_FOUND)
 add_subdirectory(./rawx)
 add_subdirectory(./rawx-apache2/src)
 add_subdirectory(./rawx-lib/src)

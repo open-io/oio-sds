@@ -140,9 +140,14 @@ class BlobClient(object):
 
         def __delete_chunk(chunk_):
             try:
+                if 'real_url' in chunk_:
+                    url = chunk_['real_url']
+                else:
+                    url = self.resolve_url(chunk_['url'])
+                if not url.startswith("http://"):
+                    return
                 resp = self.http_pool.request(
-                    "DELETE", self.resolve_url(chunk_['url']),
-                    headers=headers, timeout=timeout)
+                    "DELETE", url, headers=headers, timeout=timeout)
                 resp.chunk = chunk_
                 return resp
             except urllib3.exceptions.HTTPError as ex:

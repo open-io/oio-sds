@@ -67,19 +67,22 @@ _is_empty_prop(gpointer bean)
 	return !val || !val->len || !val->data;
 }
 
-gchar*
-m2v2_build_chunk_url (const char *srv, const char *id)
+static gchar*
+m2v2_build_chunk_url (const char *proto, const char *srv, const char *id)
 {
-	return g_strconcat("http://", srv, "/", id, NULL);
+	return g_strconcat(proto, "://", srv, "/", id, NULL);
 }
 
 static gchar*
 m2v2_build_chunk_url_storage (const struct storage_policy_s *pol,
 		const gchar *str_id)
 {
-	switch(data_security_get_type(storage_policy_get_data_security(pol))) {
-	case STGPOL_DS_BACKBLAZE:
-		return g_strconcat("b2/", str_id, NULL);
+	const struct data_security_s *ds = storage_policy_get_data_security(pol);
+	switch(data_security_get_type(ds)) {
+	case STGPOL_DS_PUBLIC:
+		return g_strconcat(
+				"public://",  data_security_get_param(ds, "provider"),
+				"/", str_id, NULL);
 	default:
 		return NULL;
 	}
@@ -2173,16 +2176,11 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 	ctx->cb(ctx->cb_data, header);
 }
 
-static int
-is_stgpol_backblaze(const struct storage_policy_s *pol)
+static gboolean
+is_stgpol_public(const struct storage_policy_s *pol)
 {
-	switch(data_security_get_type(storage_policy_get_data_security(pol))) {
-		case STGPOL_DS_BACKBLAZE:
-			return TRUE;
-		default:
-			return FALSE;
-	}
-	return FALSE;
+	return STGPOL_DS_PUBLIC ==
+		data_security_get_type(storage_policy_get_data_security(pol));
 }
 
 static GString*
@@ -2219,11 +2217,18 @@ generate_chunk_bean(struct oio_lb_selected_item_s *sel,
 	oio_buf_randomize(binid, sizeof(binid));
 	oio_str_bin2hex(binid, sizeof(binid), strid, sizeof(strid));
 
-	if (sel->item->id) {
+	if (sel && sel->item->id) {
 		gchar shifted_id[LIMIT_LENGTH_SRVID];
 		g_strlcpy(shifted_id, sel->item->id, sizeof(shifted_id));
 		meta1_url_shift_addr(shifted_id);
-		chunkid = m2v2_build_chunk_url(shifted_id, strid);
+		if (0 == strcmp(NAME_SRVTYPE_RAWX, sel->item->type)) {
+			chunkid = m2v2_build_chunk_url("http", shifted_id, strid);
+		} else if (0 == strcmp(NAME_SRVTYPE_FABX, sel->item->type)) {
+			chunkid = m2v2_build_chunk_url("fabx", shifted_id, strid);
+		} else {
+			GRID_ERROR("Service type not managed: %s", sel->item->type);
+			g_assert_not_reached();
+		}
 	} else {
 		EXTRA_ASSERT(policy != NULL);
 		chunkid = m2v2_build_chunk_url_storage(policy, strid);
@@ -2261,8 +2266,6 @@ _gen_chunk(struct gen_ctx_s *ctx, struct oio_lb_selected_item_s *sel,
 {
 	gchar strpos[24];
 
-	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
-
 	if (subpos < 0)
 		g_snprintf(strpos, sizeof(strpos), "%u", pos);
 	else
@@ -2279,7 +2282,6 @@ _gen_chunk(struct gen_ctx_s *ctx, struct oio_lb_selected_item_s *sel,
 	struct bean_PROPERTIES_s *prop = generate_chunk_quality_bean(
 			sel, CHUNKS_get_id(chunk)->str, ctx->url);
 	ctx->cb(ctx->cb_data, prop);
-
 }
 
 static GError*
@@ -2299,11 +2301,10 @@ _m2_generate_chunks(struct gen_ctx_s *ctx,
 		int i = 0;
 		void _on_id(struct oio_lb_selected_item_s *sel, gpointer u UNUSED)
 		{
-			if (is_stgpol_backblaze(ctx->pol)) {
-				// Shortcut for backblaze
+			if (is_stgpol_public(ctx->pol)) {
 				_gen_chunk(ctx, NULL, ctx->chunk_size, pos, -1);
 			} else {
-				_gen_chunk(ctx, sel, ctx->chunk_size, pos, subpos? i : -1);
+				_gen_chunk(ctx, sel, ctx->chunk_size, pos, subpos ? i : -1);
 			}
 			i++;
 		}
@@ -2360,7 +2361,7 @@ m2_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,
 
 	gint64 k;
 	switch (data_security_get_type(storage_policy_get_data_security(pol))) {
-		case STGPOL_DS_BACKBLAZE:
+		case STGPOL_DS_PUBLIC:
 		case STGPOL_DS_PLAIN:
 			return _m2_generate_chunks(&ctx, chunk_size, 0);
 		case STGPOL_DS_EC:
@@ -2644,7 +2645,7 @@ _m2db_check_content_validity(struct m2v2_sorted_content_s *sorted_content,
 	enum _content_broken_state_e cbroken = NONE;
 	const struct data_security_s *dsec = storage_policy_get_data_security(pol);
 	switch (data_security_get_type(dsec)) {
-		case STGPOL_DS_BACKBLAZE:
+		case STGPOL_DS_PUBLIC:
 		case STGPOL_DS_PLAIN:
 			cbroken = _check_plain_content(sorted_content, dsec,
 					checked_content_p, partial);
@@ -2677,7 +2678,7 @@ _m2db_get_content_missing_chunks(struct m2v2_sorted_content_s *sorted_content,
 	gint64 expected_chunks = 0;
 	const struct data_security_s *dsec = storage_policy_get_data_security(pol);
 	switch (data_security_get_type(dsec)) {
-		case STGPOL_DS_BACKBLAZE:
+		case STGPOL_DS_PUBLIC:
 		case STGPOL_DS_PLAIN:
 			expected_chunks = data_security_get_int64_param(
 					dsec, DS_KEY_COPY_COUNT, 1);

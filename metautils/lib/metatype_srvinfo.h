@@ -94,7 +94,7 @@ GError* service_info_load_json(const gchar *encoded,
 void service_info_encode_json(GString *out, const struct service_info_s *si,
 		gboolean full);
 
-void oio_parse_chunk_url(const gchar *url,
+gboolean oio_parse_chunk_url(const char *url,
 		gchar **type, gchar **netloc, gchar **id);
 
 /** Build a key for a service from its type and ID */

@@ -178,7 +178,7 @@ gridinit_cmd -S "$GRIDINIT_SOCK" reload >/dev/null
 gridinit_cmd -S "$GRIDINIT_SOCK" start "@${NS}" >/dev/null
 
 COUNT=$(oio-test-config.py -c -t meta2 -t rawx -t sqlx -t meta0 -t meta1 -t rdir)
-$cmd_openio cluster wait -d 30 -u -n "$COUNT" sqlx rawx meta2 meta0 meta1 rdir
+$cmd_openio cluster wait -d 30 -u -n "$COUNT" sqlx fabx rawx meta2 meta0 meta1 rdir
 
 
 echo -e "\n### Init the meta0/meta1 directory"

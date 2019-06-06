@@ -70,6 +70,18 @@ enum oio_url_field_e
  *  i.e. a size enough to store the C string */
 #define LIMIT_LENGTH_USER 1024
 
+/** One plus the maximum length of a service type name, with all its subtypes
+ * i.e. a size enough to store the C string */
+#define LIMIT_LENGTH_SRVTYPE 32
+
+#define STRLEN_CONTENTID   65
+
+#define LIMIT_LENGTH_FULLPATH \
+	LIMIT_LENGTH_ACCOUNTNAME + 1 + \
+	LIMIT_LENGTH_USER + 1 + \
+	STRLEN_CONTENTID + 1 + \
+	LIMIT_LENGTH_VERSION + 1 + \
+	LIMIT_LENGTH_CONTENTPATH
 
 struct oio_url_s;
 

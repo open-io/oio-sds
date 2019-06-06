@@ -22,7 +22,7 @@ from urlparse import urlparse
 
 from oio.api import io
 from oio.common.exceptions import OioTimeout, SourceReadError, \
-    SourceReadTimeout
+    SourceReadTimeout, InvalidStorageMethod
 from oio.common.http import headers_from_object_metadata
 from oio.common.utils import monotonic_time
 from oio.common.constants import CHUNK_HEADERS
@@ -297,6 +297,16 @@ class ReplicatedWriteHandler(io.WriteHandler):
     For initialization parameters, see oio.api.io.WriteHandler.
     """
 
+    def _validate_chunk(self, chunk):
+        url = chunk.get('real_url', chunk['url'])
+        if not url.startswith('http://') and not url.startswith('rawx://'):
+            raise InvalidStorageMethod(
+                    "Scheme not managed for chunk {0}".format(chunk))
+
+    def _validate_metachunk(self, metachunk):
+        for chunk in metachunk:
+            self._validate_chunk(chunk)
+
     def stream(self):
         global_checksum = hashlib.md5()
         total_bytes_transferred = 0
@@ -304,6 +314,7 @@ class ReplicatedWriteHandler(io.WriteHandler):
         kwargs = ReplicatedMetachunkWriter.filter_kwargs(self.extra_kwargs)
 
         for meta_chunk in self.chunk_prep():
+            self._validate_metachunk(meta_chunk)
             size = self.sysmeta['chunk_size']
             handler = ReplicatedMetachunkWriter(
                 self.sysmeta, meta_chunk, global_checksum, self.storage_method,

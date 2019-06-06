@@ -19,6 +19,7 @@ License along with this library.
 #ifndef OIO_SDS__core__oiolb_h
 # define OIO_SDS__core__oiolb_h 1
 # include <glib.h>
+# include <core/oiourl.h>
 # include <core/oioloc.h>
 
 typedef guint8 oio_weight_t;
@@ -40,6 +41,7 @@ struct oio_lb_item_s
 	oio_weight_t weight;
 	gchar addr[STRLEN_ADDRINFO];
 	gchar id[LIMIT_LENGTH_SRVID];
+	gchar type[LIMIT_LENGTH_SRVTYPE];
 };
 
 struct oio_lb_selected_item_s

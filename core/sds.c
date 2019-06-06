@@ -30,6 +30,7 @@ License along with this library.
 
 #include <core/client_variables.h>
 #include <metautils/lib/metautils.h>
+#include <fabx/client.h>
 
 #include "http_put.h"
 #include "http_del.h"
@@ -316,7 +317,7 @@ _chunk_method_is_EC(const char *chunk_method)
 static int
 _chunk_method_needs_ecd(const char *chunk_method)
 {
-	return oio_str_prefixed(chunk_method, STGPOL_DSPREFIX_BACKBLAZE, "/") ||
+	return oio_str_prefixed(chunk_method, STGPOL_DSPREFIX_PUBLIC, "/") ||
 			oio_str_prefixed(chunk_method, STGPOL_DSPREFIX_EC, "/");
 }
 
@@ -727,6 +728,42 @@ _download_range_from_chunk (struct _download_ctx_s *dl,
 	}
 
 	GError *err = NULL;
+
+	if (g_str_has_prefix(c0_url, "fabx://")) {
+		struct oio_fabx_download_s *fabx = oio_fabx_download_create(dl->src->url);
+
+		/* Unpack the URL */
+		gchar *url = g_strdup(c0_url);
+		char *slash = strrchr(url, '/');
+		if (slash) {
+			*slash = '\0';
+			char *slash2 = strrchr(url, '/');
+			if (slash2) {
+				oio_fabx_download_source(fabx, slash2 + 1, slash + 1,
+						range->offset, range->size);
+			}
+			*slash = '/';
+		}
+		g_free(url);
+
+		/* do the upload */
+		gsize len = 0;
+		do {
+			GBytes *block = NULL;
+			err = oio_fabx_download_consume(fabx, &block);
+			EXTRA_ASSERT((err != NULL) ^ (block != NULL));
+			if (err)
+				goto fabx_exit;
+			void *buf = (void*) g_bytes_get_data(block, &len);
+			if (len)
+				_write_wrapper(buf, len, 1, NULL);
+			g_bytes_unref(block);
+		} while (len > 0);
+
+fabx_exit:
+		oio_fabx_download_close(fabx);
+		return err;
+	}
 
 	gchar str_range[64] = "";
 	g_snprintf (str_range, sizeof(str_range),
@@ -1205,6 +1242,9 @@ struct oio_sds_ul_s
 	GSList *http_dests;
 	size_t local_done;
 	GChecksum *checksum_chunk;
+
+	/* current fabx upload */
+	struct oio_fabx_upload_s *fabx;
 };
 
 static void
@@ -1301,6 +1341,9 @@ oio_sds_upload_clean (struct oio_sds_ul_s *ul)
 	if (!ul)
 		return;
 
+	if (ul->fabx)
+		oio_fabx_upload_close(ul->fabx);
+
 	if (ul->checksum_content)
 		g_checksum_free (ul->checksum_content);
 	if (ul->buffer_tail)
@@ -1350,7 +1393,7 @@ oio_sds_upload_greedy (struct oio_sds_ul_s *ul)
 int
 oio_sds_upload_needs_ecd(struct oio_sds_ul_s *ul)
 {
-	return _chunk_method_needs_ecd(ul->chunk_method);
+	return ul->fabx != NULL || _chunk_method_needs_ecd(ul->chunk_method);
 }
 
 struct oio_error_s *
@@ -1360,55 +1403,69 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 
 	GError *err = NULL;
 	GString *request_body = g_string_sized_new(128);
-	GString *reply_body = g_string_sized_new (1024);
+	GString *reply_body = g_string_sized_new(1024);
 
 	/* get the beans from the proxy, for the size announced.
 	 * The reply will only carry the official chunk_size and
 	 * some places. */
 	do {
+		/* To avoid changing the API, we just pass the policy as a special
+		 * properties, because in facts this is just what the policy is! */
+		gchar *policy = NULL;
+		for (const char *const *pstr = ul->dst->properties;
+			 pstr && *pstr; pstr += 2) {
+			if (!strcmp(*pstr, "policy")) {
+				oio_str_replace(&policy, pstr[1]);
+				break;
+			}
+		}
+		struct oio_proxy_content_prepare_in_s in = {
+				policy, size, BOOL(ul->dst->autocreate)
+		};
 		struct oio_proxy_content_prepare_out_s out = {
-			.body = reply_body,
-			.header_chunk_size = NULL,
-			.header_version = NULL,
-			.header_content = NULL,
-			.header_stgpol = NULL,
-			.header_chunk_method = NULL,
-			.header_mime_type = NULL,
+				.body = reply_body,
+				.header_chunk_size = NULL,
+				.header_version = NULL,
+				.header_content = NULL,
+				.header_stgpol = NULL,
+				.header_chunk_method = NULL,
+				.header_mime_type = NULL,
 		};
 		CURL_DO(ul->sds, H, err = oio_proxy_call_content_prepare(
-					H, ul->dst->url, size, ul->dst->autocreate, &out));
+				H, ul->dst->url, &in, &out));
+		oio_str_clean(&policy);
 
-		if (!err && out.header_content && !oio_str_ishexa1 (out.header_content))
+		if (!err && out.header_content && !oio_str_ishexa1(out.header_content))
 			err = SYSERR("returned content-id not hexadecimal");
 
 		if (err) {
-			g_prefix_error (&err, "Proxy: ");
+			g_prefix_error(&err, "Proxy: ");
 		} else {
 			if (out.header_chunk_size && !ul->chunk_size) {
 #ifdef HAVE_ENBUG
 				/* Let's receive some trash from the proxy */
 				ul->chunk_size = 1;
 #else
-				ul->chunk_size = g_ascii_strtoll (out.header_chunk_size, NULL, 10);
+				ul->chunk_size = g_ascii_strtoll(out.header_chunk_size, NULL, 10);
 #endif
 			}
 			if (out.header_version && !ul->version)
-				ul->version = g_ascii_strtoll (out.header_version, NULL, 10);
+				ul->version = g_ascii_strtoll(out.header_version, NULL, 10);
 			if (out.header_content && !ul->hexid)
-				oio_str_replace (&ul->hexid, out.header_content);
+				oio_str_replace(&ul->hexid, out.header_content);
 			if (out.header_stgpol)
-				oio_str_replace (&ul->stgpol, out.header_stgpol);
+				oio_str_replace(&ul->stgpol, out.header_stgpol);
 			if (out.header_chunk_method)
-				oio_str_replace (&ul->chunk_method, out.header_chunk_method);
+				oio_str_replace(&ul->chunk_method, out.header_chunk_method);
 			if (out.header_mime_type)
-				oio_str_replace (&ul->mime_type, out.header_mime_type);
+				oio_str_replace(&ul->mime_type, out.header_mime_type);
 		}
-		oio_str_clean (&out.header_chunk_size);
-		oio_str_clean (&out.header_version);
-		oio_str_clean (&out.header_content);
-		oio_str_clean (&out.header_stgpol);
-		oio_str_clean (&out.header_chunk_method);
-		oio_str_clean (&out.header_mime_type);
+		oio_str_clean(&out.header_chunk_size);
+		oio_str_clean(&out.header_version);
+		oio_str_clean(&out.header_content);
+		oio_str_clean(&out.header_stgpol);
+		oio_str_clean(&out.header_chunk_method);
+		oio_str_clean(&out.header_mime_type);
 	} while (0);
 
 	EXTRA_ASSERT(!ul->hexid || oio_str_ishexa1(ul->hexid));
@@ -1417,9 +1474,10 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 	/* Parse the output, as a (JSON object with a) JSON array of objects
 	 * with fields depicting chunks */
 	if (!err) {
-		struct json_tokener *tok = json_tokener_new ();
-		struct json_object *jbody = json_tokener_parse_ex (tok,
-				reply_body->str, reply_body->len);
+		struct json_tokener *tok = json_tokener_new();
+		struct json_object *jbody = json_tokener_parse_ex(tok,
+														  reply_body->str,
+														  reply_body->len);
 		if (json_object_is_type(jbody, json_type_object))
 			err = _chunks_load_ext(&_chunks, &ul->sys_props, jbody);
 		else if (json_object_is_type(jbody, json_type_array))
@@ -1427,9 +1485,33 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 		else
 			err = SYSERR("Invalid JSON received from OIO proxy");
 		if (err)
-			g_prefix_error (&err, "Parsing: ");
-		json_object_put (jbody);
-		json_tokener_free (tok);
+			g_prefix_error(&err, "Parsing: ");
+		json_object_put(jbody);
+		json_tokener_free(tok);
+	}
+
+	/* SHORTCUT: Determine if we work on a FABX upload */
+	gboolean using_fabx = FALSE;
+	for (GSList *c = _chunks; c; c = c->next) {
+		struct chunk_s *chunk = c->data;
+		if (g_str_has_prefix(chunk->url, "fabx://")) {
+			using_fabx = TRUE;
+			break;
+		}
+	}
+	if (using_fabx) {
+		ul->fabx = oio_fabx_upload_create(ul->dst->url);
+		for (GSList *c = _chunks; c; c = c->next) {
+			struct chunk_s *chunk = c->data;
+			char *slash = strrchr(chunk->url, '/');
+			if (slash) {
+				*slash = '\0';
+				char *slash2 = strrchr(chunk->url, '/');
+				if (slash2)
+					oio_fabx_upload_target(ul->fabx, slash2 + 1, slash + 1);
+				*slash = '/';
+			}
+		}
 	}
 
 	gint64 k = 1;
@@ -1440,7 +1522,7 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 			GRID_DEBUG("using ecd gateway");
 		} else {
 			err = NEWERROR(CODE_NOT_IMPLEMENTED,
-					"cannot upload this without ecd");
+						   "cannot upload this without ecd");
 		}
 
 		/* If we erasure-code, patch the metachunk-size
@@ -1464,10 +1546,10 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 	if (!err) {
 		struct metachunk_s **out = NULL;
 		if ((err = _organize_chunks(_chunks, &out, ul->sds->no_shuffle, k)))
-			g_prefix_error (&err, "Logic: ");
+			g_prefix_error(&err, "Logic: ");
 		else
 			for (struct metachunk_s **p = out; *p; ++p)
-				g_queue_push_tail (ul->metachunk_ready, *p);
+				g_queue_push_tail(ul->metachunk_ready, *p);
 		if (out)
 			g_free(out);
 	}
@@ -1475,7 +1557,7 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 
 	/* some values can be guessed if the proxy didn't reply */
 	if (!err) {
-#define LAZYSET(R,V) do { if (!R) R = g_strdup(V); } while (0)
+#define LAZYSET(R, V) do { if (!R) R = g_strdup(V); } while (0)
 		if (!ul->version) ul->version = oio_ext_real_time();
 		LAZYSET(ul->hexid, "0000");
 		LAZYSET(ul->stgpol, OIO_DEFAULT_STGPOL);
@@ -1484,9 +1566,9 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 #undef LAZYSET
 	}
 
-	g_string_free (request_body, TRUE);
-	g_string_free (reply_body, TRUE);
-	return (struct oio_error_s*) err;
+	g_string_free(request_body, TRUE);
+	g_string_free(reply_body, TRUE);
+	return (struct oio_error_s *) err;
 }
 
 static void
@@ -1514,6 +1596,7 @@ _finish_metachunk_upload(struct oio_sds_ul_s *ul)
 {
 	EXTRA_ASSERT(ul != NULL);
 	EXTRA_ASSERT(ul->mc != NULL);
+	EXTRA_ASSERT(ul->fabx == NULL);
 
 	ul->mc->size = ul->local_done;
 
@@ -1537,6 +1620,8 @@ _finish_metachunk_upload(struct oio_sds_ul_s *ul)
 static GError *
 _sds_upload_finish (struct oio_sds_ul_s *ul)
 {
+	EXTRA_ASSERT (NULL == ul->fabx);
+
 	GRID_TRACE("%s (%p)", __FUNCTION__, ul);
 	EXTRA_ASSERT(ul->mc != NULL);
 	GError *err = NULL;
@@ -1578,6 +1663,8 @@ _sds_upload_finish (struct oio_sds_ul_s *ul)
 static void
 _sds_upload_add_headers(struct oio_sds_ul_s *ul, struct http_put_dest_s *dest)
 {
+	EXTRA_ASSERT (NULL == ul->fabx);
+
 	http_put_dest_add_header (dest, PROXYD_HEADER_REQID,
 			"%s", oio_ext_get_reqid());
 
@@ -1628,6 +1715,7 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 
 	struct oio_error_s *err = NULL;
 
+	EXTRA_ASSERT (NULL == ul->fabx);
 	EXTRA_ASSERT (NULL == ul->put);
 	EXTRA_ASSERT (NULL == ul->http_dests);
 	EXTRA_ASSERT (NULL == ul->checksum_chunk);
@@ -1708,6 +1796,23 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 	return NULL;
 }
 
+static struct oio_error_s *
+_sds_upload_step_fabx (struct oio_sds_ul_s *ul)
+{
+	if (g_queue_is_empty(ul->buffer_tail))
+		return NULL;
+
+	GRID_TRACE("%s (%p) Data ready!", __FUNCTION__, ul);
+	GBytes *buf = g_queue_pop_head(ul->buffer_tail);
+	if (g_bytes_get_size(buf) <= 0) {
+		ul->ready_for_data = FALSE;
+		ul->finished = TRUE;
+	} else {
+		oio_fabx_upload_push(ul->fabx, buf);
+	}
+	return NULL;
+}
+
 struct oio_error_s *
 oio_sds_upload_step (struct oio_sds_ul_s *ul)
 {
@@ -1719,6 +1824,10 @@ oio_sds_upload_step (struct oio_sds_ul_s *ul)
 		GRID_TRACE("%s (%p) finished!", __FUNCTION__, ul);
 		return NULL;
 	}
+
+	/* SHORTCUT for fabx uploads */
+	if (ul->fabx)
+		return _sds_upload_step_fabx(ul);
 
 	if (ul->put) {
 		/* maybe finish the previous upload */
@@ -1857,7 +1966,10 @@ oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 	GRID_TRACE("%s (%p) append=%u", __FUNCTION__, ul, ul->dst->append);
 	EXTRA_ASSERT (ul != NULL);
 
-	if (ul->put && !http_put_done (ul->put))
+	/* SHORTCUT for fabx uploads */
+	if (ul->fabx)
+		oio_fabx_upload_finalize(ul->fabx);
+	else if (ul->put && !http_put_done(ul->put))
 		return (struct oio_error_s *) SYSERR("RAWX upload not completed");
 
 	gint64 size = ul->dst->offset;

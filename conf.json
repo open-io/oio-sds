@@ -1078,5 +1078,12 @@
 				"def": "true",
 				"descr": "Compare the number of items to select to the number of items available at the current location level, and decide if it is desirable to bypass or slacken the time-consuming distance checks. Disable this if you detect too many situations where distance between selected items could have been bigger." }
 		]
+	},
+	"fabx": {
+		"code": "fabx_variables.c",
+		"header": "fabx_variables.h",
+		"license": "agpl",
+		"variables": [
+		]
 	}
 }

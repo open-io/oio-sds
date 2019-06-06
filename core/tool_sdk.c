@@ -32,6 +32,10 @@ License along with this library.
 	if (v) oio_url_set(url,(F),v); \
 } while (0)
 
+static void _usage(void) {
+	g_printerr("Usage: %s (put|replace|append) SIZE\n", g_get_prgname());
+}
+
 static struct oio_url_s * _load_url_from_env (void) {
 	struct oio_url_s *url = oio_url_empty();
 	FIELD("OIO_NS", OIOURL_NS);
@@ -44,6 +48,7 @@ static struct oio_url_s * _load_url_from_env (void) {
 static int _upload (int argc, char **argv, gboolean append, int replace) {
 	if (argc < 1) {
 		g_printerr("Missing size\n");
+		_usage();
 		return 1;
 	}
 
@@ -73,12 +78,20 @@ static int _upload (int argc, char **argv, gboolean append, int replace) {
 		return remaining;
 	}
 
+	gchar *properties[3] = {NULL, NULL, NULL};
+	const gchar *policy = g_getenv("OIO_POLICY");
+	if (policy != NULL) {
+		properties[0] = "policy";
+		properties[1] = (char *) policy;
+	}
+
 	gchar *content_id = NULL;
 	struct oio_sds_ul_src_s src = OIO_SDS_UPLOAD_SRC_INIT;
 	src.type = OIO_UL_SRC_HOOK_SEQUENTIAL;
 	src.data.hook.cb = _gen;
 	src.data.hook.ctx = NULL;
 	src.data.hook.size = size;
+
 	struct oio_sds_ul_dst_s dst = OIO_SDS_UPLOAD_DST_INIT;
 	dst.url = url;
 	dst.autocreate = 1;
@@ -86,6 +99,7 @@ static int _upload (int argc, char **argv, gboolean append, int replace) {
 	dst.append = BOOL(append);
 	dst.partial = BOOL(replace >= 0);
 	dst.meta_pos = replace;
+	dst.properties = (const char * const *) properties;
 
 	if (dst.append || dst.partial) {
 		void _cb(void *i UNUSED, enum oio_sds_content_key_e k, const char *v) {
@@ -128,11 +142,13 @@ int main(int argc, char **argv) {
 
 	if (!oio_var_value_with_files(g_getenv("OIO_NS"), TRUE, NULL)) {
 		g_printerr("Unknown NS [%s]\n", g_getenv("OIO_NS"));
+		_usage();
 		return 1;
 	}
 
 	if (argc < 2) {
 		g_printerr("Missing argument\n");
+		_usage();
 		return 1;
 	}
 
@@ -151,5 +167,6 @@ int main(int argc, char **argv) {
 	}
 
 	g_printerr("Command not found\n");
+	_usage();
 	return 1;
 }

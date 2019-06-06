@@ -46,8 +46,7 @@ oio_lb_world__feed_service_info_list(struct oio_lb_world_s *lbw,
 	for (GSList *l = services; l; l = l->next) {
 		struct service_info_s *srv = l->data;
 
-		struct oio_lb_item_s *item =
-			g_malloc0(sizeof(struct oio_lb_item_s) + LIMIT_LENGTH_SRVID);
+		struct oio_lb_item_s *item = g_malloc0(sizeof(struct oio_lb_item_s));
 		service_info_to_lb_item(srv, item);
 		/* Keep a of all items, for easier garbage collection. */
 		items = g_slist_prepend(items, item);

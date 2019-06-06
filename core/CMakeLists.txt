@@ -66,11 +66,16 @@ add_library(oiosds SHARED
 	http_del.c
 	headers.c
 	proxy.c
-	sds.c dir.c cs.c)
+	sds.c dir.c cs.c
+	../fabx/client.c
+	../fabx/common.c)
 
 set_target_properties(oiosds PROPERTIES PUBLIC_HEADER "oio_sds.h" VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(oiosds oiocore
-		${GLIB2_LIBRARIES} ${CURL_LIBRARIES} ${JSONC_LIBRARIES})
+		${GLIB2_LIBRARIES}
+		${CURL_LIBRARIES}
+		${JSONC_LIBRARIES}
+		${FABRIC_LIBRARIES})
 
 add_executable(tool_sdk_noconf tool_sdk_noconf.c)
 target_link_libraries(tool_sdk_noconf oiosds)

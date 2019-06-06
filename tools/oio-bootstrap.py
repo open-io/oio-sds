@@ -379,6 +379,21 @@ stats:
     - {type: system}
 """
 
+template_fabx_watch = """
+host: ${IP}
+port: ${PORT}
+type: fabx
+location: ${LOC}
+checks:
+    - {type: tcp}
+slots:
+    - ${SRVTYPE}
+    - ${EXTRASLOT}
+stats:
+    - {type: volume, path: ${VOLUME}}
+    - {type: system}
+"""
+
 template_rawx_watch = """
 host: ${IP}
 port: ${PORT}
@@ -516,7 +531,15 @@ THREECOPIES=rawx3:DUPONETHREE
 17COPIES=rawx17:DUP17
 EC=NONE:EC
 EC21=NONE:EC21
-BACKBLAZE=NONE:BACKBLAZE
+FABX3=fabx3:DUPONETHREE
+FABX2=fabx2:DUPONETWO
+FABX1=fabx1:NONE
+
+# Public tier using Backblaze B2
+B2=NONE:B2
+
+# Public tier using Amazon S3
+S3=NONE:S3
 
 [DATA_SECURITY]
 # Data security definitions
@@ -540,7 +563,9 @@ EC21=ec/k=2,m=1,algo=liberasurecode_rs_vand,min_dist=1,warn_dist=${WARN_DIST}
 # "shss"                   EC_BACKEND_SHSS
 # "liberasurecode_rs_vand" EC_BACKEND_LIBERASURECODE_RS_VAND
 
-BACKBLAZE=backblaze/account_id=${BACKBLAZE_ACCOUNT_ID},bucket_name=${BACKBLAZE_BUCKET_NAME},min_dist=0,nb_copy=1
+B2=pub/provider=b2,account_id=${BACKBLAZE_ACCOUNT_ID},bucket_name=${BACKBLAZE_BUCKET_NAME}
+
+S3=pub/provider=s3,region=${AWS_REGION},account_id=${AWS_ACCOUNT},bucket_name=${AWS_BUCKET}
 """
 
 template_credentials = """
@@ -590,6 +615,18 @@ targets=${M2_REPLICAS},meta2
 
 [pool:account]
 targets=1,account
+
+[pool:fabx1]
+targets=1,fabx
+warn_dist=${WARN_DIST}
+
+[pool:fabx2]
+targets=2,fabx
+warn_dist=${WARN_DIST}
+
+[pool:fabx3]
+targets=3,fabx
+warn_dist=${WARN_DIST}
 
 [pool:fastrawx3]
 # Pick 3 SSD rawx, or any rawx if SSD is not available
@@ -644,6 +681,10 @@ score_timeout=120
 lock_at_first_register=false
 
 [type:meta2]
+score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+score_timeout=120
+
+[type:fabx]
 score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
 score_timeout=120
 
@@ -770,6 +811,15 @@ template_gridinit_rawx = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 command=oio-rawx %s
+enabled=true
+start_at_boot=false
+on_die=cry
+"""
+
+template_gridinit_fabx = """
+[Service.${NS}-${SRVTYPE}-${SRVNUM}]
+group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+command=oio-fabx -s OIO,${NS},${SRVTYPE},${SRVNUM} ${NS} ${IP}:${PORT} ${VOLUME}
 enabled=true
 start_at_boot=false
 on_die=cry
@@ -1136,6 +1186,7 @@ defaults = {
     'NB_M1': 1,
     'NB_M2': 1,
     'NB_SQLX': 1,
+    'NB_FABX': 3,
     'NB_RAWX': 3,
     'NB_RAINX': 0,
     'NB_ECD': 1,
@@ -1518,6 +1569,28 @@ def generate(options):
             generate_meta('sqlx', i + 1, template_gridinit_sqlx,
                           options['sqlx'].get(SVC_PARAMS, ""))
 
+    # FABX
+    srvtype = 'fabx'
+    nb_fabx = getint(options[srvtype].get(SVC_NB), defaults['NB_FABX'])
+    if nb_fabx:
+        for i in range(nb_fabx):
+            env = subenv({'SRVTYPE': srvtype,
+                          'SRVNUM': i + 1,
+                          'PORT': next(ports)})
+            env['SERVICE_ID'] = "{NS}-{SRVTYPE}-{SRVNUM}".format(**env)
+            add_service(env)
+            # gridinit (fabx)
+            tpl = Template(template_gridinit_fabx)
+            with open(gridinit(env), 'a+') as f:
+                f.write(tpl.safe_substitute(env))
+            # watcher
+            tpl = Template(template_fabx_watch)
+            to_write = tpl.safe_substitute(env)
+            with open(watch(env), 'w+') as f:
+                f.write(to_write)
+            # TODO(jfs): indexer (gridinit, service)
+
+
     # RAWX
     srvtype = 'rawx'
     nb_rawx = getint(options[srvtype].get(SVC_NB), defaults['NB_RAWX'])
@@ -1857,6 +1930,7 @@ def main():
     opts['meta2'] = {SVC_NB: None, SVC_HOSTS: None}
     opts['sqlx'] = {SVC_NB: None, SVC_HOSTS: None}
     opts['rawx'] = {SVC_NB: None, SVC_HOSTS: None}
+    opts['fabx'] = {SVC_NB: None, SVC_HOSTS: None}
     opts[GO_RAWX] = False
     opts[FSYNC_RAWX] = False
     opts['rdir'] = {SVC_NB: None, SVC_HOSTS: None}

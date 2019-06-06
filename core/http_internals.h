@@ -154,6 +154,13 @@ GError * oio_proxy_call_content_set_properties (CURL *h,
 GError * oio_proxy_call_content_get_properties (CURL *h,
 		struct oio_url_s *u, GString ** props_str);
 
+struct oio_proxy_content_prepare_in_s
+{
+	gchar *policy;
+	gsize size;
+	gboolean autocreate;
+};
+
 struct oio_proxy_content_prepare_out_s
 {
 	GString *body;
@@ -166,7 +173,7 @@ struct oio_proxy_content_prepare_out_s
 };
 
 GError * oio_proxy_call_content_prepare (CURL *h, struct oio_url_s *u,
-		gsize size, gboolean autocreate,
+		struct oio_proxy_content_prepare_in_s *in,
 		struct oio_proxy_content_prepare_out_s *out);
 
 struct oio_proxy_content_create_in_s

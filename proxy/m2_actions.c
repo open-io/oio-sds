@@ -203,17 +203,34 @@ static gchar*
 _real_url_from_chunk_id (const char *id)
 {
 	gchar *out = NULL;
-	gchar *addr = NULL, *type = NULL, *netloc = NULL;
 
-	oio_parse_chunk_url(id, &type, &netloc, NULL);
-	addr = _resolve_service_id(netloc);
+	gchar *type = NULL, *netloc = NULL, *chunkid = NULL;
+	if (!oio_parse_chunk_url(id, &type, &netloc, &chunkid))
+		return NULL;
+
+	gchar *addr = _resolve_service_id(netloc);
+
+	const char *proto = NULL;
+	if (!strcmp(type, NAME_SRVTYPE_RAWX)) {
+		proto = "http";
+	} else if (!strcmp(type, NAME_SRVTYPE_FABX)) {
+		proto = "fabx";
+	} else if (!strcmp(type, NAME_SRVTYPE_PUBLIC)) {
+		/* TODO(jfs): implement public tiering here, the chunk_method
+		 * policy must tell which provider has to be used. */
+		goto error;
+	} else {
+		goto error;
+	}
 
 	/* generate real_url, only if item was found */
-	out = g_strdup_printf("http://%s/%s",
-			addr, id + strlen("http://") + strlen(netloc) + 1);
+	out = g_strdup_printf("%s://%s/%s", proto, addr, chunkid);
+
 	g_free(addr);
-	g_free(netloc);
+error:
 	g_free(type);
+	g_free(netloc);
+	g_free(chunkid);
 	return out;
 }
 

@@ -634,7 +634,7 @@ oio_proxy_call_content_truncate (CURL *h, struct oio_url_s *u, gint64 size)
 
 GError *
 oio_proxy_call_content_prepare (CURL *h, struct oio_url_s *u,
-		gsize size, gboolean autocreate,
+		struct oio_proxy_content_prepare_in_s *in,
 		struct oio_proxy_content_prepare_out_s *out)
 {
 	gboolean use_legacy = FALSE;
@@ -649,18 +649,23 @@ retry:
 		return BADNS();
 
 	gchar *hdrin[] = {
-		PROXYD_HEADER_MODE, autocreate ? "autocreate" : NULL,
+		PROXYD_HEADER_MODE, in && in->autocreate ? "autocreate" : NULL,
 		NULL
 	};
-	struct http_ctx_s i = {
-		.headers = hdrin,
-		.body = _gs_vprintf ("{\"size\":%"G_GSIZE_FORMAT",\"autocreate\":%s}",
-			size, autocreate ? "true" : "false")
-	};
+
+	GString *b = _gs_vprintf ("{\"size\":%"G_GSIZE_FORMAT",\"autocreate\":%s",
+			in && in->size ? in->size : 1, in && in->autocreate ? "true" : "false");
+	if (in && in->policy) {
+		g_string_append_printf(b, ",\"policy\":\"%s\"}", in->policy);
+	} else {
+		g_string_append_c(b, '}');
+	}
+	struct http_ctx_s i = { .headers = hdrin, .body = b };
 	struct http_ctx_s o = {
 		.headers = g_malloc0(sizeof(void*)),
 		.body = out ? out->body : NULL
 	};
+	b = NULL;
 
 	GError *err = _proxy_call (h, "POST", http_url->str, &i, &o);
 	if (!err && out && o.headers) {

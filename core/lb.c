@@ -222,6 +222,7 @@ struct _lb_item_s
 	oio_weight_t weight;
 	gchar addr[STRLEN_ADDRINFO];
 	gchar id[LIMIT_LENGTH_SRVID];
+	gchar type[LIMIT_LENGTH_SRVTYPE];
 	oio_refcount_t refcount;
 };
 
@@ -388,16 +389,6 @@ static struct oio_lb_pool_vtable_s vtable_LOCAL =
 	.get_item = _local__get_item
 };
 
-static struct _lb_item_s *
-_item_make (oio_location_t location, const char *id, const char *addr)
-{
-	struct _lb_item_s *out = g_malloc0(sizeof(struct _lb_item_s));
-	out->location = location;
-	g_strlcpy(out->addr, addr, sizeof(out->addr));
-	g_strlcpy(out->id, id, sizeof(out->id));
-	return out;
-}
-
 void
 oio_lb_selected_item_free(struct oio_lb_selected_item_s *_item)
 {
@@ -412,10 +403,11 @@ _item_select(const struct _lb_item_s *src)
 	struct oio_lb_selected_item_s *res =  g_malloc0(sizeof *res);
 	if (src != NULL) {
 		res->item = g_malloc0(sizeof(struct oio_lb_item_s));
-		g_strlcpy(res->item->addr, src->addr, sizeof(res->item->addr));
-		g_strlcpy(res->item->id, src->id, sizeof(res->item->id));
 		res->item->location = src->location;
 		res->item->weight = src->weight;
+		g_strlcpy(res->item->id, src->id, sizeof(res->item->id));
+		g_strlcpy(res->item->addr, src->addr, sizeof(res->item->addr));
+		g_strlcpy(res->item->type, src->type, sizeof(res->item->type));
 	}
 	return res;
 }
@@ -1529,7 +1521,8 @@ oio_lb_world__get_item(struct oio_lb_world_s *self, const char *id)
 		item = g_malloc0(sizeof(struct oio_lb_item_s));
 		item->location = item0->location;
 		item->weight = item0->weight;
-		memcpy(item->addr, item0->addr, sizeof(item->addr));
+		g_strlcpy(item->addr, item0->addr, sizeof(item->addr));
+		g_strlcpy(item->type, item0->type, sizeof(item->type));
 		g_strlcpy(item->id, id, sizeof(item->id));
 	}
 	g_rw_lock_reader_unlock(&self->lock);
@@ -1607,8 +1600,12 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 	if (!item0) {
 
 		/* Item unknown in the world, so we add it */
-		item0 = _item_make (item->location, item->id, item->addr);
+		item0 = g_malloc0(sizeof(struct _lb_item_s));
+		item0->location = item->location;
 		item0->weight = item->weight;
+		g_strlcpy(item0->addr, item->addr, sizeof(item0->addr));
+		g_strlcpy(item0->id, item->id, sizeof(item0->id));
+		g_strlcpy(item0->type, item->type, sizeof(item0->type));
 		g_tree_replace (self->items, g_strdup(item0->id), item0);
 		_oio_service_id_cache_add_addr(item0->id, item0->addr);
 

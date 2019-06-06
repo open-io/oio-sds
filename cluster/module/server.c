@@ -50,6 +50,7 @@ License along with this library.
 # define EXPR_DEFAULT_META1 "root(2,((num stat.cpu)*(num stat.io)))"
 # define EXPR_DEFAULT_META2 "root(2,((num stat.cpu)*(num stat.io)))"
 # define EXPR_DEFAULT_RAWX  "root(3,((num stat.cpu)*(num stat.io)*(num stat.space)))"
+# define EXPR_DEFAULT_FABX  "root(3,((num stat.cpu)*(num stat.io)*(num stat.space)))"
 
 static struct network_server_s *server = NULL;
 static struct gridd_request_dispatcher_s *dispatcher = NULL;
@@ -1519,6 +1520,7 @@ module_init_known_service_types(void)
 		{NAME_SRVTYPE_META1,EXPR_DEFAULT_META1},
 		{NAME_SRVTYPE_META2,EXPR_DEFAULT_META2},
 		{NAME_SRVTYPE_RAWX,EXPR_DEFAULT_RAWX},
+		{NAME_SRVTYPE_FABX,EXPR_DEFAULT_FABX},
 		{0,0}
 	};
 

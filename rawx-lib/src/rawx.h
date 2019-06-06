@@ -22,8 +22,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # include <metautils/lib/metatypes.h>
 
-# define ATTR_NAME_MAX_LENGTH 64
-
 # define ATTR_DOMAIN "user.grid"
 # define ATTR_DOMAIN_OIO "user.oio"
 

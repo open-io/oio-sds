@@ -369,32 +369,34 @@ oio_parse_service_key(const char *key, gchar **ns, gchar **type, gchar **id)
 	g_free(toks);
 }
 
-void oio_parse_chunk_url(const gchar *url,
+static gboolean
+_parse_chunk_url(const char *url, gsize prefix_len, const char *type,
+		gchar **p_type, gchar **p_netloc, gchar **p_id)
+{
+	const char * start = url + prefix_len;
+	const char * first_slash = strchr(start, '/');
+	if (!first_slash)
+		return FALSE;
+	if (p_netloc)
+		*p_netloc = g_strndup(start, first_slash - start);
+	if (p_id)
+		*p_id = g_strdup(first_slash + 1);
+	if (p_type)
+		*p_type = g_strdup(type);
+}
+
+gboolean oio_parse_chunk_url(const char *url,
 		gchar **type, gchar **netloc, gchar **id)
 {
-	gchar *_type = NULL;
-	if (g_str_has_prefix(url, "http://")) {
-		_type = NAME_SRVTYPE_RAWX;
-		const char * start = url + sizeof("http://") - 1;
-		const char * first_slash = strchr(start, '/');
-		if (first_slash) {
-			if (netloc)
-				*netloc = g_strndup(start, first_slash - start);
-			if (id)
-				*id = g_strdup(first_slash + 1);
-		}
-	} else if (g_str_has_prefix(url, "b2/") || g_str_has_prefix(url, "b2:")) {
-		_type = "b2";
-		if (id)
-			*id = g_strdup(url + 3);
-	} else if (g_str_has_prefix(url, "k/")) {
-		_type = "k";
-		if (netloc)
-			*netloc = g_strdup(url + 2);
-	}
-
-	if (type)
-		*type = g_strdup(_type);
+	if (g_str_has_prefix(url, "http://"))
+		return _parse_chunk_url(url, 7, NAME_SRVTYPE_RAWX, type, netloc, id);
+	if (g_str_has_prefix(url, "rawx://"))
+		return _parse_chunk_url(url, 7, NAME_SRVTYPE_RAWX, type, netloc, id);
+	if (g_str_has_prefix(url, "fabx://"))
+		return _parse_chunk_url(url, 7, NAME_SRVTYPE_FABX, type, netloc, id);
+	if (g_str_has_prefix(url, "public://"))
+		return _parse_chunk_url(url, 9, NAME_SRVTYPE_PUBLIC, type, netloc, id);
+	return FALSE;
 }
 
 gchar *
@@ -433,10 +435,12 @@ service_info_to_lb_item(const struct service_info_s *si,
 	}
 	item->weight = CLAMP(si->score.value, 0, 100);
 	gchar *key = service_info_key(si);
-	g_strlcpy(item->id, key, LIMIT_LENGTH_SRVID);
+	g_strlcpy(item->id, key, sizeof(item->id));
 	g_free(key);
 
 	grid_addrinfo_to_string(&(si->addr), item->addr, sizeof(item->addr));
+
+	g_strlcpy(item->type, si->type, sizeof(item->type));
 }
 
 //------------------------------------------------------------------------------

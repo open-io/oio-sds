@@ -30,19 +30,22 @@ License along with this library.
 #define DS_KEY_WEAK "weak"
 #define DS_KEY_ACCOUNT_ID "account_id"
 #define DS_KEY_BUCKET_NAME "bucket_name"
+#define DS_KEY_PROVIDER "provider"
+#define DS_KEY_ENDPOINT "endpoint"
+#define DS_KEY_REGION "region"
 
 #define STORAGE_POLICY_NONE "NONE"
 #define DATA_SECURITY_NONE "NONE"
 
 #define STGPOL_DSPREFIX_PLAIN "plain"
 #define STGPOL_DSPREFIX_EC "ec"
-#define STGPOL_DSPREFIX_BACKBLAZE "backblaze"
+#define STGPOL_DSPREFIX_PUBLIC "pub"
 
 enum data_security_e
 {
 	STGPOL_DS_PLAIN,
 	STGPOL_DS_EC,
-	STGPOL_DS_BACKBLAZE
+	STGPOL_DS_PUBLIC
 };
 
 /** Forward declarations */

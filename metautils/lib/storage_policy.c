@@ -114,8 +114,8 @@ _parse_data_security(struct data_security_s *ds, const char *config)
 		ds->type = STGPOL_DS_PLAIN;
 	} else if (oio_str_prefixed (config, "ec", "/")) {
 		ds->type = STGPOL_DS_EC;
-	} else if (oio_str_prefixed (config, "backblaze", "/")) {
-		ds->type = STGPOL_DS_BACKBLAZE;
+	} else if (oio_str_prefixed (config, "pub", "/")) {
+		ds->type = STGPOL_DS_PUBLIC;
 	} else {
 		return 0;
 	}
@@ -325,18 +325,23 @@ _rain_policy_to_chunk_method(const struct data_security_s *datasec)
 }
 
 static GString *
-_backblaze_policy_to_chunk_method(const struct data_security_s *datasec)
+_public_policy_to_chunk_method(const struct data_security_s *datasec)
 {
 	GString *result = g_string_sized_new(128);
 
-	const char *account_id = data_security_get_param(datasec,
-							 DS_KEY_ACCOUNT_ID);
-	const char *bucket_name = data_security_get_param(datasec,
-							DS_KEY_BUCKET_NAME);
+	const char *prov = data_security_get_param(datasec, DS_KEY_PROVIDER);
+	const char *endp = data_security_get_param(datasec, DS_KEY_ENDPOINT);
+	const char *acct = data_security_get_param(datasec, DS_KEY_ACCOUNT_ID);
+	const char *bckt = data_security_get_param(datasec, DS_KEY_BUCKET_NAME);
+	const char *regn = data_security_get_param(datasec, DS_KEY_REGION);
 
 	g_string_append_printf(result,
-			"backblaze/account_id=%s,bucket_name=%s",
-			account_id, bucket_name);
+			"pub/provider=%s,account_id=%s,bucket_name=%s",
+			prov, acct, bckt);
+	if (endp)
+		g_string_append_printf(result, ",endpoint=%s", endp);
+	if (regn)
+		g_string_append_printf(result, ",region=%s", regn);
 	return result;
 }
 
@@ -361,10 +366,10 @@ storage_policy_to_chunk_method(const struct storage_policy_s *sp)
 	switch (data_security_get_type(datasec)) {
 		case STGPOL_DS_EC:
 			return _rain_policy_to_chunk_method(datasec);
-		case STGPOL_DS_BACKBLAZE:
-			return _backblaze_policy_to_chunk_method(datasec);
 		case STGPOL_DS_PLAIN:
 			return _plain_policy_to_chunk_method(datasec);
+		case STGPOL_DS_PUBLIC:
+			return _public_policy_to_chunk_method(datasec);
 		default:
 			g_assert_not_reached();
 	}
