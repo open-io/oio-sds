@@ -115,7 +115,14 @@ class RatelimiterTest(unittest.TestCase):
         self.assertEqual(10, next_rate)
         self.assertEqual(datetime(2018, 1, 1, hour=0, minute=30), next_date)
 
-    def test_policy_parsing_ok(self):
+    def test_policy_parsing_ok_single(self):
+        expected = [
+            (timedelta(0), 10),  # whole day
+        ]
+        parsed = ratelimit_policy_from_string('10')
+        self.assertListEqual(expected, parsed)
+
+    def test_policy_parsing_ok_several(self):
         expected = [
             (timedelta(0, 1800), 10),  # 0h30 to 6h45
             (timedelta(0, 24300), 2),  # 6h45 to 9h45
