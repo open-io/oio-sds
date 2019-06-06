@@ -36,7 +36,7 @@ def make_logger_args_parser():
 
 def get_logger_from_args(args, default_conf=None):
     """Build a Logger instance from parsed args."""
-    conf = default_conf or dict()
+    conf = default_conf or {'namespace': args.namespace}
     if args.log_level is not None:
         conf['log_level'] = args.log_level
     if args.log_facility is not None:

@@ -141,7 +141,7 @@ class ObjectStorageApi(object):
             from oio.blob.client import BlobClient
             connection_pool = self.container.pool_manager
             self._blob_client = BlobClient(
-                conf={"namespace": self.namespace},
+                conf={"namespace": self.namespace}, logger=self.logger,
                 connection_pool=connection_pool, perfdata=self.perfdata)
         return self._blob_client
 
