@@ -174,7 +174,7 @@ class Meta1Check(BaseCheckCommand):
         yield ('OK', None)
 
 
-class DirCheck(BaseCheckCommand):
+class DirectoryCheck(BaseCheckCommand):
     """
     Check the directory has been fully bootstraped.
 
