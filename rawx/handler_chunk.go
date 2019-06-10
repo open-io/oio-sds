@@ -292,8 +292,7 @@ func (rr *rawxRequest) downloadChunk() {
 		defer in.Close()
 	}
 	if err != nil {
-		setError(rr.rep, err)
-		rr.replyCode(http.StatusInternalServerError)
+		rr.replyError(err)
 		return
 	}
 

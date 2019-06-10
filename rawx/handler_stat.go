@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"reflect"
 	"sync/atomic"
+	"time"
 )
 
 type statInfo struct {
@@ -60,7 +61,7 @@ type statInfo struct {
 var counters statInfo
 
 func incrementStatReq(rr *rawxRequest) uint64 {
-	spent := rr.getSpent()
+	spent := uint64(time.Since(rr.startTime).Nanoseconds() / 1000)
 	atomic.AddUint64(&counters.ReqTimeAll, spent)
 	atomic.AddUint64(&counters.ReqHitsAll, 1)
 
@@ -181,12 +182,20 @@ func (rr *rawxRequest) serveStat(rep http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	var spent uint64
 	switch req.Method {
 	case "GET", "HEAD":
 		doGetStats(rr)
-		IncrementStatReqStat(rr)
+		spent = IncrementStatReqStat(rr)
 	default:
 		rr.replyCode(http.StatusMethodNotAllowed)
-		IncrementStatReqOther(rr)
+		spent = IncrementStatReqOther(rr)
+	}
+
+	if isVerbose() {
+		LogHttp(
+			rr.rawx.url, rr.req.RemoteAddr, rr.req.Method,
+			rr.status, spent, rr.bytesOut, rr.chunk.ContainerID,
+			rr.reqid, rr.req.URL.Path)
 	}
 }

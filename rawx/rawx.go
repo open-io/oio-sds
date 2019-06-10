@@ -24,14 +24,6 @@ import (
 	"time"
 )
 
-func setErrorString(rep http.ResponseWriter, s string) {
-	rep.Header().Set("X-Error", s)
-}
-
-func setError(rep http.ResponseWriter, e error) {
-	setErrorString(rep, e.Error())
-}
-
 type rawxService struct {
 	ns       string
 	url      string
@@ -72,10 +64,6 @@ func (rr *rawxRequest) replyCode(code int) {
 	rr.rep.WriteHeader(rr.status)
 }
 
-func (rr *rawxRequest) getSpent() uint64 {
-	return uint64(time.Since(rr.startTime).Nanoseconds() / 1000)
-}
-
 func (rr *rawxRequest) replyError(err error) {
 	if os.IsExist(err) {
 		rr.replyCode(http.StatusConflict)
@@ -84,7 +72,18 @@ func (rr *rawxRequest) replyError(err error) {
 	} else if os.IsNotExist(err) {
 		rr.replyCode(http.StatusNotFound)
 	} else {
-		setError(rr.rep, err)
+		// A strong error occured, we tend to close the connection
+		// whatever the client has sent in the request, in terms of
+		// connection management.
+		rr.req.Close = true
+
+		// Also, we debug what happened in the reply headers
+		// TODO(jfs): This is a job for a distributed tracing framework
+		if logExtremeVerbosity {
+			rr.rep.Header().Set("X-Error", err.Error())
+		}
+
+		// Prepare the most adapted reply status.
 		if err == os.ErrInvalid {
 			rr.replyCode(http.StatusBadRequest)
 		} else {
