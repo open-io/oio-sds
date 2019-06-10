@@ -50,11 +50,6 @@ func checkNS(ns string) {
 	}
 }
 
-func usage(why string) {
-	log.Println("rawx NS IP:PORT BASEDIR")
-	log.Fatal(why)
-}
-
 func installSigHandlers(rawx *rawxService, srv *http.Server) {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan,
@@ -102,22 +97,24 @@ func main() {
 		logSeverity = syslog.LOG_DEBUG
 	}
 
+	var opts optionsMap
+
+	if len(*confPtr) <= 0 {
+		log.Fatal("Missing configuration file")
+	} else if cfg, err := filepath.Abs(*confPtr); err != nil {
+		log.Fatalf("Invalid configuration file path: %v", err.Error())
+	} else if opts, err = readConfig(cfg); err != nil {
+		log.Fatalf("Exiting with error: %v", err.Error())
+	}
+
 	if logExtremeVerbosity {
 		InitStderrLogger()
 	} else if *syslogIDPtr != "" {
 		InitSysLogger(*syslogIDPtr)
+	} else if v, ok := opts["syslog_id"]; ok {
+		InitSysLogger(v)
 	} else {
 		InitNoopLogger()
-	}
-
-	var opts optionsMap
-
-	if len(*confPtr) <= 0 {
-		LogFatal("Missing configuration file")
-	} else if cfg, err := filepath.Abs(*confPtr); err != nil {
-		LogFatal("Invalid configuration file path: %v", err.Error())
-	} else if opts, err = readConfig(cfg); err != nil {
-		LogFatal("Exiting with error: %v", err.Error())
 	}
 
 	chunkrepo := chunkRepository{}
