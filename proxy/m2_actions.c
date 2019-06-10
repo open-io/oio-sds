@@ -223,7 +223,7 @@ static oio_weight_t
 _patch_score(const oio_weight_t score,
 		const oio_location_t location, const oio_location_t reference)
 {
-	if (score <= 0 || !location)
+	if (score <= 0 || !location || !reference)
 		return score;
 	switch (oio_location_proximity(location, reference)) {
 		case OIO_LOC_PROX_VOLUME:
