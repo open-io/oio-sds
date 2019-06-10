@@ -166,16 +166,21 @@ func main() {
 	}
 	rawx.notifier = notifier
 
+	toReadHeader := opts.getInt("timeout_read_header", 10)
+	toReadRequest := opts.getInt("timeout_read_request", 20)
+	toWrite := opts.getInt("timeout_write_reply", 20)
+	toIdle := opts.getInt("timeout_idle", 30)
+
 	srv := http.Server{
 		Addr:              rawx.url,
 		Handler:           &rawx,
 		TLSConfig:         nil,
-		ReadHeaderTimeout: 10 * time.Second,
-		ReadTimeout:       20 * time.Second,
-		WriteTimeout:      20 * time.Second,
-		IdleTimeout:       20 * time.Second,
+		ReadHeaderTimeout: time.Duration(toReadHeader) * time.Second,
+		ReadTimeout:       time.Duration(toReadRequest) * time.Second,
+		WriteTimeout:      time.Duration(toWrite) * time.Second,
+		IdleTimeout:       time.Duration(toIdle) * time.Second,
 		// The default is at 1MiB but the RAWX never needs that
-		MaxHeaderBytes: 65536,
+		MaxHeaderBytes: opts.getInt("headers_buffer_size", 65536),
 	}
 
 	installSigHandlers(&rawx, &srv)
