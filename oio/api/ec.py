@@ -718,11 +718,16 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 failed_chunks.append(chunk)
             else:
                 current_writers.append(writer)
-        # write the data
-        bytes_transferred = self._stream(source, size, current_writers)
+        try:
+            # write the data
+            bytes_transferred = self._stream(source, size, current_writers)
 
-        # get the chunks from writers
-        chunks = self._get_results(current_writers)
+            # get the chunks from writers
+            chunks = self._get_results(current_writers)
+        finally:
+            # Writers which are not in current_writers have
+            # never been connected: don't try to close them.
+            self._close_writers(current_writers)
 
         meta_checksum = self.checksum.hexdigest()
 
@@ -891,7 +896,11 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 failed_chunks.append(writer.chunk)
         else:
             failed_chunks.append(writer.chunk)
-        io.close_source(writer)
+
+    def _close_writers(self, writers):
+        """Explicitly close all chunk writers."""
+        for writer in writers:
+            io.close_source(writer)
 
     def _get_results(self, writers):
         # get the results from writers
