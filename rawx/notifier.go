@@ -54,9 +54,8 @@ const (
 	beanstalkNotifierPipeSize    = 4096
 )
 
-var (
-	ErrNoNotiifer = errors.New("No notifier")
-)
+// Tells if the current RAWX service may emit notifications
+var notifAllowed = true
 
 type beanstalkNotifier struct {
 	rawx       *rawxService
@@ -152,6 +151,9 @@ func (notifier *beanstalkNotifier) asyncNotify(eventType, requestID string,
 			chunkInfo:  *chunk,
 		},
 	})
+	if isVerbose() {
+		LogDebug("Event %s", string(eventJSON))
+	}
 	if !notifier.run {
 		LogWarning("Can't send a event to %s using tube %s: closed",
 			notifier.endpoint, notifier.tube)
@@ -214,13 +216,17 @@ func MakeNotifier(config string, rawx *rawxService) (Notifier, error) {
 		return makeBeanstalkNotifier(endpoint, rawx)
 	}
 	// TODO(adu) makeZMQNotifier
-	return nil, ErrNoNotiifer
+	return nil, errors.New("Notifier URL not managed")
 }
 
 func NotifyNew(notifier Notifier, requestID string, chunk *chunkInfo) {
-	notifier.asyncNotify(eventTypeNewChunk, requestID, chunk)
+	if notifAllowed {
+		notifier.asyncNotify(eventTypeNewChunk, requestID, chunk)
+	}
 }
 
 func NotifyDel(notifier Notifier, requestID string, chunk *chunkInfo) {
-	notifier.asyncNotify(eventTypeDelChunk, requestID, chunk)
+	if notifAllowed {
+		notifier.asyncNotify(eventTypeDelChunk, requestID, chunk)
+	}
 }

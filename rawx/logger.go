@@ -23,15 +23,29 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type oioLogger interface {
 	write(priority syslog.Priority, message string)
 }
 
-var logger oioLogger
-var logDefaultSeverity = syslog.LOG_CRIT
+// Activate the extreme verbosity on the RAWX. This is has to be set at the
+// startup of the service.
+var logExtremeVerbosity = false
+
+// The high severity (a.k.a. log level) that will be logged by the application.
+var logDefaultSeverity = syslog.LOG_NOTICE
+
+// When using
 var logSeverity = logDefaultSeverity
+
+// The singleton logger that will be used by all the coroutine
+var logger oioLogger
+
+func isVerbose() bool {
+	return logExtremeVerbosity && severityAllowed(syslog.LOG_DEBUG)
+}
 
 func severityAllowed(severity syslog.Priority) bool {
 	return severity <= logSeverity
@@ -83,6 +97,11 @@ func writeLogFmt(priority syslog.Priority, format string, v ...interface{}) {
 	sb.WriteString(" - ")
 	sb.WriteString(fmt.Sprintf(format, v...))
 	logger.write(syslog.LOG_LOCAL0|severity, sb.String())
+}
+
+func LogFatal(format string, v ...interface{}) {
+	writeLogFmt(syslog.LOG_ERR, format, v...)
+	log.Fatalf(format, v...)
 }
 
 func LogError(format string, v ...interface{}) {
@@ -178,5 +197,6 @@ func InitStderrLogger() {
 }
 
 func (log *StderrLogger) write(priority syslog.Priority, message string) {
-	log.logger.Println(message)
+	now := time.Now()
+	log.logger.Println(fmt.Sprintf("%v.%06d", now.Unix(), (now.UnixNano()/1000)%1000000), message)
 }

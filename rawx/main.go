@@ -25,6 +25,7 @@ import (
 	"context"
 	"flag"
 	"log"
+	"log/syslog"
 	"net"
 	"net/http"
 	"os"
@@ -96,6 +97,12 @@ func main() {
 	}
 
 	if *verbosePtr {
+		logExtremeVerbosity = true
+		logDefaultSeverity = syslog.LOG_DEBUG
+		logSeverity = syslog.LOG_DEBUG
+	}
+
+	if logExtremeVerbosity {
 		InitStderrLogger()
 	} else if *syslogIDPtr != "" {
 		InitSysLogger(*syslogIDPtr)
@@ -106,11 +113,11 @@ func main() {
 	var opts optionsMap
 
 	if len(*confPtr) <= 0 {
-		log.Fatal("Missing configuration file")
+		LogFatal("Missing configuration file")
 	} else if cfg, err := filepath.Abs(*confPtr); err != nil {
-		log.Fatal("Invalid configuration file path", err.Error())
+		LogFatal("Invalid configuration file path: %v", err.Error())
 	} else if opts, err = readConfig(cfg); err != nil {
-		log.Fatal("Exiting with error: ", err.Error())
+		LogFatal("Exiting with error: %v", err.Error())
 	}
 
 	chunkrepo := chunkRepository{}
@@ -121,6 +128,8 @@ func main() {
 	checkNS(namespace)
 	checkURL(rawxURL)
 
+	tcp_keepalive := opts.getBool("tcp_keepalive", false)
+
 	// No service ID specified, using the service address instead
 	if rawxID == "" {
 		rawxID = rawxURL
@@ -129,7 +138,7 @@ func main() {
 
 	// Init the actual chunk storage
 	if err := chunkrepo.sub.init(opts["basedir"]); err != nil {
-		log.Fatal("Invalid directories: ", err)
+		LogFatal("Invalid directories: ", err)
 	}
 	chunkrepo.sub.hashWidth = opts.getInt("hash_width", chunkrepo.sub.hashWidth)
 	chunkrepo.sub.hashDepth = opts.getInt("hash_depth", chunkrepo.sub.hashDepth)
@@ -148,12 +157,12 @@ func main() {
 
 	eventAgent := OioGetEventAgent(namespace)
 	if eventAgent == "" {
-		log.Fatal("Notifier error: no address")
+		LogFatal("Notifier error: no address")
 	}
 
 	notifier, err := MakeNotifier(eventAgent, &rawx)
 	if err != nil {
-		log.Fatal("Notifier error: ", err)
+		LogFatal("Notifier error: %v", err)
 	}
 	rawx.notifier = notifier
 
@@ -175,21 +184,20 @@ func main() {
 
 	if !*servicingPtr {
 		if err := chunkrepo.lock(namespace, rawxID); err != nil {
-			log.Fatal("Volume lock error: ", err.Error())
+			LogFatal("Volume lock error: %v", err.Error())
 		}
 	}
 
-	// TODO(jfs): make this configurable
-	srv.SetKeepAlivesEnabled(true)
+	srv.SetKeepAlivesEnabled(tcp_keepalive)
 
-	if *verbosePtr {
+	if logExtremeVerbosity {
 		srv.ConnState = func(cnx net.Conn, state http.ConnState) {
-			LogDebug("cnx %v state %v", cnx, state)
+			LogDebug("%v %v %v", cnx.LocalAddr(), cnx.RemoteAddr(), state)
 		}
 	}
 
 	if err := srv.ListenAndServe(); err != nil {
-		log.Println("HTTP Server error: ", err)
+		LogWarning("HTTP Server exiting: ", err)
 	}
 
 	rawx.notifier.Stop()
