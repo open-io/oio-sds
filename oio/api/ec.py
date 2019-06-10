@@ -13,9 +13,9 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.common.green import sleep, ChunkReadTimeout, ChunkWriteTimeout, \
+from oio.common.green import ChunkReadTimeout, ChunkWriteTimeout, \
     ContextPool, ConnectionTimeout, GreenPile, LightQueue, Timeout, \
-    SourceReadTimeout
+    SourceReadTimeout, eventlet_yield
 
 import collections
 import math
@@ -629,7 +629,7 @@ class EcChunkWriter(object):
                         self.conn.send(data)
                         self.conn.send("\r\n")
                         self.bytes_transferred += len(data)
-                    sleep(0)
+                    eventlet_yield()
                 except (Exception, ChunkWriteTimeout) as exc:
                     self.failed = True
                     msg = str(exc)
@@ -643,7 +643,7 @@ class EcChunkWriter(object):
         has been processed by the send coroutine
         """
         while self.queue.qsize():
-            sleep(0)
+            eventlet_yield()
 
     def send(self, data):
         # do not send empty data because
@@ -656,6 +656,8 @@ class EcChunkWriter(object):
 
     def finish(self, metachunk_size, metachunk_hash):
         """Send metachunk_size and metachunk_hash as trailers"""
+        if self.failed:
+            return
         parts = [
             '0\r\n',
             '%s: %s\r\n' % (CHUNK_HEADERS['metachunk_size'],
@@ -671,7 +673,7 @@ class EcChunkWriter(object):
         self.conn.send(to_send)
         # Last segment sent, disable TCP_CORK to flush buffers
         self.conn.set_cork(False)
-        sleep(0)
+        eventlet_yield()
 
     def getresponse(self):
         """Read the HTTP response from the connection"""
@@ -763,7 +765,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 else:
                     current_writers.remove(writer)
                     failed_chunks.append(writer.chunk)
-            sleep(0)
+            eventlet_yield()
             self.quorum_or_fail([w.chunk for w in current_writers],
                                 failed_chunks)
 
