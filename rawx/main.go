@@ -22,17 +22,17 @@ http handler.
 */
 
 import (
+	"context"
 	"flag"
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"regexp"
 	"syscall"
 	"time"
-
-	graceful "gopkg.in/tylerb/graceful.v1"
 )
 
 func checkURL(url string) {
@@ -54,32 +54,30 @@ func usage(why string) {
 	log.Fatal(why)
 }
 
-func sigHandlerUSR1() {
-	increaseVerbosity()
-	go func() {
-		time.Sleep(time.Minute * 15)
-		resetVerbosity()
-	}()
-}
-
-func sigHandlerUSR2() {
-	resetVerbosity()
-}
-
-func installSigHandlers() {
+func installSigHandlers(rawx *rawxService, srv *http.Server) {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan,
 		syscall.SIGUSR1,
-		syscall.SIGUSR2)
+		syscall.SIGUSR2,
+		syscall.SIGINT,
+		syscall.SIGTERM)
 
 	go func() {
 		for {
-			sig := <-signalChan
-			switch sig {
+			switch <-signalChan {
 			case syscall.SIGUSR1:
-				sigHandlerUSR1()
+				increaseVerbosity()
+				go func() {
+					time.Sleep(time.Minute * 15)
+					resetVerbosity()
+				}()
 			case syscall.SIGUSR2:
-				sigHandlerUSR2()
+				resetVerbosity()
+			case syscall.SIGINT, syscall.SIGTERM:
+				ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+				if err := srv.Shutdown(ctx); err != nil {
+					LogWarning("graceful shutdown error: %v", err)
+				}
 			}
 		}
 	}()
@@ -104,8 +102,6 @@ func main() {
 	} else {
 		InitNoopLogger()
 	}
-
-	installSigHandlers()
 
 	var opts optionsMap
 
@@ -141,12 +137,6 @@ func main() {
 	chunkrepo.sub.syncDir = opts.getBool("fsync_dir", chunkrepo.sub.syncDir)
 	chunkrepo.sub.fallocateFile = opts.getBool("fallocate", chunkrepo.sub.fallocateFile)
 
-	if !*servicingPtr {
-		if err := chunkrepo.lock(namespace, rawxID); err != nil {
-			log.Fatal("Volume lock error: ", err.Error())
-		}
-	}
-
 	rawx := rawxService{
 		ns:       namespace,
 		url:      rawxURL,
@@ -160,15 +150,46 @@ func main() {
 	if eventAgent == "" {
 		log.Fatal("Notifier error: no address")
 	}
+
 	notifier, err := MakeNotifier(eventAgent, &rawx)
 	if err != nil {
 		log.Fatal("Notifier error: ", err)
 	}
 	rawx.notifier = notifier
+
+	srv := http.Server{
+		Addr:              rawx.url,
+		Handler:           &rawx,
+		TLSConfig:         nil,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       20 * time.Second,
+		WriteTimeout:      20 * time.Second,
+		IdleTimeout:       20 * time.Second,
+		// The default is at 1MiB but the RAWX never needs that
+		MaxHeaderBytes: 65536,
+	}
+
+	installSigHandlers(&rawx, &srv)
+
 	rawx.notifier.Start()
 
-	if err = graceful.RunWithErr(rawx.url, 0, &rawx); err != nil {
-		log.Fatal("HTTP error: ", err)
+	if !*servicingPtr {
+		if err := chunkrepo.lock(namespace, rawxID); err != nil {
+			log.Fatal("Volume lock error: ", err.Error())
+		}
+	}
+
+	// TODO(jfs): make this configurable
+	srv.SetKeepAlivesEnabled(true)
+
+	if *verbosePtr {
+		srv.ConnState = func(cnx net.Conn, state http.ConnState) {
+			LogDebug("cnx %v state %v", cnx, state)
+		}
+	}
+
+	if err := srv.ListenAndServe(); err != nil {
+		log.Println("HTTP Server error: ", err)
 	}
 
 	rawx.notifier.Stop()
