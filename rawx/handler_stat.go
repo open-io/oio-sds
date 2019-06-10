@@ -176,6 +176,11 @@ func doGetStats(rr *rawxRequest) {
 }
 
 func (rr *rawxRequest) serveStat(rep http.ResponseWriter, req *http.Request) {
+	if err := rr.drain(); err != nil {
+		rr.replyError(err)
+		return
+	}
+
 	switch req.Method {
 	case "GET", "HEAD":
 		doGetStats(rr)

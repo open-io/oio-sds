@@ -17,9 +17,10 @@
 package main
 
 import (
+	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 )
 
@@ -55,6 +56,15 @@ type rawxRequest struct {
 	status   int
 	bytesIn  uint64
 	bytesOut uint64
+}
+
+func (rr *rawxRequest) drain() error {
+	if _, err := io.Copy(ioutil.Discard, rr.req.Body); err != nil {
+		rr.req.Close = true
+		return err
+	} else {
+		return nil
+	}
 }
 
 func (rr *rawxRequest) replyCode(code int) {
@@ -94,6 +104,10 @@ func (rr *rawxRequest) replyError(err error) {
 	}
 }
 
+func _dslash(s string) bool {
+	return len(s) > 1 && s[0] == '/' && s[1] == '/'
+}
+
 func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 	rawxreq := rawxRequest{
 		rawx:      rawx,
@@ -118,7 +132,7 @@ func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 	if len(req.Host) > 0 && (req.Host != rawx.id && req.Host != rawx.url) {
 		rawxreq.replyCode(http.StatusTeapot)
 	} else {
-		if strings.HasPrefix(req.URL.Path, "//") == true {
+		for _dslash(req.URL.Path) {
 			req.URL.Path = req.URL.Path[1:]
 		}
 		switch req.URL.Path {
