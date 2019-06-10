@@ -91,9 +91,11 @@ func DialBeanstalkd(addr string) (*Beanstalkd, error) {
 
 func (beanstalkd *Beanstalkd) Close() {
 	_, _ = beanstalkd.sendAll([]byte("quit \r\n"))
-	err := beanstalkd.conn.Close()
-	if err != nil {
-		LogWarning("Failed to close the cnx to beanstalkd: %s", err.Error())
+	if beanstalkd.conn != nil {
+		err := beanstalkd.conn.Close()
+		if err != nil {
+			LogWarning("Failed to close the cnx to beanstalkd: %s", err.Error())
+		}
 	}
 }
 
@@ -250,6 +252,10 @@ func (beanstalkd *Beanstalkd) sendCommand(command string) (string, error) {
 }
 
 func (beanstalkd *Beanstalkd) sendAll(data []byte) (int, error) {
+	if beanstalkd.conn == nil {
+		return 0, errors.New("No connection to beanstalkd")
+	}
+
 	lengthData := len(data)
 	toWrite := data
 	totalWritten := 0

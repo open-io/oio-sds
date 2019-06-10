@@ -118,8 +118,10 @@ func (notifier *beanstalkNotifier) connectBeanstalkd() error {
 }
 
 func (notifier *beanstalkNotifier) closeBeanstalkd() {
-	notifier.beanstalkd.Close()
-	notifier.beanstalkd = nil
+	if notifier.beanstalkd != nil {
+		notifier.beanstalkd.Close()
+		notifier.beanstalkd = nil
+	}
 }
 
 func (notifier *beanstalkNotifier) syncNotify(eventJSON []byte) {
