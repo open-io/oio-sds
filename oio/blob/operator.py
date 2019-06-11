@@ -14,7 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-from oio.common.exceptions import ContentNotFound, NotFound, OrphanChunk
+from oio.common.exceptions import ContentNotFound, OrphanChunk
 from oio.common.logger import get_logger
 from oio.content.factory import ContentFactory
 from oio.rdir.client import RdirClient
@@ -70,13 +70,19 @@ class ChunkOperator(object):
         if try_chunk_delete:
             try:
                 content.blob_client.chunk_delete(chunk.url)
-                self.logger.info("Chunk %s deleted", chunk.url)
-            except NotFound as exc:
-                self.logger.debug("Chunk %s: %s", chunk.url, exc)
+                self.logger.info("Old chunk %s deleted", chunk.url)
+            except Exception as exc:
+                self.logger.warn(
+                    'Failed to delete old chunk %s: %s', chunk.url, exc)
 
         # This call does not raise exception if chunk is not referenced
         if chunk_id is not None:
-            self.rdir_client.chunk_delete(
-                chunk.host, container_id, content_id, chunk_id)
+            try:
+                self.rdir_client.chunk_delete(
+                    chunk.host, container_id, content_id, chunk_id)
+            except Exception as exc:
+                self.logger.warn(
+                    'Failed to delete chunk entry (%s) from the rdir (%s): %s',
+                    chunk_id, chunk.host, exc)
 
         return chunk_size
