@@ -135,7 +135,7 @@ func main() {
 
 	// Init the actual chunk storage
 	if err := chunkrepo.sub.init(opts["basedir"]); err != nil {
-		LogFatal("Invalid directories: ", err)
+		LogFatal("Invalid directories: %v", err)
 	}
 	chunkrepo.sub.hashWidth = opts.getInt("hash_width", chunkrepo.sub.hashWidth)
 	chunkrepo.sub.hashDepth = opts.getInt("hash_depth", chunkrepo.sub.hashDepth)
@@ -199,7 +199,7 @@ func main() {
 	}
 
 	if err := srv.ListenAndServe(); err != nil {
-		LogWarning("HTTP Server exiting: ", err)
+		LogWarning("HTTP Server exiting: %v", err)
 	}
 
 	rawx.notifier.Stop()
