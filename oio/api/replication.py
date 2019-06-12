@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -136,7 +136,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
             logger.warn('Source read error (reqid=%s): %s', self.reqid, err)
             raise
         except Timeout as to:
-            logger.error('Timeout writing data (reqid=%s): %s', self.reqid, to)
+            logger.warn('Timeout writing data (reqid=%s): %s', self.reqid, to)
             raise OioTimeout(to)
         except Exception:
             logger.exception('Exception writing data (reqid=%s)', self.reqid)
@@ -194,8 +194,8 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
             return conn, chunk
         except (SocketError, Timeout) as err:
             msg = str(err)
-            logger.error("Failed to connect to %s (reqid=%s): %s",
-                         chunk, self.reqid, err)
+            logger.warn("Failed to connect to %s (reqid=%s): %s",
+                        chunk, self.reqid, err)
         except Exception as err:
             msg = str(err)
             logger.exception("Failed to connect to %s (reqid=%s)",
@@ -245,8 +245,8 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                         + upload_end - conn.upload_start
         except Timeout as err:
             resp = err
-            logger.error('Failed to read response from %s (reqid=%s): %s',
-                         conn.chunk, self.reqid, err)
+            logger.warn('Failed to read response from %s (reqid=%s): %s',
+                        conn.chunk, self.reqid, err)
         except Exception as err:
             resp = err
             logger.exception("Failed to read response from %s (reqid=%s)",

@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,7 +14,7 @@
 # License along with this library.
 
 from oio.common.green import ChunkReadTimeout, ChunkWriteTimeout, \
-    ContextPool, ConnectionTimeout, GreenPile, LightQueue, OioTimeout, \
+    ContextPool, ConnectionTimeout, GreenPile, LightQueue, \
     SourceReadTimeout, Timeout, eventlet_yield
 
 import collections
@@ -680,7 +680,7 @@ class EcChunkWriter(object):
         # As the server may buffer data before writing it to non-volatile
         # storage, we don't know if we have to wait while sending data or
         # while reading response, thus we apply the same timeout to both.
-        with OioTimeout(self.write_timeout):
+        with ChunkWriteTimeout(self.write_timeout):
             resp = self.conn.getresponse()
             if self.perfdata is not None:
                 perfdata_rawx = self.perfdata.setdefault('rawx', dict())
@@ -839,7 +839,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
             logger.warn('Source read error (reqid=%s): %s', self.reqid, exc)
             raise
         except Timeout as to:
-            logger.error('Timeout writing data (reqid=%s): %s', self.reqid, to)
+            logger.warn('Timeout writing data (reqid=%s): %s', self.reqid, to)
             # Not the same class as the globally imported OioTimeout class
             raise exceptions.OioTimeout(to)
         except Exception:
@@ -871,8 +871,8 @@ class EcMetachunkWriter(io.MetachunkWriter):
             return writer, chunk
         except (Exception, Timeout) as exc:
             msg = str(exc)
-            logger.error("Failed to connect to %s (%s, reqid=%s): %s",
-                         chunk, msg, self.reqid, exc)
+            logger.warn("Failed to connect to %s (%s, reqid=%s): %s",
+                        chunk, msg, self.reqid, exc)
             chunk['error'] = 'connect: %s' % msg
             return None, chunk
 
@@ -889,7 +889,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 else:
                     success_chunks.append(writer.chunk)
             else:
-                logger.error(
+                logger.warn(
                     "Unexpected status code from %s (reqid=%s): (%s) %s)",
                     writer.chunk, self.reqid, resp.status, resp.reason)
                 writer.chunk['error'] = 'resp: HTTP %s' % resp.status
@@ -934,14 +934,9 @@ class EcMetachunkWriter(io.MetachunkWriter):
         except (Exception, Timeout) as exc:
             resp = None
             msg = str(exc)
-            if isinstance(exc, Timeout):
-                logger.warn("Timeout (%s) while writing %s (reqid=%s)",
-                            msg, writer.chunk, self.reqid)
-                writer.chunk['error'] = 'resp: %s' % msg
-            else:
-                logger.warn("Failed to read response for %s (reqid=%s): %s",
-                            writer.chunk, self.reqid, msg)
-                writer.chunk['error'] = 'resp: %s' % msg
+            logger.warn("Failed to read response for %s (reqid=%s): %s",
+                        writer.chunk, self.reqid, msg)
+            writer.chunk['error'] = 'resp: %s' % msg
         return (writer, resp)
 
     def _build_index(self, writers):
@@ -1036,7 +1031,7 @@ class ECRebuildHandler(object):
                 conn = io.http_connect(
                     parsed.netloc, 'GET', parsed.path, headers)
 
-            with OioTimeout(self.read_timeout):
+            with ChunkReadTimeout(self.read_timeout):
                 resp = conn.getresponse()
             if resp.status != 200:
                 logger.warning('Invalid GET response from %s: %s %s',
@@ -1090,7 +1085,7 @@ class ECRebuildHandler(object):
                 for resp in resps:
                     pile.spawn(_get_frag, resp)
                 try:
-                    with OioTimeout(self.read_timeout):
+                    with Timeout(self.read_timeout):
                         frag = [frag for frag in pile]
                 except Timeout as to:
                     logger.error('ERROR while rebuilding: %s', to)
