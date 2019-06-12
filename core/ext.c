@@ -307,6 +307,9 @@ const gchar *oio_ext_get_user_agent(void) {
 
 void oio_ext_set_user_agent(const gchar *user_agent) {
 	struct oio_ext_local_s *l = _local_ensure();
+	if (l->user_agent) {
+		g_free(l->user_agent);
+	}
 	l->user_agent = g_strdup(user_agent);
 }
 
@@ -317,6 +320,9 @@ const gchar *oio_ext_get_force_versioning(void) {
 
 void oio_ext_set_force_versioning(const gchar *force_versioning) {
 	struct oio_ext_local_s *l = _local_ensure();
+	if (l->force_versioning) {
+		g_free(l->force_versioning);
+	}
 	l->force_versioning = g_strdup(force_versioning);
 }
 
