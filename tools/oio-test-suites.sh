@@ -208,11 +208,11 @@ func_tests () {
 	CNAME=$RANDOM
 	${PYTHON} $CLI object create $CNAME /tmp/blob%
 
+	${PYTHON} ${ADMIN_CLI} meta0 check
+	${PYTHON} ${ADMIN_CLI} meta1 check
+	${PYTHON} ${ADMIN_CLI} directory check
+	${PYTHON} $(command -v oio-check-master) --oio-account $OIO_USER --oio-ns $OIO_NS $CNAME
 	if is_running_test_suite "repli"; then
-		${PYTHON} ${ADMIN_CLI} meta0 check
-		${PYTHON} ${ADMIN_CLI} meta1 check
-		${PYTHON} ${ADMIN_CLI} directory check
-		${PYTHON} $(command -v oio-check-master) --oio-account $OIO_USER --oio-ns $OIO_NS $CNAME
 		test_zookeeper_failure
 	fi
 	${PYTHON} ${ADMIN_CLI} rdir check

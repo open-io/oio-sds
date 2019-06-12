@@ -55,6 +55,8 @@ class ZkHandle(object):
 
 def get_connected_handles(cnxstr):
     zookeeper.set_debug_level(zookeeper.LOG_LEVEL_WARN)
+    if cnxstr is None:
+        return
     for shard in cnxstr.split(";"):
         zh = zookeeper.init(shard)
         yield ZkHandle(zh)
