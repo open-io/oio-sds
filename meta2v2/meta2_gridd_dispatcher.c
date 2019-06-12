@@ -51,6 +51,8 @@ meta2_dispatch_all(struct gridd_reply_ctx_s *reply,
 	 * ensure the admin-mode and force-master flags are clean. */
 	oio_ext_set_admin(FALSE);
 	oio_ext_set_force_master(FALSE);
+	oio_ext_set_force_versioning(NULL);
+	oio_ext_set_user_agent(NULL);
 
 	ctx = meta2_filter_ctx_new();
 	meta2_filter_ctx_set_backend(ctx, (struct meta2_backend_s *) gdata);
@@ -82,6 +84,8 @@ meta2_dispatch_all(struct gridd_reply_ctx_s *reply,
 	meta2_filter_ctx_clean(ctx);
 	oio_ext_set_admin(FALSE);
 	oio_ext_set_force_master(FALSE);
+	oio_ext_set_force_versioning(NULL);
+	oio_ext_set_user_agent(NULL);
 	return TRUE;
 }
 
