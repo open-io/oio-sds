@@ -25,7 +25,8 @@ import struct
 from tests.utils import BaseTestCase, random_str, random_id
 from oio.common import exceptions as exc
 from oio.common.constants import OIO_DB_STATUS_NAME, OIO_DB_ENABLED, \
-                                 OIO_DB_FROZEN, OIO_DB_DISABLED
+                                 OIO_DB_FROZEN, OIO_DB_DISABLED, \
+                                 FORCEVERSIONING_HEADER
 from oio.common.easy_value import boolean_value
 from oio.conscience.client import ConscienceClient
 
@@ -414,7 +415,7 @@ class TestMeta2Containers(BaseTestCase):
         del_properties(p0.keys())
         check_properties(p1)
 
-    def _create_content(self, name, missing_chunks=0):
+    def _create_content(self, name, missing_chunks=0, headers_add=None):
         headers = {'X-oio-action-mode': 'autocreate'}
         params = self.param_content(self.ref, name)
         resp = self.request('POST', self.url_content('prepare'), params=params,
@@ -430,6 +431,9 @@ class TestMeta2Containers(BaseTestCase):
                    'x-oio-content-meta-policy': stgpol,
                    'x-oio-content-meta-version': int(time.time()*1000000),
                    'x-oio-content-meta-id': random_id(32)}
+
+        if headers_add:
+            headers.update(headers_add)
         resp = self.request('POST', self.url_content('create'), params=params,
                             headers=headers, data=json.dumps(chunks))
         self.assertEqual(204, resp.status)
@@ -667,6 +671,29 @@ class TestMeta2Containers(BaseTestCase):
 
         self._truncate_content('content3')
         self._check_missing_chunks(2, 2)
+
+    def test_object_with_versioning_header(self):
+        path = random_content()
+        params = self.param_ref(self.ref)
+
+        self._create_content(path)
+        resp = self.request('POST', self.url_container('get_properties'),
+                            params=params)
+
+        data = json.loads(resp.data)
+        self.assertNotIn("sys.m2.policy.version", data['system'].keys())
+
+        self._create_content(path, headers_add={FORCEVERSIONING_HEADER: 1})
+        resp = self.request('POST', self.url_container('get_properties'),
+                            params=params)
+        data = json.loads(resp.data)
+        self.assertEqual("1", data['system'].get("sys.m2.policy.version", 0))
+
+        self._create_content(path, headers_add={FORCEVERSIONING_HEADER: -1})
+        resp = self.request('POST', self.url_container('get_properties'),
+                            params=params)
+        data = json.loads(resp.data)
+        self.assertEqual("-1", data['system'].get("sys.m2.policy.version", 0))
 
 
 class TestMeta2Contents(BaseTestCase):
