@@ -2643,11 +2643,13 @@ action_m2_content_purge (struct req_args_s *args, struct json_object *j UNUSED)
 //    ]
 //
 // You must specify content length and ID on header
+// You can update system property policy.version of container
 //
 // .. code-block:: text
 //
 //    "x-oio-content-meta-id: 2996752DFD7205006B73F17AD315AA2B"
 //    "x-oio-content-meta-size: 64"
+//    "x-oio-force-versioning: -1"
 //
 // Create a new object. This method does not upload any data, it just
 // registers object metadata in the database.
@@ -2660,6 +2662,7 @@ action_m2_content_purge (struct req_args_s *args, struct json_object *j UNUSED)
 //    Accept: */*
 //    x-oio-content-meta-size: 64
 //    x-oio-content-meta-id: 2996752DFD7205006B73F17AD315AA2B
+//    x-oio-force-versioning: -1
 //    Content-Length: 165
 //    Content-Type: application/x-www-form-urlencoded
 //
