@@ -743,7 +743,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
         # init generator
         ec_stream.send(None)
 
-        def send(data):
+        def encode_and_send(data):
             self.checksum.update(data)
             self.global_checksum.update(data)
             # get the encoded fragments
@@ -804,17 +804,17 @@ class EcMetachunkWriter(io.MetachunkWriter):
                         bytes_transferred += len(data)
                         if len(data) == 0:
                             break
-                        send(data)
+                        encode_and_send(data)
                 else:
                     while True:
                         data = read(self.buffer_size())
                         bytes_transferred += len(data)
                         if len(data) == 0:
                             break
-                        send(data)
+                        encode_and_send(data)
 
                 # flush out buffered data
-                send('')
+                encode_and_send('')
 
                 # wait for all data to be processed
                 for writer in writers:
