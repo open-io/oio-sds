@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,8 +14,8 @@
 # License along with this library.
 
 from oio.common.green import ChunkReadTimeout, ChunkWriteTimeout, \
-    ContextPool, ConnectionTimeout, GreenPile, LightQueue, Timeout, \
-    SourceReadTimeout, eventlet_yield
+    ContextPool, ConnectionTimeout, GreenPile, LightQueue, \
+    SourceReadTimeout, Timeout, eventlet_yield
 
 import collections
 import math
@@ -680,7 +680,7 @@ class EcChunkWriter(object):
         # As the server may buffer data before writing it to non-volatile
         # storage, we don't know if we have to wait while sending data or
         # while reading response, thus we apply the same timeout to both.
-        with Timeout(self.write_timeout):
+        with ChunkWriteTimeout(self.write_timeout):
             resp = self.conn.getresponse()
             if self.perfdata is not None:
                 perfdata_rawx = self.perfdata.setdefault('rawx', dict())
@@ -707,15 +707,15 @@ class EcMetachunkWriter(io.MetachunkWriter):
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
         self.read_timeout = read_timeout or io.CLIENT_TIMEOUT
+        self.failed_chunks = list()
 
     def stream(self, source, size):
         writers = self._get_writers()
 
-        failed_chunks = []
         current_writers = []
         for writer, chunk in writers:
             if not writer:
-                failed_chunks.append(chunk)
+                self.failed_chunks.append(chunk)
             else:
                 current_writers.append(writer)
         try:
@@ -731,7 +731,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
 
         meta_checksum = self.checksum.hexdigest()
 
-        final_chunks = chunks + failed_chunks
+        final_chunks = chunks + self.failed_chunks
 
         return bytes_transferred, meta_checksum, final_chunks
 
@@ -760,7 +760,6 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 return
 
             current_writers = list(writers)
-            failed_chunks = list()
             for writer in current_writers:
                 fragment = fragments[chunk_index[writer]]
                 if not writer.failed:
@@ -769,10 +768,10 @@ class EcMetachunkWriter(io.MetachunkWriter):
                     writer.send(fragment)
                 else:
                     current_writers.remove(writer)
-                    failed_chunks.append(writer.chunk)
+                    self.failed_chunks.append(writer.chunk)
             eventlet_yield()
             self.quorum_or_fail([w.chunk for w in current_writers],
-                                failed_chunks)
+                                self.failed_chunks)
 
         try:
             # we use eventlet GreenPool to manage writers
@@ -840,7 +839,8 @@ class EcMetachunkWriter(io.MetachunkWriter):
             logger.warn('Source read error (reqid=%s): %s', self.reqid, exc)
             raise
         except Timeout as to:
-            logger.error('Timeout writing data (reqid=%s): %s', self.reqid, to)
+            logger.warn('Timeout writing data (reqid=%s): %s', self.reqid, to)
+            # Not the same class as the globally imported OioTimeout class
             raise exceptions.OioTimeout(to)
         except Exception:
             logger.exception('Exception writing data (reqid=%s)', self.reqid)
@@ -871,12 +871,12 @@ class EcMetachunkWriter(io.MetachunkWriter):
             return writer, chunk
         except (Exception, Timeout) as exc:
             msg = str(exc)
-            logger.error("Failed to connect to %s (%s, reqid=%s): %s",
-                         chunk, msg, self.reqid, exc)
+            logger.warn("Failed to connect to %s (%s, reqid=%s): %s",
+                        chunk, msg, self.reqid, exc)
             chunk['error'] = 'connect: %s' % msg
             return None, chunk
 
-    def _dispatch_response(self, writer, resp, success_chunks, failed_chunks):
+    def _dispatch_response(self, writer, resp, success_chunks):
         if resp:
             if resp.status == 201:
                 checksum = resp.getheader(CHUNK_HEADERS['chunk_hash'])
@@ -885,17 +885,17 @@ class EcMetachunkWriter(io.MetachunkWriter):
                     writer.chunk['error'] = \
                         "checksum mismatch: %s (local), %s (rawx)" % \
                         (checksum.lower(), writer.checksum.hexdigest())
-                    failed_chunks.append(writer.chunk)
+                    self.failed_chunks.append(writer.chunk)
                 else:
                     success_chunks.append(writer.chunk)
             else:
-                logger.error(
+                logger.warn(
                     "Unexpected status code from %s (reqid=%s): (%s) %s)",
                     writer.chunk, self.reqid, resp.status, resp.reason)
                 writer.chunk['error'] = 'resp: HTTP %s' % resp.status
-                failed_chunks.append(writer.chunk)
+                self.failed_chunks.append(writer.chunk)
         else:
-            failed_chunks.append(writer.chunk)
+            self.failed_chunks.append(writer.chunk)
 
     def _close_writers(self, writers):
         """Explicitly close all chunk writers."""
@@ -903,26 +903,29 @@ class EcMetachunkWriter(io.MetachunkWriter):
             io.close_source(writer)
 
     def _get_results(self, writers):
-        # get the results from writers
+        """
+        Check the results of the writers.
+        Failures are appended to the self.failed_chunks list.
+
+        :returns: a list of chunks that have been uploaded.
+        """
         success_chunks = []
-        failed_chunks = []
 
         # we use eventlet GreenPile to read the responses from the writers
         pile = GreenPile(len(writers))
 
         for writer in writers:
             if writer.failed:
-                failed_chunks.append(writer.chunk)
+                self.failed_chunks.append(writer.chunk)
                 continue
             pile.spawn(self._get_response, writer)
 
         for (writer, resp) in pile:
-            self._dispatch_response(writer, resp,
-                                    success_chunks, failed_chunks)
+            self._dispatch_response(writer, resp, success_chunks)
 
-        self.quorum_or_fail(success_chunks, failed_chunks)
+        self.quorum_or_fail(success_chunks, self.failed_chunks)
 
-        return success_chunks + failed_chunks
+        return success_chunks
 
     def _get_response(self, writer):
         # spawned in a coroutine to read the HTTP response
@@ -931,14 +934,9 @@ class EcMetachunkWriter(io.MetachunkWriter):
         except (Exception, Timeout) as exc:
             resp = None
             msg = str(exc)
-            if isinstance(exc, Timeout):
-                logger.warn("Timeout (%s) while writing %s (reqid=%s)",
-                            msg, writer.chunk, self.reqid)
-                writer.chunk['error'] = 'resp: %s' % msg
-            else:
-                logger.warn("Failed to read response for %s (reqid=%s): %s",
-                            writer.chunk, self.reqid, msg)
-                writer.chunk['error'] = 'resp: %s' % msg
+            logger.warn("Failed to read response for %s (reqid=%s): %s",
+                        writer.chunk, self.reqid, msg)
+            writer.chunk['error'] = 'resp: %s' % msg
         return (writer, resp)
 
     def _build_index(self, writers):
@@ -1033,7 +1031,7 @@ class ECRebuildHandler(object):
                 conn = io.http_connect(
                     parsed.netloc, 'GET', parsed.path, headers)
 
-            with Timeout(self.read_timeout):
+            with ChunkReadTimeout(self.read_timeout):
                 resp = conn.getresponse()
             if resp.status != 200:
                 logger.warning('Invalid GET response from %s: %s %s',

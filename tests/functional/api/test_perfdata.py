@@ -46,20 +46,20 @@ class TestObjectStorageApiPerfdata(BaseTestCase):
         self.assertIn('proxy', perfdata)
         self.assertIn('resolve', perfdata['proxy'])
         self.assertIn('meta2', perfdata['proxy'])
-        self.assertIn('total', perfdata['proxy'])
+        self.assertIn('overall', perfdata['proxy'])
         self.assertIn('rawx', perfdata)
         if meta['policy'] == 'EC':
             self.assertIn('ec', perfdata['rawx'])
         for chunk in chunks:
             self.assertIn(chunk['url'], perfdata['rawx'])
-        self.assertIn('total', perfdata['rawx'])
+        self.assertIn('overall', perfdata['rawx'])
 
         perfdata.clear()
         self.api.object_delete(self.account, container, obj, perfdata=perfdata)
         self.assertIn('proxy', perfdata)
         self.assertIn('resolve', perfdata['proxy'])
         self.assertIn('meta2', perfdata['proxy'])
-        self.assertIn('total', perfdata['proxy'])
+        self.assertIn('overall', perfdata['proxy'])
 
     def test_object_fetch_perfdata(self):
         perfdata = dict()
@@ -73,7 +73,7 @@ class TestObjectStorageApiPerfdata(BaseTestCase):
         self.assertIn('proxy', perfdata)
         self.assertIn('resolve', perfdata['proxy'])
         self.assertIn('meta2', perfdata['proxy'])
-        self.assertIn('total', perfdata['proxy'])
+        self.assertIn('overall', perfdata['proxy'])
         self.assertNotIn('ttfb', perfdata)
         self.assertNotIn('ttlb', perfdata)
 
@@ -88,7 +88,7 @@ class TestObjectStorageApiPerfdata(BaseTestCase):
                 nb_chunks_to_read += 1
         self.assertLessEqual(stg_method.min_chunks_to_read,
                              nb_chunks_to_read)
-        self.assertIn('total', perfdata['rawx'])
+        self.assertIn('overall', perfdata['rawx'])
         self.assertIn('ttfb', perfdata)
         self.assertIn('ttlb', perfdata)
 
