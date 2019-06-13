@@ -112,7 +112,9 @@ class BlobClient(object):
         return resp
 
     @ensure_request_id
-    def chunk_delete_many(self, chunks, cid=None, **kwargs):
+    def chunk_delete_many(self, chunks, cid=None,
+                          concurrency=PARALLEL_CHUNKS_DELETE,
+                          **kwargs):
         """
         :rtype: `list` of either `urllib3.response.HTTPResponse`
             or `urllib3.exceptions.HTTPError`, with an extra "chunk"
@@ -137,7 +139,7 @@ class BlobClient(object):
                 ex.chunk = chunk_
                 return ex
 
-        pile = GreenPile(PARALLEL_CHUNKS_DELETE)
+        pile = GreenPile(concurrency)
         for chunk in chunks:
             pile.spawn(__delete_chunk, chunk)
         resps = [resp for resp in pile if resp]

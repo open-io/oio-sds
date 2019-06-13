@@ -861,6 +861,13 @@ pipeline = account_update volume_index ${PRESERVE}
 use = egg:oio#content_cleaner
 key_file = ${KEY_FILE}
 
+# These values are changed only for testing purposes.
+# The default values are good for most use cases.
+concurrency = 4
+pool_connections = 16
+pool_maxsize = 16
+timeout = 4.5
+
 [filter:content_improve]
 use = egg:oio#notify
 tube = oio-improve
@@ -873,6 +880,8 @@ queue_url = ${QUEUE_URL}
 
 [filter:account_update]
 use = egg:oio#account_update
+connection_timeout=1.0
+read_timeout=15.0
 
 [filter:volume_index]
 use = egg:oio#volume_index

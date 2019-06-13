@@ -20,6 +20,7 @@ from oio.event.filters.base import Filter
 from oio.common.exceptions import OioException
 from oio.api.backblaze import BackblazeDeleteHandler
 from oio.api.backblaze_http import BackblazeUtils
+from oio.common.http_urllib3 import URLLIB3_POOLMANAGER_KWARGS
 from oio.common.storage_method import STORAGE_METHODS, guess_storage_method
 from oio.common.utils import request_id
 
@@ -33,7 +34,11 @@ class ContentReaperFilter(Filter):
                 "ec": self._handle_rawx,
                 "backblaze": self._handle_b2,
         }
-        self.blob_client = BlobClient(self.conf)
+        kwargs = {k: v for k, v in self.conf.items()
+                  if k in URLLIB3_POOLMANAGER_KWARGS}
+        self.blob_client = BlobClient(self.conf, logger=self.logger, **kwargs)
+        self.chunk_concurrency = int(self.conf.get('concurrency', 3))
+        self.chunk_timeout = float(self.conf.get('timeout', 5.0))
 
     def _handle_rawx(self, url, chunks, content_headers,
                      storage_method, reqid):
@@ -42,7 +47,8 @@ class ContentReaperFilter(Filter):
                    'Connection': 'close'}
 
         resps = self.blob_client.chunk_delete_many(
-            chunks, cid=cid, headers=headers, timeout=5.0)
+            chunks, cid=cid, headers=headers,
+            concurrency=self.chunk_concurrency, timeout=self.chunk_timeout)
         for resp in resps:
             if isinstance(resp, Exception):
                 self.logger.warn(
