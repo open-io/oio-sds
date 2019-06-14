@@ -813,37 +813,37 @@ queue_url=${QUEUE_URL}
 template_event_agent_handlers = """
 [handler:storage.content.new]
 # pipeline = replication
-pipeline = ${WEBHOOK} ${PRESERVE}
+pipeline = ${REPLICATION} ${WEBHOOK} ${PRESERVE}
 
 [handler:storage.content.update]
 # pipeline = replication webhook
-pipeline = ${WEBHOOK} ${PRESERVE}
+pipeline = ${REPLICATION} ${WEBHOOK} ${PRESERVE}
 
 [handler:storage.content.append]
 # pipeline = replication
-pipeline = ${WEBHOOK} ${PRESERVE}
+pipeline = ${REPLICATION} ${WEBHOOK} ${PRESERVE}
 
 [handler:storage.content.broken]
 pipeline = content_rebuild ${PRESERVE}
 
 [handler:storage.content.deleted]
-# pipeline = content_cleaner replication
-pipeline = ${WEBHOOK} content_cleaner ${PRESERVE}
+# pipeline = replication content_cleaner
+pipeline = ${REPLICATION} ${WEBHOOK} content_cleaner ${PRESERVE}
 
 [handler:storage.content.drained]
-# pipeline = content_cleaner replication
-pipeline = content_cleaner ${PRESERVE}
+# pipeline = replication content_cleaner
+pipeline = ${REPLICATION} content_cleaner ${PRESERVE}
 
 [handler:storage.content.perfectible]
 pipeline = logger content_improve ${PRESERVE}
 
 [handler:storage.container.new]
-# pipeline = account_update volume_index replication
-pipeline = account_update volume_index ${PRESERVE}
+# pipeline = replication account_update volume_index
+pipeline = ${REPLICATION} account_update volume_index ${PRESERVE}
 
 [handler:storage.container.deleted]
-# pipeline = account_update volume_index replication
-pipeline = account_update volume_index ${PRESERVE}
+# pipeline = replication account_update volume_index
+pipeline = ${REPLICATION} account_update volume_index ${PRESERVE}
 
 [handler:storage.container.state]
 pipeline = account_update ${PRESERVE}
@@ -1238,6 +1238,8 @@ def generate(options):
                HTTPD_BINARY=HTTPD_BINARY,
                META_HEADER=META_HEADER,
                PRESERVE='preserve' if options.get('preserve_events') else '',
+               REPLICATION='replication' if options.get('replication_events')
+                           else '',
                WANT_SERVICE_ID=want_service_id,
                WEBHOOK=WEBHOOK,
                WEBHOOK_ENDPOINT=WEBHOOK_ENDPOINT)
