@@ -2907,6 +2907,8 @@ enum http_rc_e action_content_show (struct req_args_s *args) {
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Unreference object from container
 //
+// You can update system property policy.version of container
+//
 // .. code-block:: http
 //
 //    POST /v3.0/OPENIO/content/delete?acct=my_account&ref=mycontainer&path=mycontent HTTP/1.1
@@ -2922,7 +2924,10 @@ enum http_rc_e action_content_show (struct req_args_s *args) {
 //
 // }}CONTENT
 enum http_rc_e action_content_delete (struct req_args_s *args) {
-	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url, DL()); }
+	const char* force_versioning = g_tree_lookup(args->rq->tree_headers,
+			PROXYD_HEADER_FORCE_VERSIONING);
+
+	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url, force_versioning, DL()); }
 	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	return _reply_m2_error (args, err);
 }
@@ -2930,7 +2935,7 @@ enum http_rc_e action_content_delete (struct req_args_s *args) {
 static enum http_rc_e
 _m2_content_delete_many (struct req_args_s *args, struct json_object * jbody) {
 	json_object *jarray = NULL;
-	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url, DL()); }
+	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url, NULL, DL()); }
 
 	if (!oio_url_has_fq_container(args->url))
 		return _reply_format_error(args,
