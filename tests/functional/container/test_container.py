@@ -585,9 +585,10 @@ class TestMeta2Containers(BaseTestCase):
         self.assertEqual(str(expected_missing_chunks),
                          data['system']['sys.m2.chunks.missing'])
 
-    def _delete_content(self, obj_name):
+    def _delete_content(self, obj_name, headers=None):
         params = self.param_content(self.ref, obj_name)
-        resp = self.request('POST', self.url_content('delete'), params=params)
+        resp = self.request('POST', self.url_content('delete'), params=params,
+                            headers=headers)
         self.assertEqual(resp.status, 204)
 
     def test_missing_chunks(self):
@@ -694,6 +695,34 @@ class TestMeta2Containers(BaseTestCase):
                             params=params)
         data = json.loads(resp.data)
         self.assertEqual("-1", data['system'].get("sys.m2.policy.version", 0))
+
+        resp = self.request('GET', self.url_container('list'),
+                            params=merge(params, {'all': 1}))
+        data = json.loads(resp.data)
+        self.assertEqual(2, len(data['objects']))
+
+        self._delete_content(path, headers={FORCEVERSIONING_HEADER: 1})
+        resp = self.request('POST', self.url_container('get_properties'),
+                            params=params)
+        data = json.loads(resp.data)
+        self.assertEqual("1", data['system'].get("sys.m2.policy.version", 0))
+
+        resp = self.request('GET', self.url_container('list'),
+                            params=merge(params, {'all': 1}))
+        data = json.loads(resp.data)
+        self.assertEqual(1, len(data['objects']))
+
+        self._delete_content(path, headers={FORCEVERSIONING_HEADER: -1})
+        resp = self.request('POST', self.url_container('get_properties'),
+                            params=params)
+        data = json.loads(resp.data)
+        self.assertEqual("-1", data['system'].get("sys.m2.policy.version", 0))
+
+        resp = self.request('GET', self.url_container('list'),
+                            params=merge(params, {'all': 1}))
+        data = json.loads(resp.data)
+        self.assertEqual(2, len(data['objects']))
+        self.assertTrue(data['objects'][0]['deleted'])
 
 
 class TestMeta2Contents(BaseTestCase):
