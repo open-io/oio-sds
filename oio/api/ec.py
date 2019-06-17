@@ -759,19 +759,18 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 # not enough data given
                 return
 
-            current_writers = list(writers)
-            for writer in current_writers:
+            ok_chunks = list()
+            for writer in writers:
                 fragment = fragments[chunk_index[writer]]
                 if not writer.failed:
                     if writer.checksum:
                         writer.checksum.update(fragment)
                     writer.send(fragment)
+                    ok_chunks.append(writer.chunk)
                 else:
-                    current_writers.remove(writer)
                     self.failed_chunks.append(writer.chunk)
             eventlet_yield()
-            self.quorum_or_fail([w.chunk for w in current_writers],
-                                self.failed_chunks)
+            self.quorum_or_fail(ok_chunks, self.failed_chunks)
 
         try:
             # we use eventlet GreenPool to manage writers
