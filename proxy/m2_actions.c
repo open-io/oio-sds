@@ -2934,8 +2934,11 @@ enum http_rc_e action_content_delete (struct req_args_s *args) {
 
 static enum http_rc_e
 _m2_content_delete_many (struct req_args_s *args, struct json_object * jbody) {
+	const char* force_versioning = g_tree_lookup(args->rq->tree_headers,
+			PROXYD_HEADER_FORCE_VERSIONING);
+
 	json_object *jarray = NULL;
-	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url, NULL, DL()); }
+	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url, force_versioning, DL()); }
 
 	if (!oio_url_has_fq_container(args->url))
 		return _reply_format_error(args,
@@ -2988,6 +2991,8 @@ _m2_content_delete_many (struct req_args_s *args, struct json_object * jbody) {
 // CONTENT{{
 // POST /v3.0/{NS}/content/delete_many?acct={account}&ref={container}
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// You can update system property policy.version of container
 //
 // .. code-block:: json
 //
