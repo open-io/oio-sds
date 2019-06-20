@@ -661,7 +661,7 @@ class EcChunkWriter(object):
         if self.failed:
             logger.debug("NOT sending end marker and trailers to %s, "
                          "because upload has failed", self.chunk['url'])
-            return
+            return False
         logger.debug("Sending end marker and trailers to %s",
                      self.chunk['url'])
         parts = [
@@ -676,10 +676,19 @@ class EcChunkWriter(object):
                                          self.checksum.hexdigest()))
         parts.append('\r\n')
         to_send = "".join(parts)
-        self.conn.send(to_send)
-        # Last segment sent, disable TCP_CORK to flush buffers
-        self.conn.set_cork(False)
-        eventlet_yield()
+        try:
+            with ChunkWriteTimeout(self.write_timeout):
+                self.conn.send(to_send)
+                # Last segment sent, disable TCP_CORK to flush buffers
+                self.conn.set_cork(False)
+            eventlet_yield()
+        except (Exception, ChunkWriteTimeout) as exc:
+            self.failed = True
+            msg = str(exc)
+            logger.warn("Failed to finish %s (%s, reqid=%s)",
+                        self.chunk, msg, self.reqid)
+            self.chunk['error'] = 'finish: %s' % msg
+            return False
         return True
 
     def getresponse(self):
@@ -945,6 +954,10 @@ class EcMetachunkWriter(io.MetachunkWriter):
             logger.warn("Failed to read response for %s (reqid=%s): %s",
                         writer.chunk, self.reqid, msg)
             writer.chunk['error'] = 'resp: %s' % msg
+        # close_source() will be called in a finally block later.
+        # But we do not want to wait for all writers to have finished writing
+        # before closing connections.
+        io.close_source(writer)
         return (writer, resp)
 
 
