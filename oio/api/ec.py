@@ -20,7 +20,6 @@ from oio.common.green import ChunkReadTimeout, ChunkWriteTimeout, \
 import collections
 import math
 import hashlib
-import logging
 from urlparse import urlparse
 from socket import error as SocketError
 from greenlet import GreenletExit
@@ -32,9 +31,10 @@ from oio.common.http import HeadersDict, parse_content_range, \
     ranges_from_http_header, headers_from_object_metadata
 from oio.common.utils import fix_ranges, monotonic_time
 from oio.common.constants import CHUNK_HEADERS
+from oio.common.logger import get_logger
 
 
-logger = logging.getLogger(__name__)
+logger = get_logger({}, __name__)
 
 
 def segment_range_to_fragment_range(segment_start, segment_end, segment_size,
