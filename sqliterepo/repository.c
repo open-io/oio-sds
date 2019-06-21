@@ -540,6 +540,34 @@ sqlx_repository_call_change_callback(struct sqlx_sqlite3_s *sq3)
 }
 
 void
+sqlx_repository_configure_db_properties_change_callback(
+		sqlx_repository_t *repo,
+		sqlx_repo_db_properties_change_hook cb, gpointer cb_data)
+{
+	EXTRA_ASSERT(repo != NULL);
+	EXTRA_ASSERT(repo->running);
+	EXTRA_ASSERT(cb != NULL);
+
+	repo->db_properties_change_callback = cb;
+	repo->db_properties_change_callback_data = cb_data;
+}
+
+void
+sqlx_repository_call_db_properties_change_callback(
+		struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
+		struct db_properties_s *db_properties)
+{
+	if (NULL == sq3 || NULL == sq3->repo)
+		return;
+	if (!sq3->repo->running)
+		return;
+	if (sq3->repo->db_properties_change_callback)
+		sq3->repo->db_properties_change_callback(sq3,
+				sq3->repo->db_properties_change_callback_data,
+				url, db_properties);
+}
+
+void
 sqlx_repository_set_locator(struct sqlx_repository_s *repo,
 		sqlx_file_locator_f locator, gpointer locator_data)
 {

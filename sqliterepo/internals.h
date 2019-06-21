@@ -89,6 +89,9 @@ struct sqlx_repository_s
 	sqlx_repo_change_hook change_callback;
 	gpointer change_callback_data;
 
+	sqlx_repo_db_properties_change_hook db_properties_change_callback;
+	gpointer db_properties_change_callback_data;
+
 	/* hash for the directory structure */
 	guint hash_width;
 	guint hash_depth;

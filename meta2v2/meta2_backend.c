@@ -1795,6 +1795,19 @@ meta2_backend_change_callback(struct sqlx_sqlite3_s *sq3,
 	g_free(account);
 }
 
+void
+meta2_backend_db_properties_change_callback(struct sqlx_sqlite3_s *sq3 UNUSED,
+		struct meta2_backend_s *m2b, struct oio_url_s *url,
+		struct db_properties_s *db_properties)
+{
+	GString *event = oio_event__create_with_id(
+			META2_EVENTS_PREFIX ".container.update", url, oio_ext_get_reqid());
+	g_string_append_static(event, ",\"data\":{");
+	db_properties_to_json(db_properties, event);
+	g_string_append_static(event, "}}");
+	oio_events_queue__send(m2b->notifier, g_string_free(event, FALSE));
+}
+
 /**
  * Get m2_prepare_data from the cache if available. If it's not,
  * get it from the database and return a pointer to the open database.

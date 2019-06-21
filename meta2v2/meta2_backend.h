@@ -59,6 +59,10 @@ const gchar* meta2_backend_get_local_addr(struct meta2_backend_s *m2);
 void meta2_backend_change_callback(struct sqlx_sqlite3_s *sq3,
 		struct meta2_backend_s *m2b);
 
+void meta2_backend_db_properties_change_callback(struct sqlx_sqlite3_s *sq3,
+		struct meta2_backend_s *m2b, struct oio_url_s *url,
+		struct db_properties_s *db_properties);
+
 /* -------------------------------------------------------------------------- */
 
 GError *meta2_backend_create_container(struct meta2_backend_s *m2,

@@ -101,6 +101,11 @@ _post_config(struct sqlx_service_s *ss)
 	sqlx_repository_configure_change_callback(ss->repository,
 			(sqlx_repo_change_hook)meta2_backend_change_callback, m2);
 
+	/* Send event */
+	sqlx_repository_configure_db_properties_change_callback(ss->repository,
+			(sqlx_repo_db_properties_change_hook)meta2_backend_db_properties_change_callback,
+			m2);
+
 	hc_resolver_configure(ss->resolver, HC_RESOLVER_DECACHEM0);
 
 	/* Register meta2 requests handlers */
