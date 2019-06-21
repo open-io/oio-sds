@@ -200,7 +200,7 @@ action_sqlx_propset (struct req_args_s *args, struct json_object *jargs)
 	if (!err) {
 		gboolean flush = _request_get_flag(args, "flush");
 		GByteArray * _pack (const struct sqlx_name_s *n) {
-			return sqlx_pack_PROPSET_tab(n, flush, kv, DL());
+			return sqlx_pack_PROPSET_tab(args->url, n, flush, kv, DL());
 		}
 		rc = _sqlx_action_noreturn(args, CLIENT_PREFER_MASTER, _pack);
 	} else {
@@ -285,7 +285,7 @@ action_sqlx_propdel (struct req_args_s *args, struct json_object *jargs)
 		oio_str_reuse(p, g_strconcat("user.", *p, NULL));
 
 	GByteArray * _pack(const struct sqlx_name_s *n) {
-		return sqlx_pack_PROPDEL (n, (const gchar * const * )namev, DL());
+		return sqlx_pack_PROPDEL(args->url, n, (const gchar * const * )namev, DL());
 	}
 	enum http_rc_e rc = _sqlx_action_noreturn (args, CLIENT_PREFER_MASTER, _pack);
 	g_strfreev (namev);
