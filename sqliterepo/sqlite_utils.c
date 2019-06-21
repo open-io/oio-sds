@@ -140,7 +140,8 @@ sqlx_admin_del(struct sqlx_sqlite3_s *sq3, const gchar *k)
 }
 
 void
-sqlx_admin_del_all_user(struct sqlx_sqlite3_s *sq3)
+sqlx_admin_del_all_user(struct sqlx_sqlite3_s *sq3, GTraverseFunc func,
+		gpointer data)
 {
 	gboolean runner(gchar *k, struct _cache_entry_s *v, gpointer i UNUSED) {
 		if (v->flag_deleted)
@@ -149,6 +150,7 @@ sqlx_admin_del_all_user(struct sqlx_sqlite3_s *sq3)
 			v->flag_deleted = 1;
 			v->flag_changed = 1;
 			_dump_entry("change", k, v);
+			func(k, NULL, data);
 		}
 		return FALSE;
 	}
