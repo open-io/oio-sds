@@ -19,7 +19,6 @@ from oio.common.green import sleep, Timeout
 
 from io import BufferedReader, RawIOBase, IOBase
 import itertools
-import logging
 from urlparse import urlparse
 from socket import error as SocketError
 from oio.common import exceptions as exc
@@ -30,8 +29,9 @@ from oio.common.utils import GeneratorIO, group_chunk_errors, \
     deadline_to_timeout, monotonic_time, set_deadline_from_read_timeout
 from oio.common import green
 from oio.common.storage_method import STORAGE_METHODS
+from oio.common.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger({}, __name__)
 
 WRITE_CHUNK_SIZE = 65536
 READ_CHUNK_SIZE = 65536

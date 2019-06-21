@@ -16,7 +16,6 @@
 
 from oio.common.green import sleep, LightQueue, Timeout, GreenPile
 
-import logging
 import hashlib
 from socket import error as SocketError
 from urlparse import urlparse
@@ -28,8 +27,9 @@ from oio.common.http import headers_from_object_metadata
 from oio.common.utils import monotonic_time
 from oio.common.constants import CHUNK_HEADERS
 from oio.common import green
+from oio.common.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger({}, __name__)
 
 
 class FakeChecksum(object):
