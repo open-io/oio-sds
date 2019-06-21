@@ -841,6 +841,10 @@ pipeline = logger content_improve ${PRESERVE}
 # pipeline = replication account_update volume_index
 pipeline = ${REPLICATION} account_update volume_index ${PRESERVE}
 
+[handler:storage.container.update]
+# pipeline = replication
+pipeline = ${REPLICATION} ${PRESERVE}
+
 [handler:storage.container.deleted]
 # pipeline = replication account_update volume_index
 pipeline = ${REPLICATION} account_update volume_index ${PRESERVE}

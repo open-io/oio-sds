@@ -32,6 +32,10 @@ pipeline = content_improve
 # pipeline = account_update volume_index replication
 pipeline = account_update volume_index
 
+[handler:storage.container.update]
+# pipeline = replication
+pipeline =
+
 [handler:storage.container.deleted]
 # pipeline = account_update volume_index replication
 pipeline = account_update volume_index
