@@ -672,8 +672,15 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 			return err;
 		}
 		GString *gs = oio_event__create(META2_EVENTS_PREFIX".container.new", url);
-		g_string_append_static(gs, ",\"data\":{\"properties\":");
-		KV_encode_gstr2(gs, params->properties);
+		struct db_properties_s *db_properties = db_properties_new();
+		if (params->properties) {
+			for (gchar **p=params->properties; *p && *(p+1); p+=2) {
+				db_properties_add(db_properties, *p, *(p+1));
+			}
+		}
+		g_string_append_static(gs, ",\"data\":{");
+		db_properties_to_json(db_properties, gs);
+		db_properties_free(db_properties);
 		g_string_append_c(gs, ',');
 		g_string_append(gs, peers_list->str);
 		g_string_free(peers_list, TRUE);
