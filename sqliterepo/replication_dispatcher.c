@@ -2071,10 +2071,12 @@ _handler_PROPSET(struct gridd_reply_ctx_s *reply,
 	for (gchar **p=pairs; !err && *p && *(p+1); p+=2) {
 		if (!(flags & FLAG_NOCHECK)
 				&& !g_str_has_prefix (*p, SQLX_ADMIN_PREFIX_SYS)
-				&& !g_str_has_prefix (*p, SQLX_ADMIN_PREFIX_USER))
+				&& !g_str_has_prefix (*p, SQLX_ADMIN_PREFIX_USER)) {
 			err = NEWERROR(CODE_BAD_REQUEST, "Invalid property name");
+			break;
+		}
 	}
-	if (NULL != err)
+	if (err)
 		goto label_exit;
 
 	/* Open */
