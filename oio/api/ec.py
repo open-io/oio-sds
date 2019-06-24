@@ -34,7 +34,7 @@ from oio.common.constants import CHUNK_HEADERS
 from oio.common.logger import get_logger
 
 
-logger = get_logger({}, __name__)
+LOGGER = get_logger({}, __name__)
 
 
 def segment_range_to_fragment_range(segment_start, segment_end, segment_size,
@@ -114,6 +114,7 @@ class ECChunkDownloadHandler(object):
         self.read_timeout = read_timeout
         self.reqid = reqid
         self.perfdata = perfdata
+        self.logger = _kwargs.get('logger', LOGGER)
 
     def _get_range_infos(self):
         """
@@ -159,7 +160,7 @@ class ECChunkDownloadHandler(object):
         reader = io.ChunkReader(chunk_iter, storage_method.ec_fragment_size,
                                 headers, self.connection_timeout,
                                 self.read_timeout, perfdata=self.perfdata,
-                                align=True)
+                                align=True, logger=self.logger)
         return (reader, reader.get_iter())
 
     def get_stream(self):
@@ -189,7 +190,8 @@ class ECChunkDownloadHandler(object):
             read_iterators = [it for _, it in readers]
             stream = ECStream(self.storage_method, read_iterators, range_infos,
                               self.meta_length, fragment_length,
-                              reqid=self.reqid, perfdata=self.perfdata)
+                              reqid=self.reqid, perfdata=self.perfdata,
+                              logger=self.logger)
             # start the stream
             stream.start()
             return stream
@@ -206,7 +208,7 @@ class ECStream(object):
     Handles the different readers.
     """
     def __init__(self, storage_method, readers, range_infos, meta_length,
-                 fragment_length, reqid=None, perfdata=None):
+                 fragment_length, reqid=None, perfdata=None, logger=None):
         self.storage_method = storage_method
         self.readers = readers
         self.range_infos = range_infos
@@ -215,6 +217,7 @@ class ECStream(object):
         self._iter = None
         self.reqid = reqid
         self.perfdata = perfdata
+        self.logger = logger or LOGGER
 
     def start(self):
         self._iter = io.chain(self._stream())
@@ -298,9 +301,10 @@ class ECStream(object):
                 # ignore
                 pass
             except ChunkReadTimeout as err:
-                logger.error('%s (reqid=%s)', err, self.reqid)
+                self.logger.error('%s (reqid=%s)', err, self.reqid)
             except Exception:
-                logger.exception("Exception on reading (reqid=%s)", self.reqid)
+                self.logger.exception("Exception on reading (reqid=%s)",
+                                      self.reqid)
             finally:
                 queue.resize(2)
                 # put None to indicate the decoding loop
@@ -332,8 +336,8 @@ class ECStream(object):
                     segment = self.storage_method.driver.decode(data)
                 except exceptions.ECError:
                     # something terrible happened
-                    logger.exception("ERROR decoding fragments (reqid=%s)",
-                                     self.reqid)
+                    self.logger.exception(
+                        "ERROR decoding fragments (reqid=%s)", self.reqid)
                     raise
 
                 yield segment
@@ -438,9 +442,10 @@ class ECStream(object):
                 try:
                     range_info = results[(fragment_start, fragment_end)].pop(0)
                 except KeyError:
-                    logger.error("Invalid range: %s, available: %s (reqid=%s)",
-                                 repr((fragment_start, fragment_end)),
-                                 results.keys(), self.reqid)
+                    self.logger.error(
+                            "Invalid range: %s, available: %s (reqid=%s)",
+                            repr((fragment_start, fragment_end)),
+                            results.keys(), self.reqid)
                     raise
                 if self.perfdata is not None:
                     ec_start = monotonic_time()
@@ -560,6 +565,7 @@ class EcChunkWriter(object):
         self.queue = LightQueue(io.PUT_QUEUE_DEPTH)
         self.reqid = kwargs.get('reqid')
         self.perfdata = perfdata
+        self.logger = kwargs.get('logger', LOGGER)
 
     @property
     def chunk(self):
@@ -632,8 +638,8 @@ class EcChunkWriter(object):
             except (Exception, ChunkWriteTimeout) as exc:
                 self.failed = True
                 msg = str(exc)
-                logger.warn("Failed to write to %s (%s, reqid=%s)",
-                            self.chunk, msg, self.reqid)
+                self.logger.warn("Failed to write to %s (%s, reqid=%s)",
+                                 self.chunk, msg, self.reqid)
                 self.chunk['error'] = 'write: %s' % msg
 
         # Drain the queue before quitting
@@ -648,7 +654,7 @@ class EcChunkWriter(object):
         Wait until all data in the queue
         has been processed by the send coroutine
         """
-        logger.debug("Waiting for %s to receive data", self.chunk['url'])
+        self.logger.debug("Waiting for %s to receive data", self.chunk['url'])
         while self.queue.qsize() and not self.failed:
             eventlet_yield()
 
@@ -669,11 +675,11 @@ class EcChunkWriter(object):
         """
         self.wait()
         if self.failed:
-            logger.debug("NOT sending end marker and trailers to %s, "
-                         "because upload has failed", self.chunk['url'])
+            self.logger.debug("NOT sending end marker and trailers to %s, "
+                              "because upload has failed", self.chunk['url'])
             return self.chunk
-        logger.debug("Sending end marker and trailers to %s",
-                     self.chunk['url'])
+        self.logger.debug("Sending end marker and trailers to %s",
+                          self.chunk['url'])
         parts = [
             '0\r\n',
             '%s: %s\r\n' % (CHUNK_HEADERS['metachunk_size'],
@@ -694,8 +700,8 @@ class EcChunkWriter(object):
         except (Exception, ChunkWriteTimeout) as exc:
             self.failed = True
             msg = str(exc)
-            logger.warn("Failed to finish %s (%s, reqid=%s)",
-                        self.chunk, msg, self.reqid)
+            self.logger.warn("Failed to finish %s (%s, reqid=%s)",
+                             self.chunk, msg, self.reqid)
             self.chunk['error'] = 'finish: %s' % msg
             return self.chunk
         return None
@@ -735,6 +741,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
         self.read_timeout = read_timeout or io.CLIENT_TIMEOUT
         self.failed_chunks = list()
+        self.logger = kwargs.get('logger', LOGGER)
 
     def stream(self, source, size):
         writers = self._get_writers()
@@ -872,17 +879,20 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 return bytes_transferred
 
         except SourceReadTimeout as exc:
-            logger.warn('%s (reqid=%s)', exc, self.reqid)
+            self.logger.warn('%s (reqid=%s)', exc, self.reqid)
             raise exceptions.SourceReadTimeout(exc)
         except SourceReadError as exc:
-            logger.warn('Source read error (reqid=%s): %s', self.reqid, exc)
+            self.logger.warn('Source read error (reqid=%s): %s',
+                             self.reqid, exc)
             raise
         except Timeout as to:
-            logger.warn('Timeout writing data (reqid=%s): %s', self.reqid, to)
+            self.logger.warn('Timeout writing data (reqid=%s): %s',
+                             self.reqid, to)
             # Not the same class as the globally imported OioTimeout class
             raise exceptions.OioTimeout(to)
         except Exception:
-            logger.exception('Exception writing data (reqid=%s)', self.reqid)
+            self.logger.exception('Exception writing data (reqid=%s)',
+                                  self.reqid)
             raise
 
     def _get_writers(self):
@@ -906,12 +916,13 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 connection_timeout=self.connection_timeout,
                 write_timeout=self.write_timeout,
                 chunk_checksum_algo=self.chunk_checksum_algo,
-                perfdata=self.perfdata)
+                perfdata=self.perfdata,
+                logger=self.logger)
             return writer, chunk
         except (Exception, Timeout) as exc:
             msg = str(exc)
-            logger.warn("Failed to connect to %s (%s, reqid=%s): %s",
-                        chunk, msg, self.reqid, exc)
+            self.logger.warn("Failed to connect to %s (%s, reqid=%s): %s",
+                             chunk, msg, self.reqid, exc)
             chunk['error'] = 'connect: %s' % msg
             return None, chunk
 
@@ -928,7 +939,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 else:
                     success_chunks.append(writer.chunk)
             else:
-                logger.warn(
+                self.logger.warn(
                     "Unexpected status code from %s (reqid=%s): (%s) %s)",
                     writer.chunk, self.reqid, resp.status, resp.reason)
                 writer.chunk['error'] = 'resp: HTTP %s' % resp.status
@@ -939,7 +950,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
     def _close_writers(self, writers):
         """Explicitly close all chunk writers."""
         for writer in writers:
-            io.close_source(writer)
+            io.close_source(writer, self.logger)
 
     def _get_results(self, writers):
         """
@@ -973,13 +984,13 @@ class EcMetachunkWriter(io.MetachunkWriter):
         except (Exception, Timeout) as exc:
             resp = None
             msg = str(exc)
-            logger.warn("Failed to read response for %s (reqid=%s): %s",
-                        writer.chunk, self.reqid, msg)
+            self.logger.warn("Failed to read response for %s (reqid=%s): %s",
+                             writer.chunk, self.reqid, msg)
             writer.chunk['error'] = 'resp: %s' % msg
         # close_source() will be called in a finally block later.
         # But we do not want to wait for all writers to have finished writing
         # before closing connections.
-        io.close_source(writer)
+        io.close_source(writer, self.logger)
         return (writer, resp)
 
 
@@ -1059,6 +1070,7 @@ class ECRebuildHandler(object):
         self.storage_method = storage_method
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
         self.read_timeout = read_timeout or io.CHUNK_TIMEOUT
+        self.logger = _kwargs.get('logger', LOGGER)
 
     def _get_response(self, chunk, headers):
         resp = None
@@ -1071,13 +1083,13 @@ class ECRebuildHandler(object):
             with ChunkReadTimeout(self.read_timeout):
                 resp = conn.getresponse()
             if resp.status != 200:
-                logger.warning('Invalid GET response from %s: %s %s',
-                               chunk, resp.status, resp.reason)
+                self.logger.warning('Invalid GET response from %s: %s %s',
+                                    chunk, resp.status, resp.reason)
                 resp = None
         except (SocketError, Timeout) as err:
-            logger.error('ERROR fetching %s: %s', chunk, err)
+            self.logger.error('ERROR fetching %s: %s', chunk, err)
         except Exception:
-            logger.exception('ERROR fetching %s', chunk)
+            self.logger.exception('ERROR fetching %s', chunk)
         return resp
 
     def rebuild(self):
@@ -1097,7 +1109,7 @@ class ECRebuildHandler(object):
             if len(resps) >= self.storage_method.ec_nb_data:
                 break
         else:
-            logger.error('Unable to read enough valid sources to rebuild')
+            self.logger.error('Unable to read enough valid sources to rebuild')
             raise exceptions.UnrecoverableContent(
                 'Not enough valid sources to rebuild')
 
@@ -1125,9 +1137,9 @@ class ECRebuildHandler(object):
                     with Timeout(self.read_timeout):
                         frag = [frag for frag in pile]
                 except Timeout as to:
-                    logger.error('ERROR while rebuilding: %s', to)
+                    self.logger.error('ERROR while rebuilding: %s', to)
                 except Exception:
-                    logger.exception('ERROR while rebuilding')
+                    self.logger.exception('ERROR while rebuilding')
                     break
                 if not all(frag):
                     break

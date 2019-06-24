@@ -31,7 +31,7 @@ from oio.common import green
 from oio.common.storage_method import STORAGE_METHODS
 from oio.common.logger import get_logger
 
-logger = get_logger({}, __name__)
+LOGGER = get_logger({}, __name__)
 
 WRITE_CHUNK_SIZE = 65536
 READ_CHUNK_SIZE = 65536
@@ -46,11 +46,12 @@ CLIENT_TIMEOUT = 60.0
 PUT_QUEUE_DEPTH = 10
 
 
-def close_source(source):
+def close_source(source, logger=None):
     """Safely close the connection behind `source`."""
     try:
         source.conn.close()
     except Exception:
+        logger = logger or LOGGER
         logger.exception("Failed to close %s", source)
 
 
@@ -108,6 +109,7 @@ class WriteHandler(object):
         self.connection_timeout = kwargs.get('connection_timeout',
                                              CONNECTION_TIMEOUT)
         self.deadline = kwargs.get('deadline')
+        self.logger = kwargs.get('logger', LOGGER)
 
     @property
     def read_timeout(self):
@@ -223,6 +225,7 @@ class ChunkReader(object):
         self.read_timeout = read_timeout or CHUNK_TIMEOUT
         self._resp_by_chunk = dict()
         self.perfdata = perfdata
+        self.logger = _kwargs.get('logger', LOGGER)
 
     @property
     def reqid(self):
@@ -297,13 +300,13 @@ class ChunkReader(object):
                 source = conn.getresponse()
                 source.conn = conn
         except (SocketError, Timeout) as err:
-            logger.error('Connection failed to %s (reqid=%s): %s',
-                         chunk, self.reqid, err)
+            self.logger.error('Connection failed to %s (reqid=%s): %s',
+                              chunk, self.reqid, err)
             self._resp_by_chunk[chunk["url"]] = (0, str(err))
             return False
         except Exception as err:
-            logger.exception('Connection failed to %s (reqid=%s)',
-                             chunk, self.reqid)
+            self.logger.exception('Connection failed to %s (reqid=%s)',
+                                  chunk, self.reqid)
             self._resp_by_chunk[chunk["url"]] = (0, str(err))
             return False
 
@@ -313,11 +316,11 @@ class ChunkReader(object):
             self.sources.append((source, chunk))
             return True
         else:
-            logger.warn("Invalid response from %s (reqid=%s): %d %s",
-                        chunk, self.reqid, source.status, source.reason)
+            self.logger.warn("Invalid response from %s (reqid=%s): %d %s",
+                             chunk, self.reqid, source.status, source.reason)
             self._resp_by_chunk[chunk["url"]] = (source.status,
                                                  str(source.reason))
-            close_source(source)
+            close_source(source, self.logger)
         return False
 
     def _get_source(self):
@@ -439,11 +442,11 @@ class ChunkReader(object):
                 # find a new source to perform recovery
                 new_source, new_chunk = self._get_source()
                 if new_source:
-                    logger.warn(
+                    self.logger.warn(
                         "Failed to read from %s (%s), "
                         "retrying from %s (reqid=%s)",
                         chunk, crto, new_chunk, self.reqid)
-                    close_source(source[0])
+                    close_source(source[0], self.logger)
                     # switch source
                     source[0] = new_source
                     chunk = new_chunk
@@ -457,8 +460,8 @@ class ChunkReader(object):
                         return
 
                 else:
-                    logger.warn("Failed to read from %s (%s, reqid=%s)",
-                                chunk, crto, self.reqid)
+                    self.logger.warn("Failed to read from %s (%s, reqid=%s)",
+                                     chunk, crto, self.reqid)
                     # no valid source found to recover
                     raise
             else:
@@ -518,14 +521,14 @@ class ChunkReader(object):
                 pass
 
         except green.ChunkReadTimeout:
-            logger.exception("Failure during chunk read (reqid=%s)",
-                             self.reqid)
+            self.logger.exception("Failure during chunk read (reqid=%s)",
+                                  self.reqid)
             raise
         except Exception:
-            logger.exception("Failure during read (reqid=%s)", self.reqid)
+            self.logger.exception("Failure during read (reqid=%s)", self.reqid)
             raise
         finally:
-            close_source(source[0])
+            close_source(source[0], self.logger)
 
     @property
     def headers(self):
@@ -590,7 +593,8 @@ class MetachunkWriter(object):
                 if k in ('chunk_checksum_algo',
                          'chunk_buffer_min',
                          'chunk_buffer_max',
-                         'perfdata')}
+                         'perfdata',
+                         'logger')}
 
     @property
     def quorum(self):
