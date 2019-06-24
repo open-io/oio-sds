@@ -21,7 +21,7 @@ import (
 	"os"
 	"os/user"
 
-	ini "gopkg.in/ini.v1"
+	"gopkg.in/ini.v1"
 )
 
 const (

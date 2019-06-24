@@ -16,9 +16,9 @@
 
 package main
 
-var (
-	notHexa [256]bool
-)
+// An array of character considered as invalid hexadecimal.
+// YOU SHOULD NOT alter this this unless you know what you are doing
+var notHexa [256]bool
 
 func init() {
 	hexa := []byte{

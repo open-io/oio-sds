@@ -62,6 +62,11 @@ class ChunkReadTimeout(OioTimeout):
     msg_prefix = 'Chunk read '
 
 
+def eventlet_yield():
+    """Swith to another eventlet coroutine."""
+    sleep(0)
+
+
 def get_hub():
     return 'poll'
 

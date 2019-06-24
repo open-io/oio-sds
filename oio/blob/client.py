@@ -73,8 +73,8 @@ def update_rawx_perfdata(func):
         if perfdata is not None:
             req_end = utils.monotonic_time()
             perfdata_rawx = perfdata.setdefault('rawx', dict())
-            total_rawx = perfdata_rawx.get('total', 0.0) + req_end - req_start
-            perfdata_rawx['total'] = total_rawx
+            overall = perfdata_rawx.get('overall', 0.0) + req_end - req_start
+            perfdata_rawx['overall'] = overall
         return res
     return _update_rawx_perfdata
 

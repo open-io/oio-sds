@@ -26,21 +26,49 @@ import (
 
 type optionsMap map[string]string
 
-// readConfig -- fetch options from conf file
+// An array of all the string that evaluate as TRUE
+var ok = []string{"ok", "yes", "true", "enable", "enabled", "yeah", "on"}
+
+// An array of all the string that evaluate as FALSE
+var nok = []string{"ko", "no", "false", "disable", "disabled", "nope", "off", "wot?"}
+
+var loadedOpts = map[string]string{
+	// Long historical names
+	"grid_namespace":   "ns",
+	"grid_hash_width":  "hash_width",
+	"grid_hash_depth":  "hash_depth",
+	"grid_fsync":       "fsync_file",
+	"grid_fsync_dir":   "fsync_dir",
+	"grid_docroot":     "basedir",
+	"grid_compression": "compression",
+	"grid_fallocate":   "fallocate",
+	"grid_service_id":  "id",
+	// Also manage shorter names
+	"Listen":        "addr",
+	"namespace":     "ns",
+	"service_id":    "id",
+	"syslog_id":     "syslog_id",
+	"hash_width":    "hash_width",
+	"hash_depth":    "hash_depth",
+	"fsync":         "fsync_file",
+	"fsync_dir":     "fsync_dir",
+	"docroot":       "basedir",
+	"compression":   "compression",
+	"fallocate":     "fallocate",
+	"tcp_keepalive": "tcp_keepalive",
+	// More recent names
+	"timeout_read_header":  "timeout_read_header",
+	"timeout_read_request": "timeout_read_request",
+	"timeout_write_reply":  "timeout_write_reply",
+	"timeout_idle":         "timeout_idle",
+	"headers_buffer_size":  "headers_buffer_size",
+	// TODO(jfs): also implement a cachedir
+}
+
+// readConfig -- fetch options from conf file and remap their name
+// to a shorter form. This helps managing several aliases to the
+// same variable.
 func readConfig(conf string) (optionsMap, error) {
-	loadedOpts := map[string]string{
-		"Listen":           "addr",
-		"grid_namespace":   "ns",
-		"grid_hash_width":  "hash_width",
-		"grid_hash_depth":  "hash_depth",
-		"grid_fsync":       "fsync_file",
-		"grid_fsync_dir":   "fsync_dir",
-		"grid_docroot":     "basedir",
-		"grid_compression": "compression",
-		"grid_fallocate":   "fallocate",
-		"grid_service_id":  "id",
-		// TODO(jfs): also implement a cachedir
-	}
 	var opts = make(map[string]string)
 	f, err := os.OpenFile(conf, os.O_RDONLY, os.ModePerm)
 	if err != nil {

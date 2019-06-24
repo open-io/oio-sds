@@ -89,6 +89,10 @@ extern "C" {
 #  define PROXYD_HEADER_PERFDATA PROXYD_HEADER_PREFIX "perfdata"
 # endif
 
+# ifndef PROXYD_HEADER_FORCE_VERSIONING
+#  define PROXYD_HEADER_FORCE_VERSIONING PROXYD_HEADER_PREFIX "force-versioning"
+#endif
+
 /* in oio_ext_monotonic_time() precision */
 # ifndef PROXYD_DEFAULT_TTL_SERVICES
 #  define PROXYD_DEFAULT_TTL_SERVICES G_TIME_SPAN_HOUR

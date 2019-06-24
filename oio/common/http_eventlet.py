@@ -13,12 +13,12 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from urllib import quote
 
 from oio.common.green import socket, HTTPConnection, HTTPResponse, _UNKNOWN
+from oio.common.logger import get_logger
 
-import logging
-
-from urllib import quote
+logger = get_logger({}, __name__)
 
 
 class CustomHTTPResponse(HTTPResponse):
@@ -93,8 +93,8 @@ class CustomHttpConnection(HTTPConnection):
 
     def getresponse(self):
         response = HTTPConnection.getresponse(self)
-        logging.debug('HTTP %s %s:%s %s',
-                      self._method, self.host, self.port, self._path)
+        logger.debug('HTTP %s %s:%s %s',
+                     self._method, self.host, self.port, self._path)
         return response
 
 
@@ -103,7 +103,7 @@ def http_connect(host, method, path, headers=None, query_string=None):
         try:
             path = path.encode('utf-8')
         except UnicodeError as e:
-            logging.exception('ERROR encoding to UTF-8: %s', str(e))
+            logger.exception('ERROR encoding to UTF-8: %s', str(e))
     path = quote('/' + path)
     conn = CustomHttpConnection(host)
     if query_string:

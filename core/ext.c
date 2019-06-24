@@ -178,6 +178,7 @@ struct oio_ext_local_s {
 	 * (in case of master/slave replication). */
 	guint8 force_master;
 	gchar *user_agent;
+	gchar *force_versioning;
 	gchar reqid[LIMIT_LENGTH_REQID];
 };
 
@@ -192,6 +193,10 @@ static void _local_free(gpointer p) {
 	if (l->user_agent) {
 		g_free(l->user_agent);
 		l->user_agent = NULL;
+	}
+	if (l->force_versioning) {
+		g_free(l->force_versioning);
+		l->force_versioning = NULL;
 	}
 	g_free (l);
 }
@@ -302,7 +307,23 @@ const gchar *oio_ext_get_user_agent(void) {
 
 void oio_ext_set_user_agent(const gchar *user_agent) {
 	struct oio_ext_local_s *l = _local_ensure();
+	if (l->user_agent) {
+		g_free(l->user_agent);
+	}
 	l->user_agent = g_strdup(user_agent);
+}
+
+const gchar *oio_ext_get_force_versioning(void) {
+	const struct oio_ext_local_s *l = _local_ensure ();
+	return l->force_versioning;
+}
+
+void oio_ext_set_force_versioning(const gchar *force_versioning) {
+	struct oio_ext_local_s *l = _local_ensure();
+	if (l->force_versioning) {
+		g_free(l->force_versioning);
+	}
+	l->force_versioning = g_strdup(force_versioning);
 }
 
 /* -------------------------------------------------------------------------- */

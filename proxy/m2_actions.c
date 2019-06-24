@@ -223,7 +223,7 @@ static oio_weight_t
 _patch_score(const oio_weight_t score,
 		const oio_location_t location, const oio_location_t reference)
 {
-	if (score <= 0 || !location)
+	if (score <= 0 || !location || !reference)
 		return score;
 	switch (oio_location_proximity(location, reference)) {
 		case OIO_LOC_PROX_VOLUME:
@@ -2531,6 +2531,10 @@ static GError *_m2_json_put (struct req_args_s *args,
 	const gboolean append = _request_get_flag (args, "append");
 	const gboolean force = _request_get_flag (args, "force");
 	const gboolean change_policy = _request_get_flag (args, "change_policy");
+	/* used from oio-swift for "sharding" in containers */
+	const char* force_versioning = g_tree_lookup(args->rq->tree_headers,
+			PROXYD_HEADER_FORCE_VERSIONING);
+
 	GSList *ibeans = NULL, *obeans = NULL;
 	GError *err;
 
@@ -2552,7 +2556,7 @@ static GError *_m2_json_put (struct req_args_s *args,
 		if (force) return m2v2_remote_pack_OVERWRITE (args->url, ibeans, DL());
 		if (append) return m2v2_remote_pack_APPEND (args->url, ibeans, DL());
 		if (change_policy) return m2v2_remote_pack_CHANGE_POLICY (args->url, ibeans, DL());
-		return m2v2_remote_pack_PUT (args->url, ibeans, DL());
+		return m2v2_remote_pack_PUT (args->url, ibeans, force_versioning, DL());
 	}
 	err = _resolve_meta2(args, _prefer_master(), _pack, &obeans, NULL);
 	_bean_cleanl2 (obeans);
@@ -2634,11 +2638,13 @@ action_m2_content_purge (struct req_args_s *args, struct json_object *j UNUSED)
 //    ]
 //
 // You must specify content length and ID on header
+// You can update system property policy.version of container
 //
 // .. code-block:: text
 //
 //    "x-oio-content-meta-id: 2996752DFD7205006B73F17AD315AA2B"
 //    "x-oio-content-meta-size: 64"
+//    "x-oio-force-versioning: -1"
 //
 // Create a new object. This method does not upload any data, it just
 // registers object metadata in the database.
@@ -2651,6 +2657,7 @@ action_m2_content_purge (struct req_args_s *args, struct json_object *j UNUSED)
 //    Accept: */*
 //    x-oio-content-meta-size: 64
 //    x-oio-content-meta-id: 2996752DFD7205006B73F17AD315AA2B
+//    x-oio-force-versioning: -1
 //    Content-Length: 165
 //    Content-Type: application/x-www-form-urlencoded
 //

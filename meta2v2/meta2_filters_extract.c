@@ -317,3 +317,17 @@ meta2_filter_extract_list_params(struct gridd_filter_ctx_s *ctx,
 	EXTRACT_OPT(NAME_MSGKEY_MAX_KEYS);
 	return FILTER_OK;
 }
+
+int
+meta2_filter_extract_header_optional_force_versioning(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GError *e = NULL;
+	gchar buf[1024];
+	TRACE_FILTER();
+	EXTRACT_STRING(NAME_MSGKEY_FORCE_VERSIONING, TRUE);
+	/* TODO(mbo) we should validate value */
+	const char *force_versioning = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_FORCE_VERSIONING);
+	oio_ext_set_force_versioning(force_versioning);
+	return FILTER_OK;
+}

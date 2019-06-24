@@ -1065,14 +1065,17 @@ class ObjectStorageApi(object):
     def _ttfb_wrapper(stream, req_start, download_start, perfdata):
         """Keep track of time-to-first-byte and time-to-last-byte"""
         perfdata_rawx = perfdata.setdefault('rawx', dict())
+        size = 0
         for dat in stream:
             if 'ttfb' not in perfdata:
                 perfdata['ttfb'] = monotonic_time() - req_start
             yield dat
+            size += len(dat)
         req_end = monotonic_time()
         perfdata['ttlb'] = req_end - req_start
-        perfdata_rawx['total'] = perfdata_rawx.get('total', 0.0) \
+        perfdata_rawx['overall'] = perfdata_rawx.get('overall', 0.0) \
             + req_end - download_start
+        perfdata['data_size'] = size
 
     @patch_kwargs
     @ensure_headers
@@ -1251,8 +1254,9 @@ class ObjectStorageApi(object):
         if perfdata is not None:
             upload_end = monotonic_time()
             perfdata_rawx = perfdata.setdefault('rawx', dict())
-            perfdata_rawx['total'] = perfdata_rawx.get('total', 0.0) \
+            perfdata_rawx['overall'] = perfdata_rawx.get('overall', 0.0) \
                 + upload_end - upload_start
+            perfdata['data_size'] = ul_bytes
         return ul_chunks, ul_bytes, obj_checksum
 
     def _object_prepare(self, account, container, obj_name, source,

@@ -42,6 +42,9 @@ const (
 	beanstalkNotifierPipeSize    = 4096
 )
 
+// Tells if the current RAWX service may emit notifications
+var notifAllowed = true
+
 type beanstalkNotifier struct {
 	rawx       *rawxService
 	run        bool
@@ -102,8 +105,10 @@ func (notifier *beanstalkNotifier) connectBeanstalkd() error {
 }
 
 func (notifier *beanstalkNotifier) closeBeanstalkd() {
-	notifier.beanstalkd.Close()
-	notifier.beanstalkd = nil
+	if notifier.beanstalkd != nil {
+		notifier.beanstalkd.Close()
+		notifier.beanstalkd = nil
+	}
 }
 
 func (notifier *beanstalkNotifier) syncNotify(eventJSON []byte) {
@@ -124,7 +129,6 @@ func (notifier *beanstalkNotifier) syncNotify(eventJSON []byte) {
 
 func (notifier *beanstalkNotifier) asyncNotify(eventType, requestID string,
 	chunk *chunkInfo) {
-
 	if !notifier.run {
 		LogWarning("Can't send a event to %s using tube %s: closed",
 			notifier.endpoint, notifier.tube)
@@ -244,13 +248,18 @@ func MakeNotifier(config string, rawx *rawxService) (Notifier, error) {
 	if endpoint, ok := hasPrefix(config, "beanstalk://"); ok {
 		return makeBeanstalkNotifier(endpoint, rawx)
 	}
+	// TODO(adu) makeZMQNotifier
 	return nil, errors.New("Unexpected notification endpoint, only `beanstalk://...` is accepted")
 }
 
 func NotifyNew(notifier Notifier, requestID string, chunk *chunkInfo) {
-	notifier.asyncNotify(eventTypeNewChunk, requestID, chunk)
+	if notifAllowed {
+		notifier.asyncNotify(eventTypeNewChunk, requestID, chunk)
+	}
 }
 
 func NotifyDel(notifier Notifier, requestID string, chunk *chunkInfo) {
-	notifier.asyncNotify(eventTypeDelChunk, requestID, chunk)
+	if notifAllowed {
+		notifier.asyncNotify(eventTypeDelChunk, requestID, chunk)
+	}
 }

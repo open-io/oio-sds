@@ -17,9 +17,10 @@
 package main
 
 import (
+	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 )
 
@@ -64,13 +65,18 @@ type rawxRequest struct {
 	bytesOut uint64
 }
 
+func (rr *rawxRequest) drain() error {
+	if _, err := io.Copy(ioutil.Discard, rr.req.Body); err != nil {
+		rr.req.Close = true
+		return err
+	} else {
+		return nil
+	}
+}
+
 func (rr *rawxRequest) replyCode(code int) {
 	rr.status = code
 	rr.rep.WriteHeader(rr.status)
-}
-
-func (rr *rawxRequest) getSpent() uint64 {
-	return uint64(time.Since(rr.startTime).Nanoseconds() / 1000)
 }
 
 func (rr *rawxRequest) replyError(err error) {
@@ -81,7 +87,18 @@ func (rr *rawxRequest) replyError(err error) {
 	} else if os.IsNotExist(err) {
 		rr.replyCode(http.StatusNotFound)
 	} else {
-		setError(rr.rep, err)
+		// A strong error occured, we tend to close the connection
+		// whatever the client has sent in the request, in terms of
+		// connection management.
+		rr.req.Close = true
+
+		// Also, we debug what happened in the reply headers
+		// TODO(jfs): This is a job for a distributed tracing framework
+		if logExtremeVerbosity {
+			rr.rep.Header().Set("X-Error", err.Error())
+		}
+
+		// Prepare the most adapted reply status.
 		if err == os.ErrInvalid {
 			rr.replyCode(http.StatusBadRequest)
 		} else {
@@ -95,6 +112,10 @@ func (rr *rawxRequest) replyError(err error) {
 			}
 		}
 	}
+}
+
+func _dslash(s string) bool {
+	return len(s) > 1 && s[0] == '/' && s[1] == '/'
 }
 
 func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
@@ -124,7 +145,7 @@ func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 	if len(req.Host) > 0 && (req.Host != rawx.id && req.Host != rawx.url) {
 		rawxreq.replyCode(http.StatusTeapot)
 	} else {
-		if strings.HasPrefix(req.URL.Path, "//") == true {
+		for _dslash(req.URL.Path) {
 			req.URL.Path = req.URL.Path[1:]
 		}
 		switch req.URL.Path {

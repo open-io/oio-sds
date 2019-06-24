@@ -186,8 +186,8 @@ class HttpApi(object):
                 request_end = monotonic_time()
                 service_perfdata = perfdata.setdefault(
                     self.service_type, dict())
-                service_perfdata['total'] = service_perfdata.get(
-                    'total', 0.0) + request_end - request_start
+                service_perfdata['overall'] = service_perfdata.get(
+                    'overall', 0.0) + request_end - request_start
             body = resp.data
             if body:
                 try:

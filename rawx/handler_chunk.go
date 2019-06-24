@@ -368,7 +368,11 @@ func (rr *rawxRequest) serveChunk() {
 	var spent uint64
 	switch rr.req.Method {
 	case "GET":
-		rr.downloadChunk()
+		if err := rr.drain(); err != nil {
+			rr.replyError(err)
+		} else {
+			rr.downloadChunk()
+		}
 		spent = IncrementStatReqGet(rr)
 	case "PUT":
 		rr.uploadChunk()
@@ -379,16 +383,32 @@ func (rr *rawxRequest) serveChunk() {
 			rr.reqid, rr.req.URL.Path)
 		return
 	case "DELETE":
-		rr.removeChunk()
+		if err := rr.drain(); err != nil {
+			rr.replyError(err)
+		} else {
+			rr.removeChunk()
+		}
 		spent = IncrementStatReqDel(rr)
 	case "HEAD":
-		rr.checkChunk()
+		if err := rr.drain(); err != nil {
+			rr.replyError(err)
+		} else {
+			rr.checkChunk()
+		}
 		spent = IncrementStatReqHead(rr)
 	case "COPY":
-		rr.copyChunk()
+		if err := rr.drain(); err != nil {
+			rr.replyError(err)
+		} else {
+			rr.copyChunk()
+		}
 		spent = IncrementStatReqCopy(rr)
 	default:
-		rr.replyCode(http.StatusMethodNotAllowed)
+		if err := rr.drain(); err != nil {
+			rr.replyError(err)
+		} else {
+			rr.replyCode(http.StatusMethodNotAllowed)
+		}
 		spent = IncrementStatReqOther(rr)
 	}
 
