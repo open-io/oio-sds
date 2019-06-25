@@ -376,6 +376,11 @@ label_rollback:
 			sqlx_admin_reload(sq3);
 		}
 		else {
+			/* If the database has just been created, the cached admin table
+			 * does not contain new entries. These entries may be required
+			 * by the change callback, thus we need to reload the whole
+			 * admin table. */
+			sqlx_admin_reload(sq3);
 			sqlx_repository_call_change_callback(sq3);
 		}
 	}
@@ -426,8 +431,11 @@ _restore(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 	}
 	GRID_TRACE("Restore done!");
 
-	if (!err)
+	if (!err) {
+		/* See the comment in replicate_body_manage */
+		sqlx_admin_reload(sq3);
 		sqlx_repository_call_change_callback(sq3);
+	}
 
 	sqlx_repository_unlock_and_close_noerror(sq3);
 	return NULL;
@@ -443,6 +451,8 @@ _restore2(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 	if (!err) {
 		err = sqlx_repository_restore_from_file(sq3, path);
 		if (!err) {
+			/* See the comment in replicate_body_manage */
+			sqlx_admin_reload(sq3);
 			sqlx_repository_call_change_callback(sq3);
 		}
 	}
