@@ -1746,7 +1746,9 @@ _find_member (struct election_manager_s *M, const char *path, guint gen)
 		GRID_DEBUG("watcher: [%s] obsolete w=%u gen=%u",
 				member->key, gen, member->generation_id);
 	} else {
-		GRID_WARN("watcher: [%s] no election found", key);
+		/* That's fine, we sometimes get callbacks for members
+		 * that have already left. */
+		GRID_DEBUG("watcher: [%s] no election found", key);
 	}
 	_manager_unlock(M);
 	return NULL;
@@ -1811,15 +1813,15 @@ deferred_watch_COMMON(struct deferred_watcher_context_s *d,
 		// Not under lock but it's just a read operation
 		} else if (M->members_by_state[STEP_MASTER].count > 0) {
 #if ZOO_MAJOR_VERSION > 3 || (ZOO_MAJOR_VERSION == 3 && ZOO_MINOR_VERSION >= 5)
-			GRID_WARN("Got ZK session event for an unknown election, "
+			GRID_WARN("Got ZK session event (-> %s) for an unknown election, "
 					"resetting all local elections using %s and "
 					"currently in MASTER state",
-					zoo_get_current_server(d->zh));
+					zoo_state2str(d->state), zoo_get_current_server(d->zh));
 #else
-			GRID_WARN("Got ZK session event for an unknown election, "
+			GRID_WARN("Got ZK session event (-> %s) for an unknown election, "
 					"resetting all local elections using %p and "
 					"currently in MASTER state",
-					d->zh);
+					zoo_state2str(d->state), d->zh);
 #endif
 			guint reset = _reset_matching_members(M, d->zh, STEP_MASTER);
 			GRID_WARN("%u MASTER elections reset", reset);
@@ -1833,24 +1835,10 @@ deferred_watch_COMMON(struct deferred_watcher_context_s *d,
 			transition(member, d->evt, NULL);
 			member_unref(member);
 			member_unlock(member);
-		} else if (M->members_by_state[STEP_MASTER].count > 0) {
-#if ZOO_MAJOR_VERSION > 3 || (ZOO_MAJOR_VERSION == 3 && ZOO_MINOR_VERSION >= 5)
-			GRID_WARN("Got %s event for an unknown election, "
-					"resetting all local elections using %s and "
-					"currently in MASTER state",
-					_evt2str(d->evt), zoo_get_current_server(d->zh));
-#else
-			GRID_WARN("Got %s event for an unknown election, "
-					"resetting all local elections using %p and "
-					"currently in MASTER state",
-					_evt2str(d->evt), d->zh);
-#endif
-			guint reset = _reset_matching_members(M, d->zh, STEP_MASTER);
-			GRID_WARN("%u MASTER elections reset", reset);
 		} else {
-			GRID_INFO("Got %s event for an unknown member. "
-					"No local MASTER election, but check for "
-					"'free slave' situations!",
+			GRID_DEBUG("Got %s event for an unknown member. "
+					"That's fine, probably just a slow callback "
+					"for an expired election.",
 					_evt2str(d->evt));
 		}
 	}
