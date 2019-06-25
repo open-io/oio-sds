@@ -20,6 +20,12 @@ def encode_fullpath(account, container, path, version, content_id):
     for k, v in locals().items():
         if not v:
             raise ValueError("Can't encode fullpath: missing %s" % k)
+    if isinstance(account, unicode):
+        account = account.encode('utf-8')
+    if isinstance(container, unicode):
+        container = container.encode('utf-8')
+    if isinstance(path, unicode):
+        path = path.encode('utf-8')
     return '{0}/{1}/{2}/{3}/{4}'.format(quote(account, ''),
                                         quote(container, ''),
                                         quote(path, ''),
