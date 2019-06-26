@@ -24,6 +24,7 @@ License along with this library.
 enum oio_var_kind_e {
 	OIO_VARKIND_time = 0,
 	OIO_VARKIND_size = 1,
+	OIO_VARKIND_epoch = 2,
 };
 
 /**

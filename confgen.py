@@ -273,7 +273,7 @@ class Monotonic(Number):
 class Epoch(Number):
     def __init__(self, conf):
         super(Epoch, self).__init__(conf)
-        self.kind = 'OIO_VARKIND_time'
+        self.kind = 'OIO_VARKIND_epoch'
         self.ctype = "gint64"
         self.default = str2epoch(self.default)
         self.vmin = str2epoch(self.vmin)
