@@ -2225,13 +2225,18 @@ _result_GETVERS (GError *enet, struct election_member_s *m,
 		if (err && err->code == CODE_CONTAINER_NOTFOUND) {
 			/* We don't have the base! If we are here, we can suppose we have
 			 * already checked that we are actually in the list of peers of
-			 * the election. We must ask for a fresh copy of the base. */
+			 * the election. We must ask for a fresh copy of the base.
+			 * Update 2019-06-26: get_version() is supposed to create an
+			 * empty(ish) database (with only the schema). */
+			GRID_NOTICE("BUG: get_version() should create the database file, "
+					"but returned: (%d) %s (reqid=%s)",
+					err->code, err->message, oio_ext_get_reqid());
 			g_clear_error(&err);
 			err = NEWERROR(CODE_PIPEFROM, "Local database missing");
 		} else if (err) {
-			GRID_WARN("GETVERS error [%s.%s]: (%d) %s",
+			GRID_WARN("GETVERS error [%s.%s]: (%d) %s (reqid=%s)",
 					m->inline_name.base, m->inline_name.type,
-					err->code, err->message);
+					err->code, err->message, oio_ext_get_reqid());
 		}
 	}
 
@@ -2240,7 +2245,7 @@ _result_GETVERS (GError *enet, struct election_member_s *m,
 		err = version_validate_diff(vlocal, vremote, &worst);
 		if (NULL != err) {
 			if (err->code == CODE_PIPETO) {
-				GRID_DEBUG("Remote outdated : (%d) %s",
+				GRID_DEBUG("Remote outdated: (%d) %s",
 						err->code, err->message);
 				g_clear_error(&err);
 			}

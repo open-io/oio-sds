@@ -51,7 +51,7 @@ GTree* version_extract_expected(GTree *current, struct TableSequence *changes);
 
 /**
  * Compute the diff between both versions, and returns an error if the worst
- * version is > 1 in basolute value.
+ * version is > 1 in absolute value.
  *
  * @param worst the worst difference matched, with the considering 'src - dst'
  * @return the error that occured
