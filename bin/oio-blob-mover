@@ -27,8 +27,11 @@ def make_arg_parser():
     parser.add_argument('--namespace', '--ns', help="Namespace")
     parser.add_argument('--volume', help="Volume to move")
     parser.add_argument('config', help="Configuration file or empty file")
-    parser.add_argument('--generate-config', action='store_true',
-                        help="Generate configuration file with given arguments")
+    parser.add_argument('--concurrency', type=int,
+                        help="Number of coroutines to spawn.")
+    parser.add_argument(
+        '--generate-config', action='store_true',
+        help="Generate configuration file with given arguments")
     parser.add_argument('--edit-config', action='store_true',
                         help="Edit configuration file with given arguments")
     parser.add_argument('--limit', type=int,
@@ -85,6 +88,7 @@ def generate_config_file(path, mode):
         add_value(cont, 'report_interval', args.report_interval)
         add_value(cont, 'bytes_per_second', args.bytes_per_second)
         add_value(cont, 'chunks_per_second', args.chunks_per_second)
+        add_value(cont, 'concurrency', args.concurrency)
         add_value(cont, 'user', args.user)
         add_value(cont, 'limit', args.limit)
         return dic_to_string(cont, header)

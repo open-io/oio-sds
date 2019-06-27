@@ -15,7 +15,7 @@
 
 from string import hexdigits
 
-from oio.common.green import ratelimit, time
+from oio.common.green import ratelimit, time, GreenPool
 
 from oio.blob.client import BlobClient
 from oio.blob.utils import check_volume, read_chunk_metadata
@@ -39,6 +39,7 @@ class BlobMoverWorker(object):
         self.logger = logger or get_logger(conf)
         self.volume = volume
         self.namespace, self.address = check_volume(self.volume)
+        self.running = False
         self.run_time = 0
         self.passes = 0
         self.errors = 0
@@ -49,6 +50,7 @@ class BlobMoverWorker(object):
         self.bytes_processed = 0
         self.total_bytes_processed = 0
         self.total_chunks_processed = 0
+        self.concurrency = int_value(conf.get('concurrency'), 10)
         self.usage_target = int_value(
             conf.get('usage_target'), 0)
         self.usage_check_interval = int_value(
@@ -57,8 +59,6 @@ class BlobMoverWorker(object):
             conf.get('report_interval'), 3600)
         self.max_chunks_per_second = int_value(
             conf.get('chunks_per_second'), 30)
-        self.max_bytes_per_second = int_value(
-            conf.get('bytes_per_second'), 10000000)
         self.limit = int_value(conf.get('limit'), 0)
         self.allow_links = true_value(conf.get('allow_links', True))
         self.blob_client = BlobClient(conf)
@@ -70,6 +70,8 @@ class BlobMoverWorker(object):
 
         total_errors = 0
         mover_time = 0
+
+        pool = GreenPool(self.concurrency)
 
         paths = paths_gen(self.volume)
 
@@ -87,7 +89,10 @@ class BlobMoverWorker(object):
                     self.last_usage_check = now
                     break
 
-            self.safe_chunk_move(path)
+            # Spawn a chunk move task.
+            # The call will block if no green thread is available.
+            pool.spawn_n(self.safe_chunk_move, path)
+
             self.chunks_run_time = ratelimit(
                 self.chunks_run_time,
                 self.max_chunks_per_second
