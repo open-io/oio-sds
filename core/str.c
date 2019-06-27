@@ -651,11 +651,16 @@ GError * KV_decode_object(struct json_object *jobj, gchar ***out) {
 		return BADREQ("json: not a valid KV object");
 
 	GError *err = NULL;
-	GPtrArray *v = g_ptr_array_new ();
-	json_object_object_foreach (jobj, key, val) {
-		if (!json_object_is_type (val, json_type_string)) {
-			err = BADREQ ("Invalid property '%s'", key);
-			break;
+	GPtrArray *v = g_ptr_array_new();
+	json_object_object_foreach(jobj, key, val) {
+		if (!json_object_is_type(val, json_type_string)) {
+			if (!json_object_is_type(val, json_type_null)) {
+				err = BADREQ ("Invalid property '%s'", key);
+				break;
+			}
+			g_ptr_array_add(v, g_strdup(key));
+			// TODO(adu): We should use a null pointer
+			g_ptr_array_add(v, g_strdup(""));
 		} else {
 			g_ptr_array_add(v, g_strdup(key));
 			g_ptr_array_add(v, g_strdup(json_object_get_string(val)));
