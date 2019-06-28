@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 CLI=$(which openio)
-CONFIG=$(which oio-test-config.py)
+CONFIG=$(command -v oio-test-config.py)
 NAMESPACE=$($CONFIG -n)
 WORKERS=10
 
@@ -201,7 +201,7 @@ oio_meta_rebuilder()
 
     META_AFTER=${META//"${TMP_VOLUME}"/"${META_LOC_TO_REBUILD}"}
     if ! [ -f "${META_AFTER}" ]; then
-      echo >&2 "${META}: No such file for ${TYPE} ${META_IP_TO_REBUILD}"
+      echo >&2 "${META}: missing file for ${TYPE} ${META_IP_TO_REBUILD}"
       FAIL=true
       continue
     fi

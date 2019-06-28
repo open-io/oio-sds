@@ -1863,7 +1863,8 @@ sqlx_repository_get_version2(sqlx_repository_t *repo, const struct sqlx_name_s *
 	struct sqlx_sqlite3_s *sq3 = NULL;
 
 	*result = NULL;
-	err = sqlx_repository_open_and_lock(repo, n, SQLX_OPEN_LOCAL, &sq3, NULL);
+	err = sqlx_repository_open_and_lock(repo, n,
+			SQLX_OPEN_CREATE|SQLX_OPEN_LOCAL|SQLX_OPEN_URGENT, &sq3, NULL);
 	if (NULL != err)
 		return err;
 
