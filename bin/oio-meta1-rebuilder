@@ -42,10 +42,10 @@ def make_arg_parser():
     parser.add_argument('namespace', help="Namespace")
     parser.add_argument('--report-interval', type=int,
                         help="Report interval in seconds (3600)")
-    parser.add_argument('--workers', type=int,
-                        help="Number of workers (1)")
+    parser.add_argument('--concurrency', '--workers', type=int,
+                        help='Number of coroutines to spawn. (1)')
     parser.add_argument('--prefixes-per-second', type=int,
-                        help="Max prefixes per second per workers (30)")
+                        help="Max prefixes per second per concurrency (30)")
     parser.add_argument('-q', '--quiet', action='store_true',
                         help="Don't print log on console")
     ifile_help = "Read container IDs from this file instead of redis. " \
@@ -75,8 +75,8 @@ if __name__ == '__main__':
 
     if args.report_interval is not None:
         conf['report_interval'] = args.report_interval
-    if args.workers is not None:
-        conf['workers'] = args.workers
+    if args.concurrency is not None:
+        conf['concurrency'] = args.concurrency
     if args.prefixes_per_second is not None:
         conf['items_per_second'] = args.prefixes_per_second
 

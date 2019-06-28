@@ -54,9 +54,9 @@ and triggering a synchronization.
 
     # local
     parser.add_argument(
-        '--workers', type=int,
-        help='Number of workers. '
-             '(default=%d)' % Meta2Rebuilder.DEFAULT_WORKERS)
+        '--concurrency', '--workers', type=int,
+        help='Number of coroutines to spawn. '
+             '(default=%d)' % Meta2Rebuilder.DEFAULT_CONCURRENCY)
     parser.add_argument(
         '--items-per-second', type=int,
         help='Max items per second. '
@@ -77,7 +77,7 @@ if __name__ == '__main__':
     conf['rdir_fetch_limit'] = args.rdir_fetch_limit
     conf['report_interval'] = args.report_interval
     # local
-    conf['workers'] = args.workers
+    conf['concurrency'] = args.concurrency
     conf['items_per_second'] = args.references_per_second
 
     logger = get_logger_from_args(args, default_conf=conf)

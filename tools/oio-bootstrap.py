@@ -787,7 +787,7 @@ on_die=cry
 template_gridinit_blob_rebuilder = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE}
-command=oio-blob-rebuilder --workers 10 --beanstalkd ${QUEUE_URL} --log-facility local0 --log-syslog-prefix OIO,OPENIO,${SRVTYPE},${SRVNUM} ${NS}
+command=oio-blob-rebuilder --concurrency 10 --beanstalkd ${QUEUE_URL} --log-facility local0 --log-syslog-prefix OIO,OPENIO,${SRVTYPE},${SRVNUM} ${NS}
 enabled=true
 start_at_boot=false
 on_die=cry
