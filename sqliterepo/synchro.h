@@ -109,6 +109,9 @@ void sqlx_sync_set_hash(struct sqlx_sync_s *ss, guint witdth, guint depth);
  * Zookeeper handle. */
 int sqlx_sync_uses_handle(struct sqlx_sync_s *ss, zhandle_t *zh);
 
+/** Get a string describing one of Zookeeper's state constants. */
+const char * zoo_state2str(int state);
+
 /* -------------------------------------------------------------------------- */
 
 struct sqlx_name_s;

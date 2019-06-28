@@ -80,7 +80,7 @@ def get_pool_manager(pool_connections=DEFAULT_POOLSIZE,
         max_retries = urllib3.Retry(0, read=False)
     else:
         max_retries = urllib3.Retry(total=int(max_retries),
-                                    backoff_factor=int(backoff_factor))
+                                    backoff_factor=float(backoff_factor))
     kw = {k: v for k, v in kwargs.items()
           if k in URLLIB3_POOLMANAGER_KWARGS[4:]}
     pool_connections = int(pool_connections)

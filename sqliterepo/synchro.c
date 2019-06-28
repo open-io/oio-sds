@@ -35,15 +35,19 @@ License along with this library.
 #include "sqlx_remote.h"
 #include "gridd_client_pool.h"
 
-
-static const char * zoo_state2str(int state) {
+/* Unfortunately, state2String() is not exported by Zookeeper. */
+const char * zoo_state2str(int state) {
 #define ON_STATE(N) do { if (state == ZOO_##N##_STATE) return #N; } while (0)
 	ON_STATE(EXPIRED_SESSION);
 	ON_STATE(AUTH_FAILED);
 	ON_STATE(CONNECTING);
 	ON_STATE(ASSOCIATING);
 	ON_STATE(CONNECTED);
-	return "STATE?";
+#if ZOO_MAJOR_VERSION > 3 || (ZOO_MAJOR_VERSION == 3 && ZOO_MINOR_VERSION >= 5)
+	ON_STATE(READONLY);
+	ON_STATE(NOTCONNECTED);
+#endif
+	return "INVALID_STATE";
 }
 
 static const char * zoo_zevt2str(int zevt) {

@@ -255,6 +255,30 @@ _size_modifier (const char *unit)
 }
 
 static gint64
+_epoch_modifier(const char *unit)
+{
+	static struct _conversion_s {
+		const char unit[4];
+		const gint64 value;
+	} units[] = {
+		{"s", 1},
+		{"m", 60},       /* 60 seconds */
+		{"h", 3600},     /* 60 minutes */
+		{"d", 86400},    /* 24 hours */
+		{"w", 604800},   /* 7 days */
+		{"M", 2419200},  /* 4 weeks */
+		{"", 0},
+	};
+	if (!oio_str_is_set(unit))
+		return 1;
+	for (struct _conversion_s *pu=units; pu->unit[0] ;++pu) {
+		if (!strcmp(pu->unit, unit))
+			return pu->value;
+	}
+	return 0;
+}
+
+static gint64
 _time_modifier(const char *unit)
 {
 	static struct _conversion_s {
@@ -263,6 +287,7 @@ _time_modifier(const char *unit)
 	} units[] = {
 		{"ms", G_TIME_SPAN_MILLISECOND},
 		{"s", G_TIME_SPAN_SECOND},
+		{"m", G_TIME_SPAN_MINUTE},
 		{"h", G_TIME_SPAN_HOUR},
 		{"d", G_TIME_SPAN_DAY},
 		{"w", 7 * G_TIME_SPAN_DAY},
@@ -286,6 +311,8 @@ _unit(struct oio_var_record_s *rec, const char *end)
 			return _time_modifier(end);
 		case OIO_VARKIND_size:
 			return _size_modifier(end);
+		case OIO_VARKIND_epoch:
+			return _epoch_modifier(end);
 		default:
 			g_assert_not_reached();
 			return 0;

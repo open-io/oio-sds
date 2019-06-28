@@ -1129,6 +1129,7 @@ class ObjectStorageApi(object):
         meta['container_id'] = (
             cid_arg or cid_from_name(account, container).upper())
         meta['ns'] = self.namespace
+        kwargs['logger'] = self.logger
         if perfdata is not None:
             download_start = monotonic_time()
         if storage_method.ec:
@@ -1288,6 +1289,7 @@ class ObjectStorageApi(object):
                                         backblaze_info=backblaze_info)
         else:
             write_handler_cls = ReplicatedWriteHandler
+        kwargs['logger'] = self.logger
         handler = write_handler_cls(
                 source, obj_meta, chunk_prep, storage_method, **kwargs)
 

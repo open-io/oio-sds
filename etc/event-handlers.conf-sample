@@ -50,6 +50,13 @@ pipeline = account_update volume_index
 
 [filter:content_cleaner]
 use = egg:oio#content_cleaner
+# Allowed parameters:
+# - backoff_factor (float, 0),
+# - concurrency (int, 3)
+# - max_retries (int, 0),
+# - pool_connections (int, 32),
+# - pool_maxsize (int, 32),
+# - timeout (float, 5.0)
 
 [filter:account_update]
 use = egg:oio#account_update

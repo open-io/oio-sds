@@ -212,7 +212,7 @@ openioadmin_meta_rebuild()
 
     META_AFTER=${META//"${TMP_VOLUME}"/"${META_LOC_TO_REBUILD}"}
     if ! [ -f "${META_AFTER}" ]; then
-      echo >&2 "${META}: No such file for ${TYPE} ${META_ID_TO_REBUILD}"
+      echo >&2 "${META}: missing file for ${TYPE} ${META_IP_TO_REBUILD}"
       FAIL=true
       continue
     fi

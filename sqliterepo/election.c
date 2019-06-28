@@ -1785,7 +1785,9 @@ _find_member (struct election_manager_s *M, const char *path, guint gen)
 		GRID_DEBUG("watcher: [%s] obsolete w=%u gen=%u",
 				member->key, gen, member->generation_id);
 	} else {
-		GRID_WARN("watcher: [%s] no election found", key);
+		/* That's fine, we sometimes get callbacks for members
+		 * that have already left. */
+		GRID_DEBUG("watcher: [%s] no election found", key);
 	}
 	_manager_unlock(M);
 	return NULL;
@@ -1856,15 +1858,15 @@ deferred_watch_COMMON(struct deferred_watcher_context_s *d,
 		// Not under lock but it's just a read operation
 		} else if (M->members_by_state[STEP_MASTER].count > 0) {
 #if ZOO_MAJOR_VERSION > 3 || (ZOO_MAJOR_VERSION == 3 && ZOO_MINOR_VERSION >= 5)
-			GRID_WARN("Got ZK session event for an unknown election, "
+			GRID_WARN("Got ZK session event (-> %s) for an unknown election, "
 					"resetting all local elections using %s and "
 					"currently in MASTER state",
-					zoo_get_current_server(d->zh));
+					zoo_state2str(d->state), zoo_get_current_server(d->zh));
 #else
-			GRID_WARN("Got ZK session event for an unknown election, "
+			GRID_WARN("Got ZK session event (-> %s) for an unknown election, "
 					"resetting all local elections using %p and "
 					"currently in MASTER state",
-					d->zh);
+					zoo_state2str(d->state), d->zh);
 #endif
 			guint reset = _reset_matching_members(M, d->zh, STEP_MASTER);
 			GRID_WARN("%u MASTER elections reset", reset);
@@ -1878,24 +1880,10 @@ deferred_watch_COMMON(struct deferred_watcher_context_s *d,
 			transition(member, d->evt, NULL);
 			member_unref(member);
 			member_unlock(member);
-		} else if (M->members_by_state[STEP_MASTER].count > 0) {
-#if ZOO_MAJOR_VERSION > 3 || (ZOO_MAJOR_VERSION == 3 && ZOO_MINOR_VERSION >= 5)
-			GRID_WARN("Got %s event for an unknown election, "
-					"resetting all local elections using %s and "
-					"currently in MASTER state",
-					_evt2str(d->evt), zoo_get_current_server(d->zh));
-#else
-			GRID_WARN("Got %s event for an unknown election, "
-					"resetting all local elections using %p and "
-					"currently in MASTER state",
-					_evt2str(d->evt), d->zh);
-#endif
-			guint reset = _reset_matching_members(M, d->zh, STEP_MASTER);
-			GRID_WARN("%u MASTER elections reset", reset);
 		} else {
-			GRID_INFO("Got %s event for an unknown member. "
-					"No local MASTER election, but check for "
-					"'free slave' situations!",
+			GRID_DEBUG("Got %s event for an unknown member. "
+					"That's fine, probably just a slow callback "
+					"for an expired election.",
 					_evt2str(d->evt));
 		}
 	}
@@ -2288,13 +2276,18 @@ _result_GETVERS (GError *enet, struct election_member_s *m,
 		if (err && err->code == CODE_CONTAINER_NOTFOUND) {
 			/* We don't have the base! If we are here, we can suppose we have
 			 * already checked that we are actually in the list of peers of
-			 * the election. We must ask for a fresh copy of the base. */
+			 * the election. We must ask for a fresh copy of the base.
+			 * Update 2019-06-26: get_version() is supposed to create an
+			 * empty(ish) database (with only the schema). */
+			GRID_NOTICE("BUG: get_version() should create the database file, "
+					"but returned: (%d) %s (reqid=%s)",
+					err->code, err->message, oio_ext_get_reqid());
 			g_clear_error(&err);
 			err = NEWERROR(CODE_PIPEFROM, "Local database missing");
 		} else if (err) {
-			GRID_WARN("GETVERS error [%s.%s]: (%d) %s",
+			GRID_WARN("GETVERS error [%s.%s]: (%d) %s (reqid=%s)",
 					m->inline_name.base, m->inline_name.type,
-					err->code, err->message);
+					err->code, err->message, oio_ext_get_reqid());
 		}
 	}
 
@@ -2303,7 +2296,7 @@ _result_GETVERS (GError *enet, struct election_member_s *m,
 		err = version_validate_diff(vlocal, vremote, &worst);
 		if (NULL != err) {
 			if (err->code == CODE_PIPETO) {
-				GRID_DEBUG("Remote outdated : (%d) %s",
+				GRID_DEBUG("Remote outdated: (%d) %s",
 						err->code, err->message);
 				g_clear_error(&err);
 			}

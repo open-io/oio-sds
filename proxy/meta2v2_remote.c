@@ -313,9 +313,13 @@ m2v2_remote_pack_DRAIN(struct oio_url_s *url, gint64 dl)
 }
 
 GByteArray*
-m2v2_remote_pack_DEL(struct oio_url_s *url, gint64 dl)
+m2v2_remote_pack_DEL(struct oio_url_s *url, const gchar* force_versioning, gint64 dl)
 {
-	return _m2v2_pack_request_with_flags(NAME_MSGNAME_M2V2_DEL, url, NULL, 0, dl);
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_DEL, url, NULL, dl);
+	if (force_versioning) {
+		metautils_message_add_field_str(msg, NAME_MSGKEY_FORCE_VERSIONING, force_versioning);
+	}
+	return message_marshall_gba_and_clean(msg);
 }
 
 GByteArray*

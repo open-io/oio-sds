@@ -1103,11 +1103,16 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
 		struct sqlx_repctx_s *repctx = NULL;
-		const gint64 max_versions = _maxvers(sq3);
+		gint64 max_versions = _maxvers(sq3);
 		GSList *deleted_beans = NULL;
 		GSList *deleted_objects = NULL;
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
+			if (oio_ext_get_force_versioning()) {
+				GRID_DEBUG("Updating max_version: %s", oio_ext_get_force_versioning());
+				max_versions = atoi(oio_ext_get_force_versioning());
+				m2db_set_max_versions(sq3, max_versions);
+			}
 			if (!(err = m2db_delete_alias(sq3, max_versions, url,
 					_bean_list_cb, &deleted_beans))) {
 				if (deleted_beans) {
