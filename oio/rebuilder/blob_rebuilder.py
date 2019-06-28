@@ -19,10 +19,10 @@ from datetime import datetime
 from socket import gethostname
 
 from oio.common.json import json
-from oio.common.green import threading
+from oio.common.green import threading, sleep
 from oio.common.easy_value import int_value, true_value
 from oio.common.exceptions import ContentNotFound, NotFound, OrphanChunk, \
-    ConfigurationException, OioTimeout, ExplicitBury
+    ConfigurationException, OioTimeout, ExplicitBury, OioException, RetryLater
 from oio.event.beanstalk import BeanstalkdListener, BeanstalkdSender, \
     BeanstalkError
 from oio.content.factory import ContentFactory
@@ -31,6 +31,7 @@ from oio.rebuilder.rebuilder import Rebuilder, RebuilderWorker
 
 
 DEFAULT_REBUILDER_TUBE = 'oio-rebuild'
+DEFAULT_RETRY_DELAY = 3600
 DISTRIBUTED_REBUILDER_TIMEOUT = 300
 
 
@@ -49,12 +50,17 @@ class BlobRebuilder(Rebuilder):
         self.try_chunk_delete = try_chunk_delete
         # beanstalk
         if beanstalkd_addr:
+            beanstalkd_tube = conf.get('beanstalkd_tube',
+                                       DEFAULT_REBUILDER_TUBE)
             self.beanstalkd_listener = BeanstalkdListener(
-                beanstalkd_addr,
-                conf.get('beanstalkd_tube', DEFAULT_REBUILDER_TUBE),
-                self.logger, **kwargs)
+                beanstalkd_addr, beanstalkd_tube, self.logger, **kwargs)
+            self.retryer = BeanstalkdSender(
+                beanstalkd_addr, beanstalkd_tube, self.logger, **kwargs)
         else:
             self.beanstalkd_listener = None
+            self.retryer = None
+        self.retry_delay = int_value(self.conf.get('retry_delay'),
+                                     DEFAULT_RETRY_DELAY)
         # counters
         self.bytes_processed = 0
         self.total_bytes_processed = 0
@@ -70,6 +76,21 @@ class BlobRebuilder(Rebuilder):
         chunks = self._fetch_chunks(**kwargs)
         for chunk in chunks:
             queue.put(chunk)
+
+    def _read_retry_queue(self, queue, **kwargs):
+        while True:
+            # Reschedule jobs we were not able to handle.
+            chunk = queue.get()
+            if self.retryer:
+                sent = False
+                while not sent:
+                    sent = self.retryer.send_job(
+                        self._event_from_broken_chunk(chunk, **kwargs),
+                        delay=self.retry_delay)
+                    if not sent:
+                        sleep(1.0)
+                self.retryer.job_done()
+            queue.task_done()
 
     def _item_to_string(self, chunk, **kwargs):
         cid, content_id, chunk_id_or_pos, _ = chunk
@@ -153,7 +174,7 @@ class BlobRebuilder(Rebuilder):
                 self.rdir_client.admin_unlock(self.volume)
         return success
 
-    def _event_from_broken_chunk(self, chunk, reply, **kwargs):
+    def _event_from_broken_chunk(self, chunk, reply=None, **kwargs):
         cid, content_id, chunk_id_or_pos, _ = chunk
         event = {}
         event['when'] = time.time()
@@ -161,7 +182,8 @@ class BlobRebuilder(Rebuilder):
         event['data'] = {'missing_chunks': [chunk_id_or_pos]}
         event['url'] = {'ns': self.namespace,
                         'id': cid, 'content': content_id}
-        event['reply'] = reply
+        if reply:
+            event['reply'] = reply
         return json.dumps(event)
 
     def _chunks_from_event(self, job_id, data, **kwargs):
@@ -278,7 +300,7 @@ class DistributedBlobRebuilder(BlobRebuilder):
 
         def _send_broken_chunk(broken_chunk, local_index):
             event = self._event_from_broken_chunk(
-                broken_chunk, reply, **kwargs)
+                broken_chunk, reply=reply, **kwargs)
             # Send the event with a non-full sender
             while True:
                 for _ in range(sender_count):
@@ -334,8 +356,20 @@ class BlobRebuilderWorker(RebuilderWorker):
                                       chunk_id_or_pos, **kwargs)
             return 0
         else:
-            return self.chunk_rebuild(container_id, content_id,
-                                      chunk_id_or_pos, **kwargs)
+            try:
+                return self.chunk_rebuild(container_id, content_id,
+                                          chunk_id_or_pos, **kwargs)
+            except OioException as exc:
+                _, _, _, more = chunk
+                # Schedule a retry only if the sender did not set reply address
+                # (rebuild CLIs set reply address, meta2 does not).
+                if not isinstance(exc, OrphanChunk) \
+                        and not more.get('reply', None):
+                    raise RetryLater(
+                        chunk, 'Cannot rebuild chunk %s: %s' % (
+                            self.rebuilder._item_to_string(chunk, **kwargs),
+                            exc))
+                raise
 
     def update_processed(self, chunk, bytes_processed, error=None, **kwargs):
         container_id, content_id, chunk_id_or_pos, more = chunk
