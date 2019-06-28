@@ -36,7 +36,7 @@ class Rebuilder(object):
 
     DEFAULT_REPORT_INTERVAL = 3600
     DEFAULT_ITEM_PER_SECOND = 30
-    DEFAULT_WORKERS = 1
+    DEFAULT_CONCURRENCY = 1
 
     def __init__(self, conf, logger, volume, input_file=None, **kwargs):
         # pylint: disable=no-member
@@ -45,7 +45,8 @@ class Rebuilder(object):
         self.namespace = conf['namespace']
         self.volume = volume
         self.input_file = input_file
-        self.nworkers = int_value(conf.get('workers'), self.DEFAULT_WORKERS)
+        self.concurrency = int_value(conf.get('concurrency'),
+                                     self.DEFAULT_CONCURRENCY)
         # counters
         self.lock_counters = threading.Lock()
         self.items_processed = 0
@@ -64,14 +65,14 @@ class Rebuilder(object):
         self.log_report('START', force=True)
 
         workers = list()
-        with ContextPool(self.nworkers + 1) as pool:
+        with ContextPool(self.concurrency + 1) as pool:
             # spawn one worker for the retry queue
-            rqueue = eventlet.Queue(self.nworkers)
+            rqueue = eventlet.Queue(self.concurrency)
             pool.spawn(self._read_retry_queue, rqueue, **kwargs)
 
             # spawn workers to rebuild
-            queue = eventlet.Queue(self.nworkers*10)
-            for i in range(self.nworkers):
+            queue = eventlet.Queue(self.concurrency*10)
+            for i in range(self.concurrency):
                 worker = self._create_worker(**kwargs)
                 workers.append(worker)
                 pool.spawn(worker.rebuilder_pass, i, queue,

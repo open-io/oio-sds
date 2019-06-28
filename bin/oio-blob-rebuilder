@@ -66,9 +66,9 @@ tube for broken chunks events.
 
     # local
     parser.add_argument(
-        '--workers', type=int,
-        help='Number of workers. '
-             '(default=%d)' % BlobRebuilder.DEFAULT_WORKERS)
+        '--concurrency', '--workers', type=int,
+        help='Number of coroutines to spawn. '
+             '(default=%d)' % BlobRebuilder.DEFAULT_CONCURRENCY)
     parser.add_argument(
         '--chunks-per-second', type=int,
         help='Max chunks per second. '
@@ -97,7 +97,7 @@ tube for broken chunks events.
         help='Send broken chunks to beanstalkd tubes '
              'instead of rebuilding them locally '
              '(the following options are ignored: '
-             '--workers, --chunks-per-second, --delete-faulty-chunks).')
+             '--concurrency, --chunks-per-second, --delete-faulty-chunks).')
     parser.add_argument(
         '--distributed-tube',
         help='The beanstalkd tube to use to send the broken chunks. '
@@ -121,7 +121,7 @@ def main():
     # input
     conf['beanstalkd_worker_tube'] = args.beanstalkd_tube
     # local
-    conf['workers'] = args.workers
+    conf['concurrency'] = args.concurrency
     conf['items_per_second'] = args.chunks_per_second
     conf['dry_run'] = args.dry_run
     conf['try_chunk_delete'] = args.delete_faulty_chunks

@@ -282,9 +282,9 @@ The beanstalkd tube to use to send the items to rebuild. (default=%s)
                 help=distributed_tube_help)
         else:  # local
             parser.add_argument(
-                '--workers', type=int,
-                help='Number of workers. '
-                     '(default=%d)' % self.tool_class.DEFAULT_WORKERS)
+                '--concurrency', type=int,
+                help='Number of coroutines to spawn. '
+                     '(default=%d)' % self.tool_class.DEFAULT_CONCURRENCY)
 
     def check_and_load_parsed_args(self, app, parsed_args):
         self.tool_conf.update(app.client_manager.client_conf)
@@ -294,4 +294,4 @@ The beanstalkd tube to use to send the items to rebuild. (default=%s)
             self.tool_conf['distributed_beanstalkd_worker_tube'] = \
                 parsed_args.distributed_tube
         else:  # local
-            self.tool_conf['workers'] = parsed_args.workers
+            self.tool_conf['concurrency'] = parsed_args.concurrency
