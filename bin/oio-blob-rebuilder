@@ -74,6 +74,12 @@ tube for broken chunks events.
         metavar='LISTENER_TUBE',
         help='The beanstalkd tube to use to listen (default: "%s")'
              % DEFAULT_REBUILDER_TUBE)
+    parser.add_argument('--retry-delay', type=int,
+                        help=('Delay to wait before rescheduling a job that '
+                              'could not be handled. '
+                              'Only works with "--beanstalkd". '
+                              'Defaults to 3600s.'),
+                        default=3600)
     distributed_help = "Send broken chunks to beanstalkd tubes " \
                        "instead of rebuilding them locally " \
                        "(the following options are ignored: " \
@@ -112,6 +118,8 @@ def main():
 
     if args.beanstalkd_tube is not None:
         conf['beanstalkd_tube'] = args.beanstalkd_tube
+    if args.retry_delay is not None:
+        conf['retry_delay'] = args.retry_delay
     if args.distributed_tube is not None:
         conf['distributed_tube'] = args.distributed_tube
     if args.rdir_fetch_limit is not None:

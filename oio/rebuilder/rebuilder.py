@@ -191,7 +191,7 @@ class RebuilderWorker(object):
                 info = self._rebuild_one(item, **kwargs)
             except exceptions.RetryLater as exc:
                 if retry_queue:
-                    self.logger.debug(
+                    self.logger.warn(
                         "Putting an item in the retry queue: %s", exc.args[1])
                     retry_queue.put(exc.args[0])
                 else:
