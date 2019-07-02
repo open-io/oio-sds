@@ -18,7 +18,9 @@
 import argparse
 import sys
 
+from oio.cli import make_logger_args_parser, get_logger_from_args
 from oio.directory.meta1 import Meta1RefMapping
+
 
 def make_arg_parser():
     descr = """
@@ -26,7 +28,8 @@ def make_arg_parser():
     If the destination service isn't set,
     a destination service is automatically selected.
     """
-    parser = argparse.ArgumentParser(description=descr)
+    parser = argparse.ArgumentParser(description=descr,
+                                     parents=[make_logger_args_parser()])
     parser.add_argument('namespace',
                         metavar='<namespace>',
                         help="Namespace")
@@ -48,10 +51,11 @@ def make_arg_parser():
 
 if __name__ == '__main__':
     args = make_arg_parser().parse_args()
+    logger = get_logger_from_args(args)
 
     moved_ok = None
     try:
-        mapping = Meta1RefMapping(args.namespace)
+        mapping = Meta1RefMapping(args.namespace, logger=logger)
         moved = mapping.move(args.src_service, args.dest_service, args.base,
                              'meta2')
         kwargs = {'src_service': args.src_service}
