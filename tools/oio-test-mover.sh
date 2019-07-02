@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 
-NAMESPACE=$($(which oio-test-config.py) -n)
-META1_DIGITS=$($(which oio-test-config.py) -v meta1_digits)
-CLI=$(which openio)
+NAMESPACE=$($(command -v oio-test-config.py) -n)
+META1_DIGITS=$($(command -v oio-test-config.py) -v meta1_digits)
+CLI=$(command -v openio)
+M2_MOVER="$(command -v oio-meta2-mover)"
 
 SVCID_ENABLED=$(openio cluster list rawx -c 'Service Id' -f value | grep -v 'n/a')
 
@@ -108,7 +109,7 @@ oio_meta2_mover()
     exit 1
   fi
   if [ "${META2_COPY}" -ge "$(echo "${ALL_META2}" | wc -l)" ]; then
-    printf "\noio-meta2-rebuilder: SKIP (need more meta2 to run)\n"
+    printf "\noio-meta2-mover: SKIP (need more meta2 to run)\n"
     return
   fi
   ALL_META1=$(${CLI} cluster list meta1 -c Addr -c "Service Id" -c Volume -f value)
@@ -125,7 +126,7 @@ oio_meta2_mover()
   echo "Copy the volume ${META2_IP_TO_MOVE} (${META2_ID})"
   if [ "$(/usr/bin/find "${META2_LOC_TO_MOVE}" -type f 2> /dev/null \
       | /usr/bin/wc -l)" -eq 0 ]; then
-    echo "No base for the meta2 ${META2_IP_TO_MOVE} (${META2_ID})"
+    echo "No base found in the volume of meta2 ${META2_IP_TO_MOVE} (${META2_ID})"
     printf "${RED}\noio-meta2-mover: FAILED\n${NO_COLOR}"
     exit 1
   fi
@@ -198,16 +199,16 @@ oio_meta2_mover()
     SEQ=$( echo "${FILE}" | /usr/bin/cut -d'.' -f2)
 
     if [ -z "${DEST_ID}" ]; then
-      echo "oio-meta2-mover ${NAMESPACE} ${BASE}.${SEQ} ${META2_ID}"
-      if ! $(which oio-meta2-mover) "${NAMESPACE}" "${BASE}" \
+      echo "$M2_MOVER ${NAMESPACE} ${BASE}.${SEQ} ${META2_ID}"
+      if ! $M2_MOVER "${NAMESPACE}" "${BASE}" \
           "${META2_ID}" &> /dev/null; then
         echo "${META2}: oio-meta2-mover failed"
         FAIL=true
       fi
     else
-      echo "oio-meta2-mover ${NAMESPACE} ${BASE}.${SEQ} ${META2_ID}" \
+      echo "$M2_MOVER ${NAMESPACE} ${BASE}.${SEQ} ${META2_ID}" \
           "${DEST_ID}"
-      if ! $(which oio-meta2-mover) "${NAMESPACE}" "${BASE}" \
+      if ! $M2_MOVER "${NAMESPACE}" "${BASE}" \
           "${META2_ID}" "${DEST_ID}" &> /dev/null; then
         echo "${META2}: oio-meta2-mover failed"
         FAIL=true
@@ -238,12 +239,12 @@ oio_meta2_mover()
       if ! PEERS_AFTER=$(/usr/bin/sqlite3 "${META1}" \
           "SELECT url FROM services WHERE hex(services.cid) == '${BASE}' and srvtype == 'meta2' and seq == '${SEQ}'" \
           2> /dev/null | /usr/bin/tr ',' '\n'); then
-        echo "${META2}: sqlite3 failed for the meta1 ${META1_ID}"
+        echo "${META2}: sqlite3 failed for meta1 ${META1_ID}"
         FAIL=true
         continue
       fi
       if [ -z "${PEERS_AFTER}" ]; then
-        echo "${META2}: No peer for the meta1 ${META1_ID}"
+        echo "${META2}: No peer for meta1 ${META1_ID}"
         FAIL=true
         continue
       fi
@@ -252,7 +253,7 @@ oio_meta2_mover()
       IFS=$'\n'
       for PEER_ID in $(echo "${PEERS_TO_KEEP}"); do
         if ! echo "${PEERS_AFTER_COPY}" | /bin/grep -q "${PEER_ID}" ; then
-          echo "${META2}: Missing IP (${PEER_ID}) for the meta1 ${META1_ID}"
+          echo "${META2}: Missing IP (${PEER_ID}) for meta1 ${META1_ID}"
           FAIL=true
           continue
         fi
@@ -261,23 +262,23 @@ oio_meta2_mover()
       done
       IFS=$OLD_IFS
       if [ "$(echo "${PEERS_AFTER_COPY}" | /usr/bin/wc -l)" -ne 1 ]; then
-        echo "${META2}: Missing destination for the meta1 ${META1_ID}"
+        echo "${META2}: Missing destination for meta1 ${META1_ID}"
         FAIL=true
         continue
       fi
       if [ "${PEERS_AFTER_COPY}" == "${META2_ID}" ]; then
-        echo "${META2}: Source still present for the meta1 ${META1_ID}"
+        echo "${META2}: Source still present for meta1 ${META1_ID}"
         FAIL=true
         continue
       fi
       if [ -n "${DEST_ID}" ] && [ "${DEST_ID}" != "${PEERS_AFTER_COPY}" ]; then
-        echo "${META2}: Wrong destination for the meta1 ${META1_ID}"
+        echo "${META2}: Wrong destination for meta1 ${META1_ID}"
         FAIL=true
         continue
       fi
       if [ -n "${REAL_DEST_ID}" ] \
           && [ "${REAL_DEST_ID}" != "${PEERS_AFTER_COPY}" ]; then
-        echo "${META2}: Differente destination for the meta1 ${META1_ID}"
+        echo "${META2}: Different destination for meta1 ${META1_ID}"
         FAIL=true
         continue
       fi
@@ -293,14 +294,14 @@ oio_meta2_mover()
           | /usr/bin/cut -d' ' -f3)
       META2_AFTER=$(/bin/ls "${PEER_LOC}/"*"/${FILE}")
       if ! [ -f "${META2_AFTER}" ]; then
-        echo "${META2}: Missing base for the meta2 ${PEER_ID}"
+        echo "${META2}: Missing base for meta2 ${PEER_ID}"
         FAIL=true
         continue
       fi
       if ! PEERS_AFTER_BIS=$(/usr/bin/sqlite3 "${META2_AFTER}" \
           "SELECT v FROM admin where k == 'sys.peers'" 2> /dev/null \
           | /usr/bin/tr ',' '\n'); then
-        echo "${META2}: sqlite3 failed for the meta2 ${PEER_ID}"
+        echo "${META2}: sqlite3 failed for meta2 ${PEER_ID}"
         FAIL=true
         continue
       fi
@@ -308,7 +309,7 @@ oio_meta2_mover()
       IFS=$'\n'
       for PEER_ID_BIS in $(echo "${PEERS_AFTER}"); do
         if ! echo "${PEERS_AFTER_BIS}" | /bin/grep -q "${PEER_ID_BIS}"; then
-          echo "${META2}: Missing ID (${PEER_ID_BIS}) for the meta2 ${PEER_ID}"
+          echo "${META2}: Missing ID (${PEER_ID_BIS}) for meta2 ${PEER_ID}"
           FAIL=true
           continue
         fi
@@ -316,7 +317,7 @@ oio_meta2_mover()
       done
       IFS=$OLD_IFS
       if [ -n "${PEERS_AFTER_BIS}" ]; then
-        echo "${META2}: Too many peers for the meta2 ${PEER_ID}"
+        echo "${META2}: Too many peers for meta2 ${PEER_ID}"
         FAIL=true
         continue
       fi
@@ -324,14 +325,14 @@ oio_meta2_mover()
       if ! VERSION_AFTER_BIS=$(/usr/bin/sqlite3 "${META2_AFTER}" \
           "SELECT v FROM admin where k == 'version:main.admin'" \
           2> /dev/null); then
-        echo "${META2}: sqlite3 failed for the meta2 ${PEER_ID}"
+        echo "${META2}: sqlite3 failed for meta2 ${PEER_ID}"
         FAIL=true
         continue
       fi
       if [ -z "${VERSION_AFTER}" ]; then
         VERSION_AFTER=$VERSION_AFTER_BIS
       elif [ "${VERSION_AFTER_BIS}" != "${VERSION_AFTER}" ]; then
-        echo "${META2}: Differente version for the meta2 ${PEER_ID}"
+        echo "${META2}: Different version for meta2 ${PEER_ID}"
         FAIL=true
         continue
       fi
@@ -340,24 +341,24 @@ oio_meta2_mover()
       /bin/cp -a "${META2_AFTER}" "${TMP_FILE_AFTER}"
       if ! /usr/bin/sqlite3 "${TMP_FILE_BEFORE}" \
           "DELETE FROM admin WHERE k == 'sys.peers' or k == 'version:main.admin'" &> /dev/null; then
-        echo "${META2}: sqlite3 failed for the meta2 ${PEER_ID}"
+        echo "${META2}: sqlite3 failed for meta2 ${PEER_ID}"
         FAIL=true
         continue
       fi
       if ! /usr/bin/sqlite3 "${TMP_FILE_AFTER}" \
           "DELETE FROM admin WHERE k == 'sys.peers' or k == 'version:main.admin'" &> /dev/null; then
-        echo "${META2}: sqlite3 failed for the meta2 ${PEER_ID}"
+        echo "${META2}: sqlite3 failed for meta2 ${PEER_ID}"
         FAIL=true
         continue
       fi
       if ! DIFF=$(mysqldiff "${TMP_FILE_BEFORE}" "${TMP_FILE_AFTER}" \
           2> /dev/null); then
-        echo "${META2}: sqldiff failed for the meta2 ${PEER_ID}"
+        echo "${META2}: sqldiff failed for meta2 ${PEER_ID}"
         FAIL=true
         continue
       fi
       if [ -n "${DIFF}" ]; then
-        echo "${META2}: Wrong content for the meta2 ${PEER_ID}"
+        echo "${META2}: Difference found for meta2 ${PEER_ID}"
         FAIL=true
         continue
       fi
@@ -373,7 +374,7 @@ oio_meta2_mover()
       continue
     fi
     if [ -z "${PEERS_AFTER_BIS}" ]; then
-      echo "${META2}: No meta2 peer for the 'container locate'"
+      echo "${META2}: No meta2 peer reported by 'container locate'"
       FAIL=true
       continue
     fi
@@ -382,7 +383,7 @@ oio_meta2_mover()
     IFS=$'\n'
     for PEER_ID in $(echo "${PEERS_AFTER}"); do
       if ! echo "${PEERS_AFTER_BIS}" | /bin/grep -q "${PEER_ID}"; then
-        echo "${META2}: Missing ID (${PEER_ID}) for the 'container locate'"
+        echo "${META2}: Missing ID (${PEER_ID}) in the output of 'container locate'"
         FAIL=true
         continue
       fi
@@ -390,17 +391,19 @@ oio_meta2_mover()
     done
     IFS=$OLD_IFS
     if [ -n "${PEERS_AFTER_BIS}" ]; then
-      echo "${META2}: Too many peers for the 'container locate'"
+      echo "${META2}: Too many peers reported by 'container locate'"
       FAIL=true
       continue
     fi
   done
 
   if [ "$(/usr/bin/find "${META2_LOC_TO_MOVE}" -type f 2> /dev/null \
-      | /usr/bin/wc -l)" -ne 0 ]; then
-    echo "Not empty for the meta2 ${META2_IP_TO_MOVE} (${META2_ID})"
+      | tee "${TMPDIR:-/tmp}/unwanted_files.txt" | /usr/bin/wc -l)" -ne 0 ]; then
+    echo "Extra files found for meta2 ${META2_IP_TO_MOVE} (${META2_ID}):"
+    cat "${TMPDIR:-/tmp}/unwanted_files.txt"
     FAIL=true
   fi
+  rm -f "${TMPDIR:-/tmp}/unwanted_files.txt"
 
   if [ "${FAIL}" = true ]; then
     printf "${RED}\noio-meta2-mover: FAILED\n${NO_COLOR}"
