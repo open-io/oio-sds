@@ -156,6 +156,7 @@ _init_notifiers(struct meta2_backend_s *m2, const char *ns)
 	INIT(m2->notifier_container_created, oio_meta2_tube_container_new);
 	INIT(m2->notifier_container_deleted, oio_meta2_tube_container_deleted);
 	INIT(m2->notifier_container_state, oio_meta2_tube_container_state);
+	INIT(m2->notifier_container_updated, oio_meta2_tube_container_updated);
 
 	INIT(m2->notifier_content_created, oio_meta2_tube_content_created);
 	INIT(m2->notifier_content_appended, oio_meta2_tube_content_appended);
@@ -230,6 +231,7 @@ meta2_backend_clean(struct meta2_backend_s *m2)
 	CLEAN(m2->notifier_container_created);
 	CLEAN(m2->notifier_container_deleted);
 	CLEAN(m2->notifier_container_state);
+	CLEAN(m2->notifier_container_updated);
 
 	CLEAN(m2->notifier_content_created);
 	CLEAN(m2->notifier_content_appended);
@@ -724,8 +726,15 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 			return err;
 		}
 		GString *gs = oio_event__create(META2_EVENTS_PREFIX".container.new", url);
-		g_string_append_static(gs, ",\"data\":{\"properties\":");
-		KV_encode_gstr2(gs, params->properties);
+		struct db_properties_s *db_properties = db_properties_new();
+		if (params->properties) {
+			for (gchar **p=params->properties; *p && *(p+1); p+=2) {
+				db_properties_add(db_properties, *p, *(p+1));
+			}
+		}
+		g_string_append_static(gs, ",\"data\":{");
+		db_properties_to_json(db_properties, gs);
+		db_properties_free(db_properties);
 		g_string_append_c(gs, ',');
 		g_string_append(gs, peers_list->str);
 		g_string_free(peers_list, TRUE);
@@ -1839,6 +1848,20 @@ meta2_backend_change_callback(struct sqlx_sqlite3_s *sq3,
 	}
 	g_free(user);
 	g_free(account);
+}
+
+void
+meta2_backend_db_properties_change_callback(struct sqlx_sqlite3_s *sq3 UNUSED,
+		struct meta2_backend_s *m2b, struct oio_url_s *url,
+		struct db_properties_s *db_properties)
+{
+	GString *event = oio_event__create_with_id(
+			META2_EVENTS_PREFIX ".container.update", url, oio_ext_get_reqid());
+	g_string_append_static(event, ",\"data\":{");
+	db_properties_to_json(db_properties, event);
+	g_string_append_static(event, "}}");
+	oio_events_queue__send(m2b->notifier_container_updated,
+			g_string_free(event, FALSE));
 }
 
 /**

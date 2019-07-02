@@ -1930,6 +1930,13 @@ _handler_RESYNC(struct gridd_reply_ctx_s *reply,
 /* ------------------------------------------------------------------------- */
 
 static gboolean
+_db_properties_add(gpointer key, gpointer value, gpointer data)
+{
+	db_properties_add(data, key, value);
+	return FALSE;
+}
+
+static gboolean
 _handler_PROPDEL(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
@@ -1938,6 +1945,7 @@ _handler_PROPDEL(struct gridd_reply_ctx_s *reply,
 	NAME2CONST(n0, name);
 	GError *err = NULL;
 	guint32 flags = 0;
+	struct db_properties_s *db_properties = NULL;
 
 	if (NULL != (err = _load_sqlx_name(reply, &name, &flags))) {
 		reply->send_error(0, err);
@@ -1961,18 +1969,21 @@ _handler_PROPDEL(struct gridd_reply_ctx_s *reply,
 	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
 		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERONLY;
 	err = sqlx_repository_open_and_lock(repo, &n0, how, &sq3, NULL);
-	if (err) {
-		reply->send_error(0, err);
-	} else {
-		struct sqlx_repctx_s *repctx = NULL;
-		if (!(flags & FLAG_LOCAL))
-			err = sqlx_transaction_begin(sq3, &repctx);
-		if (!err) {
-			if (!keys )
-				sqlx_admin_del_all_user (sq3);
-			else {
-				for (gchar **pk = keys; keys && *pk; ++pk)
-					sqlx_admin_del (sq3, *pk);
+	if (err)
+		goto label_exit;
+
+	db_properties = db_properties_new();
+	struct sqlx_repctx_s *repctx = NULL;
+	if (!(flags & FLAG_LOCAL))
+		err = sqlx_transaction_begin(sq3, &repctx);
+	if (!err) {
+		if (!keys)
+			sqlx_admin_del_all_user(sq3, _db_properties_add,
+					db_properties);
+		else {
+			for (gchar **pk = keys; keys && *pk; ++pk) {
+				sqlx_admin_del(sq3, *pk);
+				db_properties_add(db_properties, *pk, NULL);
 			}
 		}
 
@@ -1981,14 +1992,27 @@ _handler_PROPDEL(struct gridd_reply_ctx_s *reply,
 		} else {
 			sqlx_admin_save_lazy_tnx (sq3);
 		}
-
-		sqlx_repository_unlock_and_close_noerror(sq3);
-		if (err)
-			reply->send_error(0, err);
-		else
-			reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
+	if (!err && db_properties) {
+		struct oio_url_s *url = metautils_message_extract_url(
+				reply->request);
+		sqlx_repository_call_db_properties_change_callback(
+				sq3, url, db_properties);
+		oio_url_clean(url);
+	}
+
+	sqlx_repository_unlock_and_close_noerror(sq3);
+
+label_exit:
+	if (err) {
+		reply->send_error(0, err);
+	} else {
+		reply->send_reply(CODE_FINAL_OK, "OK");
+	}
+
+	if (db_properties)
+		db_properties_free(db_properties);
 	if (keys)
 		g_strfreev(keys);
 	return TRUE;
@@ -2050,6 +2074,7 @@ _handler_PROPSET(struct gridd_reply_ctx_s *reply,
 	NAME2CONST(n0, name);
 	GError *err;
 	guint32 flags = 0;
+	struct db_properties_s *db_properties = NULL;
 
 	/* Extraction */
 	if (NULL != (err = _load_sqlx_name(reply, &name, &flags))) {
@@ -2072,49 +2097,66 @@ _handler_PROPSET(struct gridd_reply_ctx_s *reply,
 	for (gchar **p=pairs; !err && *p && *(p+1); p+=2) {
 		if (!(flags & FLAG_NOCHECK)
 				&& !g_str_has_prefix (*p, SQLX_ADMIN_PREFIX_SYS)
-				&& !g_str_has_prefix (*p, SQLX_ADMIN_PREFIX_USER))
+				&& !g_str_has_prefix (*p, SQLX_ADMIN_PREFIX_USER)) {
 			err = NEWERROR(CODE_BAD_REQUEST, "Invalid property name");
+			break;
+		}
 	}
-	if (NULL != err)
+	if (err)
 		goto label_exit;
 
 	/* Open */
 	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
 			? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERONLY;
 	err = sqlx_repository_open_and_lock(repo, &n0, how, &sq3, NULL);
-	if (err) {
+	if (err)
 		goto label_exit;
-	}
 
+	db_properties = db_properties_new();
 	/* Action */
 	struct sqlx_repctx_s *repctx = NULL;
 	if (!(flags & FLAG_LOCAL))
 		err = sqlx_transaction_begin(sq3, &repctx);
-	if (NULL == err) {
+	if (!err) {
 		if (flags & FLAG_FLUSH)
-			sqlx_admin_del_all_user (sq3);
+			sqlx_admin_del_all_user(sq3, _db_properties_add,
+					db_properties);
 		/* insertion */
 		for (gchar **p=pairs; !err && *p && *(p+1); p+=2) {
 			if (oio_str_is_set(*(p+1))) {
-				sqlx_admin_set_str (sq3, *p, *(p+1));
+				sqlx_admin_set_str(sq3, *p, *(p+1));
 			} else {
-				sqlx_admin_del (sq3, *p);
+				sqlx_admin_del(sq3, *p);
 			}
+			db_properties_add(db_properties, *p, *(p+1));
 		}
 
 		if (repctx) {
 			err = sqlx_transaction_end(repctx, err);
 		} else {
-			sqlx_admin_save_lazy_tnx (sq3);
+			sqlx_admin_save_lazy_tnx(sq3);
 		}
 	}
+
+	if (!err && db_properties) {
+		struct oio_url_s *url = metautils_message_extract_url(
+				reply->request);
+		sqlx_repository_call_db_properties_change_callback(
+				sq3, url, db_properties);
+		oio_url_clean(url);
+	}
+
 	sqlx_repository_unlock_and_close_noerror(sq3);
 
 label_exit:
-	if (NULL != err)
+	if (err) {
 		reply->send_error(0, err);
-	else
+	} else {
 		reply->send_reply(CODE_FINAL_OK, "OK");
+	}
+
+	if (db_properties)
+		db_properties_free(db_properties);
 	g_strfreev(pairs);
 	return TRUE;
 }

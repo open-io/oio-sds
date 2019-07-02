@@ -79,6 +79,11 @@
 				"limit": 64, "def": "oio", "descr": "" },
 
 			{ "type": "string",
+				"name": "oio_meta2_tube_container_updated",
+				"key": "meta2.tube.container_updated",
+				"limit": 64, "def": "oio", "descr": "" },
+
+			{ "type": "string",
 				"name": "oio_meta2_tube_content_created",
 				"key": "meta2.tube.content_created",
 				"limit": 64, "def": "oio", "descr": "" },

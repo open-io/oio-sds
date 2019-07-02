@@ -48,6 +48,7 @@ struct meta2_backend_s
 	struct oio_events_queue_s *notifier_container_created;
 	struct oio_events_queue_s *notifier_container_deleted;
 	struct oio_events_queue_s *notifier_container_state;
+	struct oio_events_queue_s *notifier_container_updated;
 
 	struct oio_events_queue_s *notifier_content_created;
 	struct oio_events_queue_s *notifier_content_appended;

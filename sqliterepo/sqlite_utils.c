@@ -140,7 +140,8 @@ sqlx_admin_del(struct sqlx_sqlite3_s *sq3, const gchar *k)
 }
 
 void
-sqlx_admin_del_all_user(struct sqlx_sqlite3_s *sq3)
+sqlx_admin_del_all_user(struct sqlx_sqlite3_s *sq3, GTraverseFunc func,
+		gpointer data)
 {
 	gboolean runner(gchar *k, struct _cache_entry_s *v, gpointer i UNUSED) {
 		if (v->flag_deleted)
@@ -149,6 +150,7 @@ sqlx_admin_del_all_user(struct sqlx_sqlite3_s *sq3)
 			v->flag_deleted = 1;
 			v->flag_changed = 1;
 			_dump_entry("change", k, v);
+			func(k, NULL, data);
 		}
 		return FALSE;
 	}
@@ -516,3 +518,69 @@ version_extract_from_admin_tree(GTree *t)
 	return v;
 }
 
+struct db_properties_s
+{
+	GTree *system;
+	GTree *user;
+};
+
+struct db_properties_s *
+db_properties_new(void)
+{
+	struct db_properties_s *db_properties = g_malloc0(
+		sizeof(struct db_properties_s));
+	db_properties->system = g_tree_new((GCompareFunc)g_strcmp0);
+	db_properties->user = g_tree_new((GCompareFunc)g_strcmp0);
+	return db_properties;
+}
+
+void
+db_properties_free(struct db_properties_s *db_properties)
+{
+	g_tree_destroy(db_properties->system);
+	g_tree_destroy(db_properties->user);
+	g_free(db_properties);
+}
+
+void
+db_properties_add(struct db_properties_s *db_properties,
+		gchar *key, gchar *value)
+{
+	if (!db_properties)
+		return;
+
+	if (g_str_has_prefix(key, SQLX_ADMIN_PREFIX_SYS)) {
+		g_tree_insert(db_properties->system, key, value);
+	} else if (g_str_has_prefix(key, SQLX_ADMIN_PREFIX_USER)) {
+		g_tree_insert(db_properties->user,
+				key + strlen(SQLX_ADMIN_PREFIX_USER), value);
+	}
+}
+
+GString *
+db_properties_to_json(
+		struct db_properties_s *db_properties, GString *json)
+{
+	if (!db_properties)
+		return NULL;
+
+	gboolean first = TRUE;
+	gboolean _property_to_json(gpointer key, gpointer value,
+			gpointer data UNUSED) {
+		if (first)
+			first = FALSE;
+		else
+			g_string_append_c(json, ',');
+
+		oio_str_gstring_append_json_pair(json, key, value);
+		return FALSE;
+	}
+
+	g_string_append_static(json, "\"system\":{");
+	g_tree_foreach(db_properties->system, _property_to_json, NULL);
+	first = TRUE;
+	g_string_append_static(json, "},\"properties\":{");
+	g_tree_foreach(db_properties->user, _property_to_json, NULL);
+	g_string_append_static(json, "}");
+	return json;
+}

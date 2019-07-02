@@ -172,6 +172,7 @@ meta2_filter_check_events_not_stalled (struct gridd_filter_ctx_s *ctx,
 	CHECK(m2b->notifier_container_created);
 	CHECK(m2b->notifier_container_deleted);
 	CHECK(m2b->notifier_container_state);
+	CHECK(m2b->notifier_container_updated);
 
 	CHECK(m2b->notifier_content_created);
 	CHECK(m2b->notifier_content_appended);

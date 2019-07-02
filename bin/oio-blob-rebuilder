@@ -64,6 +64,14 @@ tube for broken chunks events.
         help='The beanstalkd tube to use to listen. '
              '(default=%s)' % BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE)
 
+    # retry
+    parser.add_argument(
+        '--retry-delay', type=int,
+        help=('Delay to wait before rescheduling a job that could not be '
+              'handled. Only works with "--beanstalkd". '
+              '(default=%s)' % BlobRebuilder.DEFAULT_RETRY_DELAY),
+        default=3600)
+
     # local
     parser.add_argument(
         '--workers', type=int,
@@ -120,6 +128,8 @@ def main():
     conf['report_interval'] = args.report_interval
     # input
     conf['beanstalkd_worker_tube'] = args.beanstalkd_tube
+    # retry
+    conf['retry_delay'] = args.retry_delay
     # local
     conf['workers'] = args.workers
     conf['items_per_second'] = args.chunks_per_second

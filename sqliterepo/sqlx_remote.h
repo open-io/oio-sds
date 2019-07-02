@@ -77,15 +77,17 @@ GByteArray* sqlx_pack_DISABLE (const struct sqlx_name_s *name, gint64 deadline);
 GByteArray* sqlx_pack_DISABLE_DISABLED (const struct sqlx_name_s *name, gint64 deadline);
 
 GByteArray* sqlx_pack_PROPGET (const struct sqlx_name_s *name, gint64 deadline);
-GByteArray* sqlx_pack_PROPDEL (const struct sqlx_name_s *name, const gchar * const *k, gint64 deadline);
+GByteArray* sqlx_pack_PROPDEL (struct oio_url_s *url,
+		const struct sqlx_name_s *name, const gchar * const *k, gint64 deadline);
 
 /* @param kv a NULL-terminated array of strings, containing N pairs
  * with for 0 <= i < N:
  *   kv[2i] is the key
  *   kv[2i+1] if the value.
  */
-GByteArray* sqlx_pack_PROPSET_tab (const struct sqlx_name_s *name,
-		gboolean flush, gchar **kv, gint64 deadline);
+GByteArray* sqlx_pack_PROPSET_tab (struct oio_url_s *url,
+		const struct sqlx_name_s *name, gboolean flush, gchar **kv,
+		gint64 deadline);
 
 GByteArray* sqlx_pack_EXITELECTION(const struct sqlx_name_s *name, gint64 deadline);
 GByteArray* sqlx_pack_USE(const struct sqlx_name_s *name, const gboolean master,

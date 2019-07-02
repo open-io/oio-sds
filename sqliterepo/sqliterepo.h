@@ -46,6 +46,10 @@ typedef GError* (*sqlx_repo_open_hook)(struct sqlx_sqlite3_s *sq3,
 typedef void (*sqlx_repo_change_hook)(struct sqlx_sqlite3_s *sq3,
 		gpointer cb_data);
 
+typedef void (*sqlx_repo_db_properties_change_hook)(struct sqlx_sqlite3_s *sq3,
+		gpointer cb_data, struct oio_url_s *url,
+		struct db_properties_s *db_properties);
+
 typedef void (*sqlx_file_locator_f) (gpointer locator_data,
 		const struct sqlx_name_s *n, GString *file_name);
 
@@ -208,6 +212,14 @@ void sqlx_repository_configure_change_callback(sqlx_repository_t *repo,
 		sqlx_repo_change_hook cb, gpointer cb_data);
 
 void sqlx_repository_call_change_callback(struct sqlx_sqlite3_s *sq3);
+
+void sqlx_repository_configure_db_properties_change_callback(
+		sqlx_repository_t *repo,
+		sqlx_repo_db_properties_change_hook cb, gpointer cb_data);
+
+void sqlx_repository_call_db_properties_change_callback(
+		struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
+		struct db_properties_s *db_properties);
 
 /* Bases operations -------------------------------------------------------- */
 

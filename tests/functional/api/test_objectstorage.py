@@ -129,7 +129,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
         data = self._get_properties(name)
 
-        self.assertEqual(data['properties'], metadata)
+        self.assertDictEqual(data['properties'], metadata)
 
         # clean
         self._clean(name, True)
@@ -198,7 +198,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self._set_properties(name, metadata)
 
         data = self.api.container_get_properties(self.account, name)
-        self.assertEqual(data['properties'], metadata)
+        self.assertDictEqual(data['properties'], metadata)
 
         # clean
         self._clean(name, True)
@@ -242,6 +242,12 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             random_str(32): random_str(32),
             random_str(32): random_str(32),
         }
+        event_url = {
+            'ns': self.ns,
+            'account': self.account,
+            'user': name,
+            'id': cid_from_name(self.account, name)
+        }
 
         # container_set_properties on unknown container
         self.assertRaises(
@@ -254,7 +260,12 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # container_set_properties on existing container
         self.api.container_set_properties(self.account, name, metadata)
         data = self._get_properties(name)
-        self.assertEqual(data['properties'], metadata)
+        self.assertDictEqual(data['properties'], metadata)
+        event = self.wait_for_event(
+            'oio-preserved', type_=EventTypes.CONTAINER_UPDATE)
+        self.assertDictEqual(event_url, event['url'])
+        self.assertDictEqual({}, event['data']['system'])
+        self.assertDictEqual(metadata, event['data']['properties'])
 
         # container_set_properties
         key = random_str(32)
@@ -262,19 +273,43 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         metadata2 = {key: value}
         self._set_properties(name, metadata2)
         metadata.update(metadata2)
-
         data = self._get_properties(name)
-        self.assertEqual(data['properties'], metadata)
+        self.assertDictEqual(data['properties'], metadata)
+        event = self.wait_for_event(
+            'oio-preserved', type_=EventTypes.CONTAINER_UPDATE)
+        self.assertDictEqual(event_url, event['url'])
+        self.assertDictEqual({}, event['data']['system'])
+        self.assertDictEqual(metadata2, event['data']['properties'])
 
         # container_set_properties overwrite key
         key = metadata.keys().pop(0)
         value = random_str(32)
         metadata3 = {key: value}
-
         metadata.update(metadata3)
         self.api.container_set_properties(self.account, name, metadata3)
         data = self._get_properties(name)
-        self.assertEqual(data['properties'], metadata)
+        self.assertDictEqual(data['properties'], metadata)
+        event = self.wait_for_event(
+            'oio-preserved', type_=EventTypes.CONTAINER_UPDATE)
+        self.assertDictEqual(event_url, event['url'])
+        self.assertDictEqual({}, event['data']['system'])
+        self.assertDictEqual(metadata3, event['data']['properties'])
+
+        # container_set_properties and clear old keys
+        key = metadata.keys().pop(0)
+        value = random_str(32)
+        event_properties = {key: None for key in metadata}
+        metadata = {key: value}
+        event_properties.update(metadata)
+        self.api.container_set_properties(self.account, name, metadata,
+                                          clear=True)
+        data = self._get_properties(name)
+        self.assertDictEqual(data['properties'], metadata)
+        event = self.wait_for_event(
+            'oio-preserved', type_=EventTypes.CONTAINER_UPDATE)
+        self.assertDictEqual(event_url, event['url'])
+        self.assertDictEqual({}, event['data']['system'])
+        self.assertDictEqual(event_properties, event['data']['properties'])
 
         # clean
         self._clean(name, True)
@@ -284,30 +319,56 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             exc.NoSuchContainer, self.api.container_set_properties,
             self.account, name, metadata)
 
-    def test_container_unset_set_same_property(self):
+    def test_container_del_set_same_property(self):
         name = random_str(32)
 
         metadata = {
             random_str(32): random_str(32),
+            random_str(32): random_str(32)
+        }
+        event_url = {
+            'ns': self.ns,
+            'account': self.account,
+            'user': name,
+            'id': cid_from_name(self.account, name)
         }
 
         res = self._create(name)
         self.assertEqual(res, True)
 
-        # container_set_properties a property
+        # container_set_properties properties
         self.api.container_set_properties(self.account, name, metadata)
         data = self._get_properties(name)
-        self.assertEqual(data['properties'], metadata)
+        self.assertDictEqual(data['properties'], metadata)
+        event = self.wait_for_event(
+            'oio-preserved', type_=EventTypes.CONTAINER_UPDATE)
+        self.assertDictEqual(event_url, event['url'])
+        self.assertDictEqual({}, event['data']['system'])
+        self.assertDictEqual(metadata, event['data']['properties'])
 
-        # container_unset_properties the property
-        self.api.container_del_properties(self.account, name, metadata.keys())
+        # container_del_properties a property
+        key = metadata.keys().pop(0)
+        _metadata = metadata.copy()
+        del _metadata[key]
+        self.api.container_del_properties(self.account, name, [key])
         data = self._get_properties(name)
-        self.assertEqual(len(data['properties']), 0)
+        self.assertDictEqual(data['properties'], _metadata)
+        event = self.wait_for_event(
+            'oio-preserved', type_=EventTypes.CONTAINER_UPDATE)
+        self.assertDictEqual(event_url, event['url'])
+        self.assertDictEqual({}, event['data']['system'])
+        self.assertDictEqual({key: None}, event['data']['properties'])
 
         # container_set_properties the same property with the same value
-        self.api.container_set_properties(self.account, name, metadata)
+        _metadata = {key: metadata[key]}
+        self.api.container_set_properties(self.account, name, _metadata)
         data = self._get_properties(name)
-        self.assertEqual(data['properties'], metadata)
+        self.assertDictEqual(data['properties'], metadata)
+        event = self.wait_for_event(
+            'oio-preserved', type_=EventTypes.CONTAINER_UPDATE)
+        self.assertDictEqual(event_url, event['url'])
+        self.assertDictEqual({}, event['data']['system'])
+        self.assertDictEqual(_metadata, event['data']['properties'])
 
     def _flush_and_check(self, cname, fast=False):
         self.api.container_flush(self.account, cname, limit=50)
@@ -378,6 +439,12 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             random_str(32): random_str(32),
             random_str(32): random_str(32),
         }
+        event_url = {
+            'ns': self.ns,
+            'account': self.account,
+            'user': name,
+            'id': cid_from_name(self.account, name)
+        }
 
         # container_del_properties on unknown container
         self.assertRaises(
@@ -386,6 +453,11 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
         res = self._create(name, metadata)
         self.assertEqual(res, True)
+        event = self.wait_for_event(
+            'oio-preserved', type_=EventTypes.CONTAINER_NEW)
+        self.assertDictEqual(event_url, event['url'])
+        self.assertDictEqual({}, event['data']['system'])
+        self.assertDictEqual(metadata, event['data']['properties'])
 
         key = metadata.keys().pop()
         del metadata[key]
@@ -394,6 +466,11 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.container_del_properties(self.account, name, [key])
         data = self._get_properties(name)
         self.assertNotIn(key, data['properties'])
+        event = self.wait_for_event(
+            'oio-preserved', type_=EventTypes.CONTAINER_UPDATE)
+        self.assertDictEqual(event_url, event['url'])
+        self.assertDictEqual({}, event['data']['system'])
+        self.assertDictEqual({key: None}, event['data']['properties'])
 
         key = random_str(32)
         # We do not check if a property exists before deleting it
@@ -401,9 +478,13 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         #     exc.NoSuchContainer, self.api.container_del_properties,
         #     self.account, name, [key])
         self.api.container_del_properties(self.account, name, [key])
-
         data = self._get_properties(name)
-        self.assertEqual(data['properties'], metadata)
+        self.assertDictEqual(data['properties'], metadata)
+        event = self.wait_for_event(
+            'oio-preserved', type_=EventTypes.CONTAINER_UPDATE)
+        self.assertDictEqual(event_url, event['url'])
+        self.assertDictEqual({}, event['data']['system'])
+        self.assertDictEqual({key: None}, event['data']['properties'])
 
         # clean
         self._clean(name, True)
