@@ -141,7 +141,8 @@ void sqlx_admin_load(struct sqlx_sqlite3_s *sq3);
 void sqlx_admin_reload(struct sqlx_sqlite3_s *sq3);
 
 void sqlx_admin_del(struct sqlx_sqlite3_s *sq3, const gchar *k);
-void sqlx_admin_del_all_user(struct sqlx_sqlite3_s *sq3);
+void sqlx_admin_del_all_user(struct sqlx_sqlite3_s *sq3, GTraverseFunc func,
+		gpointer data);
 
 int sqlx_admin_has(struct sqlx_sqlite3_s *sq3, const gchar *k);
 
@@ -183,5 +184,20 @@ gint64 sqlx_admin_get_status(struct sqlx_sqlite3_s *sq3);
 const gchar* sqlx_admin_status2str(gint64 status);
 
 void sqlx_alert_dirty_base(struct sqlx_sqlite3_s *sq3, const char *msg);
+
+/* database properties */
+struct db_properties_s;
+
+struct db_properties_s *db_properties_new(void);
+
+void db_properties_free(
+		struct db_properties_s *db_properties);
+
+void db_properties_add(
+		struct db_properties_s *db_properties,
+		gchar *key, gchar *value);
+
+GString * db_properties_to_json(
+		struct db_properties_s *db_properties, GString *json);
 
 #endif /*OIO_SDS__sqliterepo__sqlite_utils_h*/

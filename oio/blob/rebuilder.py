@@ -19,6 +19,7 @@ from socket import gethostname
 
 from oio.blob.operator import ChunkOperator
 from oio.common.easy_value import int_value, true_value
+from oio.common.exceptions import OioException, OrphanChunk, RetryLater
 from oio.common.green import time
 from oio.common.tool import Tool, ToolWorker
 from oio.event.evob import EventTypes
@@ -256,7 +257,13 @@ class BlobRebuilderWorker(ToolWorker):
             return None
 
         self.logger.debug(log_rebuilding)
-        return self.chunk_operator.rebuild(
-            container_id, content_id, chunk_id_or_pos,
-            rawx_id=self.tool.rawx_id, try_chunk_delete=self.try_chunk_delete,
-            allow_same_rawx=self.allow_same_rawx)
+        try:
+            return self.chunk_operator.rebuild(
+                container_id, content_id, chunk_id_or_pos,
+                rawx_id=self.tool.rawx_id,
+                try_chunk_delete=self.try_chunk_delete,
+                allow_same_rawx=self.allow_same_rawx)
+        except OioException as exc:
+            if not isinstance(exc, OrphanChunk):
+                raise RetryLater(exc)
+            raise

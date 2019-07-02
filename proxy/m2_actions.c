@@ -1489,7 +1489,7 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 			NULL
 		};
 		GByteArray * _pack_propset(const struct sqlx_name_s *n) {
-			return sqlx_pack_PROPSET_tab(n, FALSE, props, DL());
+			return sqlx_pack_PROPSET_tab(args->url, n, FALSE, props, DL());
 		}
 		err = _resolve_meta2(args, CLIENT_PREFER_MASTER,
 				_pack_propset, NULL, NULL);

@@ -15,7 +15,7 @@
 
 
 from oio.common.easy_value import int_value
-from oio.common.exceptions import OioException, OioTimeout
+from oio.common.exceptions import OioException, OioTimeout, RetryLater
 from oio.common.green import ContextPool, eventlet, ratelimit, sleep, \
     threading, time
 from oio.common.json import json
@@ -37,6 +37,7 @@ class Tool(object):
 
     DEFAULT_BEANSTALKD_WORKER_TUBE = 'oio-process'
     DEFAULT_REPORT_INTERVAL = 3600
+    DEFAULT_RETRY_DELAY = 3600
     DEFAULT_ITEM_PER_SECOND = 30
     DEFAULT_WORKERS = 1
     DEFAULT_DISTRIBUTED_BEANSTALKD_WORKER_TUBE = 'oio-process'
@@ -71,6 +72,16 @@ class Tool(object):
                 self.conf.get('beanstalkd_worker_tube')
                 or self.DEFAULT_BEANSTALKD_WORKER_TUBE,
                 self.logger)
+
+        # retry
+        self.retryer = None
+        self.retry_queue = None
+        if self.beanstalkd:
+            self.retryer = BeanstalkdSender(
+                self.beanstalkd.addr, self.beanstalkd.tube, self.logger)
+            self.retry_queue = eventlet.Queue()
+        self.retry_delay = int_value(self.conf.get('retry_delay'),
+                                     self.DEFAULT_RETRY_DELAY)
 
     @staticmethod
     def items_from_task_event(task_event):
@@ -191,6 +202,23 @@ class Tool(object):
     def _load_total_expected_items(self):
         raise NotImplementedError()
 
+    def _read_retry_queue(self):
+        if self.retry_queue is None:
+            return
+        while True:
+            # Reschedule jobs we were not able to handle.
+            item = self.retry_queue.get()
+            if self.retryer:
+                sent = False
+                while not sent:
+                    sent = self.retryer.send_job(
+                        json.dumps(self.task_event_from_item(item)),
+                        delay=self.retry_delay)
+                    if not sent:
+                        sleep(1.0)
+                self.retryer.job_done()
+            self.retry_queue.task_done()
+
     def run(self):
         """
         Start processing all found items.
@@ -199,7 +227,16 @@ class Tool(object):
             raise ValueError('No dispatcher')
 
         self._load_total_expected_items()
-        return self.dispatcher.run()
+
+        # spawn one worker for the retry queue
+        eventlet.spawn_n(self._read_retry_queue)
+
+        for task_res in self.dispatcher.run():
+            yield task_res
+
+        # block until the retry queue is empty
+        if self.retry_queue:
+            self.retry_queue.join()
 
     def is_success(self):
         """
@@ -274,6 +311,16 @@ class ToolWorker(object):
             error = None
             try:
                 info = self._process_item(item)
+            except RetryLater as exc:
+                # Schedule a retry only if the sender did not set reply address
+                # (rebuild CLIs set reply address, meta2 does not).
+                if self.tool.retry_queue and not beanstalkd_reply:
+                    self.logger.warn(
+                        "Putting an item (%s) in the retry queue: %s",
+                        self.tool.string_from_item(item), exc.args[0])
+                    self.tool.retry_queue.put(item)
+                else:
+                    error = str(exc.args[0])
             except Exception as exc:  # pylint: disable=broad-except
                 error = str(exc)
             task_res = (item, info, error)
@@ -356,6 +403,8 @@ class _LocalDispatcher(_Dispatcher):
                 # spawn workers
                 for worker in self.workers:
                     pool.spawn(worker.run)
+
+                # spawn one worker to fill the queue
                 pool.spawn(self._fill_queue_and_wait_all_items)
 
                 # with the main thread

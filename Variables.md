@@ -555,6 +555,14 @@ Used by `gcc`
  * type: string
  * cmake directive: *OIO_META2_TUBE_CONTAINER_STATE*
 
+### meta2.tube.container_updated
+
+> TODO: to be documented
+
+ * default: **oio**
+ * type: string
+ * cmake directive: *OIO_META2_TUBE_CONTAINER_UPDATED*
+
 ### meta2.tube.content_appended
 
 > TODO: to be documented
