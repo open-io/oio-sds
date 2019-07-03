@@ -127,7 +127,7 @@ typedef void (*sqlx_peering_pipefrom_end_f) (GError *e,
 
 typedef void (*sqlx_peering_getvers_end_f) (GError *e,
 		struct election_member_s *m,
-		guint reqid,
+		const char *reqid,
 		GTree *vremote);
 
 /* Represents what an election needs to communicate with its peers. */
@@ -151,7 +151,7 @@ struct sqlx_peering_vtable_s
 			const struct sqlx_name_inline_s *n,
 			/* out */
 			struct election_member_s *m,
-			guint reqid,
+			const char *reqid,
 			sqlx_peering_getvers_end_f result);
 
 	/** @return FALSE if no notify() is necessary (i.e. no command deferred) */
@@ -187,7 +187,7 @@ gboolean sqlx_peering__getvers (struct sqlx_peering_s *self,
 		const struct sqlx_name_inline_s *n,
 		/* out */
 		struct election_member_s *m,
-		guint reqid,
+		const char *reqid,
 		sqlx_peering_getvers_end_f result);
 
 gboolean sqlx_peering__pipefrom (struct sqlx_peering_s *self,

@@ -583,7 +583,7 @@ static gboolean _direct_getvers (struct sqlx_peering_s *self,
 		const struct sqlx_name_inline_s *n,
 		/* out */
 		struct election_member_s *m,
-		guint reqid,
+		const char *reqid,
 		sqlx_peering_getvers_end_f result);
 
 static gboolean _direct_pipefrom (struct sqlx_peering_s *self,
@@ -839,7 +839,8 @@ struct evtclient_GETVERS_s
 	sqlx_peering_getvers_end_f hook;
 	struct election_member_s *m;
 	GTree *vremote;
-	guint reqid;
+	// FIXME(FVE): move reqid to event_client_s
+	char reqid[LIMIT_LENGTH_REQID];
 };
 
 static void
@@ -895,7 +896,7 @@ _direct_getvers (struct sqlx_peering_s *self,
 		const struct sqlx_name_inline_s *n,
 		/* out */
 		struct election_member_s *m,
-		guint reqid,
+		const char *reqid,
 		sqlx_peering_getvers_end_f result)
 {
 	struct sqlx_peering_direct_s *p = (struct sqlx_peering_direct_s*) self;
@@ -910,7 +911,9 @@ _direct_getvers (struct sqlx_peering_s *self,
 	mc->ec.on_end = (gridd_client_end_f) on_end_GETVERS;
 	mc->hook = result;
 	mc->m = m;
-	mc->reqid = reqid;
+	if (!reqid)
+		reqid = oio_ext_get_reqid();
+	g_strlcpy(mc->reqid, reqid, LIMIT_LENGTH_REQID);
 	mc->vremote = NULL;
 
 	const gint64 now = oio_ext_monotonic_time();
@@ -985,7 +988,7 @@ sqlx_peering__getvers (struct sqlx_peering_s *self,
 		const struct sqlx_name_inline_s *n,
 		/* out */
 		struct election_member_s *m,
-		guint reqid,
+		const char *reqid,
 		sqlx_peering_getvers_end_f result)
 {
 #ifdef HAVE_EXTRA_DEBUG
