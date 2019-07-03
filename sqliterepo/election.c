@@ -1235,6 +1235,7 @@ _run_exit (gpointer k, gpointer v, gpointer i)
 {
 	(void) k, (void) i;
 	struct election_member_s *m = v;
+	oio_ext_set_prefixed_random_reqid("exit-");
 	if (m->step != STEP_NONE
 			&& m->step != STEP_LEAVING
 			&& m->step != STEP_LEAVING_FAILING)
@@ -1568,9 +1569,10 @@ deferred_completion_ASKING(struct exec_later_ASKING_context_s *d)
 				GString *tmp = g_string_sized_new(128);
 				for (const char * const *p = peers; peers && *p ;++p)
 					g_string_append_printf(tmp, " [%s]", *p);
-				GRID_WARN("unknown master [%s] for [%s.%s], only%s", d->master,
-						d->member->inline_name.base, d->member->inline_name.type,
-						tmp->str);
+				GRID_WARN("unknown master [%s] for [%s.%s], only%s (reqid=%s)",
+						d->master, d->member->inline_name.base,
+						d->member->inline_name.type, tmp->str,
+						oio_ext_get_reqid());
 				g_string_free(tmp, TRUE);
 				d->member->requested_peers_decache = 1;
 				transition(d->member, EVT_MASTER_BAD, NULL);
@@ -1927,10 +1929,12 @@ _worker_getpeers(struct election_member_s *m, struct election_manager_s *M)
 	member_unlock(m);
 
 	oio_ext_set_deadline(oio_ext_monotonic_time() + 10 * G_TIME_SPAN_SECOND);
+	const char *reqid = oio_ext_set_prefixed_random_reqid("getpeers-");
 
 	NAME2CONST(n, inline_name);
 	err = M->config->get_peers(M->config->ctx, &n, decache, &peers);
 
+	oio_ext_set_reqid(reqid);
 	member_lock(m);
 	if (err || !peers || !*peers) {
 		transition(m, EVT_GETPEERS_DONE, NULL);
@@ -2209,13 +2213,15 @@ defer_USE(struct election_member_s *member, const gboolean master)
 
 static void
 _result_GETVERS (GError *enet, struct election_member_s *m,
-		guint reqid, GTree *vremote)
+		const char *reqid, GTree *vremote)
 {
 	GError *err = NULL;
 	GTree *vlocal = NULL;
 
 	MEMBER_CHECK(m);
 	EXTRA_ASSERT((enet != NULL) ^ (vremote != NULL));
+	if (reqid && *reqid)
+		oio_ext_set_reqid(reqid);
 
 	if (enet) {
 		err = g_error_copy(enet);
@@ -2240,7 +2246,7 @@ _result_GETVERS (GError *enet, struct election_member_s *m,
 		} else if (err) {
 			GRID_WARN("GETVERS error [%s.%s]: (%d) %s (reqid=%s)",
 					m->inline_name.base, m->inline_name.type,
-					err->code, err->message, oio_ext_get_reqid());
+					err->code, err->message, reqid);
 		}
 	}
 
@@ -4202,6 +4208,7 @@ election_manager_play_timers(struct election_manager_s *M, const gint64 now)
 		-1
 	};
 
+	oio_ext_set_prefixed_random_reqid("eltimer-");
 	for (int i=0; steps[i] != -1 ;i++)
 		_send_NONE_to_step(M, M->members_by_state + steps[i], now);
 }

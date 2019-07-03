@@ -66,14 +66,14 @@ GError * oio_ext_extract_json (struct json_object *j,
 		struct oio_ext_json_mapping_s *tab);
 
 /** Set a thread-local variable with a copy of the given request id. */
-void oio_ext_set_reqid (const char *reqid);
+const char *oio_ext_set_reqid(const char *reqid);
 
 /** Calls oio_ext_set_reqid() with a randomly generated string */
-void oio_ext_set_random_reqid (void);
+const char *oio_ext_set_random_reqid(void);
 
 /** Calls oio_ext_set_reqid() with a randomly generated string,
  * with the specified prefix. */
-void oio_ext_set_prefixed_random_reqid(const char *prefix);
+const char *oio_ext_set_prefixed_random_reqid(const char *prefix);
 
 /* DO NOT FREE ... In facts, DO NOT EVEN CONSIDER USING THIS FUNCTION!
  * Gets the PRNG associated to the local thread, and allocates on if none
