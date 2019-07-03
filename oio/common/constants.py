@@ -122,3 +122,7 @@ volume_xattr_keys = {
 CHUNK_SUFFIX_CORRUPT = '.corrupt'
 # Suffix of chunk file names that are not finished being uploaded
 CHUNK_SUFFIX_PENDING = '.pending'
+
+# Container Hierarchy
+CH_ENCODED_SEPARATOR = '%2F'
+CH_SEPARATOR = '/'
