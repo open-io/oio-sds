@@ -15,6 +15,7 @@
 
 
 from oio.conscience.client import ConscienceClient
+from oio.common.decorators import ensure_request_id2
 from oio.common.logger import get_logger
 from oio.directory.admin import AdminClient
 from oio.directory.client import DirectoryClient
@@ -95,10 +96,10 @@ class Meta2Database(object):
         else:
             return (base.ljust(64, '0'), None)
 
-    def _get_bases_seq(self, base):
+    def _get_bases_seq(self, base, **kwargs):
         base_seqs = dict()
         cid, seq = self.get_cid_and_seq(base)
-        linked_services = self.directory.list(cid=cid)
+        linked_services = self.directory.list(cid=cid, **kwargs)
 
         for service in linked_services['srv']:
             if service['type'] != self.service_type:
@@ -119,7 +120,7 @@ class Meta2Database(object):
     def _get_peers(self, bseq):
         return self.services_by_base[bseq].keys()
 
-    def _set_peers(self, bseq, src, dst):
+    def _set_peers(self, bseq, src, dst, **kwargs):
         cid, _ = self.get_cid_and_seq(bseq)
         current_peers = self._get_peers(bseq)
         new_peers = [v for v in current_peers if v != src]
@@ -132,7 +133,8 @@ class Meta2Database(object):
 
         self.logger.debug(
             "Setting peers (base=%s new_peers=%s)", bseq, new_peers)
-        self.admin.set_peers(self.service_type, cid=cid, peers=new_peers)
+        self.admin.set_peers(self.service_type, cid=cid, peers=new_peers,
+                             **kwargs)
         self.services_by_base[bseq][dst] = self.services_by_base[bseq].pop(src)
 
     def _get_args(self, bseq):
@@ -149,7 +151,7 @@ class Meta2Database(object):
     def _get_service_full_id(self, service):
         return self.conf['namespace'] + "|" + self.service_type + "|" + service
 
-    def _check_dst_service(self, bseq, src, dst):
+    def _check_dst_service(self, bseq, src, dst, **kwargs):
         peers = self._get_peers(bseq)
 
         if dst is None:
@@ -157,7 +159,7 @@ class Meta2Database(object):
             avoid = [self._get_service_full_id(src)]
             try:
                 services_found = self.conscience.poll(
-                    self.service_type, known=known, avoid=avoid)
+                    self.service_type, known=known, avoid=avoid, **kwargs)
                 dst = services_found[0].get('tags', dict()).get(
                     'tag.service_id', None)
                 if dst is None:
@@ -176,7 +178,7 @@ class Meta2Database(object):
                 "Destination service must be a %s service" % self.service_type)
         return dst
 
-    def _has_base(self, bseq):
+    def _has_base(self, bseq, **kwargs):
         """
         Check which of the old peers actually host the database.
         """
@@ -184,7 +186,7 @@ class Meta2Database(object):
         peers_to_copy_from = list()
         master = None
 
-        has = self.admin.has_base(self.service_type, cid=cid)
+        has = self.admin.has_base(self.service_type, cid=cid, **kwargs)
         for service, status in has.items():
             if status['status']['status'] == 200:
                 peers_to_copy_from.append(service)
@@ -197,7 +199,8 @@ class Meta2Database(object):
             raise ValueError("No base to copy")
 
         try:
-            election = self.admin.election_status(self.service_type, cid=cid)
+            election = self.admin.election_status(self.service_type, cid=cid,
+                                                  **kwargs)
             for service, status in election['peers'].items():
                 if status['status']['status'] == 200:
                     master = service
@@ -220,7 +223,7 @@ class Meta2Database(object):
 
         return peers_to_copy_from
 
-    def _copy_base(self, bseq, dst, peers_to_copy_from):
+    def _copy_base(self, bseq, dst, peers_to_copy_from, **kwargs):
         cid, _ = self.get_cid_and_seq(bseq)
 
         for true_src in peers_to_copy_from:
@@ -229,7 +232,8 @@ class Meta2Database(object):
                 bseq, true_src, dst)
             try:
                 self.admin.copy_base_from(
-                    self.service_type, cid=cid, svc_from=true_src, svc_to=dst)
+                    self.service_type, cid=cid, svc_from=true_src, svc_to=dst,
+                    **kwargs)
                 break
             except Exception as exc:  # pylint: disable=broad-except
                 self.logger.warn(
@@ -238,7 +242,7 @@ class Meta2Database(object):
                 if true_src == peers_to_copy_from[-1]:
                     raise
 
-    def _link_service(self, bseq, src, dst):
+    def _link_service(self, bseq, src, dst, **kwargs):
         cid, seq = self.get_cid_and_seq(bseq)
         peers = self._get_peers(bseq)
         args = self._get_args(bseq)
@@ -246,7 +250,8 @@ class Meta2Database(object):
         self.directory.force(
             cid=cid, replace=True, service_type=self.service_type,
             services=dict(type=self.service_type, host=','.join(peers),
-                          args=args, seq=seq))
+                          args=args, seq=seq),
+            **kwargs)
         # FIXME(ABO): This part can be removed when, either:
         # - meta1 sends the removed services bundled with the
         #     account.services events.
@@ -254,9 +259,10 @@ class Meta2Database(object):
         #     sqliterepo layer is the one that notifies the deletion of
         #     the databases.
         if self.service_type == 'meta2':
-            self.rdir.meta2_index_delete(volume_id=src, container_id=cid)
+            self.rdir.meta2_index_delete(volume_id=src, container_id=cid,
+                                         **kwargs)
 
-    def _reset_election(self, bseq, src, dst):
+    def _reset_election(self, bseq, src, dst, **kwargs):
         """
         Reset the election, try to remove `base` from its old host,
         then trigger an election with the new peers.
@@ -269,17 +275,19 @@ class Meta2Database(object):
 
         self.logger.debug(
             "Resetting election (base=%s src=%s dst=%s)", bseq, src, dst)
-        self.admin.election_leave(self.service_type, cid=cid)
+        self.admin.election_leave(self.service_type, cid=cid, **kwargs)
 
         try:
-            self.admin.remove_base(self.service_type, cid=cid, service_id=src)
+            self.admin.remove_base(self.service_type, cid=cid, service_id=src,
+                                   **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
             self.logger.warn(
                 "Failed to remove source base (base=%s src=%s dst=%s): %s",
                 bseq, src, dst, exc)
 
         try:
-            election = self.admin.election_status(self.service_type, cid=cid)
+            election = self.admin.election_status(self.service_type, cid=cid,
+                                                  **kwargs)
             for service, status in election['peers'].items():
                 if status['status']['status'] in (200, 303):
                     continue
@@ -291,18 +299,18 @@ class Meta2Database(object):
                 "Failed to get election status (base=%s src=%s dst=%s): %s",
                 bseq, src, dst, exc)
 
-    def _safe_move(self, bseq, src, dst):
+    def _safe_move(self, bseq, src, dst, **kwargs):
         err = None
         try:
             self._check_src_service(bseq, src)
-            dst = self._check_dst_service(bseq, src, dst)
+            dst = self._check_dst_service(bseq, src, dst, **kwargs)
 
             self.logger.debug(
                 "Moving base (base=%s src=%s dst=%s)", bseq, src, dst)
 
             try:
                 self.logger.debug("Step 1: check available bases.")
-                peers_to_copy_from = self._has_base(bseq)
+                peers_to_copy_from = self._has_base(bseq, **kwargs)
             except Exception as exc:  # pylint: disable=broad-except
                 self.logger.error(
                     "Failed to check if each peer exists (base=%s src=%s "
@@ -310,7 +318,7 @@ class Meta2Database(object):
                 raise
             try:
                 self.logger.debug("Step 2: set the new peers in the base.")
-                self._set_peers(bseq, src, dst)
+                self._set_peers(bseq, src, dst, **kwargs)
             except Exception as exc:  # pylint: disable=broad-except
                 self.logger.error(
                     "Failed to set new peers (base=%s src=%s dst=%s): %s",
@@ -318,7 +326,7 @@ class Meta2Database(object):
                 raise
             try:
                 self.logger.debug("Step 3: copy the database.")
-                self._copy_base(bseq, dst, peers_to_copy_from)
+                self._copy_base(bseq, dst, peers_to_copy_from, **kwargs)
             except Exception as exc:  # pylint: disable=broad-except
                 self.logger.error(
                     "Failed to copy base (base=%s src=%s dst=%s): %s",
@@ -326,7 +334,7 @@ class Meta2Database(object):
                 raise
             try:
                 self.logger.debug("Step 4: set the peers in meta1.")
-                self._link_service(bseq, src, dst)
+                self._link_service(bseq, src, dst, **kwargs)
             except Exception as exc:  # pylint: disable=broad-except
                 self.logger.error(
                     "Failed to link service (base=%s src=%s dst=%s): %s",
@@ -334,7 +342,7 @@ class Meta2Database(object):
                 raise
             try:
                 self.logger.debug("Step 5: reset the election.")
-                self._reset_election(bseq, src, dst)
+                self._reset_election(bseq, src, dst, **kwargs)
             except Exception as exc:  # pylint: disable=broad-except
                 self.logger.error(
                     "Failed to reset election (base=%s src=%s dst=%s): %s",
@@ -347,7 +355,8 @@ class Meta2Database(object):
             err = exc
         return dst, err
 
-    def move(self, base, src, dst=None):
+    @ensure_request_id2(prefix='m2mov-')
+    def move(self, base, src, dst=None, **kwargs):
         """
         Move a database from `src` to `dst`.
         If `dst` is None, find one automatically.
@@ -355,7 +364,7 @@ class Meta2Database(object):
         self.reset_peers()
 
         try:
-            bases_seq = self._get_bases_seq(base)
+            bases_seq = self._get_bases_seq(base, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
             self.logger.error(
                 "Failed to load peers (base=%s src=%s dst=%s): %s",
@@ -364,17 +373,17 @@ class Meta2Database(object):
             return
 
         for bseq in bases_seq:
-            _dst, err = self._safe_move(bseq, src, dst)
+            _dst, err = self._safe_move(bseq, src, dst, **kwargs)
             yield {'base': bseq, 'src': src, 'dst': _dst, 'err': err}
 
-    def _safe_rebuild(self, bseq):
+    def _safe_rebuild(self, bseq, **kwargs):
         err = None
         try:
             self.logger.debug("Rebuilding base (base=%s)")
 
             try:
                 self.logger.debug("Step 1: check available bases.")
-                available_bases = self._has_base(bseq)
+                available_bases = self._has_base(bseq, **kwargs)
             except Exception as exc:  # pylint: disable=broad-except
                 self.logger.error(
                     "Failed to check if each peer exists (base=%s): %s",
@@ -387,7 +396,7 @@ class Meta2Database(object):
                 self.logger.debug("Step 2: copy the database.")
             for dst in missing_bases:
                 try:
-                    self._copy_base(bseq, dst, available_bases)
+                    self._copy_base(bseq, dst, available_bases, **kwargs)
                 except Exception as exc:  # pylint: disable=broad-except
                     self.logger.error(
                         "Failed to copy base (base=%s dst=%s): %s",
@@ -401,14 +410,15 @@ class Meta2Database(object):
             err = exc
         return err
 
-    def rebuild(self, base):
+    @ensure_request_id2(prefix='m2reb-')
+    def rebuild(self, base, **kwargs):
         """
         Rebuild a database.
         """
         self.reset_peers()
 
         try:
-            bases_seq = self._get_bases_seq(base)
+            bases_seq = self._get_bases_seq(base, **kwargs)
         except Exception as exc:  # pylint: disable=broad-except
             self.logger.error(
                 "Failed to load peers (base=%s): %s", base, exc)
@@ -416,5 +426,5 @@ class Meta2Database(object):
             return
 
         for bseq in bases_seq:
-            err = self._safe_rebuild(bseq)
+            err = self._safe_rebuild(bseq, **kwargs)
             yield {'base': bseq, 'err': err}

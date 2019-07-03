@@ -47,6 +47,27 @@ def ensure_request_id(func):
     return ensure_request_id_wrapper
 
 
+def ensure_request_id2(prefix=''):
+    """Ensure the subsequent RPCs will have a request ID."""
+    def _ensure_request_id(func):
+        @wraps(func)
+        def ensure_request_id_wrapper(*args, **kwargs):
+            headers = kwargs.setdefault('headers', dict())
+            # Old style request ID
+            if REQID_HEADER not in headers:
+                if 'reqid' in kwargs:
+                    headers[REQID_HEADER] = kwargs.pop('reqid')
+                else:
+                    headers[REQID_HEADER] = request_id(prefix=prefix)
+                kwargs['headers'] = headers
+            # New style request ID
+            if 'reqid' not in kwargs:
+                kwargs['reqid'] = kwargs['headers'][REQID_HEADER]
+            return func(*args, **kwargs)
+        return ensure_request_id_wrapper
+    return _ensure_request_id
+
+
 def handle_account_not_found(fnc):
     @wraps(fnc)
     def _wrapped(self, account=None, *args, **kwargs):
