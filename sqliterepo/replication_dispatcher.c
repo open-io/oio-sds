@@ -1951,7 +1951,7 @@ _handler_PROPDEL(struct gridd_reply_ctx_s *reply,
 	if (!(flags & FLAG_LOCAL))
 		err = sqlx_transaction_begin(sq3, &repctx);
 	if (!err) {
-		if (!keys)
+		if (!keys || !*keys)
 			sqlx_admin_del_all_user(sq3, _db_properties_add,
 					db_properties);
 		else {
