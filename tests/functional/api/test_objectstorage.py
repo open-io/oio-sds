@@ -438,6 +438,9 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         metadata = {
             random_str(32): random_str(32),
             random_str(32): random_str(32),
+            random_str(32): random_str(32),
+            random_str(32): random_str(32),
+            random_str(32): random_str(32),
         }
         event_url = {
             'ns': self.ns,
@@ -485,6 +488,17 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertDictEqual(event_url, event['url'])
         self.assertDictEqual({}, event['data']['system'])
         self.assertDictEqual({key: None}, event['data']['properties'])
+
+        # Delete all container properties
+        self.api.container_del_properties(self.account, name, [])
+        data = self._get_properties(name)
+        self.assertDictEqual({}, data['properties'])
+        event = self.wait_for_event(
+            'oio-preserved', type_=EventTypes.CONTAINER_UPDATE)
+        self.assertDictEqual(event_url, event['url'])
+        self.assertDictEqual({}, event['data']['system'])
+        self.assertDictEqual({key: None for key in metadata},
+                             event['data']['properties'])
 
         # clean
         self._clean(name, True)
