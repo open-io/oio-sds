@@ -519,7 +519,7 @@ class UnsetContainer(ContainerCommandMixin, command.Command):
         if parsed_args.delete_exceeding_versions:
             system['sys.m2.policy.version.delete_exceeding'] = ''
 
-        if properties:
+        if properties or not system:
             self.app.client_manager.storage.container_del_properties(
                 self.app.client_manager.account,
                 parsed_args.container,
