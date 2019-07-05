@@ -17,11 +17,24 @@ from functools import wraps
 from oio.common.client import ProxyClient
 
 
+def service_id_to_string(service_id):
+    """Convert a list of service IDs to a comma separated string."""
+    if not service_id:
+        return None
+    elif isinstance(service_id, basestring):
+        return service_id
+    else:
+        try:
+            return ','.join(service_id)
+        except Exception:
+            raise ValueError("'service_id' must be a string or a list")
+
+
 def loc_params(func):
     """Wrap database localization parameters in request parameters"""
     @wraps(func)
     def _wrapped(self, service_type=None, account=None, reference=None,
-                 cid=None, **kwargs):
+                 cid=None, service_id=None, **kwargs):
         params = kwargs.pop('params', {})
         if service_type:
             params['type'] = service_type
@@ -36,6 +49,8 @@ def loc_params(func):
         elif 'cid' not in params and \
              ('acct' not in params or 'ref' not in params):
             raise ValueError("Missing value for account and reference or cid")
+        if service_id:
+            params['service_id'] = service_id_to_string(service_id)
         return func(self, params, **kwargs)
     return _wrapped
 
@@ -60,18 +75,10 @@ class AdminClient(ProxyClient):
         return body
 
     @loc_params
-    def election_leave(self, params, service_id=None, **kwargs):
+    def election_leave(self, params, **kwargs):
         """
         Force all peers to leave the election.
         """
-        if service_id:
-            if isinstance(service_id, basestring):
-                params['service_id'] = service_id
-            else:
-                try:
-                    params['service_id'] = ','.join(service_id)
-                except Exception:
-                    raise ValueError("'service_id' must be a string or a list")
         _, body = self._request('POST', '/leave', params=params, **kwargs)
         return body
 
@@ -201,17 +208,10 @@ class AdminClient(ProxyClient):
                       params=params, json={'to': svc_to}, **kwargs)
 
     @loc_params
-    def remove_base(self, params, service_id, **kwargs):
+    def remove_base(self, params, **kwargs):
         """
         Remove specific base.
         """
-        if isinstance(service_id, basestring):
-            params['service_id'] = service_id
-        else:
-            try:
-                params['service_id'] = ','.join(service_id)
-            except Exception:
-                raise ValueError("'service_id' must be a string or a list")
         _, body = self._request('POST', '/remove', params=params, **kwargs)
         return body
 
