@@ -2228,6 +2228,11 @@ _result_GETVERS (GError *enet, struct election_member_s *m,
 		GRID_DEBUG("GETVERS error [%s.%s]: (%d) %s",
 				m->inline_name.base, m->inline_name.type,
 				err->code, err->message);
+	} else if (m->requested_LEAVE) {
+		/* Prevent calling get_version, which would create an empty database.
+		 * Use CODE_CONTAINER_MIGRATED, because we detected this case while
+		 * moving containers. */
+		err = NEWERROR(CODE_CONTAINER_MIGRATED, "Requested leave");
 	} else {
 		NAME2CONST(name, m->inline_name);
 		err = m->manager->config->get_version(m->manager->config->ctx, &name, &vlocal);
