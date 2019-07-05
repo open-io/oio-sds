@@ -20,7 +20,7 @@ from socket import gethostname
 
 from oio.common.json import json
 from oio.common.green import threading, sleep
-from oio.common.easy_value import int_value, true_value
+from oio.common.easy_value import float_value, int_value, true_value
 from oio.common.exceptions import ContentNotFound, NotFound, OrphanChunk, \
     ConfigurationException, OioTimeout, ExplicitBury, OioException, RetryLater
 from oio.event.beanstalk import BeanstalkdListener, BeanstalkdSender, \
@@ -46,6 +46,7 @@ class BlobRebuilder(Rebuilder):
         # rdir
         self.rdir_client = RdirClient(conf, logger=self.logger)
         self.rdir_fetch_limit = int_value(conf.get('rdir_fetch_limit'), 100)
+        self.rdir_timeout = float_value(conf.get('rdir_timeout'), 60.0)
         # rawx
         self.try_chunk_delete = try_chunk_delete
         # beanstalk
@@ -163,15 +164,18 @@ class BlobRebuilder(Rebuilder):
         success = False
         if self.volume:
             self.rdir_client.admin_lock(self.volume,
-                                        "rebuilder on %s" % gethostname())
-            info = self.rdir_client.status(self.volume)
+                                        "rebuilder on %s" % gethostname(),
+                                        timeout=self.rdir_timeout)
+            info = self.rdir_client.status(self.volume,
+                                           timeout=self.rdir_timeout)
             self.total_expected_chunks = info.get(
                     'chunk', dict()).get('to_rebuild', None)
         try:
             success = self._rebuilder_pass(**kwargs)
         finally:
             if self.volume:
-                self.rdir_client.admin_unlock(self.volume)
+                self.rdir_client.admin_unlock(self.volume,
+                                              timeout=self.rdir_timeout)
         return success
 
     def _event_from_broken_chunk(self, chunk, reply=None, **kwargs):
@@ -217,7 +221,7 @@ class BlobRebuilder(Rebuilder):
         if self.volume:
             return self.rdir_client.chunk_fetch(
                 self.volume, limit=self.rdir_fetch_limit, rebuild=True,
-                **kwargs)
+                timeout=self.rdir_timeout, **kwargs)
         raise ConfigurationException('No source to fetch chunks from')
 
 
