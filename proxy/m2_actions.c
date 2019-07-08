@@ -1116,8 +1116,7 @@ action_m2_container_destroy (struct req_args_s *args)
 		}
 	}
 
-	/* 2. FLUSH the base on the MASTER, so events are generated for all the
-	   contents removed. */
+	/* 2. Check the base is empty. */
 	if (!err && !force) {
 		guint32 flags = flag_force_master ? M2V2_FLAG_MASTER : 0;
 		PACKER_VOID(_pack) { return m2v2_remote_pack_ISEMPTY (args->url, flags, DL()); }
@@ -1129,7 +1128,7 @@ action_m2_container_destroy (struct req_args_s *args)
 		}
 	}
 
-	/* 3. UNLINK the base in the directory */
+	/* 3. UNLINK the base from the directory. */
 	if (!err) {
 		GError * _unlink (const char * m1) {
 			return meta1v2_remote_unlink_service(

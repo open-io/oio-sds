@@ -39,7 +39,7 @@ void grid_single_rrd_set_default(struct grid_single_rrd_s *gsr,
 void grid_single_rrd_push(struct grid_single_rrd_s *gsr,
 		time_t at, guint64 v);
 
-/*! forces an absolute value for the current position */
+/*! Add to the value for the current position */
 void grid_single_rrd_add(struct grid_single_rrd_s *gsr,
 		time_t at, guint64 v);
 
