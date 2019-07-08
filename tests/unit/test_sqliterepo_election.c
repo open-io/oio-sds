@@ -119,7 +119,7 @@ static gboolean _peering_getvers (struct sqlx_peering_s *self,
 		const struct sqlx_name_inline_s *n,
 		/* out */
 		struct election_member_s *m,
-		guint reqid,
+		const char *reqid,
 		sqlx_peering_getvers_end_f result);
 
 static gboolean _peering_pipefrom (struct sqlx_peering_s *self,
@@ -158,7 +158,7 @@ _peering_getvers (struct sqlx_peering_s *self,
 		const struct sqlx_name_inline_s *n,
 		/* out */
 		struct election_member_s *m,
-		guint reqid,
+		const char *reqid,
 		sqlx_peering_getvers_end_f result)
 {
 	(void) self, (void) url, (void) n;

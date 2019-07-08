@@ -42,6 +42,10 @@ tube for broken chunks events.
         help='Maximum number of entries returned in each rdir response. '
              '(default=%d)' % BlobRebuilder.DEFAULT_RDIR_FETCH_LIMIT)
     parser.add_argument(
+        '--rdir-timeout', type=float,
+        help='Timeout for rdir operations, in seconds (%f)' %
+             BlobRebuilder.DEFAULT_RDIR_FETCH_LIMIT)
+    parser.add_argument(
         '--report-interval', type=int,
         help='Report interval in seconds. '
              '(default=%d)' % BlobRebuilder.DEFAULT_REPORT_INTERVAL)
@@ -125,6 +129,8 @@ def main():
     # common
     conf['namespace'] = args.namespace
     conf['rdir_fetch_limit'] = args.rdir_fetch_limit
+    if args.rdir_timeout is not None:
+        conf['rdir_timeout'] = args.rdir_timeout
     conf['report_interval'] = args.report_interval
     # input
     conf['beanstalkd_worker_tube'] = args.beanstalkd_tube

@@ -47,10 +47,10 @@ class VolumeClientCli(object):
     def volume_admin_clear(self, volume, **kwargs):
         return self.volume.admin_clear(volume, **kwargs)
 
-    def volume_show(self, volume):
+    def volume_show(self, volume, **kwargs):
         from oio.common.json import json
 
-        info = self.volume.status(volume)
+        info = self.volume.status(volume, **kwargs)
         data = {}
         containers = info.get('container')
         data['chunk'] = info.get('chunk')
