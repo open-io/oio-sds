@@ -241,18 +241,19 @@ const char *oio_ext_get_reqid (void) {
 	return oio_str_is_set(l->reqid) ? l->reqid : NULL;
 }
 
-void oio_ext_set_reqid (const char *reqid) {
+const char *oio_ext_set_reqid(const char *reqid) {
 	struct oio_ext_local_s *l = _local_ensure ();
 	l->reqid[0] = '\0';
 	if (oio_str_is_set(reqid))
 		g_strlcpy(l->reqid, reqid, sizeof(l->reqid));
+	return l->reqid;
 }
 
-void oio_ext_set_random_reqid(void) {
-	oio_ext_set_prefixed_random_reqid(NULL);
+const char *oio_ext_set_random_reqid(void) {
+	return oio_ext_set_prefixed_random_reqid(NULL);
 }
 
-void oio_ext_set_prefixed_random_reqid(const char *prefix) {
+const char *oio_ext_set_prefixed_random_reqid(const char *prefix) {
 	struct {
 		pid_t pid:16;
 		guint8 buf[14];
@@ -267,7 +268,7 @@ void oio_ext_set_prefixed_random_reqid(const char *prefix) {
 	}
 	oio_buf_randomize(bulk.buf, sizeof(bulk.buf) - plen/2);
 	oio_str_bin2hex((guint8*)&bulk, sizeof(bulk), hex+plen, sizeof(hex) - plen);
-	oio_ext_set_reqid(hex);
+	return oio_ext_set_reqid(hex);
 }
 
 gint64 oio_ext_get_deadline(void) {

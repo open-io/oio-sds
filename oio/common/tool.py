@@ -39,7 +39,7 @@ class Tool(object):
     DEFAULT_REPORT_INTERVAL = 3600
     DEFAULT_RETRY_DELAY = 3600
     DEFAULT_ITEM_PER_SECOND = 30
-    DEFAULT_WORKERS = 1
+    DEFAULT_CONCURRENCY = 1
     DEFAULT_DISTRIBUTED_BEANSTALKD_WORKER_TUBE = 'oio-process'
 
     def __init__(self, conf, beanstalkd_addr=None, logger=None):
@@ -354,20 +354,20 @@ class _LocalDispatcher(_Dispatcher):
     def __init__(self, conf, tool):
         super(_LocalDispatcher, self).__init__(conf, tool)
 
-        nb_workers = int_value(self.conf.get(
-            'workers'), self.tool.DEFAULT_WORKERS)
+        concurrency = int_value(self.conf.get(
+            'concurrency'), self.tool.DEFAULT_CONCURRENCY)
         self.max_items_per_second = int_value(self.conf.get(
             'items_per_second'), self.tool.DEFAULT_ITEM_PER_SECOND)
         if self.max_items_per_second > 0:
             # Max 5 seconds in advance
             queue_size = self.max_items_per_second * 5
         else:
-            queue_size = nb_workers * 1024
+            queue_size = concurrency * 1024
         self.queue_workers = eventlet.Queue(queue_size)
         self.queue_reply = eventlet.Queue()
 
         self.workers = list()
-        for _ in range(nb_workers):
+        for _ in range(concurrency):
             worker = self.tool.create_worker(
                 self.queue_workers, self.queue_reply)
             self.workers.append(worker)

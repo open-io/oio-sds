@@ -18,7 +18,7 @@ from datetime import datetime
 from socket import gethostname
 
 from oio.blob.operator import ChunkOperator
-from oio.common.easy_value import int_value, true_value
+from oio.common.easy_value import float_value, int_value, true_value
 from oio.common.exceptions import OioException, OrphanChunk, RetryLater
 from oio.common.green import time
 from oio.common.tool import Tool, ToolWorker
@@ -34,6 +34,7 @@ class BlobRebuilder(Tool):
     DEFAULT_BEANSTALKD_WORKER_TUBE = 'oio-rebuild'
     DEFAULT_DISTRIBUTED_BEANSTALKD_WORKER_TUBE = 'oio-rebuild'
     DEFAULT_RDIR_FETCH_LIMIT = 100
+    DEFAULT_RDIR_TIMEOUT = 60.0
     DEFAULT_ALLOW_SAME_RAWX = True
     DEFAULT_TRY_CHUNK_DELETE = False
     DEFAULT_DRY_RUN = False
@@ -54,6 +55,8 @@ class BlobRebuilder(Tool):
         self.rdir_client = RdirClient(self.conf, logger=self.logger)
         self.rdir_fetch_limit = int_value(
             self.conf.get('rdir_fetch_limit'), self.DEFAULT_RDIR_FETCH_LIMIT)
+        self.rdir_timeout = float_value(
+            conf.get('rdir_timeout'), self.DEFAULT_RDIR_TIMEOUT)
 
     @staticmethod
     def items_from_task_event(task_event):
@@ -134,7 +137,8 @@ class BlobRebuilder(Tool):
 
     def _fetch_items_from_rawx_id(self):
         lost_chunks = self.rdir_client.chunk_fetch(
-            self.rawx_id, limit=self.rdir_fetch_limit, rebuild=True)
+            self.rawx_id, limit=self.rdir_fetch_limit, rebuild=True,
+            timeout=self.rdir_timeout)
         for container_id, content_id, chunk_id, _ in lost_chunks:
             yield self.namespace, container_id, content_id, chunk_id
 
@@ -216,17 +220,19 @@ class BlobRebuilder(Tool):
         if self.rawx_id:
             info = self.rdir_client.status(
                 self.rawx_id,
-                read_timeout=600)  # FIXME(adu): Reduce the timeout
+                read_timeout=self.rdir_timeout)
             self.total_expected_items = info.get(
                 'chunk', dict()).get('to_rebuild', None)
 
     def run(self):
         if self.rawx_id:
             self.rdir_client.admin_lock(
-                self.rawx_id, "rebuilder on %s" % gethostname())
+                self.rawx_id, "rebuilder on %s" % gethostname(),
+                timeout=self.rdir_timeout)
         success = super(BlobRebuilder, self).run()
         if self.rawx_id:
-            self.rdir_client.admin_unlock(self.rawx_id)
+            self.rdir_client.admin_unlock(self.rawx_id,
+                                          timeout=self.rdir_timeout)
         return success
 
 

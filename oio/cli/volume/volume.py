@@ -126,7 +126,7 @@ class ShowVolume(show.ShowOne):
         self.log.debug('take_action(%s)', parsed_args)
 
         data = self.app.client_manager.volume.volume_show(
-            volume=parsed_args.volume
+            volume=parsed_args.volume, read_timeout=60.0
         )
         return zip(*sorted(data.iteritems()))
 

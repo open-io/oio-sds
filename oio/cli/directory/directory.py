@@ -287,7 +287,7 @@ class DirectoryWarmup(DirectoryCmd):
 
     def get_parser(self, prog_name):
         parser = super(DirectoryWarmup, self).get_parser(prog_name)
-        parser.add_argument('--workers', type=int, default=1,
+        parser.add_argument('--concurrency', '--workers', type=int, default=1,
                             help="How many concurrent bases to warm up")
         parser.add_argument('--proxy', type=str, default=None,
                             help="Specific proxy IP:PORT")
@@ -299,7 +299,7 @@ class DirectoryWarmup(DirectoryCmd):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         digits = self.app.client_manager.meta1_digits
-        workers_count = parsed_args.workers
+        concurrency = parsed_args.concurrency
 
         conf = {'namespace': self.app.client_manager.namespace}
         if parsed_args.proxy:
@@ -310,12 +310,12 @@ class DirectoryWarmup(DirectoryCmd):
             conf.update({'proxyd_url': proxy})
 
         workers = list()
-        with green.ContextPool(workers_count) as pool:
+        with green.ContextPool(concurrency) as pool:
             pile = GreenPile(pool)
             prefix_queue = Queue(16)
 
             # Prepare some workers
-            for _ in range(workers_count):
+            for _ in range(concurrency):
                 worker = WarmupWorker(self.app.client_manager.client_conf,
                                       self.log)
                 workers.append(worker)

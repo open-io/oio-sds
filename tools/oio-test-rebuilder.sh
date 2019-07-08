@@ -5,18 +5,18 @@ ADMIN_CLI=$(command -v openio-admin)
 CONFIG=$(command -v oio-test-config.py)
 NAMESPACE=$($CONFIG -n)
 INTEGRITY="$(command -v oio-crawler-integrity)"
-WORKERS=10
+CONCURRENCY=10
 
 SVCID_ENABLED=$(openio cluster list meta2 rawx -c 'Service Id' -f value | grep -v 'n/a')
 GRIDINIT="gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock"
 
 usage() {
-  echo "Usage: $(basename "${0}") -n namespace -w workers"
-  echo "Example (default): $(basename "${0}") -n ${NAMESPACE} -w ${WORKERS}"
+  echo "Usage: $(basename "${0}") -n namespace -c concurrency"
+  echo "Example (default): $(basename "${0}") -n ${NAMESPACE} -c ${CONCURRENCY}"
   exit
 }
 
-while getopts ":n:w:p:" opt; do
+while getopts ":n:c:p:" opt; do
   case $opt in
     n)
       echo "-n was triggered, Parameter: $OPTARG" >&2
@@ -27,10 +27,10 @@ while getopts ":n:w:p:" opt; do
       fi
       ;;
     w)
-      echo "-w was triggered, Parameter: $OPTARG" >&2
-      WORKERS=$OPTARG
-      if [ -z "${WORKERS}" ]; then
-        echo "Missing number of workers"
+      echo "-c was triggered, Parameter: $OPTARG" >&2
+      CONCURRENCY=$OPTARG
+      if [ -z "${CONCURRENCY}" ]; then
+        echo "Missing number of coroutines"
         exit 1
       fi
       ;;
@@ -179,13 +179,13 @@ openioadmin_meta_rebuild()
   sleep 3s
 
   echo >&2 "Start the rebuilding for ${TYPE} ${META_ID_TO_REBUILD}" \
-      "with ${WORKERS} workers"
+      "with ${CONCURRENCY} coroutines"
   if [ "${TYPE}" == "meta1" ]; then
-    if ! $ADMIN_CLI $TYPE rebuild --workers "${WORKERS}"; then
+    if ! $ADMIN_CLI $TYPE rebuild --concurrency "${CONCURRENCY}"; then
         FAIL=true
     fi
   else
-    if ! $ADMIN_CLI $TYPE rebuild --workers "${WORKERS}" "${META_ID_TO_REBUILD}"; then
+    if ! $ADMIN_CLI $TYPE rebuild --concurrency "${CONCURRENCY}" "${META_ID_TO_REBUILD}"; then
         FAIL=true
     fi
   fi
@@ -361,7 +361,7 @@ openioadmin_rawx_rebuild()
     BLOB_REBUILDER_OPTIONS=( )
   else
     CLI_ACTION=rebuild
-    BLOB_REBUILDER_OPTIONS=( --workers "${WORKERS}" )
+    BLOB_REBUILDER_OPTIONS=( --concurrency "${CONCURRENCY}" )
   fi
 
   echo >&2 "Start the rebuilding for rawx ${RAWX_ID_TO_REBUILD}"

@@ -55,8 +55,8 @@ def make_arg_parser():
     parser.add_argument('--stop-after-events', type=int, default=0,
                         help=('Stop the process after this number of events '
                               'have been processed. Useful for testing.'))
-    parser.add_argument('--workers', type=int,
-                        help="Number of workers (1)")
+    parser.add_argument('--concurrency', '--workers', type=int,
+                        help='Number of coroutines to spawn (1)')
     return parser
 
 
@@ -80,8 +80,8 @@ def main():
         conf['beanstalkd_tube'] = args.beanstalkd_tube
     if args.report_interval is not None:
         conf['report_interval'] = args.report_interval
-    if args.workers is not None:
-        conf['workers'] = args.workers
+    if args.concurrency is not None:
+        conf['concurrency'] = args.concurrency
     if args.chunks_per_second is not None:
         conf['items_per_second'] = args.chunks_per_second
     if args.retry_delay:

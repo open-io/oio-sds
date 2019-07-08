@@ -20,10 +20,10 @@ from __future__ import print_function
 
 import argparse
 import sys
-import warnings
 
-from oio.common.logger import get_logger
 from oio.directory.meta2 import Meta2Database
+
+from oio.cli import make_logger_args_parser, get_logger_from_args
 
 
 def make_arg_parser():
@@ -32,16 +32,15 @@ def make_arg_parser():
     If the destination service isn't set,
     a destination service is automatically selected.
     """
-    parser = argparse.ArgumentParser(description=descr)
+    parser = argparse.ArgumentParser(description=descr,
+                                     parents=[make_logger_args_parser()])
     parser.add_argument('namespace',
                         metavar='<namespace>',
                         help="Namespace")
     parser.add_argument('base',
                         metavar='<base>',
-                        help="""ID of the base (cid[.seq]).
- If the sequence is not set, apply to all sequences.
-"""
-    )
+                        help="ID of the base (cid[.seq]). If the "
+                             "sequence is not set, apply to all sequences.")
     parser.add_argument('src',
                         metavar='<service_id>',
                         help="ID of the source service")
@@ -57,8 +56,9 @@ if __name__ == '__main__':
           file=sys.stderr)
 
     args = make_arg_parser().parse_args()
+    logger = get_logger_from_args(args)
 
-    meta2 = Meta2Database({'namespace': args.namespace})
+    meta2 = Meta2Database({'namespace': args.namespace}, logger=logger)
     moved = meta2.move(args.base, args.src, dst=args.dst)
 
     return_code = 0
