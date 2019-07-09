@@ -63,6 +63,7 @@ class ItemRebuildTest(CliTestCase):
     def test_chunk_rebuild(self):
         obj_meta, obj_chunks = self.create_object(
             self.account, self.container, self.obj_name)
+        cid = cid_from_name(self.account, self.container)
 
         stg_met = STORAGE_METHODS.load(obj_meta['chunk_method'])
         if stg_met.expected_chunks <= stg_met.min_chunks_to_read:
@@ -71,16 +72,16 @@ class ItemRebuildTest(CliTestCase):
         expected_items = list()
         expected_items.append('account account=%s OK' % self.account)
         expected_items.append(
-            'container account=%s, container=%s OK'
-            % (self.account, self.container))
+            'container account=%s, container=%s, cid=%s OK'
+            % (self.account, self.container, cid))
 
         # Delete first chunk
         missing_chunk = random.choice(obj_chunks)
         self.api.blob_client.chunk_delete(missing_chunk['url'])
         expected_items.append(
-            'object account=%s, container=%s, obj=%s, content_id=%s, '
+            'object account=%s, container=%s, cid=%s, obj=%s, content_id=%s, '
             'version=%s error'
-            % (self.account, self.container, self.obj_name,
+            % (self.account, self.container, cid, self.obj_name,
                obj_meta['id'], obj_meta['version']))
         for chunk in obj_chunks:
             if chunk['url'] == missing_chunk['url']:
@@ -98,9 +99,9 @@ class ItemRebuildTest(CliTestCase):
         second_missing_chunk = random.choice(second_obj_chunks)
         self.api.blob_client.chunk_delete(second_missing_chunk['url'])
         expected_items.append(
-            'object account=%s, container=%s, obj=%s, content_id=%s, '
+            'object account=%s, container=%s, cid=%s, obj=%s, content_id=%s, '
             'version=%s error'
-            % (self.account, self.container, second_obj,
+            % (self.account, self.container, cid, second_obj,
                second_obj_meta['id'], second_obj_meta['version']))
         for chunk in second_obj_chunks:
             if chunk['url'] == second_missing_chunk['url']:
@@ -121,14 +122,13 @@ class ItemRebuildTest(CliTestCase):
         self.assert_list_output(expected_items, output)
 
         expected_items = list()
-        container_id = cid_from_name(self.account, self.container)
         expected_items.append(
             '%s|%s|%s|%s OK' % (
-                self.ns, container_id, obj_meta['id'],
+                self.ns, cid, obj_meta['id'],
                 missing_chunk['url']))
         expected_items.append(
             '%s|%s|%s|%s OK' % (
-                self.ns, container_id, second_obj_meta['id'],
+                self.ns, cid, second_obj_meta['id'],
                 second_missing_chunk['url']))
 
         # Rebuild missing chunks

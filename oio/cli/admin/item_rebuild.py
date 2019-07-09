@@ -67,7 +67,7 @@ class ChunkRebuildCommand(ItemRebuildCommand):
 
         parser.add_argument(
             '--input-file',
-            help='Read chunks from this file instead of rdir. '
+            help='Read chunks from this file. '
                  'Each line should be formatted like '
                  '"container_id|content_id|short_chunk_id_or_position".')
 
@@ -116,13 +116,14 @@ class ChunkRebuildCommand(ItemRebuildCommand):
 
 class ChunkRebuild(ChunkRebuildCommand):
     """
-    Rebuild chunks that were on the specified file.
+    Rebuild the specified chunks.
     """
 
 
 class ChunkDistributedRebuild(ChunkRebuildCommand):
     """
-    Rebuild chunks that were on the specified file across the platform.
+    Rebuild the specified chunks,
+    using several workers across the platform.
     """
 
     distributed = True
