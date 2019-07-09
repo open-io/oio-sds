@@ -78,7 +78,7 @@ class ItemCheckCommand(lister.Lister):
             error_file=parsed_args.output,
             rebuild_file=parsed_args.output_for_chunk_rebuild,
             request_attempts=parsed_args.attempts,
-            integrity=parsed_args.checksum,
+            check_hash=parsed_args.checksum,
             logger=self.logger)
 
         return self.columns, self._take_action(parsed_args)
