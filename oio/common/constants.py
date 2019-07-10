@@ -136,3 +136,6 @@ volume_xattr_keys = VOLUME_XATTR_KEYS
 CHUNK_SUFFIX_CORRUPT = '.corrupt'
 # Suffix of chunk file names that are not finished being uploaded
 CHUNK_SUFFIX_PENDING = '.pending'
+
+# Accounts that are used by internally oio-sds and should stay hidden
+HIDDEN_ACCOUNTS = ("_RDIR",)
