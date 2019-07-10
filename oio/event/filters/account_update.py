@@ -14,7 +14,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-from oio.common.constants import REQID_HEADER, CONNECTION_TIMEOUT, READ_TIMEOUT
+from oio.common.constants import REQID_HEADER, CONNECTION_TIMEOUT, \
+    READ_TIMEOUT, HIDDEN_ACCOUNTS
 from oio.common.exceptions import ClientException, OioTimeout
 from oio.common.utils import request_id
 from oio.event.evob import Event, EventError, EventTypes
@@ -47,7 +48,9 @@ class AccountUpdateFilter(Filter):
         }
 
         try:
-            if event.event_type in CONTAINER_EVENTS:
+            if event.env.get('url').get('account') in HIDDEN_ACCOUNTS:
+                pass
+            elif event.event_type in CONTAINER_EVENTS:
                 mtime = event.when / 1000000.0  # convert to seconds
                 data = event.data
                 url = event.env.get('url')
