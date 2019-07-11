@@ -29,6 +29,7 @@ import argparse
 
 from oio.common import exceptions as exc
 from oio.common.storage_method import STORAGE_METHODS
+from oio.common.utils import cid_from_name
 from oio.account.client import AccountClient
 from oio.container.client import ContainerClient
 from oio.blob.client import BlobClient
@@ -41,6 +42,20 @@ class Target(object):
         self.container = container
         self.obj = obj
         self.chunk = chunk
+        self._cid = None
+
+    @property
+    def cid(self):
+        if not self._cid and self.account and self.container:
+            self._cid = cid_from_name(self.account, self.container)
+        return self._cid
+
+    @cid.setter
+    def cid(self, cid):
+        if cid is not None:
+            self._cid = cid
+            self.account = None
+            self.container = None
 
     def copy(self):
         return Target(
@@ -122,15 +137,10 @@ class Checker(object):
         self.error_writer.writerow(error)
 
     def write_rebuilder_input(self, target, obj_meta, irreparable=False):
-        ct_meta = self.list_cache[(target.account, target.container)][1]
-        try:
-            cid = ct_meta['system']['sys.name'].split('.', 1)[0]
-        except KeyError:
-            cid = ct_meta['properties']['sys.name'].split('.', 1)[0]
         error = list()
         if irreparable:
             error.append('#IRREPARABLE')
-        error.append(cid)
+        error.append(target.cid)
         error.append(obj_meta['id'])
         error.append(target.chunk)
         self.rebuild_writer.writerow(error)
