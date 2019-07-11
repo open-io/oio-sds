@@ -94,8 +94,8 @@ class Checker(object):
 
         self.rebuild_file = rebuild_file
         if self.rebuild_file:
-            fd = open(self.rebuild_file, 'a')
-            self.rebuild_writer = csv.writer(fd, delimiter='|')
+            self.fd = open(self.rebuild_file, 'a')
+            self.rebuild_writer = csv.writer(self.fd, delimiter='|')
 
         conf = {'namespace': namespace}
         self.account_client = AccountClient(
