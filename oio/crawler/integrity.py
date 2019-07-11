@@ -36,6 +36,9 @@ from oio.blob.client import BlobClient
 from oio.api.object_storage import _sort_chunks
 
 
+IRREPARABLE_PREFIX = '#IRREPARABLE'
+
+
 class Target(object):
     def __init__(self, account, container=None, obj=None, chunk=None):
         self.account = account
@@ -126,7 +129,7 @@ class Checker(object):
     def write_error(self, target, irreparable=False):
         error = list()
         if irreparable:
-            error.append('#IRREPARABLE')
+            error.append(IRREPARABLE_PREFIX)
         error.append(target.account)
         if target.container:
             error.append(target.container)
@@ -139,7 +142,7 @@ class Checker(object):
     def write_rebuilder_input(self, target, obj_meta, irreparable=False):
         error = list()
         if irreparable:
-            error.append('#IRREPARABLE')
+            error.append(IRREPARABLE_PREFIX)
         error.append(target.cid)
         error.append(obj_meta['id'])
         error.append(target.chunk)
