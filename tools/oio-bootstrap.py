@@ -159,79 +159,8 @@ syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
 """
 
 template_rawx_service = """
-LoadModule mpm_worker_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mpm_worker.so
-LoadModule authz_core_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_authz_core.so
-LoadModule setenvif_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_setenvif.so
-LoadModule env_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_env.so
-LoadModule dav_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_dav.so
-LoadModule mime_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mime.so
-LoadModule alias_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_alias.so
-LoadModule dav_rawx_module @APACHE2_MODULES_DIRS@/mod_dav_rawx.so
-
-<IfModule !mod_logio.c>
-  LoadModule logio_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_logio.so
-</IfModule>
-<IfModule !unixd_module>
-  LoadModule unixd_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_unixd.so
-</IfModule>
-<IfModule !log_config_module>
-  LoadModule log_config_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_log_config.so
-</IfModule>
-
 Listen ${IP}:${PORT}
 PidFile ${RUNDIR}/${NS}-${SRVTYPE}-${SRVNUM}.pid
-ServerRoot ${TMPDIR}
-ServerName ${IP}
-ServerSignature Off
-ServerTokens Prod
-DocumentRoot ${RUNDIR}
-TypesConfig /etc/mime.types
-
-User  ${USER}
-Group ${GROUP}
-
-SetEnv INFO_SERVICES OIO,${NS},${SRVTYPE},${SRVNUM}
-SetEnv LOG_TYPE access
-SetEnv LEVEL INF
-SetEnv HOSTNAME oio
-
-SetEnvIf Remote_Addr "^" log-cid-out=1
-SetEnvIf Remote_Addr "^" log-cid-in=0
-SetEnvIf Request_Method "PUT" log-cid-in=1
-SetEnvIf Request_Method "PUT" !log-cid-out
-SetEnvIf log-cid-in 0 !log-cid-in
-
-LogFormat "%{%b %d %T}t %{HOSTNAME}e %{INFO_SERVICES}e %{pid}P %{tid}P %{LOG_TYPE}e %{LEVEL}e %{Host}i %a:%{remote}p %m %>s %D %O %{${META_HEADER}-container-id}i %{x-oio-req-id}i %U" log/cid-in
-LogFormat "%{%b %d %T}t %{HOSTNAME}e %{INFO_SERVICES}e %{pid}P %{tid}P %{LOG_TYPE}e %{LEVEL}e %{Host}i %a:%{remote}p %m %>s %D %O %{${META_HEADER}-container-id}o %{x-oio-req-id}i %U" log/cid-out
-
-ErrorLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-errors.log
-SetEnvIf Request_URI "/(stat|info)$" nolog=1
-
-SetEnvIf nolog 1 !log-cid-out
-SetEnvIf nolog 1 !log-cid-in
-
-CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-access.log log/cid-out env=log-cid-out
-CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-access.log log/cid-in  env=log-cid-in
-LogLevel info
-
-<IfModule prefork.c>
-StartServers 5
-MaxClients 40
-MinSpareServers 2
-MaxSpareServers 40
-</IfModule>
-
-<IfModule worker.c>
-MaxClients 512
-MaxRequestWorkers 512
-ThreadsPerChild 256
-StartServers 1
-MinSpareThreads 8
-MaxSpareThreads 32
-MaxRequestsPerChild 0
-</IfModule>
-
-DavDepthInfinity Off
 
 grid_docroot           ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
 grid_namespace         ${NS}
@@ -260,18 +189,12 @@ grid_fsync_dir         ${FSYNC}
 # Enable compression ('zlib' or 'lzo' or 'off')
 grid_compression ${COMPRESSION}
 
-Alias / /x/
-
-<Directory />
-DAV rawx
-AllowOverride None
-Require all granted
-Options -SymLinksIfOwnerMatch -FollowSymLinks -Includes -Indexes
-</Directory>
-
-<VirtualHost ${IP}:${PORT}>
-# DO NOT REMOVE (even if empty) !
-</VirtualHost>
+#tcp_keepalive disabled
+#timeout_read_header 10
+#timeout_read_request 10
+#timeout_write_reply 30
+#timeout_idle 10
+#headers_buffer_size 32768
 """
 
 template_wsgi_service_host = """
