@@ -7,6 +7,6 @@ Name: OpenIO SDS
 Description: SDS client API's
 Version: @OIOSDS_PROJECT_VERSION_SHORT@
 Requires.private: sqlite3, glib-2.0
-Libs: -L${libdir} -loiocore -loiosds -loiosqlx -loiosqlx_direct -loiosqlx_local
+Libs: -L${libdir} -loiocore -loiosds
 Cflags: -I${includedir}
 

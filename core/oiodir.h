@@ -1,5 +1,5 @@
 /*
-OpenIO SDS sqlx
+OpenIO SDS directory client
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify

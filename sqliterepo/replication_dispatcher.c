@@ -2541,13 +2541,6 @@ _handler_QUERY(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	if (!g_str_has_prefix(name.type, NAME_SRVTYPE_SQLX".") &&
-			strcmp(name.type, NAME_SRVTYPE_SQLX)) {
-		reply->send_error(0, NEWERROR(CODE_BAD_REQUEST,
-					"Invalid schema name, not prefixed with 'sqlx.'"));
-		return TRUE;
-	}
-
 	if (NULL != (err = _extract_params(reply->request, &params))) {
 		reply->send_error(0, err);
 		return TRUE;

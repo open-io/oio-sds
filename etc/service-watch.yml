@@ -25,7 +25,7 @@ checks:
 # timeout: 1.0, timeout for check
 
 # ASN.1 ping check.
-# Can be used for meta0, meta1, meta2 or sqlx services.
+# Can be used for meta0, meta1 or meta2 services.
     - {type: asn1}
 
 # Http Check
@@ -57,7 +57,7 @@ stats:
 # Only records starting with "stat." will be reported to conscience.
     - {type: http, path: /status, parser: json}
 
-# Collect statistics from meta0, meta1, meta2 or sqlx services.
+# Collect statistics from meta0, meta1 or meta2 services.
     - {type: meta}
 
 # Collect statistics from an oioproxy service.

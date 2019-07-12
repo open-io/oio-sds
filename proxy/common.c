@@ -262,7 +262,6 @@ cache_flush_user(struct req_args_s *args, struct client_ctx_s *ctx)
 		NAME_SRVTYPE_META0,
 		NAME_SRVTYPE_META1,
 		NAME_SRVTYPE_META2,
-		NAME_SRVTYPE_SQLX,
 	};
 
 	GRID_DEBUG("Suspected stale cache entry for [%s] [%s]",
@@ -270,7 +269,6 @@ cache_flush_user(struct req_args_s *args, struct client_ctx_s *ctx)
 
 	hc_decache_reference (resolver, args->url);
 	hc_decache_reference_service (resolver, args->url, NAME_SRVTYPE_META2);
-	hc_decache_reference_service (resolver, args->url, NAME_SRVTYPE_SQLX);
 
 	for (int i=0; i<3 ;++i) {
 		gchar *k = g_strconcat(ctx->name.base, "/", types[i], NULL);

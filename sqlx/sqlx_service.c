@@ -520,7 +520,7 @@ sqlx_service_resolve_peers(struct sqlx_service_s *ss,
 	struct oio_url_s *u = oio_url_empty ();
 	oio_url_set(u, OIOURL_NS, ss->ns_name);
 
-	err = sqlx_name_extract(n, u, NAME_SRVTYPE_SQLX, &seq);
+	err = sqlx_name_extract(n, u, ss->service_config->srvtype, &seq);
 	if (!err) {
 label_retry:
 		if (nocache)

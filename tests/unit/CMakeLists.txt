@@ -117,10 +117,6 @@ add_executable(test_gridd_client_pool test_gridd_client_pool.c)
 target_link_libraries(test_gridd_client_pool sqliterepo ${ENLARGED})
 add_test(NAME sqliterepo/gridd_client_pool COMMAND test_gridd_client_pool)
 
-add_executable(test_sqlx_client_mem test_sqlx_client.c)
-target_link_libraries(test_sqlx_client_mem oiosqlx oiosqlx_local ${ENLARGED})
-add_test(NAME sqlx/client/mem COMMAND test_sqlx_client_mem)
-
 add_executable(test_events_queue test_events_queue.c)
 target_link_libraries(test_events_queue sqlxsrv oioevents ${ENLARGED})
 add_test(NAME events/abstract COMMAND test_events_queue)

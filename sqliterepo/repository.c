@@ -227,24 +227,11 @@ _schema_get (sqlx_repository_t *repo, const char *type, const char **res)
 {
 	gchar *schema = NULL;
 
-	/* XXX(jfs): ugly quirk to quickly manage (in one place and without
-	   excess of abstractions) 2 kinds of services with opposed behaviors.
-	   On one side, we have meta2 where all the meta2[.*] services MUST have
-	   exactly the same schema, and on the other side the sqlx[.*] that
-	   might all have different schemas, and maybe no specific schema at all. */
-	if (!strcmp(type, NAME_SRVTYPE_SQLX) ||
-			g_str_has_prefix (type, NAME_SRVTYPE_SQLX".")) {
-		if (!(schema = g_tree_lookup (repo->schemas, type)))
-			schema = g_tree_lookup (repo->schemas, NAME_SRVTYPE_SQLX);
-		if (!schema)
-			schema = "";
-	} else {
 		gchar *realtype = g_strdup (type);
 		gchar *dot = strchr(realtype, '.');
 		if (dot) *dot = '\0';
 		schema = g_tree_lookup(repo->schemas, realtype);
 		g_free (realtype);
-	}
 
 	if (!schema)
 		return NEWERROR(CODE_SRVTYPE_NOTMANAGED, "Type [%s] not managed", type);

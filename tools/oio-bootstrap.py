@@ -574,10 +574,6 @@ score_timeout=120
 score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
 score_timeout=120
 
-[type:sqlx]
-score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
-score_timeout=120
-
 [type:rdir]
 score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
 score_timeout=120
@@ -659,15 +655,6 @@ start_at_boot=false
 command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${IP}:${PORT} ${OPTARGS} ${EXTRA} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
 """
 
-template_gridinit_sqlx = """
-[service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-on_die=cry
-enabled=true
-start_at_boot=false
-command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O DirectorySchemas=${CFGDIR}/sqlx/schemas -O Endpoint=${IP}:${PORT} ${EXTRA} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
-"""
-
 template_gridinit_indexer = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
@@ -728,7 +715,6 @@ ${NOZK}# Alternate ZK endpoints for specific services
 ${NOZK}zookeeper.meta0=${ZK_CNXSTRING}
 ${NOZK}zookeeper.meta1=${ZK_CNXSTRING}
 ${NOZK}zookeeper.meta2=${ZK_CNXSTRING}
-${NOZK}zookeeper.sqlx= ${ZK_CNXSTRING}
 
 #proxy-local=${RUNDIR}/${NS}-proxy.sock
 proxy=${IP}:${PORT_PROXYD}
@@ -950,77 +936,6 @@ command=oio-webhook-test.py --port 9081
 env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 """
 
-sqlx_schema_dovecot = """
-CREATE TABLE IF NOT EXISTS box (
-   name TEXT NOT NULL PRIMARY KEY,
-   ro INT NOT NULL DEFAULT 0,
-   messages INT NOT NULL DEFAULT 0,
-   recent INT NOT NULL DEFAULT 0,
-   unseen INT NOT NULL DEFAULT 0,
-   uidnext INT NOT NULL DEFAULT 1,
-   uidvalidity INT NOT NULL DEFAULT 0,
-   keywords TEXT);
-
-CREATE TABLE IF NOT EXISTS boxattr (
-   box TEXT NOT NULL,
-   k TEXT NOT NULL,
-   v TEXT NOT NULL,
-   PRIMARY KEY (box,k));
-
-CREATE TABLE IF NOT EXISTS mail (
-   seq INTEGER PRIMARY KEY AUTOINCREMENT,
-   box_uid INTEGER NOT NULL,
-   uid TEXT NOT NULL,
-   guid TEXT NOT NULL,
-   box TEXT NOT NULL,
-   oiourl TEXT NOT NULL,
-   len INTEGER NOT NULL,
-   hlen INTEGER NOT NULL,
-   flags INTEGER NOT NULL,
-   header TEXT NOT NULL);
-
-CREATE INDEX IF NOT EXISTS boxattr_index_by_box ON boxattr(box);
-CREATE INDEX IF NOT EXISTS mail_index_by_box ON mail(box);
-
-CREATE TRIGGER IF NOT EXISTS mail_after_add AFTER INSERT ON mail
-BEGIN
-   -- Lazy mailbox creation. Eases the tests but breaks the IMAP
-   -- compliance.
-   --INSERT OR IGNORE INTO box (name) VALUES (new.box);
-   UPDATE mail SET
-      box_uid = (SELECT uidnext FROM box WHERE name = new.box)
-   WHERE guid = new.guid AND box = new.box AND uid = new.uid;
-   UPDATE box SET
-      messages = messages + 1,
-      recent = recent + 1,
-      unseen = unseen + 1,
-      uidnext = uidnext + 1
-   WHERE name = new.box ;
-END ;
-
-CREATE TRIGGER IF NOT EXISTS mail_after_delete AFTER DELETE ON mail
-BEGIN
-   UPDATE box SET
-      messages = messages - 1
-   WHERE name = old.box ;
-END ;
-
-CREATE TRIGGER IF NOT EXISTS mail_after_update AFTER UPDATE OF flags ON mail
-BEGIN
-   UPDATE mail SET flags = flags & ~(32) WHERE box = new.box;
-   UPDATE box SET
-      recent = 0,
-      unseen = unseen + ((old.flags & 8) AND ((new.flags & 8) != (old.flags & 8))) - ((new.flags & 8) AND ((new.flags & 8) != (old.flags & 8)))
-   WHERE name = old.box ;
-END ;
-
-INSERT OR REPLACE INTO box (name,ro) VALUES ('INBOX', 0);
-"""
-
-sqlx_schemas = (
-    ("sqlx", sqlx_schema_dovecot),
-    ("sqlx.mail", sqlx_schema_dovecot),
-)
 
 HOME = str(os.environ['HOME'])
 OIODIR = HOME + '/.oio'
@@ -1052,7 +967,6 @@ M1_REPLICAS = 'directory_replicas'
 M2_REPLICAS = 'container_replicas'
 M2_VERSIONS = 'container_versions'
 M2_STGPOL = 'storage_policy'
-SQLX_REPLICAS = 'sqlx_replicas'
 PROFILE = 'profile'
 PORT_START = 'port_start'
 ACCOUNT_ID = 'account_id'
@@ -1071,11 +985,9 @@ defaults = {
     'NB_M0': 1,
     'NB_M1': 1,
     'NB_M2': 1,
-    'NB_SQLX': 1,
     'NB_RAWX': 3,
     'NB_RAINX': 0,
     'NB_ECD': 1,
-    'REPLI_SQLX': 1,
     'REPLI_M2': 1,
     'REPLI_M1': 1,
     'COMPRESSION': "off",
@@ -1154,7 +1066,6 @@ def generate(options):
     meta1_digits = getint(options.get(M1_DIGITS), defaults[M1_DIGITS])
     meta1_replicas = getint(options.get(M1_REPLICAS), defaults['REPLI_M1'])
     meta2_replicas = getint(options.get(M2_REPLICAS), defaults['REPLI_M2'])
-    sqlx_replicas = getint(options.get(SQLX_REPLICAS), defaults['REPLI_SQLX'])
 
     if M2_VERSIONS in options:
         versioning = options[M2_VERSIONS]
@@ -1203,8 +1114,6 @@ def generate(options):
                M1_REPLICAS=meta1_replicas,
                M2_REPLICAS=meta2_replicas,
                M2_DISTANCE=str(1),
-               SQLX_REPLICAS=sqlx_replicas,
-               SQLX_DISTANCE=str(1),
                APACHE2_MODULES_SYSTEM_DIR=APACHE2_MODULES_SYSTEM_DIR,
                BACKBLAZE_ACCOUNT_ID=backblaze_account_id,
                BACKBLAZE_BUCKET_NAME=backblaze_bucket_name,
@@ -1375,7 +1284,7 @@ def generate(options):
 
     meta2_volumes = []
 
-    # meta* + sqlx
+    # meta*
     def generate_meta(t, n, tpl, ext_opt="", service_id=False):
         env = subenv({'SRVTYPE': t, 'SRVNUM': n, 'PORT': next(ports),
                       'EXE': 'oio-' + t + '-server',
@@ -1446,13 +1355,6 @@ def generate(options):
     tpl = Template(template_gridinit_meta2_indexer)
     with open(gridinit(_tmp_env), 'a+') as f:
         f.write(tpl.safe_substitute(_tmp_env))
-
-    # sqlx
-    nb_sqlx = getint(options['sqlx'].get(SVC_NB), sqlx_replicas)
-    if nb_sqlx:
-        for i in range(nb_sqlx):
-            generate_meta('sqlx', i + 1, template_gridinit_sqlx,
-                          options['sqlx'].get(SVC_PARAMS, ""))
 
     # RAWX
     srvtype = 'rawx'
@@ -1648,13 +1550,6 @@ def generate(options):
         tpl = Template(template_conscience_agent)
         f.write(tpl.safe_substitute(env))
 
-    # sqlx schemas
-    base = '{CFGDIR}/sqlx/schemas'.format(**ENV)
-    mkdir_noerror(base)
-    for name, content in sqlx_schemas:
-        with open(base + '/' + name, 'w+') as f:
-            f.write(content)
-
     # gridinit header
     with open(gridinit(ENV), 'a+') as f:
         tpl = Template(template_gridinit_ns)
@@ -1787,7 +1682,6 @@ def main():
     opts['meta0'] = {SVC_NB: None, SVC_HOSTS: None}
     opts['meta1'] = {SVC_NB: None, SVC_HOSTS: None}
     opts['meta2'] = {SVC_NB: None, SVC_HOSTS: None}
-    opts['sqlx'] = {SVC_NB: None, SVC_HOSTS: None}
     opts['rawx'] = {SVC_NB: None, SVC_HOSTS: None}
     opts[GO_RAWX] = False
     opts[FSYNC_RAWX] = False
