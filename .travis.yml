@@ -86,7 +86,7 @@ jobs:
     - script: ./tools/oio-travis-suites.sh
       env: TEST_SUITE=single,webhook
     - script: ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=repli,go-rawx
+      env: TEST_SUITE=repli
     - script: ./tools/oio-travis-suites.sh
       env: TEST_SUITE=ec
     - script: ./tools/oio-travis-suites.sh
