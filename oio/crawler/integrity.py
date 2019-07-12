@@ -27,13 +27,14 @@ import csv
 import sys
 from time import time
 
-# from oio.blob.rebuilder import BlobRebuilder
+from oio.blob.rebuilder import BlobRebuilder
 from oio.common import exceptions as exc
 from oio.common.fullpath import decode_fullpath
-# from oio.common.json import json
+from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.storage_method import STORAGE_METHODS
-from oio.common.utils import cid_from_name
+from oio.common.utils import cid_from_name, CacheDict
+from oio.event.beanstalk import BeanstalkdSender
 from oio.api.object_storage import ObjectStorageApi
 from oio.api.object_storage import _sort_chunks
 from oio.rdir.client import RdirClient
@@ -129,7 +130,7 @@ class Target(object):
 
         :rtype: tuple
         :returns: the duration (in seconds) since we detected an error,
-            and the number of consecutive checks which showed an error.
+            and the number of consecutive error confirmations.
         """
         if not self.has_errors:
             return 0.0, 0
@@ -138,7 +139,7 @@ class Target(object):
             if not res[1]:
                 break
             consecutive.append(res)
-        return time() - consecutive[-1][0], len(consecutive)
+        return time() - consecutive[-1][0], len(consecutive) - 1
 
     def __repr__(self):
         if self.type == 'chunk':
@@ -196,9 +197,12 @@ class Checker(object):
                  limit_listings=0, request_attempts=1,
                  logger=None, verbose=False, check_hash=False,
                  min_time_in_error=0.0, required_confirmations=0,
-                 **_kwargs):
+                 beanstalkd_addr=None,
+                 beanstalkd_tube=BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE,
+                 cache_size=2**24, **_kwargs):
         self.pool = GreenPool(concurrency)
         self.error_file = error_file
+        self.error_sender = None
         self.check_xattr = bool(check_xattr)
         self.check_hash = bool(check_hash)
         self.logger = logger or get_logger({'namespace': namespace},
@@ -217,6 +221,10 @@ class Checker(object):
         if self.rebuild_file:
             self.fd = open(self.rebuild_file, 'a')
             self.rebuild_writer = csv.writer(self.fd, delimiter='|')
+
+        if beanstalkd_addr:
+            self.error_sender = BeanstalkdSender(
+                beanstalkd_addr, beanstalkd_tube, self.logger)
 
         self.api = ObjectStorageApi(
             namespace,
@@ -239,7 +247,7 @@ class Checker(object):
         self.object_exceptions = 0
         self.chunk_exceptions = 0
 
-        self.list_cache = {}
+        self.list_cache = CacheDict(cache_size)
         self.running_tasks = {}
         self.running_lock = Semaphore(1)
         self.result_queue = LightQueue(concurrency)
@@ -358,15 +366,19 @@ class Checker(object):
         target.append_result(ItemResult(errors, irreparable))
         self.result_queue.put(target)
 
-#    def send_chunk_job(self, target, irreparable=False):
-#        item = (self.api.namespace, target.cid,
-#                target.content_id, target.chunk)
-#        ev_dict = BlobRebuilder.task_event_from_item(item)
-#        if irreparable:
-#            ev_dict['data']['irreparable'] = irreparable
-#        job = json.dumps(ev_dict)
-#        self.error_sender.send_job(job)
-#        self.error_sender.job_done()  # Don't expect any response
+    def send_chunk_job(self, target, irreparable=False):
+        """
+        Send a "content broken" event, to trigger the
+        reconstruction of the chunk.
+        """
+        item = (self.api.namespace, target.cid,
+                target.content_id, target.chunk)
+        ev_dict = BlobRebuilder.task_event_from_item(item)
+        if irreparable:
+            ev_dict['data']['irreparable'] = irreparable
+        job = json.dumps(ev_dict)
+        self.error_sender.send_job(job)
+        self.error_sender.job_done()  # Don't expect any response
 
     def write_error(self, target, irreparable=False):
         if not self.error_file:
@@ -403,6 +415,8 @@ class Checker(object):
         if self.rebuild_file:
             self.write_rebuilder_input(target,
                                        irreparable=irreparable)
+        if self.error_sender:
+            self.send_chunk_job(target, irreparable=irreparable)
 
     def _check_chunk_xattr(self, target, obj_meta, xattr_meta):
         """
@@ -442,6 +456,10 @@ class Checker(object):
         obj_meta = None
         xattr_meta = None
 
+        cached = self._get_cached_or_lock(chunk)
+        if cached is not None:
+            return cached + (True, )
+
         self.logger.debug('Checking chunk "%s"', target)
         try:
             xattr_meta = self.api.blob_client.chunk_head(
@@ -474,14 +492,19 @@ class Checker(object):
                 errors.extend(
                     self._check_chunk_xattr(target, db_meta, xattr_meta))
 
+        self.list_cache[chunk] = errors, obj_meta
+        self._unlock(chunk)
+
         # Do not send errors directly, let the caller do it.
         # Indeed, it may want to check if the chunks can be repaired or not.
         self.chunks_checked += 1
-        return errors, obj_meta
+        return errors, obj_meta, False
 
     def check_chunk(self, target):
-        errors, _obj_meta = self._check_chunk(target)
-        self.send_result(target, errors)
+        errors, _obj_meta, from_cache = self._check_chunk(target)
+        # If the result comes from the cache, we already reported it.
+        if not from_cache:
+            self.send_result(target, errors, target.irreparable)
         return errors
 
     def _check_metachunk(self, target, stg_met, pos, chunks,
@@ -504,22 +527,22 @@ class Checker(object):
                         chkt = target.copy()
                         chkt.chunk = '%d.%d' % (pos, sub)
                         err = "Missing chunk at position %s" % chkt.chunk
-                        chunk_results.append((chkt, [err]))
+                        chunk_results.append((chkt, [err], False))
                         errors.append(err)
             else:
                 for _ in range(missing_chunks):
                     chkt = target.copy()
                     chkt.chunk = '%d.%d' % (pos, sub)
                     err = "Missing chunk at position %d" % pos
-                    chunk_results.append((chkt, [err]))
+                    chunk_results.append((chkt, [err], False))
                     errors.append(err)
 
         if recurse > 0:
             for chunk in chunks:
                 tcopy = target.copy()
                 tcopy.chunk = chunk['url']
-                chunk_errors, _ = self._check_chunk(tcopy)
-                chunk_results.append((tcopy, chunk_errors))
+                chunk_errors, _, from_cache = self._check_chunk(tcopy)
+                chunk_results.append((tcopy, chunk_errors, from_cache))
                 if chunk_errors:
                     errors.append("Unusable chunk %s at position %s" % (
                         chunk['url'], chunk['pos']))
@@ -531,8 +554,10 @@ class Checker(object):
                 "(%d/%d chunks available, %d/%d required)" % (
                     pos, required - len(errors), stg_met.expected_chunks,
                     stg_met.min_chunks_to_read, stg_met.expected_chunks))
-        for tgt, errs in chunk_results:
-            self.send_result(tgt, errs, irreparable)
+        for tgt, errs, from_cache in chunk_results:
+            # If the result comes from the cache, we already reported it.
+            if not from_cache:
+                self.send_result(tgt, errs, irreparable)
         # Since the "metachunk" is not an official item type,
         # this method does not report errors itself. Errors will
         # be reported as object errors.
@@ -903,6 +928,9 @@ class Checker(object):
                 self.delayed_targets[repr(target)] = target
             else:
                 if target.type == 'chunk':
+                    self.logger.info(
+                        "Writing error for %s, %d/%d confirmations",
+                        target, confirmations, self.required_confirmations)
                     self.write_chunk_error(target,
                                            irreparable=target.irreparable)
                 else:
@@ -931,6 +959,7 @@ class Checker(object):
         for result in self.fetch_results():
             self.log_result(result)
             yield result
+        self.list_cache = CacheDict(self.list_cache.size)
 
     def stop(self):
         self.logger.info("Stopping")
@@ -981,13 +1010,17 @@ class Checker(object):
 def run_once(checker, entries=None, rate_limiter=None):
     if entries:
         for entry in entries:
-            checker.check(Target(*entry), recurse=DEFAULT_DEPTH)
+            if isinstance(entry, Target):
+                checker.check(entry, recurse=DEFAULT_DEPTH)
+            else:
+                checker.check(Target(*entry), recurse=DEFAULT_DEPTH)
     else:
         checker.check_all_accounts(recurse=DEFAULT_DEPTH)
     for _ in checker.run(rate_limiter):
         pass
     if not checker.report():
-        sys.exit(1)
+        return 1
+    return 0
 
 
 def run_indefinitely(checker, entries=None, rate_limiter=None,
@@ -1001,17 +1034,13 @@ def run_indefinitely(checker, entries=None, rate_limiter=None,
     signal.signal(signal.SIGTERM, _stop)
 
     while checker.running:
-        for target in checker.delayed_targets.values():
-            checker.check(target, recurse=0)
-        if entries:
-            for entry in entries:
-                checker.check(Target(*entry), recurse=DEFAULT_DEPTH)
-        else:
-            checker.check_all_accounts(recurse=DEFAULT_DEPTH)
-        for _ in checker.run(rate_limiter):
-            pass
-        checker.report()
-        checker.list_cache = dict()
+        if checker.delayed_targets:
+            run_once(checker,
+                     entries=checker.delayed_targets.values(),
+                     rate_limiter=rate_limiter)
+
+        run_once(checker, entries, rate_limiter)
+
         checker.reset_stats()
         if checker.running and pause_between_passes > 0.0:
             checker.logger.info("Pausing for %.3fs", pause_between_passes)
@@ -1046,6 +1075,19 @@ def main():
     parser.add_argument('--attempts', type=int, default=1,
                         help=('Number of attempts for '
                               'listing requests (default: 1).'))
+
+    parser.add_argument('--beanstalkd', metavar='IP:PORT',
+                        help=("BETA: send broken chunks events to a "
+                              "beanstalkd tube. Do not enable this without "
+                              "also enabling --confirmations and/or "
+                              "--time-in-error, or the system may be "
+                              "rebuilding temporary unavailable chunks."))
+    parser.add_argument('--beanstalkd-tube',
+                        default=BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE,
+                        help=("The beanstalkd tube to send broken chunks "
+                              "events to (default=%s)." %
+                              BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE))
+
     parser.add_argument('--concurrency', '--workers', type=int,
                         default=50,
                         help='Number of concurrent checks (default: 50).')
@@ -1114,6 +1156,8 @@ def main():
         verbose=not args.quiet,
         min_time_in_error=args.time_in_error,
         required_confirmations=args.confirmations,
+        beanstalkd_addr=args.beanstalkd,
+        beanstalkd_tube=args.beanstalkd_tube,
     )
 
     if args.ratelimit:
@@ -1125,4 +1169,4 @@ def main():
         run_indefinitely(checker, entries, rate_limiter,
                          pause_between_passes=args.pause_between_passes)
     else:
-        run_once(checker, entries, rate_limiter)
+        return run_once(checker, entries, rate_limiter)

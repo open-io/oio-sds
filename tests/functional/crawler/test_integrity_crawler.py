@@ -84,3 +84,39 @@ class TestIntegrityCrawler(BaseTestCase):
             pass
         self.checker.fd.flush()
         self._verify_rebuilder_input()
+
+    def test_object_rebuilder_output_with_confirmations(self):
+        """
+        Check that chunk targets showing errors are reported only after
+        the right number of confirmations.
+        """
+        self.checker.required_confirmations = 2
+        tgt = Target(self.account, container=self.container, obj=self.obj,
+                     content_id=self.meta['id'], version=self.meta['version'])
+        self.checker.check(tgt, recurse=DEFAULT_DEPTH)
+        for _ in self.checker.run():
+            pass
+        self.checker.fd.flush()
+        # File is empty
+        self.assertRaises(StopIteration, self._verify_rebuilder_input)
+        self.assertIn(repr(tgt), self.checker.delayed_targets)
+
+        # 1st confirmation
+        for dtgt in self.checker.delayed_targets.values():
+            self.checker.check(dtgt, recurse=DEFAULT_DEPTH)
+        for _ in self.checker.run():
+            pass
+        self.checker.fd.flush()
+        # File is empty
+        self.assertRaises(StopIteration, self._verify_rebuilder_input)
+        self.assertIn(repr(tgt), self.checker.delayed_targets)
+
+        # 2nd confirmation
+        for dtgt in self.checker.delayed_targets.values():
+            self.checker.check(dtgt, recurse=DEFAULT_DEPTH)
+        for _ in self.checker.run():
+            pass
+        self.checker.fd.flush()
+        # File is NOT empty
+        self._verify_rebuilder_input()
+        self.assertNotIn(repr(tgt), self.checker.delayed_targets)
