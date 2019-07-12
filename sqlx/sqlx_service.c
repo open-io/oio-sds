@@ -504,51 +504,6 @@ filter_services(struct sqlx_service_s *ss, gchar **s, const gchar *type)
 	return NULL;
 }
 
-GError *
-sqlx_service_resolve_peers(struct sqlx_service_s *ss,
-		const struct sqlx_name_s *n, gboolean nocache, gchar ***result)
-{
-	EXTRA_ASSERT(ss != NULL);
-	EXTRA_ASSERT(result != NULL);
-
-	GError *err = NULL;
-	gint64 seq = 1;
-	gint retry = 1;
-
-	*result = NULL;
-
-	struct oio_url_s *u = oio_url_empty ();
-	oio_url_set(u, OIOURL_NS, ss->ns_name);
-
-	err = sqlx_name_extract(n, u, ss->service_config->srvtype, &seq);
-	if (!err) {
-label_retry:
-		if (nocache)
-			hc_decache_reference_service(ss->resolver, u, n->type);
-
-		gchar **peers = NULL;
-		err = hc_resolve_reference_service(ss->resolver, u, n->type, &peers,
-				oio_ext_get_deadline());
-		if (err == NULL) {
-			EXTRA_ASSERT(peers != NULL);
-			*result = peers;
-			peers = NULL;
-		} else {
-			EXTRA_ASSERT(peers == NULL);
-			if (retry > 0 && err->code == CODE_RANGE_NOTFOUND) {
-				// We may have asked the wrong meta1
-				hc_decache_reference(ss->resolver, u);
-				retry --;
-				goto label_retry;
-			}
-			g_prefix_error(&err, "Peer resolution error: ");
-		}
-	}
-
-	oio_url_pclean (&u);
-	return err;
-}
-
 // TODO: replace `nocache` by flags
 static GError *
 _get_peers_wrapper(struct sqlx_service_s *ss, const struct sqlx_name_s *name,
@@ -974,12 +929,6 @@ _count_options (struct grid_main_option_s const * tab)
 		for (; tab->name; ++tab, ++count)
 			;
 	return count;
-}
-
-void
-sqlx_service_set_custom_options (struct grid_main_option_s *tab)
-{
-	custom_options = tab;
 }
 
 static struct grid_main_option_s *

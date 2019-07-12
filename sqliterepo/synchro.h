@@ -25,6 +25,7 @@ License along with this library.
  *
  * Helps the developper to make use of a ZooKeeper-like server.
  */
+#include <glib.h>
 #include <zookeeper.h>
 
 #define PATH_MAXLEN 128 + LIMIT_LENGTH_NSNAME

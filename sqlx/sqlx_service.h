@@ -22,22 +22,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define PSRV(P) ((struct sqlx_service_s*)(P))
 
-struct election_manager_s;
-struct gridd_client_pool_s;
-struct gridd_request_dispatcher_s;
-struct grid_single_rrd_s;
-struct grid_task_queue_s;
-struct hc_resolver_s;
-struct network_server_s;
-struct replication_config_s;
-struct service_info_s;
-struct sqlx_name_s;
-struct sqlx_peering_s;
-struct sqlx_repo_config_s;
-struct sqlx_repository_s;
+#include <glib.h>
+#include <metautils/lib/metautils.h>
+#include <sqliterepo/sqliterepo.h>
+#include <sqliterepo/sqlx_remote.h>
+#include <resolver/hc_resolver.h>
+#include <server/transport_gridd.h>
+#include <server/network_server.h>
+
 struct sqlx_service_config_s;
 struct sqlx_service_s;
-struct sqlx_sync_s;
 
 struct sqlx_service_config_s
 {
@@ -154,16 +148,6 @@ struct sqlx_service_s
 
 extern int sqlite_service_main(int argc, char **argv,
 		const struct sqlx_service_config_s *cfg);
-
-void sqlx_service_set_custom_options (struct grid_main_option_s *options);
-
-GError* sqlx_reload_lb_service_types(struct oio_lb_world_s *lbw,
-		struct oio_lb_s *lb, GSList *list_srvtypes);
-
-/** Use the resolver to find peers.
- *  Only for services registered in meta1 (e.g. meta2 and sqlx). */
-GError * sqlx_service_resolve_peers(struct sqlx_service_s *ss,
-		const struct sqlx_name_s *n, gboolean nocache, gchar ***result);
 
 // FIXME: this is only used in meta1
 /** Reloads the optional (oio_lb_s*). Exposed to let the
