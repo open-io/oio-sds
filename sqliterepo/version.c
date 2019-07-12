@@ -109,8 +109,8 @@ version_encode(GTree *t)
 			struct object_version_s *v = _v;
 			struct TableVersion *tv = ASN1C_CALLOC(1, sizeof(*tv));
 			OCTET_STRING_fromBuf(&(tv->name), hashstr_str(_k), hashstr_len(_k));
-			asn_int64_to_INTEGER(&(tv->version), v->version);
-			asn_int64_to_INTEGER(&(tv->when), v->when);
+			metautils_asn_int64_to_INTEGER(&(tv->version), v->version);
+			metautils_asn_int64_to_INTEGER(&(tv->when), v->when);
 			asn_sequence_add(&(bv.list), tv);
 		}
 		return FALSE;
@@ -164,8 +164,8 @@ version_decode(guint8 *raw, gsize rawsize)
 			}
 
 			o = version_getslen(1, t, tv->name.buf, tv->name.size);
-			asn_INTEGER_to_int64(&(tv->version), &(o->version));
-			asn_INTEGER_to_int64(&(tv->when), &(o->when));
+			metautils_asn_INTEGER_to_int64(&(tv->version), &(o->version));
+			metautils_asn_INTEGER_to_int64(&(tv->when), &(o->when));
 		}
 
 		asn_DEF_BaseVersion.free_struct(&asn_DEF_BaseVersion, bv, FALSE);

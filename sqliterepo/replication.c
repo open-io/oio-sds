@@ -139,7 +139,7 @@ load_table_header(sqlite3_stmt *stmt, Table_t *t)
 	for (i=0,max=sqlite3_data_count(stmt); i<max ;i++) {
 		const char *cname = sqlite3_column_name(stmt, i);
 		struct RowName *rname = ASN1C_CALLOC(1, sizeof(*rname));
-		asn_uint32_to_INTEGER(&(rname->pos), i);
+		metautils_asn_uint32_to_INTEGER(&(rname->pos), i);
 		OCTET_STRING_fromBuf(&(rname->name), cname, strlen(cname));
 		asn_sequence_add(&(t->header.list), rname);
 	}
@@ -158,7 +158,7 @@ load_statement(sqlite3_stmt *stmt, Row_t *row, Table_t *table)
 
 	for (i=0,max=sqlite3_data_count(stmt); i<max ;i++) {
 		struct RowField *rf = ASN1C_CALLOC(1, sizeof(*rf));
-		asn_uint32_to_INTEGER(&(rf->pos), i);
+		metautils_asn_uint32_to_INTEGER(&(rf->pos), i);
 		rf->value.present = RowFieldValue_PR_n;
 
 		switch (sqlite3_column_type(stmt, i)) {
@@ -168,7 +168,7 @@ load_statement(sqlite3_stmt *stmt, Row_t *row, Table_t *table)
 			case SQLITE_INTEGER:
 				do {
 					gint64 i64 = sqlite3_column_int64(stmt, i);
-					asn_int64_to_INTEGER(&(rf->value.choice.i), i64);
+					metautils_asn_int64_to_INTEGER(&(rf->value.choice.i), i64);
 					rf->value.present = RowFieldValue_PR_i;
 				} while (0);
 				break;
@@ -271,7 +271,7 @@ context_pending_to_rowset(sqlite3 *db, struct sqlx_repctx_s *ctx)
 					hashstr_str(name), rowid, deleted);
 
 			struct Row *row = ASN1C_CALLOC(1, sizeof(*row));
-			asn_int64_to_INTEGER(&(row->rowid), rowid);
+			metautils_asn_int64_to_INTEGER(&(row->rowid), rowid);
 			if (!deleted)
 				load_table_row(db, name, rowid, row, table);
 

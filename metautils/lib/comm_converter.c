@@ -265,7 +265,7 @@ addr_info_ASN2API(const AddrInfo_t * asn, addr_info_t * api)
 	EXTRA_ASSERT (asn != NULL);
 
 	guint16 port16 = 0;
-	asn_INTEGER_to_uint16(&asn->port, &port16);
+	metautils_asn_INTEGER_to_uint16(&asn->port, &port16);
 	api->port = g_ntohs(port16);
 
 	switch (asn->ip.present) {
@@ -292,7 +292,7 @@ addr_info_API2ASN(const addr_info_t * api, AddrInfo_t * asn)
 	EXTRA_ASSERT (api != NULL);
 	EXTRA_ASSERT (asn != NULL);
 
-	asn_uint16_to_INTEGER(&asn->port, g_htons(api->port));
+	metautils_asn_uint16_to_INTEGER(&asn->port, g_htons(api->port));
 	asn->ip.present = AddrInfo__ip_PR_NOTHING;
 
 	switch (api->type) {
@@ -319,8 +319,8 @@ score_ASN2API(const Score_t * asn, score_t * api)
 {
 	EXTRA_ASSERT (api != NULL);
 	EXTRA_ASSERT (asn != NULL);
-	asn_INTEGER_to_int32(&(asn->value), &(api->value));
-	asn_INTEGER_to_int32(&(asn->timestamp), &(api->timestamp));
+	metautils_asn_INTEGER_to_int32(&(asn->value), &(api->value));
+	metautils_asn_INTEGER_to_int32(&(asn->timestamp), &(api->timestamp));
 	return TRUE;
 }
 
@@ -329,8 +329,8 @@ score_API2ASN(const score_t * api, Score_t * asn)
 {
 	EXTRA_ASSERT (api != NULL);
 	EXTRA_ASSERT (asn != NULL);
-	asn_int32_to_INTEGER(&(asn->value), api->value);
-	asn_int32_to_INTEGER(&(asn->timestamp), api->timestamp);
+	metautils_asn_int32_to_INTEGER(&(asn->value), api->value);
+	metautils_asn_int32_to_INTEGER(&(asn->timestamp), api->timestamp);
 	return TRUE;
 }
 
@@ -353,7 +353,7 @@ service_tag_ASN2API(ServiceTag_t * asn, service_tag_t * api)
 			return TRUE;
 		case ServiceTag__value_PR_i:
 			api->type = STVT_I64;
-			asn_INTEGER_to_int64(&(asn->value.choice.i), &(api->value.i));
+			metautils_asn_INTEGER_to_int64(&(asn->value.choice.i), &(api->value.i));
 			return TRUE;
 		case ServiceTag__value_PR_r:
 			api->type = STVT_REAL;
@@ -431,7 +431,7 @@ service_tag_API2ASN(service_tag_t * api, ServiceTag_t * asn)
 		break;
 	case STVT_I64:
 		asn->value.present = ServiceTag__value_PR_i;
-		asn_int64_to_INTEGER(&(asn->value.choice.i), api->value.i);
+			metautils_asn_int64_to_INTEGER(&(asn->value.choice.i), api->value.i);
 		break;
 	case STVT_BOOL:
 		asn->value.present = ServiceTag__value_PR_b;
