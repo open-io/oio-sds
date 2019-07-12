@@ -1548,11 +1548,7 @@ def generate(options):
             env['SERVICE_ID'] = "{NS}-{SRVTYPE}-{SRVNUM}".format(**env)
             add_service(env)
             # gridinit (rawx)
-            if options[GO_RAWX]:
-                tpl = Template(
-                    template_gridinit_rawx % template_gridinit_rawx_command_options)
-            else:
-                tpl = Template(template_gridinit_httpd)
+            tpl = Template(template_gridinit_rawx % template_gridinit_rawx_command_options)
             with open(gridinit(env), 'a+') as f:
                 f.write(tpl.safe_substitute(env))
             # service
