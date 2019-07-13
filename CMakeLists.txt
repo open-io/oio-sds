@@ -365,7 +365,17 @@ if (ASN1C_EXE)
 else()
 	find_program(ASN1C_EXECUTABLE asn1c)
 endif()
-set(ASN1C_EXE_OPTS "-fwide-types")
+
+# In some distributions we have to support, the asn1c version is really old
+# and has not yet the "-fwide-types" option. At that time, it was still the
+# default. So we detect this option, as a sign that it is mandatory to have
+# wide types.
+execute_process(COMMAND ${ASN1C_EXECUTABLE} -h ERROR_FILE ${CMAKE_BINARY_DIR}/ASN1C_HELP OUTPUT_QUIET)
+execute_process(COMMAND grep -q wide ${CMAKE_BINARY_DIR}/ASN1C_HELP RESULT_VARIABLE ASN1C_HELP)
+execute_process(COMMAND rm ${CMAKE_BINARY_DIR}/ASN1C_HELP OUTPUT_QUIET ERROR_QUIET)
+if (${ASN1C_HELP} EQUAL 0)
+	set(ASN1C_EXE_OPTS "-fwide-types")
+endif()
 
 find_program(GO_EXECUTABLE go)
 endif (NOT SDK_ONLY)
