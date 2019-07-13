@@ -54,7 +54,6 @@ install:
   - sudo bash -c "echo '/tmp/core.%p.%E' > /proc/sys/kernel/core_pattern"
   - mkdir /tmp/oio
   - git fetch --tags
-  - git submodule update --init --recursive
 
 env:
   global:
