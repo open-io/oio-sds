@@ -146,8 +146,7 @@ replicate_table_updates(struct sqlx_sqlite3_s *sq3, Table_t *table)
 					case RowFieldValue_PR_i:
 						do {
 							gint64 i64;
-							metautils_asn_INTEGER_to_int64(&(field->value.choice.i),
-														   &i64);
+							metautils_asn_INTEGER_to_int64(&(field->value.choice.i), &i64);
 							sqlite3_bind_int64(stmt, pos, i64);
 						} while (0);
 						break;
