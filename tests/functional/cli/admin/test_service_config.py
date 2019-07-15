@@ -79,6 +79,3 @@ class ServiceConfigTest(CliTestCase):
 
     def test_meta2_config(self):
         self._test_service_config('meta2')
-
-    def test_sqlx_config(self):
-        self._test_service_config('sqlx')

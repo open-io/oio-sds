@@ -41,11 +41,6 @@ struct gridd_request_descr_s;
  */
 const struct gridd_request_descr_s* sqlx_repli_gridd_get_requests(void);
 
-/**
- * @return
- */
-const struct gridd_request_descr_s * sqlx_sql_gridd_get_requests(void);
-
 /** @} */
 
 #endif /*OIO_SDS__sqliterepo__replication_dispatcher_h*/

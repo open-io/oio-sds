@@ -27,7 +27,7 @@ class ServiceGetConfig(SingleServiceCommandMixin, show.ShowOne):
     Get all configuration parameters from the specified service.
 
     Works on all services using ASN.1 protocol (conscience, meta0, meta1,
-    meta2, sqlx).
+    meta2).
     """
 
     @property
@@ -118,7 +118,7 @@ class ServiceSetConfig(SingleServiceCommandMixin, SetConfigCommand):
     Set configuration parameters on the specified service.
 
     Works on all services using ASN.1 protocol (conscience, meta0, meta1,
-    meta2, sqlx).
+    meta2).
     """
 
     def get_parser(self, prog_name):

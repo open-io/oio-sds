@@ -31,8 +31,7 @@ _acl_openbar = [{'perms': zookeeper.PERM_ALL,
 # <type, depth, width>
 _srvtypes = (('meta0', 0, 0),
              ('meta1', 1, 3),
-             ('meta2', 2, 2),
-             ('sqlx', 2, 2))
+             ('meta2', 2, 2))
 
 
 def get_meta0_paths(zh, ns):
