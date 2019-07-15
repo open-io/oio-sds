@@ -15,17 +15,11 @@ link_directories(
 		${SQLITE3_LIBRARY_DIRS})
 
 
-add_library(sqlxsrv SHARED sqlx_service.c)
-set_target_properties(sqlxsrv PROPERTIES VERSION 0.0.0 SOVERSION 0)
+add_library(sqlxsrv STATIC sqlx_service.c)
 target_link_libraries(sqlxsrv
 		server metautils gridcluster sqliterepo
 		hcresolve meta0remote meta1remote
 		server sqliterepo metautils gridcluster
 		oioevents
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
-
-install(TARGETS
-			sqlxsrv
-		LIBRARY DESTINATION ${LD_LIBDIR}
-		PUBLIC_HEADER DESTINATION include)
 

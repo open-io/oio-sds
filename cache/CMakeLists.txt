@@ -3,14 +3,8 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
 include_directories(BEFORE . ..)
 
-add_library(oiocache SHARED cache.c cache_noop.c cache_lru.c cache_multilayer.c)
-set_target_properties(oiocache PROPERTIES VERSION 0.0.0 SOVERSION 0)
+add_library(oiocache STATIC cache.c cache_noop.c cache_lru.c cache_multilayer.c)
 target_link_libraries(oiocache metautils ${GLIB2_LIBRARIES})
-
-install(TARGETS oiocache
-		LIBRARY DESTINATION ${LD_LIBDIR}
-		RUNTIME DESTINATION bin
-		PUBLIC_HEADER DESTINATION include)
 
 if (DEFINED ALLOW_HIREDIS)
 	if (HIREDIS_FOUND)

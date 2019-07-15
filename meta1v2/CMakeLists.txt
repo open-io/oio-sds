@@ -13,7 +13,7 @@ link_directories(
 		${ZK_LIBRARY_DIRS}
 		${SQLITE3_LIBRARY_DIRS})
 
-add_library(meta1v2 SHARED
+add_library(meta1v2 STATIC
 		meta1_backend_internals.h
 		meta1_backend.h
 		meta1_backend.c
@@ -24,14 +24,12 @@ add_library(meta1v2 SHARED
 		meta1_prefixes.c meta1_prefixes.h
 		internals.h internals_sqlite.h)
 
-	set_target_properties(meta1v2 PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(meta1v2
 		metautils gridcluster sqliterepo
 		meta0utils meta0remote
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
-add_library(meta1remote SHARED meta1_remote.c meta1_remote.h)
-set_target_properties(meta1remote PROPERTIES VERSION 0.0.0 SOVERSION 0)
+add_library(meta1remote STATIC meta1_remote.c meta1_remote.h)
 target_link_libraries(meta1remote
 		metautils
 		${GLIB2_LIBRARIES})
@@ -43,11 +41,5 @@ target_link_libraries(meta1_server meta1v2
 		sqlxsrv
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
-add_executable(meta1_client meta1_client.c)
-bin_prefix(meta1_client -meta1-client)
-target_link_libraries(meta1_client metautils meta1remote)
-
-install(TARGETS meta1v2 meta1_server meta1remote meta1_client
-		LIBRARY DESTINATION ${LD_LIBDIR}
-		RUNTIME DESTINATION bin)
+install(TARGETS meta1_server RUNTIME DESTINATION bin)
 

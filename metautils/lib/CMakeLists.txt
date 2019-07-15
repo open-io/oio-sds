@@ -5,11 +5,8 @@ include_directories(BEFORE . ../..
 		${CMAKE_BINARY_DIR}/metautils/asn1c
 		${CMAKE_CURRENT_BINARY_DIR})
 
-link_directories()
-
 include_directories(AFTER
 		${JSONC_INCLUDE_DIRS})
-
 
 add_custom_command(
 	OUTPUT
@@ -172,7 +169,7 @@ add_custom_command(
 		"metautils"
 		${CMAKE_SOURCE_DIR}/conf.json)
 
-add_library(metautils SHARED
+add_library(metautils STATIC
 		metacomm.h
 		metatypes.h
 		metautils.h
@@ -341,20 +338,9 @@ add_library(metautils SHARED
 		comm_meta_reply.c
 		asn1c_ext.c
 )
-set_target_properties(metautils PROPERTIES VERSION 0.0.0 SOVERSION 0)
+
 target_link_libraries(metautils
 		oiocore
 		${GLIB2_LIBRARIES} ${JSONC_LIBRARIES}
-		-lm)
-
-add_executable(tool_sigfpe tool_sigfpe.c)
-target_link_libraries(tool_sigfpe
-		metautils
-		${GLIB2_LIBRARIES})
-
-
-install(TARGETS metautils
-		LIBRARY DESTINATION ${LD_LIBDIR}
-		RUNTIME DESTINATION bin
-		PUBLIC_HEADER DESTINATION include)
+		-lm ${CMAKE_THREAD_LIBS_INIT})
 

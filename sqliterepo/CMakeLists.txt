@@ -52,24 +52,22 @@ add_custom_command(
 		${CMAKE_SOURCE_DIR}/conf.json)
 
 
-add_library(sqliteutils SHARED rc.c sqlite_utils.c)
+add_library(sqliteutils STATIC rc.c sqlite_utils.c)
 
-set_target_properties(sqliteutils PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(sqliteutils metautils
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
-add_library(sqlitereporemote SHARED
+add_library(sqlitereporemote STATIC
 		sqlx_remote.c
 		sqlx_remote_ex.c
 		replication_client.c
 		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_remote_variables.c
 		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_remote_variables.h)
 
-set_target_properties(sqlitereporemote PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(sqlitereporemote metautils
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
-add_library(sqliterepo SHARED
+add_library(sqliterepo STATIC
 		gridd_client_pool.c
 		synchro.c
 		version.c
@@ -84,12 +82,7 @@ add_library(sqliterepo SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_variables.c
 		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_variables.h)
 
-	set_target_properties(sqliterepo PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(sqliterepo metautils
 		sqlitereporemote sqliteutils
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES} ${ZK_LIBRARIES})
-
-install(TARGETS sqliterepo sqliteutils sqlitereporemote
-		LIBRARY DESTINATION ${LD_LIBDIR}
-		RUNTIME DESTINATION bin)
 
