@@ -123,7 +123,7 @@ _post_config(struct sqlx_service_s *ss)
 
 static GError *
 sqlx_service_resolve_peers(struct sqlx_service_s *ss,
-						   const struct sqlx_name_s *n, gboolean nocache, gchar ***result)
+		const struct sqlx_name_s *n, gboolean nocache, gchar ***result)
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(result != NULL);
