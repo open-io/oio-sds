@@ -339,6 +339,7 @@ add_library(metautils SHARED
 		comm_message.c
 		comm_converter.c
 		comm_meta_reply.c
+		asn1c_ext.c
 )
 set_target_properties(metautils PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(metautils

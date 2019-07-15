@@ -198,7 +198,7 @@ _pack_request (struct sqlx_name_inline_s *n0, struct oio_sqlx_batch_s *batch, gi
 
 		if (stmt->len > 1) {
 			struct Row *row = ASN1C_CALLOC(1, sizeof(struct Row));
-			asn_int64_to_INTEGER(&row->rowid, 0);
+			metautils_asn_int64_to_INTEGER(&row->rowid, 0);
 			struct RowFieldSequence *rfs = ASN1C_CALLOC(1, sizeof(struct RowFieldSequence));
 			row->fields = rfs;
 			for (guint fi=1; fi < stmt->len ;++fi) {
@@ -206,7 +206,7 @@ _pack_request (struct sqlx_name_inline_s *n0, struct oio_sqlx_batch_s *batch, gi
 				struct RowField *rf = ASN1C_CALLOC(1, sizeof(struct RowField));
 				/* XXX JFS: index must conform the sqlite3_bind_*() norm,
 				 * where the leftmost parameter has an index of 1 */
-				asn_uint32_to_INTEGER (&rf->pos, fi);
+				metautils_asn_uint32_to_INTEGER(&rf->pos, fi);
 				OCTET_STRING_fromBuf(&rf->value.choice.s, param, strlen(param));
 				rf->value.present = RowFieldValue_PR_s;
 				asn_sequence_add(&(rfs->list), rf);
@@ -241,7 +241,7 @@ _unpack_asn1_to_api (struct TableSequence *ts, struct oio_sqlx_batch_result_s *b
 		struct oio_sqlx_statement_result_s *stmt = oio_sqlx_statement_result__create ();
 
 		gint64 s64 = -1;
-		asn_INTEGER_to_int64 (t->status, &s64);
+		metautils_asn_INTEGER_to_int64(t->status, &s64);
 		if (s64 != 0) {
 			stmt->err = NEWERROR(CODE_INTERNAL_ERROR,
 					"Query failure: (%"G_GINT64_FORMAT") %.*s", s64,
@@ -250,11 +250,11 @@ _unpack_asn1_to_api (struct TableSequence *ts, struct oio_sqlx_batch_result_s *b
 		}
 
 		if (t->localChanges)
-			asn_INTEGER_to_int64 (t->localChanges, &stmt->ctx.changes);
+			metautils_asn_INTEGER_to_int64(t->localChanges, &stmt->ctx.changes);
 		if (t->totalChanges)
-			asn_INTEGER_to_int64 (t->localChanges, &stmt->ctx.total_changes);
+			metautils_asn_INTEGER_to_int64(t->localChanges, &stmt->ctx.total_changes);
 		if (t->lastRowId)
-			asn_INTEGER_to_int64 (t->lastRowId, &stmt->ctx.last_rowid);
+			metautils_asn_INTEGER_to_int64(t->lastRowId, &stmt->ctx.last_rowid);
 
 		/* append each row */
 		for (int ri=0; !err && ri < t->rows.list.count ;++ri) {
@@ -277,7 +277,7 @@ _unpack_asn1_to_api (struct TableSequence *ts, struct oio_sqlx_batch_result_s *b
 						g_ptr_array_add (tokens, g_strdup("null"));
 						break;
 					case RowFieldValue_PR_i:
-						asn_INTEGER_to_int64(&(f->value.choice.i), &i64);
+						metautils_asn_INTEGER_to_int64(&(f->value.choice.i), &i64);
 						g_ptr_array_add (tokens, g_strdup_printf("%"G_GINT64_FORMAT, i64));
 						break;
 					case RowFieldValue_PR_f:

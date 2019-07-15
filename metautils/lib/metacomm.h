@@ -29,7 +29,9 @@ GByteArray* Name (GSList *l, GError **err)
 #define DECLARE_UNMARSHALLER(Name) \
 gint Name (GSList **l, const void *buf, gsize len, GError **err)
 
+typedef struct ASN__PRIMITIVE_TYPE_s INTEGER_t;
 typedef struct Message Message_t;
+typedef struct Parameter Parameter_t;
 typedef Message_t* MESSAGE;
 
 /** Builds a simple reply for the given request. This function automates the

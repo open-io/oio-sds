@@ -59,4 +59,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define ASN1C_FREE(P)      FREEMEM(P)
 #define ASN1C_REALLOC(P,S) REALLOC(P,S)
 
+#include <stdint.h>
+
+int metautils_asn_INTEGER_to_int64(const INTEGER_t *st, int64_t *pv);
+int metautils_asn_INTEGER_to_int32(const INTEGER_t *st, int32_t *pv);
+
+int metautils_asn_INTEGER_to_uint16(const INTEGER_t *st, uint16_t *pv);
+
+int metautils_asn_int64_to_INTEGER(INTEGER_t *st, int64_t v);
+int metautils_asn_int32_to_INTEGER(INTEGER_t *st, int32_t v);
+
+int metautils_asn_uint32_to_INTEGER(INTEGER_t *st, uint32_t v);
+int metautils_asn_uint16_to_INTEGER(INTEGER_t *st, uint16_t v);
+
 #endif  /* OIO_SDS_metautils_lib_codec_h */

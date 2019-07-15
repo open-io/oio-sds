@@ -123,7 +123,7 @@ replicate_table_updates(struct sqlx_sqlite3_s *sq3, Table_t *table)
 		if (row->fields && row->fields->list.count > 0) {
 			gint64 rowid;
 
-			asn_INTEGER_to_int64(&(row->rowid), &rowid);
+			metautils_asn_INTEGER_to_int64(&(row->rowid), &rowid);
 			sqlite3_reset(stmt);
 			sqlite3_clear_bindings(stmt);
 
@@ -146,7 +146,7 @@ replicate_table_updates(struct sqlx_sqlite3_s *sq3, Table_t *table)
 					case RowFieldValue_PR_i:
 						do {
 							gint64 i64;
-							asn_INTEGER_to_int64(&(field->value.choice.i), &i64);
+							metautils_asn_INTEGER_to_int64(&(field->value.choice.i), &i64);
 							sqlite3_bind_int64(stmt, pos, i64);
 						} while (0);
 						break;
@@ -227,7 +227,7 @@ replicate_table_deletes(struct sqlx_sqlite3_s *sq3, Table_t *table)
 		if (!row->fields || row->fields->list.count <= 0) {
 			gint64 rowid;
 
-			asn_INTEGER_to_int64(&(row->rowid), &rowid);
+			metautils_asn_INTEGER_to_int64(&(row->rowid), &rowid);
 			sqlite3_reset(stmt);
 			sqlite3_clear_bindings(stmt);
 			sqlite3_bind_int64(stmt, 1, rowid);
@@ -662,7 +662,7 @@ apply_parameters(sqlite3_stmt *stmt, Row_t *row)
 
 		switch (field->value.present) {
 			case RowFieldValue_PR_i:
-				asn_INTEGER_to_int64(&(field->value.choice.i), &i64);
+				metautils_asn_INTEGER_to_int64(&(field->value.choice.i), &i64);
 				sqlite3_bind_int64(stmt, pos, i64);
 				GRID_TRACE2("bind(%d,%"G_GINT64_FORMAT")", pos, i64);
 				break;
@@ -847,7 +847,7 @@ _table_set_error(Table_t *table, GError *err,
 	void _reset_integer (INTEGER_t **pi, gint64 v) {
 		ASN_STRUCT_FREE(asn_DEF_INTEGER, *pi);
 		*pi = ASN1C_CALLOC(1, sizeof(INTEGER_t));
-		asn_int64_to_INTEGER(*pi, v);
+		metautils_asn_int64_to_INTEGER(*pi, v);
 	}
 
 	gint64 status = 0;
