@@ -17,6 +17,7 @@ include(FindCURL)
 include(FindPythonInterp)
 include(FindZLIB)
 find_package(PkgConfig)
+find_package(Threads)
 
 if (NOT DEFINED OIOSDS_RELEASE)
 	set(OIOSDS_RELEASE master)

@@ -25,19 +25,12 @@ add_custom_command(
 		${CMAKE_SOURCE_DIR}/conf.json)
 
 
-add_library(server SHARED
+add_library(server STATIC
 		slab.c
 		network_server.c
         transport_gridd.c
 		${CMAKE_CURRENT_BINARY_DIR}/server_variables.c)
-
-set_target_properties(server PROPERTIES VERSION 0.0.0 SOVERSION 0)
-
 target_link_libraries(server
 		metautils
 		-lm ${GLIB2_LIBRARIES})
-
-install(TARGETS server
-		LIBRARY DESTINATION ${LD_LIBDIR}
-		RUNTIME DESTINATION bin)
 

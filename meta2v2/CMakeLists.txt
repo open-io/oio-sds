@@ -47,7 +47,7 @@ add_custom_command(
 		${CMAKE_CURRENT_BINARY_DIR}
 )
 
-add_library(meta2v2utils SHARED
+add_library(meta2v2utils STATIC
 		${CMAKE_CURRENT_BINARY_DIR}/autogen.c
 		${CMAKE_CURRENT_BINARY_DIR}/autogen.h
 		${CMAKE_CURRENT_BINARY_DIR}/meta2_variables.c
@@ -70,21 +70,19 @@ add_library(meta2v2utils SHARED
 		meta2_utils_json.h
 )
 
-set_target_properties(meta2v2utils PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(meta2v2utils
 		metautils gridcluster sqliteutils
 		${LIBRAIN_LIBRARIES}
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES} ${JSONC_LIBRARIES})
 
 
-add_library(meta2v2 SHARED
+add_library(meta2v2 STATIC
 		${CMAKE_CURRENT_BINARY_DIR}/autogen.h generic.h
 		meta2_utils.h
 		meta2_macros.h
 		meta2_backend.h
 		meta2_backend.c)
 
-set_target_properties(meta2v2 PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(meta2v2
 		metautils sqliterepo
 		meta1remote meta0remote meta0utils
@@ -108,7 +106,5 @@ target_link_libraries(meta2_server meta2v2
         hcresolve metautils gridcluster server
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
-install(TARGETS meta2v2 meta2_server meta2v2utils
-		LIBRARY DESTINATION ${LD_LIBDIR}
-		RUNTIME DESTINATION bin)
+install(TARGETS meta2_server RUNTIME DESTINATION bin)
 
