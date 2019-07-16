@@ -57,4 +57,14 @@ GError * namespace_info_init_json(const gchar *encoded,
 /* Appends to 'out' a json representation of 'ni' */
 void namespace_info_encode_json(GString *out, struct namespace_info_s *ni);
 
+
+gboolean namespace_is_storage_policy_valid(const namespace_info_t* ns_info,
+		const gchar *storage_policy);
+
+gchar* namespace_data_security_value(const namespace_info_t *ns_info,
+		const gchar *wanted_policy);
+
+gchar* namespace_storage_policy_value(const namespace_info_t *ns_info,
+		const gchar *wanted_policy);
+
 #endif /*OIO_SDS__metautils__lib__metatype_nsinfo_h*/
