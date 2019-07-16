@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -45,7 +45,7 @@ sqlx_remote_execute_DESTROY_many(gchar **targets, GByteArray *sid,
 	}
 
 	gridd_clients_set_timeout(clients,
-                            oio_clamp_timeout(10 * G_TIME_SPAN_SECOND, deadline));
+			oio_clamp_timeout(10 * G_TIME_SPAN_SECOND, deadline));
 
 	gridd_clients_start(clients);
 	err = gridd_clients_loop(clients);
@@ -65,3 +65,37 @@ sqlx_remote_execute_DESTROY_many(gchar **targets, GByteArray *sid,
 	return err;
 }
 
+GError*
+sqlx_remote_execute_RESYNC_many(gchar **targets, GByteArray *sid,
+		struct sqlx_name_s *name, gint64 deadline)
+{
+	(void) sid;
+	GError *err = NULL;
+	GByteArray *req = sqlx_pack_RESYNC(name, deadline);
+	struct gridd_client_s **clients = gridd_client_create_many(
+			targets, req, NULL, NULL);
+	metautils_gba_unref(req);
+	req = NULL;
+
+	if (clients == NULL) {
+		err = NEWERROR(0, "Failed to create gridd clients");
+		return err;
+	}
+
+	gridd_clients_set_timeout(clients,
+			oio_clamp_timeout(10 * G_TIME_SPAN_SECOND, deadline));
+
+	gridd_clients_start(clients);
+	err = gridd_clients_loop(clients);
+
+	for (struct gridd_client_s **p = clients; p && *p; p++) {
+		if ((err = gridd_client_error(*p))) {
+			GRID_WARN("Database resync attempts failed: (%d) %s",
+					err->code, err->message);
+			g_clear_error(&err);
+		}
+	}
+
+	gridd_clients_free(clients);
+	return err;
+}
