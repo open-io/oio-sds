@@ -128,10 +128,19 @@ class Content(object):
 
     def _get_spare_chunk(self, chunks_notin, chunks_broken,
                          max_attempts=3, check_quality=False,
-                         **kwargs):
+                         fake_excluded_chunks=None, **kwargs):
+        notin = ChunksHelper(chunks_notin, False).raw()
+        broken = ChunksHelper(chunks_broken, False).raw()
+        if fake_excluded_chunks:
+            for fake_excluded_chunk in fake_excluded_chunks:
+                chunk = fake_excluded_chunk.copy()
+                chunk['hash'] = broken[0]['hash']
+                chunk['pos'] = broken[0]['pos']
+                chunk['size'] = broken[0]['size']
+                broken.append(chunk)
         spare_data = {
-            "notin": ChunksHelper(chunks_notin, False).raw(),
-            "broken": ChunksHelper(chunks_broken, False).raw()
+            "notin": notin,
+            "broken": broken
         }
         last_exc = None
         bal = 0
