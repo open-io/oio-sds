@@ -39,8 +39,8 @@ add_custom_command(
 
 add_executable(rdir
 		rdir.c
-		routes.c routes.h
-		rdir_variables.c rdir_variables.h
+		routes.c
+		rdir_variables.c
 		../proxy/transport_http.c)
 
 bin_prefix(rdir -rdir-server)

@@ -52,7 +52,9 @@ add_custom_command(
 		${CMAKE_SOURCE_DIR}/conf.json)
 
 
-add_library(sqliteutils STATIC rc.c sqlite_utils.c)
+add_library(sqliteutils STATIC
+		rc.c
+		sqlite_utils.c)
 
 target_link_libraries(sqliteutils metautils
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
@@ -61,11 +63,10 @@ add_library(sqlitereporemote STATIC
 		sqlx_remote.c
 		sqlx_remote_ex.c
 		replication_client.c
-		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_remote_variables.c
-		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_remote_variables.h)
+		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_remote_variables.c)
 
 target_link_libraries(sqlitereporemote metautils
-		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
+		${GLIB2_LIBRARIES})
 
 add_library(sqliterepo STATIC
 		gridd_client_pool.c
@@ -79,8 +80,7 @@ add_library(sqliterepo STATIC
 		repository.c
 		restoration.c
 		upgrade.c
-		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_variables.c
-		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_variables.h)
+		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_variables.c)
 
 target_link_libraries(sqliterepo metautils
 		sqlitereporemote sqliteutils

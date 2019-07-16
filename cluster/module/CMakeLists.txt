@@ -29,7 +29,10 @@ add_custom_command(
 
 add_executable(conscience
 	server.c
-	expr.clean.c expr.eval.c expr.lex.c expr.yacc.c expr.yacc.h expr.h)
+	expr.clean.c
+	expr.eval.c
+	expr.lex.c
+	expr.yacc.c)
 
 target_link_libraries(conscience
 	server
