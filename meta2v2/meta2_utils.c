@@ -26,7 +26,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/meta2_utils.h>
 #include <meta2v2/meta2_macros.h>
 #include <meta2v2/meta2_variables.h>
-#include <meta2v2/meta2_dedup_utils.h>
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
 #include <meta2v2/meta2_utils_json.h>
@@ -3121,29 +3120,6 @@ m2db_purge(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		err = _real_delete_aliases(sq3, aliases, cb, u0);
 
 	_bean_cleanv2(aliases);
-	return err;
-}
-
-GError*
-m2db_deduplicate_contents(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
-{
-	GError *err = NULL;
-	GSList *impacted_aliases = NULL;
-	guint64 size_before = 0u;
-	m2db_get_container_size_and_obj_count(sq3->db, TRUE, &size_before, NULL);
-	guint64 saved_space = dedup_aliases(sq3->db, url, &impacted_aliases, &err);
-	guint64 size_after = 0u;
-	m2db_get_container_size_and_obj_count(sq3->db, TRUE, &size_after, NULL);
-
-	GRID_INFO("DEDUP [%s]"
-			"%"G_GUINT64_FORMAT" bytes saved "
-			"by deduplication of %u contents "
-			"(%"G_GUINT64_FORMAT" -> %"G_GUINT64_FORMAT" bytes)",
-			oio_url_get (url, OIOURL_WHOLE),
-			saved_space, g_slist_length(impacted_aliases),
-			size_before, size_after);
-
-	g_slist_free_full(impacted_aliases, g_free);
 	return err;
 }
 
