@@ -27,3 +27,6 @@ volume = /var/lib/oio/sds/vol1/NS/rawx-1/
 #
 # Concurrency: number of chunk move coroutines
 #concurrency = 10
+#
+# List of rawx not to use to move the chunks
+#excluded_rawx = RAWX_ID1,RAWX_ID2,RAWX_ID3
