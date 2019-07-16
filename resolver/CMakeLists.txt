@@ -29,8 +29,8 @@ add_custom_command(
 
 add_library(hcresolve STATIC
 	hc_resolver.c
-	${CMAKE_CURRENT_BINARY_DIR}/resolver_variables.c
-	${CMAKE_CURRENT_BINARY_DIR}/resolver_variables.h)
+	${CMAKE_CURRENT_BINARY_DIR}/resolver_variables.c)
+
 target_link_libraries(hcresolve
 		meta0remote meta1remote metautils gridcluster
 		${GLIB2_LIBRARIES})

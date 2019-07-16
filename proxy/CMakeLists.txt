@@ -58,7 +58,7 @@ target_link_libraries(metacd_http
 		meta2v2utils
 		meta1remote sqlitereporemote
 		meta0remote meta0utils
-		${GLIB2_LIBRARIES} ${JSONC_LIBRARIES} ${CURL_LIBRARIES})
+		${GLIB2_LIBRARIES} ${JSONC_LIBRARIES})
 
 install(TARGETS metacd_http
 		LIBRARY DESTINATION ${LD_LIBDIR}

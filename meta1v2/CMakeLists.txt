@@ -14,22 +14,19 @@ link_directories(
 		${SQLITE3_LIBRARY_DIRS})
 
 add_library(meta1v2 STATIC
-		meta1_backend_internals.h
-		meta1_backend.h
 		meta1_backend.c
 		meta1_backend_internals.c
 		meta1_backend_services.c
 		meta1_backend_properties.c
 		meta1_backend_references.c
-		meta1_prefixes.c meta1_prefixes.h
-		internals.h internals_sqlite.h)
+		meta1_prefixes.c)
 
 target_link_libraries(meta1v2
 		metautils gridcluster sqliterepo
 		meta0utils meta0remote
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
-add_library(meta1remote STATIC meta1_remote.c meta1_remote.h)
+add_library(meta1remote STATIC meta1_remote.c)
 target_link_libraries(meta1remote
 		metautils
 		${GLIB2_LIBRARIES})

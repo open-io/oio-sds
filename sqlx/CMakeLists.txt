@@ -16,10 +16,11 @@ link_directories(
 
 
 add_library(sqlxsrv STATIC sqlx_service.c)
+
 target_link_libraries(sqlxsrv
 		server metautils gridcluster sqliterepo
 		hcresolve meta0remote meta1remote
 		server sqliterepo metautils gridcluster
 		oioevents
-		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
+		${GLIB2_LIBRARIES})
 

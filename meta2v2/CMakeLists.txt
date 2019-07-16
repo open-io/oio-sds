@@ -36,7 +36,8 @@ add_custom_command(
 
 add_custom_command(
 	OUTPUT
-		${CMAKE_CURRENT_BINARY_DIR}/autogen.c
+		${CMAKE_CURRENT_BINARY_DIR}/autogen_storage.c
+		${CMAKE_CURRENT_BINARY_DIR}/autogen_codec.c
 		${CMAKE_CURRENT_BINARY_DIR}/autogen.h
 	DEPENDS
 		${CMAKE_CURRENT_SOURCE_DIR}/m2gen.py
@@ -48,11 +49,9 @@ add_custom_command(
 )
 
 add_library(meta2v2utils STATIC
-		${CMAKE_CURRENT_BINARY_DIR}/autogen.c
+		${CMAKE_CURRENT_BINARY_DIR}/autogen_codec.c
 		${CMAKE_CURRENT_BINARY_DIR}/meta2_variables.c
-		meta2_utils_lb.c
 		generic.c
-		meta2_utils.c
 		meta2_bean.c
 		meta2_bean_utils.c
 		meta2_utils_json_in.c
@@ -60,13 +59,15 @@ add_library(meta2v2utils STATIC
 )
 
 target_link_libraries(meta2v2utils
-		metautils gridcluster sqliteutils
-		${LIBRAIN_LIBRARIES}
-		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES} ${JSONC_LIBRARIES})
+		metautils gridcluster
+		${GLIB2_LIBRARIES} ${JSONC_LIBRARIES})
 
 
 add_library(meta2v2 STATIC
-		${CMAKE_CURRENT_BINARY_DIR}/autogen.h
+		${CMAKE_CURRENT_BINARY_DIR}/autogen_storage.c
+		generic_backend.c
+		meta2_utils.c
+		meta2_utils_lb.c
 		meta2_backend.c)
 
 target_link_libraries(meta2v2

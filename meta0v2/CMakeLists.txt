@@ -16,19 +16,19 @@ link_directories(
 		${ZK_LIBRARY_DIRS}
 		${SQLITE3_LIBRARY_DIRS})
 
-add_library(meta0remote STATIC meta0_remote.c meta0_remote.h)
+add_library(meta0remote STATIC meta0_remote.c)
 target_link_libraries(meta0remote
 		metautils
 		${GLIB2_LIBRARIES})
 
 
-add_library(meta0utils STATIC meta0_utils.c meta0_utils.h)
+add_library(meta0utils STATIC meta0_utils.c)
 target_link_libraries(meta0utils
 		metautils gridcluster
 		${GLIB2_LIBRARIES})
 
 
-add_library(meta0v2 STATIC meta0_backend.h meta0_backend.c)
+add_library(meta0v2 STATIC meta0_backend.c)
 target_link_libraries(meta0v2
 		meta0utils metautils gridcluster sqliterepo
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
