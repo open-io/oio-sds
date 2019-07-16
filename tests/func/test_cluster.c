@@ -29,6 +29,91 @@ License along with this library.
 const char *ns = NULL;
 const char *srvtype = NULL;
 
+/* ------------------------------------------------------------------------- */
+
+static void
+metautils_srvinfo_ensure_tags (struct service_info_s *si)
+{
+	if (!si || !si->tags)
+		return;
+
+	if (!service_info_get_tag (si->tags, "stat.cpu"))
+		service_tag_set_value_float(service_info_ensure_tag (
+					si->tags, "stat.cpu"), 100.0 * oio_sys_cpu_idle ());
+
+	gchar vol[512] = "";
+	struct service_tag_s *tag = service_info_get_tag (si->tags, "tag.vol");
+	if (!tag || !service_tag_get_value_string (tag, vol, sizeof(vol), NULL))
+		return;
+
+	if (!service_info_get_tag(si->tags, "stat.io"))
+		service_tag_set_value_float (service_info_ensure_tag(
+					si->tags, "stat.io"), 100.0 * oio_sys_io_idle (vol));
+	if (!service_info_get_tag(si->tags, "stat.space"))
+		service_tag_set_value_float (service_info_ensure_tag (
+					si->tags, "stat.space"), 100.0 * oio_sys_space_idle (vol));
+}
+
+static GError *
+conscience_push_service (const char *ns_, struct service_info_s *si)
+{
+	g_assert (ns_ != NULL);
+	g_assert (si != NULL);
+
+	if (!*ns_ || !si->type[0] || !metautils_addr_valid_for_connect(&si->addr))
+		return BADREQ("Invalid service ns, type or address");
+
+	struct oio_cs_client_s *cs = oio_cs_client__create_proxied (ns_);
+
+	/* convert the <service_info_t> into a <struct oio_cs_registration_s> */
+	gchar strurl[STRLEN_ADDRINFO], *srvkey, **kv;
+	GPtrArray *tmp = g_ptr_array_new ();
+	if (si->tags) for (guint i=0; i<si->tags->len ;++i) {
+		struct service_tag_s *tag = si->tags->pdata[i];
+		gchar v[256];
+		service_tag_to_string (tag, v, sizeof(v));
+		g_ptr_array_add (tmp, g_strdup(tag->name));
+		g_ptr_array_add (tmp, g_strdup(v));
+	}
+	g_ptr_array_add (tmp, NULL);
+	kv = (gchar**) g_ptr_array_free (tmp, FALSE);
+	grid_addrinfo_to_string (&si->addr, strurl, sizeof(strurl));
+	srvkey = service_info_key (si);
+	struct oio_cs_registration_s reg = {
+		.id = srvkey, .url = strurl, .kv_tags = (const char * const *)kv,
+	};
+
+	GError *err;
+	if (si->score.value == SCORE_UNSET)
+		err = oio_cs_client__register_service (cs, si->type, &reg);
+	else if (si->score.value == SCORE_UNLOCK)
+		err = oio_cs_client__unlock_service (cs, si->type, &reg);
+	else
+		err = oio_cs_client__lock_service (cs, si->type, &reg,
+				si->score.value);
+
+	g_free (srvkey);
+	g_strfreev (kv);
+	oio_cs_client__destroy (cs);
+	return err;
+}
+
+static GError *
+register_namespace_service(const struct service_info_s *si)
+{
+	g_assert(si != NULL);
+
+	struct service_info_s *si_copy = service_info_dup(si);
+	si_copy->score.value = SCORE_UNSET;
+	si_copy->score.timestamp = oio_ext_real_time () / G_TIME_SPAN_SECOND;
+	metautils_srvinfo_ensure_tags (si_copy);
+	GError *err = conscience_push_service (si->ns_name, si_copy);
+	service_info_clean(si_copy);
+	return err;
+}
+
+/* ------------------------------------------------------------------------- */
+
 static void
 test_cluster_info_success (void)
 {

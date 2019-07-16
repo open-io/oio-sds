@@ -24,23 +24,11 @@ License along with this library.
 
 struct service_info_s;
 
-/* Requests the the best target (conscience, agent proxy) ------------------- */
-
 GError* conscience_get_namespace (const char *ns, struct namespace_info_s **out);
+
 GError* conscience_get_services (const char *ns, const char *type,
 		gboolean full, GSList **out, gint64 deadline);
+
 GError* conscience_get_types (const char *ns, GSList **out);
-GError* conscience_push_service (const char *ns, struct service_info_s *si);
-GError* conscience_remove_services (const char *ns, const char *type);
-
-GError* register_namespace_service (const struct service_info_s *si);
-
-/* -------------------------------------------------------------------------- */
-
-gboolean namespace_is_storage_policy_valid(const namespace_info_t* ns_info, const gchar *storage_policy);
-
-gchar* namespace_data_security_value(const namespace_info_t *ns_info, const gchar *wanted_policy);
-
-gchar* namespace_storage_policy_value(const namespace_info_t *ns_info, const gchar *wanted_policy);
 
 #endif /*OIO_SDS__cluster__lib__gridcluster_h*/
