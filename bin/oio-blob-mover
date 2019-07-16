@@ -51,6 +51,8 @@ def make_arg_parser():
                         help="Throttle: max byte per second")
     parser.add_argument('--chunks-per-second', type=int,
                         help="Throttle: max chunks per second")
+    parser.add_argument('--excluded-rawx',
+                        help="List of rawx not to use to move the chunks.")
     levels = ['DEBUG', 'INFO', 'WARN', 'ERROR']
     parser.add_argument('--log-level', choices=levels,
                         help="Log level")
@@ -91,6 +93,7 @@ def generate_config_file(path, mode):
         add_value(cont, 'concurrency', args.concurrency)
         add_value(cont, 'user', args.user)
         add_value(cont, 'limit', args.limit)
+        add_value(cont, 'excluded_rawx', args.excluded_rawx)
         return dic_to_string(cont, header)
 
     with open(path, mode) as conf:
