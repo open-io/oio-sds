@@ -1702,27 +1702,6 @@ meta2_backend_set_properties(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	return err;
 }
 
-/* dedup -------------------------------------------------------------------- */
-
-GError*
-meta2_backend_dedup_contents(struct meta2_backend_s *m2b, struct oio_url_s *url)
-{
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_repctx_s *repctx = NULL;
-	EXTRA_ASSERT(m2b != NULL);
-	EXTRA_ASSERT(url != NULL);
-
-	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
-	if (!err) {
-		if (!(err = _transaction_begin(sq3,url, &repctx))) {
-			err = m2db_deduplicate_contents(sq3, url);
-			err = sqlx_transaction_end(repctx, err);
-		}
-		m2b_close(sq3);
-	}
-	return err;
-}
 
 /* Beans generation --------------------------------------------------------- */
 

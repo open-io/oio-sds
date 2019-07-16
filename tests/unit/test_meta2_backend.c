@@ -1501,72 +1501,6 @@ test_props_set_simple()
 	_container_wraper_allversions("NS", test);
 }
 
-static void
-test_content_dedup (void)
-{
-	guint num_duplicates = 1;
-
-	void change_chunk_hash(GSList *beans, guint start) {
-		guint8 counter = start;
-		for (GSList *cursor = beans; cursor; cursor = cursor->next) {
-			if (DESCR(cursor->data) == &descr_struct_CHUNKS) {
-				GByteArray *hash = CHUNKS_get_hash(cursor->data);
-				hash->data[0] = counter;
-				CHUNKS_set_hash(cursor->data, hash); // no-op because same pointer
-				counter++;
-			} else if (DESCR(cursor->data) == &descr_struct_CONTENTS_HEADERS) {
-				GByteArray *hash = g_byte_array_sized_new(16);
-				GRID_INFO("---- forging content hash ----");
-				for (guint8 i = 0; i < 16; i++) {
-					hash->data[i] = i + 1;
-				}
-				CONTENTS_HEADERS_set_hash(cursor->data, hash);
-				g_byte_array_free (hash, TRUE);
-			}
-		}
-	}
-
-	void test(struct meta2_backend_s *m2, struct oio_url_s *url, gint64 maxver) {
-		GError *err;
-		(void) maxver;
-		/* Generate a list of beans */
-		GSList *beans = _create_alias(m2, url, NULL);
-		/* Change the hash of the chunk beans (0 by default) */
-		change_chunk_hash(beans, 0);
-		/* Put the beans in the database */
-		err = meta2_backend_put_alias(m2, url, beans, 0,
-				NULL, NULL, NULL, NULL);
-		g_assert_no_error(err);
-		_bean_cleanl2(beans);
-
-		/* Generate other contents with same hashes */
-		for (guint counter = 1; counter <= num_duplicates; counter++) {
-			/* Suffix the base url */
-			struct oio_url_s *url2 = oio_url_dup(url);
-			const char *p0 = oio_url_get(url, OIOURL_PATH);
-			if (p0) {
-				gchar *p = g_strdup_printf("%s-%u", p0, counter);
-				oio_url_set(url2, OIOURL_PATH, p);
-				g_free(p);
-			}
-			_set_content_id(url2);
-			GSList *beans2 = _create_alias(m2, url2, NULL);
-			change_chunk_hash(beans2, counter);
-			err = meta2_backend_put_alias(m2, url2, beans2, 0,
-					NULL, NULL, NULL, NULL);
-			g_assert_no_error(err);
-			_bean_cleanl2(beans2);
-			oio_url_pclean (&url2);
-		}
-
-		err = meta2_backend_dedup_contents (m2, url);
-		g_assert_no_error(err);
-
-		/* TODO check the result of the dedup ;) */
-	}
-	_container_wraper_allversions("NS", test);
-}
-
 int
 main(int argc, char **argv)
 {
@@ -1604,8 +1538,6 @@ main(int argc, char **argv)
 			test_content_append);
 	g_test_add_func("/meta2v2/backend/content/append_notfound",
 			test_content_append_not_found);
-	g_test_add_func("/meta2v2/backend/content/dedup",
-			test_content_dedup);
 	g_test_add_func("/meta2v2/backend/content/check_plain_all_present_chunks",
 			test_content_check_plain_all_present_chunks);
 	g_test_add_func("/meta2v2/backend/content/check_plain_missing_chunks_reparable",

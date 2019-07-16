@@ -200,20 +200,6 @@ meta2_filter_action_flush_container(struct gridd_filter_ctx_s *ctx,
 	return FILTER_KO;
 }
 
-int
-meta2_filter_action_dedup_contents(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply UNUSED)
-{
-	GError *err = meta2_backend_dedup_contents(
-			meta2_filter_ctx_get_backend(ctx),
-			meta2_filter_ctx_get_url(ctx));
-	if (!err)
-		return FILTER_OK;
-	GRID_DEBUG("Container purge failed (%d): %s", err->code, err->message);
-	meta2_filter_ctx_set_error(ctx, err);
-	return FILTER_KO;
-}
-
 #define S3_RESPONSE_HEADER(FieldName, Var) do { \
 	if (NULL != (Var)) \
 		reply->add_header((FieldName), metautils_gba_from_string(Var)); \
