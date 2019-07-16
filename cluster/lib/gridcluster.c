@@ -177,23 +177,7 @@ conscience_remove_services(const char *ns, const char *type)
 
 /* -------------------------------------------------------------------------- */
 
-GError *
-register_namespace_service(const struct service_info_s *si)
-{
-	g_assert(si != NULL);
-
-	struct service_info_s *si_copy = service_info_dup(si);
-	si_copy->score.value = SCORE_UNSET;
-	si_copy->score.timestamp = oio_ext_real_time () / G_TIME_SPAN_SECOND;
-	metautils_srvinfo_ensure_tags (si_copy);
-	GError *err = conscience_push_service (si->ns_name, si_copy);
-	service_info_clean(si_copy);
-	return err;
-}
-
-/* -------------------------------------------------------------------------- */
-
-void
+static void
 metautils_srvinfo_ensure_tags (struct service_info_s *si)
 {
 	if (!si || !si->tags)
@@ -214,6 +198,20 @@ metautils_srvinfo_ensure_tags (struct service_info_s *si)
 	if (!service_info_get_tag(si->tags, "stat.space"))
 		service_tag_set_value_float (service_info_ensure_tag (
 					si->tags, "stat.space"), 100.0 * oio_sys_space_idle (vol));
+}
+
+GError *
+register_namespace_service(const struct service_info_s *si)
+{
+	g_assert(si != NULL);
+
+	struct service_info_s *si_copy = service_info_dup(si);
+	si_copy->score.value = SCORE_UNSET;
+	si_copy->score.timestamp = oio_ext_real_time () / G_TIME_SPAN_SECOND;
+	metautils_srvinfo_ensure_tags (si_copy);
+	GError *err = conscience_push_service (si->ns_name, si_copy);
+	service_info_clean(si_copy);
+	return err;
 }
 
 /* -------------------------------------------------------------------------- */
