@@ -1,4 +1,4 @@
-# Copyright (C) 2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,7 +17,6 @@ import random
 import os
 
 from tests.utils import BaseTestCase, random_str
-from oio import ObjectStorageApi
 
 
 class TestAdmin(BaseTestCase):
@@ -25,15 +24,14 @@ class TestAdmin(BaseTestCase):
         super(TestAdmin, self).setUp()
         # Created by superclass
         # self.admin = AdminClient(self.conf)
-        self.api = ObjectStorageApi(self.ns)
         self.account = "test_admin"
         self.container = "admin-"+random_str(4)
-        self.api.container_create(self.account, self.container)
+        self.storage.container_create(self.account, self.container)
 
     def tearDown(self):
         super(TestAdmin, self).tearDown()
         try:
-            self.api.container_delete(self.account, self.container)
+            self.storage.container_delete(self.account, self.container)
         except Exception:
             pass
 
@@ -79,3 +77,25 @@ class TestAdmin(BaseTestCase):
         del info[peer]
         for peer, meta in info.iteritems():
             self.assertEqual(200, meta['status']['status'])
+
+    def test_database_vacuum(self):
+        """
+        Check that the vacuum operation properly sets the 'last_vacuum'
+        property and triggers a replication on all peers.
+        """
+        props = self.admin.get_properties(
+            "meta2", account=self.account, reference=self.container)
+
+        self.admin.vacuum_base(
+            "meta2", account=self.account, reference=self.container)
+
+        # If there is no peer, will be ['']
+        peers = props['system'].get('sys.peers', '').split(',')
+
+        for peer in peers:
+            nprops = self.admin.get_properties(
+                "meta2", account=self.account, reference=self.container,
+                service_id=peer)
+            self.assertGreater(nprops['system']['version:main.admin'],
+                               props['system']['version:main.admin'])
+            self.assertIn('sys.last_vacuum', nprops['system'])

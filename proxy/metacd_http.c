@@ -1062,7 +1062,12 @@ configure_request_handlers (void)
 	 * hosting the CID. */
 	SET("/$NS/admin/drop_cache/#POST", action_admin_drop_cache);
 
+	/* Ask the slaves to copy the database from the master.*/
 	SET("/$NS/admin/sync/#POST", action_admin_sync);
+
+	/* Defragment the database on the master,
+	 * then resynchronize it on the slaves. */
+	SET("/$NS/admin/vacuum/#POST", action_admin_vacuum);
 
 	/* Ask each peer to exit the election ("DB_LEAVE"). */
 	SET("/$NS/admin/leave/#POST", action_admin_leave);

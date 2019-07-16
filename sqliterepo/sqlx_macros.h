@@ -44,6 +44,7 @@ License along with this library.
 #define NAME_MSGNAME_SQLX_DUMP               "DB_DUMP"
 #define NAME_MSGNAME_SQLX_RESTORE            "DB_RESTORE"
 #define NAME_MSGNAME_SQLX_RESYNC             "DB_RESYNC"
+#define NAME_MSGNAME_SQLX_VACUUM             "DB_VACUUM"
 
 /* repository-wide */
 #define NAME_MSGNAME_SQLX_INFO               "DB_INFO"

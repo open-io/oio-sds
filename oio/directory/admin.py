@@ -239,6 +239,14 @@ class AdminClient(ProxyClient):
         _, body = self._request('POST', '/remove', params=params, **kwargs)
         return body
 
+    @loc_params
+    def vacuum_base(self, params, **kwargs):
+        """
+        Vacuum (defragment) the database on the master service, then
+        resynchronize it on the slaves.
+        """
+        self._request('POST', '/vacuum', params=params, **kwargs)
+
     # Proxy's cache and config actions ################################
 
     def _proxy_endpoint(self, proxy_netloc=None):

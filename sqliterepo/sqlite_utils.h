@@ -72,6 +72,10 @@ License along with this library.
 #define SQLX_ADMIN_BASETYPE SQLX_ADMIN_PREFIX_SYS "type"
 #endif
 
+#ifndef SQLX_ADMIN_LAST_VACUUM
+#define SQLX_ADMIN_LAST_VACUUM SQLX_ADMIN_PREFIX_SYS "last_vacuum"
+#endif
+
 /** Can read and write */
 #define ADMIN_STATUS_ENABLED  0x00000000
 /** Cannot write but can read */

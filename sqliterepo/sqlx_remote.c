@@ -120,6 +120,16 @@ sqlx_pack_RESYNC(const struct sqlx_name_s *name, gint64 deadline)
 }
 
 GByteArray*
+sqlx_pack_VACUUM(const struct sqlx_name_s *name, gboolean local, gint64 deadline)
+{
+	gint8 local2 = BOOL(local);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_VACUUM, NULL, name, deadline);
+	if (local)
+		metautils_message_add_field(req, NAME_MSGKEY_LOCAL, &local2, 1);
+	return message_marshall_gba_and_clean(req);
+}
+
+GByteArray*
 sqlx_pack_STATUS(const struct sqlx_name_s *name, gint64 deadline)
 {
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_STATUS, NULL, name, deadline);

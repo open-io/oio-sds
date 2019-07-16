@@ -335,6 +335,13 @@ action_admin_sync (struct req_args_s *args)
 }
 
 enum http_rc_e
+action_admin_vacuum(struct req_args_s *args)
+{
+	PACKER_VOID(_pack) { return sqlx_pack_VACUUM(_u, FALSE, DL()); }
+	return _sqlx_action_noreturn(args, CLIENT_PREFER_MASTER, _pack);
+}
+
+enum http_rc_e
 action_admin_leave (struct req_args_s *args)
 {
 	PACKER_VOID(_pack) { return sqlx_pack_EXITELECTION (_u, DL()); }
