@@ -23,7 +23,6 @@ License along with this library.
 #include <metautils/lib/metatypes.h>
 
 struct service_info_s;
-void metautils_srvinfo_ensure_tags (struct service_info_s *si);
 
 /* Requests the the best target (conscience, agent proxy) ------------------- */
 
