@@ -1,4 +1,4 @@
-# Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -26,6 +26,7 @@ from oio.common.exceptions import OioException
 from oio.common.logger import get_logger
 from oio.common.utils import depaginate
 from oio.common.easy_value import true_value
+from oio.common.constants import CH_ENCODED_SEPARATOR, CH_SEPARATOR
 
 
 ALLOWED_STATUSES = ['enabled', 'disabled']
@@ -86,11 +87,13 @@ class ProcessedVersions(object):
 
 class ContainerLifecycle(object):
 
-    def __init__(self, api, account, container, logger=None):
+    def __init__(self, api, account, container, logger=None,
+                 recursive=False):
         self.api = api
         self.account = account
         self.container = container
         self.logger = logger or get_logger(None, name=str(self.__class__))
+        self.recursive = recursive
         self.rules = list()
         self.processed_versions = None
 
@@ -182,28 +185,39 @@ class ContainerLifecycle(object):
             else:
                 yield obj_meta, rule.id, "n/a", "Kept"
 
-    def execute(self, use_precessed_versions=True, **kwargs):
+    def process_container(self, container, **kwargs):
         """
         Match then apply the set of rules of the lifecycle configuration
         on all objects of the container.
 
         :returns: tuples of (object metadata, rule name, action, status)
         :rtype: generator of 4-tuples
-        :notice: you must consume the results or the rules won't be applied.
+        :notice: the results must be consumed or the rules won't be applied.
         """
-        if use_precessed_versions:
-            self.processed_versions = ProcessedVersions()
         for obj_meta in depaginate(
                 self.api.object_list,
                 listing_key=lambda x: x['objects'],
                 marker_key=lambda x: x.get('next_marker'),
                 truncated_key=lambda x: x['truncated'],
                 account=self.account,
-                container=self.container,
+                container=container,
                 properties=True,
                 versions=True,
                 **kwargs):
             try:
+                # Save the name of the object as it is in the container,
+                # for later use.
+                obj_meta['orig_name'] = obj_meta['name']
+                # And reconstruct the name of the object as it is
+                # when shown to the final user.
+                if self.recursive and CH_ENCODED_SEPARATOR in container:
+                    obj_meta['name'] = container.split(CH_ENCODED_SEPARATOR,
+                                                       1)[1]
+                    obj_meta['name'].replace(CH_ENCODED_SEPARATOR,
+                                             CH_SEPARATOR)
+                    obj_meta['name'] += CH_SEPARATOR + obj_meta['orig_name']
+                obj_meta['container'] = container
+
                 if self.processed_versions is not None \
                     and self.processed_versions.is_already_processed(
                         obj_meta, **kwargs):
@@ -218,6 +232,36 @@ class ContainerLifecycle(object):
                 yield obj_meta, "n/a", "n/a", exc
             if self.processed_versions is not None:
                 self.processed_versions.save_object(obj_meta, **kwargs)
+
+    def execute(self, use_precessed_versions=True, **kwargs):
+        """
+        Match then apply the set of rules of the lifecycle configuration
+        on all objects of the container (and its relatives, if recursive
+        mode is enabled).
+
+        :returns: tuples of (object metadata, rule name, action, status)
+        :rtype: generator of 4-tuples
+        :notice: the results must be consumed or the rules won't be applied.
+        """
+        if use_precessed_versions:
+            self.processed_versions = ProcessedVersions()
+
+        results = self.process_container(self.container, **kwargs)
+        for res in results:
+            yield res
+
+        if self.recursive:
+            for container in depaginate(
+                    self.api.container_list,
+                    item_key=lambda x: x[0],
+                    marker_key=lambda x: x[-1][0],
+                    account=self.account,
+                    prefix=self.container + CH_ENCODED_SEPARATOR):
+
+                results = self.process_container(container, **kwargs)
+                for res in results:
+                    yield res
+
         self.processed_versions = None
 
     def is_current_version(self, obj_meta, **kwargs):
@@ -226,7 +270,7 @@ class ContainerLifecycle(object):
         """
         if self.processed_versions is None:
             current_obj = self.api.object_get_properties(
-                self.account, self.container, obj_meta['name'])
+                self.account, obj_meta['container'], obj_meta['orig_name'])
             return current_obj['version'] == obj_meta['version']
         else:
             return self.processed_versions.is_current(obj_meta, **kwargs)
@@ -760,8 +804,8 @@ class Expiration(LifecycleAction):
     def apply(self, obj_meta, version=None, **kwargs):
         if self.match(obj_meta, **kwargs):
             res = self.lifecycle.api.object_delete(
-                self.lifecycle.account, self.lifecycle.container,
-                obj_meta['name'], version=version)
+                self.lifecycle.account, obj_meta['container'],
+                obj_meta['orig_name'], version=version)
             return "Deleted" if res else "Kept"
         return "Kept"
 
@@ -776,10 +820,6 @@ class Transition(LifecycleAction):
     def __init__(self, filter_, policy, **kwargs):
         super(Transition, self).__init__(filter_, **kwargs)
         self.policy = policy
-        if self.lifecycle:
-            from oio.content.factory import ContentFactory
-            self.factory = ContentFactory(self.lifecycle.api.container.conf,
-                                          self.lifecycle.api.container)
 
     @classmethod
     def from_element(cls, transition_elt, **kwargs):
@@ -835,8 +875,9 @@ class Transition(LifecycleAction):
             if obj_meta['policy'] == self.policy:
                 return "Policy already changed to %s" % self.policy
             self.lifecycle.api.object_change_policy(
-                self.lifecycle.account, self.lifecycle.container,
-                obj_meta['name'], self.policy, version=obj_meta['version'])
+                self.lifecycle.account, obj_meta['container'],
+                obj_meta['orig_name'], self.policy,
+                version=obj_meta['version'])
             return "Policy changed to %s" % self.policy
         return "Kept"
 

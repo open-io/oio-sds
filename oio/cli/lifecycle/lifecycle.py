@@ -35,14 +35,19 @@ class LifecycleApply(lister.Lister):
             metavar='<container>',
             help='Container on which to apply lifecycle rules'
         )
+        parser.add_argument(
+            '--recursive',
+            type=bool,
+            help='For sharded S3 buckets, recurse on sub containers.'
+        )
         return parser
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
-        lc = ContainerLifecycle(self.app.client_manager.storage,
-                                self.app.client_manager.account,
-                                parsed_args.container,
-                                self.log)
+        lc = ContainerLifecycle(
+            self.app.client_manager.storage, self.app.client_manager.account,
+            parsed_args.container, self.log,
+            recursive=parsed_args.recursive)
         if not lc.load():
             raise LifecycleNotFound(
                 "No lifecycle configuration for container %s in account %s" %

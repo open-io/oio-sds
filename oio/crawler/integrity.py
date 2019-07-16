@@ -38,6 +38,9 @@ from oio.rdir.client import RdirClient
 DEFAULT_DEPTH = 4
 
 
+IRREPARABLE_PREFIX = '#IRREPARABLE'
+
+
 class Target(object):
     """
     Identify the target of a check.
@@ -161,8 +164,8 @@ class Checker(object):
 
         self.rebuild_file = rebuild_file
         if self.rebuild_file:
-            fd = open(self.rebuild_file, 'a')
-            self.rebuild_writer = csv.writer(fd, delimiter='|')
+            self.fd = open(self.rebuild_file, 'a')
+            self.rebuild_writer = csv.writer(self.fd, delimiter='|')
 
         self.api = ObjectStorageApi(
             namespace,
@@ -263,7 +266,7 @@ class Checker(object):
             return
         error = list()
         if irreparable:
-            error.append('#IRREPARABLE')
+            error.append(IRREPARABLE_PREFIX)
         error.append(target.account)
         if target.container:
             error.append(target.container)
@@ -276,7 +279,7 @@ class Checker(object):
     def write_rebuilder_input(self, target, irreparable=False):
         error = list()
         if irreparable:
-            error.append('#IRREPARABLE')
+            error.append(IRREPARABLE_PREFIX)
         error.append(target.cid)
         # FIXME(FVE): ensure we always resolve content_id,
         # or pass object version along with object name.
