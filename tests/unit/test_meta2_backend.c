@@ -27,6 +27,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
 #include <resolver/hc_resolver.h>
+#include <cluster/lib/gridcluster.h>
 
 #undef GQ
 #define GQ() g_quark_from_static_string("oio.m2v2")
@@ -308,7 +309,7 @@ _repo_wrapper(const gchar *ns, gint64 maxvers, repo_test_f fr)
 	lb = _init_lb(9);
 	g_assert_nonnull(lb);
 
-	resolver = hc_resolver_create();
+	resolver = hc_resolver_create(conscience_locate_meta0);
 	g_assert_nonnull(resolver);
 
 	cfg.flags = SQLX_REPO_DELETEON;
@@ -351,7 +352,7 @@ _repo_failure(const gchar *ns)
 	lb = _init_lb(6);
 	g_assert_nonnull(lb);
 
-	resolver = hc_resolver_create();
+	resolver = hc_resolver_create(conscience_locate_meta0);
 	g_assert_nonnull(resolver);
 
 	cfg.flags = SQLX_REPO_DELETEON;

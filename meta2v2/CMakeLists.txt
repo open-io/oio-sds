@@ -59,7 +59,7 @@ add_library(meta2v2utils STATIC
 )
 
 target_link_libraries(meta2v2utils
-		metautils gridcluster
+		metautils
 		${GLIB2_LIBRARIES} ${JSONC_LIBRARIES})
 
 
@@ -74,7 +74,7 @@ target_link_libraries(meta2v2
 		metautils sqliterepo
 		meta1remote meta0remote meta0utils
 		meta2v2utils
-		sqlxsrv
+		oioevents
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
 
@@ -89,8 +89,10 @@ add_executable(meta2_server
 		meta2_server.c)
 bin_prefix(meta2_server -meta2-server)
 
-target_link_libraries(meta2_server meta2v2
-        hcresolve metautils gridcluster server
+target_link_libraries(meta2_server
+		meta2v2
+        hcresolve metautils server
+		sqlxsrv
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
 install(TARGETS meta2_server RUNTIME DESTINATION bin)

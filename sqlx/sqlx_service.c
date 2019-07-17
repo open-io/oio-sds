@@ -370,7 +370,7 @@ _init_configless_structures(struct sqlx_service_s *ss)
 			|| !(ss->server = network_server_init())
 			|| !(ss->dispatcher = transport_gridd_build_empty_dispatcher())
 			|| !(ss->clients_pool = gridd_client_pool_create())
-			|| !(ss->resolver = hc_resolver_create())
+			|| !(ss->resolver = hc_resolver_create(conscience_locate_meta0))
 			|| !(ss->gtq_admin = grid_task_queue_create("admin"))
 			|| !(ss->gtq_reload = grid_task_queue_create("reload"))) {
 		GRID_WARN("SERVICE init error: memory allocation failure");

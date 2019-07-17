@@ -34,7 +34,7 @@ target_link_libraries(meta1remote
 add_executable(meta1_server meta1_gridd_dispatcher.c meta1_server.c)
 bin_prefix(meta1_server -meta1-server)
 target_link_libraries(meta1_server meta1v2
-        meta0utils metautils gridcluster server sqliterepo
+        meta0utils metautils server sqliterepo
 		sqlxsrv
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 

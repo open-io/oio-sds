@@ -32,6 +32,6 @@ add_library(hcresolve STATIC
 	${CMAKE_CURRENT_BINARY_DIR}/resolver_variables.c)
 
 target_link_libraries(hcresolve
-		meta0remote meta1remote metautils gridcluster
+		meta0remote meta1remote metautils
 		${GLIB2_LIBRARIES})
 

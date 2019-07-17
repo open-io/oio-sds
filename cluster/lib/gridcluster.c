@@ -117,3 +117,14 @@ conscience_get_services (const char *ns, const char *type, gboolean full,
 	return NULL;
 }
 
+GError *
+conscience_locate_meta0(const char *ns, gchar ***result, gint64 dl)
+{
+	GSList *out = NULL;
+	GError *err = conscience_get_services (ns, NAME_SRVTYPE_META0, FALSE, &out, dl);
+	if (err)
+		return err;
+	*result = metautils_service_list_to_urlv(out);
+	g_slist_free_full(out, (GDestroyNotify)service_info_clean);
+	return NULL;
+}

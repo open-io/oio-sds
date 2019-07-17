@@ -580,3 +580,27 @@ service_info_load_json(const gchar *encoded, struct service_info_s **out,
 	json_object_put(obj);
 	return err;
 }
+
+gchar *
+metautils_service_to_m1url(const struct service_info_s *si, gint64 seq)
+{
+	gchar str[64] = {};
+	grid_addrinfo_to_string(&(si->addr), str, sizeof(str));
+	return g_strdup_printf("%" G_GINT64_FORMAT "|%s|%s|", seq, si->type, str);
+}
+
+gchar **
+metautils_service_list_to_urlv(GSList *l)
+{
+	GPtrArray *tmp = g_ptr_array_new();
+	for (; l ;l=l->next) {
+		gchar str[64] = {};
+		struct service_info_s *si = l->data;
+		grid_addrinfo_to_string(&(si->addr), str, sizeof(str));
+		g_ptr_array_add(tmp, metautils_service_to_m1url(si, 1));
+	}
+
+	g_ptr_array_add(tmp, NULL);
+	return (gchar**) g_ptr_array_free(tmp, FALSE);
+}
+
