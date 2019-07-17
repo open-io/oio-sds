@@ -428,7 +428,9 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 
 	TRACE_FILTER();
-	e = meta2_backend_delete_alias(m2b, url, _bean_list_cb, &obc->l);
+	e = meta2_backend_delete_alias(m2b, url,
+		BOOL(meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_DELETE_MARKER)),
+		_bean_list_cb, &obc->l);
 	if (NULL != e) {
 		GRID_DEBUG("Fail to delete alias for url: %s", oio_url_get(url, OIOURL_WHOLE));
 		meta2_filter_ctx_set_error(ctx, e);

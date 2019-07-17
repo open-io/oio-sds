@@ -241,6 +241,17 @@ meta2_filter_extract_header_string_size(struct gridd_filter_ctx_s *ctx,
 }
 
 int
+meta2_filter_extract_header_optional_delete_marker(
+		struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
+{
+	GError *e = NULL;
+	gchar buf[64];
+	TRACE_FILTER();
+	EXTRACT_OPT(NAME_MSGKEY_DELETE_MARKER);
+	return FILTER_OK;
+}
+
+int
 meta2_filter_extract_header_optional_overwrite(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {

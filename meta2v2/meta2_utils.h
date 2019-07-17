@@ -178,7 +178,8 @@ GError* m2db_drain_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		m2_onbean_cb cb, gpointer u0);
 
 GError* m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
-		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0);
+		gboolean delete_marker, struct oio_url_s *url,
+		m2_onbean_cb cb, gpointer u0);
 
 GError* m2db_link_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		GBytes *id);
