@@ -117,6 +117,10 @@ void oio_ext_set_force_versioning(const gchar *force_versioning);
 
 void oio_ext_clean_force_versioning(void);
 
+gboolean oio_ext_has_simulate_versioning(void);
+
+void oio_ext_set_simulate_versioning(const gboolean simulate_versioning);
+
 gint64 oio_ext_real_time (void);
 
 gint64 oio_ext_monotonic_time (void);

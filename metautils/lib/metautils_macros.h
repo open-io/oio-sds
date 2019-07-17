@@ -91,6 +91,7 @@ License along with this library.
 #define NAME_MSGKEY_RECOMPUTE          "RECOMPUTE"
 #define NAME_MSGKEY_REPLICAS           "REPLICAS"
 #define NAME_MSGKEY_SEQNUM             "SEQ_NUM"
+#define NAME_MSGKEY_SIM_VER            "SIM_VER"
 #define NAME_MSGKEY_SPARE              "SPARE"
 #define NAME_MSGKEY_SRC                "SRC"
 #define NAME_MSGKEY_STATUS             "S"

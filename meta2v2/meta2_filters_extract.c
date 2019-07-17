@@ -319,7 +319,7 @@ meta2_filter_extract_list_params(struct gridd_filter_ctx_s *ctx,
 }
 
 int
-meta2_filter_extract_header_optional_force_versioning(struct gridd_filter_ctx_s *ctx,
+meta2_filter_extract_force_versioning(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	GError *e = NULL;
@@ -327,7 +327,23 @@ meta2_filter_extract_header_optional_force_versioning(struct gridd_filter_ctx_s 
 	TRACE_FILTER();
 	EXTRACT_STRING(NAME_MSGKEY_FORCE_VERSIONING, TRUE);
 	/* TODO(mbo) we should validate value */
-	const char *force_versioning = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_FORCE_VERSIONING);
+	const char *force_versioning = meta2_filter_ctx_get_param(
+			ctx, NAME_MSGKEY_FORCE_VERSIONING);
 	oio_ext_set_force_versioning(force_versioning);
+	return FILTER_OK;
+}
+
+int
+meta2_filter_extract_simulate_versioning(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GError *e = NULL;
+	gchar buf[1024];
+	TRACE_FILTER();
+	EXTRACT_OPT(NAME_MSGKEY_SIM_VER);
+	const char *simulate_versioning = meta2_filter_ctx_get_param(
+			ctx, NAME_MSGKEY_SIM_VER);
+	oio_ext_set_simulate_versioning(
+			oio_str_parse_bool(simulate_versioning, FALSE));
 	return FILTER_OK;
 }
