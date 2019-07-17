@@ -262,12 +262,14 @@ m2v2_remote_pack_SPARE(struct oio_url_s *url, const char *pol,
 }
 
 GByteArray*
-m2v2_remote_pack_PUT(struct oio_url_s *url, GSList *beans, const char* force_versioning, gint64 dl)
+m2v2_remote_pack_PUT(struct oio_url_s *url, GSList *beans, gint64 dl)
 {
 	GByteArray *body = bean_sequence_marshall(beans);
 	MESSAGE msg = _m2v2_build_request (NAME_MSGNAME_M2V2_PUT, url, body, dl);
-	if (force_versioning) {
-		metautils_message_add_field_str(msg, NAME_MSGKEY_FORCE_VERSIONING, force_versioning);
+	const gchar *force_versioning = oio_ext_get_force_versioning();
+	if (force_versioning != NULL) {
+		metautils_message_add_field_str(msg, NAME_MSGKEY_FORCE_VERSIONING,
+				force_versioning);
 	}
 	return message_marshall_gba_and_clean(msg);
 }
@@ -313,11 +315,13 @@ m2v2_remote_pack_DRAIN(struct oio_url_s *url, gint64 dl)
 }
 
 GByteArray*
-m2v2_remote_pack_DEL(struct oio_url_s *url, const gchar* force_versioning, gint64 dl)
+m2v2_remote_pack_DEL(struct oio_url_s *url, gint64 dl)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_DEL, url, NULL, dl);
-	if (force_versioning) {
-		metautils_message_add_field_str(msg, NAME_MSGKEY_FORCE_VERSIONING, force_versioning);
+	const gchar *force_versioning = oio_ext_get_force_versioning();
+	if (force_versioning != NULL) {
+		metautils_message_add_field_str(msg, NAME_MSGKEY_FORCE_VERSIONING,
+				force_versioning);
 	}
 	return message_marshall_gba_and_clean(msg);
 }
