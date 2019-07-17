@@ -73,12 +73,12 @@ extern "C" {
 # define PROXYD_HEADER_ADMIN PROXYD_HEADER_PREFIX "admin"
 # endif
 
-#ifndef PROXYD_HEADER_FORCE_MASTER
-#define PROXYD_HEADER_FORCE_MASTER PROXYD_HEADER_PREFIX "force-master"
-#endif
+# ifndef PROXYD_HEADER_FORCE_MASTER
+#  define PROXYD_HEADER_FORCE_MASTER PROXYD_HEADER_PREFIX "force-master"
+# endif
 
 # ifndef PROXYD_HEADER_TIMEOUT
-# define PROXYD_HEADER_TIMEOUT PROXYD_HEADER_PREFIX "timeout"
+#  define PROXYD_HEADER_TIMEOUT PROXYD_HEADER_PREFIX "timeout"
 # endif
 
 # ifndef PROXYD_HEADER_NOEMPTY
@@ -91,7 +91,11 @@ extern "C" {
 
 # ifndef PROXYD_HEADER_FORCE_VERSIONING
 #  define PROXYD_HEADER_FORCE_VERSIONING PROXYD_HEADER_PREFIX "force-versioning"
-#endif
+# endif
+
+# ifndef PROXYD_HEADER_SIMULATE_VERSIONING
+#  define PROXYD_HEADER_SIMULATE_VERSIONING PROXYD_HEADER_PREFIX "simulate-versioning"
+# endif
 
 /* in oio_ext_monotonic_time() precision */
 # ifndef PROXYD_DEFAULT_TTL_SERVICES
