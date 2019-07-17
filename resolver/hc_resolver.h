@@ -35,11 +35,22 @@ struct oio_url_s;
 /* Hidden type */
 struct hc_resolver_s;
 
+/* the way any resolver locate the meta0: the proxy requires a direct touch
+ * on the conscience while all the other services do it via the proxy.
+ * (*result) must contains a NULL-terminated array of strings of
+ * encoded meta1_url_s */
+typedef GError * (*hc_resolver_m0locate_f) (
+		const char *ns,
+		gchar ***result,
+		gint64 deadline);
+
 /* Simple constructor */
-struct hc_resolver_s* hc_resolver_create(void);
+struct hc_resolver_s* hc_resolver_create(
+		hc_resolver_m0locate_f locate_m0);
 
 /* Change the internal flags of the resolver */
-void hc_resolver_configure (struct hc_resolver_s *r, enum hc_resolver_flags_e f);
+void hc_resolver_configure (struct hc_resolver_s *r,
+		enum hc_resolver_flags_e f);
 
 /* Allows to resolver to prefer services that have no known problem.
  * The hook is called with the IP:PORT couple in a string. */

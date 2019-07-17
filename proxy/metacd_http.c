@@ -1163,7 +1163,7 @@ grid_main_configure (int argc, char **argv)
 
 	oio_resolver_cache_enabled = BOOL(flag_cache_enabled);
 
-	resolver = hc_resolver_create ();
+	resolver = hc_resolver_create (proxy_locate_meta0);
 	hc_resolver_qualify (resolver, service_is_ok);
 	hc_resolver_notify (resolver, service_invalidate);
 

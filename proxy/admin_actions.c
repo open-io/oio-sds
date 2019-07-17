@@ -57,28 +57,21 @@ static GString* _m0_mapping_from_m1_list(GSList *m1_list) {
 typedef GError*(*meta0_func)(const char *m0_url, gpointer udata);
 
 static GError*
-_action_admin_meta0_common(struct req_args_s *args,
-		meta0_func func, gpointer udata)
+_action_admin_meta0_common(meta0_func func, gpointer udata)
 {
-	GError *err = NULL;
-	GSList *m0_lst = NULL;
+	gchar **urlv = NULL;
+	GError *err = proxy_locate_meta0(ns_name, &urlv, oio_ext_get_deadline());
+	if (err)
+		return err;
 
-	err = conscience_get_services(NS(), NAME_SRVTYPE_META0, FALSE, &m0_lst, oio_ext_get_deadline());
-	if (!err) {
-		for (GSList *l = m0_lst; l; l = l->next) {
-			g_clear_error(&err);
-			service_info_t *m0 = l->data;
-			gchar m0_url[STRLEN_ADDRINFO] = {0};
-			grid_addrinfo_to_string(&(m0->addr), m0_url, sizeof(m0_url));
-
-			err = func(m0_url, udata);
-
-			if (!err || !CODE_IS_NETWORK_ERROR(err->code))
-				break;
-		}
-		g_slist_free_full(m0_lst, (GDestroyNotify)service_info_clean);
+	for (gchar **pu = urlv; *pu; ++pu) {
+		if (err) g_clear_error(&err);
+		meta1_url_shift_addr(*pu);
+		err = func(*pu, udata);
+		if (!err || !CODE_IS_NETWORK_ERROR(err->code))
+			break;
 	}
-
+	g_strfreev(urlv);
 	return err;
 }
 
@@ -93,7 +86,7 @@ enum http_rc_e
 action_admin_meta0_list(struct req_args_s *args) {
 	GSList *m1_lst = NULL;
 	GString *json = NULL;
-	GError *err = _action_admin_meta0_common(args,
+	GError *err = _action_admin_meta0_common(
 			(meta0_func)_wrap_meta0_remote_get_meta1_all, &m1_lst);
 
 	if (!err) {
@@ -116,7 +109,7 @@ _wrap_meta0_remote_force(const char *m0_url, GByteArray *udata)
 
 enum http_rc_e
 action_admin_meta0_force(struct req_args_s *args) {
-	GError *err = _action_admin_meta0_common(args,
+	GError *err = _action_admin_meta0_common(
 			(meta0_func)_wrap_meta0_remote_force, args->rq->body);
 
 	if (!err)

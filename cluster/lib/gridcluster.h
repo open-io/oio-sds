@@ -31,4 +31,9 @@ GError* conscience_get_services (const char *ns, const char *type,
 
 GError* conscience_get_types (const char *ns, GSList **out);
 
+/* Variant of conscience_get_services() dedicated to meta0 and suitable
+ * as a "meta0 location lookup hook" required at the construction of a
+ * hc_resolver_s */
+GError* conscience_locate_meta0(const char *ns, gchar ***result, gint64 dl);
+
 #endif /*OIO_SDS__cluster__lib__gridcluster_h*/

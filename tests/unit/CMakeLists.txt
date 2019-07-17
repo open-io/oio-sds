@@ -82,7 +82,7 @@ target_link_libraries(test_gba ${ENLARGED})
 add_test(NAME metautils/gba COMMAND test_gba)
 
 add_executable(test_meta2_backend test_meta2_backend.c)
-target_link_libraries(test_meta2_backend meta2v2 ${ENLARGED})
+target_link_libraries(test_meta2_backend meta2v2 ${ENLARGED} gridcluster hcresolve)
 add_test(NAME meta2/backend COMMAND test_meta2_backend)
 
 add_executable(test_meta1_backend test_meta1_backend.c)

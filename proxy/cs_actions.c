@@ -121,7 +121,7 @@ conscience_remote_push_services(gchar **allcs, GSList *ls, gint64 deadline)
 	return _loop_on_allcs_while_neterror(allcs, action);
 }
 
-GError*
+GError *
 conscience_remote_remove_services(gchar **allcs, const char *type, GSList *ls, gint64 deadline)
 {
 	GError * action(const char *cs) {
@@ -147,6 +147,87 @@ conscience_resolve_service_id(gchar **cs UNUSED, const char *type UNUSED,
 		return NULL;
 
 	return NEWERROR(CODE_UNAVAILABLE, "Service ID [%s] not found", service_id);
+}
+
+static GError *
+_cached_json_to_urlv(const char * srvtype, GBytes *json, gchar ***result)
+{
+	/* Extract the JSON portion of the cached information (there is
+	 * a prefix, the whole buffer is not valid JSON) */
+	do {
+		const gsize ltype = strlen(srvtype) + 1;
+		const gsize lmax = g_bytes_get_size(json);
+		json = g_bytes_new_from_bytes(json, ltype, lmax-ltype);
+	} while (0);
+
+	GPtrArray *tmp = g_ptr_array_new();
+	GError *err = NULL;
+
+	/* We now have a JSON-encoded list of services, right out of
+	 * the cache */
+	gsize buflen = 0;
+	gconstpointer bufptr = g_bytes_get_data(json, &buflen);
+	struct json_tokener *tok = json_tokener_new();
+	struct json_object *array = json_tokener_parse_ex(tok, bufptr, buflen);
+	json_tokener_free(tok);
+	if (!json_object_is_type(array, json_type_array)) {
+		err = SYSERR("Unexpected cache entry");
+		goto label_error;
+	} else {
+		const int max = json_object_array_length(array);
+		if (max <= 0) {
+			err = SYSERR("No %s service", srvtype);
+			goto label_error;
+		}
+		for (int i = 0; i < max; ++i) {
+			struct service_info_s *si = NULL;
+			struct json_object *obj = json_object_array_get_idx(array, i);
+			err = service_info_load_json_object(obj, &si, TRUE);
+			if (err != NULL)
+				goto label_error;
+			g_ptr_array_add(tmp, metautils_service_to_m1url(si, 1));
+			service_info_clean(si);
+		}
+	}
+	json_object_put(array);
+	g_ptr_array_add(tmp, NULL);
+	*result = (gchar**) g_ptr_array_free(tmp, FALSE);
+	return NULL;
+
+label_error:
+	json_object_put(array);
+	g_ptr_array_set_free_func(tmp, g_free);
+	g_ptr_array_free(tmp, TRUE);
+	*result = NULL;
+	return err;
+}
+
+GError *
+proxy_locate_meta0(const char *ns UNUSED, gchar ***result, gint64 deadline)
+{
+	CSURL(cs);
+	GSList *sl = NULL;
+	GError *err = NULL;
+
+	if (flag_cache_enabled) {
+		service_remember_wanted (NAME_SRVTYPE_META0);
+		GBytes *prepared = service_is_wanted (NAME_SRVTYPE_META0);
+		if (prepared) {
+			err = _cached_json_to_urlv(NAME_SRVTYPE_META0, prepared, result);
+			g_bytes_unref(prepared);
+			return err;
+		}
+	}
+
+	err = conscience_remote_get_services(cs, NAME_SRVTYPE_META0,
+			FALSE, &sl, deadline);
+	if (NULL != err) {
+		g_slist_free_full (sl, (GDestroyNotify) service_info_clean);
+		return err;
+	}
+	*result = metautils_service_list_to_urlv(sl);
+	g_slist_free_full(sl, (GDestroyNotify)service_info_clean);
+	return NULL;
 }
 
 /* -------------------------------------------------------------------------- */

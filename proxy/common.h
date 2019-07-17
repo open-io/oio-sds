@@ -135,7 +135,7 @@ extern struct namespace_info_s nsinfo;
 gboolean validate_namespace (const char * ns);
 gboolean validate_srvtype (const char * n);
 
-/* Periodically loads the consciennce's addresses from the local config
+/* Periodically loads the conscience's addresses from the local config
  * and keep this in cache. */
 extern GRWLock csurl_rwlock;
 extern gchar **csurl;
@@ -338,5 +338,7 @@ static inline gint64 DL(void) {
  * seen faulty or down. */
 GError * gridd_client_exec_and_concat_string (const char *to, gdouble timeout,
 		GByteArray *req, gchar **out);
+
+GError* proxy_locate_meta0(const char *ns, gchar ***result, gint64 dl);
 
 #endif /*OIO_SDS__proxy__common_h*/

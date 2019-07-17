@@ -22,12 +22,35 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <unistd.h>
 
 #include <metautils/lib/metautils.h>
-#include <resolver/resolver_variables.h>
-
-#include <cluster/lib/gridcluster.h>
 #include <meta0v2/meta0_remote.h>
 #include <meta1v2/meta1_remote.h>
-#include <resolver/hc_resolver_internals.h>
+#include <resolver/resolver_variables.h>
+
+#include "hc_resolver.h"
+
+struct lru_tree_s;
+
+struct cached_element_s
+{
+	guint32 count_elements;
+	gchar s[]; /* Must be the last! */
+};
+
+struct hc_resolver_s
+{
+	GMutex lock;
+	struct lru_tree_s *services;
+	struct lru_tree_s *csm0;
+	enum hc_resolver_flags_e flags;
+
+	/* called with the IP:PORT string */
+	gboolean (*service_qualifier) (gconstpointer);
+
+	/* called with the IP:PORT string */
+	void (*service_notifier) (gconstpointer);
+
+	hc_resolver_m0locate_f locate_m0;
+};
 
 /* Packing */
 static void
@@ -86,8 +109,10 @@ hc_resolver_element_create(const char * const *value)
 /* Public API -------------------------------------------------------------- */
 
 struct hc_resolver_s*
-hc_resolver_create(void)
+hc_resolver_create(hc_resolver_m0locate_f locate)
 {
+	g_assert_nonnull(locate);
+
 	struct hc_resolver_s *resolver = g_malloc0(sizeof(struct hc_resolver_s));
 
 	resolver->csm0 = lru_tree_create((GCompareFunc)hashstr_quick_cmp,
@@ -95,6 +120,8 @@ hc_resolver_create(void)
 
 	resolver->services = lru_tree_create((GCompareFunc)hashstr_quick_cmp,
 			g_free, g_free, 0);
+
+	resolver->locate_m0 = locate;
 
 	g_mutex_init(&resolver->lock);
 	return resolver;
@@ -203,21 +230,6 @@ _srv_key(const char *srvtype, struct oio_url_s *u)
 			oio_url_get(u, OIOURL_NS));
 }
 
-static gchar **
-_srvlist_to_urlv(GSList *l)
-{
-	gchar str[64] = {};
-	GPtrArray *tmp = g_ptr_array_new();
-	for (; l ;l=l->next) {
-		struct service_info_s *si = l->data;
-		grid_addrinfo_to_string(&(si->addr), str, sizeof(str));
-		g_ptr_array_add(tmp, g_strdup_printf("1|%s|%s|", si->type, str));
-	}
-
-	g_ptr_array_add(tmp, NULL);
-	return (gchar **) g_ptr_array_free(tmp, FALSE);
-}
-
 static GError*
 _resolve_meta0(struct hc_resolver_s *r, const char *ns, gchar ***result,
 		gint64 deadline)
@@ -228,23 +240,16 @@ _resolve_meta0(struct hc_resolver_s *r, const char *ns, gchar ***result,
 
 	/* Try to hit the cache */
 	if (!(*result = hc_resolver_get_cached(r, r->csm0, hk))) {
-		GSList *allm0;
 
 		/* Now attempt a real resolution */
-		err = conscience_get_services(ns, NAME_SRVTYPE_META0, FALSE, &allm0, deadline);
-		if (!allm0 || err) {
+		err = r->locate_m0(ns, result, deadline);
+		if (!*result || err) {
 			if (!err)
 				err = BUSY("No meta0 available");
 			*result = NULL;
 		} else {
-			*result = _srvlist_to_urlv(allm0);
-			g_slist_foreach(allm0, service_info_gclean, NULL);
-			g_slist_free(allm0);
-			allm0 = NULL;
-
 			/* then fill the cache */
-			hc_resolver_store(r, r->csm0, hk,
-					(const char * const *) *result);
+			hc_resolver_store(r, r->csm0, hk, (const char * const *) *result);
 			err = NULL;
 		}
 	}

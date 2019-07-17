@@ -33,22 +33,28 @@ void service_info_gclean(gpointer si, gpointer unused);
 
 struct service_info_s *service_info_dup(const struct service_info_s *si);
 
+
 GPtrArray *service_info_copy_tags(GPtrArray * original);
 
-
 struct service_tag_s *service_info_get_tag(GPtrArray * a, const gchar * n);
+
 struct service_tag_s *service_info_ensure_tag(GPtrArray * a, const gchar * name);
+
 void service_info_remove_tag(GPtrArray * a, const gchar * name);
 
 void service_tag_copy(struct service_tag_s *dst, struct service_tag_s *src);
+
 struct service_tag_s *service_tag_dup(struct service_tag_s *src);
+
 void service_tag_destroy(struct service_tag_s *tag);
 
 void service_tag_set_value_string(struct service_tag_s *tag, const gchar *s);
+
 gboolean service_tag_get_value_string(struct service_tag_s *tag, gchar * s,
 		gsize s_size, GError **error);
 
 void service_tag_set_value_boolean(struct service_tag_s *tag, gboolean b);
+
 gboolean service_tag_get_value_boolean(struct service_tag_s *tag, gboolean *b,
 		GError **error);
 
@@ -108,5 +114,11 @@ gchar * service_info_key (const struct service_info_s *si);
 /** Fill a preallocated LB item from a service description */
 void service_info_to_lb_item(const struct service_info_s *si,
 		struct oio_lb_item_s *item);
+
+gchar ** metautils_service_list_to_urlv(GSList *l);
+
+/* Build a serialized representation of meta1_url that correspond
+ * to the given service. */
+gchar * metautils_service_to_m1url(const struct service_info_s *si, gint64 seq);
 
 #endif /*OIO_SDS__metautils__lib__metatype_srvinfo_h*/

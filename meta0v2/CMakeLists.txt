@@ -24,13 +24,13 @@ target_link_libraries(meta0remote
 
 add_library(meta0utils STATIC meta0_utils.c)
 target_link_libraries(meta0utils
-		metautils gridcluster
+		metautils
 		${GLIB2_LIBRARIES})
 
 
 add_library(meta0v2 STATIC meta0_backend.c)
 target_link_libraries(meta0v2
-		meta0utils metautils gridcluster sqliterepo
+		meta0utils metautils sqliterepo
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
 
@@ -41,7 +41,7 @@ add_executable(meta0_server
 bin_prefix(meta0_server -meta0-server)
 target_link_libraries(meta0_server
 		meta0v2 meta0utils
-        metautils gridcluster server sqliterepo
+        metautils server sqliterepo
 		sqlxsrv
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
