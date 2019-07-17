@@ -20,13 +20,14 @@
 import time
 import binascii
 import logging
+import random
 import simplejson as json
 import struct
 from tests.utils import BaseTestCase, random_str, random_id
 from oio.common import exceptions as exc
 from oio.common.constants import OIO_DB_STATUS_NAME, OIO_DB_ENABLED, \
-                                 OIO_DB_FROZEN, OIO_DB_DISABLED, \
-                                 FORCEVERSIONING_HEADER
+    OIO_DB_FROZEN, OIO_DB_DISABLED, OBJECT_METADATA_PREFIX, \
+    FORCEVERSIONING_HEADER, SIMULATEVERSIONING_HEADER
 from oio.common.easy_value import boolean_value
 from oio.conscience.client import ConscienceClient
 
@@ -415,9 +416,11 @@ class TestMeta2Containers(BaseTestCase):
         del_properties(p0.keys())
         check_properties(p1)
 
-    def _create_content(self, name, missing_chunks=0, headers_add=None):
+    def _create_content(self, name, version=None, missing_chunks=0,
+                        headers_add=None):
         headers = {'X-oio-action-mode': 'autocreate'}
-        params = self.param_content(self.ref, name)
+        params = self.param_content(self.ref, name, version=version)
+
         resp = self.request('POST', self.url_content('prepare'), params=params,
                             headers=headers, data=json.dumps({'size': '1024'}))
         self.assertEqual(200, resp.status)
@@ -426,10 +429,11 @@ class TestMeta2Containers(BaseTestCase):
             chunks.pop()
 
         stgpol = resp.getheader('x-oio-content-meta-policy')
+        version = resp.getheader('x-oio-content-meta-version')
         headers = {'x-oio-action-mode': 'autocreate',
                    'x-oio-content-meta-size': '1024',
                    'x-oio-content-meta-policy': stgpol,
-                   'x-oio-content-meta-version': int(time.time()*1000000),
+                   'x-oio-content-meta-version': version,
                    'x-oio-content-meta-id': random_id(32)}
 
         if headers_add:
@@ -786,6 +790,147 @@ class TestMeta2Containers(BaseTestCase):
                             params=merge(params, {'all': 1}))
         data = json.loads(resp.data)
         self.assertEqual(8, len(data['objects']))
+
+    def test_object_by_simulating_versioning(self):
+        path = random_content()
+        params_container = self.param_ref(self.ref)
+        headers = {SIMULATEVERSIONING_HEADER: 1}
+        versions = dict()
+
+        def _check(max_versions=None):
+            resp = self.request('POST', self.url_container('get_properties'),
+                                params=params_container)
+            data = json.loads(resp.data)
+            self.assertEqual(str(len([version for version, deleted
+                                      in versions.items() if not deleted])),
+                             data['system']['sys.m2.objects'])
+            if max_versions is None:
+                self.assertNotIn('sys.m2.policy.version',
+                                 data['system'].keys())
+            else:
+                self.assertEqual(data['system']['sys.m2.policy.version'],
+                                 str(max_versions))
+            param_content = self.param_content(self.ref, path)
+            resp = self.request('POST', self.url_content('get_properties'),
+                                params=param_content)
+            sorted_versions = versions.keys()
+            sorted_versions.sort()
+            self.assertEqual(200, resp.status)
+            self.assertEqual(
+                str(sorted_versions[-1]),
+                resp.headers[OBJECT_METADATA_PREFIX + 'version'])
+
+            for version in versions:
+                param_content = self.param_content(self.ref, path,
+                                                   version=version)
+                resp = self.request('POST', self.url_content('get_properties'),
+                                    params=param_content)
+                self.assertEqual(200, resp.status)
+
+        def _set_max_version(max_versions):
+            props = {"system": {"sys.m2.policy.version": str(max_versions)}}
+            resp = self.request('POST', self.url_container('set_properties'),
+                                params=params_container,
+                                data=json.dumps(props))
+            self.assertEqual(200, resp.status)
+
+        def _random_delete_object():
+            version = random.choice(list(versions))
+            param_content = self.param_content(self.ref, path,
+                                               version=version)
+            resp = self.request('POST', self.url_content('delete'),
+                                params=param_content, headers=headers)
+            self.assertEqual(204, resp.status)
+
+            resp = self.request('POST', self.url_content('get_properties'),
+                                params=param_content)
+            self.assertEqual(404, resp.status)
+            del versions[version]
+
+        def _create_delete_marker():
+            param_content = self.param_content(self.ref, path)
+            resp = self.request('POST', self.url_content('delete'),
+                                params=param_content, headers=headers)
+            self.assertEqual(204, resp.status)
+            sorted_versions = versions.keys()
+            sorted_versions.sort()
+            versions[sorted_versions[-1] + 1] = True
+
+        # Default versioning
+        version = int(time.time()*1000000)
+        self._create_content(path, version=version, headers_add=headers)
+        versions[version] = False
+        _check()
+
+        version += 10
+        self._create_content(path, version=version, headers_add=headers)
+        versions[version] = False
+        _check()
+
+        version -= 5
+        self._create_content(path, version=version, headers_add=headers)
+        versions[version] = False
+        _check()
+
+        _random_delete_object()
+        _check()
+
+        _create_delete_marker()
+        _check()
+
+        # Versioning unlimited
+        _set_max_version(-1)
+        version += 15
+        self._create_content(path, version=version, headers_add=headers)
+        versions[version] = False
+        _check(max_versions=-1)
+
+        version -= 5
+        self._create_content(path, version=version, headers_add=headers)
+        versions[version] = False
+        _check(max_versions=-1)
+
+        _random_delete_object()
+        _check(max_versions=-1)
+
+        _create_delete_marker()
+        _check(max_versions=-1)
+
+        # Versioning disabled
+        _set_max_version(0)
+        version += 15
+        self._create_content(path, version=version, headers_add=headers)
+        versions[version] = False
+        _check(max_versions=0)
+
+        version -= 5
+        self._create_content(path, version=version, headers_add=headers)
+        versions[version] = False
+        _check(max_versions=0)
+
+        _random_delete_object()
+        _check(max_versions=0)
+
+        _create_delete_marker()
+        _check(max_versions=0)
+
+        # Versioning suspended
+        _set_max_version(1)
+        version += 15
+        self._create_content(path, version=version, headers_add=headers)
+        versions[version] = False
+        _check(max_versions=1)
+
+        version -= 5
+        self._create_content(path, version=version, headers_add=headers)
+        versions[version] = False
+        _check(max_versions=1)
+
+        _random_delete_object()
+        _check(max_versions=1)
+
+        _create_delete_marker()
+        _check(max_versions=1)
 
 
 class TestMeta2Contents(BaseTestCase):

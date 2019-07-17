@@ -142,8 +142,11 @@ class CommonTestCase(testtools.TestCase):
     def param_ref(self, ref):
         return {'ref': ref, 'acct': self.account}
 
-    def param_content(self, ref, path):
-        return {'ref': ref, 'acct': self.account, 'path': path}
+    def param_content(self, ref, path, version=None):
+        params = {'ref': ref, 'acct': self.account, 'path': path}
+        if version is not None:
+            params['version'] = version
+        return params
 
     @staticmethod
     def static_request(method, url, data=None, params=None, headers=None,
