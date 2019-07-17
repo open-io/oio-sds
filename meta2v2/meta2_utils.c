@@ -1144,7 +1144,8 @@ _real_delete_aliases(struct sqlx_sqlite3_s *sq3, GPtrArray *aliases,
 
 GError*
 m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
-		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0)
+		gboolean delete_marker, struct oio_url_s *url,
+		m2_onbean_cb cb, gpointer u0)
 {
 	GError *err;
 	struct bean_ALIASES_s *alias = NULL;
@@ -1183,11 +1184,26 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 			max_versions, ALIASES_get_deleted(alias),
 			oio_url_has(url, OIOURL_VERSION), oio_url_get(url, OIOURL_VERSION));
 
+	gboolean add_delete_marker = FALSE;
 	if (VERSIONS_DISABLED(max_versions) || VERSIONS_SUSPENDED(max_versions) ||
 			oio_url_has(url, OIOURL_VERSION) || ALIASES_get_deleted(alias)) {
-		err = _real_delete_and_save_deleted_beans(sq3, beans, alias, header,
-				cb, u0);
+		if (delete_marker) {
+			if (VERSIONS_DISABLED(max_versions) ||
+					VERSIONS_SUSPENDED(max_versions)) {
+				err = BADREQ("Versioning not enabled and delete marker specified");
+			} else if (ALIASES_get_deleted(alias)) {
+				err = BADREQ("Alias is a delete marker and delete marker specified");
+			} else {
+				add_delete_marker = TRUE;
+			}
+		} else {
+			err = _real_delete_and_save_deleted_beans(sq3, beans,
+					alias, header, cb, u0);
+		}
 	} else {
+		add_delete_marker = TRUE;
+	}
+	if (add_delete_marker) {
 		gint64 now = oio_ext_real_time () / G_TIME_SPAN_SECOND;
 		/* Create a new version marked as deleted */
 		struct bean_ALIASES_s *new_alias = _bean_create(&descr_struct_ALIASES);
