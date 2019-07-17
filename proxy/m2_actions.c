@@ -2914,7 +2914,12 @@ enum http_rc_e action_content_show (struct req_args_s *args) {
 // POST /v3.0/{NS}/content/delete?acct={account}&ref={container}&path={file path}
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// You can update system property policy.version of container
+// If the versioning is enabled, you can add delete marker to a specific version
+//
+// .. code-block:: text
+//    POST /v3.0/OPENIO/content/delete?acct=my_account&ref=mycontainer&path=mycontent&version=9876543210&delete_marker=1 HTTP/1.1
+//
+// Unreference object from container
 //
 // .. code-block:: text
 //    "x-oio-force-versioning: -1"
@@ -2941,25 +2946,29 @@ enum http_rc_e action_content_show (struct req_args_s *args) {
 //
 // }}CONTENT
 enum http_rc_e action_content_delete (struct req_args_s *args) {
+	const gboolean delete_marker = _request_get_flag(args, "delete_marker");
 	/* used from oio-swift for "sharding" in containers */
 	const char* force_versioning = g_tree_lookup(args->rq->tree_headers,
 			PROXYD_HEADER_FORCE_VERSIONING);
 	oio_ext_set_force_versioning(force_versioning);
 
-	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url, DL()); }
+	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url,
+			delete_marker, DL()); }
 	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	return _reply_m2_error (args, err);
 }
 
 static enum http_rc_e
 _m2_content_delete_many (struct req_args_s *args, struct json_object * jbody) {
+	const gboolean delete_marker = _request_get_flag(args, "delete_marker");
 	/* used from oio-swift for "sharding" in containers */
 	const char* force_versioning = g_tree_lookup(args->rq->tree_headers,
 			PROXYD_HEADER_FORCE_VERSIONING);
 	oio_ext_set_force_versioning(force_versioning);
 
 	json_object *jarray = NULL;
-	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url, DL()); }
+	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url,
+			delete_marker, DL()); }
 
 	if (!oio_url_has_fq_container(args->url))
 		return _reply_format_error(args,

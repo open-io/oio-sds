@@ -143,6 +143,7 @@ GByteArray* m2v2_remote_pack_DRAIN(
 
 GByteArray* m2v2_remote_pack_DEL(
 		struct oio_url_s *url,
+		gboolean delete_marker,
 		gint64 deadline);
 
 GByteArray* m2v2_remote_pack_TRUNC(

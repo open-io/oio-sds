@@ -315,9 +315,12 @@ m2v2_remote_pack_DRAIN(struct oio_url_s *url, gint64 dl)
 }
 
 GByteArray*
-m2v2_remote_pack_DEL(struct oio_url_s *url, gint64 dl)
+m2v2_remote_pack_DEL(struct oio_url_s *url, gboolean delete_marker, gint64 dl)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_DEL, url, NULL, dl);
+	if (delete_marker) {
+		metautils_message_add_field_str(msg, NAME_MSGKEY_DELETE_MARKER, "1");
+	}
 	const gchar *force_versioning = oio_ext_get_force_versioning();
 	if (force_versioning != NULL) {
 		metautils_message_add_field_str(msg, NAME_MSGKEY_FORCE_VERSIONING,
