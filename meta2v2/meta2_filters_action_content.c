@@ -67,6 +67,9 @@ _m2b_notify_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		GString *path = ALIASES_get_alias(alias);
 		oio_url_set(url2, OIOURL_PATH, path->str);
 		gint64 version = ALIASES_get_version(alias);
+		// If it's a delete marker, use the version of the associated object
+		if (ALIASES_get_deleted(alias))
+			version--;
 		gchar *str_version = g_strdup_printf("%"G_GINT64_FORMAT, version);
 		oio_url_set(url2, OIOURL_VERSION, str_version);
 		g_free(str_version);
