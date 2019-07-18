@@ -631,6 +631,56 @@ m2db_get_versioned_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	return m2db_get_alias1 (sq3, url, 0, alias);
 }
 
+static void
+_cb_has_not(gpointer udata, gpointer bean)
+{
+	if (!bean)
+		return;
+	*((gboolean*)udata) = FALSE;
+	_bean_clean(bean);
+}
+
+GError*
+check_alias_doesnt_exist(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
+{
+	gboolean no_bean = TRUE;
+	GError *err = m2db_get_alias(sq3, url,
+			M2V2_FLAG_NORECURSION|M2V2_FLAG_NOPROPS, _cb_has_not, &no_bean);
+	if (NULL != err) {
+		if (err->code == CODE_CONTENT_NOTFOUND) {
+			g_clear_error(&err);
+		} else {
+			g_prefix_error(&err, "Could not check the ALIAS is present"
+					" (multiple versions not allowed): ");
+		}
+	}
+	else if (!no_bean)
+		err = NEWERROR(CODE_CONTENT_EXISTS, "Alias already present");
+	return err;
+}
+
+GError*
+check_alias_doesnt_exist2(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
+{
+	GError *err = NULL;
+	if (oio_url_has(url, OIOURL_PATH) && oio_url_has(url, OIOURL_CONTENTID)) {
+		struct oio_url_s *u = oio_url_dup(url);
+		oio_url_unset(u, OIOURL_CONTENTID);
+		err = check_alias_doesnt_exist(sq3, u);
+		if (err) {
+			oio_url_clean(u);
+			return err;
+		}
+		oio_url_unset(u, OIOURL_PATH);
+		oio_url_set(u, OIOURL_CONTENTID, oio_url_get(url, OIOURL_CONTENTID));
+		err = check_alias_doesnt_exist(sq3, u);
+		oio_url_clean(u);
+	} else {
+		err = check_alias_doesnt_exist(sq3, url);
+	}
+	return err;
+}
+
 /* LIST --------------------------------------------------------------------- */
 
 static GVariant **
@@ -1203,24 +1253,44 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 	} else {
 		add_delete_marker = TRUE;
 	}
-	if (add_delete_marker) {
-		gint64 now = oio_ext_real_time () / G_TIME_SPAN_SECOND;
-		/* Create a new version marked as deleted */
-		struct bean_ALIASES_s *new_alias = _bean_create(&descr_struct_ALIASES);
-		ALIASES_set_deleted(new_alias, TRUE);
-		ALIASES_set_alias(new_alias, ALIASES_get_alias(alias));
-		ALIASES_set_version(new_alias, 1 + ALIASES_get_version(alias));
-		GByteArray *content = g_byte_array_new_take((guint8 *) "DELETED", 7);
-		ALIASES_set_content(new_alias, content);
-		g_byte_array_free(content, FALSE);
-		ALIASES_set_ctime(new_alias, now);
-		ALIASES_set_mtime(new_alias, now);
-		err = _db_save_bean(sq3->db, new_alias);
-		if (cb)
-			cb(u0, new_alias);
-		else
-			_bean_clean(new_alias);
-		new_alias = NULL;
+	if (!err && add_delete_marker) {
+		/* Check if delete marker already exists */
+		struct oio_url_s *delete_marker_url = oio_url_dup(url);
+		oio_url_set(delete_marker_url, OIOURL_PATH,
+				ALIASES_get_alias(alias)->str);
+		gint64 delete_marker_version = ALIASES_get_version(alias) + 1;
+		gchar *str_delete_marker_version = g_strdup_printf(
+				"%"G_GINT64_FORMAT, delete_marker_version);
+		oio_url_set(delete_marker_url, OIOURL_VERSION,
+				str_delete_marker_version);
+		g_free(str_delete_marker_version);
+		oio_url_unset(delete_marker_url, OIOURL_CONTENTID);
+		err = check_alias_doesnt_exist(sq3, delete_marker_url);
+		if (err)
+			g_prefix_error(&err, "Delete marker error: ");
+		oio_url_clean(delete_marker_url);
+
+		if (!err) {
+			gint64 now = oio_ext_real_seconds();
+			/* Create a new version marked as deleted */
+			struct bean_ALIASES_s *new_alias = _bean_create(
+					&descr_struct_ALIASES);
+			ALIASES_set_deleted(new_alias, TRUE);
+			ALIASES_set_alias(new_alias, ALIASES_get_alias(alias));
+			ALIASES_set_version(new_alias, 1 + ALIASES_get_version(alias));
+			GByteArray *content = g_byte_array_new_take(
+					(guint8 *) "DELETED", 7);
+			ALIASES_set_content(new_alias, content);
+			g_byte_array_free(content, FALSE);
+			ALIASES_set_ctime(new_alias, now);
+			ALIASES_set_mtime(new_alias, now);
+			err = _db_save_bean(sq3->db, new_alias);
+			if (cb)
+				cb(u0, new_alias);
+			else
+				_bean_clean(new_alias);
+			new_alias = NULL;
+		}
 	}
 
 	_bean_clean(alias);
