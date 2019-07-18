@@ -61,7 +61,7 @@ conscience_push_service (const char *ns_, struct service_info_s *si)
 	g_assert (si != NULL);
 
 	if (!*ns_ || !si->type[0] || !metautils_addr_valid_for_connect(&si->addr))
-		return BADREQ("Invalid service ns, type or address");
+		return g_error_new(GQ_CLUSTER(), CODE_BAD_REQUEST, "Invalid service ns, type or address");
 
 	struct oio_cs_client_s *cs = oio_cs_client__create_proxied (ns_);
 
