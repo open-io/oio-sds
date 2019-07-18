@@ -3,11 +3,6 @@
 		"code": "meta2_variables.c",
 		"header": "meta2_variables.h",
 		"variables": [
-			{ "type": "int64", "name": "meta2_max_versions",
-				"key": "meta2.max_versions",
-				"descr": "How many versions for a single alias.",
-				"def": 1, "min": -1, "max": "max" },
-
 			{ "type": "int64", "name": "meta2_container_max_size",
 				"key": "meta2.container.max_size",
 				"descr": "How many bytes may be stored in each container.",
@@ -982,6 +977,11 @@
 		"code": "client_variables.c",
 		"header": "client_variables.h",
 		"variables": [
+			{ "type": "int64", "name": "meta2_max_versions",
+				"key": "meta2.max_versions",
+				"descr": "Namespace configuration of the max number of versions for a single alias, in a container.",
+				"def": 1, "min": -1, "max": "max" },
+
 			{ "type": "uint", "name": "oio_socket_proxy_buflen",
 				"key": "socket.proxy.buflen",
 				"descr": "Advice the libcurl to use that buffer size for the interactions with the proxy. libcurl gives no guaranty to take the advice into account. Set to 0 to let the default. libcurl applies its own range, usually between 1k and 512k.",
