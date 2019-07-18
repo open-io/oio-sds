@@ -1860,9 +1860,23 @@ GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 	/* version explicitely specified */
 	if (version == latest_version) {
 		err = NEWERROR(CODE_CONTENT_EXISTS, "Alias already saved");
-	} else if (version < latest_version && !VERSIONS_ENABLED(max_versions)) {
-		err = NEWERROR(CODE_CONTENT_PRECONDITION,
-				"New object version is older than latest version");
+	} else if (version < latest_version) {
+		if (VERSIONS_ENABLED(max_versions)) {
+			/* Check if alias already exists */
+			struct oio_url_s *url2 = oio_url_dup(args->url);
+			if (!oio_url_has(url2, OIOURL_VERSION)) {
+				gchar *str_version = g_strdup_printf(
+						"%"G_GINT64_FORMAT, version);
+				oio_url_set(url2, OIOURL_VERSION, str_version);
+				g_free(str_version);
+			}
+			oio_url_unset(url2, OIOURL_CONTENTID);
+			err = check_alias_doesnt_exist(args->sq3, url2);
+			oio_url_clean(url2);
+		} else {
+			err = NEWERROR(CODE_CONTENT_PRECONDITION,
+					"New object version is older than latest version");
+		}
 	}
 
 	/* Check the operation respects the rules of versioning for the container */
