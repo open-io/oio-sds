@@ -20,11 +20,10 @@ import os
 import tempfile
 from string import hexdigits
 from datetime import datetime
-from collections import OrderedDict
 
 from oio.common.constants import chunk_xattr_keys, OIO_VERSION, \
     STRLEN_CHUNKID, CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
-from oio.common.utils import cid_from_name, paths_gen
+from oio.common.utils import cid_from_name, paths_gen, CacheDict
 from oio.common.fullpath import decode_fullpath, decode_old_fullpath, \
     encode_fullpath
 from oio.common.xattr import set_fullpath_xattr
@@ -41,23 +40,6 @@ from oio.rdir.client import RdirClient
 XATTR_CHUNK_ID = chunk_xattr_keys['chunk_id']
 XATTR_OLD_FULLPATH = 'oio:'
 XATTR_OLD_FULLPATH_SIZE = 4
-
-
-# FIXME(FVE): move to utility class and document
-class CacheDict(OrderedDict):
-
-    def __init__(self, size=262144):
-        super(CacheDict, self).__init__()
-        self.size = size
-        self._check_size()
-
-    def __setitem__(self, key, value):
-        super(CacheDict, self).__setitem__(key, value)
-        self._check_size()
-
-    def _check_size(self):
-        while len(self) > self.size:
-            self.popitem(last=False)
 
 
 class BlobConverter(object):
