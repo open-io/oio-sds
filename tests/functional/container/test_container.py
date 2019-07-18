@@ -417,7 +417,7 @@ class TestMeta2Containers(BaseTestCase):
         check_properties(p1)
 
     def _create_content(self, name, version=None, missing_chunks=0,
-                        headers_add=None):
+                        headers_add=None, create_status=204):
         headers = {'X-oio-action-mode': 'autocreate'}
         params = self.param_content(self.ref, name, version=version)
 
@@ -440,7 +440,7 @@ class TestMeta2Containers(BaseTestCase):
             headers.update(headers_add)
         resp = self.request('POST', self.url_content('create'), params=params,
                             headers=headers, data=json.dumps(chunks))
-        self.assertEqual(204, resp.status)
+        self.assertEqual(create_status, resp.status)
 
     def _append_content(self, name, missing_chunks=0):
         headers = {'X-oio-action-mode': 'autocreate'}
@@ -931,6 +931,76 @@ class TestMeta2Containers(BaseTestCase):
 
         _create_delete_marker()
         _check(max_versions=1)
+
+    def test_object_with_specific_delete_marker(self):
+        path = random_content()
+        params_container = self.param_ref(self.ref)
+        param_content = self.param_content(self.ref, path)
+        param_content['delete_marker'] = 1
+
+        # Versioning not enabled
+        self._create_content(path)
+        resp = self.request('POST', self.url_content('delete'),
+                            params=param_content)
+        self.assertEqual(400, resp.status)
+
+        # Versioning enabled
+        props = {"system": {"sys.m2.policy.version": '-1'}}
+        resp = self.request('POST', self.url_container('set_properties'),
+                            params=params_container,
+                            data=json.dumps(props))
+        self.assertEqual(200, resp.status)
+        resp = self.request('POST', self.url_content('delete'),
+                            params=param_content)
+        self.assertEqual(204, resp.status)
+
+        # Add delete marker to a delete marker
+        resp = self.request('POST', self.url_content('delete'),
+                            params=param_content)
+        self.assertEqual(400, resp.status)
+
+        # Add delete marker to a specific version
+        self._create_content(path, version=12345)
+        param_content['version'] = 12345
+        resp = self.request('POST', self.url_content('delete'),
+                            params=param_content)
+        self.assertEqual(204, resp.status)
+        resp = self.request('POST', self.url_content('get_properties'),
+                            params=param_content)
+        self.assertEqual(200, resp.status)
+        self.assertEqual(
+            '12345', resp.headers[OBJECT_METADATA_PREFIX + 'version'])
+        param_content['version'] = 12346
+        resp = self.request('POST', self.url_content('get_properties'),
+                            params=param_content)
+        self.assertEqual(200, resp.status)
+        self.assertEqual(
+            '12346', resp.headers[OBJECT_METADATA_PREFIX + 'version'])
+        print(resp.headers)
+        self.assertEqual(
+            'True', resp.headers[OBJECT_METADATA_PREFIX + 'deleted'])
+        del param_content['version']
+
+        # Add delete marker to a specific version with delete marker
+        param_content['version'] = 12345
+        resp = self.request('POST', self.url_content('delete'),
+                            params=param_content)
+        self.assertEqual(409, resp.status)
+        del param_content['version']
+
+    def test_object_with_versioned_objects_before_latest(self):
+        path = random_content()
+        params_container = self.param_ref(self.ref)
+
+        self._create_content(path)
+        props = {"system": {"sys.m2.policy.version": '-1'}}
+        resp = self.request('POST', self.url_container('set_properties'),
+                            params=params_container,
+                            data=json.dumps(props))
+        self.assertEqual(200, resp.status)
+
+        self._create_content(path, version=12345)
+        self._create_content(path, version=12345, create_status=409)
 
 
 class TestMeta2Contents(BaseTestCase):
