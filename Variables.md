@@ -497,7 +497,7 @@ Used by `gcc`
 
 ### meta2.max_versions
 
-> How many versions for a single alias.
+> Namespace configuration of the max number of versions for a single alias, in a container.
 
  * default: **1**
  * type: gint64
