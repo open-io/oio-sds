@@ -92,6 +92,15 @@ gint64 data_security_get_int64_param(const struct data_security_s *ds,
 		const char *key, gint64 def);
 
 static inline gint64
+storage_policy_parameter(struct storage_policy_s *pol, const char *key, gint64 def)
+{
+	if (!pol || !key)
+		return def;
+	return data_security_get_int64_param(
+			storage_policy_get_data_security(pol), key, def);
+}
+
+static inline gint64
 data_security_decode_param_int64 (const char *encoded, const char *k, gint64 def)
 {
 	gint64 rc = def;
