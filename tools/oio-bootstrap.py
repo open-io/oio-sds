@@ -992,7 +992,7 @@ defaults = {
     'REPLI_M1': 1,
     'COMPRESSION': "off",
     MONITOR_PERIOD: 1,
-    M1_DIGITS: 4}
+    M1_DIGITS: 2}
 
 # XXX When /usr/sbin/httpd is present we suspect a Redhat/Centos/Fedora
 # environment. If not, we consider being in a Ubuntu/Debian environment.
