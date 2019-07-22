@@ -30,11 +30,15 @@ from oio.common import exceptions as exc
 from oio.common.fullpath import decode_fullpath
 from oio.common.logger import get_logger
 from oio.common.storage_method import STORAGE_METHODS
+from oio.common.utils import cid_from_name
 from oio.api.object_storage import ObjectStorageApi
 from oio.api.object_storage import _sort_chunks
 from oio.rdir.client import RdirClient
 
 DEFAULT_DEPTH = 4
+
+
+IRREPARABLE_PREFIX = '#IRREPARABLE'
 
 
 class Target(object):
@@ -51,7 +55,20 @@ class Target(object):
         self.content_id = content_id
         self.version = version
         self.chunk = chunk
-        self.cid = cid
+        self._cid = cid
+
+    @property
+    def cid(self):
+        if not self._cid and self.account and self.container:
+            self._cid = cid_from_name(self.account, self.container)
+        return self._cid
+
+    @cid.setter
+    def cid(self, cid):
+        if cid is not None:
+            self._cid = cid
+            self.account = None
+            self.container = None
 
     def copy(self):
         return Target(
@@ -109,8 +126,9 @@ class ItemResult(object):
     Must be serializable to be used in the Checker's return queue.
     """
 
-    def __init__(self, target, errors=None):
+    def __init__(self, target, errors=None, irreparable=False):
         self.errors = errors if errors is not None else list()
+        self.irreparable = irreparable
         self.target = target
 
     def errors_to_str(self, separator='\n', err_format='%s'):
@@ -124,13 +142,16 @@ class ItemResult(object):
 
 class Checker(object):
     def __init__(self, namespace, concurrency=50,
-                 error_file=None, rebuild_file=None, full=True,
+                 error_file=None, rebuild_file=None, check_xattr=True,
                  limit_listings=0, request_attempts=1,
-                 logger=None, verbose=False, integrity=False):
+                 logger=None, verbose=False, check_hash=False,
+                 **_kwargs):
         self.pool = GreenPool(concurrency)
         self.error_file = error_file
-        self.full = bool(full)
-        self.integrity = bool(integrity)
+        self.check_xattr = bool(check_xattr)
+        self.check_hash = bool(check_hash)
+        self.logger = logger or get_logger({'namespace': namespace},
+                                           name='integrity', verbose=verbose)
         # Optimisation for when we are only checking one object
         # or one container.
         # 0 -> do not limit
@@ -143,11 +164,9 @@ class Checker(object):
 
         self.rebuild_file = rebuild_file
         if self.rebuild_file:
-            fd = open(self.rebuild_file, 'a')
-            self.rebuild_writer = csv.writer(fd, delimiter='|')
+            self.fd = open(self.rebuild_file, 'a')
+            self.rebuild_writer = csv.writer(self.fd, delimiter='|')
 
-        self.logger = logger or get_logger({'namespace': namespace},
-                                           name='integrity', verbose=verbose)
         self.api = ObjectStorageApi(
             namespace,
             logger=self.logger,
@@ -251,19 +270,19 @@ class Checker(object):
         target.version = meta['version']
         target.account, target.container = self.api.resolve_cid(target.cid)
 
-    def send_result(self, target, errors=None):
+    def send_result(self, target, errors=None, irreparable=False):
         """
         Put an item in the result queue.
         """
         # TODO(FVE): send to an external queue.
-        self.result_queue.put(ItemResult(target, errors))
+        self.result_queue.put(ItemResult(target, errors, irreparable))
 
     def write_error(self, target, irreparable=False):
         if not self.error_file:
             return
         error = list()
         if irreparable:
-            error.append('#IRREPARABLE')
+            error.append(IRREPARABLE_PREFIX)
         error.append(target.account)
         if target.container:
             error.append(target.container)
@@ -274,19 +293,10 @@ class Checker(object):
         self.error_writer.writerow(error)
 
     def write_rebuilder_input(self, target, irreparable=False):
-        # FIXME(FVE): cid can be computed from account and container names
-        if target.cid:
-            cid = target.cid
-        else:
-            ct_meta = self.list_cache[(target.account, target.container)][1]
-            try:
-                cid = ct_meta['system']['sys.name'].split('.', 1)[0]
-            except KeyError:
-                cid = ct_meta['properties']['sys.name'].split('.', 1)[0]
         error = list()
         if irreparable:
-            error.append('#IRREPARABLE')
-        error.append(cid)
+            error.append(IRREPARABLE_PREFIX)
+        error.append(target.cid)
         # FIXME(FVE): ensure we always resolve content_id,
         # or pass object version along with object name.
         error.append(target.content_id or target.obj)
@@ -344,7 +354,7 @@ class Checker(object):
         self.logger.debug('Checking chunk "%s"', target)
         try:
             xattr_meta = self.api.blob_client.chunk_head(
-                chunk, xattr=self.full, check_hash=self.integrity)
+                chunk, xattr=self.check_xattr, check_hash=self.check_hash)
         except exc.NotFound as err:
             self.chunk_not_found += 1
             errors.append('Not found: %s' % (err, ))
@@ -369,16 +379,18 @@ class Checker(object):
             else:
                 db_meta = obj_listing[chunk]
 
-            if db_meta and xattr_meta and self.full:
+            if db_meta and xattr_meta and self.check_xattr:
                 errors.extend(
                     self._check_chunk_xattr(target, db_meta, xattr_meta))
 
-        self.send_result(target, errors)
+        # Do not send errors directly, let the caller do it.
+        # Indeed, it may want to check if the chunks can be repaired or not.
         self.chunks_checked += 1
         return errors, obj_meta
 
     def check_chunk(self, target):
         errors, _obj_meta = self._check_chunk(target)
+        self.send_result(target, errors)
         return errors
 
     def _check_metachunk(self, target, stg_met, pos, chunks,
@@ -390,6 +402,7 @@ class Checker(object):
         """
         required = stg_met.expected_chunks
         errors = list()
+        chunk_results = list()
 
         if len(chunks) < required:
             missing_chunks = required - len(chunks)
@@ -397,29 +410,38 @@ class Checker(object):
                 subs = {x['num'] for x in chunks}
                 for sub in range(required):
                     if sub not in subs:
-                        errors.append(
-                            "Missing chunk at position %d.%d" % (pos, sub))
+                        chkt = target.copy()
+                        chkt.chunk = '%d.%d' % (pos, sub)
+                        err = "Missing chunk at position %s" % chkt.chunk
+                        chunk_results.append((chkt, [err]))
+                        errors.append(err)
             else:
                 for _ in range(missing_chunks):
-                    errors.append("Missing chunk at position %d" % pos)
+                    chkt = target.copy()
+                    chkt.chunk = '%d.%d' % (pos, sub)
+                    err = "Missing chunk at position %d" % pos
+                    chunk_results.append((chkt, [err]))
+                    errors.append(err)
 
         if recurse > 0:
             for chunk in chunks:
                 tcopy = target.copy()
                 tcopy.chunk = chunk['url']
                 chunk_errors, _ = self._check_chunk(tcopy)
+                chunk_results.append((tcopy, chunk_errors))
                 if chunk_errors:
-                    # The errors have already been reported by _check_chunk,
-                    # but we must count this chunk among the unusable chunks
-                    # of the current metachunk.
                     errors.append("Unusable chunk %s at position %s" % (
                         chunk['url'], chunk['pos']))
 
         irreparable = required - len(errors) < stg_met.min_chunks_to_read
         if irreparable:
             errors.append(
-                "Unavailable metachunk at position %s (%d/%d chunks)" % (
-                    pos, required - len(errors), stg_met.expected_chunks))
+                "Unavailable metachunk at position %s "
+                "(%d/%d chunks available, %d/%d required)" % (
+                    pos, required - len(errors), stg_met.expected_chunks,
+                    stg_met.min_chunks_to_read, stg_met.expected_chunks))
+        for tgt, errs in chunk_results:
+            self.send_result(tgt, errs, irreparable)
         # Since the "metachunk" is not an official item type,
         # this method does not report errors itself. Errors will
         # be reported as object errors.
@@ -755,10 +777,12 @@ class Checker(object):
             if result.target.type == 'chunk':
                 # FIXME(FVE): check error criticity
                 # and set the irreparable flag.
-                self.write_chunk_error(result.target)
+                self.write_chunk_error(result.target,
+                                       irreparable=result.irreparable)
             else:
-                self.write_error(result.target)
-            self.logger.warn('%s:\n%s', result.target,
+                self.write_error(result.target, irreparable=result.irreparable)
+            self.logger.warn('%s:%s\n%s', result.target,
+                             ' irreparable' if result.irreparable else '',
                              result.errors_to_str(err_format='  %s'))
 
     def run(self, rate_limiter=None):
@@ -915,7 +939,7 @@ def main():
         error_file=args.output,
         concurrency=args.concurrency,
         rebuild_file=args.output_for_chunk_rebuild,
-        full=not args.presence,
+        check_xattr=not args.presence,
         limit_listings=limit_listings,
         request_attempts=args.attempts,
         logger=logger,

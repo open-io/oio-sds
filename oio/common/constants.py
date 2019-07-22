@@ -136,3 +136,10 @@ volume_xattr_keys = VOLUME_XATTR_KEYS
 CHUNK_SUFFIX_CORRUPT = '.corrupt'
 # Suffix of chunk file names that are not finished being uploaded
 CHUNK_SUFFIX_PENDING = '.pending'
+
+# Accounts that are used internally by oio-sds and should stay hidden
+HIDDEN_ACCOUNTS = ("_RDIR",)
+
+# Default separator used by swift's "container hierarchy" middleware
+CH_ENCODED_SEPARATOR = '%2F'
+CH_SEPARATOR = '/'

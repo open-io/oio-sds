@@ -544,7 +544,7 @@ class _DistributedDispatcher(_Dispatcher):
 
     def _all_events_are_processed(self):
         """
-        Tell is all workers have finished to process their events.
+        Tell if all workers have finished to process their events.
         """
         if self.sending:
             return False

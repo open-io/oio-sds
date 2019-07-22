@@ -28,6 +28,7 @@ from oio.common.easy_value import int_value, true_value
 from oio.common.logger import get_logger
 from oio.common.constants import STRLEN_CHUNKID
 from oio.common.fullpath import decode_fullpath
+from oio.conscience.client import ConscienceClient
 from oio.content.factory import ContentFactory
 
 SLEEP_TIME = 30
@@ -64,6 +65,26 @@ class BlobMoverWorker(object):
         self.blob_client = BlobClient(conf)
         self.container_client = ContainerClient(conf, logger=self.logger)
         self.content_factory = ContentFactory(conf)
+        self.excluded_rawx = \
+            [rawx for rawx in conf.get('excluded_rawx', '').split(',') if rawx]
+        self.fake_excluded_chunks = self._generate_fake_excluded_chunks()
+
+    def _generate_fake_excluded_chunks(self):
+        conscience_client = ConscienceClient(self.conf, logger=self.logger)
+        fake_excluded_chunks = list()
+        fake_chunk_id = '0'*64
+        for service_id in self.excluded_rawx:
+            service_addr = conscience_client.resolve_service_id(
+                'rawx', service_id)
+            chunk = dict()
+            chunk['hash'] = '0000000000000000000000000000000000'
+            chunk['pos'] = '0'
+            chunk['size'] = 1
+            chunk['score'] = 1
+            chunk['url'] = 'http://' + service_id + '/' + fake_chunk_id
+            chunk['real_url'] = 'http://' + service_addr + '/' + fake_chunk_id
+            fake_excluded_chunks.append(chunk)
+        return fake_excluded_chunks
 
     def mover_pass(self, **kwargs):
         start_time = report_time = time.time()
@@ -177,7 +198,8 @@ class BlobMoverWorker(object):
         except ContentNotFound:
             raise exc.OrphanChunk('Content not found')
 
-        new_chunk = content.move_chunk(chunk_id)
+        new_chunk = content.move_chunk(
+            chunk_id, fake_excluded_chunks=self.fake_excluded_chunks)
 
         self.logger.info(
             'moved chunk http://%s/%s to %s',

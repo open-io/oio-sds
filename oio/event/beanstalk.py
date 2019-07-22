@@ -777,7 +777,8 @@ class BeanstalkdSender(TubedBeanstalkd):
     def job_done(self):
         """
         Declare that a job previously sent by this sender
-        has been fully processed.
+        has been fully processed (the sender received a response,
+        or does not expect one).
         """
         with self.nb_jobs_lock:
             self.nb_jobs -= 1
