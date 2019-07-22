@@ -20,6 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <errno.h>
 
 #include <meta2v2/meta2_utils_json.h>
+#include <meta2v2/meta2_utils_lb.h>
 #include <meta2v2/meta2_bean.h>
 #include <meta2v2/autogen.h>
 
@@ -2325,6 +2326,22 @@ enum http_rc_e action_container_raw_delete (struct req_args_s *args) {
 
 /* CONTENT action resource -------------------------------------------------- */
 
+static GError*
+_generate_beans(struct oio_url_s *url, gint64 size, const char *pol, GSList **beans)
+{
+	struct namespace_info_s ni = {};
+	NSINFO_READ(namespace_info_copy(&nsinfo, &ni));
+	struct storage_policy_s *policy = storage_policy_init(&ni, pol);
+	namespace_info_clear(&ni);
+
+	if (!policy)
+		return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Unexpected storage policy");
+	GError *err =
+		oio_generate_beans(url, size, oio_ns_chunk_size, policy, lb, beans);
+	storage_policy_clean(policy);
+	return err;
+}
+
 static enum http_rc_e
 _action_m2_content_prepare(struct req_args_s *args, struct json_object *jargs,
 		enum http_rc_e (*_reply_beans_func)(struct req_args_s *, GError *, GSList *))
@@ -2336,46 +2353,22 @@ _action_m2_content_prepare(struct req_args_s *args, struct json_object *jargs,
 	const gchar *strsize = !jsize ? NULL : json_object_get_string (jsize);
 	const gchar *stgpol = !jpol ? NULL : json_object_get_string (jpol);
 
+	/* Parse the size */
 	if (!strsize)
 		return _reply_format_error (args, BADREQ("Missing size estimation"));
-
 	errno = 0;
 	gchar *end = NULL;
 	gint64 size = g_ascii_strtoll (strsize, &end, 10);
 	if ((end && *end) || errno == ERANGE || errno == EINVAL)
 		return _reply_format_error (args, BADREQ("Invalid size format"));
 
-	gboolean autocreate = _request_get_flag (args, "autocreate");
-	GError *err = NULL;
+	/* Local generation of beans */
 	GSList *beans = NULL;
-	PACKER_VOID(_pack) { return m2v2_remote_pack_BEANS (args->url, stgpol, size, 0, DL()); }
+	GError *err = _generate_beans(args->url, size, stgpol, &beans);
 
-retry:
-	GRID_TRACE("Content preparation %s", oio_url_get (args->url, OIOURL_WHOLE));
-	beans = NULL;
-	err = _resolve_meta2(args, _prefer_slave(), _pack, &beans, NULL);
-
-	// Maybe manage autocreation
-	if (err && CODE_IS_NOTFOUND(err->code)) {
-		if (autocreate) {
-			GRID_DEBUG("Resource not found, autocreation: (%d) %s",
-					err->code, err->message);
-			autocreate = FALSE;
-			g_clear_error (&err);
-			err = _m2_container_create_with_defaults (args);
-			if (!err)
-				goto retry;
-			if (err->code == CODE_CONTAINER_EXISTS
-					|| err->code == CODE_USER_EXISTS) {
-				g_clear_error(&err);
-				goto retry;
-			}
-		}
-	}
-
-	// Patch the chunk size to ease putting contents with unknown size.
+	/* Patch the chunk size to ease putting contents with unknown size. */
 	if (!err) {
-		gint64 chunk_size = oio_ns_chunk_size;
+		const gint64 chunk_size = oio_ns_chunk_size;
 		for (GSList *l=beans; l ;l=l->next) {
 			if (l->data && (DESCR(l->data) == &descr_struct_CHUNKS)) {
 				struct bean_CHUNKS_s *bean = l->data;
