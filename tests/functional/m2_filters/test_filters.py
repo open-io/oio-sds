@@ -84,14 +84,14 @@ class TestFilters(BaseTestCase):
         path = 'test_worm'
         content = self._new_content(data, path, True)
 
-        # Prepare without admin mode
-        self.assertRaises(Conflict, self._prepare_content, path, None, False)
-        self.assertRaises(Conflict, self._prepare_content, path,
-                          content.content_id, False)
-        self.assertRaises(Conflict, self._prepare_content, 'test_worm_prepare',
-                          content.content_id, False)
-        self.assertRaises(Conflict, self._prepare_content, path, random_id(32),
-                          False)
+        # Prepare without admin mode:
+        # Since the 'prepare' step is done in the proxy, there is no check
+        # on the pre-existence of the content. The subsequent prepare MUST
+        # now work despite the presence of the content.
+        self._prepare_content(path, None, False)
+        self._prepare_content(path, content.content_id, False)
+        self._prepare_content('test_worm_prepare', content.content_id, False)
+        self._prepare_content(path, random_id(32), False)
 
         # Overwrite without admin mode
         data2 = random_data(11)
