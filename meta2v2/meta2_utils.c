@@ -30,14 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
 #include <meta2v2/meta2_utils_json.h>
-
-#define RANDOM_UID(uid,uid_size) \
-	struct { guint64 now; guint32 r; guint16 pid; guint16 th; } uid; \
-	uid.now = oio_ext_real_time (); \
-	uid.r = oio_ext_rand_int(); \
-	uid.pid = getpid(); \
-	uid.th = oio_log_current_thread_id(); \
-	gsize uid_size = sizeof(uid);
+#include <meta2v2/meta2_utils_lb.h>
 
 static GError*
 _get_container_policy(struct sqlx_sqlite3_s *sq3, struct namespace_info_s *nsinfo,
@@ -65,25 +58,6 @@ _is_empty_prop(gpointer bean)
 		return FALSE;
 	GByteArray *val = PROPERTIES_get_value((struct bean_PROPERTIES_s *)bean);
 	return !val || !val->len || !val->data;
-}
-
-gchar*
-m2v2_build_chunk_url (const char *srv, const char *id)
-{
-	return g_strconcat("http://", srv, "/", id, NULL);
-}
-
-static gchar*
-m2v2_build_chunk_url_storage (const struct storage_policy_s *pol,
-		const gchar *str_id)
-{
-	switch(data_security_get_type(storage_policy_get_data_security(pol))) {
-	case STGPOL_DS_BACKBLAZE:
-		return g_strconcat("b2/", str_id, NULL);
-	default:
-		return NULL;
-	}
-	return NULL;
 }
 
 void
@@ -2208,269 +2182,24 @@ out:
 
 /* GENERATOR ---------------------------------------------------------------- */
 
-struct gen_ctx_s
-{
-	struct oio_url_s *url;
-	const struct storage_policy_s *pol;
-	struct oio_lb_s *lb;
-	guint8 *uid;
-	gsize uid_size;
-	guint8 h[16];
-	gint64 size;
-	gint64 chunk_size;
-	m2_onbean_cb cb;
-	gpointer cb_data;
-};
-
-static guint
-_policy_parameter(struct storage_policy_s *pol, const gchar *key, guint def)
-{
-	const char *s;
-	if (!pol || !key)
-		return def;
-	s = data_security_get_param(storage_policy_get_data_security(pol), key);
-	if (!s)
-		return def;
-	return (guint) atoi(s);
-}
-
-static void
-_m2_generate_alias_header(struct gen_ctx_s *ctx)
-{
-	const gchar *p;
-	p = ctx->pol ? storage_policy_get_name(ctx->pol) : "none";
-
-	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
-	const gint64 now = oio_ext_real_time ();
-
-	struct bean_ALIASES_s *alias = _bean_create(&descr_struct_ALIASES);
-	ALIASES_set2_alias(alias, oio_url_get(ctx->url, OIOURL_PATH));
-	gint64 version;
-	if (oio_url_has(ctx->url, OIOURL_VERSION) &&
-			(version = g_ascii_strtoll(
-				oio_url_get(ctx->url, OIOURL_VERSION), NULL, 10)) > 0) {
-		ALIASES_set_version(alias, version);
-	} else {
-		ALIASES_set_version(alias, now);
-	}
-	ALIASES_set_ctime(alias, now / G_TIME_SPAN_SECOND);
-	ALIASES_set_mtime(alias, now / G_TIME_SPAN_SECOND);
-	ALIASES_set_deleted(alias, FALSE);
-	ALIASES_set2_content(alias, ctx->uid, ctx->uid_size);
-	ctx->cb(ctx->cb_data, alias);
-
-	struct bean_CONTENTS_HEADERS_s *header;
-	header = _bean_create(&descr_struct_CONTENTS_HEADERS);
-	CONTENTS_HEADERS_set_size(header, ctx->size);
-	CONTENTS_HEADERS_set2_id(header, ctx->uid, ctx->uid_size);
-	CONTENTS_HEADERS_set2_policy(header, p);
-	CONTENTS_HEADERS_nullify_hash(header);
-	CONTENTS_HEADERS_set_ctime(header, now / G_TIME_SPAN_SECOND);
-	CONTENTS_HEADERS_set_mtime(header, now / G_TIME_SPAN_SECOND);
-	CONTENTS_HEADERS_set2_mime_type(header, OIO_DEFAULT_MIMETYPE);
-
-	GString *chunk_method = storage_policy_to_chunk_method(ctx->pol);
-	CONTENTS_HEADERS_set_chunk_method(header, chunk_method);
-	g_string_free(chunk_method, TRUE);
-	ctx->cb(ctx->cb_data, header);
-}
-
-static int
-is_stgpol_backblaze(const struct storage_policy_s *pol)
-{
-	switch(data_security_get_type(storage_policy_get_data_security(pol))) {
-		case STGPOL_DS_BACKBLAZE:
-			return TRUE;
-		default:
-			return FALSE;
-	}
-	return FALSE;
-}
-
-static GString*
-_selected_item_quality_to_json(GString *inout,
-		struct oio_lb_selected_item_s *sel)
-{
-	GString *qual = inout? : g_string_sized_new(128);
-	g_string_append_c(qual, '{');
-	oio_str_gstring_append_json_pair_int(qual,
-			"expected_dist", sel->expected_dist);
-	g_string_append_c(qual, ',');
-	oio_str_gstring_append_json_pair_int(qual,
-			"final_dist", sel->final_dist);
-	g_string_append_c(qual, ',');
-	oio_str_gstring_append_json_pair_int(qual,
-			"warn_dist", sel->warn_dist);
-	g_string_append_c(qual, ',');
-	oio_str_gstring_append_json_pair(qual,
-			"expected_slot", sel->expected_slot);
-	g_string_append_c(qual, ',');
-	oio_str_gstring_append_json_pair(qual,
-			"final_slot", sel->final_slot);
-	g_string_append_c(qual, '}');
-	return qual;
-}
-
-struct bean_CHUNKS_s *
-generate_chunk_bean(struct oio_lb_selected_item_s *sel,
-		const struct storage_policy_s *policy)
-{
-	guint8 binid[32];
-	gchar *chunkid, strid[65];
-
-	oio_buf_randomize(binid, sizeof(binid));
-	oio_str_bin2hex(binid, sizeof(binid), strid, sizeof(strid));
-
-	if (sel->item->id) {
-		gchar shifted_id[LIMIT_LENGTH_SRVID];
-		g_strlcpy(shifted_id, sel->item->id, sizeof(shifted_id));
-		meta1_url_shift_addr(shifted_id);
-		chunkid = m2v2_build_chunk_url(shifted_id, strid);
-	} else {
-		EXTRA_ASSERT(policy != NULL);
-		chunkid = m2v2_build_chunk_url_storage(policy, strid);
-	}
-
-	struct bean_CHUNKS_s *chunk = _bean_create(&descr_struct_CHUNKS);
-	CHUNKS_set2_id(chunk, chunkid);
-	CHUNKS_set_ctime(chunk, oio_ext_real_time() / G_TIME_SPAN_SECOND);
-	g_free(chunkid);
-
-	return chunk;
-}
-
-struct bean_PROPERTIES_s *
-generate_chunk_quality_bean(struct oio_lb_selected_item_s *sel,
-		const gchar *chunkid, struct oio_url_s *url)
-{
-	GString *qual = _selected_item_quality_to_json(NULL, sel);
-	struct bean_PROPERTIES_s *prop = _bean_create(&descr_struct_PROPERTIES);
-	gchar *prop_key = g_alloca(
-			sizeof(OIO_CHUNK_SYSMETA_PREFIX) + strlen(chunkid));
-	sprintf(prop_key, OIO_CHUNK_SYSMETA_PREFIX"%s", chunkid);
-	PROPERTIES_set2_key(prop, prop_key);
-	PROPERTIES_set2_value(prop, (guint8*)qual->str, qual->len);
-	if (url && oio_url_has(url, OIOURL_PATH))
-		PROPERTIES_set2_alias(prop, oio_url_get(url, OIOURL_PATH));
-
-	g_string_free(qual, TRUE);
-	return prop;
-}
-
-static void
-_gen_chunk(struct gen_ctx_s *ctx, struct oio_lb_selected_item_s *sel,
-		gint64 cs, guint pos, gint subpos)
-{
-	gchar strpos[24];
-
-	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
-
-	if (subpos < 0)
-		g_snprintf(strpos, sizeof(strpos), "%u", pos);
-	else
-		g_snprintf(strpos, sizeof(strpos), "%u.%d", pos, subpos);
-
-	struct bean_CHUNKS_s *chunk = generate_chunk_bean(sel, ctx->pol);
-	CHUNKS_set2_content(chunk, ctx->uid, ctx->uid_size);
-	CHUNKS_set2_hash(chunk, ctx->h, sizeof(ctx->h));
-	CHUNKS_set_size(chunk, cs);
-	CHUNKS_set2_position(chunk, strpos);
-	ctx->cb(ctx->cb_data, chunk);
-
-	/* Create a property to represent the quality of the selected chunk. */
-	struct bean_PROPERTIES_s *prop = generate_chunk_quality_bean(
-			sel, CHUNKS_get_id(chunk)->str, ctx->url);
-	ctx->cb(ctx->cb_data, prop);
-
-}
-
-static GError*
-_m2_generate_chunks(struct gen_ctx_s *ctx,
-		gint64 mcs /* actual metachunk size */,
-		gboolean subpos)
-{
-	GError *err = NULL;
-
-	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
-
-	_m2_generate_alias_header(ctx);
-
-	guint pos = 0;
-	gint64 esize = MAX(ctx->size, 1);
-	for (gint64 s = 0; s < esize && !err; s += mcs, ++pos) {
-		int i = 0;
-		void _on_id(struct oio_lb_selected_item_s *sel, gpointer u UNUSED)
-		{
-			if (is_stgpol_backblaze(ctx->pol)) {
-				// Shortcut for backblaze
-				_gen_chunk(ctx, NULL, ctx->chunk_size, pos, -1);
-			} else {
-				_gen_chunk(ctx, sel, ctx->chunk_size, pos, subpos? i : -1);
-			}
-			i++;
-		}
-		const char *pool = storage_policy_get_service_pool(ctx->pol);
-		// FIXME(FVE): set last argument
-		if ((err = oio_lb__poll_pool(ctx->lb, pool, NULL, _on_id, NULL))) {
-			g_prefix_error(&err, "at position %u: did not find enough "
-					"services matching the criteria for pool [%s]: ",
-					pos, pool);
-		}
-	}
-
-	return err;
-}
 
 GError*
 m2_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,
 		struct storage_policy_s *pol, struct oio_lb_s *lb,
 		m2_onbean_cb cb, gpointer cb_data)
 {
-	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(url, OIOURL_WHOLE));
-	EXTRA_ASSERT(url != NULL);
-
-	if (!oio_url_has(url, OIOURL_PATH))
-		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
-	if (size < 0)
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid size");
-	if (chunk_size <= 0)
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid chunk size");
-
-	RANDOM_UID(_uid, uid_size);
-	guint8 *uid = (guint8 *) &_uid;
-	const gchar *content_id = oio_url_get(url, OIOURL_CONTENTID);
-	if (content_id) {
-		gsize len = strlen(content_id);
-		uid_size = len/2;
-		oio_str_hex2bin(content_id, uid, uid_size);
+	GSList *beans = NULL;
+	GError *err = oio_generate_beans(url, size, chunk_size, pol, lb, &beans);
+	if (err)
+		return err;
+	if (cb) {
+		for (GSList *l=beans; l; l=l->next)
+			cb(cb_data, l->data);
+		g_slist_free(beans);
+	} else {
+		_bean_cleanl2(beans);
 	}
-	struct gen_ctx_s ctx;
-	memset(&ctx, 0, sizeof(ctx));
-
-	ctx.url = url;
-	ctx.pol = pol;
-	ctx.uid = uid;
-	ctx.uid_size = uid_size;
-	ctx.size = size;
-	ctx.chunk_size = chunk_size;
-	ctx.cb = cb;
-	ctx.cb_data = cb_data;
-	ctx.lb = lb;
-
-	if (!pol)
-		return _m2_generate_chunks(&ctx, chunk_size, 0);
-
-	gint64 k;
-	switch (data_security_get_type(storage_policy_get_data_security(pol))) {
-		case STGPOL_DS_BACKBLAZE:
-		case STGPOL_DS_PLAIN:
-			return _m2_generate_chunks(&ctx, chunk_size, 0);
-		case STGPOL_DS_EC:
-			k = _policy_parameter(pol, DS_KEY_K, 6);
-			return _m2_generate_chunks(&ctx, k*chunk_size, TRUE);
-		default:
-			return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy type");
-	}
+	return NULL;
 }
 
 enum _content_broken_state_e
@@ -2715,8 +2444,8 @@ _check_ec_content(struct m2v2_sorted_content_s *content,
 
 	gint64 size = CONTENTS_HEADERS_get_size(content->header);
 	struct checked_content_s *checked_content = _checked_content_new(
-			partial, 0, _policy_parameter(pol, DS_KEY_K, 6),
-			_policy_parameter(pol, DS_KEY_M, 3));
+			partial, 0, storage_policy_parameter(pol, DS_KEY_K, 6),
+			storage_policy_parameter(pol, DS_KEY_M, 3));
 
 	g_tree_foreach(content->metachunks, _foreach_check_ec_content,
 			checked_content);
@@ -2830,7 +2559,7 @@ m2db_check_content_quality(struct m2v2_sorted_content_s *sorted_content,
 				g_string_append_c(out, ',');
 				oio_str_gstring_append_json_quote(out, "quality");
 				g_string_append_c(out, ':');
-				_selected_item_quality_to_json(out, item);
+				m2_selected_item_quality_to_json(out, item);
 				if (item->final_dist <= item->warn_dist ||
 						strcmp(item->final_slot, item->expected_slot)) {
 					must_send_event = TRUE;

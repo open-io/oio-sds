@@ -24,11 +24,21 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metautils.h>
 #include <glib.h>
 
-/**
- * Signature of functions converting (struct service_info_s *)
- * to chunk information.
- */
-typedef gpointer (*srvinfo_to_chunk_f)(struct service_info_s *si);
+#define RANDOM_UID(uid,uid_size) \
+	struct { guint64 now; guint32 r; guint16 pid; guint16 th; } uid; \
+	uid.now = oio_ext_real_time (); \
+	uid.r = oio_ext_rand_int(); \
+	uid.pid = getpid(); \
+	uid.th = oio_log_current_thread_id(); \
+	gsize uid_size = sizeof(uid);
+
+GString* m2_selected_item_quality_to_json(GString *inout,
+		struct oio_lb_selected_item_s *sel);
+
+GError* oio_generate_beans(
+		struct oio_url_s *url, gint64 size, gint64 chunk_size,
+		struct storage_policy_s *pol, struct oio_lb_s *lb,
+		GSList **out);
 
 /**
  * Get as many spare chunks as required to upload one metachunk with the
