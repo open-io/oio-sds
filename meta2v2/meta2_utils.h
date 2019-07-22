@@ -51,9 +51,6 @@ struct list_params_s
 	guint8 flag_local     :1;
 };
 
-gchar* m2v2_build_chunk_url(const char *srv, const char *id);
-
-
 struct m2v2_position_s {
 	int meta, intra;
 	unsigned int flag_parity : 1;
