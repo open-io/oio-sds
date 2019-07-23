@@ -1291,6 +1291,15 @@ oio_sds_upload_init (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst)
 		EXTRA_ASSERT(oio_str_ishexa1 (dst->content_id));
 		oio_str_replace (&ul->hexid, dst->content_id);
 	}
+
+	/* Force a storage policy if any */
+	if (dst->properties) {
+		for (const char * const *pp = dst->properties; *pp && *(pp+1); pp+=2) {
+			if (!strcmp(*pp, "policy"))
+				oio_str_replace(&ul->stgpol, *(pp+1));
+		}
+	}
+
 	ul->sys_props = g_ptr_array_new_with_free_func(g_free);
 	return ul;
 }
@@ -1376,7 +1385,7 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 			.header_mime_type = NULL,
 		};
 		CURL_DO(ul->sds, H, err = oio_proxy_call_content_prepare(
-					H, ul->dst->url, size, ul->dst->autocreate, &out));
+					H, ul->dst->url, size, NULL, &out));
 
 		if (!err && out.header_content && !oio_str_ishexa1 (out.header_content))
 			err = SYSERR("returned content-id not hexadecimal");
@@ -1396,8 +1405,13 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 				ul->version = g_ascii_strtoll (out.header_version, NULL, 10);
 			if (out.header_content && !ul->hexid)
 				oio_str_replace (&ul->hexid, out.header_content);
-			if (out.header_stgpol)
-				oio_str_replace (&ul->stgpol, out.header_stgpol);
+			if (out.header_stgpol) {
+				if (ul->stgpol && strcmp(ul->stgpol, out.header_stgpol)) {
+					err = SYSERR("The returned storage policy differ");
+				} else {
+					oio_str_replace (&ul->stgpol, out.header_stgpol);
+				}
+			}
 			if (out.header_chunk_method)
 				oio_str_replace (&ul->chunk_method, out.header_chunk_method);
 			if (out.header_mime_type)
@@ -1582,8 +1596,6 @@ _sds_upload_add_headers(struct oio_sds_ul_s *ul, struct http_put_dest_s *dest)
 			"%s", oio_ext_get_reqid());
 
 	if (oio_ext_is_admin()) {
-		/* TODO(jfs): melt these informatiion with the 'mode' (already
-		 * containing autocreate, etc */
 		http_put_dest_add_header (dest, PROXYD_HEADER_ADMIN, "yes");
 	}
 
@@ -1893,6 +1905,7 @@ oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 		.chunk_method = ul->chunk_method,
 		.append = BOOL(ul->dst->append),
 		.update = BOOL(ul->dst->partial),
+		.autocreate = BOOL(ul->dst->autocreate),
 		.properties = (const char * const *)ul->sys_props->pdata,
 	};
 
