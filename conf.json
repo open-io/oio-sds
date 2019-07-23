@@ -31,7 +31,7 @@
 			{ "type": "bool", "name": "meta2_flag_precheck_on_generate",
 				"key": "meta2.generate.precheck",
 				"descr": "Should the meta2 check the container state (quota, etc) before generating chunks.",
-				"def": true },
+				"def": false },
 
 			{ "type": "bool", "name": "meta2_flag_delete_exceeding_versions",
 				"key": "meta2.delete_exceeding_versions",

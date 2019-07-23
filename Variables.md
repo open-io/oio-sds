@@ -491,7 +491,7 @@ Used by `gcc`
 
 > Should the meta2 check the container state (quota, etc) before generating chunks.
 
- * default: **TRUE**
+ * default: **FALSE**
  * type: gboolean
  * cmake directive: *OIO_META2_GENERATE_PRECHECK*
 
