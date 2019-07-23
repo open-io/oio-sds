@@ -79,6 +79,12 @@ static int _upload (int argc, char **argv, gboolean append, int replace) {
 	src.data.hook.cb = _gen;
 	src.data.hook.ctx = NULL;
 	src.data.hook.size = size;
+
+	const gchar *props[] = {
+		"policy", g_getenv("OIO_POLICY"),
+		NULL
+	};
+
 	struct oio_sds_ul_dst_s dst = OIO_SDS_UPLOAD_DST_INIT;
 	dst.url = url;
 	dst.autocreate = 1;
@@ -86,6 +92,7 @@ static int _upload (int argc, char **argv, gboolean append, int replace) {
 	dst.append = BOOL(append);
 	dst.partial = BOOL(replace >= 0);
 	dst.meta_pos = replace;
+	dst.properties = (const char * const *)props;
 
 	if (dst.append || dst.partial) {
 		void _cb(void *i UNUSED, enum oio_sds_content_key_e k, const char *v) {
