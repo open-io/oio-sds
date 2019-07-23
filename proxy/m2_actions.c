@@ -2352,6 +2352,8 @@ _action_m2_content_prepare(struct req_args_s *args, struct json_object *jargs,
 
 	const gchar *strsize = !jsize ? NULL : json_object_get_string (jsize);
 	const gchar *stgpol = !jpol ? NULL : json_object_get_string (jpol);
+	if (!stgpol)
+		stgpol = oio_ns_storage_policy;
 
 	/* Parse the size */
 	if (!strsize)
