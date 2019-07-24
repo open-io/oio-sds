@@ -53,6 +53,7 @@ meta2_dispatch_all(struct gridd_reply_ctx_s *reply,
 	oio_ext_set_force_master(FALSE);
 	oio_ext_set_force_versioning(NULL);
 	oio_ext_set_user_agent(NULL);
+	oio_ext_set_simulate_versioning(FALSE);
 
 	ctx = meta2_filter_ctx_new();
 	meta2_filter_ctx_set_backend(ctx, (struct meta2_backend_s *) gdata);
@@ -86,6 +87,7 @@ meta2_dispatch_all(struct gridd_reply_ctx_s *reply,
 	oio_ext_set_force_master(FALSE);
 	oio_ext_set_force_versioning(NULL);
 	oio_ext_set_user_agent(NULL);
+	oio_ext_set_simulate_versioning(FALSE);
 	return TRUE;
 }
 
@@ -300,7 +302,8 @@ static gridd_filter M2V2_PUT_FILTERS[] =
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_header_optional_overwrite,
 	meta2_filter_extract_header_localflag,
-	meta2_filter_extract_header_optional_force_versioning,
+	meta2_filter_extract_force_versioning,
+	meta2_filter_extract_simulate_versioning,
 	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_fill_subject,
@@ -366,9 +369,11 @@ static gridd_filter M2V2_DRAIN_FILTERS[] =
 static gridd_filter M2V2_DELETE_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
+	meta2_filter_extract_header_optional_delete_marker,
 	meta2_filter_extract_header_localflag,
 	meta2_filter_extract_header_flags32,
-	meta2_filter_extract_header_optional_force_versioning,
+	meta2_filter_extract_force_versioning,
+	meta2_filter_extract_simulate_versioning,
 	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_fill_subject,
