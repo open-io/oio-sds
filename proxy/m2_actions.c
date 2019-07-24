@@ -2327,11 +2327,45 @@ enum http_rc_e action_container_raw_delete (struct req_args_s *args) {
 /* CONTENT action resource -------------------------------------------------- */
 
 static GError*
-_generate_beans(struct oio_url_s *url, gint64 size, const char *pol, GSList **beans)
+_get_conditioned_spare_chunks(const char *polname,
+	   GSList *notin, GSList *broken, GSList **beans)
 {
 	struct namespace_info_s ni = {};
 	NSINFO_READ(namespace_info_copy(&nsinfo, &ni));
-	struct storage_policy_s *policy = storage_policy_init(&ni, pol);
+	struct storage_policy_s *policy = storage_policy_init(&ni, polname);
+	namespace_info_clear(&ni);
+
+	if (!policy)
+		return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Unexpected storage policy");
+	GError *err = get_conditioned_spare_chunks(
+			lb, storage_policy_get_service_pool(policy), ns_name,
+			notin, broken, beans);
+	storage_policy_clean(policy);
+	return err;
+}
+
+static GError*
+_get_spare_chunks(const char *polname, GSList **beans)
+{
+	struct namespace_info_s ni = {};
+	NSINFO_READ(namespace_info_copy(&nsinfo, &ni));
+	struct storage_policy_s *policy = storage_policy_init(&ni, polname);
+	namespace_info_clear(&ni);
+
+	if (!policy)
+		return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Unexpected storage policy");
+	GError *err = get_spare_chunks(
+			lb, storage_policy_get_service_pool(policy), beans);
+	storage_policy_clean(policy);
+	return err;
+}
+
+static GError*
+_generate_beans(struct oio_url_s *url, gint64 size, const char *polname, GSList **beans)
+{
+	struct namespace_info_s ni = {};
+	NSINFO_READ(namespace_info_copy(&nsinfo, &ni));
+	struct storage_policy_s *policy = storage_policy_init(&ni, polname);
 	namespace_info_clear(&ni);
 
 	if (!policy)
@@ -2351,9 +2385,7 @@ _action_m2_content_prepare(struct req_args_s *args, struct json_object *jargs,
 	json_object_object_get_ex(jargs, "policy", &jpol);
 
 	const gchar *strsize = !jsize ? NULL : json_object_get_string (jsize);
-	const gchar *stgpol = !jpol ? NULL : json_object_get_string (jpol);
-	if (!stgpol)
-		stgpol = oio_ns_storage_policy;
+	const gchar *stgpol = !jpol ? oio_ns_storage_policy : json_object_get_string (jpol);
 
 	/* Parse the size */
 	if (!strsize)
@@ -2399,13 +2431,12 @@ action_m2_content_prepare_v2(struct req_args_s *args, struct json_object *jargs)
 
 static GError *_m2_json_spare (struct req_args_s *args,
 		struct json_object *jbody, GSList ** out) {
+	struct json_object *jnotin = NULL, *jbroken = NULL;
 	GSList *notin = NULL, *broken = NULL;
-	json_object *jnotin = NULL, *jbroken = NULL;
-	GError *err;
+	GError *err = NULL;
 
 	if (!json_object_is_type (jbody, json_type_object))
 		return BADREQ ("Body is not a valid JSON object");
-
 	if (!json_object_object_get_ex (jbody, "notin", &jnotin))
 		return BADREQ("'notin' field missing");
 	if (!json_object_object_get_ex (jbody, "broken", &jbroken))
@@ -2417,21 +2448,32 @@ static GError *_m2_json_spare (struct req_args_s *args,
 		_bean_cleanl2 (broken);
 		return err;
 	}
-	if (!notin && !broken)
-		return BADREQ("Empty beans sets");
 
-	PACKER_VOID(_pack) {
-		return m2v2_remote_pack_SPARE (args->url, OPT("stgpol"), notin, broken, DL());
-	}
+	const char *stgpol = OPT("stgpol");
+
 	GSList *obeans = NULL;
-	err = _resolve_meta2(args, _prefer_master(), _pack, &obeans, NULL);
+	if (!notin && !broken) {
+		if (!stgpol) {
+			err = BADREQ("'policy' field not a string");
+		} else {
+			err = _get_spare_chunks(stgpol, &obeans);
+		}
+	} else {
+		if (!stgpol) {
+			err = BADREQ("'policy' field missing");
+		} else {
+			err = _get_conditioned_spare_chunks(stgpol, notin, broken, &obeans);
+		}
+	}
 	_bean_cleanl2 (broken);
 	_bean_cleanl2 (notin);
 	EXTRA_ASSERT ((err != NULL) ^ (obeans != NULL));
+
 	if (!err)
 		*out = obeans;
 	else
 		_bean_cleanl2 (obeans);
+	obeans = NULL;
 	return err;
 }
 

@@ -206,60 +206,6 @@ m2v2_remote_pack_DEDUP(struct oio_url_s *url, gint64 dl)
 	return _m2v2_pack_request (NAME_MSGNAME_M2V2_DEDUP, url, NULL, dl);
 }
 
-GByteArray*
-m2v2_remote_pack_BEANS(struct oio_url_s *url, const char *pol,
-		gint64 size, gboolean append, gint64 dl)
-{
-	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_BEANS, url, NULL, dl);
-	metautils_message_add_field_strint64 (msg, NAME_MSGKEY_CONTENTLENGTH, size);
-	metautils_message_add_field_str (msg, NAME_MSGKEY_STGPOLICY, pol);
-	if (append)
-		metautils_message_add_field_str (msg, NAME_MSGKEY_APPEND, "true");
-
-	/* si policy est NULL, le paramètre ne sera pas ajouté. On profite que
-	 * ce soit ldernier argument de la liste */
-	return message_marshall_gba_and_clean(msg);
-}
-
-GByteArray*
-m2v2_remote_pack_SPARE(struct oio_url_s *url, const char *pol,
-		GSList *notin_list, GSList *broken_list, gint64 dl)
-{
-	gchar *spare_type = M2V2_SPARE_BY_STGPOL;
-	GSList *beans = NULL;
-
-	if (notin_list != NULL) {
-		spare_type = M2V2_SPARE_BY_BLACKLIST;
-		for (GSList *l = notin_list; l != NULL; l = l->next) {
-			if (DESCR(l->data) != &descr_struct_CHUNKS)
-				continue;
-			beans = g_slist_prepend(beans, _bean_dup(l->data));
-		}
-	}
-
-	for (GSList *l = broken_list; l != NULL; l = l->next) {
-		if (DESCR(l->data) != &descr_struct_CHUNKS)
-			continue;
-		struct bean_CHUNKS_s *chunk = _bean_dup(l->data);
-		// This makes difference between valid and broken chunks
-		CHUNKS_set_size(chunk, -1);
-		beans = g_slist_prepend(beans, chunk);
-	}
-
-	/* body is only mandatory for M2V2_SPARE_BY_BLACKLIST so when
-	 * notin_list != NULL. If not_in_list != NULL, beans is always
-	 * != NULL so body is sent.
-	 */
-	GByteArray *body = NULL;
-	if (beans != NULL)
-		body = bean_sequence_marshall(beans);
-
-	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_BEANS, url, body, dl);
-	metautils_message_add_field_str (msg, NAME_MSGKEY_STGPOLICY, pol);
-	metautils_message_add_field_str (msg, NAME_MSGKEY_SPARE, spare_type);
-	_bean_cleanl2(beans);
-	return message_marshall_gba_and_clean(msg);
-}
 
 GByteArray*
 m2v2_remote_pack_PUT(struct oio_url_s *url, GSList *beans, gint64 dl)
