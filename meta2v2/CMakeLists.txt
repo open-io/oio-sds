@@ -56,6 +56,7 @@ add_library(meta2v2utils STATIC
 		meta2_bean_utils.c
 		meta2_utils_json_in.c
 		meta2_utils_json_out.c
+		meta2_utils_lb.c
 )
 
 target_link_libraries(meta2v2utils
@@ -67,7 +68,6 @@ add_library(meta2v2 STATIC
 		${CMAKE_CURRENT_BINARY_DIR}/autogen_storage.c
 		generic_backend.c
 		meta2_utils.c
-		meta2_utils_lb.c
 		meta2_backend.c)
 
 target_link_libraries(meta2v2
