@@ -67,8 +67,8 @@ GError* get_spare_chunks(struct oio_lb_s *lb,
  * @param result Pointer to a list where spare chunks will be inserted
  * @return A GError in case of error
  */
-GError* get_conditioned_spare_chunks(struct oio_lb_s *lbp,
-		const char *stgpol, const gchar *ns_name,
+GError* get_conditioned_spare_chunks(struct oio_lb_s *lb,
+		const char *pool, const gchar *ns_name,
 		GSList *notin, GSList *broken,
 		GSList **result);
 

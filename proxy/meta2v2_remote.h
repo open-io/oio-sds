@@ -98,19 +98,6 @@ GByteArray* m2v2_remote_pack_DEDUP(
 		struct oio_url_s *url,
 		gint64 deadline);
 
-GByteArray* m2v2_remote_pack_BEANS(
-		struct oio_url_s *url,
-		const char *pol,
-		gint64 size,
-		gboolean append,
-		gint64 deadline);
-
-GByteArray* m2v2_remote_pack_SPARE(
-		struct oio_url_s *url,
-		const char *pol,
-		GSList *notin_list,
-		GSList *broken_list,
-		gint64 deadline);
 
 GByteArray* m2v2_remote_pack_PUT(
 		struct oio_url_s *url,
