@@ -148,7 +148,7 @@ ec_tests () {
 	SIZE0=$((256*1024*1024))
 	export OIO_USER=user-$RANDOM OIO_PATH=path-$RANDOM
 	echo $OIO_NS $OIO_ACCOUNT $OIO_USER $OIO_PATH
-	( export G_DEBUG_LEVEL=W ; ./core/tool_sdk put $SIZE0 )
+	( export G_DEBUG_LEVEL=W ; ${WRKDIR}/core/tool_sdk put $SIZE0 )
 	openio object save $OIO_USER $OIO_PATH
 	SIZE=$(stat --printf='%s' $OIO_PATH)
 	/bin/rm "$OIO_PATH"
@@ -250,7 +250,7 @@ func_tests () {
 	rm "/$HOME/.oio/sds.conf"
 	export OIO_PROXY=$(oio-test-config.py -t proxy -1)
 	export OIO_ECD=$(oio-test-config.py -t ecd -1)
-	./core/tool_sdk_noconf
+	${WRKDIR}/core/tool_sdk_noconf
 
 	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
 	sleep 0.5
