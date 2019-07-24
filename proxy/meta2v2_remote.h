@@ -115,7 +115,6 @@ GByteArray* m2v2_remote_pack_SPARE(
 GByteArray* m2v2_remote_pack_PUT(
 		struct oio_url_s *url,
 		GSList *beans,
-		const char *force_versioning,
 		gint64 deadline);
 
 GByteArray* m2v2_remote_pack_OVERWRITE(
@@ -144,7 +143,7 @@ GByteArray* m2v2_remote_pack_DRAIN(
 
 GByteArray* m2v2_remote_pack_DEL(
 		struct oio_url_s *url,
-		const char *force_versioning,
+		gboolean delete_marker,
 		gint64 deadline);
 
 GByteArray* m2v2_remote_pack_TRUNC(

@@ -67,6 +67,9 @@ _m2b_notify_beans(struct oio_events_queue_s *notifier, struct oio_url_s *url,
 		GString *path = ALIASES_get_alias(alias);
 		oio_url_set(url2, OIOURL_PATH, path->str);
 		gint64 version = ALIASES_get_version(alias);
+		// If it's a delete marker, use the version of the associated object
+		if (ALIASES_get_deleted(alias))
+			version--;
 		gchar *str_version = g_strdup_printf("%"G_GINT64_FORMAT, version);
 		oio_url_set(url2, OIOURL_VERSION, str_version);
 		g_free(str_version);
@@ -449,7 +452,9 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 
 	TRACE_FILTER();
-	e = meta2_backend_delete_alias(m2b, url, _bean_list_cb, &obc->l);
+	e = meta2_backend_delete_alias(m2b, url,
+		BOOL(meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_DELETE_MARKER)),
+		_bean_list_cb, &obc->l);
 	if (NULL != e) {
 		GRID_DEBUG("Fail to delete alias for url: %s", oio_url_get(url, OIOURL_WHOLE));
 		meta2_filter_ctx_set_error(ctx, e);

@@ -2533,6 +2533,7 @@ static GError *_m2_json_put (struct req_args_s *args,
 	/* used from oio-swift for "sharding" in containers */
 	const char* force_versioning = g_tree_lookup(args->rq->tree_headers,
 			PROXYD_HEADER_FORCE_VERSIONING);
+	oio_ext_set_force_versioning(force_versioning);
 
 	GSList *ibeans = NULL, *obeans = NULL;
 	GError *err;
@@ -2555,7 +2556,7 @@ static GError *_m2_json_put (struct req_args_s *args,
 		if (force) return m2v2_remote_pack_OVERWRITE (args->url, ibeans, DL());
 		if (append) return m2v2_remote_pack_APPEND (args->url, ibeans, DL());
 		if (change_policy) return m2v2_remote_pack_CHANGE_POLICY (args->url, ibeans, DL());
-		return m2v2_remote_pack_PUT (args->url, ibeans, force_versioning, DL());
+		return m2v2_remote_pack_PUT (args->url, ibeans, DL());
 	}
 	err = _resolve_meta2(args, _prefer_master(), _pack, &obeans, NULL);
 	_bean_cleanl2 (obeans);
@@ -2637,13 +2638,21 @@ action_m2_content_purge (struct req_args_s *args, struct json_object *j UNUSED)
 //    ]
 //
 // You must specify content length and ID on header
-// You can update system property policy.version of container
 //
 // .. code-block:: text
 //
 //    "x-oio-content-meta-id: 2996752DFD7205006B73F17AD315AA2B"
 //    "x-oio-content-meta-size: 64"
+//
+// You can update system property policy.version of container
+//
+// .. code-block:: text
 //    "x-oio-force-versioning: -1"
+//
+// You can create this object as if the versioning is enabled
+//
+// .. code-block:: text
+//    "x-oio-simulate-versioning: 1"
 //
 // Create a new object. This method does not upload any data, it just
 // registers object metadata in the database.
@@ -2656,7 +2665,6 @@ action_m2_content_purge (struct req_args_s *args, struct json_object *j UNUSED)
 //    Accept: */*
 //    x-oio-content-meta-size: 64
 //    x-oio-content-meta-id: 2996752DFD7205006B73F17AD315AA2B
-//    x-oio-force-versioning: -1
 //    Content-Length: 165
 //    Content-Type: application/x-www-form-urlencoded
 //
@@ -2899,9 +2907,23 @@ enum http_rc_e action_content_show (struct req_args_s *args) {
 // CONTENT{{
 // POST /v3.0/{NS}/content/delete?acct={account}&ref={container}&path={file path}
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// If the versioning is enabled, you can add delete marker to a specific version
+//
+// .. code-block:: text
+//    POST /v3.0/OPENIO/content/delete?acct=my_account&ref=mycontainer&path=mycontent&version=9876543210&delete_marker=1 HTTP/1.1
+//
 // Unreference object from container
 //
-// You can update system property policy.version of container
+// .. code-block:: text
+//    "x-oio-force-versioning: -1"
+//
+// You can delete this object as if the versioning is enabled
+//
+// .. code-block:: text
+//    "x-oio-simulate-versioning: 1"
+//
+// Unreference object from container
 //
 // .. code-block:: http
 //
@@ -2918,21 +2940,29 @@ enum http_rc_e action_content_show (struct req_args_s *args) {
 //
 // }}CONTENT
 enum http_rc_e action_content_delete (struct req_args_s *args) {
+	const gboolean delete_marker = _request_get_flag(args, "delete_marker");
+	/* used from oio-swift for "sharding" in containers */
 	const char* force_versioning = g_tree_lookup(args->rq->tree_headers,
 			PROXYD_HEADER_FORCE_VERSIONING);
+	oio_ext_set_force_versioning(force_versioning);
 
-	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url, force_versioning, DL()); }
+	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url,
+			delete_marker, DL()); }
 	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	return _reply_m2_error (args, err);
 }
 
 static enum http_rc_e
 _m2_content_delete_many (struct req_args_s *args, struct json_object * jbody) {
+	const gboolean delete_marker = _request_get_flag(args, "delete_marker");
+	/* used from oio-swift for "sharding" in containers */
 	const char* force_versioning = g_tree_lookup(args->rq->tree_headers,
 			PROXYD_HEADER_FORCE_VERSIONING);
+	oio_ext_set_force_versioning(force_versioning);
 
 	json_object *jarray = NULL;
-	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url, force_versioning, DL()); }
+	PACKER_VOID(_pack) { return m2v2_remote_pack_DEL (args->url,
+			delete_marker, DL()); }
 
 	if (!oio_url_has_fq_container(args->url))
 		return _reply_format_error(args,

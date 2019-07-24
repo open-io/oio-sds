@@ -179,6 +179,7 @@ struct oio_ext_local_s {
 	guint8 force_master;
 	gchar *user_agent;
 	gchar *force_versioning;
+	guint8 simulate_versioning;
 	gchar reqid[LIMIT_LENGTH_REQID];
 };
 
@@ -325,6 +326,16 @@ void oio_ext_set_force_versioning(const gchar *force_versioning) {
 		g_free(l->force_versioning);
 	}
 	l->force_versioning = g_strdup(force_versioning);
+}
+
+gboolean oio_ext_has_simulate_versioning(void) {
+	const struct oio_ext_local_s *l = _local_ensure ();
+	return BOOL(l->simulate_versioning);
+}
+
+void oio_ext_set_simulate_versioning(const gboolean simulate_versioning) {
+	struct oio_ext_local_s *l = _local_ensure();
+	l->simulate_versioning = BOOL(simulate_versioning);
 }
 
 /* -------------------------------------------------------------------------- */

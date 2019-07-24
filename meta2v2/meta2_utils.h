@@ -155,6 +155,14 @@ GError* m2db_latest_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 GError* m2db_get_versioned_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		struct bean_ALIASES_s **out);
 
+/* Check if alias doesn't exsist */
+GError* check_alias_doesnt_exist(struct sqlx_sqlite3_s *sq3,
+		struct oio_url_s *url);
+
+/* Check if alias doesn't exist separately checking the path and the content ID */
+GError* check_alias_doesnt_exist2(struct sqlx_sqlite3_s *sq3,
+		struct oio_url_s *url);
+
 GError* m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp,
 		GSList *headers, m2_onbean_cb cb, gpointer u);
 
@@ -178,7 +186,8 @@ GError* m2db_drain_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		m2_onbean_cb cb, gpointer u0);
 
 GError* m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
-		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0);
+		gboolean delete_marker, struct oio_url_s *url,
+		m2_onbean_cb cb, gpointer u0);
 
 GError* m2db_link_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		GBytes *id);
