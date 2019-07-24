@@ -230,6 +230,12 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 	const char *user_agent = g_tree_lookup(rq->tree_headers, USER_AGENT_HEADER);
 	oio_ext_set_user_agent(user_agent);
 
+	/* Load the optional 'simulate_versioning' flag */
+	const char *simulate_versioning = g_tree_lookup(
+			rq->tree_headers, PROXYD_HEADER_SIMULATE_VERSIONING);
+	oio_ext_set_simulate_versioning(
+			oio_str_parse_bool(simulate_versioning, FALSE));
+
 	/* Load the optional deadline of the current request */
 	const char *tostr = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_TIMEOUT);
 	gint64 to = 0;

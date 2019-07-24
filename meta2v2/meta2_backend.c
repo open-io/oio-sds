@@ -1101,7 +1101,8 @@ meta2_backend_drain_content(struct meta2_backend_s *m2,
 
 GError*
 meta2_backend_delete_alias(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0)
+		struct oio_url_s *url, gboolean delete_marker,
+		m2_onbean_cb cb, gpointer u0)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1122,8 +1123,8 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 				max_versions = atoi(oio_ext_get_force_versioning());
 				m2db_set_max_versions(sq3, max_versions);
 			}
-			if (!(err = m2db_delete_alias(sq3, max_versions, url,
-					_bean_list_cb, &deleted_beans))) {
+			if (!(err = m2db_delete_alias(sq3, max_versions, delete_marker,
+					url, _bean_list_cb, &deleted_beans))) {
 				if (deleted_beans) {
 					deleted_objects = g_slist_append(
 							deleted_objects, deleted_beans);
@@ -1726,56 +1727,6 @@ meta2_backend_dedup_contents(struct meta2_backend_s *m2b, struct oio_url_s *url)
 
 /* Beans generation --------------------------------------------------------- */
 
-static void
-_cb_has_not(gpointer udata, gpointer bean)
-{
-	if (!bean)
-		return;
-	*((gboolean*)udata) = FALSE;
-	_bean_clean(bean);
-}
-
-static GError*
-_check_alias_doesnt_exist(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
-{
-	gboolean no_bean = TRUE;
-	GError *err = m2db_get_alias(sq3, url, M2V2_FLAG_NODELETED,
-			_cb_has_not, &no_bean);
-	if (NULL != err) {
-		if (err->code == CODE_CONTENT_NOTFOUND) {
-			g_clear_error(&err);
-		} else {
-			g_prefix_error(&err, "Could not check the ALIAS is present"
-					" (multiple versions not allowed): ");
-		}
-	}
-	else if (!no_bean)
-		err = NEWERROR(CODE_CONTENT_EXISTS, "Alias already present");
-	return err;
-}
-
-static GError*
-_check_alias_doesnt_exist2(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
-{
-	GError *err = NULL;
-	if (oio_url_has(url, OIOURL_PATH) && oio_url_has(url, OIOURL_CONTENTID)) {
-		struct oio_url_s *u = oio_url_dup(url);
-		oio_url_unset(u, OIOURL_CONTENTID);
-		err = _check_alias_doesnt_exist(sq3, u);
-		if (err) {
-			oio_url_clean(u);
-			return err;
-		}
-		oio_url_unset(u, OIOURL_PATH);
-		oio_url_set(u, OIOURL_CONTENTID, oio_url_get(url, OIOURL_CONTENTID));
-		err = _check_alias_doesnt_exist(sq3, u);
-		oio_url_clean(u);
-	} else {
-		err = _check_alias_doesnt_exist(sq3, url);
-	}
-	return err;
-}
-
 /* Create, save in cache, and possibly return m2_prepare_data.
  * If container is disabled or frozen, decache m2_prepare_data
  * and return nothing. */
@@ -2031,7 +1982,7 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 		if (!err) {
 			/* If the versioning is not supported, or the namespace is
 			 * is WORM mode, we check the content is not present */
-			err = _check_alias_doesnt_exist2(sq3, url);
+			err = check_alias_doesnt_exist2(sq3, url);
 			if (append) {
 				if (err) {
 					g_clear_error(&err);
