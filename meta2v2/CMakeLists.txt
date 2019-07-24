@@ -49,12 +49,8 @@ add_custom_command(
 
 add_library(meta2v2utils SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/autogen.c
-		${CMAKE_CURRENT_BINARY_DIR}/autogen.h
 		${CMAKE_CURRENT_BINARY_DIR}/meta2_variables.c
-		${CMAKE_CURRENT_BINARY_DIR}/meta2_variables.h
-		meta2_macros.h
 		meta2_utils_lb.c
-		meta2_utils_lb.h
 		generic.c
 		generic.h
 		meta2_utils.c
@@ -78,10 +74,6 @@ target_link_libraries(meta2v2utils
 
 
 add_library(meta2v2 SHARED
-		${CMAKE_CURRENT_BINARY_DIR}/autogen.h generic.h
-		meta2_utils.h
-		meta2_macros.h
-		meta2_backend.h
 		meta2_backend.c)
 
 set_target_properties(meta2v2 PROPERTIES VERSION 0.0.0 SOVERSION 0)
