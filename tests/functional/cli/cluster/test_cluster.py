@@ -127,6 +127,6 @@ class ClusterTest(CliTestCase):
         data = json.loads(output)
         self.assertTrue(all([node['Result'] == 'unlocked' for node in data]))
         # Wait for services to be non-zero-scored
-        output = self.openio('cluster wait rawx -d 99 -s 20' + opts)
+        output = self.openio('cluster wait rawx -d 99 -s 1' + opts)
         data = json.loads(output)
-        self.assertTrue(all([node['Score'] > 20 for node in data]))
+        self.assertTrue(all([node['Score'] > 1 for node in data]))
