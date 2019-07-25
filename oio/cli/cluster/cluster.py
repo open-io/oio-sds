@@ -233,6 +233,13 @@ class ClusterUnlockAll(lister.Lister):
         return columns, self._unlock_all(parsed_args)
 
 
+def _sleep_interval(*tab):
+    for v in tab:
+        yield v
+    while True:
+        yield tab[-1]
+
+
 class ClusterWait(lister.Lister):
     """Wait for services to get a score above specified value."""
 
@@ -300,13 +307,7 @@ class ClusterWait(lister.Lister):
                             srv['type'], srv.get('id', None), srv['score'])
                 raise Exception(msg)
 
-        def generator(*tab):
-            for v in tab:
-                yield v
-            while True:
-                yield tab[-1]
-
-        interval = generator(1.0, 2.0, 4.0)
+        interval = _sleep_interval(1.0, 2.0, 4.0)
         while True:
             descr = []
             for type_ in types:
