@@ -51,6 +51,10 @@ def make_arg_parser():
                         help="Throttle: max byte per second")
     parser.add_argument('--chunks-per-second', type=int,
                         help="Throttle: max chunks per second")
+    parser.add_argument('--min-chunk-size', type=int, default=0,
+                        help="Only move chunks larger than the given size")
+    parser.add_argument('--max-chunk-size', type=int, default=0,
+                        help="Only move chunks smaller than the given size.")
     parser.add_argument('--excluded-rawx',
                         help="List of rawx not to use to move the chunks.")
     levels = ['DEBUG', 'INFO', 'WARN', 'ERROR']
@@ -90,6 +94,8 @@ def generate_config_file(path, mode):
         add_value(cont, 'report_interval', args.report_interval)
         add_value(cont, 'bytes_per_second', args.bytes_per_second)
         add_value(cont, 'chunks_per_second', args.chunks_per_second)
+        add_value(cont, 'min_chunk_size', args.min_chunk_size)
+        add_value(cont, 'max_chunk_size', args.max_chunk_size)
         add_value(cont, 'concurrency', args.concurrency)
         add_value(cont, 'user', args.user)
         add_value(cont, 'limit', args.limit)

@@ -149,6 +149,7 @@ class BlobMoverWorker(object):
             mover_time += (now - loop_time)
             if self.limit != 0 and self.total_chunks_processed >= self.limit:
                 break
+        pool.waitall()
         elapsed = (time.time() - start_time) or 0.000001
         self.logger.info(
             '%(elapsed).02f '
@@ -193,6 +194,18 @@ class BlobMoverWorker(object):
         content_id = meta['content_id']
         chunk_id = meta['chunk_id']
 
+        # Maybe skip the chunk because it doesn't match the size constaint
+        chunk_size = int(meta['chunk_size'])
+        min_chunk_size = int(self.conf.get('min_chunk_size', 0))
+        max_chunk_size = int(self.conf.get('max_chunk_size', 0))
+        if chunk_size < min_chunk_size:
+            self.logger.debug("SKIP %s too small", path)
+            return
+        if max_chunk_size > 0 and chunk_size > max_chunk_size:
+            self.logger.debug("SKIP %s too big", path)
+            return
+
+        # Start moving the chunk
         try:
             content = self.content_factory.get(container_id, content_id)
         except ContentNotFound:
