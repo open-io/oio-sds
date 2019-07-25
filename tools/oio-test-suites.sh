@@ -167,15 +167,17 @@ test_zookeeper_failure() {
 	# Old systemd versions do not recognize --value, whence the eval hack
 	#MainPID=$(sudo systemctl show -p MainPID --value zookeeper)
 	eval $(sudo systemctl show -p MainPID zookeeper)
-	sudo kill -STOP $MainPID
-	openio election debug meta2 test_zookeeper_failure
-	sleep 11
-	sudo kill -CONT $MainPID
+	if [[ -n "$MainPID" ]] && [[ $MainPID -gt 0 ]] ; then
+		sudo kill -STOP $MainPID
+		openio election debug meta2 test_zookeeper_failure
+		sleep 11
+		sudo kill -CONT $MainPID
 
-	openio election debug meta2 test_zookeeper_failure
-	openio container locate test_zookeeper_failure
-	openio election debug meta2 test_zookeeper_failure
-	openio container delete test_zookeeper_failure
+		openio election debug meta2 test_zookeeper_failure
+		openio container locate test_zookeeper_failure
+		openio election debug meta2 test_zookeeper_failure
+		openio container delete test_zookeeper_failure
+	fi
 }
 
 func_tests () {
