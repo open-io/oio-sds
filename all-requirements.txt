@@ -4,7 +4,7 @@ gunicorn>=19.4.5,<20.0.0
 lxml<5.0.0
 plyvel>=0.9,<1.0.0
 PyECLib>=1.2.0,<2.0.0
-pyparsing!=2.4.1
+pyparsing!=2.4.1,!=2.4.1.1
 pyxattr>=0.4.0,<1.0.0
 PyYAML>=3.10,<4.0
 redis>=2.10.3,<4.0.0
