@@ -734,7 +734,7 @@ Used by `gcc`
 
 > In a proxy, upon a read request, should the proxy prefer a service known to host a SLAVE copy of the DB.
 
- * default: **FALSE**
+ * default: **TRUE**
  * type: gboolean
  * cmake directive: *OIO_PROXY_PREFER_SLAVE_FOR_READ*
 

@@ -846,7 +846,7 @@
 			{ "type": "bool", "name": "flag_prefer_slave_for_read",
 				"key": "proxy.prefer.slave_for_read",
 				"descr": "In a proxy, upon a read request, should the proxy prefer a service known to host a SLAVE copy of the DB.",
-				"def": false,
+				"def": true,
 				"aliases": ["PreferSlave"]},
 
 			{ "type": "bool", "name": "flag_force_master",
