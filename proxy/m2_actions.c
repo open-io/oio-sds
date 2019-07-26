@@ -2432,8 +2432,13 @@ action_m2_content_prepare_v2(struct req_args_s *args, struct json_object *jargs)
 static GError *_m2_json_spare (struct req_args_s *args,
 		struct json_object *jbody, GSList ** out) {
 	struct json_object *jnotin = NULL, *jbroken = NULL;
-	GSList *notin = NULL, *broken = NULL;
+	GSList *notin = NULL, *broken = NULL, *obeans = NULL;
 	GError *err = NULL;
+
+	*out = NULL;
+	const char *stgpol = OPT("stgpol");
+	if (!stgpol)
+		return BADREQ("'policy' field not a string");
 
 	if (!json_object_is_type (jbody, json_type_object))
 		return BADREQ ("Body is not a valid JSON object");
@@ -2442,38 +2447,34 @@ static GError *_m2_json_spare (struct req_args_s *args,
 	if (!json_object_object_get_ex (jbody, "broken", &jbroken))
 		return BADREQ("'broken' field missing");
 
-	if (NULL != (err = _load_simplified_chunks (jnotin, &notin))
-		|| NULL != (err = _load_simplified_chunks (jbroken, &broken))) {
-		_bean_cleanl2 (notin);
-		_bean_cleanl2 (broken);
-		return err;
+	if (!json_object_is_type(jnotin, json_type_null)
+			&& NULL != (err = _load_simplified_chunks (jnotin, &notin)))
+		goto label_exit;
+	if (!json_object_is_type(jbroken, json_type_null)
+			&& NULL != (err = _load_simplified_chunks (jbroken, &broken)))
+		goto label_exit;
+
+	for (GSList *l=broken; l; l=l->next) {
+		struct bean_CHUNKS_s *chunk = l->data;
+		CHUNKS_set_size(chunk, -1);
 	}
 
-	const char *stgpol = OPT("stgpol");
-
-	GSList *obeans = NULL;
 	if (!notin && !broken) {
-		if (!stgpol) {
-			err = BADREQ("'policy' field not a string");
-		} else {
-			err = _get_spare_chunks(stgpol, &obeans);
-		}
+		/* traditional prepare but only for chunks */
+		err = _get_spare_chunks(stgpol, &obeans);
 	} else {
-		if (!stgpol) {
-			err = BADREQ("'policy' field missing");
-		} else {
-			err = _get_conditioned_spare_chunks(stgpol, notin, broken, &obeans);
-		}
+		err = _get_conditioned_spare_chunks(stgpol, notin, broken, &obeans);
 	}
-	_bean_cleanl2 (broken);
-	_bean_cleanl2 (notin);
 	EXTRA_ASSERT ((err != NULL) ^ (obeans != NULL));
 
-	if (!err)
+	if (!err) {
 		*out = obeans;
-	else
-		_bean_cleanl2 (obeans);
-	obeans = NULL;
+		obeans = NULL;
+	}
+label_exit:
+	_bean_cleanl2 (obeans);
+	_bean_cleanl2 (broken);
+	_bean_cleanl2 (notin);
 	return err;
 }
 
