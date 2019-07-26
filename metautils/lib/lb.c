@@ -34,6 +34,10 @@ License along with this library.
 
 #include "metautils.h"
 
+static struct oio_lb_pool_s *
+oio_lb_pool__from_storage_policy(struct oio_lb_world_s *lbw,
+		const struct storage_policy_s *stgpol);
+
 void
 oio_lb_world__feed_service_info_list(struct oio_lb_world_s *lbw,
 		GSList *services)

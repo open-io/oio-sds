@@ -48,8 +48,9 @@ void oio_lb_world__feed_from_string(struct oio_lb_world_s *self,
 GError *oio_lb_world__feed_from_file(struct oio_lb_world_s *self,
 		const gchar *main_slot, const gchar *src_file);
 
-/** Check there is a pool for each storage policy. If not, create a dummy one.
- * @see oio_lb_pool__from_storage_policy */
+/** Check there is a pool for each storage policy. If not,
+ * create a service pool returning sets of services satisfying
+ * the specified storage policy */
 void oio_lb_world__reload_storage_policies(struct oio_lb_world_s *lbw,
 		struct oio_lb_s *lb, struct namespace_info_s *nsinfo);
 
@@ -69,12 +70,6 @@ struct oio_lb_pool_s *oio_lb_pool__from_service_policy(
 		struct oio_lb_world_s *lbw,
 		const gchar *srvtype,
 		struct service_update_policies_s *pols);
-
-/** Create a service pool returning sets of services satisfying
- * the specified storage policy */
-struct oio_lb_pool_s *oio_lb_pool__from_storage_policy(
-		struct oio_lb_world_s *lbw,
-		const struct storage_policy_s *stgpol);
 
 /* Repeatedly call oio_lb_pool__poll(), check for unbalanced situations,
  * and count how many times each service has been selected. */
