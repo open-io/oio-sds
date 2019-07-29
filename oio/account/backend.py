@@ -181,10 +181,18 @@ class AccountBackend(RedisConn):
             objects_sum = objects_sum + redis.call('HGET', container_key,
                                                    'objects')
             bytes_sum = bytes_sum + redis.call('HGET', container_key, 'bytes')
-            damaged_objects_sum = damaged_objects_sum
-                    + redis.call('HGET', container_key, 'damaged_objects')
-            missing_chunks_sum = missing_chunks_sum
-                    + redis.call('HGET', container_key, 'missing_chunks')
+            local damaged_objects = redis.call('HGET', container_key,
+                                               'damaged_objects')
+            if damaged_objects == false then
+                damaged_objects = 0
+            end
+            damaged_objects_sum = damaged_objects_sum + damaged_objects
+            local missing_chunks = redis.call('HGET', container_key,
+                                              'missing_chunks')
+            if missing_chunks == false then
+                missing_chunks = 0
+            end
+            missing_chunks_sum = missing_chunks_sum + missing_chunks
         end;
 
         redis.call('HMSET', KEYS[1], 'objects', objects_sum,
