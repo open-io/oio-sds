@@ -299,6 +299,13 @@ class ClusterWait(lister.Lister):
                             srv['type'], srv['id'], srv['score'])
                 raise Exception(msg)
 
+        def generator(*tab):
+            for v in tab:
+                yield v
+            while True:
+                yield tab[-1]
+
+        interval = generator(1.0, 2.0, 4.0)
         while True:
             descr = []
             for type_ in types:
@@ -316,7 +323,7 @@ class ClusterWait(lister.Lister):
                         self.log.debug("Only %d services up", ok)
                         check_deadline()
                         maybe_unlock(descr)
-                        sleep(1.0)
+                        sleep(next(interval))
                         continue
                 # No service down, and enough services, we are done.
                 for srv in descr:
@@ -326,7 +333,7 @@ class ClusterWait(lister.Lister):
                 self.log.debug("Still %d services down", ko)
                 check_deadline()
                 maybe_unlock(descr)
-                sleep(1.0)
+                sleep(next(interval))
 
     def take_action(self, parsed_args):
         columns = ('Type', 'Service', 'Score')
