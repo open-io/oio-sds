@@ -260,8 +260,6 @@ void
 cache_flush_user(struct req_args_s *args, struct client_ctx_s *ctx)
 {
 	static const char types[][LIMIT_LENGTH_SRVTYPE] = {
-		NAME_SRVTYPE_META0,
-		NAME_SRVTYPE_META1,
 		NAME_SRVTYPE_META2,
 		NAME_SRVTYPE_SQLX,
 	};
@@ -269,11 +267,8 @@ cache_flush_user(struct req_args_s *args, struct client_ctx_s *ctx)
 	GRID_DEBUG("Suspected stale cache entry for [%s] [%s]",
 			ctx->type, oio_url_get(args->url, OIOURL_WHOLE));
 
-	hc_decache_reference (resolver, args->url);
-	hc_decache_reference_service (resolver, args->url, NAME_SRVTYPE_META2);
-	hc_decache_reference_service (resolver, args->url, NAME_SRVTYPE_SQLX);
-
-	for (int i=0; i<3 ;++i) {
+	for (int i=0; i<2 ;++i) {
+		hc_decache_reference_service (resolver, args->url, types[i]);
 		gchar *k = g_strconcat(ctx->name.base, "/", types[i], NULL);
 		service_forget_master(k);
 		g_free(k);
@@ -314,7 +309,6 @@ label_retry:
 		EXTRA_ASSERT(m1uv == NULL);
 		if (retry && err->code == CODE_RANGE_NOTFOUND) {
 			retry = FALSE;
-			hc_decache_reference_service(resolver, ctx->url, NAME_SRVTYPE_META1);
 			hc_decache_reference(resolver, ctx->url);
 			goto label_retry;
 		} else {
