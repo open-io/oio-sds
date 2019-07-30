@@ -235,7 +235,8 @@ error_clue_for_decache(GError *err)
 		return FALSE;
 	switch (err->code) {
 		case CODE_CONTAINER_NOTFOUND:
-		case CODE_USER_NOTFOUND:
+		/* DO NOT consider CODE_USER_NOTFOUND as a valid reason
+		 * to trigger a decache. This is a normal return code */
 		case CODE_RANGE_NOTFOUND:
 		case CODE_SRVTYPE_NOTMANAGED:
 		case CODE_ACCOUNT_NOTFOUND:
