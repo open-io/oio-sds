@@ -1855,7 +1855,7 @@ sqlx_repository_get_peers2(sqlx_repository_t *repo,
 		*result = NULL;
 	} else {
 		gchar *tmp = sqlx_admin_get_str(sq3, SQLX_ADMIN_PEERS);
-		sqlx_repository_unlock_and_close_noerror2(sq3, SQLX_CLOSE_IMMEDIATELY);
+		sqlx_repository_unlock_and_close_noerror2(sq3, 0);
 		if (tmp) {
 			*result = g_strsplit(tmp, ",", -1);
 			g_free(tmp);
