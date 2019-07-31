@@ -1185,7 +1185,7 @@ _manager_get_condition (struct election_manager_s *m, const char *k)
 static struct election_member_s *
 _LOCKED_init_member(struct election_manager_s *manager,
 		const struct sqlx_name_s *n, const char *key,
-		gboolean autocreate)
+		gboolean autocreate, gchar ***peers)
 {
 	MANAGER_CHECK(manager);
 	NAME_CHECK(n);
@@ -1214,6 +1214,10 @@ _LOCKED_init_member(struct election_manager_s *manager,
 		g_strlcpy(member->inline_name.ns, n->ns, sizeof(member->inline_name.ns));
 		member->refcount = 2;
 		member->cond = _manager_get_condition(manager, member->key);
+		if (peers && *peers) {
+			member->peers = *peers;
+			*peers = NULL;
+		}
 
 		_DEQUE_add (member);
 		g_tree_replace(manager->members_by_key, member->key, member);
@@ -2005,16 +2009,33 @@ _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
 	if (replicated)
 		*replicated = FALSE;
 
-	if (op != ELOP_EXIT) {
+	struct election_member_s *member = NULL;
+	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
+	gchar **peers = NULL;
+
+	sqliterepo_hash_name(n, key, sizeof(key));
+
+	_manager_lock(m);
+	member = _LOCKED_get_member(m, key);
+	_manager_unlock(m);
+
+	if (op != ELOP_EXIT && !member) {
 		/* Out of the critical section */
 		gboolean peers_present = FALSE;
-		GError *err = election_has_peers(m, n, FALSE, &peers_present);
+		GError *err = election_get_peers(m, n, FALSE, &peers);
 		if (err != NULL) {
 			g_prefix_error(&err, "Election error: ");
 			return err;
 		}
+		if (peers)
+			peers_present = oio_str_is_set(*peers);
+
 		if (!peers_present) {
 			GRID_DEBUG("No peer for [%s][%s]", n->base, n->type);
+			if (peers) {
+				g_strfreev(peers);
+				peers = NULL;
+			}
 			return NULL;
 		} else {
 			if (replicated)
@@ -2022,11 +2043,10 @@ _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
 		}
 	}
 
-	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
-	sqliterepo_hash_name(n, key, sizeof(key));
-
 	_manager_lock(m);
-	struct election_member_s *member = _LOCKED_init_member(m, n, key, op != ELOP_EXIT);
+	if (member)
+		member_unref(member);
+	member = _LOCKED_init_member(m, n, key, op != ELOP_EXIT, &peers);
 	switch (op) {
 		case ELOP_NONE:
 			_election_atime(member);
@@ -2051,6 +2071,10 @@ _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
 	}
 	_manager_unlock(m);
 
+	if (peers) {
+		g_strfreev(peers);
+		peers = NULL;
+	}
 	return NULL;
 }
 
@@ -2145,7 +2169,7 @@ _election_get_status(struct election_manager_s *mgr,
 	deadline = (deadline <= 0) ? local_deadline : MIN(deadline, local_deadline);
 
 	_manager_lock(mgr);
-	struct election_member_s *m = _LOCKED_init_member(mgr, n, key, TRUE);
+	struct election_member_s *m = _LOCKED_init_member(mgr, n, key, TRUE, NULL);
 
 	if (!wait_for_final_status(m, deadline)) {  /* TIMEOUT! */
 		rc = STEP_FAILED;
@@ -2328,6 +2352,9 @@ member_action_to_NONE(struct election_member_s *member)
 	return member_set_status(member, STEP_NONE);
 }
 
+static void _member_react_PEERING(struct election_member_s *member,
+		enum event_type_e evt, gchar **peers);
+
 static void
 member_action_to_PEERING(struct election_member_s *member)
 {
@@ -2341,12 +2368,25 @@ member_action_to_PEERING(struct election_member_s *member)
 	/* The only origin of the transition is NONE */
 	member->when_unstable = oio_ext_monotonic_time();
 
-	member_ref(member);
-#ifndef FAKE_GETPEERS
-	struct election_manager_s *M = MMANAGER(member);
-	metautils_gthreadpool_push("getpeers", M->tasks_getpeers, member);
-#endif
+#ifdef FAKE_GETPEERS
 	return member_set_status(member, STEP_PEERING);
+#else
+	if (member->peers) {
+		/* When the election is created, the caller already knows the peers
+		 * and might tell the manager about them. So despite the transition
+		 * (in the FSM) clears the peers, they can exist and the intention
+		 * is to save calls to meta1 */
+		gchar **peers = member->peers;
+		member->peers = NULL;
+		member_set_status(member, STEP_PEERING);
+		return _member_react_PEERING(member, EVT_GETPEERS_DONE, peers);
+	} else {
+		struct election_manager_s *M = MMANAGER(member);
+		member_ref(member);
+		metautils_gthreadpool_push("getpeers", M->tasks_getpeers, member);
+		return member_set_status(member, STEP_PEERING);
+	}
+#endif
 }
 
 /* Gathers a check on the set of actions currently pending and the change of

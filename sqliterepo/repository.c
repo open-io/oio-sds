@@ -943,10 +943,10 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 			}
 		}
 
+		args->is_replicated = BOOL(replicated);
+
 		if (!err && args->is_replicated)
 			err = election_start(args->repo->election_manager, &args->name);
-
-		args->is_replicated = BOOL(replicated);
 	}
 
 	/* Now manage the replication status */
@@ -1299,9 +1299,8 @@ sqlx_repository_status_base(sqlx_repository_t *repo,
 
 	/* Wait for a final status */
 	gchar *url = NULL;
-	enum election_status_e status;
-
-	status = election_get_status(repo->election_manager, n, &url, deadline);
+	enum election_status_e status =
+		election_get_status(repo->election_manager, n, &url, deadline);
 	switch (status) {
 		case ELECTION_LOST:
 			err = NEWERROR(CODE_REDIRECT, "%s", url);
