@@ -66,6 +66,10 @@ _create_named (const char *name, gint64 dl, gboolean with_id)
 		const char *id = oio_ext_get_reqid ();
 		if (id)
 			metautils_message_set_ID (result, id, strlen(id));
+#if HAVE_EXTRA_DEBUG
+		else
+			GRID_WARN("No reqid provided for %s message", name);
+#endif
 	}
 
 	if (dl > 0) {

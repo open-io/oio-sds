@@ -212,10 +212,14 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 
 	/* Get a request id for the current request */
 	const char *reqid = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_REQID);
-	if (reqid)
+	if (reqid) {
 		oio_ext_set_reqid(reqid);
-	else
-		oio_ext_set_random_reqid();
+	} else {
+#if HAVE_EXTRA_DEBUG
+		GRID_DEBUG("Received %s request without request id", rq->cmd);
+#endif
+		oio_ext_set_prefixed_random_reqid("proxy-");
+    }
 
 	/* Load the optional 'admin' flag */
 	const char *admin = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_ADMIN);
