@@ -2173,13 +2173,13 @@ _handler_ENABLE(struct gridd_reply_ctx_s *reply,
 			sqlx_admin_save_lazy_tnx (sq3);
 		}
 	}
+	sqlx_repository_unlock_and_close_noerror(sq3);
 
 	if (NULL != err)
 		reply->send_error(0, err);
 	else
 		reply->send_reply(CODE_FINAL_OK, "OK");
 
-	sqlx_repository_unlock_and_close_noerror(sq3);
 	return TRUE;
 }
 
@@ -2224,13 +2224,13 @@ _handler_FREEZE(struct gridd_reply_ctx_s *reply,
 			sqlx_admin_save_lazy_tnx (sq3);
 		}
 	}
+	sqlx_repository_unlock_and_close_noerror(sq3);
 
 	if (NULL != err)
 		reply->send_error(0, err);
 	else
 		reply->send_reply(CODE_FINAL_OK, "OK");
 
-	sqlx_repository_unlock_and_close_noerror(sq3);
 	return TRUE;
 }
 
@@ -2275,13 +2275,13 @@ _handler_DISABLE(struct gridd_reply_ctx_s *reply,
 			sqlx_admin_save_lazy_tnx (sq3);
 		}
 	}
+	sqlx_repository_unlock_and_close_noerror(sq3);
 
 	if (NULL != err)
 		reply->send_error(0, err);
 	else
 		reply->send_reply(CODE_FINAL_OK, "OK");
 
-	sqlx_repository_unlock_and_close_noerror(sq3);
 	return TRUE;
 }
 
