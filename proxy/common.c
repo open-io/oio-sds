@@ -259,20 +259,13 @@ context_clue_for_decache(struct client_ctx_s *ctx)
 void
 cache_flush_user(struct req_args_s *args, struct client_ctx_s *ctx)
 {
-	static const char types[][LIMIT_LENGTH_SRVTYPE] = {
-		NAME_SRVTYPE_META2,
-		NAME_SRVTYPE_SQLX,
-	};
-
 	GRID_DEBUG("Suspected stale cache entry for [%s] [%s]",
 			ctx->type, oio_url_get(args->url, OIOURL_WHOLE));
 
-	for (int i=0; i<2 ;++i) {
-		hc_decache_reference_service (resolver, args->url, types[i]);
-		gchar *k = g_strconcat(ctx->name.base, "/", types[i], NULL);
-		service_forget_master(k);
-		g_free(k);
-	}
+	hc_decache_reference_service (resolver, args->url, NAME_SRVTYPE_META2);
+	gchar *k = g_strconcat(ctx->name.base, "/", NAME_SRVTYPE_META2, NULL);
+	service_forget_master(k);
+	g_free(k);
 }
 
 static GError *
