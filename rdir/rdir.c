@@ -2391,7 +2391,7 @@ handler_action(struct http_request_s *rq, struct http_reply_ctx_s *rp)
 	if (reqid)
 		oio_ext_set_reqid(reqid);
 	else
-		oio_ext_set_random_reqid();
+		oio_ext_set_prefixed_random_reqid("rdir-");
 
 	/* parse the URLL and forward to the backend if the route matches */
 	struct req_args_s args = {0};

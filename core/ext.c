@@ -251,6 +251,11 @@ const char *oio_ext_set_reqid(const char *reqid) {
 }
 
 const char *oio_ext_set_random_reqid(void) {
+#ifdef HAVE_EXTRA_DEBUG
+	GRID_DEBUG(
+			"%s is deprecated, please call oio_ext_set_prefixed_random_reqid",
+			__FUNCTION__);
+#endif
 	return oio_ext_set_prefixed_random_reqid(NULL);
 }
 

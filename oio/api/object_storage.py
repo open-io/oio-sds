@@ -30,7 +30,8 @@ from oio.common.utils import cid_from_name, GeneratorIO, monotonic_time, \
     depaginate, set_deadline_from_read_timeout
 from oio.common.easy_value import float_value, true_value
 from oio.common.logger import get_logger
-from oio.common.decorators import ensure_headers, ensure_request_id
+from oio.common.decorators import ensure_headers, ensure_request_id, \
+    ensure_request_id2
 from oio.common.storage_method import STORAGE_METHODS
 from oio.common.constants import OIO_VERSION, HEADER_PREFIX
 from oio.common.decorators import handle_account_not_found, \
@@ -653,7 +654,7 @@ class ObjectStorageApi(object):
     @handle_container_not_found
     @patch_kwargs
     @ensure_headers
-    @ensure_request_id
+    @ensure_request_id2(prefix="create-")
     def object_create_ext(self, account, container, file_or_path=None,
                           data=None, etag=None, obj_name=None, mime_type=None,
                           metadata=None, policy=None, key_file=None,
