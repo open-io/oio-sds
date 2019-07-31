@@ -526,11 +526,12 @@ sqlx_service_resolve_peers(struct sqlx_service_s *ss,
 
 	err = sqlx_name_extract(n, u, ss->service_config->srvtype, &seq);
 	if (!err) {
+		gchar **peers = NULL;
+
 label_retry:
 		if (nocache)
 			hc_decache_reference_service(ss->resolver, u, n->type);
 
-		gchar **peers = NULL;
 		err = hc_resolve_reference_service(ss->resolver, u, n->type, &peers,
 				oio_ext_get_deadline());
 		if (err == NULL) {
@@ -583,6 +584,7 @@ label_retry:
 	// Try to read peers from the upper-level service
 	if (!peers || !oio_str_is_set(*peers)) {
 		oio_str_cleanv(&peers);
+		if (err) g_clear_error(&err);
 		err = ss->service_config->get_peers(ss, name, nocache, &peers);
 	}
 
@@ -1206,11 +1208,10 @@ _task_expire_resolver(gpointer p)
 	if (!grid_main_is_running ())
 		return;
 
-	guint count_expire = hc_resolver_expire(PSRV(p)->resolver);
-	guint count_purge = hc_resolver_purge (PSRV(p)->resolver);
-	if (count_expire || count_purge) {
-		GRID_DEBUG ("Resolver: expired %u, purged %u",
-				count_expire, count_purge);
+	guint nb_expire = hc_resolver_expire(PSRV(p)->resolver);
+	guint nb_purge = hc_resolver_purge (PSRV(p)->resolver);
+	if (nb_expire || nb_purge) {
+		GRID_DEBUG("Resolver: expired %u, purged %u", nb_expire, nb_purge);
 	}
 }
 
