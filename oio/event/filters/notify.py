@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from urllib import unquote
 
 from oio.common.json import json
 from oio.event.evob import Event, EventError
@@ -22,8 +23,47 @@ from oio.event.filters.base import Filter
 
 class NotifyFilter(Filter):
 
+    @staticmethod
+    def _parse_exclude(array):
+        """
+        array is in this format ["urlencoded(account)",
+                                 "urlencoded(account2)/urlencoded(container2)"]
+        and we want to return this {account: [], account2: [container2]}
+        empty list means that everything is accepted
+        """
+        if isinstance(array, basestring):
+            array = array.split(',')
+        exclude = dict()
+        for a in array:
+            if '/' in a:
+                acct, cnt = a.split('/', 1)
+                acct = unquote(acct)
+                cnt = unquote(cnt)
+                if exclude.get(acct, None):
+                    exclude[acct].append(cnt)
+                else:
+                    exclude[acct] = [cnt]
+            else:
+                exclude[unquote(a)] = []
+        return exclude
+
+    def _should_replicate(self, account, container):
+        if self.exclude is None:
+            return True
+        containers = self.exclude.get(account, None)
+        if containers == []:
+            return False
+        elif containers is None:
+            return True
+        elif container in containers:
+            return False
+        else:
+            return True
+
     def init(self):
         queue_url = self.conf.get('queue_url')
+        self.exclude = self._parse_exclude(
+            self.conf.get('exclude', []))
         if not queue_url:
             raise ValueError("Missing 'queue_url' in the configuration")
         self.beanstalk = Beanstalk.from_url(queue_url)
@@ -31,13 +71,17 @@ class NotifyFilter(Filter):
         self.beanstalk.use(self.tube)
 
     def process(self, env, cb):
-        data = json.dumps(env)
-        try:
-            self.beanstalk.put(data)
-        except BeanstalkError as e:
-            msg = 'notify failure: %s' % str(e)
-            resp = EventError(event=Event(env), body=msg)
-            return resp(env, cb)
+        event = Event(env)
+        if self._should_replicate(event.url.get('account'),
+                                  event.url.get('user')):
+            try:
+                data = json.dumps(env)
+                self.beanstalk.put(data)
+            except BeanstalkError as e:
+                msg = 'notify failure: %s' % str(e)
+                resp = EventError(event=Event(env), body=msg)
+                return resp(env, cb)
+
         return self.app(env, cb)
 
 
