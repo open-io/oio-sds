@@ -17,12 +17,13 @@
 
 import time
 import subprocess
+from urllib import quote
 from random import choice
 from oio.api.object_storage import ObjectStorageApi
 from oio.container.client import ContainerClient
 from oio.event.beanstalk import Beanstalk
 from oio.event.filters.notify import NotifyFilter
-from tests.utils import BaseTestCase, random_str
+from tests.utils import BaseTestCase, random_str, strange_paths
 from oio.rebuilder.blob_rebuilder import DEFAULT_REBUILDER_TUBE
 
 
@@ -365,3 +366,53 @@ class TestContentRebuildFilter(BaseTestCase):
         missing_pos = ["0.1", "0.2", "0.3", "0.4"]
         self._check_rebuild(content_name, chunks, missing_pos, meta,
                             chunks_to_remove, chunk_created=False)
+
+
+class TestNotifyFilter(BaseTestCase):
+
+    def setUp(self):
+        super(TestNotifyFilter, self).setUp()
+        queue_addr = choice(self.conf['services']['beanstalkd'])['addr']
+        self.queue_url = queue_addr
+        self.conf['queue_url'] = 'beanstalk://' + self.queue_url
+        self.conf['tube'] = 'oio-repli'
+        self.conf['exclude'] = []
+        self.notify_filter = NotifyFilter(app=_App, conf=self.conf)
+
+    def tearDown(self):
+        super(TestNotifyFilter, self).tearDown()
+
+    def test_parsing(self):
+        expected = {
+            'account': [],
+            'account2': ['container'],
+            'account3': ['container1', 'container2'],
+        }
+        actual = self.notify_filter._parse_exclude(
+            "account,"
+            "account2/container,"
+            "account3/container1,account3/container2")
+        self.assertDictEqual(expected, actual)
+
+    def test_filtering(self):
+        # Simple test
+        self.notify_filter.exclude = \
+            self.notify_filter._parse_exclude(
+                [quote('account'), 'account2/container'])
+        self.assertFalse(self.notify_filter._should_replicate(
+            'account', random_str(16)))
+        self.assertFalse(self.notify_filter._should_replicate(
+            'account2', 'container'))
+
+        # account that should not be replicated
+        strange_account = [quote(x, '') for x in strange_paths]
+        self.notify_filter.exclude = \
+            self.notify_filter._parse_exclude(strange_account)
+        for x in strange_paths:
+            print x
+            self.assertFalse(self.notify_filter._should_replicate(
+                x, random_str(16)))
+
+        # random account should be replicated
+        self.assertTrue(self.notify_filter._should_replicate(random_str(16),
+                                                             random_str(16)))
