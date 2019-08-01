@@ -2012,16 +2012,21 @@ _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
 	struct election_member_s *member = NULL;
 	gchar key[OIO_ELECTION_KEY_LIMIT_LENGTH];
 	gchar **peers = NULL;
+	gboolean peers_present = FALSE;
 
 	sqliterepo_hash_name(n, key, sizeof(key));
 
 	_manager_lock(m);
 	member = _LOCKED_get_member(m, key);
+	if (member != NULL) {
+		peers_present = member->peers != NULL && member->peers[0] != NULL;
+		member_unref(member);
+		member = NULL;
+	}
 	_manager_unlock(m);
 
-	if (op != ELOP_EXIT && !member) {
+	if (op != ELOP_EXIT && !peers_present) {
 		/* Out of the critical section */
-		gboolean peers_present = FALSE;
 		GError *err = election_get_peers(m, n, FALSE, &peers);
 		if (err != NULL) {
 			g_prefix_error(&err, "Election error: ");
@@ -2044,8 +2049,6 @@ _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
 	}
 
 	_manager_lock(m);
-	if (member)
-		member_unref(member);
 	member = _LOCKED_init_member(m, n, key, op != ELOP_EXIT, &peers);
 	switch (op) {
 		case ELOP_NONE:
