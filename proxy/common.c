@@ -249,7 +249,9 @@ error_clue_for_decache(GError *err)
 static gboolean
 context_clue_for_decache(struct client_ctx_s *ctx)
 {
-	for (guint i=0; i<ctx->count ;++i) {
+	if (!ctx->errorv)
+		return FALSE;
+	for (guint i=0; i < ctx->count; ++i) {
 		if (error_clue_for_decache(ctx->errorv[i]))
 			return TRUE;
 	}
