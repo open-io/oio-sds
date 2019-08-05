@@ -2305,7 +2305,9 @@ _result_GETVERS (GError *enet, struct election_member_s *m,
 	} else if (err->code == CODE_CONCURRENT) {
 		transition(m, EVT_GETVERS_RACE, &reqid);
 	} else {
-		if (err->code == CODE_CONTAINER_NOTFOUND) {
+		if (err->code == CODE_CONTAINER_NOTFOUND
+				|| err->code == CODE_RANGE_NOTFOUND
+				|| err->code == CODE_USER_NOTFOUND) {
 			// We may have asked the wrong peer
 			m->requested_peers_decache = 1;
 		}
