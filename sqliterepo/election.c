@@ -2382,7 +2382,9 @@ member_action_to_PEERING(struct election_member_s *member)
 		gchar **peers = member->peers;
 		member->peers = NULL;
 		member_set_status(member, STEP_PEERING);
-		return _member_react_PEERING(member, EVT_GETPEERS_DONE, peers);
+		_member_react_PEERING(member, EVT_GETPEERS_DONE, peers);
+		g_strfreev(peers);
+		return;
 	} else {
 		struct election_manager_s *M = MMANAGER(member);
 		member_ref(member);
