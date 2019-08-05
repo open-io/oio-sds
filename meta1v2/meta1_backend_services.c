@@ -552,7 +552,7 @@ __get_services_up(struct meta1_backend_s *m1, struct meta1_service_url_s **src)
 		// of unitary URLs. Each unitary URL is checked as is.
 		extracted = expand_url(*src);
 		for (pe = extracted; !one_is_up && *pe; pe++) {
-			struct compound_type_s ct;
+			struct compound_type_s ct = {};
 			if ((err = compound_type_parse(&ct, (*pe)->srvtype))) {
 				GRID_WARN("Failed to parse service type: %s", err->message);
 				g_clear_error(&err);
@@ -684,7 +684,7 @@ __get_container_service(struct sqlx_sqlite3_s *sq3,
 		gchar ***result, gboolean *renewed)
 {
 	GError *err = NULL;
-	struct compound_type_s ct;
+	struct compound_type_s ct = {};
 
 	if (NULL != (err = compound_type_parse(&ct, srvtype)))
 		return err;
@@ -1156,7 +1156,7 @@ meta1_backend_services_relink(struct meta1_backend_s *m1,
 
 	struct meta1_service_url_s **ukept = NULL, **urepl = NULL;
 	/* fields to be prefetched */
-	struct compound_type_s ct = {0};
+	struct compound_type_s ct = {};
 
 	ukept = __parse_and_expand (kept);
 	urepl = __parse_and_expand (replaced);

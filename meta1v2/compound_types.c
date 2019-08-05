@@ -33,41 +33,32 @@ compound_type_clean(struct compound_type_s *ct)
 }
 
 static void
-_parse_type(struct compound_type_s *ct, gchar *s)
-{
-	gchar **tokens = g_strsplit(s, ".", 2);
-	g_strlcpy(ct->type, s, sizeof(ct->type));
-	g_free(tokens);
-}
-
-static void
 _parse_args(struct compound_type_s *ct, gchar *s)
 {
 	if (!s)
 		return;
-
 	gchar **tokens = g_strsplit(s, "=", 2);
 	ct->req.k = tokens[0];
 	ct->req.v = tokens[1];
 	g_free(tokens);
-	g_free(s);
 }
 
 GError*
 compound_type_parse(struct compound_type_s *ct, const gchar *srvtype)
 {
 	EXTRA_ASSERT(ct != NULL);
-	memset(ct, 0, sizeof(struct compound_type_s));
+	EXTRA_ASSERT(ct->fulltype == NULL);
+	EXTRA_ASSERT(ct->type[0] == 0);
 
 	if (!srvtype || !*srvtype || *srvtype == '.' || *srvtype == ';')
-		return NEWERROR(CODE_BAD_REQUEST, "Bad service type [%s]", srvtype);
+		return BADREQ("Bad service type [%s]", srvtype);
 
 	ct->fulltype = srvtype;
 
 	gchar **tokens = g_strsplit(srvtype, ";", 2);
-	_parse_type(ct, tokens[0]);
+	g_strlcpy(ct->type, tokens[0], sizeof(ct->type));
 	_parse_args(ct, tokens[1]);
-	g_free(tokens);
+	g_strfreev(tokens);
 
 	GRID_TRACE("CT full[%s] type[%s] args[%s|%s]",
 			ct->fulltype, ct->type, ct->req.k, ct->req.v);
