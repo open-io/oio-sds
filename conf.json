@@ -797,7 +797,7 @@
 			{ "type": "monotonic", "name": "ttl_expire_master_services",
 				"key": "proxy.ttl.services.master",
 				"descr": "In a proxy, sets the TTL on each 'known master' entry. That cache is filled each time a redirection to a MASTER occurs, so that we can immediately direct write operation to the service that owns the MASTER copy.",
-				"def": "5s", "min": 0, "max": "7d" },
+				"def": "30m", "min": 0, "max": "7d" },
 
 			{ "type": "epoch", "name": "lb_downstream_delay",
 				"key": "proxy.period.cs.downstream",
