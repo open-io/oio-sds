@@ -2032,21 +2032,13 @@ _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
 			g_prefix_error(&err, "Election error: ");
 			return err;
 		}
-		if (peers)
-			peers_present = oio_str_is_set(*peers);
-
-		if (!peers_present) {
-			GRID_DEBUG("No peer for [%s][%s]", n->base, n->type);
-			if (peers) {
-				g_strfreev(peers);
-				peers = NULL;
-			}
-			return NULL;
-		} else {
-			if (replicated)
-				*replicated = TRUE;
+		if (peers) {
+			if (!(peers_present = oio_str_is_set(*peers)))
+				oio_str_cleanv(&peers);
 		}
 	}
+	if (peers_present && replicated)
+		*replicated = TRUE;
 
 	_manager_lock(m);
 	member = _LOCKED_init_member(m, n, key, op != ELOP_EXIT, &peers);
@@ -2074,10 +2066,7 @@ _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
 	}
 	_manager_unlock(m);
 
-	if (peers) {
-		g_strfreev(peers);
-		peers = NULL;
-	}
+	g_strfreev(peers);
 	return NULL;
 }
 
