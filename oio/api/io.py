@@ -616,16 +616,16 @@ class MetachunkWriter(object):
         :raises `exc.SourceReadTimeout`: if there is a timeout while reading
             data from the client
         :raises `exc.OioTimeout`: if there is a timeout among the errors
-        :raises `exc.OioException`: if quorum has not been reached
+        :raises `exc.ServiceBusy`: if quorum has not been reached
             for any other reason
         """
         if len(successes) < self.quorum:
             errors = group_chunk_errors(
                 ((chunk["url"], chunk.get("error", "success"))
                  for chunk in successes + failures))
-            new_exc = exc.OioException(
-                "RAWX write failure, quorum not reached (%d/%d): %s" %
-                (len(successes), self.quorum, errors))
+            new_exc = exc.ServiceBusy(
+                message=("RAWX write failure, quorum not reached (%d/%d): %s" %
+                         (len(successes), self.quorum, errors)))
             for err in [x.get('error') for x in failures]:
                 if isinstance(err, exc.SourceReadError):
                     raise exc.SourceReadError(new_exc)
