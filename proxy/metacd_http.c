@@ -275,7 +275,6 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 		if (!_metacd_load_url (&args, url)) {
 			rc = _reply_format_error(&args, BADREQ("Invalid oio url"));
 		} else {
-			rp->subject(oio_url_get(url, OIOURL_HEXID));
 			gq_count = (*matchings)->last->gq_count;
 			gq_time = (*matchings)->last->gq_time;
 

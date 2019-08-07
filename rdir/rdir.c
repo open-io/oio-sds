@@ -1125,7 +1125,7 @@ _route_vol_push(struct req_args_s *args, struct json_object *jbody,
 
 	GString *key = _record_to_key(&rec);
 	GString *value = g_string_sized_new(1024);
-	args->rp->subject(key->str);
+	args->rp->access_tail("k=%s", key->str);
 	_record_encode(&rec, value);
 
 	/* Eventually push the record in the database */
@@ -2106,7 +2106,7 @@ _route_meta2_push(struct req_args_s *args, struct json_object *jbody,
 		return _reply_format_error(args->rp, err);
 	}
 	GString *value = g_string_sized_new(1024);
-	args->rp->subject(key->str);
+	args->rp->access_tail("k=%s", key->str);
 	_meta2_record_encode(&rec, value);
 
 
@@ -2177,7 +2177,7 @@ _route_meta2_delete(struct req_args_s *args, struct json_object *jbody,
 		return _reply_format_error(args->rp, err);
 	}
 
-	args->rp->subject(key->str);
+	args->rp->access_tail("k=%s", key->str);
 
 	/* Eventually delete the record from the database */
 	err = _meta2_db_delete(meta2_address, key);
