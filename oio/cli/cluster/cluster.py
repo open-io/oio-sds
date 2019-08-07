@@ -296,7 +296,7 @@ class ClusterWait(lister.Lister):
                     if srv['score'] < min_score:
                         self.log.warn(
                             "%s %s %s",
-                            srv['type'], srv['id'], srv['score'])
+                            srv['type'], srv.get('id', None), srv['score'])
                 raise Exception(msg)
 
         def generator(*tab):
