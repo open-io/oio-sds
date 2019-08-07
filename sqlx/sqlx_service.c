@@ -112,13 +112,6 @@ static struct grid_main_option_s common_options[] =
 	{"Replicate", OT_BOOL, {.b = &SRV.flag_replicable},
 		"DO NOT USE THIS. This might disable the replication"},
 
-	{"Sqlx.Sync.Repli", OT_UINT, {.u = &SRV.sync_mode_repli},
-		"SYNC mode to be applied on replicated bases after open "
-			"(0=NONE,1=NORMAL,2=FULL)"},
-	{"Sqlx.Sync.Solo", OT_UINT, {.u = &SRV.sync_mode_solo},
-		"SYNC mode to be applied on non-replicated bases after open "
-			"(0=NONE,1=NORMAL,2=FULL)"},
-
 	{"CacheEnabled", OT_BOOL, {.b = &SRV.flag_cached_bases},
 		"If set, each base will be cached in a way it won't be accessed"
 			" by several requests in the same time."},
@@ -158,14 +151,6 @@ static gboolean
 _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 {
 	// Sanity checks
-	if (ss->sync_mode_solo > SQLX_SYNC_FULL) {
-		GRID_WARN("Invalid SYNC mode for not-replicated bases");
-		return FALSE;
-	}
-	if (ss->sync_mode_repli > SQLX_SYNC_FULL) {
-		GRID_WARN("Invalid SYNC mode for replicated bases");
-		return FALSE;
-	}
 	if (!ss->url) {
 		GRID_WARN("No URL!");
 		return FALSE;
@@ -649,8 +634,6 @@ _configure_backend(struct sqlx_service_s *ss)
 	repository_config.flags = 0;
 	repository_config.flags |= ss->flag_delete_on ? SQLX_REPO_DELETEON : 0;
 	repository_config.flags |= ss->flag_cached_bases ? 0 : SQLX_REPO_NOCACHE;
-	repository_config.sync_solo = ss->sync_mode_solo;
-	repository_config.sync_repli = ss->sync_mode_repli;
 
 	GError *err = sqlx_repository_init(ss->volume, &repository_config,
 			&ss->repository);
@@ -879,8 +862,6 @@ sqlx_service_set_defaults(void)
 	SRV.flag_delete_on = TRUE;
 	SRV.flag_cached_bases = TRUE;
 
-	SRV.sync_mode_solo = SQLX_SYNC_NORMAL;
-	SRV.sync_mode_repli = SQLX_SYNC_OFF;
 	SRV.service_id = NULL;
 
 	if (SRV.service_config->set_defaults)
