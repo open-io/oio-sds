@@ -98,13 +98,20 @@ def get_logger(
     facility = getattr(SysLogHandler, conf.get('log_facility', 'LOG_LOCAL0'),
                        SysLogHandler.LOG_LOCAL0)
 
-    log_address = conf.get('log_address', '/dev/log')
-    try:
-        handler = SysLogHandler(address=log_address, facility=facility)
-    except socket.error as exc:
-        if exc.errno not in [errno.ENOTSOCK, errno.ENOENT]:
-            raise exc
-        handler = SysLogHandler(facility=facility)
+    udp_host = conf.get('log_udp_host')
+    if udp_host:
+        udp_port = int(conf.get('log_udp_port',
+                                logging.handlers.SYSLOG_UDP_PORT))
+        handler = SysLogHandler(address=(udp_host, udp_port),
+                                facility=facility)
+    else:
+        log_address = conf.get('log_address', '/dev/log')
+        try:
+            handler = SysLogHandler(address=log_address, facility=facility)
+        except socket.error as exc:
+            if exc.errno not in [errno.ENOTSOCK, errno.ENOENT]:
+                raise exc
+            handler = SysLogHandler(facility=facility)
 
     handler.setFormatter(syslog_formatter)
     logger.addHandler(handler)
