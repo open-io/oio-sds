@@ -41,8 +41,6 @@ struct req_ctx_s
 	struct transport_client_context_s *context;
 	struct http_request_s *request;
 
-	gchar *uid;
-
 	gboolean close_after_request;
 	gboolean access_disabled;
 };
@@ -361,10 +359,8 @@ _access_log(struct req_ctx_s *r, gint status, gsize out_len, const gchar *tail)
 	g_string_append(gstr, ensure(r->client->peer_name));
 	g_string_append_c(gstr, ' ');
 	g_string_append(gstr, ensure(r->request->cmd));
-	g_string_append_printf(gstr, " %d %"G_GINT64_FORMAT" %"G_GSIZE_FORMAT" ",
+	g_string_append_printf(gstr, " %d %"G_GINT64_FORMAT" %"G_GSIZE_FORMAT" - ",
 			status, diff_total, out_len);
-	g_string_append(gstr, ensure(r->uid));
-	g_string_append_c(gstr, ' ');
 	g_string_append(gstr, ensure(reqid));
 
 	/* arbitrary */
@@ -390,10 +386,6 @@ http_manage_request(struct req_ctx_s *r)
 	const gchar *content_type = "octet/stream";
 
 	GBytes *body = NULL;
-
-	void subject (const char *id) {
-		oio_str_replace (&r->uid, id);
-	}
 
 	void cleanup(void) {
 		oio_str_clean (&msg);
@@ -523,7 +515,6 @@ http_manage_request(struct req_ctx_s *r)
 		.add_header_gstr = add_header_gstr,
 		.set_body_bytes = set_body_bytes,
 		.set_body_gstr = set_body_gstr,
-		.subject = subject,
 		.finalize = finalize,
 		.access_tail = access_tail,
 		.no_access = no_access,
@@ -612,8 +603,6 @@ http_notify_input(struct network_client_s *clt)
 			continue;
 		}
 
-		oio_str_clean(&r.uid);
-
 		struct http_parsing_result_s rc = http_parse(parser, data, data_size);
 
 		if (rc.status == HPRC_SUCCESS) {
@@ -658,6 +647,5 @@ http_notify_input(struct network_client_s *clt)
 	parser->command_provider = NULL;
 	parser->body_provider = NULL;
 	parser->header_provider = NULL;
-	oio_str_clean (&r.uid);
 	return clt->transport.waiting_for_close ? RC_NODATA : RC_PROCESSED;
 }
