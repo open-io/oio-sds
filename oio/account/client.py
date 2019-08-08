@@ -17,8 +17,11 @@ import json
 import sys
 import time
 from oio.api.base import HttpApi
-from oio.common.logger import get_logger
+from oio.common.constants import TIMEOUT_KEYS
+from oio.common.decorators import patch_kwargs
+from oio.common.easy_value import float_value
 from oio.common.exceptions import OioException, OioNetworkException
+from oio.common.logger import get_logger
 from oio.conscience.client import ConscienceClient
 
 
@@ -43,6 +46,11 @@ class AccountClient(HttpApi):
         self.logger = logger or get_logger(conf)
         self.cs = ConscienceClient(conf, endpoint=proxy_endpoint,
                                    logger=self.logger, **kwargs)
+
+        self._global_kwargs = {tok: float_value(tov, None)
+                               for tok, tov in kwargs.items()
+                               if tok in TIMEOUT_KEYS}
+
         self._refresh_delay = refresh_delay if not self.endpoint else -1.0
         self._last_refresh = 0.0
 
@@ -79,6 +87,11 @@ class AccountClient(HttpApi):
                         raise
                     self.logger.exception("Failed to refresh account endpoint")
 
+    # Since all operations implemented in this class (as of 2019-08-08) result
+    # in only one request to the account service, we can patch the keyword
+    # arguments here. If this is changed, put the decorator on each public
+    # method of this class.
+    @patch_kwargs
     def account_request(self, account, method, action, params=None, **kwargs):
         """Make a request to the account service."""
         self._maybe_refresh_endpoint(**kwargs)
