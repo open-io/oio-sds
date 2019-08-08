@@ -45,15 +45,15 @@ static GTree* urlv_to_tree(const guint8 *prefix, gchar **urlv) {
 
 static GError * extract_prefix(MESSAGE msg, const gchar *n, gboolean mandatory,
 		guint8 *prefix) {
-	gsize f_size;
+	gsize f_size = 0;
 	void *f = metautils_message_get_field(msg, n, &f_size);
 	if (!f) {
 		if (mandatory)
-			return NEWERROR(CODE_BAD_REQUEST, "Missing field '%s'", n);
+			return BADREQ("Missing field '%s'", n);
 		return NULL;
 	}
 	if (f_size != 2)
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid field size '%s'", n);
+		return BADREQ("Invalid field size '%s'", n);
 
 	prefix[0] = ((guint8*)f)[0];
 	prefix[1] = ((guint8*)f)[1];
@@ -203,17 +203,18 @@ meta0_dispatch_v1_FORCE(struct gridd_reply_ctx_s *reply,
 	}
 
 	if (!mapping || !*mapping) {
-		err = NEWERROR(CODE_BAD_REQUEST, "Empty mapping provided");
+		err = BADREQ("Empty mapping provided");
 	} else {
 		err = meta0_backend_fill_from_json(m0disp->m0, mapping);
 	}
 
 	g_free(mapping);
 
-	if (!err)
+	if (!err) {
 		reply->send_reply(CODE_FINAL_OK, "OK");
-	else
+	} else {
 		reply->send_error(0, err);
+	}
 
 	return TRUE;
 }
