@@ -349,9 +349,6 @@ sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
 				(sqlx_cache_close_hook)__close_base);
 	}
 
-	repo->sync_mode_solo = cfg->sync_solo;
-	repo->sync_mode_repli = cfg->sync_repli;
-
 	repo->locator = _default_locator;
 	repo->locator_data = NULL;
 
@@ -630,10 +627,10 @@ struct open_args_s
 	gchar *realpath;
 	gint64 deadline;
 
-	gboolean create : 1;
-	gboolean no_refcheck : 1;
-	gboolean urgent : 1;
-	gboolean is_replicated : 1;
+	guint8 create;
+	guint8 no_refcheck;
+	guint8 urgent;
+	guint8 is_replicated;
 };
 
 static GError*
@@ -691,21 +688,6 @@ _open_clean_args(struct open_args_s *args)
 		g_free(args->realname);
 	if (args->realpath)
 		g_free(args->realpath);
-}
-
-static const gchar *
-_get_pragma_sync(register const int mode)
-{
-	switch (mode) {
-		case SQLX_SYNC_OFF:
-			return "PRAGMA synchronous = OFF";
-		case SQLX_SYNC_NORMAL:
-			return "PRAGMA synchronous = NORMAL";
-		case SQLX_SYNC_FULL:
-			return "PRAGMA synchronous = FULL";
-		default:
-			return "PRAGMA synchronous = NORMAL";
-	}
 }
 
 /* XXX this should not be called during a transaction */
@@ -804,6 +786,7 @@ __open_not_cached(struct open_args_s *args, struct sqlx_sqlite3_s **result)
 	sq3->admin = g_tree_new_full(metautils_strcmp3, NULL, g_free, g_free);
 
 	sqlx_exec(handle, "PRAGMA foreign_keys = OFF");
+	sqlx_exec(handle, "PRAGMA synchronous = OFF");
 
 	/* We chose to check this call especially because it is able to detect
 	 * a wrong/corrupted database file. */
@@ -843,13 +826,6 @@ __open_not_cached(struct open_args_s *args, struct sqlx_sqlite3_s **result)
 	sqlx_admin_set_str (sq3, SQLX_ADMIN_BASETYPE, sq3->name.type);
 	sqlx_admin_save_lazy (sq3);
 	sqlx_exec (handle, "COMMIT");
-
-	/* Lazy DB config */
-	if (args->is_replicated) {
-		sqlx_exec(handle, _get_pragma_sync(args->repo->sync_mode_repli));
-	} else {
-		sqlx_exec(handle, _get_pragma_sync(args->repo->sync_mode_solo));
-	}
 
 	*result = sq3;
 	return NULL;
@@ -926,7 +902,6 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 		election_manager_configured(args->repo->election_manager);
 
 	if (election_configured && !args->no_refcheck) {
-
 		gboolean replicated = FALSE;
 		enum election_step_e step = STEP_NONE;
 		err = election_init(args->repo->election_manager, &args->name, &step, &replicated);
@@ -942,11 +917,10 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 				}
 			}
 		}
+		args->is_replicated = BOOL(replicated);
 
 		if (!err && args->is_replicated)
 			err = election_start(args->repo->election_manager, &args->name);
-
-		args->is_replicated = BOOL(replicated);
 	}
 
 	/* Now manage the replication status */
@@ -1300,9 +1274,8 @@ sqlx_repository_status_base(sqlx_repository_t *repo,
 
 	/* Wait for a final status */
 	gchar *url = NULL;
-	enum election_status_e status;
-
-	status = election_get_status(repo->election_manager, n, &url, deadline);
+	enum election_status_e status =
+		election_get_status(repo->election_manager, n, &url, deadline);
 	switch (status) {
 		case ELECTION_LOST:
 			err = NEWERROR(CODE_REDIRECT, "%s", url);
@@ -1856,7 +1829,7 @@ sqlx_repository_get_peers2(sqlx_repository_t *repo,
 		*result = NULL;
 	} else {
 		gchar *tmp = sqlx_admin_get_str(sq3, SQLX_ADMIN_PEERS);
-		sqlx_repository_unlock_and_close_noerror2(sq3, SQLX_CLOSE_IMMEDIATELY);
+		sqlx_repository_unlock_and_close_noerror2(sq3, 0);
 		if (tmp) {
 			*result = g_strsplit(tmp, ",", -1);
 			g_free(tmp);

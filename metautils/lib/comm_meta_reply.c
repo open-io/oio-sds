@@ -33,11 +33,6 @@ metaXServer_reply_simple(MESSAGE request, gint code, const gchar *message)
 	EXTRA_ASSERT (request != NULL);
 	MESSAGE reply = metautils_message_create_named(NAME_MSGNAME_METAREPLY, 0);
 
-	gsize mIDSize = 0;
-	void *mID = metautils_message_get_ID (request, &mIDSize);
-	if (mID && mIDSize)
-		metautils_message_set_ID (reply, mID, mIDSize);
-
 	if (CODE_IS_NETWORK_ERROR(code))
 		code = CODE_PROXY_ERROR;
 	metautils_message_add_field_strint(reply, NAME_MSGKEY_STATUS, code);

@@ -87,7 +87,7 @@ class TestReplication(unittest.TestCase):
         with set_http_connect(*resps):
             handler = ReplicatedMetachunkWriter(
                 self.sysmeta, meta_chunk, checksum, self.storage_method)
-            self.assertRaises(exc.OioException, handler.stream, source, size)
+            self.assertRaises(exc.ServiceBusy, handler.stream, source, size)
 
     def test_write_quorum_success(self):
         checksum = self.checksum()
@@ -126,7 +126,7 @@ class TestReplication(unittest.TestCase):
         with set_http_connect(*resps):
             handler = ReplicatedMetachunkWriter(
                 self.sysmeta, meta_chunk, checksum, self.storage_method)
-            self.assertRaises(exc.OioException, handler.stream, source, size)
+            self.assertRaises(exc.ServiceBusy, handler.stream, source, size)
 
     def test_write_timeout(self):
         checksum = self.checksum()

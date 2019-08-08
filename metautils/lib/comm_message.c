@@ -55,24 +55,38 @@ __getParameter(MESSAGE m, enum message_param_e mp)
 }
 
 MESSAGE
-metautils_message_create_named (const char *name, gint64 deadline)
+_create_named (const char *name, gint64 dl, gboolean with_id)
 {
 	EXTRA_ASSERT(name != NULL);
 
 	MESSAGE result = ASN1C_CALLOC(1, sizeof(Message_t));
 	metautils_message_set_NAME (result, name, strlen(name));
 
-	const char *id = oio_ext_get_reqid ();
-	if (id)
-		metautils_message_set_ID (result, id, strlen(id));
+	if (with_id) {
+		const char *id = oio_ext_get_reqid ();
+		if (id)
+			metautils_message_set_ID (result, id, strlen(id));
+	}
 
-	if (deadline > 0) {
+	if (dl > 0) {
 		const gint64 now = oio_ext_monotonic_time();
 		metautils_message_add_field_strint64(result, NAME_MSGKEY_TIMEOUT,
-				(now < deadline) ? (deadline - now) : 1);
+				(now < dl) ? (dl - now) : 1);
 	}
 
 	return result;
+}
+
+MESSAGE
+metautils_message_create_reply (const char *name)
+{
+	return _create_named(name, 0, FALSE);
+}
+
+MESSAGE
+metautils_message_create_named (const char *name, gint64 deadline)
+{
+	return _create_named(name, deadline, TRUE);
 }
 
 void

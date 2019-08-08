@@ -830,7 +830,7 @@ Used by `gcc`
 
 > In a proxy, upon a read request, should the proxy prefer a service known to host a SLAVE copy of the DB.
 
- * default: **FALSE**
+ * default: **TRUE**
  * type: gboolean
  * cmake directive: *OIO_PROXY_PREFER_SLAVE_FOR_READ*
 
@@ -906,7 +906,7 @@ Used by `gcc`
 
 > In a proxy, sets the TTL on each 'known master' entry. That cache is filled each time a redirection to a MASTER occurs, so that we can immediately direct write operation to the service that owns the MASTER copy.
 
- * default: **5 * G_TIME_SPAN_SECOND**
+ * default: **30 * G_TIME_SPAN_MINUTE**
  * type: gint64
  * cmake directive: *OIO_PROXY_TTL_SERVICES_MASTER*
  * range: 0 -> 7 * G_TIME_SPAN_DAY
