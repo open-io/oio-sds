@@ -33,20 +33,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "./meta1_gridd_dispatcher.h"
 #include "./internals.h"
 
-static void _strfreev (gchar ***pv) {
-	if (pv) {
-		g_strfreev(*pv);
-		*pv = NULL;
-	}
-}
-
-static GByteArray *encode_and_clean(GByteArray* (*e)(gchar**), gchar **pv) {
-	GByteArray *result = (*e)(pv);
-	g_strfreev(pv);
-	return result;
-}
-
-/* -------------------------------------------------------------------------- */
 
 static gboolean
 meta1_dispatch_v2_USERCREATE(struct gridd_reply_ctx_s *reply,
@@ -56,21 +42,20 @@ meta1_dispatch_v2_USERCREATE(struct gridd_reply_ctx_s *reply,
 
 	gsize length = 0;
 	void *body = metautils_message_get_BODY(reply->request, &length);
+
 	gchar **properties = NULL;
 	GError *err = KV_decode_buffer(body, length, &properties);
 	if (NULL != err) {
-		reply->send_error(0, err);
-		return TRUE;
+		reply->send_error(CODE_BAD_REQUEST, err);
+	} else {
+		err = meta1_backend_user_create(m1, url, properties);
+		if (NULL != err) {
+			reply->send_error(0, err);
+		} else {
+			reply->send_reply(CODE_FINAL_OK, "Created");
+		}
 	}
-
-	err = meta1_backend_user_create(m1, url, properties);
 	g_strfreev(properties);
-
-	if (NULL != err)
-		reply->send_error(0, err);
-	else
-		reply->send_reply(CODE_FINAL_OK, "Created");
-
 	return TRUE;
 }
 
@@ -82,10 +67,11 @@ meta1_dispatch_v2_USERDESTROY(struct gridd_reply_ctx_s *reply,
 	reply->subject("%s|%s|%d", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID), force);
 
 	GError *err = meta1_backend_user_destroy(m1, url, force);
-	if (NULL != err)
+	if (NULL != err) {
 		reply->send_error(0, err);
-	else
+	} else {
 		reply->send_reply(CODE_FINAL_OK, "OK");
+	}
 
 	return TRUE;
 }
@@ -99,13 +85,13 @@ meta1_dispatch_v2_USERINFO(struct gridd_reply_ctx_s *reply,
 	gchar **info = NULL;
 	GError *err = meta1_backend_user_info(m1, url, &info);
 	if (NULL != err) {
-		_strfreev(&info);
 		reply->send_error(0, err);
 	} else {
-		reply->add_body(encode_and_clean(STRV_encode_gba, info));
+		reply->add_body(STRV_encode_gba(info));
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
+	g_strfreev(info);
 	return TRUE;
 }
 
@@ -113,22 +99,22 @@ static gboolean
 meta1_dispatch_v2_SRV_LINK(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, struct oio_url_s *url)
 {
-	gchar *srvtype = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
+	gchar *srvtype = metautils_message_extract_string_copy(reply->request, NAME_MSGKEY_TYPENAME);
 	gboolean dryrun = metautils_message_extract_flag(reply->request, NAME_MSGKEY_DRYRUN, FALSE);
 	gboolean autocreate = metautils_message_extract_flag(reply->request, NAME_MSGKEY_AUTOCREATE, FALSE);
 	reply->subject("%s|%s|%s|%d", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID), srvtype, dryrun);
 
 	gchar **result = NULL;
-	GError *err = meta1_backend_services_link (m1, url, srvtype, dryrun, autocreate, &result);
+	GError *err = meta1_backend_services_link(m1, url, srvtype, dryrun, autocreate, &result);
 	if (NULL != err) {
-		_strfreev(&result);
 		reply->send_error(0, err);
 	} else {
-		reply->add_body(encode_and_clean(STRV_encode_gba, result));
+		reply->add_body(STRV_encode_gba(result));
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
-	g_free0 (srvtype);
+	g_strfreev(result);
+	g_free(srvtype);
 	return TRUE;
 }
 
@@ -138,20 +124,20 @@ meta1_dispatch_v2_SRV_RENEW(struct gridd_reply_ctx_s *reply,
 {
 	gboolean ac = metautils_message_extract_flag(reply->request, NAME_MSGKEY_AUTOCREATE, FALSE);
 	gboolean dryrun = metautils_message_extract_flag(reply->request, NAME_MSGKEY_DRYRUN, FALSE);
-	gchar *srvtype = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
+	gchar *srvtype = metautils_message_extract_string_copy(reply->request, NAME_MSGKEY_TYPENAME);
 	reply->subject("%s|%s|%s|%d", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID), srvtype, dryrun);
 
 	gchar **result = NULL;
 	GError *err = meta1_backend_services_poll(m1, url, srvtype, ac, dryrun, &result);
 	if (NULL != err) {
-		_strfreev(&result);
 		reply->send_error(0, err);
 	} else {
-		reply->add_body(encode_and_clean(STRV_encode_gba, result));
+		reply->add_body(STRV_encode_gba(result));
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
-	g_free0 (srvtype);
+	g_strfreev(result);
+	g_free(srvtype);
 	return TRUE;
 }
 
@@ -159,24 +145,25 @@ static gboolean
 meta1_dispatch_v2_SRV_FORCE(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, struct oio_url_s *url)
 {
-	gboolean ac = metautils_message_extract_flag (reply->request, NAME_MSGKEY_AUTOCREATE, FALSE);
-	gboolean force = metautils_message_extract_flag (reply->request, NAME_MSGKEY_FORCE, FALSE);
+	gboolean ac = metautils_message_extract_flag(reply->request, NAME_MSGKEY_AUTOCREATE, FALSE);
+	gboolean force = metautils_message_extract_flag(reply->request, NAME_MSGKEY_FORCE, FALSE);
 	reply->subject("%s|%s|?", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
 
 	gchar *m1url = NULL;
 	GError *err = metautils_message_extract_body_string(reply->request, &m1url);
-	if (NULL != err)
+	if (NULL != err) {
 		reply->send_error(CODE_BAD_REQUEST, err);
-	else {
+	} else {
 		reply->subject("%s|%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID), m1url);
 		err = meta1_backend_services_set(m1, url, m1url, ac, force);
-		g_free0 (m1url);
-		if (NULL != err)
+		if (NULL != err) {
 			reply->send_error(0, err);
-		else
-			reply->send_reply(200, "OK");
+		} else {
+			reply->send_reply(CODE_FINAL_OK, "OK");
+		}
 	}
 
+	g_free(m1url);
 	return TRUE;
 }
 
@@ -188,17 +175,18 @@ meta1_dispatch_v2_SRV_CONFIG(struct gridd_reply_ctx_s *reply,
 
 	gchar *m1url = NULL;
 	GError *err = metautils_message_extract_body_string(reply->request, &m1url);
-	if (NULL != err)
+	if (NULL != err) {
 		reply->send_error(CODE_BAD_REQUEST, err);
-	else {
+	} else {
 		err = meta1_backend_services_config(m1, url, m1url);
-		g_free0 (m1url);
-		if (NULL != err)
+		if (NULL != err) {
 			reply->send_error(0, err);
-		else
+		} else {
 			reply->send_reply(CODE_FINAL_OK, "OK");
+		}
 	}
 
+	g_free(m1url);
 	return TRUE;
 }
 
@@ -206,29 +194,30 @@ static gboolean
 meta1_dispatch_v2_SRV_UNLINK(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, struct oio_url_s *url)
 {
-	gchar *srvtype = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
+	gchar **urlv = NULL;
+	gchar *srvtype = metautils_message_extract_string_copy(reply->request, NAME_MSGKEY_TYPENAME);
 	reply->subject("%s|%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID), srvtype);
 
-	if (!srvtype)
-		reply->send_error(CODE_BAD_REQUEST, NEWERROR(CODE_BAD_REQUEST, "Missing srvtype"));
-	else {
+	if (!srvtype) {
+		reply->send_error(0, BADREQ("Missing srvtype"));
+	} else {
 		gsize length = 0;
 		void *body = metautils_message_get_BODY(reply->request, &length);
-		gchar **urlv = NULL;
 		GError *err = STRV_decode_buffer(body, length, &urlv);
-		if (NULL != err)
+		if (NULL != err) {
 			reply->send_error(CODE_BAD_REQUEST, err);
-		else {
+		} else {
 			err = meta1_backend_services_unlink(m1, url, srvtype, urlv);
-			if (NULL != err)
+			if (NULL != err) {
 				reply->send_error(0, err);
-			else
+			} else {
 				reply->send_reply(CODE_FINAL_OK, "OK");
-			g_strfreev (urlv);
+			}
 		}
 	}
 
-	g_free0 (srvtype);
+	g_strfreev(urlv);
+	g_free(srvtype);
 	return TRUE;
 }
 
@@ -236,25 +225,22 @@ static gboolean
 meta1_dispatch_v2_SRV_LIST(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, struct oio_url_s *url)
 {
-	gchar *srvtype = metautils_message_extract_string_copy(
-			reply->request, NAME_MSGKEY_TYPENAME);
-	gboolean extended = metautils_message_extract_flag(
-			reply->request, NAME_MSGKEY_EXTEND, FALSE);
-	reply->subject("%s|%s|%s", oio_url_get(url, OIOURL_WHOLE),
-			oio_url_get(url, OIOURL_HEXID), srvtype);
-	STRING_STACKIFY(srvtype);
+	gchar *srvtype = metautils_message_extract_string_copy(reply->request, NAME_MSGKEY_TYPENAME);
+	gboolean extended = metautils_message_extract_flag(reply->request, NAME_MSGKEY_EXTEND, FALSE);
+	reply->subject("%s|%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID), srvtype);
 
 	gchar **result = NULL;
 	GError *err = meta1_backend_services_list(
 			m1, url, srvtype, &result, oio_ext_get_deadline(), extended);
 	if (NULL != err) {
-		_strfreev(&result);
 		reply->send_error(0, err);
 	} else {
-		reply->add_body(encode_and_clean(STRV_encode_gba, result));
+		reply->add_body(STRV_encode_gba(result));
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
+	g_strfreev(result);
+	g_free(srvtype);
 	return TRUE;
 }
 
@@ -268,13 +254,13 @@ meta1_dispatch_v2_SRV_ALLONM1(struct gridd_reply_ctx_s *reply,
 	gchar **result = NULL;
 	GError *err = meta1_backend_services_all(m1, url, &result);
 	if (NULL != err) {
-		_strfreev(&result);
 		reply->send_error(0, err);
 	} else {
-		reply->add_body(encode_and_clean(STRV_encode_gba, result));
+		reply->add_body(STRV_encode_gba(result));
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
+	g_strfreev(result);
 	return TRUE;
 }
 
@@ -286,23 +272,24 @@ meta1_dispatch_v2_PROPGET(struct gridd_reply_ctx_s *reply,
 
 	gsize length = 0;
 	void *body = metautils_message_get_BODY(reply->request, &length);
+
+	gchar **result = NULL;
 	gchar **keys = NULL;
 	GError *err = STRV_decode_buffer(body, length, &keys);
-	if (NULL != err)
+	if (NULL != err) {
 		reply->send_error(CODE_BAD_REQUEST, err);
-	else {
-		gchar **result = NULL;
+	} else {
 		err = meta1_backend_get_container_properties(m1, url, keys, &result);
-		g_strfreev (keys);
 		if (NULL != err) {
-			_strfreev(&result);
 			reply->send_error(0, err);
 		} else {
-			reply->add_body(encode_and_clean(KV_encode_gba, result));
+			reply->add_body(KV_encode_gba(result));
 			reply->send_reply(CODE_FINAL_OK, "OK");
 		}
 	}
 
+	g_strfreev(keys);
+	g_strfreev(result);
 	return TRUE;
 }
 
@@ -315,19 +302,21 @@ meta1_dispatch_v2_PROPSET(struct gridd_reply_ctx_s *reply,
 
 	gsize length = 0;
 	void *body = metautils_message_get_BODY(reply->request, &length);
+
 	gchar **props = NULL;
 	GError *err = KV_decode_buffer(body, length, &props);
-	if (NULL != err)
+	if (NULL != err) {
 		reply->send_error(CODE_BAD_REQUEST, err);
-	else {
+	} else {
 		err = meta1_backend_set_container_properties(m1, url, props, flush);
-		g_strfreev (props);
-		if (NULL != err)
+		if (NULL != err) {
 			reply->send_error(0, err);
-		else
+		} else {
 			reply->send_reply(CODE_FINAL_OK, "OK");
+		}
 	}
 
+	g_strfreev(props);
 	return TRUE;
 }
 
@@ -342,17 +331,18 @@ meta1_dispatch_v2_PROPDEL(struct gridd_reply_ctx_s *reply,
 	void *body = metautils_message_get_BODY(reply->request, &length);
 	GError *err = STRV_decode_buffer(body, length, &keys);
 
-	if (NULL != err)
+	if (NULL != err) {
 		reply->send_error(CODE_BAD_REQUEST, err);
-	else {
+	} else {
 		err = meta1_backend_del_container_properties(m1, url, keys);
-		if (err)
+		if (err) {
 			reply->send_error(0, err);
-		else
+		} else {
 			reply->send_reply(CODE_FINAL_OK, "OK");
-		g_strfreev (keys);
+		}
 	}
 
+	g_strfreev(keys);
 	return TRUE;
 }
 
@@ -362,8 +352,9 @@ meta1_dispatch_v2_GET_PREFIX(struct gridd_reply_ctx_s *reply,
 {
 	gchar **result = meta1_prefixes_get_all(meta1_backend_get_prefixes(m1));
 	if (result)
-		reply->add_body(encode_and_clean(STRV_encode_gba, result));
+		reply->add_body(STRV_encode_gba(result));
 	reply->send_reply(CODE_FINAL_OK, "OK");
+	g_strfreev(result);
 	return TRUE;
 }
 
@@ -371,27 +362,27 @@ static gboolean
 meta1_dispatch_v2_SRVRELINK(struct gridd_reply_ctx_s *reply,
 	struct meta1_backend_s *m1, struct oio_url_s *url)
 {
-	gchar *kept = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_OLD);
-	gchar *replaced = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_NOTIN);
-	gboolean dryrun = metautils_message_extract_flag (reply->request, NAME_MSGKEY_DRYRUN, FALSE);
+	gchar **newset = NULL;
+	gchar *kept = metautils_message_extract_string_copy(reply->request, NAME_MSGKEY_OLD);
+	gchar *replaced = metautils_message_extract_string_copy(reply->request, NAME_MSGKEY_NOTIN);
+	gboolean dryrun = metautils_message_extract_flag(reply->request, NAME_MSGKEY_DRYRUN, FALSE);
 	reply->subject("%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
 
 	if (!url) {
-		reply->send_error (0, NEWERROR(CODE_BAD_REQUEST, "Missing field (%s)", "url"));
+		reply->send_error(0, BADREQ("Missing field (%s)", "url"));
 	} else {
-		gchar **newset = NULL;
-		GError *err = meta1_backend_services_relink (m1, url, kept, replaced, dryrun, &newset);
+		GError *err = meta1_backend_services_relink(m1, url, kept, replaced, dryrun, &newset);
 		if (NULL != err) {
-			_strfreev(&newset);
-			reply->send_error (0, err);
+			reply->send_error(0, err);
 		} else {
-			reply->add_body(encode_and_clean(STRV_encode_gba, newset));
-			reply->send_reply (CODE_FINAL_OK, "OK");
+			reply->add_body(STRV_encode_gba(newset));
+			reply->send_reply(CODE_FINAL_OK, "OK");
 		}
 	}
 
-	g_free0 (kept);
-	g_free0 (replaced);
+	g_free(kept);
+	g_free(replaced);
+	g_strfreev(newset);
 	return TRUE;
 }
 
