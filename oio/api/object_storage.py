@@ -16,7 +16,7 @@
 
 from __future__ import absolute_import
 from io import BytesIO
-from functools import wraps, partial
+from functools import partial
 import os
 import warnings
 import time
@@ -35,28 +35,12 @@ from oio.common.easy_value import float_value, true_value
 from oio.common.logger import get_logger
 from oio.common.decorators import ensure_headers, ensure_request_id
 from oio.common.storage_method import STORAGE_METHODS
-from oio.common.constants import OIO_VERSION, HEADER_PREFIX
+from oio.common.constants import OIO_VERSION, HEADER_PREFIX, TIMEOUT_KEYS
 from oio.common.decorators import handle_account_not_found, \
-    handle_container_not_found, handle_object_not_found
+    handle_container_not_found, handle_object_not_found, patch_kwargs
 from oio.common.storage_functions import _sort_chunks, fetch_stream, \
     fetch_stream_ec
 from oio.common.fullpath import encode_fullpath
-
-
-def patch_kwargs(fnc):
-    """
-    Patch keyword arguments with the ones passed to the class' constructor.
-    Compute a deadline if a timeout is provided and there is no deadline
-    already.
-    """
-    @wraps(fnc)
-    def _patch_kwargs(self, *args, **kwargs):
-        for argk, argv in self._global_kwargs.items():
-            if argk not in kwargs:
-                kwargs[argk] = argv
-        set_deadline_from_read_timeout(kwargs)
-        return fnc(self, *args, **kwargs)
-    return _patch_kwargs
 
 
 class ObjectStorageApi(object):
@@ -74,7 +58,6 @@ class ObjectStorageApi(object):
         - `read_timeout`: `float`
         - `write_timeout`: `float`
     """
-    TIMEOUT_KEYS = ('connection_timeout', 'read_timeout', 'write_timeout')
     EXTRA_KEYWORDS = ('chunk_checksum_algo', 'autocreate',
                       'chunk_buffer_min', 'chunk_buffer_max')
 
@@ -108,7 +91,7 @@ class ObjectStorageApi(object):
         self.perfdata = perfdata
         self._global_kwargs = {tok: float_value(tov, None)
                                for tok, tov in kwargs.items()
-                               if tok in self.__class__.TIMEOUT_KEYS}
+                               if tok in TIMEOUT_KEYS}
         self._global_kwargs['autocreate'] = True
         if self.perfdata is not None:
             self._global_kwargs['perfdata'] = self.perfdata
