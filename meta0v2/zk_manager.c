@@ -153,7 +153,7 @@ zk_srv_manager_create(gchar *namespace, gchar *url, gchar *srvType,
 	rc = zoo_exists(manager->zh, manager->zk_dir, 0, &my_stat);
 	if (rc == ZNONODE) {
 		GRID_WARN("zk base node [%s] doesn't exist, zk code (%d). "
-				"Please run zk-bootstrap.py.",
+				"Please run `openio zk bootstrap`.",
 				manager->zk_dir, rc);
 	} else if (rc != ZOK) {
 		GRID_WARN("Failed to connect to zookeeper, zk code (%d)", rc);
