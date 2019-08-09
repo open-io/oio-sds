@@ -76,7 +76,8 @@ dav_rawx_create_server_config(apr_pool_t *p, server_rec *s UNUSED)
 	conf->cleanup = NULL;
 	conf->hash_depth = 1;
 	conf->hash_width = 3;
-	conf->fsync_on_close = FSYNC_ON_CHUNK_DIR;
+	conf->fsync_on_close = 0;
+	conf->upload_buffer_size = 0;
 	conf->fallocate = 1;
 	conf->checksum_mode = CHECKSUM_ALWAYS;
 	return conf;
@@ -93,6 +94,7 @@ dav_rawx_merge_server_config(apr_pool_t *p, void *base UNUSED, void *overrides)
 	newconf->hash_depth = child->hash_depth;
 	newconf->hash_width = child->hash_width;
 	newconf->fsync_on_close = child->fsync_on_close;
+	newconf->upload_buffer_size = child->upload_buffer_size;
 	newconf->fallocate = child->fallocate;
 	newconf->checksum_mode = child->checksum_mode;
 	memcpy(newconf->docroot, child->docroot, sizeof(newconf->docroot));
@@ -159,6 +161,24 @@ dav_rawx_cmd_gridconfig_namespace(cmd_parms *cmd, void *config UNUSED, const cha
 	dav_rawx_server_conf *conf =
 		ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
 	g_strlcpy(conf->ns_name, arg1, sizeof(conf->ns_name));
+	return NULL;
+}
+
+static const char *
+dav_rawx_cmd_gridconfig_uploadbuf(cmd_parms *cmd, void *config UNUSED, const char *arg1)
+{
+	dav_rawx_server_conf *conf =
+		ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
+
+	gint64 v = 0;
+	DAV_ERROR_POOL(cmd->temp_pool, 0, "%s %s", __FUNCTION__, arg1);
+	if (!oio_str_is_number(arg1, &v) || v < 0)
+		return "invalid upload buffer size";
+
+	conf->upload_buffer_size = 1024 * CLAMP(v, 0, 65536);
+	DAV_ERROR_POOL(cmd->temp_pool, 0,
+			"BUF v=%"G_GINT64_FORMAT" size=%"G_GINT64_FORMAT,
+			v, (gint64)conf->upload_buffer_size);
 	return NULL;
 }
 
@@ -445,18 +465,45 @@ label_error:
 
 static const command_rec dav_rawx_cmds[] =
 {
-    AP_INIT_TAKE1("grid_service_id",  dav_rawx_cmd_gridconfig_service_id,  NULL, RSRC_CONF, "Service id"),
-    AP_INIT_TAKE1("grid_hash_width",  dav_rawx_cmd_gridconfig_hash_width,  NULL, RSRC_CONF, "hash width on a chunk's name"),
-    AP_INIT_TAKE1("grid_hash_depth",  dav_rawx_cmd_gridconfig_hash_depth,  NULL, RSRC_CONF, "hash depth on a chunk's name"),
-    AP_INIT_TAKE1("grid_docroot",     dav_rawx_cmd_gridconfig_docroot,     NULL, RSRC_CONF, "chunks docroot"),
-    AP_INIT_TAKE1("grid_namespace",   dav_rawx_cmd_gridconfig_namespace,   NULL, RSRC_CONF, "namespace name"),
-    AP_INIT_TAKE1("grid_dir_run",     dav_rawx_cmd_gridconfig_dirrun,      NULL, RSRC_CONF, "run directory"),
-    AP_INIT_TAKE1("grid_fsync",       dav_rawx_cmd_gridconfig_fsync,       NULL, RSRC_CONF, "do fsync on file close"),
-    AP_INIT_TAKE1("grid_fsync_dir",   dav_rawx_cmd_gridconfig_fsync_dir,   NULL, RSRC_CONF, "do fsync on chunk direcory after renaming .pending"),
-    AP_INIT_TAKE1("grid_fallocate",   dav_rawx_cmd_gridconfig_fallocate,   NULL, RSRC_CONF, "call fallocate when receiving a chunk"),
-    AP_INIT_TAKE1("grid_acl",         dav_rawx_cmd_gridconfig_acl,         NULL, RSRC_CONF, "enable acl (ignored)"),
-    AP_INIT_TAKE1("grid_compression", dav_rawx_cmd_gridconfig_compression, NULL, RSRC_CONF, "enable compression ('yes', 'no')'"),
-    AP_INIT_TAKE1("grid_checksum",    dav_rawx_cmd_gridconfig_checksum,    NULL, RSRC_CONF, "enable checksuming the body of PUT ('yes', 'no', 'smart')'"),
+    AP_INIT_TAKE1("grid_service_id",
+			dav_rawx_cmd_gridconfig_service_id, NULL, RSRC_CONF,
+			"Service id"),
+    AP_INIT_TAKE1("grid_hash_width",
+			dav_rawx_cmd_gridconfig_hash_width, NULL, RSRC_CONF,
+			"hash width on a chunk's name"),
+    AP_INIT_TAKE1("grid_hash_depth",
+			dav_rawx_cmd_gridconfig_hash_depth, NULL, RSRC_CONF,
+			"hash depth on a chunk's name"),
+    AP_INIT_TAKE1("grid_docroot",
+			dav_rawx_cmd_gridconfig_docroot, NULL, RSRC_CONF,
+			"chunks docroot"),
+    AP_INIT_TAKE1("grid_namespace",
+			dav_rawx_cmd_gridconfig_namespace, NULL, RSRC_CONF,
+			"namespace name"),
+    AP_INIT_TAKE1("grid_dir_run",
+			dav_rawx_cmd_gridconfig_dirrun, NULL, RSRC_CONF,
+			"run directory"),
+    AP_INIT_TAKE1("grid_fsync",
+			dav_rawx_cmd_gridconfig_fsync, NULL, RSRC_CONF,
+			"do fsync on file close"),
+    AP_INIT_TAKE1("grid_fsync_dir",
+			dav_rawx_cmd_gridconfig_fsync_dir, NULL, RSRC_CONF,
+			"do fsync on chunk direcory after renaming .pending"),
+    AP_INIT_TAKE1("grid_fallocate",
+			dav_rawx_cmd_gridconfig_fallocate, NULL, RSRC_CONF,
+			"call fallocate when receiving a chunk"),
+    AP_INIT_TAKE1("grid_acl",
+			dav_rawx_cmd_gridconfig_acl, NULL, RSRC_CONF,
+			"enable acl (ignored)"),
+    AP_INIT_TAKE1("grid_compression",
+			dav_rawx_cmd_gridconfig_compression, NULL, RSRC_CONF,
+			"enable compression ('yes', 'no')'"),
+    AP_INIT_TAKE1("grid_checksum",
+			dav_rawx_cmd_gridconfig_checksum, NULL, RSRC_CONF,
+			"enable checksuming the body of PUT ('yes', 'no', 'smart')'"),
+    AP_INIT_TAKE1("grid_buffer_size",
+			dav_rawx_cmd_gridconfig_uploadbuf, NULL, RSRC_CONF,
+			"In kiB, the size of the upload buffer."),
     AP_INIT_TAKE1(NULL,  NULL,  NULL, RSRC_CONF, NULL)
 };
 

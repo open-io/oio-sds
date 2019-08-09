@@ -29,28 +29,19 @@ LogLevel debug
 DavDepthInfinity Off
 
 # Mandatory values
+grid_service_id ksjlqksjxlqksjxqslkxj
 grid_hash_width 3
 grid_hash_depth 1
-grid_docroot /DATA/@NS@/@STGDEV@/rawx-@NB@
-grid_namespace @NS@
-grid_dir_run /GRID/@NS@/@STGDEV@/run
-
-# Optional trigger that specifies the scheme used in http headers.
-# Values:
-#   1    : v1.1 and v1.4 scheme (chunk_*, content_*)
-#   2    : v1.6 scheme (X-Grid- prefixed)
-#  both  : each header is written twice, once in each scheme
-# Default: 1
-grid_headers 1
-
-# Optional trigger that specifies if a fsync should be sent
-# after a PUT, when the stream is closed, before replying
-# to the client.
-# Possible values: true, on, yes, enabled
-# All the other values mean disabled.
-# Default: disabled
-grid_fsync enabled
-
+grid_docroot /path/to/the/volume
+grid_namespace YOUR_NS_HERE
+grid_dir_run /path/to/the/directory/with/shared/memory
+grid_fsync false
+grid_fsync_dir false
+grid_fallocate false
+grid_checksum true
+grid_buffer_size 8192
+# grid_acl false
+# grid_compression false
 
 <IfModule mod_env.c> 
 SetEnv nokeepalive 1
