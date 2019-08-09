@@ -246,16 +246,13 @@ grid_hash_depth        1
 
 # At the end of an upload, perform a fsync() on the chunk file itself
 grid_fsync             ${FSYNC}
+grid_buffer_size 8192
 
 # At the end of an upload, perform a fsync() on the directory holding the chunk
 grid_fsync_dir         ${FSYNC}
 
 # Preallocate space for the chunk file (enabled by default)
 #grid_fallocate enabled
-
-# Triggers Access Control List (acl)
-# DO NOT USE, this is broken
-#grid_acl disabled
 
 # Enable compression ('zlib' or 'lzo' or 'off')
 grid_compression ${COMPRESSION}

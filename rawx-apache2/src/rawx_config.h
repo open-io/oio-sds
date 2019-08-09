@@ -114,9 +114,10 @@ struct dav_rawx_server_conf_s {
 	char ns_name[LIMIT_LENGTH_NSNAME];
 	unsigned int hash_depth;
 	unsigned int hash_width;
-	unsigned int fsync_on_close;
 	unsigned int fallocate;
+	unsigned int upload_buffer_size;
 	unsigned int enabled_compression;
+	size_t fsync_on_close;
 
 	char event_agent_addr[RAWX_EVENT_ADDR_SIZE];
 

@@ -899,6 +899,14 @@ retry:
 				errno2http(errsav), 0, "FILE allocation error");
 	}
 
+	if (conf->upload_buffer_size > 0) {
+		const size_t buf_len = conf->upload_buffer_size;
+		DAV_ERROR_REQ(resource->info->request, 0,
+				"ACTUAL BUF %"G_GINT64_FORMAT, (gint64)buf_len);
+		void *buf_ptr = apr_palloc(ds->p, buf_len);
+		setvbuf(ds->f, buf_ptr, _IOFBF, buf_len);
+	}
+
 	/* Preallocate disk space for the chunk */
 	apr_int64_t chunk_size = 0;
 	if (ctx->chunk.chunk_size != NULL && conf->fallocate &&
