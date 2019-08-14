@@ -293,7 +293,7 @@ action_forward_balance_masters(struct req_args_s *args)
 {
 	const gchar *opt_keys[] = {
 		"max", NAME_MSGKEY_SIZE,
-		"replicas", NAME_MSGKEY_REPLICAS,
+		"inactivity", NAME_MSGKEY_TIMEOUT,
 		NULL
 	};
 	return _forward_XXX(args, NAME_MSGNAME_SQLX_BALM, opt_keys,
