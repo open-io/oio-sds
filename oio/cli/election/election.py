@@ -172,3 +172,97 @@ class ElectionLeave(ElectionCmd):
         results = ((k, v["status"]["status"], v["status"]["message"])
                    for k, v in data)
         return columns, results
+
+
+class ElectionBalance(Lister):
+    """Ask all the services to leave many elections."""
+
+    log = getLogger(__name__ + '.Election')
+
+    def get_parser(self, prog_name):
+        parser = super(ElectionBalance, self).get_parser(prog_name)
+        parser.add_argument(
+            'service_type',
+            action='append',
+            help="Service type")
+        parser.add_argument(
+            '--service-id',
+            metavar='<service-id>',
+            action='append',
+            help="Query only this service ID")
+        parser.add_argument(
+            '--inactivity', type=int, default=0,
+            help="Specifiy an inactivity in seconds")
+        parser.add_argument(
+            '--average', action='store_true',
+            help="Only rebalance on services higher than the average")
+        parser.add_argument(
+            '--max', type=int, default=100,
+            help="Do not leave more than `max` elections")
+        parser.add_argument(
+            '--timeout',
+            default=32.0,
+            type=float,
+            help="Timeout toward the proxy (defaults to 32.0 seconds)")
+        return parser
+
+    def _balance(self, id_, max_, inactivity):
+        return self.app.client_manager.admin.service_balance_elections(
+                id_, max_ops=max_, inactivity=inactivity)
+
+    def _srvtypes(self, parsed_args):
+        srvtypes = ('meta0', 'meta1', 'meta2')
+        if parsed_args.service_type:
+            srvtypes = parsed_args.service_type
+        for s in srvtypes:
+            yield s
+
+    def _allsrv(self, parsed_args):
+        max_ = int(parsed_args.max)
+        inactivity = int(parsed_args.inactivity)
+        if parsed_args.service_id:
+            for id_ in parsed_args.service_id:
+                yield id_, max_, inactivity
+        else:
+            for _st in self._srvtypes(parsed_args):
+                srvs = self.app.client_manager.conscience.all_services(
+                        _st, full=False)
+                for srv in srvs:
+                    yield srv.get('id', srv['addr']), max_, inactivity
+
+    def _above_average(self, allids):
+        qualified = list()
+        total = 0
+        for id_, max_, inactivity in allids:
+            masters = 0
+            try:
+                conf = self.app.client_manager.admin.service_get_info(id_)
+                masters = conf.get('elections', {}).get('master', 0)
+            except:
+                pass
+            qualified.append((id_, max_, inactivity, masters))
+            total += masters
+        avg = 0
+        if qualified:
+            avg = total / len(qualified)
+        for id_, max_, inactivity, masters in qualified:
+            if masters > avg:
+                yield id_, (masters - avg), 0
+            else:
+                yield id_, 0, 0
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+        data = list()
+        allids = self._allsrv(parsed_args)
+        if parsed_args.average:
+            allids = self._above_average(allids)
+        for id_, max_, inactivity in allids:
+            if max_ > 0:
+                rc, count = self._balance(id_, max_, inactivity)
+            else:
+                rc, count = 0, 0
+            data.append((id_, rc, count))
+
+        columns = ('Id', 'Status', 'Count')
+        return columns, data
