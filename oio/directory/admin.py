@@ -354,17 +354,19 @@ class AdminClient(ProxyClient):
         return self._forward_service_action(
             svc_id, '/info', method='GET', **kwargs)
 
-    def service_balance_elections(self, svc_id, max_ops=0, replicas=0,
+    def service_balance_elections(self, svc_id, max_ops=0, inactivity=0,
                                   **kwargs):
         """
         Balance elections to get an acceptable slave/master ratio.
 
         :param svc_to: id of the service that should balance its elections.
-        :param replicas: typical number of "replicas", used to compute the
-            acceptable master/slave ratio. 3 replicas lead to 1 master for
-            2 slaves.
         :param max_ops: maximum number of balancing operations.
+        :param inactivity: avoid expiring election whose last activity is
+                           younger than the specified value.
         """
-        params = {'replicas': int(replicas), 'max': int(max_ops)}
-        self._forward_service_action(svc_id, '/balance-masters',
-                                     json=params, **kwargs)
+        params = {'inactivity': int(inactivity),
+                  'max': int(max_ops),
+                  'id': svc_id}
+        _resp, body = self.forwarder._request(
+            'POST', '/balance-masters', params=params, **kwargs)
+        return _resp.status, body
