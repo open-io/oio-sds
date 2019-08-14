@@ -2569,33 +2569,38 @@ _handler_LEANIFY(struct gridd_reply_ctx_s *reply,
 
 static gboolean
 _handler_BALM(struct gridd_reply_ctx_s *reply,
-		struct sqlx_repository_s *repo, gpointer ignored)
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
-	(void) ignored, (void) repo;
-
-	guint replicas = 0;
-	GError *err = metautils_message_extract_struint(
-			reply->request, NAME_MSGKEY_REPLICAS, &replicas);
-	if (err || replicas < 2) {
-		g_clear_error(&err);
-		replicas = 3;
-	}
 	guint max = 0;
+	gint64 inactivity = 0;
+	GError *err = NULL;
+
 	err = metautils_message_extract_struint(
 			reply->request, NAME_MSGKEY_SIZE, &max);
-	if (err || max == 0) {
+	if (err) {
 		g_clear_error(&err);
 		max = 100;
 	}
-	guint64 balanced = election_manager_balance_masters(
-			sqlx_repository_get_elections_manager(repo), replicas - 1, max, 0);
-	gchar *msg = g_strdup_printf(
-			"%"G_GUINT64_FORMAT" local elections have left master state",
-			balanced);
-	GRID_INFO("%s", msg);
-	reply->add_body(metautils_gba_from_string(msg));
+
+	err = metautils_message_extract_strint64(
+			reply->request, NAME_MSGKEY_TIMEOUT, &inactivity);
+	if (err) {
+		g_clear_error(&err);
+		inactivity = 0;
+	}
+
+	max = CLAMP(max,1,9999);
+	inactivity = CLAMP(inactivity, 0, 86400);
+	reply->subject("max=%u inactivity=%"G_GINT64_FORMAT, max, inactivity);
+
+	guint count = election_manager_balance_masters(
+			sqlx_repository_get_elections_manager(repo),
+			max, inactivity * G_TIME_SPAN_SECOND);
+
+	gchar *out = g_strdup_printf("%u", count);
+	reply->add_body(metautils_gba_from_string(out));
 	reply->send_reply(CODE_FINAL_OK, "OK");
-	g_free(msg);
+	g_free(out);
 	return TRUE;
 }
 
@@ -2735,9 +2740,9 @@ sqlx_repli_gridd_get_requests(void)
 		{NAME_MSGNAME_SQLX_RESYNC,       (hook) _handler_RESYNC,    NULL},
 		{NAME_MSGNAME_SQLX_VACUUM,       (hook) _handler_VACUUM,    NULL},
 
-		{NAME_MSGNAME_SQLX_INFO,    (hook) _handler_INFO,    NULL},
-		{NAME_MSGNAME_SQLX_LEANIFY, (hook) _handler_LEANIFY, NULL},
-		{NAME_MSGNAME_SQLX_BALM,    (hook) _handler_BALM,    NULL},
+		{NAME_MSGNAME_SQLX_INFO,    (hook) _handler_INFO,      NULL},
+		{NAME_MSGNAME_SQLX_LEANIFY, (hook) _handler_LEANIFY,   NULL},
+		{NAME_MSGNAME_SQLX_BALM,    (hook) _handler_BALM,      NULL},
 
 		{NULL, NULL, NULL}
 	};
