@@ -183,7 +183,8 @@ class ElectionBalance(Lister):
         parser = super(ElectionBalance, self).get_parser(prog_name)
         parser.add_argument(
             'service_type',
-            action='append',
+            nargs='*',
+            metavar='<service_type>',
             help="Service type")
         parser.add_argument(
             '--service-id',
@@ -191,14 +192,18 @@ class ElectionBalance(Lister):
             action='append',
             help="Query only this service ID")
         parser.add_argument(
-            '--inactivity', type=int, default=0,
-            help="Specifiy an inactivity in seconds")
-        parser.add_argument(
-            '--average', action='store_true',
-            help="Only rebalance on services higher than the average")
+            '--inactivity',
+            type=int, default=0,
+            help="Specifiy an inactivity in seconds."
+                 " Ignored with --average")
         parser.add_argument(
             '--max', type=int, default=100,
-            help="Do not leave more than `max` elections")
+            help="Do not leave more than `max` elections."
+                 "Ignored with --average")
+        parser.add_argument(
+            '--average',
+            action='store_true',
+            help="Only rebalance on services higher than the average")
         parser.add_argument(
             '--timeout',
             default=32.0,
@@ -238,7 +243,7 @@ class ElectionBalance(Lister):
             try:
                 conf = self.app.client_manager.admin.service_get_info(id_)
                 masters = conf.get('elections', {}).get('master', 0)
-            except:
+            except Exception as _:
                 pass
             qualified.append((id_, max_, inactivity, masters))
             total += masters
@@ -254,6 +259,10 @@ class ElectionBalance(Lister):
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
         data = list()
+        if parsed_args.average:
+            if len(parsed_args.service_type) != 1:
+                raise ValueError("The --average option only works with"
+                                 " exactly 1 type of service")
         allids = self._allsrv(parsed_args)
         if parsed_args.average:
             allids = self._above_average(allids)
