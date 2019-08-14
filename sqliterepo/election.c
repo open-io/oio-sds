@@ -4214,33 +4214,29 @@ _send_NONE_to_step(struct election_manager_s *M, struct deque_beacon_s *beacon,
 }
 
 guint
-election_manager_balance_masters(struct election_manager_s *M,
-		guint ratio, guint max, gint64 inactivity UNUSED)
+election_manager_balance_masters(struct election_manager_s *M, guint max,
+		gint64 inactivity)
 {
 	guint count = 0;
+	gint64 pivot = 0;
 
-	_manager_lock(M);
+	if (inactivity > 0)
+		pivot = OLDEST(oio_ext_monotonic_time(), inactivity);
 
-	const guint bias = 64;
-	const guint nb_master = M->members_by_state[STEP_MASTER].count;
-	const guint nb_slave = M->members_by_state[STEP_SLAVE].count;
-	const guint ideal = nb_slave / (ratio? : 2);
-
-	if (nb_master > 0 && nb_master > ideal + bias) {
-		max = MIN(max, nb_master);
-		max = MIN(max, ideal);
+	for (gboolean running = TRUE; running && count < max;) {
+		_manager_lock(M);
 		struct election_member_s *current = M->members_by_state[STEP_MASTER].front;
-		while (max-- > 0 && current) {
-			struct election_member_s *next = current->next;
+		if (!current || (pivot > 0 && current->last_atime < pivot)) {
+			running = FALSE;
+		} else {
 			/* Tell the first base to leave its MASTER position but to re-join
 			 * immediately after. */
 			current->requested_USE = 1;
 			transition(current, EVT_LEAVE_REQ, NULL);
-			current = next;
-			count++;
+			++ count;
 		}
+		_manager_unlock(M);
 	}
-	_manager_unlock(M);
 
 	return count;
 }
