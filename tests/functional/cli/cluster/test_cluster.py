@@ -74,6 +74,8 @@ class ClusterTest(CliTestCase):
         if self.is_running_on_public_ci():
             self.skipTest("Too long to run on public CI")
 
+        self._flush_cs('rawx')
+        time.sleep(3.0)
         opts = self.get_opts([], 'json')
 
         # Get one rawx service's ID
