@@ -2338,7 +2338,7 @@ _get_conditioned_spare_chunks(const char *polname,
 	if (!policy)
 		return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Unexpected storage policy");
 	GError *err = get_conditioned_spare_chunks(
-			lb, storage_policy_get_service_pool(policy), ns_name,
+			lb_rawx, storage_policy_get_service_pool(policy), ns_name,
 			notin, broken, beans);
 	storage_policy_clean(policy);
 	return err;
@@ -2355,7 +2355,7 @@ _get_spare_chunks(const char *polname, GSList **beans)
 	if (!policy)
 		return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Unexpected storage policy");
 	GError *err = get_spare_chunks(
-			lb, storage_policy_get_service_pool(policy), beans);
+			lb_rawx, storage_policy_get_service_pool(policy), beans);
 	storage_policy_clean(policy);
 	return err;
 }
@@ -2371,7 +2371,7 @@ _generate_beans(struct oio_url_s *url, gint64 size, const char *polname, GSList 
 	if (!policy)
 		return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Unexpected storage policy");
 	GError *err =
-		oio_generate_beans(url, size, oio_ns_chunk_size, policy, lb, beans);
+		oio_generate_beans(url, size, oio_ns_chunk_size, policy, lb_rawx, beans);
 	storage_policy_clean(policy);
 	return err;
 }

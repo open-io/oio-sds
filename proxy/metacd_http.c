@@ -37,8 +37,12 @@ static GSList *config_urlv = NULL;
 
 gchar *ns_name = NULL;
 
+struct oio_lb_world_s *lb_world_rawx = NULL;
+struct oio_lb_s *lb_rawx = NULL;
+
 struct oio_lb_world_s *lb_world = NULL;
 struct oio_lb_s *lb = NULL;
+
 struct hc_resolver_s *resolver = NULL;
 
 oio_location_t location_num = 0;
@@ -443,9 +447,19 @@ _reload_srvtype(const char *type, GSList *list)
 		g_bytes_unref (encoded);
 	}
 
-	/* reload the LB world */
-	if (list)
+	/* reload the LB worlds, all of them #facepalm */
+	if (list) {
 		oio_lb_world__feed_service_info_list(lb_world, list);
+
+		GSList *rlist = NULL;
+		for (GSList *l = list; l; l=l->next) {
+			struct service_info_s *si = l->data;
+			if (!si || strcmp(si->type, NAME_SRVTYPE_RAWX)) continue;
+			rlist = g_slist_prepend(rlist, si);
+		}
+		oio_lb_world__feed_service_info_list(lb_world_rawx, rlist);
+		g_slist_free(rlist);
+	}
 }
 
 static void
@@ -554,17 +568,22 @@ lb_cache_reload (void)
 		g_ptr_array_add(taberr, e);
 	}
 
+#define reload_lb(W,L) do { \
+	if (!any_loading_error) \
+		oio_lb_world__increment_generation(W); \
+	oio_lb_world__reload_pools(W, L, nsi); \
+	_reload_lb_service_types(W, L, tabtypes, tabsrv, taberr); \
+	oio_lb_world__reload_storage_policies(W, L, nsi); \
+	if (!any_loading_error) \
+		oio_lb_world__purge_old_generations(W); \
+	else \
+		oio_lb_world__rehash_all_slots(W); \
+} while (0)
+
 	/* refresh the load-balancing world */
-	if (!any_loading_error)
-		oio_lb_world__increment_generation(lb_world);
-	oio_lb_world__reload_pools(lb_world, lb, nsi);
-	_reload_lb_service_types(lb_world, lb, tabtypes, tabsrv, taberr);
-	oio_lb_world__reload_storage_policies(lb_world, lb, nsi);
-	if (!any_loading_error) {
-		oio_lb_world__purge_old_generations(lb_world);
-	} else {
-		oio_lb_world__rehash_all_slots(lb_world);
-	}
+	reload_lb(lb_world, lb);
+	reload_lb(lb_world_rawx, lb_rawx);
+
 out:
 	if (tabtypes) g_free0 (tabtypes);
 	if (nsi) namespace_info_free(nsi);
@@ -848,8 +867,15 @@ grid_main_specific_fini (void)
 		path_parser_clean (path_parser);
 		path_parser = NULL;
 	}
+	if (lb_rawx) {
+		oio_lb__clear(&lb_rawx);
+	}
 	if (lb) {
 		oio_lb__clear(&lb);
+	}
+	if (lb_world_rawx) {
+		oio_lb_world__destroy(lb_world_rawx);
+		lb_world_rawx = NULL;
 	}
 	if (lb_world) {
 		oio_lb_world__destroy(lb_world);
@@ -1169,8 +1195,12 @@ grid_main_configure (int argc, char **argv)
 			gq_count_all, 0, gq_count_unexpected, 0,
 			gq_time_all, 0, gq_time_unexpected, 0);
 
+	lb_world_rawx = oio_lb_local__create_world();
+	lb_rawx = oio_lb__create();
+
 	lb_world = oio_lb_local__create_world();
 	lb = oio_lb__create();
+
 	srv_down = lru_tree_create((GCompareFunc)g_strcmp0, g_free, NULL, LTO_NOATIME);
 	srv_known = lru_tree_create((GCompareFunc)g_strcmp0, g_free, NULL, LTO_NOATIME);
 	srv_master = lru_tree_create((GCompareFunc)g_strcmp0, g_free, g_free, LTO_NOATIME);
