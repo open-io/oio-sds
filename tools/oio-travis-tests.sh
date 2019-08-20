@@ -470,3 +470,7 @@ if is_running_test_suite "mover" ; then
 
 	unset MOVER
 fi
+
+# Reaching the end of this script means we didn't get any error,
+# and thus we do not need to print logs.
+trap - EXIT
