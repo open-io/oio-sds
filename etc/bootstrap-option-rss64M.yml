@@ -1,0 +1,2 @@
+config:
+  sqliterepo.rss.max: "64Mi"

@@ -199,6 +199,11 @@ struct gen_ctx_s
 	guint8 h[16];
 	gint64 size;
 	gint64 chunk_size;
+
+	/* location focused mode */
+	oio_location_t pin;
+	int mode;
+
 	GSList **out;
 };
 
@@ -261,30 +266,6 @@ is_stgpol_backblaze(const struct storage_policy_s *pol)
 	return FALSE;
 }
 
-GString*
-m2_selected_item_quality_to_json(GString *inout,
-		struct oio_lb_selected_item_s *sel)
-{
-	GString *qual = inout? : g_string_sized_new(128);
-	g_string_append_c(qual, '{');
-	oio_str_gstring_append_json_pair_int(qual,
-			"expected_dist", sel->expected_dist);
-	g_string_append_c(qual, ',');
-	oio_str_gstring_append_json_pair_int(qual,
-			"final_dist", sel->final_dist);
-	g_string_append_c(qual, ',');
-	oio_str_gstring_append_json_pair_int(qual,
-			"warn_dist", sel->warn_dist);
-	g_string_append_c(qual, ',');
-	oio_str_gstring_append_json_pair(qual,
-			"expected_slot", sel->expected_slot);
-	g_string_append_c(qual, ',');
-	oio_str_gstring_append_json_pair(qual,
-			"final_slot", sel->final_slot);
-	g_string_append_c(qual, '}');
-	return qual;
-}
-
 struct bean_CHUNKS_s *
 generate_chunk_bean(struct oio_lb_selected_item_s *sel,
 		const struct storage_policy_s *policy)
@@ -317,7 +298,7 @@ struct bean_PROPERTIES_s *
 generate_chunk_quality_bean(struct oio_lb_selected_item_s *sel,
 		const gchar *chunkid, struct oio_url_s *url)
 {
-	GString *qual = m2_selected_item_quality_to_json(NULL, sel);
+	GString *qual = oio_selected_item_quality_to_json(NULL, sel);
 	struct bean_PROPERTIES_s *prop = _bean_create(&descr_struct_PROPERTIES);
 	gchar *prop_key = g_alloca(
 			sizeof(OIO_CHUNK_SYSMETA_PREFIX) + strlen(chunkid));
@@ -336,8 +317,6 @@ _gen_chunk(struct gen_ctx_s *ctx, struct oio_lb_selected_item_s *sel,
 		gint64 cs, guint pos, gint subpos)
 {
 	gchar strpos[24];
-
-	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
 
 	if (subpos < 0)
 		g_snprintf(strpos, sizeof(strpos), "%u", pos);
@@ -365,8 +344,6 @@ _m2_generate_chunks(struct gen_ctx_s *ctx,
 {
 	GError *err = NULL;
 
-	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
-
 	_m2_generate_alias_header(ctx);
 
 	guint pos = 0;
@@ -385,7 +362,11 @@ _m2_generate_chunks(struct gen_ctx_s *ctx,
 		}
 		const char *pool = storage_policy_get_service_pool(ctx->pol);
 		// FIXME(FVE): set last argument
-		if ((err = oio_lb__poll_pool(ctx->lb, pool, NULL, _on_id, NULL))) {
+
+		err = oio_lb__poll_pool_around(
+				ctx->lb, pool, ctx->pin, ctx->mode, _on_id, NULL);
+
+		if (err != NULL) {
 			g_prefix_error(&err, "at position %u: did not find enough "
 					"services matching the criteria for pool [%s]: ",
 					pos, pool);
@@ -398,6 +379,16 @@ _m2_generate_chunks(struct gen_ctx_s *ctx,
 GError*
 oio_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,
 		struct storage_policy_s *pol, struct oio_lb_s *lb,
+		GSList **out)
+{
+	return oio_generate_focused_beans(url, size, chunk_size, pol, lb, 0, 0, out);
+}
+
+GError *
+oio_generate_focused_beans(
+		struct oio_url_s *url, gint64 size, gint64 chunk_size,
+		struct storage_policy_s *pol, struct oio_lb_s *lb,
+		oio_location_t pin, int mode,
 		GSList **out)
 {
 	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(url, OIOURL_WHOLE));
@@ -428,6 +419,8 @@ oio_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,
 	ctx.chunk_size = chunk_size;
 	ctx.lb = lb;
 	ctx.out = out;
+	ctx.pin = pin;
+	ctx.mode = mode;
 
 	if (!pol)
 		return _m2_generate_chunks(&ctx, chunk_size, 0);
