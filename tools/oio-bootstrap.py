@@ -516,6 +516,7 @@ THREECOPIES=rawx3:DUPONETHREE
 17COPIES=rawx17:DUP17
 EC=NONE:EC
 EC21=NONE:EC21
+ECX21=rawx3nearby:EC21
 BACKBLAZE=NONE:BACKBLAZE
 
 [DATA_SECURITY]
@@ -531,6 +532,7 @@ DUP17=plain/min_dist=1,nb_copy=17
 
 EC=ec/k=6,m=3,algo=liberasurecode_rs_vand,min_dist=1
 EC21=ec/k=2,m=1,algo=liberasurecode_rs_vand,min_dist=1,warn_dist=${WARN_DIST}
+ECX21=ec/k=2,m=1,algo=liberasurecode_rs_vand,min_dist=0,max_dist=2,warn_dist=0
 
 # List of possible values for the "algo" parameter of "ec" data security:
 # "jerasure_rs_vand"       EC_BACKEND_JERASURE_RS_VAND
@@ -616,7 +618,7 @@ targets=1,rawx-europe,rawx;1,rawx-usa,rawx;1,rawx-asia,rawx
 [pool:rawx3nearby]
 targets=3,rawx
 nearby_mode=true
-warn_dist=2
+warn_dist=0
 
 [pool:rawx3faraway]
 targets=3,rawx

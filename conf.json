@@ -799,6 +799,11 @@
 		"code": "proxy_variables.c",
 		"header": "proxy_variables.h",
 		"variables": [
+			{ "type": "int", "name": "oio_proxy_local_prepare",
+				"key": "proxy.srv_local.prepare",
+				"descr": "Should the proxy allocate services with a local preference. 0 for no, 1 for only one local service and 2 for a maimum of services in spite of the location constraints. The value 2 is a quirk that should be avoided unless upon exceptional conditon wherein you accept the risk.",
+				"def": 0, "min": 0, "max": 2},
+
 			{ "type": "string", "name": "oio_proxy_location",
 				"key": "proxy.location",
 				"limit": 256,

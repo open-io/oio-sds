@@ -867,6 +867,15 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_PROXY_SRV_LOCAL_PREFER*
 
+### proxy.srv_local.prepare
+
+> Should the proxy allocate services with a local preference. 0 for no, 1 for only one local service and 2 for a maimum of services in spite of the location constraints. The value 2 is a quirk that should be avoided unless upon exceptional conditon wherein you accept the risk.
+
+ * default: **0**
+ * type: gint
+ * cmake directive: *OIO_PROXY_SRV_LOCAL_PREPARE*
+ * range: 0 -> 2
+
 ### proxy.srv_shuffle
 
 > Should the proxy shuffle the meta2 addresses before the query, to do a better load-balancing of the requests.

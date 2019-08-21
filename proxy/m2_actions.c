@@ -2370,8 +2370,19 @@ _generate_beans(struct oio_url_s *url, gint64 size, const char *polname, GSList 
 
 	if (!policy)
 		return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Unexpected storage policy");
-	GError *err =
-		oio_generate_beans(url, size, oio_ns_chunk_size, policy, lb_rawx, beans);
+
+	GError *err = NULL;
+
+	if (oio_proxy_local_prepare == 0) {
+		err = oio_generate_beans(
+				url, size, oio_ns_chunk_size, policy, lb_rawx, beans);
+	} else {
+		const int mode = oio_proxy_local_prepare;
+		err = oio_generate_focused_beans(
+				url, size, oio_ns_chunk_size, policy, lb_rawx,
+				location_num, CLAMP(mode, 1, 2), beans);
+	}
+
 	storage_policy_clean(policy);
 	return err;
 }

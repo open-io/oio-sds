@@ -2559,7 +2559,7 @@ m2db_check_content_quality(struct m2v2_sorted_content_s *sorted_content,
 				g_string_append_c(out, ',');
 				oio_str_gstring_append_json_quote(out, "quality");
 				g_string_append_c(out, ':');
-				m2_selected_item_quality_to_json(out, item);
+				oio_selected_item_quality_to_json(out, item);
 				if (item->final_dist <= item->warn_dist ||
 						strcmp(item->final_slot, item->expected_slot)) {
 					must_send_event = TRUE;
