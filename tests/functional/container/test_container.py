@@ -1121,7 +1121,6 @@ class TestMeta2Contents(BaseTestCase):
                             data=json.dumps(
                                 {"notin": chunks,
                                  "broken": broken}))
-        print resp.data
         self.assertEqual(resp.status, 200)
         spare_data = self.json_loads(resp.data)
         # Since we extracted N chunks, there must be exactly N chunks in
