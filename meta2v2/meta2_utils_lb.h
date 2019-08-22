@@ -58,6 +58,11 @@ GError* oio_generate_beans(
 GError* get_spare_chunks(struct oio_lb_s *lb,
 		const char *stgpol_name, GSList **result);
 
+GError* get_spare_chunks_focused(struct oio_lb_s *lb,
+		const char *stgpol_name,
+		oio_location_t pin, int mode,
+		GSList **result);
+
 /**
  * Get spare chunks according to a storage policy and lists of already
  * known chunks. Will return enough spare chunks to complete a metachunk,

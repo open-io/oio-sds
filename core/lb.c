@@ -2052,6 +2052,7 @@ _local__poll_around(struct oio_lb_pool_s *self,
 	EXTRA_ASSERT(lb->targets != NULL);
 
 	guint count_targets = oio_lb_world__count_pool_targets(self);
+	guint count_slots = 0;
 
 	GPtrArray *selection = g_ptr_array_new_with_free_func(
 			(GDestroyNotify)oio_lb_selected_item_free);
@@ -2062,6 +2063,7 @@ _local__poll_around(struct oio_lb_pool_s *self,
 	GPtrArray *suspects = NULL;
 	do {
 		gchar **slotnames = _unique_slotnames(lb->targets);
+		count_slots = g_strv_length(slotnames);
 		suspects = _unique_services(lb, slotnames, pin);
 		g_free(slotnames);
 	} while (0);
@@ -2099,6 +2101,9 @@ _local__poll_around(struct oio_lb_pool_s *self,
 	g_rw_lock_reader_unlock(&lb->world->lock);
 
 	const guint nb_locals = selection->len;
+	GRID_DEBUG("%s pin=%" G_GINT64_MODIFIER "x mode=%d targets=%u slots=%u suspects=%u locals=%u",
+			__FUNCTION__, pin, mode,
+			count_targets, count_slots, max_suspects, nb_locals);
 
 	// Eventually complete with traditionnally polled services
 	GError *err = NULL;
@@ -2139,6 +2144,9 @@ oio_lb__poll_pool_around(struct oio_lb_s *lb, const char *name,
 
 	EXTRA_ASSERT(lb != NULL);
 	EXTRA_ASSERT(oio_str_is_set(name));
+
+	GRID_DEBUG("%s pin=%"G_GINT64_MODIFIER"x mode=%d", __FUNCTION__, pin, mode);
+
 	GError *res = NULL;
 	g_rw_lock_reader_lock(&lb->lock);
 	struct oio_lb_pool_s *pool = g_hash_table_lookup(lb->pools, name);
