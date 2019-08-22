@@ -414,7 +414,7 @@ template_redis_watch = """
 host: ${IP}
 port: ${PORT}
 type: redis
-location: localhost.db${SRVNUM}
+location: ${LOC}
 checks:
     - {type: tcp}
 slots:
@@ -516,7 +516,7 @@ THREECOPIES=rawx3:DUPONETHREE
 17COPIES=rawx17:DUP17
 EC=NONE:EC
 EC21=NONE:EC21
-ECX21=rawx3nearby:EC21
+ECX21=NONE:ECX21
 BACKBLAZE=NONE:BACKBLAZE
 
 [DATA_SECURITY]
@@ -819,6 +819,7 @@ ns.meta1_digits=${M1_DIGITS}
 
 # Small pagination to avoid time-consuming tests
 meta2.flush_limit=64
+proxy.location=${LOC_PROXYD}
 
 admin=${IP}:${PORT_ADMIN}
 
@@ -1335,20 +1336,8 @@ def generate(options):
         env['VOLUME'] = '{DATADIR}/{NS}-{SRVTYPE}-{SRVNUM}'.format(**env)
         return env
 
-    ENV['MONITOR_PERIOD'] = getint(
-        options.get(MONITOR_PERIOD), defaults[MONITOR_PERIOD])
-    if options.get(ZOOKEEPER):
-        ENV['NOZK'] = ''
-    else:
-        ENV['NOZK'] = '#'
-
-    mkdir_noerror(SDSDIR)
-    mkdir_noerror(CODEDIR)
-    mkdir_noerror(DATADIR)
-    mkdir_noerror(CFGDIR)
-    mkdir_noerror(WATCHDIR)
-    mkdir_noerror(RUNDIR)
-    mkdir_noerror(LOGDIR)
+    def build_location(ip, num):
+        return "rack.%s.%d" % (ip.replace(".", "-"), num)
 
     def add_service(env):
         t = env['SRVTYPE']
@@ -1363,7 +1352,7 @@ def generate(options):
                 _h = ensure(options[t].get(SVC_HOSTS), hosts)
             env['IP'] = _h[(num-1) % len(_h)]
         if 'LOC' not in env:
-            env['LOC'] = "host%s.vol%d" % (env['IP'].rsplit('.', 1)[-1], num)
+            env['LOC'] = build_location(env['IP'], env['SRVNUM'])
         if 'PORT' in env:
             out['addr'] = '%s:%s' % (env['IP'], env['PORT'])
         if 'VOLUME' in env:
@@ -1375,6 +1364,23 @@ def generate(options):
                 env.get('WANT_SERVICE_ID') != '#'):
             out['service_id'] = env['SERVICE_ID']
         final_services[t].append(out)
+
+    ENV['LOC_PROXYD'] = build_location(hosts[0], ENV['PORT_PROXYD'])
+
+    ENV['MONITOR_PERIOD'] = getint(
+        options.get(MONITOR_PERIOD), defaults[MONITOR_PERIOD])
+    if options.get(ZOOKEEPER):
+        ENV['NOZK'] = ''
+    else:
+        ENV['NOZK'] = '#'
+
+    mkdir_noerror(SDSDIR)
+    mkdir_noerror(CODEDIR)
+    mkdir_noerror(DATADIR)
+    mkdir_noerror(CFGDIR)
+    mkdir_noerror(WATCHDIR)
+    mkdir_noerror(RUNDIR)
+    mkdir_noerror(LOGDIR)
 
     # gridinit header
     with open(gridinit(ENV), 'w+') as f:
