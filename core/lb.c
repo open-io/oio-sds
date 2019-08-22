@@ -459,7 +459,8 @@ oio_lb_world__count_slot_items_unlocked(struct oio_lb_world_s *self,
 #define TAB_ITEM(t,i)  g_array_index ((t), struct _slot_item_s, i)
 #define SLOT_ITEM(s,i) TAB_ITEM (s->items, i)
 
-static guint _search_first_at_location(GArray *tab, const oio_location_t needle,
+static guint _search_first_at_location(GArray *tab,
+		const oio_location_t needle, const enum oio_loc_proximity_level_e lvl,
 		const guint start, const guint end);
 
 guint32
@@ -1005,7 +1006,8 @@ _local_target__is_satisfied(struct oio_lb_pool_LOCAL_s *lb,
 		oio_location_t *known = ctx->next_polled;
 		do {
 			guint pos = _search_first_at_location(slot->items,
-					*known, 0, slot->items->len-1);
+					*known, OIO_LOC_PROX_VOLUME,
+					0, slot->items->len-1);
 			if (pos != (guint)-1) {
 				/* The current item is in a slot referenced by our target.
 				** Place this item at the beginning of ctx->next_polled so
@@ -1556,13 +1558,16 @@ _location_at_position (GArray *tab, const guint i)
 	return TAB_ITEM(tab,i).item->location;
 }
 
+#define M(loc) oio_location_mask_after(loc,lvl)
+
 static int
-_slide_to_first_at_location (GArray *tab, const oio_location_t needle,
+_slide_to_first_at_location (GArray *tab,
+		const oio_location_t needle, const enum oio_loc_proximity_level_e lvl,
 		guint i)
 {
-	EXTRA_ASSERT (needle == _location_at_position(tab,i));
+	EXTRA_ASSERT (M(needle) == M(_location_at_position(tab,i)));
 	for (; i>0 ;--i) {
-		if (needle != _location_at_position (tab, i-1))
+		if (M(needle) != M(_location_at_position (tab, i-1)))
 			return i;
 	}
 	return i;
@@ -1571,7 +1576,8 @@ _slide_to_first_at_location (GArray *tab, const oio_location_t needle,
 /* return the position of the first item with the same location as the
  * value of <needle> */
 static guint
-_search_first_at_location (GArray *tab, const oio_location_t needle,
+_search_first_at_location (GArray *tab,
+		const oio_location_t needle, const enum oio_loc_proximity_level_e lvl,
 		const guint start, const guint end)
 {
 	/* No item, answer "not found" */
@@ -1583,15 +1589,15 @@ _search_first_at_location (GArray *tab, const oio_location_t needle,
 
 	if (start == end) {
 		/* not found ? */
-		if (needle != _location_at_position (tab, start))
+		if (M(needle) != M(_location_at_position(tab, start)))
 			return (guint)-1;
-		return _slide_to_first_at_location (tab, needle, start);
+		return _slide_to_first_at_location (tab, needle, lvl, start);
 	}
 
 	const int i_pivot = start + ((end - start) / 2);
-	if (needle > _location_at_position (tab, i_pivot))
-		return _search_first_at_location (tab, needle, i_pivot+1, end);
-	return _search_first_at_location (tab, needle, start, i_pivot);
+	if (M(needle) > M(_location_at_position(tab, i_pivot)))
+		return _search_first_at_location (tab, needle, lvl, i_pivot+1, end);
+	return _search_first_at_location (tab, needle, lvl, start, i_pivot);
 }
 
 static void
@@ -1638,7 +1644,8 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 			i0 = 0;
 		} else if (slot->items->len) {
 			/* Binary search, faster when items are sorted */
-			i0 = _search_first_at_location (slot->items, item0->location,
+			i0 = _search_first_at_location (slot->items,
+					item0->location, OIO_LOC_PROX_VOLUME,
 					0, slot->items->len-1);
 		}
 
@@ -1990,6 +1997,8 @@ _unique_slotnames(gchar **targets)
 static GPtrArray *
 _unique_services(struct oio_lb_pool_LOCAL_s *lb, gchar **slots, oio_location_t pin)
 {
+	pin = oio_location_mask_after(pin, OIO_LOC_DIST_HOST);
+
 	GTree *t = g_tree_new_full(oio_str_cmp3, NULL, NULL, NULL);
 	for (gchar **pname = slots; *pname; ++pname) {
 		struct oio_lb_slot_s *slot =
@@ -2005,11 +2014,12 @@ _unique_services(struct oio_lb_pool_LOCAL_s *lb, gchar **slots, oio_location_t p
 			}
 		} else {
 			// Binary lookup of the first item
-			guint i = _search_first_at_location(
-					slot->items, pin, 0, slot->items->len-1);
+			guint i = _search_first_at_location(slot->items,
+					pin, OIO_LOC_PROX_HOST,
+					0, slot->items->len-1);
 			for (; i < slot->items->len; ++i) {
 				struct _lb_item_s *item = SLOT_ITEM(slot, i).item;
-				if (OIO_LOC_PROX_HOST != oio_location_proximity(item->location, pin))
+				if (OIO_LOC_PROX_HOST > oio_location_proximity(item->location, pin))
 					break;
 				g_tree_replace(t, item->id, item);
 			}
@@ -2052,8 +2062,9 @@ _local__poll_around(struct oio_lb_pool_s *self,
 		g_free(slotnames);
 	} while (0);
 
-	// Secondly poll as many pinned services as wanted AND possible.
 	const guint max_suspects = suspects->len;
+
+	// Secondly poll as many pinned services as wanted AND possible.
 	if (max_suspects > 0) {
 		// Build a slot name that can be recognized as a special name pattern
 		// indicating an evil-placement
