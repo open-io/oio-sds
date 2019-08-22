@@ -23,7 +23,7 @@ import logging
 import random
 import simplejson as json
 import struct
-from tests.utils import BaseTestCase, random_str, random_id
+from tests.utils import BaseTestCase, random_str, random_id, strange_paths
 from oio.common import exceptions as exc
 from oio.common.constants import OIO_DB_STATUS_NAME, OIO_DB_ENABLED, \
     OIO_DB_FROZEN, OIO_DB_DISABLED, OBJECT_METADATA_PREFIX, \
@@ -1250,19 +1250,6 @@ class TestMeta2Contents(BaseTestCase):
         self.assertEqual(json_data['contents'][0]['status'], 204)
         self.assertEqual(json_data['contents'][1]['status'], 204)
 
-        strange_paths = [
-            "Annual report.txt",
-            "foo+bar=foobar.txt",
-            "100%_bug_free.c",
-            "forward/slash/allowed",
-            "I\\put\\backslashes\\and$dollar$signs$in$file$names",
-            "Je suis tombé sur la tête, mais ça va bien.",
-            "%s%f%u%d%%",
-            "carriage\rreturn",
-            "line\nfeed",
-            "ta\tbu\tla\ttion",
-            "controlchars",
-        ]
         contents = []
         for name in strange_paths:
             self._create_content(name)

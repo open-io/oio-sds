@@ -58,6 +58,23 @@ def random_str(size, chars=random_chars):
     return ''.join(random.choice(chars) for _ in range(size))
 
 
+strange_paths = [
+                "Annual report.txt",
+                "foo+bar=foobar.txt",
+                "100%_bug_free.c",
+                "forward/slash/allowed",
+                "I\\put\\backslashes\\and$dollar$signs$in$file$names",
+                "Je suis tombé sur la tête, mais ça va bien.",
+                "%s%f%u%d%%",
+                "{1},{0},{3}",
+                "carriage\rreturn",
+                "line\nfeed",
+                "ta\tbu\tla\ttion",
+                "controlchars",
+                "//azeaze\\//azeaz\\//azea"
+                ]
+
+
 def random_id(size):
     return random_str(size, chars=random_chars_id)
 

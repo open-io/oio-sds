@@ -32,7 +32,7 @@ from oio.container.client import ContainerClient
 from oio.content.factory import ContentFactory
 from oio.content.plain import PlainContent
 from oio.content.ec import ECContent
-from tests.utils import BaseTestCase, ec
+from tests.utils import BaseTestCase, ec, strange_paths
 
 
 def md5_stream(stream):
@@ -289,21 +289,6 @@ class TestContentFactory(BaseTestCase):
             content.move_chunk("1234")
 
     def test_strange_paths(self):
-        strange_paths = [
-                "Annual report.txt",
-                "foo+bar=foobar.txt",
-                "100%_bug_free.c",
-                "forward/slash/allowed",
-                "I\\put\\backslashes\\and$dollar$signs$in$file$names",
-                "Je suis tombé sur la tête, mais ça va bien.",
-                "%s%f%u%d%%",
-                "{1},{0},{3}",
-                "carriage\rreturn",
-                "line\nfeed",
-                "ta\tbu\tla\ttion",
-                "controlchars",
-                "//azeaze\\//azeaz\\//azea"
-                ]
         answers = dict()
         for cname in strange_paths:
             content = self._new_content(self.stgpol, "nobody cares", cname)

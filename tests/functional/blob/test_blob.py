@@ -26,7 +26,7 @@ from oio.common.constants import OIO_VERSION, CHUNK_HEADERS
 from oio.common.fullpath import encode_fullpath
 from oio.common.utils import cid_from_name
 from oio.blob.utils import read_chunk_metadata
-from tests.utils import CommonTestCase, random_id
+from tests.utils import CommonTestCase, random_id, strange_paths
 from tests.functional.blob import convert_to_old_chunk, random_buffer, \
     random_chunk_id
 
@@ -483,21 +483,6 @@ class RawxTestSuite(CommonTestCase):
         self.assertEqual(404, resp.status)
 
     def test_strange_path(self):
-        strange_paths = [
-                "Annual report.txt",
-                "foo+bar=foobar.txt",
-                "100%_bug_free.c",
-                "forward/slash/allowed",
-                "I\\put\\backslashes\\and$dollar$signs$in$file$names",
-                "Je suis tombé sur la tête, mais ça va bien.",
-                "%s%f%u%d%%",
-                "{1},{0},{3}",
-                "carriage\rreturn",
-                "line\nfeed",
-                "ta\tbu\tla\ttion",
-                "controlchars",
-                "//azeaze\\//azeaz\\//azea"
-                ]
         for path in strange_paths:
             self._cycle_put(1, 201, path=path)
             self._cycle_copy(path)
