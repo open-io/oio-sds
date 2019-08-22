@@ -906,7 +906,7 @@ _local_slot__poll(struct oio_lb_slot_s *slot, guint16 distance,
 	}
 
 	/* get the closest */
-	guint32 random_weight = g_random_int_range (0, slot->sum_weight);
+	guint32 random_weight = oio_ext_rand_int_range(0, slot->sum_weight);
 	int i = _search_closest_weight (slot->items, random_weight, 0,
 			slot->items->len - 1);
 	GRID_TRACE2("%s random_weight=%"G_GUINT32_FORMAT" at %d",
@@ -2005,13 +2005,16 @@ _unique_services(struct oio_lb_pool_LOCAL_s *lb, gchar **slots, oio_location_t p
 			oio_lb_world__get_slot_unlocked(lb->world, *pname);
 		if (!slot)
 			continue;
+#if 0
 		if (slot->flag_dirty_order) {
+#endif
 			// Linear total collection of items
 			for (guint i=0; i < slot->items->len; ++i) {
 				struct _lb_item_s *item = SLOT_ITEM(slot,i).item;
-				if (OIO_LOC_PROX_HOST == oio_location_proximity(item->location, pin))
-					g_tree_replace(t, item->id, item);
+				if (pin == oio_location_mask_after(item->location, OIO_LOC_DIST_HOST))
+					g_tree_replace(t, item->addr, item);
 			}
+#if 0
 		} else {
 			// Binary lookup of the first item
 			guint i = _search_first_at_location(slot->items,
@@ -2019,11 +2022,12 @@ _unique_services(struct oio_lb_pool_LOCAL_s *lb, gchar **slots, oio_location_t p
 					0, slot->items->len-1);
 			for (; i < slot->items->len; ++i) {
 				struct _lb_item_s *item = SLOT_ITEM(slot, i).item;
-				if (OIO_LOC_PROX_HOST > oio_location_proximity(item->location, pin))
+				if (pin != oio_location_mask_after(item->location, OIO_LOC_DIST_HOST))
 					break;
 				g_tree_replace(t, item->id, item);
 			}
 		}
+#endif
 	}
 
 	gboolean _add_val (gpointer *k UNUSED, gpointer v, GPtrArray *out) {
@@ -2072,7 +2076,7 @@ _local__poll_around(struct oio_lb_pool_s *self,
 		oio_str_randomize(slot + sizeof(PREFIX_SLOT_SKEW) - 1, sizeof(SUFFIX_SLOT_SKEW) - 1, HEXA);
 
 		guint i = max_suspects > 1
-			? oio_ext_rand_int_range(0, max_suspects-1) : 0;
+			? oio_ext_rand_int_range(0, max_suspects) : 0;
 		if (mode == 1) {
 			// Poll one weighted random service under the pin
 			// OSEF the weight -> the other chunks will respect a weighted random
