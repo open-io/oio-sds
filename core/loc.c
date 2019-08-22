@@ -68,3 +68,32 @@ oio_location_distance(const oio_location_t loc0, const oio_location_t loc1)
 	};
 	return loc0 == loc1 ? OIO_LOC_DIST_VOLUME : app[_loc_clz(loc0, loc1)];
 }
+
+unsigned int
+oio_location_common_bits(enum oio_loc_proximity_level_e level)
+{
+	switch (level) {
+		case OIO_LOC_DIST_FARAWAY:
+			return 0;
+		case OIO_LOC_DIST_REGION:
+			return 8;
+		case OIO_LOC_DIST_ROOM:
+			return 16;
+		case OIO_LOC_DIST_RACK:
+			return 32;
+		case OIO_LOC_DIST_HOST:
+			return 48;
+		default:
+			return 64;
+	}
+}
+
+oio_location_t
+oio_location_mask_after(oio_location_t location,
+		enum oio_loc_proximity_level_e level)
+{
+	const unsigned int shift = 64 - oio_location_common_bits(level);
+	if (likely(shift == 0))
+		return location;
+	return (location >> shift) << shift;
+}
