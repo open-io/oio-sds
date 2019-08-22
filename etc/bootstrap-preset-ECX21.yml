@@ -8,10 +8,9 @@ hosts:
   - "127.0.0.4"
   - "127.0.0.5"
   - "127.0.0.6"
+  - "127.0.0.7"
 redis: true
 rdir:
   count: 2
 rawx:
-  count: 12
-rawx:
-  count: 18
+  count: 28
