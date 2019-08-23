@@ -1366,7 +1366,6 @@ def generate(options):
         final_services[t].append(out)
 
     ENV['LOC_PROXYD'] = build_location(hosts[0], ENV['PORT_PROXYD'])
-
     ENV['MONITOR_PERIOD'] = getint(
         options.get(MONITOR_PERIOD), defaults[MONITOR_PERIOD])
     if options.get(ZOOKEEPER):
@@ -1605,7 +1604,7 @@ def generate(options):
 
     # proxy
     env = subenv({'SRVTYPE': 'proxy', 'SRVNUM': 1, 'PORT': port_proxy,
-                  'EXE': 'oio-proxy'})
+                  'EXE': 'oio-proxy', 'LOC': ENV['LOC_PROXYD']})
     add_service(env)
     with open(gridinit(env), 'a+') as f:
         tpl = Template(template_gridinit_proxy)
