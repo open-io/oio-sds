@@ -76,7 +76,7 @@ get_spare_chunks_focused(struct oio_lb_s *lb, const char *pool,
 	GError *err = NULL;
 	GSList *beans = NULL;
 
-	GRID_DEBUG("%s pin=%"G_GINT64_MODIFIER"x mode=%d", __FUNCTION__, pin, mode);
+	GRID_TRACE("%s pin=%"G_GINT64_MODIFIER"x mode=%d", __FUNCTION__, pin, mode);
 
 	void _on_id(struct oio_lb_selected_item_s *sel, gpointer u UNUSED)
 	{
@@ -99,8 +99,7 @@ get_spare_chunks_focused(struct oio_lb_s *lb, const char *pool,
 }
 
 GError*
-get_spare_chunks(struct oio_lb_s *lb, const char *pool,
-		GSList **result)
+get_spare_chunks(struct oio_lb_s *lb, const char *pool, GSList **result)
 {
 	return get_spare_chunks_focused(lb, pool, 0, 0, result);
 }
@@ -140,6 +139,8 @@ get_conditioned_spare_chunks(struct oio_lb_s *lb, const char *pool,
 {
 	GError *err = NULL;
 	GSList *beans = NULL;
+
+	GRID_TRACE("%s", __FUNCTION__);
 
 	g_rw_lock_reader_lock(&lb->lock);
 	struct oio_lb_pool_s *pool_obj = g_hash_table_lookup(lb->pools, pool);
@@ -404,7 +405,7 @@ oio_generate_focused_beans(
 {
 	EXTRA_ASSERT(url != NULL);
 
-	GRID_DEBUG("%s pin=%"G_GINT64_MODIFIER"x mode=%d", __FUNCTION__, pin, mode);
+	GRID_TRACE("%s pin=%"G_GINT64_MODIFIER"x mode=%d", __FUNCTION__, pin, mode);
 
 	if (!oio_url_has(url, OIOURL_PATH))
 		return BADREQ("Missing path");

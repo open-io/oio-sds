@@ -2005,21 +2005,30 @@ _unique_services(struct oio_lb_pool_LOCAL_s *lb, gchar **slots, oio_location_t p
 			oio_lb_world__get_slot_unlocked(lb->world, *pname);
 		if (!slot)
 			continue;
-#if 0
 		if (slot->flag_dirty_order) {
-#endif
 			// Linear total collection of items
 			for (guint i=0; i < slot->items->len; ++i) {
 				struct _lb_item_s *item = SLOT_ITEM(slot,i).item;
 				if (pin == oio_location_mask_after(item->location, OIO_LOC_DIST_HOST))
 					g_tree_replace(t, item->addr, item);
 			}
-#if 0
 		} else {
-			// Binary lookup of the first item
+			// Binary lookup of the first item. If not found, it returns -1,
+			// e.g. the biggest integer possible that will prevent the loop.
 			guint i = _search_first_at_location(slot->items,
-					pin, OIO_LOC_PROX_HOST,
-					0, slot->items->len-1);
+					pin, OIO_LOC_PROX_HOST, 0, slot->items->len-1);
+
+#ifdef HAVE_EXTRA_ASSERT
+#define CHECK_HLOC(pin,op,i) g_assert_cmpint(pin, op, \
+		oio_location_mask_after(SLOT_ITEM(slot,(i)).item->location, OIO_LOC_DIST_HOST))
+			if (i != (guint)-1) {
+				// check this is well the first item of its slice
+				if (i > 0)
+					CHECK_HLOC(pin, !=, i-1);
+				CHECK_HLOC(pin, ==, i);
+			}
+#endif
+
 			for (; i < slot->items->len; ++i) {
 				struct _lb_item_s *item = SLOT_ITEM(slot, i).item;
 				if (pin != oio_location_mask_after(item->location, OIO_LOC_DIST_HOST))
@@ -2027,7 +2036,6 @@ _unique_services(struct oio_lb_pool_LOCAL_s *lb, gchar **slots, oio_location_t p
 				g_tree_replace(t, item->id, item);
 			}
 		}
-#endif
 	}
 
 	gboolean _add_val (gpointer *k UNUSED, gpointer v, GPtrArray *out) {
@@ -2101,7 +2109,7 @@ _local__poll_around(struct oio_lb_pool_s *self,
 	g_rw_lock_reader_unlock(&lb->world->lock);
 
 	const guint nb_locals = selection->len;
-	GRID_DEBUG("%s pin=%" G_GINT64_MODIFIER "x mode=%d targets=%u slots=%u suspects=%u locals=%u",
+	GRID_TRACE("%s pin=%" G_GINT64_MODIFIER "x mode=%d targets=%u slots=%u suspects=%u locals=%u",
 			__FUNCTION__, pin, mode,
 			count_targets, count_slots, max_suspects, nb_locals);
 
@@ -2145,7 +2153,7 @@ oio_lb__poll_pool_around(struct oio_lb_s *lb, const char *name,
 	EXTRA_ASSERT(lb != NULL);
 	EXTRA_ASSERT(oio_str_is_set(name));
 
-	GRID_DEBUG("%s pin=%"G_GINT64_MODIFIER"x mode=%d", __FUNCTION__, pin, mode);
+	GRID_TRACE("%s pin=%"G_GINT64_MODIFIER"x mode=%d", __FUNCTION__, pin, mode);
 
 	GError *res = NULL;
 	g_rw_lock_reader_lock(&lb->lock);
