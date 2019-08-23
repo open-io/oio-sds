@@ -2060,7 +2060,9 @@ _local__poll_around(struct oio_lb_pool_s *self,
 	EXTRA_ASSERT(lb->targets != NULL);
 
 	guint count_targets = oio_lb_world__count_pool_targets(self);
+#ifdef HAVE_EXTRA_DEBUG
 	guint count_slots = 0;
+#endif
 
 	GPtrArray *selection = g_ptr_array_new_with_free_func(
 			(GDestroyNotify)oio_lb_selected_item_free);
@@ -2071,7 +2073,9 @@ _local__poll_around(struct oio_lb_pool_s *self,
 	GPtrArray *suspects = NULL;
 	do {
 		gchar **slotnames = _unique_slotnames(lb->targets);
+#ifdef HAVE_EXTRA_DEBUG
 		count_slots = g_strv_length(slotnames);
+#endif
 		suspects = _unique_services(lb, slotnames, pin);
 		g_free(slotnames);
 	} while (0);

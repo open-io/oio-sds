@@ -88,7 +88,7 @@ sqlx_remote_execute_RESYNC_many(gchar **targets, GByteArray *sid,
 	gridd_clients_start(clients);
 	err = gridd_clients_loop(clients);
 
-	for (struct gridd_client_s **p = clients; p && *p; p++) {
+	for (struct gridd_client_s **p = clients; clients && *p; p++) {
 		if ((err = gridd_client_error(*p))) {
 			GRID_WARN("Database resync attempts failed: (%d) %s",
 					err->code, err->message);
