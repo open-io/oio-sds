@@ -28,9 +28,8 @@ License along with this library.
 #include "./gridd_client_ext.h"
 
 MESSAGE
-metaXServer_reply_simple(MESSAGE request, gint code, const gchar *message)
+metaXServer_reply_simple(MESSAGE request UNUSED, gint code, const gchar *message)
 {
-	EXTRA_ASSERT (request != NULL);
 	MESSAGE reply = metautils_message_create_named(NAME_MSGNAME_METAREPLY, 0);
 
 	if (CODE_IS_NETWORK_ERROR(code))

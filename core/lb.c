@@ -906,7 +906,7 @@ _local_slot__poll(struct oio_lb_slot_s *slot, guint16 distance,
 	}
 
 	/* get the closest */
-	guint32 random_weight = g_random_int_range (0, slot->sum_weight);
+	guint32 random_weight = oio_ext_rand_int_range(0, slot->sum_weight);
 	int i = _search_closest_weight (slot->items, random_weight, 0,
 			slot->items->len - 1);
 	GRID_TRACE2("%s random_weight=%"G_GUINT32_FORMAT" at %d",
@@ -2009,17 +2009,29 @@ _unique_services(struct oio_lb_pool_LOCAL_s *lb, gchar **slots, oio_location_t p
 			// Linear total collection of items
 			for (guint i=0; i < slot->items->len; ++i) {
 				struct _lb_item_s *item = SLOT_ITEM(slot,i).item;
-				if (OIO_LOC_PROX_HOST == oio_location_proximity(item->location, pin))
-					g_tree_replace(t, item->id, item);
+				if (pin == oio_location_mask_after(item->location, OIO_LOC_DIST_HOST))
+					g_tree_replace(t, item->addr, item);
 			}
 		} else {
-			// Binary lookup of the first item
+			// Binary lookup of the first item. If not found, it returns -1,
+			// e.g. the biggest integer possible that will prevent the loop.
 			guint i = _search_first_at_location(slot->items,
-					pin, OIO_LOC_PROX_HOST,
-					0, slot->items->len-1);
+					pin, OIO_LOC_PROX_HOST, 0, slot->items->len-1);
+
+#ifdef HAVE_EXTRA_ASSERT
+#define CHECK_HLOC(pin,op,i) g_assert_cmpint(pin, op, \
+		oio_location_mask_after(SLOT_ITEM(slot,(i)).item->location, OIO_LOC_DIST_HOST))
+			if (i != (guint)-1) {
+				// check this is well the first item of its slice
+				if (i > 0)
+					CHECK_HLOC(pin, !=, i-1);
+				CHECK_HLOC(pin, ==, i);
+			}
+#endif
+
 			for (; i < slot->items->len; ++i) {
 				struct _lb_item_s *item = SLOT_ITEM(slot, i).item;
-				if (OIO_LOC_PROX_HOST > oio_location_proximity(item->location, pin))
+				if (pin != oio_location_mask_after(item->location, OIO_LOC_DIST_HOST))
 					break;
 				g_tree_replace(t, item->id, item);
 			}
@@ -2048,6 +2060,9 @@ _local__poll_around(struct oio_lb_pool_s *self,
 	EXTRA_ASSERT(lb->targets != NULL);
 
 	guint count_targets = oio_lb_world__count_pool_targets(self);
+#ifdef HAVE_EXTRA_DEBUG
+	guint count_slots = 0;
+#endif
 
 	GPtrArray *selection = g_ptr_array_new_with_free_func(
 			(GDestroyNotify)oio_lb_selected_item_free);
@@ -2058,6 +2073,9 @@ _local__poll_around(struct oio_lb_pool_s *self,
 	GPtrArray *suspects = NULL;
 	do {
 		gchar **slotnames = _unique_slotnames(lb->targets);
+#ifdef HAVE_EXTRA_DEBUG
+		count_slots = g_strv_length(slotnames);
+#endif
 		suspects = _unique_services(lb, slotnames, pin);
 		g_free(slotnames);
 	} while (0);
@@ -2072,7 +2090,7 @@ _local__poll_around(struct oio_lb_pool_s *self,
 		oio_str_randomize(slot + sizeof(PREFIX_SLOT_SKEW) - 1, sizeof(SUFFIX_SLOT_SKEW) - 1, HEXA);
 
 		guint i = max_suspects > 1
-			? oio_ext_rand_int_range(0, max_suspects-1) : 0;
+			? oio_ext_rand_int_range(0, max_suspects) : 0;
 		if (mode == 1) {
 			// Poll one weighted random service under the pin
 			// OSEF the weight -> the other chunks will respect a weighted random
@@ -2095,6 +2113,9 @@ _local__poll_around(struct oio_lb_pool_s *self,
 	g_rw_lock_reader_unlock(&lb->world->lock);
 
 	const guint nb_locals = selection->len;
+	GRID_TRACE("%s pin=%" G_GINT64_MODIFIER "x mode=%d targets=%u slots=%u suspects=%u locals=%u",
+			__FUNCTION__, pin, mode,
+			count_targets, count_slots, max_suspects, nb_locals);
 
 	// Eventually complete with traditionnally polled services
 	GError *err = NULL;
@@ -2135,6 +2156,9 @@ oio_lb__poll_pool_around(struct oio_lb_s *lb, const char *name,
 
 	EXTRA_ASSERT(lb != NULL);
 	EXTRA_ASSERT(oio_str_is_set(name));
+
+	GRID_TRACE("%s pin=%"G_GINT64_MODIFIER"x mode=%d", __FUNCTION__, pin, mode);
+
 	GError *res = NULL;
 	g_rw_lock_reader_lock(&lb->lock);
 	struct oio_lb_pool_s *pool = g_hash_table_lookup(lb->pools, name);

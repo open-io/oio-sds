@@ -38,9 +38,7 @@ GError* oio_generate_focused_beans(
 		oio_location_t pin, int mode,
 		GSList **out);
 
-/**
- * @deprecated only used in a deprecated function of meta2
- */
+/* @deprecated only used in a deprecated function of meta2 */
 GError* oio_generate_beans(
 		struct oio_url_s *url, gint64 size, gint64 chunk_size,
 		struct storage_policy_s *pol, struct oio_lb_s *lb,
@@ -48,13 +46,15 @@ GError* oio_generate_beans(
 
 /**
  * Get as many spare chunks as required to upload one metachunk with the
- * specified storage policy.
- *
- * @param lb Pointer to a load balancer
- * @param stgpol_name Name of the wanted storage policy
- * @param result Pointer to a list where spare chunks will be inserted
- * @return A GError in case of error
+ * specified storage policy, starting at the `pin` location if the `mode`
+ * allows it.
  */
+GError* get_spare_chunks_focused(struct oio_lb_s *lb,
+		const char *stgpol_name,
+		oio_location_t pin, int mode,
+		GSList **result);
+
+/* @deprecated Only used in an obsolete call of te meta2 */
 GError* get_spare_chunks(struct oio_lb_s *lb,
 		const char *stgpol_name, GSList **result);
 

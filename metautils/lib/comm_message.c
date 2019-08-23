@@ -54,7 +54,7 @@ __getParameter(MESSAGE m, enum message_param_e mp)
 	}
 }
 
-MESSAGE
+static MESSAGE
 _create_named (const char *name, gint64 dl, gboolean with_id)
 {
 	EXTRA_ASSERT(name != NULL);

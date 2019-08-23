@@ -69,11 +69,15 @@ out:
 /* ------------------------------------------------------------------------- */
 
 GError*
-get_spare_chunks(struct oio_lb_s *lb, const char *pool,
+get_spare_chunks_focused(struct oio_lb_s *lb, const char *pool,
+		oio_location_t pin, int mode,
 		GSList **result)
 {
 	GError *err = NULL;
 	GSList *beans = NULL;
+
+	GRID_TRACE("%s pin=%"G_GINT64_MODIFIER"x mode=%d", __FUNCTION__, pin, mode);
+
 	void _on_id(struct oio_lb_selected_item_s *sel, gpointer u UNUSED)
 	{
 		struct bean_CHUNKS_s *chunk = generate_chunk_bean(sel, NULL);
@@ -82,7 +86,7 @@ get_spare_chunks(struct oio_lb_s *lb, const char *pool,
 		beans = g_slist_prepend(beans, prop);
 		beans = g_slist_prepend(beans, chunk);
 	}
-	err = oio_lb__poll_pool(lb, pool, NULL, _on_id, NULL);
+	err = oio_lb__poll_pool_around(lb, pool, pin, mode, _on_id, NULL);
 	if (err) {
 		g_prefix_error(&err,
 				"found only %u services matching the criteria (pool=%s): ",
@@ -92,6 +96,12 @@ get_spare_chunks(struct oio_lb_s *lb, const char *pool,
 		*result = beans;
 	}
 	return err;
+}
+
+GError*
+get_spare_chunks(struct oio_lb_s *lb, const char *pool, GSList **result)
+{
+	return get_spare_chunks_focused(lb, pool, 0, 0, result);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -129,6 +139,8 @@ get_conditioned_spare_chunks(struct oio_lb_s *lb, const char *pool,
 {
 	GError *err = NULL;
 	GSList *beans = NULL;
+
+	GRID_TRACE("%s", __FUNCTION__);
 
 	g_rw_lock_reader_lock(&lb->lock);
 	struct oio_lb_pool_s *pool_obj = g_hash_table_lookup(lb->pools, pool);
@@ -363,8 +375,8 @@ _m2_generate_chunks(struct gen_ctx_s *ctx,
 		const char *pool = storage_policy_get_service_pool(ctx->pol);
 		// FIXME(FVE): set last argument
 
-		err = oio_lb__poll_pool_around(
-				ctx->lb, pool, ctx->pin, ctx->mode, _on_id, NULL);
+		err = oio_lb__poll_pool_around(ctx->lb, pool,
+				ctx->pin, ctx->mode, _on_id, NULL);
 
 		if (err != NULL) {
 			g_prefix_error(&err, "at position %u: did not find enough "
@@ -391,8 +403,9 @@ oio_generate_focused_beans(
 		oio_location_t pin, int mode,
 		GSList **out)
 {
-	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(url, OIOURL_WHOLE));
 	EXTRA_ASSERT(url != NULL);
+
+	GRID_TRACE("%s pin=%"G_GINT64_MODIFIER"x mode=%d", __FUNCTION__, pin, mode);
 
 	if (!oio_url_has(url, OIOURL_PATH))
 		return BADREQ("Missing path");
