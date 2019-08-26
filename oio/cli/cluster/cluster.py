@@ -16,7 +16,8 @@
 from logging import getLogger
 from cliff import lister, show, command
 from oio.common.easy_value import boolean_value
-from oio.common.exceptions import OioException, ServiceBusy
+from oio.common.exceptions import OioException, OioNetworkException, \
+    ServiceBusy
 
 
 class ClusterShow(show.ShowOne):
@@ -319,6 +320,8 @@ class ClusterWait(lister.Lister):
                 try:
                     types = self.app.client_manager.cluster.service_types()
                     break
+                except OioNetworkException as exc:
+                    self.log.debug("Proxy error: %s", exc)
                 except ServiceBusy as exc:
                     self.log.debug("Conscience busy: %s", exc)
 
@@ -336,6 +339,9 @@ class ClusterWait(lister.Lister):
                     for srv in tmp:
                         srv['type'] = type_
                     descr += tmp
+            except OioNetworkException as exc:
+                self.log.debug("Proxy error: %s", exc)
+                continue
             except ServiceBusy as exc:
                 self.log.debug("Conscience busy: %s", exc)
                 continue
