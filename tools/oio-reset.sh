@@ -102,18 +102,17 @@ if [[ -e "$DATADIR" ]] ; then
 fi
 
 # Stop and clean a previous installation.
-pgrep -u "$UID" --full gridinit | while read pidof_gridinit ; do
-    # First try a clean stop of gridinit's children
-    if [ -e "$GRIDINIT_SOCK" ] ; then
-        if ! gridinit_cmd -S "$GRIDINIT_SOCK" stop >/dev/null ; then
-            echo "Failed to send 'stop' to gridinit"
-        fi
-    fi
-    # We know by experience this might fail, so try to kill gridinit's children
-    if ! pkill -u "$UID" -P "$pidof_gridinit" ; then
-        echo "Failed to kill gridinit children" 1>&2
-    fi
-    # Kill gridinit until it dies with its children
+
+if egrep -q '\S+ \S+ \S+ 0001\S* \S+ \S+ \S+ '$GRIDINIT_SOCK /proc/net/unix ; then
+	# There is a gridinit attached to the socket. Let's try a clean stop of the services.
+	if ! gridinit_cmd -S "$GRIDINIT_SOCK" stop >/dev/null ; then
+		echo "Failed to send 'stop' to gridinit"
+	fi
+fi
+
+if [ -r $SDS/run/gridinit.pid ] ; then
+	# There was a gridinit deployed, we send it signals to make it stop
+	pidof_gridinit=$(head $SDS/run/gridinit.pid)
     count=0
     while kill "$pidof_gridinit" ; do
         # Waiting for gridinit ...
@@ -121,9 +120,10 @@ pgrep -u "$UID" --full gridinit | while read pidof_gridinit ; do
             echo "Gridinit doesn't want to die gracefully. Go for euthanasy"
             ( pkill -9 -u "$UID" oio-event-agent || exit 0 )
         fi
-            timeout 30
-        done
-done
+		timeout 30
+	done
+fi
+
 
 # Generate a new configuration and start the new gridinit
 
