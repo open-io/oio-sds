@@ -162,18 +162,19 @@ if grep -q ^zookeeper $HOME/.oio/sds.conf ; then
 fi
 
 
-# Wait for the gridinit's startup
+echo -e "\n### Wait for gridinit to get ready"
 count=0
 while ! pkill -u "$UID" --full -0 gridinit ; do
     timeout 15 "gridinit startup"
 done
-while ! [ -e "$GRIDINIT_SOCK" ] ; do
+
+while ! egrep -q '\S+ \S+ \S+ 0001\S* \S+ \S+ \S+ '$GRIDINIT_SOCK /proc/net/unix ; do
     timeout 30 "gridinit readyness"
 done
 pidof_gridinit=$(pgrep -u "$UID" --full gridinit)
 
 
-echo -e "\n### Start gridinit and wait for the services to register"
+echo -e "\n### Wait for the services to register"
 gridinit_cmd -S "$GRIDINIT_SOCK" reload >/dev/null
 gridinit_cmd -S "$GRIDINIT_SOCK" start "@${NS}" >/dev/null
 
