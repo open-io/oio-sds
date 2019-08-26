@@ -51,8 +51,9 @@ class ClusterTest(CliTestCase):
         # Check that nonexistent types are rejected
         output = self.openio('cluster unlock nonexistent 127.0.0.1:666' + opts)
         data = json.loads(output)
-        self.assertEqual(data[0]['Result'], ('Service type currently unknown '
-                                             + '(HTTP 400) (STATUS 400)'))
+        self.assertEqual(data[0]['Result'],
+                         ('Service type [nonexistent] not managed '
+                          + '(HTTP 404) (STATUS 453)'))
         # Check that existent type are accepted even if the service is invalid
         output = self.openio('cluster unlock rdir 127.0.0.1:666' + opts)
         data = json.loads(output)
@@ -63,8 +64,9 @@ class ClusterTest(CliTestCase):
         # Check that nonexistent types are rejected
         output = self.openio('cluster lock nonexistent 127.0.0.1:666' + opts)
         data = json.loads(output)
-        self.assertEqual(data[0]['Result'], ('Service type currently unknown '
-                                             + '(HTTP 400) (STATUS 400)'))
+        self.assertEqual(data[0]['Result'],
+                         ('Service type [nonexistent] not managed '
+                          + '(HTTP 404) (STATUS 453)'))
         # Check that existent type are accepted even if the service is invalid
         output = self.openio('cluster lock rdir 127.0.0.1:666' + opts)
         data = json.loads(output)
