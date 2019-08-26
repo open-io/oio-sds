@@ -639,7 +639,7 @@ conscience_run_srvtypes(const gchar *type, service_callback_f * callback, gpoint
 		conscience_get_srvtype(type, FALSE);
 
 	if (!srvtype) {
-		err = NEWERROR(CODE_SRVTYPE_NOTMANAGED, "Service type [%s] not managed", type);
+		err = BADSRVTYPE(type);
 	} else {
 		g_rw_lock_reader_lock(&(srvtype->rw_lock));
 		gboolean rc = conscience_srvtype_run_all(srvtype, callback, udata);

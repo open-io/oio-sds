@@ -133,7 +133,11 @@ extern GRWLock nsinfo_rwlock;
 extern gchar **srvtypes;
 extern struct namespace_info_s nsinfo;
 gboolean validate_namespace (const char * ns);
-gboolean validate_srvtype (const char * n);
+/**
+ * Check that the service types are loaded
+ * and check that the service type exists
+ **/
+GError * validate_srvtype(const char *srvtype);
 
 /* Periodically loads the consciennce's addresses from the local config
  * and keep this in cache. */

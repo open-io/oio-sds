@@ -25,9 +25,10 @@ _lb_check_tokens (struct req_args_s *args)
 {
 	if (!validate_namespace(NS()))
 		return NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Invalid NS");
-	if (!TYPE() || !validate_srvtype(TYPE()))
-		return NEWERROR(CODE_SRVTYPE_NOTMANAGED, "Invalid TYPE");
-	return NULL;
+	const char *type = TYPE();
+	if (!type)
+		BADREQ("Missing type");
+	return validate_srvtype(type);
 }
 
 // New handlers ----------------------------------------------------------------

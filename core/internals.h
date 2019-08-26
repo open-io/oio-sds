@@ -260,14 +260,15 @@ GError * oio_error_debug (GQuark gq, int code, const char *fmt, ...);
 #  define NEWERROR(CODE, FMT,...) g_error_new(GQ(), (CODE), FMT, ##__VA_ARGS__)
 # endif
 
-#define ERRPTF(FMT,...) NEWERROR(CODE_PLATFORM_ERROR, FMT, ##__VA_ARGS__)
-#define NYI()           NEWERROR(CODE_NOT_IMPLEMENTED, "NYI")
-#define BADREQ(FMT,...) NEWERROR(CODE_BAD_REQUEST, FMT, ##__VA_ARGS__)
-#define BADNS()         NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Unexpected NS")
-#define BUSY(FMT,...)   NEWERROR(CODE_UNAVAILABLE, FMT, ##__VA_ARGS__)
-#define TIMEOUT(FMT,...) NEWERROR(CODE_GATEWAY_TIMEOUT, FMT, ##__VA_ARGS__)
-#define BADSRVTYPE()    NEWERROR(CODE_SRVTYPE_NOTMANAGED, "Unexpected service type")
-#define SYSERR(FMT,...) NEWERROR(CODE_INTERNAL_ERROR, FMT, ##__VA_ARGS__)
+#define ERRPTF(FMT,...)     NEWERROR(CODE_PLATFORM_ERROR, FMT, ##__VA_ARGS__)
+#define NYI()               NEWERROR(CODE_NOT_IMPLEMENTED, "NYI")
+#define BADREQ(FMT,...)     NEWERROR(CODE_BAD_REQUEST, FMT, ##__VA_ARGS__)
+#define BADNS()             NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Unexpected NS")
+#define BUSY(FMT,...)       NEWERROR(CODE_UNAVAILABLE, FMT, ##__VA_ARGS__)
+#define TIMEOUT(FMT,...)    NEWERROR(CODE_GATEWAY_TIMEOUT, FMT, ##__VA_ARGS__)
+#define BADSRVTYPE(SRVTYPE) NEWERROR(CODE_SRVTYPE_NOTMANAGED, \
+	"Service type [%s] not managed", SRVTYPE)
+#define SYSERR(FMT,...)     NEWERROR(CODE_INTERNAL_ERROR, FMT, ##__VA_ARGS__)
 
 #ifdef __cplusplus
 }
