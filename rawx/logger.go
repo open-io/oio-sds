@@ -124,34 +124,43 @@ func LogDebug(format string, v ...interface{}) {
 	writeLogFmt(syslog.LOG_DEBUG, format, v...)
 }
 
-func LogHttp(url, peer, method string, status int, spent, bytes uint64, containerID, id, path string) {
+type AccessLogEvent struct {
+	status    int
+	bytesIn   uint64
+	bytesOut  uint64
+	timeSpent uint64
+	method    string
+	local     string
+	peer      string
+	path      string
+	reqId     string
+}
+
+func LogHttp(evt AccessLogEvent) {
+	//url, peer, method string, status int, spent, bytes uint64, containerID, id, path string) {
 	sb := strings.Builder{}
-	sb.Grow(128 + len(path))
+	sb.Grow(128 + len(evt.path))
 	// Preamble
 	sb.WriteString(strconv.Itoa(os.Getpid()))
 	sb.WriteString(" access INF - ")
 	// Payload
-	sb.WriteString(url)
+	sb.WriteString(evt.local)
 	sb.WriteRune(' ')
-	sb.WriteString(peer)
+	sb.WriteString(evt.peer)
 	sb.WriteRune(' ')
-	sb.WriteString(method)
+	sb.WriteString(evt.method)
 	sb.WriteRune(' ')
-	sb.WriteString(itoa(status))
+	sb.WriteString(itoa(evt.status))
 	sb.WriteRune(' ')
-	sb.WriteString(utoa(spent))
+	sb.WriteString(utoa(evt.timeSpent))
 	sb.WriteRune(' ')
-	sb.WriteString(utoa(bytes))
+	sb.WriteString(utoa(evt.bytesOut))
 	sb.WriteRune(' ')
-	if len(containerID) > 0 {
-		sb.WriteString(containerID)
-	} else {
-		sb.WriteRune('-')
-	}
+	sb.WriteString(utoa(evt.bytesIn))
+	sb.WriteString(" - ")
+	sb.WriteString(evt.reqId)
 	sb.WriteRune(' ')
-	sb.WriteString(id)
-	sb.WriteRune(' ')
-	sb.WriteString(path)
+	sb.WriteString(evt.path)
 	logger.write(syslog.LOG_LOCAL1|syslog.LOG_INFO, sb.String())
 }
 
