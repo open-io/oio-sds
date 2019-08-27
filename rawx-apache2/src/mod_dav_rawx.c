@@ -36,6 +36,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metautils.h>
 #include <rawx-lib/src/rawx.h>
 #include <rawx-apache2/src/rawx_variables.h>
+#include <metautils/lib/common_variables.h>
 
 #include "mod_dav_rawx.h"
 #include "rawx_internals.h"
@@ -409,7 +410,7 @@ rawx_hook_post_config(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp UNU
 
 			gerr = volume_service_lock (conf->docroot, NAME_SRVTYPE_RAWX,
 					conf->service_id[0] ? conf->service_id : url, conf->ns_name,
-					FALSE);
+					oio_volume_lock_lazy);
 			if (!gerr)
 				volume_validated = 1;
 			else {
