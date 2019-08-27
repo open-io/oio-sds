@@ -276,15 +276,6 @@ rawx_hook_child_init(apr_pool_t *pchild, server_rec *s)
 
 	conf->cleanup = _cleanup_child;
 
-	/* Load the system configuration in the central config system */
-	do {
-		struct oio_cfg_handle_s *ns_conf = oio_cfg_cache_create();
-		if (ns_conf) {
-			oio_var_value_all_with_config(ns_conf, conf->ns_name);
-			oio_cfg_handle_clean(ns_conf);
-		}
-	} while (0);
-
 	if (oio_rawx_events) {
 		gchar *event_agent_addr = oio_cfg_get_eventagent(conf->ns_name);
 		GError *err = rawx_event_init(event_agent_addr);
@@ -386,6 +377,15 @@ rawx_hook_post_config(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp UNU
 	DAV_XDEBUG_POOL(plog, 0, "Checking the docroot XATTR lock for [%s]",
 			conf->docroot);
 
+	/* Load the system configuration in the central config system */
+	do {
+		struct oio_cfg_handle_s *ns_conf = oio_cfg_cache_create();
+		if (ns_conf) {
+			oio_var_value_all_with_config(ns_conf, conf->ns_name);
+			oio_cfg_handle_clean(ns_conf);
+		}
+	} while (0);
+
 	/* Runs the configured servers and check they do not serve
 	 * the grid docroot with an unauthorized IP:PORT couple */
 	for (s = server ; s ; s = s->next) {
@@ -422,6 +422,20 @@ rawx_hook_post_config(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp UNU
 				DAV_ERROR_POOL(plog, 0, "Failed to grab the docroot ownership: %s",
 						gerror_get_message(gerr));
 				goto label_error;
+			}
+
+			/* If configured, check the RAWX is not running in / */
+			struct stat s0 = {}, s1 = {};
+			stat(conf->docroot, &s0);
+			stat("/", &s1);
+			if (s0.st_dev == s1.st_dev) {
+				if (oio_rawx_allow_slash) {
+					__ap_log_perror(APLOG_NOTICE, 0, plog, "RAWX is running in /");
+				} else {
+					DAV_ERROR_POOL(plog, 0, "RAWX is not allowed to run in '/'."
+							" Consider configuring rawx.slash_allowed to change this behavior.");
+					goto label_error;
+				}
 			}
 		}
 	}
