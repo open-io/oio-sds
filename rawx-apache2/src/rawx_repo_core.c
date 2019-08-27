@@ -901,8 +901,6 @@ retry:
 
 	if (conf->upload_buffer_size > 0) {
 		const size_t buf_len = conf->upload_buffer_size;
-		DAV_ERROR_REQ(resource->info->request, 0,
-				"ACTUAL BUF %"G_GINT64_FORMAT, (gint64)buf_len);
 		void *buf_ptr = apr_palloc(ds->p, buf_len);
 		setvbuf(ds->f, buf_ptr, _IOFBF, buf_len);
 	}

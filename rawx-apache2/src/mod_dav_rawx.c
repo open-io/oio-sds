@@ -169,16 +169,10 @@ dav_rawx_cmd_gridconfig_uploadbuf(cmd_parms *cmd, void *config UNUSED, const cha
 {
 	dav_rawx_server_conf *conf =
 		ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
-
 	gint64 v = 0;
-	DAV_ERROR_POOL(cmd->temp_pool, 0, "%s %s", __FUNCTION__, arg1);
 	if (!oio_str_is_number(arg1, &v) || v < 0)
 		return "invalid upload buffer size";
-
 	conf->upload_buffer_size = 1024 * CLAMP(v, 0, 65536);
-	DAV_ERROR_POOL(cmd->temp_pool, 0,
-			"BUF v=%"G_GINT64_FORMAT" size=%"G_GINT64_FORMAT,
-			v, (gint64)conf->upload_buffer_size);
 	return NULL;
 }
 
