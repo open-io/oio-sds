@@ -56,7 +56,11 @@
 			{ "type": "bool", "name": "oio_rawx_events",
 				"key": "rawx.events_allowed",
 				"def": true,
-				"descr": "" }
+				"descr": "Is the RAWX allowed to emit events in the beansatlkd?" },
+			{ "type": "bool", "name": "oio_rawx_allow_slash",
+				"key": "rawx.slash_allowed",
+				"def": true,
+				"descr": "Is the RAWX allowed to run if its base directory is hosted in the root partition, a.k.a. '/'." }
 		]
 	},
 	"events": {
