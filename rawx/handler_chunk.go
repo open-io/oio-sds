@@ -377,11 +377,6 @@ func (rr *rawxRequest) serveChunk() {
 	case "PUT":
 		rr.uploadChunk()
 		spent = IncrementStatReqPut(rr)
-		LogHttp(
-			rr.rawx.url, rr.req.RemoteAddr, rr.req.Method,
-			rr.status, spent, rr.bytesIn, rr.chunk.ContainerID,
-			rr.reqid, rr.req.URL.Path)
-		return
 	case "DELETE":
 		if err := rr.drain(); err != nil {
 			rr.replyError(err)
@@ -412,8 +407,15 @@ func (rr *rawxRequest) serveChunk() {
 		spent = IncrementStatReqOther(rr)
 	}
 
-	LogHttp(
-		rr.rawx.url, rr.req.RemoteAddr, rr.req.Method,
-		rr.status, spent, rr.bytesOut, rr.chunk.ContainerID,
-		rr.reqid, rr.req.URL.Path)
+	LogHttp(AccessLogEvent{
+		status:    rr.status,
+		timeSpent: spent,
+		bytesIn:   rr.bytesIn,
+		bytesOut:  rr.bytesOut,
+		method:    rr.req.Method,
+		local:     rr.rawx.url,
+		peer:      rr.req.RemoteAddr,
+		path:      rr.req.URL.Path,
+		reqId:     rr.reqid,
+	})
 }
