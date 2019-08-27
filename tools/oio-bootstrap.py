@@ -195,23 +195,10 @@ SetEnv LOG_TYPE access
 SetEnv LEVEL INF
 SetEnv HOSTNAME oio
 
-SetEnvIf Remote_Addr "^" log-cid-out=1
-SetEnvIf Remote_Addr "^" log-cid-in=0
-SetEnvIf Request_Method "PUT" log-cid-in=1
-SetEnvIf Request_Method "PUT" !log-cid-out
-SetEnvIf log-cid-in 0 !log-cid-in
-
-LogFormat "%{%b %d %T}t %{HOSTNAME}e %{INFO_SERVICES}e %{pid}P %{tid}P %{LOG_TYPE}e %{LEVEL}e %{Host}i %a:%{remote}p %m %>s %D %O %{${META_HEADER}-container-id}i %{x-oio-req-id}i %U" log/cid-in
-LogFormat "%{%b %d %T}t %{HOSTNAME}e %{INFO_SERVICES}e %{pid}P %{tid}P %{LOG_TYPE}e %{LEVEL}e %{Host}i %a:%{remote}p %m %>s %D %O %{${META_HEADER}-container-id}o %{x-oio-req-id}i %U" log/cid-out
-
-ErrorLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-errors.log
+LogFormat "%{%b %d %T}t %{HOSTNAME}e %{INFO_SERVICES}e %{pid}P %{tid}P %{LOG_TYPE}e %{LEVEL}e %{Host}i %a:%{remote}p %m %>s %D %O %I - %{x-oio-req-id}i %U" log/req
 SetEnvIf Request_URI "/(stat|info)$" nolog=1
-
-SetEnvIf nolog 1 !log-cid-out
-SetEnvIf nolog 1 !log-cid-in
-
-CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-access.log log/cid-out env=log-cid-out
-CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-access.log log/cid-in  env=log-cid-in
+CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-access.log log/req env=!nolog
+ErrorLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-${SRVNUM}-errors.log
 LogLevel info
 
 <IfModule prefork.c>
