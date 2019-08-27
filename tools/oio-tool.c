@@ -233,7 +233,7 @@ static int
 _init_volume(const char *nsname, const char *srvtype, const char *endpoint,
 		const char *path)
 {
-	GError *err = volume_service_lock(path, srvtype, endpoint, nsname, FALSE);
+	GError *err = volume_service_lock(path, srvtype, endpoint, nsname, TRUE);
 	if (err) {
 		g_printerr("Volume assignation failed: (%d) %s\n", err->code, err->message);
 		g_clear_error(&err);
