@@ -30,6 +30,8 @@ along with this program. If not, see <http://www.gnu.org/licenses/>.
 #include <server/network_server.h>
 #include <server/server_variables.h>
 #include <rdir/rdir_variables.h>
+#include <metautils/lib/common_variables.h>
+
 #include <proxy/transport_http.h>
 
 #include "routes.h"
@@ -43,7 +45,6 @@ static GSList *config_urlv = NULL;
 static struct network_server_s *server = NULL;
 static struct grid_task_queue_s *gtq_admin = NULL;
 static GThread *th_gtq_admin = NULL;
-static gboolean servicing = FALSE;
 static GCond cond_bases;
 static GMutex lock_bases;
 static GTree *tree_bases = NULL;
@@ -2505,10 +2506,6 @@ grid_main_get_options(void)
 		{"Config", OT_LIST, {.lst = &config_paths},
 			"Load the given file and overload the central variables"},
 
-		{"Servicing", OT_BOOL, {.b = &servicing},
-			"Tell the service is going to production.\n"
-			"\t\tCheck the volume is already locked and belongs to us."},
-
 		{NULL, 0, {.i = 0}, NULL}
 	};
 
@@ -2678,7 +2675,7 @@ grid_main_configure(int argc, char **argv)
 
 	/* Validate the volume was never used for another rdir */
 	err = volume_service_lock(basedir, NAME_SRVTYPE_RDIR,
-				  cfg_main_url, ns_name, servicing);
+				  cfg_main_url, ns_name, oio_volume_lock_lazy);
 	if (err != NULL)
 		return _config_error("Volume lock error", err);
 
