@@ -931,11 +931,19 @@ Used by `gcc`
 
 ### rawx.events_allowed
 
-> TODO: to be documented
+> Is the RAWX allowed to emit events in the beansatlkd?
 
  * default: **TRUE**
  * type: gboolean
  * cmake directive: *OIO_RAWX_EVENTS_ALLOWED*
+
+### rawx.slash_allowed
+
+> Is the RAWX allowed to run if its base directory is hosted in the root partition, a.k.a. '/'.
+
+ * default: **TRUE**
+ * type: gboolean
+ * cmake directive: *OIO_RAWX_SLASH_ALLOWED*
 
 ### rawx.tube.chunk_created
 
