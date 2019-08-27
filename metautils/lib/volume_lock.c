@@ -52,11 +52,11 @@ retry:
 
 	if (!err) {
 		if (strlen(v) != (gsize)realsize) {
-			err = NEWERROR(CODE_INTERNAL_ERROR,
+			err = SYSERR(
 					"XATTR size differ, expected value for %s is %s, got %*s",
 					n, v, (int)realsize, buf);
 		} else if (0 != memcmp(v, buf, realsize)) {
-			err = NEWERROR(CODE_INTERNAL_ERROR,
+			err = SYSERR(
 					"XATTR differ, expected value for %s is %s, got %*s",
 					n, v, (int)realsize, buf);
 		}
@@ -68,9 +68,9 @@ retry:
 
 static GError*
 _set_lock(const char *vol, const char *n, const char *v,
-	const gboolean servicing)
+	const gboolean autoset)
 {
-	if (!servicing) {
+	if (autoset) {
 		int rc = setxattr(vol, n, v, strlen(v), XATTR_CREATE);
 		if (!rc)
 			return NULL;
@@ -83,7 +83,7 @@ _set_lock(const char *vol, const char *n, const char *v,
 
 GError*
 volume_service_lock(const char *vol, const char *type, const char *id,
-		const char *ns, const gboolean servicing)
+		const char *ns, const gboolean autoset)
 {
 	EXTRA_ASSERT (vol != NULL);
 	EXTRA_ASSERT (ns != NULL);
@@ -91,11 +91,11 @@ volume_service_lock(const char *vol, const char *type, const char *id,
 	EXTRA_ASSERT (type != NULL);
 
 	GError *err;
-	if (NULL != (err = _set_lock(vol, "user.server.ns", ns, servicing)))
+	if (NULL != (err = _set_lock(vol, "user.server.ns", ns, autoset)))
 		return err;
-	if (NULL != (err = _set_lock(vol, "user.server.id", id, servicing)))
+	if (NULL != (err = _set_lock(vol, "user.server.id", id, autoset)))
 		return err;
-	if (NULL != (err = _set_lock(vol, "user.server.type", type, servicing)))
+	if (NULL != (err = _set_lock(vol, "user.server.type", type, autoset)))
 		return err;
 	return NULL;
 }
