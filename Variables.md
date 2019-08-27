@@ -1757,6 +1757,14 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_UDP_ALLOWED*
 
+### volume.lazy_lock
+
+> Allow the services to self-assign to the volume they find in their configuration. This was the default behaviour in pre 5.2 versions of oio-sds.
+
+ * default: **TRUE**
+ * type: gboolean
+ * cmake directive: *OIO_VOLUME_LAZY_LOCK*
+
 ## Variables only for testing purposes
 
 These variables are only active when the **ENBUG** option has been specified on

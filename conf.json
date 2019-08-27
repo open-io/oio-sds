@@ -234,6 +234,11 @@
 		"header": "common_variables.h",
 		"variables": [
 
+			{ "type": "bool", "name": "oio_volume_lock_lazy",
+				"key": "volume.lazy_lock",
+				"descr": "Allow the services to self-assign to the volume they find in their configuration. This was the default behaviour in pre 5.2 versions of oio-sds.",
+				"def": true},
+
 			{ "type": "uint", "name": "oio_socket_gridd_rcvbuf",
 				"key": "socket.gridd.rcvbuf",
 				"descr": "Set to a non-zero value to explicitely force a RCVBUF option on client sockets to gridd services. Set to 0 to keep the OS default.",
