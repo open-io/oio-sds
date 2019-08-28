@@ -31,7 +31,7 @@
 			{ "type": "bool", "name": "meta2_flag_precheck_on_generate",
 				"key": "meta2.generate.precheck",
 				"descr": "Should the meta2 check the container state (quota, etc) before generating chunks.",
-				"def": true },
+				"def": false },
 
 			{ "type": "bool", "name": "meta2_flag_delete_exceeding_versions",
 				"key": "meta2.delete_exceeding_versions",
@@ -51,7 +51,11 @@
 			{ "type": "bool", "name": "oio_rawx_events",
 				"key": "rawx.events_allowed",
 				"def": true,
-				"descr": "" }
+				"descr": "Is the RAWX allowed to emit events in the beansatlkd?" },
+			{ "type": "bool", "name": "oio_rawx_allow_slash",
+				"key": "rawx.slash_allowed",
+				"def": true,
+				"descr": "Is the RAWX allowed to run if its base directory is hosted in the root partition, a.k.a. '/'." }
 		]
 	},
 	"events": {
@@ -794,6 +798,11 @@
 		"code": "proxy_variables.c",
 		"header": "proxy_variables.h",
 		"variables": [
+			{ "type": "int", "name": "oio_proxy_local_prepare",
+				"key": "proxy.srv_local.prepare",
+				"descr": "Should the proxy allocate services with a local preference. 0 for no, 1 for only one local service and 2 for a maimum of services in spite of the location constraints. The value 2 is a quirk that should be avoided unless upon exceptional conditon wherein you accept the risk.",
+				"def": 0, "min": 0, "max": 2},
+
 			{ "type": "string", "name": "oio_proxy_location",
 				"key": "proxy.location",
 				"limit": 256,
@@ -858,7 +867,7 @@
 			{ "type": "monotonic", "name": "ttl_expire_master_services",
 				"key": "proxy.ttl.services.master",
 				"descr": "In a proxy, sets the TTL on each 'known master' entry. That cache is filled each time a redirection to a MASTER occurs, so that we can immediately direct write operation to the service that owns the MASTER copy.",
-				"def": "5s", "min": 0, "max": "7d" },
+				"def": "30m", "min": 0, "max": "7d" },
 
 			{ "type": "epoch", "name": "lb_downstream_delay",
 				"key": "proxy.period.cs.downstream",
@@ -907,7 +916,7 @@
 			{ "type": "bool", "name": "flag_prefer_slave_for_read",
 				"key": "proxy.prefer.slave_for_read",
 				"descr": "In a proxy, upon a read request, should the proxy prefer a service known to host a SLAVE copy of the DB.",
-				"def": false,
+				"def": true,
 				"aliases": ["PreferSlave"]},
 
 			{ "type": "bool", "name": "flag_force_master",

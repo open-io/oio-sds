@@ -51,12 +51,12 @@ add_custom_command(
 add_library(meta2v2utils STATIC
 		${CMAKE_CURRENT_BINARY_DIR}/autogen_codec.c
 		${CMAKE_CURRENT_BINARY_DIR}/meta2_variables.c
+		meta2_utils_lb.c
 		generic.c
 		meta2_bean.c
 		meta2_bean_utils.c
 		meta2_utils_json_in.c
-		meta2_utils_json_out.c
-)
+		meta2_utils_json_out.c)
 
 target_link_libraries(meta2v2utils
 		metautils
@@ -67,7 +67,6 @@ add_library(meta2v2 STATIC
 		${CMAKE_CURRENT_BINARY_DIR}/autogen_storage.c
 		generic_backend.c
 		meta2_utils.c
-		meta2_utils_lb.c
 		meta2_backend.c)
 
 target_link_libraries(meta2v2

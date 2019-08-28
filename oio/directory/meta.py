@@ -146,6 +146,16 @@ class MetaMapping(object):
             service_type = self._get_service_type_by_base(base)
             cid, _ = self.get_cid_and_seq(base)
             if no_longer_used:
+                # Pre-leave elections to avoid GETVERS targeting the old peer,
+                # because the cache of peers in each election is cleared when
+                # restarting the FSM.
+                try:
+                    self.admin.election_leave(service_type, cid=cid)
+                except OioException as exc:
+                    self.logger.warn(
+                        "Failed to reset the election before deleting of "
+                        "%s: %s",
+                        cid, exc)
                 try:
                     self.admin.remove_base(service_type, cid=cid,
                                            service_id=no_longer_used)

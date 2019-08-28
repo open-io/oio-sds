@@ -233,6 +233,13 @@ class ClusterUnlockAll(lister.Lister):
         return columns, self._unlock_all(parsed_args)
 
 
+def _sleep_interval(*tab):
+    for v in tab:
+        yield v
+    while True:
+        yield tab[-1]
+
+
 class ClusterWait(lister.Lister):
     """Wait for services to get a score above specified value."""
 
@@ -297,9 +304,10 @@ class ClusterWait(lister.Lister):
                     if srv['score'] < min_score:
                         self.log.warn(
                             "%s %s %s",
-                            srv['type'], srv['id'], srv['score'])
+                            srv['type'], srv.get('id', None), srv['score'])
                 raise Exception(msg)
 
+        interval = _sleep_interval(1.0, 2.0, 4.0)
         while True:
             descr = []
             for type_ in types:
@@ -317,7 +325,7 @@ class ClusterWait(lister.Lister):
                         self.log.debug("Only %d services up", ok)
                         check_deadline()
                         maybe_unlock(descr)
-                        sleep(1.0)
+                        sleep(next(interval))
                         continue
                 # No service down, and enough services, we are done.
                 for srv in descr:
@@ -327,7 +335,7 @@ class ClusterWait(lister.Lister):
                 self.log.debug("Still %d services down", ko)
                 check_deadline()
                 maybe_unlock(descr)
-                sleep(1.0)
+                sleep(next(interval))
 
     def take_action(self, parsed_args):
         columns = ('Type', 'Service', 'Score')

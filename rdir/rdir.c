@@ -1125,7 +1125,7 @@ _route_vol_push(struct req_args_s *args, struct json_object *jbody,
 
 	GString *key = _record_to_key(&rec);
 	GString *value = g_string_sized_new(1024);
-	args->rp->subject(key->str);
+	args->rp->access_tail("k=%s", key->str);
 	_record_encode(&rec, value);
 
 	/* Eventually push the record in the database */
@@ -2106,7 +2106,7 @@ _route_meta2_push(struct req_args_s *args, struct json_object *jbody,
 		return _reply_format_error(args->rp, err);
 	}
 	GString *value = g_string_sized_new(1024);
-	args->rp->subject(key->str);
+	args->rp->access_tail("k=%s", key->str);
 	_meta2_record_encode(&rec, value);
 
 
@@ -2177,7 +2177,7 @@ _route_meta2_delete(struct req_args_s *args, struct json_object *jbody,
 		return _reply_format_error(args->rp, err);
 	}
 
-	args->rp->subject(key->str);
+	args->rp->access_tail("k=%s", key->str);
 
 	/* Eventually delete the record from the database */
 	err = _meta2_db_delete(meta2_address, key);
@@ -2391,7 +2391,7 @@ handler_action(struct http_request_s *rq, struct http_reply_ctx_s *rp)
 	if (reqid)
 		oio_ext_set_reqid(reqid);
 	else
-		oio_ext_set_random_reqid();
+		oio_ext_set_prefixed_random_reqid("rdir-");
 
 	/* parse the URLL and forward to the backend if the route matches */
 	struct req_args_s args = {0};

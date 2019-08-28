@@ -58,6 +58,7 @@ void metautils_message_set_BODY (MESSAGE m, const void *b, gsize l);
 gboolean metautils_message_has_ID (MESSAGE m);
 gboolean metautils_message_has_BODY (MESSAGE m);
 
+MESSAGE metautils_message_create_reply (const char *name);
 MESSAGE metautils_message_create_named (const char *name, gint64 deadline);
 
 /** Frees all the internal structures of the pointed message. */

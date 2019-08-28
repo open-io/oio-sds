@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -14,7 +14,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from oio.common import exceptions as exc
+from oio.common.constants import REQID_HEADER
 from oio.common.http_urllib3 import urllibexc
+from oio.common.utils import request_id
 from oio.conscience.checker.base import BaseChecker
 
 
@@ -42,7 +44,9 @@ class HttpChecker(BaseChecker):
         try:
             # We have clues that the connection will be reused quickly to get
             # stats, thus we do not explicitely require its closure.
-            resp = self.agent.pool_manager.request("GET", self.url)
+            hdrs = {REQID_HEADER: request_id('chk-')}
+            resp = self.agent.pool_manager.request("GET", self.url,
+                                                   headers=hdrs)
             if resp.status == 200:
                 self.success = True
             else:

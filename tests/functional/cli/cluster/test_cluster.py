@@ -74,6 +74,8 @@ class ClusterTest(CliTestCase):
         if self.is_running_on_public_ci():
             self.skipTest("Too long to run on public CI")
 
+        self._flush_cs('rawx')
+        time.sleep(3.0)
         opts = self.get_opts([], 'json')
 
         # Get one rawx service's ID
@@ -127,6 +129,6 @@ class ClusterTest(CliTestCase):
         data = json.loads(output)
         self.assertTrue(all([node['Result'] == 'unlocked' for node in data]))
         # Wait for services to be non-zero-scored
-        output = self.openio('cluster wait rawx -d 99 -s 20' + opts)
+        output = self.openio('cluster wait rawx -d 99 -s 1' + opts)
         data = json.loads(output)
-        self.assertTrue(all([node['Score'] > 20 for node in data]))
+        self.assertTrue(all([node['Score'] > 1 for node in data]))

@@ -66,6 +66,16 @@ guint32 key_from_loc_level(oio_location_t location, int level);
  * keep the 16 (or 8) LSB of each hash to build a 64 integer. */
 oio_location_t location_from_dotted_string(const char *dotted);
 
+/* Returns the number of bits in the mask corresponding to the
+ * proximity level */
+unsigned int oio_location_common_bits(enum oio_loc_proximity_level_e level);
+
+/* Zeroes all the bits that are not in the mask corresponding to
+ * the proximity level. I.e. gives the first location in the
+ * proximity segment.*/
+oio_location_t oio_location_mask_after(oio_location_t location,
+		enum oio_loc_proximity_level_e level);
+
 #ifdef __cplusplus
 }
 #endif

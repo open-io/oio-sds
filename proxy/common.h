@@ -123,8 +123,16 @@ enum proxy_preference_e {
 };
 
 extern gchar *ns_name;
+
+/* The ugliest quirk on the world, because there is a fundamental flaw in the
+ * LB algorithm that fails to compares distances we dupplicate the set of rawx
+ * used by the meta2 logic */
+extern struct oio_lb_world_s *lb_world_rawx;
+extern struct oio_lb_s *lb_rawx;
+
 extern struct oio_lb_world_s *lb_world;
 extern struct oio_lb_s *lb;
+
 extern struct hc_resolver_s *resolver;
 extern oio_location_t location_num;
 

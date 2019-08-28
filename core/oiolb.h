@@ -45,8 +45,8 @@ struct oio_lb_item_s
 struct oio_lb_selected_item_s
 {
 	struct oio_lb_item_s *item;
-	const gchar *expected_slot;
-	const gchar *final_slot;
+	gchar *expected_slot;
+	gchar *final_slot;
 	guint16 expected_dist;
 	guint16 final_dist;
 	guint16 warn_dist;
@@ -203,6 +203,13 @@ void oio_lb__delete_pool(struct oio_lb_s *lb, const char *name);
 GError *oio_lb__poll_pool(struct oio_lb_s *lb, const char *name,
 		const oio_location_t * avoids, oio_lb_on_id_f on_id, gboolean *flawed);
 
+/** Calls oio_lb_pool__poll() on the pool `name`. Focus on the
+ * provided location.
+ * Thread-safe. */
+GError *oio_lb__poll_pool_around(struct oio_lb_s *lb, const char *name,
+		const oio_location_t pin, int mode,
+		oio_lb_on_id_f on_id, gboolean *flawed);
+
 /** Calls oio_lb_pool__patch() on the pool `name`. Thread-safe. */
 GError *oio_lb__patch_with_pool(struct oio_lb_s *lb, const char *name,
 		const oio_location_t *avoids, const oio_location_t *known,
@@ -212,5 +219,8 @@ GError *oio_lb__patch_with_pool(struct oio_lb_s *lb, const char *name,
  *  The result must be freed with g_free(). */
 struct oio_lb_item_s *oio_lb__get_item_from_pool(struct oio_lb_s *lb,
 		const char *name, const char *id);
+
+GString* oio_selected_item_quality_to_json(GString *inout,
+		struct oio_lb_selected_item_s *sel);
 
 #endif /*OIO_SDS__core__oiolb_h*/

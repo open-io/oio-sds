@@ -85,13 +85,14 @@ class ItemCheckCommand(lister.Lister):
 
     def _format_results(self):
         for res in self.checker.run():
-            if not res.errors:
+            if not res.has_errors:
                 status = 'OK'
+                yield (res.type, repr(res), status, str(None))
             else:
                 self.success = False
                 status = 'error'
-            yield (res.target.type, repr(res.target),
-                   status, res.errors_to_str())
+                yield (res.type, repr(res),
+                       status, res.latest_error_result().errors_to_str())
 
     def run(self, parsed_args):
         super(ItemCheckCommand, self).run(parsed_args)

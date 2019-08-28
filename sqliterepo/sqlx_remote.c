@@ -101,14 +101,14 @@ sqlx_pack_DESCR(const struct sqlx_name_s *name, gint64 deadline)
 GByteArray*
 sqlx_pack_INFO(gint64 deadline)
 {
-	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_SQLX_INFO, deadline);
+	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_SQLX_INFO, deadline);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
 sqlx_pack_LEANIFY(gint64 deadline)
 {
-	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_SQLX_LEANIFY, deadline);
+	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_SQLX_LEANIFY, deadline);
 	return message_marshall_gba_and_clean(req);
 }
 
@@ -116,6 +116,16 @@ GByteArray*
 sqlx_pack_RESYNC(const struct sqlx_name_s *name, gint64 deadline)
 {
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_RESYNC, NULL, name, deadline);
+	return message_marshall_gba_and_clean(req);
+}
+
+GByteArray*
+sqlx_pack_VACUUM(const struct sqlx_name_s *name, gboolean local, gint64 deadline)
+{
+	gint8 local2 = BOOL(local);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_VACUUM, NULL, name, deadline);
+	if (local)
+		metautils_message_add_field(req, NAME_MSGKEY_LOCAL, &local2, 1);
 	return message_marshall_gba_and_clean(req);
 }
 

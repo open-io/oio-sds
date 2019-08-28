@@ -1146,7 +1146,6 @@ meta1_backend_services_relink(struct meta1_backend_s *m1,
 
 	struct meta1_service_url_s **ukept = NULL, **urepl = NULL;
 	/* fields to be prefetched */
-
 	ukept = __parse_and_expand (kept);
 	urepl = __parse_and_expand (replaced);
 

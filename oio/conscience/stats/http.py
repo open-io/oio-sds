@@ -14,7 +14,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from oio.common.json import json
+from oio.common.constants import REQID_HEADER
 from oio.common.http_urllib3 import urllibexc
+from oio.common.utils import request_id
 from oio.conscience.stats.base import BaseStat
 
 
@@ -72,8 +74,10 @@ class HttpStat(BaseStat):
             # We have troubles identifying connections that have been closed
             # on the remote side but not on the local side, thus we
             # explicitely require the connection to be closed.
+            reqid = request_id('stat-')
             resp = self.agent.pool_manager.request(
-                'GET', self.url, headers={'Connection': 'close'})
+                'GET', self.url, headers={'Connection': 'close',
+                                          REQID_HEADER: reqid})
             if resp.status == 200:
                 result = self._parse_func(resp.data)
             else:

@@ -23,7 +23,7 @@ import logging
 import random
 import simplejson as json
 import struct
-from tests.utils import BaseTestCase, random_str, random_id
+from tests.utils import BaseTestCase, random_str, random_id, strange_paths
 from oio.common import exceptions as exc
 from oio.common.constants import OIO_DB_STATUS_NAME, OIO_DB_ENABLED, \
     OIO_DB_FROZEN, OIO_DB_DISABLED, OBJECT_METADATA_PREFIX, \
@@ -1036,18 +1036,13 @@ class TestMeta2Contents(BaseTestCase):
         return True
 
     def test_prepare(self):
-        headers = {'X-oio-action-mode': 'autocreate'}
         params = self.param_content(self.ref, random_content())
 
         resp = self.request('POST', self.url_content('prepare'), params=params)
         self.assertError(resp, 400, 400)
+        # A content/prepare now works despite the container is not created
         resp = self.request('POST', self.url_content('prepare'),
                             params=params, data=json.dumps({'size': 1024}))
-        self.assertError(resp, 404, 406)
-        resp = self.request('POST', self.url_content('prepare'),
-                            params=params, data=json.dumps({'size': 1024}),
-                            headers=headers)
-        self.assertEqual(resp.status, 200)
         self.assertTrue(self.valid_chunks(self.json_loads(resp.data)))
         # TODO test /content/prepare with additional useless parameters
         # TODO test /content/prepare with invalid sizes
@@ -1069,8 +1064,11 @@ class TestMeta2Contents(BaseTestCase):
         self.assertEqual(resp.status, 400)
 
     def test_spare_with_one_missing(self):
+        stg_policy = self.conscience.info().get(
+                'options', dict()).get('storage_policy')
         headers = {'X-oio-action-mode': 'autocreate'}
         params = self.param_content(self.ref, random_content())
+        params.update({'stgpol': stg_policy})
         resp = self.request('POST', self.url_content('prepare2'),
                             params=params, data=json.dumps({'size': 1024}),
                             headers=headers)
@@ -1094,8 +1092,12 @@ class TestMeta2Contents(BaseTestCase):
         self.assertEqual(1, len(spare_data['properties']))
 
     def _test_spare_with_n_broken(self, count_broken):
+        stg_policy = self.conscience.info().get(
+                'options', dict()).get('storage_policy')
+
         headers = {'X-oio-action-mode': 'autocreate'}
         params = self.param_content(self.ref, random_content())
+        params.update({'stgpol': stg_policy})
         resp = self.request('POST', self.url_content('prepare2'),
                             params=params, data=json.dumps({'size': 1024}),
                             headers=headers)
@@ -1248,19 +1250,6 @@ class TestMeta2Contents(BaseTestCase):
         self.assertEqual(json_data['contents'][0]['status'], 204)
         self.assertEqual(json_data['contents'][1]['status'], 204)
 
-        strange_paths = [
-            "Annual report.txt",
-            "foo+bar=foobar.txt",
-            "100%_bug_free.c",
-            "forward/slash/allowed",
-            "I\\put\\backslashes\\and$dollar$signs$in$file$names",
-            "Je suis tombé sur la tête, mais ça va bien.",
-            "%s%f%u%d%%",
-            "carriage\rreturn",
-            "line\nfeed",
-            "ta\tbu\tla\ttion",
-            "controlchars",
-        ]
         contents = []
         for name in strange_paths:
             self._create_content(name)

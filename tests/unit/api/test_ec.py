@@ -94,7 +94,10 @@ class TestEC(unittest.TestCase):
         with set_http_connect(*resps):
             handler = EcMetachunkWriter(self.sysmeta, self.meta_chunk(),
                                         checksum, self.storage_method)
-            self.assertRaises(exc.OioException, handler.stream, source, size)
+            # From now on, exceptions happening during chunk upload are
+            # considered retryable, and thus will tell the caller the
+            # service was just too busy.
+            self.assertRaises(exc.ServiceBusy, handler.stream, source, size)
 
     def test_write_quorum_success(self):
         checksum = self.checksum()
@@ -129,8 +132,7 @@ class TestEC(unittest.TestCase):
         with set_http_connect(*resps):
             handler = EcMetachunkWriter(self.sysmeta, self.meta_chunk(),
                                         checksum, self.storage_method)
-            # TODO use specialized Exception
-            self.assertRaises(exc.OioException, handler.stream, source, size)
+            self.assertRaises(exc.ServiceBusy, handler.stream, source, size)
 
     def test_write_connect_errors(self):
         test_cases = [

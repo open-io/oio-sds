@@ -175,16 +175,13 @@ grid_hash_depth        1
 
 # At the end of an upload, perform a fsync() on the chunk file itself
 grid_fsync             ${FSYNC}
+grid_buffer_size 8192
 
 # At the end of an upload, perform a fsync() on the directory holding the chunk
 grid_fsync_dir         ${FSYNC}
 
 # Preallocate space for the chunk file (enabled by default)
 #grid_fallocate enabled
-
-# Triggers Access Control List (acl)
-# DO NOT USE, this is broken
-#grid_acl disabled
 
 # Enable compression ('zlib' or 'lzo' or 'off')
 grid_compression ${COMPRESSION}
@@ -337,7 +334,7 @@ template_redis_watch = """
 host: ${IP}
 port: ${PORT}
 type: redis
-location: localhost.db${SRVNUM}
+location: ${LOC}
 checks:
     - {type: tcp}
 slots:
@@ -439,6 +436,7 @@ THREECOPIES=rawx3:DUPONETHREE
 17COPIES=rawx17:DUP17
 EC=NONE:EC
 EC21=NONE:EC21
+ECX21=NONE:ECX21
 BACKBLAZE=NONE:BACKBLAZE
 
 [DATA_SECURITY]
@@ -454,6 +452,7 @@ DUP17=plain/min_dist=1,nb_copy=17
 
 EC=ec/k=6,m=3,algo=liberasurecode_rs_vand,min_dist=1
 EC21=ec/k=2,m=1,algo=liberasurecode_rs_vand,min_dist=1,warn_dist=${WARN_DIST}
+ECX21=ec/k=2,m=1,algo=liberasurecode_rs_vand,min_dist=0,max_dist=2,warn_dist=0
 
 # List of possible values for the "algo" parameter of "ec" data security:
 # "jerasure_rs_vand"       EC_BACKEND_JERASURE_RS_VAND
@@ -539,7 +538,7 @@ targets=1,rawx-europe,rawx;1,rawx-usa,rawx;1,rawx-asia,rawx
 [pool:rawx3nearby]
 targets=3,rawx
 nearby_mode=true
-warn_dist=2
+warn_dist=0
 
 [pool:rawx3faraway]
 targets=3,rawx
@@ -726,6 +725,7 @@ ns.meta1_digits=${M1_DIGITS}
 
 # Small pagination to avoid time-consuming tests
 meta2.flush_limit=64
+proxy.location=${LOC_PROXYD}
 
 admin=${IP}:${PORT_ADMIN}
 
@@ -992,7 +992,7 @@ defaults = {
     'REPLI_M1': 1,
     'COMPRESSION': "off",
     MONITOR_PERIOD: 1,
-    M1_DIGITS: 4}
+    M1_DIGITS: 2}
 
 # XXX When /usr/sbin/httpd is present we suspect a Redhat/Centos/Fedora
 # environment. If not, we consider being in a Ubuntu/Debian environment.
@@ -1165,20 +1165,8 @@ def generate(options):
         env['VOLUME'] = '{DATADIR}/{NS}-{SRVTYPE}-{SRVNUM}'.format(**env)
         return env
 
-    ENV['MONITOR_PERIOD'] = getint(
-        options.get(MONITOR_PERIOD), defaults[MONITOR_PERIOD])
-    if options.get(ZOOKEEPER):
-        ENV['NOZK'] = ''
-    else:
-        ENV['NOZK'] = '#'
-
-    mkdir_noerror(SDSDIR)
-    mkdir_noerror(CODEDIR)
-    mkdir_noerror(DATADIR)
-    mkdir_noerror(CFGDIR)
-    mkdir_noerror(WATCHDIR)
-    mkdir_noerror(RUNDIR)
-    mkdir_noerror(LOGDIR)
+    def build_location(ip, num):
+        return "rack.%s.%d" % (ip.replace(".", "-"), num)
 
     def add_service(env):
         t = env['SRVTYPE']
@@ -1193,7 +1181,7 @@ def generate(options):
                 _h = ensure(options[t].get(SVC_HOSTS), hosts)
             env['IP'] = _h[(num-1) % len(_h)]
         if 'LOC' not in env:
-            env['LOC'] = "host%s.vol%d" % (env['IP'].rsplit('.', 1)[-1], num)
+            env['LOC'] = build_location(env['IP'], env['SRVNUM'])
         if 'PORT' in env:
             out['addr'] = '%s:%s' % (env['IP'], env['PORT'])
         if 'VOLUME' in env:
@@ -1205,6 +1193,22 @@ def generate(options):
                 env.get('WANT_SERVICE_ID') != '#'):
             out['service_id'] = env['SERVICE_ID']
         final_services[t].append(out)
+
+    ENV['LOC_PROXYD'] = build_location(hosts[0], ENV['PORT_PROXYD'])
+    ENV['MONITOR_PERIOD'] = getint(
+        options.get(MONITOR_PERIOD), defaults[MONITOR_PERIOD])
+    if options.get(ZOOKEEPER):
+        ENV['NOZK'] = ''
+    else:
+        ENV['NOZK'] = '#'
+
+    mkdir_noerror(SDSDIR)
+    mkdir_noerror(CODEDIR)
+    mkdir_noerror(DATADIR)
+    mkdir_noerror(CFGDIR)
+    mkdir_noerror(WATCHDIR)
+    mkdir_noerror(RUNDIR)
+    mkdir_noerror(LOGDIR)
 
     # gridinit header
     with open(gridinit(ENV), 'w+') as f:
@@ -1418,7 +1422,7 @@ def generate(options):
 
     # proxy
     env = subenv({'SRVTYPE': 'proxy', 'SRVNUM': 1, 'PORT': port_proxy,
-                  'EXE': 'oio-proxy'})
+                  'EXE': 'oio-proxy', 'LOC': ENV['LOC_PROXYD']})
     add_service(env)
     with open(gridinit(env), 'a+') as f:
         tpl = Template(template_gridinit_proxy)

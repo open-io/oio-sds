@@ -37,6 +37,7 @@ enum http_rc_e action_forward_get_version (struct req_args_s *args);
 enum http_rc_e action_forward_kill (struct req_args_s *args);
 enum http_rc_e action_forward_lean_glib (struct req_args_s *args);
 enum http_rc_e action_forward_lean_sqlx (struct req_args_s *args);
+enum http_rc_e action_forward_balance_masters(struct req_args_s *args);
 enum http_rc_e action_forward_flush (struct req_args_s *args);
 enum http_rc_e action_forward_reload (struct req_args_s *args);
 
@@ -113,6 +114,7 @@ enum http_rc_e action_admin_status (struct req_args_s *args);
 enum http_rc_e action_admin_info (struct req_args_s *args);
 enum http_rc_e action_admin_drop_cache (struct req_args_s *args);
 enum http_rc_e action_admin_sync (struct req_args_s *args);
+enum http_rc_e action_admin_vacuum(struct req_args_s *args);
 enum http_rc_e action_admin_leave (struct req_args_s *args);
 enum http_rc_e action_admin_debug (struct req_args_s *args);
 enum http_rc_e action_admin_copy (struct req_args_s *args);

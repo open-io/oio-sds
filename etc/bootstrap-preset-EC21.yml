@@ -1,0 +1,16 @@
+storage_policy: "EC21"
+config:
+  ns.chunk_size: 1048576
+hosts:
+  - "127.0.0.1"
+  - "127.0.0.2"
+  - "127.0.0.3"
+  - "127.0.0.4"
+  - "127.0.0.5"
+  - "127.0.0.6"
+  - "127.0.0.7"
+redis: true
+rdir:
+  count: 2
+rawx:
+  count: 28

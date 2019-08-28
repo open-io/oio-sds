@@ -148,7 +148,7 @@ ec_tests () {
 	SIZE0=$((256*1024*1024))
 	export OIO_USER=user-$RANDOM OIO_PATH=path-$RANDOM
 	echo $OIO_NS $OIO_ACCOUNT $OIO_USER $OIO_PATH
-	( export G_DEBUG_LEVEL=W ; ./core/tool_sdk put $SIZE0 )
+	( export G_DEBUG_LEVEL=W ; ${WRKDIR}/core/tool_sdk put $SIZE0 )
 	openio object save $OIO_USER $OIO_PATH
 	SIZE=$(stat --printf='%s' $OIO_PATH)
 	/bin/rm "$OIO_PATH"
@@ -167,15 +167,17 @@ test_zookeeper_failure() {
 	# Old systemd versions do not recognize --value, whence the eval hack
 	#MainPID=$(sudo systemctl show -p MainPID --value zookeeper)
 	eval $(sudo systemctl show -p MainPID zookeeper)
-	sudo kill -STOP $MainPID
-	openio election debug meta2 test_zookeeper_failure
-	sleep 11
-	sudo kill -CONT $MainPID
+	if [[ -n "$MainPID" ]] && [[ $MainPID -gt 0 ]] ; then
+		sudo kill -STOP $MainPID
+		openio election debug meta2 test_zookeeper_failure
+		sleep 11
+		sudo kill -CONT $MainPID
 
-	openio election debug meta2 test_zookeeper_failure
-	openio container locate test_zookeeper_failure
-	openio election debug meta2 test_zookeeper_failure
-	openio container delete test_zookeeper_failure
+		openio election debug meta2 test_zookeeper_failure
+		openio container locate test_zookeeper_failure
+		openio election debug meta2 test_zookeeper_failure
+		openio container delete test_zookeeper_failure
+	fi
 }
 
 func_tests () {
@@ -250,7 +252,7 @@ func_tests () {
 	rm "/$HOME/.oio/sds.conf"
 	export OIO_PROXY=$(oio-test-config.py -t proxy -1)
 	export OIO_ECD=$(oio-test-config.py -t ecd -1)
-	./core/tool_sdk_noconf
+	${WRKDIR}/core/tool_sdk_noconf
 
 	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
 	sleep 0.5
@@ -471,3 +473,7 @@ if is_running_test_suite "mover" ; then
 
 	unset MOVER
 fi
+
+# Reaching the end of this script means we didn't get any error,
+# and thus we do not need to print logs.
+trap - EXIT

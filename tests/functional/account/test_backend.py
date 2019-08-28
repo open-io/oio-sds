@@ -566,6 +566,19 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(self.conn.hget('container:%s:%s' %
                                         (account_id, name), 'mtime'), mtime)
 
+    def test_update_container_missing_damaged_object(self):
+        backend = AccountBackend({}, self.conn)
+        account_id = random_str(16)
+        self.assertEqual(backend.create_account(account_id), account_id)
+        # initial container
+        name = '"{<container \'&\' name>}"'
+        backend.update_container(account_id, name, 0, 0, 0, 0, 0, 0)
+        self.conn.hdel('container:%s:%s' % (account_id, name),
+                       'damaged_objects')
+        backend.refresh_account(account_id)
+        self.assertEqual(self.conn.hget('account:%s' % (account_id),
+                                        'damaged_objects'), '0')
+
     def test_is_sup(self):
         backend = AccountBackend({}, self.conn)
         compare = (backend.lua_is_sup +

@@ -35,6 +35,9 @@ TIMEOUT_HEADER = HEADER_PREFIX + 'timeout'
 CONNECTION_TIMEOUT = 2.0
 READ_TIMEOUT = 30.0
 
+# Name of keywords used to set timeouts
+TIMEOUT_KEYS = ('connection_timeout', 'read_timeout', 'write_timeout')
+
 STRLEN_REFERENCEID = 66
 STRLEN_CHUNKID = 64
 STRLEN_REQID = 63

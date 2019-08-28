@@ -166,7 +166,7 @@ struct oio_proxy_content_prepare_out_s
 };
 
 GError * oio_proxy_call_content_prepare (CURL *h, struct oio_url_s *u,
-		gsize size, gboolean autocreate,
+		gsize size, const char *stgpol,
 		struct oio_proxy_content_prepare_out_s *out);
 
 struct oio_proxy_content_create_in_s
@@ -178,8 +178,9 @@ struct oio_proxy_content_create_in_s
 	const char *hash;
 	const char *stgpol;
 	const char *chunk_method;
-	unsigned int append : 1;
-	unsigned int update : 1; // accept holes in metachunk positions
+	guint8 append : 1;
+	guint8 update : 1; // accept holes in metachunk positions
+	guint8 autocreate : 1; // autocreate the reference and link a (set of) container(s)
 	const char * const * properties;
 };
 

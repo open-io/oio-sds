@@ -119,9 +119,6 @@ struct sqlx_service_s
 	// anymore after that.
 	//-------------------------------------------------------------------
 
-	guint sync_mode_repli;
-	guint sync_mode_solo;
-
 	// Must the cache be set
 	gboolean flag_cached_bases;
 

@@ -79,7 +79,6 @@ struct req_ctx_s
 	struct gridd_request_dispatcher_s *disp;
 	struct hashstr_s *reqname;
 	gchar *subject;
-	gchar *uid;
 	const gchar *reqid;
 	gboolean final_sent;
 	gboolean access_disabled;
@@ -223,10 +222,8 @@ network_client_log_access(struct log_item_s *item)
 	g_string_append_c(gstr, ' ');
 	g_string_append_len(gstr, ensure(hashstr_str(r->reqname)),
 			hashstr_len(r->reqname)?:1);
-	g_string_append_printf(gstr, " %d %"G_GINT64_FORMAT" %"G_GSIZE_FORMAT" ",
+	g_string_append_printf(gstr, " %d %"G_GINT64_FORMAT" %"G_GSIZE_FORMAT" - ",
 			item->code, diff_total, item->out_len);
-	g_string_append(gstr, ensure(r->uid));
-	g_string_append_c(gstr, ' ');
 	g_string_append(gstr, ensure(r->reqid));
 
 	/* arbitrary */
@@ -706,31 +703,6 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 	return rc;
 }
 
-static gchar *
-_request_get_cid (MESSAGE request)
-{
-	GError *err;
-	container_id_t cid;
-	gchar strcid[STRLEN_CONTAINERID];
-
-	err = metautils_message_extract_cid(request, NAME_MSGKEY_CONTAINERID, &cid);
-	if (!err) {
-		oio_str_bin2hex (cid, sizeof(container_id_t), strcid, sizeof(strcid));
-		return g_strdup(strcid);
-	}
-	g_clear_error(&err);
-
-	gchar *out = metautils_message_extract_string_copy (request, NAME_MSGKEY_BASENAME);
-	if (out) {
-		gchar *p = strchr(out, '.');
-		if (p) *p = '\0';
-		return out;
-	}
-	g_clear_error (&err);
-
-	return NULL;
-}
-
 static gboolean
 _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 {
@@ -767,7 +739,6 @@ _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 
 	req_ctx.request = request;
 	req_ctx.reqname = _request_get_name(request);
-	req_ctx.uid = _request_get_cid(request);
 	req_ctx.reqid = _req_get_ID(request, reqid, sizeof(reqid));
 	oio_ext_set_reqid(req_ctx.reqid);
 	rc = TRUE;
@@ -797,7 +768,6 @@ label_exit:
 	if (req_ctx.reqname)
 		g_free(req_ctx.reqname);
 	oio_str_clean(&req_ctx.subject);
-	oio_str_clean(&req_ctx.uid);
 	memset(&req_ctx, 0, sizeof(req_ctx));
 	oio_ext_set_reqid (NULL);
 	return rc;

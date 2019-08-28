@@ -1192,6 +1192,67 @@ _handler_RESYNC(struct gridd_reply_ctx_s *reply,
 	return TRUE;
 }
 
+static gboolean
+_handler_VACUUM(struct gridd_reply_ctx_s *reply,
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
+{
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	struct sqlx_name_inline_s name;
+	NAME2CONST(n0, name);
+	GError *err = NULL;
+	guint32 flags = 0;
+
+	if (NULL != (err = _load_sqlx_name(reply, &name, &flags))) {
+		reply->send_error(0, err);
+		return TRUE;
+	}
+
+	const enum sqlx_open_type_e how = (flags & FLAG_LOCAL)
+		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERONLY;
+	err = sqlx_repository_open_and_lock(repo, &n0, how, &sq3, NULL);
+	if (err)
+		goto label_exit;
+
+	gchar **peers = NULL;
+	if (!(flags & FLAG_LOCAL)) {
+		err = election_get_peers(sq3->manager, &n0, FALSE, &peers);
+		if (err) {
+			goto label_exit;
+		}
+	}
+
+	/* Do not explicitly open a transaction! A transaction would trigger
+	 * a synchronous replication, which would fail when the database is big.
+	 * Instead, we will trigger an asyncronous resync. */
+	sqlx_admin_set_i64(sq3, SQLX_ADMIN_LAST_VACUUM, oio_ext_real_seconds());
+	/* This is to prevent concurrent changes in case the resync is not
+	 * performed quickly enough. */
+	sqlx_admin_inc_all_versions(sq3, 2);
+	sqlx_admin_save_lazy_tnx(sq3);
+	sqlx_exec(sq3->db, "VACUUM");
+
+	if (!(flags & FLAG_LOCAL)) {
+		/* Trigger the resync before unlocking the database, to increase
+		 * the chance that the first request handled by the service after
+		 * the current one is the DB_DUMP triggered by the resync.
+		 * No-op if replication is not enabled. */
+		err = sqlx_remote_execute_RESYNC_many(
+				peers, NULL, &n0, oio_ext_get_deadline());
+		g_strfreev(peers);
+	}
+
+	sqlx_repository_unlock_and_close_noerror(sq3);
+
+label_exit:
+	if (err) {
+		reply->send_error(0, err);
+	} else {
+		reply->send_reply(CODE_FINAL_OK, "VACUUM done");
+	}
+	return TRUE;
+}
+
+
 /* ------------------------------------------------------------------------- */
 
 static gboolean
@@ -1464,13 +1525,13 @@ _handler_ENABLE(struct gridd_reply_ctx_s *reply,
 			sqlx_admin_save_lazy_tnx (sq3);
 		}
 	}
+	sqlx_repository_unlock_and_close_noerror(sq3);
 
 	if (NULL != err)
 		reply->send_error(0, err);
 	else
 		reply->send_reply(CODE_FINAL_OK, "OK");
 
-	sqlx_repository_unlock_and_close_noerror(sq3);
 	return TRUE;
 }
 
@@ -1515,13 +1576,13 @@ _handler_FREEZE(struct gridd_reply_ctx_s *reply,
 			sqlx_admin_save_lazy_tnx (sq3);
 		}
 	}
+	sqlx_repository_unlock_and_close_noerror(sq3);
 
 	if (NULL != err)
 		reply->send_error(0, err);
 	else
 		reply->send_reply(CODE_FINAL_OK, "OK");
 
-	sqlx_repository_unlock_and_close_noerror(sq3);
 	return TRUE;
 }
 
@@ -1566,13 +1627,13 @@ _handler_DISABLE(struct gridd_reply_ctx_s *reply,
 			sqlx_admin_save_lazy_tnx (sq3);
 		}
 	}
+	sqlx_repository_unlock_and_close_noerror(sq3);
 
 	if (NULL != err)
 		reply->send_error(0, err);
 	else
 		reply->send_reply(CODE_FINAL_OK, "OK");
 
-	sqlx_repository_unlock_and_close_noerror(sq3);
 	return TRUE;
 }
 
@@ -1773,6 +1834,43 @@ _handler_LEANIFY(struct gridd_reply_ctx_s *reply,
 	return TRUE;
 }
 
+static gboolean
+_handler_BALM(struct gridd_reply_ctx_s *reply,
+		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
+{
+	guint max = 0;
+	gint64 inactivity = 0;
+	GError *err = NULL;
+
+	err = metautils_message_extract_struint(
+			reply->request, NAME_MSGKEY_SIZE, &max);
+	if (err) {
+		g_clear_error(&err);
+		max = 100;
+	}
+
+	err = metautils_message_extract_strint64(
+			reply->request, NAME_MSGKEY_TIMEOUT, &inactivity);
+	if (err) {
+		g_clear_error(&err);
+		inactivity = 0;
+	}
+
+	max = CLAMP(max,1,9999);
+	inactivity = CLAMP(inactivity, 0, 86400);
+	reply->subject("max=%u inactivity=%"G_GINT64_FORMAT, max, inactivity);
+
+	guint count = election_manager_balance_masters(
+			sqlx_repository_get_elections_manager(repo),
+			max, inactivity * G_TIME_SPAN_SECOND);
+
+	gchar *out = g_strdup_printf("%u", count);
+	reply->add_body(metautils_gba_from_string(out));
+	reply->send_reply(CODE_FINAL_OK, "OK");
+	g_free(out);
+	return TRUE;
+}
+
 /* ------------------------------------------------------------------------- */
 
 typedef gboolean (*hook) (struct gridd_reply_ctx_s *, gpointer, gpointer);
@@ -1804,9 +1902,11 @@ sqlx_repli_gridd_get_requests(void)
 		{NAME_MSGNAME_SQLX_REPLICATE,    (hook) _handler_REPLICATE, NULL},
 		{NAME_MSGNAME_SQLX_GETVERS,      (hook) _handler_GETVERS,   NULL},
 		{NAME_MSGNAME_SQLX_RESYNC,       (hook) _handler_RESYNC,    NULL},
+		{NAME_MSGNAME_SQLX_VACUUM,       (hook) _handler_VACUUM,    NULL},
 
 		{NAME_MSGNAME_SQLX_INFO,    (hook) _handler_INFO,      NULL},
 		{NAME_MSGNAME_SQLX_LEANIFY, (hook) _handler_LEANIFY,   NULL},
+		{NAME_MSGNAME_SQLX_BALM,    (hook) _handler_BALM,      NULL},
 
 		{NULL, NULL, NULL}
 	};

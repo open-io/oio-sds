@@ -283,6 +283,11 @@ class UnsatisfiableRange(ClientException):
 
 # FIXME(FVE): ServiceBusy is not a client exception
 class ServiceBusy(ClientException):
+    """
+    This kind of exceptions tell that the system was "busy" and could not
+    handle the request at the moment. The user is invited to retry after a
+    few seconds.
+    """
     def __init__(self, http_status=503, status=None, message=None):
         super(ServiceBusy, self).__init__(http_status, status, message)
 

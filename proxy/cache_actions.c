@@ -58,6 +58,7 @@ enum http_rc_e
 action_cache_flush_local (struct req_args_s *args)
 {
 	oio_lb_world__flush(lb_world);
+	oio_lb_world__flush(lb_world_rawx);
 	hc_resolver_flush_csm0 (resolver);
 	hc_resolver_flush_services (resolver);
 	return _reply_success_json (args, NULL);
@@ -189,7 +190,8 @@ action_forward_set_config (struct req_args_s *args)
 }
 
 static enum http_rc_e
-_forward_XXX (struct req_args_s *args, const char *reqname, gdouble timeout)
+_forward_XXX(struct req_args_s *args, const char *reqname, const char **opts,
+		gdouble timeout)
 {
 	args->rp->no_access();
 
@@ -199,6 +201,10 @@ _forward_XXX (struct req_args_s *args, const char *reqname, gdouble timeout)
 
 	MESSAGE req = metautils_message_create_named(reqname,
 			oio_clamp_deadline(timeout, oio_ext_get_deadline()));
+	for (const gchar **opt_key = opts;
+			opts && *opt_key && *(opt_key + 1);
+			opt_key += 2)
+		metautils_message_add_field_str(req, *(opt_key + 1), OPT(*opt_key));
 	GByteArray *encoded = message_marshall_gba_and_clean(req);
 	gchar *packed = NULL;
 	GError *err = gridd_client_exec_and_concat_string(id,
@@ -207,7 +213,8 @@ _forward_XXX (struct req_args_s *args, const char *reqname, gdouble timeout)
 	if (err) {
 		g_free0 (packed);
 		if (CODE_IS_NETWORK_ERROR(err->code)) {
-			if (err->code == ERRCODE_CONN_TIMEOUT || err->code == ERRCODE_READ_TIMEOUT)
+			if (err->code == ERRCODE_CONN_TIMEOUT ||
+					err->code == ERRCODE_READ_TIMEOUT)
 				return _reply_gateway_timeout (args, err);
 			return _reply_srv_unavailable (args, err);
 		}
@@ -222,60 +229,74 @@ _forward_XXX (struct req_args_s *args, const char *reqname, gdouble timeout)
 enum http_rc_e
 action_forward_get_config (struct req_args_s *args)
 {
-	return _forward_XXX(args, "REQ_GETCFG", proxy_timeout_config);
+	return _forward_XXX(args, "REQ_GETCFG", NULL, proxy_timeout_config);
 }
 
 enum http_rc_e
 action_forward_get_version (struct req_args_s *args)
 {
-	return _forward_XXX(args, "REQ_VERSION", proxy_timeout_info);
+	return _forward_XXX(args, "REQ_VERSION", NULL, proxy_timeout_info);
 }
 
 enum http_rc_e
 action_forward_get_handlers (struct req_args_s *args)
 {
-	return _forward_XXX(args, "REQ_HANDLERS", proxy_timeout_common);
+	return _forward_XXX(args, "REQ_HANDLERS", NULL, proxy_timeout_common);
 }
 
 enum http_rc_e
 action_forward_get_ping (struct req_args_s *args)
 {
-	return _forward_XXX(args, "REQ_PING", proxy_timeout_common);
+	return _forward_XXX(args, "REQ_PING", NULL, proxy_timeout_common);
 }
 
 enum http_rc_e
 action_forward_get_info (struct req_args_s *args)
 {
-	return _forward_XXX(args, NAME_MSGNAME_SQLX_INFO, proxy_timeout_info);
+	return _forward_XXX(args, NAME_MSGNAME_SQLX_INFO, NULL, proxy_timeout_info);
 }
 
 enum http_rc_e
 action_forward_kill (struct req_args_s *args)
 {
-	return _forward_XXX(args, "REQ_KILL", proxy_timeout_common);
+	return _forward_XXX(args, "REQ_KILL", NULL, proxy_timeout_common);
 }
 
 enum http_rc_e
 action_forward_flush (struct req_args_s *args)
 {
-	return _forward_XXX(args, NAME_MSGNAME_SQLX_FLUSH, proxy_timeout_common);
+	return _forward_XXX(args, NAME_MSGNAME_SQLX_FLUSH, NULL,
+			proxy_timeout_common);
 }
 
 enum http_rc_e
 action_forward_reload (struct req_args_s *args)
 {
-	return _forward_XXX(args, NAME_MSGNAME_SQLX_RELOAD, proxy_timeout_common);
+	return _forward_XXX(args, NAME_MSGNAME_SQLX_RELOAD, NULL,
+			proxy_timeout_common);
 }
 
 enum http_rc_e
 action_forward_lean_sqlx (struct req_args_s *args)
 {
-	return _forward_XXX(args, NAME_MSGNAME_SQLX_LEANIFY, proxy_timeout_common);
+	return _forward_XXX(args, NAME_MSGNAME_SQLX_LEANIFY, NULL,
+			proxy_timeout_common);
 }
 
 enum http_rc_e
 action_forward_lean_glib (struct req_args_s *args)
 {
-	return _forward_XXX(args, "REQ_LEAN", proxy_timeout_common);
+	return _forward_XXX(args, "REQ_LEAN", NULL, proxy_timeout_common);
 }
 
+enum http_rc_e
+action_forward_balance_masters(struct req_args_s *args)
+{
+	const gchar *opt_keys[] = {
+		"max", NAME_MSGKEY_SIZE,
+		"inactivity", NAME_MSGKEY_TIMEOUT,
+		NULL
+	};
+	return _forward_XXX(args, NAME_MSGNAME_SQLX_BALM, opt_keys,
+			proxy_timeout_common);
+}

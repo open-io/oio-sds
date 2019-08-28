@@ -17,6 +17,7 @@ import os
 import grp
 import pwd
 import fcntl
+from collections import OrderedDict
 from hashlib import sha256
 from random import getrandbits
 from io import RawIOBase
@@ -109,6 +110,24 @@ def statfs(volume):
     else:
         block_ratio = 1
     return min(inode_ratio, block_ratio)
+
+
+class CacheDict(OrderedDict):
+    """
+    OrderedDict subclass which holds a limited number of items.
+    """
+
+    def __init__(self, size=262144):
+        super(CacheDict, self).__init__()
+        self.size = size
+
+    def __setitem__(self, key, value):
+        super(CacheDict, self).__setitem__(key, value)
+        self._check_size()
+
+    def _check_size(self):
+        while len(self) > self.size:
+            self.popitem(last=False)
 
 
 class RingBuffer(list):

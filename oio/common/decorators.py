@@ -15,7 +15,7 @@
 
 from functools import wraps
 from oio.common.constants import REQID_HEADER
-from oio.common.utils import request_id
+from oio.common.utils import request_id, set_deadline_from_read_timeout
 from oio.common.exceptions import NotFound, NoSuchAccount, NoSuchObject, \
     NoSuchContainer, reraise
 
@@ -109,3 +109,19 @@ def handle_object_not_found(fnc):
                 err.message = "Object '%s' does not exist." % obj
                 reraise(NoSuchObject, err)
     return _wrapped
+
+
+def patch_kwargs(fnc):
+    """
+    Patch keyword arguments with the ones passed to the class' constructor.
+    Compute a deadline if a timeout is provided and there is no deadline
+    already. Requires the class to have a `_global_kwargs` member (dict).
+    """
+    @wraps(fnc)
+    def _patch_kwargs(self, *args, **kwargs):
+        for argk, argv in self._global_kwargs.items():
+            if argk not in kwargs:
+                kwargs[argk] = argv
+        set_deadline_from_read_timeout(kwargs)
+        return fnc(self, *args, **kwargs)
+    return _patch_kwargs

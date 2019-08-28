@@ -139,11 +139,12 @@ sqlx_service_resolve_peers(struct sqlx_service_s *ss,
 
 	err = sqlx_name_extract(n, u, NAME_SRVTYPE_META2, &seq);
 	if (!err) {
+		gchar **peers = NULL;
+
 label_retry:
 		if (nocache)
 			hc_decache_reference_service(ss->resolver, u, NAME_SRVTYPE_META2);
 
-		gchar **peers = NULL;
 		err = hc_resolve_reference_service(
 				ss->resolver, u, NAME_SRVTYPE_META2, &peers, oio_ext_get_deadline());
 		if (err == NULL) {

@@ -239,6 +239,14 @@ class AdminClient(ProxyClient):
         _, body = self._request('POST', '/remove', params=params, **kwargs)
         return body
 
+    @loc_params
+    def vacuum_base(self, params, **kwargs):
+        """
+        Vacuum (defragment) the database on the master service, then
+        resynchronize it on the slaves.
+        """
+        self._request('POST', '/vacuum', params=params, **kwargs)
+
     # Proxy's cache and config actions ################################
 
     def _proxy_endpoint(self, proxy_netloc=None):
@@ -345,3 +353,20 @@ class AdminClient(ProxyClient):
         """
         return self._forward_service_action(
             svc_id, '/info', method='GET', **kwargs)
+
+    def service_balance_elections(self, svc_id, max_ops=0, inactivity=0,
+                                  **kwargs):
+        """
+        Balance elections to get an acceptable slave/master ratio.
+
+        :param svc_to: id of the service that should balance its elections.
+        :param max_ops: maximum number of balancing operations.
+        :param inactivity: avoid expiring election whose last activity is
+                           younger than the specified value.
+        """
+        params = {'inactivity': int(inactivity),
+                  'max': int(max_ops),
+                  'id': svc_id}
+        _resp, body = self.forwarder._request(
+            'POST', '/balance-masters', params=params, **kwargs)
+        return _resp.status, body

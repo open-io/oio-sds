@@ -33,6 +33,10 @@ typedef guint32 generation_t;
 /* This special target matches any service, any location. */
 #define OIO_LB_JOKER_SVC_TARGET "__any_slot"
 
+#define PREFIX_SLOT_SKEW ".rawx-"
+#define SUFFIX_SLOT_SKEW "XXXXXXXX"
+#define HEXA "0123456789ABCDEF"
+
 guint64 _prime_numbers[] = {
 	524269u, 524261u, 524257u,
 	2147483629u, 2147483587u, 2147483579u, 2147483563u,
@@ -399,11 +403,22 @@ _item_make (oio_location_t location, const char *id, const char *addr)
 }
 
 void
-oio_lb_selected_item_free(struct oio_lb_selected_item_s *_item)
+oio_lb_selected_item_free(struct oio_lb_selected_item_s *sel)
 {
-	g_free((char *) _item->expected_slot);
-	g_free((char *) _item->final_slot);
-	g_free(_item);
+	g_free(sel->item);
+	g_free(sel->expected_slot);
+	g_free(sel->final_slot);
+	g_free(sel);
+}
+
+static struct oio_lb_selected_item_s *
+_item_dup(const struct oio_lb_selected_item_s *sel)
+{
+	struct oio_lb_selected_item_s *res = g_memdup(sel, sizeof(*sel));
+	res->expected_slot = g_strdup(sel->expected_slot);
+	res->final_slot = g_strdup(sel->final_slot);
+	res->item = g_memdup(sel->item, sizeof(*sel->item));
+	return res;
 }
 
 static struct oio_lb_selected_item_s *
@@ -418,16 +433,6 @@ _item_select(const struct _lb_item_s *src)
 		res->item->weight = src->weight;
 	}
 	return res;
-}
-
-static void
-_selected_item_free(struct oio_lb_selected_item_s *src)
-{
-	g_free((gpointer)src->item);
-	g_free((gpointer)src->expected_slot);
-	g_free((gpointer)src->final_slot);
-	memset(src, 0, sizeof(*src));
-	g_free(src);
 }
 
 static struct oio_lb_slot_s *
@@ -454,7 +459,8 @@ oio_lb_world__count_slot_items_unlocked(struct oio_lb_world_s *self,
 #define TAB_ITEM(t,i)  g_array_index ((t), struct _slot_item_s, i)
 #define SLOT_ITEM(s,i) TAB_ITEM (s->items, i)
 
-static guint _search_first_at_location(GArray *tab, const oio_location_t needle,
+static guint _search_first_at_location(GArray *tab,
+		const oio_location_t needle, const enum oio_loc_proximity_level_e lvl,
 		const guint start, const guint end);
 
 guint32
@@ -900,7 +906,7 @@ _local_slot__poll(struct oio_lb_slot_s *slot, guint16 distance,
 	}
 
 	/* get the closest */
-	guint32 random_weight = g_random_int_range (0, slot->sum_weight);
+	guint32 random_weight = oio_ext_rand_int_range(0, slot->sum_weight);
 	int i = _search_closest_weight (slot->items, random_weight, 0,
 			slot->items->len - 1);
 	GRID_TRACE2("%s random_weight=%"G_GUINT32_FORMAT" at %d",
@@ -1000,7 +1006,8 @@ _local_target__is_satisfied(struct oio_lb_pool_LOCAL_s *lb,
 		oio_location_t *known = ctx->next_polled;
 		do {
 			guint pos = _search_first_at_location(slot->items,
-					*known, 0, slot->items->len-1);
+					*known, OIO_LOC_PROX_VOLUME,
+					0, slot->items->len-1);
 			if (pos != (guint)-1) {
 				/* The current item is in a slot referenced by our target.
 				** Place this item at the beginning of ctx->next_polled so
@@ -1091,7 +1098,7 @@ _local__patch(struct oio_lb_pool_s *self,
 		.max_dist = max_dist,
 		.min_dist = lb->min_dist,
 		.selection = g_ptr_array_new_with_free_func(
-			(GDestroyNotify)_selected_item_free),
+			(GDestroyNotify)oio_lb_selected_item_free),
 	};
 
 	for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {
@@ -1183,9 +1190,9 @@ _local__patch(struct oio_lb_pool_s *self,
 					(!lb->nearby_mode && reached_dist <= lb->warn_dist) ||
 					ctx.fallback_used;
 		}
-		void _forward(struct oio_lb_selected_item_s *sel, gpointer udata) {
+		void _forward(struct oio_lb_selected_item_s *sel, gpointer u UNUSED) {
 			if (sel->item)
-				on_id(sel, udata);
+				on_id(sel, NULL);
 			// Do not forward "known" items (sel->item == NULL)
 		}
 		// FIXME(FVE): change signature, specify last parameter
@@ -1551,13 +1558,16 @@ _location_at_position (GArray *tab, const guint i)
 	return TAB_ITEM(tab,i).item->location;
 }
 
+#define M(loc) oio_location_mask_after(loc,lvl)
+
 static int
-_slide_to_first_at_location (GArray *tab, const oio_location_t needle,
+_slide_to_first_at_location (GArray *tab,
+		const oio_location_t needle, const enum oio_loc_proximity_level_e lvl,
 		guint i)
 {
-	EXTRA_ASSERT (needle == _location_at_position(tab,i));
+	EXTRA_ASSERT (M(needle) == M(_location_at_position(tab,i)));
 	for (; i>0 ;--i) {
-		if (needle != _location_at_position (tab, i-1))
+		if (M(needle) != M(_location_at_position (tab, i-1)))
 			return i;
 	}
 	return i;
@@ -1566,7 +1576,8 @@ _slide_to_first_at_location (GArray *tab, const oio_location_t needle,
 /* return the position of the first item with the same location as the
  * value of <needle> */
 static guint
-_search_first_at_location (GArray *tab, const oio_location_t needle,
+_search_first_at_location (GArray *tab,
+		const oio_location_t needle, const enum oio_loc_proximity_level_e lvl,
 		const guint start, const guint end)
 {
 	/* No item, answer "not found" */
@@ -1578,15 +1589,15 @@ _search_first_at_location (GArray *tab, const oio_location_t needle,
 
 	if (start == end) {
 		/* not found ? */
-		if (needle != _location_at_position (tab, start))
+		if (M(needle) != M(_location_at_position(tab, start)))
 			return (guint)-1;
-		return _slide_to_first_at_location (tab, needle, start);
+		return _slide_to_first_at_location (tab, needle, lvl, start);
 	}
 
 	const int i_pivot = start + ((end - start) / 2);
-	if (needle > _location_at_position (tab, i_pivot))
-		return _search_first_at_location (tab, needle, i_pivot+1, end);
-	return _search_first_at_location (tab, needle, start, i_pivot);
+	if (M(needle) > M(_location_at_position(tab, i_pivot)))
+		return _search_first_at_location (tab, needle, lvl, i_pivot+1, end);
+	return _search_first_at_location (tab, needle, lvl, start, i_pivot);
 }
 
 static void
@@ -1633,7 +1644,8 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 			i0 = 0;
 		} else if (slot->items->len) {
 			/* Binary search, faster when items are sorted */
-			i0 = _search_first_at_location (slot->items, item0->location,
+			i0 = _search_first_at_location (slot->items,
+					item0->location, OIO_LOC_PROX_VOLUME,
 					0, slot->items->len-1);
 		}
 
@@ -1889,7 +1901,6 @@ oio_lb__clear(struct oio_lb_s **lb)
 	lb2->pools = NULL;
 	g_rw_lock_writer_unlock(&lb2->lock);
 	g_rw_lock_clear(&lb2->lock);
-	memset(lb2, 0, sizeof(struct oio_lb_s));
 	g_free(lb2);
 }
 
@@ -1918,6 +1929,7 @@ oio_lb__poll_pool(struct oio_lb_s *lb, const char *name,
 		const oio_location_t * avoids, oio_lb_on_id_f on_id,
 		gboolean *flawed)
 {
+	EXTRA_ASSERT(lb != NULL);
 	EXTRA_ASSERT(name != NULL);
 	GError *res = NULL;
 	g_rw_lock_reader_lock(&lb->lock);
@@ -1960,3 +1972,225 @@ oio_lb__get_item_from_pool(struct oio_lb_s *lb, const char *name,
 	g_rw_lock_reader_unlock(&lb->lock);
 	return res;
 }
+
+static gchar **
+_unique_slotnames(gchar **targets)
+{
+	GTree *t = g_tree_new_full(oio_str_cmp3, NULL, NULL, NULL);
+	for (gchar **ptarget = targets; *ptarget; ++ptarget) {
+		for (gchar *name = *ptarget; *name; name += 1+strlen(name)) {
+			g_tree_replace(t, name, GINT_TO_POINTER(1));
+		}
+	}
+
+	gboolean _add_key (gpointer *k, gpointer v UNUSED, GPtrArray *out) {
+		g_ptr_array_add(out, k);
+		return FALSE;
+	}
+	GPtrArray *out = g_ptr_array_sized_new(g_tree_nnodes(t) + 1);
+	g_tree_foreach(t, (GTraverseFunc)_add_key, out);
+	g_tree_destroy(t);
+	g_ptr_array_add(out, NULL);
+	return (gchar**) g_ptr_array_free(out, FALSE);
+}
+
+static GPtrArray *
+_unique_services(struct oio_lb_pool_LOCAL_s *lb, gchar **slots, oio_location_t pin)
+{
+	pin = oio_location_mask_after(pin, OIO_LOC_DIST_HOST);
+
+	GTree *t = g_tree_new_full(oio_str_cmp3, NULL, NULL, NULL);
+	for (gchar **pname = slots; *pname; ++pname) {
+		struct oio_lb_slot_s *slot =
+			oio_lb_world__get_slot_unlocked(lb->world, *pname);
+		if (!slot)
+			continue;
+		if (slot->flag_dirty_order) {
+			// Linear total collection of items
+			for (guint i=0; i < slot->items->len; ++i) {
+				struct _lb_item_s *item = SLOT_ITEM(slot,i).item;
+				if (pin == oio_location_mask_after(item->location, OIO_LOC_DIST_HOST))
+					g_tree_replace(t, item->addr, item);
+			}
+		} else {
+			// Binary lookup of the first item. If not found, it returns -1,
+			// e.g. the biggest integer possible that will prevent the loop.
+			guint i = _search_first_at_location(slot->items,
+					pin, OIO_LOC_PROX_HOST, 0, slot->items->len-1);
+
+#ifdef HAVE_EXTRA_ASSERT
+#define CHECK_HLOC(pin,op,i) g_assert_cmpint(pin, op, \
+		oio_location_mask_after(SLOT_ITEM(slot,(i)).item->location, OIO_LOC_DIST_HOST))
+			if (i != (guint)-1) {
+				// check this is well the first item of its slice
+				if (i > 0)
+					CHECK_HLOC(pin, !=, i-1);
+				CHECK_HLOC(pin, ==, i);
+			}
+#endif
+
+			for (; i < slot->items->len; ++i) {
+				struct _lb_item_s *item = SLOT_ITEM(slot, i).item;
+				if (pin != oio_location_mask_after(item->location, OIO_LOC_DIST_HOST))
+					break;
+				g_tree_replace(t, item->id, item);
+			}
+		}
+	}
+
+	gboolean _add_val (gpointer *k UNUSED, gpointer v, GPtrArray *out) {
+		g_ptr_array_add(out, v);
+		return FALSE;
+	}
+	GPtrArray *out = g_ptr_array_sized_new(g_tree_nnodes(t));
+	g_tree_foreach(t, (GTraverseFunc)_add_val, out);
+	g_tree_destroy(t);
+	return out;
+}
+
+static GError*
+_local__poll_around(struct oio_lb_pool_s *self,
+		const oio_location_t pin, int mode,
+		oio_lb_on_id_f on_id, gboolean *flawed)
+{
+	struct oio_lb_pool_LOCAL_s *lb = (struct oio_lb_pool_LOCAL_s *) self;
+	EXTRA_ASSERT(lb != NULL);
+	EXTRA_ASSERT(lb->vtable == &vtable_LOCAL);
+	EXTRA_ASSERT(lb->world != NULL);
+	EXTRA_ASSERT(lb->targets != NULL);
+
+	guint count_targets = oio_lb_world__count_pool_targets(self);
+#ifdef HAVE_EXTRA_DEBUG
+	guint count_slots = 0;
+#endif
+
+	GPtrArray *selection = g_ptr_array_new_with_free_func(
+			(GDestroyNotify)oio_lb_selected_item_free);
+
+	g_rw_lock_reader_lock(&lb->world->lock);
+
+	// First we collect all the unique targets names in the pool
+	GPtrArray *suspects = NULL;
+	do {
+		gchar **slotnames = _unique_slotnames(lb->targets);
+#ifdef HAVE_EXTRA_DEBUG
+		count_slots = g_strv_length(slotnames);
+#endif
+		suspects = _unique_services(lb, slotnames, pin);
+		g_free(slotnames);
+	} while (0);
+
+	const guint max_suspects = suspects->len;
+
+	// Secondly poll as many pinned services as wanted AND possible.
+	if (max_suspects > 0) {
+		// Build a slot name that can be recognized as a special name pattern
+		// indicating an evil-placement
+		gchar slot[] = PREFIX_SLOT_SKEW SUFFIX_SLOT_SKEW;
+		oio_str_randomize(slot + sizeof(PREFIX_SLOT_SKEW) - 1, sizeof(SUFFIX_SLOT_SKEW) - 1, HEXA);
+
+		guint i = max_suspects > 1
+			? oio_ext_rand_int_range(0, max_suspects) : 0;
+		if (mode == 1) {
+			// Poll one weighted random service under the pin
+			// OSEF the weight -> the other chunks will respect a weighted random
+			struct oio_lb_selected_item_s *selected = _item_select(suspects->pdata[i]);
+			selected->expected_slot = g_strdup("rawx");
+			selected->final_slot = g_strdup(slot);
+			g_ptr_array_add(selection, selected);
+		} else {
+			// Poll as many services as possible under the pin
+			for (guint nb=0; nb < count_targets && nb < max_suspects; ++nb) {
+				struct oio_lb_selected_item_s *selected = _item_select(suspects->pdata[i]);
+				selected->expected_slot = g_strdup("rawx");
+				selected->final_slot = g_strdup(slot);
+				g_ptr_array_add(selection, selected);
+				i = (i+1) % max_suspects;
+			}
+		}
+	}
+
+	g_rw_lock_reader_unlock(&lb->world->lock);
+
+	const guint nb_locals = selection->len;
+	GRID_TRACE("%s pin=%" G_GINT64_MODIFIER "x mode=%d targets=%u slots=%u suspects=%u locals=%u",
+			__FUNCTION__, pin, mode,
+			count_targets, count_slots, max_suspects, nb_locals);
+
+	// Eventually complete with traditionnally polled services
+	GError *err = NULL;
+	if (selection->len < count_targets) {
+		void _select(struct oio_lb_selected_item_s *sel, gpointer u UNUSED) {
+			if (sel->item) {
+				g_ptr_array_add(selection, _item_dup(sel));
+			}
+		}
+		oio_location_t known[selection->len + 1];
+		for (guint i=0; i < selection->len ;++i) {
+			struct oio_lb_selected_item_s *sel = selection->pdata[i];
+			known[i] = sel->item->location;
+		}
+		known[selection->len] = 0;
+		err = _local__patch(self, NULL, known, _select, flawed);
+	}
+
+	if (flawed && nb_locals > 0)
+		*flawed = TRUE;
+
+	// If no error occured, we can upstream the polled services
+	for (guint i=0; !err && i < selection->len; ++i)
+		on_id(selection->pdata[i], NULL);
+
+	g_ptr_array_free(selection, TRUE);
+	g_ptr_array_free(suspects, TRUE);
+	return err;
+}
+
+GError*
+oio_lb__poll_pool_around(struct oio_lb_s *lb, const char *name,
+		const oio_location_t pin, int mode,
+		oio_lb_on_id_f on_id, gboolean *flawed)
+{
+	if (!pin || !mode)
+		return oio_lb__poll_pool(lb, name, NULL, on_id, NULL);
+
+	EXTRA_ASSERT(lb != NULL);
+	EXTRA_ASSERT(oio_str_is_set(name));
+
+	GRID_TRACE("%s pin=%"G_GINT64_MODIFIER"x mode=%d", __FUNCTION__, pin, mode);
+
+	GError *res = NULL;
+	g_rw_lock_reader_lock(&lb->lock);
+	struct oio_lb_pool_s *pool = g_hash_table_lookup(lb->pools, name);
+	if (pool)
+		res = _local__poll_around(pool, pin, mode, on_id, flawed);
+	else
+		res = BADREQ("pool [%s] not found", name);
+	g_rw_lock_reader_unlock(&lb->lock);
+	return res;
+}
+
+GString*
+oio_selected_item_quality_to_json(GString *inout,
+		struct oio_lb_selected_item_s *sel)
+{
+	GString *qual = inout? : g_string_sized_new(128);
+	g_string_append_c(qual, '{');
+	oio_str_gstring_append_json_pair_int(qual,
+			"expected_dist", sel->expected_dist);
+	g_string_append_c(qual, ',');
+	oio_str_gstring_append_json_pair_int(qual,
+			"final_dist", sel->final_dist);
+	g_string_append_c(qual, ',');
+	oio_str_gstring_append_json_pair_int(qual,
+			"warn_dist", sel->warn_dist);
+	g_string_append_c(qual, ',');
+	oio_str_gstring_append_json_pair(qual,
+			"expected_slot", sel->expected_slot);
+	g_string_append_c(qual, ',');
+	oio_str_gstring_append_json_pair(qual,
+			"final_slot", sel->final_slot);
+	g_string_append_c(qual, '}');
+	return qual;
+}
+

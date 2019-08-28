@@ -1,0 +1,3 @@
+config:
+  ns.chunk_size: 1027
+

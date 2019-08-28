@@ -235,7 +235,8 @@ error_clue_for_decache(GError *err)
 		return FALSE;
 	switch (err->code) {
 		case CODE_CONTAINER_NOTFOUND:
-		case CODE_USER_NOTFOUND:
+		/* DO NOT consider CODE_USER_NOTFOUND as a valid reason
+		 * to trigger a decache. This is a normal return code */
 		case CODE_RANGE_NOTFOUND:
 		case CODE_SRVTYPE_NOTMANAGED:
 		case CODE_ACCOUNT_NOTFOUND:
@@ -248,7 +249,9 @@ error_clue_for_decache(GError *err)
 static gboolean
 context_clue_for_decache(struct client_ctx_s *ctx)
 {
-	for (guint i=0; i<ctx->count ;++i) {
+	if (!ctx->errorv)
+		return FALSE;
+	for (guint i=0; i < ctx->count; ++i) {
 		if (error_clue_for_decache(ctx->errorv[i]))
 			return TRUE;
 	}
@@ -258,23 +261,13 @@ context_clue_for_decache(struct client_ctx_s *ctx)
 void
 cache_flush_user(struct req_args_s *args, struct client_ctx_s *ctx)
 {
-	static const char types[][LIMIT_LENGTH_SRVTYPE] = {
-		NAME_SRVTYPE_META0,
-		NAME_SRVTYPE_META1,
-		NAME_SRVTYPE_META2,
-	};
-
 	GRID_DEBUG("Suspected stale cache entry for [%s] [%s]",
 			ctx->type, oio_url_get(args->url, OIOURL_WHOLE));
 
-	hc_decache_reference (resolver, args->url);
 	hc_decache_reference_service (resolver, args->url, NAME_SRVTYPE_META2);
-
-	for (int i=0; i<3 ;++i) {
-		gchar *k = g_strconcat(ctx->name.base, "/", types[i], NULL);
-		service_forget_master(k);
-		g_free(k);
-	}
+	gchar *k = g_strconcat(ctx->name.base, "/", NAME_SRVTYPE_META2, NULL);
+	service_forget_master(k);
+	g_free(k);
 }
 
 static GError *
@@ -311,7 +304,6 @@ label_retry:
 		EXTRA_ASSERT(m1uv == NULL);
 		if (retry && err->code == CODE_RANGE_NOTFOUND) {
 			retry = FALSE;
-			hc_decache_reference_service(resolver, ctx->url, NAME_SRVTYPE_META1);
 			hc_decache_reference(resolver, ctx->url);
 			goto label_retry;
 		} else {

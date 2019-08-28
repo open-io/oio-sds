@@ -48,7 +48,6 @@ struct http_reply_ctx_s
 	void (*set_body_gstr) (GString *gstr);
 	void (*set_body_bytes) (GBytes *bytes);
 
-	void (*subject) (const char *id);
 	void (*finalize) (void);
 	void (*access_tail) (const char *fmt, ...);
 	void (*no_access) (void);
