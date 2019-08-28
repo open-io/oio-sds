@@ -247,7 +247,7 @@ _schema_get (sqlx_repository_t *repo, const char *type, const char **res)
 	}
 
 	if (!schema)
-		return NEWERROR(CODE_SRVTYPE_NOTMANAGED, "Type [%s] not managed", type);
+		return BADSRVTYPE(type);
 	if (res)
 		*res = schema;
 	return NULL;
