@@ -82,6 +82,9 @@ struct sqlx_base_s
 	gint index; /*!< self reference */
 
 	enum sqlx_base_status_e status; /*!< Changed under the global lock */
+
+	struct grid_single_rrd_s *open_attempts;
+	struct grid_single_rrd_s *open_wait_time;
 };
 
 typedef struct sqlx_base_s sqlx_base_t;
@@ -538,12 +541,15 @@ sqlx_cache_init(void)
 	cache->bases_max_soft = CLAMP(sqliterepo_repo_max_bases_soft, 1, cache->bases_max_hard);
 	cache->bases = g_malloc0(cache->bases_max_hard * sizeof(sqlx_base_t));
 
+	time_t now = oio_ext_monotonic_seconds();
 	for (guint i=0; i<cache->bases_max_hard ;i++) {
 		sqlx_base_t *base = cache->bases + i;
 		base->index = i;
 		base->link.prev = base->link.next = -1;
 		g_cond_init(&base->cond);
 		g_cond_init(&base->cond_prio);
+		base->open_attempts = grid_single_rrd_create(now, 60);
+		base->open_wait_time = grid_single_rrd_create(now, 60);
 	}
 
 	/* stack all the bases in the FREE list, so that the first bases are
@@ -584,6 +590,8 @@ sqlx_cache_clean(sqlx_cache_t *cache)
 
 			g_cond_clear(&base->cond);
 			g_cond_clear(&base->cond_prio);
+			grid_single_rrd_destroy(base->open_attempts);
+			grid_single_rrd_destroy(base->open_wait_time);
 			g_free0 (base->name);
 			base->name = NULL;
 		}
@@ -682,11 +690,17 @@ retry:
 									base->count_waiting, _cache_max_waiting);
 							break;
 						} else if (_cache_alert_on_heavy_load) {
+							gint64 dx = grid_single_rrd_get_delta(base->open_attempts,
+									now / G_TIME_SPAN_SECOND, 30);
+							gint64 dt = grid_single_rrd_get_delta(base->open_wait_time,
+									now / G_TIME_SPAN_SECOND, 30);
+							gint64 avg_wait = dt / (dx?: 1);
 							GRID_WARN("Load too high on [%s] "
-									"(%"G_GUINT32_FORMAT"/%"G_GUINT32_FORMAT")"
+									"(%"G_GUINT32_FORMAT"/%"G_GUINT32_FORMAT","
+									" avg_wait: %"G_GINT64_FORMAT"us)"
 									" reqid=%s", hashstr_str(hname),
 									base->count_waiting, _cache_max_waiting,
-									oio_ext_get_reqid());
+									avg_wait, oio_ext_get_reqid());
 						}
 					}
 
@@ -722,6 +736,11 @@ retry:
 	}
 
 	if (base) {
+		gint64 now = oio_ext_monotonic_time();
+		time_t now_secs = now / G_TIME_SPAN_SECOND;
+		grid_single_rrd_add(base->open_attempts, now_secs, 1);
+		grid_single_rrd_add(base->open_wait_time, now_secs, now - start);
+
 		if (!err) {
 			sqlx_base_debug(__FUNCTION__, base);
 			EXTRA_ASSERT(base->owner == g_thread_self());
