@@ -148,9 +148,12 @@ struct m2v2_create_params_s
 {
 	const char *storage_policy; /**< Will override the (maybe present) stgpol property. */
 	const char *version_policy; /**< idem for the verpol property. */
-	gchar **properties; /**< A NULL-terminated sequence of strings where:
-						  * properties[i*2] is the i-th key and
-						  * properties[(i*2)+1] is the i-th value */
+	const char *peers; /**< Peers to replicate the database to. */
+
+	/** A NULL-terminated sequence of strings where:
+	 * properties[i*2] is the i-th key and
+	 * properties[(i*2)+1] is the i-th value */
+	gchar **properties;
 	gboolean local; /**< Do not try to replicate, do not call get_peers() */
 };
 

@@ -343,8 +343,8 @@ static GError * _election_trigger_RESYNC(struct election_manager_s *manager,
 		const struct sqlx_name_s *n);
 
 static GError * _election_init(struct election_manager_s *manager,
-		const struct sqlx_name_s *n, enum election_step_e *out_status,
-		gboolean *replicated);
+		const struct sqlx_name_s *n, const gchar *peers,
+		enum election_step_e *out_status, gboolean *replicated);
 
 static GError * _election_start(struct election_manager_s *manager,
 		const struct sqlx_name_s *n);
@@ -2040,9 +2040,35 @@ _election_atime(struct election_member_s *m)
 	}
 }
 
+/** Filter a list of peers: exclude the local address from the array. */
+static void
+_manager_filter_peers(struct election_manager_s *m, gchar **peers)
+{
+	const gchar *self = election_manager_get_local(m);
+	gint last = g_strv_length(peers) - 1;
+	for (gchar **peer = peers; peers && *peer;) {
+		if (!g_strcmp0(*peer, self)) {
+			g_free(*peer);
+			if (peer == peers + last) {
+				// Last element, just set it to NULL.
+				*peer = NULL;
+				break;
+			} else {
+				// Middle element, exchange with last.
+				*peer = peers[last];
+				peers[last] = NULL;
+				last--;
+				// Do not increment peer, we have to check it.
+				continue;
+			}
+		}
+		peer++;
+	}
+}
+
 static GError *
 _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
-		enum election_op_e op,
+		enum election_op_e op, const gchar *new_peers,
 		enum election_step_e *out_status, gboolean *replicated)
 {
 	MANAGER_CHECK(m);
@@ -2073,11 +2099,16 @@ _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
 	_manager_unlock(m);
 
 	if (op != ELOP_EXIT && !peers_present) {
-		/* Out of the critical section */
-		GError *err = election_get_peers(m, n, FALSE, &peers);
-		if (err != NULL) {
-			g_prefix_error(&err, "Election error: ");
-			return err;
+		if (oio_str_is_set(new_peers)) {
+			peers = g_strsplit(new_peers, OIO_CSV_SEP, -1);
+			_manager_filter_peers(m, peers);
+		} else {
+			/* Out of the critical section */
+			GError *err = election_get_peers(m, n, FALSE, &peers);
+			if (err != NULL) {
+				g_prefix_error(&err, "Election error: ");
+				return err;
+			}
 		}
 		if (peers) {
 			if (!(peers_present = oio_str_is_set(*peers)))
@@ -2121,26 +2152,27 @@ static GError *
 _election_trigger_RESYNC(struct election_manager_s *manager,
 		const struct sqlx_name_s *n)
 {
-	return _election_make(manager, n, ELOP_RESYNC, NULL, NULL);
+	return _election_make(manager, n, ELOP_RESYNC, NULL, NULL, NULL);
 }
 
 static GError *
 _election_init(struct election_manager_s *manager, const struct sqlx_name_s *n,
+		const gchar *peers,
 		enum election_step_e *out_status, gboolean *replicated)
 {
-	return _election_make(manager, n, ELOP_NONE, out_status, replicated);
+	return _election_make(manager, n, ELOP_NONE, peers, out_status, replicated);
 }
 
 static GError *
 _election_start(struct election_manager_s *manager, const struct sqlx_name_s *n)
 {
-	return _election_make(manager, n, ELOP_START, NULL, NULL);
+	return _election_make(manager, n, ELOP_START, NULL, NULL, NULL);
 }
 
 static GError *
 _election_exit(struct election_manager_s *manager, const struct sqlx_name_s *n)
 {
-	return _election_make(manager, n, ELOP_EXIT, NULL, NULL);
+	return _election_make(manager, n, ELOP_EXIT, NULL, NULL, NULL);
 }
 
 static gboolean
@@ -2243,6 +2275,21 @@ _election_get_status(struct election_manager_s *mgr,
 
 /* ------------------------------------------------------------------------- */
 
+static gchar *
+_member_all_peers(struct election_member_s *member)
+{
+	const gchar *peertab[64] = {NULL};
+	const gchar **cursor = peertab;
+	for (gchar **peer = member->peers;
+			member->peers && *peer && (cursor - peertab) < 63;
+			peer++, cursor++) {
+		*cursor = *peer;
+	}
+	*cursor = member_get_url(member);
+	*(++cursor) = NULL;
+	return g_strjoinv(OIO_CSV_SEP, (gchar**)peertab);
+}
+
 static gboolean
 defer_USE(struct election_member_s *member, const gboolean master)
 {
@@ -2262,13 +2309,15 @@ defer_USE(struct election_member_s *member, const gboolean master)
 	}
 
 	if (member->peers) {
+		gchar *all_peers = _member_all_peers(member);
 		member->last_USE = oio_ext_monotonic_time();
 		for (gchar **p = member->peers; *p; p++) {
 			member->manager->deferred_peering_notify |= sqlx_peering__use(
 					member->manager->peering, *p, &member->inline_name,
-					master);
+					all_peers, master);
 			TRACE_EXECUTION(member->manager);
 		}
+		g_free(all_peers);
 	}
 
 	return TRUE;
@@ -2730,10 +2779,13 @@ member_action_to_CHECKING_MASTER(struct election_member_s *m)
 	m->concurrent_GETVERS = 0;
 	m->errors_GETVERS = 0;
 
+	gchar *all_peers = _member_all_peers(m);
 	member_ref(m);
 	m->manager->deferred_peering_notify |= sqlx_peering__getvers(
-			m->manager->peering, m->master_url, &m->inline_name, m, 0, _result_GETVERS);
+			m->manager->peering, m->master_url, &m->inline_name, all_peers,
+			m, 0, _result_GETVERS);
 	TRACE_EXECUTION(m->manager);
+	g_free(all_peers);
 
 	return member_set_status(m, STEP_CHECKING_MASTER);
 }
@@ -2762,12 +2814,15 @@ member_action_to_CHECKING_SLAVES(struct election_member_s *m)
 	m->outdated_GETVERS = 0;
 	m->errors_GETVERS = 0;
 
+	gchar *all_peers = _member_all_peers(m);
 	for (gchar **p=m->peers; *p; p++) {
 		member_ref(m);
 		m->manager->deferred_peering_notify |= sqlx_peering__getvers(
-				m->manager->peering, *p, &m->inline_name, m, 0, _result_GETVERS);
+				m->manager->peering, *p, &m->inline_name, all_peers,
+				m, 0, _result_GETVERS);
 		TRACE_EXECUTION(m->manager);
 	}
+	g_free(all_peers);
 
 	return member_set_status(m, STEP_CHECKING_SLAVES);
 }

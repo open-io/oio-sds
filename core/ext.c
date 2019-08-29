@@ -277,6 +277,15 @@ const char *oio_ext_set_prefixed_random_reqid(const char *prefix) {
 	return oio_ext_set_reqid(hex);
 }
 
+const char *
+oio_ext_ensure_reqid(const char *prefix)
+{
+	const char *reqid = oio_ext_get_reqid();
+	if (reqid)
+		return reqid;
+	return oio_ext_set_prefixed_random_reqid(prefix);
+}
+
 gint64 oio_ext_get_deadline(void) {
 	const struct oio_ext_local_s *l = _local_ensure ();
 	return l->deadline > 0 ? l->deadline : 0;

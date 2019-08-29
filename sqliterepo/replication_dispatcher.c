@@ -466,7 +466,7 @@ _restore2(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 
 static GError *
 _restore_snapshot(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
-		const gchar *path)
+		const gchar *path, const gchar *peers)
 {
 	struct stat bstats;
 	if (stat(path, &bstats) != 0) {
@@ -479,8 +479,9 @@ _restore_snapshot(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	/* The database snapshot file is here, open the base locally to avoid
 	 * a redirection, in case the local service does not become the master. */
-	GError *err = sqlx_repository_open_and_lock(repo, name,
-			SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK|SQLX_OPEN_CREATE, &sq3, NULL);
+	GError *err = sqlx_repository_timed_open_and_lock(repo, name,
+			SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK|SQLX_OPEN_CREATE, peers,
+			&sq3, NULL, oio_ext_get_deadline());
 	if (!err) {
 		struct sqlx_repctx_s *repctx = NULL;
 		if (sync_repli)
@@ -489,10 +490,8 @@ _restore_snapshot(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 			err = sqlx_repository_restore_from_file(sq3, path);
 			if (!err) {
 				sqlx_repository_call_change_callback(sq3);
-				/* Reset the set of peers.
-				 * It will be loaded from meta1 when needed.
-				 * FIXME(FVE): the request should define the peer set. */
-				sqlx_admin_del(sq3, SQLX_ADMIN_PEERS);
+				/* Set the new set of peers, avoid a lookup from meta1. */
+				sqlx_admin_set_str(sq3, SQLX_ADMIN_PEERS, peers);
 				sqlx_admin_save_lazy(sq3);
 				/* The slaves do not have the base, trigger synchronous
 				 * replication and prevent "Remote diff missed" errors. */
@@ -630,13 +629,14 @@ _pipe_from(const gchar *source, struct sqlx_repository_s *repo,
 
 static GError *
 _snapshot_from(const gchar *source, struct sqlx_repository_s *repo,
-		struct sqlx_name_s *source_name, struct sqlx_name_s *dest_name)
+		struct sqlx_name_s *source_name, struct sqlx_name_s *dest_name,
+		const gchar *peers)
 {
 	GError *err = NULL;
 	struct restore_ctx_s *ctx = NULL;
 	err = _pipe_base_from(source, repo, source_name, &ctx);
 	if (!err)
-		err = _restore_snapshot(repo, dest_name, ctx->path);
+		err = _restore_snapshot(repo, dest_name, ctx->path, peers);
 
 	restore_ctx_clear(&ctx);
 	return err;
@@ -1436,6 +1436,26 @@ _load_sqlx_name (struct gridd_reply_ctx_s *ctx,
 	return NULL;
 }
 
+static void
+_load_sqlx_peers(struct gridd_reply_ctx_s *ctx, gchar **peers)
+{
+	EXTRA_ASSERT(peers != NULL);
+	gsize msglen;
+	gchar pbuf[256];
+	const char *msg = metautils_message_get_NAME(ctx->request, &msglen);
+	GError *err = metautils_message_extract_string(ctx->request,
+			SQLX_ADMIN_PEERS, pbuf, sizeof(pbuf));
+	if (!err && oio_str_is_set(pbuf)) {
+		*peers = g_strndup(pbuf, sizeof(pbuf));
+		GRID_TRACE("%.*s request received peers: %s (reqid=%s)",
+				(int)msglen, msg, *peers, oio_ext_get_reqid());
+	} else {
+		GRID_INFO("%.*s request received no peers (reqid=%s)",
+				(int)msglen, msg, oio_ext_get_reqid());
+	}
+	g_clear_error(&err);
+}
+
 /* ------------------------------------------------------------------------- */
 
 static gboolean
@@ -1450,14 +1470,18 @@ _handler_GETVERS(struct gridd_reply_ctx_s *reply,
 
 	reply->no_access();
 
-	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
+	if ((err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
 		return TRUE;
 	}
+	gchar *peers = NULL;
+	_load_sqlx_peers(reply, &peers);
 
-	err = sqlx_repository_open_and_lock(repo, &n0,
-			SQLX_OPEN_CREATE|SQLX_OPEN_LOCAL|SQLX_OPEN_URGENT, &sq3, NULL);
-	if (NULL != err) {
+	err = sqlx_repository_timed_open_and_lock(repo, &n0,
+			SQLX_OPEN_CREATE|SQLX_OPEN_LOCAL|SQLX_OPEN_URGENT,
+			peers, &sq3, NULL, oio_ext_get_deadline());
+	g_free(peers);
+	if (err) {
 		g_prefix_error(&err, "Open/lock: ");
 		reply->send_error(0, err);
 		return TRUE;
@@ -1466,7 +1490,7 @@ _handler_GETVERS(struct gridd_reply_ctx_s *reply,
 	err = sqlx_repository_get_version(sq3, &version);
 	sqlx_repository_unlock_and_close_noerror(sq3);
 
-	if (NULL != err) {
+	if (err) {
 		reply->send_error(0, err);
 	} else {
 		GByteArray *encoded = version_encode(version);
@@ -1664,11 +1688,15 @@ _handler_USE(struct gridd_reply_ctx_s *reply,
 
 	const gboolean master = metautils_message_extract_flag(
 			reply->request, NAME_MSGKEY_MASTER, FALSE);
+	gchar *peers = NULL;
+	_load_sqlx_peers(reply, &peers);
 
-	if (NULL != (err = sqlx_repository_use_base(repo, &n0, master, TRUE, NULL)))
+	if ((err = sqlx_repository_use_base(repo, &n0, peers, master, TRUE, NULL)))
 		reply->send_error(0, err);
 	else
 		reply->send_reply(CODE_FINAL_OK, "OK");
+
+	g_free(peers);
 	return TRUE;
 }
 
@@ -1871,6 +1899,7 @@ _handler_SNAPSHOT(struct gridd_reply_ctx_s *reply,
 	gchar cid[STRLEN_CONTAINERID];
 	gchar seq_num[10];
 	gchar *full_base_name;
+	gchar *peers = NULL;
 	struct sqlx_name_inline_s name;
 	NAME2CONST(no, name);
 
@@ -1883,13 +1912,16 @@ _handler_SNAPSHOT(struct gridd_reply_ctx_s *reply,
 	EXTRACT_STRING(NAME_MSGKEY_CONTAINERID, cid);
 	EXTRACT_STRING(NAME_MSGKEY_SEQNUM, seq_num);
 	reply->subject("%s.%s|%s", name.base, name.type, source);
+	_load_sqlx_peers(reply, &peers);
+
 	full_base_name = g_strconcat(cid, seq_num, NULL);
 	struct sqlx_name_s src = {name.ns, full_base_name ,name.type};
-	if ((err = _snapshot_from(source, repo, &src, &no)))
+	if ((err = _snapshot_from(source, repo, &src, &no, peers)))
 		reply->send_error(0, err);
 	else
 		reply->send_reply(CODE_FINAL_OK, "OK");
 
+	g_free(peers);
 	g_free(full_base_name);
 	return TRUE;
 }
@@ -1915,7 +1947,7 @@ _handler_RESYNC(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	err = sqlx_repository_retore_from_master(sq3);
+	err = sqlx_repository_restore_from_master(sq3);
 	sqlx_repository_unlock_and_close_noerror(sq3);
 
 	if (NULL != err) {

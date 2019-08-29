@@ -91,6 +91,7 @@ void metautils_message_add_body_unref (MESSAGE m, GByteArray *body);
 void metautils_message_add_field_gba(MESSAGE m, const char *name, GByteArray *gba);
 
 void metautils_message_add_field_str(MESSAGE m, const char *name, const char *value);
+void metautils_message_add_fields_str(MESSAGE m, const char **fields);
 
 void metautils_message_add_field_strint64(MESSAGE m, const char *n, gint64 v);
 

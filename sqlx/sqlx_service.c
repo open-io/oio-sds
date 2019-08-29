@@ -485,6 +485,8 @@ filter_services(struct sqlx_service_s *ss, gchar **s, const gchar *type)
 	return NULL;
 }
 
+// TODO(FVE): when this conflicts while merging to master branch,
+// move to meta2v2/meta2_server.c.
 GError *
 sqlx_service_resolve_peers(struct sqlx_service_s *ss,
 		const struct sqlx_name_s *n, gboolean nocache, gchar ***result)
@@ -530,6 +532,16 @@ label_retry:
 	oio_url_pclean (&u);
 	return err;
 }
+
+#if 0
+static GError *
+sqlx_service_reply_no_peers(struct sqlx_service_s *ss UNUSED,
+		const struct sqlx_name_s *n UNUSED, gboolean nocache UNUSED,
+		gchar ***result UNUSED)
+{
+	return NEWERROR(CODE_NOT_ALLOWED, "Refusing to call meta1 to get peers.");
+}
+#endif
 
 // TODO: replace `nocache` by flags
 static GError *

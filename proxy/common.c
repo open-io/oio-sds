@@ -288,6 +288,7 @@ gridd_request_replicated (struct req_args_s *args, struct client_ctx_s *ctx,
 
 	gchar *election_key = _election_key(ctx);
 	STRING_STACKIFY(election_key);
+	gchar *peers = NULL;
 
 	const gint64 deadline = oio_ext_get_deadline();
 
@@ -334,9 +335,10 @@ label_retry:
 		}
 
 		/* We found some locations, let's keep only the URL part */
-		meta1_urlv_shift_addr (m1uv);
+		meta1_urlv_shift_addr(m1uv);
 		/* let's prefer the services requested (master, slave, etc) */
 		_sort_services (ctx, election_key, m1uv);
+		peers = g_strjoinv(",", m1uv);
 	}
 	const gint64 resolve_end = oio_ext_monotonic_time();
 	ctx->resolve_duration = resolve_end - req_start;
@@ -350,7 +352,8 @@ label_retry:
 		*bodyv = g_ptr_array_new (); /* <GByteArray*> */
 
 	NAME2CONST(n, ctx->name);
-	GByteArray *packed = pack(&n);
+	const gchar *headers[4] = {SQLX_ADMIN_PEERS, peers, NULL, NULL};
+	GByteArray *packed = pack(&n, headers);
 
 	gboolean stop = FALSE;
 	for (gchar **pu = m1uv; *pu && !stop; ++pu) {
@@ -490,7 +493,8 @@ label_retry:
 	EXTRA_ASSERT(urlv->len == errorv->len);
 
 	g_byte_array_unref (packed);
-	g_strfreev (m1uv);
+	g_strfreev(m1uv);
+	g_free(peers);
 
 #define FinishArray(Out,Type,Var) do { \
 	g_ptr_array_add (Var, NULL); \
