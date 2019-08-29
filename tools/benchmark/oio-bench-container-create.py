@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/env python
 
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
 #
@@ -14,6 +14,8 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+from __future__ import print_function
 
 import time
 from eventlet import sleep
@@ -37,7 +39,7 @@ def create_loop(prefix):
             RESULTS.put(name)
             sleep(0)
         except Exception as err:
-            print err
+            print(err)
 
 
 def main(threads, delay=2.0, duration=30.0):
@@ -49,8 +51,8 @@ def main(threads, delay=2.0, duration=30.0):
         res = RESULTS.get()
         counter += 1
         if now - checkpoint > delay:
-            print "%d containers in %fs, %f containers per second." % (
-                counter, now - checkpoint, counter / (now - checkpoint))
+            print("%d containers in %fs, %f containers per second." % (
+                  counter, now - checkpoint, counter / (now - checkpoint)))
             counter = 0
             checkpoint = now
         created.append(res)
@@ -61,9 +63,9 @@ def main(threads, delay=2.0, duration=30.0):
         created.append(RESULTS.get(block=False))
     end = time.time()
     rate = len(created) / (end - start)
-    print "End. %d containers created in %fs, %f containers per second." % (
-        len(created), end - start, rate)
-    print "Cleaning..."
+    print("End. %d containers created in %fs, %f containers per second." % (
+          len(created), end - start, rate))
+    print("Cleaning...")
     for _ in POOL.starmap(API.container_delete,
                           [('benchmark', n) for n in created]):
         pass
