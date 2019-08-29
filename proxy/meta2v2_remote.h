@@ -61,6 +61,7 @@ GError* m2v2_remote_execute_DESTROY_many(
 GByteArray* m2v2_remote_pack_CREATE(
 		struct oio_url_s *url,
 		struct m2v2_create_params_s *pols,
+		const gchar **headers,
 		gint64 deadline);
 
 GByteArray* m2v2_remote_pack_DESTROY(

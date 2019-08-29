@@ -111,12 +111,14 @@ static void _peering_notify (struct sqlx_peering_s *self UNUSED) {}
 static gboolean _peering_use (struct sqlx_peering_s *self,
 			const char *url,
 			const struct sqlx_name_inline_s *n,
+		const char *peers UNUSED,
 			const gboolean master);
 
 static gboolean _peering_getvers (struct sqlx_peering_s *self,
 		/* in */
 		const char *url,
 		const struct sqlx_name_inline_s *n,
+		const char *peers UNUSED,
 		/* out */
 		struct election_member_s *m,
 		const char *reqid,
@@ -144,6 +146,7 @@ static gboolean
 _peering_use (struct sqlx_peering_s *self,
 		const char *url,
 		const struct sqlx_name_inline_s *n,
+		const char *peers UNUSED,
 		const gboolean master)
 {
 	(void) self, (void) url, (void) n, (void) master;
@@ -156,6 +159,7 @@ _peering_getvers (struct sqlx_peering_s *self,
 		/* in */
 		const char *url,
 		const struct sqlx_name_inline_s *n,
+		const char *peers UNUSED,
 		/* out */
 		struct election_member_s *m,
 		const char *reqid,
@@ -485,7 +489,7 @@ test_election_init(void)
 		g_snprintf(n0.base, sizeof(n0.base),
 				"base-%"G_GUINT32_FORMAT, oio_ext_rand_int());
 		NAME2CONST(n, n0);
-		err = election_init(m, &n, NULL, NULL);
+		err = election_init(m, &n, NULL, NULL, NULL);
 		g_assert_no_error(err);
 		err = election_exit(m, &n);
 		g_assert_no_error(err);
@@ -531,7 +535,7 @@ test_create_ok(void)
 	sqliterepo_hash_name(&name, _k, sizeof(_k)); \
 	struct election_member_s *m = manager_get_member (manager, _k); \
 	g_assert_null(m); \
-	g_assert_no_error (_election_init (manager, &name, NULL, NULL)); \
+	g_assert_no_error (_election_init (manager, &name, NULL, NULL, NULL)); \
 	m = manager_get_member (manager, _k); \
 	g_assert_nonnull(m); \
 

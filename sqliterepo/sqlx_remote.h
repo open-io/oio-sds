@@ -90,15 +90,16 @@ GByteArray* sqlx_pack_PROPSET_tab (struct oio_url_s *url,
 		gint64 deadline);
 
 GByteArray* sqlx_pack_EXITELECTION(const struct sqlx_name_s *name, gint64 deadline);
-GByteArray* sqlx_pack_USE(const struct sqlx_name_s *name, const gboolean master,
-		gint64 deadline);
+GByteArray* sqlx_pack_USE(const struct sqlx_name_s *name, const gchar *peers,
+		const gboolean master, gint64 deadline);
 GByteArray* sqlx_pack_HAS(const struct sqlx_name_s *name, gint64 deadline);
 GByteArray* sqlx_pack_DESCR(const struct sqlx_name_s *name, gint64 deadline);
 GByteArray* sqlx_pack_STATUS(const struct sqlx_name_s *name, gint64 deadline);
-GByteArray* sqlx_pack_GETVERS(const struct sqlx_name_s *name, gint64 deadline);
+GByteArray* sqlx_pack_GETVERS(const struct sqlx_name_s *name, const gchar *peers,
+		gint64 deadline);
 
 GByteArray* sqlx_pack_SNAPSHOT(const struct sqlx_name_s *name, const gchar *source,
-		const gchar *cid, const gchar *seq_num, gint64 deadline);
+		const gchar *cid, const gchar *seq_num, const gchar **fields, gint64 deadline);
 GByteArray* sqlx_pack_PIPEFROM(const struct sqlx_name_s *name, const gchar *source, gint64 deadline);
 GByteArray* sqlx_pack_PIPETO(const struct sqlx_name_s *name, const gchar *target, gint64 deadline);
 GByteArray* sqlx_pack_REMOVE(const struct sqlx_name_s *name, gint64 deadline);

@@ -41,7 +41,7 @@ int
 meta2_filter_action_create_container(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	struct m2v2_create_params_s params = {NULL,NULL,NULL,0};
+	struct m2v2_create_params_s params = {NULL,NULL,NULL,NULL,0};
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	GError *err = NULL;
@@ -50,6 +50,7 @@ meta2_filter_action_create_container(struct gridd_filter_ctx_s *ctx,
 	params.storage_policy = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_STGPOLICY);
 	params.version_policy = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_VERPOLICY);
 	params.local = (meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_LOCAL) != NULL);
+	params.peers = meta2_filter_ctx_get_param(ctx, SQLX_ADMIN_PEERS);
 
 	gsize len = 0;
 	void *buf = metautils_message_get_BODY(reply->request, &len);

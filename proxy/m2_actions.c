@@ -1030,11 +1030,14 @@ _m2_container_create_with_properties (struct req_args_s *args, char **props,
 	 * of the account. This is how we do NOW, by letting the meta2 find the best
 	 * value when necessary. */
 	struct m2v2_create_params_s param = {
-			container_stgpol, container_verpol, props, FALSE
+			container_stgpol, container_verpol, NULL, props, FALSE
 	};
 
 	GError *err = NULL;
-	PACKER_VOID (_pack) { return m2v2_remote_pack_CREATE (args->url, &param, DL()); }
+	GByteArray *_pack(const struct sqlx_name_s *_u UNUSED,
+			const gchar **headers) {
+		return m2v2_remote_pack_CREATE(args->url, &param, headers, DL());
+	}
 
 retry:
 	GRID_TRACE("Container creation %s", oio_url_get (args->url, OIOURL_WHOLE));
@@ -1465,8 +1468,6 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 		GError *err2 = meta1v2_remote_link_service(
 				m1, args->url, NAME_SRVTYPE_META2, FALSE, TRUE, &urlv_snapshot,
 				oio_ext_get_deadline());
-		/* TODO(FVE): send this list along with the snapshot request.
-		 * This will prevent the meta2 from looking up in the meta1. */
 		if (urlv_snapshot) {
 			g_strfreev(urlv_snapshot);
 			urlv_snapshot = NULL;
@@ -1480,8 +1481,9 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 	meta1_urlv_shift_addr(urlv);
 	CLIENT_CTX(ctx, args, NAME_SRVTYPE_META2, 1);
 	gchar *url = _resolve_service_id(urlv[0]);
-	GByteArray * _pack_snapshot(const struct sqlx_name_s *n) {
-		return sqlx_pack_SNAPSHOT(n, url, target_cid, seq_num, DL());
+	GByteArray * _pack_snapshot(const struct sqlx_name_s *n,
+			const gchar **headers) {
+		return sqlx_pack_SNAPSHOT(n, url, target_cid, seq_num, headers, DL());
 	}
 	err = _resolve_meta2(args, CLIENT_PREFER_MASTER,
 			_pack_snapshot, NULL, NULL);
@@ -1494,7 +1496,8 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 			SQLX_ADMIN_USERNAME, (gchar*)container,
 			NULL
 		};
-		GByteArray * _pack_propset(const struct sqlx_name_s *n) {
+		GByteArray * _pack_propset(const struct sqlx_name_s *n,
+				const gchar **headers UNUSED) {
 			return sqlx_pack_PROPSET_tab(args->url, n, FALSE, props, DL());
 		}
 		err = _resolve_meta2(args, CLIENT_PREFER_MASTER,

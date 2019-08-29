@@ -370,6 +370,14 @@ metautils_message_add_field_str(MESSAGE m, const char *name, const char *value)
 }
 
 void
+metautils_message_add_fields_str(MESSAGE m, const char **fields)
+{
+	for (const char **cur = fields; fields && *cur; cur += 2) {
+		metautils_message_add_field_str(m, *cur, *(cur+1));
+	}
+}
+
+void
 metautils_message_add_field_gba(MESSAGE m, const char *name, GByteArray *gba)
 {
 	if (gba)

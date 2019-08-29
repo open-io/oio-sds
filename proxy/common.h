@@ -263,9 +263,11 @@ enum proxy_preference_e _prefer_master (void);
 GError * _m1_locate_and_action (struct oio_url_s *url,
 		GError * (*hook) (const char *m1addr));
 
-typedef GByteArray * (request_packer_f) (const struct sqlx_name_s *);
+typedef GByteArray * (request_packer_f) (const struct sqlx_name_s *,
+		const gchar **headers);
 
-#define PACKER_VOID(N) GByteArray * N (const struct sqlx_name_s *_u UNUSED)
+#define PACKER_VOID(N) GByteArray * N (const struct sqlx_name_s *_u UNUSED, \
+		const gchar **headers UNUSED)
 
 GError * gridd_request_replicated_with_retry (struct req_args_s *args,
 		struct client_ctx_s *ctx, request_packer_f pack);

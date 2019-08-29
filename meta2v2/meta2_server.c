@@ -128,7 +128,10 @@ main(int argc, char **argv)
 		NAME_SRVTYPE_META2, "m2v2",
 		"el/" NAME_SRVTYPE_META2, 2, 2,
 		schema, 1, 3,
-		sqlx_service_resolve_peers, _post_config, NULL
+		// FIXME(FVE): create a parameter to allow or deny peer requests.
+		//sqlx_service_reply_no_peers,
+		sqlx_service_resolve_peers,
+		_post_config, NULL
 	};
 
 	int rc = sqlite_service_main (argc, argv, &cfg);
