@@ -86,7 +86,7 @@ struct dav_stream
 #define RESOURCE_STAT_CHUNK_READ_FULLPATH_ATTRS 0x02
 #define RESOURCE_STAT_CHUNK_PENDING             0x04
 
-void resource_stat_chunk(dav_resource *resource, int flags);
+apr_status_t resource_stat_chunk(dav_resource *resource, int flags);
 
 void request_load_chunk_info_from_headers(request_rec *request,
 		struct chunk_textinfo_s *cti);

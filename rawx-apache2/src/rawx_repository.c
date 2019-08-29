@@ -463,7 +463,15 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 			flags |= RESOURCE_STAT_CHUNK_PENDING;
 			break;
 	}
-	resource_stat_chunk(resource, flags);
+	apr_status_t status = resource_stat_chunk(resource, flags);
+	if (status != APR_SUCCESS) {
+		char buff[256];
+		return server_create_and_stat_error(
+				request_get_server_config(r), r->pool,
+				HTTP_INTERNAL_SERVER_ERROR, status,
+				apr_pstrcat(r->pool, "Can not check if the chunk exists: ",
+					apr_strerror(status, buff, sizeof(buff)), NULL));
+	}
 
 	if (r->method_number == M_COPY) {
 		request_load_chunk_info_from_headers(r, &(resource->info->chunk));
