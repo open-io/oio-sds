@@ -45,8 +45,9 @@ class BlobRebuilder(Rebuilder):
         super(BlobRebuilder, self).__init__(conf, logger, volume, **kwargs)
         # rdir
         self.rdir_client = RdirClient(conf, logger=self.logger)
-        self.rdir_fetch_limit = int_value(conf.get('rdir_fetch_limit'), 100)
+        self.rdir_fetch_limit = int_value(conf.get('rdir_fetch_limit'), 1000)
         self.rdir_timeout = float_value(conf.get('rdir_timeout'), 60.0)
+        self.rdir_shuffle_chunks = true_value(conf.get('rdir_shuffle_chunks'))
         # rawx
         self.try_chunk_delete = try_chunk_delete
         # beanstalk
@@ -221,7 +222,8 @@ class BlobRebuilder(Rebuilder):
         if self.volume:
             return self.rdir_client.chunk_fetch(
                 self.volume, limit=self.rdir_fetch_limit, rebuild=True,
-                timeout=self.rdir_timeout, **kwargs)
+                timeout=self.rdir_timeout, shuffle=self.rdir_shuffle_chunks,
+                **kwargs)
         raise ConfigurationException('No source to fetch chunks from')
 
 
