@@ -47,7 +47,16 @@ add_executable(meta1_client meta1_client.c)
 bin_prefix(meta1_client -meta1-client)
 target_link_libraries(meta1_client metautils meta1remote)
 
-install(TARGETS meta1v2 meta1_server meta1remote meta1_client
+install(TARGETS
+			meta1v2
+			meta1_server
+			meta1remote
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		RUNTIME DESTINATION bin)
 
+# TODO(jfs): This tool should ne be necessary on any other use cases
+#            than DEVEL.
+install(TARGETS
+			meta1_client
+		RUNTIME DESTINATION bin
+		CONFIGURATIONS Debug COMPONENT dev)

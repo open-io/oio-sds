@@ -352,8 +352,12 @@ target_link_libraries(tool_sigfpe
 		${GLIB2_LIBRARIES})
 
 
-install(TARGETS metautils
+install(TARGETS
+			metautils
 		LIBRARY DESTINATION ${LD_LIBDIR}
-		RUNTIME DESTINATION bin
 		PUBLIC_HEADER DESTINATION include)
 
+install(TARGETS
+			tool_sigfpe
+		DESTINATION bin
+		CONFIGURATIONS Debug COMPONENT dev)

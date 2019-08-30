@@ -89,7 +89,10 @@ target_link_libraries(sqliterepo metautils
 		sqlitereporemote sqliteutils
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES} ${ZK_LIBRARIES})
 
-install(TARGETS sqliterepo sqliteutils sqlitereporemote
+install(TARGETS
+			sqliterepo
+			sqliteutils
+			sqlitereporemote
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		RUNTIME DESTINATION bin)
 

@@ -38,6 +38,6 @@ target_link_libraries(conscience
 bin_prefix(conscience -daemon)
 
 install(TARGETS conscience
-		LIBRARY DESTINATION ${GRIDD_PLUGINS_DIRECTORY}
+		LIBRARY DESTINATION ${LD_LIBDIR}
 		RUNTIME DESTINATION bin)
 

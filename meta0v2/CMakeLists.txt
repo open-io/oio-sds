@@ -54,9 +54,22 @@ target_link_libraries(meta0_server
 		sqlxsrv
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
-install(TARGETS meta0utils meta0remote meta0v2 meta0_server meta0_client
+install(TARGETS
+			meta0utils
+			meta0remote
+			meta0v2
+			meta0_server
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		RUNTIME DESTINATION bin)
+
+# As soon as the admin CLI is able to efficiently check a meta0
+# service without that command, we can uncomment the directive that
+# reserve the tool for the DEVEL use cases.
+install(TARGETS
+			meta0_client
+		RUNTIME DESTINATION bin
+		#CONFIGURATIONS Debug
+		COMPONENT dev)
 
 install(TARGETS meta0remote
 		LIBRARY DESTINATION ${LD_LIBDIR}
