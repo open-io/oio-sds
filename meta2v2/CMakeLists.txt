@@ -100,7 +100,10 @@ target_link_libraries(meta2_server meta2v2
         hcresolve metautils gridcluster server
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
-install(TARGETS meta2v2 meta2_server meta2v2utils
+install(TARGETS
+			meta2v2
+			meta2_server
+			meta2v2utils
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		RUNTIME DESTINATION bin)
 

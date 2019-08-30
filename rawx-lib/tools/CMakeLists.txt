@@ -20,6 +20,8 @@ bin_prefix(gs_uncompress -rawx-uncompress)
 target_link_libraries(gs_uncompress ${REQLIBS})
 
 install(TARGETS
-		gs_compress gs_uncompress
-		RUNTIME DESTINATION bin)
+			gs_compress
+			gs_uncompress
+		RUNTIME DESTINATION bin
+		CONFIGURATIONS Debug COMPONENT dev)
 
