@@ -327,6 +327,9 @@ _dump_json_aliases_and_headers(GString *gstr, GSList *aliases,
 			OIO_JSON_append_gstr(gstr, "policy",
 					CONTENTS_HEADERS_get_policy(h));
 			g_string_append_c(gstr, ',');
+			OIO_JSON_append_gstr(gstr, "chunk-method",
+					CONTENTS_HEADERS_get_chunk_method(h));
+			g_string_append_c(gstr, ',');
 			OIO_JSON_append_gba(gstr, "hash",
 					CONTENTS_HEADERS_get_hash(h));
 			g_string_append_c(gstr, ',');
@@ -338,6 +341,8 @@ _dump_json_aliases_and_headers(GString *gstr, GSList *aliases,
 		} else {
 			g_string_append_c(gstr, ',');
 			OIO_JSON_append_null(gstr, "policy");
+			g_string_append_c(gstr, ',');
+			OIO_JSON_append_null(gstr, "chunk-method");
 			g_string_append_c(gstr, ',');
 			OIO_JSON_append_null(gstr, "hash");
 			g_string_append_c(gstr, ',');
