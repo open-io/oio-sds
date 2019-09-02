@@ -920,6 +920,11 @@ class ObjectStorageApi(object):
 
         for obj in resp_body['objects']:
             try:
+                obj['chunk_method'] = obj['chunk-method']
+                del obj['chunk-method']
+            except KeyError:
+                obj['chunk_method'] = None
+            try:
                 obj['mime_type'] = obj['mime-type']
                 del obj['mime-type']
             except KeyError:
