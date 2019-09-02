@@ -214,14 +214,16 @@ class BlobClient(object):
     @update_rawx_perfdata
     @ensure_headers
     @ensure_request_id
-    def chunk_link(self, target, link, fullpath, headers=None, **kwargs):
+    def chunk_link(self, target, link, fullpath, headers=None,
+                   write_timeout=None, **kwargs):
         hdrs = headers.copy()
         if link is None:
             link = self._generate_fullchunk_copy(target, **kwargs)
         hdrs['Destination'] = link
         hdrs[CHUNK_HEADERS['full_path']] = fullpath
         resp = self.http_pool.request('COPY', self.resolve_url(target),
-                                      headers=hdrs)
+                                      headers=hdrs, read_timeout=write_timeout,
+                                      **kwargs)
         if resp.status != 201:
             raise exc.ChunkException(resp.status)
         return resp, link

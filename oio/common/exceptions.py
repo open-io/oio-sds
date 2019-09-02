@@ -231,6 +231,19 @@ class StatusMessageException(OioException):
         return out
 
 
+class UnfinishedUploadException(OioException):
+    """
+    Exception raised when a number of chunks are not uploaded.
+    """
+    def __init__(self, exception, chunks_already_uploaded):
+        self.exception = exception
+        self.chunks_already_uploaded = chunks_already_uploaded
+        super(UnfinishedUploadException, self).__init__()
+
+    def reraise(self):
+        raise self.exception, None, exc_info()[2]
+
+
 class ClientException(StatusMessageException):
     pass
 

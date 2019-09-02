@@ -24,7 +24,7 @@ import random
 from urllib import unquote
 from oio.common import exceptions as exc
 from oio.api.ec import ECWriteHandler
-from oio.api.io import MetachunkPreparer
+from oio.api.io import MetachunkPreparer, LinkHandler
 from oio.api.replication import ReplicatedWriteHandler
 from oio.api.backblaze_http import BackblazeUtilsException, BackblazeUtils
 from oio.api.backblaze import BackblazeWriteHandler, \
@@ -456,7 +456,21 @@ class ObjectStorageApi(object):
                 fullpath = encode_fullpath(
                     dst_account, dst_container, obj['name'], obj['version'],
                     obj['content'])
-                chunks_copies = self._link_chunks(chunks, fullpath, **kwargs)
+                storage_method = STORAGE_METHODS.load(obj['chunk_method'])
+                chunks_by_pos = _sort_chunks(chunks, storage_method.ec)
+                handler = LinkHandler(
+                    fullpath, chunks_by_pos, storage_method,
+                    self.blob_client, **kwargs)
+                try:
+                    chunks_copies = handler.link()
+                except exc.UnfinishedUploadException as ex:
+                    self.logger.warn(
+                        'Failed to upload all data (%s), deleting chunks',
+                        ex.exception)
+                    self._delete_orphan_chunks(
+                        ex.chunks_already_uploaded, obj['container_id'],
+                        **kwargs)
+                    ex.reraise()
                 t_beans, c_beans = self._prepare_meta2_raw_update(
                     chunks, chunks_copies, obj['content'])
                 target_beans.extend(t_beans)
@@ -993,9 +1007,10 @@ class ObjectStorageApi(object):
         target_meta, chunks = self.object_locate(
             target_account, target_container, target_obj,
             version=target_version, content=target_content_id, **kwargs)
-        link_meta, _ = self.container.content_prepare(
-            link_account, link_container, link_obj, content_id=link_content_id,
-            size=1, stgpol=target_meta['policy'], **kwargs)
+        link_meta, handler, _ = self._object_prepare(
+            link_account, link_container, link_obj, None, dict(),
+            content_id=link_content_id, policy=target_meta['policy'],
+            link=True, **kwargs)
         link_meta['chunk_method'] = target_meta['chunk_method']
         link_meta['length'] = target_meta['length']
         link_meta['hash'] = target_meta['hash']
@@ -1003,10 +1018,18 @@ class ObjectStorageApi(object):
         link_meta['mime_type'] = target_meta['mime_type']
         link_meta['properties'] = target_meta['properties']
 
-        fullpath = encode_fullpath(
-            link_account, link_container, link_obj, link_meta['version'],
-            link_meta['id'])
-        chunks_copies = self._link_chunks(chunks, fullpath, **kwargs)
+        chunks_by_pos = _sort_chunks(chunks, handler.storage_method.ec)
+        handler._load_chunk_prep(chunks_by_pos)
+        try:
+            chunks_copies = handler.link()
+        except exc.UnfinishedUploadException as ex:
+            self.logger.warn(
+                'Failed to upload all data (%s), deleting chunks',
+                ex.exception)
+            self._delete_orphan_chunks(
+                ex.chunks_already_uploaded, link_meta['container_id'],
+                **kwargs)
+            ex.reraise()
 
         data = {'chunks': chunks_copies,
                 'properties': link_meta['properties'] or {}}
@@ -1019,12 +1042,20 @@ class ObjectStorageApi(object):
             else:
                 data['properties'] = {}
 
-        self.container.content_create(
-            link_account, link_container, link_obj,
-            version=link_meta['version'], content_id=link_meta['id'],
-            data=data, size=link_meta['length'], checksum=link_meta['hash'],
-            stgpol=link_meta['policy'], mime_type=link_meta['mime_type'],
-            chunk_method=link_meta['chunk_method'], **kwargs)
+        try:
+            self.container.content_create(
+                link_account, link_container, link_obj,
+                version=link_meta['version'], content_id=link_meta['id'],
+                data=data, size=link_meta['length'],
+                checksum=link_meta['hash'], stgpol=link_meta['policy'],
+                mime_type=link_meta['mime_type'],
+                chunk_method=link_meta['chunk_method'], **kwargs)
+        except (exc.Conflict, exc.DeadlineReached) as ex:
+            self.logger.warn(
+                'Failed to commit to meta2 (%s), deleting chunks', ex)
+            self._delete_orphan_chunks(
+                chunks_copies, link_meta['container_id'], **kwargs)
+            raise
         return link_meta
 
     @staticmethod
@@ -1228,7 +1259,7 @@ class ObjectStorageApi(object):
 
     def _object_prepare(self, account, container, obj_name, source,
                         sysmeta, policy=None,
-                        key_file=None, **kwargs):
+                        key_file=None, link=False, **kwargs):
         """Call content/prepare, initialize chunk uploaders."""
         chunk_prep = MetachunkPreparer(
             self.container, account, container, obj_name,
@@ -1244,6 +1275,12 @@ class ObjectStorageApi(object):
                                    or OIO_VERSION)
 
         storage_method = STORAGE_METHODS.load(obj_meta['chunk_method'])
+        if link:
+            handler = LinkHandler(
+                    obj_meta['full_path'], None, storage_method,
+                    self.blob_client, **kwargs)
+            return obj_meta, handler, None
+
         if storage_method.ec:
             write_handler_cls = ECWriteHandler
         elif storage_method.backblaze:
