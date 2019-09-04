@@ -667,7 +667,9 @@ _dump_vol_status(GString *value, GTree *tree_containers, GTree *tree_to_rebuild)
 static GError *
 _db_vol_status(const char *volid, GString *value)
 {
-	static const char beacon[] = CHUNK_PREFIX;
+	static const char prefix[] = CHUNK_PREFIX;
+	static gsize prefix_len = sizeof(prefix)-1;
+
 	gint64 nb_chunks = 0, nb_to_rebuild = 0, incident_date = 0;
 	struct rdir_base_s *base = NULL;
 	GError *err = NULL;
@@ -694,26 +696,31 @@ _db_vol_status(const char *volid, GString *value)
 		g_tree_replace(tree_to_rebuild, g_strdup(cid), GINT_TO_POINTER(v));
 	}
 
-	/* Iterate over the chunk to count them and their containers */
 	leveldb_readoptions_t *options = leveldb_readoptions_create();
 	leveldb_readoptions_set_fill_cache(options, 0);
 	leveldb_readoptions_set_verify_checksums(options, 0);
 	leveldb_iterator_t *it = leveldb_create_iterator(base->base, options);
 	leveldb_readoptions_destroy(options);
-	leveldb_iter_seek(it, beacon, sizeof(beacon)-1);
+
+	/* Initially seek at the farthest position */
+	leveldb_iter_seek(it, prefix, prefix_len);
+
+	/* Iterate over the chunk to count them and their containers */
 	for (; leveldb_iter_valid(it); leveldb_iter_next(it)) {
-		size_t len = 0;
-		const char *k0 = leveldb_iter_key(it, &len);
-		if (*k0 != 'c' || len < sizeof(CHUNK_PREFIX "?|?|?")-1) {
-			/* not a chunk, for sure */
+		size_t keylen = 0, vallen = 0;
+		const char *key = leveldb_iter_key(it, &keylen);
+
+		/* We don't match the prefix anymore, and we won't find the prefix
+		 * in further elements, because of the initial seek that jumped
+		 * 'at least further than the prefix' */
+		if (keylen < prefix_len || memcmp(key, prefix, prefix_len) != 0)
 			break;
-		}
 
 		/* Insulate the name of its container */
 		gchar cid[128];
 		g_snprintf(cid, sizeof(cid), "%.*s",
-				(int)(len - sizeof(CHUNK_PREFIX) - 1),
-				k0 + sizeof(CHUNK_PREFIX) - 1);
+				(int)(keylen - sizeof(CHUNK_PREFIX) - 1),
+				key + sizeof(CHUNK_PREFIX) - 1);
 		char *colon = strchr(cid, '|');
 		if (!colon) continue;
 		*colon = 0;
@@ -725,22 +732,18 @@ _db_vol_status(const char *volid, GString *value)
 		count_chunk(cid);
 
 		if (incident_date > 0) {
-			const char *v0 = leveldb_iter_value(it, &len);
-			struct json_object *jrecord = NULL;
-			err = JSON_parse_buffer((const guint8*)v0, len, &jrecord);
+			struct rdir_record_s rec = {0};
+			const char *val = leveldb_iter_value(it, &vallen);
+			err = _record_parse(&rec, val, vallen);
 			if (err) {
-				GRID_TRACE("malformed record [%s]: (%d) %s",
-						k0, err->code, err->message);
+				GRID_INFO("Malformed record at [%.*s]", (int)keylen, key);
 				g_clear_error(&err);
-			} else {
-				json_object *jmtime = NULL;
-				if (json_object_object_get_ex(jrecord, "mtime", &jmtime)
-						&& json_object_is_type(jmtime, json_type_int)
-						&& json_object_get_int64(jmtime) <= incident_date) {
-					nb_to_rebuild++;
-					count_to_rebuild(cid);
-				}
-				json_object_put(jrecord);
+				continue;
+			}
+
+			if (rec.mtime <= incident_date) {
+				nb_to_rebuild++;
+				count_to_rebuild(cid);
 			}
 		}
 	}
