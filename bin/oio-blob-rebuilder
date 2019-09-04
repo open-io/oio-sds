@@ -59,6 +59,8 @@ tube for broken chunks events.
                         help="Random wait (in microseconds)")
     parser.add_argument('--allow-same-rawx', action='store_true',
                         help="Allow rebuilding a chunk on the original rawx")
+    parser.add_argument('--allow-frozen-container', action='store_true',
+                        help="Allow rebuilding a chunk in a frozen container")
     dft_help = "Try to delete faulty chunks after they have been rebuilt " \
                "elsewhere. This option is useful if the chunks you are " \
                "rebuilding are not actually missing but are corrupted."
@@ -111,6 +113,7 @@ def main():
 
     conf = {}
     conf['allow_same_rawx'] = args.allow_same_rawx
+    conf['allow_frozen_container'] = args.allow_frozen_container
     conf['dry_run'] = args.dry_run
     conf['namespace'] = args.namespace
 

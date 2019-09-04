@@ -395,6 +395,8 @@ class ContainerClient(ProxyClient):
                              cid=None, **kwargs):
         params = self._make_params(account, reference, cid=cid)
         data = json.dumps((bean,))
+        if kwargs.pop("frozen", None):
+            params["frozen"] = 1
         self._request(
             'POST', '/raw_insert', data=data, params=params, **kwargs)
 
