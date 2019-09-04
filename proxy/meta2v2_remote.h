@@ -196,6 +196,7 @@ GByteArray* m2v2_remote_pack_RAW_DEL(
 GByteArray* m2v2_remote_pack_RAW_ADD(
 		struct oio_url_s *url,
 		GSList *beans,
+		gboolean frozen,
 		gboolean force,
 		gint64 deadline);
 
