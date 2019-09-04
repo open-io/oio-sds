@@ -25,9 +25,12 @@ import string
 from subprocess import check_call
 from functools import wraps
 from urllib import urlencode
+from time import sleep
 
 import yaml
 import testtools
+import unittest
+import tempfile
 
 from oio.common.configuration import load_namespace_conf, set_namespace_options
 from oio.common.constants import REQID_HEADER
@@ -42,6 +45,11 @@ random_chars_id = 'ABCDEF' + string.digits
 CODE_NAMESPACE_NOTMANAGED = 418
 CODE_SRVTYPE_NOTMANAGED = 453
 CODE_POLICY_NOT_SATISFIABLE = 481
+
+# Number of chunks to use for admin agents
+ADMIN_AGENT_CHUNKS = 30
+ADMIN_AGENT_SHARDS = 10
+ADMIN_AGENT_BASES = 3
 
 
 def ec(fnc):
@@ -537,3 +545,170 @@ class BaseTestCase(CommonTestCase):
         except ResponseError as err:
             logging.info('%s', err)
         return None
+
+
+class DotDict(dict):
+    def __getattr__(self, key):
+        if key not in self:
+            raise AttributeError(key)
+        return self[key]
+
+    def __setattr__(self, key, value):
+        self[key] = value
+
+    def __delattr__(self, key):
+        del self[key]
+
+
+class FakeBlobMover(object):
+    logger = None
+
+    def __init__(self, conf, logger, *args, **kwargs):
+        self.logger = logger
+
+    def mover_pass(self, *args, **kwargs):
+        for i in range(ADMIN_AGENT_CHUNKS):
+            self.logger.info("moved ")
+
+
+class FakeBlobMoverSlow(FakeBlobMover):
+    def mover_pass(self, *args, **kwargs):
+        for i in range(ADMIN_AGENT_CHUNKS):
+            self.logger.info("moved ")
+        while True:
+            sleep(5)
+
+
+class FakeBlobMoverFail(FakeBlobMover):
+    def mover_pass(self, *args, **kwargs):
+        for i in range(ADMIN_AGENT_CHUNKS):
+            self.logger.error("ERROR")
+
+
+class FakeMeta2Mover(object):
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def move(self, *args, **kwargs):
+        return [dict(err=None)]
+
+
+class FakeMeta2MoverFail(FakeMeta2Mover):
+    def move(self, *args, **kwargs):
+        return [dict(err=1)]
+
+
+class FakeMeta2MoverSlow(FakeMeta2Mover):
+    def move(self, *args, **kwargs):
+        sleep(0.1)
+        return [dict(err=None)]
+
+
+class FakeBlobRebuilder(object):
+    def __init__(self, *args, **kwargs):
+        self.dispatcher = DotDict(
+            terminate=True
+        )
+        self.rdir_client = DotDict(
+            status=self._status
+        )
+
+    def prepare_distributed_dispatcher(self, *args, **kwargs):
+        pass
+
+    def run(self, *args, **kwargs):
+        for i in range(ADMIN_AGENT_CHUNKS):
+            yield (None, None, None)
+
+    def _status(self, *args, **kwargs):
+        return dict(
+            chunk=dict(to_rebuild=ADMIN_AGENT_CHUNKS)
+        )
+
+
+class FakeBlobRebuilderFail(FakeBlobRebuilder):
+
+    def run(self, *args, **kwargs):
+        for i in range(ADMIN_AGENT_CHUNKS):
+            yield (None, None, "error")
+
+
+class FakeBlobRebuilderSlow(FakeBlobRebuilder):
+
+    def run(self, *args, **kwargs):
+        for i in range(ADMIN_AGENT_CHUNKS):
+            yield (None, None, None)
+            sleep(0.1)
+
+
+class FakeBaseConscienceClient(object):
+    rawx = []
+    meta2 = []
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def lock_score(self, *args, **kwargs):
+        pass
+
+    def unlock_score(self, *args, **kwargs):
+        pass
+
+    def all_services(self, *args, **kwargs):
+        if args:
+            if args[0] == "meta2":
+                return self.meta2
+            elif args[0] == "rawx":
+                return self.rawx
+
+        return self.rawx + self.meta2
+
+
+class FakeCsClientFactory(object):
+    """
+        Utility class for creating a fake conscience client
+    """
+
+    def __call__(self, *args, **kwargs):
+        """
+        Create a fake conscience client with the current
+        rawx/meta2 service set
+        """
+        self._gen_services()
+
+        class FakeConscienceClient(FakeBaseConscienceClient):
+            rawx = self.rawx
+            meta2 = self.meta2
+        return FakeConscienceClient
+
+    def _gen_services(self):
+        """
+        Create some services and meta2 bases
+        """
+        self.rawx, self.meta2 = [], []
+        for i in range(5):
+            for j in range(2):
+                self.rawx.append(dict(
+                    addr="10.10.10.1%d:620%d" % (i, j),
+                    tags={
+                        "tag.loc": "node%d.%d" % (i, j),
+                        "tag.vol": tempfile.mkdtemp("test_mover_agent")
+                    }
+                ))
+                vol = tempfile.mkdtemp("test_mover_agent")
+                self.meta2.append(dict(
+                    addr="10.10.10.1%d:612%d" % (i, j),
+                    tags={
+                        "tag.loc": "node%d.%d" % (i, j),
+                        "tag.vol": vol
+                    }
+                ))
+                for k in range(ADMIN_AGENT_SHARDS):
+                    shard = os.path.join(vol, "%03d" % k)
+                    os.mkdir(shard)
+                    for l in range(ADMIN_AGENT_BASES):
+                        file_ = os.path.join(
+                            shard,
+                            "%032d" % (k * 1e3 + l) + ".1.meta2"
+                        )
+                        os.mknod(file_)
