@@ -21,25 +21,21 @@ from oio.conscience.checker.base import BaseChecker
 
 
 class HttpChecker(BaseChecker):
-    name = 'http'
+    checker_type = 'http'
 
-    def configure(self):
-        for k in ['host', 'port', 'uri']:
+    def _configure(self):
+        for k in ('uri', ):
             if k not in self.checker_conf:
                 raise exc.ConfigurationException(
                     'Missing field "%s" in configuration' % k)
 
-        self.host = self.checker_conf['host']
-        self.port = self.checker_conf['port']
         self.path = self.checker_conf['uri'].lstrip('/')
-        self.name = '%s|http|%s|%s|%s' % \
-            (self.srv_type, self.host, self.port, self.path)
+        self.name = '%s|%s' % (self.name, self.path)
         self.url = '%s:%s%s%s' % (self.host, self.port,
                                   '' if self.path.startswith('/') else '/',
                                   self.path)
-        self.success = True
 
-    def check(self):
+    def _check(self):
         resp = None
         try:
             # We have clues that the connection will be reused quickly to get
@@ -48,21 +44,21 @@ class HttpChecker(BaseChecker):
             resp = self.agent.pool_manager.request("GET", self.url,
                                                    headers=hdrs)
             if resp.status == 200:
-                self.success = True
+                self.last_check_success = True
             else:
                 raise Exception("status code != 200: %s" % resp.status)
         except Exception as err:
             # Avoid spamming the logs
-            if self.success:
-                self.logger.warn('ERROR performing http check (%s): %s',
-                                 self.url, err)
-            self.success = False
+            if self.last_check_success:
+                self.logger.warn('ERROR performing %s check (%s): %s',
+                                 self.checker_type, self.url, err)
+            self.last_check_success = False
         finally:
             if resp:
                 try:
                     resp.close()
                 except urllibexc.HTTPError:
                     pass
-            if not self.success:
+            if not self.last_check_success:
                 self.logger.warn('%s check failed', self.name)
-            return self.success
+            return self.last_check_success
