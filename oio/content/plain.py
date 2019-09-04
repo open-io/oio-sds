@@ -46,7 +46,8 @@ class PlainContent(Content):
         self._create_object(**kwargs)
         return final_chunks, bytes_transferred, content_checksum
 
-    def rebuild_chunk(self, chunk_id, allow_same_rawx=False, chunk_pos=None):
+    def rebuild_chunk(self, chunk_id, allow_same_rawx=False, chunk_pos=None,
+                      allow_frozen_container=False):
         # Identify the chunk to rebuild
         current_chunk = self.chunks.filter(id=chunk_id).one()
         if current_chunk is None and chunk_pos is None:
@@ -97,8 +98,10 @@ class PlainContent(Content):
 
         # Register the spare chunk in object's metadata
         if chunk_id is None:
-            self._add_raw_chunk(current_chunk, spare_url)
+            self._add_raw_chunk(current_chunk, spare_url,
+                                frozen=allow_frozen_container)
         else:
-            self._update_spare_chunk(current_chunk, spare_url)
+            self._update_spare_chunk(current_chunk, spare_url,
+                                     frozen=allow_frozen_container)
         self.logger.info('Chunk %s repaired in %s',
                          chunk_id or chunk_pos, spare_url)

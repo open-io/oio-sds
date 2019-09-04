@@ -349,6 +349,8 @@ class BlobRebuilderWorker(RebuilderWorker):
             self.rebuilder.conf.get('dry_run', False))
         self.allow_same_rawx = true_value(
             self.rebuilder.conf.get('allow_same_rawx'))
+        self.allow_frozen_container = true_value(
+            self.rebuilder.conf.get('allow_frozen_container'))
         self.try_chunk_delete = try_chunk_delete
         self.rdir_client = self.rebuilder.rdir_client
         self.content_factory = ContentFactory(self.rebuilder.conf,
@@ -451,8 +453,10 @@ class BlobRebuilderWorker(RebuilderWorker):
                 raise ValueError("Chunk does not belong to this volume")
             chunk_size = chunk.size
 
-        content.rebuild_chunk(chunk_id, allow_same_rawx=self.allow_same_rawx,
-                              chunk_pos=chunk_pos)
+        content.rebuild_chunk(
+            chunk_id, allow_same_rawx=self.allow_same_rawx,
+            chunk_pos=chunk_pos,
+            allow_frozen_container=self.allow_frozen_container)
 
         if self.try_chunk_delete:
             try:
