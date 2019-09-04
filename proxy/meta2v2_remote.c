@@ -345,10 +345,12 @@ m2v2_remote_pack_RAW_DEL(struct oio_url_s *url, GSList *beans, gint64 dl)
 }
 
 GByteArray*
-m2v2_remote_pack_RAW_ADD(struct oio_url_s *url, GSList *beans, gboolean force, gint64 dl)
+m2v2_remote_pack_RAW_ADD(struct oio_url_s *url, GSList *beans, gboolean frozen,
+		gboolean force, gint64 dl)
 {
 	GByteArray *body = bean_sequence_marshall(beans);
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_RAW_ADD, url, body, dl);
+	metautils_message_add_field_struint(msg, NAME_MSGKEY_FROZEN, BOOL(frozen));
 	metautils_message_add_field_struint(msg, NAME_MSGKEY_FORCE, BOOL(force));
 	return message_marshall_gba_and_clean(msg);
 }
