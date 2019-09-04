@@ -29,7 +29,6 @@ from time import sleep
 
 import yaml
 import testtools
-import unittest
 import tempfile
 
 from oio.common.configuration import load_namespace_conf, set_namespace_options
