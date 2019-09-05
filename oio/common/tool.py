@@ -337,6 +337,7 @@ class _Dispatcher(object):
         self.conf = conf
         self.tool = tool
         self.logger = self.tool.logger
+        self.terminate = False
 
     def run(self):
         """
@@ -585,6 +586,8 @@ class _DistributedDispatcher(_Dispatcher):
             self.sending = False
             return
         for task_event in tasks_events:
+            if self.terminate:
+                break
             items_run_time = ratelimit(items_run_time,
                                        self.max_items_per_second)
             next_worker = self._send_task_event(task_event, reply_loc,
