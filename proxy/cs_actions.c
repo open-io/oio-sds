@@ -240,8 +240,9 @@ _cs_check_tokens (struct req_args_s *args)
 		return BADNS();
 
 	const char *type = TYPE();
-	if (type && !validate_srvtype(type))
-		return BADSRVTYPE();
+	if (type)
+		return validate_srvtype(type);
+
 	return NULL;
 }
 
@@ -277,10 +278,11 @@ _registration_batch (enum reg_op_e op, GSList *services)
 
 		if (!metautils_addr_valid_for_connect(&si->addr))
 			return BADREQ("Invalid service address");
-		if (!si->type[0] && !service_info_get_tag(si->tags, "tag.id"))
+		if (!si->type[0])
 			return BADREQ("Service type not specified");
-		if (!validate_srvtype(si->type))
-			return BADREQ("Service type currently unknown");
+		GError *err = validate_srvtype(si->type);
+		if (err)
+			return err;
 
 		si->score.timestamp = now;
 		switch (op) {
@@ -360,7 +362,7 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 		return _reply_bad_gateway(args, SYSERR("Service upstream disabled"));
 
 	if (NULL != (err = _cs_check_tokens(args)))
-		return _reply_notfound_error (args, err);
+		return _reply_common_error(args, err);
 
 	/* Manage a single service as well as a list of services */
 	GSList *services = NULL;
@@ -431,29 +433,36 @@ action_conscience_info (struct req_args_s *args)
 		return _reply_retry(args, NEWERROR(CODE_UNAVAILABLE, "FAKE"));
 #endif
 
-	if (v && !strcmp(v, "types")) {
-		if (NULL != (err = _cs_check_tokens(args)))
-			return _reply_notfound_error (args, err);
+	if (NULL != (err = _cs_check_tokens(args)))
+		return _reply_common_error(args, err);
 
+	if (v && !strcmp(v, "types")) {
+		gboolean service_types_loaded = FALSE;
 		GString *out = g_string_sized_new(128);
 		g_string_append_c(out, '[');
-		NSINFO_READ(if (srvtypes && *srvtypes) {
-			g_string_append_c(out, '"');
-			g_string_append(out, *srvtypes);
-			g_string_append_c(out, '"');
-			for (gchar **ps = srvtypes+1; *ps ;ps++) {
-				g_string_append_c(out, ',');
-				g_string_append_c(out, '"');
-				g_string_append(out, *ps);
-				g_string_append_c(out, '"');
-			}
-		});
+		NSINFO_READ(
+			if (srvtypes) {
+				service_types_loaded = TRUE;
+				if (*srvtypes) {
+					g_string_append_c(out, '"');
+					g_string_append(out, *srvtypes);
+					g_string_append_c(out, '"');
+					for (gchar **ps = srvtypes+1; *ps ;ps++) {
+						g_string_append_c(out, ',');
+						g_string_append_c(out, '"');
+						g_string_append(out, *ps);
+						g_string_append_c(out, '"');
+					}
+				}
+			});
+		if (!service_types_loaded) {
+			g_string_free(out, TRUE);
+			return _reply_retry(args, NEWERROR(CODE_UNAVAILABLE,
+					"Service types not yet loaded"));
+		}
 		g_string_append_c(out, ']');
 		return _reply_success_json (args, out);
 	}
-
-	if (NULL != (err = _cs_check_tokens(args)))
-		return _reply_notfound_error (args, err);
 
 	struct namespace_info_s ni = {{0}};
 	NSINFO_READ(namespace_info_copy (&nsinfo, &ni));
@@ -473,7 +482,7 @@ action_local_list (struct req_args_s *args)
 
 	GError *err;
 	if (NULL != (err = _cs_check_tokens(args)))
-		return _reply_notfound_error(args, err);
+		return _reply_common_error(args, err);
 
 	GString *gs = g_string_sized_new (2048);
 	g_string_append_c (gs, '[');
@@ -537,7 +546,7 @@ action_conscience_list (struct req_args_s *args)
 
 	GError *err;
 	if (NULL != (err = _cs_check_tokens(args)))
-		return _reply_notfound_error(args, err);
+		return _reply_common_error(args, err);
 
 	if (flag_cache_enabled) {
 		service_remember_wanted (type);
@@ -619,7 +628,7 @@ action_conscience_resolve_service_id (struct req_args_s *args)
 
 	GError *err;
 	if (NULL != (err = _cs_check_tokens(args)))
-		return _reply_notfound_error(args, err);
+		return _reply_common_error(args, err);
 
 	CSURL(cs);
 	gchar *addr = NULL;
@@ -669,7 +678,7 @@ action_conscience_flush (struct req_args_s *args)
 {
 	GError *err;
 	if (NULL != (err = _cs_check_tokens(args)))
-		return _reply_notfound_error (args, err);
+		return _reply_common_error(args, err);
 
 #ifdef HAVE_ENBUG
 	if (proxy_enbug_cs_failure_rate >= oio_ext_rand_int_range(1,100))
@@ -727,7 +736,7 @@ action_conscience_deregister (struct req_args_s *args)
 
 	GError *err;
 	if (NULL != (err = _cs_check_tokens(args)))
-		return _reply_notfound_error (args, err);
+		return _reply_common_error(args, err);
 
 	/* TODO(jfs): the deregistration of a single service has not been implemented yet */
 	return _reply_not_implemented (args);

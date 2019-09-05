@@ -1581,6 +1581,12 @@ def generate(options):
         for rec in final_services[srvtype]:
             if 'path' in rec:
                 mkdir_noerror(rec['path'])
+            if 'path' in rec and 'addr' in rec:
+                cmd = ('oio-tool', 'init',
+                       rec['path'], ENV['NS'],
+                       srvtype, rec.get('service_id', rec['addr']))
+                import subprocess
+                subprocess.check_call(cmd)
 
     final_conf["services"] = final_services
     final_conf["namespace"] = ns

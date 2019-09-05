@@ -16,7 +16,8 @@
 from logging import getLogger
 from cliff import lister, show, command
 from oio.common.easy_value import boolean_value
-from oio.common.exceptions import OioException
+from oio.common.exceptions import OioException, OioNetworkException, \
+    ServiceBusy
 
 
 class ClusterShow(show.ShowOne):
@@ -281,25 +282,29 @@ class ClusterWait(lister.Lister):
     def _wait(self, parsed_args):
         from time import time as now, sleep
 
-        types = parsed_args.types
-        if not parsed_args.types:
-            types = self.app.client_manager.conscience.service_types()
-
         min_score = parsed_args.score
         delay = parsed_args.delay
         deadline = now() + delay
         descr = []
+        ko = -1
         exc_msg = ("Timeout ({0}s) while waiting for the services to get a "
-                   "score >= {1}, still {2} are not.")
+                   "score >= {1}, {2}")
 
         def maybe_unlock(allsrv):
             if not parsed_args.unlock:
+                return
+            if not allsrv:
                 return
             self.app.client_manager.conscience.unlock_score(allsrv)
 
         def check_deadline():
             if now() > deadline:
-                msg = exc_msg.format(delay, min_score, ko)
+                if ko < 0:
+                    msg = exc_msg.format(delay, min_score,
+                                         "proxy and/or conscience not ready")
+                else:
+                    msg = exc_msg.format(delay, min_score,
+                                         "still %d are not." % ko)
                 for srv in descr:
                     if srv['score'] < min_score:
                         self.log.warn(
@@ -307,35 +312,65 @@ class ClusterWait(lister.Lister):
                             srv['type'], srv.get('id', None), srv['score'])
                 raise Exception(msg)
 
-        interval = _sleep_interval(1.0, 2.0, 4.0)
-        while True:
-            descr = []
-            for type_ in types:
-                tmp = self.app.client_manager.conscience.all_services(type_)
-                for srv in tmp:
-                    srv['type'] = type_
-                descr += tmp
-            ko = len([s['score'] for s in descr if s['score'] < min_score])
-            if ko == 0:
-                # If a minimum has been specified, let's check we have enough
-                # services
-                if parsed_args.count:
-                    ok = len([s for s in descr if s['score'] >= min_score])
-                    if ok < parsed_args.count:
-                        self.log.debug("Only %d services up", ok)
-                        check_deadline()
-                        maybe_unlock(descr)
-                        sleep(next(interval))
-                        continue
-                # No service down, and enough services, we are done.
-                for srv in descr:
-                    yield srv['type'], srv['addr'], srv['score']
-                return
-            else:
-                self.log.debug("Still %d services down", ko)
+        def generator(*tab):
+            for v in tab:
+                yield v
+            while True:
+                yield tab[-1]
+
+        interval = generator(0.0, 1.0, 2.0, 4.0)
+        types = parsed_args.types
+        if not parsed_args.types:
+            while True:
                 check_deadline()
-                maybe_unlock(descr)
                 sleep(next(interval))
+
+                try:
+                    types = self.app.client_manager.conscience.service_types()
+                    break
+                except OioNetworkException as exc:
+                    self.log.debug("Proxy error: %s", exc)
+                except ServiceBusy as exc:
+                    self.log.debug("Conscience busy: %s", exc)
+
+        interval = generator(0.0, 1.0, 2.0, 4.0)
+        while True:
+            check_deadline()
+            maybe_unlock(descr)
+            sleep(next(interval))
+
+            descr = []
+            ko = -1
+            try:
+                for typ in types:
+                    tmp = self.app.client_manager.conscience.all_services(typ)
+                    for srv in tmp:
+                        srv['type'] = typ
+                    descr += tmp
+            except OioNetworkException as exc:
+                self.log.debug("Proxy error: %s", exc)
+                continue
+            except ServiceBusy as exc:
+                self.log.debug("Conscience busy: %s", exc)
+                continue
+
+            ko = len([s['score'] for s in descr if s['score'] < min_score])
+            if ko > 0:
+                self.log.debug("Still %d services down", ko)
+                continue
+
+            # If a minimum has been specified, let's check we have enough
+            # services
+            if parsed_args.count:
+                ok = len([s for s in descr if s['score'] >= min_score])
+                if ok < parsed_args.count:
+                    self.log.debug("Only %d services up", ok)
+                    continue
+
+            # No service down, and enough services, we are done.
+            for srv in descr:
+                yield srv['type'], srv['addr'], srv['score']
+            return
 
     def take_action(self, parsed_args):
         columns = ('Type', 'Service', 'Score')

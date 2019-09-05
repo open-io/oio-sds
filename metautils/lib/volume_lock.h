@@ -24,10 +24,11 @@ License along with this library.
 
 /**
  * Lock a volume by setting some extended attributes.
- * If `servicing` is true, do not set the attributes, just check they are
- * already there and match type, id and namespace.
+ * If `autoset` is true, set the attributes if they are not found.
+ * If not, just check their presence and return an error is they are missing.
+ * In both cases, it returns an error if any attribute differs.
  */
 GError* volume_service_lock(const char *vol, const char *type,
-		const char *id, const char *ns, const gboolean servicing);
+		const char *id, const char *ns, const gboolean autoset);
 
 #endif /*OIO_SDS__metautils__lib__volume_lock_h*/

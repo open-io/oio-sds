@@ -229,12 +229,29 @@ _print_loc(const char *dotted_loc)
 	g_print("%s\t%"OIO_LOC_FORMAT"\n", dotted_loc, loc);
 }
 
+static int
+_init_volume(const char *nsname, const char *srvtype, const char *endpoint,
+		const char *path)
+{
+	GError *err = volume_service_lock(path, srvtype, endpoint, nsname, TRUE);
+	if (err) {
+		g_printerr("Volume assignation failed: (%d) %s\n", err->code, err->message);
+		g_clear_error(&err);
+		return 1;
+	} else {
+		g_printerr("Assigned %s to %s/%s/%s\n", path, nsname, srvtype, endpoint);
+		return 0;
+	}
+}
+
 static void
 _print_usage(const char *name)
 {
 	g_printerr ("Usage:\n");
 	g_printerr ("\nDump a view of all the variables known in the central "
-			"configurationn\n");
+			"configuration\n");
+	g_printerr ("\nInitiate the xattr-lock on a volume.\n");
+	g_printerr (" %s init PATH NS TYPE ENDPOINT\n", name);
 	g_printerr (" %s config NS [--raw] PATH...\n", name);
 	g_printerr ("\nPrint hex representation of the address\n");
 	g_printerr (" %s addr IP:PORT\n", name);
@@ -307,6 +324,12 @@ main (int argc, char **argv)
 			return 1;
 		}
 		return _redirect(argv[2]);
+	} else if (!strcmp("init", argv[1])) {
+		if (argc != 6) {
+			g_printerr("Usage: %s init PATH NS TYPE ENDPOINT\n", argv[0]);
+			return 1;
+		}
+		return _init_volume(argv[3], argv[4], argv[5], argv[2]);
 	} else if (!strcmp("-h", argv[1]) ||
 			!strcmp("help", argv[1]) ||
 			!strcmp("--help", argv[1])) {

@@ -141,6 +141,9 @@ _reply_common_error (struct req_args_s *args, GError *err)
 		case CODE_CORRUPT_DATABASE:
 		case CODE_CONTAINER_FROZEN:
 			return _reply_retry(args, err);
+		case CODE_NAMESPACE_NOTMANAGED:
+		case CODE_SRVTYPE_NOTMANAGED:
+			return _reply_notfound_error(args, err);
 		case CODE_CONTAINER_EXISTS:
 		case CODE_CONTENT_EXISTS:
 		case CODE_CONTENT_PRECONDITION:

@@ -40,33 +40,33 @@ class ServiceConfigTest(CliTestCase):
         output = self.openio_admin(
             '%s get-config %s %s' % (service_type, service_id, opts))
         config = json.loads(output)
-        max_delay_start = int(config['server.request.max_delay_start'])
+        max_run_time = int(config['server.request.max_run_time'])
 
         opts = self.get_opts([])
         output = self.openio_admin(
-            '%s set-config %s -p "server.request.max_delay_start=%d" '
+            '%s set-config %s -p "server.request.max_run_time=%d" '
             '-p "test=test" %s'
-            % (service_type, service_id, max_delay_start-1, opts),
+            % (service_type, service_id, max_run_time-1, opts),
             expected_returncode=1)
         self.assertOutput(
-            ['server.request.max_delay_start True', 'test False'],
+            ['server.request.max_run_time True', 'test False'],
             sorted(output.rstrip('\n').split('\n')))
 
-        opts = self.get_opts(['server.request.max_delay_start', 'test'])
+        opts = self.get_opts(['server.request.max_run_time', 'test'])
         output = self.openio_admin(
             '%s get-config %s %s' % (service_type, service_id, opts))
-        self.assertOutput('%d\n' % (max_delay_start - 1), output)
+        self.assertOutput('%d\n' % (max_run_time - 1), output)
 
         opts = self.get_opts([])
         output = self.openio_admin(
-            '%s set-config %s -p "server.request.max_delay_start=%d" %s'
-            % (service_type, service_id, max_delay_start, opts))
-        self.assertOutput("server.request.max_delay_start True\n", output)
+            '%s set-config %s -p "server.request.max_run_time=%d" %s'
+            % (service_type, service_id, max_run_time, opts))
+        self.assertOutput("server.request.max_run_time True\n", output)
 
-        opts = self.get_opts(['server.request.max_delay_start'])
+        opts = self.get_opts(['server.request.max_run_time'])
         output = self.openio_admin(
             '%s get-config %s %s' % (service_type, service_id, opts))
-        self.assertOutput('%d\n' % max_delay_start, output)
+        self.assertOutput('%d\n' % max_run_time, output)
 
     def test_oioproxy_config(self):
         self._test_service_config('oioproxy')

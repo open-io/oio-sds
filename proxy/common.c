@@ -35,15 +35,22 @@ validate_namespace (const char * ns)
 	return 0 == strcmp (ns, ns_name);
 }
 
-gboolean
-validate_srvtype (const char * n)
+GError *
+validate_srvtype(const char *srvtype)
 {
-	gboolean rc = FALSE;
-	NSINFO_READ(if (srvtypes) {
-		for (gchar ** p = srvtypes; !rc && *p; ++p)
-			rc = !strcmp (*p, n);
-	});
-	return rc;
+	gboolean service_types_loaded = FALSE;
+	gboolean service_type_found = FALSE;
+	NSINFO_READ(
+		if (srvtypes) {
+			service_types_loaded = TRUE;
+			for (gchar ** p = srvtypes; !service_type_found && *p; ++p)
+				service_type_found = !strcmp(*p, srvtype);
+		});
+	if (!service_types_loaded)
+		return NEWERROR(CODE_UNAVAILABLE, "Service types not yet loaded");
+	if (!service_type_found)
+		return BADSRVTYPE(srvtype);
+	return NULL;
 }
 
 gboolean

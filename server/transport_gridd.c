@@ -648,7 +648,7 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 	/* request data */
 	ctx.client = req_ctx->client;
 	ctx.request = req_ctx->request;
-	ctx.deadline = now + sqlx_request_max_delay_start;
+	ctx.deadline = now + sqlx_request_max_run_time;
 
 	/* Patch the deadline with a potential max delay in the request itself */
 	gchar tostr[32] = {};

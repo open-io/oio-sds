@@ -1184,13 +1184,13 @@ Used by `gcc`
  * cmake directive: *OIO_SERVER_QUEUE_WARN_DELAY*
  * range: 10 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
-### server.request.max_delay_start
+### server.request.max_run_time
 
-> How long a request might take to start executing on the server side. This value is used to compute a deadline for several waitings (DB cache, manager of elections, etc). Common to all sqliterepo-based services, it might be overriden.
+> How long a request might take to run on the server side. This value is used to compute a deadline for several waitings (DB cache, manager of elections, etc). Common to all sqliterepo-based services, it might be overriden.
 
- * default: **30 * G_TIME_SPAN_SECOND**
+ * default: **300 * G_TIME_SPAN_SECOND**
  * type: gint64
- * cmake directive: *OIO_SERVER_REQUEST_MAX_DELAY_START*
+ * cmake directive: *OIO_SERVER_REQUEST_MAX_RUN_TIME*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
 ### server.task.malloc_trim.period
@@ -1756,6 +1756,14 @@ Used by `gcc`
  * default: **TRUE**
  * type: gboolean
  * cmake directive: *OIO_UDP_ALLOWED*
+
+### volume.lazy_lock
+
+> Allow the services to self-assign to the volume they find in their configuration. This was the default behaviour in pre 5.2 versions of oio-sds.
+
+ * default: **TRUE**
+ * type: gboolean
+ * cmake directive: *OIO_VOLUME_LAZY_LOCK*
 
 ## Variables only for testing purposes
 

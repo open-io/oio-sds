@@ -229,6 +229,11 @@
 		"header": "common_variables.h",
 		"variables": [
 
+			{ "type": "bool", "name": "oio_volume_lock_lazy",
+				"key": "volume.lazy_lock",
+				"descr": "Allow the services to self-assign to the volume they find in their configuration. This was the default behaviour in pre 5.2 versions of oio-sds.",
+				"def": true},
+
 			{ "type": "uint", "name": "oio_socket_gridd_rcvbuf",
 				"key": "socket.gridd.rcvbuf",
 				"descr": "Set to a non-zero value to explicitely force a RCVBUF option on client sockets to gridd services. Set to 0 to keep the OS default.",
@@ -788,10 +793,11 @@
 				"descr": "How long may the decache routine take",
 				"def": "500ms", "min": "1ms", "max": "1m" },
 
-			{ "type": "monotonic", "name": "sqlx_request_max_delay_start",
-				"key": "server.request.max_delay_start",
-				"descr": "How long a request might take to start executing on the server side. This value is used to compute a deadline for several waitings (DB cache, manager of elections, etc). Common to all sqliterepo-based services, it might be overriden.",
-				"def": "30s", "min": "1ms", "max": "1h" }
+			{ "type": "monotonic", "name": "sqlx_request_max_run_time",
+				"key": "server.request.max_run_time",
+				"descr": "How long a request might take to run on the server side. This value is used to compute a deadline for several waitings (DB cache, manager of elections, etc). Common to all sqliterepo-based services, it might be overriden.",
+				"def": "300s", "min": "1ms", "max": "1h",
+				"aliases": ["server.request.max_delay_start"] }
 		]
 	},
 	"proxy": {
