@@ -18,15 +18,16 @@
 set -e
 set -x
 
-SRCDIR="$1"
-[[ -n $SRCDIR ]]
-[[ -d $SRCDIR ]]
+SRCDIR="$1" ; [[ -n "$SRCDIR" ]] ; [[ -d "$SRCDIR" ]]
+
+export OIO_NS=NS-$RANDOM-$RANDOM
+export OIO_ACCOUNT=ACCT-$RANDOM-$RANDOM
 
 D=$(mktemp -d)
 cd $D
-cmake ${CMAKE_OPTS} -D CMAKE_BUILD_TYPE=Debug ${SRCDIR}
+cmake ${CMAKE_OPTS} -D CMAKE_BUILD_TYPE=Debug "${SRCDIR}"
 make -j 8 all
 make -C tests/unit test
 make clean
-cd
+cd -
 rm -rf "$D"

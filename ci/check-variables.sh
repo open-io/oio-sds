@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# oio-build-sdk.sh
+# check-variables.sh
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
@@ -16,20 +16,19 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 set -e
-set -x
 
-SRCDIR="$1" ; [[ -n "$SRCDIR" ]] ; [[ -d "$SRCDIR" ]]
+SRCDIR=$1 ; [[ -n "$SRCDIR" ]] ; [[ -d "$SRCDIR" ]]
 
-for TYPE in Debug Release ; do
-	export OIO_NS=NS-$RANDOM-$RANDOM
-	export OIO_ACCOUNT=ACCT-$RANDOM-$RANDOM
-
-	D=$(mktemp -d)
-	cd $D
-	cmake ${CMAKE_OPTS} -D CMAKE_BUILD_TYPE=$TYPE -D SDK_ONLY=on "${SRCDIR}"
-	make -j 8 all
-	make test
-	make clean
-	cd -
-	rm -rf "$D"
-done
+cd $SRCDIR
+h0=$(md5sum Variables.md)
+h1=$(md5sum Variables.CMakeFile)
+./confgen.py cmake conf.json
+./confgen.py github conf.json
+if ! [[ "$h0" = $(md5sum Variables.md) ]] ; then
+	echo "Please regenerate the GitHub markdown doc about the configuration" >&2
+	exit 1
+fi
+if ! [[ "$h1" = $(md5sum Variables.CMakeFile) ]] ; then
+	echo "Please regenerate the CMake directives about the configuration" >&2
+	exit 1
+fi

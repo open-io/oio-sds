@@ -5,39 +5,161 @@ jobs:
       - image: jfsmig/oio-sds-ci
     environment:
       CMAKE_OPTS: -DENABLE_CODECOVERAGE=on -DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib -DZK_LIBDIR=/usr/lib -DZK_INCDIR=/usr/include/zookeeper
-      G_DEBUG: fatal_warnings
-      G_DEBUG_LEVEL: W
-      ZK: 127.0.0.1:2181
-      LD_LIBRARY_PATH: /tmp/oio/lib
-      PKG_CONFIG_PATH: /tmp/oio/lib/pkgconfig
     steps:
       - checkout
       - run:
-          name: Install dependencies
+          name: Env Setup
           command: |
-            ./ci/install-user-deps.sh ${HOME}/oio
-            echo "source ${HOME}/oio/bin/activate" >> ${BASH_ENV}
+            echo ". /etc/profile" >> ${BASH_ENV}
+            sudo /etc/init.d/rsyslog start
       - run:
-          name: Updates the submodules
+          name: Format Tests
           command: |
-            mkdir /tmp/oio
-            git fetch --tags
-            git submodule sync
-            git submodule update --init
+            set -e
+            set -x
+            ./ci/build-sdk.sh ${PWD}
+            ./ci/build-release.sh ${PWD}
+            ./ci/check-version.sh ${PWD}
+            ./ci/check-copyright.sh ${PWD}
+            ./ci/check-variables.sh ${PWD}
       - run:
-          name: Fail-Fast tests
-          command: ./ci/travis-failfast.sh
+          name: Installation
+          command: |
+            set -e
+            set -x
+            cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Debug" ${PWD}
+            make -j 8 all
+            make install
+            python ./setup.py develop
       - run:
           name: Unit tests
-          command: ./ci/travis-unit.sh
-      - run:
-          name: Unit tests
-          command: ./ci/travis-suites.sh
-      - run:
-          name: Detect coredumps and print backtraces
-          command: ./ci/post-failure.sh
-          when: on_fail
+          command: ./ci/test-unit.sh ${PWD} ${PWD}
       - run:
           name: Detect coredumps and print backtraces
           command: ./ci/post-success.sh
           when: on_success
+      - run:
+          name: Detect coredumps and print backtraces
+          command: ./ci/post-failure.sh
+          when: on_fail
+  test0:
+    docker:
+      - image: jfsmig/oio-sds-ci
+    environment:
+      CMAKE_OPTS: -DENABLE_CODECOVERAGE=on -DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib -DZK_LIBDIR=/usr/lib -DZK_INCDIR=/usr/include/zookeeper
+    steps:
+      - checkout
+      - run:
+          name: Env Setup
+          command: |
+            echo ". /etc/profile" >> ${BASH_ENV}
+            sudo /etc/init.d/rsyslog start
+      - run:
+          name: Installation
+          command: |
+            set -e
+            set -x
+            cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Debug" ${PWD}
+            make -j 8 all
+            make install
+            python ./setup.py develop
+      - run:
+          environment:
+            TEST_SUITE: slave
+          command: ./ci/test-suites.sh ${PWD} ${PWD}
+      - run:
+          environment:
+            TEST_SUITE: cli
+          command: ./ci/test-suites.sh ${PWD} ${PWD}
+      - run:
+          environment:
+            TEST_SUITE: worm
+          command: ./ci/test-suites.sh ${PWD} ${PWD}
+      - run:
+          environment:
+            TEST_SUITE: single,webhook
+          command: ./ci/test-suites.sh ${PWD} ${PWD}
+      - run:
+          environment:
+            TEST_SUITE: repli,go-rawx
+          command: ./ci/test-suites.sh ${PWD} ${PWD}
+      - run:
+          environment:
+            TEST_SUITE: ec
+          command: ./ci/test-suites.sh ${PWD} ${PWD}
+      - run:
+          environment:
+            TEST_SUITE: 3copies
+          command: ./ci/test-suites.sh ${PWD} ${PWD}
+      - run:
+          environment:
+            TEST_SUITE: small-cache,fsync
+          command: ./ci/test-suites.sh ${PWD} ${PWD}
+      - run:
+          name: Detect coredumps and print backtraces
+          command: ./ci/post-success.sh
+          when: on_success
+      - run:
+          name: Detect coredumps and print backtraces
+          command: ./ci/post-failure.sh
+          when: on_fail
+  test1:
+    docker:
+      - image: jfsmig/oio-sds-ci
+    environment:
+      CMAKE_OPTS: -DENABLE_CODECOVERAGE=on -DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib -DZK_LIBDIR=/usr/lib -DZK_INCDIR=/usr/include/zookeeper
+    steps:
+      - checkout
+      - run:
+          name: Env Setup
+          command: |
+            echo ". /etc/profile" >> ${BASH_ENV}
+            sudo /etc/init.d/rsyslog start
+      - run:
+          name: Installation
+          command: |
+            set -e
+            set -x
+            cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Debug" ${PWD}
+            make -j 8 all
+            make install
+            python ./setup.py develop
+      - run:
+          environment:
+            TEST_SUITE: 3copies,with-service-id
+          command: ./ci/test-suites.sh ${PWD} ${PWD}
+      - run:
+          environment:
+            TEST_SUITE: ec,with-service-id
+          command: ./ci/test-suites.sh ${PWD} ${PWD}
+      - run:
+          environment:
+            TEST_SUITE: rebuilder,with-service-id
+          command: ./ci/test-suites.sh ${PWD} ${PWD}
+      - run:
+          environment:
+            TEST_SUITE: mover,with-service-id
+          command: ./ci/test-suites.sh ${PWD} ${PWD}
+      - run:
+          environment:
+            TEST_SUITE: multi-beanstalk
+          command: ./ci/test-suites.sh ${PWD} ${PWD}
+      - run:
+          name: Detect coredumps and print backtraces
+          command: ./ci/post-success.sh
+          when: on_success
+      - run:
+          name: Detect coredumps and print backtraces
+          command: ./ci/post-failure.sh
+          when: on_fail
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+      - build
+      - test0
+          requires:
+            - build
+      - test1
+          requires:
+            - build

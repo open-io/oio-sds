@@ -1,5 +1,6 @@
 ci coreutils
 ci sudo
+ci wget
 
 build apache2-dev
 build bison
@@ -33,15 +34,16 @@ run gnupg
 run libapache2-mod-wsgi
 run python-dev
 run python-pbr
-run redis-server
-run redis-tools
 run sqlite3
 run zookeeper
 run software-properties-common
 run locales
 
+test redis-server
+test redis-tools
 test zookeeper-bin
 test zookeeperd
+test rsyslog
 
 prod openio-asn1c
 prod openio-gridinit
