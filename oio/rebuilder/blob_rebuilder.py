@@ -19,7 +19,7 @@ from datetime import datetime
 from socket import gethostname
 
 from oio.common.json import json
-from oio.common.green import threading, sleep
+from oio.common.green import eventlet, threading, sleep
 from oio.common.easy_value import float_value, int_value, true_value
 from oio.common.exceptions import ContentNotFound, NotFound, OrphanChunk, \
     ConfigurationException, OioTimeout, ExplicitBury, OioException, RetryLater
@@ -161,16 +161,25 @@ class BlobRebuilder(Rebuilder):
     def _rebuilder_pass(self, **kwargs):
         return super(BlobRebuilder, self).rebuilder_pass(**kwargs)
 
+    def _load_expected_chunks(self):
+        try:
+            info = self.rdir_client.status(self.volume,
+                                           timeout=self.rdir_timeout)
+            self.total_expected_chunks = info.get(
+                    'chunk', dict()).get('to_rebuild', None)
+            self.logger.info('Total chunks to rebuild: %d',
+                             self.total_expected_chunks)
+        except Exception as exc:
+            self.logger.warn('Failed to fetch the total chunks to rebuild: %s',
+                             exc)
+
     def rebuilder_pass(self, **kwargs):
         success = False
         if self.volume:
             self.rdir_client.admin_lock(self.volume,
                                         "rebuilder on %s" % gethostname(),
                                         timeout=self.rdir_timeout)
-            info = self.rdir_client.status(self.volume,
-                                           timeout=self.rdir_timeout)
-            self.total_expected_chunks = info.get(
-                    'chunk', dict()).get('to_rebuild', None)
+            eventlet.spawn_n(self._load_expected_chunks)
         try:
             success = self._rebuilder_pass(**kwargs)
         finally:
