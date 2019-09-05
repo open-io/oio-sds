@@ -1430,6 +1430,7 @@ class ObjectStorageApi(object):
             try:
                 self.account.container_reset(account, container, time.time(),
                                              **kwargs)
+                break
             except exc.Conflict:
                 if i >= attempts - 1:
                     raise

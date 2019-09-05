@@ -290,7 +290,7 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 
 		++ client->nb_redirects;
 
-		/* Allow 4 redirections (i.e. 5 attemps) */
+		/* Allow 4 redirections (i.e. 5 attempts) */
 		if (client->nb_redirects > 4)
 			return NEWERROR(CODE_TOOMANY_REDIRECT, "Too many redirections");
 
