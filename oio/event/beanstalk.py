@@ -531,16 +531,24 @@ class Beanstalk(object):
     def delete(self, job_id):
         self.execute_command('delete', job_id)
 
-    def drain_tube(self, tube):
-        """Delete all jobs from the specified tube."""
-        self.watch(tube)
+    def _drain(self, fetch_func):
         try:
             job_id = True
             while job_id is not None:
-                job_id, _ = self.reserve(timeout=0)
+                job_id, _ = fetch_func()
                 self.delete(job_id)
         except ResponseError:
             pass
+
+    def drain_buried(self, tube):
+        self.use(tube)
+        return self._drain(self.peek_buried)
+
+    def drain_tube(self, tube):
+        """Delete all jobs from the specified tube."""
+        self.watch(tube)
+        from functools import partial
+        return self._drain(partial(self.reserve, timeout=0))
 
     def kick_job(self, job_id):
         """
@@ -563,17 +571,27 @@ class Beanstalk(object):
         kicked = int(self.execute_command('kick', str(bound))[1][0])
         return kicked
 
-    def peek_ready(self):
-        """
-        Read the next ready job without reserving it.
-        """
+    def _peek_generic(self, command_suffix=''):
+        command = 'peek' + command_suffix
         try:
-            return self.execute_command('peek-ready')
+            return self.execute_command(command)
         except ResponseError as err:
-            if err.args[0] == 'peek-ready' and err.args[1] == 'NOT_FOUND':
+            if err.args[0] == command and err.args[1] == 'NOT_FOUND':
                 return None, None
             else:
                 raise
+
+    def peek_buried(self):
+        """
+        Read the next buried job without kicking it.
+        """
+        return self._peek_generic('-buried')
+
+    def peek_ready(self):
+        """
+        read the next ready job without reserving it.
+        """
+        return self._peek_generic('-ready')
 
     def wait_until_empty(self, tube, timeout=float('inf'), poll_interval=0.2,
                          initial_delay=0.0):
