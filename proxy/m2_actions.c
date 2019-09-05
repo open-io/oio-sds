@@ -1707,8 +1707,7 @@ static GError * _list_loop (struct req_args_s *args,
 				m2v2_list_result_extract);
 		oio_str_clean((gchar**)&(in.marker_start));
 		if (err) {
-			if (err->code == CODE_UNAVAILABLE &&
-					strstr(err->message, "deadline reached")) {
+			if (err->code == CODE_UNAVAILABLE && count > 0) {
 				// We reached request deadline, just tell the caller the
 				// listing is truncated, it will call us again with the
 				// appropriate marker.
