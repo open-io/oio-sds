@@ -17,7 +17,7 @@
 # License along with this library.
 
 import argparse
-from oio.cli import make_logger_args_parser
+from oio.cli import make_logger_args_parser, get_logger_from_args
 from oio.admin.agent import BaseAdminAgentHandler, OioAdminAgent
 from BaseHTTPServer import HTTPServer
 
@@ -28,31 +28,31 @@ def make_arg_parser():
     """
     parser = argparse.ArgumentParser(description=desc,
                                      parents=[make_logger_args_parser()])
-    parser.add_argument('--namespace',
+    parser.add_argument('--namespace', '--ns',
                         metavar='<namespace>',
                         dest='namespace',
                         help="Namespace", required=True)
-    parser.add_argument('--host',
-                        metavar='<host>',
-                        dest='host',
-                        help="Hostname of current node",
+    parser.add_argument('--loc', '--location',
+                        help="Location of the service.",
                         required=True)
     parser.add_argument('--addr',
                         metavar='<addr>',
                         dest='addr',
                         help="IP:PORT to bind to", required=True)
-
     return parser
 
 
 def make_handler(args):
+    logger = get_logger_from_args(args)
+
     class OioAdminAgentHandler(BaseAdminAgentHandler):
-        agent = OioAdminAgent(args)
+        agent = OioAdminAgent(args.namespace, args.loc, logger=logger)
+
     return OioAdminAgentHandler
 
 
 if __name__ == "__main__":
-    args = make_arg_parser().parse_args()
-    ip, port = args.addr.split(':')
-    httpd = HTTPServer((ip, int(port)), make_handler(args))
-    httpd.serve_forever()
+    ARGS = make_arg_parser().parse_args()
+    IP, PORT = ARGS.addr.split(':')
+    HTTPD = HTTPServer((IP, int(PORT)), make_handler(ARGS))
+    HTTPD.serve_forever()

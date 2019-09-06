@@ -17,9 +17,10 @@ from uuid import uuid4
 import unittest
 
 from oio.admin.agent import OioAdminAgent
+from oio.common.logger import get_logger
 from tests.utils import FakeBlobMover, FakeBlobMoverFail, FakeMeta2Mover,\
     FakeMeta2MoverFail, FakeBlobRebuilder, FakeBlobRebuilderFail, DotDict,\
-    FakeCsClientFactory
+    FakeConscienceClient
 
 SHARDS = 10
 BASES = 3
@@ -28,32 +29,26 @@ CHUNKS = 30
 
 class TestOioMoverAgent(unittest.TestCase):
     agent = None
-    ctx = None
     job_id_len = len(str(uuid4()))
     rawx = []
     meta2 = []
 
     def setUp(self):
-        cs_client_factory = FakeCsClientFactory()
-        cs_client = cs_client_factory()
-        self.rawx = cs_client_factory.rawx
-        self.meta2 = cs_client_factory.meta2
+        cs_client = FakeConscienceClient()
+        self.rawx = cs_client.rawx
+        self.meta2 = cs_client.meta2
 
-        self.ctx = dict(
-            conscience=cs_client,
-            blob_mover=FakeBlobMover,
-            meta2_mover=FakeMeta2Mover,
-            blob_rebuilder=FakeBlobRebuilder,
-        )
-        self.agent = OioAdminAgent(args=DotDict(
-            host="node1",
-            namespace="OPENIO",
-            log_level="INFO",
-            log_facility="local0",
-            log_syslog_prefix="OIO,OPENIO,oio-mover-agent,0",
-            log_address="/dev/log",
-            quiet=False
-        ), ctx=self.ctx)
+        logger = get_logger({
+            'log_level': "INFO",
+            'log_facility': "local0",
+            'log_syslog_prefix': "OIO,OPENIO,oio-mover-agent,0",
+            'log_address': "/dev/log"},
+            'log', True)
+        self.agent = OioAdminAgent('OPENIO', 'node1.1', logger=logger,
+                                   conscience_client=cs_client)
+        self.agent.blob_mover_cls = FakeBlobMover
+        self.agent.meta2_mover_cls = FakeMeta2Mover
+        self.agent.blob_rebuilder_cls = FakeBlobRebuilder
 
     def tearDown(self):
         try:
@@ -63,89 +58,89 @@ class TestOioMoverAgent(unittest.TestCase):
         self.agent.jobs = None
 
     def test_move_meta2(self):
-        id, err = self.agent.run_job(
+        jid, err = self.agent.run_job(
             "move", "meta2", "10.10.10.11:6120",
             self.meta2[0]['tags']['tag.vol'], dict()
         )
-        self.assertEqual(len(id), self.job_id_len)
-        job = self.agent.jobs[id]
-        for p in job['processes']:
-            p.join()
+        self.assertEqual(len(jid), self.job_id_len)
+        job = self.agent.jobs[jid]
+        for proc in job['processes']:
+            proc.join()
         self.assertEqual(job['stats']['fail'].value, 0)
         self.assertEqual(job['stats']['success'].value, SHARDS * BASES)
 
     def test_move_meta2_fail(self):
-        self.agent.cm.meta2_mover = FakeMeta2MoverFail
-        id, err = self.agent.run_job(
+        self.agent.meta2_mover_cls = FakeMeta2MoverFail
+        jid, _err = self.agent.run_job(
             "move", "meta2", "10.10.10.11:6120",
             self.meta2[0]['tags']['tag.vol'], dict()
         )
-        self.assertEqual(len(id), self.job_id_len)
-        job = self.agent.jobs[id]
-        for p in job['processes']:
-            p.join()
+        self.assertEqual(len(jid), self.job_id_len)
+        job = self.agent.jobs[jid]
+        for proc in job['processes']:
+            proc.join()
         self.assertEqual(job['stats']['success'].value, 0)
         self.assertEqual(job['stats']['fail'].value, SHARDS * BASES)
 
     def test_move_rawx(self):
-        id, err = self.agent.run_job(
+        jid, _err = self.agent.run_job(
             "move", "rawx", "10.10.10.11:6120",
             self.rawx[0]['tags']['tag.vol'], dict()
         )
-        self.assertEqual(len(id), self.job_id_len)
-        job = self.agent.jobs[id]
-        for p in job['processes']:
-            p.join()
+        self.assertEqual(len(jid), self.job_id_len)
+        job = self.agent.jobs[jid]
+        for proc in job['processes']:
+            proc.join()
         self.assertEqual(job['stats']['fail'].value, 0)
         self.assertEqual(job['stats']['success'].value, CHUNKS)
 
     def test_move_rawx_excl(self):
-        id, err = self.agent.run_job(
+        jid, _err = self.agent.run_job(
             "move", "rawx", "10.10.10.11:6120",
             self.rawx[0]['tags']['tag.vol'], dict(exclude=['re:!node1'])
         )
-        self.assertEqual(len(id), self.job_id_len)
-        job = self.agent.jobs[id]
-        for p in job['processes']:
-            p.join()
+        self.assertEqual(len(jid), self.job_id_len)
+        job = self.agent.jobs[jid]
+        for proc in job['processes']:
+            proc.join()
         self.assertEqual(job['stats']['fail'].value, 0)
         self.assertEqual(job['stats']['success'].value, CHUNKS)
 
     def test_move_rawx_fail(self):
-        self.agent.cm.blob_mover = FakeBlobMoverFail
-        id, err = self.agent.run_job(
+        self.agent.blob_mover_cls = FakeBlobMoverFail
+        jid, _err = self.agent.run_job(
             "move", "rawx", "10.10.10.11:6120",
             self.rawx[0]['tags']['tag.vol'], dict()
         )
-        self.assertEqual(len(id), self.job_id_len)
-        job = self.agent.jobs[id]
-        for p in job['processes']:
-            p.join()
+        self.assertEqual(len(jid), self.job_id_len)
+        job = self.agent.jobs[jid]
+        for proc in job['processes']:
+            proc.join()
         self.assertEqual(job['stats']['fail'].value, CHUNKS)
         self.assertEqual(job['stats']['success'].value, 0)
 
     def test_rebuild_rawx(self):
-        id, err = self.agent.run_job(
+        jid, _err = self.agent.run_job(
             "rebuild", "rawx", "10.10.10.11:6120",
             self.rawx[0]['tags']['tag.vol'], dict()
         )
-        self.assertEqual(len(id), self.job_id_len)
-        job = self.agent.jobs[id]
-        for p in job['processes']:
-            p.join()
+        self.assertEqual(len(jid), self.job_id_len)
+        job = self.agent.jobs[jid]
+        for proc in job['processes']:
+            proc.join()
         self.assertEqual(job['stats']['fail'].value, 0)
         self.assertEqual(job['stats']['success'].value, CHUNKS)
 
     def test_rebuild_rawx_fail(self):
-        self.agent.cm.blob_rebuilder = FakeBlobRebuilderFail
-        id, err = self.agent.run_job(
+        self.agent.blob_rebuilder_cls = FakeBlobRebuilderFail
+        jid, _err = self.agent.run_job(
             "rebuild", "rawx", "10.10.10.11:6120",
             self.rawx[0]['tags']['tag.vol'], dict()
         )
-        self.assertEqual(len(id), self.job_id_len)
-        job = self.agent.jobs[id]
-        for p in job['processes']:
-            p.join()
+        self.assertEqual(len(jid), self.job_id_len)
+        job = self.agent.jobs[jid]
+        for proc in job['processes']:
+            proc.join()
         self.assertEqual(job['stats']['fail'].value, CHUNKS)
         self.assertEqual(job['stats']['success'].value, 0)
 
@@ -163,7 +158,7 @@ class TestOioMoverAgent(unittest.TestCase):
         fields = (
             'stats',
             'config',
-            'host',
+            'loc',
             'service',
             'volume',
             'id',
@@ -172,9 +167,9 @@ class TestOioMoverAgent(unittest.TestCase):
             'end',
             'action'
         )
-        for f in fields:
+        for field in fields:
             for job in jobs:
-                self.assertIn(f, job)
+                self.assertIn(field, job)
 
     def test_excluded(self):
         excl = self.agent.excluded("rawx", ['node1', 'node2'])
@@ -236,28 +231,31 @@ class TestOioMoverAgent(unittest.TestCase):
 
     def test_volume(self):
         vol = self.agent.volume("rawx", '10.10.10.11:6201')
-        self.assertNotEqual(None, vol)
+        self.assertIsNotNone(vol)
         vol2 = self.agent.volume("rawx", '10.10.10.11:6210')
-        self.assertEqual(None, vol2)
+        self.assertIsNone(vol2)
 
     def test_check_running(self):
-        self.agent.jobs = dict(
-            a=dict(
-                host="node1",
-                config=dict(volume="/mnt/test"),
-                control=dict(end=DotDict(value=0))
-            ),
-            b=dict(
-                host="node1",
-                config=dict(volume="/mnt/test"),
-                control=dict(end=DotDict(value=2))
-            ),
-            c=dict(
-                host="node1",
-                config=dict(volume="/mnt/test2"),
-                control=dict(end=DotDict(value=2))
-            )
-        )
+        self.agent.jobs = {
+            'a': {
+                'id': 'a',
+                'loc': "node1.1",
+                'config': dict(volume="/mnt/test"),
+                'control': dict(end=DotDict(value=0))
+            },
+            'b': {
+                'id': 'b',
+                'loc': "node1.1",
+                'config': dict(volume="/mnt/test"),
+                'control': dict(end=DotDict(value=2))
+            },
+            'c': {
+                'id': 'c',
+                'loc': "node1.1",
+                'config': dict(volume="/mnt/test2"),
+                'control': dict(end=DotDict(value=2))
+            }
+        }
         res = self.agent.check_running("/mnt/test")
         self.assertTrue(res)
         res2 = self.agent.check_running("/mnt/test2")
@@ -267,6 +265,4 @@ class TestOioMoverAgent(unittest.TestCase):
         bases = [[str(i), i] for i in range(1, 30)]
         for i in range(1, 30):
             self.assertEqual(
-                i,
-                len(self.agent.chunk_bases(bases, i)),
-            )
+                i, len(self.agent.chunk_bases(bases, i)),)

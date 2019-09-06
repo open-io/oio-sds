@@ -32,7 +32,6 @@ from BaseHTTPServer import BaseHTTPRequestHandler
 from oio.blob.mover import BlobMoverWorker
 from oio.blob.rebuilder import BlobRebuilder
 from oio.conscience.client import ConscienceClient
-from oio.cli import get_logger_from_args
 from oio.directory.meta2 import Meta2Database
 
 
@@ -55,35 +54,20 @@ class BlobStatsLogger(object):
         self.size = size
 
     def info(self, msg, *args, **kwargs):
-        self.log.debug(msg % args)
+        self.log.debug(msg, *args, **kwargs)
         if msg.startswith("moved"):
             self.success.value += 1
 
     def warn(self, msg, *args, **kwargs):
-        self.log.debug(msg % args)
+        self.log.debug(msg, *args, **kwargs)
 
     def error(self, msg, *args, **kwargs):
-        self.log.debug(msg % args)
+        self.log.debug(msg, *args, **kwargs)
         if msg.startswith("ERROR"):
             self.fail.value += 1
 
     def debug(self, msg, *args, **kwargs):
-        self.log.debug(msg % args)
-
-
-class OioAdminAgentClassManager(object):
-    """
-    Pluggable class manager for admin agent
-    """
-
-    def __init__(self, ctx=dict()):
-        self.blob_mover = BlobMoverWorker
-        self.blob_rebuilder = BlobRebuilder
-        self.conscience = ConscienceClient
-        self.meta2_mover = Meta2Database
-
-        for name, class_ in ctx.items():
-            setattr(self, name, class_)
+        self.log.debug(msg, *args, **kwargs)
 
 
 class OioAdminAgent(object):
@@ -93,25 +77,26 @@ class OioAdminAgent(object):
     """
     jobs = dict()
 
-    def __init__(self, args, **kwargs):
-        # This allows for easily swappable classes to be used
-        ctx = {}
-        try:
-            ctx = args.get("ctx", {})
-        except Exception:
-            pass
-        self.cm = OioAdminAgentClassManager(ctx=ctx or kwargs.get("ctx", {}))
-        self.host = args.host
-        self.namespace = args.namespace
-        self.client = self.cm.conscience({"namespace": args.namespace})
-        self.log = get_logger_from_args(args)
+    blob_mover_cls = BlobMoverWorker
+    blob_rebuilder_cls = BlobRebuilder
+    meta2_mover_cls = Meta2Database
+
+    def __init__(self, namespace, location,
+                 conscience_client=None, logger=None,
+                 **kwargs):
+        self.ns = namespace
+        self.loc = location
+        self.log = logger
+        self.cs = conscience_client or \
+            ConscienceClient({'namespace': self.ns}, logger=self.log,
+                             **kwargs)
         self.log.info("Starting oio-mover-agent")
         self.jobs = dict()
 
-        signal.signal(signal.SIGTERM, self._clean_exit)
+        signal.signal(signal.SIGINT, self._clean_exit)
         signal.signal(signal.SIGTERM, self._clean_exit)
 
-    def _clean_exit(self, signum, frame):
+    def _clean_exit(self, _signum, _frame):
         self.log.info(
             "Clean exit requested: cleaning %d running jobs",
             len([j for j in self.jobs.values() if j.get('status') == 0])
@@ -124,23 +109,23 @@ class OioAdminAgent(object):
     def _clean_stop(self, job):
         if job.get('type') == 'meta2':
             job['control'].get('signal').value = True
-            for p in job['processes']:
+            for proc in job['processes']:
                 try:
-                    p.join()
+                    proc.join()
                 except AssertionError:
                     pass
 
         elif job.get('type') == 'rawx':
-            for p in job['processes']:
+            for proc in job['processes']:
                 try:
-                    p.terminate()
+                    proc.terminate()
                 except Exception:
                     pass
 
     def _terminate(self, job):
-        for p in job['processes']:
+        for proc in job['processes']:
             try:
-                p.terminate()
+                proc.terminate()
             except Exception:
                 pass
 
@@ -165,14 +150,14 @@ class OioAdminAgent(object):
         lock = control.get('lock')
         src = config.get('src')
         conf_str = ",".join(["%s=%s" % (k, v) for k, v in config.items()])
-        self.client.lock_score(dict(type="meta2", addr=src))
+        self.cs.lock_score({'type': "meta2", 'addr': src})
         self.log.info("Starting meta2 mover on %s with config %s",
                       config['volume'], conf_str)
         for base in config.get('bases'):
             if control.get('signal').value:
                 return
             try:
-                meta2 = self.cm.meta2_mover({'namespace': self.namespace})
+                meta2 = self.meta2_mover_cls({'namespace': self.ns})
                 moved = meta2.move(base[0], src)
                 for res in moved:
                     if res['err']:
@@ -180,10 +165,10 @@ class OioAdminAgent(object):
                     else:
                         _add(lock, stats.get("success"), 1)
                         _add(lock, stats.get("bytes"), 1)
-            except Exception as e:
+            except Exception as exc:
                 # TODO: Log job id here
-                self.log.warn("Meta2 mover for job %s returned %s"
-                              % ("unknown", format_exc(e)))
+                self.log.warn("Meta2 mover for job %s returned %s",
+                              "unknown", format_exc(exc))
                 _add(lock, stats.get("fail"), 1)
         _set(lock, control.get('status'), 2)
         _set(lock, control.get('end'), int(time.time()))
@@ -201,7 +186,7 @@ class OioAdminAgent(object):
         conf_str = ",".join(["%s=%s" % (k, v) for k, v in config.items()])
         self.log.info("Starting blob rebuilder on %s with config %s",
                       config['volume'], conf_str)
-        worker = self.cm.blob_rebuilder(
+        worker = self.blob_rebuilder_cls(
             config,
             service_id=src,
             logger=None
@@ -237,7 +222,7 @@ class OioAdminAgent(object):
         """
         src = config.get('src')
         del config['src']
-        self.client.lock_score(dict(type="rawx", addr=src))
+        self.cs.lock_score(dict(type="rawx", addr=src))
 
         self.log.info("Starting blob mover on %s with config %s",
                       config['volume'],
@@ -247,11 +232,11 @@ class OioAdminAgent(object):
                                      stats.get("success"),
                                      stats.get("fail"),
                                      stats.get("bytes"))
-            worker = self.cm.blob_mover(config, logger, config['volume'])
+            worker = self.blob_mover_cls(config, logger, config['volume'])
             worker.mover_pass()
-        except Exception as e:
-            self.log.error("Blob mover failed with error: %s" % format_exc(e))
-        self.client.unlock_score(dict(type="rawx", addr=src))
+        except Exception:
+            self.log.exception("Blob mover failed with error:")
+        self.cs.unlock_score(dict(type="rawx", addr=src))
         control.get('status').value = 2
         control.get('end').value = int(time.time())
 
@@ -259,20 +244,25 @@ class OioAdminAgent(object):
         """
         Check if a mover job is already running on the specified volume
         """
-        for _, job in self.jobs.items():
-            if job.get("host") == self.host and\
-                job['config'].get("volume") == vol\
-                    and job['control'].get("end").value == 0:
-                return True
+        for job in self.jobs.values():
+            if (self.on_same_host(job.get("loc")) and
+                    job['config'].get("volume") == vol and
+                    job['control'].get("end").value == 0):
+                return job['id']
+        return None
+
+    def on_same_host(self, location):
+        """Tell if the location is on the same host as the current process."""
+        return self.loc.split('.', 1)[0] == location.rsplit('.', 1)[0]
 
     def volume(self, type_, src):
         """
         Resolve the volume for the specified service
         """
-        for svc in self.client.all_services(type_):
+        for svc in self.cs.all_services(type_):
             tags = svc.get("tags", {})
             location = tags.get("tag.loc")
-            if svc.get("addr") == src and self.host in location.split("."):
+            if svc.get("id") == src and self.on_same_host(location):
                 return tags.get("tag.vol")
         return None
 
@@ -281,7 +271,7 @@ class OioAdminAgent(object):
         Resolve excluded rawx services from the exclude list
         """
         to_exclude = []
-        services = self.client.all_services(type_)
+        services = self.cs.all_services(type_)
 
         for excl in exclude:
             incl_ = False
@@ -294,12 +284,12 @@ class OioAdminAgent(object):
                 loc = re.compile(excl)
                 for svc in services:
                     tags_loc = svc.get("tags", {}).get("tag.loc", "")
-                    if (incl_ ^ bool(loc.match(tags_loc))):
+                    if incl_ ^ bool(loc.match(tags_loc)):
                         to_exclude.append(svc.get("addr"))
             else:
                 for svc in services:
-                    for excl in exclude:
-                        if excl in svc.get("tags", {}).get("tag.loc", []):
+                    for excl1 in exclude:
+                        if excl1 in svc.get("tags", {}).get("tag.loc", []):
                             to_exclude.append(svc.get("addr"))
             return to_exclude
 
@@ -309,8 +299,8 @@ class OioAdminAgent(object):
         for mover parallelization
         """
         chunks = [bases[i::into] for i in range(into)]
-        for i, c in enumerate(chunks):
-            chunks[i] = [(k, v) for k, v in dict(c).iteritems()]
+        for i, chunk in enumerate(chunks):
+            chunks[i] = list(dict(chunk).items())
         return chunks
 
     def fetch_jobs(self):
@@ -318,20 +308,20 @@ class OioAdminAgent(object):
         Get the status/stats of all running jobs
         """
         res = []
-        for id, job in self.jobs.items():
-            data = dict(
-                action=job["action"],
-                id=str(id),
-                config=job["config"],
-                stats=dict(),
-                service=job["config"]["src"],
-                volume=job["config"]["volume"],
-                host=job["host"],
-                type=job["type"],
-                start=job["control"]["start"],
-                end=job["control"]["end"].value,
-                status=job["control"]["status"].value
-            )
+        for jid, job in self.jobs.items():
+            data = {
+                'action': job["action"],
+                'id': str(jid),
+                'config': job["config"],
+                'stats': dict(),
+                'service': job["config"]["src"],
+                'volume': job["config"]["volume"],
+                'loc': job["loc"],
+                'type': job["type"],
+                'start': job["control"]["start"],
+                'end': job["control"]["end"].value,
+                'status': job["control"]["status"].value
+            }
             for k, v in job["stats"].items():
                 if k == 'total' and v == 0:
                     data['stats'][k] = job['stats']['success'].value + \
@@ -350,39 +340,40 @@ class OioAdminAgent(object):
         Create a mover job on the specified service
         """
 
-        id = str(uuid.uuid4())
-        job = dict(
-            type=type_,
-            action=action,
-            host=self.host,
-            processes=[],
-            stats=dict(
+        jid = str(uuid.uuid4())
+        job = {
+            'id': jid,
+            'type': type_,
+            'action': action,
+            'loc': self.loc,
+            'processes': [],
+            'stats': dict(
                 success=mp.Value('i'),
                 fail=mp.Value('i'),
                 bytes=mp.Value('i'),
                 total=0
             ),
-            control=dict(
+            'control': dict(
                 status=mp.Value('i'),
                 signal=mp.Value('b'),
                 start=int(time.time()),
                 end=mp.Value('i'),
                 lock=mp.Lock(),
             ),
-        )
+        }
 
         if type_ == "meta2" and action == "move":
             bases = []
             for path, _, files in os.walk(vol):
-                for file in files:
-                    size = os.path.getsize(os.path.join(path, file))
+                for file_ in files:
+                    size = os.path.getsize(os.path.join(path, file_))
                     if size < opts.get("minsize", 0):
                         continue
                     elif size > opts.get("maxsize", 1e32):
                         continue
-                    bases.append([file.split('.1.meta2')[0], size])
+                    bases.append([file_.split('.1.meta2')[0], size])
 
-            job['config'] = dict(src=src, volume=vol, namespace=self.namespace)
+            job['config'] = dict(src=src, volume=vol, namespace=self.ns)
             for field in ("min_base_size", "max_base_size", "concurrency"):
                 if opts.get(field):
                     job['config'][field] = opts.get(field)
@@ -405,14 +396,14 @@ class OioAdminAgent(object):
         elif type_ == "rawx" and action == "move":
             try:
                 excluded = self.excluded("rawx", opts.get('exclude', []))
-            except Exception as e:
-                err = "Could not parse exclusion list: %s" % format_exc(e)
+            except Exception as exc:
+                err = "Could not parse exclusion list: %s" % format_exc(exc)
                 return None, err
 
             job['config'] = dict(
                 src=src,
                 volume=vol,
-                namespace=self.namespace,
+                namespace=self.ns,
             )
             for field in [("bps", "bytes_per_second"),
                           ("cps", "chunks_per_second"),
@@ -437,7 +428,7 @@ class OioAdminAgent(object):
             job['config'] = dict(
                 src=src,
                 volume=vol,
-                namespace=self.namespace,
+                namespace=self.ns,
                 report_interval=0,
             )
 
@@ -455,10 +446,10 @@ class OioAdminAgent(object):
         else:
             return None, "Unknown job %s %s" % (type_, action)
 
-        for p in job['processes']:
-            p.start()
-        self.jobs[id] = job
-        return id, None
+        for proc in job['processes']:
+            proc.start()
+        self.jobs[jid] = job
+        return jid, None
 
 
 class BaseAdminAgentHandler(BaseHTTPRequestHandler):
@@ -468,9 +459,6 @@ class BaseAdminAgentHandler(BaseHTTPRequestHandler):
     """
     agent = None
 
-    def __init__(self, *args, **kwargs):
-        BaseHTTPRequestHandler.__init__(self, *args, **kwargs)
-
     def http(self, code, data=None, json_=None, err=None):
         self.send_response(code)
         self.end_headers()
@@ -478,8 +466,8 @@ class BaseAdminAgentHandler(BaseHTTPRequestHandler):
             self.wfile.write(data)
             return
         if err:
-            json_ = dict(error=err)
-        if json:
+            json_ = {'error': err}
+        if json_:
             self.wfile.write(json.dumps(json_))
 
     def do_GET(self):
@@ -509,28 +497,32 @@ class BaseAdminAgentHandler(BaseHTTPRequestHandler):
         length = int(self.headers.getheader('content-length'))
         req = json.loads(self.rfile.read(length))
         type_ = req.get('type')
-        src = req.get('src')
+        src = req.get('id')
         action = req.get('action', 'move')  # TODO: remove this default
 
         if type_ not in ("meta2", "rawx"):
-            return self.http(400, err="Invalid service type")
+            return self.http(400, err="Invalid service type '%s'" % type_)
         if not src:
-            return self.http(400, err="Invalid service")
+            return self.http(400, err="Invalid service '%s'" % src)
 
         vol = self.agent.volume(type_, src)
         if not vol:
-            return self.http(400, err="Volume not found")
-
-        if self.agent.check_running(vol):
             return self.http(
                 400,
-                err="A job is already running on the target volume",
+                err="Volume not found for '%s', not a local service?" % src)
+
+        already = self.agent.check_running(vol)
+        if already:
+            return self.http(
+                400,
+                err=("A job is already running on the target volume (id=%s)" %
+                     already),
             )
 
-        id, err = self.agent.run_job(action, type_, src, vol, req)
+        jid, err = self.agent.run_job(action, type_, src, vol, req)
         if err:
             return self.http(400, err=err)
-        self.http(201, json_=dict(id=id))
+        self.http(201, json_={'id': jid})
 
     def do_DELETE(self):
         """
@@ -549,19 +541,19 @@ class BaseAdminAgentHandler(BaseHTTPRequestHandler):
 
         if type_ == 'meta2' and action == "move":
             job['control'].get('signal').value = True
-            for p in job['processes']:
-                p.join()
+            for proc in job['processes']:
+                proc.join()
 
         elif type_ == 'rawx' and action == "move":
-            for p in job['processes']:
+            for proc in job['processes']:
                 try:
-                    p.terminate()
+                    proc.terminate()
                 except Exception:
                     pass
         elif type_ == 'rawx' and action == "rebuild":
             job['control'].get('signal').value = True
-            for p in job['processes']:
-                p.join()
+            for proc in job['processes']:
+                proc.join()
 
         if job['control']['status'].value == 0:
             with job['control'].get('lock'):

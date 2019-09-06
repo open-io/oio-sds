@@ -547,6 +547,9 @@ class BaseTestCase(CommonTestCase):
 
 
 class DotDict(dict):
+    """
+    Dictionary subclass which allows each key to be accessed as a field.
+    """
     def __getattr__(self, key):
         if key not in self:
             raise AttributeError(key)
@@ -566,13 +569,13 @@ class FakeBlobMover(object):
         self.logger = logger
 
     def mover_pass(self, *args, **kwargs):
-        for i in range(ADMIN_AGENT_CHUNKS):
+        for _ in range(ADMIN_AGENT_CHUNKS):
             self.logger.info("moved ")
 
 
 class FakeBlobMoverSlow(FakeBlobMover):
     def mover_pass(self, *args, **kwargs):
-        for i in range(ADMIN_AGENT_CHUNKS):
+        for _ in range(ADMIN_AGENT_CHUNKS):
             self.logger.info("moved ")
         while True:
             sleep(5)
@@ -580,7 +583,7 @@ class FakeBlobMoverSlow(FakeBlobMover):
 
 class FakeBlobMoverFail(FakeBlobMover):
     def mover_pass(self, *args, **kwargs):
-        for i in range(ADMIN_AGENT_CHUNKS):
+        for _ in range(ADMIN_AGENT_CHUNKS):
             self.logger.error("ERROR")
 
 
@@ -589,7 +592,7 @@ class FakeMeta2Mover(object):
         pass
 
     def move(self, *args, **kwargs):
-        return [dict(err=None)]
+        return [{'err': None}]
 
 
 class FakeMeta2MoverFail(FakeMeta2Mover):
@@ -616,7 +619,7 @@ class FakeBlobRebuilder(object):
         pass
 
     def run(self, *args, **kwargs):
-        for i in range(ADMIN_AGENT_CHUNKS):
+        for _ in range(ADMIN_AGENT_CHUNKS):
             yield (None, None, None)
 
     def _status(self, *args, **kwargs):
@@ -628,24 +631,59 @@ class FakeBlobRebuilder(object):
 class FakeBlobRebuilderFail(FakeBlobRebuilder):
 
     def run(self, *args, **kwargs):
-        for i in range(ADMIN_AGENT_CHUNKS):
+        for _ in range(ADMIN_AGENT_CHUNKS):
             yield (None, None, "error")
 
 
 class FakeBlobRebuilderSlow(FakeBlobRebuilder):
 
     def run(self, *args, **kwargs):
-        for i in range(ADMIN_AGENT_CHUNKS):
+        for _ in range(ADMIN_AGENT_CHUNKS):
             yield (None, None, None)
             sleep(0.1)
 
 
-class FakeBaseConscienceClient(object):
-    rawx = []
-    meta2 = []
+class FakeConscienceClient(object):
 
     def __init__(self, *args, **kwargs):
-        pass
+        self.rawx = list()
+        self.meta2 = list()
+        self._gen_services()
+
+    def _gen_services(self):
+        """
+        Create some services and meta2 bases
+        """
+        for i in range(5):
+            for j in range(2):
+                sid = '10.10.10.1%d:620%d' % (i, j)
+                self.rawx.append({
+                    'addr': sid,
+                    'id': sid,
+                    'tags': {
+                        "tag.loc": "node%d.%d" % (i, j),
+                        "tag.vol": tempfile.mkdtemp("test_mover_agent")
+                    }
+                })
+                sid = '10.10.10.1%d:612%d' % (i, j)
+                vol = tempfile.mkdtemp("test_mover_agent")
+                self.meta2.append({
+                    'addr': sid,
+                    'id': sid,
+                    'tags': {
+                        "tag.loc": "node%d.%d" % (i, j),
+                        "tag.vol": vol
+                    }
+                })
+                for shard in range(ADMIN_AGENT_SHARDS):
+                    shard_path = os.path.join(vol, "%03d" % shard)
+                    os.mkdir(shard_path)
+                    for base in range(ADMIN_AGENT_BASES):
+                        file_ = os.path.join(
+                            shard_path,
+                            "%032d.1.meta2" % (shard * 1000 + base, )
+                        )
+                        os.mknod(file_)
 
     def lock_score(self, *args, **kwargs):
         pass
@@ -661,53 +699,3 @@ class FakeBaseConscienceClient(object):
                 return self.rawx
 
         return self.rawx + self.meta2
-
-
-class FakeCsClientFactory(object):
-    """
-        Utility class for creating a fake conscience client
-    """
-
-    def __call__(self, *args, **kwargs):
-        """
-        Create a fake conscience client with the current
-        rawx/meta2 service set
-        """
-        self._gen_services()
-
-        class FakeConscienceClient(FakeBaseConscienceClient):
-            rawx = self.rawx
-            meta2 = self.meta2
-        return FakeConscienceClient
-
-    def _gen_services(self):
-        """
-        Create some services and meta2 bases
-        """
-        self.rawx, self.meta2 = [], []
-        for i in range(5):
-            for j in range(2):
-                self.rawx.append(dict(
-                    addr="10.10.10.1%d:620%d" % (i, j),
-                    tags={
-                        "tag.loc": "node%d.%d" % (i, j),
-                        "tag.vol": tempfile.mkdtemp("test_mover_agent")
-                    }
-                ))
-                vol = tempfile.mkdtemp("test_mover_agent")
-                self.meta2.append(dict(
-                    addr="10.10.10.1%d:612%d" % (i, j),
-                    tags={
-                        "tag.loc": "node%d.%d" % (i, j),
-                        "tag.vol": vol
-                    }
-                ))
-                for k in range(ADMIN_AGENT_SHARDS):
-                    shard = os.path.join(vol, "%03d" % k)
-                    os.mkdir(shard)
-                    for l in range(ADMIN_AGENT_BASES):
-                        file_ = os.path.join(
-                            shard,
-                            "%032d" % (k * 1e3 + l) + ".1.meta2"
-                        )
-                        os.mknod(file_)

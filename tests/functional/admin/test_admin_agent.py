@@ -15,40 +15,40 @@ import unittest
 import os
 import multiprocessing as mp
 from BaseHTTPServer import HTTPServer
-import requests
+
+from tests.utils import BaseTestCase, jsonlib as json
+from oio.common.logger import get_logger
 from oio.admin.agent import OioAdminAgent, BaseAdminAgentHandler
-from tests.utils import DotDict, FakeBlobMoverSlow, \
-    FakeBlobRebuilderSlow, FakeMeta2MoverSlow, FakeCsClientFactory
+from tests.utils import FakeBlobMoverSlow, \
+    FakeBlobRebuilderSlow, FakeMeta2MoverSlow, FakeConscienceClient
 
 STATUS_JOB_TERMINATED = 1
 process = None
 
 
-def make_handler(args):
-    class OioAdminAgentHandler(BaseAdminAgentHandler):
-        agent = OioAdminAgent(args)
-    return OioAdminAgentHandler
+class TestOioAdminAgentHandler(BaseTestCase):
 
-
-class TestOioAdminAgentHandler(unittest.TestCase):
+    headers = {'content-type': 'application/json'}
 
     def setUp(self):
-        self.handler = make_handler(DotDict(
-            host="node2",
-            namespace="OPENIO",
-            log_level="INFO",
-            log_facility="local0",
-            log_syslog_prefix="OIO,OPENIO,oio-mover-agent,0",
-            log_address="/dev/log",
-            quiet=False,
-            ctx=dict(
-                conscience=FakeCsClientFactory()(),
-                blob_mover=FakeBlobMoverSlow,
-                blob_rebuilder=FakeBlobRebuilderSlow,
-                meta2_mover=FakeMeta2MoverSlow,
-            )
-        ))
-        httpd = HTTPServer(('localhost', 0), self.handler)
+        super(TestOioAdminAgentHandler, self).setUp()
+        logger = get_logger({
+            'log_level': "INFO",
+            'log_facility': "local0",
+            'log_syslog_prefix': "OIO,OPENIO,oio-mover-agent,0",
+            'log_address': "/dev/log"},
+            'log', True)
+        cs_client = FakeConscienceClient()
+        self.agent = OioAdminAgent(self.ns, 'node2.1', logger=logger,
+                                   conscience_client=cs_client)
+        self.agent.blob_mover_cls = FakeBlobMoverSlow
+        self.agent.meta2_mover_cls = FakeMeta2MoverSlow
+        self.agent.blob_rebuilder_cls = FakeBlobRebuilderSlow
+
+        class OioAdminAgentHandler(BaseAdminAgentHandler):
+            agent = self.agent
+
+        httpd = HTTPServer(('localhost', 0), OioAdminAgentHandler)
         self.url = "http://localhost:%s/" % httpd.server_port
 
         def start(httpd):
@@ -59,92 +59,95 @@ class TestOioAdminAgentHandler(unittest.TestCase):
 
     def tearDown(self):
         os.kill(process.pid, 15)
+        super(TestOioAdminAgentHandler, self).tearDown()
 
     def _spawn_blob_mover(self, svc):
-        return requests.post(self.url + 'api/v1/jobs', json=dict(
-            action="move",
-            type="rawx",
-            src=svc
-        ))
+        return self.http_pool.request(
+            'POST', self.url + 'api/v1/jobs',
+            body='{"action": "move", "type": "rawx", "id": "%s"}' % svc,
+            headers=self.headers)
 
     def _spawn_blob_rebuilder(self, svc):
-        return requests.post(self.url + 'api/v1/jobs', json=dict(
-            action="rebuild",
-            type="rawx",
-            src=svc
-        ))
+        return self.http_pool.request(
+            'POST', self.url + 'api/v1/jobs',
+            body='{"action": "rebuild", "type": "rawx", "id": "%s"}' % svc,
+            headers=self.headers)
 
     def _spawn_meta2_mover(self, svc):
-        return requests.post(self.url + 'api/v1/jobs', json=dict(
-            action="move",
-            type="meta2",
-            src=svc
-        ))
+        return self.http_pool.request(
+            'POST', self.url + 'api/v1/jobs',
+            body='{"action": "move", "type": "meta2", "id": "%s"}' % svc,
+            headers=self.headers)
 
     def test_10_default(self):
-        res = requests.get(self.url)
-        self.assertEqual(res.status_code, 404)
+        res = self.http_pool.request('GET', self.url)
+        self.assertEqual(res.status, 404)
 
     def test_20_get_jobs(self):
-        res2 = requests.get(self.url + 'api/v1/jobs')
-        self.assertEqual(res2.status_code, 200)
-        self.assertEqual(res2.json(), [])
+        res2 = self.http_pool.request('GET', self.url + 'api/v1/jobs')
+        self.assertEqual(res2.status, 200)
+        self.assertEqual(res2.data, '')
 
     def test_30_post_jobs_failures(self):
         # Invalid content type
-        res = requests.post(self.url + 'api/v1/jobs')
-        self.assertEqual(res.status_code, 400)
+        res = self.http_pool.request('POST', self.url + 'api/v1/jobs',
+                                     body=' ')
+        self.assertEqual(res.status, 400)
         # Invalid JSON
-        res = requests.post(self.url + 'api/v1/jobs', json={})
-        self.assertEqual(res.status_code, 400)
+        res = self.http_pool.request('POST', self.url + 'api/v1/jobs',
+                                     body='{}', headers=self.headers)
+        self.assertEqual(res.status, 400)
         # Invalid volume
         res = self._spawn_blob_mover("10.10.10.11:6201")
-        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.status, 400)
 
     def test_40_post_jobs_move(self):
         res = self._spawn_meta2_mover("10.10.10.12:6121")
-        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.status, 201)
         res = self._spawn_blob_rebuilder("10.10.10.12:6201")
-        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.status, 201)
 
     def test_50_post_jobs_rebuild(self):
         res = self._spawn_blob_rebuilder("10.10.10.12:6201")
-        self.assertEqual(res.status_code, 201)
+        self.assertEqual(res.status, 201)
 
     def test_60_post_jobs_dupes(self):
         for status in (201, 400):
             res = self._spawn_meta2_mover("10.10.10.12:6121")
-            self.assertEqual(res.status_code, status)
+            self.assertEqual(res.status, status)
 
             res = self._spawn_blob_mover("10.10.10.12:6201")
-            self.assertEqual(res.status_code, status)
+            self.assertEqual(res.status, status)
         # A different action on the same service is not permitted
         res = self._spawn_blob_rebuilder("10.10.10.12:6201")
-        self.assertEqual(res.status_code, 400)
+        self.assertEqual(res.status, 400)
 
     def test_70_list_jobs(self):
         self._spawn_blob_mover("10.10.10.12:6201")
         self._spawn_meta2_mover("10.10.10.12:6121")
 
-        res = requests.get(self.url + 'api/v1/jobs', json=dict())
-        self.assertEqual(len(res.json()), 2)
+        res = self.http_pool.request('GET', self.url + 'api/v1/jobs')
+        decoded = json.loads(res.data)
+        self.assertEqual(len(decoded), 2)
 
     def test_80_stop_job(self):
-        for fc, svc in [
+        for fc, svc in (
                 (self._spawn_meta2_mover, "10.10.10.12:6121"),
                 (self._spawn_blob_mover, "10.10.10.12:6201"),
                 (self._spawn_blob_rebuilder, "10.10.10.12:6201"),
-        ]:
+                ):
             res = fc(svc)
-            self.assertEqual(res.status_code, 201)
-            id = res.json()['id']
+            self.assertEqual(res.status, 201)
+            jid = json.loads(res.data)['id']
 
-            res = requests.delete(self.url + 'api/v1/jobs/' + id)
-            self.assertEqual(res.status_code, 204)
+            res = self.http_pool.request('DELETE',
+                                         self.url + 'api/v1/jobs/' + jid)
+            self.assertEqual(res.status, 204)
 
-            res = requests.get(self.url + 'api/v1/jobs')
-            self.assertEqual(res.status_code, 200)
-            rc = [job.get('status') for job in res.json() if job['id'] == id]
+            res = self.http_pool.request('GET', self.url + 'api/v1/jobs')
+            self.assertEqual(res.status, 200)
+            decoded = json.loads(res.data)
+            rc = [job.get('status') for job in decoded if job['id'] == jid]
             self.assertEqual(rc[0], STATUS_JOB_TERMINATED)
 
 
