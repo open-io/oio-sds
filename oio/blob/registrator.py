@@ -17,7 +17,7 @@
 from contextlib import contextmanager
 from string import hexdigits
 from os.path import basename
-from time import clock as now
+from time import time, clock as now
 
 from oio.common.utils import paths_gen
 from oio.blob.utils import check_volume, read_chunk_metadata
@@ -27,6 +27,7 @@ from oio.common.constants import STRLEN_CHUNKID
 
 
 default_report_interval = 60.0
+ctime = int(time())
 
 
 @contextmanager
@@ -36,13 +37,34 @@ def lock_volume(path):
     # TODO xattr-unlock the volume
 
 
-def meta2bean(volid, meta):
-    return {"type": "chunk",
-            "id": "http://" + volid + "/" + meta["chunk_id"],
-            "hash": meta['chunk_hash'],
-            "size": int(meta["chunk_size"]),
-            "pos": meta["chunk_pos"],
-            "content": meta["content_id"]}
+def meta2beans(volid, meta):
+    return \
+        [{
+            'type': 'alias',
+            'name': meta['content_path'],
+            'version': int(meta['content_version']),
+            'ctime': ctime,
+            'mtime': ctime,
+            'deleted': False,
+            'header': meta['content_id']
+        }, {
+            'type': 'header',
+            'id': meta['content_id'],
+            'size': 0,
+            'ctime': ctime,
+            'mtime': ctime,
+            'policy': meta['content_policy'],
+            'chunk-method': meta['content_chunkmethod'],
+            'mime-type': 'application/octet-stream'
+        }, {
+            'type': 'chunk',
+            'id': 'http://' + volid + '/' + meta['chunk_id'],
+            'hash': meta.get('metachunk_hash') or meta['chunk_hash'],
+            'size': int(meta['chunk_size']),
+            'ctime': ctime,
+            'pos': meta['chunk_pos'],
+            'content': meta['content_id']
+        }]
 
 
 class BlobRegistratorWorker(object):
@@ -91,7 +113,7 @@ class BlobRegistratorWorker(object):
             # Action
             try:
                 with open(path) as f:
-                    meta = read_chunk_metadata(f, chunk_id)
+                    meta, _ = read_chunk_metadata(f, chunk_id)
                     self.action(self, path, f, meta)
                     success = success + 1
             except NotFound as e:
@@ -129,13 +151,31 @@ class BlobRegistratorWorker(object):
         raise Exception("CHECK not yet implemented")
 
     def _insert_chunk(self, path, f, meta):
-        cid = meta['container_id']
-        chunkid = basename(path)
-        bean = meta2bean(self.volume_id, meta)
-        self.client.container_raw_insert(bean, cid=cid)
-        self.logger.info("inserted %s/%s in %s/%s",
-                         meta['content_id'], chunkid, cid,
-                         meta['content_path'])
+        beans = meta2beans(self.volume_id, meta)
+        for bean in beans:
+            try:
+                self.client.container_raw_insert(
+                    bean, cid=meta['container_id'])
+                self.logger.info(
+                    'Inserted %s (container_id=%s content_path=%s '
+                    'content_version=%s content_id=%s chunk_id=%s)',
+                    bean['type'], meta['container_id'], meta['content_path'],
+                    meta['content_version'], meta['content_id'],
+                    meta['chunk_id'])
+            except Conflict as exc:
+                self.logger.warn(
+                    'Already exists %s (container_id=%s content_path=%s '
+                    'content_version=%s content_id=%s chunk_id=%s): %s',
+                    bean['type'], meta['container_id'], meta['content_path'],
+                    meta['content_version'], meta['content_id'],
+                    meta['chunk_id'], exc)
+            except Exception as exc:
+                self.logger.error(
+                    'Failed to insert %s (container_id=%s content_path=%s '
+                    'content_version=%s content_id=%s chunk_id=%s): %s',
+                    bean['type'], meta['container_id'], meta['content_path'],
+                    meta['content_version'], meta['content_id'],
+                    meta['chunk_id'], exc)
 
     def _update_chunk(self, path, f, meta):
         cid = meta['container_id']
@@ -146,9 +186,9 @@ class BlobRegistratorWorker(object):
                                  meta['content_id'], chunkid, cid,
                                  meta['content_path'])
                 return
-        pre = meta2bean(self.volume_id, meta)
-        post = meta2bean(self.volume_id, meta)
-        self.client.container_raw_update([pre], [post], cid=cid)
+        pre = meta2beans(self.volume_id, meta)
+        post = meta2beans(self.volume_id, meta)
+        self.client.container_raw_update(pre, post, cid=cid)
         self.logger.info("updated %s/%s in %s/%s",
                          meta['content_id'], chunkid, cid,
                          meta['content_path'])
