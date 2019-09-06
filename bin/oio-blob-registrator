@@ -45,6 +45,8 @@ without overriding the chunks in place.
 of the chunks in the volume.
 """)
     parser.add_argument('volume', help="The volume path to use")
+    parser.add_argument('container_ids', metavar='<container_id>', nargs='*',
+                        help="The container IDs to use")
 
     parser.add_argument(
         '--chunks-per-second', type=int,
@@ -74,7 +76,8 @@ def main():
 
     success = False
     try:
-        registrator = BlobRegistrator(conf, logger, args.volume)
+        registrator = BlobRegistrator(conf, logger, args.volume,
+                                      args.container_ids)
         success = registrator.pass_volume()
     except Exception as e:
         logger.exception('ERROR in registrator: %s' % e)

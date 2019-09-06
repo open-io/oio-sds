@@ -31,11 +31,15 @@ class BlobRegistrator(object):
     DEFAULT_REPORT_INTERVAL = 3600
     BEAN_TYPES = ('alias', 'header', 'chunk')
 
-    def __init__(self, conf, logger, volume):
+    def __init__(self, conf, logger, volume, container_ids):
         self.conf = conf
         self.logger = logger
         self.volume = volume
         self.volume_ns, self.volume_id = check_volume(self.volume)
+        self.container_ids = container_ids or list()
+        self.container_ids = [container_id.upper()
+                              for container_id in self.container_ids]
+
         self.namespace = self.conf['namespace']
         if self.namespace != self.volume_ns:
             raise ValueError(
@@ -233,14 +237,28 @@ class BlobRegistrator(object):
 
         with open(path) as f:
             meta, _ = read_chunk_metadata(f, chunk_id)
+            if self.container_ids \
+                    and meta['container_id'] in self.container_ids:
+                self.logger.debug(
+                    'Skipping chunk file (container_id=%s content_path=%s '
+                    'content_version=%s content_id=%s chunk_id=%s '
+                    'chunk_pos=%s)', meta['container_id'],
+                    meta['content_path'], meta['content_version'],
+                    meta['content_id'], meta['chunk_id'], meta['chunk_pos'])
+                return
+
             beans = self._beans_from_meta(meta)
             for bean in beans:
                 try:
                     self.pass_bean(meta, bean)
                 except Exception as exc:
                     self.logger.error(
-                        'Failed to pass %s (chunk_file=%s): %s',
-                        bean['type'], path, exc)
+                        'Failed to pass chunk file (container_id=%s '
+                        'content_path=%s content_version=%s content_id=%s '
+                        'chunk_id=%s chunk_pos=%s): %s', meta['container_id'],
+                        meta['content_path'], meta['content_version'],
+                        meta['content_id'], meta['chunk_id'],
+                        meta['chunk_pos'], exc)
                     self.bean_errors[bean['type']] = \
                         self.bean_errors[bean['type']] + 1
 
