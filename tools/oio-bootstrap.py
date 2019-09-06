@@ -346,6 +346,19 @@ def save_coverage():
 atexit.register(save_coverage)
 """
 
+template_admin_agent_watch = """
+host: ${IP}
+port: ${PORT}
+type: adminagent
+location: ${LOC}
+checks:
+    - {type: http, uri: /api/v1/jobs}
+slots:
+    - adminagent
+stats:
+    - {type: system}
+"""
+
 template_meta_watch = """
 host: ${IP}
 port: ${PORT}
@@ -666,6 +679,11 @@ score_timeout=120
 score_expr=(1 + (num stat.cpu))
 score_timeout=120
 
+[type:adminagent]
+score_expr=(1 + (num stat.cpu))
+score_timeout=30
+lock_at_first_register=false
+
 [type:echo]
 score_expr=(num stat.cpu)
 score_timeout=30
@@ -705,6 +723,15 @@ limit.core_size=-1
 
 #include=${CFGDIR}/*-gridinit.conf
 
+"""
+
+template_gridinit_admin_agent = """
+[Service.${NS}-${SRVTYPE}-${SRVNUM}]
+group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+command=oio-admin-agent --ns ${NS} --loc ${LOC} --addr ${IP}:${PORT}
+enabled=true
+start_at_boot=false
+on_die=cry
 """
 
 template_gridinit_ns = """
@@ -1420,6 +1447,22 @@ def generate(options):
             with open(config(env), 'w+') as f:
                 tpl = Template(template_conscience_service)
                 f.write(tpl.safe_substitute(env))
+
+    # Admin agent
+    admin_port = next(ports)
+    env = subenv({'SRVTYPE': 'adminagent', 'SRVNUM': 1,
+                  'IP': host, 'PORT': admin_port})
+    add_service(env)
+    # gridinit config
+    tpl = Template(template_gridinit_admin_agent)
+    with open(gridinit(env), 'a+') as f:
+        f.write(tpl.safe_substitute(env))
+        for key in (k for k in env.iterkeys() if k.startswith("env.")):
+            f.write("%s=%s\n" % (key, env[key]))
+    # watcher
+    tpl = Template(template_admin_agent_watch)
+    with open(watch(env), 'w+') as f:
+        f.write(tpl.safe_substitute(env))
 
     # beanstalkd
     all_beanstalkd = list()
