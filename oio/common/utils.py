@@ -23,7 +23,7 @@ from io import RawIOBase
 from itertools import islice
 from codecs import getdecoder, getencoder
 from urllib import quote as _quote
-from oio.common.exceptions import OioException, DeadlineReached
+from oio.common.exceptions import OioException, DeadlineReached, ServiceBusy
 
 
 try:
@@ -265,7 +265,7 @@ def group_chunk_errors(chunk_err_iter):
 
 
 def depaginate(func, item_key=None, listing_key=None, marker_key=None,
-               truncated_key=None, *args, **kwargs):
+               truncated_key=None, attempts=1, *args, **kwargs):
     """
     Yield items from the lists returned by the repetitive calls
     to `func(*args, **kwargs)`. For each call (except the first),
@@ -299,14 +299,26 @@ def depaginate(func, item_key=None, listing_key=None, marker_key=None,
         def truncated_key(listing):
             return bool(listing_key(listing))
 
-    raw_listing = func(*args, **kwargs)
+    for i in range(attempts):
+        try:
+            raw_listing = func(*args, **kwargs)
+            break
+        except ServiceBusy:
+            if i >= attempts - 1:
+                raise
     listing = listing_key(raw_listing)
     for item in listing:
         yield item_key(item)
 
     while truncated_key(raw_listing):
         kwargs['marker'] = marker_key(raw_listing)
-        raw_listing = func(*args, **kwargs)
+        for i in range(attempts):
+            try:
+                raw_listing = func(*args, **kwargs)
+                break
+            except ServiceBusy:
+                if i >= attempts - 1:
+                    raise
         listing = listing_key(raw_listing)
         if listing:
             for item in listing:

@@ -22,7 +22,8 @@ from oio.common.constants import OIO_VERSION
 
 
 class ECContent(Content):
-    def rebuild_chunk(self, chunk_id, allow_same_rawx=False, chunk_pos=None):
+    def rebuild_chunk(self, chunk_id, allow_same_rawx=False, chunk_pos=None,
+                      allow_frozen_container=False):
         # Identify the chunk to rebuild
         current_chunk = self.chunks.filter(id=chunk_id).one()
 
@@ -89,9 +90,11 @@ class ECContent(Content):
 
         # Register the spare chunk in object's metadata
         if chunk_id is None:
-            self._add_raw_chunk(current_chunk, spare_url[0])
+            self._add_raw_chunk(current_chunk, spare_url[0],
+                                frozen=allow_frozen_container)
         else:
-            self._update_spare_chunk(current_chunk, spare_url[0])
+            self._update_spare_chunk(current_chunk, spare_url[0],
+                                     frozen=allow_frozen_container)
         self.logger.info('Chunk %s repaired in %s',
                          chunk_id or chunk_pos, spare_url[0])
 
