@@ -350,8 +350,10 @@ m2v2_remote_pack_RAW_ADD(struct oio_url_s *url, GSList *beans, gboolean frozen,
 {
 	GByteArray *body = bean_sequence_marshall(beans);
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_RAW_ADD, url, body, dl);
-	metautils_message_add_field_struint(msg, NAME_MSGKEY_FROZEN, BOOL(frozen));
-	metautils_message_add_field_struint(msg, NAME_MSGKEY_FORCE, BOOL(force));
+	if (force)
+		metautils_message_add_field_str(msg, NAME_MSGKEY_FORCE, "1");
+	if (frozen)
+		metautils_message_add_field_str(msg, NAME_MSGKEY_FROZEN, "1");
 	return message_marshall_gba_and_clean(msg);
 }
 
@@ -364,7 +366,8 @@ m2v2_remote_pack_RAW_SUBST(struct oio_url_s *url,
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_RAW_SUBST, url, NULL, dl);
 	metautils_message_add_field_gba(msg, NAME_MSGKEY_NEW, new_chunks_gba);
 	metautils_message_add_field_gba(msg, NAME_MSGKEY_OLD, old_chunks_gba);
-	metautils_message_add_field_struint(msg, NAME_MSGKEY_FROZEN, BOOL(frozen));
+	if (frozen)
+		metautils_message_add_field_str(msg, NAME_MSGKEY_FROZEN, "1");
 	g_byte_array_unref (new_chunks_gba);
 	g_byte_array_unref (old_chunks_gba);
 	return message_marshall_gba_and_clean(msg);
@@ -471,8 +474,8 @@ m2v2_remote_pack_TOUCHB(struct oio_url_s *url, guint32 flags, gint64 dl,
 	flags = g_htonl(flags);
 	metautils_message_add_field(msg, NAME_MSGKEY_FLAGS,
 			&flags, sizeof(flags));
-	metautils_message_add_field_struint(msg, NAME_MSGKEY_RECOMPUTE,
-			BOOL(recompute));
+	if (recompute)
+		metautils_message_add_field_str(msg, NAME_MSGKEY_RECOMPUTE, "1");
 	metautils_message_add_field_strint64(msg, NAME_MSGKEY_DAMAGED_OBJECTS,
 			damaged_objects);
 	metautils_message_add_field_strint64(msg, NAME_MSGKEY_MISSING_CHUNKS,
