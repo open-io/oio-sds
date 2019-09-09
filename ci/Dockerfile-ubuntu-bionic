@@ -63,8 +63,8 @@ done < /etc/oio/deps/submodules.txt \
 	&& ./configure --prefix=/usr \
 	&& make ${MAKE_OPTS:-"-j4"} && make install ) && rm -rf asn1c \
 # Ensure the CI user account
-&& useradd -l -U -G sudo,users -m ci \
-&& chown -R ci:users /tmp/venv /tmp/oio \
+&& useradd -s /bin/bash -l -U -G sudo,users -m ci \
+&& chown -R ci:users /tmp/venv \
 # Golang dependencies
 && su -l -c 'go get gopkg.in/ini.v1 gopkg.in/tylerb/graceful.v1 golang.org/x/sys/unix' ci \
 # Finalize & clean the env
