@@ -158,8 +158,8 @@ workflows:
     jobs:
       - build
       - test0
-          requires:
-            - build
+        requires:
+          - build
       - test1
-          requires:
-            - build
+        requires:
+          - build
