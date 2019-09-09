@@ -226,7 +226,7 @@ class Tool(object):
         if self.dispatcher is None:
             raise ValueError('No dispatcher')
 
-        self._load_total_expected_items()
+        eventlet.spawn_n(self._load_total_expected_items)
 
         # spawn one worker for the retry queue
         eventlet.spawn_n(self._read_retry_queue)

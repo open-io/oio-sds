@@ -55,6 +55,7 @@ class BlobRebuilder(Tool):
         self.rdir_client = RdirClient(self.conf, logger=self.logger)
         self.rdir_fetch_limit = int_value(
             self.conf.get('rdir_fetch_limit'), self.DEFAULT_RDIR_FETCH_LIMIT)
+        self.rdir_shuffle_chunks = true_value(conf.get('rdir_shuffle_chunks'))
         self.rdir_timeout = float_value(
             conf.get('rdir_timeout'), self.DEFAULT_RDIR_TIMEOUT)
 
@@ -138,7 +139,7 @@ class BlobRebuilder(Tool):
     def _fetch_items_from_rawx_id(self):
         lost_chunks = self.rdir_client.chunk_fetch(
             self.rawx_id, limit=self.rdir_fetch_limit, rebuild=True,
-            timeout=self.rdir_timeout)
+            shuffle=self.rdir_shuffle_chunks, timeout=self.rdir_timeout)
         for container_id, content_id, chunk_id, _ in lost_chunks:
             yield self.namespace, container_id, content_id, chunk_id
 
@@ -218,11 +219,16 @@ class BlobRebuilder(Tool):
 
     def _load_total_expected_items(self):
         if self.rawx_id:
-            info = self.rdir_client.status(
-                self.rawx_id,
-                read_timeout=self.rdir_timeout)
-            self.total_expected_items = info.get(
-                'chunk', dict()).get('to_rebuild', None)
+            try:
+                info = self.rdir_client.status(
+                    self.rawx_id,
+                    read_timeout=self.rdir_timeout)
+                self.total_expected_items = info.get(
+                    'chunk', dict()).get('to_rebuild', None)
+            except Exception as exc:
+                self.logger.warn(
+                        'Failed to fetch the total chunks to rebuild: %s',
+                        exc)
 
     def run(self):
         if self.rawx_id:

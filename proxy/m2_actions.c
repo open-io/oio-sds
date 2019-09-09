@@ -328,6 +328,9 @@ _dump_json_aliases_and_headers(GString *gstr, GSList *aliases,
 			OIO_JSON_append_gstr(gstr, "policy",
 					CONTENTS_HEADERS_get_policy(h));
 			g_string_append_c(gstr, ',');
+			OIO_JSON_append_gstr(gstr, "chunk-method",
+					CONTENTS_HEADERS_get_chunk_method(h));
+			g_string_append_c(gstr, ',');
 			OIO_JSON_append_gba(gstr, "hash",
 					CONTENTS_HEADERS_get_hash(h));
 			g_string_append_c(gstr, ',');
@@ -339,6 +342,8 @@ _dump_json_aliases_and_headers(GString *gstr, GSList *aliases,
 		} else {
 			g_string_append_c(gstr, ',');
 			OIO_JSON_append_null(gstr, "policy");
+			g_string_append_c(gstr, ',');
+			OIO_JSON_append_null(gstr, "chunk-method");
 			g_string_append_c(gstr, ',');
 			OIO_JSON_append_null(gstr, "hash");
 			g_string_append_c(gstr, ',');
@@ -1697,8 +1702,7 @@ static GError * _list_loop (struct req_args_s *args,
 				m2v2_list_result_extract);
 		oio_str_clean((gchar**)&(in.marker_start));
 		if (err) {
-			if (err->code == CODE_UNAVAILABLE &&
-					strstr(err->message, "deadline reached")) {
+			if (err->code == CODE_UNAVAILABLE && count > 0) {
 				// We reached request deadline, just tell the caller the
 				// listing is truncated, it will call us again with the
 				// appropriate marker.

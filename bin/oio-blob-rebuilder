@@ -42,6 +42,11 @@ tube for broken chunks events.
         help='Maximum number of entries returned in each rdir response. '
              '(default=%d)' % BlobRebuilder.DEFAULT_RDIR_FETCH_LIMIT)
     parser.add_argument(
+        '--rdir-shuffle-chunks', action='store_true',
+        help="Shuffle chunks after fetching them from rdir. "
+             "Allows to avoid rebuilding all chunks "
+             "of the same container at the same time.")
+    parser.add_argument(
         '--rdir-timeout', type=float,
         help='Timeout for rdir operations, in seconds (%f)' %
              BlobRebuilder.DEFAULT_RDIR_FETCH_LIMIT)
@@ -131,6 +136,7 @@ def main():
     conf['rdir_fetch_limit'] = args.rdir_fetch_limit
     if args.rdir_timeout is not None:
         conf['rdir_timeout'] = args.rdir_timeout
+    conf['rdir_shuffle_chunks'] = args.rdir_shuffle_chunks
     conf['report_interval'] = args.report_interval
     # input
     conf['beanstalkd_worker_tube'] = args.beanstalkd_tube

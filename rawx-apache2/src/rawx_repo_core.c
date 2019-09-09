@@ -494,7 +494,7 @@ chunk_verify_checksum(dav_resource *resource, request_rec *r)
 	return code;
 }
 
-void
+apr_status_t
 resource_stat_chunk(dav_resource *resource, int flags)
 {
 	dav_resource_private *ctx;
@@ -504,7 +504,7 @@ resource_stat_chunk(dav_resource *resource, int flags)
 
 	if (resource->type != DAV_RESOURCE_TYPE_REGULAR || resource->collection) {
 		DAV_ERROR_RES(resource, 0, "Cannot stat a anything else a chunk");
-		return;
+		return APR_SUCCESS;
 	}
 
 	if (flags & RESOURCE_STAT_CHUNK_PENDING) {
@@ -514,10 +514,13 @@ resource_stat_chunk(dav_resource *resource, int flags)
 				APR_FINFO_NORM, resource->pool);
 	}
 
-	if (status != APR_SUCCESS && status != APR_INCOMPLETE)
+	if (status == APR_ENOENT)
 		status = apr_stat(&(resource->info->finfo),
 				resource_get_pathname(resource),
 				APR_FINFO_NORM, resource->pool);
+
+	if (status != APR_SUCCESS && status != APR_INCOMPLETE && status != APR_ENOENT)
+		return status;
 
 	resource->collection = 0;
 	resource->exists = (status == APR_SUCCESS || status == APR_INCOMPLETE);
@@ -555,6 +558,7 @@ resource_stat_chunk(dav_resource *resource, int flags)
 				g_clear_error(&err);
 		}
 	}
+	return APR_SUCCESS;
 }
 
 void

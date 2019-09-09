@@ -71,7 +71,7 @@ def get_pool_manager(pool_connections=DEFAULT_POOLSIZE,
     :type pool_maxsize: `int`
     :param max_retries: number of retries per request
     :type max_retries: `int`
-    :param backoff_factor: backoff factor to apply between attemps after
+    :param backoff_factor: backoff factor to apply between attempts after
         second try
     :type backoff_factor: `float`
 

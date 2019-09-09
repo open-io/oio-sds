@@ -14,6 +14,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+import random
+
 from oio.api.base import HttpApi
 from oio.common.constants import REQID_HEADER
 from oio.common.exceptions import ClientException, NotFound, VolumeException
@@ -408,7 +410,7 @@ class RdirClient(HttpApi):
 
     def chunk_fetch(self, volume, limit=100, rebuild=False,
                     container_id=None, max_attempts=3,
-                    start_after=None, **kwargs):
+                    start_after=None, shuffle=False, **kwargs):
         """
         Fetch the list of chunks belonging to the specified volume.
 
@@ -448,14 +450,14 @@ class RdirClient(HttpApi):
                         continue
                     # Too many attempts
                     raise
-            if len(resp_body) == 0:
+            if not resp_body:
                 break
-            key = None
+            req_body['start_after'] = resp_body[-1][0]
+            if shuffle:
+                random.shuffle(resp_body)
             for (key, value) in resp_body:
                 container, content, chunk = key.split('|')
                 yield container, content, chunk, value
-            if key is not None:
-                req_body['start_after'] = key
 
     def admin_incident_set(self, volume, date, **kwargs):
         body = {'date': int(float(date))}
