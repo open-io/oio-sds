@@ -35,6 +35,7 @@ class BlobRebuilder(Tool):
     DEFAULT_DISTRIBUTED_BEANSTALKD_WORKER_TUBE = 'oio-rebuild'
     DEFAULT_RDIR_FETCH_LIMIT = 100
     DEFAULT_RDIR_TIMEOUT = 60.0
+    DEFAULT_ALLOW_FROZEN_CT = False
     DEFAULT_ALLOW_SAME_RAWX = True
     DEFAULT_TRY_CHUNK_DELETE = False
     DEFAULT_DRY_RUN = False
@@ -248,6 +249,8 @@ class BlobRebuilderWorker(ToolWorker):
         super(BlobRebuilderWorker, self).__init__(
             tool, queue_workers, queue_reply)
 
+        self.allow_frozen_container = true_value(self.tool.conf.get(
+            'allow_frozen_container', self.tool.DEFAULT_ALLOW_FROZEN_CT))
         self.allow_same_rawx = true_value(self.tool.conf.get(
             'allow_same_rawx', self.tool.DEFAULT_ALLOW_SAME_RAWX))
         self.try_chunk_delete = true_value(self.tool.conf.get(
@@ -274,6 +277,7 @@ class BlobRebuilderWorker(ToolWorker):
                 container_id, content_id, chunk_id_or_pos,
                 rawx_id=self.tool.rawx_id,
                 try_chunk_delete=self.try_chunk_delete,
+                allow_frozen_container=self.allow_frozen_container,
                 allow_same_rawx=self.allow_same_rawx)
         except OioException as exc:
             if not isinstance(exc, OrphanChunk):

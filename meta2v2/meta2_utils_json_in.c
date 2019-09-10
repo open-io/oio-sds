@@ -40,10 +40,10 @@ m2v2_json_load_single_alias (struct json_object *j, gpointer *pbean)
 	struct oio_ext_json_mapping_s m[] = {
 		{"name",    &jname,    json_type_string,  1},
 		{"version", &jversion, json_type_int,     1},
-		{"header",  &jheader,  json_type_string,  1},
 		{"ctime",   &jctime,   json_type_int,     0},
 		{"mtime",   &jmtime,   json_type_int,     0},
 		{"deleted", &jdel,     json_type_boolean, 0},
+		{"header",  &jheader,  json_type_string,  1},
 		{NULL, NULL, 0, 0}
 	};
 
@@ -58,12 +58,14 @@ m2v2_json_load_single_alias (struct json_object *j, gpointer *pbean)
 	}
 
 	alias = _bean_create (&descr_struct_ALIASES);
-	ALIASES_set2_alias (alias, json_object_get_string(jname));
-	ALIASES_set_version (alias, json_object_get_int64(jversion));
-	ALIASES_set2_content (alias, hid->data, hid->len);
-	ALIASES_set_deleted (alias, json_object_get_boolean(jdel));
-	ALIASES_set_mtime (alias, json_object_get_int64(jmtime));
-	ALIASES_set_ctime (alias, json_object_get_int64(jctime));
+	ALIASES_set2_alias(alias, json_object_get_string(jname));
+	ALIASES_set_version(alias, json_object_get_int64(jversion));
+	ALIASES_set_ctime(alias,
+			jctime ? json_object_get_int64(jctime) : oio_ext_real_time()/G_TIME_SPAN_SECOND);
+	ALIASES_set_mtime(alias,
+			jmtime ? json_object_get_int64(jmtime) : oio_ext_real_time()/G_TIME_SPAN_SECOND);
+	ALIASES_set_deleted(alias, json_object_get_boolean(jdel));
+	ALIASES_set2_content(alias, hid->data, hid->len);
 	*pbean = alias;
 	alias = NULL;
 
@@ -79,13 +81,17 @@ m2v2_json_load_single_header (struct json_object *j, gpointer *pbean)
 	GError *err = NULL;
 	GByteArray *id = NULL, *hash = NULL;
 	struct bean_CONTENTS_HEADERS_s *header = NULL;
-	struct json_object *jid, *jhash, *jsize, *jctime, *jmtime, *jmethod, *jtype;
+	struct json_object *jid, *jhash, *jsize, *jctime, *jmtime, *jpolicy,
+			*jmethod, *jtype;
 	struct oio_ext_json_mapping_s mapping[] = {
-		{"id",     &jid,    json_type_string, 1},
-		{"hash",   &jhash,  json_type_string, 1},
-		{"size",   &jsize,  json_type_int, 1},
-		{"ctime",  &jctime, json_type_int, 0},
-		{"mtime",  &jmtime, json_type_int, 0},
+		{"id",           &jid,     json_type_string, 1},
+		// Size and hash are not needed to rebuild the object
+		// Moreover, they can be calculated a posteriori
+		{"hash",         &jhash,   json_type_string, 0},
+		{"size",         &jsize,   json_type_int,    0},
+		{"ctime",        &jctime,  json_type_int,    0},
+		{"mtime",        &jmtime,  json_type_int,    0},
+		{"policy",       &jpolicy, json_type_string, 0},
 		{"chunk-method", &jmethod, json_type_string, 1},
 		{"mime-type",    &jtype,   json_type_string, 1},
 		{NULL, NULL, 0, 0}
@@ -100,22 +106,28 @@ m2v2_json_load_single_header (struct json_object *j, gpointer *pbean)
 		err = NEWERROR(CODE_BAD_REQUEST, "Invalid header, not hexa id");
 		goto exit;
 	}
-	hash = metautils_gba_from_hexstring(json_object_get_string(jhash));
-	if (!hash || hash->len != 16) {
-		err = NEWERROR(CODE_BAD_REQUEST, "Invalid header, not hexa16 hash");
-		goto exit;
+	if (jhash) {
+		hash = metautils_gba_from_hexstring(json_object_get_string(jhash));
+		if (!hash || hash->len != 16) {
+			err = NEWERROR(CODE_BAD_REQUEST, "Invalid header, not hexa16 hash");
+			goto exit;
+		}
 	}
 
-	header = _bean_create (&descr_struct_CONTENTS_HEADERS);
-	CONTENTS_HEADERS_set2_id (header, id->data, id->len);
-	CONTENTS_HEADERS_set2_hash (header, hash->data, hash->len);
-	CONTENTS_HEADERS_set_size (header, json_object_get_int64(jsize));
-	if (jctime)
-		CONTENTS_HEADERS_set_ctime (header, json_object_get_int64(jctime));
-	if (jmtime)
-		CONTENTS_HEADERS_set_mtime (header, json_object_get_int64(jmtime));
-	CONTENTS_HEADERS_set2_chunk_method (header, json_object_get_string(jmethod));
-	CONTENTS_HEADERS_set2_mime_type (header, json_object_get_string(jtype));
+	header = _bean_create(&descr_struct_CONTENTS_HEADERS);
+	CONTENTS_HEADERS_set2_id(header, id->data, id->len);
+	if (hash)
+		CONTENTS_HEADERS_set2_hash(header, hash->data, hash->len);
+	CONTENTS_HEADERS_set_size(header,
+			jsize ? json_object_get_int64(jsize) : 0);
+	CONTENTS_HEADERS_set_ctime(header,
+			jctime ? json_object_get_int64(jctime) : oio_ext_real_time()/G_TIME_SPAN_SECOND);
+	CONTENTS_HEADERS_set_mtime(header,
+			jmtime ? json_object_get_int64(jmtime) : oio_ext_real_time()/G_TIME_SPAN_SECOND);
+	if (jpolicy)
+		CONTENTS_HEADERS_set2_policy(header, json_object_get_string(jpolicy));
+	CONTENTS_HEADERS_set2_chunk_method(header, json_object_get_string(jmethod));
+	CONTENTS_HEADERS_set2_mime_type(header, json_object_get_string(jtype));
 
 	*pbean = header;
 	header = NULL;
@@ -137,8 +149,8 @@ m2v2_json_load_single_chunk (struct json_object *j, gpointer *pbean)
 	struct oio_ext_json_mapping_s mapping[] = {
 		{"id",      &jid,      json_type_string, 1},
 		{"hash",    &jhash,    json_type_string, 1},
-		{"size",    &jsize,    json_type_int, 1},
-		{"ctime",   &jctime,   json_type_int, 0},
+		{"size",    &jsize,    json_type_int,    1},
+		{"ctime",   &jctime,   json_type_int,    0},
 		{"content", &jcontent, json_type_string, 1},
 		{"pos",     &jpos,     json_type_string, 1},
 		{NULL, NULL, 0, 0}
@@ -160,12 +172,13 @@ m2v2_json_load_single_chunk (struct json_object *j, gpointer *pbean)
 	}
 
 	chunk = _bean_create (&descr_struct_CHUNKS);
-	CHUNKS_set2_id (chunk, json_object_get_string(jid));
-	CHUNKS_set_hash (chunk, hash);
-	CHUNKS_set_size (chunk, json_object_get_int64(jsize));
-	CHUNKS_set_ctime (chunk, !jctime ? oio_ext_real_time() / G_TIME_SPAN_SECOND : json_object_get_int64(jctime));
-	CHUNKS_set_content (chunk, hid);
-	CHUNKS_set2_position (chunk, json_object_get_string (jpos));
+	CHUNKS_set2_id(chunk, json_object_get_string(jid));
+	CHUNKS_set_hash(chunk, hash);
+	CHUNKS_set_size(chunk, json_object_get_int64(jsize));
+	CHUNKS_set_ctime(chunk,
+			jctime ? json_object_get_int64(jctime) : oio_ext_real_time()/G_TIME_SPAN_SECOND);
+	CHUNKS_set_content(chunk, hid);
+	CHUNKS_set2_position(chunk, json_object_get_string (jpos));
 	*pbean = chunk;
 	chunk = NULL;
 

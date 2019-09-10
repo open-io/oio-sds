@@ -227,7 +227,8 @@ class Content(object):
             mime_type=self.mime_type, data=data,
             **kwargs)
 
-    def rebuild_chunk(self, chunk_id, allow_same_rawx=False, chunk_pos=None):
+    def rebuild_chunk(self, chunk_id, allow_same_rawx=False, chunk_pos=None,
+                      allow_frozen_container=False):
         raise NotImplementedError()
 
     def create(self, stream, **kwargs):

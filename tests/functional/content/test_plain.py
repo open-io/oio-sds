@@ -20,7 +20,8 @@ from testtools.matchers import NotEquals
 from testtools.testcase import ExpectedException
 
 from oio.blob.client import BlobClient
-from oio.common.exceptions import NotFound, UnrecoverableContent
+from oio.common.constants import OIO_DB_ENABLED, OIO_DB_FROZEN
+from oio.common.exceptions import NotFound, UnrecoverableContent, ServiceBusy
 from oio.common.utils import cid_from_name
 from oio.common.fullpath import encode_fullpath
 from oio.container.client import ContainerClient
@@ -158,15 +159,12 @@ class TestPlainContent(BaseTestCase):
         return (self.content_factory.get(
             self.container_id, old_content.content_id), broken_chunks_info)
 
-    def _test_rebuild(self, stgpol, data_size, broken_pos_list,
-                      full_rebuild_pos):
-        data = random_data(data_size)
-        content, broken_chunks_info = self._new_content(
-            stgpol, data, broken_pos_list)
-
+    def _rebuild_and_check(self, content, broken_chunks_info, full_rebuild_pos,
+                           allow_frozen_container=False):
         rebuild_pos, rebuild_idx = full_rebuild_pos
         rebuild_chunk_info = broken_chunks_info[rebuild_pos][rebuild_idx]
-        content.rebuild_chunk(rebuild_chunk_info["id"])
+        content.rebuild_chunk(rebuild_chunk_info["id"],
+                              allow_frozen_container=allow_frozen_container)
 
         # get the new structure of the content
         rebuilt_content = self.content_factory.get(self.container_id,
@@ -192,6 +190,14 @@ class TestPlainContent(BaseTestCase):
             del rebuild_chunk_info["dl_meta"]["chunk_id"]
             self.assertEqual(meta, rebuild_chunk_info["dl_meta"])
 
+    def _test_rebuild(self, stgpol, data_size, broken_pos_list,
+                      full_rebuild_pos):
+        data = random_data(data_size)
+        content, broken_chunks_info = self._new_content(
+            stgpol, data, broken_pos_list)
+
+        self._rebuild_and_check(content, broken_chunks_info, full_rebuild_pos)
+
     def test_2copies_content_0_byte_1broken_rebuild_pos_0_idx_0(self):
         self._test_rebuild(self.stgpol_twocopies, 0, [(0, 0)], (0, 0))
 
@@ -212,6 +218,29 @@ class TestPlainContent(BaseTestCase):
         with ExpectedException(UnrecoverableContent):
             self._test_rebuild(
                 self.stgpol_twocopies, 0, [(0, 0), (0, 1)], (0, 0))
+
+    def test_rebuild_chunk_in_frozen_container(self):
+        data = random_data(self.chunk_size)
+        content, broken_chunks_info = self._new_content(
+            self.stgpol_twocopies, data, [(0, 0)])
+        system = dict()
+        system['sys.status'] = str(OIO_DB_FROZEN)
+        self.container_client.container_set_properties(
+            self.account, self.container_name, None, system=system)
+
+        try:
+            full_rebuild_pos = (0, 0)
+            rebuild_pos, rebuild_idx = full_rebuild_pos
+            rebuild_chunk_info = broken_chunks_info[rebuild_pos][rebuild_idx]
+            self.assertRaises(ServiceBusy,
+                              content.rebuild_chunk, rebuild_chunk_info["id"])
+        finally:
+            system['sys.status'] = str(OIO_DB_ENABLED)
+            self.container_client.container_set_properties(
+                self.account, self.container_name, None, system=system)
+
+        self._rebuild_and_check(content, broken_chunks_info, full_rebuild_pos,
+                                allow_frozen_container=True)
 
     def _test_fetch(self, stgpol, data_size, broken_pos_list):
         data = random_data(data_size)

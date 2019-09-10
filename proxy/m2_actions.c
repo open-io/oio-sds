@@ -1292,6 +1292,7 @@ static enum http_rc_e
 action_m2_container_raw_insert (struct req_args_s *args, struct json_object *jargs)
 {
 	const gboolean force = _request_get_flag (args, "force");
+	const gboolean frozen = OPT("frozen")?TRUE:FALSE;
 
 	GSList *beans = NULL;
 	GError *err = m2v2_json_load_setof_xbean (jargs, &beans);
@@ -1303,7 +1304,7 @@ action_m2_container_raw_insert (struct req_args_s *args, struct json_object *jar
 		return _reply_format_error (args, BADREQ("Empty beans list"));
 
 	PACKER_VOID(_pack) {
-		return m2v2_remote_pack_RAW_ADD (args->url, beans, force, DL());
+		return m2v2_remote_pack_RAW_ADD (args->url, beans, frozen, force, DL());
 	}
 	err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	_bean_cleanl2(beans);

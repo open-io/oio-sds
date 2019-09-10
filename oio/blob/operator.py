@@ -32,7 +32,8 @@ class ChunkOperator(object):
         self.content_factory = ContentFactory(conf, logger=self.logger)
 
     def rebuild(self, container_id, content_id, chunk_id_or_pos,
-                rawx_id=None, try_chunk_delete=False, allow_same_rawx=True):
+                rawx_id=None, try_chunk_delete=False,
+                allow_frozen_container=True, allow_same_rawx=True):
         """
         Try to find the chunk in the metadata of the specified object,
         then rebuild it.
@@ -64,7 +65,8 @@ class ChunkOperator(object):
             chunk_size = chunk.size
 
         content.rebuild_chunk(
-            chunk_id, allow_same_rawx=allow_same_rawx,
+            chunk_id, allow_frozen_container=allow_frozen_container,
+            allow_same_rawx=allow_same_rawx,
             chunk_pos=chunk_pos)
 
         if try_chunk_delete:
