@@ -55,9 +55,16 @@ func (rr *rawxRequest) serveInfo(rep http.ResponseWriter, req *http.Request) {
 		spent = IncrementStatReqOther(rr)
 	}
 	if isVerbose() {
-		LogHttp(
-			rr.rawx.url, rr.req.RemoteAddr, rr.req.Method,
-			rr.status, spent, rr.bytesOut, rr.chunk.ContainerID,
-			rr.reqid, rr.req.URL.Path)
+		LogHttp(AccessLogEvent{
+			status:    rr.status,
+			timeSpent: spent,
+			bytesIn:   rr.bytesIn,
+			bytesOut:  rr.bytesOut,
+			method:    rr.req.Method,
+			local:     rr.rawx.url,
+			peer:      rr.req.RemoteAddr,
+			path:      rr.req.URL.Path,
+			reqId:     rr.reqid,
+		})
 	}
 }

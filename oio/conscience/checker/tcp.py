@@ -16,35 +16,39 @@
 
 from oio.common.green import socket
 
-from oio.common import exceptions as exc
 from oio.conscience.checker.base import BaseChecker
 
 
 class TcpChecker(BaseChecker):
-    def configure(self):
-        for k in ['host', 'port']:
-            if k not in self.checker_conf:
-                raise exc.ConfigurationException(
-                    'Missing field "%s" in configuration' % k)
-        self.addr = (self.checker_conf['host'], self.checker_conf['port'])
+    checker_type = 'tcp'
+
+    def _configure(self):
+        self.addr = (self.host, self.port)
 
     def _communicate(self, sock):
         """Do something with the already connected socket."""
         pass
 
-    def check(self):
-        result = False
+    def _check(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             sock.connect(self.addr)
             self._communicate(sock)
-            result = True
+            self.last_check_success = True
+        except Exception as err:
+            # Avoid spamming the logs
+            if self.last_check_success:
+                self.logger.warn('ERROR performing %s check (%s:%d): %s',
+                                 self.checker_type, self.host, self.port, err)
+            self.last_check_success = False
         finally:
             if sock:
                 try:
                     sock.shutdown(socket.SHUT_RDWR)
                     sock.close()
                 except socket.error as err:
-                    self.logger.warn('Close error: %s', err)
-            return result
+                    pass
+            if not self.last_check_success:
+                self.logger.warn('%s check failed', self.name)
+            return self.last_check_success

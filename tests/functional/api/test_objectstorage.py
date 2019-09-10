@@ -23,7 +23,7 @@ from oio.api.object_storage import ObjectStorageApi
 from oio.common import exceptions as exc
 from oio.common.constants import REQID_HEADER
 from oio.common.storage_functions import _sort_chunks as sort_chunks
-from oio.common.utils import cid_from_name, request_id
+from oio.common.utils import cid_from_name, request_id, depaginate
 from oio.common.fullpath import encode_fullpath
 from oio.common.storage_method import STORAGE_METHODS
 from oio.event.evob import EventTypes
@@ -1784,6 +1784,31 @@ class TestObjectList(ObjectStorageApiTestBase):
         self.assertIn('truncated', res)
         self.assertFalse(res['objects'])
         self.assertListEqual(['2/'], res['prefixes'])
+
+    def test_depaginate_object_list_with_service_busy(self):
+        container = random_str(32)
+
+        object_names = list()
+        for i in range(8):
+            _, _, _, meta = self.api.object_create_ext(
+                self.account, container, data="depaginate",
+                obj_name="depaginate-"+str(i))
+            object_names.append(meta['name'])
+
+        def my_object_list(*args, **kwargs):
+            my_object_list.i += 1
+            if i % 2 == 0:
+                raise exc.ServiceBusy()
+            return self.api.object_list(*args, **kwargs)
+        my_object_list.i = -1
+
+        obj_gen = depaginate(
+            my_object_list,
+            listing_key=lambda x: x['objects'],
+            marker_key=lambda x: x.get('next_marker'),
+            truncated_key=lambda x: x['truncated'],
+            account=self.account, container=container, attempts=2, limit=2)
+        self.assertListEqual(object_names, [obj['name'] for obj in obj_gen])
 
     def test_object_create_ext(self):
         name = random_str(32)

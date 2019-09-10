@@ -35,6 +35,7 @@ class BlobRebuilder(Tool):
     DEFAULT_DISTRIBUTED_BEANSTALKD_WORKER_TUBE = 'oio-rebuild'
     DEFAULT_RDIR_FETCH_LIMIT = 100
     DEFAULT_RDIR_TIMEOUT = 60.0
+    DEFAULT_ALLOW_FROZEN_CT = False
     DEFAULT_ALLOW_SAME_RAWX = True
     DEFAULT_TRY_CHUNK_DELETE = False
     DEFAULT_DRY_RUN = False
@@ -55,6 +56,7 @@ class BlobRebuilder(Tool):
         self.rdir_client = RdirClient(self.conf, logger=self.logger)
         self.rdir_fetch_limit = int_value(
             self.conf.get('rdir_fetch_limit'), self.DEFAULT_RDIR_FETCH_LIMIT)
+        self.rdir_shuffle_chunks = true_value(conf.get('rdir_shuffle_chunks'))
         self.rdir_timeout = float_value(
             conf.get('rdir_timeout'), self.DEFAULT_RDIR_TIMEOUT)
 
@@ -138,7 +140,7 @@ class BlobRebuilder(Tool):
     def _fetch_items_from_rawx_id(self):
         lost_chunks = self.rdir_client.chunk_fetch(
             self.rawx_id, limit=self.rdir_fetch_limit, rebuild=True,
-            timeout=self.rdir_timeout)
+            shuffle=self.rdir_shuffle_chunks, timeout=self.rdir_timeout)
         for container_id, content_id, chunk_id, _ in lost_chunks:
             yield self.namespace, container_id, content_id, chunk_id
 
@@ -218,11 +220,16 @@ class BlobRebuilder(Tool):
 
     def _load_total_expected_items(self):
         if self.rawx_id:
-            info = self.rdir_client.status(
-                self.rawx_id,
-                read_timeout=self.rdir_timeout)
-            self.total_expected_items = info.get(
-                'chunk', dict()).get('to_rebuild', None)
+            try:
+                info = self.rdir_client.status(
+                    self.rawx_id,
+                    read_timeout=self.rdir_timeout)
+                self.total_expected_items = info.get(
+                    'chunk', dict()).get('to_rebuild', None)
+            except Exception as exc:
+                self.logger.warn(
+                        'Failed to fetch the total chunks to rebuild: %s',
+                        exc)
 
     def run(self):
         if self.rawx_id:
@@ -242,6 +249,8 @@ class BlobRebuilderWorker(ToolWorker):
         super(BlobRebuilderWorker, self).__init__(
             tool, queue_workers, queue_reply)
 
+        self.allow_frozen_container = true_value(self.tool.conf.get(
+            'allow_frozen_container', self.tool.DEFAULT_ALLOW_FROZEN_CT))
         self.allow_same_rawx = true_value(self.tool.conf.get(
             'allow_same_rawx', self.tool.DEFAULT_ALLOW_SAME_RAWX))
         self.try_chunk_delete = true_value(self.tool.conf.get(
@@ -268,6 +277,7 @@ class BlobRebuilderWorker(ToolWorker):
                 container_id, content_id, chunk_id_or_pos,
                 rawx_id=self.tool.rawx_id,
                 try_chunk_delete=self.try_chunk_delete,
+                allow_frozen_container=self.allow_frozen_container,
                 allow_same_rawx=self.allow_same_rawx)
         except OioException as exc:
             if not isinstance(exc, OrphanChunk):

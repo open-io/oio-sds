@@ -22,7 +22,7 @@ User  smig
 Group server
 
 ErrorLog /GRID/@NS@/logs/rawx-@NB@-errors.log
-LogFormat "%h %l %u %t \"%r\" %>s %b" common
+LogFormat "%{%b %d %T}t %{HOSTNAME}e %{INFO_SERVICES}e %{pid}P %{tid}P %{LOG_TYPE}e %{LEVEL}e %{Host}i %a:%{remote}p %m %>s %D %O %I - %{x-oio-req-id}i %U" log/cid-in
 CustomLog /GRID/@NS@/logs/rawx-@NB@-access.log common
 LogLevel debug
 

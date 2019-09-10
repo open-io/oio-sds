@@ -14,14 +14,15 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+from oio.common import exceptions as exc
 from oio.common.green import Timeout
-
 from oio.common.utils import RingBuffer
 from oio.common.easy_value import float_value
 
 
 class BaseChecker(object):
     """Base class for all service checkers"""
+    checker_type = 'checker'
 
     def __init__(self, agent, checker_conf, logger):
         self.agent = agent
@@ -34,9 +35,20 @@ class BaseChecker(object):
         self.name = checker_conf.get('name')
         self.srv_type = agent.service['type']
         self.last_result = None
-        self.configure()
 
-    def configure(self):
+        for k in ('host', 'port'):
+            if k not in self.checker_conf:
+                raise exc.ConfigurationException(
+                    'Missing field "%s" in configuration' % k)
+        self.host = self.checker_conf['host']
+        self.port = self.checker_conf['port']
+        self.name = '%s|%s|%s|%s' % \
+            (self.srv_type, self.checker_type, self.host, self.port)
+        self.last_check_success = True
+
+        self._configure()
+
+    def _configure(self):
         """Configuration handle"""
         pass
 
@@ -45,7 +57,7 @@ class BaseChecker(object):
         result = False
         try:
             with Timeout(self.timeout):
-                result = self.check()
+                result = self._check()
         except Timeout as e:
             self.logger.warn('check timed out')
         except Exception as e:
@@ -72,6 +84,6 @@ class BaseChecker(object):
                 self.last_result = True
         return self.last_result
 
-    def check(self):
+    def _check(self):
         """Actually do the service check"""
         return False

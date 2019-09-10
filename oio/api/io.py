@@ -80,7 +80,73 @@ class IOBaseWrapper(RawIOBase):
         return len(read_data)
 
 
-class WriteHandler(object):
+class _WriteHandler(object):
+    def __init__(self, chunk_preparer, storage_method, headers=None,
+                 **kwargs):
+        self.chunk_prep = None
+        self._load_chunk_prep(chunk_preparer)
+        self.storage_method = storage_method
+        self.headers = headers or dict()
+        self.connection_timeout = kwargs.get('connection_timeout',
+                                             CONNECTION_TIMEOUT)
+        self.deadline = kwargs.get('deadline')
+        self.logger = kwargs.get('logger', LOGGER)
+        self.extra_kwargs = kwargs
+
+    def _load_chunk_prep(self, chunk_preparer):
+        if isinstance(chunk_preparer, dict):
+            def _sort_and_yield():
+                for pos in sorted(chunk_preparer.keys()):
+                    yield chunk_preparer[pos]
+            self.chunk_prep = _sort_and_yield
+        else:
+            self.chunk_prep = chunk_preparer
+
+    @property
+    def write_timeout(self):
+        if 'write_timeout' in self.extra_kwargs:
+            return self.extra_kwargs['write_timeout']
+        elif self.deadline is not None:
+            return deadline_to_timeout(self.deadline, True)
+        return CHUNK_TIMEOUT
+
+
+class LinkHandler(_WriteHandler):
+    def __init__(self, fullpath, chunk_preparer, storage_method, blob_client,
+                 headers=None, **kwargs):
+        super(LinkHandler, self).__init__(
+            chunk_preparer, storage_method, headers=headers, **kwargs)
+        self.fullpath = fullpath
+        self.blob_client = blob_client
+
+    def link(self):
+        content_chunks = list()
+
+        kwargs = MetachunkLinker.filter_kwargs(self.extra_kwargs)
+        for meta_chunk in self.chunk_prep():
+            try:
+                handler = MetachunkLinker(
+                    meta_chunk, self.fullpath, self.blob_client,
+                    storage_method=self.storage_method,
+                    reqid=self.headers.get(REQID_HEADER),
+                    connection_timeout=self.connection_timeout,
+                    write_timeout=self.write_timeout, **kwargs)
+                chunks = handler.link()
+            except Exception as ex:
+                if isinstance(ex, exc.UnfinishedUploadException):
+                    content_chunks = content_chunks + \
+                            ex.chunks_already_uploaded
+                    ex = ex.exception
+                raise exc.UnfinishedUploadException(ex, content_chunks)
+
+            for chunk in chunks:
+                if not chunk.get('error'):
+                    content_chunks.append(chunk)
+
+        return content_chunks
+
+
+class WriteHandler(_WriteHandler):
     def __init__(self, source, sysmeta, chunk_preparer,
                  storage_method, headers=None,
                  **kwargs):
@@ -92,25 +158,13 @@ class WriteHandler(object):
             checksums locally. Can be `None` to disable local checksum
             computation and let the rawx compute it (will be md5).
         """
+        super(WriteHandler, self).__init__(
+            chunk_preparer, storage_method, headers=headers, **kwargs)
         if isinstance(source, IOBase):
             self.source = BufferedReader(source)
         else:
             self.source = BufferedReader(IOBaseWrapper(source))
-        if isinstance(chunk_preparer, dict):
-            def _sort_and_yield():
-                for pos in sorted(chunk_preparer.keys()):
-                    yield chunk_preparer[pos]
-            self.chunk_prep = _sort_and_yield
-        else:
-            self.chunk_prep = chunk_preparer
         self.sysmeta = sysmeta
-        self.storage_method = storage_method
-        self.headers = headers or dict()
-        self.extra_kwargs = kwargs
-        self.connection_timeout = kwargs.get('connection_timeout',
-                                             CONNECTION_TIMEOUT)
-        self.deadline = kwargs.get('deadline')
-        self.logger = kwargs.get('logger', LOGGER)
 
     @property
     def read_timeout(self):
@@ -119,14 +173,6 @@ class WriteHandler(object):
         elif self.deadline is not None:
             return deadline_to_timeout(self.deadline, True)
         return CLIENT_TIMEOUT
-
-    @property
-    def write_timeout(self):
-        if 'write_timeout' in self.extra_kwargs:
-            return self.extra_kwargs['write_timeout']
-        elif self.deadline is not None:
-            return deadline_to_timeout(self.deadline, True)
-        return CHUNK_TIMEOUT
 
     def stream(self):
         """
@@ -571,31 +617,16 @@ def exp_ramp_gen(start, maximum):
         current = min(current * 2, maximum)
 
 
-class MetachunkWriter(object):
-    """Base class for metachunk writers"""
+class _MetachunkWriter(object):
 
     def __init__(self, storage_method=None, quorum=None,
-                 chunk_checksum_algo='md5', reqid=None,
-                 chunk_buffer_min=32768, chunk_buffer_max=262144,
-                 perfdata=None, **_kwargs):
+                 reqid=None, perfdata=None, **kwargs):
         self.storage_method = storage_method
         self._quorum = quorum
         if storage_method is None and quorum is None:
             raise ValueError('Missing storage_method or quorum')
-        self.chunk_checksum_algo = chunk_checksum_algo
         self.perfdata = perfdata
         self.reqid = reqid
-        self._buffer_size_gen = exp_ramp_gen(chunk_buffer_min,
-                                             chunk_buffer_max)
-
-    @classmethod
-    def filter_kwargs(cls, kwargs):
-        return {k: v for k, v in kwargs.items()
-                if k in ('chunk_checksum_algo',
-                         'chunk_buffer_min',
-                         'chunk_buffer_max',
-                         'perfdata',
-                         'logger')}
 
     @property
     def quorum(self):
@@ -636,6 +667,76 @@ class MetachunkWriter(object):
                 elif isinstance(err, (exc.OioTimeout, green.OioTimeout)):
                     raise exc.OioTimeout(new_exc)
             raise new_exc
+
+
+class MetachunkLinker(_MetachunkWriter):
+    """
+    Base class for metachunk linkers
+    """
+    def __init__(self, meta_chunk_target, fullpath, blob_client,
+                 storage_method=None, quorum=None, reqid=None, perfdata=None,
+                 connection_timeout=None, write_timeout=None,
+                 **kwargs):
+        super(MetachunkLinker, self).__init__(
+            storage_method=storage_method, quorum=quorum, reqid=reqid,
+            perfdata=perfdata, **kwargs)
+        self.meta_chunk_target = meta_chunk_target
+        self.fullpath = fullpath
+        self.blob_client = blob_client
+        self.connection_timeout = connection_timeout or CONNECTION_TIMEOUT
+        self.write_timeout = write_timeout or CHUNK_TIMEOUT
+        self.logger = kwargs.get('logger', LOGGER)
+
+    @classmethod
+    def filter_kwargs(cls, kwargs):
+        return {k: v for k, v in kwargs.items()
+                if k in ('perfdata',
+                         'logger')}
+
+    def link(self):
+        new_meta_chunks = list()
+        failed_chunks = list()
+        for chunk_target in self.meta_chunk_target:
+            try:
+                resp, new_chunk_url = self.blob_client.chunk_link(
+                    chunk_target['url'], None, self.fullpath,
+                    connection_timeout=self.connection_timeout,
+                    write_timeout=self.write_timeout)
+                new_chunk = chunk_target.copy()
+                new_chunk['url'] = new_chunk_url
+                new_meta_chunks.append(new_chunk)
+            except Exception:
+                failed_chunks.append(chunk_target)
+        try:
+            self.quorum_or_fail(new_meta_chunks, failed_chunks)
+        except Exception as ex:
+            raise exc.UnfinishedUploadException(ex, new_meta_chunks)
+        return new_meta_chunks
+
+
+class MetachunkWriter(_MetachunkWriter):
+    """
+    Base class for metachunk writers
+    """
+    def __init__(self, storage_method=None, quorum=None,
+                 chunk_checksum_algo='md5', reqid=None,
+                 chunk_buffer_min=32768, chunk_buffer_max=262144,
+                 perfdata=None, **_kwargs):
+        super(MetachunkWriter, self).__init__(
+            storage_method=storage_method, quorum=quorum, reqid=reqid,
+            perfdata=perfdata, **_kwargs)
+        self.chunk_checksum_algo = chunk_checksum_algo
+        self._buffer_size_gen = exp_ramp_gen(chunk_buffer_min,
+                                             chunk_buffer_max)
+
+    @classmethod
+    def filter_kwargs(cls, kwargs):
+        return {k: v for k, v in kwargs.items()
+                if k in ('chunk_checksum_algo',
+                         'chunk_buffer_min',
+                         'chunk_buffer_max',
+                         'perfdata',
+                         'logger')}
 
     def buffer_size(self):
         """

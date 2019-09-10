@@ -87,14 +87,14 @@ def validate_service_conf(conf):
         raise InvalidServiceConfigError()
 
 
-def config_paths():
+def _config_paths():
     """
     Yield paths to potential namespace configuration files.
     """
-    yield '/etc/oio/sds.conf'
+    yield '/etc/oio/sds.conf', True
     for conf_path in glob('/etc/oio/sds.conf.d/*'):
-        yield conf_path
-    yield path.expanduser('~/.oio/sds.conf')
+        yield conf_path, True
+    yield path.expanduser('~/.oio/sds.conf'), False
 
 
 # Keep namespace configurations, avoid loading files everytime
@@ -131,11 +131,21 @@ def load_namespace_conf(namespace, failsafe=False, fresh=False):
 
     parser = SafeConfigParser({})
     success = False
-    loaded_files = parser.read(config_paths())
+
+    # Do not load a non-overriding file (local) if any file has
+    # already been loaded before.
+    loaded_files = list()
+    for p, override in _config_paths():
+        if override or not loaded_files:
+            flist = parser.read((p,))
+            loaded_files.extend(flist)
+
     conf = NamespaceConfiguration(loaded_files, namespace=namespace)
     if not loaded_files:
         print('Unable to read namespace config')
     else:
+        import logging
+        logging.info("Configuration loaded from %s", repr(loaded_files))
         if not parser.has_section(namespace):
             print('Unable to find [%s] section in any of %s' % (
                   namespace, loaded_files))
@@ -163,11 +173,17 @@ def set_namespace_options(namespace, options, remove=None):
     :returns: a dictionary with all options of the namespace
     """
     parser = SafeConfigParser({})
-    potential_confs = list(config_paths())
-    actual_confs = parser.read(potential_confs)
+
+    potential_confs = list()
+    actual_confs = list()
+    for p, _ in _config_paths():
+        potential_confs.append(p)
+        fdone = parser.read((p,))
+        actual_confs.extend(fdone)
     if not actual_confs:
         raise ValueError(
             "Could not read configuration from any of %s" % potential_confs)
+
     if not parser.has_section(namespace):
         print('Namespace %s was not found in %s' % (namespace, actual_confs))
         parser.add_section(namespace)
@@ -176,6 +192,7 @@ def set_namespace_options(namespace, options, remove=None):
     if remove:
         for key in remove:
             parser.remove_option(namespace, key)
-    with open(actual_confs[0], 'w') as outfile:
+
+    with open(actual_confs[-1], 'w') as outfile:
         parser.write(outfile)
     return dict(parser.items(namespace))

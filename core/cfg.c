@@ -38,22 +38,32 @@ oio_cfg_build_key(const gchar *ns, const gchar *what)
 	return result;
 }
 
+/**
+ * `override` is only set when loading local files. This happens in testing
+ * conditions and we prefer avoiding any overriding of NS config.
+ */
 static void
-config_load_ns(GHashTable *h, GKeyFile *kf, const gchar *ns)
+config_load_ns(GHashTable *h, GKeyFile *kf, const gchar *ns, gboolean override)
 {
 	gchar **keys = g_key_file_get_keys(kf, ns, 0, NULL);
 	if (keys) {
-		g_hash_table_insert(h, oio_cfg_build_key(ns, "known"), g_strdup("yes"));
+		gchar *k_known = oio_cfg_build_key(ns, "known");
+		if (!override && g_hash_table_lookup(h, k_known)) {
+			g_free(k_known);
+			return;
+		}
+		g_hash_table_insert(h, k_known, g_strdup("yes"));
 		for (gchar **pk=keys; *pk ;pk++) {
+			gchar *k = oio_cfg_build_key(ns, *pk);
 			gchar *v = g_key_file_get_string(kf, ns, *pk, NULL);
-			g_hash_table_insert(h, oio_cfg_build_key(ns, *pk), v);
+			g_hash_table_insert(h, k, v);
 		}
 		g_strfreev(keys);
 	}
 }
 
 static void
-config_load_file(GHashTable *h, const gchar *source)
+config_load_file(GHashTable *h, const gchar *source, gboolean override)
 {
 	GError *err = NULL;
 	GKeyFile *kf = g_key_file_new();
@@ -65,7 +75,7 @@ config_load_file(GHashTable *h, const gchar *source)
 		groups = g_key_file_get_groups(kf, NULL);
 		if (groups) {
 			for (pg=groups; *pg ;pg++)
-				config_load_ns(h, kf, *pg);
+				config_load_ns(h, kf, *pg, override);
 			g_strfreev(groups);
 		}
 	}
@@ -73,7 +83,8 @@ config_load_file(GHashTable *h, const gchar *source)
 }
 
 static void
-config_load_dir(GHashTable *ht, const gchar *dirname, GDir *gdir)
+config_load_dir(GHashTable *ht, const gchar *dirname, GDir *gdir,
+		gboolean override)
 {
 	const char *bn = NULL;
 
@@ -84,7 +95,7 @@ config_load_dir(GHashTable *ht, const gchar *dirname, GDir *gdir)
 			continue;
 		fullpath = g_strconcat(dirname, G_DIR_SEPARATOR_S, bn, NULL);
 		if (fullpath) {
-			config_load_file(ht, fullpath);
+			config_load_file(ht, fullpath, override);
 			g_free(fullpath);
 		}
 	}
@@ -121,7 +132,7 @@ oio_cfg_parse_file(const char *path)
 {
 	GHashTable *ht = g_hash_table_new_full(g_str_hash, g_str_equal,
 			g_free, g_free);
-	config_load_file(ht, path);
+	config_load_file(ht, path, TRUE);
 	return ht;
 }
 
@@ -133,13 +144,13 @@ oio_cfg_parse(void)
 
 	// Load the system configuration
 	if (g_file_test(OIO_CONFIG_FILE_PATH, G_FILE_TEST_IS_REGULAR))
-		config_load_file(ht, OIO_CONFIG_FILE_PATH);
+		config_load_file(ht, OIO_CONFIG_FILE_PATH, TRUE);
 
 	if (g_file_test(OIO_CONFIG_DIR_PATH,
 			G_FILE_TEST_IS_DIR|G_FILE_TEST_EXISTS)) {
 		GDir *gdir = g_dir_open(OIO_CONFIG_DIR_PATH, 0, NULL);
 		if (gdir) {
-			config_load_dir(ht, OIO_CONFIG_DIR_PATH, gdir);
+			config_load_dir(ht, OIO_CONFIG_DIR_PATH, gdir, TRUE);
 			g_dir_close(gdir);
 		}
 	}
@@ -148,7 +159,7 @@ oio_cfg_parse(void)
 	if (g_get_home_dir() && OIO_CONFIG_LOCAL_PATH) {
 		gchar *local = g_strdup_printf("%s/%s", g_get_home_dir(),
 				OIO_CONFIG_LOCAL_PATH);
-		config_load_file(ht, local);
+		config_load_file(ht, local, FALSE);
 		g_free(local);
 	}
 

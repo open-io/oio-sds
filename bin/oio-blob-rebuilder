@@ -37,10 +37,17 @@ tube for broken chunks events.
 
     # common
     parser.add_argument('namespace', help="Namespace")
+    parser.add_argument("--random-wait", type=int,
+                        help="Random wait (in microseconds)")
     parser.add_argument(
         '--rdir-fetch-limit', type=int,
         help='Maximum number of entries returned in each rdir response. '
              '(default=%d)' % BlobRebuilder.DEFAULT_RDIR_FETCH_LIMIT)
+    parser.add_argument(
+        '--rdir-shuffle-chunks', action='store_true',
+        help="Shuffle chunks after fetching them from rdir. "
+             "Allows to avoid rebuilding all chunks "
+             "of the same container at the same time.")
     parser.add_argument(
         '--rdir-timeout', type=float,
         help='Timeout for rdir operations, in seconds (%f)' %
@@ -97,6 +104,9 @@ tube for broken chunks events.
              'rebuilding are not actually missing but are corrupted. '
              '(default=%s)' % BlobRebuilder.DEFAULT_TRY_CHUNK_DELETE)
     parser.add_argument(
+        '--allow-frozen-container', action='store_true',
+        help="Allow rebuilding a chunk in a frozen container.")
+    parser.add_argument(
         '--allow-same-rawx', action='store_true',
         default=BlobRebuilder.DEFAULT_ALLOW_SAME_RAWX,
         help='Allow rebuilding a chunk on the original rawx. '
@@ -127,10 +137,14 @@ def main():
 
     conf = {}
     # common
+    conf['allow_frozen_container'] = args.allow_frozen_container
+    conf['allow_same_rawx'] = args.allow_same_rawx
+    conf['dry_run'] = args.dry_run
     conf['namespace'] = args.namespace
     conf['rdir_fetch_limit'] = args.rdir_fetch_limit
     if args.rdir_timeout is not None:
         conf['rdir_timeout'] = args.rdir_timeout
+    conf['rdir_shuffle_chunks'] = args.rdir_shuffle_chunks
     conf['report_interval'] = args.report_interval
     # input
     conf['beanstalkd_worker_tube'] = args.beanstalkd_tube
@@ -139,9 +153,7 @@ def main():
     # local
     conf['concurrency'] = args.concurrency
     conf['items_per_second'] = args.chunks_per_second
-    conf['dry_run'] = args.dry_run
     conf['try_chunk_delete'] = args.delete_faulty_chunks
-    conf['allow_same_rawx'] = args.allow_same_rawx
     # distributed
     conf['distributed_beanstalkd_worker_tube'] = args.distributed_tube
 
