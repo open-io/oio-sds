@@ -1365,7 +1365,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             _, chunks_copies = self.api.object_locate(self.account, snapshot,
                                                       test_object % i)
 
-            for chunk, copy in zip(chunks, chunks_copies):
+            for chunk, copy in zip(sorted(chunks), sorted(chunks_copies)):
                 # check that every chunk is different from the target
                 self.assertNotEqual(chunk['url'], copy['url'])
 
