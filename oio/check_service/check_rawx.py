@@ -58,12 +58,12 @@ class CheckRawx(CheckService):
                 data += '%x\r\n%s\r\n' % (len(body), body)
             data += '0\r\n'
             if trailers:
-                for k, v in trailers.iteritems():
+                for k, v in trailers.items():
                     data += '%s: %s\r\n' % (k, v)
             data += '\r\n'
         if trailers:
             headers['Trailer'] = list()
-            for k, v in trailers.iteritems():
+            for k, v in trailers.items():
                 headers['Trailer'].append(k)
 
         response = super(CheckRawx, self)._direct_request(

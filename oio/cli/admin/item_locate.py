@@ -16,8 +16,7 @@
 
 from cliff import lister
 from itertools import chain
-from urllib import quote
-from urlparse import urlparse
+from six.moves.urllib_parse import quote, urlparse
 
 from oio.common import exceptions
 from oio.common.fullpath import encode_fullpath

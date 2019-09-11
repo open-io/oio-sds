@@ -74,7 +74,7 @@ def read_chunk_metadata(fd, chunk_id, check_chunk_id=True):
     attr_vers = 0.0
     raw_chunk_id = container_id = path = version = content_id = None
     missing = list()
-    for k, v in raw_meta.iteritems():
+    for k, v in raw_meta.items():
         # New chunks have a version
         if k == chunk_xattr_keys['oio_version']:
             attr_vers = float(v)

@@ -15,6 +15,7 @@
 
 
 from datetime import datetime
+from six import iteritems
 
 from oio.api.object_storage import _sort_chunks
 from oio.blob.operator import ChunkOperator
@@ -186,7 +187,7 @@ class ContentRepairerWorker(ToolWorker):
         exceptions = list()
         stg_met = STORAGE_METHODS.load(obj_meta['chunk_method'])
         chunks_by_pos = _sort_chunks(chunks, stg_met.ec)
-        for pos, chunks in chunks_by_pos.iteritems():
+        for pos, chunks in iteritems(chunks_by_pos):
             try:
                 exceptions += self._repair_metachunk(
                     item, content_id, stg_met, pos, chunks)

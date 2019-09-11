@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
+from six import iteritems
 from cliff import lister
 
 from oio.crawler.integrity import Target
@@ -219,7 +219,7 @@ class DirectoryCheck(BaseCheckCommand):
 
         # Check all the meta1 are concerned
         reverse_dump = set()
-        for _, v in json.loads(dump0).iteritems():
+        for _, v in iteritems(json.loads(dump0)):
             for url in v:
                 reverse_dump.add(url)
         m1 = list(self.filter_services(self.catalog, 'meta1'))

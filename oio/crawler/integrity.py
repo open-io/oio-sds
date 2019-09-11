@@ -26,6 +26,7 @@ import os
 import csv
 import sys
 from time import time
+from six import iteritems
 
 from oio.blob.rebuilder import BlobRebuilder
 from oio.common import exceptions as exc
@@ -573,7 +574,7 @@ class Checker(object):
         stg_met = STORAGE_METHODS.load(obj_meta['chunk_method'])
         chunks_by_pos = _sort_chunks(chunks, stg_met.ec)
         tasks = list()
-        for pos, pchunks in chunks_by_pos.iteritems():
+        for pos, pchunks in iteritems(chunks_by_pos):
             tasks.append((pos, self._spawn(
                 self._check_metachunk,
                 target.copy(), stg_met, pos, pchunks,

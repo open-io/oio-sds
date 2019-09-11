@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS
+# Copyright (C) 2015-2019 OpenIO SAS
 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,6 +15,9 @@
 from oio.common.green import Timeout, sleep
 
 from contextlib import contextmanager
+
+from six import PY2
+
 from oio.common.http import HeadersDict
 import mock
 import oio
@@ -33,6 +36,9 @@ def set_http_requests(cb):
         def getresponse(self):
             self.resp = cb(self.req)
             return self.resp
+
+        def close(self):
+            pass
 
     class ConnectionRecord(object):
         def __init__(self):
@@ -64,8 +70,9 @@ def set_http_connect(*args, **kwargs):
     try:
         oio.api.io.http_connect = new
         yield new
+        # This does not work with Python 3
         unused_status = list(new.status_iter)
-        if unused_status:
+        if PY2 and unused_status:
             raise AssertionError('unused status %r' % unused_status)
 
     finally:

@@ -1,4 +1,4 @@
-# Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -89,7 +89,7 @@ class ContainerClientTest(unittest.TestCase):
         properties.update((self._gen_chunk_qual(), ))
         properties.update((self._gen_chunk_qual('127.0.0.2:6022'), ))
         properties.update((self._gen_chunk_qual('127.0.0.3:6023'), ))
-        keys = properties.keys()
+        keys = list(properties.keys())  # PY3: make a list from the view
         properties.update({'a': 'b'})
 
         quals = extract_chunk_qualities(properties)

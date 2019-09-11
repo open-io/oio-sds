@@ -268,7 +268,7 @@ class ElectionBalance(Lister):
             try:
                 conf = self.app.client_manager.admin.service_get_info(id_)
                 masters = conf.get('elections', {}).get('master', 0)
-            except Exception as _:
+            except Exception:
                 pass
             qualified.append((id_, max_, inactivity, masters))
             total += masters

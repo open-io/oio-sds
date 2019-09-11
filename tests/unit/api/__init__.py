@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -86,7 +86,8 @@ def decode_chunked_body(raw_body):
             header, remaining = remaining.split(b'\r\n', 1)
             if header:
                 header_key, header_value = header.split(b': ', 1)
-                trailers[header_key] = header_value
+                trailers[header_key.decode('utf-8')] = \
+                    header_value.decode('utf-8')
         else:
             # get the hexa_length
             hexa_length, remaining = remaining.split(b'\r\n', 1)

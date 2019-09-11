@@ -40,7 +40,7 @@ map_cfg = {'host': 'bind_addr', 'port': 'bind_port',
 def _write_config(path, config):
     with open(path, 'w') as f:
         f.write("[rdir-server]\n")
-        for k, v in config.iteritems():
+        for k, v in config.items():
             f.write("{0} = {1}\n".format(map_cfg[k], config[k]))
         f.write("syslog_prefix = OIO,OPENIO,rdir,1\n")
 

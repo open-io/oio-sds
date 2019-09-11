@@ -246,7 +246,7 @@ class TestPlainContent(BaseTestCase):
         data = random_data(data_size)
         content, _ = self._new_content(stgpol, data, broken_pos_list)
 
-        fetched_data = "".join(content.fetch())
+        fetched_data = b''.join(content.fetch())
 
         self.assertEqual(fetched_data, data)
 
@@ -279,7 +279,7 @@ class TestPlainContent(BaseTestCase):
         content, _ = self._new_content(
             self.stgpol_twocopies, data, [(0, 0), (0, 1)])
         gen = content.fetch()
-        self.assertRaises(UnrecoverableContent, gen.next)
+        self.assertRaises(UnrecoverableContent, lambda: next(gen))
 
     def test_single_fetch_content_1_byte_without_broken_chunks(self):
         self._test_fetch(self.stgpol, 1, [])

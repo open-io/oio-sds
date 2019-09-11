@@ -19,6 +19,7 @@ set -e
 
 BASEDIR=$1 ; [[ -n "$BASEDIR" ]] ; [[ -d "$BASEDIR" ]]
 
+echo "Checking for missing copyright mentions."
 /bin/ls -1f ${BASEDIR} \
 | grep -i -v -e '^\.' -e '^build' -e '^cmake' -e '^setup' \
 | while read D ; do
@@ -26,7 +27,7 @@ BASEDIR=$1 ; [[ -n "$BASEDIR" ]] ; [[ -d "$BASEDIR" ]]
 		-name '*.h' -or -name '*.c' -or -name '*.py' -or -name '*.go' \
 	| while read F ; do
 		if ! [[ -s "$F" ]] ; then continue ; fi
-		if ! /usr/bin/git ls-files --error-unmatch "$F" >/dev/null ; then continue ; fi
+		if ! /usr/bin/git ls-files --error-unmatch "$F" &>/dev/null ; then continue ; fi
 		if ! /bin/grep -q 'Copyright' "$F" ; then
 			echo "Missing Copyright section in $F" 1>&2
 			exit 1
@@ -34,14 +35,9 @@ BASEDIR=$1 ; [[ -n "$BASEDIR" ]] ; [[ -d "$BASEDIR" ]]
 	done
 done
 
-if [ -n "$TRAVIS_COMMIT_RANGE" ]
-then
-	INCLUDE='.+\.(c|go|h|py)$'
-	YEAR=$(date +%Y)
+function check_files {
 	FAIL=0
-	echo "Checking copyright for year $YEAR."
-	git diff --name-only "$TRAVIS_COMMIT_RANGE" | grep -E "$INCLUDE" \
-	| while read name ; do
+	while read name ; do
 		# Ignore empty files
 		if ! [[ -s "$name" ]] ; then continue ; fi
 		# Ignore removed files
@@ -54,5 +50,15 @@ then
 			FAIL=1
 		fi
 	done
-	if [[ "$FAIL" != 0 ]] ; then exit $FAIL ; fi
+	return $FAIL
+}
+
+if [ -n "$TRAVIS_COMMIT_RANGE" ]
+then
+	INCLUDE='^(^setup).+\.(c|go|h|py)$'
+	YEAR=$(date +%Y)
+	FAIL=0
+	echo "Checking copyright for year $YEAR."
+	git diff --name-only "$TRAVIS_COMMIT_RANGE" | grep -E "$INCLUDE" \
+	| check_files || exit 1
 fi

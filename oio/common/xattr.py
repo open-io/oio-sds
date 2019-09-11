@@ -18,6 +18,7 @@ import errno
 
 from oio.common.constants import chunk_xattr_keys, \
     CHUNK_XATTR_CONTENT_FULLPATH_PREFIX, OIO_VERSION
+from oio.common.easy_value import debinarize
 
 
 xattr = None
@@ -43,7 +44,7 @@ def read_user_xattr(fd):
             if hasattr(errno, code) and err.errno == getattr(errno, code):
                 raise err
 
-    meta = {k[5:]: v for k, v in it if k.startswith('user.')}
+    meta = debinarize({k[5:]: v for k, v in it if k.startswith(b'user.')})
     return meta
 
 
@@ -60,7 +61,7 @@ def set_fullpath_xattr(fd, new_fullpaths, remove_old_xattr=False,
     :param xattr_to_remove: list of extra extended attributes
         that should be removed from file
     """
-    for chunk_id, new_fullpath in new_fullpaths.iteritems():
+    for chunk_id, new_fullpath in new_fullpaths.items():
         xattr.setxattr(
             fd,
             'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + chunk_id.upper(),

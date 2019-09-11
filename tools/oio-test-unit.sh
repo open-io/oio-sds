@@ -28,6 +28,11 @@ cd $WRKDIR
 make -C tests/unit test
 
 cd $SRCDIR
-tox -e pep8
-tox -e py27
-
+if [ "${TRAVIS_PYTHON_VERSION:-2.7}" \< "3.6" ]
+then
+  tox -e pep8
+  tox -e py27
+else
+  tox -e py3_pep8
+  tox -e py3
+fi

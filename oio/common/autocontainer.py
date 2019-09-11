@@ -14,9 +14,16 @@
 # License along with this library.
 
 import re
-from six import string_types
 from itertools import takewhile
 from ctypes import CDLL, c_char_p, c_uint, create_string_buffer
+
+from six import PY3, string_types
+
+if PY3:
+    from typing import Pattern
+else:
+    # pylint: disable=invalid-name
+    Pattern = re._pattern_type
 
 
 # Python's int() raises an exception if the string has non-digit
@@ -37,7 +44,7 @@ class ContainerBuilder(object):
     def alternatives(self, path):
         """Generate all alternatives for the provided content path."""
         yield self(path)
-        raise StopIteration
+        return
 
     def verify(self, name):
         """Verify that `name` is an autocontainer"""
@@ -74,13 +81,13 @@ class HashedContainerBuilder(ContainerBuilder):
             self.func.argtypes = [c_char_p, c_uint, c_char_p, c_uint]
             self.func.restype = c_char_p
 
-        src = path[self.offset:]
+        src = path[self.offset:].encode('utf-8')
         srclen = len(src)
         if self.size and self.size < len(src):
             srclen = self.size
         tmp = create_string_buffer(65)
         out = self.func(src, srclen, tmp, self.bits)
-        return str(out)
+        return out.decode('utf-8')
 
     def verify(self, name):
         """Verify that `name` is an autocontainer"""
@@ -152,7 +159,7 @@ class RegexContainerBuilder(object):
             raise ValueError("You must provide at least one pattern")
         self.patterns = list()
         for pattern in patterns:
-            if not isinstance(pattern, re._pattern_type):
+            if not isinstance(pattern, Pattern):
                 pattern = re.compile(pattern)
                 if pattern.groups < 1:
                     raise ValueError(
@@ -180,7 +187,7 @@ class RegexContainerBuilder(object):
             if match:
                 yield self.builder(''.join([x for x in match.groups()
                                             if x is not None]))
-        raise StopIteration
+        return
 
     def verify(self, name):
         return self.builder.verify(name)

@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,8 +18,10 @@ import random
 from subprocess import check_call
 import time
 import urllib3
-from ConfigParser import SafeConfigParser
 import yaml
+
+from six.moves import xrange
+from six.moves.configparser import SafeConfigParser
 
 from oio.api.object_storage import ObjectStorageApi
 from oio.common.exceptions import ServiceBusy

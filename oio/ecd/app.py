@@ -14,8 +14,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from six.moves import range
+from six.moves.urllib_parse import unquote
 from hashlib import md5
-from urllib import unquote
 
 from werkzeug.exceptions import BadRequest
 from werkzeug.routing import Map, Rule

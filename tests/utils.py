@@ -26,6 +26,7 @@ from subprocess import check_call
 from functools import wraps
 
 from six import text_type
+from six.moves.urllib_parse import urlencode
 
 import yaml
 import testtools
@@ -33,10 +34,6 @@ import testtools
 from oio.common.configuration import load_namespace_conf, set_namespace_options
 from oio.common.constants import REQID_HEADER
 from oio.common.http_urllib3 import get_pool_manager
-try:
-    from urllib.parse import urlencode
-except ImportError:
-    from urllib import urlencode
 from oio.common.json import json as jsonlib
 from oio.common.green import time
 from oio.event.beanstalk import Beanstalk, ResponseError
@@ -347,7 +344,7 @@ class CommonTestCase(testtools.TestCase):
     def _flush_proxy(self):
         url = self.uri + '/v3.0/cache/flush/local'
         resp = self.request('POST', url, '', headers=self.TEST_HEADERS)
-        self.assertEqual(resp.status / 100, 2)
+        self.assertEqual(resp.status // 100, 2)
 
     @classmethod
     def _cls_reload_proxy(cls):
@@ -362,7 +359,7 @@ class CommonTestCase(testtools.TestCase):
     def _reload_proxy(self):
         url = '{0}/v3.0/{1}/lb/reload'.format(self.uri, self.ns)
         resp = self.request('POST', url, '', headers=self.TEST_HEADERS)
-        self.assertEqual(resp.status / 100, 2)
+        self.assertEqual(resp.status // 100, 2)
 
     def _flush_meta(self):
         for srvtype in ('meta1', 'meta2'):
@@ -449,10 +446,10 @@ class BaseTestCase(CommonTestCase):
         """
         Lock specified services, wait for the score to be propagated.
         """
-        for svc in services:
-            self.locked_svc.append({'type': type_, 'addr': svc['addr'],
-                                    'score': score})
-        self.conscience.lock_score(self.locked_svc)
+        new_locked_svc = [{'type': type_, 'addr': svc['addr'], 'score': score}
+                          for svc in services]
+        self.conscience.lock_score(new_locked_svc)
+        self.locked_svc.extend(new_locked_svc)
         # In a perfect world™️ we do not need the time.sleep().
         # For mysterious reason, all services are not reloaded immediately.
         self._reload_proxy()

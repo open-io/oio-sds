@@ -419,7 +419,7 @@ class SetObject(ObjectCommandMixin, Command):
                 from oio.common.exceptions import CommandError
                 raise CommandError('--tags: Not a JSON object')
             tags_xml = '<Tagging><TagSet>'
-            for k, v in tags.iteritems():
+            for k, v in tags.items():
                 tags_xml += '<Tag><Key>%s</Key><Value>%s</Value></Tag>' \
                     % (k, v)
             tags_xml += '</TagSet></Tagging>'

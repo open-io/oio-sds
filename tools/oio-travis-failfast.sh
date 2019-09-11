@@ -31,4 +31,5 @@ fold Release ./tools/oio-build-release.sh ${PWD}
 fold Copyright ./tools/oio-check-copyright.sh ${PWD}
 fold Virtualenv python ./setup.py develop
 fold Variables tox -e variables
+fold VariablesPy3 tox -e py3_variables
 

@@ -1,4 +1,4 @@
-# Copyright (C) 2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,18 +13,19 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from urllib import quote, unquote, quote_plus, unquote_plus
+from six import text_type
+from six.moves.urllib_parse import quote, unquote, quote_plus, unquote_plus
 
 
 def encode_fullpath(account, container, path, version, content_id):
     for k, v in locals().items():
         if not v:
             raise ValueError("Can't encode fullpath: missing %s" % k)
-    if isinstance(account, unicode):
+    if isinstance(account, text_type):
         account = account.encode('utf-8')
-    if isinstance(container, unicode):
+    if isinstance(container, text_type):
         container = container.encode('utf-8')
-    if isinstance(path, unicode):
+    if isinstance(path, text_type):
         path = path.encode('utf-8')
     return '{0}/{1}/{2}/{3}/{4}'.format(quote(account, ''),
                                         quote(container, ''),

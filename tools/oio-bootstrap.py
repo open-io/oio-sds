@@ -26,8 +26,9 @@ import grp
 import yaml
 import os
 import pwd
-from string import Template
 import re
+from string import Template
+import sys
 import argparse
 
 
@@ -658,7 +659,7 @@ on_die=cry
 enabled=true
 start_at_boot=true
 command=oio-conscience-agent ${CFGDIR}/conscience-agent.yml
-env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
+env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/${PYTHON_VERSION}/site-packages
 """
 
 template_gridinit_conscience = """
@@ -764,7 +765,7 @@ on_die=respawn
 enabled=true
 start_at_boot=false
 command=oio-event-agent ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
-env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
+env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/${PYTHON_VERSION}/site-packages
 """
 
 template_event_agent = """
@@ -961,7 +962,7 @@ on_die=cry
 enabled=true
 start_at_boot=true
 command=oio-webhook-test.py --port 9081
-env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
+env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/${PYTHON_VERSION}/site-packages
 """
 
 
@@ -977,6 +978,7 @@ TMPDIR = '/tmp'
 CODEDIR = '@CMAKE_INSTALL_PREFIX@'
 LIBDIR = CODEDIR + '/@LD_LIBDIR@'
 PATH = HOME+"/.local/bin:@CMAKE_INSTALL_PREFIX@/bin:/usr/sbin"
+PYTHON_VERSION = "python" + ".".join(str(x) for x in sys.version_info[:2])
 
 # Constants for the configuration of oio-bootstrap
 NS = 'ns'
@@ -1150,6 +1152,7 @@ def generate(options):
                HTTPD_BINARY=HTTPD_BINARY,
                META_HEADER=META_HEADER,
                PRESERVE='preserve' if options.get('preserve_events') else '',
+               PYTHON_VERSION=PYTHON_VERSION,
                REPLICATION='replication' if options.get('replication_events')
                            else '',
                WANT_SERVICE_ID=want_service_id,
@@ -1299,7 +1302,7 @@ def generate(options):
             tpl = Template(template_gridinit_beanstalkd)
             with open(gridinit(env), 'a+') as f:
                 f.write(tpl.safe_substitute(env))
-                for key in (k for k in env.iterkeys() if k.startswith("env.")):
+                for key in (k for k in iterkeys(env) if k.startswith("env.")):
                     f.write("%s=%s\n" % (key, env[key]))
             # watcher
             tpl = Template(template_beanstalkd_watch)

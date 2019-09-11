@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from logging import getLogger
+from six import iteritems
 
 from oio.cli import Lister
 from oio.common.exceptions import OioException
@@ -122,7 +123,7 @@ class RdirAssignments(Lister):
                 if rdir_id not in rdir_by_id:
                     rdir['managed_svc'] = list()
                     rdir_by_id[rdir_id] = rdir
-            for addr, rdir in rdir_by_id.iteritems():
+            for addr, rdir in iteritems(rdir_by_id):
                 results.append((addr,
                                 len(rdir['managed_svc']),
                                 ' '.join(rdir['managed_svc'])))

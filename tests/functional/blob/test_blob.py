@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,7 +19,7 @@ import string
 from os.path import isfile
 from hashlib import md5
 from urlparse import urlparse
-from urllib import unquote
+from six.moves.urllib_parse import unquote
 from oio.common.http import headers_from_object_metadata
 from oio.common.http_eventlet import http_connect
 from oio.common.constants import OIO_VERSION, CHUNK_HEADERS
@@ -34,12 +34,6 @@ from tests.functional.blob import convert_to_old_chunk, random_buffer, \
 map_cfg = {'addr': 'Listen',
            'ns': 'grid_namespace',
            'basedir': 'grid_docroot'}
-
-
-def _write_config(path, config):
-    with open(path, 'w') as f:
-        for k, v in config.iteritems():
-            f.write("{0} {1}\n".format(map_cfg[k], config[k]))
 
 
 # TODO we should the content of events sent by the rawx
@@ -102,7 +96,7 @@ class RawxTestSuite(CommonTestCase):
             headers['transfer-encoding'] = 'chunked'
         if trailers:
             headers['Trailer'] = list()
-            for k, v in trailers.iteritems():
+            for k in trailers.values():
                 headers['Trailer'].append(k)
 
         conn = http_connect(parsed.netloc, method, parsed.path,
@@ -112,7 +106,7 @@ class RawxTestSuite(CommonTestCase):
                 conn.send('%x\r\n%s\r\n' % (len(body), body))
             conn.send('0\r\n')
             if trailers:
-                for k, v in trailers.iteritems():
+                for k, v in trailers.items():
                     conn.send('%s: %s\r\n' % (k, v))
             conn.send('\r\n')
         if method == 'PUT':

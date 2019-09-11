@@ -22,6 +22,7 @@ from os.path import basename
 from tempfile import NamedTemporaryFile
 from mock import MagicMock as Mock, ANY
 
+from six import PY3
 
 from oio.common import exceptions
 from oio.common.constants import container_headers, object_headers, \
@@ -291,7 +292,9 @@ class ObjectStorageTest(unittest.TestCase):
         self.assertIs(call_args[0][0], self.account)
         self.assertIs(call_args[0][1], self.container)
         self.assertEqual(call_args[0][2], basename(src.name))
-        self.assertIsInstance(call_args[0][3], file)
+        if PY3:
+            from io import IOBase
+            self.assertIsInstance(call_args[0][3], IOBase)
         self.assertEqual(call_args[0][3].name, src.name)
 
     def test_object_create_from_iterable(self):
@@ -328,11 +331,11 @@ class ObjectStorageTest(unittest.TestCase):
             self.account, self.container, data=name, obj_name=name)
         self.api._object_create.assert_called_once()
         call_args = self.api._object_create.call_args
-        from io import BytesIO
         self.assertIs(call_args[0][0], self.account)
         self.assertIs(call_args[0][1], self.container)
         self.assertIs(call_args[0][2], name)
-        self.assertIsInstance(call_args[0][3], BytesIO)
+        from io import IOBase
+        self.assertIsInstance(call_args[0][3], IOBase)
 
     def test_object_set_properties(self):
         api = self.api

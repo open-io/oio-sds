@@ -167,9 +167,12 @@ class EventWorker(Worker):
             env = json.loads(data)
             env['job_id'] = job_id
             return env
-        except Exception as exc:
-            self.logger.warn('Failed to decode job %s: "%s"',
-                             job_id, str(exc.message))
+        except json.JSONDecodeError as exc:
+            self.logger.warn('Failed to decode job %s: %s',
+                             job_id, exc)
+            return None
+        except Exception:
+            self.logger.exception('Failed to decode job %s', job_id)
             return None
 
     def run(self):

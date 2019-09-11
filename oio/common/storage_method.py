@@ -174,7 +174,9 @@ class ECStorageMethod(StorageMethod):
         except ECDriverError as exc:
             msg = "'%s' (%s: %s) Check erasure code packages." % (
                 ec_type, exc.__class__.__name__, exc)
-            raise exceptions.InvalidStorageMethod(msg), None, sys.exc_info()[2]
+            reraise(exceptions.InvalidStorageMethod,
+                    exceptions.InvalidStorageMethod(msg),
+                    sys.exc_info()[2])
         self._ec_quorum_size = \
             self._ec_nb_data + self.driver.min_parity_fragments_needed()
 

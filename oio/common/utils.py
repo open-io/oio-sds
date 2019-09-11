@@ -13,6 +13,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from __future__ import print_function
+
 import os
 import grp
 import pwd
@@ -23,12 +25,10 @@ from random import getrandbits
 from io import RawIOBase
 from itertools import islice
 from codecs import getdecoder, getencoder
+from six import PY2, text_type
 from six.moves import range
-try:
-    from urllib.parse import quote as _quote
-except ImportError:
-    from urllib import quote as _quote
-from six import text_type
+from six.moves.urllib_parse import quote as _quote
+
 from oio.common.exceptions import OioException, DeadlineReached, ServiceBusy
 
 
@@ -161,6 +161,10 @@ class RingBuffer(list):
     def __index(self, key):
         if not self._count:
             raise IndexError('list index out of range')
+        if isinstance(key, slice):
+            start = (key.start + self._zero) % self._count
+            stop = key.stop or (self._count + 1)
+            return slice(start, stop)
         return (key + self._zero) % self._count
 
     def append(self, value):
@@ -234,7 +238,7 @@ def request_id(prefix=''):
     pref_bits = min(112, len(prefix) * 4)
     rand_bits = 112 - pref_bits
     return "%s%04X%0*X" % (prefix, os.getpid(),
-                           rand_bits/4, getrandbits(rand_bits))
+                           rand_bits//4, getrandbits(rand_bits))
 
 
 class GeneratorIO(RawIOBase):
@@ -268,15 +272,19 @@ class GeneratorIO(RawIOBase):
                 else:
                     yield part
             else:
-                raise StopIteration
+                return
 
     def readable(self):
         return True
 
     def read(self, size=None):
+        if PY2:
+            if size is not None:
+                return b''.join(islice(self.generator, size))
+            return b''.join(self.generator)
         if size is not None:
-            return "".join(islice(self.generator, size))
-        return "".join(self.generator)
+            return bytes(islice(self.generator, size))
+        return bytes(self.generator)
 
     def readinto(self, b):  # pylint: disable=invalid-name
         read_len = len(b)
@@ -383,7 +391,8 @@ def monotonic_time():
         except OSError as exc:
             from sys import stderr
             from time import time
-            print >>stderr, "Failed to load oio_ext_monotonic_time(): %s" % exc
+            print("Failed to load oio_ext_monotonic_time(): %s" % exc,
+                  file=stderr)
             __MONOTONIC_TIME = time
 
     return __MONOTONIC_TIME()
@@ -412,3 +421,16 @@ def set_deadline_from_read_timeout(kwargs, force=False):
     to = kwargs.get('read_timeout')
     if to is not None and (force or 'deadline' not in kwargs):
         kwargs['deadline'] = timeout_to_deadline(to)
+
+
+def lower_dict_keys(mydict):
+    """Convert all dict keys to lower case."""
+    old_keys = list()
+    for k, v in mydict.items():
+        nk = k.lower()
+        if nk == k:
+            continue
+        mydict[nk] = v
+        old_keys.append(k)
+    for k in old_keys:
+        del mydict[k]

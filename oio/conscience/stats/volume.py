@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -26,6 +26,7 @@ class VolumeStat(BaseStat):
 
     def configure(self):
         self.volume = self.stat_conf.get('path', '') or '/'
+        self.vol_b = self.volume.encode('utf-8')
         if not self.__class__.oio_sys_space_idle:
             self._load_lib()
 
@@ -52,7 +53,7 @@ class VolumeStat(BaseStat):
         if not self.__class__.oio_sys_space_idle:
             return {}
 
-        stats = {"stat.io": 100.0 * self.oio_sys_io_idle(self.volume),
-                 "stat.space": 100.0 * self.oio_sys_space_idle(self.volume),
+        stats = {"stat.io": 100.0 * self.oio_sys_io_idle(self.vol_b),
+                 "stat.space": 100.0 * self.oio_sys_space_idle(self.vol_b),
                  "tag.vol": self.volume}
         return stats

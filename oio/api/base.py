@@ -14,6 +14,7 @@
 # License along with this library.
 
 from six import text_type, iteritems
+from six.moves.urllib_parse import urlencode
 
 from oio.common.easy_value import true_value
 from oio.common.json import json as jsonlib
@@ -25,10 +26,6 @@ from oio.common.utils import deadline_to_timeout, monotonic_time
 from oio.common.constants import ADMIN_HEADER, \
     TIMEOUT_HEADER, PERFDATA_HEADER, FORCEMASTER_HEADER, \
     CONNECTION_TIMEOUT, READ_TIMEOUT, REQID_HEADER, STRLEN_REQID
-try:
-    from urllib.parse import urlencode
-except ImportError:
-    from urllib import urlencode
 
 _POOL_MANAGER_OPTIONS_KEYS = ["pool_connections", "pool_maxsize",
                               "max_retries"]
@@ -208,8 +205,8 @@ class HttpApi(object):
             body = resp.data
             if body:
                 try:
-                    body = jsonlib.loads(body)
-                except ValueError:
+                    body = jsonlib.loads(body.decode('utf-8'))
+                except (UnicodeDecodeError, ValueError):
                     pass
             if perfdata is not None and PERFDATA_HEADER in resp.headers:
                 service_perfdata = perfdata[self.service_type]

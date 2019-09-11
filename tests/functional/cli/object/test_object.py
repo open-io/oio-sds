@@ -47,7 +47,7 @@ class ObjectTest(CliTestCase):
 
     def __test_obj(self, name, with_cid=False):
         with tempfile.NamedTemporaryFile() as f:
-            test_content = 'test content'
+            test_content = b'test content'
             f.write(test_content)
             f.flush()
             self._test_obj(f.name, test_content, name, with_cid=with_cid)
@@ -61,7 +61,7 @@ class ObjectTest(CliTestCase):
 
     def test_obj_without_autocreate(self):
         with tempfile.NamedTemporaryFile() as f:
-            test_content = 'test content'
+            test_content = b'test content'
             f.write(test_content)
             f.flush()
 
@@ -83,12 +83,12 @@ class ObjectTest(CliTestCase):
 
         # delete 2 existent
         with tempfile.NamedTemporaryFile(delete=False) as f:
-            f.write('test_exists')
+            f.write(b'test_exists')
             f.flush()
             obj_file_exists = f.name
             obj_name_exists = os.path.basename(f.name)
         with tempfile.NamedTemporaryFile(delete=False) as f:
-            f.write('test_also_exists')
+            f.write(b'test_also_exists')
             f.flush()
             obj_file_also_exists = f.name
             obj_name_also_exists = os.path.basename(f.name)
@@ -110,7 +110,7 @@ class ObjectTest(CliTestCase):
         self.assertEqual(data_json[1]['Deleted'], False)
         # delete 1 existent 1 nonexistent
         with tempfile.NamedTemporaryFile(delete=False) as f:
-            f.write('test_exists')
+            f.write(b'test_exists')
             f.flush()
             obj_file_exists = f.name
             obj_name_exists = os.path.basename(f.name)
@@ -219,7 +219,7 @@ class ObjectTest(CliTestCase):
             cid_opt = '--cid'
 
         with tempfile.NamedTemporaryFile(delete=False) as f:
-            f.write('test_exists')
+            f.write(b'test_exists')
             f.flush()
             obj = f.name
             obj_name = random_str(16)
@@ -244,7 +244,7 @@ class ObjectTest(CliTestCase):
         prefix = random_str(8)
         expected = list()
         with tempfile.NamedTemporaryFile() as myfile:
-            myfile.write('something')
+            myfile.write(b'something')
             myfile.flush()
             # TODO(FVE): find a quicker way to upload several objects
             commands = list()
@@ -311,7 +311,7 @@ class ObjectTest(CliTestCase):
             cid_opt = '--cid '
 
         with tempfile.NamedTemporaryFile() as myfile:
-            myfile.write('something')
+            myfile.write(b'something')
             myfile.flush()
             output = self.openio('object create ' + cid_opt + cont_name + ' ' +
                                  myfile.name + ' --name ' + obj_name +
@@ -346,7 +346,7 @@ class ObjectTest(CliTestCase):
             cid_opt = '--cid '
 
         with tempfile.NamedTemporaryFile() as myfile:
-            myfile.write('something')
+            myfile.write(b'something')
             myfile.flush()
             output = self.openio('object create ' + cid_opt + cont_name +
                                  ' ' + myfile.name + ' --name ' + obj_name +

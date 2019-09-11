@@ -146,7 +146,7 @@ class ObjectStoragePropertiesTest(BaseTestCase):
         self.assertDictEqual(data['properties'], properties)
 
         self.api.directory.del_properties(
-            self.account, cname, properties.keys())
+            self.account, cname, list(properties.keys()))
         data = self.api.directory.get_properties(self.account, cname)
         self.assertDictEqual(data['properties'], {})
 
@@ -155,7 +155,7 @@ class ObjectStoragePropertiesTest(BaseTestCase):
         self.assertDictEqual(data['properties'], properties)
 
         self.api.directory.del_properties(
-            self.account, cname, properties.keys())
+            self.account, cname, list(properties.keys()))
         data = self.api.directory.get_properties(self.account, cname)
         self.assertDictEqual(data['properties'], {})
         self.api.directory.delete(self.account, cname)
@@ -172,7 +172,7 @@ class ObjectStoragePropertiesTest(BaseTestCase):
         data = self.api.container_get_properties(self.account, cname)
         self.assertDictEqual(data['properties'], properties)
         self.api.container_del_properties(
-            self.account, cname, properties.keys())
+            self.account, cname, list(properties.keys()))
         data = self.api.container_get_properties(self.account, cname)
         self.assertDictEqual(data['properties'], {})
         self.api.container_delete(self.account, cname)
@@ -206,7 +206,7 @@ class ObjectStoragePropertiesTest(BaseTestCase):
         self.assertDictEqual(data['properties'], properties)
 
         self.api.container_del_properties(
-            self.account, cname, properties.keys())
+            self.account, cname, list(properties.keys()))
         data = self.api.container_get_properties(self.account, cname)
         self.assertDictEqual(data['properties'], {})
 
@@ -215,7 +215,7 @@ class ObjectStoragePropertiesTest(BaseTestCase):
         self.assertDictEqual(data['properties'], properties)
 
         self.api.container_del_properties(
-            self.account, cname, properties.keys())
+            self.account, cname, list(properties.keys()))
         data = self.api.container_get_properties(self.account, cname)
         self.assertDictEqual(data['properties'], {})
         self.api.container_delete(self.account, cname)

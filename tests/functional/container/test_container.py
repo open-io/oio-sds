@@ -411,9 +411,9 @@ class TestMeta2Containers(BaseTestCase):
         check_properties(p0)
         set_properties(p1)
         check_properties(merge(p0, p1))
-        del_properties(p0.keys())
+        del_properties(list(p0.keys()))
         check_properties(p1)
-        del_properties(p0.keys())
+        del_properties(list(p0.keys()))
         check_properties(p1)
 
     def _create_content(self, name, version=None, missing_chunks=0,

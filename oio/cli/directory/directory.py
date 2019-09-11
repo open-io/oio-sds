@@ -137,7 +137,7 @@ class DirectoryInit(DirectoryCmd):
             return mapping.check_replicas()
 
         if parsed_args.degradation is None:
-            quorum = parsed_args.replicas / 2 + 1
+            quorum = parsed_args.replicas // 2 + 1
             parsed_args.degradation = parsed_args.replicas - quorum
 
         # Reset and bootstrap

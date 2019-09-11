@@ -22,10 +22,7 @@ import math
 import hashlib
 from socket import error as SocketError
 from six import text_type
-try:
-    from urllib.parse import urlparse
-except ImportError:
-    from urlparse import urlparse
+from six.moves.urllib_parse import urlparse
 from greenlet import GreenletExit
 
 from oio.api import io
@@ -419,7 +416,10 @@ class ECStream(object):
             results = {}
 
             while True:
-                next_range = self._next()
+                try:
+                    next_range = self._next()
+                except StopIteration:
+                    break
 
                 headers, fragment_iters = next_range
                 content_range = headers.get('Content-Range')
@@ -597,7 +597,7 @@ class EcChunkWriter(object):
                     CHUNK_HEADERS["metachunk_hash"])
         if kwargs.get('chunk_checksum_algo'):
             trailers = trailers + (CHUNK_HEADERS["chunk_hash"], )
-        hdrs["Trailer"] = b', '.join(trailers)
+        hdrs["Trailer"] = ', '.join(trailers)
         with ConnectionTimeout(
                 connection_timeout or io.CONNECTION_TIMEOUT):
             perfdata = kwargs.get('perfdata', None)
@@ -697,7 +697,7 @@ class EcChunkWriter(object):
             parts.append('%s: %s\r\n' % (CHUNK_HEADERS['chunk_hash'],
                                          self.checksum.hexdigest()))
         parts.append('\r\n')
-        to_send = b"".join(parts)
+        to_send = ''.join(parts).encode('utf-8')
         try:
             with ChunkWriteTimeout(self.write_timeout):
                 self.conn.send(to_send)
@@ -867,7 +867,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
                                                             curr_writers)
 
                 # flush out buffered data
-                self.encode_and_send(ec_stream, '', curr_writers)
+                self.encode_and_send(ec_stream, b'', curr_writers)
 
                 # trailer headers
                 # metachunk size

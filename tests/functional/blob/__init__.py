@@ -1,4 +1,4 @@
-# Copyright (C) 2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -12,6 +12,8 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
+
+from __future__ import print_function
 
 import random
 import shutil
@@ -64,7 +66,7 @@ def remove_fullpath_xattr(chunk_path):
         try:
             xattr.removexattr(fd, key)
         except IOError as err:
-            print 'Failed to remove fullpath: %s' % err
+            print('Failed to remove fullpath: %s' % err)
 
 
 def remove_xattr(chunk_path, key):
@@ -72,7 +74,7 @@ def remove_xattr(chunk_path, key):
         try:
             xattr.removexattr(fd, key)
         except IOError as err:
-            print 'Failed to remove fullpath: %s' % err
+            print('Failed to remove fullpath: %s' % err)
 
 
 def random_buffer(dictionary, n):

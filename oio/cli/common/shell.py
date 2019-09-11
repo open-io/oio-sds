@@ -147,7 +147,7 @@ class OpenIOShell(CommonShell):
                          json.dumps(perfdata, sort_keys=True, indent=4))
             return res
         except Exception as e:
-            LOG.error('Exception raised: ' + str(e))
+            LOG.error('Exception raised: %s', e)
             return 1
 
     def build_option_parser(self, description, version):

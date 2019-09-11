@@ -98,7 +98,7 @@ class TestBlobConverter(BaseTestCase):
         self.assertEqual(expected_errors, converter.errors)
 
         checker = Checker(self.ns)
-        for chunk_id, info in chunk_id_info.iteritems():
+        for chunk_id, info in chunk_id_info.items():
             account, container, path, version, content_id = info
             fullpath = encode_fullpath(
                 account, container, path, version, content_id)
@@ -130,7 +130,7 @@ class TestBlobConverter(BaseTestCase):
             self.assertNotIn(chunk_xattr_keys['content_id'], raw_meta)
             self.assertIn(CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + chunk_id,
                           raw_meta)
-            for k in raw_meta.iterkeys():
+            for k in raw_meta.keys():
                 if k.startswith('oio:'):
                     self.fail('old fullpath always existing')
             self.assertEqual(raw_meta[chunk_xattr_keys['oio_version']],

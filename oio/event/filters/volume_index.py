@@ -93,7 +93,7 @@ class VolumeIndexFilter(Filter):
 
     def process(self, env, cb):
         event = Event(env)
-        mtime = event.when / 1000000  # seconds
+        mtime = event.when // 1000000  # seconds
         if event.event_type in CHUNK_EVENTS:
             data = event.data
             volume_id = data.get('volume_service_id') or data.get('volume_id')

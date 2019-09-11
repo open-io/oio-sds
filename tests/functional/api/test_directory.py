@@ -426,5 +426,5 @@ class TestDirectoryAPI(BaseTestCase):
         avg = total / float(len(by_rdir))
         print("Ideal number of bases per rdir: ", avg)
         print("Current repartition: ", by_rdir)
-        for count in by_rdir.itervalues():
+        for count in by_rdir.values():
             self.assertLessEqual(count, avg + 1)

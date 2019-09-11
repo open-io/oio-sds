@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -47,7 +47,7 @@ class TcpChecker(BaseChecker):
                 try:
                     sock.shutdown(socket.SHUT_RDWR)
                     sock.close()
-                except socket.error as err:
+                except socket.error:
                     pass
             if not self.last_check_success:
                 self.logger.warn('%s check failed', self.name)

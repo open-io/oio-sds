@@ -92,7 +92,7 @@ class ItemCheckTest(CliTestCase):
         chunk_id = chunk_id.upper()
         chunk_path = rawx_service_path + '/' + chunk_id[:3] + '/' + chunk_id
         with open(chunk_path, "wb") as fp:
-            fp.write('chunk is dead')
+            fp.write(b'chunk is dead')
 
     def test_account_check(self):
         obj_meta, obj_chunks = self.create_object(

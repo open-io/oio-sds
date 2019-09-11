@@ -14,11 +14,8 @@
 # License along with this library.
 
 import re
-try:
-    from urllib.parse import quote
-except ImportError:
-    from urllib import quote
 from six import text_type
+from six.moves.urllib_parse import quote
 
 from oio.common.constants import CHUNK_HEADERS, OIO_VERSION
 from oio.common.http_eventlet import CustomHttpConnection \

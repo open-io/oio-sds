@@ -15,6 +15,7 @@
 
 
 import logging
+import random
 import time
 from mock import MagicMock as Mock
 from functools import partial
@@ -227,7 +228,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self._set_properties(name, metadata)
 
         # container_get_properties specify key
-        key = metadata.keys().pop(0)
+        key = random.choice(metadata.keys())
 
         data = self.api.container_get_properties(self.account, name, [key])
         self.assertEqual({key: metadata[key]}, data['properties'])
@@ -282,7 +283,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertDictEqual(metadata2, event.data['properties'])
 
         # container_set_properties overwrite key
-        key = metadata.keys().pop(0)
+        key = random.choice(metadata.keys())
         value = random_str(32)
         metadata3 = {key: value}
         metadata.update(metadata3)
@@ -296,7 +297,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertDictEqual(metadata3, event.data['properties'])
 
         # container_set_properties and clear old keys
-        key = metadata.keys().pop(0)
+        key = random.choice(metadata.keys())
         value = random_str(32)
         event_properties = {key: None for key in metadata}
         metadata = {key: value}
@@ -347,9 +348,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertDictEqual(metadata, event.data['properties'])
 
         # container_del_properties a property
-        key = metadata.keys().pop(0)
         _metadata = metadata.copy()
-        del _metadata[key]
+        key, _ = _metadata.popitem()
         self.api.container_del_properties(self.account, name, [key])
         data = self._get_properties(name)
         self.assertDictEqual(data['properties'], _metadata)
@@ -463,8 +463,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertDictEqual({}, event.data['system'])
         self.assertDictEqual(metadata, event.data['properties'])
 
-        key = metadata.keys().pop()
-        del metadata[key]
+        key, _ = metadata.popitem()
 
         # container_del_properties on existing container
         self.api.container_del_properties(self.account, name, [key])
@@ -610,9 +609,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             ranges = range_
         stream = self.api.object_fetch(
                 self.account, name, name, ranges=ranges)[1]
-        data = ""
-        for chunk in stream:
-            data += chunk
+        data = b''.join(stream)
         return data
 
     def test_object_fetch_range_start(self):
@@ -1080,7 +1077,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
         original_meta, data = self.api.object_fetch(
             self.account, link_container, link_obj)
-        data = "".join(data)
+        data = b''.join(data)
         cid = cid_from_name(self.account, link_container)
         fullpath = encode_fullpath(
             self.account, link_container, link_obj, original_meta['version'],
@@ -1127,20 +1124,20 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         link_container = random_str(16)
         link_obj = random_str(16)
         self._link_and_check(
-            target_container, target_obj, link_container, link_obj, "1"*128)
+            target_container, target_obj, link_container, link_obj, b'1'*128)
 
         # send target content ID
         link_container = random_str(16)
         link_obj = random_str(16)
         self._link_and_check(
-            target_container, None, link_container, link_obj, "1"*128,
+            target_container, None, link_container, link_obj, b'1'*128,
             target_content_id=target_content_id)
 
         # send target path and version
         link_container = random_str(16)
         link_obj = random_str(16)
         self._link_and_check(
-            target_container, target_obj, link_container, link_obj, "1"*128,
+            target_container, target_obj, link_container, link_obj, b'1'*128,
             target_version=target_version)
 
         # send target path and wrong version
@@ -1156,7 +1153,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         link_obj = random_str(16)
         link_content_id = random_id(32)
         self._link_and_check(
-            target_container, target_obj, link_container, link_obj, "1"*128,
+            target_container, target_obj, link_container, link_obj, b'1'*128,
             link_content_id=link_content_id)
 
     def test_object_link_different_container_no_autocreate(self):
@@ -1188,18 +1185,18 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # send target path
         link_obj = random_str(16)
         self._link_and_check(
-            target_container, target_obj, link_container, link_obj, "1"*128)
+            target_container, target_obj, link_container, link_obj, b'1'*128)
 
         # send target content ID
         link_obj = random_str(16)
         self._link_and_check(
-            target_container, None, link_container, link_obj, "1"*128,
+            target_container, None, link_container, link_obj, b'1'*128,
             target_content_id=target_content_id)
 
         # send target path and version
         link_obj = random_str(16)
         self._link_and_check(
-            target_container, target_obj, link_container, link_obj, "1"*128,
+            target_container, target_obj, link_container, link_obj, b'1'*128,
             target_version=target_version)
 
         # send target and wrong version
@@ -1213,7 +1210,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         link_obj = random_str(16)
         link_content_id = random_id(32)
         self._link_and_check(
-            target_container, target_obj, link_container, link_obj, "1"*128,
+            target_container, target_obj, link_container, link_obj, b'1'*128,
             link_content_id=link_content_id)
 
     def test_object_link_same_name_same_container(self):
@@ -1223,7 +1220,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.object_create(self.account, container, data="1"*128,
                                obj_name=obj)
         self._link_and_check(
-            container, obj, container, obj, "1"*128)
+            container, obj, container, obj, b'1'*128)
 
     def test_object_link_with_already_existing_name(self):
         target_container = random_str(16)
@@ -1235,7 +1232,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.object_create(self.account, target_container, data="0"*128,
                                obj_name=link_obj)
         self._link_and_check(
-            target_container, target_obj, link_container, link_obj, "1"*128)
+            target_container, target_obj, link_container, link_obj, b'1'*128)
 
     def test_object_link_with_metadata(self):
         target_container = random_str(16)
@@ -1535,7 +1532,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
 
         _, stream = self.api.object_fetch(
             self.account, name, name, version=obj2['version'])
-        self.assertEqual(data, ''.join(stream))
+        self.assertEqual(data, b''.join(stream))
 
         stg_met2 = STORAGE_METHODS.load(obj2['chunk_method'])
         chunks_by_pos2 = sort_chunks(chunks2, stg_met2.ec)
@@ -1543,7 +1540,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
             required = stg_met2.ec_nb_data + stg_met2.ec_nb_parity
         else:
             required = stg_met2.nb_copy
-        for pos, clist in chunks_by_pos2.iteritems():
+        for pos, clist in chunks_by_pos2.items():
             self.assertEqual(required, len(clist))
 
         for chunk in chunks1:
