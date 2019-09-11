@@ -88,7 +88,11 @@ def load_meta_chunk(request, nb_chunks, pos=None):
     h = request.headers
     meta_chunk = []
     for i in xrange(nb_chunks):
-        chunk_url = h['%schunk-%s' % (SYS_PREFIX, i)]
+        try:
+            chunk_url = h['%schunk-%s' % (SYS_PREFIX, i)]
+        except KeyError:
+            # Missing chunk
+            continue
         chunk_pos = '%s.%d' % (pos, i) if pos else str(i)
         chunk = {
             'url': chunk_url,
