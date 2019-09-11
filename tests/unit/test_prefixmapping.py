@@ -13,12 +13,12 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import logging
 import unittest
 
 from mock import MagicMock as Mock
 
 from oio.common.exceptions import PreconditionFailed
+from oio.common.logger import get_logger
 from oio.directory.meta0 import \
         Meta0PrefixMapping, \
         generate_short_prefixes as prefixes, \
@@ -134,7 +134,7 @@ class TestMeta0PrefixMapping(unittest.TestCase):
         super(TestMeta0PrefixMapping, self).setUp()
         self.cs_client = FakeConscienceClient()
         self.m0_client = Mock(conf={'namespace': 'OPENIO'})
-        self.logger = logging.getLogger('test')
+        self.logger = get_logger(None, 'test')
 
     def make_mapping(self, replicas=3, digits=None):
         mapping = Meta0PrefixMapping(self.m0_client,
@@ -246,9 +246,9 @@ class TestMeta0PrefixMapping(unittest.TestCase):
             mapping.decommission(svc, [base])
             new_peers = [x['addr'] for x in mapping.services_by_base[base]]
             preserved = [x for x in new_peers if x in old_peers]
-            self.logger.info("Old peers: %s", old_peers)
-            self.logger.info("New peers: %s", new_peers)
-            self.logger.info("Peers kept: %s", preserved)
+            self.logger.debug("Old peers: %s", old_peers)
+            self.logger.debug("New peers: %s", new_peers)
+            self.logger.debug("Peers kept: %s", preserved)
             self.assertTrue(mapping.check_replicas())
             self.assertNotIn(svc['addr'], new_peers)
             self.assertEqual(replicas - 1, len(preserved))
@@ -283,10 +283,10 @@ class TestMeta0PrefixMapping(unittest.TestCase):
             old_peers2 = mapping.raw_services_by_base[base]
             new_peers = [x['addr'] for x in mapping.services_by_base[base]]
             preserved = [x for x in new_peers if x in old_peers]
-            self.logger.info("Old peers: %s (real)", old_peers)
-            self.logger.info("Old peers: %s (computed)", old_peers2)
-            self.logger.info("New peers: %s", new_peers)
-            self.logger.info("Peers kept: %s", preserved)
+            self.logger.debug("Old peers: %s (real)", old_peers)
+            self.logger.debug("Old peers: %s (computed)", old_peers2)
+            self.logger.debug("New peers: %s", new_peers)
+            self.logger.debug("Peers kept: %s", preserved)
             self.assertTrue(mapping.check_replicas())
             self.assertNotIn(svc['addr'], new_peers)
             self.assertEqual(replicas - 1, len(preserved))
