@@ -27,7 +27,7 @@ if [ "${PYTHON_COVERAGE:-}" == "1" ]; then
 	PYTHON="coverage run -p --omit=/home/travis/oio/lib/python2.7/*"
 fi
 
-OIO_RESET="oio-reset.sh -v"
+OIO_RESET="oio-reset.sh"
 
 SRCDIR=$PWD
 WRKDIR=$PWD
