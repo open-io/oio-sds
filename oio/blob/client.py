@@ -18,7 +18,8 @@ from oio.common.green import GreenPile
 
 import random
 from functools import wraps
-from urllib import unquote
+from six import PY2
+from six.moves.urllib_parse import unquote
 
 from oio.common.logger import get_logger
 from oio.common.http_urllib3 import get_pool_manager, \
@@ -101,7 +102,7 @@ class BlobClient(object):
     @ensure_request_id
     def chunk_put(self, url, meta, data, **kwargs):
         if not hasattr(data, 'read'):
-            data = utils.GeneratorIO(data)
+            data = utils.GeneratorIO(data, sub_generator=PY2)
         chunk = {'url': self.resolve_url(url), 'pos': meta['chunk_pos']}
         # FIXME: ugly
         chunk_method = meta.get('chunk_method',

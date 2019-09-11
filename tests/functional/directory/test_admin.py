@@ -63,7 +63,7 @@ class TestAdmin(BaseTestCase):
     def test_has_base(self):
         info = self.admin.has_base(
             'meta2', account=self.account, reference=self.container)
-        for peer, meta in info.iteritems():
+        for peer, meta in info.items():
             self.assertEqual(200, meta['status']['status'])
 
         peer = info.keys()[0]
@@ -75,7 +75,7 @@ class TestAdmin(BaseTestCase):
             'meta2', account=self.account, reference=self.container)
         self.assertNotEquals(200, info[peer]['status']['status'])
         del info[peer]
-        for peer, meta in info.iteritems():
+        for peer, meta in info.items():
             self.assertEqual(200, meta['status']['status'])
 
     def test_database_vacuum(self):

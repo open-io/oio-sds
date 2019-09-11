@@ -128,7 +128,9 @@ class DirectoryClient(ProxyClient):
         Delete properties for a reference.
         """
         params = self._make_params(account, reference, cid=cid)
-        data = json.dumps(properties or list())
+        properties = properties or list()
+        # Build a serializable list in case properties is a view.
+        data = json.dumps([k for k in properties])
         _resp, _body = self._request('POST', '/del_properties',
                                      data=data, params=params, **kwargs)
 

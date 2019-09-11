@@ -13,6 +13,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from __future__ import print_function
+
 import zookeeper
 from logging import getLogger
 from six import iteritems
@@ -132,7 +134,7 @@ class ElectionReset(ElectionCmdMixin, lister.Lister):
                 for child in children:
                     n = group + '/' + child
                     data, meta = tuple(zookeeper.get(zh, n))
-                    print('%r %r' % (data, meta))
+                    print(repr(data), repr(meta))
                     if data in group:
                         # Mark the oldest nodes for removal
                         yield action(group, group[data])

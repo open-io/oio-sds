@@ -18,6 +18,8 @@ import uuid
 import math
 import importlib
 
+from six import string_types
+
 from oio.common.easy_value import true_value
 
 
@@ -54,7 +56,7 @@ class RedisConnection(object):
         if not sentinel_name:
             raise ValueError("missing parameter 'sentinel_name'")
 
-        if isinstance(sentinel_hosts, basestring):
+        if isinstance(sentinel_hosts, string_types):
             sentinel_hosts = sentinel_hosts.split(',')
         self._sentinel_hosts = [(h, int(p)) for h, p, in (hp.rsplit(':', 1)
                                 for hp in sentinel_hosts)]
@@ -137,7 +139,8 @@ class RedisConnection(object):
         while True:
             try:
                 pipe.watch(lockname)
-                if pipe.get(lockname) == identifier:
+                cur_id = pipe.get(lockname)
+                if cur_id and cur_id.decode('utf-8') == identifier:
                     pipe.multi()
                     pipe.delete(lockname)
                     pipe.execute()

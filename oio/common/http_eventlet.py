@@ -14,11 +14,7 @@
 # License along with this library.
 
 from six import text_type
-
-try:
-    from urllib.parse import quote
-except ImportError:
-    from urllib import quote
+from six.moves.urllib_parse import quote
 
 from oio.common.green import socket, HTTPConnection, HTTPResponse, _UNKNOWN
 from oio.common.logger import get_logger

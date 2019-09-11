@@ -19,11 +19,9 @@ from __future__ import absolute_import
 from io import BufferedReader, RawIOBase, IOBase
 import itertools
 from socket import error as SocketError
-from six import text_type
-try:
-    from urllib.parse import urlparse
-except ImportError:
-    from urlparse import urlparse
+from six import PY2, text_type
+from six.moves.urllib_parse import urlparse
+
 from oio.common import exceptions as exc, green
 from oio.common.constants import REQID_HEADER
 from oio.common.http import parse_content_type,\
@@ -53,6 +51,8 @@ def close_source(source, logger=None):
     """Safely close the connection behind `source`."""
     try:
         source.conn.close()
+    except AttributeError:
+        pass
     except Exception:
         logger = logger or LOGGER
         logger.exception("Failed to close %s", source)
@@ -366,7 +366,7 @@ class ChunkReader(object):
 
         if source.status in (200, 206):
             self.status = source.status
-            self._headers = source.getheaders()
+            self._headers = [(k.lower(), v) for k, v in source.getheaders()]
             self.sources.append((source, chunk))
             return True
         else:
@@ -416,9 +416,11 @@ class ChunkReader(object):
             for part in parts_iter:
                 for data in part['iter']:
                     yield data
-            raise StopIteration
+            return
 
-        return GeneratorIO(_iter())
+        if PY2:
+            return GeneratorIO(_iter())
+        return _iter()
 
     def fill_ranges(self, start, end, length):
         """
@@ -462,7 +464,7 @@ class ChunkReader(object):
                 return (start, end, length, headers, part)
             except green.ChunkReadTimeout:
                 # TODO recover
-                raise StopIteration
+                return
 
     def iter_from_resp(self, source, parts_iter, part, chunk):
         bytes_consumed = 0
@@ -603,7 +605,7 @@ class ChunkReader(object):
         for part in parts_iter:
             for data in part['iter']:
                 yield data
-        raise StopIteration
+        return
 
 
 def exp_ramp_gen(start, maximum):
@@ -752,7 +754,7 @@ class MetachunkWriter(_MetachunkWriter):
         Start small to minimize initial dead time and parallelize early,
         then grow to avoid too much context switches.
         """
-        return self._buffer_size_gen.next()
+        return next(self._buffer_size_gen)
 
 
 class MetachunkPreparer(object):

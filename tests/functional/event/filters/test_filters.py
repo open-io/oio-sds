@@ -17,8 +17,8 @@
 
 import time
 import subprocess
-from urllib import quote
 from random import choice
+from six.moves.urllib_parse import quote
 from oio.blob.rebuilder import BlobRebuilder
 from oio.event.beanstalk import Beanstalk
 from oio.event.filters.notify import NotifyFilter

@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+
 from oio.common.exceptions import OrphanChunk
 from oio.content.content import Content, Chunk
 from oio.api.ec import ECWriteHandler, ECRebuildHandler
@@ -86,7 +87,8 @@ class ECContent(Content):
         meta['metachunk_size'] = current_chunk.size
         meta['full_path'] = self.full_path
         meta['oio_version'] = OIO_VERSION
-        self.blob_client.chunk_put(spare_url[0], meta, GeneratorIO(stream))
+        self.blob_client.chunk_put(spare_url[0], meta,
+                                   GeneratorIO(stream, sub_generator=True))
 
         # Register the spare chunk in object's metadata
         if chunk_id is None:

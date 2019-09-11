@@ -33,7 +33,9 @@ class MetaStat(HttpStat):
         resp, _body = self.agent.client._request(
                 'POST', self.uri, params=self.params, retries=False)
         stats = self._parse_stats_lines(resp.data)
-        for key in stats.keys():
+        # In Py3, keys() returns a view, and it's not safe to add
+        # items while iterating over it. And so we build a list.
+        for key in list(stats):
             if key.startswith('gauge'):
                 stat_key = 'stat.' + key.split(None, 1)[1]
                 stats[stat_key] = stats[key]

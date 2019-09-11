@@ -16,7 +16,7 @@
 
 from werkzeug.wrappers import Response
 from werkzeug.routing import Map, Rule
-from werkzeug.exceptions import NotFound, BadRequest, Conflict
+from werkzeug.exceptions import NotFound, BadRequest, Conflict, HTTPException
 from functools import wraps
 
 from oio.account.backend import AccountBackend
@@ -36,9 +36,15 @@ def access_log(func):
         rc = func(self, req, *args, **kwargs)
         post = time()
         reqid = req.headers.get(REQID_HEADER, '-')[:STRLEN_REQID]
+        if isinstance(rc, HTTPException):
+            code = str(rc.code)
+        elif isinstance(rc, Response):
+            code = str(rc.status_code)
+        else:
+            code = "-"
         # func time size user reqid
-        self.logger.info("%s %0.6f %s %s %s",
-                         func.__name__, post - pre, '-', '-', reqid)
+        self.logger.info("%s %s %0.6f %s %s %s",
+                         func.__name__, code, post - pre, '-', '-', reqid)
         return rc
 
     return _access_log_wrapper
@@ -149,13 +155,13 @@ class Account(WerkzeugApp):
     #    myaccount
     #
     # }}ACCT
+    @access_log
     def on_account_create(self, req):
         account_id = self._get_account_id(req)
-        id = self.backend.create_account(account_id)
-        if id:
-            return Response(id, 201)
-        else:
-            return Response(status=202)
+        aid = self.backend.create_account(account_id)
+        if aid:
+            return Response(aid, 201)
+        return Response(status=202)
 
     # ACCT{{
     # GET /v1.0/account/list
@@ -217,6 +223,7 @@ class Account(WerkzeugApp):
     #    Content-Type: text/plain; charset=utf-8
     #
     # }}ACCT
+    @access_log
     def on_account_delete(self, req):
         account_id = self._get_account_id(req)
         result = self.backend.delete_account(account_id)
@@ -508,6 +515,7 @@ class Account(WerkzeugApp):
     #    Content-Type: text/plain; charset=utf-8
     #
     # }}ACCT
+    @access_log
     def on_account_refresh(self, req):
         account_id = self._get_account_id(req)
         self.backend.refresh_account(account_id)
@@ -534,6 +542,7 @@ class Account(WerkzeugApp):
     #    Content-Type: text/plain; charset=utf-8
     #
     # }}ACCT
+    @access_log
     def on_account_flush(self, req):
         account_id = self._get_account_id(req)
         self.backend.flush_account(account_id)

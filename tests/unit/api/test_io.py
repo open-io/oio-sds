@@ -28,6 +28,10 @@ class FakeSource(object):
         self.data = list(data)
         self.status = 200
 
+    @property
+    def conn(self):
+        return None
+
     def read(self, size):
         if self.data:
             d = self.data.pop(0)

@@ -23,7 +23,8 @@ import redis
 import redis.sentinel
 from werkzeug.exceptions import NotFound, Conflict, BadRequest
 from oio.common.timestamp import Timestamp
-from oio.common.easy_value import int_value, true_value, float_value
+from oio.common.easy_value import int_value, true_value, float_value, \
+    debinarize
 from oio.common.redis_conn import RedisConnection
 
 
@@ -294,15 +295,16 @@ class AccountBackend(RedisConnection):
         self.release_lock('account:%s' % account_id, lock)
         return account_id
 
-    def delete_account(self, account_id):
+    def delete_account(self, req_account_id):
         conn = self.conn
-        if not account_id:
+        if not req_account_id:
             return None
-        account_id = conn.hget('account:%s' % account_id, 'id')
+        account_id = conn.hget('account:%s' % req_account_id, 'id')
 
         if not account_id:
             return None
 
+        account_id = account_id.decode('utf-8')
         lock = self.acquire_lock_with_timeout('account:%s' % account_id, 1)
         if not lock:
             return None
@@ -310,6 +312,7 @@ class AccountBackend(RedisConnection):
         num_containers = conn.zcard('containers:%s' % account_id)
 
         if int(num_containers) > 0:
+            self.release_lock('account:%s' % account_id, lock)
             return False
 
         pipeline = conn.pipeline(True)
@@ -321,25 +324,25 @@ class AccountBackend(RedisConnection):
         self.release_lock('account:%s' % account_id, lock)
         return True
 
-    def get_account_metadata(self, account_id):
+    def get_account_metadata(self, req_account_id):
         conn = self.conn_slave
-        if not account_id:
+        if not req_account_id:
             return None
-        account_id = conn.hget('account:%s' % account_id, 'id')
+        account_id = conn.hget('account:%s' % req_account_id, 'id')
 
         if not account_id:
             return None
 
-        meta = conn.hgetall('metadata:%s' % account_id)
-        return meta
+        meta = conn.hgetall('metadata:%s' % account_id.decode('utf-8'))
+        return debinarize(meta)
 
     def update_account_metadata(self, account_id, metadata, to_delete=None):
         conn = self.conn
         if not account_id:
             return None
-        _account_id = conn.hget('account:%s' % account_id, 'id')
+        _acct_id = conn.hget('account:%s' % account_id, 'id')
 
-        if not _account_id:
+        if not _acct_id:
             if self.autocreate:
                 self.create_account(account_id)
             else:
@@ -355,31 +358,33 @@ class AccountBackend(RedisConnection):
         pipeline.execute()
         return account_id
 
-    def info_account(self, account_id):
+    def info_account(self, req_account_id):
         conn = self.conn_slave
-        if not account_id:
+        if not req_account_id:
             return None
-        account_id = conn.hget('account:%s' % account_id, 'id')
+        account_id = conn.hget('account:%s' % req_account_id, 'id')
 
         if not account_id:
             return None
 
+        account_id = account_id.decode('utf-8')
         pipeline = conn.pipeline(False)
         pipeline.hgetall('account:%s' % account_id)
         pipeline.zcard('containers:%s' % account_id)
         pipeline.hgetall('metadata:%s' % account_id)
         data = pipeline.execute()
         info = data[0]
-        for r in ['bytes', 'objects', 'damaged_objects', 'missing_chunks']:
-            info[r] = int_value(info.get(r), 0)
-        info['containers'] = data[1]
-        info['metadata'] = data[2]
-        return info
+        for field in (b'bytes', b'objects',
+                      b'damaged_objects', b'missing_chunks'):
+            info[field] = int_value(info.get(field), 0)
+        info[b'containers'] = data[1]
+        info[b'metadata'] = data[2]
+        return debinarize(info)
 
     def list_account(self):
         conn = self.conn_slave
         accounts = conn.hkeys('accounts:')
-        return accounts
+        return debinarize(accounts)
 
     def update_container(self, account_id, name, mtime, dtime,
                          object_count, bytes_used,

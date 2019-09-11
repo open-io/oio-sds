@@ -220,7 +220,7 @@ class BlobMoverWorker(object):
 
         if self.allow_links:
             old_links = meta['links']
-            for chunk_id, fullpath in old_links.iteritems():
+            for chunk_id, fullpath in old_links.items():
                 # pylint: disable=unbalanced-tuple-unpacking
                 account, container, _, _, content_id = \
                     decode_fullpath(fullpath)

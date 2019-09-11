@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,6 +19,8 @@ import time
 import logging
 
 from datetime import datetime, timedelta
+
+from six import string_types
 
 import eventlet.hubs as eventlet_hubs # noqa
 from eventlet import sleep, patcher, greenthread # noqa
@@ -223,7 +225,7 @@ def ratelimit_function_build(policy):
     :return: A callable function similar in signature to ratelimit but that
              ignores all parameters other than the first one.
     """
-    if isinstance(policy, basestring):
+    if isinstance(policy, string_types):
         policy = ratelimit_policy_from_string(policy)
     ratelimit_validate_policy(policy)
 

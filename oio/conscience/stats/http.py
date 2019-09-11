@@ -13,6 +13,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from six import binary_type
+
 from oio.common.json import json
 from oio.common.constants import REQID_HEADER
 from oio.common.http_urllib3 import urllibexc
@@ -39,6 +41,8 @@ class HttpStat(BaseStat):
     @staticmethod
     def _parse_stats_lines(body):
         """Converts each line to a dictionary entry"""
+        if isinstance(body, binary_type):
+            body = body.decode('utf-8')
         data = {}
         for line in body.splitlines():
             parts = line.rsplit(None, 1)
@@ -60,6 +64,8 @@ class HttpStat(BaseStat):
     @staticmethod
     def _parse_stats_json(body):
         """Prefix each entry with 'stat.'"""
+        if isinstance(body, binary_type):
+            body = body.decode('utf-8')
         body = json.loads(body)
         uuid = body.pop('uuid', None)
         res = {'stat.' + k: body[k] for k in body.keys()}

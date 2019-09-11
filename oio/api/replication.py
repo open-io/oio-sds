@@ -19,11 +19,8 @@ from oio.common.green import sleep, LightQueue, Timeout, GreenPile
 
 from socket import error as SocketError
 
-try:
-    from urllib.parse import urlparse
-except ImportError:
-    from urlparse import urlparse
 from six import text_type
+from six.moves.urllib_parse import urlparse
 
 from oio.api import io
 from oio.common.exceptions import OioTimeout, SourceReadError, \
@@ -229,9 +226,9 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                         if self.perfdata is not None \
                                 and conn.upload_start is None:
                             conn.upload_start = monotonic_time()
-                        conn.send('%x\r\n' % len(data))
+                        conn.send(b'%x\r\n' % len(data))
                         conn.send(data)
-                        conn.send('\r\n')
+                        conn.send(b'\r\n')
                     if not data:
                         # Last segment sent, disable TCP_CORK to flush buffers
                         conn.set_cork(False)

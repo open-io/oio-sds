@@ -146,7 +146,7 @@ class ContainerLifecycle(object):
         return lifecycle_elt
 
     def __str__(self):
-        return etree.tostring(self._to_element_tree())
+        return etree.tostring(self._to_element_tree()).decode("utf-8")
 
     def save(self, xml_str=None):
         """
@@ -437,7 +437,7 @@ class LifecycleRule(object):
         return rule_elt
 
     def __str__(self):
-        return etree.tostring(self._to_element_tree())
+        return etree.tostring(self._to_element_tree()).decode("utf-8")
 
     def match(self, obj_meta, **kwargs):
         """
@@ -533,7 +533,7 @@ class LifecycleRuleFilter(object):
             prefix_elt.text = self.prefix
             _filter_elt.append(prefix_elt)
 
-        for k, v in self.tags.iteritems():
+        for k, v in self.tags.items():
             tag_elt = etree.Element('Tag')
             key_elt = etree.Element('Key')
             key_elt.text = k
@@ -546,7 +546,7 @@ class LifecycleRuleFilter(object):
         return filter_elt
 
     def __str__(self):
-        return etree.tostring(self._to_element_tree())
+        return etree.tostring(self._to_element_tree()).decode("utf-8")
 
     def match(self, obj_meta, **kwargs):
         """
@@ -619,7 +619,7 @@ class LifecycleActionFilter(object):
         raise NotImplementedError
 
     def __str__(self):
-        return etree.tostring(self._to_element_tree())
+        return etree.tostring(self._to_element_tree()).decode("utf-8")
 
     def match(self, obj_meta, now=None, **kwargs):
         """

@@ -104,7 +104,7 @@ class TestPerfectibleContent(BaseTestCase):
         reqid = request_id('perfectible-')
         self.api.object_create(self.account, container,
                                obj_name='perfect',
-                               data='whatever',
+                               data=b'whatever',
                                policy='THREECOPIES',
                                headers={REQID_HEADER: reqid})
 
@@ -175,7 +175,7 @@ class TestPerfectibleContent(BaseTestCase):
         reqid = request_id('perfectible-')
         self.api.object_create(self.account, container,
                                obj_name='perfectible',
-                               data='whatever',
+                               data=b'whatever',
                                policy='THREECOPIES',
                                headers={REQID_HEADER: reqid})
 
@@ -233,7 +233,7 @@ class TestPerfectibleContent(BaseTestCase):
         reqid = request_id('perfectible-')
         chunks, _, _ = self.api.object_create(
             self.account, container, obj_name='perfectible',
-            data='whatever', policy='THREECOPIES', reqid=reqid)
+            data=b'whatever', policy='THREECOPIES', reqid=reqid)
 
         # Wait for the "perfectible" event to be emitted,
         # but do not consume it.

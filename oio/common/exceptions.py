@@ -15,6 +15,8 @@
 
 from sys import exc_info
 
+from six import binary_type, reraise as six_reraise
+
 
 class OioException(Exception):
     pass
@@ -241,7 +243,11 @@ class UnfinishedUploadException(OioException):
         super(UnfinishedUploadException, self).__init__()
 
     def reraise(self):
-        raise self.exception, None, exc_info()[2]
+        """
+        Re-raise the wrapped exception. This is intended to be called
+        after some sort of cleanup has been done.
+        """
+        six_reraise(type(self.exception), self.exception, exc_info()[2])
 
 
 class ClientException(StatusMessageException):
@@ -335,7 +341,10 @@ def from_response(resp, body=None):
             message = body.get('message')
             status = body.get('status')
         except Exception:
-            message = body
+            if isinstance(body, binary_type):
+                message = body.decode('utf-8')
+            else:
+                message = body
         return cls(http_status, status, message)
     else:
         return cls(http_status, resp.reason)
@@ -351,4 +360,4 @@ def reraise(exc_type, exc_value, extra_message=None):
         args = (exc_value.message, ) + args
     if extra_message:
         args = (extra_message, ) + args
-    raise exc_type(*args), None, exc_info()[2]
+    six_reraise(exc_type, exc_type(*args), exc_info()[2])

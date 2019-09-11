@@ -34,33 +34,34 @@ class TestAccountServer(BaseTestCase):
         self._create_account()
 
     def _create_account(self):
-        self.app.put('/v1.0/account/create',
-                     query_string={"id": self.account_id})
+        resp = self.app.put('/v1.0/account/create',
+                            query_string={"id": self.account_id})
+        self.assertIn(resp.status_code, (201, 202))
 
     def test_status(self):
         resp = self.app.get('/status')
         self.assertEqual(resp.status_code, 200)
-        status = self.json_loads(resp.data)
-        self.assertTrue(status['account_count'] > 0)
+        status = self.json_loads(resp.data.decode('utf-8'))
+        self.assertGreater(status['account_count'], 0)
 
     def test_account_list(self):
         resp = self.app.get('/v1.0/account/list')
         self.assertEqual(resp.status_code, 200)
-        self.assertTrue(self.account_id in resp.data)
-        self.assertFalse('Should_no_exist' in resp.data)
+        self.assertIn(self.account_id, resp.data.decode('utf-8'))
+        self.assertNotIn('Should_no_exist', resp.data)
 
     def test_account_info(self):
         resp = self.app.get('/v1.0/account/show',
                             query_string={"id": self.account_id})
         self.assertEqual(resp.status_code, 200)
-        data = self.json_loads(resp.data)
+        data = self.json_loads(resp.data.decode('utf-8'))
 
-        for f in ["ctime", "objects", "bytes", "containers", "metadata"]:
-            self.assertTrue(f in data)
+        for field in ("ctime", "objects", "bytes", "containers", "metadata"):
+            self.assertIn(field, data)
 
-        self.assertTrue(data['objects'] >= 0)
-        self.assertTrue(data['containers'] >= 0)
-        self.assertTrue(data['bytes'] >= 0)
+        self.assertGreaterEqual(data['objects'], 0)
+        self.assertGreaterEqual(data['containers'], 0)
+        self.assertGreaterEqual(data['bytes'], 0)
 
     def test_account_update(self):
         data = {'metadata': {'foo': 'bar'}, 'to_delete': []}
@@ -82,13 +83,13 @@ class TestAccountServer(BaseTestCase):
         resp = self.app.get('/v1.0/account/containers',
                             query_string=args)
         self.assertEqual(resp.status_code, 200)
-        data = self.json_loads(resp.data)
-        for f in ["ctime", "objects", "bytes", "listing", "containers",
-                  "metadata"]:
-            self.assertTrue(f in data)
-        self.assertTrue(data['objects'] >= 0)
-        self.assertTrue(data['containers'] >= 0)
-        self.assertTrue(data['bytes'] >= 0)
+        data = self.json_loads(resp.data.decode('utf-8'))
+        for field in ("ctime", "objects", "bytes", "listing", "containers",
+                      "metadata"):
+            self.assertIn(field, data)
+        self.assertGreaterEqual(data['objects'], 0)
+        self.assertGreaterEqual(data['containers'], 0)
+        self.assertGreaterEqual(data['bytes'], 0)
 
     def test_account_container_reset(self):
         data = {'name': 'foo', 'mtime': Timestamp(time()).normal,

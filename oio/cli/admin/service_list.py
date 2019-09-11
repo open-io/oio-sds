@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
+from six import iteritems
 from cliff import lister
 
 from oio.common.exceptions import ClientException
@@ -108,7 +108,7 @@ class RawxListContainers(ServiceListCommand):
         status = self.rdir.status(rawx, reqid=reqid)
         containers = status.get('container')
         trans = self.translate_cid if translate else lambda x: x
-        for cid, info in containers.iteritems():
+        for cid, info in iteritems(containers):
             yield trans(cid), info['total']
         yield 'Total', status['chunk']['total']
 

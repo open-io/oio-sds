@@ -18,18 +18,15 @@ from oio.common.green import socket, Empty, LifoQueue, threading, time
 
 import os
 import sys
-from six import iteritems
+from six import BytesIO, iteritems
+from six.moves.urllib_parse import urlparse
 import yaml
-from cStringIO import StringIO as BytesIO
-try:
-    from urllib.parse import urlparse
-except ImportError:
-    from urlparse import urlparse
 
 from oio.common import exceptions
 
 
 SYM_CRLF = '\r\n'
+SYM_CRLF_BYTES = b'\r\n'
 
 DEFAULT_PRIORITY = 2 ** 31
 
@@ -109,13 +106,13 @@ class Reader(object):
         if self.bytes_read == self.bytes_written:
             self.purge()
 
-        return data[:-2]
+        return data[:-2].decode('utf-8')
 
     def readline(self):
         buf = self._buffer
         buf.seek(self.bytes_read)
         data = buf.readline()
-        while not data.endswith(SYM_CRLF):
+        while not data.endswith(SYM_CRLF_BYTES):
             self._read_from_socket()
             buf.seek(self.bytes_read)
             data = buf.readline()
@@ -125,7 +122,7 @@ class Reader(object):
         if self.bytes_read == self.bytes_written:
             self.purge()
 
-        return data[:-2]
+        return data[:-2].decode('utf-8')
 
     def purge(self):
         self._buffer.seek(0)
@@ -320,14 +317,14 @@ class Connection(object):
             output.append(SYM_CRLF)
             output.append(body)
         output.append(SYM_CRLF)
-        return ''.join(output)
+        return ''.join(output).encode('utf-8')
 
     def send_command(self, command, *args, **kwargs):
-        command = self.pack_command(command, kwargs.get('body'), *args)
+        encoded = self.pack_command(command, kwargs.get('body'), *args)
         if not self._sock:
             self.connect()
         try:
-            self._sock.sendall(command)
+            self._sock.sendall(encoded)
         except socket.timeout:
             self.disconnect()
             raise TimeoutError("Timeout writing to socket")
@@ -374,19 +371,19 @@ def dict_merge(*dicts):
 
 
 def parse_yaml(connection, response, **kwargs):
-    (status, results) = response
-    size = results[0]
-    body = connection.read_body(int(size))
+    results = response[1]
+    size = int(results[0])
+    body = connection.read_body(size)
     if size > 0 and not body:
         raise ResponseError()
     return yaml.load(body, Loader=yaml.Loader)
 
 
 def parse_body(connection, response, **kwargs):
-    (status, results) = response
+    results = response[1]
     job_id = results[0]
-    job_size = results[1]
-    body = connection.read_body(int(job_size))
+    job_size = int(results[1])
+    body = connection.read_body(job_size)
     if job_size > 0 and not body:
         raise ResponseError()
     return job_id, body

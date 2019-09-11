@@ -182,7 +182,7 @@ def _make_object_metadata(headers):
 
     prefix = OBJECT_METADATA_PREFIX
 
-    for k, v in headers.iteritems():
+    for k, v in headers.items():
         k = k.lower()
         if k.startswith(prefix):
             key = k.replace(prefix, "")

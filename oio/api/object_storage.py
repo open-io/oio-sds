@@ -15,7 +15,8 @@
 
 
 from __future__ import absolute_import
-from six import string_types
+from six import PY2, string_types
+from six.moves.urllib_parse import unquote
 
 from io import BytesIO
 from functools import partial
@@ -23,11 +24,6 @@ import os
 import warnings
 import time
 import random
-
-try:
-    from urllib.parse import unquote
-except ImportError:
-    from urllib import unquote
 
 from oio.common import exceptions as exc
 from oio.api.ec import ECWriteHandler
@@ -225,7 +221,11 @@ class ObjectStorageApi(object):
     @ensure_headers
     @ensure_request_id
     def account_del_properties(self, account, properties, **kwargs):
-        self.account.account_update(account, None, properties, **kwargs)
+        """
+        Delete some properties from the specified account.
+        """
+        self.account.account_update(account, None,
+                                    [k for k in properties], **kwargs)
 
     @patch_kwargs
     @ensure_headers
@@ -728,10 +728,16 @@ class ObjectStorageApi(object):
             obj_name = obj_name or file_name
         else:
             # We are asked to read from a buffer or an iterator
+            if isinstance(src, string_types):
+                try:
+                    src = src.encode('utf-8')
+                except UnicodeDecodeError:
+                    # src is already encoded
+                    pass
             try:
                 src = BytesIO(src)
             except TypeError:
-                src = GeneratorIO(src)
+                src = GeneratorIO(src, sub_generator=PY2)
 
         if not obj_name:
             raise exc.MissingName(

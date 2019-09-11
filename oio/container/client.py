@@ -16,10 +16,8 @@
 import warnings
 from functools import wraps
 
-try:
-    from urllib.parse import unquote
-except ImportError:
-    from urllib import unquote
+from six.moves.urllib_parse import unquote
+
 from oio.common.client import ProxyClient
 from oio.common.decorators import ensure_headers
 from oio.common.json import json
@@ -709,7 +707,8 @@ class ContainerClient(ProxyClient):
         uri = self._make_uri('content/del_properties')
         params = self._make_params(account, reference, path,
                                    cid=cid, version=version)
-        data = json.dumps(properties)
+        # Build a list in case the parameter is a view (not serializable).
+        data = json.dumps([x for x in properties])
         resp, _body = self._direct_request(
             'POST', uri, data=data, params=params, **kwargs)
         return resp.status == 204

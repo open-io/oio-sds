@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -23,6 +23,8 @@ from mock import MagicMock as Mock
 from testtools.matchers import Contains
 from testtools.matchers import Not
 from testtools.testcase import ExpectedException
+
+from six import PY2
 
 from oio.blob.client import BlobClient
 from oio.common.exceptions import ContentNotFound, OrphanChunk
@@ -291,13 +293,15 @@ class TestContentFactory(BaseTestCase):
     def test_strange_paths(self):
         answers = dict()
         for cname in strange_paths:
-            content = self._new_content(self.stgpol, "nobody cares", cname)
+            content = self._new_content(self.stgpol, b"nobody cares", cname)
             answers[cname] = content
 
         _, listing = self.container_client.content_list(self.account,
                                                         self.container_name)
-        obj_set = {k["name"].encode("utf8", "ignore")
-                   for k in listing["objects"]}
+        if PY2:
+            obj_set = {k["name"].encode('utf-8') for k in listing["objects"]}
+        else:
+            obj_set = {k["name"] for k in listing["objects"]}
         try:
             # Ensure the saved path is the one we gave the object
             for cname in answers:

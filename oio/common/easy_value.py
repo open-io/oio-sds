@@ -15,7 +15,7 @@
 
 import math
 import string
-from six import string_types
+from six import binary_type, string_types
 
 
 def int_value(value, default):
@@ -74,8 +74,29 @@ def convert_size(size, unit=""):
 
 
 def is_hexa(hexa, size=None):
-    if not isinstance(hexa, basestring):
+    if not isinstance(hexa, string_types):
         return False
     if size and len(hexa) != size:
         return False
     return all(c in string.hexdigits for c in hexa)
+
+
+def debinarize(something):
+    """
+    Convert binary data to string.
+
+    For bytes arrays, return a string.
+    For lists, call debinarize all items.
+    For dicts, debinarize keys and values.
+    For other types, return the item as is.
+
+    :type something: bytes, list, dict, or anything else.
+    """
+    if isinstance(something, binary_type):
+        return something.decode('utf-8')
+    elif isinstance(something, list):
+        return [debinarize(o) for o in something]
+    elif isinstance(something, dict):
+        return {debinarize(k): debinarize(v)
+                for k, v in something.items()}
+    return something

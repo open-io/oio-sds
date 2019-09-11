@@ -34,7 +34,7 @@ class ProxyStat(HttpStat):
                 stats[key[:-2]] = val
                 del stats[key]
         # Keep only "gauge" metrics for the moment
-        for key in stats.keys():
+        for key in list(stats):
             if key.startswith('gauge'):
                 stat_key = 'stat.' + key.split(None, 1)[1]
                 stats[stat_key] = stats[key]

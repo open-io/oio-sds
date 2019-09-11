@@ -13,7 +13,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from urllib import unquote
+from six import string_types
+from six.moves.urllib_parse import unquote
 
 from oio.common.json import json
 from oio.event.evob import Event, EventError
@@ -31,12 +32,12 @@ class NotifyFilter(Filter):
         and we want to return this {account: [], account2: [container2]}
         empty list means that everything is accepted
         """
-        if isinstance(array, basestring):
+        if isinstance(array, string_types):
             array = array.split(',')
         exclude = dict()
-        for a in array:
-            if '/' in a:
-                acct, cnt = a.split('/', 1)
+        for elt in array:
+            if '/' in elt:
+                acct, cnt = elt.split('/', 1)
                 acct = unquote(acct)
                 cnt = unquote(cnt)
                 if exclude.get(acct, None):
@@ -44,7 +45,7 @@ class NotifyFilter(Filter):
                 else:
                     exclude[acct] = [cnt]
             else:
-                exclude[unquote(a)] = []
+                exclude[unquote(elt)] = []
         return exclude
 
     def _should_notify(self, account, container):

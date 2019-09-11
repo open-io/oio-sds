@@ -14,6 +14,7 @@
 # License along with this library.
 
 from functools import wraps
+from six import string_types
 from oio.common.client import ProxyClient
 
 
@@ -21,7 +22,7 @@ def service_id_to_string(service_id):
     """Convert a list of service IDs to a comma separated string."""
     if not service_id:
         return None
-    elif isinstance(service_id, basestring):
+    elif isinstance(service_id, string_types):
         return service_id
     else:
         try:

@@ -55,16 +55,18 @@ class TestRdirClient(unittest.TestCase):
                          (self.container_id_2, self.content_id_2,
                           self.chunk_id_2), {'mtime': 20}],
                     ]
-                )
+                ),
+                (FakeResponse(204), None)
             ])
         gen = self.rdir_client.chunk_fetch("volume", limit=2)
+        items = list(gen)
         self.assertEqual(
-            gen.next(), (self.container_id_1, self.content_id_1,
-                         self.chunk_id_1, {'mtime': 10}))
+            items[0], (self.container_id_1, self.content_id_1,
+                       self.chunk_id_1, {'mtime': 10}))
         self.assertEqual(
-            gen.next(), (self.container_id_2, self.content_id_2,
-                         self.chunk_id_2, {'mtime': 20}))
-        self.assertRaises(StopIteration, gen.next)
+            items[1], (self.container_id_2, self.content_id_2,
+                       self.chunk_id_2, {'mtime': 20}))
+        self.assertEqual(2, len(items))
         self.assertEqual(self.rdir_client._direct_request.call_count, 2)
 
     def test_fetch_multi_req(self):
@@ -88,19 +90,21 @@ class TestRdirClient(unittest.TestCase):
                          (self.container_id_3, self.content_id_3,
                           self.chunk_id_3), {'mtime': 30}],
                     ]
-                )
+                ),
+                (FakeResponse(204), None)
             ])
         gen = self.rdir_client.chunk_fetch("volume", limit=2)
+        items = list(gen)
         self.assertEqual(
-            gen.next(), (self.container_id_1, self.content_id_1,
-                         self.chunk_id_1, {'mtime': 10}))
+            items[0], (self.container_id_1, self.content_id_1,
+                       self.chunk_id_1, {'mtime': 10}))
         self.assertEqual(
-            gen.next(), (self.container_id_2, self.content_id_2,
-                         self.chunk_id_2, {'mtime': 20}))
+            items[1], (self.container_id_2, self.content_id_2,
+                       self.chunk_id_2, {'mtime': 20}))
         self.assertEqual(
-            gen.next(), (self.container_id_3, self.content_id_3,
-                         self.chunk_id_3, {'mtime': 30}))
-        self.assertRaises(StopIteration, gen.next)
+            items[2], (self.container_id_3, self.content_id_3,
+                       self.chunk_id_3, {'mtime': 30}))
+        self.assertEqual(3, len(items))
         self.assertEqual(self.rdir_client._direct_request.call_count, 3)
 
 

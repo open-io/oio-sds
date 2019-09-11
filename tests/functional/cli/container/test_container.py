@@ -178,7 +178,7 @@ class ContainerTest(CliTestCase):
             cid_opt = '--cid '
             name = self.CID
         with tempfile.NamedTemporaryFile(delete=False) as ntf:
-            ntf.write('test_exists')
+            ntf.write(b'test_exists')
             ntf.flush()
             obj = ntf.name
             for _ in range(10):
@@ -203,7 +203,7 @@ class ContainerTest(CliTestCase):
             cid_opt = '--cid '
             name = self.CID
         with tempfile.NamedTemporaryFile(delete=False) as ntf:
-            ntf.write('test_exists')
+            ntf.write(b'test_exists')
             ntf.flush()
             obj = ntf.name
             for _ in range(10):

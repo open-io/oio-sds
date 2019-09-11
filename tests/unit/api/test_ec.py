@@ -457,8 +457,11 @@ class TestEC(unittest.TestCase):
 
     def _make_ec_meta_resp(self, test_data=None):
         segment_size = self.storage_method.ec_segment_size
-        test_data = test_data or \
-            (b'1234' * segment_size)[:-random.randint(0, 1000)]
+        if not test_data:
+            test_data = b'1234' * segment_size
+            discard = random.randint(0, 1000)
+            if discard > 0:
+                test_data = test_data[:-discard]
         ec_chunks = self._make_ec_chunks(test_data)
 
         return test_data, ec_chunks

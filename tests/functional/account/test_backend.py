@@ -33,9 +33,9 @@ class TestAccountBackend(BaseTestCase):
     def setUp(self):
         super(TestAccountBackend, self).setUp()
         _, _, self.redis_host, self.redis_port = self.get_service('redis')
-        self.conf_account = {'redis_host': self.redis_host,
+        self.account_conf = {'redis_host': self.redis_host,
                              'redis_port': self.redis_port}
-        self.backend = AccountBackend(self.conf_account)
+        self.backend = AccountBackend(self.account_conf)
         self.backend.conn.flushdb()
 
     def tearDown(self):
@@ -54,31 +54,31 @@ class TestAccountBackend(BaseTestCase):
         # first meta
         self.backend.update_account_metadata(account_id, {'a': '1'})
         metadata = self.backend.get_account_metadata(account_id)
-        self.assert_('a' in metadata)
+        self.assertIn('a', metadata)
         self.assertEqual(metadata['a'], '1')
 
         # second meta
         self.backend.update_account_metadata(account_id, {'b': '2'})
         metadata = self.backend.get_account_metadata(account_id)
-        self.assert_('a' in metadata)
+        self.assertIn('a', metadata)
         self.assertEqual(metadata['a'], '1')
-        self.assert_('b' in metadata)
+        self.assertIn('b', metadata)
         self.assertEqual(metadata['b'], '2')
 
         # update first meta
         self.backend.update_account_metadata(account_id, {'a': '1b'})
         metadata = self.backend.get_account_metadata(account_id)
-        self.assert_('a' in metadata)
+        self.assertIn('a', metadata)
         self.assertEqual(metadata['a'], '1b')
-        self.assert_('b' in metadata)
+        self.assertIn('b', metadata)
         self.assertEqual(metadata['b'], '2')
 
         # delete second meta
         self.backend.update_account_metadata(account_id, None, ['b'])
         metadata = self.backend.get_account_metadata(account_id)
-        self.assert_('a' in metadata)
+        self.assertIn('a', metadata)
         self.assertEqual(metadata['a'], '1b')
-        self.assert_('b' not in metadata)
+        self.assertNotIn('b', metadata)
 
     def test_list_account(self):
 
@@ -86,7 +86,7 @@ class TestAccountBackend(BaseTestCase):
         account_id = 'test_list'
         self.backend.create_account(account_id)
         account_list = self.backend.list_account()
-        self.assertTrue(account_id in account_list)
+        self.assertIn(account_id, account_list)
 
         # Check the result of a nonexistent account
         self.assertFalse("Should_not_exist" in account_list)
@@ -206,7 +206,7 @@ class TestAccountBackend(BaseTestCase):
         self.backend.update_container(account_id, name, mtime, 0, 0, 0, 0, 0)
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
-        self.assertEqual(res[0], name)
+        self.assertEqual(res[0].decode('utf-8'), name)
 
         # delete event
         sleep(.00001)
@@ -216,8 +216,8 @@ class TestAccountBackend(BaseTestCase):
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
         self.assertEqual(len(res), 0)
-        self.assertTrue(
-            self.backend.conn.ttl('container:%s:%s' % (account_id, name)) >= 1)
+        self.assertGreaterEqual(
+            self.backend.conn.ttl('container:%s:%s' % (account_id, name)), 1)
 
         # same event
         with ExpectedException(Conflict):
@@ -226,8 +226,8 @@ class TestAccountBackend(BaseTestCase):
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
         self.assertEqual(len(res), 0)
-        self.assertTrue(
-            self.backend.conn.ttl('container:%s:%s' % (account_id, name)) >= 1)
+        self.assertGreaterEqual(
+            self.backend.conn.ttl('container:%s:%s' % (account_id, name)), 1)
 
         # old event
         with ExpectedException(Conflict):
@@ -236,8 +236,8 @@ class TestAccountBackend(BaseTestCase):
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
         self.assertEqual(len(res), 0)
-        self.assertTrue(
-            self.backend.conn.ttl('container:%s:%s' % (account_id, name)) >= 1)
+        self.assertGreaterEqual(
+            self.backend.conn.ttl('container:%s:%s' % (account_id, name)), 1)
 
     def test_utf8_container(self):
         account_id = 'test'
@@ -263,8 +263,8 @@ class TestAccountBackend(BaseTestCase):
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
         self.assertEqual(len(res), 0)
-        self.assertTrue(
-            self.backend.conn.ttl('container:%s:%s' % (account_id, name)) >= 1)
+        self.assertGreaterEqual(
+            self.backend.conn.ttl('container:%s:%s' % (account_id, name)), 1)
 
         # ensure it has been removed
         with ExpectedException(Conflict):
@@ -273,8 +273,8 @@ class TestAccountBackend(BaseTestCase):
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
         self.assertEqual(len(res), 0)
-        self.assertTrue(
-            self.backend.conn.ttl('container:%s:%s' % (account_id, name)) >= 1)
+        self.assertGreaterEqual(
+            self.backend.conn.ttl('container:%s:%s' % (account_id, name)), 1)
 
     def test_update_container(self):
         account_id = 'test'
@@ -288,9 +288,11 @@ class TestAccountBackend(BaseTestCase):
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
         self.assertEqual(res[0], name)
+        self.assertEqual(res[0].decode('utf-8'), name)
 
-        self.assertEqual(self.backend.conn.hget(
-            'container:%s:%s' % (account_id, name), 'mtime'), mtime)
+        tmtime = self.backend.conn.hget(
+            'container:%s:%s' % (account_id, name), 'mtime')
+        self.assertEqual(tmtime.decode('utf-8'), mtime)
 
         # same event
         with ExpectedException(Conflict):
@@ -299,10 +301,11 @@ class TestAccountBackend(BaseTestCase):
 
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
-        self.assertEqual(res[0], name)
+        self.assertEqual(res[0].decode('utf-8'), name)
 
-        self.assertEqual(self.backend.conn.hget(
-            'container:%s:%s' % (account_id, name), 'mtime'), mtime)
+        tmtime = self.backend.conn.hget(
+            'container:%s:%s' % (account_id, name), 'mtime')
+        self.assertEqual(tmtime.decode('utf-8'), mtime)
 
         # New event
         sleep(.00001)
@@ -311,10 +314,11 @@ class TestAccountBackend(BaseTestCase):
 
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
-        self.assertEqual(res[0], name)
+        self.assertEqual(res[0].decode('utf-8'), name)
 
-        self.assertEqual(self.backend.conn.hget(
-            'container:%s:%s' % (account_id, name), 'mtime'), mtime)
+        tmtime = self.backend.conn.hget(
+            'container:%s:%s' % (account_id, name), 'mtime')
+        self.assertEqual(tmtime.decode('utf-8'), mtime)
 
         # Old event
         old_mtime = Timestamp(time() - 1).normal
@@ -324,10 +328,11 @@ class TestAccountBackend(BaseTestCase):
 
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
-        self.assertEqual(res[0], name)
+        self.assertEqual(res[0].decode('utf-8'), name)
 
-        self.assertEqual(self.backend.conn.hget(
-            'container:%s:%s' % (account_id, name), 'mtime'), mtime)
+        tmtime = self.backend.conn.hget(
+            'container:%s:%s' % (account_id, name), 'mtime')
+        self.assertEqual(tmtime.decode('utf-8'), mtime)
 
         # Old delete event
         dtime = Timestamp(time() - 1).normal
@@ -336,9 +341,10 @@ class TestAccountBackend(BaseTestCase):
                 account_id, name, 0, dtime, 0, 0, 0, 0)
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
-        self.assertEqual(res[0], name)
-        self.assertEqual(self.backend.conn.hget(
-            'container:%s:%s' % (account_id, name), 'mtime'), mtime)
+        self.assertEqual(res[0].decode('utf-8'), name)
+        tmtime = self.backend.conn.hget(
+            'container:%s:%s' % (account_id, name), 'mtime')
+        self.assertEqual(tmtime.decode('utf-8'), mtime)
 
         # New delete event
         sleep(.00001)
@@ -347,8 +353,8 @@ class TestAccountBackend(BaseTestCase):
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
         self.assertEqual(len(res), 0)
-        self.assertTrue(
-            self.backend.conn.ttl('container:%s:%s' % (account_id, name)) >= 1)
+        self.assertGreaterEqual(
+            self.backend.conn.ttl('container:%s:%s' % (account_id, name)), 1)
 
         # New event
         sleep(.00001)
@@ -356,9 +362,10 @@ class TestAccountBackend(BaseTestCase):
         self.backend.update_container(account_id, name, mtime, 0, 0, 0, 0, 0)
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
-        self.assertEqual(res[0], name)
-        self.assertEqual(self.backend.conn.hget(
-            'container:%s:%s' % (account_id, name), 'mtime'), mtime)
+        self.assertEqual(res[0].decode('utf-8'), name)
+        tmtime = self.backend.conn.hget(
+            'container:%s:%s' % (account_id, name), 'mtime')
+        self.assertEqual(tmtime.decode('utf-8'), mtime)
         # ensure ttl has been removed
         self.assertEqual(
             self.backend.conn.ttl('container:%s:%s' % (account_id, name)), -1)
@@ -515,23 +522,23 @@ class TestAccountBackend(BaseTestCase):
         self.backend.conn.hset(account_key, 'objects', 2)
         self.backend.conn.hset(account_key, 'damaged_objects', 3)
         self.backend.conn.hset(account_key, 'missing_chunks', 4)
-        self.assertEqual(self.backend.conn.hget(account_key, 'bytes'), '1')
-        self.assertEqual(self.backend.conn.hget(account_key, 'objects'), '2')
+        self.assertEqual(self.backend.conn.hget(account_key, 'bytes'), b'1')
+        self.assertEqual(self.backend.conn.hget(account_key, 'objects'), b'2')
         self.assertEqual(
-            self.backend.conn.hget(account_key, 'damaged_objects'), '3')
+            self.backend.conn.hget(account_key, 'damaged_objects'), b'3')
         self.assertEqual(
-            self.backend.conn.hget(account_key, 'missing_chunks'), '4')
+            self.backend.conn.hget(account_key, 'missing_chunks'), b'4')
 
         self.backend.refresh_account(account_id)
         self.assertEqual(self.backend.conn.hget(account_key, 'bytes'),
-                         str(total_bytes))
+                         str(total_bytes).encode('utf-8'))
         self.assertEqual(self.backend.conn.hget(account_key, 'objects'),
-                         str(total_objects))
+                         str(total_objects).encode('utf-8'))
         self.assertEqual(
             self.backend.conn.hget(account_key, 'damaged_objects'),
-            str(total_damaged_objects))
+            str(total_damaged_objects).encode('utf-8'))
         self.assertEqual(self.backend.conn.hget(account_key, 'missing_chunks'),
-                         str(total_missing_chunks))
+                         str(total_missing_chunks).encode('utf-8'))
 
     def test_update_container_wrong_timestamp_format(self):
         account_id = 'test'
@@ -545,6 +552,7 @@ class TestAccountBackend(BaseTestCase):
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
         self.assertEqual(res[0], name)
+        self.assertEqual(res[0].decode('utf-8'), name)
 
         # same event
         with ExpectedException(Conflict):
@@ -553,27 +561,29 @@ class TestAccountBackend(BaseTestCase):
 
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
-        self.assertEqual(res[0], name)
+        self.assertEqual(res[0].decode('utf-8'), name)
 
         mtime = "0000012456.00005"
         self.backend.update_container(account_id, name, mtime, 0, 0, 0, 0, 0)
 
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
-        self.assertEqual(res[0], name)
+        self.assertEqual(res[0].decode('utf-8'), name)
 
-        self.assertEqual(self.backend.conn.hget(
-            'container:%s:%s' % (account_id, name), 'mtime'), mtime)
+        tmtime = self.backend.conn.hget(
+            'container:%s:%s' % (account_id, name), 'mtime')
+        self.assertEqual(tmtime.decode('utf-8'), mtime)
 
         mtime = "0000012456.00035"
         self.backend.update_container(account_id, name, mtime, 0, 0, 0, 0, 0)
 
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
-        self.assertEqual(res[0], name)
+        self.assertEqual(res[0].decode('utf-8'), name)
 
-        self.assertEqual(self.backend.conn.hget(
-            'container:%s:%s' % (account_id, name), 'mtime'), mtime)
+        tmtime = self.backend.conn.hget(
+            'container:%s:%s' % (account_id, name), 'mtime')
+        self.assertEqual(tmtime.decode('utf-8'), mtime)
 
     def test_update_container_missing_damaged_object(self):
         account_id = random_str(16)
@@ -585,7 +595,7 @@ class TestAccountBackend(BaseTestCase):
             'container:%s:%s' % (account_id, name), 'damaged_objects')
         self.backend.refresh_account(account_id)
         self.assertEqual(self.backend.conn.hget(
-            'account:%s' % (account_id), 'damaged_objects'), '0')
+            'account:%s' % (account_id), 'damaged_objects'), b'0')
 
     def test_is_sup(self):
         compare = (self.backend.lua_is_sup +
@@ -602,19 +612,19 @@ class TestAccountBackend(BaseTestCase):
                           keys=["12457.00245", "12457.00245"],
                           client=self.backend.conn)
         self.assertEqual(compare_script(keys=["42457.00245", "12457.00245"],
-                                        client=self.backend.conn), "IS SUP")
+                                        client=self.backend.conn), b"IS SUP")
         self.assertRaises(redis.exceptions.ResponseError, compare_script,
                           keys=["12457.00245", "12457.002450"],
                           client=self.backend.conn)
         self.assertEqual(compare_script(keys=["42457.00245", "12457.002450"],
-                                        client=self.backend.conn), "IS SUP")
+                                        client=self.backend.conn), b"IS SUP")
         self.assertRaises(redis.exceptions.ResponseError, compare_script,
                           keys=["12457.00245", "12457.002456"],
                           client=self.backend.conn)
         self.assertEqual(compare_script(keys=["42457.00245", "12457.002456"],
-                                        client=self.backend.conn), "IS SUP")
+                                        client=self.backend.conn), b"IS SUP")
         self.assertEqual(compare_script(keys=["42457.00246", "42457.002458"],
-                                        client=self.backend.conn), "IS SUP")
+                                        client=self.backend.conn), b"IS SUP")
 
     def test_flush_account(self):
         account_id = random_str(16)
@@ -644,22 +654,22 @@ class TestAccountBackend(BaseTestCase):
                 damaged_objects, missing_chunks)
 
         self.assertEqual(self.backend.conn.hget(account_key, 'bytes'),
-                         str(total_bytes))
+                         str(total_bytes).encode('utf-8'))
         self.assertEqual(self.backend.conn.hget(account_key, 'objects'),
-                         str(total_objects))
+                         str(total_objects).encode('utf-8'))
         self.assertEqual(
             self.backend.conn.hget(account_key, 'damaged_objects'),
-            str(total_damaged_objects))
+            str(total_damaged_objects).encode('utf-8'))
         self.assertEqual(self.backend.conn.hget(account_key, 'missing_chunks'),
-                         str(total_missing_chunks))
+                         str(total_missing_chunks).encode('utf-8'))
 
         self.backend.flush_account(account_id)
-        self.assertEqual(self.backend.conn.hget(account_key, 'bytes'), '0')
-        self.assertEqual(self.backend.conn.hget(account_key, 'objects'), '0')
+        self.assertEqual(self.backend.conn.hget(account_key, 'bytes'), b'0')
+        self.assertEqual(self.backend.conn.hget(account_key, 'objects'), b'0')
         self.assertEqual(
-            self.backend.conn.hget(account_key, 'damaged_objects'), '0')
+            self.backend.conn.hget(account_key, 'damaged_objects'), b'0')
         self.assertEqual(
-            self.backend.conn.hget(account_key, 'missing_chunks'), '0')
+            self.backend.conn.hget(account_key, 'missing_chunks'), b'0')
         self.assertEqual(
             self.backend.conn.zcard("containers:%s" % account_id), 0)
         self.assertEqual(self.backend.conn.exists("container:test:*"), 0)

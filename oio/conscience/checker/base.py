@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -58,10 +58,10 @@ class BaseChecker(object):
         try:
             with Timeout(self.timeout):
                 result = self._check()
-        except Timeout as e:
-            self.logger.warn('check timed out')
-        except Exception as e:
-            self.logger.warn('check failed: %s', str(e.message))
+        except Timeout as err:
+            self.logger.warn('check timed out (%s)', err)
+        except Exception as err:
+            self.logger.warn('check failed: %s', str(err.message))
 
         if self.last_result is None:
             self.last_result = result

@@ -80,13 +80,13 @@ class LifecycleCliTest(CliTestCase):
 
     def test_lifecycle_set_file(self):
         with NamedTemporaryFile() as file_:
-            file_.write(self.CONF)
+            file_.write(self.CONF.encode('utf-8'))
             file_.flush()
             self.openio('lifecycle set %s --from-file %s' %
                         (self.NAME, file_.name))
 
         with NamedTemporaryFile() as file_:
-            file_.write(self.WRONG_CONF)
+            file_.write(self.WRONG_CONF.encode('utf-8'))
             file_.flush()
             self.assertRaises(
                 CommandFailed, self.openio,
@@ -106,7 +106,7 @@ class LifecycleCliTest(CliTestCase):
         self.openio('container set --max-versions -1 ' + self.NAME)
         self.openio('lifecycle set %s "%s"' % (self.NAME, self.CONF))
         with NamedTemporaryFile() as file_:
-            file_.write('test')
+            file_.write(b'test')
             file_.flush()
             for _ in range(5):
                 self.openio(

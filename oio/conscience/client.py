@@ -14,7 +14,7 @@
 # License along with this library.
 
 
-from urlparse import urlparse, urlunparse
+from six.moves.urllib_parse import urlparse, urlunparse
 
 from oio.common.client import ProxyClient
 from oio.common.exceptions import OioException

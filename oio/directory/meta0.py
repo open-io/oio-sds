@@ -224,8 +224,10 @@ class Meta0PrefixMapping(MetaMapping):
             self.logger.warn(
                     "Failed to link services for meta0: %s", exc)
 
-    def __nonzero__(self):
+    def __bool__(self):
         return bool(self.services_by_base)
+
+    __nonzero__ = __bool__
 
     def num_bases(self):
         """Get total the number of bases according to `self.digits`"""
@@ -444,7 +446,7 @@ class Meta0PrefixMapping(MetaMapping):
         for srv in allsrv:
             for prefix in srv['bases']:
                 bases[prefix].add(srv['addr'])
-        for base, srv in bases.iteritems():
+        for base, srv in iteritems(bases):
             self._learn(base, srv)
 
     def count_pfx_by_svc(self):
@@ -523,13 +525,13 @@ class Meta0PrefixMapping(MetaMapping):
 
         loops = 0
         moved_bases = set()
-        all_available_services = [x for x in self.services.itervalues()
+        all_available_services = [x for x in itervalues(self.services)
                                   if self.get_score(x) > 0]
         if len(all_available_services) < 2:
             self.logger.warn("Less than 2 services have a positive score, "
                              "we won't rebalance.")
             return None
-        ideal_bases_by_svc = (self.num_bases() * self.replicas /
+        ideal_bases_by_svc = (self.num_bases() * self.replicas //
                               len(all_available_services))
         upper_limit = ideal_bases_by_svc + 1
         self.logger.info("META1 Digits = %d", self.digits)

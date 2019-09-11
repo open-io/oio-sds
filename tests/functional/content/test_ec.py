@@ -235,7 +235,7 @@ class TestECContent(BaseTestCase):
         test_data = random_data(data_size)
         content = self._new_content(test_data, broken_pos_list)
 
-        data = "".join(content.fetch())
+        data = b''.join(content.fetch())
 
         self.assertEqual(len(data), len(test_data))
         self.assertEqual(md5_data(data), md5_data(test_data))

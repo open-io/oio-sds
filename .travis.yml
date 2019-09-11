@@ -37,6 +37,7 @@ addons:
     - python-pbr
     - python-setuptools
     - python-virtualenv
+    - python3
     - redis-server
     - redis-tools
     - sqlite3
@@ -71,8 +72,15 @@ jobs:
       script: ./tools/oio-travis-failfast.sh
       name: Copyright, Release build, SDK build
     - script: ./tools/oio-travis-unit.sh
+      python: 2.7
       name: C unit/func, Python unit/pep8
+    - script: ./tools/oio-travis-unit.sh
+      language: python
+      python: 3.6
+      name: C unit/func, Python3 unit/pep8
     - stage: Functional tests (fast)
+      language: python
+      python: 3.6
       script: ./tools/oio-travis-suites.sh
       env: TEST_SUITE=slave
     - script: ./tools/oio-travis-suites.sh
@@ -89,6 +97,8 @@ jobs:
     - script: ./tools/oio-travis-suites.sh
       env: TEST_SUITE=ec
     - script: ./tools/oio-travis-suites.sh
+      env: TEST_SUITE=ec,with-service-id
+    - script: ./tools/oio-travis-suites.sh
       env: TEST_SUITE=3copies
     - script: ./tools/oio-travis-suites.sh
       env: TEST_SUITE=small-cache,fsync
@@ -100,6 +110,17 @@ jobs:
       env: TEST_SUITE=multi-beanstalk
     - script: ./tools/oio-travis-suites.sh
       env: TEST_SUITE=mover,with-service-id
+  allow_failures:
+    - stage: Fail Fast tests
+      script: ./tools/oio-travis-unit.sh
+      language: python
+      python: 3.6
+      name: C unit/func, Python3 unit/pep8
+    - stage: Functional tests
+      script: ./tools/oio-travis-suites.sh
+      language: python
+      python: 3.6
+      env: TEST_SUITE=ec,with-service-id
 
 after_success:
   - bash <(curl -s https://codecov.io/bash) -f /tmp/cmake_coverage.output

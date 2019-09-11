@@ -51,11 +51,10 @@ class TestMeta0Bootstrap(unittest.TestCase):
 
     def _test_ok(self, groups, sites=1, replicas=1, level=0, fill_token=0):
         nb_services = sites * 3
-        print "srv =", nb_services, "sites =", sites, "repli =", replicas
         srv = list(self.generate_services(nb_services, nb_sites=sites,
                                           fill_token=fill_token))
         _after = _bootstrap(srv, groups, replicas, level)
-        ideal_per_slice = (len(groups) * replicas) / sites
+        ideal_per_slice = (len(groups) * replicas) // sites
         for start, end in _slice_services(_after, level):
             total = sum(len(s['bases']) for s in _after[start:end])
             # Check the sites are evenly loaded
@@ -63,7 +62,7 @@ class TestMeta0Bootstrap(unittest.TestCase):
             self.assertIn(total, bounds)
             # Check services are uniformly balanced within the
             # current slice.
-            ideal_per_node = total / (end - start)
+            ideal_per_node = total // (end - start)
             bounds = (ideal_per_node, ideal_per_node+1)
             for s in _after[start:end]:
                 self.assertIn(len(s['bases']), bounds)

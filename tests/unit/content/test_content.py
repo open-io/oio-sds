@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of
+# Copyright (C) 2015-2019 OpenIO SAS, as part of
 # OpenIO Software Defined Storage
 #
 # This library is free software; you can redistribute it and/or
@@ -269,77 +269,80 @@ class TestChunksHelper(unittest.TestCase):
 
 class TestGeneratorIO(unittest.TestCase):
     def test_read_1_by_1_byte_from_list(self):
-        data = ["a", "b", "c", "d"]
+        data = [b"a", b"b", b"c", b"d"]
         gen = GeneratorIO(data)
-        self.assertEqual(gen.read(1), "a")
-        self.assertEqual(gen.read(1), "b")
-        self.assertEqual(gen.read(1), "c")
-        self.assertEqual(gen.read(1), "d")
-        self.assertEqual(gen.read(1), "")
+        self.assertEqual(gen.read(1), b"a")
+        self.assertEqual(gen.read(1), b"b")
+        self.assertEqual(gen.read(1), b"c")
+        self.assertEqual(gen.read(1), b"d")
+        self.assertEqual(gen.read(1), b"")
 
     def test_read_1_by_1_from_tuple(self):
-        data = ("a", "bc", "d")
+        data = (b"a", b"bc", b"d")
         gen = GeneratorIO(data)
-        self.assertEqual(gen.read(1), "a")
-        self.assertEqual(gen.read(1), "b")
-        self.assertEqual(gen.read(1), "c")
-        self.assertEqual(gen.read(1), "d")
-        self.assertEqual(gen.read(1), "")
+        self.assertEqual(gen.read(1), b"a")
+        self.assertEqual(gen.read(1), b"b")
+        self.assertEqual(gen.read(1), b"c")
+        self.assertEqual(gen.read(1), b"d")
+        self.assertEqual(gen.read(1), b"")
 
     def test_read_1_by_1_from_generator(self):
         def gen_data():
-            yield 'a'
-            yield 'bc'
-            yield 'd'
+            yield b'a'
+            yield b'bc'
+            yield b'd'
         gen = GeneratorIO(gen_data())
-        self.assertEqual(gen.read(1), "a")
-        self.assertEqual(gen.read(1), "b")
-        self.assertEqual(gen.read(1), "c")
-        self.assertEqual(gen.read(1), "d")
-        self.assertEqual(gen.read(1), "")
+        self.assertEqual(gen.read(1), b"a")
+        self.assertEqual(gen.read(1), b"b")
+        self.assertEqual(gen.read(1), b"c")
+        self.assertEqual(gen.read(1), b"d")
+        self.assertEqual(gen.read(1), b"")
 
     def test_read_1_by_1_from_iterable_class(self):
         class DataGen(object):
             def __init__(self):
-                self.data = "abcd"
+                self.data = b"abcd"
                 self.pos = 0
 
             def __iter__(self):
                 return self
 
-            def next(self):
+            def __next__(self):
                 if self.pos >= len(self.data):
                     raise StopIteration()
                 self.pos += 1
                 return self.data[self.pos - 1]
 
+            def next(self):
+                return self.__next__()
+
         gen = GeneratorIO(DataGen())
-        self.assertEqual(gen.read(1), "a")
-        self.assertEqual(gen.read(1), "b")
-        self.assertEqual(gen.read(1), "c")
-        self.assertEqual(gen.read(1), "d")
-        self.assertEqual(gen.read(1), "")
+        self.assertEqual(gen.read(1), b"a")
+        self.assertEqual(gen.read(1), b"b")
+        self.assertEqual(gen.read(1), b"c")
+        self.assertEqual(gen.read(1), b"d")
+        self.assertEqual(gen.read(1), b"")
 
     def test_read_1_by_1_byte_variable_input(self):
-        data = ["a", "bc", "d"]
+        data = [b"a", b"bc", b"d"]
         gen = GeneratorIO(data)
-        self.assertEqual(gen.read(1), "a")
-        self.assertEqual(gen.read(1), "b")
-        self.assertEqual(gen.read(1), "c")
-        self.assertEqual(gen.read(1), "d")
-        self.assertEqual(gen.read(1), "")
+        self.assertEqual(gen.read(1), b"a")
+        self.assertEqual(gen.read(1), b"b")
+        self.assertEqual(gen.read(1), b"c")
+        self.assertEqual(gen.read(1), b"d")
+        self.assertEqual(gen.read(1), b"")
 
     def test_read_more_than_data_size(self):
-        data = ["a", "bc", "d"]
-        gen = GeneratorIO(data)
-        self.assertEqual(gen.read(10), "abcd")
-        self.assertEqual(gen.read(10), "")
+        data = [b"a", b"bc", b"d"]
+        gen = GeneratorIO(data, True)
+        self.assertEqual(gen.read(10), b"abcd")
+        self.assertEqual(gen.read(10), b"")
 
     def test_read_empty_data(self):
         data = []
         gen = GeneratorIO(data)
-        self.assertEqual(gen.read(10), "")
+        self.assertEqual(gen.read(10), b'')
 
         data = ["", "", ""]
         gen = GeneratorIO(data)
-        self.assertEqual(gen.read(10), "")
+        self.assertEqual(gen.read(10), b'')

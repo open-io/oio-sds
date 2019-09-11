@@ -21,6 +21,8 @@ import tempfile
 from string import hexdigits
 from datetime import datetime
 
+from six import string_types
+
 from oio.common.constants import chunk_xattr_keys, OIO_VERSION, \
     STRLEN_CHUNKID, CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
 from oio.common.utils import cid_from_name, paths_gen, CacheDict
@@ -101,7 +103,7 @@ class BlobConverter(object):
         with open(dirname + '/' + chunk_id, 'w') as backup_fd:
             # same format as getfattr
             backup_fd.write('# file: ' + self._get_path(chunk_id) + '\n')
-            for k, v in xattr.iteritems():
+            for k, v in xattr.items():
                 backup_fd.write('user.' + k + '="' + v + '"\n')
 
     def _save_container(self, cid, account, container):
@@ -177,7 +179,7 @@ class BlobConverter(object):
             raise OrphanChunk('Not the same inode: possible orphan chunk')
 
         # check fullpath and chunk ID
-        if isinstance(version, basestring):
+        if isinstance(version, string_types):
             try:
                 version = int(version)
             except ValueError:
@@ -254,7 +256,7 @@ class BlobConverter(object):
                                              check_chunk_id=False)
 
         links = meta.get('links', dict())
-        for chunk_id2, fullpath2 in links.iteritems():
+        for chunk_id2, fullpath2 in links.items():
             self.decode_fullpath(fullpath2)
 
         fullpath = meta.get('full_path')
@@ -276,7 +278,7 @@ class BlobConverter(object):
         xattr_to_remove = list()
         success = True
 
-        for k, v in raw_meta.iteritems():
+        for k, v in raw_meta.items():
             # fetch raw chunk ID
             if k == XATTR_CHUNK_ID:
                 raw_chunk_id = v.upper()

@@ -442,7 +442,7 @@ class RdirClient(HttpApi):
         while True:
             for i in range(max_attempts):
                 try:
-                    _resp, resp_body = self._rdir_request(
+                    resp, resp_body = self._rdir_request(
                         volume, 'POST', 'fetch', json=req_body, **kwargs)
                     break
                 except OioNetworkException:
@@ -453,7 +453,7 @@ class RdirClient(HttpApi):
                     # Too many attempts
                     raise
 
-            truncated = _resp.headers.get(
+            truncated = resp.headers.get(
                     HEADER_PREFIX + 'list-truncated')
             if truncated is None:
                 # TODO(adu): Delete when it will no longer be used
@@ -464,7 +464,7 @@ class RdirClient(HttpApi):
             else:
                 truncated = true_value(truncated)
                 if truncated:
-                    req_body['start_after'] = _resp.headers[
+                    req_body['start_after'] = resp.headers[
                         HEADER_PREFIX + 'list-marker']
 
             if shuffle:
@@ -584,7 +584,7 @@ class RdirClient(HttpApi):
                 'container_id': container_id,
                 'mtime': int(mtime)}
 
-        for key, value in kwargs.iteritems():
+        for key, value in kwargs.items():
             body[key] = value
 
         return self._rdir_request(volume=volume_id, method='POST',
@@ -628,7 +628,7 @@ class RdirClient(HttpApi):
         body = {'container_url': container_path,
                 'container_id': container_id}
 
-        for key, value in kwargs.iteritems():
+        for key, value in kwargs.items():
             body[key] = value
 
         return self._rdir_request(volume=volume_id, method='POST',
