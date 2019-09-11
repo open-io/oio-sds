@@ -80,6 +80,12 @@ queue_url = ${QUEUE_URL}
 use = egg:oio#notify
 tube = oio-repli
 queue_url = ${QUEUE_URL}
+# Exclude accounts and/or specific containers.
+# Account and container names must be urlencoded.
+# Values are separated with commas.
+#exclude = account/container
+#exclude = account1,account2,account3
+#exclude = account1/container1,account2,account3/container1
 
 [filter:noop]
 use = egg:oio#noop
