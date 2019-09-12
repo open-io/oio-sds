@@ -147,8 +147,7 @@ class ServiceWatcher(object):
         # Use a boolean so we can easily convert it to a number in conscience
         self.service_definition['tags']['tag.up'] = self.status
         try:
-            self.cs.register(self.service['type'], self.service_definition,
-                             retries=False)
+            self.cs.register(self.service_definition, retries=False)
         except OioException as rqe:
             self.logger.warn("Failed to register service %s: %s",
                              self.service_definition["addr"], rqe)
