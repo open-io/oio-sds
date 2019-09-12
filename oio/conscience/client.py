@@ -172,9 +172,25 @@ class ConscienceClient(ProxyClient):
             raise OioException("ERROR while getting services types: %s" %
                                resp.text)
 
-    def register(self, pool, service_definition, **kwargs):
-        data = json.dumps(service_definition)
+    def get_service_definition(self, srv_type, srv_id,
+                               score=None, tags=None):
+        service_definition = dict()
+        service_definition['ns'] = self.ns
+        service_definition['type'] = srv_type
+        service_definition['addr'] = srv_id
+        if score is not None:
+            service_definition['score'] = score
+        if tags is not None:
+            service_definition['tags'] = tags
+        return service_definition
+
+    def register(self, service_definitions, **kwargs):
+        data = json.dumps(service_definitions)
         resp, body = self._request('POST', '/register', data=data, **kwargs)
+
+    def deregister(self, service_definitions, **kwargs):
+        data = json.dumps(service_definitions)
+        resp, body = self._request('POST', '/deregister', data=data, **kwargs)
 
     def info(self):
         resp, body = self._request("GET", '/info')
