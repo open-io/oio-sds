@@ -256,4 +256,3 @@ _reply_success_json (struct req_args_s *args, GString * gstr)
 	const gchar *msg = gstr && gstr->len > 0 ? "OK" : "No Content";
 	return _reply_json (args, code, msg, gstr);
 }
-
