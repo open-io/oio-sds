@@ -14,6 +14,7 @@
 # License along with this library.
 
 import logging
+import random
 
 from tests.utils import BaseTestCase
 from tests.utils import CODE_SRVTYPE_NOTMANAGED
@@ -260,3 +261,28 @@ class TestConscienceFunctional(BaseTestCase):
         self.assertTrue(my_rawx['tags']['tag.lock'])
         self.assertEqual(1, my_rawx['score'])
         self.conscience.unlock_score(one_rawx)
+
+    def test_deregister_services(self):
+        self._flush_cs('echo')
+        self._reload()
+        expected_services = list()
+        expected_services.append(self._srv('echo', ip='127.0.0.1'))
+        expected_services.append(self._srv('echo', ip='127.0.0.2'))
+        expected_services.append(self._srv('echo', ip='127.0.0.3'))
+        self._register_srv(expected_services)
+        services = self._list_srvs('echo')
+        self.assertListEqual(
+            sorted([srv['addr'] for srv in expected_services]),
+            sorted([srv['addr'] for srv in services]))
+
+        service = random.choice(expected_services)
+        expected_services.remove(service)
+        self._deregister_srv(service)
+        services = self._list_srvs('echo')
+        self.assertListEqual(
+            sorted([srv['addr'] for srv in expected_services]),
+            sorted([srv['addr'] for srv in services]))
+
+        self._deregister_srv(expected_services)
+        services = self._list_srvs('echo')
+        self.assertListEqual([], services)
