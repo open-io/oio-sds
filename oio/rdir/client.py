@@ -28,6 +28,8 @@ from oio.conscience.client import ConscienceClient
 from oio.directory.client import DirectoryClient
 from oio.common.utils import depaginate, cid_from_name
 from oio.common.green import sleep
+from oio.common.easy_value import true_value
+from oio.common.constants import HEADER_PREFIX
 
 RDIR_ACCT = '_RDIR'
 
@@ -404,7 +406,7 @@ class RdirClient(HttpApi):
         self._rdir_request(volume_id, 'DELETE', 'delete',
                            json=body, **kwargs)
 
-    def chunk_fetch(self, volume, limit=100, rebuild=False,
+    def chunk_fetch(self, volume, limit=1000, rebuild=False,
                     container_id=None, max_attempts=3,
                     start_after=None, shuffle=False, **kwargs):
         """
@@ -446,14 +448,29 @@ class RdirClient(HttpApi):
                         continue
                     # Too many attempts
                     raise
-            if not resp_body:
-                break
-            req_body['start_after'] = resp_body[-1][0]
+
+            truncated = _resp.headers.get(
+                    HEADER_PREFIX + 'list-truncated')
+            if truncated is None:
+                # TODO(adu): Delete when it will no longer be used
+                if not resp_body:
+                    break
+                truncated = True
+                req_body['start_after'] = resp_body[-1][0]
+            else:
+                truncated = true_value(truncated)
+                if truncated:
+                    req_body['start_after'] = _resp.headers[
+                        HEADER_PREFIX + 'list-marker']
+
             if shuffle:
                 random.shuffle(resp_body)
             for (key, value) in resp_body:
                 container, content, chunk = key.split('|')
                 yield container, content, chunk, value
+
+            if not truncated:
+                break
 
     def admin_incident_set(self, volume, date, **kwargs):
         body = {'date': int(float(date))}
@@ -486,9 +503,58 @@ class RdirClient(HttpApi):
             volume, 'POST', 'admin/clear', params=params, **kwargs)
         return resp_body
 
-    def status(self, volume, **kwargs):
-        _resp, body = self._rdir_request(volume, 'GET', 'status', **kwargs)
-        return body
+    def status(self, volume, max=1000, prefix=None, marker=None,
+               max_attempts=3, **kwargs):
+        """
+        Get the status of chunks belonging to the specified volume.
+
+        :param volume: the volume to get chunks from
+        :type volume: `str`
+        :param max: maximum number of results to return per request
+            to the rdir server.
+        :type max: `int`
+        :keyword prefix: get only chunks belonging to
+           the specified prefix
+        :type prefix: `str`
+        :keyword marker: fetch only chunk that appear after
+            this marker
+        :type marker: `str`
+        """
+        req_params = {'max': max}
+        if prefix:
+            req_params['prefix'] = prefix
+        if marker:
+            req_params['marker'] = marker
+        chunks = dict()
+        containers = dict()
+
+        while True:
+            for i in range(max_attempts):
+                try:
+                    _resp, resp_body = self._rdir_request(
+                        volume, 'GET', 'status', params=req_params, **kwargs)
+                    break
+                except OioNetworkException:
+                    # Monotonic backoff
+                    if i < max_attempts - 1:
+                        sleep(i * 1.0)
+                        continue
+                    # Too many attempts
+                    raise
+
+            for (key, value) in resp_body.get('chunk', dict()).items():
+                chunks[key] = chunks.get(key, 0) + value
+            for (cid, info) in resp_body.get('container', dict()).items():
+                for (key, value) in info.items():
+                    containers[cid][key] = containers.setdefault(
+                        cid, dict()).get(key, 0) + value
+
+            if not true_value(_resp.headers.get(
+                    HEADER_PREFIX + 'list-truncated')):
+                break
+            req_params['marker'] = _resp.headers[HEADER_PREFIX + 'list-marker']
+
+        return {'chunk': chunks, 'container': containers}
 
     def meta2_index_create(self, volume_id, **kwargs):
         """
