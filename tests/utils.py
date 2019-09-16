@@ -306,11 +306,22 @@ class CommonTestCase(testtools.TestCase):
         """
         self._ns_conf = set_namespace_options(self.ns, opts, remove=remove)
 
+    def _list_srvs(self, srvtype):
+        resp = self.request('GET', self._url_cs('list'),
+                            params={'type': srvtype})
+        self.assertEqual(resp.status, 200)
+        return self.json_loads(resp.data)
+
     def _flush_cs(self, srvtype):
         params = {'type': srvtype}
         resp = self.request('POST', self._url_cs("flush"),
                             params=params, headers=self.TEST_HEADERS)
-        self.assertEqual(resp.status / 100, 2)
+        self.assertIn(resp.status, (200, 204))
+
+    def _deregister_srv(self, srv):
+        resp = self.request('POST', self._url_cs("deregister"),
+                            jsonlib.dumps(srv), headers=self.TEST_HEADERS)
+        self.assertIn(resp.status, (200, 204))
 
     def _register_srv(self, srv):
         resp = self.request('POST', self._url_cs("register"),

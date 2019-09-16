@@ -1,7 +1,7 @@
 /*
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -256,4 +256,3 @@ _reply_success_json (struct req_args_s *args, GString * gstr)
 	const gchar *msg = gstr && gstr->len > 0 ? "OK" : "No Content";
 	return _reply_json (args, code, msg, gstr);
 }
-

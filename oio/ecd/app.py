@@ -1,4 +1,4 @@
-# Copyright (C) 2016-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -88,7 +88,11 @@ def load_meta_chunk(request, nb_chunks, pos=None):
     h = request.headers
     meta_chunk = []
     for i in xrange(nb_chunks):
-        chunk_url = h['%schunk-%s' % (SYS_PREFIX, i)]
+        try:
+            chunk_url = h['%schunk-%s' % (SYS_PREFIX, i)]
+        except KeyError:
+            # Missing chunk
+            continue
         chunk_pos = '%s.%d' % (pos, i) if pos else str(i)
         chunk = {
             'url': chunk_url,
