@@ -76,6 +76,31 @@ static GTree *tree_bases = NULL;
 #define RDIR_LISTING_LIMIT 4096
 /* ------------------------------------------------------------------------- */
 
+struct req_args_s
+{
+	struct http_request_s *rq;
+	struct http_reply_ctx_s *rp;
+	struct oio_requri_s ruri;
+};
+
+static const char *
+_option(struct req_args_s *args, const char *name)
+{
+	gsize namelen = strlen(name);
+	gchar *needle = g_alloca(namelen+2);
+	memcpy(needle, name, namelen);
+	needle[namelen] = '=';
+	needle[namelen+1] = 0;
+
+	if (args->ruri.query_tokens != NULL) {
+		for (gchar **p = args->ruri.query_tokens ; *p ; ++p) {
+			if (g_str_has_prefix(*p, needle))
+				return (*p) + namelen + 1;
+		}
+	}
+	return NULL;
+}
+
 static enum http_rc_e
 _reply_bytes(struct http_reply_ctx_s *rp,
 		int code, const gchar * msg, GBytes * bytes)
@@ -522,22 +547,100 @@ _db_vol_push(const char *volid, gboolean autocreate, GString *key,
 	return _db_insert_generic(base, key, value);
 }
 
-static GError *
-_db_vol_fetch(const char *volid, GString *value,
-		const char *start_after, gint64 limit, gboolean rebuild,
-		const char *cid)
+struct _listing_req_s {
+	const gchar *marker;
+	gint64 max;
+	const gchar *prefix;
+	gboolean rebuild;
+};
+
+struct _listing_resp_s {
+	gboolean truncated;
+	gchar *marker;
+	gint64 incident_date;
+};
+
+typedef void (*_listing_func) (gint64 incident_date,
+		size_t keylen, const gchar *key, struct rdir_record_s *rec);
+
+static void
+clean_listing_resp(struct _listing_resp_s *listing_resp)
 {
+	g_free(listing_resp->marker);
+}
+
+static GError *
+extract_optional_listing_fields(struct req_args_s *args,
+		struct json_object *jbody, struct _listing_req_s *listing_req)
+{
+	GError *err = NULL;
+	struct json_object *jstart = NULL, *jlimit = NULL, *jcid = NULL,
+			*jrebuild = NULL;
+
+	if (jbody) {
+		// TODO(adu): Delete when it will no longer be used
+		if (!json_object_is_type(jbody, json_type_object))
+			return BADREQ("null body");
+		struct oio_ext_json_mapping_s map[] = {
+			{"start_after",  &jstart,   json_type_string,  0},
+			{"limit",        &jlimit,   json_type_int,     0},
+			{"container_id", &jcid,     json_type_string,  0},
+			{"rebuild",      &jrebuild, json_type_boolean, 0},
+			{NULL, NULL, 0, 0}
+		};
+		if ((err = oio_ext_extract_json(jbody, map)))
+			return err;
+	}
+
+	if (OPT("marker"))
+		listing_req->marker = OPT("marker");
+	else if (jstart)
+		listing_req->marker = json_object_get_string(jstart);
+	if (OPT("max"))
+		listing_req->max = g_ascii_strtoll(OPT("max"), NULL, 10);
+	else if (jlimit)
+		listing_req->max = json_object_get_int64(jlimit);
+	if (listing_req->max <= 0)
+		listing_req->max = 1000;
+	if (OPT("prefix"))
+		listing_req->prefix = OPT("prefix");
+	else if (jcid)
+		listing_req->prefix = json_object_get_string(jcid);
+	if (OPT("rebuild"))
+		listing_req->rebuild = oio_str_parse_bool(OPT("rebuild"), FALSE);
+	else if (jrebuild)
+		listing_req->rebuild = json_object_get_boolean(jrebuild);
+	return NULL;
+}
+
+static void
+load_listing_headers(struct http_reply_ctx_s *rp,
+		struct _listing_resp_s *listing_resp)
+{
+	if (listing_resp->truncated) {
+		rp->add_header(PROXYD_HEADER_PREFIX "list-truncated", g_strdup("true"));
+		rp->add_header(PROXYD_HEADER_PREFIX "list-marker",
+				g_strdup(listing_resp->marker));
+	} else {
+		rp->add_header(PROXYD_HEADER_PREFIX "list-truncated", g_strdup("false"));
+	}
+}
+
+static GError *
+_db_vol_listing(const char *volid, struct _listing_req_s *listing_req,
+		struct _listing_resp_s *listing_resp, _listing_func listing_func)
+{
+	gint64 nb_chunks = 0;
 	gint64 incident_date = 0;
 	GError *err = NULL;
 	struct rdir_base_s *base = NULL;
 
-	limit = CLAMP(limit, 1, 4096);
-
 	if ((err = _db_admin_get_incident(volid, &incident_date)))
 		return err;
+	listing_resp->incident_date = incident_date;
 
-	if (rebuild && incident_date <= 0) {
-		GRID_INFO("Fetching the chunks in order to rebuild, but "
+	if (listing_req->rebuild && incident_date <= 0) {
+		GRID_INFO("Listing the chunks in order to rebuild, but "
 				"no incident date set");
 		return NULL;
 	}
@@ -545,11 +648,13 @@ _db_vol_fetch(const char *volid, GString *value,
 	if ((err = _db_get(volid, FALSE, &base)))
 		return err;
 
-	gchar prefix[128], after[512];
+	gchar prefix[512], after[512];
 	const gsize prefix_len =
-		g_snprintf(prefix, sizeof(prefix), CHUNK_PREFIX "%s", cid ?: "");
+		g_snprintf(prefix, sizeof(prefix), CHUNK_PREFIX "%s",
+				listing_req->prefix ?: "");
 	const gsize after_len =
-		g_snprintf(after, sizeof(after), CHUNK_PREFIX "%s", start_after ?: "");
+		g_snprintf(after, sizeof(after), CHUNK_PREFIX "%s",
+				listing_req->marker ?: "");
 
 	leveldb_readoptions_t *options = leveldb_readoptions_create();
 	leveldb_readoptions_set_fill_cache(options, 0);
@@ -563,16 +668,25 @@ _db_vol_fetch(const char *volid, GString *value,
 
 	/* if a 'start_after' has been provided and if the iterator is
 	 * exactly on it, let's step one chunk further. */
-	if (leveldb_iter_valid(it) && start_after) {
+	if (leveldb_iter_valid(it) && listing_req->marker) {
 		size_t keylen = 0;
 		const char *key = leveldb_iter_key(it, &keylen);
 		if (after_len <= keylen && !memcmp(key, after, after_len))
 			leveldb_iter_next(it);
 	}
 
-	for (guint nb=0 ; leveldb_iter_valid(it) ; leveldb_iter_next(it)) {
-		size_t keylen = 0, vallen = 0;
-		const char *key = leveldb_iter_key(it, &keylen);
+	size_t keylen = 0;
+	const char *key = NULL;
+	size_t vallen = 0;
+	const char *val = NULL;
+	for (; leveldb_iter_valid(it); leveldb_iter_next(it)) {
+		keylen = 0;
+		key = NULL;
+		vallen = 0;
+		val = NULL;
+		struct rdir_record_s rec = {0};
+
+		key = leveldb_iter_key(it, &keylen);
 
 		/* We don't match the prefix anymore, and we won't find the prefix
 		 * in further elements, because of the initial seek that jumped
@@ -580,20 +694,48 @@ _db_vol_fetch(const char *volid, GString *value,
 		if (keylen < prefix_len || 0 != memcmp(key, prefix, prefix_len))
 			break;
 
-		struct rdir_record_s rec = {0};
-		const char *val = leveldb_iter_value(it, &vallen);
+		val = leveldb_iter_value(it, &vallen);
 		err = _record_parse(&rec, val, vallen);
 		if (err) {
-			GRID_INFO("Malformed record at [%.*s]", (int)keylen, key);
+			GRID_WARN("Malformed record at [%.*s]", (int)keylen, key);
 			g_clear_error(&err);
 			continue;
 		}
 
-		if (rebuild && incident_date > 0 && rec.mtime > incident_date) {
+		if (listing_req->rebuild && incident_date > 0
+				&& rec.mtime > incident_date)
 			continue;
+
+		if (listing_req->max > 0 && nb_chunks >= listing_req->max) {
+			listing_resp->truncated = TRUE;
+
+			leveldb_iter_prev(it);
+			keylen = 0;
+			key = NULL;
+			key = leveldb_iter_key(it, &keylen);
+			listing_resp->marker = g_strndup(key + (sizeof(CHUNK_PREFIX) - 1),
+					keylen - (sizeof(CHUNK_PREFIX) - 1));
+			break;
 		}
 
-		if (nb++ > 0)
+		listing_func(incident_date, keylen, key, &rec);
+
+		nb_chunks++;
+	}
+
+	leveldb_iter_destroy(it);
+	return err;
+}
+
+static GError *
+_db_vol_fetch(const char *volid, struct _listing_req_s *listing_req,
+		struct _listing_resp_s *listing_resp, GString *value)
+{
+	GError *err = NULL;
+
+	void listing_func(gint64 incident_date UNUSED,
+			size_t keylen, const gchar *key, struct rdir_record_s *rec) {
+		if (value->len > 1)
 			g_string_append_c(value, ',');
 
 		g_string_append_c(value, '[');
@@ -604,16 +746,15 @@ _db_vol_fetch(const char *volid, GString *value,
 		g_string_append_c(value, '"');
 		g_string_append_c(value, ',');
 		g_string_append_c(value, '{');
-		oio_str_gstring_append_json_pair_int(value, "mtime", rec.mtime);
+		oio_str_gstring_append_json_pair_int(value, "mtime", rec->mtime);
 		g_string_append_c(value, '}');
 		g_string_append_c(value, ']');
-
-		if (limit > 0 && nb >= limit)
-			break;
 	}
 
-	leveldb_iter_destroy(it);
-	return NULL;
+	g_string_append_c(value, '[');
+	err = _db_vol_listing(volid, listing_req, listing_resp, listing_func);
+	g_string_append_c(value, ']');
+	return err;
 }
 
 static GError *
@@ -665,20 +806,11 @@ _dump_vol_status(GString *value, GTree *tree_containers, GTree *tree_to_rebuild)
 }
 
 static GError *
-_db_vol_status(const char *volid, GString *value)
+_db_vol_status(const char *volid, struct _listing_req_s *listing_req,
+		struct _listing_resp_s *listing_resp, GString *value)
 {
-	static const char prefix[] = CHUNK_PREFIX;
-	static gsize prefix_len = sizeof(prefix)-1;
-
-	gint64 nb_chunks = 0, nb_to_rebuild = 0, incident_date = 0;
-	struct rdir_base_s *base = NULL;
+	gint64 nb_chunks = 0, nb_to_rebuild = 0;
 	GError *err = NULL;
-
-	if ((err = _db_admin_get_incident(volid, &incident_date)))
-		return err;
-
-	if ((err = _db_get(volid, FALSE, &base)))
-		return err;
 
 	GTree *tree_containers =
 		g_tree_new_full(metautils_strcmp3, NULL, g_free, NULL);
@@ -695,34 +827,18 @@ _db_vol_status(const char *volid, GString *value)
 		gint v = p ? GPOINTER_TO_INT(p) + 1 : 2;
 		g_tree_replace(tree_to_rebuild, g_strdup(cid), GINT_TO_POINTER(v));
 	}
-
-	leveldb_readoptions_t *options = leveldb_readoptions_create();
-	leveldb_readoptions_set_fill_cache(options, 0);
-	leveldb_readoptions_set_verify_checksums(options, 0);
-	leveldb_iterator_t *it = leveldb_create_iterator(base->base, options);
-	leveldb_readoptions_destroy(options);
-
-	/* Initially seek at the farthest position */
-	leveldb_iter_seek(it, prefix, prefix_len);
-
-	/* Iterate over the chunk to count them and their containers */
-	for (; leveldb_iter_valid(it); leveldb_iter_next(it)) {
-		size_t keylen = 0, vallen = 0;
-		const char *key = leveldb_iter_key(it, &keylen);
-
-		/* We don't match the prefix anymore, and we won't find the prefix
-		 * in further elements, because of the initial seek that jumped
-		 * 'at least further than the prefix' */
-		if (keylen < prefix_len || memcmp(key, prefix, prefix_len) != 0)
-			break;
-
+	void listing_func(gint64 incident_date,
+			size_t keylen, const gchar *key, struct rdir_record_s *rec) {
 		/* Insulate the name of its container */
 		gchar cid[128];
 		g_snprintf(cid, sizeof(cid), "%.*s",
-				(int)(keylen - sizeof(CHUNK_PREFIX) - 1),
-				key + sizeof(CHUNK_PREFIX) - 1);
+				(int)(keylen - (sizeof(CHUNK_PREFIX) - 1)),
+				key + (sizeof(CHUNK_PREFIX) - 1));
 		char *colon = strchr(cid, '|');
-		if (!colon) continue;
+		if (!colon) {
+			GRID_WARN("Malformed key at [%.*s]", (int)keylen, key);
+			return;
+		}
 		*colon = 0;
 
 		/* count that chunk */
@@ -731,23 +847,19 @@ _db_vol_status(const char *volid, GString *value)
 		/* count that chunk, for its container */
 		count_chunk(cid);
 
-		if (incident_date > 0) {
-			struct rdir_record_s rec = {0};
-			const char *val = leveldb_iter_value(it, &vallen);
-			err = _record_parse(&rec, val, vallen);
-			if (err) {
-				GRID_INFO("Malformed record at [%.*s]", (int)keylen, key);
-				g_clear_error(&err);
-				continue;
-			}
+		if (incident_date <= 0 || rec->mtime > incident_date)
+			return;
 
-			if (rec.mtime <= incident_date) {
-				nb_to_rebuild++;
-				count_to_rebuild(cid);
-			}
-		}
+		/* count that chunk to rebuild */
+		nb_to_rebuild++;
+
+		/* count that chunk to rebuild, for its container */
+		count_to_rebuild(cid);
 	}
-	leveldb_iter_destroy(it);
+
+	err = _db_vol_listing(volid, listing_req, listing_resp, listing_func);
+	if (err)
+		goto label_end;
 
 	/* pack the answer */
 	g_string_append_c(value, '{');
@@ -755,7 +867,7 @@ _db_vol_status(const char *volid, GString *value)
 	g_string_append_c(value, ':');
 	g_string_append_c(value, '{');
 	oio_str_gstring_append_json_pair_int(value, "total", nb_chunks);
-	if (incident_date > 0 && nb_to_rebuild > 0) {
+	if (listing_resp->incident_date > 0 && nb_to_rebuild > 0) {
 		g_string_append_c(value, ',');
 		oio_str_gstring_append_json_pair_int(value, "to_rebuild",
 				nb_to_rebuild);
@@ -767,20 +879,21 @@ _db_vol_status(const char *volid, GString *value)
 	g_string_append_c(value, '{');
 	_dump_vol_status(value, tree_containers, tree_to_rebuild);
 	g_string_append_c(value, '}');
-	if (incident_date > 0) {
+	if (listing_resp->incident_date > 0) {
 		g_string_append_c(value, ',');
 		oio_str_gstring_append_json_quote(value, "rebuild");
 		g_string_append_c(value, ':');
 		g_string_append_c(value, '{');
 		oio_str_gstring_append_json_pair_int(value,
-				"incident_date", incident_date);
+				"incident_date", listing_resp->incident_date);
 		g_string_append_c(value, '}');
 	}
 	g_string_append_c(value, '}');
 
+label_end:
 	g_tree_destroy(tree_containers);
 	g_tree_destroy(tree_to_rebuild);
-	return NULL;
+	return err;
 }
 
 static GError *
@@ -998,13 +1111,6 @@ _db_admin_clear(const char *volid, gboolean all, gboolean before_incident,
  *                            Chunk records                                  *
  * ------------------------------------------------------------------------- */
 
-struct req_args_s
-{
-	struct http_request_s *rq;
-	struct http_reply_ctx_s *rp;
-	struct oio_requri_s ruri;
-};
-
 static GError *
 _request_to_key(struct json_object *jbody, GString **pkey)
 {
@@ -1168,40 +1274,27 @@ static enum http_rc_e
 _route_vol_fetch(struct req_args_s *args, struct json_object *jbody,
 		const char *volid)
 {
-	if (jbody && !json_object_is_type(jbody, json_type_object))
-		return _reply_format_error(args->rp, BADREQ("null body"));
+	GError *err = NULL;
+
 	if (!volid)
 		return _reply_format_error(args->rp, BADREQ("no volume id"));
 
-	/* extract the optional (push-specific) fields */
-	GError *err = NULL;
-	struct json_object *jstart = NULL, *jlimit = NULL,
-					   *jrebuild = NULL, *jcid = NULL;
-	if (jbody) {
-		struct oio_ext_json_mapping_s map[] = {
-			{"start_after",  &jstart,   json_type_string,  0},
-			{"limit",        &jlimit,   json_type_int,     0},
-			{"rebuild",      &jrebuild, json_type_boolean, 0},
-			{"container_id", &jcid,     json_type_string,  0},
-			{NULL, NULL, 0, 0}
-		};
-		if ((err = oio_ext_extract_json(jbody, map)))
-			return _reply_format_error(args->rp, err);
-	}
+	struct _listing_req_s listing_req = {0};
+	struct _listing_resp_s listing_resp = {0};
+	err = extract_optional_listing_fields(args, jbody, &listing_req);
+	if (err)
+		return _reply_format_error(args->rp, err);
 
 	GString *value = g_string_sized_new(1024);
-	g_string_append_c(value, '[');
-	err = _db_vol_fetch(volid, value,
-			jstart ? json_object_get_string(jstart) : NULL,
-			jlimit ? json_object_get_int64(jlimit) : G_MAXINT64,
-			jrebuild ? json_object_get_boolean(jrebuild) : FALSE,
-			jcid ? json_object_get_string(jcid) : NULL);
-	g_string_append_c(value, ']');
-
-	if (err) {
+	err = _db_vol_fetch(volid, &listing_req, &listing_resp, value);
+	if (err)
 		g_string_free(value, TRUE);
+	else
+		load_listing_headers(args->rp, &listing_resp);
+
+	clean_listing_resp(&listing_resp);
+	if (err)
 		return _reply_common_error(args->rp, err);
-	}
 	return _reply_ok(args->rp, value);
 }
 
@@ -1273,17 +1366,29 @@ _route_vol_create(struct req_args_s *args, const char *volid)
 static enum http_rc_e
 _route_vol_status(struct req_args_s *args, const char *volid)
 {
-	/* sanity checks */
-	if (!oio_str_is_set(volid))
+	GError *err = NULL;
+
+	if (!volid)
 		return _reply_format_error(args->rp, BADREQ("no volume id"));
 
-	/* forward to the backend */
+	struct _listing_req_s listing_req = {0};
+	struct _listing_resp_s listing_resp = {0};
+	err = extract_optional_listing_fields(args, NULL, &listing_req);
+	if (err)
+		return _reply_format_error(args->rp, err);
+	listing_req.rebuild = FALSE;
+
 	GString *value = g_string_sized_new(1024);
-	GError *err = _db_vol_status(volid, value);
-	if (!err)
-		return _reply_ok(args->rp, value);
-	g_string_free(value, TRUE);
-	return _reply_common_error(args->rp, err);
+	err = _db_vol_status(volid, &listing_req, &listing_resp, value);
+	if (err)
+		g_string_free(value, TRUE);
+	else
+		load_listing_headers(args->rp, &listing_resp);
+
+	clean_listing_resp(&listing_resp);
+	if (err)
+		return _reply_common_error(args->rp, err);
+	return _reply_ok(args->rp, value);
 }
 
 
@@ -2273,24 +2378,6 @@ _route_srv_config(struct req_args_s *args)
 }
 
 /* ------------------------------------------------------------------------- */
-
-static const char *
-_option(struct req_args_s *args, const char *name)
-{
-	gsize namelen = strlen(name);
-	gchar *needle = g_alloca(namelen+2);
-	memcpy(needle, name, namelen);
-	needle[namelen] = '=';
-	needle[namelen+1] = 0;
-
-	if (args->ruri.query_tokens != NULL) {
-		for (gchar **p = args->ruri.query_tokens ; *p ; ++p) {
-			if (g_str_has_prefix(*p, needle))
-				return (*p) + namelen + 1;
-		}
-	}
-	return NULL;
-}
 
 static enum http_rc_e
 _handler_decode_route(struct req_args_s *args, struct json_object *jbody,
