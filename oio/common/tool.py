@@ -131,6 +131,8 @@ class Tool(object):
             'Stop sending and wait for all results already sent')
         self.success = False
         self.running = False
+        if self.beanstalkd:
+            self.beanstalkd.running = False
 
     def _item_with_beanstalkd_reply_from_task_event(self, job_id, data):
         task_event = json.loads(data)
@@ -140,6 +142,7 @@ class Tool(object):
             yield (item, beanstalkd_reply)
 
     def _fetch_items_with_beanstalkd_reply_from_beanstalkd(self):
+        # Do not block more than 2 seconds
         return self.beanstalkd.fetch_jobs(
             self._item_with_beanstalkd_reply_from_task_event,
             reserve_timeout=2)
@@ -374,10 +377,10 @@ class _LocalDispatcher(_Dispatcher):
         self.max_items_per_second = int_value(self.conf.get(
             'items_per_second'), self.tool.DEFAULT_ITEM_PER_SECOND)
         if self.max_items_per_second > 0:
-            # Max 5 seconds in advance
-            queue_size = self.max_items_per_second * 5
+            # Max 2 seconds in advance
+            queue_size = self.max_items_per_second * 2
         else:
-            queue_size = concurrency * 1024
+            queue_size = concurrency * 64
         self.queue_workers = eventlet.Queue(queue_size)
         self.queue_reply = eventlet.Queue()
 
@@ -504,11 +507,12 @@ class _DistributedDispatcher(_Dispatcher):
             raise OioException('No beanstalkd worker available')
         nb_workers = len(self.beanstalkd_workers)
         if self.max_items_per_second > 0:
-            # Max 5 seconds in advance
-            queue_size_per_worker = self.max_items_per_second * 5 / nb_workers
+            # Max 2 seconds in advance
+            queue_size_per_worker = self.max_items_per_second * 2 / nb_workers
         else:
-            queue_size_per_worker = 1024
+            queue_size_per_worker = 64
         for _, beanstalkd_worker in self.beanstalkd_workers.items():
+            beanstalkd_worker.low_limit = queue_size_per_worker / 2
             beanstalkd_worker.high_limit = queue_size_per_worker
 
         # Beanstalkd reply

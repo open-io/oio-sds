@@ -776,11 +776,7 @@ class BeanstalkdSender(TubedBeanstalkd):
 
         job_id = None
         try:
-            if not self.connected:
-                self.logger.debug('Connecting to %s using tube %s',
-                                  self.addr, self.tube)
-                self._connect(**kwargs)
-
+            self._connect(**kwargs)
             with self.nb_jobs_lock:
                 job_id = self.beanstalkd.put(
                     job, priority=priority, delay=delay)
