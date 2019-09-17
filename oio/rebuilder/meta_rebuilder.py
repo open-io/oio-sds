@@ -41,6 +41,8 @@ class MetaRebuilder(Rebuilder):
                 stripped = line.strip()
                 if stripped and not stripped.startswith('#'):
                     queue.put(stripped)
+                if not self.running:
+                    break
         return True
 
     def _full_container_list(self, account, **kwargs):

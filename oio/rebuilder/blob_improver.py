@@ -77,6 +77,8 @@ class BlobImprover(Rebuilder):
                 self.logger.info('Max events (%d) reached, exiting',
                                  max_events)
                 break
+            if not self.running:
+                break
         events.close()
 
     def _read_retry_queue(self, queue, **kwargs):
