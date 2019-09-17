@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -225,6 +225,7 @@ void sqlx_repository_call_db_properties_change_callback(
 
 GError* sqlx_repository_timed_open_and_lock(sqlx_repository_t *repo,
 		const struct sqlx_name_s *n, enum sqlx_open_type_e how,
+		const gchar *peers,
 		struct sqlx_sqlite3_s **sq3, gchar **lead,
 		gint64 deadline);
 
@@ -282,6 +283,7 @@ GError* sqlx_repository_exit_election(sqlx_repository_t *repo,
 /** Triggers the global election mechanism on a base given its name */
 GError* sqlx_repository_use_base(sqlx_repository_t *repo,
 		const struct sqlx_name_s *n,
+		const gchar *peers,
 		gboolean notify_master,
 		gboolean allow_autocreate,
 		gboolean *replicated);
@@ -328,7 +330,7 @@ GError* sqlx_repository_restore_base(struct sqlx_sqlite3_s *sq3,
 GError* sqlx_repository_restore_from_file(struct sqlx_sqlite3_s *sq3,
 		const gchar *path);
 
-GError* sqlx_repository_retore_from_master(struct sqlx_sqlite3_s *sq3);
+GError* sqlx_repository_restore_from_master(struct sqlx_sqlite3_s *sq3);
 
 /* ------------------------------------------------------------------------- */
 

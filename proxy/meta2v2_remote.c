@@ -31,17 +31,26 @@ License along with this library.
 #include "common.h"
 
 static MESSAGE
-_m2v2_build_request(const char *name, struct oio_url_s *url, GByteArray *body,
-		gint64 deadline)
+_m2v2_build_request_with_extra_fields(const char *name, struct oio_url_s *url,
+		GByteArray *body, const gchar **fields, gint64 deadline)
 {
 	EXTRA_ASSERT(name != NULL);
 	EXTRA_ASSERT(url != NULL);
 
 	MESSAGE msg = metautils_message_create_named(name, deadline);
 	metautils_message_add_url (msg, url);
+	metautils_message_add_fields_str(msg, fields);
 	if (body)
 		metautils_message_add_body_unref (msg, body);
 	return msg;
+}
+
+static MESSAGE
+_m2v2_build_request(const char *name, struct oio_url_s *url,
+		GByteArray *body, gint64 deadline)
+{
+	return _m2v2_build_request_with_extra_fields(
+			name, url, body, NULL, deadline);
 }
 
 static GByteArray *
@@ -140,9 +149,11 @@ m2v2_boolean_truncated_extract(gpointer ctx, MESSAGE reply)
 GByteArray* m2v2_remote_pack_CREATE(
 		struct oio_url_s *url,
 		struct m2v2_create_params_s *pols,
+		const gchar **headers,
 		gint64 dl)
 {
-	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_CREATE, url, NULL, dl);
+	MESSAGE msg = _m2v2_build_request_with_extra_fields(
+			NAME_MSGNAME_M2V2_CREATE, url, NULL, headers, dl);
 	if (pols && pols->storage_policy)
 		metautils_message_add_field_str(msg, NAME_MSGKEY_STGPOLICY, pols->storage_policy);
 	if (pols && pols->version_policy)

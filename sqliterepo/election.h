@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -128,6 +128,7 @@ struct election_manager_vtable_s
 	 * starting the election. Usefull to prepare. */
 	GError* (*election_init) (struct election_manager_s *manager,
 			const struct sqlx_name_s *n,
+			const gchar *peers,
 			enum election_step_e *out_status,
 			gboolean *replicated);
 
@@ -168,8 +169,8 @@ const char * election_manager_get_local (const struct election_manager_s *m);
 GError* election_get_peers (struct election_manager_s *manager,
 		const struct sqlx_name_s *n, guint32 flags, gchar ***peers);
 
-#define election_init(m,n,out,replicated) \
-	((struct abstract_election_manager_s*)m)->vtable->election_init(m,n,out,replicated)
+#define election_init(m,n,peers,out,replicated) \
+	((struct abstract_election_manager_s*)m)->vtable->election_init(m,n,peers,out,replicated)
 
 #define election_start(m,n) \
 	((struct abstract_election_manager_s*)m)->vtable->election_start(m,n)

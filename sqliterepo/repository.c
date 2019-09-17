@@ -612,6 +612,7 @@ struct open_args_s
 	const char *schema;
 	hashstr_t *realname;
 	gchar *realpath;
+	const char *peers;  /* Used when database is being created. */
 	gint64 deadline;
 
 	guint8 create;
@@ -891,7 +892,8 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 	if (election_configured && !args->no_refcheck) {
 		gboolean replicated = FALSE;
 		enum election_step_e step = STEP_NONE;
-		err = election_init(args->repo->election_manager, &args->name, &step, &replicated);
+		err = election_init(args->repo->election_manager, &args->name,
+				args->peers, &step, &replicated);
 		if (err)
 			return err;
 
@@ -1089,12 +1091,13 @@ sqlx_repository_open_and_lock(sqlx_repository_t *repo,
 		struct sqlx_sqlite3_s **result, gchar **lead)
 {
 	return sqlx_repository_timed_open_and_lock(
-			repo, n, how, result, lead, oio_ext_get_deadline());
+			repo, n, how, NULL, result, lead, oio_ext_get_deadline());
 }
 
 GError*
 sqlx_repository_timed_open_and_lock(sqlx_repository_t *repo,
 		const struct sqlx_name_s *n, enum sqlx_open_type_e how,
+		const gchar *peers,
 		struct sqlx_sqlite3_s **result, gchar **lead,
 		gint64 deadline)
 {
@@ -1117,6 +1120,7 @@ sqlx_repository_timed_open_and_lock(sqlx_repository_t *repo,
 	args.create = BOOL(how & SQLX_OPEN_CREATE);
 	args.urgent = BOOL(how & SQLX_OPEN_URGENT);
 	args.deadline = deadline;
+	args.peers = peers;
 
 	switch (how & SQLX_OPEN_REPLIMODE) {
 		case SQLX_OPEN_LOCAL:
@@ -1253,7 +1257,8 @@ sqlx_repository_status_base(sqlx_repository_t *repo,
 
 	/* Kick the election off */
 	gboolean replicated = FALSE;
-	GError *err = sqlx_repository_use_base(repo, n, FALSE, TRUE, &replicated);
+	GError *err = sqlx_repository_use_base(
+			repo, n, NULL, FALSE, TRUE, &replicated);
 	if (err)
 		return err;
 	if (!replicated)
@@ -1300,7 +1305,7 @@ sqlx_repository_prepare_election(sqlx_repository_t *repo, const struct sqlx_name
 		return NULL;
 	}
 
-	return election_init(repo->election_manager, n, NULL, NULL);
+	return election_init(repo->election_manager, n, NULL, NULL, NULL);
 }
 
 GError*
@@ -1356,7 +1361,7 @@ _base_lazy_recover(sqlx_repository_t *repo, const struct sqlx_name_s *n,
 
 GError*
 sqlx_repository_use_base(sqlx_repository_t *repo, const struct sqlx_name_s *n,
-		gboolean notify_master, gboolean allow_autocreate,
+		const gchar *peers, gboolean notify_master, gboolean allow_autocreate,
 		gboolean *replicated)
 {
 	REPO_CHECK(repo);
@@ -1379,7 +1384,8 @@ sqlx_repository_use_base(sqlx_repository_t *repo, const struct sqlx_name_s *n,
 	/* The initiation of the election will perform the check that the
 	 * election is locally managed. */
 	enum election_step_e status = STEP_NONE;
-	if (!(err = election_init(repo->election_manager, n, &status, replicated))) {
+	if (!(err = election_init(repo->election_manager, n, peers,
+					&status, replicated))) {
 
 		/* Interleave a DB creation (out of the lock) if explicitely
 		 * allowed by both the request type AND the application */
@@ -1785,7 +1791,7 @@ sqlx_repository_restore_base(struct sqlx_sqlite3_s *sq3, guint8 *raw, gsize raws
 }
 
 GError*
-sqlx_repository_retore_from_master(struct sqlx_sqlite3_s *sq3)
+sqlx_repository_restore_from_master(struct sqlx_sqlite3_s *sq3)
 {
 	EXTRA_ASSERT(sq3 != NULL);
 	NAME2CONST(n, sq3->name);

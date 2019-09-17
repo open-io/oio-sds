@@ -107,6 +107,7 @@ static gridd_filter M2V2_CREATE_FILTERS[] =
 	meta2_filter_extract_header_storage_policy,
 	meta2_filter_extract_header_version_policy,
 	meta2_filter_extract_header_localflag,
+	meta2_filter_extract_header_peers,
 	meta2_filter_action_create_container,
 	meta2_filter_reply_success,
 	NULL

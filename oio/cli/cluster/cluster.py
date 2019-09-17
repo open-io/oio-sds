@@ -429,8 +429,38 @@ class ClusterFlush(command.Command):
                 self.app.client_manager.conscience.flush(srv_type)
                 self.log.warn('%s services flushed', srv_type)
             except Exception as err:
-                raise Exception('Error while flushing service %s: %s' %
-                                (srv_type, str(err)))
+                raise Exception('Error while flushing %s service: %s' %
+                                (srv_type, err))
+
+
+class ClusterDeregister(command.Command):
+    """Deregister specific services of the cluster."""
+
+    log = getLogger(__name__ + '.ClusterDeregister')
+
+    def get_parser(self, prog_name):
+        parser = super(ClusterDeregister, self).get_parser(prog_name)
+        parser.add_argument(
+            'srv_type',
+            help='Service type')
+        parser.add_argument(
+            'srv_ids',
+            metavar='<srv_ids>',
+            nargs='+',
+            help='IDs of the services.')
+        return parser
+
+    def take_action(self, parsed_args):
+        service_definitions = list()
+        for srv_id in parsed_args.srv_ids:
+            service_definitions.append(
+                self.app.client_manager.cluster.get_service_definition(
+                    parsed_args.srv_type, srv_id))
+        try:
+            self.app.client_manager.cluster.deregister(service_definitions)
+        except Exception as err:
+            raise Exception('Error while deregistering %s services: %s' %
+                            (parsed_args.srv_type, err))
 
 
 class ClusterResolve(show.ShowOne):

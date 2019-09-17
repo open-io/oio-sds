@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -143,6 +143,7 @@ struct sqlx_peering_vtable_s
 			/* in */
 			const char *url,
 			const struct sqlx_name_inline_s *n,
+			const gchar *peers,
 			const gboolean master);
 
 	/** @return FALSE if no notify() is necessary (i.e. no command deferred) */
@@ -150,6 +151,7 @@ struct sqlx_peering_vtable_s
 			/* in */
 			const char *url,
 			const struct sqlx_name_inline_s *n,
+			const gchar *peers,
 			/* out */
 			struct election_member_s *m,
 			const char *reqid,
@@ -180,12 +182,14 @@ gboolean sqlx_peering__use (struct sqlx_peering_s *self,
 		/* in */
 		const char *url,
 		const struct sqlx_name_inline_s *n,
+		const char *peers,
 		const gboolean master);
 
 gboolean sqlx_peering__getvers (struct sqlx_peering_s *self,
 		/* in */
 		const char *url,
 		const struct sqlx_name_inline_s *n,
+		const char *peers,
 		/* out */
 		struct election_member_s *m,
 		const char *reqid,

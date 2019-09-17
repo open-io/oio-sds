@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -164,6 +164,18 @@ meta2_filter_extract_header_append(struct gridd_filter_ctx_s *ctx,
 
 	TRACE_FILTER();
 	EXTRACT_STRING2(NAME_MSGKEY_APPEND, "APPEND", 1);
+	return FILTER_OK;
+}
+
+int
+meta2_filter_extract_header_peers(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GError *e = NULL;
+	gchar buf[512];
+
+	TRACE_FILTER();
+	EXTRACT_OPT(SQLX_ADMIN_PEERS);
 	return FILTER_OK;
 }
 

@@ -62,6 +62,12 @@ enum m2v2_open_type_e
 #define M2V2_OPEN_STATUS    0xF00
 };
 
+struct m2_open_args_s
+{
+	enum m2v2_open_type_e how;
+	const gchar *peers;
+};
+
 struct m2_prepare_data
 {
 	gint64 max_versions;
@@ -408,8 +414,8 @@ m2b_destroy(struct sqlx_sqlite3_s *sq3)
 }
 
 static GError *
-m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
-		enum m2v2_open_type_e how, struct sqlx_sqlite3_s **result)
+m2b_open_with_args(struct meta2_backend_s *m2, struct oio_url_s *url,
+		struct m2_open_args_s *open_args, struct sqlx_sqlite3_s **result)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -422,8 +428,10 @@ m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
 	struct sqlx_name_inline_s n0;
 	sqlx_inline_name_fill (&n0, url, NAME_SRVTYPE_META2, 1);
 	NAME2CONST(n,n0);
+	enum m2v2_open_type_e how = open_args->how;
 
-	err = sqlx_repository_open_and_lock(m2->repo, &n, m2_to_sqlx(how), &sq3, NULL);
+	err = sqlx_repository_timed_open_and_lock(m2->repo, &n, m2_to_sqlx(how),
+		   open_args->peers, &sq3, NULL, oio_ext_get_deadline());
 	if (NULL != err) {
 		if (err->code == CODE_CONTAINER_NOTFOUND)
 			err->domain = GQ();
@@ -483,6 +491,15 @@ m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
 	*result = sq3;
 	return NULL;
 }
+
+static GError *
+m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
+		enum m2v2_open_type_e how, struct sqlx_sqlite3_s **result)
+{
+	struct m2_open_args_s args = {how, NULL};
+	return m2b_open_with_args(m2, url, &args, result);
+}
+
 
 static GError *
 m2b_open_if_needed(struct meta2_backend_s *m2, struct oio_url_s *url,
@@ -700,10 +717,12 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 	}
 
 	/* Defer the `m2.init` check to the m2b_open() */
-	enum m2v2_open_type_e open_mode = M2V2_OPEN_AUTOCREATE |
+	struct m2_open_args_s open_args = {0};
+	open_args.how = M2V2_OPEN_AUTOCREATE |
 		(params->local ? M2V2_OPEN_LOCAL : M2V2_OPEN_MASTERONLY);
+	open_args.peers = params->peers;
 
-	err = m2b_open(m2, url, open_mode, &sq3);
+	err = m2b_open_with_args(m2, url, &open_args, &sq3);
 	EXTRA_ASSERT((sq3 != NULL) ^ (err != NULL));
 	if (err)
 		return err;

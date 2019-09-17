@@ -1,7 +1,7 @@
 /*
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -367,6 +367,14 @@ metautils_message_add_field_str(MESSAGE m, const char *name, const char *value)
 {
 	if (value)
 		metautils_message_add_field (m, name, value, strlen(value));
+}
+
+void
+metautils_message_add_fields_str(MESSAGE m, const char **fields)
+{
+	for (const char **cur = fields; fields && *cur; cur += 2) {
+		metautils_message_add_field_str(m, *cur, *(cur+1));
+	}
 }
 
 void

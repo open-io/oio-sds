@@ -1,6 +1,6 @@
 /*
 OpenIO SDS proxy
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -166,7 +166,8 @@ action_sqlx_copyto (struct req_args_s *args, struct json_object *jargs)
 	if (!from) {
 		/* No source, locate services from directory and use DB_PIPETO. */
 		ctx.which = CLIENT_PREFER_MASTER;
-		GByteArray * _pack(const struct sqlx_name_s *n) {
+		GByteArray * _pack(const struct sqlx_name_s *n,
+				const gchar **headers UNUSED) {
 			return sqlx_pack_PIPETO(n, to, DL());
 		}
 		rc = _sqlx_action_noreturn_TAIL(args, &ctx, _pack);
@@ -199,7 +200,8 @@ action_sqlx_propset (struct req_args_s *args, struct json_object *jargs)
 		err = BADREQ("No properties found in JSON object");
 	if (!err) {
 		gboolean flush = _request_get_flag(args, "flush");
-		GByteArray * _pack (const struct sqlx_name_s *n) {
+		GByteArray * _pack (const struct sqlx_name_s *n,
+				const gchar **headers UNUSED) {
 			return sqlx_pack_PROPSET_tab(args->url, n, flush, kv, DL());
 		}
 		rc = _sqlx_action_noreturn(args, CLIENT_PREFER_MASTER, _pack);
@@ -284,7 +286,8 @@ action_sqlx_propdel (struct req_args_s *args, struct json_object *jargs)
 	for (gchar **p = namev; namev && *p; p++)
 		oio_str_reuse(p, g_strconcat("user.", *p, NULL));
 
-	GByteArray * _pack(const struct sqlx_name_s *n) {
+	GByteArray * _pack(const struct sqlx_name_s *n,
+				const gchar **headers UNUSED) {
 		return sqlx_pack_PROPDEL(args->url, n, (const gchar * const * )namev, DL());
 	}
 	enum http_rc_e rc = _sqlx_action_noreturn (args, CLIENT_PREFER_MASTER, _pack);
@@ -295,7 +298,7 @@ action_sqlx_propdel (struct req_args_s *args, struct json_object *jargs)
 enum http_rc_e
 action_admin_ping (struct req_args_s *args)
 {
-	PACKER_VOID(_pack) { return sqlx_pack_USE (_u, FALSE, DL()); }
+	PACKER_VOID(_pack) { return sqlx_pack_USE(_u, NULL, FALSE, DL()); }
 	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, _pack);
 }
 

@@ -378,6 +378,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertEqual(properties['system']['sys.m2.usage'], '0')
         all_objects = self.api.object_list(self.account, cname)
         self.assertEqual(0, len(all_objects['objects']))
+        self.beanstalkd0.drain_buried('oio')
 
     # These tests are numbered to force them to be run in order
     def test_container_flush_0_no_container(self):
@@ -1365,7 +1366,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             _, chunks_copies = self.api.object_locate(self.account, snapshot,
                                                       test_object % i)
 
-            for chunk, copy in zip(chunks, chunks_copies):
+            for chunk, copy in zip(sorted(chunks), sorted(chunks_copies)):
                 # check that every chunk is different from the target
                 self.assertNotEqual(chunk['url'], copy['url'])
 

@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -275,6 +275,15 @@ const char *oio_ext_set_prefixed_random_reqid(const char *prefix) {
 	oio_buf_randomize(bulk.buf, sizeof(bulk.buf) - plen/2);
 	oio_str_bin2hex((guint8*)&bulk, sizeof(bulk), hex+plen, sizeof(hex) - plen);
 	return oio_ext_set_reqid(hex);
+}
+
+const char *
+oio_ext_ensure_reqid(const char *prefix)
+{
+	const char *reqid = oio_ext_get_reqid();
+	if (reqid)
+		return reqid;
+	return oio_ext_set_prefixed_random_reqid(prefix);
 }
 
 gint64 oio_ext_get_deadline(void) {

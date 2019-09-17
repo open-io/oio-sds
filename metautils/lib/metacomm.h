@@ -1,7 +1,7 @@
 /*
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -93,6 +93,7 @@ void metautils_message_add_body_unref (MESSAGE m, GByteArray *body);
 void metautils_message_add_field_gba(MESSAGE m, const char *name, GByteArray *gba);
 
 void metautils_message_add_field_str(MESSAGE m, const char *name, const char *value);
+void metautils_message_add_fields_str(MESSAGE m, const char **fields);
 
 void metautils_message_add_field_strint64(MESSAGE m, const char *n, gint64 v);
 

@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -75,12 +75,13 @@ sqlx_encode_TableSequence(struct TableSequence *tabseq, GError **err)
 /* ------------------------------------------------------------------------- */
 
 GByteArray*
-sqlx_pack_USE(const struct sqlx_name_s *name, const gboolean master,
-		gint64 deadline)
+sqlx_pack_USE(const struct sqlx_name_s *name, const gchar *peers,
+		const gboolean master, gint64 deadline)
 {
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_USE, NULL, name, deadline);
 	if (master)
 		metautils_message_add_field_strint(req, NAME_MSGKEY_MASTER, 1);
+	metautils_message_add_field_str(req, SQLX_ADMIN_PEERS, peers);
 	return message_marshall_gba_and_clean(req);
 }
 
@@ -145,12 +146,14 @@ sqlx_pack_EXITELECTION(const struct sqlx_name_s *name, gint64 deadline)
 
 GByteArray*
 sqlx_pack_SNAPSHOT(const struct sqlx_name_s *name, const gchar *source,
-		const gchar *cid, const gchar *seq_num, gint64 deadline)
+		const gchar *cid, const gchar *seq_num, const gchar **fields,
+		gint64 deadline)
 {
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_SNAPSHOT, NULL, name, deadline);
 	metautils_message_add_field_str(req, NAME_MSGKEY_SRC, source);
 	metautils_message_add_field_str(req, NAME_MSGKEY_CONTAINERID, cid);
 	metautils_message_add_field_str(req, NAME_MSGKEY_SEQNUM, seq_num);
+	metautils_message_add_fields_str(req, fields);
 	return message_marshall_gba_and_clean(req);
 }
 
@@ -205,10 +208,12 @@ sqlx_pack_REPLICATE(const struct sqlx_name_s *name, struct TableSequence *tabseq
 }
 
 GByteArray*
-sqlx_pack_GETVERS(const struct sqlx_name_s *name, gint64 deadline)
+sqlx_pack_GETVERS(const struct sqlx_name_s *name, const gchar *peers,
+		gint64 deadline)
 {
 	EXTRA_ASSERT(name != NULL);
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_GETVERS, NULL, name, deadline);
+	metautils_message_add_field_str(req, SQLX_ADMIN_PEERS, peers);
 	return message_marshall_gba_and_clean(req);
 }
 

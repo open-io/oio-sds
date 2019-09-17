@@ -261,6 +261,33 @@ _cs_pack_and_free_srvinfo_list (GSList * svc)
 	return gstr;
 }
 
+static GError *
+_load_services_info(struct json_object *jsrv, GSList **services)
+{
+	GError *err = NULL;
+
+	/* Manage a single service as well as a list of services */
+	if (json_object_is_type(jsrv, json_type_array)) {
+		const gint max = json_object_array_length(jsrv);
+		for (gint i = 0; i < max; ++i) {
+			struct json_object *jitem = json_object_array_get_idx(jsrv, i);
+			struct service_info_s *si = NULL;
+			err = service_info_load_json_object(jitem, &si, TRUE);
+			if (err)
+				break;
+			*services = g_slist_prepend(*services, si);
+		}
+	} else if (json_object_is_type(jsrv, json_type_object)) {
+		struct service_info_s *si = NULL;
+		if (!(err = service_info_load_json_object(jsrv, &si, TRUE)))
+			*services = g_slist_prepend(*services, si);
+	} else {
+		err = BADREQ("Expected: json object");
+	}
+
+	return err;
+}
+
 enum reg_op_e {
 	REGOP_PUSH,
 	REGOP_LOCK,
@@ -354,44 +381,56 @@ _registration_batch (enum reg_op_e op, GSList *services)
 }
 
 static enum http_rc_e
-_registration (struct req_args_s *args, enum reg_op_e op, struct json_object *jsrv)
+_registration(struct req_args_s *args, enum reg_op_e op, struct json_object *jsrv)
 {
-	GError *err;
+	GError *err = NULL;
+	GSList *services = NULL;
 
 	if (!push_queue)
 		return _reply_bad_gateway(args, SYSERR("Service upstream disabled"));
 
-	if (NULL != (err = _cs_check_tokens(args)))
+	if ((err = _cs_check_tokens(args)) != NULL)
 		return _reply_common_error(args, err);
 
-	/* Manage a single service as well as a list of services */
-	GSList *services = NULL;
-	if (json_object_is_type (jsrv, json_type_array)) {
-		const gint max = json_object_array_length(jsrv);
-		for (gint i = 0; i < max; ++i) {
-			struct json_object *jitem = json_object_array_get_idx(jsrv, i);
-			struct service_info_s *si = NULL;
-			err = service_info_load_json_object (jitem, &si, TRUE);
-			if (err)
-				break;
-			services = g_slist_prepend(services, si);
-		}
-	} else if (json_object_is_type (jsrv, json_type_object)) {
-		struct service_info_s *si = NULL;
-		if (!(err = service_info_load_json_object (jsrv, &si, TRUE)))
-			services = g_slist_prepend(services, si);
-	} else {
-		err = BADREQ("Expected: json object");
+	if ((err = _load_services_info(jsrv, &services)) != NULL) {
+		g_slist_free_full(services, (GDestroyNotify)service_info_clean);
+		return _reply_common_error(args, err);
 	}
 
 	/* Register the whole batch */
-	if (!err)
-		err = _registration_batch(op, services);
-	g_slist_free_full(services, (GDestroyNotify)service_info_clean);
+	err = _registration_batch(op, services);
 
-	if (!err)
-		return _reply_success_json (args, NULL);
-	return _reply_common_error (args, err);
+	g_slist_free_full(services, (GDestroyNotify)service_info_clean);
+	if (err)
+		return _reply_common_error(args, err);
+	return _reply_success_json(args, NULL);
+}
+
+static enum http_rc_e
+_deregistration(struct req_args_s *args, struct json_object *jsrv)
+{
+	GError *err = NULL;
+	GSList *services = NULL;
+
+	if ((err = _cs_check_tokens(args)) != NULL)
+		return _reply_common_error(args, err);
+
+	if ((err = _load_services_info(jsrv, &services)) != NULL) {
+		g_slist_free_full(services, (GDestroyNotify)service_info_clean);
+		return _reply_common_error(args, err);
+	}
+
+	/* Deregister */
+	CSURL(cs);
+	err = conscience_remote_remove_services(cs, NULL, services,
+			oio_ext_get_deadline());
+
+	g_slist_free_full(services, (GDestroyNotify)service_info_clean);
+	if (err) {
+		g_prefix_error(&err, "Conscience error: ");
+		return _reply_common_error(args, err);
+	}
+	return _reply_success_json(args, NULL);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -663,21 +702,21 @@ action_conscience_resolve_service_id (struct req_args_s *args)
 //
 // .. code-block:: http
 //
-//    HTTP/1.1 200 OK
+//    HTTP/1.1 204 No Content
 //    Connection: Close
-//    Content-Type: application/json
-//    Content-Length: 29
-//
-// .. code-block:: json
-//
-//    {"status":200,"message":"OK"}
+//    Content-Length: 0
 //
 // }}CS
 enum http_rc_e
 action_conscience_flush (struct req_args_s *args)
 {
-	GError *err;
-	if (NULL != (err = _cs_check_tokens(args)))
+	GError *err = NULL;
+	const char *srvtype = TYPE();
+
+	if (!srvtype)
+		return _reply_format_error(args, BADREQ("Missing type"));
+
+	if ((err = _cs_check_tokens(args)) != NULL)
 		return _reply_common_error(args, err);
 
 #ifdef HAVE_ENBUG
@@ -685,96 +724,80 @@ action_conscience_flush (struct req_args_s *args)
 		return _reply_retry(args, NEWERROR(CODE_UNAVAILABLE, "FAKE"));
 #endif
 
-	const char *srvtype = TYPE();
-	if (!srvtype)
-		return _reply_format_error (args, BADREQ("Missing type"));
-
 	CSURL(cs);
-	err = conscience_remote_remove_services (cs, srvtype, NULL, oio_ext_get_deadline());
+	err = conscience_remote_remove_services(cs, srvtype, NULL,
+			oio_ext_get_deadline());
 
 	if (err) {
-		g_prefix_error (&err, "Conscience error: ");
-		return _reply_common_error (args, err);
+		g_prefix_error(&err, "Conscience error: ");
+		return _reply_common_error(args, err);
 	}
-	return _reply_success_json (args, _create_status (CODE_FINAL_OK, "OK"));
+	return _reply_success_json(args, NULL);
+}
+
+static enum http_rc_e
+_rest_conscience_deregister(struct req_args_s *args, struct json_object *jargs)
+{
+	return _deregistration(args, jargs);
 }
 
 // CS{{
 // POST /v3.0/{NS}/conscience/deregister?type=<services type>
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Deregister service with given type, same as flush
-//
 // .. code-block:: http
 //
-//    POST /v3.0/OPENIO/conscience/deregister?type=rawx HTTP/1.1
+//    POST /v3.0/OPENIO/conscience/deregister HTTP/1.1
 //    Host: 127.0.0.1:6000
 //    User-Agent: curl/7.47.0
 //    Accept: */*
+//    Content-Length: 189
+//    Content-Type: application/x-www-form-urlencoded
 //
-// .. code-block:: http
-//
-//    HTTP/1.1 200 OK
-//    Connection: Close
-//    Content-Type: application/json
-//    Content-Length: 29
-//
-// .. code-block:: json
-//
-//    {"status":200,"message":"OK"}
-//
-// }}CS
-enum http_rc_e
-action_conscience_deregister (struct req_args_s *args)
-{
-	/* TODO(jfs): this behavior should disappear, there is the explicit
-	   flush() for this */
-	if (!args->rq->body || !args->rq->body->len) {
-		GRID_INFO("old-style flush");
-		return action_conscience_flush (args);
-	}
-
-	GError *err;
-	if (NULL != (err = _cs_check_tokens(args)))
-		return _reply_common_error(args, err);
-
-	/* TODO(jfs): the deregistration of a single service has not been implemented yet */
-	return _reply_not_implemented (args);
-}
-
-static enum http_rc_e
-_rest_conscience_register (struct req_args_s *args, struct json_object *jargs)
-{
-	return _registration (args, REGOP_PUSH, jargs);
-}
-
-
-// CS{{
-// POST /v3.0/{NS}/conscience/register
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-//
-// Register one service:
+// Body when deregistering one service:
 //
 // .. code-block:: json
 //
 //    {
 //      "addr": "127.0.0.1:6010",
-//      "tags": { "stat.cpu": 100, "stat.idle": 100, "stat.io": 100 },
 //      "type": "rawx"
 //    }
 //
-// Register several services at once:
+// Body when deregistering several services at once:
 //
 // .. code-block:: json
 //
 //    [
 //      { "addr": "127.0.0.1:6010",
-//        "tags": { "stat.cpu": 100, "stat.idle": 100, "stat.io": 100 },
 //        "type": "rawx" },
 //      { "addr": "127.0.0.1:6011",
-//        "tags": { "stat.cpu": 100, "stat.idle": 100, "stat.io": 100 },
-//        "type": "127.0.0.1:6011"}
+//        "type": "rawx"}
 //    ]
+//
+// Standard response:
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}CS
+enum http_rc_e
+action_conscience_deregister(struct req_args_s *args)
+{
+	return rest_action(args, _rest_conscience_deregister);
+}
+
+static enum http_rc_e
+_rest_conscience_register(struct req_args_s *args, struct json_object *jargs)
+{
+	return _registration(args, REGOP_PUSH, jargs);
+}
+
+// CS{{
+// POST /v3.0/{NS}/conscience/register
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
 // .. code-block:: http
 //
@@ -785,6 +808,31 @@ _rest_conscience_register (struct req_args_s *args, struct json_object *jargs)
 //    Content-Length: 189
 //    Content-Type: application/x-www-form-urlencoded
 //
+// Body when registering one service:
+//
+// .. code-block:: json
+//
+//    {
+//      "addr": "127.0.0.1:6010",
+//      "tags": { "stat.cpu": 100, "stat.idle": 100, "stat.io": 100 },
+//      "type": "rawx"
+//    }
+//
+// Body when registering several services at once:
+//
+// .. code-block:: json
+//
+//    [
+//      { "addr": "127.0.0.1:6010",
+//        "tags": { "stat.cpu": 100, "stat.idle": 100, "stat.io": 100 },
+//        "type": "rawx" },
+//      { "addr": "127.0.0.1:6011",
+//        "tags": { "stat.cpu": 100, "stat.idle": 100, "stat.io": 100 },
+//        "type": "rawx"}
+//    ]
+//
+// Standard response:
+//
 // .. code-block:: http
 //
 //    HTTP/1.1 204 No Content
@@ -793,16 +841,16 @@ _rest_conscience_register (struct req_args_s *args, struct json_object *jargs)
 //
 // }}CS
 enum http_rc_e
-action_conscience_register (struct req_args_s *args)
+action_conscience_register(struct req_args_s *args)
 {
 	args->rp->no_access();
-	return rest_action (args, _rest_conscience_register);
+	return rest_action(args, _rest_conscience_register);
 }
 
 static enum http_rc_e
-_rest_conscience_lock (struct req_args_s *args, struct json_object *jargs)
+_rest_conscience_lock(struct req_args_s *args, struct json_object *jargs)
 {
-	return _registration (args, REGOP_LOCK, jargs);
+	return _registration(args, REGOP_LOCK, jargs);
 }
 
 // CS{{
@@ -835,7 +883,7 @@ _rest_conscience_lock (struct req_args_s *args, struct json_object *jargs)
 //      { "addr": "127.0.0.1:6010",
 //        "type": "rawx" },
 //      { "addr": "127.0.0.1:6011",
-//        "type": "127.0.0.1:6011"}
+//        "type": "rawx"}
 //    ]
 //
 // Standard response:
@@ -890,7 +938,7 @@ _rest_conscience_unlock (struct req_args_s *args, struct json_object *jargs)
 //      { "addr": "127.0.0.1:6010",
 //        "type": "rawx" },
 //      { "addr": "127.0.0.1:6011",
-//        "type": "127.0.0.1:6011"}
+//        "type": "rawx"}
 //    ]
 //
 // Standard response:

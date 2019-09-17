@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -575,12 +575,14 @@ static gboolean _direct_use (struct sqlx_peering_s *self,
 		/* in */
 		const char *url,
 		const struct sqlx_name_inline_s *n,
+		const char *peers,
 		const gboolean master);
 
 static gboolean _direct_getvers (struct sqlx_peering_s *self,
 		/* in */
 		const char *url,
 		const struct sqlx_name_inline_s *n,
+		const char *peers,
 		/* out */
 		struct election_member_s *m,
 		const char *reqid,
@@ -624,13 +626,15 @@ struct use_request_s {
 	struct sockaddr_in6 addr;
 	struct sqlx_name_inline_s name;
 	gboolean master;
+	gchar reqid[LIMIT_LENGTH_REQID];
+	gchar peers[];
 };
 
 static void
 _use_by_udp_no_free(struct use_request_s *req, struct sqlx_peering_direct_s *self)
 {
 	NAME2CONST(n, req->name);
-	GByteArray *msg = sqlx_pack_USE(&n, req->master, req->deadline);
+	GByteArray *msg = sqlx_pack_USE(&n, req->peers, req->master, req->deadline);
 	const ssize_t len = msg->len;
 	const ssize_t sent = sendto(self->fd_udp, msg->data, msg->len,
 			MSG_NOSIGNAL, (struct sockaddr*) &req->addr, req->addr_len);
@@ -645,6 +649,10 @@ _use_by_udp_no_free(struct use_request_s *req, struct sqlx_peering_direct_s *sel
 static void
 _use_by_udp(struct use_request_s *req, struct sqlx_peering_direct_s *self)
 {
+	if (oio_str_is_set(req->reqid))
+		oio_ext_set_reqid(req->reqid);
+	else
+		oio_ext_set_prefixed_random_reqid("udp-use-");
 	_use_by_udp_no_free(req, self);
 	g_free(req);
 }
@@ -690,10 +698,11 @@ _direct_notify (struct sqlx_peering_s *self)
 }
 
 static gboolean
-_direct_use (struct sqlx_peering_s *self,
+_direct_use(struct sqlx_peering_s *self,
 		/* in */
 		const char *url,
 		const struct sqlx_name_inline_s *ni,
+		const char *peers,
 		const gboolean master)
 {
 	struct sqlx_peering_direct_s *p = (struct sqlx_peering_direct_s*) self;
@@ -707,20 +716,26 @@ _direct_use (struct sqlx_peering_s *self,
 	if (p->fd_udp >= 0) {
 		/* A UDP socket has been configured, so we skip the queue and the pool
 		 * for TCP RPC */
-		struct use_request_s req = {0};
-		req.deadline = deadline;
-		req.addr_len = sizeof(req.addr);
-		memcpy(&req.name, ni, sizeof(req.name));
-		req.master = master;
+		gsize struct_size =
+				sizeof(struct use_request_s) + 1 + (peers? strlen(peers) : 0);
+		struct use_request_s *req = g_alloca(struct_size);
+		req->deadline = deadline;
+		req->addr_len = sizeof(req->addr);
+		memcpy(&(req->name), ni, sizeof(req->name));
+		req->master = master;
 		if (!grid_string_to_sockaddr(url,
-					(struct sockaddr*)&req.addr, &req.addr_len)) {
+					(struct sockaddr*)&(req->addr), &req->addr_len)) {
 			GRID_WARN("Invalid peer addr [%s]", url);
 		} else {
+			g_strlcpy(req->reqid, oio_ext_ensure_reqid("sync-use-"),
+					LIMIT_LENGTH_REQID);
+			if (peers)
+				strcpy(req->peers, peers);
 			if (sqliterepo_udp_deferred) {
 				metautils_gthreadpool_push("UDP", p->pool_udp_use,
-						g_memdup(&req, sizeof(req)));
+						g_memdup(req, struct_size));
 			} else {
-				_use_by_udp_no_free(&req, p);
+				_use_by_udp_no_free(req, p);
 			}
 		}
 		return FALSE;
@@ -743,7 +758,7 @@ _direct_use (struct sqlx_peering_s *self,
 			return FALSE;
 		} else {
 			NAME2CONST(n, *ni);
-			GByteArray *req = sqlx_pack_USE(&n, master, deadline);
+			GByteArray *req = sqlx_pack_USE(&n, peers, master, deadline);
 			err = gridd_client_request (mc->client, req, NULL, NULL);
 			g_byte_array_unref(req);
 			if (err) {
@@ -894,6 +909,7 @@ _direct_getvers (struct sqlx_peering_s *self,
 		/* in */
 		const char *url,
 		const struct sqlx_name_inline_s *n,
+		const char *peers,
 		/* out */
 		struct election_member_s *m,
 		const char *reqid,
@@ -912,7 +928,7 @@ _direct_getvers (struct sqlx_peering_s *self,
 	mc->hook = result;
 	mc->m = m;
 	if (!reqid)
-		reqid = oio_ext_get_reqid();
+		reqid = oio_ext_ensure_reqid("sync-vers-");
 	g_strlcpy(mc->reqid, reqid, LIMIT_LENGTH_REQID);
 	mc->vremote = NULL;
 
@@ -929,7 +945,7 @@ _direct_getvers (struct sqlx_peering_s *self,
 		return FALSE;
 	} else {
 		NAME2CONST(n0, *n);
-		GByteArray *req = sqlx_pack_GETVERS(&n0, deadline);
+		GByteArray *req = sqlx_pack_GETVERS(&n0, peers, deadline);
 		err = gridd_client_request (mc->ec.client, req, mc, on_reply_GETVERS);
 		g_byte_array_unref(req);
 		if (NULL != err) {
@@ -972,12 +988,13 @@ sqlx_peering__use (struct sqlx_peering_s *self,
 		/* in */
 		const char *url,
 		const struct sqlx_name_inline_s *n,
+		const char *peers,
 		const gboolean master)
 {
 #ifdef HAVE_EXTRA_DEBUG
-	PEER_CALL(self,use)(self, url, n, master);
+	PEER_CALL(self,use)(self, url, n, peers, master);
 #else
-	return _direct_use(self, url, n, master);
+	return _direct_use(self, url, n, peers, master);
 #endif
 }
 
@@ -986,15 +1003,16 @@ sqlx_peering__getvers (struct sqlx_peering_s *self,
 		/* in */
 		const char *url,
 		const struct sqlx_name_inline_s *n,
+		const char *peers,
 		/* out */
 		struct election_member_s *m,
 		const char *reqid,
 		sqlx_peering_getvers_end_f result)
 {
 #ifdef HAVE_EXTRA_DEBUG
-	PEER_CALL(self,getvers)(self, url, n, m, reqid, result);
+	PEER_CALL(self,getvers)(self, url, n, peers, m, reqid, result);
 #else
-	return _direct_getvers(self, url, n, m, reqid, result);
+	return _direct_getvers(self, url, n, peers, m, reqid, result);
 #endif
 }
 

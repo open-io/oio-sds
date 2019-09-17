@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -74,6 +74,10 @@ const char *oio_ext_set_random_reqid(void);
 /** Calls oio_ext_set_reqid() with a randomly generated string,
  * with the specified prefix. */
 const char *oio_ext_set_prefixed_random_reqid(const char *prefix);
+
+/** If there is no request ID, generate one with the prefix, and return it.
+ * If there is already one, return it. */
+const char *oio_ext_ensure_reqid(const char *prefix);
 
 /* DO NOT FREE ... In facts, DO NOT EVEN CONSIDER USING THIS FUNCTION!
  * Gets the PRNG associated to the local thread, and allocates on if none

@@ -167,6 +167,15 @@ label_retry:
 	return err;
 }
 
+#if 0
+static GError *
+sqlx_service_reply_no_peers(struct sqlx_service_s *ss UNUSED,
+		const struct sqlx_name_s *n UNUSED, gboolean nocache UNUSED,
+		gchar ***result UNUSED)
+{
+	return NEWERROR(CODE_NOT_ALLOWED, "Refusing to call meta1 to get peers.");
+}
+#endif
 
 int
 main(int argc, char **argv)
@@ -175,7 +184,10 @@ main(int argc, char **argv)
 		NAME_SRVTYPE_META2, "m2v2",
 		"el/" NAME_SRVTYPE_META2, 2, 2,
 		schema, 1, 3,
-		sqlx_service_resolve_peers, _post_config, NULL
+		// FIXME(FVE): create a parameter to allow or deny peer requests.
+		//sqlx_service_reply_no_peers,
+		sqlx_service_resolve_peers,
+		_post_config, NULL
 	};
 
 	int rc = sqlite_service_main (argc, argv, &cfg);

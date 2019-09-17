@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -147,8 +147,7 @@ class ServiceWatcher(object):
         # Use a boolean so we can easily convert it to a number in conscience
         self.service_definition['tags']['tag.up'] = self.status
         try:
-            self.cs.register(self.service['type'], self.service_definition,
-                             retries=False)
+            self.cs.register(self.service_definition, retries=False)
         except OioException as rqe:
             self.logger.warn("Failed to register service %s: %s",
                              self.service_definition["addr"], rqe)
