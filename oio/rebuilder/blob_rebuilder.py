@@ -78,6 +78,8 @@ class BlobRebuilder(Rebuilder):
         chunks = self._fetch_chunks(**kwargs)
         for chunk in chunks:
             queue.put(chunk)
+            if not self.running:
+                break
 
     def _read_retry_queue(self, queue, **kwargs):
         while True:
@@ -326,14 +328,21 @@ class DistributedBlobRebuilder(BlobRebuilder):
                         return local_index
                 time.sleep(5)
 
-        broken_chunks = self._fetch_chunks(**kwargs)
         try:
+            broken_chunks = self._fetch_chunks(**kwargs)
             index = _send_broken_chunk(next(broken_chunks), index)
             self.sending = True
-        except StopIteration:
-            return
-        for broken_chunk in broken_chunks:
-            index = _send_broken_chunk(broken_chunk, index)
+            for broken_chunk in broken_chunks:
+                index = _send_broken_chunk(broken_chunk, index)
+
+                if not self.running:
+                    break
+        except Exception as exc:
+            if not isinstance(exc, StopIteration) and self.running:
+                self.logger.error("Failed to distribute events: %s", exc)
+                self.success = False
+        finally:
+            self.sending = False
 
     def _rebuilt_chunk_from_event(self, job_id, data, **kwargs):
         # pylint: disable=no-member

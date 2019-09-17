@@ -38,6 +38,8 @@ class Meta2Rebuilder(MetaRebuilder):
             for container in containers:
                 cid = cid_from_name(account, container[0])
                 queue.put(cid)
+            if not self.running:
+                break
 
     def _item_to_string(self, cid, **kwargs):
         return 'reference %s' % cid
