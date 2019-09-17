@@ -70,6 +70,11 @@ class BlobRebuilder(Rebuilder):
         # distributed
         self.distributed = False
 
+    def exit_gracefully(self, signum, frame):
+        super(BlobRebuilder, self).exit_gracefully(signum, frame)
+        if self.beanstalkd_listener:
+            self.beanstalkd_listener.running = False
+
     def _create_worker(self, **kwargs):
         return BlobRebuilderWorker(
             self, try_chunk_delete=self.try_chunk_delete, **kwargs)
@@ -215,8 +220,9 @@ class BlobRebuilder(Rebuilder):
                    str(chunk_id_or_pos), more]
 
     def _fetch_events_from_beanstalk(self, **kwargs):
+        # Do not block more than 2 seconds
         return self.beanstalkd_listener.fetch_jobs(
-            self._chunks_from_event, **kwargs)
+            self._chunks_from_event, reserve_timeout=2, **kwargs)
 
     def _fetch_chunks_from_file(self, **kwargs):
         with open(self.input_file, 'r') as ifile:
@@ -260,7 +266,8 @@ class DistributedBlobRebuilder(BlobRebuilder):
         self.beanstalkd_senders = dict()
         for addr in distributed_addr.split(';'):
             sender = BeanstalkdSender(
-                addr, distributed_tube, self.logger, **kwargs)
+                addr, distributed_tube, self.logger,
+                low_limit=32, high_limit=64, **kwargs)
             self.beanstalkd_senders[sender.addr] = sender
         self.sending = False
         self.rebuilder_id = str(uuid.uuid4())
