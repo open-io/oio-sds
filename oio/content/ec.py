@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from six import PY2
 
 from oio.common.exceptions import OrphanChunk
 from oio.content.content import Content, Chunk
@@ -88,7 +89,7 @@ class ECContent(Content):
         meta['full_path'] = self.full_path
         meta['oio_version'] = OIO_VERSION
         self.blob_client.chunk_put(spare_url[0], meta,
-                                   GeneratorIO(stream, sub_generator=True))
+                                   GeneratorIO(stream, sub_generator=PY2))
 
         # Register the spare chunk in object's metadata
         if chunk_id is None:

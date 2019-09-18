@@ -754,13 +754,7 @@ class ObjectStorageApi(object):
                 properties = metadata
             else:
                 properties.update(metadata)
-
-        if isinstance(src, BytesIO):
-            return self._object_create(
-                account, container, obj_name, src, sysmeta,
-                properties=properties, policy=policy,
-                key_file=key_file, append=append, **kwargs)
-        elif hasattr(src, 'read'):
+        if isinstance(src, BytesIO) or hasattr(src, 'read'):
             return self._object_create(
                 account, container, obj_name, src, sysmeta,
                 properties=properties, policy=policy, key_file=key_file,

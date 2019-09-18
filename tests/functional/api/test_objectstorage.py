@@ -115,7 +115,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_container_create_invalid_name(self):
         # Ah, those latin1 users!
-        name = "Beno\xeet-" + random_str(8)
+        name = (u"Beno\xeet-" + random_str(8)).encode('latin1')
         self.assertRaises(exc.ClientException, self._create, name)
 
     def test_create_properties(self):
@@ -228,7 +228,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self._set_properties(name, metadata)
 
         # container_get_properties specify key
-        key = random.choice(metadata.keys())
+        key = random.choice(list(metadata.keys()))
 
         data = self.api.container_get_properties(self.account, name, [key])
         self.assertEqual({key: metadata[key]}, data['properties'])
@@ -283,7 +283,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertDictEqual(metadata2, event.data['properties'])
 
         # container_set_properties overwrite key
-        key = random.choice(metadata.keys())
+        key = random.choice(list(metadata.keys()))
         value = random_str(32)
         metadata3 = {key: value}
         metadata.update(metadata3)
@@ -297,7 +297,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertDictEqual(metadata3, event.data['properties'])
 
         # container_set_properties and clear old keys
-        key = random.choice(metadata.keys())
+        key = random.choice(list(metadata.keys()))
         value = random_str(32)
         event_properties = {key: None for key in metadata}
         metadata = {key: value}
@@ -506,7 +506,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # container_del_properties on deleted container
         self.assertRaises(
             exc.NoSuchContainer, self.api.container_del_properties,
-            self.account, name, metadata.keys())
+            self.account, name, list(metadata.keys()))
 
     def test_container_touch(self):
         name = random_str(32)
@@ -578,10 +578,10 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_object_create_invalid_name(self):
         ct = random_str(32)
-        obj = "Beno\xeet"  # Latin1, not UTF-8
+        obj = u"Beno\xeet".encode('latin1')
         self._create(ct)
         self.assertRaises(exc.ClientException, self.api.object_create,
-                          self.account, ct, data="data", obj_name=obj)
+                          self.account, ct, data=b"data", obj_name=obj)
         self._clean(ct)
 
     def test_object_create_mime_type(self):
@@ -692,31 +692,31 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
     def test_object_create_then_append(self):
         """Create an object then append data"""
         name = random_str(16)
-        self.api.object_create(self.account, name, data="1"*128, obj_name=name)
+        self.api.object_create(self.account, name, data=b'1'*64, obj_name=name)
         _, size, _ = self.api.object_create(
-            self.account, name, data="2"*128, obj_name=name, append=True)
+            self.account, name, data=b'2'*128, obj_name=name, append=True)
         self.assertEqual(size, 128)
         _, data = self.api.object_fetch(self.account, name, name)
-        data = "".join(data)
-        self.assertEqual(len(data), 256)
-        self.assertEqual(data, "1" * 128 + "2" * 128)
+        data = b''.join(data)
+        self.assertEqual(len(data), 192)
+        self.assertEqual(data, b'1' * 64 + b'2' * 128)
 
     def test_object_create_from_append(self):
         """Create an object with append operation"""
         name = random_str(16)
         self.api.container_create(self.account, name)
-        self.api.object_create(self.account, name, data="1"*128, obj_name=name,
-                               append=True)
+        self.api.object_create(self.account, name, data=b'1'*128,
+                               obj_name=name, append=True)
         _, data = self.api.object_fetch(self.account, name, name)
-        data = "".join(data)
+        data = b''.join(data)
         self.assertEqual(len(data), 128)
-        self.assertEqual(data, "1"*128)
+        self.assertEqual(data, b'1'*128)
 
     def test_container_object_create_from_append(self):
         """Try to create container and object with append operation"""
         name = random_str(16)
         _chunks, size, checksum = self.api.object_create(
-            self.account, name, data="1"*128, obj_name=name, append=True)
+            self.account, name, data=b'1'*128, obj_name=name, append=True)
         self.assertEqual(size, 128)
 
         meta = self.api.object_get_properties(self.account, name, name)
@@ -1262,26 +1262,28 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
     def test_object_create_then_truncate(self):
         """Create an object then truncate data"""
         name = random_str(16)
-        self.api.object_create(self.account, name, data="1"*128, obj_name=name)
+        self.api.object_create(self.account, name,
+                               data=b'1'*128, obj_name=name)
         self.api.object_truncate(self.account, name, name, size=64)
         _, data = self.api.object_fetch(self.account, name, name)
-        data = "".join(data)
+        data = b''.join(data)
         self.assertEqual(len(data), 64)
-        self.assertEqual(data, "1" * 64)
+        self.assertEqual(data, b'1' * 64)
 
     def test_object_create_append_then_truncate(self):
         """Create an object, append data then truncate on chunk boundary"""
         name = random_str(16)
-        self.api.object_create(self.account, name, data="1"*128, obj_name=name)
+        self.api.object_create(self.account, name,
+                               data=b'1'*128, obj_name=name)
         _, size, _ = self.api.object_create(
-            self.account, name, data="2"*128, obj_name=name, append=True)
+            self.account, name, data=b'2'*128, obj_name=name, append=True)
         self.assertEqual(size, 128)
 
         self.api.object_truncate(self.account, name, name, size=128)
         _, data = self.api.object_fetch(self.account, name, name)
-        data = "".join(data)
+        data = b''.join(data)
         self.assertEqual(len(data), 128)
-        self.assertEqual(data, "1" * 128)
+        self.assertEqual(data, b'1' * 128)
 
         self.api.object_truncate(self.account, name, name, size=128)
 
@@ -1289,7 +1291,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         """Create an object, append data then try to truncate outside object
            range"""
         name = random_str(16)
-        self.api.object_create(self.account, name, data="1"*128, obj_name=name)
+        self.api.object_create(self.account, name,
+                               data=b'1'*128, obj_name=name)
         self.assertRaises(
             exc.OioException, self.api.object_truncate, self.account, name,
             name, size=-1)
@@ -1301,7 +1304,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         def _check_content_id(content_id=None):
             name = random_str(32)
             chunks, _, _ = self.api.object_create(
-                self.account, name, data="data", obj_name=name,
+                self.account, name, data=b"data", obj_name=name,
                 content_id=content_id)
             obj_meta = self.api.object_show(self.account, name, name)
             if content_id is not None:
@@ -1317,7 +1320,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         objects = ["obj%d" % i for i in range(8)]
         for obj in objects:
             self.api.object_create(self.account, container,
-                                   obj_name=obj, data=obj)
+                                   obj_name=obj, data=obj.encode('utf-8'))
         res = self.api.object_delete_many(self.account, container, objects)
         self.assertEqual(len(objects), len(res))
         for obj in objects:
@@ -1333,7 +1336,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.container_create(self.account, container)
         test_object = "test_object_%d"
         for i in range(10):
-            self.api.object_create(self.account, container, data="0"*128,
+            self.api.object_create(self.account, container, data=b'0'*128,
                                    obj_name=test_object % i,
                                    chunk_checksum_algo=None)
 
@@ -1359,7 +1362,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertRaises(exc.ServiceBusy,
                           self.api.object_create,
                           self.account, snapshot,
-                          data="1"*128,
+                          data=b'1'*128,
                           obj_name="should_not_be_created")
 
         for i in range(10):
@@ -1368,7 +1371,9 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             _, chunks_copies = self.api.object_locate(self.account, snapshot,
                                                       test_object % i)
 
-            for chunk, copy in zip(sorted(chunks), sorted(chunks_copies)):
+            zipped = zip(sorted(chunks, key=lambda x: x['pos']),
+                         sorted(chunks_copies, key=lambda x: x['pos']))
+            for chunk, copy in zipped:
                 # check that every chunk is different from the target
                 self.assertNotEqual(chunk['url'], copy['url'])
 
@@ -1414,7 +1419,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         cname = random_str(16)
         path = random_str(1023)
         self.api.object_create(self.account, cname,
-                               data="1"*128, obj_name=path)
+                               data=b'1'*128, obj_name=path)
 
     def test_object_head_trust_level_0(self):
         cname = random_str(16)

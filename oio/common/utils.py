@@ -23,9 +23,9 @@ from collections import OrderedDict
 from hashlib import sha256
 from random import getrandbits
 from io import RawIOBase
-from itertools import islice
+from itertools import chain, islice
 from codecs import getdecoder, getencoder
-from six import PY2, text_type
+from six import PY2, binary_type, text_type
 from six.moves import range
 from six.moves.urllib_parse import quote as _quote
 
@@ -241,60 +241,116 @@ def request_id(prefix=''):
                            rand_bits//4, getrandbits(rand_bits))
 
 
-class GeneratorIO(RawIOBase):
-    """
-    Make a file-like object from a generator.
-    `gen` is the generator to read.
-    `sub_generator` is a boolean telling that the generator
-    yields sequences of bytes instead of bytes.
-    """
-
-    def __init__(self, gen, sub_generator=True):
-        self.generator = self._wrap(gen)
-        self._sub_gen = sub_generator
-
-    def _wrap(self, gen):
+if PY2:
+    class GeneratorIO(RawIOBase):
         """
-        Wrap the provided generator so it yields bytes
-        instead of sequences of bytes
+        Make a file-like object from a generator.
+        `gen` is the generator to read.
+        `sub_generator` is a boolean telling that the generator
+        yields sequences of bytes instead of bytes.
         """
-        for part in gen:
-            if part:
-                if self._sub_gen:
-                    try:
-                        for byte in part:
-                            yield byte
-                    except TypeError:
-                        # The yielded elements do not support iteration
-                        # thus we will disable it
-                        self._sub_gen = False
-                        yield part
-                else:
-                    yield part
-            else:
+
+        def __init__(self, gen, sub_generator=True, iter_size=8192):
+            self.generator = self._wrap(gen)
+            self._sub_gen = sub_generator
+            self.iter_size = iter_size
+            self.byte_generator = chain.from_iterable(self.generator)
+
+        def _wrap(self, gen):
+            """
+            Wrap the provided generator so it yields bytes
+            instead of sequences of bytes
+            """
+            if isinstance(gen, binary_type):
+                yield gen
                 return
 
-    def readable(self):
-        return True
+            for part in gen:
+                if part:
+                    # FIXME(FVE): get rid of this, we don't need to yield bytes
+                    if self._sub_gen:
+                        try:
+                            for byte in part:
+                                yield byte
+                        except TypeError:
+                            # The yielded elements do not support iteration
+                            # thus we will disable it
+                            self._sub_gen = False
+                            yield part
+                    else:
+                        yield part
+                else:
+                    return
 
-    def read(self, size=None):
-        if PY2:
+        def readable(self):
+            return True
+
+        def read(self, size=None):
             if size is not None:
                 return b''.join(islice(self.generator, size))
             return b''.join(self.generator)
-        if size is not None:
-            return bytes(islice(self.generator, size))
-        return bytes(self.generator)
 
-    def readinto(self, b):  # pylint: disable=invalid-name
-        read_len = len(b)
-        read_data = self.read(read_len)
-        b[0:len(read_data)] = read_data
-        return len(read_data)
+        def readinto(self, b):  # pylint: disable=invalid-name
+            read_len = len(b)
+            read_data = self.read(read_len)
+            b[0:len(read_data)] = read_data
+            return len(read_data)
 
-    def __iter__(self):
-        for chunk in self.generator:
-            yield chunk
+        def __iter__(self):
+            while True:
+                buf = self.read(self.iter_size)
+                if not buf:
+                    return
+                yield buf
+
+else:
+    class GeneratorIO(RawIOBase):
+        """
+        Make a file-like object from a generator.
+        `gen` is the generator to read.
+        `sub_generator` is deprecated.
+        """
+
+        def __init__(self, gen, sub_generator=False, iter_size=8192):
+            self.generator = self._wrap(gen)
+            self.iter_size = iter_size
+            self.byte_generator = chain.from_iterable(self.generator)
+
+        def _wrap(self, gen):
+            """
+            Wrap the provided generator so it yields bytes objects
+            and not single bytes.
+            """
+            if isinstance(gen, binary_type):
+                yield gen
+                return
+            for part in gen:
+                yield part
+
+        def readable(self):
+            return True
+
+        def read(self, size=None):
+            if size is not None:
+                buf = bytes(islice(self.byte_generator, size))
+                return buf
+            try:
+                return next(self.generator)
+            except StopIteration:
+                return bytes(0)
+
+        def readinto(self, b):  # pylint: disable=invalid-name
+            read_len = len(b)
+            read_data = self.read(read_len)
+            b[0:len(read_data)] = read_data
+            return len(read_data)
+
+        def __iter__(self):
+            while True:
+                buf = self.read(self.iter_size)
+                if not buf:
+                    return
+                yield buf
 
 
 def group_chunk_errors(chunk_err_iter):

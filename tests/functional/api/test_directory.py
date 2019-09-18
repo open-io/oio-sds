@@ -175,10 +175,10 @@ class TestDirectoryAPI(BaseTestCase):
         self.assertEqual(data['properties'], metadata)
 
         # get_properties specify key
-        key = metadata.keys().pop(0)
+        key, old_val = metadata.popitem()
 
         data = self.api.get_properties(self.account, name, [key])
-        self.assertEqual(data['properties'], {key: metadata[key]})
+        self.assertEqual(data['properties'], {key: old_val})
 
         # clean
         self._clean(name, True)
@@ -219,7 +219,7 @@ class TestDirectoryAPI(BaseTestCase):
         self.assertEqual(data['properties'], metadata)
 
         # set_properties overwrite key
-        key = metadata.keys().pop(0)
+        key, _ = metadata.popitem()
         value = random_str(32)
         metadata3 = {key: value}
 
@@ -251,8 +251,7 @@ class TestDirectoryAPI(BaseTestCase):
         res = self._create(name, metadata)
         self.assertEqual(res, True)
 
-        key = metadata.keys().pop()
-        del metadata[key]
+        key, _ = metadata.popitem()
 
         # del_properties on existing reference
         self.api.del_properties(self.account, name, [key])
