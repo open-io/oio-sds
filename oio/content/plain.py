@@ -94,7 +94,7 @@ class PlainContent(Content):
             except Exception as err:
                 self.logger.warn(
                     "Failed to copy chunk from %s to %s: %s %s", src.url,
-                    spare_url, type(err), str(err.message))
+                    spare_url, type(err), err)
         if not uploaded:
             raise UnrecoverableContent("No copy available of missing chunk")
 

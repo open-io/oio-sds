@@ -307,14 +307,16 @@ class TestGeneratorIO(unittest.TestCase):
             def __iter__(self):
                 return self
 
-            def __next__(self):
+            def next(self):
+                # Python 2
                 if self.pos >= len(self.data):
                     raise StopIteration()
                 self.pos += 1
                 return self.data[self.pos - 1]
 
-            def next(self):
-                return self.__next__()
+            def __next__(self):
+                # Python 3, yield bytes, not int
+                return bytes((self.next(), ))
 
         gen = GeneratorIO(DataGen())
         self.assertEqual(gen.read(1), b"a")

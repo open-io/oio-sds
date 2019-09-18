@@ -191,10 +191,13 @@ func_tests () {
 		args="${args} -R"
 	fi
 	if is_running_test_suite "fsync"; then
-		args="${args} -f "${SRCDIR}/etc/bootstrap-option-rawx-fsync.yml""
+		args="${args} -f ${SRCDIR}/etc/bootstrap-option-rawx-fsync.yml"
+	fi
+	if is_running_test_suite "small-cache"; then
+		args="${args} -f ${SRCDIR}/etc/bootstrap-option-smallcache.yml"
 	fi
 	if is_running_test_suite "webhook"; then
-		args="${args} -f "${SRCDIR}/etc/bootstrap-option-webhook.yml""
+		args="${args} -f ${SRCDIR}/etc/bootstrap-option-webhook.yml"
 	fi
 	$OIO_RESET ${args} -N $OIO_NS $@
 
@@ -380,12 +383,6 @@ if is_running_test_suite "cli" ; then
 	echo -e "\n### CLI tests"
 	test_cli -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-cache.yml"
-fi
-
-if is_running_test_suite "small-cache" ; then
-	echo -e "\n### Small Cache tests"
-	func_tests -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
-		-f "${SRCDIR}/etc/bootstrap-option-smallcache.yml"
 fi
 
 if is_running_test_suite "3copies" ; then

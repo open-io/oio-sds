@@ -77,7 +77,7 @@ class TestObjectStorageApiPerfdata(BaseTestCase):
         self.assertNotIn('ttfb', perfdata)
         self.assertNotIn('ttlb', perfdata)
 
-        buf = ''.join(stream)
+        buf = b''.join(stream)
         self.assertEqual(obj, buf)
         self.assertIn('rawx', perfdata)
         if stg_method.ec:
