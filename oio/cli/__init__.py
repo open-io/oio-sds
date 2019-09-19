@@ -14,6 +14,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
+from cliff import command, lister, show
+
 from oio.common.logger import get_logger
 
 LOG_LEVELS = ['DEBUG', 'INFO', 'WARN', 'ERROR']
@@ -46,3 +48,32 @@ def get_logger_from_args(args, default_conf=None):
         conf['syslog_prefix'] = args.log_syslog_prefix
 
     return get_logger(conf, 'log', not args.quiet)
+
+
+class Command(command.Command):
+
+    success = True
+
+    def run(self, parsed_args):
+        return_code = super(Command, self).run(parsed_args)
+        if return_code == 0:
+            return_code = int(not self.success)
+        return return_code
+
+
+class Lister(lister.Lister):
+
+    success = True
+
+    def run(self, parsed_args):
+        super(Lister, self).run(parsed_args)
+        return int(not self.success)
+
+
+class ShowOne(show.ShowOne):
+
+    success = True
+
+    def run(self, parsed_args):
+        super(ShowOne, self).run(parsed_args)
+        return int(not self.success)

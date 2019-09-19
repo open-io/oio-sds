@@ -14,7 +14,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from logging import getLogger
-from cliff import lister, show
+
+from oio.cli import Lister, ShowOne
 from oio.common.easy_value import boolean_value
 from oio.common.exceptions import OioException, OioNetworkException, \
     ServiceBusy
@@ -31,7 +32,7 @@ def _bounded_batches(src, size=1000):
         yield src[start:end]
 
 
-class ClusterShow(show.ShowOne):
+class ClusterShow(ShowOne):
     """Show general information about the cluster."""
 
     log = getLogger(__name__ + '.ClusterShow')
@@ -54,7 +55,7 @@ class ClusterShow(show.ShowOne):
         return zip(*output)
 
 
-class ClusterList(lister.Lister):
+class ClusterList(Lister):
     """List services of the namespace."""
 
     log = getLogger(__name__ + '.ClusterList')
@@ -80,9 +81,10 @@ class ClusterList(lister.Lister):
             try:
                 data = self.app.client_manager.cluster.all_services(
                     srv_type, parsed_args.stats)
-            except OioException:
-                self.log.exception("Failed to list services of type %s",
-                                   srv_type)
+            except OioException as exc:
+                self.success = False
+                self.log.error("Failed to list services of type %s: %s",
+                               srv_type, exc)
                 continue
             for srv in data:
                 tags = srv['tags']
@@ -115,7 +117,7 @@ class ClusterList(lister.Lister):
         return columns, self._list_services(parsed_args)
 
 
-class ClusterLocalList(lister.Lister):
+class ClusterLocalList(Lister):
     """List local services."""
 
     log = getLogger(__name__ + '.ClusterLocalList')
@@ -160,7 +162,7 @@ class ClusterLocalList(lister.Lister):
         return columns, result_gen
 
 
-class ClusterUnlock(lister.Lister):
+class ClusterUnlock(Lister):
     """Unlock the score of specific services of the cluster."""
 
     log = getLogger(__name__ + '.ClusterUnlock')
@@ -189,6 +191,7 @@ class ClusterUnlock(lister.Lister):
             try:
                 self.app.client_manager.cluster.unlock_score(batch)
             except Exception as exc:
+                self.success = False
                 result = str(exc)
             for srv_definition in batch:
                 yield (srv_definition['type'], srv_definition['addr'],
@@ -200,7 +203,7 @@ class ClusterUnlock(lister.Lister):
         return (('Type', 'Service', 'Result'), res)
 
 
-class ClusterUnlockAll(lister.Lister):
+class ClusterUnlockAll(Lister):
     """Unlock all services of the cluster."""
 
     log = getLogger(__name__ + '.ClusterUnlockAll')
@@ -222,9 +225,10 @@ class ClusterUnlockAll(lister.Lister):
             try:
                 srv_definitions = \
                     self.app.client_manager.cluster.all_services(srv_type)
-            except OioException:
-                self.log.exception("Failed to list services of type %s",
-                                   srv_type)
+            except OioException as exc:
+                self.success = False
+                self.log.error("Failed to list services of type %s: %s",
+                               srv_type, exc)
                 continue
             for srv_definition in srv_definitions:
                 srv_definition['type'] = srv_type
@@ -233,6 +237,7 @@ class ClusterUnlockAll(lister.Lister):
                 try:
                     self.app.client_manager.cluster.unlock_score(batch)
                 except Exception as exc:
+                    self.success = False
                     result = str(exc)
                 for srv_definition in batch:
                     yield (srv_definition['type'],
@@ -245,7 +250,7 @@ class ClusterUnlockAll(lister.Lister):
         return (('Type', 'Service', 'Result'), res)
 
 
-class ClusterWait(lister.Lister):
+class ClusterWait(Lister):
     """Wait for services to get a score above specified value."""
 
     log = getLogger(__name__ + '.ClusterWait')
@@ -408,6 +413,7 @@ class ClusterLock(ClusterUnlock):
             try:
                 self.app.client_manager.cluster.lock_score(batch)
             except Exception as exc:
+                self.success = False
                 result = str(exc)
             for srv_definition in batch:
                 yield (srv_definition['type'], srv_definition['addr'],
@@ -419,7 +425,7 @@ class ClusterLock(ClusterUnlock):
         return (('Type', 'Service', 'Result'), res)
 
 
-class ClusterFlush(lister.Lister):
+class ClusterFlush(Lister):
     """Deregister all services of the cluster."""
 
     log = getLogger(__name__ + '.ClusterFlush')
@@ -442,6 +448,7 @@ class ClusterFlush(lister.Lister):
             try:
                 self.app.client_manager.cluster.flush(srv_type)
             except Exception as err:
+                self.success = False
                 result = err
             yield (srv_type, result)
 
@@ -451,7 +458,7 @@ class ClusterFlush(lister.Lister):
         return (('Type', 'Result'), res)
 
 
-class ClusterDeregister(lister.Lister):
+class ClusterDeregister(Lister):
     """Deregister specific services of the cluster."""
 
     log = getLogger(__name__ + '.ClusterDeregister')
@@ -479,6 +486,7 @@ class ClusterDeregister(lister.Lister):
             try:
                 self.app.client_manager.cluster.deregister(batch)
             except Exception as exc:
+                self.success = False
                 result = str(exc)
             for srv_definition in batch:
                 yield (srv_definition['type'], srv_definition['addr'],
@@ -490,7 +498,7 @@ class ClusterDeregister(lister.Lister):
         return (('Type', 'Service', 'Result'), res)
 
 
-class ClusterResolve(show.ShowOne):
+class ClusterResolve(ShowOne):
     """Resolve a service ID to an IP address and port."""
 
     log = getLogger(__name__ + '.ClusterFlush')
@@ -513,7 +521,7 @@ class ClusterResolve(show.ShowOne):
         return zip(*resolved.items())
 
 
-class LocalNSConf(show.ShowOne):
+class LocalNSConf(ShowOne):
     """Show namespace configuration values locally configured."""
 
     log = getLogger(__name__ + '.LocalNSConf')

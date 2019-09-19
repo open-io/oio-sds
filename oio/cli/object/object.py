@@ -18,7 +18,8 @@ from oio.common.green import GreenPool
 
 import os
 from logging import getLogger
-from cliff import command, lister, show
+
+from oio.cli import Command, Lister, ShowOne
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.utils import depaginate
 from oio.common.json import json as jsonlib
@@ -90,7 +91,7 @@ class ObjectCommandMixin(ContainerCommandMixin):
             help='Version of the object to manipulate.')
 
 
-class CreateObject(ContainerCommandMixin, lister.Lister):
+class CreateObject(ContainerCommandMixin, Lister):
     """Upload object"""
 
     log = getLogger(__name__ + '.CreateObject')
@@ -205,7 +206,7 @@ class CreateObject(ContainerCommandMixin, lister.Lister):
         return columns, listing
 
 
-class TouchObject(ContainerCommandMixin, command.Command):
+class TouchObject(ContainerCommandMixin, Command):
     """Touch an object in a container, re-triggers asynchronous treatments"""
 
     log = getLogger(__name__ + '.TouchObject')
@@ -250,7 +251,7 @@ class TouchObject(ContainerCommandMixin, command.Command):
                 cid=cid)
 
 
-class DeleteObject(ContainerCommandMixin, lister.Lister):
+class DeleteObject(ContainerCommandMixin, Lister):
     """Delete object from container"""
 
     log = getLogger(__name__ + '.DeleteObject')
@@ -328,7 +329,7 @@ class DeleteObject(ContainerCommandMixin, lister.Lister):
         return columns, res_gen
 
 
-class ShowObject(ObjectCommandMixin, show.ShowOne):
+class ShowObject(ObjectCommandMixin, ShowOne):
     """Show information about an object"""
 
     log = getLogger(__name__ + '.ShowObject')
@@ -368,7 +369,7 @@ class ShowObject(ObjectCommandMixin, show.ShowOne):
         return zip(*sorted(info.iteritems()))
 
 
-class SetObject(ObjectCommandMixin, command.Command):
+class SetObject(ObjectCommandMixin, Command):
     """Set object properties"""
 
     log = getLogger(__name__ + '.SetObject')
@@ -431,7 +432,7 @@ class SetObject(ObjectCommandMixin, command.Command):
             cid=cid)
 
 
-class SaveObject(ObjectCommandMixin, command.Command):
+class SaveObject(ObjectCommandMixin, Command):
     """Save object locally"""
 
     log = getLogger(__name__ + '.SaveObject')
@@ -484,7 +485,7 @@ class SaveObject(ObjectCommandMixin, command.Command):
                 ofile.write(chunk)
 
 
-class ListObject(ContainerCommandMixin, lister.Lister):
+class ListObject(ContainerCommandMixin, Lister):
     """List objects in a container."""
 
     log = getLogger(__name__ + '.ListObject')
@@ -620,6 +621,7 @@ class ListObject(ContainerCommandMixin, lister.Lister):
                     account=account, container=container, **kwargs):
                 object_list.append(i)
         except exceptions.OioException as err:
+            self.success = False
             self.log.warn('Listing may be incomplete: container %s: %s',
                           container, err)
         return object_list
@@ -698,6 +700,7 @@ class ListObject(ContainerCommandMixin, lister.Lister):
                                   _format_props(obj.get('properties', {})))
                         yield result
                     except KeyError as exc:
+                        self.success = False
                         self.log.warn("Bad object entry, missing '%s': %s",
                                       exc, obj)
             columns = ('Name', 'Size', 'Hash', 'Version', 'Deleted',
@@ -712,6 +715,7 @@ class ListObject(ContainerCommandMixin, lister.Lister):
                             obj['hash'],
                             obj['version'])
                     except KeyError as exc:
+                        self.success = False
                         self.log.warn("Bad object entry, missing %s: %s",
                                       exc, obj)
             columns = ('Name', 'Size', 'Hash', 'Version')
@@ -719,7 +723,7 @@ class ListObject(ContainerCommandMixin, lister.Lister):
         return (columns, results)
 
 
-class UnsetObject(ObjectCommandMixin, command.Command):
+class UnsetObject(ObjectCommandMixin, Command):
     """Unset object properties"""
 
     log = getLogger(__name__ + '.UnsetObject')
@@ -761,7 +765,7 @@ class UnsetObject(ObjectCommandMixin, command.Command):
             cid=cid)
 
 
-class DrainObject(ContainerCommandMixin, command.Command):
+class DrainObject(ContainerCommandMixin, Command):
     """\
 Remove all the chunks of a content but keep the properties.
 We can replace the data or the properties of the content
@@ -795,7 +799,7 @@ but no action needing the removed chunks are accepted\
                 cid=cid)
 
 
-class LocateObject(ObjectCommandMixin, lister.Lister):
+class LocateObject(ObjectCommandMixin, Lister):
     """Locate the parts of an object"""
 
     log = getLogger(__name__ + '.LocateObject')
@@ -843,7 +847,7 @@ class LocateObject(ObjectCommandMixin, lister.Lister):
         return columns, chunks
 
 
-class PurgeObject(ObjectCommandMixin, command.Command):
+class PurgeObject(ObjectCommandMixin, Command):
     """Purge exceeding object versions."""
 
     log = getLogger(__name__ + '.PurgeObject')
@@ -877,7 +881,7 @@ class PurgeObject(ObjectCommandMixin, command.Command):
         )
 
 
-class LinkObject(ObjectCommandMixin, command.Command):
+class LinkObject(ObjectCommandMixin, Command):
     """
     Make a shallow copy of an object (similar to a hardlink).
     """

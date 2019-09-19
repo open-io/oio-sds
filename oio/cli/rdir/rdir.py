@@ -14,7 +14,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from logging import getLogger
-from cliff import lister
+
+from oio.cli import Lister
+from oio.common.exceptions import OioException
 
 
 def _format_assignments(all_services, svc_col_title='Rawx'):
@@ -35,14 +37,10 @@ def _format_assignments(all_services, svc_col_title='Rawx'):
     return columns, results
 
 
-class RdirBootstrap(lister.Lister):
+class RdirBootstrap(Lister):
     """Assign an rdir services"""
 
     log = getLogger(__name__ + '.RdirBootstrap')
-
-    def __init__(self, *args, **kwargs):
-        super(RdirBootstrap, self).__init__(*args, **kwargs)
-        self.error = None
 
     def get_parser(self, prog_name):
         parser = super(RdirBootstrap, self).get_parser(prog_name)
@@ -63,7 +61,6 @@ class RdirBootstrap(lister.Lister):
         return parser
 
     def take_action(self, parsed_args):
-        from oio.common.exceptions import OioException
         dispatcher = self.app.client_manager.rdir.rdir_lb
         try:
             all_services = dispatcher.assign_services(
@@ -71,22 +68,17 @@ class RdirBootstrap(lister.Lister):
                 min_dist=parsed_args.min_dist,
                 connection_timeout=30.0, read_timeout=90.0)
         except OioException as exc:
+            self.success = False
             self.log.warn('Failed to assign all %s services: %s',
                           parsed_args.service_type, exc)
-            self.error = exc
             all_services, _ = dispatcher.get_assignments(
                 parsed_args.service_type, connection_timeout=30.0,
                 read_timeout=90.0)
         return _format_assignments(all_services,
                                    parsed_args.service_type.capitalize())
 
-    def run(self, parsed_args):
-        super(RdirBootstrap, self).run(parsed_args)
-        if self.error:
-            return 1
 
-
-class RdirAssignments(lister.Lister):
+class RdirAssignments(Lister):
     """Display which rdir service is linked to each other service"""
 
     log = getLogger(__name__ + '.DisplayVolumeAssignation')

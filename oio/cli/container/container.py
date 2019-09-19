@@ -16,8 +16,9 @@
 """Container-related commands"""
 
 from logging import getLogger
-from cliff import command, show, lister
 from time import time
+
+from oio.cli import Command, Lister, ShowOne
 from oio.common.timestamp import Timestamp
 from oio.common.constants import OIO_DB_STATUS_NAME,\
     OIO_DB_ENABLED, OIO_DB_DISABLED, OIO_DB_FROZEN
@@ -119,7 +120,7 @@ class ContainersCommandMixin(object):
         )
 
 
-class CreateContainer(SetPropertyCommandMixin, lister.Lister):
+class CreateContainer(SetPropertyCommandMixin, Lister):
     """Create an object container."""
 
     log = getLogger(__name__ + '.CreateContainer')
@@ -172,7 +173,7 @@ class CreateContainer(SetPropertyCommandMixin, lister.Lister):
 
 
 class SetContainer(SetPropertyCommandMixin,
-                   ContainerCommandMixin, command.Command):
+                   ContainerCommandMixin, Command):
     """
     Set container properties, quota, storage policy, status or versioning.
     """
@@ -230,7 +231,7 @@ class SetContainer(SetPropertyCommandMixin,
         )
 
 
-class TouchContainer(ContainersCommandMixin, command.Command):
+class TouchContainer(ContainersCommandMixin, Command):
     """Touch an object container, triggers asynchronous treatments on it."""
 
     log = getLogger(__name__ + '.TouchContainer')
@@ -263,7 +264,7 @@ class TouchContainer(ContainersCommandMixin, command.Command):
                 )
 
 
-class DeleteContainer(ContainersCommandMixin, command.Command):
+class DeleteContainer(ContainersCommandMixin, Command):
     """Delete an object container."""
 
     log = getLogger(__name__ + '.DeleteContainer')
@@ -290,7 +291,7 @@ class DeleteContainer(ContainersCommandMixin, command.Command):
                 )
 
 
-class FlushContainer(ContainerCommandMixin, command.Command):
+class FlushContainer(ContainerCommandMixin, Command):
     """Flush an object container."""
 
     log = getLogger(__name__ + '.FlushContainer')
@@ -317,7 +318,7 @@ class FlushContainer(ContainerCommandMixin, command.Command):
             fast=parsed_args.quick)
 
 
-class ShowContainer(ContainerCommandMixin, show.ShowOne):
+class ShowContainer(ContainerCommandMixin, ShowOne):
     """Display information about an object container."""
 
     log = getLogger(__name__ + '.ShowContainer')
@@ -378,7 +379,7 @@ class ShowContainer(ContainerCommandMixin, show.ShowOne):
         return zip(*sorted(info.iteritems()))
 
 
-class ListContainer(lister.Lister):
+class ListContainer(Lister):
     """List containers."""
 
     log = getLogger(__name__ + '.ListContainer')
@@ -463,7 +464,7 @@ class ListContainer(lister.Lister):
         return columns, ((v[0], v[2], v[1]) for v in listing)
 
 
-class UnsetContainer(ContainerCommandMixin, command.Command):
+class UnsetContainer(ContainerCommandMixin, Command):
     """Unset container properties."""
 
     log = getLogger(__name__ + '.UnsetContainer')
@@ -531,7 +532,7 @@ class UnsetContainer(ContainerCommandMixin, command.Command):
                 system=system, cid=parsed_args.cid)
 
 
-class SaveContainer(ContainerCommandMixin, command.Command):
+class SaveContainer(ContainerCommandMixin, Command):
     """Save all objects of a container locally."""
 
     log = getLogger(__name__ + '.SaveContainer')
@@ -566,7 +567,7 @@ class SaveContainer(ContainerCommandMixin, command.Command):
                     f.write(chunk)
 
 
-class LocateContainer(ContainerCommandMixin, show.ShowOne):
+class LocateContainer(ContainerCommandMixin, ShowOne):
     """Locate the services in charge of a container."""
 
     log = getLogger(__name__ + '.LocateContainer')
@@ -619,7 +620,7 @@ class LocateContainer(ContainerCommandMixin, show.ShowOne):
         return zip(*sorted(info.iteritems()))
 
 
-class PurgeContainer(ContainerCommandMixin, command.Command):
+class PurgeContainer(ContainerCommandMixin, Command):
     """Purge exceeding object versions."""
 
     log = getLogger(__name__ + '.PurgeContainer')
@@ -652,7 +653,7 @@ class PurgeContainer(ContainerCommandMixin, command.Command):
         )
 
 
-class RefreshContainer(ContainerCommandMixin, command.Command):
+class RefreshContainer(ContainerCommandMixin, Command):
     """ Refresh counters of an account (triggers asynchronous treatments) """
 
     log = getLogger(__name__ + '.RefreshContainer')
@@ -674,7 +675,7 @@ class RefreshContainer(ContainerCommandMixin, command.Command):
         )
 
 
-class SnapshotContainer(ContainerCommandMixin, lister.Lister):
+class SnapshotContainer(ContainerCommandMixin, Lister):
     """
     Take a snapshot of a container.
 
