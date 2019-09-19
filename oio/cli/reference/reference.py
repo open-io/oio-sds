@@ -14,10 +14,11 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from logging import getLogger
-from cliff import command, lister, show
+
+from oio.cli import Command, Lister, ShowOne
 
 
-class ListReference(lister.Lister):
+class ListReference(Lister):
     """List services linked to a reference."""
 
     log = getLogger(__name__ + '.ListReference')
@@ -44,7 +45,7 @@ class ListReference(lister.Lister):
         return columns, results
 
 
-class ShowReference(show.ShowOne):
+class ShowReference(ShowOne):
     """Show reference properties."""
 
     log = getLogger(__name__ + '.ShowReference')
@@ -74,7 +75,7 @@ class ShowReference(show.ShowOne):
         return zip(*sorted(info.iteritems()))
 
 
-class CreateReference(lister.Lister):
+class CreateReference(Lister):
     """
     Create one or several references.
     """
@@ -104,7 +105,7 @@ class CreateReference(lister.Lister):
         return ('Name', 'Created'), (r for r in results)
 
 
-class DeleteReference(command.Command):
+class DeleteReference(Command):
     """
     Delete one or several references.
 
@@ -133,7 +134,7 @@ class DeleteReference(command.Command):
             )
 
 
-class LinkReference(command.Command):
+class LinkReference(Command):
     """Link services to a reference."""
 
     log = getLogger(__name__ + '.LinkReference')
@@ -165,7 +166,7 @@ class LinkReference(command.Command):
         )
 
 
-class UnlinkReference(command.Command):
+class UnlinkReference(Command):
     """Unlink services from a reference."""
 
     log = getLogger(__name__ + '.UnlinkReference')
@@ -197,7 +198,7 @@ class UnlinkReference(command.Command):
         )
 
 
-class PollReference(command.Command):
+class PollReference(Command):
     """
     Poll (renew) services for a reference.
 
@@ -232,7 +233,7 @@ class PollReference(command.Command):
         )
 
 
-class ForceReference(command.Command):
+class ForceReference(Command):
     """
     Force link a service to reference.
 
@@ -301,7 +302,7 @@ class ForceReference(command.Command):
         )
 
 
-class SetReference(command.Command):
+class SetReference(Command):
     """Set reference properties."""
 
     log = getLogger(__name__ + '.SetReference')
@@ -338,7 +339,7 @@ class SetReference(command.Command):
             parsed_args.clear)
 
 
-class UnsetReference(command.Command):
+class UnsetReference(Command):
     """Unset reference properties."""
 
     log = getLogger(__name__ + '.UnsetReference')
@@ -368,7 +369,7 @@ class UnsetReference(command.Command):
             parsed_args.property)
 
 
-class LocateReference(show.ShowOne):
+class LocateReference(ShowOne):
     """Locate the services in charge of a reference."""
 
     log = getLogger(__name__ + '.LocateReference')

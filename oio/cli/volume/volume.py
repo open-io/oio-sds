@@ -14,13 +14,13 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from logging import getLogger
-from cliff import lister, show
 
-from oio.common.exceptions import OioException
+from oio.cli import Lister, ShowOne
 from oio.cli.rdir.rdir import _format_assignments
+from oio.common.exceptions import OioException
 
 
-class ShowAdminVolume(show.ShowOne):
+class ShowAdminVolume(ShowOne):
     """
     Show information about a volume, like the last incident date,
     or the presence of a lock on the volume.
@@ -50,7 +50,7 @@ class ShowAdminVolume(show.ShowOne):
         return zip(*output)
 
 
-class ClearAdminVolume(lister.Lister):
+class ClearAdminVolume(Lister):
     """Clear volume incident date."""
 
     log = getLogger(__name__ + '.ClearAdminVolume')
@@ -100,12 +100,13 @@ class ClearAdminVolume(lister.Lister):
                         repair=parsed_args.repair)
                 results.append((volume, True, resp_body))
             except OioException as exc:
+                self.success = False
                 results.append((volume, False, exc))
         columns = ('Volume', 'Success', 'Message')
         return columns, results
 
 
-class ShowVolume(show.ShowOne):
+class ShowVolume(ShowOne):
     """
     Show various volume information, like number of indexed chunks,
     and names of containers having chunks on this volume.
@@ -131,7 +132,7 @@ class ShowVolume(show.ShowOne):
         return zip(*sorted(data.iteritems()))
 
 
-class IncidentAdminVolume(lister.Lister):
+class IncidentAdminVolume(Lister):
     """Declare an incident on the specified volume."""
 
     log = getLogger(__name__ + '.IncidentAdminVolume')
@@ -171,7 +172,7 @@ class IncidentAdminVolume(lister.Lister):
         return columns, results
 
 
-class LockAdminVolume(lister.Lister):
+class LockAdminVolume(Lister):
     """
     Lock the specified volumes.
     Useful to prevent several rebuilders to work on the same volume.
@@ -208,7 +209,7 @@ class LockAdminVolume(lister.Lister):
         return columns, results
 
 
-class UnlockAdminVolume(lister.Lister):
+class UnlockAdminVolume(Lister):
     """Unlock the specified volumes."""
 
     log = getLogger(__name__ + '.UnlockAdminVolume')
@@ -236,17 +237,13 @@ class UnlockAdminVolume(lister.Lister):
         return columns, results
 
 
-class BootstrapVolume(lister.Lister):
+class BootstrapVolume(Lister):
     """
     Assign an rdir service to all rawx.
     Deprecated, prefer using 'openio rdir bootstrap rawx'.
     """
 
     log = getLogger(__name__ + '.BootstrapVolume')
-
-    def __init__(self, *args, **kwargs):
-        super(BootstrapVolume, self).__init__(*args, **kwargs)
-        self.error = None
 
     def get_parser(self, prog_name):
         parser = super(BootstrapVolume, self).get_parser(prog_name)
@@ -266,18 +263,17 @@ class BootstrapVolume(lister.Lister):
                     parsed_args.max_per_rdir,
                     connection_timeout=30.0, read_timeout=90.0)
         except OioException as exc:
+            self.success = False
             self.log.warn("Failed to assign all rawx: %s", exc)
-            self.error = exc
             all_rawx, _ = \
                 self.app.client_manager.volume.rdir_lb.get_assignments(
                         'rawx', connection_timeout=30.0, read_timeout=90.0)
 
         columns, results = _format_assignments(all_rawx, 'Rawx')
-        # FIXME(FVE): return 1 if self.error
         return columns, results
 
 
-class DisplayVolumeAssignation(lister.Lister):
+class DisplayVolumeAssignation(Lister):
     """
     Display which rdir service is linked to each rawx service.
     Deprecated, prefer using 'openio rdir assignments rawx'.

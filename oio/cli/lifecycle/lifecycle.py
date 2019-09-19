@@ -17,13 +17,13 @@
 
 
 from logging import getLogger
-from cliff import command, lister
 
+from oio.cli import Command, Lister
 from oio.common.exceptions import LifecycleNotFound
 from oio.container.lifecycle import etree, ContainerLifecycle
 
 
-class LifecycleApply(lister.Lister):
+class LifecycleApply(Lister):
     """Synchronously apply lifecycle rules."""
 
     log = getLogger(__name__ + '.LifecycleApply')
@@ -59,7 +59,7 @@ class LifecycleApply(lister.Lister):
         return columns, res
 
 
-class LifecycleSet(command.Command):
+class LifecycleSet(Command):
     """Set container lifecycle configuration."""
 
     log = getLogger(__name__ + '.LifecycleSet')
@@ -99,7 +99,7 @@ class LifecycleSet(command.Command):
         lc.save()
 
 
-class LifecycleGet(command.Command):
+class LifecycleGet(Command):
     """Get container lifecycle configuration."""
 
     log = getLogger(__name__ + '.LifecycleGet')

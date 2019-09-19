@@ -17,7 +17,8 @@
 from oio.common.green import Queue, GreenPile, sleep
 
 from logging import getLogger, INFO
-from cliff.command import Command
+
+from oio.cli import Command
 from oio.common.configuration import load_namespace_conf
 from oio.common.exceptions import \
         ClientException, ConfigurationException, PreconditionFailed
