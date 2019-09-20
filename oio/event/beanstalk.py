@@ -623,12 +623,12 @@ class Beanstalk(object):
         or the timeout expires.
         """
         self.use(tube)
-        job_id, _ = self.peek_ready()
+        job_id, data = self.peek_ready()
         deadline = time.time() + timeout
         while job_id is None and time.time() < deadline:
             time.sleep(poll_interval)
-            job_id, _ = self.peek_ready()
-        return job_id
+            job_id, data = self.peek_ready()
+        return job_id, data
 
     def stats(self):
         return self.execute_command('stats')

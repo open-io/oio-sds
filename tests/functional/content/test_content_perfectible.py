@@ -80,7 +80,7 @@ class TestPerfectibleContent(BaseTestCase):
 
     def _aggregate_rawx_by_place(self):
         by_place = self._aggregate_services(
-            'rawx', lambda x: x['tags']['tag.loc'].rsplit('.', 2)[0])
+            'rawx', lambda x: x['tags']['tag.loc'].rsplit('.', 1)[0])
         if len(by_place) < 3:
             self.skip('This test requires 3 different 2nd level locations')
         return by_place
@@ -246,8 +246,10 @@ class TestPerfectibleContent(BaseTestCase):
 
         # Wait for the "perfectible" event to be emitted,
         # but do not consume it.
-        job = self.beanstalkd.wait_for_ready_job(
+        job, data = self.beanstalkd.wait_for_ready_job(
             DEFAULT_IMPROVER_TUBE, timeout=REASONABLE_EVENT_DELAY)
+        if job:
+            logging.debug("Expected job data: %s", data)
         self.assertIsNotNone(job)
         # "Unlock" the services of the 'rawx-even' slot.
         self._lock_services('rawx', by_slot[banned_slot], score=100)
@@ -257,8 +259,15 @@ class TestPerfectibleContent(BaseTestCase):
         # Check some changes have been done on the object.
         _, new_chunks = self.api.object_locate(
             self.account, container, 'perfectible')
-        self.assertNotEqual(chunks, new_chunks)
+        old_urls = sorted([x['url'] for x in chunks])
+        new_urls = sorted([x['url'] for x in new_chunks])
+        logging.debug('Old chunks: %s', old_urls)
+        logging.debug('New chunks: %s', new_urls)
+        self.assertNotEqual(old_urls, new_urls)
+
         # Ensure no new "perfectible" event is emitted.
-        job = self.beanstalkd.wait_for_ready_job(
+        job, data = self.beanstalkd.wait_for_ready_job(
             DEFAULT_IMPROVER_TUBE, timeout=REASONABLE_EVENT_DELAY)
+        if job:
+            logging.debug("Unexpected job data: %s", data)
         self.assertIsNone(job)
