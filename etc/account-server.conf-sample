@@ -20,3 +20,11 @@ syslog_prefix = OIO,OPENIO,account,1
 #redis_socket_keepalive=False
 #redis_retry_on_timeout=False
 #redis_max_connections=2**31
+
+# Redis sentinel parameters, override Redis parameters
+# for connections to the sentinels.
+#redis_sentinel_socket_timeout=None
+#redis_sentinel_socket_connect_timeout=None
+#redis_sentinel_socket_keepalive=False
+#redis_sentinel_retry_on_timeout=False
+#redis_sentinel_max_connections=2**31
