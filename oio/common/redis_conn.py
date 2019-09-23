@@ -59,8 +59,10 @@ class RedisConnection(object):
         self._sentinel_hosts = [(h, int(p)) for h, p, in (hp.rsplit(':', 1)
                                 for hp in sentinel_hosts)]
         self._sentinel_name = sentinel_name
+        self._sentinel_conn_kwargs = self._filter_sentinel_conn_kwargs(kwargs)
         self._sentinel = self.__redis_sentinel_mod.Sentinel(
             self._sentinel_hosts,
+            sentinel_kwargs=self._sentinel_conn_kwargs,
             **self._conn_kwargs)
 
     def _filter_conn_kwargs(self, conn_kwargs):
@@ -77,6 +79,13 @@ class RedisConnection(object):
         return {k: parsers[k](v)
                 for k, v in conn_kwargs.items()
                 if k in parsers}
+
+    def _filter_sentinel_conn_kwargs(self, sentinel_conn_kwargs):
+        if sentinel_conn_kwargs is None:
+            return None
+        return self._filter_conn_kwargs(
+            {k[9:]: v for k, v in sentinel_conn_kwargs.items()
+             if k.startswith('sentinel_')})
 
     @property
     def conn(self):
