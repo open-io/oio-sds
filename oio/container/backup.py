@@ -28,6 +28,7 @@ import os
 import pickle
 from tarfile import TarInfo, REGTYPE, NUL, PAX_FORMAT, BLOCKSIZE, XHDTYPE, \
                     DIRTYPE, AREGTYPE, InvalidHeaderError
+from urlparse import urlparse
 
 from md5py import MD5
 
@@ -45,7 +46,7 @@ from oio.common import exceptions as exc
 from oio.common.configuration import read_conf
 from oio.common.logger import get_logger
 from oio.common.wsgi import WerkzeugApp
-from oio.common.redis_conn import RedisConn
+from oio.common.redis_conn import RedisConnection
 from oio.common.storage_method import STORAGE_METHODS
 
 RANGE_RE = re.compile(r"^bytes=(\d+)-(\d+)$")
@@ -768,7 +769,7 @@ def redis_cnx(fct):
     return wrapper
 
 
-class ContainerBackup(RedisConn, WerkzeugApp):
+class ContainerBackup(RedisConnection, WerkzeugApp):
     """WSGI Application to dump or restore a container."""
 
     REDIS_TIMEOUT = 3600 * 24  # Redis keys will expire after one day
@@ -794,7 +795,25 @@ class ContainerBackup(RedisConn, WerkzeugApp):
         self.REDIS_TIMEOUT = self.conf.get("redis_cache_timeout",
                                            self.REDIS_TIMEOUT)
 
-        super(ContainerBackup, self).__init__(self.conf)
+        redis_conf = {k[6:]: v for k, v in self.conf.items()
+                      if k.startswith("redis_")}
+        redis_host = redis_conf.pop('host', None)
+        if redis_host:
+            parsed = urlparse('http://' + redis_host)
+            if parsed.port is None:
+                redis_host = '%s:%s' % (redis_host,
+                                        redis_conf.pop('port', '6379'))
+        redis_sentinel_hosts = redis_conf.pop(
+            'sentinel_hosts',
+            # TODO(adu): Delete when it will no longer be used
+            self.conf.get('sentinel_hosts'))
+        redis_sentinel_name = redis_conf.pop(
+            'sentinel_name',
+            # TODO(adu): Delete when it will no longer be used
+            self.conf.get('sentinel_master_name'))
+        RedisConnection.__init__(
+            self, host=redis_host, sentinel_hosts=redis_sentinel_hosts,
+            sentinel_name=redis_sentinel_name, **redis_conf)
         WerkzeugApp.__init__(self, self.url_map, self.logger)
 
     @property
