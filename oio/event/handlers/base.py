@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+from oio.event.consumer import StopServe
 from oio.event.evob import Event, EventOk, EventError
 
 
@@ -32,10 +33,14 @@ class Handler(object):
         try:
             res = self.process(event)
             return res(env, cb)
-        except Exception:
-            self.logger.exception('Error: An error occured')
+        except StopServe:
+            self.logger.info('Job %s not handled: the process is stopping',
+                             event.job_id)
+            res = EventError(event=event, body='Process is stopping')
+        except Exception as err:
+            self.logger.exception('Job %s not handled: %s', event.job_id, err)
             res = EventError(event=event, body='An error ocurred')
-            return res(env, cb)
+        return res(env, cb)
 
 
 def handler_factory(app, global_conf, **local_conf):
