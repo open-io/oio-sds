@@ -1,10 +1,11 @@
+from time import sleep
 import logging
 import pickle
 import urlparse
 import json
 from eventlet import Queue, Timeout, GreenPile, GreenPool
 from uuid import uuid1 as uuid
-from oio.event.beanstalk import Beanstalk, BeanstalkdListener, BeanstalkdSender
+from oio.event.beanstalk import Beanstalk
 
 
 def _uuid(prev):
@@ -14,18 +15,12 @@ def _uuid(prev):
 
 
 class Handler(object):
-    def __init__(self, source, sink, job_id, uri_out):
+    def __init__(self, source, sink, ns_name, job_id, uri_out):
         super(Handler, self).__init__()
         self.source = source
         self.sink = sink
         self.job_id = job_id
         self.uri_out = uri_out
-
-    def recurse(self, job):
-        """Send a new action to the beanstalkd that emitted
-        the current action."""
-        self.sink.send(self.source.back_url(),
-                       Action(self.uri_out, job, id_ = self.job_id))
 
     def produce(self, msg):
         """Send an output to the beanstalkd whose URL is configured
@@ -34,9 +29,7 @@ class Handler(object):
 
     def propagate(self, job):
         """Trigger a new job somewhere on the platform"""
-        url = None
-        sink.send(url,
-                  Action(self.uri_out, msg))
+        sink.send(None, Action(self.uri_out, msg))
 
 
 class Action(object):
@@ -63,50 +56,6 @@ class Action(object):
             self.uuid = None
         if rc is not None:
             sink.send(self.uri_out, (self.uuid, rc))
-
-
-class Worker(object):
-    def __init__(self, url, source_factory, sink):
-        super(Worker, self).__init__()
-        self.running = True
-        self.url = url
-        self.source_factory = source_factory
-        self.sink = sink
-
-    def step(self, source):
-        jobid, action = None, None
-        # Decode the input
-        try:
-            jobid, action = source.reserve()
-            logging.warn("Job polled id=%s %s", jobid, repr(action))
-        except Exception as ex:
-            logging.exception("Action not decoded: %s", ex)
-            source.bury(jobid)
-            return
-        # Execute the action
-        try:
-            if not isinstance(action, Action):
-                raise Exception("Unexpected encoded object")
-            else:
-                action(source, self.sink)
-                source.delete(jobid)
-        except Exception as ex:
-            logging.exception("Action error: %s", ex)
-            source.bury(jobid)
-
-    def worker(self):
-        source = self.source_factory(self.url)
-        while self.running:
-            try:
-                self.step(source)
-            except StopIteration:
-                self.running = False
-
-    def run(self):
-        pool = GreenPool()
-        for i in range(5):
-            pool.spawn_n(self.worker);
-        pool.waitall()
 
 
 class BeanstalkdSource(object):
@@ -159,11 +108,16 @@ class BeanstalkdSink(object):
     """The BeanstalkdSink does nothing more than submitting the given
     message to the beanstalkd whose URL has been given.
     It acts like a client pool toward beanstalkd services. """
-    def __init__(self):
+    def __init__(self, ns_name):
         super(BeanstalkdSink, self).__init__()
         self.clients = dict()
+        self.ns_name = ns_name
 
     def send(self, to, msg):
+        if not to:
+            lb = LbClient({'namespace': self.ns_name})
+            to = lb.poll('beanstalkd')
+            to = 'beanstalk://' + to[0]['addr']
         if to not in self.clients:
             parsed = urlparse.urlparse(to)
             tube = parsed.path.strip('/')
@@ -172,9 +126,54 @@ class BeanstalkdSink(object):
         client.send(msg)
 
 
+class Worker(object):
+    def __init__(self, url, source_factory, sink):
+        super(Worker, self).__init__()
+        self.running = True
+        self.url = url
+        self.source_factory = source_factory
+        self.sink = sink
+
+    def step(self, source):
+        jobid, action = None, None
+        # Decode the input
+        try:
+            jobid, action = source.reserve()
+            logging.warn("Job polled id=%s %s", jobid, repr(action))
+        except Exception as ex:
+            logging.exception("Action not decoded: %s", ex)
+            source.bury(jobid)
+            return
+        # Execute the action
+        try:
+            if not isinstance(action, Action):
+                raise Exception("Unexpected encoded object")
+            else:
+                action(source, self.sink)
+                source.delete(jobid)
+        except Exception as ex:
+            logging.exception("Action error: %s", ex)
+            source.bury(jobid)
+
+    def worker(self):
+        source = self.source_factory(self.url)
+        while self.running:
+            try:
+                self.step(source)
+            except StopIteration:
+                self.running = False
+
+    def run(self):
+        pool = GreenPool()
+        for i in range(5):
+            pool.spawn_n(self.worker);
+        pool.waitall()
+
+
 class ClientSync(object):
-    def __init__(self, local_addr):
+    def __init__(self, ns_name, local_addr):
         super(ClientSync, self).__init__()
+        self.ns_name = ns_name
         self.uuid = _uuid(None)
         self.local = local_addr
         self.source = BeanstalkdSource(self.local, self.uuid)
@@ -189,12 +188,13 @@ class ClientSync(object):
 
 
 class ClientAsync(object):
-    def __init__(self, local_addr, id_=None):
+    def __init__(self, ns_name, local_addr, id_=None):
         super(ClientAsync, self).__init__()
+        self.ns_name = ns_name
         self.local = local_addr
         self.uuid = _uuid(id_)
         self.source = BeanstalkdSource(self.local, self.uuid)
-        self.sink = BeanstalkdSink()
+        self.sink = BeanstalkdSink(ns_name)
         self.pending = set()
         self.done = dict()
 
@@ -220,36 +220,78 @@ class ClientAsync(object):
             self.done[ju] = rc
 
 
-class Stream(object):
-    def __init__(self, local_addr, id_=None):
-        super(Stream, self).__init__()
-        self.uuid = id_
-        self.local = local_addr
-        self.source = BeanstalkdSource(self.local, self.uuid)
-        self.sink = BeanstalkdSink()
+class DetachedTask(object):
+    def __init__(self, nsname, batch_id, task_id, task):
+        super(DetachedTask, self).__init__()
+        self.batch_id = batch_id
+        self.task_id = task_id
+        self.task = task
 
-    def kick(self, to, job):
-        assert(self.uuid is None)
-        job = Action('beanstalk://' + self.local + '/' + self.uuid, job,
-                     id_ = self.uuid)
-        self.sink.send(to + '/worker', job)
-        self.uuid = job.uuid
-        return job.uuid
+    def raw(self):
+        return {'bid': self.batch_id, 'tid': self.task_id, 't': self.task}
 
-    def __iter__(self):
-        """Creates an iterator on the replies, until a StopIteration
-        exception is returned from a worker."""
-        return self.generator()
+    def __repr__(self):
+        return 'DetachedTask' + json.dumps(self.raw())
 
-    def generator(self):
+    def __call__(self, handle):
+        try:
+            self.task(handle)
+        finally:
+            # TODO(jfs): remove the task from the repository
+            pass
+
+
+class Batch(object):
+    def __init__(self, ns_name, redis_cnx, batch_id=None):
+        super(Batch, self).__init__()
+        self.ns_name = ns_name
+        self.redis = redis_cnx
+        self.batch_id = batch_id
+
+    def start(self, handler, generator, cls_executor):
+        """
+        :param handler:
+        :param generator: a callable object that yields items
+        :param executor: the class of a callable object that can be
+                         instanciated with any element generated by generator.
+        """
+        assert(self.batch_id is None)
+        self.batch_id = _uuid(None)
+        sink = BeanstalkdSink(self.ns_name)
+        # TODO(jfs): register the batch in the repository
+        for item in generator():
+            # TODO(jfs): register the task in the repository
+            executor = cls_executor(item)
+            todo = Action(None, executor)
+            todo = DetachedTask(self.batch_id, _uuid(None), todo)
+            sink.send(None, todo)
+
+    def _zset_name(self):
+        return 'job:' + self.batch_id
+
+    def status(self):
+        assert(self.batch_id is not None)
+        return self.redis.conn.zcard(self._zset_name())
+
+    def resume(self):
+        assert(self.batch_id is not None)
+        # TODO(jfs): Poll the ZSET with all the job, get the URL from the
+        #            value of each ZSET entry, and send a 'pause-tube'
+        #            command with a value of 0.
+        raise Exception("Not Yet Implemented")
+
+    def pause(self):
+        assert(self.batch_id is not None)
+        # TODO(jfs): Poll the ZSET with all the job, get the URL from the
+        #            value of each ZSET entry, and send a 'pause-tube'
+        #            command with a value of 'many' ;)
+        raise Exception("Not Yet Implemented")
+
+    def join(self):
+        assert(self.batch_id is not None)
         while True:
-            jobid, result = self.source.reserve()
-            ju, rc = result
-            if ju != self.uuid:
-                logging.warn("Unexpected message %s %s", ju, repr(rc))
-                continue
-            self.source.delete(jobid)
-            if isinstance(rc, StopIteration):
-                raise StopIteration
-            yield rc
+         count = self.redis.conn.zcard(self._zset_name())
+         if count <= 0:
+             return
+         sleep(1.0)
 
