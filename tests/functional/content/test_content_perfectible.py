@@ -46,6 +46,10 @@ class TestPerfectibleContent(BaseTestCase):
         # Ensure the tube is not clogged
         self.beanstalkd.drain_tube(DEFAULT_IMPROVER_TUBE, timeout=0.2)
 
+    def tearDown(self):
+        super(TestPerfectibleContent, self).tearDown()
+        self.wait_for_score(('rawx', ), timeout=5.0, score_threshold=8)
+
     @classmethod
     def tearDownClass(cls):
         # Be kind with the next test suites
