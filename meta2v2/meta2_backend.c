@@ -370,46 +370,19 @@ m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
 	NAME2CONST(n,n0);
 
 	err = sqlx_repository_open_and_lock(m2->repo, &n, m2_to_sqlx(how), &sq3, NULL);
-	if (NULL != err) {
+	if (err) {
 		if (err->code == CODE_CONTAINER_NOTFOUND)
 			err->domain = GQ();
 		return err;
 	}
 
-	/* beware that LOCAL is maybe == 0 */
-	const gboolean _local = (M2V2_OPEN_LOCAL == (how & M2V2_OPEN_REPLIMODE));
-	const gboolean _create = (M2V2_OPEN_AUTOCREATE == (how & M2V2_OPEN_AUTOCREATE));
-
-	sq3->no_peers = _local;
-
-	// If the container is being deleted, this is sad ...
-	// This MIGHT happen if a cache is present (and this is the
-	// common case for m2v2), because the deletion will happen
-	// when the base exit the cache.
-	// In facts this SHOULD NOT happend because a base being deleted
-	// is closed with an instruction to exit the cache immediately.
-	// TODO FIXME this is maybe a good place for an assert().
-	if (sq3->deleted) {
-		m2b_close(sq3);
-		return NEWERROR(CODE_CONTAINER_FROZEN, "destruction pending");
-	}
-
 	/* The kind of check we do depend of the kind of opening:
-	 * - creation : init not done
-	 * - local access : no check
-	 * - replicated access : int done */
-	if (_create) {
-		if (_is_container_initiated(sq3)) {
-			m2b_close(sq3);
-			return NEWERROR(CODE_CONTAINER_EXISTS,
-					"container already initiated");
-		}
-	} else if (!_local) {
-		if (!_is_container_initiated(sq3)) {
-			m2b_close(sq3);
-			return NEWERROR(CODE_CONTAINER_NOTFOUND,
-					"container created but not initiated");
-		}
+	 * - creation : init not done */
+	const gboolean _create = (M2V2_OPEN_AUTOCREATE == (how & M2V2_OPEN_AUTOCREATE));
+	if (_create && _is_container_initiated(sq3)) {
+		m2b_close(sq3);
+		return NEWERROR(CODE_CONTAINER_EXISTS,
+				"container already initiated");
 	}
 
 	/* Complete URL with full VNS and container name */
@@ -1722,6 +1695,30 @@ _meta2_backend_force_prepare_data(struct meta2_backend_s *m2b,
 	g_rw_lock_writer_lock(&(m2b->prepare_data_lock));
 	_meta2_backend_force_prepare_data_unlocked(m2b, key, NULL, sq3);
 	g_rw_lock_writer_unlock(&(m2b->prepare_data_lock));
+}
+
+
+GError *
+meta2_backend_open_callback(struct sqlx_sqlite3_s *sq3,
+		struct meta2_backend_s *m2b UNUSED, enum sqlx_open_type_e open_mode)
+{
+	/* beware that LOCAL is maybe == 0 */
+	const gboolean _local = (SQLX_OPEN_LOCAL == (open_mode & SQLX_OPEN_REPLIMODE));
+	const gboolean _create = (SQLX_OPEN_CREATE == (open_mode & SQLX_OPEN_CREATE));
+
+	sq3->no_peers = _local;
+
+	/* The kind of check we do depend of the kind of opening:
+	 * - creation : no check
+	 * - local access : no check
+	 * - replicated access : init done */
+	if (!_create && !_local && !_is_container_initiated(sq3)) {
+		m2b_close(sq3);
+		return NEWERROR(CODE_CONTAINER_NOTFOUND,
+				"container created but not initiated");
+	}
+
+	return NULL;
 }
 
 void
