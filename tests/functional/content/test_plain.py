@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -45,9 +46,11 @@ class TestPlainContent(BaseTestCase):
         self.account = self.conf['account']
         self.chunk_size = self.conf['chunk_size']
         self.gridconf = {"namespace": self.namespace}
-        self.content_factory = ContentFactory(self.gridconf)
-        self.container_client = ContainerClient(self.gridconf)
-        self.blob_client = BlobClient(self.conf)
+        self.content_factory = ContentFactory(
+            self.gridconf, logger=self.logger)
+        self.container_client = ContainerClient(
+            self.gridconf, logger=self.logger)
+        self.blob_client = BlobClient(self.conf, logger=self.logger)
         self.container_name = "TestPlainContent-%f" % time.time()
         self.container_client.container_create(account=self.account,
                                                reference=self.container_name)

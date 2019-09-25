@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -230,6 +231,7 @@ class CommonTestCase(testtools.TestCase):
         self._beanstalkd0 = None
         self._conscience = None
         self._http_pool = None
+        self._logger = None
         self._storage_api = None
         # Namespace configuration, from "sds.conf"
         self._ns_conf = None
@@ -289,6 +291,12 @@ class CommonTestCase(testtools.TestCase):
             self._storage_api = ObjectStorageApi(self.ns,
                                                  pool_manager=self.http_pool)
         return self._storage_api
+
+    @property
+    def logger(self):
+        if not self._logger:
+            self._logger = logging.getLogger('test')
+        return self._logger
 
     @property
     def ns_conf(self):
@@ -421,7 +429,7 @@ class CommonTestCase(testtools.TestCase):
         try:
             return jsonlib.loads(data)
         except ValueError:
-            logging.info("Unparseable data: %s", str(data))
+            logging.info("Unparsable data: %s", str(data))
             raise
 
 
