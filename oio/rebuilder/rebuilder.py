@@ -15,6 +15,7 @@
 
 
 import random
+import signal
 from oio.common.green import ratelimit, eventlet, threading, ContextPool, time
 
 from oio.common.easy_value import int_value
@@ -47,6 +48,11 @@ class Rebuilder(object):
         self.input_file = input_file
         self.concurrency = int_value(conf.get('concurrency'),
                                      self.DEFAULT_CONCURRENCY)
+        self.success = True
+        # exit gracefully
+        self.running = True
+        signal.signal(signal.SIGINT, self.exit_gracefully)
+        signal.signal(signal.SIGTERM, self.exit_gracefully)
         # counters
         self.lock_counters = threading.Lock()
         self.items_processed = 0
@@ -59,6 +65,12 @@ class Rebuilder(object):
         self.last_report = 0
         self.report_interval = int_value(conf.get('report_interval'),
                                          self.DEFAULT_REPORT_INTERVAL)
+
+    def exit_gracefully(self, signum, frame):
+        self.logger.info(
+            'Stop sending and wait for all results already sent')
+        self.success = False
+        self.running = False
 
     def rebuilder_pass(self, **kwargs):
         self.start_time = self.last_report = time.time()
@@ -79,7 +91,13 @@ class Rebuilder(object):
                            retry_queue=rqueue, **kwargs)
 
             # fill the queue (with the main thread)
-            self._fill_queue(queue, **kwargs)
+
+            try:
+                self._fill_queue(queue, **kwargs)
+            except Exception as exc:
+                if self.running:
+                    self.logger.error("Failed to fill queue: %s", exc)
+                    self.success = False
 
             # block until all items are rebuilt
             queue.join()
@@ -87,7 +105,7 @@ class Rebuilder(object):
             rqueue.join()
 
         self.log_report('DONE', force=True)
-        return self.total_errors == 0
+        return self.success and self.total_errors == 0
 
     def _create_worker(self, **kwargs):
         """

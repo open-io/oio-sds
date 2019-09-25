@@ -664,7 +664,11 @@ class TubedBeanstalkd(object):
         self.beanstalkd.stats_tube(self.tube)
 
     def _connect(self, **kwargs):
-        self.close()
+        if self.connected:
+            return
+
+        self.logger.debug('Connecting to %s using tube %s',
+                          self.addr, self.tube)
         self.beanstalkd = Beanstalk.from_url('beanstalk://' + self.addr)
         self.beanstalkd.use(self.tube)
         self.beanstalkd.watch(self.tube)
@@ -672,23 +676,27 @@ class TubedBeanstalkd(object):
 
     def close(self):
         """Disconnect the wrapped Beanstalkd client."""
-        if self.connected:
-            try:
-                self.beanstalkd.close()
-            except BeanstalkError:
-                pass
-            self.connected = False
+        if not self.connected:
+            return
+
+        try:
+            self.beanstalkd.close()
+        except BeanstalkError:
+            pass
+        self.connected = False
 
 
 class BeanstalkdListener(TubedBeanstalkd):
 
+    def __init__(self, addr, tube, logger, **kwargs):
+        # pylint: disable=no-member
+        super(BeanstalkdListener, self).__init__(addr, tube, logger, **kwargs)
+        self.running = True
+
     def fetch_job(self, on_job, timeout=None, **kwargs):
         job_id = None
         try:
-            if not self.connected:
-                self.logger.debug('Connecting to %s using tube %s',
-                                  self.addr, self.tube)
-                self._connect(**kwargs)
+            self._connect(**kwargs)
             job_id, data = self.beanstalkd.reserve(timeout=timeout)
             try:
                 for job_info in on_job(job_id, data, **kwargs):
@@ -709,7 +717,7 @@ class BeanstalkdListener(TubedBeanstalkd):
                 self.beanstalkd.delete(job_id)
             return
         except ConnectionError as exc:
-            self.connected = False
+            self.close()
             self.logger.warn(
                 'Disconnected from %s using tube %s (job=%s): %s',
                 self.addr, self.tube, job_id, exc)
@@ -729,10 +737,14 @@ class BeanstalkdListener(TubedBeanstalkd):
             self.logger.exception("ERROR on %s using tube %s (job=%s)",
                                   self.addr, self.tube, job_id)
 
-    def fetch_jobs(self, on_job, **kwargs):
-        while True:
-            for job_info in self.fetch_job(on_job, **kwargs):
-                yield job_info
+    def fetch_jobs(self, on_job, reserve_timeout=None, **kwargs):
+        while self.running:
+            try:
+                for job_info in self.fetch_job(on_job, timeout=reserve_timeout,
+                                               **kwargs):
+                    yield job_info
+            except exceptions.OioTimeout:
+                pass
 
 
 class BeanstalkdSender(TubedBeanstalkd):
@@ -744,7 +756,7 @@ class BeanstalkdSender(TubedBeanstalkd):
     def __init__(self, addr, tube, logger,
                  low_limit=512, high_limit=1024, **kwargs):
         # pylint: disable=no-member
-        super(BeanstalkdSender, self).__init__(addr, tube, logger)
+        super(BeanstalkdSender, self).__init__(addr, tube, logger, **kwargs)
         self.low_limit = low_limit
         self.high_limit = high_limit
         self.accepts_jobs = True
@@ -777,7 +789,7 @@ class BeanstalkdSender(TubedBeanstalkd):
                     self.accepts_jobs = False
             return True
         except ConnectionError as exc:
-            self.connected = False
+            self.close()
             self.logger.warn(
                 'Disconnected from %s using tube %s (job=%s): %s',
                 self.addr, self.tube, job_id, exc)
