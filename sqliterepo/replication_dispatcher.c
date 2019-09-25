@@ -2013,7 +2013,6 @@ _handler_PROPGET(struct gridd_reply_ctx_s *reply,
 		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE;
 	err = sqlx_repository_open_and_lock(repo, &n0, how, &sq3, NULL);
 	if (err) {
-		g_prefix_error(&err, "Open/lock: ");
 		reply->send_error(0, err);
 	} else {
 		GPtrArray *tmp = g_ptr_array_new();

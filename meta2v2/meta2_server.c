@@ -94,6 +94,11 @@ _post_config(struct sqlx_service_s *ss)
 		return FALSE;
 	}
 
+	/* Check the base just after opening */
+	sqlx_repository_configure_open_callback(ss->repository,
+			(sqlx_repo_open_hook)meta2_backend_open_callback,
+			m2);
+
 	/* Make deleted bases exit the cache */
 	sqlx_repository_configure_close_callback(ss->repository, meta2_on_close, ss);
 
