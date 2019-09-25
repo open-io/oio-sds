@@ -1054,6 +1054,34 @@ _match_known_services_with_targets(struct oio_lb_pool_LOCAL_s *lb,
 	*unmatched = NULL;
 }
 
+static void
+_debug_service_selection(struct polling_ctx_s *ctx)
+{
+	// FIXME: there is similar code in _slot_rehash()
+	void _display(GQuark k, gpointer data, gpointer u) {
+		guint level = GPOINTER_TO_UINT(u);
+		oio_location_t loc = (GPOINTER_TO_UINT(k) - 1);
+		GRID_DEBUG("%0*" G_GINT64_MODIFIER "X selected %u times",
+				4 * (OIO_LB_LOC_LEVELS - level),
+				loc, GPOINTER_TO_UINT(data));
+	}
+	for (int level = 1; level < OIO_LB_LOC_LEVELS; level++)
+		g_datalist_foreach(&(ctx->counters[level]),
+				_display, GUINT_TO_POINTER(level));
+	guint i = 0;
+	void _display_selected(gpointer element, gpointer udata UNUSED) {
+		struct oio_lb_selected_item_s *sel = element;
+		GRID_DEBUG("Selected %s at loc %016"G_GINT64_MODIFIER
+				"X, dist: %u/%u/%u, slot: %s/%s",
+				sel->item? sel->item->id : "known service",
+				sel->item? sel->item->location : ctx->polled[i],
+				sel->final_dist, sel->warn_dist, sel->expected_dist,
+				sel->final_slot, sel->expected_slot);
+		i++;
+	}
+	g_ptr_array_foreach(ctx->selection, _display_selected, NULL);
+}
+
 static GError*
 _local__patch(struct oio_lb_pool_s *self,
 		const oio_location_t *avoids, const oio_location_t *known,
@@ -1141,37 +1169,25 @@ _local__patch(struct oio_lb_pool_s *self,
 	}
 	g_rw_lock_reader_unlock(&lb->world->lock);
 
-	void _set_expected_dist(gpointer element, gpointer udata UNUSED) {
+	void _set_dists(gpointer element, guint cur) {
 		struct oio_lb_selected_item_s *sel = element;
 		sel->expected_dist = start_dist;
 		sel->warn_dist = lb->warn_dist;
+		if (sel->item) {
+			/* Recompute the distance between chunks.
+			 * FIXME(FVE): this is necessary only on the first selected item. */
+			oio_location_t old = ctx.polled[cur];
+			polled[cur] = (oio_location_t)-1;
+			sel->final_dist = _find_min_dist(
+					polled, sel->item->location, ctx.max_dist);
+			polled[cur] = old;
+		}
 	}
-	g_ptr_array_foreach(ctx.selection, _set_expected_dist, NULL);
+	for (i = 0; i < ctx.selection->len; i++)
+		_set_dists(g_ptr_array_index(ctx.selection, i), i);
 
 	if (unlikely(GRID_DEBUG_ENABLED())) {
-		// FIXME: there is similar code in _slot_rehash()
-		void _display(GQuark k, gpointer data, gpointer u) {
-			guint level = GPOINTER_TO_UINT(u);
-			oio_location_t loc = (GPOINTER_TO_UINT(k) - 1);
-			GRID_DEBUG("%0*" G_GINT64_MODIFIER "X selected %u times",
-					4 * (OIO_LB_LOC_LEVELS - level),
-					loc, GPOINTER_TO_UINT(data));
-		}
-		for (int level = 1; level < OIO_LB_LOC_LEVELS; level++)
-			g_datalist_foreach(&ctx.counters[level],
-					_display, GUINT_TO_POINTER(level));
-		i = 0;
-		void _display_selected(gpointer element, gpointer udata UNUSED) {
-			struct oio_lb_selected_item_s *sel = element;
-			GRID_DEBUG("Selected %s at loc %016"G_GINT64_MODIFIER
-					"X, dist: %u/%u/%u, slot: %s/%s",
-					sel->item? sel->item->id : "known service",
-					sel->item? sel->item->location : polled[i],
-					sel->final_dist, sel->warn_dist, sel->expected_dist,
-					sel->final_slot, sel->expected_slot);
-			i++;
-		}
-		g_ptr_array_foreach(ctx.selection, _display_selected, NULL);
+		_debug_service_selection(&ctx);
 	}
 
 	for (int level = 1; level < OIO_LB_LOC_LEVELS; level++) {

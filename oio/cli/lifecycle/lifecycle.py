@@ -36,8 +36,7 @@ class LifecycleApply(lister.Lister):
             help='Container on which to apply lifecycle rules'
         )
         parser.add_argument(
-            '--recursive',
-            type=bool,
+            '--recursive', action='store_true',
             help='For sharded S3 buckets, recurse on sub containers.'
         )
         return parser

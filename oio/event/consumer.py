@@ -23,7 +23,7 @@ import greenlet
 
 from oio.account.client import AccountClient
 from oio.rdir.client import RdirClient
-from oio.event.beanstalk import Beanstalk, ConnectionError
+from oio.event.beanstalk import Beanstalk, ConnectionError, ResponseError
 from oio.common.utils import drop_privileges
 from oio.common.easy_value import int_value
 from oio.common.json import json
@@ -238,6 +238,10 @@ class EventWorker(Worker):
                         self.logger.info("Burying event %s (%s)",
                                          job_id, event.get('event'))
                         beanstalk.bury(job_id)
+                    except StopServe:
+                        self.logger.info("Releasing event %s (%s): stopping",
+                                         job_id, event.get('event'))
+                        beanstalk.release(job_id)
                     except Exception:
                         self.logger.exception("Burying event %s: %s",
                                               job_id, event)
@@ -254,12 +258,22 @@ class EventWorker(Worker):
 
         def cb(status, msg):
             if is_success(status):
-                beanstalk.delete(job_id)
+                try:
+                    beanstalk.delete(job_id)
+                except ResponseError as err:
+                    self.logger.warn(
+                        "Job %s succeeded but was not deleted: %s",
+                        job_id, err)
             elif is_error(status):
                 self.logger.warn(
                     'event %s handling failure (release with delay): %s',
-                    event['job_id'], msg)
-                beanstalk.release(job_id, delay=RELEASE_DELAY)
+                    job_id, msg)
+                try:
+                    beanstalk.release(job_id, delay=RELEASE_DELAY)
+                except ResponseError as err:
+                    self.logger.error(
+                        "Job %s failed and could not be rescheduled: %s",
+                        job_id, err)
 
         handler(event, cb)
 

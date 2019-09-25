@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -47,7 +47,7 @@ class NotifyFilter(Filter):
                 exclude[unquote(a)] = []
         return exclude
 
-    def _should_replicate(self, account, container):
+    def _should_notify(self, account, container):
         if self.exclude is None:
             return True
         containers = self.exclude.get(account, None)
@@ -57,8 +57,13 @@ class NotifyFilter(Filter):
             return True
         elif container in containers:
             return False
-        else:
-            return True
+        return True
+
+    def should_notify(self, event):
+        # Some events do not have a URL (e.g. chunk events),
+        # we cannot filter them easily, so we let them pass.
+        return not event.url or self._should_notify(event.url.get('account'),
+                                                    event.url.get('user'))
 
     def init(self):
         queue_url = self.conf.get('queue_url')
@@ -72,13 +77,12 @@ class NotifyFilter(Filter):
 
     def process(self, env, cb):
         event = Event(env)
-        if self._should_replicate(event.url.get('account'),
-                                  event.url.get('user')):
+        if self.should_notify(event):
             try:
                 data = json.dumps(env)
                 self.beanstalk.put(data)
-            except BeanstalkError as e:
-                msg = 'notify failure: %s' % str(e)
+            except BeanstalkError as err:
+                msg = 'notify failure: %s' % str(err)
                 resp = EventError(event=Event(env), body=msg)
                 return resp(env, cb)
 

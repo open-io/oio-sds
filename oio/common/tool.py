@@ -127,7 +127,8 @@ class Tool(object):
 
     def _fetch_items_with_beanstalkd_reply_from_beanstalkd(self):
         return self.beanstalkd.fetch_jobs(
-            self._item_with_beanstalkd_reply_from_task_event)
+            self._item_with_beanstalkd_reply_from_task_event,
+            reserve_timeout=2)
 
     def _fetch_items(self):
         """

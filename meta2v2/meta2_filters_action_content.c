@@ -327,6 +327,7 @@ meta2_filter_action_put_content(struct gridd_filter_ctx_s *ctx,
 			_m2b_notify_beans(m2b->notifier_content_deleted, url, l->data, "content.deleted", TRUE);
 		}
 		_m2b_notify_beans(m2b->notifier_content_created, url, added, "content.new", FALSE);
+		meta2_filter_send_deferred_events(ctx, m2b->notifier_content_created);
 		_on_bean_ctx_send_list(obc);
 		rc = FILTER_OK;
 	}
@@ -335,7 +336,6 @@ meta2_filter_action_put_content(struct gridd_filter_ctx_s *ctx,
 	g_slist_free_full(deleted, (GDestroyNotify)_bean_cleanl2);
 	_on_bean_ctx_clean(obc);
 
-	meta2_filter_send_deferred_events(ctx, m2b->notifier_content_created);
 	return rc;
 }
 

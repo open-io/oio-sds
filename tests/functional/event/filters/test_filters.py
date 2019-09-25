@@ -399,9 +399,9 @@ class TestNotifyFilter(BaseTestCase):
         self.notify_filter.exclude = \
             self.notify_filter._parse_exclude(
                 [quote('account'), 'account2/container'])
-        self.assertFalse(self.notify_filter._should_replicate(
+        self.assertFalse(self.notify_filter._should_notify(
             'account', random_str(16)))
-        self.assertFalse(self.notify_filter._should_replicate(
+        self.assertFalse(self.notify_filter._should_notify(
             'account2', 'container'))
 
         # account that should not be replicated
@@ -409,10 +409,9 @@ class TestNotifyFilter(BaseTestCase):
         self.notify_filter.exclude = \
             self.notify_filter._parse_exclude(strange_account)
         for x in strange_paths:
-            print x
-            self.assertFalse(self.notify_filter._should_replicate(
+            self.assertFalse(self.notify_filter._should_notify(
                 x, random_str(16)))
 
         # random account should be replicated
-        self.assertTrue(self.notify_filter._should_replicate(random_str(16),
-                                                             random_str(16)))
+        self.assertTrue(self.notify_filter._should_notify(random_str(16),
+                                                          random_str(16)))

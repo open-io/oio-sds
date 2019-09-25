@@ -50,6 +50,10 @@ class BlobImprover(Rebuilder):
         self.retry_delay = int_value(self.conf.get('retry_delay'), 30)
         self.reqid_prefix = 'blob-impr-'
 
+    def exit_gracefully(self, signum, frame):
+        super(BlobImprover, self).exit_gracefully(signum, frame)
+        self.listener.running = False
+
     def _event_from_job(self, job_id, data, **kwargs):
         """Decode a JSON string into an event dictionary."""
         # pylint: disable=no-member
@@ -69,13 +73,17 @@ class BlobImprover(Rebuilder):
     def _fill_queue(self, queue, **kwargs):
         max_events = kwargs.get('max_events')
         sent_events = 0
-        events = self.listener.fetch_jobs(self._event_from_job, **kwargs)
+        # Do not block more than 2 seconds
+        events = self.listener.fetch_jobs(self._event_from_job,
+                                          reserve_timeout=2, **kwargs)
         for event in events:
             queue.put(event)
             sent_events += 1
             if max_events > 0 and sent_events >= max_events:
                 self.logger.info('Max events (%d) reached, exiting',
                                  max_events)
+                break
+            if not self.running:
                 break
         events.close()
 

@@ -447,7 +447,7 @@ BACKBLAZE=NONE:BACKBLAZE
 # after the '/' are the parameters of the data security.
 
 DUPONETWO=plain/min_dist=1,nb_copy=2
-DUPONETHREE=plain/min_dist=1,nb_copy=3
+DUPONETHREE=plain/max_dist=2,min_dist=1,nb_copy=3
 DUP17=plain/min_dist=1,nb_copy=17
 
 EC=ec/k=6,m=3,algo=liberasurecode_rs_vand,min_dist=1
@@ -529,6 +529,8 @@ warn_dist=${WARN_DIST}
 [pool:rawx3]
 # Try to pick one "even" and one "odd" rawx, and a generic one
 targets=1,rawx-even,rawx;1,rawx-odd,rawx;1,rawx
+# If we change max_dist to 3, we need to update test_content_perfectible.py
+max_dist=2
 warn_dist=${WARN_DIST}
 
 [pool:zonedrawx3]

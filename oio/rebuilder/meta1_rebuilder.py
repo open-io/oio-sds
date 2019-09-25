@@ -57,6 +57,8 @@ class Meta1Rebuilder(MetaRebuilder):
                 if prefix not in prefixes:
                     queue.put(prefix.ljust(64, '0'))
                     prefixes.add(prefix)
+            if not self.running:
+                break
 
     def _item_to_string(self, prefix, **kwargs):
         return 'prefix %s' % prefix
