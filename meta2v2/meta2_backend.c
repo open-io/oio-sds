@@ -706,16 +706,10 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 		if (!err) {
 			m2b_destroy(sq3);
 			if (m2->notifier && send_event) {
-				/* This request handler is local, it will be called on each
-				 * service hosting the base. We must only signal our own
-				 * address; the other peers will do the same. */
-				const gchar *me = sqlx_repository_get_local_addr(m2->repo);
-				/* FIXME(FVE): do this at sqliterepo level, to be consistent
-				 * with DB_REMOVE request. */
-				GString *gs = oio_event__create(
-						META2_EVENTS_PREFIX ".container.deleted", url);
-				g_string_append_printf(
-						gs, ",\"data\":{\"peers\":[\"%s\"]}}", me);
+				GString *gs = oio_event__create_with_id(
+						META2_EVENTS_PREFIX ".container.deleted", url,
+						oio_ext_get_reqid());
+				g_string_append_static(gs, ",\"data\":{}}");
 				oio_events_queue__send(m2->notifier, g_string_free(gs, FALSE));
 			}
 		} else {
@@ -1724,6 +1718,57 @@ meta2_backend_open_callback(struct sqlx_sqlite3_s *sq3,
 }
 
 void
+meta2_backend_close_callback(struct sqlx_sqlite3_s *sq3,
+		struct meta2_backend_s *m2b)
+{
+	gint64 seq = 1;
+	EXTRA_ASSERT(sq3 != NULL);
+
+	if (!sq3->deleted)
+		return;
+
+	struct oio_url_s *url = oio_url_empty ();
+	oio_url_set(url, OIOURL_NS, m2b->ns_name);
+	NAME2CONST(n, sq3->name);
+
+	GError *err = sqlx_name_extract(&n, url, NAME_SRVTYPE_META2, &seq);
+	if (err) {
+		GRID_WARN("Invalid base name [%s]: %s", sq3->name.base, err->message);
+		g_clear_error(&err);
+	} else {
+		hc_decache_reference_service(m2b->resolver, url, NAME_SRVTYPE_META2);
+	}
+
+	/* This request handler is local, it will be called on each
+	* service hosting the base. We must only signal our own
+	* address; the other peers will do the same. */
+	if (m2b->notifier) {
+		gchar *account = sqlx_admin_get_str(sq3, SQLX_ADMIN_ACCOUNT);
+		gchar *user = sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME);
+		if (!account || !user) {
+			GRID_WARN("Missing "SQLX_ADMIN_ACCOUNT" or "SQLX_ADMIN_USERNAME
+					" in database %s (reqid=%s)", sq3->path_inline,
+					oio_ext_get_reqid());
+		} else {
+			oio_url_set(url, OIOURL_ACCOUNT, account);
+			oio_url_set(url, OIOURL_USER, user);
+
+			const gchar *me = meta2_backend_get_local_addr(m2b);
+			GString *gs = oio_event__create_with_id(
+					META2_EVENTS_PREFIX ".meta2.deleted", url,
+					oio_ext_get_reqid());
+			g_string_append_printf(
+					gs, ",\"data\":{\"peer\":\"%s\"}}", me);
+			oio_events_queue__send(m2b->notifier, g_string_free(gs, FALSE));
+		}
+		g_free(user);
+		g_free(account);
+	}
+
+	oio_url_clean(url);
+}
+
+void
 meta2_backend_change_callback(struct sqlx_sqlite3_s *sq3,
 		struct meta2_backend_s *m2b)
 {
@@ -1753,12 +1798,15 @@ meta2_backend_db_properties_change_callback(struct sqlx_sqlite3_s *sq3 UNUSED,
 		struct meta2_backend_s *m2b, struct oio_url_s *url,
 		struct db_properties_s *db_properties)
 {
-	GString *event = oio_event__create_with_id(
-			META2_EVENTS_PREFIX ".container.update", url, oio_ext_get_reqid());
-	g_string_append_static(event, ",\"data\":{");
-	db_properties_to_json(db_properties, event);
-	g_string_append_static(event, "}}");
-	oio_events_queue__send(m2b->notifier, g_string_free(event, FALSE));
+	if (m2b->notifier) {
+		GString *event = oio_event__create_with_id(
+				META2_EVENTS_PREFIX ".container.update", url,
+				oio_ext_get_reqid());
+		g_string_append_static(event, ",\"data\":{");
+		db_properties_to_json(db_properties, event);
+		g_string_append_static(event, "}}");
+		oio_events_queue__send(m2b->notifier, g_string_free(event, FALSE));
+	}
 }
 
 /**
