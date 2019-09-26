@@ -133,7 +133,8 @@ class VolumeIndexFilter(Filter):
                 peers = event.data.get('peers') or list()
                 for peer in peers:
                     self._service_delete(
-                        event.reqid, 'meta2', peer, container_url, container_id)
+                        event.reqid, 'meta2', peer, container_url,
+                        container_id)
         return self.app(env, cb)
 
 

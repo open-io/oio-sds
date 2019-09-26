@@ -38,6 +38,7 @@ class TestIntegrityCrawler(BaseTestCase):
         self.chunk = chunks[0]
         self.irreparable = len(chunks) == 1
         self.storage.blob_client.chunk_delete(self.chunk['real_url'])
+        self.beanstalkd0.drain_tube('oio-preserved')
 
     def tearDown(self):
         super(TestIntegrityCrawler, self).tearDown()
@@ -45,7 +46,7 @@ class TestIntegrityCrawler(BaseTestCase):
         self.storage.container_flush(self.account, self.container)
         self.storage.container_delete(self.account, self.container)
         self.wait_for_event('oio-preserved',
-                            type_=EventTypes.CONTAINER_DELETED,
+                            types=[EventTypes.CONTAINER_DELETED],
                             fields={'user': self.container})
         self.storage.account_delete(self.account)
 
