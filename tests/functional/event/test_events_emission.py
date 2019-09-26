@@ -15,15 +15,15 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import json
 import time
 from oio.api.object_storage import ObjectStorageApi
-from oio.event.beanstalk import Beanstalk, ResponseError
-from oio.event.consumer import DEFAULT_TUBE
 from oio.event.evob import EventTypes
 from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
 from tests.utils import BaseTestCase
+
+
+REASONABLE_EVENT_DELAY = 3.0
 
 
 class TestMeta2EventsEmission(BaseTestCase):
@@ -33,64 +33,44 @@ class TestMeta2EventsEmission(BaseTestCase):
         self.container_id = cid_from_name(self.account, self.container_name)
         self.container_client = ContainerClient(self.conf)
         self.storage_api = ObjectStorageApi(self.conf['namespace'])
-        self.event_agent_name = 'event-agent-1'
-        self.bt_connections = []
-        self._bt_make_connections(self.conf['services']['beanstalkd'])
+        self.beanstalkd0.drain_tube('oio-preserved')
 
-    def tearDown(self):
-        super(TestMeta2EventsEmission, self).tearDown()
-        self._service(self.event_agent_name, 'start', wait=3)
+    def wait_for_all_events(self, types):
+        pulled_events = dict()
+        for event_type in types:
+            pulled_events[event_type] = list()
 
-    def _bt_make_connections(self, bt_list):
-        for bt_entry in bt_list:
-            self.bt_connections.append(
-                Beanstalk.from_url('beanstalk://{0}'.format(bt_entry['addr'])))
-
-    def _bt_watch(self, tube):
-        for bt in self.bt_connections:
-            bt.watch(tube)
-
-    def _bt_pull_events_by_type(self, event_type):
-        pulled_events = []
-
-        for bt in self.bt_connections:
-            job_id = True
-            while job_id is not None:
-                try:
-                    job_id, data_raw = bt.reserve(timeout=4)
-                    pulled_events.append(json.loads(data_raw))
-                    bt.delete(job_id)
-                except ResponseError:
-                    break
-        return [x for x in pulled_events if x.get("event") == event_type]
+        while True:
+            event = self.wait_for_event('oio-preserved', types=types,
+                                        timeout=REASONABLE_EVENT_DELAY)
+            if event is None:
+                break
+            pulled_events[event.event_type].append(event)
+        return pulled_events
 
     def test_container_create(self):
-        if len(self.bt_connections) > 1:
-            self.skipTest("Unsupported on multi-beanstalk setups.")
-
-        # First shutdown the event-agent
-        self._service(self.event_agent_name, 'stop', wait=3)
-        self._bt_watch(DEFAULT_TUBE)
-
         # Fire up the event
         self.container_client.container_create(self.account,
                                                self.container_name)
 
         # Grab all events and filter for the needed event type
-        wanted_events = self._bt_pull_events_by_type(
-            EventTypes.ACCOUNT_SERVICES)
+        wanted_events = self.wait_for_all_events(
+            [EventTypes.CONTAINER_NEW, EventTypes.ACCOUNT_SERVICES])
 
-        self.assertEqual(len(wanted_events), 1)
+        container_new_events = wanted_events[EventTypes.CONTAINER_NEW]
+        account_services_events = wanted_events[EventTypes.ACCOUNT_SERVICES]
+        self.assertEqual(1, len(container_new_events))
+        self.assertEqual(1, len(account_services_events))
         # Prepping for the next operation.
-        ev = wanted_events[0]
+        container_new_event = container_new_events[0]
+        account_services_event = account_services_events[0]
 
         # Basic info
-        self.assertEqual(ev.get("url"), {
-            'ns': self.ns,
-            'account': self.account,
-            'user': self.container_name,
-            'id': self.container_id,
-        })
+        for event in (container_new_event, account_services_event):
+            self.assertEqual({'ns': self.ns,
+                              'account': self.account,
+                              'user': self.container_name,
+                              'id': self.container_id}, event.url)
 
         # Get the peers list and verify it's the same as received
         raw_dir_info = self.storage_api.directory.list(self.account,
@@ -100,24 +80,18 @@ class TestMeta2EventsEmission(BaseTestCase):
         expected_peers_list = sorted(
             [x.get('host') for x in raw_dir_info if x.get('type') == 'meta2']
         )
-
         received_peers_list = sorted(
-            [x.get('host') for x in ev.get('data') if x.get('type') == 'meta2']
+            [x.get('host') for x in account_services_event.data
+             if x.get('type') == 'meta2']
         )
-
-        self.assertListEqual(received_peers_list, expected_peers_list)
+        self.assertListEqual(expected_peers_list, received_peers_list)
 
     def test_container_delete(self):
-        if len(self.bt_connections) > 1:
-            self.skipTest("Unsupported on multi-beanstalk setups.")
-        self._service(self.event_agent_name, 'stop', wait=3)
-        self._bt_watch(DEFAULT_TUBE)
-
         # Create the container first
         self.container_client.container_create(self.account,
                                                self.container_name)
 
-        # Get the peers list and verify it's the same as received
+        # Get the peers list
         raw_dir_info = self.storage_api.directory.list(self.account,
                                                        self.container_name,
                                                        cid=self.container_id)
@@ -126,27 +100,27 @@ class TestMeta2EventsEmission(BaseTestCase):
             [x.get('host') for x in raw_dir_info if x.get('type') == 'meta2']
         )
 
+        self.beanstalkd0.drain_tube('oio-preserved')
         # Fire up the event
         self.container_client.container_delete(self.account,
                                                self.container_name)
 
         # Grab all events and filter for the needed event type
-        wanted_events = self._bt_pull_events_by_type(
-            EventTypes.CONTAINER_DELETED)
-
-        self.assertEqual(len(wanted_events), len(expected_peers_list))
-        # Prepping for the next operation.
+        wanted_events = self.wait_for_all_events(
+            [EventTypes.CONTAINER_DELETED, EventTypes.META2_DELETED])
+        container_deleted_events = wanted_events[EventTypes.CONTAINER_DELETED]
+        meta2_deleted_events = wanted_events[EventTypes.META2_DELETED]
+        self.assertEqual(1, len(container_deleted_events))
+        self.assertEqual(len(expected_peers_list), len(meta2_deleted_events))
 
         # Basic info
-        for ev in wanted_events:
-            self.assertEqual(ev.get("url"), {
-                'ns': self.ns,
-                'account': self.account,
-                'user': self.container_name,
-                'id': self.container_id,
-            })
+        for event in (container_deleted_events + meta2_deleted_events):
+            self.assertDictEqual({'ns': self.ns,
+                                  'account': self.account,
+                                  'user': self.container_name,
+                                  'id': self.container_id}, event.url)
 
+        # Verify it's the same as received
         received_peers = sorted(
-            [str(x.get("data").get("peers")[0]) for x in wanted_events])
-
-        self.assertListEqual(received_peers, expected_peers_list)
+            [event.data.get("peer") for event in meta2_deleted_events])
+        self.assertListEqual(expected_peers_list, received_peers)

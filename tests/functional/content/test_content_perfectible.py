@@ -13,7 +13,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import logging
 import time
 
 try:
@@ -29,9 +28,7 @@ from tests.utils import BaseTestCase
 
 from oio.api.object_storage import ObjectStorageApi
 from oio.common.utils import request_id
-from oio.common.json import json
 from oio.event.beanstalk import ResponseError
-from oio.event.evob import Event
 from oio.rebuilder.blob_improver import DEFAULT_IMPROVER_TUBE
 
 
@@ -88,15 +85,10 @@ class TestPerfectibleContent(BaseTestCase):
         """
         Wait for an event in the oio-improve tube.
         """
-        self.beanstalkd.watch(DEFAULT_IMPROVER_TUBE)
-        try:
-            job_id, data = self.beanstalkd.reserve(timeout=timeout)
-        except ResponseError as exc:
-            logging.warn('No event read from tube %s: %s',
-                         DEFAULT_IMPROVER_TUBE, exc)
+        event = self.wait_for_event(DEFAULT_IMPROVER_TUBE, timeout=timeout)
+        if event is None:
             self.fail()
-        self.beanstalkd.delete(job_id)
-        return Event(json.loads(data))
+        return event
 
     # This test must be executed first
     def test_0_upload_ok(self):
