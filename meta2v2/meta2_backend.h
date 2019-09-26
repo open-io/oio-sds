@@ -59,6 +59,9 @@ const gchar* meta2_backend_get_local_addr(struct meta2_backend_s *m2);
 GError *meta2_backend_open_callback(struct sqlx_sqlite3_s *sq3,
 		struct meta2_backend_s *m2b, enum sqlx_open_type_e open_mode);
 
+void meta2_backend_close_callback(struct sqlx_sqlite3_s *sq3,
+		struct meta2_backend_s *m2b);
+
 void meta2_backend_change_callback(struct sqlx_sqlite3_s *sq3,
 		struct meta2_backend_s *m2b);
 

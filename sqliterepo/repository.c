@@ -522,7 +522,7 @@ sqlx_repository_call_close_callback(struct sqlx_sqlite3_s *sq3)
 	if (!sq3 || !sq3->repo
 			|| !sq3->repo->close_callback)
 		return;
-	return sq3->repo->close_callback(sq3, sq3->deleted,
+	return sq3->repo->close_callback(sq3,
 			sq3->repo->close_callback_data);
 }
 

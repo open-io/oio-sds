@@ -43,7 +43,7 @@ typedef GError* (*sqlx_repo_open_hook)(struct sqlx_sqlite3_s *sq3,
 		gpointer cb_data, enum sqlx_open_type_e open_mode);
 
 typedef void (*sqlx_repo_close_hook)(struct sqlx_sqlite3_s *sq3,
-		gboolean deleted, gpointer cb_data);
+		gpointer cb_data);
 
 typedef void (*sqlx_repo_change_hook)(struct sqlx_sqlite3_s *sq3,
 		gpointer cb_data);
