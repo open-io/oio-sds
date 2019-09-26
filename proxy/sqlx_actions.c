@@ -295,6 +295,7 @@ action_sqlx_propdel (struct req_args_s *args, struct json_object *jargs)
 enum http_rc_e
 action_admin_ping (struct req_args_s *args)
 {
+	oio_ext_set_admin(TRUE);
 	PACKER_VOID(_pack) { return sqlx_pack_USE (_u, FALSE, DL()); }
 	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, _pack);
 }
@@ -302,6 +303,7 @@ action_admin_ping (struct req_args_s *args)
 enum http_rc_e
 action_admin_has (struct req_args_s *args)
 {
+	oio_ext_set_admin(TRUE);
 	PACKER_VOID(_pack) { return sqlx_pack_HAS (_u, DL()); }
 	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, _pack);
 }
@@ -309,6 +311,7 @@ action_admin_has (struct req_args_s *args)
 enum http_rc_e
 action_admin_status (struct req_args_s *args)
 {
+	oio_ext_set_admin(TRUE);
 	PACKER_VOID(_pack) { return sqlx_pack_STATUS (_u, DL()); }
 	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, _pack);
 }
@@ -316,6 +319,7 @@ action_admin_status (struct req_args_s *args)
 enum http_rc_e
 action_admin_info (struct req_args_s *args)
 {
+	oio_ext_set_admin(TRUE);
 	PACKER_VOID(_pack) { return sqlx_pack_INFO (DL()); }
 	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, _pack);
 }
@@ -323,6 +327,7 @@ action_admin_info (struct req_args_s *args)
 enum http_rc_e
 action_admin_drop_cache (struct req_args_s *args)
 {
+	oio_ext_set_admin(TRUE);
 	PACKER_VOID(_pack) { return sqlx_pack_LEANIFY (DL()); }
 	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, _pack);
 }
@@ -330,6 +335,7 @@ action_admin_drop_cache (struct req_args_s *args)
 enum http_rc_e
 action_admin_sync (struct req_args_s *args)
 {
+	oio_ext_set_admin(TRUE);
 	PACKER_VOID(_pack) { return sqlx_pack_RESYNC (_u, DL()); }
 	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, _pack);
 }
@@ -337,6 +343,7 @@ action_admin_sync (struct req_args_s *args)
 enum http_rc_e
 action_admin_leave (struct req_args_s *args)
 {
+	oio_ext_set_admin(TRUE);
 	PACKER_VOID(_pack) { return sqlx_pack_EXITELECTION (_u, DL()); }
 	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, _pack);
 }
@@ -344,6 +351,7 @@ action_admin_leave (struct req_args_s *args)
 enum http_rc_e
 action_admin_debug (struct req_args_s *args)
 {
+	oio_ext_set_admin(TRUE);
 	PACKER_VOID(_pack) { return sqlx_pack_DESCR (_u, DL()); }
 	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, _pack);
 }
@@ -351,12 +359,14 @@ action_admin_debug (struct req_args_s *args)
 enum http_rc_e
 action_admin_copy (struct req_args_s *args)
 {
+	oio_ext_set_admin(TRUE);
 	return rest_action (args, action_sqlx_copyto);
 }
 
 enum http_rc_e
 action_admin_remove (struct req_args_s *args)
 {
+	oio_ext_set_admin(TRUE);
 	PACKER_VOID(_pack) { return sqlx_pack_REMOVE(_u, DL()); }
 	const char *service_id = SERVICE_ID();
 	if (service_id == NULL)
@@ -368,6 +378,7 @@ action_admin_remove (struct req_args_s *args)
 enum http_rc_e
 action_admin_prop_get (struct req_args_s *args)
 {
+	oio_ext_set_admin(TRUE);
 	return rest_action (args, action_sqlx_propget);
 }
 

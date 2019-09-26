@@ -1709,10 +1709,12 @@ meta2_backend_open_callback(struct sqlx_sqlite3_s *sq3,
 	sq3->no_peers = _local;
 
 	/* The kind of check we do depend of the kind of opening:
+	 * - admin access : no check
 	 * - creation : no check
 	 * - local access : no check
 	 * - replicated access : init done */
-	if (!_create && !_local && !_is_container_initiated(sq3)) {
+	if (!oio_ext_is_admin() && !_create && !_local
+			&& !_is_container_initiated(sq3)) {
 		m2b_close(sq3);
 		return NEWERROR(CODE_CONTAINER_NOTFOUND,
 				"container created but not initiated");
