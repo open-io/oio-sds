@@ -618,7 +618,7 @@ oio_url_to_json (GString *out, struct oio_url_s *u)
 		if (len != out->len) g_string_append_c (out, ',');
 		oio_str_gstring_append_json_pair (out, "content", u->content);
 	}
-	if (u->hexid[0]) {
+	if (oio_url_get_id(u)) {
 		if (len != out->len) g_string_append_c (out, ',');
 		oio_str_gstring_append_json_pair (out, "id", u->hexid);
 	}
