@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -1352,7 +1352,11 @@ member_json (struct election_member_s *m, GString *gs)
 	g_string_append_c (gs, ',');
 	OIO_JSON_append_str (gs, "type", m->inline_name.type);
 	g_string_append_c (gs, ',');
-	OIO_JSON_append_str (gs, "zk", m->key);
+	gchar *full_key = sqlx_sync_zk_full_key_path(m->sync, m->key);
+	OIO_JSON_append_str (gs, "zk", full_key);
+	g_free(full_key);
+	g_string_append_c(gs, ',');
+	OIO_JSON_append_str(gs, "zk_server", sqlx_sync_zk_server(m->sync));
 	g_string_append_static (gs, "},\"#\":{");
 	OIO_JSON_append_int (gs, "refcount", m->refcount);
 	g_string_append_c (gs, ',');

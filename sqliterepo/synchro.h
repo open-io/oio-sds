@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -108,6 +108,12 @@ void sqlx_sync_set_hash(struct sqlx_sync_s *ss, guint witdth, guint depth);
 /** Tell if the current synchronizer handle is using the specified
  * Zookeeper handle. */
 int sqlx_sync_uses_handle(struct sqlx_sync_s *ss, zhandle_t *zh);
+
+/** Build to full ZK path to the key. Must be freed with g_free. */
+gchar* sqlx_sync_zk_full_key_path(struct sqlx_sync_s *ss, const char *key);
+
+/** Tell which server this handle is connected to. */
+const char* sqlx_sync_zk_server(struct sqlx_sync_s *ss);
 
 /** Get a string describing one of Zookeeper's state constants. */
 const char * zoo_state2str(int state);
