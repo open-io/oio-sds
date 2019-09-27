@@ -1,4 +1,3 @@
 config:
   proxy.location: "hostx.vol0"
   proxy.srv_local.patch: true
-  proxy.srv_local.prefer: true
