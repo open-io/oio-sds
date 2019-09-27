@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta1v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -73,13 +73,12 @@ struct meta1_prefixes_set_s;
 struct sqlx_repository_s;
 struct sqlx_sqlite3_s;
 struct oio_url_s;
-
 struct meta1_backend_s;
 
 /* Backend constructor.
  * This creates an internal sqlx_repository_t constructor. */
-GError * meta1_backend_init(struct meta1_backend_s **out,
-		const char *ns, struct sqlx_repository_s *repo,
+GError* meta1_backend_init(struct meta1_backend_s **result,
+		struct sqlx_repository_s *repo, const char *ns,
 		struct oio_lb_s *lb);
 
 /* Returns the set of prefixes internally managed
