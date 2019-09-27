@@ -422,6 +422,7 @@ class ListContainer(Lister):
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
+        from oio.common.utils import cid_from_name
 
         kwargs = {}
         if parsed_args.prefix:
@@ -457,8 +458,9 @@ class ListContainer(Lister):
             listing = self.app.client_manager.storage.container_list(
                 account, **kwargs)
 
-        columns = ('Name', 'Bytes', 'Count')
-        return columns, ((v[0], v[2], v[1]) for v in listing)
+        columns = ('Name', 'Bytes', 'Count', 'Mtime', 'CID')
+        return columns, ((v[0], v[2], v[1], v[4], cid_from_name(account, v[0]))
+                         for v in listing)
 
 
 class UnsetContainer(ContainerCommandMixin, Command):
