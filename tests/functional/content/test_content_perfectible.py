@@ -118,14 +118,10 @@ class TestPerfectibleContent(BaseTestCase):
         Check that an event is emitted when the warning distance is reached.
         """
         # Check we have enough service locations.
-        by_place = self._aggregate_services(
-            'rawx', lambda x: x['tags']['tag.loc'].rsplit('.', 2)[0])
-        if len(by_place) < 3:
-            self.skip('This test requires 3 different 2nd level locations')
-            return
+        by_place = self._aggregate_rawx_by_place()
 
         # Lock all services of the 3rd location.
-        banned_loc = by_place.keys()[2]
+        banned_loc = list(by_place.keys())[2]
         self._lock_services('rawx', by_place[banned_loc])
 
         # Upload an object.
@@ -133,7 +129,7 @@ class TestPerfectibleContent(BaseTestCase):
         reqid = request_id('perfectible-')
         self.api.object_create(self.account, container,
                                obj_name='perfectible',
-                               data='whatever',
+                               data=b'whatever',
                                policy='THREECOPIES',
                                headers={REQID_HEADER: reqid})
 
@@ -264,3 +260,19 @@ class TestPerfectibleContent(BaseTestCase):
         if job:
             logging.debug("Unexpected job data: %s", data)
         self.assertIsNone(job)
+
+
+class TestPerfectibleLocalContent(TestPerfectibleContent):
+
+    @classmethod
+    def setUpClass(cls):
+        super(TestPerfectibleLocalContent, cls).setUpClass()
+        config = {'proxy.srv_local.prepare': 1,
+                  'proxy.location': 'rack.127-0-0-4.6000'}
+        cls._cls_set_proxy_config(config)
+
+    @classmethod
+    def tearDownClass(cls):
+        config = {'proxy.srv_local.prepare': 0}
+        cls._cls_set_proxy_config(config)
+        super(TestPerfectibleLocalContent, cls).tearDownClass()

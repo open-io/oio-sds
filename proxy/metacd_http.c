@@ -223,7 +223,7 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 		GRID_DEBUG("Received %s request without request id", rq->cmd);
 #endif
 		oio_ext_set_prefixed_random_reqid("proxy-");
-    }
+	}
 
 	/* Load the optional 'admin' flag */
 	const char *admin = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_ADMIN);
