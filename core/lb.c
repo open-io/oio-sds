@@ -1054,6 +1054,26 @@ _match_known_services_with_targets(struct oio_lb_pool_LOCAL_s *lb,
 	*unmatched = NULL;
 }
 
+static gboolean
+_match_item_with_targets(struct oio_lb_pool_LOCAL_s *lb,
+		struct oio_lb_selected_item_s *selected)
+{
+	for (gchar **ptarget = lb->targets; *ptarget; ++ptarget) {
+		// Lookup only the first slot of each target.
+		struct oio_lb_slot_s *slot = oio_lb_world__get_slot_unlocked(
+				lb->world, *ptarget);
+		guint pos = _search_first_at_location(slot->items,
+				selected->item->location, OIO_LOC_PROX_VOLUME,
+				0, slot->items->len-1);
+		if (pos != (guint)-1) {
+			oio_str_replace(&(selected->expected_slot), *ptarget);
+			oio_str_replace(&(selected->final_slot), *ptarget);
+			return TRUE;
+		}
+	}
+	return FALSE;
+}
+
 static void
 _debug_service_selection(struct polling_ctx_s *ctx)
 {
@@ -2103,23 +2123,40 @@ _local__poll_around(struct oio_lb_pool_s *self,
 		// Build a slot name that can be recognized as a special name pattern
 		// indicating an evil-placement
 		gchar slot[] = PREFIX_SLOT_SKEW SUFFIX_SLOT_SKEW;
-		oio_str_randomize(slot + sizeof(PREFIX_SLOT_SKEW) - 1, sizeof(SUFFIX_SLOT_SKEW) - 1, HEXA);
+		oio_str_randomize(slot + sizeof(PREFIX_SLOT_SKEW) - 1,
+				sizeof(SUFFIX_SLOT_SKEW) - 1, HEXA);
 
+		guint16 max_dist = MIN(lb->world->abs_max_dist, lb->initial_dist);
 		guint i = max_suspects > 1
 			? oio_ext_rand_int_range(0, max_suspects) : 0;
 		if (mode == 1) {
 			// Poll one weighted random service under the pin
 			// OSEF the weight -> the other chunks will respect a weighted random
-			struct oio_lb_selected_item_s *selected = _item_select(suspects->pdata[i]);
-			selected->expected_slot = g_strdup("rawx");
-			selected->final_slot = g_strdup(slot);
+			struct oio_lb_selected_item_s *selected = \
+					_item_select(suspects->pdata[i]);
+			if (!_match_item_with_targets(lb, selected)) {
+				selected->expected_slot = g_strdup("rawx");
+				selected->final_slot = g_strdup(slot);
+			}
+			selected->expected_dist = max_dist;
+			// Consider this chunk is well placed in terms of distance.
+			selected->final_dist = max_dist;
+			selected->warn_dist = lb->warn_dist;
 			g_ptr_array_add(selection, selected);
 		} else {
 			// Poll as many services as possible under the pin
 			for (guint nb=0; nb < count_targets && nb < max_suspects; ++nb) {
-				struct oio_lb_selected_item_s *selected = _item_select(suspects->pdata[i]);
-				selected->expected_slot = g_strdup("rawx");
-				selected->final_slot = g_strdup(slot);
+				struct oio_lb_selected_item_s *selected = \
+						_item_select(suspects->pdata[i]);
+				// FIXME(FVE): this is broken since we may match several times
+				// the same target (which should be matched only once).
+				if (!_match_item_with_targets(lb, selected)) {
+					selected->expected_slot = g_strdup("rawx");
+					selected->final_slot = g_strdup(slot);
+				}
+				selected->expected_dist = max_dist;
+				selected->final_dist = 1;  // on the same host by definition
+				selected->warn_dist = lb->warn_dist;
 				g_ptr_array_add(selection, selected);
 				i = (i+1) % max_suspects;
 			}
