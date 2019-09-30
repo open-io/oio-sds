@@ -611,6 +611,14 @@ Used by `gcc`
  * type: string
  * cmake directive: *OIO_META2_TUBE_CONTENT_UPDATED*
 
+### meta2.tube.meta2_deleted
+
+> TODO: to be documented
+
+ * default: **oio**
+ * type: string
+ * cmake directive: *OIO_META2_TUBE_META2_DELETED*
+
 ### ns.chunk_size
 
 > Default chunk size for the given namespace.

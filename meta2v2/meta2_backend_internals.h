@@ -57,6 +57,8 @@ struct meta2_backend_s
 	struct oio_events_queue_s *notifier_content_drained;
 	struct oio_events_queue_s *notifier_content_broken;
 
+	struct oio_events_queue_s *notifier_meta2_deleted;
+
 	// Trigger pre-check on alias upon a BEANS generation request
 	gboolean flag_precheck_on_generate;
 

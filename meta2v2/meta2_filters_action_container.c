@@ -459,10 +459,8 @@ meta2_filter_action_insert_beans(struct gridd_filter_ctx_s *ctx,
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
-	gboolean frozen;
-	metautils_message_extract_boolean(reply->request, NAME_MSGKEY_FROZEN,
-			FALSE, &frozen);
-
+	const gboolean frozen = metautils_message_extract_flag(
+			reply->request, NAME_MSGKEY_FROZEN, FALSE);
 	const gboolean force = metautils_message_extract_flag(
 			reply->request, NAME_MSGKEY_FORCE, FALSE);
 
@@ -501,9 +499,9 @@ meta2_filter_action_update_beans(struct gridd_filter_ctx_s *ctx,
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	GSList **chunk_lists = meta2_filter_ctx_get_input_udata(ctx);
-	gboolean frozen = FALSE;
-	metautils_message_extract_boolean(reply->request, NAME_MSGKEY_FROZEN,
-			FALSE, &frozen);
+	const gboolean frozen = metautils_message_extract_flag(
+			reply->request, NAME_MSGKEY_FROZEN, FALSE);
+
 	GError *err = meta2_backend_update_beans(m2b, url,
 			chunk_lists[0], chunk_lists[1], frozen);
 	if (!err)

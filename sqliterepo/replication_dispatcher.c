@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -1681,7 +1681,7 @@ _handler_USE(struct gridd_reply_ctx_s *reply,
 
 	reply->no_access();
 
-	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
+	if ((err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
 		return TRUE;
 	}
@@ -2132,7 +2132,6 @@ _handler_PROPGET(struct gridd_reply_ctx_s *reply,
 		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE;
 	err = sqlx_repository_open_and_lock(repo, &n0, how, &sq3, NULL);
 	if (err) {
-		g_prefix_error(&err, "Open/lock: ");
 		reply->send_error(0, err);
 	} else {
 		GPtrArray *tmp = g_ptr_array_new();
@@ -2743,38 +2742,68 @@ _handler_DESTROY(struct gridd_reply_ctx_s *reply,
 
 typedef gboolean (*hook) (struct gridd_reply_ctx_s *, gpointer, gpointer);
 
+static gboolean
+sqlx_dispatch_all(struct gridd_reply_ctx_s *reply,
+		gpointer gdata, gpointer hdata)
+{
+	hook hk;
+	gchar admin[16];
+	GError *err = NULL;
+	gboolean res = TRUE;
+
+	hk = (hook)hdata;
+
+	/* Extract admin */
+	memset(admin, 0, sizeof(admin));
+	err = metautils_message_extract_string(reply->request,
+			NAME_MSGKEY_ADMIN_COMMAND, admin, sizeof(admin));
+	if (err)
+		g_clear_error(&err);
+	oio_ext_set_admin(oio_str_parse_bool(admin, FALSE));
+
+	if (!hk) {
+		GRID_INFO("No hook defined for this request, consider not yet implemented");
+		reply->send_reply(CODE_NOT_IMPLEMENTED, "NOT IMPLEMENTED");
+	} else {
+		res = hk(reply, gdata, NULL);
+	}
+
+	oio_ext_set_admin(FALSE);
+	return res;
+}
+
 const struct gridd_request_descr_s *
 sqlx_repli_gridd_get_requests(void)
 {
 	static struct gridd_request_descr_s descriptions[] = {
-		{NAME_MSGNAME_SQLX_HAS,              (hook) _handler_HAS,      NULL},
-		{NAME_MSGNAME_SQLX_PROPSET,          (hook) _handler_PROPSET,  NULL},
-		{NAME_MSGNAME_SQLX_PROPGET,          (hook) _handler_PROPGET,  NULL},
-		{NAME_MSGNAME_SQLX_PROPDEL,          (hook) _handler_PROPDEL,  NULL},
-		{NAME_MSGNAME_SQLX_ENABLE,           (hook) _handler_ENABLE,   NULL},
-		{NAME_MSGNAME_SQLX_FREEZE,           (hook) _handler_FREEZE,   NULL},
-		{NAME_MSGNAME_SQLX_DISABLE,          (hook) _handler_DISABLE,  NULL},
-		{NAME_MSGNAME_SQLX_DISABLE_DISABLED, (hook) _handler_DISABLE2, NULL},
+		{NAME_MSGNAME_SQLX_HAS,              (hook) sqlx_dispatch_all, _handler_HAS},
+		{NAME_MSGNAME_SQLX_PROPSET,          (hook) sqlx_dispatch_all, _handler_PROPSET},
+		{NAME_MSGNAME_SQLX_PROPGET,          (hook) sqlx_dispatch_all, _handler_PROPGET},
+		{NAME_MSGNAME_SQLX_PROPDEL,          (hook) sqlx_dispatch_all, _handler_PROPDEL},
+		{NAME_MSGNAME_SQLX_ENABLE,           (hook) sqlx_dispatch_all, _handler_ENABLE},
+		{NAME_MSGNAME_SQLX_FREEZE,           (hook) sqlx_dispatch_all, _handler_FREEZE},
+		{NAME_MSGNAME_SQLX_DISABLE,          (hook) sqlx_dispatch_all, _handler_DISABLE},
+		{NAME_MSGNAME_SQLX_DISABLE_DISABLED, (hook) sqlx_dispatch_all, _handler_DISABLE2},
 
-		{NAME_MSGNAME_SQLX_STATUS,       (hook) _handler_STATUS,    NULL},
-		{NAME_MSGNAME_SQLX_DESCR,        (hook) _handler_DESCR,     NULL},
-		{NAME_MSGNAME_SQLX_ISMASTER,     (hook) _handler_ISMASTER,  NULL},
-		{NAME_MSGNAME_SQLX_USE,          (hook) _handler_USE,       NULL},
-		{NAME_MSGNAME_SQLX_EXITELECTION, (hook) _handler_EXIT,      NULL},
-		{NAME_MSGNAME_SQLX_PIPETO,       (hook) _handler_PIPETO,    NULL},
-		{NAME_MSGNAME_SQLX_PIPEFROM,     (hook) _handler_PIPEFROM,  NULL},
-		{NAME_MSGNAME_SQLX_REMOVE,       (hook) _handler_REMOVE,    NULL},
-		{NAME_MSGNAME_SQLX_SNAPSHOT,     (hook) _handler_SNAPSHOT,  NULL},
-		{NAME_MSGNAME_SQLX_DUMP,         (hook) _handler_DUMP,      NULL},
-		{NAME_MSGNAME_SQLX_RESTORE,      (hook) _handler_RESTORE,   NULL},
-		{NAME_MSGNAME_SQLX_REPLICATE,    (hook) _handler_REPLICATE, NULL},
-		{NAME_MSGNAME_SQLX_GETVERS,      (hook) _handler_GETVERS,   NULL},
-		{NAME_MSGNAME_SQLX_RESYNC,       (hook) _handler_RESYNC,    NULL},
-		{NAME_MSGNAME_SQLX_VACUUM,       (hook) _handler_VACUUM,    NULL},
+		{NAME_MSGNAME_SQLX_STATUS,       (hook) sqlx_dispatch_all, _handler_STATUS},
+		{NAME_MSGNAME_SQLX_DESCR,        (hook) sqlx_dispatch_all, _handler_DESCR},
+		{NAME_MSGNAME_SQLX_ISMASTER,     (hook) sqlx_dispatch_all, _handler_ISMASTER},
+		{NAME_MSGNAME_SQLX_USE,          (hook) sqlx_dispatch_all, _handler_USE},
+		{NAME_MSGNAME_SQLX_EXITELECTION, (hook) sqlx_dispatch_all, _handler_EXIT},
+		{NAME_MSGNAME_SQLX_PIPETO,       (hook) sqlx_dispatch_all, _handler_PIPETO},
+		{NAME_MSGNAME_SQLX_PIPEFROM,     (hook) sqlx_dispatch_all, _handler_PIPEFROM},
+		{NAME_MSGNAME_SQLX_REMOVE,       (hook) sqlx_dispatch_all, _handler_REMOVE},
+		{NAME_MSGNAME_SQLX_SNAPSHOT,     (hook) sqlx_dispatch_all, _handler_SNAPSHOT},
+		{NAME_MSGNAME_SQLX_DUMP,         (hook) sqlx_dispatch_all, _handler_DUMP},
+		{NAME_MSGNAME_SQLX_RESTORE,      (hook) sqlx_dispatch_all, _handler_RESTORE},
+		{NAME_MSGNAME_SQLX_REPLICATE,    (hook) sqlx_dispatch_all, _handler_REPLICATE},
+		{NAME_MSGNAME_SQLX_GETVERS,      (hook) sqlx_dispatch_all, _handler_GETVERS},
+		{NAME_MSGNAME_SQLX_RESYNC,       (hook) sqlx_dispatch_all, _handler_RESYNC},
+		{NAME_MSGNAME_SQLX_VACUUM,       (hook) sqlx_dispatch_all, _handler_VACUUM},
 
-		{NAME_MSGNAME_SQLX_INFO,    (hook) _handler_INFO,      NULL},
-		{NAME_MSGNAME_SQLX_LEANIFY, (hook) _handler_LEANIFY,   NULL},
-		{NAME_MSGNAME_SQLX_BALM,    (hook) _handler_BALM,      NULL},
+		{NAME_MSGNAME_SQLX_INFO,    (hook) sqlx_dispatch_all, _handler_INFO},
+		{NAME_MSGNAME_SQLX_LEANIFY, (hook) sqlx_dispatch_all, _handler_LEANIFY},
+		{NAME_MSGNAME_SQLX_BALM,    (hook) sqlx_dispatch_all, _handler_BALM},
 
 		{NULL, NULL, NULL}
 	};
@@ -2786,8 +2815,8 @@ const struct gridd_request_descr_s *
 sqlx_sql_gridd_get_requests(void)
 {
 	static struct gridd_request_descr_s descriptions[] = {
-		{NAME_MSGNAME_SQLX_QUERY,   (hook) _handler_QUERY,   NULL},
-		{NAME_MSGNAME_SQLX_DESTROY, (hook) _handler_DESTROY, NULL},
+		{NAME_MSGNAME_SQLX_QUERY,   (hook) sqlx_dispatch_all, _handler_QUERY},
+		{NAME_MSGNAME_SQLX_DESTROY, (hook) sqlx_dispatch_all, _handler_DESTROY},
 		{NULL, NULL, NULL}
 	};
 

@@ -14,7 +14,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from logging import getLogger
-from cliff.lister import Lister
+
+from oio.cli import Lister
 
 
 def format_json(parsed_args, json):

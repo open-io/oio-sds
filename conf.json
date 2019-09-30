@@ -118,6 +118,11 @@
 				"limit": 64, "def": "oio", "descr": "" },
 
 			{ "type": "string",
+				"name": "oio_meta2_tube_meta2_deleted",
+				"key": "meta2.tube.meta2_deleted",
+				"limit": 64, "def": "oio", "descr": "" },
+
+			{ "type": "string",
 				"name": "oio_rawx_tube_chunk_created",
 				"key": "rawx.tube.chunk_created",
 				"limit": 64, "def": "oio", "descr": "" },

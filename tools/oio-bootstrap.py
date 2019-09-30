@@ -865,16 +865,16 @@ pipeline = ${REPLICATION} content_cleaner ${PRESERVE}
 pipeline = logger content_improve ${PRESERVE}
 
 [handler:storage.container.new]
-# pipeline = replication account_update volume_index
-pipeline = ${REPLICATION} account_update volume_index ${PRESERVE}
+# pipeline = replication account_update
+pipeline = ${REPLICATION} account_update ${PRESERVE}
 
 [handler:storage.container.update]
 # pipeline = replication
 pipeline = ${REPLICATION} ${PRESERVE}
 
 [handler:storage.container.deleted]
-# pipeline = replication account_update volume_index
-pipeline = ${REPLICATION} account_update volume_index ${PRESERVE}
+# pipeline = replication account_update
+pipeline = ${REPLICATION} account_update ${PRESERVE}
 
 [handler:storage.container.state]
 pipeline = account_update ${PRESERVE}
@@ -883,6 +883,9 @@ pipeline = account_update ${PRESERVE}
 pipeline = volume_index ${PRESERVE}
 
 [handler:storage.chunk.deleted]
+pipeline = volume_index ${PRESERVE}
+
+[handler:storage.meta2.deleted]
 pipeline = volume_index ${PRESERVE}
 
 [handler:account.services]

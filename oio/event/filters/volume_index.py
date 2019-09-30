@@ -21,7 +21,8 @@ from oio.common.exceptions import OioException, VolumeException
 
 
 CHUNK_EVENTS = [EventTypes.CHUNK_DELETED, EventTypes.CHUNK_NEW]
-SERVICE_EVENTS = [EventTypes.ACCOUNT_SERVICES, EventTypes.CONTAINER_DELETED]
+SERVICE_EVENTS = [EventTypes.ACCOUNT_SERVICES, EventTypes.META2_DELETED,
+                  EventTypes.CONTAINER_DELETED]
 
 
 class VolumeIndexFilter(Filter):
@@ -124,12 +125,17 @@ class VolumeIndexFilter(Filter):
                 for peer in peers:
                     self._service_push(event.reqid, peer['type'], peer['host'],
                                        container_url, container_id, mtime)
-            if event.event_type == EventTypes.CONTAINER_DELETED:
+            elif event.event_type == EventTypes.META2_DELETED:
+                peer = event.data['peer']
+                self._service_delete(
+                    event.reqid, 'meta2', peer, container_url, container_id)
+            elif event.event_type == EventTypes.CONTAINER_DELETED:
+                # TODO(adu): Delete when it will no longer be used
                 peers = event.data.get('peers') or list()
-                type_ = 'meta2'
                 for peer in peers:
-                    self._service_delete(event.reqid, type_, peer,
-                                         container_url, container_id)
+                    self._service_delete(
+                        event.reqid, 'meta2', peer, container_url,
+                        container_id)
         return self.app(env, cb)
 
 

@@ -33,11 +33,11 @@ class ServiceRebuildTest(CliTestCase):
         self.wait_for_event(
             'oio-preserved',
             fields={'account': account, 'user': container, 'path': obj_name},
-            type_=EventTypes.CONTENT_NEW)
+            types=(EventTypes.CONTENT_NEW, ))
         self.wait_for_event(
             'oio-preserved',
             fields={'account': account, 'user': container},
-            type_=EventTypes.CONTAINER_STATE)
+            types=(EventTypes.CONTAINER_STATE, ))
 
     def create_object(self, account, container, obj_name):
         self.api.object_create(
@@ -79,7 +79,7 @@ class ServiceRebuildTest(CliTestCase):
         self.wait_for_event(
             'oio-preserved',
             fields={'account': account, 'user': container},
-            type_=EventTypes.CONTAINER_STATE)
+            types=(EventTypes.CONTAINER_STATE, ))
 
         account_info = self.api.account_show(account)
         self.assertEqual(20, account_info['bytes'])

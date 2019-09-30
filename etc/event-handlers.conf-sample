@@ -29,16 +29,16 @@ pipeline = content_cleaner
 pipeline = content_improve
 
 [handler:storage.container.new]
-# pipeline = account_update volume_index replication
-pipeline = account_update volume_index
+# pipeline = account_update replication
+pipeline = account_update
 
 [handler:storage.container.update]
 # pipeline = replication
 pipeline =
 
 [handler:storage.container.deleted]
-# pipeline = account_update volume_index replication
-pipeline = account_update volume_index
+# pipeline = account_update replication
+pipeline = account_update
 
 [handler:storage.container.state]
 pipeline = account_update
@@ -47,6 +47,9 @@ pipeline = account_update
 pipeline = volume_index
 
 [handler:storage.chunk.deleted]
+pipeline = volume_index
+
+[handler:storage.meta2.deleted]
 pipeline = volume_index
 
 [handler:account.services]

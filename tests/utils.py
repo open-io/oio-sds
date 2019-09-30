@@ -35,6 +35,7 @@ from oio.common.http_urllib3 import get_pool_manager
 from oio.common.json import json as jsonlib
 from oio.common.green import time
 from oio.event.beanstalk import Beanstalk, ResponseError
+from oio.event.evob import Event
 
 random_chars = string.ascii_letters + string.digits
 random_chars_id = 'ABCDEF' + string.digits
@@ -510,7 +511,7 @@ class BaseTestCase(CommonTestCase):
         logging.info('Service(s) fails to reach %d score (timeout %d)',
                      score_threshold, timeout)
 
-    def wait_for_event(self, tube, reqid=None, type_=None,
+    def wait_for_event(self, tube, reqid=None, types=None,
                        fields=None, timeout=30.0):
         """
         Wait for an event in the specified tube.
@@ -526,25 +527,25 @@ class BaseTestCase(CommonTestCase):
             while now < deadline:
                 to = max(0.0, deadline - now)
                 job_id, data = self.beanstalkd0.reserve(timeout=to)
-                edata = jsonlib.loads(data)
+                event = Event(jsonlib.loads(data))
                 self.beanstalkd0.delete(job_id)
                 now = time.time()
-                if type_ and edata['event'] != type_:
+                if types and event.event_type not in types:
                     logging.debug("ignore event %s (event mismatch)", data)
                     continue
-                if reqid and edata.get('request_id') != reqid:
+                if reqid and event.reqid != reqid:
                     logging.info("ignore event %s (request_id mismatch)", data)
                     continue
-                if fields and any(fields[k] != edata.get('url', {}).get(k)
+                if fields and any(fields[k] != event.url.get(k)
                                   for k in fields):
                     logging.info("ignore event %s (filter mismatch)", data)
                     continue
                 logging.info("event %s", data)
-                return edata
+                return event
             logging.warn(
-                ('wait_for_event(reqid=%s, type_=%s, fields=%s, timeout=%s) '
+                ('wait_for_event(reqid=%s, types=%s, fields=%s, timeout=%s) '
                  'reached its timeout'),
-                reqid, type_, fields, timeout)
+                reqid, types, fields, timeout)
         except ResponseError as err:
-            logging.info('%s', err)
+            logging.warn('%s', err)
         return None

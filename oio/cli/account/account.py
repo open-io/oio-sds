@@ -14,10 +14,11 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from logging import getLogger
-from cliff import command, show, lister
+
+from oio.cli import Command, Lister, ShowOne
 
 
-class ShowAccount(show.ShowOne):
+class ShowAccount(ShowOne):
     """Show account"""
 
     log = getLogger(__name__ + '.ShowAccount')
@@ -48,7 +49,7 @@ class ShowAccount(show.ShowOne):
         return zip(*sorted(data.iteritems()))
 
 
-class DeleteAccount(command.Command):
+class DeleteAccount(Command):
     """Delete account"""
 
     log = getLogger(__name__ + '.DeleteAccount')
@@ -72,7 +73,7 @@ class DeleteAccount(command.Command):
             )
 
 
-class CreateAccount(lister.Lister):
+class CreateAccount(Lister):
     """Create account"""
 
     log = getLogger(__name__ + '.CreateAccount')
@@ -99,7 +100,7 @@ class CreateAccount(lister.Lister):
         return ('Name', 'Created'), (r for r in results)
 
 
-class SetAccount(command.Command):
+class SetAccount(Command):
     """Set account properties."""
 
     log = getLogger(__name__ + '.SetAccount')
@@ -131,7 +132,7 @@ class SetAccount(command.Command):
         )
 
 
-class UnsetAccount(command.Command):
+class UnsetAccount(Command):
     """Unset account properties."""
 
     log = getLogger(__name__ + '.UnsetAccount')
@@ -162,7 +163,7 @@ class UnsetAccount(command.Command):
         )
 
 
-class ListAccounts(lister.Lister):
+class ListAccounts(Lister):
     """List accounts of the namespace"""
 
     log = getLogger(__name__ + '.ListAccount')
@@ -203,7 +204,7 @@ class ListAccounts(lister.Lister):
         return column, ((e,) for e in account_list)
 
 
-class RefreshAccount(command.Command):
+class RefreshAccount(Command):
     """ Refresh counters of an account and all its containers """
 
     log = getLogger(__name__ + '.RefreshAccount')
@@ -240,7 +241,7 @@ class RefreshAccount(command.Command):
                                 "Missing value for account or --all")
 
 
-class FlushAccount(command.Command):
+class FlushAccount(Command):
     """ Flush account by emptying the list of its containers """
 
     log = getLogger(__name__ + '.FlushAccount')

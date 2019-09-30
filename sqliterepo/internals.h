@@ -80,11 +80,11 @@ struct sqlx_repository_s
 	sqlx_file_locator_f locator;
 	gpointer locator_data;
 
-	sqlx_repo_close_hook close_callback;
-	gpointer close_callback_data;
-
 	sqlx_repo_open_hook open_callback;
 	gpointer open_callback_data;
+
+	sqlx_repo_close_hook close_callback;
+	gpointer close_callback_data;
 
 	sqlx_repo_change_hook change_callback;
 	gpointer change_callback_data;

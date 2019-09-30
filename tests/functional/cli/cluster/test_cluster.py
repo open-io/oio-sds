@@ -49,7 +49,8 @@ class ClusterTest(CliTestCase):
     def test_cluster_unlock(self):
         opts = self.get_opts([], 'json')
         # Check that nonexistent types are rejected
-        output = self.openio('cluster unlock nonexistent 127.0.0.1:666' + opts)
+        output = self.openio('cluster unlock nonexistent 127.0.0.1:666' + opts,
+                             expected_returncode=1)
         data = json.loads(output)
         self.assertEqual(data[0]['Result'],
                          ('Service type [nonexistent] not managed '
@@ -62,7 +63,8 @@ class ClusterTest(CliTestCase):
     def test_cluster_lock(self):
         opts = self.get_opts([], 'json')
         # Check that nonexistent types are rejected
-        output = self.openio('cluster lock nonexistent 127.0.0.1:666' + opts)
+        output = self.openio('cluster lock nonexistent 127.0.0.1:666' + opts,
+                             expected_returncode=1)
         data = json.loads(output)
         self.assertEqual(data[0]['Result'],
                          ('Service type [nonexistent] not managed '

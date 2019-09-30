@@ -15,6 +15,8 @@
 
 import argparse
 import os
+from cliff import command, lister, show
+
 from oio.common.logger import get_logger
 
 LOG_LEVELS = ['DEBUG', 'INFO', 'WARN', 'ERROR']
@@ -95,3 +97,44 @@ def add_common_parser_options(parser):
         "--profile-early",
         action='store_true',
         help=("Start profiling early, before subcommand loading."))
+
+
+class Command(command.Command):
+    """
+    Wraps cliff's command.Command and sets the process' return code
+    according to the class' "success" field.
+    """
+
+    success = True
+
+    def run(self, parsed_args):
+        return_code = super(Command, self).run(parsed_args)
+        if return_code == 0:
+            return_code = int(not self.success)
+        return return_code
+
+
+class Lister(lister.Lister):
+    """
+    Wraps cliff's lister.Lister and sets the process' return code
+    according to the class' "success" field.
+    """
+
+    success = True
+
+    def run(self, parsed_args):
+        super(Lister, self).run(parsed_args)
+        return int(not self.success)
+
+
+class ShowOne(show.ShowOne):
+    """
+    Wraps cliff's show.ShowOne and sets the process' return code
+    according to the class' "success" field.
+    """
+
+    success = True
+
+    def run(self, parsed_args):
+        super(ShowOne, self).run(parsed_args)
+        return int(not self.success)
