@@ -265,13 +265,22 @@ context_clue_for_decache(struct client_ctx_s *ctx)
 	return FALSE;
 }
 
+static void
+cache_flush_reference(struct req_args_s *args, struct client_ctx_s *ctx)
+{
+	GRID_DEBUG("Suspected stale cache entry for [%s] [%s]",
+			ctx->type, oio_url_get(args->url, OIOURL_WHOLE));
+
+	hc_decache_reference(resolver, args->url);
+}
+
 void
 cache_flush_user(struct req_args_s *args, struct client_ctx_s *ctx)
 {
 	GRID_DEBUG("Suspected stale cache entry for [%s] [%s]",
 			ctx->type, oio_url_get(args->url, OIOURL_WHOLE));
 
-	hc_decache_reference_service (resolver, args->url, NAME_SRVTYPE_META2);
+	hc_decache_reference_service(resolver, args->url, NAME_SRVTYPE_META2);
 	gchar *k = g_strconcat(ctx->name.base, "/", NAME_SRVTYPE_META2, NULL);
 	service_forget_master(k);
 	g_free(k);
@@ -309,9 +318,10 @@ label_retry:
 
 	if (err) {
 		EXTRA_ASSERT(m1uv == NULL);
-		if (retry && err->code == CODE_RANGE_NOTFOUND) {
+		if (retry && error_clue_for_decache(err)) {
 			retry = FALSE;
-			hc_decache_reference(resolver, ctx->url);
+			cache_flush_reference(args, ctx);
+			g_clear_error(&err);
 			goto label_retry;
 		} else {
 			g_prefix_error(&err, "Directory error: ");
@@ -515,10 +525,12 @@ gridd_request_replicated_with_retry (struct req_args_s *args,
 retry:
 	err = gridd_request_replicated(args, ctx, pack);
 	if (error_clue_for_decache(err) || context_clue_for_decache(ctx)) {
-		cache_flush_user(args, ctx);
+		if (*ctx->type == '#')
+			cache_flush_reference(args, ctx);
+		else
+			cache_flush_user(args, ctx);
 		if (attempts-- > 0) {
-			if (err)
-				g_clear_error(&err);
+			g_clear_error(&err);
 			client_clean(ctx);
 			goto retry;
 		}
