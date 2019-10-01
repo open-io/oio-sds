@@ -353,11 +353,7 @@ class Meta0PrefixMapping(MetaMapping):
 
         # pylint: disable=no-member
         for pfx, services_addrs in raw_mapping.iteritems():
-            # FIXME: this is REALLY annoying
-            # self.prefix_to_base() takes the beginning of the prefix,
-            # but here we have to take the end, because meta0 does
-            # some byte swapping.
-            base = pfx[4-self.digits:]
+            base = pfx[:self.digits]
             self._learn(base, services_addrs)
 
     def _find_services(self, known=None, lookup=None, max_lookup=50):
