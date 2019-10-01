@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2017-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,9 +19,7 @@ import time
 import subprocess
 from urllib import quote
 from random import choice
-from oio.api.object_storage import ObjectStorageApi
 from oio.blob.rebuilder import BlobRebuilder
-from oio.container.client import ContainerClient
 from oio.event.beanstalk import Beanstalk
 from oio.event.filters.notify import NotifyFilter
 from tests.utils import BaseTestCase, random_str, strange_paths
@@ -39,16 +37,15 @@ class TestContentRebuildFilter(BaseTestCase):
 
     def setUp(self):
         super(TestContentRebuildFilter, self).setUp()
-        self.namespace = self.conf['namespace']
-        self.gridconf = {"namespace": self.namespace}
+        self.gridconf = {"namespace": self.ns}
         self.container = "TestContentRebuildFilter%f" % time.time()
         self.ref = self.container
-        self.container_client = ContainerClient(self.conf)
+        self.container_client = self.storage.container
         self.container_client.container_create(self.account, self.container)
         syst = self.container_client.container_get_properties(
                 self.account, self.container)['system']
         self.container_id = syst['sys.name'].split('.', 1)[0]
-        self.object_storage_api = ObjectStorageApi(namespace=self.namespace)
+        self.object_storage_api = self.storage
         queue_addr = choice(self.conf['services']['beanstalkd'])['addr']
         self.queue_url = queue_addr
         self.conf['queue_url'] = 'beanstalk://' + self.queue_url
@@ -57,6 +54,7 @@ class TestContentRebuildFilter(BaseTestCase):
         bt = Beanstalk.from_url(self.conf['queue_url'])
         bt.drain_tube(BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE)
         bt.close()
+        self.wait_for_score(('rawx', ))
 
     def _create_event(self, content_name, present_chunks, missing_chunks,
                       content_id):
@@ -65,7 +63,7 @@ class TestContentRebuildFilter(BaseTestCase):
         event["event"] = "storage.content.broken"
         event["data"] = {"present_chunks": present_chunks,
                          "missing_chunks": missing_chunks}
-        event["url"] = {"ns": self.namespace, "account": self.account,
+        event["url"] = {"ns": self.ns, "account": self.account,
                         "user": self.container, "path": content_name,
                         "id": self.container_id, "content": content_id}
         return event
@@ -88,7 +86,7 @@ class TestContentRebuildFilter(BaseTestCase):
 
     def _rebuild(self, event, job_id=0):
         self.blob_rebuilder = subprocess.Popen(
-                    ['oio-blob-rebuilder', self.namespace,
+                    ['oio-blob-rebuilder', self.ns,
                      '--beanstalkd=' + self.queue_url])
         time.sleep(3)
         self.blob_rebuilder.kill()

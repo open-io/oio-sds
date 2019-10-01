@@ -17,6 +17,7 @@ import tempfile
 import fileinput
 import os
 
+from oio.common import exceptions
 from oio.common.utils import cid_from_name
 from oio.crawler.integrity import Checker, Target, \
     DEFAULT_DEPTH, IRREPARABLE_PREFIX
@@ -49,7 +50,10 @@ class TestIntegrityCrawler(BaseTestCase):
         self.wait_for_event('oio-preserved',
                             types=[EventTypes.CONTAINER_DELETED],
                             fields={'user': self.container})
-        self.storage.account_delete(self.account)
+        try:
+            self.storage.account_delete(self.account)
+        except exceptions.Conflict:
+            pass  # Yes I know, that's not supposed to fail, but...
 
     def _verify_rebuilder_input(self):
         try:

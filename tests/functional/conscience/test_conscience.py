@@ -218,6 +218,7 @@ class TestConscienceFunctional(BaseTestCase):
 
     def test_service_lock_tag(self):
         """Ensure a 'tag.lock' tag is set on service whose score is locked."""
+        self.wait_for_score(('rawx',))
         all_rawx = self.conscience.all_services('rawx')
         one_rawx = all_rawx[0]
         one_rawx['score'] = 1
@@ -241,6 +242,7 @@ class TestConscienceFunctional(BaseTestCase):
         """
         Check that a locked service is still locked after a conscience restart.
         """
+        self.wait_for_score(('rawx',))
         all_rawx = self.conscience.all_services('rawx')
         one_rawx = all_rawx[0]
         one_rawx['score'] = 1
