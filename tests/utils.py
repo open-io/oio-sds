@@ -520,7 +520,7 @@ class BaseTestCase(CommonTestCase):
                        fields=None, timeout=30.0):
         """
         Wait for an event in the specified tube.
-        If reqid, type_ and/or fields are specified, drain events until the
+        If reqid, types and/or fields are specified, drain events until the
         specified event is found.
         """
         self.beanstalkd0.wait_for_ready_job(tube, timeout=timeout)
