@@ -423,13 +423,19 @@ class BlobRebuilderWorker(RebuilderWorker):
                             reply['addr'], reply['tube'], self.logger,
                             **kwargs)
                     elif self.sender.addr != reply['addr'] \
-                            or self.sender.addr != reply['tube']:
+                            or self.sender.tube != reply['tube']:
                         self.sender.close()
                         self.sender = BeanstalkdSender(
                             reply['addr'], reply['tube'], self.logger,
                             **kwargs)
 
-                    self.sender.send_job(json.dumps(event))
+                    sent = False
+                    event_json = json.dumps(event)
+                    while not sent:
+                        sent = self.sender.send_job(event_json)
+                        if not sent:
+                            sleep(1.0)
+                    self.sender.job_done()
                 except BeanstalkError as exc:
                     self.logger.warn(
                         'reply failed %s: %s',
