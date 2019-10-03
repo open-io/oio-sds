@@ -73,15 +73,15 @@ unsigned int
 oio_location_common_bits(enum oio_loc_proximity_level_e level)
 {
 	switch (level) {
-		case OIO_LOC_DIST_FARAWAY:
+		case OIO_LOC_PROX_NONE:
 			return 0;
-		case OIO_LOC_DIST_REGION:
+		case OIO_LOC_PROX_REGION:
 			return 8;
-		case OIO_LOC_DIST_ROOM:
+		case OIO_LOC_PROX_ROOM:
 			return 16;
-		case OIO_LOC_DIST_RACK:
+		case OIO_LOC_PROX_RACK:
 			return 32;
-		case OIO_LOC_DIST_HOST:
+		case OIO_LOC_PROX_HOST:
 			return 48;
 		default:
 			return 64;

@@ -1596,7 +1596,7 @@ _location_at_position (GArray *tab, const guint i)
 
 #define M(loc) oio_location_mask_after(loc,lvl)
 
-static int
+static guint
 _slide_to_first_at_location (GArray *tab,
 		const oio_location_t needle, const enum oio_loc_proximity_level_e lvl,
 		guint i)
@@ -1635,6 +1635,7 @@ _search_first_at_location (GArray *tab,
 		return _search_first_at_location (tab, needle, lvl, i_pivot+1, end);
 	return _search_first_at_location (tab, needle, lvl, start, i_pivot);
 }
+#undef M
 
 static void
 oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
@@ -2055,7 +2056,7 @@ _unique_services(struct oio_lb_pool_LOCAL_s *lb, gchar **slots, oio_location_t p
 					pin, OIO_LOC_PROX_HOST, 0, slot->items->len-1);
 
 #ifdef HAVE_EXTRA_ASSERT
-#define CHECK_HLOC(pin,op,i) g_assert_cmpint(pin, op, \
+#define CHECK_HLOC(pin,op,i) g_assert_cmpuint(pin, op, \
 		oio_location_mask_after(SLOT_ITEM(slot,(i)).item->location, OIO_LOC_DIST_HOST))
 			if (i != (guint)-1) {
 				// check this is well the first item of its slice
