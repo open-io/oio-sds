@@ -43,7 +43,7 @@ const char * zoo_state2str(int state) {
 	ON_STATE(CONNECTING);
 	ON_STATE(ASSOCIATING);
 	ON_STATE(CONNECTED);
-#if ZOO_MAJOR_VERSION > 3 || (ZOO_MAJOR_VERSION == 3 && ZOO_MINOR_VERSION >= 5)
+#if ZOO_35
 	ON_STATE(READONLY);
 	ON_STATE(NOTCONNECTED);
 #endif
@@ -104,6 +104,9 @@ static int _awget_siblings (struct sqlx_sync_s *ss, const char *path,
 		watcher_fn watcher, void* watcherCtx,
 		strings_completion_t completion, const void *data);
 
+static int _aremove_all_watches(struct sqlx_sync_s *ss, const char *path,
+		void_completion_t completion, const void *data);
+
 static struct sqlx_sync_vtable_s VTABLE =
 {
 	_clear,
@@ -115,6 +118,7 @@ static struct sqlx_sync_vtable_s VTABLE =
 	_awget,
 	_awget_children,
 	_awget_siblings,
+	_aremove_all_watches,
 };
 
 static gchar *
@@ -454,6 +458,32 @@ _awget_siblings (struct sqlx_sync_s *ss, const char *path,
 	return rc;
 }
 
+static int
+_aremove_all_watches(struct sqlx_sync_s *ss, const char *path,
+		void_completion_t completion, const void *data)
+{
+	EXTRA_ASSERT(ss != NULL);
+	EXTRA_ASSERT(ss->vtable == &VTABLE);
+#ifdef HAVE_ENBUG
+	if (oio_sync_failure_threshold_action >= oio_ext_rand_int_range(1,100))
+		return ZOPERATIONTIMEOUT;
+#endif
+	int rc = ZOK;
+#if ZOO_35
+	gchar p[PATH_MAXLEN];
+	_realpath(ss, path, p, sizeof(p));
+	// XXX: the (void_completion_t *) cast is necessary because of a bogus API
+	// XXX: we should set 'local' to TRUE, but it did not work with ZK 3.5.5
+	rc = zoo_aremove_all_watches(ss->zh, p,
+			ZWATCHTYPE_DATA, FALSE, (void_completion_t *)completion, data);
+#else
+	(void) path;
+	(void) completion;
+	(void) data;
+#endif
+	return rc;
+}
+
 /* -------------------------------------------------------------------------- */
 
 #define SYNC_CALL(self,F) VTABLE_CALL(self,struct abstract_sqlx_sync_s*,F)
@@ -556,6 +586,17 @@ sqlx_sync_awget_siblings (struct sqlx_sync_s *ss, const char *path,
 	SYNC_CALL(ss,awget_siblings)(ss, path, watch, watchCtx, completion, d);
 #else
 	return _awget_siblings(ss, path, watch, watchCtx, completion, d);
+#endif
+}
+
+int
+sqlx_sync_aremove_all_watches(struct sqlx_sync_s *ss, const char *path,
+		void_completion_t completion, const void *d)
+{
+#ifdef HAVE_EXTRA_DEBUG
+	SYNC_CALL(ss,aremove_all_watches)(ss, path, completion, d);
+#else
+	return _aremove_all_watches(ss, path, completion, d);
 #endif
 }
 

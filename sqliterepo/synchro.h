@@ -28,6 +28,7 @@ License along with this library.
 #include <zookeeper.h>
 
 #define PATH_MAXLEN 128 + LIMIT_LENGTH_NSNAME
+#define ZOO_35 ZOO_MAJOR_VERSION > 3 || (ZOO_MAJOR_VERSION == 3 && ZOO_MINOR_VERSION >= 5)
 
 struct sqlx_sync_s;
 
@@ -62,6 +63,9 @@ struct sqlx_sync_vtable_s
 	int (*awget_siblings) (struct sqlx_sync_s *ss, const char *path,
 			watcher_fn watcher, void* watcherCtx,
 			strings_completion_t completion, const void *data);
+
+	int (*aremove_all_watches) (struct sqlx_sync_s *ss, const char *path,
+			void_completion_t completion, const void *data);
 };
 
 struct abstract_sqlx_sync_s
@@ -96,6 +100,9 @@ int sqlx_sync_awget_children (struct sqlx_sync_s *ss, const char *path,
 int sqlx_sync_awget_siblings (struct sqlx_sync_s *ss, const char *path,
 		watcher_fn watcher, void* watcherCtx,
 		strings_completion_t completion, const void *data);
+
+int sqlx_sync_aremove_all_watches(struct sqlx_sync_s *ss, const char *path,
+		  void_completion_t completion, const void *data);
 
 /** Initiates a sqlx synchronizer based on ZooKeeper.
  * @param url the Zookeeper connection string */

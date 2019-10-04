@@ -1747,6 +1747,25 @@ deferred_completion_LEAVING(struct exec_later_LEAVING_context_s *d)
 	g_slice_free1(sizeof(struct exec_later_LEAVING_context_s), d);
 }
 
+#if ZOO_35
+static void
+completion_delete_watches(int zrc, const void *d)
+{
+	if (!d)
+		return;
+	struct election_member_s *member = (struct election_member_s *)d;
+	member_lock(member);
+	member_log_completion("Delete watches", zrc, member);
+	if (zrc != ZOK && zrc != ZNOWATCHER) {
+		gchar path[PATH_MAXLEN];
+		member_fullpath(member, path, sizeof(path));
+		GRID_WARN("Failed to remove a watch for %s: %s",
+				path, zerror(zrc));
+	}
+	member_unlock(member);
+}
+#endif
+
 static void
 completion_LEAVING(int zrc, const void *d)
 {
@@ -1863,7 +1882,7 @@ deferred_watch_COMMON(struct deferred_watcher_context_s *d,
 					member_set_status(member, STEP_NONE));
 		// Not under lock but it's just a read operation
 		} else if (M->members_by_state[STEP_MASTER].count > 0) {
-#if ZOO_MAJOR_VERSION > 3 || (ZOO_MAJOR_VERSION == 3 && ZOO_MINOR_VERSION >= 5)
+#if ZOO_35
 			GRID_WARN("Got ZK session event (-> %s) for an unknown election, "
 					"resetting all local elections using %s and "
 					"currently in MASTER state",
@@ -2523,9 +2542,28 @@ _common_action_to_LEAVE(struct election_member_s *member,
 		member->when_unstable = oio_ext_monotonic_time();
 
 	gchar path[PATH_MAXLEN];
-	int zrc = sqlx_sync_adelete(member->sync,
-			member_fullpath(member, path, sizeof(path)), -1,
-			completion_LEAVING, member);
+	int zrc = 0;
+#if ZOO_35
+	if (member_masterpath(member, path, sizeof(path))) {
+		zrc = sqlx_sync_aremove_all_watches(
+				member->sync, path, completion_delete_watches, member);
+		if (zrc != ZOK) {
+			GRID_WARN("Could not remove watch for master ZK node %s: %s",
+					path, zerror(zrc));
+		}
+	}
+#endif
+	member_fullpath(member, path, sizeof(path));
+#if ZOO_35
+	zrc = sqlx_sync_aremove_all_watches(
+			member->sync, path, completion_delete_watches, member);
+	if (zrc != ZOK) {
+		GRID_WARN("Could not remove watch for local ZK node %s: %s",
+				path, zerror(zrc));
+	}
+#endif
+	zrc = sqlx_sync_adelete(
+			member->sync, path, -1, completion_LEAVING, member);
 	TRACE_EXECUTION(member->manager);
 
 	if (unlikely(zrc != ZOK))
