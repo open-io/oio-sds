@@ -47,11 +47,11 @@ install(FILES
 
 install(TARGETS
 			oio-tool
+			oio-lb-benchmark
 		DESTINATION bin)
 
 install(TARGETS
 			oio-file
-			oio-lb-benchmark
 			oio-zk-harass
 		DESTINATION bin
 		CONFIGURATIONS Debug COMPONENT dev)
