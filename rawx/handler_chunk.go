@@ -76,7 +76,7 @@ type rangeInfo struct {
 func (ri rangeInfo) isVoid() bool { return ri.offset == 0 && ri.size == 0 }
 
 func fillBuffer(src io.Reader, buf []byte) (written int, err error) {
-	for len(buf) - written >= uploadBatchSize {
+	for len(buf)-written >= uploadBatchSize {
 		nr, er := src.Read(buf[written:])
 		if nr > 0 {
 			written += nr
