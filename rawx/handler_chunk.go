@@ -33,7 +33,11 @@ import (
 )
 
 const (
-	uploadBufferSize int64 = 64 * 1024
+	// Do not attempt a Read if the available space is less than this value
+	uploadBatchSize int = 8 * 1024
+
+	// Size of the buffer allocated for the upload
+	uploadBufferSize int64 = 8 * 1024 * 1024
 )
 
 var (
@@ -71,6 +75,64 @@ type rangeInfo struct {
 
 func (ri rangeInfo) isVoid() bool { return ri.offset == 0 && ri.size == 0 }
 
+func fillBuffer(src io.Reader, buf []byte) (written int, err error) {
+	for len(buf) - written >= uploadBatchSize {
+		nr, er := src.Read(buf[written:])
+		if nr > 0 {
+			written += nr
+		}
+		if er != nil {
+			err = er
+			break
+		}
+	}
+	return written, err
+}
+
+func dumpBuffer(dst io.Writer, buf []byte) (written int, err error) {
+	for written < len(buf) {
+		wr, er := dst.Write(buf[written:])
+		if wr > 0 {
+			written += wr
+		}
+		if er != nil {
+			err = er
+			break
+		}
+	}
+	if err == nil && written != len(buf) {
+		err = io.ErrShortWrite
+	}
+	return written, err
+}
+
+func copyReadWriteBuffer(dst io.Writer, src io.Reader, buf []byte) (written int64, err error) {
+	for {
+		// Fill the buffer
+		totalr, er := fillBuffer(src, buf)
+
+		// Dump the buffer
+		if totalr > 0 {
+			nw, erw := dumpBuffer(dst, buf[:totalr])
+			written += int64(nw)
+			if erw != nil {
+				if er == nil || er == io.EOF {
+					err = erw
+					break
+				}
+			}
+		}
+
+		if er != nil {
+			if er != io.EOF {
+				err = er
+			}
+			break
+		}
+	}
+	return written, err
+}
+
 func (rr *rawxRequest) putData(out io.Writer) (uploadInfo, error) {
 	var in io.Reader
 	var h hash.Hash
@@ -81,7 +143,7 @@ func (rr *rawxRequest) putData(out io.Writer) (uploadInfo, error) {
 
 	ul := uploadInfo{}
 	buffer := make([]byte, uploadBufferSize, uploadBufferSize)
-	chunkLength, err := io.CopyBuffer(out, in, buffer)
+	chunkLength, err := copyReadWriteBuffer(out, in, buffer)
 	if err != nil {
 		return ul, err
 	}
