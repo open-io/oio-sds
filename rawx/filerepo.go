@@ -70,7 +70,7 @@ func (fr *fileRepository) init(root string) error {
 	fr.syncFile = false
 	fr.syncDir = true
 
-	flags := syscall.O_DIRECTORY | syscall.O_RDONLY | syscall.O_NOATIME
+	flags := syscall.O_DIRECTORY | syscall.O_RDONLY | syscall.O_NOATIME | syscall.O_PATH
 	if fr.rootFd, err = syscall.Open(fr.root, flags, 0); err != nil {
 		return err
 	}
