@@ -114,8 +114,11 @@ func copyReadWriteBuffer(dst io.Writer, src io.Reader, buf []byte) (written int6
 		// Dump the buffer
 		if totalr > 0 {
 			nw, erw := dumpBuffer(dst, buf[:totalr])
-			written += int64(nw)
+			if nw > 0 {
+				written += int64(nw)
+			}
 			if erw != nil {
+				// Only override the mais error if no strong condition occured
 				if er == nil || er == io.EOF {
 					err = erw
 					break
@@ -123,8 +126,10 @@ func copyReadWriteBuffer(dst io.Writer, src io.Reader, buf []byte) (written int6
 			}
 		}
 
+		// Manage the read error.
+		// If err is already set, this is due to a strong condition when writing
 		if er != nil {
-			if er != io.EOF {
+			if err == nil && er != io.EOF {
 				err = er
 			}
 			break
