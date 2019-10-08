@@ -24,13 +24,6 @@ import (
 	"time"
 )
 
-const (
-	HeaderNameOioReqId = "X-oio-req-id"
-	HeaderLenOioReqId  = 63
-	HeaderNameTransId  = "X-trans-id"
-	HeaderNameError    = "X-Error"
-)
-
 func setErrorString(rep http.ResponseWriter, s string) {
 	rep.Header().Set(HeaderNameError, s)
 }
@@ -40,13 +33,15 @@ func setError(rep http.ResponseWriter, e error) {
 }
 
 type rawxService struct {
-	ns       string
-	url      string
-	path     string
-	id       string
-	repo     repository
-	compress bool
-	notifier Notifier
+	ns           string
+	url          string
+	path         string
+	id           string
+	repo         repository
+	notifier     Notifier
+	bufferSize   int
+	checksumMode int
+	compress     bool
 }
 
 type rawxRequest struct {

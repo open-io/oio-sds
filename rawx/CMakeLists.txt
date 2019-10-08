@@ -9,6 +9,7 @@ endif ( ENABLE_CODECOVERAGE )
 add_custom_command(
 	TARGET oio-rawx
 	DEPENDS
+		${CMAKE_CURRENT_SOURCE_DIR}/const.go
 		${CMAKE_CURRENT_SOURCE_DIR}/chunk_info.go
 		${CMAKE_CURRENT_SOURCE_DIR}/chunkrepo.go
 		${CMAKE_CURRENT_SOURCE_DIR}/conf_reader.go

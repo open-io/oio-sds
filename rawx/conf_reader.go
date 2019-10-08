@@ -43,6 +43,8 @@ var loadedOpts = map[string]string{
 	"grid_compression": "compression",
 	"grid_fallocate":   "fallocate",
 	"grid_service_id":  "id",
+	"grid_checksum":    "checksum",
+	"grid_buffer_size": "buffer_size",
 	// Also manage shorter names
 	"Listen":        "addr",
 	"namespace":     "ns",
@@ -56,6 +58,8 @@ var loadedOpts = map[string]string{
 	"compression":   "compression",
 	"fallocate":     "fallocate",
 	"tcp_keepalive": "tcp_keepalive",
+	"checksum":      "checksum",
+	"buffer_size":   "buffer_size",
 	// More recent names
 	"timeout_read_header":  "timeout_read_header",
 	"timeout_read_request": "timeout_read_request",
@@ -115,9 +119,6 @@ func (m optionsMap) getBool(k string, def bool) bool {
 }
 
 func GetBool(v string, def bool) bool {
-	ok := []string{"ok", "yes", "true", "enable", "enabled", "yeah"}
-	nok := []string{"ko", "no", "false", "disable", "disabled", "nope"}
-
 	lv := strings.ToLower(v)
 	for _, v0 := range ok {
 		if v0 == lv {
