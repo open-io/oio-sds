@@ -144,12 +144,37 @@ func main() {
 	chunkrepo.sub.fallocateFile = opts.getBool("fallocate", chunkrepo.sub.fallocateFile)
 
 	rawx := rawxService{
-		ns:       namespace,
-		url:      rawxURL,
-		path:     chunkrepo.sub.root,
-		id:       rawxID,
-		repo:     &chunkrepo,
-		compress: opts.getBool("compress", false),
+		ns:           namespace,
+		url:          rawxURL,
+		path:         chunkrepo.sub.root,
+		id:           rawxID,
+		repo:         &chunkrepo,
+		bufferSize:   1024 * opts.getInt("buffer_size", uploadBufferDefault),
+		checksumMode: checksumAlways,
+		compress:     opts.getBool("compress", false),
+	}
+
+	// Clamp the buffer size to admitted values
+	if rawx.bufferSize > uploadBufferSizeMax {
+		rawx.bufferSize = uploadBufferSizeMax
+	}
+	if rawx.bufferSize < uploadBufferSizeMin {
+		rawx.bufferSize = uploadBufferSizeMin
+	}
+	// In case of a misconfiguration
+	if rawx.bufferSize < uploadBatchSize {
+		rawx.bufferSize = uploadBatchSize
+	}
+
+	// Patch the checksum mode
+	if v, ok := opts["checksum"]; ok {
+		if v == "smart" {
+			rawx.checksumMode = checksumSmart
+		} else if GetBool(v, true) {
+			rawx.checksumMode = checksumAlways
+		} else {
+			rawx.checksumMode = checksumNever
+		}
 	}
 
 	eventAgent := OioGetEventAgent(namespace)

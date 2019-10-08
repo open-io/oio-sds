@@ -24,17 +24,6 @@ import (
 	"gopkg.in/ini.v1"
 )
 
-const (
-	oioEtcDir          = "/etc/oio"
-	oioConfigFilePath  = oioEtcDir + "/sds.conf"
-	oioConfigDirPath   = oioEtcDir + "/sds.conf.d"
-	oioConfigLocalPath = ".oio/sds.conf"
-)
-
-const (
-	oioConfigEventAgent = "event-agent"
-)
-
 var oioConfig map[string]map[string]string
 
 var optsParser = ini.LoadOptions{
