@@ -1,6 +1,6 @@
 /*
 OpenIO SDS unit tests
-Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -110,21 +110,24 @@ _repo_wrapper(const gchar *ns, repo_test_f fr)
 {
 	gchar repodir[512];
 	GError *err = NULL;
+	struct oio_lb_s *lb = NULL;
+	struct meta1_backend_s *m1 = NULL;
+	struct sqlx_repository_s *repository = NULL;
+	struct namespace_info_s *nsinfo = NULL;
+	struct sqlx_repo_config_s cfg = {0};
 
 	g_assert(ns != NULL);
 
-	struct namespace_info_s *nsinfo = _init_nsinfo(ns);
+	nsinfo = _init_nsinfo(ns);
 	g_assert_nonnull (nsinfo);
 
 	g_snprintf(repodir, sizeof(repodir), "%s/.oio/sds/data/test-%d",
 			g_get_home_dir(), getpid());
 	g_mkdir_with_parents(repodir, 0755);
 
-	struct oio_lb_s *lb = _init_lb(9);
+	lb = _init_lb(9);
 	g_assert_nonnull(lb);
 
-	struct sqlx_repo_config_s cfg = {0};
-	struct sqlx_repository_s *repository = NULL;
 	cfg.sync_solo = SQLX_SYNC_OFF;
 	cfg.sync_repli = SQLX_SYNC_OFF;
 	err = sqlx_repository_init(repodir, &cfg, &repository);
@@ -134,8 +137,7 @@ _repo_wrapper(const gchar *ns, repo_test_f fr)
 			NAME_SRVTYPE_META1, META1_SCHEMA);
 	g_assert_no_error(err);
 
-	struct meta1_backend_s *m1 = NULL;
-	err = meta1_backend_init(&m1, ns, repository, lb);
+	err = meta1_backend_init(&m1, repository, ns, lb);
 	g_assert_no_error(err);
 
 	meta1_prefixes_manage_all(meta1_backend_get_prefixes(m1));

@@ -171,13 +171,41 @@ _get_peers(struct sqlx_service_s *ss UNUSED, const struct sqlx_name_s *n,
 	return err;
 }
 
+static void
+meta1_on_close_callback(struct sqlx_sqlite3_s *sq3,
+		struct sqlx_service_s *ss)
+{
+	gint64 seq = 1;
+	EXTRA_ASSERT(sq3 != NULL);
+
+	if (!sq3->deleted)
+		return;
+
+	struct oio_url_s *url = oio_url_empty ();
+	oio_url_set(url, OIOURL_NS, ss->ns_name);
+	NAME2CONST(n, sq3->name);
+
+	GError *err = sqlx_name_extract(&n, url, NAME_SRVTYPE_META1, &seq);
+	if (err) {
+		GRID_WARN("Invalid base name [%s]: %s", sq3->name.base, err->message);
+		g_clear_error(&err);
+	} else {
+		hc_decache_reference(ss->resolver, url);
+	}
+
+	oio_url_clean(url);
+}
+
 static gboolean
 _post_config(struct sqlx_service_s *ss)
 {
-	GError *err = meta1_backend_init(&m1, ss->ns_name, ss->repository, ss->lb);
+	GError *err = NULL;
+
+	/* prepare a meta1 backend */
+	err = meta1_backend_init(&m1, ss->repository, ss->ns_name, ss->lb);
 	if (NULL != err) {
-		GRID_WARN("META1 backend init failure: (%d) %s", err->code, err->message);
-		g_clear_error (&err);
+		GRID_WARN("meta1 backend init failure: (%d) %s", err->code, err->message);
+		g_clear_error(&err);
 		return FALSE;
 	}
 
@@ -207,6 +235,10 @@ _post_config(struct sqlx_service_s *ss)
 		GRID_INFO("Stopped while loading M0 prefixes");
 		return FALSE;
 	}
+
+	/* Make deleted bases exit the cache */
+	sqlx_repository_configure_close_callback(ss->repository,
+			(sqlx_repo_close_hook)meta1_on_close_callback, ss->resolver);
 
 	grid_task_queue_register(ss->gtq_reload, 5,
 			_task_reload_policies, NULL, ss);

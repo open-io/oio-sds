@@ -72,11 +72,13 @@ _init_notifiers(struct meta1_backend_s *m1, const char *ns)
 }
 
 GError *
-meta1_backend_init(struct meta1_backend_s **out, const char *ns,
-		struct sqlx_repository_s *repo, struct oio_lb_s *lb)
+meta1_backend_init(struct meta1_backend_s **result,
+		struct sqlx_repository_s *repo, const char *ns,
+		struct oio_lb_s *lb)
 {
-	EXTRA_ASSERT(out != NULL);
+	EXTRA_ASSERT(result != NULL);
 	EXTRA_ASSERT(repo != NULL);
+	EXTRA_ASSERT(lb != NULL);
 
 	if (!*ns || strlen(ns) >= LIMIT_LENGTH_NSNAME)
 		return BADREQ("Invalid namespace name");
@@ -98,11 +100,15 @@ meta1_backend_init(struct meta1_backend_s **out, const char *ns,
 
 	err = _init_notifiers(m1, ns);
 	if (err) {
-		GRID_WARN("Events queue startup failed: (%d) %s", err->code, err->message);
+		GRID_WARN("Events queue startup failed: (%d) %s",
+				err->code, err->message);
 		goto exit;
 	}
 
-	*out = m1;
+	*result = m1;
+
+	GRID_DEBUG("M1V2 backend created for NS[%s] and repo[%p]",
+			m1->ns_name, m1->repo);
 	return NULL;
 exit:
 	meta1_backend_clean(m1);
@@ -127,7 +133,7 @@ meta1_backend_clean(struct meta1_backend_s *m1)
 	}
 
 	if (m1->svcupdate) {
-		service_update_policies_destroy (m1->svcupdate);
+		service_update_policies_destroy(m1->svcupdate);
 		m1->svcupdate = NULL;
 	}
 
@@ -148,4 +154,3 @@ meta1_backend_get_prefixes(struct meta1_backend_s *m1)
 	EXTRA_ASSERT(m1 != NULL);
 	return m1 ? m1->prefixes : NULL;
 }
-
