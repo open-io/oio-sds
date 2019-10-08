@@ -309,7 +309,16 @@ class ToolWorker(object):
                     beanstalkd_reply['addr'], beanstalkd_reply['tube'],
                     self.logger)
 
-            self.beanstalkd_reply.send_job(json.dumps(res_event))
+            sent = False
+            event_json = json.dumps(res_event)
+            # This will loop forever if there is a connection issue with the
+            # beanstalkd server. We chose to let it loop until someone fixes
+            # the problem (or the problem resolves by magic).
+            while not sent:
+                sent = self.beanstalkd_reply.send_job(event_json)
+                if not sent:
+                    sleep(1.0)
+            self.beanstalkd_reply.job_done()
         except Exception as exc:  # pylint: disable=broad-except
             item, info, error = task_res
             self.logger.warn(
