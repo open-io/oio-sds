@@ -67,9 +67,26 @@ const (
 )
 
 const (
+	// Use this value to disable a call to fadvise()
+	configFadviseNone = iota
+
+	// Use this value to advise the kernel to avoid caching the file
+	configFadviseNoReuse = iota
+
+	// Use this value to advise the kernel to keep the fie in cache
+	configFadviseReuse = iota
+)
+
+const (
 	configDefaultFallocate = true
 	configDefaultSyncFile  = false
 	configDefaultSyncDir   = false
+
+	// By default, no fadvise() will be called before commiting a chunk
+	configDefaultFadviseUpload = configFadviseNone
+
+	// By default, no fadvise() will be called before download a chunk
+	configDefaultFadviseDownload = configFadviseNone
 )
 
 const (

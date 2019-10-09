@@ -39,15 +39,17 @@ const (
 )
 
 type fileRepository struct {
-	root          string
-	rootFd        int
-	putOpenMode   uint32
-	putMkdirMode  os.FileMode
-	hashWidth     int
-	hashDepth     int
-	syncFile      bool
-	syncDir       bool
-	fallocateFile bool
+	root            string
+	rootFd          int
+	putOpenMode     uint32
+	putMkdirMode    os.FileMode
+	hashWidth       int
+	hashDepth       int
+	syncFile        bool
+	syncDir         bool
+	fallocateFile   bool
+	fadviseUpload   int
+	fadviseDownload int
 }
 
 func (fr *fileRepository) init(root string) error {
@@ -64,6 +66,8 @@ func (fr *fileRepository) init(root string) error {
 	fr.syncFile = configDefaultSyncFile
 	fr.syncDir = configDefaultSyncDir
 	fr.fallocateFile = configDefaultFallocate
+	fr.fadviseUpload = configDefaultFadviseUpload
+	fr.fadviseDownload = configDefaultFadviseDownload
 
 	flags := openFlagsBasedir
 	if fr.rootFd, err = syscall.Open(fr.root, flags, 0); err != nil {
@@ -119,7 +123,18 @@ func (fr *fileRepository) getRelPath(path string) (fileReader, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &realFileReader{f: os.NewFile(uintptr(fd), path), repo: fr}, nil
+
+	f := &realFileReader{f: os.NewFile(uintptr(fd), path), repo: fr}
+
+	switch fr.fadviseUpload {
+	case configFadviseNone:
+	case configFadviseNoReuse:
+		syscall.Fadvise(fd, 0, f.size(), syscall.FADV_DONTNEED)
+	case configFadviseReuse:
+		syscall.Fadvise(fd, 0, f.size(), syscall.FADV_SEQUENTIAL)
+	}
+
+	return f, nil
 }
 
 func (fr *fileRepository) get(name string) (fileReader, error) {
@@ -299,6 +314,16 @@ func (fw *realFileWriter) commit() error {
 
 	if fw.allocated > fw.written {
 		err = syscall.Ftruncate(fw.fd, fw.written)
+	}
+
+	if err == nil {
+		switch fw.repo.fadviseUpload {
+		case configFadviseNone:
+		case configFadviseNoReuse:
+			syscall.Fadvise(fw.fd, 0, fw.written, syscall.FADV_DONTNEED)
+		case configFadviseReuse:
+			syscall.Fadvise(fw.fd, 0, fw.written, syscall.FADV_SEQUENTIAL)
+		}
 	}
 
 	if err == nil {

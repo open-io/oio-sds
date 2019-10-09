@@ -32,6 +32,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -174,6 +175,24 @@ func main() {
 			rawx.checksumMode = checksumAlways
 		} else {
 			rawx.checksumMode = checksumNever
+		}
+	}
+
+	// Patch the fadvise() upon upload
+	if v, ok := opts["fadvise_upload"]; ok {
+		if strings.ToLower(v) == "reuse" {
+			chunkrepo.sub.fadviseUpload = configFadviseReuse
+		} else if strings.ToLower(v) == "noreuse" {
+			chunkrepo.sub.fadviseUpload = configFadviseNoReuse
+		}
+	}
+
+	// Patch the fadvise() upon download
+	if v, ok := opts["fadvise_download"]; ok {
+		if strings.ToLower(v) == "reuse" {
+			chunkrepo.sub.fadviseDownload = configFadviseReuse
+		} else if strings.ToLower(v) == "noreuse" {
+			chunkrepo.sub.fadviseDownload = configFadviseNoReuse
 		}
 	}
 
