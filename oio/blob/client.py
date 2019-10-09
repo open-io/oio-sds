@@ -194,10 +194,13 @@ class BlobClient(object):
         headers[FETCHXATTR_HEADER] = _xattr
         if bool(kwargs.get('check_hash', False)):
             headers[CHECKHASH_HEADER] = True
+        timeout = kwargs.get('timeout')
+        if not timeout:
+            timeout = urllib3.Timeout(CHUNK_TIMEOUT)
 
         try:
             resp = self.http_pool.request(
-                'HEAD', url, headers=headers)
+                'HEAD', url, headers=headers, timeout=timeout)
         except urllib3.exceptions.HTTPError as ex:
             oio_exception_from_httperror(ex, reqid=headers[REQID_HEADER],
                                          url=url)
