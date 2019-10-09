@@ -130,3 +130,16 @@ const (
 const (
 	oioConfigEventAgent = "event-agent"
 )
+
+const (
+	timeoutReadHeader = 60
+
+	// How long (in seconds) might a client take to send its whole request
+	timeoutReadRequest = 900
+
+	// How long (in seconds) might it takes to emit the whole reply
+	timeoutWrite = 900
+
+	// How long (in seconds) might a connection stay idle (between two requests)
+	timeoutIdle = 3600
+)
