@@ -1,10 +1,53 @@
 #!/usr/bin/env python
 
-from oio import xcute
+import argparse
 
-def source_factory(url):
-    return xcute.BeanstalkdSource(url, "worker")
+from oio.cli import make_logger_args_parser, get_logger_from_args
+from oio.common.json import json
+from oio.event.beanstalk import BeanstalkdListener
+from oio.xcute.common.dispatcher import XcuteDispatcher
+from oio.xcute.common.worker import XcuteWorker
+
+
+def make_arg_parser():
+    log_parser = make_logger_args_parser()
+    descr = """
+    Xcute worker
+    """
+    parser = argparse.ArgumentParser(description=descr, parents=[log_parser])
+
+    parser.add_argument('namespace', help="Namespace")
+
+    parser.add_argument(
+        '--beanstalkd-addr', metavar='IP:PORT',
+        help='Listen to action job from a beanstalkd tube.')
+    parser.add_argument(
+        '--beanstalkd-tube',
+        help='The beanstalkd tube to use to listen. '
+             '(default=%s)' % XcuteDispatcher.DEFAULT_WORKER_TUBE)
+
+    return parser
+
+
+def _decode_job(job_id, job_data):
+    yield json.loads(job_data)
+
 
 if __name__ == '__main__':
-    sink = xcute.BeanstalkdSink('OPENIO')
-    xcute.Worker("127.0.0.1:6005", source_factory, sink).run()
+    args = make_arg_parser().parse_args()
+
+    if not args.beanstalkd_addr:
+        raise ValueError('Missing beanstalkd address')
+    beanstalkd_addr = args.beanstalkd_addr
+    beanstalkd_tube = args.beanstalkd_tube \
+        or XcuteDispatcher.DEFAULT_WORKER_TUBE
+
+    conf = {'namespace': args.namespace}
+    logger = get_logger_from_args(args)
+
+    beanstalkd = BeanstalkdListener(beanstalkd_addr, beanstalkd_tube, logger)
+    worker = XcuteWorker(beanstalkd.addr, beanstalkd.tube, conf, logger)
+
+    jobs = beanstalkd.fetch_jobs(_decode_job)
+    while True:
+        worker.process_job(next(jobs))
