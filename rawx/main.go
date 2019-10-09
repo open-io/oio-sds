@@ -207,10 +207,10 @@ func main() {
 	}
 	rawx.notifier = notifier
 
-	toReadHeader := opts.getInt("timeout_read_header", 10)
-	toReadRequest := opts.getInt("timeout_read_request", 20)
-	toWrite := opts.getInt("timeout_write_reply", 20)
-	toIdle := opts.getInt("timeout_idle", 30)
+	toReadHeader := opts.getInt("timeout_read_header", timeoutReadHeader)
+	toReadRequest := opts.getInt("timeout_read_request", timeoutReadRequest)
+	toWrite := opts.getInt("timeout_write_reply", timeoutWrite)
+	toIdle := opts.getInt("timeout_idle", timeoutIdle)
 
 	srv := http.Server{
 		Addr:              rawx.url,
