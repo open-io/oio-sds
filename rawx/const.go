@@ -101,10 +101,10 @@ const (
 	uploadBufferSizeMax int = 8 * 1024 * 1024
 
 	// Minimum size (in bytes) of the upload buffer
-	uploadBufferSizeMin int = 65536
+	uploadBufferSizeMin int = 32768
 
 	// Specifies the extension size when Fallocate is called to prepare file placeholders
-	uploadExtensionSize int64 = 64 * 1024 * 1024
+	uploadExtensionSize int64 = 32 * 1024 * 1024
 )
 
 const (
