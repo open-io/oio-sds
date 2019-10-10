@@ -70,11 +70,17 @@ const (
 	// Use this value to disable a call to fadvise()
 	configFadviseNone = iota
 
+	// Just tell the kernel that further accesses will consume the file
+	// sequentially, using FADV_SEQUENTIAL
+	configFadviseYes = iota
+
 	// Use this value to advise the kernel to avoid caching the file
-	configFadviseNoReuse = iota
+	// using FADV_DONTNEED
+	configFadviseNocache = iota
 
 	// Use this value to advise the kernel to keep the fie in cache
-	configFadviseReuse = iota
+	// using FADV_WILLNEED + the general FADV_SEQUENTIAL
+	configFadviseCache = iota
 )
 
 const (

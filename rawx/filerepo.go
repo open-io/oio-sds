@@ -126,12 +126,15 @@ func (fr *fileRepository) getRelPath(path string) (fileReader, error) {
 
 	f := &realFileReader{f: os.NewFile(uintptr(fd), path), repo: fr}
 
-	switch fr.fadviseUpload {
+	switch fr.fadviseDownload {
 	case configFadviseNone:
-	case configFadviseNoReuse:
-		syscall.Fadvise(fd, 0, f.size(), syscall.FADV_DONTNEED)
-	case configFadviseReuse:
+	case configFadviseYes:
 		syscall.Fadvise(fd, 0, f.size(), syscall.FADV_SEQUENTIAL)
+	case configFadviseNocache:
+		syscall.Fadvise(fd, 0, f.size(), syscall.FADV_DONTNEED)
+	case configFadviseCache:
+		syscall.Fadvise(fd, 0, f.size(), syscall.FADV_SEQUENTIAL)
+		syscall.Fadvise(fd, 0, f.size(), syscall.FADV_WILLNEED)
 	}
 
 	return f, nil
@@ -319,10 +322,13 @@ func (fw *realFileWriter) commit() error {
 	if err == nil {
 		switch fw.repo.fadviseUpload {
 		case configFadviseNone:
-		case configFadviseNoReuse:
-			syscall.Fadvise(fw.fd, 0, fw.written, syscall.FADV_DONTNEED)
-		case configFadviseReuse:
+		case configFadviseYes:
 			syscall.Fadvise(fw.fd, 0, fw.written, syscall.FADV_SEQUENTIAL)
+		case configFadviseNocache:
+			syscall.Fadvise(fw.fd, 0, fw.written, syscall.FADV_DONTNEED)
+		case configFadviseCache:
+			syscall.Fadvise(fw.fd, 0, fw.written, syscall.FADV_SEQUENTIAL)
+			syscall.Fadvise(fw.fd, 0, fw.written, syscall.FADV_WILLNEED)
 		}
 	}
 

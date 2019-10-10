@@ -180,19 +180,23 @@ func main() {
 
 	// Patch the fadvise() upon upload
 	if v, ok := opts["fadvise_upload"]; ok {
-		if strings.ToLower(v) == "reuse" {
-			chunkrepo.sub.fadviseUpload = configFadviseReuse
-		} else if strings.ToLower(v) == "noreuse" {
-			chunkrepo.sub.fadviseUpload = configFadviseNoReuse
+		if strings.ToLower(v) == "cache" {
+			chunkrepo.sub.fadviseUpload = configFadviseCache
+		} else if strings.ToLower(v) == "nocache" {
+			chunkrepo.sub.fadviseUpload = configFadviseNocache
+		} else if GetBool(v, false) {
+			chunkrepo.sub.fadviseUpload = configFadviseYes
 		}
 	}
 
 	// Patch the fadvise() upon download
 	if v, ok := opts["fadvise_download"]; ok {
-		if strings.ToLower(v) == "reuse" {
-			chunkrepo.sub.fadviseDownload = configFadviseReuse
-		} else if strings.ToLower(v) == "noreuse" {
-			chunkrepo.sub.fadviseDownload = configFadviseNoReuse
+		if strings.ToLower(v) == "cache" {
+			chunkrepo.sub.fadviseDownload = configFadviseCache
+		} else if strings.ToLower(v) == "nocache" {
+			chunkrepo.sub.fadviseDownload = configFadviseNocache
+		} else if GetBool(v, false) {
+			chunkrepo.sub.fadviseDownload = configFadviseYes
 		}
 	}
 
