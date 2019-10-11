@@ -426,6 +426,46 @@ stats:
     - {type: system}
 """
 
+template_beanstalkd_watch = """
+host: ${IP}
+port: ${PORT}
+type: beanstalkd
+location: ${LOC}
+checks:
+    - {type: tcp}
+slots:
+    - beanstalkd
+stats:
+    - {type: beanstalkd}
+    - {type: system}
+    - {type: volume, path: ${VOLUME}}
+"""
+
+template_proxy_watch = """
+host: ${IP}
+port: ${PORT}
+type: oioproxy
+location: ${LOC}
+checks:
+    - {type: tcp}
+slots:
+    - oioproxy
+stats:
+    - {type: oioproxy}
+    - {type: system}
+"""
+
+template_oioswift_watch = """
+host: ${IP}
+port: ${PORT}
+type: rawx
+location: ${LOC}
+checks:
+    - {type: http, uri: /healthcheck}
+slots:
+    - ${SRVTYPE}
+"""
+
 template_conscience_service = """
 [General]
 to_op=1000
@@ -646,6 +686,23 @@ score_timeout=30
 
 [type:oiofs]
 score_expr=(num stat.cpu)
+score_timeout=120
+lock_at_first_register=false
+
+[type:oioproxy]
+score_expr=(1 + (num stat.cpu))
+score_timeout=120
+lock_at_first_register=false
+
+[type:oioswift]
+#score_expr=((num stat.cpu)>5) * (num stat.cpu)
+score_expr=1 + (num stat.cpu)
+score_timeout=120
+lock_at_first_register=false
+
+[type:beanstalkd]
+# 1000000 ready jobs -> score = 0
+score_expr=root(3, (num stat.cpu) * (num stat.space) * (100 - root(3, (num stat.jobs_ready))))
 score_timeout=120
 lock_at_first_register=false
 """
