@@ -437,6 +437,19 @@ stats:
     - {type: system}
 """
 
+template_oioswift_watch = """
+host: ${IP}
+port: ${PORT}
+type: oioswift
+location: ${LOC}
+checks:
+    - {type: http, uri: "/healthcheck"}
+slots:
+    - ${SRVTYPE}
+stats:
+    - {type: system}
+"""
+
 template_conscience_service = """
 [General]
 to_op=1000
@@ -666,6 +679,12 @@ lock_at_first_register=false
 
 [type:oioproxy]
 score_expr=(1 + (num stat.cpu))
+score_timeout=120
+lock_at_first_register=false
+
+[type:oioswift]
+#score_expr=((num stat.cpu)>5) * (num stat.cpu)
+score_expr=1 + (num stat.cpu)
 score_timeout=120
 lock_at_first_register=false
 
