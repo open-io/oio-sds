@@ -30,12 +30,10 @@ import (
 )
 
 const (
-	openFlagsReadOnly  int = syscall.O_RDONLY | syscall.O_NOATIME | syscall.O_CLOEXEC
-	openFlagsWriteOnly int = syscall.O_WRONLY | syscall.O_CREAT | syscall.O_EXCL | syscall.O_NOATIME | syscall.O_CLOEXEC
-	openFlagsSyncDir   int = syscall.O_DIRECTORY | syscall.O_RDWR | syscall.O_NOATIME
-	openFlagsSyncFile  int = syscall.O_RDONLY | syscall.O_NOATIME | syscall.O_CLOEXEC
-	openFlagsLink      int = syscall.O_WRONLY | syscall.O_NOATIME | syscall.O_CLOEXEC
-	openFlagsBasedir   int = syscall.O_DIRECTORY | syscall.O_RDONLY | syscall.O_NOATIME | syscall.O_PATH
+	openFlagsBase  int = syscall.O_NOATIME | syscall.O_CLOEXEC | syscall.O_NONBLOCK
+	openFlagsROnly     = openFlagsBase | syscall.O_RDONLY
+	openFlagsWOnly     = openFlagsBase | syscall.O_WRONLY
+	openFlagsRW        = openFlagsBase | syscall.O_RDWR
 )
 
 type fileRepository struct {
@@ -69,8 +67,7 @@ func (fr *fileRepository) init(root string) error {
 	fr.fadviseUpload = configDefaultFadviseUpload
 	fr.fadviseDownload = configDefaultFadviseDownload
 
-	flags := openFlagsBasedir
-	if fr.rootFd, err = syscall.Open(fr.root, flags, 0); err != nil {
+	if fr.rootFd, err = syscall.Open(fr.root, syscall.O_DIRECTORY|syscall.O_PATH|openFlagsROnly, 0); err != nil {
 		return err
 	}
 	return nil
@@ -119,7 +116,7 @@ func (fr *fileRepository) del(name string) error {
 }
 
 func (fr *fileRepository) getRelPath(path string) (fileReader, error) {
-	fd, err := syscall.Openat(fr.rootFd, path, openFlagsReadOnly, 0)
+	fd, err := syscall.Openat(fr.rootFd, path, openFlagsROnly, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +144,7 @@ func (fr *fileRepository) get(name string) (fileReader, error) {
 
 func (fr *fileRepository) putRelPath(path string) (fileWriter, error) {
 	pathTemp := path + ".pending"
-	fd, err := syscall.Openat(fr.rootFd, pathTemp, openFlagsWriteOnly, fr.putOpenMode)
+	fd, err := syscall.Openat(fr.rootFd, pathTemp, syscall.O_CREAT|syscall.O_EXCL|openFlagsWOnly, fr.putOpenMode)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Lazy dir creation
@@ -226,7 +223,7 @@ func (fr *fileRepository) link(src, dst string) (linkOperation, error) {
 
 // Synchronize the directory, based on its path
 func (fr *fileRepository) syncRelDir(relPath string) error {
-	fd, err := syscall.Openat(fr.rootFd, relPath, openFlagsSyncDir, 0)
+	fd, err := syscall.Openat(fr.rootFd, relPath, syscall.O_DIRECTORY|syscall.O_PATH|openFlagsROnly, 0)
 	if err == nil {
 		err = syscall.Fdatasync(fd)
 		syscall.Close(fd)
@@ -237,7 +234,7 @@ func (fr *fileRepository) syncRelDir(relPath string) error {
 
 // Synchronize just the file, based on its path
 func (fr *fileRepository) syncRelFile(relPath string) error {
-	fd, err := syscall.Openat(fr.rootFd, relPath, openFlagsSyncFile, 0)
+	fd, err := syscall.Openat(fr.rootFd, relPath, syscall.O_PATH|openFlagsROnly, 0)
 	if err == nil {
 		err = syscall.Fdatasync(fd)
 		syscall.Close(fd)
