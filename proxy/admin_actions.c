@@ -1,6 +1,6 @@
 /*
 OpenIO SDS proxy
-Copyright (C) 2016-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -36,7 +36,12 @@ static GString* _m0_mapping_from_m1_list(GSList *m1_list) {
 					g_string_append_c(out, ',');
 				guint16 p = i;
 				gboolean first2 = TRUE;
-				g_string_append_printf(out, "\"%04X\":[", p);
+				GByteArray *gba = g_byte_array_new();
+				g_byte_array_append(gba, (guint8 *) &p, 2);
+				g_string_append(out, "\"");
+				metautils_gba_to_hexgstr(out, gba);
+				g_string_append(out, "\":[");
+				g_byte_array_free(gba, TRUE);
 				for (gchar **m1 = v; v && *m1; m1++) {
 					if (!first2)
 						g_string_append_c(out, ',');

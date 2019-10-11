@@ -171,6 +171,9 @@ _init_notifiers(struct meta2_backend_s *m2, const char *ns)
 	INIT(m2->notifier_content_updated, oio_meta2_tube_content_updated);
 	INIT(m2->notifier_content_broken, oio_meta2_tube_content_broken);
 	INIT(m2->notifier_content_drained, oio_meta2_tube_content_drained);
+
+	INIT(m2->notifier_meta2_deleted, oio_meta2_tube_meta2_deleted);
+
 	return err;
 }
 
@@ -246,6 +249,8 @@ meta2_backend_clean(struct meta2_backend_s *m2)
 	CLEAN(m2->notifier_content_updated);
 	CLEAN(m2->notifier_content_broken);
 	CLEAN(m2->notifier_content_drained);
+
+	CLEAN(m2->notifier_meta2_deleted);
 
 	g_hash_table_unref(m2->prepare_data_cache);
 	m2->prepare_data_cache = NULL;
@@ -432,46 +437,19 @@ m2b_open_with_args(struct meta2_backend_s *m2, struct oio_url_s *url,
 
 	err = sqlx_repository_timed_open_and_lock(m2->repo, &n, m2_to_sqlx(how),
 		   open_args->peers, &sq3, NULL, oio_ext_get_deadline());
-	if (NULL != err) {
+	if (err) {
 		if (err->code == CODE_CONTAINER_NOTFOUND)
 			err->domain = GQ();
 		return err;
 	}
 
-	/* beware that LOCAL is maybe == 0 */
-	const gboolean _local = (M2V2_OPEN_LOCAL == (how & M2V2_OPEN_REPLIMODE));
-	const gboolean _create = (M2V2_OPEN_AUTOCREATE == (how & M2V2_OPEN_AUTOCREATE));
-
-	sq3->no_peers = _local;
-
-	// If the container is being deleted, this is sad ...
-	// This MIGHT happen if a cache is present (and this is the
-	// common case for m2v2), because the deletion will happen
-	// when the base exit the cache.
-	// In facts this SHOULD NOT happend because a base being deleted
-	// is closed with an instruction to exit the cache immediately.
-	// TODO FIXME this is maybe a good place for an assert().
-	if (sq3->deleted) {
-		m2b_close(sq3);
-		return NEWERROR(CODE_CONTAINER_FROZEN, "destruction pending");
-	}
-
 	/* The kind of check we do depend of the kind of opening:
-	 * - creation : init not done
-	 * - local access : no check
-	 * - replicated access : int done */
-	if (_create) {
-		if (_is_container_initiated(sq3)) {
-			m2b_close(sq3);
-			return NEWERROR(CODE_CONTAINER_EXISTS,
-					"container already initiated");
-		}
-	} else if (!_local) {
-		if (!_is_container_initiated(sq3)) {
-			m2b_close(sq3);
-			return NEWERROR(CODE_CONTAINER_NOTFOUND,
-					"container created but not initiated");
-		}
+	 * - creation: init not done */
+	const gboolean _create = (M2V2_OPEN_AUTOCREATE == (how & M2V2_OPEN_AUTOCREATE));
+	if (_create && _is_container_initiated(sq3)) {
+		m2b_close(sq3);
+		return NEWERROR(CODE_CONTAINER_EXISTS,
+				"container already initiated");
 	}
 
 	/* Complete URL with full VNS and container name */
@@ -807,16 +785,10 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 		if (!err) {
 			m2b_destroy(sq3);
 			if (m2->notifier_container_deleted && send_event) {
-				/* This request handler is local, it will be called on each
-				 * service hosting the base. We must only signal our own
-				 * address; the other peers will do the same. */
-				const gchar *me = sqlx_repository_get_local_addr(m2->repo);
-				/* FIXME(FVE): do this at sqliterepo level, to be consistent
-				 * with DB_REMOVE request. */
-				GString *gs = oio_event__create(
-						META2_EVENTS_PREFIX ".container.deleted", url);
-				g_string_append_printf(
-						gs, ",\"data\":{\"peers\":[\"%s\"]}}", me);
+				GString *gs = oio_event__create_with_id(
+						META2_EVENTS_PREFIX ".container.deleted", url,
+						oio_ext_get_reqid());
+				g_string_append_static(gs, ",\"data\":{}}");
 				oio_events_queue__send(
 						m2->notifier_container_deleted, g_string_free(gs, FALSE));
 			}
@@ -1778,6 +1750,84 @@ _meta2_backend_force_prepare_data(struct meta2_backend_s *m2b,
 	g_rw_lock_writer_unlock(&(m2b->prepare_data_lock));
 }
 
+
+GError *
+meta2_backend_open_callback(struct sqlx_sqlite3_s *sq3,
+		struct meta2_backend_s *m2b UNUSED, enum sqlx_open_type_e open_mode)
+{
+	/* beware that LOCAL is maybe == 0 */
+	const gboolean _local = (SQLX_OPEN_LOCAL == (open_mode & SQLX_OPEN_REPLIMODE));
+	const gboolean _create = (SQLX_OPEN_CREATE == (open_mode & SQLX_OPEN_CREATE));
+
+	sq3->no_peers = _local;
+
+	/* The kind of check we do depend of the kind of opening:
+	 * - admin access : no check
+	 * - creation : no check
+	 * - local access : no check
+	 * - replicated access : init done */
+	if (!oio_ext_is_admin() && !_create && !_local
+			&& !_is_container_initiated(sq3)) {
+		m2b_close(sq3);
+		return NEWERROR(CODE_CONTAINER_NOTFOUND,
+				"container created but not initiated");
+	}
+
+	return NULL;
+}
+
+void
+meta2_backend_close_callback(struct sqlx_sqlite3_s *sq3,
+		struct meta2_backend_s *m2b)
+{
+	gint64 seq = 1;
+	EXTRA_ASSERT(sq3 != NULL);
+
+	if (!sq3->deleted)
+		return;
+
+	struct oio_url_s *url = oio_url_empty ();
+	oio_url_set(url, OIOURL_NS, m2b->ns_name);
+	NAME2CONST(n, sq3->name);
+
+	GError *err = sqlx_name_extract(&n, url, NAME_SRVTYPE_META2, &seq);
+	if (err) {
+		GRID_WARN("Invalid base name [%s]: %s", sq3->name.base, err->message);
+		g_clear_error(&err);
+	} else {
+		hc_decache_reference_service(m2b->resolver, url, NAME_SRVTYPE_META2);
+	}
+
+	/* This request handler is local, it will be called on each
+	* service hosting the base. We must only signal our own
+	* address; the other peers will do the same. */
+	if (m2b->notifier_meta2_deleted) {
+		gchar *account = sqlx_admin_get_str(sq3, SQLX_ADMIN_ACCOUNT);
+		gchar *user = sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME);
+		if (!account || !user) {
+			GRID_WARN("Missing "SQLX_ADMIN_ACCOUNT" or "SQLX_ADMIN_USERNAME
+					" in database %s (reqid=%s)", sq3->path_inline,
+					oio_ext_get_reqid());
+		} else {
+			oio_url_set(url, OIOURL_ACCOUNT, account);
+			oio_url_set(url, OIOURL_USER, user);
+
+			const gchar *me = meta2_backend_get_local_addr(m2b);
+			GString *gs = oio_event__create_with_id(
+					META2_EVENTS_PREFIX ".meta2.deleted", url,
+					oio_ext_get_reqid());
+			g_string_append_printf(
+					gs, ",\"data\":{\"peer\":\"%s\"}}", me);
+			oio_events_queue__send(
+					m2b->notifier_meta2_deleted, g_string_free(gs, FALSE));
+		}
+		g_free(user);
+		g_free(account);
+	}
+
+	oio_url_clean(url);
+}
+
 void
 meta2_backend_change_callback(struct sqlx_sqlite3_s *sq3,
 		struct meta2_backend_s *m2b)
@@ -1808,13 +1858,16 @@ meta2_backend_db_properties_change_callback(struct sqlx_sqlite3_s *sq3 UNUSED,
 		struct meta2_backend_s *m2b, struct oio_url_s *url,
 		struct db_properties_s *db_properties)
 {
-	GString *event = oio_event__create_with_id(
-			META2_EVENTS_PREFIX ".container.update", url, oio_ext_get_reqid());
-	g_string_append_static(event, ",\"data\":{");
-	db_properties_to_json(db_properties, event);
-	g_string_append_static(event, "}}");
-	oio_events_queue__send(m2b->notifier_container_updated,
-			g_string_free(event, FALSE));
+	if (m2b->notifier_container_updated) {
+		GString *event = oio_event__create_with_id(
+				META2_EVENTS_PREFIX ".container.update", url,
+				oio_ext_get_reqid());
+		g_string_append_static(event, ",\"data\":{");
+		db_properties_to_json(db_properties, event);
+		g_string_append_static(event, "}}");
+		oio_events_queue__send(m2b->notifier_container_updated,
+				g_string_free(event, FALSE));
+	}
 }
 
 /**

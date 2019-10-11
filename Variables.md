@@ -611,6 +611,14 @@ Used by `gcc`
  * type: string
  * cmake directive: *OIO_META2_TUBE_CONTENT_UPDATED*
 
+### meta2.tube.meta2_deleted
+
+> TODO: to be documented
+
+ * default: **oio**
+ * type: string
+ * cmake directive: *OIO_META2_TUBE_META2_DELETED*
+
 ### ns.chunk_size
 
 > Default chunk size for the given namespace.
@@ -853,19 +861,11 @@ Used by `gcc`
 
 ### proxy.srv_local.patch
 
-> Should the proxy prefer local services for its own usage.
-
- * default: **FALSE**
- * type: gboolean
- * cmake directive: *OIO_PROXY_SRV_LOCAL_PATCH*
-
-### proxy.srv_local.prefer
-
 > Should the proxy patch the services descriptions to let the caller prefer local services.
 
  * default: **FALSE**
  * type: gboolean
- * cmake directive: *OIO_PROXY_SRV_LOCAL_PREFER*
+ * cmake directive: *OIO_PROXY_SRV_LOCAL_PATCH*
 
 ### proxy.srv_local.prepare
 

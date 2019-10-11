@@ -47,29 +47,6 @@ _task_reconfigure_m2(gpointer p)
 	meta2_backend_configure_nsinfo(m2, PSRV(p)->nsinfo);
 }
 
-static void
-meta2_on_close(struct sqlx_sqlite3_s *sq3, gboolean deleted, gpointer cb_data)
-{
-	gint64 seq = 1;
-	EXTRA_ASSERT(sq3 != NULL);
-
-	if (!deleted)
-		return;
-
-	struct oio_url_s *u = oio_url_empty ();
-	oio_url_set (u, OIOURL_NS, PSRV(cb_data)->ns_name);
-	NAME2CONST(n, sq3->name);
-
-	GError *err = sqlx_name_extract (&n, u, NAME_SRVTYPE_META2, &seq);
-	if (err) {
-		GRID_WARN("Invalid base name [%s]: %s", sq3->name.base, err->message);
-		g_clear_error(&err);
-	} else {
-		hc_decache_reference_service(PSRV(cb_data)->resolver, u, NAME_SRVTYPE_META2);
-		oio_url_pclean(&u);
-	}
-}
-
 static gboolean
 _post_config(struct sqlx_service_s *ss)
 {
@@ -88,14 +65,20 @@ _post_config(struct sqlx_service_s *ss)
 
 	/* prepare a meta2 backend */
 	err = meta2_backend_init(&m2, ss->repository, ss->ns_name, ss->lb, ss->resolver);
-	if (NULL != err) {
+	if (err) {
 		GRID_WARN("meta2 backend init failure: (%d) %s", err->code, err->message);
 		g_clear_error(&err);
 		return FALSE;
 	}
 
+	/* Check the base just after opening */
+	sqlx_repository_configure_open_callback(ss->repository,
+			(sqlx_repo_open_hook)meta2_backend_open_callback,
+			m2);
+
 	/* Make deleted bases exit the cache */
-	sqlx_repository_configure_close_callback(ss->repository, meta2_on_close, ss);
+	sqlx_repository_configure_close_callback(ss->repository,
+			(sqlx_repo_close_hook)meta2_backend_close_callback, m2);
 
 	/* Make base replications update the cache */
 	sqlx_repository_configure_change_callback(ss->repository,

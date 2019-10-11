@@ -202,6 +202,9 @@ func_tests () {
 
 	wait_proxy_cache
 
+	# The next commands often fail because the account service is slow to start
+	${PYTHON} ${CLI} cluster wait -s 20 account
+
 	# test a content with a strange name, through the CLI and the API
 	/usr/bin/fallocate -l $RANDOM /tmp/blob%
 	CNAME=$RANDOM

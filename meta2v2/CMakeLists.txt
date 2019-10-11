@@ -90,9 +90,8 @@ bin_prefix(meta2_server -meta2-server)
 
 target_link_libraries(meta2_server
 		meta2v2
-        hcresolve metautils server
+		hcresolve metautils server
 		sqlxsrv
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
 install(TARGETS meta2_server RUNTIME DESTINATION bin)
-

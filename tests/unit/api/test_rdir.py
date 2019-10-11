@@ -13,11 +13,12 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import unittest
 from mock import MagicMock as Mock
 
 from oio.rdir.client import RdirClient
 from tests.utils import random_id
-import unittest
+from tests.unit.api import FakeResponse
 
 
 class TestRdirClient(unittest.TestCase):
@@ -45,7 +46,7 @@ class TestRdirClient(unittest.TestCase):
         self.rdir_client._direct_request = Mock(
             side_effect=[
                 (
-                    Mock(),
+                    FakeResponse(200),
                     [
                         ["%s|%s|%s" %
                          (self.container_id_1, self.content_id_1,
@@ -70,7 +71,7 @@ class TestRdirClient(unittest.TestCase):
         self.rdir_client._direct_request = Mock(
             side_effect=[
                 (
-                    Mock(),
+                    FakeResponse(200),
                     [
                         ["%s|%s|%s" %
                          (self.container_id_1, self.content_id_1,
@@ -81,7 +82,7 @@ class TestRdirClient(unittest.TestCase):
                     ]
                 ),
                 (
-                    Mock(),
+                    FakeResponse(200),
                     [
                         ["%s|%s|%s" %
                          (self.container_id_3, self.content_id_3,

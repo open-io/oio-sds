@@ -550,11 +550,11 @@ class Beanstalk(object):
         self.use(tube)
         return self._drain(self.peek_buried)
 
-    def drain_tube(self, tube):
+    def drain_tube(self, tube, timeout=0.0):
         """Delete all jobs from the specified tube."""
         self.watch(tube)
         from functools import partial
-        return self._drain(partial(self.reserve, timeout=0))
+        return self._drain(partial(self.reserve, timeout=timeout))
 
     def kick_job(self, job_id):
         """
@@ -776,11 +776,7 @@ class BeanstalkdSender(TubedBeanstalkd):
 
         job_id = None
         try:
-            if not self.connected:
-                self.logger.debug('Connecting to %s using tube %s',
-                                  self.addr, self.tube)
-                self._connect(**kwargs)
-
+            self._connect(**kwargs)
             with self.nb_jobs_lock:
                 job_id = self.beanstalkd.put(
                     job, priority=priority, delay=delay)

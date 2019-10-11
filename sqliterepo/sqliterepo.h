@@ -26,6 +26,8 @@ License along with this library.
 # include <sqliterepo/sqlite_utils.h>
 # include <sqliterepo/sqlx_remote.h>
 
+enum sqlx_open_type_e;
+
 struct hashstr_s;
 struct replication_config_s;
 struct election_manager_s;
@@ -37,10 +39,10 @@ struct sqlx_name_s;
 
 typedef struct sqlx_repository_s sqlx_repository_t;
 
-typedef void (*sqlx_repo_close_hook)(struct sqlx_sqlite3_s *sq3,
-		gboolean deleted, gpointer cb_data);
-
 typedef GError* (*sqlx_repo_open_hook)(struct sqlx_sqlite3_s *sq3,
+		gpointer cb_data, enum sqlx_open_type_e open_mode);
+
+typedef void (*sqlx_repo_close_hook)(struct sqlx_sqlite3_s *sq3,
 		gpointer cb_data);
 
 typedef void (*sqlx_repo_change_hook)(struct sqlx_sqlite3_s *sq3,
@@ -200,13 +202,17 @@ void sqlx_repository_configure_hash(sqlx_repository_t *repo,
 GError* sqlx_repository_configure_type(sqlx_repository_t *repo,
 		const char *type, const char *schema);
 
+void sqlx_repository_configure_open_callback(
+		sqlx_repository_t *repo,
+		sqlx_repo_open_hook cb, gpointer cb_data);
+
+GError* sqlx_repository_call_open_callback(
+		struct sqlx_sqlite3_s *sq3, enum sqlx_open_type_e open_mode);
+
 void sqlx_repository_configure_close_callback(sqlx_repository_t *repo,
 		sqlx_repo_close_hook cb, gpointer cb_data);
 
 void sqlx_repository_call_close_callback(struct sqlx_sqlite3_s *sq3);
-
-void sqlx_repository_configure_open_callback(sqlx_repository_t *repo,
-		sqlx_repo_open_hook cb, gpointer cb_data);
 
 void sqlx_repository_configure_change_callback(sqlx_repository_t *repo,
 		sqlx_repo_change_hook cb, gpointer cb_data);

@@ -14,10 +14,11 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from logging import getLogger
-from cliff import show
+
+from oio.cli import ShowOne
 
 
-class StatsEvents(show.ShowOne):
+class StatsEvents(ShowOne):
     """Stats events"""
 
     log = getLogger(__name__ + '.StatsEvents')
@@ -37,7 +38,7 @@ class StatsEvents(show.ShowOne):
         return zip(*sorted(data.iteritems()))
 
 
-class EventsExhume(show.ShowOne):
+class EventsExhume(ShowOne):
     """
     Exhume (replay) events that have been buried.
     """

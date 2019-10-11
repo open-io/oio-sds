@@ -15,6 +15,7 @@
 
 
 from time import time
+from urlparse import urlparse
 
 import re
 import redis
@@ -22,7 +23,7 @@ import redis.sentinel
 from werkzeug.exceptions import NotFound, Conflict, BadRequest
 from oio.common.timestamp import Timestamp
 from oio.common.easy_value import int_value, true_value, float_value
-from oio.common.redis_conn import RedisConn
+from oio.common.redis_conn import RedisConnection
 
 
 EXPIRE_TIME = 60  # seconds
@@ -34,7 +35,7 @@ container_fields = ['ns', 'account', 'type', 'objects', 'bytes', 'ctime',
                     'mtime', 'name']
 
 
-class AccountBackend(RedisConn):
+class AccountBackend(RedisConnection):
     lua_is_sup = """
                -- With lua float we are losing precision for this reason
                -- we keep the number as a string
@@ -233,10 +234,28 @@ class AccountBackend(RedisConn):
         (^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)* #third
         ([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])$)""", re.X)
 
-    def __init__(self, conf, connection=None):
+    def __init__(self, conf):
         self.conf = conf
+        redis_conf = {k[6:]: v for k, v in self.conf.items()
+                      if k.startswith("redis_")}
+        redis_host = redis_conf.pop('host', None)
+        if redis_host:
+            parsed = urlparse('http://' + redis_host)
+            if parsed.port is None:
+                redis_host = '%s:%s' % (redis_host,
+                                        redis_conf.pop('port', '6379'))
+        redis_sentinel_hosts = redis_conf.pop(
+            'sentinel_hosts',
+            # TODO(adu): Delete when it will no longer be used
+            self.conf.get('sentinel_hosts'))
+        redis_sentinel_name = redis_conf.pop(
+            'sentinel_name',
+            # TODO(adu): Delete when it will no longer be used
+            self.conf.get('sentinel_master_name'))
+        super(AccountBackend, self).__init__(
+            host=redis_host, sentinel_hosts=redis_sentinel_hosts,
+            sentinel_name=redis_sentinel_name, **redis_conf)
         self.autocreate = true_value(conf.get('autocreate', 'true'))
-        super(AccountBackend, self).__init__(conf, connection)
         self.script_update_container = self.register_script(
             self.lua_update_container)
         self.script_refresh_account = self.register_script(

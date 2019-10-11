@@ -14,6 +14,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+import signal
+
 from oio.common.easy_value import int_value
 from oio.common.exceptions import OioException, OioTimeout, RetryLater
 from oio.common.green import ContextPool, eventlet, ratelimit, sleep, \
@@ -21,7 +23,8 @@ from oio.common.green import ContextPool, eventlet, ratelimit, sleep, \
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.conscience.client import ConscienceClient
-from oio.event.beanstalk import Beanstalk, BeanstalkdListener, BeanstalkdSender
+from oio.event.beanstalk import Beanstalk, BeanstalkdListener, \
+    BeanstalkdSender
 
 
 DISTRIBUTED_DISPATCHER_TIMEOUT = 300
@@ -47,6 +50,11 @@ class Tool(object):
         self.logger = logger or get_logger(self.conf)
         self.namespace = conf['namespace']
         self.success = True
+
+        # exit gracefully
+        self.running = True
+        signal.signal(signal.SIGINT, self.exit_gracefully)
+        signal.signal(signal.SIGTERM, self.exit_gracefully)
 
         # counters
         self.items_processed = 0
@@ -118,6 +126,14 @@ class Tool(object):
         """
         raise NotImplementedError()
 
+    def exit_gracefully(self, signum, frame):
+        self.logger.info(
+            'Stop sending and wait for all results already sent')
+        self.success = False
+        self.running = False
+        if self.beanstalkd:
+            self.beanstalkd.running = False
+
     def _item_with_beanstalkd_reply_from_task_event(self, job_id, data):
         task_event = json.loads(data)
         beanstalkd_reply = task_event.get('beanstalkd_reply')
@@ -126,6 +142,7 @@ class Tool(object):
             yield (item, beanstalkd_reply)
 
     def _fetch_items_with_beanstalkd_reply_from_beanstalkd(self):
+        # Do not block more than 2 seconds
         return self.beanstalkd.fetch_jobs(
             self._item_with_beanstalkd_reply_from_task_event,
             reserve_timeout=2)
@@ -292,7 +309,16 @@ class ToolWorker(object):
                     beanstalkd_reply['addr'], beanstalkd_reply['tube'],
                     self.logger)
 
-            self.beanstalkd_reply.send_job(json.dumps(res_event))
+            sent = False
+            event_json = json.dumps(res_event)
+            # This will loop forever if there is a connection issue with the
+            # beanstalkd server. We chose to let it loop until someone fixes
+            # the problem (or the problem resolves by magic).
+            while not sent:
+                sent = self.beanstalkd_reply.send_job(event_json)
+                if not sent:
+                    sleep(1.0)
+            self.beanstalkd_reply.job_done()
         except Exception as exc:  # pylint: disable=broad-except
             item, info, error = task_res
             self.logger.warn(
@@ -360,10 +386,10 @@ class _LocalDispatcher(_Dispatcher):
         self.max_items_per_second = int_value(self.conf.get(
             'items_per_second'), self.tool.DEFAULT_ITEM_PER_SECOND)
         if self.max_items_per_second > 0:
-            # Max 5 seconds in advance
-            queue_size = self.max_items_per_second * 5
+            # Max 2 seconds in advance
+            queue_size = self.max_items_per_second * 2
         else:
-            queue_size = concurrency * 1024
+            queue_size = concurrency * 64
         self.queue_workers = eventlet.Queue(queue_size)
         self.queue_reply = eventlet.Queue()
 
@@ -378,12 +404,21 @@ class _LocalDispatcher(_Dispatcher):
         Fill the queue.
         """
         items_run_time = 0
-        items_with_beanstalkd_reply = \
-            self.tool.fetch_items_with_beanstalkd_reply()
-        for item_with_beanstalkd_reply in items_with_beanstalkd_reply:
-            items_run_time = ratelimit(items_run_time,
-                                       self.max_items_per_second)
-            self.queue_workers.put(item_with_beanstalkd_reply)
+
+        try:
+            items_with_beanstalkd_reply = \
+                self.tool.fetch_items_with_beanstalkd_reply()
+            for item_with_beanstalkd_reply in items_with_beanstalkd_reply:
+                items_run_time = ratelimit(items_run_time,
+                                           self.max_items_per_second)
+                self.queue_workers.put(item_with_beanstalkd_reply)
+
+                if not self.tool.running:
+                    break
+        except Exception as exc:
+            if self.tool.running:
+                self.logger.error("Failed to fill queue: %s", exc)
+                self.tool.success = False
 
     def _fill_queue_and_wait_all_items(self):
         """
@@ -481,11 +516,12 @@ class _DistributedDispatcher(_Dispatcher):
             raise OioException('No beanstalkd worker available')
         nb_workers = len(self.beanstalkd_workers)
         if self.max_items_per_second > 0:
-            # Max 5 seconds in advance
-            queue_size_per_worker = self.max_items_per_second * 5 / nb_workers
+            # Max 2 seconds in advance
+            queue_size_per_worker = self.max_items_per_second * 2 / nb_workers
         else:
-            queue_size_per_worker = 1024
+            queue_size_per_worker = 64
         for _, beanstalkd_worker in self.beanstalkd_workers.items():
+            beanstalkd_worker.low_limit = queue_size_per_worker / 2
             beanstalkd_worker.high_limit = queue_size_per_worker
 
         # Beanstalkd reply
@@ -575,22 +611,28 @@ class _DistributedDispatcher(_Dispatcher):
     def _distribute_events(self, reply_loc=None):
         next_worker = 0
         items_run_time = 0
-        tasks_events = self._fetch_tasks_events_to_send()
+
         try:
-            items_run_time = ratelimit(items_run_time,
-                                       self.max_items_per_second)
-            next_worker = self._send_task_event(next(tasks_events), reply_loc,
-                                                next_worker)
+            tasks_events = self._fetch_tasks_events_to_send()
+            items_run_time = ratelimit(
+                items_run_time, self.max_items_per_second)
+            next_worker = self._send_task_event(
+                next(tasks_events), reply_loc, next_worker)
             self.sending = True
-        except StopIteration:
+            for task_event in tasks_events:
+                items_run_time = ratelimit(items_run_time,
+                                           self.max_items_per_second)
+                next_worker = self._send_task_event(task_event, reply_loc,
+                                                    next_worker)
+
+                if not self.tool.running:
+                    break
+        except Exception as exc:
+            if not isinstance(exc, StopIteration) and self.tool.running:
+                self.logger.error("Failed to distribute events: %s", exc)
+                self.tool.success = False
+        finally:
             self.sending = False
-            return
-        for task_event in tasks_events:
-            items_run_time = ratelimit(items_run_time,
-                                       self.max_items_per_second)
-            next_worker = self._send_task_event(task_event, reply_loc,
-                                                next_worker)
-        self.sending = False
 
     def run(self):
         self.tool.start_time = self.tool.last_report = time.time()

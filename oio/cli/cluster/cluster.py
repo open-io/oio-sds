@@ -14,13 +14,25 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from logging import getLogger
-from cliff import lister, show, command
+
+from oio.cli import Lister, ShowOne
 from oio.common.easy_value import boolean_value
 from oio.common.exceptions import OioException, OioNetworkException, \
     ServiceBusy
 
 
-class ClusterShow(show.ShowOne):
+def _batches_boundaries(srclen, size):
+    for start in range(0, srclen, size):
+        end = min(srclen, start + size)
+        yield start, end
+
+
+def _bounded_batches(src, size=1000):
+    for start, end in _batches_boundaries(len(src), size):
+        yield src[start:end]
+
+
+class ClusterShow(ShowOne):
     """Show general information about the cluster."""
 
     log = getLogger(__name__ + '.ClusterShow')
@@ -43,7 +55,7 @@ class ClusterShow(show.ShowOne):
         return zip(*output)
 
 
-class ClusterList(lister.Lister):
+class ClusterList(Lister):
     """List services of the namespace."""
 
     log = getLogger(__name__ + '.ClusterList')
@@ -69,9 +81,10 @@ class ClusterList(lister.Lister):
             try:
                 data = self.app.client_manager.conscience.all_services(
                     srv_type, parsed_args.stats)
-            except OioException:
-                self.log.exception("Failed to list services of type %s",
-                                   srv_type)
+            except OioException as exc:
+                self.success = False
+                self.log.error("Failed to list services of type %s: %s",
+                               srv_type, exc)
                 continue
             for srv in data:
                 tags = srv['tags']
@@ -104,7 +117,7 @@ class ClusterList(lister.Lister):
         return columns, self._list_services(parsed_args)
 
 
-class ClusterLocalList(lister.Lister):
+class ClusterLocalList(Lister):
     """List local services."""
 
     log = getLogger(__name__ + '.ClusterLocalList')
@@ -149,8 +162,8 @@ class ClusterLocalList(lister.Lister):
         return columns, result_gen
 
 
-class ClusterUnlock(lister.Lister):
-    """Unlock the score of a service."""
+class ClusterUnlock(Lister):
+    """Unlock the score of specific services of the cluster."""
 
     log = getLogger(__name__ + '.ClusterUnlock')
 
@@ -161,38 +174,36 @@ class ClusterUnlock(lister.Lister):
             metavar='<srv_type>',
             help='Service type.')
         parser.add_argument(
-            'srv_addr',
-            metavar='<srv_addr>',
-            help='Network address of the service.'
-        )
+            'srv_ids',
+            metavar='<srv_ids>',
+            nargs='+',
+            help='ID(s) of the services.')
         return parser
 
-    def _unlock_one(self, type_, addr):
-        service_info = {'type': type_, 'addr': addr}
-        try:
-            self.app.client_manager.conscience.unlock_score(service_info)
-            yield type_, addr, "unlocked"
-        except Exception as exc:
-            yield type_, addr, str(exc)
+    def _unlock_services(self, parsed_args):
+        srv_definitions = list()
+        for srv_id in parsed_args.srv_ids:
+            srv_definitions.append(
+                self.app.client_manager.conscience.get_service_definition(
+                    parsed_args.srv_type, srv_id))
+        for batch in _bounded_batches(srv_definitions):
+            result = "unlocked"
+            try:
+                self.app.client_manager.conscience.unlock_score(batch)
+            except Exception as exc:
+                self.success = False
+                result = str(exc)
+            for srv_definition in batch:
+                yield (srv_definition['type'], srv_definition['addr'],
+                       result)
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
-        return (('Type', 'Service', 'Result'),
-                self._unlock_one(parsed_args.srv_type, parsed_args.srv_addr))
+        res = self._unlock_services(parsed_args)
+        return (('Type', 'Service', 'Result'), res)
 
 
-def _batches_boundaries(srclen, size):
-    for start in range(0, srclen, size):
-        end = min(srclen, start + size)
-        yield start, end
-
-
-def _bounded_batches(src, size):
-    for start, end in _batches_boundaries(len(src), size):
-        yield src[start:end]
-
-
-class ClusterUnlockAll(lister.Lister):
+class ClusterUnlockAll(Lister):
     """Unlock all services of the cluster."""
 
     log = getLogger(__name__ + '.ClusterUnlockAll')
@@ -200,38 +211,43 @@ class ClusterUnlockAll(lister.Lister):
     def get_parser(self, prog_name):
         parser = super(ClusterUnlockAll, self).get_parser(prog_name)
         parser.add_argument(
-            'types',
-            metavar='<types>',
+            'srv_types',
+            metavar='<srv_types>',
             nargs='*',
-            help='Service type(s) to unlock (or all if unset).')
+            help='Service type(s) (or all if unset).')
         return parser
 
-    def _unlock_all(self, parsed_args):
-        types = parsed_args.types
-        if not parsed_args.types:
-            types = self.app.client_manager.conscience.service_types()
-        for type_ in types:
+    def _unlock_all_services(self, parsed_args):
+        srv_types = parsed_args.srv_types
+        if not parsed_args.srv_types:
+            srv_types = self.app.client_manager.conscience.service_types()
+        for srv_type in srv_types:
             try:
-                all_descr = \
-                    self.app.client_manager.conscience.all_services(type_)
-            except OioException:
-                self.log.exception("Failed to list services of type %s",
-                                   type_)
+                srv_definitions = \
+                    self.app.client_manager.conscience.all_services(srv_type)
+            except OioException as exc:
+                self.success = False
+                self.log.error("Failed to list services of type %s: %s",
+                               srv_type, exc)
                 continue
-            for descr in all_descr:
-                descr['type'] = type_
-            for batch in _bounded_batches(all_descr, 4096):
+            for srv_definition in srv_definitions:
+                srv_definition['type'] = srv_type
+            for batch in _bounded_batches(srv_definitions):
+                result = "unlocked"
                 try:
                     self.app.client_manager.conscience.unlock_score(batch)
-                    for descr in batch:
-                        yield type_, descr['addr'], "unlocked"
                 except Exception as exc:
-                    for descr in batch:
-                        yield type_, descr['addr'], str(exc)
+                    self.success = False
+                    result = str(exc)
+                for srv_definition in batch:
+                    yield (srv_definition['type'],
+                           srv_definition['addr'],
+                           result)
 
     def take_action(self, parsed_args):
-        columns = ('Type', 'Service', 'Result')
-        return columns, self._unlock_all(parsed_args)
+        self.log.debug('take_action(%s)', parsed_args)
+        res = self._unlock_all_services(parsed_args)
+        return (('Type', 'Service', 'Result'), res)
 
 
 def _sleep_interval(*tab):
@@ -241,7 +257,7 @@ def _sleep_interval(*tab):
         yield tab[-1]
 
 
-class ClusterWait(lister.Lister):
+class ClusterWait(Lister):
     """Wait for services to get a score above specified value."""
 
     log = getLogger(__name__ + '.ClusterWait')
@@ -312,13 +328,7 @@ class ClusterWait(lister.Lister):
                             srv['type'], srv.get('id', None), srv['score'])
                 raise Exception(msg)
 
-        def generator(*tab):
-            for v in tab:
-                yield v
-            while True:
-                yield tab[-1]
-
-        interval = generator(0.0, 1.0, 2.0, 4.0)
+        interval = _sleep_interval(0.0, 1.0, 2.0, 4.0)
         types = parsed_args.types
         if not parsed_args.types:
             while True:
@@ -333,7 +343,7 @@ class ClusterWait(lister.Lister):
                 except ServiceBusy as exc:
                     self.log.debug("Conscience busy: %s", exc)
 
-        interval = generator(0.0, 1.0, 2.0, 4.0)
+        interval = _sleep_interval(0.0, 1.0, 2.0, 4.0)
         while True:
             check_deadline()
             maybe_unlock(descr)
@@ -393,23 +403,30 @@ class ClusterLock(ClusterUnlock):
         )
         return parser
 
-    def _lock_one(self, type_, addr, score):
-        si = {'type': type_, 'addr': addr, 'score': score}
-        try:
-            self.app.client_manager.conscience.lock_score(si)
-            yield type_, addr, "locked to %d" % int(score)
-        except Exception as exc:
-            yield type_, addr, str(exc)
+    def _lock_services(self, parsed_args):
+        srv_definitions = list()
+        for srv_id in parsed_args.srv_ids:
+            srv_definitions.append(
+                self.app.client_manager.conscience.get_service_definition(
+                    parsed_args.srv_type, srv_id, score=parsed_args.score))
+        for batch in _bounded_batches(srv_definitions):
+            result = "locked to %d" % int(parsed_args.score)
+            try:
+                self.app.client_manager.conscience.lock_score(batch)
+            except Exception as exc:
+                self.success = False
+                result = str(exc)
+            for srv_definition in batch:
+                yield (srv_definition['type'], srv_definition['addr'],
+                       result)
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
-        return (('Type', 'Service', 'Result'),
-                self._lock_one(parsed_args.srv_type,
-                               parsed_args.srv_addr,
-                               parsed_args.score))
+        res = self._lock_services(parsed_args)
+        return (('Type', 'Service', 'Result'), res)
 
 
-class ClusterFlush(command.Command):
+class ClusterFlush(Lister):
     """Deregister all services of the cluster."""
 
     log = getLogger(__name__ + '.ClusterFlush')
@@ -419,21 +436,30 @@ class ClusterFlush(command.Command):
         parser.add_argument(
             'srv_types',
             metavar='<srv_types>',
-            nargs='+',
-            help='Service type(s).')
+            nargs='*',
+            help='Service type(s) (or all if unset).')
         return parser
 
-    def take_action(self, parsed_args):
-        for srv_type in parsed_args.srv_types:
+    def _flush_srv_types(self, parsed_args):
+        srv_types = parsed_args.srv_types
+        if not parsed_args.srv_types:
+            srv_types = self.app.client_manager.conscience.service_types()
+        for srv_type in srv_types:
+            result = "flushed"
             try:
                 self.app.client_manager.conscience.flush(srv_type)
-                self.log.warn('%s services flushed', srv_type)
             except Exception as err:
-                raise Exception('Error while flushing %s service: %s' %
-                                (srv_type, err))
+                self.success = False
+                result = err
+            yield (srv_type, result)
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+        res = self._flush_srv_types(parsed_args)
+        return (('Type', 'Result'), res)
 
 
-class ClusterDeregister(command.Command):
+class ClusterDeregister(Lister):
     """Deregister specific services of the cluster."""
 
     log = getLogger(__name__ + '.ClusterDeregister')
@@ -442,28 +468,38 @@ class ClusterDeregister(command.Command):
         parser = super(ClusterDeregister, self).get_parser(prog_name)
         parser.add_argument(
             'srv_type',
-            help='Service type')
+            help='Service type.')
         parser.add_argument(
             'srv_ids',
             metavar='<srv_ids>',
             nargs='+',
-            help='IDs of the services.')
+            help='ID(s) of the services.')
         return parser
 
-    def take_action(self, parsed_args):
-        service_definitions = list()
+    def _deregister_services(self, parsed_args):
+        srv_definitions = list()
         for srv_id in parsed_args.srv_ids:
-            service_definitions.append(
-                self.app.client_manager.cluster.get_service_definition(
+            srv_definitions.append(
+                self.app.client_manager.conscience.get_service_definition(
                     parsed_args.srv_type, srv_id))
-        try:
-            self.app.client_manager.cluster.deregister(service_definitions)
-        except Exception as err:
-            raise Exception('Error while deregistering %s services: %s' %
-                            (parsed_args.srv_type, err))
+        for batch in _bounded_batches(srv_definitions):
+            result = "deregistered"
+            try:
+                self.app.client_manager.conscience.deregister(batch)
+            except Exception as exc:
+                self.success = False
+                result = str(exc)
+            for srv_definition in batch:
+                yield (srv_definition['type'], srv_definition['addr'],
+                       result)
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+        res = self._deregister_services(parsed_args)
+        return (('Type', 'Service', 'Result'), res)
 
 
-class ClusterResolve(show.ShowOne):
+class ClusterResolve(ShowOne):
     """Resolve a service ID to an IP address and port."""
 
     log = getLogger(__name__ + '.ClusterFlush')
@@ -486,7 +522,7 @@ class ClusterResolve(show.ShowOne):
         return zip(*resolved.items())
 
 
-class LocalNSConf(show.ShowOne):
+class LocalNSConf(ShowOne):
     """Show namespace configuration values locally configured."""
 
     log = getLogger(__name__ + '.LocalNSConf')

@@ -113,6 +113,11 @@
 				"limit": 64, "def": "oio", "descr": "" },
 
 			{ "type": "string",
+				"name": "oio_meta2_tube_meta2_deleted",
+				"key": "meta2.tube.meta2_deleted",
+				"limit": 64, "def": "oio", "descr": "" },
+
+			{ "type": "string",
 				"name": "oio_rawx_tube_chunk_created",
 				"key": "rawx.tube.chunk_created",
 				"limit": 64, "def": "oio", "descr": "" },
@@ -815,15 +820,11 @@
 				"def": "",
 				"descr": "Specify the OpenIO SDS location of the service." },
 
-			{ "type": "bool", "name": "oio_proxy_local_prefer",
-				"key": "proxy.srv_local.patch",
-				"descr": "Should the proxy prefer local services for its own usage.",
-				"def": false },
-
 			{ "type": "bool", "name": "oio_proxy_local_patch",
-				"key": "proxy.srv_local.prefer",
+				"key": "proxy.srv_local.patch",
 				"descr": "Should the proxy patch the services descriptions to let the caller prefer local services.",
-				"def": false },
+				"def": false,
+				"aliases": ["proxy.srv_local.prefer"] },
 
 			{ "type": "monotonic", "name": "proxy_request_max_delay",
 				"key": "proxy.request.max_delay",

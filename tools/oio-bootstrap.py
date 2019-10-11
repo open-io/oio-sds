@@ -373,6 +373,19 @@ stats:
     - {type: system}
 """
 
+template_oioswift_watch = """
+host: ${IP}
+port: ${PORT}
+type: oioswift
+location: ${LOC}
+checks:
+    - {type: http, uri: "/healthcheck"}
+slots:
+    - ${SRVTYPE}
+stats:
+    - {type: system}
+"""
+
 template_conscience_service = """
 [General]
 to_op=1000
@@ -601,6 +614,12 @@ score_expr=(1 + (num stat.cpu))
 score_timeout=120
 lock_at_first_register=false
 
+[type:oioswift]
+#score_expr=((num stat.cpu)>5) * (num stat.cpu)
+score_expr=1 + (num stat.cpu)
+score_timeout=120
+lock_at_first_register=false
+
 [type:beanstalkd]
 # 1000000 ready jobs -> score = 0
 score_expr=root(3, (num stat.cpu) * (num stat.space) * (100 - root(3, (num stat.jobs_ready))))
@@ -787,16 +806,16 @@ pipeline = ${REPLICATION} content_cleaner ${PRESERVE}
 pipeline = logger content_improve ${PRESERVE}
 
 [handler:storage.container.new]
-# pipeline = replication account_update volume_index
-pipeline = ${REPLICATION} account_update volume_index ${PRESERVE}
+# pipeline = replication account_update
+pipeline = ${REPLICATION} account_update ${PRESERVE}
 
 [handler:storage.container.update]
 # pipeline = replication
 pipeline = ${REPLICATION} ${PRESERVE}
 
 [handler:storage.container.deleted]
-# pipeline = replication account_update volume_index
-pipeline = ${REPLICATION} account_update volume_index ${PRESERVE}
+# pipeline = replication account_update
+pipeline = ${REPLICATION} account_update ${PRESERVE}
 
 [handler:storage.container.state]
 pipeline = account_update ${PRESERVE}
@@ -805,6 +824,9 @@ pipeline = account_update ${PRESERVE}
 pipeline = volume_index ${PRESERVE}
 
 [handler:storage.chunk.deleted]
+pipeline = volume_index ${PRESERVE}
+
+[handler:storage.meta2.deleted]
 pipeline = volume_index ${PRESERVE}
 
 [handler:account.services]

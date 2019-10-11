@@ -30,9 +30,7 @@ from tests.utils import BaseTestCase
 from oio.api.object_storage import ObjectStorageApi
 from oio.common.constants import REQID_HEADER
 from oio.common.utils import request_id
-from oio.common.json import json
 from oio.event.beanstalk import ResponseError
-from oio.event.evob import Event
 from oio.rebuilder.blob_improver import DEFAULT_IMPROVER_TUBE
 
 
@@ -46,7 +44,7 @@ class TestPerfectibleContent(BaseTestCase):
         self.api = ObjectStorageApi(self.ns, endpoint=self.uri,
                                     pool_manager=self.http_pool)
         # Ensure the tube is not clogged
-        self.beanstalkd.drain_tube(DEFAULT_IMPROVER_TUBE)
+        self.beanstalkd.drain_tube(DEFAULT_IMPROVER_TUBE, timeout=0.2)
 
     @classmethod
     def tearDownClass(cls):
@@ -89,19 +87,15 @@ class TestPerfectibleContent(BaseTestCase):
         """
         Wait for an event in the oio-improve tube.
         """
-        self.beanstalkd.watch(DEFAULT_IMPROVER_TUBE)
-        try:
-            job_id, data = self.beanstalkd.reserve(timeout=timeout)
-        except ResponseError as exc:
-            logging.warn('No event read from tube %s: %s',
-                         DEFAULT_IMPROVER_TUBE, exc)
-            self.fail()
-        self.beanstalkd.delete(job_id)
-        return Event(json.loads(data))
+        event = self.wait_for_event(DEFAULT_IMPROVER_TUBE, timeout=timeout)
+        if event is None:
+            self.fail("No event received in the last %s seconds" % timeout)
+        return event
 
     # This test must be executed first
     def test_0_upload_ok(self):
         """Check that no event is emitted when everything is ok."""
+        self.wait_for_score(('rawx', ))
         # Check we have enough service locations.
         self._aggregate_rawx_by_place()
 
@@ -124,15 +118,12 @@ class TestPerfectibleContent(BaseTestCase):
         """
         Check that an event is emitted when the warning distance is reached.
         """
+        self.wait_for_score(('rawx', ))
         # Check we have enough service locations.
-        by_place = self._aggregate_services(
-            'rawx', lambda x: x['tags']['tag.loc'].rsplit('.', 2)[0])
-        if len(by_place) < 3:
-            self.skip('This test requires 3 different 2nd level locations')
-            return
+        by_place = self._aggregate_rawx_by_place()
 
         # Lock all services of the 3rd location.
-        banned_loc = by_place.keys()[2]
+        banned_loc = list(by_place.keys())[2]
         self._lock_services('rawx', by_place[banned_loc])
 
         # Upload an object.
@@ -140,12 +131,12 @@ class TestPerfectibleContent(BaseTestCase):
         reqid = request_id('perfectible-')
         self.api.object_create(self.account, container,
                                obj_name='perfectible',
-                               data='whatever',
+                               data=b'whatever',
                                policy='THREECOPIES',
                                headers={REQID_HEADER: reqid})
 
         # Wait on the oio-improve beanstalk tube.
-        event = self._wait_for_event()
+        event = self._wait_for_event(timeout=REASONABLE_EVENT_DELAY*2)
 
         # Check the content of the event.
         self.assertEqual('storage.content.perfectible', event.event_type)
@@ -189,7 +180,7 @@ class TestPerfectibleContent(BaseTestCase):
                                headers={REQID_HEADER: reqid})
 
         # Wait on the oio-improve beanstalk tube.
-        event = self._wait_for_event()
+        event = self._wait_for_event(timeout=REASONABLE_EVENT_DELAY*2)
 
         # Check the content of the event.
         self.assertEqual('storage.content.perfectible', event.event_type)
@@ -271,3 +262,22 @@ class TestPerfectibleContent(BaseTestCase):
         if job:
             logging.debug("Unexpected job data: %s", data)
         self.assertIsNone(job)
+
+
+class TestPerfectibleLocalContent(TestPerfectibleContent):
+
+    @classmethod
+    def setUpClass(cls):
+        super(TestPerfectibleLocalContent, cls).setUpClass()
+        config = {'proxy.srv_local.prepare': 1,
+                  'proxy.location': 'rack.127-0-0-4.6000'}
+        cls._cls_set_proxy_config(config)
+
+    @classmethod
+    def tearDownClass(cls):
+        config = {'proxy.srv_local.prepare': 0}
+        cls._cls_set_proxy_config(config)
+        super(TestPerfectibleLocalContent, cls).tearDownClass()
+
+    def test_upload_warn_dist(self):
+        self.skip("Too buggy when run with proxy.srv_local.prepare=1")

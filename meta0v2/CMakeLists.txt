@@ -48,9 +48,17 @@ add_executable(meta0_server
 bin_prefix(meta0_server -meta0-server)
 target_link_libraries(meta0_server
 		meta0v2 meta0utils
-        metautils server sqliterepo
+		metautils server sqliterepo
 		sqlxsrv
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
 install(TARGETS meta0_server meta0_client RUNTIME DESTINATION bin)
 
+# As soon as the admin CLI is able to efficiently check a meta0
+# service without that command, we can uncomment the directive that
+# reserve the tool for the DEVEL use cases.
+install(TARGETS
+			meta0_client
+		RUNTIME DESTINATION bin
+		#CONFIGURATIONS Debug
+		COMPONENT dev)

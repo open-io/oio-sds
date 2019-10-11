@@ -1,4 +1,4 @@
-# Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,7 +16,6 @@
 
 import time
 
-from oio.api.object_storage import ObjectStorageApi
 from tests.utils import BaseTestCase, random_str
 from oio.common.exceptions import NoSuchObject
 from oio.common.easy_value import true_value
@@ -26,10 +25,10 @@ class TestContentVersioning(BaseTestCase):
 
     def setUp(self):
         super(TestContentVersioning, self).setUp()
-        self.api = ObjectStorageApi(self.conf['namespace'])
+        self.api = self.storage
         self.container = random_str(8)
         system = {'sys.m2.policy.version': '3'}
-        self.wait_for_score(('meta2', ))
+        self.wait_for_score(('meta2', 'rawx'))
         self.api.container_create(self.account, self.container, system=system)
 
     def test_versioning_enabled(self):

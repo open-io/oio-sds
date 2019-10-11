@@ -91,6 +91,7 @@ class EventTypes(object):
     CONTENT_NEW = 'storage.content.new'
     CONTENT_PERFECTIBLE = 'storage.content.perfectible'
     CONTENT_REBUILT = 'storage.content.rebuilt'
+    META2_DELETED = 'storage.meta2.deleted'
 
 
 class StatusMap(object):

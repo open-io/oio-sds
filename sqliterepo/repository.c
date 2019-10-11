@@ -468,6 +468,30 @@ sqlx_repository_configure_type(sqlx_repository_t *repo,
 }
 
 void
+sqlx_repository_configure_open_callback(
+		sqlx_repository_t *repo,
+		sqlx_repo_open_hook cb, gpointer cb_data)
+{
+	EXTRA_ASSERT(repo != NULL);
+	EXTRA_ASSERT(repo->running);
+	EXTRA_ASSERT(cb != NULL);
+
+	repo->open_callback = cb;
+	repo->open_callback_data = cb_data;
+}
+
+GError *
+sqlx_repository_call_open_callback(
+		struct sqlx_sqlite3_s *sq3, enum sqlx_open_type_e open_mode)
+{
+	if (!sq3 || !sq3->repo || !sq3->repo->running
+			|| !sq3->repo->open_callback)
+		return NULL;
+	return sq3->repo->open_callback(sq3,
+			sq3->repo->open_callback_data, open_mode);
+}
+
+void
 sqlx_repository_configure_close_callback(sqlx_repository_t *repo,
 		sqlx_repo_close_hook cb, gpointer cb_data)
 {
@@ -482,22 +506,11 @@ sqlx_repository_configure_close_callback(sqlx_repository_t *repo,
 void
 sqlx_repository_call_close_callback(struct sqlx_sqlite3_s *sq3)
 {
-	if (sq3->repo != NULL && sq3->repo->close_callback != NULL) {
-		sq3->repo->close_callback(sq3, sq3->deleted,
-				sq3->repo->close_callback_data);
-	}
-}
-
-void
-sqlx_repository_configure_open_callback(sqlx_repository_t *repo,
-		sqlx_repo_open_hook cb, gpointer cb_data)
-{
-	EXTRA_ASSERT(repo != NULL);
-	EXTRA_ASSERT(repo->running);
-	EXTRA_ASSERT(cb != NULL);
-
-	repo->open_callback = cb;
-	repo->open_callback_data = cb_data;
+	if (!sq3 || !sq3->repo
+			|| !sq3->repo->close_callback)
+		return;
+	return sq3->repo->close_callback(sq3,
+			sq3->repo->close_callback_data);
 }
 
 void
@@ -515,12 +528,11 @@ sqlx_repository_configure_change_callback(sqlx_repository_t *repo,
 void
 sqlx_repository_call_change_callback(struct sqlx_sqlite3_s *sq3)
 {
-	if (NULL == sq3 || NULL == sq3->repo)
+	if (!sq3 || !sq3->repo || !sq3->repo->running
+			|| !sq3->repo->change_callback)
 		return;
-	if (!sq3->repo->running)
-		return;
-	if (sq3->repo->change_callback)
-		sq3->repo->change_callback(sq3, sq3->repo->change_callback_data);
+	return sq3->repo->change_callback(sq3,
+			sq3->repo->change_callback_data);
 }
 
 void
@@ -541,14 +553,12 @@ sqlx_repository_call_db_properties_change_callback(
 		struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		struct db_properties_s *db_properties)
 {
-	if (NULL == sq3 || NULL == sq3->repo)
+	if (!sq3 || !sq3->repo || !sq3->repo->running
+			|| !sq3->repo->db_properties_change_callback)
 		return;
-	if (!sq3->repo->running)
-		return;
-	if (sq3->repo->db_properties_change_callback)
-		sq3->repo->db_properties_change_callback(sq3,
-				sq3->repo->db_properties_change_callback_data,
-				url, db_properties);
+	return sq3->repo->db_properties_change_callback(sq3,
+			sq3->repo->db_properties_change_callback_data,
+			url, db_properties);
 }
 
 void
@@ -1141,7 +1151,9 @@ sqlx_repository_timed_open_and_lock(sqlx_repository_t *repo,
 			g_assert_not_reached();
 	}
 
-	if (!err) {
+	_open_clean_args(&args);
+
+	if (!err && result) {
 		gint64 expected_status = how & SQLX_OPEN_STATUS;
 		if (expected_status) {
 
@@ -1158,19 +1170,26 @@ sqlx_repository_timed_open_and_lock(sqlx_repository_t *repo,
 				sqlx_repository_unlock_and_close_noerror(*result);
 			}
 		}
-	}
 
-	_open_clean_args(&args);
-
-	/* XXX(jfs): patching the db handle so it has the lastest election_manager
-	   allows reusing a handle from the cache, and that was initiated during
-	   the _post_config hook (when the election_manager was not associated yet
-	   to the repository. */
-	if (!err && result)
+		/* XXX(jfs): patching the db handle so it has the lastest election_manager
+		   allows reusing a handle from the cache, and that was initiated during
+		   the _post_config hook (when the election_manager was not associated yet
+		   to the repository. */
 		(*result)->manager = repo->election_manager;
 
-	if (!err && repo->open_callback && result) {
-		err = repo->open_callback(*result, repo->open_callback_data);
+		// If the container is being deleted, this is sad ...
+		// This MIGHT happen if a cache is present (and this is the
+		// common case for m2v2), because the deletion will happen
+		// when the base exit the cache.
+		// In facts this SHOULD NOT happend because a base being deleted
+		// is closed with an instruction to exit the cache immediately.
+		// TODO FIXME this is maybe a good place for an assert().
+		if ((*result)->deleted)
+			err = NEWERROR(CODE_CONTAINER_FROZEN, "destruction pending");
+
+		if (!err)
+			err = sqlx_repository_call_open_callback(*result, how);
+
 		if (err) {
 			sqlx_repository_unlock_and_close_noerror(*result);
 			if (lead && *lead) {

@@ -1187,7 +1187,7 @@ action_m2_container_destroy (struct req_args_s *args)
 			goto clean_and_exit;
 		} else if (urlv[1]) {
 			err = m2v2_remote_execute_DESTROY_many(urlv+1, args->url,
-					M2V2_DESTROY_EVENT|flag_force);
+					flag_force);
 		}
 	}
 

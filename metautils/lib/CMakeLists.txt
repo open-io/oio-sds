@@ -276,4 +276,3 @@ target_link_libraries(metautils
 		oiocore
 		${GLIB2_LIBRARIES} ${JSONC_LIBRARIES}
 		-lm ${CMAKE_THREAD_LIBS_INIT})
-

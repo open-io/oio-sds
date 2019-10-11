@@ -85,4 +85,3 @@ add_library(sqliterepo STATIC
 target_link_libraries(sqliterepo metautils
 		sqlitereporemote sqliteutils
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES} ${ZK_LIBRARIES})
-

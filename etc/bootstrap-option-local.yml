@@ -1,4 +1,4 @@
 config:
-  proxy.location: "hostx.vol0"
+  proxy.location: "rack.127-0-0-4.6000"
   proxy.srv_local.patch: true
-  proxy.srv_local.prefer: true
+  proxy.srv_local.prepare: 1

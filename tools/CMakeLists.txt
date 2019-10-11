@@ -40,13 +40,21 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/oio-sds.pc.in
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/oio-bootstrap.py
 	${CMAKE_CURRENT_BINARY_DIR}/oio-bootstrap.py @ONLY)
 
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/oio-sds.pc
+install(FILES
+			${CMAKE_CURRENT_BINARY_DIR}/oio-sds.pc
 		DESTINATION ${PKGCONFIG_DIRECTORY}
 		PERMISSIONS OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
 
-install(TARGETS oio-tool DESTINATION bin)
+install(TARGETS
+			oio-tool
+			oio-lb-benchmark
+		DESTINATION bin)
 
-install(TARGETS oio-file DESTINATION bin)
+install(TARGETS
+			oio-file
+			oio-zk-harass
+		DESTINATION bin
+		CONFIGURATIONS Debug COMPONENT dev)
 
 install(PROGRAMS
 			oio-flush-all.sh
@@ -56,4 +64,6 @@ install(PROGRAMS
 			oio-reset.sh
 			oio-dump-buried-events.py
 			oio-webhook-test.py
-		DESTINATION bin)
+		DESTINATION bin
+		CONFIGURATIONS Debug COMPONENT dev)
+
