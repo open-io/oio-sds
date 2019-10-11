@@ -97,7 +97,7 @@ const (
 
 const (
 	// Default size (in KiB) of the buffer allocated for the upload
-	uploadBufferDefault int = 2048
+	uploadBufferDefault int = 2 * 1024
 
 	// Size (in bytes) used as a threshold to allow read().
 	// In other words: we do not read() if the available space in the buffer is less than this value
@@ -110,7 +110,7 @@ const (
 	uploadBufferSizeMin int = 32768
 
 	// Specifies the extension size when Fallocate is called to prepare file placeholders
-	uploadExtensionSize int64 = 32 * 1024 * 1024
+	uploadExtensionSize int64 = 16 * 1024 * 1024
 )
 
 const (

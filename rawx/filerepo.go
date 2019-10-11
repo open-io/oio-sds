@@ -165,7 +165,8 @@ func (fr *fileRepository) putRelPath(path string) (fileWriter, error) {
 	}
 
 	return &realFileWriter{
-		fd: fd, pathFinal: path, pathTemp: pathTemp, repo: fr,
+		f:         os.NewFile(uintptr(fd), pathTemp),
+		pathFinal: path, pathTemp: pathTemp, repo: fr,
 		allocated: 0, written: 0}, nil
 }
 
@@ -272,7 +273,7 @@ func (lo *realLinkOp) rollback() error {
 }
 
 type realFileWriter struct {
-	fd        int
+	f         *os.File
 	pathFinal string
 	pathTemp  string
 	repo      *fileRepository
@@ -281,8 +282,12 @@ type realFileWriter struct {
 	written   int64
 }
 
+func (fw *realFileWriter) fd() int {
+	return int(fw.f.Fd())
+}
+
 func (fw *realFileWriter) setAttr(key string, value []byte) error {
-	return syscall.Fsetxattr(fw.fd, key, value, 0)
+	return syscall.Fsetxattr(fw.fd(), key, value, 0)
 }
 
 func (fw *realFileWriter) Write(buffer []byte) (int, error) {
@@ -293,15 +298,11 @@ func (fw *realFileWriter) Write(buffer []byte) (int, error) {
 	}
 
 	fw.written += buflen
-	return syscall.Write(fw.fd, buffer)
+	return fw.f.Write(buffer)
 }
 
 func (fw *realFileWriter) close() {
-	if fw.fd >= 0 {
-		fd := fw.fd
-		fw.fd = -1
-		_ = syscall.Close(fd)
-	}
+	_ = fw.f.Close()
 }
 
 func (fw *realFileWriter) abort() error {
@@ -313,19 +314,19 @@ func (fw *realFileWriter) commit() error {
 	var err error
 
 	if fw.allocated > fw.written {
-		err = syscall.Ftruncate(fw.fd, fw.written)
+		err = fw.f.Truncate(fw.written)
 	}
 
 	if err == nil {
 		switch fw.repo.fadviseUpload {
 		case configFadviseNone:
 		case configFadviseYes:
-			syscall.Fadvise(fw.fd, 0, fw.written, syscall.FADV_SEQUENTIAL)
+			syscall.Fadvise(fw.fd(), 0, fw.written, syscall.FADV_SEQUENTIAL)
 		case configFadviseNocache:
-			syscall.Fadvise(fw.fd, 0, fw.written, syscall.FADV_DONTNEED)
+			syscall.Fadvise(fw.fd(), 0, fw.written, syscall.FADV_DONTNEED)
 		case configFadviseCache:
-			syscall.Fadvise(fw.fd, 0, fw.written, syscall.FADV_SEQUENTIAL)
-			syscall.Fadvise(fw.fd, 0, fw.written, syscall.FADV_WILLNEED)
+			syscall.Fadvise(fw.fd(), 0, fw.written, syscall.FADV_SEQUENTIAL)
+			syscall.Fadvise(fw.fd(), 0, fw.written, syscall.FADV_WILLNEED)
 		}
 	}
 
@@ -351,7 +352,7 @@ func (fw *realFileWriter) syncFile() error {
 	if !fw.repo.syncFile {
 		return nil
 	}
-	return syscall.Fdatasync(fw.fd)
+	return syscall.Fdatasync(fw.fd())
 }
 
 func (fw *realFileWriter) syncDir() error {
@@ -364,7 +365,7 @@ func (fw *realFileWriter) syncDir() error {
 
 func (fw *realFileWriter) Extend(size int64) {
 	if fw.repo.fallocateFile {
-		err := syscall.Fallocate(fw.fd, syscall.FALLOC_FL_KEEP_SIZE, fw.written, size)
+		err := syscall.Fallocate(fw.fd(), syscall.FALLOC_FL_KEEP_SIZE, fw.written, size)
 		if err == nil {
 			fw.allocated = fw.written + size
 		}
@@ -374,6 +375,10 @@ func (fw *realFileWriter) Extend(size int64) {
 type realFileReader struct {
 	f    *os.File
 	repo *fileRepository
+}
+
+func (fr *realFileReader) fd() int {
+	return int(fr.f.Fd())
 }
 
 func (fr *realFileReader) size() int64 {
@@ -405,7 +410,7 @@ func (fr *realFileReader) File() *os.File {
 }
 
 func (fr *realFileReader) getAttr(key string, value []byte) (int, error) {
-	return syscall.Fgetxattr(int(fr.f.Fd()), key, value)
+	return syscall.Fgetxattr(fr.fd(), key, value)
 }
 
 func (fr *fileRepository) nameToRelPath(name string) string {
