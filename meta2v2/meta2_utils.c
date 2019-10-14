@@ -2527,9 +2527,11 @@ checked_content_append_json_string(struct checked_content_s *checked_content,
 		if (first_missing_pos) {
 			first_missing_pos = FALSE;
 		} else {
-			g_string_append(message, ",");
+			g_string_append_c(message, ',');
 		}
+		g_string_append_c(message, '"');
 		oio_str_gstring_append_json_string(message, missing_pos->data);
+		g_string_append_c(message, '"');
 	}
 	g_string_append_c(message, ']');
 }
