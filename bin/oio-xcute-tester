@@ -22,4 +22,7 @@ if __name__ == '__main__':
     args = make_arg_parser().parse_args()
     logger = get_logger_from_args(args)
 
-    TesterDispatcher({'namespace': args.namespace}, logger=logger).run()
+    conf = {'namespace': args.namespace}
+    conf['redis_host'] = '127.0.0.1:6379'
+
+    TesterDispatcher(conf, logger=logger).run()
