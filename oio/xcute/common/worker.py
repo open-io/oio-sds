@@ -71,7 +71,7 @@ class XcuteWorker(object):
             if not isinstance(action, XcuteAction):
                 raise ValueError('Unexpected action: %s' % action_class)
 
-            action_item = pickle.loads(job['item'])
+            action_item = job['item']
             action_kwargs = job.get('kwargs', dict())
 
             # Execute the action
