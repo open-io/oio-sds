@@ -20,7 +20,7 @@ from oio.xcute.common.dispatcher import XcuteDispatcher
 class Tester(XcuteAction):
 
     def process(self, item, **kwargs):
-        self.logger.error('ca marche (item=%s ; kwargs=%s) !!!',
+        self.logger.error('It works (item=%s ; kwargs=%s) !!!',
                           str(item), str(kwargs))
 
 
@@ -30,5 +30,4 @@ class TesterDispatcher(XcuteDispatcher):
 
     def _get_actions_with_args(self):
         for i in range(10):
-            yield (Tester, ['coucou', 'hibou', i],
-                   {'coucou': 'hibou', 'hibou': i})
+            yield (Tester, 'myitem-' + str(i), {'coucou': 'hibou', 'hibou': i})

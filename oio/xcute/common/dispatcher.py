@@ -162,7 +162,7 @@ class XcuteDispatcher(object):
     def _get_actions_with_args(self):
         raise NotImplementedError()
 
-    def _job_from_action(self, action_class, item, kwargs):
+    def _job_data_from_action(self, action_class, item, kwargs):
         job = dict()
         job['task_id'] = self.task_id
         job['action'] = pickle.dumps(action_class)
@@ -170,14 +170,14 @@ class XcuteDispatcher(object):
         job['kwargs'] = kwargs or dict()
         job['beanstalkd_reply'] = {'addr': self.beanstalkd_reply.addr,
                                    'tube': self.beanstalkd_reply.tube}
-        return job
+        return json.dumps(job)
 
     def _send_action(self, action_with_args, next_worker):
         """
         Send the action through a non-full sender.
         """
-        job = self._job_from_action(*action_with_args)
-        job_data = json.dumps(job)
+        _, item, _ = action_with_args
+        job_data = self._job_data_from_action(*action_with_args)
         workers = self.beanstalkd_workers.values()
         nb_workers = len(workers)
         while True:
@@ -185,7 +185,7 @@ class XcuteDispatcher(object):
                 success = workers[next_worker].send_job(job_data)
                 next_worker = (next_worker + 1) % nb_workers
                 if success:
-                    self.last_item_sent = job['item']
+                    self.last_item_sent = item
                     return next_worker
             self.logger.warn("All beanstalkd workers are full")
             sleep(5)
