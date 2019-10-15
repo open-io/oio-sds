@@ -248,6 +248,14 @@ class ClientException(StatusMessageException):
     pass
 
 
+class BadRequest(ClientException):
+    """
+    Request is not correct.
+    """
+    def __init__(self, http_status=400, status=None, message=None):
+        super(BadRequest, self).__init__(http_status, status, message)
+
+
 class Forbidden(ClientException):
     """
     Operation is forbidden.
@@ -306,6 +314,7 @@ class ServiceBusy(ClientException):
 
 
 _http_status_map = {
+    400: BadRequest,
     403: Forbidden,
     404: NotFound,
     405: MethodNotAllowed,

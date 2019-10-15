@@ -19,7 +19,7 @@
 import argparse
 
 from oio.cli import make_logger_args_parser, get_logger_from_args
-from oio.xcute.blob_mover import BlobMoverDispatcher
+from oio.xcute.blob_mover import RawxDecommissionDispatcher
 
 
 def make_arg_parser():
@@ -35,16 +35,17 @@ def make_arg_parser():
         help='ID of the service to work on.')
     parser.add_argument(
         '--items-per-second', type=int,
-        help='Max items per second. '
-             '(default=%d)' % BlobMoverDispatcher.DEFAULT_ITEM_PER_SECOND)
+        help='Max items per second. (default=%d)'
+             % RawxDecommissionDispatcher.DEFAULT_ITEM_PER_SECOND)
     parser.add_argument(
         '--rdir-fetch-limit', type=int,
         help='Maximum number of entries returned in each rdir response. '
-             '(default=%d)' % BlobMoverDispatcher.DEFAULT_RDIR_FETCH_LIMIT)
+             '(default=%d)'
+             % RawxDecommissionDispatcher.DEFAULT_RDIR_FETCH_LIMIT)
     parser.add_argument(
         '--rdir-timeout', type=float,
-        help='Timeout for rdir operations, in seconds. '
-             '(default=%f).' % BlobMoverDispatcher.DEFAULT_RDIR_TIMEOUT)
+        help='Timeout for rdir operations, in seconds. (default=%f).'
+             % RawxDecommissionDispatcher.DEFAULT_RDIR_TIMEOUT)
     parser.add_argument(
         '--min-chunk-size', type=int,
         help='Only move chunks larger than the given size.')
@@ -65,6 +66,7 @@ if __name__ == '__main__':
     conf = dict()
     # common
     conf['namespace'] = args.namespace
+    conf['redis_host'] = '127.0.0.1:6379'
     conf['items_per_second'] = args.items_per_second
     # blob mover
     conf['service_id'] = args.service_id
@@ -74,4 +76,4 @@ if __name__ == '__main__':
     conf['max_chunk_size'] = args.max_chunk_size
     conf['excluded_rawx'] = args.excluded_rawx
 
-    BlobMoverDispatcher(conf, logger=logger).run()
+    RawxDecommissionDispatcher(conf, logger=logger).run()
