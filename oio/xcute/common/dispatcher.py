@@ -18,12 +18,13 @@ from uuid import uuid1
 
 from oio.common.easy_value import int_value
 from oio.common.exceptions import ExplicitBury, OioException, OioTimeout
-from oio.common.green import ratelimit, sleep, threading
+from oio.common.green import ratelimit, sleep, threading, time
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.conscience.client import ConscienceClient
 from oio.event.beanstalk import Beanstalk, BeanstalkdListener, \
     BeanstalkdSender
+from oio.xcute.common.backend import XcuteBackend
 
 
 def uuid(prev=None):
@@ -37,6 +38,7 @@ class XcuteDispatcher(object):
     Dispatch actions on the platform.
     """
 
+    DEFAULT_TASK_TYPE = None
     DEFAULT_WORKER_TUBE = 'oio-xcute'
     DEFAULT_ITEM_PER_SECOND = 30
     DEFAULT_DISPATCHER_TIMEOUT = 300
@@ -127,6 +129,18 @@ class XcuteDispatcher(object):
             'Beanstalkd %s using tube %s is selected for the replies',
             self.beanstalkd_reply.addr, self.beanstalkd_reply.tube)
 
+        # Info
+        self.last_item_sent = None
+        self.processed_items = 0
+        self.errors = 0
+        self.expected_items = None
+
+        # Register the task
+        self.backend = XcuteBackend(self.conf)
+        self.backend.start_task(self.task_id, task_type=self.DEFAULT_TASK_TYPE,
+                                mtime=time.time())
+        self.sending_task_info = True
+
     def _locate_tube(self, services, tube):
         """
         Get a list of beanstalkd services hosting the specified tube.
@@ -148,21 +162,22 @@ class XcuteDispatcher(object):
     def _get_actions_with_args(self):
         raise NotImplementedError()
 
-    def _job_data_from_action(self, action, args, kwargs):
+    def _job_from_action(self, action_class, item, kwargs):
         job = dict()
         job['task_id'] = self.task_id
-        job['action'] = pickle.dumps(action)
-        job['args'] = args or list()
+        job['action'] = pickle.dumps(action_class)
+        job['item'] = pickle.dumps(item)
         job['kwargs'] = kwargs or dict()
         job['beanstalkd_reply'] = {'addr': self.beanstalkd_reply.addr,
                                    'tube': self.beanstalkd_reply.tube}
-        return json.dumps(job)
+        return job
 
     def _send_action(self, action_with_args, next_worker):
         """
         Send the action through a non-full sender.
         """
-        job_data = self._job_data_from_action(*action_with_args)
+        job = self._job_from_action(*action_with_args)
+        job_data = json.dumps(job)
         workers = self.beanstalkd_workers.values()
         nb_workers = len(workers)
         while True:
@@ -170,6 +185,7 @@ class XcuteDispatcher(object):
                 success = workers[next_worker].send_job(job_data)
                 next_worker = (next_worker + 1) % nb_workers
                 if success:
+                    self.last_item_sent = job['item']
                     return next_worker
             self.logger.warn("All beanstalkd workers are full")
             sleep(5)
@@ -199,9 +215,19 @@ class XcuteDispatcher(object):
         finally:
             self.sending = False
 
-    def _update_status(self):
-        self.redis_conn
-        sleep(1)
+    def _prepare_task_info(self):
+        info = dict()
+        info['mtime'] = time.time()
+        info['last_item_sent'] = self.last_item_sent or XcuteBackend.NONE_VALUE
+        info['processed_items'] = self.processed_items
+        info['errors'] = self.errors
+        return info
+
+    def _send_task_info_periodically(self):
+        while self.sending_task_info:
+            sleep(1)
+            info = self._prepare_task_info()
+            self.backend.update_task(self.task_id, **info)
 
     def _all_actions_are_processed(self):
         """
@@ -222,10 +248,16 @@ class XcuteDispatcher(object):
                                % (reply_info['task_id'], self.task_id))
         yield reply_info
 
-    def _process_reply(self, reply_info):
+    def _update_task_info(self, reply_info):
+        self.processed_items += 1
+
         exc = pickle.loads(reply_info['exc'])
         if exc:
             self.logger.error(exc)
+            self.errors += 1
+
+    def _process_reply(self, reply_info):
+        self._update_task_info(reply_info)
 
         beanstalkd_worker_addr = reply_info['beanstalkd_worker']['addr']
         self.beanstalkd_workers[beanstalkd_worker_addr].job_done()
@@ -238,6 +270,11 @@ class XcuteDispatcher(object):
         # Wait until the thread is started sending events
         while self.sending is None:
             sleep(0.1)
+
+        self.sending_task_info = True
+        thread_send_task_info_periodically = threading.Thread(
+            target=self._send_task_info_periodically)
+        thread_send_task_info_periodically.start()
 
         # Retrieve replies until all events are processed
         try:
@@ -254,3 +291,12 @@ class XcuteDispatcher(object):
         except Exception:
             self.logger.exception('ERROR in distributed dispatcher')
             self.success = False
+
+        # Send the last information
+        self.sending_task_info = False
+        info = self._prepare_task_info()
+        thread_send_task_info_periodically.join()
+        if self.running:
+            self.backend.finish_task(self.task_id, **info)
+        else:
+            self.backend.pause_task(self.task_id, **info)
