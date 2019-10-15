@@ -84,7 +84,7 @@ const (
 )
 
 const (
-	configDefaultFallocate = true
+	configDefaultFallocate = false
 	configDefaultSyncFile  = false
 	configDefaultSyncDir   = false
 
