@@ -21,5 +21,5 @@ class XcuteAction(object):
         self.conf = conf
         self.logger = logger
 
-    def process(self, *args, **kwargs):
+    def process(self, item, **kwargs):
         raise NotImplementedError()
