@@ -52,11 +52,11 @@ class BlobMover(XcuteAction):
     def process(self, chunk_url, rawx_timeout=None, min_chunk_size=None,
                 max_chunk_size=None, excluded_rawx=None):
         min_chunk_size = min_chunk_size \
-            or BlobMoverDispatcher.DEFAULT_MIN_CHUNK_SIZE
+            or RawxDecommissionDispatcher.DEFAULT_MIN_CHUNK_SIZE
         max_chunk_size = max_chunk_size \
-            or BlobMoverDispatcher.DEFAULT_MAX_CHUNK_SIZE
+            or RawxDecommissionDispatcher.DEFAULT_MAX_CHUNK_SIZE
         excluded_rawx = excluded_rawx \
-            or BlobMoverDispatcher.DEFAULT_EXCLUDED_RAWX
+            or RawxDecommissionDispatcher.DEFAULT_EXCLUDED_RAWX
 
         fake_excluded_chunks = self._generate_fake_excluded_chunks(
             excluded_rawx)
@@ -87,8 +87,9 @@ class BlobMover(XcuteAction):
         self.logger.info('Moved chunk %s to %s', chunk_url, new_chunk['url'])
 
 
-class BlobMoverDispatcher(XcuteDispatcher):
+class RawxDecommissionDispatcher(XcuteDispatcher):
 
+    DEFAULT_TASK_TYPE = 'rawx-decommission'
     DEFAULT_RDIR_FETCH_LIMIT = 1000
     DEFAULT_RDIR_TIMEOUT = 60.0
     DEFAULT_RAWX_TIMEOUT = 60.0
@@ -97,7 +98,7 @@ class BlobMoverDispatcher(XcuteDispatcher):
     DEFAULT_EXCLUDED_RAWX = list()
 
     def __init__(self, conf, logger=None):
-        super(BlobMoverDispatcher, self).__init__(conf, logger=logger)
+        super(RawxDecommissionDispatcher, self).__init__(conf, logger=logger)
         self.service_id = self.conf.get('service_id')
         if not self.service_id:
             raise ValueError('Missing service ID')
@@ -124,7 +125,7 @@ class BlobMoverDispatcher(XcuteDispatcher):
 
         for _, _, chunk_id, _ in chunks_info:
             yield (BlobMover,
-                   ['/'.join(('http:/', self.service_id, chunk_id))],
+                   '/'.join(('http:/', self.service_id, chunk_id)),
                    {'rawx_timeout': self.rawx_timeout,
                     'min_chunk_size': self.min_chunk_size,
                     'max_chunk_size': self.max_chunk_size,
