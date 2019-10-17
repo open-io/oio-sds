@@ -110,7 +110,7 @@ def wrand_choice_index(scores):
     assert False, "Shouldn't get here"
 
 
-def _sort_chunks(raw_chunks, ec_security):
+def _sort_chunks(raw_chunks, ec_security, logger=None):
     """
     Sort a list a chunk objects. In addition to the sort,
     this function adds an "offset" field to each chunk object.
@@ -122,17 +122,24 @@ def _sort_chunks(raw_chunks, ec_security):
     :returns: a `dict` with metachunk positions as keys,
         and `list` of chunk objects as values.
     """
+    nums_by_position = dict()
     chunks = dict()
     for chunk in raw_chunks:
         raw_position = chunk["pos"].split(".")
         position = int(raw_position[0])
         if ec_security:
+            num = int(raw_position[1])
             chunk['num'] = int(raw_position[1])
-        if position in chunks:
-            chunks[position].append(chunk)
-        else:
-            chunks[position] = []
-            chunks[position].append(chunk)
+            nums = nums_by_position.setdefault(position, set())
+            if num in nums:
+                if logger:
+                    logger.warning(
+                        'Duplicated position (%s) for %s', chunk['pos'],
+                        chunk['real_url'])
+                continue
+            nums.add(num)
+        chunks_at_position = chunks.setdefault(position, list())
+        chunks_at_position.append(chunk)
 
     # for each position, remove incoherent chunks
     for pos, local_chunks in chunks.iteritems():
