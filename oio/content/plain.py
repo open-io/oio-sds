@@ -25,14 +25,16 @@ from oio.common.exceptions import UnrecoverableContent
 class PlainContent(Content):
     def fetch(self):
         storage_method = STORAGE_METHODS.load(self.chunk_method)
-        chunks = _sort_chunks(self.chunks.raw(), storage_method.ec)
+        chunks = _sort_chunks(self.chunks.raw(), storage_method.ec,
+                              logger=self.logger)
         stream = fetch_stream(chunks, None, storage_method)
         return stream
 
     def create(self, stream, **kwargs):
         storage_method = STORAGE_METHODS.load(self.chunk_method)
         sysmeta = self._generate_sysmeta()
-        chunks = _sort_chunks(self.chunks.raw(), storage_method.ec)
+        chunks = _sort_chunks(self.chunks.raw(), storage_method.ec,
+                              logger=self.logger)
 
         # TODO deal with headers
         headers = {}
