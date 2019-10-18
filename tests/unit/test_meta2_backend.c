@@ -598,7 +598,7 @@ test_content_check_plain_missing_chunks_reparable(void)
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
 		gchar *missing_chunks = g_strrstr(gmessage->str,
-				"\"missing_chunks\":[2]");
+				"\"missing_chunks\":[\"2\"]");
 		g_assert_nonnull(missing_chunks);
 		g_assert_cmpint(1, ==, nb_missing_chunks);
 		_bean_cleanl2(beans_2cpy);
@@ -611,7 +611,7 @@ test_content_check_plain_missing_chunks_reparable(void)
 				&nb_missing_chunks, _save_message, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
-		missing_chunks = g_strrstr(gmessage->str, "\"missing_chunks\":[1]");
+		missing_chunks = g_strrstr(gmessage->str, "\"missing_chunks\":[\"1\"]");
 		g_assert_nonnull(missing_chunks);
 		g_assert_cmpint(1, ==, nb_missing_chunks);
 
@@ -622,7 +622,7 @@ test_content_check_plain_missing_chunks_reparable(void)
 				&nb_missing_chunks, _save_message, FALSE);
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
-		missing_chunks = g_strrstr(gmessage->str, "\"missing_chunks\":[1,1]");
+		missing_chunks = g_strrstr(gmessage->str, "\"missing_chunks\":[\"1\",\"1\"]");
 		g_assert_nonnull(missing_chunks);
 		g_assert_cmpint(2, ==, nb_missing_chunks);
 		_bean_cleanl2(beans_3cpy);
@@ -700,7 +700,7 @@ test_content_check_plain_first_missing_chunks(void)
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
 		gchar *missing_chunks = g_strrstr(gmessage->str,
-				"\"missing_chunks\":[0]");
+				"\"missing_chunks\":[\"0\"]");
 		g_assert_nonnull(missing_chunks);
 		g_assert_cmpint(1, ==, nb_missing_chunks);
 
@@ -712,7 +712,7 @@ test_content_check_plain_first_missing_chunks(void)
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
 		missing_chunks = g_strrstr(gmessage->str,
-				"\"missing_chunks\":[1,0]");
+				"\"missing_chunks\":[\"1\",\"0\"]");
 		g_assert_nonnull(missing_chunks);
 		g_assert_cmpint(2, ==, nb_missing_chunks);
 
@@ -759,7 +759,7 @@ test_content_check_plain_last_missing_chunks(void)
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
 		gchar *missing_chunks = g_strrstr(gmessage->str,
-				"\"missing_chunks\":[2]");
+				"\"missing_chunks\":[\"2\"]");
 		g_assert_nonnull(missing_chunks);
 		g_assert_cmpint(1, ==, nb_missing_chunks);
 
@@ -771,7 +771,7 @@ test_content_check_plain_last_missing_chunks(void)
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
 		missing_chunks = g_strrstr(gmessage->str,
-				"\"missing_chunks\":[2,1]");
+				"\"missing_chunks\":[\"2\",\"1\"]");
 		g_assert_nonnull(missing_chunks);
 		g_assert_cmpint(2, ==, nb_missing_chunks);
 
@@ -828,7 +828,7 @@ test_content_check_ec_missing_chunks_reparable(void)
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
 		gchar *missing_chunks = g_strrstr(gmessage->str,
-				"\"missing_chunks\":[1.0]");
+				"\"missing_chunks\":[\"1.0\"]");
 		g_assert_nonnull(missing_chunks);
 		g_assert_cmpint(1, ==, nb_missing_chunks);
 
@@ -841,7 +841,7 @@ test_content_check_ec_missing_chunks_reparable(void)
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
 		missing_chunks = g_strrstr(gmessage->str,
-				"\"missing_chunks\":[1.8,1.2,1.0]");
+				"\"missing_chunks\":[\"1.8\",\"1.2\",\"1.0\"]");
 		g_assert_nonnull(missing_chunks);
 		g_assert_cmpint(3, ==, nb_missing_chunks);
 		_bean_cleanl2(beans_ec);
@@ -905,7 +905,7 @@ test_content_check_ec_first_missing_chunks(void)
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
 		gchar *missing_chunks = g_strrstr(gmessage->str,
-				"\"missing_chunks\":[0.0]");
+				"\"missing_chunks\":[\"0.0\"]");
 		g_assert_nonnull(missing_chunks);
 		g_assert_cmpint(1, ==, nb_missing_chunks);
 
@@ -919,7 +919,7 @@ test_content_check_ec_first_missing_chunks(void)
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
 		missing_chunks = g_strrstr(gmessage->str,
-				"\"missing_chunks\":[1.5,0.5,0.3,0.0]");
+				"\"missing_chunks\":[\"1.5\",\"0.5\",\"0.3\",\"0.0\"]");
 		g_assert_nonnull(missing_chunks);
 		g_assert_cmpint(4, ==, nb_missing_chunks);
 
@@ -966,7 +966,7 @@ test_content_check_ec_last_missing_chunks(void)
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
 		gchar *missing_chunks = g_strrstr(gmessage->str,
-				"\"missing_chunks\":[2.8]");
+				"\"missing_chunks\":[\"2.8\"]");
 		g_assert_nonnull(missing_chunks);
 		g_assert_cmpint(1, ==, nb_missing_chunks);
 
@@ -980,7 +980,7 @@ test_content_check_ec_last_missing_chunks(void)
 		g_assert_error(err, GQ(), CODE_CONTENT_UNCOMPLETE);
 		g_error_free(err);
 		missing_chunks = g_strrstr(gmessage->str,
-				"\"missing_chunks\":[2.8,2.5,2.3,1.5]");
+				"\"missing_chunks\":[\"2.8\",\"2.5\",\"2.3\",\"1.5\"]");
 		g_assert_nonnull(missing_chunks);
 		g_assert_cmpint(4, ==, nb_missing_chunks);
 

@@ -498,11 +498,13 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 		const char *missing = check_chunk_content_fullpath(
 				r->pool, &resource->info->chunk);
 		if (missing != NULL) {
-			return server_create_and_stat_error(
+			e = server_create_and_stat_error(
 					request_get_server_config(r), r->pool,
 					HTTP_BAD_REQUEST, 0,
 					apr_pstrcat(r->pool, "missing or invalid header ", missing,
 							NULL));
+			DAV_ERROR_REQ(r, HTTP_BAD_REQUEST, "%s", e->desc);
+			return e;
 		}
 	}
 
@@ -513,19 +515,24 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 		const char *missing = check_chunk_info(
 				r->pool, &resource->info->chunk);
 		if (missing != NULL) {
-			return server_create_and_stat_error(
+			e = server_create_and_stat_error(
 					request_get_server_config(r), r->pool,
 					HTTP_BAD_REQUEST, 0,
 					apr_pstrcat(r->pool, "missing or invalid header ", missing,
 							NULL));
+			DAV_ERROR_REQ(r, HTTP_BAD_REQUEST, "%s", e->desc);
+			return e;
 		}
 	}
 
 	if (r->method_number == M_POST || r->method_number == M_PUT) {
 		if (resource->info->chunk.chunk_id) {
-			if (0 != apr_strnatcasecmp(resource->info->chunk.chunk_id, resource->info->hex_chunkid))
-				return server_create_and_stat_error(request_get_server_config(r), r->pool,
+			if (apr_strnatcasecmp(resource->info->chunk.chunk_id, resource->info->hex_chunkid)) {
+				e = server_create_and_stat_error(request_get_server_config(r), r->pool,
 						HTTP_BAD_REQUEST, 0, "chunk-id mismatch");
+				DAV_ERROR_REQ(r, HTTP_BAD_REQUEST, "%s", e->desc);
+				return e;
+			}
 		} else {
 			resource->info->chunk.chunk_id = apr_pstrdup(
 					r->pool, resource->info->hex_chunkid);

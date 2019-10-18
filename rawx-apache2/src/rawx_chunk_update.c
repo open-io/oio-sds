@@ -1,7 +1,7 @@
 /*
 OpenIO SDS rawx-apache2
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -238,9 +238,15 @@ __build_chunk_full_path(const dav_resource *resource, char **full_path)
 	const request_rec *r = resource->info->request;
 	dav_rawx_server_conf *conf = request_get_server_config(r);
 
-	if(strlen(r->uri) < 65)
-		return server_create_and_stat_error(request_get_server_config(r), r->pool,
-				HTTP_BAD_REQUEST, 0, apr_pstrcat(r->pool, "Cannot parse request uri ", r->uri, NULL));
+	if (strlen(r->uri) < 65) {
+		dav_error *err = server_create_and_stat_error(
+				request_get_server_config(r), r->pool,
+				HTTP_BAD_REQUEST, 0,
+				apr_pstrcat(r->pool, "Cannot parse request uri ", r->uri, NULL)
+		);
+		DAV_ERROR_RES(resource, HTTP_BAD_REQUEST, "%s", err->desc);
+		return err;
+	}
 	char *p = NULL;
 
 	uint i_p = 1;

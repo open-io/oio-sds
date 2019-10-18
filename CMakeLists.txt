@@ -36,20 +36,20 @@ set(PYTHON python)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-missing-field-initializers")
 
 if (CMAKE_COMPILER_IS_GNUCC)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunused")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-variadic-macros")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wsequence-point")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wredundant-decls")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wshadow")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunused")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-variadic-macros")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wsequence-point")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wredundant-decls")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wshadow")
 
 	# gcc >= 4.2
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wcomment")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wmain")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wparentheses")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wfloat-equal")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunsafe-loop-optimizations")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunused-but-set-parameter")
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunused-but-set-variable")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wcomment")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wmain")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wparentheses")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wfloat-equal")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunsafe-loop-optimizations")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunused-but-set-parameter")
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunused-but-set-variable")
 
 	# gcc >= 4.6
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wmissing-prototypes")
@@ -59,48 +59,48 @@ endif()
 
 if ( ENABLE_CODECOVERAGE )
 
-    if ( NOT DEFINED CODECOV_OUTPUTFILE )
-        set( CODECOV_OUTPUTFILE /tmp/cmake_coverage.output )
-    endif ( NOT DEFINED CODECOV_OUTPUTFILE )
+	if ( NOT DEFINED CODECOV_OUTPUTFILE )
+		set( CODECOV_OUTPUTFILE /tmp/cmake_coverage.output )
+	endif ( NOT DEFINED CODECOV_OUTPUTFILE )
 
-    if ( NOT DEFINED CODECOV_HTMLOUTPUTDIR )
-        set( CODECOV_HTMLOUTPUTDIR coverage_results )
-    endif ( NOT DEFINED CODECOV_HTMLOUTPUTDIR )
+	if ( NOT DEFINED CODECOV_HTMLOUTPUTDIR )
+		set( CODECOV_HTMLOUTPUTDIR coverage_results )
+	endif ( NOT DEFINED CODECOV_HTMLOUTPUTDIR )
 
 
 	set(CODECOV_PATTERN_TO_IGNORE
 		"'${CMAKE_BINARY_DIR}/metautils/asn1c/*.*'"
 		"'metautils/asn1c/*.*'")
 
-    set(PYTHON_COVERAGE_FILE ${CMAKE_BINARY_DIR}/.python_coverage)
-    set(PYTHON coverage run -p --source=${CMAKE_SOURCE_DIR})
+	set(PYTHON_COVERAGE_FILE ${CMAKE_BINARY_DIR}/.python_coverage)
+	set(PYTHON coverage run -p --source=${CMAKE_SOURCE_DIR})
 
-    if ( CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX )
-        find_program( CODECOV_GCOV gcov )
-        find_program( CODECOV_LCOV lcov )
-        find_program( CODECOV_GENHTML genhtml )
-        add_definitions( -fprofile-arcs -ftest-coverage )
-        link_libraries( gcov )
-        set( CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} --coverage )
+	if ( CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX )
+		find_program( CODECOV_GCOV gcov )
+		find_program( CODECOV_LCOV lcov )
+		find_program( CODECOV_GENHTML genhtml )
+		add_definitions( -fprofile-arcs -ftest-coverage )
+		link_libraries( gcov )
+		set( CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} --coverage )
 
-        add_custom_target( coverage_init
-                           ${CODECOV_LCOV} --base-directory ${CMAKE_SOURCE_DIR} --directory ${CMAKE_BINARY_DIR} --output-file ${CODECOV_OUTPUTFILE} --capture --initial
-                           COMMAND coverage erase)
+		add_custom_target( coverage_init
+						   ${CODECOV_LCOV} --base-directory ${CMAKE_SOURCE_DIR} --directory ${CMAKE_BINARY_DIR} --output-file ${CODECOV_OUTPUTFILE} --capture --initial
+						   COMMAND coverage erase)
 
-        add_custom_target( coverage
+		add_custom_target( coverage
 						   ${CODECOV_LCOV} --base-directory ${CMAKE_SOURCE_DIR} --directory ${CMAKE_BINARY_DIR} --no-external --output-file ${CODECOV_OUTPUTFILE} --capture
-                           COMMAND ${CODECOV_LCOV} --output ${CODECOV_OUTPUTFILE} --remove ${CODECOV_OUTPUTFILE} ${CODECOV_PATTERN_TO_IGNORE}
+						   COMMAND ${CODECOV_LCOV} --output ${CODECOV_OUTPUTFILE} --remove ${CODECOV_OUTPUTFILE} ${CODECOV_PATTERN_TO_IGNORE}
 						   COMMAND genhtml --ignore-errors source -o ${CODECOV_HTMLOUTPUTDIR} ${CODECOV_OUTPUTFILE}
-                           COMMAND coverage combine
-                           COMMAND coverage html)
+						   COMMAND coverage combine
+						   COMMAND coverage html)
 
-    endif ( CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX )
+	endif ( CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_GNUCXX )
 endif (ENABLE_CODECOVERAGE )
 
-set(CMAKE_C_FLAGS_DEBUG          "-O0 -fno-inline")
-set(CMAKE_C_FLAGS_RELEASE        "-O2")
+set(CMAKE_C_FLAGS_DEBUG		  "-O0 -fno-inline")
+set(CMAKE_C_FLAGS_RELEASE		"-O2")
 set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -fno-inline")
-set(CMAKE_C_FLAGS_MINSIZEREL     "-Os -s")
+set(CMAKE_C_FLAGS_MINSIZEREL	 "-Os -s")
 
 add_definitions(-D_REENTRANT)
 add_definitions(-D_LARGE_FILES)

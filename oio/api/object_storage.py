@@ -266,7 +266,8 @@ class ObjectStorageApi(object):
                     account, container, obj_meta['name'],
                     version=obj_meta['version'], **kwargs)
                 stg_met = STORAGE_METHODS.load(obj_meta['chunk_method'])
-                chunks_by_pos = _sort_chunks(chunks, stg_met.ec)
+                chunks_by_pos = _sort_chunks(chunks, stg_met.ec,
+                                             logger=self.logger)
                 expected_chunks = len(chunks_by_pos) * stg_met.expected_chunks
                 diff = expected_chunks - len(chunks)
                 if diff > 0:
@@ -475,7 +476,8 @@ class ObjectStorageApi(object):
                     dst_account, dst_container, obj['name'], obj['version'],
                     obj['content'])
                 storage_method = STORAGE_METHODS.load(obj['chunk_method'])
-                chunks_by_pos = _sort_chunks(chunks, storage_method.ec)
+                chunks_by_pos = _sort_chunks(chunks, storage_method.ec,
+                                             logger=self.logger)
                 handler = LinkHandler(
                     fullpath, chunks_by_pos, storage_method,
                     self.blob_client, **kwargs)
@@ -881,7 +883,8 @@ class ObjectStorageApi(object):
             properties=False, **kwargs)
         chunk_method = meta['chunk_method']
         storage_method = STORAGE_METHODS.load(chunk_method)
-        chunks = _sort_chunks(raw_chunks, storage_method.ec)
+        chunks = _sort_chunks(raw_chunks, storage_method.ec,
+                              logger=self.logger)
 
         for pos in sorted(chunks.keys()):
             chunk = chunks[pos][0]
@@ -1041,7 +1044,8 @@ class ObjectStorageApi(object):
         link_meta['mime_type'] = target_meta['mime_type']
         link_meta['properties'] = target_meta['properties']
 
-        chunks_by_pos = _sort_chunks(chunks, handler.storage_method.ec)
+        chunks_by_pos = _sort_chunks(chunks, handler.storage_method.ec,
+                                     logger=self.logger)
         handler._load_chunk_prep(chunks_by_pos)
         try:
             chunks_copies = handler.link()
@@ -1145,7 +1149,8 @@ class ObjectStorageApi(object):
             account, container, obj, version=version, **kwargs)
         chunk_method = meta['chunk_method']
         storage_method = STORAGE_METHODS.load(chunk_method)
-        chunks = _sort_chunks(raw_chunks, storage_method.ec)
+        chunks = _sort_chunks(raw_chunks, storage_method.ec,
+                              logger=self.logger)
         meta['container_id'] = (
             cid_arg or cid_from_name(account, container).upper())
         meta['ns'] = self.namespace
