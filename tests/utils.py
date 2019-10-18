@@ -500,10 +500,15 @@ class BaseTestCase(CommonTestCase):
             wait = False
             for type_ in types:
                 try:
-                    for service in self.conscience.all_services(type_):
+                    all_svcs = self.conscience.all_services(type_)
+                    for service in all_svcs:
                         if int(service['score']) < score_threshold:
                             wait = True
                             break
+                    else:
+                        # No service registered yet, must wait.
+                        if not all_svcs:
+                            wait = True
                 except Exception as err:
                     logging.warn('Could not check service score: %s', err)
                     wait = True
