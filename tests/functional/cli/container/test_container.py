@@ -1,4 +1,4 @@
-# Copyright (C) 2016-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -106,6 +106,7 @@ class ContainerTest(CliTestCase):
         self._test_container_refresh(with_cid=True)
 
     def _test_container_snapshot(self, with_cid=False):
+        self.wait_for_score(('meta2', ))
         # Snapshot should reply the name of the snapshot on success
         opts = self.get_opts([], 'json')
         cid_opt = ''
