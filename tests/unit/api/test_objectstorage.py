@@ -422,7 +422,8 @@ class ObjectStorageTest(unittest.TestCase):
             2: [extend(chunk("EEEE", "2"), {"offset": 64}),
                 extend(chunk("FFFF", "2"), {"offset": 64})]
             }
-        self.assertEqual(chunks, sorted_chunks)
+        self.assertDictEqual(sorted_chunks, chunks)
+
         raw_chunks = [
             chunk("AAAA", "0.0"), chunk("BBBB", "0.1"), chunk("CCCC", "0.2"),
             chunk("DDDD", "1.0"), chunk("EEEE", "1.1"), chunk("FFFF", "1.2"),
@@ -436,7 +437,20 @@ class ObjectStorageTest(unittest.TestCase):
                 extend(chunk("EEEE", "1.1"), {"num": 1, "offset": 32}),
                 extend(chunk("FFFF", "1.2"), {"num": 2, "offset": 32})]
         }
-        self.assertEqual(chunks, sorted_chunks)
+        self.assertDictEqual(sorted_chunks, chunks)
+
+        raw_chunks = [
+            chunk("AAAA", "0.0"), chunk("BBBB", "0.1"), chunk("AAAA", "0.0"),
+            chunk("DDDD", "1.0"), chunk("EEEE", "1.1"), chunk("EEEE", "1.1"),
+        ]
+        chunks = _sort_chunks(raw_chunks, True)
+        sorted_chunks = {
+            0: [extend(chunk("AAAA", "0.0"), {"num": 0, "offset": 0}),
+                extend(chunk("BBBB", "0.1"), {"num": 1, "offset": 0})],
+            1: [extend(chunk("DDDD", "1.0"), {"num": 0, "offset": 32}),
+                extend(chunk("EEEE", "1.1"), {"num": 1, "offset": 32})]
+        }
+        self.assertDictEqual(sorted_chunks, chunks)
 
     def test_container_refresh_conflict(self):
         self.api.account.container_reset = Mock(

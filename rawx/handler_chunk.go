@@ -32,20 +32,8 @@ import (
 	"strings"
 )
 
-const (
-	// Do not attempt a Read if the available space is less than this value
-	uploadBatchSize int = 8 * 1024
-
-	// Size of the buffer allocated for the upload
-	uploadBufferSize int64 = 8 * 1024 * 1024
-)
-
 var (
 	attrValueZLib = []byte{'z', 'l', 'i', 'b'}
-)
-
-const (
-	HeaderNameCheckHash = "X-oio-check-hash"
 )
 
 var (
@@ -114,8 +102,11 @@ func copyReadWriteBuffer(dst io.Writer, src io.Reader, buf []byte) (written int6
 		// Dump the buffer
 		if totalr > 0 {
 			nw, erw := dumpBuffer(dst, buf[:totalr])
-			written += int64(nw)
+			if nw > 0 {
+				written += int64(nw)
+			}
 			if erw != nil {
+				// Only override the mais error if no strong condition occured
 				if er == nil || er == io.EOF {
 					err = erw
 					break
@@ -123,8 +114,10 @@ func copyReadWriteBuffer(dst io.Writer, src io.Reader, buf []byte) (written int6
 			}
 		}
 
+		// Manage the read error.
+		// If err is already set, this is due to a strong condition when writing
 		if er != nil {
-			if er != io.EOF {
+			if err == nil && er != io.EOF {
 				err = er
 			}
 			break
@@ -133,16 +126,22 @@ func copyReadWriteBuffer(dst io.Writer, src io.Reader, buf []byte) (written int6
 	return written, err
 }
 
+func (rr *rawxRequest) checksumRequired() bool {
+	return rr.rawx.checksumMode == checksumAlways || (rr.rawx.checksumMode == checksumSmart && !strings.HasPrefix(rr.chunk.ContentStgPol, "ec/"))
+}
+
 func (rr *rawxRequest) putData(out io.Writer) (uploadInfo, error) {
-	var in io.Reader
+	var in io.Reader = rr.req.Body
 	var h hash.Hash
 
-	// TODO(jfs): Maybe we can toggle the MD5 computation with configuration
-	h = md5.New()
-	in = io.TeeReader(rr.req.Body, h)
+	// Trigger the checksum only if configured so
+	if rr.checksumRequired() {
+		h = md5.New()
+		in = io.TeeReader(rr.req.Body, h)
+	}
 
 	ul := uploadInfo{}
-	buffer := make([]byte, uploadBufferSize, uploadBufferSize)
+	buffer := make([]byte, rr.rawx.bufferSize, rr.rawx.bufferSize)
 	chunkLength, err := copyReadWriteBuffer(out, in, buffer)
 	if err != nil {
 		return ul, err
@@ -172,6 +171,11 @@ func (rr *rawxRequest) uploadChunk() {
 		// Discard request body
 		io.Copy(ioutil.Discard, rr.req.Body)
 		return
+	}
+
+	// In specific cases where the final chunk size is known, it might be useful to prepare a space on disk.
+	if rr.req.ContentLength > 0 {
+		out.Extend(rr.req.ContentLength)
 	}
 
 	// Upload, and maybe manage compression
@@ -403,7 +407,6 @@ func (rr *rawxRequest) removeChunk() {
 	// Load only the fullpath in an attempt to spare syscalls
 	err := rr.chunk.loadFullPath(getter, rr.chunkID)
 	if err != nil {
-		LogError("Failed to retrieve FullPath: %s", err)
 		rr.replyError(err)
 		return
 	}
@@ -411,7 +414,7 @@ func (rr *rawxRequest) removeChunk() {
 	err = rr.rawx.repo.del(rr.chunkID)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			LogError("Failed to remove chunk %s", err)
+			LogWarning("Failed to remove chunk %s", err)
 		}
 		rr.replyError(err)
 	} else {

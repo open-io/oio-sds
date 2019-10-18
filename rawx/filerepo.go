@@ -30,30 +30,24 @@ import (
 )
 
 const (
-	hashWidth    = 3
-	hashDepth    = 1
-	putOpenMode  = 0644
-	putMkdirMode = 0755
-)
-
-const (
-	openFlagsReadOnly  int = syscall.O_RDONLY | syscall.O_NOATIME | syscall.O_CLOEXEC
-	openFlagsWriteOnly int = syscall.O_WRONLY | syscall.O_CREAT | syscall.O_EXCL | syscall.O_NOATIME | syscall.O_CLOEXEC
-	openFlagsSyncDir   int = syscall.O_DIRECTORY | syscall.O_RDWR | syscall.O_NOATIME
-	openFlagsSyncFile  int = syscall.O_RDONLY | syscall.O_NOATIME | syscall.O_CLOEXEC
-	openFlagsLink      int = syscall.O_WRONLY | syscall.O_NOATIME | syscall.O_CLOEXEC
+	openFlagsBase  int = syscall.O_NOATIME | syscall.O_CLOEXEC | syscall.O_NONBLOCK
+	openFlagsROnly     = openFlagsBase | syscall.O_RDONLY
+	openFlagsWOnly     = openFlagsBase | syscall.O_WRONLY
+	openFlagsRW        = openFlagsBase | syscall.O_RDWR
 )
 
 type fileRepository struct {
-	root          string
-	rootFd        int
-	putOpenMode   uint32
-	putMkdirMode  os.FileMode
-	hashWidth     int
-	hashDepth     int
-	syncFile      bool
-	syncDir       bool
-	fallocateFile bool
+	root            string
+	rootFd          int
+	putOpenMode     uint32
+	putMkdirMode    os.FileMode
+	hashWidth       int
+	hashDepth       int
+	syncFile        bool
+	syncDir         bool
+	fallocateFile   bool
+	fadviseUpload   int
+	fadviseDownload int
 }
 
 func (fr *fileRepository) init(root string) error {
@@ -67,11 +61,13 @@ func (fr *fileRepository) init(root string) error {
 	fr.hashDepth = hashDepth
 	fr.putOpenMode = putOpenMode
 	fr.putMkdirMode = putMkdirMode
-	fr.syncFile = false
-	fr.syncDir = true
+	fr.syncFile = configDefaultSyncFile
+	fr.syncDir = configDefaultSyncDir
+	fr.fallocateFile = configDefaultFallocate
+	fr.fadviseUpload = configDefaultFadviseUpload
+	fr.fadviseDownload = configDefaultFadviseDownload
 
-	flags := syscall.O_DIRECTORY | syscall.O_RDONLY | syscall.O_NOATIME | syscall.O_PATH
-	if fr.rootFd, err = syscall.Open(fr.root, flags, 0); err != nil {
+	if fr.rootFd, err = syscall.Open(fr.root, syscall.O_DIRECTORY|syscall.O_PATH|openFlagsROnly, 0); err != nil {
 		return err
 	}
 	return nil
@@ -120,11 +116,25 @@ func (fr *fileRepository) del(name string) error {
 }
 
 func (fr *fileRepository) getRelPath(path string) (fileReader, error) {
-	fd, err := syscall.Openat(fr.rootFd, path, openFlagsReadOnly, 0)
+	fd, err := syscall.Openat(fr.rootFd, path, openFlagsROnly, 0)
 	if err != nil {
 		return nil, err
 	}
-	return &realFileReader{f: os.NewFile(uintptr(fd), path), repo: fr}, nil
+
+	f := &realFileReader{f: os.NewFile(uintptr(fd), path), repo: fr}
+
+	switch fr.fadviseDownload {
+	case configFadviseNone:
+	case configFadviseYes:
+		syscall.Fadvise(fd, 0, f.size(), syscall.FADV_SEQUENTIAL)
+	case configFadviseNocache:
+		syscall.Fadvise(fd, 0, f.size(), syscall.FADV_DONTNEED)
+	case configFadviseCache:
+		syscall.Fadvise(fd, 0, f.size(), syscall.FADV_SEQUENTIAL)
+		syscall.Fadvise(fd, 0, f.size(), syscall.FADV_WILLNEED)
+	}
+
+	return f, nil
 }
 
 func (fr *fileRepository) get(name string) (fileReader, error) {
@@ -134,7 +144,7 @@ func (fr *fileRepository) get(name string) (fileReader, error) {
 
 func (fr *fileRepository) putRelPath(path string) (fileWriter, error) {
 	pathTemp := path + ".pending"
-	fd, err := syscall.Openat(fr.rootFd, pathTemp, openFlagsWriteOnly, fr.putOpenMode)
+	fd, err := syscall.Openat(fr.rootFd, pathTemp, syscall.O_CREAT|syscall.O_EXCL|openFlagsWOnly, fr.putOpenMode)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Lazy dir creation
@@ -155,8 +165,9 @@ func (fr *fileRepository) putRelPath(path string) (fileWriter, error) {
 	}
 
 	return &realFileWriter{
-		fd:        fd,
-		pathFinal: path, pathTemp: pathTemp, repo: fr}, nil
+		f:         os.NewFile(uintptr(fd), pathTemp),
+		pathFinal: path, pathTemp: pathTemp, repo: fr,
+		allocated: 0, written: 0}, nil
 }
 
 func (fr *fileRepository) put(name string) (fileWriter, error) {
@@ -213,7 +224,7 @@ func (fr *fileRepository) link(src, dst string) (linkOperation, error) {
 
 // Synchronize the directory, based on its path
 func (fr *fileRepository) syncRelDir(relPath string) error {
-	fd, err := syscall.Openat(fr.rootFd, relPath, openFlagsSyncDir, 0)
+	fd, err := syscall.Openat(fr.rootFd, relPath, syscall.O_DIRECTORY|syscall.O_PATH|openFlagsROnly, 0)
 	if err == nil {
 		err = syscall.Fdatasync(fd)
 		syscall.Close(fd)
@@ -224,7 +235,7 @@ func (fr *fileRepository) syncRelDir(relPath string) error {
 
 // Synchronize just the file, based on its path
 func (fr *fileRepository) syncRelFile(relPath string) error {
-	fd, err := syscall.Openat(fr.rootFd, relPath, openFlagsSyncFile, 0)
+	fd, err := syscall.Openat(fr.rootFd, relPath, syscall.O_PATH|openFlagsROnly, 0)
 	if err == nil {
 		err = syscall.Fdatasync(fd)
 		syscall.Close(fd)
@@ -262,31 +273,36 @@ func (lo *realLinkOp) rollback() error {
 }
 
 type realFileWriter struct {
-	fd        int
+	f         *os.File
 	pathFinal string
 	pathTemp  string
 	repo      *fileRepository
+
+	allocated int64
+	written   int64
 }
 
-func (fw *realFileWriter) seek(offset int64) error {
-	_, err := syscall.Seek(fw.fd, offset, os.SEEK_SET)
-	return err
+func (fw *realFileWriter) fd() int {
+	return int(fw.f.Fd())
 }
 
 func (fw *realFileWriter) setAttr(key string, value []byte) error {
-	return syscall.Fsetxattr(fw.fd, key, value, 0)
+	return syscall.Fsetxattr(fw.fd(), key, value, 0)
 }
 
 func (fw *realFileWriter) Write(buffer []byte) (int, error) {
-	return syscall.Write(fw.fd, buffer)
+	buflen := int64(len(buffer))
+
+	if fw.written+buflen > fw.allocated {
+		fw.Extend(uploadExtensionSize)
+	}
+
+	fw.written += buflen
+	return fw.f.Write(buffer)
 }
 
 func (fw *realFileWriter) close() {
-	if fw.fd >= 0 {
-		fd := fw.fd
-		fw.fd = -1
-		_ = syscall.Close(fd)
-	}
+	_ = fw.f.Close()
 }
 
 func (fw *realFileWriter) abort() error {
@@ -295,11 +311,32 @@ func (fw *realFileWriter) abort() error {
 }
 
 func (fw *realFileWriter) commit() error {
-	err := fw.syncFile()
+	var err error
+
+	if fw.allocated > fw.written {
+		err = fw.f.Truncate(fw.written)
+	}
+
 	if err == nil {
-		err := syscall.Renameat(fw.repo.rootFd, fw.pathTemp, fw.repo.rootFd, fw.pathFinal)
+		switch fw.repo.fadviseUpload {
+		case configFadviseNone:
+		case configFadviseYes:
+			syscall.Fadvise(fw.fd(), 0, fw.written, syscall.FADV_SEQUENTIAL)
+		case configFadviseNocache:
+			syscall.Fadvise(fw.fd(), 0, fw.written, syscall.FADV_DONTNEED)
+		case configFadviseCache:
+			syscall.Fadvise(fw.fd(), 0, fw.written, syscall.FADV_SEQUENTIAL)
+			syscall.Fadvise(fw.fd(), 0, fw.written, syscall.FADV_WILLNEED)
+		}
+	}
+
+	if err == nil {
+		err = fw.syncFile()
 		if err == nil {
-			_ = fw.syncDir()
+			err := syscall.Renameat(fw.repo.rootFd, fw.pathTemp, fw.repo.rootFd, fw.pathFinal)
+			if err == nil {
+				_ = fw.syncDir()
+			}
 		}
 	}
 
@@ -315,7 +352,7 @@ func (fw *realFileWriter) syncFile() error {
 	if !fw.repo.syncFile {
 		return nil
 	}
-	return syscall.Fdatasync(fw.fd)
+	return syscall.Fdatasync(fw.fd())
 }
 
 func (fw *realFileWriter) syncDir() error {
@@ -326,9 +363,22 @@ func (fw *realFileWriter) syncDir() error {
 	return fw.repo.syncRelDir(dir)
 }
 
+func (fw *realFileWriter) Extend(size int64) {
+	if fw.repo.fallocateFile {
+		err := syscall.Fallocate(fw.fd(), syscall.FALLOC_FL_KEEP_SIZE, fw.written, size)
+		if err == nil {
+			fw.allocated = fw.written + size
+		}
+	}
+}
+
 type realFileReader struct {
 	f    *os.File
 	repo *fileRepository
+}
+
+func (fr *realFileReader) fd() int {
+	return int(fr.f.Fd())
 }
 
 func (fr *realFileReader) size() int64 {
@@ -360,7 +410,7 @@ func (fr *realFileReader) File() *os.File {
 }
 
 func (fr *realFileReader) getAttr(key string, value []byte) (int, error) {
-	return syscall.Fgetxattr(int(fr.f.Fd()), key, value)
+	return syscall.Fgetxattr(fr.fd(), key, value)
 }
 
 func (fr *fileRepository) nameToRelPath(name string) string {

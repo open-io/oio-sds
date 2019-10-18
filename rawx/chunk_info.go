@@ -46,46 +46,6 @@ type chunkInfo struct {
 	OioVersion         string `json:"oio_version,omitempty"`
 }
 
-const OioVersion = "4.2"
-
-const (
-	AttrNameFullPrefix = "user.oio.content.fullpath:"
-)
-
-const (
-	AttrNameContainerID        = "user.grid.content.container"
-	AttrNameContentPath        = "user.grid.content.path"
-	AttrNameContentVersion     = "user.grid.content.version"
-	AttrNameContentID          = "user.grid.content.id"
-	AttrNameContentChunkMethod = "user.grid.content.chunk_method"
-	AttrNameContentStgPol      = "user.grid.content.storage_policy"
-	AttrNameMetachunkChecksum  = "user.grid.metachunk.hash"
-	AttrNameMetachunkSize      = "user.grid.metachunk.size"
-	AttrNameChunkID            = "user.grid.chunk.id"
-	AttrNameChunkPosition      = "user.grid.chunk.position"
-	AttrNameChunkChecksum      = "user.grid.chunk.hash"
-	AttrNameChunkSize          = "user.grid.chunk.size"
-	AttrNameCompression        = "user.grid.compression"
-	AttrNameOioVersion         = "user.grid.oio.version"
-)
-
-const (
-	HeaderNameFullpath           = "X-oio-Chunk-Meta-Full-Path"
-	HeaderNameContainerID        = "X-oio-Chunk-Meta-Container-Id"
-	HeaderNameContentPath        = "X-oio-Chunk-Meta-Content-Path"
-	HeaderNameContentVersion     = "X-oio-Chunk-Meta-Content-Version"
-	HeaderNameContentID          = "X-oio-Chunk-Meta-Content-Id"
-	HeaderNameContentStgPol      = "X-oio-Chunk-Meta-Content-Storage-Policy"
-	HeaderNameContentChunkMethod = "X-oio-Chunk-Meta-Content-Chunk-Method"
-	HeaderNameChunkPosition      = "X-oio-Chunk-Meta-Chunk-Pos"
-	HeaderNameChunkSize          = "X-oio-Chunk-Meta-Chunk-Size"
-	HeaderNameChunkChecksum      = "X-oio-Chunk-Meta-Chunk-Hash"
-	HeaderNameMetachunkSize      = "X-oio-Chunk-Meta-Metachunk-Size"
-	HeaderNameMetachunkChecksum  = "X-oio-Chunk-Meta-Metachunk-Hash"
-	HeaderNameChunkID            = "X-oio-Chunk-Meta-Chunk-Id"
-	HeaderNameXattrVersion       = "X-oio-Chunk-Meta-Oio-Version"
-)
-
 func returnError(err error, message string) error {
 	LogDebug("%s: %s", err, message)
 	return err

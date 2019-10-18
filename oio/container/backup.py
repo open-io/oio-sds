@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -557,9 +557,12 @@ class ContainerRestore(object):
             raise UnprocessableEntity('Header is broken')
 
     def read(self, size):
-        while (len(self.state['buf']) < size and
-                not self.req.stream.is_exhausted):
+        while (len(self.state['buf']) < size and not
+                (hasattr(self.req.stream, 'is_exhausted') and
+                 self.req.stream.is_exhausted)):
             chunk = self.req.stream.read(size - len(self.state['buf']))
+            if not chunk:
+                break
             self.state['consumed'] += len(chunk)
             self.state['buf'] += chunk
         data = self.state['buf'][:size]

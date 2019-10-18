@@ -32,6 +32,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -144,12 +145,59 @@ func main() {
 	chunkrepo.sub.fallocateFile = opts.getBool("fallocate", chunkrepo.sub.fallocateFile)
 
 	rawx := rawxService{
-		ns:       namespace,
-		url:      rawxURL,
-		path:     chunkrepo.sub.root,
-		id:       rawxID,
-		repo:     &chunkrepo,
-		compress: opts.getBool("compress", false),
+		ns:           namespace,
+		url:          rawxURL,
+		path:         chunkrepo.sub.root,
+		id:           rawxID,
+		repo:         &chunkrepo,
+		bufferSize:   1024 * opts.getInt("buffer_size", uploadBufferDefault),
+		checksumMode: checksumAlways,
+		compress:     opts.getBool("compress", false),
+	}
+
+	// Clamp the buffer size to admitted values
+	if rawx.bufferSize > uploadBufferSizeMax {
+		rawx.bufferSize = uploadBufferSizeMax
+	}
+	if rawx.bufferSize < uploadBufferSizeMin {
+		rawx.bufferSize = uploadBufferSizeMin
+	}
+	// In case of a misconfiguration
+	if rawx.bufferSize < uploadBatchSize {
+		rawx.bufferSize = uploadBatchSize
+	}
+
+	// Patch the checksum mode
+	if v, ok := opts["checksum"]; ok {
+		if v == "smart" {
+			rawx.checksumMode = checksumSmart
+		} else if GetBool(v, true) {
+			rawx.checksumMode = checksumAlways
+		} else {
+			rawx.checksumMode = checksumNever
+		}
+	}
+
+	// Patch the fadvise() upon upload
+	if v, ok := opts["fadvise_upload"]; ok {
+		if strings.ToLower(v) == "cache" {
+			chunkrepo.sub.fadviseUpload = configFadviseCache
+		} else if strings.ToLower(v) == "nocache" {
+			chunkrepo.sub.fadviseUpload = configFadviseNocache
+		} else if GetBool(v, false) {
+			chunkrepo.sub.fadviseUpload = configFadviseYes
+		}
+	}
+
+	// Patch the fadvise() upon download
+	if v, ok := opts["fadvise_download"]; ok {
+		if strings.ToLower(v) == "cache" {
+			chunkrepo.sub.fadviseDownload = configFadviseCache
+		} else if strings.ToLower(v) == "nocache" {
+			chunkrepo.sub.fadviseDownload = configFadviseNocache
+		} else if GetBool(v, false) {
+			chunkrepo.sub.fadviseDownload = configFadviseYes
+		}
 	}
 
 	eventAgent := OioGetEventAgent(namespace)
@@ -163,10 +211,10 @@ func main() {
 	}
 	rawx.notifier = notifier
 
-	toReadHeader := opts.getInt("timeout_read_header", 10)
-	toReadRequest := opts.getInt("timeout_read_request", 20)
-	toWrite := opts.getInt("timeout_write_reply", 20)
-	toIdle := opts.getInt("timeout_idle", 30)
+	toReadHeader := opts.getInt("timeout_read_header", timeoutReadHeader)
+	toReadRequest := opts.getInt("timeout_read_request", timeoutReadRequest)
+	toWrite := opts.getInt("timeout_write_reply", timeoutWrite)
+	toIdle := opts.getInt("timeout_idle", timeoutIdle)
 
 	srv := http.Server{
 		Addr:              rawx.url,

@@ -52,8 +52,12 @@ type fileReader interface {
 
 type fileWriter interface {
 	decorable
+
+	// Prepare a placeholder for the file, if the underlying implementation allows it.
+	Extend(size int64)
+
 	Write([]byte) (int, error)
-	seek(int64) error
+
 	commit() error
 	abort() error
 }

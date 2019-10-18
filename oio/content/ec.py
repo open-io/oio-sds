@@ -99,13 +99,15 @@ class ECContent(Content):
                           chunk_id or chunk_pos, spare_url[0])
 
     def fetch(self):
-        chunks = _sort_chunks(self.chunks.raw(), self.storage_method.ec)
+        chunks = _sort_chunks(self.chunks.raw(), self.storage_method.ec,
+                              logger=self.logger)
         stream = fetch_stream_ec(chunks, None, self.storage_method)
         return stream
 
     def create(self, stream, **kwargs):
         sysmeta = self._generate_sysmeta()
-        chunks = _sort_chunks(self.chunks.raw(), self.storage_method.ec)
+        chunks = _sort_chunks(self.chunks.raw(), self.storage_method.ec,
+                              logger=self.logger)
 
         headers = {}
         handler = ECWriteHandler(
