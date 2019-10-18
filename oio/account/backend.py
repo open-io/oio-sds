@@ -15,10 +15,10 @@
 
 
 from time import time
-from urlparse import urlparse
 
 import re
 from six import text_type
+from six.moves.urllib_parse import urlparse
 import redis
 import redis.sentinel
 from werkzeug.exceptions import NotFound, Conflict, BadRequest

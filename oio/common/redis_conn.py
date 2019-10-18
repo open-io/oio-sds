@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,7 +17,6 @@ from time import time, sleep
 import uuid
 import math
 import importlib
-
 from six import string_types
 
 from oio.common.easy_value import true_value

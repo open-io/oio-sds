@@ -14,7 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from datetime import datetime
-from six import PY2, text_type
+import six
 from oio.blob.utils import check_volume_for_service_type
 from oio.common import exceptions as exc
 from oio.common.constants import STRLEN_REFERENCEID
@@ -157,13 +157,11 @@ class Meta2IndexingWorker(object):
 
             container_id = db_id.rsplit(".")[0]
 
-            if PY2:
-                if isinstance(account, text_type):
+            if six.PY2:
+                if isinstance(account, six.text_type):
                     account = account.encode('utf-8')
-                if isinstance(container, text_type):
+                if isinstance(container, six.text_type):
                     container = container.encode('utf-8')
-            # else:
-            #     PY3: since we use a text formatter, we need text, not binary.
             cont_url = "{0}/{1}/{2}".format(self.namespace, account, container)
 
             if not is_peer:

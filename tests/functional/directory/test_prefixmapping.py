@@ -13,8 +13,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import logging
-
 from oio.common.utils import cid_from_name
 from oio.directory.meta0 import Meta0Client, Meta0PrefixMapping
 from tests.utils import BaseTestCase, random_str
@@ -26,7 +24,6 @@ class TestMeta0PrefixMapping(BaseTestCase):
         super(TestMeta0PrefixMapping, self).setUp()
         self.account = "test_prefixmapping"
         self.reference = "prefixmapping-" + random_str(4)
-        self.logger = logging.getLogger('test')
         self.meta0_client = Meta0Client(self.conf)
         self.mapping = Meta0PrefixMapping(self.meta0_client,
                                           logger=self.logger)
