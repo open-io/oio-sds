@@ -15,7 +15,7 @@
 
 
 import random
-from urlparse import urlparse
+from six.moves.urllib_parse import urlparse
 
 from tests.utils import BaseTestCase, random_data, random_str
 from oio.api.object_storage import _sort_chunks

@@ -351,12 +351,12 @@ class Meta0PrefixMapping(MetaMapping):
 
     def load_meta0(self, json_mapping=None, **kwargs):
         """
-        Load the mapping from dictionnary out of the cluster,
+        Load the mapping from dictionary out of the cluster,
         """
         raw_mapping = self.m0.list(**kwargs)
 
         # pylint: disable=no-member
-        for pfx, services_addrs in raw_mapping.iteritems():
+        for pfx, services_addrs in iteritems(raw_mapping):
             base = pfx[:self.digits]
             self._learn(base, services_addrs)
 

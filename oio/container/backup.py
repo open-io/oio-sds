@@ -18,6 +18,7 @@
 from __future__ import print_function
 from six import string_types
 from six.moves import range
+from six.moves.urllib_parse import urlparse
 try:
     import simplejson as json
 except ImportError:
@@ -30,7 +31,6 @@ import os
 import pickle
 from tarfile import TarInfo, REGTYPE, NUL, PAX_FORMAT, BLOCKSIZE, XHDTYPE, \
                     DIRTYPE, AREGTYPE, InvalidHeaderError
-from urlparse import urlparse
 
 from md5py import MD5
 

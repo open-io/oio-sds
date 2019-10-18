@@ -18,8 +18,7 @@
 import string
 from os.path import isfile
 from hashlib import md5
-from urlparse import urlparse
-from six.moves.urllib_parse import unquote
+from six.moves.urllib_parse import unquote, urlparse
 from oio.common.http import headers_from_object_metadata
 from oio.common.http_eventlet import http_connect
 from oio.common.constants import OIO_VERSION, CHUNK_HEADERS
