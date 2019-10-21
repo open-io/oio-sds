@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -247,7 +247,8 @@ class ChunkReader(object):
 
     def __init__(self, chunk_iter, buf_size, headers,
                  connection_timeout=None, read_timeout=None,
-                 align=False, perfdata=None, **_kwargs):
+                 align=False, perfdata=None, resp_by_chunk=None,
+                 **_kwargs):
         """
         :param chunk_iter:
         :param buf_size: size of the read buffer
@@ -270,7 +271,10 @@ class ChunkReader(object):
         self.align = align
         self.connection_timeout = connection_timeout or CONNECTION_TIMEOUT
         self.read_timeout = read_timeout or CHUNK_TIMEOUT
-        self._resp_by_chunk = dict()
+        if resp_by_chunk is not None:
+            self._resp_by_chunk = resp_by_chunk
+        else:
+            self._resp_by_chunk = dict()
         self.perfdata = perfdata
         self.logger = _kwargs.get('logger', LOGGER)
 
