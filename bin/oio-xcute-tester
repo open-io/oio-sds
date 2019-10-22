@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 
 import argparse
+import signal
+import sys
 
 from oio.cli import make_logger_args_parser, get_logger_from_args
 from oio.xcute.tester import TesterJob
@@ -25,4 +27,14 @@ if __name__ == '__main__':
     conf = {'namespace': args.namespace}
     conf['redis_host'] = '127.0.0.1:6379'
 
-    TesterJob(conf, logger=logger).run()
+    job = TesterJob(conf, logger=logger)
+
+    def exit_gracefully(signum, frame):
+        job.exit_gracefully()
+
+    signal.signal(signal.SIGINT, exit_gracefully)
+    signal.signal(signal.SIGTERM, exit_gracefully)
+
+    job.run()
+    if not job.success:
+        sys.exit(1)
