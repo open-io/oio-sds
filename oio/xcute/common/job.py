@@ -38,22 +38,32 @@ class XcuteJob(object):
     Dispatch tasks on the platform.
     """
 
-    DEFAULT_JOB_TYPE = None
+    JOB_TYPE = None
     DEFAULT_WORKER_TUBE = 'oio-xcute'
     DEFAULT_ITEM_PER_SECOND = 30
     DEFAULT_DISPATCHER_TIMEOUT = 300
 
-    def __init__(self, conf, logger=None):
+    def __init__(self, conf, job_info=None, logger=None):
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
         self.running = True
         self.success = True
         self.sending = None
-        self.job_id = uuid()
 
         self.max_items_per_second = int_value(
             self.conf.get('items_per_second', None),
             self.DEFAULT_ITEM_PER_SECOND)
+
+        # Info
+        self.job_id = None
+        self.last_item_sent = None
+        self.processed_items = 0
+        self.errors = 0
+        self.expected_items = None
+        if job_info is None:
+            self.job_id = uuid()
+        else:
+            self._load_job_info(job_info)
 
         # All available beanstalkd
         conscience_client = ConscienceClient(self.conf)
@@ -121,25 +131,45 @@ class XcuteJob(object):
         beanstalkd_reply_tube = self.workers_tube + '.reply.' + self.job_id
         tubes = Beanstalk.from_url(
             'beanstalk://' + beanstalkd_reply_addr).tubes()
-        if beanstalkd_reply_tube in tubes:
-            raise OioException('Beanstalkd %s using tube %s is already used')
+        tube_reply_exists = beanstalkd_reply_tube in tubes
+        if job_info is None:
+            if tube_reply_exists:
+                raise OioException(
+                    'Beanstalkd %s using tube %s is already used'
+                    % (beanstalkd_reply_addr, beanstalkd_reply_tube))
+        else:
+            if not tube_reply_exists:
+                raise OioException(
+                    'Beanstalkd %s using tube %s doesn\'t exist'
+                    % (beanstalkd_reply_addr, beanstalkd_reply_tube))
         self.beanstalkd_reply = BeanstalkdListener(
             beanstalkd_reply_addr, beanstalkd_reply_tube, self.logger)
         self.logger.info(
             'Beanstalkd %s using tube %s is selected for the replies',
             self.beanstalkd_reply.addr, self.beanstalkd_reply.tube)
 
-        # Info
-        self.last_item_sent = None
-        self.processed_items = 0
-        self.errors = 0
-        self.expected_items = None
-
         # Register the job
         self.backend = XcuteBackend(self.conf)
-        self.backend.start_job(self.job_id, job_type=self.DEFAULT_JOB_TYPE,
-                               mtime=time.time())
+        mtime = time.time()
+        if job_info is None:
+            self.backend.start_job(self.job_id, job_type=self.JOB_TYPE,
+                                   mtime=mtime)
+        else:
+            self.backend.resume_job(self.job_id, mtime=mtime)
         self.sending_job_info = True
+
+    def _load_job_info(self, job_info):
+        if job_info['job_type'] != self.JOB_TYPE:
+            raise ValueError('Wrong job type')
+        self.job_id = job_info['job_id']
+        self.last_item_sent = job_info['last_item_sent']
+        self.processed_items = int(job_info['processed_items'])
+        self.errors = int(job_info['errors'])
+        self.expected_items = job_info['expected_items']
+        if self.expected_items == XcuteBackend.NONE_VALUE:
+            self.expected_items = None
+        else:
+            self.expected_items = int(self.expected_items)
 
     def _locate_tube(self, services, tube):
         """
