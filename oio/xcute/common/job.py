@@ -159,6 +159,11 @@ class XcuteJob(object):
                 available.append(bsd)
         return available
 
+    def exit_gracefully(self):
+        self.logger.info('Stop sending and wait for all tasks already sent')
+        self.success = False
+        self.running = False
+
     def _get_tasks_with_args(self):
         raise NotImplementedError()
 
@@ -297,6 +302,7 @@ class XcuteJob(object):
         # Send the last information
         self.sending_job_info = False
         info = self._prepare_job_info()
+        self.success = self.errors > 0
         thread_send_job_info_periodically.join()
         if self.running:
             self.backend.finish_job(self.job_id, **info)
