@@ -13,28 +13,26 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import signal
+import sys
 
-from oio.cli import Lister, ShowOne
-from oio.xcute.common.backend import XcuteBackend
-
-
-conf = dict()
-conf['redis_host'] = '127.0.0.1:6379'
+from oio.cli import Command, Lister, ShowOne
+from oio.xcute.common.manager import XcuteManager
 
 
 class JobCommand(object):
 
-    _backend = None
+    _manager = None
 
     @property
     def logger(self):
         return self.app.client_manager.logger
 
     @property
-    def backend(self):
-        if self._backend is None:
-            self._backend = XcuteBackend(conf)
-        return self._backend
+    def manager(self):
+        if self._manager is None:
+            self._manager = XcuteManager()
+        return self._manager
 
 
 class JobList(JobCommand, Lister):
@@ -45,7 +43,7 @@ class JobList(JobCommand, Lister):
     columns = ('ID', 'Status', 'Type', 'ctime', 'mtime')
 
     def _take_action(self, parsed_args):
-        jobs = self.backend.list_jobs()
+        jobs = self.manager.list_jobs()
         for job in jobs:
             yield (job['job_id'], job['status'], job['job_type'],
                    job['ctime'], job['mtime'])
@@ -72,16 +70,39 @@ class JobShow(JobCommand, ShowOne):
     def take_action(self, parsed_args):
         self.logger.debug('take_action(%s)', parsed_args)
 
-        return zip(*sorted(self.backend.get_job_info(
-            parsed_args.job_id).items()))
+        return zip(*sorted(self.manager.show_job(parsed_args.job_id).items()))
 
 
 class JobPause():
     pass
 
 
-class JobResume():
-    pass
+class JobResume(JobCommand, Command):
+    """
+    Resume the job
+    """
+
+    def get_parser(self, prog_name):
+        parser = super(JobResume, self).get_parser(prog_name)
+        parser.add_argument(
+            'job_id',
+            metavar='<job_id>',
+            help=("Job ID to resume"))
+        return parser
+
+    def take_action(self, parsed_args):
+        self.logger.debug('take_action(%s)', parsed_args)
+
+        job = self.manager.resume_job(parsed_args.job_id)
+
+        def exit_gracefully(signum, frame):
+            job.exit_gracefully()
+
+        signal.signal(signal.SIGINT, exit_gracefully)
+        signal.signal(signal.SIGTERM, exit_gracefully)
+
+        job.run()
+        self.success = job.success
 
 
 class JobDelete(JobCommand, Lister):
@@ -97,14 +118,14 @@ class JobDelete(JobCommand, Lister):
             'job_ids',
             nargs='+',
             metavar='<job_id>',
-            help=("Job ID to show"))
+            help=("Job IDs to delete"))
         return parser
 
     def _take_action(self, parsed_args):
         for job_id in parsed_args.job_ids:
             deleted = True
             try:
-                self.backend.delete_job(job_id)
+                self.manager.delete_job(job_id)
             except Exception as exc:
                 self.logger.error('Failed to deleted job %s: %s',
                                   job_id, exc)
