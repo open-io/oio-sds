@@ -13,21 +13,21 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.xcute.common.action import XcuteAction
-from oio.xcute.common.dispatcher import XcuteDispatcher
+from oio.xcute.common.job import XcuteJob
+from oio.xcute.common.task import XcuteTask
 
 
-class Tester(XcuteAction):
+class Tester(XcuteTask):
 
     def process(self, item, **kwargs):
         self.logger.error('It works (item=%s ; kwargs=%s) !!!',
                           str(item), str(kwargs))
 
 
-class TesterDispatcher(XcuteDispatcher):
+class TesterJob(XcuteJob):
 
-    DEFAULT_TASK_TYPE = 'tester'
+    DEFAULT_JOB_TYPE = 'tester'
 
-    def _get_actions_with_args(self):
+    def _get_tasks_with_args(self):
         for i in range(10):
             yield (Tester, 'myitem-' + str(i), {'coucou': 'hibou', 'hibou': i})

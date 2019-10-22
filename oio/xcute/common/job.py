@@ -33,12 +33,12 @@ def uuid(prev=None):
     return uuid1().hex
 
 
-class XcuteDispatcher(object):
+class XcuteJob(object):
     """
-    Dispatch actions on the platform.
+    Dispatch tasks on the platform.
     """
 
-    DEFAULT_TASK_TYPE = None
+    DEFAULT_JOB_TYPE = None
     DEFAULT_WORKER_TUBE = 'oio-xcute'
     DEFAULT_ITEM_PER_SECOND = 30
     DEFAULT_DISPATCHER_TIMEOUT = 300
@@ -49,7 +49,7 @@ class XcuteDispatcher(object):
         self.running = True
         self.success = True
         self.sending = None
-        self.task_id = uuid()
+        self.job_id = uuid()
 
         self.max_items_per_second = int_value(
             self.conf.get('items_per_second', None),
@@ -118,7 +118,7 @@ class XcuteDispatcher(object):
                     'ERROR when searching for beanstalkd: %s', exc)
         beanstalkd_reply_addr = beanstalkd_reply['addr']
         # If the tube exists, another service must have already used this tube
-        beanstalkd_reply_tube = self.workers_tube + '.reply.' + self.task_id
+        beanstalkd_reply_tube = self.workers_tube + '.reply.' + self.job_id
         tubes = Beanstalk.from_url(
             'beanstalk://' + beanstalkd_reply_addr).tubes()
         if beanstalkd_reply_tube in tubes:
@@ -135,11 +135,11 @@ class XcuteDispatcher(object):
         self.errors = 0
         self.expected_items = None
 
-        # Register the task
+        # Register the job
         self.backend = XcuteBackend(self.conf)
-        self.backend.start_task(self.task_id, task_type=self.DEFAULT_TASK_TYPE,
-                                mtime=time.time())
-        self.sending_task_info = True
+        self.backend.start_job(self.job_id, job_type=self.DEFAULT_JOB_TYPE,
+                               mtime=time.time())
+        self.sending_job_info = True
 
     def _locate_tube(self, services, tube):
         """
@@ -159,30 +159,32 @@ class XcuteDispatcher(object):
                 available.append(bsd)
         return available
 
-    def _get_actions_with_args(self):
+    def _get_tasks_with_args(self):
         raise NotImplementedError()
 
-    def _job_data_from_action(self, action_class, item, kwargs):
-        job = dict()
-        job['task_id'] = self.task_id
-        job['action'] = pickle.dumps(action_class)
-        job['item'] = pickle.dumps(item)
-        job['kwargs'] = kwargs or dict()
-        job['beanstalkd_reply'] = {'addr': self.beanstalkd_reply.addr,
-                                   'tube': self.beanstalkd_reply.tube}
-        return json.dumps(job)
+    def _beanstlkd_job_data_from_task(self, task_class, item, kwargs):
+        beanstlkd_job = dict()
+        beanstlkd_job['job_id'] = self.job_id
+        beanstlkd_job['task'] = pickle.dumps(task_class)
+        beanstlkd_job['item'] = pickle.dumps(item)
+        beanstlkd_job['kwargs'] = kwargs or dict()
+        beanstlkd_job['beanstalkd_reply'] = {
+            'addr': self.beanstalkd_reply.addr,
+            'tube': self.beanstalkd_reply.tube}
+        return json.dumps(beanstlkd_job)
 
-    def _send_action(self, action_with_args, next_worker):
+    def _send_task(self, task_with_args, next_worker):
         """
-        Send the action through a non-full sender.
+        Send the task through a non-full sender.
         """
-        _, item, _ = action_with_args
-        job_data = self._job_data_from_action(*action_with_args)
+        _, item, _ = task_with_args
+        beanstlkd_job_data = self._beanstlkd_job_data_from_task(
+            *task_with_args)
         workers = self.beanstalkd_workers.values()
         nb_workers = len(workers)
         while True:
             for _ in range(nb_workers):
-                success = workers[next_worker].send_job(job_data)
+                success = workers[next_worker].send_job(beanstlkd_job_data)
                 next_worker = (next_worker + 1) % nb_workers
                 if success:
                     self.last_item_sent = item
@@ -190,32 +192,32 @@ class XcuteDispatcher(object):
             self.logger.warn("All beanstalkd workers are full")
             sleep(5)
 
-    def _distribute_actions(self):
+    def _distribute_tasks(self):
         next_worker = 0
         items_run_time = 0
 
         try:
-            actions_with_args = self._get_actions_with_args()
+            tasks_with_args = self._get_tasks_with_args()
             items_run_time = ratelimit(
                 items_run_time, self.max_items_per_second)
-            next_worker = self._send_action(
-                next(actions_with_args), next_worker)
+            next_worker = self._send_task(
+                next(tasks_with_args), next_worker)
             self.sending = True
-            for action_with_args in actions_with_args:
+            for task_with_args in tasks_with_args:
                 items_run_time = ratelimit(items_run_time,
                                            self.max_items_per_second)
-                next_worker = self._send_action(action_with_args, next_worker)
+                next_worker = self._send_task(task_with_args, next_worker)
 
                 if not self.running:
                     break
         except Exception as exc:
             if not isinstance(exc, StopIteration) and self.running:
-                self.logger.error("Failed to distribute actions: %s", exc)
+                self.logger.error("Failed to distribute tasks: %s", exc)
                 self.success = False
         finally:
             self.sending = False
 
-    def _prepare_task_info(self):
+    def _prepare_job_info(self):
         info = dict()
         info['mtime'] = time.time()
         info['last_item_sent'] = self.last_item_sent or XcuteBackend.NONE_VALUE
@@ -223,32 +225,32 @@ class XcuteDispatcher(object):
         info['errors'] = self.errors
         return info
 
-    def _send_task_info_periodically(self):
-        while self.sending_task_info:
+    def _send_job_info_periodically(self):
+        while self.sending_job_info:
             sleep(1)
-            info = self._prepare_task_info()
-            self.backend.update_task(self.task_id, **info)
+            info = self._prepare_job_info()
+            self.backend.update_job(self.job_id, **info)
 
-    def _all_actions_are_processed(self):
+    def _all_tasks_are_processed(self):
         """
-        Tell if all workers have finished to process their actions.
+        Tell if all workers have finished to process their tasks.
         """
         if self.sending:
             return False
 
-        total_actions = 0
+        total_tasks = 0
         for _, worker in self.beanstalkd_workers.iteritems():
-            total_actions += worker.nb_jobs
-        return total_actions <= 0
+            total_tasks += worker.nb_jobs
+        return total_tasks <= 0
 
-    def _decode_reply(self, job_id, job_data, **kwargs):
-        reply_info = json.loads(job_data)
-        if reply_info['task_id'] != self.task_id:
-            raise ExplicitBury('Wrong task ID (%d ; expected=%d)'
-                               % (reply_info['task_id'], self.task_id))
+    def _decode_reply(self, beanstlkd_job_id, beanstlkd_job_data, **kwargs):
+        reply_info = json.loads(beanstlkd_job_data)
+        if reply_info['job_id'] != self.job_id:
+            raise ExplicitBury('Wrong job ID (%d ; expected=%d)'
+                               % (reply_info['job_id'], self.job_id))
         yield reply_info
 
-    def _update_task_info(self, reply_info):
+    def _update_job_info(self, reply_info):
         self.processed_items += 1
 
         exc = pickle.loads(reply_info['exc'])
@@ -257,28 +259,28 @@ class XcuteDispatcher(object):
             self.errors += 1
 
     def _process_reply(self, reply_info):
-        self._update_task_info(reply_info)
+        self._update_job_info(reply_info)
 
         beanstalkd_worker_addr = reply_info['beanstalkd_worker']['addr']
         self.beanstalkd_workers[beanstalkd_worker_addr].job_done()
 
     def run(self):
-        thread_distribute_actions = threading.Thread(
-            target=self._distribute_actions)
-        thread_distribute_actions.start()
+        thread_distribute_tasks = threading.Thread(
+            target=self._distribute_tasks)
+        thread_distribute_tasks.start()
 
         # Wait until the thread is started sending events
         while self.sending is None:
             sleep(0.1)
 
-        self.sending_task_info = True
-        thread_send_task_info_periodically = threading.Thread(
-            target=self._send_task_info_periodically)
-        thread_send_task_info_periodically.start()
+        self.sending_job_info = True
+        thread_send_job_info_periodically = threading.Thread(
+            target=self._send_job_info_periodically)
+        thread_send_job_info_periodically.start()
 
         # Retrieve replies until all events are processed
         try:
-            while not self._all_actions_are_processed():
+            while not self._all_tasks_are_processed():
                 replies = self.beanstalkd_reply.fetch_job(
                     self._decode_reply,
                     timeout=self.DEFAULT_DISPATCHER_TIMEOUT)
@@ -293,10 +295,10 @@ class XcuteDispatcher(object):
             self.success = False
 
         # Send the last information
-        self.sending_task_info = False
-        info = self._prepare_task_info()
-        thread_send_task_info_periodically.join()
+        self.sending_job_info = False
+        info = self._prepare_job_info()
+        thread_send_job_info_periodically.join()
         if self.running:
-            self.backend.finish_task(self.task_id, **info)
+            self.backend.finish_job(self.job_id, **info)
         else:
-            self.backend.pause_task(self.task_id, **info)
+            self.backend.pause_job(self.job_id, **info)
