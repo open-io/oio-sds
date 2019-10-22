@@ -17,6 +17,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
+import signal
+import sys
 
 from oio.cli import make_logger_args_parser, get_logger_from_args
 from oio.xcute.blob_mover import RawxDecommissionDispatcher
@@ -76,4 +78,14 @@ if __name__ == '__main__':
     conf['max_chunk_size'] = args.max_chunk_size
     conf['excluded_rawx'] = args.excluded_rawx
 
-    RawxDecommissionDispatcher(conf, logger=logger).run()
+    job = RawxDecommissionDispatcher(conf, logger=logger)
+
+    def exit_gracefully(signum, frame):
+        job.exit_gracefully()
+
+    signal.signal(signal.SIGINT, exit_gracefully)
+    signal.signal(signal.SIGTERM, exit_gracefully)
+
+    job.run()
+    if not job.success:
+        sys.exit(1)
