@@ -14,8 +14,8 @@
 # License along with this library.
 
 
-class XcuteAction(object):
-    """Serialisable wrapper for an action submitted in the xcute hub."""
+class XcuteTask(object):
+    """Serialisable wrapper for an task submitted in the xcute hub."""
 
     def __init__(self, conf, logger):
         self.conf = conf

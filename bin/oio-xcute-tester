@@ -3,7 +3,7 @@
 import argparse
 
 from oio.cli import make_logger_args_parser, get_logger_from_args
-from oio.xcute.tester import TesterDispatcher
+from oio.xcute.tester import TesterJob
 
 
 def make_arg_parser():
@@ -25,4 +25,4 @@ if __name__ == '__main__':
     conf = {'namespace': args.namespace}
     conf['redis_host'] = '127.0.0.1:6379'
 
-    TesterDispatcher(conf, logger=logger).run()
+    TesterJob(conf, logger=logger).run()
