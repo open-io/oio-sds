@@ -17,6 +17,11 @@ from oio.xcute.common.job import XcuteJob
 from oio.xcute.common.task import XcuteTask
 
 
+ITEMS = list()
+for i in range(1000):
+    ITEMS.append('myitem-' + str(i))
+
+
 class Tester(XcuteTask):
 
     def process(self, item, **kwargs):
@@ -29,5 +34,5 @@ class TesterJob(XcuteJob):
     DEFAULT_JOB_TYPE = 'tester'
 
     def _get_tasks_with_args(self):
-        for i in range(10):
-            yield (Tester, 'myitem-' + str(i), {'coucou': 'hibou', 'hibou': i})
+        for item in ITEMS:
+            yield (Tester, item, {'kwarg': item})
