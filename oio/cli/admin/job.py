@@ -22,7 +22,7 @@ conf = dict()
 conf['redis_host'] = '127.0.0.1:6379'
 
 
-class TaskCommand(object):
+class JobCommand(object):
 
     _backend = None
 
@@ -37,18 +37,18 @@ class TaskCommand(object):
         return self._backend
 
 
-class TaskList(TaskCommand, Lister):
+class JobList(JobCommand, Lister):
     """
-    List all tasks
+    List all jobs
     """
 
     columns = ('ID', 'Status', 'Type', 'ctime', 'mtime')
 
     def _take_action(self, parsed_args):
-        tasks = self.backend.list_tasks()
-        for task in tasks:
-            yield (task['task_id'], task['status'], task['task_type'],
-                   task['ctime'], task['mtime'])
+        jobs = self.backend.list_jobs()
+        for job in jobs:
+            yield (job['job_id'], job['status'], job['job_type'],
+                   job['ctime'], job['mtime'])
 
     def take_action(self, parsed_args):
         self.logger.debug('take_action(%s)', parsed_args)
@@ -56,60 +56,60 @@ class TaskList(TaskCommand, Lister):
         return self.columns, self._take_action(parsed_args)
 
 
-class TaskShow(TaskCommand, ShowOne):
+class JobShow(JobCommand, ShowOne):
     """
-    Get all informations about the task
+    Get all informations about the job
     """
 
     def get_parser(self, prog_name):
-        parser = super(TaskShow, self).get_parser(prog_name)
+        parser = super(JobShow, self).get_parser(prog_name)
         parser.add_argument(
-            'task_id',
-            metavar='<task_id>',
-            help=("Task ID to show"))
+            'job_id',
+            metavar='<job_id>',
+            help=("Job ID to show"))
         return parser
 
     def take_action(self, parsed_args):
         self.logger.debug('take_action(%s)', parsed_args)
 
-        return zip(*sorted(self.backend.get_task_info(
-            parsed_args.task_id).items()))
+        return zip(*sorted(self.backend.get_job_info(
+            parsed_args.job_id).items()))
 
 
-class TaskPause():
+class JobPause():
     pass
 
 
-class TaskResume():
+class JobResume():
     pass
 
 
-class TaskDelete(TaskCommand, Lister):
+class JobDelete(JobCommand, Lister):
     """
-    Delete all informations about the tasks
+    Delete all informations about the jobs
     """
 
     columns = ('ID', 'Deleted')
 
     def get_parser(self, prog_name):
-        parser = super(TaskDelete, self).get_parser(prog_name)
+        parser = super(JobDelete, self).get_parser(prog_name)
         parser.add_argument(
-            'task_ids',
+            'job_ids',
             nargs='+',
-            metavar='<task_id>',
-            help=("Task ID to show"))
+            metavar='<job_id>',
+            help=("Job ID to show"))
         return parser
 
     def _take_action(self, parsed_args):
-        for task_id in parsed_args.task_ids:
+        for job_id in parsed_args.job_ids:
             deleted = True
             try:
-                self.backend.delete_task(task_id)
+                self.backend.delete_job(job_id)
             except Exception as exc:
-                self.logger.error('Failed to deleted task %s: %s',
-                                  task_id, exc)
+                self.logger.error('Failed to deleted job %s: %s',
+                                  job_id, exc)
                 deleted = False
-            yield (task_id, deleted)
+            yield (job_id, deleted)
 
     def take_action(self, parsed_args):
         self.logger.debug('take_action(%s)', parsed_args)
