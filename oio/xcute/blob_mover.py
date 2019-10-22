@@ -89,7 +89,7 @@ class BlobMover(XcuteTask):
 
 class RawxDecommissionJob(XcuteJob):
 
-    DEFAULT_JOB_TYPE = 'rawx-decommission'
+    JOB_TYPE = 'rawx-decommission'
     DEFAULT_RDIR_FETCH_LIMIT = 1000
     DEFAULT_RDIR_TIMEOUT = 60.0
     DEFAULT_RAWX_TIMEOUT = 60.0
@@ -121,7 +121,7 @@ class RawxDecommissionJob(XcuteJob):
     def _get_tasks_with_args(self):
         chunks_info = self.rdir_client.chunk_fetch(
             self.service_id, limit=self.rdir_fetch_limit,
-            timeout=self.rdir_timeout)
+            timeout=self.rdir_timeout, start_after=self.last_item_sent)
 
         for _, _, chunk_id, _ in chunks_info:
             yield (BlobMover,
