@@ -31,8 +31,11 @@ class Tester(XcuteTask):
 
 class TesterJob(XcuteJob):
 
-    DEFAULT_JOB_TYPE = 'tester'
+    JOB_TYPE = 'tester'
 
     def _get_tasks_with_args(self):
-        for item in ITEMS:
+        start_index = 0
+        if self.last_item_sent is not None:
+            start_index = ITEMS.index(self.last_item_sent) + 1
+        for item in ITEMS[start_index:]:
             yield (Tester, item, {'kwarg': item})
