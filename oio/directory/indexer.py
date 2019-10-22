@@ -1,4 +1,4 @@
-# Copyright (C) 2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -156,6 +156,10 @@ class Meta2IndexingWorker(object):
 
             container_id = db_id.rsplit(".")[0]
 
+            if isinstance(account, unicode):
+                account = account.encode('utf-8')
+            if isinstance(container, unicode):
+                container = container.encode('utf-8')
             cont_url = "{0}/{1}/{2}".format(self.namespace, account, container)
 
             if not is_peer:
