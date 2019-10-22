@@ -19,11 +19,11 @@ from oio.common.exceptions import ContentNotFound, OrphanChunk
 from oio.conscience.client import ConscienceClient
 from oio.content.factory import ContentFactory
 from oio.rdir.client import RdirClient
-from oio.xcute.common.action import XcuteAction
-from oio.xcute.common.dispatcher import XcuteDispatcher
+from oio.xcute.common.job import XcuteJob
+from oio.xcute.common.task import XcuteTask
 
 
-class BlobMover(XcuteAction):
+class BlobMover(XcuteTask):
 
     def __init__(self, conf, logger):
         super(BlobMover, self).__init__(conf, logger)
@@ -52,11 +52,11 @@ class BlobMover(XcuteAction):
     def process(self, chunk_url, rawx_timeout=None, min_chunk_size=None,
                 max_chunk_size=None, excluded_rawx=None):
         min_chunk_size = min_chunk_size \
-            or RawxDecommissionDispatcher.DEFAULT_MIN_CHUNK_SIZE
+            or RawxDecommissionJob.DEFAULT_MIN_CHUNK_SIZE
         max_chunk_size = max_chunk_size \
-            or RawxDecommissionDispatcher.DEFAULT_MAX_CHUNK_SIZE
+            or RawxDecommissionJob.DEFAULT_MAX_CHUNK_SIZE
         excluded_rawx = excluded_rawx \
-            or RawxDecommissionDispatcher.DEFAULT_EXCLUDED_RAWX
+            or RawxDecommissionJob.DEFAULT_EXCLUDED_RAWX
 
         fake_excluded_chunks = self._generate_fake_excluded_chunks(
             excluded_rawx)
@@ -87,9 +87,9 @@ class BlobMover(XcuteAction):
         self.logger.info('Moved chunk %s to %s', chunk_url, new_chunk['url'])
 
 
-class RawxDecommissionDispatcher(XcuteDispatcher):
+class RawxDecommissionJob(XcuteJob):
 
-    DEFAULT_TASK_TYPE = 'rawx-decommission'
+    DEFAULT_JOB_TYPE = 'rawx-decommission'
     DEFAULT_RDIR_FETCH_LIMIT = 1000
     DEFAULT_RDIR_TIMEOUT = 60.0
     DEFAULT_RAWX_TIMEOUT = 60.0
@@ -98,7 +98,7 @@ class RawxDecommissionDispatcher(XcuteDispatcher):
     DEFAULT_EXCLUDED_RAWX = list()
 
     def __init__(self, conf, logger=None):
-        super(RawxDecommissionDispatcher, self).__init__(conf, logger=logger)
+        super(RawxDecommissionJob, self).__init__(conf, logger=logger)
         self.service_id = self.conf.get('service_id')
         if not self.service_id:
             raise ValueError('Missing service ID')
@@ -118,7 +118,7 @@ class RawxDecommissionDispatcher(XcuteDispatcher):
             [rawx for rawx in (conf.get('excluded_rawx') or '').split(',')
              if rawx]
 
-    def _get_actions_with_args(self):
+    def _get_tasks_with_args(self):
         chunks_info = self.rdir_client.chunk_fetch(
             self.service_id, limit=self.rdir_fetch_limit,
             timeout=self.rdir_timeout)
