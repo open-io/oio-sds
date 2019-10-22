@@ -116,6 +116,7 @@ class ECChunkDownloadHandler(object):
         self.reqid = reqid
         self.perfdata = perfdata
         self.logger = _kwargs.get('logger', LOGGER)
+        self._resp_by_chunk = dict()
 
     def _get_range_infos(self):
         """
@@ -161,7 +162,8 @@ class ECChunkDownloadHandler(object):
         reader = io.ChunkReader(chunk_iter, storage_method.ec_fragment_size,
                                 headers, self.connection_timeout,
                                 self.read_timeout, perfdata=self.perfdata,
-                                align=True, logger=self.logger)
+                                align=True, logger=self.logger,
+                                resp_by_chunk=self._resp_by_chunk)
         return (reader, reader.get_iter())
 
     def get_stream(self):

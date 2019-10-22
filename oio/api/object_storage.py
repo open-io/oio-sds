@@ -1101,6 +1101,7 @@ class ObjectStorageApi(object):
             + req_end - download_start
         perfdata['data_size'] = size
 
+    @handle_object_not_found
     @patch_kwargs
     @ensure_headers
     @ensure_request_id

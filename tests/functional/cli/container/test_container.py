@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
@@ -16,6 +17,8 @@
 import uuid
 import re
 import tempfile
+
+from oio.event.evob import EventTypes
 from tests.functional.cli import CliTestCase, CommandFailed
 from tests.utils import random_str
 
@@ -26,7 +29,7 @@ class ContainerTest(CliTestCase):
 
     @classmethod
     def setUpClass(cls):
-        opts = cls.get_opts(['Name'])
+        opts = cls.get_format_opts(fields=('Name', ))
         output = cls.openio('container create ' + cls.NAME + opts)
         cls.CID = cls._get_cid_from_name(cls.NAME)
         cls.assertOutput(cls.NAME + '\n', output)
@@ -38,13 +41,13 @@ class ContainerTest(CliTestCase):
 
     @classmethod
     def _get_cid_from_name(self, name):
-        opts = self.get_opts([], 'json')
+        opts = self.get_format_opts('json')
         output = self.openio('container show ' + name + opts)
         data = self.json_loads(output)
         return data['base_name']
 
     def _test_container_show(self, with_cid=False):
-        opts = self.get_opts(['container'])
+        opts = self.get_format_opts(fields=('container', ))
         cid_opt = ''
         name = self.NAME
         if with_cid:
@@ -60,7 +63,7 @@ class ContainerTest(CliTestCase):
         self._test_container_show(with_cid=True)
 
     def _test_container_show_table(self, with_cid=False):
-        opts = self.get_opts([], 'table')
+        opts = self.get_format_opts('table')
         cid_opt = ''
         name = self.NAME
         if with_cid:
@@ -78,9 +81,19 @@ class ContainerTest(CliTestCase):
         self._test_container_show_table(with_cid=True)
 
     def test_container_list(self):
-        opts = self.get_opts(['Name'])
+        opts = self.get_format_opts(fields=('Name', ))
         output = self.openio('container list ' + opts)
         self.assertIn(self.NAME, output)
+
+    def test_unicode_container_list(self):
+        opts = self.get_format_opts(fields=('Name', )) + ' -a ' + self.account
+        cname = u"Intérêts-" + uuid.uuid4().hex
+        self.storage.container_create(self.account, cname)
+        self.wait_for_event('oio-preserved',
+                            fields={'user': cname},
+                            types=(EventTypes.CONTAINER_NEW, ))
+        output = self.openio('container list ' + opts)
+        self.assertIn(cname, output)
 
     def _test_container_refresh(self, with_cid=False):
         cid_opt = ''
@@ -89,7 +102,7 @@ class ContainerTest(CliTestCase):
             cid_opt = '--cid '
             name = self.CID
         self.openio('container refresh ' + cid_opt + name)
-        opts = self.get_opts([], 'json')
+        opts = self.get_format_opts('json')
         output = self.openio('container list ' + opts)
         containers = self.json_loads(output)
         for container in containers:
@@ -108,7 +121,7 @@ class ContainerTest(CliTestCase):
     def _test_container_snapshot(self, with_cid=False):
         self.wait_for_score(('meta2', ))
         # Snapshot should reply the name of the snapshot on success
-        opts = self.get_opts([], 'json')
+        opts = self.get_format_opts('json')
         cid_opt = ''
         name = self.NAME
         if with_cid:
@@ -164,11 +177,11 @@ class ContainerTest(CliTestCase):
         if with_cid:
             cid_opt = '--cid '
             name = self.CID
-        with tempfile.NamedTemporaryFile(delete=False) as f:
-            f.write('test_exists')
-            f.flush()
-            obj = f.name
-            for i in range(10):
+        with tempfile.NamedTemporaryFile(delete=False) as ntf:
+            ntf.write('test_exists')
+            ntf.flush()
+            obj = ntf.name
+            for _ in range(10):
                 obj_name = random_str(16)
                 self.openio('object create ' + self.NAME
                             + ' ' + obj + ' --name ' + obj_name)
@@ -189,11 +202,11 @@ class ContainerTest(CliTestCase):
         if with_cid:
             cid_opt = '--cid '
             name = self.CID
-        with tempfile.NamedTemporaryFile(delete=False) as f:
-            f.write('test_exists')
-            f.flush()
-            obj = f.name
-            for i in range(10):
+        with tempfile.NamedTemporaryFile(delete=False) as ntf:
+            ntf.write('test_exists')
+            ntf.flush()
+            obj = ntf.name
+            for _ in range(10):
                 obj_name = random_str(16)
                 self.openio('object create ' + cid_opt + name
                             + ' ' + obj + ' --name ' + obj_name)

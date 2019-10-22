@@ -174,6 +174,8 @@ def cid_from_name(account, ref):
     """
     hash_ = sha256()
     for v in [account, '\0', ref]:
+        if isinstance(v, unicode):
+            v = v.encode('utf-8')
         hash_.update(v)
     return hash_.hexdigest().upper()
 
