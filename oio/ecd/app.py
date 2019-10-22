@@ -104,9 +104,14 @@ def load_meta_chunk(request, nb_chunks, pos=None):
 
 
 def part_iter_to_bytes_iter(stream):
-    for part in stream:
-        for x in part['iter']:
-            yield x
+    try:
+        for part_info in stream:
+            for dat in part_info['iter']:
+                yield dat
+    finally:
+        # This must be done in a finally block to handle the case
+        # when the reader does not read until the end of the stream.
+        stream.close()
 
 
 def part_backblaze_to_bytes_iter(stream):
