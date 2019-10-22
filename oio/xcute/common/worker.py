@@ -18,7 +18,7 @@ import pickle
 from oio.common.green import sleep
 from oio.common.json import json
 from oio.event.beanstalk import BeanstalkdSender
-from oio.xcute.common.action import XcuteAction
+from oio.xcute.common.task import XcuteTask
 
 
 class XcuteWorker(object):
@@ -31,16 +31,17 @@ class XcuteWorker(object):
         self.conf = conf
         self.logger = logger
 
-    def _reply(self, job, res, exc):
-        reply_dest = job.get('beanstalkd_reply')
+    def _reply(self, beanstalkd_job, res, exc):
+        reply_dest = beanstalkd_job.get('beanstalkd_reply')
         if not reply_dest:
             return
 
-        job['beanstalkd_worker'] = {'addr': self.beanstalkd_worker_addr,
-                                    'tube': self.beanstalkd_worker_tube}
-        job['res'] = pickle.dumps(res)
-        job['exc'] = pickle.dumps(exc)
-        job_data = json.dumps(job)
+        beanstalkd_job['beanstalkd_worker'] = {
+            'addr': self.beanstalkd_worker_addr,
+            'tube': self.beanstalkd_worker_tube}
+        beanstalkd_job['res'] = pickle.dumps(res)
+        beanstalkd_job['exc'] = pickle.dumps(exc)
+        beanstalkd_job_data = json.dumps(beanstalkd_job)
 
         try:
             if self.beanstalkd_reply is None \
@@ -53,35 +54,36 @@ class XcuteWorker(object):
 
             sent = False
             while not sent:
-                sent = self.beanstalkd_reply.send_job(job_data)
+                sent = self.beanstalkd_reply.send_job(beanstalkd_job_data)
                 if not sent:
                     sleep(1.0)
             self.beanstalkd_reply.job_done()
         except Exception as exc:
-            self.logger.warn('Fail to reply %s: %s', job, exc)
+            self.logger.warn('Fail to reply %s: %s', str(beanstalkd_job), exc)
 
-    def process_job(self, job):
+    def process_job(self, beanstalkd_job):
         try:
-            # Decode the job
-            action_class_encoded = job['action']
+            # Decode the beanstakd job
+            task_class_encoded = beanstalkd_job['task']
 
-            action_class = pickle.loads(action_class_encoded)
-            action = action_class(self.conf, self.logger)
+            task_class = pickle.loads(task_class_encoded)
+            task = task_class(self.conf, self.logger)
 
-            if not isinstance(action, XcuteAction):
-                raise ValueError('Unexpected action: %s' % action_class)
+            if not isinstance(task, XcuteTask):
+                raise ValueError('Unexpected task: %s' % task_class)
 
-            action_item = job['item']
-            action_kwargs = job.get('kwargs', dict())
+            task_item = beanstalkd_job['item']
+            task_kwargs = beanstalkd_job.get('kwargs', dict())
 
-            # Execute the action
-            res = action.process(action_item, **action_kwargs)
+            # Execute the task
+            res = task.process(task_item, **task_kwargs)
             exc = None
         except Exception as exc:
             res = None
 
         if exc:
-            self.logger.error('Error to process job %s: %s', str(job), exc)
+            self.logger.error('Error to process job %s: %s',
+                              str(beanstalkd_job), exc)
 
         # Reply
-        self._reply(job, res, exc)
+        self._reply(beanstalkd_job, res, exc)
