@@ -50,11 +50,10 @@ class XcuteJob(object):
         self.success = True
         self.sending = None
 
-        self.max_items_per_second = int_value(
-            self.conf.get('items_per_second', None),
-            self.DEFAULT_ITEM_PER_SECOND)
+        # Prepare backend
+        self.backend = XcuteBackend(self.conf)
 
-        # Info
+        # Job info / config
         self.job_id = None
         self.last_item_sent = None
         self.processed_items = 0
@@ -62,8 +61,19 @@ class XcuteJob(object):
         self.expected_items = None
         if job_info is None:
             self.job_id = uuid()
+            self.job_conf = dict()
+            for key, value in self.conf.items():
+                if not key.startswith('job_'):
+                    continue
+                self.job_conf[key[4:]] = value
         else:
             self._load_job_info(job_info)
+            self.job_conf = self.backend.get_job_config(self.job_id)
+
+        # Speed
+        self.max_items_per_second = int_value(
+            self.job_conf.get('items_per_second', None),
+            self.DEFAULT_ITEM_PER_SECOND)
 
         # All available beanstalkd
         conscience_client = ConscienceClient(self.conf)
@@ -77,7 +87,7 @@ class XcuteJob(object):
             raise OioException('No beanstalkd available')
 
         # Beanstalkd workers
-        self.workers_tube = self.conf.get('worker_tube') \
+        self.workers_tube = self.job_conf.get('worker_tube') \
             or self.DEFAULT_WORKER_TUBE
         self.beanstalkd_workers = dict()
         for beanstalkd in self._locate_tube(all_available_beanstalkd.values(),
@@ -149,11 +159,11 @@ class XcuteJob(object):
             self.beanstalkd_reply.addr, self.beanstalkd_reply.tube)
 
         # Register the job
-        self.backend = XcuteBackend(self.conf)
         mtime = time.time()
         if job_info is None:
-            self.backend.start_job(self.job_id, job_type=self.JOB_TYPE,
-                                   mtime=mtime)
+            self.backend.start_job(
+                self.job_id, conf=self.job_conf, job_type=self.JOB_TYPE,
+                mtime=mtime)
         else:
             self.backend.resume_job(self.job_id, mtime=mtime)
         self.sending_job_info = True
@@ -165,11 +175,7 @@ class XcuteJob(object):
         self.last_item_sent = job_info['last_item_sent']
         self.processed_items = int(job_info['processed_items'])
         self.errors = int(job_info['errors'])
-        self.expected_items = job_info['expected_items']
-        if self.expected_items == XcuteBackend.NONE_VALUE:
-            self.expected_items = None
-        else:
-            self.expected_items = int(self.expected_items)
+        self.expected_items = job_info.get('expected_items')
 
     def _locate_tube(self, services, tube):
         """
@@ -255,7 +261,7 @@ class XcuteJob(object):
     def _prepare_job_info(self):
         info = dict()
         info['mtime'] = time.time()
-        info['last_item_sent'] = self.last_item_sent or XcuteBackend.NONE_VALUE
+        info['last_item_sent'] = self.last_item_sent
         info['processed_items'] = self.processed_items
         info['errors'] = self.errors
         return info

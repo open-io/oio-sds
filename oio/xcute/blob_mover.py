@@ -99,23 +99,23 @@ class RawxDecommissionJob(XcuteJob):
 
     def __init__(self, conf, logger=None):
         super(RawxDecommissionJob, self).__init__(conf, logger=logger)
-        self.service_id = self.conf.get('service_id')
+        self.service_id = self.job_conf.get('service_id')
         if not self.service_id:
             raise ValueError('Missing service ID')
 
         self.rdir_client = RdirClient(self.conf, logger=self.logger)
         self.rdir_fetch_limit = int_value(
-            self.conf.get('rdir_fetch_limit'), self.DEFAULT_RDIR_FETCH_LIMIT)
+            self.job_conf.get('rdir_fetch_limit'), self.DEFAULT_RDIR_FETCH_LIMIT)
         self.rdir_timeout = float_value(
-            conf.get('rdir_timeout'), self.DEFAULT_RDIR_TIMEOUT)
+            self.job_conf.get('rdir_timeout'), self.DEFAULT_RDIR_TIMEOUT)
         self.rawx_timeout = float_value(
-            conf.get('rawx_timeout'), self.DEFAULT_RAWX_TIMEOUT)
+            self.job_conf.get('rawx_timeout'), self.DEFAULT_RAWX_TIMEOUT)
         self.min_chunk_size = int_value(
-            self.conf.get('min_chunk_size'), self.DEFAULT_MIN_CHUNK_SIZE)
+            self.job_conf.get('min_chunk_size'), self.DEFAULT_MIN_CHUNK_SIZE)
         self.max_chunk_size = int_value(
-            self.conf.get('max_chunk_size'), self.DEFAULT_MAX_CHUNK_SIZE)
+            self.job_conf.get('max_chunk_size'), self.DEFAULT_MAX_CHUNK_SIZE)
         self.excluded_rawx = \
-            [rawx for rawx in (conf.get('excluded_rawx') or '').split(',')
+            [rawx for rawx in (self.job_conf.get('excluded_rawx') or '').split(',')
              if rawx]
 
     def _get_tasks_with_args(self):

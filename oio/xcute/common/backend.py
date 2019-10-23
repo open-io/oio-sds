@@ -56,24 +56,22 @@ def handle_missing_update_info(func):
 
 class XcuteBackend(RedisConnection):
 
-    NONE_VALUE = 'n/a'
-
     _lua_update_info = """
-        redis.call('HMSET', 'xcute:info:' .. KEYS[1], unpack(ARGV));
+        redis.call('HMSET', 'xcute:job:info:' .. KEYS[1], unpack(ARGV));
         """
 
     lua_start_job = """
-        local exists = redis.call('EXISTS', 'xcute:info:' .. KEYS[1]);
+        local exists = redis.call('EXISTS', 'xcute:job:info:' .. KEYS[1]);
         if exists == 1 then
             return redis.error_reply('job_exists');
         end;
 
-        redis.call('HMSET', 'xcute:info:' .. KEYS[1], 'status', 'RUN');
-        redis.call('ZADD', 'xcute:all:ids', 0, KEYS[1]);
+        redis.call('HMSET', 'xcute:job:info:' .. KEYS[1], 'status', 'RUN');
+        redis.call('ZADD', 'xcute:job:ids', 0, KEYS[1]);
         """ + _lua_update_info
 
     lua_update_job = """
-        local status = redis.call('HMGET', 'xcute:info:' .. KEYS[1], 'status');
+        local status = redis.call('HMGET', 'xcute:job:info:' .. KEYS[1], 'status');
         if status == nil then
             return redis.error_reply('no_job');
         end;
@@ -83,7 +81,7 @@ class XcuteBackend(RedisConnection):
         """ + _lua_update_info
 
     lua_pause_job = """
-        local status = redis.call('HMGET', 'xcute:info:' .. KEYS[1], 'status');
+        local status = redis.call('HMGET', 'xcute:job:info:' .. KEYS[1], 'status');
         if status == nil then
             return redis.error_reply('no_job');
         end;
@@ -91,11 +89,11 @@ class XcuteBackend(RedisConnection):
             return redis.error_reply('must_be_running');
         end;
 
-        redis.call('HMSET', 'xcute:info:' .. KEYS[1], 'status', 'PAUSE');
+        redis.call('HMSET', 'xcute:job:info:' .. KEYS[1], 'status', 'PAUSE');
         """ + _lua_update_info
 
     lua_resume_job = """
-        local status = redis.call('HMGET', 'xcute:info:' .. KEYS[1], 'status');
+        local status = redis.call('HMGET', 'xcute:job:info:' .. KEYS[1], 'status');
         if status == nil then
             return redis.error_reply('no_job');
         end;
@@ -103,11 +101,11 @@ class XcuteBackend(RedisConnection):
             return redis.error_reply('must_be_paused');
         end;
 
-        redis.call('HMSET', 'xcute:info:' .. KEYS[1], 'status', 'RUN');
+        redis.call('HMSET', 'xcute:job:info:' .. KEYS[1], 'status', 'RUN');
         """
 
     lua_finish_job = """
-        local status = redis.call('HMGET', 'xcute:info:' .. KEYS[1], 'status');
+        local status = redis.call('HMGET', 'xcute:job:info:' .. KEYS[1], 'status');
         if status == nil then
             return redis.error_reply('no_job');
         end;
@@ -115,11 +113,11 @@ class XcuteBackend(RedisConnection):
             return redis.error_reply('must_be_running');
         end;
 
-        redis.call('HMSET', 'xcute:info:' .. KEYS[1], 'status', 'FINISHED');
+        redis.call('HMSET', 'xcute:job:info:' .. KEYS[1], 'status', 'FINISHED');
         """ + _lua_update_info
 
     lua_delete_job = """
-        local status = redis.call('HMGET', 'xcute:info:' .. KEYS[1], 'status');
+        local status = redis.call('HMGET', 'xcute:job:info:' .. KEYS[1], 'status');
         if status == nil then
             return redis.error_reply('no_job');
         end;
@@ -127,9 +125,17 @@ class XcuteBackend(RedisConnection):
             return redis.error_reply('must_be_paused_finished');
         end;
 
-        redis.call('ZREM', 'xcute:all:ids', KEYS[1])
-        redis.call('DEL', 'xcute:info:' .. KEYS[1])
+        redis.call('ZREM', 'xcute:job:ids', KEYS[1]);
+        redis.call('DEL', 'xcute:job:info:' .. KEYS[1]);
+        redis.call('DEL', 'xcute:job:config:' .. KEYS[1]);
         """
+
+    lua_set_config = """
+        redis.call('HMSET', 'xcute:job:config:' .. KEYS[1], unpack(ARGV));
+        """
+
+    lua_get_config = """
+    """
 
     def __init__(self, conf):
         self.conf = conf
@@ -149,12 +155,14 @@ class XcuteBackend(RedisConnection):
             self.lua_finish_job)
         self.script_delete_job = self.register_script(
             self.lua_delete_job)
+        self.script_set_config = self.register_script(
+            self.lua_set_config)
 
     def list_jobs(self):
-        job_ids = self.conn.zrangebylex('xcute:all:ids', '-', '+')
+        job_ids = self.conn.zrangebylex('xcute:job:ids', '-', '+')
         pipeline = self.conn.pipeline(True)
         for job_id in job_ids:
-            pipeline.hgetall('xcute:info:%s' % job_id)
+            pipeline.hgetall('xcute:job:info:%s' % job_id)
         res = pipeline.execute()
 
         jobs = list()
@@ -171,19 +179,33 @@ class XcuteBackend(RedisConnection):
 
     @handle_missing_job_id
     def get_job_info(self, job_id):
-        info = self.conn.hgetall('xcute:info:%s' % job_id)
+        info = self.conn.hgetall('xcute:job:info:%s' % job_id)
         if not info:
             raise NotFound(message='Job %s doest\'nt exist' % job_id)
         info['job_id'] = job_id
+        info['expected_items'] = info.get('expected_items')
+        info['last_item_sent'] = info.get('last_item_sent')
         return info
 
-    def _run_script(self, job_id, script, **info):
+    @handle_missing_job_id
+    def get_job_config(self, job_id):
+        conf = self.conn.hgetall('xcute:job:config:%s' % job_id)
+        if not conf:
+            raise NotFound(message='Job %s doest\'nt exist' % job_id)
+        return conf
+
+    def _run_script(self, job_id, script, client=None, **info):
+        client = client or self.conn
+
         script_args = list()
-        for k, v in info.items():
-            script_args.append(k)
-            script_args.append(v)
+        for key, value in info.items():
+            if value is None:
+                continue
+            script_args.append(key)
+            script_args.append(value)
+
         try:
-            return script(keys=[job_id], args=script_args, client=self.conn)
+            return script(keys=[job_id], args=script_args, client=client)
         except redis.exceptions.ResponseError as exc:
             if str(exc) == 'job_exists':
                 raise Forbidden(
@@ -208,16 +230,29 @@ class XcuteBackend(RedisConnection):
 
     @handle_missing_job_id
     @handle_missing_mtime
-    def start_job(self, job_id, **info):
+    def start_job(self, job_id, conf=None, **info):
+        if conf is None:
+            raise BadRequest(message='Missing configuration')
         if info.get('job_type') is None:
             raise BadRequest(message='Missing job type')
 
         info['ctime'] = info.get('mtime')
-        info['expected_items'] = self.NONE_VALUE
-        info['last_item_sent'] = self.NONE_VALUE
         info['processed_items'] = 0
         info['errors'] = 0
-        self._run_script(job_id, self.script_start_job, **info)
+
+        script_args_conf = list()
+        for key, value in conf.items():
+            if value is None:
+                continue
+            script_args_conf.append(key)
+            script_args_conf.append(value)
+
+        pipeline = self.conn.pipeline()
+        self._run_script(
+            job_id, self.script_start_job, client=pipeline, **info)
+        self.script_set_config(
+            keys=[job_id], args=script_args_conf, client=pipeline)
+        pipeline.execute()
 
     @handle_missing_job_id
     @handle_missing_mtime
