@@ -75,80 +75,42 @@ class XcuteJob(object):
             self.job_conf.get('items_per_second', None),
             self.DEFAULT_ITEM_PER_SECOND)
 
-        # All available beanstalkd
+        # Beanstalkd
         conscience_client = ConscienceClient(self.conf)
-        all_beanstalkd = conscience_client.all_services('beanstalkd')
-        all_available_beanstalkd = dict()
-        for beanstalkd in all_beanstalkd:
-            if beanstalkd['score'] <= 0:
-                continue
-            all_available_beanstalkd[beanstalkd['addr']] = beanstalkd
-        if not all_available_beanstalkd:
-            raise OioException('No beanstalkd available')
-
+        all_available_beanstalkd = self._get_all_available_beanstalkd(
+            conscience_client)
         # Beanstalkd workers
-        self.workers_tube = self.job_conf.get('worker_tube') \
+        beanstalkd_worker_tube = self.job_conf.get('beanstalkd_worker_tube') \
             or self.DEFAULT_WORKER_TUBE
-        self.beanstalkd_workers = dict()
-        for beanstalkd in self._locate_tube(all_available_beanstalkd.values(),
-                                            self.workers_tube):
-            beanstalkd_worker = BeanstalkdSender(
-                beanstalkd['addr'], self.workers_tube, self.logger)
-            self.beanstalkd_workers[beanstalkd['addr']] = beanstalkd_worker
-            self.logger.info(
-                'Beanstalkd %s using tube %s is selected as a worker',
-                beanstalkd_worker.addr, beanstalkd_worker.tube)
-        if not self.beanstalkd_workers:
-            raise OioException('No beanstalkd worker available')
-        nb_workers = len(self.beanstalkd_workers)
-        if self.max_items_per_second > 0:
-            # Max 2 seconds in advance
-            queue_size_per_worker = self.max_items_per_second * 2 / nb_workers
-        else:
-            queue_size_per_worker = 64
-        for _, beanstalkd_worker in self.beanstalkd_workers.iteritems():
-            beanstalkd_worker.low_limit = queue_size_per_worker / 2
-            beanstalkd_worker.high_limit = queue_size_per_worker
-
-        # Beanstalkd reply
-        beanstalkd_reply = dict()
+        self.job_conf['beanstalkd_worker_tube'] = beanstalkd_worker_tube
         try:
-            local_services = conscience_client.local_services()
-            for local_service in local_services:
-                if local_service['type'] != 'beanstalkd':
-                    continue
-                beanstalkd = all_available_beanstalkd.get(
-                    local_service['addr'])
-                if beanstalkd is None:
-                    continue
-                if beanstalkd_reply \
-                        and beanstalkd_reply['score'] >= beanstalkd['score']:
-                    continue
-                beanstalkd_reply = beanstalkd
+            self.beanstalkd_workers = self._get_beanstalkd_workers(
+                conscience_client, all_available_beanstalkd,
+                beanstalkd_worker_tube)
         except Exception as exc:
-            self.logger.warning(
-                'ERROR when searching for beanstalkd locally: %s', exc)
-        if not beanstalkd_reply:
-            self.logger.warn('No beanstalkd available locally')
+            self.logger.error(
+                'ERROR when searching for beanstalkd workers: %s', exc)
+            raise
+        # Beanstalkd reply
+        beanstalkd_reply_tube = self.job_conf.get('beanstalkd_reply_tube') \
+            or beanstalkd_worker_tube + '.job.reply.' + self.job_id
+        self.job_conf['beanstalkd_reply_tube'] = beanstalkd_reply_tube
+        beanstalkd_reply_addr = self.job_conf.get('beanstalkd_reply_addr')
+        if not beanstalkd_reply_addr:
             try:
-                beanstalkd = conscience_client.next_instance('beanstalkd')
-                beanstalkd_reply = all_available_beanstalkd[beanstalkd['addr']]
+                beanstalkd_reply_addr = self._get_beanstalkd_reply_addr(
+                    conscience_client, all_available_beanstalkd)
             except Exception as exc:
-                self.logger.warning(
-                    'ERROR when searching for beanstalkd: %s', exc)
-        beanstalkd_reply_addr = beanstalkd_reply['addr']
-        # If the tube exists, another service must have already used this tube
-        beanstalkd_reply_tube = self.workers_tube + '.reply.' + self.job_id
-        tubes = Beanstalk.from_url(
-            'beanstalk://' + beanstalkd_reply_addr).tubes()
-        tube_reply_exists = beanstalkd_reply_tube in tubes
+                self.logger.error(
+                    'ERROR when searching for beanstalkd reply: %s', exc)
+                raise
+        self.job_conf['beanstalkd_reply_addr'] = beanstalkd_reply_addr
         if job_info is None:
-            if tube_reply_exists:
-                raise OioException(
-                    'Beanstalkd %s using tube %s is already used'
-                    % (beanstalkd_reply_addr, beanstalkd_reply_tube))
-        else:
-            if not tube_reply_exists:
+            # If the tube exists, another service must have
+            # already used this tube
+            tubes = Beanstalk.from_url(
+                'beanstalk://' + beanstalkd_reply_addr).tubes()
+            if beanstalkd_reply_tube not in tubes:
                 raise OioException(
                     'Beanstalkd %s using tube %s doesn\'t exist'
                     % (beanstalkd_reply_addr, beanstalkd_reply_tube))
@@ -177,6 +139,20 @@ class XcuteJob(object):
         self.errors = int(job_info['errors'])
         self.expected_items = job_info.get('expected_items')
 
+    def _get_all_available_beanstalkd(self, conscience_client):
+        """
+        Get all available beanstalkd.
+        """
+        all_beanstalkd = conscience_client.all_services('beanstalkd')
+        all_available_beanstalkd = dict()
+        for beanstalkd in all_beanstalkd:
+            if beanstalkd['score'] <= 0:
+                continue
+            all_available_beanstalkd[beanstalkd['addr']] = beanstalkd
+        if not all_available_beanstalkd:
+            raise OioException('No beanstalkd available')
+        return all_available_beanstalkd
+
     def _locate_tube(self, services, tube):
         """
         Get a list of beanstalkd services hosting the specified tube.
@@ -194,6 +170,46 @@ class XcuteJob(object):
             if tube in tubes:
                 available.append(bsd)
         return available
+
+    def _get_beanstalkd_workers(self, conscience_client,
+                                all_available_beanstalkd,
+                                beanstalkd_worker_tube):
+        beanstalkd_workers = dict()
+        for beanstalkd in self._locate_tube(all_available_beanstalkd.values(),
+                                            beanstalkd_worker_tube):
+            beanstalkd_worker = BeanstalkdSender(
+                beanstalkd['addr'], beanstalkd_worker_tube, self.logger)
+            beanstalkd_workers[beanstalkd['addr']] = beanstalkd_worker
+            self.logger.info(
+                'Beanstalkd %s using tube %s is selected as a worker',
+                beanstalkd_worker.addr, beanstalkd_worker.tube)
+        if not beanstalkd_workers:
+            raise OioException('No beanstalkd worker available')
+        nb_workers = len(beanstalkd_workers)
+        if self.max_items_per_second > 0:
+            # Max 2 seconds in advance
+            queue_size_per_worker = self.max_items_per_second * 2 / nb_workers
+        else:
+            queue_size_per_worker = 64
+        for _, beanstalkd_worker in beanstalkd_workers.iteritems():
+            beanstalkd_worker.low_limit = queue_size_per_worker / 2
+            beanstalkd_worker.high_limit = queue_size_per_worker
+        return beanstalkd_workers
+
+    def _get_beanstalkd_reply_addr(self, conscience_client,
+                                   all_available_beanstalkd):
+        local_services = conscience_client.local_services()
+        for local_service in local_services:
+            if local_service['type'] != 'beanstalkd':
+                continue
+            local_beanstalkd = all_available_beanstalkd.get(
+                local_service['addr'])
+            if local_beanstalkd is None:
+                continue
+            return local_beanstalkd['addr']
+        self.logger.warn('No beanstalkd available locally')
+        beanstalkd = conscience_client.next_instance('beanstalkd')
+        return beanstalkd['addr']
 
     def exit_gracefully(self):
         self.logger.info('Stop sending and wait for all tasks already sent')
