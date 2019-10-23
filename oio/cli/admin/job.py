@@ -70,7 +70,8 @@ class JobShow(JobCommand, ShowOne):
     def take_action(self, parsed_args):
         self.logger.debug('take_action(%s)', parsed_args)
 
-        return zip(*sorted(self.manager.show_job(parsed_args.job_id).items()))
+        return zip(*sorted(
+            self.manager.show_job(parsed_args.job_id).items()))
 
 
 class JobPause():
@@ -136,3 +137,23 @@ class JobDelete(JobCommand, Lister):
         self.logger.debug('take_action(%s)', parsed_args)
 
         return self.columns, self._take_action(parsed_args)
+
+
+class JobGetConfig(JobCommand, ShowOne):
+    """
+    Get configuration of the job
+    """
+
+    def get_parser(self, prog_name):
+        parser = super(JobGetConfig, self).get_parser(prog_name)
+        parser.add_argument(
+            'job_id',
+            metavar='<job_id>',
+            help=("Job ID to use"))
+        return parser
+
+    def take_action(self, parsed_args):
+        self.logger.debug('take_action(%s)', parsed_args)
+
+        return zip(*sorted(
+            self.manager.get_job_config(parsed_args.job_id).items()))
