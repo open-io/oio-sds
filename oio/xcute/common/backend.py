@@ -158,23 +158,37 @@ class XcuteBackend(RedisConnection):
         self.script_set_config = self.register_script(
             self.lua_set_config)
 
-    def list_jobs(self):
-        job_ids = self.conn.zrangebylex('xcute:job:ids', '-', '+')
-        pipeline = self.conn.pipeline(True)
-        for job_id in job_ids:
-            pipeline.hgetall('xcute:job:info:%s' % job_id)
-        res = pipeline.execute()
-
+    def list_jobs(self, marker=None, limit=1000):
         jobs = list()
-        i = 0
-        for job_id in job_ids:
-            if not res[i]:
-                continue
-            info = dict()
-            info['job_id'] = job_id
-            info.update(res[i])
-            jobs.append(info)
-            i += 1
+        while True:
+            limit_ = limit - len(jobs)
+            if limit_ <= 0:
+                break
+            min = '-'
+            if marker:
+                max = '(' + marker
+            else:
+                max = '+'
+
+            job_ids = self.conn.zrevrangebylex(
+                'xcute:job:ids', max, min, 0, limit - len(jobs))
+
+            pipeline = self.conn.pipeline(True)
+            for job_id in job_ids:
+                pipeline.hgetall('xcute:job:info:%s' % job_id)
+            res = pipeline.execute()
+            i = 0
+            for job_id in job_ids:
+                if not res[i]:
+                    continue
+                info = dict()
+                info['job_id'] = job_id
+                info.update(res[i])
+                jobs.append(info)
+                i += 1
+
+            if len(job_ids) < limit_:
+                break
         return jobs
 
     @handle_missing_job_id
