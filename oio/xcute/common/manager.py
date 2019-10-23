@@ -66,3 +66,6 @@ class XcuteManager(object):
 
     def delete_job(self, job_id):
         self.backend.delete_job(job_id)
+
+    def get_job_config(self, job_id):
+        return self.backend.get_job_config(job_id)

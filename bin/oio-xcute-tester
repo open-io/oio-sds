@@ -26,6 +26,7 @@ if __name__ == '__main__':
 
     conf = {'namespace': args.namespace}
     conf['redis_host'] = '127.0.0.1:6379'
+    conf['job_test'] = 'job_config'
 
     job = TesterJob(conf, logger=logger)
 
