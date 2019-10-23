@@ -14,7 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import signal
-import sys
+from datetime import datetime
 
 from oio.cli import Command, Lister, ShowOne
 from oio.xcute.common.manager import XcuteManager
@@ -46,7 +46,8 @@ class JobList(JobCommand, Lister):
         jobs = self.manager.list_jobs()
         for job in jobs:
             yield (job['job_id'], job['status'], job['job_type'],
-                   job['ctime'], job['mtime'])
+                   datetime.utcfromtimestamp(float(job['ctime'])),
+                   datetime.utcfromtimestamp(float(job['mtime'])))
 
     def take_action(self, parsed_args):
         self.logger.debug('take_action(%s)', parsed_args)
@@ -70,8 +71,10 @@ class JobShow(JobCommand, ShowOne):
     def take_action(self, parsed_args):
         self.logger.debug('take_action(%s)', parsed_args)
 
-        return zip(*sorted(
-            self.manager.show_job(parsed_args.job_id).items()))
+        job = self.manager.show_job(parsed_args.job_id)
+        job['ctime'] = datetime.utcfromtimestamp(float(job['ctime']))
+        job['mtime'] = datetime.utcfromtimestamp(float(job['mtime']))
+        return zip(*sorted(job.items()))
 
 
 class JobPause():
