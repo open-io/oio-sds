@@ -17,7 +17,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 set -e
 set -x
-source $HOME/oio/bin/activate
+
+# Not required, Travis tests already run in a virtualenv if language is python.
+#source $HOME/oio/bin/activate
+
 export PATH="$PATH:/tmp/oio/bin"
 export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/tmp/oio/lib"
 

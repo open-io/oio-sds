@@ -3,11 +3,13 @@ dist: bionic
 language: python
 python:
     - "2.7"
+virtualenv:
+    system_site_packages: true
 addons:
   apt:
     sources:
-    - sourceline: 'deb http://mirror.openio.io/pub/repo/openio/sds/18.10/ubuntu/ bionic/'
-      key_url: 'http://mirror.openio.io/pub/repo/openio/APT-GPG-KEY-OPENIO-0'
+    - sourceline: 'deb http://mirror2.openio.io/pub/repo/openio/sds/19.10/ubuntu/ bionic/'
+      key_url: 'http://mirror2.openio.io/pub/repo/openio/APT-GPG-KEY-OPENIO-0'
 # Please keep the following list sorted!
     packages:
     - apache2
@@ -19,7 +21,6 @@ addons:
     - flex
     - gdb
     - lcov
-    - libapache2-mod-wsgi
     - libapreq2-dev
     - libattr1-dev
     - libcurl4-gnutls-dev
@@ -38,7 +39,10 @@ addons:
     - python-pbr
     - python-setuptools
     - python-virtualenv
+    - python-zookeeper
     - python3
+    - python3-coverage
+    - python3-zookeeper
     - redis-server
     - redis-tools
     - sqlite3
@@ -47,11 +51,10 @@ addons:
     - zookeeperd
 services:
   - zookeeper
+before_install:
+  - sudo apt-get install $([ "$TRAVIS_PYTHON_VERSION" == "2.7" ] && echo 'libapache2-mod-wsgi' || echo 'libapache2-mod-wsgi-py3')
 install:
-  - virtualenv $HOME/oio && source $HOME/oio/bin/activate
-  - pip install --upgrade pip setuptools virtualenv tox
-  - pip install --upgrade -r all-requirements.txt -r test-requirements.txt
-  - pip install --upgrade zkpython
+  - pip install --upgrade pip setuptools virtualenv tox -r all-requirements.txt -r test-requirements.txt
   - go get gopkg.in/ini.v1 golang.org/x/sys/unix
   - sudo bash -c "echo '/tmp/core.%p.%E' > /proc/sys/kernel/core_pattern"
   - mkdir /tmp/oio
@@ -86,18 +89,6 @@ jobs:
     - script: ./tools/oio-travis-suites.sh
       env: TEST_SUITE=worm
 
-    - stage: Functional tests (Python 2)
-      script: ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=repli
-    - script: ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=ec,with-service-id
-    - script: ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=3copies,with-service-id
-    - script: ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=single,small-cache,fsync,webhook
-    - script: ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=multi-beanstalk
-
     - stage: Functional tests (Python 3)
       script: ./tools/oio-travis-suites.sh
       env: TEST_SUITE=cli
@@ -117,6 +108,18 @@ jobs:
     - script: ./tools/oio-travis-suites.sh
       env: TEST_SUITE=mover,with-service-id
       python: 3.6
+
+    - stage: Functional tests (Python 2)
+      script: ./tools/oio-travis-suites.sh
+      env: TEST_SUITE=repli
+    - script: ./tools/oio-travis-suites.sh
+      env: TEST_SUITE=ec,with-service-id
+    - script: ./tools/oio-travis-suites.sh
+      env: TEST_SUITE=3copies,with-service-id
+    - script: ./tools/oio-travis-suites.sh
+      env: TEST_SUITE=single,small-cache,fsync,webhook
+    - script: ./tools/oio-travis-suites.sh
+      env: TEST_SUITE=multi-beanstalk
 
 after_success:
   - bash <(curl -s https://codecov.io/bash) -f /tmp/cmake_coverage.output
