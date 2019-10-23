@@ -38,4 +38,4 @@ class TesterJob(XcuteJob):
         if self.last_item_sent is not None:
             start_index = ITEMS.index(self.last_item_sent) + 1
         for item in ITEMS[start_index:]:
-            yield (Tester, item, {'kwarg': item})
+            yield (Tester, item, self.job_conf)
