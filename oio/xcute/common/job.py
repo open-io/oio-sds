@@ -14,7 +14,8 @@
 # License along with this library.
 
 import pickle
-from uuid import uuid1
+import random
+from datetime import datetime
 
 from oio.common.easy_value import int_value
 from oio.common.exceptions import ExplicitBury, OioException, OioTimeout
@@ -27,10 +28,9 @@ from oio.event.beanstalk import Beanstalk, BeanstalkdListener, \
 from oio.xcute.common.backend import XcuteBackend
 
 
-def uuid(prev=None):
-    if prev is not None:
-        return prev
-    return uuid1().hex
+def uuid():
+    return datetime.utcnow().strftime('%Y%m%d%H%M%S%f') \
+        + '-%011x' % random.randrange(16**10)
 
 
 class XcuteJob(object):
@@ -110,7 +110,7 @@ class XcuteJob(object):
             # already used this tube
             tubes = Beanstalk.from_url(
                 'beanstalk://' + beanstalkd_reply_addr).tubes()
-            if beanstalkd_reply_tube not in tubes:
+            if beanstalkd_reply_tube in tubes:
                 raise OioException(
                     'Beanstalkd %s using tube %s doesn\'t exist'
                     % (beanstalkd_reply_addr, beanstalkd_reply_tube))
