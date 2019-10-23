@@ -66,17 +66,17 @@ if __name__ == '__main__':
     logger = get_logger_from_args(args)
 
     conf = dict()
-    # common
     conf['namespace'] = args.namespace
+    # redis
     conf['redis_host'] = '127.0.0.1:6379'
-    conf['items_per_second'] = args.items_per_second
-    # blob mover
-    conf['service_id'] = args.service_id
-    conf['rdir_fetch_limit'] = args.rdir_fetch_limit
-    conf['rdir_timeout'] = args.rdir_timeout
-    conf['min_chunk_size'] = args.min_chunk_size
-    conf['max_chunk_size'] = args.max_chunk_size
-    conf['excluded_rawx'] = args.excluded_rawx
+    # job
+    conf['job_items_per_second'] = args.items_per_second
+    conf['job_service_id'] = args.service_id
+    conf['job_rdir_fetch_limit'] = args.rdir_fetch_limit
+    conf['job_rdir_timeout'] = args.rdir_timeout
+    conf['job_min_chunk_size'] = args.min_chunk_size
+    conf['job_max_chunk_size'] = args.max_chunk_size
+    conf['job_excluded_rawx'] = args.excluded_rawx
 
     job = RawxDecommissionDispatcher(conf, logger=logger)
 
