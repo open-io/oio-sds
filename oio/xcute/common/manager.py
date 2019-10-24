@@ -13,62 +13,158 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import random
+
 from oio.xcute.common.backend import XcuteBackend
-from oio.xcute.blob_mover import RawxDecommissionJob
-from oio.xcute.tester import TesterJob
+from oio.xcute.common.exceptions import UnknownJobTypeException
+from oio.common.green import datetime, time
+from oio.xcute.jobs import JOB_TYPES
 
 
 class XcuteManager(object):
 
-    JOB_TYPES = {
-        RawxDecommissionJob.JOB_TYPE: RawxDecommissionJob,
-        TesterJob.JOB_TYPE: TesterJob
-    }
+    STATUS_WAITING = 'WAITING'
+    STATUS_RUNNING = 'RUNNING'
+    STATUS_PAUSED = 'PAUSED'
+    STATUS_FINISHED = 'FINISHED'
+    STATUS_FAILED = 'FAILED'
 
-    def __init__(self):
-        self.conf = dict()
-        # TODO(adu): Remove this
-        self.conf['redis_host'] = '127.0.0.1:6379'
-        self.conf['namespace'] = 'OPENIO'
+    def __init__(self, conf, logger):
+        self.conf = conf
         self.backend = XcuteBackend(self.conf)
+        self.logger = logger
 
-    def create_job(self, job_type, conf, logger=None):
-        job_class = self.JOB_TYPES.get(job_type)
-        if job_class is None:
-            raise ValueError('Job type unknown')
+    def create_job(self, job_type, job_conf=None):
+        """
+            Create a job (not started)
+        """
 
-        conf_ = self.conf.copy()
-        for key, value in conf:
-            if value is None:
-                continue
-            conf_[key] = value
+        if job_type not in JOB_TYPES:
+            raise UnknownJobTypeException()
 
-        job = job_class(conf_, logger=logger)
-        return job
+        now = time.time()
 
-    def resume_job(self, job_id, logger=None):
-        job_info = self.backend.get_job_info(job_id)
+        job_id = self._uuid()
+        job_conf = job_conf or {}
+        job_info = {
+            'job_type': job_type,
+            'ctime': now,
+            'mtime': now,
+            'status': self.STATUS_WAITING,
+            'sent': 0,
+            'all_sent': 0,
+            'processed': 0,
+            'errors': 0,
+        }
 
-        job_class = self.JOB_TYPES.get(job_info['job_type'])
-        if job_class is None:
-            raise ValueError('Job type unknown')
+        self.backend.create_job(job_id, job_conf, job_info)
 
-        conf_ = self.conf.copy()
+        return dict(id=job_id)
 
-        job = job_class(conf_, job_info=job_info, logger=logger)
-        return job
+    def get_orchestrator_jobs(self, orchestrator_id):
+        """
+            Get the list of jobs managed by a given orchestrator
+        """
 
-    def list_jobs(self):
-        return self.backend.list_jobs()
+        return self.backend.list_orchestrator_jobs(orchestrator_id)
+
+    def get_new_jobs(self, orchestrator_id):
+        """
+            Get waiting jobs until there's none left
+        """
+
+        return iter(lambda: self.backend.pop_job(orchestrator_id), None)
+
+    def start_job(self, job_id, job_conf):
+        """
+            Mark a job as running
+        """
+
+        updates = {
+            'status': self.STATUS_RUNNING,
+            'mtime': time.time(),
+        }
+        self.backend.start_job(job_id, job_conf, updates)
+
+    def pause_job(self, job_id):
+        """
+            Mark a job as paused
+        """
+
+        updates = {
+            'status': self.STATUS_PAUSED,
+            'mtime': time.time(),
+        }
+        self.backend.update_job_info(job_id, updates)
+
+    def fail_job(self, job_id):
+        """
+            Mark a job as failed
+        """
+
+        updates = {
+            'status': self.STATUS_FAILED,
+            'mtime': time.time(),
+        }
+        self.backend.update_job_info(job_id, updates)
+
+    def task_sent(self, job_id, task_id, total=None):
+        """
+            Update a job's sent tasks status
+        """
+
+        updates = {
+            'mtime': time.time(),
+        }
+        if total is not None:
+            updates['total'] = total
+        self.backend.incr_sent(job_id, task_id, updates)
+
+    def all_tasks_sent(self, job_id, nb_sent):
+        """
+            Mark a job as having all its tasks sent
+        """
+
+        updates = {
+            'sent': nb_sent,
+            'all_sent': 1,
+            'mtime': time.time(),
+        }
+        self.backend.update_job_info(job_id, updates)
+
+    def task_processed(self, orchestrator_id, job_id, task_id, task_ok):
+        """
+            Update a job's processed tasks status
+        """
+
+        updates = {
+            'mtime': time.time(),
+        }
+        return self.backend.incr_processed(orchestrator_id, job_id,
+                                           task_id, not task_ok, updates)
+
+    def list_jobs(self, **kwargs):
+        """
+            Get all jobs with their information
+        """
+
+        return self.backend.list_jobs(**kwargs)
 
     def show_job(self, job_id):
+        """
+            Get one job and its information
+        """
+
         return self.backend.get_job_info(job_id)
 
     def delete_job(self, job_id):
+        """
+            Delete a job
+        """
+
         self.backend.delete_job(job_id)
 
-    def get_job_config(self, job_id):
-        return self.backend.get_job_config(job_id)
-
-    def get_locks(self):
-        return self.backend.get_locks()
+    @staticmethod
+    def _uuid():
+        return datetime.utcnow().strftime('%Y%m%d%H%M%S%f') \
+            + '-%011x' % random.randrange(16**10)
