@@ -152,7 +152,7 @@ func main() {
 		repo:         &chunkrepo,
 		bufferSize:   1024 * opts.getInt("buffer_size", uploadBufferDefault),
 		checksumMode: checksumAlways,
-		compress:     opts.getBool("compress", false),
+		compression:  opts["compression"],
 	}
 
 	// Clamp the buffer size to admitted values

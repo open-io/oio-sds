@@ -37,8 +37,15 @@ const (
 	AttrNameChunkPosition      = "user.grid.chunk.position"
 	AttrNameChunkChecksum      = "user.grid.chunk.hash"
 	AttrNameChunkSize          = "user.grid.chunk.size"
-	AttrNameCompression        = "user.grid.compression"
 	AttrNameOioVersion         = "user.grid.oio.version"
+	AttrNameCompression        = "user.grid.compression"
+)
+
+const (
+	compressionOff     = "off"
+	compressionLzw     = "lzw"
+	compressionZlib    = "zlib"
+	compressionDeflate = "deflate"
 )
 
 const (

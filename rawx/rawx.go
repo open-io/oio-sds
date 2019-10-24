@@ -41,7 +41,7 @@ type rawxService struct {
 	notifier     Notifier
 	bufferSize   int
 	checksumMode int
-	compress     bool
+	compression  string
 }
 
 type rawxRequest struct {
