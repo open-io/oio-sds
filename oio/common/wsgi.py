@@ -105,8 +105,8 @@ class WerkzeugApp(object):
     def dispatch_request(self, req):
         adapter = self.url_map.bind_to_environ(req.environ)
         try:
-            endpoint, _ = adapter.match()
-            resp = getattr(self, 'on_' + endpoint)(req)
+            endpoint, params = adapter.match()
+            resp = getattr(self, 'on_' + endpoint)(req, **params)
         except HTTPException as exc:
             resp = exc
         except Exception as exc:

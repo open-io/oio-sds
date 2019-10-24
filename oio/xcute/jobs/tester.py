@@ -13,29 +13,26 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.xcute.common.job import XcuteJob
 from oio.xcute.common.task import XcuteTask
 
 
-ITEMS = list()
-for i in range(1000):
-    ITEMS.append('myitem-' + str(i))
+class TesterFirstTask(XcuteTask):
+
+    def process(self, payload):
+        self.logger.info('First task: %s', payload['msg'])
+        return True
 
 
-class Tester(XcuteTask):
+class TesterSecondTask(XcuteTask):
 
-    def process(self, item, **kwargs):
-        self.logger.error('It works (item=%s ; kwargs=%s) !!!',
-                          str(item), str(kwargs))
+    def process(self, payload):
+        self.logger.info('Second task: %s', payload['msg'])
+        return True
 
 
-class TesterJob(XcuteJob):
-
-    JOB_TYPE = 'tester'
-
-    def _get_tasks_with_args(self):
-        start_index = 0
-        if self.last_item_sent is not None:
-            start_index = ITEMS.index(self.last_item_sent) + 1
-        for item in ITEMS[start_index:]:
-            yield (Tester, item, self.job_conf)
+def tester_job(job_conf, marker=0, **kwargs):
+    for i in range(marker + 1, 5):
+        if i < 2:
+            yield (TesterFirstTask, {'msg': 'coucou-%d' % i}, None)
+        else:
+            yield (TesterSecondTask, {'msg': 'hibou-%d' % i}, 4)
