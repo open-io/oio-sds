@@ -21,5 +21,5 @@ class XcuteTask(object):
         self.conf = conf
         self.logger = logger
 
-    def process(self, item, **kwargs):
+    def process(self, payload, **kwargs):
         raise NotImplementedError()
