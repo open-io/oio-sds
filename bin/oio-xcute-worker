@@ -48,6 +48,5 @@ if __name__ == '__main__':
     beanstalkd = BeanstalkdListener(beanstalkd_addr, beanstalkd_tube, logger)
     worker = XcuteWorker(beanstalkd.addr, beanstalkd.tube, conf, logger)
 
-    jobs = beanstalkd.fetch_jobs(_decode_job)
-    while True:
-        worker.process_job(next(jobs))
+    for job in beanstalkd.fetch_jobs(_decode_job):
+        worker.process_beanstalkd_job(job)

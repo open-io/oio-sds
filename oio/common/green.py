@@ -23,7 +23,7 @@ from datetime import datetime, timedelta
 import eventlet.hubs as eventlet_hubs # noqa
 from eventlet import sleep, patcher, greenthread # noqa
 from eventlet import Queue, Timeout, GreenPile, GreenPool # noqa
-from eventlet.green import threading, socket # noqa
+from eventlet.green import thread, threading, socket # noqa
 from eventlet.green.httplib import HTTPConnection, HTTPResponse, _UNKNOWN # noqa
 from eventlet.event import Event # noqa
 from eventlet.queue import Empty, LifoQueue, LightQueue # noqa
