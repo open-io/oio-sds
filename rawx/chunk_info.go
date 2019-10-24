@@ -44,6 +44,9 @@ type chunkInfo struct {
 	ChunkHash          string `json:"chunk_hash,omitempty"`
 	ChunkSize          string `json:"chunk_size,omitempty"`
 	OioVersion         string `json:"oio_version,omitempty"`
+
+	compression string
+	size        int64
 }
 
 func returnError(err error, message string) error {
@@ -93,6 +96,7 @@ func (chunk *chunkInfo) saveAttr(out decorable) error {
 		{AttrNameContentChunkMethod, &chunk.ContentChunkMethod},
 		{AttrNameContentStgPol, &chunk.ContentStgPol},
 		{AttrNameOioVersion, &chunk.OioVersion},
+		{AttrNameCompression, &chunk.compression},
 	}
 	for _, hs := range detailedAttrs {
 		if err := setAttr(hs.key, *(hs.ptr)); err != nil {
@@ -166,6 +170,7 @@ func (chunk *chunkInfo) loadAttr(inChunk fileReader, chunkID string) error {
 		{AttrNameChunkChecksum, &chunk.ChunkHash},
 		{AttrNameChunkSize, &chunk.ChunkSize},
 		{AttrNameOioVersion, &chunk.OioVersion},
+		{AttrNameCompression, &chunk.compression},
 	}
 
 	contentFullpath, err := getAttr(AttrNameFullPrefix + chunkID)
@@ -209,6 +214,11 @@ func (chunk *chunkInfo) loadAttr(inChunk fileReader, chunkID string) error {
 			return err
 		}
 		*(hs.ptr) = value
+	}
+
+	chunk.size, err = strconv.ParseInt(chunk.ChunkSize, 10, 63)
+	if err != nil {
+		return err
 	}
 
 	return nil

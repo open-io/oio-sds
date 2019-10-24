@@ -17,7 +17,8 @@
 package main
 
 import (
-	"bytes"
+	"compress/flate"
+	"compress/lzw"
 	"compress/zlib"
 	"crypto/md5"
 	"encoding/hex"
@@ -30,10 +31,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-)
-
-var (
-	attrValueZLib = []byte{'z', 'l', 'i', 'b'}
 )
 
 var (
@@ -178,23 +175,40 @@ func (rr *rawxRequest) uploadChunk() {
 		out.Extend(rr.req.ContentLength)
 	}
 
-	// Upload, and maybe manage compression
 	var ul uploadInfo
-	if rr.rawx.compress {
-		z := zlib.NewWriter(out)
+
+	// Maybe intercept the upload with a compression filter
+	var z io.WriteCloser
+	switch rr.rawx.compression {
+	case compressionZlib:
+		z = zlib.NewWriter(out)
+	case compressionDeflate:
+		z, err = flate.NewWriter(out, 1)
+	case compressionLzw:
+		z = lzw.NewWriter(out, lzw.MSB, 8)
+	case "", compressionOff:
+		z = nil
+	default:
+		err = errCompressionNotManaged
+	}
+
+	// Upload, and maybe manage compression
+	if z != nil {
 		ul, err = rr.putData(z)
 		errClose := z.Close()
 		if err == nil {
 			err = errClose
 		}
-	} else {
-		if ul, err = rr.putData(out); err != nil {
+	} else if err == nil {
+		ul, err = rr.putData(out)
+		if err != nil {
 			LogError("Chunk upload error: %s", err)
 		}
 	}
 
 	// If a hash has been sent, it must match the hash computed
 	if err == nil {
+		rr.chunk.compression = rr.rawx.compression
 		if err = rr.chunk.retrieveTrailers(&rr.req.Trailer, &ul); err != nil {
 			LogError("Trailer error: %s", err)
 		}
@@ -254,16 +268,14 @@ func (rr *rawxRequest) copyChunk() {
 }
 
 func (rr *rawxRequest) checkChunk() {
-	in, err := rr.rawx.repo.get(rr.chunkID)
-	if in != nil {
-		defer in.Close()
-	}
+	chunkIn, err := rr.rawx.repo.get(rr.chunkID)
 	if err != nil {
 		rr.replyError(err)
 		return
 	}
+	defer chunkIn.Close()
 
-	err = rr.chunk.loadAttr(in, rr.chunkID)
+	err = rr.chunk.loadAttr(chunkIn, rr.chunkID)
 	if err != nil {
 		LogError("Failed to load xattr: %s", err)
 		rr.replyError(err)
@@ -275,24 +287,36 @@ func (rr *rawxRequest) checkChunk() {
 		if expected_hash == "" {
 			expected_hash = rr.chunk.ChunkHash
 		}
-		checksum, err := in.recomputeHash()
+		expected_hash = strings.ToUpper(expected_hash)
+
+		var filter io.ReadCloser
+		var in *io.LimitedReader
+		in, filter, err = rr.getChunkReader(chunkIn, rr.chunk.size, rangeInfo{})
 		if err != nil {
-			/* how check return code ? */
-			LogError("Fail to compute md5sum: %s", err)
-			rr.replyError(err)
+			rr.replyCode(http.StatusPreconditionFailed)
 			return
 		}
-		if !strings.EqualFold(checksum, expected_hash) {
-			LogError("Md5sum doesn't match: computed:%s, expected:%s",
-				checksum, expected_hash)
-			rr.replyCode(http.StatusPreconditionFailed)
+		if filter != nil {
+			defer filter.Close()
+		}
+
+		h := md5.New()
+		if _, err = io.Copy(h, in); err == nil {
+			actual_hash := strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
+			if expected_hash != actual_hash {
+				rr.replyCode(http.StatusPreconditionFailed)
+				return
+			}
+		}
+		if err != nil {
+			rr.replyError(err)
 			return
 		}
 	}
 
 	headers := rr.rep.Header()
 	rr.chunk.fillHeaders(headers)
-	headers.Set("Content-Length", strconv.FormatUint(uint64(in.size()), 10))
+	headers.Set("Content-Length", strconv.FormatUint(uint64(rr.chunk.size), 10))
 	headers.Set("Accept-Ranges", "bytes")
 
 	rr.replyCode(http.StatusOK)
@@ -313,6 +337,7 @@ func (rr *rawxRequest) getRange(chunkSize int64) (rangeInfo, error) {
 	if offset < 0 || last < 0 || offset > last {
 		return ri, nil
 	}
+	LogWarning("Range chunksize=%v offset=%v last=%v", chunkSize, offset, last)
 	if offset >= chunkSize {
 		return ri, errInvalidRange
 	}
@@ -333,64 +358,92 @@ func (rr *rawxRequest) downloadChunk() {
 	}
 	defer inChunk.Close()
 
-	// Load a possible range in the request
-	// !!!(jfs): we do not manage requests on multiple ranges
-	// TODO(jfs): is a multiple range is encountered, we should follow the norm
-	// that allows us to answer a "200 OK" with the complete content.
-	chunkSize := inChunk.size()
-	rangeInf, err := rr.getRange(chunkSize)
-	if err != nil {
-		rr.replyError(err)
-		return
-	}
-
 	if err = rr.chunk.loadAttr(inChunk, rr.chunkID); err != nil {
 		rr.replyError(err)
 		return
 	}
 
-	// Check if there is some compression
-	in := io.LimitedReader{R: inChunk.File(), N: chunkSize}
+	var rangeInf rangeInfo
+	// A potential decompression filter
+	var filter io.ReadCloser
+	// Actual reader that will be used
+	var in *io.LimitedReader
 
-	buf := make([]byte, 32, 32)
-	if sz, err := inChunk.getAttr(AttrNameCompression, buf); err != nil {
-		// The range is easy to manage with non-compressed chunks
-		if !rangeInf.isVoid() {
-			err = inChunk.seek(rangeInf.offset)
-			in.N = rangeInf.size
-		}
-		err = nil
-	} else {
-		// TODO(jfs): manage the Range offset
-		if bytes.Equal(buf[:sz], attrValueZLib) {
-			//in, err = zlib.NewReader(in)
-			err = errCompressionNotManaged
-		} else {
-			err = errCompressionNotManaged
-		}
+	// Load the range, with the specific case of the compression
+	rangeInf, err = rr.getRange(rr.chunk.size)
+	if err != nil {
+		rr.replyError(err)
+		return
 	}
 
-	headers := rr.rep.Header()
-	rr.chunk.fillHeaders(headers)
+	in, filter, err = rr.getChunkReader(inChunk, rr.chunk.size, rangeInf)
+	if filter != nil {
+		defer filter.Close()
+	}
+	if err != nil {
+		rr.replyError(err)
+		return
+	}
 
 	// Prepare the headers of the reply
+	headers := rr.rep.Header()
+	rr.chunk.fillHeaders(headers)
 	if !rangeInf.isVoid() {
 		headers.Set("Content-Range", fmt.Sprintf("bytes %v-%v/%v",
-			rangeInf.offset, rangeInf.last, chunkSize))
+			rangeInf.offset, rangeInf.last, rr.chunk.size))
 		headers.Set("Content-Length", strconv.FormatUint(uint64(rangeInf.size), 10))
 		rr.replyCode(http.StatusPartialContent)
 	} else {
-		headers.Set("Content-Length", strconv.FormatUint(uint64(chunkSize), 10))
+		headers.Set("Content-Length", strconv.FormatUint(uint64(rr.chunk.size), 10))
 		rr.replyCode(http.StatusOK)
 	}
 
 	// Now transmit the clear data to the client
-	nb, err := io.Copy(rr.rep, &in)
+	nb, err := io.Copy(rr.rep, in)
 	if err == nil {
 		rr.bytesOut = rr.bytesOut + uint64(nb)
 	} else {
 		LogError("Write() error: %s", err)
 	}
+}
+
+func (rr *rawxRequest) getChunkReader(inChunk fileReader, cs int64, ri rangeInfo) (in *io.LimitedReader, filter io.ReadCloser, err error) {
+	// !!!(jfs): we do not manage requests on multiple ranges
+	// TODO(jfs): is a multiple range is encountered, we should follow the norm
+	// that allows us to answer a "200 OK" with the complete content.
+	switch rr.chunk.compression {
+	case compressionZlib:
+		filter, err = zlib.NewReader(inChunk.File())
+	case compressionLzw:
+		filter = lzw.NewReader(inChunk.File(), lzw.MSB, 8)
+	case compressionDeflate:
+		filter = flate.NewReader(inChunk.File())
+	case "", compressionOff:
+		filter = nil
+	default:
+		err = errCompressionNotManaged
+	}
+
+	if err == nil {
+		if filter != nil {
+			// Skip unwanted bytes to match the range
+			if !ri.isVoid() {
+				_, err = io.CopyN(ioutil.Discard, filter, ri.offset)
+				in = &io.LimitedReader{R: filter, N: ri.size}
+			} else {
+				in = &io.LimitedReader{R: filter, N: cs}
+			}
+		} else {
+			// No compression, we can serve the raw file
+			in = &io.LimitedReader{R: inChunk.File(), N: cs}
+			if !ri.isVoid() {
+				err = inChunk.seek(ri.offset)
+				in.N = ri.size
+			}
+		}
+	}
+
+	return in, filter, err
 }
 
 func (rr *rawxRequest) removeChunk() {
