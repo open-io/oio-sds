@@ -43,7 +43,7 @@ class XcuteJob(object):
     DEFAULT_ITEM_PER_SECOND = 30
     DEFAULT_DISPATCHER_TIMEOUT = 300
 
-    def __init__(self, conf, job_info=None, logger=None):
+    def __init__(self, conf, job_info=None, lock=None, logger=None):
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
         self.running = True
@@ -125,7 +125,7 @@ class XcuteJob(object):
         if job_info is None:
             self.backend.start_job(
                 self.job_id, conf=self.job_conf, job_type=self.JOB_TYPE,
-                mtime=mtime)
+                mtime=mtime, lock=lock)
         else:
             self.backend.resume_job(self.job_id, mtime=mtime)
         self.sending_job_info = True

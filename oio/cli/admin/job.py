@@ -40,12 +40,13 @@ class JobList(JobCommand, Lister):
     List all jobs
     """
 
-    columns = ('ID', 'Status', 'Type', 'ctime', 'mtime')
+    columns = ('ID', 'Status', 'Type', 'Lock', 'ctime', 'mtime')
 
     def _take_action(self, parsed_args):
         jobs = self.manager.list_jobs()
         for job in jobs:
             yield (job['job_id'], job['status'], job['job_type'],
+                   job.get('lock', ''),
                    datetime.utcfromtimestamp(float(job['ctime'])),
                    datetime.utcfromtimestamp(float(job['mtime'])))
 
@@ -160,3 +161,20 @@ class JobGetConfig(JobCommand, ShowOne):
 
         return zip(*sorted(
             self.manager.get_job_config(parsed_args.job_id).items()))
+
+
+class JobGetLocks(JobCommand, Lister):
+    """
+    Get all the locks used.
+    """
+
+    columns = ('Key', 'Owner')
+
+    def _take_action(self, parsed_args):
+        for key, owner in self.manager.get_locks().items():
+            yield (key, owner)
+
+    def take_action(self, parsed_args):
+        self.logger.debug('take_action(%s)', parsed_args)
+
+        return self.columns, self._take_action(parsed_args)
