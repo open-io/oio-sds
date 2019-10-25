@@ -56,73 +56,116 @@ def handle_missing_update_info(func):
 
 class XcuteBackend(RedisConnection):
 
+    _lua_errors = {
+        'job_exists': (Forbidden,
+                       'The job already exists'),
+        'no_job': (NotFound,
+                   'The job does\'nt exist'),
+        'lock_exists': (Forbidden,
+                        'The lock already exists'),
+        'must_be_running': (Forbidden,
+                            'The job must be running'),
+        'must_be_paused': (Forbidden,
+                           'The job must be paused'),
+        'must_be_paused_finished': (Forbidden,
+                                    'The job must be paused or finished')
+        }
+
     _lua_update_info = """
         redis.call('HMSET', 'xcute:job:info:' .. KEYS[1], unpack(ARGV));
         """
 
     lua_start_job = """
-        local exists = redis.call('EXISTS', 'xcute:job:info:' .. KEYS[1]);
-        if exists == 1 then
+        local job_exists = redis.call('EXISTS', 'xcute:job:info:' .. KEYS[1]);
+        if job_exists == 1 then
             return redis.error_reply('job_exists');
         end;
 
-        redis.call('HMSET', 'xcute:job:info:' .. KEYS[1], 'status', 'RUN');
+        for i, v in ipairs(ARGV) do
+            if math.mod(i,2) == 1 and v == 'lock' then
+                local lock = ARGV[i+1];
+                local lock_exists = redis.call('HSETNX', 'xcute:locks',
+                                               lock, KEYS[1]);
+                if lock_exists ~= 1 then
+                    return redis.error_reply('lock_exists');
+                end;
+                break;
+            end;
+        end;
+
+        redis.call('HSET', 'xcute:job:info:' .. KEYS[1],
+                   'status', 'RUN');
         redis.call('ZADD', 'xcute:job:ids', 0, KEYS[1]);
         """ + _lua_update_info
 
     lua_update_job = """
-        local status = redis.call('HMGET', 'xcute:job:info:' .. KEYS[1], 'status');
-        if status == nil then
+        local status = redis.call('HGET', 'xcute:job:info:' .. KEYS[1],
+                                  'status');
+        if status == nil or status == false then
             return redis.error_reply('no_job');
         end;
-        if status[1] ~= 'RUN' then
+        if status ~= 'RUN' then
             return redis.error_reply('must_be_running');
         end;
         """ + _lua_update_info
 
     lua_pause_job = """
-        local status = redis.call('HMGET', 'xcute:job:info:' .. KEYS[1], 'status');
-        if status == nil then
+        local status = redis.call('HGET', 'xcute:job:info:' .. KEYS[1],
+                                  'status');
+        if status == nil or status == false then
             return redis.error_reply('no_job');
         end;
-        if status[1] ~= 'RUN' then
+        if status ~= 'RUN' then
             return redis.error_reply('must_be_running');
         end;
 
-        redis.call('HMSET', 'xcute:job:info:' .. KEYS[1], 'status', 'PAUSE');
+        redis.call('HSET', 'xcute:job:info:' .. KEYS[1], 'status', 'PAUSE');
         """ + _lua_update_info
 
     lua_resume_job = """
-        local status = redis.call('HMGET', 'xcute:job:info:' .. KEYS[1], 'status');
-        if status == nil then
+        local status = redis.call('HGET', 'xcute:job:info:' .. KEYS[1],
+                                  'status');
+        if status == nil or status == false then
             return redis.error_reply('no_job');
         end;
-        if status[1] ~= 'PAUSE' then
+        if status ~= 'PAUSE' then
             return redis.error_reply('must_be_paused');
         end;
 
-        redis.call('HMSET', 'xcute:job:info:' .. KEYS[1], 'status', 'RUN');
+        redis.call('HSET', 'xcute:job:info:' .. KEYS[1], 'status', 'RUN');
         """
 
     lua_finish_job = """
-        local status = redis.call('HMGET', 'xcute:job:info:' .. KEYS[1], 'status');
-        if status == nil then
+        local status = redis.call('HGET', 'xcute:job:info:' .. KEYS[1],
+                                  'status');
+        if status == nil or status == false then
             return redis.error_reply('no_job');
         end;
-        if status[1] ~= 'RUN' then
+        if status ~= 'RUN' then
             return redis.error_reply('must_be_running');
         end;
 
-        redis.call('HMSET', 'xcute:job:info:' .. KEYS[1], 'status', 'FINISHED');
+        local lock = redis.call('HGET', 'xcute:job:info:' .. KEYS[1], 'lock');
+        if lock ~= nil and lock ~= false then
+            redis.call('HDEL', 'xcute:locks', lock);
+        end;
+
+        redis.call('HSET', 'xcute:job:info:' .. KEYS[1], 'status', 'FINISHED');
         """ + _lua_update_info
 
     lua_delete_job = """
-        local status = redis.call('HMGET', 'xcute:job:info:' .. KEYS[1], 'status');
-        if status == nil then
+        local status = redis.call('HGET', 'xcute:job:info:' .. KEYS[1],
+                                  'status');
+        if status == nil or status == false then
             return redis.error_reply('no_job');
         end;
-        if status[1] ~= 'PAUSE' and status[1] ~= 'FINISHED' then
+        if status ~= 'PAUSE' and status ~= 'FINISHED' then
             return redis.error_reply('must_be_paused_finished');
+        end;
+
+        local lock = redis.call('HGET', 'xcute:job:info:' .. KEYS[1], 'lock');
+        if lock ~= nil and lock ~= false then
+            redis.call('HDEL', 'xcute:locks', lock);
         end;
 
         redis.call('ZREM', 'xcute:job:ids', KEYS[1]);
@@ -208,6 +251,9 @@ class XcuteBackend(RedisConnection):
             raise NotFound(message='Job %s doest\'nt exist' % job_id)
         return conf
 
+    def get_locks(self):
+        return self.conn.hgetall('xcute:locks')
+
     def _run_script(self, job_id, script, client=None, **info):
         client = client or self.conn
 
@@ -221,26 +267,11 @@ class XcuteBackend(RedisConnection):
         try:
             return script(keys=[job_id], args=script_args, client=client)
         except redis.exceptions.ResponseError as exc:
-            if str(exc) == 'job_exists':
-                raise Forbidden(
-                    message='The job %s already exists' % job_id)
-            elif str(exc) == 'no_job':
-                raise NotFound(
-                    message='The job %s doest\'nt exist' % job_id)
-            elif str(exc) == 'must_be_running':
-                raise Forbidden(
-                    message='The job %s must be running' % job_id)
-            elif str(exc) == 'must_be_paused':
-                raise Forbidden(
-                    message='The job %s must be paused' % job_id)
-            elif str(exc) == 'must_be_paused':
-                raise Forbidden(
-                    message='The job %s must be paused' % job_id)
-            elif str(exc) == 'must_be_paused_finished':
-                raise Forbidden(
-                    message='The job %s must be paused or finished' % job_id)
-            else:
+            error = self._lua_errors.get(str(exc))
+            if error is None:
                 raise
+            error_cls, error_msg = error
+            raise error_cls(message=error_msg)
 
     @handle_missing_job_id
     @handle_missing_mtime
