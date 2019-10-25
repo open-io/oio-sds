@@ -16,6 +16,7 @@ def make_arg_parser():
     parser = argparse.ArgumentParser(description=descr, parents=[log_parser])
 
     parser.add_argument('namespace', help="Namespace")
+    parser.add_argument('--lock', help='Name of the lock')
 
     return parser
 
@@ -28,7 +29,7 @@ if __name__ == '__main__':
     conf['redis_host'] = '127.0.0.1:6379'
     conf['job_test'] = 'job_config'
 
-    job = TesterJob(conf, logger=logger)
+    job = TesterJob(conf, lock=args.lock, logger=logger)
 
     def exit_gracefully(signum, frame):
         job.exit_gracefully()

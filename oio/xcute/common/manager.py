@@ -69,3 +69,6 @@ class XcuteManager(object):
 
     def get_job_config(self, job_id):
         return self.backend.get_job_config(job_id)
+
+    def get_locks(self):
+        return self.backend.get_locks()
