@@ -1,4 +1,4 @@
-# Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,6 +14,7 @@
 # License along with this library.
 
 from functools import wraps
+from oio.common.constants import REQID_HEADER
 from oio.common.utils import request_id, set_deadline_from_read_timeout
 from oio.common.exceptions import NotFound, NoSuchAccount, NoSuchObject, \
     NoSuchContainer, reraise
@@ -32,15 +33,15 @@ def ensure_request_id(func):
     def ensure_request_id_wrapper(*args, **kwargs):
         headers = kwargs.get('headers', dict())
         # Old style request ID
-        if 'X-oio-req-id' not in headers:
+        if REQID_HEADER not in headers:
             if 'reqid' in kwargs:
-                headers['X-oio-req-id'] = kwargs.pop('reqid')
+                headers[REQID_HEADER] = kwargs.pop('reqid')
             else:
-                headers['X-oio-req-id'] = request_id()
+                headers[REQID_HEADER] = request_id()
             kwargs['headers'] = headers
         # New style request ID
         if 'reqid' not in kwargs:
-            kwargs['reqid'] = kwargs['headers']['X-oio-req-id']
+            kwargs['reqid'] = kwargs['headers'][REQID_HEADER]
         return func(*args, **kwargs)
     return ensure_request_id_wrapper
 

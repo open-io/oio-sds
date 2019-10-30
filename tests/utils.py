@@ -29,6 +29,7 @@ from urllib import urlencode
 import yaml
 import testtools
 
+from oio.common.constants import REQID_HEADER
 from oio.common.configuration import load_namespace_conf, set_namespace_options
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.json import json as jsonlib
@@ -116,7 +117,7 @@ def get_config(defaults=None):
 
 class CommonTestCase(testtools.TestCase):
 
-    TEST_HEADERS = {'X-oio-req-id': '7E571D0000000000'}
+    TEST_HEADERS = {REQID_HEADER: '7E571D0000000000'}
 
     def is_running_on_public_ci(self):
         from os import getenv

@@ -20,6 +20,7 @@ from oio.event.filters.base import Filter
 from oio.common.exceptions import OioException
 from oio.api.backblaze import BackblazeDeleteHandler
 from oio.api.backblaze_http import BackblazeUtils
+from oio.common.constants import REQID_HEADER
 from oio.common.http_urllib3 import URLLIB3_POOLMANAGER_KWARGS
 from oio.common.storage_method import STORAGE_METHODS, guess_storage_method
 from oio.common.utils import request_id
@@ -43,7 +44,7 @@ class ContentReaperFilter(Filter):
     def _handle_rawx(self, url, chunks, content_headers,
                      storage_method, reqid):
         cid = url.get('id')
-        headers = {'X-oio-req-id': reqid,
+        headers = {REQID_HEADER: reqid,
                    'Connection': 'close'}
 
         resps = self.blob_client.chunk_delete_many(

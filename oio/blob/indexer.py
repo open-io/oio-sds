@@ -25,7 +25,8 @@ from oio.blob.utils import check_volume, read_chunk_metadata
 from oio.rdir.client import RdirClient
 from oio.common.daemon import Daemon
 from oio.common import exceptions as exc
-from oio.common.constants import STRLEN_CHUNKID, CHUNK_SUFFIX_PENDING
+from oio.common.constants import STRLEN_CHUNKID, CHUNK_SUFFIX_PENDING, \
+    REQID_HEADER
 from oio.common.easy_value import int_value, true_value
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.logger import get_logger
@@ -182,7 +183,7 @@ class BlobIndexer(Daemon):
 
             data = {'mtime': int(time.time())}
             # TODO(FVE): replace with the improved request_id() function
-            headers = {'X-oio-req-id': 'blob-indexer-' + request_id()[:-13]}
+            headers = {REQID_HEADER: 'blob-indexer-' + request_id()[:-13]}
             self.index_client.chunk_push(self.volume_id,
                                          meta['container_id'],
                                          meta['content_id'],
