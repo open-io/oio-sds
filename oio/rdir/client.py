@@ -29,7 +29,7 @@ from oio.directory.client import DirectoryClient
 from oio.common.utils import depaginate, cid_from_name
 from oio.common.green import sleep
 from oio.common.easy_value import true_value
-from oio.common.constants import HEADER_PREFIX
+from oio.common.constants import HEADER_PREFIX, REQID_HEADER
 
 RDIR_ACCT = '_RDIR'
 
@@ -340,7 +340,7 @@ class RdirClient(HttpApi):
             return self._addr_cache[volume_id]
         # Not cached, try a direct lookup
         try:
-            headers = {'X-oio-req-id': reqid or request_id()}
+            headers = {REQID_HEADER: reqid or request_id()}
             resp = self.directory.list(RDIR_ACCT, volume_id,
                                        service_type='rdir',
                                        headers=headers)
@@ -367,7 +367,7 @@ class RdirClient(HttpApi):
         if create:
             params['create'] = '1'
         uri = self._make_uri(action, volume,
-                             reqid=kwargs['headers']['X-oio-req-id'],
+                             reqid=kwargs['headers'][REQID_HEADER],
                              service_type=service_type)
         try:
             resp, body = self._direct_request(method, uri, params=params,

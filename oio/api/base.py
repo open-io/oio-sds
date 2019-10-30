@@ -23,7 +23,7 @@ from oio.common import exceptions
 from oio.common.utils import deadline_to_timeout, monotonic_time
 from oio.common.constants import ADMIN_HEADER, \
     TIMEOUT_HEADER, PERFDATA_HEADER, FORCEMASTER_HEADER, \
-    CONNECTION_TIMEOUT, READ_TIMEOUT
+    CONNECTION_TIMEOUT, READ_TIMEOUT, REQID_HEADER
 
 
 class HttpApi(object):
@@ -133,7 +133,7 @@ class HttpApi(object):
 
         # Look for a request ID
         if 'reqid' in kwargs:
-            out_headers['X-oio-req-id'] = str(kwargs['reqid'])
+            out_headers[REQID_HEADER] = str(kwargs['reqid'])
 
         # Convert json and add Content-Type
         if json:
@@ -190,7 +190,7 @@ class HttpApi(object):
                         kv[0], 0.0) + float(kv[1]) / 1000000.0
         except urllib3.exceptions.HTTPError as exc:
             oio_exception_from_httperror(exc,
-                                         reqid=out_headers.get('X-oio-req-id'),
+                                         reqid=out_headers.get(REQID_HEADER),
                                          url=url)
         if resp.status >= 400:
             raise exceptions.from_response(resp, body)

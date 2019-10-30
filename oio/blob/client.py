@@ -25,7 +25,7 @@ from oio.common.http_urllib3 import get_pool_manager, \
     oio_exception_from_httperror, urllib3
 from oio.common import exceptions as exc, utils
 from oio.common.constants import CHUNK_HEADERS, chunk_xattr_keys_optional, \
-        HEADER_PREFIX, OIO_VERSION
+        HEADER_PREFIX, OIO_VERSION, REQID_HEADER
 from oio.common.decorators import ensure_headers, ensure_request_id
 from oio.api.io import ChunkReader
 from oio.api.replication import ReplicatedMetachunkWriter, FakeChecksum
@@ -168,7 +168,7 @@ class BlobClient(object):
             resp = self.http_pool.request(
                 'HEAD', url, headers=headers)
         except urllib3.exceptions.HTTPError as ex:
-            oio_exception_from_httperror(ex, reqid=headers['X-oio-req-id'],
+            oio_exception_from_httperror(ex, reqid=headers[REQID_HEADER],
                                          url=url)
         if resp.status == 200:
             if not _xattr:

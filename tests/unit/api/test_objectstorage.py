@@ -24,7 +24,8 @@ from mock import MagicMock as Mock, ANY
 
 
 from oio.common import exceptions
-from oio.common.constants import container_headers, object_headers
+from oio.common.constants import container_headers, object_headers, \
+    REQID_HEADER
 from oio.common.decorators import handle_container_not_found, \
     handle_object_not_found
 from oio.common.storage_functions import _sort_chunks
@@ -50,7 +51,7 @@ class ObjectStorageTest(unittest.TestCase):
         self.account = "test"
         self.container = "fake"
         reqid = random_str(32)
-        self.headers = {"X-oio-req-id": reqid}
+        self.headers = {REQID_HEADER: reqid}
         self.common_kwargs = {'headers': self.headers, 'reqid': reqid}
         self.policy = "THREECOPIES"
         self.uri_base = self.fake_endpoint + "/v3.0/NS"
