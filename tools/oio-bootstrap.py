@@ -1020,7 +1020,7 @@ defaults = {
     'NB_ECD': 1,
     'REPLI_M2': 1,
     'REPLI_M1': 1,
-    'COMPRESSION': "off",
+    COMPRESSION: "off",
     MONITOR_PERIOD: 1,
     M1_DIGITS: 2}
 
@@ -1116,6 +1116,8 @@ def generate(options):
     WEBHOOK = 'webhook' if options.get('webhook_enabled', False) else ''
     WEBHOOK_ENDPOINT = options.get('webhook_endpoint', '')
 
+    compression = options.get("compression", defaults["compression"])
+
     key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
     ENV = dict(ZK_CNXSTRING=options.get('ZK'),
                NS=ns,
@@ -1144,6 +1146,7 @@ def generate(options):
                M1_REPLICAS=meta1_replicas,
                M2_REPLICAS=meta2_replicas,
                M2_DISTANCE=str(1),
+               COMPRESSION=compression,
                APACHE2_MODULES_SYSTEM_DIR=APACHE2_MODULES_SYSTEM_DIR,
                BACKBLAZE_ACCOUNT_ID=backblaze_account_id,
                BACKBLAZE_BUCKET_NAME=backblaze_bucket_name,
@@ -1394,13 +1397,11 @@ def generate(options):
     # RAWX
     srvtype = 'rawx'
     nb_rawx = getint(options[srvtype].get(SVC_NB), defaults['NB_RAWX'])
-    compression = options[srvtype].get(COMPRESSION, "off")
     if nb_rawx:
         for i in range(nb_rawx):
             env = subenv({'SRVTYPE': srvtype,
                           'SRVNUM': i + 1,
                           'PORT': next(ports),
-                          'COMPRESSION': compression,
                           'EXTRASLOT': ('rawx-even' if i % 2 else 'rawx-odd'),
                           'FSYNC': ('enabled' if options[FSYNC_RAWX]
                                     else 'disabled')
@@ -1630,7 +1631,8 @@ def generate(options):
     final_conf[M2_REPLICAS] = meta2_replicas
     final_conf[M1_REPLICAS] = meta1_replicas
     final_conf[M1_DIGITS] = meta1_digits
-    for k in (APPLICATION_KEY, COMPRESSION, BUCKET_NAME,
+    final_conf["compression"] = compression
+    for k in (APPLICATION_KEY, BUCKET_NAME,
               ACCOUNT_ID, PORT_START, PROFILE,
               MONITOR_PERIOD):
         if k in ENV:

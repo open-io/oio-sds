@@ -49,6 +49,13 @@ class RawxTestSuite(CommonTestCase):
         super(RawxTestSuite, self).tearDown()
         self._teardown()
 
+    def _compression(self):
+        print repr(self.conf)
+        rx = self.conf.get('rawx', {})
+        v = self.conf.get('compression', rx.get('compression', ''))
+        print repr(v), repr(rx)
+        return v and v != 'off'
+
     def _chunk_attr(self, chunk_id, data, path=None):
         if path is not None:
             self.content_path = path
@@ -209,10 +216,11 @@ class RawxTestSuite(CommonTestCase):
         resp, body = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                         trailers)
         self.assertEqual(409, resp.status)
-        # check the file if is correct
-        with open(chunkpath, 'rb') as chunkf:
-            data = chunkf.read()
-            self.assertEqual(data, chunkdata)
+        if not self._compression():
+            # check the file if is correct
+            with open(chunkpath, 'rb') as chunkf:
+                data = chunkf.read()
+                self.assertEqual(data, chunkdata)
 
         # check the whole download is correct
         # TODO FIXME getting an empty content should return 204
@@ -906,12 +914,14 @@ class RawxTestSuite(CommonTestCase):
             {'x-oio-check-hash': True})
         self.assertEqual(412, resp.status)
 
-        # Check the hash with corrupted chunk and valid header
-        resp, body = self._http_request(
-            chunkurl, 'HEAD', '',
-            {'x-oio-check-hash': True,
-             'x-oio-chunk-meta-chunk-hash': md5(corrupted_data).hexdigest()})
-        self.assertEqual(200, resp.status)
+        if not self._compression():
+            # Check the hash with corrupted chunk and valid header
+            newh = md5(corrupted_data).hexdigest()
+            resp, body = self._http_request(
+                chunkurl, 'HEAD', '',
+                {'x-oio-check-hash': True,
+                 'x-oio-chunk-meta-chunk-hash': newh})
+            self.assertEqual(200, resp.status)
 
         # Check the hash with corrupted chunk and invalid header
         resp, body = self._http_request(
