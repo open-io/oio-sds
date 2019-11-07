@@ -140,7 +140,9 @@ if [[ -n "${SERVICE_ID}" ]] ; then bootstrap_opt="${bootstrap_opt} --with-servic
 if [[ -n "${RANDOM_SERVICE_ID}" ]] ; then bootstrap_opt="${bootstrap_opt} --random-service-id" ; fi
 if [[ -n "${DATADIR}" ]] ; then bootstrap_opt="${bootstrap_opt} --data ${DATADIR}" ; fi
 if [[ -n "${PROFILE}" ]] ; then bootstrap_opt="${bootstrap_opt} --profile ${PROFILE}" ; fi
-oio-bootstrap.py $bootstrap_opt -d ${BOOTSTRAP_CONFIG} "$NS" "$IP" > /tmp/oio-bootstrap.$$
+bootstrap_opt="$bootstrap_opt -d ${BOOTSTRAP_CONFIG} $NS $IP"
+echo oio-bootstrap.py $bootstrap_opt
+oio-bootstrap.py $bootstrap_opt > /tmp/oio-bootstrap.$$
 
 
 . /tmp/oio-bootstrap.$$
