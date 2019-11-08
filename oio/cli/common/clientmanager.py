@@ -96,6 +96,14 @@ class ClientManager(object):
         return self._account_client
 
     @property
+    def xcute_client(self):
+        if self._account_client is None:
+            from oio.xcute.client import XcuteClient
+            self._account_client = XcuteClient(
+                self.client_conf, pool_manager=self.pool_manager)
+        return self._account_client
+
+    @property
     def admin(self):
         if self._admin_client is None:
             from oio.directory.admin import AdminClient

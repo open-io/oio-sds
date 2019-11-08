@@ -108,6 +108,15 @@ start_at_boot=false
 command=oio-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 """
 
+template_gridinit_xcute = """
+[service.${NS}-${SRVTYPE}-${SRVNUM}]
+group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+on_die=cry
+enabled=true
+start_at_boot=false
+command=oio-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+"""
+
 template_gridinit_rdir = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
@@ -355,6 +364,19 @@ template_account_watch = """
 host: ${IP}
 port: ${PORT}
 type: account
+checks:
+    - {type: tcp}
+slots:
+    - ${SRVTYPE}
+stats:
+    - {type: http, path: /status, parser: json}
+    - {type: system}
+"""
+
+template_xcute_watch = """
+host: ${IP}
+port: ${PORT}
+type: xcute
 checks:
     - {type: tcp}
 slots:
@@ -666,6 +688,10 @@ score_expr=(num stat.cpu)
 score_timeout=120
 
 [type:account]
+score_expr=(1 + (num stat.cpu))
+score_timeout=120
+
+[type:xcute]
 score_expr=(1 + (num stat.cpu))
 score_timeout=120
 
@@ -1033,6 +1059,24 @@ syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
 sentinel_master_name = oio
 
 redis_host = ${IP}
+"""
+
+template_xcute = """
+[xcute-server]
+bind_addr = ${IP}
+bind_port = ${PORT}
+workers = 2
+namespace = ${NS}
+log_facility = LOG_LOCAL0
+log_level = INFO
+log_address = /dev/log
+syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
+
+# Let this option empty to connect directly to redis_host
+#sentinel_hosts = 127.0.0.1:26379,127.0.0.1:26380,127.0.0.1:26381
+sentinel_master_name = oio
+
+redis_host = ${IP}:${REDIS_PORT}
 """
 
 template_rdir = """
@@ -1713,6 +1757,20 @@ def generate(options):
         f.write(tpl.safe_substitute(env))
     with open(watch(env), 'w+') as f:
         tpl = Template(template_account_watch)
+        f.write(tpl.safe_substitute(env))
+
+    # xcute
+    env = subenv({'SRVTYPE': 'xcute', 'SRVNUM': 1, 'PORT': next(ports),
+                  'REDIS_PORT': 6379})
+    add_service(env)
+    with open(gridinit(env), 'a+') as f:
+        tpl = Template(template_gridinit_xcute)
+        f.write(tpl.safe_substitute(env))
+    with open(config(env), 'w+') as f:
+        tpl = Template(template_xcute)
+        f.write(tpl.safe_substitute(env))
+    with open(watch(env), 'w+') as f:
+        tpl = Template(template_xcute_watch)
         f.write(tpl.safe_substitute(env))
 
     # rdir
