@@ -970,6 +970,40 @@ tube = oio-preserved
 queue_url = ${MAIN_QUEUE_URL}
 """
 
+template_gridinit_xcute_event_agent = """
+
+[service.${NS}-${SRVTYPE}-${SRVNUM}]
+group=${NS},localhost,event
+on_die=respawn
+enabled=true
+start_at_boot=false
+command=oio-event-agent ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
+"""
+
+template_xcute_event_agent = """
+[event-agent]
+tube = oio-xcute
+namespace = ${NS}
+user = ${USER}
+workers = 2
+concurrency = 5
+handlers_conf = ${CFGDIR}/xcute-event-handlers-${SRVNUM}.conf
+log_facility = LOG_LOCAL0
+log_level = INFO
+log_address = /dev/log
+syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
+queue_url=${QUEUE_URL}
+"""
+
+template_xcute_event_agent_handlers = """
+[handler:xcute.task]
+pipeline = xcute
+
+[filter:xcute]
+use = egg:oio#xcute
+"""
+
 template_conscience_agent = """
 namespace: ${NS}
 user: ${USER}
@@ -1707,6 +1741,7 @@ def generate(options):
     # Event agent configuration -> one per beanstalkd
     for num, host, port in all_beanstalkd:
         bnurl = 'beanstalk://{0}:{1}'.format(host, port)
+
         env = subenv({'SRVTYPE': 'event-agent', 'SRVNUM': num,
                       'QUEUE_URL': bnurl})
         add_service(env)
@@ -1718,6 +1753,18 @@ def generate(options):
             f.write(tpl.safe_substitute(env))
         with open(CFGDIR + '/event-handlers-'+str(num)+'.conf', 'w+') as f:
             tpl = Template(template_event_agent_handlers)
+            f.write(tpl.safe_substitute(env))
+
+        env = subenv({'SRVTYPE': 'xcute-event-agent', 'SRVNUM': num,
+                      'QUEUE_URL': bnurl})
+        with open(gridinit(env), 'a+') as f:
+            tpl = Template(template_gridinit_xcute_event_agent)
+            f.write(tpl.safe_substitute(env))
+        with open(config(env), 'w+') as f:
+            tpl = Template(template_xcute_event_agent)
+            f.write(tpl.safe_substitute(env))
+        with open(CFGDIR + '/xcute-event-handlers-'+str(num)+'.conf', 'w+') as f:
+            tpl = Template(template_xcute_event_agent_handlers)
             f.write(tpl.safe_substitute(env))
 
     # blob-rebuilder configuration -> one per beanstalkd
