@@ -25,13 +25,10 @@ from oio.xcute.common.job import XcuteTask
 
 class XcuteWorker(object):
 
-    def __init__(self, beanstalkd_worker_addr, beanstalkd_worker_tube, conf,
-                 logger=None):
-        self.beanstalkd_worker_addr = beanstalkd_worker_addr
-        self.beanstalkd_worker_tube = beanstalkd_worker_tube
-        self.beanstalkd_senders = {}
+    def __init__(self, conf, logger=None):
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
+        self.beanstalkd_senders = {}
 
     def process_beanstalkd_job(self, beanstalkd_job):
         job_id = beanstalkd_job['job_id']
