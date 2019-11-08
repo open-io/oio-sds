@@ -40,6 +40,7 @@ class ClientManager(object):
 
         # Various API client classes
         self._account_client = None
+        self._xcute_client = None
         self._admin_client = None
         self._conscience_client = None
         self._rdir_client = None
@@ -94,6 +95,14 @@ class ClientManager(object):
             self._account_client = AccountClient(
                 self.client_conf, pool_manager=self.pool_manager)
         return self._account_client
+
+    @property
+    def xcute_client(self):
+        if self._xcute_client is None:
+            from oio.xcute.client import XcuteClient
+            self._xcute_client = XcuteClient(
+                self.client_conf, pool_manager=self.pool_manager)
+        return self._xcute_client
 
     @property
     def admin(self):
