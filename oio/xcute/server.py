@@ -8,6 +8,7 @@ from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.wsgi import WerkzeugApp
 from oio.xcute.common.exceptions import UnknownJobTypeException
+from oio.xcute.jobs import JOB_TYPES
 from oio.xcute.common.manager import XcuteManager
 
 
@@ -41,15 +42,23 @@ class Xcute(WerkzeugApp):
             return Response(json.dumps(jobs), mimetype='application/json')
 
         if req.method == 'POST':
-            try:
-                data = json.loads(req.data)
+            data = json.loads(req.data)
 
-                job_type = data['type']
-                job_conf = data.get('conf')
+            job_type = data['type']
 
-                job = self.manager.create_job(job_type, job_conf)
-            except UnknownJobTypeException as e:
-                return HTTPBadRequest(e.message)
+            job_class = JOB_TYPES.get(job_type)
+            if job_class is None:
+                return HTTPBadRequest(UnknownJobTypeException.message)
+
+            job_conf = data.get('conf', {})
+            job_params = data.get('params', {})
+
+            # TODO: use lock
+            (sanitized_params, lock) = job_class.sanitize_params(job_params)
+
+            job_conf['params'] = sanitized_params
+
+            job = self.manager.create_job(job_type, job_conf)
 
             return Response(json.dumps(job), status=202)
 

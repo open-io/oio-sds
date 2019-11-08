@@ -13,26 +13,60 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.xcute.common.task import XcuteTask
+from oio.xcute.common.job import XcuteJob, XcuteTask
 
 
 class TesterFirstTask(XcuteTask):
 
     def process(self, payload):
         self.logger.info('First task: %s', payload['msg'])
-        return True
+        return True, 1
 
 
 class TesterSecondTask(XcuteTask):
 
     def process(self, payload):
         self.logger.info('Second task: %s', payload['msg'])
-        return True
+        return True, 2
 
 
-def tester_job(job_conf, marker=0, **kwargs):
-    for i in range(marker + 1, 5):
-        if i < 2:
-            yield (TesterFirstTask, {'msg': 'coucou-%d' % i}, None)
-        else:
-            yield (TesterSecondTask, {'msg': 'hibou-%d' % i}, 4)
+class TesterJob(XcuteJob):
+
+    JOB_TYPE = 'tester'
+
+    @staticmethod
+    def sanitize_params(params):
+        sanitized_params = params.copy()
+        sanitized_params['start'] = int(params.get('start', 0))
+        sanitized_params['end'] = int(params.get('end', 5))
+
+        return (sanitized_params, sanitized_params.pop('lock', None))
+
+    @staticmethod
+    def get_tasks(conf, logger, params, marker=None):
+        start = params['start']
+        end = params['end']
+
+        total_tasks = end - start
+
+        if marker is not None:
+            start = int(marker) + 1
+
+        for i in range(start, end):
+            if i < 2:
+                task_class = TesterFirstTask
+                task_payload = {'msg': 'coucou-%d' % i}
+            else:
+                task_class = TesterSecondTask
+                task_payload = {'msg': 'hibou-%d' % i}
+
+            task_id = str(i)
+
+            yield (task_class, task_id, task_payload, total_tasks)
+
+    @staticmethod
+    def reduce_result(job_result, task_result):
+        if job_result is None:
+            job_result = 0
+
+        return job_result + task_result

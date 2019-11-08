@@ -1,6 +1,8 @@
-from .tester import tester_job
+from .mover import RawxDecommissionJob
+from .tester import TesterJob
 
 
 JOB_TYPES = {
-    'tester': tester_job
+    RawxDecommissionJob.JOB_TYPE: RawxDecommissionJob,
+    TesterJob.JOB_TYPE: TesterJob
 }
