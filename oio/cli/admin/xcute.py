@@ -13,26 +13,18 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from datetime import datetime
-
 from oio.cli import Command, Lister, ShowOne
-from oio.xcute.client import XcuteClient
 
 
 class XcuteCommand(object):
-
-    _client = None
 
     @property
     def logger(self):
         return self.app.client_manager.logger
 
     @property
-    def client(self):
-        if self._client is None:
-            self._client = XcuteClient(
-                self.app.client_manager.client_conf, logger=self.logger)
-        return self._client
+    def xcute(self):
+        return self.app.client_manager.xcute_client
 
 
 class XcuteJobList(XcuteCommand, Lister):
@@ -43,7 +35,7 @@ class XcuteJobList(XcuteCommand, Lister):
     columns = ('ID', 'Status', 'Type', 'ctime', 'mtime')
 
     def _take_action(self, parsed_args):
-        jobs = self.client.job_list()
+        jobs = self.xcute.job_list()
         for job_info in jobs:
             yield (job_info['job_id'], job_info['status'], job_info['job_type'],
                    job_info['ctime'], float(job_info['mtime']))
@@ -70,7 +62,7 @@ class XcuteJobShow(XcuteCommand, ShowOne):
     def take_action(self, parsed_args):
         self.logger.debug('take_action(%s)', parsed_args)
 
-        job_info = self.client.job_show(parsed_args.job_id)
+        job_info = self.xcute.job_show(parsed_args.job_id)
         return zip(*sorted(job_info.items()))
 
 
@@ -94,7 +86,7 @@ class XcuteJobPause(XcuteCommand, Command):
         for job_id in parsed_args.job_ids:
             paused = True
             try:
-                self.client.job_resume(job_id)
+                self.xcute.job_resume(job_id)
             except Exception as exc:
                 self.logger.error('Failed to paused job %s: %s',
                                   job_id, exc)
@@ -127,7 +119,7 @@ class XcuteJobResume(XcuteCommand, Command):
         for job_id in parsed_args.job_ids:
             resumed = True
             try:
-                self.client.job_resume(job_id)
+                self.xcute.job_resume(job_id)
             except Exception as exc:
                 self.logger.error('Failed to resumed job %s: %s',
                                   job_id, exc)
@@ -160,7 +152,7 @@ class XcuteJobDelete(XcuteCommand, Lister):
         for job_id in parsed_args.job_ids:
             deleted = True
             try:
-                self.client.job_delete(job_id)
+                self.xcute.job_delete(job_id)
             except Exception as exc:
                 self.logger.error('Failed to deleted job %s: %s',
                                   job_id, exc)
