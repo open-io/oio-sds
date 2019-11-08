@@ -342,7 +342,12 @@ CLI=$(command -v openio)
 ADMIN_CLI=$(command -v openio-admin)
 
 if is_running_test_suite "single" ; then
-	func_tests -f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
+	opts=
+	if is_running_test_suite "zlib" ; then
+		opts="-f ${SRCDIR}/etc/bootstrap-option-compression-zlib.yml"
+	fi
+	func_tests $opts \
+		-f "${SRCDIR}/etc/bootstrap-preset-SINGLE.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-udp.yml" \
 		-f "${SRCDIR}/etc/bootstrap-option-long-timeouts.yml" \
 		-f "${SRCDIR}/etc/bootstrap-meta1-1digits.yml"
