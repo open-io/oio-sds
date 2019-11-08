@@ -21,5 +21,40 @@ class XcuteTask(object):
         self.conf = conf
         self.logger = logger
 
-    def process(self, payload, **kwargs):
+    def process(self, payload):
         raise NotImplementedError()
+
+
+
+class XcuteJob(object):
+
+    JOB_TYPE = None
+
+    @staticmethod
+    def sanitize_params(params):
+        """
+            Validate and sanitize the job parameters
+            Ex: cast a string as integer, set a default
+            Also return the lock id if there is one
+        """
+
+        raise NotImplementedError()
+
+    @staticmethod
+    def get_tasks(conf, logger, params, marker=None):
+        """
+            Yields the job tasks as
+            (TaskClass, task_id, task_payload, total_tasks)
+            task_id must be a string and can be used as a marker
+        """
+
+        raise NotImplementedError()
+
+    @staticmethod
+    def reduce_result(job_result, task_result):
+        """ Compute the new result of the job """
+
+        if job_result is None:
+            return 0
+
+        return job_result
