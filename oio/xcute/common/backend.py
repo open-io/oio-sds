@@ -38,6 +38,8 @@ def handle_redis_exceptions(func):
 
 class XcuteBackend(RedisConnection):
 
+    DEFAULT_LIMIT = 1000
+
     _lua_errors = {
         'job_exists': (Forbidden,
                        'The job already exists'),
@@ -118,11 +120,14 @@ class XcuteBackend(RedisConnection):
         self.script_delete_job = self.register_script(
             self.lua_delete_job)
 
-    def list_jobs(self, marker='', limit=1000):
-        jobs = list()
+    def list_jobs(self, marker=None, limit=1000):
+        limit = limit or self.DEFAULT_LIMIT
 
-        while len(jobs) < limit:
+        jobs = list()
+        while True:
             limit_ = limit - len(jobs)
+            if limit_ <= 0:
+                break
 
             range_min = '-'
             if marker:
@@ -132,9 +137,6 @@ class XcuteBackend(RedisConnection):
 
             job_ids = self.conn.zrevrangebylex(
                 self.key_job_ids, range_max, range_min, 0, limit_)
-
-            if len(job_ids) == 0:
-                break
 
             pipeline = self.conn.pipeline(True)
             for job_id in job_ids:
@@ -148,8 +150,9 @@ class XcuteBackend(RedisConnection):
                 job = dict(job_id=job_id, **self.sanitize_job_info(job_info))
                 jobs.append(job)
 
-            marker = jobs[-1]['job_id']
-
+            if len(job_ids) < limit_:
+                break
+            marker = job_id
         return jobs
 
     @handle_redis_exceptions
