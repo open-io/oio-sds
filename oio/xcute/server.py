@@ -3,6 +3,7 @@ from werkzeug.exceptions import NotFound as HTTPNotFound
 from werkzeug.routing import Map, Rule, Submount
 from werkzeug.wrappers import Response
 
+from oio.common.easy_value import int_value, true_value
 from oio.common.exceptions import NotFound
 from oio.common.json import json
 from oio.common.logger import get_logger
@@ -35,8 +36,8 @@ class Xcute(WerkzeugApp):
 
     def on_job_list(self, req):
         if req.method == 'GET':
-            limit = int(req.args.get('limit', '1000'))
-            marker = req.args.get('marker', '')
+            limit = int_value(req.args.get('limit'), None)
+            marker = req.args.get('marker')
             jobs = self.manager.list_jobs(limit=limit, marker=marker)
 
             return Response(json.dumps(jobs), mimetype='application/json')
