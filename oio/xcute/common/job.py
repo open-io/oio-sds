@@ -13,17 +13,18 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from oio.common.logger import get_logger
+
 
 class XcuteTask(object):
     """Serialisable wrapper for an task submitted in the xcute hub."""
 
-    def __init__(self, conf, logger):
+    def __init__(self, conf, logger=None):
         self.conf = conf
-        self.logger = logger
+        self.logger = logger or get_logger(self.conf)
 
-    def process(self, payload):
+    def process(self, task_id, task_payload):
         raise NotImplementedError()
-
 
 
 class XcuteJob(object):
