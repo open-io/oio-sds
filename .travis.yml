@@ -117,7 +117,7 @@ jobs:
     - script: ./tools/oio-travis-suites.sh
       env: TEST_SUITE=3copies,with-service-id
     - script: ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=single,small-cache,fsync,webhook
+      env: TEST_SUITE=single,small-cache,fsync,webhook,zlib
     - script: ./tools/oio-travis-suites.sh
       env: TEST_SUITE=multi-beanstalk
 
