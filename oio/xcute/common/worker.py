@@ -19,7 +19,7 @@ import traceback
 from oio.common.green import sleep
 from oio.common.json import json
 from oio.event.beanstalk import BeanstalkdSender
-from oio.xcute.common.task import XcuteTask
+from oio.xcute.common.job import XcuteTask
 
 
 class XcuteWorker(object):
@@ -36,35 +36,33 @@ class XcuteWorker(object):
         job_id = beanstalkd_job['job_id']
         task_id = beanstalkd_job['task_id']
         task_class_encoded = beanstalkd_job['task_class']
-        task_payload_encoded = beanstalkd_job['task_payload']
+        task_payload = beanstalkd_job['task_payload']
         reply_addr = beanstalkd_job['beanstalkd_reply']['addr']
         reply_tube = beanstalkd_job['beanstalkd_reply']['tube']
 
+        task_ok, task_result = (False, None)
         try:
             task_class = pickle.loads(task_class_encoded)
-            task_payload = pickle.loads(task_payload_encoded)
             task = task_class(self.conf, self.logger)
 
             if not isinstance(task, XcuteTask):
                 raise ValueError('Unexpected task: %s' % task_class)
 
-            task_ok = self._execute_task(task, task_payload)
+            task_ok, task_result = task.process(task_payload)
+            if not task_ok:
+                self.logger.debug('Task was not processed: %s', beanstalkd_job)
         except Exception:
             self.logger.error('Error processing job %s: %s',
                               beanstalkd_job, traceback.format_exc())
-            task_ok = False
 
-        self._reply(reply_addr, reply_tube, job_id, task_id, task_ok)
+        self._reply(reply_addr, reply_tube, job_id, task_id, task_ok, task_result)
 
-    @staticmethod
-    def _execute_task(task, task_payload):
-        return task.process(task_payload)
-
-    def _reply(self, reply_addr, reply_tube, job_id, task_id, task_ok):
+    def _reply(self, reply_addr, reply_tube, job_id, task_id, task_ok, task_result):
         reply_payload = json.dumps({
             'job_id': job_id,
             'task_id': task_id,
             'task_ok': task_ok,
+            'task_result': task_result,
         })
 
         sender_key = (reply_addr, reply_tube)

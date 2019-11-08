@@ -5,8 +5,8 @@ import argparse
 from oio.cli import make_logger_args_parser, get_logger_from_args
 from oio.common.json import json
 from oio.event.beanstalk import BeanstalkdListener
-from oio.xcute.common.job import XcuteJob
 from oio.xcute.common.worker import XcuteWorker
+from oio.xcute.orchestrator import XcuteOrchestrator
 
 
 def make_arg_parser():
@@ -24,7 +24,7 @@ def make_arg_parser():
     parser.add_argument(
         '--beanstalkd-tube',
         help='The beanstalkd tube to use to listen. '
-             '(default=%s)' % XcuteJob.DEFAULT_WORKER_TUBE)
+             '(default=%s)' % XcuteOrchestrator.DEFAULT_WORKER_TUBE)
 
     return parser
 
@@ -40,7 +40,7 @@ if __name__ == '__main__':
         raise ValueError('Missing beanstalkd address')
     beanstalkd_addr = args.beanstalkd_addr
     beanstalkd_tube = args.beanstalkd_tube \
-        or XcuteJob.DEFAULT_WORKER_TUBE
+        or XcuteOrchestrator.DEFAULT_WORKER_TUBE
 
     conf = {'namespace': args.namespace}
     logger = get_logger_from_args(args)
