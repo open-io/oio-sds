@@ -24,8 +24,8 @@ from oio.xcute.common.job import XcuteJob, XcuteTask
 
 class BlobMover(XcuteTask):
 
-    def __init__(self, conf, logger):
-        super(BlobMover, self).__init__(conf, logger)
+    def __init__(self, conf, logger=None):
+        super(BlobMover, self).__init__(conf, logger=logger)
         self.blob_client = BlobClient(
             self.conf, logger=self.logger)
         self.content_factory = ContentFactory(conf)
@@ -48,33 +48,30 @@ class BlobMover(XcuteTask):
             fake_excluded_chunks.append(chunk)
         return fake_excluded_chunks
 
-    def process(self, payload):
-        rawx_timeout = payload['rawx_timeout']
-        min_chunk_size = payload['min_chunk_size']
-        max_chunk_size = payload['max_chunk_size']
-        excluded_rawx = payload['excluded_rawx']
+    def process(self, chunk_id, task_payload):
+        rawx_id = task_payload['rawx_id']
+        rawx_timeout = task_payload['rawx_timeout']
+        min_chunk_size = task_payload['min_chunk_size']
+        max_chunk_size = task_payload['max_chunk_size']
+        excluded_rawx = task_payload['excluded_rawx']
 
-        chunk_url = 'http://{}/{}'.format(
-            payload['rawx_id'], payload['chunk_id'])
+        fake_excluded_chunks = self._generate_fake_excluded_chunks(
+            excluded_rawx)
 
-        fake_excluded_chunks = self._generate_fake_excluded_chunks(excluded_rawx)
-
+        chunk_url = 'http://{}/{}'.format(rawx_id, chunk_id)
         meta = self.blob_client.chunk_head(chunk_url, timeout=rawx_timeout)
-
         container_id = meta['container_id']
         content_id = meta['content_id']
         chunk_id = meta['chunk_id']
         chunk_size = int(meta['chunk_size'])
 
-        # Skip the chunk if it's too small or too big
+        # Maybe skip the chunk because it doesn't match the size constaint
         if chunk_size < min_chunk_size:
             self.logger.debug("SKIP %s too small", chunk_url)
-
-            return True, 0
-        if max_chunk_size > -1 and chunk_size > max_chunk_size:
+            return
+        if max_chunk_size > 0 and chunk_size > max_chunk_size:
             self.logger.debug("SKIP %s too big", chunk_url)
-
-            return True, 0
+            return
 
         # Start moving the chunk
         try:
@@ -92,32 +89,43 @@ class BlobMover(XcuteTask):
 class RawxDecommissionJob(XcuteJob):
 
     JOB_TYPE = 'rawx-decommission'
+    DEFAULT_RDIR_FETCH_LIMIT = 1000
+    DEFAULT_RDIR_TIMEOUT = 60.0
+    DEFAULT_RAWX_TIMEOUT = 60.0
+    DEFAULT_MIN_CHUNK_SIZE = 0
+    DEFAULT_MAX_CHUNK_SIZE = 0
 
     @staticmethod
     def sanitize_params(params):
-        if params.get('rawx_id') is None:
+        if not params.get('rawx_id'):
             return ValueError('Missing rawx ID')
 
         sanitized_params = params.copy()
 
         sanitized_params['rdir_fetch_limit'] = int_value(
-            params.get('rdir_fetch_limit'), 1000)
+            params.get('rdir_fetch_limit'),
+            RawxDecommissionJob.DEFAULT_RDIR_FETCH_LIMIT)
 
         sanitized_params['rdir_timeout'] = float_value(
-            params.get('rdir_timeout'), 60.0)
+            params.get('rdir_timeout'),
+            RawxDecommissionJob.DEFAULT_RDIR_TIMEOUT)
 
         sanitized_params['rawx_timeout'] = float_value(
-            params.get('rawx_timeout'), 60.0)
+            params.get('rawx_timeout'),
+            RawxDecommissionJob.DEFAULT_RAWX_TIMEOUT)
 
         sanitized_params['min_chunk_size'] = int_value(
-            params.get('min_chunk_size'), 0)
+            params.get('min_chunk_size'),
+            RawxDecommissionJob.DEFAULT_MIN_CHUNK_SIZE)
 
         sanitized_params['max_chunk_size'] = int_value(
-            params.get('max_chunk_size'), -1)
+            params.get('max_chunk_size'),
+            RawxDecommissionJob.DEFAULT_MAX_CHUNK_SIZE)
 
-        excluded_rawx = []
-        if 'excluded_rawx' in params:
-            excluded_rawx = params['excluded_rawx'].split(',')
+        excluded_rawx = list()
+        excluded_rawx_param = params.get('excluded_rawx')
+        if excluded_rawx_param:
+            excluded_rawx = excluded_rawx_param.split(',')
         sanitized_params['excluded_rawx'] = excluded_rawx
 
         lock = 'rawx/%s' % params['rawx_id']
@@ -133,8 +141,8 @@ class RawxDecommissionJob(XcuteJob):
         rdir_timeout = params['rdir_timeout']
 
         chunk_infos = rdir_client.chunk_fetch(
-            rawx_id, limit=rdir_fetch_limit,
-            timeout=rdir_timeout, start_after=marker)
+            rawx_id, timeout=rdir_timeout,
+            limit=rdir_fetch_limit, start_after=marker)
 
         for i, (_, _, chunk_id, _) in enumerate(chunk_infos):
             payload = {
