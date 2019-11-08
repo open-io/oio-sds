@@ -18,6 +18,7 @@ from functools import wraps
 import redis
 
 from oio.common.exceptions import Forbidden, NotFound
+from oio.common.json import json
 from oio.common.redis_conn import RedisConnection
 
 
@@ -153,18 +154,20 @@ class XcuteBackend(RedisConnection):
 
     @handle_redis_exceptions
     def create_job(self, job_id, job_conf, job_info):
+        job_conf['params'] = json.dumps(job_conf['params'])
+
         pipeline = self.conn.pipeline()
 
         self.script_create_job(keys=[job_id], client=pipeline)
         pipeline.hmset(self.key_job_info % job_id, job_info)
-
-        if job_conf is not None and job_conf != {}:
-            pipeline.hmset(self.key_job_config % job_id, job_conf)
+        pipeline.hmset(self.key_job_config % job_id, job_conf)
 
         pipeline.execute()
 
     def start_job(self, job_id, job_conf, updates):
         pipeline = self.conn.pipeline()
+
+        job_conf['params'] = json.dumps(job_conf['params'])
 
         pipeline.hmset(self.key_job_config % job_id, job_conf)
         pipeline.hmset(self.key_job_info % job_id, updates)
@@ -182,7 +185,7 @@ class XcuteBackend(RedisConnection):
         job_config_infos = pipeline.execute()
 
         return (
-            (job_id, job_conf or {}, self.sanitize_job_info(job_info))
+            (job_id, self.sanitize_job_conf(job_conf), self.sanitize_job_info(job_info))
             for job_conf, job_info in zip(*([iter(job_config_infos)] * 2))
         )
 
@@ -231,7 +234,9 @@ class XcuteBackend(RedisConnection):
         return True if done == 1 else False
 
     def get_job_config(self, job_id):
-        return self.conn.hgetall(self.key_job_config % job_id) or {}
+        job_conf = self.conn.hgetall(self.key_job_config % job_id)
+
+        return self.sanitize_job_conf(job_conf)
 
     def get_job_info(self, job_id):
         info = self.conn.hgetall(self.key_job_info % job_id)
@@ -239,12 +244,23 @@ class XcuteBackend(RedisConnection):
             raise NotFound(message='Job %s does\'nt exist' % job_id)
         return self.sanitize_job_info(info)
 
+    def get_job_result(self, job_id):
+        job_info = self.get_job_info(job_id)
+
+        return job_info['job_type'], job_info.get('result')
+
     def update_job_info(self, job_id, updates):
         self.conn.hmset(self.key_job_info % job_id, updates)
 
     @handle_redis_exceptions
     def delete_job(self, job_id):
         self.script_delete_job(keys=[job_id])
+
+    @staticmethod
+    def sanitize_job_conf(job_conf):
+        job_conf['params'] = json.loads(job_conf['params'])
+
+        return job_conf
 
     @staticmethod
     def sanitize_job_info(job_info):
