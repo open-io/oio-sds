@@ -44,7 +44,9 @@ class Xcute(WerkzeugApp):
         if req.method == 'POST':
             data = json.loads(req.data)
 
-            job_type = data['type']
+            job_type = data.get('type')
+            if not job_type:
+                raise HTTPBadRequest('Missing job type')
 
             job_class = JOB_TYPES.get(job_type)
             if job_class is None:
@@ -54,8 +56,7 @@ class Xcute(WerkzeugApp):
             job_params = data.get('params', {})
 
             # TODO: use lock
-            (sanitized_params, lock) = job_class.sanitize_params(job_params)
-
+            sanitized_params, lock = job_class.sanitize_params(job_params)
             job_conf['params'] = sanitized_params
 
             job = self.manager.create_job(job_type, job_conf)
