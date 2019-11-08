@@ -121,6 +121,11 @@ class CommonTestCase(testtools.TestCase):
 
     TEST_HEADERS = {REQID_HEADER: '7E571D0000000000'}
 
+    def _compression(self):
+        rx = self.conf.get('rawx', {})
+        v = self.conf.get('compression', rx.get('compression', ''))
+        return v and v != 'off'
+
     def is_running_on_public_ci(self):
         from os import getenv
         clues = (getenv("TRAVIS"), getenv("CIRCLECI"))

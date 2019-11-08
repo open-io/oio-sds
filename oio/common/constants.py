@@ -105,6 +105,7 @@ CHUNK_XATTR_KEYS = {
     'content_version': 'grid.content.version',
     'metachunk_hash': 'grid.metachunk.hash',
     'metachunk_size': 'grid.metachunk.size',
+    'compression': 'grid.compression',
     'oio_version': 'grid.oio.version'
 }
 
@@ -117,6 +118,7 @@ CHUNK_XATTR_KEYS_OPTIONAL = {
         'metachunk_size': True,
         'metachunk_hash': True,
         'oio_version': True,
+        'compression': True,
         # Superseded by full_path
         'container_id': True,
         'content_id': True,

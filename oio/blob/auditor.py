@@ -19,6 +19,7 @@ from oio.common.green import ratelimit
 from contextlib import closing
 from string import hexdigits
 import hashlib
+import zlib
 import time
 
 from oio.blob.utils import check_volume, read_chunk_metadata
@@ -182,7 +183,8 @@ class BlobAuditorWorker(object):
             raise exc.FaultyChunk(err)
         size = int(meta['chunk_size'])
         md5_checksum = meta['chunk_hash'].lower()
-        reader = ChunkReader(chunk_file, size, md5_checksum)
+        reader = ChunkReader(chunk_file, size, md5_checksum,
+                             compression=meta.get("compression", ""))
         with closing(reader):
             for buf in reader:
                 buf_len = len(buf)
@@ -259,8 +261,17 @@ class BlobAuditor(Daemon):
 
 
 class ChunkReader(object):
-    def __init__(self, fp, size, md5_checksum):
+    def __init__(self, fp, size, md5_checksum, compression=None):
         self.fp = fp
+        self.decompressor = None
+        self.error = None
+        if compression not in (None, 'off'):
+            if compression == 'zlib':
+                self.decompressor = zlib.decompressobj(0)
+            else:
+                msg = "Compression method not managed: %s" % compression
+                self.error = exc.FaultyChunk(msg)
+                raise self.error
         self.size = size
         self.md5_checksum = md5_checksum
         self.bytes_read = 0
@@ -270,6 +281,12 @@ class ChunkReader(object):
         self.iter_md5 = hashlib.md5()
         while True:
             buf = self.fp.read()
+            if buf and self.decompressor:
+                try:
+                    buf = self.decompressor.decompress(buf)
+                except zlib.error as zerr:
+                    self.error = exc.CorruptedChunk(zerr)
+                    raise self.error
             if buf:
                 self.iter_md5.update(buf)
                 self.bytes_read += len(buf)
@@ -278,7 +295,11 @@ class ChunkReader(object):
                 break
 
     def close(self):
-        if self.fp:
+        """
+        Perform checks on what has been read before closing,
+        if no error has occurred yet.
+        """
+        if self.fp and not self.error:
             md5_read = self.iter_md5.hexdigest()
             if self.bytes_read != self.size:
                 raise exc.FaultyChunk('Invalid size: expected %d, got %d' % (

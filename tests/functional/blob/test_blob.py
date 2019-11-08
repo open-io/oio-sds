@@ -49,13 +49,6 @@ class RawxTestSuite(CommonTestCase):
         super(RawxTestSuite, self).tearDown()
         self._teardown()
 
-    def _compression(self):
-        print repr(self.conf)
-        rx = self.conf.get('rawx', {})
-        v = self.conf.get('compression', rx.get('compression', ''))
-        print repr(v), repr(rx)
-        return v and v != 'off'
-
     def _chunk_attr(self, chunk_id, data, path=None):
         if path is not None:
             self.content_path = path
