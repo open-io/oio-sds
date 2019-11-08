@@ -120,6 +120,11 @@ class XcuteBackend(RedisConnection):
         self.script_delete_job = self.register_script(
             self.lua_delete_job)
 
+    def status(self):
+        job_count = self.conn.zcard(self.key_job_ids)
+        status = {'job_count': job_count}
+        return status
+
     def list_jobs(self, marker=None, limit=1000):
         limit = limit or self.DEFAULT_LIMIT
 

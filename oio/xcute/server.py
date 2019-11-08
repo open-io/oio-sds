@@ -20,6 +20,7 @@ class Xcute(WerkzeugApp):
         self.logger = logger
 
         url_map = Map([
+            Rule('/status', endpoint='status'),
             Submount('/v1.0/xcute', [
                 Rule('/jobs', endpoint='job_list',
                      methods=['POST', 'GET']),
@@ -33,6 +34,10 @@ class Xcute(WerkzeugApp):
         ])
 
         super(Xcute, self).__init__(url_map, logger)
+
+    def on_status(self, req):
+        status = self.manager.backend.status()
+        return Response(json.dumps(status), mimetype='application/json')
 
     def on_job_list(self, req):
         if req.method == 'GET':
