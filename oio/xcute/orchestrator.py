@@ -243,14 +243,17 @@ class XcuteOrchestrator(object):
     def make_beanstalkd_payload(self, job_id,
                                 task_id, task_class, task_payload):
         return json.dumps({
-            'job_id': job_id,
-            'task_class': pickle.dumps(task_class),
-            'task_id': task_id,
-            'task_payload': task_payload,
-            'beanstalkd_reply': {
-                'addr': self.reply_beanstalkd_addr,
-                'tube': self.reply_tube,
-            },
+            'event': 'xcute.task',
+            'data': {
+                'job_id': job_id,
+                'task_class': pickle.dumps(task_class),
+                'task_id': task_id,
+                'task_payload': task_payload,
+                'beanstalkd_reply': {
+                    'addr': self.reply_beanstalkd_addr,
+                    'tube': self.reply_tube,
+                },
+            }
         })
 
     def listen(self):
