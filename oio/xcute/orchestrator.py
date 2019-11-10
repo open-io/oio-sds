@@ -180,27 +180,30 @@ class XcuteOrchestrator(object):
             Dispatch all of a job's tasks
         """
 
-        for task in job_tasks:
-            (task_class, task_id, task_payload, total_tasks) = task
+        try:
+            for task in job_tasks:
+                (task_class, task_id, task_payload, total_tasks) = task
 
-            sent = self.dispatch_task(beanstalkd_workers, job_id,
-                                      task_id, task_class, task_payload)
+                sent = self.dispatch_task(beanstalkd_workers, job_id,
+                                        task_id, task_class, task_payload)
 
-            if sent:
-                self.manager.task_sent(job_id, task_id, total_tasks)
+                if sent:
+                    self.manager.task_sent(job_id, task_id, total_tasks)
 
-            if not self.running:
-                break
-        else:
-            self.logger.info('All tasks sent (job_id=%s)' % job_id)
-            self.manager.all_tasks_sent(job_id)
+                if not self.running:
+                    break
+            else:
+                self.logger.info('All tasks sent (job_id=%s)' % job_id)
+                self.manager.all_tasks_sent(job_id)
 
-            # threading.current_thread returns the wrong id
-            del self.threads[thread.get_ident()]
+                # threading.current_thread returns the wrong id
+                del self.threads[thread.get_ident()]
 
-            return
+                return
 
-        self.manager.pause_job(job_id)
+            self.manager.pause_job(job_id)
+        except Exception:
+            self.manager.fail_job(job_id)
 
     def dispatch_task(self, beanstalkd_workers, job_id,
                       task_id, task_class, task_payload):

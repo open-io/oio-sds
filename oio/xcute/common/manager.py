@@ -169,4 +169,4 @@ class XcuteManager(object):
     @staticmethod
     def _uuid():
         return datetime.utcnow().strftime('%Y%m%d%H%M%S%f') \
-            + '-%011x' % random.randrange(16**10)
+            + '-%011x' % random.randrange(16**11)
