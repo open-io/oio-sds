@@ -49,7 +49,7 @@ class BlobMover(XcuteTask):
         return fake_excluded_chunks
 
     def process(self, chunk_id, task_payload):
-        rawx_id = task_payload['rawx_id']
+        service_id = task_payload['service_id']
         rawx_timeout = task_payload['rawx_timeout']
         min_chunk_size = task_payload['min_chunk_size']
         max_chunk_size = task_payload['max_chunk_size']
@@ -58,7 +58,7 @@ class BlobMover(XcuteTask):
         fake_excluded_chunks = self._generate_fake_excluded_chunks(
             excluded_rawx)
 
-        chunk_url = 'http://{}/{}'.format(rawx_id, chunk_id)
+        chunk_url = 'http://{}/{}'.format(service_id, chunk_id)
         meta = self.blob_client.chunk_head(chunk_url, timeout=rawx_timeout)
         container_id = meta['container_id']
         content_id = meta['content_id']
@@ -97,8 +97,8 @@ class RawxDecommissionJob(XcuteJob):
 
     @staticmethod
     def sanitize_params(params):
-        if not params.get('rawx_id'):
-            return ValueError('Missing rawx ID')
+        if not params.get('service_id'):
+            return ValueError('Missing service ID')
 
         sanitized_params = params.copy()
 
@@ -128,7 +128,7 @@ class RawxDecommissionJob(XcuteJob):
             excluded_rawx = excluded_rawx_param.split(',')
         sanitized_params['excluded_rawx'] = excluded_rawx
 
-        lock = 'rawx/%s' % params['rawx_id']
+        lock = 'rawx/%s' % params['service_id']
 
         return (sanitized_params, lock)
 
@@ -136,17 +136,17 @@ class RawxDecommissionJob(XcuteJob):
     def get_tasks(conf, logger, params, marker=None):
         rdir_client = RdirClient(conf, logger=logger)
 
-        rawx_id = params['rawx_id']
+        service_id = params['service_id']
         rdir_fetch_limit = params['rdir_fetch_limit']
         rdir_timeout = params['rdir_timeout']
 
         chunk_infos = rdir_client.chunk_fetch(
-            rawx_id, timeout=rdir_timeout,
+            service_id, timeout=rdir_timeout,
             limit=rdir_fetch_limit, start_after=marker)
 
         for i, (_, _, chunk_id, _) in enumerate(chunk_infos):
             payload = {
-                'rawx_id': params['rawx_id'],
+                'service_id': params['service_id'],
                 'rawx_timeout': params['rawx_timeout'],
                 'min_chunk_size': params['min_chunk_size'],
                 'max_chunk_size': params['max_chunk_size'],
