@@ -86,11 +86,8 @@ class XcuteOrchestrator(object):
         self.threads[listen_thread.ident] = listen_thread
 
         while self.running:
-            self.logger.debug('Start orchestrating loop')
-
             self.orchestrate_loop()
 
-            self.logger.debug('Finished orchestrating loop')
             sleep(2)
 
         for thread_ in self.threads.values():
