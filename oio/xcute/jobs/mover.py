@@ -98,7 +98,7 @@ class RawxDecommissionJob(XcuteJob):
     @staticmethod
     def sanitize_params(params):
         if not params.get('service_id'):
-            return ValueError('Missing service ID')
+            raise ValueError('Missing service ID')
 
         sanitized_params = params.copy()
 
