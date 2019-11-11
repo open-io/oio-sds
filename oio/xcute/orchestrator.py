@@ -212,6 +212,9 @@ class XcuteOrchestrator(object):
             self.make_beanstalkd_payload(job_id, task_id,
                                          task_class, task_payload)
 
+        if len(beanstalkd_payload) > 2**16:
+            raise ValueError('Task payload is too big (length=%s)' % len(beanstalkd_payload))
+
         while self.running:
             workers_tried = set()
             for worker in beanstalkd_workers:
