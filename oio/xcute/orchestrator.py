@@ -327,6 +327,8 @@ class XcuteOrchestrator(object):
                                                     new_job_result)
 
                     if job_done:
+                        del job_results[job_id]
+
                         self.logger.info('Job done (job_id=%s)' % job_id)
                 except Exception:
                     self.logger.error('Error processing reply: %s' % traceback.format_exc())
