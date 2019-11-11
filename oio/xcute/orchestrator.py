@@ -176,6 +176,8 @@ class XcuteOrchestrator(object):
             Dispatch all of a job's tasks
         """
 
+        self.logger.info('Start dispatching job (job_id=%s)', job_id)
+
         try:
             for task in job_tasks:
                 (task_class, task_id, task_payload, total_tasks) = task
@@ -199,7 +201,11 @@ class XcuteOrchestrator(object):
 
             self.manager.pause_job(job_id)
         except Exception:
+            self.logger.exception('Failed generating task list (job_id=%s', job_id)
+
             self.manager.fail_job(job_id)
+
+        self.logger.info('Finished dispatching job (job_id=%s)', job_id)
 
     def dispatch_task(self, beanstalkd_workers, job_id,
                       task_id, task_class, task_payload):
@@ -219,15 +225,11 @@ class XcuteOrchestrator(object):
             for worker in beanstalkd_workers:
                 if worker is None:
                     self.logger.info('No beanstalkd available (job_id=%s)' % job_id)
-                    sleep(5)
-                    workers_tried.clear()
-                    continue
+                    break
 
                 if worker.addr in workers_tried:
                     self.logger.debug('Tried all beanstalkd (job_id=%s)' % job_id)
-                    sleep(5)
-                    workers_tried.clear()
-                    continue
+                    break
 
                 sent = worker.send_job(beanstalkd_payload)
 
@@ -240,6 +242,7 @@ class XcuteOrchestrator(object):
                                   (job_id, task_id, worker.addr))
                 return True
 
+            workers_tried.clear()
             sleep(5)
 
     def make_beanstalkd_payload(self, job_id,
@@ -414,9 +417,7 @@ class XcuteOrchestrator(object):
         """
 
         while True:
-            if len(self.all_beanstalkd) == 0:
-                yield None
-
+            yielded = False
             for beanstalkd, beanstalkd_tubes, beanstalkd_senders in self.all_beanstalkd.itervalues():
                 if beanstalkd['score'] == 0:
                     continue
@@ -433,6 +434,10 @@ class XcuteOrchestrator(object):
                     beanstalkd_senders[worker_tube] = sender
 
                 yield beanstalkd_senders[worker_tube]
+                yielded = True
+
+            if not yielded:
+                yield None
 
     def exit(self, *args, **kwargs):
         if self.running:
