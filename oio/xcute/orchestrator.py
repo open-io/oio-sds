@@ -383,7 +383,7 @@ class XcuteOrchestrator(object):
             Get the beanstalkd used for the reply
         """
 
-        if 'reply_addr' in self.conf:
+        if 'beanstalkd_reply_addr' in self.conf:
             return self.conf['beanstalkd_reply_addr']
 
         # prefer a local beanstalkd if it's not in the configuration
