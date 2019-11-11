@@ -144,7 +144,7 @@ class RawxDecommissionJob(XcuteJob):
             service_id, timeout=rdir_timeout,
             limit=rdir_fetch_limit, start_after=marker)
 
-        for i, (_, _, chunk_id, _) in enumerate(chunk_infos):
+        for i, (_, _, chunk_id, _) in enumerate(chunk_infos, 1):
             payload = {
                 'service_id': params['service_id'],
                 'rawx_timeout': params['rawx_timeout'],
