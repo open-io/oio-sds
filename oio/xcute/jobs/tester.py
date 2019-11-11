@@ -18,14 +18,14 @@ from oio.xcute.common.job import XcuteJob, XcuteTask
 
 class TesterFirstTask(XcuteTask):
 
-    def process(self, payload):
+    def process(self, task_id, payload):
         self.logger.info('First task: %s', payload['msg'])
         return True, 1
 
 
 class TesterSecondTask(XcuteTask):
 
-    def process(self, payload):
+    def process(self, task_id, payload):
         self.logger.info('Second task: %s', payload['msg'])
         return True, 2
 
