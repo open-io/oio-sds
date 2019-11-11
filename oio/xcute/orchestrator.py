@@ -18,7 +18,6 @@ import itertools
 import pickle
 import os
 import socket
-import traceback
 
 from oio.common.exceptions import OioTimeout
 from oio.common.logger import get_logger
@@ -107,10 +106,10 @@ class XcuteOrchestrator(object):
 
                 self.handle_new_job(job_id, job_type, job_conf, job_info)
             except Exception:
-                self.logger.error((
+                self.logger.exception((
                     'Failed to instantiate job'
-                    ' (job_id=%s, job_conf=%s): %s') %
-                    (job_type, job_conf, traceback.format_exc()))
+                    ' (job_id=%s, job_conf=%s)') %
+                    (job_type, job_conf))
 
                 self.manager.fail_job(job_id)
 
@@ -283,67 +282,76 @@ class XcuteOrchestrator(object):
                          (self.reply_beanstalkd_addr, self.reply_tube))
 
         # keep the job results in memory
-        job_results = {}
+        self.job_results = {}
         while self.running:
-            job_results = self.listen_loop(listener, job_results)
+            connection_error = self.listen_loop(listener)
 
-            sleep(2)
+            # in case of a beanstalkd connection error
+            # sleep to avoid spamming
+            if connection_error:
+                sleep(2)
 
         self.logger.info('Exited listening thread')
 
-    def listen_loop(self, listener, job_results):
+    def listen_loop(self, listener):
         """
             One iteration of the listening loop
         """
 
+        connection_error = False
         try:
             replies = listener.fetch_job(
-                self.decode_reply, timeout=self.DEFAULT_DISPATCHER_TIMEOUT)
+                self.process_reply, timeout=self.DEFAULT_DISPATCHER_TIMEOUT)
 
-            for reply in replies:
-                job_id = reply['job_id']
-                task_id = reply['task_id']
-                task_ok = reply['task_ok']
-                task_result = reply['task_result']
-
-                self.logger.debug((
-                    'Task processed'
-                    ' (job_id=%s, task_id=%s)') %
-                    (job_id, task_id))
-
-                try:
-                    if job_id not in job_results:
-                        job_results[job_id] = self.manager.get_job_result(job_id)
-
-                    job_type, job_result = job_results[job_id]
-
-                    new_job_result = job_result
-                    if task_ok:
-                        new_job_result = JOB_TYPES[job_type].reduce_result(job_result, task_result)
-
-                    job_results[job_id] = (job_type, new_job_result)
-
-                    job_done = \
-                        self.manager.task_processed(self.orchestrator_id,
-                                                    job_id,
-                                                    task_id, task_ok,
-                                                    new_job_result)
-
-                    if job_done:
-                        del job_results[job_id]
-
-                        self.logger.info('Job done (job_id=%s)' % job_id)
-                except Exception:
-                    self.logger.error('Error processing reply: %s' % traceback.format_exc())
+            # to force the execution of process_reply
+            # if there were no replies, consider it as a connection error
+            connection_error = len(list(replies)) == 0
 
         except OioTimeout:
             pass
 
-        return job_results
+        return connection_error
 
-    @staticmethod
-    def decode_reply(beanstalkd_job_id, reply):
-        yield json.loads(reply)
+    def process_reply(self, beanstalkd_job_id, encoded_reply):
+        job_results = self.job_results
+        reply = json.loads(encoded_reply)
+
+        job_id = reply['job_id']
+        task_id = reply['task_id']
+        task_ok = reply['task_ok']
+        task_result = reply['task_result']
+
+        self.logger.debug((
+            'Task processed'
+            ' (job_id=%s, task_id=%s)') %
+            (job_id, task_id))
+
+        try:
+            if job_id not in job_results:
+                job_results[job_id] = self.manager.get_job_result(job_id)
+
+            job_type, job_result = job_results[job_id]
+
+            new_job_result = job_result
+            if task_ok:
+                new_job_result = JOB_TYPES[job_type].reduce_result(job_result, task_result)
+
+            job_results[job_id] = (job_type, new_job_result)
+
+            job_done = \
+                self.manager.task_processed(self.orchestrator_id,
+                                            job_id,
+                                            task_id, task_ok,
+                                            new_job_result)
+
+            if job_done:
+                del job_results[job_id]
+
+                self.logger.info('Job done (job_id=%s)' % job_id)
+        except Exception:
+            self.logger.exception('Error processing reply')
+
+        yield None
 
     def refresh_all_beanstalkd(self):
         """
