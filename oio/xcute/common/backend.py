@@ -68,8 +68,8 @@ class XcuteBackend(RedisConnection):
             return redis.error_reply('job_exists');
         end;
 
-        redis.call('ZADD', 'xcute:job:ids', 0, KEYS[1])
-        redis.call('LPUSH', 'xcute:job:queue', KEYS[1])
+        redis.call('ZADD', 'xcute:job:ids', 0, KEYS[1]);
+        redis.call('LPUSH', 'xcute:job:queue', KEYS[1]);
     """
 
     lua_take_job = """
@@ -82,6 +82,7 @@ class XcuteBackend(RedisConnection):
         local job_info = redis.call('HGETALL', 'xcute:job:info:' .. job_id);
 
         redis.call('SADD', 'xcute:orchestrator:jobs:' .. KEYS[1], job_id);
+        redis.call('HSET', 'xcute:job:info:' .. job_id, 'orchestrator_id', KEYS[1]);
 
         return {job_id, job_conf, job_info};
     """
@@ -106,11 +107,10 @@ class XcuteBackend(RedisConnection):
         return 0;
     """
 
-    # TODO: does not remove the job from the orchestrator jobs set
-    # when deleted while PAUSED
     lua_delete_job = """
-        local status = redis.call('HGET', 'xcute:job:info:' .. KEYS[1],
-                                  'status');
+        local job_info = redis.call('HMGET', 'xcute:job:info:' .. KEYS[1],
+                                    'status', 'orchestrator_id');
+        local status = job_info[1];
 
         if status == nil or status == false then
             return redis.error_reply('no_job');
@@ -120,12 +120,14 @@ class XcuteBackend(RedisConnection):
             return redis.error_reply('must_be_waiting_paused_finished');
         end;
 
-        if status == 'PAUSED' then
-            -- TODO: remove from orchestrator's job set
-        end;
-
         if status == 'WAITING' then
             redis.call('LREM', 'xcute:job:queue', 1, KEYS[1]);
+        end;
+
+        if status == 'PAUSED' then
+            local orchestrator_id = job_info[2];
+
+            redis.call('SREM', 'xcute:orchestrator:jobs:' .. orchestrator_id, KEYS[1]);
         end;
 
         redis.call('ZREM', 'xcute:job:ids', KEYS[1]);

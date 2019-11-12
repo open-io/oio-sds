@@ -17,8 +17,6 @@ import random
 
 from oio.xcute.common.backend import XcuteBackend
 from oio.common.green import datetime, time
-from oio.common.json import json
-from oio.xcute.jobs import JOB_TYPES
 
 
 class XcuteManager(object):
