@@ -51,11 +51,11 @@ class XcuteBackend(RedisConnection):
                             'The job must be running'),
         'must_be_paused': (Forbidden,
                            'The job must be paused'),
-        'must_be_paused_finished': (Forbidden,
-                                    'The job must be paused or finished')
+        'must_be_waiting_paused_finished': (Forbidden,
+                                            'The job must be waiting or paused or finished')
         }
 
-    key_job_config = 'xcute:job:config:%s'
+    key_job_conf = 'xcute:job:config:%s'
     key_job_ids = 'xcute:job:ids'
     key_job_info = 'xcute:job:info:%s'
     key_job_queue = 'xcute:job:queue'
@@ -70,6 +70,20 @@ class XcuteBackend(RedisConnection):
 
         redis.call('ZADD', 'xcute:job:ids', 0, KEYS[1])
         redis.call('LPUSH', 'xcute:job:queue', KEYS[1])
+    """
+
+    lua_take_job = """
+        local job_id = redis.call('RPOP', 'xcute:job:queue');
+        if job_id == false then
+            return nil;
+        end;
+
+        local job_conf = redis.call('HGETALL', 'xcute:job:config:' .. job_id);
+        local job_info = redis.call('HGETALL', 'xcute:job:info:' .. job_id);
+
+        redis.call('SADD', 'xcute:orchestrator:jobs:' .. KEYS[1], job_id);
+
+        return {job_id, job_conf, job_info};
     """
 
     lua_incr_processed = """
@@ -92,14 +106,26 @@ class XcuteBackend(RedisConnection):
         return 0;
     """
 
+    # TODO: does not remove the job from the orchestrator jobs set
+    # when deleted while PAUSED
     lua_delete_job = """
         local status = redis.call('HGET', 'xcute:job:info:' .. KEYS[1],
                                   'status');
+
         if status == nil or status == false then
             return redis.error_reply('no_job');
         end;
-        if status ~= 'PAUSED' and status ~= 'FINISHED' then
-            return redis.error_reply('must_be_paused_finished');
+
+        if status ~= 'WAITING' and status ~= 'PAUSED' and status ~= 'FINISHED' then
+            return redis.error_reply('must_be_waiting_paused_finished');
+        end;
+
+        if status == 'PAUSED' then
+            -- TODO: remove from orchestrator's job set
+        end;
+
+        if status == 'WAITING' then
+            redis.call('LREM', 'xcute:job:queue', 1, KEYS[1]);
         end;
 
         redis.call('ZREM', 'xcute:job:ids', KEYS[1]);
@@ -115,6 +141,8 @@ class XcuteBackend(RedisConnection):
 
         self.script_create_job = self.register_script(
             self.lua_create_job)
+        self.script_take_job = self.register_script(
+            self.lua_take_job)
         self.script_incr_processed = self.register_script(
             self.lua_incr_processed)
         self.script_delete_job = self.register_script(
@@ -143,16 +171,16 @@ class XcuteBackend(RedisConnection):
             job_ids = self.conn.zrevrangebylex(
                 self.key_job_ids, range_max, range_min, 0, limit_)
 
-            pipeline = self.conn.pipeline(True)
+            pipeline = self.conn.pipeline()
             for job_id in job_ids:
-                pipeline.hgetall(self.key_job_info % job_id)
+                self._get_job_info(job_id, client=pipeline)
             job_infos = pipeline.execute()
 
             for job_id, job_info in zip(job_ids, job_infos):
                 if not job_info:
                     continue
 
-                job = dict(job_id=job_id, **self.sanitize_job_info(job_info))
+                job = dict(job_id=job_id, **self._unmarshal_job_info(job_info))
                 jobs.append(job)
 
             if len(job_ids) < limit_:
@@ -162,23 +190,20 @@ class XcuteBackend(RedisConnection):
 
     @handle_redis_exceptions
     def create_job(self, job_id, job_conf, job_info):
-        job_conf['params'] = json.dumps(job_conf['params'])
-
         pipeline = self.conn.pipeline()
 
         self.script_create_job(keys=[job_id], client=pipeline)
-        pipeline.hmset(self.key_job_info % job_id, job_info)
-        pipeline.hmset(self.key_job_config % job_id, job_conf)
+        self._update_job_info(job_id, job_info, client=pipeline)
+        self._update_job_conf(job_id, job_conf, client=pipeline)
 
         pipeline.execute()
 
-    def start_job(self, job_id, job_conf, updates):
+    @handle_redis_exceptions
+    def start_job(self, job_id, job_conf, job_info):
         pipeline = self.conn.pipeline()
 
-        job_conf['params'] = json.dumps(job_conf['params'])
-
-        pipeline.hmset(self.key_job_config % job_id, job_conf)
-        pipeline.hmset(self.key_job_info % job_id, updates)
+        self._update_job_info(job_id, job_info, client=pipeline)
+        self._update_job_conf(job_id, job_conf, client=pipeline)
 
         pipeline.execute()
 
@@ -186,44 +211,36 @@ class XcuteBackend(RedisConnection):
         orchestrator_jobs_key = self.key_orchestrator_jobs % orchestrator_id
         job_ids = self.conn.smembers(orchestrator_jobs_key)
 
-        pipeline = self.conn.pipeline(True)
+        pipeline = self.conn.pipeline()
         for job_id in job_ids:
-            pipeline.hgetall(self.key_job_config % job_id)
-            pipeline.hgetall(self.key_job_info % job_id)
+            self._get_job_conf(job_id, client=pipeline)
+            self._get_job_info(job_id, client=pipeline)
         job_config_infos = pipeline.execute()
 
         return (
-            (job_id, self.sanitize_job_conf(job_conf), self.sanitize_job_info(job_info))
+            (job_id, self._unmarshal_job_conf(job_conf), self._unmarshal_job_info(job_info))
             for job_conf, job_info in zip(*([iter(job_config_infos)] * 2))
         )
 
     @handle_redis_exceptions
-    def pop_job(self, orchestrator_id):
-        while True:
-            job_id = self.conn.rpop(self.key_job_queue)
+    def take_job(self, orchestrator_id):
+        job = self.script_take_job(keys=[orchestrator_id])
 
-            if job_id is None:
-                return None
+        if job is None:
+            return None
 
-            job_info = self.get_job_info(job_id)
+        job_id = job[0]
+        job_conf = self._unmarshal_job_conf(self._lua_array_to_dict(job[1]))
+        job_info = self._unmarshal_job_info(self._lua_array_to_dict(job[2]))
 
-            # the job has already been deleted, ignore
-            if job_info is None:
-                continue
-
-            job_conf = self.get_job_config(job_id)
-
-            self.conn.sadd(
-                self.key_orchestrator_jobs % orchestrator_id, job_id)
-
-            return job_id, job_conf, job_info
+        return job_id, job_conf, job_info
 
     def incr_sent(self, job_id, task_id, updates):
         pipeline = self.conn.pipeline()
 
         pipeline.hincrby(self.key_job_info % job_id, 'sent', 1)
-        pipeline.hmset(self.key_job_info % job_id, updates)
         pipeline.sadd(self.key_job_tasks % job_id, task_id)
+        self._update_job_info(job_id, updates, client=pipeline)
 
         pipeline.execute()
 
@@ -231,56 +248,101 @@ class XcuteBackend(RedisConnection):
     def incr_processed(self, orchestrator_id, job_id, task_id, error, updates):
         pipeline = self.conn.pipeline()
 
-        done = self.script_incr_processed(
+        self.script_incr_processed(
             keys=[orchestrator_id, job_id],
-            args=[int(error)])
-        pipeline.hmset(self.key_job_info % job_id, updates)
+            args=[int(error)],
+            client=pipeline)
         pipeline.srem(self.key_job_tasks % job_id, task_id)
+        self._update_job_info(job_id, updates, client=pipeline)
 
-        pipeline.execute()
+        done = pipeline.execute()[0]
 
         return True if done == 1 else False
 
     @handle_redis_exceptions
     def fail_job(self, orchestrator_id, job_id, updates):
-        pipeline = self.conn.pipeline(True)
+        pipeline = self.conn.pipeline()
 
-        pipeline.hmset(self.key_job_info % job_id, updates)
         pipeline.srem(self.key_orchestrator_jobs % orchestrator_id, job_id)
+        self._update_job_info(job_id, updates, client=pipeline)
 
         pipeline.execute()
 
-    def get_job_config(self, job_id):
-        job_conf = self.conn.hgetall(self.key_job_config % job_id)
+    def get_job_conf(self, job_id):
+        job_conf = self._get_job_conf(job_id, client=self.conn)
 
-        return self.sanitize_job_conf(job_conf)
+        return self._unmarshal_job_conf(job_conf)
 
     def get_job_info(self, job_id):
-        info = self.conn.hgetall(self.key_job_info % job_id)
-        if not info:
-            raise NotFound(message='Job %s does\'nt exist' % job_id)
-        return self.sanitize_job_info(info)
+        job_info = self._get_job_info(job_id, client=self.conn)
+
+        return self._unmarshal_job_info(job_info)
 
     def get_job_type_and_result(self, job_id):
         job_info = self.get_job_info(job_id)
 
         return job_info['job_type'], job_info.get('result')
 
+    def update_job_conf(self, job_id, updates):
+        self._update_job_conf(job_id, updates, client=self.conn)
+
     def update_job_info(self, job_id, updates):
-        self.conn.hmset(self.key_job_info % job_id, updates)
+        self._update_job_info(job_id, updates, client=self.conn)
 
     @handle_redis_exceptions
     def delete_job(self, job_id):
         self.script_delete_job(keys=[job_id])
 
+    def _get_job_conf(self, job_id, client):
+        return client.hgetall(self.key_job_conf % job_id)
+
+    def _get_job_info(self, job_id, client):
+        return client.hgetall(self.key_job_info % job_id)
+
+    def _update_job_info(self, job_id, updates, client):
+        marshalled_updates = self._marshal_job_info(updates)
+        return client.hmset(self.key_job_info % job_id, marshalled_updates)
+
+    def _update_job_conf(self, job_id, updates, client):
+        marshalled_updates = self._marshal_job_conf(updates)
+        return client.hmset(self.key_job_conf % job_id, marshalled_updates)
+
     @staticmethod
-    def sanitize_job_conf(job_conf):
+    def _marshal_job_conf(job_conf):
+        marshalled_job_conf = job_conf.copy()
+
+        if 'params' in job_conf:
+            marshalled_job_conf['params'] = json.dumps(job_conf['params'])
+
+        return marshalled_job_conf
+
+    @staticmethod
+    def _unmarshal_job_conf(marshalled_job_conf):
+        job_conf = marshalled_job_conf.copy()
+
         job_conf['params'] = json.loads(job_conf['params'])
 
         return job_conf
 
     @staticmethod
-    def sanitize_job_info(job_info):
+    def _marshal_job_info(job_info):
+        marshalled_job_info = job_info.copy()
+
+        if 'all_sent' in job_info:
+            marshalled_job_info['all_sent'] = int(job_info['all_sent'])
+
+        if job_info.get('total') is None:
+            marshalled_job_info.pop('total', None)
+
+        if 'result' in job_info:
+            marshalled_job_info['result'] = json.dumps(job_info['result'])
+
+        return marshalled_job_info
+
+    @staticmethod
+    def _unmarshal_job_info(marshalled_job_info):
+        job_info = marshalled_job_info.copy()
+
         all_sent = True if job_info['all_sent'] == '1' else False
         total = int(job_info['total']) if 'total' in job_info else None
 
@@ -292,3 +354,8 @@ class XcuteBackend(RedisConnection):
         job_info['result'] = json.loads(job_info['result'])
 
         return job_info
+
+    @staticmethod
+    def _lua_array_to_dict(array):
+        it = iter(array)
+        return dict(zip(*([it] * 2)))
