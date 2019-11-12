@@ -261,7 +261,7 @@ class XcuteBackend(RedisConnection):
             raise NotFound(message='Job %s does\'nt exist' % job_id)
         return self.sanitize_job_info(info)
 
-    def get_job_result(self, job_id):
+    def get_job_type_and_result(self, job_id):
         job_info = self.get_job_info(job_id)
 
         return job_info['job_type'], job_info.get('result')
@@ -289,5 +289,6 @@ class XcuteBackend(RedisConnection):
         job_info['processed'] = int(job_info['processed'])
         job_info['errors'] = int(job_info['errors'])
         job_info['total'] = total
+        job_info['result'] = json.loads(job_info['result'])
 
         return job_info
