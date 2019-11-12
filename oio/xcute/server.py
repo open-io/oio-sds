@@ -65,9 +65,8 @@ class Xcute(WerkzeugApp):
             sanitized_params, lock = job_class.sanitize_params(job_params)
             job_conf['params'] = sanitized_params
 
-            job = self.manager.create_job(job_type, job_conf)
-
-            return Response(json.dumps(job), status=202)
+            job_id = self.manager.backend.create(job_type, job_conf)
+            return Response(job_id, status=202)
 
     def on_job(self, req, job_id):
         if req.method == 'GET':

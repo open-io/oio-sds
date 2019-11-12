@@ -31,8 +31,6 @@ from oio.xcute.jobs import JOB_TYPES
 
 class XcuteOrchestrator(object):
 
-    DEFAULT_WORKER_TUBE = 'oio-xcute'
-    DEFAULT_REPLY_TUBE = DEFAULT_WORKER_TUBE + '.reply'
     DEFAULT_DISPATCHER_TIMEOUT = 2
     DEFAULT_TASKS_BATCH_SIZE = 8
 
@@ -42,6 +40,26 @@ class XcuteOrchestrator(object):
         self.manager = XcuteManager(self.conf, self.logger)
         self.conscience_client = ConscienceClient(self.conf)
 
+        self.orchestrator_id = self.conf.get('orchestrator_id')
+        if not self.orchestrator_id:
+            raise ValueError('Missing orchestrator ID')
+        self.logger.info('Using orchestrator ID: %s', self.orchestrator_id)
+
+        self.beanstalkd_workers_tube = self.conf.get('beanstalkd_workers_tube')
+        if not self.beanstalkd_workers_tube:
+            raise ValueError('Missing beanstalkd workers tube')
+        self.logger.info('Using beanstalkd workers tube: %s',
+                         self.beanstalkd_workers_tube)
+
+        self.beanstalkd_reply_addr = self.conf.get('beanstalkd_reply_addr')
+        if not self.beanstalkd_reply_addr:
+            raise ValueError('Missing beanstalkd reply address')
+        self.beanstalkd_reply_tube = self.conf.get(
+            'beanstalkd_reply_tube', self.beanstalkd_workers_tube + '.reply')
+        self.logger.info('Using beanstalkd reply : %s %s',
+                         self.beanstalkd_reply_addr,
+                         self.beanstalkd_reply_tube)
+
         self.running = True
         self.threads = {}
 
@@ -49,10 +67,6 @@ class XcuteOrchestrator(object):
         """
             Take jobs from the queue and spawn threads to dispatch them
         """
-
-        self.orchestrator_id = \
-            self.conf.get('orchestrator_id', socket.gethostname())
-        self.logger.info('Using orchestrator id %s' % self.orchestrator_id)
 
         # gather beanstalkd info
         self.all_beanstalkd = OrderedDict()
@@ -67,20 +81,14 @@ class XcuteOrchestrator(object):
 
             sleep(5)
 
-        self.reply_beanstalkd_addr = self.get_reply_beanstalkd_addr()
-        self.reply_tube = self.conf.get('beanstalkd_reply_tube', self.DEFAULT_REPLY_TUBE)
-
         self.threads[beanstalkd_thread.ident] = beanstalkd_thread
 
         # restart running jobs
         self.logger.debug('Look for unfinished jobs')
-        orchestrator_jobs = \
-            self.manager.get_orchestrator_jobs(self.orchestrator_id)
-
-        for job_id, job_conf, job_info in orchestrator_jobs:
-            self.logger.info('Found running job (job_id=%s, job_conf=%s)' %
-                             (job_id, job_conf))
-            self.handle_running_job(job_id, job_conf, job_info)
+        running_jobs = \
+            self.manager.backend.get_running_jobs(self.orchestrator_id)
+        for running_job in running_jobs:
+            self.run_job(*running_job)
 
         # start processing replies
         listen_thread = threading.Thread(target=self.listen)
@@ -88,106 +96,58 @@ class XcuteOrchestrator(object):
 
         self.threads[listen_thread.ident] = listen_thread
 
+        # run new jobs
         while self.running:
             # remove dead dispatching threads
             for thread_id, thread_ in self.threads.items():
                 if not thread_.is_alive():
                     del self.threads[thread_id]
 
-            self.orchestrate_loop()
+            new_jobs = iter(
+                lambda: self.manager.backend.run_next(self.orchestrator_id), None)
+            for new_job in new_jobs:
+                self.run_job(*new_job)
 
             sleep(2)
 
         for thread_ in self.threads.values():
             thread_.join()
 
-    def orchestrate_loop(self):
-        """
-            One iteration of the main loop
-        """
-
-        new_jobs = self.manager.get_new_jobs(self.orchestrator_id)
-        for job_id, job_conf, job_info in new_jobs:
-            self.logger.info('Found new job (job_id=%s, job_conf=%s)' %
-                             (job_id, job_conf))
-            try:
-                job_type = job_info['job_type']
-
-                self.handle_new_job(job_id, job_type, job_conf, job_info)
-            except Exception:
-                self.logger.exception((
-                    'Failed to instantiate job'
-                    ' (job_id=%s, job_conf=%s)') %
-                    (job_type, job_conf))
-
-                self.manager.fail_job(self.orchestrator_id, job_id)
-
-    def handle_new_job(self, job_id, job_type, job_conf, job_info):
-        """
-            Set a new job's configuration
-            and get its tasks before dispatching it
-        """
-
-        job_tasks = JOB_TYPES[job_type].get_tasks(
-            self.conf, self.logger,
-            job_conf['params'])
-
-        job_conf.setdefault('beanstalkd_worker_tube',
-            self.conf.get('beanstalkd_workers_tube', self.DEFAULT_WORKER_TUBE))
-        job_conf['beanstalkd_reply_addr'] = self.reply_beanstalkd_addr
-        job_conf['beanstalkd_reply_tube'] = self.reply_tube
-
-        self.handle_job(job_id, job_conf, job_info, job_tasks)
-
-    def handle_running_job(self, job_id, job_conf, job_info):
-        """
-            Read the job's configuration
-            and get its tasks before dispatching it
-        """
-
-        if job_info['all_sent']:
-            return
-
-        job_type = job_info['job_type']
-        last_task_id = None
-        if len(job_info['last_sent']) > 0:
-            last_task_id = job_info['last_sent']
-        job_tasks = JOB_TYPES[job_type].get_tasks(
-            self.conf, self.logger,
-            job_conf['params'], marker=last_task_id)
-
-        self.handle_job(job_id, job_conf, job_info, job_tasks)
-
-    def handle_job(self, job_id, job_conf, job_info, job_tasks):
+    def run_job(self, job_id, job_type, last_sent, job_config):
         """
             Get the beanstalkd available for this job
             and start the dispatching thread
         """
+        self.logger.info('Run job %s', job_id)
 
-        worker_tube = job_conf['beanstalkd_worker_tube']
+        try:
+            thread_args = (job_id, JOB_TYPES[job_type], last_sent, job_config)
+            dispatch_thread = threading.Thread(
+                target=self.dispatch_job,
+                args=thread_args)
+            dispatch_thread.start()
 
-        beanstalkd_workers = \
-            self.get_loadbalanced_workers(worker_tube)
+            self.threads[dispatch_thread.ident] = dispatch_thread
+        except Exception:
+            self.logger.exception('Failed to run job %s', job_id)
+            self.manager.fail_job(self.orchestrator_id, job_id)
 
-        self.manager.start_job(job_id, job_conf)
-
-        thread_args = (job_id, job_conf,
-                       job_tasks, beanstalkd_workers)
-        dispatch_thread = threading.Thread(
-            target=self.dispatch_job,
-            args=thread_args)
-        dispatch_thread.start()
-
-        self.threads[dispatch_thread.ident] = dispatch_thread
-
-    def dispatch_job(self, job_id, job_conf, job_tasks, beanstalkd_workers):
+    def dispatch_job(self, job_id, job_class, last_sent, job_config):
         """
             Dispatch all of a job's tasks
         """
 
         self.logger.info('Start dispatching job (job_id=%s)', job_id)
 
+        # TODO(adu)
+        beanstalkd_workers = self.get_loadbalanced_workers(
+            self.beanstalkd_workers_tube)
+
         try:
+            job_tasks = job_class.get_tasks(
+                self.conf, self.logger,
+                job_config['params'], marker=last_sent)
+
             all_tasks_sent = False
             tasks_batch = list()
             for task in job_tasks:
@@ -276,8 +236,8 @@ class XcuteOrchestrator(object):
                 'job_id': job_id,
                 'tasks': tasks_payload,
                 'beanstalkd_reply': {
-                    'addr': self.reply_beanstalkd_addr,
-                    'tube': self.reply_tube,
+                    'addr': self.beanstalkd_reply_addr,
+                    'tube': self.beanstalkd_reply_tube,
                 },
             }
         }
@@ -293,8 +253,8 @@ class XcuteOrchestrator(object):
         while self.running:
             try:
                 listener = BeanstalkdListener(
-                    addr=self.reply_beanstalkd_addr,
-                    tube=self.reply_tube,
+                    addr=self.beanstalkd_reply_addr,
+                    tube=self.beanstalkd_reply_tube,
                     logger=self.logger)
 
                 break
@@ -303,8 +263,8 @@ class XcuteOrchestrator(object):
 
             sleep(5)
 
-        self.logger.info('Listening to replies on %s (tube=%s)' %
-                         (self.reply_beanstalkd_addr, self.reply_tube))
+        self.logger.info('Listening to replies on %s (tube=%s)',
+                         self.beanstalkd_reply_addr, self.beanstalkd_reply_tube)
 
         # keep the job results in memory
         self.job_results = {}
@@ -395,21 +355,6 @@ class XcuteOrchestrator(object):
             sleep(5)
 
         self.logger.info('Exited beanstalkd thread')
-
-    def get_reply_beanstalkd_addr(self):
-        """
-            Get the beanstalkd used for the reply
-        """
-
-        if 'beanstalkd_reply_addr' in self.conf:
-            return self.conf['beanstalkd_reply_addr']
-
-        # prefer a local beanstalkd if it's not in the configuration
-        for service in self.conscience_client.local_services():
-            if service['type'] == 'beanstalkd':
-                return service['addr']
-
-        return self.conscience_client.next_instance('beanstalkd')['addr']
 
     @staticmethod
     def get_beanstalkd_tubes(beanstalkd_addr):

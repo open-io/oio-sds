@@ -74,9 +74,9 @@ class RawxDecommission(MultipleServicesCommandMixin, lister.Lister):
         for service_id in parsed_args.services:
             job_params['service_id'] = service_id
             try:
-                job_info_ = self.xcute.job_create(
+                job_id = self.xcute.job_create(
                     RawxDecommissionJob.JOB_TYPE, job_params=job_params)
-                res = job_info_['id']
+                res = job_id
             except Exception as exc:
                 res = str(exc)
             yield (service_id, res)
