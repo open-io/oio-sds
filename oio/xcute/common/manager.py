@@ -94,7 +94,7 @@ class XcuteManager(object):
         }
         self.backend.update_job_info(job_id, updates)
 
-    def fail_job(self, job_id):
+    def fail_job(self, orchestrator_id, job_id):
         """
             Mark a job as failed
         """
@@ -103,7 +103,7 @@ class XcuteManager(object):
             'status': self.STATUS_FAILED,
             'mtime': time.time(),
         }
-        self.backend.update_job_info(job_id, updates)
+        self.backend.fail_job(orchestrator_id, job_id, updates)
 
     def task_sent(self, job_id, task_id, total=None):
         """
