@@ -775,7 +775,8 @@ class Checker(object):
                 errors.append('Check failed: %s' % (err, ))
                 break
 
-            if resp.get('truncated', False):
+            truncated = resp.get('truncated', False)
+            if truncated:
                 marker = resp['next_marker']
 
             if resp['objects']:
@@ -783,7 +784,7 @@ class Checker(object):
                 if not marker:
                     marker = resp['objects'][-1]['name']
                 results.extend(resp['objects'])
-                if self.limit_listings > 1:
+                if not truncated or self.limit_listings > 1:
                     break
             else:
                 ct_meta = resp
