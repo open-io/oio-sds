@@ -241,6 +241,15 @@ class XcuteBackend(RedisConnection):
 
         return True if done == 1 else False
 
+    @handle_redis_exceptions
+    def fail_job(self, orchestrator_id, job_id, updates):
+        pipeline = self.conn.pipeline(True)
+
+        pipeline.hmset(self.key_job_info % job_id, updates)
+        pipeline.srem(self.key_orchestrator_jobs % orchestrator_id, job_id)
+
+        pipeline.execute()
+
     def get_job_config(self, job_id):
         job_conf = self.conn.hgetall(self.key_job_config % job_id)
 
