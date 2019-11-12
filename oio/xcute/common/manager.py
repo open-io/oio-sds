@@ -52,7 +52,7 @@ class XcuteManager(object):
             'all_sent': 0,
             'processed': 0,
             'errors': 0,
-            'result': json.dumps(None),
+            'result': None,
         }
 
         self.backend.create_job(job_id, job_conf, job_info)
@@ -71,7 +71,7 @@ class XcuteManager(object):
             Get waiting jobs until there's none left
         """
 
-        return iter(lambda: self.backend.pop_job(orchestrator_id), None)
+        return iter(lambda: self.backend.take_job(orchestrator_id), None)
 
     def start_job(self, job_id, job_conf):
         """
@@ -114,9 +114,8 @@ class XcuteManager(object):
         updates = {
             'mtime': time.time(),
             'last_sent': task_id,
+            'total': total,
         }
-        if total is not None:
-            updates['total'] = total
         self.backend.incr_sent(job_id, task_id, updates)
 
     def all_tasks_sent(self, job_id):
@@ -137,7 +136,7 @@ class XcuteManager(object):
 
         updates = {
             'mtime': time.time(),
-            'result': json.dumps(job_result),
+            'result': job_result,
         }
         return self.backend.incr_processed(orchestrator_id, job_id,
                                            task_id, not task_ok, updates)
