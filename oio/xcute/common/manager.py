@@ -52,6 +52,7 @@ class XcuteManager(object):
             'all_sent': 0,
             'processed': 0,
             'errors': 0,
+            'result': json.dumps(None),
         }
 
         self.backend.create_job(job_id, job_conf, job_info)
@@ -136,9 +137,8 @@ class XcuteManager(object):
 
         updates = {
             'mtime': time.time(),
+            'result': json.dumps(job_result),
         }
-        if job_result is not None:
-            updates['job_result'] = job_result
         return self.backend.incr_processed(orchestrator_id, job_id,
                                            task_id, not task_ok, updates)
 
@@ -163,8 +163,8 @@ class XcuteManager(object):
 
         self.backend.delete_job(job_id)
 
-    def get_job_result(self, job_id):
-        return self.backend.get_job_result(job_id)
+    def get_job_type_and_result(self, job_id):
+        return self.backend.get_job_type_and_result(job_id)
 
     @staticmethod
     def _uuid():

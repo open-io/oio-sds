@@ -331,7 +331,7 @@ class XcuteOrchestrator(object):
 
         try:
             if job_id not in job_results:
-                job_results[job_id] = self.manager.get_job_result(job_id)
+                job_results[job_id] = self.manager.get_job_type_and_result(job_id)
 
             job_type, job_result = job_results[job_id]
 
