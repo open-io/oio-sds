@@ -79,6 +79,12 @@ class XcuteBackend(RedisConnection):
     key_tasks_running = 'xcute:tasks:running:%s'
     key_orchestrator_jobs = 'xcute:orchestrator:jobs:%s'
 
+    _lua_update_mtime = """
+        local time = redis.call('TIME');
+        redis.call('HSET', 'xcute:job:info:' .. job_id, 'mtime',
+                   time[1] .. '.' .. time[2]);
+    """
+
     lua_create = """
         local job_id = KEYS[1];
         local job_type = KEYS[2];
@@ -100,6 +106,9 @@ class XcuteBackend(RedisConnection):
             'errors', '0');
         redis.call('HSET', 'xcute:job:config:' .. job_id, unpack(job_config));
         redis.call('RPUSH', 'xcute:waiting_run:jobs', job_id);
+    """ + _lua_update_mtime + """
+        redis.call('HSET', 'xcute:job:info:' .. job_id, 'ctime',
+                   time[1] .. '.' .. time[2]);
     """
 
     lua_run_next = """
@@ -115,7 +124,7 @@ class XcuteBackend(RedisConnection):
                    'orchestrator_id', orchestrator_id);
         redis.call('SADD', 'xcute:orchestrator:jobs:' .. orchestrator_id,
                    job_id);
-
+    """ + _lua_update_mtime + """
         local job_info = redis.call('HGETALL', 'xcute:job:info:' .. job_id);
         local job_config = redis.call('HGETALL', 'xcute:job:config:' .. job_id);
         return {job_id, job_info, job_config};
@@ -134,12 +143,14 @@ class XcuteBackend(RedisConnection):
             redis.call('HSET', 'xcute:job:info:' .. job_id,
                        'status', 'PAUSED');
             redis.call('LREM', 'xcute:waiting_run:jobs', 1, job_id);
+    """ + _lua_update_mtime + """
             return;
         end;
 
         if status == 'RUNNING' then
             redis.call('HSET', 'xcute:job:info:' .. job_id,
                        'status', 'WAITING_PAUSE');
+        """ + _lua_update_mtime + """
             return;
         end;
 
@@ -180,6 +191,7 @@ class XcuteBackend(RedisConnection):
         if status == 'WAITING_PAUSE' then
             redis.call('HSET', 'xcute:job:info:' .. job_id,
                        'status', 'RUNNING');
+    """ + _lua_update_mtime + """
             return;
         end;
 
@@ -187,6 +199,7 @@ class XcuteBackend(RedisConnection):
             redis.call('HSET', 'xcute:job:info:' .. job_id,
                        'status', 'WAITING_RUN');
             redis.call('RPUSH', 'xcute:waiting_run:jobs', job_id);
+    """ + _lua_update_mtime + """
             return;
         end;
 
@@ -249,6 +262,7 @@ class XcuteBackend(RedisConnection):
                        job_id);
             stopped = true;
         end;
+    """ + _lua_update_mtime + """
         return stopped;
     """
 
@@ -285,7 +299,7 @@ class XcuteBackend(RedisConnection):
                            'status', 'FINISHED');
             end;
         end;
-    """
+    """ + _lua_update_mtime
 
     lua_delete = """
         local job_id = KEYS[1];
