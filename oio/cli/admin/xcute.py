@@ -37,7 +37,7 @@ class XcuteJobList(XcuteCommand, Lister):
     def _take_action(self, parsed_args):
         jobs = self.xcute.job_list()
         for job_info in jobs:
-            yield (job_info['job_id'], job_info['status'], job_info['job_type'],
+            yield (job_info['id'], job_info['status'], job_info['type'],
                    job_info['ctime'], float(job_info['mtime']))
 
     def take_action(self, parsed_args):
@@ -66,7 +66,7 @@ class XcuteJobShow(XcuteCommand, ShowOne):
         return zip(*sorted(job_info.items()))
 
 
-class XcuteJobPause(XcuteCommand, Command):
+class XcuteJobPause(XcuteCommand, Lister):
     """
     Pause the jobs
     """
@@ -86,7 +86,7 @@ class XcuteJobPause(XcuteCommand, Command):
         for job_id in parsed_args.job_ids:
             paused = True
             try:
-                self.xcute.job_resume(job_id)
+                self.xcute.job_pause(job_id)
             except Exception as exc:
                 self.logger.error('Failed to paused job %s: %s',
                                   job_id, exc)
@@ -99,7 +99,7 @@ class XcuteJobPause(XcuteCommand, Command):
         return self.columns, self._take_action(parsed_args)
 
 
-class XcuteJobResume(XcuteCommand, Command):
+class XcuteJobResume(XcuteCommand, Lister):
     """
     Resume the jobs
     """

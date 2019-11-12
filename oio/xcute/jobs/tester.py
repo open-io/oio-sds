@@ -47,8 +47,6 @@ class TesterJob(XcuteJob):
         start = params['start']
         end = params['end']
 
-        total_tasks = end - start
-
         if marker is not None:
             start = int(marker) + 1
 
@@ -62,7 +60,7 @@ class TesterJob(XcuteJob):
 
             task_id = str(i)
 
-            yield (task_class, task_id, task_payload, total_tasks)
+            yield task_class, task_id, task_payload
 
     @staticmethod
     def reduce_result(job_result, task_result):

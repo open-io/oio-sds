@@ -45,22 +45,13 @@ class XcuteBackend(RedisConnection):
     _lua_errors = {
         'job_exists': (
             Forbidden,
-            'The job already exists'),
+            'Job already exists'),
         'no_job': (
             NotFound,
-            'The job does\'nt exist'),
-        'lock_exists': (
+            'Job does\'nt exist'),
+        'job_must_be_paused_finished': (
             Forbidden,
-            'The lock already exists'),
-        'must_be_running': (
-            Forbidden,
-            'The job must be running'),
-        'must_be_paused': (
-            Forbidden,
-            'The job must be paused'),
-        'must_be_waiting_paused_finished': (
-            Forbidden,
-            'The job must be waiting or paused or finished'),
+            'Job must be paused or finished'),
         'job_already_waiting_run': (
             Forbidden,
             'Job already waiting run'),
@@ -210,8 +201,7 @@ class XcuteBackend(RedisConnection):
 
     lua_update_tasks_sent = """
         local job_id = KEYS[1];
-        local orchestrator_id = KEYS[2];
-        local all_tasks_sent = KEYS[3];
+        local all_tasks_sent = KEYS[2];
         local tasks_sent = ARGV;
         local tasks_sent_length = #tasks_sent;
 
@@ -244,6 +234,8 @@ class XcuteBackend(RedisConnection):
                            'status', 'RUNNING_LAST_TASKS');
             end;
             -- remove the job of the orchestrator
+            local orchestrator_id = redis.call(
+                'HGET', 'xcute:job:info:' .. job_id, 'orchestrator_id');
             redis.call('SREM', 'xcute:orchestrator:jobs:' .. orchestrator_id,
                        job_id);
             stopped = true;
@@ -251,6 +243,8 @@ class XcuteBackend(RedisConnection):
             -- if waiting pause, pause the job
             redis.call('HSET', 'xcute:job:info:' .. job_id,
                        'status', 'PAUSED');
+            local orchestrator_id = redis.call(
+                'HGET', 'xcute:job:info:' .. job_id, 'orchestrator_id');
             redis.call('SREM', 'xcute:orchestrator:jobs:' .. orchestrator_id,
                        job_id);
             stopped = true;
@@ -293,32 +287,22 @@ class XcuteBackend(RedisConnection):
         end;
     """
 
-    lua_delete_job = """
-        local job_info = redis.call('HMGET', 'xcute:job:info:' .. KEYS[1],
-                                    'status', 'orchestrator_id');
-        local status = job_info[1];
+    lua_delete = """
+        local job_id = KEYS[1];
 
+        local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
+                                  'status');
         if status == nil or status == false then
             return redis.error_reply('no_job');
         end;
 
-        if status ~= 'WAITING' and status ~= 'PAUSED' and status ~= 'FINISHED' then
-            return redis.error_reply('must_be_waiting_paused_finished');
+        if status ~= 'PAUSED' and status ~= 'FINISHED' then
+            return redis.error_reply('job_must_be_paused_finished');
         end;
 
-        if status == 'WAITING' then
-            redis.call('LREM', 'xcute:waiting_run:jobs', 1, KEYS[1]);
-        end;
-
-        if status == 'PAUSED' then
-            local orchestrator_id = job_info[2];
-
-            redis.call('SREM', 'xcute:orchestrator:jobs:' .. orchestrator_id, KEYS[1]);
-        end;
-
-        redis.call('ZREM', 'xcute:job:ids', KEYS[1]);
-        redis.call('DEL', 'xcute:job:info:' .. KEYS[1]);
-        redis.call('DEL', 'xcute:job:config:' .. KEYS[1]);
+        redis.call('ZREM', 'xcute:job:ids', job_id);
+        redis.call('DEL', 'xcute:job:info:' .. job_id);
+        redis.call('DEL', 'xcute:job:config:' .. job_id);
         """
 
     def __init__(self, conf):
@@ -339,15 +323,15 @@ class XcuteBackend(RedisConnection):
             self.lua_update_tasks_sent)
         self.script_update_tasks_processed = self.register_script(
             self.lua_update_tasks_processed)
-        self.script_delete_job = self.register_script(
-            self.lua_delete_job)
+        self.script_delete = self.register_script(
+            self.lua_delete)
 
     def status(self):
         job_count = self.conn.zcard(self.key_job_ids)
         status = {'job_count': job_count}
         return status
 
-    def list_jobs(self, marker=None, limit=1000):
+    def list_jobs(self, marker=None, limit=None):
         limit = limit or self.DEFAULT_LIMIT
 
         jobs = list()
@@ -374,7 +358,8 @@ class XcuteBackend(RedisConnection):
                 if not job_info:
                     continue
 
-                job = dict(job_id=job_id, **self._unmarshal_job_info(job_info))
+                job = dict(**self._unmarshal_job_info(job_info))
+                job['id'] = job_id
                 jobs.append(job)
 
             if len(job_ids) < limit_:
@@ -436,14 +421,13 @@ class XcuteBackend(RedisConnection):
         self.script_resquest_pause(keys=[job_id], client=self.conn)
 
     @handle_redis_exceptions
-    def resume(self, job_id, orchestrator_id):
+    def resume(self, job_id):
         self.script_resume(keys=[job_id], client=self.conn)
 
     @handle_redis_exceptions
-    def update_tasks_sent(self, job_id, orchestrator_id, task_ids,
-                          all_tasks_sent=False):
+    def update_tasks_sent(self, job_id, task_ids, all_tasks_sent=False):
         return self.script_update_tasks_sent(
-            keys=[job_id, orchestrator_id, str(all_tasks_sent)],
+            keys=[job_id, str(all_tasks_sent)],
             args=task_ids, client=self.conn)
 
     @handle_redis_exceptions
@@ -484,7 +468,7 @@ class XcuteBackend(RedisConnection):
 
     @handle_redis_exceptions
     def delete_job(self, job_id):
-        self.script_delete_job(keys=[job_id])
+        self.script_delete(keys=[job_id])
 
     def _get_job_conf(self, job_id, client):
         return client.hgetall(self.key_job_conf % job_id)

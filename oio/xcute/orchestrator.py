@@ -163,7 +163,7 @@ class XcuteOrchestrator(object):
                     beanstalkd_workers, job_id, tasks_batch)
                 if sent:
                     paused = self.manager.backend.update_tasks_sent(
-                        job_id, self.orchestrator_id,
+                        job_id,
                         [task_id for _, task_id, _ in tasks_batch])
                     if paused:
                         return
@@ -176,7 +176,7 @@ class XcuteOrchestrator(object):
                 beanstalkd_workers, job_id, tasks_batch)
             if sent:
                 self.manager.backend.update_tasks_sent(
-                    job_id, self.orchestrator_id,
+                    job_id,
                     [task_id for _, task_id, _ in tasks_batch],
                     all_tasks_sent=True)
 
