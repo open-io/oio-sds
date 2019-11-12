@@ -88,6 +88,11 @@ class XcuteOrchestrator(object):
         self.threads[listen_thread.ident] = listen_thread
 
         while self.running:
+            # remove dead dispatching threads
+            for thread_id, thread_ in self.threads.items():
+                if not thread_.is_alive():
+                    del self.threads[thread_id]
+
             self.orchestrate_loop()
 
             sleep(2)
@@ -203,8 +208,7 @@ class XcuteOrchestrator(object):
                 if is_finished:
                     self.logger.info('Job done (job_id=%s)' % job_id)
 
-                # threading.current_thread returns the wrong id
-                del self.threads[thread.get_ident()]
+                self.logger.info('Finished dispatching job (job_id=%s)', job_id)
 
                 return
 
@@ -213,8 +217,6 @@ class XcuteOrchestrator(object):
             self.logger.exception('Failed generating task list (job_id=%s', job_id)
 
             self.manager.fail_job(self.orchestrator_id, job_id)
-
-        self.logger.info('Finished dispatching job (job_id=%s)', job_id)
 
     def dispatch_task(self, beanstalkd_workers, job_id,
                       task_id, task_class, task_payload):
