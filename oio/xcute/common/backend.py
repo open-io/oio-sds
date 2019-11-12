@@ -245,6 +245,16 @@ class XcuteBackend(RedisConnection):
         pipeline.execute()
 
     @handle_redis_exceptions
+    def all_sent(self, orchestrator_id, job_id, updates, is_finished):
+        pipeline = self.conn.pipeline()
+
+        self._update_job_info(job_id, updates, client=pipeline)
+        if is_finished:
+            pipeline.srem(self.key_orchestrator_jobs % orchestrator_id, job_id)
+
+        pipeline.execute()
+
+    @handle_redis_exceptions
     def incr_processed(self, orchestrator_id, job_id, task_id, error, updates):
         pipeline = self.conn.pipeline()
 

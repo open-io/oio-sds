@@ -182,6 +182,7 @@ class XcuteOrchestrator(object):
         self.logger.info('Start dispatching job (job_id=%s)', job_id)
 
         try:
+            task = None
             for task in job_tasks:
                 (task_class, task_id, task_payload, total_tasks) = task
 
@@ -195,7 +196,12 @@ class XcuteOrchestrator(object):
                     break
             else:
                 self.logger.info('All tasks sent (job_id=%s)' % job_id)
-                self.manager.all_tasks_sent(job_id)
+                # no task in the job
+                is_finished = task is None
+                self.manager.all_tasks_sent(self.orchestrator_id, job_id, is_finished)
+
+                if is_finished:
+                    self.logger.info('Job done (job_id=%s)' % job_id)
 
                 # threading.current_thread returns the wrong id
                 del self.threads[thread.get_ident()]

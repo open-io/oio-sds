@@ -118,7 +118,7 @@ class XcuteManager(object):
         }
         self.backend.incr_sent(job_id, task_id, updates)
 
-    def all_tasks_sent(self, job_id):
+    def all_tasks_sent(self, orchestrator_id, job_id, is_finished):
         """
             Mark a job as having all its tasks sent
         """
@@ -127,7 +127,9 @@ class XcuteManager(object):
             'all_sent': 1,
             'mtime': time.time(),
         }
-        self.backend.update_job_info(job_id, updates)
+        if is_finished:
+            updates['status'] = self.STATUS_FINISHED
+        self.backend.all_sent(orchestrator_id, job_id, updates, is_finished)
 
     def task_processed(self, orchestrator_id, job_id, task_id, task_ok, job_result):
         """
