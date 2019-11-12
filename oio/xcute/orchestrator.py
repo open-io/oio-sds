@@ -61,6 +61,9 @@ class XcuteOrchestrator(object):
 
         self.logger.info('Wait until beanstalkd are found')
         while len(self.all_beanstalkd) == 0:
+            if not self.running:
+                return
+
             sleep(5)
 
         self.reply_beanstalkd_addr = self.get_reply_beanstalkd_addr()
