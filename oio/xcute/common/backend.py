@@ -41,25 +41,49 @@ class XcuteBackend(RedisConnection):
     DEFAULT_LIMIT = 1000
 
     _lua_errors = {
-        'job_exists': (Forbidden,
-                       'The job already exists'),
-        'no_job': (NotFound,
-                   'The job does\'nt exist'),
-        'lock_exists': (Forbidden,
-                        'The lock already exists'),
-        'must_be_running': (Forbidden,
-                            'The job must be running'),
-        'must_be_paused': (Forbidden,
-                           'The job must be paused'),
-        'must_be_waiting_paused_finished': (Forbidden,
-                                            'The job must be waiting or paused or finished')
+        'job_exists': (
+            Forbidden,
+            'The job already exists'),
+        'no_job': (
+            NotFound,
+            'The job does\'nt exist'),
+        'lock_exists': (
+            Forbidden,
+            'The lock already exists'),
+        'must_be_running': (
+            Forbidden,
+            'The job must be running'),
+        'must_be_paused': (
+            Forbidden,
+            'The job must be paused'),
+        'must_be_waiting_paused_finished': (
+            Forbidden,
+            'The job must be waiting or paused or finished'),
+        'job_already_waiting_run': (
+            Forbidden,
+            'Job already waiting run'),
+        'job_already_running': (
+            Forbidden,
+            'Job already running'),
+        'job_already_wait_pause': (
+            Forbidden,
+            'Job already wait pause'),
+        'job_already_paused': (
+            Forbidden,
+            'Job already paused'),
+        'job_running_last_tasks': (
+            Forbidden,
+            'Job sent all tasks to the workers and waits the last results'),
+        'job_finished': (
+            Forbidden,
+            'Job is finished')
         }
 
     key_job_conf = 'xcute:job:config:%s'
     key_job_ids = 'xcute:job:ids'
     key_job_info = 'xcute:job:info:%s'
-    key_job_queue = 'xcute:job:queue'
-    key_job_tasks = 'xcute:job:running:%s'
+    key_waiting_run_jobs = 'xcute:waiting_run:jobs'
+    key_tasks_running = 'xcute:tasks:running:%s'
     key_orchestrator_jobs = 'xcute:orchestrator:jobs:%s'
 
     lua_create_job = """
@@ -69,11 +93,11 @@ class XcuteBackend(RedisConnection):
         end;
 
         redis.call('ZADD', 'xcute:job:ids', 0, KEYS[1]);
-        redis.call('LPUSH', 'xcute:job:queue', KEYS[1]);
+        redis.call('LPUSH', 'xcute:waiting_run:jobs', KEYS[1]);
     """
 
     lua_take_job = """
-        local job_id = redis.call('RPOP', 'xcute:job:queue');
+        local job_id = redis.call('RPOP', 'xcute:waiting_run:jobs');
         if job_id == false then
             return nil;
         end;
@@ -87,24 +111,167 @@ class XcuteBackend(RedisConnection):
         return {job_id, job_conf, job_info};
     """
 
-    lua_incr_processed = """
-        local processed = redis.call('HINCRBY', 'xcute:job:info:' .. KEYS[2],
-                                     'processed', 1);
-        redis.call('HINCRBY', 'xcute:job:info:' .. KEYS[2], 'errors', ARGV[1]);
+    lua_request_pause = """
+        local job_id = KEYS[1];
 
-        local sent = redis.call('HMGET', 'xcute:job:info:' .. KEYS[2],
-                                'all_sent', 'sent');
-
-        if sent[1] == '1' and tonumber(sent[2]) == processed then
-            redis.call('HSET', 'xcute:job:info:' .. KEYS[2],
-                       'status', 'FINISHED');
-            redis.call('SREM', 'xcute:orchestrator:jobs:' .. KEYS[1],
-                       KEYS[2]);
-
-            return 1;
+        local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
+                                  'status');
+        if status == nil or status == false then
+            return redis.error_reply('no_job');
         end;
 
-        return 0;
+        if status == 'WAITING_RUN' then
+            redis.call('HSET', 'xcute:job:info:' .. job_id,
+                       'status', 'PAUSED');
+            redis.call('LREM', 'xcute:waiting_run:jobs', 1, job_id);
+            return;
+        end;
+
+        if status == 'RUNNING' then
+            redis.call('HSET', 'xcute:job:info:' .. job_id,
+                       'status', 'WAITING_PAUSE');
+            return;
+        end;
+
+        if status == 'WAITING_PAUSE' then
+            return redis.error_reply('job_already_wait_pause');
+        end;
+
+        if status == 'PAUSED' then
+            return redis.error_reply('job_already_paused');
+        end;
+
+        if status == 'RUNNING_LAST_TASKS' then
+            return redis.error_reply('job_running_last_tasks');
+        end;
+
+        if status == 'FINISHED' then
+            return redis.error_reply('job_finished');
+        end;
+    """
+
+    lua_resume = """
+        local job_id = KEYS[1];
+
+        local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
+                                  'status');
+        if status == nil or status == false then
+            return redis.error_reply('no_job');
+        end;
+
+        if status == 'WAITING_RUN' then
+            return redis.error_reply('job_already_waiting_run');
+        end;
+
+        if status == 'RUNNING' then
+            return redis.error_reply('job_already_running');
+        end;
+
+        if status == 'WAITING_PAUSE' then
+            redis.call('HSET', 'xcute:job:info:' .. job_id,
+                       'status', 'RUNNING');
+            return;
+        end;
+
+        if status == 'PAUSED' then
+            redis.call('HSET', 'xcute:job:info:' .. job_id,
+                       'status', 'WAITING_RUN');
+            redis.call('LPUSH', 'xcute:waiting_run:jobs', job_id);
+            return;
+        end;
+
+        if status == 'RUNNING_LAST_TASKS' then
+            return redis.error_reply('job_already_running');
+        end;
+
+        if status == 'FINISHED' then
+            return redis.error_reply('job_finished');
+        end;
+    """
+
+    lua_update_tasks_sent = """
+        local job_id = KEYS[1];
+        local orchestrator_id = KEYS[2];
+        local all_tasks_sent = KEYS[3];
+        local tasks_sent = ARGV;
+        local tasks_sent_length = #tasks_sent;
+
+        local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
+                                  'status');
+        if status == nil or status == false then
+            return redis.error_reply('no_job');
+        end;
+
+        local total_tasks_sent = redis.call(
+            'HINCRBY', 'xcute:job:info:' .. job_id,
+            'sent', tasks_sent_length);
+        for _, task_id in ipairs(tasks_sent) do
+            redis.call('SADD', 'xcute:tasks:running:' .. job_id, task_id);
+        end;
+        if tasks_sent_length > 0 then
+            redis.call('HSET', 'xcute:job:info:' .. job_id,
+                       'last_sent', tasks_sent[tasks_sent_length]);
+        end;
+
+        local stopped = false;
+        if all_tasks_sent == 'True' then
+            if tonumber(total_tasks_sent) == 0 then
+                -- if there is no task sent, finish job
+                redis.call('HSET', 'xcute:job:info:' .. job_id,
+                           'status', 'FINISHED');
+            else
+                -- else, wait the last tasks
+                redis.call('HSET', 'xcute:job:info:' .. job_id,
+                           'status', 'RUNNING_LAST_TASKS');
+            end;
+            -- remove the job of the orchestrator
+            redis.call('SREM', 'xcute:orchestrator:jobs:' .. orchestrator_id,
+                       job_id);
+            stopped = true;
+        elseif status == 'WAITING_PAUSE' then
+            -- if waiting pause, pause the job
+            redis.call('HSET', 'xcute:job:info:' .. job_id,
+                       'status', 'PAUSED');
+            redis.call('SREM', 'xcute:orchestrator:jobs:' .. orchestrator_id,
+                       job_id);
+            stopped = true;
+        end;
+        return stopped;
+    """
+
+    lua_update_tasks_processed = """
+        local job_id = KEYS[1];
+        local errors = KEYS[2];
+        local results = KEYS[3];
+        local tasks_processed = ARGV;
+        local tasks_processed_length = #tasks_processed;
+
+        local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
+                                  'status');
+        if status == nil or status == false then
+            return redis.error_reply('no_job');
+        end;
+
+        local total_tasks_processed = redis.call(
+            'HINCRBY', 'xcute:job:info:' .. job_id,
+            'processed', tasks_processed_length);
+        for _, task_id in ipairs(tasks_processed) do
+            redis.call('SREM', 'xcute:tasks:running:' .. job_id, task_id);
+        end;
+
+        redis.call('HINCRBY', 'xcute:job:info:' .. job_id,
+                   'errors', errors);
+        redis.call('HINCRBY', 'xcute:job:info:' .. job_id,
+                   'results', results);
+
+        if status == 'RUNNING_LAST_TASKS' then
+            local total_tasks_sent = redis.call(
+                'HGET', 'xcute:job:info:' .. job_id, 'sent');
+            if tonumber(total_tasks_processed) >= tonumber(total_tasks_sent) then
+                redis.call('HSET', 'xcute:job:info:' .. job_id,
+                           'status', 'FINISHED');
+            end;
+        end;
     """
 
     lua_delete_job = """
@@ -121,7 +288,7 @@ class XcuteBackend(RedisConnection):
         end;
 
         if status == 'WAITING' then
-            redis.call('LREM', 'xcute:job:queue', 1, KEYS[1]);
+            redis.call('LREM', 'xcute:waiting_run:jobs', 1, KEYS[1]);
         end;
 
         if status == 'PAUSED' then
@@ -145,8 +312,14 @@ class XcuteBackend(RedisConnection):
             self.lua_create_job)
         self.script_take_job = self.register_script(
             self.lua_take_job)
-        self.script_incr_processed = self.register_script(
-            self.lua_incr_processed)
+        self.script_resquest_pause = self.register_script(
+            self.lua_request_pause)
+        self.script_resume = self.register_script(
+            self.lua_resume)
+        self.script_update_tasks_sent = self.register_script(
+            self.lua_update_tasks_sent)
+        self.script_update_tasks_processed = self.register_script(
+            self.lua_update_tasks_processed)
         self.script_delete_job = self.register_script(
             self.lua_delete_job)
 
@@ -209,6 +382,28 @@ class XcuteBackend(RedisConnection):
 
         pipeline.execute()
 
+    @handle_redis_exceptions
+    def request_pause(self, job_id):
+        self.script_resquest_pause(keys=[job_id], client=self.conn)
+
+    @handle_redis_exceptions
+    def resume(self, job_id, orchestrator_id):
+        self.script_resume(keys=[job_id], client=self.conn)
+
+    @handle_redis_exceptions
+    def update_tasks_sent(self, job_id, orchestrator_id, task_ids,
+                          all_tasks_sent=False):
+        return self.script_update_tasks_sent(
+            keys=[job_id, orchestrator_id, str(all_tasks_sent)],
+            args=task_ids, client=self.conn)
+
+    @handle_redis_exceptions
+    def update_tasks_processed(self, job_id, task_ids,
+                               task_errors, task_results):
+        self.script_update_tasks_processed(
+            keys=[job_id, task_errors, task_results],
+            args=task_ids, client=self.conn)
+
     def list_orchestrator_jobs(self, orchestrator_id):
         orchestrator_jobs_key = self.key_orchestrator_jobs % orchestrator_id
         job_ids = self.conn.smembers(orchestrator_jobs_key)
@@ -241,7 +436,7 @@ class XcuteBackend(RedisConnection):
         pipeline = self.conn.pipeline()
 
         pipeline.hincrby(self.key_job_info % job_id, 'sent', 1)
-        pipeline.sadd(self.key_job_tasks % job_id, task_id)
+        pipeline.sadd(self.key_tasks_running % job_id, task_id)
         self._update_job_info(job_id, updates, client=pipeline)
 
         pipeline.execute()
@@ -264,7 +459,7 @@ class XcuteBackend(RedisConnection):
             keys=[orchestrator_id, job_id],
             args=[int(error)],
             client=pipeline)
-        pipeline.srem(self.key_job_tasks % job_id, task_id)
+        pipeline.srem(self.key_tasks_running % job_id, task_id)
         self._update_job_info(job_id, updates, client=pipeline)
 
         done = pipeline.execute()[0]

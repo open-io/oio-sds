@@ -144,8 +144,8 @@ class RawxDecommissionJob(XcuteJob):
             service_id, timeout=rdir_timeout,
             limit=rdir_fetch_limit, start_after=marker)
 
-        for i, (_, _, chunk_id, _) in enumerate(chunk_infos, 1):
-            payload = {
+        for _, _, chunk_id, _ in chunk_infos:
+            task_payload = {
                 'service_id': params['service_id'],
                 'rawx_timeout': params['rawx_timeout'],
                 'min_chunk_size': params['min_chunk_size'],
@@ -153,7 +153,7 @@ class RawxDecommissionJob(XcuteJob):
                 'excluded_rawx': params['excluded_rawx']
             }
 
-            yield (BlobMover, chunk_id, payload, i)
+            yield BlobMover, chunk_id, task_payload
 
     @staticmethod
     def reduce_result(total_chunk_size, chunk_size):

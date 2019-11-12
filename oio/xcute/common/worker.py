@@ -32,35 +32,43 @@ class XcuteWorker(object):
 
     def process_beanstalkd_job(self, beanstalkd_job):
         job_id = beanstalkd_job['job_id']
-        task_class_encoded = beanstalkd_job['task_class']
-        task_id = beanstalkd_job['task_id']
-        task_payload = beanstalkd_job['task_payload']
+        tasks = beanstalkd_job['tasks']
         reply_addr = beanstalkd_job['beanstalkd_reply']['addr']
         reply_tube = beanstalkd_job['beanstalkd_reply']['tube']
+        task_replies = list()
 
-        task_ok, task_result = (False, None)
-        try:
-            task_class = pickle.loads(task_class_encoded)
-            task = task_class(self.conf, logger=self.logger)
+        for task in tasks:
+            task_class_encoded = task['task_class']
+            task_id = task['task_id']
+            task_payload = task['task_payload']
 
-            if not isinstance(task, XcuteTask):
-                raise ValueError('Unexpected task: %s' % task_class)
+            task_ok, task_result = (False, None)
+            try:
+                task_class = pickle.loads(task_class_encoded)
+                task = task_class(self.conf, logger=self.logger)
 
-            task_ok, task_result = task.process(task_id, task_payload)
-            if not task_ok:
-                self.logger.debug('Task was not processed: %s', beanstalkd_job)
-        except Exception:
-            self.logger.error('Error processing job %s: %s',
-                              beanstalkd_job, traceback.format_exc())
+                if not isinstance(task, XcuteTask):
+                    raise ValueError('Unexpected task: %s' % task_class)
 
-        self._reply(reply_addr, reply_tube, job_id, task_id, task_ok, task_result)
+                task_ok, task_result = task.process(task_id, task_payload)
+                if not task_ok:
+                    self.logger.debug('Task was not processed: %s', beanstalkd_job)
+                
+                task_replies.append({
+                    'task_id': task_id,
+                    'task_ok': task_ok,
+                    'task_result': task_result
+                })
+            except Exception:
+                self.logger.error('Error processing job %s: %s',
+                                  beanstalkd_job, traceback.format_exc())
 
-    def _reply(self, reply_addr, reply_tube, job_id, task_id, task_ok, task_result):
+        self._reply(reply_addr, reply_tube, job_id, task_replies)
+
+    def _reply(self, reply_addr, reply_tube, job_id, task_replies):
         reply_payload = json.dumps({
             'job_id': job_id,
-            'task_id': task_id,
-            'task_ok': task_ok,
-            'task_result': task_result,
+            'task_replies': task_replies
         })
 
         sender_key = (reply_addr, reply_tube)

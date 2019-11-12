@@ -34,6 +34,7 @@ class XcuteOrchestrator(object):
     DEFAULT_WORKER_TUBE = 'oio-xcute'
     DEFAULT_REPLY_TUBE = DEFAULT_WORKER_TUBE + '.reply'
     DEFAULT_DISPATCHER_TIMEOUT = 2
+    DEFAULT_TASKS_BATCH_SIZE = 8
 
     def __init__(self, conf, verbose):
         self.conf = conf
@@ -187,47 +188,55 @@ class XcuteOrchestrator(object):
         self.logger.info('Start dispatching job (job_id=%s)', job_id)
 
         try:
-            task = None
+            all_tasks_sent = False
+            tasks_batch = list()
             for task in job_tasks:
-                (task_class, task_id, task_payload, total_tasks) = task
-
-                sent = self.dispatch_task(beanstalkd_workers, job_id,
-                                        task_id, task_class, task_payload)
-
-                if sent:
-                    self.manager.task_sent(job_id, task_id, total_tasks)
-
                 if not self.running:
                     break
+
+                tasks_batch.append(task)
+
+                if len(tasks_batch) < self.DEFAULT_TASKS_BATCH_SIZE:
+                    continue
+
+                sent = self.dispatch_tasks(
+                    beanstalkd_workers, job_id, tasks_batch)
+                if sent:
+                    paused = self.manager.backend.update_tasks_sent(
+                        job_id, self.orchestrator_id,
+                        [task_id for _, task_id, _ in tasks_batch])
+                    if paused:
+                        return
+                    tasks_batch = list()
             else:
                 self.logger.info('All tasks sent (job_id=%s)' % job_id)
-                # no task in the job
-                is_finished = task is None
-                self.manager.all_tasks_sent(self.orchestrator_id, job_id, is_finished)
+                all_tasks_sent = True
 
-                if is_finished:
-                    self.logger.info('Job done (job_id=%s)' % job_id)
+            sent = self.dispatch_tasks(
+                beanstalkd_workers, job_id, tasks_batch)
+            if sent:
+                self.manager.backend.update_tasks_sent(
+                    job_id, self.orchestrator_id,
+                    [task_id for _, task_id, _ in tasks_batch],
+                    all_tasks_sent=True)
 
-                self.logger.info('Finished dispatching job (job_id=%s)', job_id)
+            if not self.running:
+                self.manager.pause_job(job_id)
 
-                return
-
-            self.manager.pause_job(job_id)
+            self.logger.info('Finished dispatching job (job_id=%s)', job_id)
         except Exception:
             self.logger.exception('Failed generating task list (job_id=%s', job_id)
 
             self.manager.fail_job(self.orchestrator_id, job_id)
 
-    def dispatch_task(self, beanstalkd_workers, job_id,
-                      task_id, task_class, task_payload):
+    def dispatch_tasks(self, beanstalkd_workers, job_id, tasks_batch):
         """
             Try sending a task until it's ok
         """
+        if len(tasks_batch) == 0:
+            return True
 
-        beanstalkd_payload = \
-            self.make_beanstalkd_payload(job_id, task_id,
-                                         task_class, task_payload)
-
+        beanstalkd_payload = self.make_beanstalkd_payload(job_id, tasks_batch)
         if len(beanstalkd_payload) > 2**16:
             raise ValueError('Task payload is too big (length=%s)' % len(beanstalkd_payload))
 
@@ -246,31 +255,33 @@ class XcuteOrchestrator(object):
 
                 if not sent:
                     workers_tried.add(worker.addr)
-
                     continue
 
-                self.logger.debug('Task (job_id=%s, task_id=%s) sent to %s' %
-                                  (job_id, task_id, worker.addr))
                 return True
 
             workers_tried.clear()
             sleep(5)
 
-    def make_beanstalkd_payload(self, job_id,
-                                task_id, task_class, task_payload):
-        return json.dumps({
+    def make_beanstalkd_payload(self, job_id, tasks_batch):
+        tasks_payload = list()
+        for task_class, task_id, task_payload in tasks_batch:
+            tasks_payload.append({
+                'task_class': pickle.dumps(task_class),
+                'task_id': task_id,
+                'task_payload': task_payload
+            })
+        beanstalkd_payload = {
             'event': 'xcute.task',
             'data': {
                 'job_id': job_id,
-                'task_class': pickle.dumps(task_class),
-                'task_id': task_id,
-                'task_payload': task_payload,
+                'tasks': tasks_payload,
                 'beanstalkd_reply': {
                     'addr': self.reply_beanstalkd_addr,
                     'tube': self.reply_tube,
                 },
             }
-        })
+        }
+        return json.dumps(beanstalkd_payload)
 
     def listen(self):
         """
@@ -326,42 +337,24 @@ class XcuteOrchestrator(object):
 
         return connection_error
 
-    def process_reply(self, beanstalkd_job_id, encoded_reply):
+    def process_reply(self, beanstalkd_job_id, beanstalkd_job_data):
         job_results = self.job_results
-        reply = json.loads(encoded_reply)
+        reply = json.loads(beanstalkd_job_data)
 
         job_id = reply['job_id']
-        task_id = reply['task_id']
-        task_ok = reply['task_ok']
-        task_result = reply['task_result']
-
-        self.logger.debug((
-            'Task processed'
-            ' (job_id=%s, task_id=%s)') %
-            (job_id, task_id))
+        task_replies = reply['task_replies']
+        task_ids = list()
+        task_errors = 0
+        task_results = 0
+        for task_reply in task_replies:
+            task_ids.append(task_reply['task_id'])
+            task_results += task_reply['task_result']
+            if not task_reply['task_ok']:
+                task_errors += 1
 
         try:
-            if job_id not in job_results:
-                job_results[job_id] = self.manager.get_job_type_and_result(job_id)
-
-            job_type, job_result = job_results[job_id]
-
-            new_job_result = job_result
-            if task_ok:
-                new_job_result = JOB_TYPES[job_type].reduce_result(job_result, task_result)
-
-            job_results[job_id] = (job_type, new_job_result)
-
-            job_done = \
-                self.manager.task_processed(self.orchestrator_id,
-                                            job_id,
-                                            task_id, task_ok,
-                                            new_job_result)
-
-            if job_done:
-                del job_results[job_id]
-
-                self.logger.info('Job done (job_id=%s)' % job_id)
+            self.manager.backend.update_tasks_processed(
+                job_id, task_ids, task_errors, task_results)
         except Exception:
             self.logger.exception('Error processing reply')
 

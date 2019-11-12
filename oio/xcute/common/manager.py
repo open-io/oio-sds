@@ -21,7 +21,7 @@ from oio.common.green import datetime, time
 
 class XcuteManager(object):
 
-    STATUS_WAITING = 'WAITING'
+    STATUS_WAITING_RUN = 'WAITING_RUN'
     STATUS_RUNNING = 'RUNNING'
     STATUS_PAUSED = 'PAUSED'
     STATUS_FINISHED = 'FINISHED'
@@ -44,7 +44,7 @@ class XcuteManager(object):
             'job_type': job_type,
             'ctime': now,
             'mtime': now,
-            'status': self.STATUS_WAITING,
+            'status': self.STATUS_WAITING_RUN,
             'sent': 0,
             'last_sent': '',
             'all_sent': 0,
@@ -103,43 +103,6 @@ class XcuteManager(object):
             'mtime': time.time(),
         }
         self.backend.fail_job(orchestrator_id, job_id, updates)
-
-    def task_sent(self, job_id, task_id, total=None):
-        """
-            Update a job's sent tasks status
-        """
-
-        updates = {
-            'mtime': time.time(),
-            'last_sent': task_id,
-            'total': total,
-        }
-        self.backend.incr_sent(job_id, task_id, updates)
-
-    def all_tasks_sent(self, orchestrator_id, job_id, is_finished):
-        """
-            Mark a job as having all its tasks sent
-        """
-
-        updates = {
-            'all_sent': 1,
-            'mtime': time.time(),
-        }
-        if is_finished:
-            updates['status'] = self.STATUS_FINISHED
-        self.backend.all_sent(orchestrator_id, job_id, updates, is_finished)
-
-    def task_processed(self, orchestrator_id, job_id, task_id, task_ok, job_result):
-        """
-            Update a job's processed tasks status
-        """
-
-        updates = {
-            'mtime': time.time(),
-            'result': job_result,
-        }
-        return self.backend.incr_processed(orchestrator_id, job_id,
-                                           task_id, not task_ok, updates)
 
     def list_jobs(self, **kwargs):
         """
