@@ -111,7 +111,7 @@ class XcuteOrchestrator(object):
                     ' (job_id=%s, job_conf=%s)') %
                     (job_type, job_conf))
 
-                self.manager.fail_job(job_id)
+                self.manager.fail_job(self.orchestrator_id, job_id)
 
     def handle_new_job(self, job_id, job_type, job_conf, job_info):
         """
@@ -203,7 +203,7 @@ class XcuteOrchestrator(object):
         except Exception:
             self.logger.exception('Failed generating task list (job_id=%s', job_id)
 
-            self.manager.fail_job(job_id)
+            self.manager.fail_job(self.orchestrator_id, job_id)
 
         self.logger.info('Finished dispatching job (job_id=%s)', job_id)
 
