@@ -1,7 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -225,9 +225,15 @@ _logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
 	GString *gstr = g_string_sized_new(512);
 
 	if (oio_log_flags & LOG_FLAG_PRETTYTIME) {
+#if GLIB_CHECK_VERSION(2,56,0)
+		GDateTime *tv = g_date_time_new_now_local();
+		gchar *strnow = g_date_time_format_iso8601(tv);
+		g_date_time_unref(tv);
+#else
 		GTimeVal tv;
 		g_get_current_time(&tv);
-		gchar * strnow = g_time_val_to_iso8601 (&tv);
+		gchar *strnow = g_time_val_to_iso8601(&tv);
+#endif
 		g_string_append(gstr, strnow);
 		g_free(strnow);
 	} else {
