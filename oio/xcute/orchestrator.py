@@ -116,23 +116,19 @@ class XcuteOrchestrator(object):
             One iteration of the main loop
         """
 
-        new_jobs = self.manager.get_new_jobs(self.orchestrator_id)
-        for job_id, job_conf, job_info in new_jobs:
-            self.logger.info('Found new job (job_id=%s, job_conf=%s)' %
-                             (job_id, job_conf))
+        new_jobs = iter(
+            lambda: self.manager.run_next(self.orchestrator_id), None)
+        for job_id, job_type, last_sent_task, job_config in new_jobs:
+            self.logger.info('Found new job %s', job_id)
             try:
-                job_type = job_info['job_type']
-
-                self.handle_new_job(job_id, job_type, job_conf, job_info)
+                self.handle_new_job(
+                    job_id, job_type, last_sent_task, job_config)
             except Exception:
-                self.logger.exception((
-                    'Failed to instantiate job'
-                    ' (job_id=%s, job_conf=%s)') %
-                    (job_type, job_conf))
-
+                self.logger.exception(
+                    'Failed to instantiate job %s', job_id)
                 self.manager.fail_job(self.orchestrator_id, job_id)
 
-    def handle_new_job(self, job_id, job_type, job_conf, job_info):
+    def handle_new_job(self, job_id, job_type, last_sent_task, job_config):
         """
             Set a new job's configuration
             and get its tasks before dispatching it
@@ -140,11 +136,11 @@ class XcuteOrchestrator(object):
 
         job_tasks = JOB_TYPES[job_type].get_tasks(
             self.conf, self.logger,
-            job_conf['params'])
+            job_config['params'], marker=last_sent_task)
 
-        self.handle_job(job_id, job_conf, job_info, job_tasks)
+        self.handle_job(job_id, job_config, job_tasks)
 
-    def handle_running_job(self, job_id, job_conf, job_info):
+    def handle_running_job(self, job_id, job_config, job_info):
         """
             Read the job's configuration
             and get its tasks before dispatching it
@@ -159,11 +155,13 @@ class XcuteOrchestrator(object):
             last_task_id = job_info['last_sent']
         job_tasks = JOB_TYPES[job_type].get_tasks(
             self.conf, self.logger,
-            job_conf['params'], marker=last_task_id)
+            job_config['params'], marker=last_task_id)
 
-        self.handle_job(job_id, job_conf, job_info, job_tasks)
+        self.manager.start_job(job_id, job_config)
 
-    def handle_job(self, job_id, job_conf, job_info, job_tasks):
+        self.handle_job(job_id, job_config, job_tasks)
+
+    def handle_job(self, job_id, job_config, job_tasks):
         """
             Get the beanstalkd available for this job
             and start the dispatching thread
@@ -171,10 +169,7 @@ class XcuteOrchestrator(object):
 
         beanstalkd_workers = self.get_loadbalanced_workers()
 
-        self.manager.start_job(job_id, job_conf)
-
-        thread_args = (job_id, job_conf,
-                       job_tasks, beanstalkd_workers)
+        thread_args = (job_id, job_tasks, beanstalkd_workers)
         dispatch_thread = threading.Thread(
             target=self.dispatch_job,
             args=thread_args)
@@ -182,7 +177,7 @@ class XcuteOrchestrator(object):
 
         self.threads[dispatch_thread.ident] = dispatch_thread
 
-    def dispatch_job(self, job_id, job_conf, job_tasks, beanstalkd_workers):
+    def dispatch_job(self, job_id, job_tasks, beanstalkd_workers):
         """
             Dispatch all of a job's tasks
         """
