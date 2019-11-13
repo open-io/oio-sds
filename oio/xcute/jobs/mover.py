@@ -190,13 +190,3 @@ class RawxDecommissionJob(XcuteJob):
             }
 
             yield (BlobMover, chunk_ids_batch[0], payload, i)
-
-    @staticmethod
-    def reduce_result(total_result, task_result):
-        if total_result is None:
-            total_result = dict(chunks=0, total_size=0, skipped=0, orphan=0)
-
-        for key, value in task_result.items():
-            total_result[key] += value
-
-        return total_result

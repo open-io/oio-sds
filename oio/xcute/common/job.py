@@ -50,12 +50,3 @@ class XcuteJob(object):
         """
 
         raise NotImplementedError()
-
-    @staticmethod
-    def reduce_result(job_result, task_result):
-        """ Compute the new result of the job """
-
-        if job_result is None:
-            return 0
-
-        return job_result

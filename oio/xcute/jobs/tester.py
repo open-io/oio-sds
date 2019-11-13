@@ -63,10 +63,3 @@ class TesterJob(XcuteJob):
             task_id = str(i)
 
             yield (task_class, task_id, task_payload, total_tasks)
-
-    @staticmethod
-    def reduce_result(job_result, task_result):
-        if job_result is None:
-            job_result = 0
-
-        return job_result + task_result

@@ -299,7 +299,6 @@ class XcuteOrchestrator(object):
                          self.beanstalkd_reply_addr, self.beanstalkd_reply_tube)
 
         # keep the job results in memory
-        self.job_results = {}
         while self.running:
             connection_error = self.listen_loop(listener)
 
@@ -330,7 +329,6 @@ class XcuteOrchestrator(object):
         return connection_error
 
     def process_reply(self, beanstalkd_job_id, encoded_reply):
-        job_results = self.job_results
         reply = json.loads(encoded_reply)
 
         job_id = reply['job_id']
@@ -344,27 +342,11 @@ class XcuteOrchestrator(object):
             (job_id, task_id))
 
         try:
-            if job_id not in job_results:
-                job_results[job_id] = self.manager.get_job_type_and_result(job_id)
 
-            job_type, job_result = job_results[job_id]
+            self.manager.task_processed(
+                self.orchestrator_id, job_id, task_id, task_ok, task_result)
 
-            new_job_result = job_result
-            if task_ok:
-                new_job_result = JOB_TYPES[job_type].reduce_result(job_result, task_result)
-
-            job_results[job_id] = (job_type, new_job_result)
-
-            job_done = \
-                self.manager.task_processed(self.orchestrator_id,
-                                            job_id,
-                                            task_id, task_ok,
-                                            new_job_result)
-
-            if job_done:
-                del job_results[job_id]
-
-                self.logger.info('Job done (job_id=%s)' % job_id)
+            self.logger.info('Job %s done', job_id)
         except Exception:
             self.logger.exception('Error processing reply')
 
