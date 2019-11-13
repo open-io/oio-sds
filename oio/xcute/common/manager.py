@@ -17,6 +17,7 @@ import random
 
 from oio.xcute.common.backend import XcuteBackend
 from oio.common.green import datetime, time
+from oio.common.logger import get_logger
 
 
 class XcuteManager(object):
@@ -27,10 +28,10 @@ class XcuteManager(object):
     STATUS_FINISHED = 'FINISHED'
     STATUS_FAILED = 'FAILED'
 
-    def __init__(self, conf, logger):
+    def __init__(self, conf, logger=None):
         self.conf = conf
         self.backend = XcuteBackend(self.conf)
-        self.logger = logger
+        self.logger = logger or get_logger(self.conf)
 
     def create_job(self, job_type, job_conf):
         """
