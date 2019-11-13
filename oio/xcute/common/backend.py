@@ -18,6 +18,7 @@ from functools import wraps
 import redis
 
 from oio.common.exceptions import Forbidden, NotFound
+from oio.common.green import time
 from oio.common.json import json
 from oio.common.redis_conn import RedisConnection
 
@@ -100,11 +101,7 @@ class XcuteBackend(RedisConnection):
                        'status', 'FINISHED');
             redis.call('SREM', 'xcute:orchestrator:jobs:' .. KEYS[1],
                        KEYS[2]);
-
-            return 1;
         end;
-
-        return 0;
     """
 
     lua_delete_job = """
@@ -257,7 +254,7 @@ class XcuteBackend(RedisConnection):
         pipeline.execute()
 
     @handle_redis_exceptions
-    def incr_processed(self, orchestrator_id, job_id, task_id, error, updates):
+    def incr_processed(self, orchestrator_id, job_id, task_id, error, task_result):
         pipeline = self.conn.pipeline()
 
         self.script_incr_processed(
@@ -265,11 +262,13 @@ class XcuteBackend(RedisConnection):
             args=[int(error)],
             client=pipeline)
         pipeline.srem(self.key_job_tasks % job_id, task_id)
-        self._update_job_info(job_id, updates, client=pipeline)
+        pipeline.hset(self.key_job_info % job_id, 'mtime', time.time())
+        for key, value in task_result.items():
+            pipeline.hset(self.key_job_info % job_id,
+                          'results.' + key, value)
+        pipeline.execute()
 
-        done = pipeline.execute()[0]
-
-        return True if done == 1 else False
+        return
 
     @handle_redis_exceptions
     def fail_job(self, orchestrator_id, job_id, updates):
@@ -289,11 +288,6 @@ class XcuteBackend(RedisConnection):
         job_info = self._get_job_info(job_id, client=self.conn)
 
         return self._unmarshal_job_info(job_info)
-
-    def get_job_type_and_result(self, job_id):
-        job_info = self.get_job_info(job_id)
-
-        return job_info['job_type'], job_info.get('result')
 
     def update_job_conf(self, job_id, updates):
         self._update_job_conf(job_id, updates, client=self.conn)
