@@ -117,6 +117,25 @@ class XcuteBackend(RedisConnection):
         return {job_id, job_info, job_config};
     """
 
+    lua_free = """
+        local job_id = KEYS[1];
+
+        local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
+                                  'status');
+        if status ~= 'RUNNING' then
+            return redis.error_reply('job_must_be_running');
+        end;
+
+        local orchestrator_id = redis.call(
+            'HGET', 'xcute:job:info:' .. job_id, 'orchestrator_id');
+        redis.call('SREM', 'xcute:orchestrator:jobs:' .. orchestrator_id,
+                   job_id);
+
+        redis.call('HSET', 'xcute:job:info:' .. job_id,
+                   'status', 'WAITING');
+        redis.call('LPUSH', 'xcute:waiting:jobs', job_id);
+    """ + _lua_update_mtime
+
     lua_fail = """
         local job_id = KEYS[1];
 
@@ -136,7 +155,7 @@ class XcuteBackend(RedisConnection):
         local orchestrator_id = redis.call(
             'HGET', 'xcute:job:info:' .. job_id, 'orchestrator_id');
         redis.call('SREM', 'xcute:orchestrator:jobs:' .. orchestrator_id,
-                    job_id);
+                   job_id);
     """ + _lua_update_mtime
 
     lua_request_pause = """
@@ -362,6 +381,8 @@ class XcuteBackend(RedisConnection):
             self.lua_create)
         self.script_run_next = self.register_script(
             self.lua_run_next)
+        self.script_free = self.register_script(
+            self.lua_free)
         self.script_fail = self.register_script(
             self.lua_fail)
         self.script_request_pause = self.register_script(
@@ -462,6 +483,10 @@ class XcuteBackend(RedisConnection):
         job_config = self._lua_array_to_dict(job_config)
         return (job_id, job_info['job_type'], job_info.get('last_sent'),
                 self._unmarshal_job_conf(job_config))
+
+    @handle_redis_exceptions
+    def free(self, job_id):
+        self.script_free(keys=[job_id], client=self.conn)
 
     @handle_redis_exceptions
     def fail(self, job_id):
