@@ -149,6 +149,11 @@ class RawxDecommissionJob(XcuteJob):
             params.get('batch_size'),
             RawxDecommissionJob.DEFAULT_BATCH_SIZE)
 
+        # a bigger batch size may result
+        # in beanstalkd payloads being too big
+        if sanitized_params['batch_size'] > 900:
+            raise ValueError('Batch size should less than 900')
+
         excluded_rawx = list()
         excluded_rawx_param = params.get('excluded_rawx')
         if excluded_rawx_param:
