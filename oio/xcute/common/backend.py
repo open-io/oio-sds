@@ -16,10 +16,11 @@
 from functools import wraps
 
 import redis
+import random
 
 from oio.common.easy_value import true_value
 from oio.common.exceptions import Forbidden, NotFound
-from oio.common.green import time
+from oio.common.green import datetime, time
 from oio.common.json import json
 from oio.common.redis_conn import RedisConnection
 
@@ -70,14 +71,30 @@ class XcuteBackend(RedisConnection):
                    time[1] .. '.' .. time[2]);
     """
 
-    lua_create_job = """
+    lua_create = """
+        local job_id = KEYS[1];
+        local job_type = KEYS[2];
+        local job_config = ARGV;
+
         local job_exists = redis.call('EXISTS', 'xcute:job:info:' .. KEYS[1]);
         if job_exists == 1 then
             return redis.error_reply('job_exists');
         end;
 
-        redis.call('ZADD', 'xcute:job:ids', 0, KEYS[1]);
-        redis.call('RPUSH', 'xcute:waiting:jobs', KEYS[1]);
+        redis.call('ZADD', 'xcute:job:ids', 0, job_id);
+        redis.call(
+            'HSET', 'xcute:job:info:' .. job_id,
+            'job_type', job_type,
+            'status', 'WAITING',
+            'all_sent', 'False',
+            'sent', '0',
+            'processed', '0',
+            'errors.total', '0');
+        redis.call('HSET', 'xcute:job:config:' .. job_id, unpack(job_config));
+        redis.call('RPUSH', 'xcute:waiting:jobs', job_id);
+    """ + _lua_update_mtime + """
+        redis.call('HSET', 'xcute:job:info:' .. job_id, 'ctime',
+                   time[1] .. '.' .. time[2]);
     """
 
     lua_run_next = """
@@ -236,8 +253,8 @@ class XcuteBackend(RedisConnection):
                       if k.startswith('redis_')}
         super(XcuteBackend, self).__init__(**redis_conf)
 
-        self.script_create_job = self.register_script(
-            self.lua_create_job)
+        self.script_create = self.register_script(
+            self.lua_create)
         self.script_run_next = self.register_script(
             self.lua_run_next)
         self.script_update_tasks_sent = self.register_script(
@@ -288,14 +305,15 @@ class XcuteBackend(RedisConnection):
         return jobs
 
     @handle_redis_exceptions
-    def create_job(self, job_id, job_conf, job_info):
-        pipeline = self.conn.pipeline()
+    def create(self, job_type, job_config):
+        job_id = datetime.utcnow().strftime('%Y%m%d%H%M%S%f') \
+            + '-%011x' % random.randrange(16**11)
 
-        self.script_create_job(keys=[job_id], client=pipeline)
-        self._update_job_info(job_id, job_info, client=pipeline)
-        self._update_job_conf(job_id, job_conf, client=pipeline)
-
-        pipeline.execute()
+        self.script_create(
+            keys=[job_id, job_type],
+            args=self._dict_to_lua_array(self._marshal_job_conf(job_config)),
+            client=self.conn)
+        return job_id
 
     @handle_redis_exceptions
     def start_job(self, job_id, job_conf, job_info):
@@ -437,9 +455,8 @@ class XcuteBackend(RedisConnection):
         job_info['sent'] = int(job_info['sent'])
         job_info['all_sent'] = all_sent
         job_info['processed'] = int(job_info['processed'])
-        job_info['errors'] = int(job_info['errors'])
+        job_info['errors.total'] = int(job_info['errors.total'])
         job_info['total'] = total
-        job_info['result'] = json.loads(job_info['result'])
 
         return job_info
 
