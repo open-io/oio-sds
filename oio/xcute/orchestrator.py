@@ -126,7 +126,7 @@ class XcuteOrchestrator(object):
             except Exception:
                 self.logger.exception(
                     'Failed to instantiate job %s', job_id)
-                self.manager.fail_job(self.orchestrator_id, job_id)
+                self.manager.fail(job_id)
 
     def handle_new_job(self, job_id, job_type, last_sent_task, job_config):
         """
@@ -212,7 +212,7 @@ class XcuteOrchestrator(object):
         except Exception:
             self.logger.exception('Failed generating task list (job_id=%s', job_id)
 
-            self.manager.fail_job(self.orchestrator_id, job_id)
+            self.manager.fail(job_id)
 
     def dispatch_task(self, beanstalkd_workers, job_id,
                       task_id, task_class, task_payload):
