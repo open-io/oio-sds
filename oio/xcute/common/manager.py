@@ -33,30 +33,11 @@ class XcuteManager(object):
         self.backend = XcuteBackend(self.conf)
         self.logger = logger or get_logger(self.conf)
 
-    def create_job(self, job_type, job_conf):
+    def create(self, job_type, job_config):
         """
             Create a job (not started)
         """
-
-        now = time.time()
-
-        job_id = self._uuid()
-        job_info = {
-            'job_type': job_type,
-            'ctime': now,
-            'mtime': now,
-            'status': self.STATUS_WAITING,
-            'sent': 0,
-            'last_sent': '',
-            'all_sent': 'False',
-            'processed': 0,
-            'errors': 0,
-            'result': None,
-        }
-
-        self.backend.create_job(job_id, job_conf, job_info)
-
-        return dict(id=job_id)
+        return self.backend.create(job_type, job_config)
 
     def get_orchestrator_jobs(self, orchestrator_id):
         """
@@ -131,8 +112,3 @@ class XcuteManager(object):
         """
 
         self.backend.delete_job(job_id)
-
-    @staticmethod
-    def _uuid():
-        return datetime.utcnow().strftime('%Y%m%d%H%M%S%f') \
-            + '-%011x' % random.randrange(16**11)
