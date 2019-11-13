@@ -130,17 +130,13 @@ class XcuteManager(object):
             updates['status'] = self.STATUS_FINISHED
         self.backend.all_sent(orchestrator_id, job_id, updates, is_finished)
 
-    def task_processed(self, orchestrator_id, job_id, task_id, task_ok, job_result):
+    def task_processed(self, orchestrator_id, job_id, task_id, task_ok, task_result):
         """
             Update a job's processed tasks status
         """
 
-        updates = {
-            'mtime': time.time(),
-            'result': job_result,
-        }
-        return self.backend.incr_processed(orchestrator_id, job_id,
-                                           task_id, not task_ok, updates)
+        self.backend.incr_processed(
+            orchestrator_id, job_id, task_id, not task_ok, task_result)
 
     def list_jobs(self, **kwargs):
         """
@@ -162,9 +158,6 @@ class XcuteManager(object):
         """
 
         self.backend.delete_job(job_id)
-
-    def get_job_type_and_result(self, job_id):
-        return self.backend.get_job_type_and_result(job_id)
 
     @staticmethod
     def _uuid():
