@@ -79,7 +79,7 @@ class Xcute(WerkzeugApp):
             return Response(json.dumps(job), mimetype='application/json')
 
         if req.method == 'DELETE':
-            self.manager.delete_job(job_id)
+            self.manager.delete(job_id)
 
             return Response(status=204)
 
