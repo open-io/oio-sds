@@ -219,32 +219,26 @@ class XcuteBackend(RedisConnection):
         end;
     """ + _lua_update_mtime
 
-    lua_delete_job = """
-        local job_info = redis.call('HMGET', 'xcute:job:info:' .. KEYS[1],
-                                    'status', 'orchestrator_id');
-        local status = job_info[1];
+    lua_delete = """
+        local job_id = KEYS[1];
 
+        local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
+                                  'status');
         if status == nil or status == false then
             return redis.error_reply('no_job');
         end;
 
-        if status ~= 'WAITING' and status ~= 'PAUSED' and status ~= 'FINISHED' then
-            return redis.error_reply('must_be_waiting_paused_finished');
+        if status == 'RUNNING' then
+            return redis.error_reply('job_running');
         end;
 
         if status == 'WAITING' then
             redis.call('LREM', 'xcute:waiting:jobs', 1, KEYS[1]);
         end;
 
-        if status == 'PAUSED' then
-            local orchestrator_id = job_info[2];
-
-            redis.call('SREM', 'xcute:orchestrator:jobs:' .. orchestrator_id, KEYS[1]);
-        end;
-
-        redis.call('ZREM', 'xcute:job:ids', KEYS[1]);
-        redis.call('DEL', 'xcute:job:info:' .. KEYS[1]);
-        redis.call('DEL', 'xcute:job:config:' .. KEYS[1]);
+        redis.call('ZREM', 'xcute:job:ids', job_id);
+        redis.call('DEL', 'xcute:job:info:' .. job_id);
+        redis.call('DEL', 'xcute:job:config:' .. job_id);
         """
 
     def __init__(self, conf):
@@ -261,8 +255,8 @@ class XcuteBackend(RedisConnection):
             self.lua_update_tasks_sent)
         self.script_update_tasks_processed = self.register_script(
             self.lua_update_tasks_processed)
-        self.script_delete_job = self.register_script(
-            self.lua_delete_job)
+        self.script_delete = self.register_script(
+            self.lua_delete)
 
     def status(self):
         job_count = self.conn.zcard(self.key_job_ids)
@@ -382,6 +376,10 @@ class XcuteBackend(RedisConnection):
 
         pipeline.execute()
 
+    @handle_redis_exceptions
+    def delete(self, job_id):
+        self.script_delete(keys=[job_id])
+
     def get_job_conf(self, job_id):
         job_conf = self._get_job_conf(job_id, client=self.conn)
 
@@ -397,10 +395,6 @@ class XcuteBackend(RedisConnection):
 
     def update_job_info(self, job_id, updates):
         self._update_job_info(job_id, updates, client=self.conn)
-
-    @handle_redis_exceptions
-    def delete_job(self, job_id):
-        self.script_delete_job(keys=[job_id])
 
     def _get_job_conf(self, job_id, client):
         return client.hgetall(self.key_job_conf % job_id)
