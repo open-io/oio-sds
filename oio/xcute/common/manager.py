@@ -60,16 +60,12 @@ class XcuteManager(object):
     def run_next(self, orchestrator_id):
         return self.backend.run_next(orchestrator_id)
 
-    def pause_job(self, job_id):
+    def free(self, job_id):
         """
-            Mark a job as paused
+            Free the job by removing it from the orchestrator
         """
 
-        updates = {
-            'status': self.STATUS_PAUSED,
-            'mtime': time.time(),
-        }
-        self.backend.update_job_info(job_id, updates)
+        self.backend.free(job_id)
 
     def fail(self, job_id):
         """
