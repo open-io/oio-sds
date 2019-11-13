@@ -117,6 +117,28 @@ class XcuteBackend(RedisConnection):
         return {job_id, job_info, job_config};
     """
 
+    lua_fail = """
+        local job_id = KEYS[1];
+
+        local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
+                                  'status');
+        if status == nil or status == false then
+            return redis.error_reply('no_job');
+        end;
+
+        if status ~= 'RUNNING' then
+            return redis.error_reply('job_must_be_running');
+        end;
+
+        redis.call('HSET', 'xcute:job:info:' .. job_id,
+                   'status', 'FAILED');
+        -- remove the job of the orchestrator
+        local orchestrator_id = redis.call(
+            'HGET', 'xcute:job:info:' .. job_id, 'orchestrator_id');
+        redis.call('SREM', 'xcute:orchestrator:jobs:' .. orchestrator_id,
+                    job_id);
+    """ + _lua_update_mtime
+
     lua_request_pause = """
         local job_id = KEYS[1];
 
@@ -340,6 +362,8 @@ class XcuteBackend(RedisConnection):
             self.lua_create)
         self.script_run_next = self.register_script(
             self.lua_run_next)
+        self.script_fail = self.register_script(
+            self.lua_fail)
         self.script_request_pause = self.register_script(
             self.lua_request_pause)
         self.script_resume = self.register_script(
@@ -440,6 +464,10 @@ class XcuteBackend(RedisConnection):
                 self._unmarshal_job_conf(job_config))
 
     @handle_redis_exceptions
+    def fail(self, job_id):
+        self.script_fail(keys=[job_id], client=self.conn)
+
+    @handle_redis_exceptions
     def request_pause(self, job_id):
         self.script_request_pause(keys=[job_id], client=self.conn)
 
@@ -467,15 +495,6 @@ class XcuteBackend(RedisConnection):
             keys=[job_id] + self._dict_to_lua_array(counters),
             args=task_ids,
             client=self.conn)
-
-    @handle_redis_exceptions
-    def fail_job(self, orchestrator_id, job_id, updates):
-        pipeline = self.conn.pipeline()
-
-        pipeline.srem(self.key_orchestrator_jobs % orchestrator_id, job_id)
-        self._update_job_info(job_id, updates, client=pipeline)
-
-        pipeline.execute()
 
     @handle_redis_exceptions
     def delete(self, job_id):
