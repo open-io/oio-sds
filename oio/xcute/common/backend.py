@@ -17,6 +17,7 @@ from functools import wraps
 
 import redis
 
+from oio.common.easy_value import true_value
 from oio.common.exceptions import Forbidden, NotFound
 from oio.common.green import time
 from oio.common.json import json
@@ -94,6 +95,65 @@ class XcuteBackend(RedisConnection):
         return {job_id, job_conf, job_info};
     """
 
+    lua_update_tasks_sent = """
+        local job_id = KEYS[1];
+        local total_tasks = KEYS[2];
+        local all_tasks_sent = KEYS[3];
+        local tasks_sent = ARGV;
+        local tasks_sent_length = #tasks_sent;
+
+        local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
+                                  'status');
+        if status == nil or status == false then
+            return redis.error_reply('no_job');
+        end;
+
+        local total_tasks_sent = redis.call(
+            'HINCRBY', 'xcute:job:info:' .. job_id,
+            'total', total_tasks);
+
+        local total_tasks_sent = redis.call(
+            'HINCRBY', 'xcute:job:info:' .. job_id,
+            'sent', tasks_sent_length);
+        for _, task_id in ipairs(tasks_sent) do
+            redis.call('SADD', 'xcute:tasks:running:' .. job_id, task_id);
+        end;
+        if tasks_sent_length > 0 then
+            redis.call('HSET', 'xcute:job:info:' .. job_id,
+                       'last_sent', tasks_sent[tasks_sent_length]);
+        end;
+
+        local stopped = false;
+        if all_tasks_sent == 'True' then
+            if tonumber(total_tasks_sent) == 0 then
+                -- if there is no task sent, finish job
+                redis.call('HSET', 'xcute:job:info:' .. job_id,
+                           'status', 'FINISHED');
+            else
+                -- else, wait the last tasks
+                redis.call('HSET', 'xcute:job:info:' .. job_id,
+                           'all_sent', 'True');
+            end;
+            -- remove the job of the orchestrator
+            local orchestrator_id = redis.call(
+                'HGET', 'xcute:job:info:' .. job_id, 'orchestrator_id');
+            redis.call('SREM', 'xcute:orchestrator:jobs:' .. orchestrator_id,
+                       job_id);
+            stopped = true;
+        elseif status == 'WAITING_PAUSE' then
+            -- if waiting pause, pause the job
+            redis.call('HSET', 'xcute:job:info:' .. job_id,
+                       'status', 'PAUSED');
+            local orchestrator_id = redis.call(
+                'HGET', 'xcute:job:info:' .. job_id, 'orchestrator_id');
+            redis.call('SREM', 'xcute:orchestrator:jobs:' .. orchestrator_id,
+                       job_id);
+            stopped = true;
+        end;
+    """ + _lua_update_mtime + """
+        return stopped;
+    """
+
     lua_update_tasks_processed = """
         local function get_counters(tbl, first, last)
             local sliced = {}
@@ -126,9 +186,9 @@ class XcuteBackend(RedisConnection):
                        key, value);
         end;
 
-        local tasks_all_sent = redis.call(
+        local all_tasks_sent = redis.call(
             'HGET', 'xcute:job:info:' .. job_id, 'all_sent');
-        if tasks_all_sent == '1' and status ~= 'FINISHED' then
+        if all_tasks_sent == 'True' and status ~= 'FINISHED' then
             local total_tasks_sent = redis.call(
                 'HGET', 'xcute:job:info:' .. job_id, 'sent');
             if tonumber(total_tasks_processed) >= tonumber(total_tasks_sent) then
@@ -176,6 +236,8 @@ class XcuteBackend(RedisConnection):
             self.lua_create_job)
         self.script_take_job = self.register_script(
             self.lua_take_job)
+        self.script_update_tasks_sent = self.register_script(
+            self.lua_update_tasks_sent)
         self.script_update_tasks_processed = self.register_script(
             self.lua_update_tasks_processed)
         self.script_delete_job = self.register_script(
@@ -268,24 +330,12 @@ class XcuteBackend(RedisConnection):
 
         return job_id, job_conf, job_info
 
-    def incr_sent(self, job_id, task_id, updates):
-        pipeline = self.conn.pipeline()
-
-        pipeline.hincrby(self.key_job_info % job_id, 'sent', 1)
-        pipeline.sadd(self.key_tasks_running % job_id, task_id)
-        self._update_job_info(job_id, updates, client=pipeline)
-
-        pipeline.execute()
-
     @handle_redis_exceptions
-    def all_sent(self, orchestrator_id, job_id, updates, is_finished):
-        pipeline = self.conn.pipeline()
-
-        self._update_job_info(job_id, updates, client=pipeline)
-        if is_finished:
-            pipeline.srem(self.key_orchestrator_jobs % orchestrator_id, job_id)
-
-        pipeline.execute()
+    def update_tasks_sent(self, job_id, task_ids, total_tasks,
+                          all_tasks_sent=False):
+        return self.script_update_tasks_sent(
+            keys=[job_id, total_tasks, str(all_tasks_sent)],
+            args=task_ids, client=self.conn)
 
     @handle_redis_exceptions
     def update_tasks_processed(self, job_id, task_ids,
@@ -365,9 +415,6 @@ class XcuteBackend(RedisConnection):
     def _marshal_job_info(job_info):
         marshalled_job_info = job_info.copy()
 
-        if 'all_sent' in job_info:
-            marshalled_job_info['all_sent'] = int(job_info['all_sent'])
-
         if job_info.get('total') is None:
             marshalled_job_info.pop('total', None)
 
@@ -380,7 +427,7 @@ class XcuteBackend(RedisConnection):
     def _unmarshal_job_info(marshalled_job_info):
         job_info = marshalled_job_info.copy()
 
-        all_sent = True if job_info['all_sent'] == '1' else False
+        all_sent = true_value(job_info['all_sent'])
         total = int(job_info['total']) if 'total' in job_info else None
 
         job_info['sent'] = int(job_info['sent'])
