@@ -27,7 +27,7 @@ class TesterSecondTask(XcuteTask):
 
     def process(self, task_id, payload):
         self.logger.info('Second task: %s', payload['msg'])
-        return True, 2
+        return True, None
 
 
 class TesterJob(XcuteJob):

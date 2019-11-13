@@ -60,8 +60,14 @@ class XcuteBackend(RedisConnection):
     key_job_ids = 'xcute:job:ids'
     key_job_info = 'xcute:job:info:%s'
     key_job_queue = 'xcute:job:queue'
-    key_job_tasks = 'xcute:job:running:%s'
+    key_tasks_running = 'xcute:tasks:running:%s'
     key_orchestrator_jobs = 'xcute:orchestrator:jobs:%s'
+
+    _lua_update_mtime = """
+        local time = redis.call('TIME');
+        redis.call('HSET', 'xcute:job:info:' .. job_id, 'mtime',
+                   time[1] .. '.' .. time[2]);
+    """
 
     lua_create_job = """
         local job_exists = redis.call('EXISTS', 'xcute:job:info:' .. KEYS[1]);
@@ -88,21 +94,49 @@ class XcuteBackend(RedisConnection):
         return {job_id, job_conf, job_info};
     """
 
-    lua_incr_processed = """
-        local processed = redis.call('HINCRBY', 'xcute:job:info:' .. KEYS[2],
-                                     'processed', 1);
-        redis.call('HINCRBY', 'xcute:job:info:' .. KEYS[2], 'errors', ARGV[1]);
-
-        local sent = redis.call('HMGET', 'xcute:job:info:' .. KEYS[2],
-                                'all_sent', 'sent');
-
-        if sent[1] == '1' and tonumber(sent[2]) == processed then
-            redis.call('HSET', 'xcute:job:info:' .. KEYS[2],
-                       'status', 'FINISHED');
-            redis.call('SREM', 'xcute:orchestrator:jobs:' .. KEYS[1],
-                       KEYS[2]);
+    lua_update_tasks_processed = """
+        local function get_counters(tbl, first, last)
+            local sliced = {}
+            for i = first or 1, last or #tbl, 2 do
+                sliced[tbl[i]] = tbl[i+1];
+            end;
+            return sliced;
         end;
-    """
+
+        local job_id = KEYS[1];
+        local counters = get_counters(KEYS, 2, nil);
+        local tasks_processed = ARGV;
+        local tasks_processed_length = #tasks_processed;
+
+        local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
+                                  'status');
+        if status == nil or status == false then
+            return redis.error_reply('no_job');
+        end;
+
+        local total_tasks_processed = redis.call(
+            'HINCRBY', 'xcute:job:info:' .. job_id,
+            'processed', tasks_processed_length);
+        for _, task_id in ipairs(tasks_processed) do
+            redis.call('SREM', 'xcute:tasks:running:' .. job_id, task_id);
+        end;
+
+        for key, value in pairs(counters) do
+            redis.call('HINCRBY', 'xcute:job:info:' .. job_id,
+                       key, value);
+        end;
+
+        local tasks_all_sent = redis.call(
+            'HGET', 'xcute:job:info:' .. job_id, 'all_sent');
+        if tasks_all_sent == '1' and status ~= 'FINISHED' then
+            local total_tasks_sent = redis.call(
+                'HGET', 'xcute:job:info:' .. job_id, 'sent');
+            if tonumber(total_tasks_processed) >= tonumber(total_tasks_sent) then
+                redis.call('HSET', 'xcute:job:info:' .. job_id,
+                           'status', 'FINISHED');
+            end;
+        end;
+    """ + _lua_update_mtime
 
     lua_delete_job = """
         local job_info = redis.call('HMGET', 'xcute:job:info:' .. KEYS[1],
@@ -142,8 +176,8 @@ class XcuteBackend(RedisConnection):
             self.lua_create_job)
         self.script_take_job = self.register_script(
             self.lua_take_job)
-        self.script_incr_processed = self.register_script(
-            self.lua_incr_processed)
+        self.script_update_tasks_processed = self.register_script(
+            self.lua_update_tasks_processed)
         self.script_delete_job = self.register_script(
             self.lua_delete_job)
 
@@ -238,7 +272,7 @@ class XcuteBackend(RedisConnection):
         pipeline = self.conn.pipeline()
 
         pipeline.hincrby(self.key_job_info % job_id, 'sent', 1)
-        pipeline.sadd(self.key_job_tasks % job_id, task_id)
+        pipeline.sadd(self.key_tasks_running % job_id, task_id)
         self._update_job_info(job_id, updates, client=pipeline)
 
         pipeline.execute()
@@ -254,21 +288,18 @@ class XcuteBackend(RedisConnection):
         pipeline.execute()
 
     @handle_redis_exceptions
-    def incr_processed(self, orchestrator_id, job_id, task_id, error, task_result):
-        pipeline = self.conn.pipeline()
-
-        self.script_incr_processed(
-            keys=[orchestrator_id, job_id],
-            args=[int(error)],
-            client=pipeline)
-        pipeline.srem(self.key_job_tasks % job_id, task_id)
-        pipeline.hset(self.key_job_info % job_id, 'mtime', time.time())
-        for key, value in task_result.items():
-            pipeline.hset(self.key_job_info % job_id,
-                          'results.' + key, value)
-        pipeline.execute()
-
-        return
+    def update_tasks_processed(self, job_id, task_ids,
+                               task_errors, task_results):
+        counters = dict()
+        if task_errors:
+            counters['errors.total'] = len(task_errors)
+        if task_results:
+            for key, value in task_results.items():
+                counters['results.' + key] = value
+        self.script_update_tasks_processed(
+            keys=[job_id] + self._dict_to_lua_array(counters),
+            args=task_ids,
+            client=self.conn)
 
     @handle_redis_exceptions
     def fail_job(self, orchestrator_id, job_id, updates):
@@ -365,3 +396,11 @@ class XcuteBackend(RedisConnection):
     def _lua_array_to_dict(array):
         it = iter(array)
         return dict(zip(*([it] * 2)))
+
+    @staticmethod
+    def _dict_to_lua_array(dict_):
+        array = list()
+        for key, value in dict_.items():
+            array.append(key)
+            array.append(value)
+        return array
