@@ -198,21 +198,19 @@ class XcuteOrchestrator(object):
                                         task_id, task_class, task_payload)
 
                 if sent:
-                    self.manager.task_sent(job_id, task_id, total_tasks)
+                    paused = self.manager.update_tasks_sent(
+                        job_id, [task_id], total_tasks)
+                    if paused:
+                        return
 
                 if not self.running:
                     break
             else:
                 self.logger.info('All tasks sent (job_id=%s)' % job_id)
-                # no task in the job
-                is_finished = task is None
-                self.manager.all_tasks_sent(self.orchestrator_id, job_id, is_finished)
-
-                if is_finished:
-                    self.logger.info('Job done (job_id=%s)' % job_id)
+                self.manager.update_tasks_sent(
+                    job_id, [], 0, all_tasks_sent=True)
 
                 self.logger.info('Finished dispatching job (job_id=%s)', job_id)
-
                 return
 
             self.manager.pause_job(job_id)
