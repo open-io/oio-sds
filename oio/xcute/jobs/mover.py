@@ -95,10 +95,8 @@ class BlobMover(XcuteTask):
                 orphan += 1
                 continue
 
-            new_chunk = content.move_chunk(
+            content.move_chunk(
                 chunk_id, fake_excluded_chunks=fake_excluded_chunks)
-
-            self.logger.info('Moved chunk %s to %s', chunk_url, new_chunk['url'])
 
             total_size += chunk_size
 
