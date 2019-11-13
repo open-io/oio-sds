@@ -92,6 +92,13 @@ class XcuteManager(object):
         self.backend.update_tasks_processed(
             job_id, task_ids, task_errors, task_results)
 
+    def delete(self, job_id):
+        """
+            Delete a job
+        """
+
+        self.backend.delete(job_id)
+
     def list_jobs(self, **kwargs):
         """
             Get all jobs with their information
@@ -105,10 +112,3 @@ class XcuteManager(object):
         """
 
         return self.backend.get_job_info(job_id)
-
-    def delete_job(self, job_id):
-        """
-            Delete a job
-        """
-
-        self.backend.delete_job(job_id)
