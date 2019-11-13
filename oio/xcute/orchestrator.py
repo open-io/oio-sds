@@ -208,7 +208,7 @@ class XcuteOrchestrator(object):
                 self.logger.info('Finished dispatching job (job_id=%s)', job_id)
                 return
 
-            self.manager.pause_job(job_id)
+            self.manager.free(job_id)
         except Exception:
             self.logger.exception('Failed generating task list (job_id=%s', job_id)
 
