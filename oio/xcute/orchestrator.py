@@ -31,15 +31,33 @@ from oio.xcute.jobs import JOB_TYPES
 
 class XcuteOrchestrator(object):
 
-    DEFAULT_WORKER_TUBE = 'oio-xcute'
-    DEFAULT_REPLY_TUBE = DEFAULT_WORKER_TUBE + '.reply'
     DEFAULT_DISPATCHER_TIMEOUT = 2
 
     def __init__(self, conf, verbose):
         self.conf = conf
         self.logger = get_logger(self.conf, verbose=verbose)
-        self.manager = XcuteManager(self.conf, self.logger)
+        self.manager = XcuteManager(self.conf, logger=self.logger)
         self.conscience_client = ConscienceClient(self.conf)
+
+        self.orchestrator_id = self.conf.get('orchestrator_id')
+        if not self.orchestrator_id:
+            raise ValueError('Missing orchestrator ID')
+        self.logger.info('Using orchestrator ID: %s', self.orchestrator_id)
+
+        self.beanstalkd_workers_tube = self.conf.get('beanstalkd_workers_tube')
+        if not self.beanstalkd_workers_tube:
+            raise ValueError('Missing beanstalkd workers tube')
+        self.logger.info('Using beanstalkd workers tube: %s',
+                         self.beanstalkd_workers_tube)
+
+        self.beanstalkd_reply_addr = self.conf.get('beanstalkd_reply_addr')
+        if not self.beanstalkd_reply_addr:
+            raise ValueError('Missing beanstalkd reply address')
+        self.beanstalkd_reply_tube = self.conf.get(
+            'beanstalkd_reply_tube', self.beanstalkd_workers_tube + '.reply')
+        self.logger.info('Using beanstalkd reply : %s %s',
+                         self.beanstalkd_reply_addr,
+                         self.beanstalkd_reply_tube)
 
         self.running = True
         self.threads = {}
@@ -48,10 +66,6 @@ class XcuteOrchestrator(object):
         """
             Take jobs from the queue and spawn threads to dispatch them
         """
-
-        self.orchestrator_id = \
-            self.conf.get('orchestrator_id', socket.gethostname())
-        self.logger.info('Using orchestrator id %s' % self.orchestrator_id)
 
         # gather beanstalkd info
         self.all_beanstalkd = OrderedDict()
@@ -65,9 +79,6 @@ class XcuteOrchestrator(object):
                 return
 
             sleep(5)
-
-        self.reply_beanstalkd_addr = self.get_reply_beanstalkd_addr()
-        self.reply_tube = self.conf.get('beanstalkd_reply_tube', self.DEFAULT_REPLY_TUBE)
 
         self.threads[beanstalkd_thread.ident] = beanstalkd_thread
 
@@ -131,11 +142,6 @@ class XcuteOrchestrator(object):
             self.conf, self.logger,
             job_conf['params'])
 
-        job_conf.setdefault('beanstalkd_worker_tube',
-            self.conf.get('beanstalkd_workers_tube', self.DEFAULT_WORKER_TUBE))
-        job_conf['beanstalkd_reply_addr'] = self.reply_beanstalkd_addr
-        job_conf['beanstalkd_reply_tube'] = self.reply_tube
-
         self.handle_job(job_id, job_conf, job_info, job_tasks)
 
     def handle_running_job(self, job_id, job_conf, job_info):
@@ -163,10 +169,7 @@ class XcuteOrchestrator(object):
             and start the dispatching thread
         """
 
-        worker_tube = job_conf['beanstalkd_worker_tube']
-
-        beanstalkd_workers = \
-            self.get_loadbalanced_workers(worker_tube)
+        beanstalkd_workers = self.get_loadbalanced_workers()
 
         self.manager.start_job(job_id, job_conf)
 
@@ -266,8 +269,8 @@ class XcuteOrchestrator(object):
                 'task_id': task_id,
                 'task_payload': task_payload,
                 'beanstalkd_reply': {
-                    'addr': self.reply_beanstalkd_addr,
-                    'tube': self.reply_tube,
+                    'addr': self.beanstalkd_reply_addr,
+                    'tube': self.beanstalkd_reply_tube,
                 },
             }
         })
@@ -282,8 +285,8 @@ class XcuteOrchestrator(object):
         while self.running:
             try:
                 listener = BeanstalkdListener(
-                    addr=self.reply_beanstalkd_addr,
-                    tube=self.reply_tube,
+                    addr=self.beanstalkd_reply_addr,
+                    tube=self.beanstalkd_reply_tube,
                     logger=self.logger)
 
                 break
@@ -292,8 +295,8 @@ class XcuteOrchestrator(object):
 
             sleep(5)
 
-        self.logger.info('Listening to replies on %s (tube=%s)' %
-                         (self.reply_beanstalkd_addr, self.reply_tube))
+        self.logger.info('Listening to replies on %s (tube=%s)',
+                         self.beanstalkd_reply_addr, self.beanstalkd_reply_tube)
 
         # keep the job results in memory
         self.job_results = {}
@@ -403,26 +406,11 @@ class XcuteOrchestrator(object):
 
         self.logger.info('Exited beanstalkd thread')
 
-    def get_reply_beanstalkd_addr(self):
-        """
-            Get the beanstalkd used for the reply
-        """
-
-        if 'beanstalkd_reply_addr' in self.conf:
-            return self.conf['beanstalkd_reply_addr']
-
-        # prefer a local beanstalkd if it's not in the configuration
-        for service in self.conscience_client.local_services():
-            if service['type'] == 'beanstalkd':
-                return service['addr']
-
-        return self.conscience_client.next_instance('beanstalkd')['addr']
-
     @staticmethod
     def get_beanstalkd_tubes(beanstalkd_addr):
         return Beanstalk.from_url('beanstalkd://' + beanstalkd_addr).tubes()
 
-    def get_loadbalanced_workers(self, worker_tube):
+    def get_loadbalanced_workers(self):
         """
             Yield senders following a loadbalancing strategy
         """
@@ -433,18 +421,18 @@ class XcuteOrchestrator(object):
                 if beanstalkd['score'] == 0:
                     continue
 
-                if worker_tube not in beanstalkd_tubes:
+                if self.beanstalkd_workers_tube not in beanstalkd_tubes:
                     continue
 
-                if worker_tube not in beanstalkd_senders:
+                if self.beanstalkd_workers_tube not in beanstalkd_senders:
                     sender = BeanstalkdSender(
                         addr=beanstalkd['addr'],
-                        tube=worker_tube,
+                        tube=self.beanstalkd_workers_tube,
                         logger=self.logger)
 
-                    beanstalkd_senders[worker_tube] = sender
+                    beanstalkd_senders[self.beanstalkd_workers_tube] = sender
 
-                yield beanstalkd_senders[worker_tube]
+                yield beanstalkd_senders[self.beanstalkd_workers_tube]
                 yielded = True
 
             if not yielded:
