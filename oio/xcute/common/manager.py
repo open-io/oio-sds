@@ -65,13 +65,6 @@ class XcuteManager(object):
 
         return self.backend.list_orchestrator_jobs(orchestrator_id)
 
-    def get_new_jobs(self, orchestrator_id):
-        """
-            Get waiting jobs until there's none left
-        """
-
-        return iter(lambda: self.backend.take_job(orchestrator_id), None)
-
     def start_job(self, job_id, job_conf):
         """
             Mark a job as running
@@ -82,6 +75,9 @@ class XcuteManager(object):
             'mtime': time.time(),
         }
         self.backend.start_job(job_id, job_conf, updates)
+
+    def run_next(self, orchestrator_id):
+        return self.backend.run_next(orchestrator_id)
 
     def pause_job(self, job_id):
         """

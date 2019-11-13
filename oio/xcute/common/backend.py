@@ -60,7 +60,7 @@ class XcuteBackend(RedisConnection):
     key_job_conf = 'xcute:job:config:%s'
     key_job_ids = 'xcute:job:ids'
     key_job_info = 'xcute:job:info:%s'
-    key_job_queue = 'xcute:job:queue'
+    key_waiting_jobs = 'xcute:waiting:jobs'
     key_tasks_running = 'xcute:tasks:running:%s'
     key_orchestrator_jobs = 'xcute:orchestrator:jobs:%s'
 
@@ -77,22 +77,26 @@ class XcuteBackend(RedisConnection):
         end;
 
         redis.call('ZADD', 'xcute:job:ids', 0, KEYS[1]);
-        redis.call('LPUSH', 'xcute:job:queue', KEYS[1]);
+        redis.call('RPUSH', 'xcute:waiting:jobs', KEYS[1]);
     """
 
-    lua_take_job = """
-        local job_id = redis.call('RPOP', 'xcute:job:queue');
-        if job_id == false then
+    lua_run_next = """
+        local orchestrator_id = KEYS[1];
+
+        local job_id = redis.call('LPOP', 'xcute:waiting:jobs');
+        if job_id == nil or job_id == false then
             return nil;
         end;
 
-        local job_conf = redis.call('HGETALL', 'xcute:job:config:' .. job_id);
+        redis.call('HSET', 'xcute:job:info:' .. job_id,
+                   'status', 'RUNNING',
+                   'orchestrator_id', orchestrator_id);
+        redis.call('SADD', 'xcute:orchestrator:jobs:' .. orchestrator_id,
+                   job_id);
+    """ + _lua_update_mtime + """
         local job_info = redis.call('HGETALL', 'xcute:job:info:' .. job_id);
-
-        redis.call('SADD', 'xcute:orchestrator:jobs:' .. KEYS[1], job_id);
-        redis.call('HSET', 'xcute:job:info:' .. job_id, 'orchestrator_id', KEYS[1]);
-
-        return {job_id, job_conf, job_info};
+        local job_config = redis.call('HGETALL', 'xcute:job:config:' .. job_id);
+        return {job_id, job_info, job_config};
     """
 
     lua_update_tasks_sent = """
@@ -212,7 +216,7 @@ class XcuteBackend(RedisConnection):
         end;
 
         if status == 'WAITING' then
-            redis.call('LREM', 'xcute:job:queue', 1, KEYS[1]);
+            redis.call('LREM', 'xcute:waiting:jobs', 1, KEYS[1]);
         end;
 
         if status == 'PAUSED' then
@@ -234,8 +238,8 @@ class XcuteBackend(RedisConnection):
 
         self.script_create_job = self.register_script(
             self.lua_create_job)
-        self.script_take_job = self.register_script(
-            self.lua_take_job)
+        self.script_run_next = self.register_script(
+            self.lua_run_next)
         self.script_update_tasks_sent = self.register_script(
             self.lua_update_tasks_sent)
         self.script_update_tasks_processed = self.register_script(
@@ -318,17 +322,17 @@ class XcuteBackend(RedisConnection):
         )
 
     @handle_redis_exceptions
-    def take_job(self, orchestrator_id):
-        job = self.script_take_job(keys=[orchestrator_id])
-
-        if job is None:
+    def run_next(self, orchestrator_id):
+        next_job = self.script_run_next(
+            keys=[orchestrator_id], client=self.conn)
+        if next_job is None:
             return None
-
-        job_id = job[0]
-        job_conf = self._unmarshal_job_conf(self._lua_array_to_dict(job[1]))
-        job_info = self._unmarshal_job_info(self._lua_array_to_dict(job[2]))
-
-        return job_id, job_conf, job_info
+        job_id, job_info, job_config = next_job
+        job_info_dict = dict()
+        job_info = self._lua_array_to_dict(job_info)
+        job_config = self._lua_array_to_dict(job_config)
+        return (job_id, job_info['job_type'], job_info.get('last_sent'),
+                self._unmarshal_job_conf(job_config))
 
     @handle_redis_exceptions
     def update_tasks_sent(self, job_id, task_ids, total_tasks,
