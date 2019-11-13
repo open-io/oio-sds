@@ -13,6 +13,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from itertools import izip_longest
+
 from oio.blob.client import BlobClient
 from oio.common.easy_value import float_value, int_value
 from oio.common.exceptions import ContentNotFound, OrphanChunk
@@ -48,7 +50,8 @@ class BlobMover(XcuteTask):
             fake_excluded_chunks.append(chunk)
         return fake_excluded_chunks
 
-    def process(self, chunk_id, task_payload):
+    def process(self, task_id, task_payload):
+        chunk_ids = task_payload['chunk_ids']
         service_id = task_payload['service_id']
         rawx_timeout = task_payload['rawx_timeout']
         min_chunk_size = task_payload['min_chunk_size']
@@ -58,32 +61,53 @@ class BlobMover(XcuteTask):
         fake_excluded_chunks = self._generate_fake_excluded_chunks(
             excluded_rawx)
 
-        chunk_url = 'http://{}/{}'.format(service_id, chunk_id)
-        meta = self.blob_client.chunk_head(chunk_url, timeout=rawx_timeout)
-        container_id = meta['container_id']
-        content_id = meta['content_id']
-        chunk_id = meta['chunk_id']
-        chunk_size = int(meta['chunk_size'])
+        chunks = 0
+        total_size = 0
+        skipped = 0
+        orphan = 0
+        for chunk_id in chunk_ids:
+            if chunk_id is None:
+                continue
 
-        # Maybe skip the chunk because it doesn't match the size constaint
-        if chunk_size < min_chunk_size:
-            self.logger.debug("SKIP %s too small", chunk_url)
-            return
-        if max_chunk_size > 0 and chunk_size > max_chunk_size:
-            self.logger.debug("SKIP %s too big", chunk_url)
-            return
+            chunks += 1
 
-        # Start moving the chunk
-        try:
-            content = self.content_factory.get(container_id, content_id)
-        except ContentNotFound:
-            raise OrphanChunk('Content not found')
+            chunk_url = 'http://{}/{}'.format(service_id, chunk_id)
+            meta = self.blob_client.chunk_head(chunk_url, timeout=rawx_timeout)
+            container_id = meta['container_id']
+            content_id = meta['content_id']
+            chunk_id = meta['chunk_id']
+            chunk_size = int(meta['chunk_size'])
 
-        new_chunk = content.move_chunk(
-            chunk_id, fake_excluded_chunks=fake_excluded_chunks)
+            # Maybe skip the chunk because it doesn't match the size constaint
+            if chunk_size < min_chunk_size:
+                self.logger.debug("SKIP %s too small", chunk_url)
+                skipped += 1
+                continue
+            if max_chunk_size > 0 and chunk_size > max_chunk_size:
+                self.logger.debug("SKIP %s too big", chunk_url)
+                skipped += 1
+                continue
 
-        self.logger.info('Moved chunk %s to %s', chunk_url, new_chunk['url'])
-        return True, chunk_size
+            # Start moving the chunk
+            try:
+                content = self.content_factory.get(container_id, content_id)
+            except ContentNotFound:
+                orphan += 1
+                continue
+
+            new_chunk = content.move_chunk(
+                chunk_id, fake_excluded_chunks=fake_excluded_chunks)
+
+            self.logger.info('Moved chunk %s to %s', chunk_url, new_chunk['url'])
+
+            total_size += chunk_size
+
+        return True, {
+            'chunks': chunks,
+            'total_size': total_size,
+            'skipped': skipped,
+            'orphan': orphan,
+        }
 
 
 class RawxDecommissionJob(XcuteJob):
@@ -94,6 +118,7 @@ class RawxDecommissionJob(XcuteJob):
     DEFAULT_RAWX_TIMEOUT = 60.0
     DEFAULT_MIN_CHUNK_SIZE = 0
     DEFAULT_MAX_CHUNK_SIZE = 0
+    DEFAULT_BATCH_SIZE = 100
 
     @staticmethod
     def sanitize_params(params):
@@ -122,6 +147,10 @@ class RawxDecommissionJob(XcuteJob):
             params.get('max_chunk_size'),
             RawxDecommissionJob.DEFAULT_MAX_CHUNK_SIZE)
 
+        sanitized_params['batch_size'] = int_value(
+            params.get('batch_size'),
+            RawxDecommissionJob.DEFAULT_BATCH_SIZE)
+
         excluded_rawx = list()
         excluded_rawx_param = params.get('excluded_rawx')
         if excluded_rawx_param:
@@ -144,8 +173,12 @@ class RawxDecommissionJob(XcuteJob):
             service_id, timeout=rdir_timeout,
             limit=rdir_fetch_limit, start_after=marker)
 
-        for i, (_, _, chunk_id, _) in enumerate(chunk_infos, 1):
+        chunk_ids = (chunk_id for _, _, chunk_id, _ in chunk_infos)
+        chunk_ids_batches = izip_longest(*([chunk_ids] * params['batch_size']))
+
+        for i, chunk_ids_batch in enumerate(chunk_ids_batches, 1):
             payload = {
+                'chunk_ids': chunk_ids_batch,
                 'service_id': params['service_id'],
                 'rawx_timeout': params['rawx_timeout'],
                 'min_chunk_size': params['min_chunk_size'],
@@ -153,11 +186,14 @@ class RawxDecommissionJob(XcuteJob):
                 'excluded_rawx': params['excluded_rawx']
             }
 
-            yield (BlobMover, chunk_id, payload, i)
+            yield (BlobMover, chunk_ids_batch[0], payload, i)
 
     @staticmethod
-    def reduce_result(total_chunk_size, chunk_size):
-        if total_chunk_size is None:
-            total_chunk_size = 0
+    def reduce_result(total_result, task_result):
+        if total_result is None:
+            total_result = dict(chunks=0, total_size=0, skipped=0, orphan=0)
 
-        return total_chunk_size + chunk_size
+        for key, value in task_result.items():
+            total_result[key] += value
+
+        return total_result
