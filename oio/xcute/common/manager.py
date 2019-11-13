@@ -48,7 +48,7 @@ class XcuteManager(object):
             'status': self.STATUS_WAITING,
             'sent': 0,
             'last_sent': '',
-            'all_sent': 0,
+            'all_sent': 'False',
             'processed': 0,
             'errors': 0,
             'result': None,
@@ -105,30 +105,10 @@ class XcuteManager(object):
         }
         self.backend.fail_job(orchestrator_id, job_id, updates)
 
-    def task_sent(self, job_id, task_id, total=None):
-        """
-            Update a job's sent tasks status
-        """
-
-        updates = {
-            'mtime': time.time(),
-            'last_sent': task_id,
-            'total': total,
-        }
-        self.backend.incr_sent(job_id, task_id, updates)
-
-    def all_tasks_sent(self, orchestrator_id, job_id, is_finished):
-        """
-            Mark a job as having all its tasks sent
-        """
-
-        updates = {
-            'all_sent': 1,
-            'mtime': time.time(),
-        }
-        if is_finished:
-            updates['status'] = self.STATUS_FINISHED
-        self.backend.all_sent(orchestrator_id, job_id, updates, is_finished)
+    def update_tasks_sent(self, job_id, task_ids, total_tasks,
+                          all_tasks_sent=False):
+        self.backend.update_tasks_sent(job_id, task_ids, total_tasks,
+                                       all_tasks_sent=all_tasks_sent)
 
     def update_tasks_processed(self, job_id, task_ids,
                                task_errors, task_results):
