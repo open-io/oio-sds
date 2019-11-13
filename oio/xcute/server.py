@@ -84,14 +84,12 @@ class Xcute(WerkzeugApp):
             return Response(status=204)
 
     def on_job_pause(self, req, job_id):
-        return Response(status=501)
-        # do something
-        # return Response(status=204)
+        self.manager.request_pause(job_id)
+        return Response(status=204)
 
     def on_job_resume(self, req, job_id):
-        return Response(status=501)
-        # do something
-        # return Response(status=204)
+        self.manager.resume(job_id)
+        return Response(status=204)
 
 
 def create_app(conf):
