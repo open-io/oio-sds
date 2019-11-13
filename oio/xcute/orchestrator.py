@@ -343,8 +343,8 @@ class XcuteOrchestrator(object):
 
         try:
 
-            self.manager.task_processed(
-                self.orchestrator_id, job_id, task_id, task_ok, task_result)
+            self.manager.update_tasks_processed(
+                job_id, [task_id], [not task_ok], task_result)
 
             self.logger.info('Job %s done', job_id)
         except Exception:
