@@ -95,7 +95,7 @@ class XcuteManager(object):
 
     def update_tasks_processed(self, job_id, task_ids,
                                task_errors, task_results):
-        self.backend.update_tasks_processed(
+        return self.backend.update_tasks_processed(
             job_id, task_ids, task_errors, task_results)
 
     def delete(self, job_id):
