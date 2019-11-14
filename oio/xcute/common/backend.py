@@ -337,6 +337,7 @@ class XcuteBackend(RedisConnection):
                        key, value);
         end;
 
+        local finished = false;
         local all_tasks_sent = redis.call(
             'HGET', 'xcute:job:info:' .. job_id, 'all_sent');
         if all_tasks_sent == 'True' and status ~= 'FINISHED' then
@@ -345,9 +346,12 @@ class XcuteBackend(RedisConnection):
             if tonumber(total_tasks_processed) >= tonumber(total_tasks_sent) then
                 redis.call('HSET', 'xcute:job:info:' .. job_id,
                            'status', 'FINISHED');
+                finished = true;
             end;
         end;
-    """ + _lua_update_mtime
+    """ + _lua_update_mtime + """
+        return finished;
+    """
 
     lua_delete = """
         local job_id = KEYS[1];
@@ -478,11 +482,12 @@ class XcuteBackend(RedisConnection):
         if next_job is None:
             return None
         job_id, job_info, job_config = next_job
-        job_info_dict = dict()
-        job_info = self._lua_array_to_dict(job_info)
-        job_config = self._lua_array_to_dict(job_config)
+        job_info = self._unmarshal_job_info(
+            self._lua_array_to_dict(job_info))
+        job_config = self._unmarshal_job_conf(
+            self._lua_array_to_dict(job_config))
         return (job_id, job_info['job_type'], job_info.get('last_sent'),
-                self._unmarshal_job_conf(job_config))
+                job_config)
 
     @handle_redis_exceptions
     def free(self, job_id):
@@ -516,7 +521,7 @@ class XcuteBackend(RedisConnection):
         if task_results:
             for key, value in task_results.items():
                 counters['results.' + key] = value
-        self.script_update_tasks_processed(
+        return self.script_update_tasks_processed(
             keys=[job_id] + self._dict_to_lua_array(counters),
             args=task_ids,
             client=self.conn)
