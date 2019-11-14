@@ -13,14 +13,13 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import pickle
 import traceback
 
 from oio.common.green import sleep
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.event.beanstalk import BeanstalkdSender
-from oio.xcute.common.job import XcuteTask
+from oio.xcute.jobs import JOB_TYPES
 
 
 class XcuteWorker(object):
@@ -32,7 +31,8 @@ class XcuteWorker(object):
 
     def process_beanstalkd_job(self, beanstalkd_job):
         job_id = beanstalkd_job['job_id']
-        task_class_encoded = beanstalkd_job['task_class']
+        job_type = beanstalkd_job['job_type']
+        job_class = JOB_TYPES[job_type]
         task_id = beanstalkd_job['task_id']
         task_payload = beanstalkd_job['task_payload']
         reply_addr = beanstalkd_job['beanstalkd_reply']['addr']
@@ -40,13 +40,8 @@ class XcuteWorker(object):
 
         task_ok, task_result = (False, None)
         try:
-            task_class = pickle.loads(task_class_encoded)
-            task = task_class(self.conf, logger=self.logger)
-
-            if not isinstance(task, XcuteTask):
-                raise ValueError('Unexpected task: %s' % task_class)
-
-            task_ok, task_result = task.process(task_id, task_payload)
+            job = job_class(self.conf, logger=self.logger)
+            task_ok, task_result = job.process_task(task_id, task_payload)
             if not task_ok:
                 self.logger.debug('Task was not processed: %s', beanstalkd_job)
         except Exception:

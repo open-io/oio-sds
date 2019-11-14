@@ -13,21 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.xcute.common.job import XcuteJob, XcuteTask
-
-
-class TesterFirstTask(XcuteTask):
-
-    def process(self, task_id, payload):
-        self.logger.info('First task: %s', payload['msg'])
-        return True, 1
-
-
-class TesterSecondTask(XcuteTask):
-
-    def process(self, task_id, payload):
-        self.logger.info('Second task: %s', payload['msg'])
-        return True, None
+from oio.xcute.common.job import XcuteJob
 
 
 class TesterJob(XcuteJob):
@@ -54,12 +40,20 @@ class TesterJob(XcuteJob):
 
         for i in range(start, end):
             if i < 2:
-                task_class = TesterFirstTask
-                task_payload = {'msg': 'coucou-%d' % i}
+                task_payload = {'first': True, 'msg': 'coucou-%d' % i}
             else:
-                task_class = TesterSecondTask
-                task_payload = {'msg': 'hibou-%d' % i}
+                task_payload = {'first': False, 'msg': 'hibou-%d' % i}
 
             task_id = str(i)
 
-            yield (task_class, task_id, task_payload, total_tasks)
+            yield (task_id, task_payload, total_tasks)
+
+    def process_task(self, task_id, task_payload):
+        first = task_payload['first']
+        msg = task_payload['msg']
+
+        if first:
+            self.logger.info('First task: %s', msg)
+        else:
+            self.logger.info('Second task: %s', msg)
+        return True, None
