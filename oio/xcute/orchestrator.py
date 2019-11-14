@@ -196,14 +196,17 @@ class XcuteOrchestrator(object):
                     paused = self.manager.update_tasks_sent(
                         job_id, [task_id], total_tasks)
                     if paused:
+                        self.logger.info('Job %s is paused', job_id)
                         return
 
                 if not self.running:
                     break
             else:
                 self.logger.info('All tasks sent (job_id=%s)' % job_id)
-                self.manager.update_tasks_sent(
+                finished = self.manager.update_tasks_sent(
                     job_id, [], 0, all_tasks_sent=True)
+                if finished:
+                    self.logger.info('Job %s is finished', job_id)
 
                 self.logger.info('Finished dispatching job (job_id=%s)', job_id)
                 return
@@ -336,10 +339,10 @@ class XcuteOrchestrator(object):
 
         try:
 
-            self.manager.update_tasks_processed(
+            finished = self.manager.update_tasks_processed(
                 job_id, [task_id], [not task_ok], task_result)
-
-            self.logger.info('Job %s done', job_id)
+            if finished:
+                self.logger.info('Job %s is finished', job_id)
         except Exception:
             self.logger.exception('Error processing reply')
 
