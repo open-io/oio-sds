@@ -16,20 +16,13 @@
 from oio.common.logger import get_logger
 
 
-class XcuteTask(object):
-    """Serialisable wrapper for an task submitted in the xcute hub."""
+class XcuteJob(object):
+
+    JOB_TYPE = None
 
     def __init__(self, conf, logger=None):
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
-
-    def process(self, task_id, task_payload):
-        raise NotImplementedError()
-
-
-class XcuteJob(object):
-
-    JOB_TYPE = None
 
     @staticmethod
     def sanitize_params(params):
@@ -49,4 +42,7 @@ class XcuteJob(object):
             task_id must be a string and can be used as a marker
         """
 
+        raise NotImplementedError()
+
+    def process_task(self, task_id, task_payload):
         raise NotImplementedError()

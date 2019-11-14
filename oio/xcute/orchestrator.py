@@ -15,7 +15,6 @@
 
 from collections import OrderedDict
 import itertools
-import pickle
 import os
 import socket
 
@@ -138,7 +137,7 @@ class XcuteOrchestrator(object):
             self.conf, self.logger,
             job_config['params'], marker=last_sent_task)
 
-        self.handle_job(job_id, job_config, job_tasks)
+        self.handle_job(job_id, job_type, job_config, job_tasks)
 
     def handle_running_job(self, job_id, job_config, job_info):
         """
@@ -159,9 +158,9 @@ class XcuteOrchestrator(object):
 
         self.manager.start_job(job_id, job_config)
 
-        self.handle_job(job_id, job_config, job_tasks)
+        self.handle_job(job_id, job_type, job_config, job_tasks)
 
-    def handle_job(self, job_id, job_config, job_tasks):
+    def handle_job(self, job_id, job_type, job_config, job_tasks):
         """
             Get the beanstalkd available for this job
             and start the dispatching thread
@@ -169,7 +168,7 @@ class XcuteOrchestrator(object):
 
         beanstalkd_workers = self.get_loadbalanced_workers()
 
-        thread_args = (job_id, job_tasks, beanstalkd_workers)
+        thread_args = (job_id, job_type, job_tasks, beanstalkd_workers)
         dispatch_thread = threading.Thread(
             target=self.dispatch_job,
             args=thread_args)
@@ -177,7 +176,7 @@ class XcuteOrchestrator(object):
 
         self.threads[dispatch_thread.ident] = dispatch_thread
 
-    def dispatch_job(self, job_id, job_tasks, beanstalkd_workers):
+    def dispatch_job(self, job_id, job_type, job_tasks, beanstalkd_workers):
         """
             Dispatch all of a job's tasks
         """
@@ -187,10 +186,10 @@ class XcuteOrchestrator(object):
         try:
             task = None
             for task in job_tasks:
-                (task_class, task_id, task_payload, total_tasks) = task
+                (task_id, task_payload, total_tasks) = task
 
-                sent = self.dispatch_task(beanstalkd_workers, job_id,
-                                        task_id, task_class, task_payload)
+                sent = self.dispatch_task(
+                    beanstalkd_workers, job_id, job_type, task_id, task_payload)
 
                 if sent:
                     paused = self.manager.update_tasks_sent(
@@ -217,15 +216,14 @@ class XcuteOrchestrator(object):
 
             self.manager.fail(job_id)
 
-    def dispatch_task(self, beanstalkd_workers, job_id,
-                      task_id, task_class, task_payload):
+    def dispatch_task(self, beanstalkd_workers, job_id, job_type,
+                      task_id, task_payload):
         """
             Try sending a task until it's ok
         """
 
-        beanstalkd_payload = \
-            self.make_beanstalkd_payload(job_id, task_id,
-                                         task_class, task_payload)
+        beanstalkd_payload = self.make_beanstalkd_payload(
+            job_id, job_type, task_id, task_payload)
 
         if len(beanstalkd_payload) > 2**16:
             raise ValueError('Task payload is too big (length=%s)' % len(beanstalkd_payload))
@@ -255,13 +253,13 @@ class XcuteOrchestrator(object):
             workers_tried.clear()
             sleep(5)
 
-    def make_beanstalkd_payload(self, job_id,
-                                task_id, task_class, task_payload):
+    def make_beanstalkd_payload(self, job_id, job_type,
+                                task_id, task_payload):
         return json.dumps({
             'event': 'xcute.task',
             'data': {
                 'job_id': job_id,
-                'task_class': pickle.dumps(task_class),
+                'job_type': job_type,
                 'task_id': task_id,
                 'task_payload': task_payload,
                 'beanstalkd_reply': {
