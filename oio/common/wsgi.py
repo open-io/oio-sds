@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -26,7 +26,7 @@ from oio.common.logger import get_logger
 
 class Application(BaseApplication):
     access_log_fmt = '%(bind0)s %(h)s:%({remote}p)s %(m)s %(s)s %(D)s ' + \
-                     '%(B)s %(l)s %({X-oio-req-id}i)s %(U)s?%(q)s'
+                     '%(B)s %(l)s %({x-oio-req-id}i)s %(U)s?%(q)s'
 
     def __init__(self, app, conf, logger_class=None):
         self.conf = conf

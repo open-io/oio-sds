@@ -26,13 +26,12 @@ from greenlet import GreenletExit
 
 from oio.api import io
 from oio.common import exceptions
-from oio.common.constants import REQID_HEADER
+from oio.common.constants import CHUNK_HEADERS, REQID_HEADER
 from oio.common.exceptions import SourceReadError
 from oio.common.http import HeadersDict, parse_content_range, \
     ranges_from_http_header, headers_from_object_metadata
-from oio.common.utils import fix_ranges, monotonic_time
-from oio.common.constants import CHUNK_HEADERS
 from oio.common.logger import get_logger
+from oio.common.utils import fix_ranges, monotonic_time
 
 
 LOGGER = get_logger({}, __name__)
