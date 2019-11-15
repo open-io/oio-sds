@@ -138,16 +138,33 @@ class RawxDecommissionJob(XcuteJob):
         return sanitized_job_params, 'rawx/%s' % service_id
 
     def get_tasks(self, job_params, marker=None):
-        service_id = job_params['service_id']
-        rdir_fetch_limit = job_params['rdir_fetch_limit']
-        rdir_timeout = job_params['rdir_timeout']
+        chunk_infos = self.get_chunk_infos(job_params, marker)
 
+        chunk_ids = (chunk_id for _, _, chunk_id, _ in chunk_infos)
+        for i, chunk_id in enumerate(chunk_ids, 1):
+            yield chunk_id, dict(), i
+
+    def get_total_tasks(self, job_params, marker=None):
+        chunk_infos = self.get_chunk_infos(job_params, marker)
+
+        chunk_id = ''
+        i = 0
+        for i, (_, _, chunk_id, _) in enumerate(chunk_infos, 1):
+            if i % 1000 == 0:
+                yield (chunk_id, 1000)
+
+        yield (chunk_id, i % 1000)
+
+    @staticmethod
+    def get_chunk_infos(params, marker):
         rdir_client = RdirClient(self.conf, logger=self.logger)
+
+        service_id = params['service_id']
+        rdir_fetch_limit = params['rdir_fetch_limit']
+        rdir_timeout = params['rdir_timeout']
 
         chunk_infos = rdir_client.chunk_fetch(
             service_id, timeout=rdir_timeout,
             limit=rdir_fetch_limit, start_after=marker)
 
-        chunk_ids = (chunk_id for _, _, chunk_id, _ in chunk_infos)
-        for i, chunk_id in enumerate(chunk_ids, 1):
-            yield chunk_id, dict(), i
+        return chunk_infos

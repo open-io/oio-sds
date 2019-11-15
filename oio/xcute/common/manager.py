@@ -96,6 +96,12 @@ class XcuteManager(object):
         return self.backend.update_tasks_processed(
             job_id, task_ids, task_errors, task_results)
 
+    def incr_total_tasks(self, job_id, total_marker, tasks_incr):
+        return self.backend.incr_total_tasks(job_id, total_marker, tasks_incr)
+
+    def total_tasks_done(self, job_id):
+        return self.backend.total_tasks_done(job_id)
+
     def delete(self, job_id):
         """
             Delete a job
