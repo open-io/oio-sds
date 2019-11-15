@@ -34,86 +34,81 @@ class RawxDecommissionJob(XcuteJob):
     DEFAULT_MAX_CHUNK_SIZE = 0
     DEFAULT_BATCH_SIZE = 100
 
-    def __init__(self, conf, logger=None):
-        super(RawxDecommissionJob, self).__init__(conf, logger=logger)
-        self.blob_client = BlobClient(
-            self.conf, logger=self.logger)
-        self.content_factory = ContentFactory(conf)
-        self.conscience_client = ConscienceClient(
-            self.conf, logger=self.logger)
+    def load_config(self, job_config):
+        sanitized_job_config, _ = super(
+            RawxDecommissionJob, self).load_config(job_config)
 
-    @staticmethod
-    def sanitize_params(params):
-        if not params.get('service_id'):
+        self.service_id = job_config.get('service_id')
+        if not self.service_id:
             raise ValueError('Missing service ID')
+        sanitized_job_config['service_id'] = self.service_id
 
-        sanitized_params = params.copy()
+        self.rdir_fetch_limit = int_value(
+            job_config.get('rdir_fetch_limit'),
+            self.DEFAULT_RDIR_FETCH_LIMIT)
+        sanitized_job_config['rdir_fetch_limit'] = self.rdir_fetch_limit
 
-        sanitized_params['rdir_fetch_limit'] = int_value(
-            params.get('rdir_fetch_limit'),
-            RawxDecommissionJob.DEFAULT_RDIR_FETCH_LIMIT)
+        self.rdir_timeout = float_value(
+            job_config.get('rdir_timeout'),
+            self.DEFAULT_RDIR_TIMEOUT)
+        sanitized_job_config['rdir_timeout'] = self.rdir_timeout
 
-        sanitized_params['rdir_timeout'] = float_value(
-            params.get('rdir_timeout'),
-            RawxDecommissionJob.DEFAULT_RDIR_TIMEOUT)
+        self.rawx_timeout = float_value(
+            job_config.get('rawx_timeout'),
+            self.DEFAULT_RAWX_TIMEOUT)
+        sanitized_job_config['rawx_timeout'] = self.rawx_timeout
 
-        sanitized_params['rawx_timeout'] = float_value(
-            params.get('rawx_timeout'),
-            RawxDecommissionJob.DEFAULT_RAWX_TIMEOUT)
+        self.min_chunk_size = int_value(
+            job_config.get('min_chunk_size'),
+            self.DEFAULT_MIN_CHUNK_SIZE)
+        sanitized_job_config['min_chunk_size'] = self.min_chunk_size
 
-        sanitized_params['min_chunk_size'] = int_value(
-            params.get('min_chunk_size'),
-            RawxDecommissionJob.DEFAULT_MIN_CHUNK_SIZE)
+        self.max_chunk_size = int_value(
+            job_config.get('max_chunk_size'),
+            self.DEFAULT_MAX_CHUNK_SIZE)
+        sanitized_job_config['max_chunk_size'] = self.max_chunk_size
 
-        sanitized_params['max_chunk_size'] = int_value(
-            params.get('max_chunk_size'),
-            RawxDecommissionJob.DEFAULT_MAX_CHUNK_SIZE)
+        excluded_rawx_param = job_config.get('excluded_rawx')
+        if excluded_rawx_param:
+            self.excluded_rawx = excluded_rawx_param.split(',')
+        else:
+            self.excluded_rawx = list()
+        sanitized_job_config['excluded_rawx'] = ','.join(self.excluded_rawx)
 
-        sanitized_params['batch_size'] = int_value(
-            params.get('batch_size'),
+        self.batch_size = int_value(
+            job_config.get('batch_size'),
             RawxDecommissionJob.DEFAULT_BATCH_SIZE)
-
         # a bigger batch size may result
         # in beanstalkd payloads being too big
-        if sanitized_params['batch_size'] > 900:
+        if self.batch_size > 900:
             raise ValueError('Batch size should less than 900')
+        sanitized_job_config['batch_size'] = self.batch_size
 
-        excluded_rawx = list()
-        excluded_rawx_param = params.get('excluded_rawx')
-        if excluded_rawx_param:
-            excluded_rawx = excluded_rawx_param.split(',')
-        sanitized_params['excluded_rawx'] = excluded_rawx
+        return sanitized_job_config, 'rawx/%s' % self.service_id
 
-        lock = 'rawx/%s' % params['service_id']
-
-        return (sanitized_params, lock)
-
-    @staticmethod
-    def get_tasks(conf, logger, params, marker=None):
-        rdir_client = RdirClient(conf, logger=logger)
-
-        service_id = params['service_id']
-        rdir_fetch_limit = params['rdir_fetch_limit']
-        rdir_timeout = params['rdir_timeout']
+    def get_tasks(self, marker=None):
+        rdir_client = RdirClient(self.conf, logger=self.logger)
 
         chunk_infos = rdir_client.chunk_fetch(
-            service_id, timeout=rdir_timeout,
-            limit=rdir_fetch_limit, start_after=marker)
+            self.service_id, timeout=self.rdir_timeout,
+            limit=self.rdir_fetch_limit, start_after=marker)
 
         chunk_ids = (chunk_id for _, _, chunk_id, _ in chunk_infos)
-        chunk_ids_batches = izip_longest(*([chunk_ids] * params['batch_size']))
+        chunk_ids_batches = izip_longest(*([chunk_ids] * self.batch_size))
 
         for i, chunk_ids_batch in enumerate(chunk_ids_batches, 1):
             payload = {
                 'chunk_ids': chunk_ids_batch,
-                'service_id': params['service_id'],
-                'rawx_timeout': params['rawx_timeout'],
-                'min_chunk_size': params['min_chunk_size'],
-                'max_chunk_size': params['max_chunk_size'],
-                'excluded_rawx': params['excluded_rawx']
             }
 
             yield (chunk_ids_batch[0], payload, i)
+
+    def init_process_task(self):
+        self.blob_client = BlobClient(
+            self.conf, logger=self.logger)
+        self.content_factory = ContentFactory(self.conf)
+        self.conscience_client = ConscienceClient(
+            self.conf, logger=self.logger)
 
     def _generate_fake_excluded_chunks(self, excluded_rawx):
         fake_excluded_chunks = list()
@@ -133,14 +128,9 @@ class RawxDecommissionJob(XcuteJob):
 
     def process_task(self, task_id, task_payload):
         chunk_ids = task_payload['chunk_ids']
-        service_id = task_payload['service_id']
-        rawx_timeout = task_payload['rawx_timeout']
-        min_chunk_size = task_payload['min_chunk_size']
-        max_chunk_size = task_payload['max_chunk_size']
-        excluded_rawx = task_payload['excluded_rawx']
 
         fake_excluded_chunks = self._generate_fake_excluded_chunks(
-            excluded_rawx)
+            self.excluded_rawx)
 
         chunks = 0
         total_size = 0
@@ -152,19 +142,19 @@ class RawxDecommissionJob(XcuteJob):
 
             chunks += 1
 
-            chunk_url = 'http://{}/{}'.format(service_id, chunk_id)
-            meta = self.blob_client.chunk_head(chunk_url, timeout=rawx_timeout)
+            chunk_url = 'http://{}/{}'.format(self.service_id, chunk_id)
+            meta = self.blob_client.chunk_head(chunk_url, timeout=self.rawx_timeout)
             container_id = meta['container_id']
             content_id = meta['content_id']
             chunk_id = meta['chunk_id']
             chunk_size = int(meta['chunk_size'])
 
             # Maybe skip the chunk because it doesn't match the size constaint
-            if chunk_size < min_chunk_size:
+            if chunk_size < self.min_chunk_size:
                 self.logger.debug("SKIP %s too small", chunk_url)
                 skipped += 1
                 continue
-            if max_chunk_size > 0 and chunk_size > max_chunk_size:
+            if self.max_chunk_size > 0 and chunk_size > self.max_chunk_size:
                 self.logger.debug("SKIP %s too big", chunk_url)
                 skipped += 1
                 continue
