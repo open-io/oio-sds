@@ -40,21 +40,20 @@ class XcuteWorker(object):
         reply_addr = beanstalkd_job['beanstalkd_reply']['addr']
         reply_tube = beanstalkd_job['beanstalkd_reply']['tube']
 
-        task_errors = 0
+        task_errors = Counter()
         task_results = Counter()
-        try:
-            job = job_class(self.conf, logger=self.logger)
-            job.load_config(job_config)
-            job.init_process_task()
-            for task_id, task_payload in tasks.iteritems():
-                task_ok, task_result = job.process_task(task_id, task_payload)
-                task_errors += int(not task_ok)
+
+        job = job_class(self.conf, logger=self.logger)
+        job.load_config(job_config)
+        job.init_process_task()
+        for task_id, task_payload in tasks.iteritems():
+            try:
+                task_result = job.process_task(task_id, task_payload)
                 task_results.update(task_result)
-                if not task_ok:
-                    self.logger.debug('Task was not processed: %s', beanstalkd_job)
-        except Exception:
-            self.logger.error('Error processing job %s: %s',
-                              beanstalkd_job, traceback.format_exc())
+            except Exception as exc:
+                self.logger.warn('[job_id=%s] Fail to process task %s: %s',
+                                 job_id, task_id, exc)
+                task_errors[type(exc).__name__] += 1
 
         self._reply(reply_addr, reply_tube,
                     beanstalkd_job, task_results, task_errors)

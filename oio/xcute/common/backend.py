@@ -89,8 +89,7 @@ class XcuteBackend(RedisConnection):
             'request_pause', 'False',
             'all_sent', 'False',
             'sent', '0',
-            'processed', '0',
-            'errors.total', '0');
+            'processed', '0');
         redis.call('HSET', 'xcute:job:config:' .. job_id, unpack(job_config));
         redis.call('RPUSH', 'xcute:waiting:jobs', job_id);
     """ + _lua_update_mtime + """
@@ -516,7 +515,11 @@ class XcuteBackend(RedisConnection):
                                task_errors, task_results):
         counters = dict()
         if task_errors:
-            counters['errors.total'] = task_errors
+            total_errors = 0
+            for key, value in task_errors.items():
+                total_errors += value
+                counters['errors.' + key] = value
+            counters['errors.total'] = total_errors
         if task_results:
             for key, value in task_results.items():
                 counters['results.' + key] = value
@@ -578,8 +581,11 @@ class XcuteBackend(RedisConnection):
         job_info['sent'] = int(job_info['sent'])
         job_info['all_sent'] = all_sent
         job_info['processed'] = int(job_info['processed'])
-        job_info['errors.total'] = int(job_info['errors.total'])
         job_info['total'] = total
+
+        for key, value in job_info.iteritems():
+            if key.startswith('errors.') or key.startswith('results.'):
+                job_info[key] = int(value)
 
         return job_info
 

@@ -127,11 +127,11 @@ class RawxDecommissionJob(XcuteJob):
         if chunk_size < self.min_chunk_size:
             self.logger.debug("SKIP %s too small", chunk_url)
             results['skipped'] += 1
-            return True, results
+            return results
         if self.max_chunk_size > 0 and chunk_size > self.max_chunk_size:
             self.logger.debug("SKIP %s too big", chunk_url)
             results['skipped'] += 1
-            return True, results
+            return results
 
         # Start moving the chunk
         try:
@@ -140,9 +140,8 @@ class RawxDecommissionJob(XcuteJob):
                 chunk_id, fake_excluded_chunks=fake_excluded_chunks)
         except (ContentNotFound, OrphanChunk):
             results['orphan'] += 1
-            return True, results
+            return results
 
         results['moved_chunks'] += 1
         results['total_size'] += chunk_size
-
-        return True, results
+        return results
