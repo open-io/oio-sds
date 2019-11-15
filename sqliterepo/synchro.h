@@ -110,6 +110,12 @@ void sqlx_sync_set_hash(struct sqlx_sync_s *ss, guint witdth, guint depth);
  * Zookeeper handle. */
 int sqlx_sync_uses_handle(struct sqlx_sync_s *ss, zhandle_t *zh);
 
+/** Build to full ZK path to the key. Must be freed with g_free. */
+gchar* sqlx_sync_zk_full_key_path(struct sqlx_sync_s *ss, const char *key);
+
+/** Tell which server this handle is connected to. */
+const char* sqlx_sync_zk_server(struct sqlx_sync_s *ss);
+
 /** Get a string describing one of Zookeeper's state constants. */
 const char * zoo_state2str(int state);
 

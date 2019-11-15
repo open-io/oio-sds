@@ -565,6 +565,28 @@ sqlx_sync_uses_handle(struct sqlx_sync_s *ss, zhandle_t *zh)
 	return ss? ss->zh == zh: FALSE;
 }
 
+gchar*
+sqlx_sync_zk_full_key_path(struct sqlx_sync_s *ss, const char *key)
+{
+	if (!ss || !key)
+		return NULL;
+	gchar p[PATH_MAXLEN];
+	_realpath(ss, key, p, sizeof(p));
+	return g_strdup(p);
+}
+
+const char*
+sqlx_sync_zk_server(struct sqlx_sync_s *ss)
+{
+	if (!ss || !ss->zh)
+		return NULL;
+#if ZOO_MAJOR_VERSION > 3 || (ZOO_MAJOR_VERSION == 3 && ZOO_MINOR_VERSION >= 5)
+	return zoo_get_current_server(ss->zh);
+#else
+	return "# requires zookeeper>=3.5 #";
+#endif
+}
+
 /* -------------------------------------------------------------------------- */
 
 static void _direct_destroy (struct sqlx_peering_s *self);

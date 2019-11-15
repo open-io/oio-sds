@@ -118,6 +118,12 @@ class ElectionStatus(ElectionCmd):
 class ElectionDebug(ElectionCmd):
     """Get debugging information about an election."""
 
+    def get_parser(self, prog_name):
+        parser = super(ElectionDebug, self).get_parser(prog_name)
+        parser.add_argument('--human', action='store_true',
+                            help="Display human-readable dates")
+        return parser
+
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
@@ -130,8 +136,25 @@ class ElectionDebug(ElectionCmd):
 
         columns = ('Id', 'Status', 'Message', 'Body')
         data = sorted(data.iteritems())
+        import time
+
+        def format_item(x, v):
+            if v is None:
+                return format_json(x, v)
+            patched_times = list()
+            for entry in v.get("log", []):
+                date, bef, act, aft = entry.split(':', 3)
+                secs = float(date)
+                date = (time.strftime("%Y-%m-%d %H:%M:%S",
+                                      time.localtime(secs / 1000.0)) +
+                        '.%03d' % (secs % 1000))
+                patched_times.append("%s %s, %s -> %s" % (date, bef, act, aft))
+            v['log'] = patched_times
+            return format_json(x, v)
+
+        formatter = format_item if parsed_args.human else format_json
         results = ((k, v["status"]["status"], v["status"]["message"],
-                    format_json(parsed_args, v["body"])
+                    formatter(parsed_args, v["body"])
                     ) for k, v in data)
         return columns, results
 

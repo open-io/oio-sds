@@ -23,10 +23,10 @@ from string import hexdigits
 
 from oio.blob.utils import check_volume, read_chunk_metadata
 from oio.rdir.client import RdirClient
-from oio.common.constants import REQID_HEADER
 from oio.common.daemon import Daemon
 from oio.common import exceptions as exc
-from oio.common.constants import STRLEN_CHUNKID, CHUNK_SUFFIX_PENDING
+from oio.common.constants import STRLEN_CHUNKID, CHUNK_SUFFIX_PENDING, \
+    REQID_HEADER
 from oio.common.easy_value import int_value, true_value
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.logger import get_logger

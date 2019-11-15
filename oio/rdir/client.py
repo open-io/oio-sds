@@ -17,7 +17,7 @@
 import random
 
 from oio.api.base import HttpApi
-from oio.common.constants import REQID_HEADER
+from oio.common.constants import HEADER_PREFIX, REQID_HEADER
 from oio.common.exceptions import ClientException, NotFound, VolumeException
 from oio.common.exceptions import ServiceUnavailable, ServerException
 from oio.common.exceptions import OioNetworkException, OioException, \
@@ -30,7 +30,6 @@ from oio.directory.client import DirectoryClient
 from oio.common.utils import depaginate, cid_from_name
 from oio.common.green import sleep
 from oio.common.easy_value import true_value
-from oio.common.constants import HEADER_PREFIX
 
 RDIR_ACCT = '_RDIR'
 
