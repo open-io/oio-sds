@@ -23,6 +23,7 @@ from oio.common.exceptions import Forbidden, NotFound
 from oio.common.green import datetime, time
 from oio.common.json import json
 from oio.common.redis_conn import RedisConnection
+from oio.common.timestamp import Timestamp
 
 
 def handle_redis_exceptions(func):
@@ -66,17 +67,16 @@ class XcuteBackend(RedisConnection):
     key_orchestrator_jobs = 'xcute:orchestrator:jobs:%s'
 
     _lua_update_mtime = """
-        local time = redis.call('TIME');
-        redis.call('HSET', 'xcute:job:info:' .. job_id, 'mtime',
-                   time[1] .. '.' .. time[2]);
+        redis.call('HSET', 'xcute:job:info:' .. job_id, 'mtime', mtime);
     """
 
     lua_create = """
-        local job_id = KEYS[1];
-        local job_type = KEYS[2];
+        local mtime = KEYS[1];
+        local job_id = KEYS[2];
+        local job_type = KEYS[3];
         local job_config = ARGV;
 
-        local job_exists = redis.call('EXISTS', 'xcute:job:info:' .. KEYS[1]);
+        local job_exists = redis.call('EXISTS', 'xcute:job:info:' .. job_id);
         if job_exists == 1 then
             return redis.error_reply('job_exists');
         end;
@@ -93,12 +93,12 @@ class XcuteBackend(RedisConnection):
         redis.call('HSET', 'xcute:job:config:' .. job_id, unpack(job_config));
         redis.call('RPUSH', 'xcute:waiting:jobs', job_id);
     """ + _lua_update_mtime + """
-        redis.call('HSET', 'xcute:job:info:' .. job_id, 'ctime',
-                   time[1] .. '.' .. time[2]);
+        redis.call('HSET', 'xcute:job:info:' .. job_id, 'ctime', mtime);
     """
 
     lua_run_next = """
-        local orchestrator_id = KEYS[1];
+        local mtime = KEYS[1];
+        local orchestrator_id = KEYS[2];
 
         local job_id = redis.call('LPOP', 'xcute:waiting:jobs');
         if job_id == nil or job_id == false then
@@ -117,7 +117,8 @@ class XcuteBackend(RedisConnection):
     """
 
     lua_free = """
-        local job_id = KEYS[1];
+        local mtime = KEYS[1];
+        local job_id = KEYS[2];
 
         local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
                                   'status');
@@ -136,7 +137,8 @@ class XcuteBackend(RedisConnection):
     """ + _lua_update_mtime
 
     lua_fail = """
-        local job_id = KEYS[1];
+        local mtime = KEYS[1];
+        local job_id = KEYS[2];
 
         local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
                                   'status');
@@ -158,7 +160,8 @@ class XcuteBackend(RedisConnection):
     """ + _lua_update_mtime
 
     lua_request_pause = """
-        local job_id = KEYS[1];
+        local mtime = KEYS[1];
+        local job_id = KEYS[2];
 
         local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
                                   'status');
@@ -197,7 +200,8 @@ class XcuteBackend(RedisConnection):
     """
 
     lua_resume = """
-        local job_id = KEYS[1];
+        local mtime = KEYS[1];
+        local job_id = KEYS[2];
 
         local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
                                   'status');
@@ -242,9 +246,10 @@ class XcuteBackend(RedisConnection):
     """
 
     lua_update_tasks_sent = """
-        local job_id = KEYS[1];
-        local total_tasks = KEYS[2];
-        local all_tasks_sent = KEYS[3];
+        local mtime = KEYS[1];
+        local job_id = KEYS[2];
+        local total_tasks = KEYS[3];
+        local all_tasks_sent = KEYS[4];
         local tasks_sent = ARGV;
         local tasks_sent_length = #tasks_sent;
 
@@ -312,8 +317,9 @@ class XcuteBackend(RedisConnection):
             return sliced;
         end;
 
-        local job_id = KEYS[1];
-        local counters = get_counters(KEYS, 2, nil);
+        local mtime = KEYS[1];
+        local job_id = KEYS[2];
+        local counters = get_counters(KEYS, 3, nil);
         local tasks_processed = ARGV;
         local tasks_processed_length = #tasks_processed;
 
@@ -365,7 +371,7 @@ class XcuteBackend(RedisConnection):
         end;
 
         if status == 'WAITING' then
-            redis.call('LREM', 'xcute:waiting:jobs', 1, KEYS[1]);
+            redis.call('LREM', 'xcute:waiting:jobs', 1, job_id);
         end;
 
         redis.call('ZREM', 'xcute:job:ids', job_id);
@@ -439,13 +445,16 @@ class XcuteBackend(RedisConnection):
             marker = job_id
         return jobs
 
+    def _get_timestamp(self):
+        return Timestamp().normal
+
     @handle_redis_exceptions
     def create(self, job_type, job_config):
         job_id = datetime.utcnow().strftime('%Y%m%d%H%M%S%f') \
             + '-%011x' % random.randrange(16**11)
 
         self.script_create(
-            keys=[job_id, job_type],
+            keys=[self._get_timestamp(), job_id, job_type],
             args=self._dict_to_lua_array(job_config),
             client=self.conn)
         return job_id
@@ -477,7 +486,8 @@ class XcuteBackend(RedisConnection):
     @handle_redis_exceptions
     def run_next(self, orchestrator_id):
         next_job = self.script_run_next(
-            keys=[orchestrator_id], client=self.conn)
+            keys=[self._get_timestamp(), orchestrator_id],
+            client=self.conn)
         if next_job is None:
             return None
         job_id, job_info, job_config = next_job
@@ -489,25 +499,33 @@ class XcuteBackend(RedisConnection):
 
     @handle_redis_exceptions
     def free(self, job_id):
-        self.script_free(keys=[job_id], client=self.conn)
+        self.script_free(
+            keys=[self._get_timestamp(), job_id],
+            client=self.conn)
 
     @handle_redis_exceptions
     def fail(self, job_id):
-        self.script_fail(keys=[job_id], client=self.conn)
+        self.script_fail(
+            keys=[self._get_timestamp(), job_id],
+            client=self.conn)
 
     @handle_redis_exceptions
     def request_pause(self, job_id):
-        self.script_request_pause(keys=[job_id], client=self.conn)
+        self.script_request_pause(
+            keys=[self._get_timestamp(), job_id],
+            client=self.conn)
 
     @handle_redis_exceptions
     def resume(self, job_id):
-        self.script_resume(keys=[job_id], client=self.conn)
+        self.script_resume(
+            keys=[self._get_timestamp(), job_id],
+            client=self.conn)
 
     @handle_redis_exceptions
     def update_tasks_sent(self, job_id, task_ids, total_tasks,
                           all_tasks_sent=False):
         return self.script_update_tasks_sent(
-            keys=[job_id, total_tasks, str(all_tasks_sent)],
+            keys=[self._get_timestamp(), job_id, total_tasks, str(all_tasks_sent)],
             args=task_ids, client=self.conn)
 
     @handle_redis_exceptions
@@ -524,7 +542,7 @@ class XcuteBackend(RedisConnection):
             for key, value in task_results.items():
                 counters['results.' + key] = value
         return self.script_update_tasks_processed(
-            keys=[job_id] + self._dict_to_lua_array(counters),
+            keys=[self._get_timestamp(), job_id] + self._dict_to_lua_array(counters),
             args=task_ids,
             client=self.conn)
 
