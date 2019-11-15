@@ -62,7 +62,7 @@ class RawxDecommission(MultipleServicesCommandMixin, lister.Lister):
         return parser
 
     def _take_action(self, parsed_args):
-        job_params = {
+        job_config = {
             'rdir_fetch_limit': parsed_args.rdir_fetch_limit,
             'rdir_timeout': parsed_args.rdir_timeout,
             'rawx_timeout': parsed_args.rawx_timeout,
@@ -72,11 +72,11 @@ class RawxDecommission(MultipleServicesCommandMixin, lister.Lister):
         }
 
         for service_id in parsed_args.services:
-            job_params['service_id'] = service_id
+            job_config['service_id'] = service_id
             try:
                 job_info_ = self.xcute.job_create(
-                    RawxDecommissionJob.JOB_TYPE, job_params=job_params)
-                res = job_info_['job.id']
+                    RawxDecommissionJob.JOB_TYPE, job_config=job_config)
+                res = job_info_['id']
             except Exception as exc:
                 res = str(exc)
             yield (service_id, res)

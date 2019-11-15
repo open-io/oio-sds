@@ -117,25 +117,26 @@ class XcuteOrchestrator(object):
 
         new_jobs = iter(
             lambda: self.manager.run_next(self.orchestrator_id), None)
-        for job_id, job_type, last_sent_task, job_config in new_jobs:
+        for job_id, job_type, last_task_id, job_config in new_jobs:
             self.logger.info('Found new job %s', job_id)
             try:
                 self.handle_new_job(
-                    job_id, job_type, last_sent_task, job_config)
+                    job_id, job_type, last_task_id, job_config)
             except Exception:
                 self.logger.exception(
                     'Failed to instantiate job %s', job_id)
                 self.manager.fail(job_id)
 
-    def handle_new_job(self, job_id, job_type, last_sent_task, job_config):
+    def handle_new_job(self, job_id, job_type, last_task_id, job_config):
         """
             Set a new job's configuration
             and get its tasks before dispatching it
         """
 
-        job_tasks = JOB_TYPES[job_type].get_tasks(
-            self.conf, self.logger,
-            job_config['params'], marker=last_sent_task)
+        job_class = JOB_TYPES[job_type]
+        job = job_class(self.conf, logger=self.logger)
+        job.load_config(job_config)
+        job_tasks = job.get_tasks(marker=last_task_id)
 
         self.handle_job(job_id, job_type, job_config, job_tasks)
 
@@ -150,11 +151,11 @@ class XcuteOrchestrator(object):
 
         job_type = job_info['job_type']
         last_task_id = None
-        if len(job_info['last_sent']) > 0:
-            last_task_id = job_info['last_sent']
-        job_tasks = JOB_TYPES[job_type].get_tasks(
-            self.conf, self.logger,
-            job_config['params'], marker=last_task_id)
+        last_task_id = job_info.get('last_sent')
+        job_class = JOB_TYPES[job_type]
+        job = job_class(self.conf, logger=self.logger)
+        job.load_config(job_config)
+        job_tasks = job.get_tasks(marker=last_task_id)
 
         self.manager.start_job(job_id, job_config)
 
@@ -168,7 +169,8 @@ class XcuteOrchestrator(object):
 
         beanstalkd_workers = self.get_loadbalanced_workers()
 
-        thread_args = (job_id, job_type, job_tasks, beanstalkd_workers)
+        thread_args = (job_id, job_type, job_config, job_tasks,
+                       beanstalkd_workers)
         dispatch_thread = threading.Thread(
             target=self.dispatch_job,
             args=thread_args)
@@ -176,7 +178,8 @@ class XcuteOrchestrator(object):
 
         self.threads[dispatch_thread.ident] = dispatch_thread
 
-    def dispatch_job(self, job_id, job_type, job_tasks, beanstalkd_workers):
+    def dispatch_job(self, job_id, job_type, job_config, job_tasks,
+                     beanstalkd_workers):
         """
             Dispatch all of a job's tasks
         """
@@ -189,7 +192,8 @@ class XcuteOrchestrator(object):
                 (task_id, task_payload, total_tasks) = task
 
                 sent = self.dispatch_task(
-                    beanstalkd_workers, job_id, job_type, task_id, task_payload)
+                    beanstalkd_workers,
+                    job_id, job_type, job_config, task_id, task_payload)
 
                 if sent:
                     paused = self.manager.update_tasks_sent(
@@ -216,14 +220,14 @@ class XcuteOrchestrator(object):
 
             self.manager.fail(job_id)
 
-    def dispatch_task(self, beanstalkd_workers, job_id, job_type,
+    def dispatch_task(self, beanstalkd_workers, job_id, job_type, job_config,
                       task_id, task_payload):
         """
             Try sending a task until it's ok
         """
 
         beanstalkd_payload = self.make_beanstalkd_payload(
-            job_id, job_type, task_id, task_payload)
+            job_id, job_type, job_config, task_id, task_payload)
 
         if len(beanstalkd_payload) > 2**16:
             raise ValueError('Task payload is too big (length=%s)' % len(beanstalkd_payload))
@@ -253,13 +257,14 @@ class XcuteOrchestrator(object):
             workers_tried.clear()
             sleep(5)
 
-    def make_beanstalkd_payload(self, job_id, job_type,
+    def make_beanstalkd_payload(self, job_id, job_type, job_config,
                                 task_id, task_payload):
         return json.dumps({
             'event': 'xcute.task',
             'data': {
                 'job_id': job_id,
                 'job_type': job_type,
+                'job_config': job_config,
                 'task_id': task_id,
                 'task_payload': task_payload,
                 'beanstalkd_reply': {
