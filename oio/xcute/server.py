@@ -58,16 +58,13 @@ class Xcute(WerkzeugApp):
             if job_class is None:
                 return HTTPBadRequest(UnknownJobTypeException.message)
 
-            job_config = data.get('conf', {})
-            job_params = data.get('params', {})
-
+            job = job_class(self.conf, logger=self.logger)
+            job_config = data.get('config')
             # TODO: use lock
-            sanitized_params, lock = job_class.sanitize_params(job_params)
-            job_config['params'] = sanitized_params
+            job_config, lock = job.load_config(job_config)
 
             job_id = self.manager.create(job_type, job_config)
-
-            return Response(json.dumps({'job.id': job_id}), status=202)
+            return Response(json.dumps({'id': job_id}), status=202)
 
     def on_job(self, req, job_id):
         if req.method == 'GET':
