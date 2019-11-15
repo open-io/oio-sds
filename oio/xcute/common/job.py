@@ -90,3 +90,15 @@ class XcuteJob(object):
             task_id must be a string and can be used as a marker
         """
         raise NotImplementedError()
+
+    @staticmethod
+    def get_total_tasks(conf, logger, params, marker=None):
+        """
+            Yields numbers of tasks as
+            (marker, tasks_incr)
+            The sum of all tasks_incr yielded
+            must be the total of tasks in the job
+            NB: do not define if not needed
+        """
+
+        return None

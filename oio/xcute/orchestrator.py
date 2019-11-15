@@ -136,7 +136,10 @@ class XcuteOrchestrator(object):
         job_class = JOB_TYPES[job_type]
         job = job_class(self.conf, logger=self.logger)
         job_tasks = job.get_tasks(job_config['params'], marker=last_task_id)
-        self.handle_job(job_id, job_type, job_config, job_tasks)
+
+        tasks_counter = job.get_total_tasks(job_config['params'])
+
+        self.handle_job(job_id, job_type, job_config, job_tasks, tasks_counter)
 
     def handle_running_job(self, job_id, job_config, job_info):
         """
@@ -155,9 +158,15 @@ class XcuteOrchestrator(object):
 
         self.manager.start_job(job_id, job_config)
 
-        self.handle_job(job_id, job_type, job_config, job_tasks)
+        tasks_counter = None
+        if job_info['is_total_temp']:
+            tasks_counter = job.get_total_tasks(
+                job_config['params'], job_info['total_marker'])
 
-    def handle_job(self, job_id, job_type, job_config, job_tasks):
+        self.handle_job(job_id, job_type, job_config, job_tasks, tasks_counter)
+
+    def handle_job(self, job_id, job_type, job_config,
+                   job_tasks, tasks_counter):
         """
             Get the beanstalkd available for this job
             and start the dispatching thread
@@ -173,6 +182,14 @@ class XcuteOrchestrator(object):
         dispatch_thread.start()
 
         self.threads[dispatch_thread.ident] = dispatch_thread
+
+        if tasks_counter is None:
+            return
+
+        total_tasks_thread = threading.Thread(
+            target=self.get_job_total_tasks,
+            args=(job_id, tasks_counter))
+        total_tasks_thread.start()
 
     def dispatch_job(self, job_id, job_type, job_config, job_tasks,
                      beanstalkd_workers):
@@ -291,6 +308,17 @@ class XcuteOrchestrator(object):
                     },
                 }
             })
+
+    def get_job_total_tasks(self, job_id, tasks_counter):
+        for total_marker, tasks_incr in tasks_counter:
+            stop = self.manager.incr_total_tasks(job_id, total_marker, tasks_incr)
+
+            if stop or not self.running:
+                return
+
+        total_tasks = self.manager.total_tasks_done(job_id)
+
+        self.logger.info('Job %s has %s tasks', job_id, total_tasks)
 
     def listen(self):
         """
