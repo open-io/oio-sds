@@ -734,7 +734,7 @@ class SnapshotContainer(ContainerCommandMixin, Lister):
         deadline = timeout_to_deadline(parsed_args.timeout)
         dst_account = parsed_args.dst_account or account
         dst_container = (parsed_args.dst_container or
-                         (container + "-" + Timestamp(time()).normal))
+                         (container + "-" + Timestamp().normal))
         batch_size = parsed_args.chunk_batch_size
 
         self.app.client_manager.storage.container_snapshot(

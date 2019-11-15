@@ -287,7 +287,7 @@ class AccountBackend(RedisConnection):
             'bytes': 0,
             'damaged_objects': 0,
             'missing_chunks': 0,
-            'ctime': Timestamp(time()).normal
+            'ctime': Timestamp().normal
         })
         pipeline.execute()
         self.release_lock('account:%s' % account_id, lock)
@@ -394,11 +394,11 @@ class AccountBackend(RedisConnection):
         if mtime is None:
             mtime = '0'
         else:
-            mtime = Timestamp(float(mtime)).normal
+            mtime = Timestamp(mtime).normal
         if dtime is None:
             dtime = '0'
         else:
-            dtime = Timestamp(float(dtime)).normal
+            dtime = Timestamp(dtime).normal
         if object_count is None:
             object_count = 0
         if bytes_used is None:
@@ -413,7 +413,7 @@ class AccountBackend(RedisConnection):
                 ("account:%s" % (account_id))]
         args = [name, mtime, dtime, object_count, bytes_used,
                 damaged_objects, missing_chunks,
-                str(autocreate_account), Timestamp(time()).normal, EXPIRE_TIME,
+                str(autocreate_account), Timestamp().normal, EXPIRE_TIME,
                 str(autocreate_container)]
         try:
             self.script_update_container(keys=keys, args=args, client=conn)
