@@ -95,7 +95,11 @@ class XcuteBackend(RedisConnection):
             'job.request_pause', 'False',
             'tasks.all_sent', 'False',
             'tasks.sent', '0',
-            'tasks.processed', '0');
+            'tasks.processed', '0',
+            'errors.total', '0',
+            'temp_total', '0',
+            'is_total_temp', 'True');
+
         redis.call('HSET', 'xcute:job:config:' .. job_id, unpack(job_config));
         redis.call('RPUSH', 'xcute:waiting:jobs', job_id);
     """ + _lua_update_mtime + """
@@ -366,6 +370,33 @@ class XcuteBackend(RedisConnection):
         return finished;
     """
 
+    lua_incr_total = """
+        local mtime = KEYS[1];
+        local job_id = KEYS[2];
+        local marker = KEYS[3];
+        local incr_by = KEYS[4];
+        local info_key = 'xcute:job:info:' .. job_id;
+
+        local info = redis.call('HMGET', info_key, 'job.status', 'tasks.all_sent');
+        local status = info[1];
+        local all_sent = info[2];
+
+        if status == nil or status == false then
+            return redis.error_reply('no_job');
+        end;
+
+        redis.call('HINCRBY', info_key, 'temp_total', incr_by);
+        redis.call('HSET', info_key, 'total_marker', marker);
+
+        local stop = false;
+        if status == 'PAUSED' or status == 'FAILED' or all_sent == 'True' then
+            stop = true;
+        end;
+
+    """ + _lua_update_mtime + """
+        return stop;
+    """
+
     lua_delete = """
         local job_id = KEYS[1];
 
@@ -411,6 +442,8 @@ class XcuteBackend(RedisConnection):
             self.lua_update_tasks_sent)
         self.script_update_tasks_processed = self.register_script(
             self.lua_update_tasks_processed)
+        self.script_incr_total = self.register_script(
+            self.lua_incr_total)
         self.script_delete = self.register_script(
             self.lua_delete)
 
@@ -507,7 +540,7 @@ class XcuteBackend(RedisConnection):
             self._lua_array_to_dict(job_info))
         job_config = self._unmarshal_job_config(
             self._lua_array_to_dict(job_config))
-        return (job_id, job_info['job.type'], job_info.get('tasks.last_sent'),
+        return (job_id, job_info['job.type'], job_info['tasks.last_sent'],
                 job_config)
 
     @handle_redis_exceptions
@@ -561,6 +594,21 @@ class XcuteBackend(RedisConnection):
             args=task_ids,
             client=self.conn)
 
+    def incr_total_tasks(self, job_id, total_marker, tasks_incr):
+        return self.script_incr_total(
+            keys=[self._get_timestamp(), job_id, total_marker, tasks_incr])
+
+    def total_tasks_done(self, job_id):
+        pipeline = self.conn.pipeline()
+
+        key = self.key_job_info % job_id
+        pipeline.hset(key, 'is_total_temp', 'False')
+        pipeline.hget(key, 'temp_total')
+
+        total_tasks = int(pipeline.execute()[1])
+
+        return total_tasks
+
     @handle_redis_exceptions
     def delete(self, job_id):
         self.script_delete(keys=[job_id])
@@ -606,14 +654,17 @@ class XcuteBackend(RedisConnection):
     def _unmarshal_job_info(marshalled_job_info):
         job_info = marshalled_job_info.copy()
 
-        all_sent = true_value(job_info['tasks.all_sent'])
         total = int(job_info['tasks.total']) if 'tasks.total' \
             in job_info else None
 
         job_info['tasks.sent'] = int(job_info['tasks.sent'])
-        job_info['tasks.all_sent'] = all_sent
+        job_info.setdefault('tasks.last_sent')
+        job_info['tasks.all_sent'] = true_value(job_info['tasks.all_sent'])
         job_info['tasks.processed'] = int(job_info['tasks.processed'])
         job_info['tasks.total'] = total
+        job_info['temp_total'] = int(job_info['temp_total'])
+        job_info.setdefault('total_marker')
+        job_info['is_total_temp'] = true_value(job_info['is_total_temp'])
 
         for key, value in job_info.iteritems():
             if key.startswith('errors.') or key.startswith('results.'):
