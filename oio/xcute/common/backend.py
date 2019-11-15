@@ -255,9 +255,8 @@ class XcuteBackend(RedisConnection):
             return redis.error_reply('no_job');
         end;
 
-        local total_tasks_sent = redis.call(
-            'HINCRBY', 'xcute:job:info:' .. job_id,
-            'total', total_tasks);
+        redis.call('HSET', 'xcute:job:info:' .. job_id,
+                   'total', total_tasks);
 
         local total_tasks_sent = redis.call(
             'HINCRBY', 'xcute:job:info:' .. job_id,
@@ -373,6 +372,7 @@ class XcuteBackend(RedisConnection):
         redis.call('ZREM', 'xcute:job:ids', job_id);
         redis.call('DEL', 'xcute:job:info:' .. job_id);
         redis.call('DEL', 'xcute:job:config:' .. job_id);
+        redis.call('DEL', 'xcute:tasks:running:' .. job_id);
         """
 
     def __init__(self, conf):
