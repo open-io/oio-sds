@@ -13,32 +13,37 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from oio.common.easy_value import int_value
 from oio.xcute.common.job import XcuteJob
 
 
 class TesterJob(XcuteJob):
 
     JOB_TYPE = 'tester'
+    DEFAULT_START = 0
+    DEFAULT_END = 5
 
-    @staticmethod
-    def sanitize_params(params):
-        sanitized_params = params.copy()
-        sanitized_params['start'] = int(params.get('start', 0))
-        sanitized_params['end'] = int(params.get('end', 5))
+    def load_config(self, job_config):
+        sanitized_job_config, _ = super(
+            TesterJob, self).load_config(job_config)
 
-        return (sanitized_params, sanitized_params.pop('lock', None))
+        self.start = int_value(job_config.get('start'), self.DEFAULT_START)
+        sanitized_job_config['start'] = self.start
 
-    @staticmethod
-    def get_tasks(conf, logger, params, marker=None):
-        start = params['start']
-        end = params['end']
+        self.end = int_value(job_config.get('end'), self.DEFAULT_END)
+        sanitized_job_config['end'] = self.end
 
-        total_tasks = end - start
+        return sanitized_job_config, job_config.get('lock')
 
-        if marker is not None:
+    def get_tasks(self, marker=None):
+        start = self.start
+
+        total_tasks = self.end - start
+
+        if marker:
             start = int(marker) + 1
 
-        for i in range(start, end):
+        for i in range(start, self.end):
             if i < 2:
                 task_payload = {'first': True, 'msg': 'coucou-%d' % i}
             else:
@@ -47,6 +52,9 @@ class TesterJob(XcuteJob):
             task_id = str(i)
 
             yield (task_id, task_payload, total_tasks)
+
+    def init_process_task(self):
+        pass
 
     def process_task(self, task_id, task_payload):
         first = task_payload['first']

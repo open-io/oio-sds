@@ -109,10 +109,10 @@ class XcuteClient(HttpApi):
         _, data = self.xcute_request('GET', '/jobs', params=params)
         return data
 
-    def job_create(self, job_type, job_params=None):
+    def job_create(self, job_type, job_config=None):
         job_info = {
             'type': job_type,
-            'params': job_params or dict()
+            'config': job_config
         }
         _, data = self.xcute_request('POST', '/jobs', json=job_info)
         return data

@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from oio.common.easy_value import int_value
 from oio.common.logger import get_logger
 
 
@@ -24,24 +25,25 @@ class XcuteJob(object):
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
 
-    @staticmethod
-    def sanitize_params(params):
+    def load_config(self, job_config):
         """
-            Validate and sanitize the job parameters
+            Validate and sanitize the job congiguration
             Ex: cast a string as integer, set a default
             Also return the lock id if there is one
         """
+        sanitized_job_config = dict()
 
-        raise NotImplementedError()
+        return sanitized_job_config, None
 
-    @staticmethod
-    def get_tasks(conf, logger, params, marker=None):
+    def get_tasks(self, marker=None):
         """
             Yields the job tasks as
             (TaskClass, task_id, task_payload, total_tasks)
             task_id must be a string and can be used as a marker
         """
+        raise NotImplementedError()
 
+    def init_process_task(self):
         raise NotImplementedError()
 
     def process_task(self, task_id, task_payload):
