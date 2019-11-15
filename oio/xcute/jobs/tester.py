@@ -49,7 +49,7 @@ class TesterTask(XcuteTask):
             exc_class = random.choice(EXCEPTIONS)
             raise exc_class()
 
-        return True, { 'counter': len(msg) }
+        return { 'counter': len(msg) }
 
 
 class TesterJob(XcuteJob):
@@ -91,3 +91,9 @@ class TesterJob(XcuteJob):
             task_payload = {'msg': 'World %d' % i}
 
             yield (task_id, task_payload, total_tasks)
+
+    def get_total_tasks(self, job_params, marker=None):
+        start = job_params['start']
+        end = job_params['end']
+
+        yield ('', end - start)
