@@ -15,6 +15,8 @@
 
 import traceback
 
+from collections import Counter
+
 from oio.common.green import sleep
 from oio.common.json import json
 from oio.common.logger import get_logger
@@ -34,32 +36,34 @@ class XcuteWorker(object):
         job_type = beanstalkd_job['job_type']
         job_class = JOB_TYPES[job_type]
         job_config = beanstalkd_job['job_config']
-        task_id = beanstalkd_job['task_id']
-        task_payload = beanstalkd_job['task_payload']
+        tasks = beanstalkd_job['tasks']
         reply_addr = beanstalkd_job['beanstalkd_reply']['addr']
         reply_tube = beanstalkd_job['beanstalkd_reply']['tube']
 
-        task_ok, task_result = (False, None)
+        task_errors = 0
+        task_results = Counter()
         try:
             job = job_class(self.conf, logger=self.logger)
             job.load_config(job_config)
             job.init_process_task()
-            task_ok, task_result = job.process_task(task_id, task_payload)
-            if not task_ok:
-                self.logger.debug('Task was not processed: %s', beanstalkd_job)
+            for task_id, task_payload in tasks.iteritems():
+                task_ok, task_result = job.process_task(task_id, task_payload)
+                task_errors += int(not task_ok)
+                task_results.update(task_result)
+                if not task_ok:
+                    self.logger.debug('Task was not processed: %s', beanstalkd_job)
         except Exception:
             self.logger.error('Error processing job %s: %s',
                               beanstalkd_job, traceback.format_exc())
 
-        self._reply(reply_addr, reply_tube, job_id, task_id, task_ok, task_result)
+        self._reply(reply_addr, reply_tube,
+                    beanstalkd_job, task_results, task_errors)
 
-    def _reply(self, reply_addr, reply_tube, job_id, task_id, task_ok, task_result):
-        reply_payload = json.dumps({
-            'job_id': job_id,
-            'task_id': task_id,
-            'task_ok': task_ok,
-            'task_result': task_result,
-        })
+    def _reply(self, reply_addr, reply_tube,
+               beanstalkd_job, task_results, task_errors):
+        beanstalkd_job['task_results'] = task_results
+        beanstalkd_job['task_errors'] = task_errors
+        reply_payload = json.dumps(beanstalkd_job)
 
         sender_key = (reply_addr, reply_tube)
         if sender_key not in self.beanstalkd_senders:
