@@ -516,7 +516,7 @@ class XcuteBackend(RedisConnection):
                                task_errors, task_results):
         counters = dict()
         if task_errors:
-            counters['errors.total'] = len(task_errors)
+            counters['errors.total'] = task_errors
         if task_results:
             for key, value in task_results.items():
                 counters['results.' + key] = value

@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from collections import Counter
 from itertools import izip_longest
 
 from oio.blob.client import BlobClient
@@ -32,7 +33,6 @@ class RawxDecommissionJob(XcuteJob):
     DEFAULT_RAWX_TIMEOUT = 60.0
     DEFAULT_MIN_CHUNK_SIZE = 0
     DEFAULT_MAX_CHUNK_SIZE = 0
-    DEFAULT_BATCH_SIZE = 100
 
     def load_config(self, job_config):
         sanitized_job_config, _ = super(
@@ -75,15 +75,6 @@ class RawxDecommissionJob(XcuteJob):
             self.excluded_rawx = list()
         sanitized_job_config['excluded_rawx'] = ','.join(self.excluded_rawx)
 
-        self.batch_size = int_value(
-            job_config.get('batch_size'),
-            RawxDecommissionJob.DEFAULT_BATCH_SIZE)
-        # a bigger batch size may result
-        # in beanstalkd payloads being too big
-        if self.batch_size > 900:
-            raise ValueError('Batch size should less than 900')
-        sanitized_job_config['batch_size'] = self.batch_size
-
         return sanitized_job_config, 'rawx/%s' % self.service_id
 
     def get_tasks(self, marker=None):
@@ -94,14 +85,8 @@ class RawxDecommissionJob(XcuteJob):
             limit=self.rdir_fetch_limit, start_after=marker)
 
         chunk_ids = (chunk_id for _, _, chunk_id, _ in chunk_infos)
-        chunk_ids_batches = izip_longest(*([chunk_ids] * self.batch_size))
-
-        for i, chunk_ids_batch in enumerate(chunk_ids_batches, 1):
-            payload = {
-                'chunk_ids': chunk_ids_batch,
-            }
-
-            yield (chunk_ids_batch[0], payload, i)
+        for i, chunk_id in enumerate(chunk_ids, 1):
+            yield chunk_id, dict(), i
 
     def init_process_task(self):
         self.blob_client = BlobClient(
@@ -126,54 +111,38 @@ class RawxDecommissionJob(XcuteJob):
             fake_excluded_chunks.append(chunk)
         return fake_excluded_chunks
 
-    def process_task(self, task_id, task_payload):
-        chunk_ids = task_payload['chunk_ids']
-
+    def process_task(self, chunk_id, task_payload):
         fake_excluded_chunks = self._generate_fake_excluded_chunks(
             self.excluded_rawx)
 
-        chunks = 0
-        total_size = 0
-        skipped = 0
-        orphan = 0
-        for chunk_id in chunk_ids:
-            if chunk_id is None:
-                continue
+        results = Counter()
 
-            chunks += 1
+        chunk_url = 'http://{}/{}'.format(self.service_id, chunk_id)
+        meta = self.blob_client.chunk_head(chunk_url, timeout=self.rawx_timeout)
+        container_id = meta['container_id']
+        content_id = meta['content_id']
+        chunk_size = int(meta['chunk_size'])
 
-            chunk_url = 'http://{}/{}'.format(self.service_id, chunk_id)
-            meta = self.blob_client.chunk_head(chunk_url, timeout=self.rawx_timeout)
-            container_id = meta['container_id']
-            content_id = meta['content_id']
-            chunk_id = meta['chunk_id']
-            chunk_size = int(meta['chunk_size'])
+        # Maybe skip the chunk because it doesn't match the size constaint
+        if chunk_size < self.min_chunk_size:
+            self.logger.debug("SKIP %s too small", chunk_url)
+            results['skipped'] += 1
+            return True, results
+        if self.max_chunk_size > 0 and chunk_size > self.max_chunk_size:
+            self.logger.debug("SKIP %s too big", chunk_url)
+            results['skipped'] += 1
+            return True, results
 
-            # Maybe skip the chunk because it doesn't match the size constaint
-            if chunk_size < self.min_chunk_size:
-                self.logger.debug("SKIP %s too small", chunk_url)
-                skipped += 1
-                continue
-            if self.max_chunk_size > 0 and chunk_size > self.max_chunk_size:
-                self.logger.debug("SKIP %s too big", chunk_url)
-                skipped += 1
-                continue
-
-            # Start moving the chunk
-            try:
-                content = self.content_factory.get(container_id, content_id)
-            except ContentNotFound:
-                orphan += 1
-                continue
-
+        # Start moving the chunk
+        try:
+            content = self.content_factory.get(container_id, content_id)
             content.move_chunk(
                 chunk_id, fake_excluded_chunks=fake_excluded_chunks)
+        except (ContentNotFound, OrphanChunk):
+            results['orphan'] += 1
+            return True, results
 
-            total_size += chunk_size
+        results['moved_chunks'] += 1
+        results['total_size'] += chunk_size
 
-        return True, {
-            'chunks': chunks,
-            'total_size': total_size,
-            'skipped': skipped,
-            'orphan': orphan,
-        }
+        return True, results
