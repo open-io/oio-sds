@@ -1023,7 +1023,7 @@ queue_url=${QUEUE_URL}
 """
 
 template_xcute_event_agent_handlers = """
-[handler:xcute.task]
+[handler:xcute.tasks]
 pipeline = xcute
 
 [filter:xcute]
