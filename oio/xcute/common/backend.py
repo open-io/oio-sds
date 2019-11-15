@@ -447,7 +447,7 @@ class XcuteBackend(RedisConnection):
 
         self.script_create(
             keys=[job_id, job_type],
-            args=self._dict_to_lua_array(self._marshal_job_conf(job_config)),
+            args=self._dict_to_lua_array(job_config),
             client=self.conn)
         return job_id
 
@@ -471,7 +471,7 @@ class XcuteBackend(RedisConnection):
         job_config_infos = pipeline.execute()
 
         return (
-            (job_id, self._unmarshal_job_conf(job_conf), self._unmarshal_job_info(job_info))
+            (job_id, job_conf, self._unmarshal_job_info(job_info))
             for job_conf, job_info in zip(*([iter(job_config_infos)] * 2))
         )
 
@@ -484,8 +484,7 @@ class XcuteBackend(RedisConnection):
         job_id, job_info, job_config = next_job
         job_info = self._unmarshal_job_info(
             self._lua_array_to_dict(job_info))
-        job_config = self._unmarshal_job_conf(
-            self._lua_array_to_dict(job_config))
+        job_config = self._lua_array_to_dict(job_config)
         return (job_id, job_info['job_type'], job_info.get('last_sent'),
                 job_config)
 
@@ -531,9 +530,7 @@ class XcuteBackend(RedisConnection):
         self.script_delete(keys=[job_id])
 
     def get_job_conf(self, job_id):
-        job_conf = self._get_job_conf(job_id, client=self.conn)
-
-        return self._unmarshal_job_conf(job_conf)
+        return self._get_job_conf(job_id, client=self.conn)
 
     def get_job_info(self, job_id):
         job_info = self._get_job_info(job_id, client=self.conn)
@@ -557,25 +554,7 @@ class XcuteBackend(RedisConnection):
         return client.hmset(self.key_job_info % job_id, marshalled_updates)
 
     def _update_job_conf(self, job_id, updates, client):
-        marshalled_updates = self._marshal_job_conf(updates)
-        return client.hmset(self.key_job_conf % job_id, marshalled_updates)
-
-    @staticmethod
-    def _marshal_job_conf(job_conf):
-        marshalled_job_conf = job_conf.copy()
-
-        if 'params' in job_conf:
-            marshalled_job_conf['params'] = json.dumps(job_conf['params'])
-
-        return marshalled_job_conf
-
-    @staticmethod
-    def _unmarshal_job_conf(marshalled_job_conf):
-        job_conf = marshalled_job_conf.copy()
-
-        job_conf['params'] = json.loads(job_conf['params'])
-
-        return job_conf
+        return client.hmset(self.key_job_conf % job_id, updates)
 
     @staticmethod
     def _marshal_job_info(job_info):
