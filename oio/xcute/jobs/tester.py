@@ -40,18 +40,16 @@ class TesterTask(XcuteTask):
         self.error_percentage = job_params['error_percentage']
 
     def process(self, task_id, task_payload):
-        first = task_payload['first']
         msg = task_payload['msg']
 
-        if first:
-            self.logger.info('First task: %s', msg)
-        else:
-            self.logger.info('Second task: %s', msg)
+        self.logger.info('Hello: %s', msg)
 
         if self.error_percentage \
                 and random.randrange(100) < self.error_percentage:
             exc_class = random.choice(EXCEPTIONS)
             raise exc_class()
+
+        return True, { 'counter': len(msg) }
 
 
 class TesterJob(XcuteJob):
@@ -89,11 +87,7 @@ class TesterJob(XcuteJob):
             start = int(marker) + 1
 
         for i in range(start, end):
-            if i < 2:
-                task_payload = {'first': True, 'msg': 'coucou-%d' % i}
-            else:
-                task_payload = {'first': False, 'msg': 'hibou-%d' % i}
-
             task_id = str(i)
+            task_payload = {'msg': 'World %d' % i}
 
             yield (task_id, task_payload, total_tasks)
