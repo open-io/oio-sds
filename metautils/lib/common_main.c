@@ -75,9 +75,15 @@ _logger_syslog_udp(const gchar *log_domain, GLogLevelFlags log_level,
 	g_string_append_printf(gstr, "<%u>1 ", (facility + severity));
 
 	/* pack the date */
+#if GLIB_CHECK_VERSION(2,62,0)
+	GDateTime *tv = g_date_time_new_now_local();
+	gchar *strnow = g_date_time_format_iso8601(tv);
+	g_date_time_unref(tv);
+#else
 	GTimeVal tv = {0};
 	g_get_current_time(&tv);
 	gchar * strnow = g_time_val_to_iso8601(&tv);
+#endif
 	g_string_append(gstr, strnow);
 	g_free(strnow);
 
