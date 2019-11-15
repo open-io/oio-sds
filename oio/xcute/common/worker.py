@@ -33,6 +33,7 @@ class XcuteWorker(object):
         job_id = beanstalkd_job['job_id']
         job_type = beanstalkd_job['job_type']
         job_class = JOB_TYPES[job_type]
+        job_config = beanstalkd_job['job_config']
         task_id = beanstalkd_job['task_id']
         task_payload = beanstalkd_job['task_payload']
         reply_addr = beanstalkd_job['beanstalkd_reply']['addr']
@@ -41,6 +42,8 @@ class XcuteWorker(object):
         task_ok, task_result = (False, None)
         try:
             job = job_class(self.conf, logger=self.logger)
+            job.load_config(job_config)
+            job.init_process_task()
             task_ok, task_result = job.process_task(task_id, task_payload)
             if not task_ok:
                 self.logger.debug('Task was not processed: %s', beanstalkd_job)
