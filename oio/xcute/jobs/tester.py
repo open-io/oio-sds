@@ -13,8 +13,22 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import random
+
+import oio.common.exceptions as exc
 from oio.common.easy_value import int_value
 from oio.xcute.common.job import XcuteJob
+
+
+EXCEPTIONS = [exc.BadRequest,
+              exc.Forbidden,
+              exc.NotFound,
+              exc.MethodNotAllowed,
+              exc.Conflict,
+              exc.ClientPreconditionFailed,
+              exc.TooLarge,
+              exc.UnsatisfiableRange,
+              exc.ServiceBusy]
 
 
 class TesterJob(XcuteJob):
@@ -22,6 +36,7 @@ class TesterJob(XcuteJob):
     JOB_TYPE = 'tester'
     DEFAULT_START = 0
     DEFAULT_END = 5
+    DEFAULT_ERROR_PERCENTAGE = 0
 
     def load_config(self, job_config):
         sanitized_job_config, _ = super(
@@ -32,6 +47,11 @@ class TesterJob(XcuteJob):
 
         self.end = int_value(job_config.get('end'), self.DEFAULT_END)
         sanitized_job_config['end'] = self.end
+
+        self.error_percentage = int_value(
+            job_config.get('error_percentage'),
+            self.DEFAULT_ERROR_PERCENTAGE)
+        sanitized_job_config['error_percentage'] = self.error_percentage
 
         return sanitized_job_config, job_config.get('lock')
 
@@ -64,4 +84,7 @@ class TesterJob(XcuteJob):
             self.logger.info('First task: %s', msg)
         else:
             self.logger.info('Second task: %s', msg)
-        return True, None
+
+        if self.error_percentage and random.randrange(100) < self.error_percentage:
+            exc_class = random.choice(EXCEPTIONS)
+            raise exc_class()
