@@ -138,7 +138,7 @@ class XcuteOrchestrator(object):
         job.load_config(job_config)
         job_tasks = job.get_tasks(marker=last_task_id)
 
-        self.handle_job(job_id, job_type, job_config, job_tasks)
+        self.handle_job(job_id, job_type, job_config, job, job_tasks)
 
     def handle_running_job(self, job_id, job_config, job_info):
         """
@@ -159,9 +159,9 @@ class XcuteOrchestrator(object):
 
         self.manager.start_job(job_id, job_config)
 
-        self.handle_job(job_id, job_type, job_config, job_tasks)
+        self.handle_job(job_id, job_type, job_config, job, job_tasks)
 
-    def handle_job(self, job_id, job_type, job_config, job_tasks):
+    def handle_job(self, job_id, job_type, job_config, job, job_tasks):
         """
             Get the beanstalkd available for this job
             and start the dispatching thread
@@ -169,7 +169,7 @@ class XcuteOrchestrator(object):
 
         beanstalkd_workers = self.get_loadbalanced_workers()
 
-        thread_args = (job_id, job_type, job_config, job_tasks,
+        thread_args = (job_id, job_type, job_config, job, job_tasks,
                        beanstalkd_workers)
         dispatch_thread = threading.Thread(
             target=self.dispatch_job,
@@ -178,7 +178,7 @@ class XcuteOrchestrator(object):
 
         self.threads[dispatch_thread.ident] = dispatch_thread
 
-    def dispatch_job(self, job_id, job_type, job_config, job_tasks,
+    def dispatch_job(self, job_id, job_type, job_config, job, job_tasks,
                      beanstalkd_workers):
         """
             Dispatch all of a job's tasks
@@ -187,32 +187,40 @@ class XcuteOrchestrator(object):
         self.logger.info('Start dispatching job (job_id=%s)', job_id)
 
         try:
-            task = None
-            for task in job_tasks:
-                (task_id, task_payload, total_tasks) = task
+            tasks = dict()
+            total = 0
+            for task_id, task_payload, total in job_tasks:
+                if not self.running:
+                    break
 
-                sent = self.dispatch_task(
+                tasks[task_id] = task_payload
+                if len(tasks) < job.tasks_batch_size:
+                    continue
+
+                sent = self.dispatch_tasks(
                     beanstalkd_workers,
-                    job_id, job_type, job_config, task_id, task_payload)
-
+                    job_id, job_type, job_config, tasks)
                 if sent:
                     paused = self.manager.update_tasks_sent(
-                        job_id, [task_id], total_tasks)
+                        job_id, tasks.keys(), total)
+                    tasks = dict()
                     if paused:
                         self.logger.info('Job %s is paused', job_id)
                         return
-
-                if not self.running:
-                    break
             else:
                 self.logger.info('All tasks sent (job_id=%s)' % job_id)
-                finished = self.manager.update_tasks_sent(
-                    job_id, [], 0, all_tasks_sent=True)
-                if finished:
-                    self.logger.info('Job %s is finished', job_id)
 
-                self.logger.info('Finished dispatching job (job_id=%s)', job_id)
-                return
+                sent = self.dispatch_tasks(
+                    beanstalkd_workers,
+                    job_id, job_type, job_config, tasks)
+                if sent:
+                    finished = self.manager.update_tasks_sent(
+                        job_id, tasks.keys(), total, all_tasks_sent=True)
+                    if finished:
+                        self.logger.info('Job %s is finished', job_id)
+
+                    self.logger.info('Finished dispatching job (job_id=%s)', job_id)
+                    return
 
             self.manager.free(job_id)
         except Exception:
@@ -220,14 +228,14 @@ class XcuteOrchestrator(object):
 
             self.manager.fail(job_id)
 
-    def dispatch_task(self, beanstalkd_workers, job_id, job_type, job_config,
-                      task_id, task_payload):
+    def dispatch_tasks(self, beanstalkd_workers,
+                       job_id, job_type, job_config, tasks):
         """
             Try sending a task until it's ok
         """
 
         beanstalkd_payload = self.make_beanstalkd_payload(
-            job_id, job_type, job_config, task_id, task_payload)
+            job_id, job_type, job_config, tasks)
 
         if len(beanstalkd_payload) > 2**16:
             raise ValueError('Task payload is too big (length=%s)' % len(beanstalkd_payload))
@@ -250,29 +258,29 @@ class XcuteOrchestrator(object):
 
                     continue
 
-                self.logger.debug('Task (job_id=%s, task_id=%s) sent to %s' %
-                                  (job_id, task_id, worker.addr))
+                self.logger.debug('Tasks (job_id=%s) sent to %s: %s',
+                                  job_id, worker.addr, tasks)
                 return True
 
             workers_tried.clear()
             sleep(5)
 
     def make_beanstalkd_payload(self, job_id, job_type, job_config,
-                                task_id, task_payload):
-        return json.dumps({
-            'event': 'xcute.task',
-            'data': {
-                'job_id': job_id,
-                'job_type': job_type,
-                'job_config': job_config,
-                'task_id': task_id,
-                'task_payload': task_payload,
-                'beanstalkd_reply': {
-                    'addr': self.beanstalkd_reply_addr,
-                    'tube': self.beanstalkd_reply_tube,
-                },
-            }
-        })
+                                tasks):
+        return json.dumps(
+            {
+                'event': 'xcute.tasks',
+                'data': {
+                    'job_id': job_id,
+                    'job_type': job_type,
+                    'job_config': job_config,
+                    'tasks': tasks,
+                    'beanstalkd_reply': {
+                        'addr': self.beanstalkd_reply_addr,
+                        'tube': self.beanstalkd_reply_tube,
+                    },
+                }
+            })
 
     def listen(self):
         """
@@ -331,19 +339,16 @@ class XcuteOrchestrator(object):
         reply = json.loads(encoded_reply)
 
         job_id = reply['job_id']
-        task_id = reply['task_id']
-        task_ok = reply['task_ok']
-        task_result = reply['task_result']
+        tasks = reply['tasks']
+        task_results = reply['task_results']
+        task_errors = reply['task_errors']
 
-        self.logger.debug((
-            'Task processed'
-            ' (job_id=%s, task_id=%s)') %
-            (job_id, task_id))
+        self.logger.debug('Task processed (job_id=%s): %s', job_id, tasks)
 
         try:
 
             finished = self.manager.update_tasks_processed(
-                job_id, [task_id], [not task_ok], task_result)
+                job_id, tasks.keys(), task_errors, task_results)
             if finished:
                 self.logger.info('Job %s is finished', job_id)
         except Exception:
