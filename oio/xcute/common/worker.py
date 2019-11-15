@@ -17,7 +17,7 @@ import traceback
 
 from collections import Counter
 
-from oio.common.green import sleep
+from oio.common.green import ratelimit, sleep
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.event.beanstalk import BeanstalkdSender
@@ -43,10 +43,14 @@ class XcuteWorker(object):
         task_errors = Counter()
         task_results = Counter()
 
+        items_run_time = 0
         job = job_class(self.conf, logger=self.logger)
         job.load_config(job_config)
         job.init_process_task()
         for task_id, task_payload in tasks.iteritems():
+            items_run_time = ratelimit(
+                    items_run_time, job.tasks_per_second)
+
             try:
                 task_result = job.process_task(task_id, task_payload)
                 task_results.update(task_result)
