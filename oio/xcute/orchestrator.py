@@ -20,7 +20,7 @@ import socket
 
 from oio.common.exceptions import OioTimeout
 from oio.common.logger import get_logger
-from oio.common.green import sleep, thread, threading
+from oio.common.green import ratelimit, sleep, thread, threading
 from oio.common.json import json
 from oio.conscience.client import ConscienceClient
 from oio.event.beanstalk import Beanstalk, BeanstalkdListener, BeanstalkdSender, ConnectionError
@@ -187,6 +187,8 @@ class XcuteOrchestrator(object):
         self.logger.info('Start dispatching job (job_id=%s)', job_id)
 
         try:
+            items_run_time = 0
+            batch_per_second = job.tasks_per_second / float(job.tasks_batch_size)
             tasks = dict()
             total = 0
             for task_id, task_payload, total in job_tasks:
@@ -196,6 +198,9 @@ class XcuteOrchestrator(object):
                 tasks[task_id] = task_payload
                 if len(tasks) < job.tasks_batch_size:
                     continue
+
+                items_run_time = ratelimit(
+                    items_run_time, batch_per_second)
 
                 sent = self.dispatch_tasks(
                     beanstalkd_workers,
