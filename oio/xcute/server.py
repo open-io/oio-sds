@@ -58,9 +58,12 @@ class Xcute(WerkzeugApp):
         if req.method == 'GET':
             limit = int_value(req.args.get('limit'), None)
             marker = req.args.get('marker')
+
             jobs = self.manager.list_jobs(limit=limit, marker=marker)
 
-            return Response(json.dumps(jobs), mimetype='application/json')
+            formatted_jobs = list(map(self._format_job, jobs))
+
+            return Response(json.dumps(formatted_jobs), mimetype='application/json')
 
         if req.method == 'POST':
             data = json.loads(req.data)
@@ -79,14 +82,20 @@ class Xcute(WerkzeugApp):
             job_config, lock = job.sanitize_config(job_config)
 
             job_id = self.manager.create(job_type, job_config)
-            return Response(json.dumps({'id': job_id}), status=202)
+
+            job_config, job_info  = self.manager.show_job(job_id)
+            job = self._format_job((job_id, job_config, job_info))
+
+            return Response(json.dumps(job), mimetype='application/json', status=202)
 
     def on_job(self, req, job_id):
         if req.method == 'GET':
             try:
-                job = self.manager.show_job(job_id)
+                job_config, job_info  = self.manager.show_job(job_id)
             except NotFound as e:
                 return HTTPNotFound(e.message)
+
+            job = self._format_job((job_id, job_config, job_info))
 
             return Response(json.dumps(job), mimetype='application/json')
 
@@ -97,11 +106,28 @@ class Xcute(WerkzeugApp):
 
     def on_job_pause(self, req, job_id):
         self.manager.request_pause(job_id)
-        return Response(status=204)
+
+        job_config, job_info  = self.manager.show_job(job_id)
+        job = self._format_job((job_id, job_config, job_info))
+
+        return Response(json.dumps(job), mimetype='application/json', status=202)
 
     def on_job_resume(self, req, job_id):
         self.manager.resume(job_id)
-        return Response(status=204)
+
+        job_config, job_info  = self.manager.show_job(job_id)
+        job = self._format_job((job_id, job_config, job_info))
+
+        return Response(json.dumps(job), mimetype='application/json', status=202)
+
+    @staticmethod
+    def _format_job(job_tuple):
+        job_id, job_config, job_info = job_tuple
+        return {
+            'job.id': job_id,
+            'config': job_config,
+            'info': job_info,
+        }
 
 
 def create_app(conf):
