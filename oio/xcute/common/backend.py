@@ -472,16 +472,18 @@ class XcuteBackend(RedisConnection):
 
             pipeline = self.conn.pipeline()
             for job_id in job_ids:
+                self._get_job_conf(job_id, client=pipeline)
                 self._get_job_info(job_id, client=pipeline)
-            job_infos = pipeline.execute()
+            job_conf_infos = pipeline.execute()
 
-            for job_id, job_info in zip(job_ids, job_infos):
+            for job_id, job_conf, job_info in zip(job_ids, *([iter(job_conf_infos)] * 2)):
                 if not job_info:
                     continue
 
-                job = self._unmarshal_job_info(job_info)
-                job['job.id'] = job_id
-                jobs.append(job)
+                job_conf = self._unmarshal_job_config(job_conf)
+                job_info = self._unmarshal_job_info(job_info)
+
+                jobs.append((job_id, job_conf, job_info))
 
             if len(job_ids) < limit_:
                 break
@@ -613,6 +615,22 @@ class XcuteBackend(RedisConnection):
     def delete(self, job_id):
         self.script_delete(keys=[job_id])
 
+    def get_job(self, job_id):
+        pipeline = self.conn.pipeline()
+
+        self._get_job_conf(job_id, client=pipeline)
+        self._get_job_info(job_id, client=pipeline)
+
+        job_conf, job_info = pipeline.execute()
+
+        if job_info is None:
+            raise NotFound('The job does\'nt exist')
+
+        job_conf = self._unmarshal_job_config(job_conf)
+        job_info = self._unmarshal_job_info(job_info)
+
+        return job_conf, job_info
+
     def get_job_conf(self, job_id):
         job_config = self._get_job_conf(job_id, client=self.conn)
         return self._unmarshal_job_config(job_config)
@@ -665,6 +683,7 @@ class XcuteBackend(RedisConnection):
         job_info['temp_total'] = int(job_info['temp_total'])
         job_info.setdefault('total_marker')
         job_info['is_total_temp'] = true_value(job_info['is_total_temp'])
+        job_info['request_pause'] = true_value(job_info.get('request_pause'))
 
         for key, value in job_info.iteritems():
             if key.startswith('errors.') or key.startswith('results.'):

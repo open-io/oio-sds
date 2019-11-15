@@ -121,4 +121,4 @@ class XcuteManager(object):
             Get one job and its information
         """
 
-        return self.backend.get_job_info(job_id)
+        return self.backend.get_job(job_id)
