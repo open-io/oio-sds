@@ -21,6 +21,9 @@ class XcuteJob(object):
 
     JOB_TYPE = None
 
+    DEFAULT_TASKS_BATCH_SIZE = 32
+    MAX_TASKS_BATCH_SIZE = 512
+
     def __init__(self, conf, logger=None):
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
@@ -32,6 +35,16 @@ class XcuteJob(object):
             Also return the lock id if there is one
         """
         sanitized_job_config = dict()
+
+        self.tasks_batch_size = int_value(
+            job_config.get('tasks_batch_size'),
+            self.DEFAULT_TASKS_BATCH_SIZE)
+        if self.tasks_batch_size < 1:
+            raise ValueError('Tasks batch size should positive')
+        if self.tasks_batch_size > self.MAX_TASKS_BATCH_SIZE:
+            raise ValueError('Tasks batch size should less than %d' %
+                             self.MAX_TASKS_BATCH_SIZE)
+        sanitized_job_config['tasks_batch_size'] = self.tasks_batch_size
 
         return sanitized_job_config, None
 
