@@ -225,7 +225,7 @@ _logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
 	GString *gstr = g_string_sized_new(512);
 
 	if (oio_log_flags & LOG_FLAG_PRETTYTIME) {
-#if GLIB_CHECK_VERSION(2,56,0)
+#if GLIB_CHECK_VERSION(2,62,0)
 		GDateTime *tv = g_date_time_new_now_local();
 		gchar *strnow = g_date_time_format_iso8601(tv);
 		g_date_time_unref(tv);
