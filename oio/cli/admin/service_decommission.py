@@ -37,6 +37,11 @@ class RawxDecommission(MultipleServicesCommandMixin, lister.Lister):
         MultipleServicesCommandMixin.patch_parser(self, parser)
 
         parser.add_argument(
+            '--chunks-per-second', type=int,
+            help='Max chunks per second. '
+                 '(default=%d)'
+                 % RawxDecommissionJob.DEFAULT_TASKS_PER_SECOND)
+        parser.add_argument(
             '--rdir-fetch-limit', type=int,
             help='Maximum number of entries returned in each rdir response. '
                  '(default=%d)'
@@ -63,6 +68,7 @@ class RawxDecommission(MultipleServicesCommandMixin, lister.Lister):
 
     def _take_action(self, parsed_args):
         job_config = {
+            'chunks_per_second': parsed_args.chunks_per_second,
             'rdir_fetch_limit': parsed_args.rdir_fetch_limit,
             'rdir_timeout': parsed_args.rdir_timeout,
             'rawx_timeout': parsed_args.rawx_timeout,

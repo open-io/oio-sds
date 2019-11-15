@@ -35,9 +35,16 @@ class RawxDecommissionJob(XcuteJob):
     DEFAULT_MAX_CHUNK_SIZE = 0
 
     def load_config(self, job_config):
+        # common configuration
+        job_config = job_config.copy()
+        job_config['tasks_per_second'] = job_config.pop(
+            'chunks_per_second', None)
         sanitized_job_config, _ = super(
             RawxDecommissionJob, self).load_config(job_config)
+        sanitized_job_config['chunks_per_second'] = sanitized_job_config.pop(
+            'tasks_per_second')
 
+        # specific configuration
         self.service_id = job_config.get('service_id')
         if not self.service_id:
             raise ValueError('Missing service ID')
