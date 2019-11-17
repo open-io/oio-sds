@@ -14,16 +14,15 @@
 # License along with this library.
 
 from collections import OrderedDict
-import itertools
 import os
-import socket
 
 from oio.common.exceptions import OioTimeout
 from oio.common.logger import get_logger
-from oio.common.green import ratelimit, sleep, thread, threading
+from oio.common.green import ratelimit, sleep, threading
 from oio.common.json import json
 from oio.conscience.client import ConscienceClient
-from oio.event.beanstalk import Beanstalk, BeanstalkdListener, BeanstalkdSender, ConnectionError
+from oio.event.beanstalk import Beanstalk, BeanstalkdListener, \
+    BeanstalkdSender, ConnectionError
 from oio.xcute.common.manager import XcuteManager
 from oio.xcute.jobs import JOB_TYPES
 
@@ -69,7 +68,8 @@ class XcuteOrchestrator(object):
         # gather beanstalkd info
         self.all_beanstalkd = OrderedDict()
         self.beanstalkd_senders = {}
-        beanstalkd_thread = threading.Thread(target=self.refresh_all_beanstalkd)
+        beanstalkd_thread = threading.Thread(
+            target=self.refresh_all_beanstalkd)
         beanstalkd_thread.start()
 
         self.logger.info('Wait until beanstalkd are found')
@@ -146,7 +146,7 @@ class XcuteOrchestrator(object):
             and get its tasks before dispatching it
         """
 
-        if job_info['all_sent']:
+        if job_info['job.all_sent']:
             return
 
         job_type = job_info['job.type']
@@ -187,7 +187,8 @@ class XcuteOrchestrator(object):
 
         try:
             items_run_time = 0
-            batch_per_second = job.tasks_per_second / float(job.tasks_batch_size)
+            batch_per_second = job.tasks_per_second / float(
+                job.tasks_batch_size)
             tasks = dict()
             total = 0
             for task_id, task_payload, total in job_tasks:
@@ -223,12 +224,14 @@ class XcuteOrchestrator(object):
                     if finished:
                         self.logger.info('Job %s is finished', job_id)
 
-                    self.logger.info('Finished dispatching job (job_id=%s)', job_id)
+                    self.logger.info('Finished dispatching job (job_id=%s)',
+                                     job_id)
                     return
 
             self.manager.free(job_id)
         except Exception:
-            self.logger.exception('Failed generating task list (job_id=%s', job_id)
+            self.logger.exception('Failed generating task list (job_id=%s)',
+                                  job_id)
 
             self.manager.fail(job_id)
 
@@ -242,17 +245,20 @@ class XcuteOrchestrator(object):
             job_id, job_type, job_config, tasks)
 
         if len(beanstalkd_payload) > 2**16:
-            raise ValueError('Task payload is too big (length=%s)' % len(beanstalkd_payload))
+            raise ValueError('Task payload is too big (length=%s)' %
+                             len(beanstalkd_payload))
 
         while self.running:
             workers_tried = set()
             for worker in beanstalkd_workers:
                 if worker is None:
-                    self.logger.info('No beanstalkd available (job_id=%s)' % job_id)
+                    self.logger.info('No beanstalkd available (job_id=%s)',
+                                     job_id)
                     break
 
                 if worker.addr in workers_tried:
-                    self.logger.debug('Tried all beanstalkd (job_id=%s)' % job_id)
+                    self.logger.debug('Tried all beanstalkd (job_id=%s)',
+                                      job_id)
                     break
 
                 sent = worker.send_job(beanstalkd_payload)
@@ -307,7 +313,8 @@ class XcuteOrchestrator(object):
             sleep(5)
 
         self.logger.info('Listening to replies on %s (tube=%s)',
-                         self.beanstalkd_reply_addr, self.beanstalkd_reply_tube)
+                         self.beanstalkd_reply_addr,
+                         self.beanstalkd_reply_tube)
 
         # keep the job results in memory
         while self.running:
@@ -372,11 +379,13 @@ class XcuteOrchestrator(object):
                 beanstalkd_addr = beanstalkd['addr']
 
                 try:
-                    beanstalkd_tubes = self.get_beanstalkd_tubes(beanstalkd_addr)
+                    beanstalkd_tubes = self.get_beanstalkd_tubes(
+                        beanstalkd_addr)
                 except ConnectionError:
                     continue
 
-                all_beanstalkd_with_tubes[beanstalkd_addr] = (beanstalkd, beanstalkd_tubes)
+                all_beanstalkd_with_tubes[beanstalkd_addr] = (
+                    beanstalkd, beanstalkd_tubes)
 
             for beanstalkd_addr in self.all_beanstalkd:
                 if beanstalkd_addr in all_beanstalkd_with_tubes:
@@ -385,7 +394,8 @@ class XcuteOrchestrator(object):
                 self.logger.info('Removed beanstalkd %s' % beanstalkd_addr)
                 del self.all_beanstalkd[beanstalkd_addr]
 
-            for beanstalkd_addr, beanstalkd in all_beanstalkd_with_tubes.iteritems():
+            for beanstalkd_addr, beanstalkd \
+                    in all_beanstalkd_with_tubes.iteritems():
                 if beanstalkd_addr not in self.all_beanstalkd:
                     self.logger.info('Found beanstalkd %s' % beanstalkd_addr)
 
@@ -406,7 +416,8 @@ class XcuteOrchestrator(object):
 
         while True:
             yielded = False
-            for beanstalkd, beanstalkd_tubes, beanstalkd_senders in self.all_beanstalkd.itervalues():
+            for beanstalkd, beanstalkd_tubes, beanstalkd_senders \
+                    in self.all_beanstalkd.itervalues():
                 if beanstalkd['score'] == 0:
                     continue
 

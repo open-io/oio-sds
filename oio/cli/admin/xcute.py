@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from oio.cli import Command, Lister, ShowOne
+from oio.cli import Lister, ShowOne
 
 
 class XcuteCommand(object):
@@ -37,8 +37,9 @@ class XcuteJobList(XcuteCommand, Lister):
     def _take_action(self, parsed_args):
         jobs = self.xcute.job_list()
         for job_info in jobs:
-            yield (job_info['job.id'], job_info['job.status'], job_info['job.type'],
-                   job_info['job.ctime'], job_info['job.mtime'])
+            yield (job_info['job.id'], job_info['job.status'],
+                   job_info['job.type'], job_info['job.ctime'],
+                   job_info['job.mtime'])
 
     def take_action(self, parsed_args):
         self.logger.debug('take_action(%s)', parsed_args)
