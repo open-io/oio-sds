@@ -54,8 +54,8 @@ class BlobConverter(object):
         self.volume = volume
         self.namespace, self.volume_id = check_volume(self.volume)
         # cache
-        self.name_by_cid = CacheDict(size=262144)
-        self.content_id_by_name = CacheDict(size=262144)
+        self.name_by_cid = CacheDict()
+        self.content_id_by_name = CacheDict()
         # client
         self.container_client = ContainerClient(conf, **kwargs)
         self.content_factory = ContentFactory(conf, self.container_client,
