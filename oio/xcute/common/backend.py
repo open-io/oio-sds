@@ -20,8 +20,7 @@ import random
 
 from oio.common.easy_value import true_value
 from oio.common.exceptions import Forbidden, NotFound
-from oio.common.green import datetime, time
-from oio.common.json import json
+from oio.common.green import datetime
 from oio.common.redis_conn import RedisConnection
 from oio.common.timestamp import Timestamp
 
@@ -45,18 +44,24 @@ class XcuteBackend(RedisConnection):
     DEFAULT_LIMIT = 1000
 
     _lua_errors = {
-        'job_exists': (Forbidden,
-                       'The job already exists'),
-        'no_job': (NotFound,
-                   'The job does\'nt exist'),
-        'lock_exists': (Forbidden,
-                        'The lock already exists'),
-        'must_be_running': (Forbidden,
-                            'The job must be running'),
-        'must_be_paused': (Forbidden,
-                           'The job must be paused'),
-        'must_be_waiting_paused_finished': (Forbidden,
-                                            'The job must be waiting or paused or finished')
+        'job_exists': (
+            Forbidden,
+            'The job already exists'),
+        'no_job': (
+            NotFound,
+            'The job does\'nt exist'),
+        'lock_exists': (
+            Forbidden,
+            'The lock already exists'),
+        'must_be_running': (
+            Forbidden,
+            'The job must be running'),
+        'must_be_paused': (
+            Forbidden,
+            'The job must be paused'),
+        'must_be_waiting_paused_finished': (
+            Forbidden,
+            'The job must be waiting or paused or finished')
         }
 
     key_job_conf = 'xcute:job:config:%s'
@@ -112,7 +117,8 @@ class XcuteBackend(RedisConnection):
                    job_id);
     """ + _lua_update_mtime + """
         local job_info = redis.call('HGETALL', 'xcute:job:info:' .. job_id);
-        local job_config = redis.call('HGETALL', 'xcute:job:config:' .. job_id);
+        local job_config = redis.call(
+            'HGETALL', 'xcute:job:config:' .. job_id);
         return {job_id, job_info, job_config};
     """
 
@@ -299,8 +305,9 @@ class XcuteBackend(RedisConnection):
                         'job.status', 'PAUSED');
                 local orchestrator_id = redis.call(
                     'HGET', 'xcute:job:info:' .. job_id, 'orchestrator.id');
-                redis.call('SREM', 'xcute:orchestrator:jobs:' .. orchestrator_id,
-                        job_id);
+                redis.call(
+                    'SREM', 'xcute:orchestrator:jobs:' .. orchestrator_id,
+                    job_id);
                 stopped = true;
             end;
         end;
@@ -347,7 +354,8 @@ class XcuteBackend(RedisConnection):
         if all_tasks_sent == 'True' and status ~= 'FINISHED' then
             local total_tasks_sent = redis.call(
                 'HGET', 'xcute:job:info:' .. job_id, 'tasks.sent');
-            if tonumber(total_tasks_processed) >= tonumber(total_tasks_sent) then
+            if tonumber(total_tasks_processed) >= tonumber(
+                    total_tasks_sent) then
                 redis.call('HSET', 'xcute:job:info:' .. job_id,
                            'job.status', 'FINISHED');
                 finished = true;
@@ -526,7 +534,8 @@ class XcuteBackend(RedisConnection):
     def update_tasks_sent(self, job_id, task_ids, total_tasks,
                           all_tasks_sent=False):
         return self.script_update_tasks_sent(
-            keys=[self._get_timestamp(), job_id, total_tasks, str(all_tasks_sent)],
+            keys=[self._get_timestamp(), job_id, total_tasks,
+                  str(all_tasks_sent)],
             args=task_ids, client=self.conn)
 
     @handle_redis_exceptions
@@ -543,7 +552,8 @@ class XcuteBackend(RedisConnection):
             for key, value in task_results.items():
                 counters['results.' + key] = value
         return self.script_update_tasks_processed(
-            keys=[self._get_timestamp(), job_id] + self._dict_to_lua_array(counters),
+            keys=[self._get_timestamp(),
+                  job_id] + self._dict_to_lua_array(counters),
             args=task_ids,
             client=self.conn)
 
@@ -592,7 +602,8 @@ class XcuteBackend(RedisConnection):
         job_info = marshalled_job_info.copy()
 
         all_sent = true_value(job_info['tasks.all_sent'])
-        total = int(job_info['tasks.total']) if 'tasks.total' in job_info else None
+        total = int(job_info['tasks.total']) if 'tasks.total' \
+            in job_info else None
 
         job_info['tasks.sent'] = int(job_info['tasks.sent'])
         job_info['tasks.all_sent'] = all_sent

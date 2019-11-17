@@ -14,7 +14,6 @@
 # License along with this library.
 
 from collections import Counter
-from itertools import izip_longest
 
 from oio.blob.client import BlobClient
 from oio.common.easy_value import float_value, int_value
@@ -22,7 +21,7 @@ from oio.common.exceptions import ContentNotFound, OrphanChunk
 from oio.conscience.client import ConscienceClient
 from oio.content.factory import ContentFactory
 from oio.rdir.client import RdirClient
-from oio.xcute.common.job import XcuteJob   
+from oio.xcute.common.job import XcuteJob
 
 
 class RawxDecommissionJob(XcuteJob):
@@ -114,7 +113,8 @@ class RawxDecommissionJob(XcuteJob):
             chunk['size'] = 1
             chunk['score'] = 1
             chunk['url'] = 'http://{}/{}'.format(service_id, fake_chunk_id)
-            chunk['real_url'] = 'http://{}/{}'.format(service_addr, fake_chunk_id)
+            chunk['real_url'] = 'http://{}/{}'.format(service_addr,
+                                                      fake_chunk_id)
             fake_excluded_chunks.append(chunk)
         return fake_excluded_chunks
 
@@ -125,7 +125,8 @@ class RawxDecommissionJob(XcuteJob):
         results = Counter()
 
         chunk_url = 'http://{}/{}'.format(self.service_id, chunk_id)
-        meta = self.blob_client.chunk_head(chunk_url, timeout=self.rawx_timeout)
+        meta = self.blob_client.chunk_head(chunk_url,
+                                           timeout=self.rawx_timeout)
         container_id = meta['container_id']
         content_id = meta['content_id']
         chunk_size = int(meta['chunk_size'])
