@@ -37,8 +37,8 @@ class XcuteJobList(XcuteCommand, Lister):
     def _take_action(self, parsed_args):
         jobs = self.xcute.job_list()
         for job_info in jobs:
-            yield (job_info['job_id'], job_info['status'], job_info['job_type'],
-                   job_info['ctime'], float(job_info['mtime']))
+            yield (job_info['job.id'], job_info['job.status'], job_info['job.type'],
+                   job_info['job.ctime'], job_info['job.mtime'])
 
     def take_action(self, parsed_args):
         self.logger.debug('take_action(%s)', parsed_args)

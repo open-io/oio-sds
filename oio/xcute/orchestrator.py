@@ -149,9 +149,8 @@ class XcuteOrchestrator(object):
         if job_info['all_sent']:
             return
 
-        job_type = job_info['job_type']
-        last_task_id = None
-        last_task_id = job_info.get('last_sent')
+        job_type = job_info['job.type']
+        last_task_id = job_info.get('job.last_sent')
         job_class = JOB_TYPES[job_type]
         job = job_class(self.conf, logger=self.logger)
         job.load_config(job_config)
