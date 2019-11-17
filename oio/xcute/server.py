@@ -3,7 +3,7 @@ from werkzeug.exceptions import NotFound as HTTPNotFound
 from werkzeug.routing import Map, Rule, Submount
 from werkzeug.wrappers import Response
 
-from oio.common.easy_value import int_value, true_value
+from oio.common.easy_value import int_value
 from oio.common.exceptions import NotFound
 from oio.common.json import json
 from oio.common.logger import get_logger

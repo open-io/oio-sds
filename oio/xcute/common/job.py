@@ -13,8 +13,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import math
-
 from oio.common.easy_value import int_value
 from oio.common.logger import get_logger
 

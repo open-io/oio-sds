@@ -13,8 +13,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import traceback
-
 from collections import Counter
 
 from oio.common.green import ratelimit, sleep
