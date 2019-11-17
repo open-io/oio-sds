@@ -85,6 +85,7 @@ class TesterJob(XcuteJob):
         else:
             self.logger.info('Second task: %s', msg)
 
-        if self.error_percentage and random.randrange(100) < self.error_percentage:
+        if self.error_percentage \
+                and random.randrange(100) < self.error_percentage:
             exc_class = random.choice(EXCEPTIONS)
             raise exc_class()

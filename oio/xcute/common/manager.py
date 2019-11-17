@@ -13,10 +13,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import random
-
 from oio.xcute.common.backend import XcuteBackend
-from oio.common.green import datetime, time
+from oio.common.green import time
 from oio.common.logger import get_logger
 
 
