@@ -20,6 +20,7 @@ from collections import Counter
 from oio.common.green import ratelimit, sleep
 from oio.common.json import json
 from oio.common.logger import get_logger
+from oio.common.utils import CacheDict
 from oio.event.beanstalk import BeanstalkdSender
 from oio.xcute.jobs import JOB_TYPES
 
@@ -29,13 +30,24 @@ class XcuteWorker(object):
     def __init__(self, conf, logger=None):
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
-        self.beanstalkd_senders = {}
+        self.beanstalkd_senders = dict()
+        self.jobs = CacheDict(size=10)
 
     def process_beanstalkd_job(self, beanstalkd_job):
         job_id = beanstalkd_job['job_id']
-        job_type = beanstalkd_job['job_type']
-        job_class = JOB_TYPES[job_type]
-        job_config = beanstalkd_job['job_config']
+
+        job = self.jobs.get(job_id)
+        if job is None:
+            job_type = beanstalkd_job['job_type']
+            job_class = JOB_TYPES[job_type]
+            job_config = beanstalkd_job['job_config']
+
+            job = job_class(self.conf, logger=self.logger)
+            job.load_config(job_config)
+            job.init_process_task()
+
+            self.jobs[job_id] = job
+
         tasks = beanstalkd_job['tasks']
         reply_addr = beanstalkd_job['beanstalkd_reply']['addr']
         reply_tube = beanstalkd_job['beanstalkd_reply']['tube']
@@ -44,9 +56,6 @@ class XcuteWorker(object):
         task_results = Counter()
 
         items_run_time = 0
-        job = job_class(self.conf, logger=self.logger)
-        job.load_config(job_config)
-        job.init_process_task()
         for task_id, task_payload in tasks.iteritems():
             items_run_time = ratelimit(
                     items_run_time, job.tasks_per_second)
