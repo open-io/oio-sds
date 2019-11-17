@@ -16,7 +16,6 @@
 """Container-related commands"""
 
 from logging import getLogger
-from time import time
 
 from oio.cli import Command, Lister, ShowOne
 from oio.common.timestamp import Timestamp
