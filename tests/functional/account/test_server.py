@@ -13,7 +13,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from time import time
 import simplejson as json
 
 from werkzeug.test import Client
