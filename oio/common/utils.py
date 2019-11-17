@@ -17,7 +17,6 @@ import os
 import grp
 import pwd
 import fcntl
-import time
 from collections import OrderedDict
 from hashlib import sha256
 from random import getrandbits
@@ -118,35 +117,17 @@ class CacheDict(OrderedDict):
     OrderedDict subclass which holds a limited number of items.
     """
 
-    def __init__(self, size=None, timeout=None):
+    def __init__(self, size=262144):
         super(CacheDict, self).__init__()
         self.size = size
-        self.timeout = timeout
 
     def __setitem__(self, key, value):
-        deadline = None
-        if self.timeout:
-            deadline = time.time() + self.timeout
-        super(CacheDict, self).__setitem__(key, (value, deadline))
-        if self.size:
-            while len(self) > self.size:
-                try:
-                    self.popitem(last=False)
-                except KeyError:
-                    # Maybe remove with an other thread in the same time
-                    # or with the timeout
-                    pass
+        super(CacheDict, self).__setitem__(key, value)
+        self._check_size()
 
-    def __getitem__(self, key):
-        value, deadline = super(CacheDict, self).__getitem__(key)
-        if deadline and time.time() > deadline:
-            try:
-                self.__delitem__(key)
-            except KeyError:
-                # Maybe remove with an other thread in the same time
-                pass
-            raise KeyError(key)
-        return value
+    def _check_size(self):
+        while len(self) > self.size:
+            self.popitem(last=False)
 
 
 class RingBuffer(list):
