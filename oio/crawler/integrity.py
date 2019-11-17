@@ -247,7 +247,7 @@ class Checker(object):
         self.object_exceptions = 0
         self.chunk_exceptions = 0
 
-        self.list_cache = CacheDict(size=cache_size)
+        self.list_cache = CacheDict(cache_size)
         self.running_tasks = {}
         self.running_lock = Semaphore(1)
         self.result_queue = LightQueue(concurrency)
@@ -960,7 +960,7 @@ class Checker(object):
         for result in self.fetch_results():
             self.log_result(result)
             yield result
-        self.list_cache = CacheDict(size=self.list_cache.size)
+        self.list_cache = CacheDict(self.list_cache.size)
 
     def stop(self):
         self.logger.info("Stopping")
