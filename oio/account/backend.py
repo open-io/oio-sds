@@ -321,7 +321,7 @@ class AccountBackend(RedisConnection):
         return True
 
     def get_account_metadata(self, account_id):
-        conn = self.conn
+        conn = self.conn_slave
         if not account_id:
             return None
         account_id = conn.hget('account:%s' % account_id, 'id')
@@ -355,7 +355,7 @@ class AccountBackend(RedisConnection):
         return account_id
 
     def info_account(self, account_id):
-        conn = self.conn
+        conn = self.conn_slave
         if not account_id:
             return None
         account_id = conn.hget('account:%s' % account_id, 'id')
@@ -376,7 +376,7 @@ class AccountBackend(RedisConnection):
         return info
 
     def list_account(self):
-        conn = self.conn
+        conn = self.conn_slave
         accounts = conn.hkeys('accounts:')
         return accounts
 
@@ -465,7 +465,7 @@ class AccountBackend(RedisConnection):
             elif prefix:
                 min_k = '[' + prefix
 
-            cnames = self.conn.zrangebylex(
+            cnames = self.conn_slave.zrangebylex(
                 'containers:%s' % account_id, min_k, max_k,
                 0, limit - len(results))
             if not cnames:
@@ -502,7 +502,7 @@ class AccountBackend(RedisConnection):
                                      end_marker=end_marker, prefix=prefix,
                                      delimiter=delimiter,
                                      s3_buckets_only=s3_buckets_only)
-        pipeline = self.conn.pipeline(True)
+        pipeline = self.conn_slave.pipeline(True)
         # skip prefix
         for container in [entry for entry in raw_list if not entry[3]]:
             pipeline.hmget(AccountBackend.ckey(account_id, container[0]),
@@ -521,7 +521,7 @@ class AccountBackend(RedisConnection):
         return raw_list
 
     def status(self):
-        conn = self.conn
+        conn = self.conn_slave
         account_count = conn.hlen('accounts:')
         status = {'account_count': account_count}
         return status
