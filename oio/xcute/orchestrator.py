@@ -135,7 +135,7 @@ class XcuteOrchestrator(object):
 
         job_class = JOB_TYPES[job_type]
         job = job_class(self.conf, logger=self.logger)
-        job.load_config(job_config)
+        job.sanitize_params(job_config)
         job_tasks = job.get_tasks(marker=last_task_id)
 
         self.handle_job(job_id, job_type, job_config, job, job_tasks)
@@ -153,7 +153,7 @@ class XcuteOrchestrator(object):
         last_task_id = job_info.get('job.last_sent')
         job_class = JOB_TYPES[job_type]
         job = job_class(self.conf, logger=self.logger)
-        job.load_config(job_config)
+        job.sanitize_params(job_config)
         job_tasks = job.get_tasks(marker=last_task_id)
 
         self.manager.start_job(job_id, job_config)
