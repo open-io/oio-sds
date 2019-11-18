@@ -17,9 +17,22 @@ from oio.common.easy_value import int_value
 from oio.common.logger import get_logger
 
 
+class XcuteTask(object):
+
+    def __init__(self, conf, job_config, logger=None):
+        self.conf = conf
+        self.logger = logger or get_logger(self.conf)
+
+        self.tasks_per_second = int(job_config['tasks_per_second'])
+
+    def process(self, task_id, task_payload):
+        raise NotImplementedError()
+
+
 class XcuteJob(object):
 
     JOB_TYPE = None
+    TASK_CLASS = None
 
     DEFAULT_TASKS_PER_SECOND = 32
     MAX_TASKS_BATCH_SIZE = 512
@@ -28,9 +41,9 @@ class XcuteJob(object):
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
 
-    def load_config(self, job_config):
+    def sanitize_params(self, job_config):
         """
-            Validate and sanitize the job congiguration
+            Validate and sanitize the job configuration
             Ex: cast a string as integer, set a default
             Also return the lock id if there is one
         """
@@ -50,9 +63,9 @@ class XcuteJob(object):
             else:
                 self.tasks_batch_size = self.MAX_TASKS_BATCH_SIZE
         elif self.tasks_batch_size < 1:
-            raise ValueError('Tasks batch size should positive')
+            raise ValueError('Tasks batch size should be positive')
         elif self.tasks_batch_size > self.MAX_TASKS_BATCH_SIZE:
-            raise ValueError('Tasks batch size should less than %d' %
+            raise ValueError('Tasks batch size should be less than %d' %
                              self.MAX_TASKS_BATCH_SIZE)
         sanitized_job_config['tasks_batch_size'] = self.tasks_batch_size
 
@@ -61,13 +74,7 @@ class XcuteJob(object):
     def get_tasks(self, marker=None):
         """
             Yields the job tasks as
-            (TaskClass, task_id, task_payload, total_tasks)
+            (task_id, task_payload, total_tasks)
             task_id must be a string and can be used as a marker
         """
-        raise NotImplementedError()
-
-    def init_process_task(self):
-        raise NotImplementedError()
-
-    def process_task(self, task_id, task_payload):
         raise NotImplementedError()
