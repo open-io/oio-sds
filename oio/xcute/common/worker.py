@@ -56,13 +56,16 @@ class XcuteWorker(object):
                 task_errors[type(exc).__name__] += 1
 
         self._reply(reply_addr, reply_tube,
-                    beanstalkd_job, task_results, task_errors)
+                    job_id, tasks.keys(), task_results, task_errors)
 
     def _reply(self, reply_addr, reply_tube,
-               beanstalkd_job, task_results, task_errors):
-        beanstalkd_job['task_results'] = task_results
-        beanstalkd_job['task_errors'] = task_errors
-        reply_payload = json.dumps(beanstalkd_job)
+               job_id, task_ids, task_results, task_errors):
+        reply_payload = json.dumps({
+            'job_id': job_id,
+            'task_ids': task_ids,
+            'task_results': task_results,
+            'task_errors': task_errors
+        })
 
         sender_key = (reply_addr, reply_tube)
         if sender_key not in self.beanstalkd_senders:
