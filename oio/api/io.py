@@ -277,6 +277,7 @@ class ChunkReader(object):
             self._resp_by_chunk = dict()
         self.perfdata = perfdata
         self.logger = _kwargs.get('logger', LOGGER)
+        self.is_ec = _kwargs.get('is_ec', False)
 
     @property
     def reqid(self):
@@ -482,13 +483,14 @@ class ChunkReader(object):
                     count += 1
                     buf += data
             except (green.ChunkReadTimeout, IOError) as crto:
-                try:
-                    self.recover(bytes_consumed)
-                except (exc.UnsatisfiableRange, ValueError):
-                    raise
-                except exc.EmptyByteRange:
-                    # we are done already
-                    break
+                if not self.is_ec:
+                    try:
+                        self.recover(bytes_consumed)
+                    except (exc.UnsatisfiableRange, ValueError):
+                        raise
+                    except exc.EmptyByteRange:
+                        # we are done already
+                        break
                 buf = ''
                 # find a new source to perform recovery
                 new_source, new_chunk = self._get_source()

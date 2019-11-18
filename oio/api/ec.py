@@ -162,7 +162,8 @@ class ECChunkDownloadHandler(object):
                                 headers, self.connection_timeout,
                                 self.read_timeout, perfdata=self.perfdata,
                                 align=True, logger=self.logger,
-                                resp_by_chunk=self._resp_by_chunk)
+                                resp_by_chunk=self._resp_by_chunk,
+                                is_ec=True)
         return (reader, reader.get_iter())
 
     def get_stream(self):
