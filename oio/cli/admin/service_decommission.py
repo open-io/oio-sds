@@ -68,7 +68,7 @@ class RawxDecommission(MultipleServicesCommandMixin, lister.Lister):
 
     def _take_action(self, parsed_args):
         job_config = {
-            'chunks_per_second': parsed_args.chunks_per_second,
+            'tasks_per_second': parsed_args.chunks_per_second,
             'rdir_fetch_limit': parsed_args.rdir_fetch_limit,
             'rdir_timeout': parsed_args.rdir_timeout,
             'rawx_timeout': parsed_args.rawx_timeout,
