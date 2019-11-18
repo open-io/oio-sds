@@ -67,8 +67,6 @@ class RawxDecommissionTask(XcuteTask):
         return fake_excluded_chunks
 
     def process(self, chunk_id, task_payload):
-        results = Counter()
-
         chunk_url = 'http://{}/{}'.format(self.service_id, chunk_id)
         meta = self.blob_client.chunk_head(chunk_url,
                                            timeout=self.rawx_timeout)
@@ -79,12 +77,10 @@ class RawxDecommissionTask(XcuteTask):
         # Maybe skip the chunk because it doesn't match the size constaint
         if chunk_size < self.min_chunk_size:
             self.logger.debug("SKIP %s too small", chunk_url)
-            results['skipped'] += 1
-            return results
+            return {'skipped_chunks': 1}
         if self.max_chunk_size > 0 and chunk_size > self.max_chunk_size:
             self.logger.debug("SKIP %s too big", chunk_url)
-            results['skipped'] += 1
-            return results
+            return {'skipped_chunks': 1}
 
         # Start moving the chunk
         try:
@@ -92,12 +88,9 @@ class RawxDecommissionTask(XcuteTask):
             content.move_chunk(
                 chunk_id, fake_excluded_chunks=self.fake_excluded_chunks)
         except (ContentNotFound, OrphanChunk):
-            results['orphan'] += 1
-            return results
+            return {'orphan_chunks': 1}
 
-        results['moved_chunks'] += 1
-        results['total_size'] += chunk_size
-        return results
+        return {'moved_chunks': 1, 'moved_bytes': chunk_size}
 
 
 class RawxDecommissionJob(XcuteJob):
