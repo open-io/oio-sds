@@ -17,7 +17,7 @@ import random
 
 import oio.common.exceptions as exc
 from oio.common.easy_value import int_value
-from oio.xcute.common.job import XcuteJob
+from oio.xcute.common.job import XcuteJob, XcuteTask
 
 
 EXCEPTIONS = [exc.BadRequest,
@@ -31,16 +31,41 @@ EXCEPTIONS = [exc.BadRequest,
               exc.ServiceBusy]
 
 
+class TesterTask(XcuteTask):
+
+    def __init__(self, conf, job_config, logger=None):
+        super(TesterTask, self).__init__(
+            conf, job_config, logger=logger)
+
+        self.error_percentage = int(job_config['error_percentage'])
+
+    def process(self, task_id, task_payload):
+        first = task_payload['first']
+        msg = task_payload['msg']
+
+        if first:
+            self.logger.info('First task: %s', msg)
+        else:
+            self.logger.info('Second task: %s', msg)
+
+        if self.error_percentage \
+                and random.randrange(100) < self.error_percentage:
+            exc_class = random.choice(EXCEPTIONS)
+            raise exc_class()
+
+
 class TesterJob(XcuteJob):
 
     JOB_TYPE = 'tester'
+    TASK_CLASS = TesterTask
+
     DEFAULT_START = 0
     DEFAULT_END = 5
     DEFAULT_ERROR_PERCENTAGE = 0
 
-    def load_config(self, job_config):
+    def sanitize_params(self, job_config):
         sanitized_job_config, _ = super(
-            TesterJob, self).load_config(job_config)
+            TesterJob, self).sanitize_params(job_config)
 
         self.start = int_value(job_config.get('start'), self.DEFAULT_START)
         sanitized_job_config['start'] = self.start
@@ -48,10 +73,9 @@ class TesterJob(XcuteJob):
         self.end = int_value(job_config.get('end'), self.DEFAULT_END)
         sanitized_job_config['end'] = self.end
 
-        self.error_percentage = int_value(
+        sanitized_job_config['error_percentage'] = int_value(
             job_config.get('error_percentage'),
             self.DEFAULT_ERROR_PERCENTAGE)
-        sanitized_job_config['error_percentage'] = self.error_percentage
 
         return sanitized_job_config, job_config.get('lock')
 
@@ -72,20 +96,3 @@ class TesterJob(XcuteJob):
             task_id = str(i)
 
             yield (task_id, task_payload, total_tasks)
-
-    def init_process_task(self):
-        pass
-
-    def process_task(self, task_id, task_payload):
-        first = task_payload['first']
-        msg = task_payload['msg']
-
-        if first:
-            self.logger.info('First task: %s', msg)
-        else:
-            self.logger.info('Second task: %s', msg)
-
-        if self.error_percentage \
-                and random.randrange(100) < self.error_percentage:
-            exc_class = random.choice(EXCEPTIONS)
-            raise exc_class()
