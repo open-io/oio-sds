@@ -339,16 +339,15 @@ class XcuteOrchestrator(object):
         reply = json.loads(encoded_reply)
 
         job_id = reply['job_id']
-        tasks = reply['tasks']
+        task_ids = reply['task_ids']
         task_results = reply['task_results']
         task_errors = reply['task_errors']
 
-        self.logger.debug('Task processed (job_id=%s): %s', job_id, tasks)
+        self.logger.debug('Tasks processed (job_id=%s): %s', job_id, task_ids)
 
         try:
-
             finished = self.manager.update_tasks_processed(
-                job_id, tasks.keys(), task_errors, task_results)
+                job_id, task_ids, task_errors, task_results)
             if finished:
                 self.logger.info('Job %s is finished', job_id)
         except Exception:
