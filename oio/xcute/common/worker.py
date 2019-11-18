@@ -29,22 +29,19 @@ class XcuteWorker(object):
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
         self.beanstalkd_senders = dict()
-        self.jobs = CacheDict(size=10)
+        self.tasks = CacheDict(size=10)
 
     def process_beanstalkd_job(self, beanstalkd_job):
         job_id = beanstalkd_job['job_id']
 
-        job = self.jobs.get(job_id)
-        if job is None:
+        task = self.tasks.get(job_id)
+        if task is None:
             job_type = beanstalkd_job['job_type']
-            job_class = JOB_TYPES[job_type]
+            task_class = JOB_TYPES[job_type].TASK_CLASS
             job_config = beanstalkd_job['job_config']
 
-            job = job_class(self.conf, logger=self.logger)
-            job.load_config(job_config)
-            job.init_process_task()
-
-            self.jobs[job_id] = job
+            task = task_class(self.conf, job_config, logger=self.logger)
+            self.tasks[job_id] = task
 
         tasks = beanstalkd_job['tasks']
         reply_addr = beanstalkd_job['beanstalkd_reply']['addr']
@@ -56,10 +53,10 @@ class XcuteWorker(object):
         items_run_time = 0
         for task_id, task_payload in tasks.iteritems():
             items_run_time = ratelimit(
-                    items_run_time, job.tasks_per_second)
+                    items_run_time, task.tasks_per_second)
 
             try:
-                task_result = job.process_task(task_id, task_payload)
+                task_result = task.process(task_id, task_payload)
                 task_results.update(task_result)
             except Exception as exc:
                 self.logger.warn('[job_id=%s] Fail to process task %s: %s',
