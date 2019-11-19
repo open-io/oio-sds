@@ -61,7 +61,7 @@ class Xcute(WerkzeugApp):
             job = job_class(self.conf, logger=self.logger)
             job_config = data.get('config')
             # TODO: use lock
-            job_config, lock = job.sanitize_params(job_config)
+            job_config, lock = job.sanitize_config(job_config)
 
             job_id = self.manager.create(job_type, job_config)
             return Response(json.dumps({'id': job_id}), status=202)

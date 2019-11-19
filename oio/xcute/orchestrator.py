@@ -135,10 +135,8 @@ class XcuteOrchestrator(object):
 
         job_class = JOB_TYPES[job_type]
         job = job_class(self.conf, logger=self.logger)
-        job.sanitize_params(job_config)
-        job_tasks = job.get_tasks(marker=last_task_id)
-
-        self.handle_job(job_id, job_type, job_config, job, job_tasks)
+        job_tasks = job.get_tasks(job_config['params'], marker=last_task_id)
+        self.handle_job(job_id, job_type, job_config, job_tasks)
 
     def handle_running_job(self, job_id, job_config, job_info):
         """
@@ -153,14 +151,13 @@ class XcuteOrchestrator(object):
         last_task_id = job_info.get('job.last_sent')
         job_class = JOB_TYPES[job_type]
         job = job_class(self.conf, logger=self.logger)
-        job.sanitize_params(job_config)
-        job_tasks = job.get_tasks(marker=last_task_id)
+        job_tasks = job.get_tasks(job_config['params'], marker=last_task_id)
 
         self.manager.start_job(job_id, job_config)
 
-        self.handle_job(job_id, job_type, job_config, job, job_tasks)
+        self.handle_job(job_id, job_type, job_config, job_tasks)
 
-    def handle_job(self, job_id, job_type, job_config, job, job_tasks):
+    def handle_job(self, job_id, job_type, job_config, job_tasks):
         """
             Get the beanstalkd available for this job
             and start the dispatching thread
@@ -168,7 +165,7 @@ class XcuteOrchestrator(object):
 
         beanstalkd_workers = self.get_loadbalanced_workers()
 
-        thread_args = (job_id, job_type, job_config, job, job_tasks,
+        thread_args = (job_id, job_type, job_config, job_tasks,
                        beanstalkd_workers)
         dispatch_thread = threading.Thread(
             target=self.dispatch_job,
@@ -177,7 +174,7 @@ class XcuteOrchestrator(object):
 
         self.threads[dispatch_thread.ident] = dispatch_thread
 
-    def dispatch_job(self, job_id, job_type, job_config, job, job_tasks,
+    def dispatch_job(self, job_id, job_type, job_config, job_tasks,
                      beanstalkd_workers):
         """
             Dispatch all of a job's tasks
@@ -186,9 +183,12 @@ class XcuteOrchestrator(object):
         self.logger.info('Start dispatching job (job_id=%s)', job_id)
 
         try:
-            items_run_time = 0
-            batch_per_second = job.tasks_per_second / float(
-                job.tasks_batch_size)
+            tasks_per_second = job_config['tasks_per_second']
+            tasks_batch_size = job_config['tasks_batch_size']
+
+            tasks_run_time = 0
+            batch_per_second = tasks_per_second / float(
+                tasks_batch_size)
             tasks = dict()
             total = 0
             for task_id, task_payload, total in job_tasks:
@@ -196,11 +196,11 @@ class XcuteOrchestrator(object):
                     break
 
                 tasks[task_id] = task_payload
-                if len(tasks) < job.tasks_batch_size:
+                if len(tasks) < tasks_batch_size:
                     continue
 
-                items_run_time = ratelimit(
-                    items_run_time, batch_per_second)
+                tasks_run_time = ratelimit(
+                    tasks_run_time, batch_per_second)
 
                 sent = self.dispatch_tasks(
                     beanstalkd_workers,

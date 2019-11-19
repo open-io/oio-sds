@@ -19,11 +19,9 @@ from oio.common.logger import get_logger
 
 class XcuteTask(object):
 
-    def __init__(self, conf, job_config, logger=None):
+    def __init__(self, conf, job_params, logger=None):
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
-
-        self.tasks_per_second = int(job_config['tasks_per_second'])
 
     def process(self, task_id, task_payload):
         raise NotImplementedError()
@@ -41,7 +39,7 @@ class XcuteJob(object):
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
 
-    def sanitize_params(self, job_config):
+    def sanitize_config(self, job_config):
         """
             Validate and sanitize the job configuration
             Ex: cast a string as integer, set a default
@@ -49,27 +47,41 @@ class XcuteJob(object):
         """
         sanitized_job_config = dict()
 
-        self.tasks_per_second = int_value(
+        tasks_per_second = int_value(
             job_config.get('tasks_per_second'),
             self.DEFAULT_TASKS_PER_SECOND)
-        sanitized_job_config['tasks_per_second'] = self.tasks_per_second
+        sanitized_job_config['tasks_per_second'] = tasks_per_second
 
-        self.tasks_batch_size = int_value(
+        tasks_batch_size = int_value(
             job_config.get('tasks_batch_size'), None)
-        if self.tasks_batch_size is None:
-            if self.tasks_per_second > 0:
-                self.tasks_batch_size = min(
-                    self.tasks_per_second, self.MAX_TASKS_BATCH_SIZE)
+        if tasks_batch_size is None:
+            if tasks_per_second > 0:
+                tasks_batch_size = min(
+                    tasks_per_second, self.MAX_TASKS_BATCH_SIZE)
             else:
-                self.tasks_batch_size = self.MAX_TASKS_BATCH_SIZE
-        elif self.tasks_batch_size < 1:
+                tasks_batch_size = self.MAX_TASKS_BATCH_SIZE
+        elif tasks_batch_size < 1:
             raise ValueError('Tasks batch size should be positive')
-        elif self.tasks_batch_size > self.MAX_TASKS_BATCH_SIZE:
+        elif tasks_batch_size > self.MAX_TASKS_BATCH_SIZE:
             raise ValueError('Tasks batch size should be less than %d' %
                              self.MAX_TASKS_BATCH_SIZE)
-        sanitized_job_config['tasks_batch_size'] = self.tasks_batch_size
+        sanitized_job_config['tasks_batch_size'] = tasks_batch_size
 
-        return sanitized_job_config, None
+        sanitized_job_params, lock = self.sanitize_params(
+            job_config.get('params') or dict())
+        sanitized_job_config['params'] = sanitized_job_params
+
+        return sanitized_job_config, lock
+
+    def sanitize_params(self, job_params):
+        """
+            Validate and sanitize the job parameters
+            Ex: cast a string as integer, set a default
+            Also return the lock id if there is one
+        """
+        sanitized_job_params = dict()
+
+        return sanitized_job_params, None
 
     def get_tasks(self, marker=None):
         """

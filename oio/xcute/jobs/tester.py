@@ -33,11 +33,11 @@ EXCEPTIONS = [exc.BadRequest,
 
 class TesterTask(XcuteTask):
 
-    def __init__(self, conf, job_config, logger=None):
+    def __init__(self, conf, job_params, logger=None):
         super(TesterTask, self).__init__(
-            conf, job_config, logger=logger)
+            conf, job_params, logger=logger)
 
-        self.error_percentage = int(job_config['error_percentage'])
+        self.error_percentage = job_params['error_percentage']
 
     def process(self, task_id, task_payload):
         first = task_payload['first']
@@ -63,31 +63,32 @@ class TesterJob(XcuteJob):
     DEFAULT_END = 5
     DEFAULT_ERROR_PERCENTAGE = 0
 
-    def sanitize_params(self, job_config):
-        sanitized_job_config, _ = super(
-            TesterJob, self).sanitize_params(job_config)
+    def sanitize_params(self, job_params):
+        sanitized_job_params, _ = super(
+            TesterJob, self).sanitize_params(job_params)
 
-        self.start = int_value(job_config.get('start'), self.DEFAULT_START)
-        sanitized_job_config['start'] = self.start
+        sanitized_job_params['start'] = int_value(
+            job_params.get('start'), self.DEFAULT_START)
 
-        self.end = int_value(job_config.get('end'), self.DEFAULT_END)
-        sanitized_job_config['end'] = self.end
+        sanitized_job_params['end'] = int_value(
+            job_params.get('end'), self.DEFAULT_END)
 
-        sanitized_job_config['error_percentage'] = int_value(
-            job_config.get('error_percentage'),
+        sanitized_job_params['error_percentage'] = int_value(
+            job_params.get('error_percentage'),
             self.DEFAULT_ERROR_PERCENTAGE)
 
-        return sanitized_job_config, job_config.get('lock')
+        return sanitized_job_params, job_params.get('lock')
 
-    def get_tasks(self, marker=None):
-        start = self.start
+    def get_tasks(self, job_params, marker=None):
+        start = job_params['start']
+        end = job_params['end']
 
-        total_tasks = self.end - start
+        total_tasks = end - start
 
         if marker:
             start = int(marker) + 1
 
-        for i in range(start, self.end):
+        for i in range(start, end):
             if i < 2:
                 task_payload = {'first': True, 'msg': 'coucou-%d' % i}
             else:
