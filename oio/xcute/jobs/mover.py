@@ -13,8 +13,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from collections import Counter
-
 from oio.blob.client import BlobClient
 from oio.common.easy_value import float_value, int_value
 from oio.common.exceptions import ContentNotFound, OrphanChunk
@@ -26,19 +24,15 @@ from oio.xcute.common.job import XcuteJob, XcuteTask
 
 class RawxDecommissionTask(XcuteTask):
 
-    def __init__(self, conf, job_config, logger=None):
+    def __init__(self, conf, job_params, logger=None):
         super(RawxDecommissionTask, self).__init__(
-            conf, job_config, logger=logger)
+            conf, job_params, logger=logger)
 
-        self.service_id = job_config['service_id']
-        self.rawx_timeout = float(job_config['rawx_timeout'])
-        self.min_chunk_size = int(job_config['min_chunk_size'])
-        self.max_chunk_size = int(job_config['max_chunk_size'])
-        excluded_rawx_param = job_config['excluded_rawx']
-        if excluded_rawx_param:
-            self.excluded_rawx = excluded_rawx_param.split(',')
-        else:
-            self.excluded_rawx = list()
+        self.service_id = job_params['service_id']
+        self.rawx_timeout = job_params['rawx_timeout']
+        self.min_chunk_size = job_params['min_chunk_size']
+        self.max_chunk_size = job_params['max_chunk_size']
+        self.excluded_rawx = job_params['excluded_rawx']
 
         self.blob_client = BlobClient(
             self.conf, logger=self.logger)
@@ -104,53 +98,55 @@ class RawxDecommissionJob(XcuteJob):
     DEFAULT_MIN_CHUNK_SIZE = 0
     DEFAULT_MAX_CHUNK_SIZE = 0
 
-    def sanitize_params(self, job_config):
-        sanitized_job_config, _ = super(
-            RawxDecommissionJob, self).sanitize_params(job_config)
+    def sanitize_params(self, job_params):
+        sanitized_job_params, _ = super(
+            RawxDecommissionJob, self).sanitize_params(job_params)
 
         # specific configuration
-        self.service_id = job_config.get('service_id')
-        if not self.service_id:
+        service_id = job_params.get('service_id')
+        if not service_id:
             raise ValueError('Missing service ID')
-        sanitized_job_config['service_id'] = self.service_id
+        sanitized_job_params['service_id'] = service_id
 
-        self.rdir_fetch_limit = int_value(
-            job_config.get('rdir_fetch_limit'),
+        sanitized_job_params['rdir_fetch_limit'] = int_value(
+            job_params.get('rdir_fetch_limit'),
             self.DEFAULT_RDIR_FETCH_LIMIT)
-        sanitized_job_config['rdir_fetch_limit'] = self.rdir_fetch_limit
 
-        self.rdir_timeout = float_value(
-            job_config.get('rdir_timeout'),
+        sanitized_job_params['rdir_timeout'] = float_value(
+            job_params.get('rdir_timeout'),
             self.DEFAULT_RDIR_TIMEOUT)
-        sanitized_job_config['rdir_timeout'] = self.rdir_timeout
 
-        sanitized_job_config['rawx_timeout'] = float_value(
-            job_config.get('rawx_timeout'),
+        sanitized_job_params['rawx_timeout'] = float_value(
+            job_params.get('rawx_timeout'),
             self.DEFAULT_RAWX_TIMEOUT)
 
-        sanitized_job_config['min_chunk_size'] = int_value(
-            job_config.get('min_chunk_size'),
+        sanitized_job_params['min_chunk_size'] = int_value(
+            job_params.get('min_chunk_size'),
             self.DEFAULT_MIN_CHUNK_SIZE)
 
-        sanitized_job_config['max_chunk_size'] = int_value(
-            job_config.get('max_chunk_size'),
+        sanitized_job_params['max_chunk_size'] = int_value(
+            job_params.get('max_chunk_size'),
             self.DEFAULT_MAX_CHUNK_SIZE)
 
-        excluded_rawx_param = job_config.get('excluded_rawx')
-        if excluded_rawx_param:
-            excluded_rawx = excluded_rawx_param.split(',')
+        excluded_rawx = job_params.get('excluded_rawx')
+        if excluded_rawx:
+            excluded_rawx = excluded_rawx.split(',')
         else:
             excluded_rawx = list()
-        sanitized_job_config['excluded_rawx'] = ','.join(excluded_rawx)
+        sanitized_job_params['excluded_rawx'] = excluded_rawx
 
-        return sanitized_job_config, 'rawx/%s' % self.service_id
+        return sanitized_job_params, 'rawx/%s' % service_id
 
-    def get_tasks(self, marker=None):
+    def get_tasks(self, job_params, marker=None):
+        service_id = job_params['service_id']
+        rdir_fetch_limit = job_params['rdir_fetch_limit']
+        rdir_timeout = job_params['rdir_timeout']
+
         rdir_client = RdirClient(self.conf, logger=self.logger)
 
         chunk_infos = rdir_client.chunk_fetch(
-            self.service_id, timeout=self.rdir_timeout,
-            limit=self.rdir_fetch_limit, start_after=marker)
+            service_id, timeout=rdir_timeout,
+            limit=rdir_fetch_limit, start_after=marker)
 
         chunk_ids = (chunk_id for _, _, chunk_id, _ in chunk_infos)
         for i, chunk_id in enumerate(chunk_ids, 1):
