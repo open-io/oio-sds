@@ -33,15 +33,17 @@ class XcuteWorker(object):
 
     def process_beanstalkd_job(self, beanstalkd_job):
         job_id = beanstalkd_job['job_id']
+        job_config = beanstalkd_job['job_config']
 
         task = self.tasks.get(job_id)
         if task is None:
             job_type = beanstalkd_job['job_type']
             task_class = JOB_TYPES[job_type].TASK_CLASS
-            job_config = beanstalkd_job['job_config']
-
-            task = task_class(self.conf, job_config, logger=self.logger)
+            job_params = job_config['params']
+            task = task_class(self.conf, job_params, logger=self.logger)
             self.tasks[job_id] = task
+
+        tasks_per_second = job_config['tasks_per_second']
 
         tasks = beanstalkd_job['tasks']
         reply_addr = beanstalkd_job['beanstalkd_reply']['addr']
@@ -50,10 +52,10 @@ class XcuteWorker(object):
         task_errors = Counter()
         task_results = Counter()
 
-        items_run_time = 0
+        tasks_run_time = 0
         for task_id, task_payload in tasks.iteritems():
-            items_run_time = ratelimit(
-                    items_run_time, task.tasks_per_second)
+            tasks_run_time = ratelimit(
+                    tasks_run_time, tasks_per_second)
 
             try:
                 task_result = task.process(task_id, task_payload)
