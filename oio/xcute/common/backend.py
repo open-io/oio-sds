@@ -21,6 +21,7 @@ import random
 from oio.common.easy_value import true_value
 from oio.common.exceptions import Forbidden, NotFound
 from oio.common.green import datetime
+from oio.common.json import json
 from oio.common.redis_conn import RedisConnection
 from oio.common.timestamp import Timestamp
 
@@ -464,7 +465,8 @@ class XcuteBackend(RedisConnection):
 
         self.script_create(
             keys=[self._get_timestamp(), job_id, job_type],
-            args=self._dict_to_lua_array(job_config),
+            args=self._dict_to_lua_array(
+                self._marshal_job_config(job_config)),
             client=self.conn)
         return job_id
 
@@ -488,8 +490,9 @@ class XcuteBackend(RedisConnection):
         job_config_infos = pipeline.execute()
 
         return (
-            (job_id, job_conf, self._unmarshal_job_info(job_info))
-            for job_conf, job_info in zip(*([iter(job_config_infos)] * 2))
+            (job_id, self._unmarshal_job_config(job_config),
+             self._unmarshal_job_info(job_info))
+            for job_config, job_info in zip(*([iter(job_config_infos)] * 2))
         )
 
     @handle_redis_exceptions
@@ -502,7 +505,8 @@ class XcuteBackend(RedisConnection):
         job_id, job_info, job_config = next_job
         job_info = self._unmarshal_job_info(
             self._lua_array_to_dict(job_info))
-        job_config = self._lua_array_to_dict(job_config)
+        job_config = self._unmarshal_job_config(
+            self._lua_array_to_dict(job_config))
         return (job_id, job_info['job.type'], job_info.get('tasks.last_sent'),
                 job_config)
 
@@ -562,11 +566,11 @@ class XcuteBackend(RedisConnection):
         self.script_delete(keys=[job_id])
 
     def get_job_conf(self, job_id):
-        return self._get_job_conf(job_id, client=self.conn)
+        job_config = self._get_job_conf(job_id, client=self.conn)
+        return self._unmarshal_job_config(job_config)
 
     def get_job_info(self, job_id):
         job_info = self._get_job_info(job_id, client=self.conn)
-
         return self._unmarshal_job_info(job_info)
 
     def update_job_conf(self, job_id, updates):
@@ -585,8 +589,9 @@ class XcuteBackend(RedisConnection):
         marshalled_updates = self._marshal_job_info(updates)
         return client.hmset(self.key_job_info % job_id, marshalled_updates)
 
-    def _update_job_conf(self, job_id, updates, client):
-        return client.hmset(self.key_job_conf % job_id, updates)
+    def _update_job_conf(self, job_id, job_config, client):
+        marshalled_job_config = self._marshal_job_config(job_config)
+        return client.hmset(self.key_job_conf % job_id, marshalled_job_config)
 
     @staticmethod
     def _marshal_job_info(job_info):
@@ -615,6 +620,20 @@ class XcuteBackend(RedisConnection):
                 job_info[key] = int(value)
 
         return job_info
+
+    @staticmethod
+    def _marshal_job_config(job_config):
+        marshalled_job_config = job_config.copy()
+        marshalled_job_config['params'] = json.dumps(job_config['params'])
+        return marshalled_job_config
+
+    @staticmethod
+    def _unmarshal_job_config(marshalled_job_config):
+        job_config = marshalled_job_config.copy()
+        job_config['tasks_per_second'] = int(job_config['tasks_per_second'])
+        job_config['tasks_batch_size'] = int(job_config['tasks_batch_size'])
+        job_config['params'] = json.loads(job_config['params'])
+        return job_config
 
     @staticmethod
     def _lua_array_to_dict(array):
