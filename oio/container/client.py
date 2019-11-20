@@ -429,7 +429,7 @@ class ContainerClient(ProxyClient):
         params = self._make_params(account, reference, cid=cid)
         resp, _ = self._request('POST', '/flush', params=params, **kwargs)
         return {'truncated':
-                boolean_value(resp.getheader('x-oio-truncated', False))}
+                boolean_value(resp.getheader('x-oio-truncated'), False)}
 
     @extract_reference_params
     def content_list(self, account=None, reference=None, limit=None,

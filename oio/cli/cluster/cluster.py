@@ -93,7 +93,7 @@ class ClusterList(Lister):
                 volume = tags.get('tag.vol', 'n/a')
                 service_id = tags.get('tag.service_id', 'n/a')
                 addr = srv['addr']
-                locked = boolean_value(tags.get('tag.lock', False))
+                locked = boolean_value(tags.get('tag.lock'), False)
                 up = tags.get('tag.up', 'n/a')
                 score = srv['score']
                 if parsed_args.stats:
@@ -136,8 +136,8 @@ class ClusterLocalList(Lister):
         results = []
         srv_types = parsed_args.srv_types
         local_scores = boolean_value(
-            self.app.client_manager.sds_conf.get('proxy.quirk.local_scores',
-                                                 False))
+            self.app.client_manager.sds_conf.get('proxy.quirk.local_scores'),
+            False)
         if not local_scores:
             self.log.warn("'proxy.quirk.local_scores' not set, "
                           "scores won't be realistic.")
@@ -151,7 +151,7 @@ class ClusterLocalList(Lister):
             addr = srv['addr']
             up = tags.get('tag.up', 'n/a')
             score = srv['score']
-            locked = boolean_value(tags.get('tag.lock', False))
+            locked = boolean_value(tags.get('tag.lock'), False)
             srv_type = srv['type']
             if not srv_types or srv_type in srv_types:
                 results.append((srv_type, addr, service_id, volume, location,
