@@ -74,8 +74,7 @@ class Meta2IndexingWorker(object):
         self.namespace, self.volume_id = check_volume_for_service_type(
             self.volume, "meta2")
         self.attempt_bad_index_removal = boolean_value(
-            conf.get('try_removing_faulty_indexes', False)
-        )
+            conf.get('try_removing_faulty_indexes'), False)
 
         if not pool_manager:
             pool_manager = get_pool_manager(pool_connections=10)
