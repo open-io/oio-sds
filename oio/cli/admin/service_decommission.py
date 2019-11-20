@@ -13,14 +13,12 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-
-from cliff import lister
-
+from oio.cli import Lister
 from oio.cli.admin.common import MultipleServicesCommandMixin
 from oio.xcute.jobs.mover import RawxDecommissionJob
 
 
-class RawxDecommission(MultipleServicesCommandMixin, lister.Lister):
+class RawxDecommission(MultipleServicesCommandMixin, Lister):
 
     columns = ('Service ID', 'Job ID')
 
@@ -87,6 +85,7 @@ class RawxDecommission(MultipleServicesCommandMixin, lister.Lister):
                     RawxDecommissionJob.JOB_TYPE, job_config=job_config)
                 res = job_info['id']
             except Exception as exc:
+                self.success = False
                 res = str(exc)
             yield (service_id, res)
 
