@@ -15,7 +15,9 @@
 
 import zookeeper
 from logging import getLogger
-from cliff import lister, command
+from six import iteritems
+from cliff import lister
+from oio.cli import Command
 from oio.zk.client import \
         get_connected_handles, \
         generate_namespace_tree as _run, \
@@ -68,7 +70,7 @@ class ElectionCmdMixin(object):
             if key not in seen:
                 seen[key] = []
             seen[key].append(num)
-        for k, nums in seen.iteritems():
+        for k, nums in iteritems(seen):
             nums = sorted(nums)
             yield k, nums[0], nums[-1]
 
@@ -130,7 +132,7 @@ class ElectionReset(ElectionCmdMixin, lister.Lister):
                 for child in children:
                     n = group + '/' + child
                     data, meta = tuple(zookeeper.get(zh, n))
-                    print repr(data), repr(meta)
+                    print('%r %r' % (data, meta))
                     if data in group:
                         # Mark the oldest nodes for removal
                         yield action(group, group[data])
@@ -194,7 +196,7 @@ class ElectionSmudge(ElectionCmdMixin, lister.Lister):
                     yield group, suffix, str(ex)
 
 
-class HierarchyArmageddon(ElectionCmdMixin, command.Command):
+class HierarchyArmageddon(ElectionCmdMixin, Command):
     """Remove the hierarchy tree in the Zookeeper ensembles"""
 
     log = getLogger(__name__ + '.HierarchyArmageddon')
@@ -217,12 +219,15 @@ class HierarchyArmageddon(ElectionCmdMixin, command.Command):
             try:
                 delete_children(zh.get(), ns, self.log)
             except Exception as ex:
-                self.log.exception("Failed to flush TODO: %s", str(ex))
-            zh.close()
+                self.log.exception("Failed to flush '%s': %s",
+                                   zh.cnxstr, str(ex))
+                self.__class__.success = False
+            finally:
+                zh.close()
 
 
-class HierarchyBootstrap(ElectionCmdMixin, command.Command):
-    """Remove the hierarchy tree in the Zookeeper ensembles"""
+class HierarchyBootstrap(ElectionCmdMixin, Command):
+    """Create the election tree in the Zookeeper ensembles."""
 
     log = getLogger(__name__ + '.HierarchyArmageddon')
 
@@ -252,5 +257,8 @@ class HierarchyBootstrap(ElectionCmdMixin, command.Command):
                                       batch_size=batch_size,
                                       precheck=parsed_args.lazy)
             except Exception as ex:
-                self.log.exception("Failed to bootstrap TODO: %s", str(ex))
-            zh.close()
+                self.log.exception("Failed to bootstrap '%s': %s",
+                                   zh.cnxstr, ex)
+                self.__class__.success = False
+            finally:
+                zh.close()

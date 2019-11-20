@@ -41,8 +41,9 @@ def get_meta0_paths(zh, ns):
 
 
 class ZkHandle(object):
-    def __init__(self, zh):
+    def __init__(self, zh, cnxstr=None):
         self._zh = zh
+        self.cnxstr = cnxstr
 
     def get(self):
         return self._zh
@@ -58,7 +59,7 @@ def get_connected_handles(cnxstr):
         return
     for shard in cnxstr.split(";"):
         zh = zookeeper.init(shard)
-        yield ZkHandle(zh)
+        yield ZkHandle(zh, cnxstr)
 
 
 def _batch_split(nodes, N):
