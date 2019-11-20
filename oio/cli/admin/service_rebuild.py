@@ -17,6 +17,7 @@
 from cliff import lister
 
 from oio.account.rebuilder import AccountRebuilder
+from oio.cli import Lister
 from oio.cli.admin.common import MultipleServicesCommandMixin, \
     ToolCommandMixin, SingleServiceCommandMixin
 from oio.directory.meta2_rebuilder import Meta2Rebuilder
@@ -129,7 +130,7 @@ class Meta2Rebuild(SingleServiceCommandMixin, ServiceRebuildCommand):
         return super(Meta2Rebuild, self).take_action(parsed_args)
 
 
-class RawxRebuildCommand(MultipleServicesCommandMixin, lister.Lister):
+class RawxRebuildCommand(MultipleServicesCommandMixin, Lister):
 
     columns = ('Service ID', 'Job ID')
 
@@ -199,6 +200,7 @@ class RawxRebuildCommand(MultipleServicesCommandMixin, lister.Lister):
                     RawxRebuildJob.JOB_TYPE, job_config=job_config)
                 res = job_info['id']
             except Exception as exc:
+                self.success = False
                 res = str(exc)
             yield (service_id, res)
 
