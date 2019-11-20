@@ -528,7 +528,7 @@ grid_main_set_prgname(const gchar *cmd)
 	g_free(bn);
 }
 
-static gboolean
+static int
 grid_main_init(int argc, char **args)
 {
 	memset(syslog_id, 0, sizeof(syslog_id));
@@ -544,8 +544,7 @@ grid_main_init(int argc, char **args)
 					const char *errmsg = grid_main_set_option(optarg);
 					if (errmsg) {
 						GRID_WARN("Invalid option: %s", errmsg);
-						grid_main_usage();
-						return FALSE;
+						return 1;
 					}
 				} while (0);
 				break;
@@ -560,8 +559,7 @@ grid_main_init(int argc, char **args)
 				memset(pidfile_path, 0, sizeof(pidfile_path));
 				if (sizeof(pidfile_path) <= g_strlcpy(pidfile_path, optarg, sizeof(pidfile_path))) {
 					GRID_WARN("Invalid '-p' argument: too long");
-					grid_main_usage();
-					return FALSE;
+					return 1;
 				}
 				GRID_DEBUG("Explicitely configured pidfile_path=[%s]", pidfile_path);
 				break;
@@ -573,8 +571,7 @@ grid_main_init(int argc, char **args)
 				memset(udp_target, 0, sizeof(udp_target));
 				if (sizeof(udp_target) <= g_strlcpy(udp_target, optarg, sizeof(udp_target))) {
 					GRID_WARN("Invalid '-u' argument: too long");
-					grid_main_usage();
-					return FALSE;
+					return 1;
 				}
 				GRID_DEBUG("Explicitely configured udp_target=[%s]", udp_target);
 				break;
@@ -582,8 +579,7 @@ grid_main_init(int argc, char **args)
 				memset(syslog_id, 0, sizeof(syslog_id));
 				if (sizeof(syslog_id) <= g_strlcpy(syslog_id, optarg, sizeof(syslog_id))) {
 					GRID_WARN("Invalid '-s' argument: too long");
-					grid_main_usage();
-					return FALSE;
+					return 1;
 				}
 				GRID_DEBUG("Explicitely configured syslog_id=[%s]", syslog_id);
 				break;
@@ -598,10 +594,10 @@ grid_main_init(int argc, char **args)
 				break;
 			case ':':
 				GRID_WARN("Unexpected option at position %d ('%c')", optind, optopt);
-				return FALSE;
+				return 1;
 			default:
 				GRID_WARN("Unknown option at position %d ('%c')", optind, optopt);
-				return FALSE;
+				return 1;
 		}
 	}
 
@@ -611,7 +607,7 @@ grid_main_init(int argc, char **args)
 			if (!logger_udp_open(udp_target)) {
 				GRID_WARN("Failed to open an UDP logger to [%s]: (%d) %s",
 						udp_target, errno, strerror(errno));
-				return FALSE;
+				return 2;
 			}
 		} else {
 			GRID_DEBUG("Opening syslog with id [%s] to /dev/log", syslog_id);
@@ -623,12 +619,18 @@ grid_main_init(int argc, char **args)
 
 	if (!user_callbacks->configure(argc-optind, args+optind)) {
 		flag_running = FALSE;
-		GRID_WARN("User init error");
-		return FALSE;
+		if (*syslog_id) {
+			g_printerr("An error occurred, check syslog for more "
+					"information.\n-> journalctl -n 20 -t %s\n",
+					syslog_id);
+		} else {
+			GRID_WARN("User init error");
+		}
+		return 2;
 	}
 
 	GRID_DEBUG("Process initiation successful");
-	return TRUE;
+	return 0;
 }
 
 static void
@@ -672,9 +674,14 @@ grid_main(int argc, char ** argv, struct grid_main_callbacks * callbacks)
 	user_callbacks = callbacks;
 	user_callbacks->set_defaults();
 
-	if (!grid_main_init(argc, argv)) {
+	switch (grid_main_init(argc, argv)) {
+	case 1:
 		grid_main_usage();
+		// FALLTHROUGH
+	case 2:
 		return -1;
+	default:
+		break;
 	}
 	grid_main_install_sighandlers();
 
