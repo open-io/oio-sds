@@ -22,7 +22,6 @@ from oio.common.timestamp import Timestamp
 from oio.common.utils import timeout_to_deadline
 from oio.common.constants import OIO_DB_STATUS_NAME,\
     OIO_DB_ENABLED, OIO_DB_DISABLED, OIO_DB_FROZEN
-from oio.common.easy_value import boolean_value
 
 
 class SetPropertyCommandMixin(object):
@@ -61,8 +60,7 @@ class SetPropertyCommandMixin(object):
         )
         parser.add_argument(
             '--delete-exceeding-versions',
-            metavar='<bool>',
-            type=boolean_value,
+            action='store_true',
             help="""Delete exceeding versions when adding a new object
  (only if versioning is enabled).
 """
