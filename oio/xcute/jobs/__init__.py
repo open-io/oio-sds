@@ -13,11 +13,13 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from .blob_rebuilder import RawxRebuildJob
 from .mover import RawxDecommissionJob
 from .tester import TesterJob
 
 
 JOB_TYPES = {
     RawxDecommissionJob.JOB_TYPE: RawxDecommissionJob,
+    RawxRebuildJob.JOB_TYPE: RawxRebuildJob,
     TesterJob.JOB_TYPE: TesterJob
 }
