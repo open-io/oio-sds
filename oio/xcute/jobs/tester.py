@@ -61,19 +61,20 @@ class TesterJob(XcuteJob):
     DEFAULT_END = 5
     DEFAULT_ERROR_PERCENTAGE = 0
 
-    def sanitize_params(self, job_params):
+    @classmethod
+    def sanitize_params(cls, job_params):
         sanitized_job_params, _ = super(
-            TesterJob, self).sanitize_params(job_params)
+            TesterJob, cls).sanitize_params(job_params)
 
         sanitized_job_params['start'] = int_value(
-            job_params.get('start'), self.DEFAULT_START)
+            job_params.get('start'), cls.DEFAULT_START)
 
         sanitized_job_params['end'] = int_value(
-            job_params.get('end'), self.DEFAULT_END)
+            job_params.get('end'), cls.DEFAULT_END)
 
         sanitized_job_params['error_percentage'] = int_value(
             job_params.get('error_percentage'),
-            self.DEFAULT_ERROR_PERCENTAGE)
+            cls.DEFAULT_ERROR_PERCENTAGE)
 
         return sanitized_job_params, job_params.get('lock')
 
