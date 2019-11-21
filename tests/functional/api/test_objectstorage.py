@@ -18,16 +18,17 @@ import copy
 import logging
 import random
 import time
-from mock import MagicMock as Mock
+from mock import MagicMock as Mock, patch
 from functools import partial
 from urllib3 import HTTPResponse
 from oio.api.object_storage import ObjectStorageApi
 from oio.common import exceptions as exc
 from oio.common.constants import REQID_HEADER
+from oio.common.http_eventlet import CustomHTTPResponse
 from oio.common.storage_functions import _sort_chunks as sort_chunks
 from oio.common.utils import cid_from_name, request_id, depaginate
 from oio.common.fullpath import encode_fullpath
-from oio.common.storage_method import STORAGE_METHODS
+from oio.common.storage_method import STORAGE_METHODS, EC_SEGMENT_SIZE
 from oio.event.evob import EventTypes
 from tests.utils import random_str, random_data, random_id, BaseTestCase
 
@@ -81,6 +82,40 @@ class ObjectStorageApiTestBase(BaseTestCase):
             self.api.object_create(self.account, container,
                                    obj_name=obj, data="", **kwargs)
             self.created.append((container, obj))
+
+
+class UnreliableResponse(CustomHTTPResponse):
+    """
+    The first instance of this class will raise an exception after
+    a predefined number of calls to its read() method. Other instances
+    will behave like normal instances of CustomHTTPResponse.
+    """
+
+    inst_count = 0
+
+    @classmethod
+    def reset_instance_count(cls):
+        cls.inst_count = 0
+
+    def __init__(self, *args, **kwargs):
+        CustomHTTPResponse.__init__(self, *args, **kwargs)
+        self._read_count = 0
+        self._limit_reads = self.__class__.inst_count == 0
+        self.__class__.inst_count += 1
+
+    def read(self, amount=None):
+        if self._limit_reads:
+            if self._read_count > 2:
+                raise IOError('Failed to read more data')
+            elif self._read_count > 1:
+                # Short read
+                if amount:
+                    amount -= 3
+                else:
+                    amount = 1
+        res = CustomHTTPResponse.read(self, amount=amount)
+        self._read_count += 1
+        return res
 
 
 class TestObjectStorageApi(ObjectStorageApiTestBase):
@@ -606,8 +641,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def _upload_data(self, name):
         chunksize = int(self.conf["chunk_size"])
-        size = int(chunksize * 12)
-        data = random_data(int(size))
+        size = chunksize * 12
+        data = random_data(size)
         self.api.object_create(self.account, name, obj_name=name,
                                data=data)
         self.created.append((name, name))
@@ -701,6 +736,33 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             fdata,
             data[chunks[0][0]['size']:chunks[0][0]['size'] + 3] +
             data[0:2] + data[1:3] + data[4:7])
+
+    def test_object_fetch_range_recover(self):
+        """
+        Check that the client can continue reading after the failure
+        of a chunk in the middle of the download.
+        """
+        ec_k = 6  # FIXME(FVE): load actual number from the storage policy
+        fragment_size = EC_SEGMENT_SIZE // ec_k
+        if (not self.conf['storage_policy'].startswith('EC') or
+                self.conf['chunk_size'] <= (fragment_size * 3)):
+            self.skipTest('Run only in EC mode and when chunk size > %d' %
+                          fragment_size * 3)
+        name = 'range_test_' + random_str(6)
+        _, data = self._upload_data(name)
+
+        # Start reading the object just before the end of an EC segment
+        start = EC_SEGMENT_SIZE - 16
+        # End reading a few bytes after the start of an EC segment
+        end = start + EC_SEGMENT_SIZE + 31  # Over 3 segments
+        expected_data = data[start:end+1]
+        logging.debug("Fetching %d bytes (%d-%d)", end-start+1, start, end)
+        UnreliableResponse.reset_instance_count()
+        with patch(
+                'oio.common.http_eventlet.CustomHttpConnection.response_class',
+                UnreliableResponse):
+            fetched_data = self._fetch_range(name, (start, end))
+        self.assertEqual(expected_data, fetched_data)
 
     def test_object_create_then_append(self):
         """Create an object then append data"""
