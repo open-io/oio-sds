@@ -15,10 +15,11 @@
 
 from collections import Counter
 
+from oio.common.constants import STRLEN_REQID
 from oio.common.green import ratelimit, sleep
 from oio.common.json import json
 from oio.common.logger import get_logger
-from oio.common.utils import CacheDict
+from oio.common.utils import CacheDict, request_id
 from oio.event.beanstalk import BeanstalkdSender
 from oio.xcute.jobs import JOB_TYPES
 
@@ -57,8 +58,10 @@ class XcuteWorker(object):
             tasks_run_time = ratelimit(
                     tasks_run_time, tasks_per_second)
 
+            reqid = job_id + request_id('-')
+            reqid = reqid[:STRLEN_REQID]
             try:
-                task_result = task.process(task_id, task_payload)
+                task_result = task.process(task_id, task_payload, reqid=reqid)
                 task_results.update(task_result)
             except Exception as exc:
                 self.logger.warn('[job_id=%s] Fail to process task %s: %s',
