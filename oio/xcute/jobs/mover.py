@@ -102,9 +102,10 @@ class RawxDecommissionJob(XcuteJob):
     DEFAULT_MIN_CHUNK_SIZE = 0
     DEFAULT_MAX_CHUNK_SIZE = 0
 
-    def sanitize_params(self, job_params):
+    @classmethod
+    def sanitize_params(cls, job_params):
         sanitized_job_params, _ = super(
-            RawxDecommissionJob, self).sanitize_params(job_params)
+            RawxDecommissionJob, cls).sanitize_params(job_params)
 
         # specific configuration
         service_id = job_params.get('service_id')
@@ -114,23 +115,23 @@ class RawxDecommissionJob(XcuteJob):
 
         sanitized_job_params['rdir_fetch_limit'] = int_value(
             job_params.get('rdir_fetch_limit'),
-            self.DEFAULT_RDIR_FETCH_LIMIT)
+            cls.DEFAULT_RDIR_FETCH_LIMIT)
 
         sanitized_job_params['rdir_timeout'] = float_value(
             job_params.get('rdir_timeout'),
-            self.DEFAULT_RDIR_TIMEOUT)
+            cls.DEFAULT_RDIR_TIMEOUT)
 
         sanitized_job_params['rawx_timeout'] = float_value(
             job_params.get('rawx_timeout'),
-            self.DEFAULT_RAWX_TIMEOUT)
+            cls.DEFAULT_RAWX_TIMEOUT)
 
         sanitized_job_params['min_chunk_size'] = int_value(
             job_params.get('min_chunk_size'),
-            self.DEFAULT_MIN_CHUNK_SIZE)
+            cls.DEFAULT_MIN_CHUNK_SIZE)
 
         sanitized_job_params['max_chunk_size'] = int_value(
             job_params.get('max_chunk_size'),
-            self.DEFAULT_MAX_CHUNK_SIZE)
+            cls.DEFAULT_MAX_CHUNK_SIZE)
 
         excluded_rawx = job_params.get('excluded_rawx')
         if excluded_rawx:

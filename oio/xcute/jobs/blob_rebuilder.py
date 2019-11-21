@@ -72,9 +72,10 @@ class RawxRebuildJob(XcuteJob):
     DEFAULT_TRY_CHUNK_DELETE = False
     DEFAULT_ALLOW_FROZEN_CT = False
 
-    def sanitize_params(self, job_params):
+    @classmethod
+    def sanitize_params(cls, job_params):
         sanitized_job_params, _ = super(
-            RawxRebuildJob, self).sanitize_params(job_params)
+            RawxRebuildJob, cls).sanitize_params(job_params)
 
         # specific configuration
         service_id = job_params.get('service_id')
@@ -84,31 +85,31 @@ class RawxRebuildJob(XcuteJob):
 
         sanitized_job_params['rdir_fetch_limit'] = int_value(
             job_params.get('rdir_fetch_limit'),
-            self.DEFAULT_RDIR_FETCH_LIMIT)
+            cls.DEFAULT_RDIR_FETCH_LIMIT)
 
         sanitized_job_params['rdir_timeout'] = float_value(
             job_params.get('rdir_timeout'),
-            self.DEFAULT_RDIR_TIMEOUT)
+            cls.DEFAULT_RDIR_TIMEOUT)
 
         sanitized_job_params['rawx_timeout'] = float_value(
             job_params.get('rawx_timeout'),
-            self.DEFAULT_RAWX_TIMEOUT)
+            cls.DEFAULT_RAWX_TIMEOUT)
 
         sanitized_job_params['dry_run'] = boolean_value(
             job_params.get('dry_run'),
-            self.DEFAULT_DRY_RUN)
+            cls.DEFAULT_DRY_RUN)
 
         sanitized_job_params['allow_same_rawx'] = boolean_value(
             job_params.get('allow_same_rawx'),
-            self.DEFAULT_ALLOW_SAME_RAWX)
+            cls.DEFAULT_ALLOW_SAME_RAWX)
 
         sanitized_job_params['try_chunk_delete'] = boolean_value(
             job_params.get('try_chunk_delete'),
-            self.DEFAULT_TRY_CHUNK_DELETE)
+            cls.DEFAULT_TRY_CHUNK_DELETE)
 
         sanitized_job_params['allow_frozen_container'] = boolean_value(
             job_params.get('allow_frozen_container'),
-            self.DEFAULT_ALLOW_FROZEN_CT)
+            cls.DEFAULT_ALLOW_FROZEN_CT)
 
         return sanitized_job_params, 'rawx/%s' % service_id
 
