@@ -39,7 +39,8 @@ class XcuteJob(object):
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
 
-    def sanitize_config(self, job_config):
+    @classmethod
+    def sanitize_config(cls, job_config):
         """
             Validate and sanitize the job configuration
             Ex: cast a string as integer, set a default
@@ -49,7 +50,7 @@ class XcuteJob(object):
 
         tasks_per_second = int_value(
             job_config.get('tasks_per_second'),
-            self.DEFAULT_TASKS_PER_SECOND)
+            cls.DEFAULT_TASKS_PER_SECOND)
         sanitized_job_config['tasks_per_second'] = tasks_per_second
 
         tasks_batch_size = int_value(
@@ -57,23 +58,24 @@ class XcuteJob(object):
         if tasks_batch_size is None:
             if tasks_per_second > 0:
                 tasks_batch_size = min(
-                    tasks_per_second, self.MAX_TASKS_BATCH_SIZE)
+                    tasks_per_second, cls.MAX_TASKS_BATCH_SIZE)
             else:
-                tasks_batch_size = self.MAX_TASKS_BATCH_SIZE
+                tasks_batch_size = cls.MAX_TASKS_BATCH_SIZE
         elif tasks_batch_size < 1:
             raise ValueError('Tasks batch size should be positive')
-        elif tasks_batch_size > self.MAX_TASKS_BATCH_SIZE:
+        elif tasks_batch_size > cls.MAX_TASKS_BATCH_SIZE:
             raise ValueError('Tasks batch size should be less than %d' %
-                             self.MAX_TASKS_BATCH_SIZE)
+                             cls.MAX_TASKS_BATCH_SIZE)
         sanitized_job_config['tasks_batch_size'] = tasks_batch_size
 
-        sanitized_job_params, lock = self.sanitize_params(
+        sanitized_job_params, lock = cls.sanitize_params(
             job_config.get('params') or dict())
         sanitized_job_config['params'] = sanitized_job_params
 
         return sanitized_job_config, lock
 
-    def sanitize_params(self, job_params):
+    @classmethod
+    def sanitize_params(cls, job_params):
         """
             Validate and sanitize the job parameters
             Ex: cast a string as integer, set a default
