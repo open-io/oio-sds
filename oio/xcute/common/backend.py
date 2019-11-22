@@ -371,7 +371,8 @@ class XcuteBackend(RedisConnection):
         local incr_by = KEYS[4];
         local info_key = 'xcute:job:info:' .. job_id;
 
-        local info = redis.call('HMGET', info_key, 'job.status', 'tasks.all_sent');
+        local info = redis.call(
+            'HMGET', info_key, 'job.status', 'tasks.all_sent');
         local status = info[1];
         local all_sent = info[2];
 
@@ -484,7 +485,8 @@ class XcuteBackend(RedisConnection):
                 self._get_job_info(job_id, client=pipeline)
             job_conf_infos = pipeline.execute()
 
-            for job_id, job_conf, job_info in zip(job_ids, *([iter(job_conf_infos)] * 2)):
+            for job_id, job_conf, job_info in zip(
+                    job_ids, *([iter(job_conf_infos)] * 2)):
                 if not job_info:
                     continue
 
@@ -669,16 +671,18 @@ class XcuteBackend(RedisConnection):
     def _unmarshal_job_info(marshalled_job_info):
         job_info = marshalled_job_info.copy()
 
-        total = int(job_info['tasks.total']) if 'tasks.total' \
-            in job_info else None
+        job_info['tasks.total'] = int(job_info['tasks.total']) \
+            if 'tasks.total' in job_info else None
 
         job_info['tasks.sent'] = int(job_info['tasks.sent'])
         job_info.setdefault('tasks.last_sent')
         job_info['tasks.all_sent'] = true_value(job_info['tasks.all_sent'])
         job_info['tasks.processed'] = int(job_info['tasks.processed'])
-        job_info['tasks.is_total_temp'] = true_value(job_info['tasks.is_total_temp'])
+        job_info['tasks.is_total_temp'] = true_value(
+            job_info['tasks.is_total_temp'])
         job_info.setdefault('tasks.total_marker')
-        job_info['job.request_pause'] = true_value(job_info.get('job.request_pause'))
+        job_info['job.request_pause'] = true_value(
+            job_info.get('job.request_pause'))
 
         for key, value in job_info.iteritems():
             if key.startswith('errors.') or key.startswith('results.'):
