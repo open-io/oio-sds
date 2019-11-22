@@ -301,8 +301,9 @@ class XcuteBackend(RedisConnection):
                 'HGET', 'xcute:job:info:' .. job_id, 'job.request_pause');
             if request_pause == 'True' then
                 -- if waiting pause, pause the job
-                redis.call('HSET', 'xcute:job:info:' .. job_id,
-                        'job.status', 'PAUSED');
+                redis.call('HMSET', 'xcute:job:info:' .. job_id,
+                           'job.status', 'PAUSED',
+                           'job.request_pause', 'False');
                 local orchestrator_id = redis.call(
                     'HGET', 'xcute:job:info:' .. job_id, 'orchestrator.id');
                 redis.call(
