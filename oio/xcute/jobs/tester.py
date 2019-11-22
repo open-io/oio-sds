@@ -81,8 +81,6 @@ class TesterJob(XcuteJob):
         start = job_params['start']
         end = job_params['end']
 
-        total_tasks = end - start
-
         if marker:
             start = int(marker) + 1
 
@@ -90,7 +88,7 @@ class TesterJob(XcuteJob):
             task_id = str(i)
             task_payload = {'msg': 'World %d' % i}
 
-            yield (task_id, task_payload, total_tasks)
+            yield (task_id, task_payload)
 
     def get_total_tasks(self, job_params, marker=None):
         start = job_params['start']
