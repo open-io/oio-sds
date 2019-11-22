@@ -49,7 +49,7 @@ class TesterTask(XcuteTask):
             exc_class = random.choice(EXCEPTIONS)
             raise exc_class()
 
-        return { 'counter': len(msg) }
+        return {'counter': len(msg)}
 
 
 class TesterJob(XcuteJob):
