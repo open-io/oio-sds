@@ -281,20 +281,18 @@ class XcuteBackend(RedisConnection):
         end;
 
         if all_tasks_sent == 'True' then
-            if tonumber(total_tasks_sent) == 0 then
-                -- if there is no task sent, finish job
-                redis.call('HSET', info_key,
-                           'job.status', 'FINISHED');
-            else
-                -- else, wait the last tasks
-                redis.call('HSET', info_key,
-                           'tasks.all_sent', 'True');
-            end;
+            redis.call('HSET', info_key, 'tasks.all_sent', 'True');
             -- remove the job of the orchestrator
             local orchestrator_id = redis.call(
                 'HGET', info_key, 'orchestrator.id');
             redis.call('SREM', 'xcute:orchestrator:jobs:' .. orchestrator_id,
                        job_id);
+
+            if tonumber(total_tasks_sent) == 0 then
+                -- if there is no task sent, finish job
+                redis.call('HSET', info_key,
+                           'job.status', 'FINISHED');
+            end;
         else
             local request_pause = redis.call(
                 'HGET', info_key, 'job.request_pause');
