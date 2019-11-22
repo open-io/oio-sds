@@ -120,33 +120,11 @@ class XcuteOrchestrator(object):
         for job_id, job_config, job_info in new_jobs:
             self.logger.info('Found new job %s', job_id)
             try:
-                self.handle_new_job(job_id, job_config, job_info)
+                self.handle_running_job(job_id, job_config, job_info)
             except Exception:
                 self.logger.exception(
                     'Failed to instantiate job %s', job_id)
                 self.manager.fail(job_id)
-
-    def handle_new_job(self, job_id, job_config, job_info):
-        """
-            Set a new job's configuration
-            and get its tasks before dispatching it
-        """
-
-        job_type = job_info['job.type']
-        last_task_id = job_info['tasks.last_sent']
-        job_class = JOB_TYPES[job_type]
-        job = job_class(self.conf, logger=self.logger)
-        job_tasks = job.get_tasks(job_config['params'], marker=last_task_id)
-
-        tasks_counter = job.get_total_tasks(job_config['params'])
-
-        tasks_counter = None
-        if job_info['tasks.is_total_temp']:
-            total_marker = job_info['tasks.total_marker']
-            tasks_counter = job.get_total_tasks(
-                job_config['params'], total_marker)
-
-        self.handle_job(job_id, job_type, job_config, job_tasks, tasks_counter)
 
     def handle_running_job(self, job_id, job_config, job_info):
         """
@@ -163,22 +141,11 @@ class XcuteOrchestrator(object):
         job = job_class(self.conf, logger=self.logger)
         job_tasks = job.get_tasks(job_config['params'], marker=last_task_id)
 
-        self.manager.start_job(job_id)
-
         tasks_counter = None
         if job_info['tasks.is_total_temp']:
             total_marker = job_info['tasks.total_marker']
             tasks_counter = job.get_total_tasks(
                 job_config['params'], total_marker)
-
-        self.handle_job(job_id, job_type, job_config, job_tasks, tasks_counter)
-
-    def handle_job(self, job_id, job_type, job_config,
-                   job_tasks, tasks_counter):
-        """
-            Get the beanstalkd available for this job
-            and start the dispatching thread
-        """
 
         beanstalkd_workers = self.get_loadbalanced_workers()
 
