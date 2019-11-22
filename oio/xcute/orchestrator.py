@@ -117,27 +117,34 @@ class XcuteOrchestrator(object):
 
         new_jobs = iter(
             lambda: self.manager.run_next(self.orchestrator_id), None)
-        for job_id, job_type, last_task_id, job_config in new_jobs:
+        for job_id, job_config, job_info in new_jobs:
             self.logger.info('Found new job %s', job_id)
             try:
-                self.handle_new_job(
-                    job_id, job_type, last_task_id, job_config)
+                self.handle_new_job(job_id, job_config, job_info)
             except Exception:
                 self.logger.exception(
                     'Failed to instantiate job %s', job_id)
                 self.manager.fail(job_id)
 
-    def handle_new_job(self, job_id, job_type, last_task_id, job_config):
+    def handle_new_job(self, job_id, job_config, job_info):
         """
             Set a new job's configuration
             and get its tasks before dispatching it
         """
 
+        job_type = job_info['job.type']
+        last_task_id = job_info['tasks.last_sent']
         job_class = JOB_TYPES[job_type]
         job = job_class(self.conf, logger=self.logger)
         job_tasks = job.get_tasks(job_config['params'], marker=last_task_id)
 
         tasks_counter = job.get_total_tasks(job_config['params'])
+
+        tasks_counter = None
+        if job_info['tasks.is_total_temp']:
+            total_marker = job_info['tasks.total_marker']
+            tasks_counter = job.get_total_tasks(
+                job_config['params'], total_marker)
 
         self.handle_job(job_id, job_type, job_config, job_tasks, tasks_counter)
 
@@ -151,17 +158,18 @@ class XcuteOrchestrator(object):
             return
 
         job_type = job_info['job.type']
-        last_task_id = job_info.get('tasks.last_sent')
+        last_task_id = job_info['tasks.last_sent']
         job_class = JOB_TYPES[job_type]
         job = job_class(self.conf, logger=self.logger)
         job_tasks = job.get_tasks(job_config['params'], marker=last_task_id)
 
-        self.manager.start_job(job_id, job_config)
+        self.manager.start_job(job_id)
 
         tasks_counter = None
         if job_info['tasks.is_total_temp']:
+            total_marker = job_info['tasks.total_marker']
             tasks_counter = job.get_total_tasks(
-                job_config['params'], job_info['tasks.total_marker'])
+                job_config['params'], total_marker)
 
         self.handle_job(job_id, job_type, job_config, job_tasks, tasks_counter)
 
