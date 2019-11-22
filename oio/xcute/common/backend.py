@@ -281,7 +281,11 @@ class XcuteBackend(RedisConnection):
         end;
 
         if all_tasks_sent == 'True' then
-            redis.call('HSET', info_key, 'tasks.all_sent', 'True');
+            -- replace the estimated total with the actual total
+            redis.call('HSET', info_key,
+                       'tasks.all_sent', 'True',
+                       'tasks.total', total_tasks_sent,
+                       'tasks.is_total_temp', 'False');
             -- remove the job of the orchestrator
             local orchestrator_id = redis.call(
                 'HGET', info_key, 'orchestrator.id');
@@ -370,20 +374,25 @@ class XcuteBackend(RedisConnection):
         local info_key = 'xcute:job:info:' .. job_id;
 
         local info = redis.call(
-            'HMGET', info_key, 'job.status', 'tasks.all_sent');
+            'HMGET', info_key,
+            'job.status', 'tasks.is_total_temp');
         local status = info[1];
-        local all_sent = info[2];
+        local is_total_temp = info[2];
 
         if status == nil or status == false then
             return redis.error_reply('no_job');
         end;
 
-        redis.call('HINCRBY', info_key, 'tasks.total', incr_by);
-        redis.call('HSET', info_key, 'tasks.total_marker', marker);
-
         local stop = false;
-        if status == 'PAUSED' or status == 'FAILED' or all_sent == 'True' then
-            stop = true;
+        if is_total_temp == 'False' then
+            stop = true
+        else
+            redis.call('HINCRBY', info_key, 'tasks.total', incr_by);
+            redis.call('HSET', info_key, 'tasks.total_marker', marker);
+
+            if status == 'PAUSED' or status == 'FAILED' then
+                stop = true;
+            end;
         end;
 
     """ + _lua_update_mtime + """
