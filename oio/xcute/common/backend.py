@@ -96,9 +96,8 @@ class XcuteBackend(RedisConnection):
             'tasks.all_sent', 'False',
             'tasks.sent', '0',
             'tasks.processed', '0',
-            'errors.total', '0',
-            'temp_total', '0',
-            'is_total_temp', 'True');
+            'tasks.is_total_temp', 'True',
+            'errors.total', '0');
 
         redis.call('HSET', 'xcute:job:config:' .. job_id, unpack(job_config));
         redis.call('RPUSH', 'xcute:waiting:jobs', job_id);
@@ -381,8 +380,8 @@ class XcuteBackend(RedisConnection):
             return redis.error_reply('no_job');
         end;
 
-        redis.call('HINCRBY', info_key, 'temp_total', incr_by);
-        redis.call('HSET', info_key, 'total_marker', marker);
+        redis.call('HINCRBY', info_key, 'tasks.total', incr_by);
+        redis.call('HSET', info_key, 'tasks.total_marker', marker);
 
         local stop = false;
         if status == 'PAUSED' or status == 'FAILED' or all_sent == 'True' then
@@ -391,6 +390,18 @@ class XcuteBackend(RedisConnection):
 
     """ + _lua_update_mtime + """
         return stop;
+    """
+
+    lua_total_tasks_done = """
+        local mtime = KEYS[1];
+        local job_id = KEYS[2];
+        local info_key = 'xcute:job:info:' .. job_id;
+
+        redis.call('HSET', info_key, 'tasks.is_total_temp', 'False');
+        local total_tasks = redis.call('HGET', info_key, 'tasks.total');
+
+    """ + _lua_update_mtime + """
+        return tonumber(total_tasks);
     """
 
     lua_delete = """
@@ -440,6 +451,8 @@ class XcuteBackend(RedisConnection):
             self.lua_update_tasks_processed)
         self.script_incr_total = self.register_script(
             self.lua_incr_total)
+        self.script_total_tasks_done = self.register_script(
+            self.lua_total_tasks_done)
         self.script_delete = self.register_script(
             self.lua_delete)
 
@@ -595,15 +608,8 @@ class XcuteBackend(RedisConnection):
             keys=[self._get_timestamp(), job_id, total_marker, tasks_incr])
 
     def total_tasks_done(self, job_id):
-        pipeline = self.conn.pipeline()
-
-        key = self.key_job_info % job_id
-        pipeline.hset(key, 'is_total_temp', 'False')
-        pipeline.hget(key, 'temp_total')
-
-        total_tasks = int(pipeline.execute()[1])
-
-        return total_tasks
+        return self.script_total_tasks_done(
+            keys=[self._get_timestamp(), job_id])
 
     @handle_redis_exceptions
     def delete(self, job_id):
@@ -673,9 +679,8 @@ class XcuteBackend(RedisConnection):
         job_info.setdefault('tasks.last_sent')
         job_info['tasks.all_sent'] = true_value(job_info['tasks.all_sent'])
         job_info['tasks.processed'] = int(job_info['tasks.processed'])
-        job_info['temp_total'] = int(job_info['temp_total'])
-        job_info.setdefault('total_marker')
-        job_info['is_total_temp'] = true_value(job_info['is_total_temp'])
+        job_info['tasks.is_total_temp'] = true_value(job_info['tasks.is_total_temp'])
+        job_info.setdefault('tasks.total_marker')
         job_info['request_pause'] = true_value(job_info.get('request_pause'))
 
         for key, value in job_info.iteritems():
