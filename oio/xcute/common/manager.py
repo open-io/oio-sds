@@ -14,7 +14,6 @@
 # License along with this library.
 
 from oio.xcute.common.backend import XcuteBackend
-from oio.common.green import time
 from oio.common.logger import get_logger
 
 
@@ -43,17 +42,6 @@ class XcuteManager(object):
         """
 
         return self.backend.list_orchestrator_jobs(orchestrator_id)
-
-    def start_job(self, job_id):
-        """
-            Mark a job as running
-        """
-
-        updates = {
-            'status': self.STATUS_RUNNING,
-            'mtime': time.time(),
-        }
-        self.backend.start_job(job_id, updates)
 
     def run_next(self, orchestrator_id):
         return self.backend.run_next(orchestrator_id)
