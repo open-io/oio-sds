@@ -124,4 +124,6 @@ class LifecycleGet(Command):
                 "No lifecycle configuration for container %s in account %s" %
                 (parsed_args.container, self.app.client_manager.account))
         tree = etree.fromstring(xml)
-        self.app.stdout.write(etree.tostring(tree, pretty_print=True))
+        text = etree.tostring(tree, pretty_print=True,
+                              encoding='utf-8').decode('utf-8')
+        self.app.stdout.write(text)

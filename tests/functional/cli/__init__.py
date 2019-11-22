@@ -13,6 +13,7 @@
 
 import os
 import shlex
+import six
 import subprocess
 from tests.utils import BaseTestCase
 
@@ -47,6 +48,8 @@ def execute(cmd, stdin=None, env=None, expected_returncode=0):
         _env.update(env)
     proc = subprocess.Popen(cmdlist, stdin=in_, stdout=stdout, stderr=stderr,
                             env=_env)
+    if isinstance(stdin, six.text_type):
+        stdin = stdin.encode('utf-8')
     result, result_err = proc.communicate(stdin)
     result = result.decode('utf-8')
     if proc.returncode != expected_returncode:

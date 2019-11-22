@@ -39,7 +39,7 @@ class TestAdmin(BaseTestCase):
         status = self.admin.election_status(
             "meta2", account=self.account, reference=self.container)
         peers = status["peers"]
-        service_id = peers.keys()[random.randrange(len(peers))]
+        service_id = list(peers.keys())[random.randrange(len(peers))]
         election = self.admin.election_leave(
             "meta2", account=self.account, reference=self.container,
             service_id=service_id)
@@ -52,7 +52,7 @@ class TestAdmin(BaseTestCase):
         peers = status["peers"]
         if len(peers) < 2:
             self.skipTest('Can only run in a replicated environment')
-        service_ids = peers.keys()[:2]
+        service_ids = list(peers.keys())[:2]
         election = self.admin.election_leave(
             "meta2", account=self.account, reference=self.container,
             service_id=service_ids)
@@ -66,7 +66,7 @@ class TestAdmin(BaseTestCase):
         for peer, meta in info.items():
             self.assertEqual(200, meta['status']['status'])
 
-        peer = info.keys()[0]
+        peer = list(info.keys())[0]
         peer_loc = info[peer]['body']
         self.assertTrue(os.path.isfile(peer_loc))
         os.remove(peer_loc)

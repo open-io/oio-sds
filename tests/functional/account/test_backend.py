@@ -287,7 +287,6 @@ class TestAccountBackend(BaseTestCase):
 
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
-        self.assertEqual(res[0], name)
         self.assertEqual(res[0].decode('utf-8'), name)
 
         tmtime = self.backend.conn.hget(
@@ -551,7 +550,6 @@ class TestAccountBackend(BaseTestCase):
 
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
-        self.assertEqual(res[0], name)
         self.assertEqual(res[0].decode('utf-8'), name)
 
         # same event

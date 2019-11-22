@@ -82,7 +82,7 @@ class TestLbChoose(BaseLbTest):
         parsed = self.json_loads(resp.data)
         self.assertIsInstance(parsed, list)
         self.assertEqual(1, len(parsed))
-        self.assertGreaterEqual(parsed[0]["addr"].split(':')[1], 8000)
+        self.assertGreaterEqual(int(parsed[0]["addr"].split(':')[1]), 8000)
 
     def test_choose_4_slot(self):
         self._reload()
