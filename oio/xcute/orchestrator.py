@@ -147,11 +147,11 @@ class XcuteOrchestrator(object):
             and get its tasks before dispatching it
         """
 
-        if job_info['job.all_sent']:
+        if job_info['tasks.all_sent']:
             return
 
         job_type = job_info['job.type']
-        last_task_id = job_info.get('job.last_sent')
+        last_task_id = job_info.get('tasks.last_sent')
         job_class = JOB_TYPES[job_type]
         job = job_class(self.conf, logger=self.logger)
         job_tasks = job.get_tasks(job_config['params'], marker=last_task_id)
