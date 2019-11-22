@@ -261,59 +261,57 @@ class XcuteBackend(RedisConnection):
         local all_tasks_sent = KEYS[3];
         local tasks_sent = ARGV;
         local tasks_sent_length = #tasks_sent;
+        local info_key = 'xcute:job:info:' .. job_id;
 
-        local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
+        local status = redis.call('HGET', info_key,
                                   'job.status');
         if status == nil or status == false then
             return redis.error_reply('no_job');
         end;
 
         local total_tasks_sent = redis.call(
-            'HINCRBY', 'xcute:job:info:' .. job_id,
+            'HINCRBY', info_key,
             'tasks.sent', tasks_sent_length);
         for _, task_id in ipairs(tasks_sent) do
             redis.call('SADD', 'xcute:tasks:running:' .. job_id, task_id);
         end;
         if tasks_sent_length > 0 then
-            redis.call('HSET', 'xcute:job:info:' .. job_id,
+            redis.call('HSET', info_key,
                        'tasks.last_sent', tasks_sent[tasks_sent_length]);
         end;
 
-        local stopped = false;
         if all_tasks_sent == 'True' then
             if tonumber(total_tasks_sent) == 0 then
                 -- if there is no task sent, finish job
-                redis.call('HSET', 'xcute:job:info:' .. job_id,
+                redis.call('HSET', info_key,
                            'job.status', 'FINISHED');
             else
                 -- else, wait the last tasks
-                redis.call('HSET', 'xcute:job:info:' .. job_id,
+                redis.call('HSET', info_key,
                            'tasks.all_sent', 'True');
             end;
             -- remove the job of the orchestrator
             local orchestrator_id = redis.call(
-                'HGET', 'xcute:job:info:' .. job_id, 'orchestrator.id');
+                'HGET', info_key, 'orchestrator.id');
             redis.call('SREM', 'xcute:orchestrator:jobs:' .. orchestrator_id,
                        job_id);
-            stopped = true;
         else
             local request_pause = redis.call(
-                'HGET', 'xcute:job:info:' .. job_id, 'job.request_pause');
+                'HGET', info_key, 'job.request_pause');
             if request_pause == 'True' then
                 -- if waiting pause, pause the job
-                redis.call('HMSET', 'xcute:job:info:' .. job_id,
+                redis.call('HMSET', info_key,
                            'job.status', 'PAUSED',
                            'job.request_pause', 'False');
                 local orchestrator_id = redis.call(
-                    'HGET', 'xcute:job:info:' .. job_id, 'orchestrator.id');
+                    'HGET', info_key, 'orchestrator.id');
                 redis.call(
                     'SREM', 'xcute:orchestrator:jobs:' .. orchestrator_id,
                     job_id);
-                stopped = true;
             end;
         end;
     """ + _lua_update_mtime + """
-        return stopped;
+        return redis.call('HGET', info_key, 'job.status');
     """
 
     lua_update_tasks_processed = """
