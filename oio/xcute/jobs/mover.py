@@ -159,8 +159,7 @@ class RawxDecommissionJob(XcuteJob):
 
         yield (chunk_id, i % 1000)
 
-    @staticmethod
-    def get_chunk_infos(params, marker):
+    def get_chunk_infos(self, params, marker):
         rdir_client = RdirClient(self.conf, logger=self.logger)
 
         service_id = params['service_id']
