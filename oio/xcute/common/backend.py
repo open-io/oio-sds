@@ -516,11 +516,10 @@ class XcuteBackend(RedisConnection):
         return job_id
 
     @handle_redis_exceptions
-    def start_job(self, job_id, job_conf, job_info):
+    def start_job(self, job_id, job_info):
         pipeline = self.conn.pipeline()
 
         self._update_job_info(job_id, job_info, client=pipeline)
-        self._update_job_conf(job_id, job_conf, client=pipeline)
 
         pipeline.execute()
 
@@ -552,8 +551,7 @@ class XcuteBackend(RedisConnection):
             self._lua_array_to_dict(job_info))
         job_config = self._unmarshal_job_config(
             self._lua_array_to_dict(job_config))
-        return (job_id, job_info['job.type'], job_info['tasks.last_sent'],
-                job_config)
+        return (job_id, job_config, job_info)
 
     @handle_redis_exceptions
     def free(self, job_id):
