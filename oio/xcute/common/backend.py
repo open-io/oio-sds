@@ -522,14 +522,6 @@ class XcuteBackend(RedisConnection):
             client=self.conn)
         return job_id
 
-    @handle_redis_exceptions
-    def start_job(self, job_id, job_info):
-        pipeline = self.conn.pipeline()
-
-        self._update_job_info(job_id, job_info, client=pipeline)
-
-        pipeline.execute()
-
     def list_orchestrator_jobs(self, orchestrator_id):
         orchestrator_jobs_key = self.key_orchestrator_jobs % orchestrator_id
         job_ids = self.conn.smembers(orchestrator_jobs_key)
@@ -645,34 +637,11 @@ class XcuteBackend(RedisConnection):
         job_info = self._get_job_info(job_id, client=self.conn)
         return self._unmarshal_job_info(job_info)
 
-    def update_job_conf(self, job_id, updates):
-        self._update_job_conf(job_id, updates, client=self.conn)
-
-    def update_job_info(self, job_id, updates):
-        self._update_job_info(job_id, updates, client=self.conn)
-
     def _get_job_conf(self, job_id, client):
         return client.hgetall(self.key_job_conf % job_id)
 
     def _get_job_info(self, job_id, client):
         return client.hgetall(self.key_job_info % job_id)
-
-    def _update_job_info(self, job_id, updates, client):
-        marshalled_updates = self._marshal_job_info(updates)
-        return client.hmset(self.key_job_info % job_id, marshalled_updates)
-
-    def _update_job_conf(self, job_id, job_config, client):
-        marshalled_job_config = self._marshal_job_config(job_config)
-        return client.hmset(self.key_job_conf % job_id, marshalled_job_config)
-
-    @staticmethod
-    def _marshal_job_info(job_info):
-        marshalled_job_info = job_info.copy()
-
-        if job_info.get('tasks.total') is None:
-            marshalled_job_info.pop('tasks.total', None)
-
-        return marshalled_job_info
 
     @staticmethod
     def _unmarshal_job_info(marshalled_job_info):
