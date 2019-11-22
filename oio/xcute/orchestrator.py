@@ -207,8 +207,7 @@ class XcuteOrchestrator(object):
             batch_per_second = tasks_per_second / float(
                 tasks_batch_size)
             tasks = dict()
-            total = 0
-            for task_id, task_payload, total in job_tasks:
+            for task_id, task_payload in job_tasks:
                 if not self.running:
                     break
 
@@ -224,7 +223,7 @@ class XcuteOrchestrator(object):
                     job_id, job_type, job_config, tasks)
                 if sent:
                     paused = self.manager.update_tasks_sent(
-                        job_id, tasks.keys(), total)
+                        job_id, tasks.keys())
                     tasks = dict()
                     if paused:
                         self.logger.info('Job %s is paused', job_id)
@@ -237,7 +236,7 @@ class XcuteOrchestrator(object):
                     job_id, job_type, job_config, tasks)
                 if sent:
                     finished = self.manager.update_tasks_sent(
-                        job_id, tasks.keys(), total, all_tasks_sent=True)
+                        job_id, tasks.keys(), all_tasks_sent=True)
                     if finished:
                         self.logger.info('Job %s is finished', job_id)
 
