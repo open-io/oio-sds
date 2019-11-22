@@ -123,8 +123,8 @@ class ObjectTest(CliTestCase):
         self.assertEqual(data_json[1]['Deleted'], False)
 
     def test_auto_container(self):
-        with open('/etc/fstab', 'r') as f:
-            test_content = f.read()
+        with open('/etc/fstab', 'rb') as source:
+            test_content = source.read()
             self._test_auto_container(test_content)
 
     def _test_auto_container(self, test_content):

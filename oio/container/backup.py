@@ -32,7 +32,7 @@ import pickle
 from tarfile import TarInfo, REGTYPE, NUL, PAX_FORMAT, BLOCKSIZE, XHDTYPE, \
                     DIRTYPE, AREGTYPE, InvalidHeaderError
 
-from md5py import MD5
+from .md5py import MD5
 
 
 from redis import ConnectionError

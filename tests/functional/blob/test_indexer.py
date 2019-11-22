@@ -64,7 +64,7 @@ class TestBlobIndexer(BaseTestCase):
         fullpath = encode_fullpath(
                 account, container, content_path, content_version, content_id)
         chunk_id = random_chunk_id()
-        data = random_buffer(string.printable, 100)
+        data = random_buffer(string.printable, 100).encode('utf-8')
         meta = {
             'full_path': fullpath,
             'container_id': cid,

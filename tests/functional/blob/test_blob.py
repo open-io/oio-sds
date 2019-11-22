@@ -102,12 +102,13 @@ class RawxTestSuite(CommonTestCase):
                             headers)
         if method == 'PUT':
             if body:
-                conn.send('%x\r\n%s\r\n' % (len(body), body))
-            conn.send('0\r\n')
+                conn.send(b'%x\r\n%s\r\n' % (len(body), body))
+            conn.send(b'0\r\n')
             if trailers:
                 for k, v in trailers.items():
-                    conn.send('%s: %s\r\n' % (k, v))
-            conn.send('\r\n')
+                    conn.send(b'%s: %s\r\n' % (k.encode('utf-8'),
+                                               v.encode('utf-8')))
+            conn.send(b'\r\n')
         if method == 'PUT':
             del headers['transfer-encoding']
         if trailers:
@@ -121,7 +122,7 @@ class RawxTestSuite(CommonTestCase):
     def test_copy_errors(self):
         length = 100
         chunkid = random_chunk_id()
-        chunkdata = random_buffer(string.printable, length)
+        chunkdata = random_buffer(string.printable, length).encode('utf-8')
         chunkurl = self._rawx_url(chunkid)
         self._check_not_present(chunkurl)
         headers = self._chunk_attr(chunkid, chunkdata)
@@ -129,7 +130,7 @@ class RawxTestSuite(CommonTestCase):
         # TODO take random legit value
         metachunk_hash = md5().hexdigest()
         # TODO should also include meta-chunk-hash
-        trailers = {'x-oio-chunk-meta-metachunk-size': metachunk_size,
+        trailers = {'x-oio-chunk-meta-metachunk-size': str(metachunk_size),
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
         # Initial put that must succeed
         resp, body = self._http_request(chunkurl, 'PUT', chunkdata, headers,
@@ -164,7 +165,7 @@ class RawxTestSuite(CommonTestCase):
         if path:
             self.path = path
         chunkid = random_chunk_id()
-        chunkdata = random_buffer(string.printable, length)
+        chunkdata = random_buffer(string.printable, length).encode('utf-8')
         if chunkid_lowercase:
             chunkurl = self._rawx_url(chunkid.lower())
         else:
@@ -184,7 +185,7 @@ class RawxTestSuite(CommonTestCase):
         # TODO take random legit value
         metachunk_hash = md5().hexdigest()
         # TODO should also include meta-chunk-hash
-        trailers = {'x-oio-chunk-meta-metachunk-size': metachunk_size,
+        trailers = {'x-oio-chunk-meta-metachunk-size': str(metachunk_size),
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
 
         self._check_not_present(chunkurl)
@@ -193,7 +194,7 @@ class RawxTestSuite(CommonTestCase):
         resp, body = self._http_request(chunkurl, 'PUT', chunkdata, headers,
                                         trailers)
         self.assertEqual(expected, resp.status)
-        if expected / 100 != 2:
+        if expected // 100 != 2:
             self.assertFalse(isfile(chunkpath))
             return
         chunk_hash = headers.get('x-oio-chunk-meta-chunk-hash',
@@ -209,8 +210,8 @@ class RawxTestSuite(CommonTestCase):
                                         trailers)
         self.assertEqual(409, resp.status)
         # check the file if is correct
-        with open(chunkpath) as f:
-            data = f.read()
+        with open(chunkpath, 'rb') as chunkf:
+            data = chunkf.read()
             self.assertEqual(data, chunkdata)
 
         # check the whole download is correct
@@ -246,7 +247,7 @@ class RawxTestSuite(CommonTestCase):
         for start, end in ranges():
             r = "bytes={0}-{1}".format(start, end)
             resp, body = self._http_request(chunkurl, 'GET', '', {'Range': r})
-            self.assertEqual(resp.status/100, 2)
+            self.assertEqual(resp.status // 100, 2)
             self.assertEqual(len(body), end-start+1)
             self.assertEqual(body, chunkdata[start:end+1])
         if length > 0:
@@ -324,7 +325,7 @@ class RawxTestSuite(CommonTestCase):
 
     def _check_bad_headers(self, length, bad_headers=None, bad_trailers=None):
         chunkid = random_chunk_id()
-        chunkdata = random_buffer(string.printable, length)
+        chunkdata = random_buffer(string.printable, length).encode('utf-8')
         chunkurl = self._rawx_url(chunkid)
         headers = self._chunk_attr(chunkid, chunkdata)
         # force the bad headers
@@ -376,12 +377,12 @@ class RawxTestSuite(CommonTestCase):
         if path:
             self.path = path
         chunkid = random_chunk_id()
-        chunkdata = random_buffer(string.printable, 1)
+        chunkdata = random_buffer(string.printable, 1).encode('utf-8')
         chunkurl = self._rawx_url(chunkid)
         chunkpath = self._chunk_path(chunkid)
         headers1 = self._chunk_attr(chunkid, chunkdata)
         metachunk_hash = md5().hexdigest()
-        trailers = {'x-oio-chunk-meta-metachunk-size': 1,
+        trailers = {'x-oio-chunk-meta-metachunk-size': '1',
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
 
         self._check_not_present(chunkurl)
@@ -482,11 +483,11 @@ class RawxTestSuite(CommonTestCase):
 
     def test_copy_with_same_chunkid(self):
         metachunk_hash = md5().hexdigest()
-        trailers = {'x-oio-chunk-meta-metachunk-size': 1,
+        trailers = {'x-oio-chunk-meta-metachunk-size': '1',
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
 
         chunkid1 = random_chunk_id()
-        chunkdata1 = random_buffer(string.printable, 1)
+        chunkdata1 = random_buffer(string.printable, 1).encode('utf-8')
         chunkurl1 = self._rawx_url(chunkid1)
         headers1 = self._chunk_attr(chunkid1, chunkdata1)
         self._check_not_present(chunkurl1)
@@ -508,11 +509,11 @@ class RawxTestSuite(CommonTestCase):
 
     def test_copy_with_existing_destination(self):
         metachunk_hash = md5().hexdigest()
-        trailers = {'x-oio-chunk-meta-metachunk-size': 1,
+        trailers = {'x-oio-chunk-meta-metachunk-size': '1',
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
 
         chunkid1 = random_chunk_id()
-        chunkdata1 = random_buffer(string.printable, 1)
+        chunkdata1 = random_buffer(string.printable, 1).encode('utf-8')
         chunkurl1 = self._rawx_url(chunkid1)
         headers1 = self._chunk_attr(chunkid1, chunkdata1)
         self._check_not_present(chunkurl1)
@@ -525,7 +526,7 @@ class RawxTestSuite(CommonTestCase):
                          resp.getheader('x-oio-chunk-meta-chunk-size'))
 
         chunkid2 = random_chunk_id()
-        chunkdata2 = random_buffer(string.printable, 1)
+        chunkdata2 = random_buffer(string.printable, 1).encode('utf-8')
         chunkurl2 = self._rawx_url(chunkid2)
         headers2 = self._chunk_attr(chunkid2, chunkdata2)
         self._check_not_present(chunkurl2)
@@ -547,14 +548,14 @@ class RawxTestSuite(CommonTestCase):
 
     def test_copy_with_nonexistent_source(self):
         metachunk_hash = md5().hexdigest()
-        trailers = {'x-oio-chunk-meta-metachunk-size': 1,
+        trailers = {'x-oio-chunk-meta-metachunk-size': '1',
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
 
         chunkid1 = random_chunk_id()
         chunkurl1 = self._rawx_url(chunkid1)
 
         chunkid2 = random_chunk_id()
-        chunkdata2 = random_buffer(string.printable, 1)
+        chunkdata2 = random_buffer(string.printable, 1).encode('utf-8')
         chunkurl2 = self._rawx_url(chunkid2)
         headers2 = self._chunk_attr(chunkid2, chunkdata2)
         self._check_not_present(chunkurl2)
@@ -576,11 +577,11 @@ class RawxTestSuite(CommonTestCase):
 
     def test_wrong_fullpath(self):
         metachunk_hash = md5().hexdigest()
-        trailers = {'x-oio-chunk-meta-metachunk-size': 1,
+        trailers = {'x-oio-chunk-meta-metachunk-size': '1',
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
 
         chunkid = random_chunk_id()
-        chunkdata = random_buffer(string.printable, 1)
+        chunkdata = random_buffer(string.printable, 1).encode('utf-8')
         chunkurl = self._rawx_url(chunkid)
         hdrs = self._chunk_attr(chunkid, chunkdata)
         self._check_not_present(chunkurl)
@@ -710,11 +711,11 @@ class RawxTestSuite(CommonTestCase):
 
     def test_read_old_chunk(self):
         metachunk_hash = md5().hexdigest()
-        trailers = {'x-oio-chunk-meta-metachunk-size': 1,
+        trailers = {'x-oio-chunk-meta-metachunk-size': '1',
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
 
         chunkid = random_chunk_id()
-        chunkdata = random_buffer(string.printable, 1)
+        chunkdata = random_buffer(string.printable, 1).encode('utf-8')
         chunkurl = self._rawx_url(chunkid)
         chunkpath = self._chunk_path(chunkid)
         headers = self._chunk_attr(chunkid, chunkdata)
@@ -850,14 +851,14 @@ class RawxTestSuite(CommonTestCase):
     def test_HEAD_chunk(self):
         length = 100
         chunkid = random_chunk_id()
-        chunkdata = random_buffer(string.printable, length)
+        chunkdata = random_buffer(string.printable, length).encode('utf-8')
         chunkurl = self._rawx_url(chunkid)
         self._check_not_present(chunkurl)
         headers = self._chunk_attr(chunkid, chunkdata)
         metachunk_size = 9 * length
         metachunk_hash = md5(chunkdata).hexdigest()
         # TODO should also include meta-chunk-hash
-        trailers = {'x-oio-chunk-meta-metachunk-size': metachunk_size,
+        trailers = {'x-oio-chunk-meta-metachunk-size': str(metachunk_size),
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
         # Initial put that must succeed
         resp, body = self._http_request(chunkurl, 'PUT', chunkdata, headers,
@@ -895,7 +896,7 @@ class RawxTestSuite(CommonTestCase):
         self.assertEqual(412, resp.status)
 
         # Corrupt the chunk
-        corrupted_data = 'chunk is dead'
+        corrupted_data = b'chunk is dead'
         with open(self._chunk_path(chunkid), "wb") as fp:
             fp.write(corrupted_data)
 
@@ -928,7 +929,7 @@ class RawxTestSuite(CommonTestCase):
         chunkid_woattr = chunkid[:3] + random_chunk_id()[3:]
         chunkurl_woattr = self._rawx_url(chunkid_woattr)
         with open(self._chunk_path(chunkid_woattr), "wb") as fp:
-            fp.write("without xattrs")
+            fp.write(b"without xattrs")
         resp, body = self._http_request(
             chunkurl_woattr, 'HEAD', "",
             {'X-oio-check-hash': "true"})
