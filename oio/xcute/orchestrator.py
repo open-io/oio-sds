@@ -230,10 +230,10 @@ class XcuteOrchestrator(object):
                     beanstalkd_workers,
                     job_id, job_type, job_config, tasks)
                 if sent:
-                    paused = self.manager.update_tasks_sent(
+                    job_status = self.manager.update_tasks_sent(
                         job_id, tasks.keys())
                     tasks = dict()
-                    if paused:
+                    if job_status == 'PAUSED':
                         self.logger.info('Job %s is paused', job_id)
                         return
             else:
@@ -243,9 +243,9 @@ class XcuteOrchestrator(object):
                     beanstalkd_workers,
                     job_id, job_type, job_config, tasks)
                 if sent:
-                    finished = self.manager.update_tasks_sent(
+                    job_status = self.manager.update_tasks_sent(
                         job_id, tasks.keys(), all_tasks_sent=True)
-                    if finished:
+                    if job_status == 'FINISHED':
                         self.logger.info('Job %s is finished', job_id)
 
                     self.logger.info('Finished dispatching job (job_id=%s)',
