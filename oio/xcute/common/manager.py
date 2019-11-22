@@ -86,9 +86,8 @@ class XcuteManager(object):
 
         self.backend.resume(job_id)
 
-    def update_tasks_sent(self, job_id, task_ids, total_tasks,
-                          all_tasks_sent=False):
-        return self.backend.update_tasks_sent(job_id, task_ids, total_tasks,
+    def update_tasks_sent(self, job_id, task_ids, all_tasks_sent=False):
+        return self.backend.update_tasks_sent(job_id, task_ids,
                                               all_tasks_sent=all_tasks_sent)
 
     def update_tasks_processed(self, job_id, task_ids,
