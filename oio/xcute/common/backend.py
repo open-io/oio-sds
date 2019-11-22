@@ -259,8 +259,7 @@ class XcuteBackend(RedisConnection):
     lua_update_tasks_sent = """
         local mtime = KEYS[1];
         local job_id = KEYS[2];
-        local total_tasks = KEYS[3];
-        local all_tasks_sent = KEYS[4];
+        local all_tasks_sent = KEYS[3];
         local tasks_sent = ARGV;
         local tasks_sent_length = #tasks_sent;
 
@@ -269,9 +268,6 @@ class XcuteBackend(RedisConnection):
         if status == nil or status == false then
             return redis.error_reply('no_job');
         end;
-
-        redis.call('HSET', 'xcute:job:info:' .. job_id,
-                   'tasks.total', total_tasks);
 
         local total_tasks_sent = redis.call(
             'HINCRBY', 'xcute:job:info:' .. job_id,
@@ -570,11 +566,9 @@ class XcuteBackend(RedisConnection):
             client=self.conn)
 
     @handle_redis_exceptions
-    def update_tasks_sent(self, job_id, task_ids, total_tasks,
-                          all_tasks_sent=False):
+    def update_tasks_sent(self, job_id, task_ids, all_tasks_sent=False):
         return self.script_update_tasks_sent(
-            keys=[self._get_timestamp(), job_id, total_tasks,
-                  str(all_tasks_sent)],
+            keys=[self._get_timestamp(), job_id, str(all_tasks_sent)],
             args=task_ids, client=self.conn)
 
     @handle_redis_exceptions
@@ -679,7 +673,6 @@ class XcuteBackend(RedisConnection):
         job_info.setdefault('tasks.last_sent')
         job_info['tasks.all_sent'] = true_value(job_info['tasks.all_sent'])
         job_info['tasks.processed'] = int(job_info['tasks.processed'])
-        job_info['tasks.total'] = total
         job_info['temp_total'] = int(job_info['temp_total'])
         job_info.setdefault('total_marker')
         job_info['is_total_temp'] = true_value(job_info['is_total_temp'])
