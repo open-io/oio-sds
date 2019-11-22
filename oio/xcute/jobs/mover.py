@@ -140,9 +140,8 @@ class RawxDecommissionJob(XcuteJob):
     def get_tasks(self, job_params, marker=None):
         chunk_infos = self.get_chunk_infos(job_params, marker)
 
-        chunk_ids = (chunk_id for _, _, chunk_id, _ in chunk_infos)
-        for i, chunk_id in enumerate(chunk_ids, 1):
-            yield chunk_id, dict(), i
+        for _, _, chunk_id, _ in chunk_infos:
+            yield chunk_id, dict()
 
     def get_total_tasks(self, job_params, marker=None):
         chunk_infos = self.get_chunk_infos(job_params, marker)

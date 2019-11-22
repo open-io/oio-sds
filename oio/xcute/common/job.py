@@ -86,7 +86,7 @@ class XcuteJob(object):
     def get_tasks(self, marker=None):
         """
             Yields the job tasks as
-            (task_id, task_payload, total_tasks)
+            (task_id, task_payload)
             task_id must be a string and can be used as a marker
         """
         raise NotImplementedError()
