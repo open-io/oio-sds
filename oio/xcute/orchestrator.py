@@ -159,9 +159,9 @@ class XcuteOrchestrator(object):
         self.manager.start_job(job_id, job_config)
 
         tasks_counter = None
-        if job_info['is_total_temp']:
+        if job_info['tasks.is_total_temp']:
             tasks_counter = job.get_total_tasks(
-                job_config['params'], job_info['total_marker'])
+                job_config['params'], job_info['tasks.total_marker'])
 
         self.handle_job(job_id, job_type, job_config, job_tasks, tasks_counter)
 
