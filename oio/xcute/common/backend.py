@@ -681,7 +681,7 @@ class XcuteBackend(RedisConnection):
         job_info['tasks.processed'] = int(job_info['tasks.processed'])
         job_info['tasks.is_total_temp'] = true_value(job_info['tasks.is_total_temp'])
         job_info.setdefault('tasks.total_marker')
-        job_info['request_pause'] = true_value(job_info.get('request_pause'))
+        job_info['job.request_pause'] = true_value(job_info.get('job.request_pause'))
 
         for key, value in job_info.iteritems():
             if key.startswith('errors.') or key.startswith('results.'):
