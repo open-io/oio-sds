@@ -77,7 +77,7 @@ class Xcute(WerkzeugApp):
                 return HTTPBadRequest(UnknownJobTypeException.message)
 
             job = job_class(self.conf, logger=self.logger)
-            job_config = data.get('config')
+            job_config = data.get('config', dict())
             # TODO: use lock
             job_config, lock = job.sanitize_config(job_config)
 
