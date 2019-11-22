@@ -318,7 +318,8 @@ class XcuteOrchestrator(object):
 
     def get_job_total_tasks(self, job_id, tasks_counter):
         for total_marker, tasks_incr in tasks_counter:
-            stop = self.manager.incr_total_tasks(job_id, total_marker, tasks_incr)
+            stop = self.manager.incr_total_tasks(
+                job_id, total_marker, tasks_incr)
 
             if stop or not self.running:
                 return
