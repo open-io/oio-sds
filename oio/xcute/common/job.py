@@ -85,7 +85,7 @@ class XcuteJob(object):
 
         return sanitized_job_params, None
 
-    def get_tasks(self, marker=None):
+    def get_tasks(self, job_params, marker=None):
         """
             Yields the job tasks as
             (task_id, task_payload)
@@ -93,8 +93,7 @@ class XcuteJob(object):
         """
         raise NotImplementedError()
 
-    @staticmethod
-    def get_total_tasks(conf, logger, params, marker=None):
+    def get_total_tasks(self, job_params, marker=None):
         """
             Yields numbers of tasks as
             (marker, tasks_incr)

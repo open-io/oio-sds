@@ -114,6 +114,24 @@ class RawxRebuildJob(XcuteJob):
         return sanitized_job_params, 'rawx/%s' % service_id
 
     def get_tasks(self, job_params, marker=None):
+        chunk_infos = self.get_chunk_infos(job_params, marker)
+
+        for container_id, content_id, chunk_id, _ in chunk_infos:
+            yield chunk_id, {'container_id': container_id,
+                             'content_id': content_id}
+
+    def get_total_tasks(self, job_params, marker=None):
+        chunk_infos = self.get_chunk_infos(job_params, marker)
+
+        chunk_id = ''
+        i = 0
+        for i, (_, _, chunk_id, _) in enumerate(chunk_infos, 1):
+            if i % 1000 == 0:
+                yield (chunk_id, 1000)
+
+        yield (chunk_id, i % 1000)
+
+    def get_chunk_infos(self, job_params, marker=None):
         service_id = job_params['service_id']
         rdir_fetch_limit = job_params['rdir_fetch_limit']
         rdir_timeout = job_params['rdir_timeout']
@@ -124,10 +142,4 @@ class RawxRebuildJob(XcuteJob):
             service_id, rebuild=True, timeout=rdir_timeout,
             limit=rdir_fetch_limit, start_after=marker)
 
-        tasks = ((chunk_id, {'container_id': container_id,
-                             'content_id': content_id})
-                 for container_id, content_id, chunk_id, _
-                 in chunk_infos)
-        for i, task in enumerate(tasks, 1):
-            chunk_id, payload = task
-            yield chunk_id, payload, i
+        return chunk_infos
