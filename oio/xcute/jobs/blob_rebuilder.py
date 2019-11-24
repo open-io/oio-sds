@@ -113,15 +113,19 @@ class RawxRebuildJob(XcuteJob):
 
         return sanitized_job_params, 'rawx/%s' % service_id
 
+    def __init__(self, conf, logger=None):
+        super(RawxRebuildJob, self).__init__(conf, logger=logger)
+        self.rdir_client = RdirClient(self.conf, logger=self.logger)
+
     def get_tasks(self, job_params, marker=None):
-        chunk_infos = self.get_chunk_infos(job_params, marker)
+        chunk_infos = self.get_chunk_infos(job_params, marker=marker)
 
         for container_id, content_id, chunk_id, _ in chunk_infos:
             yield chunk_id, {'container_id': container_id,
                              'content_id': content_id}
 
     def get_total_tasks(self, job_params, marker=None):
-        chunk_infos = self.get_chunk_infos(job_params, marker)
+        chunk_infos = self.get_chunk_infos(job_params, marker=marker)
 
         chunk_id = ''
         i = 0
@@ -136,9 +140,7 @@ class RawxRebuildJob(XcuteJob):
         rdir_fetch_limit = job_params['rdir_fetch_limit']
         rdir_timeout = job_params['rdir_timeout']
 
-        rdir_client = RdirClient(self.conf, logger=self.logger)
-
-        chunk_infos = rdir_client.chunk_fetch(
+        chunk_infos = self.rdir_client.chunk_fetch(
             service_id, rebuild=True, timeout=rdir_timeout,
             limit=rdir_fetch_limit, start_after=marker)
 
