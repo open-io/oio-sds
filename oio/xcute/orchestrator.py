@@ -86,10 +86,10 @@ class XcuteOrchestrator(object):
         orchestrator_jobs = \
             self.manager.get_orchestrator_jobs(self.orchestrator_id)
 
-        for job_id, job_conf, job_info in orchestrator_jobs:
-            self.logger.info('Found running job (job_id=%s, job_conf=%s)' %
-                             (job_id, job_conf))
-            self.handle_running_job(job_id, job_conf, job_info)
+        for job_info in orchestrator_jobs:
+            job_id = job_info['job']['id']
+            self.logger.info('Found running job %s', job_id)
+            self.handle_running_job(job_info)
 
         # start processing replies
         listen_thread = threading.Thread(target=self.listen)
@@ -117,16 +117,17 @@ class XcuteOrchestrator(object):
 
         new_jobs = iter(
             lambda: self.manager.run_next(self.orchestrator_id), None)
-        for job_id, job_config, job_info in new_jobs:
+        for job_info in new_jobs:
+            job_id = job_info['job']['id']
             self.logger.info('Found new job %s', job_id)
             try:
-                self.handle_running_job(job_id, job_config, job_info)
+                self.handle_running_job(job_info)
             except Exception:
                 self.logger.exception(
                     'Failed to instantiate job %s', job_id)
                 self.manager.fail(job_id)
 
-    def handle_running_job(self, job_id, job_config, job_info):
+    def handle_running_job(self, job_info):
         """
             Read the job's configuration
             and get its tasks before dispatching it
@@ -134,16 +135,20 @@ class XcuteOrchestrator(object):
         if job_info['tasks']['all_sent']:
             return
 
+        job_id = job_info['job']['id']
         job_type = job_info['job']['type']
         last_task_id = job_info['tasks']['last_sent']
+        total_marker = job_info['tasks']['total_marker']
+        job_config = job_info['config']
+        job_params = job_config['params']
         job_class = JOB_TYPES[job_type]
         job = job_class(self.conf, logger=self.logger)
-        job_tasks = job.get_tasks(job_config['params'], marker=last_task_id)
+        job_tasks = job.get_tasks(job_params, marker=last_task_id)
 
         tasks_counter = None
         if job_info['tasks']['is_total_temp']:
             tasks_counter = job.get_total_tasks(
-                job_config['params'], job_info['tasks']['total_marker'])
+                job_params, marker=total_marker)
 
         beanstalkd_workers = self.get_loadbalanced_workers()
 

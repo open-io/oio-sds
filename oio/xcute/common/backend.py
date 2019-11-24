@@ -66,7 +66,6 @@ class XcuteBackend(RedisConnection):
             'The job must be waiting or paused or finished')
         }
 
-    key_job_conf = 'xcute:job:config:%s'
     key_job_ids = 'xcute:job:ids'
     key_job_info = 'xcute:job:info:%s'
     key_waiting_jobs = 'xcute:waiting:jobs'
@@ -81,7 +80,7 @@ class XcuteBackend(RedisConnection):
         local mtime = KEYS[1];
         local job_id = KEYS[2];
         local job_type = KEYS[3];
-        local job_config = ARGV;
+        local job_config = KEYS[4];
 
         local job_exists = redis.call('EXISTS', 'xcute:job:info:' .. job_id);
         if job_exists == 1 then
@@ -91,6 +90,7 @@ class XcuteBackend(RedisConnection):
         redis.call('ZADD', 'xcute:job:ids', 0, job_id);
         redis.call(
             'HSET', 'xcute:job:info:' .. job_id,
+            'job.id', job_id,
             'job.type', job_type,
             'job.status', 'WAITING',
             'job.request_pause', 'False',
@@ -98,9 +98,9 @@ class XcuteBackend(RedisConnection):
             'tasks.sent', '0',
             'tasks.processed', '0',
             'tasks.is_total_temp', 'True',
-            'errors.total', '0');
+            'errors.total', '0',
+            'config', job_config);
 
-        redis.call('HSET', 'xcute:job:config:' .. job_id, unpack(job_config));
         redis.call('RPUSH', 'xcute:waiting:jobs', job_id);
     """ + _lua_update_mtime + """
         redis.call('HSET', 'xcute:job:info:' .. job_id, 'job.ctime', mtime);
@@ -122,9 +122,7 @@ class XcuteBackend(RedisConnection):
                    job_id);
     """ + _lua_update_mtime + """
         local job_info = redis.call('HGETALL', 'xcute:job:info:' .. job_id);
-        local job_config = redis.call(
-            'HGETALL', 'xcute:job:config:' .. job_id);
-        return {job_id, job_info, job_config};
+        return job_info;
     """
 
     lua_free = """
@@ -490,19 +488,15 @@ class XcuteBackend(RedisConnection):
 
             pipeline = self.conn.pipeline()
             for job_id in job_ids:
-                self._get_job_conf(job_id, client=pipeline)
                 self._get_job_info(job_id, client=pipeline)
-            job_conf_infos = pipeline.execute()
+            job_infos = pipeline.execute()
 
-            for job_id, job_conf, job_info in zip(
-                    job_ids, *([iter(job_conf_infos)] * 2)):
+            for job_info in job_infos:
                 if not job_info:
+                    # The job can be deleted between two requests
                     continue
 
-                job_conf = self._unmarshal_job_config(job_conf)
-                job_info = self._unmarshal_job_info(job_info)
-
-                jobs.append((job_id, job_conf, job_info))
+                jobs.append(self._unmarshal_job_info(job_info))
 
             if len(job_ids) < limit_:
                 break
@@ -517,10 +511,10 @@ class XcuteBackend(RedisConnection):
         job_id = datetime.utcnow().strftime('%Y%m%d%H%M%S%f') \
             + '-%011x' % random.randrange(16**11)
 
+        job_config = json.dumps(job_config)
+
         self.script_create(
-            keys=[self._get_timestamp(), job_id, job_type],
-            args=self._dict_to_lua_array(
-                self._marshal_job_config(job_config)),
+            keys=[self._get_timestamp(), job_id, job_type, job_config],
             client=self.conn)
         return job_id
 
@@ -530,29 +524,29 @@ class XcuteBackend(RedisConnection):
 
         pipeline = self.conn.pipeline()
         for job_id in job_ids:
-            self._get_job_conf(job_id, client=pipeline)
             self._get_job_info(job_id, client=pipeline)
-        job_config_infos = pipeline.execute()
+        job_infos = pipeline.execute()
 
-        return (
-            (job_id, self._unmarshal_job_config(job_config),
-             self._unmarshal_job_info(job_info))
-            for job_config, job_info in zip(*([iter(job_config_infos)] * 2))
-        )
+        jobs = list()
+        for job_info in job_infos:
+            if not job_info:
+                # The job can be deleted between two requests
+                continue
+
+            jobs.append(self._unmarshal_job_info(job_info))
+        return jobs
 
     @handle_redis_exceptions
     def run_next(self, orchestrator_id):
-        next_job = self.script_run_next(
+        job_info = self.script_run_next(
             keys=[self._get_timestamp(), orchestrator_id],
             client=self.conn)
-        if next_job is None:
+        if job_info is None:
             return None
-        job_id, job_info, job_config = next_job
+
         job_info = self._unmarshal_job_info(
             self._lua_array_to_dict(job_info))
-        job_config = self._unmarshal_job_config(
-            self._lua_array_to_dict(job_config))
-        return (job_id, job_config, job_info)
+        return job_info
 
     @handle_redis_exceptions
     def free(self, job_id):
@@ -615,32 +609,13 @@ class XcuteBackend(RedisConnection):
     def delete(self, job_id):
         self.script_delete(keys=[job_id])
 
-    def get_job(self, job_id):
-        pipeline = self.conn.pipeline()
-
-        self._get_job_conf(job_id, client=pipeline)
-        self._get_job_info(job_id, client=pipeline)
-
-        job_conf, job_info = pipeline.execute()
+    def get_job_info(self, job_id):
+        job_info = self._get_job_info(job_id, client=self.conn)
 
         if job_info is None:
             raise NotFound('The job does\'nt exist')
 
-        job_conf = self._unmarshal_job_config(job_conf)
-        job_info = self._unmarshal_job_info(job_info)
-
-        return job_conf, job_info
-
-    def get_job_conf(self, job_id):
-        job_config = self._get_job_conf(job_id, client=self.conn)
-        return self._unmarshal_job_config(job_config)
-
-    def get_job_info(self, job_id):
-        job_info = self._get_job_info(job_id, client=self.conn)
         return self._unmarshal_job_info(job_info)
-
-    def _get_job_conf(self, job_id, client):
-        return client.hgetall(self.key_job_conf % job_id)
 
     def _get_job_info(self, job_id, client):
         return client.hgetall(self.key_job_info % job_id)
@@ -656,8 +631,11 @@ class XcuteBackend(RedisConnection):
             config=dict())
 
         for key, value in marshalled_job_info.items():
-            first_key, second_key = key.split('.', 1)
-            job_info[first_key][second_key] = value
+            split_key = key.split('.', 1)
+            if len(split_key) == 1:
+                job_info[split_key[0]] = value
+            else:
+                job_info[split_key[0]][split_key[1]] = value
 
         job_main_info = job_info['job']
         job_main_info['request_pause'] = true_value(
@@ -686,21 +664,9 @@ class XcuteBackend(RedisConnection):
         for key, value in job_results.items():
             job_results[key] = int(value)
 
+        job_info['config'] = json.loads(job_info['config'])
+
         return job_info
-
-    @staticmethod
-    def _marshal_job_config(job_config):
-        marshalled_job_config = job_config.copy()
-        marshalled_job_config['params'] = json.dumps(job_config['params'])
-        return marshalled_job_config
-
-    @staticmethod
-    def _unmarshal_job_config(marshalled_job_config):
-        job_config = marshalled_job_config.copy()
-        job_config['tasks_per_second'] = int(job_config['tasks_per_second'])
-        job_config['tasks_batch_size'] = int(job_config['tasks_batch_size'])
-        job_config['params'] = json.loads(job_config['params'])
-        return job_config
 
     @staticmethod
     def _lua_array_to_dict(array):
