@@ -16,6 +16,36 @@
 from oio.cli import Lister, ShowOne
 
 
+def _flat_dict_from_dict(parsed_args, dict_):
+    """
+    Create a dictionary without depth.
+
+    {
+        'depth0': {
+            'depth1': {
+                'depth2': 'test'
+            }
+        }
+    }
+    =>
+    {
+        'depth0.depth1.depth2': 'test'
+    }
+    """
+    flat_dict = dict()
+    for key, value in dict_.items():
+        if not isinstance(value, dict):
+            if isinstance(value, list) and parsed_args.formatter == 'table':
+                value = '\n'.join(value)
+            flat_dict[key] = value
+            continue
+
+        _flat_dict = _flat_dict_from_dict(parsed_args, value)
+        for _key, _value in _flat_dict.items():
+            flat_dict[key + '.' + _key] = _value
+    return flat_dict
+
+
 class XcuteCommand(object):
 
     @property
@@ -37,9 +67,10 @@ class XcuteJobList(XcuteCommand, Lister):
     def _take_action(self, parsed_args):
         jobs = self.xcute.job_list()
         for job_info in jobs:
-            yield (job_info['job.id'], job_info['job.status'],
-                   job_info['job.type'], job_info['job.ctime'],
-                   job_info['job.mtime'])
+            job_main_info = job_info['job']
+            yield (job_main_info['id'], job_main_info['status'],
+                   job_main_info['type'], job_main_info['ctime'],
+                   job_main_info['mtime'])
 
     def take_action(self, parsed_args):
         self.logger.debug('take_action(%s)', parsed_args)
@@ -64,7 +95,8 @@ class XcuteJobShow(XcuteCommand, ShowOne):
         self.logger.debug('take_action(%s)', parsed_args)
 
         job_info = self.xcute.job_show(parsed_args.job_id)
-        return zip(*sorted(job_info.items()))
+        return zip(*sorted(
+            _flat_dict_from_dict(parsed_args, job_info).items()))
 
 
 class XcuteJobPause(XcuteCommand, Lister):
