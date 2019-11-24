@@ -126,11 +126,10 @@ class Xcute(WerkzeugApp):
     @staticmethod
     def _format_job(job_tuple):
         job_id, job_config, job_info = job_tuple
-        return {
-            'job.id': job_id,
-            'config': job_config,
-            'info': job_info,
-        }
+        job_info = job_info.copy()
+        job_info['job']['id'] = job_id
+        job_info['config'] = job_config
+        return job_info
 
 
 def create_app(conf):
