@@ -645,24 +645,44 @@ class XcuteBackend(RedisConnection):
 
     @staticmethod
     def _unmarshal_job_info(marshalled_job_info):
-        job_info = marshalled_job_info.copy()
+        job_info = dict(
+            job=dict(),
+            orchestrator=dict(),
+            tasks=dict(),
+            errors=dict(),
+            results=dict(),
+            config=dict())
 
-        job_info['tasks.total'] = int(job_info['tasks.total']) \
-            if 'tasks.total' in job_info else None
+        for key, value in marshalled_job_info.items():
+            first_key, second_key = key.split('.', 1)
+            job_info[first_key][second_key] = value
 
-        job_info['tasks.sent'] = int(job_info['tasks.sent'])
-        job_info.setdefault('tasks.last_sent')
-        job_info['tasks.all_sent'] = true_value(job_info['tasks.all_sent'])
-        job_info['tasks.processed'] = int(job_info['tasks.processed'])
-        job_info['tasks.is_total_temp'] = true_value(
-            job_info['tasks.is_total_temp'])
-        job_info.setdefault('tasks.total_marker')
-        job_info['job.request_pause'] = true_value(
-            job_info.get('job.request_pause'))
+        job_main_info = job_info['job']
+        job_main_info['request_pause'] = true_value(
+            job_main_info['request_pause'])
 
-        for key, value in job_info.iteritems():
-            if key.startswith('errors.') or key.startswith('results.'):
-                job_info[key] = int(value)
+        job_tasks = job_info['tasks']
+        job_tasks['sent'] = int(job_tasks['sent'])
+        job_tasks.setdefault('last_sent')
+        job_tasks['all_sent'] = true_value(job_tasks['all_sent'])
+        job_tasks['processed'] = int(job_tasks['processed'])
+        tasks_total = job_tasks.get('total')
+        job_tasks['total'] = tasks_total if tasks_total is None \
+            else int(tasks_total)
+        job_tasks['is_total_temp'] = true_value(
+            job_tasks['is_total_temp'])
+        # To have a total coherent if the estimate was too low
+        job_tasks['total'] = max(job_tasks['sent'],
+                                 job_tasks['total'])
+        job_tasks.setdefault('total_marker')
+
+        job_errors = job_info['errors']
+        for key, value in job_errors.items():
+            job_errors[key] = int(value)
+
+        job_results = job_info.get('results', dict())
+        for key, value in job_results.items():
+            job_results[key] = int(value)
 
         return job_info
 

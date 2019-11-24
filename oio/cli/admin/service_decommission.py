@@ -83,7 +83,7 @@ class RawxDecommission(MultipleServicesCommandMixin, Lister):
             try:
                 job_info = self.xcute.job_create(
                     RawxDecommissionJob.JOB_TYPE, job_config=job_config)
-                res = job_info['id']
+                res = job_info['job']['id']
             except Exception as exc:
                 self.success = False
                 res = str(exc)
