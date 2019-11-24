@@ -131,21 +131,19 @@ class XcuteOrchestrator(object):
             Read the job's configuration
             and get its tasks before dispatching it
         """
-
-        if job_info['tasks.all_sent']:
+        if job_info['tasks']['all_sent']:
             return
 
-        job_type = job_info['job.type']
-        last_task_id = job_info['tasks.last_sent']
+        job_type = job_info['job']['type']
+        last_task_id = job_info['tasks']['last_sent']
         job_class = JOB_TYPES[job_type]
         job = job_class(self.conf, logger=self.logger)
         job_tasks = job.get_tasks(job_config['params'], marker=last_task_id)
 
         tasks_counter = None
-        if job_info['tasks.is_total_temp']:
-            total_marker = job_info['tasks.total_marker']
+        if job_info['tasks']['is_total_temp']:
             tasks_counter = job.get_total_tasks(
-                job_config['params'], total_marker)
+                job_config['params'], job_info['tasks']['total_marker'])
 
         beanstalkd_workers = self.get_loadbalanced_workers()
 
