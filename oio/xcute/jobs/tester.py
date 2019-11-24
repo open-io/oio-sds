@@ -93,6 +93,8 @@ class TesterJob(XcuteJob):
 
     def get_total_tasks(self, job_params, marker=None):
         start = job_params['start']
+        if marker is not None:
+            start = int(marker) + 1
         end = job_params['end']
 
-        yield ('', end - start)
+        yield (str(end - 1), end - start)
