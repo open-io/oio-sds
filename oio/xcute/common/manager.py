@@ -27,8 +27,9 @@ class XcuteManager(object):
 
     def __init__(self, conf, logger=None):
         self.conf = conf
-        self.backend = XcuteBackend(self.conf)
         self.logger = logger or get_logger(self.conf)
+
+        self.backend = XcuteBackend(self.conf, logger=self.logger)
 
     def create(self, job_type, job_config):
         """
