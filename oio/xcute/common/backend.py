@@ -22,6 +22,7 @@ from oio.common.easy_value import true_value
 from oio.common.exceptions import Forbidden, NotFound
 from oio.common.green import datetime
 from oio.common.json import json
+from oio.common.logger import get_logger
 from oio.common.redis_conn import RedisConnection
 from oio.common.timestamp import Timestamp
 
@@ -430,12 +431,13 @@ class XcuteBackend(RedisConnection):
 
         redis.call('ZREM', 'xcute:job:ids', job_id);
         redis.call('DEL', 'xcute:job:info:' .. job_id);
-        redis.call('DEL', 'xcute:job:config:' .. job_id);
         redis.call('DEL', 'xcute:tasks:running:' .. job_id);
         """
 
-    def __init__(self, conf):
+    def __init__(self, conf, logger=None):
         self.conf = conf
+        self.logger = logger or get_logger(self.conf)
+
         redis_conf = {k[6:]: v for k, v in self.conf.items()
                       if k.startswith('redis_')}
         super(XcuteBackend, self).__init__(**redis_conf)
