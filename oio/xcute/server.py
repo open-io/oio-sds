@@ -59,12 +59,9 @@ class Xcute(WerkzeugApp):
             limit = int_value(req.args.get('limit'), None)
             marker = req.args.get('marker')
 
-            jobs = self.manager.list_jobs(limit=limit, marker=marker)
-
-            formatted_jobs = list(map(self._format_job, jobs))
-
+            job_infos = self.manager.list_jobs(limit=limit, marker=marker)
             return Response(
-                json.dumps(formatted_jobs), mimetype='application/json')
+                json.dumps(job_infos), mimetype='application/json')
 
         if req.method == 'POST':
             data = json.loads(req.data)
@@ -83,22 +80,18 @@ class Xcute(WerkzeugApp):
 
             job_id = self.manager.create(job_type, job_config)
 
-            job_config, job_info = self.manager.show_job(job_id)
-            job = self._format_job((job_id, job_config, job_info))
-
+            job_info = self.manager.show_job(job_id)
             return Response(
-                json.dumps(job), mimetype='application/json', status=202)
+                json.dumps(job_info), mimetype='application/json', status=202)
 
     def on_job(self, req, job_id):
         if req.method == 'GET':
             try:
-                job_config, job_info = self.manager.show_job(job_id)
+                job_info = self.manager.show_job(job_id)
             except NotFound as e:
                 return HTTPNotFound(e.message)
 
-            job = self._format_job((job_id, job_config, job_info))
-
-            return Response(json.dumps(job), mimetype='application/json')
+            return Response(json.dumps(job_info), mimetype='application/json')
 
         if req.method == 'DELETE':
             self.manager.delete(job_id)
@@ -108,28 +101,16 @@ class Xcute(WerkzeugApp):
     def on_job_pause(self, req, job_id):
         self.manager.request_pause(job_id)
 
-        job_config, job_info = self.manager.show_job(job_id)
-        job = self._format_job((job_id, job_config, job_info))
-
+        job_info = self.manager.show_job(job_id)
         return Response(
-            json.dumps(job), mimetype='application/json', status=202)
+            json.dumps(job_info), mimetype='application/json', status=202)
 
     def on_job_resume(self, req, job_id):
         self.manager.resume(job_id)
 
-        job_config, job_info = self.manager.show_job(job_id)
-        job = self._format_job((job_id, job_config, job_info))
-
+        job_info = self.manager.show_job(job_id)
         return Response(
-            json.dumps(job), mimetype='application/json', status=202)
-
-    @staticmethod
-    def _format_job(job_tuple):
-        job_id, job_config, job_info = job_tuple
-        job_info = job_info.copy()
-        job_info['job']['id'] = job_id
-        job_info['config'] = job_config
-        return job_info
+            json.dumps(job_info), mimetype='application/json', status=202)
 
 
 def create_app(conf):
