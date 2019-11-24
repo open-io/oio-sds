@@ -142,14 +142,18 @@ class RawxDecommissionJob(XcuteJob):
 
         return sanitized_job_params, 'rawx/%s' % service_id
 
+    def __init__(self, conf, logger=None):
+        super(RawxDecommissionJob, self).__init__(conf, logger=logger)
+        self.rdir_client = RdirClient(self.conf, logger=self.logger)
+
     def get_tasks(self, job_params, marker=None):
-        chunk_infos = self.get_chunk_infos(job_params, marker)
+        chunk_infos = self.get_chunk_infos(job_params, marker=marker)
 
         for _, _, chunk_id, _ in chunk_infos:
             yield chunk_id, dict()
 
     def get_total_tasks(self, job_params, marker=None):
-        chunk_infos = self.get_chunk_infos(job_params, marker)
+        chunk_infos = self.get_chunk_infos(job_params, marker=marker)
 
         chunk_id = ''
         i = 0
@@ -159,14 +163,12 @@ class RawxDecommissionJob(XcuteJob):
 
         yield (chunk_id, i % 1000)
 
-    def get_chunk_infos(self, params, marker):
-        rdir_client = RdirClient(self.conf, logger=self.logger)
+    def get_chunk_infos(self, job_params, marker=None):
+        service_id = job_params['service_id']
+        rdir_fetch_limit = job_params['rdir_fetch_limit']
+        rdir_timeout = job_params['rdir_timeout']
 
-        service_id = params['service_id']
-        rdir_fetch_limit = params['rdir_fetch_limit']
-        rdir_timeout = params['rdir_timeout']
-
-        chunk_infos = rdir_client.chunk_fetch(
+        chunk_infos = self.rdir_client.chunk_fetch(
             service_id, timeout=rdir_timeout,
             limit=rdir_fetch_limit, start_after=marker)
 
