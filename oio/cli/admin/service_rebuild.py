@@ -17,12 +17,11 @@
 from cliff import lister
 
 from oio.account.rebuilder import AccountRebuilder
-from oio.cli import Lister
-from oio.cli.admin.common import MultipleServicesCommandMixin, \
-    ToolCommandMixin, SingleServiceCommandMixin
+from oio.blob.rebuilder import BlobRebuilder
+from oio.cli.admin.common import ToolCommandMixin, \
+    SingleServiceCommandMixin
 from oio.directory.meta2_rebuilder import Meta2Rebuilder
 from oio.rebuilder.meta1_rebuilder import Meta1Rebuilder
-from oio.xcute.jobs.blob_rebuilder import RawxRebuildJob
 
 
 class ServiceRebuildCommand(ToolCommandMixin, lister.Lister):
@@ -130,84 +129,64 @@ class Meta2Rebuild(SingleServiceCommandMixin, ServiceRebuildCommand):
         return super(Meta2Rebuild, self).take_action(parsed_args)
 
 
-class RawxRebuildCommand(MultipleServicesCommandMixin, Lister):
+class RawxRebuildCommand(SingleServiceCommandMixin, ServiceRebuildCommand):
 
-    columns = ('Service ID', 'Job ID')
-
-    @property
-    def logger(self):
-        return self.app.client_manager.logger
-
-    @property
-    def xcute(self):
-        return self.app.client_manager.xcute_client
+    tool_class = BlobRebuilder
+    columns = ('Chunk', 'Status', 'Errors')
 
     def get_parser(self, prog_name):
         parser = super(RawxRebuildCommand, self).get_parser(prog_name)
-        MultipleServicesCommandMixin.patch_parser(self, parser)
+        SingleServiceCommandMixin.patch_parser(self, parser)
 
-        parser.add_argument(
-            '--chunks-per-second', type=int,
-            help='Max chunks per second. '
-                 '(default=%d)'
-                 % RawxRebuildJob.DEFAULT_TASKS_PER_SECOND)
+        # common
         parser.add_argument(
             '--rdir-fetch-limit', type=int,
             help='Maximum number of entries returned in each rdir response. '
                  '(default=%d)'
-            % RawxRebuildJob.DEFAULT_RDIR_FETCH_LIMIT)
-        parser.add_argument(
-            '--rdir-timeout', type=float,
-            help='Timeout for rdir operations, in seconds. (default=%f)'
-                 % RawxRebuildJob.DEFAULT_RDIR_TIMEOUT)
-        parser.add_argument(
-            '--rawx-timeout', type=float,
-            help='Timeout for rawx operations, in seconds. (default=%f)'
-                 % RawxRebuildJob.DEFAULT_RAWX_TIMEOUT)
-        parser.add_argument(
-            '--dry-run', action='store_true',
-            help='Display actions but do nothing.')
-        parser.add_argument(
-            '--delete-faulty-chunks', action='store_true',
-            help='Try to delete faulty chunks after they have been '
-                 'rebuilt elsewhere. This option is useful if the chunks '
-                 'you are rebuilding are not actually missing but are '
-                 'corrupted.')
-        parser.add_argument(
-            '--allow-frozen-container', action='store_true',
-            help='Allow rebuilding a chunk in a frozen container.')
+            % self.tool_class.DEFAULT_RDIR_FETCH_LIMIT)
+        if not self.distributed:  # local
+            parser.add_argument(
+                '--dry-run', action='store_true',
+                help='Display actions but do nothing. '
+                     '(default=%s)' % self.tool_class.DEFAULT_DRY_RUN)
+            parser.add_argument(
+                '--delete-faulty-chunks', action='store_true',
+                help='Try to delete faulty chunks after they have been '
+                     'rebuilt elsewhere. This option is useful if the chunks '
+                     'you are rebuilding are not actually missing but are '
+                     'corrupted. '
+                     '(default=%s)'
+                % self.tool_class.DEFAULT_TRY_CHUNK_DELETE)
 
         return parser
 
     def _take_action(self, parsed_args):
-        job_params = {
-            'rdir_fetch_limit': parsed_args.rdir_fetch_limit,
-            'rdir_timeout': parsed_args.rdir_timeout,
-            'rawx_timeout': parsed_args.rawx_timeout,
-            'dry_run': parsed_args.dry_run,
-            'try_chunk_delete': parsed_args.delete_faulty_chunks,
-            'allow_frozen_container': parsed_args.allow_frozen_container
-        }
-        job_config = {
-            'tasks_per_second': parsed_args.chunks_per_second,
-            'params': job_params
-        }
+        # common
+        self.tool_conf['rdir_fetch_limit'] = parsed_args.rdir_fetch_limit
+        if not self.distributed:  # local
+            self.tool_conf['dry_run'] = parsed_args.dry_run
+            self.tool_conf['try_chunk_delete'] = \
+                parsed_args.delete_faulty_chunks
 
-        for service_id in parsed_args.services:
-            job_params['service_id'] = service_id
-            try:
-                job_info = self.xcute.job_create(
-                    RawxRebuildJob.JOB_TYPE, job_config=job_config)
-                res = job_info['job']['id']
-            except Exception as exc:
-                self.success = False
-                res = str(exc)
-            yield (service_id, res)
+        self.rebuilder = BlobRebuilder(
+            self.tool_conf, service_id=parsed_args.service,
+            logger=self.logger)
+        if self.distributed:
+            self.rebuilder.prepare_distributed_dispatcher()
+        else:
+            self.rebuilder.prepare_local_dispatcher()
+
+        for item, _, error in self.rebuilder.run():
+            if error is None:
+                status = 'OK'
+            else:
+                status = 'error'
+            yield (self.rebuilder.string_from_item(item), status, error)
 
     def take_action(self, parsed_args):
-        MultipleServicesCommandMixin.check_and_load_parsed_args(
+        SingleServiceCommandMixin.check_and_load_parsed_args(
             self, self.app, parsed_args)
-        return (self.columns, self._take_action(parsed_args))
+        return super(RawxRebuildCommand, self).take_action(parsed_args)
 
 
 class RawxRebuild(RawxRebuildCommand):

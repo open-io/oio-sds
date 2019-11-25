@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # oio-blob-mover.py
-# Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -17,75 +17,109 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
-import signal
-import sys
 
-from oio.cli import make_logger_args_parser, get_logger_from_args
-from oio.xcute.blob_mover import RawxDecommissionDispatcher
+from oio.blob.mover import BlobMover
+from oio.common.daemon import run_daemon
 
 
 def make_arg_parser():
-    log_parser = make_logger_args_parser()
-    descr = """
-    Xcute blob mover
-    """
-    parser = argparse.ArgumentParser(description=descr, parents=[log_parser])
-
-    parser.add_argument('namespace', help="Namespace")
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--namespace', '--ns', help="Namespace")
+    parser.add_argument('--volume', help="Volume to move")
+    parser.add_argument('config', help="Configuration file or empty file")
+    parser.add_argument('--concurrency', type=int,
+                        help="Number of coroutines to spawn.")
     parser.add_argument(
-        'service_id',
-        help='ID of the service to work on.')
-    parser.add_argument(
-        '--items-per-second', type=int,
-        help='Max items per second. (default=%d)'
-             % RawxDecommissionDispatcher.DEFAULT_ITEM_PER_SECOND)
-    parser.add_argument(
-        '--rdir-fetch-limit', type=int,
-        help='Maximum number of entries returned in each rdir response. '
-             '(default=%d)'
-             % RawxDecommissionDispatcher.DEFAULT_RDIR_FETCH_LIMIT)
-    parser.add_argument(
-        '--rdir-timeout', type=float,
-        help='Timeout for rdir operations, in seconds. (default=%f).'
-             % RawxDecommissionDispatcher.DEFAULT_RDIR_TIMEOUT)
-    parser.add_argument(
-        '--min-chunk-size', type=int,
-        help='Only move chunks larger than the given size.')
-    parser.add_argument(
-        '--max-chunk-size', type=int,
-        help='Only move chunks smaller than the given size.')
-    parser.add_argument(
-        '--excluded-rawx',
-        help="List of rawx not to use to move the chunks.")
+        '--generate-config', action='store_true',
+        help="Generate configuration file with given arguments")
+    parser.add_argument('--edit-config', action='store_true',
+                        help="Edit configuration file with given arguments")
+    parser.add_argument('--limit', type=int,
+                        help="Limit of chunks to move")
+    parser.add_argument('--usage-target', type=int,
+                        help="Target percentage of volume usage")
+    parser.add_argument('--daemon', action='store_true',
+                        help="Run mover as a daemon.")
+    parser.add_argument('--report-interval', type=int,
+                        help="Interval between passes in seconds")
+    parser.add_argument('--usage-check-interval', type=int,
+                        help="Interval between disk usage check in seconds")
+    parser.add_argument('--verbose', '-v', action='store_true',
+                        help="More verbose output")
+    parser.add_argument('--user', help='run daemon as user')
+    parser.add_argument('--bytes-per-second', type=int,
+                        help="Throttle: max byte per second")
+    parser.add_argument('--chunks-per-second', type=int,
+                        help="Throttle: max chunks per second")
+    parser.add_argument('--min-chunk-size', type=int, default=0,
+                        help="Only move chunks larger than the given size")
+    parser.add_argument('--max-chunk-size', type=int, default=0,
+                        help="Only move chunks smaller than the given size.")
+    parser.add_argument('--excluded-rawx',
+                        help="List of rawx not to use to move the chunks.")
+    levels = ['DEBUG', 'INFO', 'WARN', 'ERROR']
+    parser.add_argument('--log-level', choices=levels,
+                        help="Log level")
+    parser.add_argument('--log-syslog-prefix', help="Syslog prefix")
+    parser.add_argument('--log-facility', help="Log facility")
+    parser.add_argument('--log-address', help="Log address")
 
     return parser
 
 
-if __name__ == '__main__':
+def generate_config_file(path, mode):
     args = make_arg_parser().parse_args()
-    logger = get_logger_from_args(args)
 
-    conf = dict()
-    conf['namespace'] = args.namespace
-    # redis
-    conf['redis_host'] = '127.0.0.1:6379'
-    # job
-    conf['job_items_per_second'] = args.items_per_second
-    conf['job_service_id'] = args.service_id
-    conf['job_rdir_fetch_limit'] = args.rdir_fetch_limit
-    conf['job_rdir_timeout'] = args.rdir_timeout
-    conf['job_min_chunk_size'] = args.min_chunk_size
-    conf['job_max_chunk_size'] = args.max_chunk_size
-    conf['job_excluded_rawx'] = args.excluded_rawx
+    def add_value(dic, key, value):
+        if value is not None:
+            dic[key] = value
 
-    job = RawxDecommissionDispatcher(conf, logger=logger)
+    def dic_to_string(dic, header):
+        for key in dic:
+            header += key + " = " + str(dic[key]) + "\n"
+        return header
 
-    def exit_gracefully(signum, frame):
-        job.exit_gracefully()
+    def create_content():
+        header = "\n[blob-mover]\n"
+        cont = dict()
+        add_value(cont, 'namespace', args.namespace)
+        add_value(cont, 'volume', args.volume)
+        add_value(cont, 'log_level', args.log_level)
+        add_value(cont, 'log_facility', args.log_facility)
+        add_value(cont, 'log_address', args.log_address)
+        add_value(cont, 'syslog_prefix', args.log_syslog_prefix)
+        add_value(cont, 'usage_target', args.usage_target)
+        add_value(cont, 'usage_check_interval',
+                  args.usage_check_interval)
+        add_value(cont, 'report_interval', args.report_interval)
+        add_value(cont, 'bytes_per_second', args.bytes_per_second)
+        add_value(cont, 'chunks_per_second', args.chunks_per_second)
+        add_value(cont, 'min_chunk_size', args.min_chunk_size)
+        add_value(cont, 'max_chunk_size', args.max_chunk_size)
+        add_value(cont, 'concurrency', args.concurrency)
+        add_value(cont, 'user', args.user)
+        add_value(cont, 'limit', args.limit)
+        add_value(cont, 'excluded_rawx', args.excluded_rawx)
+        return dic_to_string(cont, header)
 
-    signal.signal(signal.SIGINT, exit_gracefully)
-    signal.signal(signal.SIGTERM, exit_gracefully)
+    with open(path, mode) as conf:
+        cont = create_content()
+        conf.write(cont)
+    return path
 
-    job.run()
-    if not job.success:
-        sys.exit(1)
+
+def main():
+    args = make_arg_parser().parse_args()
+    daemon = args.daemon
+    verbose = args.verbose
+    config = args.config
+
+    if args.generate_config:
+        config = generate_config_file(config, 'w')
+    if args.edit_config:
+        config = generate_config_file(config, 'a')
+    run_daemon(BlobMover, config, daemon=daemon, verbose=verbose)
+
+
+if __name__ == '__main__':
+    main()
