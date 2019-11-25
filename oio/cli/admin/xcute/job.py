@@ -14,6 +14,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from oio.cli import Lister, ShowOne
+from oio.cli.admin.xcute import XcuteCommand
 
 
 def _flat_dict_from_dict(parsed_args, dict_):
@@ -46,18 +47,7 @@ def _flat_dict_from_dict(parsed_args, dict_):
     return flat_dict
 
 
-class XcuteCommand(object):
-
-    @property
-    def logger(self):
-        return self.app.client_manager.logger
-
-    @property
-    def xcute(self):
-        return self.app.client_manager.xcute_client
-
-
-class XcuteJobList(XcuteCommand, Lister):
+class JobList(XcuteCommand, Lister):
     """
     List all jobs
     """
@@ -78,13 +68,13 @@ class XcuteJobList(XcuteCommand, Lister):
         return self.columns, self._take_action(parsed_args)
 
 
-class XcuteJobShow(XcuteCommand, ShowOne):
+class JobShow(XcuteCommand, ShowOne):
     """
     Get all informations about the job
     """
 
     def get_parser(self, prog_name):
-        parser = super(XcuteJobShow, self).get_parser(prog_name)
+        parser = super(JobShow, self).get_parser(prog_name)
         parser.add_argument(
             'job_id',
             metavar='<job_id>',
@@ -99,7 +89,7 @@ class XcuteJobShow(XcuteCommand, ShowOne):
             _flat_dict_from_dict(parsed_args, job_info).items()))
 
 
-class XcuteJobPause(XcuteCommand, Lister):
+class JobPause(XcuteCommand, Lister):
     """
     Pause the jobs
     """
@@ -107,7 +97,7 @@ class XcuteJobPause(XcuteCommand, Lister):
     columns = ('ID', 'Paused')
 
     def get_parser(self, prog_name):
-        parser = super(XcuteJobPause, self).get_parser(prog_name)
+        parser = super(JobPause, self).get_parser(prog_name)
         parser.add_argument(
             'job_ids',
             nargs='+',
@@ -132,7 +122,7 @@ class XcuteJobPause(XcuteCommand, Lister):
         return self.columns, self._take_action(parsed_args)
 
 
-class XcuteJobResume(XcuteCommand, Lister):
+class JobResume(XcuteCommand, Lister):
     """
     Resume the jobs
     """
@@ -140,7 +130,7 @@ class XcuteJobResume(XcuteCommand, Lister):
     columns = ('ID', 'Resumed')
 
     def get_parser(self, prog_name):
-        parser = super(XcuteJobResume, self).get_parser(prog_name)
+        parser = super(JobResume, self).get_parser(prog_name)
         parser.add_argument(
             'job_ids',
             nargs='+',
@@ -165,7 +155,7 @@ class XcuteJobResume(XcuteCommand, Lister):
         return self.columns, self._take_action(parsed_args)
 
 
-class XcuteJobDelete(XcuteCommand, Lister):
+class JobDelete(XcuteCommand, Lister):
     """
     Delete all informations about the jobs
     """
@@ -173,7 +163,7 @@ class XcuteJobDelete(XcuteCommand, Lister):
     columns = ('ID', 'Deleted')
 
     def get_parser(self, prog_name):
-        parser = super(XcuteJobDelete, self).get_parser(prog_name)
+        parser = super(JobDelete, self).get_parser(prog_name)
         parser.add_argument(
             'job_ids',
             nargs='+',
