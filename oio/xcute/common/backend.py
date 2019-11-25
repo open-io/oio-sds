@@ -403,6 +403,11 @@ class XcuteBackend(RedisConnection):
         local job_id = KEYS[2];
         local info_key = 'xcute:job:info:' .. job_id;
 
+        local status = redis.call('HGET', info_key, 'job.status');
+        if status == nil or status == false then
+            return redis.error_reply('no_job');
+        end;
+
         redis.call('HSET', info_key, 'tasks.is_total_temp', 'False');
         local total_tasks = redis.call('HGET', info_key, 'tasks.total');
 
