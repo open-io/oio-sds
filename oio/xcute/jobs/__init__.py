@@ -13,8 +13,8 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from .blob_mover import RawxDecommissionJob
 from .blob_rebuilder import RawxRebuildJob
-from .mover import RawxDecommissionJob
 from .tester import TesterJob
 
 
