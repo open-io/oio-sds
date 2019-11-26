@@ -23,7 +23,7 @@ from oio.common.json import json
 from oio.conscience.client import ConscienceClient
 from oio.event.beanstalk import Beanstalk, BeanstalkdListener, \
     BeanstalkdSender, ConnectionError
-from oio.xcute.common.manager import XcuteManager
+from oio.xcute.common.backend import XcuteBackend
 from oio.xcute.jobs import JOB_TYPES
 
 
@@ -34,7 +34,7 @@ class XcuteOrchestrator(object):
     def __init__(self, conf, verbose):
         self.conf = conf
         self.logger = get_logger(self.conf, verbose=verbose)
-        self.manager = XcuteManager(self.conf, logger=self.logger)
+        self.backend = XcuteBackend(self.conf, logger=self.logger)
         self.conscience_client = ConscienceClient(self.conf)
 
         self.orchestrator_id = self.conf.get('orchestrator_id')
@@ -84,7 +84,7 @@ class XcuteOrchestrator(object):
         # restart running jobs
         self.logger.debug('Look for unfinished jobs')
         orchestrator_jobs = \
-            self.manager.get_orchestrator_jobs(self.orchestrator_id)
+            self.backend.list_orchestrator_jobs(self.orchestrator_id)
 
         for job_info in orchestrator_jobs:
             job_id = job_info['job']['id']
@@ -116,7 +116,7 @@ class XcuteOrchestrator(object):
         """
 
         new_jobs = iter(
-            lambda: self.manager.run_next(self.orchestrator_id), None)
+            lambda: self.backend.run_next(self.orchestrator_id), None)
         for job_info in new_jobs:
             job_id = job_info['job']['id']
             self.logger.info('Found new job %s', job_id)
@@ -125,7 +125,7 @@ class XcuteOrchestrator(object):
             except Exception:
                 self.logger.exception(
                     'Failed to instantiate job %s', job_id)
-                self.manager.fail(job_id)
+                self.backend.fail(job_id)
 
     def handle_running_job(self, job_info):
         """
@@ -200,7 +200,7 @@ class XcuteOrchestrator(object):
                     beanstalkd_workers,
                     job_id, job_type, job_config, tasks)
                 if sent:
-                    job_status = self.manager.update_tasks_sent(
+                    job_status = self.backend.update_tasks_sent(
                         job_id, tasks.keys())
                     tasks = dict()
                     if job_status == 'PAUSED':
@@ -213,7 +213,7 @@ class XcuteOrchestrator(object):
                     beanstalkd_workers,
                     job_id, job_type, job_config, tasks)
                 if sent:
-                    job_status = self.manager.update_tasks_sent(
+                    job_status = self.backend.update_tasks_sent(
                         job_id, tasks.keys(), all_tasks_sent=True)
                     if job_status == 'FINISHED':
                         self.logger.info('Job %s is finished', job_id)
@@ -222,12 +222,12 @@ class XcuteOrchestrator(object):
                                      job_id)
                     return
 
-            self.manager.free(job_id)
+            self.backend.free(job_id)
         except Exception:
             self.logger.exception('Failed generating task list (job_id=%s)',
                                   job_id)
 
-            self.manager.fail(job_id)
+            self.backend.fail(job_id)
 
     def dispatch_tasks(self, beanstalkd_workers,
                        job_id, job_type, job_config, tasks):
@@ -288,13 +288,13 @@ class XcuteOrchestrator(object):
 
     def get_job_total_tasks(self, job_id, tasks_counter):
         for total_marker, tasks_incr in tasks_counter:
-            stop = self.manager.incr_total_tasks(
+            stop = self.backend.incr_total_tasks(
                 job_id, total_marker, tasks_incr)
 
             if stop or not self.running:
                 return
 
-        total_tasks = self.manager.total_tasks_done(job_id)
+        total_tasks = self.backend.total_tasks_done(job_id)
 
         self.logger.info('Job %s has %s tasks', job_id, total_tasks)
 
@@ -363,7 +363,7 @@ class XcuteOrchestrator(object):
         self.logger.debug('Tasks processed (job_id=%s): %s', job_id, task_ids)
 
         try:
-            finished = self.manager.update_tasks_processed(
+            finished = self.backend.update_tasks_processed(
                 job_id, task_ids, task_errors, task_results)
             if finished:
                 self.logger.info('Job %s is finished', job_id)
