@@ -301,9 +301,11 @@ class XcuteBackend(RedisConnection):
             redis.call('SREM', 'xcute:orchestrator:jobs:' .. orchestrator_id,
                        job_id);
 
-            if tonumber(total_tasks_sent) == 0 then
-                -- if there is no task sent, finish job
-                redis.call('HSET', info_key,
+            local total_tasks_processed = redis.call(
+                'HGET', 'xcute:job:info:' .. job_id, 'tasks.processed');
+            if tonumber(total_tasks_processed) >= tonumber(
+                    total_tasks_sent) then
+                redis.call('HSET', 'xcute:job:info:' .. job_id,
                            'job.status', 'FINISHED');
             end;
         else
