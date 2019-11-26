@@ -15,8 +15,8 @@
 
 from oio.cli import Lister
 from oio.cli.admin.common import MultipleServicesCommandMixin
+from oio.xcute.jobs.blob_mover import RawxDecommissionJob
 from oio.xcute.jobs.blob_rebuilder import RawxRebuildJob
-from oio.xcute.jobs.mover import RawxDecommissionJob
 
 
 class RawxRebuild(MultipleServicesCommandMixin, Lister):
