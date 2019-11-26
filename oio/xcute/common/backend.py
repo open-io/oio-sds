@@ -52,18 +52,27 @@ class XcuteBackend(RedisConnection):
         'no_job': (
             NotFound,
             'The job does\'nt exist'),
-        'lock_exists': (
-            Forbidden,
-            'The lock already exists'),
-        'must_be_running': (
+        'job_must_be_running': (
             Forbidden,
             'The job must be running'),
-        'must_be_paused': (
+        'job_cannot_be_paused_all_tasks_sent': (
             Forbidden,
-            'The job must be paused'),
-        'must_be_waiting_paused_finished': (
+            'The job cannot be paused anymore, all jobs have been sent'),
+        'job_already_paused': (
             Forbidden,
-            'The job must be waiting or paused or finished')
+            'The job is already paused'),
+        'job_finished': (
+            Forbidden,
+            'The job is finished'),
+        'job_already_waiting':  (
+            Forbidden,
+            'The job is already waiting'),
+        'job_already_running':  (
+            Forbidden,
+            'The job is already running'),
+        'job_running':  (
+            Forbidden,
+            'The job running')
         }
 
     key_job_ids = 'xcute:job:ids'
@@ -190,7 +199,8 @@ class XcuteBackend(RedisConnection):
             local all_tasks_sent = redis.call(
                 'HGET', 'xcute:job:info:' .. job_id, 'tasks.all_sent');
             if all_tasks_sent == 'True' then
-                return redis.error_reply('job_running_all_tasks_sent');
+                return redis.error_reply(
+                    'job_cannot_be_paused_all_tasks_sent');
             else
                 redis.call('HSET', 'xcute:job:info:' .. job_id,
                            'job.request_pause', 'True');
