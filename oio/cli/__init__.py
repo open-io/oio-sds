@@ -99,6 +99,36 @@ def add_common_parser_options(parser):
         help=("Start profiling early, before subcommand loading."))
 
 
+def flat_dict_from_dict(parsed_args, dict_):
+    """
+    Create a dictionary without depth.
+
+    {
+        'depth0': {
+            'depth1': {
+                'depth2': 'test'
+            }
+        }
+    }
+    =>
+    {
+        'depth0.depth1.depth2': 'test'
+    }
+    """
+    flat_dict = dict()
+    for key, value in dict_.items():
+        if not isinstance(value, dict):
+            if isinstance(value, list) and parsed_args.formatter == 'table':
+                value = '\n'.join(value)
+            flat_dict[key] = value
+            continue
+
+        _flat_dict = flat_dict_from_dict(parsed_args, value)
+        for _key, _value in _flat_dict.items():
+            flat_dict[key + '.' + _key] = _value
+    return flat_dict
+
+
 class Command(command.Command):
     """
     Wraps cliff's command.Command and sets the process' return code
