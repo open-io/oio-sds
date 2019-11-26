@@ -114,7 +114,7 @@ group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 on_die=cry
 enabled=true
 start_at_boot=false
-command=oio-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+command=oio-${SRVTYPE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 """
 
 template_gridinit_rdir = """
@@ -1062,21 +1062,27 @@ redis_host = ${IP}
 """
 
 template_xcute = """
-[xcute-server]
-bind_addr = ${IP}
-bind_port = ${PORT}
-workers = 2
-namespace = ${NS}
+[DEFAULT]
 log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
-
+namespace = ${NS}
 # Let this option empty to connect directly to redis_host
 #sentinel_hosts = 127.0.0.1:26379,127.0.0.1:26380,127.0.0.1:26381
 sentinel_master_name = oio
-
 redis_host = ${IP}:${REDIS_PORT}
+
+[xcute-server]
+bind_addr = ${IP}
+bind_port = ${PORT}
+workers = 2
+
+[xcute-orchestrator]
+orchestrator_id = orchestrator-${SRVNUM}
+beanstalkd_workers_tube = oio-xcute
+beanstalkd_reply_tube = oio-xcute.reply
+beanstalkd_reply_addr = ${QUEUE_URL}
 """
 
 template_rdir = """
@@ -1759,20 +1765,6 @@ def generate(options):
         tpl = Template(template_account_watch)
         f.write(tpl.safe_substitute(env))
 
-    # xcute
-    env = subenv({'SRVTYPE': 'xcute', 'SRVNUM': 1, 'PORT': next(ports),
-                  'REDIS_PORT': 6379})
-    add_service(env)
-    with open(gridinit(env), 'a+') as f:
-        tpl = Template(template_gridinit_xcute)
-        f.write(tpl.safe_substitute(env))
-    with open(config(env), 'w+') as f:
-        tpl = Template(template_xcute)
-        f.write(tpl.safe_substitute(env))
-    with open(watch(env), 'w+') as f:
-        tpl = Template(template_xcute_watch)
-        f.write(tpl.safe_substitute(env))
-
     # rdir
     nb_rdir = getint(options['rdir'].get(SVC_NB), 3)
     for num in range(nb_rdir):
@@ -1824,6 +1816,20 @@ def generate(options):
         with open(CFGDIR + '/xcute-event-handlers-'+str(num)+'.conf', 'w+') as f:
             tpl = Template(template_xcute_event_agent_handlers)
             f.write(tpl.safe_substitute(env))
+
+    # xcute
+    env = subenv({'SRVTYPE': 'xcute', 'SRVNUM': 1, 'PORT': next(ports),
+                  'REDIS_PORT': 6379, 'QUEUE_URL': bnurl})
+    add_service(env)
+    with open(gridinit(env), 'a+') as f:
+        tpl = Template(template_gridinit_xcute)
+        f.write(tpl.safe_substitute(env))
+    with open(config(env), 'w+') as f:
+        tpl = Template(template_xcute)
+        f.write(tpl.safe_substitute(env))
+    with open(watch(env), 'w+') as f:
+        tpl = Template(template_xcute_watch)
+        f.write(tpl.safe_substitute(env))
 
     # blob-rebuilder configuration -> one per beanstalkd
     for num, host, port in all_beanstalkd:
