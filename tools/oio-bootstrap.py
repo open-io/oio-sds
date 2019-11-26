@@ -1020,6 +1020,11 @@ log_level = INFO
 log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
 queue_url=${QUEUE_URL}
+
+# Let this option empty to connect directly to redis_host
+#sentinel_hosts = 127.0.0.1:26379,127.0.0.1:26380,127.0.0.1:26381
+sentinel_master_name = oio
+redis_host = ${IP}:${REDIS_PORT}
 """
 
 template_xcute_event_agent_handlers = """
@@ -1028,6 +1033,10 @@ pipeline = xcute
 
 [filter:xcute]
 use = egg:oio#xcute
+# Let this option empty to connect directly to redis_host
+#sentinel_hosts = 127.0.0.1:26379,127.0.0.1:26380,127.0.0.1:26381
+sentinel_master_name = oio
+redis_host = ${IP}:${REDIS_PORT}
 """
 
 template_conscience_agent = """
@@ -1806,7 +1815,8 @@ def generate(options):
             f.write(tpl.safe_substitute(env))
 
         env = subenv({'SRVTYPE': 'xcute-event-agent', 'SRVNUM': num,
-                      'QUEUE_URL': bnurl})
+                      'QUEUE_URL': bnurl, 'REDIS_PORT': 6379})
+        add_service(env)
         with open(gridinit(env), 'a+') as f:
             tpl = Template(template_gridinit_xcute_event_agent)
             f.write(tpl.safe_substitute(env))

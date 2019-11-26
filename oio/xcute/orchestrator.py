@@ -15,12 +15,11 @@
 
 from collections import OrderedDict
 
-from oio.common.exceptions import OioTimeout
 from oio.common.logger import get_logger
 from oio.common.green import ratelimit, sleep, threading
 from oio.common.json import json
 from oio.conscience.client import ConscienceClient
-from oio.event.beanstalk import Beanstalk, BeanstalkdListener, \
+from oio.event.beanstalk import Beanstalk, \
     BeanstalkdSender, ConnectionError
 from oio.xcute.common.backend import XcuteBackend
 from oio.xcute.jobs import JOB_TYPES
@@ -46,15 +45,6 @@ class XcuteOrchestrator(object):
             raise ValueError('Missing beanstalkd workers tube')
         self.logger.info('Using beanstalkd workers tube: %s',
                          self.beanstalkd_workers_tube)
-
-        self.beanstalkd_reply_addr = self.conf.get('beanstalkd_reply_addr')
-        if not self.beanstalkd_reply_addr:
-            raise ValueError('Missing beanstalkd reply address')
-        self.beanstalkd_reply_tube = self.conf.get(
-            'beanstalkd_reply_tube', self.beanstalkd_workers_tube + '.reply')
-        self.logger.info('Using beanstalkd reply : %s %s',
-                         self.beanstalkd_reply_addr,
-                         self.beanstalkd_reply_tube)
 
         self.running = True
         self.threads = {}
@@ -89,12 +79,6 @@ class XcuteOrchestrator(object):
             job_id = job_info['job']['id']
             self.logger.info('Found running job %s', job_id)
             self.handle_running_job(job_info)
-
-        # start processing replies
-        listen_thread = threading.Thread(target=self.listen)
-        listen_thread.start()
-
-        self.threads[listen_thread.ident] = listen_thread
 
         while self.running:
             # remove dead dispatching threads
@@ -279,11 +263,7 @@ class XcuteOrchestrator(object):
                     'job_id': job_id,
                     'job_type': job_type,
                     'job_config': job_config,
-                    'tasks': tasks,
-                    'beanstalkd_reply': {
-                        'addr': self.beanstalkd_reply_addr,
-                        'tube': self.beanstalkd_reply_tube,
-                    },
+                    'tasks': tasks
                 }
             })
 
@@ -298,80 +278,6 @@ class XcuteOrchestrator(object):
         total_tasks = self.backend.total_tasks_done(job_id)
 
         self.logger.info('Job %s has %s tasks', job_id, total_tasks)
-
-    def listen(self):
-        """
-            Process this orchestrator's job replies
-        """
-
-        self.logger.info('Connecting to the reply beanstalkd')
-
-        while self.running:
-            try:
-                listener = BeanstalkdListener(
-                    addr=self.beanstalkd_reply_addr,
-                    tube=self.beanstalkd_reply_tube,
-                    logger=self.logger)
-
-                break
-            except ConnectionError:
-                self.logger.error('Failed to connect to the reply beanstalkd')
-
-            sleep(5)
-
-        self.logger.info('Listening to replies on %s (tube=%s)',
-                         self.beanstalkd_reply_addr,
-                         self.beanstalkd_reply_tube)
-
-        # keep the job results in memory
-        while self.running:
-            connection_error = self.listen_loop(listener)
-
-            # in case of a beanstalkd connection error
-            # sleep to avoid spamming
-            if connection_error:
-                sleep(2)
-
-        self.logger.info('Exited listening thread')
-
-    def listen_loop(self, listener):
-        """
-            One iteration of the listening loop
-        """
-
-        connection_error = False
-        try:
-            replies = listener.fetch_job(
-                self.process_reply, timeout=self.DEFAULT_DISPATCHER_TIMEOUT)
-
-            # to force the execution of process_reply
-            # if there were no replies, consider it as a connection error
-            connection_error = len(list(replies)) == 0
-
-        except OioTimeout:
-            pass
-
-        return connection_error
-
-    def process_reply(self, beanstalkd_job_id, encoded_reply):
-        reply = json.loads(encoded_reply)
-
-        job_id = reply['job_id']
-        task_ids = reply['task_ids']
-        task_results = reply['task_results']
-        task_errors = reply['task_errors']
-
-        self.logger.debug('Tasks processed (job_id=%s): %s', job_id, task_ids)
-
-        try:
-            finished = self.backend.update_tasks_processed(
-                job_id, task_ids, task_errors, task_results)
-            if finished:
-                self.logger.info('Job %s is finished', job_id)
-        except Exception:
-            self.logger.exception('Error processing reply')
-
-        yield None
 
     def refresh_all_beanstalkd(self):
         """

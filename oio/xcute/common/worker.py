@@ -16,11 +16,10 @@
 from collections import Counter
 
 from oio.common.constants import STRLEN_REQID
-from oio.common.green import ratelimit, sleep
-from oio.common.json import json
+from oio.common.green import ratelimit
 from oio.common.logger import get_logger
 from oio.common.utils import CacheDict, request_id
-from oio.event.beanstalk import BeanstalkdSender
+from oio.xcute.common.backend import XcuteBackend
 from oio.xcute.jobs import JOB_TYPES
 
 
@@ -29,8 +28,8 @@ class XcuteWorker(object):
     def __init__(self, conf, logger=None):
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
-        self.beanstalkd_senders = dict()
         self.tasks = CacheDict(size=10)
+        self.backend = XcuteBackend(self.conf, logger=self.logger)
 
     def process_beanstalkd_job(self, beanstalkd_job):
         job_id = beanstalkd_job['job_id']
@@ -47,8 +46,6 @@ class XcuteWorker(object):
         tasks_per_second = job_config['tasks_per_second']
 
         tasks = beanstalkd_job['tasks']
-        reply_addr = beanstalkd_job['beanstalkd_reply']['addr']
-        reply_tube = beanstalkd_job['beanstalkd_reply']['tube']
 
         task_errors = Counter()
         task_results = Counter()
@@ -68,28 +65,7 @@ class XcuteWorker(object):
                                  job_id, task_id, exc)
                 task_errors[type(exc).__name__] += 1
 
-        self._reply(reply_addr, reply_tube,
-                    job_id, tasks.keys(), task_results, task_errors)
-
-    def _reply(self, reply_addr, reply_tube,
-               job_id, task_ids, task_results, task_errors):
-        reply_payload = json.dumps({
-            'job_id': job_id,
-            'task_ids': task_ids,
-            'task_results': task_results,
-            'task_errors': task_errors
-        })
-
-        sender_key = (reply_addr, reply_tube)
-        if sender_key not in self.beanstalkd_senders:
-            self.beanstalkd_senders[sender_key] = BeanstalkdSender(
-                addr=reply_addr,
-                tube=reply_tube,
-                logger=self.logger)
-
-        beanstalkd_sender = self.beanstalkd_senders[(reply_addr, reply_tube)]
-
-        while not beanstalkd_sender.send_job(reply_payload):
-            sleep(1)
-
-        beanstalkd_sender.job_done()
+        finished = self.backend.update_tasks_processed(
+                job_id, tasks.keys(), task_errors, task_results)
+        if finished:
+            self.logger.info('Job %s is finished', job_id)
