@@ -23,16 +23,16 @@ from oio.common.exceptions import NotFound
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.wsgi import WerkzeugApp
+from oio.xcute.common.backend import XcuteBackend
 from oio.xcute.common.exceptions import UnknownJobTypeException
 from oio.xcute.jobs import JOB_TYPES
-from oio.xcute.common.manager import XcuteManager
 
 
-class Xcute(WerkzeugApp):
-    def __init__(self, conf, manager, logger=None):
+class XcuteServer(WerkzeugApp):
+    def __init__(self, conf, logger=None):
         self.conf = conf
-        self.manager = manager
-        self.logger = logger
+        self.logger = logger or get_logger(self.conf)
+        self.backend = XcuteBackend(self.conf, logger=self.logger)
 
         url_map = Map([
             Rule('/status', endpoint='status'),
@@ -48,10 +48,10 @@ class Xcute(WerkzeugApp):
             ])
         ])
 
-        super(Xcute, self).__init__(url_map, logger)
+        super(XcuteServer, self).__init__(url_map, logger)
 
     def on_status(self, req):
-        status = self.manager.backend.status()
+        status = self.backend.status()
         return Response(json.dumps(status), mimetype='application/json')
 
     def on_job_list(self, req):
@@ -59,7 +59,7 @@ class Xcute(WerkzeugApp):
             limit = int_value(req.args.get('limit'), None)
             marker = req.args.get('marker')
 
-            job_infos = self.manager.list_jobs(limit=limit, marker=marker)
+            job_infos = self.backend.list_jobs(limit=limit, marker=marker)
             return Response(
                 json.dumps(job_infos), mimetype='application/json')
 
@@ -78,44 +78,43 @@ class Xcute(WerkzeugApp):
             job_config, lock = job_class.sanitize_config(
                 data.get('config') or dict())
 
-            job_id = self.manager.create(job_type, job_config)
+            job_id = self.backend.create(job_type, job_config)
 
-            job_info = self.manager.show_job(job_id)
+            job_info = self.backend.get_job_info(job_id)
             return Response(
                 json.dumps(job_info), mimetype='application/json', status=202)
 
     def on_job(self, req, job_id):
         if req.method == 'GET':
             try:
-                job_info = self.manager.show_job(job_id)
+                job_info = self.backend.get_job_info(job_id)
             except NotFound as e:
                 return HTTPNotFound(e.message)
 
             return Response(json.dumps(job_info), mimetype='application/json')
 
         if req.method == 'DELETE':
-            self.manager.delete(job_id)
+            self.backend.delete(job_id)
 
             return Response(status=204)
 
     def on_job_pause(self, req, job_id):
-        self.manager.request_pause(job_id)
+        self.backend.request_pause(job_id)
 
-        job_info = self.manager.show_job(job_id)
+        job_info = self.backend.get_job_info(job_id)
         return Response(
             json.dumps(job_info), mimetype='application/json', status=202)
 
     def on_job_resume(self, req, job_id):
-        self.manager.resume(job_id)
+        self.backend.resume(job_id)
 
-        job_info = self.manager.show_job(job_id)
+        job_info = self.backend.get_job_info(job_id)
         return Response(
             json.dumps(job_info), mimetype='application/json', status=202)
 
 
 def create_app(conf):
     logger = get_logger(conf)
-    manager = XcuteManager(conf, logger)
-    app = Xcute(conf, manager, logger)
+    app = XcuteServer(conf, logger)
 
     return app
