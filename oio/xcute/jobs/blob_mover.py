@@ -60,12 +60,20 @@ class RawxDecommissionTask(XcuteTask):
             fake_excluded_chunks.append(chunk)
         return fake_excluded_chunks
 
-    def process(self, chunk_id, task_payload, reqid=None):
+    def process(self, task_id, task_payload, reqid=None):
+        container_id = task_payload['container_id']
+        content_id = task_payload['content_id']
+        chunk_id = task_payload['chunk_id']
+
         chunk_url = 'http://{}/{}'.format(self.service_id, chunk_id)
         meta = self.blob_client.chunk_head(
             chunk_url, timeout=self.rawx_timeout, reqid=reqid)
-        container_id = meta['container_id']
-        content_id = meta['content_id']
+        if container_id != meta['container_id']:
+            raise ValueError('Mismatch container ID: %s != %s',
+                             container_id, meta['container_id'])
+        if content_id != meta['content_id']:
+            raise ValueError('Mismatch content ID: %s != %s',
+                             content_id, meta['content_id'])
         chunk_size = int(meta['chunk_size'])
 
         # Maybe skip the chunk because it doesn't match the size constaint
@@ -149,19 +157,24 @@ class RawxDecommissionJob(XcuteJob):
     def get_tasks(self, job_params, marker=None):
         chunk_infos = self.get_chunk_infos(job_params, marker=marker)
 
-        for _, _, chunk_id, _ in chunk_infos:
-            yield chunk_id, dict()
+        for container_id, content_id, chunk_id, _ in chunk_infos:
+            task_id = '|'.join((container_id, content_id, chunk_id))
+            yield task_id, {'container_id': container_id,
+                            'content_id': content_id,
+                            'chunk_id': chunk_id}
 
     def get_total_tasks(self, job_params, marker=None):
         chunk_infos = self.get_chunk_infos(job_params, marker=marker)
 
-        chunk_id = ''
         i = 0
-        for i, (_, _, chunk_id, _) in enumerate(chunk_infos, 1):
+        for i, (container_id, content_id, chunk_id, _) \
+                in enumerate(chunk_infos, 1):
             if i % 1000 == 0:
-                yield (chunk_id, 1000)
+                yield '|'.join((container_id, content_id, chunk_id)), 1000
 
-        yield (chunk_id, i % 1000)
+        remaining = i % 1000
+        if remaining > 0:
+            yield '|'.join((container_id, content_id, chunk_id)), remaining
 
     def get_chunk_infos(self, job_params, marker=None):
         service_id = job_params['service_id']

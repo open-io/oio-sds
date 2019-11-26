@@ -35,9 +35,10 @@ class RawxRebuildTask(XcuteTask):
 
         self.chunk_operator = ChunkOperator(self.conf, logger=self.logger)
 
-    def process(self, chunk_id, task_payload, reqid=None):
+    def process(self, task_id, task_payload, reqid=None):
         container_id = task_payload['container_id']
         content_id = task_payload['content_id']
+        chunk_id = task_payload['chunk_id']
 
         if self.dry_run:
             self.logger.debug('[reqid=%s] [dryrun] Rebuilding %s',
@@ -121,19 +122,23 @@ class RawxRebuildJob(XcuteJob):
         chunk_infos = self.get_chunk_infos(job_params, marker=marker)
 
         for container_id, content_id, chunk_id, _ in chunk_infos:
-            yield chunk_id, {'container_id': container_id,
-                             'content_id': content_id}
+            task_id = '|'.join((container_id, content_id, chunk_id))
+            yield task_id, {'container_id': container_id,
+                            'content_id': content_id,
+                            'chunk_id': chunk_id}
 
     def get_total_tasks(self, job_params, marker=None):
         chunk_infos = self.get_chunk_infos(job_params, marker=marker)
 
-        chunk_id = ''
         i = 0
-        for i, (_, _, chunk_id, _) in enumerate(chunk_infos, 1):
+        for i, (container_id, content_id, chunk_id, _) \
+                in enumerate(chunk_infos, 1):
             if i % 1000 == 0:
-                yield (chunk_id, 1000)
+                yield '|'.join((container_id, content_id, chunk_id)), 1000
 
-        yield (chunk_id, i % 1000)
+        remaining = i % 1000
+        if remaining > 0:
+            yield '|'.join((container_id, content_id, chunk_id)), remaining
 
     def get_chunk_infos(self, job_params, marker=None):
         service_id = job_params['service_id']
