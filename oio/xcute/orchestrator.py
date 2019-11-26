@@ -31,9 +31,9 @@ class XcuteOrchestrator(object):
 
     DEFAULT_DISPATCHER_TIMEOUT = 2
 
-    def __init__(self, conf, verbose):
+    def __init__(self, conf, logger=None):
         self.conf = conf
-        self.logger = get_logger(self.conf, verbose=verbose)
+        self.logger = logger or get_logger(self.conf)
         self.backend = XcuteBackend(self.conf, logger=self.logger)
         self.conscience_client = ConscienceClient(self.conf)
 
@@ -109,6 +109,8 @@ class XcuteOrchestrator(object):
 
         for thread_ in self.threads.values():
             thread_.join()
+
+        self.logger.info('Exited running thread')
 
     def orchestrate_loop(self):
         """
