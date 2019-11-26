@@ -16,37 +16,8 @@
 
 from cliff import show
 
+from oio.cli import flat_dict_from_dict
 from oio.cli.admin.common import SingleServiceCommandMixin
-
-
-def _flat_dict_from_dict(parsed_args, dict_):
-    """
-    Create a dictionary without depth.
-
-    {
-        'depth0': {
-            'depth1': {
-                'depth2': 'test'
-            }
-        }
-    }
-    =>
-    {
-        'depth0.depth1.depth2': 'test'
-    }
-    """
-    flat_dict = dict()
-    for key, value in dict_.items():
-        if not isinstance(value, dict):
-            if isinstance(value, list) and parsed_args.formatter == 'table':
-                value = '\n'.join(value)
-            flat_dict[key] = value
-            continue
-
-        _flat_dict = _flat_dict_from_dict(parsed_args, value)
-        for _key, _value in _flat_dict.items():
-            flat_dict[key + '.' + _key] = _value
-    return flat_dict
 
 
 class ServiceInfo(SingleServiceCommandMixin, show.ShowOne):
@@ -73,4 +44,4 @@ class ServiceInfo(SingleServiceCommandMixin, show.ShowOne):
 
         conf = self.app.client_manager.admin.service_get_info(
             parsed_args.service)
-        return zip(*sorted(_flat_dict_from_dict(parsed_args, conf).items()))
+        return zip(*sorted(flat_dict_from_dict(parsed_args, conf).items()))

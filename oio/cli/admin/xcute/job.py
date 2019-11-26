@@ -13,38 +13,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from oio.cli import Lister, ShowOne
+from oio.cli import Lister, ShowOne, flat_dict_from_dict
 from oio.cli.admin.xcute import XcuteCommand
-
-
-def _flat_dict_from_dict(parsed_args, dict_):
-    """
-    Create a dictionary without depth.
-
-    {
-        'depth0': {
-            'depth1': {
-                'depth2': 'test'
-            }
-        }
-    }
-    =>
-    {
-        'depth0.depth1.depth2': 'test'
-    }
-    """
-    flat_dict = dict()
-    for key, value in dict_.items():
-        if not isinstance(value, dict):
-            if isinstance(value, list) and parsed_args.formatter == 'table':
-                value = '\n'.join(value)
-            flat_dict[key] = value
-            continue
-
-        _flat_dict = _flat_dict_from_dict(parsed_args, value)
-        for _key, _value in _flat_dict.items():
-            flat_dict[key + '.' + _key] = _value
-    return flat_dict
 
 
 class JobList(XcuteCommand, Lister):
@@ -86,7 +56,7 @@ class JobShow(XcuteCommand, ShowOne):
 
         job_info = self.xcute.job_show(parsed_args.job_id)
         return zip(*sorted(
-            _flat_dict_from_dict(parsed_args, job_info).items()))
+            flat_dict_from_dict(parsed_args, job_info).items()))
 
 
 class JobPause(XcuteCommand, Lister):
