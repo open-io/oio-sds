@@ -1,0 +1,94 @@
+#!/usr/bin/env python
+
+# Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+import signal
+import sys
+from multiprocessing import Process
+from optparse import OptionParser
+
+from oio.common.configuration import parse_options, read_conf
+from oio.common.logger import get_logger
+from oio.common.wsgi import Application, ServiceLogger
+from oio.xcute.orchestrator import XcuteOrchestrator
+from oio.xcute.server import create_app
+
+
+DEFAULT_SECTION = 'DEFAULT'
+SERVER_SECTION = 'xcute-server'
+ORCHESTRATOR_SECTION = 'xcute-orchestrator'
+
+
+if __name__ == '__main__':
+    parser = OptionParser('%prog CONFIG [options]')
+    conf_file, options = parse_options(parser)
+
+    all_conf = read_conf(conf_file)
+    global_conf = all_conf.copy().get(DEFAULT_SECTION, dict())
+
+    orchestrator_conf = all_conf.copy().get(ORCHESTRATOR_SECTION)
+    if orchestrator_conf is not None:
+        orchestrator_conf_ = global_conf.copy()
+        orchestrator_conf_.update(orchestrator_conf)
+        orchestrator_conf = orchestrator_conf_
+
+    server_conf = all_conf.copy().get(SERVER_SECTION)
+    if server_conf is not None:
+        server_conf_ = global_conf.copy()
+        server_conf_.update(server_conf)
+        server_conf = server_conf_
+
+    if server_conf is None and orchestrator_conf is None:
+        print('Missing section %s or %s in config %s'
+              % (ORCHESTRATOR_SECTION, SERVER_SECTION, conf_file))
+        sys.exit(1)
+
+    orchestrator = None
+    if orchestrator_conf is not None:
+        orchestrator_logger = get_logger(
+            orchestrator_conf, verbose=options['verbose'])
+        orchestrator = XcuteOrchestrator(
+            orchestrator_conf, logger=orchestrator_logger)
+
+    server = None
+    if server_conf is not None:
+        app = create_app(server_conf)
+        server = Application(app, server_conf, logger_class=ServiceLogger)
+
+    if orchestrator is not None and server is not None:
+        server_process = Process(target=server.run)
+
+        def exit_gracefully(signum, frame):
+            orchestrator.exit()
+            server_process.terminate()
+
+        signal.signal(signal.SIGINT, exit_gracefully)
+        signal.signal(signal.SIGTERM, exit_gracefully)
+
+        server_process.start()
+        try:
+            orchestrator.run_forever()
+        finally:
+            server_process.terminate()
+            server_process.join()
+    elif orchestrator is not None:
+        signal.signal(signal.SIGINT, orchestrator.exit)
+        signal.signal(signal.SIGTERM, orchestrator.exit)
+
+        orchestrator.run_forever()
+    else:
+        server.run()
