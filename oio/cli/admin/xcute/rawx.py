@@ -13,20 +13,18 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from oio.cli import Lister
-from oio.cli.admin.common import MultipleServicesCommandMixin
+from oio.cli import ShowOne, flat_dict_from_dict
+from oio.cli.admin.common import SingleServiceCommandMixin
 from oio.xcute.jobs.blob_mover import RawxDecommissionJob
 from oio.xcute.jobs.blob_rebuilder import RawxRebuildJob
 
 
-class RawxRebuild(MultipleServicesCommandMixin, Lister):
+class RawxRebuild(SingleServiceCommandMixin, ShowOne):
     """
-    Rebuild chunks that were on the specified volume.
+    Rebuild chunks that were on the specified service.
     It is necessary to declare an incident (with 'openio volume admin
     incident') before running this command.
     """
-
-    columns = ('Service ID', 'Job ID')
 
     @property
     def logger(self):
@@ -38,7 +36,7 @@ class RawxRebuild(MultipleServicesCommandMixin, Lister):
 
     def get_parser(self, prog_name):
         parser = super(RawxRebuild, self).get_parser(prog_name)
-        MultipleServicesCommandMixin.patch_parser(self, parser)
+        SingleServiceCommandMixin.patch_parser(self, parser)
 
         parser.add_argument(
             '--chunks-per-second', type=int,
@@ -73,8 +71,13 @@ class RawxRebuild(MultipleServicesCommandMixin, Lister):
 
         return parser
 
-    def _take_action(self, parsed_args):
+    def take_action(self, parsed_args):
+        SingleServiceCommandMixin.check_and_load_parsed_args(
+            self, self.app, parsed_args)
+        self.logger.debug('take_action(%s)', parsed_args)
+
         job_params = {
+            'service_id': parsed_args.service,
             'rdir_fetch_limit': parsed_args.rdir_fetch_limit,
             'rdir_timeout': parsed_args.rdir_timeout,
             'rawx_timeout': parsed_args.rawx_timeout,
@@ -86,27 +89,17 @@ class RawxRebuild(MultipleServicesCommandMixin, Lister):
             'tasks_per_second': parsed_args.chunks_per_second,
             'params': job_params
         }
-
-        for service_id in parsed_args.services:
-            job_params['service_id'] = service_id
-            try:
-                job_info = self.xcute.job_create(
-                    RawxRebuildJob.JOB_TYPE, job_config=job_config)
-                res = job_info['job']['id']
-            except Exception as exc:
-                self.success = False
-                res = str(exc)
-            yield (service_id, res)
-
-    def take_action(self, parsed_args):
-        MultipleServicesCommandMixin.check_and_load_parsed_args(
-            self, self.app, parsed_args)
-        return (self.columns, self._take_action(parsed_args))
+        job_info = self.xcute.job_create(
+            RawxRebuildJob.JOB_TYPE, job_config=job_config)
+        return zip(*sorted(
+            flat_dict_from_dict(parsed_args, job_info).items()))
 
 
-class RawxDecommission(MultipleServicesCommandMixin, Lister):
-
-    columns = ('Service ID', 'Job ID')
+class RawxDecommission(SingleServiceCommandMixin, ShowOne):
+    """
+    Decommission the specified service.
+    All chunks will be moved on the others services.
+    """
 
     @property
     def logger(self):
@@ -118,7 +111,7 @@ class RawxDecommission(MultipleServicesCommandMixin, Lister):
 
     def get_parser(self, prog_name):
         parser = super(RawxDecommission, self).get_parser(prog_name)
-        MultipleServicesCommandMixin.patch_parser(self, parser)
+        SingleServiceCommandMixin.patch_parser(self, parser)
 
         parser.add_argument(
             '--chunks-per-second', type=int,
@@ -150,8 +143,13 @@ class RawxDecommission(MultipleServicesCommandMixin, Lister):
 
         return parser
 
-    def _take_action(self, parsed_args):
+    def take_action(self, parsed_args):
+        SingleServiceCommandMixin.check_and_load_parsed_args(
+            self, self.app, parsed_args)
+        self.logger.debug('take_action(%s)', parsed_args)
+
         job_params = {
+            'service_id': parsed_args.service,
             'rdir_fetch_limit': parsed_args.rdir_fetch_limit,
             'rdir_timeout': parsed_args.rdir_timeout,
             'rawx_timeout': parsed_args.rawx_timeout,
@@ -163,19 +161,7 @@ class RawxDecommission(MultipleServicesCommandMixin, Lister):
             'tasks_per_second': parsed_args.chunks_per_second,
             'params': job_params
         }
-
-        for service_id in parsed_args.services:
-            job_params['service_id'] = service_id
-            try:
-                job_info = self.xcute.job_create(
-                    RawxDecommissionJob.JOB_TYPE, job_config=job_config)
-                res = job_info['job']['id']
-            except Exception as exc:
-                self.success = False
-                res = str(exc)
-            yield (service_id, res)
-
-    def take_action(self, parsed_args):
-        MultipleServicesCommandMixin.check_and_load_parsed_args(
-            self, self.app, parsed_args)
-        return (self.columns, self._take_action(parsed_args))
+        job_info = self.xcute.job_create(
+            RawxDecommissionJob.JOB_TYPE, job_config=job_config)
+        return zip(*sorted(
+            flat_dict_from_dict(parsed_args, job_info).items()))
