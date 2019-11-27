@@ -185,7 +185,9 @@ class XcuteOrchestrator(object):
             tasks_run_time = 0
             batch_per_second = tasks_per_second / float(
                 tasks_batch_size)
-            tasks = dict()
+            # The backend must have the tasks in order
+            # to know the last task sent
+            tasks = OrderedDict()
             for task_id, task_payload in job_tasks:
                 if not self.running:
                     break
@@ -203,7 +205,7 @@ class XcuteOrchestrator(object):
                 if sent:
                     job_status = self.backend.update_tasks_sent(
                         job_id, tasks.keys())
-                    tasks = dict()
+                    tasks.clear()
                     if job_status == 'PAUSED':
                         self.logger.info('Job %s is paused', job_id)
                         return
