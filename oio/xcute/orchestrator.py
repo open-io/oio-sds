@@ -14,7 +14,6 @@
 # License along with this library.
 
 from collections import OrderedDict
-import os
 
 from oio.common.exceptions import OioTimeout
 from oio.common.logger import get_logger
@@ -446,13 +445,9 @@ class XcuteOrchestrator(object):
             if not yielded:
                 yield None
 
-    def exit(self, *args, **kwargs):
+    def exit_gracefully(self, *args, **kwargs):
         if self.running:
             self.logger.info('Exiting gracefully')
-
             self.running = False
-
-            return
-
-        self.logger.info('Exiting')
-        os._exit(1)
+        else:
+            self.logger.info('Already exiting gracefully')
