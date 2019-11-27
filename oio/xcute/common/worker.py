@@ -16,6 +16,7 @@
 from collections import Counter
 
 from oio.common.constants import STRLEN_REQID
+from oio.common.exceptions import NotFound
 from oio.common.green import ratelimit
 from oio.common.logger import get_logger
 from oio.common.utils import CacheDict, request_id
@@ -48,12 +49,16 @@ class XcuteWorker(object):
 
         # Since the backend updates all tasks at the same time,
         # we can only check one
-        already_processed = self.backend.check_tasks_processed(
-            job_id, task_ids[0])
-        if already_processed:
-            self.logger.warn(
-                '[job_id=%s] Tasks already processed: %s',
-                job_id, task_ids)
+        try:
+            already_processed = self.backend.check_tasks_processed(
+                job_id, task_ids[0])
+            if already_processed:
+                self.logger.warn(
+                    '[job_id=%s] Tasks already processed: %s',
+                    job_id, task_ids)
+                return
+        except NotFound as exc:
+            self.logger.warn('[job_id=%s] %s', exc)
             return
 
         tasks_per_second = job_config['tasks_per_second']
@@ -75,7 +80,11 @@ class XcuteWorker(object):
                                  job_id, task_id, exc)
                 task_errors[type(exc).__name__] += 1
 
-        finished = self.backend.update_tasks_processed(
+        try:
+            finished = self.backend.update_tasks_processed(
                 job_id, task_ids, task_errors, task_results)
-        if finished:
-            self.logger.info('Job %s is finished', job_id)
+            if finished:
+                self.logger.info('Job %s is finished', job_id)
+        except NotFound as exc:
+            self.logger.warn('[job_id=%s] %s', exc)
+            return
