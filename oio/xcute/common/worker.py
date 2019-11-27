@@ -43,10 +43,20 @@ class XcuteWorker(object):
             task = task_class(self.conf, job_params, logger=self.logger)
             self.tasks[job_id] = task
 
-        tasks_per_second = job_config['tasks_per_second']
-
         tasks = beanstalkd_job['tasks']
+        task_ids = tasks.keys()
 
+        # Since the backend updates all tasks at the same time,
+        # we can only check one
+        already_processed = self.backend.check_tasks_processed(
+            job_id, task_ids[0])
+        if already_processed:
+            self.logger.warn(
+                '[job_id=%s] Tasks already processed: %s',
+                job_id, task_ids)
+            return
+
+        tasks_per_second = job_config['tasks_per_second']
         task_errors = Counter()
         task_results = Counter()
 
@@ -66,6 +76,6 @@ class XcuteWorker(object):
                 task_errors[type(exc).__name__] += 1
 
         finished = self.backend.update_tasks_processed(
-                job_id, tasks.keys(), task_errors, task_results)
+                job_id, task_ids, task_errors, task_results)
         if finished:
             self.logger.info('Job %s is finished', job_id)

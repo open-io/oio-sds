@@ -327,6 +327,21 @@ class XcuteBackend(RedisConnection):
         return redis.call('HGET', info_key, 'job.status');
     """
 
+    lua_check_tasks_processed = """
+        local job_id = KEYS[1];
+        local task_id = ARGV[1];
+
+        local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
+                                  'job.status');
+        if status == nil or status == false then
+            return redis.error_reply('no_job');
+        end;
+
+        local task_running = redis.call(
+            'SISMEMBER', 'xcute:tasks:running:' .. job_id, task_id);
+        return task_running ~= 1;
+    """
+
     lua_update_tasks_processed = """
         local function get_counters(tbl, first, last)
             local sliced = {}
@@ -471,6 +486,8 @@ class XcuteBackend(RedisConnection):
             self.lua_resume)
         self.script_update_tasks_sent = self.register_script(
             self.lua_update_tasks_sent)
+        self.script_check_tasks_processed = self.register_script(
+            self.lua_check_tasks_processed)
         self.script_update_tasks_processed = self.register_script(
             self.lua_update_tasks_processed)
         self.script_incr_total = self.register_script(
@@ -596,6 +613,11 @@ class XcuteBackend(RedisConnection):
             args=task_ids, client=self.conn)
 
     @handle_redis_exceptions
+    def check_tasks_processed(self, job_id, task_id):
+        return self.script_check_tasks_processed(
+            keys=[job_id], args=[task_id], client=self.conn)
+
+    @handle_redis_exceptions
     def update_tasks_processed(self, job_id, task_ids,
                                task_errors, task_results):
         counters = dict()
@@ -614,10 +636,12 @@ class XcuteBackend(RedisConnection):
             args=task_ids,
             client=self.conn)
 
+    @handle_redis_exceptions
     def incr_total_tasks(self, job_id, total_marker, tasks_incr):
         return self.script_incr_total(
             keys=[self._get_timestamp(), job_id, total_marker, tasks_incr])
 
+    @handle_redis_exceptions
     def total_tasks_done(self, job_id):
         return self.script_total_tasks_done(
             keys=[self._get_timestamp(), job_id])
