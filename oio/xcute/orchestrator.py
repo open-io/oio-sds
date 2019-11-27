@@ -181,30 +181,47 @@ class XcuteOrchestrator(object):
                 tasks_run_time = ratelimit(
                     tasks_run_time, batch_per_second)
 
+                # Make sure that the sent tasks will be saved
+                # before being processed
+                job_status, old_last_sent = self.backend.update_tasks_sent(
+                    job_id, tasks.keys())
                 sent = self.dispatch_tasks(
                     beanstalkd_workers,
                     job_id, job_type, job_config, tasks)
-                if sent:
-                    job_status = self.backend.update_tasks_sent(
-                        job_id, tasks.keys())
-                    tasks = dict()
-                    if job_status == 'PAUSED':
-                        self.logger.info('Job %s is paused', job_id)
-                        return
+                if not sent:
+                    self.backend.abort_tasks_sent(
+                        job_id, tasks.keys(), old_last_sent)
+                if job_status == 'PAUSED':
+                    self.logger.info('Job %s is paused', job_id)
+                    return
+                if not sent:
+                    break
+                tasks = dict()
             else:
                 self.logger.info('All tasks sent (job_id=%s)' % job_id)
 
-                sent = self.dispatch_tasks(
-                    beanstalkd_workers,
-                    job_id, job_type, job_config, tasks)
+                # Make sure that the sent tasks will be saved
+                # before being processed
+                job_status, old_last_sent = self.backend.update_tasks_sent(
+                    job_id, tasks.keys(), all_tasks_sent=True)
+                if tasks:
+                    sent = self.dispatch_tasks(
+                        beanstalkd_workers,
+                        job_id, job_type, job_config, tasks)
+                    if not sent:
+                        self.backend.abort_tasks_sent(
+                            job_id, tasks.keys(), old_last_sent)
+                else:
+                    sent = True
+                if job_status == 'PAUSED':
+                    self.logger.info('Job %s is paused', job_id)
+                    return
                 if sent:
-                    job_status = self.backend.update_tasks_sent(
-                        job_id, tasks.keys(), all_tasks_sent=True)
                     if job_status == 'FINISHED':
                         self.logger.info('Job %s is finished', job_id)
 
-                    self.logger.info('Finished dispatching job (job_id=%s)',
-                                     job_id)
+                    self.logger.info(
+                        'Finished dispatching job (job_id=%s)', job_id)
                     return
 
             self.backend.free(job_id)

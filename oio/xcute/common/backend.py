@@ -281,9 +281,9 @@ class XcuteBackend(RedisConnection):
         local total_tasks_sent = redis.call(
             'HINCRBY', info_key,
             'tasks.sent', tasks_sent_length);
-        for _, task_id in ipairs(tasks_sent) do
-            redis.call('SADD', 'xcute:tasks:running:' .. job_id, task_id);
-        end;
+        redis.call(
+            'SADD', 'xcute:tasks:running:' .. job_id, unpack(tasks_sent));
+        local old_last_sent = redis.call('HGET', info_key, 'tasks.last_sent');
         if tasks_sent_length > 0 then
             redis.call('HSET', info_key,
                        'tasks.last_sent', tasks_sent[tasks_sent_length]);
@@ -303,10 +303,11 @@ class XcuteBackend(RedisConnection):
 
             local total_tasks_processed = redis.call(
                 'HGET', 'xcute:job:info:' .. job_id, 'tasks.processed');
-            if tonumber(total_tasks_processed) >= tonumber(
-                    total_tasks_sent) then
+            if tasks_sent_length == 0 and tonumber(
+                    total_tasks_processed) >= tonumber(total_tasks_sent) then
                 redis.call('HSET', 'xcute:job:info:' .. job_id,
                            'job.status', 'FINISHED');
+                status = 'FINISHED';
             end;
         else
             local request_pause = redis.call(
@@ -316,6 +317,7 @@ class XcuteBackend(RedisConnection):
                 redis.call('HMSET', info_key,
                            'job.status', 'PAUSED',
                            'job.request_pause', 'False');
+                status = 'PAUSED';
                 local orchestrator_id = redis.call(
                     'HGET', info_key, 'orchestrator.id');
                 redis.call(
@@ -324,8 +326,33 @@ class XcuteBackend(RedisConnection):
             end;
         end;
     """ + _lua_update_mtime + """
-        return redis.call('HGET', info_key, 'job.status');
+        return {status, old_last_sent};
     """
+
+    lua_abort_tasks_sent = """
+        local mtime = KEYS[1];
+        local job_id = KEYS[2];
+        local old_last_sent = KEYS[3];
+        local tasks_sent = ARGV;
+        local tasks_sent_length = #tasks_sent;
+
+        local status = redis.call(
+            'HGET', 'xcute:job:info:' .. job_id, 'job.status');
+        if status == nil or status == false then
+            return redis.error_reply('no_job');
+        end;
+
+        redis.call('HINCRBY', 'xcute:job:info:' .. job_id,
+                   'tasks.sent', -tasks_sent_length);
+        redis.call(
+            'SREM', 'xcute:tasks:running:' .. job_id, unpack(tasks_sent));
+        if old_last_sent == 'None' then
+            redis.call('HDEL', 'xcute:job:info:' .. job_id, 'tasks.last_sent');
+        else
+            redis.call('HSET', 'xcute:job:info:' .. job_id,
+                       'tasks.last_sent', old_last_sent);
+        end;
+    """ + _lua_update_mtime
 
     lua_check_tasks_processed = """
         local job_id = KEYS[1];
@@ -366,9 +393,8 @@ class XcuteBackend(RedisConnection):
         local total_tasks_processed = redis.call(
             'HINCRBY', 'xcute:job:info:' .. job_id,
             'tasks.processed', tasks_processed_length);
-        for _, task_id in ipairs(tasks_processed) do
-            redis.call('SREM', 'xcute:tasks:running:' .. job_id, task_id);
-        end;
+        redis.call(
+            'SREM', 'xcute:tasks:running:' .. job_id, unpack(tasks_processed));
 
         for key, value in pairs(counters) do
             redis.call('HINCRBY', 'xcute:job:info:' .. job_id,
@@ -486,6 +512,8 @@ class XcuteBackend(RedisConnection):
             self.lua_resume)
         self.script_update_tasks_sent = self.register_script(
             self.lua_update_tasks_sent)
+        self.script_abort_tasks_sent = self.register_script(
+            self.lua_abort_tasks_sent)
         self.script_check_tasks_processed = self.register_script(
             self.lua_check_tasks_processed)
         self.script_update_tasks_processed = self.register_script(
@@ -610,6 +638,12 @@ class XcuteBackend(RedisConnection):
     def update_tasks_sent(self, job_id, task_ids, all_tasks_sent=False):
         return self.script_update_tasks_sent(
             keys=[self._get_timestamp(), job_id, str(all_tasks_sent)],
+            args=task_ids, client=self.conn)
+
+    @handle_redis_exceptions
+    def abort_tasks_sent(self, job_id, task_ids,  old_last_sent):
+        return self.script_abort_tasks_sent(
+            keys=[self._get_timestamp(), job_id, str(old_last_sent)],
             args=task_ids, client=self.conn)
 
     @handle_redis_exceptions
