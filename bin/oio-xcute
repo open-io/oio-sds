@@ -73,7 +73,7 @@ if __name__ == '__main__':
         server_process = Process(target=server.run)
 
         def exit_gracefully(signum, frame):
-            orchestrator.exit()
+            orchestrator.exit_gracefully()
             server_process.terminate()
 
         signal.signal(signal.SIGINT, exit_gracefully)
@@ -86,8 +86,8 @@ if __name__ == '__main__':
             server_process.terminate()
             server_process.join()
     elif orchestrator is not None:
-        signal.signal(signal.SIGINT, orchestrator.exit)
-        signal.signal(signal.SIGTERM, orchestrator.exit)
+        signal.signal(signal.SIGINT, orchestrator.exit_gracefully)
+        signal.signal(signal.SIGTERM, orchestrator.exit_gracefully)
 
         orchestrator.run_forever()
     else:
