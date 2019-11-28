@@ -212,9 +212,11 @@ class XcuteOrchestrator(object):
             else:
                 self.logger.info('All tasks sent (job_id=%s)' % job_id)
 
-                sent = self.dispatch_tasks(
-                    beanstalkd_workers,
-                    job_id, job_type, job_config, tasks)
+                sent = True
+                if tasks:
+                    sent = self.dispatch_tasks(
+                        beanstalkd_workers,
+                        job_id, job_type, job_config, tasks)
                 if sent:
                     job_status = self.backend.update_tasks_sent(
                         job_id, tasks.keys(), all_tasks_sent=True)
