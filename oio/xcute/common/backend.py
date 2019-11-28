@@ -558,7 +558,7 @@ class XcuteBackend(RedisConnection):
         job_info = self.script_run_next(
             keys=[self._get_timestamp(), orchestrator_id],
             client=self.conn)
-        if job_info is None:
+        if not job_info:
             return None
 
         job_info = self._unmarshal_job_info(
@@ -614,10 +614,12 @@ class XcuteBackend(RedisConnection):
             args=task_ids,
             client=self.conn)
 
+    @handle_redis_exceptions
     def incr_total_tasks(self, job_id, total_marker, tasks_incr):
         return self.script_incr_total(
             keys=[self._get_timestamp(), job_id, total_marker, tasks_incr])
 
+    @handle_redis_exceptions
     def total_tasks_done(self, job_id):
         return self.script_total_tasks_done(
             keys=[self._get_timestamp(), job_id])
@@ -626,11 +628,11 @@ class XcuteBackend(RedisConnection):
     def delete(self, job_id):
         self.script_delete(keys=[job_id])
 
+    @handle_redis_exceptions
     def get_job_info(self, job_id):
         job_info = self._get_job_info(job_id, client=self.conn)
-
-        if job_info is None:
-            raise NotFound('The job does\'nt exist')
+        if not job_info:
+            raise redis.exceptions.ResponseError('no_job')
 
         return self._unmarshal_job_info(job_info)
 
