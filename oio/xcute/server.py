@@ -13,19 +13,34 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from functools import wraps
+
 from werkzeug.exceptions import BadRequest as HTTPBadRequest
+from werkzeug.exceptions import Forbidden as HTTPForbidden
 from werkzeug.exceptions import NotFound as HTTPNotFound
 from werkzeug.routing import Map, Rule, Submount
 from werkzeug.wrappers import Response
 
 from oio.common.easy_value import int_value
-from oio.common.exceptions import NotFound
+from oio.common.exceptions import Forbidden, NotFound
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.wsgi import WerkzeugApp
 from oio.xcute.common.backend import XcuteBackend
 from oio.xcute.common.exceptions import UnknownJobTypeException
 from oio.xcute.jobs import JOB_TYPES
+
+
+def handle_backend_exceptions(func):
+    @wraps(func)
+    def handle_backend_exceptions(self, *args, **kwargs):
+        try:
+            return func(self, *args, **kwargs)
+        except NotFound as exc:
+            return HTTPNotFound(exc.message)
+        except Forbidden as exc:
+            return HTTPForbidden(exc.message)
+    return handle_backend_exceptions
 
 
 class XcuteServer(WerkzeugApp):
@@ -50,10 +65,12 @@ class XcuteServer(WerkzeugApp):
 
         super(XcuteServer, self).__init__(url_map, logger)
 
+    @handle_backend_exceptions
     def on_status(self, req):
         status = self.backend.status()
         return Response(json.dumps(status), mimetype='application/json')
 
+    @handle_backend_exceptions
     def on_job_list(self, req):
         if req.method == 'GET':
             limit = int_value(req.args.get('limit'), None)
@@ -84,12 +101,10 @@ class XcuteServer(WerkzeugApp):
             return Response(
                 json.dumps(job_info), mimetype='application/json', status=202)
 
+    @handle_backend_exceptions
     def on_job(self, req, job_id):
         if req.method == 'GET':
-            try:
-                job_info = self.backend.get_job_info(job_id)
-            except NotFound as e:
-                return HTTPNotFound(e.message)
+            job_info = self.backend.get_job_info(job_id)
 
             return Response(json.dumps(job_info), mimetype='application/json')
 
@@ -98,6 +113,7 @@ class XcuteServer(WerkzeugApp):
 
             return Response(status=204)
 
+    @handle_backend_exceptions
     def on_job_pause(self, req, job_id):
         self.backend.request_pause(job_id)
 
