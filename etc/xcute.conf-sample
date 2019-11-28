@@ -1,0 +1,39 @@
+[DEFAULT]
+log_facility = LOG_LOCAL0
+log_level = INFO
+log_address = /dev/log
+syslog_prefix = OIO,OPENIO,xcute,1
+
+namespace = OPENIO
+
+# Configure Redis backend
+redis_host = 127.0.0.1:6379
+# or
+#redis_sentinel_hosts = 10.0.1.24:6012,10.0.1.27:6012,10.0.1.25:6012
+#redis_sentinel_name = SENTINEL-master-1
+#
+# Redis parameters (see redis.connection module)
+#redis_socket_timeout=None
+#redis_socket_connect_timeout=None
+#redis_socket_keepalive=False
+#redis_retry_on_timeout=False
+#redis_max_connections=2**31
+
+# Redis sentinel parameters, override Redis parameters
+# for connections to the sentinels.
+#redis_sentinel_socket_timeout=None
+#redis_sentinel_socket_connect_timeout=None
+#redis_sentinel_socket_keepalive=False
+#redis_sentinel_retry_on_timeout=False
+#redis_sentinel_max_connections=2**31
+
+[xcute-server]
+bind_addr = 127.0.0.1
+bind_port = 6400
+workers = 2
+
+[xcute-orchestrator]
+orchestrator_id = orchestrator-1
+beanstalkd_workers_tube = oio-xcute
+beanstalkd_reply_tube = oio-xcute.reply
+beanstalkd_reply_addr = beanstalk://127.0.0.1:6014
