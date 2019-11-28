@@ -64,13 +64,13 @@ class XcuteBackend(RedisConnection):
         'job_finished': (
             Forbidden,
             'The job is finished'),
-        'job_already_waiting':  (
+        'job_already_waiting': (
             Forbidden,
             'The job is already waiting'),
-        'job_already_running':  (
+        'job_already_running': (
             Forbidden,
             'The job is already running'),
-        'job_running':  (
+        'job_running': (
             Forbidden,
             'The job running')
         }
@@ -278,16 +278,16 @@ class XcuteBackend(RedisConnection):
             return redis.error_reply('no_job');
         end;
 
-        local total_tasks_sent = redis.call(
-            'HINCRBY', info_key,
-            'tasks.sent', tasks_sent_length);
-        for _, task_id in ipairs(tasks_sent) do
-            redis.call('SADD', 'xcute:tasks:running:' .. job_id, task_id);
-        end;
+        local nb_tasks_sent = 0;
         if tasks_sent_length > 0 then
+            nb_tasks_sent = redis.call(
+                'SADD', 'xcute:tasks:running:' .. job_id, unpack(tasks_sent));
             redis.call('HSET', info_key,
                        'tasks.last_sent', tasks_sent[tasks_sent_length]);
         end;
+        local total_tasks_sent = redis.call(
+            'HINCRBY', info_key,
+            'tasks.sent', nb_tasks_sent);
 
         if all_tasks_sent == 'True' then
             -- replace the estimated total with the actual total
@@ -324,7 +324,7 @@ class XcuteBackend(RedisConnection):
             end;
         end;
     """ + _lua_update_mtime + """
-        return redis.call('HGET', info_key, 'job.status');
+        return {nb_tasks_sent, redis.call('HGET', info_key, 'job.status')};
     """
 
     lua_update_tasks_processed = """
@@ -589,9 +589,13 @@ class XcuteBackend(RedisConnection):
 
     @handle_redis_exceptions
     def update_tasks_sent(self, job_id, task_ids, all_tasks_sent=False):
-        return self.script_update_tasks_sent(
+        nb_tasks_sent, status = self.script_update_tasks_sent(
             keys=[self._get_timestamp(), job_id, str(all_tasks_sent)],
             args=task_ids, client=self.conn)
+        if nb_tasks_sent != len(task_ids):
+            self.logger.warn('%s tasks were sent several times',
+                             len(task_ids) - nb_tasks_sent)
+        return status
 
     @handle_redis_exceptions
     def update_tasks_processed(self, job_id, task_ids,
