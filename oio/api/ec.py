@@ -15,7 +15,7 @@
 
 from oio.common.green import ChunkReadTimeout, ChunkWriteTimeout, \
     ContextPool, ConnectionTimeout, Empty, GreenPile, LightQueue, \
-    SourceReadTimeout, Timeout, eventlet_yield
+    SourceReadTimeout, Timeout, Queue, eventlet_yield
 
 import collections
 import math
@@ -561,7 +561,7 @@ class EcChunkWriter(object):
             self.checksum = None
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
         # we use eventlet Queue to pass data to the send coroutine
-        self.queue = LightQueue(io.PUT_QUEUE_DEPTH)
+        self.queue = Queue(io.PUT_QUEUE_DEPTH)
         self.reqid = kwargs.get('reqid')
         self.perfdata = perfdata
         self.logger = kwargs.get('logger', LOGGER)
@@ -640,11 +640,14 @@ class EcChunkWriter(object):
                 self.logger.warn("Failed to write to %s (%s, reqid=%s)",
                                  self.chunk, msg, self.reqid)
                 self.chunk['error'] = 'write: %s' % msg
+            # Indicate that the data is completely sent
+            self.queue.task_done()
 
         # Drain the queue before quitting
         while True:
             try:
                 self.queue.get_nowait()
+                self.queue.task_done()
             except Empty:
                 break
 
@@ -654,8 +657,8 @@ class EcChunkWriter(object):
         has been processed by the send coroutine
         """
         self.logger.debug("Waiting for %s to receive data", self.chunk['url'])
-        while self.queue.qsize() and not self.failed:
-            eventlet_yield()
+        # Wait until the data is completely sent to continue
+        self.queue.join()
 
     def send(self, data):
         # do not send empty data because
