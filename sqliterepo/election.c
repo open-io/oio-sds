@@ -1479,11 +1479,17 @@ deferred_completion_CREATING(struct exec_later_CREATING_context_s *d)
 	_thlocal_set_manager (d->member->manager);
 	TRACE_EXECUTION(d->member->manager);
 
+#ifdef HAVE_ENBUG
+	if (oio_ext_rand_int_range(1,100) > oio_sync_failure_threshold_action) {
+#endif
 	if (d->zrc != ZOK) {
 		transition_error(d->member, EVT_CREATE_KO, d->zrc);
 	} else {
 		transition(d->member, EVT_CREATE_OK, &d->local_id);
 	}
+#ifdef HAVE_ENBUG
+	}  // else { Never send the callback. }
+#endif
 	member_unref(d->member);
 	member_unlock(d->member);
 
@@ -3405,8 +3411,26 @@ _member_react_CREATING(struct election_member_s *member,
 		enum event_type_e evt, gint32 *p_local_id)
 {
 	_member_assert_CREATING (member);
+	gint64 now = 0;
 	switch (evt) {
 		case EVT_NONE:
+			now = oio_ext_monotonic_time();
+			/* Safety feature to protect from ZooKeeper failures.
+			 * Sometimes the node creation order gets lost into the wild,
+			 * and we never get any callback (no EVT_CREATE_OK or
+			 * EVT_CREATE_KO). So after a configurable delay, we reset the
+			 * election. If the ZooKeeper node is created in the background,
+			 * the DeleteRogueNode mechanism will delete it. */
+			if (_is_over(now, member->last_status,
+						oio_election_delay_expire_pending) ||
+					member->requested_LEAVE) {
+				GRID_WARN("Election for [%s.%s] stuck in CREATING step "
+						"for more than %"G_GINT64_FORMAT"s, resetting it.",
+					member->inline_name.base, member->inline_name.type,
+					oio_election_delay_expire_pending/G_TIME_SPAN_SECOND);
+				member->pending_ZK_CREATE = 0;
+				return member_action_to_FAILED(member);
+			}
 			return;
 
 			/* Interruptions */
@@ -4140,6 +4164,8 @@ _member_next_timeout(const struct election_member_s *m)
 	switch (m->step) {
 		case STEP_NONE:
 			return m->last_status + oio_election_delay_expire_NONE;
+		case STEP_CREATING:
+			return m->last_status + oio_election_delay_expire_pending;
 		case STEP_DELAYED_CHECKING_MASTER:
 			return m->last_status + sqliterepo_getvers_delay;
 		case STEP_DELAYED_CHECKING_SLAVES:
@@ -4385,6 +4411,7 @@ election_manager_play_timers(struct election_manager_s *M, const gint64 now)
 		STEP_FAILED,
 		STEP_DELAYED_CHECKING_MASTER,
 		STEP_DELAYED_CHECKING_SLAVES,
+		STEP_CREATING,
 		STEP_SLAVE,
 		STEP_MASTER,
 		-1
