@@ -98,7 +98,7 @@ class XcuteBackend(RedisConnection):
 
         redis.call('ZADD', 'xcute:job:ids', 0, job_id);
         redis.call(
-            'HSET', 'xcute:job:info:' .. job_id,
+            'HMSET', 'xcute:job:info:' .. job_id,
             'job.id', job_id,
             'job.type', job_type,
             'job.status', 'WAITING',
@@ -124,7 +124,7 @@ class XcuteBackend(RedisConnection):
             return nil;
         end;
 
-        redis.call('HSET', 'xcute:job:info:' .. job_id,
+        redis.call('HMSET', 'xcute:job:info:' .. job_id,
                    'job.status', 'RUNNING',
                    'orchestrator.id', orchestrator_id);
         redis.call('SADD', 'xcute:orchestrator:jobs:' .. orchestrator_id,
@@ -291,7 +291,7 @@ class XcuteBackend(RedisConnection):
 
         if all_tasks_sent == 'True' then
             -- replace the estimated total with the actual total
-            redis.call('HSET', info_key,
+            redis.call('HMSET', info_key,
                        'tasks.all_sent', 'True',
                        'tasks.total', total_tasks_sent,
                        'tasks.is_total_temp', 'False');
