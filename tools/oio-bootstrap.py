@@ -1069,8 +1069,8 @@ log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
 namespace = ${NS}
 # Let this option empty to connect directly to redis_host
-#sentinel_hosts = 127.0.0.1:26379,127.0.0.1:26380,127.0.0.1:26381
-sentinel_master_name = oio
+#redis_sentinel_hosts = 127.0.0.1:26379,127.0.0.1:26380,127.0.0.1:26381
+#redis_sentinel_name = oio
 redis_host = ${IP}:${REDIS_PORT}
 
 [xcute-server]
