@@ -473,7 +473,7 @@
 			{ "type": "monotonic", "name": "oio_election_lock_alert_delay",
 				"key": "sqliterepo.election.lock_alert_delay",
 				"descr": "Only effective when built in DEBUG mode. Dump the long critical sections around the elections lock, when the lock is held for longer than this threshold (in microseconds).",
-				"def": "200", "min": "1", "max": "60s" },
+				"def": "500", "min": "1", "max": "60s" },
 
 			{ "type": "monotonic", "name": "oio_election_period_cond_wait",
 				"key": "sqliterepo.election.wait.quantum",
@@ -509,6 +509,11 @@
 				"key": "sqliterepo.election.delay.expire_master",
 				"descr": "In the current sqliterepo repository, sets the amount of time after which a MASTER election will drop its status and return to the NONE status. This helps recycling established-but-unused elections, and save Zookeeper nodes. Keep this value greater than sqliterepo.election.delay.expire_slave to avoid rotating the master service.",
 				"def": "240m", "min": "1ms", "max": "7d" },
+
+			{ "type": "monotonic", "name": "oio_election_delay_expire_pending",
+				"key": "sqliterepo.election.delay.expire_pending",
+				"descr": "Sets the amount of time after which a pending election (without any status change) will be reset and return to the NONE status. This helps recovering after a ZooKeeper failure. Should be set between sqliterepo.zk.timeout and sqliterepo.election.wait.delay.",
+				"def": "12s", "min": "1s", "max": "7d" },
 
 			{ "type": "monotonic", "name": "oio_election_delay_retry_FAILED",
 				"key": "sqliterepo.election.delay.retry_failed",
