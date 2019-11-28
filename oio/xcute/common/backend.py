@@ -340,7 +340,6 @@ class XcuteBackend(RedisConnection):
         local job_id = KEYS[2];
         local counters = get_counters(KEYS, 3, nil);
         local tasks_processed = ARGV;
-        local tasks_processed_length = #tasks_processed;
 
         local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
                                   'job.status');
@@ -348,12 +347,11 @@ class XcuteBackend(RedisConnection):
             return redis.error_reply('no_job');
         end;
 
+        local nb_tasks_processed  = redis.call(
+            'SREM', 'xcute:tasks:running:' .. job_id, unpack(tasks_processed));
         local total_tasks_processed = redis.call(
             'HINCRBY', 'xcute:job:info:' .. job_id,
-            'tasks.processed', tasks_processed_length);
-        for _, task_id in ipairs(tasks_processed) do
-            redis.call('SREM', 'xcute:tasks:running:' .. job_id, task_id);
-        end;
+            'tasks.processed', nb_tasks_processed);
 
         for key, value in pairs(counters) do
             redis.call('HINCRBY', 'xcute:job:info:' .. job_id,
