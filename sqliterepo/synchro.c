@@ -477,6 +477,7 @@ _aremove_all_watches(struct sqlx_sync_s *ss, const char *path,
 	rc = zoo_aremove_all_watches(ss->zh, p,
 			ZWATCHTYPE_DATA, FALSE, (void_completion_t *)completion, data);
 #else
+	(void) ss;
 	(void) path;
 	(void) completion;
 	(void) data;

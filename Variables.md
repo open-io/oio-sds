@@ -1438,6 +1438,15 @@ Used by `gcc`
  * cmake directive: *OIO_SQLITEREPO_ELECTION_DELAY_EXPIRE_NONE*
  * range: 1 * G_TIME_SPAN_SECOND -> 1 * G_TIME_SPAN_DAY
 
+### sqliterepo.election.delay.expire_pending
+
+> Sets the amount of time after which a pending election (without any status change) will be reset and return to the NONE status. This helps recovering after a ZooKeeper failure. Should be set between sqliterepo.zk.timeout and sqliterepo.election.wait.delay.
+
+ * default: **12 * G_TIME_SPAN_SECOND**
+ * type: gint64
+ * cmake directive: *OIO_SQLITEREPO_ELECTION_DELAY_EXPIRE_PENDING*
+ * range: 1 * G_TIME_SPAN_SECOND -> 7 * G_TIME_SPAN_DAY
+
 ### sqliterepo.election.delay.expire_slave
 
 > In the current sqliterepo repository, sets the amount of time after which a SLAVE election will drop its status and return to the NONE status. This helps recycling established-but-unused elections, and save Zookeeper nodes.
@@ -1468,7 +1477,7 @@ Used by `gcc`
 
 > Only effective when built in DEBUG mode. Dump the long critical sections around the elections lock, when the lock is held for longer than this threshold (in microseconds).
 
- * default: **200**
+ * default: **500**
  * type: gint64
  * cmake directive: *OIO_SQLITEREPO_ELECTION_LOCK_ALERT_DELAY*
  * range: 1 -> 60 * G_TIME_SPAN_SECOND
