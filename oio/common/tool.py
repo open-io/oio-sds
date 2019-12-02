@@ -596,7 +596,7 @@ class _DistributedDispatcher(_Dispatcher):
         Send the event through a non-full sender.
         """
         task_event['beanstalkd_reply'] = reply_loc
-        workers = self.beanstalkd_workers.values()
+        workers = list(self.beanstalkd_workers.values())
         nb_workers = len(workers)
         while True:
             for _ in range(nb_workers):

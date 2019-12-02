@@ -18,14 +18,15 @@
 
 import sys
 import threading
-import BaseHTTPServer
 from ctypes import cdll
+from six import string_types
+from six.moves import BaseHTTPServer
 
 
 class DumbHttpMock (BaseHTTPServer.BaseHTTPRequestHandler):
     def reply(self):
         inbody = None
-        length = self.headers.getheader('content-length')
+        length = self.headers.get('content-length')
         if length is None:
             inbody = []
             while True:
@@ -36,11 +37,11 @@ class DumbHttpMock (BaseHTTPServer.BaseHTTPRequestHandler):
                     break
                 chunk = self.rfile.read(chunk_length)
                 inbody.append(chunk)
-            inbody = ''.join(inbody)
+            inbody = b''.join(inbody)
         elif int(length) > 0:
             inbody = self.rfile.read(int(length))
         else:
-            inbody = ''
+            inbody = b''
         self.log_message("body: %d", len(inbody))
 
         if len(self.server.expectations) <= 0:
@@ -63,6 +64,8 @@ class DumbHttpMock (BaseHTTPServer.BaseHTTPRequestHandler):
 
         # Reply
         pcode, phdr, pbody = rep
+        if isinstance(pbody, string_types):
+            pbody = pbody.encode('utf-8')
         self.send_response(pcode)
         for k, v in phdr.items():
             self.send_header(k, v)
@@ -102,7 +105,7 @@ def test_ok(lib):
         http.append(BaseHTTPServer.HTTPServer(("127.0.0.1", 7000+i),
                                               DumbHttpMock))
     for h in http:
-        urls.append('http://127.0.0.1:' + str(h.server_port) + '/')
+        urls.append(('http://127.0.0.1:%d/' % h.server_port).encode('utf-8'))
         services.append(Service(h))
     expectations = [
         (("/", {"Content-Length": "0"}, ""), (200, {}, "")),
@@ -148,6 +151,6 @@ def test_ok(lib):
 
 
 if __name__ == '__main__':
-    lib = cdll.LoadLibrary(sys.argv[1] + "/liboiohttp_test.so")
-    lib.setup()
-    test_ok(lib)
+    LIB = cdll.LoadLibrary(sys.argv[1] + "/liboiohttp_test.so")
+    LIB.setup()
+    test_ok(LIB)

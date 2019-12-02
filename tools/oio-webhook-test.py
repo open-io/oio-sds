@@ -17,11 +17,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
-import BaseHTTPServer
-import SocketServer
 import argparse
 import json
 import socket
+from six.moves import BaseHTTPServer, socketserver as SocketServer
 
 PORT = 9081
 DATA = {}
