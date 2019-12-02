@@ -203,6 +203,7 @@ enum hook_type_e
 	CMD_EXIST,
 	CMD_GET,
 	CMD_LIST,
+	CMD_DEL_WATCH,
 };
 
 static const char *
@@ -214,6 +215,7 @@ _pending_2str (enum hook_type_e t)
 		ON_ENUM(,CMD_EXIST);
 		ON_ENUM(,CMD_GET);
 		ON_ENUM(,CMD_LIST);
+		ON_ENUM(,CMD_DEL_WATCH);
 	}
 
 	g_assert_not_reached ();
@@ -254,11 +256,15 @@ static int _sync_awget_siblings (struct sqlx_sync_s *ss, const char *path,
 		watcher_fn watcher, void* watcherCtx,
 		strings_completion_t completion, const void *data);
 
+static int _sync_aremove_all_watches(struct sqlx_sync_s *ss, const char *path,
+		void_completion_t completion, const void *data);
+
 struct sqlx_sync_vtable_s vtable_sync_NOOP =
 {
 	_sync_clear, _sync_open, _sync_close,
 	_sync_acreate, _sync_adelete, _sync_awexists,
 	_sync_awget, _sync_awget_children, _sync_awget_siblings,
+	_sync_aremove_all_watches,
 };
 
 static void
@@ -354,6 +360,16 @@ _sync_awget_siblings (struct sqlx_sync_s *ss, const char *path UNUSED,
 		enum hook_type_e val = CMD_LIST;
 		g_array_append_vals (ss->pending, &val, 1);
 	}
+	return ZOK;
+}
+
+static int
+_sync_aremove_all_watches(struct sqlx_sync_s *ss, const char *path UNUSED,
+		void_completion_t completion UNUSED, const void *data UNUSED)
+{
+	EXTRA_ASSERT (ss->vtable == &vtable_sync_NOOP);
+	enum hook_type_e val = CMD_DEL_WATCH;
+	g_array_append_vals (ss->pending, &val, 1);
 	return ZOK;
 }
 
@@ -765,7 +781,11 @@ static void test_STEP_WATCHING(void) {
 	RESET();
 	transition(m, EVT_EXISTS_KO, NULL);
 	_member_assert_LEAVING(m);
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 	TEST_TAIL();
 }
@@ -826,7 +846,11 @@ static void test_STEP_LISTING(void) {
 	RESET();
 	transition(m, EVT_LIST_KO, NULL);
 	_member_assert_LEAVING_FAILING(m);
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 	gint64 i64;
 
@@ -980,7 +1004,11 @@ static void test_STEP_CHECKING_SLAVES(void) {
 	transition(m, EVT_GETVERS_OLD, NULL);
 	_member_assert_LEAVING(m);
 	g_assert_false(member_has_getvers(m));
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 	RESET();
 	m->count_GETVERS = 3;
@@ -989,7 +1017,11 @@ static void test_STEP_CHECKING_SLAVES(void) {
 	transition(m, EVT_GETVERS_RACE, NULL);
 	_member_assert_LEAVING(m);
 	g_assert_false(member_has_getvers(m));
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 	/* Legit transitions with no interruption:
 	 * 3/ LAST getvers reply, quorum absent */
@@ -1010,7 +1042,11 @@ static void test_STEP_CHECKING_SLAVES(void) {
 	transition(m, EVT_GETVERS_KO, NULL);
 	_member_assert_LEAVING_FAILING(m);  /* no more attempts left */
 	g_assert_false(member_has_getvers(m));
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 	TEST_TAIL();
 }
@@ -1059,7 +1095,11 @@ static void test_STEP_MASTER(void) {
 	RESET();
 	transition(m, EVT_LEAVE_REQ, NULL);
 	_member_assert_LEAVING(m);
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 	g_assert_false(member_has_request(m));
 
 	RESET();
@@ -1145,12 +1185,20 @@ static void test_STEP_ASKING(void) {
 	RESET();
 	transition(m, EVT_MASTER_BAD, NULL);
 	_member_assert_LEAVING_FAILING(m);
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 	RESET();
 	transition(m, EVT_MASTER_KO, NULL);
 	_member_assert_LEAVING_FAILING(m);
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 	/* Legit transitions
 	 * 2/ Pending past interruption */
@@ -1165,7 +1213,11 @@ static void test_STEP_ASKING(void) {
 	g_assert_false(m->requested_LEFT_MASTER);
 	g_assert_false(m->requested_LEFT_SELF);
 	g_assert_false(m->requested_LEAVE);
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 	RESET();
 	m->requested_LEFT_SELF = 1; /* left_self takes over left_master */
@@ -1204,7 +1256,11 @@ static void test_STEP_ASKING(void) {
 	g_assert_false(m->requested_LEFT_MASTER);
 	g_assert_false(m->requested_LEFT_SELF);
 	g_assert_false(m->requested_LEAVE);
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 	RESET();
 	m->requested_LEFT_MASTER = 1;
@@ -1213,7 +1269,11 @@ static void test_STEP_ASKING(void) {
 	g_assert_false(m->requested_LEFT_MASTER);
 	g_assert_false(m->requested_LEFT_SELF);
 	g_assert_false(m->requested_LEAVE);
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 	RESET();
 	m->requested_LEAVE = 1;
@@ -1222,7 +1282,11 @@ static void test_STEP_ASKING(void) {
 	g_assert_false(m->requested_LEFT_MASTER);
 	g_assert_false(m->requested_LEFT_SELF);
 	g_assert_false(m->requested_LEAVE);
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 
 	/* MASTER_KO */
@@ -1235,7 +1299,11 @@ static void test_STEP_ASKING(void) {
 	g_assert_false(m->requested_LEFT_MASTER);
 	g_assert_false(m->requested_LEFT_SELF);
 	g_assert_false(m->requested_LEAVE);
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 	RESET();
 	m->requested_LEFT_MASTER = 1;
@@ -1245,7 +1313,11 @@ static void test_STEP_ASKING(void) {
 	g_assert_false(m->requested_LEFT_MASTER);
 	g_assert_false(m->requested_LEFT_SELF);
 	g_assert_false(m->requested_LEAVE);
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 	RESET();
 	m->requested_LEFT_SELF = 1;
@@ -1254,7 +1326,11 @@ static void test_STEP_ASKING(void) {
 	g_assert_false(m->requested_LEFT_MASTER);
 	g_assert_false(m->requested_LEFT_SELF);
 	g_assert_false(m->requested_LEAVE);
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 	RESET();
 	m->requested_LEFT_MASTER = 1;
@@ -1272,7 +1348,11 @@ static void test_STEP_ASKING(void) {
 	g_assert_false(m->requested_LEFT_MASTER);
 	g_assert_false(m->requested_LEFT_SELF);
 	g_assert_false(m->requested_LEAVE);
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 	TEST_TAIL();
 }
@@ -1324,7 +1404,11 @@ static void test_STEP_DELAYED_CHECKING_MASTER(void) {
 	RESET();
 	transition(m, EVT_LEAVE_REQ, NULL);
 	_member_assert_LEAVING(m);
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 	g_assert_cmpint(m->requested_LEAVE, ==, 0);
 
 	RESET();
@@ -1372,7 +1456,11 @@ static void test_STEP_DELAYED_CHECKING_MASTER(void) {
 	CLOCK += sqliterepo_getvers_delay + 1;
 	transition(m, EVT_NONE, NULL);
 	_member_assert_LEAVING_FAILING(m);
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 	/* Timeout raised with reload, no attempts left, no decache */
 	RESET();
@@ -1381,7 +1469,11 @@ static void test_STEP_DELAYED_CHECKING_MASTER(void) {
 	CLOCK += sqliterepo_getvers_delay + 1;
 	transition(m, EVT_NONE, NULL);
 	_member_assert_LEAVING_FAILING(m);
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 	TEST_TAIL();
 }
@@ -1459,7 +1551,11 @@ static void test_STEP_REFRESH_CHECKING_MASTER(void) {
 	RESET();
 	transition(m, EVT_GETPEERS_DONE, NULL);
 	_member_assert_LEAVING_FAILING(m);
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 	RESET();
 	transition(m, EVT_GETPEERS_DONE, PEERS);
@@ -1480,7 +1576,11 @@ static void test_STEP_REFRESH_CHECKING_MASTER(void) {
 	transition(m, EVT_GETPEERS_DONE, PEERS);
 	_member_assert_LEAVING(m);
 	g_assert_cmpint(m->requested_LEAVE, ==, 0);
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 	RESET();
 	m->requested_LEFT_SELF = 1;
@@ -1546,7 +1646,11 @@ static void test_STEP_DELAYED_CHECKING_SLAVES(void) {
 	RESET();
 	transition(m, EVT_LEAVE_REQ, NULL);
 	_member_assert_LEAVING(m);
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 	g_assert_cmpint(m->requested_LEAVE, ==, 0);
 
 	RESET();
@@ -1600,7 +1704,11 @@ static void test_STEP_DELAYED_CHECKING_SLAVES(void) {
 	CLOCK += sqliterepo_getvers_delay + 1;
 	transition(m, EVT_NONE, NULL);
 	_member_assert_LEAVING_FAILING(m);
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 	/* Timeout raised without reload, no pending interruption, no attempt, refresh */
 	RESET();
@@ -1609,7 +1717,11 @@ static void test_STEP_DELAYED_CHECKING_SLAVES(void) {
 	CLOCK += sqliterepo_getvers_delay + 1;
 	transition(m, EVT_NONE, NULL);
 	_member_assert_LEAVING_FAILING(m);
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 	TEST_TAIL();
 }
@@ -1676,7 +1788,11 @@ static void test_STEP_REFRESH_CHECKING_SLAVES(void) {
 	RESET();
 	transition(m, EVT_GETPEERS_DONE, NULL);
 	_member_assert_LEAVING_FAILING(m);
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 	RESET();
 	transition(m, EVT_GETPEERS_DONE, PEERS);
@@ -1697,7 +1813,11 @@ static void test_STEP_REFRESH_CHECKING_SLAVES(void) {
 	transition(m, EVT_GETPEERS_DONE, PEERS);
 	_member_assert_LEAVING(m);
 	g_assert_cmpint(m->requested_LEAVE, ==, 0);
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 	RESET();
 	m->requested_LEFT_MASTER = 1;
@@ -1799,7 +1919,11 @@ static void test_STEP_CHECKING_MASTER(void) {
 	transition(m, EVT_GETVERS_KO, NULL);
 	_member_assert_LEAVING_FAILING(m);
 	g_assert_false(member_has_getvers(m));
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 	RESET();
 	m->attempts_GETVERS = 1;
@@ -1863,7 +1987,11 @@ static void test_STEP_SLAVE(void) {
 	RESET();
 	transition(m, EVT_LEAVE_REQ, NULL);
 	_member_assert_LEAVING(m);
+#if ZOO_35
+	_pending(CMD_DEL_WATCH, CMD_DEL_WATCH, CMD_DELETE, 0);
+#else
 	_pending(CMD_DELETE, 0);
+#endif
 
 	RESET();
 	transition(m, EVT_LEFT_SELF, NULL);
