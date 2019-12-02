@@ -84,7 +84,7 @@ class OioTarEntry(object):
     def compute(self, conn, data=None):
         tarinfo = TarInfo()
         tarinfo.name = self.name
-        tarinfo.mod = 0o700
+        tarinfo.mode = 0o700
         tarinfo.uid = 0
         tarinfo.gid = 0
         tarinfo.type = REGTYPE
@@ -94,12 +94,12 @@ class OioTarEntry(object):
             meta = data or conn.container_get_properties(self.acct, self.ref)
             tarinfo.size = len(json.dumps(meta['properties'], sort_keys=True))
             self._filesize = tarinfo.size
-            self._buf = tarinfo.tobuf(format=PAX_FORMAT)
+            self._buf = tarinfo.tobuf(format=PAX_FORMAT, encoding='utf-8')
             return
         elif self.name == CONTAINER_MANIFEST:
             tarinfo.size = len(json.dumps(data, sort_keys=True))
             self._filesize = tarinfo.size
-            self._buf = tarinfo.tobuf(format=PAX_FORMAT)
+            self._buf = tarinfo.tobuf(format=PAX_FORMAT, encoding='utf-8')
             return
 
         entry = conn.object_get_properties(self.acct, self.ref, self.name)
@@ -111,7 +111,8 @@ class OioTarEntry(object):
             tarinfo.size = int(properties.get(SLO_SIZE))
             _, slo = conn.object_fetch(self.acct, self.ref, self.name,
                                        properties=False)
-            self._slo = json.loads("".join(slo), object_pairs_hook=OrderedDict)
+            self._slo = json.loads(b''.join(slo).decode('utf-8'),
+                                   object_pairs_hook=OrderedDict)
             self._checksums = {}
             # format MD5 to share same format as multi chunks object
             offset = 0
@@ -145,7 +146,7 @@ class OioTarEntry(object):
                 continue
             tarinfo.pax_headers[SCHILY + key] = val
         tarinfo.pax_headers['mime_type'] = entry['mime_type']
-        self._buf = tarinfo.tobuf(format=PAX_FORMAT)
+        self._buf = tarinfo.tobuf(format=PAX_FORMAT, encoding='utf-8')
 
     @property
     def filesize(self):
@@ -226,7 +227,7 @@ class LimitedStream(object):
             self.current_chunk['md5'] = pickle.dumps(self.md5)
             self.md5 = None
             self.current_chunk = None
-        return ""
+        return b''
 
     def _update_checksum(self, data):
         """Update and verify the checksum of the current chunk."""
@@ -296,7 +297,7 @@ class ContainerTarFile(object):
     # FIXME: create_tar_oio_XXX functions should be merged
     def create_tar_oio_stream(self, entry, range_):
         """Extract data from entry from object"""
-        mem = ""
+        mem = b''
         name = entry['name']
 
         if range_[0] < entry['hdr_blocks']:
@@ -340,7 +341,7 @@ class ContainerTarFile(object):
                 _, data = self.storage.object_fetch(
                     self.acct, cnt, path, ranges=[(slo_start, slo_end)],
                     properties=False)
-                mem += "".join(data)
+                mem += b''.join(data)
 
                 start = max(0, start - part['bytes'])
                 end -= part['bytes']
@@ -350,7 +351,7 @@ class ContainerTarFile(object):
             _, data = self.storage.object_fetch(
                 self.acct, self.container, name, ranges=[(start, end)],
                 properties=False)
-            mem += "".join(data)
+            mem += b''.join(data)
 
         if last:
             mem += NUL * (BLOCKSIZE - remainder)
@@ -582,7 +583,7 @@ class ContainerRestore(object):
         if buf == NUL * BLOCKSIZE:
             return False
 
-        self.inf = TarInfo.frombuf(buf)
+        self.inf = TarInfo.frombuf(buf, 'utf-8', 'strict')
 
         if self.mode == self.MODE_RANGE:
             self.inf.size = min(self.req_size - self.state['consumed'],
@@ -702,7 +703,7 @@ class ContainerRestore(object):
         self.prepare(account, container)
 
         self.proxy.container_create(account, container)
-        self.state = {'consumed': 0, 'buf': ''}
+        self.state = {'consumed': 0, 'buf': b''}
 
         hdrs = {}
         while self.state['consumed'] < self.req_size:

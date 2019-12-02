@@ -329,7 +329,6 @@ func_tests_rebuilder_mover () {
 #-------------------------------------------------------------------------------
 
 set -e
-set -x
 SRCDIR="$1" ; [[ -n "$SRCDIR" ]] ; [[ -d "$SRCDIR" ]]
 WRKDIR="$2" ; [[ -n "$WRKDIR" ]] ; [[ -d "$WRKDIR" ]]
 
