@@ -156,12 +156,12 @@ class TestContainerDownload(BaseTestCase):
         for idx, _name in itertools.islice(name(), 5):
             mime = random.choice(MIMETYPE)
             if append and size > 0:
-                data = gen_data(size / 2 * idx)
+                data = gen_data(size // 2 * idx)
                 entry = {'data': data, 'meta': None, 'mime': mime}
                 self.conn.object_create(self.account, self._cnt,
                                         obj_name=_name, data=data,
                                         mime_type=mime)
-                data = gen_data(size / 2 * idx)
+                data = gen_data(size // 2 * idx)
                 self.conn.object_create(self.account, self._cnt,
                                         obj_name=_name, data=data,
                                         mime_type=mime, append=True)
@@ -509,7 +509,7 @@ class TestContainerDownload(BaseTestCase):
         org = requests.get(self.make_uri('dump'))
         cnt = rand_str(20)
         uri = self.make_uri('restore', container=cnt)
-        size = divmod(len(org.content) / 3, 512)[0] * 512
+        size = divmod(len(org.content) // 3, 512)[0] * 512
         parts = [org.content[x:x+size] for x in xrange(0, len(org.content),
                                                        size)]
         start = 0
@@ -529,7 +529,7 @@ class TestContainerDownload(BaseTestCase):
             def read(self, *args):
                 if self._count < len(self._data):
                     time.sleep(0.5)
-                    data = self._data[self._count:self._count+size/3]
+                    data = self._data[self._count:self._count+size//3]
                     self._count += len(data)
                     return data
                 return ""
@@ -580,7 +580,7 @@ class TestContainerDownload(BaseTestCase):
 
             def read(self, *args):
                 if self._count < self._size:
-                    data = self._data[self._count:self._count+size/3]
+                    data = self._data[self._count:self._count+size//3]
                     self._count += len(data)
                     return data
                 if self._count == len(self._data):
@@ -614,7 +614,7 @@ class TestContainerDownload(BaseTestCase):
             hdrs = {'Range': 'bytes=%d-%d' % (start, stop-1)}
             size = stop - start
             if cut:
-                size = block / 2
+                size = block // 2
             cut = not cut
 
             try:

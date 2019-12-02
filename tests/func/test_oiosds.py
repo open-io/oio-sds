@@ -19,8 +19,9 @@
 import sys
 import json
 import threading
-import BaseHTTPServer
 from ctypes import cdll
+from six import string_types
+from six.moves import BaseHTTPServer
 
 
 class DumbHttpMock(BaseHTTPServer.BaseHTTPRequestHandler):
@@ -45,6 +46,8 @@ class DumbHttpMock(BaseHTTPServer.BaseHTTPRequestHandler):
 
         # Reply
         pcode, phdr, pbody = rep
+        if isinstance(pbody, string_types):
+            pbody = pbody.encode('utf-8')
         self.send_response(pcode)
         for k, v in phdr.items():
             self.send_header(k, v)
@@ -155,14 +158,14 @@ def test_get(lib):
     for s in services:
         s.start()
 
-    cfg = json.dumps({"NS": {"proxy": urls[0]}})
+    cfg = json.dumps({"NS": {"proxy": urls[0]}}).encode('utf-8')
     try:
-        lib.test_init(cfg, "NS")
-        lib.test_get_fail(cfg, "NS", "NS/ACCT/JFS//plop")
-        lib.test_get_fail(cfg, "NS", "NS/ACCT/JFS//plop")
-        lib.test_get_success(cfg, "NS", "NS/ACCT/JFS//plop", 64)
-        lib.test_get_success(cfg, "NS", "NS/ACCT/JFS//plop", 64)
-        lib.test_get_success(cfg, "NS", "NS/ACCT/JFS//plop", 64)
+        lib.test_init(cfg, b"NS")
+        lib.test_get_fail(cfg, b"NS", b"NS/ACCT/JFS//plop")
+        lib.test_get_fail(cfg, b"NS", b"NS/ACCT/JFS//plop")
+        lib.test_get_success(cfg, b"NS", b"NS/ACCT/JFS//plop", 64)
+        lib.test_get_success(cfg, b"NS", b"NS/ACCT/JFS//plop", 64)
+        lib.test_get_success(cfg, b"NS", b"NS/ACCT/JFS//plop", 64)
     finally:
         for h in http:
             assert(0 == len(h.expectations))
@@ -185,12 +188,12 @@ def test_has(lib):
     service = Service(proxy)
     service.start()
 
-    cfg = json.dumps({"NS": {"proxy": proxy_url}})
+    cfg = json.dumps({"NS": {"proxy": proxy_url}}).encode('utf-8')
     try:
-        lib.test_init(cfg, "NS")
-        lib.test_has(cfg, "NS", "NS/ACCT/JFS//plop")
-        lib.test_has_not(cfg, "NS", "NS/ACCT/JFS//plop")
-        lib.test_has_fail(cfg, "NS", "NS/ACCT/JFS//plop")
+        lib.test_init(cfg, b"NS")
+        lib.test_has(cfg, b"NS", b"NS/ACCT/JFS//plop")
+        lib.test_has_not(cfg, b"NS", b"NS/ACCT/JFS//plop")
+        lib.test_has_fail(cfg, b"NS", b"NS/ACCT/JFS//plop")
     finally:
         proxy.shutdown()
         service.join()
@@ -219,13 +222,13 @@ def test_list_fail(lib):
     service = Service(proxy)
     service.start()
 
-    cfg = json.dumps({"NS": {"proxy": proxy_url}})
+    cfg = json.dumps({"NS": {"proxy": proxy_url}}).encode('utf-8')
     try:
-        lib.test_init(cfg, "NS")
-        lib.test_list_badarg(cfg, "NS")
+        lib.test_init(cfg, b"NS")
+        lib.test_list_badarg(cfg, b"NS")
         while len(proxy.expectations) > 0:
             # invalid HTTP reply status
-            lib.test_list_fail(cfg, "NS", "NS/ACCT/JFS")
+            lib.test_list_fail(cfg, b"NS", b"NS/ACCT/JFS")
         assert(0 == len(proxy.expectations))
     finally:
         proxy.shutdown()
@@ -296,22 +299,22 @@ def test_list_ok(lib):
     service = Service(proxy)
     service.start()
 
-    cfg = json.dumps({"NS": {"proxy": proxy_url}})
+    cfg = json.dumps({"NS": {"proxy": proxy_url}}).encode('utf-8')
     try:
-        lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 0,
+        lib.test_list_success_count(cfg, b"NS", b"NS/ACCT/JFS", 0,
                                     None, None, None, 0)
-        lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 6,
+        lib.test_list_success_count(cfg, b"NS", b"NS/ACCT/JFS", 6,
                                     None, None, None, 0)
-        lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 1,
-                                    "pla", None, None, 0)
-        lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 1,
-                                    None, "plap", None, 0)
-        lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 2,
+        lib.test_list_success_count(cfg, b"NS", b"NS/ACCT/JFS", 1,
+                                    b"pla", None, None, 0)
+        lib.test_list_success_count(cfg, b"NS", b"NS/ACCT/JFS", 1,
+                                    None, b"plap", None, 0)
+        lib.test_list_success_count(cfg, b"NS", b"NS/ACCT/JFS", 2,
                                     None, None, None, 0)
-        lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 2,
+        lib.test_list_success_count(cfg, b"NS", b"NS/ACCT/JFS", 2,
                                     None, None, None, 2)
-        lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 1,
-                                    None, "plap", None, 1)
+        lib.test_list_success_count(cfg, b"NS", b"NS/ACCT/JFS", 1,
+                                    None, b"plap", None, 1)
     finally:
         proxy.shutdown()
         service.join()

@@ -55,7 +55,7 @@ class TestECD(BaseTestCase):
         storage_method = STORAGE_METHODS.load(meta['chunk_method'])
         sorted_chunks = _sort_chunks(chunks, storage_method.ec)
 
-        data = ''
+        data = b''
         for pos in range(len(sorted_chunks)):
             resp = self._download_metachunk(meta, sorted_chunks[pos])
             self.assertEqual(200, resp.status)
@@ -91,7 +91,7 @@ class TestECD(BaseTestCase):
         sorted_chunks = _sort_chunks(chunks, storage_method.ec)
 
         for i in range(storage_method.ec_nb_parity):
-            data = ''
+            data = b''
             for pos in range(len(sorted_chunks)):
                 chunk = random.choice(sorted_chunks[pos])
                 sorted_chunks[pos].remove(chunk)
@@ -118,7 +118,7 @@ class TestECD(BaseTestCase):
 
         sorted_present_chunks = sorted_chunks.copy()
         for i in range(storage_method.ec_nb_parity):
-            data = ''
+            data = b''
             for pos in range(len(sorted_chunks)):
                 chunk = random.choice(sorted_present_chunks[pos])
                 sorted_present_chunks[pos].remove(chunk)
@@ -148,7 +148,7 @@ class TestECD(BaseTestCase):
         sorted_present_chunks = sorted_chunks.copy()
         try:
             for i in range(storage_method.ec_nb_parity):
-                data = ''
+                data = b''
                 for pos in range(len(sorted_chunks)):
                     if pos == 0:
                         chunk = random.choice(sorted_present_chunks[pos])
