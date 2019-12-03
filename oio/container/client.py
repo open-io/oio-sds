@@ -115,7 +115,8 @@ class ContainerClient(ProxyClient):
         Build URIs for request that don't use the same prefix as the one
         set in this class' constructor.
         """
-        uri = 'http://%s/v3.0/%s/%s' % (self.proxy_netloc, self.ns, target)
+        uri = '%s://%s/v3.0/%s/%s' % (self.proxy_scheme, self.proxy_netloc,
+                                      self.ns, target)
         return uri
 
     def _make_params(self, account=None, reference=None, path=None, cid=None,
