@@ -60,12 +60,15 @@ class ProxyClient(HttpApi):
             endpoint = self.conf.get('proxyd_url', None)
 
         ep_parts = list()
+        self.proxy_scheme = 'http'
         if endpoint:
-            self.proxy_netloc = endpoint.lstrip("http://")
+            if endpoint.startswith('https://'):
+                self.proxy_scheme = 'https'
+            self.proxy_netloc = endpoint.lstrip('%s://' % self.proxy_scheme)
         else:
             ns_conf = load_namespace_conf(self.ns)
             self.proxy_netloc = ns_conf.get('proxy')
-        ep_parts.append("http:/")
+        ep_parts.append('%s:/' % self.proxy_scheme)
         ep_parts.append(self.proxy_netloc)
 
         ep_parts.append("v3.0")
