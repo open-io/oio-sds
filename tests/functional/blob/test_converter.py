@@ -91,7 +91,7 @@ class TestBlobConverter(BaseTestCase):
                            expected_errors=0):
         conf = self.conf
         conf['volume'] = self.rawx_volumes[chunk_volume]
-        converter = BlobConverter(conf)
+        converter = BlobConverter(conf, logger=self.logger)
         converter.safe_convert_chunk(chunk_path)
         self.assertEqual(1, converter.total_chunks_processed)
         self.assertEqual(1, converter.passes)

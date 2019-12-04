@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -40,7 +40,7 @@ class TestContent(object):
         self.id = random_id(32)
         self.fullpath = encode_fullpath(
             account, ref, self.path, self.version, self.id)
-        self.data = random_str(1280)
+        self.data = os.urandom(1280)
         self.size = len(self.data)
         md5 = hashlib.new('md5')
         md5.update(self.data)
@@ -105,7 +105,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
             pass
 
         try:
-            self.container_client.container_destroy(self.account, self.ref)
+            self.container_client.container_delete(self.account, self.ref)
         except Exception:
             pass
 
@@ -142,25 +142,26 @@ class TestBlobAuditorFunctional(BaseTestCase):
 
     def test_chunk_corrupted(self):
         self.init_content()
-        with open(self.chunk.path, "w") as f:
-            f.write(random_str(1280))
+        with open(self.chunk.path, "wb") as outf:
+            outf.write(os.urandom(1280))
 
         self.assertRaises(exc.CorruptedChunk, self.auditor.chunk_audit,
                           self.chunk.path, self.chunk.id)
 
     def test_chunk_bad_chunk_size(self):
         self.init_content()
-        with open(self.chunk.path, "w") as f:
-            f.write(random_str(320))
+        with open(self.chunk.path, "wb") as outf:
+            outf.write(os.urandom(320))
 
-        self.assertRaises(exc.FaultyChunk, self.auditor.chunk_audit,
+        exc_class = (exc.FaultyChunk, exc.CorruptedChunk)
+        self.assertRaises(exc_class, self.auditor.chunk_audit,
                           self.chunk.path, self.chunk.id)
 
     def test_xattr_bad_xattr_metachunk_size(self):
         self.init_content()
         xattr.setxattr(
             self.chunk.path, 'user.' + chunk_xattr_keys['metachunk_size'],
-            '320')
+            b'320')
 
         self.assertRaises(exc.FaultyChunk, self.auditor.chunk_audit,
                           self.chunk.path, self.chunk.id)
@@ -169,7 +170,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
         self.init_content()
         xattr.setxattr(
             self.chunk.path, 'user.' + chunk_xattr_keys['metachunk_hash'],
-            '0123456789ABCDEF0123456789ABCDEF')
+            b'0123456789ABCDEF0123456789ABCDEF')
 
         self.assertRaises(exc.FaultyChunk, self.auditor.chunk_audit,
                           self.chunk.path, self.chunk.id)
@@ -181,7 +182,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
             + str(self.chunk.id))
         xattr.setxattr(
             self.chunk.path, 'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
-            + 'WRONG_ID', self.content.fullpath)
+            + 'WRONG_ID', self.content.fullpath.encode('utf-8'))
 
         self.assertRaises(exc.FaultyChunk, self.auditor.chunk_audit,
                           self.chunk.path, self.chunk.id)
@@ -192,7 +193,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
             self.chunk.path, 'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
             + str(self.chunk.id), encode_fullpath(
                 self.account, 'WRONG_REF', self.content.path,
-                self.content.version, self.content.id))
+                self.content.version, self.content.id).encode('utf-8'))
 
         self.assertRaises(exc.OrphanChunk, self.auditor.chunk_audit,
                           self.chunk.path, self.chunk.id)
@@ -203,7 +204,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
             self.chunk.path, 'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
             + str(self.chunk.id), encode_fullpath(
                 self.account, self.ref, self.content.path,
-                self.content.version, '0123456789ABCDEF'))
+                self.content.version, '0123456789ABCDEF').encode('utf-8'))
 
         self.assertRaises(exc.OrphanChunk, self.auditor.chunk_audit,
                           self.chunk.path, self.chunk.id)
@@ -211,7 +212,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
     def test_xattr_bad_xattr_chunk_position(self):
         self.init_content()
         xattr.setxattr(
-            self.chunk.path, 'user.' + chunk_xattr_keys['chunk_pos'], '42')
+            self.chunk.path, 'user.' + chunk_xattr_keys['chunk_pos'], b'42')
 
         self.assertRaises(exc.FaultyChunk, self.auditor.chunk_audit,
                           self.chunk.path, self.chunk.id)
