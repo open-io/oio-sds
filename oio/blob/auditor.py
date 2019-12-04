@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -172,7 +172,7 @@ class BlobAuditorWorker(object):
         self.passes += 1
 
     def chunk_audit(self, path, chunk_id):
-        with open(path) as chunk_file:
+        with open(path, 'rb') as chunk_file:
             return self.chunk_file_audit(chunk_file, chunk_id)
 
     def chunk_file_audit(self, chunk_file, chunk_id):
@@ -279,11 +279,12 @@ class ChunkReader(object):
 
     def close(self):
         if self.fp:
-            self.md5_read = self.iter_md5.hexdigest()
+            md5_read = self.iter_md5.hexdigest()
             if self.bytes_read != self.size:
-                raise exc.FaultyChunk('Invalid size for chunk')
+                raise exc.FaultyChunk('Invalid size: expected %d, got %d' % (
+                                      self.size, self.bytes_read))
 
-            if self.md5_read != self.md5_checksum:
+            if md5_read != self.md5_checksum:
                 raise exc.CorruptedChunk(
                     'checksum does not match %s != %s'
-                    % (self.md5_read, self.md5_checksum))
+                    % (md5_read, self.md5_checksum))

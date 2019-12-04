@@ -32,26 +32,30 @@ def convert_to_old_chunk(chunk_path, account, container, path, version,
     cid = cid_from_name(account, container)
     with open(chunk_path) as fd:
         xattr.setxattr(
-            fd, 'user.' + chunk_xattr_keys['chunk_id'], chunk_id)
+            fd, 'user.' + chunk_xattr_keys['chunk_id'],
+            chunk_id.encode('utf-8'))
         xattr.setxattr(
-            fd, 'user.' + chunk_xattr_keys['container_id'], cid)
+            fd, 'user.' + chunk_xattr_keys['container_id'],
+            cid.encode('utf-8'))
         xattr.setxattr(
-            fd, 'user.' + chunk_xattr_keys['content_path'], path)
+            fd, 'user.' + chunk_xattr_keys['content_path'],
+            path.encode('utf-8'))
         xattr.setxattr(
             fd, 'user.' + chunk_xattr_keys['content_version'],
-            str(version))
+            str(version).encode('utf-8'))
         xattr.setxattr(
-            fd, 'user.' + chunk_xattr_keys['content_id'], content_id)
+            fd, 'user.' + chunk_xattr_keys['content_id'],
+            content_id.encode('utf-8'))
         if add_old_fullpath:
             old_fullpath = encode_old_fullpath(
-                account, container, path, version)
-            h = sha256()
-            h.update(old_fullpath)
-            hash_old_fullpath = h.hexdigest().upper()
+                account, container, path, version).encode('utf-8')
+            hasher = sha256()
+            hasher.update(old_fullpath)
+            hash_old_fullpath = hasher.hexdigest().upper()
             xattr.setxattr(
                 fd, 'user.oio:' + hash_old_fullpath, old_fullpath)
         xattr.setxattr(
-            fd, 'user.' + chunk_xattr_keys['oio_version'], '4.0')
+            fd, 'user.' + chunk_xattr_keys['oio_version'], b'4.0')
         try:
             xattr.removexattr(
                 fd, 'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + chunk_id)

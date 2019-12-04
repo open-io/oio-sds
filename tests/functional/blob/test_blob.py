@@ -19,7 +19,7 @@ import string
 from os.path import isfile
 from hashlib import md5
 from six.moves.urllib_parse import unquote, urlparse
-from oio.common.http import headers_from_object_metadata
+from oio.common.http import headers_from_object_metadata, HeadersDict
 from oio.common.http_eventlet import http_connect
 from oio.common.constants import OIO_VERSION, CHUNK_HEADERS
 from oio.common.fullpath import encode_fullpath
@@ -727,7 +727,7 @@ class RawxTestSuite(CommonTestCase):
 
         resp1, data1 = self._http_request(chunkurl, 'GET', '', {})
         self.assertEqual(200, resp1.status)
-        headers1 = dict(resp1.getheaders())
+        headers1 = HeadersDict(resp1.getheaders())
         with open(chunkpath, 'r') as fd:
             meta1, _ = read_chunk_metadata(fd, chunkid)
 
@@ -737,7 +737,7 @@ class RawxTestSuite(CommonTestCase):
 
         resp2, data2 = self._http_request(chunkurl, 'GET', '', {})
         self.assertEqual(200, resp2.status)
-        headers2 = dict(resp2.getheaders())
+        headers2 = HeadersDict(resp2.getheaders())
         with open(chunkpath, 'r') as fd:
             meta2, _ = read_chunk_metadata(fd, chunkid)
 
@@ -769,7 +769,7 @@ class RawxTestSuite(CommonTestCase):
 
         resp2, data2 = self._http_request(chunkurl, 'GET', '', {})
         self.assertEqual(200, resp2.status)
-        headers2 = dict(resp2.getheaders())
+        headers2 = HeadersDict(resp2.getheaders())
         with open(chunkpath, 'r') as fd:
             meta2, _ = read_chunk_metadata(fd, chunkid)
 
@@ -787,7 +787,7 @@ class RawxTestSuite(CommonTestCase):
 
         resp3, data3 = self._http_request(copyurl, 'GET', '', {})
         self.assertEqual(200, resp3.status)
-        headers3 = dict(resp3.getheaders())
+        headers3 = HeadersDict(resp3.getheaders())
         with open(copypath, 'r') as fd:
             meta3, _ = read_chunk_metadata(fd, copyid)
 

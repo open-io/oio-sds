@@ -1,4 +1,4 @@
-# Copyright (C) 2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -103,7 +103,9 @@ class TestBlobMover(BaseTestCase):
 
         new_chunk_headers, new_chunk_stream = self.blob_client.chunk_get(
             new_chunk['url'])
-        self.assertEqual(chunk_stream.read(), new_chunk_stream.read())
+        chunk_data = b''.join(chunk_stream)
+        new_chunk_data = b''.join(new_chunk_stream)
+        self.assertEqual(chunk_data, new_chunk_data)
         fullpath = encode_fullpath(self.account, self.container, self.path,
                                    self.version, self.content_id)
         self.assertEqual(fullpath, new_chunk_headers['full_path'])

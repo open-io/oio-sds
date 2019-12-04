@@ -147,6 +147,12 @@ class HeadersDict(dict):
             for k, v in data:
                 self[k.title()] = v
 
+    def __delitem__(self, k):
+        return dict.__delitem__(self, k.title())
+
+    def __getitem__(self, k):
+        return dict.__getitem__(self, k.title())
+
     def __setitem__(self, k, v):
         if v is None:
             self.pop(k.title(), None)

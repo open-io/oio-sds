@@ -1,4 +1,4 @@
-# Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -65,7 +65,7 @@ def set_fullpath_xattr(fd, new_fullpaths, remove_old_xattr=False,
         xattr.setxattr(
             fd,
             'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + chunk_id.upper(),
-            new_fullpath)
+            new_fullpath.encode('utf-8'))
 
     if xattr_to_remove:
         for key in xattr_to_remove:
@@ -83,4 +83,4 @@ def set_fullpath_xattr(fd, new_fullpaths, remove_old_xattr=False,
                 pass
 
     xattr.setxattr(fd, 'user.' + chunk_xattr_keys['oio_version'],
-                   OIO_VERSION)
+                   OIO_VERSION.encode('utf-8'))
