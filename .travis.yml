@@ -14,6 +14,7 @@ addons:
     packages:
     - apache2
     - apache2-dev
+    - asn1c
     - attr
     - beanstalkd
     - bison
@@ -32,7 +33,6 @@ addons:
     - libsqlite3-dev
     - libzmq3-dev
     - libzookeeper-mt-dev
-    - openio-asn1c
     - openio-gridinit
     - python-all-dev
     - python-dev
@@ -62,7 +62,7 @@ install:
 
 env:
   global:
-  - CMAKE_OPTS="-DENABLE_CODECOVERAGE=on -DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib -DZK_LIBDIR=/usr/lib -DZK_INCDIR=/usr/include/zookeeper -DAPACHE2_LIBDIR=/usr/lib/apache2 -DAPACHE2_INCDIR=/usr/include/apache2 -DAPACHE2_MODDIR=/tmp/oio/lib/apache2/module"
+  - CMAKE_OPTS="-DENABLE_CODECOVERAGE=on -DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib -DZK_LIBDIR=/usr/lib -DZK_INCDIR=/usr/include/zookeeper"
   - G_DEBUG=fatal_warnings
   - G_DEBUG_LEVEL=W
   - ZK=127.0.0.1:2181
