@@ -1344,8 +1344,38 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         res = self.api.object_delete_many(self.account, container, ["dahu"])
         self.assertFalse(res[0][1])
 
+    def test_container_snapshot_failure(self):
+        cname = 'container-' + random_str(6)
+        cname2 = cname + '.snapshot'
+
+        # Creating a snapshot on non existing container should fail
+        self.assertRaises(exc.NoSuchContainer,
+                          self.api.container_snapshot,
+                          self.account, cname,
+                          self.account, cname2)
+
+        self._create(cname)
+        # Snapshot cannot have same name and same account
+        self.assertRaises(exc.ClientException,
+                          self.api.container_snapshot,
+                          self.account, cname,
+                          self.account, cname)
+
+        # Snapshots need to have an account name
+        self.assertRaises(exc.ClientException,
+                          self.api.container_snapshot,
+                          self.account, cname,
+                          None, cname2)
+
+        # Snapshots need to have a name
+        self.assertRaises(exc.ClientException,
+                          self.api.container_snapshot,
+                          self.account, cname,
+                          cname2, None)
+
     def test_container_snapshot(self):
-        container = random_str(16)
+        container = 'container-' + random_str(6)
+        snapshot = container + '.snapshot'
         self.api.container_create(self.account, container)
         test_object = "test_object_%d"
         for i in range(10):
@@ -1353,25 +1383,20 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
                                    obj_name=test_object % i,
                                    chunk_checksum_algo=None)
 
-        # Snapshot cannot have same name and same account
-        self.assertRaises(exc.ClientException,
-                          self.api.container_snapshot,
-                          self.account, container, self.account, container)
-        snapshot = random_str(16)
-        self.assertNotEqual(snapshot, container)
         # Non existing snapshot should work
-        self.api.container_snapshot(self.account, container, self.account,
-                                    snapshot)
+        self.api.container_snapshot(self.account, container,
+                                    self.account, snapshot)
         # Check sys.user.name is correct
         ret = self.api.container_get_properties(self.account, snapshot)
         self.assertEqual(snapshot, ret['system']['sys.user.name'])
         self.assertEqual(self.account, ret['system']['sys.account'])
 
-        # Already taken snapshot name should failed
+        # Already taken snapshot name should fail
         self.assertRaises(exc.ClientException,
                           self.api.container_snapshot,
                           self.account, container, self.account, snapshot)
-        # Check Container Frozen so create should failed
+
+        # Check Container Frozen so create should fail
         self.assertRaises(exc.ServiceBusy,
                           self.api.object_create,
                           self.account, snapshot,
@@ -1412,20 +1437,6 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # check target can be used
         self.api.object_create(self.account, container, data="0"*128,
                                obj_name="should_be_created")
-
-        # Snapshot on non existing container should failed
-        self.assertRaises(exc.NoSuchContainer,
-                          self.api.container_snapshot,
-                          random_str(16), random_str(16),
-                          random_str(16), random_str(16))
-        # Snapshot need to have a account
-        self.assertRaises(exc.ClientException,
-                          self.api.container_snapshot,
-                          self.account, container, None, random_str(16))
-        # Snapshot need to have a name
-        self.assertRaises(exc.ClientException,
-                          self.api.container_snapshot,
-                          self.account, container, random_str(16), None)
 
     def test_object_create_long_name(self):
         """Create an objet whose name has the maximum length allowed"""

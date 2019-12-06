@@ -472,37 +472,24 @@ _restore_snapshot(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 	if (stat(path, &bstats) != 0) {
 		return NEWERROR(errno, "Failed to read snapshot: %s", strerror(errno));
 	}
-	/* Synchronous replication is only possible if the file is "small".
-	 * If it is not, do not start a transaction, write only in the local base,
-	 * and rely on asynchronous replication mechanisms. */
-	gboolean sync_repli = bstats.st_size < sqliterepo_dump_max_size;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	/* The database snapshot file is here, open the base locally to avoid
-	 * a redirection, in case the local service does not become the master. */
+	 * a redirection, in case the local service does not become the master.
+	 * TODO(FVE): find a way to force the local peer to be the master.
+	 * This would allow synchronous replication of the snapshot (provided
+	 * it is small enough). */
 	GError *err = sqlx_repository_timed_open_and_lock(repo, name,
 			SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK|SQLX_OPEN_CREATE, peers,
 			&sq3, NULL, oio_ext_get_deadline());
 	if (!err) {
-		struct sqlx_repctx_s *repctx = NULL;
-		if (sync_repli)
-			err = sqlx_transaction_begin(sq3, &repctx);
+		err = sqlx_repository_restore_from_file(sq3, path);
 		if (!err) {
-			err = sqlx_repository_restore_from_file(sq3, path);
-			if (!err) {
-				sqlx_repository_call_change_callback(sq3);
-				/* Set the new set of peers, avoid a lookup from meta1. */
-				sqlx_admin_set_str(sq3, SQLX_ADMIN_PEERS, peers);
-				sqlx_admin_save_lazy(sq3);
-				/* The slaves do not have the base, trigger synchronous
-				 * replication and prevent "Remote diff missed" errors. */
-				if (sync_repli)
-					sqlx_transaction_notify_huge_changes(repctx);
-			}
+			/* Set the new set of peers, avoid a lookup from meta1. */
+			sqlx_admin_set_str(sq3, SQLX_ADMIN_PEERS, peers);
+			sqlx_admin_save_lazy(sq3);
+			sqlx_repository_call_change_callback(sq3);
 		}
-		if (sync_repli)
-			err = sqlx_transaction_end(repctx, err);
 	}
-
 	sqlx_repository_unlock_and_close_noerror(sq3);
 	return err;
 }
@@ -648,6 +635,18 @@ _snapshot_from(const gchar *source, struct sqlx_repository_s *repo,
 	err = _pipe_base_from(source, repo, source_name, -1, &ctx);
 	if (!err)
 		err = _restore_snapshot(repo, dest_name, ctx->path, peers);
+
+	/* The snapshot exists locally, but there is still no election.
+	 * Trigger one, forcing the other peers to download the database.
+	 * We use sqlx_repository_status_base rather than sqlx_repository_use_base
+	 * to wait for the election to establish before returning. */
+	if (!err) {
+		NAME2CONST(n0, *dest_name);
+		err = sqlx_repository_status_base(repo, &n0, peers,
+				oio_ext_get_deadline());
+		if (err && CODE_IS_REDIRECT(err->code))
+			g_clear_error(&err);
+	}
 
 	restore_ctx_clear(&ctx);
 	return err;
@@ -1230,7 +1229,8 @@ do_query_after_open(struct gridd_reply_ctx_s *reply_ctx,
 
 		if (0 != action) {
 			NAME2CONST(n, sq3->name);
-			err = sqlx_repository_status_base(sq3->repo, &n, reply_ctx->deadline);
+			err = sqlx_repository_status_base(sq3->repo, &n, NULL,
+					reply_ctx->deadline);
 			if (NULL != err) {
 				if (err->code != CODE_REDIRECT)
 					g_prefix_error(&err, "Status error: ");
@@ -1309,7 +1309,7 @@ _check_init_flag(struct sqlx_sqlite3_s *sq3, gboolean autocreate, gint64 deadlin
 			err = NEWERROR(CODE_CONTAINER_NOTFOUND, "Base does not exist");
 		} else {
 			NAME2CONST(n, sq3->name);
-			err = sqlx_repository_status_base(sq3->repo, &n, deadline);
+			err = sqlx_repository_status_base(sq3->repo, &n, NULL, deadline);
 			if (!err) { /* We are master */
 				struct sqlx_repctx_s *repctx = NULL;
 				GRID_DEBUG("Autocreate %s, inserting %s flag",
@@ -1632,7 +1632,7 @@ _handler_STATUS(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	if (NULL != (err = sqlx_repository_status_base(repo, &n0, reply->deadline)))
+	if ((err = sqlx_repository_status_base(repo, &n0, NULL, reply->deadline)))
 		reply->send_error(0, err);
 	else
 		reply->send_reply(CODE_FINAL_OK, "MASTER");
@@ -1655,7 +1655,7 @@ _handler_ISMASTER(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	err = sqlx_repository_status_base(repo, &n0, reply->deadline);
+	err = sqlx_repository_status_base(repo, &n0, NULL, reply->deadline);
 	if (NULL == err)
 		reply->send_reply(CODE_FINAL_OK, "MASTER");
 	else {

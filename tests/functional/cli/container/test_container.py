@@ -241,11 +241,11 @@ class ContainerTest(CliTestCase):
         # Snapshot should reply the name of the snapshot on success
         opts = self.get_format_opts('json')
         cid_opt = ''
-        name = self.NAME
+        cname = self.NAME
         if with_cid:
             cid_opt = '--cid '
-            name = self.CID
-        output = self.openio('container snapshot ' + cid_opt + name + opts)
+            cname = self.CID
+        output = self.openio('container snapshot ' + cid_opt + cname + opts)
         output = self.json_loads(output)[0]
         self.assertEqual(output['Status'], "OK")
         # Snapshot should reply Missing container on non existant container
@@ -253,11 +253,11 @@ class ContainerTest(CliTestCase):
                           self.openio,
                           ('container snapshot Should_not_exist' + opts))
         # Use specified name
-        dst_account = random_str(6)
-        dst_container = random_str(6)
+        dst_account = 'acct-' + random_str(6)
+        dst_container = cname + '.snapshot-' + random_str(6)
         opts += " --dst-account " + dst_account
         opts += " --dst-container " + dst_container
-        output = self.openio('container snapshot ' + cid_opt + name + opts)
+        output = self.openio('container snapshot ' + cid_opt + cname + opts)
         output = self.json_loads(output)[0]
         self.assertEqual(output['Account'], dst_account)
         self.assertEqual(output['Container'], dst_container)
@@ -266,7 +266,7 @@ class ContainerTest(CliTestCase):
         #   specified name
         self.assertRaises(CommandFailed,
                           self.openio,
-                          ('container snapshot ' + cid_opt + name + opts))
+                          ('container snapshot ' + cid_opt + cname + opts))
 
     def test_container_snapshot(self):
         self._test_container_snapshot()

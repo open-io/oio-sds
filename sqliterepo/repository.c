@@ -1291,7 +1291,7 @@ end_sqlx_cache_close:
 
 GError*
 sqlx_repository_status_base(sqlx_repository_t *repo,
-		const struct sqlx_name_s *n, gint64 deadline)
+		const struct sqlx_name_s *n, const gchar *peers, gint64 deadline)
 {
 	REPO_CHECK(repo);
 	SQLXNAME_CHECK(n);
@@ -1301,7 +1301,7 @@ sqlx_repository_status_base(sqlx_repository_t *repo,
 	/* Kick the election off */
 	gboolean replicated = FALSE;
 	GError *err = sqlx_repository_use_base(
-			repo, n, NULL, FALSE, TRUE, &replicated);
+			repo, n, peers, FALSE, TRUE, &replicated);
 	if (err)
 		return err;
 	if (!replicated)
