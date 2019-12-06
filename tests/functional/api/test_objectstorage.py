@@ -1348,7 +1348,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertNotEqual(snapshot, container)
         # Non existing snapshot should work
         self.api.container_snapshot(self.account, container, self.account,
-                                    snapshot)
+                                    snapshot, read_timeout=60.0)
         # Check sys.user.name is correct
         ret = self.api.container_get_properties(self.account, snapshot)
         self.assertEqual(snapshot, ret['system']['sys.user.name'])

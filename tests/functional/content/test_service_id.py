@@ -17,13 +17,11 @@ import os
 import random
 from subprocess import check_call
 import time
-import urllib3
 import yaml
 
 from six.moves import xrange
 from six.moves.configparser import SafeConfigParser
 
-from oio.api.object_storage import ObjectStorageApi
 from oio.common.exceptions import ServiceBusy
 from tests.utils import BaseTestCase, random_str
 
@@ -45,8 +43,8 @@ class BaseServiceIdTest(BaseTestCase):
             self.skipTest("Service ID not enabled")
 
         self._cnt = random_str(10)
-        self.http = urllib3.PoolManager()
-        self.api = ObjectStorageApi(self.ns)
+        self.api = self.storage
+        self.wait_for_score(('meta2', ))
 
     def tearDown(self):
         super(BaseServiceIdTest, self).tearDown()
@@ -65,8 +63,8 @@ class BaseServiceIdTest(BaseTestCase):
 
     def _cache_flush(self):
         for item in ['local', 'low', 'high']:
-            r = self.http.request('POST', 'http://%s/v3.0/cache/flush/%s'
-                                  % (self.conf['proxy'], item))
+            r = self.http_pool.request('POST', 'http://%s/v3.0/cache/flush/%s'
+                                       % (self.conf['proxy'], item))
             self.assertEqual(r.status, 204)
 
     def _create_data(self):
@@ -151,7 +149,7 @@ class TestRawxServiceId(BaseServiceIdTest):
         for item in ret:
             if self.rawx['service_id'] in item['url']:
                 try:
-                    self.http.request('GET', item.get('real_url'))
+                    self.http_pool.request('GET', item.get('real_url'))
                     return True
                 except Exception as exc:
                     print("%s: %s", item.get('real_url'), str(exc))
