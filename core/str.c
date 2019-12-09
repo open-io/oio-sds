@@ -758,3 +758,28 @@ oio_strv_has(register const gchar * const * p, register const gchar *needle)
 	}
 	return FALSE;
 }
+
+gchar **
+oio_strv_filter(gchar **array, const char *needle)
+{
+	gint last = g_strv_length(array) - 1;
+	for (gchar **cur = array; array && *cur;) {
+		if (!g_strcmp0(*cur, needle)) {
+			g_free(*cur);
+			if (cur == array + last) {
+				// Last element, just set it to NULL.
+				*cur = NULL;
+				break;
+			} else {
+				// Middle element, exchange with last.
+				*cur = array[last];
+				array[last] = NULL;
+				last--;
+				// Do not increment cur, we have to check it.
+				continue;
+			}
+		}
+		cur++;
+	}
+	return array;
+}

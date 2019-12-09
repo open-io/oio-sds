@@ -59,6 +59,10 @@ size_t oio_constptrv_length (const void * const *v);
 /* Reallocs <dst> and appends it <s>. <s> is reused and is not duplicated */
 gchar ** oio_strv_append(gchar **dst, gchar *s);
 
+/* Filter out (and free) all occurrences of needle.
+ * Returns the same array pointer. */
+gchar ** oio_strv_filter(gchar **array, const char *needle);
+
 /** frees *s and set it to NULL */
 void oio_str_clean(gchar **s);
 

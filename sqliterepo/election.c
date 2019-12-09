@@ -2074,25 +2074,7 @@ static void
 _manager_filter_peers(struct election_manager_s *m, gchar **peers)
 {
 	const gchar *self = election_manager_get_local(m);
-	gint last = g_strv_length(peers) - 1;
-	for (gchar **peer = peers; peers && *peer;) {
-		if (!g_strcmp0(*peer, self)) {
-			g_free(*peer);
-			if (peer == peers + last) {
-				// Last element, just set it to NULL.
-				*peer = NULL;
-				break;
-			} else {
-				// Middle element, exchange with last.
-				*peer = peers[last];
-				peers[last] = NULL;
-				last--;
-				// Do not increment peer, we have to check it.
-				continue;
-			}
-		}
-		peer++;
-	}
+	oio_strv_filter(peers, self);
 }
 
 static GError *
