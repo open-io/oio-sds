@@ -48,6 +48,8 @@ class BaseServiceIdTest(BaseTestCase):
 
     def tearDown(self):
         super(BaseServiceIdTest, self).tearDown()
+        self.wait_for_score(('meta2', ))
+        self._reload_meta()
 
     def _update_apache(self, port):
         path = HTTPD_CONF % (self.ns, self.name)
@@ -62,7 +64,7 @@ class BaseServiceIdTest(BaseTestCase):
             fp.write('\n'.join(data))
 
     def _cache_flush(self):
-        for item in ['local', 'low', 'high']:
+        for item in ('local', 'low', 'high'):
             r = self.http_pool.request('POST', 'http://%s/v3.0/cache/flush/%s'
                                        % (self.conf['proxy'], item))
             self.assertEqual(r.status, 204)
