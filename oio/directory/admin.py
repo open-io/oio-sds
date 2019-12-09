@@ -371,3 +371,9 @@ class AdminClient(ProxyClient):
         _resp, body = self.forwarder._request(
             'POST', '/balance-masters', params=params, **kwargs)
         return _resp.status, body
+
+    def service_reload_lb(self, svc_id, **kwargs):
+        """
+        Force the service to reload its internal load balancer.
+        """
+        self._forward_service_action(svc_id, '/reload', **kwargs)
