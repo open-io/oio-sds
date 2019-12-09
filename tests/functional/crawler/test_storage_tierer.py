@@ -98,22 +98,22 @@ class TestStorageTierer(BaseTestCase):
         self.assertEqual((
             self.test_account, self.container_1_name,
             self.container_1_content_0_name,
-            int(self.container_1_content_0['version'])), gen.next())
+            int(self.container_1_content_0['version'])), next(gen))
         self.assertEqual((
             self.test_account, self.container_2_name,
             self.container_2_content_0_name,
-            int(self.container_2_content_0['version'])), gen.next())
+            int(self.container_2_content_0['version'])), next(gen))
         self.assertEqual((
             self.test_account, self.container_2_name,
             self.container_2_content_1_name,
-            int(self.container_2_content_1['version'])), gen.next())
-        self.assertRaises(StopIteration, gen.next)
+            int(self.container_2_content_1['version'])), next(gen))
+        self.assertRaises(StopIteration, next, gen)
 
     def test_iter_content_list_outdated_threshold_9999999999(self):
         self.gridconf["outdated_threshold"] = 9999999999
         worker = StorageTiererWorker(self.gridconf, Mock())
         gen = worker._list_contents()
-        self.assertRaises(StopIteration, gen.next)
+        self.assertRaises(StopIteration, next, gen)
 
     def test_iter_content_list_outdated_threshold_2(self):
         # add a new content created after the three previous contents
@@ -129,16 +129,16 @@ class TestStorageTierer(BaseTestCase):
         self.assertEqual((
             self.test_account, self.container_1_name,
             self.container_1_content_0_name,
-            int(self.container_1_content_0['version'])), gen.next())
+            int(self.container_1_content_0['version'])), next(gen))
         self.assertEqual((
             self.test_account, self.container_2_name,
             self.container_2_content_0_name,
-            int(self.container_2_content_0['version'])), gen.next())
+            int(self.container_2_content_0['version'])), next(gen))
         self.assertEqual((
             self.test_account, self.container_2_name,
             self.container_2_content_1_name,
-            int(self.container_2_content_1['version'])), gen.next())
-        self.assertRaises(StopIteration, gen.next)
+            int(self.container_2_content_1['version'])), next(gen))
+        self.assertRaises(StopIteration, next, gen)
 
     def test_iter_content_list_skip_good_policy(self):
         self.gridconf["new_policy"] = "SINGLE"
@@ -147,5 +147,5 @@ class TestStorageTierer(BaseTestCase):
         self.assertEqual((
             self.test_account, self.container_2_name,
             self.container_2_content_1_name,
-            int(self.container_2_content_1['version'])), gen.next())
-        self.assertRaises(StopIteration, gen.next)
+            int(self.container_2_content_1['version'])), next(gen))
+        self.assertRaises(StopIteration, next, gen)

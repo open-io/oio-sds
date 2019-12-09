@@ -57,7 +57,7 @@ class TestIntegrityCrawler(BaseTestCase):
 
     def _verify_rebuilder_input(self):
         try:
-            line = fileinput.input(self.rebuild_file).next().strip()
+            line = next(fileinput.input(self.rebuild_file)).strip()
             cid = cid_from_name(self.account, self.container)
             expected = '|'.join([cid, self.meta['id'], self.chunk['url']])
             if self.irreparable:
