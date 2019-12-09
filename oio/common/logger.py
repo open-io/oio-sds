@@ -106,11 +106,14 @@ def get_logger(
                                 facility=facility)
     else:
         log_address = conf.get('log_address', '/dev/log')
-        try:
-            handler = SysLogHandler(address=log_address, facility=facility)
-        except socket.error as exc:
-            if exc.errno not in [errno.ENOTSOCK, errno.ENOENT]:
-                raise exc
+        if os.path.exists(log_address):
+            try:
+                handler = SysLogHandler(address=log_address, facility=facility)
+            except socket.error as exc:
+                if exc.errno not in [errno.ENOTSOCK, errno.ENOENT]:
+                    raise exc
+                handler = SysLogHandler(facility=facility)
+        else:
             handler = SysLogHandler(facility=facility)
 
     handler.setFormatter(syslog_formatter)
