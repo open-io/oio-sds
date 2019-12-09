@@ -1041,6 +1041,13 @@ _m2_container_create_with_properties (struct req_args_s *args, char **props,
 
 retry:
 	GRID_TRACE("Container creation %s", oio_url_get (args->url, OIOURL_WHOLE));
+
+	/* Prevent the use of old peers
+	 * if the container has already existed
+	 * and is still in the cache */
+	CLIENT_CTX(ctx, args, NAME_SRVTYPE_META2, 1);
+	cache_flush_user(args, &ctx);
+
 	err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	if (err && CODE_IS_NOTFOUND(err->code)) {
 		if (autocreate) {
