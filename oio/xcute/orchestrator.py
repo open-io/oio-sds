@@ -16,6 +16,7 @@
 import random
 from collections import OrderedDict
 
+from oio.common.easy_value import int_value
 from oio.common.exceptions import OioTimeout
 from oio.common.logger import get_logger
 from oio.common.green import ratelimit, sleep, threading
@@ -30,7 +31,7 @@ from oio.xcute.jobs import JOB_TYPES
 class XcuteOrchestrator(object):
 
     DEFAULT_DISPATCHER_TIMEOUT = 2
-    DEFAULT_REFRESH_TIME_BEANSTALKD = 5
+    DEFAULT_REFRESH_TIME_BEANSTALKD_WORKERS = 30
 
     def __init__(self, conf, logger=None):
         self.conf = conf
@@ -57,6 +58,10 @@ class XcuteOrchestrator(object):
         self.logger.info('Using beanstalkd reply : %s %s',
                          self.beanstalkd_reply_addr,
                          self.beanstalkd_reply_tube)
+
+        self.refresh_time_beanstalkd_workers = int_value(
+            self.conf.get('refresh_time_beanstalkd_workers'),
+            self.DEFAULT_REFRESH_TIME_BEANSTALKD_WORKERS)
 
         self.running = True
         self.beanstalkd_workers = dict()
@@ -389,7 +394,7 @@ class XcuteOrchestrator(object):
             self.logger.info('Refresh beanstalkd workers')
             self.beanstalkd_workers = beanstalkd_workers
 
-            for i in range(self.DEFAULT_REFRESH_TIME_BEANSTALKD):
+            for _ in range(self.refresh_time_beanstalkd_workers):
                 if not self.running:
                     break
                 sleep(1)

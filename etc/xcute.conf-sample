@@ -37,3 +37,4 @@ orchestrator_id = orchestrator-1
 beanstalkd_workers_tube = oio-xcute
 beanstalkd_reply_tube = oio-xcute.reply
 beanstalkd_reply_addr = beanstalk://127.0.0.1:6014
+# refresh_time_beanstalkd_workers = 30
