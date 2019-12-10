@@ -32,6 +32,7 @@ class XcuteOrchestrator(object):
 
     DEFAULT_DISPATCHER_TIMEOUT = 2
     DEFAULT_REFRESH_TIME_BEANSTALKD_WORKERS = 30
+    DEFAULT_MAX_JOBS_PER_BEANSTALKD = 1024
 
     def __init__(self, conf, logger=None):
         self.conf = conf
@@ -62,6 +63,10 @@ class XcuteOrchestrator(object):
         self.refresh_time_beanstalkd_workers = int_value(
             self.conf.get('refresh_time_beanstalkd_workers'),
             self.DEFAULT_REFRESH_TIME_BEANSTALKD_WORKERS)
+
+        self.max_jobs_per_beanstalkd = int_value(
+            self.conf.get('max_jobs_per_beanstalkd'),
+            self.DEFAULT_MAX_JOBS_PER_BEANSTALKD)
 
         self.running = True
         self.beanstalkd_workers = dict()
@@ -452,12 +457,24 @@ class XcuteOrchestrator(object):
 
         current_stats = beanstalkd.stats_tube(
             self.beanstalkd_workers_tube)
-        if current_stats['current-jobs-reserved'] <= 0 \
-                and current_stats['current-jobs-ready'] > 0:
-            self.logger.info(
-                'Ignore beanstalkd %s: The worker doesn\'t process task',
-                beanstalkd_addr)
-            return None
+        beanstalkd_jobs_ready = current_stats['current-jobs-ready']
+        if beanstalkd_jobs_ready > 0:
+            beanstalkd_jobs_reserved = current_stats['current-jobs-reserved']
+            if beanstalkd_jobs_reserved <= 0:
+                self.logger.info(
+                    'Ignore beanstalkd %s: The worker doesn\'t process task '
+                    '(current-jobs-ready=%d, current-jobs-reserved=%d)',
+                    beanstalkd_addr, beanstalkd_jobs_ready,
+                    beanstalkd_jobs_reserved)
+                return None
+
+            if beanstalkd_jobs_ready >= self.max_jobs_per_beanstalkd:
+                self.logger.info(
+                    'Ignore beanstalkd %s: The queue is full '
+                    '(current-jobs-ready=%d, current-jobs-reserved=%d)',
+                    beanstalkd_addr, beanstalkd_jobs_ready,
+                    beanstalkd_jobs_reserved)
+                return None
 
         if hasattr(beanstalkd, 'is_broken') and beanstalkd.is_broken:
             self.logger.info(
