@@ -16,11 +16,11 @@
 from collections import Counter
 
 from oio.common.constants import STRLEN_REQID
-from oio.common.green import ratelimit, sleep
+from oio.common.green import ratelimit
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.utils import CacheDict, request_id
-from oio.event.beanstalk import BeanstalkdSender
+from oio.event.beanstalk import Beanstalk
 from oio.xcute.jobs import JOB_TYPES
 
 
@@ -29,7 +29,7 @@ class XcuteWorker(object):
     def __init__(self, conf, logger=None):
         self.conf = conf
         self.logger = logger or get_logger(self.conf)
-        self.beanstalkd_senders = dict()
+        self.beanstalkd_replies = dict()
         self.tasks = CacheDict(size=10)
 
     def process_beanstalkd_job(self, beanstalkd_job):
@@ -80,16 +80,13 @@ class XcuteWorker(object):
             'task_errors': task_errors
         })
 
-        sender_key = (reply_addr, reply_tube)
-        if sender_key not in self.beanstalkd_senders:
-            self.beanstalkd_senders[sender_key] = BeanstalkdSender(
-                addr=reply_addr,
-                tube=reply_tube,
-                logger=self.logger)
+        beanstalkd_reply_info = (reply_addr, reply_tube)
+        beanstalkd_reply = self.beanstalkd_replies.get(beanstalkd_reply_info)
+        if not beanstalkd_reply:
+            beanstalkd_reply = Beanstalk.from_url(beanstalkd_addr)
+            beanstalkd_reply.use(self.beanstalkd_workers_tube)
+            beanstalkd_reply.watch(self.beanstalkd_workers_tube)
 
-        beanstalkd_sender = self.beanstalkd_senders[(reply_addr, reply_tube)]
+            self.beanstalkd_replies[beanstalkd_reply_info] = beanstalkd_reply
 
-        while not beanstalkd_sender.send_job(reply_payload):
-            sleep(1)
-
-        beanstalkd_sender.job_done()
+        beanstalkd_reply.put(reply_payload)
