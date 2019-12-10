@@ -259,6 +259,10 @@ class XcuteOrchestrator(object):
                 self.logger.warn(
                     '[job_id=%s] Fail to send beanstalkd job: %s',
                     job_id, exc)
+                # TODO(adu): We could be more lenient
+                # and wait for a few errors in a row
+                # to happen before marking it as broken.
+                beanstalkd_worker.is_broken = True
         return False
 
     def make_beanstalkd_payload(self, job_id, job_type, job_config,
@@ -415,7 +419,6 @@ class XcuteOrchestrator(object):
                 beanstalkd = self._check_beanstalkd_worker(beanstalkd_info)
                 if not beanstalkd:
                     continue
-
                 beanstalkd_workers[beanstalkd.addr] = beanstalkd
             except Exception as exc:
                 self.logger.error('Fail to check beanstalkd: %s', exc)
@@ -456,6 +459,12 @@ class XcuteOrchestrator(object):
                 beanstalkd_addr)
             return None
 
+        if hasattr(beanstalkd, 'is_broken') and beanstalkd.is_broken:
+            self.logger.info(
+                'Beanstalkd %s was broken, and now it\'s coming back',
+                beanstalkd_addr)
+        beanstalkd.is_broken = False
+
         self.logger.info(
             'Give the green light to beanstalkd %s', beanstalkd_addr)
         return beanstalkd
@@ -478,10 +487,20 @@ class XcuteOrchestrator(object):
             # Shuffle to not have the same suite for all jobs
             random.shuffle(beanstalkd_workers)
 
+            yielded = False
             for beanstalkd_worker in beanstalkd_workers:
                 if id(self.beanstalkd_workers) != beanstalkd_workers_id:
                     break
+                if beanstalkd_worker.is_broken:
+                    continue
                 yield beanstalkd_worker
+                yielded = True
+            else:
+                if not yielded:
+                    self.logger.info(
+                        'All beanstalkd workers available are broken')
+                    sleep(1)
+                    yield None
 
     def exit_gracefully(self, *args, **kwargs):
         if self.running:
