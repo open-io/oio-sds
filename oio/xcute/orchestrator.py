@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import random
 from collections import OrderedDict
 
 from oio.common.exceptions import OioTimeout
@@ -21,7 +22,7 @@ from oio.common.green import ratelimit, sleep, threading
 from oio.common.json import json
 from oio.conscience.client import ConscienceClient
 from oio.event.beanstalk import Beanstalk, BeanstalkdListener, \
-    BeanstalkdSender, ConnectionError
+    ConnectionError
 from oio.xcute.common.backend import XcuteBackend
 from oio.xcute.jobs import JOB_TYPES
 
@@ -29,6 +30,7 @@ from oio.xcute.jobs import JOB_TYPES
 class XcuteOrchestrator(object):
 
     DEFAULT_DISPATCHER_TIMEOUT = 2
+    DEFAULT_REFRESH_TIME_BEANSTALKD = 5
 
     def __init__(self, conf, logger=None):
         self.conf = conf
@@ -57,7 +59,8 @@ class XcuteOrchestrator(object):
                          self.beanstalkd_reply_tube)
 
         self.running = True
-        self.threads = {}
+        self.beanstalkd_workers = dict()
+        self.threads = dict()
 
     def run_forever(self):
         """
@@ -65,20 +68,11 @@ class XcuteOrchestrator(object):
         """
 
         # gather beanstalkd info
-        self.all_beanstalkd = OrderedDict()
-        self.beanstalkd_senders = {}
-        beanstalkd_thread = threading.Thread(
-            target=self.refresh_all_beanstalkd)
-        beanstalkd_thread.start()
-
-        self.logger.info('Wait until beanstalkd are found')
-        while len(self.all_beanstalkd) == 0:
-            if not self.running:
-                return
-
-            sleep(5)
-
-        self.threads[beanstalkd_thread.ident] = beanstalkd_thread
+        refresh_beanstalkd_workers_thread = threading.Thread(
+            target=self.refresh_beanstalkd_workers_forever)
+        refresh_beanstalkd_workers_thread.start()
+        self.threads[refresh_beanstalkd_workers_thread.ident] = \
+            refresh_beanstalkd_workers_thread
 
         # restart running jobs
         self.logger.debug('Look for unfinished jobs')
@@ -151,10 +145,7 @@ class XcuteOrchestrator(object):
             tasks_counter = job.get_total_tasks(
                 job_params, marker=total_marker)
 
-        beanstalkd_workers = self.get_loadbalanced_workers()
-
-        thread_args = (job_id, job_type, job_config, job_tasks,
-                       beanstalkd_workers)
+        thread_args = (job_id, job_type, job_config, job_tasks)
         dispatch_thread = threading.Thread(
             target=self.dispatch_job,
             args=thread_args)
@@ -170,8 +161,7 @@ class XcuteOrchestrator(object):
             args=(job_id, tasks_counter))
         total_tasks_thread.start()
 
-    def dispatch_job(self, job_id, job_type, job_config, job_tasks,
-                     beanstalkd_workers):
+    def dispatch_job(self, job_id, job_type, job_config, job_tasks):
         """
             Dispatch all of a job's tasks
         """
@@ -179,6 +169,8 @@ class XcuteOrchestrator(object):
         self.logger.info('Start dispatching job (job_id=%s)', job_id)
 
         try:
+            beanstalkd_workers = self.get_beanstalkd_workers()
+
             tasks_per_second = job_config['tasks_per_second']
             tasks_batch_size = job_config['tasks_batch_size']
 
@@ -246,31 +238,23 @@ class XcuteOrchestrator(object):
                              len(beanstalkd_payload))
 
         while self.running:
-            workers_tried = set()
-            for worker in beanstalkd_workers:
-                if worker is None:
-                    self.logger.info('No beanstalkd available (job_id=%s)',
-                                     job_id)
+            for beanstalkd_worker in beanstalkd_workers:
+                if not self.running:
+                    return False
+                if beanstalkd_worker is not None:
                     break
 
-                if worker.addr in workers_tried:
-                    self.logger.debug('Tried all beanstalkd (job_id=%s)',
-                                      job_id)
-                    break
-
-                sent = worker.send_job(beanstalkd_payload)
-
-                if not sent:
-                    workers_tried.add(worker.addr)
-
-                    continue
-
-                self.logger.debug('Tasks (job_id=%s) sent to %s: %s',
-                                  job_id, worker.addr, tasks)
+            try:
+                beanstalkd_worker.put(beanstalkd_payload)
+                self.logger.debug(
+                    '[job_id=%s] Tasks sent to %s: %s', job_id,
+                    beanstalkd_worker.addr, str(tasks))
                 return True
-
-            workers_tried.clear()
-            sleep(5)
+            except Exception as exc:
+                self.logger.warn(
+                    '[job_id=%s] Fail to send beanstalkd job: %s',
+                    job_id, exc)
+        return False
 
     def make_beanstalkd_payload(self, job_id, job_type, job_config,
                                 tasks):
@@ -375,77 +359,115 @@ class XcuteOrchestrator(object):
 
         yield None
 
-    def refresh_all_beanstalkd(self):
+    def refresh_beanstalkd_workers_forever(self):
         """
-            Get all the beanstalkd and their tubes
+        Refresh beanstalkd workers by looking at the score,
+        existing tubes and tube statistics.
         """
-
         while self.running:
-            all_beanstalkd = self.conscience_client.all_services('beanstalkd')
+            try:
+                beanstalkd_workers = self._find_beanstalkd_workers()
+            except Exception as exc:
+                self.logger.error(
+                    'Fail to find beanstalkd workers: %s', exc)
+                # TODO(adu): We could keep trying to send jobs
+                # to the beanstalkd we already found.
+                # But we need the score to know how to dispatch the tasks...
+                beanstalkd_workers = dict()
 
-            all_beanstalkd_with_tubes = {}
-            for beanstalkd in all_beanstalkd:
-                beanstalkd_addr = beanstalkd['addr']
+            old_beanstalkd_workers_addr = set(self.beanstalkd_workers.keys())
+            new_beanstalkd_workers_addr = set(beanstalkd_workers.keys())
+            added_beanstalkds = new_beanstalkd_workers_addr \
+                - old_beanstalkd_workers_addr
+            for beanstalkd_addr in added_beanstalkds:
+                self.logger.info('Add beanstalkd %s' % beanstalkd_addr)
+            removed_beanstalkds = old_beanstalkd_workers_addr \
+                - new_beanstalkd_workers_addr
+            for beanstalkd_addr in removed_beanstalkds:
+                self.logger.info('Remove beanstalkd %s' % beanstalkd_addr)
 
-                try:
-                    beanstalkd_tubes = self.get_beanstalkd_tubes(
-                        beanstalkd_addr)
-                except ConnectionError:
-                    continue
+            self.logger.info('Refresh beanstalkd workers')
+            self.beanstalkd_workers = beanstalkd_workers
 
-                all_beanstalkd_with_tubes[beanstalkd_addr] = (
-                    beanstalkd, beanstalkd_tubes)
+            for i in range(self.DEFAULT_REFRESH_TIME_BEANSTALKD):
+                if not self.running:
+                    break
+                sleep(1)
 
-            for beanstalkd_addr in self.all_beanstalkd:
-                if beanstalkd_addr in all_beanstalkd_with_tubes:
-                    continue
+        self.logger.info('Exited beanstalkd workers thread')
 
-                self.logger.info('Removed beanstalkd %s' % beanstalkd_addr)
-                del self.all_beanstalkd[beanstalkd_addr]
-
-            for beanstalkd_addr, beanstalkd \
-                    in all_beanstalkd_with_tubes.iteritems():
-                if beanstalkd_addr not in self.all_beanstalkd:
-                    self.logger.info('Found beanstalkd %s' % beanstalkd_addr)
-
-                self.all_beanstalkd[beanstalkd_addr] = beanstalkd + ({},)
-
-            sleep(5)
-
-        self.logger.info('Exited beanstalkd thread')
-
-    @staticmethod
-    def get_beanstalkd_tubes(beanstalkd_addr):
-        return Beanstalk.from_url('beanstalkd://' + beanstalkd_addr).tubes()
-
-    def get_loadbalanced_workers(self):
+    def _find_beanstalkd_workers(self):
         """
-            Yield senders following a loadbalancing strategy
+        Find beanstalkd workers by looking at the score,
+        existing tubes and tube statistics.
+        """
+        all_beanstalkd = self.conscience_client.all_services(
+            'beanstalkd')
+
+        beanstalkd_workers = dict()
+        for beanstalkd_info in all_beanstalkd:
+            try:
+                beanstalkd = self._check_beanstalkd_worker(beanstalkd_info)
+                if not beanstalkd:
+                    continue
+
+                beanstalkd_workers[beanstalkd.addr] = beanstalkd
+            except Exception as exc:
+                self.logger.error('Fail to check beanstalkd: %s', exc)
+        return beanstalkd_workers
+
+    def _check_beanstalkd_worker(self, beanstalkd_info):
+        """
+        Check beanstalkd worker by looking at the score,
+        existing tubes and tube statistics.
+        """
+        beanstalkd_addr = 'beanstalk://' + beanstalkd_info['addr']
+        if beanstalkd_info['score'] == 0:
+            self.logger.info(
+                'Ignore beanstalkd %s: score=0', beanstalkd_addr)
+            return None
+
+        beanstalkd = self.beanstalkd_workers.get(beanstalkd_addr)
+        if not beanstalkd:
+            beanstalkd = Beanstalk.from_url(beanstalkd_addr)
+            beanstalkd.addr = beanstalkd_addr
+            beanstalkd.use(self.beanstalkd_workers_tube)
+            beanstalkd.watch(self.beanstalkd_workers_tube)
+
+        beanstalkd_tubes = beanstalkd.tubes()
+        if self.beanstalkd_workers_tube not in beanstalkd_tubes:
+            self.logger.info(
+                'Ignore beanstalkd %s: '
+                'No worker has ever listened to the tube %s',
+                beanstalkd_addr, self.beanstalkd_workers_tube)
+            return None
+
+        self.logger.info(
+            'Give the green light to beanstalkd %s', beanstalkd_addr)
+        return beanstalkd
+
+    def get_beanstalkd_workers(self):
+        """
+            Yield beanstalkd workers following a loadbalancing strategy
         """
 
         while True:
-            yielded = False
-            for beanstalkd, beanstalkd_tubes, beanstalkd_senders \
-                    in self.all_beanstalkd.itervalues():
-                if beanstalkd['score'] == 0:
-                    continue
-
-                if self.beanstalkd_workers_tube not in beanstalkd_tubes:
-                    continue
-
-                if self.beanstalkd_workers_tube not in beanstalkd_senders:
-                    sender = BeanstalkdSender(
-                        addr=beanstalkd['addr'],
-                        tube=self.beanstalkd_workers_tube,
-                        logger=self.logger)
-
-                    beanstalkd_senders[self.beanstalkd_workers_tube] = sender
-
-                yield beanstalkd_senders[self.beanstalkd_workers_tube]
-                yielded = True
-
-            if not yielded:
+            if not self.beanstalkd_workers:
+                self.logger.info('No beanstalkd worker available')
+                sleep(1)
                 yield None
+                continue
+
+            beanstalkd_workers_id = id(self.beanstalkd_workers)
+
+            beanstalkd_workers = self.beanstalkd_workers.values()
+            # Shuffle to not have the same suite for all jobs
+            random.shuffle(beanstalkd_workers)
+
+            for beanstalkd_worker in beanstalkd_workers:
+                if id(self.beanstalkd_workers) != beanstalkd_workers_id:
+                    break
+                yield beanstalkd_worker
 
     def exit_gracefully(self, *args, **kwargs):
         if self.running:
