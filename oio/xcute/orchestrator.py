@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import math
 import random
 from collections import OrderedDict
 
@@ -435,7 +436,8 @@ class XcuteOrchestrator(object):
         existing tubes and tube statistics.
         """
         beanstalkd_addr = 'beanstalk://' + beanstalkd_info['addr']
-        if beanstalkd_info['score'] == 0:
+        beanstalkd_score = beanstalkd_info['score']
+        if beanstalkd_score == 0:
             self.logger.info(
                 'Ignore beanstalkd %s: score=0', beanstalkd_addr)
             return None
@@ -482,8 +484,17 @@ class XcuteOrchestrator(object):
                 beanstalkd_addr)
         beanstalkd.is_broken = False
 
+        # Favor the workers with a good score
+        # 50% -> beanstalkd score
+        worker_score = beanstalkd_score * 50. / 100.
+        # 50% -> beanstalkd tube size
+        worker_score += 50 - (beanstalkd_jobs_ready * 50.
+                              / self.max_jobs_per_beanstalkd)
+        beanstalkd.occurrence = int(math.ceil(worker_score / 10.))
+
         self.logger.info(
-            'Give the green light to beanstalkd %s', beanstalkd_addr)
+            'Give the green light to beanstalkd %s (worker_score=%d)',
+            beanstalkd_addr, worker_score)
         return beanstalkd
 
     def get_beanstalkd_workers(self):
@@ -491,6 +502,8 @@ class XcuteOrchestrator(object):
             Yield beanstalkd workers following a loadbalancing strategy
         """
 
+        beanstalkd_workers_id = None
+        beanstalkd_workers = list()
         while True:
             if not self.beanstalkd_workers:
                 self.logger.info('No beanstalkd worker available')
@@ -498,9 +511,13 @@ class XcuteOrchestrator(object):
                 yield None
                 continue
 
-            beanstalkd_workers_id = id(self.beanstalkd_workers)
+            if id(self.beanstalkd_workers) != beanstalkd_workers_id:
+                beanstalkd_workers_id = id(self.beanstalkd_workers)
+                beanstalkd_workers = list()
+                for beanstalkd in self.beanstalkd_workers.values():
+                    for _ in range(beanstalkd.occurrence):
+                        beanstalkd_workers.append(beanstalkd)
 
-            beanstalkd_workers = self.beanstalkd_workers.values()
             # Shuffle to not have the same suite for all jobs
             random.shuffle(beanstalkd_workers)
 
