@@ -447,6 +447,15 @@ class XcuteOrchestrator(object):
                 beanstalkd_addr, self.beanstalkd_workers_tube)
             return None
 
+        current_stats = beanstalkd.stats_tube(
+            self.beanstalkd_workers_tube)
+        if current_stats['current-jobs-reserved'] <= 0 \
+                and current_stats['current-jobs-ready'] > 0:
+            self.logger.info(
+                'Ignore beanstalkd %s: The worker doesn\'t process task',
+                beanstalkd_addr)
+            return None
+
         self.logger.info(
             'Give the green light to beanstalkd %s', beanstalkd_addr)
         return beanstalkd
