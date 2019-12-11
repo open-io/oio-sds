@@ -133,43 +133,41 @@ class XcuteOrchestrator(object):
             self.logger.info('Found running job %s', job_id)
             self.handle_running_job(job_info)
 
+        # run next jobs
         while self.running:
             # remove dead dispatching threads
             for thread_id, thread_ in self.threads.items():
                 if not thread_.is_alive():
                     del self.threads[thread_id]
 
-            self.orchestrate_loop()
+            self.run_next_job()
+            sleep(1)
 
-            sleep(2)
-
-    def orchestrate_loop(self):
+    def run_next_job(self):
         """
             One iteration of the main loop
         """
 
-        while True:
-            job_info, exc = self.handle_backend_errors(
-                self.backend.run_next, self.orchestrator_id)
-            if exc is not None:
-                self.logger.warn('Unable to run next job: %s', exc)
-                return
-            if job_info is None:
-                return
+        job_info, exc = self.handle_backend_errors(
+            self.backend.run_next, self.orchestrator_id)
+        if exc is not None:
+            self.logger.warn('Unable to run next job: %s', exc)
+            return
+        if job_info is None:
+            return
 
-            job_id = job_info['job']['id']
-            self.logger.info('Found new job %s', job_id)
-            try:
-                self.handle_running_job(job_info)
-            except Exception:
-                self.logger.exception(
-                    'Failed to instantiate job %s', job_id)
-                _, exc = self.handle_backend_errors(
-                    self.backend.fail, job_id)
-                if exc is not None:
-                    self.logger.warn(
-                        '[job_id=%s] Job has not been updated '
-                        'with the failure: %s', job_id, exc)
+        job_id = job_info['job']['id']
+        self.logger.info('Found new job %s', job_id)
+        try:
+            self.handle_running_job(job_info)
+        except Exception as exc:
+            self.logger.exception('Failed to run job %s: %s', job_id, exc)
+            _, exc = self.handle_backend_errors(
+                self.backend.fail, job_id)
+            if exc is not None:
+                self.logger.warn(
+                    '[job_id=%s] Job has not been updated '
+                    'with the failure: %s', job_id, exc)
 
     def handle_running_job(self, job_info):
         """
