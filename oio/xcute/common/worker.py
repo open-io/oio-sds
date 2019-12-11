@@ -32,7 +32,7 @@ class XcuteWorker(object):
         self.beanstalkd_replies = dict()
         self.tasks = CacheDict(size=10)
 
-    def process_beanstalkd_job(self, beanstalkd_job):
+    def process(self, beanstalkd_job):
         job_id = beanstalkd_job['job_id']
         job_config = beanstalkd_job['job_config']
 
@@ -45,10 +45,7 @@ class XcuteWorker(object):
             self.tasks[job_id] = task
 
         tasks_per_second = job_config['tasks_per_second']
-
         tasks = beanstalkd_job['tasks']
-        reply_addr = beanstalkd_job['beanstalkd_reply']['addr']
-        reply_tube = beanstalkd_job['beanstalkd_reply']['tube']
 
         task_errors = Counter()
         task_results = Counter()
@@ -68,25 +65,27 @@ class XcuteWorker(object):
                                  job_id, task_id, exc)
                 task_errors[type(exc).__name__] += 1
 
-        self._reply(reply_addr, reply_tube,
-                    job_id, tasks.keys(), task_results, task_errors)
+        return job_id, tasks.keys(), task_results, task_errors, \
+            beanstalkd_job['beanstalkd_reply']
 
-    def _reply(self, reply_addr, reply_tube,
-               job_id, task_ids, task_results, task_errors):
+    def reply(self, job_id, task_ids, task_results,
+              task_errors, beanstalkd_reply_info):
+        beanstalkd_reply_addr = beanstalkd_reply_info['addr']
+        beanstalkd_reply_tube = beanstalkd_reply_info['tube']
+
+        beanstalkd_reply_info = (beanstalkd_reply_addr, beanstalkd_reply_tube)
+        beanstalkd_reply = self.beanstalkd_replies.get(beanstalkd_reply_info)
+        if not beanstalkd_reply:
+            beanstalkd_reply = Beanstalk.from_url(beanstalkd_reply_addr)
+            beanstalkd_reply.use(beanstalkd_reply_tube)
+            beanstalkd_reply.watch(beanstalkd_reply_tube)
+
+            self.beanstalkd_replies[beanstalkd_reply_info] = beanstalkd_reply
+
         reply_payload = json.dumps({
             'job_id': job_id,
             'task_ids': task_ids,
             'task_results': task_results,
-            'task_errors': task_errors
+            'task_errors': task_errors,
         })
-
-        beanstalkd_reply_info = (reply_addr, reply_tube)
-        beanstalkd_reply = self.beanstalkd_replies.get(beanstalkd_reply_info)
-        if not beanstalkd_reply:
-            beanstalkd_reply = Beanstalk.from_url(beanstalkd_addr)
-            beanstalkd_reply.use(self.beanstalkd_workers_tube)
-            beanstalkd_reply.watch(self.beanstalkd_workers_tube)
-
-            self.beanstalkd_replies[beanstalkd_reply_info] = beanstalkd_reply
-
         beanstalkd_reply.put(reply_payload)

@@ -256,6 +256,8 @@ class EventWorker(Worker):
             beanstalk.delete(job_id)
             return
 
+        event['beanstalkd'] = beanstalk
+
         def cb(status, msg):
             if is_success(status):
                 try:
