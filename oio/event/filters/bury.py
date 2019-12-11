@@ -21,7 +21,7 @@ from oio.common.exceptions import ExplicitBury
 class BuryFilter(Filter):
     """Bury all events"""
 
-    def process(self, env, cb):
+    def process(self, env, beanstalkd, cb):
         raise ExplicitBury()
 
 

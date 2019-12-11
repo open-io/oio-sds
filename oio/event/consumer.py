@@ -275,7 +275,7 @@ class EventWorker(Worker):
                         "Job %s failed and could not be rescheduled: %s",
                         job_id, err)
 
-        handler(event, cb)
+        handler(event, beanstalk, cb)
 
     def get_handler(self, event):
         return self.handlers.get(event.get('event'), None)

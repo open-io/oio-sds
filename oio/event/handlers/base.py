@@ -28,11 +28,11 @@ class Handler(object):
     def process(self, event):
         return EventOk(event=event)
 
-    def __call__(self, env, cb):
+    def __call__(self, env, beanstalkd, cb):
         event = Event(env)
         try:
             res = self.process(event)
-            return res(env, cb)
+            return res(env, beanstalkd, cb)
         except StopServe:
             self.logger.info('Job %s not handled: the process is stopping',
                              event.job_id)
@@ -40,7 +40,7 @@ class Handler(object):
         except Exception as err:
             self.logger.exception('Job %s not handled: %s', event.job_id, err)
             res = EventError(event=event, body='An error ocurred')
-        return res(env, cb)
+        return res(env, beanstalkd, cb)
 
 
 def handler_factory(app, global_conf, **local_conf):

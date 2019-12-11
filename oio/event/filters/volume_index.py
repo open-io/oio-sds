@@ -91,7 +91,7 @@ class VolumeIndexFilter(Filter):
             self.logger.warn("Failed to deindex %s from %s: %s",
                              url, volume_id, ex)
 
-    def process(self, env, cb):
+    def process(self, env, beanstalkd, cb):
         event = Event(env)
         mtime = event.when / 1000000  # seconds
         if event.event_type in CHUNK_EVENTS:
@@ -113,7 +113,7 @@ class VolumeIndexFilter(Filter):
             except OioException as exc:
                 resp = EventError(event=event,
                                   body="rdir update error: %s" % exc)
-                return resp(env, cb)
+                return resp(env, beanstalkd, cb)
         elif event.event_type in SERVICE_EVENTS:
             container_id = event.url['id']
             container_url = '/'.join((event.url['ns'],
@@ -135,7 +135,7 @@ class VolumeIndexFilter(Filter):
                     self._service_delete(
                         event.reqid, 'meta2', peer, container_url,
                         container_id)
-        return self.app(env, cb)
+        return self.app(env, beanstalkd, cb)
 
 
 def filter_factory(global_conf, **local_conf):
