@@ -94,6 +94,16 @@ test_oio_lb_benchmark() {
 	if [ $(grep -qv 'no service polled from' lb-benchmark.log) ]; then exit 1; fi
 }
 
+test_oio_logger() {
+	# Expect the thing to exit with error 1. If it crashes in an uncontrolled
+	# way, it will return 128+.
+	set +e
+	python ${WRKDIR}/tools/oio-crash-logger.py
+	CODE=$?
+	set -e
+	if [ $CODE -ne 1 ]; then exit 1; fi
+}
+
 test_proxy_forward () {
 	proxy=$(oio-test-config.py -t proxy -1)
 
@@ -291,6 +301,7 @@ test_cli () {
 	# This is tested here because we do not need to test it several times,
 	# and for some reason it cannot run with unit tests.
 	test_oio_lb_benchmark
+	test_oio_logger
 }
 
 func_tests_rebuilder_mover () {

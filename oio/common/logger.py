@@ -1,4 +1,4 @@
-# Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,7 +18,7 @@ import sys
 import socket
 import errno
 import logging
-from logging.handlers import SysLogHandler
+from logging.handlers import SysLogHandler, SocketHandler
 
 
 class StreamToLogger(object):
@@ -29,10 +29,22 @@ class StreamToLogger(object):
     def write(self, value):
         value = value.strip()
         if value:
-            self.logger.error('%s : %s', self.log_type, value)
+            try:
+                self.logger.error('%s: %s', self.log_type, value)
+            except Exception as err:
+                if self.log_type == 'STDERR' and sys.stderr != sys.__stderr__:
+                    msg = ("There was an error (%s) while logging to the "
+                           "wrapped stderr, restoring the real stderr.\n")
+                    sys.stderr = sys.__stderr__
+                    sys.stderr.write(msg % err)
+                    log_handler = self.logger.handlers[0]
+                    if isinstance(log_handler, (SysLogHandler, SocketHandler)):
+                        sys.stderr.write('log_address: %s\n' %
+                                         log_handler.address)
+                raise
 
     def writelines(self, values):
-        self.logger.error('%s : %s', self.log_type, '#012'.join(values))
+        self.logger.error('%s: %s', self.log_type, '#012'.join(values))
 
     def close(self):
         pass
@@ -49,7 +61,9 @@ def redirect_stdio(logger):
     """
     sys.excepthook = lambda * exc_info: \
         logger.critical('UNCAUGHT EXCEPTION', exc_info=exc_info)
-    stdio_fd = [sys.stdin, sys.stdout, sys.stderr]
+    # Do not close stderr. We will replace sys.stderr, but the file
+    # descriptor will still be open an reachable from sys.__stderr__.
+    stdio_fd = (sys.stdin, sys.stdout)
     console_fds = [h.stream.fileno() for _, h in getattr(
         get_logger, 'console_handler4logger', {}).items()]
     stdio_fd = [fd for fd in stdio_fd if fd.fileno() not in console_fds]
@@ -106,11 +120,14 @@ def get_logger(
                                 facility=facility)
     else:
         log_address = conf.get('log_address', '/dev/log')
-        try:
-            handler = SysLogHandler(address=log_address, facility=facility)
-        except socket.error as exc:
-            if exc.errno not in [errno.ENOTSOCK, errno.ENOENT]:
-                raise exc
+        if os.path.exists(log_address):
+            try:
+                handler = SysLogHandler(address=log_address, facility=facility)
+            except socket.error as exc:
+                if exc.errno not in [errno.ENOTSOCK, errno.ENOENT]:
+                    raise exc
+                handler = SysLogHandler(facility=facility)
+        else:
             handler = SysLogHandler(facility=facility)
 
     handler.setFormatter(syslog_formatter)
