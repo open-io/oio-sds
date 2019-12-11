@@ -28,7 +28,7 @@ from tests.utils import BaseTestCase, random_str, strange_paths
 class _App(object):
     app_env = dict()
 
-    def __init__(self, env, cb):
+    def __init__(self, env, beanstalkd, cb):
         self.env = env
         self.cb = cb
 
@@ -106,7 +106,7 @@ class TestContentRebuildFilter(BaseTestCase):
         self._remove_chunks(chunks_to_remove, meta['id'])
         event = self._create_event(content_name, chunks, missing_pos,
                                    meta['id'])
-        self.notify_filter.process(env=event, cb=None)
+        self.notify_filter.process(event, None, None)
         self._rebuild(event)
         _, after = self.object_storage_api.object_locate(
                         container=self.container, obj=content_name,

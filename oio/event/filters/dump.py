@@ -27,10 +27,10 @@ class DumpFilter(Filter):
     def __init__(self, app, conf, **kwargs):
         super(DumpFilter, self).__init__(app, conf, **kwargs)
 
-    def process(self, env, cb):
+    def process(self, env, beanstalkd, cb):
         with open("/tmp/event_%s" % env["job_id"], "w") as fp:
             fp.write(json.dumps(env, indent=4))
-        return self.app(env, cb)
+        return self.app(env, beanstalkd, cb)
 
 
 def filter_factory(global_conf, **local_conf):

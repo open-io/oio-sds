@@ -19,9 +19,9 @@ from oio.event.filters.base import Filter
 class LoggerFilter(Filter):
     """Log all events with 'info' level"""
 
-    def process(self, env, cb):
+    def process(self, env, beanstalkd, cb):
         self.logger.info("got event: %s", str(env))
-        return self.app(env, cb)
+        return self.app(env, beanstalkd, cb)
 
 
 def filter_factory(global_conf, **local_conf):

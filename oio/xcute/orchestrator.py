@@ -27,6 +27,7 @@ from oio.common.json import json
 from oio.conscience.client import ConscienceClient
 from oio.event.beanstalk import Beanstalk, BeanstalkdListener, \
     ConnectionError
+from oio.event.evob import EventTypes
 from oio.xcute.common.backend import XcuteBackend
 from oio.xcute.jobs import JOB_TYPES
 
@@ -330,7 +331,7 @@ class XcuteOrchestrator(object):
                                 tasks):
         return json.dumps(
             {
-                'event': 'xcute.tasks',
+                'event': EventTypes.XCUTE_TASKS,
                 'data': {
                     'job_id': job_id,
                     'job_type': job_type,

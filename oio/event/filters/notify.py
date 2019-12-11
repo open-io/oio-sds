@@ -75,7 +75,7 @@ class NotifyFilter(Filter):
         self.tube = self.conf.get('tube', 'notif')
         self.beanstalk.use(self.tube)
 
-    def process(self, env, cb):
+    def process(self, env, beanstalkd, cb):
         event = Event(env)
         if self.should_notify(event):
             try:
@@ -87,9 +87,9 @@ class NotifyFilter(Filter):
             except BeanstalkError as err:
                 msg = 'notify failure: %s' % str(err)
                 resp = EventError(event=Event(env), body=msg)
-                return resp(env, cb)
+                return resp(env, beanstalkd, cb)
 
-        return self.app(env, cb)
+        return self.app(env, beanstalkd, cb)
 
 
 def filter_factory(global_conf, **local_conf):

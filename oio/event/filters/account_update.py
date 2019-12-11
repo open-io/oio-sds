@@ -41,7 +41,7 @@ class AccountUpdateFilter(Filter):
         self.read_timeout = float(self.conf.get('read_timeout',
                                                 READ_TIMEOUT))
 
-    def process(self, env, cb):
+    def process(self, env, beanstalkd, cb):
         event = Event(env)
         headers = {
             REQID_HEADER: event.reqid or request_id('account-update-')
@@ -99,7 +99,7 @@ class AccountUpdateFilter(Filter):
         except OioTimeout as exc:
             msg = 'account update failure: %s' % str(exc)
             resp = EventError(event=Event(env), body=msg)
-            return resp(env, cb)
+            return resp(env, beanstalkd, cb)
         except ClientException as exc:
             if (exc.http_status == 409 and
                     "No update needed" in exc.message):
@@ -110,8 +110,8 @@ class AccountUpdateFilter(Filter):
             else:
                 msg = 'account update failure: %s' % str(exc)
                 resp = EventError(event=Event(env), body=msg)
-                return resp(env, cb)
-        return self.app(env, cb)
+                return resp(env, beanstalkd, cb)
+        return self.app(env, beanstalkd, cb)
 
 
 def filter_factory(global_conf, **local_conf):
