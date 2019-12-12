@@ -16,6 +16,8 @@
 import math
 import random
 from collections import OrderedDict
+from redis import ConnectionError as RedisConnectionError, \
+    TimeoutError as RedisTimeoutError
 
 from oio.common.easy_value import int_value
 from oio.common.exceptions import OioTimeout
@@ -73,6 +75,28 @@ class XcuteOrchestrator(object):
         self.beanstalkd_workers = dict()
         self.threads = dict()
 
+    def handle_backend_errors(self, func, *args, **kwargs):
+        while True:
+            try:
+                return func(*args, **kwargs), None
+            except (RedisConnectionError, RedisTimeoutError) as exc:
+                self.logger.warn(
+                    'Fail to communicate with redis: %s', exc)
+                if not self.running:
+                    return None, exc
+                sleep(1)
+
+    def safe_run_forever(self):
+        try:
+            self.run_forever()
+        except Exception as exc:
+            self.logger.exception('Fail to run forever: %s', exc)
+            self.exit_gracefully()
+
+        for thread_ in self.threads.values():
+            thread_.join()
+        self.logger.info('Exited running thread')
+
     def run_forever(self):
         """
             Take jobs from the queue and spawn threads to dispatch them
@@ -85,21 +109,28 @@ class XcuteOrchestrator(object):
         self.threads[refresh_beanstalkd_workers_thread.ident] = \
             refresh_beanstalkd_workers_thread
 
-        # restart running jobs
-        self.logger.debug('Look for unfinished jobs')
-        orchestrator_jobs = \
-            self.backend.list_orchestrator_jobs(self.orchestrator_id)
-
-        for job_info in orchestrator_jobs:
-            job_id = job_info['job']['id']
-            self.logger.info('Found running job %s', job_id)
-            self.handle_running_job(job_info)
-
         # start processing replies
         listen_thread = threading.Thread(target=self.listen)
         listen_thread.start()
-
         self.threads[listen_thread.ident] = listen_thread
+
+        if not self.running:
+            return
+
+        # restart running jobs
+        self.logger.debug('Look for unfinished jobs')
+        orchestrator_jobs, exc = self.handle_backend_errors(
+            self.backend.list_orchestrator_jobs, self.orchestrator_id)
+        if exc is not None:
+            self.logger.warn(
+                'Unable to list running jobs for this orchestrator: %s', exc)
+            return
+        for job_info in orchestrator_jobs:
+            if not self.running:
+                return
+            job_id = job_info['job']['id']
+            self.logger.info('Found running job %s', job_id)
+            self.handle_running_job(job_info)
 
         while self.running:
             # remove dead dispatching threads
@@ -111,19 +142,20 @@ class XcuteOrchestrator(object):
 
             sleep(2)
 
-        for thread_ in self.threads.values():
-            thread_.join()
-
-        self.logger.info('Exited running thread')
-
     def orchestrate_loop(self):
         """
             One iteration of the main loop
         """
 
-        new_jobs = iter(
-            lambda: self.backend.run_next(self.orchestrator_id), None)
-        for job_info in new_jobs:
+        while True:
+            job_info, exc = self.handle_backend_errors(
+                self.backend.run_next, self.orchestrator_id)
+            if exc is not None:
+                self.logger.warn('Unable to run next job: %s', exc)
+                return
+            if job_info is None:
+                return
+
             job_id = job_info['job']['id']
             self.logger.info('Found new job %s', job_id)
             try:
@@ -131,7 +163,12 @@ class XcuteOrchestrator(object):
             except Exception:
                 self.logger.exception(
                     'Failed to instantiate job %s', job_id)
-                self.backend.fail(job_id)
+                _, exc = self.handle_backend_errors(
+                    self.backend.fail, job_id)
+                if exc is not None:
+                    self.logger.warn(
+                        '[job_id=%s] Failure has not been updated: %s',
+                        job_id, exc)
 
     def handle_running_job(self, job_info):
         """
@@ -206,9 +243,14 @@ class XcuteOrchestrator(object):
                     beanstalkd_workers,
                     job_id, job_type, job_config, tasks)
                 if sent:
-                    job_status = self.backend.update_tasks_sent(
-                        job_id, tasks.keys())
+                    job_status, exc = self.handle_backend_errors(
+                        self.backend.update_tasks_sent, job_id, tasks.keys())
                     tasks.clear()
+                    if exc is not None:
+                        self.logger.warn(
+                            '[job_id=%s] Sent tasks has not been updated: %s',
+                            job_id, exc)
+                        break
                     if job_status == 'PAUSED':
                         self.logger.info('Job %s is paused', job_id)
                         return
@@ -219,21 +261,34 @@ class XcuteOrchestrator(object):
                     beanstalkd_workers,
                     job_id, job_type, job_config, tasks)
                 if sent:
-                    job_status = self.backend.update_tasks_sent(
-                        job_id, tasks.keys(), all_tasks_sent=True)
-                    if job_status == 'FINISHED':
-                        self.logger.info('Job %s is finished', job_id)
+                    job_status, exc = self.handle_backend_errors(
+                        self.backend.update_tasks_sent, job_id, tasks.keys(),
+                        all_tasks_sent=True)
+                    if exc is None:
+                        if job_status == 'FINISHED':
+                            self.logger.info('Job %s is finished', job_id)
 
-                    self.logger.info('Finished dispatching job (job_id=%s)',
-                                     job_id)
-                    return
+                        self.logger.info(
+                            'Finished dispatching job (job_id=%s)', job_id)
+                        return
+                    else:
+                        self.logger.warn(
+                            '[job_id=%s] Last sent tasks has not been '
+                            'updated: %s', job_id, exc)
 
-            self.backend.free(job_id)
-        except Exception:
-            self.logger.exception('Failed generating task list (job_id=%s)',
-                                  job_id)
-
-            self.backend.fail(job_id)
+            _, exc = self.handle_backend_errors(self.backend.free, job_id)
+            if exc is not None:
+                self.logger.warn(
+                    '[job_id=%s] Job has not been freed: %s',
+                    job_id, exc)
+        except Exception as exc:
+            self.logger.exception(
+                '[job_id=%s] Failed generating task list: %s', job_id, exc)
+            _, exc = self.handle_backend_errors(self.backend.fail, job_id)
+            if exc is not None:
+                self.logger.warn(
+                    '[job_id=%s] Failure has not been updated: %s',
+                    job_id, exc)
 
     def dispatch_tasks(self, beanstalkd_workers,
                        job_id, job_type, job_config, tasks):
@@ -365,10 +420,16 @@ class XcuteOrchestrator(object):
         self.logger.debug('Tasks processed (job_id=%s): %s', job_id, task_ids)
 
         try:
-            finished = self.backend.update_tasks_processed(
+            finished, exc = self.handle_backend_errors(
+                self.backend.update_tasks_processed,
                 job_id, task_ids, task_errors, task_results)
-            if finished:
-                self.logger.info('Job %s is finished', job_id)
+            if exc is None:
+                if finished:
+                    self.logger.info('Job %s is finished', job_id)
+            else:
+                self.logger.warn(
+                    '[job_id=%s] Processed tasks has not been updated: %s',
+                    job_id, exc)
         except Exception:
             self.logger.exception('Error processing reply')
 

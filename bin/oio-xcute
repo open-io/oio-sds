@@ -81,7 +81,7 @@ if __name__ == '__main__':
 
         server_process.start()
         try:
-            orchestrator.run_forever()
+            orchestrator.safe_run_forever()
         finally:
             server_process.terminate()
             server_process.join()
@@ -89,6 +89,6 @@ if __name__ == '__main__':
         signal.signal(signal.SIGINT, orchestrator.exit_gracefully)
         signal.signal(signal.SIGTERM, orchestrator.exit_gracefully)
 
-        orchestrator.run_forever()
+        orchestrator.safe_run_forever()
     else:
         server.run()
