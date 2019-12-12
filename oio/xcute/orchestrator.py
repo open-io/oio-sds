@@ -74,7 +74,11 @@ class XcuteOrchestrator(object):
 
         self.running = True
         self.beanstalkd_workers = dict()
-        self.threads = dict()
+
+        self.refresh_beanstalkd_workers_thread = None
+        self.listen_beanstalkd_reply_thread = None
+        self.dispatch_tasks_threads = dict()
+        self.compute_total_tasks_threads = dict()
 
     def handle_backend_errors(self, func, *args, **kwargs):
         while True:
@@ -94,8 +98,15 @@ class XcuteOrchestrator(object):
             self.logger.exception('Fail to run forever: %s', exc)
             self.exit_gracefully()
 
-        for thread_ in self.threads.values():
-            thread_.join()
+        if self.refresh_beanstalkd_workers_thread:
+            self.refresh_beanstalkd_workers_thread.join()
+        if self.listen_beanstalkd_reply_thread:
+            self.listen_beanstalkd_reply_thread.join()
+        for dispatch_tasks_thread in self.dispatch_tasks_threads.values():
+            dispatch_tasks_thread.join()
+        for compute_total_tasks_thread \
+                in self.compute_total_tasks_threads.values():
+            compute_total_tasks_thread.join()
         self.logger.info('Exited running thread')
 
     def run_forever(self):
@@ -104,16 +115,14 @@ class XcuteOrchestrator(object):
         """
 
         # gather beanstalkd info
-        refresh_beanstalkd_workers_thread = threading.Thread(
+        self.refresh_beanstalkd_workers_thread = threading.Thread(
             target=self.refresh_beanstalkd_workers_forever)
-        refresh_beanstalkd_workers_thread.start()
-        self.threads[refresh_beanstalkd_workers_thread.ident] = \
-            refresh_beanstalkd_workers_thread
+        self.refresh_beanstalkd_workers_thread.start()
 
         # start processing replies
-        listen_thread = threading.Thread(target=self.listen)
-        listen_thread.start()
-        self.threads[listen_thread.ident] = listen_thread
+        self.listen_beanstalkd_reply_thread = threading.Thread(
+            target=self.listen_beanstalkd_reply_forever)
+        self.listen_beanstalkd_reply_thread.start()
 
         if not self.running:
             return
@@ -129,37 +138,26 @@ class XcuteOrchestrator(object):
         for job_info in orchestrator_jobs:
             if not self.running:
                 return
-            job_id = job_info['job']['id']
-            self.logger.info('Found running job %s', job_id)
-            self.handle_running_job(job_info)
+            self.safe_handle_running_job(job_info)
 
         # run next jobs
         while self.running:
-            # remove dead dispatching threads
-            for thread_id, thread_ in self.threads.items():
-                if not thread_.is_alive():
-                    del self.threads[thread_id]
-
-            self.run_next_job()
             sleep(1)
+            job_info, exc = self.handle_backend_errors(
+                self.backend.run_next, self.orchestrator_id)
+            if exc is not None:
+                self.logger.warn('Unable to run next job: %s', exc)
+                return
+            if not job_info:
+                continue
+            self.safe_handle_running_job(job_info)
 
-    def run_next_job(self):
-        """
-            One iteration of the main loop
-        """
-
-        job_info, exc = self.handle_backend_errors(
-            self.backend.run_next, self.orchestrator_id)
-        if exc is not None:
-            self.logger.warn('Unable to run next job: %s', exc)
-            return
-        if job_info is None:
-            return
-
-        job_id = job_info['job']['id']
-        self.logger.info('Found new job %s', job_id)
+    def safe_handle_running_job(self, job_info):
         try:
-            self.handle_running_job(job_info)
+            job_id = job_info['job']['id']
+            job_type = job_info['job']['type']
+            self.logger.info('Run job %s: %s', job_id, job_type)
+            self.handle_running_job(job_id, job_type, job_info)
         except Exception as exc:
             self.logger.exception('Failed to run job %s: %s', job_id, exc)
             _, exc = self.handle_backend_errors(
@@ -169,130 +167,142 @@ class XcuteOrchestrator(object):
                     '[job_id=%s] Job has not been updated '
                     'with the failure: %s', job_id, exc)
 
-    def handle_running_job(self, job_info):
+    def handle_running_job(self, job_id, job_type, job_info):
         """
-            Read the job's configuration
-            and get its tasks before dispatching it
+        First launch the computation of total number of tasks,
+        then launch the dispatchnig of all tasks across the platform.
         """
         if job_info['tasks']['all_sent']:
+            self.logger.info(
+                '[job_id=%s] All tasks are already sent', job_id)
             return
 
-        job_id = job_info['job']['id']
-        job_type = job_info['job']['type']
-        last_task_id = job_info['tasks']['last_sent']
-        total_marker = job_info['tasks']['total_marker']
-        job_config = job_info['config']
-        job_params = job_config['params']
         job_class = JOB_TYPES[job_type]
         job = job_class(self.conf, logger=self.logger)
-        job_tasks = job.get_tasks(job_params, marker=last_task_id)
 
-        tasks_counter = None
-        if job_info['tasks']['is_total_temp']:
-            tasks_counter = job.get_total_tasks(
-                job_params, marker=total_marker)
+        if job_id in self.compute_total_tasks_threads:
+            self.logger.info(
+                '[job_id=%s] Already computing the total number of tasks',
+                job_id)
+        elif job_info['tasks']['is_total_temp']:
+            compute_total_tasks_thread = threading.Thread(
+                target=self.safe_compute_total_tasks,
+                args=(job_id, job_type, job_info, job))
+            compute_total_tasks_thread.start()
+            self.compute_total_tasks_threads[job_id] = \
+                compute_total_tasks_thread
+        else:
+            self.logger.info(
+                '[job_id=%s] The total number of tasks is already computed',
+                job_id)
 
-        thread_args = (job_id, job_type, job_config, job_tasks)
-        dispatch_thread = threading.Thread(
-            target=self.dispatch_job,
-            args=thread_args)
-        dispatch_thread.start()
+        if job_id in self.dispatch_tasks_threads:
+            self.logger.warning(
+                '[job_id=%s] Already dispatching the tasks', job_id)
+        else:
+            dispatch_tasks_thread = threading.Thread(
+                target=self.safe_dispatch_tasks,
+                args=(job_id, job_type, job_info, job))
+            dispatch_tasks_thread.start()
+            self.dispatch_tasks_threads[job_id] = dispatch_tasks_thread
 
-        self.threads[dispatch_thread.ident] = dispatch_thread
-
-        if tasks_counter is None:
-            return
-
-        total_tasks_thread = threading.Thread(
-            target=self.get_job_total_tasks,
-            args=(job_id, tasks_counter))
-        total_tasks_thread.start()
-
-    def dispatch_job(self, job_id, job_type, job_config, job_tasks):
+    def safe_dispatch_tasks(self, job_id, job_type, job_info, job):
         """
-            Dispatch all of a job's tasks
+        Dispatch all tasks across the platform
+        and update the backend.
         """
-
-        self.logger.info('Start dispatching job (job_id=%s)', job_id)
-
         try:
-            beanstalkd_workers = self.get_beanstalkd_workers()
-
-            tasks_per_second = job_config['tasks_per_second']
-            tasks_batch_size = job_config['tasks_batch_size']
-
-            tasks_run_time = 0
-            batch_per_second = tasks_per_second / float(
-                tasks_batch_size)
-            # The backend must have the tasks in order
-            # to know the last task sent
-            tasks = OrderedDict()
-            for task_id, task_payload in job_tasks:
-                if not self.running:
-                    break
-
-                tasks[task_id] = task_payload
-                if len(tasks) < tasks_batch_size:
-                    continue
-
-                tasks_run_time = ratelimit(
-                    tasks_run_time, batch_per_second)
-
-                sent = self.dispatch_tasks(
-                    beanstalkd_workers,
-                    job_id, job_type, job_config, tasks)
-                if sent:
-                    job_status, exc = self.handle_backend_errors(
-                        self.backend.update_tasks_sent, job_id, tasks.keys())
-                    tasks.clear()
-                    if exc is not None:
-                        self.logger.warn(
-                            '[job_id=%s] Job has not been updated '
-                            'with the sent tasks: %s', job_id, exc)
-                        break
-                    if job_status == 'PAUSED':
-                        self.logger.info('Job %s is paused', job_id)
-                        return
-            else:
-                self.logger.info('All tasks sent (job_id=%s)' % job_id)
-
-                sent = True
-                if tasks:
-                    sent = self.dispatch_tasks(
-                        beanstalkd_workers,
-                        job_id, job_type, job_config, tasks)
-                if sent:
-                    job_status, exc = self.handle_backend_errors(
-                        self.backend.update_tasks_sent, job_id, tasks.keys(),
-                        all_tasks_sent=True)
-                    if exc is None:
-                        if job_status == 'FINISHED':
-                            self.logger.info('Job %s is finished', job_id)
-
-                        self.logger.info(
-                            'Finished dispatching job (job_id=%s)', job_id)
-                        return
-                    else:
-                        self.logger.warn(
-                            '[job_id=%s] Job has not been updated '
-                            'with the last sent tasks: %s', job_id, exc)
-
-            _, exc = self.handle_backend_errors(self.backend.free, job_id)
-            if exc is not None:
-                self.logger.warn(
-                    '[job_id=%s] Job has not been freed: %s',
-                    job_id, exc)
+            self.logger.info(
+                '[job_id=%s] Start to dispatch tasks', job_id)
+            self.dispatch_tasks(job_id, job_type, job_info, job)
+            self.logger.info(
+                '[job_id=%s] Finish to dispatch tasks', job_id)
         except Exception as exc:
             self.logger.exception(
-                '[job_id=%s] Failed generating task list: %s', job_id, exc)
-            _, exc = self.handle_backend_errors(self.backend.fail, job_id)
+                '[job_id=%s] Fail to dispatch tasks: %s', job_id, exc)
+            _, exc = self.handle_backend_errors(
+                self.backend.fail, job_id)
             if exc is not None:
                 self.logger.warn(
                     '[job_id=%s] Job has not been updated '
                     'with the failure: %s', job_id, exc)
+        finally:
+            del self.dispatch_tasks_threads[job_id]
 
-    def dispatch_tasks(self, beanstalkd_workers,
-                       job_id, job_type, job_config, tasks):
+    def dispatch_tasks(self, job_id, job_type, job_info, job):
+        job_config = job_info['config']
+        job_params = job_config['params']
+        tasks_per_second = job_config['tasks_per_second']
+        tasks_batch_size = job_config['tasks_batch_size']
+        last_task_id = job_info['tasks']['last_sent']
+
+        job_tasks = job.get_tasks(job_params, marker=last_task_id)
+        beanstalkd_workers = self.get_beanstalkd_workers()
+
+        tasks_run_time = 0
+        batch_per_second = tasks_per_second / float(
+            tasks_batch_size)
+        # The backend must have the tasks in order
+        # to know the last task sent
+        tasks = OrderedDict()
+        for task_id, task_payload in job_tasks:
+            if not self.running:
+                break
+
+            tasks[task_id] = task_payload
+            if len(tasks) < tasks_batch_size:
+                continue
+
+            tasks_run_time = ratelimit(
+                tasks_run_time, batch_per_second)
+
+            sent = self.dispatch_tasks_batch(
+                beanstalkd_workers,
+                job_id, job_type, job_config, tasks)
+            if sent:
+                job_status, exc = self.handle_backend_errors(
+                    self.backend.update_tasks_sent, job_id, tasks.keys())
+                tasks.clear()
+                if exc is not None:
+                    self.logger.warn(
+                        '[job_id=%s] Job has not been updated '
+                        'with the sent tasks: %s', job_id, exc)
+                    break
+                if job_status == 'PAUSED':
+                    self.logger.info('Job %s is paused', job_id)
+                    return
+
+            if not self.running:
+                break
+        else:
+            sent = True
+            if tasks:
+                sent = self.dispatch_tasks_batch(
+                    beanstalkd_workers,
+                    job_id, job_type, job_config, tasks)
+            if sent:
+                job_status, exc = self.handle_backend_errors(
+                    self.backend.update_tasks_sent, job_id, tasks.keys(),
+                    all_tasks_sent=True)
+                if exc is None:
+                    if job_status == 'FINISHED':
+                        self.logger.info('Job %s is finished', job_id)
+
+                    self.logger.info(
+                        'Finished dispatching job (job_id=%s)', job_id)
+                    return
+                else:
+                    self.logger.warn(
+                        '[job_id=%s] Job has not been updated '
+                        'with the last sent tasks: %s', job_id, exc)
+
+        _, exc = self.handle_backend_errors(self.backend.free, job_id)
+        if exc is not None:
+            self.logger.warn(
+                '[job_id=%s] Job has not been freed: %s', job_id, exc)
+
+    def dispatch_tasks_batch(self, beanstalkd_workers,
+                             job_id, job_type, job_config, tasks):
         """
             Try sending a task until it's ok
         """
@@ -347,19 +357,55 @@ class XcuteOrchestrator(object):
                 }
             })
 
-    def get_job_total_tasks(self, job_id, tasks_counter):
-        for total_marker, tasks_incr in tasks_counter:
-            stop = self.backend.incr_total_tasks(
-                job_id, total_marker, tasks_incr)
+    def safe_compute_total_tasks(self, job_id, job_type, job_info, job):
+        """
+        Compute the total number of tasks
+        and update the backend.
+        """
+        try:
+            self.logger.info(
+                '[job_id=%s] Start to compute the total number of tasks',
+                job_id)
+            self.compute_total_tasks(job_id, job_type, job_info, job)
+            self.logger.info(
+                '[job_id=%s] Finish to compute the total number of tasks',
+                job_id)
+        except Exception as exc:
+            self.logger.exception(
+                '[job_id=%s] Fail to compute the total number of tasks: %s',
+                job_id, exc)
+        finally:
+            del self.compute_total_tasks_threads[job_id]
 
+    def compute_total_tasks(self, job_id, job_type, job_info, job):
+        job_params = job_info['config']['params']
+        total_marker = job_info['tasks']['total_marker']
+
+        tasks_counter = job.get_total_tasks(
+                job_params, marker=total_marker)
+        for total_marker, tasks_incr in tasks_counter:
+            stop, exc = self.handle_backend_errors(
+                self.backend.incr_total_tasks, job_id,
+                total_marker, tasks_incr)
+            if exc is not None:
+                self.logger.warn(
+                    '[job_id=%s] Job has not been updated '
+                    'with total tasks: %s', job_id, exc)
+                return
             if stop or not self.running:
                 return
 
-        total_tasks = self.backend.total_tasks_done(job_id)
+        total_tasks, exc = self.handle_backend_errors(
+            self.backend.total_tasks_done, job_id)
+        if exc is not None:
+            self.logger.warn(
+                '[job_id=%s] Job has not been updated '
+                'with last total tasks: %s', job_id, exc)
+            return
+        self.logger.info(
+            '[job_id=%s] %s estimated tasks', job_id, total_tasks)
 
-        self.logger.info('Job %s has %s tasks', job_id, total_tasks)
-
-    def listen(self):
+    def listen_beanstalkd_reply_forever(self):
         """
             Process this orchestrator's job replies
         """
