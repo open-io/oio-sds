@@ -16,9 +16,10 @@
 import logging
 import random
 
+from flaky import flaky
+from oio.common.json import json
 from tests.utils import BaseTestCase
 from tests.utils import CODE_SRVTYPE_NOTMANAGED
-import simplejson as json
 
 
 class TestConscienceFunctional(BaseTestCase):
@@ -264,6 +265,7 @@ class TestConscienceFunctional(BaseTestCase):
         self.assertEqual(1, my_rawx['score'])
         self.conscience.unlock_score(one_rawx)
 
+    @flaky()
     def test_deregister_services(self):
         self._flush_cs('echo')
         self._reload()
@@ -272,6 +274,8 @@ class TestConscienceFunctional(BaseTestCase):
         expected_services.append(self._srv('echo', ip='127.0.0.2'))
         expected_services.append(self._srv('echo', ip='127.0.0.3'))
         self._register_srv(expected_services)
+        # Sometimes the proxy's service registration thread is slow,
+        # and we get only a partial list, hence the flaky decorator.
         services = self._list_srvs('echo')
         self.assertListEqual(
             sorted([srv['addr'] for srv in expected_services]),
