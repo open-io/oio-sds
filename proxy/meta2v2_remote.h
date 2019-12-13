@@ -69,16 +69,8 @@ GByteArray* m2v2_remote_pack_DESTROY(
 		guint32 flags,
 		gint64 deadline);
 
-/* accepts M2V2_FLAG_MASTER */
-GByteArray* m2v2_remote_pack_HAS(
-		struct oio_url_s *url,
-		guint32 flags,
-		gint64 deadline);
-
-/* accepts M2V2_FLAG_MASTER */
 GByteArray* m2v2_remote_pack_ISEMPTY(
 		struct oio_url_s *url,
-		guint32 flags,
 		gint64 deadline);
 
 GByteArray* m2v2_remote_pack_FLUSH(
@@ -139,39 +131,30 @@ GByteArray* m2v2_remote_pack_TRUNC(
 		gint64 size,
 		gint64 deadline);
 
-/* accepts M2V2_FLAG_MASTER */
 GByteArray* m2v2_remote_pack_GET(
 		struct oio_url_s *url,
 		guint32 flags,
 		gint64 deadline);
 
-/* accepts M2V2_FLAG_MASTER */
 GByteArray* m2v2_remote_pack_LIST(
 		struct oio_url_s *url,
-		guint32 flags,
 		struct list_params_s *p,
 		gint64 deadline);
 
-/* accepts M2V2_FLAG_MASTER */
 GByteArray* m2v2_remote_pack_LIST_BY_CHUNKID(
 		struct oio_url_s *url,
-		guint32 flags,
 		struct list_params_s *p,
 		const char *chunk,
 		gint64 deadline);
 
-/* accepts M2V2_FLAG_MASTER */
 GByteArray* m2v2_remote_pack_LIST_BY_HEADERHASH(
 		struct oio_url_s *url,
-		guint32 flags,
 		struct list_params_s *p,
 		GBytes *h,
 		gint64 deadline);
 
-/* accepts M2V2_FLAG_MASTER */
 GByteArray* m2v2_remote_pack_LIST_BY_HEADERID(
 		struct oio_url_s *url,
-		guint32 flags,
 		struct list_params_s *p,
 		GBytes *h,
 		gint64 deadline);
@@ -206,10 +189,8 @@ GByteArray* m2v2_remote_pack_PROP_SET(
 		GSList *beans,
 		gint64 deadline);
 
-/* accepts M2V2_FLAG_MASTER */
 GByteArray* m2v2_remote_pack_PROP_GET(
 		struct oio_url_s *url,
-		guint32 flags,
 		gint64 deadline);
 
 GByteArray* m2v2_remote_pack_TOUCHB(
