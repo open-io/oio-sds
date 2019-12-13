@@ -135,6 +135,7 @@ static gridd_filter M2V2_EMPTY_FILTERS[] =
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_header_localflag,
 	meta2_filter_extract_admin,
+	meta2_filter_extract_force_master,
 	meta2_filter_extract_user_agent,
 	meta2_filter_fill_subject,
 	meta2_filter_check_url_cid,
@@ -241,6 +242,7 @@ static gridd_filter M2V2_LCHUNK_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_header_flags32,
+	meta2_filter_extract_force_master,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_list_params,
 	meta2_filter_fill_subject,
@@ -255,6 +257,7 @@ static gridd_filter M2V2_LHID_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_header_flags32,
+	meta2_filter_extract_force_master,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_list_params,
 	meta2_filter_fill_subject,
@@ -269,6 +272,7 @@ static gridd_filter M2V2_LHHASH_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_header_flags32,
+	meta2_filter_extract_force_master,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_list_params,
 	meta2_filter_fill_subject,
@@ -341,6 +345,7 @@ static gridd_filter M2V2_GET_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_header_localflag,
+	meta2_filter_extract_force_master,
 	meta2_filter_extract_header_flags32,
 	meta2_filter_extract_user_agent,
 	meta2_filter_fill_subject,
@@ -426,6 +431,7 @@ static gridd_filter M2V2_PROPSET_FILTERS[] =
 static gridd_filter M2V2_PROPGET_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
+	meta2_filter_extract_force_master,
 	meta2_filter_extract_user_agent,
 	meta2_filter_fill_subject,
 	meta2_filter_check_url_cid,

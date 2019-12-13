@@ -84,7 +84,7 @@ static void m2b_add_modified_container(struct meta2_backend_s *m2b,
 static enum m2v2_open_type_e
 _mode_masterslave(guint32 flags)
 {
-	if (flags & M2V2_FLAG_MASTER)
+	if ((flags & M2V2_FLAG_MASTER) || oio_ext_has_force_master())
 		return M2V2_OPEN_MASTERONLY;
 	return (flags & M2V2_FLAG_LOCAL)
 		? M2V2_OPEN_LOCAL : M2V2_OPEN_MASTERSLAVE;
@@ -1002,8 +1002,7 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(lp != NULL);
 
-	guint32 open_mode = oio_ext_has_force_master() ?
-			M2V2_FLAG_MASTER : (lp->flag_local? M2V2_FLAG_LOCAL: 0);
+	guint32 open_mode = lp->flag_local ? M2V2_FLAG_LOCAL: 0;
 	err = m2b_open(m2b, url, _mode_readonly(open_mode), &sq3);
 	if (!err) {
 		err = m2db_list_aliases(sq3, lp, headers, cb, u0);
