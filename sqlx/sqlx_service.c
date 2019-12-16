@@ -612,11 +612,11 @@ _configure_tasks(struct sqlx_service_s *ss)
 {
 	grid_task_queue_register(ss->gtq_reload, 5, _task_reload_nsinfo, NULL, ss);
 	grid_task_queue_register(ss->gtq_reload, 5, _task_reload_peers, NULL, ss);
-	grid_task_queue_register(ss->gtq_reload, 5, _task_probe_repository, NULL, ss);
 
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_bases, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_resolver, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_malloc_trim, NULL, ss);
+	grid_task_queue_register(ss->gtq_admin, 5, _task_probe_repository, NULL, ss);
 
 	return TRUE;
 }
@@ -1013,8 +1013,11 @@ _task_probe_repository(gpointer p)
 	errsav = errno;
 	(void) g_rmdir(path);
 	if (rc != 0) {
-		GRID_WARN("I/O error on %s: (%d) %s", path, errsav, strerror(errsav));
-		grid_daemon_notify_io_status(ss->dispatcher, FALSE);
+		gchar *msg = g_strdup_printf("IO error on %s %s: (%d) %s",
+				ss->service_id->str, path, errsav, strerror(errsav));
+		GRID_WARN("%s", msg);
+		grid_daemon_notify_io_status(ss->dispatcher, FALSE, msg);
+		g_free(msg);
 		return;
 	}
 
@@ -1026,13 +1029,15 @@ _task_probe_repository(gpointer p)
 	rc = g_file_set_contents(path, "", 0, &err);
 	(void) g_unlink(path);
 	if (!rc) {
-		GRID_WARN("I/O error on %s: (%d) %s", path, err->code, err->message);
+		gchar *msg = g_strdup_printf("IO error on %s %s: (%d) %s",
+				ss->service_id->str, path, err->code, err->message);
+		GRID_WARN("%s", msg);
 		g_clear_error(&err);
-		grid_daemon_notify_io_status(ss->dispatcher, FALSE);
+		grid_daemon_notify_io_status(ss->dispatcher, FALSE, msg);
 		return;
 	}
 
-	grid_daemon_notify_io_status(ss->dispatcher, TRUE);
+	grid_daemon_notify_io_status(ss->dispatcher, TRUE, NULL);
 }
 
 static void

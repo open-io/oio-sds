@@ -15,17 +15,10 @@
 
 from __future__ import print_function
 
-import zookeeper
 from logging import getLogger
 from six import iteritems
 from cliff import lister
 from oio.cli import Command
-from oio.zk.client import \
-        get_connected_handles, \
-        generate_namespace_tree as _run, \
-        delete_children, \
-        create_namespace_tree, \
-        _acl_openbar
 
 
 class ElectionCmdMixin(object):
@@ -45,6 +38,8 @@ class ElectionCmdMixin(object):
         return ns, cnxstr
 
     def iterate_groups(self, parsed_args, non_leaf=False):
+        from oio.zk.client import get_connected_handles, \
+            generate_namespace_tree as _run
         ns, cnxstr = self.get_params(parsed_args)
         for zh in get_connected_handles(cnxstr):
             for group in _run(ns, parsed_args.srvtype, non_leaf=non_leaf):
@@ -52,6 +47,7 @@ class ElectionCmdMixin(object):
             zh.close()
 
     def _list_nodes(self, zh, path):
+        import zookeeper
         path = path.replace('//', '/')
         try:
             children = list(zookeeper.get_children(zh, path))
@@ -108,6 +104,8 @@ class ElectionReset(ElectionCmdMixin, lister.Lister):
         return columns, self._action_generator(parsed_args)
 
     def _action_generator(self, parsed_args):
+        import zookeeper
+
         def action(group, node):
             if parsed_args.DRY:
                 return group, node, 'Skipped'
@@ -160,6 +158,7 @@ class ElectionStat(ElectionCmdMixin, lister.Lister):
         return columns, self._action_generator(parsed_args)
 
     def _action_generator(self, parsed_args):
+        import zookeeper
         for zh, group in self.iterate_groups(parsed_args):
             children = list(self._list_nodes(zh, group))
             for child in children:
@@ -185,6 +184,8 @@ class ElectionSmudge(ElectionCmdMixin, lister.Lister):
         return columns, self._action_generator(parsed_args)
 
     def _action_generator(self, parsed_args):
+        import zookeeper
+        from oio.zk.client import _acl_openbar
         for zh, group in self.iterate_groups(parsed_args):
             for key, first, last in self._list_elections(zh, group):
                 tail = str(1+int(last)).rjust(10, '0')
@@ -217,6 +218,7 @@ class HierarchyArmageddon(ElectionCmdMixin, Command):
         if not parsed_args.yeah:
             self.log.warn("This action on [%s] requires iron bollocks.", ns)
             return
+        from oio.zk.client import get_connected_handles, delete_children
         for zh in get_connected_handles(cnxstr):
             try:
                 delete_children(zh.get(), ns, self.log)
@@ -253,6 +255,7 @@ class HierarchyBootstrap(ElectionCmdMixin, Command):
             batch_size = 8
         # Send a bootstrap on each ensemble
         ns, cnxstr = self.get_params(parsed_args)
+        from oio.zk.client import get_connected_handles, create_namespace_tree
         for zh in get_connected_handles(cnxstr):
             try:
                 create_namespace_tree(zh.get(), ns, self.log,

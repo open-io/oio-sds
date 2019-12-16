@@ -232,7 +232,8 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 	/* Load the optional 'force_master' flag */
 	const char *force_master = g_tree_lookup(
 			rq->tree_headers, PROXYD_HEADER_FORCE_MASTER);
-	oio_ext_set_force_master(oio_str_parse_bool(force_master, FALSE));
+	oio_ext_set_force_master(
+			flag_force_master || oio_str_parse_bool(force_master, FALSE));
 
 	/* Load the User-Agent */
 	const char *user_agent = g_tree_lookup(rq->tree_headers, USER_AGENT_HEADER);

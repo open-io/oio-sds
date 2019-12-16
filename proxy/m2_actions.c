@@ -1134,8 +1134,7 @@ action_m2_container_destroy (struct req_args_s *args)
 
 	/* 2. Check the base is empty. */
 	if (!err && !force) {
-		guint32 flags = flag_force_master ? M2V2_FLAG_MASTER : 0;
-		PACKER_VOID(_pack) { return m2v2_remote_pack_ISEMPTY (args->url, flags, DL()); }
+		PACKER_VOID(_pack) { return m2v2_remote_pack_ISEMPTY(args->url, DL()); }
 		err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 		if (err != NULL) {
 			/* rollback! */
@@ -2004,14 +2003,13 @@ enum http_rc_e action_container_list (struct req_args_s *args) {
 
 	if (!err) {
 		GByteArray* _pack (struct list_params_s *in) {
-			guint32 flags = flag_force_master ? M2V2_FLAG_MASTER : 0;
 			if (chunk_id)
-				return m2v2_remote_pack_LIST_BY_CHUNKID (args->url, flags,
+				return m2v2_remote_pack_LIST_BY_CHUNKID(args->url,
 						in, chunk_id, DL());
 			if (content_hash)
-				return m2v2_remote_pack_LIST_BY_HEADERHASH (args->url, flags,
+				return m2v2_remote_pack_LIST_BY_HEADERHASH(args->url,
 						in, content_hash, DL());
-			return m2v2_remote_pack_LIST (args->url, flags, in, DL());
+			return m2v2_remote_pack_LIST(args->url, in, DL());
 		}
 		err = _list_loop (args, &list_in, &list_out, tree_prefixes, _pack);
 	}
@@ -2573,10 +2571,8 @@ static enum http_rc_e action_m2_content_propdel (struct req_args_s *args,
 
 static enum http_rc_e action_m2_content_propget (struct req_args_s *args,
 		struct json_object *jargs UNUSED) {
-	const guint32 flags = flag_force_master ? M2V2_FLAG_MASTER : 0;
-
 	GSList *beans = NULL;
-	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_GET (args->url, flags, DL()); }
+	PACKER_VOID(_pack) { return m2v2_remote_pack_PROP_GET(args->url, DL()); }
 	GError *err = _resolve_meta2(args, _prefer_slave(), _pack, &beans, NULL);
 	return _reply_properties (args, err, beans);
 }
@@ -2953,12 +2949,13 @@ enum http_rc_e action_content_prepare_v2(struct req_args_s *args) {
 // }}CONTENT
 enum http_rc_e action_content_show (struct req_args_s *args) {
 	GSList *beans = NULL;
-	guint32 flags = flag_force_master ? M2V2_FLAG_MASTER : 0;
+	guint32 flags = 0;
+
 	/* Historical behaviour is to return properties as headers, but
 	 * if there are too many, the client will fail decoding the request. */
 	if (!oio_str_parse_bool(OPT("properties"), TRUE))
 		flags |= M2V2_FLAG_NOPROPS;
-	PACKER_VOID(_pack) { return m2v2_remote_pack_GET (args->url, flags, DL()); }
+	PACKER_VOID(_pack) { return m2v2_remote_pack_GET(args->url, flags, DL()); }
 	GError *err = _resolve_meta2(args, _prefer_slave(), _pack, &beans, NULL);
 	return _reply_simplified_beans_legacy(args, err, beans);
 }

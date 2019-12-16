@@ -1,7 +1,7 @@
 /*
 OpenIO SDS server
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -66,6 +66,7 @@ struct gridd_request_dispatcher_s
 	 * error occurs, periodically checked for recent acctivity */
 	gint64 last_io_error;
 	gint64 last_io_success;
+	gchar last_io_msg[LIMIT_LENGTH_VOLUMENAME];
 };
 
 struct req_ctx_s
@@ -688,7 +689,10 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 			EXTRA_ASSERT(hdl->handler != NULL);
 			if (hdl->hdata != &_local_variable
 					&& !grid_daemon_is_io_ok(req_ctx->disp)) {
-				rc = _client_reply_fixed(req_ctx, CODE_UNAVAILABLE, "IO errors reported");
+				gchar msg[128] = "";
+				g_snprintf(msg, sizeof(msg), "IO errors reported: %s",
+						grid_daemon_last_io_msg(req_ctx->disp));
+				rc = _client_reply_fixed(req_ctx, CODE_UNAVAILABLE, msg);
 				_notify_request(req_ctx, gq_count_ioerror, gq_time_ioerror);
 			} else {
 				rc = hdl->handler(&ctx, hdl->gdata, hdl->hdata);
@@ -979,7 +983,7 @@ grid_daemon_bind_host(struct network_server_s *server, const gchar *url,
 
 void
 grid_daemon_notify_io_status(
-		struct gridd_request_dispatcher_s *disp, gboolean ok)
+		struct gridd_request_dispatcher_s *disp, gboolean ok, const gchar *msg)
 {
 	EXTRA_ASSERT(disp != NULL);
 	if (ok) {
@@ -987,6 +991,7 @@ grid_daemon_notify_io_status(
 	} else {
 		disp->last_io_error = oio_ext_monotonic_time();
 	}
+	g_strlcpy(disp->last_io_msg, msg? : "n/a", sizeof(disp->last_io_msg));
 }
 
 gboolean
@@ -1004,5 +1009,22 @@ grid_daemon_is_io_ok(struct gridd_request_dispatcher_s *disp)
 
 	/* check the probe thread was not stalled */
 	const gint64 now = oio_ext_monotonic_time();
-	return disp->last_io_success > OLDEST(now, G_TIME_SPAN_MINUTE);
+	gboolean ok = disp->last_io_success > OLDEST(now, G_TIME_SPAN_MINUTE);
+	/* Every 10 requests */
+	if (!ok) {
+		static gint64 last_report = 0;
+		if ((now - last_report) > G_TIME_SPAN_MINUTE) {
+			GRID_WARN(
+					"IO error checker stalled for %"G_GINT64_FORMAT" minutes",
+					(now - disp->last_io_success) / G_TIME_SPAN_MINUTE);
+			last_report = now;
+		}
+	}
+	return ok;
+}
+
+const gchar*
+grid_daemon_last_io_msg(struct gridd_request_dispatcher_s *disp)
+{
+	return disp->last_io_msg;
 }
