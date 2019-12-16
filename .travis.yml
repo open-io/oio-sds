@@ -3,8 +3,6 @@ dist: bionic
 language: python
 python:
     - "2.7"
-virtualenv:
-    system_site_packages: true
 addons:
   apt:
     sources:
@@ -39,10 +37,8 @@ addons:
     - python-pbr
     - python-setuptools
     - python-virtualenv
-    - python-zookeeper
     - python3
     - python3-coverage
-    - python3-zookeeper
     - redis-server
     - redis-tools
     - sqlite3
@@ -76,9 +72,9 @@ jobs:
       script: ./tools/oio-travis-failfast.sh
       name: Copyright, Release build, SDK build
     - script: ./tools/oio-travis-unit.sh
-      name: C unit/func, Python unit/pep8
+      name: C unit/func, Python 2 unit/pep8
     - script: ./tools/oio-travis-unit.sh
-      name: C unit/func, Python3 unit/pep8
+      name: C unit/func, Python 3 unit/pep8
       python: 3.6
 
     - stage: Functional tests (fast)
@@ -94,7 +90,7 @@ jobs:
       env: TEST_SUITE=cli
       python: 3.6
     - script: ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=rebuilder,with-service-id
+      env: TEST_SUITE=rebuilder,with-service-id,zlib
       python: 3.6
     - script: ./tools/oio-travis-suites.sh
       env: TEST_SUITE=repli

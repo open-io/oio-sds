@@ -424,6 +424,9 @@ fi
 func_tests_rebuilder_mover () {
 	randomize_env
 	args=
+	if is_running_test_suite "zlib"; then
+		args="-f ${SRCDIR}/etc/bootstrap-option-compression-zlib.yml"
+	fi
 	if is_running_test_suite "with-service-id"; then
 		args="${args} -U"
 	fi

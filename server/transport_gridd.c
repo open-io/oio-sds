@@ -1010,14 +1010,14 @@ grid_daemon_is_io_ok(struct gridd_request_dispatcher_s *disp)
 	/* check the probe thread was not stalled */
 	const gint64 now = oio_ext_monotonic_time();
 	gboolean ok = disp->last_io_success > OLDEST(now, G_TIME_SPAN_MINUTE);
-	/* Every 10 requests */
 	if (!ok) {
+		/* If this function is called often, only report once per minute. */
 		static gint64 last_report = 0;
 		if ((now - last_report) > G_TIME_SPAN_MINUTE) {
+			last_report = now;
 			GRID_WARN(
 					"IO error checker stalled for %"G_GINT64_FORMAT" minutes",
 					(now - disp->last_io_success) / G_TIME_SPAN_MINUTE);
-			last_report = now;
 		}
 	}
 	return ok;

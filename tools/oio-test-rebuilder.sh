@@ -7,7 +7,10 @@ NAMESPACE=$($CONFIG -n)
 INTEGRITY="$(command -v oio-crawler-integrity)"
 CONCURRENCY=10
 
-SVCID_ENABLED=$(openio cluster list meta2 rawx -c 'Service Id' -f value | grep -v 'n/a')
+# Some services declare their IP address and port as a service ID,
+# and thus this check does not work anymore.
+#SVCID_ENABLED=$(openio cluster list meta2 rawx -c 'Service Id' -f value | grep -v 'n/a')
+SVCID_ENABLED=$(grep "service_id: true" ~/.oio/sds/conf/test.yml)
 GRIDINIT="gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock"
 
 usage() {
@@ -61,7 +64,7 @@ update_timeout()
     $CLI cluster list "${META_TYPE}" -f value -c Addr \
         | while read -r URL; do
       curl -sS -X POST -d "{\"resolver.cache.csm0.ttl.default\": ${TIMEOUT}, \"resolver.cache.srv.ttl.default\": ${TIMEOUT}}" \
-          "http://${PROXY}/v3.0/forward/config?id=${URL}"
+          "http://${PROXY}/v3.0/forward/config?id=${URL}" 1>/dev/null
     done
   done
   sleep 10
@@ -212,7 +215,7 @@ openioadmin_meta_rebuild()
 
     META_AFTER=${META//"${TMP_VOLUME}"/"${META_LOC_TO_REBUILD}"}
     if ! [ -f "${META_AFTER}" ]; then
-      echo >&2 "${META}: missing file for ${TYPE} ${META_IP_TO_REBUILD}"
+      echo >&2 "${META} not found at ${META_AFTER} (${TYPE} ${META_ID_TO_REBUILD})"
       FAIL=true
       continue
     fi
@@ -431,26 +434,29 @@ openioadmin_rawx_rebuild()
         FAIL=true
         continue
       fi
+      # Maybe resolve the service ID into an IP:PORT couple, and fix the URL
       if [ -n "$SVCID_ENABLED" ]
       then
         CURLABLE=$(resolve_chunk "${CHUNK_URL}")
       else
         CURLABLE=${CHUNK_URL}
       fi
+      # Download the reconstructed chunk
       if ! /usr/bin/wget -O "${TMP_FILE_AFTER}" "${CURLABLE}" \
           &> /dev/null; then
-        echo >&2 "${CHUNK}: (${CURLABLE}) wget failed for rawx ${RAWX_ID_TO_REBUILD}"
+        echo >&2 "${CHUNK}: failed to download the rebuilt chunk (${CURLABLE}) ${RAWX_ID_TO_REBUILD}"
         FAIL=true
         continue
       fi
-      if ! DIFF=$(/usr/bin/diff "${CHUNK}" "${TMP_FILE_AFTER}" \
-          2> /dev/null); then
-        echo >&2 "${CHUNK}: (${CHUNK_URL}) diff failed for rawx ${RAWX_ID_TO_REBUILD}"
+      EXPECT_MD5=$(getfattr -n user.grid.chunk.hash --only-values "${CHUNK}" 2>/dev/null)
+      if ! ACTUAL_MD5=$(/usr/bin/md5sum "${TMP_FILE_AFTER}" | cut -d ' ' -f 1 2> /dev/null); then
+        echo >&2 "${CHUNK}: failed to compute the checksum of the rebuilt chunk (${TMP_FILE_AFTER}) ${RAWX_ID_TO_REBUILD}"
         FAIL=true
         continue
       fi
-      if [ -n "${DIFF}" ]; then
-        echo >&2 "${CHUNK}: (${CHUNK_URL}) difference found for rawx ${RAWX_ID_TO_REBUILD}"
+      # Uppercase comparison
+      if [ "${ACTUAL_MD5^^}" != "${EXPECT_MD5^^}" ]; then
+        echo >&2 "${CHUNK}: ${TMP_FILE_AFTER} checksum mismatch (${EXPECT_MD5^^} vs ${ACTUAL_MD5^^}) ${RAWX_ID_TO_REBUILD}"
         FAIL=true
         continue
       fi
@@ -516,18 +522,23 @@ openioadmin_all_rebuild()
 
   /bin/rm -rf "${TMP_VOLUME}"
   /bin/cp -a "${TMP_VOLUME}_meta1" "${TMP_VOLUME}"
+  /bin/rm -rf "${TMP_VOLUME}_meta1"
   openioadmin_meta_rebuild "meta1" "${META1_ID_TO_REBUILD}" "${META1_LOC_TO_REBUILD}"
 
   /bin/rm -rf "${TMP_VOLUME}"
   /bin/cp -a "${TMP_VOLUME}_meta2" "${TMP_VOLUME}"
+  /bin/rm -rf "${TMP_VOLUME}_meta2"
   openioadmin_meta_rebuild "meta2" "${META2_ID_TO_REBUILD}" "${META2_LOC_TO_REBUILD}"
 
   /bin/rm -rf "${TMP_VOLUME}"
   /bin/cp -a "${TMP_VOLUME}_rawx" "${TMP_VOLUME}"
+  /bin/rm -rf "${TMP_VOLUME}_rawx"
   openioadmin_rawx_rebuild "${RAWX_ID_TO_REBUILD}" "${RAWX_LOC_TO_REBUILD}" "${TOTAL_CHUNKS}"
 }
 
-openioadmin_meta_rebuild "meta1"
-openioadmin_meta_rebuild "meta2"
-openioadmin_rawx_rebuild
+# These tests have been disabled to gain time during CI.
+# They are indirectly called by openioadmin_all_rebuild anyway.
+#openioadmin_meta_rebuild "meta1"
+#openioadmin_meta_rebuild "meta2"
+#openioadmin_rawx_rebuild
 openioadmin_all_rebuild

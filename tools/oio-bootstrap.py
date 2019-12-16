@@ -1402,6 +1402,7 @@ def generate(options):
             env = subenv({'SRVTYPE': srvtype,
                           'SRVNUM': i + 1,
                           'PORT': next(ports),
+                          'COMPRESSION': ENV['COMPRESSION'] if i % 2 else 'off',
                           'EXTRASLOT': ('rawx-even' if i % 2 else 'rawx-odd'),
                           'FSYNC': ('enabled' if options[FSYNC_RAWX]
                                     else 'disabled')
@@ -1415,8 +1416,6 @@ def generate(options):
             # service
             tpl = Template(template_rawx_service)
             to_write = tpl.safe_substitute(env)
-            if options.get(OPENSUSE, None):
-                to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
             with open(httpd_config(env), 'w+') as f:
                 f.write(to_write)
             # watcher
