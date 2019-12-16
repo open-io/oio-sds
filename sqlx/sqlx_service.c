@@ -670,11 +670,11 @@ _configure_tasks(struct sqlx_service_s *ss)
 {
 	grid_task_queue_register(ss->gtq_reload, 5, _task_reload_nsinfo, NULL, ss);
 	grid_task_queue_register(ss->gtq_reload, 5, _task_reload_peers, NULL, ss);
-	grid_task_queue_register(ss->gtq_reload, 5, _task_probe_repository, NULL, ss);
 
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_bases, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_resolver, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_malloc_trim, NULL, ss);
+	grid_task_queue_register(ss->gtq_admin, 5, _task_probe_repository, NULL, ss);
 
 	return TRUE;
 }
