@@ -1,7 +1,7 @@
 /*
 OpenIO SDS server
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -133,8 +133,13 @@ void grid_daemon_bind_host(struct network_server_s *server, const gchar *url,
 		struct gridd_request_dispatcher_s *dispatcher);
 
 void grid_daemon_notify_io_status(
-		struct gridd_request_dispatcher_s *disp, gboolean ok);
+		struct gridd_request_dispatcher_s *disp, gboolean ok,
+		const gchar *msg);
 
 gboolean grid_daemon_is_io_ok(struct gridd_request_dispatcher_s *disp);
+
+/* When grid_daemon_is_io_ok() returns false, calling this will report the
+ * last message emitted by the IO checking thread. */
+const gchar* grid_daemon_last_io_msg(struct gridd_request_dispatcher_s *disp);
 
 #endif /*OIO_SDS__server__transport_gridd_h*/
