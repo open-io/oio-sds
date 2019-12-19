@@ -3,8 +3,6 @@ dist: bionic
 language: python
 python:
     - "2.7"
-virtualenv:
-    system_site_packages: true
 addons:
   apt:
     sources:
@@ -39,10 +37,8 @@ addons:
     - python-pbr
     - python-setuptools
     - python-virtualenv
-    - python-zookeeper
     - python3
     - python3-coverage
-    - python3-zookeeper
     - redis-server
     - redis-tools
     - sqlite3
