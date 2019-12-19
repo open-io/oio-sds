@@ -65,6 +65,7 @@ class RawxRebuildJob(XcuteJob):
     JOB_TYPE = 'rawx-rebuild'
     TASK_CLASS = RawxRebuildTask
 
+    MAX_TASKS_BATCH_SIZE = 128
     DEFAULT_RDIR_FETCH_LIMIT = 1000
     DEFAULT_RDIR_TIMEOUT = 60.0
     DEFAULT_RAWX_TIMEOUT = 60.0
