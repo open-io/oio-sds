@@ -1490,15 +1490,8 @@ _read_file(int fd, GByteArray *gba)
 	rc = fstat(fd, &st);
 	GRID_TRACE2("%s(%d,%p) size=%"G_GINT64_FORMAT, __FUNCTION__, fd,
 			gba, st.st_size);
-
 	if (rc < 0)
 		return NEWERROR(errno, "Failed to stat the database file (fd=%d)", fd);
-
-	if (st.st_size > sqliterepo_dump_max_size)
-		return NEWERROR(CODE_EXCESSIVE_LOAD, "Database is %"G_GINT64_FORMAT
-				" bytes, won't send it in one block. "
-				"(sqliterepo.dump.max_size=%"G_GINT64_FORMAT")",
-				(gint64) st.st_size, sqliterepo_dump_max_size);
 
 	g_byte_array_set_size(gba, st.st_size);
 	g_byte_array_set_size(gba, 0);
@@ -1628,14 +1621,46 @@ sqlite3_db_cacheflush(sqlite3 *db UNUSED)
 
 GError*
 sqlx_repository_dump_base_fd_no_copy(struct sqlx_sqlite3_s *sq3,
-		dump_base_fd_cb read_file_cb, gpointer cb_arg)
+		gboolean check_size, dump_base_fd_cb read_file_cb, gpointer cb_arg)
 {
 	int rc = 0, fd = -1;
+	struct stat st;
 	GError *err = NULL;
-	GRID_TRACE2("%s(%p,%p,%p)", __FUNCTION__, sq3, read_file_cb, cb_arg);
+	GRID_TRACE2("%s(%p,%d,%p,%p)",
+			__FUNCTION__, sq3, check_size, read_file_cb, cb_arg);
 	EXTRA_ASSERT(sq3 != NULL);
 	EXTRA_ASSERT(read_file_cb != NULL);
 	const char *fallback_msg = "falling back on legacy dump function";
+
+	/* Suggestion: dig in sqlite VFS, and duplicate the already open file
+	 * descriptor, instead of reopening it by path. This would allow
+	 * serving a base that is still open but has been removed
+	 * from its directory. */
+	fd = open(sq3->path_inline, O_RDONLY);
+	if (fd < 0) {
+		if (errno == ENOENT) {
+			GRID_NOTICE("%s seems to be deleted, %s",
+					sq3->path_inline, fallback_msg);
+		} else {
+			GRID_NOTICE("Failed to open %s (%s), %s",
+					sq3->path_inline, strerror(errno),
+					fallback_msg);
+		}
+	} else if (check_size) {
+		rc = fstat(fd, &st);
+		if (rc < 0) {
+			err = NEWERROR(errno, "Failed to stat the database file (fd=%d)", fd);
+			goto end;
+		}
+
+		if (st.st_size > sqliterepo_dump_max_size) {
+			err = NEWERROR(CODE_EXCESSIVE_LOAD, "Database is %"G_GINT64_FORMAT
+					" bytes, won't send it in one block. "
+					"(sqliterepo.dump.max_size=%"G_GINT64_FORMAT")",
+					(gint64) st.st_size, sqliterepo_dump_max_size);
+			goto end;
+		}
+	}
 
 	/* Detect a wrong/corrupted database file */
 	rc = sqlx_exec(sq3->db, "PRAGMA integrity_check");
@@ -1659,30 +1684,17 @@ sqlx_repository_dump_base_fd_no_copy(struct sqlx_sqlite3_s *sq3,
 					fallback_msg);
 		err = sqlx_repository_dump_base_fd(sq3, read_file_cb, cb_arg);
 	} else {
-		/* Suggestion: dig in sqlite VFS, and duplicate the already open file
-		 * descriptor, instead of reopening it by path. This would allow
-		 * serving a base that is still open but has been removed
-		 * from its directory. */
-		fd = open(sq3->path_inline, O_RDONLY);
 		if (fd < 0) {
-			if (errno == ENOENT) {
-				GRID_NOTICE("%s seems to be deleted, %s",
-						sq3->path_inline, fallback_msg);
-			} else {
-				GRID_NOTICE("Failed to open %s (%s), %s",
-						sq3->path_inline, strerror(errno),
-						fallback_msg);
-			}
 			err = sqlx_repository_dump_base_fd(sq3, read_file_cb, cb_arg);
 		} else {
 			_fadvise_whole_seq(fd, sq3->path_inline);
 			err = read_file_cb(fd, cb_arg);
-			metautils_pclose(&fd);
 		}
 	}
 
 end:
-	EXTRA_ASSERT(fd < 0);
+	if (fd >= 0)
+		metautils_pclose(&fd);
 	return err;
 }
 
@@ -1701,7 +1713,7 @@ sqlx_repository_dump_base_gba(struct sqlx_sqlite3_s *sq3, GByteArray **dump)
 			g_byte_array_free(_dump, TRUE);
 		return _err;
 	}
-	return sqlx_repository_dump_base_fd_no_copy(sq3, _monolytic_dump_cb, dump);
+	return sqlx_repository_dump_base_fd_no_copy(sq3, TRUE, _monolytic_dump_cb, dump);
 }
 
 GError*
@@ -1730,7 +1742,7 @@ sqlx_repository_dump_base_chunked(struct sqlx_sqlite3_s *sq3,
 		} while (!err && bytes_read < st.st_size);
 		return err;
 	}
-	return sqlx_repository_dump_base_fd_no_copy(sq3, _chunked_dump_cb, NULL);
+	return sqlx_repository_dump_base_fd_no_copy(sq3, FALSE, _chunked_dump_cb, NULL);
 }
 
 GError*
