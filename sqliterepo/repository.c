@@ -1663,11 +1663,11 @@ sqlx_repository_dump_base_fd_no_copy(struct sqlx_sqlite3_s *sq3,
 	}
 
 	/* Detect a wrong/corrupted database file */
-	rc = sqlx_exec(sq3->db, "PRAGMA integrity_check");
+	rc = sqlx_exec(sq3->db, "PRAGMA quick_check");
 	if (rc != SQLITE_OK) {
 		if (rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT) {
 			err = NEWERROR(CODE_CORRUPT_DATABASE,
-					"invalid database file: (%d) %s",
+					"invalid or corrupt database file: (%d) %s",
 					rc, sqlite_strerror(rc));
 			sq3->corrupted = TRUE;
 		} else {
