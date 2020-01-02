@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,12 +13,36 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from functools import wraps
 from time import time, sleep
 import uuid
 import math
 import importlib
 
 from oio.common.easy_value import true_value
+from oio.common.exceptions import ServiceBusy
+
+
+def catch_service_errors(func):
+    """
+    Catch errors attributable to the Redis service and raise ServiceBusy
+    instead.
+
+    :raises `ServiceBusy`: in case of a Redis service error
+    """
+    redis_exc_mod = importlib.import_module('redis.exceptions')
+    error_types = (redis_exc_mod.ConnectionError,
+                   redis_exc_mod.InvalidResponse)
+
+    @wraps(func)
+    def catch_service_errors_wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        # Redis exception hierarchy has changed across versions, this is
+        # why we catch several types here.
+        except error_types as err:
+            raise ServiceBusy(message=str(err))
+    return catch_service_errors_wrapper
 
 
 class RedisConnection(object):
