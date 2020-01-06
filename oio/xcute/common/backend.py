@@ -659,6 +659,8 @@ class XcuteBackend(RedisConnection):
                 job_info[split_key[0]][split_key[1]] = value
 
         job_main_info = job_info['job']
+        job_main_info['ctime'] = float(job_main_info['ctime'])
+        job_main_info['mtime'] = float(job_main_info['mtime'])
         job_main_info['request_pause'] = true_value(
             job_main_info['request_pause'])
 

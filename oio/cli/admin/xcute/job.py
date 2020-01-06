@@ -49,12 +49,46 @@ class JobShow(XcuteCommand, ShowOne):
             'job_id',
             metavar='<job_id>',
             help=("Job ID to show"))
+        parser.add_argument(
+            '--raw',
+            action='store_true',
+            help='Display raw information')
         return parser
 
     def take_action(self, parsed_args):
         self.logger.debug('take_action(%s)', parsed_args)
 
         job_info = self.xcute.job_show(parsed_args.job_id)
+
+        if not parsed_args.raw:
+            job_main_info = job_info['job']
+            duration = job_main_info['mtime'] - job_main_info['ctime']
+            job_main_info['duration'] = duration
+
+            job_tasks = job_info['tasks']
+            job_tasks['sent_percent'] = \
+                job_tasks['sent'] * 100. / (job_tasks['total'] or 0.00001)
+            job_tasks['processed_per_second'] = \
+                job_tasks['processed'] / (duration or 0.00001)
+            job_tasks['processed_percent'] = \
+                job_tasks['processed'] * 100. / (job_tasks['total'] or 0.00001)
+
+            if parsed_args.formatter == 'table':
+                if not job_tasks['all_sent']:
+                    if job_tasks['is_total_temp']:
+                        total_state = 'estimating'
+                    else:
+                        total_state = 'estimated'
+                    job_tasks['total'] = "%d (%s)" % (
+                        job_tasks['total'], total_state)
+
+            job_info.pop('orchestrator', None)
+            job_main_info.pop('request_pause', None)
+            job_tasks.pop('all_sent', None)
+            job_tasks.pop('last_sent', None)
+            job_tasks.pop('is_total_temp', None)
+            job_tasks.pop('total_marker', None)
+
         return zip(*sorted(
             flat_dict_from_dict(parsed_args, job_info).items()))
 
