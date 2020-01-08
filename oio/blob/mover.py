@@ -107,8 +107,8 @@ class BlobMoverWorker(object):
                     self.logger.info(
                         'current usage %.2f%%: target reached (%.2f%%)', usage,
                         self.usage_target)
-                    self.last_usage_check = now
                     break
+                self.last_usage_check = now
 
             # Spawn a chunk move task.
             # The call will block if no green thread is available.
