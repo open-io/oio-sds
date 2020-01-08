@@ -55,7 +55,7 @@ class BlobMoverWorker(object):
         self.usage_target = int_value(
             conf.get('usage_target'), 0)
         self.usage_check_interval = int_value(
-            conf.get('usage_check_interval'), 3600)
+            conf.get('usage_check_interval'), 60)
         self.report_interval = int_value(
             conf.get('report_interval'), 3600)
         self.max_chunks_per_second = int_value(
