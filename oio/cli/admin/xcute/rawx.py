@@ -140,7 +140,15 @@ class RawxDecommission(SingleServiceCommandMixin, ShowOne):
             help='Only move chunks smaller than the given size.')
         parser.add_argument(
             '--excluded-rawx',
-            help="List of rawx not to use to move the chunks.")
+            help='List of rawx not to use to move the chunks.')
+        parser.add_argument(
+            '--usage-target', type=float,
+            help='Target percentage of volume usage. (default=%f)'
+                 % RawxDecommissionJob.DEFAULT_USAGE_TARGET)
+        parser.add_argument(
+            '--usage-check-interval', type=float,
+            help='Interval between disk usage check in seconds. (default=%f)'
+                 % RawxDecommissionJob.DEFAULT_USAGE_CHECK_INTERVAL)
 
         return parser
 
@@ -156,7 +164,9 @@ class RawxDecommission(SingleServiceCommandMixin, ShowOne):
             'rawx_timeout': parsed_args.rawx_timeout,
             'min_chunk_size': parsed_args.min_chunk_size,
             'max_chunk_size': parsed_args.max_chunk_size,
-            'excluded_rawx': parsed_args.excluded_rawx
+            'excluded_rawx': parsed_args.excluded_rawx,
+            'usage_target': parsed_args.usage_target,
+            'usage_check_interval': parsed_args.usage_check_interval
         }
         job_config = {
             'tasks_per_second': parsed_args.chunks_per_second,
