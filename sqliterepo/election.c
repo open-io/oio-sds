@@ -2437,20 +2437,22 @@ _result_GETVERS (GError *enet, struct election_member_s *m,
 static void
 _result_PIPEFROM (GError *e, struct election_member_s *m, guint reqid)
 {
+	enum event_type_e evt;
+
 	if (!e || CODE_IS_OK(e->code)) {
 		GRID_DEBUG("PIPEFROM %s ok [%s.%s] [%s]",
 				m->master_url, m->inline_name.base, m->inline_name.type,
 				m->key);
+		evt = EVT_SYNC_OK;
 	} else {
 		GRID_WARN("PIPEFROM %s failed [%s.%s] [%s]: (%d) %s",
 				m->master_url, m->inline_name.base, m->inline_name.type,
 				m->key, e->code, e->message);
+		evt = EVT_SYNC_KO;
 	}
 
 	member_lock(m);
-	/* We do the transition even if we undergo an error.
-	 * This means we are not consistent but eventually consistent. */
-	transition(m, EVT_SYNC_OK, &reqid);
+	transition(m, evt, &reqid);
 	member_unref(m);
 	member_unlock(m);
 }
@@ -3849,6 +3851,8 @@ _member_react_SYNCING(struct election_member_s *member, enum event_type_e evt)
 				return member_action_START(member);
 			if (member->requested_LEFT_MASTER)
 				return member_action_to_LISTING(member);
+			/* We do the transition even if we undergo an error (EVT_SYNC_KO).
+			 * This means we are not consistent but eventually consistent. */
 			return member_action_to_SLAVE(member);
 
 			/* Abnormal events */

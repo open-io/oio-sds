@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -315,10 +315,11 @@ GError* sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 		dump_base_fd_cb callback, gpointer callback_arg);
 
 /** Open the database file read-only,
+ *  check the file size against sqliterepo_dump_max_size if required,
  *  and pass the file descriptor to a callback.
  *  Falls back on sqlx_repository_dump_base_fd in case of error. */
 GError* sqlx_repository_dump_base_fd_no_copy(struct sqlx_sqlite3_s *sq3,
-		dump_base_fd_cb read_file_cb, gpointer cb_arg);
+		gboolean check_size, dump_base_fd_cb read_file_cb, gpointer cb_arg);
 
 /** Callback for sqlx_repository_dump_base_chunked() */
 typedef GError*(*dump_base_chunked_cb)(GByteArray *gba, gint64 remaining_bytes,

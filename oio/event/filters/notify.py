@@ -79,7 +79,10 @@ class NotifyFilter(Filter):
         event = Event(env)
         if self.should_notify(event):
             try:
-                data = json.dumps(env)
+                # Encode without whitespace to make sure not
+                # to exceed the maximum size of the event (default: 65535)
+                data = json.dumps(env,
+                                  separators=(',', ':'))  # compact encoding
                 self.beanstalk.put(data)
             except BeanstalkError as err:
                 msg = 'notify failure: %s' % str(err)
