@@ -13,9 +13,12 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import math
+
 from oio.blob.client import BlobClient
 from oio.common.easy_value import float_value, int_value
 from oio.common.exceptions import ContentNotFound, OrphanChunk
+from oio.common.green import time
 from oio.conscience.client import ConscienceClient
 from oio.content.factory import ContentFactory
 from oio.rdir.client import RdirClient
@@ -110,6 +113,8 @@ class RawxDecommissionJob(XcuteJob):
     DEFAULT_RAWX_TIMEOUT = 60.0
     DEFAULT_MIN_CHUNK_SIZE = 0
     DEFAULT_MAX_CHUNK_SIZE = 0
+    DEFAULT_USAGE_TARGET = 0
+    DEFAULT_USAGE_CHECK_INTERVAL = 60.0
 
     @classmethod
     def sanitize_params(cls, job_params):
@@ -149,31 +154,84 @@ class RawxDecommissionJob(XcuteJob):
             excluded_rawx = list()
         sanitized_job_params['excluded_rawx'] = excluded_rawx
 
+        sanitized_job_params['usage_target'] = int_value(
+            job_params.get('usage_target'),
+            cls.DEFAULT_USAGE_TARGET)
+
+        sanitized_job_params['usage_check_interval'] = float_value(
+            job_params.get('usage_check_interval'),
+            cls.DEFAULT_USAGE_CHECK_INTERVAL)
+
         return sanitized_job_params, 'rawx/%s' % service_id
 
     def __init__(self, conf, logger=None):
         super(RawxDecommissionJob, self).__init__(conf, logger=logger)
         self.rdir_client = RdirClient(self.conf, logger=self.logger)
+        self.conscience_client = ConscienceClient(
+            self.conf, logger=self.logger)
+
+    def get_usage(self, service_id):
+        services = self.conscience_client.all_services('rawx', full=True)
+        for service in services:
+            if service_id == service['tags'].get(
+                    'tag.service_id', service['addr']):
+                return 100 - service['tags']['stat.space']
+        raise ValueError('No rawx service this ID (%s)' % service_id)
 
     def get_tasks(self, job_params, marker=None):
-        chunk_infos = self.get_chunk_infos(job_params, marker=marker)
+        service_id = job_params['service_id']
+        usage_target = job_params['usage_target']
+        usage_check_interval = job_params['usage_check_interval']
 
+        if usage_target > 0:
+            now = time.time()
+            current_usage = self.get_usage(service_id)
+            if current_usage <= usage_target:
+                self.logger.info(
+                    'current usage %.2f%%: target already reached (%.2f%%)',
+                    current_usage, usage_target)
+                return
+            last_usage_check = now
+
+        chunk_infos = self.get_chunk_infos(job_params, marker=marker)
         for container_id, content_id, chunk_id, _ in chunk_infos:
             task_id = '|'.join((container_id, content_id, chunk_id))
             yield task_id, {'container_id': container_id,
                             'content_id': content_id,
                             'chunk_id': chunk_id}
 
-    def get_total_tasks(self, job_params, marker=None):
-        chunk_infos = self.get_chunk_infos(job_params, marker=marker)
+            if usage_target <= 0:
+                continue
+            now = time.time()
+            if now - last_usage_check < usage_check_interval:
+                continue
+            current_usage = self.get_usage(service_id)
+            if current_usage > usage_target:
+                last_usage_check = now
+                continue
+            self.logger.info(
+                'current usage %.2f%%: target reached (%.2f%%)',
+                current_usage, usage_target)
+            return
 
+    def get_total_tasks(self, job_params, marker=None):
+        service_id = job_params['service_id']
+        usage_target = job_params['usage_target']
+
+        current_usage = self.get_usage(service_id)
+        if current_usage <= usage_target:
+            return
+
+        kept_chunks_ratio = 1 - (usage_target / float(current_usage))
+        chunk_infos = self.get_chunk_infos(job_params, marker=marker)
         i = 0
         for i, (container_id, content_id, chunk_id, _) \
                 in enumerate(chunk_infos, 1):
             if i % 1000 == 0:
-                yield '|'.join((container_id, content_id, chunk_id)), 1000
+                yield ('|'.join((container_id, content_id, chunk_id)),
+                       int(math.ceil(1000 * kept_chunks_ratio)))
 
-        remaining = i % 1000
+        remaining = int(math.ceil(i * kept_chunks_ratio))
         if remaining > 0:
             yield '|'.join((container_id, content_id, chunk_id)), remaining
 
