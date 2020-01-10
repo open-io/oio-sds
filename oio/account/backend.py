@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -25,7 +25,7 @@ from werkzeug.exceptions import NotFound, Conflict, BadRequest
 from oio.common.timestamp import Timestamp
 from oio.common.easy_value import int_value, true_value, float_value, \
     debinarize
-from oio.common.redis_conn import RedisConnection
+from oio.common.redis_conn import RedisConnection, catch_service_errors
 
 
 EXPIRE_TIME = 60  # seconds
@@ -270,6 +270,7 @@ class AccountBackend(RedisConnection):
         """Build the key of a container description"""
         return 'container:%s:%s' % (account, text_type(name))
 
+    @catch_service_errors
     def create_account(self, account_id):
         conn = self.conn
         if not account_id:
@@ -295,6 +296,7 @@ class AccountBackend(RedisConnection):
         self.release_lock('account:%s' % account_id, lock)
         return account_id
 
+    @catch_service_errors
     def delete_account(self, req_account_id):
         conn = self.conn
         if not req_account_id:
@@ -324,6 +326,7 @@ class AccountBackend(RedisConnection):
         self.release_lock('account:%s' % account_id, lock)
         return True
 
+    @catch_service_errors
     def get_account_metadata(self, req_account_id):
         conn = self.conn_slave
         if not req_account_id:
@@ -336,6 +339,7 @@ class AccountBackend(RedisConnection):
         meta = conn.hgetall('metadata:%s' % account_id.decode('utf-8'))
         return debinarize(meta)
 
+    @catch_service_errors
     def update_account_metadata(self, account_id, metadata, to_delete=None):
         conn = self.conn
         if not account_id:
@@ -358,6 +362,7 @@ class AccountBackend(RedisConnection):
         pipeline.execute()
         return account_id
 
+    @catch_service_errors
     def info_account(self, req_account_id):
         conn = self.conn_slave
         if not req_account_id:
@@ -381,11 +386,13 @@ class AccountBackend(RedisConnection):
         info[b'metadata'] = data[2]
         return debinarize(info)
 
+    @catch_service_errors
     def list_account(self):
         conn = self.conn_slave
         accounts = conn.hkeys('accounts:')
         return debinarize(accounts)
 
+    @catch_service_errors
     def update_container(self, account_id, name, mtime, dtime,
                          object_count, bytes_used,
                          damaged_objects, missing_chunks,
@@ -439,6 +446,7 @@ class AccountBackend(RedisConnection):
     def _should_be_listed(self, c_id, s3_buckets_only):
         return not s3_buckets_only or self.buckets_pattern.match(c_id)
 
+    @catch_service_errors
     def _raw_listing(self, account_id, limit, marker=None, end_marker=None,
                      delimiter=None, prefix=None, s3_buckets_only=False):
         """
@@ -501,6 +509,7 @@ class AccountBackend(RedisConnection):
                     results.append([cname, 0, 0, 0, 0])
         return results
 
+    @catch_service_errors
     def list_containers(self, account_id, limit=1000, marker=None,
                         end_marker=None, prefix=None, delimiter=None,
                         s3_buckets_only=False):
@@ -526,12 +535,14 @@ class AccountBackend(RedisConnection):
 
         return raw_list
 
+    @catch_service_errors
     def status(self):
         conn = self.conn_slave
         account_count = conn.hlen('accounts:')
         status = {'account_count': account_count}
         return status
 
+    @catch_service_errors
     def refresh_account(self, account_id):
         if not account_id:
             raise BadRequest("Missing account")
@@ -548,6 +559,7 @@ class AccountBackend(RedisConnection):
             else:
                 raise
 
+    @catch_service_errors
     def flush_account(self, account_id):
         if not account_id:
             raise BadRequest("Missing account")

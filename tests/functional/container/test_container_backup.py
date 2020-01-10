@@ -226,7 +226,7 @@ class TestContainerDownload(BaseTestCase):
     def _check_tar(self, data):
         raw = BytesIO(data)
         tar = tarfile.open(fileobj=raw, ignore_zeros=True)
-        info = self._data.keys()
+        info = list(self._data.keys())
         for entry in tar.getnames():
             if entry == CONTAINER_MANIFEST:
                 # skip special entry
@@ -276,7 +276,7 @@ class TestContainerDownload(BaseTestCase):
                 # skip special entry
                 continue
             headers = tar.getmember(entry).pax_headers
-            keys = headers.keys()[:]
+            keys = list(headers.keys())
             for key, val in self._data[entry]['meta'].items():
                 key = u"SCHILY.xattr.user." + key.decode('utf-8')
                 self.assertIn(key, headers)
@@ -390,7 +390,7 @@ class TestContainerDownload(BaseTestCase):
 
         raw = BytesIO(ret.content)
         tar = tarfile.open(fileobj=raw, ignore_zeros=True)
-        info = self._data.keys()
+        info = list(self._data.keys())
         for entry in tar.getnames():
             if entry == CONTAINER_MANIFEST:
                 # skip special entry
@@ -644,7 +644,7 @@ class TestContainerDownload(BaseTestCase):
         raw = BytesIO()
         tarfile = TarFile(mode='w', fileobj=raw)
 
-        testdata = rand_str(20) * 5000
+        testdata = (rand_str(20) * 5000).encode('utf-8')
 
         inf = TarInfo("simpletar")
         fileraw = BytesIO()
@@ -692,7 +692,9 @@ class TestContainerDownload(BaseTestCase):
                 + random.randint(0, BLOCKSIZE)
             # + random.randint(0, entry['hdr_blocks'] * BLOCKSIZE)
             while self.raw[idx] == inv[idx]:
-                inv = inv[:idx] + chr(random.randint(0, 255)) + inv[idx+1:]
+                inv = (inv[:idx] +
+                       chr(random.randint(0, 255)).encode('utf-8') +
+                       inv[idx+1:])
 
             cnt = rand_str(20)
             res = requests.put(self.make_uri('restore', container=cnt),

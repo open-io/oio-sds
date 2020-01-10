@@ -383,8 +383,8 @@ _defer_synchronous_RESYNC(struct sqlx_repctx_s *ctx)
 
 	if (err != NULL) {
 		GRID_WARN("Replicated transaction started but peers not found "
-				"[%s][%s]: (%d) %s", ctx->sq3->name.base, ctx->sq3->name.type,
-				err->code, err->message);
+				"[%s][%s]: (%d) %s reqid=%s", ctx->sq3->name.base, ctx->sq3->name.type,
+				err->code, err->message, oio_ext_get_reqid());
 		g_clear_error(&err);
 	} else if (peers) {
 		for (gchar **p=peers; *p ;++p) {
@@ -406,15 +406,15 @@ _perform_REPLICATE(struct sqlx_repctx_s *ctx)
 
 	if (err != NULL) {
 		GRID_WARN("Replicated transaction started but peers not found [%s.%s]"
-				": (%d) %s", ctx->sq3->name.base, ctx->sq3->name.type,
-				err->code, err->message);
+				": (%d) %s reqid=%s", ctx->sq3->name.base, ctx->sq3->name.type,
+				err->code, err->message, oio_ext_get_reqid());
 		g_clear_error(&err);
 		return 1;
 	}
 
 	if (!peers || !oio_str_is_set(*peers)) {
-		GRID_WARN("Replication triggered but no peer found for [%s.%s]",
-				 ctx->sq3->name.base, ctx->sq3->name.type);
+		GRID_WARN("Replication triggered but no peer found for [%s.%s] reqid=%s",
+				 ctx->sq3->name.base, ctx->sq3->name.type, oio_ext_get_reqid());
 		oio_str_cleanv(&peers);
 		return 1;
 	}
@@ -426,8 +426,8 @@ _perform_REPLICATE(struct sqlx_repctx_s *ctx)
 	if (likely(err == NULL))
 		return 0;
 
-	GRID_WARN("%s(%p, reqid=%s) FAILED: (%d) %s", __FUNCTION__, ctx,
-			oio_ext_get_reqid(), err->code, err->message);
+	GRID_WARN("%s(%p, reqid=%s) FAILED: (%d) %s reqid=%s", __FUNCTION__, ctx,
+			oio_ext_get_reqid(), err->code, err->message, oio_ext_get_reqid());
 	g_error_free(err);
 	ctx->any_change = 0;
 	return 1;
@@ -504,9 +504,9 @@ sqlx_synchronous_resync(struct sqlx_repctx_s *ctx, gchar **peers)
 	// Generate the DUMP
 	err = sqlx_repository_dump_base_gba(ctx->sq3, &dump);
 	if (NULL != err) {
-		GRID_WARN("[%s][%s] Synchronous COMMIT not possible: (%d) %s",
+		GRID_WARN("[%s][%s] Synchronous COMMIT not possible: (%d) %s reqid=%s",
 				ctx->sq3->name.base, ctx->sq3->name.type,
-				err->code, err->message);
+				err->code, err->message, oio_ext_get_reqid());
 		g_clear_error(&err);
 		return;
 	}
@@ -645,8 +645,9 @@ sqlx_transaction_end(struct sqlx_repctx_s *ctx, GError *err)
 		ctx->any_change = 0;
 		rc = sqlx_exec(ctx->sq3->db, "ROLLBACK");
 		if (rc != SQLITE_OK && rc != SQLITE_DONE) {
-			GRID_WARN("ROLLBACK failed! (%d/%s) %s", rc,
-					sqlite_strerror(rc), sqlite3_errmsg(ctx->sq3->db));
+			GRID_WARN("ROLLBACK failed! (%d/%s) %s reqid=%s", rc,
+					sqlite_strerror(rc), sqlite3_errmsg(ctx->sq3->db),
+					oio_ext_get_reqid());
 			if (rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT) {
 				ctx->sq3->corrupted = TRUE;
 			}

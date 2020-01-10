@@ -405,8 +405,8 @@ class TestDirectoryAPI(BaseTestCase):
         not break the whole operation.
         """
         self._test_link_rdir_fail_to_force(
-            [exc.ServiceBusy('Failed :('),
-             exc.OioTimeout('Timeout :('),
+            [exc.ServiceBusy(message='Failed :(', status=503),
+             exc.OioTimeout(message='Timeout :(', status=408),
              None],
             exc.OioException)
 
