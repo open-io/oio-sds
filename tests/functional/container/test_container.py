@@ -53,14 +53,14 @@ def merge(s0, s1):
 def gen_chunks(n):
     """Yield dummy chunk descriptions."""
     for i in range(n):
-        h = binascii.hexlify(struct.pack("q", i))
+        hexid = binascii.hexlify(struct.pack("q", i)).decode('utf-8')
         yield {"type": "chunk",
-               "id": "http://127.0.0.1:6008/" + h,
+               "id": "http://127.0.0.1:6008/" + hexid,
                "hash": "0"*32,
                "pos": "0.0",
                "size": 0,
                "ctime": 0,
-               "content": h}
+               "content": hexid}
 
 
 def gen_names():
@@ -208,15 +208,15 @@ class TestMeta2Containers(BaseTestCase):
 
         # Fill some contents
         for i, name in gen_names():
-            h = binascii.hexlify(struct.pack("q", i))
-            logging.debug("id=%s name=%s", h, name)
-            chunk = {"url": "http://127.0.0.1:6008/"+h,
+            hexid = binascii.hexlify(struct.pack("q", i)).decode('utf-8')
+            logging.debug("id=%s name=%s", hexid, name)
+            chunk = {"url": "http://127.0.0.1:6008/"+hexid,
                      "pos": "0",
                      "size": 0,
                      "hash": "0"*32}
             p = "X-oio-content-meta-"
             headers = {p+"policy": "NONE",
-                       p+"id": h,
+                       p+"id": hexid,
                        p+"version": "1",
                        p+"hash": "0"*32,
                        p+"length": "0",
@@ -300,18 +300,18 @@ class TestMeta2Containers(BaseTestCase):
                 x = dict(x)
                 del x[i]
                 return x
-            self._raw_insert(params, 400, map(remove_field, chunks))
+            self._raw_insert(params, 400, [remove_field(x) for x in chunks])
         # bad size
-        c0 = map(lambda x: dict(x).update({'size': "0"}), chunks)
+        c0 = list(map(lambda x: dict(x).update({'size': "0"}), chunks))
         self._raw_insert(params, 400, c0)
         # bad ctime
-        c0 = map(lambda x: dict(x).update({'ctime': "0"}), chunks)
+        c0 = list(map(lambda x: dict(x).update({'ctime': "0"}), chunks))
         self._raw_insert(params, 400, c0)
         # bad position
-        c0 = map(lambda x: dict(x).update({'pos': 0}), chunks)
+        c0 = list(map(lambda x: dict(x).update({'pos': 0}), chunks))
         self._raw_insert(params, 400, c0)
         # bad content
-        c0 = map(lambda x: dict(x).update({'content': 'x'}), chunks)
+        c0 = list(map(lambda x: dict(x).update({'content': 'x'}), chunks))
         self._raw_insert(params, 400, c0)
         # ok but no such container
         self._raw_insert(params, 404, chunks)
@@ -813,7 +813,7 @@ class TestMeta2Containers(BaseTestCase):
             param_content = self.param_content(self.ref, path)
             resp = self.request('POST', self.url_content('get_properties'),
                                 params=param_content)
-            sorted_versions = versions.keys()
+            sorted_versions = list(versions.keys())
             sorted_versions.sort()
             self.assertEqual(200, resp.status)
             self.assertEqual(
@@ -852,7 +852,7 @@ class TestMeta2Containers(BaseTestCase):
             resp = self.request('POST', self.url_content('delete'),
                                 params=param_content, headers=headers)
             self.assertEqual(204, resp.status)
-            sorted_versions = versions.keys()
+            sorted_versions = list(versions.keys())
             sorted_versions.sort()
             versions[sorted_versions[-1] + 1] = True
 
@@ -1277,7 +1277,7 @@ class TestMeta2Contents(BaseTestCase):
 
         def del_ok(keys):
             resp = self.request('POST', self.url_content('del_properties'),
-                                params=params, data=json.dumps(keys))
+                                params=params, data=json.dumps(list(keys)))
             self.assertEqual(resp.status, 204)
 
         def set_ok(kv):
