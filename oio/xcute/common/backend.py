@@ -106,6 +106,7 @@ class XcuteBackend(RedisConnection):
             'tasks.all_sent', 'False',
             'tasks.sent', '0',
             'tasks.processed', '0',
+            'tasks.total', '0',
             'tasks.is_total_temp', 'True',
             'errors.total', '0',
             'config', job_config);
@@ -290,11 +291,8 @@ class XcuteBackend(RedisConnection):
             'tasks.sent', nb_tasks_sent);
 
         if all_tasks_sent == 'True' then
-            -- replace the estimated total with the actual total
-            redis.call('HMSET', info_key,
-                       'tasks.all_sent', 'True',
-                       'tasks.total', total_tasks_sent,
-                       'tasks.is_total_temp', 'False');
+            redis.call('HSET', info_key,
+                       'tasks.all_sent', 'True');
             -- remove the job of the orchestrator
             local orchestrator_id = redis.call(
                 'HGET', info_key, 'orchestrator.id');
@@ -384,16 +382,19 @@ class XcuteBackend(RedisConnection):
 
         local info = redis.call(
             'HMGET', info_key,
-            'job.status', 'tasks.is_total_temp');
+            'job.status', 'tasks.all_sent', 'tasks.is_total_temp');
         local status = info[1];
-        local is_total_temp = info[2];
+        local all_sent = info[2];
+        local is_total_temp = info[3];
 
         if status == nil or status == false then
             return redis.error_reply('no_job');
         end;
 
         local stop = false;
-        if is_total_temp == 'False' then
+        if all_sent == 'True' then
+            stop = true
+        elseif is_total_temp == 'False' then
             stop = true
         else
             redis.call('HINCRBY', info_key, 'tasks.total', incr_by);
@@ -667,14 +668,14 @@ class XcuteBackend(RedisConnection):
         job_tasks.setdefault('last_sent')
         job_tasks['all_sent'] = true_value(job_tasks['all_sent'])
         job_tasks['processed'] = int(job_tasks['processed'])
-        tasks_total = job_tasks.get('total')
-        job_tasks['total'] = tasks_total if tasks_total is None \
-            else int(tasks_total)
+        # To have a coherent total if the estimate was not correct
+        if job_tasks['all_sent']:
+            job_tasks['total'] = job_tasks['sent']
+        else:
+            job_tasks['total'] = max(job_tasks['sent'],
+                                     int(job_tasks['total']))
         job_tasks['is_total_temp'] = true_value(
             job_tasks['is_total_temp'])
-        # To have a total coherent if the estimate was too low
-        job_tasks['total'] = max(job_tasks['sent'],
-                                 job_tasks['total'])
         job_tasks.setdefault('total_marker')
 
         job_errors = job_info['errors']
