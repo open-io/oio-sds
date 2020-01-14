@@ -14,10 +14,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from functools import wraps
-
-from werkzeug.exceptions import BadRequest as HTTPBadRequest
-from werkzeug.exceptions import Forbidden as HTTPForbidden
-from werkzeug.exceptions import NotFound as HTTPNotFound
+from werkzeug.exceptions import HTTPException, \
+    BadRequest as HTTPBadRequest, Forbidden as HTTPForbidden, \
+    NotFound as HTTPNotFound, InternalServerError as HTTPInternalServerError
 from werkzeug.routing import Map, Rule, Submount
 from werkzeug.wrappers import Response
 
@@ -27,20 +26,24 @@ from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.wsgi import WerkzeugApp
 from oio.xcute.common.backend import XcuteBackend
-from oio.xcute.common.exceptions import UnknownJobTypeException
 from oio.xcute.jobs import JOB_TYPES
 
 
-def handle_backend_exceptions(func):
+def handle_exceptions(func):
     @wraps(func)
-    def handle_backend_exceptions(self, *args, **kwargs):
+    def handle_exceptions_wrapper(self, *args, **kwargs):
         try:
             return func(self, *args, **kwargs)
+        except HTTPException:
+            raise
         except NotFound as exc:
-            return HTTPNotFound(exc.message)
+            raise HTTPNotFound(exc.message)
         except Forbidden as exc:
-            return HTTPForbidden(exc.message)
-    return handle_backend_exceptions
+            raise HTTPForbidden(exc.message)
+        except Exception as exc:
+            self.logger.exception('Internal error: %s', exc)
+            raise HTTPInternalServerError(str(exc))
+    return handle_exceptions_wrapper
 
 
 class XcuteServer(WerkzeugApp):
@@ -52,81 +55,89 @@ class XcuteServer(WerkzeugApp):
         url_map = Map([
             Rule('/status', endpoint='status'),
             Submount('/v1.0/xcute', [
-                Rule('/jobs', endpoint='job_list',
-                     methods=['POST', 'GET']),
-                Rule('/jobs/<job_id>', endpoint='job',
-                     methods=['GET', 'DELETE']),
-                Rule('/jobs/<job_id>/pause', endpoint='job_pause',
+                Rule('/job/list', endpoint='job_list',
+                     methods=['GET']),
+                Rule('/job/create', endpoint='job_create',
                      methods=['POST']),
-                Rule('/jobs/<job_id>/resume', endpoint='job_resume',
+                Rule('/job/show', endpoint='job_show',
+                     methods=['GET']),
+                Rule('/job/pause', endpoint='job_pause',
                      methods=['POST']),
+                Rule('/job/resume', endpoint='job_resume',
+                     methods=['POST']),
+                Rule('/job/delete', endpoint='job_delete',
+                     methods=['DELETE'])
             ])
         ])
 
         super(XcuteServer, self).__init__(url_map, logger)
 
-    @handle_backend_exceptions
+    @handle_exceptions
     def on_status(self, req):
         status = self.backend.status()
         return Response(json.dumps(status), mimetype='application/json')
 
-    @handle_backend_exceptions
+    @handle_exceptions
     def on_job_list(self, req):
-        if req.method == 'GET':
-            limit = int_value(req.args.get('limit'), None)
-            marker = req.args.get('marker')
+        limit = int_value(req.args.get('limit'), None)
+        marker = req.args.get('marker')
 
-            job_infos = self.backend.list_jobs(limit=limit, marker=marker)
-            return Response(
-                json.dumps(job_infos), mimetype='application/json')
+        job_infos = self.backend.list_jobs(limit=limit, marker=marker)
+        return Response(
+            json.dumps(job_infos), mimetype='application/json')
 
-        if req.method == 'POST':
-            data = json.loads(req.data)
+    @handle_exceptions
+    def on_job_create(self, req):
+        job_type = req.args.get('type')
+        if not job_type:
+            raise HTTPBadRequest('Missing job type')
+        job_class = JOB_TYPES.get(job_type)
+        if job_class is None:
+            raise HTTPBadRequest('Unknown job type')
 
-            job_type = data.get('type')
-            if not job_type:
-                raise HTTPBadRequest('Missing job type')
+        # TODO: use lock
+        job_config, lock = job_class.sanitize_config(
+            json.loads(req.data or '{}'))
 
-            job_class = JOB_TYPES.get(job_type)
-            if job_class is None:
-                return HTTPBadRequest(UnknownJobTypeException.message)
+        job_id = self.backend.create(job_type, job_config)
+        job_info = self.backend.get_job_info(job_id)
+        return Response(
+            json.dumps(job_info), mimetype='application/json', status=202)
 
-            # TODO: use lock
-            job_config, lock = job_class.sanitize_config(
-                data.get('config') or dict())
+    def _get_job_id(self, req):
+        """Fetch job ID from request query string."""
+        job_id = req.args.get('id')
+        if not job_id:
+            raise HTTPBadRequest('Missing job ID')
+        return job_id
 
-            job_id = self.backend.create(job_type, job_config)
+    @handle_exceptions
+    def on_job_show(self, req):
+        job_id = self._get_job_id(req)
+        job_info = self.backend.get_job_info(job_id)
+        return Response(json.dumps(job_info), mimetype='application/json')
 
-            job_info = self.backend.get_job_info(job_id)
-            return Response(
-                json.dumps(job_info), mimetype='application/json', status=202)
-
-    @handle_backend_exceptions
-    def on_job(self, req, job_id):
-        if req.method == 'GET':
-            job_info = self.backend.get_job_info(job_id)
-
-            return Response(json.dumps(job_info), mimetype='application/json')
-
-        if req.method == 'DELETE':
-            self.backend.delete(job_id)
-
-            return Response(status=204)
-
-    @handle_backend_exceptions
-    def on_job_pause(self, req, job_id):
+    @handle_exceptions
+    def on_job_pause(self, req):
+        job_id = self._get_job_id(req)
         self.backend.request_pause(job_id)
-
         job_info = self.backend.get_job_info(job_id)
         return Response(
             json.dumps(job_info), mimetype='application/json', status=202)
 
-    def on_job_resume(self, req, job_id):
+    @handle_exceptions
+    def on_job_resume(self, req):
+        job_id = self._get_job_id(req)
         self.backend.resume(job_id)
-
         job_info = self.backend.get_job_info(job_id)
         return Response(
             json.dumps(job_info), mimetype='application/json', status=202)
+
+    @handle_exceptions
+    def on_job_delete(self, req):
+        job_id = self._get_job_id(req)
+        self.backend.delete(job_id)
+        return Response(status=204)
 
 
 def create_app(conf):
