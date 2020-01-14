@@ -101,31 +101,31 @@ class XcuteClient(HttpApi):
             raise exc_info[0], exc_info[1], exc_info[2]
         return resp, body
 
-    def job_list(self, orchestrator_id=None, limit=None, marker=None):
-        params = {
-            'limit': limit,
-            'marker': marker
-        }
-        _, data = self.xcute_request('GET', '/jobs', params=params)
+    def job_list(self, limit=None, marker=None):
+        _, data = self.xcute_request(
+            'GET', '/job/list', params={'limit': limit, 'marker': marker})
         return data
 
     def job_create(self, job_type, job_config=None):
-        job_info = {
-            'type': job_type,
-            'config': job_config
-        }
-        _, data = self.xcute_request('POST', '/jobs', json=job_info)
+        _, data = self.xcute_request(
+            'POST', '/job/create', params={'type': job_type}, json=job_config)
         return data
 
     def job_show(self, job_id):
-        _, data = self.xcute_request('GET', '/jobs/%s' % job_id)
+        _, data = self.xcute_request(
+            'GET', '/job/show', params={'id': job_id})
         return data
 
     def job_pause(self, job_id):
-        self.xcute_request('POST', '/jobs/%s/pause' % job_id)
+        _, data = self.xcute_request(
+            'POST', '/job/pause', params={'id': job_id})
+        return data
 
     def job_resume(self, job_id):
-        self.xcute_request('POST', '/jobs/%s/resume' % job_id)
+        _, data = self.xcute_request(
+            'POST', '/job/resume', params={'id': job_id})
+        return data
 
     def job_delete(self, job_id):
-        self.xcute_request('DELETE', '/jobs/%s' % job_id)
+        self.xcute_request(
+            'DELETE', '/job/delete', params={'id': job_id})
