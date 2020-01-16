@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -12,6 +12,8 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+from __future__ import print_function
 
 
 from oio.common.green import Queue, GreenPile, sleep
@@ -94,6 +96,26 @@ class DirectoryCmd(Command):
                     continue
                 # Too many attempts
                 raise
+
+
+class DirectoryCheck(DirectoryCmd):
+    """
+    Check that the service directory is ok.
+
+    Currently only checks that all meta1 prefixes have the right number
+    of replicas. More checks can be performed by running
+    'openio-admin directory check'.
+    """
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+        mapping = self.get_prefix_mapping(parsed_args)
+        mapping.load_meta0(read_timeout=parsed_args.meta0_timeout)
+        if mapping.check_replicas():
+            self.log.info("Everything is ok.")
+        else:
+            self.log.warn("Errors found.")
+            self.success = False
 
 
 class DirectoryInit(DirectoryCmd):
@@ -185,7 +207,7 @@ class DirectoryList(DirectoryCmd):
         mapping = self.get_prefix_mapping(parsed_args)
         mapping.load_meta0(connection_timeout=M0_CONN_TIMEOUT,
                            read_timeout=parsed_args.meta0_timeout)
-        print mapping.to_json()
+        print(mapping.to_json())
 
 
 class DirectoryRebalance(DirectoryCmd):
@@ -196,9 +218,13 @@ class DirectoryRebalance(DirectoryCmd):
         mapping = self.get_prefix_mapping(parsed_args)
         mapping.load_meta0(read_timeout=parsed_args.meta0_timeout)
         moved = mapping.rebalance()
-        self._apply(mapping, moved=moved,
-                    read_timeout=parsed_args.meta0_timeout)
-        self.log.info("Moved %s", moved)
+        if mapping.check_replicas():
+            self._apply(mapping, moved=moved,
+                        read_timeout=parsed_args.meta0_timeout)
+            self.log.info("Moved %s", moved)
+        else:
+            self.log.warn("Nothing done due to errors")
+            self.success = False
 
 
 class DirectoryRestore(DirectoryCmd):
