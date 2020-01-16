@@ -1,5 +1,5 @@
 // OpenIO SDS Go rawx
-// Copyright (C) 2015-2019 OpenIO SAS
+// Copyright (C) 2015-2020 OpenIO SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -263,7 +263,7 @@ func (rr *rawxRequest) checkChunk() {
 		return
 	}
 
-	err = rr.chunk.loadAttr(in, rr.chunkID)
+	err = rr.chunk.loadAttr(in, rr.chunkID, rr.reqid)
 	if err != nil {
 		LogError("Failed to load xattr: %s", err)
 		rr.replyError(err)
@@ -344,7 +344,7 @@ func (rr *rawxRequest) downloadChunk() {
 		return
 	}
 
-	if err = rr.chunk.loadAttr(inChunk, rr.chunkID); err != nil {
+	if err = rr.chunk.loadAttr(inChunk, rr.chunkID, rr.reqid); err != nil {
 		rr.replyError(err)
 		return
 	}
