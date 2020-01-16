@@ -1,5 +1,5 @@
 // OpenIO SDS Go rawx
-// Copyright (C) 2015-2019 OpenIO SAS
+// Copyright (C) 2015-2020 OpenIO SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -146,7 +146,8 @@ func (chunk *chunkInfo) loadFullPath(getter func(string, string) (string, error)
 	return nil
 }
 
-func (chunk *chunkInfo) loadAttr(inChunk fileReader, chunkID string) error {
+func (chunk *chunkInfo) loadAttr(inChunk fileReader, chunkID string,
+	reqid string) error {
 	buf := make([]byte, 2048, 2048)
 	getAttr := func(k string) (string, error) {
 		l, err := inChunk.getAttr(k, buf)
@@ -190,23 +191,33 @@ func (chunk *chunkInfo) loadAttr(inChunk fileReader, chunkID string) error {
 		// Old chunk
 		_chunkID, err := getAttr(AttrNameChunkID)
 		if err != nil {
-			return err
+			if err == syscall.ENODATA {
+				LogWarning("Missing %s and %s xattr on chunk %s (reqid=%s)",
+					AttrNameFullPrefix+chunkID, AttrNameChunkID,
+					chunkID, reqid)
+			} else {
+				return err
+			}
 		}
-		if _chunkID != chunkID {
-			return errors.New("Wrong chunk ID")
+		if _chunkID == chunkID {
+			detailedAttrs = append(detailedAttrs,
+				detailedAttr{AttrNameContainerID, &chunk.ContainerID},
+				detailedAttr{AttrNameContentPath, &chunk.ContentPath},
+				detailedAttr{AttrNameContentVersion, &chunk.ContentVersion},
+				detailedAttr{AttrNameContentID, &chunk.ContentID})
 		}
-		detailedAttrs = append(detailedAttrs,
-			detailedAttr{AttrNameContainerID, &chunk.ContainerID},
-			detailedAttr{AttrNameContentPath, &chunk.ContentPath},
-			detailedAttr{AttrNameContentVersion, &chunk.ContentVersion},
-			detailedAttr{AttrNameContentID, &chunk.ContentID})
 	}
 	chunk.ChunkID = chunkID
 
 	for _, hs := range detailedAttrs {
 		value, err := getAttr(hs.key)
-		if err != nil && err != syscall.ENODATA {
-			return err
+		if err != nil {
+			if err == syscall.ENODATA {
+				LogWarning("Missing %s xattr on chunk %s (reqid=%s)",
+					hs.key, chunkID, reqid)
+			} else {
+				return err
+			}
 		}
 		*(hs.ptr) = value
 	}
