@@ -337,7 +337,6 @@ func (rr *rawxRequest) getRange(chunkSize int64) (rangeInfo, error) {
 	if offset < 0 || last < 0 || offset > last {
 		return ri, nil
 	}
-	LogWarning("Range chunksize=%v offset=%v last=%v", chunkSize, offset, last)
 	if offset >= chunkSize {
 		return ri, errInvalidRange
 	}
