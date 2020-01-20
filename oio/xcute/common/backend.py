@@ -49,6 +49,9 @@ class XcuteBackend(RedisConnection):
         'job_exists': (
             Forbidden,
             'The job already exists'),
+        'lock_exists': (
+            Forbidden,
+            'A job with the same lock is already in progress'),
         'no_job': (
             NotFound,
             'The job does\'nt exist'),
@@ -90,11 +93,19 @@ class XcuteBackend(RedisConnection):
         local job_id = KEYS[2];
         local job_type = KEYS[3];
         local job_config = KEYS[4];
+        local lock = KEYS[5];
 
         local job_exists = redis.call('EXISTS', 'xcute:job:info:' .. job_id);
         if job_exists == 1 then
             return redis.error_reply('job_exists');
         end;
+
+        local lock_exists = redis.call('ZRANK', 'xcute:locks', lock);
+        if lock_exists ~= false then
+            return redis.error_reply('lock_exists');
+        end;
+
+        redis.call('ZADD', 'xcute:locks', 0, lock);
 
         redis.call('ZADD', 'xcute:job:ids', 0, job_id);
         redis.call(
@@ -103,6 +114,7 @@ class XcuteBackend(RedisConnection):
             'job.type', job_type,
             'job.status', 'WAITING',
             'job.request_pause', 'False',
+            'job.lock', lock,
             'tasks.all_sent', 'False',
             'tasks.sent', '0',
             'tasks.processed', '0',
@@ -159,8 +171,10 @@ class XcuteBackend(RedisConnection):
         local mtime = KEYS[1];
         local job_id = KEYS[2];
 
-        local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
-                                  'job.status');
+        local info = redis.call('HMGET', 'xcute:job:info:' .. job_id,
+                                'job.status', 'job.lock');
+        local status = info[1];
+        local lock = info[2];
         if status == nil or status == false then
             return redis.error_reply('no_job');
         end;
@@ -171,6 +185,7 @@ class XcuteBackend(RedisConnection):
 
         redis.call('HSET', 'xcute:job:info:' .. job_id,
                    'job.status', 'FAILED');
+        redis.call('ZREM', 'xcute:locks', lock);
         -- remove the job of the orchestrator
         local orchestrator_id = redis.call(
             'HGET', 'xcute:job:info:' .. job_id, 'orchestrator.id');
@@ -273,8 +288,9 @@ class XcuteBackend(RedisConnection):
         local tasks_sent_length = #tasks_sent;
         local info_key = 'xcute:job:info:' .. job_id;
 
-        local status = redis.call('HGET', info_key,
-                                  'job.status');
+        local info = redis.call('HMGET', info_key, 'job.status', 'job.lock');
+        local status = info[1];
+        local lock = info[2];
         if status == nil or status == false then
             return redis.error_reply('no_job');
         end;
@@ -305,6 +321,7 @@ class XcuteBackend(RedisConnection):
                     total_tasks_sent) then
                 redis.call('HSET', 'xcute:job:info:' .. job_id,
                            'job.status', 'FINISHED');
+                redis.call('ZREM', 'xcute:locks', lock);
             end;
         else
             local request_pause = redis.call(
@@ -339,8 +356,10 @@ class XcuteBackend(RedisConnection):
         local counters = get_counters(KEYS, 3, nil);
         local tasks_processed = ARGV;
 
-        local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
-                                  'job.status');
+        local info = redis.call('HMGET', 'xcute:job:info:' .. job_id,
+                                'job.status', 'job.lock');
+        local status = info[1];
+        local lock = info[2];
         if status == nil or status == false then
             return redis.error_reply('no_job');
         end;
@@ -366,6 +385,7 @@ class XcuteBackend(RedisConnection):
                     total_tasks_sent) then
                 redis.call('HSET', 'xcute:job:info:' .. job_id,
                            'job.status', 'FINISHED');
+                redis.call('ZREM', 'xcute:locks', lock);
                 finished = true;
             end;
         end;
@@ -429,8 +449,10 @@ class XcuteBackend(RedisConnection):
     lua_delete = """
         local job_id = KEYS[1];
 
-        local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
-                                  'job.status');
+        local info = redis.call('HMGET', 'xcute:job:info:' .. job_id,
+                                'job.status', 'job.lock');
+        local status = info[1];
+        local lock = info[2];
         if status == nil or status == false then
             return redis.error_reply('no_job');
         end;
@@ -446,6 +468,7 @@ class XcuteBackend(RedisConnection):
         redis.call('ZREM', 'xcute:job:ids', job_id);
         redis.call('DEL', 'xcute:job:info:' .. job_id);
         redis.call('DEL', 'xcute:tasks:running:' .. job_id);
+        redis.call('ZREM', 'xcute:locks', lock);
         """
 
     def __init__(self, conf, logger=None):
@@ -523,14 +546,14 @@ class XcuteBackend(RedisConnection):
         return Timestamp().normal
 
     @handle_redis_exceptions
-    def create(self, job_type, job_config):
+    def create(self, job_type, job_config, lock):
         job_id = datetime.utcnow().strftime('%Y%m%d%H%M%S%f') \
             + '-%011x' % random.randrange(16**11)
 
         job_config = json.dumps(job_config)
 
         self.script_create(
-            keys=[self._get_timestamp(), job_id, job_type, job_config],
+            keys=[self._get_timestamp(), job_id, job_type, job_config, lock],
             client=self.conn)
         return job_id
 

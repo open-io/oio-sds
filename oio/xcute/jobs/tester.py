@@ -60,6 +60,7 @@ class TesterJob(XcuteJob):
     DEFAULT_START = 0
     DEFAULT_END = 5
     DEFAULT_ERROR_PERCENTAGE = 0
+    DEFAULT_LOCK = 'tester_lock'
 
     @classmethod
     def sanitize_params(cls, job_params):
@@ -76,7 +77,7 @@ class TesterJob(XcuteJob):
             job_params.get('error_percentage'),
             cls.DEFAULT_ERROR_PERCENTAGE)
 
-        return sanitized_job_params, job_params.get('lock')
+        return sanitized_job_params, job_params.get('lock', cls.DEFAULT_LOCK)
 
     def get_tasks(self, job_params, marker=None):
         start = job_params['start']
