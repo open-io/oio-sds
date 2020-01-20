@@ -129,3 +129,8 @@ class XcuteClient(HttpApi):
     def job_delete(self, job_id):
         self.xcute_request(
             'DELETE', '/job/delete', params={'id': job_id})
+
+    def lock_list(self):
+        _, data = self.xcute_request(
+            'GET', '/lock/list')
+        return data

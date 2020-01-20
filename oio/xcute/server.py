@@ -90,7 +90,9 @@ class XcuteServer(WerkzeugApp):
                 Rule('/job/resume', endpoint='job_resume',
                      methods=['POST']),
                 Rule('/job/delete', endpoint='job_delete',
-                     methods=['DELETE'])
+                     methods=['DELETE']),
+                Rule('/lock/list', endpoint='lock_list',
+                     methods=['GET']),
             ])
         ])
 
@@ -167,6 +169,12 @@ class XcuteServer(WerkzeugApp):
         job_id = self._get_job_id(req)
         self.backend.delete(job_id)
         return Response(status=204)
+
+    @access_log
+    @handle_exceptions
+    def on_lock_list(self, req):
+        locks = self.backend.list_locks()
+        return Response(json.dumps(locks), mimetype='application/json')
 
 
 def create_app(conf):
