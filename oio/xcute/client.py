@@ -134,3 +134,8 @@ class XcuteClient(HttpApi):
         _, data = self.xcute_request(
             'GET', '/lock/list')
         return data
+
+    def lock_show(self, lock):
+        _, data = self.xcute_request(
+            'GET', '/lock/show', params={'lock': lock})
+        return data
