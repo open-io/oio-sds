@@ -121,11 +121,10 @@ class XcuteServer(WerkzeugApp):
         if job_class is None:
             raise HTTPBadRequest('Unknown job type')
 
-        # TODO: use lock
         job_config, lock = job_class.sanitize_config(
             json.loads(req.data or '{}'))
 
-        job_id = self.backend.create(job_type, job_config)
+        job_id = self.backend.create(job_type, job_config, lock)
         job_info = self.backend.get_job_info(job_id)
         return Response(
             json.dumps(job_info), mimetype='application/json', status=202)
