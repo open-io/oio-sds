@@ -33,11 +33,15 @@ def handle_redis_exceptions(func):
         try:
             return func(self, *args, **kwargs)
         except redis.exceptions.ResponseError as exc:
-            error = self._lua_errors.get(str(exc))
+            error_parts = exc.message.split(':')
+            error_type = error_parts[0]
+            error_params = error_parts[1:]
+
+            error = self._lua_errors.get(error_type)
             if error is None:
                 raise
             error_cls, error_msg = error
-            raise error_cls(message=error_msg)
+            raise error_cls(message=error_msg.format(*error_params))
     return handle_redis_exceptions
 
 
@@ -51,7 +55,7 @@ class XcuteBackend(RedisConnection):
             'The job already exists'),
         'lock_exists': (
             Forbidden,
-            'A job with the same lock is already in progress'),
+            'A job with the same lock ({}) is already in progress'),
         'no_job': (
             NotFound,
             'The job does\'nt exist'),
@@ -101,12 +105,12 @@ class XcuteBackend(RedisConnection):
             return redis.error_reply('job_exists');
         end;
 
-        local lock_exists = redis.call('ZRANK', 'xcute:locks', lock);
-        if lock_exists ~= false then
-            return redis.error_reply('lock_exists');
+        local lock_exists = redis.call('HEXISTS', 'xcute:locks', lock);
+        if lock_exists ~= 0 then
+            return redis.error_reply('lock_exists:' .. lock);
         end;
 
-        redis.call('ZADD', 'xcute:locks', 0, lock);
+        redis.call('HSET', 'xcute:locks', lock, job_id);
 
         redis.call('ZADD', 'xcute:job:ids', 0, job_id);
         redis.call(
@@ -186,7 +190,7 @@ class XcuteBackend(RedisConnection):
 
         redis.call('HSET', 'xcute:job:info:' .. job_id,
                    'job.status', 'FAILED');
-        redis.call('ZREM', 'xcute:locks', lock);
+        redis.call('HDEL', 'xcute:locks', lock);
         -- remove the job of the orchestrator
         local orchestrator_id = redis.call(
             'HGET', 'xcute:job:info:' .. job_id, 'orchestrator.id');
@@ -322,7 +326,7 @@ class XcuteBackend(RedisConnection):
                     total_tasks_sent) then
                 redis.call('HSET', 'xcute:job:info:' .. job_id,
                            'job.status', 'FINISHED');
-                redis.call('ZREM', 'xcute:locks', lock);
+                redis.call('HDEL', 'xcute:locks', lock);
             end;
         else
             local request_pause = redis.call(
@@ -386,7 +390,7 @@ class XcuteBackend(RedisConnection):
                     total_tasks_sent) then
                 redis.call('HSET', 'xcute:job:info:' .. job_id,
                            'job.status', 'FINISHED');
-                redis.call('ZREM', 'xcute:locks', lock);
+                redis.call('HDEL', 'xcute:locks', lock);
                 finished = true;
             end;
         end;
@@ -469,7 +473,7 @@ class XcuteBackend(RedisConnection):
         redis.call('ZREM', 'xcute:job:ids', job_id);
         redis.call('DEL', 'xcute:job:info:' .. job_id);
         redis.call('DEL', 'xcute:tasks:running:' .. job_id);
-        redis.call('ZREM', 'xcute:locks', lock);
+        redis.call('HDEL', 'xcute:locks', lock);
         """
 
     def __init__(self, conf, logger=None):
@@ -668,7 +672,18 @@ class XcuteBackend(RedisConnection):
 
     @handle_redis_exceptions
     def list_locks(self):
-        return self.conn.zrangebylex(self.key_locks, '-', '+')
+        locks = self.conn.hgetall(self.key_locks)
+
+        return [
+            dict(lock=lock[0], job_id=lock[1])
+            for lock in sorted(locks.items())
+        ]
+
+    @handle_redis_exceptions
+    def get_lock_info(self, lock):
+        job_id = self.conn.hget(self.key_locks, lock)
+
+        return dict(lock=lock, job_id=job_id)
 
     @staticmethod
     def _unmarshal_job_info(marshalled_job_info):

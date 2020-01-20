@@ -93,6 +93,8 @@ class XcuteServer(WerkzeugApp):
                      methods=['DELETE']),
                 Rule('/lock/list', endpoint='lock_list',
                      methods=['GET']),
+                Rule('/lock/show', endpoint='lock_show',
+                     methods=['GET']),
             ])
         ])
 
@@ -175,6 +177,15 @@ class XcuteServer(WerkzeugApp):
     def on_lock_list(self, req):
         locks = self.backend.list_locks()
         return Response(json.dumps(locks), mimetype='application/json')
+
+    @access_log
+    @handle_exceptions
+    def on_lock_show(self, req):
+        lock = req.args.get('lock')
+        if not lock:
+            raise HTTPBadRequest('Missing lock')
+        lock_info = self.backend.get_lock_info(lock)
+        return Response(json.dumps(lock_info), mimetype='application/json')
 
 
 def create_app(conf):
