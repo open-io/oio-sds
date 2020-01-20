@@ -83,6 +83,7 @@ class XcuteBackend(RedisConnection):
     key_waiting_jobs = 'xcute:waiting:jobs'
     key_tasks_running = 'xcute:tasks:running:%s'
     key_orchestrator_jobs = 'xcute:orchestrator:jobs:%s'
+    key_locks = 'xcute:locks'
 
     _lua_update_mtime = """
         redis.call('HSET', 'xcute:job:info:' .. job_id, 'job.mtime', mtime);
@@ -664,6 +665,10 @@ class XcuteBackend(RedisConnection):
 
     def _get_job_info(self, job_id, client):
         return client.hgetall(self.key_job_info % job_id)
+
+    @handle_redis_exceptions
+    def list_locks(self):
+        return self.conn.zrangebylex(self.key_locks, '-', '+')
 
     @staticmethod
     def _unmarshal_job_info(marshalled_job_info):
