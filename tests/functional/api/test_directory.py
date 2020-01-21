@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -406,7 +406,7 @@ class TestDirectoryAPI(BaseTestCase):
         """
         self._test_link_rdir_fail_to_force(
             [exc.ServiceBusy(message='Failed :(', status=503),
-             exc.OioTimeout(message='Timeout :(', status=408),
+             exc.OioTimeout('Timeout :('),
              None],
             exc.OioException)
 
