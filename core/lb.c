@@ -1069,6 +1069,7 @@ _local__patch(struct oio_lb_pool_s *self,
 	guint i = 0;
 	for (; known && known[i]; i++)
 		polled[i] = known[i];
+	guint count_known_targets = i;
 	for (; i < count_targets; i++)
 		polled[i] = 0;
 
@@ -1122,8 +1123,9 @@ _local__patch(struct oio_lb_pool_s *self,
 		} else {
 			/* the strings are '\0' separated, printf won't display them */
 			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "no service polled "
-					"from [%s], %u/%d services polled, %u services in slot",
-					*ptarget, count, count_targets,
+					"from [%s], %u/%u services polled, %u known services, "
+					"%u services in slot", *ptarget, count,
+					count_targets - count_known_targets, count_known_targets,
 					oio_lb_world__count_slot_items_unlocked(
 						lb->world, *ptarget));
 			break;
