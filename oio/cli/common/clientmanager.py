@@ -179,8 +179,8 @@ class ClientManager(object):
     def pool_manager(self):
         if self._pool_manager is None:
             from oio.common.http_urllib3 import get_pool_manager
-            # TODO(FVE): load parameters from self._options or self.ns_conf
-            self._pool_manager = get_pool_manager()
+            # get_pool_manager already filters arguments it cares about
+            self._pool_manager = get_pool_manager(**self._options)
         return self._pool_manager
 
     @property
