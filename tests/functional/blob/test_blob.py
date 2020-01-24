@@ -21,9 +21,9 @@ from hashlib import md5
 from six.moves.urllib_parse import unquote, urlparse
 from oio.common.http import headers_from_object_metadata, HeadersDict
 from oio.common.http_eventlet import http_connect
-from oio.common.constants import OIO_VERSION, CHUNK_HEADERS
+from oio.common.constants import OIO_VERSION, CHUNK_HEADERS, REQID_HEADER
 from oio.common.fullpath import encode_fullpath
-from oio.common.utils import cid_from_name
+from oio.common.utils import cid_from_name, request_id
 from oio.blob.utils import read_chunk_metadata
 from tests.utils import CommonTestCase, random_id, strange_paths
 from tests.functional.blob import convert_to_old_chunk, random_buffer, \
@@ -935,5 +935,6 @@ class RawxTestSuite(CommonTestCase):
             fp.write(b"without xattrs")
         resp, body = self._http_request(
             chunkurl_woattr, 'HEAD', "",
-            {'X-oio-check-hash': "true"})
+            {'X-oio-check-hash': "true",
+             REQID_HEADER: request_id('test_HEAD_chunk')})
         self.assertEqual(412, resp.status)
