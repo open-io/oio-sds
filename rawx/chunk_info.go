@@ -226,10 +226,11 @@ func (chunk *chunkInfo) loadAttr(inChunk fileReader, chunkID string,
 		}
 		*(hs.ptr) = value
 	}
-
-	chunk.size, err = strconv.ParseInt(chunk.ChunkSize, 10, 63)
-	if err != nil {
-		return err
+	if chunk.ChunkSize != "" {
+		chunk.size, err = strconv.ParseInt(chunk.ChunkSize, 10, 63)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
