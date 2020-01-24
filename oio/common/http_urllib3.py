@@ -33,12 +33,10 @@ URLLIB3_REQUESTS_KWARGS = ('fields', 'headers', 'body', 'retries', 'redirect',
                            'assert_same_host', 'timeout', 'pool_timeout',
                            'release_conn', 'chunked')
 URLLIB3_POOLMANAGER_KWARGS = (
-    # Integers
+    # default values overriden by get_pool_manager
     'pool_connections', 'pool_maxsize', 'max_retries', 'backoff_factor',
-    # List or tuple
-    'socket_options',
-    # Tuple
-    'source_address'
+    # passed directly to SafePoolManager's init
+    'socket_options', 'source_address', 'cert_reqs', 'ca_certs'
 )
 
 
