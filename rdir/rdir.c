@@ -2339,15 +2339,29 @@ _route_srv_status(struct req_args_s *args)
 	guint count = g_tree_nnodes(tree_bases);
 	g_mutex_unlock(&lock_bases);
 
+	const gchar *format = OPT("format");
 	GString *gstr = g_string_sized_new(128);
-	g_string_append_c(gstr, '{');
-	oio_str_gstring_append_json_pair_int(gstr, "opened_db_count", count);
-	if (service_id) {
-		g_string_append_c(gstr, ',');
-		oio_str_gstring_append_json_pair(gstr, "service_id", service_id);
+	if (!format || !*format || !g_strcmp0(format, "json")) {
+		g_string_append_c(gstr, '{');
+		oio_str_gstring_append_json_pair_int(gstr, "opened_db_count", count);
+		if (service_id) {
+			g_string_append_c(gstr, ',');
+			oio_str_gstring_append_json_pair(gstr, "service_id", service_id);
+		}
+		g_string_append_c(gstr, '}');
+	} else if (!g_strcmp0(format, "prometheus")) {
+		// FIXME(FVE): find something more appropriate than syslog_id
+		g_string_append_printf(gstr,
+				"oio_opened_db{namespace=\"%s\", service=\"%s\"} "
+				"%u %"G_GINT64_FORMAT,
+				ns_name, syslog_id, count, oio_ext_real_time());
+	} else {
+		g_string_free(gstr, TRUE);
+		return _reply_format_error(
+				args->rp, BADREQ("Unknown format: %s", format));
 	}
-	g_string_append_c(gstr, '}');
 
+	// FIXME(FVE): fix Content-Type response header
 	return _reply_ok(args->rp, gstr);
 }
 
