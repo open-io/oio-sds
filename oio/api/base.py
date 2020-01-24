@@ -20,19 +20,12 @@ from oio.common.easy_value import true_value
 from oio.common.json import json as jsonlib
 
 from oio.common.http_urllib3 import urllib3, get_pool_manager, \
-    oio_exception_from_httperror
+    oio_exception_from_httperror, URLLIB3_REQUESTS_KWARGS
 from oio.common import exceptions
 from oio.common.utils import deadline_to_timeout, monotonic_time
 from oio.common.constants import ADMIN_HEADER, \
     TIMEOUT_HEADER, PERFDATA_HEADER, FORCEMASTER_HEADER, \
     CONNECTION_TIMEOUT, READ_TIMEOUT, REQID_HEADER, STRLEN_REQID
-
-_POOL_MANAGER_OPTIONS_KEYS = ["pool_connections", "pool_maxsize",
-                              "max_retries"]
-
-URLLIB3_REQUESTS_KWARGS = ('fields', 'headers', 'body', 'retries', 'redirect',
-                           'assert_same_host', 'timeout', 'pool_timeout',
-                           'release_conn', 'chunked')
 
 
 class HttpApi(object):
@@ -61,10 +54,8 @@ class HttpApi(object):
         self.endpoint = endpoint
 
         if not pool_manager:
-            pool_manager_conf = {k: int(v)
-                                 for k, v in iteritems(kwargs)
-                                 if k in _POOL_MANAGER_OPTIONS_KEYS}
-            pool_manager = get_pool_manager(**pool_manager_conf)
+            # get_pool_manager filters its args
+            pool_manager = get_pool_manager(**kwargs)
         self.pool_manager = pool_manager
 
         self.admin_mode = true_value(kwargs.get('admin_mode', False))
