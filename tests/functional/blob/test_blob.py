@@ -936,4 +936,4 @@ class RawxTestSuite(CommonTestCase):
         resp, body = self._http_request(
             chunkurl_woattr, 'HEAD', "",
             {'X-oio-check-hash': "true"})
-        self.assertEqual(500, resp.status)
+        self.assertEqual(412, resp.status)
