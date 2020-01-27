@@ -937,4 +937,5 @@ class RawxTestSuite(CommonTestCase):
             chunkurl_woattr, 'HEAD', "",
             {'X-oio-check-hash': "true",
              REQID_HEADER: request_id('test_HEAD_chunk')})
-        self.assertEqual(412, resp.status)
+        # If the size xattr is missing, we cannot read the chunk
+        self.assertEqual(500, resp.status)
