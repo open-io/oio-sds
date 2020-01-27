@@ -20,6 +20,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -226,11 +227,10 @@ func (chunk *chunkInfo) loadAttr(inChunk fileReader, chunkID string,
 		}
 		*(hs.ptr) = value
 	}
-	if chunk.ChunkSize != "" {
-		chunk.size, err = strconv.ParseInt(chunk.ChunkSize, 10, 63)
-		if err != nil {
-			return err
-		}
+	chunk.size, err = strconv.ParseInt(chunk.ChunkSize, 10, 63)
+	if err != nil {
+		return fmt.Errorf("%s xattr missing or invalid: %v",
+			AttrNameChunkSize, err)
 	}
 
 	return nil
