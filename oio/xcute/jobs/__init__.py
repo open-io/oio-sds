@@ -15,10 +15,12 @@
 
 from .blob_mover import RawxDecommissionJob
 from .blob_rebuilder import RawxRebuildJob
+from .container_mover import ContainerMoveJob
 from .tester import TesterJob
 
 
 JOB_TYPES = {
+    ContainerMoveJob.JOB_TYPE: ContainerMoveJob,
     RawxDecommissionJob.JOB_TYPE: RawxDecommissionJob,
     RawxRebuildJob.JOB_TYPE: RawxRebuildJob,
     TesterJob.JOB_TYPE: TesterJob
