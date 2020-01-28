@@ -16,11 +16,13 @@
 from .blob_mover import RawxDecommissionJob
 from .blob_rebuilder import RawxRebuildJob
 from .container_mover import ContainerMoveJob
+from .meta2_rebuilder import Meta2RebuildJob
 from .tester import TesterJob
 
 
 JOB_TYPES = {
     ContainerMoveJob.JOB_TYPE: ContainerMoveJob,
+    Meta2RebuildJob.JOB_TYPE: Meta2RebuildJob,
     RawxDecommissionJob.JOB_TYPE: RawxDecommissionJob,
     RawxRebuildJob.JOB_TYPE: RawxRebuildJob,
     TesterJob.JOB_TYPE: TesterJob
