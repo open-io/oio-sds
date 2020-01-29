@@ -456,10 +456,14 @@ class XcuteOrchestrator(object):
 
             old_beanstalkd_workers_addr = set(self.beanstalkd_workers.keys())
             new_beanstalkd_workers_addr = set(beanstalkd_workers.keys())
+
             added_beanstalkds = new_beanstalkd_workers_addr \
                 - old_beanstalkd_workers_addr
             for beanstalkd_addr in added_beanstalkds:
                 self.logger.info('Add beanstalkd %s' % beanstalkd_addr)
+                beanstalkd = beanstalkd_workers[beanstalkd_addr]
+                beanstalkd.use(self.beanstalkd_workers_tube)
+
             removed_beanstalkds = old_beanstalkd_workers_addr \
                 - new_beanstalkd_workers_addr
             for beanstalkd_addr in removed_beanstalkds:
@@ -502,7 +506,7 @@ class XcuteOrchestrator(object):
         beanstalkd_addr = 'beanstalk://' + beanstalkd_info['addr']
         beanstalkd_score = beanstalkd_info['score']
         if beanstalkd_score == 0:
-            self.logger.info(
+            self.logger.debug(
                 'Ignore beanstalkd %s: score=0', beanstalkd_addr)
             return None
 
@@ -510,12 +514,10 @@ class XcuteOrchestrator(object):
         if not beanstalkd:
             beanstalkd = Beanstalk.from_url(beanstalkd_addr)
             beanstalkd.addr = beanstalkd_addr
-            beanstalkd.use(self.beanstalkd_workers_tube)
-            beanstalkd.watch(self.beanstalkd_workers_tube)
 
         beanstalkd_tubes = beanstalkd.tubes()
         if self.beanstalkd_workers_tube not in beanstalkd_tubes:
-            self.logger.info(
+            self.logger.debug(
                 'Ignore beanstalkd %s: '
                 'No worker has ever listened to the tube %s',
                 beanstalkd_addr, self.beanstalkd_workers_tube)
@@ -527,7 +529,7 @@ class XcuteOrchestrator(object):
         if beanstalkd_jobs_ready > 0:
             beanstalkd_jobs_reserved = current_stats['current-jobs-reserved']
             if beanstalkd_jobs_reserved <= 0:
-                self.logger.info(
+                self.logger.warn(
                     'Ignore beanstalkd %s: The worker doesn\'t process task '
                     '(current-jobs-ready=%d, current-jobs-reserved=%d)',
                     beanstalkd_addr, beanstalkd_jobs_ready,
@@ -535,7 +537,7 @@ class XcuteOrchestrator(object):
                 return None
 
             if beanstalkd_jobs_ready >= self.max_jobs_per_beanstalkd:
-                self.logger.info(
+                self.logger.warn(
                     'Ignore beanstalkd %s: The queue is full '
                     '(current-jobs-ready=%d, current-jobs-reserved=%d)',
                     beanstalkd_addr, beanstalkd_jobs_ready,
@@ -556,7 +558,7 @@ class XcuteOrchestrator(object):
                               / self.max_jobs_per_beanstalkd)
         beanstalkd.occurrence = int(math.ceil(worker_score / 10.))
 
-        self.logger.info(
+        self.logger.debug(
             'Give the green light to beanstalkd %s (worker_score=%d)',
             beanstalkd_addr, worker_score)
         return beanstalkd
