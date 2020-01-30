@@ -26,6 +26,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "common.h"
 #include "actions.h"
 
+#define META2_LISTING_DEFAULT_LIMIT 1000
+#define META2_LISTING_MAX_LIMIT 10000
+
 
 static gchar*
 _resolve_service_id(const char *service_id)
@@ -935,7 +938,7 @@ _delimiter (struct req_args_s *args)
 }
 
 static GError *
-_max (struct req_args_s *args, gint64 *pmax)
+_max(struct req_args_s *args, gint64 *pmax)
 {
 	const char *s = OPT("max");
 	if (!s)
@@ -944,7 +947,9 @@ _max (struct req_args_s *args, gint64 *pmax)
 	if (!oio_str_is_number(s, pmax))
 		return BADREQ("Invalid max number of items");
 	if (*pmax <= 0)
-		return BADREQ("Invalid max number of items: %s", "too small");
+		*pmax = META2_LISTING_DEFAULT_LIMIT;
+	else
+		*pmax = MIN(META2_LISTING_MAX_LIMIT, *pmax);
 	return NULL;
 }
 
@@ -1979,9 +1984,6 @@ enum http_rc_e action_container_list (struct req_args_s *args) {
 	list_in.prefix = OPT("prefix");
 	list_in.marker_start = OPT("marker");
 	list_in.marker_end = OPT("end_marker");
-	/* This is the default when no limit is passed in the request.
-	 * The client can still pass a larger limit. */
-	list_in.maxkeys = 1000;
 	if (!list_in.marker_end)
 		list_in.marker_end = OPT("marker_end");  // backward compatibility
 	if (OPT("deleted"))
@@ -1991,7 +1993,7 @@ enum http_rc_e action_container_list (struct req_args_s *args) {
 	if (oio_str_parse_bool(OPT("properties"), FALSE))
 		list_in.flag_properties = 1;
 	if (!err)
-		err = _max (args, &list_in.maxkeys);
+		err = _max(args, &list_in.maxkeys);
 	if (!err) {
 		tree_prefixes = g_tree_new_full (metautils_strcmp3, NULL, g_free, NULL);
 		m2v2_list_result_init (&list_out);
