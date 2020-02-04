@@ -231,7 +231,7 @@ class RawxDecommissionJob(XcuteJob):
                 yield ('|'.join((container_id, content_id, chunk_id)),
                        int(math.ceil(1000 * kept_chunks_ratio)))
 
-        remaining = int(math.ceil(i * kept_chunks_ratio))
+        remaining = int(math.ceil(i % 1000 * kept_chunks_ratio))
         if remaining > 0:
             yield '|'.join((container_id, content_id, chunk_id)), remaining
 
