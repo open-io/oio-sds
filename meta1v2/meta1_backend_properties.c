@@ -34,6 +34,33 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "./meta1_backend_internals.h"
 
 static GError *
+__delete_property(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
+		const gchar *name)
+{
+	GError *err = NULL;
+	gint rc;
+	sqlite3_stmt *stmt = NULL;
+
+	EXTRA_ASSERT(name != NULL && *name != '\0');
+	GRID_TRACE("%s(n=%s)", __FUNCTION__, name);
+
+	sqlite3_prepare_debug(rc, sq3->db,
+			"DELETE FROM properties WHERE cid = ? AND name = ?", -1, &stmt, NULL);
+	if (rc != SQLITE_OK && rc != SQLITE_DONE)
+		err = M1_SQLITE_GERROR(sq3->db, rc);
+	else {
+		(void) sqlite3_bind_blob(stmt, 1, oio_url_get_id(url), oio_url_get_id_size(url), NULL);
+		(void) sqlite3_bind_text(stmt, 2, name, -1, NULL);
+		sqlite3_step_debug_until_end (rc, stmt);
+		if (rc != SQLITE_DONE && rc != SQLITE_OK)
+			err = M1_SQLITE_GERROR(sq3->db, rc);
+		sqlite3_finalize_debug(rc, stmt);
+	}
+
+	return err;
+}
+
+static GError *
 __del_container_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		gchar **names)
 {
@@ -44,20 +71,9 @@ __del_container_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		__exec_cid(sq3->db, "DELETE FROM properties WHERE cid = ?", oio_url_get_id(url));
 	else {
 		for (p_name=names; !err && p_name && *p_name ;p_name++) {
-			sqlite3_stmt *stmt = NULL;
-			gint rc;
-
-			sqlite3_prepare_debug(rc, sq3->db, "DELETE FROM properties WHERE cid = ? AND name = ?", -1, &stmt, NULL);
-			if (rc != SQLITE_OK && rc != SQLITE_DONE)
-				err = M1_SQLITE_GERROR(sq3->db, rc);
-			else {
-				(void) sqlite3_bind_blob(stmt, 1, oio_url_get_id(url), oio_url_get_id_size(url), NULL);
-				(void) sqlite3_bind_text(stmt, 2, *p_name, strlen(*p_name), NULL);
-				sqlite3_step_debug_until_end (rc, stmt);
-				if (rc != SQLITE_DONE)
-					GRID_WARN("SQLite error rc=%d", rc);
-				sqlite3_finalize_debug(rc, stmt);
-			}
+			err = __delete_property(sq3, url, *p_name);
+			if (err)
+				return err;
 		}
 	}
 
@@ -95,15 +111,19 @@ __replace_property(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 
 GError *__set_container_properties(struct sqlx_sqlite3_s *sq3,
 		struct oio_url_s *url, gchar **props) {
+	GError *err = NULL;
 	if (!props)
 		return NULL;
 	for (gchar **p = props; *p && *(p + 1); p += 2) {
-		GError *err = NULL;
-		err = __replace_property(sq3, url, *p, *(p + 1));
-		if (NULL != err)
+		if (oio_str_is_set(*(p+1))) {
+			err = __replace_property(sq3, url, *p, *(p + 1));
+		} else {
+			err = __delete_property(sq3, url, *p);
+		}
+		if (err)
 			return err;
 	}
-	return NULL;
+	return err;
 }
 
 static gchar* item(struct sqlite3_stmt *stmt, int i) {

@@ -225,6 +225,15 @@ class TestDirectoryAPI(BaseTestCase):
         data = self._get_properties(name)
         self.assertEqual(data['properties'], metadata)
 
+        # set_properties overwrite key with empty value
+        key = metadata.keys().pop(0)
+        metadata4 = {key: ''}
+
+        del metadata[key]
+        self.api.set_properties(self.account, name, metadata4)
+        data = self._get_properties(name)
+        self.assertEqual(data['properties'], metadata)
+
         # clean
         self._clean(name, True)
 
