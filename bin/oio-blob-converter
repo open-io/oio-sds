@@ -57,7 +57,8 @@ If an input file is provided, convert only the listed chunks.
     parser.add_argument('-q', '--quiet', action='store_true',
                         help="Don't print log on console")
     ifile_help = "Read chunks from this file instead of volume. " \
-                 "Each line should contain a chunk ID."
+                 "Each line should contain a chunk path " \
+                 "(relative to the volume)."
     parser.add_argument('--input-file', nargs='?',
                         help=ifile_help)
 
