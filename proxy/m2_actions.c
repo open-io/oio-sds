@@ -1025,7 +1025,7 @@ _m2_container_create_with_properties (struct req_args_s *args, char **props,
 {
 	gboolean autocreate = TRUE;
 
-	/* JFS: don't lookup for default verpol and stgpol, we must left they unset
+	/* JFS: don't lookup for default verpol and stgpol, we must leave them unset
 	 * so that they will follow the default values of the namespace and (later)
 	 * of the account. This is how we do NOW, by letting the meta2 find the best
 	 * value when necessary. */
@@ -1076,12 +1076,6 @@ retry:
 	}
 
 	return err;
-}
-
-static GError *
-_m2_container_create_with_defaults (struct req_args_s *args)
-{
-	return _m2_container_create_with_properties(args, NULL, NULL, NULL);
 }
 
 static void
@@ -2630,7 +2624,18 @@ retry:
 			GRID_DEBUG("Resource not found, autocreation");
 			autocreate = FALSE;
 			g_clear_error (&err);
-			err = _m2_container_create_with_defaults (args);
+			gchar **props = NULL;
+			struct json_object *jprops = NULL;
+			if (json_object_object_get_ex(jbody, "container_properties", &jprops)) {
+				err = KV_read_usersys_properties(jprops, &props);
+				if (err) {
+					GRID_WARN("Failed to read container properties: %s",
+							err->message);
+					g_clear_error(&err);
+				}
+			}
+			err = _m2_container_create_with_properties(args, props, NULL, NULL);
+			g_strfreev(props);
 			if (!err)
 				goto retry;
 			if (err->code == CODE_CONTAINER_EXISTS
