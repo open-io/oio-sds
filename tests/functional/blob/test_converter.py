@@ -372,7 +372,6 @@ class TestBlobConverter(BaseTestCase):
         # old xattr not removed
         _, expected_raw_meta = read_chunk_metadata(linked_chunk_path,
                                                    linked_chunk_id)
-        expected_raw_meta[chunk_xattr_keys['oio_version']] = OIO_VERSION
 
         self._convert_and_check(
             linked_chunk_volume, linked_chunk_path,
