@@ -359,15 +359,17 @@ _container_state (struct sqlx_sqlite3_s *sq3)
 		sep (gs);
 		g_string_append_printf (gs, "\"%s\":%"G_GINT64_FORMAT, k, v);
 	}
-	void append_const (GString *gs, const char *k, const char *v) {
+	void append_str(GString *gs, const char *k, gchar *v) {
 		sep (gs);
 		oio_str_gstring_append_json_pair(gs, k, v);
+		g_free(v);
 	}
 
 	struct oio_url_s *u = sqlx_admin_get_url (sq3);
 	GString *gs = oio_event__create (META2_EVENTS_PREFIX ".container.state", u);
 	g_string_append_static (gs, ",\"data\":{");
-	append_const(gs, "policy", sqlx_admin_get_str(sq3, M2V2_ADMIN_STORAGE_POLICY));
+	append_str(gs, "bucket", sqlx_admin_get_str(sq3, M2V2_ADMIN_BUCKET_NAME));
+	append_str(gs, "policy", sqlx_admin_get_str(sq3, M2V2_ADMIN_STORAGE_POLICY));
 	append_int64(gs, "ctime", m2db_get_ctime(sq3));
 	append_int64(gs, "bytes-count", m2db_get_size(sq3));
 	append_int64(gs, "object-count", m2db_get_obj_count(sq3));
@@ -735,6 +737,10 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 		g_string_append_c(gs, ',');
 		g_string_append(gs, peers_list->str);
 		g_string_free(peers_list, TRUE);
+		gchar *bucket = sqlx_admin_get_str(sq3, M2V2_ADMIN_BUCKET_NAME);
+		g_string_append_c(gs, ',');
+		oio_str_gstring_append_json_pair(gs, "bucket", bucket);
+		g_free(bucket);
 		g_string_append_static(gs, "}}");
 		oio_events_queue__send(m2->notifier_container_created, g_string_free (gs, FALSE));
 	}
@@ -782,15 +788,19 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 #endif
 
 		if (!err) {
+			gchar *bucket = sqlx_admin_get_str(sq3, M2V2_ADMIN_BUCKET_NAME);
 			m2b_destroy(sq3);
 			if (m2->notifier_container_deleted && send_event) {
 				GString *gs = oio_event__create_with_id(
 						META2_EVENTS_PREFIX ".container.deleted", url,
 						oio_ext_get_reqid());
-				g_string_append_static(gs, ",\"data\":{}}");
+				g_string_append_static(gs, ",\"data\":{");
+				oio_str_gstring_append_json_pair(gs, "bucket", bucket);
+				g_string_append_static(gs, "}}");
 				oio_events_queue__send(
 						m2->notifier_container_deleted, g_string_free(gs, FALSE));
 			}
+			g_free(bucket);
 		} else {
 			m2b_close(sq3);
 		}
@@ -1883,6 +1893,10 @@ meta2_backend_db_properties_change_callback(struct sqlx_sqlite3_s *sq3 UNUSED,
 				oio_ext_get_reqid());
 		g_string_append_static(event, ",\"data\":{");
 		db_properties_to_json(db_properties, event);
+		gchar *bucket = sqlx_admin_get_str(sq3, M2V2_ADMIN_BUCKET_NAME);
+		g_string_append_c(event, ',');
+		oio_str_gstring_append_json_pair(event, "bucket", bucket);
+		g_free(bucket);
 		g_string_append_static(event, "}}");
 		oio_events_queue__send(m2b->notifier_container_updated,
 				g_string_free(event, FALSE));
