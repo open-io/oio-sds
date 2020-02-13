@@ -202,7 +202,7 @@ func (rr *rawxRequest) uploadChunk() {
 	} else if err == nil {
 		ul, err = rr.putData(out)
 		if err != nil {
-			LogError("Chunk upload error: %s", err)
+			LogError("Chunk upload error: %s (reqid=%s)", err, rr.reqid)
 		}
 	}
 
@@ -210,14 +210,14 @@ func (rr *rawxRequest) uploadChunk() {
 	if err == nil {
 		rr.chunk.compression = rr.rawx.compression
 		if err = rr.chunk.retrieveTrailers(&rr.req.Trailer, &ul); err != nil {
-			LogError("Trailer error: %s", err)
+			LogError("Trailer error: %s (reqid=%s)", err, rr.reqid)
 		}
 	}
 
 	// If everything went well, finish with the chunks XATTR management
 	if err == nil {
 		if err = rr.chunk.saveAttr(out); err != nil {
-			LogError("Save attr error: %s", err)
+			LogError("Save attr error: %s (reqid=%s)", err, rr.reqid)
 		}
 	}
 
@@ -255,7 +255,7 @@ func (rr *rawxRequest) copyChunk() {
 		err = rr.chunk.saveContentFullpathAttr(op)
 		if err != nil {
 			// Xattr failed, rollback the link itself
-			LogError("Save attr error: %s", err)
+			LogError("Save attr error: %s (reqid=%s)", err, rr.reqid)
 			rr.replyError(err)
 			// If rollback fails, is lets an error
 			_ = op.rollback()
@@ -277,7 +277,7 @@ func (rr *rawxRequest) checkChunk() {
 
 	err = rr.chunk.loadAttr(chunkIn, rr.chunkID, rr.reqid)
 	if err != nil {
-		LogError("Failed to load xattr: %s", err)
+		LogError("Failed to load xattr: %s (reqid=%s)", err, rr.reqid)
 		rr.replyError(err)
 		return
 	}
@@ -402,7 +402,7 @@ func (rr *rawxRequest) downloadChunk() {
 	if err == nil {
 		rr.bytesOut = rr.bytesOut + uint64(nb)
 	} else {
-		LogError("Write() error: %s", err)
+		LogError("Write() error: %s (reqid=%s)", err, rr.reqid)
 	}
 }
 
