@@ -152,6 +152,7 @@ func main() {
 		bufferSize:   1024 * opts.getInt("buffer_size", uploadBufferSizeDefault/1024),
 		checksumMode: checksumAlways,
 		compression:  opts["compression"],
+		extraMetrics: opts.getBool("extra_metrics", false),
 	}
 
 	// Clamp the buffer size to admitted values

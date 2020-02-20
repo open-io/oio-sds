@@ -141,6 +141,10 @@ type AccessLogEvent struct {
 	peer      string
 	path      string
 	reqId     string
+
+	extra     bool
+	readTime  uint64
+	writeTime uint64
 }
 
 func LogHttp(evt AccessLogEvent) {
@@ -168,6 +172,12 @@ func LogHttp(evt AccessLogEvent) {
 	sb.WriteString(evt.reqId)
 	sb.WriteRune(' ')
 	sb.WriteString(evt.path)
+	if evt.extra {
+		sb.WriteString(" r=")
+		sb.WriteString(utoa(evt.readTime))
+		sb.WriteString(" w=")
+		sb.WriteString(utoa(evt.writeTime))
+	}
 	logger.writeAccess(sb.String())
 }
 

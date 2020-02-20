@@ -210,6 +210,8 @@ grid_compression ${COMPRESSION}
 ${USE_TLS}tls_cert_file ${SRCDIR}/${TLS_CERT_FILE}
 ${USE_TLS}tls_key_file ${SRCDIR}/${TLS_KEY_FILE}
 ${USE_TLS}tls_rawx_url ${IP}:${TLS_PORT}
+
+extra_metrics yes
 """
 
 template_wsgi_service_host = """

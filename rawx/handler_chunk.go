@@ -30,6 +30,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var (
@@ -90,17 +91,22 @@ func dumpBuffer(dst io.Writer, buf []byte) (written int, err error) {
 	return written, err
 }
 
-func copyReadWriteBuffer(dst io.Writer, src io.Reader, pool bufferPool) (written int64, err error) {
+func copyReadWriteBuffer(dst io.Writer, src io.Reader, pool bufferPool) (written int64, spentRead uint64, spentWrite uint64, err error) {
 	buf := pool.Acquire()
 	defer pool.Release(buf)
 
 	for {
 		// Fill the buffer
+		readStart := time.Now()
 		totalr, er := fillBuffer(src, buf)
+		spentRead += uint64(time.Since(readStart).Nanoseconds() / 1000)
 
 		// Dump the buffer
 		if totalr > 0 {
+			writeStart := time.Now()
 			nw, erw := dumpBuffer(dst, buf[:totalr])
+			spentWrite += uint64(time.Since(writeStart).Nanoseconds() / 1000)
+
 			if nw > 0 {
 				written += int64(nw)
 			}
@@ -122,7 +128,7 @@ func copyReadWriteBuffer(dst io.Writer, src io.Reader, pool bufferPool) (written
 			break
 		}
 	}
-	return written, err
+	return written, spentRead, spentWrite, err
 }
 
 func (rr *rawxRequest) checksumRequired() bool {
@@ -140,10 +146,13 @@ func (rr *rawxRequest) putData(out io.Writer) (uploadInfo, error) {
 	}
 
 	ul := uploadInfo{}
-	chunkLength, err := copyReadWriteBuffer(out, in, rr.rawx.uploadBufferPool)
+	chunkLength, spentRead, spentWrite, err := copyReadWriteBuffer(out, in, rr.rawx.uploadBufferPool)
+
 	if err != nil {
 		return ul, err
 	}
+	rr.readTime = spentRead
+	rr.writeTime = spentWrite
 
 	if h != nil {
 		ul.hash = strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
@@ -540,6 +549,9 @@ func (rr *rawxRequest) serveChunk() {
 		peer:      rr.req.RemoteAddr,
 		path:      rr.req.URL.Path,
 		reqId:     rr.reqid,
+		extra:     rr.rawx.extraMetrics,
+		readTime:  rr.readTime,
+		writeTime: rr.writeTime,
 	})
 }
 

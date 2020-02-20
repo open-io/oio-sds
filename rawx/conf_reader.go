@@ -79,6 +79,7 @@ var loadedOpts = map[string]string{
 	"tls_key_file":  "tls_key_file",
 	"tls_rawx_url":  "tls_rawx_url",
 	// TODO(jfs): also implement a cachedir
+	"extra_metrics": "extra_metrics",
 }
 
 // FIXME(jfs): Schedule the removal of these misleading options

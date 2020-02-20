@@ -37,6 +37,8 @@ type rawxService struct {
 	compression  string
 
 	uploadBufferPool bufferPool
+
+	extraMetrics bool
 }
 
 type rawxRequest struct {
@@ -50,9 +52,11 @@ type rawxRequest struct {
 	chunk   chunkInfo
 
 	// for the reply's purpose
-	status   int
-	bytesIn  uint64
-	bytesOut uint64
+	status    int
+	bytesIn   uint64
+	bytesOut  uint64
+	readTime  uint64
+	writeTime uint64
 }
 
 func (rr *rawxRequest) drain() error {
