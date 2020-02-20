@@ -146,13 +146,14 @@ func (rr *rawxRequest) putData(out io.Writer) (uploadInfo, error) {
 	}
 
 	ul := uploadInfo{}
-	chunkLength, spentRead, spentWrite, err := copyReadWriteBuffer(out, in, rr.rawx.uploadBufferPool)
-
+	var (
+		err         error
+		chunkLength int64
+	)
+	chunkLength, rr.readTime, rr.writeTime, err = copyReadWriteBuffer(out, in, rr.rawx.uploadBufferPool)
 	if err != nil {
 		return ul, err
 	}
-	rr.readTime = spentRead
-	rr.writeTime = spentWrite
 
 	if h != nil {
 		ul.hash = strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
