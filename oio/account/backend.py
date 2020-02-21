@@ -24,6 +24,10 @@ from oio.common.easy_value import int_value, true_value, float_value
 from oio.common.redis_conn import RedisConnection, catch_service_errors
 
 
+ACCOUNT_KEY_PREFIX = 'account:'
+BUCKET_KEY_PREFIX = 'bucket:'
+SEGMENTS_BUCKET_SUFFIX = '+segments'
+
 EXPIRE_TIME = 60  # seconds
 
 account_fields = ['ns', 'name', 'ctime', 'containers', 'objects',
@@ -47,7 +51,53 @@ class AccountBackend(RedisConnection):
                end;
                """
 
-    lua_update_container = (lua_is_sup + """
+    lua_update_bucket_func = """
+        -- Note that bucket is the key name, not just the bucket name
+        -- (it has a prefix).
+        local update_bucket_stats = function(
+            bucket, account, mtime,
+            inc_objects, inc_bytes, inc_damaged_objects, inc_missing_chunks)
+          -- Set the bucket owner.
+          -- FIXME(FVE): do some checks instead of overwriting
+          redis.call('HSET', bucket, 'account', account)
+
+          -- Increment the counters.
+          redis.call('HINCRBY', bucket, 'objects', inc_objects)
+          redis.call('HINCRBY', bucket, 'bytes', inc_bytes)
+          redis.call('HINCRBY', bucket, 'damaged_objects', inc_damaged_objects)
+          redis.call('HINCRBY', bucket, 'missing_chunks', inc_missing_chunks)
+
+          -- Finally update the modification time.
+          redis.call('HSET', bucket, 'mtime', mtime)
+        end
+    """
+
+    # FIXME(FVE): declare local variables
+    lua_update_container = (
+        lua_is_sup +
+        lua_update_bucket_func +
+        """
+               -- KEYS[1] account name
+               -- KEYS[2] key to the container hash
+               -- KEYS[3] key to the account's container set
+               -- KEYS[4] key to the account hash
+               -- KEYS[5] key to the bucket hash
+               local bkey = KEYS[5]
+               -- ARGV[1] container name
+               -- ARGV[2] mtime
+               -- ARGV[3] dtime
+               -- ARGV[4] new object count
+               -- ARGV[5] new total size
+               -- ARGV[6] damaged objects
+               -- ARGV[7] missing chunks
+               -- ARGV[8] autocreate account?
+               -- ARGV[9] current timestamp
+               local now = ARGV[9]
+               -- ARGV[10] container key expiration time
+               -- ARGV[11] autocreate container?
+               -- ARGV[12] update bucket object count?
+               local update_bucket_object_count = ARGV[12]
+
                local account_id = redis.call('HGET', KEYS[4], 'id');
                if not account_id then
                  if ARGV[8] == 'True' then
@@ -55,7 +105,7 @@ class AccountBackend(RedisConnection):
                    redis.call('HMSET', KEYS[4], 'id', KEYS[1],
                               'bytes', 0, 'objects', 0,
                               'damaged_objects', 0, 'missing_chunks', 0,
-                              'ctime', ARGV[9]);
+                              'ctime', now);
                  else
                    return redis.error_reply('no_account');
                  end;
@@ -87,15 +137,23 @@ class AccountBackend(RedisConnection):
                end
                if objects == false then
                  objects = 0
+               else
+                 objects = tonumber(objects)
                end
                if bytes == false then
                  bytes = 0
+               else
+                 bytes = tonumber(bytes)
                end
                if damaged_objects == false then
                  damaged_objects = 0
+               else
+                 damaged_objects = tonumber(damaged_objects)
                end
                if missing_chunks == false then
                  missing_chunks = 0
+               else
+                 missing_chunks = tonumber(missing_chunks)
                end
 
                if ARGV[11] == 'False' and is_sup(dtime, mtime) then
@@ -103,10 +161,10 @@ class AccountBackend(RedisConnection):
                end;
 
                local old_mtime = mtime;
-               local inc_objects;
-               local inc_bytes;
-               local inc_damaged_objects;
-               local inc_missing_chunks;
+               local inc_objects = 0;
+               local inc_bytes = 0;
+               local inc_damaged_objects = 0;
+               local inc_missing_chunks = 0;
 
                if not is_sup(ARGV[3],dtime) and not is_sup(ARGV[2],mtime) then
                  return redis.error_reply('no_update_needed');
@@ -120,10 +178,19 @@ class AccountBackend(RedisConnection):
                  dtime = ARGV[3];
                end;
                if is_sup(dtime,mtime) then
-                 inc_objects = -objects;
-                 inc_bytes = -bytes;
-                 inc_damaged_objects = -damaged_objects
-                 inc_missing_chunks = -missing_chunks;
+                 -- Protect against "minus zero".
+                 if objects ~= 0 then
+                   inc_objects = -objects;
+                 end
+                 if bytes ~= 0 then
+                   inc_bytes = -bytes;
+                 end
+                 if damaged_objects ~= 0 then
+                   inc_damaged_objects = -damaged_objects
+                 end
+                 if missing_chunks ~= 0 then
+                   inc_missing_chunks = -missing_chunks;
+                 end
                  redis.call('HMSET', KEYS[2],
                             'bytes', 0, 'objects', 0,
                             'damaged_objects', 0, 'missing_chunks', 0);
@@ -161,6 +228,18 @@ class AccountBackend(RedisConnection):
                  redis.call('HINCRBY', KEYS[4], 'missing_chunks',
                             inc_missing_chunks);
                end;
+
+               if bkey ~= 'False' then
+                 -- For container holding MPU segments, we do not want to count
+                 -- each segment as an object. But we still want to consider
+                 -- their size.
+                 if update_bucket_object_count ~= 'True' then
+                   inc_objects = 0
+                 end
+                 update_bucket_stats(bkey, account_id, now,
+                                     inc_objects, inc_bytes,
+                                     inc_damaged_objects, inc_missing_chunks)
+               end
                """)
 
     lua_refresh_account = """
@@ -261,6 +340,17 @@ class AccountBackend(RedisConnection):
         self.script_flush_account = self.register_script(
             self.lua_flush_account)
 
+        self._account_prefix = conf.get('account_prefix', ACCOUNT_KEY_PREFIX)
+        self._bucket_prefix = conf.get('bucket_prefix', BUCKET_KEY_PREFIX)
+
+    def akey(self, account):
+        """Build the key of an account description"""
+        return self._account_prefix + account
+
+    def bkey(self, bucket):
+        """Build the key of a bucket description"""
+        return self._bucket_prefix + bucket
+
     @staticmethod
     def ckey(account, name):
         """Build the key of a container description"""
@@ -274,13 +364,13 @@ class AccountBackend(RedisConnection):
         if conn.hget('accounts:', account_id):
             return None
 
-        lock = self.acquire_lock_with_timeout('account:%s' % account_id, 1)
+        lock = self.acquire_lock_with_timeout(self.akey(account_id), 1)
         if not lock:
             return None
 
         pipeline = conn.pipeline(True)
         pipeline.hset('accounts:', account_id, 1)
-        pipeline.hmset('account:%s' % account_id, {
+        pipeline.hmset(self.akey(account_id), {
             'id': account_id,
             'objects': 0,
             'bytes': 0,
@@ -289,7 +379,7 @@ class AccountBackend(RedisConnection):
             'ctime': Timestamp().normal
         })
         pipeline.execute()
-        self.release_lock('account:%s' % account_id, lock)
+        self.release_lock(self.akey(account_id), lock)
         return account_id
 
     @catch_service_errors
@@ -297,12 +387,12 @@ class AccountBackend(RedisConnection):
         conn = self.conn
         if not account_id:
             return None
-        account_id = conn.hget('account:%s' % account_id, 'id')
+        account_id = conn.hget(self.akey(account_id), 'id')
 
         if not account_id:
             return None
 
-        lock = self.acquire_lock_with_timeout('account:%s' % account_id, 1)
+        lock = self.acquire_lock_with_timeout(self.akey(account_id), 1)
         if not lock:
             return None
 
@@ -314,10 +404,10 @@ class AccountBackend(RedisConnection):
         pipeline = conn.pipeline(True)
         pipeline.delete('metadata:%s' % account_id)
         pipeline.delete('containers:%s' % account_id)
-        pipeline.delete('account:%s' % account_id)
+        pipeline.delete(self.akey(account_id))
         pipeline.hdel('accounts:', account_id)
         pipeline.execute()
-        self.release_lock('account:%s' % account_id, lock)
+        self.release_lock(self.akey(account_id), lock)
         return True
 
     @catch_service_errors
@@ -325,7 +415,7 @@ class AccountBackend(RedisConnection):
         conn = self.conn_slave
         if not account_id:
             return None
-        account_id = conn.hget('account:%s' % account_id, 'id')
+        account_id = conn.hget(self.akey(account_id), 'id')
 
         if not account_id:
             return None
@@ -338,7 +428,7 @@ class AccountBackend(RedisConnection):
         conn = self.conn
         if not account_id:
             return None
-        _account_id = conn.hget('account:%s' % account_id, 'id')
+        _account_id = conn.hget(self.akey(account_id), 'id')
 
         if not _account_id:
             if self.autocreate:
@@ -361,13 +451,13 @@ class AccountBackend(RedisConnection):
         conn = self.conn_slave
         if not account_id:
             return None
-        account_id = conn.hget('account:%s' % account_id, 'id')
+        account_id = conn.hget(self.akey(account_id), 'id')
 
         if not account_id:
             return None
 
         pipeline = conn.pipeline(False)
-        pipeline.hgetall('account:%s' % account_id)
+        pipeline.hgetall(self.akey(account_id))
         pipeline.zcard('containers:%s' % account_id)
         pipeline.hgetall('metadata:%s' % account_id)
         data = pipeline.execute()
@@ -388,8 +478,8 @@ class AccountBackend(RedisConnection):
     def update_container(self, account_id, name, mtime, dtime,
                          object_count, bytes_used,
                          damaged_objects, missing_chunks,
+                         bucket_name=None,
                          autocreate_account=None, autocreate_container=True):
-        conn = self.conn
         if not account_id or not name:
             raise BadRequest("Missing account or container")
 
@@ -413,15 +503,26 @@ class AccountBackend(RedisConnection):
         if missing_chunks is None:
             missing_chunks = 0
 
+        # If no bucket name is provided, set it to 'False'
+        # (we cannot pass None to the Lua script).
+        bucket_key = self.bkey(bucket_name) if bucket_name else str(False)
+        now = Timestamp().normal
+        # With some sharding middlewares, the suffix may be
+        # in the middle of the container name.
+        update_bucket_object_count = SEGMENTS_BUCKET_SUFFIX not in name
+
         keys = [account_id, AccountBackend.ckey(account_id, name),
                 ("containers:%s" % (account_id)),
-                ("account:%s" % (account_id))]
+                self.akey(account_id),
+                bucket_key]
         args = [name, mtime, dtime, object_count, bytes_used,
                 damaged_objects, missing_chunks,
-                str(autocreate_account), Timestamp().normal, EXPIRE_TIME,
-                str(autocreate_container)]
+                str(autocreate_account), now, EXPIRE_TIME,
+                str(autocreate_container),
+                str(update_bucket_object_count)]
         try:
-            self.script_update_container(keys=keys, args=args, client=conn)
+            self.script_update_container(
+                keys=keys, args=args, client=self.conn)
         except redis.exceptions.ResponseError as exc:
             if str(exc) == "no_account":
                 raise NotFound("Account %s not found" % account_id)
@@ -539,7 +640,7 @@ class AccountBackend(RedisConnection):
         if not account_id:
             raise BadRequest("Missing account")
 
-        keys = ["account:%s" % account_id,
+        keys = [self.akey(account_id),
                 "containers:%s" % account_id,
                 "container:%s:" % account_id]
 
@@ -556,7 +657,7 @@ class AccountBackend(RedisConnection):
         if not account_id:
             raise BadRequest("Missing account")
 
-        keys = ["account:%s" % account_id,
+        keys = [self.akey(account_id),
                 "containers:%s" % account_id,
                 "container:%s:" % account_id]
 
