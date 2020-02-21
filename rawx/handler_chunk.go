@@ -539,6 +539,7 @@ func (rr *rawxRequest) serveChunk() {
 		}
 		spent = IncrementStatReqOther(rr)
 	}
+	Monitor(rr.req.Method, rr.status, "chunk")
 
 	LogHttp(AccessLogEvent{
 		status:    rr.status,

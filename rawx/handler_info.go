@@ -59,6 +59,7 @@ func (rr *rawxRequest) serveInfo() {
 		rr.replyCode(http.StatusMethodNotAllowed)
 		spent = IncrementStatReqOther(rr)
 	}
+	Monitor(rr.req.Method, rr.status, "info")
 	if isVerbose() {
 		LogHttp(AccessLogEvent{
 			status:    rr.status,

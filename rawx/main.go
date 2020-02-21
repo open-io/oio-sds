@@ -34,6 +34,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var xattrBufferPool = newBufferPool(xattrBufferTotalSizeDefault, xattrBufferSizeDefault)
@@ -218,10 +220,14 @@ func main() {
 	toWrite := opts.getInt("timeout_write_reply", timeoutWrite)
 	toIdle := opts.getInt("timeout_idle", timeoutIdle)
 
+	mux := http.NewServeMux()
+	mux.Handle("/", &rawx)
+	mux.Handle("/metrics", promhttp.Handler())
+
 	/* need to be duplicated for HTTP and HTTPS */
 	srv := http.Server{
 		Addr:              rawx.url,
-		Handler:           &rawx,
+		Handler:           mux,
 		TLSConfig:         nil,
 		ReadHeaderTimeout: time.Duration(toReadHeader) * time.Second,
 		ReadTimeout:       time.Duration(toReadRequest) * time.Second,
@@ -233,7 +239,7 @@ func main() {
 
 	tlsSrv := http.Server{
 		Addr:              rawx.tlsUrl,
-		Handler:           &rawx,
+		Handler:           mux,
 		TLSConfig:         nil,
 		ReadHeaderTimeout: time.Duration(toReadHeader) * time.Second,
 		ReadTimeout:       time.Duration(toReadRequest) * time.Second,
