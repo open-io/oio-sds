@@ -108,7 +108,10 @@ def http_connect(host, method, path, headers=None, query_string=None):
             path = path.encode('utf-8')
         except UnicodeError as e:
             logger.exception('ERROR encoding to UTF-8: %s', text_type(e))
-    path = quote(b'/' + path)
+    if path.startswith(b'/'):
+        path = quote(path)
+    else:
+        path = quote(b'/' + path)
     conn = CustomHttpConnection(host)
     if query_string:
         path += b'?' + query_string
