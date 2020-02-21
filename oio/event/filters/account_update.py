@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -55,6 +55,7 @@ class AccountUpdateFilter(Filter):
                 data = event.data
                 url = event.env.get('url')
                 body = dict()
+                body['bucket'] = data.get('bucket')
                 if event.event_type == EventTypes.CONTAINER_STATE:
                     body['objects'] = data.get('object-count', 0)
                     body['bytes'] = data.get('bytes-count', 0)

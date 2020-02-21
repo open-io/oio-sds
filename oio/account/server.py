@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -386,17 +386,9 @@ class Account(WerkzeugApp):
     # PUT /v1.0/account/container/update?id=<account_name>
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     #
-    # .. code-block:: json
-    #
-    #    {
-    #      "mtime": "123456789",
-    #      "dtime": "1223456789",
-    #      "name": "container name",
-    #      "objects": 0,
-    #      "bytes": 0
-    #    }
-    #
     # Update account with container-related metadata.
+    #
+    # Request example:
     #
     # .. code-block:: http
     #
@@ -406,6 +398,19 @@ class Account(WerkzeugApp):
     #    Accept: */*
     #    Content-Length: 84
     #    Content-Type: application/x-www-form-urlencoded
+    #
+    # .. code-block:: json
+    #
+    #    {
+    #      "mtime": "123456789",
+    #      "dtime": "1223456789",
+    #      "name": "user1bucket%2Ffiles",
+    #      "objects": 0,
+    #      "bytes": 0,
+    #      "bucket": "user1bucket"
+    #    }
+    #
+    # Response example:
     #
     # .. code-block:: http
     #
@@ -427,10 +432,12 @@ class Account(WerkzeugApp):
         bytes_used = data.get('bytes')
         damaged_objects = data.get('damaged_objects')
         missing_chunks = data.get('missing_chunks')
+        bucket_name = data.get('bucket')  # can be None
         # Exceptions are catched by dispatch_request
         info = self.backend.update_container(
             account_id, name, mtime, dtime,
-            object_count, bytes_used, damaged_objects, missing_chunks)
+            object_count, bytes_used, damaged_objects, missing_chunks,
+            bucket_name=bucket_name)
         result = json.dumps(info)
         return Response(result)
 
