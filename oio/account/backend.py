@@ -18,6 +18,7 @@ from urlparse import urlparse
 import re
 import redis
 import redis.sentinel
+import six
 from werkzeug.exceptions import NotFound, Conflict, BadRequest
 from oio.common.timestamp import Timestamp
 from oio.common.easy_value import int_value, true_value, float_value
@@ -26,6 +27,7 @@ from oio.common.redis_conn import RedisConnection, catch_service_errors
 
 ACCOUNT_KEY_PREFIX = 'account:'
 BUCKET_KEY_PREFIX = 'bucket:'
+BUCKET_LIST_PREFIX = 'buckets:'
 SEGMENTS_BUCKET_SUFFIX = '+segments'
 
 EXPIRE_TIME = 60  # seconds
@@ -69,6 +71,21 @@ class AccountBackend(RedisConnection):
 
           -- Finally update the modification time.
           redis.call('HSET', bucket, 'mtime', mtime)
+        end
+    """
+
+    lua_update_bucket_list = """
+        -- Key to the set of bucket of a specific account
+        local bucket_set = KEYS[1]
+        -- Actual name of the bucket
+        local bucket_name = ARGV[1]
+        -- True if the bucket has just been deleted
+        local deleted = ARGV[2]
+
+        if deleted ~= 'True' then
+          redis.call('ZADD', bucket_set, 0, bucket_name);
+        else
+          redis.call('ZREM', bucket_set, bucket_name);
         end
     """
 
@@ -335,6 +352,8 @@ class AccountBackend(RedisConnection):
         self.autocreate = true_value(conf.get('autocreate', 'true'))
         self.script_update_container = self.register_script(
             self.lua_update_container)
+        self.script_update_bucket_list = self.register_script(
+            self.lua_update_bucket_list)
         self.script_refresh_account = self.register_script(
             self.lua_refresh_account)
         self.script_flush_account = self.register_script(
@@ -342,6 +361,8 @@ class AccountBackend(RedisConnection):
 
         self._account_prefix = conf.get('account_prefix', ACCOUNT_KEY_PREFIX)
         self._bucket_prefix = conf.get('bucket_prefix', BUCKET_KEY_PREFIX)
+        self._bucket_list_prefix = conf.get('bucket_list_prefix',
+                                            BUCKET_LIST_PREFIX)
 
     def akey(self, account):
         """Build the key of an account description"""
@@ -351,10 +372,14 @@ class AccountBackend(RedisConnection):
         """Build the key of a bucket description"""
         return self._bucket_prefix + bucket
 
+    def blistkey(self, account):
+        """Build the key of an account's bucket list"""
+        return self._bucket_list_prefix + account
+
     @staticmethod
     def ckey(account, name):
         """Build the key of a container description"""
-        return 'container:%s:%s' % (account, unicode(name))
+        return 'container:%s:%s' % (account, six.text_type(name))
 
     @catch_service_errors
     def create_account(self, account_id):
@@ -494,6 +519,7 @@ class AccountBackend(RedisConnection):
             dtime = '0'
         else:
             dtime = Timestamp(dtime).normal
+        deleted = float(dtime) > float(mtime)
         if object_count is None:
             object_count = 0
         if bytes_used is None:
@@ -520,15 +546,23 @@ class AccountBackend(RedisConnection):
                 str(autocreate_account), now, EXPIRE_TIME,
                 str(autocreate_container),
                 str(update_bucket_object_count)]
+        pipeline = self.conn.pipeline(True)
         try:
             self.script_update_container(
-                keys=keys, args=args, client=self.conn)
+                keys=keys, args=args, client=pipeline)
+            # Only execute when the main shard is created/deleted.
+            if bucket_name == name:
+                self.script_update_bucket_list(
+                    keys=[self.blistkey(account_id)],
+                    args=[bucket_name, str(deleted)],
+                    client=pipeline)
+            pipeline.execute()
         except redis.exceptions.ResponseError as exc:
-            if str(exc) == "no_account":
+            if six.text_type(exc).endswith("no_account"):
                 raise NotFound("Account %s not found" % account_id)
-            if str(exc) == "no_container":
+            if six.text_type(exc).endswith("no_container"):
                 raise NotFound("Container %s not found" % name)
-            elif str(exc) == "no_update_needed":
+            elif six.text_type(exc).endswith("no_update_needed"):
                 raise Conflict("No update needed, "
                                "event older than last container update")
             else:
