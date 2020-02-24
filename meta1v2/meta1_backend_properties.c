@@ -67,10 +67,10 @@ __del_container_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	GError *err = NULL;
 	gchar **p_name;
 
-	if (!names || !*names)
+	if (!names || !*names) {
 		__exec_cid(sq3->db, "DELETE FROM properties WHERE cid = ?", oio_url_get_id(url));
-	else {
-		for (p_name=names; !err && p_name && *p_name ;p_name++) {
+	} else {
+		for (p_name = names; !err && *p_name; p_name++) {
 			err = __delete_property(sq3, url, *p_name);
 			if (err)
 				return err;
