@@ -74,6 +74,10 @@ var loadedOpts = map[string]string{
 	"headers_buffer_size":  "headers_buffer_size",
 
 	"events": "events",
+
+	"tls_cert_file": "tls_cert_file",
+	"tls_key_file":  "tls_key_file",
+	"tls_rawx_url":  "tls_rawx_url",
 	// TODO(jfs): also implement a cachedir
 }
 

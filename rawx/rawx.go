@@ -27,6 +27,7 @@ import (
 type rawxService struct {
 	ns           string
 	url          string
+	tlsUrl       string
 	path         string
 	id           string
 	repo         chunkRepository
@@ -131,7 +132,7 @@ func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 		rawxreq.reqid = "-"
 	}
 
-	if len(req.Host) > 0 && (req.Host != rawx.id && req.Host != rawx.url) {
+	if len(req.Host) > 0 && (req.Host != rawx.id && req.Host != rawx.url && req.Host != rawx.tlsUrl) {
 		rawxreq.replyCode(http.StatusTeapot)
 	} else {
 		for _dslash(req.URL.Path) {

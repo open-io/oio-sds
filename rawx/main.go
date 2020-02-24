@@ -145,6 +145,7 @@ func main() {
 	rawx := rawxService{
 		ns:           namespace,
 		url:          rawxURL,
+		tlsUrl:       opts["tls_rawx_url"],
 		path:         chunkrepo.sub.root,
 		id:           rawxID,
 		repo:         chunkrepo,
@@ -216,6 +217,7 @@ func main() {
 	toWrite := opts.getInt("timeout_write_reply", timeoutWrite)
 	toIdle := opts.getInt("timeout_idle", timeoutIdle)
 
+	/* need to be duplicated for HTTP and HTTPS */
 	srv := http.Server{
 		Addr:              rawx.url,
 		Handler:           &rawx,
@@ -228,10 +230,24 @@ func main() {
 		MaxHeaderBytes: opts.getInt("headers_buffer_size", 65536),
 	}
 
+	tlsSrv := http.Server{
+		Addr:              rawx.tlsUrl,
+		Handler:           &rawx,
+		TLSConfig:         nil,
+		ReadHeaderTimeout: time.Duration(toReadHeader) * time.Second,
+		ReadTimeout:       time.Duration(toReadRequest) * time.Second,
+		WriteTimeout:      time.Duration(toWrite) * time.Second,
+		IdleTimeout:       time.Duration(toIdle) * time.Second,
+		// The default is at 1MiB but the RAWX never needs that
+		MaxHeaderBytes: opts.getInt("headers_buffer_size", 65536),
+	}
+
 	keepalive := opts.getBool("keepalive", configDefaultHttpKeepalive)
 	srv.SetKeepAlivesEnabled(keepalive)
+	tlsSrv.SetKeepAlivesEnabled(keepalive)
 
 	installSigHandlers(&srv)
+	installSigHandlers(&tlsSrv)
 
 	if !*servicingPtr {
 		if err := chunkrepo.lock(namespace, rawxID); err != nil {
@@ -243,11 +259,14 @@ func main() {
 		srv.ConnState = func(cnx net.Conn, state http.ConnState) {
 			LogDebug("%v %v %v", cnx.LocalAddr(), cnx.RemoteAddr(), state)
 		}
+		tlsSrv.ConnState = func(cnx net.Conn, state http.ConnState) {
+			LogDebug("%v %v %v", cnx.LocalAddr(), cnx.RemoteAddr(), state)
+		}
 	}
 
 	rawx.notifier.Start()
 
-	if err := srv.ListenAndServe(); err != nil {
+	if err := Run(&srv, &tlsSrv, opts); err != nil {
 		LogWarning("HTTP Server exiting: %v", err)
 	}
 

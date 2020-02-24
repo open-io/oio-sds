@@ -34,6 +34,11 @@ func doGetInfo(rr *rawxRequest) {
 		bb.WriteString(rr.rawx.id)
 		bb.WriteRune('\n')
 	}
+	if rr.rawx.tlsUrl != "" {
+		bb.WriteString("url_tls ")
+		bb.WriteString(rr.rawx.tlsUrl)
+		bb.WriteRune('\n')
+	}
 
 	rr.replyCode(http.StatusOK)
 	rr.rep.Write(bb.Bytes())
