@@ -206,6 +206,10 @@ grid_compression ${COMPRESSION}
 #timeout_write_reply 30
 #timeout_idle 10
 #headers_buffer_size 32768
+
+${USE_TLS}tls_cert_file ${SRCDIR}/${TLS_CERT_FILE}
+${USE_TLS}tls_key_file ${SRCDIR}/${TLS_KEY_FILE}
+${USE_TLS}tls_rawx_url ${IP}:${TLS_PORT}
 """
 
 template_wsgi_service_host = """
@@ -1066,6 +1070,7 @@ SPOOLDIR = SDSDIR + '/spool'
 WATCHDIR = SDSDIR + '/conf/watch'
 TMPDIR = '/tmp'
 CODEDIR = '@CMAKE_INSTALL_PREFIX@'
+SRCDIR = '@CMAKE_CURRENT_SOURCE_DIR@'
 LIBDIR = CODEDIR + '/@LD_LIBDIR@'
 PATH = HOME+"/.local/bin:@CMAKE_INSTALL_PREFIX@/bin:/usr/sbin"
 PYTHON_VERSION = "python" + ".".join(str(x) for x in sys.version_info[:2])
@@ -1096,6 +1101,9 @@ APPLICATION_KEY = 'application_key'
 KEY_FILE = 'key_file'
 META_HEADER = 'x-oio-chunk-meta'
 COVERAGE = os.getenv('PYTHON_COVERAGE')
+
+TLS_CERT_FILE = None
+SSK_KEY_FILE = None
 
 defaults = {
     'NS': 'OPENIO',
@@ -1208,6 +1216,9 @@ def generate(options):
 
     compression = options.get("compression", defaults["compression"])
 
+    TLS_CERT_FILE = options.get('tls_cert_file')
+    TLS_KEY_FILE = options.get('tls_key_file')
+
     key_file = options.get(KEY_FILE, CFGDIR + '/' + 'application_keys.cfg')
     ENV = dict(ZK_CNXSTRING=options.get('ZK'),
                NS=ns,
@@ -1223,6 +1234,7 @@ def generate(options):
                SPOOLDIR=SPOOLDIR,
                LOGDIR=LOGDIR,
                CODEDIR=CODEDIR,
+               SRCDIR=SRCDIR,
                WATCHDIR=WATCHDIR,
                UID=str(os.geteuid()),
                GID=str(os.getgid()),
@@ -1250,7 +1262,9 @@ def generate(options):
                            else '',
                WANT_SERVICE_ID=want_service_id,
                WEBHOOK=WEBHOOK,
-               WEBHOOK_ENDPOINT=WEBHOOK_ENDPOINT)
+               WEBHOOK_ENDPOINT=WEBHOOK_ENDPOINT,
+               TLS_CERT_FILE=TLS_CERT_FILE,
+               TLS_KEY_FILE=TLS_KEY_FILE)
 
     def merge_env(add):
         env = dict(ENV)
@@ -1308,6 +1322,8 @@ def generate(options):
             env['LOC'] = build_location(env['IP'], env['SRVNUM'])
         if 'PORT' in env:
             out['addr'] = '%s:%s' % (env['IP'], env['PORT'])
+        if 'TLS_PORT' in env:
+            out['tls_addr'] = '%s:%s' % (env['IP'], env['TLS_PORT'])
         if 'VOLUME' in env:
             out['path'] = env['VOLUME']
         # For some types of services, SERVICE_ID is always there, but we do
@@ -1498,6 +1514,14 @@ def generate(options):
                                     else 'disabled')
                          })
             env['SERVICE_ID'] = "{NS}-{SRVTYPE}-{SRVNUM}".format(**env)
+            if options.get('use_tls', False):
+                env['TLS_CERT_FILE'] = ENV['TLS_CERT_FILE']
+                env['TLS_KEY_FILE'] = ENV['TLS_KEY_FILE']
+                env['TLS_PORT'] = next(ports)
+                env['USE_TLS'] = ''
+            else:
+                env['USE_TLS'] = '#'
+
             add_service(env)
             # gridinit (rawx)
             tpl = Template(template_gridinit_rawx % template_gridinit_rawx_command_options)
@@ -1759,6 +1783,7 @@ def generate(options):
     final_conf['with_service_id'] = options['with_service_id']
     final_conf['random_service_id'] = bool(options['random_service_id'])
     final_conf['webhook'] = WEBHOOK_ENDPOINT
+    final_conf['use_tls'] = bool(options.get('use_tls'))
     with open('{CFGDIR}/test.yml'.format(**ENV), 'w+') as f:
         f.write(yaml.dump(final_conf))
     return final_conf
