@@ -24,7 +24,8 @@ from oio.event.filters.base import Filter
 
 CONTAINER_EVENTS = [
         EventTypes.CONTAINER_STATE,
-        EventTypes.CONTAINER_NEW]
+        EventTypes.CONTAINER_NEW,
+        EventTypes.CONTAINER_DELETED]
 
 
 class AccountUpdateFilter(Filter):
@@ -64,6 +65,8 @@ class AccountUpdateFilter(Filter):
                     body['mtime'] = mtime
                 elif event.event_type == EventTypes.CONTAINER_NEW:
                     body['mtime'] = mtime
+                elif event.event_type == EventTypes.CONTAINER_DELETED:
+                    body['dtime'] = mtime
                 self.account.container_update(
                     url.get('account'), url.get('user'), body,
                     connection_timeout=self.connection_timeout,
@@ -79,6 +82,8 @@ class AccountUpdateFilter(Filter):
                 m2_services = [x for x in new_services
                                if x.get('type') == 'meta2']
                 if not m2_services:
+                    # FIXME(FVE): this block may not be needed anymore,
+                    # since we brought back EventTypes.CONTAINER_DELETED.
                     # No service in charge, container has been deleted
                     self.account.container_update(
                         url.get('account'), url.get('user'),
