@@ -65,6 +65,8 @@ class Account(WerkzeugApp):
                  methods=['PUT', 'POST']),  # FIXME(adu) only PUT
             Rule('/v1.0/account/show', endpoint='account_show',
                  methods=['GET']),
+            Rule('/v1.0/account/buckets', endpoint='account_buckets',
+                 methods=['GET']),
             Rule('/v1.0/account/containers', endpoint='account_containers',
                  methods=['GET']),
             Rule('/v1.0/account/refresh', endpoint='account_refresh',
@@ -187,7 +189,7 @@ class Account(WerkzeugApp):
     # }}ACCT
     @access_log
     def on_account_list(self, req):
-        accounts = self.backend.list_account()
+        accounts = self.backend.list_accounts()
         if accounts is None:
             return NotFound('No account found')
         return Response(json.dumps(accounts), mimetype='text/json')
@@ -317,6 +319,89 @@ class Account(WerkzeugApp):
         if raw is not None:
             return Response(json.dumps(raw), mimetype='text/json')
         return NotFound('Account not found')
+
+    # ACCT{{
+    # GET /v1.0/account/buckets?id=<account_name>
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    #
+    # Get information about the buckets belonging to the specified account.
+    #
+    # Sample request:
+    #
+    # .. code-block:: http
+    #
+    #    GET /v1.0/account/buckets?id=AUTH_demo HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #
+    # Sample response:
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 200 OK
+    #    Server: gunicorn/19.9.0
+    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Connection: keep-alive
+    #    Content-Type: text/plain; charset=utf-8
+    #    Content-Length: 122
+    #
+    # .. code-block:: json
+    #
+    #    {
+    #      "buckets": 3,
+    #      "bytes": 132573,
+    #      "ctime": "1582628089.30237",
+    #      "objects": 3,
+    #      "listing": [
+    #        {
+    #            "bytes": 132573,
+    #            "mtime": 1582641887.75408,
+    #            "name": "bucket0",
+    #            "objects": 3
+    #        },
+    #        {
+    #            "bytes": 0,
+    #            "mtime": 1582641712.44969,
+    #            "name": "bucket1",
+    #            "objects": 0
+    #        },
+    #        {
+    #            "bytes": 0,
+    #            "mtime": 1582641715.19412,
+    #            "name": "bucket2",
+    #            "objects": 0
+    #        }
+    #      ],
+    #      "id": "AUTH_demo",
+    #      "containers": 5,
+    #      "metadata": {}
+    #    }
+    #
+    # }}ACCT
+    @access_log
+    def on_account_buckets(self, req):
+        account_id = self._get_account_id(req)
+
+        info = self.backend.info_account(account_id)
+        if not info:
+            return NotFound('Account not found')
+
+        marker = req.args.get('marker', '')
+        end_marker = req.args.get('end_marker', '')
+        prefix = req.args.get('prefix', '')
+        limit = int(req.args.get('limit', '1000'))
+
+        bucket_list, next_marker = self.backend.list_buckets(
+            account_id, limit=limit, marker=marker, end_marker=end_marker,
+            prefix=prefix)
+
+        info['listing'] = bucket_list
+        info['truncated'] = next_marker is not None
+        if next_marker is not None:
+            info['next_marker'] = next_marker
+        result = json.dumps(info)
+        return Response(result, mimetype='text/json')
 
     # ACCT{{
     # GET /v1.0/account/containers?id=<account_name>

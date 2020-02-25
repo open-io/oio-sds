@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -159,6 +159,33 @@ class AccountClient(HttpApi):
         """
         data = json.dumps({"metadata": metadata, "to_delete": to_delete})
         self.account_request(account, 'PUT', 'update', data=data, **kwargs)
+
+    def bucket_list(self, account, limit=None, marker=None,
+                    prefix=None, **kwargs):
+        """
+        Get the list of buckets of an account.
+
+        :param account: account from which to get the bucket list
+        :type account: `str`
+        :keyword limit: maximum number of results to return
+        :type limit: `int`
+        :keyword marker: name of the bucket from where to start the listing
+        :type marker: `str`
+        :keyword prefix:
+        :rtype: `dict` with 'ctime' (`float`), 'buckets' (`int`),
+            'bytes' (`int`), 'objects' (`int`), 'containers' (`int`),
+            'id' (`str`), 'metadata' (`dict`), 'listing' (`list`),
+            'truncated' and 'next_marker'.
+            'listing' contains dicts of container metadata (name,
+            number of objects, number of bytes and modification time).
+         """
+        params = {"id": account,
+                  "limit": limit,
+                  "marker": marker,
+                  "prefix": prefix}
+        _resp, body = self.account_request(account, 'GET', 'buckets',
+                                           params=params, **kwargs)
+        return body
 
     def container_list(self, account, limit=None, marker=None,
                        end_marker=None, prefix=None, delimiter=None,

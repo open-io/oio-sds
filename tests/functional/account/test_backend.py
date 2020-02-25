@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -82,7 +82,7 @@ class TestAccountBackend(BaseTestCase):
         # Create and check if in list
         account_id = 'test_list'
         self.backend.create_account(account_id)
-        account_list = self.backend.list_account()
+        account_list = self.backend.list_accounts()
         self.assertTrue(account_id in account_list)
 
         # Check the result of a nonexistent account
