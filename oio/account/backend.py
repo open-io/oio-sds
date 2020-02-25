@@ -28,6 +28,7 @@ from oio.common.redis_conn import RedisConnection, catch_service_errors
 ACCOUNT_KEY_PREFIX = 'account:'
 BUCKET_KEY_PREFIX = 'bucket:'
 BUCKET_LIST_PREFIX = 'buckets:'
+CONTAINER_LIST_PREFIX = 'containers:'
 SEGMENTS_BUCKET_SUFFIX = '+segments'
 
 EXPIRE_TIME = 60  # seconds
@@ -363,6 +364,8 @@ class AccountBackend(RedisConnection):
         self._bucket_prefix = conf.get('bucket_prefix', BUCKET_KEY_PREFIX)
         self._bucket_list_prefix = conf.get('bucket_list_prefix',
                                             BUCKET_LIST_PREFIX)
+        self._container_list_prefix = conf.get('container_list_prefix',
+                                               CONTAINER_LIST_PREFIX)
 
     def akey(self, account):
         """Build the key of an account description"""
@@ -380,6 +383,10 @@ class AccountBackend(RedisConnection):
     def ckey(account, name):
         """Build the key of a container description"""
         return 'container:%s:%s' % (account, six.text_type(name))
+
+    def clistkey(self, account):
+        """Build the key of an account's container list"""
+        return self._container_list_prefix + account
 
     @catch_service_errors
     def create_account(self, account_id):
@@ -421,14 +428,14 @@ class AccountBackend(RedisConnection):
         if not lock:
             return None
 
-        num_containers = conn.zcard('containers:%s' % account_id)
+        num_containers = conn.zcard(self.clistkey(account_id))
 
         if int(num_containers) > 0:
             return False
 
         pipeline = conn.pipeline(True)
         pipeline.delete('metadata:%s' % account_id)
-        pipeline.delete('containers:%s' % account_id)
+        pipeline.delete(self.clistkey(account_id))
         pipeline.delete(self.akey(account_id))
         pipeline.hdel('accounts:', account_id)
         pipeline.execute()
@@ -483,18 +490,23 @@ class AccountBackend(RedisConnection):
 
         pipeline = conn.pipeline(False)
         pipeline.hgetall(self.akey(account_id))
-        pipeline.zcard('containers:%s' % account_id)
+        pipeline.zcard(self.blistkey(account_id))
+        pipeline.zcard(self.clistkey(account_id))
         pipeline.hgetall('metadata:%s' % account_id)
         data = pipeline.execute()
         info = data[0]
-        for r in ['bytes', 'objects', 'damaged_objects', 'missing_chunks']:
-            info[r] = int_value(info.get(r), 0)
-        info['containers'] = data[1]
-        info['metadata'] = data[2]
+        for what in ['bytes', 'objects', 'damaged_objects', 'missing_chunks']:
+            info[what] = int_value(info.get(what), 0)
+        info['buckets'] = data[1]
+        info['containers'] = data[2]
+        info['metadata'] = data[3]
         return info
 
     @catch_service_errors
-    def list_account(self):
+    def list_accounts(self):
+        """
+        Get the list of all accounts.
+        """
         conn = self.conn_slave
         accounts = conn.hkeys('accounts:')
         return accounts
@@ -538,7 +550,7 @@ class AccountBackend(RedisConnection):
         update_bucket_object_count = SEGMENTS_BUCKET_SUFFIX not in name
 
         keys = [account_id, AccountBackend.ckey(account_id, name),
-                ("containers:%s" % (account_id)),
+                self.clistkey(account_id),
                 self.akey(account_id),
                 bucket_key]
         args = [name, mtime, dtime, object_count, bytes_used,
@@ -574,16 +586,18 @@ class AccountBackend(RedisConnection):
         return not s3_buckets_only or self.buckets_pattern.match(c_id)
 
     @catch_service_errors
-    def _raw_listing(self, account_id, limit, marker=None, end_marker=None,
+    def _raw_listing(self, key, limit, marker=None, end_marker=None,
                      delimiter=None, prefix=None, s3_buckets_only=False):
         """
-        Fetch a list of tuples of containers matching the specified options.
+        Fetch a list of tuples of items matching the specified options.
         Each tuple is formed like
             [(container|prefix),
              0 *reserved for objects*,
              0 *reserved for size*,
              0 for container, 1 for prefix,
              0 *reserved for mtime*]
+        :returns: the list of results, and the marker for the next request
+            (in case the list of results is truncated)
         """
         orig_marker = marker
         results = list()
@@ -606,20 +620,27 @@ class AccountBackend(RedisConnection):
             elif prefix:
                 min_k = '[' + prefix
 
+            # Ask for one extra element, to be able to tell if the
+            # list of results is truncated.
             cnames = self.conn_slave.zrangebylex(
-                'containers:%s' % account_id, min_k, max_k,
-                0, limit - len(results))
+                key, min_k, max_k,
+                0, limit - len(results) + 1)
             if not cnames:
+                # No more items
+                marker = None
                 break
             cnames = [c.decode('utf8', errors='ignore') for c in cnames]
 
             for cname in cnames:
-                marker = cname
                 if len(results) >= limit:
+                    # Do not reset marker, there are more items
                     break
                 elif prefix and not cname.startswith(prefix):
                     beyond_prefix = True
+                    # No more items
+                    marker = None
                     break
+                marker = cname
                 if delimiter:
                     end = cname.find(delimiter, len(prefix))
                     if end > 0:
@@ -634,16 +655,56 @@ class AccountBackend(RedisConnection):
                         break
                 if self._should_be_listed(cname, s3_buckets_only):
                     results.append([cname, 0, 0, 0, 0])
-        return results
+        return results, marker
+
+    @catch_service_errors
+    def list_buckets(self, account_id, limit=1000, marker=None,
+                     end_marker=None, prefix=None):
+        """
+        Get the list of buckets of the specified account.
+
+        :returns: the list of buckets (with metadata), and the next
+            marker (in case the list is truncated).
+        """
+        raw_list, next_marker = self._raw_listing(
+            self.blistkey(account_id),
+            limit=limit, marker=marker,
+            end_marker=end_marker, prefix=prefix)
+        pipeline = self.conn_slave.pipeline(True)
+        for entry in raw_list:
+            # For real buckets (not prefixes), fetch metadata.
+            if not entry[3]:
+                pipeline.hmget(self.bkey(entry[0]),
+                               'objects', 'bytes', 'mtime')
+        res = pipeline.execute()
+
+        output = list()
+        i = 0
+        for bucket in raw_list:
+            if not bucket[3]:
+                bdict = {
+                    'name': bucket[0],
+                    'objects': int_value(res[i][0], 0),
+                    'bytes': int_value(res[i][1], 0),
+                    'mtime': float_value(res[i][2], 0.0),
+                }
+                i += 1
+            else:
+                bdict = {'prefix': bucket}
+            output.append(bdict)
+
+        return output, next_marker
 
     @catch_service_errors
     def list_containers(self, account_id, limit=1000, marker=None,
                         end_marker=None, prefix=None, delimiter=None,
                         s3_buckets_only=False):
-        raw_list = self._raw_listing(account_id, limit=limit, marker=marker,
-                                     end_marker=end_marker, prefix=prefix,
-                                     delimiter=delimiter,
-                                     s3_buckets_only=s3_buckets_only)
+        raw_list, _next_marker = self._raw_listing(
+            self.clistkey(account_id),
+            limit=limit, marker=marker,
+            end_marker=end_marker, prefix=prefix,
+            delimiter=delimiter,
+            s3_buckets_only=s3_buckets_only)
         pipeline = self.conn_slave.pipeline(True)
         # skip prefix
         for container in [entry for entry in raw_list if not entry[3]]:
@@ -675,7 +736,7 @@ class AccountBackend(RedisConnection):
             raise BadRequest("Missing account")
 
         keys = [self.akey(account_id),
-                "containers:%s" % account_id,
+                self.clistkey(account_id),
                 "container:%s:" % account_id]
 
         try:
@@ -692,7 +753,7 @@ class AccountBackend(RedisConnection):
             raise BadRequest("Missing account")
 
         keys = [self.akey(account_id),
-                "containers:%s" % account_id,
+                self.clistkey(account_id),
                 "container:%s:" % account_id]
 
         try:
