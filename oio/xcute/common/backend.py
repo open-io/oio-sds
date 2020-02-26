@@ -473,7 +473,12 @@ class XcuteBackend(RedisConnection):
         redis.call('ZREM', 'xcute:job:ids', job_id);
         redis.call('DEL', 'xcute:job:info:' .. job_id);
         redis.call('DEL', 'xcute:tasks:running:' .. job_id);
-        redis.call('HDEL', 'xcute:locks', lock);
+
+        local lock_job_id = redis.call('HGET', 'xcute:locks', lock);
+
+        if lock_job_id == job_id then
+            redis.call('HDEL', 'xcute:locks', lock);
+        end;
         """
 
     def __init__(self, conf, logger=None):
