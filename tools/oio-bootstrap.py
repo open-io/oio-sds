@@ -335,6 +335,7 @@ host: ${IP}
 port: ${PORT}
 type: rawx
 location: ${LOC}
+${USE_TLS}tls: ${IP}:${TLS_PORT}
 checks:
     - {type: http, uri: /info}
 slots:
@@ -1101,9 +1102,8 @@ APPLICATION_KEY = 'application_key'
 KEY_FILE = 'key_file'
 META_HEADER = 'x-oio-chunk-meta'
 COVERAGE = os.getenv('PYTHON_COVERAGE')
-
 TLS_CERT_FILE = None
-SSK_KEY_FILE = None
+TLS_KEY_FILE = None
 
 defaults = {
     'NS': 'OPENIO',
