@@ -77,15 +77,16 @@ class ServiceWatcher(object):
             'addr': '%s:%s' % (self.service['host'], self.service['port']),
             'score': 0,
             'tags': {}}
-        if self.service.get('location', None):
-            self.service_definition['tags']['tag.loc'] = \
-                    self.service['location']
         if self.service.get('slots', None):
             self.service_definition['tags']['tag.slots'] = \
                     ','.join(self.service['slots'])
-        if self.service.get('service_id', None):
-            self.service_definition['tags']['tag.service_id'] = \
-                self.service['service_id']
+        for name, tag in (('location', 'tag.loc'),
+                          ('service_id', 'tag.service_id'),
+                          ('tls', 'tag.tls')):
+            if self.service.get(name):
+                self.service_definition['tags'][tag] = \
+                    self.service[name]
+
         self.service_checks = list()
         self.service_stats = list()
         self.init_checkers(service)
