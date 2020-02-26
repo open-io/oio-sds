@@ -15,14 +15,12 @@
 
 from collections import Counter
 
-from oio.common.easy_value import boolean_value
-from oio.common.utils import cid_from_name
 from oio.directory.meta2 import Meta2Database
 from oio.rdir.client import RdirClient
 from oio.xcute.common.job import XcuteJob, XcuteTask
 
 
-class ContainerMoveTask(XcuteTask):
+class Meta2DecommissionTask(XcuteTask):
 
     def __init__(self, conf, job_params, logger=None):
         super(ContainerMoveTask, self).__init__(
@@ -52,75 +50,44 @@ class ContainerMoveTask(XcuteTask):
         return resp
 
 
-class ContainerMoveJob(XcuteJob):
+class Meta2DecommissionJob(XcuteJob):
 
-    JOB_TYPE = 'container-move'
-    TASK_CLASS = ContainerMoveTask
+    JOB_TYPE = 'meta2-decommission'
+    TASK_CLASS = Meta2DecommissionTask
 
     DEFAULT_IS_CID = False
 
     @classmethod
     def sanitize_params(cls, job_params):
         sanitized_job_params, _ = super(
-            ContainerMoveJob, cls).sanitize_params(job_params)
+            Meta2DecommissionJob, cls).sanitize_params(job_params)
 
         src = job_params.get('service_id')
         if not src:
             raise ValueError('Missing source meta2')
         sanitized_job_params['service_id'] = src
 
-        containers = job_params.get('containers')
-        if containers:
-            containers = containers.split(',')
-        sanitized_job_params['containers'] = containers
-
-        is_cid = boolean_value(
-            job_params.get('is_cid'),
-            cls.DEFAULT_IS_CID)
-        sanitized_job_params['is_cid'] = is_cid
-
-        account = job_params.get('account')
-        if containers is not None and not is_cid and account is None:
-            raise ValueError(
-                'Missing account (must be given when `is_cid` is not set)')
-        sanitized_job_params['account'] = account
-
         sanitized_job_params['dst'] = job_params.get('dst')
 
         return sanitized_job_params, 'meta2/%s' % src
 
     def __init__(self, conf, logger=None):
-        super(ContainerMoveJob, self).__init__(conf, logger=logger)
+        super(Meta2DecommissionJob, self).__init__(conf, logger=logger)
         self.rdir_client = RdirClient(conf, logger=logger)
 
     def get_tasks(self, job_params, marker=None):
         src = job_params['service_id']
-        containers = job_params['containers']
-        is_cid = job_params['is_cid']
-        account = job_params['account']
+        containers = self._containers_from_rdir(src, marker)
 
-        if containers is None:
-            containers_it = self._containers_from_rdir(src, marker)
-        else:
-            containers_it = \
-                self._containers_from_list(containers, marker, is_cid, account)
-
-        for marker, container_id in containers_it:
+        for marker, container_id in containers:
             yield marker, dict(container_id=container_id)
 
     def get_total_tasks(self, job_params, marker=None):
-        containers = job_params['containers']
-
-        if containers is not None:
-            yield '', len(containers)
-
-            return
-
         src = job_params['service_id']
-        containers_it = self._containers_from_rdir(src, marker)
+        containers = self._containers_from_rdir(src, marker)
 
         i = 0
-        for i, (marker, _) in enumerate(containers_it, 1):
+        for i, (marker, _) in enumerate(containers, 1):
             if i % 1000 == 0:
                 yield marker, 1000
 
@@ -129,19 +96,6 @@ class ContainerMoveJob(XcuteJob):
             return
 
         yield marker, remaining
-
-    @staticmethod
-    def _containers_from_list(containers, marker, is_cid, account):
-        marker_index = -1
-        if marker is not None:
-            marker_index = containers.index(marker)
-
-        for container in containers[marker_index+1:]:
-            container_id = container
-            if not is_cid:
-                container_id = cid_from_name(account, container)
-
-            yield container, container_id
 
     def _containers_from_rdir(self, src, marker):
         containers = self.rdir_client.meta2_index_fetch_all(src, marker=marker)

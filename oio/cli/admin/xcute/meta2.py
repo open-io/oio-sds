@@ -21,7 +21,7 @@ from oio.xcute.jobs.meta2_rebuilder import Meta2RebuildJob
 
 class Meta2Rebuild(SingleServiceCommandMixin, ShowOne):
     """
-    Rebuild containers that were on the specified service.
+    Rebuild bases that were on the specified service.
     """
 
     @property
@@ -37,8 +37,8 @@ class Meta2Rebuild(SingleServiceCommandMixin, ShowOne):
         SingleServiceCommandMixin.patch_parser(self, parser)
 
         parser.add_argument(
-            '--containers-per-second', type=int,
-            help='Max chunks per second. '
+            '--bases-per-second', type=int,
+            help='Max bases per second. '
                  '(default=%d)'
                  % Meta2RebuildJob.DEFAULT_TASKS_PER_SECOND)
         parser.add_argument(
@@ -59,7 +59,7 @@ class Meta2Rebuild(SingleServiceCommandMixin, ShowOne):
             'rdir_fetch_limit': parsed_args.rdir_fetch_limit,
         }
         job_config = {
-            'tasks_per_second': parsed_args.containers_per_second,
+            'tasks_per_second': parsed_args.bases_per_second,
             'params': job_params
         }
         job_info = self.xcute.job_create(
@@ -86,8 +86,8 @@ class Meta2Decommission(SingleServiceCommandMixin, ShowOne):
         SingleServiceCommandMixin.patch_parser(self, parser)
 
         parser.add_argument(
-            '--containers-per-second', type=int,
-            help='Max containers per second. '
+            '--bases-per-second', type=int,
+            help='Max bases per second. '
                  '(default=%d)'
                  % ContainerMoveJob.DEFAULT_TASKS_PER_SECOND)
         parser.add_argument(
@@ -105,7 +105,7 @@ class Meta2Decommission(SingleServiceCommandMixin, ShowOne):
             'dst': parsed_args.dst,
         }
         job_config = {
-            'tasks_per_second': parsed_args.containers_per_second,
+            'tasks_per_second': parsed_args.bases_per_second,
             'params': job_params
         }
         job_info = self.xcute.job_create(
