@@ -72,6 +72,10 @@ class ClusterList(Lister):
             '--stats', '--full',
             action='store_true',
             help='Display service statistics.')
+        parser.add_argument(
+            '--tags',
+            action='store_true',
+            help='Display service tags')
         return parser
 
     def _list_services(self, parsed_args):
@@ -89,32 +93,34 @@ class ClusterList(Lister):
                 continue
             for srv in data:
                 tags = srv['tags']
-                location = tags.get('tag.loc', 'n/a')
-                slots = tags.get('tag.slots', 'n/a')
-                volume = tags.get('tag.vol', 'n/a')
-                service_id = tags.get('tag.service_id', 'n/a')
+                location = tags.pop('tag.loc', 'n/a')
+                slots = tags.pop('tag.slots', 'n/a')
+                volume = tags.pop('tag.vol', 'n/a')
+                service_id = tags.pop('tag.service_id', 'n/a')
                 addr = srv['addr']
-                locked = boolean_value(tags.get('tag.lock'), False)
-                up = tags.get('tag.up', 'n/a')
+                locked = boolean_value(tags.pop('tag.lock', False), False)
+                up = tags.pop('tag.up', 'n/a')
                 score = srv['score']
+                values = [srv_type, addr, service_id, volume, location,
+                          slots, up, score, locked]
                 if parsed_args.stats:
                     stats = ["%s=%s" % (k, v) for k, v in iteritems(tags)
                              if k.startswith('stat.')]
-                    values = (srv_type, addr, service_id, volume, location,
-                              slots, up, score, locked, " ".join(stats))
-                else:
-                    values = (srv_type, addr, service_id, volume, location,
-                              slots, up, score, locked)
+                    values.append(" ".join(stats))
+                if parsed_args.tags:
+                    vals = ["%s=%s" % (k, v) for k, v in iteritems(tags)
+                            if k.startswith('tag.')]
+                    values.append(" ".join(vals))
                 yield values
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
+        columns = ['Type', 'Addr', 'Service Id', 'Volume', 'Location',
+                   'Slots', 'Up', 'Score', 'Locked']
         if parsed_args.stats:
-            columns = ('Type', 'Addr', 'Service Id', 'Volume', 'Location',
-                       'Slots', 'Up', 'Score', 'Locked', 'Stats')
-        else:
-            columns = ('Type', 'Addr', 'Service Id', 'Volume', 'Location',
-                       'Slots', 'Up', 'Score', 'Locked')
+            columns.append('Stats')
+        if parsed_args.tags:
+            columns.append('Tags')
         return columns, self._list_services(parsed_args)
 
 
