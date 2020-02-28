@@ -1,4 +1,4 @@
-# Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -22,7 +22,8 @@ from oio.common.green import time
 from oio.conscience.client import ConscienceClient
 from oio.content.factory import ContentFactory
 from oio.rdir.client import RdirClient
-from oio.xcute.common.job import XcuteJob, XcuteTask
+from oio.xcute.common.job import XcuteTask
+from oio.xcute.jobs.common import XcuteRdirJob
 
 
 class RawxDecommissionTask(XcuteTask):
@@ -108,13 +109,11 @@ class RawxDecommissionTask(XcuteTask):
         return {'moved_chunks': 1, 'moved_bytes': chunk_size}
 
 
-class RawxDecommissionJob(XcuteJob):
+class RawxDecommissionJob(XcuteRdirJob):
 
     JOB_TYPE = 'rawx-decommission'
     TASK_CLASS = RawxDecommissionTask
 
-    DEFAULT_RDIR_FETCH_LIMIT = 1000
-    DEFAULT_RDIR_TIMEOUT = 60.0
     DEFAULT_RAWX_TIMEOUT = 60.0
     DEFAULT_MIN_CHUNK_SIZE = 0
     DEFAULT_MAX_CHUNK_SIZE = 0
@@ -131,14 +130,6 @@ class RawxDecommissionJob(XcuteJob):
         if not service_id:
             raise ValueError('Missing service ID')
         sanitized_job_params['service_id'] = service_id
-
-        sanitized_job_params['rdir_fetch_limit'] = int_value(
-            job_params.get('rdir_fetch_limit'),
-            cls.DEFAULT_RDIR_FETCH_LIMIT)
-
-        sanitized_job_params['rdir_timeout'] = float_value(
-            job_params.get('rdir_timeout'),
-            cls.DEFAULT_RDIR_TIMEOUT)
 
         sanitized_job_params['rawx_timeout'] = float_value(
             job_params.get('rawx_timeout'),

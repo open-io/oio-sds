@@ -1,4 +1,4 @@
-# Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -13,24 +13,18 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from oio.cli import ShowOne, flat_dict_from_dict
 from oio.cli.admin.common import SingleServiceCommandMixin
-from oio.xcute.jobs.container_mover import ContainerMoveJob
+from oio.cli.admin.xcute import XcuteRdirCommand
+from oio.xcute.jobs.meta2_decommissioner import Meta2DecommissionJob
 from oio.xcute.jobs.meta2_rebuilder import Meta2RebuildJob
 
 
-class Meta2Rebuild(SingleServiceCommandMixin, ShowOne):
+class Meta2Rebuild(SingleServiceCommandMixin, XcuteRdirCommand):
     """
     Rebuild bases that were on the specified service.
     """
 
-    @property
-    def logger(self):
-        return self.app.client_manager.logger
-
-    @property
-    def xcute(self):
-        return self.app.client_manager.xcute_client
+    JOB_CLASS = Meta2RebuildJob
 
     def get_parser(self, prog_name):
         parser = super(Meta2Rebuild, self).get_parser(prog_name)
@@ -40,46 +34,28 @@ class Meta2Rebuild(SingleServiceCommandMixin, ShowOne):
             '--bases-per-second', type=int,
             help='Max bases per second. '
                  '(default=%d)'
-                 % Meta2RebuildJob.DEFAULT_TASKS_PER_SECOND)
-        parser.add_argument(
-            '--rdir-fetch-limit', type=int,
-            help='Maximum number of entries returned in each rdir response. '
-                 '(default=%d)'
-            % Meta2RebuildJob.DEFAULT_RDIR_FETCH_LIMIT)
+                 % self.JOB_CLASS.DEFAULT_TASKS_PER_SECOND)
 
         return parser
 
-    def take_action(self, parsed_args):
-        SingleServiceCommandMixin.check_and_load_parsed_args(
-            self, self.app, parsed_args)
-        self.logger.debug('take_action(%s)', parsed_args)
-
+    def get_job_config(self, parsed_args):
         job_params = {
             'service_id': parsed_args.service,
             'rdir_fetch_limit': parsed_args.rdir_fetch_limit,
+            'rdir_timeout': parsed_args.rdir_timeout,
         }
-        job_config = {
+        return {
             'tasks_per_second': parsed_args.bases_per_second,
             'params': job_params
         }
-        job_info = self.xcute.job_create(
-            Meta2RebuildJob.JOB_TYPE, job_config=job_config)
-        return zip(*sorted(
-            flat_dict_from_dict(parsed_args, job_info).items()))
 
 
-class Meta2Decommission(SingleServiceCommandMixin, ShowOne):
+class Meta2Decommission(SingleServiceCommandMixin, XcuteRdirCommand):
     """
-    Move the specified meta2.
+    Decommission a meta2 service.
     """
 
-    @property
-    def logger(self):
-        return self.app.client_manager.logger
-
-    @property
-    def xcute(self):
-        return self.app.client_manager.xcute_client
+    JOB_CLASS = Meta2DecommissionJob
 
     def get_parser(self, prog_name):
         parser = super(Meta2Decommission, self).get_parser(prog_name)
@@ -89,7 +65,7 @@ class Meta2Decommission(SingleServiceCommandMixin, ShowOne):
             '--bases-per-second', type=int,
             help='Max bases per second. '
                  '(default=%d)'
-                 % ContainerMoveJob.DEFAULT_TASKS_PER_SECOND)
+                 % self.JOB_CLASS.DEFAULT_TASKS_PER_SECOND)
         parser.add_argument(
             '--dst',
             metavar='<service_id>',
@@ -97,18 +73,14 @@ class Meta2Decommission(SingleServiceCommandMixin, ShowOne):
 
         return parser
 
-    def take_action(self, parsed_args):
-        self.logger.debug('take_action(%s)', parsed_args)
-
+    def get_job_config(self, parsed_args):
         job_params = {
             'service_id': parsed_args.service,
             'dst': parsed_args.dst,
+            'rdir_fetch_limit': parsed_args.rdir_fetch_limit,
+            'rdir_timeout': parsed_args.rdir_timeout,
         }
-        job_config = {
+        return {
             'tasks_per_second': parsed_args.bases_per_second,
             'params': job_params
         }
-        job_info = self.xcute.job_create(
-            ContainerMoveJob.JOB_TYPE, job_config=job_config)
-        return zip(*sorted(
-            flat_dict_from_dict(parsed_args, job_info).items()))

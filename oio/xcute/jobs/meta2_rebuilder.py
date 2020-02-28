@@ -15,10 +15,10 @@
 
 from collections import Counter
 
-from oio.common.easy_value import int_value
 from oio.directory.meta2 import Meta2Database
 from oio.rdir.client import RdirClient
-from oio.xcute.common.job import XcuteJob, XcuteTask
+from oio.xcute.common.job import XcuteTask
+from oio.xcute.jobs.common import XcuteRdirJob
 
 
 class Meta2RebuildTask(XcuteTask):
@@ -49,12 +49,10 @@ class Meta2RebuildTask(XcuteTask):
         return resp
 
 
-class Meta2RebuildJob(XcuteJob):
+class Meta2RebuildJob(XcuteRdirJob):
 
     JOB_TYPE = 'meta2-rebuild'
     TASK_CLASS = Meta2RebuildTask
-
-    DEFAULT_RDIR_FETCH_LIMIT = 1000
 
     @classmethod
     def sanitize_params(cls, job_params):
@@ -67,10 +65,6 @@ class Meta2RebuildJob(XcuteJob):
             raise ValueError('Missing service ID')
         sanitized_job_params['service_id'] = service_id
 
-        sanitized_job_params['rdir_fetch_limit'] = int_value(
-            job_params.get('rdir_fetch_limit'),
-            cls.DEFAULT_RDIR_FETCH_LIMIT)
-
         return sanitized_job_params, 'meta2/%s' % service_id
 
     def __init__(self, conf, logger=None):
@@ -78,17 +72,13 @@ class Meta2RebuildJob(XcuteJob):
         self.rdir_client = RdirClient(conf, logger=logger)
 
     def get_tasks(self, job_params, marker=None):
-        meta2_id = job_params['service_id']
-
-        containers_it = self._containers_from_rdir(meta2_id, marker)
+        containers_it = self._containers_from_rdir(job_params, marker)
 
         for url, container_id in containers_it:
             yield url, dict(container_id=container_id)
 
     def get_total_tasks(self, job_params, marker=None):
-        meta2_id = job_params['service_id']
-
-        containers_it = self._containers_from_rdir(meta2_id, marker)
+        containers_it = self._containers_from_rdir(job_params, marker)
 
         i = 0
         for i, (url, _) in enumerate(containers_it, 1):
@@ -101,9 +91,14 @@ class Meta2RebuildJob(XcuteJob):
 
         yield marker, remaining
 
-    def _containers_from_rdir(self, meta2_id, marker):
-        containers = self.rdir_client.meta2_index_fetch_all(meta2_id,
-                                                            marker=marker)
+    def _containers_from_rdir(self, job_params, marker):
+        service_id = job_params['service_id']
+        rdir_fetch_limit = job_params['rdir_fetch_limit']
+        rdir_timeout = job_params['rdir_timeout']
+
+        containers = self.rdir_client.meta2_index_fetch_all(
+            service_id, marker=marker, timeout=rdir_timeout,
+            limit=rdir_fetch_limit)
         for container_info in containers:
             container_url = container_info['container_url']
             container_id = container_info['container_id']
