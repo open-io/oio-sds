@@ -1,4 +1,4 @@
-# Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -23,7 +23,7 @@ from oio.xcute.common.job import XcuteJob, XcuteTask
 class Meta2DecommissionTask(XcuteTask):
 
     def __init__(self, conf, job_params, logger=None):
-        super(ContainerMoveTask, self).__init__(
+        super(Meta2DecommissionTask, self).__init__(
             conf, job_params, logger=logger)
 
         self.src = job_params['service_id']
@@ -44,8 +44,8 @@ class Meta2DecommissionTask(XcuteTask):
 
                 continue
 
-            resp['moved_seq'] +=1
-            resp['to.' + res['dst']] +=1
+            resp['moved_seq'] += 1
+            resp['to.' + res['dst']] += 1
 
         return resp
 
