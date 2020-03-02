@@ -456,6 +456,19 @@ class AccountBackend(RedisConnection):
         return meta
 
     @catch_service_errors
+    def get_bucket_info(self, bname):
+        """
+        Get all available information about a bucket.
+        """
+        if not bname:
+            return None
+        binfo = self.conn_slave.hgetall(self.bkey(bname))
+
+        for what in ['bytes', 'objects', 'damaged_objects', 'missing_chunks']:
+            binfo[what] = int_value(binfo.get(what), 0)
+        return binfo
+
+    @catch_service_errors
     def update_account_metadata(self, account_id, metadata, to_delete=None):
         conn = self.conn
         if not account_id:

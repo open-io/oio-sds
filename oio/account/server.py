@@ -65,6 +65,8 @@ class Account(WerkzeugApp):
                  methods=['PUT', 'POST']),  # FIXME(adu) only PUT
             Rule('/v1.0/account/show', endpoint='account_show',
                  methods=['GET']),
+            Rule('/v1.0/account/show-bucket', endpoint='bucket_show',
+                 methods=['GET']),
             Rule('/v1.0/account/buckets', endpoint='account_buckets',
                  methods=['GET']),
             Rule('/v1.0/account/containers', endpoint='account_containers',
@@ -79,15 +81,21 @@ class Account(WerkzeugApp):
             Rule('/v1.0/account/container/reset',
                  endpoint='account_container_reset',
                  methods=['PUT', 'POST']),  # FIXME(adu) only PUT
+            Rule('/v1.0/bucket/show', endpoint='bucket_show',
+                 methods=['GET']),
         ])
         super(Account, self).__init__(self.url_map, self.logger)
 
+    def _get_item_id(self, req, what='account'):
+        """Fetch the name of the requested item, raise an error if missing."""
+        item_id = req.args.get('id')
+        if not item_id:
+            raise BadRequest('Missing %s ID' % what)
+        return item_id
+
     def _get_account_id(self, req):
         """Fetch account name from request query string."""
-        account_id = req.args.get('id')
-        if not account_id:
-            raise BadRequest('Missing Account ID')
-        return account_id
+        return self._get_item_id(req, what='account')
 
     # ACCT{{
     # GET /status
@@ -630,6 +638,51 @@ class Account(WerkzeugApp):
         account_id = self._get_account_id(req)
         self.backend.flush_account(account_id)
         return Response(status=204)
+
+    # ACCT{{
+    # GET /v1.0/bucket/show?id=<bucket_name>
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Get information about the specified bucket.
+    #
+    # Sample request:
+    #
+    # .. code-block:: http
+    #
+    #    GET /v1.0/bucket/show?id=mybucket HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #
+    # Sample response:
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 200 OK
+    #    Server: gunicorn/19.9.0
+    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Connection: keep-alive
+    #    Content-Type: text/plain; charset=utf-8
+    #    Content-Length: 128
+    #
+    # .. code-block:: json
+    #
+    #    {
+    #      "account": "myaccount",
+    #      "bytes": 11300,
+    #      "damaged_objects": 0,
+    #      "missing_objects": 0,
+    #      "mtime": "1533127401.08165",
+    #      "objects": 100
+    #     }
+    #
+    # }}ACCT
+    @access_log
+    def on_bucket_show(self, req):
+        bname = self._get_item_id(req, 'bucket')
+        raw = self.backend.get_bucket_info(bname)
+        if raw is not None:
+            return Response(json.dumps(raw), mimetype='text/json')
+        return NotFound('Bucket not found')
 
 
 def create_app(conf, **kwargs):
