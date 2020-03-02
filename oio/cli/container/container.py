@@ -324,6 +324,34 @@ class FlushContainer(ContainerCommandMixin, Command):
             account, container, fast=parsed_args.quick)
 
 
+class ShowBucket(ShowOne):
+    """Display information about a bucket."""
+
+    log = getLogger(__name__ + '.ShowBucket')
+
+    def get_parser(self, prog_name):
+        parser = super(ShowBucket, self).get_parser(prog_name)
+        parser.add_argument(
+            'bucket',
+            help='Name of the bucket to query.'
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        reqid = request_id(prefix='CLI-BUCKET-')
+        acct_client = self.app.client_manager.storage.account
+        data = acct_client.bucket_show(parsed_args.bucket, reqid=reqid)
+
+        if parsed_args.formatter == 'table':
+            from oio.common.easy_value import convert_size
+
+            data['bytes'] = convert_size(data['bytes'])
+            data['mtime'] = Timestamp(data.get('mtime', 0.0)).isoformat
+        return zip(*sorted(data.items()))
+
+
 class ShowContainer(ContainerCommandMixin, ShowOne):
     """Display information about an object container."""
 

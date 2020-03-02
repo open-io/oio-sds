@@ -60,6 +60,17 @@ class ContainerTest(CliTestCase):
         output = self.openio('bucket list ' + opts)
         self.assertIn(cname, output)
 
+    def test_bucket_show(self):
+        opts = self.get_format_opts(fields=('Name', ))
+        cname = 'mybucket-' + random_str(4).lower()
+        output = self.openio('container create --bucket-name %s %s %s' %
+                             (cname, cname, opts))
+        self.assertOutput(cname + '\n', output)
+
+        opts = self.get_format_opts(fields=('account', 'bytes', 'objects'))
+        output = self.openio('bucket show ' + cname + opts)
+        self.assertEqual(self.account_from_env() + '\n0\n0\n', output)
+
     def test_container_show(self):
         self._test_container_show()
 

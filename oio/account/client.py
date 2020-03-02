@@ -187,6 +187,14 @@ class AccountClient(HttpApi):
                                            params=params, **kwargs)
         return body
 
+    def bucket_show(self, bucket, **kwargs):
+        """
+        Get information about a bucket.
+        """
+        _resp, body = self.account_request(bucket, 'GET', 'show-bucket',
+                                           **kwargs)
+        return body
+
     def container_list(self, account, limit=None, marker=None,
                        end_marker=None, prefix=None, delimiter=None,
                        s3_buckets_only=False, **kwargs):
