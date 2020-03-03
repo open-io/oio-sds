@@ -150,6 +150,18 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         for container in containers:
             self.api.container_delete(self.account, container)
 
+    def test_container_autocreate_properties(self):
+        cname = random_str(16)
+        path = random_str(8)
+        props = {'properties': {'is_admin': 'false'},
+                 'system': {'sys.m2.bucket.name': cname}}
+        self.api.object_create(self.account, cname,
+                               data=b'1'*128, obj_name=path,
+                               container_properties=props)
+        data = self._get_properties(cname)
+        self.assertEqual(cname, data['system'].get('sys.m2.bucket.name'))
+        self.assertEqual('false', data['properties'].get('is_admin'))
+
     def test_container_delete(self):
         name = random_str(32)
 

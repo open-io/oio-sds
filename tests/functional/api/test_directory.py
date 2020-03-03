@@ -228,6 +228,15 @@ class TestDirectoryAPI(BaseTestCase):
         data = self._get_properties(name)
         self.assertEqual(data['properties'], metadata)
 
+        # set_properties overwrite key with empty value
+        key = list(metadata.keys())[0]
+        metadata4 = {key: ''}
+
+        del metadata[key]
+        self.api.set_properties(self.account, name, metadata4)
+        data = self._get_properties(name)
+        self.assertEqual(data['properties'], metadata)
+
         # clean
         self._clean(name, True)
 
@@ -396,7 +405,7 @@ class TestDirectoryAPI(BaseTestCase):
         not break the whole operation.
         """
         self._test_link_rdir_fail_to_force(
-            [exc.ServiceBusy('Failed :('), None, None],
+            [exc.ServiceBusy(message='Failed :(', status=503), None, None],
             exc.ServiceBusy)
 
     def test_link_rdir_fail_to_force_several(self):

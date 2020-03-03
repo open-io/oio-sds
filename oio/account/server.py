@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -71,6 +71,10 @@ class Account(WerkzeugApp):
                  methods=['PUT', 'POST']),  # FIXME(adu) only PUT
             Rule('/v1.0/account/show', endpoint='account_show',
                  methods=['GET']),
+            Rule('/v1.0/account/show-bucket', endpoint='bucket_show',
+                 methods=['GET']),
+            Rule('/v1.0/account/buckets', endpoint='account_buckets',
+                 methods=['GET']),
             Rule('/v1.0/account/containers', endpoint='account_containers',
                  methods=['GET']),
             Rule('/v1.0/account/refresh', endpoint='account_refresh',
@@ -83,15 +87,21 @@ class Account(WerkzeugApp):
             Rule('/v1.0/account/container/reset',
                  endpoint='account_container_reset',
                  methods=['PUT', 'POST']),  # FIXME(adu) only PUT
+            Rule('/v1.0/bucket/show', endpoint='bucket_show',
+                 methods=['GET']),
         ])
         super(Account, self).__init__(self.url_map, self.logger)
 
+    def _get_item_id(self, req, what='account'):
+        """Fetch the name of the requested item, raise an error if missing."""
+        item_id = req.args.get('id')
+        if not item_id:
+            raise BadRequest('Missing %s ID' % what)
+        return item_id
+
     def _get_account_id(self, req):
         """Fetch account name from request query string."""
-        account_id = req.args.get('id')
-        if not account_id:
-            raise BadRequest('Missing Account ID')
-        return account_id
+        return self._get_item_id(req, what='account')
 
     # ACCT{{
     # GET /status
@@ -193,7 +203,7 @@ class Account(WerkzeugApp):
     # }}ACCT
     @access_log
     def on_account_list(self, req):
-        accounts = self.backend.list_account()
+        accounts = self.backend.list_accounts()
         if accounts is None:
             return NotFound('No account found')
         return Response(json.dumps(accounts), mimetype='text/json')
@@ -326,6 +336,89 @@ class Account(WerkzeugApp):
         return NotFound('Account not found')
 
     # ACCT{{
+    # GET /v1.0/account/buckets?id=<account_name>
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    #
+    # Get information about the buckets belonging to the specified account.
+    #
+    # Sample request:
+    #
+    # .. code-block:: http
+    #
+    #    GET /v1.0/account/buckets?id=AUTH_demo HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #
+    # Sample response:
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 200 OK
+    #    Server: gunicorn/19.9.0
+    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Connection: keep-alive
+    #    Content-Type: text/plain; charset=utf-8
+    #    Content-Length: 122
+    #
+    # .. code-block:: json
+    #
+    #    {
+    #      "buckets": 3,
+    #      "bytes": 132573,
+    #      "ctime": "1582628089.30237",
+    #      "objects": 3,
+    #      "listing": [
+    #        {
+    #            "bytes": 132573,
+    #            "mtime": 1582641887.75408,
+    #            "name": "bucket0",
+    #            "objects": 3
+    #        },
+    #        {
+    #            "bytes": 0,
+    #            "mtime": 1582641712.44969,
+    #            "name": "bucket1",
+    #            "objects": 0
+    #        },
+    #        {
+    #            "bytes": 0,
+    #            "mtime": 1582641715.19412,
+    #            "name": "bucket2",
+    #            "objects": 0
+    #        }
+    #      ],
+    #      "id": "AUTH_demo",
+    #      "containers": 5,
+    #      "metadata": {}
+    #    }
+    #
+    # }}ACCT
+    @access_log
+    def on_account_buckets(self, req):
+        account_id = self._get_account_id(req)
+
+        info = self.backend.info_account(account_id)
+        if not info:
+            return NotFound('Account not found')
+
+        marker = req.args.get('marker', '')
+        end_marker = req.args.get('end_marker', '')
+        prefix = req.args.get('prefix', '')
+        limit = int(req.args.get('limit', '1000'))
+
+        bucket_list, next_marker = self.backend.list_buckets(
+            account_id, limit=limit, marker=marker, end_marker=end_marker,
+            prefix=prefix)
+
+        info['listing'] = bucket_list
+        info['truncated'] = next_marker is not None
+        if next_marker is not None:
+            info['next_marker'] = next_marker
+        result = json.dumps(info)
+        return Response(result, mimetype='text/json')
+
+    # ACCT{{
     # GET /v1.0/account/containers?id=<account_name>
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     #
@@ -393,17 +486,9 @@ class Account(WerkzeugApp):
     # PUT /v1.0/account/container/update?id=<account_name>
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     #
-    # .. code-block:: json
-    #
-    #    {
-    #      "mtime": "123456789",
-    #      "dtime": "1223456789",
-    #      "name": "container name",
-    #      "objects": 0,
-    #      "bytes": 0
-    #    }
-    #
     # Update account with container-related metadata.
+    #
+    # Request example:
     #
     # .. code-block:: http
     #
@@ -413,6 +498,19 @@ class Account(WerkzeugApp):
     #    Accept: */*
     #    Content-Length: 84
     #    Content-Type: application/x-www-form-urlencoded
+    #
+    # .. code-block:: json
+    #
+    #    {
+    #      "mtime": "123456789",
+    #      "dtime": "1223456789",
+    #      "name": "user1bucket%2Ffiles",
+    #      "objects": 0,
+    #      "bytes": 0,
+    #      "bucket": "user1bucket"
+    #    }
+    #
+    # Response example:
     #
     # .. code-block:: http
     #
@@ -434,10 +532,12 @@ class Account(WerkzeugApp):
         bytes_used = data.get('bytes')
         damaged_objects = data.get('damaged_objects')
         missing_chunks = data.get('missing_chunks')
+        bucket_name = data.get('bucket')  # can be None
         # Exceptions are catched by dispatch_request
         info = self.backend.update_container(
             account_id, name, mtime, dtime,
-            object_count, bytes_used, damaged_objects, missing_chunks)
+            object_count, bytes_used, damaged_objects, missing_chunks,
+            bucket_name=bucket_name)
         result = json.dumps(info)
         return Response(result)
 
@@ -547,6 +647,51 @@ class Account(WerkzeugApp):
         account_id = self._get_account_id(req)
         self.backend.flush_account(account_id)
         return Response(status=204)
+
+    # ACCT{{
+    # GET /v1.0/bucket/show?id=<bucket_name>
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Get information about the specified bucket.
+    #
+    # Sample request:
+    #
+    # .. code-block:: http
+    #
+    #    GET /v1.0/bucket/show?id=mybucket HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #
+    # Sample response:
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 200 OK
+    #    Server: gunicorn/19.9.0
+    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Connection: keep-alive
+    #    Content-Type: text/plain; charset=utf-8
+    #    Content-Length: 128
+    #
+    # .. code-block:: json
+    #
+    #    {
+    #      "account": "myaccount",
+    #      "bytes": 11300,
+    #      "damaged_objects": 0,
+    #      "missing_objects": 0,
+    #      "mtime": "1533127401.08165",
+    #      "objects": 100
+    #     }
+    #
+    # }}ACCT
+    @access_log
+    def on_bucket_show(self, req):
+        bname = self._get_item_id(req, 'bucket')
+        raw = self.backend.get_bucket_info(bname)
+        if raw is not None:
+            return Response(json.dumps(raw), mimetype='text/json')
+        return NotFound('Bucket not found')
 
 
 def create_app(conf, **kwargs):

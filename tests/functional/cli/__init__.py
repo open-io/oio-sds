@@ -1,4 +1,4 @@
-# Copyright (C) 2016-2018 OpenIO SAS
+# Copyright (C) 2016-2020 OpenIO SAS
 
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -58,6 +58,12 @@ def execute(cmd, stdin=None, env=None, expected_returncode=0):
 
 
 class CliTestCase(BaseTestCase):
+
+    @classmethod
+    def account_from_env(cls):
+        """Get the name of the account set in the process' environment."""
+        return os.getenv('OIO_ACCOUNT', 'myaccount')
+
     @classmethod
     def openio(cls, cmd, **kwargs):
         """Executes openio CLI command."""

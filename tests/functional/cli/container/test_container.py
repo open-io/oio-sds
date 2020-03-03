@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,6 +18,7 @@ import uuid
 import re
 import tempfile
 
+from oio.common.utils import cid_from_name
 from oio.event.evob import EventTypes
 from tests.functional.cli import CliTestCase, CommandFailed
 from tests.utils import random_str
@@ -31,20 +32,13 @@ class ContainerTest(CliTestCase):
     def setUpClass(cls):
         opts = cls.get_format_opts(fields=('Name', ))
         output = cls.openio('container create ' + cls.NAME + opts)
-        cls.CID = cls._get_cid_from_name(cls.NAME)
+        cls.CID = cid_from_name(cls.account_from_env(), cls.NAME)
         cls.assertOutput(cls.NAME + '\n', output)
 
     @classmethod
     def tearDownClass(cls):
         output = cls.openio('container delete ' + cls.NAME)
         cls.assertOutput('', output)
-
-    @classmethod
-    def _get_cid_from_name(self, name):
-        opts = self.get_format_opts('json')
-        output = self.openio('container show ' + name + opts)
-        data = self.json_loads(output)
-        return data['base_name']
 
     def _test_container_show(self, with_cid=False):
         opts = self.get_format_opts(fields=('container', ))
@@ -55,6 +49,27 @@ class ContainerTest(CliTestCase):
             name = self.CID
         output = self.openio('container show ' + cid_opt + name + opts)
         self.assertEqual(self.NAME + '\n', output)
+
+    def test_bucket_list(self):
+        opts = self.get_format_opts(fields=('Name', ))
+        cname = 'mybucket-' + random_str(4).lower()
+        output = self.openio('container create --bucket-name %s %s %s' %
+                             (cname, cname, opts))
+        self.assertOutput(cname + '\n', output)
+
+        output = self.openio('bucket list ' + opts)
+        self.assertIn(cname, output)
+
+    def test_bucket_show(self):
+        opts = self.get_format_opts(fields=('Name', ))
+        cname = 'mybucket-' + random_str(4).lower()
+        output = self.openio('container create --bucket-name %s %s %s' %
+                             (cname, cname, opts))
+        self.assertOutput(cname + '\n', output)
+
+        opts = self.get_format_opts(fields=('account', 'bytes', 'objects'))
+        output = self.openio('bucket show ' + cname + opts)
+        self.assertEqual(self.account_from_env() + '\n0\n0\n', output)
 
     def test_container_show(self):
         self._test_container_show()
@@ -182,7 +197,7 @@ class ContainerTest(CliTestCase):
             ntf.flush()
             obj = ntf.name
             for _ in range(10):
-                obj_name = random_str(16)
+                obj_name = random_str(6)
                 self.openio('object create ' + self.NAME
                             + ' ' + obj + ' --name ' + obj_name)
         output = self.openio('container flush ' + cid_opt + name)
@@ -207,7 +222,7 @@ class ContainerTest(CliTestCase):
             ntf.flush()
             obj = ntf.name
             for _ in range(10):
-                obj_name = random_str(16)
+                obj_name = random_str(6)
                 self.openio('object create ' + cid_opt + name
                             + ' ' + obj + ' --name ' + obj_name)
         output = self.openio('container flush --quickly ' + cid_opt + name)

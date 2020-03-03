@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -149,3 +149,25 @@ HIDDEN_ACCOUNTS = ("_RDIR",)
 # Default separator used by swift's "container hierarchy" middleware
 CH_ENCODED_SEPARATOR = '%2F'
 CH_SEPARATOR = '/'
+
+# When the container is part of a bucket, this property holds the bucket's name
+M2_PROP_BUCKET_NAME = 'sys.m2.bucket.name'
+# Container creation time (microseconds).
+M2_PROP_CTIME = 'sys.m2.ctime'
+# Number of objects with problems held by the container.
+M2_PROP_DAMAGED_OBJECTS = 'sys.m2.objects.damaged'
+# Tells whether to delete exceeding object versions on-the-fly (1),
+# or let the lifecycle management do the job asynchronously (0).
+M2_PROP_DEL_EXC_VERSIONS = 'sys.m2.policy.version.delete_exceeding'
+# Number of chunks missing from objects held by the container.
+M2_PROP_MISSING_CHUNKS = 'sys.m2.chunks.missing'
+# Number of objects held by the container.
+M2_PROP_OBJECTS = 'sys.m2.objects'
+# Sets a limit on the total size of objects help by the container.
+M2_PROP_QUOTA = 'sys.m2.quota'
+# Name of the default storage policy for the container.
+M2_PROP_STORAGE_POLICY = 'sys.m2.policy.storage'
+# Total number of bytes of objects held by the container.
+M2_PROP_USAGE = 'sys.m2.usage'
+# Number of object versions to keep. -1 for unlimited.
+M2_PROP_VERSIONING_POLICY = 'sys.m2.policy.version'

@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -24,7 +24,8 @@ from oio.event.filters.base import Filter
 
 CONTAINER_EVENTS = [
         EventTypes.CONTAINER_STATE,
-        EventTypes.CONTAINER_NEW]
+        EventTypes.CONTAINER_NEW,
+        EventTypes.CONTAINER_DELETED]
 
 
 class AccountUpdateFilter(Filter):
@@ -41,7 +42,7 @@ class AccountUpdateFilter(Filter):
         self.read_timeout = float(self.conf.get('read_timeout',
                                                 READ_TIMEOUT))
 
-    def process(self, env, cb):
+    def process(self, env, beanstalkd, cb):
         event = Event(env)
         headers = {
             REQID_HEADER: event.reqid or request_id('account-update-')
@@ -55,6 +56,7 @@ class AccountUpdateFilter(Filter):
                 data = event.data
                 url = event.env.get('url')
                 body = dict()
+                body['bucket'] = data.get('bucket')
                 if event.event_type == EventTypes.CONTAINER_STATE:
                     body['objects'] = data.get('object-count', 0)
                     body['bytes'] = data.get('bytes-count', 0)
@@ -63,6 +65,8 @@ class AccountUpdateFilter(Filter):
                     body['mtime'] = mtime
                 elif event.event_type == EventTypes.CONTAINER_NEW:
                     body['mtime'] = mtime
+                elif event.event_type == EventTypes.CONTAINER_DELETED:
+                    body['dtime'] = mtime
                 self.account.container_update(
                     url.get('account'), url.get('user'), body,
                     connection_timeout=self.connection_timeout,
@@ -78,6 +82,8 @@ class AccountUpdateFilter(Filter):
                 m2_services = [x for x in new_services
                                if x.get('type') == 'meta2']
                 if not m2_services:
+                    # FIXME(FVE): this block may not be needed anymore,
+                    # since we brought back EventTypes.CONTAINER_DELETED.
                     # No service in charge, container has been deleted
                     self.account.container_update(
                         url.get('account'), url.get('user'),
@@ -99,7 +105,7 @@ class AccountUpdateFilter(Filter):
         except OioTimeout as exc:
             msg = 'account update failure: %s' % str(exc)
             resp = EventError(event=Event(env), body=msg)
-            return resp(env, cb)
+            return resp(env, beanstalkd, cb)
         except ClientException as exc:
             if (exc.http_status == 409 and
                     "No update needed" in exc.message):
@@ -110,8 +116,8 @@ class AccountUpdateFilter(Filter):
             else:
                 msg = 'account update failure: %s' % str(exc)
                 resp = EventError(event=Event(env), body=msg)
-                return resp(env, cb)
-        return self.app(env, cb)
+                return resp(env, beanstalkd, cb)
+        return self.app(env, beanstalkd, cb)
 
 
 def filter_factory(global_conf, **local_conf):

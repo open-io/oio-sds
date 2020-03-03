@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -17,13 +17,16 @@
 
 from six import iteritems
 from logging import getLogger
-from time import time
 
 from oio.cli import Command, Lister, ShowOne
 from oio.common.timestamp import Timestamp
-from oio.common.utils import timeout_to_deadline
+from oio.common.utils import depaginate, request_id, timeout_to_deadline
 from oio.common.constants import OIO_DB_STATUS_NAME,\
-    OIO_DB_ENABLED, OIO_DB_DISABLED, OIO_DB_FROZEN
+    OIO_DB_ENABLED, OIO_DB_DISABLED, OIO_DB_FROZEN, \
+    M2_PROP_BUCKET_NAME, M2_PROP_CTIME, M2_PROP_DAMAGED_OBJECTS, \
+    M2_PROP_DEL_EXC_VERSIONS, M2_PROP_MISSING_CHUNKS, \
+    M2_PROP_OBJECTS, M2_PROP_QUOTA, M2_PROP_STORAGE_POLICY, \
+    M2_PROP_USAGE, M2_PROP_VERSIONING_POLICY
 from oio.common.easy_value import boolean_value
 
 
@@ -123,6 +126,10 @@ class CreateContainer(SetPropertyCommandMixin, Lister):
         parser = super(CreateContainer, self).get_parser(prog_name)
         self.patch_parser(parser)
         parser.add_argument(
+            '--bucket-name',
+            help=('Declare the container belongs to the specified bucket')
+        )
+        parser.add_argument(
             'containers',
             metavar='<container-name>',
             nargs='+',
@@ -135,14 +142,16 @@ class CreateContainer(SetPropertyCommandMixin, Lister):
 
         properties = parsed_args.property
         system = dict()
+        if parsed_args.bucket_name:
+            system[M2_PROP_BUCKET_NAME] = parsed_args.bucket_name
         if parsed_args.quota is not None:
-            system['sys.m2.quota'] = str(parsed_args.quota)
+            system[M2_PROP_QUOTA] = str(parsed_args.quota)
         if parsed_args.storage_policy is not None:
-            system['sys.m2.policy.storage'] = parsed_args.storage_policy
+            system[M2_PROP_STORAGE_POLICY] = parsed_args.storage_policy
         if parsed_args.max_versions is not None:
-            system['sys.m2.policy.version'] = str(parsed_args.max_versions)
+            system[M2_PROP_VERSIONING_POLICY] = str(parsed_args.max_versions)
         if parsed_args.delete_exceeding_versions is not None:
-            system['sys.m2.policy.version.delete_exceeding'] = \
+            system[M2_PROP_DEL_EXC_VERSIONS] = \
                 str(int(parsed_args.delete_exceeding_versions))
 
         results = []
@@ -199,13 +208,13 @@ class SetContainer(SetPropertyCommandMixin,
         properties = parsed_args.property
         system = dict()
         if parsed_args.quota is not None:
-            system['sys.m2.quota'] = str(parsed_args.quota)
+            system[M2_PROP_QUOTA] = str(parsed_args.quota)
         if parsed_args.storage_policy is not None:
-            system['sys.m2.policy.storage'] = parsed_args.storage_policy
+            system[M2_PROP_STORAGE_POLICY] = parsed_args.storage_policy
         if parsed_args.max_versions is not None:
-            system['sys.m2.policy.version'] = str(parsed_args.max_versions)
+            system[M2_PROP_VERSIONING_POLICY] = str(parsed_args.max_versions)
         if parsed_args.delete_exceeding_versions is not None:
-            system['sys.m2.policy.version.delete_exceeding'] = \
+            system[M2_PROP_DEL_EXC_VERSIONS] = \
                 str(int(parsed_args.delete_exceeding_versions))
         if parsed_args.status is not None:
             status_value = {
@@ -316,6 +325,34 @@ class FlushContainer(ContainerCommandMixin, Command):
             account, container, fast=parsed_args.quick)
 
 
+class ShowBucket(ShowOne):
+    """Display information about a bucket."""
+
+    log = getLogger(__name__ + '.ShowBucket')
+
+    def get_parser(self, prog_name):
+        parser = super(ShowBucket, self).get_parser(prog_name)
+        parser.add_argument(
+            'bucket',
+            help='Name of the bucket to query.'
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        reqid = request_id(prefix='CLI-BUCKET-')
+        acct_client = self.app.client_manager.storage.account
+        data = acct_client.bucket_show(parsed_args.bucket, reqid=reqid)
+
+        if parsed_args.formatter == 'table':
+            from oio.common.easy_value import convert_size
+
+            data['bytes'] = convert_size(data['bytes'])
+            data['mtime'] = Timestamp(data.get('mtime', 0.0)).isoformat
+        return zip(*sorted(data.items()))
+
+
 class ShowContainer(ContainerCommandMixin, ShowOne):
     """Display information about an object container."""
 
@@ -341,11 +378,11 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
         )
 
         sys = data['system']
-        ctime = float(sys['sys.m2.ctime']) / 1000000.
-        bytes_usage = sys.get('sys.m2.usage', 0)
-        objects = sys.get('sys.m2.objects', 0)
-        damaged_objects = sys.get('sys.m2.objects.damaged', 0)
-        missing_chunks = sys.get('sys.m2.chunks.missing', 0)
+        ctime = float(sys[M2_PROP_CTIME]) / 1000000.
+        bytes_usage = sys.get(M2_PROP_USAGE, 0)
+        objects = sys.get(M2_PROP_OBJECTS, 0)
+        damaged_objects = sys.get(M2_PROP_DAMAGED_OBJECTS, 0)
+        missing_chunks = sys.get(M2_PROP_MISSING_CHUNKS, 0)
         if parsed_args.formatter == 'table':
             from oio.common.easy_value import convert_size
 
@@ -358,23 +395,87 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
             'container': sys['sys.user.name'],
             'ctime': ctime,
             'bytes_usage': bytes_usage,
-            'quota': sys.get('sys.m2.quota', "Namespace default"),
+            'quota': sys.get(M2_PROP_QUOTA, "Namespace default"),
             'objects': objects,
             'damaged_objects': damaged_objects,
             'missing_chunks': missing_chunks,
-            'storage_policy': sys.get('sys.m2.policy.storage',
+            'storage_policy': sys.get(M2_PROP_STORAGE_POLICY,
                                       "Namespace default"),
-            'max_versions': sys.get('sys.m2.policy.version',
+            'max_versions': sys.get(M2_PROP_VERSIONING_POLICY,
                                     "Namespace default"),
             'status': OIO_DB_STATUS_NAME.get(sys.get('sys.status'), "Unknown"),
         }
-        delete_exceeding = sys.get('sys.m2.policy.version.delete_exceeding',
-                                   None)
+        delete_exceeding = sys.get(M2_PROP_DEL_EXC_VERSIONS, None)
         if delete_exceeding is not None:
             info['delete_exceeding_versions'] = delete_exceeding != '0'
         for k, v in iteritems(data['properties']):
             info['meta.' + k] = v
         return list(zip(*sorted(info.items())))
+
+
+class ListBuckets(Lister):
+    """Get the list of buckets owned by an account."""
+
+    log = getLogger(__name__ + '.ListBuckets')
+
+    def get_parser(self, prog_name):
+        from oio.cli.common.utils import ValueFormatStoreTrueAction
+
+        parser = super(ListBuckets, self).get_parser(prog_name)
+        parser.add_argument(
+            '--prefix',
+            metavar='<prefix>',
+            help='Filter the list using <prefix>'
+        )
+        parser.add_argument(
+            '--marker',
+            metavar='<marker>',
+            help='Marker for paging'
+        )
+        parser.add_argument(
+            '--limit',
+            metavar='<limit>',
+            help='Limit the number of buckets returned'
+        )
+        parser.add_argument(
+            '--no-paging', '--full',
+            dest='full_listing',
+            default=False,
+            help=("List all buckets without paging "
+                  "(and set output format to 'value')"),
+            action=ValueFormatStoreTrueAction
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        kwargs = {'reqid': request_id(prefix='CLI-BUCKET-')}
+        if parsed_args.prefix:
+            kwargs['prefix'] = parsed_args.prefix
+        if parsed_args.marker:
+            kwargs['marker'] = parsed_args.marker
+        if parsed_args.limit:
+            kwargs['limit'] = parsed_args.limit
+
+        account = self.app.client_manager.account
+        acct_client = self.app.client_manager.storage.account
+
+        if parsed_args.full_listing:
+            listing = depaginate(
+                acct_client.bucket_list,
+                listing_key=lambda x: x['listing'],
+                marker_key=lambda x: x.get('next_marker'),
+                truncated_key=lambda x: x['truncated'],
+                account=account,
+                **kwargs)
+        else:
+            acct_meta = acct_client.bucket_list(account, **kwargs)
+            listing = acct_meta['listing']
+
+        columns = ('Name', 'Bytes', 'Objects', 'Mtime')
+        return columns, ((v['name'], v['bytes'], v['objects'], v['mtime'])
+                         for v in listing)
 
 
 class ListContainer(Lister):
@@ -512,13 +613,13 @@ class UnsetContainer(ContainerCommandMixin, Command):
         properties = parsed_args.property
         system = dict()
         if parsed_args.storage_policy:
-            system['sys.m2.policy.storage'] = ''
+            system[M2_PROP_STORAGE_POLICY] = ''
         if parsed_args.max_versions:
-            system['sys.m2.policy.version'] = ''
+            system[M2_PROP_VERSIONING_POLICY] = ''
         if parsed_args.quota:
-            system['sys.m2.quota'] = ''
+            system[M2_PROP_QUOTA] = ''
         if parsed_args.delete_exceeding_versions:
-            system['sys.m2.policy.version.delete_exceeding'] = ''
+            system[M2_PROP_DEL_EXC_VERSIONS] = ''
 
         if properties or not system:
             self.app.client_manager.storage.container_del_properties(
@@ -735,7 +836,7 @@ class SnapshotContainer(ContainerCommandMixin, Lister):
         deadline = timeout_to_deadline(parsed_args.timeout)
         dst_account = parsed_args.dst_account or account
         dst_container = (parsed_args.dst_container or
-                         (container + "-" + Timestamp(time()).normal))
+                         (container + "-" + Timestamp().normal))
         batch_size = parsed_args.chunk_batch_size
 
         self.app.client_manager.storage.container_snapshot(

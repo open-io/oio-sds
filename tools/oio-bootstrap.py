@@ -113,6 +113,15 @@ start_at_boot=false
 command=oio-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 """
 
+template_gridinit_xcute = """
+[service.${NS}-${SRVTYPE}-${SRVNUM}]
+group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+on_die=cry
+enabled=true
+start_at_boot=false
+command=oio-${SRVTYPE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+"""
+
 template_gridinit_rdir = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
@@ -295,6 +304,19 @@ template_account_watch = """
 host: ${IP}
 port: ${PORT}
 type: account
+checks:
+    - {type: tcp}
+slots:
+    - ${SRVTYPE}
+stats:
+    - {type: http, path: /status, parser: json}
+    - {type: system}
+"""
+
+template_xcute_watch = """
+host: ${IP}
+port: ${PORT}
+type: xcute
 checks:
     - {type: tcp}
 slots:
@@ -605,6 +627,10 @@ score_timeout=120
 score_expr=(1 + (num stat.cpu))
 score_timeout=120
 
+[type:xcute]
+score_expr=(1 + (num stat.cpu))
+score_timeout=120
+
 [type:echo]
 score_expr=(num stat.cpu)
 score_timeout=30
@@ -896,6 +922,40 @@ tube = oio-preserved
 queue_url = ${MAIN_QUEUE_URL}
 """
 
+template_gridinit_xcute_event_agent = """
+
+[service.${NS}-${SRVTYPE}-${SRVNUM}]
+group=${NS},localhost,event
+on_die=respawn
+enabled=true
+start_at_boot=false
+command=oio-event-agent ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
+"""
+
+template_xcute_event_agent = """
+[event-agent]
+tube = oio-xcute
+namespace = ${NS}
+user = ${USER}
+workers = 2
+concurrency = 5
+handlers_conf = ${CFGDIR}/xcute-event-handlers-${SRVNUM}.conf
+log_facility = LOG_LOCAL0
+log_level = INFO
+log_address = /dev/log
+syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
+queue_url=${QUEUE_URL}
+"""
+
+template_xcute_event_agent_handlers = """
+[handler:xcute.tasks]
+pipeline = xcute
+
+[filter:xcute]
+use = egg:oio#xcute
+"""
+
 template_conscience_agent = """
 namespace: ${NS}
 user: ${USER}
@@ -925,6 +985,30 @@ syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
 sentinel_master_name = oio
 
 redis_host = ${IP}
+"""
+
+template_xcute = """
+[DEFAULT]
+log_facility = LOG_LOCAL0
+log_level = INFO
+log_address = /dev/log
+syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
+namespace = ${NS}
+# Let this option empty to connect directly to redis_host
+#redis_sentinel_hosts = 127.0.0.1:26379,127.0.0.1:26380,127.0.0.1:26381
+#redis_sentinel_name = oio
+redis_host = ${IP}:${REDIS_PORT}
+
+[xcute-server]
+bind_addr = ${IP}
+bind_port = ${PORT}
+workers = 2
+
+[xcute-orchestrator]
+orchestrator_id = orchestrator-${SRVNUM}
+beanstalkd_workers_tube = oio-xcute
+beanstalkd_reply_tube = oio-xcute.reply
+beanstalkd_reply_addr = ${QUEUE_URL}
 """
 
 template_rdir = """
@@ -1547,6 +1631,7 @@ def generate(options):
     # Event agent configuration -> one per beanstalkd
     for num, host, port in all_beanstalkd:
         bnurl = 'beanstalk://{0}:{1}'.format(host, port)
+
         env = subenv({'SRVTYPE': 'event-agent', 'SRVNUM': num,
                       'QUEUE_URL': bnurl})
         add_service(env)
@@ -1559,6 +1644,32 @@ def generate(options):
         with open(CFGDIR + '/event-handlers-'+str(num)+'.conf', 'w+') as f:
             tpl = Template(template_event_agent_handlers)
             f.write(tpl.safe_substitute(env))
+
+        env = subenv({'SRVTYPE': 'xcute-event-agent', 'SRVNUM': num,
+                      'QUEUE_URL': bnurl})
+        with open(gridinit(env), 'a+') as f:
+            tpl = Template(template_gridinit_xcute_event_agent)
+            f.write(tpl.safe_substitute(env))
+        with open(config(env), 'w+') as f:
+            tpl = Template(template_xcute_event_agent)
+            f.write(tpl.safe_substitute(env))
+        with open(CFGDIR + '/xcute-event-handlers-'+str(num)+'.conf', 'w+') as f:
+            tpl = Template(template_xcute_event_agent_handlers)
+            f.write(tpl.safe_substitute(env))
+
+    # xcute
+    env = subenv({'SRVTYPE': 'xcute', 'SRVNUM': 1, 'PORT': next(ports),
+                  'REDIS_PORT': 6379, 'QUEUE_URL': bnurl})
+    add_service(env)
+    with open(gridinit(env), 'a+') as f:
+        tpl = Template(template_gridinit_xcute)
+        f.write(tpl.safe_substitute(env))
+    with open(config(env), 'w+') as f:
+        tpl = Template(template_xcute)
+        f.write(tpl.safe_substitute(env))
+    with open(watch(env), 'w+') as f:
+        tpl = Template(template_xcute_watch)
+        f.write(tpl.safe_substitute(env))
 
     # blob-rebuilder configuration -> one per beanstalkd
     for num, host, port in all_beanstalkd:

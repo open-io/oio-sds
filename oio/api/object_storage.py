@@ -706,6 +706,9 @@ class ObjectStorageApi(object):
             (`oio.common.utils.monotonic_time`). This supersedes `timeout`
             or `read_timeout` keyword arguments.
         :type deadline: `float` seconds
+        :keyword container_properties: when containers are automatically
+            created, this keyword allows to set user and system properties.
+        :type container_properties: `dict`
 
         :returns: `list` of chunks, size, hash and metadata of what has been
             uploaded
@@ -1375,7 +1378,8 @@ class ObjectStorageApi(object):
         # postpone the deadline.
         set_deadline_from_read_timeout(kwargs, force=True)
 
-        data = {'chunks': ul_chunks, 'properties': obj_meta['properties']}
+        data = {'chunks': ul_chunks, 'properties': obj_meta['properties'],
+                'container_properties': kwargs.get('container_properties')}
         try:
             # FIXME: we may just pass **obj_meta
             self.container.content_create(

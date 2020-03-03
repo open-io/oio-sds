@@ -78,7 +78,7 @@ class ContentReaperFilter(Filter):
                                chunk_method)
         return handler, storage_method
 
-    def process(self, env, cb):
+    def process(self, env, beanstalkd, cb):
         event = Event(env)
         if event.event_type == EventTypes.CONTENT_DELETED:
             url = event.env.get('url')
@@ -100,9 +100,9 @@ class ContentReaperFilter(Filter):
                     chunk_method = content_headers[0]['chunk-method']
                 handler, storage_method = self._load_handler(chunk_method)
                 handler(url, chunks, content_headers, storage_method, reqid)
-                return self.app(env, cb)
+                return self.app(env, beanstalkd, cb)
 
-        return self.app(env, cb)
+        return self.app(env, beanstalkd, cb)
 
 
 def filter_factory(global_conf, **local_conf):

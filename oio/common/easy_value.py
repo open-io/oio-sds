@@ -47,7 +47,9 @@ def true_value(value):
         (isinstance(value, string_types) and value.lower() in TRUE_VALUES)
 
 
-def boolean_value(value):
+def boolean_value(value, default=False):
+    if value in (None, 'None'):
+        return default
     try:
         value = str(value).lower()
         if value in TRUE_VALUES:

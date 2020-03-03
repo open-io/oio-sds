@@ -265,7 +265,7 @@ class ChunkReader(object):
         self.fp = fp
         self.decompressor = None
         self.error = None
-        if compression not in (None, 'off'):
+        if compression and compression not in ('off', ):
             if compression == 'zlib':
                 self.decompressor = zlib.decompressobj(0)
             else:

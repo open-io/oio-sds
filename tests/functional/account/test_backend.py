@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -85,7 +85,7 @@ class TestAccountBackend(BaseTestCase):
         # Create and check if in list
         account_id = 'test_list'
         self.backend.create_account(account_id)
-        account_list = self.backend.list_account()
+        account_list = self.backend.list_accounts()
         self.assertIn(account_id, account_list)
 
         # Check the result of a nonexistent account
@@ -105,7 +105,7 @@ class TestAccountBackend(BaseTestCase):
 
         # first container
         self.backend.update_container(
-            account_id, 'c1', Timestamp(time()).normal, 0, 1, 1, 1, 1)
+            account_id, 'c1', Timestamp().normal, 0, 1, 1, 1, 1)
         info = self.backend.info_account(account_id)
         self.assertEqual(info['containers'], 1)
         self.assertEqual(info['objects'], 1)
@@ -116,7 +116,7 @@ class TestAccountBackend(BaseTestCase):
         # second container
         sleep(.00001)
         self.backend.update_container(
-            account_id, 'c2', Timestamp(time()).normal, 0, 0, 0, 0, 0)
+            account_id, 'c2', Timestamp().normal, 0, 0, 0, 0, 0)
         info = self.backend.info_account(account_id)
         self.assertEqual(info['containers'], 2)
         self.assertEqual(info['objects'], 1)
@@ -127,7 +127,7 @@ class TestAccountBackend(BaseTestCase):
         # update second container
         sleep(.00001)
         self.backend.update_container(
-            account_id, 'c2', Timestamp(time()).normal, 0, 1, 1, 1, 2)
+            account_id, 'c2', Timestamp().normal, 0, 1, 1, 1, 2)
         info = self.backend.info_account(account_id)
         self.assertEqual(info['containers'], 2)
         self.assertEqual(info['objects'], 2)
@@ -138,7 +138,7 @@ class TestAccountBackend(BaseTestCase):
         # delete first container
         sleep(.00001)
         self.backend.update_container(
-            account_id, 'c1', 0, Timestamp(time()).normal, 0, 0, 0, 0)
+            account_id, 'c1', 0, Timestamp().normal, 0, 0, 0, 0)
         info = self.backend.info_account(account_id)
         self.assertEqual(info['containers'], 1)
         self.assertEqual(info['objects'], 1)
@@ -149,7 +149,7 @@ class TestAccountBackend(BaseTestCase):
         # delete second container
         sleep(.00001)
         self.backend.update_container(
-            account_id, 'c2', 0, Timestamp(time()).normal, 0, 0, 0, 0)
+            account_id, 'c2', 0, Timestamp().normal, 0, 0, 0, 0)
         info = self.backend.info_account(account_id)
         self.assertEqual(info['containers'], 0)
         self.assertEqual(info['objects'], 0)
@@ -163,12 +163,12 @@ class TestAccountBackend(BaseTestCase):
 
         # Container create event, sent immediately after creation
         self.backend.update_container(
-            account_id, 'c1', Timestamp(time()).normal,
+            account_id, 'c1', Timestamp().normal,
             None, None, None, None, None)
 
         # Container update event
         self.backend.update_container(
-            account_id, 'c1', Timestamp(time()).normal, None, 3, 30, 7, 5)
+            account_id, 'c1', Timestamp().normal, None, 3, 30, 7, 5)
         info = self.backend.info_account(account_id)
         self.assertEqual(info['containers'], 1)
         self.assertEqual(info['objects'], 3)
@@ -177,12 +177,12 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(info['missing_chunks'], 5)
 
         # Container is flushed, but the event is deferred
-        flush_timestamp = Timestamp(time()).normal
+        flush_timestamp = Timestamp().normal
 
         sleep(.00001)
         # Container delete event, sent immediately after deletion
         self.backend.update_container(
-            account_id, 'c1', None, Timestamp(time()).normal,
+            account_id, 'c1', None, Timestamp().normal,
             None, None, None, None)
 
         # Deferred container update event (with lower timestamp)
@@ -200,7 +200,7 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(self.backend.create_account(account_id), account_id)
         name = 'c'
         old_mtime = Timestamp(time() - 1).normal
-        mtime = Timestamp(time()).normal
+        mtime = Timestamp().normal
 
         # initial container
         self.backend.update_container(account_id, name, mtime, 0, 0, 0, 0, 0)
@@ -210,7 +210,7 @@ class TestAccountBackend(BaseTestCase):
 
         # delete event
         sleep(.00001)
-        dtime = Timestamp(time()).normal
+        dtime = Timestamp().normal
         self.backend.update_container(
             account_id, name, mtime, dtime, 0, 0, 0, 0)
         res = self.backend.conn.zrangebylex(
@@ -243,7 +243,7 @@ class TestAccountBackend(BaseTestCase):
         account_id = 'test'
         self.assertEqual(self.backend.create_account(account_id), account_id)
         name = u'La fête à la maison'
-        mtime = Timestamp(time()).normal
+        mtime = Timestamp().normal
 
         # create container
         self.backend.update_container(account_id, name, mtime, 0, 0, 0, 0, 0)
@@ -258,7 +258,7 @@ class TestAccountBackend(BaseTestCase):
 
         # delete container
         sleep(.00001)
-        dtime = Timestamp(time()).normal
+        dtime = Timestamp().normal
         self.backend.update_container(account_id, name, 0, dtime, 0, 0, 0, 0)
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
@@ -282,7 +282,7 @@ class TestAccountBackend(BaseTestCase):
 
         # initial container
         name = '"{<container \'&\' name>}"'
-        mtime = Timestamp(time()).normal
+        mtime = Timestamp().normal
         self.backend.update_container(account_id, name, mtime, 0, 0, 0, 0, 0)
 
         res = self.backend.conn.zrangebylex(
@@ -308,7 +308,7 @@ class TestAccountBackend(BaseTestCase):
 
         # New event
         sleep(.00001)
-        mtime = Timestamp(time()).normal
+        mtime = Timestamp().normal
         self.backend.update_container(account_id, name, mtime, 0, 0, 0, 0, 0)
 
         res = self.backend.conn.zrangebylex(
@@ -347,7 +347,7 @@ class TestAccountBackend(BaseTestCase):
 
         # New delete event
         sleep(.00001)
-        mtime = Timestamp(time()).normal
+        mtime = Timestamp().normal
         self.backend.update_container(account_id, name, 0, mtime, 0, 0, 0, 0)
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
@@ -357,7 +357,7 @@ class TestAccountBackend(BaseTestCase):
 
         # New event
         sleep(.00001)
-        mtime = Timestamp(time()).normal
+        mtime = Timestamp().normal
         self.backend.update_container(account_id, name, mtime, 0, 0, 0, 0, 0)
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
@@ -377,17 +377,17 @@ class TestAccountBackend(BaseTestCase):
             for cont2 in xrange(125):
                 name = '%d-%04d' % (cont1, cont2)
                 self.backend.update_container(
-                    account_id, name, Timestamp(time()).normal, 0, 0, 0, 0, 0)
+                    account_id, name, Timestamp().normal, 0, 0, 0, 0, 0)
 
         for cont in xrange(125):
             name = '2-0051-%04d' % cont
             self.backend.update_container(
-                account_id, name, Timestamp(time()).normal, 0, 0, 0, 0, 0)
+                account_id, name, Timestamp().normal, 0, 0, 0, 0, 0)
 
         for cont in xrange(125):
             name = '3-%04d-0049' % cont
             self.backend.update_container(
-                account_id, name, Timestamp(time()).normal, 0, 0, 0, 0, 0)
+                account_id, name, Timestamp().normal, 0, 0, 0, 0, 0)
 
         listing = self.backend.list_containers(
             account_id, marker='', delimiter='', limit=100)
@@ -466,7 +466,7 @@ class TestAccountBackend(BaseTestCase):
 
         name = '3-0049-'
         self.backend.update_container(
-            account_id, name, Timestamp(time()).normal, 0, 0, 0, 0, 0)
+            account_id, name, Timestamp().normal, 0, 0, 0, 0, 0)
         listing = self.backend.list_containers(
             account_id, marker='3-0048', limit=10)
         self.assertEqual(len(listing), 10)
@@ -503,7 +503,7 @@ class TestAccountBackend(BaseTestCase):
         # 10 containers with bytes and objects
         for i in range(10):
             name = "container%d" % i
-            mtime = Timestamp(time()).normal
+            mtime = Timestamp().normal
             nb_bytes = random.randrange(100)
             total_bytes += nb_bytes
             nb_objets = random.randrange(100)
@@ -638,7 +638,7 @@ class TestAccountBackend(BaseTestCase):
         # 10 containers with bytes and objects
         for i in range(10):
             name = "container%d" % i
-            mtime = Timestamp(time()).normal
+            mtime = Timestamp().normal
             nb_bytes = random.randrange(100)
             total_bytes += nb_bytes
             nb_objets = random.randrange(100)

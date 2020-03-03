@@ -60,7 +60,7 @@ class Response(object):
             self.env = {}
         self.body = body
 
-    def __call__(self, env, cb):
+    def __call__(self, env, beanstalkd, cb):
         if not self.event:
             self.event = Event(env)
         if not self.body:
@@ -92,6 +92,7 @@ class EventTypes(object):
     CONTENT_PERFECTIBLE = 'storage.content.perfectible'
     CONTENT_REBUILT = 'storage.content.rebuilt'
     META2_DELETED = 'storage.meta2.deleted'
+    XCUTE_TASKS = 'xcute.tasks'
 
 
 class StatusMap(object):

@@ -29,8 +29,8 @@ class Filter(object):
     def init(self):
         pass
 
-    def process(self, env, cb):
-        return self.app(env, cb)
+    def process(self, env, beanstalkd, cb):
+        return self.app(env, beanstalkd, cb)
 
-    def __call__(self, env, cb):
-        self.process(env, cb)
+    def __call__(self, env, beanstalkd, cb):
+        self.process(env, beanstalkd, cb)

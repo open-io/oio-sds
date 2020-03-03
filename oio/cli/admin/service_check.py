@@ -1,4 +1,4 @@
-# Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -19,6 +19,8 @@ from cliff import lister
 from oio.crawler.integrity import Target
 from oio.cli.admin.item_check import ItemCheckCommand
 from oio.cli.admin.common import MultipleServicesCommandMixin
+
+CID_PREFIX_COUNT = 65536
 
 
 class BaseCheckCommand(lister.Lister):
@@ -53,26 +55,27 @@ class BaseCheckCommand(lister.Lister):
         self.live = self.load_live_services()
         self.live = tuple(self.live)
         self.logger.info("Catalog: loaded %d services", len(self.live))
-        for t, i, p, s in self.live:
-            self.logger.debug("live> %s %s %d score=%d", t, i, p, s)
+        for type_, host, port, score in self.live:
+            self.logger.debug("live> %s %s %d score=%d",
+                              type_, host, port, score)
 
         # Load a catalog of expected services
         self.catalog = list()
         if parsed_args.catalog:
             self.catalog = self.load_catalog_from_file(parsed_args.catalog)
         else:
-            for t, i, p, s in self.live:
-                self.catalog.append((t, i, p, s))
+            for type_, host, port, score in self.live:
+                self.catalog.append((type_, host, port, score))
         self.catalog = tuple(self.catalog)
         self.logger.info("Catalog: loaded %d services", len(self.catalog))
-        for t, i, p, s in self.catalog:
-            self.logger.debug("catalog> %s %s %d", t, i, p)
+        for type_, host, port, score in self.catalog:
+            self.logger.debug("catalog> %s %s %d", type_, host, port)
 
     @staticmethod
     def filter_services(srv, srvtype):
-        for t, i, p, s in srv:
-            if t == srvtype:
-                yield t, i, p, s
+        for type_, host, port, score in srv:
+            if type_ == srvtype:
+                yield type_, host, port, score
 
     def load_live_services(self):
         client = self.app.client_manager.conscience
@@ -88,8 +91,8 @@ class BaseCheckCommand(lister.Lister):
                 if not line or line.startswith('#'):
                     continue
                 try:
-                    t, i, p = line.split()
-                    yield str(t), str(i), int(p), 0
+                    type_, host, port = line.split()
+                    yield str(type_), str(host), int(port), 0
                 except Exception as ex:
                     self.logger.exception("Failed to decode line: %s", ex)
 
@@ -130,16 +133,16 @@ class Meta0Check(BaseCheckCommand):
 
         # check they are registered in the ZK
         for zh in get_connected_handles(self.zookeeper()):
-            for p in get_meta0_paths(zh, self.app.options.ns):
+            for path in get_meta0_paths(zh, self.app.options.ns):
                 try:
                     registered = set()
-                    for n in zookeeper.get_children(zh.get(), p):
-                        v, m = zookeeper.get(zh.get(), p + '/' + n)
-                        registered.add(v)
+                    for node in zookeeper.get_children(zh.get(), path):
+                        addr, _ = zookeeper.get(zh.get(), path + '/' + node)
+                        registered.add(addr)
                     known = set()
-                    for t, i, p, s in self.filter_services(self.catalog,
-                                                           'meta0'):
-                        known.add('%s:%d' % (i, p))
+                    for _, host, port, _ in self.filter_services(self.catalog,
+                                                                 'meta0'):
+                        known.add('%s:%d' % (host, port))
                     self.logger.info("meta0 known=%d zk_registered=%d",
                                      len(known), len(registered))
                     assert registered == known
@@ -193,14 +196,16 @@ class DirectoryCheck(BaseCheckCommand):
         # Get an official dump from the proxy, check its size
         m0 = Meta0Client({"namespace": self.app.options.ns})
         prefixes = m0.list()
-        assert len(prefixes) == 65536
+        if len(prefixes) != CID_PREFIX_COUNT:
+            raise ValueError('Found %d entries in meta0, expected %d' % (
+                             len(prefixes), CID_PREFIX_COUNT))
         self.logger.info("The proxy serves a full meta0 dump.")
 
         # contact each M0 to perform a check: any "get" command will
         # fail if the meta0 is not complete. Unfortunately we just have
         # oio-meta0-client to target a specific service.
-        for t, i, p, s in self.filter_services(self.catalog, 'meta0'):
-            url = '%s:%d' % (i, p)
+        for _, host, port, _ in self.filter_services(self.catalog, 'meta0'):
+            url = '%s:%d' % (host, port)
             res = subprocess.check_output(
                 ['oio-meta0-client', url, 'get', '0000'])
             self.logger.info(res)
@@ -208,13 +213,16 @@ class DirectoryCheck(BaseCheckCommand):
 
         # contact each meta0 to check that all the dumps are identical
         dump0 = None
-        for t, i, p, s in self.filter_services(self.catalog, 'meta0'):
-            url = '%s:%d' % (i, p)
+        first = None
+        for _, host, port, _ in self.filter_services(self.catalog, 'meta0'):
+            url = '%s:%d' % (host, port)
             dump = subprocess.check_output(['oio-meta0-client', url, 'list'])
             if dump0 is None:
                 dump0 = dump
-            else:
-                assert dump0 == dump
+                first = url
+            elif dump0 != dump:
+                raise ValueError('The dump returned by meta0 %s differs from '
+                                 'the dump returned by %s' % (url, first))
         self.logger.info("All meta0 services serve the same base.")
 
         # Check all the meta1 are concerned
@@ -222,9 +230,13 @@ class DirectoryCheck(BaseCheckCommand):
         for _, v in iteritems(json.loads(dump0)):
             for url in v:
                 reverse_dump.add(url)
-        m1 = list(self.filter_services(self.catalog, 'meta1'))
-        # FIXME(FVE): this check does not guarantee items are the same
-        assert len(m1) == len(reverse_dump)
+        m1 = {':'.join((descr[1], str(descr[2])))
+              for descr in self.filter_services(self.catalog, 'meta1')}
+        if m1 != reverse_dump:
+            raise ValueError(
+                'Meta1 used but not visible: %s, '
+                'meta1 visible but not used: %s' % (
+                 reverse_dump - m1, m1 - reverse_dump))
         self.logger.info("All meta1 services have been assigned.")
         yield ('OK', None)
 

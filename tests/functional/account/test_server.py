@@ -13,7 +13,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from time import time
 import simplejson as json
 
 from werkzeug.test import Client
@@ -71,7 +70,7 @@ class TestAccountServer(BaseTestCase):
         self.assertEqual(resp.status_code, 204)
 
     def test_account_container_update(self):
-        data = {'name': 'foo', 'mtime': Timestamp(time()).normal,
+        data = {'name': 'foo', 'mtime': Timestamp().normal,
                 'objects': 0, 'bytes': 0}
         data = json.dumps(data)
         resp = self.app.put('/v1.0/account/container/update',
@@ -92,13 +91,13 @@ class TestAccountServer(BaseTestCase):
         self.assertGreaterEqual(data['bytes'], 0)
 
     def test_account_container_reset(self):
-        data = {'name': 'foo', 'mtime': Timestamp(time()).normal,
+        data = {'name': 'foo', 'mtime': Timestamp().normal,
                 'objects': 12, 'bytes': 42}
         dataj = json.dumps(data)
         resp = self.app.put('/v1.0/account/container/update',
                             data=dataj, query_string={'id': self.account_id})
 
-        data = {'name': 'foo', 'mtime': Timestamp(time()).normal}
+        data = {'name': 'foo', 'mtime': Timestamp().normal}
         dataj = json.dumps(data)
         resp = self.app.put('/v1.0/account/container/reset',
                             data=dataj, query_string={'id': self.account_id})
@@ -120,7 +119,7 @@ class TestAccountServer(BaseTestCase):
         self.fail("No container foo")
 
     def test_account_refresh(self):
-        data = {'name': 'foo', 'mtime': Timestamp(time()).normal,
+        data = {'name': 'foo', 'mtime': Timestamp().normal,
                 'objects': 12, 'bytes': 42}
         data = json.dumps(data)
         resp = self.app.put('/v1.0/account/container/update',
@@ -137,7 +136,7 @@ class TestAccountServer(BaseTestCase):
         self.assertEqual(resp["objects"], 12)
 
     def test_account_flush(self):
-        data = {'name': 'foo', 'mtime': Timestamp(time()).normal,
+        data = {'name': 'foo', 'mtime': Timestamp().normal,
                 'objects': 12, 'bytes': 42}
         data = json.dumps(data)
         resp = self.app.put('/v1.0/account/container/update',

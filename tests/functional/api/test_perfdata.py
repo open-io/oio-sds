@@ -65,7 +65,9 @@ class TestObjectStorageApiPerfdata(BaseTestCase):
         perfdata = dict()
         container = random_str(8)
         obj = random_str(8)
-        self.api.object_create(self.account, container, obj_name=obj, data=obj)
+        odata = obj.encode('utf-8')
+        self.api.object_create(self.account, container,
+                               obj_name=obj, data=odata)
         meta, chunks = self.api.object_locate(self.account, container, obj)
         stg_method = STORAGE_METHODS.load(meta['chunk_method'])
         _, stream = self.api.object_fetch(self.account, container, obj,
@@ -78,7 +80,7 @@ class TestObjectStorageApiPerfdata(BaseTestCase):
         self.assertNotIn('ttlb', perfdata)
 
         buf = b''.join(stream)
-        self.assertEqual(obj, buf)
+        self.assertEqual(odata, buf)
         self.assertIn('rawx', perfdata)
         if stg_method.ec:
             self.assertIn('ec', perfdata['rawx'])

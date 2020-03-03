@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from datetime import datetime
+from oio.common.green import datetime, time
 
 
 TIMESTAMP_FORMAT = "%016.05f"
@@ -23,11 +23,14 @@ def cmp(x, y): return (x > y) - (x < y)
 
 
 class Timestamp(object):
-    def __init__(self, timestamp):
-        self.timestamp = float(timestamp)
-        # More than year 1000000?! We got microseconds.
-        if self.timestamp > 31494784780800.0:
-            self.timestamp /= 1000000.0
+    def __init__(self, timestamp=None):
+        if timestamp is None:
+            self.timestamp = time.time()
+        else:
+            self.timestamp = float(timestamp)
+            # More than year 1000000?! We got microseconds.
+            if self.timestamp > 31494784780800.0:
+                self.timestamp /= 1000000.0
 
     def __repr__(self):
         return self.normal
