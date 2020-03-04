@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -445,19 +445,20 @@ hook_commit(gpointer d)
 
 	ctx->any_change = 1;
 
+	gint64 start = oio_ext_monotonic_time();
+	int rc = 0;
 	if (ctx->huge) {
 		_defer_synchronous_RESYNC(ctx);
-		return 0;
-	}
-
-	if (ctx->sequence.list.count <= 0) {
+	} else if (ctx->sequence.list.count <= 0) {
 		GRID_DEBUG("Empty transaction!");
 		ctx->any_change = 0;
 		context_flush_rowsets(ctx);
-		return 0;
+	} else {
+		rc = _perform_REPLICATE(ctx);
 	}
-
-	return _perform_REPLICATE(ctx);
+	gint64 duration = oio_ext_monotonic_time() - start;
+	oio_ext_add_perfdata("db_commit", duration);
+	return rc;
 }
 
 static void

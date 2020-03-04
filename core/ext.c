@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -181,6 +181,7 @@ struct oio_ext_local_s {
 	gchar *force_versioning;
 	guint8 simulate_versioning;
 	gchar reqid[LIMIT_LENGTH_REQID];
+	GHashTable *perfdata;
 };
 
 static void _local_free(gpointer p) {
@@ -198,6 +199,10 @@ static void _local_free(gpointer p) {
 	if (l->force_versioning) {
 		g_free(l->force_versioning);
 		l->force_versioning = NULL;
+	}
+	if (l->perfdata) {
+		g_hash_table_destroy(l->perfdata);
+		l->perfdata = NULL;
 	}
 	g_free (l);
 }
@@ -350,6 +355,32 @@ gboolean oio_ext_has_simulate_versioning(void) {
 void oio_ext_set_simulate_versioning(const gboolean simulate_versioning) {
 	struct oio_ext_local_s *l = _local_ensure();
 	l->simulate_versioning = BOOL(simulate_versioning);
+}
+
+GHashTable *oio_ext_get_perfdata(void) {
+	struct oio_ext_local_s *l = _local_ensure();
+	return l->perfdata;
+}
+
+GHashTable *oio_ext_enable_perfdata(gboolean enabled) {
+	struct oio_ext_local_s *l = _local_ensure();
+	if (enabled && !l->perfdata) {
+		l->perfdata = g_hash_table_new_full(
+				g_str_hash, g_str_equal, g_free, NULL);
+	} else if (!enabled && l->perfdata) {
+		g_hash_table_destroy(l->perfdata);
+		l->perfdata = NULL;
+	}
+	return l->perfdata;
+}
+
+void oio_ext_add_perfdata(const gchar *key, gint64 value) {
+	struct oio_ext_local_s *l = _local_ensure();
+	if (l->perfdata) {
+		gint64 old = GPOINTER_TO_INT(g_hash_table_lookup(l->perfdata, key));
+		g_hash_table_insert(l->perfdata,
+				g_strdup(key), GINT_TO_POINTER(old + value));
+	}
 }
 
 /* -------------------------------------------------------------------------- */

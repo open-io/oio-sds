@@ -1103,6 +1103,14 @@ Used by `gcc`
  * cmake directive: *OIO_SERVER_MALLOC_TRIM_SIZE_PERIODIC*
  * range: 0 -> 2147483648
 
+### server.perfdata.enabled
+
+> Enable server-side performance data collection.
+
+ * default: **FALSE**
+ * type: gboolean
+ * cmake directive: *OIO_SERVER_PERFDATA_ENABLED*
+
 ### server.periodic_decache.max_bases
 
 > How many bases may be decached each time the background task performs its Dance of Death

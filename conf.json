@@ -312,6 +312,11 @@
 				"def": false,
 				"descr": "" },
 
+			{ "type": "bool", "name": "server_perfdata_enabled",
+				"key": "server.perfdata.enabled",
+				"def": false,
+				"descr": "Enable server-side performance data collection."},
+
 			{ "type": "bool", "name": "oio_socket_linger_onoff",
 				"key": "socket.linger.enabled",
 				"def": false,
@@ -813,6 +818,7 @@
 				"descr": "How long a request might take to run on the server side. This value is used to compute a deadline for several waitings (DB cache, manager of elections, etc). Common to all sqliterepo-based services, it might be overriden.",
 				"def": "300s", "min": "1ms", "max": "1h",
 				"aliases": ["server.request.max_delay_start"] }
+
 		]
 	},
 	"proxy": {

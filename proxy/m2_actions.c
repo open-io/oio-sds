@@ -1,7 +1,7 @@
 /*
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -53,6 +53,10 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 		out_list = (GSList **) out;
 		*out_list = NULL;
 	}
+	/* Check if the client application wants performance data. */
+	gboolean req_perfdata_enabled =
+		g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_PERFDATA) != NULL;
+	oio_ext_enable_perfdata(req_perfdata_enabled);
 
 	GError *err = gridd_request_replicated_with_retry(args, &ctx, pack);
 
@@ -73,13 +77,14 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 			}
 		}
 	}
-	if (g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_PERFDATA)) {
+	if (req_perfdata_enabled) {
 		gchar *perfdata = g_strdup_printf(
 				"resolve=%"G_GINT64_FORMAT",meta2=%"G_GINT64_FORMAT,
 				ctx.resolve_duration, ctx.request_duration);
 		args->rp->add_header(PROXYD_HEADER_PERFDATA, perfdata);
 	}
 
+	oio_ext_enable_perfdata(FALSE);
 	client_clean (&ctx);
 	return err;
 }
