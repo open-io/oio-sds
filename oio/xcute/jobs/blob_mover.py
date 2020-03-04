@@ -17,7 +17,7 @@ import math
 
 from oio.blob.client import BlobClient
 from oio.common.easy_value import float_value, int_value
-from oio.common.exceptions import ContentNotFound, OrphanChunk
+from oio.common.exceptions import ContentNotFound, NotFound, OrphanChunk
 from oio.common.green import time
 from oio.conscience.client import ConscienceClient
 from oio.content.factory import ContentFactory
@@ -69,8 +69,14 @@ class RawxDecommissionTask(XcuteTask):
         chunk_id = task_payload['chunk_id']
 
         chunk_url = 'http://{}/{}'.format(self.service_id, chunk_id)
-        meta = self.blob_client.chunk_head(
-            chunk_url, timeout=self.rawx_timeout, reqid=reqid)
+        try:
+            meta = self.blob_client.chunk_head(
+                chunk_url, timeout=self.rawx_timeout, reqid=reqid)
+        except NotFound:
+            # The chunk is still present in the rdir,
+            # but the chunk no longer exists in the rawx.
+            # We ignore it because there is nothing to move.
+            return {'skipped_chunks_no_longer_exist': 1}
         if container_id != meta['container_id']:
             raise ValueError('Mismatch container ID: %s != %s',
                              container_id, meta['container_id'])
@@ -83,11 +89,11 @@ class RawxDecommissionTask(XcuteTask):
         if chunk_size < self.min_chunk_size:
             self.logger.debug(
                 '[reqid=%s] SKIP %s too small', reqid, chunk_url)
-            return {'skipped_chunks': 1}
+            return {'skipped_chunks_too_small': 1}
         if self.max_chunk_size > 0 and chunk_size > self.max_chunk_size:
             self.logger.debug(
                 '[reqid=%s] SKIP %s too big', reqid, chunk_url)
-            return {'skipped_chunks': 1}
+            return {'skipped_chunks_too_big': 1}
 
         # Start moving the chunk
         try:
