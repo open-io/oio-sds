@@ -1,6 +1,6 @@
 /*
 OpenIO SDS core library
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -124,6 +124,17 @@ void oio_ext_clean_force_versioning(void);
 gboolean oio_ext_has_simulate_versioning(void);
 
 void oio_ext_set_simulate_versioning(const gboolean simulate_versioning);
+
+/** Enable or disable the performance data collection. */
+GHashTable *oio_ext_enable_perfdata(gboolean enabled);
+
+/** Get the performance data hash table (will be NULL when disabled) */
+GHashTable *oio_ext_get_perfdata(void);
+
+/** Add one metric in the performance data hash table.
+ * Does not take ownership of the key.
+ * When called several times with the same key, add values. */
+void oio_ext_add_perfdata(const gchar *key, gint64 value);
 
 gint64 oio_ext_real_time (void);
 

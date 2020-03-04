@@ -745,8 +745,10 @@ retry:
 	if (base) {
 		gint64 now = oio_ext_monotonic_time();
 		time_t now_secs = now / G_TIME_SPAN_SECOND;
+		gint64 wait_time = now - start;
 		grid_single_rrd_add(base->open_attempts, now_secs, 1);
-		grid_single_rrd_add(base->open_wait_time, now_secs, now - start);
+		grid_single_rrd_add(base->open_wait_time, now_secs, wait_time);
+		oio_ext_add_perfdata("db_wait", wait_time);
 
 		if (!err) {
 			sqlx_base_debug(__FUNCTION__, base);
@@ -825,6 +827,7 @@ sqlx_cache_unlock_and_close_base(sqlx_cache_t *cache, gint bd, guint32 flags)
 
 	if (base && !err) {
 		sqlx_base_debug(__FUNCTION__, base);
+		oio_ext_add_perfdata("db_lock", lock_time);
 		if (lock_time > _cache_timeout_open * 3 / 4) {
 			GRID_WARN("The current thread held a lock on [%s] for %"
 					G_GINT64_FORMAT"us (sqliterepo.cache.timeout.open=%"
