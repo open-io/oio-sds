@@ -26,7 +26,7 @@ from oio.common.green import ratelimit, sleep, threading
 from oio.common.json import json
 from oio.conscience.client import ConscienceClient
 from oio.event.beanstalk import Beanstalk, BeanstalkdListener, \
-    ConnectionError
+    ConnectionError, DEFAULT_TTR
 from oio.event.evob import EventTypes
 from oio.xcute.common.backend import XcuteBackend
 from oio.xcute.jobs import JOB_TYPES
@@ -306,6 +306,9 @@ class XcuteOrchestrator(object):
             raise ValueError('Task payload is too big (length=%s)' %
                              len(beanstalkd_payload))
 
+        # max 2 minutes per task
+        ttr = len(tasks) * DEFAULT_TTR
+
         while self.running:
             for beanstalkd_worker in beanstalkd_workers:
                 if not self.running:
@@ -314,7 +317,7 @@ class XcuteOrchestrator(object):
                     break
 
             try:
-                beanstalkd_worker.put(beanstalkd_payload)
+                beanstalkd_worker.put(beanstalkd_payload, ttr=ttr)
                 self.logger.debug(
                     '[job_id=%s] Tasks sent to %s: %s', job_id,
                     beanstalkd_worker.addr, str(tasks))
