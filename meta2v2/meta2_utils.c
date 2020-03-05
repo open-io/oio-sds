@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -507,9 +507,7 @@ m2db_get_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *u,
 			if (!oio_str_hex2bin (h, b, hl/2))
 				err = BADREQ("The content ID is not hexa");
 			else {
-				GBytes *gb = g_bytes_new_static (b, hl/2);
-				params[0] = _gb_to_gvariant(gb);
-				g_bytes_unref (gb);
+				params[0] = _bytes_to_gvariant(b, hl/2);
 			}
 		} while (0);
 
@@ -866,7 +864,7 @@ m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	if (!alias)
 		return NEWERROR(CODE_CONTENT_NOTFOUND, "Alias not found");
 
-	const char *name = ALIASES_get_alias(alias)->str;
+	GString *name = ALIASES_get_alias(alias);
 	gint64 version = ALIASES_get_version(alias);
 	// Used to remove duplicate modified properties
 	GHashTable *modified = g_hash_table_new_full(
@@ -894,7 +892,7 @@ m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		struct bean_PROPERTIES_s *prop = beans->data;
 		if (DESCR(prop) != &descr_struct_PROPERTIES)
 			continue;
-		PROPERTIES_set2_alias(prop, name);
+		PROPERTIES_set_alias(prop, name);
 		PROPERTIES_set_version(prop, version);
 		if (_is_empty_prop(prop)) {
 			err = _db_delete_bean(sq3->db, prop);
@@ -1396,28 +1394,6 @@ cleanup:
 
 /* PUT commons -------------------------------------------------------------- */
 
-#if 0
-static void _patch_beans_with_stgpol(GSList *beans, const char *stgpol) {
-	for (GSList *l = beans; l; l = l->next) {
-		gpointer bean = l->data;
-		if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
-			CONTENTS_HEADERS_set2_policy(bean, stgpol);
-		}
-	}
-}
-
-static gchar* _fetch_content_policy (GSList *beans) {
-	for (GSList *l = beans; l; l = l->next) {
-		gpointer bean = l->data;
-		if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
-			GString *gs = CONTENTS_HEADERS_get_policy(bean);
-			return (gs && gs->len && gs->str) ? g_strdup(gs->str) : NULL;
-		}
-	}
-	return NULL;
-}
-#endif
-
 static void _patch_beans_with_version (GSList *beans, gint64 version) {
 	for (GSList *l = beans; l; l = l->next) {
 		gpointer bean = l->data;
@@ -1429,11 +1405,11 @@ static void _patch_beans_with_version (GSList *beans, gint64 version) {
 	}
 }
 
-static void _patch_beans_with_contentid (GSList *beans,
-		const guint8 *uid, gsize len) {
+static void
+_patch_beans_with_contentid(GSList *beans, const guint8 *uid, gsize len)
+{
 	for (GSList *l = beans; l; l = l->next) {
 		gpointer bean = l->data;
-
 		if (DESCR(bean) == &descr_struct_ALIASES) {
 			ALIASES_set2_content(bean, uid, len);
 		} else if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
@@ -1442,7 +1418,6 @@ static void _patch_beans_with_contentid (GSList *beans,
 			CHUNKS_set2_content(bean, uid, len);
 		}
 	}
-
 }
 
 static void _patch_beans_with_time (GSList *beans,
@@ -1569,14 +1544,12 @@ static GError* m2db_check_content_absent(struct sqlx_sqlite3_s *sq3,
 		const guint8 *uid, const gsize len) {
 	GPtrArray *tmp = g_ptr_array_new ();
 	GVariant *params[2] = {NULL, NULL};
-	GBytes *id = g_bytes_new (uid, len);
-	params[0] = _gb_to_gvariant (id);
+	params[0] = _bytes_to_gvariant(uid, len);
 	GError *err = CONTENTS_HEADERS_load (sq3->db, " id = ? LIMIT 1", params,
 			_bean_buffer_cb, tmp);
 	metautils_gvariant_unrefv(params);
 	guint count = tmp->len;
 	_bean_cleanv2 (tmp);
-	g_bytes_unref (id);
 	if (err)
 		return err;
 	if (count)
@@ -2145,17 +2118,16 @@ GError* m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 
 	/* update the position in each new chunk, and link it to the content
 	 * in place */
+	GByteArray *cid_gba = g_bytes_unref_to_array(content_id);
 	for (GSList *l = newchunks; l; l = l->next) {
 		struct bean_CHUNKS_s *chunk = l->data;
 		GString *gs = CHUNKS_get_position (chunk);
 		struct m2v2_position_s position = m2v2_position_decode (gs->str);
 		position.meta += last_position + 1;
 		m2v2_position_encode  (gs, &position);
-		CHUNKS_set2_content (chunk, g_bytes_get_data(content_id, NULL),
-				g_bytes_get_size(content_id));
+		CHUNKS_set_content(chunk, cid_gba);
 	}
-
-	g_bytes_unref (content_id);
+	g_byte_array_free(cid_gba, TRUE);
 
 	/* Save the modified content header */
 	if ((err = _db_save_bean(sq3->db, header)))
