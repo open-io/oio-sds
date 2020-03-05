@@ -2,7 +2,7 @@
 
 # OpenIO SDS meta2v2
 # Copyright (C) 2014 Worldline, as part of Redcurrant
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -479,10 +479,11 @@ the list."""
                     out.write("void\n"+t.c_name+"_set2_"+f.name+"(struct bean_"+t.c_name+"_s *bean, const guint8 *v, gsize vlen)\n{\n")
                     out.write("\tEXTRA_ASSERT(bean != NULL);\n")
                     out.write("\tEXTRA_ASSERT(v != NULL);\n")
-                    out.write("\tGByteArray *gba = g_byte_array_sized_new(vlen);\n")
-                    out.write("\tg_byte_array_append(gba, v, vlen);\n")
+                    # Let the GByteArray think it owns the array...
+                    out.write("\tGByteArray *gba = g_byte_array_new_take((guint8*)v, vlen);\n")
                     out.write("\t"+t.c_name+"_set_"+f.name+"(bean, gba);\n")
-                    out.write("\tg_byte_array_free(gba, TRUE);\n")
+                    # ...but do not actually free it!
+                    out.write("\tg_byte_array_free(gba, FALSE);\n")
                     out.write("}\n\n")
                 if not f.mandatory:
                     out.write("void\n"+t.c_name+"_nullify_"+f.name+"(struct bean_"+t.c_name+"_s *bean)\n{\n")
