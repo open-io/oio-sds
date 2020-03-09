@@ -184,9 +184,16 @@ class BlobConverter(object):
 
     def decode_old_fullpath(self, old_fullpath):
         # pylint: disable=unbalanced-tuple-unpacking
-        account, container, path, version = decode_old_fullpath(old_fullpath)
-        cid = self.cid_from_name(account, container)
-        content_id = self.content_id_from_name(cid, path, version)
+        try:
+            account, container, path, version = decode_old_fullpath(
+                old_fullpath)
+            cid = self.cid_from_name(account, container)
+            content_id = self.content_id_from_name(cid, path, version)
+        except ValueError:
+            # We never know, let's try to decode the fullpath as if it was new
+            account, container, path, version, content_id = decode_fullpath(
+                old_fullpath)
+            cid = self.cid_from_name(account, container)
         return account, container, cid, path, version, content_id
 
     def encode_fullpath(self, fd, chunk_id,
@@ -279,7 +286,7 @@ class BlobConverter(object):
 
     def convert_chunk(self, fd, chunk_id):
         meta, raw_meta = read_chunk_metadata(fd, chunk_id,
-                                             check_chunk_id=False)
+                                             for_conversion=True)
 
         links = meta.get('links', dict())
         for chunk_id2, fullpath2 in links.iteritems():
