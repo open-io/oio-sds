@@ -701,7 +701,8 @@ class XcuteBackend(RedisConnection):
             config=dict())
 
         for key, value in marshalled_job_info.items():
-            split_key = key.split('.', 1)
+            split_key = key.decode('utf-8').split('.', 1)
+            value = value.decode('utf-8')
             if len(split_key) == 1:
                 job_info[split_key[0]] = value
             else:

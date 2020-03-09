@@ -14,6 +14,7 @@
 # License along with this library.
 
 from collections import Counter
+from six import iteritems
 
 from oio.common.constants import STRLEN_REQID
 from oio.common.green import ratelimit
@@ -51,7 +52,7 @@ class XcuteWorker(object):
         task_results = Counter()
 
         tasks_run_time = 0
-        for task_id, task_payload in tasks.iteritems():
+        for task_id, task_payload in iteritems(tasks):
             tasks_run_time = ratelimit(
                     tasks_run_time, tasks_per_second)
 
@@ -65,7 +66,7 @@ class XcuteWorker(object):
                                  job_id, task_id, exc)
                 task_errors[type(exc).__name__] += 1
 
-        return job_id, tasks.keys(), task_results, task_errors, \
+        return job_id, list(tasks.keys()), task_results, task_errors, \
             beanstalkd_job['beanstalkd_reply']
 
     def reply(self, job_id, task_ids, task_results,
