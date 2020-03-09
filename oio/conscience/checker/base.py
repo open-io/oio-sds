@@ -61,7 +61,7 @@ class BaseChecker(object):
         except Timeout as err:
             self.logger.warn('check timed out (%s)', err)
         except Exception as err:
-            self.logger.warn('check failed: %s', str(err.message))
+            self.logger.warn('check failed: %s', str(err))
 
         if self.last_result is None:
             self.last_result = result

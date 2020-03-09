@@ -33,7 +33,7 @@ def handle_redis_exceptions(func):
         try:
             return func(self, *args, **kwargs)
         except redis.exceptions.ResponseError as exc:
-            error_parts = exc.message.split(':', 1)
+            error_parts = str(exc).split(':', 1)
             error_type = error_parts[0]
             error_param = error_parts[1:]
 

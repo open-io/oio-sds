@@ -51,7 +51,7 @@ class CustomHTTPResponse(HTTPResponse):
         except AttributeError as err:
             # We have seen that in production but could not reproduce.
             # This message will help us track the error further.
-            if "no attribute 'recv'" in err.message:
+            if "no attribute 'recv'" in str(err):
                 raise IOError('reading socket after close')
             else:
                 raise
