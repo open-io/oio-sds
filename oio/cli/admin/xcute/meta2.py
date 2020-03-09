@@ -21,7 +21,7 @@ from oio.xcute.jobs.meta2_rebuilder import Meta2RebuildJob
 
 class Meta2Rebuild(SingleServiceCommandMixin, XcuteRdirCommand):
     """
-    Rebuild bases that were on the specified service.
+    [BETA] Rebuild bases that were on the specified service.
     """
 
     JOB_CLASS = Meta2RebuildJob
@@ -52,7 +52,7 @@ class Meta2Rebuild(SingleServiceCommandMixin, XcuteRdirCommand):
 
 class Meta2Decommission(SingleServiceCommandMixin, XcuteRdirCommand):
     """
-    Decommission a meta2 service.
+    [BETA] Decommission a meta2 service.
     """
 
     JOB_CLASS = Meta2DecommissionJob
