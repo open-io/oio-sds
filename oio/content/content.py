@@ -169,7 +169,7 @@ class Content(object):
             if isinstance(last_exc, exc.SpareChunkException):
                 exc.reraise(exc.SpareChunkException, last_exc)
             raise exc.SpareChunkException(
-                "No spare chunk: %s" % last_exc.message)
+                "No spare chunk: %s" % str(last_exc))
 
         url_list = []
         for chunk in spare_resp["chunks"]:
