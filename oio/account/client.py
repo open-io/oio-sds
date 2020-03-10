@@ -230,6 +230,15 @@ class AccountClient(HttpApi):
                                            params=params, **kwargs)
         return body
 
+    def container_show(self, account, container, **kwargs):
+        """
+        Get information about a container.
+        """
+        _resp, body = self.account_request(account, 'GET', 'show-container',
+                                           params={'container': container},
+                                           **kwargs)
+        return body
+
     def container_update(self, account, container, metadata=None, **kwargs):
         """
         Update account with container-related metadata.
