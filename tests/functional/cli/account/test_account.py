@@ -22,7 +22,7 @@ from testtools.matchers import Equals
 HEADERS = ['Name', 'Created']
 ACCOUNT_FIELDS = ('bytes', 'containers', 'ctime', 'account', 'metadata',
                   'objects', 'damaged_objects', 'missing_chunks',
-                  'buckets')
+                  'buckets', 'replication_enabled')
 
 
 class AccountTest(CliTestCase):

@@ -971,9 +971,13 @@ use = egg:oio#webhook
 endpoint = ${WEBHOOK_ENDPOINT}
 
 [filter:replication]
-use = egg:oio#notify
+use = egg:oio#replicate
 tube = oio-repli
 queue_url = ${QUEUE_URL}
+#cache_duration=30.0
+#cache_size=10000
+#connection_timeout=2.0
+#read_timeout=30.0
 
 [filter:bury]
 use = egg:oio#bury

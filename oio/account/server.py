@@ -67,6 +67,9 @@ class Account(WerkzeugApp):
                  methods=['GET']),
             Rule('/v1.0/account/show-bucket', endpoint='bucket_show',
                  methods=['GET']),
+            Rule('/v1.0/account/show-container',
+                 endpoint='account_container_show',
+                 methods=['GET']),
             Rule('/v1.0/account/buckets', endpoint='account_buckets',
                  methods=['GET']),
             Rule('/v1.0/account/containers', endpoint='account_containers',
@@ -75,20 +78,23 @@ class Account(WerkzeugApp):
                  methods=['POST']),
             Rule('/v1.0/account/flush', endpoint='account_flush',
                  methods=['POST']),
-            Rule('/v1.0/account/container/update',
-                 endpoint='account_container_update',
-                 methods=['PUT', 'POST']),  # FIXME(adu) only PUT
             Rule('/v1.0/account/container/reset',
                  endpoint='account_container_reset',
+                 methods=['PUT', 'POST']),  # FIXME(adu) only PUT
+            Rule('/v1.0/account/container/show',
+                 endpoint='account_container_show',
+                 methods=['GET']),
+            Rule('/v1.0/account/container/update',
+                 endpoint='account_container_update',
                  methods=['PUT', 'POST']),  # FIXME(adu) only PUT
             Rule('/v1.0/bucket/show', endpoint='bucket_show',
                  methods=['GET']),
         ])
         super(Account, self).__init__(self.url_map, self.logger)
 
-    def _get_item_id(self, req, what='account'):
+    def _get_item_id(self, req, key='id', what='account'):
         """Fetch the name of the requested item, raise an error if missing."""
-        item_id = req.args.get('id')
+        item_id = req.args.get(key)
         if not item_id:
             raise BadRequest('Missing %s ID' % what)
         return item_id
@@ -678,11 +684,60 @@ class Account(WerkzeugApp):
     # }}ACCT
     @access_log
     def on_bucket_show(self, req):
-        bname = self._get_item_id(req, 'bucket')
+        bname = self._get_item_id(req, what='bucket')
         raw = self.backend.get_bucket_info(bname)
         if raw is not None:
             return Response(json.dumps(raw), mimetype='text/json')
         return NotFound('Bucket not found')
+
+    # ACCT{{
+    # GET /v1.0/account/container/show?id=<account_name>&container=<container>
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # Get information about the specified container.
+    #
+    # Sample request:
+    #
+    # .. code-block:: http
+    #
+    #    GET /v1.0/account/show-container?id=AUTH_demo&container=buck0 HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #
+    # Sample response:
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 200 OK
+    #    Server: gunicorn/19.9.0
+    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Connection: keep-alive
+    #    Content-Type: text/plain; charset=utf-8
+    #    Content-Length: 128
+    #
+    # .. code-block:: json
+    #
+    #    {
+    #      "bucket": "buck0",
+    #      "bytes": 2052,
+    #      "damaged_objects": 0,
+    #      "dtime": "0",
+    #      "missing_chunks": 0,
+    #      "mtime": "1583772880.48631",
+    #      "name": "buck0",
+    #      "objects": 2,
+    #      "replication_enabled": false
+    #    }
+    #
+    # }}ACCT
+    @access_log
+    def on_account_container_show(self, req):
+        account_id = self._get_account_id(req)
+        cname = self._get_item_id(req, key='container', what='container')
+        raw = self.backend.get_container_info(account_id, cname)
+        if raw is not None:
+            return Response(json.dumps(raw), mimetype='text/json')
+        return NotFound('Container not found')
 
 
 def create_app(conf, **kwargs):

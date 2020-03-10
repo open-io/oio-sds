@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -93,6 +93,22 @@ class EventTypes(object):
     CONTENT_REBUILT = 'storage.content.rebuilt'
     META2_DELETED = 'storage.meta2.deleted'
     XCUTE_TASKS = 'xcute.tasks'
+
+    CONTAINER_EVENTS = (
+        CONTAINER_DELETED,
+        CONTAINER_NEW,
+        CONTAINER_STATE,
+        CONTAINER_UPDATE
+    )
+    CONTENT_EVENTS = (
+        CONTENT_APPEND,
+        CONTENT_BROKEN,
+        CONTENT_DELETED,
+        CONTENT_NEW,
+        CONTENT_PERFECTIBLE,
+        CONTENT_REBUILT,
+        CONTENT_UPDATE
+    )
 
 
 class StatusMap(object):
