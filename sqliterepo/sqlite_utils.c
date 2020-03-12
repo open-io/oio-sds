@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -422,6 +422,7 @@ sqlx_admin_save_lazy_tnx (struct sqlx_sqlite3_s *sq3)
 void
 sqlx_admin_load(struct sqlx_sqlite3_s *sq3)
 {
+	gboolean invalid_entry = FALSE;
 	sqlite3_stmt *stmt = NULL;
 	int rc;
 
@@ -431,6 +432,15 @@ sqlx_admin_load(struct sqlx_sqlite3_s *sq3)
 		while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
 			const gchar *k = (const gchar*)sqlite3_column_text(stmt, 0);
 			struct _cache_entry_s *v = NULL;
+			if (unlikely(sqlite3_column_type(stmt, 0) == SQLITE_NULL)) {
+				if (!invalid_entry) {
+					GRID_ERROR(
+							"BUG: Base [%s][%s] has null keys in admin table",
+							sq3->name.base, sq3->name.type);
+					invalid_entry = TRUE;
+				}
+				continue;
+			}
 			if (sqlite3_column_type(stmt, 1) == SQLITE_NULL)
 				v = _make_cache_entry(NULL, 0);
 			else
