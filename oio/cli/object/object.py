@@ -149,6 +149,12 @@ class CreateObject(ContainerCommandMixin, Lister):
             help='Object MIME type',
             default=None
         )
+        parser.add_argument(
+            '--tls',
+            action="store_true",
+            help='Upgrade RAWX connection to TLS',
+            default=False
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -189,7 +195,8 @@ class CreateObject(ContainerCommandMixin, Lister):
                         metadata=properties,
                         key_file=key_file,
                         mime_type=parsed_args.mime_type,
-                        autocreate=autocreate)
+                        autocreate=autocreate,
+                        tls=parsed_args.tls)
 
                     results.append((name, data[1], data[2].upper(), 'Ok'))
             except KeyboardInterrupt:

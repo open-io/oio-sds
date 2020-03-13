@@ -713,6 +713,8 @@ class ObjectStorageApi(object):
         :keyword container_properties: when containers are automatically
             created, this keyword allows to set user and system properties.
         :type container_properties: `dict`
+        :keyword tls: if set, it will try to use TLS port exposed by rawx
+        :type tls: `bool`
 
         :returns: `list` of chunks, size, hash and metadata of what has been
             uploaded

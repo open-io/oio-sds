@@ -89,12 +89,20 @@ class ProxyClient(HttpApi):
         if request_attempts <= 0:
             raise OioException("Negative request attempts: %d"
                                % request_attempts)
+        org_kwargs = kwargs
         if kwargs.get("autocreate"):
             if not headers:
                 headers = dict()
             headers["X-oio-action-mode"] = "autocreate"
             kwargs = kwargs.copy()
             kwargs.pop("autocreate")
+        if kwargs.get("tls"):
+            if not headers:
+                headers = dict()
+            if kwargs is org_kwargs:
+                kwargs = kwargs.copy()
+            headers["X-oio-upgrade-to-tls"] = kwargs.pop("tls")
+
         for i in range(request_attempts):
             try:
                 return super(ProxyClient, self)._direct_request(

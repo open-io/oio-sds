@@ -190,7 +190,8 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                 if self.perfdata is not None:
                     connect_start = monotonic_time()
                 conn = io.http_connect(
-                    parsed.netloc, 'PUT', parsed.path, hdrs)
+                    parsed.netloc, 'PUT', parsed.path, hdrs,
+                    scheme=parsed.scheme)
                 conn.set_cork(True)
                 if self.perfdata is not None:
                     connect_end = monotonic_time()
