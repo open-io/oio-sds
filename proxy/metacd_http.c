@@ -72,6 +72,14 @@ GRWLock wanted_rwlock = {0};
 gchar **wanted_srvtypes = NULL;
 GBytes **wanted_prepared = NULL;
 
+/* TLS support */
+#define SUPPORT_TLS
+
+#ifdef SUPPORT_TLS
+GTree *tls_infos = NULL;
+GRWLock tls_lock = {0};
+#endif
+
 // Misc. handlers --------------------------------------------------------------
 
 static enum http_rc_e
@@ -234,6 +242,12 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 			rq->tree_headers, PROXYD_HEADER_FORCE_MASTER);
 	oio_ext_set_force_master(
 			flag_force_master || oio_str_parse_bool(force_master, FALSE));
+
+    /* Load the optional 'upgrade-to-tls' flag: this flag should only used for gateway  */
+    const char* upgrade_to_tls = g_tree_lookup(
+            rq->tree_headers, PROXYD_HEADER_UPGRADE_TO_TLS);
+    oio_ext_set_upgrade_to_tls(
+            oio_str_parse_bool(upgrade_to_tls, FALSE));
 
 	/* Load the User-Agent */
 	const char *user_agent = g_tree_lookup(rq->tree_headers, USER_AGENT_HEADER);
@@ -526,6 +540,35 @@ _filter_good_services(GSList *src, GSList **out_garbage)
 	return good;
 }
 
+/* TODO(mbo): merge this function with _filter_good_services:
+ * it will be easy to remove unavailable service */
+static void _fill_tls_tags(GSList *src)
+{
+#ifdef SUPPORT_TLS
+    gchar str[STRLEN_ADDRINFO] = {};
+
+    g_rw_lock_writer_lock(&tls_lock);
+    while (src) {
+        const struct service_info_s *si = src->data;
+        const gchar *tls = service_info_get_tag_value(si, "tag.tls", NULL);
+        if (tls) {
+            /* register with addr */
+            if (grid_addrinfo_to_string(&(si->addr), str, sizeof(str))) {
+                g_tree_replace(tls_infos, g_strdup(str), g_strdup(tls));
+            }
+            /* TODO(mbo): register also with service_id */
+        } else {
+            /* TODO(mbo): remove previously services with tag that doesn't expose any more */
+        }
+
+        src = src->next;
+    }
+    g_rw_lock_writer_unlock(&tls_lock);
+#else
+    (void) src;
+#endif
+}
+
 /* If you ever plan to factorize this code with the similar part in
  * sqlx/sqlx_service.c be carefull that a lot of context is expected on both
  * sides, and that even the function used to fetch the services cannot be the
@@ -566,6 +609,8 @@ lb_cache_reload (void)
         /* srv->data  is a service_info_s with tags array */
 		srv = _filter_good_services(srv, &bad);
 		g_slist_free_full(bad, (GDestroyNotify)service_info_clean);
+
+        _fill_tls_tags(srv);
 
 		g_ptr_array_add(tabsrv, srv);
 		g_ptr_array_add(taberr, e);
@@ -930,6 +975,10 @@ grid_main_specific_fini (void)
 	g_rw_lock_clear(&wanted_rwlock);
 	g_rw_lock_clear(&master_rwlock);
 
+#ifdef SUPPORT_TLS
+    g_rw_lock_clear(&tls_lock);
+#endif
+
 	if (csurl)
 		g_strfreev(csurl);
 	csurl = NULL;
@@ -1160,8 +1209,15 @@ grid_main_configure (int argc, char **argv)
 	g_rw_lock_init (&wanted_rwlock);
 	g_rw_lock_init (&master_rwlock);
 
-	ns_name = g_strdup(cfg_namespace);
+#ifdef SUPPORT_TLS
+    g_rw_lock_init(&tls_lock);
+    tls_infos = g_tree_new_full(oio_str_casecmp3, NULL, g_free, g_free);
+#endif
+
+
+
 	g_strlcpy(nsinfo.name, cfg_namespace, sizeof(nsinfo.name));
+    ns_name = g_strdup(cfg_namespace);
 
 	/* Load the central configuration facility, it will tell us our
 	 * NS is locally known. */
