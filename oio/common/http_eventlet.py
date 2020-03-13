@@ -13,10 +13,13 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import ssl
+
 from six import text_type
 from six.moves.urllib_parse import quote
 
-from oio.common.green import socket, HTTPConnection, HTTPResponse, _UNKNOWN
+from oio.common.green import socket, HTTPConnection, HTTPSConnection, \
+                             HTTPResponse, _UNKNOWN
 from oio.common.logger import get_logger
 
 logger = get_logger({}, __name__)
@@ -29,7 +32,12 @@ class CustomHTTPResponse(HTTPResponse):
         try:
             self._actual_socket = sock.fd._sock
         except AttributeError:
-            self._actual_socket = sock.fd
+            try:
+                self._actual_socket = sock.fd
+            except AttributeError:
+                # SSL doesn't expose fd
+                self._actual_socket = None
+
         self.fp = sock.makefile('rb')
         self.debuglevel = debuglevel
         self.strict = strict
@@ -102,7 +110,36 @@ class CustomHttpConnection(HTTPConnection):
         return response
 
 
-def http_connect(host, method, path, headers=None, query_string=None):
+class CustomHttpsConnection(HTTPSConnection):
+    response_class = CustomHTTPResponse
+
+    def connect(self):
+        conn = HTTPSConnection.connect(self)
+        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        return conn
+
+    def set_cork(self, enabled=True):
+        """
+        Enable or disable TCP_CORK on the underlying socket.
+        """
+        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK,
+                             1 if enabled else 0)
+
+    def putrequest(self, method, url, skip_host=0, skip_accept_encoding=0):
+        self._method = method
+        self._path = url
+        return HTTPSConnection.putrequest(self, method, url, skip_host,
+                                          skip_accept_encoding)
+
+    def getresponse(self):
+        response = HTTPSConnection.getresponse(self)
+        logger.debug('HTTPS %s %s:%s %s',
+                     self._method, self.host, self.port, self._path)
+        return response
+
+
+def http_connect(host, method, path, headers=None, query_string=None,
+                 scheme="http"):
     if isinstance(path, text_type):
         try:
             path = path.encode('utf-8')
@@ -112,7 +149,11 @@ def http_connect(host, method, path, headers=None, query_string=None):
         path = quote(path)
     else:
         path = quote(b'/' + path)
-    conn = CustomHttpConnection(host)
+    if scheme == "https":
+        conn = CustomHttpsConnection(host,
+                                     context=ssl._create_unverified_context())
+    else:
+        conn = CustomHttpConnection(host)
     if query_string:
         path += b'?' + query_string
     conn.path = path
