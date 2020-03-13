@@ -547,7 +547,7 @@ _filter_good_services(GSList *src, GSList **out_garbage)
 
 #if 0
 /* TODO(mbo): merge this function with _filter_good_services:
- * it will be easy to remove unavailable service */
+ * it will be simplify logic to remove unavailable service */
 static void _fill_tls_tags(GSList *src)
 {
     gchar str[STRLEN_ADDRINFO] = {};
@@ -571,6 +571,14 @@ static void _fill_tls_tags(GSList *src)
     g_rw_lock_writer_unlock(&tls_lock);
 }
 #endif
+
+gchar* get_tls(const char *addr_or_service_id)
+{
+	g_rw_lock_reader_lock(&tls_lock);
+	gchar *tls = g_strdup(g_tree_lookup(tls_infos, addr_or_service_id));
+	g_rw_lock_reader_unlock(&tls_lock);
+	return tls;
+}
 
 /* If you ever plan to factorize this code with the similar part in
  * sqlx/sqlx_service.c be carefull that a lot of context is expected on both

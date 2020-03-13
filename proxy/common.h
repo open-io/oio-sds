@@ -342,6 +342,9 @@ static inline gint64 DL(void) {
 	return oio_clamp_deadline(proxy_timeout_common, oio_ext_get_deadline());
 }
 
+/* retrieve ip:port TLS exposed by a service (service_id or addr) */
+gchar *get_tls(const gchar *);
+
 /* ------------------------------------------------------------------------- */
 
 /* Execute the request without avoidance, and discard the output */

@@ -217,9 +217,20 @@ _real_url_from_chunk_id (const char *id)
 	oio_parse_chunk_url(id, &type, &netloc, NULL);
 	addr = _resolve_service_id(netloc);
 
-	/* generate real_url, only if item was found */
+	/* TODO(mbo): fix service/IP */
+	if (oio_ext_has_upgrade_to_tls()) {
+		gchar *tls = get_tls(addr);
+
+		if (tls) {
+		    out = g_strdup_printf("https://%s/%s",
+			    tls, id + strlen("http://") + strlen(netloc) + 1);
+		    g_free(tls);
+		    goto exit_convert_url;
+		}
+	}
 	out = g_strdup_printf("http://%s/%s",
-			addr, id + strlen("http://") + strlen(netloc) + 1);
+	    addr, id + strlen("http://") + strlen(netloc) + 1);
+exit_convert_url:
 	g_free(addr);
 	g_free(netloc);
 	g_free(type);
