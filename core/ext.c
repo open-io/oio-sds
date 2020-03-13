@@ -177,6 +177,8 @@ struct oio_ext_local_s {
 	/** Request wants to talk only to the master service
 	 * (in case of master/slave replication). */
 	guint8 force_master;
+	/** Request ask for TLS usage (RAWX only at this time. */
+	guint8 upgrade_to_tls;
 	gchar *user_agent;
 	gchar *force_versioning;
 	guint8 simulate_versioning;
@@ -319,6 +321,16 @@ gboolean oio_ext_has_force_master(void) {
 void oio_ext_set_force_master(const gboolean force_master) {
 	struct oio_ext_local_s *l = _local_ensure();
 	l->force_master = BOOL(force_master);
+}
+
+gboolean oio_ext_has_upgrade_to_tls() {
+	const struct oio_ext_local_s *l = _local_ensure();
+	return BOOL(l->upgrade_to_tls);
+}
+
+void oio_ext_set_upgrade_to_tls(const gboolean upgrade_to_tls) {
+	struct oio_ext_local_s *l = _local_ensure();
+	l->upgrade_to_tls = BOOL(upgrade_to_tls);
 }
 
 const gchar *oio_ext_get_user_agent(void) {
