@@ -77,6 +77,10 @@ extern "C" {
 #  define PROXYD_HEADER_FORCE_MASTER PROXYD_HEADER_PREFIX "force-master"
 # endif
 
+# ifndef PROXYD_HEADER_UPGRADE_TO_TLS
+#  define PROXYD_HEADER_UPGRADE_TO_TLS PROXYD_HEADER_PREFIX "upgrade-to-tls"
+# endif
+
 # ifndef PROXYD_HEADER_TIMEOUT
 #  define PROXYD_HEADER_TIMEOUT PROXYD_HEADER_PREFIX "timeout"
 # endif
