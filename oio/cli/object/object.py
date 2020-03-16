@@ -461,6 +461,12 @@ class SaveObject(ObjectCommandMixin, Command):
             metavar='<key_file>',
             help='File containing application keys'
         )
+        parser.add_argument(
+            '--tls',
+            action="store_true",
+            help='Upgrade RAWX connection to TLS',
+            default=False
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -486,7 +492,8 @@ class SaveObject(ObjectCommandMixin, Command):
             version=parsed_args.object_version,
             key_file=key_file,
             properties=False,
-            cid=cid
+            cid=cid,
+            tls=parsed_args.tls
         )
         if not os.path.exists(os.path.dirname(filename)):
             if len(os.path.dirname(filename)) > 0:
