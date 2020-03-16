@@ -174,8 +174,11 @@ class BlobRebuilder(Rebuilder):
                                            timeout=self.rdir_timeout)
             self.total_expected_chunks = info.get(
                     'chunk', dict()).get('to_rebuild', None)
-            self.logger.info('Total chunks to rebuild: %d',
-                             self.total_expected_chunks)
+            if self.total_expected_chunks is None:
+                self.logger.warn('Missing incident date')
+            else:
+                self.logger.info('Total chunks to rebuild: %d',
+                                 self.total_expected_chunks)
         except Exception as exc:
             self.logger.warn('Failed to fetch the total chunks to rebuild: %s',
                              exc)
