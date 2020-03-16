@@ -870,7 +870,7 @@ _db_vol_status(const char *volid, struct _listing_req_s *listing_req,
 	g_string_append_c(value, ':');
 	g_string_append_c(value, '{');
 	oio_str_gstring_append_json_pair_int(value, "total", nb_chunks);
-	if (listing_resp->incident_date > 0 && nb_to_rebuild > 0) {
+	if (listing_resp->incident_date > 0) {
 		g_string_append_c(value, ',');
 		oio_str_gstring_append_json_pair_int(value, "to_rebuild",
 				nb_to_rebuild);

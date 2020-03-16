@@ -289,9 +289,8 @@ class TestRdirClient(BaseTestCase):
         if incident:
             expected_entries_rebuild = [entry for entry in expected_entries
                                         if entry[2][-1] == '0']
-            if expected_entries_rebuild:
-                expected_status['chunk']['to_rebuild'] = \
-                    len(expected_entries_rebuild)
+            expected_status['chunk']['to_rebuild'] = \
+                len(expected_entries_rebuild)
             for entry in expected_entries_rebuild:
                 expected_status['container'][entry[0]]['to_rebuild'] = \
                     expected_status['container'][entry[0]].get(
