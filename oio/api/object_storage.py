@@ -62,10 +62,9 @@ class ObjectStorageApi(object):
     """
     EXTRA_KEYWORDS = ('chunk_checksum_algo', 'autocreate',
                       'chunk_buffer_min', 'chunk_buffer_max',
-                      'cache')
+                      'cache', 'tls')
 
-    def __init__(self, namespace, logger=None, perfdata=None,
-                 **kwargs):
+    def __init__(self, namespace, logger=None, perfdata=None, **kwargs):
         """
         Initialize the object storage API.
 
