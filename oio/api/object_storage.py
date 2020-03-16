@@ -1153,6 +1153,8 @@ class ObjectStorageApi(object):
         :keyword perfdata: optional `dict` that will be filled with metrics
             of time spent to resolve the meta2 address, to do the meta2
             request, and the time-to-first-byte, as seen by this API.
+        :keyword tls: if set, it will try to use TLS port exposed by rawx
+        :type tls: `bool`
 
         :returns: a dictionary of object metadata and
             a stream of object data

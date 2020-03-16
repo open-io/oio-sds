@@ -343,7 +343,7 @@ class ChunkReader(object):
                 if self.perfdata is not None:
                     connect_start = monotonic_time()
                 conn = http_connect(parsed.netloc, 'GET', parsed.path,
-                                    self.request_headers)
+                                    self.request_headers, scheme=parsed.scheme)
                 if self.perfdata is not None:
                     connect_end = monotonic_time()
                     perfdata_rawx = self.perfdata.setdefault('rawx', dict())
