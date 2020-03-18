@@ -67,6 +67,8 @@ class Account(WerkzeugApp):
                  methods=['GET']),
             Rule('/v1.0/account/update', endpoint='account_update',
                  methods=['PUT', 'POST']),  # FIXME(adu) only PUT
+            Rule('/v1.0/account/update-bucket', endpoint='bucket_update',
+                 methods=['PUT']),
             Rule('/v1.0/account/show', endpoint='account_show',
                  methods=['GET']),
             Rule('/v1.0/account/show-bucket', endpoint='bucket_show',
@@ -93,6 +95,8 @@ class Account(WerkzeugApp):
                  methods=['PUT', 'POST']),  # FIXME(adu) only PUT
             Rule('/v1.0/bucket/show', endpoint='bucket_show',
                  methods=['GET']),
+            Rule('/v1.0/bucket/update', endpoint='bucket_update',
+                 methods=['PUT']),
         ])
         super(Account, self).__init__(self.url_map, self.logger)
 
@@ -686,16 +690,81 @@ class Account(WerkzeugApp):
     #      "damaged_objects": 0,
     #      "missing_objects": 0,
     #      "mtime": "1533127401.08165",
-    #      "objects": 100
-    #     }
+    #      "objects": 100,
+    #      "replication_enabled": false
+    #    }
     #
     # }}ACCT
     @access_log
     def on_bucket_show(self, req):
+        """
+        Get all available information about a bucket.
+        """
         bname = self._get_item_id(req, what='bucket')
         raw = self.backend.get_bucket_info(bname)
         if raw is not None:
             return Response(json.dumps(raw), mimetype='text/json')
+        return NotFound('Bucket not found')
+
+    # ACCT{{
+    # POST /v1.0/bucket/update?id=<bucket_name>
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    #
+    # Update metadata of the specified bucket.
+    #
+    # Sample request:
+    #
+    # .. code-block:: http
+    #
+    #    PUT /v1.0/bucket/update?id=mybucket HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #    Content-Length: 41
+    #    Content-Type: application/x-www-for-urlencoded
+    #
+    # .. code-block:: json
+    #
+    #    {
+    #      "metadata": {"key":"value"},
+    #      "to_delete": ["oldkey"]
+    #    }
+    #
+    # Sample response:
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 200 OK
+    #    Server: gunicorn/19.9.0
+    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Connection: keep-alive
+    #    Content-Type: text/plain; charset=utf-8
+    #
+    # .. code-block:: json
+    #
+    #    {
+    #      "account": "myaccount",
+    #      "bytes": 11300,
+    #      "damaged_objects": 0,
+    #      "missing_objects": 0,
+    #      "mtime": "1533127401.08165",
+    #      "objects": 100,
+    #      "replication_enabled": false
+    #    }
+    #
+    # }}ACCT
+    def on_bucket_update(self, req):
+        """
+        Update (or delete) bucket metadata.
+        """
+        bname = self._get_item_id(req, what='bucket')
+        decoded = json.loads(req.get_data())
+        metadata = decoded.get('metadata')
+        to_delete = decoded.get('to_delete')
+        info = self.backend.update_bucket_metadata(
+            bname, metadata, to_delete)
+        if info is not None:
+            return Response(json.dumps(info), mimetype='text/json')
         return NotFound('Bucket not found')
 
     # ACCT{{
