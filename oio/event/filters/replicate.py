@@ -13,7 +13,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from oio.common.constants import CONNECTION_TIMEOUT, READ_TIMEOUT
+from oio.common.constants import BUCKET_PROP_REPLI_ENABLED, \
+    CONNECTION_TIMEOUT, READ_TIMEOUT
 from oio.common.easy_value import float_value, int_value
 from oio.common.utils import CacheDict, monotonic_time, request_id
 from oio.event.evob import EventTypes
@@ -57,7 +58,7 @@ class ReplicateFilter(NotifyFilter):
                 connection_timeout=self.connection_timeout,
                 read_timeout=self.read_timeout,
                 reqid=request_id('ev-repl-'))
-            enabled = ctinfo.get('replication_enabled', False)
+            enabled = ctinfo.get(BUCKET_PROP_REPLI_ENABLED, False)
             self.cache[(account, container)] = (enabled, now)
         return enabled
 

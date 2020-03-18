@@ -20,6 +20,7 @@ import redis
 import redis.sentinel
 import six
 from werkzeug.exceptions import NotFound, Conflict, BadRequest
+from oio.common.constants import BUCKET_PROP_REPLI_ENABLED
 from oio.common.timestamp import Timestamp
 from oio.common.easy_value import int_value, boolean_value, float_value
 from oio.common.redis_conn import RedisConnection, catch_service_errors
@@ -319,11 +320,14 @@ class AccountBackend(RedisConnection):
         local bucket_prefix = ARGV[1]
         local bname = redis.call('HGET', ckey, 'bucket')
 
-        local replication_enabled = false
+        local replication_enabled = 'false'
         if bname then
             local bkey = bucket_prefix .. bname
             local enabled_str = redis.call('HGET', bkey, 'replication_enabled')
-            replication_enabled = (enabled_str == '1')
+            if enabled_str ~= nil then
+                -- Do not cast into boolean here
+                replication_enabled = enabled_str
+            end
         end
         local res = redis.call('HGETALL', ckey)
         table.insert(res, 'replication_enabled')
@@ -479,9 +483,15 @@ class AccountBackend(RedisConnection):
         Cast dict entries to the type they are supposed to be.
         """
         for what in ('bytes', 'objects', 'damaged_objects', 'missing_chunks'):
-            info[what] = int_value(info.get(what), 0)
-        for what in ('replication_enabled', ):
-            info[what] = boolean_value(info.get(what))
+            try:
+                info[what] = int_value(info.get(what), 0)
+            except (TypeError, ValueError):
+                pass
+        for what in (BUCKET_PROP_REPLI_ENABLED, ):
+            try:
+                info[what] = boolean_value(info.get(what))
+            except (TypeError, ValueError):
+                pass
 
     @catch_service_errors
     def get_bucket_info(self, bname):
@@ -539,6 +549,28 @@ class AccountBackend(RedisConnection):
             pipeline.hmset('metadata:%s' % account_id, metadata)
         pipeline.execute()
         return account_id
+
+    @catch_service_errors
+    def update_bucket_metadata(self, bname, metadata, to_delete=None):
+        """
+        Update (or delete) bucket metadata.
+
+        :param metadata: dict of entries to set (or update)
+        :param to_delete: iterable of keys to delete
+        """
+        bkey = self.bkey(bname)
+        pipeline = self.conn.pipeline(True)
+        if to_delete:
+            pipeline.hdel(bkey, *to_delete)
+        # FIXME(FVE): cast known metadata into the appropriate type/value
+        if metadata:
+            pipeline.hmset(bkey, metadata)
+        pipeline.hgetall(bkey)
+        res = pipeline.execute()
+        binfo = res[-1]
+        self.cast_fields(binfo)
+        return binfo
+        # return None
 
     @catch_service_errors
     def info_account(self, account_id):
