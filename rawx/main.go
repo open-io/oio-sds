@@ -250,7 +250,11 @@ func main() {
 	installSigHandlers(&tlsSrv)
 
 	if !*servicingPtr {
-		if err := chunkrepo.lock(namespace, rawxID); err != nil {
+		id := rawxID
+		if id == "" {
+			id = rawxURL
+		}
+		if err := chunkrepo.lock(namespace, id); err != nil {
 			LogFatal("Volume lock error: %v", err.Error())
 		}
 	}
