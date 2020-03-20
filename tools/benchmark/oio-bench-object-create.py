@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -22,6 +22,7 @@ from eventlet import sleep
 from eventlet.greenpool import GreenPool
 from eventlet.queue import LightQueue
 from oio import ObjectStorageApi
+from oio.common.utils import depaginate
 
 
 ACCOUNT = None
@@ -45,7 +46,18 @@ def create_loop(container, prefix):
             print(err)
 
 
-def main(threads, delay=2.0, duration=30.0):
+def list_objects(container):
+    objects_iter = depaginate(
+        API.object_list,
+        listing_key=lambda x: x['objects'],
+        marker_key=lambda x: x.get('next_marker'),
+        truncated_key=lambda x: x['truncated'],
+        account=ACCOUNT, container=container,
+        limit=5000)
+    return [obj['name'] for obj in objects_iter]
+
+
+def main(threads, delay=2.0, duration=180.0):
     counter = 0
     created = list()
     cname = 'benchmark-%d' % int(time.time())
@@ -70,9 +82,16 @@ def main(threads, delay=2.0, duration=30.0):
     rate = len(created) / (end - start)
     print("End. %d objects created in %fs, %f objects per second." % (
           len(created), end - start, rate))
+    print("Listing.")
+    start = time.time()
+    all_objects = list_objects(cname)
+    end = time.time()
+    print("Listing %d objects took %fs seconds, %f objects per second." % (
+        len(all_objects), end - start, len(all_objects) / (end - start)))
     print("Cleaning...")
     for _ in POOL.starmap(API.object_delete,
-                          [(ACCOUNT, n[0], n[1]) for n in created]):
+                          [(ACCOUNT, cname, obj)
+                           for obj in all_objects]):
         pass
     POOL.waitall()
     return rate
@@ -83,9 +102,20 @@ def _object_upload(ul_handler, **kwargs):
     return ul_chunks.next(), 0, 'd41d8cd98f00b204e9800998ecf8427e'
 
 
+USAGE = """Concurrently create many fake objects in the same container.
+The account name is taken from the OIO_ACCOUNT environement variable, the
+container name is 'benchmark-' followed by a timestamp.
+Does not create chunks, just save chunk addresses.
+
+usage: %s [THREADS [POLICY]]
+"""
+
 if __name__ == '__main__':
     import os
     import sys
+    if len(sys.argv) > 1 and sys.argv[1] in ('-h', '--help'):
+        print(USAGE % sys.argv[0])
+        sys.exit(0)
     THREADS = int(sys.argv[1]) if len(sys.argv) > 1 else 1
     POLICY = sys.argv[2] if len(sys.argv) > 2 else 'SINGLE'
     ACCOUNT = os.getenv('OIO_ACCOUNT', 'benchmark')
