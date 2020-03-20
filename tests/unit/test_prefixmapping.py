@@ -174,9 +174,10 @@ class TestMeta0PrefixMapping(unittest.TestCase):
         mapping.rebalance()
         self.assertTrue(mapping.check_replicas())
         n_pfx_by_svc = mapping.count_pfx_by_svc()
-        ideal = mapping.num_bases() * replicas / n_svc
-        arange = range(int(ideal * 0.92), int(ideal * 1.08))
-        for count in n_pfx_by_svc.itervalues():
+        for svc1_addr, count in n_pfx_by_svc.items():
+            svc1 = mapping.services.get(svc1_addr, {'upper_limit': svc1_addr})
+            arange = range(int(svc1['upper_limit'] * 0.92),
+                           int(svc1['upper_limit'] * 1.08))
             self.assertIn(count, arange)
 
     def test_bootstrap_4_services_rebalanced(self):
@@ -211,22 +212,22 @@ class TestMeta0PrefixMapping(unittest.TestCase):
         mapping.bootstrap()
         mapping.rebalance()
         self.assertTrue(mapping.check_replicas())
-        n_pfx_by_svc = mapping.count_pfx_by_svc()
-        ideal = mapping.num_bases() * replicas / n
-        arange = range(int(ideal * 0.95), int(ideal * 1.05))
 
         svc = mapping.services.values()[0]
         svc["score"] = 0
+
         self.logger.info("Decommissioning %s", svc["addr"])
         mapping.decommission(svc)
         self.assertTrue(mapping.check_replicas())
-        ideal = mapping.num_bases() * replicas / (n-1)
-        arange = range(int(ideal * 0.95), int(ideal * 1.05))
         n_pfx_by_svc = mapping.count_pfx_by_svc()
-        for svc1, count in n_pfx_by_svc.iteritems():
-            if svc1 == svc["addr"]:
+        for svc1_addr, count in n_pfx_by_svc.items():
+            if svc1_addr == svc["addr"]:
                 self.assertEqual(0, count)
             else:
+                svc1 = mapping.services.get(
+                    svc1_addr, {'upper_limit': svc1_addr})
+                arange = range(int(svc1['upper_limit'] * 0.95),
+                               int(svc1['upper_limit'] * 1.05))
                 self.assertIn(count, arange)
 
     def test_decommission_one_by_one(self):

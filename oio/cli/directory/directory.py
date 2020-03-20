@@ -192,7 +192,11 @@ class DirectoryList(DirectoryCmd):
 
 
 class DirectoryRebalance(DirectoryCmd):
-    """Rebalance the container prefixes."""
+    """
+    Rebalance the container prefixes.
+
+    WARNING: A maximum of 1 service per prefixe is modified
+    """
 
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
