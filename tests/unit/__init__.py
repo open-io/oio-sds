@@ -47,7 +47,7 @@ def set_http_requests(cb):
         def __len__(self):
             return len(self.records)
 
-        def __call__(self, host, method, path, headers):
+        def __call__(self, host, method, path, headers, **kwargs):
             req = {'host': host,
                    'method': method,
                    'path': path,
