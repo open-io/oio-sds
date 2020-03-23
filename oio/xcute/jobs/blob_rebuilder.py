@@ -13,8 +13,10 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import time
+
 from oio.blob.operator import ChunkOperator
-from oio.common.easy_value import boolean_value, float_value
+from oio.common.easy_value import boolean_value, float_value, int_value
 from oio.common.exceptions import ContentNotFound, OrphanChunk
 from oio.rdir.client import RdirClient
 from oio.xcute.common.job import XcuteTask
@@ -71,6 +73,7 @@ class RawxRebuildJob(XcuteRdirJob):
     DEFAULT_ALLOW_SAME_RAWX = True
     DEFAULT_TRY_CHUNK_DELETE = False
     DEFAULT_ALLOW_FROZEN_CT = False
+    DEFAULT_DECLARE_INCIDENT_DATE = False
 
     @classmethod
     def sanitize_params(cls, job_params):
@@ -103,11 +106,38 @@ class RawxRebuildJob(XcuteRdirJob):
             job_params.get('allow_frozen_container'),
             cls.DEFAULT_ALLOW_FROZEN_CT)
 
+        set_specific_incident_date = int_value(
+            job_params.get('set_specific_incident_date'),
+            None)
+        if set_specific_incident_date is None:
+            set_incident_date = boolean_value(
+                job_params.get('set_incident_date'),
+                cls.DEFAULT_DECLARE_INCIDENT_DATE)
+            if set_incident_date:
+                set_specific_incident_date = int(time.time())
+        else:
+            set_incident_date = True
+        sanitized_job_params['set_incident_date'] = set_incident_date
+        sanitized_job_params['set_specific_incident_date'] = \
+            set_specific_incident_date
+
         return sanitized_job_params, 'rawx/%s' % service_id
 
     def __init__(self, conf, logger=None):
         super(RawxRebuildJob, self).__init__(conf, logger=logger)
         self.rdir_client = RdirClient(self.conf, logger=self.logger)
+
+    def prepare(self, job_params):
+        service_id = job_params['service_id']
+        rdir_timeout = job_params['rdir_timeout']
+        set_incident_date = job_params['set_incident_date']
+        set_specific_incident_date = job_params['set_specific_incident_date']
+
+        if not set_incident_date:
+            return
+
+        self.rdir_client.admin_incident_set(
+            service_id, set_specific_incident_date, timeout=rdir_timeout)
 
     def get_tasks(self, job_params, marker=None):
         chunk_infos = self.get_chunk_infos(job_params, marker=marker)
