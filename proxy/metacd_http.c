@@ -1,7 +1,7 @@
 /*
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -1014,6 +1014,7 @@ configure_request_handlers (void)
 	// Conscience
 	SET("/$NS/conscience/info/#GET", action_conscience_info);
 	SET("/$NS/conscience/list/#GET", action_conscience_list);
+	SET("/$NS/conscience/score/#GET", action_conscience_score);
 	SET("/$NS/conscience/register/#POST", action_conscience_register);
 	SET("/$NS/conscience/deregister/#POST", action_conscience_deregister);
 	SET("/$NS/conscience/flush/#POST", action_conscience_flush);
