@@ -85,6 +85,15 @@ class XcuteJob(object):
 
         return sanitized_job_params, None
 
+    def prepare(self, job_params):
+        """
+        Allow to execute code only once when the job is run
+        for the first time.
+        This method is executed before the generation of the tasks
+        and the total.
+        """
+        pass
+
     def get_tasks(self, job_params, marker=None):
         """
             Yields the job tasks as

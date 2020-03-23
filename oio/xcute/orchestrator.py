@@ -180,6 +180,12 @@ class XcuteOrchestrator(object):
         job_class = JOB_TYPES[job_type]
         job = job_class(self.conf, logger=self.logger)
 
+        if job_info['tasks']['total'] == 0 \
+                and job_info['tasks']['is_total_temp'] \
+                and job_info['tasks']['sent'] == 0 \
+                and not job_info['tasks']['all_sent']:
+            job.prepare(job_info['config']['params'])
+
         if job_id in self.compute_total_tasks_threads:
             self.logger.info(
                 '[job_id=%s] Already computing the total number of tasks',
