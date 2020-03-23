@@ -16,6 +16,7 @@
 
 from oio.common.green import sleep
 
+from oio.common.constants import HEADER_PREFIX
 from oio.common.logger import get_logger
 from oio.common.configuration import load_namespace_conf, validate_service_conf
 from oio.api.base import HttpApi
@@ -93,15 +94,14 @@ class ProxyClient(HttpApi):
         if kwargs.get("autocreate"):
             if not headers:
                 headers = dict()
-            headers["X-oio-action-mode"] = "autocreate"
+            headers[HEADER_PREFIX + "action-mode"] = "autocreate"
             kwargs = kwargs.copy()
             kwargs.pop("autocreate")
         if kwargs.get("tls"):
-            if not headers:
-                headers = dict()
+            headers = headers or dict()
             if kwargs is org_kwargs:
                 kwargs = kwargs.copy()
-            headers["X-oio-upgrade-to-tls"] = kwargs.pop("tls")
+            headers[HEADER_PREFIX + "upgrade-to-tls"] = kwargs.pop("tls")
 
         for i in range(request_attempts):
             try:
