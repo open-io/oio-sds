@@ -1,7 +1,7 @@
 /*
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -620,6 +620,62 @@ action_conscience_list (struct req_args_s *args)
 
 	args->rp->access_tail ("%s=%u", type, g_slist_length(sl));
 	return _reply_success_json (args, _cs_pack_and_free_srvinfo_list (sl));
+}
+
+// CS{{
+// GET /v3.0/{NS}/conscience/score?type=<services type>&id=<service id>
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// Get the score of a specific service.
+//
+// .. code-block:: http
+//
+//    GET /v3.0/OPENIO/conscience/score?type=rawx&service_id=127.0.0.1:6010 HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.47.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 509
+//
+// .. code-block:: text
+//
+//    {"addr":"127.0.0.1:6010","score":81}
+//
+// }}CS
+enum http_rc_e
+action_conscience_score (struct req_args_s *args)
+{
+	args->rp->no_access();
+
+	const char *type = TYPE();
+	const char *id = SERVICE_ID();
+	if (!type || !id)
+		return _reply_format_error(args, BADREQ("Missing type and/or service_id"));
+
+#ifdef HAVE_ENBUG
+	if (proxy_enbug_cs_failure_rate >= oio_ext_rand_int_range(1,100))
+		return _reply_retry(args, BUDY("FAKE"));
+#endif
+	GError *err;
+	if (NULL != (err = _cs_check_tokens(args)))
+		return _reply_common_error(args, err);
+
+	gchar *key = oio_make_service_key(ns_name, type, id);
+	struct oio_lb_item_s *item = oio_lb_world__get_item(lb_world, key);
+	g_free(key);
+
+	if (!item)
+		return _reply_notfound_error(args, NEWERROR(CODE_NOT_FOUND, "No such item"));
+
+	GString *out = g_string_sized_new(64);
+	g_string_printf(out, "{\"addr\":\"%s\",\"score\":%d}", item->addr, item->weight);
+	g_free(item);
+	return _reply_success_json(args, out);
 }
 
 // CS{{
