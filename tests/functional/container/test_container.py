@@ -1495,3 +1495,43 @@ class TestMeta2Contents(BaseTestCase):
         # object desn't exist
         params = self.param_content(self.ref, "wrong")
         purge_and_check(8)
+
+    def test_upgrade_tls(self):
+        if not self.conf.get('use_tls'):
+            self.skipTest('TLS support must enabled for RAWX')
+
+        name = random_content()
+        headers = {'X-oio-action-mode': 'autocreate',
+                   'X-oio-upgrade-to-tls': 'true'}
+        params = self.param_content(self.ref, name)
+
+        # with legay prepare
+        resp = self.request('POST', self.url_content('prepare'), params=params,
+                            headers=headers, data=json.dumps({'size': '1024'}))
+
+        chunks = self.json_loads(resp.data)
+        for chunk in chunks:
+            self.assertTrue(chunk['real_url'].startswith('https://'))
+
+        # with new prepare2
+        resp = self.request('POST', self.url_content('prepare2'),
+                            params=params,
+                            headers=headers, data=json.dumps({'size': '1024'}))
+
+        chunks = self.json_loads(resp.data)['chunks']
+        for chunk in chunks:
+            self.assertTrue(chunk['real_url'].startswith('https://'))
+
+    def test_locate_with_tls(self):
+        if not self.conf.get('use_tls'):
+            self.skipTest('TLS support must enabled for RAWX')
+        name = random_content()
+        self._create_content(name)
+
+        headers = {'X-oio-upgrade-to-tls': 'true'}
+        params = self.param_content(self.ref, name)
+        resp = self.request('GET', self.url_content('locate'), params=params,
+                            headers=headers)
+        chunks = self.json_loads(resp.data)
+        for chunk in chunks:
+            self.assertTrue(chunk['real_url'].startswith('https://'))

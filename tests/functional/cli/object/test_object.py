@@ -131,7 +131,7 @@ class ObjectTest(CliTestCase):
         self._test_obj('/etc/fstab', test_content, '06EE0', auto='--auto')
 
     def _test_obj(self, obj_file, test_content,
-                  cname, auto='', with_cid=False):
+                  cname, auto='', with_cid=False, with_tls=False):
         cid_opt = ''
         checksum = md5(test_content).hexdigest().upper()
         opts = self.get_opts([], 'json')
@@ -166,6 +166,8 @@ class ObjectTest(CliTestCase):
             fake_cname = '_'
         obj_name = os.path.basename(obj_file)
         opts = self.get_opts([], 'json')
+        if with_tls:
+            opts += " --tls"
         output = self.openio('object create ' + auto + ' ' + fake_cname +
                              ' ' + obj_file + ' ' + obj_file + ' ' + opts)
         data = self.json_loads(output)
@@ -192,8 +194,9 @@ class ObjectTest(CliTestCase):
         self.assertOutput('', output)
 
         tmp_file = 'tmp_obj'
+        opts = " --tls" if with_tls else ""
         output = self.openio('object save ' + cid_opt + cname_or_cid +
-                             ' ' + obj_name + ' --file ' + tmp_file)
+                             ' ' + obj_name + ' --file ' + tmp_file + opts)
         self.addCleanup(os.remove, tmp_file)
         self.assertOutput('', output)
 
@@ -397,3 +400,11 @@ class ObjectTest(CliTestCase):
 
     def test_object_set_properties_with_cid(self):
         self._test_object_set_properties(with_cid=True)
+
+    def test_object_with_tls(self):
+        if not self.conf.get('use_tls'):
+            self.skipTest('TLS support must enabled for RAWX')
+        with open('/etc/fstab', 'rb') as source:
+            test_content = source.read()
+            self._test_obj('/etc/fstab', test_content,
+                           self.CONTAINER_NAME, with_tls=True)
