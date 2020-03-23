@@ -93,7 +93,7 @@ jobs:
       env: TEST_SUITE=rebuilder,with-service-id,zlib
       python: 3.6
     - script: ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=repli
+      env: TEST_SUITE=repli,with_tls
       python: 3.6
     - script: ./tools/oio-travis-suites.sh
       env: TEST_SUITE=ec,with-service-id
@@ -109,7 +109,7 @@ jobs:
       script: ./tools/oio-travis-suites.sh
       env: TEST_SUITE=repli
     - script: ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=ec,with-service-id
+      env: TEST_SUITE=ec,with-service-id,with_tls
     - script: ./tools/oio-travis-suites.sh
       env: TEST_SUITE=3copies,with-service-id
     - script: ./tools/oio-travis-suites.sh

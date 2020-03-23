@@ -209,6 +209,9 @@ func_tests () {
 	if is_running_test_suite "webhook"; then
 		args="${args} -f ${SRCDIR}/etc/bootstrap-option-webhook.yml"
 	fi
+	if is_running_test_suite "with_tls"; then
+		args="${args} -f ${SRCDIR}/etc/bootstrap-option-tls.yml"
+	fi
 	$OIO_RESET ${args} -N $OIO_NS $@
 
 	test_proxy_forward
