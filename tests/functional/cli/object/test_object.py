@@ -404,7 +404,9 @@ class ObjectTest(CliTestCase):
     def test_object_with_tls(self):
         if not self.conf.get('use_tls'):
             self.skipTest('TLS support must enabled for RAWX')
-        with open('/etc/fstab', 'rb') as source:
-            test_content = source.read()
-            self._test_obj('/etc/fstab', test_content,
-                           self.CONTAINER_NAME, with_tls=True)
+        with tempfile.NamedTemporaryFile() as f:
+            test_content = b'test content'
+            f.write(test_content)
+            f.flush()
+            self._test_obj(f.name, test_content,
+                           random_str(10), with_tls=True)
