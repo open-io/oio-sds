@@ -1,6 +1,6 @@
 /*
 OpenIO SDS load-balancing
-Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -899,23 +899,33 @@ _local_slot__poll(struct oio_lb_slot_s *slot, guint16 distance,
 		}
 	}
 
-	/* get the closest */
-	guint32 random_weight = g_random_int_range (0, slot->sum_weight);
-	int i = _search_closest_weight (slot->items, random_weight, 0,
-			slot->items->len - 1);
-	GRID_TRACE2("%s random_weight=%"G_GUINT32_FORMAT" at %d",
-			__FUNCTION__, random_weight, i);
-	EXTRA_ASSERT (i >= 0);
-	EXTRA_ASSERT ((guint)i < slot->items->len);
-
-	guint iter = 0;
+	int i = 0;
 	struct oio_lb_selected_item_s *selected = NULL;
-	while (iter++ < slot->items->len) {
+	for (gint64 attempt = 0;
+			attempt < oio_lb_weighted_random_attempts;
+			attempt++) {
+		/* get the closest */
+		guint32 random_weight = g_random_int_range(0, slot->sum_weight);
+		i = _search_closest_weight(slot->items, random_weight, 0,
+				slot->items->len - 1);
+		GRID_TRACE2("%s random_weight=%"G_GUINT32_FORMAT" at %d",
+				__FUNCTION__, random_weight, i);
+		EXTRA_ASSERT(i >= 0);
+		EXTRA_ASSERT((guint)i < slot->items->len);
 		if ((selected =
 				_accept_item(slot, distance, reversed, ctx, i))) {
 			return selected;
 		}
+	}
+
+	/* Shuffled lookup */
+	guint iter = 0;
+	while (iter++ < slot->items->len) {
 		i = (i + slot->jump) % slot->items->len;
+		if ((selected =
+				_accept_item(slot, distance, reversed, ctx, i))) {
+			return selected;
+		}
 	}
 
 	GRID_TRACE("%s avoided everything in slot=%s", __FUNCTION__, slot->name);
