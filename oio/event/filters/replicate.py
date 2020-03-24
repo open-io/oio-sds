@@ -15,7 +15,7 @@
 
 from oio.common.constants import BUCKET_PROP_REPLI_ENABLED, \
     CONNECTION_TIMEOUT, READ_TIMEOUT
-from oio.common.easy_value import float_value, int_value
+from oio.common.easy_value import boolean_value, float_value, int_value
 from oio.common.utils import CacheDict, monotonic_time, request_id
 from oio.event.evob import EventTypes
 from oio.event.filters.notify import NotifyFilter
@@ -43,12 +43,16 @@ class ReplicateFilter(NotifyFilter):
         self.cache_size = int_value(self.conf.get('cache_size'),
                                     CACHE_SIZE)
         self.cache = CacheDict(self.cache_size)
+        self.check_account = boolean_value(
+            self.conf.get('check_replication_enabled'), False)
         self.connection_timeout = float_value(
             self.conf.get('connection_timeout'), CONNECTION_TIMEOUT)
         self.read_timeout = float_value(self.conf.get('read_timeout'),
                                         READ_TIMEOUT)
 
     def _should_notify(self, account, container):
+        if not self.check_account:
+            return True
         now = monotonic_time()
         enabled, last_update = self.cache.get((account, container),
                                               (None, 0))

@@ -431,11 +431,32 @@ class TestReplicateFilter(TestNotifyFilterBase):
 
     filter_class = ReplicateFilter
 
+    def setUp(self):
+        super(TestReplicateFilter, self).setUp()
+        self.notify_filter.check_account = True
+
     @classmethod
     def setUpClass(cls):
         super(TestReplicateFilter, cls).setUpClass()
         cls.account_client = AccountClient({'namespace': cls._cls_ns})
         _App.app_env['account_client'] = cls.account_client
+
+    def test_replication_always_enabled(self):
+        # Disable the account check
+        self.notify_filter.check_account = False
+        bname = 'repli' + random_str(4)
+        now = time.time()
+        # Disable replication for this bucket
+        self.__class__.account_client.bucket_update(
+            bname, {BUCKET_PROP_REPLI_ENABLED: 'false'}, None)
+        self.__class__.account_client.container_update(
+            self.account, bname, {'bucket': bname,
+                                  'mtime': str(now)})
+        # Replication is disabled for this bucket,
+        # but the filter won't do the check,
+        # and forward the event anyway.
+        self.assertTrue(self.notify_filter._should_notify(
+            self.account, bname))
 
     def test_replication_enabled(self):
         bname = 'repli' + random_str(4)

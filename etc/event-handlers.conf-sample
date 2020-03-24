@@ -83,6 +83,12 @@ queue_url = ${QUEUE_URL}
 use = egg:oio#replicate
 tube = oio-repli
 queue_url = ${QUEUE_URL}
+
+# For each bucket, check if replication is enabled before forwarding
+# replication events. This is disabled by default, meaning that all
+# replication event will be forwarded (same behavior as before).
+#check_replication_enabled=False
+
 # Timeouts to the account service (telling if the replication
 # is enabled or not for each bucket).
 #connection_timeout=2.0
