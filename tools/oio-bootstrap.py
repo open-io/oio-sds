@@ -974,6 +974,8 @@ endpoint = ${WEBHOOK_ENDPOINT}
 use = egg:oio#replicate
 tube = oio-repli
 queue_url = ${QUEUE_URL}
+# This must be explicitly enabled
+check_replication_enabled=true
 #cache_duration=30.0
 #cache_size=10000
 #connection_timeout=2.0
