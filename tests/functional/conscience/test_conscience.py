@@ -288,3 +288,31 @@ class TestConscienceFunctional(BaseTestCase):
         self._deregister_srv(expected_services)
         services = self._list_srvs('echo')
         self.assertListEqual([], services)
+
+    def test_single_score(self):
+        srv0 = self._srv('echo', ip='127.0.0.3')
+
+        def check(code):
+            params = {'type': 'echo', 'service_id': srv0['addr']}
+            resp = self.request('GET', self._url_cs("score"), None,
+                                params=params, headers=self.TEST_HEADERS)
+            self.assertEqual(code, resp.status)
+
+        # Service not found
+        self._reload()
+        check(404)
+        # Registration -> found
+        self._register_srv([srv0])
+        self._reload_proxy()
+        check(200)
+        # lock to 0 -> found
+        resp = self.request('POST', self._url_cs('lock'), json.dumps(srv0))
+        self.assertIn(resp.status, (200, 204))
+        self._reload_proxy()
+        check(200)
+        # removal -> not found
+        resp = self.request('POST', self._url_cs('unlock'), json.dumps(srv0))
+        self._deregister_srv(srv0)
+        self._flush_proxy()
+        self._reload_proxy()
+        check(404)
