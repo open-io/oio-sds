@@ -72,9 +72,6 @@ GRWLock wanted_rwlock = {0};
 gchar **wanted_srvtypes = NULL;
 GBytes **wanted_prepared = NULL;
 
-GTree *tls_infos = NULL;
-GRWLock tls_lock = {0};
-
 // Misc. handlers --------------------------------------------------------------
 
 static enum http_rc_e
@@ -517,67 +514,23 @@ static GSList *
 _filter_good_services(GSList *src, GSList **out_garbage)
 {
 	GSList *good = NULL, *bad = NULL;
-	/* TODO: test with long service id */
-    gchar addr[STRLEN_ADDRINFO] = {};
-
-    g_rw_lock_writer_lock(&tls_lock);
 
 	while (src) {
 		GSList *next = src->next;
 		struct service_info_s *si = src->data;
-        const gchar *tls = service_info_get_tag_value(si, "tag.tls", NULL);
-		grid_addrinfo_to_string(&(si->addr), addr, sizeof(addr));
 
 		if (metautils_addr_valid_for_connect(&si->addr)) {
 			src->next = good;
 			good = src;
-			g_tree_replace(tls_infos, g_strdup(addr), g_strdup(tls));
 		} else {
 			src->next = bad;
 			bad = src;
-			g_tree_remove(tls_infos, addr);
 		}
 		src = next;
 	}
-    g_rw_lock_writer_unlock(&tls_lock);
 
 	*out_garbage = bad;
 	return good;
-}
-
-#if 0
-/* TODO(mbo): merge this function with _filter_good_services:
- * it will be simplify logic to remove unavailable service */
-static void _fill_tls_tags(GSList *src)
-{
-    gchar str[STRLEN_ADDRINFO] = {};
-
-    g_rw_lock_writer_lock(&tls_lock);
-    while (src) {
-        const struct service_info_s *si = src->data;
-        const gchar *tls = service_info_get_tag_value(si, "tag.tls", NULL);
-        if (tls) {
-            /* register with addr */
-            if (grid_addrinfo_to_string(&(si->addr), str, sizeof(str))) {
-                g_tree_replace(tls_infos, g_strdup(str), g_strdup(tls));
-            }
-            /* TODO(mbo): register also with service_id */
-        } else {
-            /* TODO(mbo): remove previously services with tag that doesn't expose any more */
-        }
-
-        src = src->next;
-    }
-    g_rw_lock_writer_unlock(&tls_lock);
-}
-#endif
-
-gchar* get_tls(const char *addr_or_service_id)
-{
-	g_rw_lock_reader_lock(&tls_lock);
-	gchar *tls = g_strdup(g_tree_lookup(tls_infos, addr_or_service_id));
-	g_rw_lock_reader_unlock(&tls_lock);
-	return tls;
 }
 
 /* If you ever plan to factorize this code with the similar part in
@@ -609,7 +562,7 @@ lb_cache_reload (void)
 	taberr = g_ptr_array_new_full(8, _free_error);
 	for (char **pt=tabtypes; *pt ;++pt) {
 		GSList *srv = NULL;
-        /* TODO(mbo): only retrieve static tags to still use cache on conscience side */
+		/* TODO(mbo): only retrieve static tags to still use cache on conscience side */
 		GError *e = conscience_remote_get_services(cs, *pt, TRUE, &srv, oio_ext_get_deadline());
 		if (e) {
 			GRID_WARN("Failed to load the list of [%s] in NS=%s", *pt, ns_name);
@@ -617,11 +570,8 @@ lb_cache_reload (void)
 		}
 
 		GSList *bad = NULL;
-        /* srv->data  is a service_info_s with tags array */
 		srv = _filter_good_services(srv, &bad);
 		g_slist_free_full(bad, (GDestroyNotify)service_info_clean);
-
-        // _fill_tls_tags(srv);
 
 		g_ptr_array_add(tabsrv, srv);
 		g_ptr_array_add(taberr, e);
@@ -986,8 +936,6 @@ grid_main_specific_fini (void)
 	g_rw_lock_clear(&wanted_rwlock);
 	g_rw_lock_clear(&master_rwlock);
 
-	g_rw_lock_clear(&tls_lock);
-
 	if (csurl)
 		g_strfreev(csurl);
 	csurl = NULL;
@@ -1218,11 +1166,8 @@ grid_main_configure (int argc, char **argv)
 	g_rw_lock_init (&wanted_rwlock);
 	g_rw_lock_init (&master_rwlock);
 
-	g_rw_lock_init(&tls_lock);
-	tls_infos = g_tree_new_full(oio_str_casecmp3, NULL, g_free, g_free);
-
 	g_strlcpy(nsinfo.name, cfg_namespace, sizeof(nsinfo.name));
-    ns_name = g_strdup(cfg_namespace);
+	ns_name = g_strdup(cfg_namespace);
 
 	/* Load the central configuration facility, it will tell us our
 	 * NS is locally known. */

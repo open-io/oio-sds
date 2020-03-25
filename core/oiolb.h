@@ -40,6 +40,7 @@ struct oio_lb_item_s
 	oio_weight_t weight;
 	gchar addr[STRLEN_ADDRINFO];
 	gchar id[LIMIT_LENGTH_SRVID];
+	gchar tls[STRLEN_ADDRINFO];
 };
 
 struct oio_lb_selected_item_s
@@ -90,9 +91,9 @@ struct oio_lb_item_s *oio_lb_pool__get_item(struct oio_lb_pool_s *self,
 
 /* -------------------------------------------------------------------------- */
 
-/* Resolve service_id to service address.
+/* Resolve service_id to service address or TLS address.
  * The result must be freed if found or NULL. */
-gchar* oio_lb_resolve_service_id(const gchar* service_id);
+gchar* oio_lb_resolve_service_id(const gchar* service_id, gboolean upgrade_to_tls);
 
 /* -------------------------------------------------------------------------- */
 

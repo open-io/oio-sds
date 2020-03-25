@@ -115,12 +115,16 @@ oio_lb_pool__get_item(struct oio_lb_pool_s *self,
 
 /* -------------------------------------------------------------------------- */
 
-/* Map service IDs to addresses <service_id, addr> */
+/* Map service IDs to addresses <service_id, (addr, tls)> */
 
 static GRWLock service_id_to_addr_lock;
 
 static GTree *service_id_to_addr = NULL;  /* <gchar*> -> <gchar*> */
 
+struct addr_and_tls_s {
+	gchar addr[STRLEN_ADDRINFO];
+	gchar tls[STRLEN_ADDRINFO];
+};
 
 static void __attribute__ ((constructor))
 _oio_service_id_cache_constructor(void)
@@ -151,12 +155,18 @@ _oio_service_id_parse(const gchar* service_id)
 }
 
 static void
-_oio_service_id_cache_add_addr(const gchar* service_id, const gchar* addr)
+_oio_service_id_cache_add_addr(const gchar* service_id, const gchar* addr, const gchar *tls)
 {
 	const gchar *id = _oio_service_id_parse(service_id);
 	if (id) {
 		g_rw_lock_writer_lock(&service_id_to_addr_lock);
-		g_tree_replace(service_id_to_addr, g_strdup(id), g_strdup(addr));
+		struct addr_and_tls_s *srvid_tls = g_malloc0(sizeof(struct addr_and_tls_s));
+		g_strlcpy(srvid_tls->addr, addr, sizeof(srvid_tls->addr));
+		if (tls) {
+			g_strlcpy(srvid_tls->tls, tls, sizeof(srvid_tls->addr));
+		}
+
+		g_tree_replace(service_id_to_addr, g_strdup(id), srvid_tls);
 		g_rw_lock_writer_unlock(&service_id_to_addr_lock);
 	}
 }
@@ -201,18 +211,26 @@ _oio_service_id_cache_destroy(void)
 }
 
 gchar*
-oio_lb_resolve_service_id(const gchar* service_id)
+oio_lb_resolve_service_id(const gchar* service_id, gboolean upgrade_to_tls)
 {
 	EXTRA_ASSERT(service_id != NULL);
 
-	gchar *res = NULL;
+	struct addr_and_tls_s *res;
+	gchar *str = NULL;
 	g_rw_lock_reader_lock(&service_id_to_addr_lock);
 	if (service_id_to_addr &&
 			(res = g_tree_lookup(service_id_to_addr, service_id))) {
-		res = g_strdup(res);
+		if (upgrade_to_tls) {
+			if (oio_str_is_set(res->tls)) {
+				str = g_strdup(res->tls);
+			}
+		} else {
+			EXTRA_ASSERT(res->addr);
+			str = g_strdup(res->addr);
+		}
 	}
 	g_rw_lock_reader_unlock(&service_id_to_addr_lock);
-	return res;
+	return str;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -226,6 +244,7 @@ struct _lb_item_s
 	oio_weight_t weight;
 	gchar addr[STRLEN_ADDRINFO];
 	gchar id[LIMIT_LENGTH_SRVID];
+	gchar tls[STRLEN_ADDRINFO];
 	oio_refcount_t refcount;
 };
 
@@ -393,12 +412,13 @@ static struct oio_lb_pool_vtable_s vtable_LOCAL =
 };
 
 static struct _lb_item_s *
-_item_make (oio_location_t location, const char *id, const char *addr)
+_item_make (oio_location_t location, const char *id, const char *addr, const char *tls)
 {
 	struct _lb_item_s *out = g_malloc0(sizeof(struct _lb_item_s));
 	out->location = location;
 	g_strlcpy(out->addr, addr, sizeof(out->addr));
 	g_strlcpy(out->id, id, sizeof(out->id));
+	g_strlcpy(out->tls, tls, sizeof(out->tls));
 	return out;
 }
 
@@ -1667,10 +1687,10 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 	if (!item0) {
 
 		/* Item unknown in the world, so we add it */
-		item0 = _item_make (item->location, item->id, item->addr);
+		item0 = _item_make (item->location, item->id, item->addr, item->tls);
 		item0->weight = item->weight;
 		g_tree_replace (self->items, g_strdup(item0->id), item0);
-		_oio_service_id_cache_add_addr(item0->id, item0->addr);
+		_oio_service_id_cache_add_addr(item0->id, item0->addr, item0->tls);
 
 	} else {
 
@@ -1683,7 +1703,7 @@ oio_lb_world__feed_slot_unlocked(struct oio_lb_world_s *self,
 		/* Address may have changed. If so, update the cache. */
 		if (g_strcmp0(item0->addr, item->addr)) {
 			g_strlcpy(item0->addr, item->addr, sizeof(item0->addr));
-			_oio_service_id_cache_add_addr(item0->id, item0->addr);
+			_oio_service_id_cache_add_addr(item0->id, item0->addr, item0->tls);
 		}
 
 		/* look for the slice of items AT THE OLD LOCATION (maybe it changed) */

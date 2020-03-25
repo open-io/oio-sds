@@ -142,7 +142,7 @@ GError *
 conscience_resolve_service_id(gchar **cs UNUSED, const char *type UNUSED,
 		const char *service_id, gchar **out)
 {
-	*out = oio_lb_resolve_service_id(service_id);
+	*out = oio_lb_resolve_service_id(service_id, FALSE);
 	if (*out)
 		return NULL;
 

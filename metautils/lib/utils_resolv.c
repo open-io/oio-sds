@@ -125,7 +125,7 @@ grid_string_to_sockaddr(const gchar *start, struct sockaddr *s, gsize *slen)
 
 	/* oio_lb_resolve_service_id may fail as
 	 * it may be an addr not referenced by LB */
-	gchar *addr = oio_lb_resolve_service_id(start);
+	gchar *addr = oio_lb_resolve_service_id(start, FALSE);
 	if (!addr) {
 		addr = g_strdup(start);
 	}
