@@ -182,6 +182,15 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_CORE_LB_ALLOW_DISTANCE_BYPASS*
 
+### core.lb.weighted_random_attempts
+
+> How many times shall we try to select a service using a weighted random algorithm, before switching to the shuffled selection. Increase this if you observe too many choices of low-score services while high-score services are available.
+
+ * default: **1**
+ * type: guint
+ * cmake directive: *OIO_CORE_LB_WEIGHTED_RANDOM_ATTEMPTS*
+ * range: 1 -> 64000
+
 ### core.lb.writer_lock_alert_delay
 
 > Dump the time spent while holding the global writer lock, when the lock is held for longer than this threshold (in microseconds).

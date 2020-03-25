@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -89,7 +89,7 @@ class BlobConverter(object):
                 self.conf, pool_manager=self.container_client.pool_manager)
         return self._rdir
 
-    def save_xattr(self, chunk_id, xattr):
+    def save_xattr(self, fd, chunk_id, xattr):
         if self.no_backup:
             return
         dirname = self.backup_dir + '/' + self.backup_name + '/' + chunk_id[:3]
@@ -100,7 +100,7 @@ class BlobConverter(object):
                 raise
         with open(dirname + '/' + chunk_id, 'w') as backup_fd:
             # same format as getfattr
-            backup_fd.write('# file: ' + self._get_path(chunk_id) + '\n')
+            backup_fd.write('# file: ' + self._get_path(fd, chunk_id) + '\n')
             for k, v in xattr.iteritems():
                 backup_fd.write('user.' + k + '="' + v + '"\n')
 
@@ -115,8 +115,16 @@ class BlobConverter(object):
         self.content_id_by_name[(cid, path, version)] = content_id
         return cid, path, version, content_id
 
-    def _get_path(self, chunk_id):
-        return self.volume + '/' + chunk_id[:3] + '/' + chunk_id
+    def _get_path(self, fd, chunk_id):
+        chunk_path = self.volume
+        chunk_path_split = fd.name[len(self.volume):].split('/')
+        start = 0
+        for chunk_part in chunk_path_split[:-1]:
+            end = start + len(chunk_part)
+            chunk_path += '/' + chunk_id[start:end]
+            start = end
+        chunk_path += '/' + chunk_path_split[-1]
+        return chunk_path
 
     def cid_from_name(self, account, container):
         cid = cid_from_name(account, container)
@@ -158,23 +166,32 @@ class BlobConverter(object):
 
     def decode_old_fullpath(self, old_fullpath):
         # pylint: disable=unbalanced-tuple-unpacking
-        account, container, path, version = decode_old_fullpath(old_fullpath)
-        cid = self.cid_from_name(account, container)
-        content_id = self.content_id_from_name(cid, path, version)
+        try:
+            account, container, path, version = decode_old_fullpath(
+                old_fullpath)
+            cid = self.cid_from_name(account, container)
+            content_id = self.content_id_from_name(cid, path, version)
+        except ValueError:
+            # We never know, let's try to decode the fullpath as if it was new
+            account, container, path, version, content_id = decode_fullpath(
+                old_fullpath)
+            cid = self.cid_from_name(account, container)
         return account, container, cid, path, version, content_id
 
-    def encode_fullpath(self, chunk_inode, chunk_id,
+    def encode_fullpath(self, fd, chunk_id,
                         account, container, path, version, content_id):
         # check if chunk exists and has the same inode
         if not is_hexa(chunk_id) or len(chunk_id) != STRLEN_CHUNKID:
             raise ValueError('chunk ID must be hexadecimal (%s)'
                              % STRLEN_CHUNKID)
         try:
-            chunk_inode2 = os.stat(self._get_path(chunk_id)).st_ino
+            chunk_inode = os.fstat(fd.fileno()).st_ino
+            chunk_inode2 = os.stat(self._get_path(fd, chunk_id)).st_ino
+            if chunk_inode2 != chunk_inode:
+                raise OrphanChunk(
+                    'Not the same inode: possible orphan chunk')
         except OSError:
             raise OrphanChunk('No such chunk: possible orphan chunk')
-        if chunk_inode2 != chunk_inode:
-            raise OrphanChunk('Not the same inode: possible orphan chunk')
 
         # check fullpath and chunk ID
         if isinstance(version, basestring):
@@ -192,7 +209,7 @@ class BlobConverter(object):
 
         return chunk_id.upper(), fullpath
 
-    def _get_chunk_id_and_fullpath(self, chunk_inode, chunk_pos, content,
+    def _get_chunk_id_and_fullpath(self, fd, chunk_pos, content,
                                    chunk_id=None):
         content.container_id, content.account, content.container_name = \
             self._save_container(content.container_id, content.account,
@@ -211,12 +228,12 @@ class BlobConverter(object):
                               'possible orphan chunk')
 
         chunk_id, new_fullpath = self.encode_fullpath(
-            chunk_inode, chunk.id, content.account, content.container_name,
+            fd, chunk.id, content.account, content.container_name,
             content.path, content.version, content.content_id)
         return chunk_id, new_fullpath
 
     def get_chunk_id_and_fullpath(
-            self, chunk_inode, chunk_pos, container_id, path, version,
+            self, fd, chunk_pos, container_id, path, version,
             chunk_id=None, account=None, container=None, content_id=None):
         if account is None or container is None:
             account, container = self.name_from_cid(container_id)
@@ -227,7 +244,7 @@ class BlobConverter(object):
                     container_id, content_id,
                     account=account, container_name=container)
                 return self._get_chunk_id_and_fullpath(
-                    chunk_inode, chunk_pos, content, chunk_id=chunk_id)
+                    fd, chunk_pos, content, chunk_id=chunk_id)
             except Exception as exc:
                 self.logger.warn(
                     'chunk_id=%s chunk_pos=%s object=%s/%s/%s/%s/%s/%s: %s',
@@ -247,11 +264,11 @@ class BlobConverter(object):
         except ContentNotFound:
             raise OrphanChunk('Content not found: possible orphan chunk')
         return self._get_chunk_id_and_fullpath(
-                chunk_inode, chunk_pos, content, chunk_id=chunk_id)
+                fd, chunk_pos, content, chunk_id=chunk_id)
 
     def convert_chunk(self, fd, chunk_id):
         meta, raw_meta = read_chunk_metadata(fd, chunk_id,
-                                             check_chunk_id=False)
+                                             for_conversion=True)
 
         links = meta.get('links', dict())
         for chunk_id2, fullpath2 in links.iteritems():
@@ -263,7 +280,6 @@ class BlobConverter(object):
             if meta.get('oio_version') == OIO_VERSION:
                 return True, meta
 
-        chunk_inode = os.fstat(fd.fileno()).st_ino
         raw_chunk_id = None
         chunk_id = chunk_id.upper()
         chunk_pos = meta['chunk_pos']
@@ -290,19 +306,21 @@ class BlobConverter(object):
                 account2, container2, container_id2, path2, version2, \
                     content_id2 = self.decode_old_fullpath(v)
 
-                if container_id == container_id2 and path == path2 \
+                if meta['chunk_id'] == chunk_id \
+                        and container_id == container_id2 \
+                        and path == path2 \
                         and version == version2:
                     if content_id2 is None:
                         content_id2 = self.content_id_from_name(
                             container_id2, path2, version2, search=True)
 
-                    chunk_id, new_fullpath = self.encode_fullpath(
-                        chunk_inode, chunk_id, account2, container2, path2,
+                    chunk_id2, new_fullpath = self.encode_fullpath(
+                        fd, chunk_id, account2, container2, path2,
                         version2, content_id2)
-                    new_fullpaths[chunk_id] = new_fullpath
+                    new_fullpaths[chunk_id2] = new_fullpath
                 else:
                     chunk_id2, new_fullpath = self.get_chunk_id_and_fullpath(
-                        chunk_inode, chunk_pos, container_id2, path2, version2,
+                        fd, chunk_pos, container_id2, path2, version2,
                         account=account2, container=container2,
                         content_id=content_id2)
                     new_fullpaths[chunk_id2] = new_fullpath
@@ -324,26 +342,26 @@ class BlobConverter(object):
                         version2 = meta2['content_version']
                         content_id2 = meta2['content_id'].upper()
 
-                        raw_chunk_id, new_fullpath = \
+                        raw_chunk_id2, new_fullpath = \
                             self.get_chunk_id_and_fullpath(
-                                chunk_inode, chunk_pos, container_id2, path2,
+                                fd, chunk_pos, container_id2, path2,
                                 version2, chunk_id=raw_chunk_id,
                                 content_id=content_id2)
-                        new_fullpaths[raw_chunk_id] = new_fullpath
+                        new_fullpaths[raw_chunk_id2] = new_fullpath
                 elif raw_chunk_id == chunk_id and fullpath is None:
                     if raw_chunk_id not in new_fullpaths:
-                        raw_chunk_id, new_fullpath = \
+                        raw_chunk_id2, new_fullpath = \
                             self.get_chunk_id_and_fullpath(
-                                chunk_inode, chunk_pos, container_id, path,
+                                fd, chunk_pos, container_id, path,
                                 version, chunk_id=raw_chunk_id,
                                 content_id=content_id)
-                        new_fullpaths[raw_chunk_id] = new_fullpath
+                        new_fullpaths[raw_chunk_id2] = new_fullpath
             except Exception as exc:
                 success = False
                 self.logger.warn('chunk_id=%s (old xattr): %s',
                                  raw_chunk_id, exc)
 
-        self.save_xattr(chunk_id, raw_meta)
+        self.save_xattr(fd, chunk_id, raw_meta)
 
         if self.dry_run:
             self.logger.info(
@@ -434,8 +452,8 @@ class BlobConverter(object):
         chunk_url = 'http://%s/%s' % (self.volume_id, chunk_id)
         if chunk_url not in [x['url'] for x in chunks]:
             raise OrphanChunk(
-                'Chunk %s not found in object %s',
-                chunk_url, fullpath)
+                'Chunk %s not found in object %s' %
+                (chunk_url, fullpath))
         # 5. Regenerate the fullpath
         with open(path, 'w') as fd:
             set_fullpath_xattr(fd, {chunk_id: fullpath})
@@ -444,9 +462,9 @@ class BlobConverter(object):
     def _fetch_chunks_from_file(self, input_file):
         with open(input_file, 'r') as ifile:
             for line in ifile:
-                chunk_id = line.strip()
-                if chunk_id and not chunk_id.startswith('#'):
-                    yield self._get_path(chunk_id)
+                chunk_path = line.strip()
+                if chunk_path and not chunk_path.startswith('#'):
+                    yield self.volume + '/' + chunk_path
 
     def paths_gen(self, input_file=None):
         if input_file:
