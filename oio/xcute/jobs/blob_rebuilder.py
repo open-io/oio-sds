@@ -1,4 +1,4 @@
-# Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,10 +14,11 @@
 # License along with this library.
 
 from oio.blob.operator import ChunkOperator
-from oio.common.easy_value import boolean_value, float_value, int_value
+from oio.common.easy_value import boolean_value, float_value
 from oio.common.exceptions import ContentNotFound, OrphanChunk
 from oio.rdir.client import RdirClient
-from oio.xcute.common.job import XcuteJob, XcuteTask
+from oio.xcute.common.job import XcuteTask
+from oio.xcute.jobs.common import XcuteRdirJob
 
 
 class RawxRebuildTask(XcuteTask):
@@ -60,14 +61,11 @@ class RawxRebuildTask(XcuteTask):
         return {'rebuilt_chunks': 1, 'rebuilt_bytes': chunk_size}
 
 
-class RawxRebuildJob(XcuteJob):
+class RawxRebuildJob(XcuteRdirJob):
 
     JOB_TYPE = 'rawx-rebuild'
     TASK_CLASS = RawxRebuildTask
 
-    MAX_TASKS_BATCH_SIZE = 128
-    DEFAULT_RDIR_FETCH_LIMIT = 1000
-    DEFAULT_RDIR_TIMEOUT = 60.0
     DEFAULT_RAWX_TIMEOUT = 60.0
     DEFAULT_DRY_RUN = False
     DEFAULT_ALLOW_SAME_RAWX = True
@@ -84,14 +82,6 @@ class RawxRebuildJob(XcuteJob):
         if not service_id:
             raise ValueError('Missing service ID')
         sanitized_job_params['service_id'] = service_id
-
-        sanitized_job_params['rdir_fetch_limit'] = int_value(
-            job_params.get('rdir_fetch_limit'),
-            cls.DEFAULT_RDIR_FETCH_LIMIT)
-
-        sanitized_job_params['rdir_timeout'] = float_value(
-            job_params.get('rdir_timeout'),
-            cls.DEFAULT_RDIR_TIMEOUT)
 
         sanitized_job_params['rawx_timeout'] = float_value(
             job_params.get('rawx_timeout'),

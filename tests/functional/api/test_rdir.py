@@ -1,4 +1,4 @@
-# Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -289,9 +289,8 @@ class TestRdirClient(BaseTestCase):
         if incident:
             expected_entries_rebuild = [entry for entry in expected_entries
                                         if entry[2][-1] == '0']
-            if expected_entries_rebuild:
-                expected_status['chunk']['to_rebuild'] = \
-                    len(expected_entries_rebuild)
+            expected_status['chunk']['to_rebuild'] = \
+                len(expected_entries_rebuild)
             for entry in expected_entries_rebuild:
                 expected_status['container'][entry[0]]['to_rebuild'] = \
                     expected_status['container'][entry[0]].get(

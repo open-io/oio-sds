@@ -1,7 +1,7 @@
 /*
 OpenIO SDS server
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -229,6 +229,15 @@ network_client_log_access(struct log_item_s *item)
 
 	/* arbitrary */
 	g_string_append_printf(gstr, " t=%"G_GINT64_FORMAT, diff_handler);
+	GHashTable *perfdata = oio_ext_get_perfdata();
+	if (perfdata) {
+		void __log_perfdata(gpointer key, gpointer val, gpointer udata UNUSED)
+		{
+			g_string_append_printf(gstr, " %s=%"G_GINT64_FORMAT,
+				(char*)key, (gint64)GPOINTER_TO_INT(val));
+		}
+		g_hash_table_foreach(perfdata, __log_perfdata, NULL);
+	}
 	if (r->subject) {
 		g_string_append_c (gstr, ' ');
 		g_string_append(gstr, ensure(r->subject));
@@ -514,9 +523,16 @@ _notify_request(struct req_ctx_s *ctx, GQuark gq_count, GQuark gq_time)
 static gsize
 _reply_message(struct network_client_s *clt, MESSAGE reply)
 {
+	gint64 start = oio_ext_monotonic_time();
 	GByteArray *encoded = message_marshall_gba_and_clean(reply);
+	gint64 encode = oio_ext_monotonic_time();
 	gsize encoded_size = encoded->len;
 	network_client_send_slab(clt, data_slab_make_gba(encoded));
+	gint64 send = oio_ext_monotonic_time();
+	if (server_perfdata_enabled) {
+		oio_ext_add_perfdata("resp_encode", encode - start);
+		oio_ext_add_perfdata("resp_send", send - encode);
+	}
 	return encoded_size;
 }
 
@@ -587,8 +603,10 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 			GHashTableIter iter;
 			gpointer n, v;
 			g_hash_table_iter_init(&iter, headers);
-			while (g_hash_table_iter_next(&iter, &n, &v))
-				metautils_message_add_field(answer, (gchar*)n, ((GByteArray*)v)->data, ((GByteArray*)v)->len);
+			while (g_hash_table_iter_next(&iter, &n, &v)) {
+				metautils_message_add_field(answer, (gchar*)n,
+						((GByteArray*)v)->data, ((GByteArray*)v)->len);
+			}
 		}
 
 		/* encode and send */
@@ -661,6 +679,11 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 			ctx.deadline = MIN(ctx.deadline, req_deadline);
 		}
 	}
+	gint64 req_perfdata_enabled = FALSE;
+	if (metautils_message_extract_string_noerror(req_ctx->request,
+				NAME_MSGKEY_PERFDATA, tostr, sizeof(tostr))) {
+		oio_str_is_number(tostr, &req_perfdata_enabled);
+	}
 
 	/* Ugly quirk: it is currently too expansive to alter all the calls to
 	 * the meta2 backend, especially right now while we are writing this
@@ -668,6 +691,10 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 	 * context with all the common open args, in 4.x, while there is one in
 	 * the 'master' branch. */
 	oio_ext_set_deadline(ctx.deadline);
+	if (req_perfdata_enabled || server_perfdata_enabled) {
+		oio_ext_enable_perfdata(TRUE);
+		oio_ext_add_perfdata("req_decode", now - req_ctx->tv_start);
+	}
 
 	gboolean rc = FALSE;
 	if (req_ctx->tv_start < OLDEST(now, meta_queue_max_delay)) {
@@ -704,6 +731,7 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 	EXTRA_ASSERT(body == NULL);
 	if (headers)
 		g_hash_table_destroy(headers);
+	oio_ext_enable_perfdata(FALSE);
 	return rc;
 }
 

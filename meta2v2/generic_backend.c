@@ -43,15 +43,17 @@ _gb_to_gvariant(GBytes *gb)
 {
 	gsize max = 0;
 	gconstpointer b = g_bytes_get_data(gb, &max);
-	const guint8 *b8 = b;
+	return _bytes_to_gvariant(b, max);
+}
 
-	GVariantBuilder *builder = g_variant_builder_new(G_VARIANT_TYPE("ay"));
-	for (gsize i=0; i<max ;i++)
-		g_variant_builder_add_value(builder, g_variant_new_byte(b8[i]));
-	GVariant *result = g_variant_builder_end(builder);
-	g_variant_builder_unref(builder);
+GVariant*
+_bytes_to_gvariant(gconstpointer bytes, gsize len)
+{
+	GVariant *result = g_variant_new_fixed_array(
+			G_VARIANT_TYPE("y"), bytes, len, 1);
 	return result;
 }
+
 static void
 gv_freev(GVariant **gv, gboolean content_only)
 {

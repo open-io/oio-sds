@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -373,7 +373,6 @@ class TestBlobConverter(BaseTestCase):
         # old xattr not removed
         _, expected_raw_meta = read_chunk_metadata(linked_chunk_path,
                                                    linked_chunk_id)
-        expected_raw_meta[chunk_xattr_keys['oio_version']] = OIO_VERSION
 
         self._convert_and_check(
             linked_chunk_volume, linked_chunk_path,

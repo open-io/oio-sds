@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # oio-bootstrap.py
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 # Copyright (C) 2015 Conrad Kleinespel
 #
 # This program is free software: you can redistribute it and/or modify
@@ -1250,22 +1250,22 @@ def generate(options):
         env = dict(ENV)
         env.update(add)
         env['env.G_DEBUG'] = "fatal_warnings"
-        if options.get(PROFILE) == "valgrind":
-            orig_exe = env.get('EXE', None)
-            new_exe = "valgrind --leak-check=full --leak-resolution=high\
- --trace-children=yes --log-file=/tmp/%q{ORIG_EXE}.%p.valgrind " + orig_exe
-            env['env.ORIG_EXE'] = orig_exe
-            env['EXE'] = new_exe
-            env['env.G_DEBUG'] = "gc-friendly"
-            env['env.G_SLICE'] = "always-malloc"
-        elif options.get(PROFILE) == "callgrind":
-            orig_exe = env.get('EXE', None)
-            new_exe = "valgrind --tool=callgrind --collect-jumps=yes\
- --collect-systime=yes --trace-children=yes\
- --callgrind-out-file=/tmp/callgrind.out.%q{ORIG_EXE}.%p " + orig_exe
-            env['env.ORIG_EXE'] = orig_exe
-            env['EXE'] = new_exe
-            del env['env.G_SLICE']
+        orig_exe = env.get('EXE', None)
+        if orig_exe and orig_exe not in ('oio-meta0-server', 'beanstalkd'):
+            if options.get(PROFILE) == "valgrind":
+                new_exe = "valgrind --leak-check=full --leak-resolution=high\
+     --trace-children=yes --log-file=/tmp/%q{ORIG_EXE}.%p.valgrind " + orig_exe
+                env['env.ORIG_EXE'] = orig_exe
+                env['EXE'] = new_exe
+                env['env.G_DEBUG'] = "gc-friendly"
+                env['env.G_SLICE'] = "always-malloc"
+            elif options.get(PROFILE) == "callgrind":
+                new_exe = "valgrind --tool=callgrind --collect-jumps=yes\
+     --collect-systime=yes --trace-children=yes\
+     --callgrind-out-file=/tmp/callgrind.out.%q{ORIG_EXE}.%p " + orig_exe
+                env['env.ORIG_EXE'] = orig_exe
+                env['EXE'] = new_exe
+                env.pop('env.G_SLICE', None)
         return env
 
     def subenv(add):

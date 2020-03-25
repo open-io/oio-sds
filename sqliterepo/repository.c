@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -899,6 +899,7 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 	const gboolean election_configured =
 		election_manager_configured(args->repo->election_manager);
 
+	gint64 start = oio_ext_monotonic_time();
 	if (election_configured && !args->no_refcheck) {
 		gboolean replicated = FALSE;
 		enum election_step_e step = STEP_NONE;
@@ -957,6 +958,7 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 
 		g_free0(url);
 	}
+	oio_ext_add_perfdata("db_election", oio_ext_monotonic_time() - start);
 
 	if (!err)
 		err = args->repo->cache

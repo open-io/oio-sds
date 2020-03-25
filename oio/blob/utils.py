@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -65,7 +65,7 @@ def check_volume_for_service_type(volume_path, required_type):
     return namespace, server_id
 
 
-def read_chunk_metadata(fd, chunk_id, check_chunk_id=True):
+def read_chunk_metadata(fd, chunk_id, for_conversion=False):
     chunk_id = chunk_id.upper()
     raw_meta = read_user_xattr(fd)
     raw_meta_copy = None
@@ -96,7 +96,7 @@ def read_chunk_metadata(fd, chunk_id, check_chunk_id=True):
         raw_meta[chunk_xattr_keys['content_path']] = path
         raw_meta[chunk_xattr_keys['content_version']] = version
         raw_meta[chunk_xattr_keys['content_id']] = content_id
-    if attr_vers >= 4.2 and 'full_path' not in meta:
+    if not for_conversion and attr_vers >= 4.2 and 'full_path' not in meta:
         # TODO(FVE): in that case, do not warn about other attributes
         # that could be deduced from this one.
         missing.append(exc.MissingAttribute(
@@ -109,6 +109,6 @@ def read_chunk_metadata(fd, chunk_id, check_chunk_id=True):
             meta[k] = raw_meta[v]
     if missing:
         raise exc.FaultyChunk(*missing)
-    if check_chunk_id and meta['chunk_id'] != chunk_id:
+    if not for_conversion and meta['chunk_id'] != chunk_id:
         raise exc.MissingAttribute(chunk_xattr_keys['chunk_id'])
     return meta, raw_meta_copy if raw_meta_copy else raw_meta

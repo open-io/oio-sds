@@ -1,6 +1,6 @@
 /*
 OpenIO SDS rdir
-Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -74,7 +74,8 @@ static GTree *tree_bases = NULL;
 	} \
 } while (0)
 
-#define RDIR_LISTING_LIMIT 4096
+#define RDIR_LISTING_DEFAULT_LIMIT 1000
+#define RDIR_LISTING_MAX_LIMIT 10000
 /* ------------------------------------------------------------------------- */
 
 struct req_args_s
@@ -602,7 +603,9 @@ extract_optional_listing_fields(struct req_args_s *args,
 	else if (jlimit)
 		listing_req->max = json_object_get_int64(jlimit);
 	if (listing_req->max <= 0)
-		listing_req->max = 1000;
+		listing_req->max = RDIR_LISTING_DEFAULT_LIMIT;
+	else
+		listing_req->max = MIN(RDIR_LISTING_MAX_LIMIT, listing_req->max);
 	if (OPT("prefix"))
 		listing_req->prefix = OPT("prefix");
 	else if (jcid)
@@ -868,7 +871,7 @@ _db_vol_status(const char *volid, struct _listing_req_s *listing_req,
 	g_string_append_c(value, ':');
 	g_string_append_c(value, '{');
 	oio_str_gstring_append_json_pair_int(value, "total", nb_chunks);
-	if (listing_resp->incident_date > 0 && nb_to_rebuild > 0) {
+	if (listing_resp->incident_date > 0) {
 		g_string_append_c(value, ',');
 		oio_str_gstring_append_json_pair_int(value, "to_rebuild",
 				nb_to_rebuild);
@@ -1865,9 +1868,12 @@ _meta2_record_subset_extract(struct rdir_meta2_record_subset_s *subset,
 		} else {
 			subset->marker = NULL;
 		}
-		subset->limit = jlimit ?
-				CLAMP(json_object_get_int64(jlimit), 0, RDIR_LISTING_LIMIT)
-				: RDIR_LISTING_LIMIT;
+		if (jlimit)
+			subset->limit = json_object_get_int64(jlimit);
+		if (subset->limit <= 0)
+			subset->limit = RDIR_LISTING_DEFAULT_LIMIT;
+		else
+			subset->limit = MIN(RDIR_LISTING_MAX_LIMIT, subset->limit);
 	}
 	return err;
 }

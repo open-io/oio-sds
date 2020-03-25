@@ -24,7 +24,11 @@ from oio.common.constants import REQID_HEADER, STRLEN_REQID
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.wsgi import WerkzeugApp
-from oio.common.easy_value import true_value
+from oio.common.easy_value import int_value, true_value
+
+
+ACCOUNT_LISTING_DEFAULT_LIMIT = 1000
+ACCOUNT_LISTING_MAX_LIMIT = 10000
 
 
 def access_log(func):
@@ -469,6 +473,10 @@ class Account(WerkzeugApp):
         end_marker = req.args.get('end_marker', '')
         prefix = req.args.get('prefix', '')
         limit = int(req.args.get('limit', '1000'))
+        limit = max(0, min(ACCOUNT_LISTING_MAX_LIMIT, int_value(
+            req.args.get('limit'), 0)))
+        if limit <= 0:
+            limit = ACCOUNT_LISTING_DEFAULT_LIMIT
         delimiter = req.args.get('delimiter', '')
         s3_buckets_only = true_value(req.args.get('s3_buckets_only', False))
 

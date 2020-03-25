@@ -1,4 +1,4 @@
-# Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,12 +17,13 @@ import math
 
 from oio.blob.client import BlobClient
 from oio.common.easy_value import float_value, int_value
-from oio.common.exceptions import ContentNotFound, OrphanChunk
+from oio.common.exceptions import ContentNotFound, NotFound, OrphanChunk
 from oio.common.green import time
 from oio.conscience.client import ConscienceClient
 from oio.content.factory import ContentFactory
 from oio.rdir.client import RdirClient
-from oio.xcute.common.job import XcuteJob, XcuteTask
+from oio.xcute.common.job import XcuteTask
+from oio.xcute.jobs.common import XcuteRdirJob
 
 
 class RawxDecommissionTask(XcuteTask):
@@ -69,8 +70,14 @@ class RawxDecommissionTask(XcuteTask):
         chunk_id = task_payload['chunk_id']
 
         chunk_url = 'http://{}/{}'.format(self.service_id, chunk_id)
-        meta = self.blob_client.chunk_head(
-            chunk_url, timeout=self.rawx_timeout, reqid=reqid)
+        try:
+            meta = self.blob_client.chunk_head(
+                chunk_url, timeout=self.rawx_timeout, reqid=reqid)
+        except NotFound:
+            # The chunk is still present in the rdir,
+            # but the chunk no longer exists in the rawx.
+            # We ignore it because there is nothing to move.
+            return {'skipped_chunks_no_longer_exist': 1}
         if container_id != meta['container_id']:
             raise ValueError('Mismatch container ID: %s != %s',
                              container_id, meta['container_id'])
@@ -83,11 +90,11 @@ class RawxDecommissionTask(XcuteTask):
         if chunk_size < self.min_chunk_size:
             self.logger.debug(
                 '[reqid=%s] SKIP %s too small', reqid, chunk_url)
-            return {'skipped_chunks': 1}
+            return {'skipped_chunks_too_small': 1}
         if self.max_chunk_size > 0 and chunk_size > self.max_chunk_size:
             self.logger.debug(
                 '[reqid=%s] SKIP %s too big', reqid, chunk_url)
-            return {'skipped_chunks': 1}
+            return {'skipped_chunks_too_big': 1}
 
         # Start moving the chunk
         try:
@@ -102,14 +109,11 @@ class RawxDecommissionTask(XcuteTask):
         return {'moved_chunks': 1, 'moved_bytes': chunk_size}
 
 
-class RawxDecommissionJob(XcuteJob):
+class RawxDecommissionJob(XcuteRdirJob):
 
     JOB_TYPE = 'rawx-decommission'
     TASK_CLASS = RawxDecommissionTask
 
-    MAX_TASKS_BATCH_SIZE = 128
-    DEFAULT_RDIR_FETCH_LIMIT = 1000
-    DEFAULT_RDIR_TIMEOUT = 60.0
     DEFAULT_RAWX_TIMEOUT = 60.0
     DEFAULT_MIN_CHUNK_SIZE = 0
     DEFAULT_MAX_CHUNK_SIZE = 0
@@ -126,14 +130,6 @@ class RawxDecommissionJob(XcuteJob):
         if not service_id:
             raise ValueError('Missing service ID')
         sanitized_job_params['service_id'] = service_id
-
-        sanitized_job_params['rdir_fetch_limit'] = int_value(
-            job_params.get('rdir_fetch_limit'),
-            cls.DEFAULT_RDIR_FETCH_LIMIT)
-
-        sanitized_job_params['rdir_timeout'] = float_value(
-            job_params.get('rdir_timeout'),
-            cls.DEFAULT_RDIR_TIMEOUT)
 
         sanitized_job_params['rawx_timeout'] = float_value(
             job_params.get('rawx_timeout'),

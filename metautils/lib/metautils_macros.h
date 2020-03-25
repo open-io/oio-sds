@@ -1,7 +1,7 @@
 /*
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -84,6 +84,7 @@ License along with this library.
 #define NAME_MSGKEY_NOTIN              "!IN"
 #define NAME_MSGKEY_OLD                "OLD"
 #define NAME_MSGKEY_OVERWRITE          "OVERWRITE"
+#define NAME_MSGKEY_PERFDATA           "PERF"
 #define NAME_MSGKEY_PREFIX             "PREFIX"
 #define NAME_MSGKEY_QUERY              "Q"
 #define NAME_MSGKEY_RECOMPUTE          "RECOMPUTE"

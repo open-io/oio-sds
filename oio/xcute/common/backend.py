@@ -33,15 +33,15 @@ def handle_redis_exceptions(func):
         try:
             return func(self, *args, **kwargs)
         except redis.exceptions.ResponseError as exc:
-            error_parts = exc.message.split(':')
+            error_parts = exc.message.split(':', 1)
             error_type = error_parts[0]
-            error_params = error_parts[1:]
+            error_param = error_parts[1:]
 
             error = self._lua_errors.get(error_type)
             if error is None:
                 raise
             error_cls, error_msg = error
-            raise error_cls(message=error_msg.format(*error_params))
+            raise error_cls(message=error_msg.format(*error_param))
     return handle_redis_exceptions
 
 
