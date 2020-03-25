@@ -34,7 +34,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 static gchar*
 _resolve_service_id(const char *service_id)
 {
-	gchar *out = oio_lb_resolve_service_id(service_id);
+	gchar *out = oio_lb_resolve_service_id(service_id, FALSE);
 	if (!out)
 		out = g_strdup(service_id);
 	GRID_TRACE("Service [%s] resolved to [%s]", service_id, out);
@@ -213,24 +213,25 @@ _real_url_from_chunk_id (const char *id)
 {
 	gchar *out = NULL;
 	gchar *addr = NULL, *type = NULL, *netloc = NULL;
-
 	oio_parse_chunk_url(id, &type, &netloc, NULL);
-	addr = _resolve_service_id(netloc);
 
-	/* TODO(mbo): fix service/IP */
+
 	if (oio_ext_has_upgrade_to_tls()) {
-		gchar *tls = get_tls(addr);
+		addr = oio_lb_resolve_service_id(netloc, TRUE);
 
-		if (tls) {
-		    out = g_strdup_printf("https://%s/%s",
-			    tls, id + strlen("http://") + strlen(netloc) + 1);
-		    g_free(tls);
-		    goto exit_convert_url;
+		if (addr) {
+			out = g_strdup_printf("https://%s/%s",
+					addr, id + strlen("http://") + strlen(netloc) + 1);
 		}
 	}
-	out = g_strdup_printf("http://%s/%s",
-	    addr, id + strlen("http://") + strlen(netloc) + 1);
-exit_convert_url:
+
+	/* allow fallback */
+	if (!addr) {
+		addr = _resolve_service_id(netloc);
+		out = g_strdup_printf("http://%s/%s",
+				addr, id + strlen("http://") + strlen(netloc) + 1);
+	}
+
 	g_free(addr);
 	g_free(netloc);
 	g_free(type);

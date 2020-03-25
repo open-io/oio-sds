@@ -425,6 +425,7 @@ service_info_to_lb_item(const struct service_info_s *si,
 	 * - tag.log as a dot-separated string or
 	 * - IP address and port */
 	const gchar *loc_str = service_info_get_tag_value(si, "tag.loc", NULL);
+	const gchar *tls_str = service_info_get_tag_value(si, "tag.tls", NULL);
 	if (!loc_str) {
 		item->location = location_from_addr_info(&(si->addr));
 	} else if (!g_str_has_prefix(loc_str, "0x") ||
@@ -435,6 +436,9 @@ service_info_to_lb_item(const struct service_info_s *si,
 	gchar *key = service_info_key(si);
 	g_strlcpy(item->id, key, LIMIT_LENGTH_SRVID);
 	g_free(key);
+	if (tls_str) {
+		g_strlcpy(item->tls, tls_str, STRLEN_ADDRINFO);
+	}
 
 	grid_addrinfo_to_string(&(si->addr), item->addr, sizeof(item->addr));
 }
