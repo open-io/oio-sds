@@ -163,6 +163,7 @@ func (chunk *chunkInfo) loadAttr(inChunk fileReader, chunkID string,
 		}
 	}
 
+	/* keep AttrNameContentStgPol above AttrNameMetachunkChecksum and AttrNameMetachunkSize */
 	var detailedAttrs = []detailedAttr{
 		{AttrNameContentChunkMethod, &chunk.ContentChunkMethod},
 		{AttrNameContentStgPol, &chunk.ContentStgPol},
@@ -216,16 +217,20 @@ func (chunk *chunkInfo) loadAttr(inChunk fileReader, chunkID string,
 	chunk.ChunkID = chunkID
 
 	for _, hs := range detailedAttrs {
-		value, err := getAttr(hs.key)
+		*(hs.ptr), err = getAttr(hs.key)
 		if err != nil {
 			if err == syscall.ENODATA {
+				/* for storage_policy other than EC, don't print error for missing MetachunkSize and MetachunkHash */
+				if !strings.HasPrefix(chunk.ContentChunkMethod, ECMethodPrefix) &&
+					(hs.key == AttrNameMetachunkChecksum || hs.key == AttrNameMetachunkSize) {
+					continue
+				}
 				LogWarning("Missing %s xattr on chunk %s (reqid=%s)",
 					hs.key, chunkID, reqid)
 			} else {
 				return err
 			}
 		}
-		*(hs.ptr) = value
 	}
 	chunk.size, err = strconv.ParseInt(chunk.ChunkSize, 10, 63)
 	if err != nil {
@@ -407,7 +412,7 @@ func (chunk *chunkInfo) retrieveTrailers(trailers *http.Header, ul *uploadInfo) 
 			}
 		}
 	}
-	if strings.HasPrefix(chunk.ContentChunkMethod, "ec/") {
+	if strings.HasPrefix(chunk.ContentChunkMethod, ECMethodPrefix) {
 		if chunk.MetachunkHash == "" {
 			return returnError(errMissingHeader, HeaderNameMetachunkChecksum)
 		}

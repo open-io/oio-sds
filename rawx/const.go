@@ -156,3 +156,7 @@ const (
 	// How long (in seconds) might a connection stay idle (between two requests)
 	timeoutIdle = 3600
 )
+
+const (
+	ECMethodPrefix = "ec/"
+)
