@@ -96,7 +96,7 @@ def read_chunk_metadata(fd, chunk_id, for_conversion=False):
         raw_meta[chunk_xattr_keys['content_path']] = path
         raw_meta[chunk_xattr_keys['content_version']] = version
         raw_meta[chunk_xattr_keys['content_id']] = content_id
-    if not for_conversion and attr_vers >= 4.2 and 'full_path' not in meta:
+    if attr_vers >= 4.2 and 'full_path' not in meta:
         # TODO(FVE): in that case, do not warn about other attributes
         # that could be deduced from this one.
         missing.append(exc.MissingAttribute(
