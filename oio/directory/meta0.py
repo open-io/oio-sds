@@ -187,8 +187,6 @@ class Meta0PrefixMapping(MetaMapping):
         :param digits: number of digits used to name the database files
         :type digits: `int` between 0 and 4 (inclusive)
         """
-        super(Meta0PrefixMapping, self).__init__(
-            meta0_client.conf, ['meta1'], **kwargs)
         self.m0 = meta0_client
         self.replicas = int(replicas)
         if self.replicas < 1:
@@ -201,6 +199,69 @@ class Meta0PrefixMapping(MetaMapping):
         if self.digits > 4:
             raise ConfigurationException("meta_digits must be <= 4")
         self.min_dist = min_dist
+        if self.min_dist < 1:
+            raise ConfigurationException("min_dist must be >= 1")
+        if self.min_dist > 4:
+            raise ConfigurationException("min_dist must be <= 4")
+        super(Meta0PrefixMapping, self).__init__(
+            meta0_client.conf, ['meta1'], **kwargs)
+
+    def reset(self):
+        super(Meta0PrefixMapping, self).reset()
+
+        for svc_id, svc in self.services.items():
+            location = self.get_loc(svc)
+            location_parts = location.rsplit('.', self.min_dist-1)
+            location = '.'.join(
+                [location_parts[0]] + ['*'] * len(location_parts[1:]))
+            svc['location'] = location
+            svc['upper_limit'] = 0
+
+    def _compute_upper_limit(self):
+        """
+        Compute the right number bases each service should host,
+        based on the total number of bases,
+        the total number of service locations,
+        and the number of services per location.
+        """
+        available_svcs_by_location = dict()
+
+        for svc_id, svc in self.services.items():
+            if self.get_score(svc) <= 0:
+                continue
+            location = svc['location']
+            available_svcs_by_location[location] = \
+                available_svcs_by_location.get(location, 0) + 1
+
+        if len(available_svcs_by_location) < self.replicas:
+            raise ValueError(
+                "Less than %s locations have a positve score, "
+                "we won't rebalance (currently: %s)"
+                % (self.replicas, len(available_svcs_by_location)))
+
+        upper_limit_by_location = dict()
+        for location, available_services \
+                in available_svcs_by_location.items():
+            ideal_bases = (float(self.num_bases()) * self.replicas
+                           / len(available_svcs_by_location)
+                           / available_services)
+            upper_limit = int(ceil(ideal_bases))
+            upper_limit_by_location[location] = upper_limit
+            self.logger.info(
+                "Scored positively in %s = %d", location, available_services)
+            self.logger.info(
+                "Ideal number of bases per meta1 in %s: %f, limit: %d",
+                location, ideal_bases, upper_limit)
+
+        for svc in sorted(self.services.values(), key=lambda x: x['addr']):
+            if self.get_score(svc) <= 0:
+                svc['upper_limit'] = 0
+            else:
+                svc['upper_limit'] = upper_limit_by_location[svc['location']]
+            self.logger.info(
+                "meta1 %s belongs to location %s "
+                "and must have a maximum of %d bases",
+                svc['addr'], svc['location'], svc['upper_limit'])
 
     @property
     def services(self):
@@ -385,12 +446,30 @@ class Meta0PrefixMapping(MetaMapping):
         """Find `replicas` services, including the ones of `known`"""
         if known is None:
             known = list()
-        filtered = [x for x in self.services.itervalues()
+        filtered = [x for x in self.services.values()
                     if self.get_score(x) >= min_score]
         # Reverse the list so we can quickly pop the service
         # with less managed bases
         filtered.sort(key=(lambda x: len(self.get_managed_bases(x))),
                       reverse=True)
+
+        def _lookup(known2):
+            while filtered:
+                svc = filtered.pop()
+                if svc not in known2:
+                    return (svc,)
+            return None
+        return self._find_services(known, _lookup, len(filtered))
+
+    def find_services_more_availability(self, known=None, min_score=1,
+                                        **_kwargs):
+        """Find `replicas` services, including the ones of `known`"""
+        if known is None:
+            known = list()
+        filtered = [x for x in self.services.values()
+                    if self.get_score(x) >= min_score]
+        filtered.sort(key=(lambda svc: svc['upper_limit']
+                           - len(self.get_managed_bases(svc))))
 
         def _lookup(known2):
             while filtered:
@@ -477,15 +556,32 @@ class Meta0PrefixMapping(MetaMapping):
                          grand_total, self.num_bases() * self.replicas)
         return not error
 
-    def decommission(self, svc, bases_to_remove=None, strategy=None):
+    def decommission(self, svc, bases_to_remove=None, strategy=None,
+                     try_=False, compute_upper_limit=True):
         """
         Unassign all bases of `bases_to_remove` from `svc`,
         and assign them to other services using `strategy`.
+        :param svc: service to decommission
+        :type svc: `str` or `dict`
+        :param bases_to_remove: bases to remove of the service
+        :type bases_to_remove: `list`
+        :param strategy: strategy to move the bases
+        :type strategy: `function`
+        :param try_: keep the bases on this service
+            if the strategy doesn't find better,
+            otherwise obligatorily remove the bases of this service
+        :type try_: `bool`
+        :param compute_upper_limit: compute the right number bases
+            each service should host
+        :type compute_upper_limit: `bool`
         """
         if isinstance(svc, basestring):
             svc = self.services[svc]
-        saved_score = svc["score"]
-        svc["score"] = 0
+        if not try_:
+            saved_score = svc["score"]
+            svc["score"] = 0
+        if compute_upper_limit:
+            self._compute_upper_limit()
         bases_to_remove_checked = set()
         if bases_to_remove:
             # Remove extra digits and duplicates
@@ -493,7 +589,7 @@ class Meta0PrefixMapping(MetaMapping):
         else:
             bases_to_remove = set(svc.get('bases', list()))
         if not strategy:
-            strategy = self.find_services_less_bases
+            strategy = self.find_services_more_availability
         for base in bases_to_remove:
             try:
                 self.services_by_base[base].remove(svc)
@@ -508,68 +604,143 @@ class Meta0PrefixMapping(MetaMapping):
             new_svcs = strategy(known=self.services_by_base[base])
             self.assign_services(base, new_svcs)
             bases_to_remove_checked.add(base)
-        svc["score"] = saved_score
+        if not try_:
+            svc["score"] = saved_score
         return bases_to_remove_checked
 
-    def rebalance(self, max_loops=65536):
+    def rebalance(self, max_loops=4096):
         """Reassign bases from the services which manage the most"""
 
+        moved_bases = dict()
+
+        def _decommission(svc, bases, try_=False):
+            moved = self.decommission(svc, bases, compute_upper_limit=False,
+                                      try_=try_)
+            nb_really_moved = 0
+            for base in moved:
+                peers = self._get_peers_by_base(base)
+                if try_ and svc['addr'] in peers:
+                    continue
+
+                old_peers = self._get_old_peers_by_base(base)
+                new_peers = [v for v in peers if v not in old_peers]
+                if len(new_peers) != 1:
+                    raise ValueError(
+                        'New missing or too many peers for base %s' % base)
+                moved_bases[base] = new_peers[0]
+                nb_really_moved += 1
+            return nb_really_moved
+
+        def _log_future_state():
+            self.logger.info("%s bases will move", len(moved_bases))
+            for svc in sorted(self.services.values(), key=lambda x: x['addr']):
+                svc_bases = self.get_managed_bases(svc)
+                more_info = ''
+                bases_too_many = len(svc_bases) - svc['upper_limit']
+                if bases_too_many > 0:
+                    more_info = ' (still %d bases in excess)' % bases_too_many
+                self.logger.info("meta1 %s will host %d bases%s",
+                                 svc['addr'], len(svc_bases), more_info)
+
         if self.digits == 0:
-            self.logger.info("No equilibration possible when " +
+            self.logger.warn("No equilibration possible when " +
                              "meta1_digits is set to 0")
             return None
 
-        loops = 0
-        moved_bases = set()
-        all_available_services = [x for x in self.services.itervalues()
-                                  if self.get_score(x) > 0]
-        if len(all_available_services) < 2:
-            self.logger.warn("Less than 2 services have a positive score, "
-                             "we won't rebalance.")
-            return None
-        ideal_bases_by_svc = (self.num_bases() * self.replicas /
-                              len(all_available_services))
-        upper_limit = ideal_bases_by_svc + 1
-        self.logger.info("META1 Digits = %d", self.digits)
+        self.logger.info("Meta1 digits = %d", self.digits)
         self.logger.info("Replicas = %d", self.replicas)
-        self.logger.info("Scored positively = %d",
-                         len(all_available_services))
-        self.logger.info(
-            "Ideal number of bases per meta1: %d, limit: %d",
-            ideal_bases_by_svc, upper_limit)
-        while loops < max_loops:
+        self.logger.info("Minimum distance = %d", self.min_dist)
+
+        self._compute_upper_limit()
+
+        # First, respect the minimum distance
+        self.logger.info('First, find the bases '
+                         'that do not respect the minimum distance')
+
+        for base, addrs in self.raw_services_by_base.items():
+            addrs_by_location = dict()
+            for addr in addrs:
+                addrs_by_location.setdefault(
+                    self.services[addr]['location'], list()).append(addr)
+            if len(addrs_by_location) == self.replicas:
+                continue
+
+            for location, svc_addrs in addrs_by_location.items():
+                if len(svc_addrs) < 2:
+                    continue
+                # Decommission base of the fuller service
+                svcs = [self.services.get(svc_addr, {'addr': svc_addr})
+                        for svc_addr in svc_addrs]
+                svcs.sort(key=(lambda svc: svc['upper_limit']
+                               - len(self.get_managed_bases(svc))))
+                _decommission(svcs[0], [base])
+                # Move a single base on all replicas
+                break
+
+        _log_future_state()
+
+        # Second, rebalances the number of bases on each meta1
+        self.logger.info('Second, rebalance the bases in each location')
+
+        loops = 0
+        rebalance_again = True
+        while loops < max_loops and rebalance_again:
+            loops += 1  # safeguard against infinite loops
+            self.logger.info("Loop %d", loops)
+
             candidates = self.services.values()
             candidates.sort(key=(lambda x: len(self.get_managed_bases(x))))
-            already_balanced = 0
+            rebalance_again = False
             while candidates:
                 svc = candidates.pop()  # service with most bases
                 svc_bases = self.get_managed_bases(svc)
+                upper_limit = svc['upper_limit']
                 if len(svc_bases) <= upper_limit:
-                    already_balanced += 1
+                    self.logger.info(
+                        "meta1 %s is already balanced with %d bases",
+                        svc['addr'], len(svc_bases))
                     continue
                 self.logger.info("meta1 %s has %d bases, moving some",
                                  svc['addr'], len(svc_bases))
-                while (len(svc_bases) > upper_limit and
-                       loops < max_loops):
-                    bases = {base
-                             for base in random.sample(
-                                 svc_bases, len(svc_bases) - upper_limit)
-                             if base not in moved_bases}
-                    if bases:
-                        moved = self.decommission(svc, bases)
-                        for base in moved:
-                            moved_bases.add(base)
-                            loops += 1
-                    else:
-                        loops += 1  # safeguard against infinite loops
-            if already_balanced >= len(self.services):
-                break
-        self.logger.info("%s bases moved", len(moved_bases))
-        for svc in sorted(self.services.values(), key=lambda x: x['addr']):
-            svc_bases = self.get_managed_bases(svc)
-            self.logger.info("meta1 %s has %d bases",
-                             svc['addr'], len(svc_bases))
-        return moved_bases
+
+                bases_never_moved = set()
+                bases_already_moved = set()
+                for base in svc_bases:
+                    # Move a single base on all replicas
+                    svc_addr = moved_bases.get(base)
+                    if svc_addr is None:
+                        bases_never_moved.add(base)
+                    elif svc_addr == svc['addr']:
+                        bases_already_moved.add(base)
+                if not bases_never_moved \
+                        and not bases_already_moved:
+                    self.logger.info("meta1 %s has no base available to move",
+                                     svc['addr'])
+                    continue
+                rebalance_again = True
+
+                nb_bases_to_move = len(svc_bases) - upper_limit
+                while nb_bases_to_move > 0 \
+                        and (bases_already_moved or bases_never_moved):
+                    # Try moving the already moved bases first
+                    # to minimize the number of bases to move
+                    bases_to_move = set()
+                    for base in random.sample(
+                            bases_already_moved,
+                            min(len(bases_already_moved), nb_bases_to_move)):
+                        bases_to_move.add(base)
+                        bases_already_moved.remove(base)
+                    for base in random.sample(
+                            bases_never_moved,
+                            min(len(bases_never_moved),
+                                nb_bases_to_move - len(bases_to_move))):
+                        bases_to_move.add(base)
+                        bases_never_moved.remove(base)
+                    nb_bases_to_move -= _decommission(svc, bases_to_move,
+                                                      try_=True)
+
+        _log_future_state()
+        return moved_bases.keys()
 
 
 def count_prefixes(digits):

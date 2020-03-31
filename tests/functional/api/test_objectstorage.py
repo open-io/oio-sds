@@ -1,4 +1,4 @@
-# Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,6 +14,7 @@
 # License along with this library.
 
 
+import copy
 import logging
 import time
 from mock import MagicMock as Mock
@@ -1383,13 +1384,15 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             _, chunks_copies = self.api.object_locate(self.account, snapshot,
                                                       test_object % i)
 
-            for chunk, copy in zip(sorted(chunks), sorted(chunks_copies)):
+            for chunk, chunk_copy in zip(sorted(chunks),
+                                         sorted(chunks_copies)):
                 # check that every chunk is different from the target
-                self.assertNotEqual(chunk['url'], copy['url'])
+                self.assertNotEqual(chunk['url'], chunk_copy['url'])
 
                 # check the metadata
                 meta = self.api._blob_client.chunk_head(chunk['url'])
-                meta_copies = self.api._blob_client.chunk_head(copy['url'])
+                meta_copies = self.api._blob_client.chunk_head(
+                    chunk_copy['url'])
 
                 fullpath = encode_fullpath(
                     self.account, snapshot, test_object % i,
@@ -1840,3 +1843,178 @@ class TestObjectList(ObjectStorageApiTestBase):
         props = self.api.object_get_properties(self.account, name, name)
         self.assertEqual(metadata['version'], props['version'])
         self.assertEqual(int(props['length']), size)
+
+
+class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
+
+    def setUp(self):
+        super(TestObjectStorageApiUsingCache, self).setUp()
+        self.cache = dict()
+        self.api = ObjectStorageApi(self.ns, endpoint=self.uri,
+                                    cache=self.cache)
+
+        self.container = random_str(8)
+        self.path = random_str(8)
+        self.api.object_create(self.account, self.container,
+                               obj_name=self.path, data='cache')
+        self.created.append((self.container, self.path))
+        self.assertEqual(0, len(self.cache))
+
+        self.api.container._direct_request = Mock(
+            side_effect=self.api.container._direct_request)
+
+    def tearDown(self):
+        super(TestObjectStorageApiUsingCache, self).tearDown()
+        self.assertEqual(0, len(self.cache))
+
+    def test_object_properties(self):
+        expected_obj_meta = self.api.object_get_properties(
+            self.account, self.container, self.path)
+        self.assertIsNotNone(expected_obj_meta)
+        expected_obj_meta = expected_obj_meta.copy()
+        self.assertEqual(1, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+
+        obj_meta = self.api.object_get_properties(
+            self.account, self.container, self.path)
+        self.assertDictEqual(expected_obj_meta, obj_meta)
+        self.assertEqual(1, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+
+        properties = {'test1': '1', 'test2': '2'}
+        self.api.object_set_properties(
+            self.account, self.container, self.path, properties)
+        self.assertEqual(2, self.api.container._direct_request.call_count)
+        self.assertEqual(0, len(self.cache))
+
+        expected_obj_meta['properties'] = properties
+        obj_meta = self.api.object_get_properties(
+            self.account, self.container, self.path)
+        self.assertDictEqual(expected_obj_meta, obj_meta)
+        self.assertEqual(3, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+
+        obj_meta = self.api.object_get_properties(
+            self.account, self.container, self.path)
+        self.assertDictEqual(expected_obj_meta, obj_meta)
+        self.assertEqual(3, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+
+        self.api.object_del_properties(
+            self.account, self.container, self.path, properties.keys())
+        self.assertEqual(4, self.api.container._direct_request.call_count)
+        self.assertEqual(0, len(self.cache))
+
+        expected_obj_meta['properties'] = dict()
+        obj_meta = self.api.object_get_properties(
+            self.account, self.container, self.path)
+        self.assertDictEqual(expected_obj_meta, obj_meta)
+        self.assertEqual(5, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+
+        obj_meta = self.api.object_get_properties(
+            self.account, self.container, self.path)
+        self.assertDictEqual(expected_obj_meta, obj_meta)
+        self.assertEqual(5, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+
+    def test_object_locate(self):
+        properties = {'test1': '1', 'test2': '2'}
+        self.api.object_set_properties(
+            self.account, self.container, self.path, properties)
+        self.assertEqual(1, self.api.container._direct_request.call_count)
+        self.assertEqual(0, len(self.cache))
+
+        expected_obj_meta, expected_chunks = self.api.object_locate(
+            self.account, self.container, self.path, properties=False)
+        self.assertIsNotNone(expected_obj_meta)
+        self.assertIsNotNone(expected_chunks)
+        expected_obj_meta = expected_obj_meta.copy()
+        expected_chunks = copy.deepcopy(expected_chunks)
+        self.assertEqual(2, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+
+        obj_meta, chunks = self.api.object_locate(
+            self.account, self.container, self.path, properties=False)
+        self.assertDictEqual(expected_obj_meta, obj_meta)
+        self.assertListEqual(expected_chunks, chunks)
+        self.assertEqual(2, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+
+        expected_obj_meta['properties'] = properties
+        obj_meta, chunks = self.api.object_locate(
+            self.account, self.container, self.path, properties=True)
+        self.assertDictEqual(expected_obj_meta, obj_meta)
+        self.assertListEqual(expected_chunks, chunks)
+        self.assertEqual(3, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+
+        obj_meta, chunks = self.api.object_locate(
+            self.account, self.container, self.path, properties=True)
+        self.assertDictEqual(expected_obj_meta, obj_meta)
+        self.assertListEqual(expected_chunks, chunks)
+        self.assertEqual(3, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+
+        expected_obj_meta['properties'] = dict()
+        obj_meta, chunks = self.api.object_locate(
+            self.account, self.container, self.path, properties=False)
+        self.assertDictEqual(expected_obj_meta, obj_meta)
+        self.assertListEqual(expected_chunks, chunks)
+        self.assertEqual(3, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+
+        expected_obj_meta['properties'] = properties
+        obj_meta = self.api.object_get_properties(
+            self.account, self.container, self.path)
+        self.assertDictEqual(expected_obj_meta, obj_meta)
+        self.assertEqual(3, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+
+    def test_object_fetch(self):
+        expected_obj_meta, stream = self.api.object_fetch(
+            self.account, self.container, self.path)
+        self.assertIsNotNone(expected_obj_meta)
+        data = b''
+        for chunk in stream:
+            data += chunk
+        self.assertEqual('cache', data)
+        self.assertEqual(1, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+
+        obj_meta, stream = self.api.object_fetch(
+            self.account, self.container, self.path)
+        self.assertDictEqual(expected_obj_meta, obj_meta)
+        data = b''
+        for chunk in stream:
+            data += chunk
+        self.assertEqual('cache', data)
+        self.assertEqual(1, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+
+        # Make the cache invalid
+        self.api.object_delete(
+            self.account, self.container, self.path, cache=None)
+        self.assertEqual(2, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+        self.wait_for_event(
+            'oio-preserved', types=[EventTypes.CONTENT_DELETED])
+
+        obj_meta, stream = self.api.object_fetch(
+            self.account, self.container, self.path)
+        self.assertDictEqual(expected_obj_meta, obj_meta)
+        try:
+            data = b''
+            for chunk in stream:
+                data += chunk
+            self.fail('This should not happen with the deleted chunks')
+        except exc.UnrecoverableContent:
+            pass
+        self.assertEqual(2, self.api.container._direct_request.call_count)
+        self.assertEqual(0, len(self.cache))
+
+        self.assertRaises(
+            exc.NoSuchObject, self.api.object_fetch,
+            self.account, self.container, self.path)
+        self.assertEqual(3, self.api.container._direct_request.call_count)
+        self.assertEqual(0, len(self.cache))
