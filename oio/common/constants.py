@@ -150,6 +150,8 @@ HIDDEN_ACCOUNTS = ("_RDIR",)
 CH_ENCODED_SEPARATOR = '%2F'
 CH_SEPARATOR = '/'
 
+BUCKET_PROP_REPLI_ENABLED = 'replication_enabled'
+
 # When the container is part of a bucket, this property holds the bucket's name
 M2_PROP_BUCKET_NAME = 'sys.m2.bucket.name'
 # Container creation time (microseconds).

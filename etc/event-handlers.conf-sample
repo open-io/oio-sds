@@ -80,15 +80,25 @@ tube = oio-rebuild
 queue_url = ${QUEUE_URL}
 
 [filter:replication]
-use = egg:oio#notify
+use = egg:oio#replicate
 tube = oio-repli
 queue_url = ${QUEUE_URL}
-# Exclude accounts and/or specific containers.
-# Account and container names must be urlencoded.
-# Values are separated with commas.
-#exclude = account/container
-#exclude = account1,account2,account3
-#exclude = account1/container1,account2,account3/container1
+
+# For each bucket, check if replication is enabled before forwarding
+# replication events. This is disabled by default, meaning that all
+# replication event will be forwarded (same behavior as before).
+#check_replication_enabled=False
+
+# Timeouts to the account service (telling if the replication
+# is enabled or not for each bucket).
+#connection_timeout=2.0
+#read_timeout=30.0
+
+# How long (seconds) and how many responses from the account service
+# to keep in cache. Notice that the cache is per worker process.
+#cache_duration=30.0
+#cache_size=10000
+
 
 [filter:noop]
 use = egg:oio#noop
@@ -97,6 +107,12 @@ use = egg:oio#noop
 use = egg:oio#notify
 tube = oio-improve
 queue_url = beanstalk://127.0.0.1:6009
+# Exclude accounts and/or specific containers.
+# Account and container names must be urlencoded.
+# Values are separated with commas.
+#exclude = account/container
+#exclude = account1,account2,account3
+#exclude = account1/container1,account2,account3/container1
 
 [filter:webook]
 use = egg:oio#webhook

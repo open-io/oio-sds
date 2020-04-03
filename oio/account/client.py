@@ -196,6 +196,20 @@ class AccountClient(HttpApi):
                                            **kwargs)
         return body
 
+    def bucket_update(self, bucket, metadata, to_delete, **kwargs):
+        """
+        Update metadata of the specified bucket.
+
+        :param metadata: dictionary of properties that must be set or updated.
+        :type metadata: `dict`
+        :param to_delete: list of property keys that must be removed.
+        :type to_delete: `list`
+        """
+        data = json.dumps({"metadata": metadata, "to_delete": to_delete})
+        _resp, body = self.account_request(bucket, 'PUT', 'update-bucket',
+                                           data=data, **kwargs)
+        return body
+
     def container_list(self, account, limit=None, marker=None,
                        end_marker=None, prefix=None, delimiter=None,
                        s3_buckets_only=False, **kwargs):
@@ -229,6 +243,15 @@ class AccountClient(HttpApi):
                   "s3_buckets_only": s3_buckets_only}
         _resp, body = self.account_request(account, 'GET', 'containers',
                                            params=params, **kwargs)
+        return body
+
+    def container_show(self, account, container, **kwargs):
+        """
+        Get information about a container.
+        """
+        _resp, body = self.account_request(account, 'GET', 'show-container',
+                                           params={'container': container},
+                                           **kwargs)
         return body
 
     def container_update(self, account, container, metadata=None, **kwargs):

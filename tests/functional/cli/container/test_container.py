@@ -18,6 +18,7 @@ import uuid
 import re
 import tempfile
 
+from oio.common.constants import BUCKET_PROP_REPLI_ENABLED
 from oio.common.utils import cid_from_name
 from oio.event.evob import EventTypes
 from tests.functional.cli import CliTestCase, CommandFailed
@@ -49,6 +50,29 @@ class ContainerTest(CliTestCase):
             name = self.CID
         output = self.openio('container show ' + cid_opt + name + opts)
         self.assertEqual(self.NAME + '\n', output)
+
+    def test_bucket_enable_replication(self):
+        cname = 'mybucket-' + random_str(4).lower()
+        opts = self.get_format_opts(fields=(BUCKET_PROP_REPLI_ENABLED, ))
+        # Enable bucket replication before creating the first container
+        output = self.openio('bucket set --replication yes ' +
+                             cname + opts)
+        self.assertEqual('True\n', output)
+
+        opts = self.get_format_opts(fields=('Name', ))
+        # Create a container attached to the previously declared bucket
+        output = self.openio('container create --bucket-name %s %s %s' %
+                             (cname, cname, opts))
+        self.assertOutput(cname + '\n', output)
+
+        opts = self.get_format_opts(fields=('account', 'bytes', 'objects',
+                                            BUCKET_PROP_REPLI_ENABLED))
+        # Check if replication is activated for the bucket
+        output = self.openio('bucket show ' + cname + opts)
+        self.assertEqual(self.account_from_env() + '\n0\n0\nTrue\n', output)
+
+        # TODO(FVE): check if replication is activated for the container
+        # As of now there is no CLI to check that.
 
     def test_bucket_list(self):
         opts = self.get_format_opts(fields=('Name', ))

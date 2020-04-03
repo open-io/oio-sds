@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,9 +19,12 @@ import time
 import subprocess
 from random import choice
 from six.moves.urllib_parse import quote
+from oio.account.client import AccountClient
 from oio.blob.rebuilder import BlobRebuilder
+from oio.common.constants import BUCKET_PROP_REPLI_ENABLED
 from oio.event.beanstalk import Beanstalk
 from oio.event.filters.notify import NotifyFilter
+from oio.event.filters.replicate import ReplicateFilter
 from tests.utils import BaseTestCase, random_str, strange_paths
 
 
@@ -366,19 +369,24 @@ class TestContentRebuildFilter(BaseTestCase):
                             chunks_to_remove, chunk_created=False)
 
 
-class TestNotifyFilter(BaseTestCase):
+class TestNotifyFilterBase(BaseTestCase):
 
     def setUp(self):
-        super(TestNotifyFilter, self).setUp()
+        super(TestNotifyFilterBase, self).setUp()
         queue_addr = choice(self.conf['services']['beanstalkd'])['addr']
         self.queue_url = queue_addr
         self.conf['queue_url'] = 'beanstalk://' + self.queue_url
         self.conf['tube'] = 'oio-repli'
         self.conf['exclude'] = []
-        self.notify_filter = NotifyFilter(app=_App, conf=self.conf)
+        self.notify_filter = self.filter_class(app=_App, conf=self.conf)
 
     def tearDown(self):
-        super(TestNotifyFilter, self).tearDown()
+        super(TestNotifyFilterBase, self).tearDown()
+
+
+class TestNotifyFilter(TestNotifyFilterBase):
+
+    filter_class = NotifyFilter
 
     def test_parsing(self):
         expected = {
@@ -413,3 +421,61 @@ class TestNotifyFilter(BaseTestCase):
         # random account should be replicated
         self.assertTrue(self.notify_filter._should_notify(random_str(16),
                                                           random_str(16)))
+
+
+class TestReplicateFilter(TestNotifyFilterBase):
+    """
+    Test the "replicate" filter, forwarding object or container events to
+    the "replicator" service.
+    """
+
+    filter_class = ReplicateFilter
+
+    def setUp(self):
+        super(TestReplicateFilter, self).setUp()
+        self.notify_filter.check_account = True
+
+    @classmethod
+    def setUpClass(cls):
+        super(TestReplicateFilter, cls).setUpClass()
+        cls.account_client = AccountClient({'namespace': cls._cls_ns})
+        _App.app_env['account_client'] = cls.account_client
+
+    def test_replication_always_enabled(self):
+        # Disable the account check
+        self.notify_filter.check_account = False
+        bname = 'repli' + random_str(4)
+        now = time.time()
+        # Disable replication for this bucket
+        self.__class__.account_client.bucket_update(
+            bname, {BUCKET_PROP_REPLI_ENABLED: 'false'}, None)
+        self.__class__.account_client.container_update(
+            self.account, bname, {'bucket': bname,
+                                  'mtime': str(now)})
+        # Replication is disabled for this bucket,
+        # but the filter won't do the check,
+        # and forward the event anyway.
+        self.assertTrue(self.notify_filter._should_notify(
+            self.account, bname))
+
+    def test_replication_enabled(self):
+        bname = 'repli' + random_str(4)
+        now = time.time()
+        self.__class__.account_client.bucket_update(
+            bname, {BUCKET_PROP_REPLI_ENABLED: 'true'}, None)
+        self.__class__.account_client.container_update(
+            self.account, bname, {'bucket': bname,
+                                  'mtime': str(now)})
+        self.assertTrue(self.notify_filter._should_notify(
+            self.account, bname))
+
+    def test_replication_disabled(self):
+        bname = 'repli' + random_str(4)
+        now = time.time()
+        self.__class__.account_client.bucket_update(
+            bname, {BUCKET_PROP_REPLI_ENABLED: 'false'}, None)
+        self.__class__.account_client.container_update(
+            self.account, bname, {'bucket': bname,
+                                  'mtime': str(now)})
+        self.assertFalse(self.notify_filter._should_notify(
+            self.account, bname))

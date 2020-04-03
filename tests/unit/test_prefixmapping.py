@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,12 +14,13 @@
 # License along with this library.
 
 import unittest
-from six import itervalues, iteritems
+from six import itervalues
 
 from mock import MagicMock as Mock
 
 from oio.common.exceptions import PreconditionFailed
-from oio.common.logger import get_logger
+# See comment further down
+# from oio.common.logger import get_logger
 from oio.directory.meta0 import \
         Meta0PrefixMapping, \
         generate_short_prefixes as prefixes, \
@@ -134,7 +135,9 @@ class TestMeta0PrefixMapping(unittest.TestCase):
         super(TestMeta0PrefixMapping, self).setUp()
         self.cs_client = FakeConscienceClient()
         self.m0_client = Mock(conf={'namespace': 'OPENIO'})
-        self.logger = get_logger(None, 'test')
+        # Disabling the logging helps passing tests on Travis CI
+        # self.logger = get_logger(None, 'test')
+        self.logger = Mock()
 
     def make_mapping(self, replicas=3, digits=None):
         mapping = Meta0PrefixMapping(self.m0_client,
@@ -174,9 +177,10 @@ class TestMeta0PrefixMapping(unittest.TestCase):
         mapping.rebalance()
         self.assertTrue(mapping.check_replicas())
         n_pfx_by_svc = mapping.count_pfx_by_svc()
-        ideal = mapping.num_bases() * replicas / n_svc
-        arange = range(int(ideal * 0.92), int(ideal * 1.08))
-        for count in itervalues(n_pfx_by_svc):
+        for svc1_addr, count in n_pfx_by_svc.items():
+            svc1 = mapping.services.get(svc1_addr, {'upper_limit': svc1_addr})
+            arange = range(int(svc1['upper_limit'] * 0.92),
+                           int(svc1['upper_limit'] * 1.08))
             self.assertIn(count, arange)
 
     def test_bootstrap_4_services_rebalanced(self):
@@ -211,22 +215,22 @@ class TestMeta0PrefixMapping(unittest.TestCase):
         mapping.bootstrap()
         mapping.rebalance()
         self.assertTrue(mapping.check_replicas())
-        n_pfx_by_svc = mapping.count_pfx_by_svc()
-        ideal = mapping.num_bases() * replicas / n
-        arange = range(int(ideal * 0.95), int(ideal * 1.05))
 
         svc = list(mapping.services.values())[0]
         svc["score"] = 0
+
         self.logger.info("Decommissioning %s", svc["addr"])
         mapping.decommission(svc)
         self.assertTrue(mapping.check_replicas())
-        ideal = mapping.num_bases() * replicas / (n-1)
-        arange = range(int(ideal * 0.95), int(ideal * 1.05))
         n_pfx_by_svc = mapping.count_pfx_by_svc()
-        for svc1, count in iteritems(n_pfx_by_svc):
-            if svc1 == svc["addr"]:
+        for svc1_addr, count in n_pfx_by_svc.items():
+            if svc1_addr == svc["addr"]:
                 self.assertEqual(0, count)
             else:
+                svc1 = mapping.services.get(
+                    svc1_addr, {'upper_limit': svc1_addr})
+                arange = range(int(svc1['upper_limit'] * 0.95),
+                               int(svc1['upper_limit'] * 1.05))
                 self.assertIn(count, arange)
 
     def test_decommission_one_by_one(self):

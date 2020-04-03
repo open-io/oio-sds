@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -42,6 +42,7 @@ from oio.common.decorators import handle_account_not_found, \
 from oio.common.storage_functions import _sort_chunks, fetch_stream, \
     fetch_stream_ec
 from oio.common.fullpath import encode_fullpath
+from oio.common.cache import del_cached_metadata
 
 
 class ObjectStorageApi(object):
@@ -60,9 +61,11 @@ class ObjectStorageApi(object):
         - `write_timeout`: `float`
     """
     EXTRA_KEYWORDS = ('chunk_checksum_algo', 'autocreate',
-                      'chunk_buffer_min', 'chunk_buffer_max')
+                      'chunk_buffer_min', 'chunk_buffer_max',
+                      'cache')
 
-    def __init__(self, namespace, logger=None, perfdata=None, **kwargs):
+    def __init__(self, namespace, logger=None, perfdata=None,
+                 **kwargs):
         """
         Initialize the object storage API.
 
@@ -87,6 +90,7 @@ class ObjectStorageApi(object):
         :type autocreate: `bool`
         :keyword endpoint: network location of the oio-proxy to talk to.
         :type endpoint: `str`
+        :keyword cache: dict-like object used as a cache for object metadata.
         """
         self.namespace = namespace
         conf = {"namespace": self.namespace}
@@ -1096,6 +1100,18 @@ class ObjectStorageApi(object):
         return link_meta
 
     @staticmethod
+    def _cache_wrapper(account, container, obj, version, stream, **kwargs):
+        try:
+            for dat in stream:
+                yield dat
+        except exc.UnrecoverableContent:
+            # The cache may no longer be valid
+            del_cached_metadata(
+                account=account, reference=container, path=obj,
+                cid=kwargs.get('cid'), version=version, **kwargs)
+            raise
+
+    @staticmethod
     def _ttfb_wrapper(stream, req_start, download_start, perfdata):
         """Keep track of time-to-first-byte and time-to-last-byte"""
         perfdata_rawx = perfdata.setdefault('rawx', dict())
@@ -1178,8 +1194,12 @@ class ObjectStorageApi(object):
             stream = fetch_stream(chunks, ranges, storage_method, **kwargs)
 
         if perfdata is not None:
-            return meta, self._ttfb_wrapper(
+            stream = self._ttfb_wrapper(
                 stream, req_start, download_start, perfdata)
+        if kwargs.get('cache'):
+            stream = self._cache_wrapper(
+                account, container, obj, version, stream, **kwargs)
+
         return meta, stream
 
     @handle_object_not_found

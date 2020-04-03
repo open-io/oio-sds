@@ -19,8 +19,9 @@ from six.moves.urllib_parse import urlparse
 import redis
 import redis.sentinel
 from werkzeug.exceptions import NotFound, Conflict, BadRequest
+from oio.common.constants import BUCKET_PROP_REPLI_ENABLED
 from oio.common.timestamp import Timestamp
-from oio.common.easy_value import int_value, true_value, float_value, \
+from oio.common.easy_value import int_value, boolean_value, float_value, \
     debinarize
 from oio.common.redis_conn import RedisConnection, catch_service_errors
 
@@ -124,6 +125,7 @@ class AccountBackend(RedisConnection):
                               'bytes', 0, 'objects', 0,
                               'damaged_objects', 0, 'missing_chunks', 0,
                               'ctime', now);
+                   account_id = KEYS[1]
                  else
                    return redis.error_reply('no_account');
                  end;
@@ -314,6 +316,26 @@ class AccountBackend(RedisConnection):
         end;
         """
 
+    lua_get_extended_container_info = """
+        local ckey = KEYS[1]
+        local bucket_prefix = ARGV[1]
+        local bname = redis.call('HGET', ckey, 'bucket')
+
+        local replication_enabled = 'false'
+        if bname then
+            local bkey = bucket_prefix .. bname
+            local enabled_str = redis.call('HGET', bkey, 'replication_enabled')
+            if enabled_str ~= nil then
+                -- Do not cast into boolean here
+                replication_enabled = enabled_str
+            end
+        end
+        local res = redis.call('HGETALL', ckey)
+        table.insert(res, 'replication_enabled')
+        table.insert(res, replication_enabled)
+        return res
+    """
+
     # This regex comes from https://stackoverflow.com/a/50484916
     #
     # The first group looks ahead to ensure that the match
@@ -350,7 +372,7 @@ class AccountBackend(RedisConnection):
         super(AccountBackend, self).__init__(
             host=redis_host, sentinel_hosts=redis_sentinel_hosts,
             sentinel_name=redis_sentinel_name, **redis_conf)
-        self.autocreate = true_value(conf.get('autocreate', 'true'))
+        self.autocreate = boolean_value(conf.get('autocreate'), True)
         self.script_update_container = self.register_script(
             self.lua_update_container)
         self.script_update_bucket_list = self.register_script(
@@ -359,6 +381,8 @@ class AccountBackend(RedisConnection):
             self.lua_refresh_account)
         self.script_flush_account = self.register_script(
             self.lua_flush_account)
+        self.script_get_container_info = self.register_script(
+            self.lua_get_extended_container_info)
 
         self._account_prefix = conf.get('account_prefix', ACCOUNT_KEY_PREFIX)
         self._bucket_prefix = conf.get('bucket_prefix', BUCKET_KEY_PREFIX)
@@ -457,6 +481,23 @@ class AccountBackend(RedisConnection):
         meta = conn.hgetall('metadata:%s' % account_id.decode('utf-8'))
         return debinarize(meta)
 
+    def cast_fields(self, info):
+        """
+        Cast dict entries to the type they are supposed to be.
+        """
+        for what in (b'bytes', b'objects', b'damaged_objects',
+                     b'missing_chunks'):
+            try:
+                info[what] = int_value(info.get(what), 0)
+            except (TypeError, ValueError):
+                pass
+        for what in (BUCKET_PROP_REPLI_ENABLED.encode('utf-8'), ):
+            try:
+                decoded = info.get(what, b'').decode('utf-8')
+                info[what] = boolean_value(decoded)
+            except (TypeError, ValueError):
+                pass
+
     @catch_service_errors
     def get_bucket_info(self, bname):
         """
@@ -465,10 +506,31 @@ class AccountBackend(RedisConnection):
         if not bname:
             return None
         binfo = self.conn_slave.hgetall(self.bkey(bname))
-
-        for what in ['bytes', 'objects', 'damaged_objects', 'missing_chunks']:
-            binfo[what] = int_value(binfo.get(what), 0)
+        self.cast_fields(binfo)
         return binfo
+
+    @catch_service_errors
+    def get_container_info(self, account_id, cname):
+        """
+        Get all available information about a container, including some
+        information coming from the bucket it belongs to.
+        """
+        if not cname:
+            return None
+        keys = [self.ckey(account_id, cname)]
+        args = [self._bucket_prefix]
+        cinfolist = self.script_get_container_info(
+            keys=keys, args=args, client=self.conn_slave)
+        key = None
+        cinfo = dict()
+        for cursor in cinfolist:
+            if key is not None:
+                cinfo[key] = cursor
+                key = None
+                continue
+            key = cursor
+        self.cast_fields(cinfo)
+        return cinfo
 
     @catch_service_errors
     def update_account_metadata(self, account_id, metadata, to_delete=None):
@@ -494,6 +556,28 @@ class AccountBackend(RedisConnection):
         return account_id
 
     @catch_service_errors
+    def update_bucket_metadata(self, bname, metadata, to_delete=None):
+        """
+        Update (or delete) bucket metadata.
+
+        :param metadata: dict of entries to set (or update)
+        :param to_delete: iterable of keys to delete
+        """
+        bkey = self.bkey(bname)
+        pipeline = self.conn.pipeline(True)
+        if to_delete:
+            pipeline.hdel(bkey, *to_delete)
+        # FIXME(FVE): cast known metadata into the appropriate type/value
+        if metadata:
+            pipeline.hmset(bkey, metadata)
+        pipeline.hgetall(bkey)
+        res = pipeline.execute()
+        binfo = res[-1]
+        self.cast_fields(binfo)
+        return binfo
+        # return None
+
+    @catch_service_errors
     def info_account(self, req_account_id):
         conn = self.conn_slave
         if not req_account_id:
@@ -511,9 +595,7 @@ class AccountBackend(RedisConnection):
         pipeline.hgetall('metadata:%s' % account_id)
         data = pipeline.execute()
         info = data[0]
-        for field in (b'bytes', b'objects',
-                      b'damaged_objects', b'missing_chunks'):
-            info[field] = int_value(info.get(field), 0)
+        self.cast_fields(info)
         info[b'buckets'] = data[1]
         info[b'containers'] = data[2]
         info[b'metadata'] = data[3]
@@ -566,7 +648,8 @@ class AccountBackend(RedisConnection):
         # in the middle of the container name.
         update_bucket_object_count = SEGMENTS_BUCKET_SUFFIX not in name
 
-        keys = [account_id, AccountBackend.ckey(account_id, name),
+        ckey = AccountBackend.ckey(account_id, name)
+        keys = [account_id, ckey,
                 self.clistkey(account_id),
                 self.akey(account_id),
                 bucket_key]
@@ -579,6 +662,8 @@ class AccountBackend(RedisConnection):
         try:
             self.script_update_container(
                 keys=keys, args=args, client=pipeline)
+            if bucket_name and not deleted:
+                pipeline.hset(ckey, "bucket", bucket_name)
             # Only execute when the main shard is created/deleted.
             if bucket_name == name:
                 self.script_update_bucket_list(

@@ -21,8 +21,9 @@ from logging import getLogger
 from oio.cli import Command, Lister, ShowOne
 from oio.common.timestamp import Timestamp
 from oio.common.utils import depaginate, request_id, timeout_to_deadline
-from oio.common.constants import OIO_DB_STATUS_NAME,\
-    OIO_DB_ENABLED, OIO_DB_DISABLED, OIO_DB_FROZEN, \
+from oio.common.constants import \
+    BUCKET_PROP_REPLI_ENABLED, \
+    OIO_DB_STATUS_NAME, OIO_DB_ENABLED, OIO_DB_DISABLED, OIO_DB_FROZEN, \
     M2_PROP_BUCKET_NAME, M2_PROP_CTIME, M2_PROP_DAMAGED_OBJECTS, \
     M2_PROP_DEL_EXC_VERSIONS, M2_PROP_MISSING_CHUNKS, \
     M2_PROP_OBJECTS, M2_PROP_QUOTA, M2_PROP_STORAGE_POLICY, \
@@ -173,6 +174,45 @@ class CreateContainer(SetPropertyCommandMixin, Lister):
                 results.append((container, success))
 
         return ('Name', 'Created'), (r for r in results)
+
+
+class SetBucket(ShowOne):
+    """Set metadata on a bucket."""
+
+    log = getLogger(__name__ + '.SetBucket')
+
+    def get_parser(self, prog_name):
+        parser = super(SetBucket, self).get_parser(prog_name)
+        parser.add_argument(
+            'bucket',
+            help='Name of the bucket to query.'
+        )
+        parser.add_argument(
+            '--replicate', '--replication',
+            metavar='yes/no',
+            type=boolean_value,
+            help='Enable or disable bucket replication.'
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        reqid = request_id(prefix='CLI-BUCKET-')
+        acct_client = self.app.client_manager.storage.account
+        metadata = dict()
+        if parsed_args.replicate is not None:
+            metadata[BUCKET_PROP_REPLI_ENABLED] = str(parsed_args.replicate)
+        data = acct_client.bucket_update(parsed_args.bucket,
+                                         metadata=metadata, to_delete=None,
+                                         reqid=reqid)
+
+        if parsed_args.formatter == 'table':
+            from oio.common.easy_value import convert_size
+
+            data['bytes'] = convert_size(data['bytes'])
+            data['mtime'] = Timestamp(data.get('mtime', 0.0)).isoformat
+        return zip(*sorted(data.items()))
 
 
 class SetContainer(SetPropertyCommandMixin,
@@ -405,6 +445,9 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
                                     "Namespace default"),
             'status': OIO_DB_STATUS_NAME.get(sys.get('sys.status'), "Unknown"),
         }
+        bucket = sys.get(M2_PROP_BUCKET_NAME, None)
+        if bucket is not None:
+            info['bucket'] = bucket
         delete_exceeding = sys.get(M2_PROP_DEL_EXC_VERSIONS, None)
         if delete_exceeding is not None:
             info['delete_exceeding_versions'] = delete_exceeding != '0'

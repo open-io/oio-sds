@@ -236,7 +236,16 @@ def fetch_stream_ec(chunks, ranges, storage_method, **kwargs):
             handler = ECChunkDownloadHandler(
                 storage_method, chunks[pos],
                 meta_start, meta_end, **kwargs)
-            stream = handler.get_stream()
+            try:
+                stream = handler.get_stream()
+            except exc.NotFound as err:
+                raise exc.UnrecoverableContent(
+                    "Cannot download position %d: %s" %
+                    (pos, err))
+            except Exception as err:
+                raise exc.ServiceUnavailable(
+                    "Error while downloading position %d: %s" %
+                    (pos, err))
             try:
                 for part_info in stream:
                     for dat in part_info['iter']:
