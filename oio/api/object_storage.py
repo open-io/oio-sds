@@ -41,7 +41,7 @@ from oio.common.decorators import handle_account_not_found, \
 from oio.common.storage_functions import _sort_chunks, fetch_stream, \
     fetch_stream_ec
 from oio.common.fullpath import encode_fullpath
-from oio.common.cache import del_cached_metadata
+from oio.common.cache import del_cached_object_metadata
 
 
 class ObjectStorageApi(object):
@@ -1079,9 +1079,9 @@ class ObjectStorageApi(object):
                 yield dat
         except exc.UnrecoverableContent:
             # The cache may no longer be valid
-            del_cached_metadata(
+            del_cached_object_metadata(
                 account=account, reference=container, path=obj,
-                cid=kwargs.get('cid'), version=version, **kwargs)
+                version=version, **kwargs)
             raise
 
     @staticmethod
