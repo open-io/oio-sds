@@ -435,6 +435,11 @@
 				"descr": "In the current sqliterepo repository, sets the page size of all the databases used. This value only has effects on databases created with that value.",
 				"def": 4096, "min": 512, "max": "1024 * 1024" },
 
+			{ "type": "uint", "name": "oio_sqliterepo_cache_kbytes_per_db",
+				"key": "sqliterepo.cache.kbytes_per_db",
+				"descr": "Number of kibibytes (kiB) of cache per open DB.",
+				"def": 0, "min": 0, "max": "1024 * 1024" },
+
 			{ "type": "int32", "name": "oio_sqlx_request_failure_threshold",
 				"key": "enbug.sqliterepo.client.failure.threshold",
 				"descr": "In testing situations, sets the average ratio of requests failing for a fake reason (from the peer). This helps testing the retrial mechanisms.",
