@@ -1,5 +1,5 @@
 // OpenIO SDS oio-rawx-harass
-// Copyright (C) 2019 OpenIO SAS
+// Copyright (C) 2019-2020 OpenIO SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public
@@ -267,7 +267,7 @@ func main() {
 	var nbScenarios uint
 	var duration time.Duration
 
-	flag.UintVar(&bufferSize, "size", 64, "Set the size of the buffer to be sent")
+	flag.UintVar(&bufferSize, "size", 64, "Set the size of the buffer to be sent (kiB)")
 	flag.DurationVar(&duration, "duration", 30*time.Second, "Set the duration of the whole test")
 	flag.UintVar(&nbScenarios, "scenarios", 1024, "Set the number of concurrent scenarios")
 	flag.UintVar(&nbWorkers, "concurrency", 16, "Set the number of concurrent coroutines")
