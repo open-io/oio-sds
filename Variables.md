@@ -1339,6 +1339,15 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_SQLITEREPO_CACHE_HEAVYLOAD_FAIL*
 
+### sqliterepo.cache.kbytes_per_db
+
+> Number of kibibytes (kiB) of cache per open DB.
+
+ * default: **0**
+ * type: guint
+ * cmake directive: *OIO_SQLITEREPO_CACHE_KBYTES_PER_DB*
+ * range: 0 -> 1048576
+
 ### sqliterepo.cache.timeout.lock
 
 > Sets how long we (unit)wait on the lock around the databases. Keep it small.

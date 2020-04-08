@@ -34,6 +34,19 @@ target_link_libraries(oio-lb-benchmark
 		oiocore metautils
 		${GLIB2_LIBRARIES})
 
+add_custom_target(oio-rawx-harass ALL)
+set(GO_BUILD_RAWX_HARASS ${GO_EXECUTABLE} build -o ${CMAKE_CURRENT_BINARY_DIR}/oio-rawx-harass oio-rawx-harass.go)
+
+add_custom_command(
+	TARGET oio-rawx-harass
+	DEPENDS
+		${CMAKE_CURRENT_SOURCE_DIR}/oio-rawx-harass.go
+	COMMAND
+	cd ${CMAKE_CURRENT_SOURCE_DIR} && ${GO_BUILD_RAWX_HARASS}
+	COMMENT
+		"Build oio-rdir-harass tool, written in Golang"
+)
+
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/oio-sds.pc.in
 	${CMAKE_CURRENT_BINARY_DIR}/oio-sds.pc @ONLY)
 

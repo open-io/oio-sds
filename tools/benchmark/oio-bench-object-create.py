@@ -57,7 +57,7 @@ def list_objects(container):
     return [obj['name'] for obj in objects_iter]
 
 
-def main(threads, delay=2.0, duration=180.0):
+def main(threads, delay=5.0, duration=60.0):
     counter = 0
     created = list()
     cname = 'benchmark-%d' % int(time.time())
@@ -107,7 +107,11 @@ The account name is taken from the OIO_ACCOUNT environement variable, the
 container name is 'benchmark-' followed by a timestamp.
 Does not create chunks, just save chunk addresses.
 
-usage: %s [THREADS [POLICY]]
+usage: %s [THREADS [POLICY [DURATION]]]
+
+    THREAD is 1 by default
+    POLICY is "SINGLE" by default
+    DURATION is 60.0 seconds by default
 """
 
 if __name__ == '__main__':
@@ -118,9 +122,10 @@ if __name__ == '__main__':
         sys.exit(0)
     THREADS = int(sys.argv[1]) if len(sys.argv) > 1 else 1
     POLICY = sys.argv[2] if len(sys.argv) > 2 else 'SINGLE'
+    DURATION = float(sys.argv[3]) if len(sys.argv) > 3 else 60.0
     ACCOUNT = os.getenv('OIO_ACCOUNT', 'benchmark')
     API = ObjectStorageApi(os.getenv('OIO_NS', 'OPENIO'))
     API._object_upload = _object_upload
     RESULTS = LightQueue(THREADS * 10)
     POOL = GreenPool(THREADS)
-    main(THREADS)
+    main(THREADS, duration=DURATION)

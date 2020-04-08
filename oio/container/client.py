@@ -20,8 +20,10 @@ from oio.common.client import ProxyClient
 from oio.common.decorators import ensure_headers
 from oio.common.json import json
 from oio.common import exceptions
-from oio.common.cache import get_cached_metadata, set_cached_metadata, \
-    del_cached_metadata
+from oio.common.cache import get_cached_container_metadata, \
+    set_cached_container_metadata, del_cached_container_metadata, \
+    get_cached_object_metadata, set_cached_object_metadata, \
+    del_cached_object_metadata
 from oio.common.easy_value import boolean_value
 
 
@@ -232,6 +234,10 @@ class ContainerClient(ProxyClient):
         :type headers: `dict`
         """
         params = self._make_params(account, reference, cid=cid)
+
+        del_cached_container_metadata(
+            account=account, reference=reference, cid=cid, **kwargs)
+
         try:
             self._request('POST', '/destroy', params=params, **kwargs)
         except exceptions.Conflict as exc:
@@ -301,6 +307,10 @@ class ContainerClient(ProxyClient):
         uri = self._make_uri('admin/enable')
         params = self._make_params(account, reference, cid=cid)
         params.update({"type": "meta2"})
+
+        del_cached_container_metadata(
+            account=account, reference=reference, cid=cid, **kwargs)
+
         resp, _ = self._direct_request('POST', uri, params=params, **kwargs)
         return resp
 
@@ -319,6 +329,10 @@ class ContainerClient(ProxyClient):
         uri = self._make_uri('admin/freeze')
         params = self._make_params(account, reference, cid=cid)
         params.update({"type": "meta2"})
+
+        del_cached_container_metadata(
+            account=account, reference=reference, cid=cid, **kwargs)
+
         resp, _ = self._direct_request('POST', uri, params=params, **kwargs)
         return resp
 
@@ -342,12 +356,22 @@ class ContainerClient(ProxyClient):
             containing respectively a `dict` of user properties and
             a `dict` of system properties.
         """
+        container_meta = get_cached_container_metadata(
+            account=account, reference=reference, cid=cid, **kwargs)
+        if container_meta is not None:
+            return container_meta
+
         if not properties:
             properties = list()
         data = json.dumps(properties)
-        _resp, body = self._request(
+        _resp, container_meta = self._request(
             'POST', '/get_properties', data=data, params=params, **kwargs)
-        return body
+
+        set_cached_container_metadata(
+            container_meta, account=account, reference=reference, cid=cid,
+            **kwargs)
+
+        return container_meta
 
     def container_set_properties(self, account=None, reference=None,
                                  properties=None, clear=False, cid=None,
@@ -357,6 +381,10 @@ class ContainerClient(ProxyClient):
             params["flush"] = 1
         data = json.dumps({'properties': properties or {},
                            'system': system or {}})
+
+        del_cached_container_metadata(
+            account=account, reference=reference, cid=cid, **kwargs)
+
         _resp, body = self._request(
             'POST', '/set_properties', data=data, params=params, **kwargs)
         return body
@@ -365,6 +393,10 @@ class ContainerClient(ProxyClient):
                                  properties=[], cid=None, **kwargs):
         params = self._make_params(account, reference, cid=cid)
         data = json.dumps(properties)
+
+        del_cached_container_metadata(
+            account=account, reference=reference, cid=cid, **kwargs)
+
         _resp, body = self._request(
             'POST', '/del_properties', data=data, params=params, **kwargs)
         return body
@@ -524,8 +556,9 @@ class ContainerClient(ProxyClient):
         if chunk_method is not None:
             hdrs['x-oio-content-meta-chunk-method'] = chunk_method
 
-        del_cached_metadata(account=account, reference=reference,
-                            path=path, cid=cid, version=version, **kwargs)
+        del_cached_object_metadata(
+            account=account, reference=reference, path=path, cid=cid,
+            version=version, **kwargs)
 
         resp, body = self._direct_request(
             'POST', uri, data=data, params=params, headers=hdrs, **kwargs)
@@ -537,8 +570,9 @@ class ContainerClient(ProxyClient):
         params = self._make_params(account, reference, path, cid=cid,
                                    version=version)
 
-        del_cached_metadata(account=account, reference=reference,
-                            path=path, cid=cid, version=version, **kwargs)
+        del_cached_object_metadata(
+            account=account, reference=reference, path=path, cid=cid,
+            version=version, **kwargs)
 
         resp, _ = self._direct_request('POST', uri, params=params, **kwargs)
         return resp.status == 204
@@ -554,8 +588,9 @@ class ContainerClient(ProxyClient):
         params = self._make_params(account, reference, path, cid=cid,
                                    version=version)
 
-        del_cached_metadata(account=account, reference=reference,
-                            path=path, cid=cid, version=version, **kwargs)
+        del_cached_object_metadata(
+            account=account, reference=reference, path=path, cid=cid,
+            version=version, **kwargs)
 
         resp, _ = self._direct_request('POST', uri,
                                        params=params, **kwargs)
@@ -580,8 +615,9 @@ class ContainerClient(ProxyClient):
         results = list()
 
         for path in paths:
-            del_cached_metadata(account=account, reference=reference,
-                                path=path, cid=cid, **kwargs)
+            del_cached_object_metadata(
+                account=account, reference=reference, path=path, cid=cid,
+                **kwargs)
 
         try:
             _, resp_body = self._direct_request(
@@ -629,7 +665,7 @@ class ContainerClient(ProxyClient):
         :returns: a tuple with content metadata `dict` as first element
             and chunk `list` as second element
         """
-        content_meta, chunks = get_cached_metadata(
+        content_meta, chunks = get_cached_object_metadata(
             account=account, reference=reference, path=path,
             cid=cid, version=version, properties=properties, **kwargs)
         if content_meta is not None and chunks is not None:
@@ -655,7 +691,7 @@ class ContainerClient(ProxyClient):
             else:
                 raise
 
-        set_cached_metadata(
+        set_cached_object_metadata(
             content_meta, chunks,
             account=account, reference=reference, path=path,
             cid=cid, version=version, properties=properties, **kwargs)
@@ -698,7 +734,7 @@ class ContainerClient(ProxyClient):
         """
         Get a description of the content along with its user properties.
         """
-        obj_meta, _ = get_cached_metadata(
+        obj_meta, _ = get_cached_object_metadata(
             account=account, reference=reference, path=path,
             cid=cid, version=version, properties=True, **kwargs)
         if obj_meta is not None:
@@ -711,7 +747,7 @@ class ContainerClient(ProxyClient):
         obj_meta = extract_content_headers_meta(resp.headers)
         obj_meta.update(body)
 
-        set_cached_metadata(
+        set_cached_object_metadata(
             obj_meta, None,
             account=account, reference=reference, path=path,
             cid=cid, version=version, properties=True, **kwargs)
@@ -733,8 +769,9 @@ class ContainerClient(ProxyClient):
             params['flush'] = 1
         data = json.dumps(properties)
 
-        del_cached_metadata(account=account, reference=reference,
-                            path=path, cid=cid, version=version, **kwargs)
+        del_cached_object_metadata(
+            account=account, reference=reference, path=path, cid=cid,
+            version=version, **kwargs)
 
         _resp, _body = self._direct_request(
             'POST', uri, data=data, params=params, **kwargs)
@@ -754,8 +791,9 @@ class ContainerClient(ProxyClient):
                                    cid=cid, version=version)
         data = json.dumps(properties)
 
-        del_cached_metadata(account=account, reference=reference,
-                            path=path, cid=cid, version=version, **kwargs)
+        del_cached_object_metadata(
+            account=account, reference=reference, path=path, cid=cid,
+            version=version, **kwargs)
 
         resp, _body = self._direct_request(
             'POST', uri, data=data, params=params, **kwargs)
@@ -786,8 +824,9 @@ class ContainerClient(ProxyClient):
                                    cid=cid, version=version)
         params['size'] = size
 
-        del_cached_metadata(account=account, reference=reference,
-                            path=path, cid=cid, version=version, **kwargs)
+        del_cached_object_metadata(
+            account=account, reference=reference, path=path, cid=cid,
+            version=version, **kwargs)
 
         _resp, body = self._direct_request(
             'POST', uri, params=params, **kwargs)
@@ -800,7 +839,8 @@ class ContainerClient(ProxyClient):
         if maxvers is not None:
             params["maxvers"] = maxvers
 
-        del_cached_metadata(account=account, reference=reference,
-                            path=path, cid=cid, **kwargs)
+        del_cached_object_metadata(
+            account=account, reference=reference, path=path, cid=cid,
+            **kwargs)
 
         self._direct_request('POST', uri, params=params, **kwargs)

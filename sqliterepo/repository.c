@@ -799,6 +799,13 @@ __open_not_cached(struct open_args_s *args, struct sqlx_sqlite3_s **result)
 	sqlx_exec(handle, "PRAGMA foreign_keys = OFF");
 	sqlx_exec(handle, "PRAGMA synchronous = OFF");
 
+	if (oio_sqliterepo_cache_kbytes_per_db > 0) {
+		gchar line[128] = {0};
+		g_snprintf(line, sizeof(line), "PRAGMA cache_size = -%u",
+				oio_sqliterepo_cache_kbytes_per_db);
+		sqlx_exec(handle, line);
+	}
+
 	/* We chose to check this call especially because it is able to detect
 	 * a wrong/corrupted database file. */
 	int rc = sqlx_exec(handle, "PRAGMA journal_mode = MEMORY");
