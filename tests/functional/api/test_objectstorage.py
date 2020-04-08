@@ -1857,6 +1857,90 @@ class TestObjectList(ObjectStorageApiTestBase):
         self.assertEqual(int(props['length']), size)
 
 
+class TestContainerStorageApiUsingCache(ObjectStorageApiTestBase):
+
+    def setUp(self):
+        super(TestContainerStorageApiUsingCache, self).setUp()
+        self.cache = dict()
+        self.api = ObjectStorageApi(self.ns, endpoint=self.uri,
+                                    cache=self.cache)
+
+        self.container = random_str(8)
+        self.api.container_create(self.account, self.container)
+        self.assertEqual(0, len(self.cache))
+
+        self.api.container._direct_request = Mock(
+            side_effect=self.api.container._direct_request)
+
+    def tearDown(self):
+        super(TestContainerStorageApiUsingCache, self).tearDown()
+        self.api.container_delete(self.account, self.container)
+        self.assertEqual(0, len(self.cache))
+
+    def test_container_properties_get_cached(self):
+        expected_container_meta = self.api.container_get_properties(
+            self.account, self.container)
+        self.assertIsNotNone(expected_container_meta)
+        expected_container_meta = expected_container_meta.copy()
+        self.assertEqual(1, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+
+        container_meta = self.api.container_get_properties(
+            self.account, self.container)
+        self.assertDictEqual(expected_container_meta, container_meta)
+        self.assertEqual(1, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+
+    def test_container_properties_decache_on_set(self):
+        expected_container_meta = self.api.container_get_properties(
+            self.account, self.container)
+        self.assertIsNotNone(expected_container_meta)
+        properties = {'test1': '1', 'test2': '2'}
+        self.api.container_set_properties(
+            self.account, self.container, properties)
+        self.assertEqual(2, self.api.container._direct_request.call_count)
+        self.assertEqual(0, len(self.cache))
+
+        container_meta = self.api.container_get_properties(
+            self.account, self.container)
+        self.assertDictEqual(properties,
+                             container_meta['properties'])
+        self.assertEqual(3, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+
+        container_meta = self.api.container_get_properties(
+            self.account, self.container)
+        self.assertDictEqual(properties, container_meta['properties'])
+        self.assertEqual(3, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+
+    def test_container_properties_decache_on_del(self):
+        properties = {'test1': '1', 'test2': '2'}
+        # Set properties
+        self.api.container_set_properties(
+            self.account, self.container, properties)
+        # Load the cache
+        self.api.container_get_properties(
+            self.account, self.container)
+        # Delete properties (and drop the cache)
+        self.api.container_del_properties(
+            self.account, self.container, properties.keys())
+        self.assertEqual(3, self.api.container._direct_request.call_count)
+        self.assertEqual(0, len(self.cache))
+
+        container_meta = self.api.container_get_properties(
+            self.account, self.container)
+        self.assertDictEqual(dict(), container_meta['properties'])
+        self.assertEqual(4, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+
+        container_meta = self.api.container_get_properties(
+            self.account, self.container)
+        self.assertDictEqual(dict(), container_meta['properties'])
+        self.assertEqual(4, self.api.container._direct_request.call_count)
+        self.assertEqual(1, len(self.cache))
+
+
 class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
 
     def setUp(self):
