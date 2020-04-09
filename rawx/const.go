@@ -97,7 +97,11 @@ const (
 
 const (
 	// Default size (in KiB) of the buffer allocated for the upload
+	// This value is in kiB becase it has the same precision the configuration.
 	uploadBufferDefault int = 2 * 1024
+
+	// Total amount (in bytes) of upload buffers kept in cache
+	uploadBufferTotalDefault = 128 * 1024 * 1024
 
 	// Size (in bytes) used as a threshold to allow read().
 	// In other words: we do not read() if the available space in the buffer is less than this value

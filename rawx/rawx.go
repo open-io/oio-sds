@@ -42,6 +42,8 @@ type rawxService struct {
 	bufferSize   int
 	checksumMode int
 	compress     bool
+
+	uploadBufferPool bufferPool
 }
 
 type rawxRequest struct {

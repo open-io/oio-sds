@@ -425,17 +425,19 @@ func (fr *fileRepository) nameToRelPath(name string) string {
 }
 
 func setOrHasXattr(path, key, value string) error {
+	buf := xattrBufferPool.Acquire()
+	defer xattrBufferPool.Release(buf)
+
 	if err := syscall.Setxattr(path, key, []byte(value), 1); err == nil {
 		return nil
 	} else if !os.IsExist(err) {
 		return err
 	}
-	tab := make([]byte, 256)
-	sz, err := syscall.Getxattr(path, key, tab)
+	sz, err := syscall.Getxattr(path, key, buf)
 	if err != nil {
 		return err
 	}
-	if bytes.Equal([]byte(value), tab[:sz]) {
+	if bytes.Equal([]byte(value), buf[:sz]) {
 		return nil
 	}
 	return errors.New("XATTR mismatch")
