@@ -37,6 +37,8 @@ import (
 	"time"
 )
 
+var xattrBufferPool = newBufferPool(128*1024, 2048)
+
 func checkURL(url string) {
 	addr, err := net.ResolveTCPAddr("tcp", url)
 	if err != nil || addr.Port <= 0 {
@@ -166,6 +168,8 @@ func main() {
 	if rawx.bufferSize < uploadBatchSize {
 		rawx.bufferSize = uploadBatchSize
 	}
+
+	rawx.uploadBufferPool = newBufferPool(uploadBufferTotalDefault, rawx.bufferSize)
 
 	// Patch the checksum mode
 	if v, ok := opts["checksum"]; ok {
