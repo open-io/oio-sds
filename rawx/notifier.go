@@ -39,7 +39,7 @@ const (
 
 const (
 	beanstalkNotifierDefaultTube = "oio"
-	beanstalkNotifierPipeSize    = 4096
+	beanstalkNotifierPipeSize    = 8192
 )
 
 // Tells if the current RAWX service may emit notifications
