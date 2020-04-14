@@ -100,7 +100,6 @@ func copyReadWriteBuffer(dst io.Writer, src io.Reader, pool bufferPool) (written
 
 	for {
 		// Fill the buffer
-		buf = buf[:cap(buf)]
 		totalr, er := fillBuffer(src, buf)
 
 		// Dump the buffer
