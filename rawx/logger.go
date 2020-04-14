@@ -112,10 +112,6 @@ func LogWarning(format string, v ...interface{}) {
 	writeLogFmt(syslog.LOG_WARNING, format, v...)
 }
 
-func LogNotice(format string, v ...interface{}) {
-	writeLogFmt(syslog.LOG_NOTICE, format, v...)
-}
-
 func LogInfo(format string, v ...interface{}) {
 	writeLogFmt(syslog.LOG_INFO, format, v...)
 }
