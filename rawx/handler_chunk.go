@@ -91,7 +91,10 @@ func dumpBuffer(dst io.Writer, buf []byte) (written int, err error) {
 	return written, err
 }
 
-func copyReadWriteBuffer(dst io.Writer, src io.Reader, buf []byte) (written int64, err error) {
+func copyReadWriteBuffer(dst io.Writer, src io.Reader, pool bufferPool) (written int64, err error) {
+	buf := pool.Acquire()
+	defer pool.Release(buf)
+
 	for {
 		// Fill the buffer
 		totalr, er := fillBuffer(src, buf)
@@ -138,15 +141,13 @@ func (rr *rawxRequest) putData(out io.Writer) (uploadInfo, error) {
 	}
 
 	ul := uploadInfo{}
-	buffer := make([]byte, rr.rawx.bufferSize, rr.rawx.bufferSize)
-	chunkLength, err := copyReadWriteBuffer(out, in, buffer)
+	chunkLength, err := copyReadWriteBuffer(out, in, rr.rawx.uploadBufferPool)
 	if err != nil {
 		return ul, err
 	}
 
 	if h != nil {
-		bin := make([]byte, 0, 32)
-		ul.hash = strings.ToUpper(hex.EncodeToString(h.Sum(bin)))
+		ul.hash = strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
 	}
 	ul.length = chunkLength
 	rr.bytesIn = uint64(chunkLength)
@@ -446,7 +447,9 @@ func (rr *rawxRequest) getChunkReader(inChunk fileReader, cs int64, ri rangeInfo
 }
 
 func (rr *rawxRequest) removeChunk() {
-	tmp := make([]byte, 2048, 2048)
+	tmp := xattrBufferPool.Acquire()
+	defer xattrBufferPool.Release(tmp)
+
 	getter := func(name, key string) (string, error) {
 		nb, err := rr.rawx.repo.getAttr(name, key, tmp)
 		if nb <= 0 || err != nil {

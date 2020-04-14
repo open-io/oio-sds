@@ -39,7 +39,7 @@ const (
 
 const (
 	beanstalkNotifierDefaultTube = "oio"
-	beanstalkNotifierPipeSize    = 4096
+	beanstalkNotifierPipeSize    = 8192
 )
 
 // Tells if the current RAWX service may emit notifications
@@ -91,7 +91,6 @@ func (notifier *beanstalkNotifier) connectBeanstalkd() error {
 	if notifier.beanstalkd != nil {
 		return nil
 	}
-	LogDebug("Connecting to %s using tube %s", notifier.endpoint, notifier.tube)
 	beanstalkd, err := DialBeanstalkd(notifier.endpoint)
 	if err != nil {
 		return err
@@ -100,6 +99,7 @@ func (notifier *beanstalkNotifier) connectBeanstalkd() error {
 	if err != nil {
 		return err
 	}
+	LogDebug("Connected to %s using tube %s", notifier.endpoint, notifier.tube)
 	notifier.beanstalkd = beanstalkd
 	return nil
 }

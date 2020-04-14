@@ -37,6 +37,8 @@ import (
 	"time"
 )
 
+var xattrBufferPool = newBufferPool(xattrBufferTotalSizeDefault, xattrBufferSizeDefault)
+
 func checkURL(url string) {
 	addr, err := net.ResolveTCPAddr("tcp", url)
 	if err != nil || addr.Port <= 0 {
@@ -150,7 +152,7 @@ func main() {
 		path:         chunkrepo.sub.root,
 		id:           rawxID,
 		repo:         &chunkrepo,
-		bufferSize:   1024 * opts.getInt("buffer_size", uploadBufferDefault),
+		bufferSize:   1024 * opts.getInt("buffer_size", uploadBufferSizeDefault/1024),
 		checksumMode: checksumAlways,
 		compression:  opts["compression"],
 	}
@@ -166,6 +168,8 @@ func main() {
 	if rawx.bufferSize < uploadBatchSize {
 		rawx.bufferSize = uploadBatchSize
 	}
+
+	rawx.uploadBufferPool = newBufferPool(uploadBufferTotalSizeDefault, rawx.bufferSize)
 
 	// Patch the checksum mode
 	if v, ok := opts["checksum"]; ok {

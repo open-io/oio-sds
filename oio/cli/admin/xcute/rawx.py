@@ -53,6 +53,16 @@ class RawxRebuild(SingleServiceCommandMixin, XcuteRdirCommand):
         parser.add_argument(
             '--allow-frozen-container', action='store_true',
             help='Allow rebuilding a chunk in a frozen container.')
+        parser.add_argument(
+            '--set-incident-date', action='store_true',
+            help='Set a new incident date to rebuild from the current date. '
+                 'Otherwise, the already existing incident date will be used '
+                 '(see "openio volume admin show").')
+        parser.add_argument(
+            '--set-specific-incident-date', type=int,
+            help='Set a specific incident date to rebuild from this date '
+                 '(seconds since Epoch). '
+                 'Override the "--set-incident-date" parameter.')
 
         return parser
 
@@ -64,7 +74,10 @@ class RawxRebuild(SingleServiceCommandMixin, XcuteRdirCommand):
             'rawx_timeout': parsed_args.rawx_timeout,
             'dry_run': parsed_args.dry_run,
             'try_chunk_delete': parsed_args.delete_faulty_chunks,
-            'allow_frozen_container': parsed_args.allow_frozen_container
+            'allow_frozen_container': parsed_args.allow_frozen_container,
+            'set_incident_date': parsed_args.set_incident_date,
+            'set_specific_incident_date':
+                parsed_args.set_specific_incident_date
         }
         return {
             'tasks_per_second': parsed_args.chunks_per_second,

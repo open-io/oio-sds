@@ -153,7 +153,9 @@ func (chunk *chunkInfo) loadFullPath(getter func(string, string) (string, error)
 
 func (chunk *chunkInfo) loadAttr(inChunk fileReader, chunkID string,
 	reqid string) error {
-	buf := make([]byte, 2048, 2048)
+	buf := xattrBufferPool.Acquire()
+	defer xattrBufferPool.Release(buf)
+
 	getAttr := func(k string) (string, error) {
 		l, err := inChunk.getAttr(k, buf)
 		if l <= 0 || err != nil {
