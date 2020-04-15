@@ -18,6 +18,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -68,11 +69,6 @@ type Beanstalkd struct {
 	bufReader *bufio.Reader
 }
 
-type Job struct {
-	ID   uint64
-	Data []byte
-}
-
 func itoa(i int) string    { return strconv.Itoa(i) }
 func utoa(i uint64) string { return strconv.FormatUint(i, 10) }
 
@@ -99,37 +95,18 @@ func (beanstalkd *Beanstalkd) Close() {
 	}
 }
 
-func (beanstalkd *Beanstalkd) Watch(tubename string) error {
-	cmd := strings.Builder{}
-	cmd.Grow(len(tubename) + 16)
-	cmd.WriteString("watch ")
-	cmd.WriteString(tubename)
-	cmd.WriteString("\r\n")
-	resp, err := beanstalkd.sendCommand(cmd.String())
-	if err != nil {
-		return err
-	}
-
-	var tubeCount int
-	_, err = fmt.Sscanf(resp, "WATCHING %d\r\n", &tubeCount)
-	if err != nil {
-		return parseBeanstalkError(resp)
-	}
-	return nil
-}
-
 func (beanstalkd *Beanstalkd) Use(tubename string) error {
-	cmd := strings.Builder{}
+	cmd := bytes.Buffer{}
 	cmd.Grow(len(tubename) + 16)
 	cmd.WriteString("use ")
 	cmd.WriteString(tubename)
 	cmd.WriteString("\r\n")
 	expected := fmt.Sprintf("USING %s\r\n", tubename)
-	return beanstalkd.sendCommandAndCheck(cmd.String(), expected)
+	return beanstalkd.sendCommandAndCheck(cmd.Bytes(), expected)
 }
 
 func (beanstalkd *Beanstalkd) Put(data []byte) (uint64, error) {
-	cmd := strings.Builder{}
+	cmd := bytes.Buffer{}
 	cmd.Grow(len(data) + 64)
 	cmd.WriteString("put ")
 	cmd.WriteString(utoa(defaultPriority))
@@ -140,7 +117,7 @@ func (beanstalkd *Beanstalkd) Put(data []byte) (uint64, error) {
 	cmd.WriteString("\r\n")
 	cmd.Write(data)
 	cmd.WriteString("\r\n")
-	resp, err := beanstalkd.sendCommand(cmd.String())
+	resp, err := beanstalkd.sendCommand(cmd.Bytes())
 	if err != nil {
 		return 0, err
 	}
@@ -159,74 +136,7 @@ func (beanstalkd *Beanstalkd) Put(data []byte) (uint64, error) {
 	}
 }
 
-func (beanstalkd *Beanstalkd) Delete(id uint64) error {
-	cmd := strings.Builder{}
-	cmd.Grow(128)
-	cmd.WriteString("delete ")
-	cmd.WriteString(utoa(id))
-	cmd.WriteString("\r\n")
-	expected := "DELETED\r\n"
-	return beanstalkd.sendCommandAndCheck(cmd.String(), expected)
-}
-
-func (beanstalkd *Beanstalkd) Reserve() (*Job, error) {
-	command := "reserve\r\n"
-	resp, err := beanstalkd.sendCommand(command)
-	if err != nil {
-		return nil, err
-	}
-
-	switch {
-	case strings.HasPrefix(resp, "RESERVED"):
-		job := new(Job)
-		var dataLen int
-		_, err = fmt.Sscanf(resp, "RESERVED %d %d\r\n", &(job.ID), &dataLen)
-		if err != nil {
-			return nil, err
-		}
-		job.Data, err = beanstalkd.readData(dataLen)
-		return job, err
-	default:
-		return nil, parseBeanstalkError(resp)
-	}
-}
-
-func (beanstalkd *Beanstalkd) Bury(id uint64) error {
-	command := fmt.Sprintf("bury %d %d\r\n", id, defaultPriority)
-	expected := "BURIED\r\n"
-	return beanstalkd.sendCommandAndCheck(command, expected)
-}
-
-func (beanstalkd *Beanstalkd) Release(id uint64) error {
-	command := fmt.Sprintf("release %d %d %d\r\n", id, defaultPriority, 0)
-	expected := "RELEASED\r\n"
-	return beanstalkd.sendCommandAndCheck(command, expected)
-}
-
-func (beanstalkd *Beanstalkd) KickJob(id uint64) error {
-	command := fmt.Sprintf("kick-job %d\r\n", id)
-	expected := "KICKED\r\n"
-	return beanstalkd.sendCommandAndCheck(command, expected)
-}
-
-func (beanstalkd *Beanstalkd) Kick(bound uint64) (uint64, error) {
-	command := fmt.Sprintf("kick %d\r\n", bound)
-	resp, err := beanstalkd.sendCommand(command)
-	if err != nil {
-		return 0, err
-	}
-
-	switch {
-	case strings.HasPrefix(resp, "KICKED"):
-		var kicked uint64
-		_, err := fmt.Sscanf(resp, "KICKED %d\r\n", &kicked)
-		return kicked, err
-	default:
-		return 0, parseBeanstalkError(resp)
-	}
-}
-
-func (beanstalkd *Beanstalkd) sendCommandAndCheck(command, expected string) error {
+func (beanstalkd *Beanstalkd) sendCommandAndCheck(command []byte, expected string) error {
 	resp, err := beanstalkd.sendCommand(command)
 	if err != nil {
 		return err
@@ -238,8 +148,8 @@ func (beanstalkd *Beanstalkd) sendCommandAndCheck(command, expected string) erro
 	return nil
 }
 
-func (beanstalkd *Beanstalkd) sendCommand(command string) (string, error) {
-	_, err := beanstalkd.sendAll([]byte(command))
+func (beanstalkd *Beanstalkd) sendCommand(command []byte) (string, error) {
+	_, err := beanstalkd.sendAll(command)
 	if err != nil {
 		return "", err
 	}
