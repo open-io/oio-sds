@@ -21,10 +21,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -69,8 +67,9 @@ type Beanstalkd struct {
 	bufReader *bufio.Reader
 }
 
-func itoa(i int) string    { return strconv.Itoa(i) }
-func utoa(i uint64) string { return strconv.FormatUint(i, 10) }
+func itoa(i int) string     { return strconv.Itoa(i) }
+func utoa(i uint64) string  { return strconv.FormatUint(i, 10) }
+func itoa64(i int64) string { return strconv.FormatInt(i, 10) }
 
 func DialBeanstalkd(addr string) (*Beanstalkd, error) {
 	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
@@ -97,7 +96,7 @@ func (beanstalkd *Beanstalkd) Close() {
 
 func (beanstalkd *Beanstalkd) Use(tubename string) error {
 	cmd := bytes.Buffer{}
-	cmd.Grow(len(tubename) + 16)
+	cmd.Grow(256)
 	cmd.WriteString("use ")
 	cmd.WriteString(tubename)
 	cmd.WriteString("\r\n")
@@ -122,13 +121,16 @@ func (beanstalkd *Beanstalkd) Put(data []byte) (uint64, error) {
 		return 0, err
 	}
 
-	switch {
-	case strings.HasPrefix(resp, "IN"):
-		var id uint64
+	if len(resp) <= 0 {
+		return 0, parseBeanstalkError(resp)
+	}
+
+	var id uint64
+	switch resp[0] {
+	case 'I':
 		_, err := fmt.Sscanf(resp, "INSERTED %d\r\n", &id)
 		return id, err
-	case strings.HasPrefix(resp, "BU"):
-		var id uint64
+	case 'B':
 		_, _ = fmt.Sscanf(resp, "BURIED %d\r\n", &id)
 		return id, errBuried
 	default:
@@ -182,16 +184,6 @@ func (beanstalkd *Beanstalkd) sendAll(data []byte) (int, error) {
 		toWrite = toWrite[n:]
 	}
 	return totalWritten, nil
-}
-
-func (beanstalkd *Beanstalkd) readData(dataLen int) ([]byte, error) {
-	data := make([]byte, dataLen+2) //+2 is for trailing \r\n
-	n, err := io.ReadFull(beanstalkd.bufReader, data)
-	if err != nil {
-		return nil, err
-	}
-
-	return data[:n-2], nil //strip \r\n trail
 }
 
 func parseBeanstalkError(str string) error {

@@ -71,8 +71,7 @@ func (fr *fileRepository) init(root string) error {
 }
 
 func (fr *fileRepository) getAttr(name, key string, value []byte) (int, error) {
-	absPath := fr.root + "/" + fr.nameToRelPath(name)
-	return syscall.Getxattr(absPath, key, value)
+	return syscall.Getxattr(fr.nameToAbsPath(name), key, value)
 }
 
 func (fr *fileRepository) lock(ns, id string) error {
@@ -94,18 +93,17 @@ func (fr *fileRepository) lock(ns, id string) error {
 
 func (fr *fileRepository) del(name string) error {
 	relPath := fr.nameToRelPath(name)
-	absPath := fr.root + "/" + relPath
-	xattrName := AttrNameFullPrefix + name
+	absPath := fr.relToAbsPath(relPath)
+	xattrName := xattrKey(name)
 
 	var err error
 	err = syscall.Removexattr(absPath, xattrName)
 	if err != nil {
-		LogWarning("Failed to remove xattr %s on %s: %s", xattrName, absPath, err.Error())
+		//LogWarning("Failed to remove xattr %s on %s: %s", xattrName, absPath, err.Error())
 		err = nil
 	}
 	err = syscall.Unlinkat(fr.rootFd, relPath, 0)
-	if err != nil && fr.syncDir {
-		LogWarning("Failed to remove chunk (was %s) %s: %s", xattrName, absPath, err.Error())
+	if err == nil && fr.syncDir {
 		dir := filepath.Dir(relPath)
 		err = fr.syncRelDir(dir)
 	}
@@ -135,17 +133,17 @@ func (fr *fileRepository) getRelPath(path string) (fileReader, error) {
 }
 
 func (fr *fileRepository) get(name string) (fileReader, error) {
-	path := fr.nameToRelPath(name)
-	return fr.getRelPath(path)
+	return fr.getRelPath(fr.nameToRelPath(name))
 }
 
 func (fr *fileRepository) putRelPath(path string) (fileWriter, error) {
-	pathTemp := path + ".pending"
+	pathTemp := pendingPath(path)
 	fd, err := syscall.Openat(fr.rootFd, pathTemp, syscall.O_CREAT|syscall.O_EXCL|openFlagsWOnly, fr.putOpenMode)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Lazy dir creation
-			err = os.MkdirAll(filepath.Dir(fr.root+"/"+path), fr.putMkdirMode)
+			abs := fr.relToAbsPath(path)
+			err = os.MkdirAll(filepath.Dir(abs), fr.putMkdirMode)
 			if err == nil {
 				return fr.putRelPath(path)
 			}
@@ -168,8 +166,7 @@ func (fr *fileRepository) putRelPath(path string) (fileWriter, error) {
 }
 
 func (fr *fileRepository) put(name string) (fileWriter, error) {
-	path := fr.nameToRelPath(name)
-	return fr.putRelPath(path)
+	return fr.putRelPath(fr.nameToRelPath(name))
 }
 
 // Fast path: initial optimistic attempt when everythng works fine
@@ -411,14 +408,26 @@ func (fr *realFileReader) getAttr(key string, value []byte) (int, error) {
 }
 
 func (fr *fileRepository) nameToRelPath(name string) string {
-	var result strings.Builder
+	sb := strings.Builder{}
 	for i := 0; i < fr.hashDepth; i++ {
 		start := i * fr.hashDepth
-		result.WriteString(name[start : start+fr.hashWidth])
-		result.WriteRune('/')
+		sb.WriteString(name[start : start+fr.hashWidth])
+		sb.WriteRune('/')
 	}
-	result.WriteString(name)
-	return result.String()
+	sb.WriteString(name)
+	return sb.String()
+}
+
+func (fr *fileRepository) nameToAbsPath(name string) string {
+	return fr.relToAbsPath(fr.nameToRelPath(name))
+}
+
+func (fr *fileRepository) relToAbsPath(path string) string {
+	sb := strings.Builder{}
+	sb.WriteString(fr.root)
+	sb.WriteRune('/')
+	sb.WriteString(path)
+	return sb.String()
 }
 
 func setOrHasXattr(path, key, value string) error {
@@ -438,4 +447,18 @@ func setOrHasXattr(path, key, value string) error {
 		return nil
 	}
 	return errors.New("XATTR mismatch")
+}
+
+func xattrKey(name string) string {
+	sb := strings.Builder{}
+	sb.WriteString(AttrNameFullPrefix)
+	sb.WriteString(name)
+	return sb.String()
+}
+
+func pendingPath(path string) string {
+	sb := strings.Builder{}
+	sb.WriteString(path)
+	sb.WriteString(".pending")
+	return sb.String()
 }

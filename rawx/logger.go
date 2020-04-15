@@ -43,6 +43,8 @@ var logDefaultSeverity = syslog.LOG_NOTICE
 // When using
 var logSeverity = logDefaultSeverity
 
+// The RAWX doesn't daemonize, we can save one syscall for each access log line
+// with this little variable caching the PID once for all.
 var strPid = strconv.Itoa(os.Getpid())
 
 // The singleton logger that will be used by all the coroutine

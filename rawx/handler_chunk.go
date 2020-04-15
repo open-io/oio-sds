@@ -232,7 +232,7 @@ func (rr *rawxRequest) uploadChunk() {
 		out.commit()
 		rr.chunk.fillHeadersLight(rr.rep.Header())
 		rr.replyCode(http.StatusCreated)
-		NotifyNew(rr.rawx.notifier, rr.reqid, &rr.chunk)
+		NotifyNew(rr.rawx.notifier, rr.reqid, rr.chunk)
 	}
 }
 
@@ -389,8 +389,7 @@ func (rr *rawxRequest) downloadChunk() {
 	headers := rr.rep.Header()
 	rr.chunk.fillHeaders(headers)
 	if !rangeInf.isVoid() {
-		headers.Set("Content-Range", fmt.Sprintf("bytes %v-%v/%v",
-			rangeInf.offset, rangeInf.last, rr.chunk.size))
+		headers.Set("Content-Range", packRangeHeader(rangeInf.offset, rangeInf.last, rr.chunk.size))
 		headers.Set("Content-Length", strconv.FormatUint(uint64(rangeInf.size), 10))
 		rr.replyCode(http.StatusPartialContent)
 	} else {
@@ -474,7 +473,7 @@ func (rr *rawxRequest) removeChunk() {
 		rr.replyError(err)
 	} else {
 		rr.replyCode(http.StatusNoContent)
-		NotifyDel(rr.rawx.notifier, rr.reqid, &rr.chunk)
+		NotifyDel(rr.rawx.notifier, rr.reqid, rr.chunk)
 	}
 }
 
@@ -538,4 +537,15 @@ func (rr *rawxRequest) serveChunk() {
 		path:      rr.req.URL.Path,
 		reqId:     rr.reqid,
 	})
+}
+
+func packRangeHeader(start, last, size int64) string {
+	sb := strings.Builder{}
+	sb.WriteString("bytes-")
+	sb.WriteString(itoa64(start))
+	sb.WriteRune('-')
+	sb.WriteString(itoa64(last))
+	sb.WriteRune('/')
+	sb.WriteString(itoa64(size))
+	return sb.String()
 }

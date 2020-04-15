@@ -29,7 +29,7 @@ import (
 type Notifier interface {
 	Start()
 	Stop()
-	asyncNotify(eventType, requestID string, chunk *chunkInfo)
+	asyncNotify(eventType, requestID string, chunk chunkInfo)
 }
 
 const (
@@ -128,7 +128,7 @@ func (notifier *beanstalkNotifier) syncNotify(eventJSON []byte) {
 }
 
 func (notifier *beanstalkNotifier) asyncNotify(eventType, requestID string,
-	chunk *chunkInfo) {
+	chunk chunkInfo) {
 	if !notifier.run {
 		LogWarning("Can't send a event to %s using tube %s: closed",
 			notifier.endpoint, notifier.tube)
@@ -227,7 +227,7 @@ func (notifier *multiNotifier) Stop() {
 }
 
 func (notifier *multiNotifier) asyncNotify(eventType, requestID string,
-	chunk *chunkInfo) {
+	chunk chunkInfo) {
 	notif := notifier.notifiers[notifier.index]
 	// Round-robin
 	notifier.index = (notifier.index + 1) % len(notifier.notifiers)
@@ -252,13 +252,13 @@ func MakeNotifier(config string, rawx *rawxService) (Notifier, error) {
 	return nil, errors.New("Unexpected notification endpoint, only `beanstalk://...` is accepted")
 }
 
-func NotifyNew(notifier Notifier, requestID string, chunk *chunkInfo) {
+func NotifyNew(notifier Notifier, requestID string, chunk chunkInfo) {
 	if notifAllowed {
 		notifier.asyncNotify(eventTypeNewChunk, requestID, chunk)
 	}
 }
 
-func NotifyDel(notifier Notifier, requestID string, chunk *chunkInfo) {
+func NotifyDel(notifier Notifier, requestID string, chunk chunkInfo) {
 	if notifAllowed {
 		notifier.asyncNotify(eventTypeDelChunk, requestID, chunk)
 	}
