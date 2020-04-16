@@ -28,7 +28,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -467,9 +466,6 @@ func (rr *rawxRequest) removeChunk() {
 
 	err = rr.rawx.repo.del(rr.chunkID)
 	if err != nil {
-		if !os.IsNotExist(err) {
-			LogWarning("Failed to remove chunk %s", err)
-		}
 		rr.replyError(err)
 	} else {
 		rr.replyCode(http.StatusNoContent)
