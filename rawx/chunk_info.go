@@ -265,7 +265,7 @@ func (chunk *chunkInfo) retrieveContentFullpathHeader(headers *http.Header) erro
 	containerID := cidFromName(account, container)
 	headerContainerID := headers.Get(HeaderNameContainerID)
 	if headerContainerID != "" {
-		if err != nil || !strings.EqualFold(containerID, headerContainerID) {
+		if !strings.EqualFold(containerID, headerContainerID) {
 			return errInvalidHeader
 		}
 	}

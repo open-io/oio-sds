@@ -116,7 +116,7 @@ func copyReadWriteBuffer(dst io.Writer, src io.Reader, pool bufferPool) (written
 		// Manage the read error.
 		// If err is already set, this is due to a strong condition when writing
 		if er != nil {
-			if err == nil && er != io.EOF {
+			if er != io.EOF {
 				err = er
 			}
 			break
