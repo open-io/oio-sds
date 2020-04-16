@@ -62,11 +62,8 @@ func (fr *fileRepository) init(root string) error {
 	fr.fallocateFile = configDefaultFallocate
 	fr.fadviseUpload = configDefaultFadviseUpload
 	fr.fadviseDownload = configDefaultFadviseDownload
-
-	if fr.rootFd, err = syscall.Open(fr.root, syscall.O_DIRECTORY|syscall.O_PATH|openFlagsROnly, 0); err != nil {
-		return err
-	}
-	return nil
+	fr.rootFd, err = syscall.Open(fr.root, syscall.O_DIRECTORY|syscall.O_PATH|openFlagsROnly, 0)
+	return err
 }
 
 func (fr *fileRepository) getAttr(name, key string, value []byte) (int, error) {
@@ -265,10 +262,9 @@ func (lo *realLinkOp) rollback() error {
 
 type realFileWriter struct {
 	f         *os.File
+	repo      *fileRepository
 	pathFinal string
 	pathTemp  string
-	repo      *fileRepository
-
 	allocated int64
 	written   int64
 }
