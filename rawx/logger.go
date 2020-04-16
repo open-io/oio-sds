@@ -23,7 +23,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
 	"log/syslog"
 )
 
@@ -61,6 +60,12 @@ func severityAllowed(severity syslog.Priority) bool {
 func initVerbosity(severity syslog.Priority) {
 	logDefaultSeverity = severity
 	logSeverity = severity
+}
+
+func maximizeVerbosity() {
+	logExtremeVerbosity = true
+	logDefaultSeverity = syslog.LOG_DEBUG
+	logSeverity = syslog.LOG_DEBUG
 }
 
 func increaseVerbosity() {
@@ -205,6 +210,7 @@ func InitStderrLogger() {
 	initVerbosity(syslog.LOG_DEBUG)
 	var stderrLogger StderrLogger
 	stderrLogger.logger = log.New(os.Stderr, "", 0)
+	stderrLogger.logger.SetFlags(log.Ldate | log.Lshortfile | log.Llongfile | log.Lmsgprefix)
 	logger = &stderrLogger
 }
 

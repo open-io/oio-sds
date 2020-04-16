@@ -25,7 +25,6 @@ import (
 	"context"
 	"flag"
 	"log"
-	"log/syslog"
 	"net"
 	"net/http"
 	"os"
@@ -95,9 +94,7 @@ func main() {
 	}
 
 	if *verbosePtr {
-		logExtremeVerbosity = true
-		logDefaultSeverity = syslog.LOG_DEBUG
-		logSeverity = syslog.LOG_DEBUG
+		maximizeVerbosity()
 	}
 
 	var opts optionsMap
@@ -127,8 +124,6 @@ func main() {
 
 	checkNS(namespace)
 	checkURL(rawxURL)
-
-	tcp_keepalive := opts.getBool("tcp_keepalive", false)
 
 	// No service ID specified, using the service address instead
 	if rawxID == "" {
@@ -232,9 +227,10 @@ func main() {
 		MaxHeaderBytes: opts.getInt("headers_buffer_size", 65536),
 	}
 
-	installSigHandlers(&rawx, &srv)
+	keepalive := opts.getBool("keepalive", configDefaultHttpKeepalive)
+	srv.SetKeepAlivesEnabled(keepalive)
 
-	rawx.notifier.Start()
+	installSigHandlers(&rawx, &srv)
 
 	if !*servicingPtr {
 		if err := chunkrepo.lock(namespace, rawxID); err != nil {
@@ -242,13 +238,13 @@ func main() {
 		}
 	}
 
-	srv.SetKeepAlivesEnabled(tcp_keepalive)
-
 	if logExtremeVerbosity {
 		srv.ConnState = func(cnx net.Conn, state http.ConnState) {
 			LogDebug("%v %v %v", cnx.LocalAddr(), cnx.RemoteAddr(), state)
 		}
 	}
+
+	rawx.notifier.Start()
 
 	if err := srv.ListenAndServe(); err != nil {
 		LogWarning("HTTP Server exiting: %v", err)
