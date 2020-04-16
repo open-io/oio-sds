@@ -77,7 +77,7 @@ var loadedOpts = map[string]string{
 
 // FIXME(jfs): Schedule the removal of these misleading options
 var deprecatedOpts = map[string]string{
-	"tcp_keepalive":    "keepalive",
+	"tcp_keepalive": "keepalive",
 }
 
 // readConfig -- fetch options from conf file and remap their name

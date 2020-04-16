@@ -357,7 +357,6 @@ func (rr *rawxRequest) downloadChunk() {
 	}
 	defer inChunk.Close()
 
-
 	if rr.chunk, err = loadAttr(inChunk, rr.chunkID, rr.reqid); err != nil {
 		rr.replyError(err)
 		return

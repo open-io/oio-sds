@@ -19,11 +19,11 @@ package main
 import (
 	"fmt"
 	"log"
+	"log/syslog"
 	"os"
 	"strconv"
 	"strings"
 	"time"
-	"log/syslog"
 )
 
 type oioLogger interface {
