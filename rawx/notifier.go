@@ -43,7 +43,7 @@ const (
 )
 
 // Tells if the current RAWX service may emit notifications
-var notifAllowed = true
+var notifAllowed = configDefaultEvents
 
 type beanstalkNotifier struct {
 	rawx       *rawxService

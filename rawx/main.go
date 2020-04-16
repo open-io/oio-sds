@@ -121,6 +121,7 @@ func main() {
 	namespace := opts["ns"]
 	rawxURL := opts["addr"]
 	rawxID := opts["id"]
+	notifAllowed = opts.getBool("events", configDefaultEvents)
 
 	checkNS(namespace)
 	checkURL(rawxURL)

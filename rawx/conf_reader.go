@@ -48,7 +48,7 @@ var loadedOpts = map[string]string{
 	"grid_buffer_size":      "buffer_size",
 	"grid_fadvise_upload":   "fadvise_upload",
 	"grid_fadvise_download": "fadvise_download",
-	// Also manage shorter names
+
 	"Listen":           "addr",
 	"namespace":        "ns",
 	"service_id":       "id",
@@ -66,12 +66,14 @@ var loadedOpts = map[string]string{
 	"buffer_size":      "buffer_size",
 	"fadvise_upload":   "fadvise_upload",
 	"fadvise_download": "fadvise_download",
-	// More recent names
+
 	"timeout_read_header":  "timeout_read_header",
 	"timeout_read_request": "timeout_read_request",
 	"timeout_write_reply":  "timeout_write_reply",
 	"timeout_idle":         "timeout_idle",
 	"headers_buffer_size":  "headers_buffer_size",
+
+	"events": "events",
 	// TODO(jfs): also implement a cachedir
 }
 

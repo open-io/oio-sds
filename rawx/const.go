@@ -105,6 +105,9 @@ const (
 	// Set this value to false to make the RAWX server deny reusing
 	// connections.
 	configDefaultHttpKeepalive = true
+
+	// Are events allowed
+	configDefaultEvents = true
 )
 
 const (
