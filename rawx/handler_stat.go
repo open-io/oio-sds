@@ -66,7 +66,6 @@ func incrementStatReq(rr *rawxRequest) uint64 {
 	atomic.AddUint64(&counters.ReqHitsAll, 1)
 
 	if rr.status == 0 {
-		LogWarning("Wrong HTTP status: %d", rr.status)
 		atomic.AddUint64(&counters.RepHitsOther, 1)
 		return spent
 	}
