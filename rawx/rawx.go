@@ -24,20 +24,12 @@ import (
 	"time"
 )
 
-func setErrorString(rep http.ResponseWriter, s string) {
-	rep.Header().Set(HeaderNameError, s)
-}
-
-func setError(rep http.ResponseWriter, e error) {
-	setErrorString(rep, e.Error())
-}
-
 type rawxService struct {
 	ns           string
 	url          string
 	path         string
 	id           string
-	repo         repository
+	repo         chunkRepository
 	notifier     Notifier
 	bufferSize   int
 	checksumMode int

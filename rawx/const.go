@@ -100,6 +100,11 @@ const (
 
 	// By default, no fadvise() will be called before download a chunk
 	configDefaultFadviseDownload = configFadviseNone
+
+	// Is HTTP "Connection: keep-alive" allowed in replies?
+	// Set this value to false to make the RAWX server deny reusing
+	// connections.
+	configDefaultHttpKeepalive = true
 )
 
 const (
