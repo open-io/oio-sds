@@ -210,7 +210,7 @@ func InitStderrLogger() {
 	initVerbosity(syslog.LOG_DEBUG)
 	var stderrLogger StderrLogger
 	stderrLogger.logger = log.New(os.Stderr, "", 0)
-	stderrLogger.logger.SetFlags(log.Ldate | log.Lshortfile | log.Llongfile | log.Lmsgprefix)
+	stderrLogger.logger.SetFlags(log.Ldate | log.Lshortfile | log.Llongfile | log.Lmicroseconds)
 	logger = &stderrLogger
 }
 
