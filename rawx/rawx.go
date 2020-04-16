@@ -84,7 +84,7 @@ func (rr *rawxRequest) replyError(err error) {
 		// Also, we debug what happened in the reply headers
 		// TODO(jfs): This is a job for a distributed tracing framework
 		if logExtremeVerbosity {
-			rr.rep.Header().Set("X-Error", err.Error())
+			rr.rep.Header().Set(HeaderNameError, err.Error())
 		}
 
 		// Prepare the most adapted reply status.
@@ -139,9 +139,9 @@ func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 		}
 		switch req.URL.Path {
 		case "/info":
-			rawxreq.serveInfo(rep, req)
+			rawxreq.serveInfo()
 		case "/stat":
-			rawxreq.serveStat(rep, req)
+			rawxreq.serveStat()
 		default:
 			rawxreq.serveChunk()
 		}

@@ -30,7 +30,6 @@ const (
 	openFlagsBase  int = syscall.O_NOATIME | syscall.O_CLOEXEC | syscall.O_NONBLOCK
 	openFlagsROnly     = openFlagsBase | syscall.O_RDONLY
 	openFlagsWOnly     = openFlagsBase | syscall.O_WRONLY
-	openFlagsRW        = openFlagsBase | syscall.O_RDWR
 )
 
 type fileRepository struct {
@@ -222,7 +221,6 @@ func (fr *fileRepository) syncRelDir(relPath string) error {
 	if err == nil {
 		err = syscall.Fdatasync(fd)
 		syscall.Close(fd)
-		fd = -1
 	}
 	return err
 }
@@ -233,7 +231,6 @@ func (fr *fileRepository) syncRelFile(relPath string) error {
 	if err == nil {
 		err = syscall.Fdatasync(fd)
 		syscall.Close(fd)
-		fd = -1
 	}
 	return err
 }

@@ -52,7 +52,7 @@ func checkNS(ns string) {
 	}
 }
 
-func installSigHandlers(rawx *rawxService, srv *http.Server) {
+func installSigHandlers(srv *http.Server) {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan,
 		syscall.SIGUSR1,
@@ -231,7 +231,7 @@ func main() {
 	keepalive := opts.getBool("keepalive", configDefaultHttpKeepalive)
 	srv.SetKeepAlivesEnabled(keepalive)
 
-	installSigHandlers(&rawx, &srv)
+	installSigHandlers(&srv)
 
 	if !*servicingPtr {
 		if err := chunkrepo.lock(namespace, rawxID); err != nil {

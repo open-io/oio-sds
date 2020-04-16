@@ -39,14 +39,14 @@ func doGetInfo(rr *rawxRequest) {
 	rr.rep.Write(bb.Bytes())
 }
 
-func (rr *rawxRequest) serveInfo(rep http.ResponseWriter, req *http.Request) {
+func (rr *rawxRequest) serveInfo() {
 	if err := rr.drain(); err != nil {
 		rr.replyError(err)
 		return
 	}
 
 	var spent uint64
-	switch req.Method {
+	switch rr.req.Method {
 	case "GET", "HEAD":
 		doGetInfo(rr)
 		spent = IncrementStatReqInfo(rr)
