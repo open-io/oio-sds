@@ -146,7 +146,7 @@ func main() {
 		url:          rawxURL,
 		path:         chunkrepo.sub.root,
 		id:           rawxID,
-		repo:         &chunkrepo,
+		repo:         chunkrepo,
 		bufferSize:   1024 * opts.getInt("buffer_size", uploadBufferSizeDefault/1024),
 		checksumMode: checksumAlways,
 		compression:  opts["compression"],
