@@ -71,13 +71,13 @@ func makeBeanstalkNotifier(endpoint string,
 
 func (notifier *beanstalkNotifier) Start() {
 	notifier.wg.Add(1)
+	notifier.run = true
 	go func() {
 		defer notifier.wg.Done()
 		for eventJSON := range notifier.queue {
 			notifier.syncNotify(eventJSON)
 		}
 	}()
-	notifier.run = true
 }
 
 func (notifier *beanstalkNotifier) Stop() {
@@ -205,7 +205,7 @@ func makeMultiNotifier(config string, rawx *rawxService) (*multiNotifier, error)
 	notifier := new(multiNotifier)
 	confs := strings.Split(config, ";")
 	for _, conf := range confs {
-		notif, err := MakeNotifier(conf, rawx)
+		notif, err := makeSingleNotifier(conf, rawx)
 		if err != nil {
 			return nil, err
 		}
@@ -241,15 +241,25 @@ func hasPrefix(s, prefix string) (string, bool) {
 	return "", false
 }
 
+func makeSingleNotifier(config string, rawx *rawxService) (Notifier, error) {
+	if endpoint, ok := hasPrefix(config, "beanstalk://"); ok {
+		return makeBeanstalkNotifier(endpoint, rawx)
+	}
+	// TODO(adu): make a ZMQ Notifier
+	// TODO(jfs): make a GRPC Notifier
+	// TODO(jfs): make an HTTP Notifier
+	return nil, errors.New("Unexpected notification endpoint, only `beanstalk://...` is accepted")
+}
+
 func MakeNotifier(config string, rawx *rawxService) (Notifier, error) {
 	if strings.Contains(config, ";") {
 		return makeMultiNotifier(config, rawx)
 	}
-	if endpoint, ok := hasPrefix(config, "beanstalk://"); ok {
-		return makeBeanstalkNotifier(endpoint, rawx)
+	fake := make([]string, 0)
+	for i := 0; i < 4; i++ {
+		fake = append(fake, config)
 	}
-	// TODO(adu) makeZMQNotifier
-	return nil, errors.New("Unexpected notification endpoint, only `beanstalk://...` is accepted")
+	return makeMultiNotifier(strings.Join(fake, ";"), rawx)
 }
 
 func NotifyNew(notifier Notifier, requestID string, chunk chunkInfo) {
