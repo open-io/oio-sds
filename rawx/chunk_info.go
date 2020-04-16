@@ -105,11 +105,10 @@ func (chunk chunkInfo) saveAttr(out decorable) error {
 
 func loadFullPath(getter func(string, string) (string, error), chunkID string) (chunkInfo, error) {
 	var chunk chunkInfo
-	getAttr := func(k string) (string, error) { return getter(chunkID, k) }
 
 	chunk.ChunkID = chunkID
 
-	fp, err := getAttr(AttrNameFullPrefix + chunkID)
+	fp, err := getter(chunkID, xattrKey(chunkID))
 	if err == nil {
 		// New chunk
 		fpTokens := strings.Split(fp, "/")
@@ -128,18 +127,18 @@ func loadFullPath(getter func(string, string) (string, error), chunkID string) (
 		if err != syscall.ENODATA {
 			return chunk, err
 		}
-		detailedAttrs := []detailedAttr{
-			{AttrNameContainerID, &chunk.ContainerID},
-			{AttrNameContentPath, &chunk.ContentPath},
-			{AttrNameContentVersion, &chunk.ContentVersion},
-			{AttrNameContentID, &chunk.ContentID},
-		}
-		for _, hs := range detailedAttrs {
-			value, err := getAttr(hs.key)
-			if err != nil && err != syscall.ENODATA {
-				return chunk, err
+		chunk.ContainerID, err = getter(chunkID, AttrNameContainerID)
+		if err == nil {
+			chunk.ContentPath, err = getter(chunkID, AttrNameContentPath)
+			if err == nil {
+				chunk.ContentVersion, err = getter(chunkID, AttrNameContentVersion)
+				if err == nil {
+					chunk.ContentID, err = getter(chunkID, AttrNameContentID)
+				}
 			}
-			*(hs.ptr) = value
+		}
+		if err != nil && err != syscall.ENODATA {
+			return chunk, err
 		}
 	}
 
