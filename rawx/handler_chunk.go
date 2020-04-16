@@ -537,7 +537,7 @@ func (rr *rawxRequest) serveChunk() {
 
 func packRangeHeader(start, last, size int64) string {
 	sb := strings.Builder{}
-	sb.WriteString("bytes-")
+	sb.WriteString("bytes ")
 	sb.WriteString(itoa64(start))
 	sb.WriteRune('-')
 	sb.WriteString(itoa64(last))
