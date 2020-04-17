@@ -549,9 +549,13 @@ func packRangeHeader(start, last, size int64) string {
 func msgErrorAction(action, reqid string, err error) string {
 	sb := strings.Builder{}
 	sb.WriteString(action)
-	sb.WriteString(" error : ")
-	sb.WriteString(err.Error())
-	sb.WriteString(" (reqid=")
+	if err == nil {
+		sb.WriteString(" error (nil) (reqid=")
+	} else {
+		sb.WriteString(" error (")
+		sb.WriteString(err.Error())
+		sb.WriteString(") (reqid=")
+	}
 	sb.WriteString(reqid)
 	sb.WriteRune(')')
 	return sb.String()
