@@ -276,8 +276,14 @@ func (rr *rawxRequest) checkChunk() {
 
 	rr.chunk, err = loadAttr(chunkIn, rr.chunkID, rr.reqid)
 	if err != nil {
-		LogError(msgErrorAction("Getxattr()", rr.reqid, err))
+		LogDebug(msgErrorAction("Getxattr()", rr.reqid, err))
 		rr.replyError(err)
+		return
+	}
+
+	// FIXME(jfs): generalize the check of chunkInfo
+	if rr.chunk.ChunkHash == "" {
+		rr.replyError(errMissingXattr(AttrNameChunkChecksum, nil))
 		return
 	}
 
@@ -292,7 +298,8 @@ func (rr *rawxRequest) checkChunk() {
 		var in *io.LimitedReader
 		in, filter, err = rr.getChunkReader(chunkIn, rr.chunk.size, rangeInfo{})
 		if err != nil {
-			rr.replyCode(http.StatusPreconditionFailed)
+			LogDebug(msgErrorAction("getChunkReader()", rr.reqid, err))
+			rr.replyError(err)
 			return
 		}
 		if filter != nil {
@@ -303,11 +310,13 @@ func (rr *rawxRequest) checkChunk() {
 		if _, err = io.Copy(h, in); err == nil {
 			actual_hash := strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
 			if expected_hash != actual_hash {
+				LogDebug(msgErrorAction("hash comparison", rr.reqid, nil))
 				rr.replyCode(http.StatusPreconditionFailed)
 				return
 			}
 		}
 		if err != nil {
+			LogDebug(msgErrorAction("hash computation", rr.reqid, nil))
 			rr.replyError(err)
 			return
 		}
@@ -317,7 +326,6 @@ func (rr *rawxRequest) checkChunk() {
 	rr.chunk.fillHeaders(headers)
 	headers.Set("Content-Length", strconv.FormatUint(uint64(rr.chunk.size), 10))
 	headers.Set("Accept-Ranges", "bytes")
-
 	rr.replyCode(http.StatusOK)
 }
 
