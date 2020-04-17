@@ -173,8 +173,7 @@ func loadAttr(inChunk fileReader, chunkID string, reqid string) (chunkInfo, erro
 		{AttrNameCompression, &chunk.compression},
 	}
 
-	keyUnique := xattrKey(chunkID)
-	contentFullpath, err := getAttr(keyUnique)
+	contentFullpath, err := getAttr(xattrKey(chunkID))
 	if err == nil {
 		// New chunk
 		fullpath := strings.Split(contentFullpath, "/")
@@ -230,7 +229,7 @@ func loadAttr(inChunk fileReader, chunkID string, reqid string) (chunkInfo, erro
 
 	chunk.size, err = strconv.ParseInt(chunk.ChunkSize, 10, 63)
 	if err != nil {
-		err = errMissingXattr(chunkID, reqid, AttrNameChunkSize, err)
+		err = errMissingXattr(AttrNameChunkSize, err)
 	}
 	return chunk, nil
 }
@@ -239,8 +238,16 @@ func msgMissingXattr(chunk, reqid, key string, cause error) string {
 	return msgErrorAction(key, reqid, cause)
 }
 
-func errMissingXattr(chunk, reqid, key string, cause error) error {
-	return errors.New(msgMissingXattr(chunk, reqid, key, cause))
+func errMissingXattr(key string, cause error) error {
+	sb := strings.Builder{}
+	sb.WriteString(key)
+	sb.WriteString(" missing")
+	if cause != nil {
+		sb.WriteRune(':')
+		sb.WriteRune(' ')
+		sb.WriteString(cause.Error())
+	}
+	return errors.New(sb.String())
 }
 
 // Check and load the content fullpath of the chunk.
