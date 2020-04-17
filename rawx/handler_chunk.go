@@ -209,7 +209,7 @@ func (rr *rawxRequest) uploadChunk() {
 	// If a hash has been sent, it must match the hash computed
 	if err == nil {
 		rr.chunk.compression = rr.rawx.compression
-		err = rr.chunk.patchWithTrailers(&rr.req.Trailer, &ul)
+		err = rr.chunk.patchWithTrailers(&rr.req.Trailer, ul)
 	}
 
 	// If everything went well, finish with the chunks XATTR management

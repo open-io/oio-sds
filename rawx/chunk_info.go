@@ -398,7 +398,7 @@ func retrieveHeaders(headers *http.Header, chunkID string) (chunkInfo, error) {
 }
 
 // Check and load the checksum and the size of the chunk and the metachunk
-func (chunk *chunkInfo) patchWithTrailers(trailers *http.Header, ul *uploadInfo) error {
+func (chunk *chunkInfo) patchWithTrailers(trailers *http.Header, ul uploadInfo) error {
 	trailerMetachunkHash := trailers.Get(HeaderNameMetachunkChecksum)
 	if trailerMetachunkHash != "" {
 		chunk.MetachunkHash = trailerMetachunkHash
