@@ -32,7 +32,8 @@ def catch_service_errors(func):
     """
     redis_exc_mod = importlib.import_module('redis.exceptions')
     error_types = (redis_exc_mod.ConnectionError,
-                   redis_exc_mod.InvalidResponse)
+                   redis_exc_mod.InvalidResponse,
+                   redis_exc_mod.TimeoutError)
 
     @wraps(func)
     def catch_service_errors_wrapper(*args, **kwargs):
