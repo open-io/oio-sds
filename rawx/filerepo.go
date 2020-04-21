@@ -214,7 +214,7 @@ func (fr *fileRepository) link(src, dst string) (linkOperation, error) {
 
 // Synchronize the directory, based on its path
 func (fr *fileRepository) syncRelDir(relPath string) error {
-	fd, err := syscall.Openat(fr.rootFd, relPath, syscall.O_DIRECTORY|syscall.O_PATH|openFlagsROnly, 0)
+	fd, err := syscall.Openat(fr.rootFd, relPath, syscall.O_DIRECTORY|openFlagsROnly, 0)
 	if err == nil {
 		err = syscall.Fdatasync(fd)
 		syscall.Close(fd)
@@ -224,7 +224,7 @@ func (fr *fileRepository) syncRelDir(relPath string) error {
 
 // Synchronize just the file, based on its path
 func (fr *fileRepository) syncRelFile(relPath string) error {
-	fd, err := syscall.Openat(fr.rootFd, relPath, syscall.O_PATH|openFlagsROnly, 0)
+	fd, err := syscall.Openat(fr.rootFd, relPath, openFlagsROnly, 0)
 	if err == nil {
 		err = syscall.Fdatasync(fd)
 		syscall.Close(fd)
