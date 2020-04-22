@@ -78,7 +78,7 @@ if __name__ == '__main__':
     conf['report_interval'] = args.report_interval
     # local
     conf['concurrency'] = args.concurrency
-    conf['items_per_second'] = args.references_per_second
+    conf['items_per_second'] = args.items_per_second
 
     logger = get_logger_from_args(args, default_conf=conf)
 
