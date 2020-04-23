@@ -53,6 +53,7 @@ var (
 	nsName     string = ""
 	bufferSize uint   = 0
 	buffer     []byte
+	reuseCnx   = 0
 )
 
 var transport http.Transport = http.Transport{
@@ -129,10 +130,21 @@ func RandStringHexa(n int) string {
 	return *(*string)(unsafe.Pointer(&b))
 }
 
+func patch(req *http.Request) {
+	if reuseCnx > 0 {
+		req.Close = false
+		req.Header.Set("Connection", "keep-alive")
+	} else if reuseCnx < 0 {
+		req.Close = true
+		req.Header.Set("Connection", "close")
+	}
+}
+
 func (rc *RawxClient) put() (int, int64) {
 	url := "http://" + rawxUrl + "/" + rc.chunkId
 	client := &http.Client{Transport: &transport}
 	req, _ := http.NewRequest("PUT", url, bytes.NewReader(buffer))
+	patch(req)
 	req.Header.Add(PFX+"full-path", rc.fullPath)
 	req.Header.Add(PFX+"container-id", rc.containerId)
 	req.Header.Add(PFX+"content-id", rc.contentId)
@@ -159,6 +171,7 @@ func (rc *RawxClient) get() (int, int64) {
 	url := "http://" + rawxUrl + "/" + rc.chunkId
 	client := &http.Client{Transport: &transport}
 	req, _ := http.NewRequest("GET", url, nil)
+	patch(req)
 
 	var size int64
 	resp, err := client.Do(req)
@@ -177,6 +190,7 @@ func (rc *RawxClient) del() int {
 	url := "http://" + rawxUrl + "/" + rc.chunkId
 	client := &http.Client{Transport: &transport}
 	req, _ := http.NewRequest("DELETE", url, nil)
+	patch(req)
 
 	resp, err := client.Do(req)
 	if resp != nil {

@@ -20,7 +20,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/url"
 	"os"
@@ -50,11 +49,6 @@ type chunkInfo struct {
 	size        int64
 }
 
-func returnError(err error, message string) error {
-	LogDebug("%s: %s", err, message)
-	return err
-}
-
 func cidFromName(account, container string) string {
 	h := sha256.New()
 	h.Write([]byte(account))
@@ -68,15 +62,15 @@ type detailedAttr struct {
 	ptr *string
 }
 
-func (chunk *chunkInfo) saveContentFullpathAttr(out decorable) error {
+func (chunk chunkInfo) saveContentFullpathAttr(out decorable) error {
 	if chunk.ChunkID == "" || chunk.ContentFullpath == "" {
 		return errors.New("Missing chunk ID or fullpath")
 	}
 
-	return out.setAttr(AttrNameFullPrefix+chunk.ChunkID, []byte(chunk.ContentFullpath))
+	return out.setAttr(xattrKey(chunk.ChunkID), []byte(chunk.ContentFullpath))
 }
 
-func (chunk *chunkInfo) saveAttr(out decorable) error {
+func (chunk chunkInfo) saveAttr(out decorable) error {
 	setAttr := func(k, v string) error {
 		if v == "" {
 			return nil
@@ -109,12 +103,12 @@ func (chunk *chunkInfo) saveAttr(out decorable) error {
 	return nil
 }
 
-func (chunk *chunkInfo) loadFullPath(getter func(string, string) (string, error), chunkID string) error {
-	getAttr := func(k string) (string, error) { return getter(chunkID, k) }
+func loadFullPath(getter func(string, string) (string, error), chunkID string) (chunkInfo, error) {
+	var chunk chunkInfo
 
 	chunk.ChunkID = chunkID
 
-	fp, err := getAttr(AttrNameFullPrefix + chunkID)
+	fp, err := getter(chunkID, xattrKey(chunkID))
 	if err == nil {
 		// New chunk
 		fpTokens := strings.Split(fp, "/")
@@ -127,32 +121,33 @@ func (chunk *chunkInfo) loadFullPath(getter func(string, string) (string, error)
 			chunk.ContentVersion, _ = url.PathUnescape(fpTokens[3])
 			chunk.ContentID, _ = url.PathUnescape(fpTokens[4])
 		} else {
-			return errors.New("Invalid fullpath")
+			return chunk, errors.New("Invalid fullpath")
 		}
 	} else {
 		if err != syscall.ENODATA {
-			return err
+			return chunk, err
 		}
-		detailedAttrs := []detailedAttr{
-			{AttrNameContainerID, &chunk.ContainerID},
-			{AttrNameContentPath, &chunk.ContentPath},
-			{AttrNameContentVersion, &chunk.ContentVersion},
-			{AttrNameContentID, &chunk.ContentID},
-		}
-		for _, hs := range detailedAttrs {
-			value, err := getAttr(hs.key)
-			if err != nil && err != syscall.ENODATA {
-				return err
+		chunk.ContainerID, err = getter(chunkID, AttrNameContainerID)
+		if err == nil {
+			chunk.ContentPath, err = getter(chunkID, AttrNameContentPath)
+			if err == nil {
+				chunk.ContentVersion, err = getter(chunkID, AttrNameContentVersion)
+				if err == nil {
+					chunk.ContentID, err = getter(chunkID, AttrNameContentID)
+				}
 			}
-			*(hs.ptr) = value
+		}
+		if err != nil && err != syscall.ENODATA {
+			return chunk, err
 		}
 	}
 
-	return nil
+	return chunk, nil
 }
 
-func (chunk *chunkInfo) loadAttr(inChunk fileReader, chunkID string,
-	reqid string) error {
+func loadAttr(inChunk fileReader, chunkID string, reqid string) (chunkInfo, error) {
+	var chunk chunkInfo
+
 	buf := xattrBufferPool.Acquire()
 	defer xattrBufferPool.Release(buf)
 
@@ -178,7 +173,7 @@ func (chunk *chunkInfo) loadAttr(inChunk fileReader, chunkID string,
 		{AttrNameCompression, &chunk.compression},
 	}
 
-	contentFullpath, err := getAttr(AttrNameFullPrefix + chunkID)
+	contentFullpath, err := getAttr(xattrKey(chunkID))
 	if err == nil {
 		// New chunk
 		fullpath := strings.Split(contentFullpath, "/")
@@ -191,21 +186,19 @@ func (chunk *chunkInfo) loadAttr(inChunk fileReader, chunkID string,
 			chunk.ContentVersion, _ = url.PathUnescape(fullpath[3])
 			chunk.ContentID, _ = url.PathUnescape(fullpath[4])
 		} else {
-			return errors.New("Invalid fullpath")
+			return chunk, errors.New("Invalid fullpath")
 		}
 	} else {
 		if err != syscall.ENODATA {
-			return err
+			return chunk, err
 		}
 		// Old chunk
 		_chunkID, err := getAttr(AttrNameChunkID)
 		if err != nil {
 			if err == syscall.ENODATA {
-				LogWarning("Missing %s and %s xattr on chunk %s (reqid=%s)",
-					AttrNameFullPrefix+chunkID, AttrNameChunkID,
-					chunkID, reqid)
+				LogWarning(msgMissingXattr(chunkID, reqid, AttrNameChunkID, err))
 			} else {
-				return err
+				return chunk, err
 			}
 		}
 		if _chunkID == chunkID {
@@ -227,86 +220,100 @@ func (chunk *chunkInfo) loadAttr(inChunk fileReader, chunkID string,
 					(hs.key == AttrNameMetachunkChecksum || hs.key == AttrNameMetachunkSize) {
 					continue
 				}
-				LogWarning("Missing %s xattr on chunk %s (reqid=%s)",
-					hs.key, chunkID, reqid)
+				LogWarning(msgMissingXattr(chunkID, reqid, hs.key, err))
 			} else {
-				return err
+				return chunk, err
 			}
 		}
 	}
+
 	chunk.size, err = strconv.ParseInt(chunk.ChunkSize, 10, 63)
 	if err != nil {
-		return fmt.Errorf("%s xattr missing or invalid: %v",
-			AttrNameChunkSize, err)
+		err = errMissingXattr(AttrNameChunkSize, err)
 	}
+	return chunk, nil
+}
 
-	return nil
+func msgMissingXattr(chunk, reqid, key string, cause error) string {
+	return msgErrorAction(key, reqid, cause)
+}
+
+func errMissingXattr(key string, cause error) error {
+	sb := strings.Builder{}
+	sb.WriteString(key)
+	sb.WriteString(" missing")
+	if cause != nil {
+		sb.WriteRune(':')
+		sb.WriteRune(' ')
+		sb.WriteString(cause.Error())
+	}
+	return errors.New(sb.String())
 }
 
 // Check and load the content fullpath of the chunk.
 func (chunk *chunkInfo) retrieveContentFullpathHeader(headers *http.Header) error {
 	headerFullpath := headers.Get(HeaderNameFullpath)
 	if headerFullpath == "" {
-		return returnError(errMissingHeader, HeaderNameFullpath)
+		return errMissingHeader
 	}
 	fullpath := strings.Split(headerFullpath, "/")
 	if len(fullpath) != 5 {
-		return returnError(errInvalidHeader, HeaderNameFullpath)
+		return errInvalidHeader
 	}
 
 	account, err := url.PathUnescape(fullpath[0])
 	if err != nil || account == "" {
-		return returnError(errInvalidHeader, HeaderNameFullpath)
+		return errInvalidHeader
 	}
 	container, err := url.PathUnescape(fullpath[1])
 	if err != nil || container == "" {
-		return returnError(errInvalidHeader, HeaderNameFullpath)
+		return errInvalidHeader
 	}
 	containerID := cidFromName(account, container)
 	headerContainerID := headers.Get(HeaderNameContainerID)
 	if headerContainerID != "" {
-		if err != nil || !strings.EqualFold(containerID, headerContainerID) {
-			return returnError(errInvalidHeader, HeaderNameContainerID)
+		if !strings.EqualFold(containerID, headerContainerID) {
+			return errInvalidHeader
 		}
 	}
 	chunk.ContainerID = containerID
 
 	path, err := url.PathUnescape(fullpath[2])
 	if err != nil || path == "" {
-		return returnError(errInvalidHeader, HeaderNameFullpath)
+		return errInvalidHeader
 	}
 	headerPath := headers.Get(HeaderNameContentPath)
 	if headerPath != "" {
 		headerPath, err = url.PathUnescape(headerPath)
 		if err != nil || headerPath != path {
-			return returnError(errInvalidHeader, HeaderNameContentPath)
+			return errInvalidHeader
 		}
 	}
 	chunk.ContentPath = path
 
 	version, err := url.PathUnescape(fullpath[3])
 	if err != nil {
-		return returnError(errInvalidHeader, HeaderNameFullpath)
+		return errInvalidHeader
 	}
 	if _, err := strconv.ParseInt(version, 10, 64); err != nil {
-		return returnError(errInvalidHeader, HeaderNameFullpath)
+		return errInvalidHeader
 	}
 	headerVersion := headers.Get(HeaderNameContentVersion)
 	if headerVersion != "" && headerVersion != version {
-		return returnError(errInvalidHeader, HeaderNameContentVersion)
+		return errInvalidHeader
 	}
 	chunk.ContentVersion = version
 
 	contentID, err := url.PathUnescape(fullpath[4])
 	if err != nil || !isHexaString(contentID, 0) {
-		return returnError(errInvalidHeader, HeaderNameFullpath)
+		return errInvalidHeader
 	}
 	headerContentID := headers.Get(HeaderNameContentID)
 	if headerContentID == "" && contentID == "" {
-		return returnError(errMissingHeader, HeaderNameContentID)
+		return errMissingHeader
 	}
 	if headerContentID != "" && !strings.EqualFold(headerContentID, contentID) {
-		return returnError(errInvalidHeader, HeaderNameContentID)
+		return errInvalidHeader
 	}
 	chunk.ContentID = strings.ToUpper(contentID)
 
@@ -316,91 +323,95 @@ func (chunk *chunkInfo) retrieveContentFullpathHeader(headers *http.Header) erro
 }
 
 // Check and load the content fullpath of the chunk.
-func (chunk *chunkInfo) retrieveDestinationHeader(headers *http.Header,
-	rawx *rawxService, srcChunkID string) error {
+func retrieveDestinationHeader(headers *http.Header, rawx *rawxService, srcChunkID string) (chunkInfo, error) {
+	var chunk chunkInfo
+
 	destination := headers.Get("Destination")
 	if destination == "" {
-		return returnError(errMissingHeader, "Destination")
+		return chunk, errMissingHeader
 	}
 	dstURL, err := url.ParseRequestURI(destination)
 	if err != nil {
-		return returnError(errInvalidHeader, "Destination")
+		return chunk, errInvalidHeader
 	}
 	if dstURL.Host != rawx.id && dstURL.Host != rawx.url {
-		return os.ErrPermission
+		return chunk, os.ErrPermission
 	}
 	chunk.ChunkID = filepath.Base(filepath.Clean(dstURL.Path))
 	if !isHexaString(chunk.ChunkID, 64) {
-		return returnError(errInvalidHeader, "Destination")
+		return chunk, errInvalidHeader
 	}
 	chunk.ChunkID = strings.ToUpper(chunk.ChunkID)
 	if chunk.ChunkID == srcChunkID {
-		return os.ErrPermission
+		return chunk, os.ErrPermission
 	}
-	return nil
+	return chunk, nil
 }
 
 // Check and load the info of the chunk.
-func (chunk *chunkInfo) retrieveHeaders(headers *http.Header, chunkID string) error {
+func retrieveHeaders(headers *http.Header, chunkID string) (chunkInfo, error) {
+	var chunk chunkInfo
+
 	chunk.ContentStgPol = headers.Get(HeaderNameContentStgPol)
 	if chunk.ContentStgPol == "" {
-		return returnError(errMissingHeader, HeaderNameContentStgPol)
+		return chunk, errMissingHeader
 	}
 	chunk.ContentChunkMethod = headers.Get(HeaderNameContentChunkMethod)
 	if chunk.ContentChunkMethod == "" {
-		return returnError(errMissingHeader, HeaderNameContentChunkMethod)
+		return chunk, errMissingHeader
 	}
 
 	chunkIDHeader := headers.Get(HeaderNameChunkID)
 	if chunkIDHeader != "" && !strings.EqualFold(chunkIDHeader, chunkID) {
-		return returnError(errInvalidHeader, HeaderNameChunkID)
+		return chunk, errInvalidHeader
 	}
 	chunk.ChunkID = strings.ToUpper(chunkID)
 	chunk.ChunkPosition = headers.Get(HeaderNameChunkPosition)
 	if chunk.ChunkPosition == "" {
-		return returnError(errMissingHeader, HeaderNameChunkPosition)
+		return chunk, errMissingHeader
 	}
 
 	chunk.MetachunkHash = headers.Get(HeaderNameMetachunkChecksum)
 	if chunk.MetachunkHash != "" {
 		if !isHexaString(chunk.MetachunkHash, 0) {
-			return returnError(errInvalidHeader, HeaderNameMetachunkChecksum)
+			return chunk, errInvalidHeader
 		}
 		chunk.MetachunkHash = strings.ToUpper(chunk.MetachunkHash)
 	}
 	chunk.MetachunkSize = headers.Get(HeaderNameMetachunkSize)
 	if chunk.MetachunkSize != "" {
 		if _, err := strconv.ParseInt(chunk.MetachunkSize, 10, 64); err != nil {
-			return returnError(errInvalidHeader, HeaderNameMetachunkSize)
+			return chunk, errInvalidHeader
 		}
 	}
 
 	chunk.ChunkHash = headers.Get(HeaderNameChunkChecksum)
 	if chunk.ChunkHash != "" {
 		if !isHexaString(chunk.ChunkHash, 0) {
-			return returnError(errInvalidHeader, HeaderNameChunkChecksum)
+			return chunk, errInvalidHeader
 		}
 		chunk.ChunkHash = strings.ToUpper(chunk.ChunkHash)
 	}
 	chunk.ChunkSize = headers.Get(HeaderNameChunkSize)
 	if chunk.ChunkSize != "" {
 		if _, err := strconv.ParseInt(chunk.ChunkSize, 10, 64); err != nil {
-			return returnError(errInvalidHeader, HeaderNameChunkSize)
+			return chunk, errInvalidHeader
 		}
 	}
 
 	chunk.OioVersion = OioVersion
-	return chunk.retrieveContentFullpathHeader(headers)
+	err := chunk.retrieveContentFullpathHeader(headers)
+	return chunk, err
 }
 
 // Check and load the checksum and the size of the chunk and the metachunk
-func (chunk *chunkInfo) retrieveTrailers(trailers *http.Header, ul *uploadInfo) error {
+func (chunk *chunkInfo) patchWithTrailers(trailers *http.Header, ul uploadInfo) error {
 	trailerMetachunkHash := trailers.Get(HeaderNameMetachunkChecksum)
 	if trailerMetachunkHash != "" {
 		chunk.MetachunkHash = trailerMetachunkHash
 		if chunk.MetachunkHash != "" {
 			if !isHexaString(chunk.MetachunkHash, 0) {
-				return returnError(errInvalidHeader, HeaderNameMetachunkChecksum)
+				return errInvalidHeader
 			}
 			chunk.MetachunkHash = strings.ToUpper(chunk.MetachunkHash)
 		}
@@ -410,16 +421,16 @@ func (chunk *chunkInfo) retrieveTrailers(trailers *http.Header, ul *uploadInfo) 
 		chunk.MetachunkSize = trailerMetachunkSize
 		if chunk.MetachunkSize != "" {
 			if _, err := strconv.ParseInt(chunk.MetachunkSize, 10, 64); err != nil {
-				return returnError(errInvalidHeader, HeaderNameMetachunkSize)
+				return errInvalidHeader
 			}
 		}
 	}
 	if strings.HasPrefix(chunk.ContentChunkMethod, ECMethodPrefix) {
 		if chunk.MetachunkHash == "" {
-			return returnError(errMissingHeader, HeaderNameMetachunkChecksum)
+			return errMissingHeader
 		}
 		if chunk.MetachunkSize == "" {
-			return returnError(errMissingHeader, HeaderNameMetachunkSize)
+			return errMissingHeader
 		}
 	}
 
@@ -429,7 +440,7 @@ func (chunk *chunkInfo) retrieveTrailers(trailers *http.Header, ul *uploadInfo) 
 	}
 	if chunk.ChunkHash != "" {
 		if !strings.EqualFold(chunk.ChunkHash, ul.hash) {
-			return returnError(errInvalidHeader, HeaderNameChunkChecksum)
+			return errInvalidHeader
 		}
 	} else {
 		chunk.ChunkHash = ul.hash
@@ -441,7 +452,7 @@ func (chunk *chunkInfo) retrieveTrailers(trailers *http.Header, ul *uploadInfo) 
 	if chunk.ChunkSize != "" {
 		if chunkSize, err := strconv.ParseInt(chunk.ChunkSize, 10, 64); err != nil ||
 			chunkSize != ul.length {
-			return returnError(errInvalidHeader, HeaderNameChunkSize)
+			return errInvalidHeader
 		}
 	} else {
 		chunk.ChunkSize = strconv.FormatInt(ul.length, 10)
@@ -457,7 +468,7 @@ func setHeader(headers http.Header, k, v string) {
 }
 
 // Fill the headers of the reply with the attributes of the chunk
-func (chunk *chunkInfo) fillHeaders(headers http.Header) {
+func (chunk chunkInfo) fillHeaders(headers http.Header) {
 	setHeader(headers, HeaderNameFullpath, chunk.ContentFullpath)
 	setHeader(headers, HeaderNameContainerID, chunk.ContainerID)
 	setHeader(headers, HeaderNameContentPath, url.PathEscape(chunk.ContentPath))
@@ -475,7 +486,7 @@ func (chunk *chunkInfo) fillHeaders(headers http.Header) {
 }
 
 // Fill the headers of the reply with the chunk info calculated by the rawx
-func (chunk *chunkInfo) fillHeadersLight(headers http.Header) {
+func (chunk chunkInfo) fillHeadersLight(headers http.Header) {
 	setHeader(headers, HeaderNameChunkChecksum, chunk.ChunkHash)
 	setHeader(headers, HeaderNameChunkSize, chunk.ChunkSize)
 	setHeader(headers, HeaderNameXattrVersion, chunk.OioVersion)

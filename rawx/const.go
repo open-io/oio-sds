@@ -1,5 +1,5 @@
 // OpenIO SDS Go rawx
-// Copyright (C) 2019 OpenIO SAS
+// Copyright (C) 2019-2020 OpenIO SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -100,6 +100,14 @@ const (
 
 	// By default, no fadvise() will be called before download a chunk
 	configDefaultFadviseDownload = configFadviseNone
+
+	// Is HTTP "Connection: keep-alive" allowed in replies?
+	// Set this value to false to make the RAWX server deny reusing
+	// connections.
+	configDefaultHttpKeepalive = true
+
+	// Are events allowed
+	configDefaultEvents = true
 )
 
 const (

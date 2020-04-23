@@ -28,7 +28,6 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 )
@@ -117,7 +116,7 @@ func copyReadWriteBuffer(dst io.Writer, src io.Reader, pool bufferPool) (written
 		// Manage the read error.
 		// If err is already set, this is due to a strong condition when writing
 		if er != nil {
-			if err == nil && er != io.EOF {
+			if er != io.EOF {
 				err = er
 			}
 			break
@@ -155,7 +154,10 @@ func (rr *rawxRequest) putData(out io.Writer) (uploadInfo, error) {
 }
 
 func (rr *rawxRequest) uploadChunk() {
-	if err := rr.chunk.retrieveHeaders(&rr.req.Header, rr.chunkID); err != nil {
+	var err error
+	var out fileWriter
+
+	if rr.chunk, err = retrieveHeaders(&rr.req.Header, rr.chunkID); err != nil {
 		rr.replyError(err)
 		// Discard request body
 		io.Copy(ioutil.Discard, rr.req.Body)
@@ -163,7 +165,7 @@ func (rr *rawxRequest) uploadChunk() {
 	}
 
 	// Attempt a PUT in the repository
-	out, err := rr.rawx.repo.put(rr.chunkID)
+	out, err = rr.rawx.repo.put(rr.chunkID)
 	if err != nil {
 		rr.replyError(err)
 		// Discard request body
@@ -202,43 +204,39 @@ func (rr *rawxRequest) uploadChunk() {
 		}
 	} else if err == nil {
 		ul, err = rr.putData(out)
-		if err != nil {
-			LogError("Chunk upload error: %s (reqid=%s)", err, rr.reqid)
-		}
 	}
 
 	// If a hash has been sent, it must match the hash computed
 	if err == nil {
 		rr.chunk.compression = rr.rawx.compression
-		if err = rr.chunk.retrieveTrailers(&rr.req.Trailer, &ul); err != nil {
-			LogError("Trailer error: %s (reqid=%s)", err, rr.reqid)
-		}
+		err = rr.chunk.patchWithTrailers(&rr.req.Trailer, ul)
 	}
 
 	// If everything went well, finish with the chunks XATTR management
 	if err == nil {
-		if err = rr.chunk.saveAttr(out); err != nil {
-			LogError("Save attr error: %s (reqid=%s)", err, rr.reqid)
-		}
+		err = rr.chunk.saveAttr(out)
 	}
 
 	// Then reply
 	if err != nil {
-		rr.replyError(err)
-		out.abort()
 		// Discard request body
 		io.Copy(ioutil.Discard, rr.req.Body)
+		rr.replyError(err)
+		out.abort()
 	} else {
 		out.commit()
+		//rr.rep.Header().Set("Content-Length", "0")
+		rr.rep.Header().Set("Connection", "keep-alive")
+		rr.req.Close = false
 		rr.chunk.fillHeadersLight(rr.rep.Header())
 		rr.replyCode(http.StatusCreated)
-		NotifyNew(rr.rawx.notifier, rr.reqid, &rr.chunk)
+		NotifyNew(rr.rawx.notifier, rr.reqid, rr.chunk)
 	}
 }
 
 func (rr *rawxRequest) copyChunk() {
-	if err := rr.chunk.retrieveDestinationHeader(&rr.req.Header,
-		rr.rawx, rr.chunkID); err != nil {
+	var err error
+	if rr.chunk, err = retrieveDestinationHeader(&rr.req.Header, rr.rawx, rr.chunkID); err != nil {
 		rr.replyError(err)
 		return
 	}
@@ -256,7 +254,7 @@ func (rr *rawxRequest) copyChunk() {
 		err = rr.chunk.saveContentFullpathAttr(op)
 		if err != nil {
 			// Xattr failed, rollback the link itself
-			LogError("Save attr error: %s (reqid=%s)", err, rr.reqid)
+			LogError(msgErrorAction("Setxattr()", rr.reqid, err))
 			rr.replyError(err)
 			// If rollback fails, is lets an error
 			_ = op.rollback()
@@ -276,10 +274,16 @@ func (rr *rawxRequest) checkChunk() {
 	}
 	defer chunkIn.Close()
 
-	err = rr.chunk.loadAttr(chunkIn, rr.chunkID, rr.reqid)
+	rr.chunk, err = loadAttr(chunkIn, rr.chunkID, rr.reqid)
 	if err != nil {
-		LogError("Failed to load xattr: %s (reqid=%s)", err, rr.reqid)
+		LogDebug(msgErrorAction("Getxattr()", rr.reqid, err))
 		rr.replyError(err)
+		return
+	}
+
+	// FIXME(jfs): generalize the check of chunkInfo
+	if rr.chunk.ChunkHash == "" {
+		rr.replyError(errMissingXattr(AttrNameChunkChecksum, nil))
 		return
 	}
 
@@ -294,7 +298,8 @@ func (rr *rawxRequest) checkChunk() {
 		var in *io.LimitedReader
 		in, filter, err = rr.getChunkReader(chunkIn, rr.chunk.size, rangeInfo{})
 		if err != nil {
-			rr.replyCode(http.StatusPreconditionFailed)
+			LogDebug(msgErrorAction("getChunkReader()", rr.reqid, err))
+			rr.replyError(err)
 			return
 		}
 		if filter != nil {
@@ -305,11 +310,13 @@ func (rr *rawxRequest) checkChunk() {
 		if _, err = io.Copy(h, in); err == nil {
 			actual_hash := strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
 			if expected_hash != actual_hash {
+				LogDebug(msgErrorAction("hash comparison", rr.reqid, nil))
 				rr.replyCode(http.StatusPreconditionFailed)
 				return
 			}
 		}
 		if err != nil {
+			LogDebug(msgErrorAction("hash computation", rr.reqid, nil))
 			rr.replyError(err)
 			return
 		}
@@ -319,7 +326,6 @@ func (rr *rawxRequest) checkChunk() {
 	rr.chunk.fillHeaders(headers)
 	headers.Set("Content-Length", strconv.FormatUint(uint64(rr.chunk.size), 10))
 	headers.Set("Accept-Ranges", "bytes")
-
 	rr.replyCode(http.StatusOK)
 }
 
@@ -358,7 +364,7 @@ func (rr *rawxRequest) downloadChunk() {
 	}
 	defer inChunk.Close()
 
-	if err = rr.chunk.loadAttr(inChunk, rr.chunkID, rr.reqid); err != nil {
+	if rr.chunk, err = loadAttr(inChunk, rr.chunkID, rr.reqid); err != nil {
 		rr.replyError(err)
 		return
 	}
@@ -389,8 +395,7 @@ func (rr *rawxRequest) downloadChunk() {
 	headers := rr.rep.Header()
 	rr.chunk.fillHeaders(headers)
 	if !rangeInf.isVoid() {
-		headers.Set("Content-Range", fmt.Sprintf("bytes %v-%v/%v",
-			rangeInf.offset, rangeInf.last, rr.chunk.size))
+		headers.Set("Content-Range", packRangeHeader(rangeInf.offset, rangeInf.last, rr.chunk.size))
 		headers.Set("Content-Length", strconv.FormatUint(uint64(rangeInf.size), 10))
 		rr.replyCode(http.StatusPartialContent)
 	} else {
@@ -403,7 +408,7 @@ func (rr *rawxRequest) downloadChunk() {
 	if err == nil {
 		rr.bytesOut = rr.bytesOut + uint64(nb)
 	} else {
-		LogError("Write() error: %s (reqid=%s)", err, rr.reqid)
+		LogError(msgErrorAction("Write()", rr.reqid, err))
 	}
 }
 
@@ -447,6 +452,7 @@ func (rr *rawxRequest) getChunkReader(inChunk fileReader, cs int64, ri rangeInfo
 }
 
 func (rr *rawxRequest) removeChunk() {
+	var err error
 	tmp := xattrBufferPool.Acquire()
 	defer xattrBufferPool.Release(tmp)
 
@@ -460,7 +466,7 @@ func (rr *rawxRequest) removeChunk() {
 	}
 
 	// Load only the fullpath in an attempt to spare syscalls
-	err := rr.chunk.loadFullPath(getter, rr.chunkID)
+	rr.chunk, err = loadFullPath(getter, rr.chunkID)
 	if err != nil {
 		rr.replyError(err)
 		return
@@ -468,13 +474,10 @@ func (rr *rawxRequest) removeChunk() {
 
 	err = rr.rawx.repo.del(rr.chunkID)
 	if err != nil {
-		if !os.IsNotExist(err) {
-			LogWarning("Failed to remove chunk %s", err)
-		}
 		rr.replyError(err)
 	} else {
 		rr.replyCode(http.StatusNoContent)
-		NotifyDel(rr.rawx.notifier, rr.reqid, &rr.chunk)
+		NotifyDel(rr.rawx.notifier, rr.reqid, rr.chunk)
 	}
 }
 
@@ -538,4 +541,30 @@ func (rr *rawxRequest) serveChunk() {
 		path:      rr.req.URL.Path,
 		reqId:     rr.reqid,
 	})
+}
+
+func packRangeHeader(start, last, size int64) string {
+	sb := strings.Builder{}
+	sb.WriteString("bytes ")
+	sb.WriteString(itoa64(start))
+	sb.WriteRune('-')
+	sb.WriteString(itoa64(last))
+	sb.WriteRune('/')
+	sb.WriteString(itoa64(size))
+	return sb.String()
+}
+
+func msgErrorAction(action, reqid string, err error) string {
+	sb := strings.Builder{}
+	sb.WriteString(action)
+	if err == nil {
+		sb.WriteString(" error (nil) (reqid=")
+	} else {
+		sb.WriteString(" error (")
+		sb.WriteString(err.Error())
+		sb.WriteString(") (reqid=")
+	}
+	sb.WriteString(reqid)
+	sb.WriteRune(')')
+	return sb.String()
 }

@@ -1,5 +1,5 @@
 // OpenIO SDS Go rawx
-// Copyright (C) 2015-2019 OpenIO SAS
+// Copyright (C) 2015-2020 OpenIO SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -20,19 +20,6 @@ import (
 	"io"
 	"os"
 )
-
-/*
-Minimal interface to a file repository, where each file might have
-some <key,value> properties.
-*/
-type repository interface {
-	lock(ns, url string) error
-	get(name string) (fileReader, error)
-	put(name string) (fileWriter, error)
-	link(fromName, toName string) (linkOperation, error)
-	del(name string) error
-	getAttr(name, key string, value []byte) (int, error)
-}
 
 type decorable interface {
 	setAttr(n string, v []byte) error

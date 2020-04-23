@@ -24,20 +24,12 @@ import (
 	"time"
 )
 
-func setErrorString(rep http.ResponseWriter, s string) {
-	rep.Header().Set(HeaderNameError, s)
-}
-
-func setError(rep http.ResponseWriter, e error) {
-	setErrorString(rep, e.Error())
-}
-
 type rawxService struct {
 	ns           string
 	url          string
 	path         string
 	id           string
-	repo         repository
+	repo         chunkRepository
 	notifier     Notifier
 	bufferSize   int
 	checksumMode int
@@ -92,7 +84,7 @@ func (rr *rawxRequest) replyError(err error) {
 		// Also, we debug what happened in the reply headers
 		// TODO(jfs): This is a job for a distributed tracing framework
 		if logExtremeVerbosity {
-			rr.rep.Header().Set("X-Error", err.Error())
+			rr.rep.Header().Set(HeaderNameError, err.Error())
 		}
 
 		// Prepare the most adapted reply status.
@@ -147,9 +139,9 @@ func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 		}
 		switch req.URL.Path {
 		case "/info":
-			rawxreq.serveInfo(rep, req)
+			rawxreq.serveInfo()
 		case "/stat":
-			rawxreq.serveStat(rep, req)
+			rawxreq.serveStat()
 		default:
 			rawxreq.serveChunk()
 		}

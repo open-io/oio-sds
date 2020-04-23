@@ -1,5 +1,5 @@
 // OpenIO SDS Go rawx
-// Copyright (C) 2015-2019 OpenIO SAS
+// Copyright (C) 2015-2020 OpenIO SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -48,7 +48,7 @@ var loadedOpts = map[string]string{
 	"grid_buffer_size":      "buffer_size",
 	"grid_fadvise_upload":   "fadvise_upload",
 	"grid_fadvise_download": "fadvise_download",
-	// Also manage shorter names
+
 	"Listen":           "addr",
 	"namespace":        "ns",
 	"service_id":       "id",
@@ -61,18 +61,25 @@ var loadedOpts = map[string]string{
 	"compression":      "compression",
 	"compress":         "compression",
 	"fallocate":        "fallocate",
-	"tcp_keepalive":    "tcp_keepalive",
+	"http_keepalive":   "keepalive",
 	"checksum":         "checksum",
 	"buffer_size":      "buffer_size",
 	"fadvise_upload":   "fadvise_upload",
 	"fadvise_download": "fadvise_download",
-	// More recent names
+
 	"timeout_read_header":  "timeout_read_header",
 	"timeout_read_request": "timeout_read_request",
 	"timeout_write_reply":  "timeout_write_reply",
 	"timeout_idle":         "timeout_idle",
 	"headers_buffer_size":  "headers_buffer_size",
+
+	"events": "events",
 	// TODO(jfs): also implement a cachedir
+}
+
+// FIXME(jfs): Schedule the removal of these misleading options
+var deprecatedOpts = map[string]string{
+	"tcp_keepalive": "keepalive",
 }
 
 // readConfig -- fetch options from conf file and remap their name
@@ -91,6 +98,10 @@ func readConfig(conf string) (optionsMap, error) {
 		fields := strings.Fields(sc.Text())
 		if len(fields) > 1 {
 			if v, found := loadedOpts[fields[0]]; found {
+				opts[v] = fields[1]
+			}
+			if v, found := deprecatedOpts[fields[0]]; found {
+				LogWarning("DEPRECATED option used: %s", fields[0])
 				opts[v] = fields[1]
 			}
 		}

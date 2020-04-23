@@ -1,5 +1,5 @@
 // OpenIO SDS Go rawx
-// Copyright (C) 2015-2019 OpenIO SAS
+// Copyright (C) 2015-2020 OpenIO SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -39,14 +39,14 @@ func doGetInfo(rr *rawxRequest) {
 	rr.rep.Write(bb.Bytes())
 }
 
-func (rr *rawxRequest) serveInfo(rep http.ResponseWriter, req *http.Request) {
+func (rr *rawxRequest) serveInfo() {
 	if err := rr.drain(); err != nil {
 		rr.replyError(err)
 		return
 	}
 
 	var spent uint64
-	switch req.Method {
+	switch rr.req.Method {
 	case "GET", "HEAD":
 		doGetInfo(rr)
 		spent = IncrementStatReqInfo(rr)
