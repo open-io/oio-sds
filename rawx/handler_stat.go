@@ -1,5 +1,5 @@
 // OpenIO SDS Go rawx
-// Copyright (C) 2015-2019 OpenIO SAS
+// Copyright (C) 2015-2020 OpenIO SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -66,7 +66,6 @@ func incrementStatReq(rr *rawxRequest) uint64 {
 	atomic.AddUint64(&counters.ReqHitsAll, 1)
 
 	if rr.status == 0 {
-		LogWarning("Wrong HTTP status: %d", rr.status)
 		atomic.AddUint64(&counters.RepHitsOther, 1)
 		return spent
 	}
@@ -176,14 +175,14 @@ func doGetStats(rr *rawxRequest) {
 	rr.rep.Write(bb.Bytes())
 }
 
-func (rr *rawxRequest) serveStat(rep http.ResponseWriter, req *http.Request) {
+func (rr *rawxRequest) serveStat() {
 	if err := rr.drain(); err != nil {
 		rr.replyError(err)
 		return
 	}
 
 	var spent uint64
-	switch req.Method {
+	switch rr.req.Method {
 	case "GET", "HEAD":
 		doGetStats(rr)
 		spent = IncrementStatReqStat(rr)

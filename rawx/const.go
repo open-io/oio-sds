@@ -1,5 +1,5 @@
 // OpenIO SDS Go rawx
-// Copyright (C) 2019 OpenIO SAS
+// Copyright (C) 2019-2020 OpenIO SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -37,8 +37,15 @@ const (
 	AttrNameChunkPosition      = "user.grid.chunk.position"
 	AttrNameChunkChecksum      = "user.grid.chunk.hash"
 	AttrNameChunkSize          = "user.grid.chunk.size"
-	AttrNameCompression        = "user.grid.compression"
 	AttrNameOioVersion         = "user.grid.oio.version"
+	AttrNameCompression        = "user.grid.compression"
+)
+
+const (
+	compressionOff     = "off"
+	compressionLzw     = "lzw"
+	compressionZlib    = "zlib"
+	compressionDeflate = "deflate"
 )
 
 const (
@@ -93,6 +100,14 @@ const (
 
 	// By default, no fadvise() will be called before download a chunk
 	configDefaultFadviseDownload = configFadviseNone
+
+	// Is HTTP "Connection: keep-alive" allowed in replies?
+	// Set this value to false to make the RAWX server deny reusing
+	// connections.
+	configDefaultHttpKeepalive = true
+
+	// Are events allowed
+	configDefaultEvents = true
 )
 
 const (
@@ -157,4 +172,8 @@ const (
 
 	// How long (in seconds) might a connection stay idle (between two requests)
 	timeoutIdle = 3600
+)
+
+const (
+	ECMethodPrefix = "ec/"
 )
