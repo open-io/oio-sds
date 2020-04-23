@@ -1,5 +1,5 @@
 // OpenIO SDS Go rawx
-// Copyright (C) 2015-2019 OpenIO SAS
+// Copyright (C) 2015-2020 OpenIO SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -29,7 +29,7 @@ import (
 type Notifier interface {
 	Start()
 	Stop()
-	asyncNotify(eventType, requestID string, chunk *chunkInfo)
+	asyncNotify(eventType, requestID string, chunk chunkInfo)
 }
 
 const (
@@ -43,7 +43,7 @@ const (
 )
 
 // Tells if the current RAWX service may emit notifications
-var notifAllowed = true
+var notifAllowed = configDefaultEvents
 
 type beanstalkNotifier struct {
 	rawx       *rawxService
@@ -71,13 +71,13 @@ func makeBeanstalkNotifier(endpoint string,
 
 func (notifier *beanstalkNotifier) Start() {
 	notifier.wg.Add(1)
+	notifier.run = true
 	go func() {
 		defer notifier.wg.Done()
 		for eventJSON := range notifier.queue {
 			notifier.syncNotify(eventJSON)
 		}
 	}()
-	notifier.run = true
 }
 
 func (notifier *beanstalkNotifier) Stop() {
@@ -128,7 +128,7 @@ func (notifier *beanstalkNotifier) syncNotify(eventJSON []byte) {
 }
 
 func (notifier *beanstalkNotifier) asyncNotify(eventType, requestID string,
-	chunk *chunkInfo) {
+	chunk chunkInfo) {
 	if !notifier.run {
 		LogWarning("Can't send a event to %s using tube %s: closed",
 			notifier.endpoint, notifier.tube)
@@ -205,7 +205,7 @@ func makeMultiNotifier(config string, rawx *rawxService) (*multiNotifier, error)
 	notifier := new(multiNotifier)
 	confs := strings.Split(config, ";")
 	for _, conf := range confs {
-		notif, err := MakeNotifier(conf, rawx)
+		notif, err := makeSingleNotifier(conf, rawx)
 		if err != nil {
 			return nil, err
 		}
@@ -227,7 +227,7 @@ func (notifier *multiNotifier) Stop() {
 }
 
 func (notifier *multiNotifier) asyncNotify(eventType, requestID string,
-	chunk *chunkInfo) {
+	chunk chunkInfo) {
 	notif := notifier.notifiers[notifier.index]
 	// Round-robin
 	notifier.index = (notifier.index + 1) % len(notifier.notifiers)
@@ -241,24 +241,34 @@ func hasPrefix(s, prefix string) (string, bool) {
 	return "", false
 }
 
+func makeSingleNotifier(config string, rawx *rawxService) (Notifier, error) {
+	if endpoint, ok := hasPrefix(config, "beanstalk://"); ok {
+		return makeBeanstalkNotifier(endpoint, rawx)
+	}
+	// TODO(adu): make a ZMQ Notifier
+	// TODO(jfs): make a GRPC Notifier
+	// TODO(jfs): make an HTTP Notifier
+	return nil, errors.New("Unexpected notification endpoint, only `beanstalk://...` is accepted")
+}
+
 func MakeNotifier(config string, rawx *rawxService) (Notifier, error) {
 	if strings.Contains(config, ";") {
 		return makeMultiNotifier(config, rawx)
 	}
-	if endpoint, ok := hasPrefix(config, "beanstalk://"); ok {
-		return makeBeanstalkNotifier(endpoint, rawx)
+	fake := make([]string, 0)
+	for i := 0; i < 4; i++ {
+		fake = append(fake, config)
 	}
-	// TODO(adu) makeZMQNotifier
-	return nil, errors.New("Unexpected notification endpoint, only `beanstalk://...` is accepted")
+	return makeMultiNotifier(strings.Join(fake, ";"), rawx)
 }
 
-func NotifyNew(notifier Notifier, requestID string, chunk *chunkInfo) {
+func NotifyNew(notifier Notifier, requestID string, chunk chunkInfo) {
 	if notifAllowed {
 		notifier.asyncNotify(eventTypeNewChunk, requestID, chunk)
 	}
 }
 
-func NotifyDel(notifier Notifier, requestID string, chunk *chunkInfo) {
+func NotifyDel(notifier Notifier, requestID string, chunk chunkInfo) {
 	if notifAllowed {
 		notifier.asyncNotify(eventTypeDelChunk, requestID, chunk)
 	}
