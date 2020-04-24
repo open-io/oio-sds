@@ -1,5 +1,5 @@
 // OpenIO SDS Go rawx
-// Copyright (C) 2015-2019 OpenIO SAS
+// Copyright (C) 2015-2020 OpenIO SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -18,10 +18,7 @@ package main
 
 import (
 	"bytes"
-	"crypto/md5"
-	"encoding/hex"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,7 +30,6 @@ const (
 	openFlagsBase  int = syscall.O_NOATIME | syscall.O_CLOEXEC | syscall.O_NONBLOCK
 	openFlagsROnly     = openFlagsBase | syscall.O_RDONLY
 	openFlagsWOnly     = openFlagsBase | syscall.O_WRONLY
-	openFlagsRW        = openFlagsBase | syscall.O_RDWR
 )
 
 type fileRepository struct {
@@ -66,16 +62,12 @@ func (fr *fileRepository) init(root string) error {
 	fr.fallocateFile = configDefaultFallocate
 	fr.fadviseUpload = configDefaultFadviseUpload
 	fr.fadviseDownload = configDefaultFadviseDownload
-
-	if fr.rootFd, err = syscall.Open(fr.root, syscall.O_DIRECTORY|syscall.O_PATH|openFlagsROnly, 0); err != nil {
-		return err
-	}
-	return nil
+	fr.rootFd, err = syscall.Open(fr.root, syscall.O_DIRECTORY|syscall.O_PATH|openFlagsROnly, 0)
+	return err
 }
 
 func (fr *fileRepository) getAttr(name, key string, value []byte) (int, error) {
-	absPath := fr.root + "/" + fr.nameToRelPath(name)
-	return syscall.Getxattr(absPath, key, value)
+	return syscall.Getxattr(fr.nameToAbsPath(name), key, value)
 }
 
 func (fr *fileRepository) lock(ns, id string) error {
@@ -97,20 +89,21 @@ func (fr *fileRepository) lock(ns, id string) error {
 
 func (fr *fileRepository) del(name string) error {
 	relPath := fr.nameToRelPath(name)
-	absPath := fr.root + "/" + relPath
-	xattrName := AttrNameFullPrefix + name
+	absPath := fr.relToAbsPath(relPath)
+	xattrName := xattrKey(name)
 
-	var err error
-	err = syscall.Removexattr(absPath, xattrName)
+	err := syscall.Removexattr(absPath, xattrName)
 	if err != nil {
-		LogWarning("Failed to remove xattr %s on %s: %s", xattrName, absPath, err.Error())
-		err = nil
+		LogWarning(msgErrorAction(joinPath2("Removexattr", name), "", err))
 	}
+
 	err = syscall.Unlinkat(fr.rootFd, relPath, 0)
-	if err != nil && fr.syncDir {
-		LogWarning("Failed to remove chunk (was %s) %s: %s", xattrName, absPath, err.Error())
-		dir := filepath.Dir(relPath)
-		err = fr.syncRelDir(dir)
+	if err == nil {
+		// JFS: We are about to open the directory. there is slight
+		// probability that the directory ceases to exist between the unlink
+		// and the attempt to sync. We should avoid to consider this an
+		// error.
+		_ = fr.syncRelParent(relPath)
 	}
 	return err
 }
@@ -138,17 +131,17 @@ func (fr *fileRepository) getRelPath(path string) (fileReader, error) {
 }
 
 func (fr *fileRepository) get(name string) (fileReader, error) {
-	path := fr.nameToRelPath(name)
-	return fr.getRelPath(path)
+	return fr.getRelPath(fr.nameToRelPath(name))
 }
 
 func (fr *fileRepository) putRelPath(path string) (fileWriter, error) {
-	pathTemp := path + ".pending"
+	pathTemp := pendingPath(path)
 	fd, err := syscall.Openat(fr.rootFd, pathTemp, syscall.O_CREAT|syscall.O_EXCL|openFlagsWOnly, fr.putOpenMode)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// Lazy dir creation
-			err = os.MkdirAll(filepath.Dir(fr.root+"/"+path), fr.putMkdirMode)
+			abs := fr.relToAbsPath(path)
+			err = os.MkdirAll(filepath.Dir(abs), fr.putMkdirMode)
 			if err == nil {
 				return fr.putRelPath(path)
 			}
@@ -171,14 +164,13 @@ func (fr *fileRepository) putRelPath(path string) (fileWriter, error) {
 }
 
 func (fr *fileRepository) put(name string) (fileWriter, error) {
-	path := fr.nameToRelPath(name)
-	return fr.putRelPath(path)
+	return fr.putRelPath(fr.nameToRelPath(name))
 }
 
-// Fast path: initial optimistic attempt when everythng works fine
+// Fast path: initial optimistic attempt when everything works fine
 // (i.e. when the source exists and the target directory exists).
 func (fr *fileRepository) linkRelPath_FastPath(fromPath, toPath string) (linkOperation, error) {
-	pathTemp := toPath + ".pending"
+	pathTemp := pendingPath(toPath)
 
 	err := syscall.Linkat(fr.rootFd, fromPath, fr.rootFd, pathTemp, 0)
 	if err != nil {
@@ -222,24 +214,30 @@ func (fr *fileRepository) link(src, dst string) (linkOperation, error) {
 	return fr.linkRelPath(relSrc, relDst)
 }
 
-// Synchronize the directory, based on its path
-func (fr *fileRepository) syncRelDir(relPath string) error {
-	fd, err := syscall.Openat(fr.rootFd, relPath, syscall.O_DIRECTORY|syscall.O_PATH|openFlagsROnly, 0)
+// Synchronize the parent directory, based on its path
+func (fr *fileRepository) syncRelParent(path string) error {
+	if !fr.syncDir {
+		return nil
+	}
+	parent := filepath.Dir(path)
+	fd, err := syscall.Openat(fr.rootFd, parent, syscall.O_DIRECTORY|openFlagsROnly, 0)
 	if err == nil {
 		err = syscall.Fdatasync(fd)
 		syscall.Close(fd)
-		fd = -1
 	}
 	return err
+
 }
 
 // Synchronize just the file, based on its path
 func (fr *fileRepository) syncRelFile(relPath string) error {
-	fd, err := syscall.Openat(fr.rootFd, relPath, syscall.O_PATH|openFlagsROnly, 0)
+	if !fr.syncFile {
+		return nil
+	}
+	fd, err := syscall.Openat(fr.rootFd, relPath, openFlagsROnly, 0)
 	if err == nil {
 		err = syscall.Fdatasync(fd)
 		syscall.Close(fd)
-		fd = -1
 	}
 	return err
 }
@@ -250,34 +248,31 @@ type realLinkOp struct {
 }
 
 func (lo *realLinkOp) setAttr(key string, value []byte) error {
-	return syscall.Setxattr(lo.repo.root+"/"+lo.relPath, key, value, 0)
+	path := joinPath2(lo.repo.root, lo.relPath)
+	return syscall.Setxattr(path, key, value, 0)
 }
 
 func (lo *realLinkOp) commit() error {
-	var err error
-	if lo.repo.syncDir {
-		err = lo.repo.syncRelDir(filepath.Dir(lo.relPath))
-	}
-	if lo.repo.syncFile {
-		err = lo.repo.syncRelFile(lo.relPath)
+	err := lo.repo.syncRelFile(lo.relPath)
+	if err == nil {
+		err = lo.repo.syncRelParent(lo.relPath)
 	}
 	return err
 }
 
 func (lo *realLinkOp) rollback() error {
 	err := syscall.Unlinkat(lo.repo.rootFd, lo.relPath, 0)
-	if err == nil && lo.repo.syncDir {
-		err = lo.repo.syncRelDir(filepath.Dir(lo.relPath))
+	if err == nil {
+		err = lo.repo.syncRelParent(lo.relPath)
 	}
 	return err
 }
 
 type realFileWriter struct {
 	f         *os.File
+	repo      *fileRepository
 	pathFinal string
 	pathTemp  string
-	repo      *fileRepository
-
 	allocated int64
 	written   int64
 }
@@ -307,14 +302,23 @@ func (fw *realFileWriter) close() {
 
 func (fw *realFileWriter) abort() error {
 	defer fw.close()
-	return syscall.Unlinkat(fw.repo.rootFd, fw.pathTemp, 0)
+
+	err := syscall.Unlinkat(fw.repo.rootFd, fw.pathTemp, 0)
+	if err == nil {
+		err = fw.repo.syncRelParent(fw.pathTemp)
+	}
+	return err
 }
 
 func (fw *realFileWriter) commit() error {
 	var err error
+	var syncAll bool
 
 	if fw.allocated > fw.written {
 		err = fw.f.Truncate(fw.written)
+		if err == nil {
+			syncAll = true
+		}
 	}
 
 	if err == nil {
@@ -331,11 +335,11 @@ func (fw *realFileWriter) commit() error {
 	}
 
 	if err == nil {
-		err = fw.syncFile()
+		err = fw.syncFile(syncAll)
 		if err == nil {
 			err := syscall.Renameat(fw.repo.rootFd, fw.pathTemp, fw.repo.rootFd, fw.pathFinal)
 			if err == nil {
-				_ = fw.syncDir()
+				_ = fw.repo.syncRelParent(fw.pathFinal)
 			}
 		}
 	}
@@ -348,19 +352,15 @@ func (fw *realFileWriter) commit() error {
 	return err
 }
 
-func (fw *realFileWriter) syncFile() error {
+func (fw *realFileWriter) syncFile(all bool) error {
 	if !fw.repo.syncFile {
 		return nil
 	}
-	return syscall.Fdatasync(fw.fd())
-}
-
-func (fw *realFileWriter) syncDir() error {
-	if !fw.repo.syncDir {
-		return nil
+	if all {
+		return syscall.Fsync(fw.fd())
+	} else {
+		return syscall.Fdatasync(fw.fd())
 	}
-	dir := filepath.Dir(fw.pathFinal)
-	return fw.repo.syncRelDir(dir)
 }
 
 func (fw *realFileWriter) Extend(size int64) {
@@ -414,14 +414,22 @@ func (fr *realFileReader) getAttr(key string, value []byte) (int, error) {
 }
 
 func (fr *fileRepository) nameToRelPath(name string) string {
-	var result strings.Builder
+	sb := strings.Builder{}
 	for i := 0; i < fr.hashDepth; i++ {
 		start := i * fr.hashDepth
-		result.WriteString(name[start : start+fr.hashWidth])
-		result.WriteRune('/')
+		sb.WriteString(name[start : start+fr.hashWidth])
+		sb.WriteRune('/')
 	}
-	result.WriteString(name)
-	return result.String()
+	sb.WriteString(name)
+	return sb.String()
+}
+
+func (fr *fileRepository) nameToAbsPath(name string) string {
+	return fr.relToAbsPath(fr.nameToRelPath(name))
+}
+
+func (fr *fileRepository) relToAbsPath(path string) string {
+	return joinPath2(fr.root, path)
 }
 
 func setOrHasXattr(path, key, value string) error {
@@ -443,11 +451,24 @@ func setOrHasXattr(path, key, value string) error {
 	return errors.New("XATTR mismatch")
 }
 
-func (fileReader *realFileReader) recomputeHash() (string, error) {
-	h := md5.New()
-	if _, err := io.Copy(h, fileReader.f); err != nil {
-		return "", err
-	}
+func xattrKey(name string) string {
+	sb := strings.Builder{}
+	sb.WriteString(AttrNameFullPrefix)
+	sb.WriteString(name)
+	return sb.String()
+}
 
-	return strings.ToUpper(hex.EncodeToString(h.Sum(nil))), nil
+func pendingPath(path string) string {
+	sb := strings.Builder{}
+	sb.WriteString(path)
+	sb.WriteString(".pending")
+	return sb.String()
+}
+
+func joinPath2(base, file string) string {
+	sb := strings.Builder{}
+	sb.WriteString(base)
+	sb.WriteRune('/')
+	sb.WriteString(file)
+	return sb.String()
 }

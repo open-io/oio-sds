@@ -1,5 +1,5 @@
 // OpenIO SDS Go rawx
-// Copyright (C) 2015-2019 OpenIO SAS
+// Copyright (C) 2015-2020 OpenIO SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -25,7 +25,6 @@ import (
 	"context"
 	"flag"
 	"log"
-	"log/syslog"
 	"net"
 	"net/http"
 	"os"
@@ -53,7 +52,7 @@ func checkNS(ns string) {
 	}
 }
 
-func installSigHandlers(rawx *rawxService, srv *http.Server) {
+func installSigHandlers(srv *http.Server) {
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan,
 		syscall.SIGUSR1,
@@ -95,9 +94,7 @@ func main() {
 	}
 
 	if *verbosePtr {
-		logExtremeVerbosity = true
-		logDefaultSeverity = syslog.LOG_DEBUG
-		logSeverity = syslog.LOG_DEBUG
+		maximizeVerbosity()
 	}
 
 	var opts optionsMap
@@ -124,11 +121,10 @@ func main() {
 	namespace := opts["ns"]
 	rawxURL := opts["addr"]
 	rawxID := opts["id"]
+	notifAllowed = opts.getBool("events", configDefaultEvents)
 
 	checkNS(namespace)
 	checkURL(rawxURL)
-
-	tcp_keepalive := opts.getBool("tcp_keepalive", false)
 
 	// No service ID specified, using the service address instead
 	if rawxID == "" {
@@ -151,10 +147,10 @@ func main() {
 		url:          rawxURL,
 		path:         chunkrepo.sub.root,
 		id:           rawxID,
-		repo:         &chunkrepo,
+		repo:         chunkrepo,
 		bufferSize:   1024 * opts.getInt("buffer_size", uploadBufferSizeDefault/1024),
 		checksumMode: checksumAlways,
-		compress:     opts.getBool("compress", false),
+		compression:  opts["compression"],
 	}
 
 	// Clamp the buffer size to admitted values
@@ -232,9 +228,10 @@ func main() {
 		MaxHeaderBytes: opts.getInt("headers_buffer_size", 65536),
 	}
 
-	installSigHandlers(&rawx, &srv)
+	keepalive := opts.getBool("keepalive", configDefaultHttpKeepalive)
+	srv.SetKeepAlivesEnabled(keepalive)
 
-	rawx.notifier.Start()
+	installSigHandlers(&srv)
 
 	if !*servicingPtr {
 		if err := chunkrepo.lock(namespace, rawxID); err != nil {
@@ -242,13 +239,13 @@ func main() {
 		}
 	}
 
-	srv.SetKeepAlivesEnabled(tcp_keepalive)
-
 	if logExtremeVerbosity {
 		srv.ConnState = func(cnx net.Conn, state http.ConnState) {
 			LogDebug("%v %v %v", cnx.LocalAddr(), cnx.RemoteAddr(), state)
 		}
 	}
+
+	rawx.notifier.Start()
 
 	if err := srv.ListenAndServe(); err != nil {
 		LogWarning("HTTP Server exiting: %v", err)
