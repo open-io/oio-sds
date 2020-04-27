@@ -31,7 +31,6 @@ In addition, there some additional dependencies at runtime:
 * python-eventlet
 * python-werkzeug
 * python-gunicorn
-* python-plyvel
 * python-redis
 * python-requests
 * python-simplejson
