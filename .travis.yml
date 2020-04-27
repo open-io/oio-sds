@@ -49,8 +49,10 @@ services:
   - zookeeper
 before_install:
   - sudo apt-get install $([ "$TRAVIS_PYTHON_VERSION" == "2.7" ] && echo 'libapache2-mod-wsgi' || echo 'libapache2-mod-wsgi-py3')
+  - dpkg -l | grep -i -e go -e golang
 install:
   - pip install --upgrade pip setuptools virtualenv tox -r all-requirements.txt -r test-requirements.txt
+  - go version
   - go get gopkg.in/ini.v1 golang.org/x/sys/unix
   - go get -u github.com/prometheus/client_golang/prometheus
   - go get -u github.com/prometheus/client_golang/prometheus/promhttp
