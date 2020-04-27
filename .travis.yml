@@ -52,6 +52,7 @@ before_install:
 install:
   - pip install --upgrade pip setuptools virtualenv tox -r all-requirements.txt -r test-requirements.txt
   - go get gopkg.in/ini.v1 golang.org/x/sys/unix
+  - go get github.com/prometheus/client_golang/prometheus/promhttp github.com/prometheus/client_golang/prometheus
   - sudo bash -c "echo '/tmp/core.%p.%E' > /proc/sys/kernel/core_pattern"
   - mkdir /tmp/oio
   - git fetch --tags
