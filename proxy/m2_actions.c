@@ -753,7 +753,7 @@ _load_alias_from_headers(struct req_args_s *args, GSList **pbeans)
 	do {
 		gchar *s = g_tree_lookup(args->rq->tree_headers,
 								 PROXYD_HEADER_PREFIX "content-meta-policy");
-		if (NULL != s)
+		if (oio_str_is_set(s))
 			CONTENTS_HEADERS_set2_policy(header, s);
 	} while (0);
 
@@ -798,6 +798,12 @@ _load_alias_from_headers(struct req_args_s *args, GSList **pbeans)
 			// TODO(adu) Remove this when all clients will only use `content-meta-size`
 			s = g_tree_lookup(args->rq->tree_headers,
 					PROXYD_HEADER_PREFIX "content-meta-length");
+			if (oio_str_is_set(s)) {
+				GRID_DEBUG("Client is using the deprecated %s header "
+						"(replaced by %s)",
+						PROXYD_HEADER_PREFIX "content-meta-length",
+						PROXYD_HEADER_PREFIX "content-meta-size");
+			}
 		}
 		if (!s) {
 			err = BADREQ("Header: missing content size");
@@ -2693,36 +2699,16 @@ action_m2_content_purge (struct req_args_s *args, struct json_object *j UNUSED)
 // POST /v3.0/{NS}/content/create?acct=<account_name>&ref=<container_name>&path=<file_path>
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// .. code-block:: json
-//
-//    [
-//      {
-//        "url":"http://127.0.0.1:6012/D3F2...",
-//        "pos":"0",
-//        "size":1048576,
-//        "hash":"00000000000000000000000000000000"
-//      }
-//    ]
-//
-// You must specify content length and ID on header
-//
-// .. code-block:: text
-//
-//    "x-oio-content-meta-id: 2996752DFD7205006B73F17AD315AA2B"
-//    "x-oio-content-meta-size: 64"
-//
-// You can update system property policy.version of container
-//
-// .. code-block:: text
-//    "x-oio-force-versioning: -1"
-//
-// You can create this object as if the versioning is enabled
-//
-// .. code-block:: text
-//    "x-oio-simulate-versioning: 1"
-//
 // Create a new object. This method does not upload any data, it just
-// registers object metadata in the database.
+// registers object metadata in the database. It is supposed to be called
+// after at least one call to the content/prepare2 route and a successful
+// data upload to rawx services.
+//
+// Most of the required information is available in the content/prepare2
+// response. Additional information must be computed by the client (object
+// size and hash).
+//
+// Sample request:
 //
 // .. code-block:: http
 //
@@ -2730,11 +2716,68 @@ action_m2_content_purge (struct req_args_s *args, struct json_object *j UNUSED)
 //    Host: 127.0.0.1:6000
 //    User-Agent: curl/7.47.0
 //    Accept: */*
-//    x-oio-content-meta-size: 64
 //    x-oio-content-meta-id: 2996752DFD7205006B73F17AD315AA2B
+//    x-oio-content-meta-policy: SINGLE
+//    x-oio-content-meta-size: 64
+//    x-oio-content-meta-version: 554086800
+//    x-oio-content-meta-chunk-method: plain/nb_copy=1
+//    x-oio-content-meta-hash: 2996752DFD7205006B73F17AD315AA2B
+//    x-oio-content-meta-mime-type: application/octet-stream
 //    Content-Length: 165
 //    Content-Type: application/x-www-form-urlencoded
 //
+// .. code-block:: json
+//
+//    {
+//      "chunks": [
+//        {
+//          "url":"http://127.0.0.1:6012/D3F2...",
+//          "pos":"0",
+//          "size":1048576,
+//          "hash":"00000000000000000000000000000000"
+//        }
+//      ],
+//      "properties": {
+//        "category": "dogs"
+//      }
+//    }
+//
+// The following request headers are mandatory:
+// content ID, storage policy, size and version.
+//
+// .. code-block:: text
+//
+//    x-oio-content-meta-id: 2996752DFD7205006B73F17AD315AA2B
+//    x-oio-content-meta-policy: SINGLE
+//    x-oio-content-meta-size: 64
+//    x-oio-content-meta-version: 554086800000000
+//
+// The following request headers are recommended:
+// content hash (MD5), mime-type, chunk method.
+//
+// .. code-block:: text
+//
+//    x-oio-content-meta-chunk-method: plain/nb_copy=1
+//    x-oio-content-meta-hash: 2996752DFD7205006B73F17AD315AA2B
+//    x-oio-content-meta-mime-type: application/octet-stream
+//
+// The following header allows to set the versioning policy of the
+// container hosting the object:
+//
+// .. code-block:: text
+//
+//    "x-oio-force-versioning: -1"
+//
+// The following header tells that the object must be created
+// as if the versioning was enabled and unlimited
+// (this prevents the automatic garbage collection):
+//
+// .. code-block:: text
+//
+//    "x-oio-simulate-versioning: 1"
+//
+//
+// Sample response:
 //
 // .. code-block:: http
 //
@@ -2884,6 +2927,8 @@ enum http_rc_e action_content_prepare (struct req_args_s *args) {
 //
 // Prepare an upload: get URLs of chunks on available rawx.
 //
+// Sample request:
+//
 // .. code-block:: http
 //
 //    POST /v3.0/OPENIO/content/prepare2?acct=my_account&ref=mycontainer&path=mycontent HTTP/1.1
@@ -2900,6 +2945,8 @@ enum http_rc_e action_content_prepare (struct req_args_s *args) {
 //      "policy": "SINGLE"
 //    }
 //
+//
+// Sample response:
 //
 // .. code-block:: http
 //
