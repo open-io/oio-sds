@@ -103,7 +103,7 @@ func copyReadWriteBuffer(dst io.Writer, src io.Reader, h hash.Hash, pool bufferP
 		// Fill the buffer
 		totalr, er := fillBuffer(src, buf)
 
-		if totalr > 0 {
+		if h != nil && totalr > 0 {
 			h.Write(buf[:totalr])
 		}
 

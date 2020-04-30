@@ -177,6 +177,7 @@ const (
 	checksumAlways = iota
 	checksumNever  = iota
 	checksumSmart  = iota
+	checksumDefault = checksumNever
 )
 
 const (
