@@ -200,6 +200,8 @@ grid_fsync_dir         ${FSYNC}
 # Enable compression ('zlib' or 'lzo' or 'off')
 grid_compression ${COMPRESSION}
 
+#grid_checksum disabled
+
 #tcp_keepalive disabled
 #timeout_read_header 10
 #timeout_read_request 10
