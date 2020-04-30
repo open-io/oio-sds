@@ -729,7 +729,7 @@ class MetachunkWriter(_MetachunkWriter):
     Base class for metachunk writers
     """
     def __init__(self, storage_method=None, quorum=None,
-                 chunk_checksum_algo='md5', reqid=None,
+                 chunk_checksum_algo=None, reqid=None,
                  chunk_buffer_min=32768, chunk_buffer_max=262144,
                  perfdata=None, **_kwargs):
         super(MetachunkWriter, self).__init__(

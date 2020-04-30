@@ -555,7 +555,7 @@ class EcChunkWriter(object):
     Writes an EC chunk
     """
     def __init__(self, chunk, conn, write_timeout=None,
-                 chunk_checksum_algo='md5', perfdata=None, **kwargs):
+                 chunk_checksum_algo=None, perfdata=None, **kwargs):
         self._chunk = chunk
         self._conn = conn
         self.failed = False
