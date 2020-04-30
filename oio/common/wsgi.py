@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,8 +17,10 @@ from gunicorn.app.base import BaseApplication
 from gunicorn.glogging import Logger
 from werkzeug.wrappers import Request, Response
 from werkzeug.utils import escape
-from werkzeug.exceptions import HTTPException, InternalServerError
+from werkzeug.exceptions import HTTPException, InternalServerError, \
+    ServiceUnavailable
 
+from oio.common.exceptions import ServiceBusy
 from oio.common.utils import CPU_COUNT
 from oio.common.configuration import read_conf
 from oio.common.logger import get_logger
@@ -109,6 +111,11 @@ class WerkzeugApp(object):
             resp = getattr(self, 'on_' + endpoint)(req, **params)
         except HTTPException as exc:
             resp = exc
+        except ServiceBusy as exc:
+            if self.logger:
+                self.logger.error(str(exc))
+            resp = ServiceUnavailable(
+                "Could not satisfy the request: %s" % exc)
         except Exception as exc:
             if self.logger:
                 self.logger.exception('ERROR Unhandled exception in request')

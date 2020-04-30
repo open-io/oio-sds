@@ -108,6 +108,9 @@ static struct grid_main_option_s common_options[] =
 	{"Replicate", OT_BOOL, {.b = &SRV.flag_replicable},
 		"DO NOT USE THIS. This might disable the replication"},
 
+	{"NoXattrLock", OT_BOOL, {.b = &SRV.flag_nolock},
+		"Set to TRUE to avoid any xattr operation on the repository root."},
+
 	{"CacheEnabled", OT_BOOL, {.b = &SRV.flag_cached_bases},
 		"If set, each base will be cached in a way it won't be accessed"
 			" by several requests in the same time."},
