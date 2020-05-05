@@ -141,6 +141,7 @@ func main() {
 	chunkrepo.sub.syncFile = opts.getBool("fsync_file", chunkrepo.sub.syncFile)
 	chunkrepo.sub.syncDir = opts.getBool("fsync_dir", chunkrepo.sub.syncDir)
 	chunkrepo.sub.fallocateFile = opts.getBool("fallocate", chunkrepo.sub.fallocateFile)
+	chunkrepo.sub.openNonBlock = opts.getBool("nonblock", configDefaultOpenNonblock)
 
 	rawx := rawxService{
 		ns:           namespace,
@@ -226,6 +227,36 @@ func main() {
 		IdleTimeout:       time.Duration(toIdle) * time.Second,
 		// The default is at 1MiB but the RAWX never needs that
 		MaxHeaderBytes: opts.getInt("headers_buffer_size", 65536),
+	}
+
+	flagNoDelay := opts.getBool("nodelay", configDefaultNoDelay)
+	flagCork := opts.getBool("cork", configDefaultCork)
+	if flagNoDelay || flagCork {
+		srv.ConnState = func(cnx net.Conn, st http.ConnState) {
+			setOpt := func(dom, flag, val int) {
+				if tcpCnx, ok := cnx.(*net.TCPConn); ok {
+					if rawCnx, err := tcpCnx.SyscallConn(); err == nil {
+						rawCnx.Control(func(fd uintptr) {
+							syscall.SetsockoptInt(int(fd), dom, flag, val)
+						})
+					}
+				}
+			}
+			switch st {
+			case http.StateNew:
+				if flagNoDelay {
+					setOpt(syscall.SOL_TCP, syscall.TCP_NODELAY, 1)
+				}
+			case http.StateActive:
+				if flagCork {
+					setOpt(syscall.SOL_TCP, syscall.TCP_CORK, 1)
+				}
+			case http.StateIdle:
+				if flagCork {
+					setOpt(syscall.SOL_TCP, syscall.TCP_CORK, 0)
+				}
+			}
+		}
 	}
 
 	keepalive := opts.getBool("keepalive", configDefaultHttpKeepalive)
