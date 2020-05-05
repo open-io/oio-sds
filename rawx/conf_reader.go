@@ -49,6 +49,7 @@ var loadedOpts = map[string]string{
 	"grid_fadvise_upload":   "fadvise_upload",
 	"grid_fadvise_download": "fadvise_download",
 
+	"listen":           "addr",
 	"Listen":           "addr",
 	"namespace":        "ns",
 	"service_id":       "id",
@@ -66,12 +67,16 @@ var loadedOpts = map[string]string{
 	"buffer_size":      "buffer_size",
 	"fadvise_upload":   "fadvise_upload",
 	"fadvise_download": "fadvise_download",
+	"open_nonblock":    "nonblock",
 
 	"timeout_read_header":  "timeout_read_header",
 	"timeout_read_request": "timeout_read_request",
 	"timeout_write_reply":  "timeout_write_reply",
 	"timeout_idle":         "timeout_idle",
 	"headers_buffer_size":  "headers_buffer_size",
+
+	"sock_tcp_cork":    "cork",
+	"sock_tcp_nodelay": "nodelay",
 
 	"events": "events",
 	// TODO(jfs): also implement a cachedir

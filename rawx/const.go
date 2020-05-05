@@ -108,6 +108,21 @@ const (
 
 	// Are events allowed
 	configDefaultEvents = true
+
+	// By default, should the Nagle algorithm be suspended when a connection
+	// is established. Only works for HTTP/1.* when a raw TCP connection is
+	// used.
+	configDefaultNoDelay = false
+
+	// By default, should the TCP_CORK be set (resp. removed) when a connection
+	// becomes active (resp. inactive). Only works for HTTP/1.* when a raw TCP
+	// connection is used.
+	configDefaultCork = false
+
+	// By default, should the O_NONBLOCK flag be set when opening a file?
+	// It turns out that the impact on Go is not weak. The presence of the
+	// flag induces many syscalls.
+	configDefaultOpenNonblock = true
 )
 
 const (
