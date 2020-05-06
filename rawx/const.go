@@ -122,7 +122,7 @@ const (
 	// By default, should the O_NONBLOCK flag be set when opening a file?
 	// It turns out that the impact on Go is not weak. The presence of the
 	// flag induces many syscalls.
-	configDefaultOpenNonblock = true
+	configDefaultOpenNonblock = false
 )
 
 const (
