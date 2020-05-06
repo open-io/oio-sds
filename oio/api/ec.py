@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -605,9 +605,8 @@ class EcChunkWriter(object):
             if perfdata is not None:
                 connect_end = monotonic_time()
                 perfdata_rawx = perfdata.setdefault('rawx', dict())
-                perfdata_rawx[chunk['url']] = \
-                    perfdata_rawx.get(chunk['url'], 0.0) \
-                    + connect_end - connect_start
+                perfdata_rawx['connect(' + chunk['url'] + ')'] = \
+                    connect_end - connect_start
             conn.chunk = chunk
         return cls(chunk, conn, write_timeout=write_timeout,
                    reqid=reqid, **kwargs)
@@ -720,11 +719,10 @@ class EcChunkWriter(object):
         finally:
             if self.perfdata is not None:
                 perfdata_rawx = self.perfdata.setdefault('rawx', dict())
-                url_chunk = self.conn.chunk['url']
+                chunk_url = self.conn.chunk['url']
                 upload_end = monotonic_time()
-                perfdata_rawx[url_chunk] = \
-                    perfdata_rawx.get(url_chunk, 0.0) \
-                    + upload_end - self.conn.upload_start
+                perfdata_rawx['upload(' + chunk_url + ')'] = \
+                    upload_end - self.conn.upload_start
 
 
 class EcMetachunkWriter(io.MetachunkWriter):

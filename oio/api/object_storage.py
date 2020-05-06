@@ -27,7 +27,7 @@ from oio.api.ec import ECWriteHandler
 from oio.api.io import MetachunkPreparer, LinkHandler
 from oio.api.replication import ReplicatedWriteHandler
 from oio.common.utils import cid_from_name, GeneratorIO, monotonic_time, \
-    depaginate, set_deadline_from_read_timeout
+    depaginate, set_deadline_from_read_timeout, compute_perfdata_stats
 from oio.common.easy_value import float_value, true_value
 from oio.common.logger import get_logger
 from oio.common.decorators import ensure_headers, ensure_request_id, \
@@ -1307,6 +1307,8 @@ class ObjectStorageApi(object):
             perfdata_rawx['overall'] = perfdata_rawx.get('overall', 0.0) \
                 + upload_end - upload_start
             perfdata['data_size'] = ul_bytes
+            compute_perfdata_stats(perfdata, 'connect')
+            compute_perfdata_stats(perfdata, 'upload')
         return ul_chunks, ul_bytes, obj_checksum
 
     def _object_prepare(self, account, container, obj_name, source,
