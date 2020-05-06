@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -192,9 +192,8 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                 if self.perfdata is not None:
                     connect_end = monotonic_time()
                     perfdata_rawx = self.perfdata.setdefault('rawx', dict())
-                    perfdata_rawx[chunk['url']] = \
-                        perfdata_rawx.get(chunk['url'], 0.0) \
-                        + connect_end - connect_start
+                    perfdata_rawx['connect(' + chunk['url'] + ')'] = \
+                        connect_end - connect_start
                 conn.chunk = chunk
             return conn, chunk
         except (SocketError, Timeout) as err:
@@ -244,10 +243,9 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                 if self.perfdata is not None:
                     upload_end = monotonic_time()
                     perfdata_rawx = self.perfdata.setdefault('rawx', dict())
-                    url_chunk = conn.chunk['url']
-                    perfdata_rawx[url_chunk] = \
-                        perfdata_rawx.get(url_chunk, 0.0) \
-                        + upload_end - conn.upload_start
+                    chunk_url = conn.chunk['url']
+                    perfdata_rawx['upload(' + chunk_url + ')'] = \
+                        upload_end - conn.upload_start
         except Timeout as err:
             resp = err
             self.logger.warn('Failed to read response from %s (reqid=%s): %s',
