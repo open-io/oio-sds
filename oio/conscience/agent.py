@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -123,12 +123,15 @@ class ServiceWatcher(object):
         """Update service definition with all configured stats"""
         if not self.status:
             return
+        collectors = (x for x in self.service_stats if self.running)
         try:
-            for stat in (x for x in self.service_stats if self.running):
+            for stat in collectors:
                 stats = stat.get_stats()
                 self.service_definition['tags'].update(stats)
         except Exception as ex:
-            self.logger.debug("get_stats error: %s", ex)
+            self.logger.debug("get_stats error: %s, skipping %s", ex,
+                              [type(col).__name__ for col in collectors]
+                              or "<nothing>")
             self.status = False
 
     def register(self):
