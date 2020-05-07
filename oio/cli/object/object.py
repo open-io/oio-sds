@@ -179,6 +179,7 @@ class CreateObject(ContainerCommandMixin, Lister):
         any_error = False
         properties = parsed_args.property
         results = []
+        perfdata = self.app.client_manager.storage.perfdata
         for obj in objs:
             name = obj
             try:
@@ -198,7 +199,11 @@ class CreateObject(ContainerCommandMixin, Lister):
                         autocreate=autocreate,
                         tls=parsed_args.tls)
 
-                    results.append((name, data[1], data[2].upper(), 'Ok'))
+                    res = (name, data[1], data[2].upper(), 'Ok')
+                    if perfdata:
+                        res += (perfdata,)
+
+                    results.append(res)
             except KeyboardInterrupt:
                 results.append((name, 0, None, 'Interrupted'))
                 any_error = True
@@ -211,6 +216,8 @@ class CreateObject(ContainerCommandMixin, Lister):
 
         listing = (obj for obj in results)
         columns = ('Name', 'Size', 'Hash', 'Status')
+        if perfdata:
+            columns += ('Perfdata',)
         if any_error:
             self.produce_output(parsed_args, columns, listing)
             raise Exception("Too many errors occured")
