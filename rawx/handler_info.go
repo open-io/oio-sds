@@ -66,7 +66,7 @@ func (rr *rawxRequest) serveInfo() {
 			bytesIn:   rr.bytesIn,
 			bytesOut:  rr.bytesOut,
 			method:    rr.req.Method,
-			local:     rr.rawx.url,
+			local:     rr.req.Host,
 			peer:      rr.req.RemoteAddr,
 			path:      rr.req.URL.Path,
 			reqId:     rr.reqid,
