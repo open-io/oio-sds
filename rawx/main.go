@@ -82,6 +82,8 @@ func installSigHandlers(srv *http.Server) {
 }
 
 func main() {
+	var err error
+
 	_ = flag.String("D", "UNUSED", "Unused compatibility flag")
 	verbosePtr := flag.Bool("v", false, "Verbose mode, this activates stderr traces")
 	syslogIDPtr := flag.String("s", "", "Activates syslog traces with the given identifier")
@@ -122,6 +124,10 @@ func main() {
 	rawxURL := opts["addr"]
 	rawxID := opts["id"]
 	notifAllowed = opts.getBool("events", configDefaultEvents)
+
+	accessLogPut = opts.getBool("log_access_put", configAccessLogDefaultPut)
+	accessLogGet = opts.getBool("log_access_get", configAccessLogDefaultGet)
+	accessLogDel = opts.getBool("log_access_del", configAccessLogDefaultDelete)
 
 	checkNS(namespace)
 	checkURL(rawxURL)
@@ -206,11 +212,10 @@ func main() {
 		LogFatal("Notifier error: no address")
 	}
 
-	notifier, err := MakeNotifier(eventAgent, &rawx)
+	rawx.notifier, err = MakeNotifier(eventAgent, &rawx)
 	if err != nil {
 		LogFatal("Notifier error: %v", err)
 	}
-	rawx.notifier = notifier
 
 	toReadHeader := opts.getInt("timeout_read_header", timeoutReadHeader)
 	toReadRequest := opts.getInt("timeout_read_request", timeoutReadRequest)
@@ -276,11 +281,10 @@ func main() {
 		}
 	}
 
-	rawx.notifier.Start()
-
 	if err := srv.ListenAndServe(); err != nil {
 		LogWarning("HTTP Server exiting: %v", err)
 	}
 
-	rawx.notifier.Stop()
+	rawx.notifier.stop()
+	logger.close()
 }
