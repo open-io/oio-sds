@@ -65,7 +65,7 @@ func itoa64(i int64) string { return strconv.FormatInt(i, 10) }
 
 type PeriodicThrottle struct {
 	nanoLast int64
-	period int64
+	period   int64
 }
 
 func (pt *PeriodicThrottle) Ok() bool {

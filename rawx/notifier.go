@@ -49,8 +49,8 @@ type beanstalkdBackend struct {
 }
 
 var (
-	errExiting = errors.New("RAWX exiting")
-	errClogged = errors.New("Beanstalkd clogged")
+	errExiting      = errors.New("RAWX exiting")
+	errClogged      = errors.New("Beanstalkd clogged")
 	alertThrottling = PeriodicThrottle{period: 1000000000}
 )
 
