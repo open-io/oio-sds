@@ -23,14 +23,20 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
 type oioLogger interface {
+	close()
 	writeAccess(message string)
 	writeInfo(message string)
 	writeError(message string)
 }
+
+var accessLogGet = configAccessLogDefaultGet
+var accessLogPut = configAccessLogDefaultPut
+var accessLogDel = configAccessLogDefaultDelete
 
 // Activate the extreme verbosity on the RAWX. This is has to be set at the
 // startup of the service.
@@ -48,6 +54,24 @@ var strPid = strconv.Itoa(os.Getpid())
 
 // The singleton logger that will be used by all the coroutine
 var logger oioLogger
+
+type AccessLogEvent struct {
+	status    int
+	bytesIn   uint64
+	bytesOut  uint64
+	timeSpent uint64
+	method    string
+	local     string
+	peer      string
+	path      string
+	reqId     string
+}
+
+type NoopLogger struct{}
+
+type StderrLogger struct {
+	logger *log.Logger
+}
 
 func isVerbose() bool {
 	return logExtremeVerbosity && severityAllowed(syslog.LOG_DEBUG)
@@ -131,20 +155,7 @@ func LogDebug(format string, v ...interface{}) {
 	writeLogFmt(syslog.LOG_DEBUG, format, v...)
 }
 
-type AccessLogEvent struct {
-	status    int
-	bytesIn   uint64
-	bytesOut  uint64
-	timeSpent uint64
-	method    string
-	local     string
-	peer      string
-	path      string
-	reqId     string
-}
-
-func LogHttp(evt AccessLogEvent) {
-	//url, peer, method string, status int, spent, bytes uint64, containerID, id, path string) {
+func (evt AccessLogEvent) String() string {
 	sb := strings.Builder{}
 	sb.Grow(256)
 	// Preamble
@@ -168,10 +179,12 @@ func LogHttp(evt AccessLogEvent) {
 	sb.WriteString(evt.reqId)
 	sb.WriteRune(' ')
 	sb.WriteString(evt.path)
-	logger.writeAccess(sb.String())
+	return sb.String()
 }
 
-type NoopLogger struct{}
+func LogHttp(evt AccessLogEvent) {
+	logger.writeAccess(evt.String())
+}
 
 func InitNoopLogger() {
 	logger = &NoopLogger{}
@@ -180,31 +193,7 @@ func InitNoopLogger() {
 func (*NoopLogger) writeAccess(string) {}
 func (*NoopLogger) writeInfo(string)   {}
 func (*NoopLogger) writeError(string)  {}
-
-type SysLogger struct {
-	syslogID     string
-	loggerAccess *syslog.Writer
-	loggerInfo   *syslog.Writer
-	loggerError  *syslog.Writer
-}
-
-func InitSysLogger(syslogID string) {
-	initVerbosity(syslog.LOG_INFO)
-	var sysLogger SysLogger
-	sysLogger.syslogID = syslogID
-	sysLogger.loggerAccess, _ = syslog.New(syslog.LOG_LOCAL1|syslog.LOG_INFO, syslogID)
-	sysLogger.loggerInfo, _ = syslog.New(syslog.LOG_LOCAL0|syslog.LOG_INFO, syslogID)
-	sysLogger.loggerError, _ = syslog.New(syslog.LOG_LOCAL0|syslog.LOG_ERR, syslogID)
-	logger = &sysLogger
-}
-
-func (l *SysLogger) writeAccess(m string) { l.loggerAccess.Info(m) }
-func (l *SysLogger) writeInfo(m string)   { l.loggerInfo.Info(m) }
-func (l *SysLogger) writeError(m string)  { l.loggerError.Err(m) }
-
-type StderrLogger struct {
-	logger *log.Logger
-}
+func (*NoopLogger) close()             {}
 
 func InitStderrLogger() {
 	initVerbosity(syslog.LOG_DEBUG)
@@ -222,3 +211,55 @@ func (l *StderrLogger) writeAll(m string) {
 func (l *StderrLogger) writeAccess(m string) { l.writeAll(m) }
 func (l *StderrLogger) writeInfo(m string)   { l.writeAll(m) }
 func (l *StderrLogger) writeError(m string)  { l.writeAll(m) }
+func (l *StderrLogger) close()               {}
+
+type SysLogger struct {
+	queue         chan string
+	wg            sync.WaitGroup
+	running       bool
+	syslogID      string
+	alertThrottle PeriodicThrottle
+	loggerAccess  *syslog.Writer
+	loggerInfo    *syslog.Writer
+	loggerError   *syslog.Writer
+}
+
+func InitSysLogger(syslogID string) {
+	initVerbosity(syslog.LOG_INFO)
+	l := &SysLogger{}
+	l.alertThrottle = PeriodicThrottle{period: 1000000000}
+	l.queue = make(chan string, configAccessLogQueueDefaultLength)
+	l.running = true
+	l.syslogID = syslogID
+	l.loggerAccess, _ = syslog.New(syslog.LOG_LOCAL1|syslog.LOG_INFO, syslogID)
+	l.loggerInfo, _ = syslog.New(syslog.LOG_LOCAL0|syslog.LOG_INFO, syslogID)
+	l.loggerError, _ = syslog.New(syslog.LOG_LOCAL0|syslog.LOG_ERR, syslogID)
+	l.wg.Add(1)
+	go func() {
+		for evt := range l.queue {
+			l.loggerAccess.Info(evt)
+		}
+		l.wg.Done()
+	}()
+	logger = l
+}
+
+func (l *SysLogger) writeAccess(m string) {
+	select {
+	case l.queue <- m: // no-blocking call, everything is fine
+	default:
+		if l.alertThrottle.Ok() {
+			LogWarning("syslog clogged")
+		}
+		// FIXME(jfs): Uncomment this upon an absolute necessity
+		// l.queue <- m
+	}
+}
+
+func (l *SysLogger) writeInfo(m string)  { l.loggerInfo.Info(m) }
+func (l *SysLogger) writeError(m string) { l.loggerError.Err(m) }
+func (l *SysLogger) close() {
+	l.running = false
+	close(l.queue)
+	l.wg.Wait()
+}

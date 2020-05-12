@@ -30,7 +30,7 @@ type rawxService struct {
 	path         string
 	id           string
 	repo         chunkRepository
-	notifier     Notifier
+	notifier     *notifier
 	bufferSize   int
 	checksumMode int
 	compression  string
@@ -101,10 +101,6 @@ func (rr *rawxRequest) replyError(err error) {
 			}
 		}
 	}
-}
-
-func _dslash(s string) bool {
-	return len(s) > 1 && s[0] == '/' && s[1] == '/'
 }
 
 func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {

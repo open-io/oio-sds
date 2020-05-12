@@ -238,7 +238,7 @@ func (rr *rawxRequest) uploadChunk() {
 		rr.req.Close = false
 		rr.chunk.fillHeadersLight(rr.rep.Header())
 		rr.replyCode(http.StatusCreated)
-		NotifyNew(rr.rawx.notifier, rr.reqid, rr.chunk)
+		rr.rawx.notifier.notifyNew(rr.reqid, rr.chunk)
 	}
 }
 
@@ -485,7 +485,7 @@ func (rr *rawxRequest) removeChunk() {
 		rr.replyError(err)
 	} else {
 		rr.replyCode(http.StatusNoContent)
-		NotifyDel(rr.rawx.notifier, rr.reqid, rr.chunk)
+		rr.rawx.notifier.notifyDel(rr.reqid, rr.chunk)
 	}
 }
 
@@ -538,17 +538,19 @@ func (rr *rawxRequest) serveChunk() {
 		spent = IncrementStatReqOther(rr)
 	}
 
-	LogHttp(AccessLogEvent{
-		status:    rr.status,
-		timeSpent: spent,
-		bytesIn:   rr.bytesIn,
-		bytesOut:  rr.bytesOut,
-		method:    rr.req.Method,
-		local:     rr.rawx.url,
-		peer:      rr.req.RemoteAddr,
-		path:      rr.req.URL.Path,
-		reqId:     rr.reqid,
-	})
+	if shouldAccessLog(rr.status, rr.req.Method) {
+		LogHttp(AccessLogEvent{
+			status:    rr.status,
+			timeSpent: spent,
+			bytesIn:   rr.bytesIn,
+			bytesOut:  rr.bytesOut,
+			method:    rr.req.Method,
+			local:     rr.rawx.url,
+			peer:      rr.req.RemoteAddr,
+			path:      rr.req.URL.Path,
+			reqId:     rr.reqid,
+		})
+	}
 }
 
 func packRangeHeader(start, last, size int64) string {
@@ -575,4 +577,25 @@ func msgErrorAction(action, reqid string, err error) string {
 	sb.WriteString(reqid)
 	sb.WriteRune(')')
 	return sb.String()
+}
+
+func statusOk(status int) bool {
+	return status >= 200 && status < 300
+}
+
+func shouldAccessLog(status int, method string) bool {
+	if !statusOk(status) || isVerbose() {
+		return true
+	}
+
+	switch method {
+	case "GET", "HEAD":
+		return accessLogGet
+	case "PUT":
+		return accessLogPut
+	case "DELETE":
+		return accessLogDel
+	default:
+		return true
+	}
 }

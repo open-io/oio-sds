@@ -126,6 +126,20 @@ const (
 )
 
 const (
+	// Default length of the Go channel in front of the access log goroutine.
+	configAccessLogQueueDefaultLength = 4096
+
+	// Should successful GET requests be logged by default
+	configAccessLogDefaultGet = true
+
+	// Should successful PUT requests be logged by default
+	configAccessLogDefaultPut = true
+
+	// Should successful DELETE requests be logged by default
+	configAccessLogDefaultDelete = true
+)
+
+const (
 	// Default size (in bytes) of each buffer allocated for xattr operations
 	xattrBufferSizeDefault = 2 * 1024
 
@@ -191,4 +205,21 @@ const (
 
 const (
 	ECMethodPrefix = "ec/"
+)
+
+const (
+	eventTypeNewChunk = "storage.chunk.new"
+
+	eventTypeDelChunk = "storage.chunk.deleted"
+
+	// Parallelism factor in situations of single targets
+	notifierSingleMultiplier = 4
+
+	// Parallelism factor in situations of multiple targets
+	notifierMultipleMultiplier = 1
+
+	// Number of slots in the channel feeding the notifier backends
+	notifierDefaultPipeSize = 32768
+
+	beanstalkNotifierDefaultTube = "oio"
 )
