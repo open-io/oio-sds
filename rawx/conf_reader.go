@@ -80,8 +80,8 @@ var loadedOpts = map[string]string{
 
 	"events": "events",
 
-	"log_access_get": "log_access_get",
-	"log_access_put": "log_access_put",
+	"log_access_get":    "log_access_get",
+	"log_access_put":    "log_access_put",
 	"log_access_delete": "log_access_delete",
 	// TODO(jfs): also implement a cachedir
 }
