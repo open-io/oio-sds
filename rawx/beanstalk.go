@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"strconv"
 	"time"
 )
 
@@ -61,50 +60,46 @@ var errorTable = map[string]error{
 	"UNKNOWN_COMMAND\r\n": errUnknownCommand,
 }
 
-type Beanstalkd struct {
-	conn      net.Conn
+type beanstalkClient struct {
+	cnx       net.Conn
 	addr      string
 	bufReader *bufio.Reader
 }
 
-func itoa(i int) string     { return strconv.Itoa(i) }
-func utoa(i uint64) string  { return strconv.FormatUint(i, 10) }
-func itoa64(i int64) string { return strconv.FormatInt(i, 10) }
-
-func DialBeanstalkd(addr string) (*Beanstalkd, error) {
+func DialBeanstalkd(addr string) (*beanstalkClient, error) {
 	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
 	if err != nil {
 		return nil, err
 	}
 
-	beanstalkd := new(Beanstalkd)
-	beanstalkd.conn = conn
-	beanstalkd.addr = addr
-	beanstalkd.bufReader = bufio.NewReader(conn)
-	return beanstalkd, nil
+	bc := new(beanstalkClient)
+	bc.cnx = conn
+	bc.addr = addr
+	bc.bufReader = bufio.NewReader(conn)
+	return bc, nil
 }
 
-func (beanstalkd *Beanstalkd) Close() {
-	_, _ = beanstalkd.sendAll([]byte("quit \r\n"))
-	if beanstalkd.conn != nil {
-		err := beanstalkd.conn.Close()
+func (bc *beanstalkClient) Close() {
+	_, _ = bc.sendAll([]byte("quit \r\n"))
+	if bc.cnx != nil {
+		err := bc.cnx.Close()
 		if err != nil {
-			LogWarning("Failed to close the cnx to beanstalkd: %s", err.Error())
+			LogWarning("Failed to close the cnx to beanstalkClient: %s", err.Error())
 		}
 	}
 }
 
-func (beanstalkd *Beanstalkd) Use(tubename string) error {
+func (bc *beanstalkClient) Use(tubename string) error {
 	cmd := bytes.Buffer{}
 	cmd.Grow(256)
 	cmd.WriteString("use ")
 	cmd.WriteString(tubename)
 	cmd.WriteString("\r\n")
 	expected := fmt.Sprintf("USING %s\r\n", tubename)
-	return beanstalkd.sendCommandAndCheck(cmd.Bytes(), expected)
+	return bc.sendCommandAndCheck(cmd.Bytes(), expected)
 }
 
-func (beanstalkd *Beanstalkd) Put(data []byte) (uint64, error) {
+func (bc *beanstalkClient) Put(data []byte) (uint64, error) {
 	cmd := bytes.Buffer{}
 	cmd.Grow(len(data) + 64)
 	cmd.WriteString("put ")
@@ -116,7 +111,7 @@ func (beanstalkd *Beanstalkd) Put(data []byte) (uint64, error) {
 	cmd.WriteString("\r\n")
 	cmd.Write(data)
 	cmd.WriteString("\r\n")
-	resp, err := beanstalkd.sendCommand(cmd.Bytes())
+	resp, err := bc.sendCommand(cmd.Bytes())
 	if err != nil {
 		return 0, err
 	}
@@ -138,8 +133,8 @@ func (beanstalkd *Beanstalkd) Put(data []byte) (uint64, error) {
 	}
 }
 
-func (beanstalkd *Beanstalkd) sendCommandAndCheck(command []byte, expected string) error {
-	resp, err := beanstalkd.sendCommand(command)
+func (bc *beanstalkClient) sendCommandAndCheck(command []byte, expected string) error {
+	resp, err := bc.sendCommand(command)
 	if err != nil {
 		return err
 	}
@@ -150,22 +145,22 @@ func (beanstalkd *Beanstalkd) sendCommandAndCheck(command []byte, expected strin
 	return nil
 }
 
-func (beanstalkd *Beanstalkd) sendCommand(command []byte) (string, error) {
-	_, err := beanstalkd.sendAll(command)
+func (bc *beanstalkClient) sendCommand(command []byte) (string, error) {
+	_, err := bc.sendAll(command)
 	if err != nil {
 		return "", err
 	}
 
-	resp, err := beanstalkd.bufReader.ReadString('\n')
+	resp, err := bc.bufReader.ReadString('\n')
 	if err != nil {
 		return "", err
 	}
 	return resp, nil
 }
 
-func (beanstalkd *Beanstalkd) sendAll(data []byte) (int, error) {
-	if beanstalkd.conn == nil {
-		return 0, errors.New("No connection to beanstalkd")
+func (bc *beanstalkClient) sendAll(data []byte) (int, error) {
+	if bc.cnx == nil {
+		return 0, errors.New("No connection to beanstalkClient")
 	}
 
 	lengthData := len(data)
@@ -174,7 +169,7 @@ func (beanstalkd *Beanstalkd) sendAll(data []byte) (int, error) {
 	var n int
 	var err error
 	for totalWritten < lengthData {
-		n, err = beanstalkd.conn.Write(toWrite)
+		n, err = bc.cnx.Write(toWrite)
 		if err != nil {
 			if nerr, ok := err.(net.Error); !ok || !nerr.Temporary() {
 				return totalWritten, err

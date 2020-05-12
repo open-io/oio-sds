@@ -26,117 +26,152 @@ import (
 	"time"
 )
 
-type Notifier interface {
-	Start()
-	Stop()
-	asyncNotify(eventType, requestID string, chunk chunkInfo)
-}
-
-const (
-	eventTypeNewChunk = "storage.chunk.new"
-	eventTypeDelChunk = "storage.chunk.deleted"
-)
-
-const (
-	beanstalkNotifierDefaultTube = "oio"
-	beanstalkNotifierPipeSize    = 8192
-)
-
 // Tells if the current RAWX service may emit notifications
 var notifAllowed = configDefaultEvents
 
-type beanstalkNotifier struct {
-	rawx       *rawxService
-	run        bool
-	wg         sync.WaitGroup
-	queue      chan []byte
-	endpoint   string
-	tube       string
-	beanstalkd *Beanstalkd
+type notifier struct {
+	queue   chan []byte
+	wg      sync.WaitGroup
+	running bool
+	url     string
+	srvid   string
 }
 
-func makeBeanstalkNotifier(endpoint string,
-	rawx *rawxService) (*beanstalkNotifier, error) {
-	// TODO(adu) Use connection pool
-	notifier := new(beanstalkNotifier)
-	notifier.rawx = rawx
-	notifier.run = false
-	notifier.queue = make(chan []byte, beanstalkNotifierPipeSize)
-	notifier.endpoint = endpoint
-	notifier.tube = beanstalkNotifierDefaultTube
-	// TODO(adu) Check endpoint
-	notifier.beanstalkd = nil
-	return notifier, nil
+type notifierBackend interface {
+	push([]byte)
+	close()
 }
 
-func (notifier *beanstalkNotifier) Start() {
-	notifier.wg.Add(1)
-	notifier.run = true
-	go func() {
-		defer notifier.wg.Done()
-		for eventJSON := range notifier.queue {
-			notifier.syncNotify(eventJSON)
+type beanstalkdBackend struct {
+	b        *beanstalkClient
+	endpoint string
+	tube     string
+}
+
+var (
+	errExiting = errors.New("RAWX exiting")
+	errClogged = errors.New("Beanstalkd clogged")
+	alertThrottling = PeriodicThrottle{period: 1000000000}
+)
+
+func deadLetter(event []byte, err error) {
+	if err != nil && alertThrottling.Ok() {
+		LogError("Beanstalkd connection error: %v", err)
+	}
+	LogWarning("event %s", string(event))
+}
+
+func (backend *beanstalkdBackend) push(event []byte) {
+	var err error
+	cnxDeadline := time.Now().Add(1 * time.Second)
+
+	// Lazy reconnection
+	for backend.b == nil {
+		backend.b, err = DialBeanstalkd(backend.endpoint)
+		if err != nil {
+			if time.Now().After(cnxDeadline) {
+				deadLetter(event, err)
+				return
+			} else {
+				time.Sleep(time.Second)
+			}
+		} else {
+			err = backend.b.Use(beanstalkNotifierDefaultTube)
+			if err != nil {
+				backend.close()
+			}
 		}
-	}()
-}
-
-func (notifier *beanstalkNotifier) Stop() {
-	notifier.run = false
-	close(notifier.queue)
-	notifier.wg.Wait()
-	notifier.closeBeanstalkd()
-}
-
-func (notifier *beanstalkNotifier) connectBeanstalkd() error {
-	if notifier.beanstalkd != nil {
-		return nil
 	}
-	beanstalkd, err := DialBeanstalkd(notifier.endpoint)
+
+	_, err = backend.b.Put(event)
 	if err != nil {
-		return err
-	}
-	err = beanstalkd.Use(notifier.tube)
-	if err != nil {
-		return err
-	}
-	LogDebug("Connected to %s using tube %s", notifier.endpoint, notifier.tube)
-	notifier.beanstalkd = beanstalkd
-	return nil
-}
-
-func (notifier *beanstalkNotifier) closeBeanstalkd() {
-	if notifier.beanstalkd != nil {
-		notifier.beanstalkd.Close()
-		notifier.beanstalkd = nil
+		backend.close()
+		deadLetter(event, err)
 	}
 }
 
-func (notifier *beanstalkNotifier) syncNotify(eventJSON []byte) {
-	err := notifier.connectBeanstalkd()
-	if err != nil {
-		LogWarning("ERROR to connect to %s using tube %s: %s",
-			notifier.endpoint, notifier.tube, err)
-		return
-	}
-	_, err = notifier.beanstalkd.Put(eventJSON)
-	if err != nil {
-		LogWarning("ERROR to notify to %s using tube %s: %s",
-			notifier.endpoint, notifier.tube, err)
-		notifier.closeBeanstalkd()
-		return
+func (backend *beanstalkdBackend) close() {
+	if backend.b != nil {
+		backend.b.Close()
+		backend.b = nil
 	}
 }
 
-func (notifier *beanstalkNotifier) asyncNotify(eventType, requestID string,
-	chunk chunkInfo) {
-	if !notifier.run {
-		LogWarning("Can't send a event to %s using tube %s: closed",
-			notifier.endpoint, notifier.tube)
-		return
+func makeSingleBackend(config string) (notifierBackend, error) {
+	if endpoint, ok := hasPrefix(config, "beanstalk://"); ok {
+		return &beanstalkdBackend{
+			endpoint: endpoint,
+			tube:     beanstalkNotifierDefaultTube,
+		}, nil
+	}
+	// TODO(adu): make a ZMQ Notifier
+	// TODO(jfs): make a GRPC Notifier
+	// TODO(jfs): make an HTTP Notifier
+	return nil, errors.New("Unexpected notification endpoint, only `beanstalk://...` is accepted")
+}
+
+func MakeNotifier(config string, rawx *rawxService) (*notifier, error) {
+	var n notifier
+	n.queue = make(chan []byte, notifierDefaultPipeSize)
+	n.running = true
+	n.url = rawx.url
+	n.srvid = rawx.id
+
+	workers := make([]notifierBackend, 0)
+	if strings.Contains(config, ";") {
+		for i := 0; i < notifierSingleMultiplier; i++ {
+			backend, err := makeSingleBackend(config)
+			if err != nil {
+				return nil, err
+			}
+			workers = append(workers, backend)
+		}
+	} else {
+		for _, conf := range strings.Split(config, ";") {
+			for i := 0; i < notifierMultipleMultiplier; i++ {
+				backend, err := makeSingleBackend(conf)
+				if err != nil {
+					return nil, err
+				} else {
+					workers = append(workers, backend)
+				}
+			}
+		}
 	}
 
+	n.wg.Add(len(workers))
+	for _, w := range workers {
+		go func(input <-chan []byte) {
+			defer n.wg.Done()
+			for event := range input {
+				if n.running {
+					w.push(event)
+				} else {
+					deadLetter(event, errExiting)
+				}
+			}
+			w.close()
+		}(n.queue)
+	}
+
+	return &n, nil
+}
+
+func (n notifier) notifyNew(requestID string, chunk chunkInfo) {
+	if notifAllowed {
+		n.asyncNotify(eventTypeNewChunk, requestID, chunk)
+	}
+}
+
+func (n notifier) notifyDel(requestID string, chunk chunkInfo) {
+	if notifAllowed {
+		n.asyncNotify(eventTypeDelChunk, requestID, chunk)
+	}
+}
+
+func (n notifier) asyncNotify(eventType, requestID string, chunk chunkInfo) {
 	sb := bytes.Buffer{}
-	sb.Grow(4096)
+	sb.Grow(2048)
 	addQuoted := func(n string) {
 		sb.WriteRune('"')
 		sb.WriteString(n)
@@ -175,8 +210,8 @@ func (notifier *beanstalkNotifier) asyncNotify(eventType, requestID string,
 	addFieldRaw("when", strconv.FormatInt(time.Now().UnixNano()/1000, 10))
 	add("request_id", requestID)
 	addFieldRaw("data", "{")
-	addFieldStr("volume_id", notifier.rawx.url)
-	add("volume_service_id", notifier.rawx.id)
+	addFieldStr("volume_id", n.url)
+	add("volume_service_id", n.srvid)
 	addEscaped("full_path", chunk.ContentFullpath)
 	addEscaped("content_path", chunk.ContentPath)
 	add("container_id", chunk.ContainerID)
@@ -193,83 +228,20 @@ func (notifier *beanstalkNotifier) asyncNotify(eventType, requestID string,
 	add("oio_version", chunk.OioVersion)
 	sb.WriteString("}}")
 
-	notifier.queue <- sb.Bytes()
-}
-
-type multiNotifier struct {
-	notifiers []Notifier
-	index     int
-}
-
-func makeMultiNotifier(config string, rawx *rawxService) (*multiNotifier, error) {
-	notifier := new(multiNotifier)
-	confs := strings.Split(config, ";")
-	for _, conf := range confs {
-		notif, err := makeSingleNotifier(conf, rawx)
-		if err != nil {
-			return nil, err
+	event := sb.Bytes()
+	if !n.running {
+		deadLetter(event, errExiting)
+	} else {
+		select {
+		case n.queue <- event:
+		default:
+			deadLetter(event, errClogged)
 		}
-		notifier.notifiers = append(notifier.notifiers, notif)
-	}
-	return notifier, nil
-}
-
-func (notifier *multiNotifier) Start() {
-	for _, notif := range notifier.notifiers {
-		notif.Start()
 	}
 }
 
-func (notifier *multiNotifier) Stop() {
-	for _, notif := range notifier.notifiers {
-		notif.Stop()
-	}
-}
-
-func (notifier *multiNotifier) asyncNotify(eventType, requestID string,
-	chunk chunkInfo) {
-	notif := notifier.notifiers[notifier.index]
-	// Round-robin
-	notifier.index = (notifier.index + 1) % len(notifier.notifiers)
-	notif.asyncNotify(eventType, requestID, chunk)
-}
-
-func hasPrefix(s, prefix string) (string, bool) {
-	if strings.HasPrefix(s, prefix) {
-		return s[len(prefix):], true
-	}
-	return "", false
-}
-
-func makeSingleNotifier(config string, rawx *rawxService) (Notifier, error) {
-	if endpoint, ok := hasPrefix(config, "beanstalk://"); ok {
-		return makeBeanstalkNotifier(endpoint, rawx)
-	}
-	// TODO(adu): make a ZMQ Notifier
-	// TODO(jfs): make a GRPC Notifier
-	// TODO(jfs): make an HTTP Notifier
-	return nil, errors.New("Unexpected notification endpoint, only `beanstalk://...` is accepted")
-}
-
-func MakeNotifier(config string, rawx *rawxService) (Notifier, error) {
-	if strings.Contains(config, ";") {
-		return makeMultiNotifier(config, rawx)
-	}
-	fake := make([]string, 0)
-	for i := 0; i < 4; i++ {
-		fake = append(fake, config)
-	}
-	return makeMultiNotifier(strings.Join(fake, ";"), rawx)
-}
-
-func NotifyNew(notifier Notifier, requestID string, chunk chunkInfo) {
-	if notifAllowed {
-		notifier.asyncNotify(eventTypeNewChunk, requestID, chunk)
-	}
-}
-
-func NotifyDel(notifier Notifier, requestID string, chunk chunkInfo) {
-	if notifAllowed {
-		notifier.asyncNotify(eventTypeDelChunk, requestID, chunk)
-	}
+func (n *notifier) stop() {
+	n.running = false
+	close(n.queue)
+	n.wg.Wait()
 }
