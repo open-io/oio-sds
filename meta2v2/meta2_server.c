@@ -29,7 +29,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <resolver/hc_resolver.h>
 #include <sqliterepo/sqliterepo.h>
 #include <sqliterepo/replication_dispatcher.h>
-#include <sqliterepo/upgrade.h>
 #include <meta2v2/meta2_variables.h>
 #include <meta2v2/meta2_gridd_dispatcher.h>
 #include <meta2v2/meta2_backend.h>
