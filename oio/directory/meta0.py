@@ -35,8 +35,8 @@ def _loc(svc):
         raise ConfigurationException("No location on {0}".format(svc))
     tokens = loc.split('.')
     if len(tokens) > 4:
-        raise ConfigurationException("Malformed location for {1}"
-                                     .format(loc, svc))
+        raise ConfigurationException("Malformed location for {0}"
+                                     .format(svc))
     return tokens
 
 

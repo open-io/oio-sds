@@ -133,8 +133,8 @@ class TestMeta2Containers(BaseTestCase):
         self.assertEqual(resp.status, 200)
         data = self.json_loads(resp.data)
 
-        for l in data["listing"]:
-            self.assertNotIn(l[0], containers)
+        for descr in data["listing"]:
+            self.assertNotIn(descr[0], containers)
 
     def test_create_many(self):
         params = {'acct': self.account}
