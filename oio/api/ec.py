@@ -605,7 +605,7 @@ class EcChunkWriter(object):
             if perfdata is not None:
                 connect_end = monotonic_time()
                 perfdata_rawx = perfdata.setdefault('rawx', dict())
-                perfdata_rawx['connect(' + chunk['url'] + ')'] = \
+                perfdata_rawx['connect.' + chunk['url']] = \
                     connect_end - connect_start
             conn.chunk = chunk
         return cls(chunk, conn, write_timeout=write_timeout,
@@ -721,7 +721,7 @@ class EcChunkWriter(object):
                 perfdata_rawx = self.perfdata.setdefault('rawx', dict())
                 chunk_url = self.conn.chunk['url']
                 upload_end = monotonic_time()
-                perfdata_rawx['upload(' + chunk_url + ')'] = \
+                perfdata_rawx['upload.' + chunk_url] = \
                     upload_end - self.conn.upload_start
 
 
