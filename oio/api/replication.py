@@ -192,7 +192,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                 if self.perfdata is not None:
                     connect_end = monotonic_time()
                     perfdata_rawx = self.perfdata.setdefault('rawx', dict())
-                    perfdata_rawx['connect(' + chunk['url'] + ')'] = \
+                    perfdata_rawx['connect.' + chunk['url']] = \
                         connect_end - connect_start
                 conn.chunk = chunk
             return conn, chunk
@@ -244,7 +244,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                     upload_end = monotonic_time()
                     perfdata_rawx = self.perfdata.setdefault('rawx', dict())
                     chunk_url = conn.chunk['url']
-                    perfdata_rawx['upload(' + chunk_url + ')'] = \
+                    perfdata_rawx['upload.' + chunk_url] = \
                         upload_end - conn.upload_start
         except Timeout as err:
             resp = err
