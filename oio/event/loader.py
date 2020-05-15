@@ -272,7 +272,7 @@ class EggLoader(_Loader):
                 % (name, self.spec))
         if len(entries) > 1:
             raise LookupError(
-                "Ambiguous entry for %r in egg"
+                "Ambiguous entry for %r in egg %r"
                 % (name, self.spec))
         return entries[0]
 

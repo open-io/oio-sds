@@ -90,13 +90,33 @@ func dumpBuffer(dst io.Writer, buf []byte) (written int, err error) {
 	return written, err
 }
 
-func copyReadWriteBuffer(dst io.Writer, src io.Reader, pool bufferPool) (written int64, err error) {
+type UploadFinal func(int64) error
+
+func copyReadWriteBuffer(dst io.Writer, src io.Reader, h hash.Hash, pool bufferPool, cb UploadFinal) error {
+	var written int64
+	var err error
+
 	buf := pool.Acquire()
 	defer pool.Release(buf)
 
 	for {
 		// Fill the buffer
 		totalr, er := fillBuffer(src, buf)
+
+		if totalr > 0 {
+			h.Write(buf[:totalr])
+		}
+
+		// We need to interleave the final operation before the last block,
+		// It will save expensive head movements on HDD if xattr are before
+		// the data when we GET
+		if er == io.EOF {
+			err = cb(written + int64(totalr))
+			if err != nil {
+				LogWarning("Upload Final Hook: %v", err)
+				return err
+			}
+		}
 
 		// Dump the buffer
 		if totalr > 0 {
@@ -107,8 +127,7 @@ func copyReadWriteBuffer(dst io.Writer, src io.Reader, pool bufferPool) (written
 			if erw != nil {
 				// Only override the mais error if no strong condition occured
 				if er == nil || er == io.EOF {
-					err = erw
-					break
+					return erw
 				}
 			}
 		}
@@ -117,45 +136,22 @@ func copyReadWriteBuffer(dst io.Writer, src io.Reader, pool bufferPool) (written
 		// If err is already set, this is due to a strong condition when writing
 		if er != nil {
 			if er != io.EOF {
-				err = er
+				return er
+			} else {
+				return nil
 			}
-			break
 		}
 	}
-	return written, err
 }
 
 func (rr *rawxRequest) checksumRequired() bool {
 	return rr.rawx.checksumMode == checksumAlways || (rr.rawx.checksumMode == checksumSmart && !strings.HasPrefix(rr.chunk.ContentStgPol, "ec/"))
 }
 
-func (rr *rawxRequest) putData(out io.Writer) (uploadInfo, error) {
-	var in io.Reader = rr.req.Body
-	var h hash.Hash
-
-	// Trigger the checksum only if configured so
-	if rr.checksumRequired() {
-		h = md5.New()
-		in = io.TeeReader(rr.req.Body, h)
-	}
-
-	ul := uploadInfo{}
-	chunkLength, err := copyReadWriteBuffer(out, in, rr.rawx.uploadBufferPool)
-	if err != nil {
-		return ul, err
-	}
-
-	if h != nil {
-		ul.hash = strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
-	}
-	ul.length = chunkLength
-	rr.bytesIn = uint64(chunkLength)
-	return ul, nil
-}
-
 func (rr *rawxRequest) uploadChunk() {
 	var err error
 	var out fileWriter
+	var h hash.Hash
 
 	if rr.chunk, err = retrieveHeaders(&rr.req.Header, rr.chunkID); err != nil {
 		rr.replyError(err)
@@ -178,6 +174,11 @@ func (rr *rawxRequest) uploadChunk() {
 		out.Extend(rr.req.ContentLength)
 	}
 
+	// Trigger the checksum only if configured so
+	if rr.checksumRequired() {
+		h = md5.New()
+	}
+
 	var ul uploadInfo
 
 	// Maybe intercept the upload with a compression filter
@@ -194,28 +195,35 @@ func (rr *rawxRequest) uploadChunk() {
 	default:
 		err = errCompressionNotManaged
 	}
+	rr.chunk.compression = rr.rawx.compression
+
+	// Destined to be called before the last chunk is written;
+	final := func(written int64) error {
+		ul.length = written
+		if h != nil {
+			ul.hash = strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
+		}
+		// If a hash has been sent, it must match the hash computed
+		e := rr.chunk.patchWithTrailers(&rr.req.Trailer, ul)
+		// If everything went well, finish with the chunks XATTR management
+		if e != nil {
+			return e
+		} else {
+			return rr.chunk.saveAttr(out)
+		}
+	}
 
 	// Upload, and maybe manage compression
 	if z != nil {
-		ul, err = rr.putData(z)
+		err = copyReadWriteBuffer(z, rr.req.Body, h, rr.rawx.uploadBufferPool, final)
 		errClose := z.Close()
 		if err == nil {
 			err = errClose
 		}
 	} else if err == nil {
-		ul, err = rr.putData(out)
+		err = copyReadWriteBuffer(out, rr.req.Body, h, rr.rawx.uploadBufferPool, final)
 	}
-
-	// If a hash has been sent, it must match the hash computed
-	if err == nil {
-		rr.chunk.compression = rr.rawx.compression
-		err = rr.chunk.patchWithTrailers(&rr.req.Trailer, ul)
-	}
-
-	// If everything went well, finish with the chunks XATTR management
-	if err == nil {
-		err = rr.chunk.saveAttr(out)
-	}
+	rr.bytesIn = uint64(ul.length)
 
 	// Then reply
 	if err != nil {
@@ -230,7 +238,7 @@ func (rr *rawxRequest) uploadChunk() {
 		rr.req.Close = false
 		rr.chunk.fillHeadersLight(rr.rep.Header())
 		rr.replyCode(http.StatusCreated)
-		NotifyNew(rr.rawx.notifier, rr.reqid, rr.chunk)
+		rr.rawx.notifier.notifyNew(rr.reqid, rr.chunk)
 	}
 }
 
@@ -477,7 +485,7 @@ func (rr *rawxRequest) removeChunk() {
 		rr.replyError(err)
 	} else {
 		rr.replyCode(http.StatusNoContent)
-		NotifyDel(rr.rawx.notifier, rr.reqid, rr.chunk)
+		rr.rawx.notifier.notifyDel(rr.reqid, rr.chunk)
 	}
 }
 
@@ -530,17 +538,19 @@ func (rr *rawxRequest) serveChunk() {
 		spent = IncrementStatReqOther(rr)
 	}
 
-	LogHttp(AccessLogEvent{
-		status:    rr.status,
-		timeSpent: spent,
-		bytesIn:   rr.bytesIn,
-		bytesOut:  rr.bytesOut,
-		method:    rr.req.Method,
-		local:     rr.req.Host,
-		peer:      rr.req.RemoteAddr,
-		path:      rr.req.URL.Path,
-		reqId:     rr.reqid,
-	})
+	if shouldAccessLog(rr.status, rr.req.Method) {
+		LogHttp(AccessLogEvent{
+			status:    rr.status,
+			timeSpent: spent,
+			bytesIn:   rr.bytesIn,
+			bytesOut:  rr.bytesOut,
+			method:    rr.req.Method,
+			local:     rr.req.Host,
+			peer:      rr.req.RemoteAddr,
+			path:      rr.req.URL.Path,
+			reqId:     rr.reqid,
+		})
+	}
 }
 
 func packRangeHeader(start, last, size int64) string {
@@ -567,4 +577,25 @@ func msgErrorAction(action, reqid string, err error) string {
 	sb.WriteString(reqid)
 	sb.WriteRune(')')
 	return sb.String()
+}
+
+func statusOk(status int) bool {
+	return status >= 200 && status < 300
+}
+
+func shouldAccessLog(status int, method string) bool {
+	if !statusOk(status) || isVerbose() {
+		return true
+	}
+
+	switch method {
+	case "GET", "HEAD":
+		return accessLogGet
+	case "PUT":
+		return accessLogPut
+	case "DELETE":
+		return accessLogDel
+	default:
+		return true
+	}
 }

@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -57,21 +57,24 @@ class ProxyClient(HttpApi):
         self.conf = conf
         self.logger = logger or get_logger(conf)
 
+        # Look for an endpoint in the application configuration
         if not endpoint:
             endpoint = self.conf.get('proxyd_url', None)
+        # Look for an endpoint in the namespace configuration
+        if not endpoint:
+            ns_conf = load_namespace_conf(self.ns)
+            endpoint = ns_conf.get('proxy')
+
+        # Historically, the endpoint did not contain any scheme
+        self.proxy_scheme = 'http'
+        split_endpoint = endpoint.split('://', 1)
+        if len(split_endpoint) > 1:
+            self.proxy_scheme = split_endpoint[0]
+        self.proxy_netloc = split_endpoint[-1]
 
         ep_parts = list()
-        self.proxy_scheme = 'http'
-        if endpoint:
-            if endpoint.startswith('https://'):
-                self.proxy_scheme = 'https'
-            self.proxy_netloc = endpoint.lstrip('%s://' % self.proxy_scheme)
-        else:
-            ns_conf = load_namespace_conf(self.ns)
-            self.proxy_netloc = ns_conf.get('proxy')
-        ep_parts.append('%s:/' % self.proxy_scheme)
+        ep_parts.append(self.proxy_scheme + ':/')
         ep_parts.append(self.proxy_netloc)
-
         ep_parts.append("v3.0")
         if not no_ns_in_url:
             ep_parts.append(self.ns)
@@ -90,17 +93,13 @@ class ProxyClient(HttpApi):
         if request_attempts <= 0:
             raise OioException("Negative request attempts: %d"
                                % request_attempts)
-        org_kwargs = kwargs
         if kwargs.get("autocreate"):
             if not headers:
                 headers = dict()
             headers[HEADER_PREFIX + "action-mode"] = "autocreate"
-            kwargs = kwargs.copy()
             kwargs.pop("autocreate")
         if kwargs.get("tls"):
             headers = headers or dict()
-            if kwargs is org_kwargs:
-                kwargs = kwargs.copy()
             headers[HEADER_PREFIX + "upgrade-to-tls"] = kwargs.pop("tls")
 
         for i in range(request_attempts):

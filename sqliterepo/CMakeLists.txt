@@ -79,7 +79,6 @@ add_library(sqliterepo STATIC
 		replication_dispatcher.c
 		repository.c
 		restoration.c
-		upgrade.c
 		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_variables.c)
 
 target_link_libraries(sqliterepo metautils

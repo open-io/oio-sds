@@ -782,6 +782,9 @@ ns.meta1_digits=${M1_DIGITS}
 
 # Small pagination to avoid time-consuming tests
 meta2.flush_limit=64
+# Limit the maximum number of databases open simultaneously
+# to avoid using too much RAM
+sqliterepo.repo.hard_max=1024
 proxy.location=${LOC_PROXYD}
 
 admin=${IP}:${PORT_ADMIN}

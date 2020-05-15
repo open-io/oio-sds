@@ -82,6 +82,8 @@ func installSigHandlers(srv *http.Server) {
 }
 
 func main() {
+	var err error
+
 	_ = flag.String("D", "UNUSED", "Unused compatibility flag")
 	verbosePtr := flag.Bool("v", false, "Verbose mode, this activates stderr traces")
 	syslogIDPtr := flag.String("s", "", "Activates syslog traces with the given identifier")
@@ -123,6 +125,10 @@ func main() {
 	rawxID := opts["id"]
 	notifAllowed = opts.getBool("events", configDefaultEvents)
 
+	accessLogPut = opts.getBool("log_access_put", configAccessLogDefaultPut)
+	accessLogGet = opts.getBool("log_access_get", configAccessLogDefaultGet)
+	accessLogDel = opts.getBool("log_access_del", configAccessLogDefaultDelete)
+
 	checkNS(namespace)
 	checkURL(rawxURL)
 
@@ -141,6 +147,7 @@ func main() {
 	chunkrepo.sub.syncFile = opts.getBool("fsync_file", chunkrepo.sub.syncFile)
 	chunkrepo.sub.syncDir = opts.getBool("fsync_dir", chunkrepo.sub.syncDir)
 	chunkrepo.sub.fallocateFile = opts.getBool("fallocate", chunkrepo.sub.fallocateFile)
+	chunkrepo.sub.openNonBlock = opts.getBool("nonblock", configDefaultOpenNonblock)
 
 	rawx := rawxService{
 		ns:           namespace,
@@ -206,11 +213,10 @@ func main() {
 		LogFatal("Notifier error: no address")
 	}
 
-	notifier, err := MakeNotifier(eventAgent, &rawx)
+	rawx.notifier, err = MakeNotifier(eventAgent, &rawx)
 	if err != nil {
 		LogFatal("Notifier error: %v", err)
 	}
-	rawx.notifier = notifier
 
 	toReadHeader := opts.getInt("timeout_read_header", timeoutReadHeader)
 	toReadRequest := opts.getInt("timeout_read_request", timeoutReadRequest)
@@ -242,6 +248,36 @@ func main() {
 		MaxHeaderBytes: opts.getInt("headers_buffer_size", 65536),
 	}
 
+	flagNoDelay := opts.getBool("nodelay", configDefaultNoDelay)
+	flagCork := opts.getBool("cork", configDefaultCork)
+	if flagNoDelay || flagCork {
+		srv.ConnState = func(cnx net.Conn, st http.ConnState) {
+			setOpt := func(dom, flag, val int) {
+				if tcpCnx, ok := cnx.(*net.TCPConn); ok {
+					if rawCnx, err := tcpCnx.SyscallConn(); err == nil {
+						rawCnx.Control(func(fd uintptr) {
+							syscall.SetsockoptInt(int(fd), dom, flag, val)
+						})
+					}
+				}
+			}
+			switch st {
+			case http.StateNew:
+				if flagNoDelay {
+					setOpt(syscall.SOL_TCP, syscall.TCP_NODELAY, 1)
+				}
+			case http.StateActive:
+				if flagCork {
+					setOpt(syscall.SOL_TCP, syscall.TCP_CORK, 1)
+				}
+			case http.StateIdle:
+				if flagCork {
+					setOpt(syscall.SOL_TCP, syscall.TCP_CORK, 0)
+				}
+			}
+		}
+	}
+
 	keepalive := opts.getBool("keepalive", configDefaultHttpKeepalive)
 	srv.SetKeepAlivesEnabled(keepalive)
 	tlsSrv.SetKeepAlivesEnabled(keepalive)
@@ -268,11 +304,10 @@ func main() {
 		}
 	}
 
-	rawx.notifier.Start()
-
 	if err := Run(&srv, &tlsSrv, opts); err != nil {
 		LogWarning("HTTP Server exiting: %v", err)
 	}
 
-	rawx.notifier.Stop()
+	rawx.notifier.stop()
+	logger.close()
 }

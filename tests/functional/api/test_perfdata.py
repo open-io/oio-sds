@@ -51,7 +51,14 @@ class TestObjectStorageApiPerfdata(BaseTestCase):
         if meta['policy'] == 'EC':
             self.assertIn('ec', perfdata['rawx'])
         for chunk in chunks:
-            self.assertIn(chunk['url'], perfdata['rawx'])
+            self.assertIn('connect.' + chunk['url'], perfdata['rawx'])
+            self.assertIn('upload.' + chunk['url'], perfdata['rawx'])
+        self.assertIn('connect.AVG', perfdata['rawx'])
+        self.assertIn('connect.SD', perfdata['rawx'])
+        self.assertIn('connect.RSD', perfdata['rawx'])
+        self.assertIn('upload.AVG', perfdata['rawx'])
+        self.assertIn('upload.SD', perfdata['rawx'])
+        self.assertIn('upload.RSD', perfdata['rawx'])
         self.assertIn('overall', perfdata['rawx'])
 
         perfdata.clear()

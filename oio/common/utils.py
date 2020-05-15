@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -21,6 +21,7 @@ import pwd
 import fcntl
 from collections import OrderedDict
 from hashlib import sha256
+from math import sqrt
 from random import getrandbits
 from io import RawIOBase
 from itertools import chain, islice
@@ -490,3 +491,23 @@ def lower_dict_keys(mydict):
         old_keys.append(k)
     for k in old_keys:
         del mydict[k]
+
+
+def compute_perfdata_stats(perfdata, prefix='upload'):
+    """
+    Compute extra statistics from a dictionary of performance data.
+    """
+    rawx_perfdata = perfdata.get('rawx')
+    if not rawx_perfdata:
+        return
+    tot = stot = count = 0
+    for k, v in rawx_perfdata.items():
+        if k.startswith(prefix):
+            tot += v
+            stot += v ** 2
+            count += 1
+    avg = tot/count
+    sdev = sqrt(stot/count - avg**2)
+    rawx_perfdata[prefix + '.AVG'] = avg
+    rawx_perfdata[prefix + '.SD'] = sdev
+    rawx_perfdata[prefix + '.RSD'] = sdev/avg

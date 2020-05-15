@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -37,8 +37,8 @@ def _loc(svc):
         raise ConfigurationException("No location on {0}".format(svc))
     tokens = loc.split('.')
     if len(tokens) > 4:
-        raise ConfigurationException("Malformed location '{0}' for {1}"
-                                     .format(loc, svc))
+        raise ConfigurationException("Malformed location for {0}"
+                                     .format(svc))
     return tokens
 
 

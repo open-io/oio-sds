@@ -108,6 +108,35 @@ const (
 
 	// Are events allowed
 	configDefaultEvents = true
+
+	// By default, should the Nagle algorithm be suspended when a connection
+	// is established. Only works for HTTP/1.* when a raw TCP connection is
+	// used.
+	configDefaultNoDelay = false
+
+	// By default, should the TCP_CORK be set (resp. removed) when a connection
+	// becomes active (resp. inactive). Only works for HTTP/1.* when a raw TCP
+	// connection is used.
+	configDefaultCork = false
+
+	// By default, should the O_NONBLOCK flag be set when opening a file?
+	// It turns out that the impact on Go is not weak. The presence of the
+	// flag induces many syscalls.
+	configDefaultOpenNonblock = false
+)
+
+const (
+	// Default length of the Go channel in front of the access log goroutine.
+	configAccessLogQueueDefaultLength = 4096
+
+	// Should successful GET requests be logged by default
+	configAccessLogDefaultGet = true
+
+	// Should successful PUT requests be logged by default
+	configAccessLogDefaultPut = true
+
+	// Should successful DELETE requests be logged by default
+	configAccessLogDefaultDelete = true
 )
 
 const (
@@ -176,4 +205,21 @@ const (
 
 const (
 	ECMethodPrefix = "ec/"
+)
+
+const (
+	eventTypeNewChunk = "storage.chunk.new"
+
+	eventTypeDelChunk = "storage.chunk.deleted"
+
+	// Parallelism factor in situations of single targets
+	notifierSingleMultiplier = 4
+
+	// Parallelism factor in situations of multiple targets
+	notifierMultipleMultiplier = 1
+
+	// Number of slots in the channel feeding the notifier backends
+	notifierDefaultPipeSize = 32768
+
+	beanstalkNotifierDefaultTube = "oio"
 )

@@ -16,6 +16,13 @@
 
 package main
 
+import (
+	"strconv"
+	"strings"
+	"sync/atomic"
+	"time"
+)
+
 // An array of character considered as invalid hexadecimal.
 // YOU SHOULD NOT alter this this unless you know what you are doing
 var notHexa [256]bool
@@ -42,4 +49,30 @@ func isHexaString(name string, length int) bool {
 		}
 	}
 	return length <= 0 || i+1 == length
+}
+
+func hasPrefix(s, prefix string) (string, bool) {
+	if strings.HasPrefix(s, prefix) {
+		return s[len(prefix):], true
+	}
+	return "", false
+}
+
+func _dslash(s string) bool { return len(s) > 1 && s[0] == '/' && s[1] == '/' }
+func itoa(i int) string     { return strconv.Itoa(i) }
+func utoa(i uint64) string  { return strconv.FormatUint(i, 10) }
+func itoa64(i int64) string { return strconv.FormatInt(i, 10) }
+
+type PeriodicThrottle struct {
+	nanoLast int64
+	period   int64
+}
+
+func (pt *PeriodicThrottle) Ok() bool {
+	nanoNow := time.Now().UnixNano()
+	nanoThen := pt.nanoLast
+	if nanoThen == 0 || nanoNow-nanoThen > pt.period {
+		return atomic.CompareAndSwapInt64(&pt.nanoLast, nanoThen, nanoNow)
+	}
+	return false
 }
