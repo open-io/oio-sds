@@ -1120,34 +1120,11 @@ class ObjectStorageApi(object):
             + req_end - download_start
         perfdata['data_size'] = size
 
-    @handle_object_not_found
-    @patch_kwargs
-    @ensure_headers
-    @ensure_request_id
-    def object_fetch(self, account, container, obj, version=None, ranges=None,
-                     key_file=None, **kwargs):
+    def _object_fetch_impl(self, account, container, obj,
+                           version=None, ranges=None, key_file=None,
+                           **kwargs):
         """
-        Download an object.
-
-        :param account: name of the account in which the object is stored
-        :param container: name of the container in which the object is stored
-        :param obj: name of the object to fetch
-        :param version: version of the object to fetch
-        :type version: `str`
-        :param ranges: a list of object ranges to download
-        :type ranges: `list` of `tuple`
-        :param key_file: path to the file containing credentials
-
-        :keyword properties: should the request return object properties
-            along with content description (True by default)
-        :type properties: `bool`
-        :keyword perfdata: optional `dict` that will be filled with metrics
-            of time spent to resolve the meta2 address, to do the meta2
-            request, and the time-to-first-byte, as seen by this API.
-
-        :returns: a dictionary of object metadata and
-            a stream of object data
-        :rtype: tuple
+        Actual implementation of object fetch logic.
         """
         perfdata = kwargs.get('perfdata', None)
         if perfdata is not None:
@@ -1194,6 +1171,71 @@ class ObjectStorageApi(object):
                 account, container, obj, version, stream, **kwargs)
 
         return meta, stream
+
+    @handle_object_not_found
+    @patch_kwargs
+    @ensure_headers
+    @ensure_request_id
+    def object_fetch(self, account, container, obj, version=None, ranges=None,
+                     key_file=None, **kwargs):
+        """
+        Download an object.
+
+        :param account: name of the account in which the object is stored
+        :param container: name of the container in which the object is stored
+        :param obj: name of the object to fetch
+        :param version: version of the object to fetch
+        :type version: `str`
+        :param ranges: a list of object ranges to download
+        :type ranges: `list` of `tuple`
+        :param key_file: path to the file containing credentials
+
+        :keyword properties: should the request return object properties
+            along with content description (True by default)
+        :type properties: `bool`
+        :keyword perfdata: optional `dict` that will be filled with metrics
+            of time spent to resolve the meta2 address, to do the meta2
+            request, and the time-to-first-byte, as seen by this API.
+
+        :returns: a dictionary of object metadata and
+            a stream of object data
+        :rtype: tuple
+        """
+        # Fetch object metadata (possibly from cache) and object stream.
+        meta, stream = self._object_fetch_impl(
+            account, container, obj,
+            version=version, ranges=ranges, key_file=key_file,
+            **kwargs)
+
+        def _data_error_wrapper(buggy_stream):
+            blocks = 0
+            try:
+                for dat in buggy_stream:
+                    yield dat
+                    blocks += 1
+            except exc.UnrecoverableContent:
+                # Maybe we got this error because the cached object
+                # metadata was stale.
+                cache = kwargs.pop('cache', None)
+                if cache is None:
+                    # No cache configured: nothing more to do.
+                    raise
+                elif blocks >= 1:
+                    # The first blocks of data were already sent to the
+                    # caller, we cannot start again.
+                    raise
+                # Retry the request without reading from the cache.
+                new_meta, new_stream = self._object_fetch_impl(
+                    account, container, obj,
+                    version=version, ranges=ranges,
+                    key_file=key_file, cache=None, **kwargs)
+                # Hack the metadata dictionary which has already been
+                # returned to the caller.
+                meta.update(new_meta)
+                # Send data from the new stream.
+                for dat in new_stream:
+                    yield dat
+        return meta, _data_error_wrapper(stream)
 
     @handle_object_not_found
     @patch_kwargs

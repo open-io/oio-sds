@@ -2092,13 +2092,37 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
             for chunk in stream:
                 data += chunk
             self.fail('This should not happen with the deleted chunks')
-        except exc.UnrecoverableContent:
+        except (exc.UnrecoverableContent, exc.NoSuchObject):
+            # A former version raised UnrecoverableContent, but newer versions
+            # do one retry, and thus see that the object does not exist.
             pass
-        self.assertEqual(2, self.api.container._direct_request.call_count)
+        self.assertEqual(3, self.api.container._direct_request.call_count)
         self.assertEqual(0, len(self.cache))
 
         self.assertRaises(
             exc.NoSuchObject, self.api.object_fetch,
             self.account, self.container, self.path)
-        self.assertEqual(3, self.api.container._direct_request.call_count)
+        self.assertEqual(4, self.api.container._direct_request.call_count)
         self.assertEqual(0, len(self.cache))
+
+    def test_object_fetch_dirty_cache(self):
+        # Fetch the original object to make sure the cache is filled.
+        self.api.object_fetch(
+            self.account, self.container, self.path)
+        # Make the cache invalid by overwriting the object without
+        # clearing the cache.
+        self.api.object_create(self.account, self.container,
+                               obj_name=self.path, data='overwritten',
+                               cache=None)
+        # Wait for the original chunks to be deleted.
+        self.wait_for_event('oio-preserved',
+                            types=(EventTypes.CHUNK_DELETED, ), timeout=5.0)
+        # Read the object. An error will be raised internally, but the latest
+        # object should be fetched.
+        meta, stream = self.api.object_fetch(
+            self.account, self.container, self.path)
+        data = b''
+        for chunk in stream:
+            data += chunk
+        self.assertEqual('overwritten', data)
+        self.assertEqual(len('overwritten'), int(meta['size']))
