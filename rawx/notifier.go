@@ -57,16 +57,17 @@ func deadLetter(event []byte, err error) {
 	if err != nil && alertThrottling.Ok() {
 		LogError("Beanstalkd connection error: %v", err)
 	}
-	LogWarning("event %s", string(event))
+	if len(event) > 0 {
+		LogWarning("event %s", string(event))
+	}
 }
 
 func (backend *beanstalkdBackend) push(event []byte) {
-	var err error
 	cnxDeadline := time.Now().Add(1 * time.Second)
 
 	// Lazy reconnection
 	for backend.b == nil {
-		backend.b, err = DialBeanstalkd(backend.endpoint)
+		b, err := DialBeanstalkd(backend.endpoint)
 		if err != nil {
 			if time.Now().After(cnxDeadline) {
 				deadLetter(event, err)
@@ -75,14 +76,20 @@ func (backend *beanstalkdBackend) push(event []byte) {
 				time.Sleep(time.Second)
 			}
 		} else {
-			err = backend.b.Use(beanstalkNotifierDefaultTube)
+			err = b.Use(beanstalkNotifierDefaultTube)
 			if err != nil {
-				backend.close()
+				b.Close()
+			} else {
+				backend.b = b
 			}
 		}
 	}
 
-	_, err = backend.b.Put(event)
+	if backend.b == nil {
+		panic("BUG")
+	}
+
+	_, err := backend.b.Put(event)
 	if err != nil {
 		backend.close()
 		deadLetter(event, err)
@@ -98,10 +105,10 @@ func (backend *beanstalkdBackend) close() {
 
 func makeSingleBackend(config string) (notifierBackend, error) {
 	if endpoint, ok := hasPrefix(config, "beanstalk://"); ok {
-		return &beanstalkdBackend{
-			endpoint: endpoint,
-			tube:     beanstalkNotifierDefaultTube,
-		}, nil
+		out := new(beanstalkdBackend)
+		out.endpoint = endpoint
+		out.tube = beanstalkNotifierDefaultTube
+		return out, nil
 	}
 	// TODO(adu): make a ZMQ Notifier
 	// TODO(jfs): make a GRPC Notifier
@@ -110,7 +117,7 @@ func makeSingleBackend(config string) (notifierBackend, error) {
 }
 
 func MakeNotifier(config string, rawx *rawxService) (*notifier, error) {
-	var n notifier
+	n := new(notifier)
 	n.queue = make(chan []byte, notifierDefaultPipeSize)
 	n.running = true
 	n.url = rawx.url
@@ -122,8 +129,9 @@ func MakeNotifier(config string, rawx *rawxService) (*notifier, error) {
 			backend, err := makeSingleBackend(config)
 			if err != nil {
 				return nil, err
+			} else {
+				workers = append(workers, backend)
 			}
-			workers = append(workers, backend)
 		}
 	} else {
 		for _, conf := range strings.Split(config, ";") {
@@ -139,21 +147,23 @@ func MakeNotifier(config string, rawx *rawxService) (*notifier, error) {
 	}
 
 	n.wg.Add(len(workers))
-	for _, w := range workers {
-		go func(input <-chan []byte) {
-			defer n.wg.Done()
-			for event := range input {
-				if n.running {
-					w.push(event)
-				} else {
-					deadLetter(event, errExiting)
-				}
+	doWork := func(w notifierBackend, input <-chan []byte) {
+		defer n.wg.Done()
+		for event := range input {
+			if n.running {
+				w.push(event)
+			} else {
+				deadLetter(event, errExiting)
 			}
-			w.close()
-		}(n.queue)
+		}
+		w.close()
 	}
 
-	return &n, nil
+	for _, w := range workers {
+		go doWork(w, n.queue)
+	}
+
+	return n, nil
 }
 
 func (n notifier) notifyNew(requestID string, chunk chunkInfo) {
