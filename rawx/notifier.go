@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -169,73 +168,71 @@ func (n notifier) notifyDel(requestID string, chunk chunkInfo) {
 	}
 }
 
+type EncodableEvent struct {
+	EventType string       `json:"event"`
+	When      int64        `json:"when"`
+	RequestId string       `json:"request_id"`
+	Data      EventPayload `json:"data"`
+}
+
+type EventPayload struct {
+	VolumeId       string `json:"volume_id"`
+	ServiceId      string `json:"volume_service_id"`
+	FullPath       string `json:"full_path"`
+	ContainerId    string `json:"container_id"`
+	ContentPath    string `json:"content_path"`
+	ContentVersion string `json:"content_version"`
+	ContentId      string `json:"content_id"`
+	StgPol         string `json:"content_storage_policy"`
+	MetaChunkHash  string `json:"metachunk_hash"`
+	MetaChunkSize  string `json:"metachunk_size"`
+	ChunkId        string `json:"chunk_id"`
+	ChunkMethod    string `json:"content_chunk_method"`
+	ChunkPosition  string `json:"chunk_position"`
+	ChunkHash      string `json:"chunk_hash"`
+	ChunkSize      string `json:"chunk_size"`
+	OioVersion     string `json:"oio_version"`
+}
+
 func (n notifier) asyncNotify(eventType, requestID string, chunk chunkInfo) {
 	sb := bytes.Buffer{}
 	sb.Grow(2048)
-	addQuoted := func(n string) {
-		sb.WriteRune('"')
-		sb.WriteString(n)
-		sb.WriteRune('"')
-	}
-	addFieldRaw := func(k, v string) {
-		sb.WriteRune(',')
-		addQuoted(k)
-		sb.WriteRune(':')
-		sb.WriteString(v)
-	}
-	addFieldStr := func(k, v string) {
-		addQuoted(k)
-		sb.WriteRune(':')
-		addQuoted(v)
-	}
-	add := func(k, v string) {
-		if len(v) > 0 {
-			sb.WriteRune(',')
-			addFieldStr(k, v)
-		}
-	}
-	addEscaped := func(k, v string) {
-		if len(v) > 0 {
-			sb.WriteRune(',')
-			addQuoted(k)
-			sb.WriteRune(':')
-			sb.WriteRune('"')
-			json.HTMLEscape(&sb, []byte(v))
-			sb.WriteRune('"')
-		}
+	evt := EncodableEvent{
+		EventType: eventType,
+		When:      time.Now().UnixNano() / 1000,
+		RequestId: requestID,
+		Data: EventPayload{
+			VolumeId:       n.url,
+			ServiceId:      n.srvid,
+			FullPath:       chunk.ContentFullpath,
+			ContainerId:    chunk.ContainerID,
+			ContentPath:    chunk.ContentPath,
+			ContentVersion: chunk.ContentVersion,
+			ContentId:      chunk.ContentID,
+			StgPol:         chunk.ContentStgPol,
+			MetaChunkHash:  chunk.MetachunkHash,
+			MetaChunkSize:  chunk.MetachunkSize,
+			ChunkId:        chunk.ChunkID,
+			ChunkMethod:    chunk.ContentChunkMethod,
+			ChunkPosition:  chunk.ChunkPosition,
+			ChunkHash:      chunk.ChunkHash,
+			ChunkSize:      chunk.ChunkSize,
+			OioVersion:     chunk.OioVersion,
+		},
 	}
 
-	sb.WriteRune('{')
-	addFieldStr("event", eventType)
-	addFieldRaw("when", strconv.FormatInt(time.Now().UnixNano()/1000, 10))
-	add("request_id", requestID)
-	addFieldRaw("data", "{")
-	addFieldStr("volume_id", n.url)
-	add("volume_service_id", n.srvid)
-	addEscaped("full_path", chunk.ContentFullpath)
-	addEscaped("content_path", chunk.ContentPath)
-	add("container_id", chunk.ContainerID)
-	add("content_version", chunk.ContentVersion)
-	add("content_id", chunk.ContentID)
-	add("content_chunk_method", chunk.ContentChunkMethod)
-	add("content_storage_policy", chunk.ContentStgPol)
-	add("metachunk_hash", chunk.MetachunkHash)
-	add("metachunk_size", chunk.MetachunkSize)
-	add("chunk_id", chunk.ChunkID)
-	add("chunk_position", chunk.ChunkPosition)
-	add("chunk_hash", chunk.ChunkHash)
-	add("chunk_size", chunk.ChunkSize)
-	add("oio_version", chunk.OioVersion)
-	sb.WriteString("}}")
-
-	event := sb.Bytes()
-	if !n.running {
-		deadLetter(event, errExiting)
+	if err := json.NewEncoder(&sb).Encode(&evt); err != nil {
+		LogWarning("JSON encoding error: %v", err)
 	} else {
-		select {
-		case n.queue <- event:
-		default:
-			deadLetter(event, errClogged)
+		event := sb.Bytes()
+		if !n.running {
+			deadLetter(event, errExiting)
+		} else {
+			select {
+			case n.queue <- event:
+			default:
+				deadLetter(event, errClogged)
+			}
 		}
 	}
 }
