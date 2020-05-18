@@ -118,7 +118,7 @@ func MakeNotifier(config string, rawx *rawxService) (*notifier, error) {
 	n.srvid = rawx.id
 
 	workers := make([]notifierBackend, 0)
-	if strings.Contains(config, ";") {
+	if !strings.Contains(config, ";") {
 		for i := 0; i < notifierSingleMultiplier; i++ {
 			backend, err := makeSingleBackend(config)
 			if err != nil {
