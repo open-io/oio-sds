@@ -398,7 +398,7 @@ def set_deadline_from_read_timeout(kwargs, force=False):
         kwargs['deadline'] = timeout_to_deadline(to)
 
 
-def compute_perfdata_stats(perfdata, prefix='upload'):
+def compute_perfdata_stats(perfdata, prefix='upload.'):
     """
     Compute extra statistics from a dictionary of performance data.
     """
@@ -413,6 +413,6 @@ def compute_perfdata_stats(perfdata, prefix='upload'):
             count += 1
     avg = tot/count
     sdev = sqrt(stot/count - avg**2)
-    rawx_perfdata[prefix + '.AVG'] = avg
-    rawx_perfdata[prefix + '.SD'] = sdev
-    rawx_perfdata[prefix + '.RSD'] = sdev/avg
+    rawx_perfdata[prefix + 'AVG'] = avg
+    rawx_perfdata[prefix + 'SD'] = sdev
+    rawx_perfdata[prefix + 'RSD'] = sdev/avg

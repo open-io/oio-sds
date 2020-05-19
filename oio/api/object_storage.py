@@ -1349,8 +1349,8 @@ class ObjectStorageApi(object):
             perfdata_rawx['overall'] = perfdata_rawx.get('overall', 0.0) \
                 + upload_end - upload_start
             perfdata['data_size'] = ul_bytes
-            compute_perfdata_stats(perfdata, 'connect')
-            compute_perfdata_stats(perfdata, 'upload')
+            compute_perfdata_stats(perfdata, 'connect.')
+            compute_perfdata_stats(perfdata, 'upload.')
         return ul_chunks, ul_bytes, obj_checksum
 
     def _object_prepare(self, account, container, obj_name, source,

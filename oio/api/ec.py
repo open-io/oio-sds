@@ -693,6 +693,8 @@ class EcChunkWriter(object):
                                          self.checksum.hexdigest()))
         parts.append('\r\n')
         to_send = "".join(parts)
+        if self.perfdata is not None:
+            fin_start = monotonic_time()
         try:
             with ChunkWriteTimeout(self.write_timeout):
                 self.conn.send(to_send)
@@ -705,6 +707,13 @@ class EcChunkWriter(object):
                              self.chunk, msg, self.reqid)
             self.chunk['error'] = 'finish: %s' % msg
             return self.chunk
+        finally:
+            if self.perfdata is not None:
+                fin_end = monotonic_time()
+                rawx_perfdata = self.perfdata.setdefault('rawx', dict())
+                chunk_url = self.conn.chunk['url']
+                rawx_perfdata['upload_finish.' + chunk_url] = \
+                    fin_end - fin_start
         return None
 
     def getresponse(self):
