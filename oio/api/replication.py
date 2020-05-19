@@ -14,7 +14,7 @@
 # License along with this library.
 
 
-from oio.common.green import sleep, LightQueue, Timeout, GreenPile
+from oio.common.green import LightQueue, Timeout, GreenPile
 
 import hashlib
 from socket import error as SocketError
@@ -128,7 +128,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
 
                 for conn in current_conns:
                     while conn.queue.qsize():
-                        sleep(0)
+                        green.eventlet_yield()
 
         except green.SourceReadTimeout as err:
             self.logger.warn('Source read timeout (reqid=%s): %s',
@@ -224,9 +224,18 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                         conn.send(data)
                         conn.send('\r\n')
                     if not data:
+                        if self.perfdata is not None:
+                            fin_start = monotonic_time()
                         # Last segment sent, disable TCP_CORK to flush buffers
                         conn.set_cork(False)
-                    sleep(0)
+                        if self.perfdata is not None:
+                            fin_end = monotonic_time()
+                            rawx_perfdata = self.perfdata.setdefault('rawx',
+                                                                     dict())
+                            chunk_url = conn.chunk['url']
+                            rawx_perfdata['upload_finish.' + chunk_url] = \
+                                fin_end - fin_start
+                    green.eventlet_yield()
                 except (Exception, green.ChunkWriteTimeout) as err:
                     conn.failed = True
                     conn.chunk['error'] = str(err)
