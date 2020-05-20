@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,7 +15,7 @@
 
 
 from __future__ import absolute_import
-from oio.common.green import sleep, Timeout
+from oio.common.green import eventlet_yield, Timeout
 
 from io import BufferedReader, RawIOBase, IOBase
 import itertools
@@ -343,13 +343,14 @@ class ChunkReader(object):
                                     self.request_headers)
                 if self.perfdata is not None:
                     connect_end = monotonic_time()
-                    perfdata_rawx = self.perfdata.setdefault('rawx', dict())
-                    perfdata_rawx[chunk['url']] = \
-                        perfdata_rawx.get(chunk['url'], 0.0) \
-                        + connect_end - connect_start
+                    rawx_perfdata = self.perfdata.setdefault('rawx', dict())
+                    rawx_perfdata['connect.' + chunk['url']] = \
+                        connect_end - connect_start
             with green.OioTimeout(self.read_timeout):
                 source = conn.getresponse()
                 source.conn = conn
+                if self.perfdata is not None:
+                    source.download_start = monotonic_time()
         except (SocketError, Timeout) as err:
             self.logger.error('Connection failed to %s (reqid=%s): %s',
                               chunk, self.reqid, err)
@@ -466,19 +467,12 @@ class ChunkReader(object):
         count = 0
         buf = ''
         if self.perfdata is not None:
-            perfdata_rawx = self.perfdata.setdefault('rawx', dict())
-            url_chunk = chunk['url']
+            rawx_perfdata = self.perfdata.setdefault('rawx', dict())
+            chunk_url = chunk['url']
         while True:
             try:
                 with green.ChunkReadTimeout(self.read_timeout):
-                    if self.perfdata is not None:
-                        download_start = monotonic_time()
                     data = part.read(READ_CHUNK_SIZE)
-                    if self.perfdata is not None:
-                        download_end = monotonic_time()
-                        perfdata_rawx[url_chunk] = \
-                            perfdata_rawx.get(url_chunk, 0.0) \
-                            + download_end - download_start
                     count += 1
                     buf += data
             except (green.ChunkReadTimeout, IOError) as crto:
@@ -548,10 +542,16 @@ class ChunkReader(object):
                     bytes_consumed += len(buf)
                     buf = ''
 
-                # avoid starvation by forcing sleep()
+                # avoid starvation by yielding
                 # every once in a while
                 if count % 10 == 0:
-                    sleep()
+                    eventlet_yield()
+
+        if self.perfdata is not None:
+            download_end = monotonic_time()
+            key = 'download.' + chunk_url
+            rawx_perfdata[key] = rawx_perfdata.get(key, 0.0) \
+                + download_end - source[0].download_start
 
     def _get_iter(self, chunk, source):
         source = [source]

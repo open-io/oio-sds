@@ -1119,6 +1119,8 @@ class ObjectStorageApi(object):
         perfdata_rawx['overall'] = perfdata_rawx.get('overall', 0.0) \
             + req_end - download_start
         perfdata['data_size'] = size
+        compute_perfdata_stats(perfdata, 'connect.')
+        compute_perfdata_stats(perfdata, 'download.')
 
     def _object_fetch_impl(self, account, container, obj,
                            version=None, ranges=None, key_file=None,

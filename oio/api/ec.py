@@ -334,6 +334,8 @@ class ECStream(object):
                     # impossible to read segment
                     break
                 # actually decode the fragments into a segment
+                if self.perfdata is not None:
+                    ec_start = monotonic_time()
                 try:
                     segment = self.storage_method.driver.decode(data)
                 except exceptions.ECError:
@@ -341,6 +343,12 @@ class ECStream(object):
                     self.logger.exception(
                         "ERROR decoding fragments (reqid=%s)", self.reqid)
                     raise
+                finally:
+                    if self.perfdata is not None:
+                        ec_end = monotonic_time()
+                        rawx_pdata = self.perfdata.setdefault('rawx', dict())
+                        rawx_pdata['ec'] = rawx_pdata.get('ec', 0.0) \
+                            + ec_end - ec_start
 
                 yield segment
 
@@ -449,14 +457,7 @@ class ECStream(object):
                             repr((fragment_start, fragment_end)),
                             results.keys(), self.reqid)
                     raise
-                if self.perfdata is not None:
-                    ec_start = monotonic_time()
                 segment_iter = self._decode_segments(fragment_iters)
-                if self.perfdata is not None:
-                    ec_end = monotonic_time()
-                    rawx_perfdata = self.perfdata.setdefault('rawx', dict())
-                    rawx_perfdata['ec'] = rawx_perfdata.get('ec', 0.0) \
-                        + ec_end - ec_start
 
                 if not range_info['satisfiable']:
                     io.consume(segment_iter)
