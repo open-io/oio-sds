@@ -21,7 +21,8 @@ from testtools.testcase import ExpectedException
 
 from oio.blob.client import BlobClient
 from oio.common.constants import OIO_DB_ENABLED, OIO_DB_FROZEN
-from oio.common.exceptions import NotFound, UnrecoverableContent, ServiceBusy
+from oio.common.exceptions import BadRequest, NotFound, \
+    UnrecoverableContent, ServiceBusy
 from oio.common.utils import cid_from_name
 from oio.common.fullpath import encode_fullpath
 from oio.container.client import ContainerClient
@@ -286,3 +287,26 @@ class TestPlainContent(BaseTestCase):
 
     def test_single_fetch_chunksize_bytes_plus_1_without_broken_chunk(self):
         self._test_fetch(self.stgpol, self.chunk_size * 2, [])
+
+    def test_content_spare_with_too_many_locations_known(self):
+        for stgpol in (self.stgpol, self.stgpol_twocopies,
+                       self.stgpol_threecopies):
+            data = random_data(self.chunk_size)
+            content, _ = self._new_content(stgpol, data)
+            meta, chunks = self.container_client.content_locate(
+                cid=self.container_id, content=content.content_id)
+            for _ in range(2):
+                spare_data = {
+                    "notin": chunks,
+                    "broken": []
+                }
+                try:
+                    self.container_client.content_spare(
+                        cid=self.container_id, content=content.content_id,
+                        data=spare_data, stgpol=stgpol)
+                except BadRequest as exc:
+                    self.assertIn("too many locations already known",
+                                  exc.message)
+                else:
+                    self.fail("shouldn't happen")
+                chunks += chunks
