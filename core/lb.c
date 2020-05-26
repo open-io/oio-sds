@@ -1133,9 +1133,15 @@ _local__patch(struct oio_lb_pool_s *self,
 	oio_location_t polled[count_targets+1];
 	guint i = 0;
 	for (; known && known[i]; i++)
-		polled[i] = known[i];
+		if (i < count_targets)
+			polled[i] = known[i];
 	guint count_known_targets = i;
-	for (; i < count_targets; i++)
+	if (count_known_targets >= count_targets)
+		return NEWERROR(CODE_BAD_REQUEST,
+			"too many locations already known (%u), "
+			"maximum %u locations for this storage policy",
+			count_known_targets, count_targets);
+	for (; i < count_targets+1; i++)
 		polled[i] = 0;
 
 	/* In normal mode (resp. nearby mode), distance starts high
