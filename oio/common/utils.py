@@ -15,6 +15,7 @@
 
 from __future__ import print_function
 
+import ctypes
 import os
 import grp
 import pwd
@@ -428,6 +429,10 @@ def depaginate(func, item_key=None, listing_key=None, marker_key=None,
                 yield item_key(item)
 
 
+# See <linux/time.h>
+# Glib2 uses CLOCK_MONOTONIC
+__CLOCK_MONOTONIC = 1
+__CLOCK_MONOTONIC_RAW = 4
 __MONOTONIC_TIME = None
 
 
@@ -435,20 +440,30 @@ def monotonic_time():
     """Get the monotonic time as float seconds"""
     global __MONOTONIC_TIME
     if __MONOTONIC_TIME is None:
-        from ctypes import CDLL, c_int64
+        # Taken from https://stackoverflow.com/a/1205762
+        class timespec(ctypes.Structure):
+            _fields_ = [
+                ('tv_sec', ctypes.c_long),
+                ('tv_nsec', ctypes.c_long)
+            ]
+
         try:
-            liboiocore = CDLL('liboiocore.so.0')
-            oio_ext_monotonic_time = liboiocore.oio_ext_monotonic_time
-            oio_ext_monotonic_time.restype = c_int64
+            librt = ctypes.CDLL('librt.so.1', use_errno=True)
+            clock_gettime = librt.clock_gettime
+            clock_gettime.argtypes = [ctypes.c_int, ctypes.POINTER(timespec)]
 
             def _monotonic_time():
-                return oio_ext_monotonic_time() / 1000000.0
+                ts = timespec()
+                if clock_gettime(__CLOCK_MONOTONIC, ctypes.pointer(ts)):
+                    errno_ = ctypes.get_errno()
+                    raise OSError(errno_, os.strerror(errno_))
+                return ts.tv_sec + ts.tv_nsec * 1e-9
 
             __MONOTONIC_TIME = _monotonic_time
         except OSError as exc:
             from sys import stderr
             from time import time
-            print("Failed to load oio_ext_monotonic_time(): %s" % exc,
+            print("Failed to load clock_gettime(): %s" % exc,
                   file=stderr)
             __MONOTONIC_TIME = time
 
@@ -493,7 +508,7 @@ def lower_dict_keys(mydict):
         del mydict[k]
 
 
-def compute_perfdata_stats(perfdata, prefix='upload'):
+def compute_perfdata_stats(perfdata, prefix='upload.'):
     """
     Compute extra statistics from a dictionary of performance data.
     """
@@ -508,6 +523,6 @@ def compute_perfdata_stats(perfdata, prefix='upload'):
             count += 1
     avg = tot/count
     sdev = sqrt(stot/count - avg**2)
-    rawx_perfdata[prefix + '.AVG'] = avg
-    rawx_perfdata[prefix + '.SD'] = sdev
-    rawx_perfdata[prefix + '.RSD'] = sdev/avg
+    rawx_perfdata[prefix + 'AVG'] = avg
+    rawx_perfdata[prefix + 'SD'] = sdev
+    rawx_perfdata[prefix + 'RSD'] = sdev/avg

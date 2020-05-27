@@ -1,4 +1,4 @@
-# Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -87,7 +87,7 @@ class CustomHttpConnection(HTTPConnection):
 
     def connect(self):
         conn = HTTPConnection.connect(self)
-        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        self.set_nodelay(True)
         return conn
 
     def set_cork(self, enabled=True):
@@ -95,6 +95,13 @@ class CustomHttpConnection(HTTPConnection):
         Enable or disable TCP_CORK on the underlying socket.
         """
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK,
+                             1 if enabled else 0)
+
+    def set_nodelay(self, enabled=True):
+        """
+        Enable or disable TCP_NODELAY on the underlying socket.
+        """
+        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY,
                              1 if enabled else 0)
 
     def putrequest(self, method, url, skip_host=0, skip_accept_encoding=0):

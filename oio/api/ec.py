@@ -335,6 +335,8 @@ class ECStream(object):
                     # impossible to read segment
                     break
                 # actually decode the fragments into a segment
+                if self.perfdata is not None:
+                    ec_start = monotonic_time()
                 try:
                     segment = self.storage_method.driver.decode(data)
                 except exceptions.ECError:
@@ -342,6 +344,12 @@ class ECStream(object):
                     self.logger.exception(
                         "ERROR decoding fragments (reqid=%s)", self.reqid)
                     raise
+                finally:
+                    if self.perfdata is not None:
+                        ec_end = monotonic_time()
+                        rawx_pdata = self.perfdata.setdefault('rawx', dict())
+                        rawx_pdata['ec'] = rawx_pdata.get('ec', 0.0) \
+                            + ec_end - ec_start
 
                 yield segment
 
@@ -453,14 +461,7 @@ class ECStream(object):
                             repr((fragment_start, fragment_end)),
                             results.keys(), self.reqid)
                     raise
-                if self.perfdata is not None:
-                    ec_start = monotonic_time()
                 segment_iter = self._decode_segments(fragment_iters)
-                if self.perfdata is not None:
-                    ec_end = monotonic_time()
-                    rawx_perfdata = self.perfdata.setdefault('rawx', dict())
-                    rawx_perfdata['ec'] = rawx_perfdata.get('ec', 0.0) \
-                        + ec_end - ec_start
 
                 if not range_info['satisfiable']:
                     io.consume(segment_iter)
@@ -697,6 +698,8 @@ class EcChunkWriter(object):
                                          self.checksum.hexdigest()))
         parts.append('\r\n')
         to_send = ''.join(parts).encode('utf-8')
+        if self.perfdata is not None:
+            fin_start = monotonic_time()
         try:
             with ChunkWriteTimeout(self.write_timeout):
                 self.conn.send(to_send)
@@ -709,6 +712,13 @@ class EcChunkWriter(object):
                              self.chunk, msg, self.reqid)
             self.chunk['error'] = 'finish: %s' % msg
             return self.chunk
+        finally:
+            if self.perfdata is not None:
+                fin_end = monotonic_time()
+                rawx_perfdata = self.perfdata.setdefault('rawx', dict())
+                chunk_url = self.conn.chunk['url']
+                rawx_perfdata['upload_finish.' + chunk_url] = \
+                    fin_end - fin_start
         return None
 
     def getresponse(self):

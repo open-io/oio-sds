@@ -1,4 +1,4 @@
-# Copyright (C) 2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -93,7 +93,8 @@ class TestObjectStorageApiPerfdata(BaseTestCase):
             self.assertIn('ec', perfdata['rawx'])
         nb_chunks_to_read = 0
         for chunk in chunks:
-            if chunk['url'] in perfdata['rawx']:
+            key = "connect." + chunk['url']
+            if key in perfdata['rawx']:
                 nb_chunks_to_read += 1
         self.assertLessEqual(stg_method.min_chunks_to_read,
                              nb_chunks_to_read)
