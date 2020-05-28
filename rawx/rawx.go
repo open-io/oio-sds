@@ -69,7 +69,7 @@ func (rr *rawxRequest) replyCode(code int) {
 	rr.rep.WriteHeader(rr.status)
 }
 
-func (rr *rawxRequest) replyError(err error) {
+func (rr *rawxRequest) replyError(action string, err error) {
 	if os.IsExist(err) {
 		rr.replyCode(http.StatusConflict)
 	} else if os.IsPermission(err) {
@@ -81,6 +81,10 @@ func (rr *rawxRequest) replyError(err error) {
 		// whatever the client has sent in the request, in terms of
 		// connection management.
 		rr.req.Close = true
+
+		if len(action) != 0 {
+			LogError(msgErrorAction(action, rr.reqid, err))
+		}
 
 		// Also, we debug what happened in the reply headers
 		// TODO(jfs): This is a job for a distributed tracing framework
