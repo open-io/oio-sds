@@ -154,7 +154,7 @@ func (rr *rawxRequest) uploadChunk() {
 	var h hash.Hash
 
 	if rr.chunk, err = retrieveHeaders(&rr.req.Header, rr.chunkID); err != nil {
-		rr.replyError(err)
+		rr.replyError("uploadChunk()", err)
 		// Discard request body
 		io.Copy(ioutil.Discard, rr.req.Body)
 		return
@@ -163,7 +163,7 @@ func (rr *rawxRequest) uploadChunk() {
 	// Attempt a PUT in the repository
 	out, err = rr.rawx.repo.put(rr.chunkID)
 	if err != nil {
-		rr.replyError(err)
+		rr.replyError("uploadChunk()", err)
 		// Discard request body
 		io.Copy(ioutil.Discard, rr.req.Body)
 		return
@@ -229,7 +229,7 @@ func (rr *rawxRequest) uploadChunk() {
 	if err != nil {
 		// Discard request body
 		io.Copy(ioutil.Discard, rr.req.Body)
-		rr.replyError(err)
+		rr.replyError("uploadChunk()", err)
 		out.abort()
 	} else {
 		out.commit()
@@ -245,25 +245,24 @@ func (rr *rawxRequest) uploadChunk() {
 func (rr *rawxRequest) copyChunk() {
 	var err error
 	if rr.chunk, err = retrieveDestinationHeader(&rr.req.Header, rr.rawx, rr.chunkID); err != nil {
-		rr.replyError(err)
+		rr.replyError("copyChunk()", err)
 		return
 	}
 	if err := rr.chunk.retrieveContentFullpathHeader(&rr.req.Header); err != nil {
-		rr.replyError(err)
+		rr.replyError("copyChunk()", err)
 		return
 	}
 
 	// Attempt a LINK in the repository
 	op, err := rr.rawx.repo.link(rr.chunkID, rr.chunk.ChunkID)
 	if err != nil {
-		rr.replyError(err)
+		rr.replyError("copyChunk()", err)
 	} else {
 		// Link created, try to place an xattr
 		err = rr.chunk.saveContentFullpathAttr(op)
 		if err != nil {
 			// Xattr failed, rollback the link itself
-			LogError(msgErrorAction("Setxattr()", rr.reqid, err))
-			rr.replyError(err)
+			rr.replyError("Setxattr()", err)
 			// If rollback fails, is lets an error
 			_ = op.rollback()
 		} else {
@@ -277,7 +276,7 @@ func (rr *rawxRequest) copyChunk() {
 func (rr *rawxRequest) checkChunk() {
 	chunkIn, err := rr.rawx.repo.get(rr.chunkID)
 	if err != nil {
-		rr.replyError(err)
+		rr.replyError("checkChunk()", err)
 		return
 	}
 	defer chunkIn.Close()
@@ -285,13 +284,13 @@ func (rr *rawxRequest) checkChunk() {
 	rr.chunk, err = loadAttr(chunkIn, rr.chunkID, rr.reqid)
 	if err != nil {
 		LogDebug(msgErrorAction("Getxattr()", rr.reqid, err))
-		rr.replyError(err)
+		rr.replyError("", err)
 		return
 	}
 
 	// FIXME(jfs): generalize the check of chunkInfo
 	if rr.chunk.ChunkHash == "" {
-		rr.replyError(errMissingXattr(AttrNameChunkChecksum, nil))
+		rr.replyError("checkChunk()", errMissingXattr(AttrNameChunkChecksum, nil))
 		return
 	}
 
@@ -307,7 +306,7 @@ func (rr *rawxRequest) checkChunk() {
 		in, filter, err = rr.getChunkReader(chunkIn, rr.chunk.size, rangeInfo{})
 		if err != nil {
 			LogDebug(msgErrorAction("getChunkReader()", rr.reqid, err))
-			rr.replyError(err)
+			rr.replyError("checkChunk()", err)
 			return
 		}
 		if filter != nil {
@@ -325,7 +324,7 @@ func (rr *rawxRequest) checkChunk() {
 		}
 		if err != nil {
 			LogDebug(msgErrorAction("hash computation", rr.reqid, nil))
-			rr.replyError(err)
+			rr.replyError("", err)
 			return
 		}
 	}
@@ -367,13 +366,13 @@ func (rr *rawxRequest) getRange(chunkSize int64) (rangeInfo, error) {
 func (rr *rawxRequest) downloadChunk() {
 	inChunk, err := rr.rawx.repo.get(rr.chunkID)
 	if err != nil {
-		rr.replyError(err)
+		rr.replyError("downloadChunk()", err)
 		return
 	}
 	defer inChunk.Close()
 
 	if rr.chunk, err = loadAttr(inChunk, rr.chunkID, rr.reqid); err != nil {
-		rr.replyError(err)
+		rr.replyError("downloadChunk()", err)
 		return
 	}
 
@@ -386,7 +385,7 @@ func (rr *rawxRequest) downloadChunk() {
 	// Load the range, with the specific case of the compression
 	rangeInf, err = rr.getRange(rr.chunk.size)
 	if err != nil {
-		rr.replyError(err)
+		rr.replyError("downloadChunk()", err)
 		return
 	}
 
@@ -395,7 +394,7 @@ func (rr *rawxRequest) downloadChunk() {
 		defer filter.Close()
 	}
 	if err != nil {
-		rr.replyError(err)
+		rr.replyError("downloadChunk()", err)
 		return
 	}
 
@@ -476,13 +475,13 @@ func (rr *rawxRequest) removeChunk() {
 	// Load only the fullpath in an attempt to spare syscalls
 	rr.chunk, err = loadFullPath(getter, rr.chunkID)
 	if err != nil {
-		rr.replyError(err)
+		rr.replyError("removeChunk()", err)
 		return
 	}
 
 	err = rr.rawx.repo.del(rr.chunkID)
 	if err != nil {
-		rr.replyError(err)
+		rr.replyError("removeChunk()", err)
 	} else {
 		rr.replyCode(http.StatusNoContent)
 		rr.rawx.notifier.notifyDel(rr.reqid, rr.chunk)
@@ -491,7 +490,7 @@ func (rr *rawxRequest) removeChunk() {
 
 func (rr *rawxRequest) serveChunk() {
 	if !isHexaString(rr.req.URL.Path[1:], 64) {
-		rr.replyError(errInvalidChunkID)
+		rr.replyError("", errInvalidChunkID)
 		return
 	}
 	rr.chunkID = strings.ToUpper(rr.req.URL.Path[1:])
@@ -500,7 +499,7 @@ func (rr *rawxRequest) serveChunk() {
 	switch rr.req.Method {
 	case "GET":
 		if err := rr.drain(); err != nil {
-			rr.replyError(err)
+			rr.replyError("", err)
 		} else {
 			rr.downloadChunk()
 		}
@@ -510,28 +509,28 @@ func (rr *rawxRequest) serveChunk() {
 		spent = IncrementStatReqPut(rr)
 	case "DELETE":
 		if err := rr.drain(); err != nil {
-			rr.replyError(err)
+			rr.replyError("", err)
 		} else {
 			rr.removeChunk()
 		}
 		spent = IncrementStatReqDel(rr)
 	case "HEAD":
 		if err := rr.drain(); err != nil {
-			rr.replyError(err)
+			rr.replyError("", err)
 		} else {
 			rr.checkChunk()
 		}
 		spent = IncrementStatReqHead(rr)
 	case "COPY":
 		if err := rr.drain(); err != nil {
-			rr.replyError(err)
+			rr.replyError("", err)
 		} else {
 			rr.copyChunk()
 		}
 		spent = IncrementStatReqCopy(rr)
 	default:
 		if err := rr.drain(); err != nil {
-			rr.replyError(err)
+			rr.replyError("", err)
 		} else {
 			rr.replyCode(http.StatusMethodNotAllowed)
 		}

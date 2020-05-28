@@ -46,7 +46,7 @@ func doGetInfo(rr *rawxRequest) {
 
 func (rr *rawxRequest) serveInfo() {
 	if err := rr.drain(); err != nil {
-		rr.replyError(err)
+		rr.replyError("", err)
 		return
 	}
 
