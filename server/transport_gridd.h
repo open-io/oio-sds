@@ -50,15 +50,6 @@ struct gridd_reply_ctx_s
 
 	void (*subject) (const gchar *fmt, ...);
 
-	void (*register_cnx_data) (const gchar *key, gpointer data,
-			GDestroyNotify cleanup);
-
-	/* Dissociates the data or does nothing if data not present */
-	void (*forget_cnx_data) (const gchar *key);
-
-	/* Return a data previously associated, or NULL if not found. */
-	gpointer (*get_cnx_data) (const gchar *key);
-
 	void (*no_access) (void);
 
 	/* --------------------------------

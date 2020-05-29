@@ -25,7 +25,6 @@ License along with this library.
 struct network_server_s;
 struct network_client_s;
 struct network_transport_s;
-struct gba_view_s;
 
 /* To be defined by the application instatiating the transport */
 struct transport_client_context_s;
@@ -120,11 +119,6 @@ void network_server_bind_host(struct network_server_s *srv,
 gchar** network_server_endpoints (struct network_server_s *srv);
 
 int network_server_first_udp (struct network_server_s *srv);
-
-/** Deprecated */
-void network_server_bind_host_lowlatency(struct network_server_s *srv,
-		const gchar *url, gpointer factory_udata,
-		network_transport_factory factory);
 
 void network_server_close_servers(struct network_server_s *srv);
 
