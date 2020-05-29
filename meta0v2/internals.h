@@ -25,8 +25,5 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define NAME_MSGNAME_M0_RELOAD              "M0_RELOAD"
 # define NAME_MSGNAME_M0_RESET               "M0_RESET"
 # define NAME_MSGNAME_M0_FORCE               "M0_FORCE"
-# define NAME_MSGNAME_M0_GET_META1_INFO      "M0_GETM1INFO"
-# define NAME_MSGNAME_M0_DESTROY_META1REF    "M0_DELM1REF"
-# define NAME_MSGNAME_M0_DESTROY_META0ZKNODE "M0_DELM0ZKNODE"
 
 #endif /*OIO_SDS__meta0v2__internals_h*/

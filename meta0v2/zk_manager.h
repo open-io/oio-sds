@@ -67,15 +67,6 @@ GError * create_zk_node(struct zk_manager_s *manager, gchar *subdir,
 GError * list_zk_children_node(struct zk_manager_s *manager, gchar *name,
 		GSList **result);
 
-/** Create a service node in ZK
- * @param zk_manager_s
- * @param subdir
- * @param name
- * @return GError
- */
-GError * delete_zk_node(struct zk_manager_s *manager, gchar *subdir,
-		gchar *name);
-
 /** @} */
 
 #endif /*OIO_SDS__sqliterepo__zk_manager_h*/

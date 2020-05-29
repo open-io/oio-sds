@@ -27,7 +27,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metautils.h>
 #include <sqliterepo/sqliterepo_variables.h>
 #include <sqliterepo/sqliterepo.h>
-#include <sqliterepo/synchro.h>
 #include <sqliterepo/hash.h>
 
 #include "zk_manager.h"
@@ -260,21 +259,3 @@ end_error :
 	}
 	return err;
 }
-
-GError *
-delete_zk_node(struct zk_manager_s *manager, gchar *subdir, gchar *name)
-{
-	EXTRA_ASSERT(manager != NULL);
-	EXTRA_ASSERT(name != NULL);
-
-	gchar *fullpath = get_fullpath(manager,subdir,name);
-	STRING_STACKIFY(fullpath);
-
-	GRID_TRACE("create node %s , full path [%s]", name, fullpath);
-
-	int rc = zoo_delete(manager->zh, fullpath, -1);
-	if ( rc != ZOK && rc != ZNONODE )
-		return  NEWERROR(0, "Failed to delete zk  node [%s], zk code [%d]", name, rc);
-	return NULL;
-}
-
