@@ -32,11 +32,6 @@ GError* m2v2_json_load_single_chunk (struct json_object *j, gpointer *pbean);
 /* the type is discovered in the json object */
 GError *m2v2_json_load_single_xbean (struct json_object *j, gpointer *pbean);
 
-/** Extract a list of beans from a JSON object.
- * @param j The JSON object to extract beans from
- * @param out The output list of beans */
-GError * meta2_json_load_setof_beans(struct json_object *j, GSList **out);
-
 /**  */
 GError * m2v2_json_load_setof_xbean (struct json_object *j, GSList **out);
 

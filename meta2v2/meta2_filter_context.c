@@ -132,13 +132,6 @@ meta2_filter_ctx_clean(struct gridd_filter_ctx_s *ctx)
 }
 
 void
-meta2_filter_ctx_gclean(gpointer ctx, gpointer ignored)
-{
-	(void) ignored;
-	meta2_filter_ctx_clean((struct gridd_filter_ctx_s *) ctx);
-}
-
-void
 meta2_filter_ctx_set_url(struct gridd_filter_ctx_s *ctx, struct oio_url_s *url)
 {
 	if(!ctx || !ctx->input_data)

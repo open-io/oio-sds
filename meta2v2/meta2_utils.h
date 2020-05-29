@@ -82,9 +82,6 @@ void m2v2_sorted_content_free(struct m2v2_sorted_content_s *content);
 
 typedef void (*m2_onbean_cb) (gpointer u, gpointer bean);
 
-typedef gboolean (*m2_onprop_cb) (gpointer u, const gchar *k,
-		const guint8 *v, gsize vlen);
-
 /** Get the cumulated size and number of contents in the database. */
 void m2db_get_container_size_and_obj_count(sqlite3 *db, gboolean check_alias,
 		guint64 *size, gint64 *count);
@@ -104,9 +101,6 @@ gint64 m2db_get_keep_deleted_delay(struct sqlx_sqlite3_s *sq3, gint64 def);
 gint64 m2db_get_flag_delete_exceeding_versions(struct sqlx_sqlite3_s *sq3,
 		gint64 def);
 
-/** Set the delay before actually deleting a content marked as deleted. */
-void m2db_set_keep_deleted_delay(struct sqlx_sqlite3_s *sq3, gint64 delay);
-
 gint64 m2db_get_quota(struct sqlx_sqlite3_s *sq3, gint64 def);
 
 gint64 m2db_get_size(struct sqlx_sqlite3_s *sq3);
@@ -124,8 +118,6 @@ void m2db_set_damaged_objects(struct sqlx_sqlite3_s *sq3, gint64 damaged);
 gint64 m2db_get_missing_chunks(struct sqlx_sqlite3_s *sq3);
 
 void m2db_set_missing_chunks(struct sqlx_sqlite3_s *sq3, gint64 missing);
-
-gint64 m2db_get_version(struct sqlx_sqlite3_s *sq3);
 
 void m2db_increment_version(struct sqlx_sqlite3_s *sq3);
 
@@ -185,9 +177,6 @@ GError* m2db_drain_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 GError* m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		gboolean delete_marker, struct oio_url_s *url,
 		m2_onbean_cb cb, gpointer u0);
-
-GError* m2db_link_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
-		GBytes *id);
 
 void checked_content_free(struct checked_content_s *checked_content);
 
