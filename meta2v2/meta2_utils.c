@@ -195,12 +195,6 @@ m2db_get_flag_delete_exceeding_versions(struct sqlx_sqlite3_s *sq3, gint64 def)
 	return sqlx_admin_get_i64(sq3, M2V2_ADMIN_DELETE_EXCEEDING_VERSIONS, def);
 }
 
-gint64
-m2db_get_version(struct sqlx_sqlite3_s *sq3)
-{
-	return sqlx_admin_get_i64(sq3, M2V2_ADMIN_VERSION, 1);
-}
-
 void
 m2db_increment_version(struct sqlx_sqlite3_s *sq3)
 {

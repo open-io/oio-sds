@@ -40,13 +40,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
 
-enum content_action_e
-{
-	PUT=1,
-	APPEND,
-	DELETE,
-};
-
 #define _MAX_BEANS_BY_EVENT 16
 
 void

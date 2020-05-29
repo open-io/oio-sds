@@ -48,10 +48,8 @@ enum m2v2_open_type_e
 	M2V2_OPEN_MASTERONLY  = 0x001,
 	M2V2_OPEN_SLAVEONLY   = 0x002,
 	M2V2_OPEN_MASTERSLAVE = 0x003,
-#define M2V2_OPEN_REPLIMODE 0x00F
 
 	M2V2_OPEN_AUTOCREATE  = 0x010,
-#define M2V2_OPEN_FLAGS     0x0F0
 
 	// Set an OR'ed combination of the following flags to require
 	// a check on the container's status during the open phase.
@@ -59,7 +57,6 @@ enum m2v2_open_type_e
 	M2V2_OPEN_ENABLED     = 0x100,
 	M2V2_OPEN_FROZEN      = 0x200,
 	M2V2_OPEN_DISABLED    = 0x400,
-#define M2V2_OPEN_STATUS    0xF00
 };
 
 struct m2_open_args_s

@@ -28,8 +28,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/autogen.h>
 #include <meta2v2/meta2_utils_json.h>
 
-typedef GError* (*jbean_mapper) (struct json_object*, gpointer*);
-
 GError*
 m2v2_json_load_single_alias (struct json_object *j, gpointer *pbean)
 {
@@ -189,32 +187,6 @@ exit:
 	return err;
 }
 
-static GError *
-_jarray_to_beans (GSList **out, struct json_object *jv, jbean_mapper map)
-{
-	if (!json_object_is_type(jv, json_type_array))
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid JSON, exepecting array of beans");
-
-	GSList *l = NULL;
-	int vlen = json_object_array_length (jv);
-	for (int i=0; i<vlen ;++i) {
-		struct json_object *j = json_object_array_get_idx (jv, i);
-		if (!json_object_is_type (j, json_type_object))
-			return NEWERROR(CODE_BAD_REQUEST, "Invalid JSON for a bean");
-		gpointer bean = NULL;
-		GError *err = map(j, &bean);
-		EXTRA_ASSERT((bean != NULL) ^ (err != NULL));
-		if (err) {
-			_bean_cleanl2 (l);
-			return err;
-		}
-		l = g_slist_prepend(l, bean);
-	}
-
-	*out = g_slist_reverse (l);
-	return NULL;
-}
-
 GError *
 m2v2_json_load_single_xbean (struct json_object *j, gpointer *pbean)
 {
@@ -259,33 +231,6 @@ m2v2_json_load_setof_xbean (struct json_object *jv, GSList **out)
 
 	*out = g_slist_reverse(l); // Serve the beans in the same order!
 	return NULL;
-}
-
-GError *
-meta2_json_load_setof_beans(struct json_object *jbeans, GSList **beans)
-{
-	static gchar* title[] = { "aliases", "headers", "chunks", NULL };
-	static jbean_mapper mapper[] = {
-		m2v2_json_load_single_alias,
-		m2v2_json_load_single_header,
-		m2v2_json_load_single_chunk
-	};
-
-	GError *err = NULL;
-	gchar **ptitle;
-	jbean_mapper *pmapper;
-	for (ptitle=title,pmapper=mapper; *ptitle ;++ptitle,++pmapper) {
-		struct json_object *jv = NULL;
-		if (!json_object_object_get_ex (jbeans, *ptitle, &jv))
-			continue;
-		err = _jarray_to_beans(beans, jv, *pmapper);
-		if (err != NULL) {
-			GRID_WARN("Parsing error: (%d) %s", err->code, err->message);
-			break;
-		}
-	}
-
-	return err;
 }
 
 GError *

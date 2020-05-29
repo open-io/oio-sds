@@ -29,7 +29,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 struct anonymous_sequence_s
 {
 	asn_anonymous_set_ list;
-	asn_struct_ctx_t _asn_ctx;
 };
 
 static void bean_gclean(gpointer bean, gpointer ignored)
@@ -138,6 +137,13 @@ bean_sequence_unmarshall(const guint8 *buf, gsize len)
 	return l;
 }
 
+static void func_free(void *d) {
+	if (!d)
+		return;
+	bean_cleanASN(d, FALSE);
+}
+
+
 gint
 bean_sequence_decoder(GSList **l, const void *buf, gsize len, GError **err)
 {
@@ -147,12 +153,6 @@ bean_sequence_decoder(GSList **l, const void *buf, gsize len, GError **err)
 	asn_codec_ctx_t codecCtx;
 	struct anonymous_sequence_s *abstract_sequence;
 	GSList *beans = NULL;
-
-	void func_free(void *d) {
-		if (!d)
-			return;
-		bean_cleanASN(d, FALSE);
-	}
 
 	if (!buf || !len) {
 		GRID_DEBUG("Invalid parameter, nothing to unmarshall");

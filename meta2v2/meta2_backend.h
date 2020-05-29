@@ -119,11 +119,6 @@ GError* meta2_backend_update_beans(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *new_chunks, GSList *old_chunks,
 		gboolean frozen);
 
-/** Filters out only the CONTENTS-typed beans and call
- * meta2_backend_delete_beans() */
-GError* meta2_backend_delete_chunks(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, GSList *beans);
-
 GError* meta2_backend_notify_container_state(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gboolean recompute,
 		gint64 damaged_objects, gint64 missing_chunks);

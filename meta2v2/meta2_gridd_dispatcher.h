@@ -22,8 +22,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 struct gridd_request_descr_s;
 
-const struct gridd_request_descr_s* meta2_gridd_get_v1_requests(void);
-
 const struct gridd_request_descr_s* meta2_gridd_get_v2_requests(void);
 
 #endif /*OIO_SDS__meta2v2__meta2_gridd_dispatcher_h*/
