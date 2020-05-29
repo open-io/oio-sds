@@ -38,13 +38,7 @@ void meta1_prefixes_manage_all(struct meta1_prefixes_set_s *m1ps);
 gboolean meta1_prefixes_is_managed(struct meta1_prefixes_set_s *m1ps,
 		const guint8 *bytes);
 
-gchar ** meta1_prefixes_get_peers(struct meta1_prefixes_set_s *m1ps,
-		const guint8 *bytes);
-
 gchar** meta1_prefixes_get_all(struct meta1_prefixes_set_s *m1ps);
-
-GError * meta1_prefixes_check_coalescence(const guint8 *cache,
-		const guint8 *bytes, guint digits);
 
 GError * meta1_prefixes_check_coalescence_all(const guint8 *cache,
 		guint digits);

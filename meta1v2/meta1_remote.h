@@ -44,9 +44,6 @@ GError * meta1v2_remote_link_service(const char *m1, struct oio_url_s *url,
 GError * meta1v2_remote_unlink_service(const char *m1, struct oio_url_s *url,
 		const char *srvtype, gint64 deadline);
 
-GError * meta1v2_remote_unlink_one_service(const char *m1, struct oio_url_s *url,
-		const char *srvtype, gint64 seqid, gint64 deadline);
-
 GError * meta1v2_remote_renew_reference_service(const char *m1, struct oio_url_s *url,
 		const char *srvtype, gboolean dryrun, gboolean ac, gchar ***out, gint64 deadline);
 
@@ -66,11 +63,5 @@ GError * meta1v2_remote_reference_del_property(const char *m1, struct oio_url_s 
 GError * meta1v2_remote_relink_service(const char *m1, struct oio_url_s *url,
 		const char *kept, const char *replaced,
 		gboolean dryrun, gchar ***out, gint64 deadline);
-
-
-GError * meta1v2_remote_list_services_by_prefix(const char *to, struct oio_url_s *url,
-		gchar ***out, gint64 deadline);
-
-GError * meta1v2_remote_get_prefixes(const char *m1, gchar ***result, gint64 deadline);
 
 #endif /*OIO_SDS__meta1v2__meta1_remote_h*/

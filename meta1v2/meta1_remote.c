@@ -164,23 +164,6 @@ meta1v2_remote_unlink_service(const char *to, struct oio_url_s *url,
 }
 
 GError *
-meta1v2_remote_unlink_one_service(const char *to, struct oio_url_s *url,
-		const char *srvtype, gint64 seqid, gint64 deadline)
-{
-	EXTRA_ASSERT(url != NULL);
-	EXTRA_ASSERT(srvtype != NULL);
-	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVUNLINK, deadline);
-	metautils_message_add_url_no_type (req, url);
-	metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, srvtype);
-	if (seqid > 0) {
-		gchar str[24];
-		g_snprintf(str, sizeof(str), "%"G_GINT64_FORMAT"\n", seqid);
-		metautils_message_add_body_unref (req, metautils_gba_from_string (str));
-	}
-	return oneway_request(to, message_marshall_gba_and_clean(req), deadline);
-}
-
-GError *
 meta1v2_remote_renew_reference_service(const char *to, struct oio_url_s *url,
 		const char *srvtype, gboolean dryrun, gboolean autocreate,
 		gchar ***result, gint64 deadline)
@@ -250,24 +233,6 @@ meta1v2_remote_reference_del_property(const char *to, struct oio_url_s *url,
 }
 
 GError *
-meta1v2_remote_list_services_by_prefix(const char *to, struct oio_url_s *url,
-		gchar ***result, gint64 deadline)
-{
-	EXTRA_ASSERT(url != NULL);
-	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVALLONM1, deadline);
-	metautils_message_add_url_no_type (req, url);
-	metautils_message_add_cid (req, NAME_MSGKEY_PREFIX, oio_url_get_id(url));
-	return STRV_request(to, message_marshall_gba_and_clean(req), result, deadline);
-}
-
-GError *
-meta1v2_remote_get_prefixes(const char *to, gchar *** result, gint64 deadline)
-{
-	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_GETPREFIX, deadline);
-	return STRV_request(to, message_marshall_gba_and_clean(req), result, deadline);
-}
-
-GError *
 meta1v2_remote_relink_service(const char *m1, struct oio_url_s *url,
 		const char *kept, const char *replaced, gboolean dryrun,
 		gchar ***out, gint64 deadline)
@@ -281,4 +246,3 @@ meta1v2_remote_relink_service(const char *m1, struct oio_url_s *url,
 		metautils_message_add_field_str (req, NAME_MSGKEY_DRYRUN, "1");
 	return STRV_request(m1, message_marshall_gba_and_clean(req), out, deadline);
 }
-

@@ -18,21 +18,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include <stddef.h>
-#include <stdlib.h>
 #include <string.h>
-#include <errno.h>
-#include <arpa/inet.h>
-
-#include <sqlite3.h>
 
 #include <core/oiocfg.h>
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/common_variables.h>
 #include <sqliterepo/sqliterepo.h>
-#include <sqliterepo/election.h>
 #include <events/events_variables.h>
 
-#include "./internals.h"
 #include "./meta1_prefixes.h"
 #include "./meta1_backend.h"
 #include "./meta1_backend_internals.h"
