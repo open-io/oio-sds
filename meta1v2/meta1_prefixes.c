@@ -361,19 +361,6 @@ meta1_prefixes_init(void)
 	return m1ps;
 }
 
-gchar **
-meta1_prefixes_get_peers(struct meta1_prefixes_set_s *m1ps,
-		const guint8 *bytes)
-{
-	EXTRA_ASSERT(m1ps != NULL);
-	if (!m1ps->by_prefix)
-		return NULL;
-	g_mutex_lock(&m1ps->lock);
-	gchar **a = meta0_utils_array_get_urlv(m1ps->by_prefix, bytes);
-	g_mutex_unlock(&m1ps->lock);
-	return a;
-}
-
 /* @private */
 struct _check_ctx_s {
 	GError *err;
@@ -393,15 +380,6 @@ _on_prefix(gpointer u, const guint8 *grp, const guint8 *pfx)
 	ctx->err = ERRPTF("Invalid Group=%02X%02X Prefix=%02X%02X",
 			grp[0], grp[1], pfx[0], pfx[1]);
 	return FALSE;
-}
-
-GError *
-meta1_prefixes_check_coalescence (const guint8 *cache, const guint8 *bytes,
-		guint digits)
-{
-	struct _check_ctx_s ctx = {NULL, cache};
-	meta0_utils_foreach_prefix_in_group(bytes, digits, _on_prefix, &ctx);
-	return ctx.err;
 }
 
 GError *
