@@ -35,15 +35,11 @@ License along with this library.
 #define EVENTLOG_SIZE 32
 #define STATUS_FINAL(e) ((e) >= STEP_SLAVE)
 
-#define MEMBER_NAME(n, m) NAME2CONST(n, m->inline_name)
-
 #ifdef HAVE_EXTRA_DEBUG
 #define TRACE_EXECUTION(M) _manager_record_activity((M), __FUNCTION__, __LINE__)
 #else
 #define TRACE_EXECUTION(...)
 #endif
-
-typedef guint req_id_t;
 
 enum event_type_e
 {
@@ -506,8 +502,6 @@ _is_over (const gint64 now, const gint64 last, const gint64 delay)
 {
 	return delay > 0 && last > 0 && last < OLDEST(now,delay);
 }
-
-#define _IS_OVER(L,D) _is_over(oio_ext_monotonic_time(), L, D)
 
 static gboolean
 _extract_id(const char *path, gint32 *pid)

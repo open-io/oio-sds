@@ -96,9 +96,6 @@ struct sqlx_repository_s
 	guint hash_width;
 	guint hash_depth;
 
-	enum sqlx_sync_mode_e sync_mode_solo;
-	enum sqlx_sync_mode_e sync_mode_repli;
-
 	gboolean flag_autovacuum : 1;
 	gboolean flag_delete_on : 1;
 
@@ -106,7 +103,5 @@ struct sqlx_repository_s
 };
 
 void load_statement(sqlite3_stmt *stmt, Row_t *r, Table_t *t);
-
-const gchar * sqlite_op2str(int op);
 
 #endif /*OIO_SDS__sqliterepo__internals_h*/

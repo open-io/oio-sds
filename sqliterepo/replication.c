@@ -733,11 +733,3 @@ sqlx_transaction_end(struct sqlx_repctx_s *ctx, GError *err)
 	sqlx_replication_free_context(ctx);
 	return err;
 }
-
-struct sqlx_sqlite3_s*
-sqlx_transaction_get_base(struct sqlx_repctx_s *ctx)
-{
-	EXTRA_ASSERT(ctx != NULL);
-	return ctx->sq3;
-}
-

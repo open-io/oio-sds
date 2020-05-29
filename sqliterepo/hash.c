@@ -19,10 +19,8 @@ License along with this library.
 
 #include <metautils/lib/metautils.h>
 
-#include "sqliterepo.h"
 #include "sqlx_remote.h"
 #include "hash.h"
-#include "internals.h"
 
 void
 sqliterepo_hash_name (const struct sqlx_name_s *n, gchar *d, gsize dlen)
