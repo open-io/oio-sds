@@ -19,7 +19,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <stddef.h>
 #include <stdlib.h>
-#include <unistd.h>
 
 #include <metautils/lib/metautils.h>
 #include <core/lrutree.h>
