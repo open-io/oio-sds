@@ -34,19 +34,6 @@ typedef struct Message Message_t;
 typedef struct Parameter Parameter_t;
 typedef Message_t* MESSAGE;
 
-/** Builds a simple reply for the given request. This function automates the
- * copy of the required fields from the request, and sets the appropriated
- * fields with the given status and message.
- *
- * The reply pointer wust be freed with metautils_message_destroy(). */
-MESSAGE metaXServer_reply_simple(MESSAGE request, gint status, const gchar *msg);
-
-/** Performs the opposite operation : retrieves the core elements of the
- * message (supposed to be a reply).
- * The message returned in the msg pointer is a copy of the original.
- * It is allocated with the g_lib and must be freed with g_free(). */
-GError* metaXClient_reply_simple(MESSAGE reply, guint * status, gchar ** msg);
-
 void* metautils_message_get_ID (MESSAGE m, gsize *l);
 void* metautils_message_get_NAME (MESSAGE m, gsize *l);
 void* metautils_message_get_BODY (MESSAGE m, gsize *l);
@@ -58,7 +45,6 @@ void metautils_message_set_BODY (MESSAGE m, const void *b, gsize l);
 gboolean metautils_message_has_ID (MESSAGE m);
 gboolean metautils_message_has_BODY (MESSAGE m);
 
-MESSAGE metautils_message_create_reply (const char *name);
 MESSAGE metautils_message_create_named (const char *name, gint64 deadline);
 
 /** Frees all the internal structures of the pointed message. */

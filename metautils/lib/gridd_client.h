@@ -24,7 +24,6 @@ License along with this library.
 # include "metautils.h"
 
 struct gridd_client_s;
-struct gridd_client_factory_s;
 
 struct addr_info_s;
 
@@ -60,9 +59,6 @@ const gchar * gridd_client_url (struct gridd_client_s *self);
 /* Returns the file descriptor currently used by `self` */
 int gridd_client_fd (struct gridd_client_s *self);
 
-/* Force the file descriptor in `fd` to be used by `self` */
-GError * gridd_client_set_fd(struct gridd_client_s *self, int fd);
-
 /* Force the global timeout for the operation (all the request, including
  * the redirections */
 void gridd_client_set_timeout (struct gridd_client_s *self, gdouble seconds);
@@ -97,9 +93,6 @@ void gridd_client_no_redirect (struct gridd_client_s *c);
 
 /* Only works with clients of the default type */
 void gridd_client_set_avoidance (struct gridd_client_s *c, gboolean on);
-
-/* Only works with clients of the default type */
-void gridd_client_set_keepalive(struct gridd_client_s *self, gboolean on);
 
 /* ------------------------------------------------------------------------- */
 

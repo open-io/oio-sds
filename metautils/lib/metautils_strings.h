@@ -48,17 +48,10 @@ License along with this library.
 /** @return to be freed with g_free(), not g_strfreev() */
 gchar ** g_strdupv_inline (gchar **src);
 
-/** Splits the given buffer (considered as a non NULL-terminated) into
- * newly allocated tokens (wrapping g_strsplit()) */
-gchar **buffer_split(const void *buf, gsize buflen, const gchar * separator, gint max_tokens);
-
 /** Calls g_strcmp0(a,b) and ignores its third argument. */
 int metautils_strcmp3(gconstpointer a, gconstpointer b, gpointer ignored);
 
 /** g_free(p) if p is not NULL */
 void g_free0(gpointer p);
-
-/** g_free0(p1) and ignores p2 */
-void g_free1(gpointer p1, gpointer p2);
 
 #endif /*OIO_SDS__metautils__lib__metautils_strings_h*/

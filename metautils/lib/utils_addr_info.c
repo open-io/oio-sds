@@ -82,39 +82,6 @@ metautils_url_valid_for_bind(const gchar *url)
 	return metautils_addr_valid_for_bind(&ai);
 }
 
-gint
-addr_info_compare(gconstpointer a, gconstpointer b)
-{
-	addr_info_t addrA, addrB;
-
-	if (!a || !b)
-		return 0;
-	if (a == b)
-		return TRUE;
-
-	memset(&addrA, 0, sizeof(addr_info_t));
-	memset(&addrB, 0, sizeof(addr_info_t));
-
-	memcpy(&addrA, a, sizeof(addr_info_t));
-	memcpy(&addrB, b, sizeof(addr_info_t));
-
-	if (addrA.type != addrB.type)
-		return CMP(addrB.type,addrA.type);
-
-	if (addrA.port != addrB.port)
-		return CMP(addrB.port,addrA.port);
-
-	switch (addrA.type) {
-		case TADDR_V4:
-			return memcmp(&(addrA.addr), &(addrB.addr), sizeof(addrA.addr.v4));
-		case TADDR_V6:
-			return memcmp(&(addrA.addr), &(addrB.addr), sizeof(addrA.addr.v6));
-		default:
-			g_assert_not_reached();
-			return 0;
-	}
-}
-
 gboolean
 addr_info_equal(gconstpointer a, gconstpointer b)
 {
@@ -141,21 +108,6 @@ addr_info_equal(gconstpointer a, gconstpointer b)
 	default:
 		return FALSE;
 	}
-}
-
-guint
-addr_info_hash(gconstpointer k)
-{
-	addr_info_t addr;
-
-	memcpy(&addr, k, sizeof(addr_info_t));
-	/*forces a NULL's padding if the address if ipv4 */
-	if (addr.type == TADDR_V4)
-		memset(
-			((guint8 *) & (addr.addr.v4)) + sizeof(addr.addr.v4),
-			0x00, sizeof(addr.addr.v6) - sizeof(addr.addr.v4));
-
-	return djb_hash_buf((guint8 *) &addr, sizeof(addr_info_t));
 }
 
 oio_location_t

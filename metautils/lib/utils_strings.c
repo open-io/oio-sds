@@ -27,7 +27,6 @@ License along with this library.
 #include "metautils_containers.h"
 
 void g_free0(gpointer p) { if (p) g_free(p); }
-void g_free1(gpointer p1, gpointer p2) { (void) p2; g_free0(p1); }
 
 int metautils_strcmp3(gconstpointer a, gconstpointer b, gpointer ignored) {
 	(void) ignored;
@@ -60,17 +59,4 @@ gchar ** g_strdupv_inline(gchar **src) {
 	}
 
 	return (gchar**)raw;
-}
-
-gchar ** buffer_split(const void *buf, gsize buflen, const gchar *sep,
-		gint max_tokens) {
-	gchar **sp, *tmp;
-
-	if (!buf || buflen <= 0)
-		return NULL;
-
-	tmp = g_strndup((gchar*)buf, buflen);
-	sp = g_strsplit(tmp, sep, max_tokens);
-	g_free(tmp);
-	return sp;
 }

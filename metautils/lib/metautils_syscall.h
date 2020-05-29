@@ -46,14 +46,9 @@ struct metautils_syscalls_vtable_s {
 	int (*setsockopt) (int, int, int, const void *, socklen_t);
 };
 
-void metautils_set_vtable_syscall(struct metautils_syscalls_vtable_s *vtable);
-struct metautils_syscalls_vtable_s* metautils_get_vtable_syscall(void);
-
 // Wrappers
 
-int metautils_syscall_open (const char *, int, int);
 int metautils_syscall_close (int);
-int metautils_syscall_shutdown (int, int);
 int metautils_syscall_unlink (const char *);
 int metautils_syscall_socket (int, int, int);
 int metautils_syscall_connect (int, const struct sockaddr *, socklen_t);

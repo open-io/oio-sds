@@ -33,28 +33,6 @@ static struct metautils_syscalls_vtable_s VTABLE = {
 	NULL, NULL,
 };
 
-void
-metautils_set_vtable_syscall(struct metautils_syscalls_vtable_s *vtable)
-{
-	memcpy(&VTABLE, vtable, sizeof(VTABLE));
-}
-
-struct metautils_syscalls_vtable_s*
-metautils_get_vtable_syscall(void)
-{
-	return &VTABLE;
-}
-
-int
-metautils_syscall_open (const char *p, int flag, int mode)
-{
-#ifdef HAVE_EXTRA_DEBUG
-	if (VTABLE.open)
-		return VTABLE.open(p, flag, mode);
-#endif
-	return open(p, flag, mode);
-}
-
 int
 metautils_syscall_unlink (const char *p)
 {
@@ -155,16 +133,6 @@ metautils_syscall_close (int fd)
 		return VTABLE.close(fd);
 #endif
 	return close(fd);
-}
-
-int
-metautils_syscall_shutdown (int fd, int how)
-{
-#ifdef HAVE_EXTRA_DEBUG
-	if (VTABLE.shutdown)
-		return VTABLE.shutdown(fd, how);
-#endif
-	return shutdown(fd, how);
 }
 
 int

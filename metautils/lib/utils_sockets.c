@@ -61,18 +61,6 @@ static struct metautils_sockets_vtable_s VTABLE = {
 	NULL, NULL, NULL, NULL, NULL, NULL, NULL
 };
 
-void
-metautils_set_vtable_sockets(struct metautils_sockets_vtable_s *vtable)
-{
-	memcpy(&VTABLE, vtable, sizeof(VTABLE));
-}
-
-struct metautils_sockets_vtable_s*
-metautils_get_vtable_sockets(void)
-{
-	return &VTABLE;
-}
-
 int
 socket_nonblock(int domain, int type, int protocol)
 {
@@ -108,87 +96,6 @@ accept_nonblock(int srv, struct sockaddr *sa, socklen_t *sa_len)
 		sock_set_non_blocking(fd, TRUE);
 	return fd;
 #endif
-}
-
-gint
-sock_to_write(int fd, gint ms, void *buf, gsize bufSize, GError ** err)
-{
-#ifdef HAVE_EXTRA_DEBUG
-	if (VTABLE.to_write)
-		return VTABLE.to_write(fd, ms, buf, bufSize, err);
-#endif
-
-#define WRITE() do { \
-		written = metautils_syscall_write(fd, ((guint8 *)buf) + nbSent, bufSize - nbSent); \
-		if (written > 0) { \
-			ui_written = written; \
-			nbSent += ui_written; \
-		} \
-		if (written < 0) { \
-			if (errno != EAGAIN && errno != EINTR) { \
-				GSETERROR(err, "Write error (%s)", strerror(errno)); \
-				return -1; \
-			} \
-		} \
-} while (0)
-
-	gsize ui_written;
-	ssize_t written;
-	gsize nbSent = 0;
-
-	if (fd < 0 || !buf || bufSize <= 0) {
-		GSETERROR(err, "invalid parameter");
-		return -1;
-	}
-
-	WRITE();
-
-	while (nbSent < bufSize) {
-		int rc_poll;
-		struct pollfd p;
-
-		p.fd = fd;
-		p.events = POLLOUT | POLLERR | POLLHUP | POLLNVAL;
-		p.revents = 0;
-
-		errno = 0;
-		rc_poll = metautils_syscall_poll(&p, 1, ms);
-
-		if (rc_poll == 0) {	/*timeout */
-			GSETCODE(err, ERRCODE_CONN_TIMEOUT, "Socket timeout");
-			return (-1);
-		}
-
-		if (rc_poll == -1) {	/*poll error */
-			if (errno != EINTR) {
-				GSETERROR(err, "Socket error (%s) after %"G_GSIZE_FORMAT" bytes written", strerror(errno), nbSent);
-				return (-1);
-			}
-			else {
-				GRID_TRACE("poll interrupted (%s)", strerror(errno));
-				continue;
-			}
-		}
-
-		/*poll success */
-		if (p.revents & POLLNVAL) {
-			GSETERROR(err, "Socket (%d) is invalid after %"G_GSIZE_FORMAT" bytes sent", fd, nbSent);
-			return -1;
-		}
-		if (p.revents & POLLERR) {
-			int sock_err = socket_get_errcode(fd);
-			GSETERROR(err, "Socket (%d) error after %"G_GSIZE_FORMAT" bytes written : (%d) %s", fd, nbSent, sock_err, strerror(sock_err));
-			return -1;
-		}
-		if ((p.revents & POLLHUP)) {
-			GSETCODE(err, ERRCODE_CONN_CLOSED, "Socket (%d) closed after %"G_GSIZE_FORMAT" bytes written", fd, nbSent);
-			return -1;
-		}
-
-		WRITE();
-	}
-
-	return nbSent;
 }
 
 gint
@@ -255,32 +162,6 @@ sock_to_read(int fd, gint ms, void *buf, gsize bufSize, GError ** err)
 			READ();
 		}
 	}
-}
-
-gint
-sock_to_read_size(int fd, gint ms, void *buf, gsize bufSize, GError ** err)
-{
-#ifdef HAVE_EXTRA_DEBUG
-	if (VTABLE.to_read_size)
-		return VTABLE.to_read_size(fd, ms, buf, bufSize, err);
-#endif
-
-	gsize nbRead = 0;
-
-	while (nbRead < bufSize) {
-		int n = sock_to_read(fd, ms, ((guint8 *) buf) + nbRead, bufSize - nbRead, err);
-		if (n < 0) {
-			GSETERROR(err, "Read failed after %"G_GSIZE_FORMAT" bytes", nbRead);
-			return n;
-		}
-		else if (n == 0) {
-			GSETERROR(err, "Socket closed after %"G_GSIZE_FORMAT" bytes read", nbRead);
-			return n;
-		}
-		else
-			nbRead += n;
-	}
-	return nbRead;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -363,22 +244,6 @@ sock_set_reuseaddr(int fd, gboolean enabled)
 	if (!metautils_syscall_setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (void*)&opt, sizeof(opt)))
 		return TRUE;
 	GRID_DEBUG("fd=%i set(SO_REUSEADDR,%d): (%d) %s",
-			fd, opt, errno, strerror(errno));
-	return FALSE;
-}
-
-gboolean
-sock_set_keepalive(int fd, gboolean enabled)
-{
-#ifdef HAVE_EXTRA_DEBUG
-	if (VTABLE.set_keepalive)
-		return VTABLE.set_keepalive(fd, enabled);
-#endif
-
-	int opt = BOOL(enabled);
-	if (!metautils_syscall_setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (void*)&opt, sizeof(opt)))
-		return TRUE;
-	GRID_DEBUG("fd=%i set(SO_KEEPALIVE,%d) : (%d) %s",
 			fd, opt, errno, strerror(errno));
 	return FALSE;
 }

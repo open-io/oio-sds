@@ -82,12 +82,6 @@ _create_named (const char *name, gint64 dl, gboolean with_id)
 }
 
 MESSAGE
-metautils_message_create_reply (const char *name)
-{
-	return _create_named(name, 0, FALSE);
-}
-
-MESSAGE
 metautils_message_create_named (const char *name, gint64 deadline)
 {
 	return _create_named(name, deadline, TRUE);
@@ -120,7 +114,6 @@ metautils_asn1c_write_gba (const void *b, gsize bSize, void *key)
 		g_byte_array_append((GByteArray*)key, b, bSize);
 	return 0;
 }
-
 
 GByteArray*
 message_marshall_gba(MESSAGE m, GError **err)
@@ -745,4 +738,3 @@ metautils_message_extract_boolean(MESSAGE msg, const gchar *n,
 		*v = oio_str_parse_bool (tmp, *v);
 	return NULL;
 }
-

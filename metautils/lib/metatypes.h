@@ -68,17 +68,11 @@ License along with this library.
 #define STRLEN_SHA256      TYPE_TO_STRLEN(hash_sha256_t)
 #define STRLEN_MD5         TYPE_TO_STRLEN(hash_md5_t)
 
-/** Type to store a file size */
-typedef gint64 file_size_t;
-
 /** Type to store a sha256 hash */
 typedef guint8 hash_sha256_t[32];
 
 /** Type to store a md5 hash */
 typedef guint8 hash_md5_t[16];
-
-/** Type to store a message id */
-typedef guint32 meta_message_id_t;
 
 /** Type to store a chunk position */
 typedef guint32 chunk_position_t;
@@ -210,15 +204,5 @@ typedef struct service_info_s
 	score_t score;                      /**< The service score */
 	GPtrArray *tags;                    /**< The list of service tags */
 } service_info_t;
-
-/**
- * Represent an ACL rule
- */
-typedef struct addr_rule_s
-{
-	gchar* network_addr; /**< IPv4 in decimal dotted notation */
-	gchar* network_mask; /**< IPv4 in decimal dotted notation */
-	gboolean authorize;  /**< Allow (TRUE) or deny (FALSE) */
-} addr_rule_t;
 
 #endif /*OIO_SDS__metautils__lib__metatypes_h*/

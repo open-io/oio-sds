@@ -46,21 +46,12 @@ gboolean service_update_tagfilter2(struct service_update_policies_s *pol,
 gboolean service_update_tagfilter(struct service_update_policies_s *pol,
 		const gchar *type, gchar **pname, gchar **pvalue);
 
-/** Get the value associated with the tag defined for the policy (or NULL). */
-gchar * service_update_get_tag_value(struct service_update_policies_s *pol,
-		const gchar *type, gchar *tag_key);
-
 enum service_update_policy_e service_howto_update(
 		struct service_update_policies_s *pol,
 		const gchar *type);
 
 /* @return 0 if unspecified, or the number of expected replicas */
 guint service_howmany_replicas(
-		struct service_update_policies_s *pol,
-		const gchar *type);
-
-/* @return 0 if unspecified, or the expected distance */
-guint service_howmany_distance(
 		struct service_update_policies_s *pol,
 		const gchar *type);
 
