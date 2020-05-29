@@ -189,10 +189,8 @@ add_library(metautils STATIC
 		utils_addr_info.c
 		utils_gba.c
 		utils_kv.c
-		utils_l4v.c
 		utils_m1url.c
 		utils_meta0_info.c
-		utils_metadata.c
 		utils_namespace_info.c
 		utils_service_info.c
 
@@ -267,7 +265,6 @@ add_library(metautils STATIC
 
 		comm_message.c
 		comm_converter.c
-		comm_meta_reply.c
 		asn1c_ext.c
 )
 

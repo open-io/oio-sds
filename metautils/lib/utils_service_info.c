@@ -273,14 +273,6 @@ service_info_cleanv(struct service_info_s **siv, gboolean content_only)
 	}
 }
 
-void
-service_info_gclean(gpointer p1, gpointer p2)
-{
-	(void) p2;
-	if (p1)
-		service_info_clean((struct service_info_s *) p1);
-}
-
 struct service_info_s *
 service_info_dup(const struct service_info_s *si)
 {

@@ -68,12 +68,6 @@ g_error_transmit(GError **err, GError *e)
 	}
 }
 
-gint
-gerror_get_code(GError * err)
-{
-	return err ? err->code : 0;
-}
-
 const gchar *
 gerror_get_message(GError * err)
 {

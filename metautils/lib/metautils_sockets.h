@@ -41,28 +41,6 @@ struct metautils_sockets_vtable_s
 
 extern gboolean oio_allow_tcp_fastopen;
 
-void metautils_set_vtable_sockets(struct metautils_sockets_vtable_s *vtable);
-struct metautils_sockets_vtable_s* metautils_get_vtable_sockets(void);
-
-/**
- * Writes data in a file descriptor with a given maximum amount of time
- * spent in network latencies.
- *
- * This function manages the case if the socket is blocking or not. If
- * fd is a blocking socket, there is n quranty that the sending will
- * be time-bounded.
- *
- * @param fd an opened and connected socket file descriptor
- * @param ms the maximum latency
- * @param buf a pointer to the buffer to be sent
- * @param bufSize the size of the buffer
- * @param err an error structure set in case of error
- *
- * @return the number of bytes spent in case of success, -1 if an
- *         error occured.
- */
-gint sock_to_write(int fd, gint ms, void *buf, gsize bufSize, GError ** err);
-
 /**
  * Read bytes from the socket file descriptor, spending at most a given
  * number of milli seconds.
@@ -81,19 +59,6 @@ gint sock_to_write(int fd, gint ms, void *buf, gsize bufSize, GError ** err);
  *         or -1 in case of error (an err is set).
  */
 gint sock_to_read(int fd, gint ms, void *buf, gsize bufSize, GError ** err);
-
-/**
- * Reads exactly 'bufSize' bytes during at most 'ms' milliseconds
- * and fills the given buffer with the data.
- *
- * @param fd an opened and connected socket
- * @param ms the maximum latency of the operation
- * @param buf a pointer to the buffer to be filled withread data.
- * @param bufSize the size of the buffer
- * @param err an error structure set in case of error
- * @return
- */
-gint sock_to_read_size(int fd, gint ms, void *buf, gsize bufSize, GError ** err);
 
 /* Use this instead of socket() + sock_set_non_blocking() because it attempts to
  * optimize the syscalls made, depending on your kernel/sysc/compile options. */
@@ -114,8 +79,6 @@ gboolean sock_set_non_blocking(int fd, gboolean enabled);
 gboolean sock_set_tcpquickack(int fd, gboolean enabled);
 
 gboolean sock_set_reuseaddr(int fd, gboolean enabled);
-
-gboolean sock_set_keepalive(int fd, gboolean enabled);
 
 gboolean sock_set_nodelay(int fd, gboolean enabled);
 

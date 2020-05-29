@@ -42,7 +42,6 @@ License along with this library.
 # include <metautils/lib/metautils_resolv.h>
 # include <metautils/lib/metautils_hashstr.h>
 # include <metautils/lib/metautils_task.h>
-# include <metautils/lib/metautils_l4v.h>
 # include <metautils/lib/metautils_svc_policy.h>
 # include <metautils/lib/metautils_syscall.h>
 
@@ -52,7 +51,6 @@ License along with this library.
 # include <metautils/lib/metatype_m1url.h>
 # include <metautils/lib/metatype_addrinfo.h>
 # include <metautils/lib/metatype_kv.h>
-# include <metautils/lib/metatype_metadata.h>
 
 # include <metautils/lib/storage_policy.h>
 # include <metautils/lib/common_main.h>

@@ -56,13 +56,6 @@ grid_single_rrd_destroy(struct grid_single_rrd_s *gsr)
 		g_free(gsr);
 }
 
-void
-grid_single_rrd_set_default(struct grid_single_rrd_s *gsr, guint64 v)
-{
-	gsr->def = v;
-	gsr->flags |= RRD_FLAG_SHIFT_SET;
-}
-
 static void
 _rrd_set(struct grid_single_rrd_s *gsr, guint64 v)
 {
@@ -124,63 +117,3 @@ grid_single_rrd_get_delta(struct grid_single_rrd_s *gsr,
 	_gsr_manage_timeshift(gsr, now);
 	return _rrd_current(gsr) - _rrd_past(gsr, period);
 }
-
-#if 0
-void
-grid_single_rrd_pushifmax(struct grid_single_rrd_s *gsr, time_t now, guint64 v)
-{
-	_gsr_manage_timeshift(gsr, now);
-	guint64 v0 = _rrd_current(gsr);
-	_rrd_set(gsr, MAX(v0,v));
-}
-
-guint64
-grid_single_rrd_get(struct grid_single_rrd_s *gsr, time_t now)
-{
-	_gsr_manage_timeshift(gsr, now);
-	return _rrd_current(gsr);
-}
-
-guint64
-grid_single_rrd_get_max(struct grid_single_rrd_s *gsr,
-		time_t now, time_t period)
-{
-	EXTRA_ASSERT(period <= gsr->period);
-	_gsr_manage_timeshift(gsr, now);
-	guint64 maximum = 0;
-	for (time_t i=0; i<period ;i++) {
-		guint64 m = _rrd_past(gsr,i);
-		maximum = MAX(maximum,m);
-	}
-	return maximum;
-}
-
-void
-grid_single_rrd_get_allmax(struct grid_single_rrd_s *gsr,
-		time_t now, time_t period, guint64 *out)
-{
-	EXTRA_ASSERT(period <= gsr->period);
-	_gsr_manage_timeshift(gsr, now);
-	guint64 maximum = 0;
-	for (time_t i=0; i<period ;i++) {
-		guint64 m = _rrd_past(gsr,i);
-		out[i] = maximum = MAX(maximum,m);
-	}
-}
-
-const char *
-grid_single_rrd_debug(struct grid_single_rrd_s *gsr, gchar *dst, gsize len)
-{
-	g_assert(gsr != NULL);
-	g_assert(dst != NULL);
-	g_assert(len > 0);
-
-	*dst = 0;
-	for (time_t i=0; i < gsr->period ;i++) {
-		gchar tmp[32];
-		g_snprintf(tmp, sizeof(tmp), ",%"G_GUINT64_FORMAT, _rrd_past(gsr, i));
-		strncat(dst, tmp, len);
-	}
-	return dst;
-}
-#endif

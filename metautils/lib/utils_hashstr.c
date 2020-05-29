@@ -102,25 +102,6 @@ hashstr_len(const hashstr_t *hs)
 	return unlikely(NULL == hs) ? 0 : hs->hl.l;
 }
 
-gsize
-hashstr_struct_len(const hashstr_t *hs)
-{
-	return sizeof(hashstr_t) + hashstr_len(hs) + 1;
-}
-
-guint
-hashstr_hash(const hashstr_t *hs)
-{
-	return unlikely(NULL == hs) ? 0 : hs->hl.h;
-}
-
-gboolean
-hashstr_equal(const hashstr_t *hs1, const hashstr_t *hs2)
-{
-	return (hs1->hl.h == hs2->hl.h) && (hs1->hl.l == hs2->hl.l)
-		&& !g_strcmp0(hashstr_str(hs1), hashstr_str(hs2));
-}
-
 gint
 hashstr_quick_cmp(const hashstr_t *hs1, const hashstr_t *hs2)
 {

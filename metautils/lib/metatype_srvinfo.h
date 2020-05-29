@@ -29,8 +29,6 @@ void service_info_cleanv(struct service_info_s **siv, gboolean content_only);
 /* Clean the tags array from the service_info_s object. */
 void service_info_clean_tags(struct service_info_s *si);
 
-void service_info_gclean(gpointer si, gpointer unused);
-
 struct service_info_s *service_info_dup(const struct service_info_s *si);
 
 
@@ -39,8 +37,6 @@ GPtrArray *service_info_copy_tags(GPtrArray * original);
 struct service_tag_s *service_info_get_tag(GPtrArray * a, const gchar * n);
 
 struct service_tag_s *service_info_ensure_tag(GPtrArray * a, const gchar * name);
-
-void service_info_remove_tag(GPtrArray * a, const gchar * name);
 
 void service_tag_copy(struct service_tag_s *dst, struct service_tag_s *src);
 
@@ -65,29 +61,8 @@ void service_tag_set_value_float(struct service_tag_s *tag, gdouble r);
 gsize service_tag_to_string(const struct service_tag_s *tag, gchar * dst,
 		gsize dst_size);
 
-void service_info_swap(struct service_info_s *si0, struct service_info_s *si1);
-
-gint service_info_sort_by_score(gconstpointer a, gconstpointer b);
-
-gboolean service_info_equal(const struct service_info_s * si1,
-		const struct service_info_s * si2);
-
 const gchar * service_info_get_tag_value(const struct service_info_s *si,
 		const gchar *name, const gchar *def);
-
-const gchar * service_info_get_rawx_location(const struct service_info_s *si,
-		const gchar *def);
-
-const gchar * service_info_get_rawx_volume(const struct service_info_s *si,
-		const gchar *def);
-
-gchar* get_rawx_location(service_info_t* rawx);
-
-#define metautils_rawx_get_location(si) \
-	g_strdup(service_info_get_rawx_location((si), ""))
-
-#define metautils_rawx_get_volume(si) \
-	g_strdup(service_info_get_rawx_volume((si), "/"))
 
 struct json_object;
 

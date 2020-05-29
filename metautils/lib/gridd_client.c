@@ -242,6 +242,24 @@ _client_replace_error(struct gridd_client_s *client, GError *e)
 }
 
 static GError *
+metaXClient_reply_simple(MESSAGE reply, guint * status, gchar ** msg)
+{
+	EXTRA_ASSERT (reply != NULL);
+	EXTRA_ASSERT (status != NULL);
+	EXTRA_ASSERT (msg != NULL);
+
+	GError *err = metautils_message_extract_struint(reply, NAME_MSGKEY_STATUS, status);
+	if (err) {
+		g_prefix_error (&err, "status: ");
+		return err;
+	}
+	*msg = metautils_message_extract_string_copy(reply, NAME_MSGKEY_MESSAGE);
+	if (!*msg)
+		*msg = g_strdup("?");
+	return NULL;
+}
+
+static GError *
 _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 {
 	GError *err = NULL;
@@ -573,45 +591,6 @@ gridd_client_set_timeout_cnx(struct gridd_client_s *client, gdouble seconds)
 }
 
 GError*
-gridd_client_set_fd(struct gridd_client_s *client, int fd)
-{
-	EXTRA_ASSERT(client != NULL);
-
-	if (fd >= 0) {
-		switch (client->step) {
-			case NONE: /* ok */
-				break;
-			case CONNECTING:
-				if (client->request != NULL)
-					return NEWERROR(CODE_INTERNAL_ERROR, "Request pending");
-				break;
-			case REQ_SENDING:
-			case REP_READING_SIZE:
-			case REP_READING_DATA:
-				return NEWERROR(CODE_INTERNAL_ERROR, "Request pending");
-			case STATUS_OK:
-			case STATUS_FAILED:
-				/* ok */
-				break;
-		}
-	}
-
-	/* reset any connection and request */
-	_client_reset_reply(client);
-	_client_reset_request(client);
-	_client_reset_target(client);
-
-	/* XXX do not call _client_reset_cnx(), or close the connexion.
-	 * It is the responsibility of the caller to manage this, because it
-	 * explicitely breaks the pending socket management. */
-	client->fd = fd;
-
-	client->step = (client->fd >= 0) ? CONNECTING : NONE;
-
-	return NULL;
-}
-
-GError*
 gridd_client_connect_url(struct gridd_client_s *client, const gchar *url)
 {
 	EXTRA_ASSERT(client != NULL);
@@ -869,13 +848,6 @@ gridd_client_no_redirect (struct gridd_client_s *c)
 {
 	if (unlikely(!c)) return;
 	c->forbid_redirect = 1;
-}
-
-void
-gridd_client_set_keepalive(struct gridd_client_s *c, gboolean onoff)
-{
-	if (unlikely(!c)) return;
-	c->keepalive = BOOL(onoff);
 }
 
 void

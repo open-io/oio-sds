@@ -24,16 +24,11 @@ License along with this library.
 
 #include <metautils/lib/metatypes.h>
 
-GByteArray* metautils_gba_from_cid(const container_id_t cid);
-
 GByteArray* metautils_gba_dup(const GByteArray *gba);
 
 GByteArray* metautils_gba_from_string(const gchar *str);
 
 GByteArray* metautils_gba_from_hexstring(const gchar *str);
-
-gsize metautils_gba_data_to_string(const GByteArray *gba, gchar *dst,
-		gsize dst_size);
 
 /** Compare 2 GByteArray. Can be cast to GEqualFunc and used as 2nd param of
  * g_hash_table_new(). */
@@ -52,9 +47,5 @@ void metautils_gba_unref(gpointer p);
 
 /** Convert the content to its hexadecimal representation */
 GString* metautils_gba_to_hexgstr(GString *gstr, GByteArray *gba);
-
-void gba_pool_clean(GSList **pool);
-
-GByteArray * gba_poolify(GSList **pool, GByteArray *gba);
 
 #endif /*OIO_SDS__metautils__lib__metautils_gba_h*/

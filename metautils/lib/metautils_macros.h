@@ -31,9 +31,6 @@ License along with this library.
 # define NAME_ACCOUNT_RDIR  "_RDIR"
 
 /* Some well known service tags macro names */
-# define NAME_MACRO_SPACE_NAME "stat.space"
-# define NAME_MACRO_CPU_NAME "stat.cpu"
-# define NAME_MACRO_IOIDLE_NAME "stat.io"
 
 # define NAME_TAGNAME_RAWX_VOL "tag.vol"
 # define NAME_TAGNAME_RAWX_UP "tag.up"

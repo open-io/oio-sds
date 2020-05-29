@@ -42,13 +42,7 @@ hashstr_t* hashstr_dup(const hashstr_t *hs);
 
 const char * hashstr_str(const hashstr_t *hs);
 
-guint hashstr_hash(const hashstr_t *hs);
-
 gsize hashstr_len(const hashstr_t *hs);
-
-gsize hashstr_struct_len(const hashstr_t *hs);
-
-gboolean hashstr_equal(const hashstr_t *hs1, const hashstr_t *hs2);
 
 /** First sort using the hash, then calling hashstr_hash()
  * in case of hash equality */
@@ -75,12 +69,6 @@ gint hashstr_quick_cmpdata(gconstpointer p1, gconstpointer p2, gpointer u);
 	(R)->hl.l = _l; \
 	if (_l) memcpy((R)->s0, (S), _l); \
 	(R)->s0[_l] = '\0'; \
-} while (0)
-
-#define HASHSTR_ALLOCA_DUP(R,S) do { \
-	(R) = g_alloca(HASHSTR_PREFIX + (S)->len + 1); \
-	memcpy((R), (S), HASHSTR_PREFIX + (S)->len + 1); \
-	((guint8*)(S))[ HASHSTR_PREFIX + (S)->len] = '\0'; \
 } while (0)
 
 #endif /*OIO_SDS__metautils__lib__metautils_hashstr_h*/

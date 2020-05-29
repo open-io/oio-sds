@@ -405,65 +405,6 @@ service_howmany_replicas(struct service_update_policies_s *pol,
 	return service_howmany_replicas2(pol, htype);
 }
 
-static guint
-service_howmany_distance2(struct service_update_policies_s *pol,
-		struct hashstr_s *htype)
-{
-	struct element_s *el;
-	guint count;
-
-	EXTRA_ASSERT(pol != NULL);
-	EXTRA_ASSERT(htype != NULL);
-
-	count = 0;
-	if (pol && htype) {
-		g_mutex_lock(&pol->lock);
-		if (NULL != (el = g_tree_lookup(pol->tree_elements, htype)))
-			count = el->reqdist;
-		g_mutex_unlock(&pol->lock);
-	}
-
-	return count;
-}
-
-guint
-service_howmany_distance(struct service_update_policies_s *pol,
-		const gchar *type)
-{
-	struct hashstr_s *htype = NULL;
-
-	EXTRA_ASSERT(pol != NULL);
-	EXTRA_ASSERT(type != NULL);
-
-	if (pol && type) {
-		const gchar *dot;
-		if (NULL != (dot = strchr(type, '.')))
-			HASHSTR_ALLOCA_LEN(htype, type, (dot-type));
-		else
-			HASHSTR_ALLOCA(htype, type);
-	}
-
-	return service_howmany_distance2(pol, htype);
-}
-
-gchar *
-service_update_get_tag_value(struct service_update_policies_s *pol,
-		const gchar *type, gchar *tag_key)
-{
-	struct element_s *el;
-	struct hashstr_s *htype;
-	gchar *tag_val = NULL;
-	HASHSTR_ALLOCA(htype, type);
-	g_mutex_lock(&pol->lock);
-	if ((el = g_tree_lookup(pol->tree_elements, htype))) {
-		if (el->tagname && !g_strcmp0(el->tagname, tag_key)) {
-			tag_val = g_strdup(el->tagvalue);
-		}
-	}
-	g_mutex_unlock(&pol->lock);
-	return tag_val;
-}
-
 gboolean
 service_update_tagfilter2(struct service_update_policies_s *pol,
 		const struct hashstr_s *htype, gchar **pname, gchar **pvalue)

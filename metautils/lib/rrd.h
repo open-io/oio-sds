@@ -30,11 +30,6 @@ struct grid_single_rrd_s* grid_single_rrd_create(time_t now, time_t period);
 /*! Cleans all the resources used by the rrd. */
 void grid_single_rrd_destroy(struct grid_single_rrd_s *gsr);
 
-/*! Save a default value to be used for the slots where there is no
- * activity. */
-void grid_single_rrd_set_default(struct grid_single_rrd_s *gsr,
-		guint64 def);
-
 /*! forces an absolute value for the current position */
 void grid_single_rrd_push(struct grid_single_rrd_s *gsr,
 		time_t at, guint64 v);
