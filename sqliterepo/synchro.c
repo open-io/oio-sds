@@ -23,10 +23,8 @@ License along with this library.
 #include <netinet/in.h>
 
 #include <zookeeper.h>
-#include <zookeeper_log.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/common_variables.h>
 #include <sqliterepo/sqliterepo_variables.h>
 #include <sqliterepo/sqliterepo_remote_variables.h>
 

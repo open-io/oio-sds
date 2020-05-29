@@ -128,8 +128,6 @@ _repo_wrapper(const gchar *ns, repo_test_f fr)
 	lb = _init_lb(9);
 	g_assert_nonnull(lb);
 
-	cfg.sync_solo = SQLX_SYNC_OFF;
-	cfg.sync_repli = SQLX_SYNC_OFF;
 	err = sqlx_repository_init(repodir, &cfg, &repository);
 	g_assert_no_error(err);
 

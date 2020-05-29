@@ -1068,42 +1068,6 @@ sqlx_repository_unlock_and_close_noerror(struct sqlx_sqlite3_s *sq3)
 	return sqlx_repository_unlock_and_close_noerror2(sq3, 0);
 }
 
-const char *
-sqlx_opentype_to_str (enum sqlx_open_type_e type, char *buf)
-{
-	char *p = buf;
-	void append(char c) { (*p++) = c; (*p) = '\0'; }
-	*buf = '\0';
-	switch (type & SQLX_OPEN_REPLIMODE) {
-		case SQLX_OPEN_LOCAL:
-			append('L');
-			break;
-		case SQLX_OPEN_MASTERONLY:
-			append('M');
-			break;
-		case SQLX_OPEN_SLAVEONLY:
-			append('S');
-			break;
-		case SQLX_OPEN_MASTERSLAVE:
-			append('M'), append('S');
-			break;
-	}
-
-	if (type & SQLX_OPEN_CREATE)
-		append('C');
-	if (type & SQLX_OPEN_NOREFCHECK)
-		append('N');
-
-	if (!(type & SQLX_OPEN_STATUS))
-		append('E'), append('F'), append('D');
-	else {
-		if (type & SQLX_OPEN_ENABLED) append ('E');
-		if (type & SQLX_OPEN_FROZEN) append ('F');
-		if (type & SQLX_OPEN_DISABLED) append ('D');
-	}
-	return buf;
-}
-
 GError*
 sqlx_repository_open_and_lock(sqlx_repository_t *repo,
 		const struct sqlx_name_s *n, enum sqlx_open_type_e how,
@@ -1311,29 +1275,6 @@ sqlx_repository_status_base(sqlx_repository_t *repo,
 
 	g_free0(url);
 	return err;
-}
-
-GError*
-sqlx_repository_prepare_election(sqlx_repository_t *repo, const struct sqlx_name_s *n)
-{
-	REPO_CHECK(repo);
-	SQLXNAME_CHECK(n);
-
-	GError *err;
-	GRID_TRACE2("%s(%p,t=%s,n=%s)", __FUNCTION__, repo, n->type, n->base);
-
-	if (!repo->running)
-		return NEWERROR(CODE_UNAVAILABLE, "Repository being shut down");
-
-	if (NULL != (err = _schema_get(repo, n->type, NULL)))
-		return err;
-
-	if (!election_manager_configured(repo->election_manager)) {
-		GRID_TRACE("Replication disabled by configuration");
-		return NULL;
-	}
-
-	return election_init(repo->election_manager, n, NULL, NULL, NULL);
 }
 
 GError*

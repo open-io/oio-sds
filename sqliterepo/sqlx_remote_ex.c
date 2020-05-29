@@ -27,45 +27,6 @@ License along with this library.
 #include <sqliterepo/sqlx_remote_ex.h>
 
 GError*
-sqlx_remote_execute_DESTROY_many(gchar **targets, GByteArray *sid,
-		struct sqlx_name_s *name, gint64 deadline)
-{
-	(void) sid;
-	GError *err = NULL;
-	GByteArray *req = sqlx_pack_DESTROY(name, TRUE, deadline);
-
-	struct gridd_client_s **clients = gridd_client_create_many(targets, req,
-			NULL, NULL);
-	metautils_gba_unref(req);
-	req = NULL;
-
-	if (clients == NULL) {
-		err = NEWERROR(0, "Failed to create gridd clients");
-		return err;
-	}
-
-	gridd_clients_set_timeout(clients,
-			oio_clamp_timeout(10 * G_TIME_SPAN_SECOND, deadline));
-
-	gridd_clients_start(clients);
-	err = gridd_clients_loop(clients);
-
-	for (struct gridd_client_s **p = clients; !err && p && *p ;p++) {
-		if (!(err = gridd_client_error(*p)))
-			continue;
-		GRID_DEBUG("Database destruction attempts failed: (%d) %s",
-				err->code, err->message);
-		if (err->code == CODE_CONTAINER_NOTFOUND || err->code == 404) {
-			g_clear_error(&err);
-			continue;
-		}
-	}
-
-	gridd_clients_free(clients);
-	return err;
-}
-
-GError*
 sqlx_remote_execute_RESYNC_many(gchar **targets, GByteArray *sid,
 		struct sqlx_name_s *name, gint64 deadline)
 {

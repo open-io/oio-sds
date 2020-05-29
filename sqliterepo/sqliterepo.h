@@ -96,8 +96,6 @@ enum sqlx_repo_flag_e
 enum sqlx_sync_mode_e
 {
 	SQLX_SYNC_OFF = 0,
-	SQLX_SYNC_NORMAL = 1,
-	SQLX_SYNC_FULL = 2
 };
 
 enum election_status_e
@@ -130,20 +128,9 @@ struct sqlx_repo_config_s
 {
 	/** several options. */
 	enum sqlx_repo_flag_e flags;
-
-	/** Which value for 'pragma synchronous'
-	 * for not replicated bases */
-	enum sqlx_sync_mode_e sync_solo;
-
-	/** Which value for 'pragma synchronous'
-	 * for replicated bases */
-	enum sqlx_sync_mode_e sync_repli;
 };
 
 /* ------------------------------------------------------------------------- */
-
-/* <b> must be a valid pointer to a buffer of 12 characters (at least) */
-const char* sqlx_opentype_to_str (enum sqlx_open_type_e type, char *b);
 
 /** Constructor for repository structures.
  *
@@ -278,11 +265,6 @@ GError* sqlx_repository_has_base2(sqlx_repository_t *repo,
 GError* sqlx_repository_remove_from_cache(sqlx_repository_t *repo,
 		const struct sqlx_name_s *name);
 
-/** Allocates the internal structure for an election, but does not
- * kick it off.  */
-GError* sqlx_repository_prepare_election(sqlx_repository_t *repo,
-		const struct sqlx_name_s *n);
-
 GError* sqlx_repository_exit_election(sqlx_repository_t *repo,
 		const struct sqlx_name_s *n);
 
@@ -350,8 +332,6 @@ GError* sqlx_transaction_begin(struct sqlx_sqlite3_s *sq3,
 		struct sqlx_repctx_s **result);
 
 GError* sqlx_transaction_end(struct sqlx_repctx_s *repctx, GError *err);
-
-struct sqlx_sqlite3_s* sqlx_transaction_get_base(struct sqlx_repctx_s *ctx);
 
 /** Tells it will be necessary to immediately perform a RESYNC instead
  * of a regular REPLICATE operation. */

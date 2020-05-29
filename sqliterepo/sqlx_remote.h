@@ -40,7 +40,6 @@ License along with this library.
 # include <metautils/lib/metatypes.h>
 
 struct Row;
-struct RowSet;
 struct Table;
 struct TableSequence;
 
@@ -74,7 +73,6 @@ GError* sqlx_name_extract (const struct sqlx_name_s *n,
 GByteArray* sqlx_pack_ENABLE (const struct sqlx_name_s *name, gint64 deadline);
 GByteArray* sqlx_pack_FREEZE (const struct sqlx_name_s *name, gint64 deadline);
 GByteArray* sqlx_pack_DISABLE (const struct sqlx_name_s *name, gint64 deadline);
-GByteArray* sqlx_pack_DISABLE_DISABLED (const struct sqlx_name_s *name, gint64 deadline);
 
 GByteArray* sqlx_pack_PROPGET (const struct sqlx_name_s *name, gint64 deadline);
 GByteArray* sqlx_pack_PROPDEL (struct oio_url_s *url,
@@ -113,10 +111,6 @@ GByteArray* sqlx_pack_REPLICATE(const struct sqlx_name_s *name, struct TableSequ
 // service-wide requests
 GByteArray* sqlx_pack_LEANIFY(gint64 deadline);
 GByteArray* sqlx_pack_INFO(gint64 deadline);
-
-// sqlx requests
-GByteArray* sqlx_pack_QUERY(const struct sqlx_name_s *name,
-		const gchar *query, struct TableSequence *params, gboolean autocreate, gint64 deadline);
 
 GByteArray* sqlx_pack_DESTROY(const struct sqlx_name_s *name, gboolean local, gint64 deadline);
 
