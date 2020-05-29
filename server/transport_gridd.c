@@ -32,19 +32,11 @@ License along with this library.
 #include "transport_gridd.h"
 #include "internals.h"
 
-struct cnx_data_s
-{
-	gchar *key;
-	gpointer data;
-	GDestroyNotify cleanup;
-};
-
 /* Associates a dispatcher and a working buffer to a client. */
 struct transport_client_context_s
 {
 	struct gridd_request_dispatcher_s *dispatcher;
 	GByteArray *gba_l4v;
-	GArray *cnx_data;
 };
 
 struct gridd_request_handler_s
@@ -177,8 +169,6 @@ transport_gridd_factory0(struct gridd_request_dispatcher_s *dispatcher,
 	struct transport_client_context_s *transport_context = g_malloc0(sizeof(*transport_context));
 	transport_context->dispatcher = dispatcher;
 	transport_context->gba_l4v = NULL;
-	transport_context->cnx_data = g_array_sized_new(FALSE, TRUE,
-			sizeof(struct cnx_data_s), 4);
 
 	client->transport.client_context = transport_context;
 	client->transport.clean_context = transport_gridd_clean_context;
@@ -324,110 +314,16 @@ _ctx_reset(struct transport_client_context_s *ctx)
 	ctx->gba_l4v = NULL;
 }
 
-static void
-_cnx_data_reset(struct cnx_data_s *cd, gboolean key_only)
-{
-	if (cd->key)
-		g_free(cd->key);
-	if (!key_only && cd->data && cd->cleanup)
-		cd->cleanup(cd->data);
-}
-
-static void
-_ctx_reset_cnx_data(struct transport_client_context_s *ctx)
-{
-	while (ctx->cnx_data->len > 0) {
-		register guint i = ctx->cnx_data->len - 1;
-		_cnx_data_reset(&g_array_index(ctx->cnx_data, struct cnx_data_s, i), FALSE);
-		g_array_remove_index_fast(ctx->cnx_data, i);
-	}
-}
-
-static void
-_ctx_append_cnx_data(struct transport_client_context_s *ctx,
-		const gchar *key, gpointer data, GDestroyNotify cleanup)
-{
-	struct cnx_data_s cd;
-
-	cd.key = g_strdup(key);
-	cd.data = data;
-	cd.cleanup = cleanup;
-	g_array_append_vals(ctx->cnx_data, &cd, 1);
-}
-
-static gboolean
-_ctx_replace_cnx_data(struct transport_client_context_s *ctx,
-		const gchar *key, gpointer data, GDestroyNotify cleanup)
-{
-	guint i, max;
-	struct cnx_data_s *pdata;
-
-	for (i=0,max=ctx->cnx_data->len; i<max ;i++) {
-		pdata = &g_array_index(ctx->cnx_data, struct cnx_data_s, i);
-		if (!strcmp(pdata->key, key)) {
-			if (pdata->data && pdata->cleanup)
-				pdata->cleanup(pdata->data);
-			pdata->data = data;
-			pdata->cleanup = cleanup;
-			return TRUE;
-		}
-	}
-
-	return FALSE;
-}
-
-static void
-_ctx_store_cnx_data(struct transport_client_context_s *ctx,
-		const gchar *key, gpointer data, GDestroyNotify cleanup)
-{
-	if (!_ctx_replace_cnx_data(ctx, key, data, cleanup))
-		_ctx_append_cnx_data(ctx, key, data, cleanup);
-}
-
-static gboolean
-_ctx_forget_cnx_data(struct transport_client_context_s *ctx,
-		const gchar *key)
-{
-	guint i, max;
-	struct cnx_data_s *pdata;
-
-	for (i=0,max=ctx->cnx_data->len; i<max ;i++) {
-		pdata = &g_array_index(ctx->cnx_data, struct cnx_data_s, i);
-		if (!strcmp(pdata->key, key)) {
-			_cnx_data_reset(&g_array_index(ctx->cnx_data, struct cnx_data_s, i), TRUE);
-			g_array_remove_index_fast(ctx->cnx_data, i);
-			return TRUE;
-		}
-	}
-
-	return FALSE;
-}
-
-static gpointer
-_ctx_get_cnx_data(struct transport_client_context_s *ctx, const gchar *key)
-{
-	guint i, max;
-	struct cnx_data_s *pdata;
-
-	for (i=0,max=ctx->cnx_data->len; i<max ;i++) {
-		pdata = &g_array_index(ctx->cnx_data, struct cnx_data_s, i);
-		if (!strcmp(pdata->key, key))
-			return pdata->data;
-	}
-
-	return NULL;
-}
-
 /* ------------------------------------------------------------------------- */
 
 static void
 transport_gridd_notify_error(struct network_client_s *clt)
 {
+	(void) clt;
 	EXTRA_ASSERT(clt != NULL);
 	/* No access log must be written here, for an unknown network error.
 	 * This always happens, periodically, for monitoring purposes (TCP hits
 	 * without data, connect() and close() */
-	_ctx_reset_cnx_data(clt->transport.client_context);
 }
 
 static int
@@ -496,12 +392,6 @@ static void
 transport_gridd_clean_context(struct transport_client_context_s *ctx)
 {
 	_ctx_reset(ctx);
-
-	if (ctx->cnx_data) {
-		_ctx_reset_cnx_data(ctx);
-		g_array_free(ctx->cnx_data, TRUE);
-	}
-
 	g_free(ctx);
 }
 
@@ -534,6 +424,20 @@ _reply_message(struct network_client_s *clt, MESSAGE reply)
 		oio_ext_add_perfdata("resp_send", send - encode);
 	}
 	return encoded_size;
+}
+
+static MESSAGE
+metaXServer_reply_simple(MESSAGE request UNUSED, gint code, const gchar *message)
+{
+	MESSAGE reply = metautils_message_create_named(NAME_MSGNAME_METAREPLY, 0);
+
+	if (CODE_IS_NETWORK_ERROR(code))
+		code = CODE_PROXY_ERROR;
+	metautils_message_add_field_strint(reply, NAME_MSGKEY_STATUS, code);
+
+	if (message)
+		metautils_message_add_field_str (reply, NAME_MSGKEY_MESSAGE, message);
+	return reply;
 }
 
 static gboolean
@@ -638,19 +542,6 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 		_send_reply(e->code, e->message);
 		g_clear_error(&e);
 	}
-	void _register_cnx_data(const gchar *key, gpointer data,
-			GDestroyNotify cleanup) {
-		EXTRA_ASSERT(key != NULL);
-		_ctx_store_cnx_data(req_ctx->clt_ctx, key, data, cleanup);
-	}
-	void _forget_cnx_data(const gchar *key) {
-		EXTRA_ASSERT(key != NULL);
-		_ctx_forget_cnx_data(req_ctx->clt_ctx, key);
-	}
-	gpointer _get_cnx_data(const gchar *key) {
-		EXTRA_ASSERT(key != NULL);
-		return _ctx_get_cnx_data(req_ctx->clt_ctx, key);
-	}
 
 	const gint64 now = req_ctx->tv_parsed;
 
@@ -660,9 +551,6 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 	ctx.send_reply = _send_reply;
 	ctx.send_error = _send_error;
 	ctx.subject = _subject;
-	ctx.register_cnx_data = _register_cnx_data;
-	ctx.forget_cnx_data = _forget_cnx_data;
-	ctx.get_cnx_data = _get_cnx_data;
 	ctx.no_access = _no_access;
 	/* request data */
 	ctx.client = req_ctx->client;

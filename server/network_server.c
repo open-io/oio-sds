@@ -329,14 +329,6 @@ network_server_bind_host(struct network_server_s *srv, const gchar *url, gpointe
 	_srv_bind_host(srv, url, u, factory);
 }
 
-// FIXME(FVE): kept for ABI compatibility, remove in 5.0.x
-void
-network_server_bind_host_lowlatency(struct network_server_s *srv,
-		const gchar *url, gpointer u, network_transport_factory factory)
-{
-	_srv_bind_host(srv, url, u, factory);
-}
-
 gchar**
 network_server_endpoints (struct network_server_s *srv)
 {
