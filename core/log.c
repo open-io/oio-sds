@@ -20,7 +20,6 @@ License along with this library.
 #include <core/oiolog.h>
 
 #include <stdio.h>
-#include <string.h>
 #include <unistd.h>
 #include <syslog.h>
 

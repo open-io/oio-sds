@@ -18,8 +18,6 @@ License along with this library.
 
 #include <core/oiocfg.h>
 
-#include <string.h>
-
 #include <core/oiolog.h>
 #include <core/oiostr.h>
 

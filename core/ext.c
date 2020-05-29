@@ -20,7 +20,6 @@ License along with this library.
 
 #include <unistd.h>
 #include <fcntl.h>
-#include <string.h>
 #include <stdio.h>
 #include <errno.h>
 #include <sys/stat.h>

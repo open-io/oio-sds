@@ -18,8 +18,6 @@ License along with this library.
 
 #include <core/oiocs.h>
 
-#include <string.h>
-
 #include <json.h>
 #include <curl/curl.h>
 
