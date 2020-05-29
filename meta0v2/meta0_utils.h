@@ -51,10 +51,6 @@ GTree* meta0_utils_tree_create(void);
 typedef gboolean (*meta0_on_prefix)(gpointer u,
 		const guint8 *group, const guint8 *prefix);
 
-/* iterate on all the prefixes in a given coalescence group */
-void meta0_utils_foreach_prefix_in_group(const guint8* bin, guint digits,
-		meta0_on_prefix on_prefix, gpointer u);
-
 /* iterate on all the prefixes */
 void meta0_utils_foreach_prefix(guint digits,
 		meta0_on_prefix on_prefix, gpointer u);

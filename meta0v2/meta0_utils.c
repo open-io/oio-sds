@@ -178,40 +178,10 @@ GSList* meta0_utils_array_to_list(GPtrArray *byprefix) {
 
 /* ------------------------------------------------------------------------- */
 
-/* The group is represented by the network order 16-bytes prefix,
- * a.k.a. a simple cast from <guint8*> to <guint16> */
-static void
-_foreach_pfx(const guint16 grp_h16, const guint16 end_h16,
-		meta0_on_prefix on_prefix, gpointer u)
-{
-	const guint16 grp_n16 = g_htons(grp_h16);
-
-	for (guint16 idx_h16 = 0 ;;) {
-		const guint16 pfx_h16 = grp_h16 | idx_h16;
-		const guint16 pfx_n16 = g_htons(pfx_h16);
-		if (!on_prefix(u, (const guint8*)&grp_n16, (const guint8*)&pfx_n16))
-			return;
-		if (idx_h16++ == end_h16)
-			return;
-	}
-}
-
 static const guint16 masks_h16[] = { 0, 0xF000, 0xFF00, 0xFFF0, 0xFFFF };
 
 void
-meta0_utils_foreach_prefix_in_group(const guint8* bin, guint digits,
-		meta0_on_prefix on_prefix, gpointer u)
-{
-	g_assert(NULL != bin);
-	g_assert(digits <= 4);
-	const guint16 msk_h16 = masks_h16[digits];
-	const guint16 pfx_n16 = *(const guint16*)bin;
-	return _foreach_pfx(g_ntohs(pfx_n16) & msk_h16, ~msk_h16, on_prefix, u);
-}
-
-void
-meta0_utils_foreach_prefix(guint digits, meta0_on_prefix on_prefix,
-		gpointer u)
+meta0_utils_foreach_prefix(guint digits, meta0_on_prefix on_prefix, gpointer u)
 {
 	g_assert(digits <= 4);
 	const guint16 msk_h16 = masks_h16[digits];
