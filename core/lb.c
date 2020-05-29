@@ -18,10 +18,6 @@ License along with this library.
 
 #include <core/oio_core.h>
 
-#include <string.h>
-
-#include <json-c/json.h>
-
 #include <core/lb_variables.h>
 
 #include "internals.h"

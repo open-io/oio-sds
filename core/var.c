@@ -18,8 +18,6 @@ License along with this library.
 
 #include <core/oiovar.h>
 
-#include <string.h>
-
 #include <core/oiolog.h>
 #include <core/oiostr.h>
 #include <core/internals.h>

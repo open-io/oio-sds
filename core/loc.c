@@ -56,10 +56,10 @@ oio_location_proximity(const oio_location_t loc0, const oio_location_t loc1)
 	return app[_loc_clz(loc0, loc1)];
 }
 
-guint
+enum oio_loc_distance_level_e
 oio_location_distance(const oio_location_t loc0, const oio_location_t loc1)
 {
-	static const enum oio_loc_proximity_level_e app[64] = {
+	static const enum oio_loc_distance_level_e app[64] = {
 		[0 ... 7] = OIO_LOC_DIST_FARAWAY,  /* the region differs */
 		[8 ... 15] = OIO_LOC_DIST_REGION,  /* the room differs */
 		[16 ... 31] = OIO_LOC_DIST_ROOM,   /* the rack differs */

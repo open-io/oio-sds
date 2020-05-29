@@ -18,7 +18,6 @@ License along with this library.
 
 #include <core/oiostr.h>
 
-#include <string.h>
 #include <errno.h>
 
 #include <oioext.h>
