@@ -509,18 +509,7 @@ _row_to_bean(const struct bean_descriptor_s *descr, sqlite3_stmt *stmt)
 
 	for (fd=descr->fields; fd->type ;fd++) {
 		col = fd->position;
-#if 0
-		GRID_TRACE2("SQL column[%d,%d/%s,%s] field[%d,%ld,%d/%s,%s]",
-				col,
-				sqlite3_column_type(stmt, col),
-				sqlite_strtype(sqlite3_column_type(stmt, col)),
-				sqlite3_column_name(stmt, col),
-				fd->position,
-				fd->offset,
-				fd->type,
-				bean_strtype(fd->type),
-				fd->name);
-#endif
+
 		if (sqlite3_column_type(stmt, col) == SQLITE_NULL) {
 			_bean_del_field(res, fd->position);
 			continue;
