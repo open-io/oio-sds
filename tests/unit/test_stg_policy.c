@@ -66,28 +66,10 @@ test_service_pool(void)
 	namespace_info_clear(&ni);
 }
 
-#if 0
-static void
-test_datasec ()
-{
-	// @todo TODO Not yet implemented
-}
-
-static void
-test_stgpol ()
-{
-	// @todo TODO Not yet implemented
-}
-#endif
-
 int
 main(int argc, char **argv)
 {
 	HC_TEST_INIT(argc,argv);
 	g_test_add_func("/metautils/svcpool", test_service_pool);
-#if 0
-	g_test_add_func("/metautils/datasec", test_datasec);
-	g_test_add_func("/metautils/stgpol", test_stgpol);
-#endif
 	return g_test_run();
 }
