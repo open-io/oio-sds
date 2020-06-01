@@ -32,7 +32,6 @@ enum http_rc_e action_forward_stats (struct req_args_s *args);
 enum http_rc_e action_forward_get_config (struct req_args_s *args);
 enum http_rc_e action_forward_get_info (struct req_args_s *args);
 enum http_rc_e action_forward_get_ping (struct req_args_s *args);
-enum http_rc_e action_forward_get_handlers (struct req_args_s *args);
 enum http_rc_e action_forward_get_version (struct req_args_s *args);
 enum http_rc_e action_forward_kill (struct req_args_s *args);
 enum http_rc_e action_forward_lean_glib (struct req_args_s *args);
@@ -133,9 +132,6 @@ enum http_rc_e action_admin_meta0_list(struct req_args_s *args);
 enum http_rc_e action_admin_meta0_force(struct req_args_s *args);
 
 // Deprecated action handlers with no equivalent yet in recent routes
-
-enum http_rc_e action_m2_container_stgpol (struct req_args_s *args, json_object *jargs);
-enum http_rc_e action_m2_container_setvers (struct req_args_s *args, json_object *jargs);
 
 enum http_rc_e action_sqlx_propget (struct req_args_s *args, json_object *jargs);
 enum http_rc_e action_sqlx_propset (struct req_args_s *args, json_object *jargs);

@@ -239,12 +239,6 @@ action_forward_get_version (struct req_args_s *args)
 }
 
 enum http_rc_e
-action_forward_get_handlers (struct req_args_s *args)
-{
-	return _forward_XXX(args, "REQ_HANDLERS", NULL, proxy_timeout_common);
-}
-
-enum http_rc_e
 action_forward_get_ping (struct req_args_s *args)
 {
 	return _forward_XXX(args, "REQ_PING", NULL, proxy_timeout_common);
