@@ -35,7 +35,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/meta2_filter_context.h>
 
 #define PTR(p) ((gpointer)(p))
-#define POS(F) (int)(PTR(F) - PTR(hdata))
 
 static gboolean
 meta2_dispatch_all(struct gridd_reply_ctx_s *reply,
