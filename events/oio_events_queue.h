@@ -22,8 +22,6 @@ struct oio_events_queue_s;
 
 void oio_events_queue__destroy (struct oio_events_queue_s *self);
 
-const char * oio_events_queue__tube (struct oio_events_queue_s *self);
-
 /* msg's ownership is given to the queue. msg has to be valid JSON */
 void oio_events_queue__send (struct oio_events_queue_s *self, gchar *msg);
 

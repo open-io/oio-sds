@@ -32,7 +32,6 @@ struct oio_events_queue_vtable_s
 			gchar *key, gchar *msg);
 	gboolean (*is_stalled) (struct oio_events_queue_s *self);
 	gint64 (*get_health) (struct oio_events_queue_s *self);
-	void (*set_max_pending) (struct oio_events_queue_s *self, guint v);
 	void (*set_buffering) (struct oio_events_queue_s *self, gint64 v);
 	GError * (*start) (struct oio_events_queue_s *self);
 };
@@ -44,8 +43,5 @@ struct oio_events_queue_abstract_s
 
 void oio_events_queue_send_buffered(struct oio_events_queue_s *self,
 		struct oio_events_queue_buffer_s *buffer, guint max);
-
-/* Destined to run a queue in a thread */
-gpointer oio_events_queue__worker(gpointer p);
 
 #endif /*OIO_SDS__sqlx__oio_events_queue_internals_h*/
