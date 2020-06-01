@@ -112,8 +112,6 @@ GByteArray* sqlx_pack_REPLICATE(const struct sqlx_name_s *name, struct TableSequ
 GByteArray* sqlx_pack_LEANIFY(gint64 deadline);
 GByteArray* sqlx_pack_INFO(gint64 deadline);
 
-GByteArray* sqlx_pack_DESTROY(const struct sqlx_name_s *name, gboolean local, gint64 deadline);
-
 // sqlx-related elements coders ------------------------------------------------
 
 GByteArray* sqlx_encode_TableSequence(struct TableSequence *tabseq,
