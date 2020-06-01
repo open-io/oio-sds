@@ -52,6 +52,7 @@ add_custom_command(
 		${CMAKE_SOURCE_DIR}/conf.json)
 
 add_library(oiocore SHARED
+	url2.c
 	url.c
 	cfg.c
 	str.c

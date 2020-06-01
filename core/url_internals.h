@@ -16,30 +16,28 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#ifndef OIO_SDS__metautils__lib__oio_url_ext_h
-# define OIO_SDS__metautils__lib__oio_url_ext_h 1
+#ifndef OIO_SDS__metautils__lib__oio_url_internals_h
+# define OIO_SDS__metautils__lib__oio_url_internals_h 1
 
-/**
- * This file provides and API dependent from the GLib, with non essential features.
- * Typically, this file is not destined to be included in external apps using the
- * C SDK.
- */
-#include <glib.h>
-#include <core/url_internals.h>
+#include <core/oiourl.h>
 
-void oio_url_to_json (GString *out, struct oio_url_s *u);
-
-struct oio_requri_s
+struct oio_url_s
 {
-	gchar *path;
-	gchar *query;
-	gchar *fragment;
+	/* primary */
+	gchar ns[LIMIT_LENGTH_NSNAME];
+	gchar account[LIMIT_LENGTH_ACCOUNTNAME];
+	gchar user[LIMIT_LENGTH_USER];
+	gchar version[LIMIT_LENGTH_VERSION];
 
-	gchar **query_tokens;
+	gchar *path;
+	gchar *content;
+
+	/* secondary */
+	gchar *whole;
+	gchar *fullpath;
+	guint8 id[32];
+	gchar hexid[65];
+	guint8 flags;
 };
 
-gboolean oio_requri_parse (const char *packed, struct oio_requri_s *ruri);
-
-void oio_requri_clear (struct oio_requri_s *ruri);
-
-#endif /*OIO_SDS__metautils__lib__oio_url_ext_h*/
+#endif /*OIO_SDS__metautils__lib__oio_url_internals_h*/
