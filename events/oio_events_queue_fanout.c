@@ -71,8 +71,6 @@ struct _queue_FANOUT_s
 	GAsyncQueue *queue;
 	GThread *worker;
 
-	gint64 pending_events;
-
 	struct oio_events_queue_s **output_tab;
 	guint output_nb;
 
