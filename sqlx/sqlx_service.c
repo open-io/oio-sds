@@ -67,7 +67,6 @@ static void _task_expire_bases(gpointer p);
 static void _task_expire_resolver(gpointer p);
 static void _task_reload_nsinfo(gpointer p);
 static void _task_reload_peers(gpointer p);
-static GQuark gq_events_health = 0;
 
 static gpointer _worker_timers(gpointer p);
 static gpointer _worker_clients(gpointer p);
@@ -215,7 +214,6 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 		if (str) oio_str_reuse(&ss->zk_url, str);
 	} while (0);
 
-#define BSTR(B) (BOOL(B) ? "on" : "off")
 	GRID_NOTICE("TFO[%d] UDP[%d] OUT[%d]",
 			oio_socket_fastopen, oio_udp_allowed, oio_log_outgoing);
 	return TRUE;
@@ -781,8 +779,6 @@ sqlx_service_set_defaults(void)
 
 	if (SRV.service_config->set_defaults)
 		SRV.service_config->set_defaults(&SRV);
-
-	gq_events_health = g_quark_from_static_string("gauge event.health");
 }
 
 static void
@@ -941,7 +937,6 @@ int
 sqlite_service_main(int argc, char **argv,
 		const struct sqlx_service_config_s *cfg)
 {
-	SRV.replication_config = &replication_config;
 	SRV.service_config = cfg;
 	int rc = grid_main(argc, argv, &sqlx_service_callbacks);
 	return rc;

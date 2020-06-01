@@ -155,16 +155,15 @@ _post_config(struct sqlx_service_s *ss)
 }
 
 static void
-_set_defaults (struct sqlx_service_s *ss)
+_set_defaults (struct sqlx_service_s *ss __attribute((unused)))
 {
-	ss->flag_no_event = 1;
 }
 
 int
 main(int argc, char ** argv)
 {
 	const struct sqlx_service_config_s cfg = {
-		NAME_SRVTYPE_META0, "m0v2",
+		NAME_SRVTYPE_META0,
 		"el/"NAME_SRVTYPE_META0, 0, 0,
 		META0_SCHEMA, 0, 0,
 		_get_peers, _post_config, _set_defaults

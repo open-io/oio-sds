@@ -93,11 +93,6 @@ enum sqlx_repo_flag_e
 	SQLX_REPO_DELETEON     = 0x04,
 };
 
-enum sqlx_sync_mode_e
-{
-	SQLX_SYNC_OFF = 0,
-};
-
 enum election_status_e
 {
 	ELECTION_LOST = 1,
