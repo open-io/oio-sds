@@ -22,20 +22,11 @@ License along with this library.
 #include <metautils/lib/metautils.h>
 #include "expr.h"
 
-#if 0
-#define FP_EPSILON 0.0000000000001
-#define FPcmp(ret,d1,d2) do {\
-	if (d1<(d2-FP_EPSILON)) ret=-1;\
-	else if (d1>(d2+FP_EPSILON)) ret=1;\
-	else ret=0;\
-} while (0);
-#else
 #define FPcmp(ret,d1,d2) do {\
 	if (d1<d2) { ret=-1; }\
 	else if (d1>d2) { ret=1; }\
 	else { ret=0;  }\
 } while (0);
-#endif
 
 #define EVAL_BINNUM(d1,d2,pE) do {\
 	ret = __main_eval(pE->expr.bin.p1, &d1); if (ret!=EXPR_EVAL_DEF) return ret;\
