@@ -61,7 +61,6 @@ gint Name (GSList **list, const void *buf, gsize len, GError **err) {\
 struct anonymous_sequence_s
 {
 	asn_anonymous_set_ list;
-	asn_struct_ctx_t _asn_ctx;
 };
 
 static void api_gclean(gpointer p1, gpointer p2)
