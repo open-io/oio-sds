@@ -74,29 +74,11 @@ typedef guint8 hash_sha256_t[32];
 /** Type to store a md5 hash */
 typedef guint8 hash_md5_t[16];
 
-/** Type to store a chunk position */
-typedef guint32 chunk_position_t;
-
-/** Type to store a chunk size */
-typedef gint64 chunk_size_t;
-
 /** Type to store a chunk hash */
 typedef hash_md5_t chunk_hash_t;
 
-/** Type to store a content hash */
-typedef hash_md5_t content_hash_t;
-
 /** Type to store a container id */
 typedef hash_sha256_t container_id_t;
-
-/** Type to store a status */
-typedef guint32 status_t;
-
-/** Type to store a content length */
-typedef gint64 content_length_t;
-
-/** Type to store a content version */
-typedef gint64 content_version_t;
 
 /**
  * The list of address types

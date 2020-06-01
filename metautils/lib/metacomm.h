@@ -66,8 +66,6 @@ typedef gint (*body_decoder_f)(GSList **r, const void *b, gsize l, GError **e);
  * will be copied. */
 void metautils_message_add_field(MESSAGE m, const char *name, const void *value, gsize valueSize);
 
-void metautils_message_add_cid (MESSAGE m, const char *f, const container_id_t cid);
-
 void metautils_message_add_url (MESSAGE m, struct oio_url_s *url);
 
 /* As for metautils_message_add_url() but skip the type mentionned */

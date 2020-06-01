@@ -466,13 +466,6 @@ metautils_message_extract_url (MESSAGE m)
 }
 
 void
-metautils_message_add_cid (MESSAGE m, const char *f, const container_id_t cid)
-{
-	if (cid)
-		metautils_message_add_field (m, f, cid, sizeof(container_id_t));
-}
-
-void
 metautils_message_add_body_unref (MESSAGE m, GByteArray *body)
 {
 	if (!body)
