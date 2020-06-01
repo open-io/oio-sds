@@ -146,8 +146,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 /* Request N spare chunks according to a storage policy */
 #define M2V2_SPARE_BY_STGPOL "SPARE_STGPOL"
 
-#define M2V2_MODE_DRYRUN  0x10000000
-
 struct m2v2_create_params_s
 {
 	const char *storage_policy; /**< Will override the (maybe present) stgpol property. */

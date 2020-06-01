@@ -20,11 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__meta2v2__meta2_filters_h
 # define OIO_SDS__meta2v2__meta2_filters_h 1
 
-#if 0
-#define TRACE_FILTER() GRID_TRACE("FILTER %s:%d %s", __FILE__, __LINE__, __FUNCTION__)
-#else
 #define TRACE_FILTER()
-#endif
 
 struct gridd_filter_ctx_s;
 struct gridd_reply_ctx_s;
@@ -113,9 +109,6 @@ M2V2_DECLARE_FILTER(meta2_filter_action_del_content_properties);
 M2V2_DECLARE_FILTER(meta2_filter_action_generate_beans);
 M2V2_DECLARE_FILTER(meta2_filter_action_touch_content);
 M2V2_DECLARE_FILTER(meta2_filter_action_purge_content);
-
-#define META2TOUCH_FLAGS_UPDATECSIZE     0x00000001
-#define META2TOUCH_FLAGS_RECALCCSIZE     0x00000002
 M2V2_DECLARE_FILTER(meta2_filter_action_touch_container);
 M2V2_DECLARE_FILTER(meta2_filter_action_insert_beans);
 M2V2_DECLARE_FILTER(meta2_filter_action_delete_beans);
