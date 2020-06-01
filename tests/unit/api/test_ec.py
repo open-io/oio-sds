@@ -319,13 +319,10 @@ class TestEC(unittest.TestCase):
         with patch('hashlib.new', wraps=hashlib.new) as algo_new:
             self._test_write_checksum_algo(EMPTY_MD5)
             algo_new.assert_called_with('md5')
-            # Should be called once for the metachunk
-            # and once for each chunk.
-            self.assertEqual(
-                (self.storage_method.ec_nb_data +
-                 self.storage_method.ec_nb_parity +
-                 1),
-                len(algo_new.call_args_list))
+            # Starting from oio-sds 7.0.0, chunk checksums are no more
+            # computed by default. Only the object md5 checksum will
+            # be computed.
+            self.assertEqual(1, len(algo_new.call_args_list))
 
     def test_write_custom_checksum_algo(self):
         with patch('hashlib.new', wraps=hashlib.new) as algo_new:

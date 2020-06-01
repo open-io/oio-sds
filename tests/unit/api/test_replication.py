@@ -64,19 +64,19 @@ class TestReplication(unittest.TestCase):
         return hashlib.md5(d)
 
     def test_write_simple(self):
-        checksum = self.checksum()
+        obj_checksum = self.checksum()
         source = empty_stream()
         meta_chunk = self.meta_chunk()
         size = CHUNK_SIZE
         resps = [201] * len(meta_chunk)
         with set_http_connect(*resps):
             handler = ReplicatedMetachunkWriter(
-                self.sysmeta, meta_chunk, checksum, self.storage_method)
+                self.sysmeta, meta_chunk, obj_checksum, self.storage_method)
             bytes_transferred, checksum, chunks = handler.stream(
                 source, size)
             self.assertEqual(len(chunks), len(meta_chunk))
             self.assertEqual(bytes_transferred, 0)
-            self.assertEqual(checksum, EMPTY_MD5)
+            self.assertEqual(checksum, None)  # No metachunk checksum
 
     def test_write_exception(self):
         checksum = self.checksum()
@@ -90,7 +90,7 @@ class TestReplication(unittest.TestCase):
             self.assertRaises(exc.ServiceBusy, handler.stream, source, size)
 
     def test_write_quorum_success(self):
-        checksum = self.checksum()
+        obj_checksum = self.checksum()
         source = empty_stream()
         size = CHUNK_SIZE
         meta_chunk = self.meta_chunk()
@@ -99,7 +99,7 @@ class TestReplication(unittest.TestCase):
         resps += [500] * (len(meta_chunk) - quorum_size)
         with set_http_connect(*resps):
             handler = ReplicatedMetachunkWriter(
-                self.sysmeta, meta_chunk, checksum, self.storage_method)
+                self.sysmeta, meta_chunk, obj_checksum, self.storage_method)
             bytes_transferred, checksum, chunks = handler.stream(source, size)
 
             self.assertEqual(len(chunks), len(meta_chunk)-1)
@@ -113,7 +113,7 @@ class TestReplication(unittest.TestCase):
             #     self.assertEqual(chunks[i].get('error'), 'HTTP 500')
 
             self.assertEqual(bytes_transferred, 0)
-            self.assertEqual(checksum, EMPTY_MD5)
+            self.assertEqual(checksum, None)  # No metachunk checksum
 
     def test_write_quorum_error(self):
         checksum = self.checksum()
@@ -129,7 +129,7 @@ class TestReplication(unittest.TestCase):
             self.assertRaises(exc.ServiceBusy, handler.stream, source, size)
 
     def test_write_timeout(self):
-        checksum = self.checksum()
+        obj_checksum = self.checksum()
         source = empty_stream()
         size = CHUNK_SIZE
         meta_chunk = self.meta_chunk()
@@ -137,7 +137,7 @@ class TestReplication(unittest.TestCase):
         resps.append(Timeout(1.0))
         with set_http_connect(*resps):
             handler = ReplicatedMetachunkWriter(
-                self.sysmeta, meta_chunk, checksum, self.storage_method)
+                self.sysmeta, meta_chunk, obj_checksum, self.storage_method)
             bytes_transferred, checksum, chunks = handler.stream(source, size)
 
         self.assertEqual(len(chunks), len(meta_chunk)-1)
@@ -151,10 +151,10 @@ class TestReplication(unittest.TestCase):
         #     chunks[len(meta_chunk) - 1].get('error'), '1.0 second')
 
         self.assertEqual(bytes_transferred, 0)
-        self.assertEqual(checksum, EMPTY_MD5)
+        self.assertEqual(checksum, None)  # No metachunk checksum by default
 
     def test_write_partial_exception(self):
-        checksum = self.checksum()
+        obj_checksum = self.checksum()
         source = empty_stream()
         size = CHUNK_SIZE
         meta_chunk = self.meta_chunk()
@@ -163,7 +163,7 @@ class TestReplication(unittest.TestCase):
         resps.append(Exception("failure"))
         with set_http_connect(*resps):
             handler = ReplicatedMetachunkWriter(
-                self.sysmeta, meta_chunk, checksum, self.storage_method)
+                self.sysmeta, meta_chunk, obj_checksum, self.storage_method)
             bytes_transferred, checksum, chunks = handler.stream(source, size)
         self.assertEqual(len(chunks), len(meta_chunk)-1)
         for i in range(len(meta_chunk) - 1):
@@ -173,7 +173,7 @@ class TestReplication(unittest.TestCase):
         # self.assertEqual(chunks[len(meta_chunk) - 1].get('error'), 'failure')
 
         self.assertEqual(bytes_transferred, 0)
-        self.assertEqual(checksum, EMPTY_MD5)
+        self.assertEqual(checksum, None)  # No metachunk checksum by default
 
     def test_write_error_source(self):
         class TestReader(object):
@@ -228,7 +228,7 @@ class TestReplication(unittest.TestCase):
                               size)
 
     def test_write_transfer(self):
-        checksum = self.checksum()
+        obj_checksum = self.checksum()
         test_data = (b'1234' * 1024)[:-10]
         size = len(test_data)
         meta_chunk = self.meta_chunk()
@@ -243,7 +243,8 @@ class TestReplication(unittest.TestCase):
 
         with set_http_connect(*resps, cb_body=cb_body):
             handler = ReplicatedMetachunkWriter(
-                self.sysmeta, meta_chunk, checksum, self.storage_method)
+                self.sysmeta, meta_chunk, obj_checksum, self.storage_method,
+                chunk_checksum_algo='md5')
             bytes_transferred, checksum, chunks = handler.stream(source, size)
 
         final_checksum = self.checksum(test_data).hexdigest()
@@ -280,9 +281,11 @@ class TestReplication(unittest.TestCase):
 
     def test_write_default_checksum_algo(self):
         with patch('hashlib.new', wraps=hashlib.new) as algo_new:
-            self._test_write_checksum_algo(EMPTY_MD5)
-            # Called only once for the metachunk
-            algo_new.assert_called_once_with('md5')
+            # Starting from oio-sds 7.0.0, chunk checksums are no more
+            # computed by default. Only the object md5 checksum will
+            # be computed.
+            self._test_write_checksum_algo(None)
+            algo_new.assert_not_called()
 
     def test_write_custom_checksum_algo(self):
         with patch('hashlib.new', wraps=hashlib.new) as algo_new:
