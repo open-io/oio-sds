@@ -47,9 +47,9 @@ test_proxied_push (void)
 		.url = "127.0.0.1:5000",
 		.kv_tags = NULL,
 	};
-	const char *tags1[] = { "stat.cpu", NULL };
-	const char *tags2[] = { "stat.cpu", "100.0", NULL };
-	const char *tags3[] = { "stat.cpu", "invalid but should work", NULL };
+	static const char *tags1[] = { "stat.cpu", NULL };
+	static const char *tags2[] = { "stat.cpu", "100.0", NULL };
+	static const char *tags3[] = { "stat.cpu", "invalid but should work", NULL };
 	GError *err;
 
 	struct oio_cs_client_s *cs = oio_cs_client__create_proxied (ns);
