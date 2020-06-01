@@ -294,7 +294,6 @@ enum http_rc_e _reply_bad_gateway (struct req_args_s *args, GError *err);
 enum http_rc_e _reply_srv_unavailable (struct req_args_s *args, GError *err);
 enum http_rc_e _reply_retry (struct req_args_s *args, GError *err);
 enum http_rc_e _reply_gateway_timeout (struct req_args_s *args, GError * err);
-enum http_rc_e _reply_not_implemented (struct req_args_s *args);
 enum http_rc_e _reply_notfound_error (struct req_args_s *args, GError * err);
 enum http_rc_e _reply_forbidden_error (struct req_args_s *args, GError * err);
 enum http_rc_e _reply_method_error (struct req_args_s *args, GError *err, gchar *allowed);
@@ -342,9 +341,6 @@ GError * conscience_resolve_service_id(gchar **cs, const char *type, const char 
 static inline gint64 DL(void) {
 	return oio_clamp_deadline(proxy_timeout_common, oio_ext_get_deadline());
 }
-
-/* retrieve ip:port TLS exposed by a service (service_id or addr) */
-gchar *get_tls(const gchar *);
 
 /* ------------------------------------------------------------------------- */
 

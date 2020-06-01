@@ -72,7 +72,6 @@ struct http_parser_s
 
 struct http_parsing_result_s
 {
-	gsize consumed;
 	enum { HPRC_SUCCESS = 0, HPRC_MORE, HPRC_ERROR } status;
 };
 
@@ -150,7 +149,6 @@ http_parse(struct http_parser_s *parser, const guint8 *data, gsize available)
 		if (msg)
 			parser->error = NEWERROR(0, "%s", msg);
 		rc.status = status;
-		rc.consumed = consumed;
 		return rc;
 	}
 

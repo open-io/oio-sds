@@ -165,13 +165,6 @@ _reply_gateway_timeout (struct req_args_s *args, GError * err)
 }
 
 enum http_rc_e
-_reply_not_implemented (struct req_args_s *args)
-{
-	return _reply_json_error (args, HTTP_CODE_NOT_IMPLEMENTED,
-			"Not implemented", _create_status_error (NYI()));
-}
-
-enum http_rc_e
 _reply_notfound_error (struct req_args_s *args, GError * err)
 {
 	return _reply_json_error (args, HTTP_CODE_NOT_FOUND,
