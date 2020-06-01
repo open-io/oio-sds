@@ -218,16 +218,6 @@ sqlx_pack_GETVERS(const struct sqlx_name_s *name, const gchar *peers,
 }
 
 GByteArray *
-sqlx_pack_DESTROY(const struct sqlx_name_s *name, gboolean local, gint64 deadline)
-{
-	gint8 local2 = BOOL(local);
-	MESSAGE req = make_request(NAME_MSGNAME_SQLX_DESTROY, NULL, name, deadline);
-	if (local)
-		metautils_message_add_field(req, NAME_MSGKEY_LOCAL, &local2, 1);
-	return message_marshall_gba_and_clean(req);
-}
-
-GByteArray *
 sqlx_pack_ENABLE(const struct sqlx_name_s *name, gint64 deadline)
 {
 	return message_marshall_gba_and_clean(make_request(NAME_MSGNAME_SQLX_ENABLE, NULL, name, deadline));
