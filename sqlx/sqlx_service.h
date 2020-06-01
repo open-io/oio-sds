@@ -36,7 +36,6 @@ struct sqlx_service_s;
 struct sqlx_service_config_s
 {
 	const gchar *srvtype;
-	const gchar *srvtag;
 
 	const gchar *zk_prefix;
 	const guint zk_hash_depth;
@@ -70,7 +69,6 @@ struct sqlx_service_s
 	 * considered */
 	gchar srvtypes[128];
 
-	struct replication_config_s *replication_config;
 	const struct sqlx_service_config_s *service_config;
 
 	GString *url;
@@ -127,10 +125,6 @@ struct sqlx_service_s
 
 	// Turn to TRUE to avoid locking the repository volume
 	gboolean flag_nolock;
-
-	// Allows the service to avoid initiating an event_queue. To be set by
-	// services that know they won't evr generate events (meta0)
-	gboolean flag_no_event;
 
 	// Controls the election mode:
 	// TRUE :  ELECTION_MODE_QUORUM

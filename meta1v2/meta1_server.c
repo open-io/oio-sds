@@ -254,7 +254,7 @@ int
 main(int argc, char ** argv)
 {
 	static struct sqlx_service_config_s cfg = {
-		NAME_SRVTYPE_META1, "m1v2",
+		NAME_SRVTYPE_META1,
 		"el/" NAME_SRVTYPE_META1, 1, 3,
 		META1_SCHEMA, 1, 2,
 		_get_peers, _post_config, NULL
