@@ -965,8 +965,10 @@ static GError *
 _max(struct req_args_s *args, gint64 *pmax)
 {
 	const char *s = OPT("max");
-	if (!s)
+	if (!s) {
+		*pmax = META2_LISTING_DEFAULT_LIMIT;
 		return NULL;
+	}
 
 	if (!oio_str_is_number(s, pmax))
 		return BADREQ("Invalid max number of items");

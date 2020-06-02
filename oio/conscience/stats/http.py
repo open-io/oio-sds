@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -15,9 +15,11 @@
 
 from six import binary_type
 
-from oio.common.json import json
 from oio.common.constants import REQID_HEADER
+from oio.common.easy_value import float_value
+from oio.common.green import OioTimeout, Timeout
 from oio.common.http_urllib3 import urllibexc
+from oio.common.json import json
 from oio.common.utils import request_id
 from oio.conscience.stats.base import BaseStat
 
@@ -37,6 +39,7 @@ class HttpStat(BaseStat):
         else:
             # default to lines parser (rawx style)
             self._parse_func = self._parse_stats_lines
+        self.timeout = float_value(self.stat_conf.get('timeout'), 10.0)
 
     @staticmethod
     def _parse_stats_lines(body):
@@ -81,9 +84,13 @@ class HttpStat(BaseStat):
             # on the remote side but not on the local side, thus we
             # explicitely require the connection to be closed.
             reqid = request_id('stat-')
-            resp = self.agent.pool_manager.request(
-                'GET', self.url, headers={'Connection': 'close',
-                                          REQID_HEADER: reqid})
+            try:
+                with OioTimeout(self.timeout):
+                    resp = self.agent.pool_manager.request(
+                        'GET', self.url, headers={'Connection': 'close',
+                                                  REQID_HEADER: reqid})
+            except Timeout as toe:
+                raise Exception(str(toe))
             if resp.status == 200:
                 result = self._parse_func(resp.data)
             else:

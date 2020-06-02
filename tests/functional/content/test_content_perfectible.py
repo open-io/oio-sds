@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -24,6 +24,7 @@ except ImportError:
     SUBPROCESS32 = False
 
 from collections import defaultdict
+from flaky import flaky
 
 from tests.utils import BaseTestCase
 
@@ -35,6 +36,11 @@ from oio.rebuilder.blob_improver import DEFAULT_IMPROVER_TUBE
 
 
 REASONABLE_EVENT_DELAY = 3.0
+
+
+def is_event_delay_error(err, *args):
+    """Tell if the first exception is related to an election error."""
+    return "No event received in the last" in str(err)
 
 
 class TestPerfectibleContent(BaseTestCase):
@@ -118,6 +124,7 @@ class TestPerfectibleContent(BaseTestCase):
         self.assertRaises(ResponseError, self.beanstalkd.reserve,
                           timeout=REASONABLE_EVENT_DELAY)
 
+    @flaky(rerun_filter=is_event_delay_error)
     def test_upload_warn_dist(self):
         """
         Check that an event is emitted when the warning distance is reached.
