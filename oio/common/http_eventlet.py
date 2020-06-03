@@ -56,10 +56,11 @@ class CustomHTTPResponse(HTTPResponse):
     def read(self, amount=None):
         try:
             return HTTPResponse.read(self, amount)
-        except AttributeError as err:
+        except (ValueError, AttributeError) as err:
             # We have seen that in production but could not reproduce.
             # This message will help us track the error further.
-            if "no attribute 'recv'" in str(err):
+            if ("no attribute 'recv'" in str(err)
+                    or "Read on closed" in str(err)):
                 raise IOError('reading socket after close')
             else:
                 raise
