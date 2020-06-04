@@ -224,7 +224,7 @@ class Account(WerkzeugApp):
 
     # ACCT{{
     # POST /v1.0/account/delete?id=<account_name>
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # Delete the specified account.
     #
     # Sample request:
@@ -260,7 +260,7 @@ class Account(WerkzeugApp):
 
     # ACCT{{
     # POST /v1.0/account/update?id=<account_name>
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     #
     # Update metadata of the specified account.
     #
@@ -351,7 +351,7 @@ class Account(WerkzeugApp):
 
     # ACCT{{
     # GET /v1.0/account/buckets?id=<account_name>
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     #
     # Get information about the buckets belonging to the specified account.
     #
@@ -502,7 +502,7 @@ class Account(WerkzeugApp):
 
     # ACCT{{
     # PUT /v1.0/account/container/update?id=<account_name>
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     #
     # Update account with container-related metadata.
     #
@@ -717,7 +717,7 @@ class Account(WerkzeugApp):
 
     # ACCT{{
     # POST /v1.0/bucket/update?id=<bucket_name>
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     #
     # Update metadata of the specified bucket.
     #
@@ -778,7 +778,7 @@ class Account(WerkzeugApp):
 
     # ACCT{{
     # GET /v1.0/account/container/show?id=<account_name>&container=<container>
-    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     # Get information about the specified container.
     #
     # Sample request:
