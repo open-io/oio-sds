@@ -2038,7 +2038,7 @@ _meta2_db_delete(const gchar *meta2_address, GString *key)
 
 // RDIR{{
 // POST /v1/rdir/meta2/fetch?vol=<volume ip>%3A<volume port>
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
 // Fetch specific meta2 records, or a range of records.
 //
@@ -2077,7 +2077,7 @@ _meta2_db_delete(const gchar *meta2_address, GString *key)
 //    {
 //      "prefix":"<container url prefix>",
 //      "marker":"<last entry of the previous response>",
-//      "limit":<number of entries to return>
+//      "limit":"<number of entries to return>"
 //    }
 //
 //
@@ -2125,7 +2125,7 @@ _route_meta2_fetch(struct req_args_s *args, struct json_object *jbody,
 
 // RDIR{{
 // POST /v1/rdir/meta2/create?vol=<volume ip>%3A<volume port>
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
 // Create a new meta2 rdir database.
 // There is no IP re-use, so the IP addresses of the meta2 servers
@@ -2165,7 +2165,7 @@ _route_meta2_create(struct req_args_s *args, const char *meta2_address)
 
 // RDIR{{
 // POST /v1/rdir/meta2/push?vol=<volume ip>%3A<volume port>
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
 // Add a newly created container to the list of containers handled
 // by the meta2 server in question.
@@ -2240,7 +2240,7 @@ _route_meta2_push(struct req_args_s *args, struct json_object *jbody,
 
 // RDIR{{
 // DELETE /v1/rdir/meta2/delete?vol=<volume ip>%3A<volume port>
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
 // Remove a meta2 record from the database.
 //

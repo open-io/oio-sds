@@ -3040,16 +3040,19 @@ enum http_rc_e action_content_show (struct req_args_s *args) {
 // If the versioning is enabled, you can add delete marker to a specific version
 //
 // .. code-block:: text
+//
 //    POST /v3.0/OPENIO/content/delete?acct=my_account&ref=mycontainer&path=mycontent&version=9876543210&delete_marker=1 HTTP/1.1
 //
 // Unreference object from container
 //
 // .. code-block:: text
+//
 //    "x-oio-force-versioning: -1"
 //
 // You can delete this object as if the versioning is enabled
 //
 // .. code-block:: text
+//
 //    "x-oio-simulate-versioning: 1"
 //
 // Unreference object from container
