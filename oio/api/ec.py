@@ -943,11 +943,18 @@ class EcMetachunkWriter(io.MetachunkWriter):
         if resp:
             if resp.status == 201:
                 checksum = resp.getheader(CHUNK_HEADERS['chunk_hash'])
+                chunk_size = resp.getheader(CHUNK_HEADERS['chunk_size'])
                 if checksum and writer.checksum and \
                         checksum.lower() != writer.checksum.hexdigest():
                     writer.chunk['error'] = \
                         "checksum mismatch: %s (local), %s (rawx)" % \
-                        (checksum.lower(), writer.checksum.hexdigest())
+                        (writer.checksum.hexdigest(), checksum.lower())
+                    self.failed_chunks.append(writer.chunk)
+                elif chunk_size is not None \
+                        and int(chunk_size) != writer.bytes_transferred:
+                    writer.chunk['error'] = \
+                        "chunk size mismatch: %d (local), %s (rawx)" % \
+                        (writer.bytes_transferred, chunk_size)
                     self.failed_chunks.append(writer.chunk)
                 else:
                     success_chunks.append(writer.chunk)
