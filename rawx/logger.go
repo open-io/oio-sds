@@ -65,6 +65,7 @@ type AccessLogEvent struct {
 	peer      string
 	path      string
 	reqId     string
+	tls       bool
 }
 
 type NoopLogger struct{}
@@ -179,6 +180,12 @@ func (evt AccessLogEvent) String() string {
 	sb.WriteString(evt.reqId)
 	sb.WriteRune(' ')
 	sb.WriteString(evt.path)
+	sb.WriteRune(' ')
+	if evt.tls {
+		sb.WriteString("https")
+	} else {
+		sb.WriteString("http")
+	}
 	return sb.String()
 }
 

@@ -70,6 +70,7 @@ func (rr *rawxRequest) serveInfo() {
 			peer:      rr.req.RemoteAddr,
 			path:      rr.req.URL.Path,
 			reqId:     rr.reqid,
+			tls:       rr.req.TLS != nil,
 		})
 	}
 }
