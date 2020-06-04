@@ -548,6 +548,7 @@ func (rr *rawxRequest) serveChunk() {
 			peer:      rr.req.RemoteAddr,
 			path:      rr.req.URL.Path,
 			reqId:     rr.reqid,
+			tls:       rr.req.TLS != nil,
 		})
 	}
 }
