@@ -101,6 +101,7 @@ install(FILES
 			oiovar.h
 			oiocs.h
 			oiolb.h
+			lrutree.h
 		DESTINATION include/core)
 
 install(TARGETS
