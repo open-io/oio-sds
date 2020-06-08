@@ -65,6 +65,8 @@ gboolean lru_tree_remove(struct lru_tree_s *lt, gconstpointer k);
 
 void lru_tree_foreach(struct lru_tree_s *lt, GTraverseFunc h, gpointer hdata);
 
+gpointer lru_tree_get_oldest_key(struct lru_tree_s *lt);
+
 /** Remove from the LRU-Tree at most `max` elements older than `oldest`,
  *  and call `func` on each of them. `func` is responsible for freeing
  *  both key and value. */
