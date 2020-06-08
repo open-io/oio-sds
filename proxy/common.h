@@ -31,6 +31,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <glib.h>
 #include <json-c/json.h>
 
+#include <core/lrutree.h>
 #include <core/url_ext.h>
 #include <core/client_variables.h>
 

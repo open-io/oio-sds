@@ -22,6 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <unistd.h>
 
 #include <metautils/lib/metautils.h>
+#include <core/lrutree.h>
 #include <meta0v2/meta0_remote.h>
 #include <meta1v2/meta1_remote.h>
 #include <resolver/resolver_variables.h>

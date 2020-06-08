@@ -60,6 +60,7 @@ add_library(oiocore SHARED
 	loc.c
 	var.c
 	lb.c
+	lrutree.c
 	${CMAKE_CURRENT_BINARY_DIR}/client_variables.c
 	${CMAKE_CURRENT_BINARY_DIR}/lb_variables.c)
 
