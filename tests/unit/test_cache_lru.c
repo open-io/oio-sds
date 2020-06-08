@@ -18,7 +18,7 @@ License along with this library.
 
 #include <glib.h>
 #include <core/oio_core.h>
-#include <metautils/lib/lrutree.h>
+#include <core/lrutree.h>
 
 #include "tests/common/test_cache_abstract.c"
 

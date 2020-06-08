@@ -54,7 +54,6 @@ License along with this library.
 # include <metautils/lib/metatype_kv.h>
 # include <metautils/lib/metatype_metadata.h>
 
-# include <metautils/lib/lrutree.h>
 # include <metautils/lib/storage_policy.h>
 # include <metautils/lib/common_main.h>
 # include <metautils/lib/volume_lock.h>

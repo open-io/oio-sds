@@ -176,7 +176,6 @@ add_library(metautils STATIC
 		lb.c
 		common_main.c
 		utils_syscall.c
-		lrutree.c
 		storage_policy.c
 
 		utils_containers.c

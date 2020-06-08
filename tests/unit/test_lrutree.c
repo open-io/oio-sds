@@ -18,7 +18,7 @@ License along with this library.
 */
 
 #include <core/oio_core.h>
-#include <metautils/lib/lrutree.h>
+#include <core/lrutree.h>
 
 int
 main(int argc, char **argv)

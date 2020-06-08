@@ -19,6 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <glib.h>
 
 #include <metautils/lib/metautils.h>
+#include <core/lrutree.h>
 
 #include "cache.h"
 

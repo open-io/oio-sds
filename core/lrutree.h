@@ -17,8 +17,8 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#ifndef OIO_SDS__metautils__lib__lrutree_h
-# define OIO_SDS__metautils__lib__lrutree_h 1
+#ifndef OIO_SDS__core__lrutree_h
+# define OIO_SDS__core__lrutree_h 1
 
 # include <glib.h>
 
@@ -69,4 +69,4 @@ void lru_tree_foreach_older_steal(struct lru_tree_s *lt,
 
 gint64 lru_tree_count(struct lru_tree_s *lt);
 
-#endif /*OIO_SDS__metautils__lib__lrutree_h*/
+#endif /*OIO_SDS__core__lrutree_h*/
