@@ -32,6 +32,10 @@ License along with this library.
  *  (lru_tree_insert() and the key was already in the tree) */
 #define LTO_NOUTIME 0x02
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct lru_tree_s;
 
 /**
@@ -68,5 +72,9 @@ void lru_tree_foreach_older_steal(struct lru_tree_s *lt,
 		GTraverseFunc func, gpointer hdata, gint64 oldest, guint max);
 
 gint64 lru_tree_count(struct lru_tree_s *lt);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /*OIO_SDS__core__lrutree_h*/
