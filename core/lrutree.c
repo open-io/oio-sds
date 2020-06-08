@@ -272,6 +272,13 @@ lru_tree_foreach(struct lru_tree_s *lt, GTraverseFunc h, gpointer hdata)
 	}
 }
 
+gpointer
+lru_tree_get_oldest_key(struct lru_tree_s *lt){
+	if (lt->last)
+		return lt->last->k;
+	return NULL;
+}
+
 gint64
 lru_tree_count(struct lru_tree_s *lt)
 {
