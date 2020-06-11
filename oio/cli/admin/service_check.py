@@ -14,16 +14,16 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from six import iteritems
-from cliff import lister
 
 from oio.crawler.integrity import Target
+from oio.cli import Lister
 from oio.cli.admin.item_check import ItemCheckCommand
 from oio.cli.admin.common import MultipleServicesCommandMixin
 
 CID_PREFIX_COUNT = 65536
 
 
-class BaseCheckCommand(lister.Lister):
+class BaseCheckCommand(Lister):
     """
     Base class for all check commands.
     """
@@ -135,24 +135,39 @@ class Meta0Check(BaseCheckCommand):
         for zh in get_connected_handles(self.zookeeper()):
             for path in get_meta0_paths(zh, self.app.options.ns):
                 try:
-                    registered = set()
+                    zk_registered = set()
                     for node in zookeeper.get_children(zh.get(), path):
                         addr, _ = zookeeper.get(zh.get(), path + '/' + node)
-                        registered.add(addr)
+                        zk_registered.add(addr)
                     known = set()
-                    for _, host, port, _ in self.filter_services(self.catalog,
-                                                                 'meta0'):
+
+                    for _, host, port, score in self.filter_services(
+                            self.catalog, 'meta0'):
+                        if score == 0:
+                            self.success = False
+                            yield ('Warn', '%s:%d is down' % (host, port))
                         known.add('%s:%d' % (host, port))
                     self.logger.info("meta0 known=%d zk_registered=%d",
-                                     len(known), len(registered))
-                    assert registered == known
+                                     len(known), len(zk_registered))
+
+                    for item in zk_registered - known:
+                        self.success = False
+                        yield ('Error', '%s unknown but present in zk' %
+                                        item)
+
+                    for item in known - zk_registered:
+                        self.success = False
+                        yield ('Error', '%s known but not present in zk' %
+                                        item)
                 except Exception as ex:
-                    self.logger.exception("Failed to list the meta0 services "
-                                          "from zookeeper: %s", ex)
+                    self.success = False
+                    yield ('Error', "Failed to list the meta0 services "
+                                    "from zookeeper: %s" % ex)
                 finally:
                     zh.close()
 
-        yield ('OK', None)
+        if self.success:
+            yield ('OK', None)
 
 
 class Meta1Check(BaseCheckCommand):
