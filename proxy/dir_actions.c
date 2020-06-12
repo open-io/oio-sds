@@ -97,7 +97,7 @@ GError * _m1_locate_and_action (struct oio_url_s *url,
 		GError * (*hook) (const char * m1addr)) {
 	gchar **m1v = NULL;
 	GError *err = hc_resolve_reference_directory(
-			resolver, url, &m1v, oio_ext_get_deadline());
+			resolver, url, &m1v, FALSE, oio_ext_get_deadline());
 	if (NULL != err) {
 		g_prefix_error (&err, "No META1: ");
 		return err;
@@ -556,7 +556,7 @@ enum http_rc_e action_ref_show (struct req_args_s *args) {
 	if (!err) {
 		gchar **dirv = NULL;
 		err = hc_resolve_reference_directory(
-				resolver, args->url, &dirv, oio_ext_get_deadline());
+				resolver, args->url, &dirv, FALSE, oio_ext_get_deadline());
 		GString *out = g_string_sized_new (512);
 		g_string_append_c (out, '{');
 		g_string_append_static (out, "\"dir\":");

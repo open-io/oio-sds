@@ -80,7 +80,7 @@ GError* hc_resolve_reference_service(struct hc_resolver_s *r,
  * responsible for the given URL. */
 GError* hc_resolve_reference_directory(struct hc_resolver_s *r,
 		struct oio_url_s *url, gchar ***result,
-		gint64 deadline);
+		gboolean m0_only, gint64 deadline);
 
 /* Removes from the cache the services associated to the given references.
  * It doesn't touch the directory services belonging to the reference. */

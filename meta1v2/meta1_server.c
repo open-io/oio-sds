@@ -160,7 +160,8 @@ _get_peers(struct sqlx_service_s *ss UNUSED, const struct sqlx_name_s *n,
 
 	err = sqlx_name_extract(n, u, NAME_SRVTYPE_META1, &seq);
 	if (!err) {
-		err = hc_resolve_reference_directory(ss->resolver, u, &peers, oio_ext_get_deadline());
+		err = hc_resolve_reference_directory(ss->resolver, u, &peers, FALSE,
+				oio_ext_get_deadline());
 	}
 	if (!err) {
 		*result = meta1_url_filter_typed((const char * const *)peers, n->type);
