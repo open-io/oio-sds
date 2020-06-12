@@ -310,8 +310,9 @@ label_retry:
 		EXTRA_ASSERT(service_id != NULL);
 		m1uv = g_strsplit(service_id, OIO_CSV_SEP, -1);
 	} else if (*ctx->type == '#') {
+		gboolean m0_only = g_strcmp0("#meta0", ctx->type) == 0;
 		err = hc_resolve_reference_directory(
-				resolver, ctx->url, &m1uv, deadline);
+				resolver, ctx->url, &m1uv, m0_only, deadline);
 	} else {
 		err = hc_resolve_reference_service(
 				resolver, ctx->url, ctx->type, &m1uv, deadline);
