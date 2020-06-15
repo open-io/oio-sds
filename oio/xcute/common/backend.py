@@ -537,7 +537,7 @@ class XcuteBackend(RedisConnection):
 
             pipeline = self.conn.pipeline()
             for job_id in job_ids:
-                self._get_job_info(job_id, client=pipeline)
+                self._get_job_info(job_id.decode('utf-8'), client=pipeline)
             job_infos = pipeline.execute()
 
             for job_info in job_infos:
