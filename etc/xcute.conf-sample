@@ -5,6 +5,7 @@ log_address = /dev/log
 syslog_prefix = OIO,OPENIO,xcute,1
 
 namespace = OPENIO
+proc_name = oio-xcute
 
 # Configure Redis backend
 redis_host = 127.0.0.1:6379

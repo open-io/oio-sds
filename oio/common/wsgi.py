@@ -51,10 +51,9 @@ class Application(BaseApplication):
         self.cfg.set('keepalive', 30)
         self.cfg.set('access_log_format', self.conf.get('access_log_format',
                                                         self.access_log_fmt))
-        if self.logger_class:
-            # reactivate after
-            # self.cfg.set('logger_class', self.logger_class)
-            pass
+        self.cfg.set('proc_name',
+                     self.conf.get('proc_name',
+                                   self.application.__class__.__name__))
 
     def load(self):
         return self.application
