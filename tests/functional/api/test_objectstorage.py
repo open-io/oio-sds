@@ -2015,11 +2015,15 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         self.assertIsNotNone(expected_chunks)
         expected_obj_meta = expected_obj_meta.copy()
         expected_chunks = copy.deepcopy(expected_chunks)
+        for expected_chunk in expected_chunks:
+            del expected_chunk['score']
         self.assertEqual(2, self.api.container._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
 
         obj_meta, chunks = self.api.object_locate(
             self.account, self.container, self.path, properties=False)
+        for chunk in chunks:
+            del chunk['score']
         self.assertDictEqual(expected_obj_meta, obj_meta)
         self.assertListEqual(expected_chunks, chunks)
         self.assertEqual(2, self.api.container._direct_request.call_count)
@@ -2028,6 +2032,8 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         expected_obj_meta['properties'] = properties
         obj_meta, chunks = self.api.object_locate(
             self.account, self.container, self.path, properties=True)
+        for chunk in chunks:
+            del chunk['score']
         self.assertDictEqual(expected_obj_meta, obj_meta)
         self.assertListEqual(expected_chunks, chunks)
         self.assertEqual(3, self.api.container._direct_request.call_count)
@@ -2035,6 +2041,8 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
 
         obj_meta, chunks = self.api.object_locate(
             self.account, self.container, self.path, properties=True)
+        for chunk in chunks:
+            del chunk['score']
         self.assertDictEqual(expected_obj_meta, obj_meta)
         self.assertListEqual(expected_chunks, chunks)
         self.assertEqual(3, self.api.container._direct_request.call_count)
@@ -2043,6 +2051,8 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         expected_obj_meta['properties'] = dict()
         obj_meta, chunks = self.api.object_locate(
             self.account, self.container, self.path, properties=False)
+        for chunk in chunks:
+            del chunk['score']
         self.assertDictEqual(expected_obj_meta, obj_meta)
         self.assertListEqual(expected_chunks, chunks)
         self.assertEqual(3, self.api.container._direct_request.call_count)
