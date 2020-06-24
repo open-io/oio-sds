@@ -341,9 +341,6 @@ pkg_check_modules(CURL curl libcurl)
 if (NOT SDK_ONLY)
 pkg_check_modules(SQLITE3 REQUIRED sqlite3)
 pkg_check_modules(ZMQ libzmq>=4.0.0)
-# Optional cache libraries
-pkg_search_module(HIREDIS hiredis)
-pkg_search_module(LIBMEMCACHED libmemcached)
 endif (NOT SDK_ONLY)
 
 # Load CLI-overriden configuration
@@ -392,15 +389,6 @@ test_CLI(ASN1C_EXECUTABLE "asn1c")
 endif(NOT SDK_ONLY)
 
 # Check every required module is present
-if (NOT DEFINED ALLOW_HIREDIS)
-	MESSAGE("hiredis disabled by default, activate with -DALLOW_HIREDIS=1")
-endif ()
-print_found("HIREDIS")
-
-if (NOT DEFINED ALLOW_LIBMEMCACHED)
-	MESSAGE("libmemcached disabled by default, activate with -DALLOW_LIBMEMCACHED=1")
-endif ()
-print_found("LIBMEMCACHED")
 
 check_found("CURL" "GLIB2" "JSONC")
 
@@ -423,7 +411,6 @@ add_subdirectory(./tests/unit)
 
 if (NOT SDK_ONLY)
 add_subdirectory(./metautils/lib)
-add_subdirectory(./cache)
 add_subdirectory(./cluster/lib)
 
 add_subdirectory(./cluster/module)
