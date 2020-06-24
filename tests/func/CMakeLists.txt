@@ -17,22 +17,6 @@ link_directories(
 		${CURL_LIBRARY_DIRS}
 		${JSONC_LIBRARY_DIRS})
 
-if (DEFINED ALLOW_HIREDIS)
-	if (HIREDIS_FOUND)
-		add_executable(test_cache_redis test_cache_redis.c)
-		target_link_libraries(test_cache_redis oiocache oiocache_redis)
-		add_test(NAME cache/redis COMMAND test_cache_redis)
-	endif ()
-endif ()
-
-if (DEFINED ALLOW_LIBMEMCACHED)
-	if (LIBMEMCACHED_FOUND)
-		add_executable(test_cache_memcached test_cache_memcached.c)
-		target_link_libraries(test_cache_memcached oiocache oiocache_memcached)
-		add_test(NAME cache/memcached COMMAND test_cache_memcached)
-	endif ()
-endif ()
-
 add_library(oiosds_test SHARED testlib_sds.c)
 set_target_properties(oiosds_test PROPERTIES VERSION 0.0.0 SOVERSION 0)
 target_link_libraries(oiosds_test oiosds)
