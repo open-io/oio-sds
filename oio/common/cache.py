@@ -126,7 +126,14 @@ def set_cached_object_metadata(content_meta, content_chunks,
     content_meta['properties'] = dict()
     cache_value['meta'] = content_meta
     if content_chunks is not None:
-        cache_value['chunks'] = content_chunks
+        downsized_chunks = list()
+        # The scores will be refreshed on reading
+        # There is therefore no reason to lose space for this information
+        for chunk in content_chunks:
+            downsized_chunk = chunk.copy()
+            downsized_chunk.pop('score', None)
+            downsized_chunks.append(downsized_chunk)
+        cache_value['chunks'] = downsized_chunks
 
     cache_key = _get_object_metadata_cache_key(
         account=account, reference=reference, path=path, cid=cid)

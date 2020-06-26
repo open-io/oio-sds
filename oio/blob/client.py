@@ -113,7 +113,8 @@ class BlobClient(object):
         writer = ReplicatedMetachunkWriter(
             meta, [chunk], FakeChecksum(checksum),
             storage_method, quorum=1, perfdata=self.perfdata)
-        writer.stream(data, None)
+        bytes_transferred, chunk_hash, _ = writer.stream(data, None)
+        return bytes_transferred, chunk_hash
 
     @update_rawx_perfdata
     @ensure_request_id
@@ -233,11 +234,31 @@ class BlobClient(object):
             meta['id'] = content_id or meta.get('content_id')
             meta['chunk_method'] = meta['content_chunkmethod']
             meta['policy'] = meta['content_policy']
-            copy_meta = self.chunk_put(to_url, meta, stream, **kwargs)
-            return copy_meta
+            bytes_transferred, chunk_hash = self.chunk_put(
+                to_url, meta, stream, **kwargs)
         finally:
             if stream:
                 stream.close()
+        try:
+            expected_chunk_size = meta.get('chunk_size')
+            if expected_chunk_size is not None:
+                expected_chunk_size = int(expected_chunk_size)
+                if bytes_transferred != expected_chunk_size:
+                    raise exc.ChunkException(
+                        'Size isn\'t the same for the copied chunk')
+
+            expected_chunk_hash = meta.get('chunk_hash')
+            if expected_chunk_hash is not None:
+                expected_chunk_hash = expected_chunk_hash.upper()
+                chunk_hash = chunk_hash.upper()
+                if chunk_hash != expected_chunk_hash:
+                    # Should never happen, the hash is checked by the rawx
+                    raise exc.ChunkException(
+                        'Hash isn\'t the same for the copied chunk')
+        except exc.ChunkException:
+            # rollback
+            self.chunk_delete(to_url, **kwargs)
+            raise
 
     def _generate_fullchunk_copy(self, chunk, random_hex=60, **kwargs):
         """

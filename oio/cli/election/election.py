@@ -31,6 +31,7 @@ class ElectionCmd(Lister):
     """Base class for election subcommands"""
 
     log = getLogger(__name__ + '.Election')
+    reqid_prefix = "ACLI-EL-"
 
     def get_parser(self, prog_name):
         parser = super(ElectionCmd, self).get_parser(prog_name)
@@ -130,10 +131,11 @@ class ElectionDebug(ElectionCmd):
 
         service_type, account, reference, cid = self.get_params(parsed_args)
 
+        reqid = self.app.request_id(self.reqid_prefix)
         data = self.app.client_manager.admin.election_debug(
             service_type=service_type, account=account, reference=reference,
             cid=cid, timeout=parsed_args.timeout,
-            service_id=parsed_args.service_id)
+            service_id=parsed_args.service_id, reqid=reqid)
 
         columns = ('Id', 'Status', 'Message', 'Body')
         data = sorted(iteritems(data))
