@@ -941,7 +941,9 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 
 		if (!err && args->is_replicated)
 			err = election_start(args->repo->election_manager, &args->name);
+		oio_ext_add_perfdata("db_election0", oio_ext_monotonic_time() - start);
 	}
+
 
 	/* Now manage the replication status */
 	if (!expected || !election_configured || !args->is_replicated) {
