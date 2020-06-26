@@ -440,7 +440,7 @@ _resolve_reference_service(struct hc_resolver_s *r, struct hashstr_s *hk,
 
 GError*
 hc_resolve_reference_directory(struct hc_resolver_s *r, struct oio_url_s *url,
-		gchar ***result, gint64 deadline)
+		gchar ***result, gboolean m0_only, gint64 deadline)
 {
 	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(url, OIOURL_WHOLE));
 	EXTRA_ASSERT(r != NULL);
@@ -452,8 +452,11 @@ hc_resolve_reference_directory(struct hc_resolver_s *r, struct oio_url_s *url,
 	GError *err = NULL;
 	gchar **m1v = NULL, **m0v = NULL;
 
-	if (!(err = _resolve_meta0(r, oio_url_get(url, OIOURL_NS), &m0v, deadline)))
-		err = _resolve_meta1(r, url, &m1v, deadline);
+	if (!(err = _resolve_meta0(r, oio_url_get(url, OIOURL_NS), &m0v, deadline))) {
+		if (!m0_only) {
+			err = _resolve_meta1(r, url, &m1v, deadline);
+		}
+	}
 
 	if (err) {
 		if (m0v) g_strfreev(m0v);
@@ -461,12 +464,12 @@ hc_resolve_reference_directory(struct hc_resolver_s *r, struct oio_url_s *url,
 		return err;
 	}
 
-	*result = g_malloc0(sizeof(gchar*) *
-			(g_strv_length(m0v) + g_strv_length(m1v) + 1));
+	size_t tabsize = g_strv_length(m0v) + (m1v? g_strv_length(m1v) : 0) + 1;
+	*result = g_malloc0(sizeof(gchar*) * tabsize);
 	gchar **d = *result;
 	for (gchar **p=m0v; *p ;++p) { *(d++) = *p; }
 	g_free(m0v); // pointers reused
-	for (gchar **p=m1v; *p ;++p) { *(d++) = *p; }
+	for (gchar **p=m1v; m1v && *p; ++p) { *(d++) = *p; }
 	g_free(m1v); // pointers reused
 	return NULL;
 }

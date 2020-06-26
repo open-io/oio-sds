@@ -14,12 +14,14 @@
 # License along with this library.
 
 import random
+from mock import MagicMock as Mock
 
 from oio.api.object_storage import ObjectStorageApi
 from oio.blob.client import BlobClient
-from oio.common.utils import cid_from_name
+from oio.common.utils import GeneratorIO, cid_from_name
 from oio.common.constants import OIO_VERSION
 from oio.common.fullpath import encode_fullpath
+from oio.common.exceptions import ChunkException
 from oio.blob.mover import BlobMoverWorker
 from tests.utils import BaseTestCase, random_str
 from tests.functional.blob import convert_to_old_chunk
@@ -57,6 +59,7 @@ class TestBlobMover(BaseTestCase):
             self.account, self.container, self.path)
         self.version = meta['version']
         self.content_id = meta['id']
+        self.chunk_method = meta['chunk_method']
 
     def _chunk_path(self, chunk):
         url = chunk['url']
@@ -120,3 +123,25 @@ class TestBlobMover(BaseTestCase):
         del chunk_headers['oio_version']
         del new_chunk_headers['oio_version']
         self.assertEqual(chunk_headers, new_chunk_headers)
+
+    def test_move_with_wrong_size(self):
+        if not self.chunk_method.startswith('ec'):
+            self.skipTest('Only works with EC')
+
+        orig_chunk = random.choice(self.chunks)
+        chunk_volume = orig_chunk['url'].split('/')[2]
+        chunk_id = orig_chunk['url'].split('/')[3]
+
+        mover = BlobMoverWorker(self.conf, None,
+                                self.rawx_volumes[chunk_volume])
+        meta, stream = mover.blob_client.chunk_get(orig_chunk['url'])
+        data = stream.read()
+        stream.close()
+        data = data[:-1]
+        del meta['chunk_hash']
+        wrong_stream = GeneratorIO(data)
+        mover.blob_client.chunk_get = Mock(return_value=(meta, wrong_stream))
+
+        self.assertRaises(
+            ChunkException, mover.chunk_move,
+            self._chunk_path(orig_chunk), chunk_id)

@@ -111,6 +111,13 @@ def wrand_choice_index(scores):
     assert False, "Shouldn't get here"
 
 
+def _get_weighted_random_score(chunk):
+    score = chunk.get("score", 0)
+    if not score:
+        return 0
+    return score + random.randrange(10)
+
+
 def _sort_chunks(raw_chunks, ec_security, logger=None):
     """
     Sort a list a chunk objects. In addition to the sort,
@@ -163,14 +170,11 @@ def _sort_chunks(raw_chunks, ec_security, logger=None):
     offset = 0
     for pos in sorted(chunks.keys()):
         clist = chunks[pos]
-        clist.sort(key=lambda x: x.get("score", 0), reverse=True)
+        # When scores are close together (e.g. [95, 94, 94, 93, 50]),
+        # don't always start with the highest element.
+        clist.sort(key=_get_weighted_random_score, reverse=True)
         for element in clist:
             element['offset'] = offset
-        if not ec_security and len(clist) > 1:
-            # When scores are close together (e.g. [95, 94, 94, 93, 50]),
-            # don't always start with the highest element.
-            first = wrand_choice_index(x.get("score", 0) for x in clist)
-            clist[0], clist[first] = clist[first], clist[0]
         offset += clist[0]['size']
 
     return chunks

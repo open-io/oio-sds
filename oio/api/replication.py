@@ -162,6 +162,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                 self._handle_resp(
                     conn, resp,
                     meta_checksum.hexdigest() if meta_checksum else None,
+                    bytes_transferred,
                     success_chunks, failed_chunks)
         self.quorum_or_fail(success_chunks, failed_chunks)
 
@@ -271,7 +272,8 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                                   conn.chunk, self.reqid)
         return (conn, resp)
 
-    def _handle_resp(self, conn, resp, checksum, successes, failures):
+    def _handle_resp(self, conn, resp, checksum, bytes_transferred,
+                     successes, failures):
         """
         If `resp` is an exception or its status is not 201,
         declare `conn` as failed and put `conn.chunk` in
@@ -294,6 +296,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                     conn.chunk, self.reqid, resp.status)
             else:
                 rawx_checksum = resp.getheader(CHUNK_HEADERS['chunk_hash'])
+                rawx_chunk_size = resp.getheader(CHUNK_HEADERS['chunk_size'])
                 if rawx_checksum and checksum and \
                         rawx_checksum.lower() != checksum:
                     conn.failed = True
@@ -304,6 +307,13 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                     self.logger.error("%s (reqid=%s): %s",
                                       conn.chunk['url'], self.reqid,
                                       conn.chunk['error'])
+                elif rawx_chunk_size is not None \
+                        and int(rawx_chunk_size) != bytes_transferred:
+                    conn.failed = True
+                    conn.chunk['error'] = \
+                        "chunk size mismatch: %d (local), %s (rawx)" % \
+                        (bytes_transferred, rawx_chunk_size)
+                    failures.append(conn.chunk)
                 else:
                     conn.chunk['hash'] = checksum or rawx_checksum
                     successes.append(conn.chunk)

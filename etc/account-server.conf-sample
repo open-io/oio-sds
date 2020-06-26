@@ -7,6 +7,7 @@ log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log
 syslog_prefix = OIO,OPENIO,account,1
+proc_name = oio-account-server
 
 # Configure Redis backend
 #redis_host = 127.0.0.1:6379

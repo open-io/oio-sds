@@ -13,6 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import time
 import warnings
 from functools import wraps
 
@@ -27,6 +28,9 @@ from oio.common.cache import get_cached_container_metadata, \
     get_cached_object_metadata, set_cached_object_metadata, \
     del_cached_object_metadata
 from oio.common.easy_value import boolean_value
+from oio.common.exceptions import OioNetworkException
+from oio.common.green import eventlet
+from oio.conscience.client import ConscienceClient
 
 
 CONTENT_HEADER_PREFIX = 'x-oio-content-meta-'
@@ -107,10 +111,18 @@ class ContainerClient(ProxyClient):
     Intermediate level class to manage containers.
     """
 
-    def __init__(self, conf, **kwargs):
+    def __init__(self, conf, refresh_rawx_scores_delay=30.0, **kwargs):
         super(ContainerClient, self).__init__(conf,
                                               request_prefix="/container",
                                               **kwargs)
+
+        # to refresh the rawx scores from cache
+        kwargs.pop('pool_manager', None)
+        self.conscience_client = ConscienceClient(
+            self.conf, pool_manager=self.pool_manager, **kwargs)
+        self.rawx_scores = dict()
+        self._refresh_rawx_scores_delay = refresh_rawx_scores_delay
+        self._last_refresh_rawx_scores = 0.0
 
     def _make_uri(self, target):
         """
@@ -134,6 +146,36 @@ class ContainerClient(ProxyClient):
         if version:
             params.update({'version': version})
         return params
+
+    def _get_rawx_scores(self):
+        rawx_services = self.conscience_client.all_services('rawx')
+        rawx_scores = dict()
+        for rawx_service in rawx_services:
+            rawx_scores[rawx_service['id']] = \
+                rawx_service['score']
+        return rawx_scores
+
+    def _refresh_rawx_scores(self, now=None, **kwargs):
+        """Refresh rawx service scores."""
+        self.rawx_scores = self._get_rawx_scores()
+        if not now:
+            now = time.time()
+        self._last_refresh_rawx_scores = now
+
+    def _maybe_refresh_rawx_scores(self, **kwargs):
+        """Refresh rawx service scores if delay has been reached."""
+        if self._refresh_rawx_scores_delay >= 0.0 or not self.rawx_scores:
+            now = time.time()
+            if now - self._last_refresh_rawx_scores \
+                    > self._refresh_rawx_scores_delay:
+                try:
+                    self._refresh_rawx_scores(now, **kwargs)
+                except OioNetworkException as exc:
+                    self.logger.warn(
+                            "Failed to refresh rawx service scores: %s", exc)
+                except Exception:
+                    self.logger.exception(
+                        "Failed to refresh rawx service scores")
 
     def container_create(self, account, reference,
                          properties=None, system=None, **kwargs):
@@ -672,6 +714,11 @@ class ContainerClient(ProxyClient):
             account=account, reference=reference, path=path,
             cid=cid, version=version, properties=properties, **kwargs)
         if content_meta is not None and chunks is not None:
+            # Refresh asynchronously so as not to slow down the current request
+            eventlet.spawn_n(self._maybe_refresh_rawx_scores, **kwargs)
+            for chunk in chunks:
+                chunk['score'] = self.rawx_scores.get(
+                    chunk['url'].split('/')[2], 0)
             return content_meta, chunks
 
         uri = self._make_uri('content/locate')

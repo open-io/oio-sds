@@ -26,12 +26,13 @@ from oio.common.storage_method import STORAGE_METHODS
 class ContentFactory(object):
     DEFAULT_DATASEC = "plain", {"nb_copy": "1", "distance": "0"}
 
-    def __init__(self, conf, container_client=None, logger=None, **kwargs):
+    def __init__(self, conf, container_client=None, blob_client=None,
+                 logger=None, **kwargs):
         self.conf = conf
         self.logger = logger or get_logger(conf)
         self.container_client = container_client or \
             ContainerClient(conf, logger=self.logger, **kwargs)
-        self.blob_client = BlobClient(conf, **kwargs)
+        self.blob_client = blob_client or BlobClient(conf, **kwargs)
 
     def _get(self, container_id, meta, chunks,
              account=None, container_name=None, **kwargs):

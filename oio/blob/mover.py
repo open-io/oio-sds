@@ -64,7 +64,9 @@ class BlobMoverWorker(object):
         self.allow_links = true_value(conf.get('allow_links', True))
         self.blob_client = BlobClient(conf)
         self.container_client = ContainerClient(conf, logger=self.logger)
-        self.content_factory = ContentFactory(conf)
+        self.content_factory = ContentFactory(
+            conf, container_client=self.container_client,
+            blob_client=self.blob_client)
         self.excluded_rawx = \
             [rawx for rawx in conf.get('excluded_rawx', '').split(',') if rawx]
         self.fake_excluded_chunks = self._generate_fake_excluded_chunks()
