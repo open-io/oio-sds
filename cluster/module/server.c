@@ -665,12 +665,28 @@ static void
 _et_bim_cest_dans_le_hub (gchar *m)
 {
 	if (*m) {
-		zmq_send (hub_zpub, m, 1, ZMQ_SNDMORE);
-		int rc = zmq_send (hub_zpub, m+1, strlen(m+1), ZMQ_DONTWAIT);
-		if (rc > 0) {
-			GRID_TRACE2("HUB published 1 service / %d bytes", rc);
+		int rc = zmq_send(hub_zpub, m, 1, ZMQ_SNDMORE);
+		if (rc < 0) {
+			GRID_WARN("HUB: failed to publish action: (%d) %s",
+					errno, strerror(errno));
+		} else if (rc != 1) {
+			GRID_WARN("HUB: failed to publish action: "
+					"unexpected number of bytes sent: %d (expected=1)",
+					rc);
 		} else {
-			GRID_INFO("HUB publish failed: (%d) %s", errno, strerror(errno));
+			GRID_TRACE2("HUB: published 1 action / %d bytes", rc);
+			int mlen = strlen(m+1);
+			rc = zmq_send(hub_zpub, m+1, mlen, ZMQ_DONTWAIT);
+			if (rc < 0) {
+				GRID_WARN("HUB: failed to publish service: (%d) %s",
+						errno, strerror(errno));
+			} else if (rc != mlen) {
+				GRID_WARN("HUB: failed to publish service: "
+						"unexpected number of bytes sent: %d (expected=%d)",
+						rc, mlen);
+			} else {
+				GRID_TRACE2("HUB: published 1 service / %d bytes", rc);
+			}
 		}
 	}
 	g_free (m);
@@ -812,8 +828,16 @@ _on_each_message (void *zin, void (*hook) (const guint8 *, gsize))
 	zmq_msg_init (&msg);
 	do {
 		rc = zmq_msg_recv (&msg, zin, ZMQ_DONTWAIT);
-		if (rc > 0 && hook)
-			hook (zmq_msg_data(&msg), zmq_msg_size(&msg));
+		if (rc < 0) {
+			GRID_WARN("HUB: failed to receive service: (%d) %s",
+					errno, strerror(errno));
+		} else if (rc == 0) {
+			GRID_INFO("HUB: received 1 service with no data");
+		} else {
+			GRID_TRACE2("HUB: received 1 service / %d bytes", rc);
+			if (hook)
+				hook(zmq_msg_data(&msg), zmq_msg_size(&msg));
+		}
 	} while (rc >= 0 && zmq_msg_more(&msg));
 	zmq_msg_close (&msg);
 }
@@ -843,31 +867,37 @@ hub_worker_sub (gpointer p)
 			zmq_msg_init (&msg);
 			rc = zmq_msg_recv (&msg, hub_zsub, ZMQ_DONTWAIT);
 			if (rc < 0) {
-				if (errno == ETERM) break;
-				if (errno == EINTR || errno == EAGAIN) continue;
-				GRID_WARN("ZMQ recv error: (%d) %s", errno, strerror(errno));
+				if (errno == ETERM)
+					break;
+				if (errno == EINTR || errno == EAGAIN)
+					continue;
+				GRID_WARN("HUB: failed to receive action: (%d) %s",
+						errno, strerror(errno));
+				break;
+			} else if (rc != 1) {
+				GRID_WARN("HUB: failed to receive action: "
+						"unexpected number of bytes received: %d (expected=1)",
+						rc);
 				break;
 			}
 			const char *action = (const char*) zmq_msg_data(&msg);
 			const int more = zmq_msg_more(&msg);
-			GRID_TRACE2 ("HUB message size=%d more=%d action=%c",
-					rc, more, rc>0 ? *action : ' ');
-			if (rc > 0) {
-				if (more) {
-					switch (*action) {
-						case 'P':
-							_on_each_message (hub_zsub, _on_push);
-							break;
-						case 'R':
-							_on_each_message (hub_zsub, _on_remove);
-							break;
-						case 'F':
-							_on_each_message (hub_zsub, _on_flush);
-							break;
-						default:
-							_on_each_message (hub_zsub, NULL);
-							break;
-					}
+			GRID_TRACE2("HUB: received 1 action size=%d more=%d action=%c",
+					rc, more, *action);
+			if (more) {
+				switch (*action) {
+					case 'P':
+						_on_each_message (hub_zsub, _on_push);
+						break;
+					case 'R':
+						_on_each_message (hub_zsub, _on_remove);
+						break;
+					case 'F':
+						_on_each_message (hub_zsub, _on_flush);
+						break;
+					default:
+						_on_each_message (hub_zsub, NULL);
+						break;
 				}
 			}
 			zmq_msg_close (&msg);
