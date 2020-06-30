@@ -2268,6 +2268,7 @@ _election_get_status(struct election_manager_s *mgr,
 		member_signal(m);
 	_manager_unlock(mgr);
 
+	oio_ext_add_perfdata("db_election_get_status", oio_ext_monotonic_time() - start);
 	GRID_TRACE("STEP=%s/%d master=%s", _step2str(rc), rc, url);
 	switch (rc) {
 		case STEP_MASTER:

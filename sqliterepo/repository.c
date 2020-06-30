@@ -912,10 +912,12 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 		enum election_step_e step = STEP_NONE;
 		err = election_init(args->repo->election_manager, &args->name,
 				args->peers, &step, &replicated);
+		oio_ext_add_perfdata("db_election_init", oio_ext_monotonic_time() - start);
 		if (err)
 			return err;
 
 		if (args->create && sqliterepo_election_lazy_recover) {
+			gint64 local_start = oio_ext_monotonic_time();
 			err = sqlx_repository_has_base2(args->repo, &args->name, NULL);
 			if (err) {
 				if (err->code == CODE_CONTAINER_NOTFOUND) {
@@ -923,12 +925,15 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 					err = _db_raw_creation(args);
 				}
 			}
+			oio_ext_add_perfdata("db_election_creation", oio_ext_monotonic_time() - local_start);
 		}
 		args->is_replicated = BOOL(replicated);
 
-		if (!err && args->is_replicated)
+		if (!err && args->is_replicated) {
+			gint64 local_start = oio_ext_monotonic_time();
 			err = election_start(args->repo->election_manager, &args->name);
-		oio_ext_add_perfdata("db_election0", oio_ext_monotonic_time() - start);
+			oio_ext_add_perfdata("db_election_start", oio_ext_monotonic_time() - local_start);
+		}
 	}
 
 
