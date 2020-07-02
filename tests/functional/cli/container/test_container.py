@@ -84,6 +84,23 @@ class ContainerTest(CliTestCase):
         output = self.openio('bucket list ' + opts)
         self.assertIn(cname, output)
 
+    def test_bucket_list_with_versioning(self):
+        opts = self.get_format_opts(fields=('Name', ))
+        cname = 'mybucket-' + random_str(4).lower()
+        output = self.openio('container create --bucket-name %s %s %s' %
+                             (cname, cname, opts))
+        self.assertOutput(cname + '\n', output)
+
+        opts = self.get_format_opts(fields=('Name', 'Versioning'))
+        opts += " --prefix %s --versioning" % cname
+
+        output = self.openio('bucket list ' + opts)
+        self.assertIn("Suspended", output)
+
+        self.openio('container set --versioning -1 %s' % cname)
+        output = self.openio('bucket list ' + opts)
+        self.assertIn("Enabled", output)
+
     def test_bucket_show(self):
         opts = self.get_format_opts(fields=('Name', ))
         cname = 'mybucket-' + random_str(4).lower()
