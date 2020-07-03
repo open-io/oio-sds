@@ -23,6 +23,7 @@ License along with this library.
 #include <string.h>
 
 #include <metautils/lib/metautils.h>
+#include <metautils/lib/common_variables.h>
 #include <sqliterepo/sqliterepo_variables.h>
 
 #include "sqliterepo.h"
@@ -84,6 +85,26 @@ enum event_type_e
 	EVT_SYNC_OK,
 	EVT_SYNC_KO,
 };
+
+/* @private */
+struct stats_s
+{
+	gint64 total;	/* accumulator for the timer stat */
+	guint count;	/* number of call */
+	gint64 last;	/* last timestamp, when changed, a log will be emitted */
+};
+
+#define REPORT(msg) do { \
+	if (server_perfdata_enabled) { \
+		stat.count += 1; \
+		stat.total += oio_ext_monotonic_time() - start; \
+		if ((start - stat.last) > 1e6) { \
+			stat.last = start; \
+			GRID_INFO(#msg " %ld us for %d calls", stat.total, stat.count ); \
+            stat.count = stat.total = 0; \
+		} \
+	} \
+} while(0)
 
 /* @private */
 struct deque_beacon_s
@@ -1835,6 +1856,7 @@ static guint
 _reset_matching_members(struct election_manager_s *M, zhandle_t *zh,
 		enum election_step_e step)
 {
+	const gint64 start = oio_ext_monotonic_time();
 	guint count = 0;
 	_manager_lock(M);
 	struct deque_beacon_s *beacon = M->members_by_state + step;
@@ -1851,6 +1873,8 @@ _reset_matching_members(struct election_manager_s *M, zhandle_t *zh,
 		}
 	}
 	_manager_unlock(M);
+	GRID_INFO("_reset_matching_members %d %ld us", step,
+			oio_ext_monotonic_time() - start);
 	return count;
 }
 
@@ -4291,8 +4315,10 @@ _member_expirable(struct election_member_s *m, const gint64 now)
 void
 election_manager_play_expirations(struct election_manager_s *M, const gint64 now)
 {
+	static struct stats_s stat;
 	struct deque_beacon_s *beacon = M->members_by_state + STEP_NONE;
 
+	const gint64 start = oio_ext_monotonic_time();
 	while (beacon->front) {
 		_manager_lock(M);
 		struct election_member_s *m = beacon->front;
@@ -4307,13 +4333,16 @@ election_manager_play_expirations(struct election_manager_s *M, const gint64 now
 			_manager_unlock(M);
 		}
 	}
+	REPORT("election_manager_play_expirations");
 }
 
 static void
 _send_NONE_to_step(struct election_manager_s *M, struct deque_beacon_s *beacon,
 		const gint64 now)
 {
+	static struct stats_s stat;
 	gboolean stop = FALSE;
+	const gint64 start = oio_ext_monotonic_time();
 
 	while (beacon->front && !stop) {
 		_manager_lock(M);
@@ -4339,18 +4368,22 @@ _send_NONE_to_step(struct election_manager_s *M, struct deque_beacon_s *beacon,
 		}
 		_manager_unlock(M);
 	}
+
+	REPORT("_send_NONE_to_step");
 }
 
 guint
 election_manager_balance_masters(struct election_manager_s *M, guint max,
 		gint64 inactivity)
 {
+	static struct stats_s stat;
 	guint count = 0;
 	gint64 pivot = 0;
 
 	if (inactivity > 0)
 		pivot = OLDEST(oio_ext_monotonic_time(), inactivity);
 
+	const gint64 start = oio_ext_monotonic_time();
 	for (gboolean running = TRUE; running && count < max;) {
 		_manager_lock(M);
 		struct election_member_s *current = M->members_by_state[STEP_MASTER].front;
@@ -4365,6 +4398,7 @@ election_manager_balance_masters(struct election_manager_s *M, guint max,
 		}
 		_manager_unlock(M);
 	}
+	REPORT("election_manager_balance_masters");
 
 	return count;
 }
