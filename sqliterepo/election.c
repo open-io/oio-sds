@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -1363,7 +1363,14 @@ member_json (struct election_member_s *m, GString *gs)
 	OIO_JSON_append_int (gs, "pipefrom", m->pending_PIPEFROM);
 	g_string_append_c (gs, ',');
 	OIO_JSON_append_int (gs, "getvers", m->pending_GETVERS);
-	g_string_append_c (gs, '}');
+	g_string_append_c (gs, ',');
+	gint64 now = oio_ext_monotonic_time();
+	gint64 last_access = (now - m->last_atime) / G_TIME_SPAN_SECOND;
+	gint64 last_status = (now - m->last_status) / G_TIME_SPAN_SECOND;
+	OIO_JSON_append_int(gs, "seconds_since_last_access", last_access);
+	g_string_append_c(gs, ',');
+	OIO_JSON_append_int(gs, "seconds_since_last_status", last_status);
+	g_string_append_c(gs, '}');
 
 	/* the peers */
 	if (m->peers) {
