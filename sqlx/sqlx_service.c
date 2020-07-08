@@ -225,7 +225,7 @@ static void
 _patch_configuration_maxrss(void)
 {
 	const gint64 pre = sqliterepo_max_rss;
-	if (sqliterepo_max_rss <= 0) {
+	if (sqliterepo_max_rss < 0) {
 		struct rlimit rl = {};
 		int rc = getrlimit(RLIMIT_DATA, &rl);
 		if (rc == 0) {
