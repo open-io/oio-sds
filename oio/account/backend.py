@@ -95,166 +95,168 @@ class AccountBackend(RedisConnection):
         lua_is_sup +
         lua_update_bucket_func +
         """
-               local account_id = KEYS[1]; -- account ID
-               local ckey = KEYS[2]; -- key to the container hash
-               local clistkey = KEYS[3]; -- key to the account's container set
-               local akey = KEYS[4]; -- key to the account hash
-               local bkey = KEYS[5]; -- key to the bucket hash
-               local container_name = ARGV[1];
-               local new_mtime = ARGV[2];
-               local new_dtime = ARGV[3];
-               local new_total_objects = ARGV[4];
-               local new_total_bytes = ARGV[5];
-               local new_total_damaged_objects = ARGV[6];
-               local new_missing_chunks = ARGV[7];
-               local autocreate_account = ARGV[8];
-               local now = ARGV[9]; -- current timestamp
-               local ckey_expiration_time = ARGV[10];
-               local autocreate_container = ARGV[11];
-               local update_bucket_object_count = ARGV[12];
+        local account_id = KEYS[1]; -- account ID
+        local ckey = KEYS[2]; -- key to the container hash
+        local clistkey = KEYS[3]; -- key to the account's container set
+        local akey = KEYS[4]; -- key to the account hash
+        local bkey = KEYS[5]; -- key to the bucket hash
+        local container_name = ARGV[1];
+        local new_mtime = ARGV[2];
+        local new_dtime = ARGV[3];
+        local new_total_objects = ARGV[4];
+        local new_total_bytes = ARGV[5];
+        local new_total_damaged_objects = ARGV[6];
+        local new_missing_chunks = ARGV[7];
+        local autocreate_account = ARGV[8];
+        local now = ARGV[9]; -- current timestamp
+        local ckey_expiration_time = ARGV[10];
+        local autocreate_container = ARGV[11];
+        local update_bucket_object_count = ARGV[12];
 
-               local account_exists = redis.call('EXISTS', akey);
-               if account_exists ~= 1 then
-                 if autocreate_account == 'True' then
-                   redis.call('HSET', 'accounts:', account_id, 1);
-                   redis.call('HMSET', akey, 'id', account_id,
-                              'bytes', 0, 'objects', 0,
-                              'damaged_objects', 0, 'missing_chunks', 0,
-                              'ctime', now);
-                 else
-                   return redis.error_reply('no_account');
-                 end;
-               end;
+        local account_exists = redis.call('EXISTS', akey);
+        if account_exists ~= 1 then
+          if autocreate_account == 'True' then
+            redis.call('HSET', 'accounts:', account_id, 1);
+            redis.call('HMSET', akey,
+                       'id', account_id,
+                       'bytes', 0,
+                       'objects', 0,
+                       'damaged_objects', 0,
+                       'missing_chunks', 0,
+                       'ctime', now);
+          else
+            return redis.error_reply('no_account');
+          end;
+        end;
 
-               if autocreate_container == 'False' then
-                 local container_exists = redis.call('EXISTS', ckey);
-                 if container_exists ~= 1 then
-                   return redis.error_reply('no_container');
-                 end;
-               end;
+        if autocreate_container == 'False' then
+          local container_exists = redis.call('EXISTS', ckey);
+          if container_exists ~= 1 then
+            return redis.error_reply('no_container');
+          end;
+        end;
 
-               local mtime = redis.call('HGET', ckey, 'mtime');
-               local dtime = redis.call('HGET', ckey, 'dtime');
-               local objects = redis.call('HGET', ckey, 'objects');
-               local bytes = redis.call('HGET', ckey, 'bytes');
-               local damaged_objects = redis.call('HGET', ckey,
-                                                  'damaged_objects');
-               local missing_chunks = redis.call('HGET', ckey,
-                                                 'missing_chunks');
+        local mtime = redis.call('HGET', ckey, 'mtime');
+        local dtime = redis.call('HGET', ckey, 'dtime');
+        local objects = redis.call('HGET', ckey, 'objects');
+        local bytes = redis.call('HGET', ckey, 'bytes');
+        local damaged_objects = redis.call('HGET', ckey, 'damaged_objects');
+        local missing_chunks = redis.call('HGET', ckey, 'missing_chunks');
 
-               -- When the keys do not exist redis return false and not nil
-               if dtime == false then
-                 dtime = '0'
-               end
-               if mtime == false then
-                 mtime = '0'
-               end
-               if objects == false then
-                 objects = 0
-               else
-                 objects = tonumber(objects)
-               end
-               if bytes == false then
-                 bytes = 0
-               else
-                 bytes = tonumber(bytes)
-               end
-               if damaged_objects == false then
-                 damaged_objects = 0
-               else
-                 damaged_objects = tonumber(damaged_objects)
-               end
-               if missing_chunks == false then
-                 missing_chunks = 0
-               else
-                 missing_chunks = tonumber(missing_chunks)
-               end
+        -- When the keys do not exist redis return false and not nil
+        if dtime == false then
+          dtime = '0';
+        end;
+        if mtime == false then
+          mtime = '0';
+        end;
+        if objects == false then
+          objects = 0;
+        else
+          objects = tonumber(objects);
+        end;
+        if bytes == false then
+          bytes = 0;
+        else
+          bytes = tonumber(bytes);
+        end;
+        if damaged_objects == false then
+          damaged_objects = 0;
+        else
+          damaged_objects = tonumber(damaged_objects);
+        end;
+        if missing_chunks == false then
+          missing_chunks = 0;
+        else
+          missing_chunks = tonumber(missing_chunks);
+        end;
 
-               if autocreate_container == 'False' and is_sup(dtime, mtime) then
-                 return redis.error_reply('no_container');
-               end;
+        if autocreate_container == 'False' and is_sup(dtime, mtime) then
+          return redis.error_reply('no_container');
+        end;
 
-               local old_mtime = mtime;
-               local inc_objects = 0;
-               local inc_bytes = 0;
-               local inc_damaged_objects = 0;
-               local inc_missing_chunks = 0;
+        local old_mtime = mtime;
+        local inc_objects = 0;
+        local inc_bytes = 0;
+        local inc_damaged_objects = 0;
+        local inc_missing_chunks = 0;
 
-               if not is_sup(new_dtime, dtime) and not is_sup(new_mtime, mtime) then
-                 return redis.error_reply('no_update_needed');
-               end;
+        if not is_sup(new_dtime, dtime) and not is_sup(new_mtime, mtime) then
+          return redis.error_reply('no_update_needed');
+        end;
 
-               if is_sup(new_mtime, mtime) then
-                 mtime = new_mtime;
-               end;
+        if is_sup(new_mtime, mtime) then
+          mtime = new_mtime;
+        end;
 
-               if is_sup(new_dtime, dtime) then
-                 dtime = new_dtime;
-               end;
-               if is_sup(dtime, mtime) then
-                 -- Protect against "minus zero".
-                 if objects ~= 0 then
-                   inc_objects = -objects;
-                 end
-                 if bytes ~= 0 then
-                   inc_bytes = -bytes;
-                 end
-                 if damaged_objects ~= 0 then
-                   inc_damaged_objects = -damaged_objects
-                 end
-                 if missing_chunks ~= 0 then
-                   inc_missing_chunks = -missing_chunks;
-                 end
-                 redis.call('HMSET', ckey,
-                            'bytes', 0, 'objects', 0,
-                            'damaged_objects', 0, 'missing_chunks', 0);
-                 redis.call('EXPIRE', ckey, tonumber(ckey_expiration_time));
-                 redis.call('ZREM', clistkey, container_name);
-               elseif is_sup(mtime,old_mtime) then
-                 redis.call('PERSIST', ckey);
-                 inc_objects = tonumber(new_total_objects) - objects
-                 inc_bytes = tonumber(new_total_bytes) - bytes
-                 inc_damaged_objects = tonumber(new_total_damaged_objects) - damaged_objects
-                 inc_missing_chunks = tonumber(new_missing_chunks) - missing_chunks
-                 redis.call('HMSET', ckey,
-                            'objects', tonumber(new_total_objects),
-                            'bytes', tonumber(new_total_bytes),
-                            'damaged_objects', tonumber(new_total_damaged_objects),
-                            'missing_chunks', tonumber(new_missing_chunks));
-                 redis.call('ZADD', clistkey, '0', container_name);
-               else
-                 return redis.error_reply('no_update_needed');
-               end;
+        if is_sup(new_dtime, dtime) then
+          dtime = new_dtime;
+        end;
+        if is_sup(dtime, mtime) then
+          -- Protect against "minus zero".
+          if objects ~= 0 then
+            inc_objects = -objects;
+          end;
+          if bytes ~= 0 then
+            inc_bytes = -bytes;
+          end;
+          if damaged_objects ~= 0 then
+            inc_damaged_objects = -damaged_objects;
+          end;
+          if missing_chunks ~= 0 then
+            inc_missing_chunks = -missing_chunks;
+          end;
+          redis.call('HMSET', ckey,
+                     'bytes', 0, 'objects', 0,
+                     'damaged_objects', 0, 'missing_chunks', 0);
+          redis.call('EXPIRE', ckey, tonumber(ckey_expiration_time));
+          redis.call('ZREM', clistkey, container_name);
+        elseif is_sup(mtime, old_mtime) then
+          redis.call('PERSIST', ckey);
+          inc_objects = tonumber(new_total_objects) - objects;
+          inc_bytes = tonumber(new_total_bytes) - bytes;
+          inc_damaged_objects = tonumber(
+              new_total_damaged_objects) - damaged_objects
+          inc_missing_chunks = tonumber(new_missing_chunks) - missing_chunks;
+          redis.call('HMSET', ckey,
+                     'objects', tonumber(new_total_objects),
+                     'bytes', tonumber(new_total_bytes),
+                     'damaged_objects', tonumber(new_total_damaged_objects),
+                     'missing_chunks', tonumber(new_missing_chunks));
+          redis.call('ZADD', clistkey, '0', container_name);
+        else
+          return redis.error_reply('no_update_needed');
+        end;
 
-               redis.call('HMSET', ckey, 'mtime', mtime,
-                          'dtime', dtime, 'name', container_name)
-               if inc_objects ~= 0 then
-                 redis.call('HINCRBY', akey, 'objects', inc_objects);
-               end;
-               if inc_bytes ~= 0 then
-                 redis.call('HINCRBY', akey, 'bytes', inc_bytes);
-               end;
-               if inc_damaged_objects ~= 0 then
-                 redis.call('HINCRBY', akey, 'damaged_objects',
-                            inc_damaged_objects);
-               end;
-               if inc_missing_chunks ~= 0 then
-                 redis.call('HINCRBY', akey, 'missing_chunks',
-                            inc_missing_chunks);
-               end;
+        redis.call('HMSET', ckey, 'mtime', mtime,
+                   'dtime', dtime, 'name', container_name);
+        if inc_objects ~= 0 then
+          redis.call('HINCRBY', akey, 'objects', inc_objects);
+        end;
+        if inc_bytes ~= 0 then
+          redis.call('HINCRBY', akey, 'bytes', inc_bytes);
+        end;
+        if inc_damaged_objects ~= 0 then
+          redis.call('HINCRBY', akey, 'damaged_objects',
+                     inc_damaged_objects);
+        end;
+        if inc_missing_chunks ~= 0 then
+          redis.call('HINCRBY', akey, 'missing_chunks',
+                     inc_missing_chunks);
+        end;
 
-               if bkey ~= 'False' then
-                 -- For container holding MPU segments, we do not want to count
-                 -- each segment as an object. But we still want to consider
-                 -- their size.
-                 if update_bucket_object_count ~= 'True' then
-                   inc_objects = 0
-                 end
-                 update_bucket_stats(bkey, account_id, now,
-                                     inc_objects, inc_bytes,
-                                     inc_damaged_objects, inc_missing_chunks)
-               end
-               """)
+        if bkey ~= 'False' then
+          -- For container holding MPU segments, we do not want to count
+          -- each segment as an object. But we still want to consider
+          -- their size.
+          if update_bucket_object_count ~= 'True' then
+            inc_objects = 0;
+          end;
+          update_bucket_stats(bkey, account_id, now,
+                              inc_objects, inc_bytes,
+                              inc_damaged_objects, inc_missing_chunks);
+        end;
+        """)
 
     lua_refresh_account = """
         local account_id = redis.call('HGET', KEYS[1], 'id');
