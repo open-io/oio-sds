@@ -59,20 +59,22 @@ class AccountBackend(RedisConnection):
         -- Note that bucket is the key name, not just the bucket name
         -- (it has a prefix).
         local update_bucket_stats = function(
-            bucket, account, mtime,
+            bucket_key, account, mtime,
             inc_objects, inc_bytes, inc_damaged_objects, inc_missing_chunks)
           -- Set the bucket owner.
           -- FIXME(FVE): do some checks instead of overwriting
-          redis.call('HSET', bucket, 'account', account)
+          redis.call('HSET', bucket_key, 'account', account);
 
           -- Increment the counters.
-          redis.call('HINCRBY', bucket, 'objects', inc_objects)
-          redis.call('HINCRBY', bucket, 'bytes', inc_bytes)
-          redis.call('HINCRBY', bucket, 'damaged_objects', inc_damaged_objects)
-          redis.call('HINCRBY', bucket, 'missing_chunks', inc_missing_chunks)
+          redis.call('HINCRBY', bucket_key, 'objects', inc_objects);
+          redis.call('HINCRBY', bucket_key, 'bytes', inc_bytes);
+          redis.call('HINCRBY', bucket_key, 'damaged_objects',
+                     inc_damaged_objects);
+          redis.call('HINCRBY', bucket_key, 'missing_chunks',
+                     inc_missing_chunks);
 
           -- Finally update the modification time.
-          redis.call('HSET', bucket, 'mtime', mtime)
+          redis.call('HSET', bucket_key, 'mtime', mtime);
         end
     """
 
@@ -95,23 +97,24 @@ class AccountBackend(RedisConnection):
         lua_is_sup +
         lua_update_bucket_func +
         """
-        local account_id = KEYS[1]; -- account ID
+        local akey = KEYS[1]; -- key to the account hash
         local ckey = KEYS[2]; -- key to the container hash
         local clistkey = KEYS[3]; -- key to the account's container set
-        local akey = KEYS[4]; -- key to the account hash
-        local bkey = KEYS[5]; -- key to the bucket hash
-        local container_name = ARGV[1];
-        local new_mtime = ARGV[2];
-        local new_dtime = ARGV[3];
-        local new_total_objects = ARGV[4];
-        local new_total_bytes = ARGV[5];
-        local new_total_damaged_objects = ARGV[6];
-        local new_missing_chunks = ARGV[7];
-        local autocreate_account = ARGV[8];
-        local now = ARGV[9]; -- current timestamp
-        local ckey_expiration_time = ARGV[10];
-        local autocreate_container = ARGV[11];
-        local update_bucket_object_count = ARGV[12];
+        local bkey_prefix = KEYS[4]; -- key prefix to the bucket hash
+        local account_id = ARGV[1];
+        local container_name = ARGV[2];
+        local bucket_name = ARGV[3];
+        local new_mtime = ARGV[4];
+        local new_dtime = ARGV[5];
+        local new_total_objects = ARGV[6];
+        local new_total_bytes = ARGV[7];
+        local new_total_damaged_objects = ARGV[8];
+        local new_missing_chunks = ARGV[9];
+        local autocreate_account = ARGV[10];
+        local now = ARGV[11]; -- current timestamp
+        local ckey_expiration_time = ARGV[12];
+        local autocreate_container = ARGV[13];
+        local update_bucket_object_count = ARGV[14];
 
         local account_exists = redis.call('EXISTS', akey);
         if account_exists ~= 1 then
@@ -245,16 +248,24 @@ class AccountBackend(RedisConnection):
                      inc_missing_chunks);
         end;
 
-        if bkey ~= 'False' then
+        local current_bucket_name = redis.call('HGET', ckey, 'bucket');
+        if bucket_name == '' and current_bucket_name ~= false then
+          -- Use the bucket name already registered when it is not given
+          bucket_name = current_bucket_name;
+        end;
+        if bucket_name ~= '' then
+          local bkey = bkey_prefix .. bucket_name;
+
           -- For container holding MPU segments, we do not want to count
           -- each segment as an object. But we still want to consider
           -- their size.
           if update_bucket_object_count ~= 'True' then
             inc_objects = 0;
           end;
-          update_bucket_stats(bkey, account_id, now,
-                              inc_objects, inc_bytes,
-                              inc_damaged_objects, inc_missing_chunks);
+
+          update_bucket_stats(
+              bkey, account_id, now,
+              inc_objects, inc_bytes, inc_damaged_objects, inc_missing_chunks);
         end;
         """)
 
@@ -631,21 +642,19 @@ class AccountBackend(RedisConnection):
         if missing_chunks is None:
             missing_chunks = 0
 
-        # If no bucket name is provided, set it to 'False'
+        # If no bucket name is provided, set it to ''
         # (we cannot pass None to the Lua script).
-        bucket_key = self.bkey(bucket_name) if bucket_name else str(False)
+        bucket_name = bucket_name or ''
         now = Timestamp().normal
         # With some sharding middlewares, the suffix may be
         # in the middle of the container name.
         update_bucket_object_count = SEGMENTS_BUCKET_SUFFIX not in name
 
         ckey = AccountBackend.ckey(account_id, name)
-        keys = [account_id, ckey,
-                self.clistkey(account_id),
-                self.akey(account_id),
-                bucket_key]
-        args = [name, mtime, dtime, object_count, bytes_used,
-                damaged_objects, missing_chunks,
+        keys = [self.akey(account_id), ckey, self.clistkey(account_id),
+                self._bucket_prefix]
+        args = [account_id, name, bucket_name, mtime, dtime,
+                object_count, bytes_used, damaged_objects, missing_chunks,
                 str(autocreate_account), now, EXPIRE_TIME,
                 str(autocreate_container),
                 str(update_bucket_object_count)]
