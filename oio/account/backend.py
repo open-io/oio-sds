@@ -59,11 +59,30 @@ class AccountBackend(RedisConnection):
         -- Note that bucket is the key name, not just the bucket name
         -- (it has a prefix).
         local update_bucket_stats = function(
-            bucket_key, account, mtime,
+            container_key, bucket_key, buckets_list_key,
+            account, container_name, bucket_name, mtime, deleted,
             inc_objects, inc_bytes, inc_damaged_objects, inc_missing_chunks)
+          if deleted then
+            redis.call('HDEL', container_key, 'bucket');
+
+            -- Update the buckets list if it's the root container
+            if bucket_name == container_name then
+              redis.call('ZREM', buckets_list_key, bucket_name);
+            end;
+            return;
+          end;
+
           -- Set the bucket owner.
           -- FIXME(FVE): do some checks instead of overwriting
           redis.call('HSET', bucket_key, 'account', account);
+
+          -- Update container info
+          redis.call('HSET', container_key, 'bucket', bucket_name);
+
+          -- Update the buckets list if it's the root container
+          if bucket_name == container_name then
+            redis.call('ZADD', buckets_list_key, 0, bucket_name);
+          end;
 
           -- Increment the counters.
           redis.call('HINCRBY', bucket_key, 'objects', inc_objects);
@@ -78,21 +97,6 @@ class AccountBackend(RedisConnection):
         end
     """
 
-    lua_update_bucket_list = """
-        -- Key to the set of bucket of a specific account
-        local bucket_set = KEYS[1]
-        -- Actual name of the bucket
-        local bucket_name = ARGV[1]
-        -- True if the bucket has just been deleted
-        local deleted = ARGV[2]
-
-        if deleted ~= 'True' then
-          redis.call('ZADD', bucket_set, 0, bucket_name);
-        else
-          redis.call('ZREM', bucket_set, bucket_name);
-        end
-    """
-
     lua_update_container = (
         lua_is_sup +
         lua_update_bucket_func +
@@ -101,6 +105,7 @@ class AccountBackend(RedisConnection):
         local ckey = KEYS[2]; -- key to the container hash
         local clistkey = KEYS[3]; -- key to the account's container set
         local bkey_prefix = KEYS[4]; -- key prefix to the bucket hash
+        local blistkey = KEYS[5]; -- key to the account's bucket set
         local account_id = ARGV[1];
         local container_name = ARGV[2];
         local bucket_name = ARGV[3];
@@ -183,6 +188,7 @@ class AccountBackend(RedisConnection):
         local inc_bytes = 0;
         local inc_damaged_objects = 0;
         local inc_missing_chunks = 0;
+        local deleted = false;
 
         if not is_sup(new_dtime, dtime) and not is_sup(new_mtime, mtime) then
           return redis.error_reply('no_update_needed');
@@ -214,6 +220,7 @@ class AccountBackend(RedisConnection):
                      'damaged_objects', 0, 'missing_chunks', 0);
           redis.call('EXPIRE', ckey, tonumber(ckey_expiration_time));
           redis.call('ZREM', clistkey, container_name);
+          deleted = true;
         elseif is_sup(mtime, old_mtime) then
           redis.call('PERSIST', ckey);
           inc_objects = tonumber(new_total_objects) - objects;
@@ -256,6 +263,16 @@ class AccountBackend(RedisConnection):
         if bucket_name ~= '' then
           local bkey = bkey_prefix .. bucket_name;
 
+          -- This container is not yet associated with this bucket.
+          -- We must add all the totals in case the container already existed
+          -- but didn't know its bucket.
+          if current_bucket_name == false then
+            inc_objects = new_total_objects;
+            inc_bytes = new_total_bytes;
+            inc_damaged_objects = new_total_damaged_objects;
+            inc_missing_chunks = new_missing_chunks;
+          end;
+
           -- For container holding MPU segments, we do not want to count
           -- each segment as an object. But we still want to consider
           -- their size.
@@ -264,7 +281,8 @@ class AccountBackend(RedisConnection):
           end;
 
           update_bucket_stats(
-              bkey, account_id, now,
+              ckey, bkey, blistkey, account_id, container_name, bucket_name,
+              mtime, deleted,
               inc_objects, inc_bytes, inc_damaged_objects, inc_missing_chunks);
         end;
         """)
@@ -382,8 +400,6 @@ class AccountBackend(RedisConnection):
         self.autocreate = boolean_value(conf.get('autocreate'), True)
         self.script_update_container = self.register_script(
             self.lua_update_container)
-        self.script_update_bucket_list = self.register_script(
-            self.lua_update_bucket_list)
         self.script_refresh_account = self.register_script(
             self.lua_refresh_account)
         self.script_flush_account = self.register_script(
@@ -632,7 +648,6 @@ class AccountBackend(RedisConnection):
             dtime = '0'
         else:
             dtime = Timestamp(dtime).normal
-        deleted = float(dtime) > float(mtime)
         if object_count is None:
             object_count = 0
         if bytes_used is None:
@@ -652,25 +667,15 @@ class AccountBackend(RedisConnection):
 
         ckey = AccountBackend.ckey(account_id, name)
         keys = [self.akey(account_id), ckey, self.clistkey(account_id),
-                self._bucket_prefix]
+                self._bucket_prefix, self.blistkey(account_id)]
         args = [account_id, name, bucket_name, mtime, dtime,
                 object_count, bytes_used, damaged_objects, missing_chunks,
                 str(autocreate_account), now, EXPIRE_TIME,
                 str(autocreate_container),
                 str(update_bucket_object_count)]
-        pipeline = self.conn.pipeline(True)
         try:
             self.script_update_container(
-                keys=keys, args=args, client=pipeline)
-            if bucket_name and not deleted:
-                pipeline.hset(ckey, "bucket", bucket_name)
-            # Only execute when the main shard is created/deleted.
-            if bucket_name == name:
-                self.script_update_bucket_list(
-                    keys=[self.blistkey(account_id)],
-                    args=[bucket_name, str(deleted)],
-                    client=pipeline)
-            pipeline.execute()
+                keys=keys, args=args)
         except redis.exceptions.ResponseError as exc:
             if six.text_type(exc).endswith("no_account"):
                 raise NotFound("Account %s not found" % account_id)
