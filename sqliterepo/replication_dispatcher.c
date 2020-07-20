@@ -1724,9 +1724,13 @@ _info_sqlite(GString *gstr)
 	const char *s;
 
 	g_string_append_static(gstr, "\"sqlite\":[");
+	g_string_append_static(gstr, "\"VERSION_COMPILED=");
+	g_string_append_static(gstr, SQLITE_VERSION);
+	g_string_append_static(gstr, "\",\"VERSION_RUNTIME=");
+	oio_str_gstring_append_json_string(gstr, sqlite3_libversion());
+	g_string_append_c(gstr, '"');
 	for (int i=0; NULL != (s = sqlite3_compileoption_get(i)); ++i) {
-		if (i!=0)
-			g_string_append_c(gstr, ',');
+		g_string_append_c(gstr, ',');
 		oio_str_gstring_append_json_quote(gstr, s);
 	}
 	g_string_append_c(gstr, ']');
