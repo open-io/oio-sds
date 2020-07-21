@@ -829,6 +829,32 @@ class PurgeContainer(ContainerCommandMixin, Command):
         )
 
 
+class RefreshBucket(Command):
+    """
+    Refresh the counters of a bucket.
+
+    Reset all statistics counters and recompute them by summing
+    the counters of all shards (containers).
+    """
+
+    log = getLogger(__name__ + '.RefreshBucket')
+
+    def get_parser(self, prog_name):
+        parser = super(RefreshBucket, self).get_parser(prog_name)
+        parser.add_argument(
+            'bucket',
+            help='Name of the bucket to refresh.'
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        reqid = request_id(prefix='CLI-BUCKET-')
+        acct_client = self.app.client_manager.storage.account
+        acct_client.bucket_refresh(parsed_args.bucket, reqid=reqid)
+
+
 class RefreshContainer(ContainerCommandMixin, Command):
     """ Refresh counters of an account (triggers asynchronous treatments) """
 

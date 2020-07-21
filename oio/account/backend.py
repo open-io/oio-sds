@@ -30,7 +30,6 @@ ACCOUNT_KEY_PREFIX = 'account:'
 BUCKET_KEY_PREFIX = 'bucket:'
 BUCKET_LIST_PREFIX = 'buckets:'
 CONTAINER_LIST_PREFIX = 'containers:'
-SEGMENTS_BUCKET_SUFFIX = '+segments'
 
 EXPIRE_TIME = 60  # seconds
 
@@ -84,6 +83,13 @@ class AccountBackend(RedisConnection):
             redis.call('ZADD', buckets_list_key, 0, bucket_name);
           end;
 
+          -- For container holding MPU segments, we do not want to count
+          -- each segment as an object. But we still want to consider
+          -- their size.
+          if string.find(container_name, '+segments') then
+            inc_objects = 0;
+          end;
+
           -- Increment the counters.
           redis.call('HINCRBY', bucket_key, 'objects', inc_objects);
           redis.call('HINCRBY', bucket_key, 'bytes', inc_bytes);
@@ -93,9 +99,68 @@ class AccountBackend(RedisConnection):
                      inc_missing_chunks);
 
           -- Finally update the modification time.
-          redis.call('HSET', bucket_key, 'mtime', mtime);
-        end
+          if mtime ~= '' then
+            redis.call('HSET', bucket_key, 'mtime', mtime);
+          end;
+        end;
     """
+
+    lua_refresh_bucket = (
+        lua_update_bucket_func +
+        """
+        local ckey_prefix = KEYS[1]; -- prefix of the key to the container hash
+        local clistkey = KEYS[2]; -- key to the account's container set
+        local bkey = KEYS[3]; -- key to the bucket hash
+        local blistkey = KEYS[4]; -- key to the account's bucket set
+        local bucket_name = ARGV[1];
+
+        -- Check if the bucket exists.
+        local account_id = redis.call('HGET', bkey, 'account');
+        if account_id == false then
+          return redis.error_reply('no_bucket');
+        end;
+        ckey_prefix = ckey_prefix:gsub( "__account__", account_id);
+        clistkey = clistkey:gsub("__account__", account_id);
+        blistkey = blistkey:gsub("__account__", account_id);
+
+        -- Reset the counters.
+        redis.call('HMSET', bkey,
+                   'objects', 0,
+                   'bytes', 0,
+                   'damaged_objects', 0,
+                   'missing_chunks', 0);
+
+        -- Increment the counters.
+        local containers = redis.call('ZRANGE', clistkey, 0, -1);
+        for _, container_name in ipairs(containers) do
+          local ckey = ckey_prefix .. container_name;
+
+          local bucket  = redis.call('HGET', ckey, 'bucket');
+          if bucket ~= false and bucket == bucket_name then
+            local info  = redis.call('HMGET', ckey,
+                                     'objects',
+                                     'bytes',
+                                     'damaged_objects',
+                                     'missing_chunks');
+            local objects = info[1];
+            local bytes = info[2];
+            local damaged_objects = info[3];
+            local missing_chunks = info[4];
+
+            if damaged_objects == false then
+              damaged_objects = 0;
+            end;
+            if missing_chunks == false then
+              missing_chunks = 0;
+            end;
+
+            update_bucket_stats(
+                ckey, bkey, blistkey, account_id, container_name, bucket_name,
+                '', false,
+                objects, bytes, damaged_objects, missing_chunks);
+          end;
+        end;
+        """)
 
     lua_update_container = (
         lua_is_sup +
@@ -104,7 +169,7 @@ class AccountBackend(RedisConnection):
         local akey = KEYS[1]; -- key to the account hash
         local ckey = KEYS[2]; -- key to the container hash
         local clistkey = KEYS[3]; -- key to the account's container set
-        local bkey_prefix = KEYS[4]; -- key prefix to the bucket hash
+        local bkey_prefix = KEYS[4]; -- prefix of the key to the bucket hash
         local blistkey = KEYS[5]; -- key to the account's bucket set
         local account_id = ARGV[1];
         local container_name = ARGV[2];
@@ -119,7 +184,6 @@ class AccountBackend(RedisConnection):
         local now = ARGV[11]; -- current timestamp
         local ckey_expiration_time = ARGV[12];
         local autocreate_container = ARGV[13];
-        local update_bucket_object_count = ARGV[14];
 
         local account_exists = redis.call('EXISTS', akey);
         if account_exists ~= 1 then
@@ -151,7 +215,7 @@ class AccountBackend(RedisConnection):
         local damaged_objects = redis.call('HGET', ckey, 'damaged_objects');
         local missing_chunks = redis.call('HGET', ckey, 'missing_chunks');
 
-        -- When the keys do not exist redis return false and not nil
+        -- When the keys do not exist redis returns false and not nil
         if dtime == false then
           dtime = '0';
         end;
@@ -265,19 +329,12 @@ class AccountBackend(RedisConnection):
 
           -- This container is not yet associated with this bucket.
           -- We must add all the totals in case the container already existed
-          -- but didn't know its bucket.
+          -- but didn't know its parent bucket.
           if current_bucket_name == false then
             inc_objects = new_total_objects;
             inc_bytes = new_total_bytes;
             inc_damaged_objects = new_total_damaged_objects;
             inc_missing_chunks = new_missing_chunks;
-          end;
-
-          -- For container holding MPU segments, we do not want to count
-          -- each segment as an object. But we still want to consider
-          -- their size.
-          if update_bucket_object_count ~= 'True' then
-            inc_objects = 0;
           end;
 
           update_bucket_stats(
@@ -400,6 +457,8 @@ class AccountBackend(RedisConnection):
         self.autocreate = boolean_value(conf.get('autocreate'), True)
         self.script_update_container = self.register_script(
             self.lua_update_container)
+        self.script_refresh_bucket = self.register_script(
+            self.lua_refresh_bucket)
         self.script_refresh_account = self.register_script(
             self.lua_refresh_account)
         self.script_flush_account = self.register_script(
@@ -525,6 +584,8 @@ class AccountBackend(RedisConnection):
         if not bname:
             return None
         binfo = self.conn_slave.hgetall(self.bkey(bname))
+        if not binfo:
+            return None
         self.cast_fields(binfo)
         return binfo
 
@@ -661,9 +722,6 @@ class AccountBackend(RedisConnection):
         # (we cannot pass None to the Lua script).
         bucket_name = bucket_name or ''
         now = Timestamp().normal
-        # With some sharding middlewares, the suffix may be
-        # in the middle of the container name.
-        update_bucket_object_count = SEGMENTS_BUCKET_SUFFIX not in name
 
         ckey = AccountBackend.ckey(account_id, name)
         keys = [self.akey(account_id), ckey, self.clistkey(account_id),
@@ -671,8 +729,7 @@ class AccountBackend(RedisConnection):
         args = [account_id, name, bucket_name, mtime, dtime,
                 object_count, bytes_used, damaged_objects, missing_chunks,
                 str(autocreate_account), now, EXPIRE_TIME,
-                str(autocreate_container),
-                str(update_bucket_object_count)]
+                str(autocreate_container)]
         try:
             self.script_update_container(
                 keys=keys, args=args)
@@ -836,6 +893,28 @@ class AccountBackend(RedisConnection):
         account_count = conn.hlen('accounts:')
         status = {'account_count': account_count}
         return status
+
+    @catch_service_errors
+    def refresh_bucket(self, bucket_name):
+        """
+        Refresh the counters of a bucket. Recompute them from the counters
+        of all shards (containers).
+        """
+        account_id = '__account__'
+        keys = [AccountBackend.ckey(account_id, ''),
+                self.clistkey(account_id), self.bkey(bucket_name),
+                self.blistkey(account_id)]
+        args = [bucket_name]
+        try:
+            self.script_refresh_bucket(
+                keys=keys, args=args)
+        except redis.exceptions.ResponseError as exc:
+            if six.text_type(exc).endswith("no_account"):
+                raise NotFound("Account %s not found" % account_id)
+            if six.text_type(exc).endswith("no_bucket"):
+                raise NotFound("Bucket %s not found" % bucket_name)
+            else:
+                raise
 
     @catch_service_errors
     def refresh_account(self, account_id):
