@@ -209,6 +209,13 @@ class AccountClient(HttpApi):
                                            data=data, **kwargs)
         return body
 
+    def bucket_refresh(self, bucket, **kwargs):
+        """
+        Refresh the counters of a bucket. Recompute them from the counters
+        of all shards (containers).
+        """
+        self.account_request(bucket, 'POST', 'refresh-bucket', **kwargs)
+
     def container_list(self, account, limit=None, marker=None,
                        end_marker=None, prefix=None, delimiter=None,
                        s3_buckets_only=False, **kwargs):

@@ -80,6 +80,8 @@ class Account(WerkzeugApp):
                  methods=['GET']),
             Rule('/v1.0/account/containers', endpoint='account_containers',
                  methods=['GET']),
+            Rule('/v1.0/account/refresh-bucket', endpoint='bucket_refresh',
+                 methods=['POST']),
             Rule('/v1.0/account/refresh', endpoint='account_refresh',
                  methods=['POST']),
             Rule('/v1.0/account/flush', endpoint='account_flush',
@@ -97,6 +99,8 @@ class Account(WerkzeugApp):
                  methods=['GET']),
             Rule('/v1.0/bucket/update', endpoint='bucket_update',
                  methods=['PUT']),
+            Rule('/v1.0/bucket/refresh', endpoint='bucket_refresh',
+                 methods=['POST']),
         ])
         super(Account, self).__init__(self.url_map, self.logger)
 
@@ -707,7 +711,7 @@ class Account(WerkzeugApp):
         return NotFound('Bucket not found')
 
     # ACCT{{
-    # POST /v1.0/bucket/update?id=<bucket_name>
+    # PUT /v1.0/bucket/update?id=<bucket_name>
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     #
     # Update metadata of the specified bucket.
@@ -766,6 +770,40 @@ class Account(WerkzeugApp):
         if info is not None:
             return Response(json.dumps(info), mimetype='text/json')
         return NotFound('Bucket not found')
+
+    # ACCT{{
+    # POST /v1.0/bucket/refresh?id=<bucket_name>
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    #
+    # Refresh the counters of a bucket named bucket_name
+    #
+    # Sample request:
+    #
+    # .. code-block:: http
+    #
+    #    POST /v1.0/bucket/refresh?id=mybucket HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #
+    # Sample response:
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 204 NO CONTENT
+    #    Server: gunicorn/19.9.0
+    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Connection: keep-alive
+    #    Content-Type: text/plain; charset=utf-8
+    #
+    # }}ACCT
+    def on_bucket_refresh(self, req):
+        """
+        Refresh bucket counters.
+        """
+        bucket_name = self._get_item_id(req, what='bucket')
+        self.backend.refresh_bucket(bucket_name)
+        return Response(status=204)
 
     # ACCT{{
     # GET /v1.0/account/container/show?id=<account_name>&container=<container>
