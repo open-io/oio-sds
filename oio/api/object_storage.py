@@ -1552,33 +1552,28 @@ class ObjectStorageApi(object):
         """
         if account is None:
             accounts = self.account_list(**kwargs)
-            for account in accounts:
-                try:
-                    self.account_refresh(account, **kwargs)
-                except exc.NoSuchAccount:  # account remove in the meantime
-                    pass
-            return
+        else:
+            accounts = [account]
 
-        self.account.account_refresh(account, **kwargs)
-
-        containers = self.container_list(account, **kwargs)
-        for container in containers:
+        for account in accounts:
             try:
-                self.container_refresh(account, container[0], **kwargs)
-            except exc.NoSuchContainer:
-                # container remove in the meantime
-                pass
+                self.account.account_refresh(account, **kwargs)
 
-        while containers:
-            marker = containers[-1][0]
-            containers = self.container_list(account, marker=marker, **kwargs)
-            if containers:
+                containers = depaginate(
+                    self.container_list,
+                    item_key=lambda x: x[0],
+                    marker_key=lambda x: x[-1][0],
+                    account=account,
+                    **kwargs)
                 for container in containers:
                     try:
-                        self.container_refresh(account, container[0], **kwargs)
+                        self.container_refresh(account, container, **kwargs)
                     except exc.NoSuchContainer:
                         # container remove in the meantime
                         pass
+            except exc.NoSuchAccount:
+                # account remove in the meantime
+                pass
 
     def all_accounts_refresh(self, **kwargs):
         """
