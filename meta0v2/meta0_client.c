@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta0v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -69,11 +69,17 @@ meta0_utils_getMeta0addr(gchar *ns, GSList **m0_lst, GSList *exclude)
 static addr_info_t *
 _getMeta0addr(GSList **m0_lst, GSList *exclude)
 {
+	addr_info_t *res = NULL;
 	if (namespace[0])
-		return  meta0_utils_getMeta0addr(namespace, m0_lst, exclude);
-	if (!exclude)
-		return &addr;
-	return NULL;
+		res = meta0_utils_getMeta0addr(namespace, m0_lst, exclude);
+	else if (!exclude) {
+		res = &addr;
+
+		const char *ns_name = g_getenv("OIO_NS");
+		if (oio_str_is_set(ns_name))
+			g_strlcpy(namespace, ns_name, sizeof(namespace));
+	}
+	return res;
 }
 
 static void
@@ -178,7 +184,8 @@ meta0_init_list(void)
 		gchar url[STRLEN_ADDRINFO];
 		grid_addrinfo_to_string(m0addr, url , sizeof(url));
 		GSList *list = NULL;
-		err = meta0_remote_get_meta1_all(url, &list, oio_ext_get_deadline());
+		err = meta0_remote_get_meta1_all(url, &list, oio_ext_get_deadline(),
+				namespace);
 		if (err != NULL) {
 			if (CODE_IS_NETWORK_ERROR(err->code)) {
 				if (GRID_DEBUG_ENABLED()) {
@@ -218,7 +225,8 @@ meta0_init_get(void)
 		gchar url[STRLEN_ADDRINFO];
 		grid_addrinfo_to_string(m0addr, url , sizeof(url));
 		GSList *list = NULL;
-		err = meta0_remote_get_meta1_one(url, prefix, &list, oio_ext_get_deadline());
+		err = meta0_remote_get_meta1_one(url, prefix, &list,
+				oio_ext_get_deadline(), namespace);
 		if (err != NULL) {
 			GRID_WARN("META0 request error (%d) : %s", err->code, err->message);
 			if (CODE_IS_NETWORK_ERROR(err->code)) {

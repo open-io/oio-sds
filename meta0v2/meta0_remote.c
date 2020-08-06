@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta0v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -54,18 +54,23 @@ _m0_remote_m0info (const char *m0, GByteArray *req, GSList **out, gint64 deadlin
 /* ------------------------------------------------------------------------- */
 
 GError *
-meta0_remote_get_meta1_all(const char *m0, GSList **out, gint64 deadline)
+meta0_remote_get_meta1_all(const char *m0, GSList **out, gint64 deadline,
+		const gchar *ns_name)
 {
 	MESSAGE request = metautils_message_create_named (NAME_MSGNAME_M0_GETALL, deadline);
+	if (oio_str_is_set(ns_name))
+		metautils_message_add_field_str(request, NAME_MSGKEY_NAMESPACE, ns_name);
 	return _m0_remote_m0info (m0, message_marshall_gba_and_clean (request), out, deadline);
 }
 
 GError*
 meta0_remote_get_meta1_one(const char *m0, const guint8 *prefix,
-		GSList **out, gint64 deadline)
+		GSList **out, gint64 deadline, const gchar *ns_name)
 {
 	MESSAGE request = metautils_message_create_named (NAME_MSGNAME_M0_GETONE, deadline);
 	metautils_message_add_field (request, NAME_MSGKEY_PREFIX, prefix, 2);
+	if (oio_str_is_set(ns_name))
+		metautils_message_add_field_str(request, NAME_MSGKEY_NAMESPACE, ns_name);
 	return _m0_remote_m0info (m0, message_marshall_gba_and_clean (request), out, deadline);
 }
 
@@ -86,12 +91,15 @@ meta0_remote_cache_reset (const char *m0, gboolean local, gint64 deadline)
 }
 
 GError*
-meta0_remote_force(const char *m0, const guint8 *mapping, gsize mapping_len, gint64 deadline)
+meta0_remote_force(const char *m0, const guint8 *mapping, gsize mapping_len,
+		gint64 deadline, const gchar *ns_name)
 {
 	if (!mapping || !mapping_len || !*mapping)
 		return NEWERROR(CODE_BAD_REQUEST, "Empty JSON mapping");
 
 	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_FORCE, deadline);
+	if (oio_str_is_set(ns_name))
+		metautils_message_add_field_str(request, NAME_MSGKEY_NAMESPACE, ns_name);
 	metautils_message_set_BODY(request, mapping, mapping_len);
 	return _m0_remote_no_return(m0, message_marshall_gba_and_clean(request), deadline);
 }
