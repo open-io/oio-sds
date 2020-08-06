@@ -1,6 +1,6 @@
 /*
 OpenIO SDS proxy
-Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -91,7 +91,7 @@ static GError*
 _wrap_meta0_remote_get_meta1_all(const char *m0_url, GSList **out)
 {
 	const gint64 deadline = oio_ext_get_deadline();
-	return meta0_remote_get_meta1_all(m0_url, out, deadline);
+	return meta0_remote_get_meta1_all(m0_url, out, deadline, ns_name);
 }
 
 enum http_rc_e
@@ -113,7 +113,8 @@ static GError*
 _wrap_meta0_remote_force(const char *m0_url, GByteArray *udata)
 {
 	const gint64 deadline = oio_ext_get_deadline();
-	GError *err = meta0_remote_force(m0_url, udata->data, udata->len, deadline);
+	GError *err = meta0_remote_force(m0_url, udata->data, udata->len,
+			deadline, ns_name);
 	if (!err)
 		err = meta0_remote_cache_refresh(m0_url, deadline);
 	return err;
