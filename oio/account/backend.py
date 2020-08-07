@@ -77,17 +77,18 @@ class AccountBackend(RedisConnection):
     """
 
     lua_update_bucket_list = """
-        -- Key to the set of bucket of a specific account
-        local bucket_set = KEYS[1]
+        -- KEYS    --> the list of keys to update
         -- Actual name of the bucket
         local bucket_name = ARGV[1]
         -- True if the bucket has just been deleted
         local deleted = ARGV[2]
 
-        if deleted ~= 'True' then
-          redis.call('ZADD', bucket_set, 0, bucket_name);
-        else
-          redis.call('ZREM', bucket_set, bucket_name);
+        for i, key in ipairs(KEYS) do
+          if deleted ~= 'True' then
+            redis.call('ZADD', key, 0, bucket_name);
+          else
+            redis.call('ZREM', key, bucket_name);
+          end
         end
     """
 
@@ -667,7 +668,7 @@ class AccountBackend(RedisConnection):
             # Only execute when the main shard is created/deleted.
             if bucket_name == name:
                 self.script_update_bucket_list(
-                    keys=[self.blistkey(account_id)],
+                    keys=[self.blistkey(account_id), self._bucket_list_prefix],
                     args=[bucket_name, str(deleted)],
                     client=pipeline)
             pipeline.execute()
