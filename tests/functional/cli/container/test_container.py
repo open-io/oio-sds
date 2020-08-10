@@ -277,6 +277,36 @@ class ContainerTest(CliTestCase):
     def test_container_flush_quickly_with_cid(self):
         self._test_container_flush_quickly(with_cid=True)
 
+    def _test_container_set_bucket_name(self, with_cid=False):
+        cid_opt = ' '
+        name = self.NAME
+        bname = 'mybucket'
+        if with_cid:
+            cid_opt = ' --cid '
+            name = self.CID
+        opts = ' -f json'
+        output = self.openio('container show ' + cid_opt + name + opts)
+        output = self.json_loads(output)
+        self.assertNotIn(output, "bucket")
+        output = self.openio('container set --bucket-name '
+                             + bname + cid_opt + name)
+        self.assertEqual('', output)
+        output = self.openio('container show ' + cid_opt + name + opts)
+        output = self.json_loads(output)
+        self.assertEqual(output['bucket'], bname)
+        output = self.openio('container unset --bucket-name ' +
+                             cid_opt + name)
+        self.assertEqual('', output)
+        output = self.openio('container show ' + cid_opt + name + opts)
+        output = self.json_loads(output)
+        self.assertNotIn(output, "bucket")
+
+    def test_container_set_bucket_name(self):
+        self._test_container_set_bucket_name()
+
+    def test_container_set_bucket_name_with_cid(self):
+        self._test_container_set_bucket_name(with_cid=True)
+
     def _test_container_set_status(self, with_cid=False):
         cid_opt = ''
         name = self.NAME

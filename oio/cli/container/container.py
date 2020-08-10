@@ -227,6 +227,11 @@ class SetContainer(SetPropertyCommandMixin,
         parser = super(SetContainer, self).get_parser(prog_name)
         self.patch_parser(parser)
         self.patch_parser_container(parser)
+        # Same as in CreateContainer class
+        parser.add_argument(
+            '--bucket-name',
+            help=('Declare the container belongs to the specified bucket')
+        )
         parser.add_argument(
             '--clear',
             dest='clear',
@@ -247,6 +252,8 @@ class SetContainer(SetPropertyCommandMixin,
         super(SetContainer, self).take_action_container(parsed_args)
         properties = parsed_args.property
         system = dict()
+        if parsed_args.bucket_name:
+            system[M2_PROP_BUCKET_NAME] = parsed_args.bucket_name
         if parsed_args.quota is not None:
             system[M2_PROP_QUOTA] = str(parsed_args.quota)
         if parsed_args.storage_policy is not None:
@@ -649,6 +656,11 @@ class UnsetContainer(ContainerCommandMixin, Command):
         parser = super(UnsetContainer, self).get_parser(prog_name)
         self.patch_parser_container(parser)
         parser.add_argument(
+            '--bucket-name',
+            action='store_true',
+            help=('Declare the container no more belongs to any bucket')
+        )
+        parser.add_argument(
             '--property',
             metavar='<key>',
             action='append',
@@ -687,6 +699,8 @@ class UnsetContainer(ContainerCommandMixin, Command):
         self.take_action_container(parsed_args)
         properties = parsed_args.property
         system = dict()
+        if parsed_args.bucket_name:
+            system[M2_PROP_BUCKET_NAME] = ''
         if parsed_args.storage_policy:
             system[M2_PROP_STORAGE_POLICY] = ''
         if parsed_args.max_versions:
