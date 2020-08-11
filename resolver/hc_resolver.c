@@ -1,7 +1,7 @@
 /*
 OpenIO SDS resolver
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -277,7 +277,7 @@ _m0list_to_urlv(GSList *l)
 
 static GError *
 _resolve_m1_through_one_m0(const char *m0, const guint8 *prefix,
-		gchar ***result, gint64 deadline)
+		gchar ***result, gint64 deadline, const gchar *ns_name)
 {
 	GRID_TRACE2("%s(%s,%02X%02X)", __FUNCTION__, m0, prefix[0], prefix[1]);
 	GError *err = NULL;
@@ -286,7 +286,7 @@ _resolve_m1_through_one_m0(const char *m0, const guint8 *prefix,
 
 	do {
 		GSList *lmap = NULL;
-		err = meta0_remote_get_meta1_one(url, prefix, &lmap, deadline);
+		err = meta0_remote_get_meta1_one(url, prefix, &lmap, deadline, ns_name);
 		if (err)
 			return err;
 		*result = _m0list_to_urlv(lmap);
@@ -299,7 +299,8 @@ _resolve_m1_through_one_m0(const char *m0, const guint8 *prefix,
 
 static GError *
 _resolve_m1_through_many_m0(struct hc_resolver_s *r, const char * const *urlv,
-		const guint8 *prefix, gchar ***result, gint64 deadline)
+		const guint8 *prefix, gchar ***result, gint64 deadline,
+		const gchar *ns_name)
 {
 	GRID_TRACE2("%s(%02X%02X)", __FUNCTION__, prefix[0], prefix[1]);
 
@@ -317,7 +318,8 @@ _resolve_m1_through_many_m0(struct hc_resolver_s *r, const char * const *urlv,
 	}
 
 	for (const char * const *purl=urlv; *purl ;++purl) {
-		GError *err = _resolve_m1_through_one_m0(*purl, prefix, result, deadline);
+		GError *err = _resolve_m1_through_one_m0(*purl, prefix, result,
+				deadline, ns_name);
 		EXTRA_ASSERT((err!=NULL) ^ (*result!=NULL));
 		if (!err)
 			return NULL;
@@ -348,7 +350,8 @@ _resolve_meta1(struct hc_resolver_s *r, struct oio_url_s *u, gchar ***result, gi
 			g_prefix_error(&err, "M0 resolution error: ");
 		else {
 			err = _resolve_m1_through_many_m0(r, (const char * const *)m0urlv,
-					oio_url_get_id(u), result, deadline);
+					oio_url_get_id(u), result, deadline,
+					oio_url_get(u, OIOURL_NS));
 			if (!err)
 				hc_resolver_store(r, r->csm0, hk,
 						(const char * const *) *result);

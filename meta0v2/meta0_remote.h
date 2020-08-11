@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta0v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -22,10 +22,13 @@ License along with this library.
 
 #include <glib.h>
 
-GError * meta0_remote_get_meta1_all(const char *m0, GSList **out, gint64 deadline);
-GError * meta0_remote_get_meta1_one(const char *m0, const guint8 *prefix, GSList **out, gint64 deadline);
+GError * meta0_remote_get_meta1_all(const char *m0, GSList **out, gint64 deadline,
+		const gchar *ns_name);
+GError * meta0_remote_get_meta1_one(const char *m0, const guint8 *prefix, GSList **out,
+		gint64 deadline, const gchar *ns_name);
 GError * meta0_remote_cache_refresh(const char *m0, gint64 deadline);
 GError * meta0_remote_cache_reset(const char *m0, gboolean local, gint64 deadline);
-GError * meta0_remote_force(const char *m0, const guint8 *mapping, gsize mapping_len, gint64 deadline);
+GError * meta0_remote_force(const char *m0, const guint8 *mapping, gsize mapping_len,
+		gint64 deadline, const gchar *ns_name);
 
 #endif /*OIO_SDS__meta0v2__meta0_remote_h*/

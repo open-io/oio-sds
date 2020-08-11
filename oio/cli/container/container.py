@@ -19,6 +19,7 @@ from six import iteritems
 from logging import getLogger
 
 from oio.cli import Command, Lister, ShowOne
+from oio.common.exceptions import NoSuchContainer
 from oio.common.timestamp import Timestamp
 from oio.common.utils import depaginate, request_id, timeout_to_deadline
 from oio.common.constants import \
@@ -227,6 +228,11 @@ class SetContainer(SetPropertyCommandMixin,
         parser = super(SetContainer, self).get_parser(prog_name)
         self.patch_parser(parser)
         self.patch_parser_container(parser)
+        # Same as in CreateContainer class
+        parser.add_argument(
+            '--bucket-name',
+            help=('Declare the container belongs to the specified bucket')
+        )
         parser.add_argument(
             '--clear',
             dest='clear',
@@ -247,6 +253,8 @@ class SetContainer(SetPropertyCommandMixin,
         super(SetContainer, self).take_action_container(parsed_args)
         properties = parsed_args.property
         system = dict()
+        if parsed_args.bucket_name:
+            system[M2_PROP_BUCKET_NAME] = parsed_args.bucket_name
         if parsed_args.quota is not None:
             system[M2_PROP_QUOTA] = str(parsed_args.quota)
         if parsed_args.storage_policy is not None:
@@ -488,6 +496,12 @@ class ListBuckets(Lister):
                   "(and set output format to 'value')"),
             action=ValueFormatStoreTrueAction
         )
+        parser.add_argument(
+            '--versioning',
+            action='store_true',
+            dest='versioning',
+            help="Display the versioning state of each bucket"
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -503,6 +517,7 @@ class ListBuckets(Lister):
 
         account = self.app.client_manager.account
         acct_client = self.app.client_manager.storage.account
+        storage = self.app.client_manager.storage
 
         if parsed_args.full_listing:
             listing = depaginate(
@@ -516,9 +531,34 @@ class ListBuckets(Lister):
             acct_meta = acct_client.bucket_list(account, **kwargs)
             listing = acct_meta['listing']
 
-        columns = ('Name', 'Bytes', 'Objects', 'Mtime')
-        return columns, ((v['name'], v['bytes'], v['objects'], v['mtime'])
-                         for v in listing)
+        columns = ('Name', 'Bytes', 'Objects', 'Mtime', )
+
+        def versioning(bucket):
+            try:
+                data = storage.container_get_properties(account, bucket,
+                                                        reqid=kwargs['reqid'])
+            except NoSuchContainer:
+                self.log.info('Bucket %s does not exist', bucket)
+                return "Error"
+
+            sys = data['system']
+            # WARN it doe not reflect namespace versioning if enabled
+            status = sys.get(M2_PROP_VERSIONING_POLICY, None)
+            if status is None or int(status) == 0:
+                return "Suspended"
+            else:
+                return "Enabled"
+
+        if parsed_args.versioning:
+            columns += ('Versioning', )
+
+            def enrich(listing):
+                for v in listing:
+                    v['versioning'] = versioning(v['name'])
+                    yield v
+            listing = enrich(listing)
+
+        return columns, ([v[k.lower()] for k in columns] for v in listing)
 
 
 class ListContainer(Lister):
@@ -617,6 +657,11 @@ class UnsetContainer(ContainerCommandMixin, Command):
         parser = super(UnsetContainer, self).get_parser(prog_name)
         self.patch_parser_container(parser)
         parser.add_argument(
+            '--bucket-name',
+            action='store_true',
+            help=('Declare the container no more belongs to any bucket')
+        )
+        parser.add_argument(
             '--property',
             metavar='<key>',
             action='append',
@@ -655,6 +700,8 @@ class UnsetContainer(ContainerCommandMixin, Command):
         self.take_action_container(parsed_args)
         properties = parsed_args.property
         system = dict()
+        if parsed_args.bucket_name:
+            system[M2_PROP_BUCKET_NAME] = ''
         if parsed_args.storage_policy:
             system[M2_PROP_STORAGE_POLICY] = ''
         if parsed_args.max_versions:
@@ -795,6 +842,32 @@ class PurgeContainer(ContainerCommandMixin, Command):
             maxvers=parsed_args.max_versions,
             cid=parsed_args.cid
         )
+
+
+class RefreshBucket(Command):
+    """
+    Refresh the counters of a bucket.
+
+    Reset all statistics counters and recompute them by summing
+    the counters of all shards (containers).
+    """
+
+    log = getLogger(__name__ + '.RefreshBucket')
+
+    def get_parser(self, prog_name):
+        parser = super(RefreshBucket, self).get_parser(prog_name)
+        parser.add_argument(
+            'bucket',
+            help='Name of the bucket to refresh.'
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        reqid = request_id(prefix='CLI-BUCKET-')
+        acct_client = self.app.client_manager.storage.account
+        acct_client.bucket_refresh(parsed_args.bucket, reqid=reqid)
 
 
 class RefreshContainer(ContainerCommandMixin, Command):

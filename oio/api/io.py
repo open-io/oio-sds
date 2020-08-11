@@ -711,7 +711,8 @@ class MetachunkLinker(_MetachunkWriter):
                 resp, new_chunk_url = self.blob_client.chunk_link(
                     chunk_target['url'], None, self.fullpath,
                     connection_timeout=self.connection_timeout,
-                    write_timeout=self.write_timeout)
+                    write_timeout=self.write_timeout, reqid=self.reqid,
+                    perfdata=self.perfdata, logger=self.logger)
                 new_chunk = chunk_target.copy()
                 new_chunk['url'] = new_chunk_url
                 new_meta_chunks.append(new_chunk)

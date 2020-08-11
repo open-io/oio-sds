@@ -1,7 +1,7 @@
 /*
 OpenIO SDS sqlx
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -225,7 +225,7 @@ static void
 _patch_configuration_maxrss(void)
 {
 	const gint64 pre = sqliterepo_max_rss;
-	if (sqliterepo_max_rss <= 0) {
+	if (sqliterepo_max_rss < 0) {
 		struct rlimit rl = {};
 		int rc = getrlimit(RLIMIT_DATA, &rl);
 		if (rc == 0) {
@@ -233,6 +233,10 @@ _patch_configuration_maxrss(void)
 			if (maxrss <= 0)
 				maxrss = G_MAXINT64;
 			sqliterepo_max_rss = maxrss;
+		} else {
+			GRID_INFO("getrlimit failed: %s (%d)",
+				 strerror(errno), errno);
+			sqliterepo_max_rss = 0;
 		}
 	}
 	if (pre != sqliterepo_max_rss)

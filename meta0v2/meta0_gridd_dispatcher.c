@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta0v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -124,22 +124,46 @@ static void _reload(struct meta0_disp_s *m0disp) {
 	}
 }
 
+static GError *
+_validate_namespace(struct gridd_reply_ctx_s *reply,
+		struct meta0_disp_s *m0disp)
+{
+	gchar req_ns_name[LIMIT_LENGTH_NSNAME] = {0};
+	GError *err = NULL;
+	if (metautils_message_extract_string_noerror(
+				reply->request, NAME_MSGKEY_NAMESPACE,
+				req_ns_name, sizeof(req_ns_name))) {
+		if (g_strcmp0(req_ns_name, m0disp->ns_name)) {
+			err = NEWERROR(CODE_NAMESPACE_NOTMANAGED,
+					"Requested %s on service running %s namespace",
+					req_ns_name, m0disp->ns_name);
+		}
+	}
+	return err;
+}
+
 /* -------------------------------------------------------------------------- */
 
 static gboolean
 meta0_dispatch_v1_GETONE(struct gridd_reply_ctx_s *reply,
 		struct meta0_disp_s *m0disp, gpointer ignored UNUSED)
 {
+	GError *err = NULL;
 	guint8 prefix[2] = {0,0};
 
-	GError *err = extract_prefix(reply->request, NAME_MSGKEY_PREFIX, TRUE, prefix);
-	if (NULL != err) {
+	if ((err = _validate_namespace(reply, m0disp))) {
+		reply->send_error(0, err);
+		return TRUE;
+	}
+
+	err = extract_prefix(reply->request, NAME_MSGKEY_PREFIX, TRUE, prefix);
+	if (err) {
 		reply->send_error(CODE_BAD_REQUEST, err);
 	} else {
 		reply->subject("%02X%02X", prefix[0], prefix[1]);
 		gchar **urlv = NULL;
 		err = meta0_backend_get_one(m0disp->m0, prefix, &urlv);
-		if (NULL != err) {
+		if (err) {
 			reply->send_error(0, err);
 		} else {
 			reply->add_body(_encode_meta0_tree(urlv_to_tree(prefix, urlv)));
@@ -153,6 +177,12 @@ static gboolean
 meta0_dispatch_v1_GETALL(struct gridd_reply_ctx_s *reply,
 		struct meta0_disp_s *m0disp, gpointer ignored UNUSED)
 {
+	GError *err = NULL;
+	if ((err = _validate_namespace(reply, m0disp))) {
+		reply->send_error(0, err);
+		return TRUE;
+	}
+
 	reply->add_body(_get_encoded(m0disp));
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;

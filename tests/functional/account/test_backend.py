@@ -596,7 +596,8 @@ class TestAccountBackend(BaseTestCase):
             'account:%s' % (account_id), 'damaged_objects'), b'0')
 
     def test_is_sup(self):
-        compare = (self.backend.lua_is_sup +
+        # HACK: replace %%d by %d
+        compare = (self.backend.lua_is_sup % (()) +
                    """
             if (is_sup(KEYS[1], KEYS[2])) then
               return redis.status_reply('IS SUP');
