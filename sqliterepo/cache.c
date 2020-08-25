@@ -21,9 +21,14 @@ License along with this library.
 #include <stdlib.h>
 #include <string.h>
 #include <malloc.h>
+#include <sys/time.h>
+#include <sys/resource.h>
+#include <errno.h>
+
 
 #include <metautils/lib/metautils.h>
 #include <sqliterepo/sqliterepo_variables.h>
+#include <metautils/lib/common_variables.h>
 
 #include "sqliterepo.h"
 #include "cache.h"
@@ -117,28 +122,29 @@ struct sqlx_cache_s
 static gboolean
 _ram_exhausted(void)
 {
-#if HAVE_MALLINFO
-	/* JFS: check on the glibc level. It would not detect a memory exhaust
-	 * if another library would be in use (e.g. jemalloc, dietlib, etc). But
-	 * it causes no syscall and currently matches our usage on the field
-	 * (where the glibc is used). */
-	if (sqliterepo_max_rss > 0) {
-		struct mallinfo mi = mallinfo();
-		gint64 total = 0;
-		total += mi.arena;
-		total += mi.hblkhd;
+	if (sqliterepo_max_rss) {
+		struct rusage usage;
+		gint64 total;
+		int ret = getrusage(RUSAGE_SELF, &usage);
+
+		if (ret < 0) {
+			GRID_NOTICE("getrusage failed: %s (%d)", strerror(errno), errno);
+			return FALSE;
+		}
+
+		total = usage.ru_maxrss * 1024;
 		if (total > sqliterepo_max_rss) {
 			GRID_DEBUG("RAM [MiB] used %" G_GINT64_FORMAT" max %" G_GINT64_FORMAT,
 					total / (1024 * 1024),
 					sqliterepo_max_rss / (1024 * 1024));
+			return TRUE;
 		} else {
 			GRID_TRACE2("RAM [MiB] used %" G_GINT64_FORMAT" max %" G_GINT64_FORMAT,
 					total / (1024 * 1024),
 					sqliterepo_max_rss / (1024 * 1024));
+			return FALSE;
 		}
-		return total > sqliterepo_max_rss;
 	}
-#endif
 	return FALSE;
 }
 

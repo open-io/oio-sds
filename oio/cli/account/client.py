@@ -13,18 +13,4 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from logging import getLogger
-from oio.api.object_storage import ObjectStorageApi
-
-LOG = getLogger(__name__)
-
-API_NAME = 'storage'
-
-
-def make_client(instance):
-    client = ObjectStorageApi(
-        endpoint=instance.get_endpoint('storage'),
-        namespace=instance.namespace,
-        admin_mode=instance.admin_mode
-    )
-    return client
+API_NAME = 'FIXME'

@@ -84,6 +84,23 @@ class ContainerTest(CliTestCase):
         output = self.openio('bucket list ' + opts)
         self.assertIn(cname, output)
 
+    def test_bucket_list_with_versioning(self):
+        opts = self.get_format_opts(fields=('Name', ))
+        cname = 'mybucket-' + random_str(4).lower()
+        output = self.openio('container create --bucket-name %s %s %s' %
+                             (cname, cname, opts))
+        self.assertOutput(cname + '\n', output)
+
+        opts = self.get_format_opts(fields=('Name', 'Versioning'))
+        opts += " --prefix %s --versioning" % cname
+
+        output = self.openio('bucket list ' + opts)
+        self.assertIn("Suspended", output)
+
+        self.openio('container set --versioning -1 %s' % cname)
+        output = self.openio('bucket list ' + opts)
+        self.assertIn("Enabled", output)
+
     def test_bucket_show(self):
         opts = self.get_format_opts(fields=('Name', ))
         cname = 'mybucket-' + random_str(4).lower()
@@ -94,6 +111,68 @@ class ContainerTest(CliTestCase):
         opts = self.get_format_opts(fields=('account', 'bytes', 'objects'))
         output = self.openio('bucket show ' + cname + opts)
         self.assertEqual(self.account_from_env() + '\n0\n0\n', output)
+
+    def test_bucket_show_with_account_refresh(self):
+        account = 'myaccount-' + random_str(4).lower()
+        opts = self.get_format_opts(fields=('Name', ))
+        cname = 'mybucket-' + random_str(4).lower()
+        output = self.openio(
+            '--oio-account %s container create --bucket-name %s %s %s' %
+            (account, cname, cname, opts))
+        self.assertOutput(cname + '\n', output)
+        self.wait_for_event('oio-preserved',
+                            fields={'user': cname},
+                            types=(EventTypes.CONTAINER_STATE, ))
+
+        with tempfile.NamedTemporaryFile() as file_:
+            file_.write('test')
+            file_.flush()
+            output = self.openio(
+                '--oio-account %s object create %s %s --name test' %
+                (account, cname, file_.name))
+        self.wait_for_event('oio-preserved',
+                            fields={'user': cname},
+                            types=(EventTypes.CONTAINER_STATE, ))
+
+        opts = self.get_format_opts(fields=('account', 'bytes', 'objects'))
+        output = self.openio('bucket show ' + cname + opts)
+        self.assertEqual(account + '\n4\n1\n', output)
+
+        output = self.openio('account refresh ' + account)
+        self.wait_for_event('oio-preserved',
+                            fields={'user': cname},
+                            types=(EventTypes.CONTAINER_STATE, ))
+
+        output = self.openio('bucket show ' + cname + opts)
+        self.assertEqual(account + '\n4\n1\n', output)
+
+    def test_bucket_refresh(self):
+        opts = self.get_format_opts(fields=('Name', ))
+        cname = 'mybucket-' + random_str(4).lower()
+        output = self.openio('container create --bucket-name %s %s %s' %
+                             (cname, cname, opts))
+        self.assertOutput(cname + '\n', output)
+        self.wait_for_event('oio-preserved',
+                            fields={'user': cname},
+                            types=(EventTypes.CONTAINER_STATE, ))
+
+        with tempfile.NamedTemporaryFile() as file_:
+            file_.write('test')
+            file_.flush()
+            output = self.openio('object create %s %s --name test' %
+                                 (cname, file_.name))
+        self.wait_for_event('oio-preserved',
+                            fields={'user': cname},
+                            types=(EventTypes.CONTAINER_STATE, ))
+
+        opts = self.get_format_opts(fields=('account', 'bytes', 'objects'))
+        output = self.openio('bucket show ' + cname + opts)
+        self.assertEqual(self.account_from_env() + '\n4\n1\n', output)
+
+        output = self.openio('bucket refresh ' + cname)
+
+        output = self.openio('bucket show ' + cname + opts)
+        self.assertEqual(self.account_from_env() + '\n4\n1\n', output)
 
     def test_container_show(self):
         self._test_container_show()
@@ -259,6 +338,36 @@ class ContainerTest(CliTestCase):
 
     def test_container_flush_quickly_with_cid(self):
         self._test_container_flush_quickly(with_cid=True)
+
+    def _test_container_set_bucket_name(self, with_cid=False):
+        cid_opt = ' '
+        name = self.NAME
+        bname = 'mybucket'
+        if with_cid:
+            cid_opt = ' --cid '
+            name = self.CID
+        opts = ' -f json'
+        output = self.openio('container show ' + cid_opt + name + opts)
+        output = self.json_loads(output)
+        self.assertNotIn(output, "bucket")
+        output = self.openio('container set --bucket-name '
+                             + bname + cid_opt + name)
+        self.assertEqual('', output)
+        output = self.openio('container show ' + cid_opt + name + opts)
+        output = self.json_loads(output)
+        self.assertEqual(output['bucket'], bname)
+        output = self.openio('container unset --bucket-name ' +
+                             cid_opt + name)
+        self.assertEqual('', output)
+        output = self.openio('container show ' + cid_opt + name + opts)
+        output = self.json_loads(output)
+        self.assertNotIn(output, "bucket")
+
+    def test_container_set_bucket_name(self):
+        self._test_container_set_bucket_name()
+
+    def test_container_set_bucket_name_with_cid(self):
+        self._test_container_set_bucket_name(with_cid=True)
 
     def _test_container_set_status(self, with_cid=False):
         cid_opt = ''

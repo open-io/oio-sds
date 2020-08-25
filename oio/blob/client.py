@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -33,7 +33,10 @@ from oio.api.replication import ReplicatedMetachunkWriter, FakeChecksum
 from oio.common.storage_method import STORAGE_METHODS
 from oio.conscience.client import ConscienceClient
 
-CHUNK_TIMEOUT = 60
+# RAWX connection timeout
+CONNECTION_TIMEOUT = 10.0
+# chunk operations timeout
+CHUNK_TIMEOUT = 60.0
 READ_BUFFER_SIZE = 65535
 PARALLEL_CHUNKS_DELETE = 3
 
@@ -119,8 +122,7 @@ class BlobClient(object):
     @update_rawx_perfdata
     @ensure_request_id
     def chunk_delete(self, url, **kwargs):
-        resp = self.http_pool.request('DELETE', self.resolve_url(url),
-                                      **kwargs)
+        resp = self._request('DELETE', url, **kwargs)
         if resp.status != 204:
             raise exc.from_response(resp)
         return resp
@@ -134,19 +136,20 @@ class BlobClient(object):
             or `urllib3.exceptions.HTTPError`, with an extra "chunk"
             attribute.
         """
-        headers = kwargs['headers'].copy()
+        headers = kwargs.pop('headers', None)
+        # Actually this is not needed since ensure_request_id always sets it
+        if headers is None:
+            headers = dict()
+        else:
+            headers = headers.copy()
         if cid is not None:
             # This is only to get a nice access log
             headers['X-oio-chunk-meta-container-id'] = cid
-        timeout = kwargs.get('timeout')
-        if not timeout:
-            timeout = urllib3.Timeout(CHUNK_TIMEOUT)
 
         def __delete_chunk(chunk_):
             try:
-                resp = self.http_pool.request(
-                    "DELETE", self.resolve_url(chunk_['url']),
-                    headers=headers, timeout=timeout)
+                resp = self._request(
+                    "DELETE", chunk_['url'], headers=headers, **kwargs)
                 resp.chunk = chunk_
                 return resp
             except urllib3.exceptions.HTTPError as ex:
@@ -191,18 +194,19 @@ class BlobClient(object):
         :returns: a `dict` with chunk metadata (empty when xattr is False).
         """
         _xattr = bool(kwargs.get('xattr', True))
-        url = self.resolve_url(url)
-        headers = kwargs['headers'].copy()
+        headers = kwargs.pop('headers', None)
+        # Actually this is not needed since ensure_request_id always sets it
+        if headers is None:
+            headers = dict()
+        else:
+            headers = headers.copy()
         headers[FETCHXATTR_HEADER] = _xattr
         if bool(kwargs.get('check_hash', False)):
             headers[CHECKHASH_HEADER] = True
-        timeout = kwargs.get('timeout')
-        if not timeout:
-            timeout = urllib3.Timeout(CHUNK_TIMEOUT)
 
         try:
-            resp = self.http_pool.request(
-                'HEAD', url, headers=headers, timeout=timeout)
+            resp = self._request(
+                'HEAD', url, headers=headers, **kwargs)
         except urllib3.exceptions.HTTPError as ex:
             oio_exception_from_httperror(ex, reqid=headers[REQID_HEADER],
                                          url=url)
@@ -279,9 +283,22 @@ class BlobClient(object):
             link = self._generate_fullchunk_copy(target, **kwargs)
         hdrs['Destination'] = link
         hdrs[CHUNK_HEADERS['full_path']] = fullpath
-        resp = self.http_pool.request('COPY', self.resolve_url(target),
-                                      headers=hdrs, read_timeout=write_timeout,
-                                      **kwargs)
+        if write_timeout is not None:
+            kwargs['read_timeout'] = write_timeout
+        resp = self._request('COPY', target, headers=hdrs, **kwargs)
         if resp.status != 201:
             raise exc.ChunkException(resp.status)
         return resp, link
+
+    def _request(self, method, url,
+                 connection_timeout=None, read_timeout=None, **kwargs):
+        if 'timeout' not in kwargs:
+            if connection_timeout is None:
+                connection_timeout = CONNECTION_TIMEOUT
+            if read_timeout is None:
+                read_timeout = CHUNK_TIMEOUT
+            kwargs['timeout'] = urllib3.Timeout(
+                connect=connection_timeout,
+                read=read_timeout)
+        return self.http_pool.request(
+            method, self.resolve_url(url), **kwargs)

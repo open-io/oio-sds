@@ -1,7 +1,7 @@
 /*
 OpenIO SDS meta1v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
-Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -142,7 +142,8 @@ _cache_load_from_m0(struct meta1_prefixes_set_s *m1ps,
 		GArray **updated_prefixes,
 		gboolean *meta0_ok,
 		guint digits,
-		gint64 deadline)
+		gint64 deadline,
+		const gchar *ns_name)
 {
 	EXTRA_ASSERT(m1ps != NULL);
 	GRID_TRACE2("%s(%p,%p,%p)", __FUNCTION__, m1ps, local_addr, m0_addr);
@@ -155,7 +156,7 @@ _cache_load_from_m0(struct meta1_prefixes_set_s *m1ps,
 
 	grid_addrinfo_to_string (m0_addr, m0, sizeof(m0));
 
-	err = meta0_remote_get_meta1_all(m0, &m0info_list, deadline);
+	err = meta0_remote_get_meta1_all(m0, &m0info_list, deadline, ns_name);
 	if (err) {
 		g_prefix_error(&err, "Remote error: ");
 		goto label_exit;
@@ -256,7 +257,7 @@ _cache_load_from_ns(struct meta1_prefixes_set_s *m1ps, const char *ns_name,
 	for (GSList *m0 = m0_list ; m0 && !err && !done ; m0 = m0->next) {
 		const struct service_info_s *si = m0->data;
 		err = _cache_load_from_m0(m1ps, &local_ai, &(si->addr),
-				updated_prefixes, meta0_ok, digits, deadline);
+				updated_prefixes, meta0_ok, digits, deadline, ns_name);
 		if (!err) {
 			done = TRUE;
 		} else {

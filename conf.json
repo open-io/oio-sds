@@ -437,8 +437,8 @@
 		"variables": [
 			{ "type": "int64", "name": "sqliterepo_max_rss",
 				"key": "sqliterepo.rss.max",
-				"descr": "Memory size ceiling we try to honor. The check is performed while closing databases. Set to 0 to autodetect the max RSS from the resource limits (see `man getrlimit` for more information). The autodetection considers the environment and is not aware of all the processes that could share that environment.",
-				"def": "0", "min": "0", "max": "max"},
+				"descr": "Memory size ceiling we try to honor. The check is performed while closing databases. Set to -1 to autodetect the max RSS from the resource limits (see `man getrlimit` for more information) or 0 to disable. The autodetection considers the environment and is not aware of all the processes that could share that environment.",
+				"def": "-1", "min": "-1", "max": "max"},
 
 			{ "type": "int", "name": "sqliterepo_dumps_max",
 				"key": "sqliterepo.dumps.max",

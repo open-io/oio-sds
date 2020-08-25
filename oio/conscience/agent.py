@@ -18,6 +18,7 @@ from oio.common.green import GreenPool, sleep
 
 import re
 import os
+import glob
 
 from six import iteritems
 import pkg_resources
@@ -265,8 +266,8 @@ class ConscienceAgent(Daemon):
         if include_dir:
             include_dir = os.path.expanduser(include_dir)
 
-            cfgfiles = [os.path.join(include_dir, f)
-                        for f in os.listdir(include_dir)
+            cfgfiles = [f for d in include_dir.split(':')
+                        for f in glob.glob(d + "/*")
                         if re.match(r'.+\.(json|yml|yaml)$', f)]
             for cfgfile in cfgfiles:
                 name = os.path.basename(cfgfile)
