@@ -581,7 +581,8 @@ class AccountBackend(RedisConnection):
                 pass
         for what in (BUCKET_PROP_REPLI_ENABLED.encode('utf-8'), ):
             try:
-                decoded = info.get(what, b'').decode('utf-8')
+                val = info.get(what)
+                decoded = val.decode('utf-8') if val is not None else None
                 info[what] = boolean_value(decoded)
             except (TypeError, ValueError):
                 pass
