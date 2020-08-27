@@ -48,6 +48,16 @@ def access_log(func):
     return _access_log_wrapper
 
 
+def force_master(func):
+
+    @wraps(func)
+    def _force_master_wrapper(self, req, *args, **kwargs):
+        force_master = true_value(req.args.get('force_master', ''))
+        return func(self, req, *args, force_master=force_master, **kwargs)
+
+    return _force_master_wrapper
+
+
 class Account(WerkzeugApp):
 
     # pylint: disable=no-member
@@ -145,8 +155,9 @@ class Account(WerkzeugApp):
     #    {"account_count": 0}
     #
     # }}ACCT
-    def on_status(self, req):
-        status = self.backend.status()
+    @force_master
+    def on_status(self, req, **kwargs):
+        status = self.backend.status(**kwargs)
         return Response(json.dumps(status), mimetype='text/json')
 
     # ACCT{{
@@ -177,13 +188,14 @@ class Account(WerkzeugApp):
     #    myaccount
     #
     # }}ACCT
-    def on_account_create(self, req):
+    @access_log
+    @force_master
+    def on_account_create(self, req, **kwargs):
         account_id = self._get_account_id(req)
-        id = self.backend.create_account(account_id)
-        if id:
-            return Response(id, 201)
-        else:
-            return Response(status=202)
+        aid = self.backend.create_account(account_id, **kwargs)
+        if aid:
+            return Response(aid, 201)
+        return Response(status=202)
 
     # ACCT{{
     # GET /v1.0/account/list
@@ -214,8 +226,9 @@ class Account(WerkzeugApp):
     #
     # }}ACCT
     @access_log
-    def on_account_list(self, req):
-        accounts = self.backend.list_accounts()
+    @force_master
+    def on_account_list(self, req, **kwargs):
+        accounts = self.backend.list_accounts(**kwargs)
         if accounts is None:
             return NotFound('No account found')
         return Response(json.dumps(accounts), mimetype='text/json')
@@ -245,9 +258,11 @@ class Account(WerkzeugApp):
     #    Content-Type: text/plain; charset=utf-8
     #
     # }}ACCT
-    def on_account_delete(self, req):
+    @access_log
+    @force_master
+    def on_account_delete(self, req, **kwargs):
         account_id = self._get_account_id(req)
-        result = self.backend.delete_account(account_id)
+        result = self.backend.delete_account(account_id, **kwargs)
         if result is None:
             return NotFound('No such account')
         if result is False:
@@ -290,13 +305,14 @@ class Account(WerkzeugApp):
     #    Content-Type: text/plain; charset=utf-8
     #
     # }}ACCT
-    def on_account_update(self, req):
+    @force_master
+    def on_account_update(self, req, **kwargs):
         account_id = self._get_account_id(req)
         decoded = json.loads(req.get_data())
         metadata = decoded.get('metadata')
         to_delete = decoded.get('to_delete')
         success = self.backend.update_account_metadata(
-            account_id, metadata, to_delete)
+            account_id, metadata, to_delete, **kwargs)
         if success:
             return Response(status=204)
         return NotFound('Account not found')
@@ -339,9 +355,10 @@ class Account(WerkzeugApp):
     #
     # }}ACCT
     @access_log
-    def on_account_show(self, req):
+    @force_master
+    def on_account_show(self, req, **kwargs):
         account_id = self._get_account_id(req)
-        raw = self.backend.info_account(account_id)
+        raw = self.backend.info_account(account_id, **kwargs)
         if raw is not None:
             return Response(json.dumps(raw), mimetype='text/json')
         return NotFound('Account not found')
@@ -406,10 +423,11 @@ class Account(WerkzeugApp):
     #
     # }}ACCT
     @access_log
-    def on_account_buckets(self, req):
+    @force_master
+    def on_account_buckets(self, req, **kwargs):
         account_id = self._get_account_id(req)
 
-        info = self.backend.info_account(account_id)
+        info = self.backend.info_account(account_id, **kwargs)
         if not info:
             return NotFound('Account not found')
 
@@ -420,7 +438,7 @@ class Account(WerkzeugApp):
 
         bucket_list, next_marker = self.backend.list_buckets(
             account_id, limit=limit, marker=marker, end_marker=end_marker,
-            prefix=prefix)
+            prefix=prefix, **kwargs)
 
         info['listing'] = bucket_list
         info['truncated'] = next_marker is not None
@@ -469,10 +487,11 @@ class Account(WerkzeugApp):
     #
     # }}ACCT
     @access_log
-    def on_account_containers(self, req):
+    @force_master
+    def on_account_containers(self, req, **kwargs):
         account_id = self._get_account_id(req)
 
-        info = self.backend.info_account(account_id)
+        info = self.backend.info_account(account_id, **kwargs)
         if not info:
             return NotFound('Account not found')
 
@@ -490,7 +509,7 @@ class Account(WerkzeugApp):
         user_list = self.backend.list_containers(
             account_id, limit=limit, marker=marker, end_marker=end_marker,
             prefix=prefix, delimiter=delimiter,
-            s3_buckets_only=s3_buckets_only)
+            s3_buckets_only=s3_buckets_only, **kwargs)
 
         info['listing'] = user_list
         # TODO(FVE): add "truncated" entry telling if the listing is truncated
@@ -537,7 +556,8 @@ class Account(WerkzeugApp):
     #    Content-Length: 117
     #
     # }}ACCT
-    def on_account_container_update(self, req):
+    @force_master
+    def on_account_container_update(self, req, **kwargs):
         account_id = self._get_account_id(req)
         data = json.loads(req.get_data())
         name = data.get('name')
@@ -552,7 +572,7 @@ class Account(WerkzeugApp):
         info = self.backend.update_container(
             account_id, name, mtime, dtime,
             object_count, bytes_used, damaged_objects, missing_chunks,
-            bucket_name=bucket_name)
+            bucket_name=bucket_name, **kwargs)
         result = json.dumps(info)
         return Response(result)
 
@@ -592,7 +612,8 @@ class Account(WerkzeugApp):
     #    Content-Type: text/plain; charset=utf-8
     #
     # }}ACCT
-    def on_account_container_reset(self, req):
+    @force_master
+    def on_account_container_reset(self, req, **kwargs):
         account_id = self._get_account_id(req)
         data = json.loads(req.get_data())
         name = data.get('name')
@@ -606,7 +627,7 @@ class Account(WerkzeugApp):
         self.backend.update_container(
             account_id, name, mtime, dtime,
             object_count, bytes_used, damaged_objects, missing_chunks,
-            autocreate_container=False)
+            autocreate_container=False, **kwargs)
         return Response(status=204)
 
     # ACCT{{
@@ -630,9 +651,11 @@ class Account(WerkzeugApp):
     #    Content-Type: text/plain; charset=utf-8
     #
     # }}ACCT
-    def on_account_refresh(self, req):
+    @access_log
+    @force_master
+    def on_account_refresh(self, req, **kwargs):
         account_id = self._get_account_id(req)
-        self.backend.refresh_account(account_id)
+        self.backend.refresh_account(account_id, **kwargs)
         return Response(status=204)
 
     # ACCT{{
@@ -656,9 +679,11 @@ class Account(WerkzeugApp):
     #    Content-Type: text/plain; charset=utf-8
     #
     # }}ACCT
-    def on_account_flush(self, req):
+    @access_log
+    @force_master
+    def on_account_flush(self, req, **kwargs):
         account_id = self._get_account_id(req)
-        self.backend.flush_account(account_id)
+        self.backend.flush_account(account_id, **kwargs)
         return Response(status=204)
 
     # ACCT{{
@@ -700,12 +725,13 @@ class Account(WerkzeugApp):
     #
     # }}ACCT
     @access_log
-    def on_bucket_show(self, req):
+    @force_master
+    def on_bucket_show(self, req, **kwargs):
         """
         Get all available information about a bucket.
         """
         bname = self._get_item_id(req, what='bucket')
-        raw = self.backend.get_bucket_info(bname)
+        raw = self.backend.get_bucket_info(bname, **kwargs)
         if raw is not None:
             return Response(json.dumps(raw), mimetype='text/json')
         return NotFound('Bucket not found')
@@ -757,7 +783,8 @@ class Account(WerkzeugApp):
     #    }
     #
     # }}ACCT
-    def on_bucket_update(self, req):
+    @force_master
+    def on_bucket_update(self, req, **kwargs):
         """
         Update (or delete) bucket metadata.
         """
@@ -766,7 +793,7 @@ class Account(WerkzeugApp):
         metadata = decoded.get('metadata')
         to_delete = decoded.get('to_delete')
         info = self.backend.update_bucket_metadata(
-            bname, metadata, to_delete)
+            bname, metadata, to_delete, **kwargs)
         if info is not None:
             return Response(json.dumps(info), mimetype='text/json')
         return NotFound('Bucket not found')
@@ -797,12 +824,13 @@ class Account(WerkzeugApp):
     #    Content-Type: text/plain; charset=utf-8
     #
     # }}ACCT
-    def on_bucket_refresh(self, req):
+    @force_master
+    def on_bucket_refresh(self, req, **kwargs):
         """
         Refresh bucket counters.
         """
         bucket_name = self._get_item_id(req, what='bucket')
-        self.backend.refresh_bucket(bucket_name)
+        self.backend.refresh_bucket(bucket_name, **kwargs)
         return Response(status=204)
 
     # ACCT{{
@@ -846,10 +874,11 @@ class Account(WerkzeugApp):
     #
     # }}ACCT
     @access_log
-    def on_account_container_show(self, req):
+    @force_master
+    def on_account_container_show(self, req, **kwargs):
         account_id = self._get_account_id(req)
         cname = self._get_item_id(req, key='container', what='container')
-        raw = self.backend.get_container_info(account_id, cname)
+        raw = self.backend.get_container_info(account_id, cname, **kwargs)
         if raw is not None:
             return Response(json.dumps(raw), mimetype='text/json')
         return NotFound('Container not found')

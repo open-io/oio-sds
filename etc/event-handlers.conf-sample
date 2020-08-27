@@ -99,6 +99,8 @@ queue_url = ${QUEUE_URL}
 #cache_duration=30.0
 #cache_size=10000
 
+# Ensure the master service is called for each request to the account service.
+#force_master=False
 
 [filter:noop]
 use = egg:oio#noop
