@@ -53,6 +53,10 @@ extern "C" {
 #  define OIO_DEFAULT_MIMETYPE "application/octet-stream"
 # endif
 
+# ifndef OIO_DELETE_MARKER_CONTENT_TYPE
+#  define OIO_DELETE_MARKER_CONTENT_TYPE "application/x-deleted;swift_versions_deleted=1"
+# endif
+
 # ifndef PROXYD_PREFIX
 #  define PROXYD_PREFIX "v3.0"
 # endif
