@@ -130,6 +130,15 @@ class RedisConnection(object):
             return self._sentinel.slave_for(self._sentinel_name)
         return self.conn
 
+    def get_slave_conn(self, force_master=False, **_kwargs):
+        """
+        Get a Redis connection object pointed at a slave Redis service,
+        unless force_master is true.
+        """
+        if force_master:
+            return self.conn
+        return self.conn_slave
+
     def register_script(self, script):
         """Register a LUA script and return Script object."""
         return self.conn.register_script(script)
