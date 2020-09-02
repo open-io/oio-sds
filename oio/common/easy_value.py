@@ -13,7 +13,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import math
 import string
 
 
@@ -64,14 +63,14 @@ def boolean_value(value, default=False):
 METRIC_SYMBOLS = ("", "K", "M", "G", "T", "P", "E", "Z", "Y")
 
 
-def convert_size(size, unit=""):
-    if size == 0:
-        return "0%s" % unit
-    i = int(math.log(size, 1000))
-    if i != 0:
-        p = math.pow(1000, i)
-        size = round(size / p, 3)
-    return "%s%s%s" % (size, METRIC_SYMBOLS[i], unit)
+def convert_size(size, unit=''):
+    if abs(size) < 1000.0:
+        return '%.0f%s%s' % (size, METRIC_SYMBOLS[0], unit)
+    for metric_symbol in METRIC_SYMBOLS[1:-1]:
+        size /= 1000.0
+        if abs(size) < 1000.0:
+            return '%.3f%s%s' % (size, metric_symbol, unit)
+    return '%.3f%s%s' % (size, METRIC_SYMBOLS[-1], unit)
 
 
 def is_hexa(hexa, size=None):
