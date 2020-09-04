@@ -47,6 +47,8 @@ class ReplicateFilter(NotifyFilter):
             self.conf.get('check_replication_enabled'), False)
         self.connection_timeout = float_value(
             self.conf.get('connection_timeout'), CONNECTION_TIMEOUT)
+        self.force_master = boolean_value(
+            self.conf.get('force_master'), False)
         self.read_timeout = float_value(self.conf.get('read_timeout'),
                                         READ_TIMEOUT)
 
@@ -57,13 +59,18 @@ class ReplicateFilter(NotifyFilter):
         enabled, last_update = self.cache.get((account, container),
                                               (None, 0))
         if now - last_update > self.cache_duration:
-            ctinfo = self.account.container_show(
-                account, container,
-                connection_timeout=self.connection_timeout,
-                read_timeout=self.read_timeout,
-                reqid=request_id('ev-repl-'))
-            enabled = ctinfo.get(BUCKET_PROP_REPLI_ENABLED, False)
-            self.cache[(account, container)] = (enabled, now)
+            try:
+                ctinfo = self.account.container_show(
+                    account, container, force_master=self.force_master,
+                    connection_timeout=self.connection_timeout,
+                    read_timeout=self.read_timeout,
+                    reqid=request_id('ev-repl-'))
+                enabled = ctinfo.get(BUCKET_PROP_REPLI_ENABLED, False)
+                self.cache[(account, container)] = (enabled, now)
+            except Exception:
+                self.logger.exception(
+                    "Not updating the cached value %s=%s for %s/%s",
+                    BUCKET_PROP_REPLI_ENABLED, enabled, account, container)
         return enabled
 
     def should_notify(self, event):
