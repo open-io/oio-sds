@@ -369,7 +369,12 @@ _dump_json_aliases_and_headers(GString *gstr, GSList *aliases,
 			g_string_append_c(gstr, ',');
 			OIO_JSON_append_null(gstr, "size");
 			g_string_append_c(gstr, ',');
-			OIO_JSON_append_null(gstr, "mime-type");
+			if (ALIASES_get_deleted(a)) {
+				OIO_JSON_append_str(gstr, "mime-type",
+						OIO_DELETE_MARKER_CONTENT_TYPE);
+			} else {
+				OIO_JSON_append_null(gstr, "mime-type");
+			}
 		}
 
 		if (prop_list) {

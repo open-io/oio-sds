@@ -966,6 +966,20 @@ class ObjectStorageApi(object):
             except KeyError:
                 obj['mime_type'] = None
 
+        if versions:
+            latest_by_name = dict()
+            for obj in resp_body['objects']:
+                ver = int(obj['version'])
+                latest = latest_by_name.get(obj['name'], {'version': '0'})
+                if ver > int(latest['version']):
+                    latest_by_name[obj['name']] = obj
+                obj['is_latest'] = False
+            for obj in latest_by_name.values():
+                obj['is_latest'] = True
+        else:
+            for obj in resp_body['objects']:
+                obj['is_latest'] = True
+
         resp_body['truncated'] = true_value(
             hdrs.get(HEADER_PREFIX + 'list-truncated'))
         marker_header = HEADER_PREFIX + 'list-marker'

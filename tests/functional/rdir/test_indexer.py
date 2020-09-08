@@ -30,6 +30,10 @@ from oio.common.constants import CHUNK_XATTR_CONTENT_FULLPATH_PREFIX, \
 from oio.common.fullpath import encode_fullpath
 
 
+def enc(my_str):
+    return my_str.encode('utf-8')
+
+
 class TestIndexerCrawler(BaseTestCase):
     def setUp(self):
         super(TestIndexerCrawler, self).setUp()
@@ -60,37 +64,39 @@ class TestIndexerCrawler(BaseTestCase):
 
         # pylint: disable=no-member
         xattr.setxattr(
-            chunk_path, 'user.' + chunk_xattr_keys['chunk_hash'], 32 * '0')
+            chunk_path, 'user.' + chunk_xattr_keys['chunk_hash'], 32 * b'0')
         xattr.setxattr(
-            chunk_path, 'user.' + chunk_xattr_keys['chunk_id'], chunk_id)
+            chunk_path, 'user.' + chunk_xattr_keys['chunk_id'], enc(chunk_id))
         xattr.setxattr(
-            chunk_path, 'user.' + chunk_xattr_keys['chunk_pos'], '0')
+            chunk_path, 'user.' + chunk_xattr_keys['chunk_pos'], b'0')
         xattr.setxattr(
-            chunk_path, 'user.' + chunk_xattr_keys['chunk_size'], '4')
+            chunk_path, 'user.' + chunk_xattr_keys['chunk_size'], b'4')
         xattr.setxattr(
             chunk_path, 'user.' + chunk_xattr_keys['content_policy'],
-            'TESTPOLICY')
+            b'TESTPOLICY')
         xattr.setxattr(
             chunk_path, 'user.' + chunk_xattr_keys['content_chunkmethod'],
-            'plain/nb_copy=3')
+            b'plain/nb_copy=3')
         xattr.setxattr(
-            chunk_path, 'user.' + chunk_xattr_keys['content_version'], '1')
+            chunk_path, 'user.' + chunk_xattr_keys['content_version'], b'1')
         # Old (oio-sds < 4.2) extended attributes
         xattr.setxattr(
             chunk_path, 'user.' + chunk_xattr_keys['container_id'],
-            container_id)
+            enc(container_id))
         xattr.setxattr(
-            chunk_path, 'user.' + chunk_xattr_keys['content_id'], content_id)
+            chunk_path, 'user.' + chunk_xattr_keys['content_id'],
+            enc(content_id))
         xattr.setxattr(
-            chunk_path, 'user.' + chunk_xattr_keys['content_path'], alias)
+            chunk_path, 'user.' + chunk_xattr_keys['content_path'], enc(alias))
         # New (oio-sds >= 4.2) extended attributes
         xattr.setxattr(
-            chunk_path, 'user.' + chunk_xattr_keys['oio_version'], OIO_VERSION)
+            chunk_path, 'user.' + chunk_xattr_keys['oio_version'],
+            enc(OIO_VERSION))
         fullpath = encode_fullpath(self.account, cname, alias, 1, content_id)
         xattr.setxattr(
             chunk_path,
             'user.%s%s' % (CHUNK_XATTR_CONTENT_FULLPATH_PREFIX, chunk_id),
-            fullpath)
+            enc(fullpath))
 
         return chunk_path, container_id, content_id, chunk_id
 
@@ -143,7 +149,7 @@ class TestIndexerCrawler(BaseTestCase):
         return self._test_index_chunk()
 
     def test_index_unicode_chunk(self):
-        return self._test_index_chunk('a%%%s%d%xàç"\r\n{0}€ 1+1=2/\\$\t_')
+        return self._test_index_chunk(u'a%%%s%d%xàç"\r\n{0}€ 1+1=2/\\$\t_')
 
     def test_index_chunk_missing_xattr(self):
         # create a fake chunk

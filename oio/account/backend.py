@@ -501,7 +501,7 @@ class AccountBackend(RedisConnection):
         return self._container_list_prefix + account
 
     @catch_service_errors
-    def create_account(self, account_id):
+    def create_account(self, account_id, **kwargs):
         conn = self.conn
         if not account_id:
             return None
@@ -527,7 +527,7 @@ class AccountBackend(RedisConnection):
         return account_id
 
     @catch_service_errors
-    def delete_account(self, req_account_id):
+    def delete_account(self, req_account_id, **kwargs):
         conn = self.conn
         if not req_account_id:
             return None
@@ -557,10 +557,11 @@ class AccountBackend(RedisConnection):
         return True
 
     @catch_service_errors
-    def get_account_metadata(self, req_account_id):
-        conn = self.conn_slave
+    def get_account_metadata(self, req_account_id, **kwargs):
         if not req_account_id:
             return None
+
+        conn = self.get_slave_conn(**kwargs)
         account_id = conn.hget(self.akey(req_account_id), 'id')
 
         if not account_id:
@@ -581,36 +582,41 @@ class AccountBackend(RedisConnection):
                 pass
         for what in (BUCKET_PROP_REPLI_ENABLED.encode('utf-8'), ):
             try:
-                decoded = info.get(what, b'').decode('utf-8')
+                val = info.get(what)
+                decoded = val.decode('utf-8') if val is not None else None
                 info[what] = boolean_value(decoded)
             except (TypeError, ValueError):
                 pass
 
     @catch_service_errors
-    def get_bucket_info(self, bname):
+    def get_bucket_info(self, bname, **kwargs):
         """
         Get all available information about a bucket.
         """
         if not bname:
             return None
-        binfo = self.conn_slave.hgetall(self.bkey(bname))
+
+        conn = self.get_slave_conn(**kwargs)
+        binfo = conn.hgetall(self.bkey(bname))
         if not binfo:
             return None
         self.cast_fields(binfo)
         return binfo
 
     @catch_service_errors
-    def get_container_info(self, account_id, cname):
+    def get_container_info(self, account_id, cname, **kwargs):
         """
         Get all available information about a container, including some
         information coming from the bucket it belongs to.
         """
         if not cname:
             return None
+
+        conn = self.get_slave_conn(**kwargs)
         keys = [self.ckey(account_id, cname)]
         args = [self._bucket_prefix]
         cinfolist = self.script_get_container_info(
-            keys=keys, args=args, client=self.conn_slave)
+            keys=keys, args=args, client=conn)
         key = None
         cinfo = dict()
         for cursor in cinfolist:
@@ -623,7 +629,8 @@ class AccountBackend(RedisConnection):
         return cinfo
 
     @catch_service_errors
-    def update_account_metadata(self, account_id, metadata, to_delete=None):
+    def update_account_metadata(self, account_id, metadata, to_delete=None,
+                                **kwargs):
         conn = self.conn
         if not account_id:
             return None
@@ -646,7 +653,8 @@ class AccountBackend(RedisConnection):
         return account_id
 
     @catch_service_errors
-    def update_bucket_metadata(self, bname, metadata, to_delete=None):
+    def update_bucket_metadata(self, bname, metadata, to_delete=None,
+                               **kwargs):
         """
         Update (or delete) bucket metadata.
 
@@ -668,10 +676,11 @@ class AccountBackend(RedisConnection):
         # return None
 
     @catch_service_errors
-    def info_account(self, req_account_id):
-        conn = self.conn_slave
+    def info_account(self, req_account_id, **kwargs):
         if not req_account_id:
             return None
+
+        conn = self.get_slave_conn(**kwargs)
         account_id = conn.hget(self.akey(req_account_id), 'id')
 
         if not account_id:
@@ -692,11 +701,11 @@ class AccountBackend(RedisConnection):
         return debinarize(info)
 
     @catch_service_errors
-    def list_accounts(self):
+    def list_accounts(self, **kwargs):
         """
         Get the list of all accounts.
         """
-        conn = self.conn_slave
+        conn = self.get_slave_conn(**kwargs)
         accounts = conn.hkeys('accounts:')
         return debinarize(accounts)
 
@@ -705,7 +714,8 @@ class AccountBackend(RedisConnection):
                          object_count, bytes_used,
                          damaged_objects, missing_chunks,
                          bucket_name=None,
-                         autocreate_account=None, autocreate_container=True):
+                         autocreate_account=None, autocreate_container=True,
+                         **kwargs):
         if not account_id or not name:
             raise BadRequest("Missing account or container")
 
@@ -762,7 +772,8 @@ class AccountBackend(RedisConnection):
 
     @catch_service_errors
     def _raw_listing(self, key, limit, marker=None, end_marker=None,
-                     delimiter=None, prefix=None, s3_buckets_only=False):
+                     delimiter=None, prefix=None, s3_buckets_only=False,
+                     **kwargs):
         """
         Fetch a list of tuples of items matching the specified options.
         Each tuple is formed like
@@ -780,6 +791,7 @@ class AccountBackend(RedisConnection):
         if prefix is None:
             prefix = ''
 
+        conn = self.get_slave_conn(**kwargs)
         while len(results) < limit and not beyond_prefix:
             min_k = '-'
             max_k = '+'
@@ -797,7 +809,7 @@ class AccountBackend(RedisConnection):
 
             # Ask for one extra element, to be able to tell if the
             # list of results is truncated.
-            cnames = self.conn_slave.zrangebylex(
+            cnames = conn.zrangebylex(
                 key, min_k, max_k,
                 0, limit - len(results) + 1)
             if not cnames:
@@ -834,7 +846,7 @@ class AccountBackend(RedisConnection):
 
     @catch_service_errors
     def list_buckets(self, account_id, limit=1000, marker=None,
-                     end_marker=None, prefix=None):
+                     end_marker=None, prefix=None, **kwargs):
         """
         Get the list of buckets of the specified account.
 
@@ -844,8 +856,9 @@ class AccountBackend(RedisConnection):
         raw_list, next_marker = self._raw_listing(
             self.blistkey(account_id),
             limit=limit, marker=marker,
-            end_marker=end_marker, prefix=prefix)
-        pipeline = self.conn_slave.pipeline(True)
+            end_marker=end_marker, prefix=prefix, **kwargs)
+        conn = self.get_slave_conn(**kwargs)
+        pipeline = conn.pipeline(True)
         for entry in raw_list:
             # For real buckets (not prefixes), fetch metadata.
             if not entry[3]:
@@ -873,14 +886,15 @@ class AccountBackend(RedisConnection):
     @catch_service_errors
     def list_containers(self, account_id, limit=1000, marker=None,
                         end_marker=None, prefix=None, delimiter=None,
-                        s3_buckets_only=False):
+                        s3_buckets_only=False, **kwargs):
         raw_list, _next_marker = self._raw_listing(
             self.clistkey(account_id),
             limit=limit, marker=marker,
             end_marker=end_marker, prefix=prefix,
             delimiter=delimiter,
-            s3_buckets_only=s3_buckets_only)
-        pipeline = self.conn_slave.pipeline(True)
+            s3_buckets_only=s3_buckets_only, **kwargs)
+        conn = self.get_slave_conn(**kwargs)
+        pipeline = conn.pipeline(True)
         # skip prefix
         for container in [entry for entry in raw_list if not entry[3]]:
             pipeline.hmget(AccountBackend.ckey(account_id, container[0]),
@@ -899,14 +913,14 @@ class AccountBackend(RedisConnection):
         return raw_list
 
     @catch_service_errors
-    def status(self):
-        conn = self.conn_slave
+    def status(self, **kwargs):
+        conn = self.get_slave_conn(**kwargs)
         account_count = conn.hlen('accounts:')
         status = {'account_count': account_count}
         return status
 
     @catch_service_errors
-    def refresh_bucket(self, bucket_name):
+    def refresh_bucket(self, bucket_name, **kwargs):
         """
         Refresh the counters of a bucket. Recompute them from the counters
         of all shards (containers).
@@ -928,7 +942,7 @@ class AccountBackend(RedisConnection):
                 raise
 
     @catch_service_errors
-    def refresh_account(self, account_id):
+    def refresh_account(self, account_id, **kwargs):
         if not account_id:
             raise BadRequest("Missing account")
 
@@ -945,7 +959,7 @@ class AccountBackend(RedisConnection):
                 raise
 
     @catch_service_errors
-    def flush_account(self, account_id):
+    def flush_account(self, account_id, **kwargs):
         if not account_id:
             raise BadRequest("Missing account")
 

@@ -31,6 +31,14 @@ class TestContentVersioning(BaseTestCase):
         self.wait_for_score(('meta2', 'rawx'))
         self.api.container_create(self.account, self.container, system=system)
 
+    def tearDown(self):
+        try:
+            self.api.container_flush(self.account, self.container)
+            self.api.container_delete(self.account, self.container)
+        except Exception:
+            pass
+        super(TestContentVersioning, self).tearDown()
+
     def test_versioning_enabled(self):
         props = self.api.container_get_properties(
             self.account, self.container)
@@ -683,3 +691,27 @@ class TestContentVersioning(BaseTestCase):
         _check_objects(expected_object_versions[4:7], list(resp['objects']))
         self.assertTrue(resp.get('truncated'))
         self.assertEqual('versioned1', resp['next_marker'])
+
+    def test_is_latest(self):
+        self.api.object_create(self.account, self.container,
+                               obj_name='before_obj', data=b'a')
+        for i in range(4):
+            self.api.object_create(self.account, self.container,
+                                   obj_name='obj', data=bytes((i, )))
+        self.api.object_create(self.account, self.container,
+                               obj_name='past_obj', data=b'b')
+        resp = self.api.object_list(self.account, self.container,
+                                    versions=True)
+        objects = resp['objects']
+        # Only one version -> latest
+        self.assertEqual(objects[0]['name'], 'before_obj')
+        self.assertTrue(objects[0]['is_latest'])
+        # Several versions, but newest version -> latest
+        self.assertEqual(objects[1]['name'], 'obj')
+        self.assertTrue(objects[1]['is_latest'])
+        # Previous versions -> not latest
+        for i in range(2, 5):
+            self.assertEqual(objects[i]['name'], 'obj')
+            self.assertFalse(objects[i]['is_latest'])
+        # Only one version -> latest
+        self.assertEqual(objects[5]['name'], 'past_obj')
