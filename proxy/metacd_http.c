@@ -537,6 +537,8 @@ lb_cache_reload (void)
 	gchar **tabtypes = NULL;
 	GPtrArray *tabsrv = NULL, *taberr = NULL;
 	gboolean any_loading_error = FALSE;
+	down_hosts_t down = NULL;
+	guint nb_down = 0;
 
 	CSURL(cs);
 	NSINFO_READ(
@@ -567,7 +569,9 @@ lb_cache_reload (void)
 
 		g_ptr_array_add(tabsrv, srv);
 		g_ptr_array_add(taberr, e);
+		nb_down += gridd_client_update_down_hosts(&down, srv);
 	}
+	gridd_client_replace_global_down_hosts(&down, nb_down);
 
 #define reload_lb(W,L) do { \
 	if (!any_loading_error) \
@@ -590,6 +594,7 @@ out:
 	if (nsi) namespace_info_free(nsi);
 	if (tabsrv) g_ptr_array_free(tabsrv, TRUE);
 	if (taberr) g_ptr_array_free(taberr, TRUE);
+	gridd_client_clear_down_hosts(&down);
 	return !any_loading_error;
 }
 
