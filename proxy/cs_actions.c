@@ -254,7 +254,7 @@ _registration_batch (enum reg_op_e op, GSList *services)
 		if (!service_is_known (k)) {
 			service_learn (k);
 			service_tag_set_value_boolean (service_info_ensure_tag (
-						si->tags, NAME_TAGNAME_RAWX_FIRST), TRUE);
+						si->tags, NAME_TAGNAME_FIRST), TRUE);
 		}
 
 		if (ttl_expire_local_services > 0 && op != REGOP_UNLOCK) {

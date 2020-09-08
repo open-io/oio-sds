@@ -484,7 +484,7 @@ conscience_srvtype_zero_expired(struct conscience_srvtype_s * srvtype,
 				p_srv->score.value = 0;
 				p_srv->score.timestamp = now;
 				struct service_tag_s *tag =
-						service_info_ensure_tag(p_srv->tags, NAME_TAGNAME_RAWX_UP);
+						service_info_ensure_tag(p_srv->tags, NAME_TAGNAME_UP);
 				service_tag_set_value_boolean(tag, FALSE);
 				conscience_srv_clean_udata(p_srv);
 				count++;
@@ -512,7 +512,7 @@ conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype, struct service_
 {
 	EXTRA_ASSERT (NULL != si);
 
-	struct service_tag_s *tag_first = service_info_get_tag(si->tags, NAME_TAGNAME_RAWX_FIRST);
+	struct service_tag_s *tag_first = service_info_get_tag(si->tags, NAME_TAGNAME_FIRST);
 	gboolean really_first = FALSE;
 
 	/* register the service if necessary, excepted if unlocking */
@@ -737,7 +737,7 @@ push_service(struct service_info_s *si)
 			/* shortcut for services tagged DOWN */
 			if (!srv->locked) {
 				gboolean bval = FALSE;
-				struct service_tag_s *tag = service_info_get_tag(si->tags, NAME_TAGNAME_RAWX_UP);
+				struct service_tag_s *tag = service_info_get_tag(si->tags, NAME_TAGNAME_UP);
 				if (tag && service_tag_get_value_boolean(tag, &bval, NULL) && !bval) {
 					srv->score.value = 0;
 					_alert_service_with_zeroed_score(srv);

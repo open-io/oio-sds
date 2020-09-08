@@ -844,7 +844,7 @@ _srv_is_down(struct service_info_s *si)
 
 	// Legacy: consider service up if tag is missing
 	struct service_tag_s *tag =
-		service_info_get_tag(si->tags, NAME_TAGNAME_RAWX_UP);
+		service_info_get_tag(si->tags, NAME_TAGNAME_UP);
 	if (!tag)
 		return FALSE;
 
