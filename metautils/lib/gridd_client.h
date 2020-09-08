@@ -103,8 +103,20 @@ void gridd_client_set_keepalive(struct gridd_client_s *self, gboolean on);
 
 /* ------------------------------------------------------------------------- */
 
-/* If that list of peers odwn is not periodically refreshed, it ends up with
- * a set of blocked peers */
-void gridd_client_learn_peers_down(const char * const * peers);
+typedef GTree* down_hosts_t;
+
+/* Update the down hosts with these services. */
+guint gridd_client_update_down_hosts(down_hosts_t *pdown, GSList *srv);
+
+/* Replace the global down hosts with the new ones.
+ * If that list of down hosts is not periodically refreshed, it ends up with
+ * a set of blocked hosts. */
+void gridd_client_replace_global_down_hosts(down_hosts_t *pnew_down, guint nb_down);
+
+/* Update the global down hosts with these services. */
+void gridd_client_update_global_down_hosts(GSList *srv);
+
+/* Clear the down hosts */
+void gridd_client_clear_down_hosts(down_hosts_t *pdown);
 
 #endif /*OIO_SDS__metautils__lib__gridd_client_h*/

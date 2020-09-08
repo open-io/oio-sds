@@ -537,6 +537,9 @@ action_conscience_list (struct req_args_s *args)
 		return _reply_common_error (args, err);
 	}
 
+	// Refresh down hosts with current value
+	gridd_client_update_global_down_hosts(sl);
+
 	args->rp->access_tail ("%s=%u", type, g_slist_length(sl));
 	return _reply_success_json (args, _cs_pack_and_free_srvinfo_list (sl));
 }
