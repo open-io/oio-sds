@@ -482,13 +482,12 @@ THREECOPIES=rawx3:DUPONETHREE
 EC=NONE:EC
 EC21=NONE:EC21
 ECX21=NONE:ECX21
-BACKBLAZE=NONE:BACKBLAZE
 
 [DATA_SECURITY]
 # Data security definitions
 # --------------------------
 #
-# The first word is the kind of data security ("plain", "ec" or "backblaze"),
+# The first word is the kind of data security ("plain" or "ec"),
 # after the '/' are the parameters of the data security.
 
 DUPONETWO=plain/min_dist=1,nb_copy=2
@@ -506,13 +505,6 @@ ECX21=ec/k=2,m=1,algo=liberasurecode_rs_vand,min_dist=0,max_dist=2,warn_dist=0
 # "isa_l_rs_vand"          EC_BACKEND_ISA_L_RS_VAND
 # "shss"                   EC_BACKEND_SHSS
 # "liberasurecode_rs_vand" EC_BACKEND_LIBERASURECODE_RS_VAND
-
-BACKBLAZE=backblaze/account_id=${BACKBLAZE_ACCOUNT_ID},bucket_name=${BACKBLAZE_BUCKET_NAME},min_dist=0,nb_copy=1
-"""
-
-template_credentials = """
-[backblaze]
-${BACKBLAZE_ACCOUNT_ID}.${BACKBLAZE_BUCKET_NAME}.application_key=${BACKBLAZE_APPLICATION_KEY}
 """
 
 template_service_pools = """
@@ -1208,9 +1200,6 @@ def generate(options):
     hosts = options.get(SVC_HOSTS) or defaults[SVC_HOSTS]
 
     ns = options.get('ns') or defaults['NS']
-    backblaze_account_id = options.get('backblaze', {}).get(ACCOUNT_ID)
-    backblaze_bucket_name = options.get('backblaze', {}).get(BUCKET_NAME)
-    backblaze_app_key = options.get('backblaze', {}).get(APPLICATION_KEY)
     want_service_id = '' if options.get('with_service_id') else '#'
 
     DATADIR = options.get('DATADIR', SDSDIR + '/data')
@@ -1253,9 +1242,6 @@ def generate(options):
                M2_DISTANCE=str(1),
                COMPRESSION=compression,
                APACHE2_MODULES_SYSTEM_DIR=APACHE2_MODULES_SYSTEM_DIR,
-               BACKBLAZE_ACCOUNT_ID=backblaze_account_id,
-               BACKBLAZE_BUCKET_NAME=backblaze_bucket_name,
-               BACKBLAZE_APPLICATION_KEY=backblaze_app_key,
                KEY_FILE=key_file,
                HTTPD_BINARY=HTTPD_BINARY,
                META_HEADER=META_HEADER,
@@ -1746,10 +1732,6 @@ def generate(options):
             if isinstance(v, bool):
                 strv = strv.lower()
             f.write('{0}={1}\n'.format(k, strv))
-
-    with open('{KEY_FILE}'.format(**ENV), 'w+') as f:
-        tpl = Template(template_credentials)
-        f.write(tpl.safe_substitute(ENV))
 
     # ensure volumes for srvtype in final_services:
     for srvtype in final_services:

@@ -2442,7 +2442,6 @@ _m2db_check_content_validity(struct m2v2_sorted_content_s *sorted_content,
 	enum _content_broken_state_e cbroken = NONE;
 	const struct data_security_s *dsec = storage_policy_get_data_security(pol);
 	switch (data_security_get_type(dsec)) {
-		case STGPOL_DS_BACKBLAZE:
 		case STGPOL_DS_PLAIN:
 			cbroken = _check_plain_content(sorted_content, dsec,
 					checked_content_p, partial);
@@ -2475,7 +2474,6 @@ _m2db_get_content_missing_chunks(struct m2v2_sorted_content_s *sorted_content,
 	gint64 expected_chunks = 0;
 	const struct data_security_s *dsec = storage_policy_get_data_security(pol);
 	switch (data_security_get_type(dsec)) {
-		case STGPOL_DS_BACKBLAZE:
 		case STGPOL_DS_PLAIN:
 			expected_chunks = data_security_get_int64_param(
 					dsec, DS_KEY_COPY_COUNT, 1);

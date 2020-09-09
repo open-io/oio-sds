@@ -36,13 +36,11 @@ License along with this library.
 
 #define STGPOL_DSPREFIX_PLAIN "plain"
 #define STGPOL_DSPREFIX_EC "ec"
-#define STGPOL_DSPREFIX_BACKBLAZE "backblaze"
 
 enum data_security_e
 {
 	STGPOL_DS_PLAIN,
 	STGPOL_DS_EC,
-	STGPOL_DS_BACKBLAZE
 };
 
 /** Forward declarations */

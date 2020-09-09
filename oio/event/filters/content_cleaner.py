@@ -30,7 +30,6 @@ class ContentReaperFilter(Filter):
         self.handlers = {
                 "plain": self._handle_rawx,
                 "ec": self._handle_rawx,
-                "backblaze": self._handle_b2,
         }
         kwargs = {k: v for k, v in self.conf.items()
                   if k in URLLIB3_POOLMANAGER_KWARGS}
@@ -56,18 +55,6 @@ class ContentReaperFilter(Filter):
                 self.logger.warn(
                     'failed to delete chunk %s (HTTP %s)',
                     resp.chunk.get('real_url', resp.chunk['url']), resp.status)
-
-    def _handle_b2(self, url, chunks, headers, storage_method, reqid):
-        from oio.api.backblaze import BackblazeDeleteHandler
-        from oio.api.backblaze_http import BackblazeUtils
-        meta = {'container_id': url['id']}
-        key_file = self.conf.get('key_file')
-        b2_creds = BackblazeUtils.get_credentials(
-            storage_method, key_file)
-        try:
-            BackblazeDeleteHandler(meta, chunks, b2_creds).delete()
-        except OioException as exc:
-            self.logger.warn('delete failed: %s' % str(exc))
 
     def _load_handler(self, chunk_method):
         storage_method = STORAGE_METHODS.load(chunk_method)

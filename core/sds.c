@@ -316,8 +316,7 @@ _chunk_method_is_EC(const char *chunk_method)
 static int
 _chunk_method_needs_ecd(const char *chunk_method)
 {
-	return oio_str_prefixed(chunk_method, STGPOL_DSPREFIX_BACKBLAZE, "/") ||
-			oio_str_prefixed(chunk_method, STGPOL_DSPREFIX_EC, "/");
+	return oio_str_prefixed(chunk_method, STGPOL_DSPREFIX_EC, "/");
 }
 
 static guint
