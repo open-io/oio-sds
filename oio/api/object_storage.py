@@ -19,7 +19,6 @@ from six import PY2, string_types
 from six.moves.urllib_parse import unquote
 
 from io import BytesIO
-from functools import partial
 import os
 import warnings
 import time
@@ -1180,10 +1179,6 @@ class ObjectStorageApi(object):
             download_start = monotonic_time()
         if storage_method.ec:
             stream = fetch_stream_ec(chunks, ranges, storage_method, **kwargs)
-        elif storage_method.backblaze:
-            stream = self._fetch_stream_backblaze(meta, chunks, ranges,
-                                                  storage_method, key_file,
-                                                  **kwargs)
         else:
             stream = fetch_stream(chunks, ranges, storage_method, **kwargs)
 
@@ -1403,13 +1398,6 @@ class ObjectStorageApi(object):
 
         if storage_method.ec:
             write_handler_cls = ECWriteHandler
-        elif storage_method.backblaze:
-            from oio.api.backblaze import BackblazeWriteHandler
-            from oio.api.backblaze_http import BackblazeUtils
-            backblaze_info = BackblazeUtils.get_credentials(storage_method,
-                                                            key_file)
-            write_handler_cls = partial(BackblazeWriteHandler,
-                                        backblaze_info=backblaze_info)
         else:
             write_handler_cls = ReplicatedWriteHandler
         kwargs['logger'] = self.logger
@@ -1479,7 +1467,6 @@ class ObjectStorageApi(object):
 
     def _delete_orphan_chunks(self, chunks, cid, **kwargs):
         """Delete chunks that have been orphaned by an unfinished upload."""
-        # FIXME(FVE): won't work with BackBlaze
         del_resps = self.blob_client.chunk_delete_many(chunks, cid, **kwargs)
         for resp in del_resps:
             if isinstance(resp, Exception):
@@ -1490,46 +1477,6 @@ class ObjectStorageApi(object):
                 self.logger.warn('failed to delete chunk %s (HTTP %s)',
                                  resp.chunk.get('real_url', resp.chunk['url']),
                                  resp.status)
-
-    def _fetch_stream_backblaze(self, meta, chunks, ranges,
-                                storage_method, key_file,
-                                **kwargs):
-        from oio.api.backblaze import BackblazeChunkDownloadHandler
-        from oio.api.backblaze_http import BackblazeUtils
-        backblaze_info = BackblazeUtils.get_credentials(storage_method,
-                                                        key_file)
-        total_bytes = 0
-        current_offset = 0
-        size = None
-        offset = 0
-        for pos in range(len(chunks)):
-            if ranges:
-                offset = ranges[pos][0]
-                size = ranges[pos][1]
-
-            if size is None:
-                size = int(meta["length"])
-            chunk_size = int(chunks[pos][0]["size"])
-            if total_bytes >= size:
-                break
-            if current_offset + chunk_size > offset:
-                if current_offset < offset:
-                    _offset = offset - current_offset
-                else:
-                    _offset = 0
-                if chunk_size + total_bytes > size:
-                    _size = size - total_bytes
-                else:
-                    _size = chunk_size
-            handler = BackblazeChunkDownloadHandler(
-                meta, chunks[pos], _offset, _size,
-                backblaze_info=backblaze_info)
-            stream = handler.get_stream()
-            if not stream:
-                raise exc.OioException("Error while downloading")
-            total_bytes += len(stream)
-            yield stream
-            current_offset += chunk_size
 
     @handle_container_not_found
     @patch_kwargs

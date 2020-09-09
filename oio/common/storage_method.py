@@ -51,9 +51,7 @@ def parse_chunk_method(chunk_method):
 
 
 def guess_storage_method(url):
-    if url.startswith('b2') or url.startswith('backblaze'):
-        return 'backblaze'
-    elif url.startswith('kine'):
+    if url.startswith('kine'):
         return 'kplain'
     else:
         return 'plain'
@@ -83,10 +81,9 @@ class StorageMethods(object):
 
 class StorageMethod(object):
 
-    def __init__(self, name, ec=False, backblaze=False):
+    def __init__(self, name, ec=False):
         self._name = name
         self._ec = ec
-        self._backblaze = backblaze
         self.type = None
 
     @property
@@ -96,10 +93,6 @@ class StorageMethod(object):
     @property
     def ec(self):
         return self._ec
-
-    @property
-    def backblaze(self):
-        return self._backblaze
 
     @property
     def quorum(self):
@@ -223,32 +216,10 @@ class ECStorageMethod(StorageMethod):
             self.ec_segment_size, self.ec_segment_size)['fragment_size']
 
 
-class BackblazeStorageMethod(StorageMethod):
-    def __init__(self, name, account_id, bucket_name):
-        super(BackblazeStorageMethod, self).__init__(name=name, backblaze=True)
-        self._account_id = account_id
-        self._bucket_name = bucket_name
-
-    @classmethod
-    def build(cls, params):
-        account_id = params.pop('account_id')
-        bucket_name = params.pop('bucket_name')
-        return cls('backblaze', account_id, bucket_name)
-
-    @property
-    def account_id(self):
-        return self._account_id
-
-    @property
-    def bucket_name(self):
-        return self._bucket_name
-
-
 def load_methods():
     global _STORAGE_METHODS
     methods = {'plain': ReplicatedStorageMethod,
-               'ec': ECStorageMethod,
-               'backblaze': BackblazeStorageMethod}
+               'ec': ECStorageMethod}
     _STORAGE_METHODS = StorageMethods(methods)
 
 

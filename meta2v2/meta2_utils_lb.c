@@ -188,19 +188,6 @@ m2v2_build_chunk_url (const char *srv, const char *id)
 	return g_strconcat("http://", srv, "/", id, NULL);
 }
 
-static gchar*
-m2v2_build_chunk_url_storage (const struct storage_policy_s *pol,
-		const gchar *str_id)
-{
-	switch(data_security_get_type(storage_policy_get_data_security(pol))) {
-	case STGPOL_DS_BACKBLAZE:
-		return g_strconcat("b2/", str_id, NULL);
-	default:
-		return NULL;
-	}
-	return NULL;
-}
-
 struct gen_ctx_s
 {
 	struct oio_url_s *url;
@@ -266,24 +253,12 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 	_collect_bean(ctx, header);
 }
 
-static int
-is_stgpol_backblaze(const struct storage_policy_s *pol)
-{
-	switch(data_security_get_type(storage_policy_get_data_security(pol))) {
-		case STGPOL_DS_BACKBLAZE:
-			return TRUE;
-		default:
-			return FALSE;
-	}
-	return FALSE;
-}
-
 struct bean_CHUNKS_s *
 generate_chunk_bean(struct oio_lb_selected_item_s *sel,
 		const struct storage_policy_s *policy)
 {
 	guint8 binid[32];
-	gchar *chunkid, strid[65];
+	gchar *chunkid = NULL, strid[65];
 
 	oio_buf_randomize(binid, sizeof(binid));
 	oio_str_bin2hex(binid, sizeof(binid), strid, sizeof(strid));
@@ -294,8 +269,11 @@ generate_chunk_bean(struct oio_lb_selected_item_s *sel,
 		meta1_url_shift_addr(shifted_id);
 		chunkid = m2v2_build_chunk_url(shifted_id, strid);
 	} else {
+		/* legacy function called here to build URL 
+		 * when chunks were stored on
+		 * other backend than SDS */
+		GRID_ERROR("Deprecated code path called");
 		EXTRA_ASSERT(policy != NULL);
-		chunkid = m2v2_build_chunk_url_storage(policy, strid);
 	}
 
 	struct bean_CHUNKS_s *chunk = _bean_create(&descr_struct_CHUNKS);
@@ -364,12 +342,7 @@ _m2_generate_chunks(struct gen_ctx_s *ctx,
 		int i = 0;
 		void _on_id(struct oio_lb_selected_item_s *sel, gpointer u UNUSED)
 		{
-			if (is_stgpol_backblaze(ctx->pol)) {
-				// Shortcut for backblaze
-				_gen_chunk(ctx, NULL, ctx->chunk_size, pos, -1);
-			} else {
-				_gen_chunk(ctx, sel, ctx->chunk_size, pos, subpos? i : -1);
-			}
+			_gen_chunk(ctx, sel, ctx->chunk_size, pos, subpos? i : -1);
 			i++;
 		}
 		const char *pool = storage_policy_get_service_pool(ctx->pol);
@@ -440,7 +413,6 @@ oio_generate_focused_beans(
 
 	gint64 k;
 	switch (data_security_get_type(storage_policy_get_data_security(pol))) {
-		case STGPOL_DS_BACKBLAZE:
 		case STGPOL_DS_PLAIN:
 			return _m2_generate_chunks(&ctx, chunk_size, 0);
 		case STGPOL_DS_EC:
