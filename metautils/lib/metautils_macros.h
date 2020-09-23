@@ -35,10 +35,10 @@ License along with this library.
 # define NAME_MACRO_CPU_NAME "stat.cpu"
 # define NAME_MACRO_IOIDLE_NAME "stat.io"
 
-# define NAME_TAGNAME_RAWX_VOL "tag.vol"
-# define NAME_TAGNAME_RAWX_UP "tag.up"
-# define NAME_TAGNAME_RAWX_FIRST "tag.1"
-# define NAME_TAGNAME_RAWX_LOC "tag.loc"
+# define NAME_TAGNAME_VOL "tag.vol"
+# define NAME_TAGNAME_UP "tag.up"
+# define NAME_TAGNAME_FIRST "tag.1"
+# define NAME_TAGNAME_LOC "tag.loc"
 # define NAME_TAGNAME_LOCK "tag.lock"
 # define NAME_TAGNAME_SLOTS "tag.slots"
 

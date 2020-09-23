@@ -98,7 +98,9 @@ def get_logger(
 
     syslog_prefix = conf.get('syslog_prefix', '')
 
-    formatter = logging.Formatter(fmt=fmt)
+    formatter = logging.Formatter(
+        fmt='%(asctime)s.%(msecs)03d ' + fmt,
+        datefmt='%Y-%m-%d %H:%M:%S')
     if syslog_prefix:
         fmt = '%s: %s' % (syslog_prefix, fmt)
 
