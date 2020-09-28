@@ -20,7 +20,9 @@ from werkzeug.exceptions import BadRequest
 from werkzeug.routing import Map, Rule
 from werkzeug.wrappers import Response
 
+from oio.common.constants import REQID_HEADER
 from oio.common.storage_method import STORAGE_METHODS
+from oio.common.utils import request_id
 from oio.api.ec import EcMetachunkWriter, ECChunkDownloadHandler
 from oio.api.replication import ReplicatedMetachunkWriter
 from oio.api.backblaze import BackblazeChunkWriteHandler, \
@@ -129,10 +131,10 @@ class ECD(WerkzeugApp):
         super(ECD, self).__init__(self.url_map)
 
     def write_ec_meta_chunk(self, source, size, storage_method, sysmeta,
-                            meta_chunk):
+                            meta_chunk, reqid):
         meta_checksum = md5()
         handler = EcMetachunkWriter(sysmeta, meta_chunk, meta_checksum,
-                                    storage_method)
+                                    storage_method, reqid=reqid)
         bytes_transferred, checksum, chunks = handler.stream(source, size)
         return Response("OK")
 
@@ -164,10 +166,11 @@ class ECD(WerkzeugApp):
         return Response("OK")
 
     def read_ec_meta_chunk(self, storage_method, meta_chunk,
-                           meta_start=None, meta_end=None):
+                           meta_start=None, meta_end=None, reqid=None):
         headers = {}
         handler = ECChunkDownloadHandler(storage_method, meta_chunk,
-                                         meta_start, meta_end, headers)
+                                         meta_start, meta_end, headers,
+                                         reqid=reqid)
         stream = handler.get_stream()
         return Response(part_iter_to_bytes_iter(stream), 200)
 
@@ -210,6 +213,7 @@ class ECD(WerkzeugApp):
         size = req.content_length
         sysmeta = load_sysmeta(req)
         storage_method = STORAGE_METHODS.load(sysmeta['chunk_method'])
+        reqid = req.headers.get(REQID_HEADER, request_id("ECD-"))
 
         if storage_method.ec:
             nb_chunks = (storage_method.ec_nb_data +
@@ -217,7 +221,7 @@ class ECD(WerkzeugApp):
             pos = safe_get_header(req, 'chunk_pos')
             meta_chunk = load_meta_chunk(req, nb_chunks, pos)
             return self.write_ec_meta_chunk(source, size, storage_method,
-                                            sysmeta, meta_chunk)
+                                            sysmeta, meta_chunk, reqid=reqid)
 
         elif storage_method.backblaze:
             nb_chunks = int(sysmeta['content_chunksnb'])
@@ -236,6 +240,7 @@ class ECD(WerkzeugApp):
     def _on_metachunk_GET(self, req):
         chunk_method = safe_get_header(req, 'content_chunkmethod')
         storage_method = STORAGE_METHODS.load(chunk_method)
+        reqid = req.headers.get(REQID_HEADER, request_id("ECD-"))
         if req.range and req.range.ranges:
             # Werkzeug give us non-inclusive ranges, but we use inclusive
             start = req.range.ranges[0][0]
@@ -254,7 +259,8 @@ class ECD(WerkzeugApp):
             meta_chunk[0]['size'] = \
                 int(safe_get_header(req, 'chunk_size'))
             return self.read_ec_meta_chunk(storage_method, meta_chunk,
-                                           my_range[0], my_range[1])
+                                           my_range[0], my_range[1],
+                                           reqid=reqid)
         elif storage_method.backblaze:
             meta_chunk = load_meta_chunk(req, 1)
             return self.read_backblaze_meta_chunk(req, storage_method,
