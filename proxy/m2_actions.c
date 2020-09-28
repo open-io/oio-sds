@@ -191,7 +191,6 @@ _score_from_chunk_id (const char *id)
 	gchar *key = NULL, *type = NULL, *netloc = NULL;
 	struct location_and_score_s res = {};
 
-	// FIXME: probably broken with B2 URLs
 	oio_parse_chunk_url(id, &type, &netloc, NULL);
 	key = oio_make_service_key(ns_name, type, netloc);
 
