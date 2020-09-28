@@ -375,10 +375,6 @@ void oio_parse_chunk_url(const gchar *url,
 			if (id)
 				*id = g_strdup(first_slash + 1);
 		}
-	} else if (g_str_has_prefix(url, "b2/") || g_str_has_prefix(url, "b2:")) {
-		_type = "b2";
-		if (id)
-			*id = g_strdup(url + 3);
 	} else if (g_str_has_prefix(url, "k/")) {
 		_type = "k";
 		if (netloc)
