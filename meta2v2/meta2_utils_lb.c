@@ -255,7 +255,7 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 
 struct bean_CHUNKS_s *
 generate_chunk_bean(struct oio_lb_selected_item_s *sel,
-		const struct storage_policy_s *policy)
+		const struct storage_policy_s *policy UNUSED)
 {
 	guint8 binid[32];
 	gchar *chunkid = NULL, strid[65];
