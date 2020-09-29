@@ -19,6 +19,7 @@ import re
 import redis
 import redis.sentinel
 import six
+
 from werkzeug.exceptions import NotFound, Conflict, BadRequest
 from oio.common.constants import BUCKET_PROP_REPLI_ENABLED
 from oio.common.timestamp import Timestamp
@@ -30,6 +31,7 @@ ACCOUNT_KEY_PREFIX = 'account:'
 BUCKET_KEY_PREFIX = 'bucket:'
 BUCKET_LIST_PREFIX = 'buckets:'
 CONTAINER_LIST_PREFIX = 'containers:'
+BUCKET_LOCK_KEY_PREFIX = 'bucketlock:'
 
 EXPIRE_TIME = 60  # seconds
 
@@ -59,7 +61,7 @@ class AccountBackend(RedisConnection):
         -- (it has a prefix).
         local update_bucket_stats = function(
             container_key, bucket_key, buckets_list_key,
-            account, container_name, bucket_name, mtime, deleted,
+            account, container_name, bucket_name, bucket_lock, mtime, deleted,
             inc_objects, inc_bytes, inc_damaged_objects, inc_missing_chunks)
           if deleted then
             redis.call('HDEL', container_key, 'bucket');
@@ -90,13 +92,18 @@ class AccountBackend(RedisConnection):
             inc_objects = 0;
           end;
 
-          -- Increment the counters.
-          redis.call('HINCRBY', bucket_key, 'objects', inc_objects);
-          redis.call('HINCRBY', bucket_key, 'bytes', inc_bytes);
-          redis.call('HINCRBY', bucket_key, 'damaged_objects',
-                     inc_damaged_objects);
-          redis.call('HINCRBY', bucket_key, 'missing_chunks',
-                     inc_missing_chunks);
+          -- Check if a refresh bucket is in progress
+          local marker = redis.call("HGET", bucket_lock, "marker");
+
+          -- Increment the counters if needed.
+          if marker == false or container_name <= marker then
+            redis.call('HINCRBY', bucket_key, 'objects', inc_objects);
+            redis.call('HINCRBY', bucket_key, 'bytes', inc_bytes);
+            redis.call('HINCRBY', bucket_key, 'damaged_objects',
+                       inc_damaged_objects);
+            redis.call('HINCRBY', bucket_key, 'missing_chunks',
+                       inc_missing_chunks);
+          end;
 
           -- Finally update the modification time.
           if mtime ~= '' then
@@ -105,14 +112,14 @@ class AccountBackend(RedisConnection):
         end;
     """
 
-    lua_refresh_bucket = (
-        lua_update_bucket_func +
+    lua_refresh_bucket_batch = (
         """
         local ckey_prefix = KEYS[1]; -- prefix of the key to the container hash
         local clistkey = KEYS[2]; -- key to the account's container set
         local bkey = KEYS[3]; -- key to the bucket hash
-        local blistkey = KEYS[4]; -- key to the account's bucket set
+        local lkey = KEYS[4]; -- key to the bucket lock
         local bucket_name = ARGV[1];
+        local mtime = ARGV[2];
 
         -- Check if the bucket exists.
         local account_id = redis.call('HGET', bkey, 'account');
@@ -121,18 +128,36 @@ class AccountBackend(RedisConnection):
         end;
         ckey_prefix = ckey_prefix:gsub( "__account__", account_id);
         clistkey = clistkey:gsub("__account__", account_id);
-        blistkey = blistkey:gsub("__account__", account_id);
 
-        -- Reset the counters.
-        redis.call('HMSET', bkey,
-                   'objects', 0,
-                   'bytes', 0,
-                   'damaged_objects', 0,
-                   'missing_chunks', 0);
+        -- global counters
+        local total_objects = 0;
+        local total_bytes = 0;
+        local total_damaged_objects = 0;
+        local total_missing_chunks = 0;
+
+        local batch_size = 10000;
+
+        local marker = redis.call('HGET', lkey, 'marker');
+
+        if marker == '' then
+            marker = '-';
+            redis.call('HMSET', bkey,
+                    'objects', 0,
+                    'bytes', 0,
+                    'damaged_objects', 0,
+                    'missing_chunks', 0);
+        else
+            marker = '(' .. marker;
+        end;
+
+        local new_marker = '';
 
         -- Increment the counters.
-        local containers = redis.call('ZRANGE', clistkey, 0, -1);
-        for _, container_name in ipairs(containers) do
+        local containers = redis.call('ZRANGEBYLEX', clistkey,
+                                      marker, '+', 'LIMIT', 0, batch_size);
+
+        local i;
+        for i, container_name in ipairs(containers) do
           local ckey = ckey_prefix .. container_name;
 
           local bucket  = redis.call('HGET', ckey, 'bucket');
@@ -147,20 +172,38 @@ class AccountBackend(RedisConnection):
             local damaged_objects = info[3];
             local missing_chunks = info[4];
 
-            if damaged_objects == false then
-              damaged_objects = 0;
+            if not string.find(container_name, '+segments') then
+                total_objects = total_objects + objects;
             end;
-            if missing_chunks == false then
-              missing_chunks = 0;
-            end;
+            total_bytes = total_bytes + bytes;
 
-            update_bucket_stats(
-                ckey, bkey, blistkey, account_id, container_name, bucket_name,
-                '', false,
-                objects, bytes, damaged_objects, missing_chunks);
+            if damaged_objects ~= false then
+              total_damaged_objects = total_damaged_objects + damaged_objects
+            end;
+            if missing_chunks ~= false then
+              total_missing_chunks = total_missing_chunks + missing_chunks
+            end;
           end;
+          new_marker = container_name
         end;
-        """)
+
+        -- Increment the counters.
+        redis.call('HINCRBY', bkey, 'objects', total_objects);
+        redis.call('HINCRBY', bkey, 'bytes', total_bytes);
+        redis.call('HINCRBY', bkey, 'damaged_objects',
+                    total_damaged_objects);
+        redis.call('HINCRBY', bkey, 'missing_chunks',
+                    total_missing_chunks);
+
+        redis.call('HSET', lkey, 'marker', new_marker,
+                                 'mtime', mtime);
+        if i ~= batch_size then
+            redis.call('DEL', lkey)
+            return { 1 }
+        end;
+        return { 0 }
+        """
+    )
 
     lua_update_container = (
         lua_is_sup +
@@ -174,16 +217,17 @@ class AccountBackend(RedisConnection):
         local account_id = ARGV[1];
         local container_name = ARGV[2];
         local bucket_name = ARGV[3];
-        local new_mtime = ARGV[4];
-        local new_dtime = ARGV[5];
-        local new_total_objects = ARGV[6];
-        local new_total_bytes = ARGV[7];
-        local new_total_damaged_objects = ARGV[8];
-        local new_missing_chunks = ARGV[9];
-        local autocreate_account = ARGV[10];
-        local now = ARGV[11]; -- current timestamp
-        local ckey_expiration_time = ARGV[12];
-        local autocreate_container = ARGV[13];
+        local bucket_lock = ARGV[4];
+        local new_mtime = ARGV[5];
+        local new_dtime = ARGV[6];
+        local new_total_objects = ARGV[7];
+        local new_total_bytes = ARGV[8];
+        local new_total_damaged_objects = ARGV[9];
+        local new_missing_chunks = ARGV[10];
+        local autocreate_account = ARGV[11];
+        local now = ARGV[12]; -- current timestamp
+        local ckey_expiration_time = ARGV[13];
+        local autocreate_container = ARGV[14];
 
         local account_exists = redis.call('EXISTS', akey);
         if account_exists ~= 1 then
@@ -339,7 +383,7 @@ class AccountBackend(RedisConnection):
 
           update_bucket_stats(
               ckey, bkey, blistkey, account_id, container_name, bucket_name,
-              mtime, deleted,
+              bucket_lock, mtime, deleted,
               inc_objects, inc_bytes, inc_damaged_objects, inc_missing_chunks);
         end;
         """)
@@ -418,6 +462,23 @@ class AccountBackend(RedisConnection):
         return res
     """
 
+    lua_lock_bucket = """
+        local lkey = KEYS[1]
+        local ctime = ARGV[1]
+
+        local ret = redis.call('HSETNX', lkey, 'ctime', ctime);
+        if ret == 0 then
+            local mtime = redis.call('HGET', lkey, 'mtime');
+            -- Recover dead lock
+            if tonumber(ctime) < (tonumber(mtime) + 3600) then
+                return redis.error_reply('bucket_lock');
+            end;
+            redis.call('HSET', lkey, 'ctime', ctime);
+        end;
+        redis.call('HSET', lkey, 'mtime', ctime,
+                                 'marker', '');
+    """
+
     # This regex comes from https://stackoverflow.com/a/50484916
     #
     # The first group looks ahead to ensure that the match
@@ -458,13 +519,15 @@ class AccountBackend(RedisConnection):
         self.script_update_container = self.register_script(
             self.lua_update_container)
         self.script_refresh_bucket = self.register_script(
-            self.lua_refresh_bucket)
+            self.lua_refresh_bucket_batch)
         self.script_refresh_account = self.register_script(
             self.lua_refresh_account)
         self.script_flush_account = self.register_script(
             self.lua_flush_account)
         self.script_get_container_info = self.register_script(
             self.lua_get_extended_container_info)
+        self.script_get_lock_bucket = self.register_script(
+            self.lua_lock_bucket)
 
         self._account_prefix = conf.get('account_prefix', ACCOUNT_KEY_PREFIX)
         self._bucket_prefix = conf.get('bucket_prefix', BUCKET_KEY_PREFIX)
@@ -472,6 +535,8 @@ class AccountBackend(RedisConnection):
                                             BUCKET_LIST_PREFIX)
         self._container_list_prefix = conf.get('container_list_prefix',
                                                CONTAINER_LIST_PREFIX)
+        self._bucket_lock_prefix = conf.get('bucket_lock_prefix',
+                                            BUCKET_LOCK_KEY_PREFIX)
 
     def akey(self, account):
         """Build the key of an account description"""
@@ -481,9 +546,17 @@ class AccountBackend(RedisConnection):
         """Build the key of a bucket description"""
         return self._bucket_prefix + bucket
 
+    def lbucketkey(self, bucket):
+        """Build the key of a bucket description"""
+        return self._bucket_prefix + bucket
+
     def blistkey(self, account):
         """Build the key of an account's bucket list"""
         return self._bucket_list_prefix + account
+
+    def blockkey(self, bucket):
+        """Build the lock key for a bucket refresh operation"""
+        return self._bucket_lock_prefix + bucket
 
     @staticmethod
     def ckey(account, name):
@@ -730,12 +803,13 @@ class AccountBackend(RedisConnection):
         # If no bucket name is provided, set it to ''
         # (we cannot pass None to the Lua script).
         bucket_name = bucket_name or ''
+        bucket_lock = self.blockkey(bucket_name)
         now = Timestamp().normal
 
         ckey = AccountBackend.ckey(account_id, name)
         keys = [self.akey(account_id), ckey, self.clistkey(account_id),
                 self._bucket_prefix, self.blistkey(account_id)]
-        args = [account_id, name, bucket_name, mtime, dtime,
+        args = [account_id, name, bucket_name, bucket_lock, mtime, dtime,
                 object_count, bytes_used, damaged_objects, missing_chunks,
                 str(autocreate_account), now, EXPIRE_TIME,
                 str(autocreate_container)]
@@ -913,21 +987,33 @@ class AccountBackend(RedisConnection):
         Refresh the counters of a bucket. Recompute them from the counters
         of all shards (containers).
         """
+        lkey = self.blockkey(bucket_name)
+        try:
+            ctime = Timestamp().normal
+            self.script_get_lock_bucket(keys=[lkey], args=[ctime])
+        except redis.exceptions.ResponseError as exc:
+            if six.text_type(exc).endswith("bucket_lock"):
+                raise Conflict("Refresh on bucket already in progress")
+            raise
+
         account_id = '__account__'
         keys = [AccountBackend.ckey(account_id, ''),
                 self.clistkey(account_id), self.bkey(bucket_name),
-                self.blistkey(account_id)]
-        args = [bucket_name]
+                lkey]
+
         try:
-            self.script_refresh_bucket(
-                keys=keys, args=args)
+            while True:
+                args = [bucket_name, Timestamp().normal]
+                res = self.script_refresh_bucket(keys=keys, args=args)
+                if res[0]:
+                    break
         except redis.exceptions.ResponseError as exc:
+            self.conn.delete(lkey)
             if six.text_type(exc).endswith("no_account"):
                 raise NotFound("Account %s not found" % account_id)
             if six.text_type(exc).endswith("no_bucket"):
                 raise NotFound("Bucket %s not found" % bucket_name)
-            else:
-                raise
+            raise
 
     @catch_service_errors
     def refresh_account(self, account_id, **kwargs):
