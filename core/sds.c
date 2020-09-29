@@ -1138,7 +1138,7 @@ oio_sds_download (struct oio_sds_s *sds, struct oio_sds_dl_src_s *dl,
 {
 	if (!sds || !dl || !snk || !dl->url)
 		return (struct oio_error_s*) BADREQ("Missing argument");
-	oio_ext_set_reqid (sds->session_id);
+	oio_ext_set_prefixed_random_reqid("DL-");
 	oio_ext_set_admin (sds->admin);
 
 	snk->out_size = 0;
@@ -1261,7 +1261,7 @@ oio_sds_upload_init (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst)
 			return NULL;
 	}
 
-	oio_ext_set_reqid (sds->session_id);
+	oio_ext_set_prefixed_random_reqid("UL-");
 	oio_ext_set_admin (sds->admin);
 
 	struct oio_sds_ul_s *ul = g_malloc0 (sizeof(*ul));
@@ -2287,7 +2287,7 @@ oio_sds_list (struct oio_sds_s *sds, struct oio_sds_list_param_s *param,
 		return (struct oio_error_s*) BADREQ("Missing argument");
 	if (!oio_url_has_fq_container (param->url))
 		return (struct oio_error_s*) BADREQ("Partial URI");
-	oio_ext_set_reqid (sds->session_id);
+	oio_ext_set_prefixed_random_reqid("LST-");
 	oio_ext_set_admin (sds->admin);
 
 	GRID_DEBUG("LIST prefix %s marker %s end %s max %"G_GSIZE_FORMAT,
@@ -2421,7 +2421,7 @@ oio_sds_truncate (struct oio_sds_s *sds, struct oio_url_s *url, size_t size)
 {
 	if (!sds || !url)
 		return (struct oio_error_s*) BADREQ("Missing argument");
-	oio_ext_set_reqid (sds->session_id);
+	oio_ext_set_prefixed_random_reqid("TRC-");
 
 	GError *err;
 	CURL_DO(sds, H, err = oio_proxy_call_content_truncate(H, url, size));
@@ -2433,7 +2433,7 @@ oio_sds_drain(struct oio_sds_s *sds, struct oio_url_s *url)
 {
 	if (!sds || !url)
 		return (struct oio_error_s*) BADREQ("Missing argument");
-	oio_ext_set_reqid(sds->session_id);
+	oio_ext_set_prefixed_random_reqid("DRAIN-");
 
 	GError *err;
 	CURL_DO(sds, H, err = oio_proxy_call_content_drain(H, url));
@@ -2445,7 +2445,7 @@ oio_sds_delete (struct oio_sds_s *sds, struct oio_url_s *url)
 {
 	if (!sds || !url)
 		return (struct oio_error_s*) BADREQ("Missing argument");
-	oio_ext_set_reqid (sds->session_id);
+	oio_ext_set_prefixed_random_reqid("DEL-");
 	oio_ext_set_admin (sds->admin);
 
 	GError *err;
@@ -2458,7 +2458,7 @@ oio_sds_delete_container (struct oio_sds_s *sds, struct oio_url_s *url)
 {
 	if (!sds || !url)
 		return (struct oio_error_s*) BADREQ("Missing argument");
-	oio_ext_set_reqid (sds->session_id);
+	oio_ext_set_prefixed_random_reqid("DEL-");
 	oio_ext_set_admin (sds->admin);
 
 	GError *err;
@@ -2475,7 +2475,7 @@ oio_sds_show_content (struct oio_sds_s *sds, struct oio_url_s *url,
 {
 	if (!sds || !url)
 		return (struct oio_error_s*) BADREQ("Missing argument");
-	oio_ext_set_reqid (sds->session_id);
+	oio_ext_set_prefixed_random_reqid("SHOW-");
 	oio_ext_set_admin (sds->admin);
 
 	GError *err = NULL;
@@ -2521,7 +2521,7 @@ oio_sds_has (struct oio_sds_s *sds, struct oio_url_s *url, int *phas)
 {
 	if (!sds || !url || !phas)
 		return (struct oio_error_s*) BADREQ("Missing argument");
-	oio_ext_set_reqid (sds->session_id);
+	oio_ext_set_prefixed_random_reqid("HAS-");
 	oio_ext_set_admin (sds->admin);
 	GError *err;
 	CURL_DO(sds, H, err = oio_proxy_call_content_show (H, url, NULL, NULL));
@@ -2538,7 +2538,7 @@ _oio_sds_get_properties(struct oio_sds_s *sds, struct oio_url_s *url,
 {
 	if (!sds || !url)
 		return (struct oio_error_s*) BADREQ("Missing argument");
-	oio_ext_set_reqid (sds->session_id);
+	oio_ext_set_prefixed_random_reqid("PROPS-");
 	oio_ext_set_admin (sds->admin);
 
 	GString *value = NULL;
@@ -2577,7 +2577,7 @@ oio_sds_set_container_properties (struct oio_sds_s *sds, struct oio_url_s *url,
 {
 	if (!sds || !url || !values)
 		return (struct oio_error_s*) BADREQ("Missing argument");
-	oio_ext_set_reqid (sds->session_id);
+	oio_ext_set_prefixed_random_reqid("PROPS-");
 	oio_ext_set_admin (sds->admin);
 
 	GError *err;
@@ -2599,7 +2599,7 @@ oio_sds_set_content_properties (struct oio_sds_s *sds, struct oio_url_s *url,
 {
 	if (!sds || !url || !values)
 		return (struct oio_error_s*) BADREQ("Missing argument");
-	oio_ext_set_reqid (sds->session_id);
+	oio_ext_set_prefixed_random_reqid("SET-");
 	oio_ext_set_admin (sds->admin);
 
 	GError *err;
