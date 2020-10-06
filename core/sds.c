@@ -39,7 +39,6 @@ License along with this library.
 
 struct oio_sds_s
 {
-	gchar *session_id;
 	gchar *ns;
 	gchar *proxy;
 	gchar *ecd;  // Erasure Coding Daemon
@@ -478,7 +477,6 @@ oio_sds_init (struct oio_sds_s **out, const char *ns)
 	EXTRA_ASSERT (out != NULL);
 	EXTRA_ASSERT (ns != NULL);
 	*out = g_slice_new0 (struct oio_sds_s);
-	(*out)->session_id = g_strdup(oio_ext_get_reqid());
 	(*out)->ns = g_strdup (ns);
 	(*out)->proxy = oio_cfg_get_proxy_containers (ns);
 	(*out)->ecd = oio_cfg_get_ecd(ns);
@@ -495,7 +493,6 @@ void
 oio_sds_free (struct oio_sds_s *sds)
 {
 	if (!sds) return;
-	oio_str_clean (&sds->session_id);
 	oio_str_clean (&sds->ns);
 	oio_str_clean (&sds->proxy);
 	oio_str_clean(&sds->ecd);
