@@ -702,7 +702,8 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(
             self.backend.conn.hget(bkey, 'missing_chunks'), '4')
 
-        self.backend.refresh_bucket(bucket)
+        # force pagination
+        self.backend.refresh_bucket(bucket, batch_size=6)
         self.assertEqual(self.backend.conn.hget(account_key, 'bytes'),
                          str(total_bytes))
         self.assertEqual(self.backend.conn.hget(account_key, 'objects'),

@@ -120,6 +120,7 @@ class AccountBackend(RedisConnection):
         local lkey = KEYS[4]; -- key to the bucket lock
         local bucket_name = ARGV[1];
         local mtime = ARGV[2];
+        local batch_size = ARGV[3];
 
         -- Check if the bucket exists.
         local account_id = redis.call('HGET', bkey, 'account');
@@ -134,8 +135,6 @@ class AccountBackend(RedisConnection):
         local total_bytes = 0;
         local total_damaged_objects = 0;
         local total_missing_chunks = 0;
-
-        local batch_size = 10000;
 
         local marker = redis.call('HGET', lkey, 'marker');
 
@@ -988,6 +987,7 @@ class AccountBackend(RedisConnection):
         of all shards (containers).
         """
         lkey = self.blockkey(bucket_name)
+        batch_size = kwargs.get("batch_size", 10000)
         try:
             ctime = Timestamp().normal
             self.script_get_lock_bucket(keys=[lkey], args=[ctime])
@@ -1003,7 +1003,7 @@ class AccountBackend(RedisConnection):
 
         try:
             while True:
-                args = [bucket_name, Timestamp().normal]
+                args = [bucket_name, Timestamp().normal, batch_size]
                 res = self.script_refresh_bucket(keys=keys, args=args)
                 if res[0]:
                     break
