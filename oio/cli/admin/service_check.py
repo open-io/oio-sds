@@ -296,15 +296,17 @@ class RawxCheck(MultipleServicesCommandMixin, ItemCheckCommand):
         return 'value'
 
     def _format_results(self, checker):
-        for res in checker.run():
-            if res.target.type == 'chunk':
-                if not res.errors:
+        for target in checker.run():
+            if target.type == 'chunk':
+                if not target.has_errors:
                     status = 'OK'
+                    msg = None
                 else:
                     status = 'error'
                     self.success = False
-                yield (repr(res.target)[len('chunk='):],
-                       status, res.errors_to_str())
+                    msg = target.latest_error_result().errors_to_str()
+                yield (repr(target)[len('chunk='):],
+                       status, msg)
 
     def get_parser(self, prog_name):
         parser = super(RawxCheck, self).get_parser(prog_name)
