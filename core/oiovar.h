@@ -111,6 +111,8 @@ gboolean oio_var_value_with_files(const char *ns, gboolean sys, GSList *files);
  * of them.
  */
 void oio_var_list_all(void (*hook) (const char *k, const char *v));
+void oio_var_list_all_ext(void (*hook) (const char *k, const char *v, void *u),
+		void *udata);
 
 /**
  * Wraps oio_var_list_all() to build a simple JSON object, where each key
