@@ -30,6 +30,7 @@ fold() {
 
 fold SDK ./tools/oio-build-sdk.sh ${PWD}
 fold Release ./tools/oio-build-release.sh ${PWD}
+fold Warnings ./tools/oio-build-with-warnings.sh ${PWD}
 fold Copyright ./tools/oio-check-copyright.sh ${PWD}
 fold Virtualenv python ./setup.py develop
 fold Variables tox -e variables

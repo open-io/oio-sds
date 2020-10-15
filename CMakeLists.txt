@@ -135,6 +135,10 @@ if (STACK_PROTECTOR)
 	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fstack-protector-all")
 endif()
 
+if (EXTRA_WARNINGS)
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} --warn-trampolines -Wno-error=trampolines")
+endif()
+
 if (SOCKET_OPTIMIZED)
 	add_definitions(-D_GNU_SOURCE)
 	add_definitions(-DHAVE_SOCKET3)
