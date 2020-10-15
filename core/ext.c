@@ -503,10 +503,7 @@ void _constructor_idle_cache (void);
 void _destructor_idle_cache (void);
 
 static void _free_majmin_idle_list (GSList *l) {
-	void _clean_idle (struct maj_min_idle_s *p) {
-		g_free (p);
-	}
-	g_slist_free_full (l, (GDestroyNotify)_clean_idle);
+	g_slist_free_full (l, (GDestroyNotify)g_free);
 }
 
 void __attribute__ ((constructor)) _constructor_idle_cache (void) {

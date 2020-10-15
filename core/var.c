@@ -438,19 +438,30 @@ _warn_deprecated(const char *name, const char *alias)
 			alias, name);
 }
 
+struct _cache_ns_s {
+	const char *ns;
+	struct oio_cfg_handle_s *cfg;
+};
+
+static gboolean
+_value_all_aliases_runner(gchar *alias, gchar *name, gpointer i)
+{
+	struct _cache_ns_s *_cache_ns2 = i;
+	gchar *value = oio_cfg_handle_get(_cache_ns2->cfg, _cache_ns2->ns, alias);
+	if (value) {
+		(void) _LOCKED_value_named_variable(name, value, FALSE);
+		_warn_deprecated(name, alias);
+		g_free(value);
+	}
+	return FALSE;
+}
+
 static void
 _LOCKED_value_all_aliases(struct oio_cfg_handle_s *cfg, const char *ns)
 {
-	gboolean _runner(gchar *alias, gchar *name, gpointer i UNUSED) {
-		gchar *value = oio_cfg_handle_get(cfg, ns, alias);
-		if (value) {
-			(void) _LOCKED_value_named_variable(name, value, FALSE);
-			_warn_deprecated(name, alias);
-			g_free(value);
-		}
-		return FALSE;
-	}
-	g_tree_foreach(var_aliases, (GTraverseFunc)_runner, NULL);
+	struct _cache_ns_s _cache_ns = {ns, cfg};
+	g_tree_foreach(var_aliases,
+			(GTraverseFunc)_value_all_aliases_runner, &_cache_ns);
 }
 
 static void
@@ -518,7 +529,8 @@ oio_var_value_one(const char *name, const char *value)
 }
 
 void
-oio_var_list_all(void (*hook) (const char *k, const char *v))
+oio_var_list_all_ext(void (*hook) (const char *k, const char *v, void *u),
+		void *udata)
 {
 	gint64 i64;
 
@@ -564,9 +576,31 @@ oio_var_list_all(void (*hook) (const char *k, const char *v))
 				g_snprintf(tmp, sizeof(tmp), "%s", rec->ptr.str);
 				break;
 		}
-		(*hook)(rec->name, tmp);
+		(*hook)(rec->name, tmp, udata);
 	}
 	g_mutex_unlock(&var_lock);
+}
+
+static void
+_call_2_args_hook(const char *k, const char *v, void *udata)
+{
+	void (*hook) (const char *k, const char *v) = udata;
+	hook(k, v);
+}
+
+void
+oio_var_list_all(void (*hook) (const char *k, const char *v))
+{
+	oio_var_list_all_ext(_call_2_args_hook, hook);
+}
+
+static void
+_append_kv_comma(const char *k, const char *v, void *u)
+{
+	GString *gstr = u;
+	if (gstr->len > 1)
+		g_string_append_c(gstr, ',');
+	oio_str_gstring_append_json_pair(gstr, k, v);
 }
 
 GString*
@@ -575,13 +609,8 @@ oio_var_list_as_json(void)
 	EXTRA_ASSERT(var_init != 0);
 
 	GString *gstr = g_string_sized_new (4096);
-	void _hook (const char *k, const char *v) {
-		if (gstr->len > 1)
-			g_string_append_c(gstr, ',');
-		oio_str_gstring_append_json_pair(gstr, k, v);
-	}
 	g_string_append_c (gstr, '{');
-	oio_var_list_all(_hook);
+	oio_var_list_all_ext(_append_kv_comma, gstr);
 	g_string_append_c (gstr, '}');
 
 	return gstr;
