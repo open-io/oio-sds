@@ -185,6 +185,8 @@ _cached_json_to_urlv(const char * srvtype, GBytes *json, gchar ***result)
 			err = service_info_load_json_object(obj, &si, TRUE);
 			if (err != NULL)
 				goto label_error;
+			if (!oio_str_is_set(si->type))
+				g_strlcpy(si->type, srvtype, sizeof(si->type));
 			g_ptr_array_add(tmp, metautils_service_to_m1url(si, 1));
 			service_info_clean(si);
 		}
