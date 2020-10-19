@@ -37,6 +37,8 @@ class CommandFailed(Exception):
 
 def execute(cmd, stdin=None, env=None, expected_returncode=0):
     """Executes command."""
+    if isinstance(expected_returncode, int):
+        expected_returncode = (expected_returncode, )
     cmdlist = shlex.split(cmd)
     result = ''
     result_err = ''
@@ -52,7 +54,7 @@ def execute(cmd, stdin=None, env=None, expected_returncode=0):
         stdin = stdin.encode('utf-8')
     result, result_err = proc.communicate(stdin)
     result = result.decode('utf-8')
-    if proc.returncode != expected_returncode:
+    if proc.returncode not in expected_returncode:
         raise CommandFailed(proc.returncode, cmd, result, result_err)
     return result
 

@@ -132,12 +132,6 @@ func main() {
 	checkNS(namespace)
 	checkURL(rawxURL)
 
-	// No service ID specified, using the service address instead
-	if rawxID == "" {
-		rawxID = rawxURL
-		LogInfo("No service ID, using ADDR %s", rawxURL)
-	}
-
 	// Init the actual chunk storage
 	if err := chunkrepo.sub.init(opts["basedir"]); err != nil {
 		LogFatal("Invalid directories: %v", err)
@@ -286,9 +280,9 @@ func main() {
 	installSigHandlers(&tlsSrv)
 
 	if !*servicingPtr {
-		id := rawxID
+		id := rawx.id
 		if id == "" {
-			id = rawxURL
+			id = rawx.url
 		}
 		if err := chunkrepo.lock(namespace, id); err != nil {
 			LogFatal("Volume lock error: %v", err.Error())
