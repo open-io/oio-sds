@@ -217,26 +217,41 @@ test_down_peer(void)
 		gridd_client_free(client);
 	}
 
-	gchar *peerv[] = {NULL, NULL};
+	down_hosts_t new_down = NULL;
+	guint nb_down = 0;
 
 	/* First attempt that must succeed, no filtering has been set */
 	oio_var_value_one("client.down_cache.avoid", "false");
-	gridd_client_learn_peers_down(NULL);
-	gridd_client_learn_peers_down((const char * const *) peerv);
+	gridd_client_replace_global_down_hosts(&new_down, nb_down);
 	test_ok();
 
 	/* Second batch of attempts that must succeed, filtering set but no URL */
 	oio_var_value_one("client.down_cache.avoid", "true");
-	gridd_client_learn_peers_down(NULL);
 	test_ok();
-	gridd_client_learn_peers_down((const char * const *) peerv);
-	test_ok();
+
+	char json_srv[STRLEN_ADDRINFO + 1024];
+	g_snprintf(json_srv, sizeof(json_srv), "{\
+				\"addr\": \"%s\",\
+				\"score\": 78,\
+				\"tags\": {\
+					\"tag.loc\": \"abcd.hem.oio.vol8\",\
+					\"tag.slots\": \"rawx,rawx-even\",\
+					\"tag.up\": false,\
+					\"tag.vol\": \"/home/aducroqu/.oio/sds/data/NS-rawx-8\"\
+				}\
+			}", url_down);
+	struct service_info_s *si = NULL;
+	err = service_info_load_json(json_srv, &si, TRUE);
+	g_assert_no_error(err);
+	GSList *srv = g_slist_append(NULL, si);
+	nb_down += gridd_client_update_down_hosts(&new_down, srv);
+	g_slist_free(srv);
+	service_info_clean(si);
 
 	/* second attempt that must succeed, a peer down has been announced but
 	 * the feature is not activated. */
 	oio_var_value_one("client.down_cache.avoid", "false");
-	peerv[0] = url_down;
-	gridd_client_learn_peers_down((const char * const *) peerv);
+	gridd_client_replace_global_down_hosts(&new_down, nb_down);
 	test_ok();
 
 	/* Now we turn the feature on and the test must fail */

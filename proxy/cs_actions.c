@@ -185,6 +185,8 @@ _cached_json_to_urlv(const char * srvtype, GBytes *json, gchar ***result)
 			err = service_info_load_json_object(obj, &si, TRUE);
 			if (err != NULL)
 				goto label_error;
+			if (!oio_str_is_set(si->type))
+				g_strlcpy(si->type, srvtype, sizeof(si->type));
 			g_ptr_array_add(tmp, metautils_service_to_m1url(si, 1));
 			service_info_clean(si);
 		}
@@ -335,7 +337,7 @@ _registration_batch (enum reg_op_e op, GSList *services)
 		if (!service_is_known (k)) {
 			service_learn (k);
 			service_tag_set_value_boolean (service_info_ensure_tag (
-						si->tags, NAME_TAGNAME_RAWX_FIRST), TRUE);
+						si->tags, NAME_TAGNAME_FIRST), TRUE);
 		}
 
 		if (ttl_expire_local_services > 0 && op != REGOP_UNLOCK) {
@@ -617,6 +619,9 @@ action_conscience_list (struct req_args_s *args)
 		g_prefix_error (&err, "Conscience error: ");
 		return _reply_common_error (args, err);
 	}
+
+	// Refresh down hosts with current value
+	gridd_client_update_global_down_hosts(sl);
 
 	args->rp->access_tail ("%s=%u", type, g_slist_length(sl));
 	return _reply_success_json (args, _cs_pack_and_free_srvinfo_list (sl));

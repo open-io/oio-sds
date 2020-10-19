@@ -1106,50 +1106,9 @@ _task_reload_nsinfo(gpointer p)
 	}
 }
 
-static gboolean
-_srv_is_down(struct service_info_s *si)
-{
-	EXTRA_ASSERT(si != NULL);
-
-	if (!si->tags)
-		return FALSE;
-
-	struct service_tag_s *tag =
-		service_info_get_tag(si->tags, NAME_TAGNAME_RAWX_UP);
-	if (!tag)
-		return FALSE;
-
-	gboolean up = TRUE;
-	service_tag_get_value_boolean(tag, &up, NULL);
-	return !up;
-}
-
-static gchar *
-_srv_url (struct service_info_s *si)
-{
-	EXTRA_ASSERT(si != NULL);
-	gchar tmp[STRLEN_ADDRINFO];
-	grid_addrinfo_to_string(&si->addr, tmp, sizeof(tmp));
-	return g_strdup(tmp);
-}
-
-static gchar **
-_filter_down_hosts(GSList *l)
-{
-	GPtrArray *tmp = g_ptr_array_new();
-	for (; l ;l=l->next) {
-		if (_srv_is_down(l->data))
-			g_ptr_array_add(tmp, _srv_url(l->data));
-	}
-	g_ptr_array_add(tmp, NULL);
-	return (gchar**) g_ptr_array_free(tmp, FALSE);
-}
-
 static void
 _task_reload_peers(gpointer p)
 {
-	VARIABLE_PERIOD_DECLARE();
-
 	if (!grid_main_is_running ())
 		return;
 
@@ -1162,18 +1121,10 @@ _task_reload_peers(gpointer p)
 				nsname, srvtype, err->code, err->message);
 		g_clear_error(&err);
 	} else {
-		gchar **down = _filter_down_hosts(allsrv);
-		gridd_client_learn_peers_down((const char * const *)down);
-		if (down && *down) {
-			const gsize len = g_strv_length(down);
-			if (VARIABLE_PERIOD_SKIP(180)) {
-				GRID_DEBUG("Loaded %" G_GSIZE_FORMAT " down %s", len, srvtype);
-			} else {
-				/* once per 15 minutes */
-				GRID_NOTICE("Loaded %" G_GSIZE_FORMAT " down %s", len, srvtype);
-			}
-		}
-		g_strfreev(down);
+		down_hosts_t down = NULL;
+		guint nb_down = gridd_client_update_down_hosts(&down, allsrv);
+		gridd_client_replace_global_down_hosts(&down, nb_down);
+		gridd_client_clear_down_hosts(&down);
 	}
 
 	g_slist_free_full(allsrv, (GDestroyNotify)service_info_clean);

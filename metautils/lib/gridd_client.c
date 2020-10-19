@@ -115,7 +115,6 @@ _is_peer_down (const char *url)
 	g_rw_lock_reader_lock(&lock_down);
 	gpointer p = g_tree_lookup(tree_down, url);
 	g_rw_lock_reader_unlock(&lock_down);
-
 	return p != NULL;
 }
 
@@ -804,22 +803,109 @@ gridd_client_fail(struct gridd_client_s *client, GError *why)
 
 /* ------------------------------------------------------------------------- */
 
-void
-gridd_client_learn_peers_down(const char * const * peers)
+static gchar*
+_srv_addr(struct service_info_s *si)
 {
-	GTree *new_down = NULL, *old_down = NULL;
+	EXTRA_ASSERT(si != NULL);
+	gchar addr[STRLEN_ADDRINFO];
+	grid_addrinfo_to_string(&si->addr, addr, sizeof(addr));
+	return g_strdup(addr);
+}
 
-	new_down = g_tree_new_full(metautils_strcmp3, NULL, g_free, NULL);
-	for (const char * const * ppeer = peers; peers && *ppeer ;++ppeer)
-		g_tree_replace(new_down, g_strdup(*ppeer), (void*)0xDEADBEAF);
+static gboolean
+_srv_is_down(struct service_info_s *si)
+{
+	EXTRA_ASSERT(si != NULL);
+
+	// Legacy: consider service up if tag is missing
+	if (!si->tags)
+		return FALSE;
+
+	// Legacy: consider service up if tag is missing
+	struct service_tag_s *tag =
+		service_info_get_tag(si->tags, NAME_TAGNAME_UP);
+	if (!tag)
+		return FALSE;
+
+	gboolean up = TRUE;
+	service_tag_get_value_boolean(tag, &up, NULL);
+	return !up;
+}
+
+guint
+gridd_client_update_down_hosts(down_hosts_t *pdown, GSList *srv)
+{
+	if (!*pdown)
+		*pdown = g_tree_new_full(metautils_strcmp3, NULL, g_free, NULL);
+
+	guint nb_down = 0;
+	gpointer value = NULL;
+	for (; srv; srv=srv->next) {
+		value = NULL;
+		if (_srv_is_down(srv->data)) {
+			value = (void *)0xDEADBEAF;
+			nb_down++;
+		}
+		gchar* addr = _srv_addr(srv->data);
+		g_tree_replace(*pdown, addr, value);
+	}
+	return nb_down;
+}
+
+void
+gridd_client_replace_global_down_hosts(down_hosts_t *pnew_down, guint nb_down)
+{
+	VARIABLE_PERIOD_DECLARE();
+	GTree *old_down = NULL;
+	if (!*pnew_down)
+		*pnew_down = g_tree_new_full(metautils_strcmp3, NULL, g_free, NULL);
 
 	g_rw_lock_writer_lock(&lock_down);
 	old_down = tree_down;
-	tree_down = new_down;
-	new_down = NULL;
+	tree_down = *pnew_down;
+	*pnew_down = NULL;
 	g_rw_lock_writer_unlock(&lock_down);
 
 	g_tree_destroy(old_down);
+
+	if (nb_down) {
+		if (VARIABLE_PERIOD_SKIP(180)) {
+			GRID_DEBUG("Loaded %d down hosts", nb_down);
+		} else {
+			/* once per 15 minutes */
+			GRID_NOTICE("Loaded %d down hosts", nb_down);
+		}
+	}
+}
+
+void
+gridd_client_update_global_down_hosts(GSList *srv)
+{
+	VARIABLE_PERIOD_DECLARE();
+	guint nb_down = 0;
+
+	g_rw_lock_writer_lock(&lock_down);
+	nb_down = gridd_client_update_down_hosts(&tree_down, srv);
+	g_rw_lock_writer_unlock(&lock_down);
+
+	if (nb_down) {
+		if (VARIABLE_PERIOD_SKIP(180)) {
+			GRID_DEBUG("Loaded %d down hosts (partial update)", nb_down);
+		} else {
+			/* once per 15 minutes */
+			GRID_NOTICE("Loaded %d down hosts (partial update)", nb_down);
+		}
+	}
+}
+
+void
+gridd_client_clear_down_hosts(down_hosts_t *pdown)
+{
+	if (!*pdown)
+		return;
+
+	g_tree_destroy(*pdown);
+	*pdown = NULL;
 }
 
 struct gridd_client_s *
