@@ -3225,3 +3225,38 @@ m2db_list_shard_ranges(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp,
 	g_string_free(clause, TRUE);
 	return err;
 }
+
+GError*
+m2db_get_shard_range(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
+		struct bean_SHARD_RANGE_s **pshard_range)
+{
+	const gchar *path = oio_url_get(url, OIOURL_PATH);
+	/* sanity checks */
+	if (!path) {
+		return BADREQ("Missing path");
+	}
+
+	/* query */
+	GError *err = NULL;
+	const gchar *sql = "(lower == '' OR lower < ?) "
+			"AND (upper == '' OR upper >= ?) ORDER BY lower ASC LIMIT 1";
+	GVariant *params[3] = {
+		g_variant_new_string(path),
+		g_variant_new_string(path),
+		NULL
+	};
+
+	GPtrArray *beans = g_ptr_array_new();
+	err = SHARD_RANGE_load(sq3->db, sql, params, _bean_buffer_cb, beans);
+	metautils_gvariant_unrefv(params);
+	if (!err) {
+		if (beans->len <= 0) {
+			err = SYSERR("No shard range found");
+		} else {
+			*pshard_range = beans->pdata[0];
+			beans->pdata[0] = NULL;
+		}
+	}
+	_bean_cleanv2(beans);
+	return err;
+}

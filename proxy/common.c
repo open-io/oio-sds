@@ -1,6 +1,7 @@
 /*
 OpenIO SDS proxy
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -649,6 +650,7 @@ void client_clean (struct client_ctx_s *ctx) {
 		metautils_gba_cleanv (ctx->bodyv);
 		ctx->bodyv = NULL;
 	}
+	ctx->count = 0;
 }
 
 GError * KV_read_properties (struct json_object *j, gchar ***out,

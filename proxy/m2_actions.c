@@ -62,9 +62,28 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 		g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_PERFDATA) != NULL;
 	oio_ext_enable_perfdata(req_perfdata_enabled);
 
-	GError *err = gridd_request_replicated_with_retry(args, &ctx, pack);
+	GError *err = NULL;
+	struct oio_url_s *original_url = args->url;
+	struct oio_url_s *redirect_url = NULL;
+redirect_shard:
+	err = gridd_request_replicated_with_retry(args, &ctx, pack);
 
 	if (err) {
+		if (err->code == CODE_REDIRECT_SHARD) {
+			if (!redirect_url) {
+				redirect_url = oio_url_dup(args->url);
+				oio_url_unset(redirect_url, OIOURL_ACCOUNT);
+				oio_url_unset(redirect_url, OIOURL_USER);
+				oio_url_set(redirect_url, OIOURL_HEXID, err->message);
+				args->url = redirect_url;
+				client_clean(&ctx);
+				client_init(&ctx, args, NAME_SRVTYPE_META2, 1);
+				g_clear_error(&err);
+				goto redirect_shard;
+			}
+			g_error_free(err);
+			err = SYSERR("Already redirect to shard");
+		}
 		GRID_DEBUG("M2V2 call failed: %d %s", err->code, err->message);
 	} else if (out_list) {
 		EXTRA_ASSERT(ctx.bodyv != NULL);
@@ -89,7 +108,9 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 	}
 
 	oio_ext_enable_perfdata(FALSE);
-	client_clean (&ctx);
+	args->url = original_url;
+	oio_url_clean(redirect_url);
+	client_clean(&ctx);
 	return err;
 }
 

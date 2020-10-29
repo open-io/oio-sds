@@ -302,4 +302,7 @@ GError* m2db_replace_shard_ranges(struct sqlx_sqlite3_s *sq3,
 GError* m2db_list_shard_ranges(struct sqlx_sqlite3_s *sq3,
 		struct list_params_s *lp, m2_onbean_cb cb, gpointer u);
 
+GError* m2db_get_shard_range(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
+		struct bean_SHARD_RANGE_s **pshard_range);
+
 #endif /*OIO_SDS__meta2v2__meta2_utils_h*/
