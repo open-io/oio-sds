@@ -1067,6 +1067,10 @@ configure_request_handlers (void)
 	SET("/$NS/container/raw_update/#POST", action_container_raw_update);
 	SET("/$NS/container/raw_delete/#POST", action_container_raw_delete);
 
+	// Container Sharding
+	SET("/$NS/container/sharding/replace/#POST", action_container_sharding_replace);
+	SET("/$NS/container/sharding/show/#GET", action_container_sharding_show);
+
 	// Content
 	SET("/$NS/content/create/#POST", action_content_put);
 	SET("/$NS/content/drain/#POST", action_content_drain);

@@ -522,3 +522,45 @@ meta2_filter_action_touch_container(struct gridd_filter_ctx_s *ctx,
 	meta2_filter_ctx_set_error(ctx, err);
 	return FILTER_KO;
 }
+
+/* Container Sharding ------------------------------------------------------- */
+
+int
+meta2_filter_action_replace_container_sharding(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	(void) reply;
+
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	gchar *shards = meta2_filter_ctx_get_input_udata(ctx);
+
+	gchar *out = NULL;
+	GError *err = meta2_backend_replace_container_sharding(m2b, url,
+			shards, &out);
+	if (!err) {
+		reply->add_body(metautils_gba_from_string(out));
+		return FILTER_OK;
+	}
+	meta2_filter_ctx_set_error(ctx, err);
+	return FILTER_KO;
+}
+
+int
+meta2_filter_action_show_container_sharding(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	(void) reply;
+
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+
+	gchar *out = NULL;
+	GError *err = meta2_backend_show_container_sharding(m2b, url, &out);
+	if (!err) {
+		reply->add_body(metautils_gba_from_string(out));
+		return FILTER_OK;
+	}
+	meta2_filter_ctx_set_error(ctx, err);
+	return FILTER_KO;
+}

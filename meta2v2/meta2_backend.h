@@ -230,4 +230,15 @@ GError* meta2_backend_get_conditionned_spare_chunks_v2(
 		struct meta2_backend_s *m2b, struct oio_url_s *url, const gchar *stgpol,
 		GSList *notin, GSList *broken, GSList **result);
 
+/* Container Sharding ------------------------------------------------------- */
+
+/** Replace shards container in root container */
+GError* meta2_backend_replace_container_sharding(
+		struct meta2_backend_s *m2b, struct oio_url_s *url, gchar *shards_str,
+		gchar **out);
+
+/** Get shards container in root container */
+GError* meta2_backend_show_container_sharding(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, gchar **out);
+
 #endif /*OIO_SDS__meta2v2__meta2_backend_h*/

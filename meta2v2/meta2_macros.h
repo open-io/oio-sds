@@ -52,6 +52,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define M2V2_ADMIN_MISSING_CHUNKS M2V2_ADMIN_PREFIX_SYS "chunks.missing"
 # endif
 
+# ifndef M2V2_ADMIN_SHARDING_SHARD
+# define M2V2_ADMIN_SHARDING_SHARD M2V2_ADMIN_PREFIX_SYS "sharding.shard"
+# endif
+
+# ifndef M2V2_ADMIN_SHARDING_SHARDS
+# define M2V2_ADMIN_SHARDING_SHARDS "sharding.shards"
+# endif
+
 # ifndef M2V2_ADMIN_CTIME
 # define M2V2_ADMIN_CTIME M2V2_ADMIN_PREFIX_SYS "ctime"
 # endif
@@ -86,33 +94,35 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 /* -------------------------------------------------------------------------- */
 
-# define NAME_MSGNAME_M2V2_CREATE          "M2_CREATE"
-# define NAME_MSGNAME_M2V2_DESTROY         "M2_DESTROY"
-# define NAME_MSGNAME_M2V2_HAS             "M2_HAS"
-# define NAME_MSGNAME_M2V2_FLUSH           "M2_FLUSH"
-# define NAME_MSGNAME_M2V2_PURGE_CONTENT   "M2_CPURGE"
-# define NAME_MSGNAME_M2V2_PURGE_CONTAINER "M2_BPURGE"
-# define NAME_MSGNAME_M2V2_DEDUP           "M2_DEDUP"
-# define NAME_MSGNAME_M2V2_PUT             "M2_PUT"
-# define NAME_MSGNAME_M2V2_BEANS           "M2_PREP"
-# define NAME_MSGNAME_M2V2_APPEND          "M2_APPEND"
-# define NAME_MSGNAME_M2V2_GET             "M2_GET"
-# define NAME_MSGNAME_M2V2_DRAIN           "M2_DRAIN"
-# define NAME_MSGNAME_M2V2_DEL             "M2_DEL"
-# define NAME_MSGNAME_M2V2_TRUNC           "M2_TRUNC"
-# define NAME_MSGNAME_M2V2_LIST            "M2_LST"
-# define NAME_MSGNAME_M2V2_LCHUNK          "M2_LCHUNK"
-# define NAME_MSGNAME_M2V2_LHID            "M2_LHID"
-# define NAME_MSGNAME_M2V2_LHHASH          "M2_LHHASH"
-# define NAME_MSGNAME_M2V2_ISEMPTY         "M2_EMPTY"
-# define NAME_MSGNAME_M2V2_PROP_SET        "M2_PSET"
-# define NAME_MSGNAME_M2V2_PROP_GET        "M2_PGET"
-# define NAME_MSGNAME_M2V2_PROP_DEL        "M2_PDEL"
-# define NAME_MSGNAME_M2V2_RAW_DEL         "M2_RAWDEL"
-# define NAME_MSGNAME_M2V2_RAW_ADD         "M2_RAWADD"
-# define NAME_MSGNAME_M2V2_RAW_SUBST       "M2_RAWSUBST"
-# define NAME_MSGNAME_M2V1_TOUCH_CONTENT   "M2_CTOUCH"
-# define NAME_MSGNAME_M2V1_TOUCH_CONTAINER "M2_BTOUCH"
+# define NAME_MSGNAME_M2V2_CREATE                      "M2_CREATE"
+# define NAME_MSGNAME_M2V2_DESTROY                     "M2_DESTROY"
+# define NAME_MSGNAME_M2V2_HAS                         "M2_HAS"
+# define NAME_MSGNAME_M2V2_FLUSH                       "M2_FLUSH"
+# define NAME_MSGNAME_M2V2_PURGE_CONTENT               "M2_CPURGE"
+# define NAME_MSGNAME_M2V2_PURGE_CONTAINER             "M2_BPURGE"
+# define NAME_MSGNAME_M2V2_DEDUP                       "M2_DEDUP"
+# define NAME_MSGNAME_M2V2_PUT                         "M2_PUT"
+# define NAME_MSGNAME_M2V2_BEANS                       "M2_PREP"
+# define NAME_MSGNAME_M2V2_APPEND                      "M2_APPEND"
+# define NAME_MSGNAME_M2V2_GET                         "M2_GET"
+# define NAME_MSGNAME_M2V2_DRAIN                       "M2_DRAIN"
+# define NAME_MSGNAME_M2V2_DEL                         "M2_DEL"
+# define NAME_MSGNAME_M2V2_TRUNC                       "M2_TRUNC"
+# define NAME_MSGNAME_M2V2_LIST                        "M2_LST"
+# define NAME_MSGNAME_M2V2_LCHUNK                      "M2_LCHUNK"
+# define NAME_MSGNAME_M2V2_LHID                        "M2_LHID"
+# define NAME_MSGNAME_M2V2_LHHASH                      "M2_LHHASH"
+# define NAME_MSGNAME_M2V2_ISEMPTY                     "M2_EMPTY"
+# define NAME_MSGNAME_M2V2_PROP_SET                    "M2_PSET"
+# define NAME_MSGNAME_M2V2_PROP_GET                    "M2_PGET"
+# define NAME_MSGNAME_M2V2_PROP_DEL                    "M2_PDEL"
+# define NAME_MSGNAME_M2V2_RAW_DEL                     "M2_RAWDEL"
+# define NAME_MSGNAME_M2V2_RAW_ADD                     "M2_RAWADD"
+# define NAME_MSGNAME_M2V2_RAW_SUBST                   "M2_RAWSUBST"
+# define NAME_MSGNAME_M2V1_TOUCH_CONTENT               "M2_CTOUCH"
+# define NAME_MSGNAME_M2V1_TOUCH_CONTAINER             "M2_BTOUCH"
+# define NAME_MSGNAME_M2V2_REPLACE_CONTAINER_SHARDING  "M2_CSREPL"
+# define NAME_MSGNAME_M2V2_SHOW_CONTAINER_SHARDING     "M2_CSGET"
 
 /* -------------------------------------------------------------------------- */
 

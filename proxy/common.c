@@ -695,7 +695,7 @@ GError * KV_read_usersys_properties (struct json_object *j, gchar ***out) {
 	}
 
 	for (gchar **p = user; *p && *(p + 1); p += 2)
-		oio_str_reuse(p, g_strconcat("user.", *p, NULL));
+		oio_str_reuse(p, g_strconcat(SQLX_ADMIN_PREFIX_USER, *p, NULL));
 	gchar **kv = (gchar **) oio_ext_array_concat((gpointer) user, (gpointer) sys);
 	g_free(user);
 	g_free(sys);

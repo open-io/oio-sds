@@ -205,4 +205,13 @@ GByteArray* m2v2_remote_pack_TOUCHC(
 		struct oio_url_s *url,
 		gint64 deadline);
 
+GByteArray* m2v2_remote_pack_REPLACE_CONTAINER_SHARDING(
+	struct oio_url_s *url,
+	GByteArray *shards,
+	gint64 dl);
+
+GByteArray* m2v2_remote_pack_SHOW_CONTAINER_SHARDING(
+	struct oio_url_s *url,
+	gint64 dl);
+
 #endif /*OIO_SDS__meta2v2__meta2v2_remote_h*/

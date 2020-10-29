@@ -277,4 +277,21 @@ struct bean_PROPERTIES_s *generate_chunk_quality_bean(
 /** Get the version of the first alias bean from the list. */
 gint64 find_alias_version(GSList *bean);
 
+/* --- Container Sharding -------------------------------------------------- */
+
+struct shard_container_s {
+	guint index;
+	gchar *lower;
+	gchar *upper;
+	gchar *cid;
+};
+
+typedef GTree* shards_container_t;
+
+GError* shards_container_decode(const gchar *str, shards_container_t *pshards);
+
+gchar* shards_container_encode(shards_container_t shards);
+
+void shards_container_free(shards_container_t shards);
+
 #endif /*OIO_SDS__meta2v2__meta2_utils_h*/

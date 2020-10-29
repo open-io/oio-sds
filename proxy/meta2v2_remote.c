@@ -483,3 +483,25 @@ m2v2_remote_execute_DESTROY_many(gchar **targets, struct oio_url_s *url, guint32
 	gridd_clients_free(clients);
 	return err;
 }
+
+/* ------------------------------------------------------------------------- */
+
+GByteArray*
+m2v2_remote_pack_REPLACE_CONTAINER_SHARDING(struct oio_url_s *url,
+		GByteArray *shards, gint64 dl)
+{
+	MESSAGE msg = _m2v2_build_request(
+			NAME_MSGNAME_M2V2_REPLACE_CONTAINER_SHARDING,
+			url, NULL, dl);
+	metautils_message_set_BODY(msg, shards->data, shards->len);
+	return message_marshall_gba_and_clean(msg);
+}
+
+GByteArray*
+m2v2_remote_pack_SHOW_CONTAINER_SHARDING(struct oio_url_s *url, gint64 dl)
+{
+	MESSAGE msg = _m2v2_build_request(
+			NAME_MSGNAME_M2V2_SHOW_CONTAINER_SHARDING,
+			url, NULL, dl);
+	return message_marshall_gba_and_clean(msg);
+}

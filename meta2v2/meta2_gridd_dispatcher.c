@@ -521,6 +521,38 @@ static gridd_filter M2V2_FILTERS_touch_container[] =
 
 /* ------------------------------------------------------------------------- */
 
+static gridd_filter M2V2_REPLACE_CONTAINER_SHARDING_FILTERS[] =
+{
+	meta2_filter_extract_header_url,
+	meta2_filter_extract_admin,
+	meta2_filter_extract_user_agent,
+	meta2_filter_fill_subject,
+	meta2_filter_check_url_cid,
+	meta2_filter_check_backend,
+	meta2_filter_check_ns_name,
+	meta2_filter_check_ns_is_master,
+	meta2_filter_extract_body_strings,
+	meta2_filter_action_replace_container_sharding,
+	meta2_filter_reply_success,
+	NULL
+};
+
+static gridd_filter M2V2_SHOW_CONTAINER_SHARDING_FILTERS[] =
+{
+	meta2_filter_extract_header_url,
+	meta2_filter_extract_force_master,
+	meta2_filter_extract_user_agent,
+	meta2_filter_fill_subject,
+	meta2_filter_check_url_cid,
+	meta2_filter_check_backend,
+	meta2_filter_check_ns_name,
+	meta2_filter_action_show_container_sharding,
+	meta2_filter_reply_success,
+	NULL
+};
+
+/* ------------------------------------------------------------------------- */
+
 typedef gboolean (*hook) (struct gridd_reply_ctx_s *, gpointer, gpointer);
 
 const struct gridd_request_descr_s *
@@ -535,6 +567,10 @@ meta2_gridd_get_v2_requests(void)
 		{NAME_MSGNAME_M2V2_ISEMPTY, (hook) meta2_dispatch_all, M2V2_EMPTY_FILTERS},
 		{NAME_MSGNAME_M2V2_PURGE_CONTAINER,   (hook) meta2_dispatch_all, M2V2_PURGE_CONTAINER_FILTERS},
 		{NAME_MSGNAME_M2V2_FLUSH,   (hook) meta2_dispatch_all, M2V2_FLUSH_FILTERS},
+
+		/* container sharding */
+		{NAME_MSGNAME_M2V2_REPLACE_CONTAINER_SHARDING, (hook) meta2_dispatch_all, M2V2_REPLACE_CONTAINER_SHARDING_FILTERS},
+		{NAME_MSGNAME_M2V2_SHOW_CONTAINER_SHARDING,    (hook) meta2_dispatch_all, M2V2_SHOW_CONTAINER_SHARDING_FILTERS},
 
 		/* contents */
 		{NAME_MSGNAME_M2V2_BEANS,   (hook) meta2_dispatch_all, M2V2_BEANS_FILTER},

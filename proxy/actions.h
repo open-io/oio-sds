@@ -90,6 +90,9 @@ enum http_rc_e action_container_raw_insert (struct req_args_s *args);
 enum http_rc_e action_container_raw_update (struct req_args_s *args);
 enum http_rc_e action_container_raw_delete (struct req_args_s *args);
 
+enum http_rc_e action_container_sharding_replace(struct req_args_s *args);
+enum http_rc_e action_container_sharding_show(struct req_args_s *args);
+
 enum http_rc_e action_content_put (struct req_args_s *args);
 enum http_rc_e action_content_drain(struct req_args_s *args);
 enum http_rc_e action_content_delete (struct req_args_s *args);

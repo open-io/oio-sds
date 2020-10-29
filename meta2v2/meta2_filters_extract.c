@@ -156,6 +156,26 @@ meta2_filter_extract_body_beans(struct gridd_filter_ctx_s *ctx,
 }
 
 int
+meta2_filter_extract_body_strings(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply) {
+	gchar *body = NULL;
+
+	TRACE_FILTER();
+
+	/* get the message body */
+	GError *err = metautils_message_extract_body_string(reply->request, &body);
+	if (err) {
+		g_free(body);
+		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_BAD_REQUEST,
+				"Invalid request, Empty / Invalid body"));
+		return FILTER_KO;
+	}
+
+	meta2_filter_ctx_set_input_udata(ctx, body, (GDestroyNotify)g_free);
+	return FILTER_OK;
+}
+
+int
 meta2_filter_extract_header_append(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
