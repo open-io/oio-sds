@@ -218,9 +218,10 @@ m2v2_json_load_single_shard_range(struct json_object *j, gpointer *pbean)
 	SHARD_RANGE_set2_lower(shard_range, json_object_get_string(jlower));
 	SHARD_RANGE_set2_upper(shard_range, json_object_get_string(jupper));
 	SHARD_RANGE_set_cid(shard_range, cid);
-	if (jmetadata)
+	if (jmetadata && json_object_object_length(jmetadata) > 0) {
 		SHARD_RANGE_set2_metadata(shard_range,
 				json_object_get_string(jmetadata));
+	}
 	*pbean = shard_range;
 	shard_range = NULL;
 

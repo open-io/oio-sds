@@ -98,9 +98,13 @@ encode_shard_range(GString *g, gpointer bean)
 	OIO_JSON_append_gba(g, "cid", SHARD_RANGE_get_cid(bean));
 	g_string_append_c(g, ',');
 	GString *metadata = SHARD_RANGE_get_metadata(bean);
+	g_string_append_static(g, "\"metadata\":");
 	if (!metadata || metadata->len == 0)
-		metadata = NULL;
-	OIO_JSON_append_gstr(g, "metadata", metadata);
+		g_string_append_static(g, "null");
+	else {
+		// metadata should be JSON object
+		g_string_append(g, metadata->str);
+	}
 }
 
 void

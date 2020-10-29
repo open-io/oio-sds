@@ -40,6 +40,7 @@ READ_TIMEOUT = 30.0
 TIMEOUT_KEYS = ('connection_timeout', 'read_timeout', 'write_timeout')
 
 STRLEN_REFERENCEID = 66
+STRLEN_CID = 64
 STRLEN_CHUNKID = 64
 STRLEN_REQID = 63
 
@@ -57,6 +58,22 @@ OIO_DB_STATUS_NAME = {
     str(OIO_DB_ENABLED): "Enabled",
     str(OIO_DB_FROZEN): "Frozen",
     str(OIO_DB_DISABLED): "Disabled",
+}
+
+CONTAINER_TO_SHARD_STATE_SAVING_WRITES = 1
+CONTAINER_TO_SHARD_STATE_LOCKED = 2
+CONTAINER_TO_SHARD_STATE_SHARDED = 3
+CONTAINER_TO_SHARD_STATE_ABORTED = 4
+NEW_SHARD_STATE_APPLYING_SAVED_WRITES = 128,
+NEW_SHARD_STATE_CLEANED_UP = 129
+
+SHARDING_STATE_NAME = {
+    CONTAINER_TO_SHARD_STATE_SAVING_WRITES: 'Saving writes',
+    CONTAINER_TO_SHARD_STATE_LOCKED: 'Locked',
+    CONTAINER_TO_SHARD_STATE_SHARDED: 'Sharded',
+    CONTAINER_TO_SHARD_STATE_ABORTED: 'Aborted',
+    NEW_SHARD_STATE_APPLYING_SAVED_WRITES: 'Applying saved writes',
+    NEW_SHARD_STATE_CLEANED_UP: 'Cleaned up'
 }
 
 CONTAINER_HEADERS = {
@@ -148,8 +165,12 @@ CH_SEPARATOR = '/'
 
 BUCKET_PROP_REPLI_ENABLED = 'replication_enabled'
 
+# Account name
+M2_PROP_ACCOUNT_NAME = 'sys.account'
 # When the container is part of a bucket, this property holds the bucket's name
 M2_PROP_BUCKET_NAME = 'sys.m2.bucket.name'
+# Container name
+M2_PROP_CONTAINER_NAME = 'sys.user.name'
 # Container creation time (microseconds).
 M2_PROP_CTIME = 'sys.m2.ctime'
 # Tells whether to delete exceeding object versions on-the-fly (1),
@@ -157,8 +178,20 @@ M2_PROP_CTIME = 'sys.m2.ctime'
 M2_PROP_DEL_EXC_VERSIONS = 'sys.m2.policy.version.delete_exceeding'
 # Number of objects held by the container.
 M2_PROP_OBJECTS = 'sys.m2.objects'
-# Sets a limit on the total size of objects help by the container.
+# Sets a limit on the total size of objects held by the container.
 M2_PROP_QUOTA = 'sys.m2.quota'
+# Number of shards held by the container.
+M2_PROP_SHARDS = 'sys.m2.shards'
+# Sharding state for the root/shard container.
+M2_PROP_SHARDING_STATE = 'sys.m2.sharding.state'
+# Sharding timestamp for the root/shard container.
+M2_PROP_SHARDING_TIMESTAMP = 'sys.m2.sharding.timestamp'
+# Root container for the shard container.
+M2_PROP_SHARDING_ROOT = 'sys.m2.sharding.root'
+# Lower for the shard container.
+M2_PROP_SHARDING_LOWER = 'sys.m2.sharding.lower'
+# Upper for the shard container.
+M2_PROP_SHARDING_UPPER = 'sys.m2.sharding.upper'
 # Name of the default storage policy for the container.
 M2_PROP_STORAGE_POLICY = 'sys.m2.policy.storage'
 # Total number of bytes of objects held by the container.

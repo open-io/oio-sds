@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -26,8 +27,11 @@ from oio.common.constants import \
     BUCKET_PROP_REPLI_ENABLED, \
     OIO_DB_STATUS_NAME, OIO_DB_ENABLED, OIO_DB_DISABLED, OIO_DB_FROZEN, \
     M2_PROP_BUCKET_NAME, M2_PROP_CTIME, M2_PROP_DEL_EXC_VERSIONS, \
-    M2_PROP_OBJECTS, M2_PROP_QUOTA, M2_PROP_STORAGE_POLICY, \
-    M2_PROP_USAGE, M2_PROP_VERSIONING_POLICY
+    M2_PROP_OBJECTS, M2_PROP_QUOTA, M2_PROP_SHARDING_LOWER, \
+    M2_PROP_SHARDING_ROOT, M2_PROP_SHARDING_STATE, \
+    M2_PROP_SHARDING_TIMESTAMP, M2_PROP_SHARDING_UPPER, M2_PROP_SHARDS, \
+    M2_PROP_STORAGE_POLICY, M2_PROP_USAGE, M2_PROP_VERSIONING_POLICY, \
+    SHARDING_STATE_NAME
 from oio.common.easy_value import boolean_value, int_value, float_value
 
 
@@ -428,24 +432,60 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
         ctime = float(sys[M2_PROP_CTIME]) / 1000000.
         bytes_usage = sys.get(M2_PROP_USAGE, 0)
         objects = sys.get(M2_PROP_OBJECTS, 0)
+        shards = sys.get(M2_PROP_SHARDS, 0)
         if parsed_args.formatter == 'table':
             ctime = int(ctime)
             bytes_usage = convert_size(int(bytes_usage), unit="B")
             objects = convert_size(int(objects))
+            shards = convert_size(int(shards))
         info = {
             'account': sys['sys.account'],
             'base_name': sys['sys.name'],
             'container': sys['sys.user.name'],
             'ctime': ctime,
             'bytes_usage': bytes_usage,
-            'quota': sys.get(M2_PROP_QUOTA, "Namespace default"),
             'objects': objects,
+            'shards': shards,
+            'quota': sys.get(M2_PROP_QUOTA, "Namespace default"),
             'storage_policy': sys.get(M2_PROP_STORAGE_POLICY,
                                       "Namespace default"),
             'max_versions': sys.get(M2_PROP_VERSIONING_POLICY,
                                     "Namespace default"),
             'status': OIO_DB_STATUS_NAME.get(sys.get('sys.status'), "Unknown"),
         }
+
+        if M2_PROP_SHARDING_STATE in sys:
+            sharding_state = sys[M2_PROP_SHARDING_STATE]
+            try:
+                sharding_state = SHARDING_STATE_NAME[int(sharding_state)]
+            except (ValueError, KeyError, TypeError):
+                sharding_state = 'Unknown'
+            info['sharding.state'] = sharding_state
+            sharding_timestamp = sys.get(M2_PROP_SHARDING_TIMESTAMP)
+            if sharding_timestamp is None:
+                self.log.warn('Missing sharding timestamp')
+            elif parsed_args.formatter == 'table':
+                sharding_timestamp = int(sharding_timestamp)
+            info['sharding.timestamp'] = sharding_timestamp
+
+        if M2_PROP_SHARDING_ROOT in sys:
+            info['sharding.root'] = sys.get(M2_PROP_SHARDING_ROOT)
+            sharding_lower = sys.get(M2_PROP_SHARDING_LOWER)
+            if not sharding_lower:
+                self.log.warn('Missing sharding lower')
+            if sharding_lower[0] == '>':
+                sharding_lower = sharding_lower[1:]
+            else:
+                self.log.warn('Wrong format for sharding lower')
+            info['sharding.lower'] = sharding_lower
+            sharding_upper = sys.get(M2_PROP_SHARDING_UPPER)
+            if not sharding_upper:
+                self.log.warn('Missing sharding upper')
+            if sharding_upper[0] == '<':
+                sharding_upper = sharding_upper[1:]
+            else:
+                self.log.warn('Wrong format for sharding upper')
+            info['sharding.upper'] = sharding_upper
 
         for k in ('stats.page_count', 'stats.freelist_count',
                   'stats.page_size'):
