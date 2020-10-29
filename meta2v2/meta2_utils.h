@@ -292,6 +292,9 @@ GError* shards_container_decode(const gchar *str, shards_container_t *pshards);
 
 gchar* shards_container_encode(shards_container_t shards);
 
+struct shard_container_s *shards_container_get_shard(
+		shards_container_t shards, const gchar *path);
+
 void shards_container_free(shards_container_t shards);
 
 #endif /*OIO_SDS__meta2v2__meta2_utils_h*/

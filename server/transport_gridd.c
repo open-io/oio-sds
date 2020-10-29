@@ -529,7 +529,8 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 		EXTRA_ASSERT(!req_ctx->final_sent);
 		EXTRA_ASSERT(e != NULL);
 		EXTRA_ASSERT(body == NULL);
-		if (e->code == CODE_REDIRECT)
+		if (e->code == CODE_REDIRECT
+				|| e->code == CODE_REDIRECT_SHARD_CONTAINER)
 			_subject ("e=(%d) redirect to %s", e->code, e->message);
 		else
 			_subject ("e=(%d) %s", e->code, e->message);

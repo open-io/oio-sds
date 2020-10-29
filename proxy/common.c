@@ -651,6 +651,7 @@ void client_clean (struct client_ctx_s *ctx) {
 		metautils_gba_cleanv (ctx->bodyv);
 		ctx->bodyv = NULL;
 	}
+	ctx->count = 0;
 }
 
 GError * KV_read_properties (struct json_object *j, gchar ***out,

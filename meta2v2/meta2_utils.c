@@ -3149,6 +3149,41 @@ shards_container_encode(shards_container_t shards)
 	return g_string_free(shards_json, FALSE);
 }
 
+static gint
+_shard_check_range(const gchar *lower, const gchar *upper, const gchar *path)
+{
+	EXTRA_ASSERT(lower != NULL);
+	EXTRA_ASSERT(upper != NULL);
+	EXTRA_ASSERT(path != NULL);
+
+	if (*lower && strncmp(path, lower, LIMIT_LENGTH_CONTENTPATH) <= 0) {
+		return -1;
+	}
+	if (*upper && strncmp(path, upper, LIMIT_LENGTH_CONTENTPATH) > 0) {
+		return 1;
+	}
+	// lower < path <= upper
+	return 0;
+}
+
+static gint
+_shard_container_cmp_with_path(gconstpointer a, gconstpointer b)
+{
+	const struct shard_container_s *shard = a;
+	const gchar *path = b;
+
+	return _shard_check_range(shard->lower, shard->upper, path);
+}
+
+struct shard_container_s *
+shards_container_get_shard(shards_container_t shards, const gchar *path)
+{
+	if (!shards)
+		return NULL;
+
+	return g_tree_search(shards, _shard_container_cmp_with_path, path);
+}
+
 void
 shards_container_free(shards_container_t shards)
 {
