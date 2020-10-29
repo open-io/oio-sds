@@ -2,6 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -146,8 +147,10 @@ meta2_filter_extract_body_beans(struct gridd_filter_ctx_s *ctx,
 	GError *err = metautils_message_extract_body_encoded (reply->request, (opt==NULL), &l, bean_sequence_decoder);
 	if (err) {
 		_bean_cleanl2 (l);
-		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_BAD_REQUEST,
-					"Invalid request, Empty / Invalid body"));
+		meta2_filter_ctx_set_error(ctx,
+			BADREQ("Invalid request, Empty / Invalid body: (%d) %s",
+					err->code, err->message));
+		g_error_free(err);
 		return FILTER_KO;
 	}
 

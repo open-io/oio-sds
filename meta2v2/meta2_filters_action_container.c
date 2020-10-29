@@ -2,6 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -253,8 +254,10 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	if (NULL != e) {
 		GRID_DEBUG("Fail to return alias for url: %s", oio_url_get(url, OIOURL_WHOLE));
 		_on_bean_ctx_clean(obc);
+		g_free(next_marker);
+		if (properties)
+			g_strfreev(properties);
 		meta2_filter_ctx_set_error(ctx, e);
-		if (properties) g_strfreev (properties);
 		return FILTER_KO;
 	}
 
@@ -281,8 +284,9 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 
 	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);
-	g_free0(next_marker);
-	if (properties) g_strfreev (properties);
+	g_free(next_marker);
+	if (properties)
+		g_strfreev (properties);
 	return FILTER_OK;
 }
 
@@ -514,4 +518,99 @@ meta2_filter_action_touch_container(struct gridd_filter_ctx_s *ctx,
 		return FILTER_OK;
 	meta2_filter_ctx_set_error(ctx, err);
 	return FILTER_KO;
+}
+
+/* Sharding ----------------------------------------------------------------- */
+
+int
+meta2_filter_action_replace_sharding(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply UNUSED)
+{
+	GError *err = NULL;
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
+
+	err = meta2_backend_replace_sharding(m2b, url, beans);
+	if (!err) {
+		return FILTER_OK;
+	}
+	meta2_filter_ctx_set_error(ctx, err);
+	return FILTER_KO;
+}
+
+int
+meta2_filter_action_show_sharding(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GError *err = NULL;
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
+	struct list_params_s lp = {0};
+	gboolean truncated = FALSE;
+	gchar *next_marker = NULL;
+	gchar **properties = NULL;
+
+	_load_list_params(&lp, ctx, reply);
+	if (lp.maxkeys <= 0)
+		lp.maxkeys = meta2_batch_maxlen;
+
+	GRID_DEBUG("LP H:%d A:%d D:%d prefix:%s marker:%s end:%s max:%"G_GINT64_FORMAT,
+			lp.flag_headers, lp.flag_allversion, lp.flag_nodeleted,
+			lp.prefix, lp.marker_start, lp.marker_end, lp.maxkeys);
+
+	gint64 max = lp.maxkeys;
+	void s3_list_cb(gpointer u UNUSED, gpointer bean) {
+		if (max > 0) {
+			if (DESCR(bean) == &descr_struct_SHARD_RANGE) {
+				_bean_list_cb(&obc->l, bean);
+				if (0 == --max)
+					next_marker = g_strdup(SHARD_RANGE_get_upper(bean)->str);
+			} else {
+				_bean_clean(bean);
+			}
+		} else {
+			if (DESCR(bean) == &descr_struct_SHARD_RANGE)
+				truncated = TRUE;
+			_bean_clean(bean);
+		}
+	}
+
+	lp.maxkeys++;
+	err = meta2_backend_show_sharding(m2b, url, &lp, s3_list_cb, NULL,
+			&properties);
+	obc->l = g_slist_reverse(obc->l);
+
+	if (err) {
+		GRID_DEBUG("Fail to return shard ranges for url: %s",
+				oio_url_get(url, OIOURL_WHOLE));
+		_on_bean_ctx_clean(obc);
+		g_free(next_marker);
+		if (properties)
+			g_strfreev(properties);
+		meta2_filter_ctx_set_error(ctx, err);
+		return FILTER_KO;
+	}
+
+	S3_RESPONSE_HEADER(NAME_MSGKEY_TRUNCATED, truncated ? "true" : "false");
+	S3_RESPONSE_HEADER(NAME_MSGKEY_NEXTMARKER, next_marker);
+
+	if (properties) {
+		for (gchar **p=properties; *p && *(p+1) ;p+=2) {
+			if (!g_str_has_prefix(*p, SQLX_ADMIN_PREFIX_USER)
+					&& !g_str_has_prefix(*p, SQLX_ADMIN_PREFIX_SYS))
+				continue;
+			gchar *k = g_strconcat(NAME_MSGKEY_PREFIX_PROPERTY, *p, NULL);
+			reply->add_header(k, metautils_gba_from_string(*(p+1)));
+			g_free(k);
+		}
+	}
+
+	_on_bean_ctx_send_list(obc);
+	_on_bean_ctx_clean(obc);
+	g_free(next_marker);
+	if (properties)
+		g_strfreev(properties);
+	return FILTER_OK;
 }

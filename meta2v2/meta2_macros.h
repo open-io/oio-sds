@@ -49,6 +49,38 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define M2V2_ADMIN_SHARD_COUNT M2V2_ADMIN_PREFIX_SYS "shards"
 # endif
 
+# ifndef M2V2_ADMIN_DAMAGED_OBJECTS
+# define M2V2_ADMIN_DAMAGED_OBJECTS M2V2_ADMIN_PREFIX_SYS "objects.damaged"
+# endif
+
+# ifndef M2V2_ADMIN_MISSING_CHUNKS
+# define M2V2_ADMIN_MISSING_CHUNKS M2V2_ADMIN_PREFIX_SYS "chunks.missing"
+# endif
+
+# ifndef M2V2_ADMIN_PREFIX_SHARDING
+# define M2V2_ADMIN_PREFIX_SHARDING M2V2_ADMIN_PREFIX_SYS "sharding."
+# endif
+
+# ifndef M2V2_ADMIN_SHARDING_STATE
+# define M2V2_ADMIN_SHARDING_STATE M2V2_ADMIN_PREFIX_SHARDING "state"
+# endif
+
+# ifndef M2V2_ADMIN_SHARDING_TIMESTAMP
+# define M2V2_ADMIN_SHARDING_TIMESTAMP M2V2_ADMIN_PREFIX_SHARDING "timestamp"
+# endif
+
+# ifndef M2V2_ADMIN_SHARDING_ROOT
+# define M2V2_ADMIN_SHARDING_ROOT M2V2_ADMIN_PREFIX_SHARDING "root"
+# endif
+
+# ifndef M2V2_ADMIN_SHARDING_LOWER
+# define M2V2_ADMIN_SHARDING_LOWER M2V2_ADMIN_PREFIX_SHARDING "lower"
+# endif
+
+# ifndef M2V2_ADMIN_SHARDING_UPPER
+# define M2V2_ADMIN_SHARDING_UPPER M2V2_ADMIN_PREFIX_SHARDING "upper"
+# endif
+
 # ifndef M2V2_ADMIN_CTIME
 # define M2V2_ADMIN_CTIME M2V2_ADMIN_PREFIX_SYS "ctime"
 # endif
@@ -83,33 +115,35 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 /* -------------------------------------------------------------------------- */
 
-# define NAME_MSGNAME_M2V2_CREATE          "M2_CREATE"
-# define NAME_MSGNAME_M2V2_DESTROY         "M2_DESTROY"
-# define NAME_MSGNAME_M2V2_HAS             "M2_HAS"
-# define NAME_MSGNAME_M2V2_FLUSH           "M2_FLUSH"
-# define NAME_MSGNAME_M2V2_PURGE_CONTENT   "M2_CPURGE"
-# define NAME_MSGNAME_M2V2_PURGE_CONTAINER "M2_BPURGE"
-# define NAME_MSGNAME_M2V2_DEDUP           "M2_DEDUP"
-# define NAME_MSGNAME_M2V2_PUT             "M2_PUT"
-# define NAME_MSGNAME_M2V2_BEANS           "M2_PREP"
-# define NAME_MSGNAME_M2V2_APPEND          "M2_APPEND"
-# define NAME_MSGNAME_M2V2_GET             "M2_GET"
-# define NAME_MSGNAME_M2V2_DRAIN           "M2_DRAIN"
-# define NAME_MSGNAME_M2V2_DEL             "M2_DEL"
-# define NAME_MSGNAME_M2V2_TRUNC           "M2_TRUNC"
-# define NAME_MSGNAME_M2V2_LIST            "M2_LST"
-# define NAME_MSGNAME_M2V2_LCHUNK          "M2_LCHUNK"
-# define NAME_MSGNAME_M2V2_LHID            "M2_LHID"
-# define NAME_MSGNAME_M2V2_LHHASH          "M2_LHHASH"
-# define NAME_MSGNAME_M2V2_ISEMPTY         "M2_EMPTY"
-# define NAME_MSGNAME_M2V2_PROP_SET        "M2_PSET"
-# define NAME_MSGNAME_M2V2_PROP_GET        "M2_PGET"
-# define NAME_MSGNAME_M2V2_PROP_DEL        "M2_PDEL"
-# define NAME_MSGNAME_M2V2_RAW_DEL         "M2_RAWDEL"
-# define NAME_MSGNAME_M2V2_RAW_ADD         "M2_RAWADD"
-# define NAME_MSGNAME_M2V2_RAW_SUBST       "M2_RAWSUBST"
-# define NAME_MSGNAME_M2V1_TOUCH_CONTENT   "M2_CTOUCH"
-# define NAME_MSGNAME_M2V1_TOUCH_CONTAINER "M2_BTOUCH"
+# define NAME_MSGNAME_M2V2_CREATE           "M2_CREATE"
+# define NAME_MSGNAME_M2V2_DESTROY          "M2_DESTROY"
+# define NAME_MSGNAME_M2V2_HAS              "M2_HAS"
+# define NAME_MSGNAME_M2V2_FLUSH            "M2_FLUSH"
+# define NAME_MSGNAME_M2V2_PURGE_CONTENT    "M2_CPURGE"
+# define NAME_MSGNAME_M2V2_PURGE_CONTAINER  "M2_BPURGE"
+# define NAME_MSGNAME_M2V2_DEDUP            "M2_DEDUP"
+# define NAME_MSGNAME_M2V2_PUT              "M2_PUT"
+# define NAME_MSGNAME_M2V2_BEANS            "M2_PREP"
+# define NAME_MSGNAME_M2V2_APPEND           "M2_APPEND"
+# define NAME_MSGNAME_M2V2_GET              "M2_GET"
+# define NAME_MSGNAME_M2V2_DRAIN            "M2_DRAIN"
+# define NAME_MSGNAME_M2V2_DEL              "M2_DEL"
+# define NAME_MSGNAME_M2V2_TRUNC            "M2_TRUNC"
+# define NAME_MSGNAME_M2V2_LIST             "M2_LST"
+# define NAME_MSGNAME_M2V2_LCHUNK           "M2_LCHUNK"
+# define NAME_MSGNAME_M2V2_LHID             "M2_LHID"
+# define NAME_MSGNAME_M2V2_LHHASH           "M2_LHHASH"
+# define NAME_MSGNAME_M2V2_ISEMPTY          "M2_EMPTY"
+# define NAME_MSGNAME_M2V2_PROP_SET         "M2_PSET"
+# define NAME_MSGNAME_M2V2_PROP_GET         "M2_PGET"
+# define NAME_MSGNAME_M2V2_PROP_DEL         "M2_PDEL"
+# define NAME_MSGNAME_M2V2_RAW_DEL          "M2_RAWDEL"
+# define NAME_MSGNAME_M2V2_RAW_ADD          "M2_RAWADD"
+# define NAME_MSGNAME_M2V2_RAW_SUBST        "M2_RAWSUBST"
+# define NAME_MSGNAME_M2V1_TOUCH_CONTENT    "M2_CTOUCH"
+# define NAME_MSGNAME_M2V1_TOUCH_CONTAINER  "M2_BTOUCH"
+# define NAME_MSGNAME_M2V2_REPLACE_SHARDING "M2_CSREPL"
+# define NAME_MSGNAME_M2V2_SHOW_SHARDING    "M2_CSGET"
 
 /* -------------------------------------------------------------------------- */
 
@@ -160,6 +194,20 @@ enum m2v2_destroy_flag_e
 	M2V2_DESTROY_EVENT = 0x01,
 	M2V2_DESTROY_FLUSH = 0x02,
 	M2V2_DESTROY_FORCE = 0x04,
+};
+
+/* Sharding ----------------------------------------------------------------- */
+
+enum sharding_state_e {
+	// Container to shard
+	CONTAINER_TO_SHARD_STATE_SAVING_WRITES = 1,
+	CONTAINER_TO_SHARD_STATE_LOCKED,
+	CONTAINER_TO_SHARD_STATE_SHARDED,
+	CONTAINER_TO_SHARD_STATE_ABORTED,
+
+	// New shard
+	NEW_SHARD_STATE_APPLYING_SAVED_WRITES = 128,
+	NEW_SHARD_STATE_CLEANED_UP,
 };
 
 #endif /*OIO_SDS__meta2v2__meta2_macros_h*/
