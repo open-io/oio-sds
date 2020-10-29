@@ -29,9 +29,9 @@ from oio.common.utils import request_id
 json.encoder.FLOAT_REPR = lambda o: format(o, '.6f')
 LOG = logging.getLogger(__name__)
 
-GROUP_LIST = ["account", "container", "object", "reference", "volume",
-              "directory", "events", "cluster", "election", "lifecycle",
-              "rdir", "zk"]
+GROUP_LIST = ["account", "container", "containersharding", "object",
+              "reference", "volume", "directory", "events", "cluster",
+              "election", "lifecycle", "rdir", "zk"]
 
 
 class CommonShell(App):
