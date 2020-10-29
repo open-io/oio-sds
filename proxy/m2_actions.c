@@ -1590,7 +1590,7 @@ _m2_container_create (struct req_args_s *args, struct json_object *jbody)
 	err = _m2_container_create_with_properties(args, properties,
 			KV_get_value(properties, M2V2_ADMIN_STORAGE_POLICY),
 			KV_get_value(properties, M2V2_ADMIN_VERSIONING_POLICY));
-	g_strfreev (properties);
+	g_strfreev(properties);
 
 	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
@@ -2389,6 +2389,217 @@ enum http_rc_e action_container_raw_delete (struct req_args_s *args) {
 	return rest_action (args, action_m2_container_raw_delete);
 }
 
+
+/* SHARDING action resource ------------------------------------------------- */
+
+static GError *
+_load_simplified_shard_ranges(struct json_object *jbody, GSList **out)
+{
+	GError *err = NULL;
+	GSList *beans = NULL;
+	gpointer shard_range = NULL;
+
+	// Load the beans
+	if (json_object_is_type(jbody, json_type_array)) {
+		for (gint i = json_object_array_length(jbody) - 1; i >= 0; i--) {
+			shard_range = NULL;
+			err = m2v2_json_load_single_shard_range(
+					json_object_array_get_idx(jbody, i),
+					&shard_range);
+			if (err)
+				break;
+			beans = g_slist_prepend(beans, shard_range);
+		}
+	} else if (json_object_is_type(jbody, json_type_object)) {
+		shard_range = NULL;
+		err = m2v2_json_load_single_shard_range(jbody,
+				&shard_range);
+		beans = g_slist_prepend(beans, shard_range);
+	} else {
+		err = BADREQ ("JSON: Not an array or an object");
+	}
+
+	if (err)
+		_bean_cleanl2(beans);
+	else
+		*out = beans;
+	return err;
+}
+
+static enum http_rc_e
+_reply_shard_ranges_list_result(struct req_args_s *args, GError * err,
+		struct list_result_s *out)
+{
+	if (err)
+		return _reply_m2_error (args, err);
+
+	GString *gstr = g_string_sized_new (4096);
+	g_string_append_c (gstr, '{');
+	_dump_json_properties(gstr, out->props);
+	g_string_append_c(gstr, ',');
+	g_string_append_static(gstr, "\"shard_ranges\":[");
+	meta2_json_shard_ranges_only(gstr, out->beans, FALSE);
+	g_string_append_static(gstr, "]}");
+
+	return _reply_success_json (args, gstr);
+}
+
+static enum http_rc_e
+action_m2_container_sharding_replace(struct req_args_s *args,
+		struct json_object *j)
+{
+	GError *err = NULL;
+	GSList *beans = NULL;
+
+	err = _load_simplified_shard_ranges(j, &beans);
+	if (!err) {
+		PACKER_VOID(_pack) {
+			return m2v2_remote_pack_REPLACE_SHARDING(args->url, beans, DL());
+		};
+		err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
+	}
+	_bean_cleanl2 (beans);
+	return _reply_m2_error(args, err);
+}
+
+// SHARDING{{
+// POST /v3.0/{NS}/container/sharding/replace?acct={account}&ref={container}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Replace shard ranges in root container.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/container/sharding/replace?acct=myaccount&ref=mycontainer HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.58.0
+//    Accept: */*
+//    Content-Length: 216
+//    Content-Type: application/x-www-form-urlencoded
+//
+//    [
+//      {
+//        "lower": "",
+//        "upper": "shard",
+//        "cid": "8B78B3245B74710F3ACC1BEF4978E621F5E764E01FFB5621D23C4EECA2B7BB3D"
+//      },
+//      {
+//        "lower": "shard",
+//        "upper": "",
+//        "cid": "BC99330D9F1A70D2AD6CA388DF8A09AD1DCD4066B439C945A157122CEC9800EA"
+//      }
+//    ]
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}SHARDING
+enum http_rc_e
+action_container_sharding_replace(struct req_args_s *args)
+{
+	return rest_action(args, action_m2_container_sharding_replace);
+}
+
+// SHARDING{{
+// GET /v3.0/{NS}/container/sharding/show?acct={account}&ref={container}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Get shard ranges from a root container.
+//
+// .. code-block:: http
+//
+//    GET /v3.0/OPENIO/container/sharding/show?acct=myaccount&ref=mycontainer HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.58.0
+//    Accept: */*
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 637
+//    x-oio-list-truncated: false
+//
+//    {
+//      "properties": {},
+//      "system": {
+//        "sys.account": "myaccount",
+//        "sys.m2.chunks.missing": "0",
+//        "sys.m2.ctime": "1613657902787922",
+//        "sys.m2.init": "1",
+//        "sys.m2.objects": "0",
+//        "sys.m2.objects.damaged": "0",
+//        "sys.m2.usage": "0",
+//        "sys.m2.version": "1",
+//        "sys.name": "594C8B26EA13E562391013AE6FC360C2C1691F314164DD457EF583B16712E360.1",
+//        "sys.ns": "OPENIO",
+//        "sys.status": "0",
+//        "sys.type": "meta2",
+//        "sys.user.name": "mycontainer"
+//      },
+//      "shard_ranges": [
+//        {
+//          "lower": "",
+//          "upper": "shard",
+//          "cid": "8B78B3245B74710F3ACC1BEF4978E621F5E764E01FFB5621D23C4EECA2B7BB3D",
+//          "metadata": ""
+//        },
+//        {
+//          "lower": "shard",
+//          "upper": "",
+//          "cid": "BC99330D9F1A70D2AD6CA388DF8A09AD1DCD4066B439C945A157122CEC9800EA",
+//          "metadata": ""
+//        }
+//      ]
+//    }
+//
+// }}SHARDING
+enum http_rc_e
+action_container_sharding_show(struct req_args_s *args)
+{
+	GError *err = NULL;
+	struct list_params_s list_in = {0};
+	struct list_result_s list_out = {0};
+
+	/* Init the listing options common to all the modes */
+	list_in.marker_start = OPT("marker");
+	err = _max(args, &list_in.maxkeys);
+	// Params not used with sharding
+	// list_in.prefix = 0;
+	// list_in.marker_end = 0;
+	// list_in.flag_nodeleted = 0;
+	// list_in.flag_allversion = 0;
+	// list_in.flag_headers = 1;
+	// list_in.flag_properties = 0;
+	if (!err) {
+		m2v2_list_result_init(&list_out);
+	}
+
+	if (!err) {
+		PACKER_VOID(_pack) {
+			return m2v2_remote_pack_SHOW_SHARDING(args->url, &list_in, DL());
+		};
+		err = _resolve_meta2(args, _prefer_slave(), _pack, &list_out,
+				m2v2_list_result_extract);
+	}
+
+	if (!err) {
+		args->rp->add_header(PROXYD_HEADER_PREFIX "list-truncated",
+				g_strdup(list_out.truncated ? "true" : "false"));
+		if (list_out.next_marker) {
+			args->rp->add_header(PROXYD_HEADER_PREFIX "list-marker",
+					g_uri_escape_string(list_out.next_marker, NULL, FALSE));
+		}
+	}
+
+	enum http_rc_e rc = _reply_shard_ranges_list_result(args, err, &list_out);
+	m2v2_list_result_clean(&list_out);
+	return rc;
+}
 
 /* CONTENT action resource -------------------------------------------------- */
 

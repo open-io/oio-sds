@@ -294,4 +294,12 @@ struct bean_PROPERTIES_s *generate_chunk_quality_bean(
 /** Get the version of the first alias bean from the list. */
 gint64 find_alias_version(GSList *bean);
 
+/* Sharding ----------------------------------------------------------------- */
+
+GError* m2db_replace_shard_ranges(struct sqlx_sqlite3_s *sq3,
+		GSList *new_shard_ranges);
+
+GError* m2db_list_shard_ranges(struct sqlx_sqlite3_s *sq3,
+		struct list_params_s *lp, m2_onbean_cb cb, gpointer u);
+
 #endif /*OIO_SDS__meta2v2__meta2_utils_h*/

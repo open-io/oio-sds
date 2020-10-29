@@ -2,6 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -1066,6 +1067,10 @@ configure_request_handlers (void)
 	SET("/$NS/container/raw_insert/#POST", action_container_raw_insert);
 	SET("/$NS/container/raw_update/#POST", action_container_raw_update);
 	SET("/$NS/container/raw_delete/#POST", action_container_raw_delete);
+
+	// Sharding
+	SET("/$NS/container/sharding/replace/#POST", action_container_sharding_replace);
+	SET("/$NS/container/sharding/show/#GET", action_container_sharding_show);
 
 	// Content
 	SET("/$NS/content/create/#POST", action_content_put);

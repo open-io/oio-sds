@@ -2,6 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -479,4 +480,25 @@ m2v2_remote_execute_DESTROY_many(gchar **targets, struct oio_url_s *url, guint32
 
 	gridd_clients_free(clients);
 	return err;
+}
+
+/* Sharding ----------------------------------------------------------------- */
+
+GByteArray*
+m2v2_remote_pack_REPLACE_SHARDING(struct oio_url_s *url, GSList *beans,
+		gint64 dl)
+{
+	GByteArray *body = bean_sequence_marshall(beans);
+	return _m2v2_pack_request(NAME_MSGNAME_M2V2_REPLACE_SHARDING, url, body,
+			dl);
+}
+
+GByteArray*
+m2v2_remote_pack_SHOW_SHARDING(struct oio_url_s *url,
+		struct list_params_s *params, gint64 dl)
+{
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_SHOW_SHARDING,
+			url, NULL, dl);
+	_pack_list_params(msg, params);
+	return message_marshall_gba_and_clean(msg);
 }

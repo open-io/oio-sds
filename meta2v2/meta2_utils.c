@@ -3044,3 +3044,184 @@ m2db_flush_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0,
 
 	return err;
 }
+
+/* Sharding ----------------------------------------------------------------- */
+
+static gint
+_shard_range_compare_lower(gconstpointer b0, gconstpointer b1)
+{
+	if (!b0 && !b1)
+		return 0;
+	if (!b0)
+		return 1;
+	if (!b1)
+		return -1;
+	struct bean_SHARD_RANGE_s *shard_range0 = (struct bean_SHARD_RANGE_s *) b0;
+	struct bean_SHARD_RANGE_s *shard_range1 = (struct bean_SHARD_RANGE_s *) b1;
+	return strcmp(SHARD_RANGE_get_lower(shard_range0)->str,
+			SHARD_RANGE_get_lower(shard_range1)->str);
+}
+
+static GVariant **
+_sharding_get_params_to_sql_clause(const gchar *lower, const gchar *upper,
+		GString *clause)
+{
+	void lazy_and () {
+		if (clause->len > 0) g_string_append_static(clause, " AND");
+	}
+	GPtrArray *params = g_ptr_array_new();
+
+	if (lower && *lower) {
+		lazy_and();
+		g_string_append_static(clause, " lower >= ? AND lower != ''");
+		g_ptr_array_add(params, g_variant_new_string(lower));
+	}
+
+	if (upper && *upper) {
+		lazy_and();
+		g_string_append_static(clause, " upper <= ? AND upper != ''");
+		g_ptr_array_add(params, g_variant_new_string(upper));
+	}
+
+	if (clause->len == 0)
+		clause = g_string_append_static(clause, " 1");
+
+	g_string_append_static(clause, " ORDER BY lower ASC");
+
+	g_ptr_array_add(params, NULL);
+	return (GVariant**) g_ptr_array_free(params, FALSE);
+}
+
+static GError*
+_m2db_get_shard_ranges(struct sqlx_sqlite3_s *sq3, const gchar *lower,
+		const gchar *upper, m2_onbean_cb cb, gpointer u)
+{
+	GPtrArray *beans = g_ptr_array_new();
+	GString *clause = g_string_sized_new(128);
+	GVariant **params = _sharding_get_params_to_sql_clause(lower, upper,
+			clause);
+	GError *err = SHARD_RANGE_load(sq3->db, clause->str, params, _bean_buffer_cb,
+			beans);
+	if (!err) {
+		if (beans->len > 0) {
+			struct bean_SHARD_RANGE_s *first_shard_range = g_ptr_array_index(
+					beans, 0);
+			struct bean_SHARD_RANGE_s *last_shard_range = g_ptr_array_index(
+					beans, beans->len - 1);
+			if (strcmp(lower ? lower : "",
+					SHARD_RANGE_get_lower(first_shard_range)->str) != 0) {
+				err = BADREQ("No shard range starts with this lower");
+			} else if (strcmp(upper ? upper : "",
+					SHARD_RANGE_get_upper(last_shard_range)->str) != 0) {
+				err = BADREQ("No shard range starts with this upper");
+			} else {
+				for (guint i = 0; i < beans->len; i++) {
+					cb(u, beans->pdata[i]);
+					beans->pdata[i] = NULL;
+				}
+			}
+		} else if ((lower && *lower) || (upper && *upper)) {
+			err = BADREQ("No shard range starts with this lower "
+					"and/or no shard range starts with this upper");
+		}
+	}
+	metautils_gvariant_unrefv(params);
+	g_free(params), params = NULL;
+	g_string_free(clause, TRUE);
+	_bean_cleanv2(beans);
+	return err;
+}
+
+static GVariant **
+_sharding_list_params_to_sql_clause(struct list_params_s *lp, GString *clause)
+{
+	void lazy_and () {
+		if (clause->len > 0) g_string_append_static(clause, " AND");
+	}
+	GPtrArray *params = g_ptr_array_new();
+
+	if (lp->marker_start) {
+		lazy_and();
+		g_string_append_static(clause, " upper > ? OR upper == ''");
+		g_ptr_array_add(params, g_variant_new_string (lp->marker_start));
+	}
+
+	if (clause->len == 0)
+		clause = g_string_append_static(clause, " 1");
+
+	g_string_append_static(clause, " ORDER BY lower ASC");
+
+	if (lp->maxkeys > 0)
+		g_string_append_printf(clause, " LIMIT %"G_GINT64_FORMAT, lp->maxkeys);
+
+	g_ptr_array_add(params, NULL);
+	return (GVariant**) g_ptr_array_free(params, FALSE);
+}
+
+GError*
+m2db_replace_shard_ranges(struct sqlx_sqlite3_s *sq3, GSList *new_shard_ranges)
+{
+	if (!new_shard_ranges)
+		return BADREQ("No shard range");
+	for (GSList *new_shard_range = new_shard_ranges; new_shard_range; new_shard_range=new_shard_range->next) {
+		if (!(new_shard_range->data)) {
+			return BADREQ("Invalid type: shard range is NULL");
+		}
+		if (DESCR(new_shard_range->data) != &descr_struct_SHARD_RANGE) {
+			return BADREQ("Invalid type: not a shard range");
+		}
+	}
+	new_shard_ranges = g_slist_sort(new_shard_ranges,
+			_shard_range_compare_lower);
+	gchar *first_lower = NULL;
+	gchar *last_upper = NULL;
+	for (GSList *new_shard_range = new_shard_ranges; new_shard_range;
+			new_shard_range=new_shard_range->next) {
+		gchar *current_lower = SHARD_RANGE_get_lower(
+				new_shard_range->data)->str;
+		gchar *current_upper = SHARD_RANGE_get_upper(
+				new_shard_range->data)->str;
+		if (*current_upper && strcmp(current_lower, current_upper) >= 0) {
+			return BADREQ("The lower must be lower than the upper");
+		}
+		if (last_upper && strcmp(last_upper, current_lower) != 0) {
+			return BADREQ("Non-consecutive shard ranges");
+		}
+		if (first_lower == NULL) {
+			first_lower = current_lower;
+		}
+		last_upper = current_upper;
+	}
+
+	GError *err = NULL;
+	GSList *deleted = NULL;
+	err = _m2db_get_shard_ranges(sq3, first_lower, last_upper, _bean_list_cb,
+			&deleted);
+	for (GSList *l = deleted; !err && l; l = l->next) {
+		err = _db_delete_bean(sq3->db, l->data);
+	}
+	if (!err) {
+		err = _db_save_beans_list(sq3->db, new_shard_ranges);
+	}
+	if (!err) {
+		gint64 shard_count = m2db_get_shard_count(sq3);
+		shard_count -= g_slist_length(deleted);
+		shard_count += g_slist_length(new_shard_ranges);
+		m2db_set_shard_count(sq3, shard_count);
+	}
+	g_slist_free_full(deleted, _bean_clean);
+	return err;
+}
+
+GError*
+m2db_list_shard_ranges(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp,
+		m2_onbean_cb cb, gpointer u)
+{
+	GString *clause = g_string_sized_new(128);
+	GVariant **params = _sharding_list_params_to_sql_clause(lp, clause);
+	GError *err = SHARD_RANGE_load(sq3->db, clause->str, params, cb, u);
+	metautils_gvariant_unrefv(params);
+	g_free(params), params = NULL;
+	g_string_free(clause, TRUE);
+	return err;
+}

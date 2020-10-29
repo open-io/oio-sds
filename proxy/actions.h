@@ -2,6 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -89,6 +90,9 @@ enum http_rc_e action_container_flush (struct req_args_s *args);
 enum http_rc_e action_container_raw_insert (struct req_args_s *args);
 enum http_rc_e action_container_raw_update (struct req_args_s *args);
 enum http_rc_e action_container_raw_delete (struct req_args_s *args);
+
+enum http_rc_e action_container_sharding_replace(struct req_args_s *args);
+enum http_rc_e action_container_sharding_show(struct req_args_s *args);
 
 enum http_rc_e action_content_put (struct req_args_s *args);
 enum http_rc_e action_content_drain(struct req_args_s *args);

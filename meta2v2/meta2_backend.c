@@ -51,6 +51,7 @@ enum m2v2_open_type_e
 	M2V2_OPEN_MASTERSLAVE = 0x003,
 
 	M2V2_OPEN_AUTOCREATE  = 0x010,
+	M2V2_OPEN_URGENT      = 0x020,
 
 	// Set an OR'ed combination of the following flags to require
 	// a check on the container's status during the open phase.
@@ -315,6 +316,8 @@ m2_to_sqlx(enum m2v2_open_type_e t)
 
 	if (t & M2V2_OPEN_AUTOCREATE)
 		result |= SQLX_OPEN_CREATE;
+	if (t & M2V2_OPEN_URGENT)
+		result |= SQLX_OPEN_URGENT;
 
 	if (t & M2V2_OPEN_ENABLED)
 		result |= SQLX_OPEN_ENABLED;
@@ -1947,6 +1950,79 @@ meta2_backend_content_from_contentid (struct meta2_backend_s *m2b,
 		metautils_gvariant_unrefv(params);
 		if (!err) {
 			/* TODO follow the FK to the aliases */
+		}
+		m2b_close(sq3);
+	}
+
+	return err;
+}
+
+/* Sharding ----------------------------------------------------------------- */
+
+GError*
+meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, GSList *beans)
+{
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+
+	err = m2b_open(m2b, url,
+			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT, &sq3);
+	if (!err) {
+		if (sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
+			err = BADREQ("Container is a shard");
+		}
+		if (!err) {
+			gint64 timestamp = oio_ext_real_time();
+			struct sqlx_repctx_s *repctx = NULL;
+			if (!(err = _transaction_begin(sq3, url, &repctx))) {
+				err = m2db_replace_shard_ranges(sq3, beans);
+				if (!err) {
+					sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
+							CONTAINER_TO_SHARD_STATE_SHARDED);
+					sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP,
+							timestamp);
+				}
+				if (!err) {
+					m2db_increment_version(sq3);
+				}
+				err = sqlx_transaction_end(repctx, err);
+				if (!err)
+					m2b_add_modified_container(m2b, sq3);
+			}
+		}
+		m2b_close(sq3);
+	}
+
+	return err;
+}
+
+GError*
+meta2_backend_show_sharding(struct meta2_backend_s *m2b, struct oio_url_s *url,
+		struct list_params_s *lp, m2_onbean_cb cb, gpointer u0,
+		gchar ***out_properties)
+{
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(lp != NULL);
+
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+
+	guint32 open_mode = lp->flag_local ? M2V2_FLAG_LOCAL: 0;
+	err = m2b_open(m2b, url, _mode_readonly(open_mode), &sq3);
+	if (!err) {
+		if (sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
+			err = BADREQ("Container is a shard");
+		}
+		if (!err) {
+			err = m2db_list_shard_ranges(sq3, lp, cb, u0);
+		}
+		if (!err && out_properties) {
+			*out_properties = sqlx_admin_get_keyvalues(sq3);
 		}
 		m2b_close(sq3);
 	}
