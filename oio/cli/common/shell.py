@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -29,9 +30,9 @@ from oio.common.utils import request_id
 json.encoder.FLOAT_REPR = lambda o: format(o, '.6f')
 LOG = logging.getLogger(__name__)
 
-GROUP_LIST = ["account", "container", "object", "reference", "volume",
-              "directory", "events", "cluster", "election", "lifecycle",
-              "rdir", "zk"]
+GROUP_LIST = ["account", "container", "containersharding", "object",
+              "reference", "volume", "directory", "events", "cluster",
+              "election", "lifecycle", "rdir", "zk"]
 
 
 class CommonShell(App):

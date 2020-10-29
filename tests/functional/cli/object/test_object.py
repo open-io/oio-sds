@@ -25,11 +25,12 @@ from tests.utils import random_str
 HEADERS = ['Name', 'Created']
 OBJ_HEADERS = ['Name', 'Size', 'Hash']
 CONTAINER_LIST_HEADERS = ['Name', 'Bytes', 'Count']
-CONTAINER_FIELDS = ['account', 'base_name', 'bytes_usage', 'quota',
-                    'container', 'ctime', 'storage_policy', 'objects',
-                    'max_versions', 'status', 'stats.freelist_count',
-                    'stats.page_count', 'stats.page_size',
-                    'stats.space_wasted']
+CONTAINER_FIELDS = ['account', 'base_name', 'bytes_usage', 'container',
+                    'ctime', 'max_versions', 'objects', 'quota',
+                    'sharding.state', 'sharding.timestamp', 'shards',
+                    'stats.freelist_count', 'stats.page_count',
+                    'stats.page_size', 'stats.space_wasted', 'status',
+                    'storage_policy']
 OBJ_FIELDS = ['account', 'container', 'ctime', 'hash', 'id', 'mime-type',
               'mtime', 'object', 'policy', 'size', 'version']
 
