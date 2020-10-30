@@ -1,6 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -128,6 +129,10 @@ void oio_ext_clean_force_versioning(void);
 gboolean oio_ext_has_simulate_versioning(void);
 
 void oio_ext_set_simulate_versioning(const gboolean simulate_versioning);
+
+gboolean oio_ext_is_shard(void);
+
+void oio_ext_set_is_shard(const gboolean is_shard);
 
 /** Enable or disable the performance data collection. */
 GHashTable *oio_ext_enable_perfdata(gboolean enabled);
