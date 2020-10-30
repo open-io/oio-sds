@@ -275,6 +275,46 @@ m2db_set_shard_count(struct sqlx_sqlite3_s *sq3, gint64 count)
 	sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARD_COUNT, count);
 }
 
+gchar*
+m2db_get_sharding_lower(struct sqlx_sqlite3_s *sq3, GError **err)
+{
+	EXTRA_ASSERT(err != NULL);
+
+	gchar *lower = NULL;
+	gchar *admin_lower = sqlx_admin_get_str(sq3, M2V2_ADMIN_SHARDING_LOWER);
+	if (!admin_lower) {
+		*err = SYSERR("No lower for the shard");
+		return NULL;
+	}
+	if (*admin_lower != '>') {
+		*err = SYSERR("Wrong lower prefix for the shard");
+	} else {
+		lower = g_strdup(admin_lower + 1);
+	}
+	g_free(admin_lower);
+	return lower;
+}
+
+gchar*
+m2db_get_sharding_upper(struct sqlx_sqlite3_s *sq3, GError **err)
+{
+	EXTRA_ASSERT(err != NULL);
+
+	gchar *upper = NULL;
+	gchar *admin_upper = sqlx_admin_get_str(sq3, M2V2_ADMIN_SHARDING_UPPER);
+	if (!admin_upper) {
+		*err = SYSERR("No upper for the shard");
+		return NULL;
+	}
+	if (*admin_upper != '<') {
+		*err = SYSERR("Wrong upper prefix for the shard");
+	} else {
+		upper = g_strdup(admin_upper + 1);
+	}
+	g_free(admin_upper);
+	return upper;
+}
+
 /* GET ---------------------------------------------------------------------- */
 
 static void
@@ -3227,10 +3267,9 @@ m2db_list_shard_ranges(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp,
 }
 
 GError*
-m2db_get_shard_range(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
+m2db_get_shard_range(struct sqlx_sqlite3_s *sq3, const gchar *path,
 		struct bean_SHARD_RANGE_s **pshard_range)
 {
-	const gchar *path = oio_url_get(url, OIOURL_PATH);
 	/* sanity checks */
 	if (!path) {
 		return BADREQ("Missing path");
@@ -3258,5 +3297,42 @@ m2db_get_shard_range(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		}
 	}
 	_bean_cleanv2(beans);
+	return err;
+}
+
+GError*
+m2db_check_shard_range(struct sqlx_sqlite3_s *sq3, const gchar *path)
+{
+	/* sanity checks */
+	if (!path) {
+		return BADREQ("Missing path");
+	}
+
+	GError *err = NULL;
+	gchar *lower = NULL;
+	gchar *upper = NULL;
+
+	lower = m2db_get_sharding_lower(sq3, &err);
+	if (err) {
+		goto end;
+	}
+	upper = m2db_get_sharding_upper(sq3, &err);
+	if (err) {
+		goto end;
+	}
+
+	if (*lower && strncmp(path, lower, LIMIT_LENGTH_CONTENTPATH) <= 0) {
+		err = BADREQ("Out of range: Not managed by this shard");
+		goto end;
+	}
+	if (*upper && strncmp(path, upper, LIMIT_LENGTH_CONTENTPATH) > 0) {
+		err = BADREQ("Out of range: Not managed by this shard");
+		goto end;
+	}
+	// lower < path <= upper
+
+end:
+	g_free(lower);
+	g_free(upper);
 	return err;
 }

@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -143,6 +144,9 @@ message_marshall_gba(MESSAGE m, GError **err)
 
 	if (oio_ext_has_simulate_versioning())
 		metautils_message_add_field_strint(m, NAME_MSGKEY_SIM_VER, 1);
+
+	if (oio_ext_is_shard())
+		metautils_message_add_field_strint(m, NAME_MSGKEY_SHARD_COMMAND, 1);
 
 	if (oio_ext_get_perfdata())
 		metautils_message_add_field_strint(m, NAME_MSGKEY_PERFDATA, 1);

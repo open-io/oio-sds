@@ -373,3 +373,17 @@ meta2_filter_extract_simulate_versioning(struct gridd_filter_ctx_s *ctx,
 			oio_str_parse_bool(simulate_versioning, FALSE));
 	return FILTER_OK;
 }
+
+int
+meta2_filter_extract_sharding_info(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GError *e = NULL;
+	gchar buf[1024];
+	TRACE_FILTER();
+	EXTRACT_OPT(NAME_MSGKEY_SHARD_COMMAND);
+	const char *is_shard = meta2_filter_ctx_get_param(ctx,
+			NAME_MSGKEY_SHARD_COMMAND);
+	oio_ext_set_is_shard(oio_str_parse_bool(is_shard, FALSE));
+	return FILTER_OK;
+}

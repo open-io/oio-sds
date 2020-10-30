@@ -144,6 +144,10 @@ void m2db_increment_version(struct sqlx_sqlite3_s *sq3);
 
 void m2db_set_container_name(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url);
 
+gchar* m2db_get_sharding_lower(struct sqlx_sqlite3_s *sq3, GError **err);
+
+gchar* m2db_get_sharding_upper(struct sqlx_sqlite3_s *sq3, GError **err);
+
 /* Get just the ALIAS, with version allowed */
 GError* m2db_get_alias1(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		guint32 flags, struct bean_ALIASES_s **out);
@@ -302,7 +306,9 @@ GError* m2db_replace_shard_ranges(struct sqlx_sqlite3_s *sq3,
 GError* m2db_list_shard_ranges(struct sqlx_sqlite3_s *sq3,
 		struct list_params_s *lp, m2_onbean_cb cb, gpointer u);
 
-GError* m2db_get_shard_range(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
+GError* m2db_get_shard_range(struct sqlx_sqlite3_s *sq3, const gchar *path,
 		struct bean_SHARD_RANGE_s **pshard_range);
+
+GError* m2db_check_shard_range(struct sqlx_sqlite3_s *sq3, const gchar *path);
 
 #endif /*OIO_SDS__meta2v2__meta2_utils_h*/

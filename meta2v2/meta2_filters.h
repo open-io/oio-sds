@@ -80,6 +80,7 @@ M2V2_DECLARE_FILTER(meta2_filter_extract_force_master);
 M2V2_DECLARE_FILTER(meta2_filter_extract_user_agent);
 M2V2_DECLARE_FILTER(meta2_filter_extract_force_versioning);
 M2V2_DECLARE_FILTER(meta2_filter_extract_simulate_versioning);
+M2V2_DECLARE_FILTER(meta2_filter_extract_sharding_info);
 
 M2V2_DECLARE_FILTER(meta2_filter_fill_subject);
 M2V2_DECLARE_FILTER(meta2_filter_reply_success);

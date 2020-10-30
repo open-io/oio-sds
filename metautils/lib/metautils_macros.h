@@ -109,6 +109,8 @@ License along with this library.
 #define NAME_MSGKEY_FORCE_MASTER  "FRC_MSTR"
 #define NAME_MSGKEY_USER_AGENT    "USR_AG"
 #define NAME_MSGKEY_NS_STATE      "STT"
+#define NAME_MSGKEY_SHARD_COMMAND "SHRD"
+#define NAME_MSGKEY_SIM_VER       "SIM_VER"
 #define NAME_MSGKEY_WORMED        "WRM"
 
 #define NAME_MSGKEY_PREFIX_PROPERTY    "P:"

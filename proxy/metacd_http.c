@@ -252,6 +252,10 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 	oio_ext_set_simulate_versioning(
 			oio_str_parse_bool(simulate_versioning, FALSE));
 
+	/* Set sharding request to FALSE.
+	 * Only a root container redirect set to TRUE. */
+	oio_ext_set_is_shard(FALSE);
+
 	/* Load the optional deadline of the current request */
 	const char *tostr = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_TIMEOUT);
 	gint64 to = 0;
