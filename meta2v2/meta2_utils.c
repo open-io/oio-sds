@@ -3190,3 +3190,86 @@ shards_container_free(shards_container_t shards)
 	if (shards)
 		g_tree_destroy(shards);
 }
+
+gchar*
+shard_info_encode(struct shard_info_s *shard_info)
+{
+	EXTRA_ASSERT(shard_info != NULL);
+
+	GString *shard_info_json = g_string_new("{");
+	oio_str_gstring_append_json_pair(shard_info_json, "root_cid",
+			shard_info->root_cid);
+	g_string_append_c(shard_info_json, ',');
+	oio_str_gstring_append_json_pair(shard_info_json, "lower", shard_info->lower);
+	g_string_append_c(shard_info_json, ',');
+	oio_str_gstring_append_json_pair(shard_info_json, "upper", shard_info->upper);
+	g_string_append_c(shard_info_json, '}');
+	return g_string_free(shard_info_json, FALSE);
+}
+
+GError*
+shard_info_decode(const gchar *str, struct shard_info_s **pshard_info)
+{
+	EXTRA_ASSERT(str != NULL);
+	EXTRA_ASSERT(pshard_info != NULL);
+
+	GError *err = NULL;
+
+	struct json_tokener *tok = json_tokener_new();
+	struct json_object *jshard_info = json_tokener_parse_ex(tok,
+			str, strlen(str));
+	json_tokener_free(tok);
+	if (!jshard_info) {
+		err = BADREQ("Parse error");
+		goto end;
+	}
+
+	struct json_object *jroot_cid = NULL, *jlower = NULL, *jupper = NULL;
+	struct oio_ext_json_mapping_s mapping[] = {
+		{"root_cid", &jroot_cid, json_type_string, 1},
+		{"lower",    &jlower, json_type_string,    1},
+		{"upper",    &jupper, json_type_string,    1},
+		{NULL,NULL,0,0}
+	};
+	err = oio_ext_extract_json(jshard_info, mapping);
+	if (err) {
+		goto end;
+	}
+
+	struct shard_info_s *shard_info = g_malloc0(
+			sizeof(struct shard_info_s));
+	shard_info->root_cid = g_strdup(json_object_get_string(jroot_cid));
+	shard_info->lower = g_strdup(json_object_get_string(jlower));
+	shard_info->upper = g_strdup(json_object_get_string(jupper));
+	*pshard_info = shard_info;
+
+end:
+	json_object_put(jshard_info);
+	if (err) {
+		g_prefix_error(&err, "Failed to decode shard info: ");
+	}
+	return err;
+}
+
+GError*
+shard_info_check_range(struct shard_info_s *shard_info, const gchar *path)
+{
+	EXTRA_ASSERT(shard_info != NULL);
+
+	if (_shard_check_range(shard_info->lower, shard_info->upper, path) != 0) {
+		return BADREQ("Out of range: Not managed by this shard container");
+	}
+	return NULL;
+}
+
+void
+shard_info_free(struct shard_info_s *shard_info)
+{
+	if (!shard_info)
+		return;
+
+	g_free(shard_info->root_cid);
+	g_free(shard_info->lower);
+	g_free(shard_info->upper);
+	g_free(shard_info);
+}

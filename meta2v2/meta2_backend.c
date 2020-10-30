@@ -481,9 +481,37 @@ static GError *
 _check_container_sharding(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 {
 	GError *err = NULL;
+	gchar *shard_info_str = NULL;
+	struct shard_info_s *shard_info = NULL;
 	gchar *shards_str = NULL;
 	shards_container_t shards = NULL;
 	const gchar *path = oio_url_get(url, OIOURL_PATH);
+
+	if (oio_ext_is_sharding()) {
+		shard_info_str = sqlx_admin_get_str(sq3, M2V2_ADMIN_SHARDING_SHARD);
+		if (!shard_info_str) {
+			err = SYSERR("Not a shard container");
+			goto fail_check_range;
+		}
+
+		// It's a shard container, check range of shard container
+		if (!path) {
+			err = BADREQ("Missing path");
+			goto fail_check_range;
+		}
+
+		err = shard_info_decode(shard_info_str, &shard_info);
+		if (err) {
+			goto fail_check_range;
+		}
+
+		err = shard_info_check_range(shard_info, path);
+		if (err) {
+			goto fail_check_range;
+		}
+
+		goto end;
+	}
 
 	shards_str = sqlx_admin_get_str(sq3, M2V2_ADMIN_SHARDING_SHARDS);
 	if (!shards_str) {
@@ -494,30 +522,35 @@ _check_container_sharding(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 	// It's a root container, redirect to shard container
 	if (!path) {
 		err = BADREQ("Missing path");
-		goto fail;
+		goto fail_redirect;
 	}
 
 	err = shards_container_decode(shards_str, &shards);
 	if (err) {
-		goto fail;
+		goto fail_redirect;
 	}
 
 	struct shard_container_s *shard = shards_container_get_shard(shards, path);
 	if (!shard) {
 		err = SYSERR("No shard container found");
-		goto fail;
+		goto fail_redirect;
 	}
 
 	// Redirect to shard container
 	err = NEWERROR(CODE_REDIRECT_SHARD_CONTAINER, "%s", shard->cid);
 	goto end;
 
-fail:
+fail_check_range:
+	g_prefix_error(&err, "Failed to check range of shard container: ");
+	goto end;
+fail_redirect:
 	g_prefix_error(&err, "Failed to redirect to shard container: ");
 end:
 	if (err) {
 		m2b_close(sq3);
 	}
+	g_free(shard_info_str);
+	shard_info_free(shard_info);
 	g_free(shards_str);
 	shards_container_free(shards);
 	return err;

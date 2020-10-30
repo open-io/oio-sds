@@ -129,6 +129,10 @@ gboolean oio_ext_has_simulate_versioning(void);
 
 void oio_ext_set_simulate_versioning(const gboolean simulate_versioning);
 
+gboolean oio_ext_is_sharding(void);
+
+void oio_ext_set_sharding(const gboolean sharding);
+
 /** Enable or disable the performance data collection. */
 GHashTable *oio_ext_enable_perfdata(gboolean enabled);
 

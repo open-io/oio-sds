@@ -390,3 +390,17 @@ meta2_filter_extract_simulate_versioning(struct gridd_filter_ctx_s *ctx,
 			oio_str_parse_bool(simulate_versioning, FALSE));
 	return FILTER_OK;
 }
+
+int
+meta2_filter_extract_sharding(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GError *e = NULL;
+	gchar buf[1024];
+	TRACE_FILTER();
+	EXTRACT_OPT(NAME_MSGKEY_SHARDING_COMMAND);
+	const char *sharding = meta2_filter_ctx_get_param(ctx,
+			NAME_MSGKEY_SHARDING_COMMAND);
+	oio_ext_set_sharding(oio_str_parse_bool(sharding, FALSE));
+	return FILTER_OK;
+}

@@ -77,6 +77,7 @@ redirect_shard_container:
 				args->url = redirect_url;
 				client_clean(&ctx);
 				client_init(&ctx, args, NAME_SRVTYPE_META2, 1);
+				oio_ext_set_sharding(TRUE);
 				g_clear_error(&err);
 				goto redirect_shard_container;
 			}
@@ -106,6 +107,7 @@ redirect_shard_container:
 		args->rp->add_header(PROXYD_HEADER_PERFDATA, perfdata);
 	}
 
+	oio_ext_set_sharding(FALSE);
 	oio_ext_enable_perfdata(FALSE);
 	args->url = original_url;
 	oio_url_clean(redirect_url);

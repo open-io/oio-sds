@@ -181,6 +181,8 @@ struct oio_ext_local_s {
 	gchar *user_agent;
 	gchar *force_versioning;
 	guint8 simulate_versioning;
+	/** Request originates from a redirect from a root container. */
+	guint8 is_sharding;
 	gchar reqid[LIMIT_LENGTH_REQID];
 	GHashTable *perfdata;
 };
@@ -366,6 +368,16 @@ gboolean oio_ext_has_simulate_versioning(void) {
 void oio_ext_set_simulate_versioning(const gboolean simulate_versioning) {
 	struct oio_ext_local_s *l = _local_ensure();
 	l->simulate_versioning = BOOL(simulate_versioning);
+}
+
+gboolean oio_ext_is_sharding(void) {
+	const struct oio_ext_local_s *l = _local_ensure ();
+	return BOOL(l->is_sharding);
+}
+
+void oio_ext_set_sharding(const gboolean sharding) {
+	struct oio_ext_local_s *l = _local_ensure();
+	l->is_sharding = BOOL(sharding);
 }
 
 GHashTable *oio_ext_get_perfdata(void) {

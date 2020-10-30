@@ -144,6 +144,9 @@ message_marshall_gba(MESSAGE m, GError **err)
 	if (oio_ext_has_simulate_versioning())
 		metautils_message_add_field_strint(m, NAME_MSGKEY_SIM_VER, 1);
 
+	if (oio_ext_is_sharding())
+		metautils_message_add_field_strint(m, NAME_MSGKEY_SHARDING_COMMAND, 1);
+
 	if (oio_ext_get_perfdata())
 		metautils_message_add_field_strint(m, NAME_MSGKEY_PERFDATA, 1);
 

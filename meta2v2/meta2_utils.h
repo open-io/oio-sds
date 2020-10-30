@@ -297,4 +297,19 @@ struct shard_container_s *shards_container_get_shard(
 
 void shards_container_free(shards_container_t shards);
 
+struct shard_info_s {
+	gchar *root_cid;
+	gchar *lower;
+	gchar *upper;
+};
+
+gchar* shard_info_encode(struct shard_info_s *shard_info);
+
+GError* shard_info_decode(const gchar *str, struct shard_info_s **pshard_info);
+
+GError* shard_info_check_range(struct shard_info_s *shard_info,
+		const gchar *path);
+
+void shard_info_free(struct shard_info_s *shard_info);
+
 #endif /*OIO_SDS__meta2v2__meta2_utils_h*/
