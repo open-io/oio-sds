@@ -109,20 +109,36 @@ class RdirDispatcher(object):
         return all_services, all_rdir
 
     def assign_services(self, service_type,
-                        max_per_rdir=None, min_dist=None, **kwargs):
+                        max_per_rdir=None, min_dist=None, service_id=None,
+                        reassign=False, **kwargs):
         """
         Assign an rdir service to all `service_type` servers that aren't
         already assigned one.
 
         :param max_per_rdir: Maximum number of services an rdir can handle.
         :type max_per_rdir: `int`
-        :param min_dist: minimum required distance between any service and
+        :param min_dist: Minimum required distance between any service and
             its assigned rdir service.
         :type min_dist: `int`
+        :param service_id: Assign only this service ID.
+        :type service_id: `str`
+        :param reassign: Reassign an rdir service.
+        :type reassign: `bool`
+        :param dry_run: Display actions but do nothing.
+        :type dry_run: `bool`
         :returns: The list of `service_type` services that were assigned
             rdir services.
         """
         all_services = self.cs.all_services(service_type, **kwargs)
+        if service_id:
+            for provider in all_services:
+                provider_id = provider['tags'].get('tag.service_id',
+                                                   provider['addr'])
+                if service_id == provider_id:
+                    break
+            else:
+                raise ValueError('%s isn\'t a %s' % (service_id, service_type))
+            all_services = [provider]
         all_rdir = self.cs.all_services('rdir', True, **kwargs)
         if len(all_rdir) <= 0:
             raise ServiceUnavailable("No rdir service found in %s" % self.ns)
@@ -140,18 +156,26 @@ class RdirDispatcher(object):
                                            service_type='rdir', **kwargs)
                 rdir_host = _filter_rdir_host(resp)
                 try:
-                    provider['rdir'] = by_id[_make_id(self.ns, 'rdir',
-                                                      rdir_host)]
+                    rdir = by_id[_make_id(self.ns, 'rdir', rdir_host)]
+                    if reassign:
+                        rdir['tags']['stat.opened_db_count'] = \
+                            rdir['tags'].get('stat.opened_db_count', 0) - 1
+                        # TODO(adu) Delete database
+                        raise NotFound('Reassign an rdir services')
+                    provider['rdir'] = rdir
                 except KeyError:
                     self.logger.warn("rdir %s linked to %s %s seems down",
                                      rdir_host, service_type,
                                      provider_id)
+                    if reassign:
+                        raise NotFound('Reassign an rdir services')
             except NotFound:
                 try:
                     rdir = self._smart_link_rdir(provider_id, all_rdir,
                                                  service_type=service_type,
                                                  max_per_rdir=max_per_rdir,
                                                  min_dist=min_dist,
+                                                 reassign=reassign,
                                                  **kwargs)
                 except OioException as exc:
                     self.logger.warn("Failed to link an rdir to %s %s: %s",
@@ -200,7 +224,7 @@ class RdirDispatcher(object):
 
     def _smart_link_rdir(self, volume_id, all_rdir, max_per_rdir=None,
                          max_attempts=7, service_type='rawx', min_dist=None,
-                         **kwargs):
+                         reassign=False, dry_run=False, **kwargs):
         """
         Force the load balancer to avoid services that already host more
         bases than the average (or more than `max_per_rdir`)
@@ -229,13 +253,19 @@ class RdirDispatcher(object):
             # Retry without `avoids`, hoping the next iteration will rebalance
             polled = self._poll_rdir(known=known, min_dist=min_dist, **kwargs)
 
+        if dry_run:
+            # No association of the rdir to the rawx
+            # No creation in the rdir
+            return polled['id']
+
         # Associate the rdir to the rawx
         forced = {'host': polled['addr'], 'type': 'rdir',
                   'seq': 1, 'args': "", 'id': polled['id']}
         for i in range(max_attempts):
             try:
                 self.directory.force(RDIR_ACCT, volume_id, 'rdir',
-                                     forced, autocreate=True, **kwargs)
+                                     forced, autocreate=True,
+                                     replace=reassign, **kwargs)
                 break
             except ClientException as ex:
                 # Already done

@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -38,7 +38,7 @@ def _format_assignments(all_services, svc_col_title='Rawx'):
 
 
 class RdirBootstrap(Lister):
-    """Assign an rdir services"""
+    """Assign rdir services"""
 
     log = getLogger(__name__ + '.RdirBootstrap')
 
@@ -58,14 +58,24 @@ class RdirBootstrap(Lister):
             type=int,
             help=("Minimum required distance between any service and "
                   "its assigned rdir service."))
+        parser.add_argument(
+            '--service-id',
+            metavar='<service-id>',
+            help="Assign an rdir only for this service ID.")
+        parser.add_argument(
+            '--dry-run', action='store_true',
+            help='Display actions but do nothing.')
         return parser
 
     def take_action(self, parsed_args):
         dispatcher = self.app.client_manager.rdir_dispatcher
         try:
             all_services = dispatcher.assign_services(
-                parsed_args.service_type, parsed_args.max_per_rdir,
+                parsed_args.service_type,
+                max_per_rdir=parsed_args.max_per_rdir,
                 min_dist=parsed_args.min_dist,
+                service_id=parsed_args.service_id,
+                dry_run=parsed_args.dry_run,
                 connection_timeout=30.0, read_timeout=90.0)
         except OioException as exc:
             self.success = False
@@ -129,3 +139,55 @@ class RdirAssignments(Lister):
             results.sort()
             columns = ('Rdir', 'Number of bases', 'Bases')
         return columns, results
+
+
+class RdirReassign(Lister):
+    """Reassign rdir services"""
+
+    log = getLogger(__name__ + '.RdirReassign')
+
+    def get_parser(self, prog_name):
+        parser = super(RdirReassign, self).get_parser(prog_name)
+        parser.add_argument(
+            'service_type',
+            help="Which service type to assign rdir to.")
+        parser.add_argument(
+            '--max-per-rdir',
+            metavar='<N>',
+            type=int,
+            help="Maximum number of databases per rdir service.")
+        parser.add_argument(
+            '--min-dist',
+            metavar='<N>',
+            type=int,
+            help=("Minimum required distance between any service and "
+                  "its assigned rdir service."))
+        parser.add_argument(
+            '--service-id',
+            metavar='<service-id>',
+            help="Assign an rdir only for this service ID.")
+        parser.add_argument(
+            '--dry-run', action='store_true',
+            help='Display actions but do nothing.')
+        return parser
+
+    def take_action(self, parsed_args):
+        dispatcher = self.app.client_manager.rdir_dispatcher
+        try:
+            all_services = dispatcher.assign_services(
+                parsed_args.service_type,
+                reassign=True,
+                service_id=parsed_args.service_id,
+                max_per_rdir=parsed_args.max_per_rdir,
+                min_dist=parsed_args.min_dist,
+                dry_run=parsed_args.dry_run,
+                connection_timeout=30.0, read_timeout=90.0)
+        except OioException as exc:
+            self.success = False
+            self.log.warn('Failed to assign all %s services: %s',
+                          parsed_args.service_type, exc)
+            all_services, _ = dispatcher.get_assignments(
+                parsed_args.service_type, connection_timeout=30.0,
+                read_timeout=90.0)
+        return _format_assignments(all_services,
+                                   parsed_args.service_type.capitalize())
