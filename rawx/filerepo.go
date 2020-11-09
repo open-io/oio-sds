@@ -19,6 +19,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -459,7 +460,8 @@ func setOrHasXattr(path, key, value string) error {
 	if bytes.Equal([]byte(value), buf[:sz]) {
 		return nil
 	}
-	return errors.New("XATTR mismatch")
+	return fmt.Errorf("XATTR '%s' of '%s' mismatches with '%s'",
+		key, path, value)
 }
 
 func xattrKey(name string) string {
