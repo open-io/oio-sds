@@ -184,7 +184,7 @@ register_namespace_service(const struct service_info_s *si)
 
 	struct service_info_s *si_copy = service_info_dup(si);
 	si_copy->score.value = SCORE_UNSET;
-	si_copy->score.timestamp = oio_ext_real_time () / G_TIME_SPAN_SECOND;
+	si_copy->score.timestamp = oio_ext_real_seconds();
 	metautils_srvinfo_ensure_tags (si_copy);
 	GError *err = conscience_push_service (si->ns_name, si_copy);
 	service_info_clean(si_copy);

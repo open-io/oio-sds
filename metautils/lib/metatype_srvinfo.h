@@ -109,4 +109,17 @@ gchar * service_info_key (const struct service_info_s *si);
 void service_info_to_lb_item(const struct service_info_s *si,
 		struct oio_lb_item_s *item);
 
+/* -------------------------------------------------------------------------- */
+
+struct service_info_dated_s *service_info_dated_new(
+		struct service_info_s *si, time_t lock_mtime);
+
+void service_info_dated_free(struct service_info_dated_s *sid);
+
+void service_info_dated_encode_json(GString *gstr,
+		const struct service_info_dated_s *sid, gboolean full);
+
+GError* service_info_dated_load_json(const gchar *encoded,
+		struct service_info_dated_s **out, gboolean permissive);
+
 #endif /*OIO_SDS__metautils__lib__metatype_srvinfo_h*/
