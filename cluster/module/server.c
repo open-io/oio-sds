@@ -1494,15 +1494,6 @@ restart_srv_from_file(gchar *path)
 
 	if (!g_file_test(path, G_FILE_TEST_EXISTS)) {
 		return FALSE;
-	} else if (hub_group_size > 0) {
-		GRID_NOTICE("Conscience hub enabled "
-				"(%d other nodes), "
-				"ignoring persistence file %s, "
-				"waiting to receive a service list.",
-				hub_group_size, path);
-		for (int i = 8; i > 0 && !hub_working; i--)
-			g_usleep(250 * G_TIME_SPAN_MILLISECOND);
-		return FALSE;
 	}
 
 	gboolean ret = FALSE;
