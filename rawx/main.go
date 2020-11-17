@@ -24,6 +24,7 @@ http handler.
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -79,6 +80,54 @@ func installSigHandlers(srv *http.Server) {
 			}
 		}
 	}()
+}
+
+func taskProbeRepository(rawx *rawxService, finished chan bool) {
+	for {
+		for i := 0; i < 5; i++ {
+			time.Sleep(time.Second)
+			select {
+			case <-finished:
+				LogInfo("Stop the probe to check the repository")
+				return
+			default:
+			}
+		}
+
+		/* Try a directory creation */
+		path := fmt.Sprintf("%s/probe-%s", rawx.path,
+			randomString(16, hexaCharacters))
+		LogDebug("Probing directory %s", path)
+		err := os.Mkdir(path, 0755)
+		os.Remove(path)
+		if err != nil {
+			msg := fmt.Sprintf("IO error on %s %s: %v", rawx.getURL(), path,
+				err)
+			LogWarning(msg)
+			rawx.lastIOError = time.Now()
+			rawx.lastIOMsg = msg
+			continue
+		}
+
+		/* Try a file creation */
+		path = fmt.Sprintf("%s/probe-%s", rawx.path,
+			randomString(16, hexaCharacters))
+		LogDebug("Probing file %s", path)
+		file, err := os.Create(path)
+		file.Close()
+		os.Remove(path)
+		if err != nil {
+			msg := fmt.Sprintf("IO error on %s %s: %v", rawx.getURL(), path,
+				err)
+			LogWarning(msg)
+			rawx.lastIOError = time.Now()
+			rawx.lastIOMsg = msg
+			continue
+		}
+
+		rawx.lastIOSuccess = time.Now()
+		rawx.lastIOMsg = "n/a"
+	}
 }
 
 func main() {
@@ -144,14 +193,18 @@ func main() {
 	chunkrepo.sub.openNonBlock = opts.getBool("nonblock", configDefaultOpenNonblock)
 
 	rawx := rawxService{
-		ns:           namespace,
-		url:          rawxURL,
-		path:         chunkrepo.sub.root,
-		id:           rawxID,
-		repo:         chunkrepo,
-		bufferSize:   1024 * opts.getInt("buffer_size", uploadBufferSizeDefault/1024),
-		checksumMode: checksumAlways,
-		compression:  opts["compression"],
+		ns:            namespace,
+		url:           rawxURL,
+		path:          chunkrepo.sub.root,
+		id:            rawxID,
+		repo:          chunkrepo,
+		bufferSize:    1024 * opts.getInt("buffer_size", uploadBufferSizeDefault/1024),
+		checksumMode:  checksumAlways,
+		compression:   opts["compression"],
+		lastIOError:   time.Time{},
+		lastIOSuccess: time.Time{},
+		lastIOMsg:     "n/a",
+		lastIOReport:  time.Time{},
 	}
 
 	// Clamp the buffer size to admitted values
@@ -279,10 +332,14 @@ func main() {
 		}
 	}
 
+	finished := make(chan bool)
+	go taskProbeRepository(&rawx, finished)
+
 	if err := srv.ListenAndServe(); err != nil {
 		LogWarning("HTTP Server exiting: %v", err)
 	}
 
+	finished <- true
 	rawx.notifier.stop()
 	logger.close()
 }

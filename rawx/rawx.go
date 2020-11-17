@@ -36,6 +36,12 @@ type rawxService struct {
 	compression  string
 
 	uploadBufferPool bufferPool
+
+	// for IO errors
+	lastIOError   time.Time
+	lastIOSuccess time.Time
+	lastIOMsg     string
+	lastIOReport  time.Time
 }
 
 type rawxRequest struct {
@@ -103,6 +109,41 @@ func (rr *rawxRequest) replyError(err error) {
 	}
 }
 
+func (rawx *rawxService) getURL() string {
+	if rawx.id == "" {
+		return rawx.url
+	}
+	return rawx.id
+}
+
+func (rawx *rawxService) isIOok() bool {
+	// Never touched -> OK
+	if rawx.lastIOError.Equal(time.Time{}) &&
+		rawx.lastIOSuccess.Equal(time.Time{}) {
+		return true
+	}
+
+	// The most recent activity is an error -> KO
+	if rawx.lastIOError.After(rawx.lastIOSuccess) {
+		return false
+	}
+
+	// Check the probe thread was not stalled
+	now := time.Now()
+	oneMinuteBefore := now.Add(-time.Minute)
+	ok := rawx.lastIOSuccess.After(oneMinuteBefore)
+	if !ok {
+		// If this function is called often, only report once per minute
+		if now.After(rawx.lastIOReport.Add(time.Minute)) {
+			rawx.lastIOReport = now
+			LogWarning("IO error checker stalled for %d minutes",
+				now.Sub(rawx.lastIOSuccess)/time.Minute)
+		}
+	}
+
+	return ok
+}
+
 func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 	rawxreq := rawxRequest{
 		rawx:      rawx,
@@ -129,6 +170,8 @@ func (rawx *rawxService) ServeHTTP(rep http.ResponseWriter, req *http.Request) {
 
 	if len(req.Host) > 0 && (req.Host != rawx.id && req.Host != rawx.url) {
 		rawxreq.replyCode(http.StatusTeapot)
+	} else if !rawx.isIOok() {
+		rawxreq.replyCode(http.StatusServiceUnavailable)
 	} else {
 		for _dslash(req.URL.Path) {
 			req.URL.Path = req.URL.Path[1:]
