@@ -116,7 +116,7 @@ class TestFilters(BaseTestCase):
             self.assertIn('worm', str(exc))
         else:
             self.fail("Delete without admin mode: no exception")
-        downloaded_data = ''.join(content.fetch())
+        downloaded_data = b''.join(content.fetch())
         self.assertEqual(downloaded_data, data2)
 
         # Delete with admin mode

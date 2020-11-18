@@ -34,5 +34,3 @@ fold Warnings ./tools/oio-build-with-warnings.sh ${PWD}
 fold Copyright ./tools/oio-check-copyright.sh ${PWD}
 fold Virtualenv python ./setup.py develop
 fold Variables tox -e variables
-fold VariablesPy3 tox -e py3_variables
-
