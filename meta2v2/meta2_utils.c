@@ -2837,21 +2837,22 @@ _purge_deleted_aliases(struct sqlx_sqlite3_s *sq3, gint64 delay,
 	GError *err = NULL;
 	gchar *sql;
 	GVariant *params[] = {NULL, NULL, NULL};
-	gint64 now = oio_ext_real_time () / G_TIME_SPAN_SECOND;
+	gint64 now = oio_ext_real_time();
 	gint64 time_limit = 0;
 
 	// All aliases which have one version deleted (the last) older than time_limit
 	if (alias) {
 		sql = (" alias IN "
 				"(SELECT alias FROM "
-				"  (SELECT alias,ctime,deleted FROM aliases WHERE alias = ? "
-				"   GROUP BY alias) "
-				" WHERE deleted AND ctime < ?) ");
+				"  (SELECT alias, MAX(version) as version, deleted "
+				"   FROM aliases WHERE alias = ? GROUP BY alias) "
+				" WHERE deleted AND version < ?) ");
 	} else {
 		sql = (" alias IN "
 				"(SELECT alias FROM "
-				"  (SELECT alias,ctime,deleted FROM aliases GROUP BY alias) "
-				" WHERE deleted AND ctime < ?) ");
+				"  (SELECT alias, MAX(version) as version, deleted "
+				"   FROM aliases GROUP BY alias) "
+				" WHERE deleted AND version < ?) ");
 	}
 
 	if (now < 0) {
@@ -2860,6 +2861,7 @@ _purge_deleted_aliases(struct sqlx_sqlite3_s *sq3, gint64 delay,
 		return err;
 	}
 
+	delay = delay * G_TIME_SPAN_SECOND;
 	if (delay >= 0 && delay < now) {
 		time_limit = now - delay;
 	}

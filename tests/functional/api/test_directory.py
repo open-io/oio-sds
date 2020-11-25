@@ -391,11 +391,12 @@ class TestDirectoryAPI(BaseTestCase):
 
         # But ensure all calls have been made
         link_calls = [call(rawx['addr'], ANY, max_per_rdir=ANY, max_attempts=1,
-                           min_dist=ANY, service_type='rawx')
+                           min_dist=ANY, service_type='rawx', reassign=False)
                       for rawx in all_srvs['rawx']]
         disp._smart_link_rdir.assert_has_calls(link_calls)
         force_calls = \
-            [call(RDIR_ACCT, rawx['addr'], 'rdir', ANY, autocreate=True)
+            [call(RDIR_ACCT, rawx['addr'], 'rdir', ANY, autocreate=True,
+                  replace=ANY)
              for rawx in all_srvs['rawx']]
         disp.directory.force.assert_has_calls(force_calls)
 

@@ -1021,7 +1021,7 @@ _task_probe_repository(gpointer p)
 	(void) g_rmdir(path);
 	if (rc != 0) {
 		gchar *msg = g_strdup_printf("IO error on %s %s: (%d) %s",
-				ss->service_id->str, path, errsav, strerror(errsav));
+				_get_url(ss), path, errsav, strerror(errsav));
 		GRID_WARN("%s", msg);
 		grid_daemon_notify_io_status(ss->dispatcher, FALSE, msg);
 		g_free(msg);
@@ -1037,7 +1037,7 @@ _task_probe_repository(gpointer p)
 	(void) g_unlink(path);
 	if (!rc) {
 		gchar *msg = g_strdup_printf("IO error on %s %s: (%d) %s",
-				ss->service_id->str, path, err->code, err->message);
+				_get_url(ss), path, err->code, err->message);
 		GRID_WARN("%s", msg);
 		g_clear_error(&err);
 		grid_daemon_notify_io_status(ss->dispatcher, FALSE, msg);

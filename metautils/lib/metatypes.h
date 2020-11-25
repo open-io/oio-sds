@@ -149,6 +149,7 @@ typedef struct namespace_info_s
 typedef struct score_s
 {
 	gint32 value;		/**< The score value */
+	// Watch out for 19 Jan 2038 03:14:07
 	gint32 timestamp;	/**< The timestamp this score was created */
 } score_t;
 
@@ -220,5 +221,15 @@ typedef struct addr_rule_s
 	gchar* network_mask; /**< IPv4 in decimal dotted notation */
 	gboolean authorize;  /**< Allow (TRUE) or deny (FALSE) */
 } addr_rule_t;
+
+/**
+ * Type to store a service info
+ */
+typedef struct service_info_dated_s
+{
+	service_info_t *si; /**< The service info */
+	time_t lock_mtime;  /**< The modification time of the lock */
+	time_t tags_mtime;  /**< The modification time of the tags */
+} service_info_dated_t;
 
 #endif /*OIO_SDS__metautils__lib__metatypes_h*/

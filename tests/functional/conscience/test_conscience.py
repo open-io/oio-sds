@@ -15,6 +15,7 @@
 
 import logging
 import random
+import time
 
 from flaky import flaky
 from oio.common.json import json
@@ -320,3 +321,48 @@ class TestConscienceFunctional(BaseTestCase):
         self._flush_proxy()
         self._reload_proxy()
         check(404)
+
+    def test_restart_conscience_with_locked_services(self):
+        services = self._list_srvs('rawx')
+        for service in services:
+            service['ns'] = self.ns
+            service['type'] = 'rawx'
+        try:
+            for service in services:
+                self._lock_srv(service)
+
+            # Wait until all conscience are up to date
+            for _ in range(4):
+                for _ in range(8):
+                    self._flush_proxy()
+                    self._reload_proxy()
+                    expeted_services = self._list_srvs('rawx')
+                    for service in expeted_services:
+                        if not service['tags'].get('tag.lock'):
+                            break
+                    else:
+                        continue
+                    break
+                else:
+                    break
+                time.sleep(1)
+            else:
+                self.fail("At least one service unlocked")
+            self.assertEqual(len(services), len(expeted_services))
+            expeted_services.sort()
+
+            self._service('%s-conscience-1' % self.ns, 'stop')
+            self._service('%s-conscience-1' % self.ns, 'start')
+            time.sleep(1)
+
+            for _ in range(8):
+                self._flush_proxy()
+                self._reload_proxy()
+                self.assertListEqual(expeted_services,
+                                     sorted(self._list_srvs('rawx')))
+        finally:
+            try:
+                for service in services:
+                    self._unlock_srv(service)
+            except Exception:
+                pass

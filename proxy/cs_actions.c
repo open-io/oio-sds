@@ -342,7 +342,6 @@ _registration_batch (enum reg_op_e op, GSList *services)
 
 		if (ttl_expire_local_services > 0 && op != REGOP_UNLOCK) {
 			struct service_info_s *v = service_info_dup (si);
-			v->score.timestamp = oio_ext_monotonic_seconds ();
 			REG_WRITE(
 					const struct service_info_s *si0 = lru_tree_get(srv_registered, k);
 					if (si0)
