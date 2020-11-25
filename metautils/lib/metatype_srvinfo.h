@@ -95,5 +95,17 @@ gchar ** metautils_service_list_to_urlv(GSList *l);
 /* Build a serialized representation of meta1_url that correspond
  * to the given service. */
 gchar * metautils_service_to_m1url(const struct service_info_s *si, gint64 seq);
+/* -------------------------------------------------------------------------- */
+
+struct service_info_dated_s *service_info_dated_new(
+		struct service_info_s *si, time_t lock_mtime);
+
+void service_info_dated_free(struct service_info_dated_s *sid);
+
+void service_info_dated_encode_json(GString *gstr,
+		const struct service_info_dated_s *sid, gboolean full);
+
+GError* service_info_dated_load_json(const gchar *encoded,
+		struct service_info_dated_s **out, gboolean permissive);
 
 #endif /*OIO_SDS__metautils__lib__metatype_srvinfo_h*/

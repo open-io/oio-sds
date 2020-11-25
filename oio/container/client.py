@@ -239,7 +239,7 @@ class ContainerClient(ProxyClient):
             return results
         except exceptions.TooLarge:
             # Batch too large for the proxy
-            pivot = len(containers) / 2
+            pivot = len(containers) // 2
             head = containers[:pivot]
             tail = containers[pivot:]
             if head:
@@ -677,7 +677,7 @@ class ContainerClient(ProxyClient):
                 results.append((obj, rc))
             return results
         except exceptions.TooLarge:
-            pivot = len(paths) / 2
+            pivot = len(paths) // 2
             head = paths[:pivot]
             tail = paths[pivot:]
             if head:

@@ -17,17 +17,23 @@
 package main
 
 import (
+	"math/rand"
 	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 )
 
+// Hexadecimal characters
+const hexaCharacters = "0123456789ABCDEF"
+
 // An array of character considered as invalid hexadecimal.
 // YOU SHOULD NOT alter this this unless you know what you are doing
 var notHexa [256]bool
 
 func init() {
+	rand.Seed(time.Now().UnixNano())
+
 	hexa := []byte{
 		'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
 		'a', 'b', 'c', 'd', 'e', 'f',
@@ -75,4 +81,12 @@ func (pt *PeriodicThrottle) Ok() bool {
 		return atomic.CompareAndSwapInt64(&pt.nanoLast, nanoThen, nanoNow)
 	}
 	return false
+}
+
+func randomString(length int, charset string) string {
+	b := make([]byte, length)
+	for i := range b {
+		b[i] = charset[rand.Intn(len(charset))]
+	}
+	return string(b)
 }

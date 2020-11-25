@@ -246,6 +246,7 @@ void service_info_clean_tags(struct service_info_s *si)
 			service_tag_destroy(tag);
 		}
 		g_ptr_array_free(pa, TRUE);
+		si->tags = NULL;
 	}
 }
 
@@ -592,3 +593,113 @@ metautils_service_list_to_urlv(GSList *l)
 	return (gchar**) g_ptr_array_free(tmp, FALSE);
 }
 
+/* -------------------------------------------------------------------------- */
+
+struct service_info_dated_s *
+service_info_dated_new(struct service_info_s *si, time_t lock_mtime)
+{
+	struct service_info_dated_s *sid = g_malloc0(sizeof(
+			struct service_info_dated_s));
+	sid->si = service_info_dup(si);
+	sid->lock_mtime = lock_mtime;
+	sid->tags_mtime = si->score.timestamp * G_TIME_SPAN_SECOND;
+	return sid;
+}
+
+void
+service_info_dated_free(struct service_info_dated_s *sid)
+{
+	if (!sid)
+		return;
+
+	service_info_clean(sid->si);
+	g_free(sid);
+}
+
+void
+service_info_dated_encode_json(GString *gstr,
+		const struct service_info_dated_s *sid, gboolean full)
+{
+	if (!sid)
+		return;
+	gchar straddr[STRLEN_ADDRINFO];
+	grid_addrinfo_to_string(&(sid->si->addr), straddr, sizeof(straddr));
+	g_string_append_c(gstr, '{');
+	OIO_JSON_append_str(gstr, "addr", straddr);
+	g_string_append_c(gstr, ',');
+	OIO_JSON_append_int(gstr, "score", sid->si->score.value);
+	if (full) {
+		g_string_append_c(gstr, ',');
+		OIO_JSON_append_str(gstr, "ns", sid->si->ns_name);
+		g_string_append_c(gstr, ',');
+		OIO_JSON_append_str(gstr, "type", sid->si->type);
+	}
+	g_string_append_static(gstr, ",\"tags\":{");
+	_append_all_tags(gstr, sid->si->tags);
+	g_string_append_static(gstr, "},\"mtime\":{");
+	OIO_JSON_append_int(gstr, "lock", sid->lock_mtime);
+	g_string_append_c(gstr, ',');
+	OIO_JSON_append_int(gstr, "tags", sid->tags_mtime);
+	g_string_append_static(gstr, "}}");
+}
+
+GError*
+service_info_dated_load_json(const gchar *encoded,
+		struct service_info_dated_s **out, gboolean permissive)
+{
+	struct json_tokener *tok = json_tokener_new();
+	struct json_object *obj = json_tokener_parse_ex(tok,
+			encoded, strlen(encoded));
+	json_tokener_free(tok);
+
+	struct service_info_dated_s *sid = NULL;
+	struct service_info_s *si = NULL;
+
+	GError *err = service_info_load_json_object(obj, &si, permissive);
+	if (err)
+		goto end;
+
+	struct json_object *mtime = NULL, *lock_mtime = NULL, *tags_mtime = NULL;
+	struct oio_ext_json_mapping_s mapping[] = {
+		{"mtime", &mtime, json_type_object, 0},
+		{NULL, NULL, 0, 0}
+	};
+	err = oio_ext_extract_json(obj, mapping);
+	if (err)
+		goto end;
+	if (mtime) {
+		struct oio_ext_json_mapping_s mapping_mtime[] = {
+			{"lock", &lock_mtime, json_type_int, 0},
+			{"tags", &tags_mtime, json_type_int, 0},
+			{NULL, NULL, 0, 0}
+		};
+		err = oio_ext_extract_json(mtime, mapping_mtime);
+		if (err)
+			goto end;
+	}
+	sid = g_malloc0(sizeof(struct service_info_dated_s));
+	sid->si = si;
+	if (lock_mtime) {
+		sid->lock_mtime = json_object_get_int64(lock_mtime);
+	} else {
+		/* Conscience is not up to date.
+		 * Consider the service up to date. */
+		sid->lock_mtime = oio_ext_real_time();
+	}
+	if (tags_mtime) {
+		sid->tags_mtime = json_object_get_int64(tags_mtime);
+	} else {
+		/* Conscience is not up to date.
+		 * Consider the service up to date. */
+		sid->tags_mtime = oio_ext_real_time();
+	}
+
+end:
+	json_object_put(obj);
+	if (!err) {
+		*out = sid;
+	} else {
+		service_info_clean(si);
+	}
+	return err;
+}
