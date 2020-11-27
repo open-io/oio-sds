@@ -70,6 +70,8 @@ class AccountBackend(RedisConnection):
             if bucket_name == container_name then
               redis.call('ZREM', buckets_list_key, bucket_name);
               redis.call('ZREM', '%(bucket_list_prefix)s', bucket_name);
+              -- Also delete the bucket
+              redis.call('DEL', bucket_key);
             end;
             return;
           end;
