@@ -214,6 +214,7 @@ class ConscienceAgent(Daemon):
         self.conf = conf
         self.logger = get_logger(conf)
         self.load_services()
+        self.check_for_conflicts()
         self.init_watchers(self.conf['services'])
 
     def stop(self):
@@ -274,6 +275,24 @@ class ConscienceAgent(Daemon):
                 name = os.path.splitext(name)[0]
                 self.conf['services'][name] = parse_config(cfgfile)
                 self.conf['services'][name]['cfgfile'] = cfgfile
+
+    def check_for_conflicts(self):
+        per_sock = dict()
+        for name, desc in self.conf['services'].items():
+            hostport = ':'.join((desc['host'], str(desc.get('port', 80))))
+            per_sock.setdefault(hostport, list()).append((name, desc))
+
+        for hostport, services in per_sock.items():
+            if len(services) > 1:
+                conflicting = ['%s (%s)' % (name, desc['type'])
+                               for name, desc in services]
+                self.logger.error(
+                    ("The following services are configured with the same "
+                     "endpoint (%s): %s. Please fix the configuration. "
+                     "Until then, they won't be updated."),
+                    hostport, ', '.join(conflicting))
+                for name, _ in services:
+                    del self.conf['services'][name]
 
 
 CHECKERS_MODULES = load_modules('oio.conscience.checker')
