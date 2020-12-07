@@ -1924,7 +1924,7 @@ class TestContainerStorageApiUsingCache(ObjectStorageApiTestBase):
             self.account, self.container)
         # Delete properties (and drop the cache)
         self.api.container_del_properties(
-            self.account, self.container, properties.keys())
+            self.account, self.container, list(properties.keys()))
         self.assertEqual(3, self.api.container._direct_request.call_count)
         self.assertEqual(0, len(self.cache))
 
@@ -1997,7 +1997,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         self.assertEqual(1, len(self.cache))
 
         self.api.object_del_properties(
-            self.account, self.container, self.path, properties.keys())
+            self.account, self.container, self.path, list(properties.keys()))
         self.assertEqual(4, self.api.container._direct_request.call_count)
         self.assertEqual(0, len(self.cache))
 
@@ -2084,7 +2084,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         data = b''
         for chunk in stream:
             data += chunk
-        self.assertEqual('cache', data)
+        self.assertEqual(b'cache', data)
         self.assertEqual(1, self.api.container._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
 
@@ -2094,7 +2094,7 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         data = b''
         for chunk in stream:
             data += chunk
-        self.assertEqual('cache', data)
+        self.assertEqual(b'cache', data)
         self.assertEqual(1, self.api.container._direct_request.call_count)
         self.assertEqual(1, len(self.cache))
 
@@ -2146,5 +2146,5 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         data = b''
         for chunk in stream:
             data += chunk
-        self.assertEqual('overwritten', data)
+        self.assertEqual(b'overwritten', data)
         self.assertEqual(len('overwritten'), int(meta['size']))
