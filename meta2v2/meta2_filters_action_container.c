@@ -245,10 +245,58 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 			_bean_clean(bean);
 		}
 	}
+	void s3_list_end_cb(struct sqlx_sqlite3_s *sq3) {
+		if (!oio_ext_is_shard()) {
+			// Not a request for a shard
+			return;
+		} else if (!sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
+			// Should never happen
+			GRID_WARN("Failed to find root information");
+			return;
+		}
+
+		if (truncated) {
+			// Already truncated
+			return;
+		}
+
+		GError *err = NULL;
+		gchar *shard_upper = m2db_get_sharding_upper(sq3, &err);
+		if (err) {
+			GRID_WARN("Failed to get shard upper: (%d) %s",
+					err->code, err->message);
+			g_clear_error(&err);
+			goto end;
+		}
+		if (!*shard_upper) {
+			// Last shard
+			goto end;
+		}
+
+		if (lp->prefix
+				// The prefix is before the last object of this shard
+				&& g_strcmp0(lp->prefix, shard_upper) <= 0
+				// The last object of this shard desn't start with the prefix
+				&& !g_str_has_prefix(shard_upper, lp->prefix))
+			goto end;
+		if (lp->marker_end
+				// The marker end is before the last object of this shard
+				&& g_strcmp0(lp->marker_end, shard_upper) <= 0)
+			goto end;
+
+		// In all other cases, the list is truncated
+		truncated = TRUE;
+		g_free(next_marker);
+		next_marker = shard_upper;
+		shard_upper = NULL;
+
+end:
+		g_free(shard_upper);
+	}
 
 	lp->maxkeys ++;
 	e = meta2_backend_list_aliases(m2b, url, lp, headers, s3_list_cb, NULL,
-			&properties);
+			s3_list_end_cb, &properties);
 	obc->l = g_slist_reverse(obc->l);
 
 	if (NULL != e) {
@@ -308,6 +356,8 @@ _load_list_params(struct list_params_s *lp, struct gridd_filter_ctx_s *ctx,
 
 	lp->prefix = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_PREFIX);
 	lp->marker_start = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MARKER);
+	if (g_strcmp0(lp->prefix, lp->marker_start) > 0)
+		lp->marker_start = lp->prefix;
 	lp->marker_end = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MARKER_END);
 	const char *maxkeys_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MAX_KEYS);
 	if (NULL != maxkeys_str)
