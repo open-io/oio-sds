@@ -134,6 +134,16 @@ _reply_common_error (struct req_args_s *args, GError *err)
 	switch (err->code) {
 		case CODE_BAD_REQUEST:
 			return _reply_format_error (args, err);
+		// Low level codes changed to 503
+		case ERRCODE_CONN_REFUSED:
+		case ERRCODE_CONN_RESET:
+		case ERRCODE_CONN_CLOSED:
+		case ERRCODE_CONN_TIMEOUT:
+		case ERRCODE_CONN_NOROUTE:
+		case ERRCODE_READ_TIMEOUT:
+		case CODE_AVOIDED:
+		case CODE_NETWORK_ERROR:
+		// High level codes changed to 503
 		case CODE_TOOMANY_REDIRECT:
 		case CODE_UNAVAILABLE:
 		case CODE_GATEWAY_TIMEOUT:  // returned by server
