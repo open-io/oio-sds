@@ -197,7 +197,8 @@ check_list_count(struct meta2_backend_s *m2, struct oio_url_s *url,
 	struct list_params_s lp = {0};
 	lp.flag_allversion = ~0;
 
-	err = meta2_backend_list_aliases(m2, url, &lp, NULL, _count, NULL, NULL);
+	err = meta2_backend_list_aliases(m2, url, &lp, NULL, _count, NULL, NULL,
+			NULL);
 	g_assert_no_error(err);
 	GRID_DEBUG("TEST list_aliases counter=%u expected=%u", counter, expected);
 	g_assert(counter == expected);

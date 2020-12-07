@@ -47,12 +47,8 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 {
 	GSList **out_list = NULL;
 
-	CLIENT_CTX(ctx, args, NAME_SRVTYPE_META2, 1);
-	ctx.which = how;
-	if (decoder) {
-		ctx.decoder_data = out;
-		ctx.decoder = decoder;
-	} else if (out) {
+	CLIENT_CTX2(ctx, args, NAME_SRVTYPE_META2, 1, how, decoder, out);
+	if (!ctx.decoder && out) {
 		out_list = (GSList **) out;
 		*out_list = NULL;
 	}
@@ -76,7 +72,8 @@ redirect_shard_container:
 				oio_url_set(redirect_url, OIOURL_HEXID, err->message);
 				args->url = redirect_url;
 				client_clean(&ctx);
-				client_init(&ctx, args, NAME_SRVTYPE_META2, 1);
+				client_init(&ctx, args, NAME_SRVTYPE_META2, 1, how,
+						decoder, out);
 				oio_ext_set_sharding(TRUE);
 				g_clear_error(&err);
 				goto redirect_shard_container;
@@ -1755,8 +1752,8 @@ static GError * _list_loop (struct req_args_s *args,
 		if (in0->maxkeys > 0)
 			in.maxkeys = in0->maxkeys - (count + g_tree_nnodes(tree_prefixes));
 		in.marker_start = _build_next_marker(
-				out0->next_marker?: in0->marker_start,
-				ctx.latest_name, ctx.latest_prefix);
+				in0->marker_start,
+				out0->next_marker?: ctx.latest_name, ctx.latest_prefix);
 
 		/* Action */
 		err = _resolve_meta2(args, _prefer_slave(), _pack, &out,

@@ -623,7 +623,8 @@ GBytes* service_is_wanted (const char *type) {
 }
 
 void client_init (struct client_ctx_s *ctx, struct req_args_s *args,
-		const char *srvtype, gint64 seq) {
+		const char *srvtype, gint64 seq, enum proxy_preference_e how,
+		client_on_reply decoder, gpointer out) {
 	memset(ctx, 0, sizeof(*ctx));
 	ctx->url = args->url;
 	ctx->type = srvtype;
@@ -633,7 +634,11 @@ void client_init (struct client_ctx_s *ctx, struct req_args_s *args,
 	if (SERVICE_ID())
 		ctx->which = CLIENT_SPECIFIED;
 	else
-		ctx->which = CLIENT_PREFER_NONE;
+		ctx->which = how;
+	if (decoder) {
+		ctx->decoder = decoder;
+		ctx->decoder_data = out;
+	}
 }
 
 void client_clean (struct client_ctx_s *ctx) {

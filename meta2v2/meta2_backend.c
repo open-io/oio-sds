@@ -478,14 +478,13 @@ m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
 }
 
 static GError *
-_check_container_sharding(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
+_check_container_sharding(struct sqlx_sqlite3_s *sq3, const gchar *path)
 {
 	GError *err = NULL;
 	gchar *shard_info_str = NULL;
 	struct shard_info_s *shard_info = NULL;
 	gchar *shards_str = NULL;
 	shards_container_t shards = NULL;
-	const gchar *path = oio_url_get(url, OIOURL_PATH);
 
 	if (oio_ext_is_sharding()) {
 		shard_info_str = sqlx_admin_get_str(sq3, M2V2_ADMIN_SHARDING_SHARD);
@@ -554,6 +553,13 @@ end:
 	g_free(shards_str);
 	shards_container_free(shards);
 	return err;
+}
+
+static GError *
+_check_container_sharding2(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
+{
+	const gchar *path = oio_url_get(url, OIOURL_PATH);
+	return _check_container_sharding(sq3, path);
 }
 
 static GError *
@@ -1079,7 +1085,9 @@ end:
 GError*
 meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		struct list_params_s *lp, GSList *headers,
-		m2_onbean_cb cb, gpointer u0, gchar ***out_properties)
+		m2_onbean_cb cb, gpointer u0,
+		void (*end_cb)(struct sqlx_sqlite3_s *sq3),
+		gchar ***out_properties)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1091,9 +1099,25 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	guint32 open_mode = lp->flag_local ? M2V2_FLAG_LOCAL: 0;
 	err = m2b_open(m2b, url, _mode_readonly(open_mode), &sq3);
 	if (!err) {
+		gchar *marker_start = NULL;
+		if (lp->marker_start) {
+			/* HACK: "\x01" is the (UTF-8 encoded) first unicode */
+			marker_start = g_strdup_printf("%s\x01", lp->marker_start);
+		} else {
+			marker_start = g_strdup("");
+		}
+		err = _check_container_sharding(sq3, marker_start);
+		g_free(marker_start);
+	}
+	if (!err) {
 		err = m2db_list_aliases(sq3, lp, headers, cb, u0);
-		if (!err && out_properties)
-			*out_properties = sqlx_admin_get_keyvalues (sq3);
+		if (!err) {
+			if (out_properties)
+				*out_properties = sqlx_admin_get_keyvalues(sq3);
+
+			if (end_cb)
+				end_cb(sq3);
+		}
 		m2b_close(sq3);
 	}
 
@@ -1113,7 +1137,7 @@ meta2_backend_get_alias(struct meta2_backend_s *m2b,
 
 	err = m2b_open(m2b, url, _mode_readonly(flags), &sq3);
 	if (!err) {
-		err = _check_container_sharding(sq3, url);
+		err = _check_container_sharding2(sq3, url);
 	}
 	if (!err) {
 		err = m2db_get_alias(sq3, url, flags, cb, u0);
@@ -1168,7 +1192,7 @@ meta2_backend_drain_content(struct meta2_backend_s *m2,
 	struct sqlx_repctx_s *repctx = NULL;
 	err = m2b_open(m2, url, M2V2_OPEN_MASTERONLY | M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
-		err = _check_container_sharding(sq3, url);
+		err = _check_container_sharding2(sq3, url);
 	}
 	if (!err) {
 		EXTRA_ASSERT(sq3 != NULL);
@@ -1194,7 +1218,7 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
-		err = _check_container_sharding(sq3, url);
+		err = _check_container_sharding2(sq3, url);
 	}
 	if (!err) {
 		struct sqlx_repctx_s *repctx = NULL;
@@ -1256,7 +1280,7 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
-		err = _check_container_sharding(sq3, url);
+		err = _check_container_sharding2(sq3, url);
 	}
 	if (!err) {
 		struct m2db_put_args_s args;
@@ -1313,7 +1337,7 @@ meta2_backend_change_alias_policy(struct meta2_backend_s *m2b,
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
-		err = _check_container_sharding(sq3, url);
+		err = _check_container_sharding2(sq3, url);
 	}
 	if (!err) {
 		struct m2db_put_args_s args;
@@ -1367,7 +1391,7 @@ meta2_backend_update_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
-		err = _check_container_sharding(sq3, url);
+		err = _check_container_sharding2(sq3, url);
 	}
 	if (!err) {
 		GSList *deleted_objects = NULL;
@@ -1412,7 +1436,7 @@ meta2_backend_truncate_content(struct meta2_backend_s *m2b,
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
-		err = _check_container_sharding(sq3, url);
+		err = _check_container_sharding2(sq3, url);
 	}
 	if (!err) {
 		GSList *deleted_objects = NULL;
@@ -1458,7 +1482,7 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
-		err = _check_container_sharding(sq3, url);
+		err = _check_container_sharding2(sq3, url);
 	}
 	if (!err) {
 		struct m2db_put_args_s args;
@@ -1509,7 +1533,7 @@ meta2_backend_purge_alias(struct meta2_backend_s *m2, struct oio_url_s *url,
 
 	err = m2b_open(m2, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
-		err = _check_container_sharding(sq3, url);
+		err = _check_container_sharding2(sq3, url);
 	}
 	if (!err) {
 		EXTRA_ASSERT(sq3 != NULL);
@@ -1561,7 +1585,7 @@ meta2_backend_insert_beans(struct meta2_backend_s *m2b,
 		flags |= M2V2_OPEN_FROZEN;
 	err = m2b_open(m2b, url, flags, &sq3);
 	if (!err) {
-		err = _check_container_sharding(sq3, url);
+		err = _check_container_sharding2(sq3, url);
 	}
 	if (!err) {
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
@@ -1638,7 +1662,7 @@ meta2_backend_delete_beans(struct meta2_backend_s *m2b,
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
-		err = _check_container_sharding(sq3, url);
+		err = _check_container_sharding2(sq3, url);
 	}
 	if (!err) {
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
@@ -1681,7 +1705,7 @@ meta2_backend_update_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		flags |= M2V2_OPEN_FROZEN;
 	err = m2b_open(m2b, url, flags, &sq3);
 	if (!err) {
-		err = _check_container_sharding(sq3, url);
+		err = _check_container_sharding2(sq3, url);
 	}
 	if (!err) {
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
@@ -1708,7 +1732,7 @@ meta2_backend_get_alias_version(struct meta2_backend_s *m2b,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = m2b_open(m2b, url, _mode_readonly(0), &sq3);
 	if (!err) {
-		err = _check_container_sharding(sq3, url);
+		err = _check_container_sharding2(sq3, url);
 	}
 	if (!err) {
 		err = m2db_get_alias_version(sq3, url, version);
@@ -1736,7 +1760,7 @@ meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
-		err = _check_container_sharding(sq3, url);
+		err = _check_container_sharding2(sq3, url);
 	}
 	if (!err) {
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
@@ -1768,7 +1792,7 @@ meta2_backend_get_properties(struct meta2_backend_s *m2b,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = m2b_open(m2b, url, _mode_readonly(flags), &sq3);
 	if (!err) {
-		err = _check_container_sharding(sq3, url);
+		err = _check_container_sharding2(sq3, url);
 	}
 	if (!err) {
 		err = m2db_get_properties(sq3, url, cb, u0);
@@ -1790,7 +1814,7 @@ meta2_backend_del_properties(struct meta2_backend_s *m2b,
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
-		err = _check_container_sharding(sq3, url);
+		err = _check_container_sharding2(sq3, url);
 	}
 	if (!err) {
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
@@ -1819,7 +1843,7 @@ meta2_backend_set_properties(struct meta2_backend_s *m2b, struct oio_url_s *url,
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
-		err = _check_container_sharding(sq3, url);
+		err = _check_container_sharding2(sq3, url);
 	}
 	if (!err) {
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
@@ -2327,7 +2351,7 @@ meta2_backend_content_from_chunkid(struct meta2_backend_s *m2b,
 
 	err = m2b_open(m2b, url, _mode_readonly(0), &sq3);
 	if (!err) {
-		err = _check_container_sharding(sq3, url);
+		err = _check_container_sharding2(sq3, url);
 	}
 	if (!err) {
 		GVariant *params[2] = {NULL, NULL};
@@ -2358,7 +2382,7 @@ meta2_backend_content_from_contenthash (struct meta2_backend_s *m2b,
 
 	err = m2b_open(m2b, url, _mode_readonly(0), &sq3);
 	if (!err) {
-		err = _check_container_sharding(sq3, url);
+		err = _check_container_sharding2(sq3, url);
 	}
 	if (!err) {
 		GVariant *params[2] = {NULL, NULL};
@@ -2387,7 +2411,7 @@ meta2_backend_content_from_contentid (struct meta2_backend_s *m2b,
 
 	err = m2b_open(m2b, url, _mode_readonly(0), &sq3);
 	if (!err) {
-		err = _check_container_sharding(sq3, url);
+		err = _check_container_sharding2(sq3, url);
 	}
 	if (!err) {
 		GVariant *params[2] = {NULL, NULL};

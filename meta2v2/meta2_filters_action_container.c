@@ -244,10 +244,42 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 			_bean_clean(bean);
 		}
 	}
+	void s3_list_end_cb(struct sqlx_sqlite3_s *sq3) {
+		GError *err = NULL;
+		gchar *shard_info_str = NULL;
+		struct shard_info_s *shard_info = NULL;
+
+		if (!oio_ext_is_sharding()) {
+			return;
+		}
+
+		shard_info_str = sqlx_admin_get_str(sq3, M2V2_ADMIN_SHARDING_SHARD);
+		if (!shard_info_str) {
+			// Should never happen
+			return;
+		}
+
+		// It's a shard container
+		err = shard_info_decode(shard_info_str, &shard_info);
+		if (err) {
+			GRID_WARN("Failed to decode shard container info: (%d) %s",
+					err->code, err->message);
+			g_error_free(err);
+			return;
+		}
+
+		if (!truncated && *shard_info->upper
+				&& (!lp->prefix || g_str_has_prefix(shard_info->upper, lp->prefix))
+				&& (!lp->marker_end || strncmp(lp->marker_end, shard_info->upper, LIMIT_LENGTH_CONTENTPATH) > 0)) {
+			truncated = TRUE;
+			g_free(next_marker);
+			next_marker = g_strdup(shard_info->upper);
+		}
+	}
 
 	lp->maxkeys ++;
 	e = meta2_backend_list_aliases(m2b, url, lp, headers, s3_list_cb, NULL,
-			&properties);
+			s3_list_end_cb, &properties);
 	obc->l = g_slist_reverse(obc->l);
 
 	if (NULL != e) {
@@ -304,6 +336,8 @@ _load_list_params(struct list_params_s *lp, struct gridd_filter_ctx_s *ctx,
 
 	lp->prefix = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_PREFIX);
 	lp->marker_start = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MARKER);
+	if (g_strcmp0(lp->prefix, lp->marker_start) > 0)
+		lp->marker_start = lp->prefix;
 	lp->marker_end = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MARKER_END);
 	const char *maxkeys_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MAX_KEYS);
 	if (NULL != maxkeys_str)
