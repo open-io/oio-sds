@@ -2,6 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -238,8 +239,9 @@ struct client_ctx_s {
  */
 void cache_flush_user(struct req_args_s *args, struct client_ctx_s *ctx);
 
-void client_init (struct client_ctx_s *ctx, struct req_args_s *args,
-	   const char *srvtype, gint64 seq);
+void client_init(struct client_ctx_s *ctx, struct req_args_s *args,
+		const char *srvtype, gint64 seq, enum proxy_preference_e how,
+		client_on_reply decoder, gpointer out);
 
 void client_clean (struct client_ctx_s *ctx);
 
@@ -259,7 +261,11 @@ enum proxy_preference_e _prefer_master (void);
 
 #define CLIENT_CTX(ctx,args,type,seq)  \
 	struct client_ctx_s ctx = {0}; \
-	client_init (&ctx, args, type, seq)
+	client_init(&ctx, args, type, seq, CLIENT_PREFER_NONE, NULL, NULL)
+
+#define CLIENT_CTX2(ctx,args,type,seq,how,decoder,out)  \
+	struct client_ctx_s ctx = {0}; \
+	client_init(&ctx, args, type, seq, how, decoder, out)
 
 GError * _m1_locate_and_action (struct oio_url_s *url,
 		GError * (*hook) (const char *m1addr));

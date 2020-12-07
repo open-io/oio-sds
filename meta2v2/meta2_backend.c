@@ -957,7 +957,9 @@ meta2_backend_purge_container(struct meta2_backend_s *m2, struct oio_url_s *url,
 GError*
 meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		struct list_params_s *lp, GSList *headers,
-		m2_onbean_cb cb, gpointer u0, gchar ***out_properties)
+		m2_onbean_cb cb, gpointer u0,
+		void (*end_cb)(struct sqlx_sqlite3_s *sq3),
+		gchar ***out_properties)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -969,9 +971,66 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	guint32 open_mode = lp->flag_local ? M2V2_FLAG_LOCAL: 0;
 	err = m2b_open(m2b, url, _mode_readonly(open_mode), &sq3);
 	if (!err) {
-		err = m2db_list_aliases(sq3, lp, headers, cb, u0);
-		if (!err && out_properties)
-			*out_properties = sqlx_admin_get_keyvalues (sq3);
+		const gchar *current_marker_start = lp->marker_start;
+		const gchar *current_marker_end = lp->marker_end;
+		if (oio_ext_is_shard()) {
+			gchar *shard_lower = NULL;
+			gchar *shard_upper = NULL;
+			if (!sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
+				err = SYSERR("Not a shard");
+			}
+			if (!err) {
+				shard_lower = m2db_get_sharding_lower(sq3, &err);
+			}
+			if (!err) {
+				shard_upper = m2db_get_sharding_upper(sq3, &err);
+			}
+			if (!err) {
+				// Update the markers according to the shard range
+				if (*shard_lower && (!lp->marker_start
+						|| g_strcmp0(lp->marker_start, shard_lower) < 0)) {
+					lp->marker_start = g_strdup(shard_lower);
+				}
+				if (*shard_upper && (!lp->marker_end
+						|| g_strcmp0(lp->marker_end, shard_upper) >= 0)) {
+					/* HACK: "\x01" is the (UTF-8 encoded) first unicode */
+					lp->marker_end = g_strdup_printf("%s\x01", shard_upper);
+				}
+			}
+			g_free(shard_lower);
+			g_free(shard_upper);
+		} else {
+			gchar *fake_path = NULL;
+			if (!(lp->prefix && *lp->prefix)
+					&& !(lp->marker_start && *lp->marker_start)) {
+				fake_path = g_strdup("");
+			} else if (g_strcmp0(lp->prefix, lp->marker_start) > 0) {
+				fake_path = g_strdup(lp->prefix);
+			} else {
+				/* HACK: "\x01" is the (UTF-8 encoded) first unicode */
+				fake_path = g_strdup_printf("%s\x01", lp->marker_start);
+			}
+			err = _redirect_to_shard(sq3, fake_path);
+			g_free(fake_path);
+		}
+		if (!err) {
+			err = m2db_list_aliases(sq3, lp, headers, cb, u0);
+		}
+		if (!err) {
+			if (out_properties)
+				*out_properties = sqlx_admin_get_keyvalues(sq3);
+
+			if (end_cb)
+				end_cb(sq3);
+		}
+		if (lp->marker_start != current_marker_start) {
+			g_free((gchar *)lp->marker_start);
+			lp->marker_start = current_marker_start;
+		}
+		if (lp->marker_end != current_marker_end) {
+			g_free((gchar *)lp->marker_end);
+			lp->marker_end = current_marker_end;
+		}
 		m2b_close(sq3);
 	}
 

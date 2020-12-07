@@ -1,6 +1,7 @@
 /*
 OpenIO SDS proxy
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -86,7 +87,7 @@ _sqlx_action_noreturn (struct req_args_s *args, enum proxy_preference_e how,
 
 	gint64 seq = 1;
 
-	CLIENT_CTX (ctx, args, dirtype, seq);
+	CLIENT_CTX2(ctx, args, dirtype, seq, how, NULL, NULL);
 
 	if (*dirtype == '#' && !strcmp(dirtype+1, NAME_SRVTYPE_META1)) {
 		const guint nb_digits = MIN(oio_ns_meta1_digits, 4);
@@ -94,10 +95,6 @@ _sqlx_action_noreturn (struct req_args_s *args, enum proxy_preference_e how,
 			ctx.name.base[i] = '0';
 	}
 
-	if (SERVICE_ID())
-		ctx.which = CLIENT_SPECIFIED;
-	else
-		ctx.which = how;
 	enum http_rc_e rc = _sqlx_action_noreturn_TAIL (args, &ctx, pack);
 	client_clean(&ctx);
 	return rc;
