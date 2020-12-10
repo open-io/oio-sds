@@ -171,7 +171,7 @@ class ElectionSync(ElectionCmd):
 
         data = self.app.client_manager.admin.election_sync(
             service_type, account=account, reference=reference, cid=cid,
-            timeout=parsed_args.timeout)
+            timeout=parsed_args.timeout, service_id=parsed_args.service_id)
 
         columns = ('Id', 'Status', 'Message', 'Body')
         data = sorted(data.iteritems())
