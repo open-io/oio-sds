@@ -40,9 +40,10 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
         if self.path == '/PURGE':
             DATA = {}
             self.send_response(200)
+            self.end_headers()
             return
 
-        content_len = int(self.headers.getheader('content-length', 0))
+        content_len = int(self.headers.get('content-length', 0))
         body = json.loads(self.rfile.read(content_len))
 
         name = '/'.join([body['data']['account'], body['data']['container'],
@@ -55,9 +56,11 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
                 del DATA[name]
         else:
             self.send_response(400)
+            self.end_headers()
             return
 
         self.send_response(200)
+        self.end_headers()
 
     def do_GET(self):
         path = self.path.strip('/')
@@ -68,13 +71,14 @@ class MyHandler(BaseHTTPServer.BaseHTTPRequestHandler):
             data = DATA.get(self.path.strip('/'), None)
 
         if data:
-            body = json.dumps(data)
+            body = json.dumps(data).encode('utf-8')
             self.send_response(200)
             self.send_header('Content-Length', len(body))
             self.end_headers()
             self.wfile.write(body)
         else:
             self.send_response(404)
+            self.end_headers()
 
 
 def options():

@@ -349,7 +349,7 @@ class TestConscienceFunctional(BaseTestCase):
             else:
                 self.fail("At least one service unlocked")
             self.assertEqual(len(services), len(expeted_services))
-            expeted_services.sort()
+            expeted_services.sort(key=lambda x: x['addr'])
 
             self._service('%s-conscience-1' % self.ns, 'stop')
             self._service('%s-conscience-1' % self.ns, 'start')
@@ -358,8 +358,9 @@ class TestConscienceFunctional(BaseTestCase):
             for _ in range(8):
                 self._flush_proxy()
                 self._reload_proxy()
-                self.assertListEqual(expeted_services,
-                                     sorted(self._list_srvs('rawx')))
+                self.assertListEqual(
+                    expeted_services,
+                    sorted(self._list_srvs('rawx'), key=lambda x: x['addr']))
         finally:
             try:
                 for service in services:

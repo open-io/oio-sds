@@ -135,7 +135,7 @@ class TestBlobMover(BaseTestCase):
         mover = BlobMoverWorker(self.conf, None,
                                 self.rawx_volumes[chunk_volume])
         meta, stream = mover.blob_client.chunk_get(orig_chunk['url'])
-        data = stream.read()
+        data = b''.join(stream)
         stream.close()
         data = data[:-1]
         del meta['chunk_hash']

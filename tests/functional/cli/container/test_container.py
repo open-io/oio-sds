@@ -125,7 +125,7 @@ class ContainerTest(CliTestCase):
                             types=(EventTypes.CONTAINER_STATE, ))
 
         with tempfile.NamedTemporaryFile() as file_:
-            file_.write('test')
+            file_.write(b'test')
             file_.flush()
             output = self.openio(
                 '--oio-account %s object create %s %s --name test' %
@@ -157,7 +157,7 @@ class ContainerTest(CliTestCase):
                             types=(EventTypes.CONTAINER_STATE, ))
 
         with tempfile.NamedTemporaryFile() as file_:
-            file_.write('test')
+            file_.write(b'test')
             file_.flush()
             output = self.openio('object create %s %s --name test' %
                                  (cname, file_.name))

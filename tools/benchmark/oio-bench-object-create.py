@@ -99,7 +99,7 @@ def main(threads, delay=5.0, duration=60.0):
 
 def _object_upload(ul_handler, **kwargs):
     ul_chunks = ul_handler.chunk_prep()
-    return ul_chunks.next(), 0, 'd41d8cd98f00b204e9800998ecf8427e'
+    return next(ul_chunks), 0, 'd41d8cd98f00b204e9800998ecf8427e'
 
 
 USAGE = """Concurrently create many fake objects in the same container.
