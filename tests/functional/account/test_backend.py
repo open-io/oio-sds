@@ -707,24 +707,26 @@ class TestAccountBackend(BaseTestCase):
         self.backend.conn.hset(bkey, 'objects', 2)
         self.backend.conn.hset(bkey, 'damaged_objects', 3)
         self.backend.conn.hset(bkey, 'missing_chunks', 4)
-        self.assertEqual(self.backend.conn.hget(bkey, 'bytes'), '1')
-        self.assertEqual(self.backend.conn.hget(bkey, 'objects'), '2')
+        self.assertEqual(self.backend.conn.hget(bkey, 'bytes'), b'1')
+        self.assertEqual(self.backend.conn.hget(bkey, 'objects'), b'2')
         self.assertEqual(
-            self.backend.conn.hget(bkey, 'damaged_objects'), '3')
+            self.backend.conn.hget(bkey, 'damaged_objects'), b'3')
         self.assertEqual(
-            self.backend.conn.hget(bkey, 'missing_chunks'), '4')
+            self.backend.conn.hget(bkey, 'missing_chunks'), b'4')
 
         # force pagination
         self.backend.refresh_bucket(bucket, batch_size=6)
-        self.assertEqual(self.backend.conn.hget(account_key, 'bytes'),
+        conn = self.backend.conn
+        self.assertEqual(conn.hget(account_key, 'bytes').decode('utf-8'),
                          str(total_bytes))
-        self.assertEqual(self.backend.conn.hget(account_key, 'objects'),
+        self.assertEqual(conn.hget(account_key, 'objects').decode('utf-8'),
                          str(total_objects))
         self.assertEqual(
-            self.backend.conn.hget(account_key, 'damaged_objects'),
+            conn.hget(account_key, 'damaged_objects').decode('utf-8'),
             str(total_damaged_objects))
-        self.assertEqual(self.backend.conn.hget(account_key, 'missing_chunks'),
-                         str(total_missing_chunks))
+        self.assertEqual(
+            conn.hget(account_key, 'missing_chunks').decode('utf-8'),
+            str(total_missing_chunks))
 
     def test_refresh_bucket_with_lock(self):
         account_id = random_str(16)
@@ -761,21 +763,21 @@ class TestAccountBackend(BaseTestCase):
         mtime = Timestamp().normal
         self.backend.update_container(account_id, "cnt-1", mtime, 0,
                                       200, 200, 200, 200, bucket_name=bucket)
-        self.assertEqual(self.backend.conn.hget(bkey, 'bytes'), '200')
+        self.assertEqual(self.backend.conn.hget(bkey, 'bytes'), b'200')
 
         # update a container equal to marker, update is ok
         mtime = Timestamp().normal
         self.backend.update_container(account_id, "cnt-2", mtime, 0,
                                       600, 600, 600, 600, bucket_name=bucket)
-        self.assertEqual(self.backend.conn.hget(bkey, 'bytes'), '300')
+        self.assertEqual(self.backend.conn.hget(bkey, 'bytes'), b'300')
 
         # update container after marker, update is not done
         mtime = Timestamp().normal
         self.backend.update_container(account_id, "cnt-3", mtime, 0,
                                       998, 998, 998, 998, bucket_name=bucket)
-        self.assertEqual(self.backend.conn.hget(bkey, 'bytes'), '300')
+        self.assertEqual(self.backend.conn.hget(bkey, 'bytes'), b'300')
 
         # update lock with very old timestamp
         self.backend.conn.hset(block, "mtime", 1000)
         self.backend.refresh_bucket(bucket)
-        self.assertEqual(self.backend.conn.hget(bkey, 'bytes'), '1798')
+        self.assertEqual(self.backend.conn.hget(bkey, 'bytes'), b'1798')
