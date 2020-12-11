@@ -141,7 +141,7 @@ class ElectionDebug(ElectionCmd):
         import time
 
         def format_item(x, v):
-            if v is None:
+            if not v:
                 return format_json(x, v)
             patched_times = list()
             for entry in v.get("log", []):
