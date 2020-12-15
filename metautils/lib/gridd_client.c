@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -293,7 +294,7 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 			_client_reset_reply(client);
 		}
 		if (client->on_reply) {
-			if (!client->on_reply(client->ctx, reply))
+			if (!client->on_reply(client->ctx, status, reply))
 				return SYSERR("Handler error");
 		}
 		return NULL;
@@ -331,6 +332,11 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 	if (!client->keepalive)
 		_client_reset_cnx(client);
 	_client_reset_reply(client);
+
+	if (status == CODE_REDIRECT_SHARD && client->on_reply) {
+		if (!client->on_reply(client->ctx, status, reply))
+			return SYSERR("Handler error");
+	}
 
 	return NEWERROR(status, "%s", message);
 }

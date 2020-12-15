@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -346,7 +347,7 @@ gridd_client_exec (const gchar *to, gdouble seconds, GByteArray *req)
 }
 
 static gboolean
-_cb_exec4 (GPtrArray *tmp, MESSAGE reply)
+_cb_exec4(GPtrArray *tmp, guint status UNUSED, MESSAGE reply)
 {
 	if (!metautils_message_has_BODY (reply))
 		return TRUE;
@@ -399,7 +400,7 @@ gridd_client_exec4 (const gchar *to, gdouble seconds, GByteArray *req,
 }
 
 static gboolean
-_cb_exec_and_concat (GByteArray *tmp, MESSAGE reply)
+_cb_exec_and_concat(GByteArray *tmp, guint status UNUSED, MESSAGE reply)
 {
 	gsize bsize = 0;
 	void *b = metautils_message_get_BODY(reply, &bsize);

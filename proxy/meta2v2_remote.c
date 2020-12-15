@@ -94,47 +94,52 @@ m2v2_list_result_clean (struct list_result_s *p)
 }
 
 gboolean
-m2v2_list_result_extract (gpointer ctx, MESSAGE reply)
+m2v2_list_result_extract(gpointer ctx, guint status, MESSAGE reply)
 {
 	struct list_result_s *out = ctx;
-	EXTRA_ASSERT (out != NULL);
+	EXTRA_ASSERT(out != NULL);
 
-	/* Extract replied aliases */
-	GSList *l = NULL;
-	GError *e = metautils_message_extract_body_encoded(reply, FALSE, &l,
-			bean_sequence_decoder);
-	if (e) {
-		GRID_DEBUG("Callback error: (%d) %s", e->code, e->message);
-		return FALSE;
+	if (status != CODE_REDIRECT_SHARD) {
+		/* Extract replied aliases */
+		GSList *l = NULL;
+		GError *e = metautils_message_extract_body_encoded(reply, FALSE, &l,
+				bean_sequence_decoder);
+		if (e) {
+			GRID_DEBUG("Callback error: (%d) %s", e->code, e->message);
+			return FALSE;
+		}
+
+		out->beans = metautils_gslist_precat(out->beans, l);
+
+		/* Extract list flags */
+		e = metautils_message_extract_boolean(reply,
+				NAME_MSGKEY_TRUNCATED, FALSE, &out->truncated);
+		if (e)
+			g_clear_error(&e);
+		gchar *tok = metautils_message_extract_string_copy(reply,
+				NAME_MSGKEY_NEXTMARKER);
+		oio_str_reuse(&out->next_marker, tok);
 	}
 
-	out->beans = metautils_gslist_precat (out->beans, l);
-
-	/* Extract list flags */
-	e = metautils_message_extract_boolean (reply,
-			NAME_MSGKEY_TRUNCATED, FALSE, &out->truncated);
-	if (e)
-		g_clear_error (&e);
-	gchar *tok = metautils_message_extract_string_copy (reply, NAME_MSGKEY_NEXTMARKER);
-	oio_str_reuse (&out->next_marker, tok);
-
-	/* Extract properties and merge them into the temporary TreeSet. */
-	gchar **names = metautils_message_get_field_names (reply);
-	for (gchar **n = names; names && *n; ++n) {
-		if (!g_str_has_prefix (*n, NAME_MSGKEY_PREFIX_PROPERTY))
-			continue;
-		g_tree_replace (out->props,
-				g_strdup((*n) + sizeof(NAME_MSGKEY_PREFIX_PROPERTY) - 1),
-				metautils_message_extract_string_copy(reply, *n));
+	if (g_tree_nnodes(out->props) == 0) {
+		/* Extract properties and merge them into the temporary TreeSet. */
+		gchar **names = metautils_message_get_field_names(reply);
+		for (gchar **n = names; names && *n; ++n) {
+			if (!g_str_has_prefix(*n, NAME_MSGKEY_PREFIX_PROPERTY))
+				continue;
+			g_tree_replace(out->props,
+					g_strdup((*n) + sizeof(NAME_MSGKEY_PREFIX_PROPERTY) - 1),
+					metautils_message_extract_string_copy(reply, *n));
+		}
+		if (names)
+			g_strfreev(names);
 	}
-	if (names)
-		g_strfreev (names);
 
 	return TRUE;
 }
 
 gboolean
-m2v2_boolean_truncated_extract(gpointer ctx, MESSAGE reply)
+m2v2_boolean_truncated_extract(gpointer ctx, guint status UNUSED, MESSAGE reply)
 {
 	gboolean *truncated = ctx;
 	EXTRA_ASSERT (truncated != NULL);

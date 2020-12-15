@@ -41,8 +41,9 @@ void m2v2_list_result_init (struct list_result_s *p);
 void m2v2_list_result_clean (struct list_result_s *p);
 
 /* suitable as a request extractor */
-gboolean m2v2_list_result_extract (gpointer ctx, MESSAGE reply);
-gboolean m2v2_boolean_truncated_extract(gpointer ctx, MESSAGE reply);
+gboolean m2v2_list_result_extract(gpointer ctx, guint status, MESSAGE reply);
+gboolean m2v2_boolean_truncated_extract(gpointer ctx, guint status,
+		MESSAGE reply);
 
 struct m2v2_create_params_s;
 

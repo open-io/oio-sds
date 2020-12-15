@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -34,7 +35,7 @@ enum client_interest_e
 };
 
 /* Return TRUE to notify the reply management failed. */
-typedef gboolean (*client_on_reply)(gpointer ctx, MESSAGE reply);
+typedef gboolean (*client_on_reply)(gpointer ctx, guint status, MESSAGE reply);
 
 /* Destroy the gridd_client pointed by `self` and free all the linked memory */
 void gridd_client_free (struct gridd_client_s *self);
