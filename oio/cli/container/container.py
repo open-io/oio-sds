@@ -28,7 +28,7 @@ from oio.common.constants import \
     M2_PROP_DEL_EXC_VERSIONS, M2_PROP_MISSING_CHUNKS, \
     M2_PROP_OBJECTS, M2_PROP_QUOTA, M2_PROP_STORAGE_POLICY, \
     M2_PROP_USAGE, M2_PROP_VERSIONING_POLICY
-from oio.common.easy_value import boolean_value
+from oio.common.easy_value import boolean_value, int_value, float_value
 
 
 class SetPropertyCommandMixin(object):
@@ -391,7 +391,6 @@ class ShowBucket(ShowOne):
         reqid = request_id(prefix='CLI-BUCKET-')
         acct_client = self.app.client_manager.storage.account
         data = acct_client.bucket_show(parsed_args.bucket, reqid=reqid)
-
         if parsed_args.formatter == 'table':
             from oio.common.easy_value import convert_size
 
@@ -411,6 +410,7 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
         return parser
 
     def take_action(self, parsed_args):
+        from oio.common.easy_value import convert_size
         self.log.debug('take_action(%s)', parsed_args)
 
         account = self.app.client_manager.account
@@ -421,9 +421,9 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
         data = self.app.client_manager.storage.container_get_properties(
             account,
             parsed_args.container,
-            cid=parsed_args.cid
+            cid=parsed_args.cid,
+            admin_mode=True
         )
-
         sys = data['system']
         ctime = float(sys[M2_PROP_CTIME]) / 1000000.
         bytes_usage = sys.get(M2_PROP_USAGE, 0)
@@ -431,8 +431,6 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
         damaged_objects = sys.get(M2_PROP_DAMAGED_OBJECTS, 0)
         missing_chunks = sys.get(M2_PROP_MISSING_CHUNKS, 0)
         if parsed_args.formatter == 'table':
-            from oio.common.easy_value import convert_size
-
             ctime = int(ctime)
             bytes_usage = convert_size(int(bytes_usage), unit="B")
             objects = convert_size(int(objects))
@@ -452,6 +450,17 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
                                     "Namespace default"),
             'status': OIO_DB_STATUS_NAME.get(sys.get('sys.status'), "Unknown"),
         }
+
+        for k in ('stats.page_count', 'stats.freelist_count',
+                  'stats.page_size'):
+            info[k] = sys.get(k)
+        wasted = (float_value(info['stats.freelist_count'], 0)
+                  / float_value(info['stats.page_count'], 1))
+        wasted_bytes = (int_value(info['stats.freelist_count'], 0)
+                        * int_value(info['stats.page_size'], 0))
+        info['stats.space_wasted'] = "%5.2f%% (est. %s)" % \
+            (wasted * 100, convert_size(wasted_bytes))
+
         bucket = sys.get(M2_PROP_BUCKET_NAME, None)
         if bucket is not None:
             info['bucket'] = bucket
