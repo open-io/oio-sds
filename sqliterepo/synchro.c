@@ -2,6 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -945,7 +946,7 @@ on_end_GETVERS(struct evtclient_GETVERS_s *mc)
 }
 
 static gboolean
-on_reply_GETVERS (gpointer ctx, MESSAGE reply)
+on_reply_GETVERS(gpointer ctx, guint status UNUSED, MESSAGE reply)
 {
 	EXTRA_ASSERT(reply != NULL);
 	struct evtclient_GETVERS_s *ec = ctx;

@@ -1016,10 +1016,11 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		if (!err) {
 			err = m2db_list_aliases(sq3, lp, headers, cb, u0);
 		}
-		if (!err) {
-			if (out_properties)
+		if (!err || err->code == CODE_REDIRECT_SHARD) {
+			if (!oio_ext_is_shard() && out_properties)
 				*out_properties = sqlx_admin_get_keyvalues(sq3);
-
+		}
+		if (!err) {
 			if (end_cb)
 				end_cb(sq3);
 		}
