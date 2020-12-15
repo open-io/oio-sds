@@ -545,9 +545,6 @@ fail_check_range:
 fail_redirect:
 	g_prefix_error(&err, "Failed to redirect to shard container: ");
 end:
-	if (err) {
-		m2b_close(sq3);
-	}
 	g_free(shard_info_str);
 	shard_info_free(shard_info);
 	g_free(shards_str);
@@ -559,7 +556,11 @@ static GError *
 _check_container_sharding2(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 {
 	const gchar *path = oio_url_get(url, OIOURL_PATH);
-	return _check_container_sharding(sq3, path);
+	GError *err = _check_container_sharding(sq3, path);
+	if (err) {
+		m2b_close(sq3);
+	}
+	return err;
 }
 
 static GError *
@@ -1108,13 +1109,15 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		}
 		err = _check_container_sharding(sq3, marker_start);
 		g_free(marker_start);
-	}
-	if (!err) {
-		err = m2db_list_aliases(sq3, lp, headers, cb, u0);
+
 		if (!err) {
+			err = m2db_list_aliases(sq3, lp, headers, cb, u0);
+		}
+		if (!err || err->code == CODE_REDIRECT_SHARD_CONTAINER) {
 			if (out_properties)
 				*out_properties = sqlx_admin_get_keyvalues(sq3);
-
+		}
+		if (!err) {
 			if (end_cb)
 				end_cb(sq3);
 		}

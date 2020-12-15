@@ -216,7 +216,7 @@ enum proxy_preference_e _prefer_master(void) {
 	return CLIENT_PREFER_NONE;
 }
 
-static gboolean _on_reply (gpointer p, MESSAGE reply) {
+static gboolean _on_reply(gpointer p, guint status UNUSED, MESSAGE reply) {
 	GByteArray **pbody = p, *b = NULL;
 	EXTRA_ASSERT (pbody != NULL);
 	GError *e = metautils_message_extract_body_gba (reply, &b);
@@ -710,7 +710,7 @@ GError * KV_read_usersys_properties (struct json_object *j, gchar ***out) {
 }
 
 static gboolean
-_cb_exec_and_concat (GByteArray *tmp, MESSAGE reply)
+_cb_exec_and_concat(GByteArray *tmp, guint status UNUSED, MESSAGE reply)
 {
 	gsize bsize = 0;
 	void *b = metautils_message_get_BODY(reply, &bsize);

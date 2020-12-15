@@ -117,7 +117,7 @@ peer_dump(const gchar *target, struct sqlx_name_s *name, gboolean chunked,
 	GByteArray *encoded;
 	GError *err = NULL;
 
-	gboolean on_reply(gpointer ctx, MESSAGE reply) {
+	gboolean on_reply(gpointer ctx, guint status UNUSED, MESSAGE reply) {
 		GError *err2 = NULL;
 		gsize bsize = 0;
 		gint64 remaining = -1;

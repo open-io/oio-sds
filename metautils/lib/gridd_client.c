@@ -293,7 +293,7 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 			_client_reset_reply(client);
 		}
 		if (client->on_reply) {
-			if (!client->on_reply(client->ctx, reply))
+			if (!client->on_reply(client->ctx, status, reply))
 				return SYSERR("Handler error");
 		}
 		return NULL;
@@ -331,6 +331,11 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 	if (!client->keepalive)
 		_client_reset_cnx(client);
 	_client_reset_reply(client);
+
+	if (status == CODE_REDIRECT_SHARD_CONTAINER && client->on_reply) {
+		if (!client->on_reply(client->ctx, status, reply))
+			return SYSERR("Handler error");
+	}
 
 	return NEWERROR(status, "%s", message);
 }

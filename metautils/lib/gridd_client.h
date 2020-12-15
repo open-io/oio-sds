@@ -34,7 +34,7 @@ enum client_interest_e
 };
 
 /* Return TRUE to notify the reply management failed. */
-typedef gboolean (*client_on_reply)(gpointer ctx, MESSAGE reply);
+typedef gboolean (*client_on_reply)(gpointer ctx, guint status, MESSAGE reply);
 
 /* Destroy the gridd_client pointed by `self` and free all the linked memory */
 void gridd_client_free (struct gridd_client_s *self);

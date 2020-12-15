@@ -346,7 +346,7 @@ gridd_client_exec (const gchar *to, gdouble seconds, GByteArray *req)
 }
 
 static gboolean
-_cb_exec4 (GPtrArray *tmp, MESSAGE reply)
+_cb_exec4(GPtrArray *tmp, guint status UNUSED, MESSAGE reply)
 {
 	if (!metautils_message_has_BODY (reply))
 		return TRUE;
@@ -399,7 +399,7 @@ gridd_client_exec4 (const gchar *to, gdouble seconds, GByteArray *req,
 }
 
 static gboolean
-_cb_exec_and_concat (GByteArray *tmp, MESSAGE reply)
+_cb_exec_and_concat(GByteArray *tmp, guint status UNUSED, MESSAGE reply)
 {
 	gsize bsize = 0;
 	void *b = metautils_message_get_BODY(reply, &bsize);

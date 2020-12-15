@@ -282,7 +282,20 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 			s3_list_end_cb, &properties);
 	obc->l = g_slist_reverse(obc->l);
 
-	if (NULL != e) {
+	if (!e || e->code == CODE_REDIRECT_SHARD_CONTAINER) {
+		if (properties) {
+			for (gchar **p=properties; *p && *(p+1) ;p+=2) {
+				if (!g_str_has_prefix (*p, SQLX_ADMIN_PREFIX_USER)
+						&& !g_str_has_prefix (*p, SQLX_ADMIN_PREFIX_SYS))
+					continue;
+				gchar *k = g_strconcat (NAME_MSGKEY_PREFIX_PROPERTY, *p, NULL);
+				reply->add_header(k, metautils_gba_from_string(*(p+1)));
+				g_free (k);
+			}
+		}
+	}
+
+	if (e) {
 		GRID_DEBUG("Fail to return alias for url: %s", oio_url_get(url, OIOURL_WHOLE));
 		_on_bean_ctx_clean(obc);
 		meta2_filter_ctx_set_error(ctx, e);
@@ -299,17 +312,6 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	gchar tmp[64];
 	g_snprintf(tmp, sizeof(tmp), "%"G_GINT64_FORMAT, lp->maxkeys - 1);
 	reply->add_header(NAME_MSGKEY_MAX_KEYS, metautils_gba_from_string(tmp));
-
-	if (properties) {
-		for (gchar **p=properties; *p && *(p+1) ;p+=2) {
-			if (!g_str_has_prefix (*p, SQLX_ADMIN_PREFIX_USER)
-					&& !g_str_has_prefix (*p, SQLX_ADMIN_PREFIX_SYS))
-				continue;
-			gchar *k = g_strconcat (NAME_MSGKEY_PREFIX_PROPERTY, *p, NULL);
-			reply->add_header(k, metautils_gba_from_string(*(p+1)));
-			g_free (k);
-		}
-	}
 
 	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);

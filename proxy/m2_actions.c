@@ -2385,7 +2385,7 @@ enum http_rc_e action_container_raw_delete (struct req_args_s *args) {
 /* SHARDING action resource ------------------------------------------------- */
 
 static gboolean
-_body_extract(gpointer ctx, MESSAGE reply)
+_body_extract(gpointer ctx, guint status UNUSED, MESSAGE reply)
 {
 	GString **gstr = ctx;
 	gchar *out = NULL;

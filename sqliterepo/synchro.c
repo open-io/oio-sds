@@ -943,7 +943,7 @@ on_end_GETVERS(struct evtclient_GETVERS_s *mc)
 }
 
 static gboolean
-on_reply_GETVERS (gpointer ctx, MESSAGE reply)
+on_reply_GETVERS(gpointer ctx, guint status UNUSED, MESSAGE reply)
 {
 	EXTRA_ASSERT(reply != NULL);
 	struct evtclient_GETVERS_s *ec = ctx;
