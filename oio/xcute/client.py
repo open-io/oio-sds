@@ -126,6 +126,11 @@ class XcuteClient(HttpApi):
             'POST', '/job/resume', params={'id': job_id})
         return data
 
+    def job_update(self, job_id, job_config=None):
+        _, data = self.xcute_request(
+            'POST', '/job/update', params={'id': job_id}, json=job_config)
+        return data
+
     def job_delete(self, job_id):
         self.xcute_request(
             'DELETE', '/job/delete', params={'id': job_id})

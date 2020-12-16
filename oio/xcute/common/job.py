@@ -21,7 +21,11 @@ class XcuteTask(object):
 
     def __init__(self, conf, job_params, logger=None):
         self.conf = conf
+        self.job_params = job_params
         self.logger = logger or get_logger(self.conf)
+
+    def params_have_changed(self, job_params):
+        return job_params != self.job_params
 
     def process(self, task_id, task_payload):
         raise NotImplementedError()
@@ -84,6 +88,23 @@ class XcuteJob(object):
         sanitized_job_params = dict()
 
         return sanitized_job_params, None
+
+    @staticmethod
+    def merge_config(current_config, new_config):
+        try:
+            merged_config = current_config.copy()
+            # If it is not set in the new configuration,
+            # recompute the new value
+            merged_config.pop('tasks_batch_size', None)
+            # Udpate configuration
+            merged_config.update(new_config)
+            # Update parameters
+            merged_params = (current_config.get('params') or dict()).copy()
+            merged_params.update(new_config.get('params') or dict())
+            merged_config['params'] = merged_params
+            return merged_config
+        except (TypeError, KeyError):
+            raise ValueError('Wrong config format')
 
     def prepare(self, job_params):
         """

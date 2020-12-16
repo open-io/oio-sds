@@ -15,6 +15,7 @@
 
 from oio.cli import Lister, ShowOne, flat_dict_from_dict
 from oio.cli.admin.xcute import XcuteCommand
+from oio.cli.common.utils import KeyValueAction
 
 
 class JobList(XcuteCommand, Lister):
@@ -48,7 +49,7 @@ class JobShow(XcuteCommand, ShowOne):
         parser.add_argument(
             'job_id',
             metavar='<job_id>',
-            help=("Job ID to show"))
+            help=('ID of the job to show'))
         parser.add_argument(
             '--raw',
             action='store_true',
@@ -106,7 +107,7 @@ class JobPause(XcuteCommand, Lister):
             'job_ids',
             nargs='+',
             metavar='<job_id>',
-            help=("Job IDs to pause"))
+            help=('IDs of the job to pause'))
         return parser
 
     def _take_action(self, parsed_args):
@@ -139,7 +140,7 @@ class JobResume(XcuteCommand, Lister):
             'job_ids',
             nargs='+',
             metavar='<job_id>',
-            help=("Job IDs to resume"))
+            help=('IDs of the job to to resume'))
         return parser
 
     def _take_action(self, parsed_args):
@@ -159,6 +160,48 @@ class JobResume(XcuteCommand, Lister):
         return self.columns, self._take_action(parsed_args)
 
 
+class JobUpdate(XcuteCommand, ShowOne):
+    """
+    Update job configuration.
+    """
+
+    def get_parser(self, prog_name):
+        parser = super(JobUpdate, self).get_parser(prog_name)
+        parser.add_argument(
+            'job_id',
+            metavar='<job_id>',
+            help=('ID of the job to update.'))
+        parser.add_argument(
+            '--tasks-per-second', type=int,
+            help='Max tasks per second.')
+        parser.add_argument(
+            '--tasks-batch-size', type=int,
+            help='Max tasks batch size.')
+        parser.add_argument(
+            '-p', '--param',
+            dest='params',
+            metavar='<key=value>',
+            action=KeyValueAction,
+            help='Configuration parameter to update'
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.logger.debug('take_action(%s)', parsed_args)
+
+        job_config = dict()
+        if parsed_args.tasks_per_second is not None:
+            job_config['tasks_per_second'] = parsed_args.tasks_per_second
+        if parsed_args.tasks_batch_size is not None:
+            job_config['tasks_batch_size'] = parsed_args.tasks_batch_size
+        if parsed_args.params is not None:
+            job_config['params'] = parsed_args.params
+        new_job_config = self.xcute.job_update(parsed_args.job_id, job_config)
+
+        return zip(*sorted(
+            flat_dict_from_dict(parsed_args, new_job_config).items()))
+
+
 class JobDelete(XcuteCommand, Lister):
     """
     Delete all information about the jobs.
@@ -172,7 +215,7 @@ class JobDelete(XcuteCommand, Lister):
             'job_ids',
             nargs='+',
             metavar='<job_id>',
-            help=("Job IDs to delete"))
+            help=('IDs of the job to delete'))
         return parser
 
     def _take_action(self, parsed_args):

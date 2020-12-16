@@ -59,6 +59,9 @@ class XcuteBackend(RedisConnection):
         'no_job': (
             NotFound,
             'The job does\'nt exist'),
+        'job_must_be_paused': (
+            Forbidden,
+            'The job must be paused'),
         'job_must_be_running': (
             Forbidden,
             'The job must be running'),
@@ -158,6 +161,9 @@ class XcuteBackend(RedisConnection):
 
         local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
                                   'job.status');
+        if status == nil or status == false then
+            return redis.error_reply('no_job');
+        end;
         if status ~= 'RUNNING' then
             return redis.error_reply('job_must_be_running');
         end;
@@ -284,6 +290,23 @@ class XcuteBackend(RedisConnection):
             return redis.error_reply('job_finished');
         end;
     """
+
+    lua_update_config = """
+        local mtime = KEYS[1];
+        local job_id = KEYS[2];
+        local job_config = KEYS[3];
+
+        local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
+                                  'job.status');
+        if status == nil or status == false then
+            return redis.error_reply('no_job');
+        end;
+        if status ~= 'PAUSED' then
+            return redis.error_reply('job_must_be_paused');
+        end;
+
+        redis.call('HSET', 'xcute:job:info:' .. job_id, 'config', job_config);
+    """ + _lua_update_mtime
 
     lua_update_tasks_sent = """
         local mtime = KEYS[1];
@@ -501,6 +524,8 @@ class XcuteBackend(RedisConnection):
             self.lua_request_pause)
         self.script_resume = self.register_script(
             self.lua_resume)
+        self.script_update_config = self.register_script(
+            self.lua_update_config)
         self.script_update_tasks_sent = self.register_script(
             self.lua_update_tasks_sent)
         self.script_update_tasks_processed = self.register_script(
@@ -619,6 +644,14 @@ class XcuteBackend(RedisConnection):
     def resume(self, job_id):
         self.script_resume(
             keys=[self._get_timestamp(), job_id],
+            client=self.conn)
+
+    @handle_redis_exceptions
+    def update_config(self, job_id, job_config):
+        job_config = json.dumps(job_config)
+
+        self.script_update_config(
+            keys=[self._get_timestamp(), job_id, job_config],
             client=self.conn)
 
     @handle_redis_exceptions
