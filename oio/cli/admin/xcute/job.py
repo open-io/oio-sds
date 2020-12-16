@@ -23,15 +23,18 @@ class JobList(XcuteCommand, Lister):
     List all jobs.
     """
 
-    columns = ('ID', 'Status', 'Type', 'ctime', 'mtime')
+    columns = ('ID', 'Status', 'Type', 'Lock', 'Progress')
 
     def _take_action(self, parsed_args):
         jobs = self.xcute.job_list()
         for job_info in jobs:
             job_main_info = job_info['job']
+            job_tasks = job_info['tasks']
+            progress = \
+                job_tasks['processed'] * 100. / (job_tasks['total'] or 0.00001)
             yield (job_main_info['id'], job_main_info['status'],
-                   job_main_info['type'], job_main_info['ctime'],
-                   job_main_info['mtime'])
+                   job_main_info['type'], job_main_info.get('lock'),
+                   '%.2f%%' % progress)
 
     def take_action(self, parsed_args):
         self.logger.debug('take_action(%s)', parsed_args)
