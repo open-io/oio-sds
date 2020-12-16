@@ -89,6 +89,8 @@ class XcuteServer(WerkzeugApp):
                      methods=['POST']),
                 Rule('/job/resume', endpoint='job_resume',
                      methods=['POST']),
+                Rule('/job/update', endpoint='job_update',
+                     methods=['POST']),
                 Rule('/job/delete', endpoint='job_delete',
                      methods=['DELETE']),
                 Rule('/lock/list', endpoint='lock_list',
@@ -164,6 +166,28 @@ class XcuteServer(WerkzeugApp):
         job_info = self.backend.get_job_info(job_id)
         return Response(
             json.dumps(job_info), mimetype='application/json', status=202)
+
+    @access_log
+    @handle_exceptions
+    def on_job_update(self, req):
+        job_id = self._get_job_id(req)
+
+        job_info = self.backend.get_job_info(job_id)
+        job_type = job_info['job']['type']
+        job_class = JOB_TYPES.get(job_type)
+        if job_class is None:
+            raise HTTPBadRequest('Unknown job type')
+
+        job_config, lock = job_class.sanitize_config(
+            job_class.merge_config(job_info['config'],
+                                   json.loads(req.data or '{}')))
+        if lock != job_info['job'].get('lock'):
+            raise ValueError(
+                'New configuration can not change the lock')
+
+        self.backend.update_config(job_id, job_config)
+        return Response(
+            json.dumps(job_config), mimetype='application/json', status=202)
 
     @access_log
     @handle_exceptions

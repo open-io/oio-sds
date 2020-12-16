@@ -17,7 +17,7 @@ import string
 
 
 def int_value(value, default):
-    if value in (None, 'None'):
+    if value in (None, 'None', ''):
         return default
     try:
         value = int(value)
@@ -27,7 +27,7 @@ def int_value(value, default):
 
 
 def float_value(value, default):
-    if value in (None, 'None'):
+    if value in (None, 'None', ''):
         return default
     try:
         value = float(value)
@@ -46,7 +46,7 @@ def true_value(value):
 
 
 def boolean_value(value, default=False):
-    if value in (None, 'None'):
+    if value in (None, 'None', ''):
         return default
     try:
         value = str(value).lower()
