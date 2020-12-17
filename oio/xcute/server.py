@@ -111,9 +111,15 @@ class XcuteServer(WerkzeugApp):
     @handle_exceptions
     def on_job_list(self, req):
         limit = int_value(req.args.get('limit'), None)
+        prefix = req.args.get('prefix')
         marker = req.args.get('marker')
+        job_status = req.args.get('status')
+        job_type = req.args.get('type')
+        job_lock = req.args.get('lock')
 
-        job_infos = self.backend.list_jobs(limit=limit, marker=marker)
+        job_infos = self.backend.list_jobs(
+            limit=limit, prefix=prefix, marker=marker,
+            job_status=job_status, job_type=job_type, job_lock=job_lock)
         return Response(
             json.dumps(job_infos), mimetype='application/json')
 

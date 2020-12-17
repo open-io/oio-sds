@@ -101,9 +101,15 @@ class XcuteClient(HttpApi):
             raise exc_info[0], exc_info[1], exc_info[2]
         return resp, body
 
-    def job_list(self, limit=None, marker=None):
+    def job_list(self, limit=None, prefix=None, marker=None,
+                 job_status=None, job_type=None, job_lock=None):
         _, data = self.xcute_request(
-            'GET', '/job/list', params={'limit': limit, 'marker': marker})
+            'GET', '/job/list', params={'limit': limit,
+                                        'prefix': prefix,
+                                        'marker': marker,
+                                        'status': job_status,
+                                        'type': job_type,
+                                        'lock': job_lock})
         return data
 
     def job_create(self, job_type, job_config=None):
