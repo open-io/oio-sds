@@ -17,6 +17,7 @@ from functools import wraps
 
 import redis
 import random
+from fnmatch import fnmatchcase
 
 from oio.common.easy_value import true_value
 from oio.common.exceptions import Forbidden, NotFound
@@ -25,6 +26,9 @@ from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.redis_conn import RedisConnection
 from oio.common.timestamp import Timestamp
+
+
+END_MARKER = u"\U0010fffd"
 
 
 def handle_redis_exceptions(func):
@@ -590,8 +594,16 @@ class XcuteBackend(RedisConnection):
         status = {'job_count': job_count}
         return status
 
-    def list_jobs(self, marker=None, limit=1000):
+    def list_jobs(self, prefix=None, marker=None, limit=1000,
+                  job_status=None, job_type=None, job_lock=None):
         limit = limit or self.DEFAULT_LIMIT
+
+        if job_status:
+            job_status = job_status.upper().strip()
+        if job_type:
+            job_type = job_type.lower().strip()
+        if job_lock:
+            job_lock = job_lock.lower().strip()
 
         jobs = list()
         while True:
@@ -600,10 +612,12 @@ class XcuteBackend(RedisConnection):
                 break
 
             range_min = '-'
-            if marker:
-                range_max = '(' + marker
-            else:
-                range_max = '+'
+            range_max = '+'
+            if prefix:
+                range_min = '[' + prefix
+                range_max = '[' + prefix + END_MARKER
+            if marker and (not prefix or marker > prefix):
+                range_min = '(' + marker
 
             job_ids = self.conn.zrevrangebylex(
                 self.key_job_ids, range_max, range_min, 0, limit_)
@@ -616,6 +630,14 @@ class XcuteBackend(RedisConnection):
             for job_info in job_infos:
                 if not job_info:
                     # The job can be deleted between two requests
+                    continue
+
+                if job_status and job_info['job.status'] != job_status:
+                    continue
+                if job_type and job_info['job.type'] != job_type:
+                    continue
+                if job_lock and not fnmatchcase(
+                        job_info.get('job.lock') or '', job_lock):
                     continue
 
                 jobs.append(self._unmarshal_job_info(job_info))

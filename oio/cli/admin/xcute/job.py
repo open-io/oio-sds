@@ -1,4 +1,4 @@
-# Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -13,9 +13,13 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from datetime import datetime
+
 from oio.cli import Lister, ShowOne, flat_dict_from_dict
 from oio.cli.admin.xcute import XcuteCommand
 from oio.cli.common.utils import KeyValueAction
+from oio.xcute.common.job import XcuteJobStatus
+from oio.xcute.jobs import JOB_TYPES
 
 
 class JobList(XcuteCommand, Lister):
@@ -25,8 +29,64 @@ class JobList(XcuteCommand, Lister):
 
     columns = ('ID', 'Status', 'Type', 'Lock', 'Progress')
 
+    def get_parser(self, prog_name):
+        parser = super(JobList, self).get_parser(prog_name)
+        parser.add_argument(
+            '--date',
+            help='Filter jobs with the specified job date '
+                 '(%%Y-%%m-%%dT%%H:%%M:%%S)')
+        parser.add_argument(
+            '--status',
+            choices=XcuteJobStatus.ALL,
+            help='Filter jobs with the specified job status')
+        parser.add_argument(
+            '--type',
+            choices=JOB_TYPES.keys(),
+            help='Filter jobs with the specified job type')
+        parser.add_argument(
+            '--lock',
+            help='Filter jobs with the specified job lock (wildcards allowed)')
+        return parser
+
     def _take_action(self, parsed_args):
-        jobs = self.xcute.job_list()
+        prefix = None
+        if parsed_args.date:
+            datetime_input_format = ''
+            datetime_output_format = ''
+            datetime_info_split = parsed_args.date.split('T', 1)
+            date_info_split = datetime_info_split[0].split('-', 2)
+            if len(date_info_split) > 0:
+                datetime_input_format += '%Y'
+                datetime_output_format += '%Y'
+            if len(date_info_split) > 1:
+                datetime_input_format += '-%m'
+                datetime_output_format += '%m'
+            if len(date_info_split) > 2:
+                datetime_input_format += '-%d'
+                datetime_output_format += '%d'
+            if len(datetime_info_split) > 1:
+                if len(date_info_split) != 3:
+                    raise ValueError('Wrong date format')
+                time_info_split = datetime_info_split[1].split(':', 2)
+                if len(time_info_split) > 0:
+                    datetime_input_format += 'T%H'
+                    datetime_output_format += '%H'
+                if len(time_info_split) > 1:
+                    datetime_input_format += ':%M'
+                    datetime_output_format += '%M'
+                if len(time_info_split) > 2:
+                    datetime_input_format += ':%S'
+                    datetime_output_format += '%S'
+            try:
+                job_date = datetime.strptime(parsed_args.date,
+                                             datetime_input_format)
+            except ValueError:
+                raise ValueError('Wrong date format')
+            prefix = job_date.strftime(datetime_output_format)
+
+        jobs = self.xcute.job_list(
+            prefix=prefix, job_status=parsed_args.status,
+            job_type=parsed_args.type, job_lock=parsed_args.lock)
         for job_info in jobs:
             job_main_info = job_info['job']
             job_tasks = job_info['tasks']

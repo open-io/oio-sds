@@ -29,6 +29,7 @@ from oio.event.beanstalk import Beanstalk, BeanstalkdListener, \
     ConnectionError, DEFAULT_TTR
 from oio.event.evob import EventTypes
 from oio.xcute.common.backend import XcuteBackend
+from oio.xcute.common.job import XcuteJobStatus
 from oio.xcute.jobs import JOB_TYPES
 
 
@@ -287,7 +288,7 @@ class XcuteOrchestrator(object):
                             '[job_id=%s] Job could not abort '
                             'the last sent tasks: %s', job_id, exc)
                         break
-                if job_status == 'PAUSED':
+                if job_status == XcuteJobStatus.PAUSED:
                     self.logger.info('Job %s is paused', job_id)
                     return
 
@@ -329,13 +330,13 @@ class XcuteOrchestrator(object):
                             'the last sent tasks: %s', job_id, exc)
                         break
                 else:
-                    if job_status == 'FINISHED':
+                    if job_status == XcuteJobStatus.FINISHED:
                         self.logger.info('Job %s is finished', job_id)
 
                     self.logger.info(
                         'Finished dispatching job (job_id=%s)', job_id)
                     return
-                if job_status == 'PAUSED':
+                if job_status == XcuteJobStatus.PAUSED:
                     self.logger.info('Job %s is paused', job_id)
                     return
 

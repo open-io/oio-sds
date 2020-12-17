@@ -17,6 +17,24 @@ from oio.common.easy_value import int_value
 from oio.common.logger import get_logger
 
 
+class XcuteJobStatus(object):
+    """Enum class for job type names."""
+
+    WAITING = 'WAITING'
+    RUNNING = 'RUNNING'
+    PAUSED = 'PAUSED'
+    FINISHED = 'FINISHED'
+    FAILED = 'FAILED'
+
+    ALL = (
+        WAITING,
+        RUNNING,
+        PAUSED,
+        FINISHED,
+        FAILED
+    )
+
+
 class XcuteTask(object):
 
     def __init__(self, conf, job_params, logger=None):
