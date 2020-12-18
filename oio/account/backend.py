@@ -27,6 +27,8 @@ from oio.common.easy_value import int_value, boolean_value, float_value
 from oio.common.redis_conn import RedisConnection, catch_service_errors
 
 
+END_MARKER = u"\U0010fffd"
+
 ACCOUNT_KEY_PREFIX = 'account:'
 BUCKET_KEY_PREFIX = 'bucket:'
 BUCKET_LIST_PREFIX = 'buckets:'
@@ -856,17 +858,14 @@ class AccountBackend(RedisConnection):
         while len(results) < limit and not beyond_prefix:
             min_k = '-'
             max_k = '+'
-            if end_marker:
-                max_k = '(' + end_marker
-            if marker:
-                if marker < prefix:
-                    # Start on the prefix
-                    min_k = '[' + prefix
-                else:
-                    # Start just after the marker
-                    min_k = '(' + marker
-            elif prefix:
+            if prefix:
                 min_k = '[' + prefix
+                max_k = '[' + prefix + END_MARKER
+            if marker and (not prefix or marker > prefix):
+                min_k = '(' + marker
+            if end_marker and (not prefix
+                               or end_marker <= prefix + END_MARKER):
+                max_k = '(' + end_marker
 
             # Ask for one extra element, to be able to tell if the
             # list of results is truncated.
@@ -897,7 +896,7 @@ class AccountBackend(RedisConnection):
                         # TODO(FVE): we can avoid another request to Redis by
                         # analyzing the rest of the list ourselves.
                         dir_name = cname[:end + 1]
-                        marker = dir_name + u'\ufffd'
+                        marker = dir_name + END_MARKER
                         if dir_name != orig_marker:
                             results.append([dir_name, 0, 0, 1, 0])
                         break
