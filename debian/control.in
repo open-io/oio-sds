@@ -1,0 +1,63 @@
+Source: ${PACKAGE}
+Section: unknown
+Priority: optional
+Maintainer: PU ObjectStorage <pu.objectstorage@internal.ovh.net>
+Uploaders: PU ObjectStorage <pu.objectstorage@internal.ovh.net>
+Build-Depends:
+  debhelper (>= 9),
+  dh-virtualenv,
+  cmake,
+  wget,
+  ca-certificates,
+  go-1.15.6-ovh258,
+  oio-zookeeper-3.6.2-ovh260,
+  python-3.7.9-ovh102, 
+  flex,
+  bison,
+  gcc,
+  pkg-config,
+  libcurl4-openssl-dev,
+  zlib1g-dev, 
+  libglib2.0-dev,
+  libjson-c-dev,
+  libzmq3-dev,
+  asn1c,
+  libattr1-dev,
+  libleveldb-dev,
+Standards-Version: 3.9.5
+Homepage: https://openio.io
+
+Package: ${PACKAGE}
+Architecture: any
+Depends:
+  ${shlibs:Depends},
+  ${misc:Depends},
+  python-3.7.9-ovh102,
+  libcurl4,
+  zlib1g,
+  libglib2.0-0,
+  libjson-c3,
+  libzmq5,
+  asn1c,
+  libattr1,
+  libleveldb1v5,
+Description: OpenIO Cloud Storage Solution
+ OpenIO software storage solution is designed to handle PETA-bytes of
+ data in a distributed way, data such as: images, videos, documents, emails,
+ and any other personal unstructured data.
+ OpenIO is a fork of Redcurrant, from Worldline by Atos.
+
+Package: ${PACKAGE}-dbg
+Architecture: any
+Section: debug
+Priority: extra
+Depends:
+  ${PACKAGE} (= ${binary:Version}),
+  ${misc:Depends}
+Description: debugging symbols for openio-sds
+ OpenIO software storage solution is designed to handle PETA-bytes of
+ data in a distributed way, data such as: images, videos, documents, emails,
+ and any other personal unstructured data.
+ OpenIO is a fork of Redcurrant, from Worldline by Atos.
+ .
+ This package contains the debugging symbols for openio-sds.

@@ -1,0 +1,39 @@
+version: v1.0
+name: oio-sds-build
+jobs:
+  - job: Package
+    steps:
+
+      - name: Checkout application
+        checkout: '{{ .cds.workspace }}'
+
+      - name: Clone external-packages
+        script:
+          - eval $(worker key install --env-git proj-ssh-openio)
+          - git clone {{ .cds.proj.STASH_URL }}/openio/external-packages.git /external-packages
+
+      - name: Build package and upload
+        script: |+
+          #!/bin/bash
+          exec &> >(tee -a sds-build-ubuntu-18.04.log)
+          trap 'worker upload --tag=log sds-build-ubuntu-18.04.log' EXIT
+          cat $0
+          set -x
+          # dev or prod release
+          export VERSION=1.0
+          PACKAGE=oio-sds
+          export REPO_SUBREPO=main
+          export REPO_LIMIT=0
+          if [[ "{{ .git.tag }}" =~  ^[0-9]+\. ]]; then
+            PACKAGE=${PACKAGE}-{{ .git.tag }}
+          else
+            PACKAGE=${PACKAGE}-$(date +%Y%m%d%H%M).git{{ .git.hash.short }}
+          fi
+          export PACKAGE=${PACKAGE}-ovh${CDS_VERSION}
+          export REPO_URL="https://{{ .cds.proj.drive_mirrors_objectstorage_openio_user }}:{{ .cds.proj.drive_mirrors_objectstorage_openio_password }}@{{ .cds.proj.drive_mirrors_hostname }}"
+          make -f /external-packages/ubuntu/bionic/Makefile.common install-apt-repo
+          make -f /external-packages/ubuntu/bionic/Makefile.common deb_changelog
+          make -f /external-packages/ubuntu/bionic/Makefile.common
+          make -f /external-packages/ubuntu/bionic/Makefile.common upload_to_repo
+    requirements:
+      - model: openio-debbuild-18.04

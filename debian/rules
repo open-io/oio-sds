@@ -1,0 +1,90 @@
+#!/usr/bin/make -f
+# See debhelper(7) (uncomment to enable)
+# output every command that modifies files on the build system.
+DH_VERBOSE = 1
+export DH_OPTIONS=-v
+export DEB_BUILD_OPTIONS += nocheck
+
+DESTDIR=$(CURDIR)/debian/${PACKAGE}
+PREFIX=/opt/${PACKAGE}
+PYTHON_PATH=$(shell readlink -f /opt/python-*)
+ZOOKEEPER_PATH=$(shell readlink -f /opt/oio-zookeeper-*)
+GO_PATH=$(shell readlink -f /opt/go-*)
+GO_HOME=${GO_PATH}
+GOPATH=${GO_PATH}
+
+export PATH := $(PYTHON_PATH)/bin:$(GO_PATH)/bin:$(PATH)
+export PKG_CONFIG_PATH := $(PYTHON_PATH)/lib/pkgconfig
+export LIBRARY_PATH := $(PYTHON_PATH)/lib
+export C_INCLUDE_PATH := $(PYTHON_PATH)/include
+
+export DH_VIRTUALENV_INSTALL_ROOT=/opt
+
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/default.mk
+
+%:
+	dh $@ --buildsystem cmake
+
+override_dh_auto_configure:
+	dh_auto_configure --buildsystem cmake -- \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DCMAKE_INSTALL_PREFIX=${PREFIX} \
+	-DLD_LIBDIR=lib \
+	-DEXE_PREFIX=oio \
+	-DZK_LIBDIR=${ZOOKEEPER_PATH}/lib \
+	-DZK_INCDIR=${ZOOKEEPER_PATH}/include/zookeeper \
+	-DSOCKET_OPTIMIZED=1
+
+override_dh_auto_build:
+	# Get golang dependencies
+	go get gopkg.in/tylerb/graceful.v1
+	go get gopkg.in/ini.v1
+	go get golang.org/x/sys/unix
+	dh_auto_build
+	python3 setup.py build
+
+override_dh_install:
+	echo "Name: oio" > PKG-INFO
+	echo "Version: $(VERSION)" >> PKG-INFO
+	dh_virtualenv \
+	  --python ${PYTHON_PATH}/bin/python \
+	  --install-suffix ${PACKAGE} \
+	  --use-system-packages \
+	  --builtin-venv \
+	  --preinstall wheel \
+	  --requirements all-requirements.txt \
+	  --index-url https://last-pypi.snap.mirrors.ovh.net/simple/
+	# do dh_install after dh_virtualenv as it cleans everything
+	# make install, to install oio except the python part
+	dh_install
+	# copy zookeeper libraries not to depend on zookeeper package
+	cp -a ${ZOOKEEPER_PATH}/lib/* $(DESTDIR)/${PREFIX}/lib/
+	# create env file for library directory
+	echo "LD_LIBRARY_PATH=${PREFIX}/lib:${PYTHON_PATH}/lib" > $(DESTDIR)/${PREFIX}/ld_library_path.env
+	# create ld.so.conf file
+	echo ${PREFIX}/lib > $(DESTDIR)${PREFIX}/ld.so.conf
+	echo ${PYTHON_PATH}/lib >> $(DESTDIR)${PREFIX}/ld.so.conf
+	# Install OpenIO SDS directories
+	mkdir -pv $(DESTDIR)/var/log/oio/sds \
+		$(DESTDIR)/var/lib/oio/sds \
+		$(DESTDIR)/etc/oio/sds \
+		$(DESTDIR)/run/oio/sds
+	# fix shebangs
+	sed -i "s@${DESTDIR}@@" $(DESTDIR)$(PREFIX)/bin/*
+
+# remove postinst from dh-virtualenv as it's buggy and useless
+override_dh_installdeb:
+	dh_installdeb -O--buildsystem=cmake
+	rm -f $(DESTDIR)/DEBIAN/postinst
+
+
+.PHONY: override_dh_strip
+override_dh_strip:
+	dh_strip --dbg-package=${PACKAGE}-dbg
+
+override_dh_auto_install:
+	dh_auto_install --destdir=${DESTDIR}
+
+override_dh_shlibdeps:
+	# skip
