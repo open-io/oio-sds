@@ -18,7 +18,9 @@ from oio.common.logger import get_logger
 from oio.blob.client import BlobClient
 from oio.container.client import ContainerClient, extract_chunk_qualities
 from oio.common.constants import OIO_VERSION
+from oio.common.exceptions import UnrecoverableContent
 from oio.common.fullpath import encode_fullpath
+from oio.common.storage_functions import _get_weighted_random_score
 
 
 def compare_chunk_quality(current, candidate):
@@ -262,18 +264,41 @@ class Content(object):
             other_chunks, [current_chunk], check_quality=check_quality,
             max_attempts=max_attempts, **kwargs)
 
+        # Sort chunks by score to try to copy with higher score.
+        # When scores are close together (e.g. [95, 94, 94, 93, 50]),
+        # don't always start with the highest element.
+        duplicate_chunks = self.chunks \
+            .filter(pos=current_chunk.pos) \
+            .sort(key=lambda chunk: _get_weighted_random_score(chunk.raw()),
+                  reverse=True) \
+            .all()
         if dry_run:
-            self.logger.info("Dry-run: would copy chunk from %s to %s",
-                             current_chunk.url, spare_urls[0])
+            self.logger.info(
+                'Dry-run: would copy chunk from %s to %s',
+                duplicate_chunks[0].url, spare_urls[0])
         else:
-            self.logger.info("Copying chunk from %s to %s",
-                             current_chunk.url, spare_urls[0])
-            # TODO(FVE): retry to copy (max_attempts times)
-            self.blob_client.chunk_copy(
-                current_chunk.url, spare_urls[0], chunk_id=chunk_id,
-                fullpath=self.full_path, cid=self.container_id,
-                path=self.path, version=self.version,
-                content_id=self.content_id, **kwargs)
+            # To reduce the load on the rawx to decommission,
+            # use one of the rawx with a copy of the chunk to move.
+            for src in duplicate_chunks:
+                try:
+                    self.logger.info(
+                        'Copying chunk from %s to %s', src.url, spare_urls[0])
+                    # TODO(FVE): retry to copy (max_attempts times)
+                    self.blob_client.chunk_copy(
+                        src.url, spare_urls[0], chunk_id=chunk_id,
+                        fullpath=self.full_path, cid=self.container_id,
+                        path=self.path, version=self.version,
+                        content_id=self.content_id, **kwargs)
+                    break
+                except Exception as err:
+                    self.logger.warn(
+                        'Failed to copy chunk from %s to %s: %s', src.url,
+                        spare_urls[0], err)
+                    if len(duplicate_chunks) == 1:
+                        raise
+            else:
+                raise UnrecoverableContent(
+                    'No copy available of chunk to move')
 
             self._update_spare_chunk(current_chunk, spare_urls[0])
 
@@ -432,12 +457,15 @@ class Chunk(object):
 
 
 class ChunksHelper(object):
-    def __init__(self, chunks, raw_chunk=True):
+    def __init__(self, chunks, raw_chunk=True,
+                 sort_key=None, sort_reverse=False):
         if raw_chunk:
             self.chunks = [Chunk(c) for c in chunks]
         else:
             self.chunks = chunks
-        self.chunks.sort()
+        self.sort_key = sort_key
+        self.sort_reverse = sort_reverse
+        self.chunks.sort(key=self.sort_key, reverse=self.sort_reverse)
 
     def filter(self, id=None, pos=None, metapos=None, subpos=None, host=None,
                url=None):
@@ -456,7 +484,9 @@ class ChunksHelper(object):
             if url is not None and c.url != url:
                 continue
             found.append(c)
-        return ChunksHelper(found, False)
+        return ChunksHelper(found, False,
+                            sort_key=self.sort_key,
+                            sort_reverse=self.sort_reverse)
 
     def exclude(self, id=None, pos=None, metapos=None, subpos=None, host=None,
                 url=None):
@@ -475,7 +505,13 @@ class ChunksHelper(object):
             if url is not None and c.url == url:
                 continue
             found.append(c)
-        return ChunksHelper(found, False)
+        return ChunksHelper(found, False,
+                            sort_key=self.sort_key,
+                            sort_reverse=self.sort_reverse)
+
+    def sort(self, key=None, reverse=False):
+        return ChunksHelper(list(self.chunks), False,
+                            sort_key=key, sort_reverse=reverse)
 
     def one(self):
         if len(self.chunks) != 1:
