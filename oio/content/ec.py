@@ -19,6 +19,7 @@ from oio.api.ec import ECWriteHandler, ECRebuildHandler
 from oio.common.storage_functions import _sort_chunks, fetch_stream_ec
 from oio.common.utils import GeneratorIO
 from oio.common.constants import OIO_VERSION
+from oio.common.storage_functions import _get_weighted_random_score
 
 
 class ECContent(Content):
@@ -39,8 +40,14 @@ class ECContent(Content):
                 self.logger.debug('Chunk at pos %s has id %s',
                                   chunk_pos, chunk_id)
 
-        chunks = self.chunks.filter(metapos=current_chunk.metapos)\
-            .exclude(id=chunk_id, pos=chunk_pos)
+        # Sort chunks by score to try to rebuild with higher score.
+        # When scores are close together (e.g. [95, 94, 94, 93, 50]),
+        # don't always start with the highest element.
+        chunks = self.chunks \
+            .filter(metapos=current_chunk.metapos) \
+            .exclude(id=chunk_id, pos=chunk_pos) \
+            .sort(key=lambda chunk: _get_weighted_random_score(chunk.raw()),
+                  reverse=True)
 
         if chunk_id is None:
             current_chunk.size = chunks[0].size
