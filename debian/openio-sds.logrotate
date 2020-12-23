@@ -1,0 +1,30 @@
+/var/log/oio/sds/*/*/rawx*-httpd*.log {
+  copytruncate
+  nodateext
+  missingok
+  notifempty
+  daily
+  maxsize 50M
+  rotate 5
+  compress
+  delaycompress
+  sharedscripts
+  postrotate
+    /bin/kill -s USR1 `cat /run/oio/sds/*-rawx*-httpd*.pid /run/oio/sds/*-ecd*-httpd*.pid` 2> /dev/null || true
+  endscript
+}
+
+/var/log/oio/sds/*/*/oio-blob-indexer-*.log  /var/log/oio/sds/*/*/conscience*.log /var/log/oio/sds/*/*/conscience*.access /var/log/oio/sds/*/*/meta*.log /var/log/oio/sds/*/*/meta*.access /var/log/oio/sds/*/*/oioproxy*.log /var/log/oio/sds/*/*/oioproxy*.access /var/log/oio/sds/*/*/account*.log /var/log/oio/sds/*/*/account*.access /var/log/oio/sds/*/*/oio-event-agent*.log /var/log/oio/sds/*/*/rdir*.log /var/log/oio/sds/*/*/rdir*.access /var/log/oio/sds/*/*/oioswift*.log /var/log/oio/sds/*/*/replicator*.access /var/log/oio/sds/*/*/replicator*.log {
+  nodateext
+  missingok
+  notifempty
+  daily
+  maxsize 100M
+  rotate 5
+  compress
+  delaycompress
+  sharedscripts
+  postrotate
+    /bin/kill -HUP `cat /run/*syslogd.pid 2> /dev/null` 2> /dev/null || true
+  endscript
+}

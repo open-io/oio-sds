@@ -1,0 +1,105 @@
+#!/usr/bin/make -f
+# See debhelper(7) (uncomment to enable)
+# output every command that modifies files on the build system.
+DH_VERBOSE = 1
+export DH_OPTIONS=-v
+export DEB_BUILD_OPTIONS += nocheck
+
+DESTDIR=$(CURDIR)/debian/openio-sds
+PYTHON_SITELIB=$(python -c "from distutils.sysconfig import get_python_lib; print get_python_lib()")
+
+# see EXAMPLES in dpkg-buildflags(1) and read /usr/share/dpkg/*
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/default.mk
+
+# see FEATURE AREAS in dpkg-buildflags(1)
+#export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+# see ENVIRONMENT in dpkg-buildflags(1)
+# package maintainers to append CFLAGS
+#export DEB_CFLAGS_MAINT_APPEND  = -Wall -pedantic
+# package maintainers to append LDFLAGS
+#export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
+
+# main packaging script based on dh7 syntax
+%:
+	dh $@ --buildsystem cmake
+
+override_dh_auto_configure:
+	wget -O - https://golang.org/dl/go1.15.5.linux-amd64.tar.gz | tar -xz
+	mkdir go/.cache
+	sed -i "s@find_program(GO_EXECUTABLE go)@set(GO_EXECUTABLE GOCACHE=${PWD}/go/.cache GOPATH=${PWD}/go ${PWD}/go/bin/go)@" CMakeLists.txt
+
+	PATH="${PATH}:${PWD}/go/bin" \
+	dh_auto_configure --buildsystem cmake -- \
+	-DCMAKE_BUILD_TYPE="Release" \
+	-DCMAKE_INSTALL_PREFIX="/usr" \
+	-DLD_LIBDIR="lib" \
+	-DEXE_PREFIX="oio" \
+	-DZK_LIBDIR="/usr/lib" \
+	-DZK_INCDIR="/usr/include/zookeeper" \
+	-DLZO_INCDIR="/usr/include/lzo" \
+	-DAPACHE2_LIBDIR="/usr/lib/apache2" \
+	-DAPACHE2_INCDIR="/usr/include/apache2" \
+	-DLIBRAIN_LIBDIR="/usr/lib" \
+	-DLIBRAIN_INCDIR="/usr/include" \
+	-DSOCKET_OPTIMIZED=1
+
+override_dh_auto_build:
+	# Get golang dependencies
+	wget --no-check-certificate https://github.com/tylerb/graceful/archive/v1.2.15.tar.gz
+	wget --no-check-certificate https://github.com/go-ini/ini/archive/v1.38.2.tar.gz
+	wget --no-check-certificate https://github.com/golang/sys/archive/release-branch.go1.11.tar.gz
+
+	# Extract & make them available in local dir added to GOPATH
+	mkdir -p go/src/gopkg.in/tylerb
+	tar -C go/src/gopkg.in/tylerb -xf v1.2.15.tar.gz
+	ln -s graceful-1.2.15 go/src/gopkg.in/tylerb/graceful.v1
+
+	mkdir -p go/src/gopkg.in/go-ini
+	tar -C go/src/gopkg.in -xf v1.38.2.tar.gz
+	ln -s ini-1.38.2 go/src/gopkg.in/ini.v1
+
+	mkdir -p go/src/golang.org/x
+	tar -C go/src/golang.org/x -xf release-branch.go1.11.tar.gz
+	ln -s sys-release-branch.go1.11 go/src/golang.org/x/sys
+
+	PATH="${PATH}:${PWD}/go/bin" \
+	dh_auto_build --buildsystem cmake
+	python3 setup.py build
+
+override_dh_install:
+	dh_install
+	python3 setup.py install -O1 --skip-build --prefix=/usr --install-layout=deb --root $(DESTDIR)
+	# Install OpenIO SDS directories
+	mkdir -pv $(DESTDIR)/var/log/oio/sds \
+		$(DESTDIR)/var/lib/oio/sds \
+		$(DESTDIR)/etc/oio/sds \
+		$(DESTDIR)/run/oio/sds
+	# Remove unwanted stuff
+	rm -rf \
+		$(DESTDIR)/usr/bin/oio-dump-buried-events.py \
+		$(DESTDIR)/usr/bin/oio-rawx-uncompress \
+		$(DESTDIR)/usr/bin/oio-webhook-test.py \
+		$(DESTDIR)/usr/bin/oio-test-config.py \
+		$(DESTDIR)/usr/bin/oio-wait-scored.sh \
+		$(DESTDIR)/usr/bin/oio-sqlx-server \
+		$(DESTDIR)/usr/bin/oio-file-tool \
+		$(DESTDIR)/usr/bin/oio-sqlx \
+		$(DESTDIR)/usr/bin/oio-check-services \
+		$(DESTDIR)/usr/bin/oio-rawx-compress \
+		$(DESTDIR)/usr/bin/oio-bootstrap.py \
+		$(DESTDIR)/usr/bin/oio-reset.sh
+
+# debmake generated override targets
+# This is example for Cmake (See http://bugs.debian.org/641051 )
+#override_dh_auto_configure:
+#       dh_auto_configure -- \
+#
+
+.PHONY: override_dh_strip
+override_dh_strip:
+	dh_strip --dbg-package=openio-sds-dbg
+
+override_dh_auto_install:
+	PATH="${PATH}:/usr/lib/go-1.10/bin" GOPATH="${GOPATH}:${PWD}/go" dh_auto_install --destdir=debian/openio-sds

@@ -1,0 +1,25 @@
+version: v1.0
+name: oio-sds-mirror
+jobs:
+- job: Mirror to github
+  steps:
+  - name: Mirror to github
+    script:
+     # git clone directly in the script to prevent using checkout or gitclone action
+     # so we have full control on what we are doing
+    - set -x
+    - eval $(worker key install --env-git proj-ssh-openio)
+    # don't use --mirror to prevent mirroring pull requests ref
+    # that would be messy
+    - git clone --bare {{ .git.url }} {{ .cds.workspace }}
+    - cd {{ .cds.workspace }}
+    - git branch --all
+    # to remove branch to sync
+    #- git branch -D xxxx
+    #
+    # TODO: remove `echo` to run mirroring
+    #
+    - echo git push --mirror --prune --force https://openiobot:{{ .cds.proj.OPENIOBOT_GITHUB_TOKEN }}@github.com/open-io/oio-sds.git
+
+  requirements:
+  - binary: git

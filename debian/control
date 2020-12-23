@@ -1,0 +1,87 @@
+Source: openio-sds
+Section: unknown
+Priority: optional
+Maintainer: PU ObjectStorage <pu.objectstorage@internal.ovh.net>
+Uploaders: PU ObjectStorage <pu.objectstorage@internal.ovh.net>
+Build-Depends:
+ debhelper (>= 9)
+ , cmake
+ , libglib2.0-dev (>= 2.42)
+ , libzookeeper-mt-dev (>= 3.5.6)
+ , wget
+ , ca-certificates
+ , python3-dev
+ , python3-pbr
+ , python3-setuptools
+ , libzmq3-dev
+ , libcurl4-gnutls-dev
+ , libapreq2-dev (>= 1.2)
+ , libsqlite3-dev (>= 3.31.1-5)
+ , libattr1-dev (>= 2.4.32)
+ , libevent-dev (>= 2.1.8)
+ , apache2 (>= 2.2)
+ , apache2-dev (>= 2.2)
+ , liblzo2-dev (>= 2.0)
+ , gridinit
+ , asn1c (>= 0.9.28)
+ , libdb-dev
+ , libjson-c-dev (>= 0.12)
+ , flex
+ , bison
+ , curl
+ , libleveldb-dev 
+Standards-Version: 3.9.5
+Homepage: https://openio.io
+
+Package: openio-sds
+Architecture: any
+Depends:
+ ${shlibs:Depends}
+ , ${misc:Depends}
+ , python3-xattr (>= 0.8.0) | python3-pyxattr (>= 0.4.0)
+ , python3-eventlet (>= 0.29.1)
+ , python3-requests (>= 2.6.0)
+ , python3-zookeeper (>= 3.5.6)
+ , python3-pbr
+ , python3-yaml
+ , python3-simplejson (>= 2.0.9)
+ , python3-redis
+ , python3-cliff (>= 1.13)
+ , python3-tablib
+ , python3-werkzeug
+ , python3-pyeclib (>= 1.2.0)
+ , python3-gunicorn
+ , gunicorn (>= 19.4.5)
+ , apache2
+ , libexpat1
+ , asn1c (>= 0.9.28)
+ , libglib2.0-0 (>= 2.42)
+ , zlib1g
+ , libjson-c3 (>= 0.12)
+ , libapr1 (>= 1.2)
+ , libevent-2.1-6
+ , liblzo2-2 (>= 2.0)
+ , gridinit
+ , libdb5.3
+ , libsqlite3-0 (>= 3.31.1-5)
+ , libleveldb1v5
+Description: OpenIO Cloud Storage Solution
+ OpenIO software storage solution is designed to handle PETA-bytes of
+ data in a distributed way, data such as: images, videos, documents, emails,
+ and any other personal unstructured data.
+ OpenIO is a fork of Redcurrant, from Worldline by Atos.
+
+Package: openio-sds-dbg
+Architecture: any
+Section: debug
+Priority: extra
+Depends:
+    openio-sds (= ${binary:Version}),
+    ${misc:Depends}
+Description: debugging symbols for openio-sds
+ OpenIO software storage solution is designed to handle PETA-bytes of
+ data in a distributed way, data such as: images, videos, documents, emails,
+ and any other personal unstructured data.
+ OpenIO is a fork of Redcurrant, from Worldline by Atos.
+ .
+ This package contains the debugging symbols for openio-sds.
