@@ -17,6 +17,7 @@ from functools import wraps
 
 import redis
 import random
+from fnmatch import fnmatchcase
 
 from oio.common.easy_value import true_value
 from oio.common.exceptions import Forbidden, NotFound
@@ -25,6 +26,9 @@ from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.redis_conn import RedisConnection
 from oio.common.timestamp import Timestamp
+
+
+END_MARKER = u"\U0010fffd"
 
 
 def handle_redis_exceptions(func):
@@ -59,6 +63,9 @@ class XcuteBackend(RedisConnection):
         'no_job': (
             NotFound,
             'The job does\'nt exist'),
+        'job_must_be_paused': (
+            Forbidden,
+            'The job must be paused'),
         'job_must_be_running': (
             Forbidden,
             'The job must be running'),
@@ -158,6 +165,9 @@ class XcuteBackend(RedisConnection):
 
         local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
                                   'job.status');
+        if status == nil or status == false then
+            return redis.error_reply('no_job');
+        end;
         if status ~= 'RUNNING' then
             return redis.error_reply('job_must_be_running');
         end;
@@ -285,6 +295,23 @@ class XcuteBackend(RedisConnection):
         end;
     """
 
+    lua_update_config = """
+        local mtime = KEYS[1];
+        local job_id = KEYS[2];
+        local job_config = KEYS[3];
+
+        local status = redis.call('HGET', 'xcute:job:info:' .. job_id,
+                                  'job.status');
+        if status == nil or status == false then
+            return redis.error_reply('no_job');
+        end;
+        if status ~= 'PAUSED' then
+            return redis.error_reply('job_must_be_paused');
+        end;
+
+        redis.call('HSET', 'xcute:job:info:' .. job_id, 'config', job_config);
+    """ + _lua_update_mtime
+
     lua_update_tasks_sent = """
         local mtime = KEYS[1];
         local job_id = KEYS[2];
@@ -299,6 +326,8 @@ class XcuteBackend(RedisConnection):
         if status == nil or status == false then
             return redis.error_reply('no_job');
         end;
+
+        local old_last_sent = redis.call('HGET', info_key, 'tasks.last_sent');
 
         local nb_tasks_sent = 0;
         if tasks_sent_length > 0 then
@@ -321,11 +350,10 @@ class XcuteBackend(RedisConnection):
                        job_id);
 
             local total_tasks_processed = redis.call(
-                'HGET', 'xcute:job:info:' .. job_id, 'tasks.processed');
+                'HGET', info_key, 'tasks.processed');
             if tonumber(total_tasks_processed) >= tonumber(
                     total_tasks_sent) then
-                redis.call('HSET', 'xcute:job:info:' .. job_id,
-                           'job.status', 'FINISHED');
+                redis.call('HSET', info_key, 'job.status', 'FINISHED');
                 redis.call('HDEL', 'xcute:locks', lock);
             end;
         else
@@ -344,7 +372,52 @@ class XcuteBackend(RedisConnection):
             end;
         end;
     """ + _lua_update_mtime + """
-        return {nb_tasks_sent, redis.call('HGET', info_key, 'job.status')};
+        return {nb_tasks_sent, redis.call('HGET', info_key, 'job.status'),
+                old_last_sent};
+    """
+
+    lua_abort_tasks_sent = """
+        local mtime = KEYS[1];
+        local job_id = KEYS[2];
+        local old_last_sent = KEYS[3];
+        local tasks_sent = ARGV;
+        local tasks_sent_length = #tasks_sent;
+        local info_key = 'xcute:job:info:' .. job_id;
+
+        local status = redis.call('HGET', info_key, 'job.status');
+        if status == nil or status == false then
+            return redis.error_reply('no_job');
+        end;
+
+        if tonumber(tasks_sent_length) == 0 then
+            return;
+        end;
+
+        redis.call('HSET', info_key, 'tasks.all_sent', 'False');
+        redis.call('HINCRBY', info_key, 'tasks.sent', -tasks_sent_length);
+        redis.call(
+            'SREM', 'xcute:tasks:running:' .. job_id, unpack(tasks_sent));
+        if old_last_sent == 'None' then
+            redis.call('HDEL', info_key, 'tasks.last_sent');
+        else
+            redis.call('HSET', info_key, 'tasks.last_sent', old_last_sent);
+        end;
+
+        local request_pause = redis.call(
+            'HGET', info_key, 'job.request_pause');
+        if request_pause == 'True' then
+            -- if waiting pause, pause the job
+            redis.call('HMSET', info_key,
+                        'job.status', 'PAUSED',
+                        'job.request_pause', 'False');
+            local orchestrator_id = redis.call(
+                'HGET', info_key, 'orchestrator.id');
+            redis.call(
+                'SREM', 'xcute:orchestrator:jobs:' .. orchestrator_id,
+                job_id);
+        end;
+    """ + _lua_update_mtime + """
+        return {redis.call('HGET', info_key, 'job.status')};
     """
 
     lua_update_tasks_processed = """
@@ -501,8 +574,12 @@ class XcuteBackend(RedisConnection):
             self.lua_request_pause)
         self.script_resume = self.register_script(
             self.lua_resume)
+        self.script_update_config = self.register_script(
+            self.lua_update_config)
         self.script_update_tasks_sent = self.register_script(
             self.lua_update_tasks_sent)
+        self.script_abort_tasks_sent = self.register_script(
+            self.lua_abort_tasks_sent)
         self.script_update_tasks_processed = self.register_script(
             self.lua_update_tasks_processed)
         self.script_incr_total = self.register_script(
@@ -517,8 +594,16 @@ class XcuteBackend(RedisConnection):
         status = {'job_count': job_count}
         return status
 
-    def list_jobs(self, marker=None, limit=1000):
+    def list_jobs(self, prefix=None, marker=None, limit=1000,
+                  job_status=None, job_type=None, job_lock=None):
         limit = limit or self.DEFAULT_LIMIT
+
+        if job_status:
+            job_status = job_status.upper().strip()
+        if job_type:
+            job_type = job_type.lower().strip()
+        if job_lock:
+            job_lock = job_lock.lower().strip()
 
         jobs = list()
         while True:
@@ -527,10 +612,12 @@ class XcuteBackend(RedisConnection):
                 break
 
             range_min = '-'
-            if marker:
-                range_max = '(' + marker
-            else:
-                range_max = '+'
+            range_max = '+'
+            if prefix:
+                range_min = '[' + prefix
+                range_max = '[' + prefix + END_MARKER
+            if marker and (not prefix or marker > prefix):
+                range_min = '(' + marker
 
             job_ids = self.conn.zrevrangebylex(
                 self.key_job_ids, range_max, range_min, 0, limit_)
@@ -543,6 +630,14 @@ class XcuteBackend(RedisConnection):
             for job_info in job_infos:
                 if not job_info:
                     # The job can be deleted between two requests
+                    continue
+
+                if job_status and job_info['job.status'] != job_status:
+                    continue
+                if job_type and job_info['job.type'] != job_type:
+                    continue
+                if job_lock and not fnmatchcase(
+                        job_info.get('job.lock') or '', job_lock):
                     continue
 
                 jobs.append(self._unmarshal_job_info(job_info))
@@ -622,14 +717,28 @@ class XcuteBackend(RedisConnection):
             client=self.conn)
 
     @handle_redis_exceptions
+    def update_config(self, job_id, job_config):
+        job_config = json.dumps(job_config)
+
+        self.script_update_config(
+            keys=[self._get_timestamp(), job_id, job_config],
+            client=self.conn)
+
+    @handle_redis_exceptions
     def update_tasks_sent(self, job_id, task_ids, all_tasks_sent=False):
-        nb_tasks_sent, status = self.script_update_tasks_sent(
+        nb_tasks_sent, status, old_last_sent = self.script_update_tasks_sent(
             keys=[self._get_timestamp(), job_id, str(all_tasks_sent)],
             args=task_ids, client=self.conn)
         if nb_tasks_sent != len(task_ids):
             self.logger.warn('%s tasks were sent several times',
                              len(task_ids) - nb_tasks_sent)
-        return status
+        return status, old_last_sent
+
+    @handle_redis_exceptions
+    def abort_tasks_sent(self, job_id, task_ids, old_last_sent):
+        return self.script_abort_tasks_sent(
+            keys=[self._get_timestamp(), job_id, str(old_last_sent)],
+            args=task_ids, client=self.conn)
 
     @handle_redis_exceptions
     def update_tasks_processed(self, job_id, task_ids,

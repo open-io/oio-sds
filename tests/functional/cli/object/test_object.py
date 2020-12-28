@@ -28,7 +28,9 @@ CONTAINER_LIST_HEADERS = ['Name', 'Bytes', 'Count']
 CONTAINER_FIELDS = ['account', 'base_name', 'bytes_usage', 'quota',
                     'container', 'ctime', 'storage_policy', 'objects',
                     'max_versions', 'status', 'damaged_objects',
-                    'missing_chunks']
+                    'missing_chunks', 'stats.freelist_count',
+                    'stats.page_count', 'stats.page_size',
+                    'stats.space_wasted']
 OBJ_FIELDS = ['account', 'container', 'ctime', 'hash', 'id', 'mime-type',
               'mtime', 'object', 'policy', 'size', 'version']
 

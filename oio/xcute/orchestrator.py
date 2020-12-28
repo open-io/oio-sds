@@ -29,6 +29,7 @@ from oio.event.beanstalk import Beanstalk, BeanstalkdListener, \
     ConnectionError, DEFAULT_TTR
 from oio.event.evob import EventTypes
 from oio.xcute.common.backend import XcuteBackend
+from oio.xcute.common.job import XcuteJobStatus
 from oio.xcute.jobs import JOB_TYPES
 
 
@@ -262,45 +263,89 @@ class XcuteOrchestrator(object):
             tasks_run_time = ratelimit(
                 tasks_run_time, batch_per_second)
 
-            sent = self.dispatch_tasks_batch(
-                beanstalkd_workers,
-                job_id, job_type, job_config, tasks)
-            if sent:
-                job_status, exc = self.handle_backend_errors(
+            # Make sure that the sent tasks will be saved
+            # before being processed
+            exc = None
+            sent = False
+            while not sent:
+                (job_status, old_last_sent), exc = self.handle_backend_errors(
                     self.backend.update_tasks_sent, job_id, tasks.keys())
-                tasks.clear()
                 if exc is not None:
                     self.logger.warn(
-                        '[job_id=%s] Job has not been updated '
-                        'with the sent tasks: %s', job_id, exc)
+                        '[job_id=%s] Job could not update '
+                        'the sent tasks: %s', job_id, exc)
                     break
-                if job_status == 'PAUSED':
+                sent = self.dispatch_tasks_batch(
+                    beanstalkd_workers, job_id, job_type, job_config, tasks)
+                if not sent:
+                    self.logger.warn(
+                        '[job_id=%s] Job aborting the last sent tasks', job_id)
+                    job_status, exc = self.handle_backend_errors(
+                        self.backend.abort_tasks_sent, job_id, tasks.keys(),
+                        old_last_sent)
+                    if exc is not None:
+                        self.logger.warn(
+                            '[job_id=%s] Job could not abort '
+                            'the last sent tasks: %s', job_id, exc)
+                        break
+                if job_status == XcuteJobStatus.PAUSED:
                     self.logger.info('Job %s is paused', job_id)
                     return
 
-            if not self.running:
+                if not self.running:
+                    break
+                sleep(1)
+
+            if exc is not None and not self.running:
                 break
+            tasks.clear()
         else:
-            sent = True
-            if tasks:
-                sent = self.dispatch_tasks_batch(
-                    beanstalkd_workers,
-                    job_id, job_type, job_config, tasks)
-            if sent:
-                job_status, exc = self.handle_backend_errors(
+            # Make sure that the sent tasks will be saved
+            # before being processed
+            sent = False
+            while not sent:
+                (job_status, old_last_sent), exc = self.handle_backend_errors(
                     self.backend.update_tasks_sent, job_id, tasks.keys(),
                     all_tasks_sent=True)
-                if exc is None:
-                    if job_status == 'FINISHED':
+                if exc is not None:
+                    self.logger.warn(
+                        '[job_id=%s] Job could not update '
+                        'the sent tasks: %s', job_id, exc)
+                    break
+                if tasks:
+                    sent = self.dispatch_tasks_batch(
+                        beanstalkd_workers, job_id, job_type, job_config,
+                        tasks)
+                else:
+                    sent = True
+                if not sent:
+                    self.logger.warn(
+                        '[job_id=%s] Job aborting the last sent tasks', job_id)
+                    job_status, exc = self.handle_backend_errors(
+                        self.backend.abort_tasks_sent, job_id, tasks.keys(),
+                        old_last_sent)
+                    if exc is not None:
+                        self.logger.warn(
+                            '[job_id=%s] Job could not abort '
+                            'the last sent tasks: %s', job_id, exc)
+                        break
+                else:
+                    if job_status == XcuteJobStatus.FINISHED:
                         self.logger.info('Job %s is finished', job_id)
 
                     self.logger.info(
                         'Finished dispatching job (job_id=%s)', job_id)
                     return
-                else:
-                    self.logger.warn(
-                        '[job_id=%s] Job has not been updated '
-                        'with the last sent tasks: %s', job_id, exc)
+                if job_status == XcuteJobStatus.PAUSED:
+                    self.logger.info('Job %s is paused', job_id)
+                    return
+
+                if not self.running:
+                    break
+                sleep(1)
+
+        self.logger.warn(
+            '[job_id=%s] Job was stopped before it was finished', job_id)
 
         _, exc = self.handle_backend_errors(self.backend.free, job_id)
         if exc is not None:
@@ -323,12 +368,16 @@ class XcuteOrchestrator(object):
         # max 2 minutes per task
         ttr = len(tasks) * DEFAULT_TTR
 
-        while self.running:
-            for beanstalkd_worker in beanstalkd_workers:
-                if not self.running:
-                    return False
-                if beanstalkd_worker is not None:
+        i = 0
+        for beanstalkd_worker in beanstalkd_workers:
+            if not self.running:
+                return False
+            i += 1
+            if beanstalkd_worker is None:
+                # Try for at least 30 seconds
+                if i > 30:
                     break
+                continue
 
             try:
                 beanstalkd_worker.put(beanstalkd_payload, ttr=ttr)
@@ -344,6 +393,7 @@ class XcuteOrchestrator(object):
                 # and wait for a few errors in a row
                 # to happen before marking it as broken.
                 beanstalkd_worker.is_broken = True
+            sleep(1)
         return False
 
     def make_beanstalkd_payload(self, job_id, job_type, job_config,
@@ -626,8 +676,8 @@ class XcuteOrchestrator(object):
         while True:
             if not self.beanstalkd_workers:
                 self.logger.info('No beanstalkd worker available')
-                sleep(1)
                 yield None
+                sleep(1)
                 continue
 
             if id(self.beanstalkd_workers) != beanstalkd_workers_id:
@@ -652,8 +702,8 @@ class XcuteOrchestrator(object):
                 if not yielded:
                     self.logger.info(
                         'All beanstalkd workers available are broken')
-                    sleep(1)
                     yield None
+                    sleep(1)
 
     def exit_gracefully(self, *args, **kwargs):
         if self.running:
