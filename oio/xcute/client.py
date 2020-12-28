@@ -101,9 +101,15 @@ class XcuteClient(HttpApi):
             reraise(exc_info[0], exc_info[1], exc_info[2])
         return resp, body
 
-    def job_list(self, limit=None, marker=None):
+    def job_list(self, limit=None, prefix=None, marker=None,
+                 job_status=None, job_type=None, job_lock=None):
         _, data = self.xcute_request(
-            'GET', '/job/list', params={'limit': limit, 'marker': marker})
+            'GET', '/job/list', params={'limit': limit,
+                                        'prefix': prefix,
+                                        'marker': marker,
+                                        'status': job_status,
+                                        'type': job_type,
+                                        'lock': job_lock})
         return data
 
     def job_create(self, job_type, job_config=None):
@@ -124,6 +130,11 @@ class XcuteClient(HttpApi):
     def job_resume(self, job_id):
         _, data = self.xcute_request(
             'POST', '/job/resume', params={'id': job_id})
+        return data
+
+    def job_update(self, job_id, job_config=None):
+        _, data = self.xcute_request(
+            'POST', '/job/update', params={'id': job_id}, json=job_config)
         return data
 
     def job_delete(self, job_id):

@@ -1607,7 +1607,12 @@ sqlx_repository_dump_base_fd_no_copy(struct sqlx_sqlite3_s *sq3,
 	}
 
 	/* Detect a wrong/corrupted database file */
+	gint64 now = oio_ext_monotonic_time();
 	rc = sqlx_exec(sq3->db, "PRAGMA quick_check");
+	GRID_INFO("Pragma quick check took %"G_GINT64_FORMAT" ms [%s][%s]",
+		(oio_ext_monotonic_time () - now) / G_TIME_SPAN_MILLISECOND,
+		sq3->name.base, sq3->name.type);
+
 	if (rc != SQLITE_OK) {
 		if (rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT) {
 			err = NEWERROR(CODE_CORRUPT_DATABASE,

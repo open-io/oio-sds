@@ -594,3 +594,38 @@ db_properties_to_json(
 	g_string_append_static(json, "}");
 	return json;
 }
+
+static gint64 _sqlx_get_number(struct sqlx_sqlite3_s *sq3, const gchar *req) {
+	gint64 result = -1;
+	gint rc;
+	sqlite3_stmt *stmt = NULL;
+
+	sqlite3_prepare_debug(rc, sq3->db, req, -1, &stmt, NULL);
+	if (rc == SQLITE_OK) {
+		EXTRA_ASSERT(stmt != NULL);
+		if (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
+			result = sqlite3_column_int64(stmt, 0);
+		}
+	}
+	sqlite3_finalize(stmt);
+	return result;
+}
+
+GPtrArray* sqlx_admin_get_usage(struct sqlx_sqlite3_s *sq3) {
+	GPtrArray *result = g_ptr_array_new();
+
+	g_ptr_array_add(result, g_strdup("stats.page_count"));
+	g_ptr_array_add(result, g_strdup_printf("%"G_GINT64_FORMAT,
+		_sqlx_get_number(sq3, "PRAGMA main.page_count")));
+
+
+	g_ptr_array_add(result, g_strdup("stats.freelist_count"));
+	g_ptr_array_add(result, g_strdup_printf("%"G_GINT64_FORMAT,
+		_sqlx_get_number(sq3, "PRAGMA main.freelist_count")));
+
+	g_ptr_array_add(result, g_strdup("stats.page_size"));
+	g_ptr_array_add(result, g_strdup_printf("%"G_GINT64_FORMAT,
+		_sqlx_get_number(sq3, "PRAGMA main.page_size")));
+
+	return result;
+}

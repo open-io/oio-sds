@@ -606,9 +606,18 @@ _pipe_from(const gchar *source, struct sqlx_repository_s *repo,
 {
 	GError *err;
 	struct restore_ctx_s *ctx = NULL;
+	gint64 now = oio_ext_monotonic_time();
 	err = _pipe_base_from(source, repo, name, &ctx);
-	if (!err)
+	gint64 elapsed = oio_ext_monotonic_time();
+	GRID_INFO("pipe_base_from took %"G_GINT64_FORMAT" ms",
+		(elapsed - now) / G_TIME_SPAN_MILLISECOND);
+
+	if (!err) {
+		now = elapsed;
 		err = _restore2(repo, name, ctx->path);
+		GRID_INFO("PIPEFROM restore db %s took %"G_GINT64_FORMAT" ms",
+			name->base, (oio_ext_monotonic_time() - now) / G_TIME_SPAN_MILLISECOND);
+	}
 
 	restore_ctx_clear(&ctx);
 	return err;
@@ -1408,7 +1417,18 @@ _handler_PROPGET(struct gridd_reply_ctx_s *reply,
 			}
 		}
 		g_free (keys); /*< pointers reused! */
-		g_ptr_array_add (tmp, NULL);
+
+		if (oio_ext_is_admin()) {
+			GPtrArray *stats = sqlx_admin_get_usage(sq3);
+			if (stats) {
+				for(guint i=0; i < stats->len; i++) {
+					g_ptr_array_add(tmp, g_ptr_array_index(stats, i));
+				}
+				g_ptr_array_free(stats, FALSE); /*< pointers reused! */
+			}
+		}
+		g_ptr_array_add(tmp, NULL);
+
 		gchar **pairs = (gchar**) g_ptr_array_free(tmp, FALSE);
 		GByteArray *body = KV_encode_gba (pairs);
 		g_strfreev(pairs);

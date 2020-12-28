@@ -142,7 +142,7 @@ class ElectionDebug(ElectionCmd):
         import time
 
         def format_item(x, v):
-            if v is None:
+            if not v:
                 return format_json(x, v)
             patched_times = list()
             for entry in v.get("log", []):
@@ -172,7 +172,7 @@ class ElectionSync(ElectionCmd):
 
         data = self.app.client_manager.admin.election_sync(
             service_type, account=account, reference=reference, cid=cid,
-            timeout=parsed_args.timeout)
+            timeout=parsed_args.timeout, service_id=parsed_args.service_id)
 
         columns = ('Id', 'Status', 'Message', 'Body')
         data = sorted(iteritems(data))

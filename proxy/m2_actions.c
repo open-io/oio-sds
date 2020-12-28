@@ -1676,10 +1676,10 @@ _build_next_marker(const char *req_marker, const gchar *obj_marker,
 		if (obj_marker && g_strcmp0(obj_marker, prefix_marker) >= 0) {
 			next_marker = g_strdup(obj_marker);
 		} else {
-			/* HACK: "\xef\xbf\xbd" is the (UTF-8 encoded) unicode
-			 * replacement character. There are very few chances that an
-			 * object has it in its name, and even if it has, it won't
-			 * be listed (because it would be behind the delimiter).
+			/* HACK: "\xf4\x8f\xbf\xbd" is last valid Unicode character.
+			 * There are very few chances that an object has it in its name,
+			 * and even if it has, it won't be listed
+			 * (because it would be behind the delimiter).
 			 * With such a marker, we will force meta2 to skip objects
 			 * that won't be listed, and won't even be used to generate
 			 * new prefixes (they all share the current prefix).
@@ -1693,10 +1693,10 @@ _build_next_marker(const char *req_marker, const gchar *obj_marker,
 			 * With a page size of 3, and '/' as a delimiter:
 			 * - the first request will return "a/b/0", "a/b/1", "a/b/2",
 			 *   generating the prefix "a/";
-			 * - the marker for the next iteration will be "a/\xef\xbf\xbd";
+			 * - the marker for the next iteration will be "a/\xf4\x8f\xbf\xbd";
 			 * - the second request will skip "a/c/3", and return "d/e/4",
 			 *   generating the prefix "d/". */
-			next_marker = g_strdup_printf("%s\xef\xbf\xbd", prefix_marker);
+			next_marker = g_strdup_printf("%s\xf4\x8f\xbf\xbd", prefix_marker);
 		}
 	} else if (obj_marker) {
 		next_marker = g_strdup(obj_marker);

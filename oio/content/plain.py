@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -20,6 +20,7 @@ from oio.common.storage_method import STORAGE_METHODS
 from oio.content.content import Content, Chunk
 from oio.common import exceptions as exc
 from oio.common.exceptions import UnrecoverableContent
+from oio.common.storage_functions import _get_weighted_random_score
 
 
 class PlainContent(Content):
@@ -57,8 +58,15 @@ class PlainContent(Content):
         elif chunk_pos is None:
             chunk_pos = current_chunk.pos
 
-        duplicate_chunks = self.chunks.filter(
-            pos=chunk_pos).exclude(id=chunk_id).all()
+        # Sort chunks by score to try to copy with higher score.
+        # When scores are close together (e.g. [95, 94, 94, 93, 50]),
+        # don't always start with the highest element.
+        duplicate_chunks = self.chunks \
+            .filter(pos=chunk_pos) \
+            .exclude(id=chunk_id) \
+            .sort(key=lambda chunk: _get_weighted_random_score(chunk.raw()),
+                  reverse=True) \
+            .all()
         if len(duplicate_chunks) == 0:
             raise UnrecoverableContent("No copy of missing chunk")
 
@@ -79,7 +87,6 @@ class PlainContent(Content):
         spare_url = spare_urls[0]
 
         # Actually create the spare chunk, by duplicating a good one
-        uploaded = False
         for src in duplicate_chunks:
             try:
                 self.blob_client.chunk_copy(
@@ -89,13 +96,12 @@ class PlainContent(Content):
                     content_id=self.content_id)
                 self.logger.debug('Chunk copied from %s to %s, registering it',
                                   src.url, spare_url)
-                uploaded = True
                 break
             except Exception as err:
                 self.logger.warn(
                     "Failed to copy chunk from %s to %s: %s %s", src.url,
                     spare_url, type(err), err)
-        if not uploaded:
+        else:
             raise UnrecoverableContent("No copy available of missing chunk")
 
         # Register the spare chunk in object's metadata

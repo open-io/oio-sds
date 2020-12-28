@@ -36,12 +36,14 @@ class XcuteWorker(object):
     def process(self, beanstalkd_job):
         job_id = beanstalkd_job['job_id']
         job_config = beanstalkd_job['job_config']
+        job_params = job_config['params']
 
         task = self.tasks.get(job_id)
+        if task is not None and task.params_have_changed(job_params):
+            task = None
         if task is None:
             job_type = beanstalkd_job['job_type']
             task_class = JOB_TYPES[job_type].TASK_CLASS
-            job_params = job_config['params']
             task = task_class(self.conf, job_params, logger=self.logger)
             self.tasks[job_id] = task
 
