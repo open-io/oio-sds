@@ -780,6 +780,7 @@ sqliterepo.repo.hard_max=1024
 proxy.location=${LOC_PROXYD}
 
 admin=${IP}:${PORT_ADMIN}
+iam.connection=redis://${IP}:${REDIS_PORT}/
 
 """
 
@@ -979,6 +980,7 @@ template_account = """
 [account-server]
 bind_addr = ${IP}
 bind_port = ${PORT}
+namespace = ${NS}
 workers = 2
 autocreate = true
 log_facility = LOG_LOCAL0
@@ -1721,7 +1723,7 @@ def generate(options):
         f.write(tpl.safe_substitute(ENV))
     # system config
     with open('{OIODIR}/sds.conf'.format(**ENV), 'w+') as f:
-        env = merge_env({'IP': hosts[0]})
+        env = merge_env({'IP': hosts[0], 'REDIS_PORT': 6379})
         tpl = Template(template_local_header)
         f.write(tpl.safe_substitute(env))
         tpl = Template(template_local_ns)
