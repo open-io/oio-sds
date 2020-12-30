@@ -96,6 +96,7 @@ class RedisIamDb(object):
         policies = [name.decode('utf-8')[prefix_len:]
                     for name in self.redis.conn_slave.hkeys(acct_key)
                     if name.startswith(prefix) or name == user_b]
+        policies.sort()
         return policies
 
     def append_policy_statements(self, account, user, policy_name, policy,

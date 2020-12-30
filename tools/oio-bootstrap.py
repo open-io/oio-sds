@@ -780,7 +780,7 @@ sqliterepo.repo.hard_max=1024
 proxy.location=${LOC_PROXYD}
 
 admin=${IP}:${PORT_ADMIN}
-iam.connection=redis://${IP}:${REDIS_PORT}/
+iam.connection=redis://${IP}:${REDIS_PORT}/?allow_empty_policy_name=False
 
 """
 

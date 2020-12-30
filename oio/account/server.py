@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVHcloud
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,22 +14,27 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from functools import wraps
+
 from werkzeug.wrappers import Response
 from werkzeug.routing import Map, Rule
 from werkzeug.exceptions import NotFound, BadRequest, Conflict, HTTPException
-from functools import wraps
 
 from oio.account.backend import AccountBackend
+from oio.account.iam import RedisIamDb
+from oio.common.configuration import load_namespace_conf
 from oio.common.constants import REQID_HEADER, STRLEN_REQID, \
     HTTP_CONTENT_TYPE_JSON
+from oio.common.easy_value import int_value, true_value
 from oio.common.json import json
 from oio.common.logger import get_logger
+from oio.common.utils import parse_conn_str
 from oio.common.wsgi import WerkzeugApp
-from oio.common.easy_value import int_value, true_value
 
 
 ACCOUNT_LISTING_DEFAULT_LIMIT = 1000
 ACCOUNT_LISTING_MAX_LIMIT = 10000
+DEFAULT_IAM_CONNECTION = 'redis://127.0.0.1:6379'
 
 
 def access_log(func):
@@ -68,9 +74,10 @@ class Account(WerkzeugApp):
 
     # pylint: disable=no-member
 
-    def __init__(self, conf, backend, logger=None):
+    def __init__(self, conf, backend, iam_db, logger=None):
         self.conf = conf
         self.backend = backend
+        self.iam = iam_db
         self.logger = logger or get_logger(conf)
 
         self.url_map = Map([
@@ -111,12 +118,29 @@ class Account(WerkzeugApp):
             Rule('/v1.0/account/container/update',
                  endpoint='account_container_update',
                  methods=['PUT', 'POST']),  # FIXME(adu) only PUT
+            # Buckets
             Rule('/v1.0/bucket/show', endpoint='bucket_show',
                  methods=['GET']),
             Rule('/v1.0/bucket/update', endpoint='bucket_update',
                  methods=['PUT']),
             Rule('/v1.0/bucket/refresh', endpoint='bucket_refresh',
                  methods=['POST']),
+            # IAM
+            Rule('/v1.0/iam/delete-user-policy',
+                 endpoint='iam_delete_user_policy',
+                 methods=['DELETE']),
+            Rule('/v1.0/iam/get-user-policy',
+                 endpoint='iam_get_user_policy',
+                 methods=['GET']),
+            Rule('/v1.0/iam/list-users',
+                 endpoint='iam_list_users',
+                 methods=['GET']),
+            Rule('/v1.0/iam/list-user-policies',
+                 endpoint='iam_list_user_policies',
+                 methods=['GET']),
+            Rule('/v1.0/iam/put-user-policy',
+                 endpoint='iam_put_user_policy',
+                 methods=['PUT', 'POST']),
         ])
         super(Account, self).__init__(self.url_map, self.logger)
 
@@ -889,8 +913,67 @@ class Account(WerkzeugApp):
             return Response(json.dumps(raw), mimetype=HTTP_CONTENT_TYPE_JSON)
         return NotFound('Container not found')
 
+    @access_log
+    def on_iam_delete_user_policy(self, req, **kwargs):
+        account = self._get_item_id(req, key='account', what='account')
+        user = self._get_item_id(req, key='user', what='user')
+        policy_name = req.args.get('policy-name', '')
+        self.iam.delete_user_policy(account, user, policy_name)
+        return Response(status=204)
+
+    @access_log
+    def on_iam_get_user_policy(self, req, **kwargs):
+        account = self._get_item_id(req, key='account', what='account')
+        user = self._get_item_id(req, key='user', what='user')
+        policy_name = req.args.get('policy-name', '')
+        policy = self.iam.get_user_policy(account, user, policy_name)
+        if not policy:
+            return NotFound('User policy not found')
+        return Response(policy, mimetype='text/json')
+
+    @access_log
+    def on_iam_list_users(self, req, **kwargs):
+        account = self._get_item_id(req, key='account', what='account')
+        users = self.iam.list_users(account)
+        res = {'Users': users}
+        return Response(json.dumps(res), mimetype='text/json')
+
+    @access_log
+    def on_iam_list_user_policies(self, req, **kwargs):
+        account = self._get_item_id(req, key='account', what='account')
+        user = self._get_item_id(req, key='user', what='user')
+        policies = self.iam.list_user_policies(account, user)
+        res = {'PolicyNames': policies}
+        return Response(json.dumps(res), mimetype='text/json')
+
+    @access_log
+    def on_iam_put_user_policy(self, req, **kwargs):
+        account = self._get_item_id(req, key='account', what='account')
+        user = self._get_item_id(req, key='user', what='user')
+        policy_name = req.args.get('policy-name', '')
+        policy = req.get_data()
+        if not policy:
+            return BadRequest('Missing policy document')
+        policy = policy.decode('utf-8')
+        self.iam.put_user_policy(account, user, policy, policy_name)
+        return Response(status=201)
+
 
 def create_app(conf, **kwargs):
+    logger = get_logger(conf)
+    iam_conn = conf.get('iam.connection')
+    if not iam_conn:
+        ns_conf = load_namespace_conf(conf['namespace'], failsafe=True)
+        iam_conn = ns_conf.get('iam.connection', DEFAULT_IAM_CONNECTION)
+    if iam_conn == DEFAULT_IAM_CONNECTION:
+        logger.warning('Using the default connection (%s) is probably '
+                       'not what you want to do.', DEFAULT_IAM_CONNECTION)
+    scheme, netloc, iam_kwargs = parse_conn_str(iam_conn)
+    if scheme == 'redis+sentinel':
+        iam_kwargs['sentinel_hosts'] = netloc
+    else:
+        iam_kwargs['host'] = netloc
     backend = AccountBackend(conf)
-    app = Account(conf, backend)
+    iam_db = RedisIamDb(logger=logger, **iam_kwargs)
+    app = Account(conf, backend, iam_db, logger=logger)
     return app

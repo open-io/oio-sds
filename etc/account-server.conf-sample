@@ -2,6 +2,7 @@
 bind_addr = 127.0.0.1
 bind_port = 5000
 backlog = 2048
+namespace = OPENIO
 workers = 2
 log_level = INFO
 log_facility = LOG_LOCAL0

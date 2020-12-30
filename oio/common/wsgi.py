@@ -18,7 +18,7 @@ from gunicorn.glogging import Logger
 from werkzeug.wrappers import Request, Response
 from werkzeug.utils import escape
 from werkzeug.exceptions import HTTPException, InternalServerError, \
-    ServiceUnavailable
+    ServiceUnavailable, BadRequest
 
 from oio.common.exceptions import ServiceBusy
 from oio.common.utils import CPU_COUNT
@@ -115,6 +115,8 @@ class WerkzeugApp(object):
                 self.logger.error(str(exc))
             resp = ServiceUnavailable(
                 "Could not satisfy the request: %s" % exc)
+        except ValueError as exc:
+            resp = BadRequest(description=str(exc))
         except Exception as exc:
             if self.logger:
                 self.logger.exception('ERROR Unhandled exception in request')
