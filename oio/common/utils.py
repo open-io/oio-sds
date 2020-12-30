@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -31,7 +32,7 @@ from itertools import chain, islice
 from codecs import getdecoder, getencoder
 from six import PY2, binary_type, text_type
 from six.moves import range
-from six.moves.urllib_parse import quote as _quote
+from six.moves.urllib_parse import parse_qs, quote as _quote, urlparse
 
 from oio.common.exceptions import OioException, DeadlineReached, ServiceBusy
 
@@ -556,3 +557,17 @@ def CDLL(name, **kwargs):
             # Now, try without the virtualenv directory
             pass
     return orig_CDLL(name, **kwargs)
+
+
+def parse_conn_str(conn_str):
+    """
+    Get the connection scheme, network host (or hosts)
+    and a dictionary of extra arguments from a connection string.
+
+    Example:
+    >>> parse_conn_str('redis://10.0.1.27:666,10.0.1.25:667?opt1=val1&opt2=5')
+    ('redis', '10.0.1.27:666,10.0.1.25:667', {'opt1': 'val1', 'opt2': '5'})
+    """
+    scheme, netloc, _, _, query, _ = urlparse(conn_str)
+    kwargs = {k: ','.join(v) for k, v in parse_qs(query).items()}
+    return scheme, netloc, kwargs
