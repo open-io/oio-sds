@@ -6,6 +6,41 @@ workflow:
     pipeline: oio-sds-root
     application: oio-sds
 
+  tests-fast:
+    pipeline: oio-sds-test-fast
+    application: oio-sds
+    depends_on:
+      - root
+
+  tests-single:
+    pipeline: oio-sds-test-functional
+    application: oio-sds
+    environment: oio-sds-env-single
+    depends_on:
+      - root
+
+  tests-cli:
+    pipeline: oio-sds-test-functional
+    application: oio-sds
+    environment: oio-sds-env-cli
+    depends_on:
+      - root
+
+  tests-3copies:
+    pipeline: oio-sds-test-functional
+    application: oio-sds
+    environment: oio-sds-env-3copies
+    depends_on:
+      - root
+
+        # Disabled: problem with gridinit not restarting
+        #  tests-ec:
+        #    pipeline: oio-sds-test-functional
+        #    application: oio-sds
+        #    environment: oio-sds-env-ec
+        #    depends_on:
+        #      - root
+
   mirror:
     pipeline: oio-sds-mirror
     application: oio-sds

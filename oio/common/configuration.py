@@ -94,7 +94,7 @@ def _config_paths():
     yield '/etc/oio/sds.conf', True
     for conf_path in glob('/etc/oio/sds.conf.d/*'):
         yield conf_path, True
-    yield path.expanduser('~/.oio/sds.conf'), False
+    yield path.expandvars('${HOME}/.oio/sds.conf'), False
 
 
 # Keep namespace configurations, avoid loading files everytime
@@ -142,7 +142,8 @@ def load_namespace_conf(namespace, failsafe=False, fresh=False):
 
     conf = NamespaceConfiguration(loaded_files, namespace=namespace)
     if not loaded_files:
-        print('Unable to read namespace config')
+        print('Unable to read namespace config. We tried %s' % (
+              [x for x in _config_paths()]))
     else:
         import logging
         logging.info("Configuration loaded from %s", repr(loaded_files))

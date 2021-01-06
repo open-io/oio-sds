@@ -65,7 +65,7 @@ timeout () {
     num=$1 ; shift
     if [ $count -gt "$num" ] ; then
         echo "TIMEOUT! $*"
-        ( ps -o pid,ppid,cmd $(pgrep -u $UID -P "$pidof_gridinit" | sed 's/^/-p /') || exit 0 )
+        ( ps -o pid,ppid,stat,cmd $(pgrep -u $UID -P "$pidof_gridinit" | sed 's/^/-p /') || exit 0 )
         exit 1
     fi
     sleep 1

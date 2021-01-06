@@ -4,6 +4,7 @@ add_custom_target(oio-rawx ALL)
 set(GO_BUILD ${GO_EXECUTABLE} build -o ${CMAKE_CURRENT_BINARY_DIR}/oio-rawx .)
 if ( ENABLE_CODECOVERAGE )
 	set(GO_BUILD ${GO_EXECUTABLE} test -c -covermode=count -coverpkg . -o ${CMAKE_CURRENT_BINARY_DIR}/oio-rawx)
+	MESSAGE("Building rawx with code coverage support")
 endif ( ENABLE_CODECOVERAGE )
 
 add_custom_command(

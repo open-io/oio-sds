@@ -19,7 +19,7 @@ from shutil import rmtree
 import simplejson as json
 import subprocess
 import uuid
-from os import remove
+from os import remove, getuid
 from oio.common.http_urllib3 import get_pool_manager
 
 from tests.utils import CommonTestCase, random_str, random_id
@@ -634,6 +634,8 @@ class TestRdirServer3(RdirTestCase):
         self._check_rdir_startup_fail(path, config)
 
     def test_basedir_denied(self):
+        if getuid() == 0:
+            self.skipTest("User is root, cannot run this test.")
         path = tempfile.mktemp()
         config = {'host': '127.0.0.1', 'port': 5999, 'ns': self.ns,
                   'db': '/var'}

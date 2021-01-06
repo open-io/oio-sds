@@ -2,7 +2,8 @@
 # vim: ts=4 shiftwidth=4 noexpandtab
 
 # oio-test-suites.sh
-# Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -23,11 +24,16 @@ function dump_syslog {
 		cmd="sudo tail"
 	fi
 	$cmd -n 500 /var/log/syslog
+	#$cmd -n 500 $HOME/.oio/sds/logs/*.log
+	#journalctl -o short-precise -n 500
 	pip list
 	gridinit_cmd -S "$HOME/.oio/sds/run/gridinit.sock" status3
 }
 
 function trap_exit {
+	echo "--------------------"
+	echo "EXIT signal trapped"
+	echo "--------------------"
 	set +e
 	#pip list
 	BEANSTALK=$(oio-test-config.py -t beanstalkd)
