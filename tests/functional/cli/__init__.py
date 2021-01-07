@@ -71,7 +71,12 @@ class CliTestCase(BaseTestCase):
     @classmethod
     def openio_batch(cls, commands, **kwargs):
         """Execute several commands in the same openio CLI process."""
-        return execute('openio', stdin='\n'.join(commands), **kwargs)
+        script = '\n'.join(commands)
+        try:
+            return execute('openio', stdin=script, **kwargs)
+        except CommandFailed:
+            print("Stdin was:\n\n%s" % (script, ))
+            raise
 
     @classmethod
     def openio_admin(cls, cmd, **kwargs):
