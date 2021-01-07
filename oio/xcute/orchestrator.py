@@ -237,6 +237,10 @@ class XcuteOrchestrator(object):
             del self.dispatch_tasks_threads[job_id]
 
     def adapt_speed(self, job_id, job_config, last_check, period=300):
+        """
+        Pause and/or reduce the rate of creation of new tasks in case
+        the number of pending tasks is too high.
+        """
         if last_check is not None \
                 and time.time() < last_check['last'] + period:
             return last_check
@@ -266,20 +270,19 @@ class XcuteOrchestrator(object):
             max_tasks_per_second = job_info['config']['tasks_per_second']
             max_tasks_batch_size = job_info['config']['tasks_batch_size']
             tasks_processed = job_info['tasks']['processed']
-            tasks_sent = job_info['tasks']['sent']
-            tasks_to_process = tasks_sent - tasks_processed
+            pending_tasks = job_info['tasks']['sent'] - tasks_processed
 
             if last_check is None:  # Initialize
                 last_check = dict()
                 last_check['last'] = job_mtime
                 last_check['processed'] = tasks_processed
-                if tasks_to_process / max_tasks_per_second >= period:
+                if pending_tasks / max_tasks_per_second >= period:
                     waiting_time = period
                     self.logger.error(
-                        '[job_id=%s] Too many tasks to process '
-                        'for the next %d seconds: %d (%d tasks/second) ; '
-                        'wait %d seconds and recheck',
-                        job_id, period, tasks_to_process, max_tasks_per_second,
+                        '[job_id=%s] Too many pending tasks '
+                        'for the next %d seconds: %d (%d tasks/second); '
+                        'wait %d seconds and check again',
+                        job_id, period, pending_tasks, max_tasks_per_second,
                         waiting_time)
                     continue
                 return last_check
@@ -291,23 +294,23 @@ class XcuteOrchestrator(object):
                 last_check['processed'] = tasks_processed
                 waiting_time = period
                 self.logger.error(
-                    '[job_id=%s] No task processed for the last %d seconds ; '
-                    'wait %d seconds and recheck',
+                    '[job_id=%s] No task processed for the last %d seconds; '
+                    'wait %d seconds and check again',
                     job_id, period, waiting_time)
                 continue
 
             elapsed = job_mtime - last_check['last']
             actual_tasks_per_second = tasks_processed_in_period \
                 / float(elapsed)
-            if tasks_to_process / actual_tasks_per_second >= period:
+            if pending_tasks / actual_tasks_per_second >= period:
                 last_check['last'] = job_mtime
                 last_check['processed'] = tasks_processed
                 waiting_time = period
                 self.logger.error(
-                    '[job_id=%s] Too many tasks to process '
+                    '[job_id=%s] Too many pending tasks '
                     'for the next %d seconds: %d (%f tasks/second) ; '
-                    'wait %d seconds and recheck',
-                    job_id, period, tasks_to_process,
+                    'wait %d seconds and check again',
+                    job_id, period, pending_tasks,
                     actual_tasks_per_second, waiting_time)
                 continue
 
@@ -317,7 +320,7 @@ class XcuteOrchestrator(object):
                 current_tasks_per_second - actual_tasks_per_second
             new_tasks_per_second = None
             if diff_tasks_per_second < -0.5:  # Too fast to process tasks
-                # The queues had to have a few tasks in advance.
+                # The queues need to have a few tasks in advance.
                 # Continue at this speed to allow the queues to empty.
                 if actual_tasks_per_second > max_tasks_per_second:
                     self.logger.warning(
@@ -340,7 +343,7 @@ class XcuteOrchestrator(object):
             else:  # Too slow to process tasks
                 new_tasks_per_second = int(math.floor(actual_tasks_per_second))
                 self.logger.warning(
-                    '[job_id=%s] The speed of processing tasks is too slow: '
+                    '[job_id=%s] The task processing speed is too slow: '
                     '%f tasks/second',
                     job_id, actual_tasks_per_second)
 
