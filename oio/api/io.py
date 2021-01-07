@@ -416,7 +416,7 @@ class ChunkReader(object):
                     yield data
             raise StopIteration
 
-        return GeneratorIO(_iter())
+        return GeneratorIO(_iter(), False)
 
     def fill_ranges(self, start, end, length):
         """
