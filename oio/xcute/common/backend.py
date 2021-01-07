@@ -240,7 +240,7 @@ class XcuteBackend(RedisConnection):
             end;
         end;
 
-        if status == 'PAUSED' then
+        if status == 'PAUSED' or status == 'FAILED' then
             return redis.error_reply('job_already_paused');
         end;
 
@@ -276,7 +276,7 @@ class XcuteBackend(RedisConnection):
             end;
         end;
 
-        if status == 'PAUSED' then
+        if status == 'PAUSED' or status == 'FAILED' then
             redis.call('HSET', 'xcute:job:info:' .. job_id,
                        'job.request_pause', 'False');
             redis.call('HSET', 'xcute:job:info:' .. job_id,
