@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2021 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -25,7 +25,7 @@ from mock import MagicMock as Mock, ANY
 from six import PY3
 
 from oio.common import exceptions
-from oio.common.constants import container_headers, object_headers, \
+from oio.common.constants import CONTAINER_HEADERS, OBJECT_HEADERS, \
     REQID_HEADER
 from oio.common.decorators import handle_container_not_found, \
     handle_object_not_found
@@ -134,7 +134,7 @@ class ObjectStorageTest(unittest.TestCase):
         name = random_str(32)
         cont_size = random.randint(1, 1000)
         resp.headers = {
-            container_headers["size"]: cont_size
+            CONTAINER_HEADERS["size"]: cont_size
         }
         api.container._direct_request = Mock(return_value=(resp, {}))
         info = api.container_show(self.account, name, **self.common_kwargs)
@@ -235,10 +235,10 @@ class ObjectStorageTest(unittest.TestCase):
         content_hash = random_str(32)
         content_type = random_str(32)
         resp = FakeApiResponse()
-        resp.headers = {object_headers["name"]: name,
-                        object_headers["size"]: str(size),
-                        object_headers["hash"]: content_hash,
-                        object_headers["mime_type"]: content_type}
+        resp.headers = {OBJECT_HEADERS["name"]: name,
+                        OBJECT_HEADERS["size"]: str(size),
+                        OBJECT_HEADERS["hash"]: content_hash,
+                        OBJECT_HEADERS["mime_type"]: content_type}
         api.container._direct_request = Mock(
             return_value=(resp, {'properties': {}}))
         obj = api.object_show(

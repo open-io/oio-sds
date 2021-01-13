@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2021 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -25,7 +25,7 @@ from oio.blob.auditor import BlobAuditorWorker
 from oio.common import exceptions as exc
 from oio.container.client import ContainerClient
 from oio.blob.client import BlobClient
-from oio.common.constants import chunk_xattr_keys
+from oio.common.constants import CHUNK_XATTR_KEYS
 from tests.utils import BaseTestCase, random_str, random_id
 from oio.common.constants import OIO_VERSION, \
         CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
@@ -160,7 +160,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
     def test_xattr_bad_xattr_metachunk_size(self):
         self.init_content()
         xattr.setxattr(
-            self.chunk.path, 'user.' + chunk_xattr_keys['metachunk_size'],
+            self.chunk.path, 'user.' + CHUNK_XATTR_KEYS['metachunk_size'],
             b'320')
 
         self.assertRaises(exc.FaultyChunk, self.auditor.chunk_audit,
@@ -169,7 +169,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
     def test_xattr_bad_xattr_metachunk_hash(self):
         self.init_content()
         xattr.setxattr(
-            self.chunk.path, 'user.' + chunk_xattr_keys['metachunk_hash'],
+            self.chunk.path, 'user.' + CHUNK_XATTR_KEYS['metachunk_hash'],
             b'0123456789ABCDEF0123456789ABCDEF')
 
         self.assertRaises(exc.FaultyChunk, self.auditor.chunk_audit,
@@ -212,7 +212,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
     def test_xattr_bad_xattr_chunk_position(self):
         self.init_content()
         xattr.setxattr(
-            self.chunk.path, 'user.' + chunk_xattr_keys['chunk_pos'], b'42')
+            self.chunk.path, 'user.' + CHUNK_XATTR_KEYS['chunk_pos'], b'42')
 
         self.assertRaises(exc.FaultyChunk, self.auditor.chunk_audit,
                           self.chunk.path, self.chunk.id)

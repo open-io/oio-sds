@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 
-# Copyright (C) 2016-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -20,7 +20,7 @@ import mock
 
 from oio.common.xattr import xattr
 from oio.blob.indexer import BlobIndexer
-from oio.blob.utils import chunk_xattr_keys
+from oio.blob.utils import CHUNK_XATTR_KEYS
 from oio.common.exceptions import FaultyChunk
 from oio.common.utils import cid_from_name
 from oio.rdir.client import RdirClient
@@ -64,33 +64,33 @@ class TestIndexerCrawler(BaseTestCase):
 
         # pylint: disable=no-member
         xattr.setxattr(
-            chunk_path, 'user.' + chunk_xattr_keys['chunk_hash'], 32 * b'0')
+            chunk_path, 'user.' + CHUNK_XATTR_KEYS['chunk_hash'], 32 * b'0')
         xattr.setxattr(
-            chunk_path, 'user.' + chunk_xattr_keys['chunk_id'], enc(chunk_id))
+            chunk_path, 'user.' + CHUNK_XATTR_KEYS['chunk_id'], enc(chunk_id))
         xattr.setxattr(
-            chunk_path, 'user.' + chunk_xattr_keys['chunk_pos'], b'0')
+            chunk_path, 'user.' + CHUNK_XATTR_KEYS['chunk_pos'], b'0')
         xattr.setxattr(
-            chunk_path, 'user.' + chunk_xattr_keys['chunk_size'], b'4')
+            chunk_path, 'user.' + CHUNK_XATTR_KEYS['chunk_size'], b'4')
         xattr.setxattr(
-            chunk_path, 'user.' + chunk_xattr_keys['content_policy'],
+            chunk_path, 'user.' + CHUNK_XATTR_KEYS['content_policy'],
             b'TESTPOLICY')
         xattr.setxattr(
-            chunk_path, 'user.' + chunk_xattr_keys['content_chunkmethod'],
+            chunk_path, 'user.' + CHUNK_XATTR_KEYS['content_chunkmethod'],
             b'plain/nb_copy=3')
         xattr.setxattr(
-            chunk_path, 'user.' + chunk_xattr_keys['content_version'], b'1')
+            chunk_path, 'user.' + CHUNK_XATTR_KEYS['content_version'], b'1')
         # Old (oio-sds < 4.2) extended attributes
         xattr.setxattr(
-            chunk_path, 'user.' + chunk_xattr_keys['container_id'],
+            chunk_path, 'user.' + CHUNK_XATTR_KEYS['container_id'],
             enc(container_id))
         xattr.setxattr(
-            chunk_path, 'user.' + chunk_xattr_keys['content_id'],
+            chunk_path, 'user.' + CHUNK_XATTR_KEYS['content_id'],
             enc(content_id))
         xattr.setxattr(
-            chunk_path, 'user.' + chunk_xattr_keys['content_path'], enc(alias))
+            chunk_path, 'user.' + CHUNK_XATTR_KEYS['content_path'], enc(alias))
         # New (oio-sds >= 4.2) extended attributes
         xattr.setxattr(
-            chunk_path, 'user.' + chunk_xattr_keys['oio_version'],
+            chunk_path, 'user.' + CHUNK_XATTR_KEYS['oio_version'],
             enc(OIO_VERSION))
         fullpath = encode_fullpath(self.account, cname, alias, 1, content_id)
         xattr.setxattr(
@@ -159,7 +159,7 @@ class TestIndexerCrawler(BaseTestCase):
         # remove mandatory xattr
         # pylint: disable=no-member
         xattr.removexattr(
-            chunk_path, 'user.' + chunk_xattr_keys['chunk_pos'])
+            chunk_path, 'user.' + CHUNK_XATTR_KEYS['chunk_pos'])
 
         # try to index the chunk
         indexer = BlobIndexer(self.conf)

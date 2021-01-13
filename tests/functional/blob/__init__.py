@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2018-2021 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,7 +19,7 @@ import random
 import shutil
 from hashlib import sha256
 
-from oio.common.constants import chunk_xattr_keys, \
+from oio.common.constants import CHUNK_XATTR_KEYS, \
     CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
 from oio.common.xattr import xattr
 from oio.common.fullpath import encode_old_fullpath
@@ -32,19 +32,19 @@ def convert_to_old_chunk(chunk_path, account, container, path, version,
     cid = cid_from_name(account, container)
     with open(chunk_path) as fd:
         xattr.setxattr(
-            fd, 'user.' + chunk_xattr_keys['chunk_id'],
+            fd, 'user.' + CHUNK_XATTR_KEYS['chunk_id'],
             chunk_id.encode('utf-8'))
         xattr.setxattr(
-            fd, 'user.' + chunk_xattr_keys['container_id'],
+            fd, 'user.' + CHUNK_XATTR_KEYS['container_id'],
             cid.encode('utf-8'))
         xattr.setxattr(
-            fd, 'user.' + chunk_xattr_keys['content_path'],
+            fd, 'user.' + CHUNK_XATTR_KEYS['content_path'],
             path.encode('utf-8'))
         xattr.setxattr(
-            fd, 'user.' + chunk_xattr_keys['content_version'],
+            fd, 'user.' + CHUNK_XATTR_KEYS['content_version'],
             str(version).encode('utf-8'))
         xattr.setxattr(
-            fd, 'user.' + chunk_xattr_keys['content_id'],
+            fd, 'user.' + CHUNK_XATTR_KEYS['content_id'],
             content_id.encode('utf-8'))
         if add_old_fullpath:
             old_fullpath = encode_old_fullpath(
@@ -55,7 +55,7 @@ def convert_to_old_chunk(chunk_path, account, container, path, version,
             xattr.setxattr(
                 fd, 'user.oio:' + hash_old_fullpath, old_fullpath)
         xattr.setxattr(
-            fd, 'user.' + chunk_xattr_keys['oio_version'], b'4.0')
+            fd, 'user.' + CHUNK_XATTR_KEYS['oio_version'], b'4.0')
         try:
             xattr.removexattr(
                 fd, 'user.' + CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + chunk_id)

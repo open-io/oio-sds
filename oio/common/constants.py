@@ -132,13 +132,6 @@ VOLUME_XATTR_KEYS = {
     'type': 'server.type',
     'id': 'server.id'}
 
-# TODO(FVE): remove from versions 5.1+
-chunk_xattr_keys = CHUNK_XATTR_KEYS
-chunk_xattr_keys_optional = CHUNK_XATTR_KEYS_OPTIONAL
-container_headers = CONTAINER_HEADERS
-object_headers = OBJECT_HEADERS
-volume_xattr_keys = VOLUME_XATTR_KEYS
-
 # Suffix of chunk file names that have been declared corrupt
 CHUNK_SUFFIX_CORRUPT = '.corrupt'
 # Suffix of chunk file names that are not finished being uploaded

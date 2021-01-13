@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2018-2021 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -22,7 +22,7 @@ from datetime import datetime
 
 from six import string_types
 
-from oio.common.constants import chunk_xattr_keys, OIO_VERSION, \
+from oio.common.constants import CHUNK_XATTR_KEYS, OIO_VERSION, \
     STRLEN_CHUNKID, CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
 from oio.common.utils import cid_from_name, paths_gen, CacheDict
 from oio.common.fullpath import decode_fullpath, decode_old_fullpath, \
@@ -38,7 +38,7 @@ from oio.blob.utils import read_chunk_metadata, check_volume
 from oio.rdir.client import RdirClient
 
 
-XATTR_CHUNK_ID = chunk_xattr_keys['chunk_id']
+XATTR_CHUNK_ID = CHUNK_XATTR_KEYS['chunk_id']
 XATTR_OLD_FULLPATH = 'oio:'
 XATTR_OLD_FULLPATH_SIZE = 4
 
@@ -377,7 +377,7 @@ class BlobConverter(object):
     def is_fullpath_error(self, err):
         if (isinstance(err, MissingAttribute) and
             (err.attribute.startswith(CHUNK_XATTR_CONTENT_FULLPATH_PREFIX)
-             or err.attribute == chunk_xattr_keys['content_path']
+             or err.attribute == CHUNK_XATTR_KEYS['content_path']
              or err.attribute.startswith(XATTR_OLD_FULLPATH))):
             return True
         elif isinstance(err, FaultyChunk):

@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2021 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,8 +16,8 @@
 from six import iteritems
 from oio.common import exceptions as exc
 from oio.common.xattr import read_user_xattr
-from oio.common.constants import chunk_xattr_keys, chunk_xattr_keys_optional, \
-    volume_xattr_keys, CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
+from oio.common.constants import CHUNK_XATTR_KEYS, CHUNK_XATTR_KEYS_OPTIONAL, \
+    VOLUME_XATTR_KEYS, CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
 from oio.common.fullpath import decode_fullpath
 from oio.common.utils import cid_from_name
 
@@ -45,22 +45,22 @@ def check_volume_for_service_type(volume_path, required_type):
     """
     msg_pfx = 'Invalid volume path [%s]: ' % volume_path
     meta = read_user_xattr(volume_path)
-    server_type = meta.get(volume_xattr_keys['type'])
+    server_type = meta.get(VOLUME_XATTR_KEYS['type'])
     if server_type is None:
         raise exc.OioException(msg_pfx + 'missing %s xattr' %
-                               volume_xattr_keys['type'])
+                               VOLUME_XATTR_KEYS['type'])
     if server_type != required_type:
         raise exc.OioException(
             msg_pfx + 'service is a {0}, not a {1}'.format(server_type,
                                                            required_type))
-    namespace = meta.get(volume_xattr_keys['namespace'])
-    server_id = meta.get(volume_xattr_keys['id'])
+    namespace = meta.get(VOLUME_XATTR_KEYS['namespace'])
+    server_id = meta.get(VOLUME_XATTR_KEYS['id'])
     if server_id is None:
         raise exc.OioException(msg_pfx + 'missing %s xattr' %
-                               volume_xattr_keys['id'])
+                               VOLUME_XATTR_KEYS['id'])
     elif namespace is None:
         raise exc.OioException(msg_pfx + 'missing %s xattr' %
-                               volume_xattr_keys['namespace'])
+                               VOLUME_XATTR_KEYS['namespace'])
     return namespace, server_id
 
 
@@ -75,7 +75,7 @@ def read_chunk_metadata(fd, chunk_id, for_conversion=False):
     missing = list()
     for k, v in raw_meta.items():
         # New chunks have a version
-        if k == chunk_xattr_keys['oio_version']:
+        if k == CHUNK_XATTR_KEYS['oio_version']:
             attr_vers = float(v)
         # Chunks with version >= 4.2 have a "full_path"
         elif k.startswith(CHUNK_XATTR_CONTENT_FULLPATH_PREFIX):
@@ -90,24 +90,24 @@ def read_chunk_metadata(fd, chunk_id, for_conversion=False):
                 meta['links'][parsed_chunk_id] = v
     if raw_chunk_id:
         raw_meta_copy = raw_meta.copy()
-        raw_meta[chunk_xattr_keys['chunk_id']] = raw_chunk_id
-        raw_meta[chunk_xattr_keys['container_id']] = container_id
-        raw_meta[chunk_xattr_keys['content_path']] = path
-        raw_meta[chunk_xattr_keys['content_version']] = version
-        raw_meta[chunk_xattr_keys['content_id']] = content_id
+        raw_meta[CHUNK_XATTR_KEYS['chunk_id']] = raw_chunk_id
+        raw_meta[CHUNK_XATTR_KEYS['container_id']] = container_id
+        raw_meta[CHUNK_XATTR_KEYS['content_path']] = path
+        raw_meta[CHUNK_XATTR_KEYS['content_version']] = version
+        raw_meta[CHUNK_XATTR_KEYS['content_id']] = content_id
     if attr_vers >= 4.2 and 'full_path' not in meta:
         # TODO(FVE): in that case, do not warn about other attributes
         # that could be deduced from this one.
         missing.append(exc.MissingAttribute(
             CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + chunk_id))
-    for k, v in iteritems(chunk_xattr_keys):
+    for k, v in iteritems(CHUNK_XATTR_KEYS):
         if v not in raw_meta:
-            if k not in chunk_xattr_keys_optional:
+            if k not in CHUNK_XATTR_KEYS_OPTIONAL:
                 missing.append(exc.MissingAttribute(v))
         else:
             meta[k] = raw_meta[v]
     if missing:
         raise exc.FaultyChunk(*missing)
     if not for_conversion and meta['chunk_id'] != chunk_id:
-        raise exc.MissingAttribute(chunk_xattr_keys['chunk_id'])
+        raise exc.MissingAttribute(CHUNK_XATTR_KEYS['chunk_id'])
     return meta, raw_meta_copy if raw_meta_copy else raw_meta

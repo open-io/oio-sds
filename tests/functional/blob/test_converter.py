@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2018-2021 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -22,7 +22,7 @@ from oio.api.object_storage import ObjectStorageApi
 from oio.common.utils import cid_from_name
 from oio.common.exceptions import OrphanChunk
 from oio.common.fullpath import encode_fullpath
-from oio.common.constants import chunk_xattr_keys, \
+from oio.common.constants import CHUNK_XATTR_KEYS, \
     CHUNK_XATTR_CONTENT_FULLPATH_PREFIX, OIO_VERSION
 from oio.blob.converter import BlobConverter
 from oio.blob.utils import read_chunk_metadata
@@ -123,17 +123,17 @@ class TestBlobConverter(BaseTestCase):
                 self.assertDictEqual(expected_raw_meta, raw_meta)
                 continue
 
-            self.assertNotIn(chunk_xattr_keys['chunk_id'], raw_meta)
-            self.assertNotIn(chunk_xattr_keys['container_id'], raw_meta)
-            self.assertNotIn(chunk_xattr_keys['content_path'], raw_meta)
-            self.assertNotIn(chunk_xattr_keys['content_version'], raw_meta)
-            self.assertNotIn(chunk_xattr_keys['content_id'], raw_meta)
+            self.assertNotIn(CHUNK_XATTR_KEYS['chunk_id'], raw_meta)
+            self.assertNotIn(CHUNK_XATTR_KEYS['container_id'], raw_meta)
+            self.assertNotIn(CHUNK_XATTR_KEYS['content_path'], raw_meta)
+            self.assertNotIn(CHUNK_XATTR_KEYS['content_version'], raw_meta)
+            self.assertNotIn(CHUNK_XATTR_KEYS['content_id'], raw_meta)
             self.assertIn(CHUNK_XATTR_CONTENT_FULLPATH_PREFIX + chunk_id,
                           raw_meta)
             for k in raw_meta.keys():
                 if k.startswith('oio:'):
                     self.fail('old fullpath always existing')
-            self.assertEqual(raw_meta[chunk_xattr_keys['oio_version']],
+            self.assertEqual(raw_meta[CHUNK_XATTR_KEYS['oio_version']],
                              OIO_VERSION)
 
     def _test_converter_single_chunk(self, chunk, expected_errors=0):
@@ -548,7 +548,7 @@ class TestBlobConverter(BaseTestCase):
 
         victim = random.choice(self.chunks)
         path = self._chunk_path(victim)
-        remove_xattr(path, chunk_xattr_keys['content_path'])
+        remove_xattr(path, CHUNK_XATTR_KEYS['content_path'])
         self._test_converter_single_chunk(victim)
 
     def test_recover_missing_old_fullpath_and_content_path(self):
@@ -559,7 +559,7 @@ class TestBlobConverter(BaseTestCase):
 
         victim = random.choice(self.chunks)
         path = self._chunk_path(victim)
-        remove_xattr(path, chunk_xattr_keys['content_path'])
+        remove_xattr(path, CHUNK_XATTR_KEYS['content_path'])
         self._test_converter_single_chunk(victim)
 
     def test_recover_missing_fullpath(self):

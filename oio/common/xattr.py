@@ -1,4 +1,4 @@
-# Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2017-2021 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,7 +16,7 @@
 from __future__ import absolute_import
 import errno
 
-from oio.common.constants import chunk_xattr_keys, \
+from oio.common.constants import CHUNK_XATTR_KEYS, \
     CHUNK_XATTR_CONTENT_FULLPATH_PREFIX, OIO_VERSION
 from oio.common.easy_value import debinarize
 
@@ -78,9 +78,9 @@ def set_fullpath_xattr(fd, new_fullpaths, remove_old_xattr=False,
         for key in ['chunk_id', 'container_id', 'content_path',
                     'content_version', 'content_id']:
             try:
-                xattr.removexattr(fd, 'user.' + chunk_xattr_keys[key])
+                xattr.removexattr(fd, 'user.' + CHUNK_XATTR_KEYS[key])
             except IOError:
                 pass
 
-        xattr.setxattr(fd, 'user.' + chunk_xattr_keys['oio_version'],
+        xattr.setxattr(fd, 'user.' + CHUNK_XATTR_KEYS['oio_version'],
                        OIO_VERSION.encode('utf-8'))
