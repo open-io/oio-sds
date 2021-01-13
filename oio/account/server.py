@@ -929,14 +929,14 @@ class Account(WerkzeugApp):
         policy = self.iam.get_user_policy(account, user, policy_name)
         if not policy:
             return NotFound('User policy not found')
-        return Response(policy, mimetype='text/json')
+        return Response(policy, mimetype=HTTP_CONTENT_TYPE_JSON)
 
     @access_log
     def on_iam_list_users(self, req, **kwargs):
         account = self._get_item_id(req, key='account', what='account')
         users = self.iam.list_users(account)
         res = {'Users': users}
-        return Response(json.dumps(res), mimetype='text/json')
+        return Response(json.dumps(res), mimetype=HTTP_CONTENT_TYPE_JSON)
 
     @access_log
     def on_iam_list_user_policies(self, req, **kwargs):
@@ -944,7 +944,7 @@ class Account(WerkzeugApp):
         user = self._get_item_id(req, key='user', what='user')
         policies = self.iam.list_user_policies(account, user)
         res = {'PolicyNames': policies}
-        return Response(json.dumps(res), mimetype='text/json')
+        return Response(json.dumps(res), mimetype=HTTP_CONTENT_TYPE_JSON)
 
     @access_log
     def on_iam_put_user_policy(self, req, **kwargs):
