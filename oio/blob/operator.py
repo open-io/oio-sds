@@ -43,13 +43,10 @@ class ChunkOperator(object):
         except ContentNotFound:
             raise OrphanChunk('Content not found: possible orphan chunk')
 
-        chunk_size = 0
         chunk_pos = None
         if len(chunk_id_or_pos) < 32:
             chunk_pos = chunk_id_or_pos
             chunk_id = None
-            metapos = int(chunk_pos.split('.', 1)[0])
-            chunk_size = content.chunks.filter(metapos=metapos).all()[0].size
         else:
             if '/' in chunk_id_or_pos:
                 chunk_id = chunk_id_or_pos.rsplit('/', 1)[-1]
@@ -62,9 +59,8 @@ class ChunkOperator(object):
                     'Chunk not found in content: possible orphan chunk')
             elif rawx_id and chunk.host != rawx_id:
                 raise ValueError('Chunk does not belong to this rawx')
-            chunk_size = chunk.size
 
-        content.rebuild_chunk(
+        rebuilt_bytes = content.rebuild_chunk(
             chunk_id, allow_frozen_container=allow_frozen_container,
             allow_same_rawx=allow_same_rawx,
             chunk_pos=chunk_pos)
@@ -87,4 +83,4 @@ class ChunkOperator(object):
                     'Failed to delete chunk entry (%s) from the rdir (%s): %s',
                     chunk_id, chunk.host, exc)
 
-        return chunk_size
+        return rebuilt_bytes
