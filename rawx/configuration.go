@@ -34,7 +34,7 @@ var optsParser = ini.LoadOptions{
 func oioLoadFile(file string) {
 	cfg, err := ini.LoadSources(optsParser, file)
 	if err != nil {
-		LogDebug("Failed to load config file [%s] : %s", file, err)
+		LogWarning("Failed to load config file [%s]: %s", file, err)
 		return
 	}
 
@@ -53,7 +53,7 @@ func oioLoadFile(file string) {
 func oioLoadDir(directory string) {
 	files, err := ioutil.ReadDir(directory)
 	if err != nil {
-		LogDebug("Failed to load config directory [%s] : %s", directory, err)
+		LogWarning("Failed to load config directory [%s]: %s", directory, err)
 		return
 	}
 
@@ -78,6 +78,19 @@ func oioLoadConfig() {
 		if fi, err := os.Stat(local); err == nil && fi.Mode().IsRegular() {
 			oioLoadFile(local)
 		}
+
+		// Yes, it happens...
+		if home := os.Getenv("HOME"); home != usr.HomeDir {
+			local = home + "/" + oioConfigLocalPath
+			if fi, err := os.Stat(local); err == nil && fi.Mode().IsRegular() {
+				oioLoadFile(local)
+			}
+		}
+	}
+
+	if len(oioConfig) == 0 {
+		LogWarning("No namespace configuration file found in %s or %s " +
+			"or user home directory", oioConfigFilePath, oioConfigDirPath)
 	}
 }
 
@@ -91,9 +104,9 @@ func oioGetConfigValue(namespace, value string) string {
 		namespace = "default"
 	}
 
-	eventAgent, ok := oioConfig[namespace][value]
+	confVal, ok := oioConfig[namespace][value]
 	if ok {
-		return eventAgent
+		return confVal
 	}
 	return ""
 }

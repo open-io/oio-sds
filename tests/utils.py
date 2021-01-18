@@ -99,7 +99,7 @@ def get_config(defaults=None):
     if defaults is not None:
         conf.update(defaults)
 
-    default_conf_path = os.path.expanduser('~/.oio/sds/conf/test.yml')
+    default_conf_path = os.path.expandvars('${HOME}/.oio/sds/conf/test.yml')
     conf_file = os.environ.get('SDS_TEST_CONFIG_FILE', default_conf_path)
 
     try:
@@ -483,7 +483,7 @@ class BaseTestCase(CommonTestCase):
                         defaults to ~/.oio/sds/run/gridinit.sock
         """
         if not socket:
-            socket = os.path.expanduser('~/.oio/sds/run/gridinit.sock')
+            socket = os.path.expandvars('${HOME}/.oio/sds/run/gridinit.sock')
         if not (name.startswith(cls._cls_ns) or name.startswith('@')):
             name = "%s-%s" % (cls._cls_ns, name)
         check_call(['gridinit_cmd', '-S', socket, action, name])

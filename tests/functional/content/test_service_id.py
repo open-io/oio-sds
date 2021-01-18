@@ -27,12 +27,12 @@ from tests.utils import BaseTestCase, random_str
 
 
 def exp(path):
-    return os.path.expanduser(path)
+    return os.path.expandvars(path)
 
 
-GRID_CONF = exp("~/.oio/sds/conf/gridinit.conf")
-WATCH_CONF = exp("~/.oio/sds/conf/watch/%s-%s.yml")
-HTTPD_CONF = exp("~/.oio/sds/conf/%s-%s.httpd.conf")
+GRID_CONF = exp("${HOME}/.oio/sds/conf/gridinit.conf")
+WATCH_CONF = exp("${HOME}/.oio/sds/conf/watch/%s-%s.yml")
+HTTPD_CONF = exp("${HOME}/.oio/sds/conf/%s-%s.httpd.conf")
 
 
 class BaseServiceIdTest(BaseTestCase):
@@ -159,7 +159,7 @@ class TestRawxServiceId(BaseServiceIdTest):
 
     def _update_gridinit_rawx(self, port):
         grid = SafeConfigParser()
-        grid.read(exp(GRID_CONF))
+        grid.read(GRID_CONF)
 
         section = "Service.%s-%s" % (self.ns, self.name)
         val = grid.get(section, "Group").split(",")
@@ -167,7 +167,7 @@ class TestRawxServiceId(BaseServiceIdTest):
         val[3] = val[3].split(':')[0] + ':' + str(port)
         grid.set(section, "Group", ",".join(val))
 
-        with open(exp(GRID_CONF), "w") as fp:
+        with open(GRID_CONF, "w") as fp:
             grid.write(fp)
 
     def _generate_data(self):
@@ -213,7 +213,7 @@ class TestMeta2ServiceId(BaseServiceIdTest):
 
     def _update_gridinit_meta(self, name, port):
         grid = SafeConfigParser()
-        grid.read(exp(GRID_CONF))
+        grid.read(GRID_CONF)
 
         section = "service.%s-%s" % (self.ns, name)
         val = grid.get(section, "Group").split(",")
@@ -228,7 +228,7 @@ class TestMeta2ServiceId(BaseServiceIdTest):
             cmd = cmd.replace(org_addr, val[3])
             grid.set(section, 'command', cmd)
 
-        with open(exp(GRID_CONF), "w") as fp:
+        with open(GRID_CONF, "w") as fp:
             grid.write(fp)
 
     def _change_meta2_addr(self, field):
