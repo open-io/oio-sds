@@ -24,6 +24,7 @@ import fcntl
 import sys
 from collections import OrderedDict
 from ctypes import CDLL as orig_CDLL
+from getpass import getuser
 from hashlib import sha256
 from math import sqrt
 from random import getrandbits
@@ -79,26 +80,32 @@ def set_fd_close_on_exec(fd):
 
 
 def drop_privileges(user):
+    """
+    Change the effective user of the current process, resets the current
+    directory to /.
+    """
     if os.geteuid() == 0:
         groups = [g.gr_gid for g in grp.getgrall() if user in g.gr_mem]
         os.setgroups(groups)
-    try:
-        user_entry = pwd.getpwnam(user)
-    except KeyError as exc:
-        raise OioException("User %s does not exist (%s). Are you running "
-                           "your namespace with another user name?" %
-                           (user, exc))
-    try:
-        os.setgid(user_entry[3])
-        os.setuid(user_entry[2])
-    except OSError as exc:
-        raise OioException("Failed to switch uid to %s or gid to %s: %s" %
-                           (user_entry[2], user_entry[3], exc))
-    os.environ['HOME'] = user_entry[5]
-    try:
-        os.setsid()
-    except OSError:
-        pass
+    current_user = getuser()
+    if user != current_user:
+        try:
+            user_entry = pwd.getpwnam(user)
+        except KeyError as exc:
+            raise OioException("User %s does not exist (%s). Are you running "
+                               "your namespace with another user name?" %
+                               (user, exc))
+        try:
+            os.setgid(user_entry[3])
+            os.setuid(user_entry[2])
+        except OSError as exc:
+            raise OioException("Failed to switch uid to %s or gid to %s: %s" %
+                               (user_entry[2], user_entry[3], exc))
+        os.environ['HOME'] = user_entry[5]
+        try:
+            os.setsid()
+        except OSError:
+            pass
     os.chdir('/')
     os.umask(0o22)
 
