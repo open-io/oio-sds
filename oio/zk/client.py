@@ -15,16 +15,16 @@
 
 import logging
 import itertools
-import threading
-import zookeeper
+
+from kazoo.client import KazooClient
+from kazoo.exceptions import NodeExistsError
+from kazoo.security import OPEN_ACL_UNSAFE
 from time import time as now
 
 
 _PREFIX = '/hc'
 _PREFIX_NS = _PREFIX + '/ns'
-_acl_openbar = [{'perms': zookeeper.PERM_ALL,
-                 'scheme': 'world',
-                 'id': 'anyone'}]
+_acl_openbar = OPEN_ACL_UNSAFE
 
 # An iterable of tuples, explain how the nodes for each service type are
 # sharded over a directory hierarchy.
@@ -49,16 +49,16 @@ class ZkHandle(object):
         return self._zh
 
     def close(self):
-        zookeeper.close(self._zh)
+        self._zh.stop()
         self._zh = None
 
 
-def get_connected_handles(cnxstr):
-    zookeeper.set_debug_level(zookeeper.LOG_LEVEL_WARN)
+def get_connected_handles(cnxstr, logger=None):
     if cnxstr is None:
         return
     for shard in cnxstr.split(";"):
-        zh = zookeeper.init(shard)
+        zh = KazooClient(hosts=shard, logger=logger)
+        zh.start()
         yield ZkHandle(zh, cnxstr)
 
 
@@ -79,29 +79,23 @@ def _batch_split(nodes, N):
     yield batch
 
 
-def _create_ignore_errors(zh, path, data, ctx):
-    def _completion(ctx, *args, **kwargs):
-        rc, zrc, ignored = args
-        if rc != 0:
-            logging.warn("zookeeper.acreate(%s) error rc=%d", path, rc)
-            ctx['failed'] += 1
-        elif zrc != 0 and zrc != zookeeper.NODEEXISTS:
-            logging.warn('create/set(%s) : FAILED', path)
-            ctx['failed'] += 1
-        ctx['sem'].release()
-
-    ctx['started'] += 1
-    zookeeper.acreate(zh, path, data, _acl_openbar, 0,
-                      lambda *a, **ka: _completion(ctx, *a, **ka))
-
-
 def _batch_create(zh, batch):
-    ctx = {"started": 0, "failed": 0, "sem": threading.Semaphore(0)}
+    started = 0
+    failed = 0
+    async_results = list()
     for path in batch:
-        _create_ignore_errors(zh, path, '', ctx)
-    for i in range(ctx['started']):
-        ctx['sem'].acquire()
-    return ctx['started'], ctx['failed']
+        async_results.append(zh.create_async(path, value=b'',
+                             acl=_acl_openbar))
+        started += 1
+    for async_result in async_results:
+        try:
+            async_result.get()
+        except NodeExistsError:
+            pass
+        except Exception as exc:
+            logging.warn('Failed to create/set(%s) : %s', path, exc)
+            failed += 1
+    return started, failed
 
 
 def _generate_hash_tokens(w):
@@ -162,9 +156,9 @@ def _probe(zh, ns, logger):
     logger.info("Probing for an existing namespace [%s]", ns)
     try:
         for t, _, _ in _srvtypes:
-            _, _ = zookeeper.get(zh, _PREFIX_NS + '/' + ns + '/el/' + t)
+            _, _ = zh.get(_PREFIX_NS + '/' + ns + '/el/' + t)
         for path in get_meta0_paths(zh, ns):
-            _, _ = zookeeper.get(zh, path)
+            _, _ = zh.get(path)
         return True
     except Exception:
         return False
@@ -177,9 +171,9 @@ def create_namespace_tree(zh, ns, logger, batch_size=2048, precheck=False):
     # Synchronous creation of the root, helps detecting a lot of
     # problems with the connection
     try:
-        zookeeper.create(zh, _PREFIX, '', _acl_openbar, 0)
+        zh.create(_PREFIX, value=b'', acl=_acl_openbar)
         logger.info("Created %s", _PREFIX)
-    except zookeeper.NodeExistsException:
+    except NodeExistsError:
         logger.info("Already %s", _PREFIX)
         pass
 
@@ -189,11 +183,11 @@ def create_namespace_tree(zh, ns, logger, batch_size=2048, precheck=False):
 
 def _delete_children(zh, path, logger):
     logger.debug("Removing %s", path)
-    for n in tuple(zookeeper.get_children(zh, path)):
+    for n in tuple(zh.get_children(path)):
         p = path + '/' + n
         _delete_children(zh, p, logger)
         try:
-            zookeeper.delete(zh, p)
+            zh.delete(p)
             logger.info('Deleted %s', p)
         except Exception as ex:
             logger.warn("Removal failed on %s: %s", p, ex)

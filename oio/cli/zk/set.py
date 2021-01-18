@@ -15,6 +15,8 @@
 
 from __future__ import print_function
 
+import six
+
 from logging import getLogger
 from six import iteritems
 from cliff import lister
@@ -41,16 +43,15 @@ class ElectionCmdMixin(object):
         from oio.zk.client import get_connected_handles, \
             generate_namespace_tree as _run
         ns, cnxstr = self.get_params(parsed_args)
-        for zh in get_connected_handles(cnxstr):
+        for zh in get_connected_handles(cnxstr, logger=self.log):
             for group in _run(ns, parsed_args.srvtype, non_leaf=non_leaf):
                 yield zh.get(), group
             zh.close()
 
     def _list_nodes(self, zh, path):
-        import zookeeper
         path = path.replace('//', '/')
         try:
-            children = list(zookeeper.get_children(zh, path))
+            children = list(zh.get_children(path))
             if len(children) <= 0:
                 return
             for child in children:
@@ -104,14 +105,12 @@ class ElectionReset(ElectionCmdMixin, lister.Lister):
         return columns, self._action_generator(parsed_args)
 
     def _action_generator(self, parsed_args):
-        import zookeeper
-
         def action(group, node):
             if parsed_args.DRY:
                 return group, node, 'Skipped'
             else:
                 try:
-                    zookeeper.delete(zh, group + '/' + node)
+                    zh.delete(group + '/' + node)
                     return group, node, 'Deleted'
                 except Exception as ex:
                     return group, node, str(ex)
@@ -131,12 +130,14 @@ class ElectionReset(ElectionCmdMixin, lister.Lister):
                 group = {}
                 for child in children:
                     n = group + '/' + child
-                    data, meta = tuple(zookeeper.get(zh, n))
-                    print(repr(data), repr(meta))
-                    if data in group:
+                    addr, node_stat = zh.get(n)
+                    if addr is not None:
+                        addr = addr.decode('utf-8')
+                    print(repr(addr), repr(node_stat))
+                    if addr in group:
                         # Mark the oldest nodes for removal
-                        yield action(group, group[data])
-                    group[data] = child
+                        yield action(group, group[addr])
+                    group[addr] = child
             else:
                 # systematical removal
                 for child in children:
@@ -158,13 +159,14 @@ class ElectionStat(ElectionCmdMixin, lister.Lister):
         return columns, self._action_generator(parsed_args)
 
     def _action_generator(self, parsed_args):
-        import zookeeper
         for zh, group in self.iterate_groups(parsed_args):
             children = list(self._list_nodes(zh, group))
             for child in children:
                 n = group + '/' + child
-                value, meta = tuple(zookeeper.get(zh, n))
-                yield group, child, meta['dataLength'], repr(value)
+                addr, node_stat = zh.get(n)
+                if addr is not None:
+                    addr = addr.decode('utf-8')
+                yield group, child, node_stat.data_length, repr(addr)
 
 
 class ElectionSmudge(ElectionCmdMixin, lister.Lister):
@@ -184,16 +186,17 @@ class ElectionSmudge(ElectionCmdMixin, lister.Lister):
         return columns, self._action_generator(parsed_args)
 
     def _action_generator(self, parsed_args):
-        import zookeeper
         from oio.zk.client import _acl_openbar
         for zh, group in self.iterate_groups(parsed_args):
-            for key, first, last in self._list_elections(zh, group):
+            for key, _, last in self._list_elections(zh, group):
                 tail = str(1+int(last)).rjust(10, '0')
                 suffix = key + '-' + tail
                 path = group + '/' + suffix
+                value = parsed_args.value
+                if isinstance(value, six.text_type):
+                    value = value.encode('utf-8')
                 try:
-                    zookeeper.create(zh, path, parsed_args.value,
-                                     _acl_openbar, 0)
+                    zh.create(path, value=value, acl=_acl_openbar)
                     yield group, suffix, "OK"
                 except Exception as ex:
                     yield group, suffix, str(ex)
@@ -219,7 +222,7 @@ class HierarchyArmageddon(ElectionCmdMixin, Command):
             self.log.warn("This action on [%s] requires iron bollocks.", ns)
             return
         from oio.zk.client import get_connected_handles, delete_children
-        for zh in get_connected_handles(cnxstr):
+        for zh in get_connected_handles(cnxstr, logger=self.log):
             try:
                 delete_children(zh.get(), ns, self.log)
             except Exception as ex:
@@ -256,7 +259,7 @@ class HierarchyBootstrap(ElectionCmdMixin, Command):
         # Send a bootstrap on each ensemble
         ns, cnxstr = self.get_params(parsed_args)
         from oio.zk.client import get_connected_handles, create_namespace_tree
-        for zh in get_connected_handles(cnxstr):
+        for zh in get_connected_handles(cnxstr, logger=self.log):
             try:
                 create_namespace_tree(zh.get(), ns, self.log,
                                       batch_size=batch_size,

@@ -125,19 +125,20 @@ class Meta0Check(BaseCheckCommand):
     SRV = 'meta0'
 
     def _take_action(self, parsed_args):
-        import zookeeper
         from oio.zk.client import get_meta0_paths, get_connected_handles
         self.logger.debug("Checking meta0 services")
 
         # TODO: tcp touch to the meta0 services
 
         # check they are registered in the ZK
-        for zh in get_connected_handles(self.zookeeper()):
+        for zh in get_connected_handles(self.zookeeper(), logger=self.logger):
             for path in get_meta0_paths(zh, self.app.options.ns):
                 try:
                     zk_registered = set()
-                    for node in zookeeper.get_children(zh.get(), path):
-                        addr, _ = zookeeper.get(zh.get(), path + '/' + node)
+                    for node in zh.get().get_children(path):
+                        addr, _ = zh.get().get(path + '/' + node)
+                        if addr is not None:
+                            addr = addr.decode('utf-8')
                         zk_registered.add(addr)
                     known = set()
 
