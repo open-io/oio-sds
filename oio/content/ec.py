@@ -93,7 +93,8 @@ class ECContent(Content):
         meta['metachunk_size'] = current_chunk.size
         meta['full_path'] = self.full_path
         meta['oio_version'] = OIO_VERSION
-        self.blob_client.chunk_put(spare_url[0], meta, GeneratorIO(stream))
+        bytes_transferred, _ = self.blob_client.chunk_put(
+            spare_url[0], meta, GeneratorIO(stream))
 
         # Register the spare chunk in object's metadata
         if chunk_id is None:
@@ -104,6 +105,8 @@ class ECContent(Content):
                                      frozen=allow_frozen_container)
         self.logger.debug('Chunk %s repaired in %s',
                           chunk_id or chunk_pos, spare_url[0])
+
+        return bytes_transferred
 
     def fetch(self):
         chunks = _sort_chunks(self.chunks.raw(), self.storage_method.ec,
