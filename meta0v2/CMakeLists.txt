@@ -10,7 +10,8 @@ include_directories(BEFORE
 		${CMAKE_CURRENT_BINARY_DIR})
 
 include_directories(AFTER
-		${ZK_INCLUDE_DIRS})
+		${ZK_INCLUDE_DIRS}
+		${SQLITE3_INCLUDE_DIRS})
 
 link_directories(
 		${ZK_LIBRARY_DIRS}

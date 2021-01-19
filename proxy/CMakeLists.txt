@@ -11,7 +11,8 @@ include_directories(BEFORE
 include_directories(AFTER
 		${GLIB2_INCLUDE_DIRS}
 		${CURL_INCLUDE_DIRS}
-		${JSONC_INCLUDE_DIRS})
+		${JSONC_INCLUDE_DIRS}
+		${SQLITE3_INCLUDE_DIRS})
 
 link_directories(
 		${GLIB2_LIBRARY_DIRS}

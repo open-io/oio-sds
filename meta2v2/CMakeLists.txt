@@ -9,7 +9,8 @@ include_directories(BEFORE . ..
 
 include_directories(AFTER
 		${JSONC_INCLUDE_DIRS}
-		${LIBRAIN_INCLUDE_DIRS})
+		${LIBRAIN_INCLUDE_DIRS}
+		${SQLITE3_INCLUDE_DIRS})
 
 link_directories(
 		${JSONC_LIBRARY_DIRS}

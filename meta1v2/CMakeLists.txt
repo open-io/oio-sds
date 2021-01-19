@@ -8,6 +8,9 @@ include_directories(BEFORE
 		${CMAKE_CURRENT_BINARY_DIR}
 		${JSONC_INCLUDE_DIRS})
 
+include_directories(AFTER
+		${SQLITE3_INCLUDE_DIRS})
+
 link_directories(
 		${JSONC_LIBRARY_DIRS}
 		${ZK_LIBRARY_DIRS}

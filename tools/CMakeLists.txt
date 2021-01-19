@@ -8,6 +8,10 @@ include_directories(BEFORE
 include_directories(AFTER
 	${ZK_INCLUDE_DIRS})
 
+link_directories(
+	${JSONC_LIBRARY_DIRS}
+	${SQLITE3_LIBRARY_DIRS})
+
 add_executable(oio-zk-harass oio-zk-harass.c)
 bin_prefix(oio-zk-harass -zk-harass)
 target_link_libraries(oio-zk-harass
