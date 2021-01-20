@@ -65,7 +65,7 @@ class Meta2RebuildJob(XcuteRdirJob):
             raise ValueError('Missing service ID')
         sanitized_job_params['service_id'] = service_id
 
-        return sanitized_job_params, 'meta2/%s' % service_id
+        return sanitized_job_params, 'meta2'
 
     def __init__(self, conf, logger=None):
         super(Meta2RebuildJob, self).__init__(conf, logger=logger)
