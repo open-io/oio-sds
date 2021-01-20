@@ -22,7 +22,7 @@ from redis import ConnectionError as RedisConnectionError, \
 from oio.common.easy_value import int_value
 from oio.common.exceptions import OioTimeout
 from oio.common.logger import get_logger
-from oio.common.green import ratelimit, sleep, threading
+from oio.common.green import ratelimit, sleep, threading, time
 from oio.common.json import json
 from oio.conscience.client import ConscienceClient
 from oio.event.beanstalk import Beanstalk, BeanstalkdListener, \
@@ -236,19 +236,146 @@ class XcuteOrchestrator(object):
         finally:
             del self.dispatch_tasks_threads[job_id]
 
+    def adapt_speed(self, job_id, job_config, last_check, period=300):
+        """
+        Pause and/or reduce the rate of creation of new tasks in case
+        the number of pending tasks is too high.
+        """
+        if last_check is not None \
+                and time.time() < last_check['last'] + period:
+            return last_check
+
+        waiting_time = 0
+        while True:
+            for _ in range(waiting_time):
+                if not self.running:
+                    break
+                sleep(1)
+
+            if not self.running:
+                return last_check
+
+            job_info, exc = self.handle_backend_errors(
+                self.backend.get_job_info, job_id)
+            if exc is not None:
+                self.logger.warning(
+                    '[job_id=%s] Unable to retrieve job info '
+                    'and adapt the speed: %s', job_id, exc)
+                return last_check
+            if job_info['job']['status'] != XcuteJobStatus.RUNNING \
+                    or job_info['job']['request_pause']:
+                return last_check
+
+            job_mtime = job_info['job']['mtime']
+            max_tasks_per_second = job_info['config']['tasks_per_second']
+            max_tasks_batch_size = job_info['config']['tasks_batch_size']
+            tasks_processed = job_info['tasks']['processed']
+            pending_tasks = job_info['tasks']['sent'] - tasks_processed
+
+            if last_check is None:  # Initialize
+                last_check = dict()
+                last_check['last'] = job_mtime
+                last_check['processed'] = tasks_processed
+                if pending_tasks / max_tasks_per_second >= period:
+                    waiting_time = period
+                    self.logger.error(
+                        '[job_id=%s] Too many pending tasks '
+                        'for the next %d seconds: %d (%d tasks/second); '
+                        'wait %d seconds and check again',
+                        job_id, period, pending_tasks, max_tasks_per_second,
+                        waiting_time)
+                    continue
+                return last_check
+
+            tasks_processed_in_period = tasks_processed \
+                - last_check['processed']
+            if tasks_processed_in_period == 0:
+                last_check['last'] = job_mtime
+                last_check['processed'] = tasks_processed
+                waiting_time = period
+                self.logger.error(
+                    '[job_id=%s] No task processed for the last %d seconds; '
+                    'wait %d seconds and check again',
+                    job_id, period, waiting_time)
+                continue
+
+            elapsed = job_mtime - last_check['last']
+            actual_tasks_per_second = tasks_processed_in_period \
+                / float(elapsed)
+            if pending_tasks / actual_tasks_per_second >= period:
+                last_check['last'] = job_mtime
+                last_check['processed'] = tasks_processed
+                waiting_time = period
+                self.logger.error(
+                    '[job_id=%s] Too many pending tasks '
+                    'for the next %d seconds: %d (%f tasks/second) ; '
+                    'wait %d seconds and check again',
+                    job_id, period, pending_tasks,
+                    actual_tasks_per_second, waiting_time)
+                continue
+
+            current_tasks_per_second = job_config['tasks_per_second']
+            current_tasks_batch_size = job_config['tasks_batch_size']
+            diff_tasks_per_second = \
+                current_tasks_per_second - actual_tasks_per_second
+            new_tasks_per_second = None
+            if diff_tasks_per_second < -0.5:  # Too fast to process tasks
+                # The queues need to have a few tasks in advance.
+                # Continue at this speed to allow the queues to empty.
+                if actual_tasks_per_second > max_tasks_per_second:
+                    self.logger.warning(
+                        '[job_id=%s] Speeding: %f tasks/second (max: %d)',
+                        job_id, actual_tasks_per_second, max_tasks_per_second)
+                else:
+                    self.logger.info(
+                        '[job_id=%s] Speeding: %f tasks/second '
+                        '(adapted max: %d)',
+                        job_id, actual_tasks_per_second,
+                        current_tasks_per_second)
+            elif diff_tasks_per_second <= 0.5:  # Good speed to process tasks
+                if current_tasks_per_second < max_tasks_per_second:
+                    new_tasks_per_second = current_tasks_per_second + 1
+                    self.logger.info(
+                        '[job_id=%s] Slowly climb up to maximum speed',
+                        job_id)
+                # else:
+                #    Tout marche bien navette !
+            else:  # Too slow to process tasks
+                new_tasks_per_second = int(math.floor(actual_tasks_per_second))
+                self.logger.warning(
+                    '[job_id=%s] The task processing speed is too slow: '
+                    '%f tasks/second',
+                    job_id, actual_tasks_per_second)
+
+            last_check['last'] = job_mtime
+            last_check['processed'] = tasks_processed
+            if new_tasks_per_second is not None:
+                new_tasks_per_second = max(new_tasks_per_second, 1)
+                new_tasks_batch_size = min(max_tasks_batch_size,
+                                           new_tasks_per_second)
+                job_config['tasks_per_second'] = new_tasks_per_second
+                job_config['tasks_batch_size'] = new_tasks_batch_size
+                self.logger.info(
+                    '[job_id=%s] Adapt the speed: %d -> %d tasks/second '
+                    '(%d -> %d tasks/batch)',
+                    job_id, current_tasks_per_second, new_tasks_per_second,
+                    current_tasks_batch_size, new_tasks_batch_size)
+            return last_check
+
     def dispatch_tasks(self, job_id, job_type, job_info, job):
         job_config = job_info['config']
         job_params = job_config['params']
-        tasks_per_second = job_config['tasks_per_second']
-        tasks_batch_size = job_config['tasks_batch_size']
         last_task_id = job_info['tasks']['last_sent']
 
         job_tasks = job.get_tasks(job_params, marker=last_task_id)
         beanstalkd_workers = self.get_beanstalkd_workers()
 
+        last_check = self.adapt_speed(job_id, job_config, None)
+        tasks_per_second = job_config['tasks_per_second']
+        tasks_batch_size = job_config['tasks_batch_size']
+        batch_per_second = tasks_per_second / float(tasks_batch_size)
+
         tasks_run_time = 0
-        batch_per_second = tasks_per_second / float(
-            tasks_batch_size)
         # The backend must have the tasks in order
         # to know the last task sent
         tasks = OrderedDict()
@@ -299,6 +426,13 @@ class XcuteOrchestrator(object):
             if exc is not None and not self.running:
                 break
             tasks.clear()
+
+            # After each tasks batch sent, adapt the sending speed
+            # according to the processing speed.
+            last_check = self.adapt_speed(job_id, job_config, last_check)
+            tasks_per_second = job_config['tasks_per_second']
+            tasks_batch_size = job_config['tasks_batch_size']
+            batch_per_second = tasks_per_second / float(tasks_batch_size)
         else:
             # Make sure that the sent tasks will be saved
             # before being processed

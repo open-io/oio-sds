@@ -113,3 +113,5 @@ class PlainContent(Content):
                                      frozen=allow_frozen_container)
         self.logger.debug('Chunk %s repaired in %s',
                           chunk_id or chunk_pos, spare_url)
+
+        return current_chunk.size

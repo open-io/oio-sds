@@ -220,6 +220,10 @@ func loadAttr(inChunk fileReader, chunkID string, reqid string) (chunkInfo, erro
 					(hs.key == AttrNameMetachunkChecksum || hs.key == AttrNameMetachunkSize) {
 					continue
 				}
+				/* Compression is not mandatory, don't print error for missing Compression attr */
+				if hs.key == AttrNameCompression {
+					continue
+				}
 				LogWarning(msgMissingXattr(chunkID, reqid, hs.key, err))
 			} else {
 				return chunk, err
