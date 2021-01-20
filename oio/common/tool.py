@@ -129,7 +129,6 @@ class Tool(object):
     def exit_gracefully(self, signum, frame):
         self.logger.info(
             'Stop sending and wait for all results already sent')
-        self.success = False
         self.running = False
         if self.beanstalkd:
             self.beanstalkd.running = False

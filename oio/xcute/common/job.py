@@ -55,7 +55,7 @@ class XcuteJob(object):
     TASK_CLASS = None
 
     DEFAULT_TASKS_PER_SECOND = 32
-    MAX_TASKS_BATCH_SIZE = 64
+    MAX_TASKS_BATCH_SIZE = 32
 
     def __init__(self, conf, logger=None):
         self.conf = conf

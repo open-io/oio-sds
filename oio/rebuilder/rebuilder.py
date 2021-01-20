@@ -69,7 +69,6 @@ class Rebuilder(object):
     def exit_gracefully(self, signum, frame):
         self.logger.info(
             'Stop sending and wait for all results already sent')
-        self.success = False
         self.running = False
 
     def rebuilder_pass(self, **kwargs):

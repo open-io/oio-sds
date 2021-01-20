@@ -421,7 +421,7 @@ class ChunkReader(object):
             return
 
         if PY2:
-            return GeneratorIO(_iter())
+            return GeneratorIO(_iter(), sub_generator=False)
         return _iter()
 
     def fill_ranges(self, start, end, length):
