@@ -58,6 +58,9 @@ class RedisConnection(object):
         'max_connections': int,
         'health_check_interval': int,
     }
+    EXTRA_ARGUMENT_PARSERS = {
+        'db': int,  # Redis database number
+    }
 
     def __init__(self, host=None, sentinel_hosts=None,
                  sentinel_name=None, **kwargs):
@@ -102,9 +105,12 @@ class RedisConnection(object):
             parsers = self.__redis_mod.connection.URL_QUERY_ARGUMENT_PARSERS
         else:
             parsers = self.URL_QUERY_ARGUMENT_PARSERS
-        return {k: parsers[k](v)
+        # We don't want to monkey patch the class' dictionary, hence the copy
+        all_parsers = self.__class__.EXTRA_ARGUMENT_PARSERS.copy()
+        all_parsers.update(parsers)
+        return {k: all_parsers[k](v)
                 for k, v in conn_kwargs.items()
-                if k in parsers}
+                if k in all_parsers}
 
     def _filter_sentinel_conn_kwargs(self, sentinel_conn_kwargs):
         if sentinel_conn_kwargs is None:
