@@ -46,18 +46,3 @@ Description: OpenIO Cloud Storage Solution
  data in a distributed way, data such as: images, videos, documents, emails,
  and any other personal unstructured data.
  OpenIO is a fork of Redcurrant, from Worldline by Atos.
-
-Package: ${PACKAGE}-dbg
-Architecture: any
-Section: debug
-Priority: extra
-Depends:
-  ${PACKAGE} (= ${binary:Version}),
-  ${misc:Depends}
-Description: debugging symbols for openio-sds
- OpenIO software storage solution is designed to handle PETA-bytes of
- data in a distributed way, data such as: images, videos, documents, emails,
- and any other personal unstructured data.
- OpenIO is a fork of Redcurrant, from Worldline by Atos.
- .
- This package contains the debugging symbols for openio-sds.

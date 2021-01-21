@@ -30,6 +30,7 @@ override_dh_auto_configure:
 	dh_auto_configure --buildsystem cmake -- \
 	-DCMAKE_BUILD_TYPE=Release \
 	-DCMAKE_INSTALL_PREFIX=${PREFIX} \
+	-DCMAKE_INSTALL_RPATH=${PREFIX}/lib:${PYTHON_PATH}/lib \
 	-DLD_LIBDIR=lib \
 	-DEXE_PREFIX=oio \
 	-DZK_LIBDIR=${ZOOKEEPER_PATH}/lib \
@@ -59,7 +60,7 @@ override_dh_install:
 	# make install, to install oio except the python part
 	dh_install
 	# copy zookeeper libraries not to depend on zookeeper package
-	cp -a ${ZOOKEEPER_PATH}/lib/* $(DESTDIR)/${PREFIX}/lib/
+	cp -a ${ZOOKEEPER_PATH}/lib/lib* $(DESTDIR)/${PREFIX}/lib/
 	# create env file for library directory
 	echo "LD_LIBRARY_PATH=${PREFIX}/lib:${PYTHON_PATH}/lib" > $(DESTDIR)/${PREFIX}/ld_library_path.env
 	# create ld.so.conf file
@@ -77,11 +78,6 @@ override_dh_install:
 override_dh_installdeb:
 	dh_installdeb -O--buildsystem=cmake
 	rm -f $(DESTDIR)/DEBIAN/postinst
-
-
-.PHONY: override_dh_strip
-override_dh_strip:
-	dh_strip --dbg-package=${PACKAGE}-dbg
 
 override_dh_auto_install:
 	dh_auto_install --destdir=${DESTDIR}
