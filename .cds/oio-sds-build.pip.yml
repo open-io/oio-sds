@@ -34,6 +34,7 @@ jobs:
           make -f /external-packages/ubuntu/bionic/Makefile.common install-apt-repo
           make -f /external-packages/ubuntu/bionic/Makefile.common deb_changelog
           make -f /external-packages/ubuntu/bionic/Makefile.common
+          make -f /external-packages/ubuntu/bionic/Makefile.common upload_to_artifacts
           make -f /external-packages/ubuntu/bionic/Makefile.common upload_to_repo
     requirements:
       - model: openio-debbuild-18.04
