@@ -20,7 +20,9 @@ import os
 import grp
 import pwd
 import fcntl
+import sys
 from collections import OrderedDict
+from ctypes import CDLL as orig_CDLL
 from hashlib import sha256
 from math import sqrt
 from random import getrandbits
@@ -526,3 +528,31 @@ def compute_perfdata_stats(perfdata, prefix='upload.'):
     rawx_perfdata[prefix + 'AVG'] = avg
     rawx_perfdata[prefix + 'SD'] = sdev
     rawx_perfdata[prefix + 'RSD'] = sdev/avg
+
+
+def get_virtualenv_dir(subdir=''):
+    """
+    Get the virtualenv directory if the code is run in a virtualenv.
+    """
+    # Get venv prefix...
+    if hasattr(sys, 'real_prefix') or (
+            hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix):
+        # In virtualenv, the venv prefix is sys.prefix
+        return os.path.normpath(os.path.join(sys.prefix, subdir))
+    return None
+
+
+def CDLL(name, **kwargs):
+    """
+    Do the same as ctypes.CDLL, but first try in the virtualenv directory
+    if the code is run in a virtualenv.
+    """
+    virtualenv_dir = get_virtualenv_dir(subdir='lib')
+    if virtualenv_dir:
+        # First try with the virtualenv directory
+        try:
+            return orig_CDLL(os.path.join(virtualenv_dir, name), **kwargs)
+        except OSError:
+            # Now, try without the virtualenv directory
+            pass
+    return orig_CDLL(name, **kwargs)

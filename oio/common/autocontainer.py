@@ -15,9 +15,10 @@
 
 import re
 from itertools import takewhile
-from ctypes import CDLL, c_char_p, c_uint, create_string_buffer
-
+from ctypes import c_char_p, c_uint, create_string_buffer
 from six import PY3, string_types
+
+from oio.common.utils import CDLL
 
 if PY3:
     from typing import Pattern

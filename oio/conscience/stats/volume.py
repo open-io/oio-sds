@@ -13,8 +13,9 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from ctypes import CDLL, c_char_p, c_double
+from ctypes import c_char_p, c_double
 
+from oio.common.utils import CDLL
 from oio.conscience.stats.base import BaseStat
 
 
