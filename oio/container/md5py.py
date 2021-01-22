@@ -26,6 +26,7 @@ Special thanks to Aurelian Coman who fixed some nasty bugs!
 
 Copyright  Dinu C. Gherman
 Copyright OpenIO SAS 2019
+Copyright OVH SAS 2021
 """
 
 
@@ -34,7 +35,6 @@ __version__ = 0.9
 
 
 import struct
-import string
 import copy
 
 
@@ -54,7 +54,7 @@ def _long2bytes(n, blocksize=0):
     """
 
     # After much testing, this algorithm was deemed to be the fastest.
-    s = ''
+    s = b''
     pack = struct.pack
     while n > 0:
         # CHANGED FROM '>I' TO '<I'. (DCG)
@@ -64,11 +64,11 @@ def _long2bytes(n, blocksize=0):
 
     # Strip off leading zeros.
     for i in range(len(s)):
-        if s[i] != '\000':
+        if s[i] != b'\000':
             break
     else:
         # Only happens when n == 0.
-        s = '\000'
+        s = b'\000'
         i = 0
 
     s = s[i:]
@@ -76,24 +76,24 @@ def _long2bytes(n, blocksize=0):
     # Add back some pad bytes. This could be done more efficiently
     # w.r.t. the de-padding being done above, but sigh...
     if blocksize > 0 and len(s) % blocksize:
-        s = (blocksize - len(s) % blocksize) * '\000' + s
+        s = (blocksize - len(s) % blocksize) * b'\000' + s
 
     return s
 
 
-def _bytelist2long(list):
+def _bytelist2long(blist):
     "Transform a list of characters into a list of longs."
 
-    imax = len(list)/4
+    imax = len(blist) // 4
     hl = [0] * imax
 
     j = 0
     i = 0
     while i < imax:
-        b0 = ord(list[j])
-        b1 = (ord(list[j+1])) << 8
-        b2 = (ord(list[j+2])) << 16
-        b3 = (ord(list[j+3])) << 24
+        b0 = blist[j]
+        b1 = blist[j+1] << 8
+        b2 = blist[j+2] << 16
+        b3 = blist[j+3] << 24
         hl[i] = b0 | b1 | b2 | b3
         i = i+1
         j = j+4
@@ -150,6 +150,13 @@ def XX(func, a, b, c, d, x, s, ac):
     res = res + b
 
     return res & 0xffffffff
+
+
+def identity(obj):
+    """
+    Just return the object passed as parameter
+    """
+    return obj
 
 
 class MD5:
@@ -305,6 +312,9 @@ class MD5:
         the arguments, i.e. m.update(a); m.update(b) is equivalent
         to m.update(a+b).
         """
+        if not isinstance(inBuf, bytes):
+            raise TypeError("Input buffer must be bytes, not %s" % (
+                            type(inBuf), ))
         leninBuf = len(inBuf)
 
         # Compute number of bytes mod 64.
@@ -319,17 +329,17 @@ class MD5:
         partLen = 64 - index
 
         if leninBuf >= partLen:
-            self.input[index:] = map(None, inBuf[:partLen])
+            self.input[index:] = list(inBuf[:partLen])
             self._transform(_bytelist2long(self.input))
             i = partLen
             while i + 63 < leninBuf:
-                self._transform(_bytelist2long(map(None, inBuf[i:i+64])))
+                self._transform(_bytelist2long(list(inBuf[i:i+64])))
                 i = i + 64
             else:
-                self.input = map(None, inBuf[i:leninBuf])
+                self.input = list(inBuf[i:leninBuf])
         else:
             i = 0
-            self.input = self.input + map(None, inBuf)
+            self.input = self.input + list(inBuf)
 
     def digest(self):
         """Terminate the message-digest computation and return digest.
@@ -353,7 +363,7 @@ class MD5:
         else:
             padLen = 120 - index
 
-        padding = ['\200'] + ['\000'] * 63
+        padding = bytes([128] + [0] * 63)
         self.update(padding[:padLen])
 
         # Append length (before padding).
@@ -384,13 +394,7 @@ class MD5:
         used to exchange the value safely in email or other non-
         binary environments.
         """
-
-        d = map(None, self.digest())
-        d = map(ord, d)
-        d = map(lambda x: "%02x" % x, d)
-        d = string.join(d, '')
-
-        return d
+        return ''.join('%02x' % x for x in self.digest())
 
     def copy(self):
         """Return a clone object.

@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,10 +20,6 @@ from __future__ import print_function
 from six import string_types
 from six.moves import range
 from six.moves.urllib_parse import urlparse
-try:
-    import simplejson as json
-except ImportError:
-    import json  # noqa
 
 from collections import OrderedDict
 import math
@@ -30,10 +27,9 @@ import re
 import os
 import pickle
 from tarfile import TarInfo, REGTYPE, NUL, PAX_FORMAT, BLOCKSIZE, XHDTYPE, \
-                    DIRTYPE, AREGTYPE, InvalidHeaderError
+    DIRTYPE, AREGTYPE, InvalidHeaderError
 
 from .md5py import MD5
-
 
 from redis import ConnectionError
 from werkzeug.wrappers import Response
@@ -46,6 +42,7 @@ from werkzeug.wsgi import wrap_file
 from oio.api.object_storage import ObjectStorageApi, _sort_chunks
 from oio.common import exceptions as exc
 from oio.common.configuration import read_conf
+from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.wsgi import WerkzeugApp
 from oio.common.redis_conn import RedisConnection
@@ -160,12 +157,12 @@ class OioTarEntry(object):
     def header_blocks(self):
         """Number of tar blocks required to store the entry header"""
         assert self._buf
-        return len(self._buf) / BLOCKSIZE
+        return len(self._buf) // BLOCKSIZE
 
     @property
     def data_blocks(self):
         """Number of tar blocks required to store the entry data"""
-        return ((self.filesize - 1) / BLOCKSIZE) + 1
+        return ((self.filesize - 1) // BLOCKSIZE) + 1
 
     @property
     def buf(self):
@@ -211,7 +208,7 @@ class LimitedStream(object):
                 if val['offset'] == self.offset:
                     self.md5 = MD5()
                 else:
-                    self.md5 = pickle.loads(val['md5'])
+                    self.md5 = pickle.loads(val['md5'].encode('utf-8'))
                 self.current_chunk_idx = idx
                 return
         if self.offset < self.entry['size']:
@@ -224,7 +221,8 @@ class LimitedStream(object):
         """Reset the current chunk and return an empty data block."""
         # save MD5 internal status in current_chunk
         if self.current_chunk:
-            self.current_chunk['md5'] = pickle.dumps(self.md5)
+            self.current_chunk['md5'] = \
+                pickle.dumps(self.md5, protocol=0).decode('utf-8')
             self.md5 = None
             self.current_chunk = None
         return b''
@@ -235,7 +233,8 @@ class LimitedStream(object):
             # We read past the current chunk end. We must only do a partial
             # update of the checksum in order to verify it.
             remaining = (self._current_chunk_end() - self.offset)
-            self.md5.update(data[0:remaining])
+            buf = data[0:remaining]
+            self.md5.update(buf)
             if self.md5.hexdigest().upper() != self.current_chunk['hash']:
                 self.invalid_checksum = True
                 raise IOError("Chunk has invalid checksum, aborting")
@@ -288,9 +287,9 @@ class ContainerTarFile(object):
     def __iter__(self):
         return self
 
-    def next(self):
+    def __next__(self):
         data = self.read()
-        if data == "":
+        if data == b'':
             raise StopIteration
         return data
 
@@ -380,8 +379,9 @@ class ContainerTarFile(object):
             struct = self.manifest
             data = json.dumps(self.manifest, sort_keys=True)
 
+        data = data.encode('utf-8')
         size = len(data)
-        mem = ""
+        mem = b''
 
         if size != entry['size']:
             self.logger.error("container properties has been updated")
@@ -436,7 +436,7 @@ class ContainerTarFile(object):
         if object is too large
         """
         # Is there API to stream data from OIO SDK (to avoid copy ?)
-        data = ""
+        data = b''
 
         size = divmod(size, 512)[0]
 
@@ -478,7 +478,8 @@ class ContainerTarFile(object):
 
     def close(self):
         if self.range_[0] <= self.range_[1]:
-            self.logger.info("data not all consumed")
+            self.logger.info("Not all data has been consumed: %d/%d",
+                             self.range_[0], self.range_[1])
 
 
 class ContainerRestore(object):
@@ -597,7 +598,7 @@ class ContainerRestore(object):
 
     def parse_xhd_type(self, hdrs):
         """ enrich hdrs with new headers """
-        buf = self.read(self.inf.size)
+        buf = self.read(self.inf.size).decode('utf-8')
         while buf:
             length = buf.split(' ', 1)[0]
             if length[0] == '\x00':
@@ -779,10 +780,10 @@ class ContainerBackup(RedisConnection, WerkzeugApp):
     """WSGI Application to dump or restore a container."""
 
     REDIS_TIMEOUT = 3600 * 24  # Redis keys will expire after one day
-    STREAMING = 52428800  # 50 MB
+    BUFSIZE = 52428800  # 50 MB
 
     # Number of blocks to serve to avoid splitting headers (1MiB)
-    BLOCK_ALIGNMENT = 2048
+    BLK_ALIGN = 2048
 
     def __init__(self, conf):
         if conf:
@@ -869,11 +870,11 @@ class ContainerBackup(RedisConnection, WerkzeugApp):
             if obj['deleted']:
                 continue
             tar = OioTarEntry(self.proxy, account, container, obj['name'])
-            if (start_block / self.BLOCK_ALIGNMENT) != \
-                    ((start_block + tar.header_blocks) / self.BLOCK_ALIGNMENT):
+            if (start_block // self.BLK_ALIGN) != \
+                    ((start_block + tar.header_blocks) // self.BLK_ALIGN):
                 # header is over boundary, we have to add padding blocks
-                padding = (self.BLOCK_ALIGNMENT -
-                           divmod(start_block, self.BLOCK_ALIGNMENT)[1])
+                padding = (self.BLK_ALIGN -
+                           divmod(start_block, self.BLK_ALIGN)[1])
                 map_objs.append({
                     'blocks': padding,
                     'size': padding * BLOCKSIZE,
@@ -912,7 +913,7 @@ class ContainerBackup(RedisConnection, WerkzeugApp):
         entry['size'] = len(json.dumps(map_objs, sort_keys=True))
         # ensure that we reserved enough blocks after recomputing offset
         entry['blocks'] = \
-            1 + int(math.ceil(entry['size'] / float(BLOCKSIZE))) * 2
+            1 + int(math.ceil(entry['size'] / BLOCKSIZE)) * 2
 
         tar = OioTarEntry(self.proxy, account, container, CONTAINER_MANIFEST,
                           data=map_objs)
@@ -957,7 +958,8 @@ class ContainerBackup(RedisConnection, WerkzeugApp):
 
         hdrs = {
             'X-Blocks': sum([i['blocks'] for i in results]),
-            'Content-Length': sum([i['blocks'] for i in results]) * BLOCKSIZE,
+            'Content-Length':
+                str(sum([i['blocks'] for i in results]) * BLOCKSIZE),
             'Accept-Ranges': 'bytes',
             'Content-Type': 'application/tar',
         }
@@ -1005,13 +1007,14 @@ class ContainerBackup(RedisConnection, WerkzeugApp):
         if 'Range' not in req.headers:
             tar = ContainerTarFile(self.proxy, account, container,
                                    (0, blocks-1), results, self.logger)
+            hdrs = {
+                'Accept-Ranges': 'bytes',
+                'Content-Type': 'application/tar',
+                'Content-Length': str(length),
+            }
             return Response(wrap_file(req.environ, tar,
-                                      buffer_size=self.STREAMING),
-                            headers={
-                                'Accept-Ranges': 'bytes',
-                                'Content-Type': 'application/tar',
-                                'Content-Length': length,
-                            }, status=200)
+                                      buffer_size=self.BUFSIZE),
+                            headers=hdrs, status=200)
 
         start, end, block_start, block_end = self._extract_range(req, blocks)
 
@@ -1019,13 +1022,13 @@ class ContainerBackup(RedisConnection, WerkzeugApp):
                                (block_start, block_end - 1),
                                results, self.logger)
         return Response(wrap_file(req.environ, tar,
-                                  buffer_size=self.STREAMING),
+                                  buffer_size=self.BUFSIZE),
                         headers={
                             'Accept-Ranges': 'bytes',
                             'Content-Type': 'application/tar',
                             'Content-Range': 'bytes %d-%d/%d' %
                                              (start, end, length),
-                            'Content-Length': end - start + 1,
+                            'Content-Length': str(end - start + 1),
                         }, status=206)
 
     def on_dump(self, req):

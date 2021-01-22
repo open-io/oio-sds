@@ -243,7 +243,7 @@ class TestContainerDownload(BaseTestCase):
 
     def _check_container(self, cnt):
         ret = self.conn.object_list(account=self.account, container=cnt)
-        names = self._data.keys()
+        names = list(self._data.keys())
         for obj in ret['objects']:
             name = obj['name']
             self.assertIn(name, self._data)
@@ -278,9 +278,9 @@ class TestContainerDownload(BaseTestCase):
             headers = tar.getmember(entry).pax_headers
             keys = list(headers.keys())
             for key, val in self._data[entry]['meta'].items():
-                key = u"SCHILY.xattr.user." + key.decode('utf-8')
+                key = "SCHILY.xattr.user." + key
                 self.assertIn(key, headers)
-                self.assertEqual(val.decode('utf-8'), headers[key])
+                self.assertEqual(val, headers[key])
                 keys.remove(key)
             #
             self.assertEqual(self._data[entry]['mime'], headers['mime_type'])
@@ -696,7 +696,7 @@ class TestContainerDownload(BaseTestCase):
                        chr(random.randint(0, 255)).encode('utf-8') +
                        inv[idx+1:])
 
-            cnt = rand_str(20)
+            cnt = 'test-backup-' + rand_str(6)
             res = requests.put(self.make_uri('restore', container=cnt),
                                data=inv)
             self.assertEqual(res.status_code, 400)
@@ -710,8 +710,10 @@ class TestContainerDownload(BaseTestCase):
             idx = (entry['start_block'] + entry['hdr_blocks']) * BLOCKSIZE \
                 + random.randint(0, entry['size'] - 1)
             while self.raw[idx] == inv[idx]:
-                inv = inv[:idx] + chr(random.randint(0, 255)) + inv[idx+1:]
-            cnt = rand_str(20)
+                inv = (inv[:idx] +
+                       chr(random.randint(0, 255)).encode('utf-8') +
+                       inv[idx+1:])
+            cnt = 'test-backup-' + rand_str(6)
             res = requests.put(self.make_uri('restore', container=cnt),
                                data=inv)
 
