@@ -156,6 +156,19 @@ message_marshall_gba(MESSAGE m, GError **err)
 		metautils_message_add_field_str(
 			m, NAME_MSGKEY_USER_AGENT, user_agent);
 
+	gchar **shared_properties = oio_ext_get_shared_properties();
+	if (shared_properties) {
+		for (gchar **p=shared_properties; *p && *(p+1); p+=2) {
+			gchar *key = g_strconcat(NAME_MSGKEY_PREFIX_SHARED_PROPERTY, *p,
+					NULL);
+			// Prefix the value with a space to ensure the field is sent
+			gchar *value = g_strconcat(" ", *(p+1), NULL);
+			metautils_message_add_field_str(m, key, value);
+			g_free(key);
+			g_free(value);
+		}
+	}
+
 	/*try to encode */
 	guint32 u32 = 0;
 	GByteArray *result = g_byte_array_sized_new(256);

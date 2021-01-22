@@ -113,7 +113,8 @@ License along with this library.
 #define NAME_MSGKEY_SIM_VER       "SIM_VER"
 #define NAME_MSGKEY_WORMED        "WRM"
 
-#define NAME_MSGKEY_PREFIX_PROPERTY    "P:"
+#define NAME_MSGKEY_PREFIX_PROPERTY        "P:"
+#define NAME_MSGKEY_PREFIX_SHARED_PROPERTY "SP:"
 
 enum {
 	SCORE_UNSET = -2,
