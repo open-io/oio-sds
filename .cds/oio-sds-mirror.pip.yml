@@ -16,10 +16,7 @@ jobs:
     - git branch --all
     # to remove branch to sync
     #- git branch -D xxxx
-    #
-    # TODO: remove `echo` to run mirroring
-    #
-    - echo git push --mirror --prune --force https://openiobot:{{ .cds.proj.OPENIOBOT_GITHUB_TOKEN }}@github.com/open-io/oio-sds.git
+    - git push --mirror --prune --force https://openiobot:{{ .cds.proj.OPENIOBOT_GITHUB_TOKEN }}@github.com/open-io/oio-sds.git
 
   requirements:
   - binary: git
