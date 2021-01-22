@@ -334,6 +334,22 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 	_client_reset_reply(client);
 
 	if (status == CODE_REDIRECT_SHARD && client->on_reply) {
+		GPtrArray *tmp = g_ptr_array_new();
+		gchar **names = metautils_message_get_field_names(reply);
+		for (gchar **n = names; names && *n; ++n) {
+			if (!g_str_has_prefix(*n, NAME_MSGKEY_PREFIX_SHARED_PROPERTY))
+				continue;
+			gchar *value = metautils_message_extract_string_copy(reply, *n);
+			if (value && *value == ' ') {
+				g_ptr_array_add(tmp, g_strdup(
+					(*n) + sizeof(NAME_MSGKEY_PREFIX_SHARED_PROPERTY) - 1));
+				g_ptr_array_add(tmp, g_strdup(value+1));
+			}
+			g_free(value);
+		}
+		oio_ext_set_shared_properties(
+				(gchar**) metautils_gpa_to_array(tmp, TRUE));
+
 		if (!client->on_reply(client->ctx, status, reply))
 			return SYSERR("Handler error");
 	}

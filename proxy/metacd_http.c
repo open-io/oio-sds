@@ -256,6 +256,11 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 	 * Only a root container redirect set to TRUE. */
 	oio_ext_set_is_shard(FALSE);
 
+	/* Init shared properties to NULL.
+	 * These shared properties are only used with sharded container.
+	 * The root container query will populate these properties as needed. */
+	oio_ext_set_shared_properties(NULL);
+
 	/* Load the optional deadline of the current request */
 	const char *tostr = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_TIMEOUT);
 	gint64 to = 0;

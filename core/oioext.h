@@ -134,6 +134,10 @@ gboolean oio_ext_is_shard(void);
 
 void oio_ext_set_is_shard(const gboolean is_shard);
 
+gchar **oio_ext_get_shared_properties(void);
+
+void oio_ext_set_shared_properties(gchar **shared_properties);
+
 /** Enable or disable the performance data collection. */
 GHashTable *oio_ext_enable_perfdata(gboolean enabled);
 

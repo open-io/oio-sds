@@ -184,6 +184,7 @@ struct oio_ext_local_s {
 	guint8 simulate_versioning;
 	/** Request originates from a redirect from a root container. */
 	guint8 is_shard;
+	gchar **shared_properties;
 	gchar reqid[LIMIT_LENGTH_REQID];
 	GHashTable *perfdata;
 };
@@ -379,6 +380,19 @@ gboolean oio_ext_is_shard(void) {
 void oio_ext_set_is_shard(const gboolean is_shard) {
 	struct oio_ext_local_s *l = _local_ensure();
 	l->is_shard = BOOL(is_shard);
+}
+
+gchar **oio_ext_get_shared_properties(void) {
+	const struct oio_ext_local_s *l = _local_ensure ();
+	return l->shared_properties;
+}
+
+void oio_ext_set_shared_properties(gchar **shared_properties) {
+	struct oio_ext_local_s *l = _local_ensure();
+	if (l->shared_properties) {
+		g_strfreev(l->shared_properties);
+	}
+	l->shared_properties = shared_properties;
 }
 
 GHashTable *oio_ext_get_perfdata(void) {
