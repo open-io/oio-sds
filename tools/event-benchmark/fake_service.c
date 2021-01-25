@@ -193,7 +193,7 @@ handler_action(struct http_request_s *request, struct http_reply_ctx_s *reply)
 	if (reqid)
 		oio_ext_set_reqid(reqid);
 	else
-		oio_ext_set_random_reqid();
+		oio_ext_set_prefixed_random_reqid("ev-bench-");
 
 	// Then parse the request to find a handler
 	struct oio_requri_s ruri = {NULL, NULL, NULL, NULL};

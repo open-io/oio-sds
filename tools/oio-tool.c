@@ -282,7 +282,7 @@ main (int argc, char **argv)
 	deadline = oio_ext_monotonic_time() + (timeout * G_TIME_SPAN_SECOND);
 	oio_ext_set_deadline(deadline);
 	oio_log_lazy_init();
-	oio_ext_set_random_reqid ();
+	oio_ext_set_prefixed_random_reqid("oio-tool-");
 
 	if (!strcmp("config", argv[1])) {
 		gboolean raw = FALSE;

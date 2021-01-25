@@ -400,8 +400,8 @@ static GError *
 _proxy_call_with_retry (CURL *h, const char *method, const char *url,
 		struct http_ctx_s *in, struct http_ctx_s *out, guint request_attempts)
 {
-	if (!oio_ext_get_reqid ())
-		oio_ext_set_random_reqid();
+	if (!oio_ext_get_reqid())
+		oio_ext_set_prefixed_random_reqid("C-API-");
 
 	GError *err = NULL;
 	guint retry_after = 0;

@@ -130,7 +130,7 @@ message_marshall_gba(MESSAGE m, GError **err)
 	if (!metautils_message_has_ID(m)) {
 		const char *reqid = oio_ext_get_reqid ();
 		if (!reqid)
-			oio_ext_set_random_reqid ();
+			oio_ext_set_prefixed_random_reqid("buggy-client-");
 		reqid = oio_ext_get_reqid ();
 		metautils_message_set_ID(m, (guint8*)reqid, strlen(reqid));
 	}

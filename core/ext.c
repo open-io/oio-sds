@@ -471,7 +471,7 @@ void oio_ext_init_test (int *argc, char ***argv) {
 	oio_log_init_level(GRID_LOGLVL_INFO);
 	oio_log_init_level_from_env("G_DEBUG_LEVEL");
 	g_log_set_default_handler(oio_log_stderr, NULL);
-	oio_ext_set_random_reqid ();
+	oio_ext_set_prefixed_random_reqid("oio-test-");
 	oio_var_value_with_files(g_getenv("OIO_NS"), TRUE, NULL);
 }
 

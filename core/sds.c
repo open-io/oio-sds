@@ -470,7 +470,7 @@ oio_sds_init (struct oio_sds_s **out, const char *ns)
 	if (!ns)
 		return (struct oio_error_s*) BADREQ("No namespace");
 
-	oio_ext_set_random_reqid ();
+	oio_ext_set_prefixed_random_reqid(NULL);
 	oio_log_lazy_init ();
 
 	EXTRA_ASSERT (out != NULL);
