@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -91,10 +92,10 @@ License along with this library.
 #define NAME_MSGKEY_QUERY              "Q"
 #define NAME_MSGKEY_RECOMPUTE          "RECOMPUTE"
 #define NAME_MSGKEY_REPLICAS           "REPLICAS"
-#define NAME_MSGKEY_SEQNUM             "SEQ_NUM"
 #define NAME_MSGKEY_SIM_VER            "SIM_VER"
 #define NAME_MSGKEY_SPARE              "SPARE"
 #define NAME_MSGKEY_SRC                "SRC"
+#define NAME_MSGKEY_SRC_BASE           "SRC_BASE"
 #define NAME_MSGKEY_STATUS             "S"
 #define NAME_MSGKEY_SIZE               "SZ"
 #define NAME_MSGKEY_STGPOLICY          "SP"

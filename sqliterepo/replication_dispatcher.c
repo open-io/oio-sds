@@ -2,6 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -466,7 +467,7 @@ _restore2(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 
 static GError *
 _restore_snapshot(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
-		const gchar *path, const gchar *peers)
+		const gchar *path, const gchar *peers, gchar **properties)
 {
 	struct stat bstats;
 	if (stat(path, &bstats) != 0) {
@@ -486,6 +487,16 @@ _restore_snapshot(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 		if (!err) {
 			/* Set the new set of peers, avoid a lookup from meta1. */
 			sqlx_admin_set_str(sq3, SQLX_ADMIN_PEERS, peers);
+			/* Update base name */
+			sqlx_admin_set_str(sq3, SQLX_ADMIN_BASENAME, name->base);
+			/* Update properties */
+			for (gchar **p=properties; !err && *p && *(p+1); p+=2) {
+				if (oio_str_is_set(*(p+1))) {
+					sqlx_admin_set_str(sq3, *p, *(p+1));
+				} else {
+					sqlx_admin_del(sq3, *p);
+				}
+			}
 			sqlx_admin_save_lazy(sq3);
 			sqlx_repository_call_change_callback(sq3);
 		}
@@ -626,15 +637,16 @@ _pipe_from(const gchar *source, struct sqlx_repository_s *repo,
 }
 
 static GError *
-_snapshot_from(const gchar *source, struct sqlx_repository_s *repo,
-		struct sqlx_name_s *source_name, struct sqlx_name_s *dest_name,
-		const gchar *peers)
+_snapshot_from(const gchar *src_addr, struct sqlx_repository_s *repo,
+		struct sqlx_name_s *src_name, struct sqlx_name_s *dest_name,
+		const gchar *dest_peers, gchar **dest_properties)
 {
 	GError *err = NULL;
 	struct restore_ctx_s *ctx = NULL;
-	err = _pipe_base_from(source, repo, source_name, -1, &ctx);
+	err = _pipe_base_from(src_addr, repo, src_name, -1, &ctx);
 	if (!err)
-		err = _restore_snapshot(repo, dest_name, ctx->path, peers);
+		err = _restore_snapshot(repo, dest_name, ctx->path, dest_peers,
+				dest_properties);
 
 	/* The snapshot exists locally, but there is still no election.
 	 * Trigger one, forcing the other peers to download the database.
@@ -642,7 +654,7 @@ _snapshot_from(const gchar *source, struct sqlx_repository_s *repo,
 	 * to wait for the election to establish before returning. */
 	if (!err) {
 		NAME2CONST(n0, *dest_name);
-		err = sqlx_repository_status_base(repo, &n0, peers,
+		err = sqlx_repository_status_base(repo, &n0, dest_peers,
 				oio_ext_get_deadline());
 		if (err && CODE_IS_REDIRECT(err->code))
 			g_clear_error(&err);
@@ -1923,34 +1935,44 @@ _handler_SNAPSHOT(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	GError *err;
-	gchar source[64];
-	gchar cid[STRLEN_CONTAINERID];
-	gchar seq_num[10];
-	gchar *full_base_name;
-	gchar *peers = NULL;
+	gchar src_addr[64];
+	gchar src_base[STRLEN_CONTAINERID + 10];
+	gchar *dest_peers = NULL;
+	gchar **dest_properties = NULL;
 	struct sqlx_name_inline_s name;
-	NAME2CONST(no, name);
+	NAME2CONST(n0, name);
 
 	if ((err = _load_sqlx_name(reply, &name, NULL))) {
 		reply->send_error(0, err);
 		return TRUE;
 	}
 
-	EXTRACT_STRING(NAME_MSGKEY_SRC, source);
-	EXTRACT_STRING(NAME_MSGKEY_CONTAINERID, cid);
-	EXTRACT_STRING(NAME_MSGKEY_SEQNUM, seq_num);
-	reply->subject("%s.%s|%s", name.base, name.type, source);
-	_load_sqlx_peers(reply, &peers);
+	gsize length = 0;
+	void *body = metautils_message_get_BODY(reply->request, &length);
+	if (body) {
+		err = KV_decode_buffer(body, length, &dest_properties);
+		if (err)
+			goto cleanup;
+	}
 
-	full_base_name = g_strconcat(cid, seq_num, NULL);
-	struct sqlx_name_s src = {name.ns, full_base_name ,name.type};
-	if ((err = _snapshot_from(source, repo, &src, &no, peers)))
+	EXTRACT_STRING(NAME_MSGKEY_SRC, src_addr);
+	EXTRACT_STRING(NAME_MSGKEY_SRC_BASE, src_base);
+	reply->subject("%s.%s|%s", name.base, name.type, src_addr);
+	_load_sqlx_peers(reply, &dest_peers);
+
+	struct sqlx_name_s src = {name.ns, src_base, name.type};
+	err = _snapshot_from(src_addr, repo, &src, &n0, dest_peers,
+			dest_properties);
+
+cleanup:
+	if (err) {
 		reply->send_error(0, err);
-	else
+	} else {
 		reply->send_reply(CODE_FINAL_OK, "OK");
+	}
 
-	g_free(peers);
-	g_free(full_base_name);
+	g_strfreev(dest_properties);
+	g_free(dest_peers);
 	return TRUE;
 }
 
