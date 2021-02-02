@@ -1464,7 +1464,7 @@ action_m2_container_propdel (struct req_args_s *args, struct json_object *jargs)
 static enum http_rc_e
 _container_snapshot(struct req_args_s *args,
 		struct oio_url_s *src_url, const gint src_seq,
-		struct oio_url_s *dest_url)
+		struct oio_url_s *dest_url, gchar **dest_properties)
 {
 	EXTRA_ASSERT(src_url != NULL);
 	EXTRA_ASSERT(dest_url != NULL);
@@ -1531,22 +1531,29 @@ _container_snapshot(struct req_args_s *args,
 	if (err)
 		goto cleanup;
 
-	gchar *dest_properties[6] = {
-		SQLX_ADMIN_ACCOUNT, (gchar*) dest_account,
-		SQLX_ADMIN_USERNAME, (gchar*) dest_container,
-		NULL, NULL
-	};
-
+	GPtrArray *tmp = g_ptr_array_new();
+	if (dest_properties) {
+		for (gchar **p=dest_properties; *p; p+=1) {
+			g_ptr_array_add(tmp, *p);
+		}
+	}
+	g_ptr_array_add(tmp, SQLX_ADMIN_ACCOUNT);
+	g_ptr_array_add(tmp, (gchar *) dest_account);
+	g_ptr_array_add(tmp, SQLX_ADMIN_USERNAME);
+	g_ptr_array_add(tmp, (gchar *) dest_container);
+	gchar **all_dest_properties = (gchar **) metautils_gpa_to_array(tmp,
+			TRUE);
 	meta1_urlv_shift_addr(src_urlv);
 	CLIENT_CTX(ctx, args, NAME_SRVTYPE_META2, 1);
 	gchar *src_addr = _resolve_service_id(src_urlv[0]);
 	GByteArray * _pack_snapshot(const struct sqlx_name_s *n,
 			const gchar **headers) {
-		return sqlx_pack_SNAPSHOT(n, src_addr, src_base, dest_properties,
+		return sqlx_pack_SNAPSHOT(n, src_addr, src_base, all_dest_properties,
 				headers, DL());
 	}
 	err = _resolve_meta2(args, CLIENT_PREFER_MASTER,
 			_pack_snapshot, NULL, NULL);
+	g_free(all_dest_properties);
 	g_free(src_addr);
 
 cleanup:
@@ -1588,7 +1595,7 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 	oio_url_set(dest_url, OIOURL_HEXID, NULL);
 
 	enum http_rc_e rc = _container_snapshot(args, args->url, seq_num,
-			dest_url);
+			dest_url, NULL);
 
 	oio_url_clean(dest_url);
 	return rc;
@@ -2465,6 +2472,49 @@ _reply_shard_ranges_list_result(struct req_args_s *args, GError * err,
 }
 
 static enum http_rc_e
+action_m2_container_sharding_create_shard(struct req_args_s *args,
+		struct json_object *j)
+{
+	GError *err = NULL;
+	struct json_object *jroot = NULL, *jparent = NULL, *jlower = NULL,
+			*jupper = NULL;
+	struct oio_ext_json_mapping_s mapping[] = {
+		{"root",   &jroot,   json_type_string, 1},
+		{"parent", &jparent, json_type_string, 1},
+		{"lower",  &jlower,  json_type_string, 1},
+		{"upper",  &jupper,  json_type_string, 1},
+		{NULL,     NULL,     0,                0}
+	};
+	err = oio_ext_extract_json(j, mapping);
+	if (err) {
+		return _reply_m2_error(args, err);
+	}
+	gchar *root = g_strdup(json_object_get_string(jroot));
+	gchar *admin_lower = g_strconcat(">", json_object_get_string(jlower), NULL);
+	gchar *admin_upper = g_strconcat("<", json_object_get_string(jupper), NULL);
+
+	gchar *shard_properties[8] = {
+		M2V2_ADMIN_SHARDING_ROOT, root,
+		M2V2_ADMIN_SHARDING_LOWER, admin_lower,
+		M2V2_ADMIN_SHARDING_UPPER, admin_upper,
+		NULL, NULL
+	};
+
+	struct oio_url_s *parent_url = oio_url_dup(args->url);
+	oio_url_set(parent_url, OIOURL_ACCOUNT, NULL);
+	oio_url_set(parent_url, OIOURL_USER, NULL);
+	oio_url_set(parent_url, OIOURL_HEXID, json_object_get_string(jparent));
+	enum http_rc_e rc = _container_snapshot(args, parent_url, 1, args->url,
+			shard_properties);
+	oio_url_clean(parent_url);
+
+	g_free(root);
+	g_free(admin_lower);
+	g_free(admin_upper);
+	return rc;
+}
+
+static enum http_rc_e
 action_m2_container_sharding_replace(struct req_args_s *args,
 		struct json_object *j)
 {
@@ -2480,6 +2530,41 @@ action_m2_container_sharding_replace(struct req_args_s *args,
 	}
 	_bean_cleanl2 (beans);
 	return _reply_m2_error(args, err);
+}
+
+// SHARDING{{
+// POST /v3.0/{NS}/container/sharding/create_shard?acct={account}&ref={container}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Create shard of container.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/container/sharding/create_shard?acct=my_account&ref=mycontainer HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.58.0
+//    Accept: */*
+//    Content-Length: 110
+//    Content-Type: application/x-www-form-urlencoded
+//
+//    {
+//      "lower": "",
+//      "upper": "shard",
+//      "root": "594C8B26EA13E562391013AE6FC360C2C1691F314164DD457EF583B16712E360",
+//      "parent": "594C8B26EA13E562391013AE6FC360C2C1691F314164DD457EF583B16712E360"
+//    }
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}SHARDING
+enum http_rc_e
+action_container_sharding_create_shard(struct req_args_s *args)
+{
+	return rest_action(args, action_m2_container_sharding_create_shard);
 }
 
 // SHARDING{{

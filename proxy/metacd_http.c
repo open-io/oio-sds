@@ -1078,6 +1078,7 @@ configure_request_handlers (void)
 	SET("/$NS/container/raw_delete/#POST", action_container_raw_delete);
 
 	// Sharding
+	SET("/$NS/container/sharding/create_shard/#POST", action_container_sharding_create_shard);
 	SET("/$NS/container/sharding/replace/#POST", action_container_sharding_replace);
 	SET("/$NS/container/sharding/show/#GET", action_container_sharding_show);
 

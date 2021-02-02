@@ -19,9 +19,8 @@ from urllib.parse import unquote
 from oio.common import exceptions
 from oio.common.client import ProxyClient
 from oio.common.constants import HEADER_PREFIX, M2_PROP_ACCOUNT_NAME, \
-    M2_PROP_CONTAINER_NAME, M2_PROP_OBJECTS, M2_PROP_SHARDS, \
-    M2_PROP_SHARDING_ROOT, M2_PROP_SHARDING_LOWER, M2_PROP_SHARDING_UPPER, \
-    STRLEN_CID
+    M2_PROP_CONTAINER_NAME, M2_PROP_SHARDS, M2_PROP_SHARDING_ROOT, \
+    M2_PROP_SHARDING_LOWER, M2_PROP_SHARDING_UPPER, STRLEN_CID
 from oio.common.easy_value import int_value, is_hexa, true_value
 from oio.common.exceptions import OioException
 from oio.common.json import json
@@ -194,18 +193,16 @@ class ContainerSharding(ProxyClient):
         shard_container = '%s-%s-%d-%d' % (
             root_container, parent_shard['cid'], timestamp, shard['index'])
 
-        # Copy shard info in the system properties
-        system = {
-            M2_PROP_SHARDING_ROOT: cid_from_name(root_account, root_container),
-            M2_PROP_SHARDING_LOWER: '>' + shard['lower'],
-            M2_PROP_SHARDING_UPPER: '<' + shard['upper']
-        }
-
         # Create shard container
-        if not self.container.container_create(
-                shard_account, shard_container, system=system):
-            raise ValueError("Container already exists: %s %s"
-                             % (shard_account, shard_container))
+        shard_info = shard.copy()
+        shard_info['root'] = cid_from_name(root_account, root_container)
+        shard_info['parent'] = parent_shard['cid']
+        params = self._make_params(account=shard_account,
+                                   reference=shard_container, **kwargs)
+        resp, body = self._request('POST', '/create_shard', params=params,
+                                   json=shard_info, **kwargs)
+        if resp.status != 204:
+            raise exceptions.from_response(resp, body)
 
         # Fill the shard info with the CID of the shard container
         shard['cid'] = cid_from_name(shard_account, shard_container)
@@ -369,12 +366,6 @@ class ContainerSharding(ProxyClient):
             root_sys = root_meta['system']
             root_account = root_sys.get(M2_PROP_ACCOUNT_NAME)
             root_container = root_sys.get(M2_PROP_CONTAINER_NAME)
-            # TODO(adu): Already sharded
-            raise NotImplementedError()
-
-        if int_value(sys.get(M2_PROP_OBJECTS), 0):
-            # TODO(adu): Move the objects in the shards
-            raise NotImplementedError()
 
         shards_for_sharding = list(self._check_shards(
             new_shards, are_new=True, partial=True, **kwargs))
