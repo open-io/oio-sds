@@ -575,6 +575,34 @@ meta2_filter_action_touch_container(struct gridd_filter_ctx_s *ctx,
 /* Sharding ----------------------------------------------------------------- */
 
 int
+meta2_filter_action_prepare_sharding(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GError *err = NULL;
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	gchar **properties = NULL;
+
+	err = meta2_backend_prepare_sharding(m2b, url, &properties);
+	if (err) {
+		meta2_filter_ctx_set_error(ctx, err);
+		return FILTER_KO;
+	}
+
+	if (properties) {
+		for (gchar **p=properties; *p && *(p+1) ;p+=2) {
+			if (!g_str_has_prefix(*p, SQLX_ADMIN_PREFIX_USER)
+					&& !g_str_has_prefix(*p, SQLX_ADMIN_PREFIX_SYS))
+				continue;
+			gchar *k = g_strconcat(NAME_MSGKEY_PREFIX_PROPERTY, *p, NULL);
+			reply->add_header(k, metautils_gba_from_string(*(p+1)));
+			g_free(k);
+		}
+	}
+	return FILTER_OK;
+}
+
+int
 meta2_filter_action_replace_sharding(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply UNUSED)
 {

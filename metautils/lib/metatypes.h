@@ -51,6 +51,10 @@ License along with this library.
  * i.e. a size enough to store the C string */
 #define LIMIT_LENGTH_BASETYPE 32
 
+/** One plus the maximum length of a database suffix, including all its subtypes
+ * i.e. a size enough to store the C string */
+#define LIMIT_LENGTH_BASESUFFIX 32
+
 /** One plus the maximum length of the textual representation of a service id
  * i.e. a size enough to store the C string */
 #define LIMIT_LENGTH_SRVID 64

@@ -13,7 +13,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import time
 from urllib.parse import unquote
 
 from oio.common import exceptions
@@ -186,17 +185,33 @@ class ContainerSharding(ProxyClient):
         return list(self._check_shards(
             formatted_shards, are_new=are_new, **kwargs))
 
+    def _prepare_sharding(self, parent_shard, **kwargs):
+        params = self._make_params(cid=parent_shard['cid'], **kwargs)
+        resp, body = self._request('POST', '/prepare', params=params, **kwargs)
+        if resp.status != 200:
+            raise exceptions.from_response(resp, body)
+
+        timestamp = int_value(body.get('timestamp'), None)
+        if timestamp is not None:
+            body['timestamp'] = timestamp
+        else:
+            raise OioException('Missing timestamp')
+        return body
+
     def _create_shard(self, root_account, root_container, parent_shard,
                       shard, **kwargs):
-        timestamp = int(time.time() * 1e6)
         shard_account = '.shards_%s' % (root_account)
         shard_container = '%s-%s-%d-%d' % (
-            root_container, parent_shard['cid'], timestamp, shard['index'])
+            root_container, parent_shard['cid'],
+            parent_shard['sharding']['timestamp'],
+            shard['index'])
 
         # Create shard container
         shard_info = shard.copy()
         shard_info['root'] = cid_from_name(root_account, root_container)
         shard_info['parent'] = parent_shard['cid']
+        shard_info['timestamp'] = parent_shard['sharding']['timestamp']
+        shard_info['master'] = parent_shard['sharding']['master']
         params = self._make_params(account=shard_account,
                                    reference=shard_container, **kwargs)
         resp, body = self._request('POST', '/create_shard', params=params,
@@ -254,7 +269,9 @@ class ContainerSharding(ProxyClient):
         self.logger.info(
             'Sharding %s with %s', str(parent_shard), str(new_shards))
 
-        # TODO(adu) Prepare the sharding for the container to shard
+        # Prepare the sharding for the container to shard
+        sharding_info = self._prepare_sharding(parent_shard, **kwargs)
+        parent_shard['sharding'] = sharding_info
 
         # Create the new shards
         for new_shard in new_shards:
@@ -268,6 +285,7 @@ class ContainerSharding(ProxyClient):
         # Remplace the shards in the root container
         self._replace_shards(root_account, root_container, new_shards,
                              **kwargs)
+        parent_shard.pop('sharding', None)
 
         root_cid = cid_from_name(root_account, root_container)
         if parent_shard['cid'] == root_cid:

@@ -63,5 +63,6 @@ int metautils_syscall_poll (struct pollfd *, int, int);
 int metautils_syscall_getsockopt (int, int, int, void *, socklen_t *);
 int metautils_syscall_setsockopt (int, int, int, const void *, socklen_t);
 guint metautils_syscall_count_maxfd (void);
+GError* metautils_syscall_copy_file(gchar *src, gchar *dst);
 
 #endif /*OIO_SDS__metautils__lib__metautils_syscall_h*/

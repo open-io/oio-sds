@@ -26,6 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <server/server_variables.h>
 #include <meta2v2/meta2_variables.h>
 #include <events/events_variables.h>
+#include <sqlx/sqlx_service.h>
 
 #include <cluster/lib/gridcluster.h>
 
@@ -1100,7 +1101,7 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		}
 		if (!err || err->code == CODE_REDIRECT_SHARD) {
 			if (!oio_ext_is_shard() && out_properties)
-				*out_properties = sqlx_admin_get_keyvalues(sq3);
+				*out_properties = sqlx_admin_get_keyvalues(sq3, NULL);
 		}
 		if (!err) {
 			if (end_cb)
@@ -2189,6 +2190,83 @@ meta2_backend_content_from_contentid (struct meta2_backend_s *m2b,
 /* Sharding ----------------------------------------------------------------- */
 
 GError*
+meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, gchar ***out_properties)
+{
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	const gchar *master = sqlx_get_service_id();
+
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	if (!master || !*master) {
+		return SYSERR("No service ID");
+	}
+
+	gboolean _sharding_filter(const gchar *k) {
+		return g_str_has_prefix(k, M2V2_ADMIN_PREFIX_SHARDING);
+	}
+
+	err = m2b_open(m2b, url,
+			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT, &sq3);
+	if (!err) {
+		gint64 timestamp = oio_ext_real_time();
+		gchar *copy_path = NULL;
+
+		gint64 sharding_state = sqlx_admin_get_i64(sq3,
+				M2V2_ADMIN_SHARDING_STATE, 0);
+		if (sharding_state
+				&& sharding_state != CONTAINER_TO_SHARD_STATE_SHARDED
+				&& sharding_state != NEW_SHARD_STATE_APPLYING_SAVED_WRITES
+				&& sharding_state != CONTAINER_TO_SHARD_STATE_ABORTED) {
+			err = BADREQ("Sharding is already in progress");
+			goto rollback;
+		}
+
+		copy_path = g_strdup_printf("%s.sharding-%"G_GINT64_FORMAT,
+					sq3->path_inline, timestamp);
+		err = metautils_syscall_copy_file(sq3->path_inline, copy_path);
+		if (err) {
+			g_prefix_error(&err, "Failed to copy %s to %s: ", sq3->path_inline,
+					copy_path);
+			goto rollback;
+		}
+
+		// TODO(adu) Save writes in a queue
+
+		struct sqlx_repctx_s *repctx = NULL;
+		if (!(err = _transaction_begin(sq3, url, &repctx))) {
+			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
+					CONTAINER_TO_SHARD_STATE_SAVING_WRITES);
+			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, timestamp);
+			sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_MASTER, master);
+			m2db_increment_version(sq3);
+			err = sqlx_transaction_end(repctx, err);
+			if (!err)
+				m2b_add_modified_container(m2b, sq3);
+		}
+
+		if (!err && out_properties) {
+			*out_properties = sqlx_admin_get_keyvalues(sq3, _sharding_filter);
+		}
+
+rollback:
+		if (err) {
+			if (copy_path && remove(copy_path)) {
+				GRID_WARN("Failed to remove file %s: (%d) %s", copy_path,
+						errno, strerror(errno));
+			}
+		}
+		g_free(copy_path);
+
+		m2b_close(sq3);
+	}
+
+	return err;
+}
+
+GError*
 meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *beans)
 {
@@ -2251,7 +2329,7 @@ meta2_backend_show_sharding(struct meta2_backend_s *m2b, struct oio_url_s *url,
 			err = m2db_list_shard_ranges(sq3, lp, cb, u0);
 		}
 		if (!err && out_properties) {
-			*out_properties = sqlx_admin_get_keyvalues(sq3);
+			*out_properties = sqlx_admin_get_keyvalues(sq3, NULL);
 		}
 		m2b_close(sq3);
 	}

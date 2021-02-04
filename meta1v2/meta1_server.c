@@ -73,7 +73,8 @@ _reload_prefixes(struct sqlx_service_s *ss, gboolean init)
 			if (!meta1_prefixes_is_managed(m1ps, bin)) {
 				gchar name[5];
 				meta1_backend_basename(m1, bin, name, sizeof(name));
-				struct sqlx_name_s n = {.base=name, .type=NAME_SRVTYPE_META1, .ns=ss->ns_name};
+				struct sqlx_name_s n = {.base=name, .type=NAME_SRVTYPE_META1,
+						.ns=ss->ns_name, .suffix=""};
 				err = election_exit(ss->election_manager, &n);
 				if (err) {
 					GRID_WARN("SQLX error : (%d) %s", err->code, err->message);

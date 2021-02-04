@@ -97,7 +97,8 @@ _round_open_close (void)
 
 	for (int i=0; i<5 ;i++) {
 		struct sqlx_sqlite3_s *sq3 = NULL;
-		struct sqlx_name_s n = { .base = name, .type = type, .ns = nsname, };
+		struct sqlx_name_s n = { .base=name, .type=type, .ns=nsname,
+				.suffix=""};
 
 		err = sqlx_repository_open_and_lock(repo, &n, SQLX_OPEN_LOCAL, &sq3, NULL);
 		g_assert_no_error (err);
@@ -140,4 +141,3 @@ main(int argc, char **argv)
 	g_test_add_func("/sqliterepo/open", test_open_close);
 	return g_test_run();
 }
-

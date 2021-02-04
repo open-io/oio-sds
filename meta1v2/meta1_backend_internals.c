@@ -101,7 +101,8 @@ _open_and_lock(struct meta1_backend_s *m1, struct oio_url_s *url,
 		return NEWERROR(CODE_RANGE_NOTFOUND, "prefix [%s] not managed", base);
 
 	/* Now open/lock the base in a way suitable for our op */
-	struct sqlx_name_s n = {.base=base, .type=NAME_SRVTYPE_META1, .ns=m1->ns_name};
+	struct sqlx_name_s n = {.base=base, .type=NAME_SRVTYPE_META1,
+			.ns=m1->ns_name, .suffix=""};
 	GError *err = sqlx_repository_open_and_lock(m1->repo, &n, m1_to_sqlx(how), handle, NULL);
 
 	if (err != NULL) {

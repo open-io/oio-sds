@@ -17,12 +17,21 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
+#include <errno.h>
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
 #include <poll.h>
+#include <linux/fs.h>
 #include <sys/socket.h>
 #include <sys/resource.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/ioctl.h>
+#include <sys/sendfile.h>
+
+#include <core/internals.h>
+#include <core/oiolog.h>
 
 #include "metautils_syscall.h"
 
@@ -162,4 +171,65 @@ metautils_syscall_count_maxfd (void)
 	if (0 == getrlimit(RLIMIT_NOFILE, &limit))
 		return MAX(1024,limit.rlim_cur);
 	return 1024;
+}
+
+GError*
+metautils_syscall_copy_file(gchar *src, gchar *dst)
+{
+	EXTRA_ASSERT(src != NULL);
+	EXTRA_ASSERT(dst != NULL);
+
+	GError *err = NULL;
+	int src_fd = 0, dest_fd = 0;
+	struct stat stat_buf = {0};
+
+	src_fd = open(src, O_RDONLY);
+	if (src_fd < 0) {
+		err = NEWERROR(errno, "Failed to open source: %s", strerror(errno));
+		goto end;
+	}
+	if (fstat(src_fd, &stat_buf) < 0) {
+		err = NEWERROR(errno, "Failed to fetch source stats: %s",
+				strerror(errno));
+		goto end;
+	}
+	dest_fd = open(dst, O_WRONLY|O_CREAT|O_EXCL, stat_buf.st_mode);
+	if (dest_fd < 0) {
+		err = NEWERROR(errno, "Failed to open destination: %s",
+				strerror(errno));
+		goto end;
+	}
+
+	GRID_DEBUG("Copying base %s to %s with reflink", src, dst);
+	gint rc = ioctl(dest_fd, FICLONE, src_fd);
+	if (rc != 0) {
+		if (errno == EOPNOTSUPP) {
+			GRID_WARN("Reflink is not enabled, "
+					"copying base %s to %s without reflink", src, dst);
+
+			off_t offset = 0;
+			while (offset < stat_buf.st_size) {
+				if (sendfile(dest_fd, src_fd, &offset,
+						stat_buf.st_size - offset) >= 0) {
+					continue;
+				}
+				if (errno == EAGAIN || errno == EINTR) {
+					continue;
+				}
+				err = NEWERROR(errno, "Failed to send file: %s",
+						strerror(errno));
+				goto end;
+			}
+		} else {
+			err = NEWERROR(errno, "Failed to share data: %s",
+					strerror(errno));
+			goto end;
+		}
+	}
+end:
+	if (src_fd)
+		close(src_fd);
+	if (dest_fd)
+		close(dest_fd);
+	return err;
 }

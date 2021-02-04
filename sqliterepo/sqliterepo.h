@@ -116,7 +116,8 @@ struct sqlx_sqlite3_s
 	guint8 corrupted : 1; // Will rename the file when closing database.
 
 	struct sqlx_name_inline_s name;
-	gchar path_inline[128 + LIMIT_LENGTH_NSNAME + LIMIT_LENGTH_SRVTYPE];
+	gchar path_inline[LIMIT_LENGTH_NSNAME + LIMIT_LENGTH_BASENAME
+			+ LIMIT_LENGTH_BASETYPE + LIMIT_LENGTH_BASESUFFIX];
 };
 
 struct sqlx_repo_config_s

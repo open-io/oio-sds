@@ -1462,9 +1462,10 @@ action_m2_container_propdel (struct req_args_s *args, struct json_object *jargs)
 }
 
 static enum http_rc_e
-_container_snapshot(struct req_args_s *args,
+_container_snapshot(struct req_args_s *args, gchar *src_service_id,
 		struct oio_url_s *src_url, const gint src_seq,
-		struct oio_url_s *dest_url, gchar **dest_properties)
+		const gchar *src_suffix, struct oio_url_s *dest_url,
+		gchar **dest_properties)
 {
 	EXTRA_ASSERT(src_url != NULL);
 	EXTRA_ASSERT(dest_url != NULL);
@@ -1499,13 +1500,17 @@ _container_snapshot(struct req_args_s *args,
 
 	src_base = g_strdup_printf("%s.%d", src_cid, src_seq);
 
-	err = hc_resolve_reference_service(resolver, src_url, NAME_SRVTYPE_META2,
-			&src_urlv, oio_ext_get_deadline());
-	if (!err && (!src_urlv || !*src_urlv)) {
-		err = NEWERROR(CODE_CONTAINER_NOTFOUND, "No service located");
+	if (!src_service_id) {
+		err = hc_resolve_reference_service(resolver, src_url,
+				NAME_SRVTYPE_META2, &src_urlv, oio_ext_get_deadline());
+		if (!err && (!src_urlv || !*src_urlv)) {
+			err = NEWERROR(CODE_CONTAINER_NOTFOUND, "No service located");
+		}
+		if (err)
+			goto cleanup;
+		meta1_urlv_shift_addr(src_urlv);
+		src_service_id = src_urlv[0];
 	}
-	if (err)
-		goto cleanup;
 
 	err = hc_resolve_reference_service(resolver, dest_url,
 			NAME_SRVTYPE_META2, &dest_urlv, oio_ext_get_deadline());
@@ -1543,13 +1548,12 @@ _container_snapshot(struct req_args_s *args,
 	g_ptr_array_add(tmp, (gchar *) dest_container);
 	gchar **all_dest_properties = (gchar **) metautils_gpa_to_array(tmp,
 			TRUE);
-	meta1_urlv_shift_addr(src_urlv);
 	CLIENT_CTX(ctx, args, NAME_SRVTYPE_META2, 1);
-	gchar *src_addr = _resolve_service_id(src_urlv[0]);
+	gchar *src_addr = _resolve_service_id(src_service_id);
 	GByteArray * _pack_snapshot(const struct sqlx_name_s *n,
 			const gchar **headers) {
-		return sqlx_pack_SNAPSHOT(n, src_addr, src_base, all_dest_properties,
-				headers, DL());
+		return sqlx_pack_SNAPSHOT(n, src_addr, src_base, src_suffix,
+				all_dest_properties, headers, DL());
 	}
 	err = _resolve_meta2(args, CLIENT_PREFER_MASTER,
 			_pack_snapshot, NULL, NULL);
@@ -1594,8 +1598,8 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 	oio_url_set(dest_url, OIOURL_USER, container);
 	oio_url_set(dest_url, OIOURL_HEXID, NULL);
 
-	enum http_rc_e rc = _container_snapshot(args, args->url, seq_num,
-			dest_url, NULL);
+	enum http_rc_e rc = _container_snapshot(args, NULL, args->url, seq_num,
+			NULL, dest_url, NULL);
 
 	oio_url_clean(dest_url);
 	return rc;
@@ -2419,6 +2423,27 @@ enum http_rc_e action_container_raw_delete (struct req_args_s *args) {
 
 /* SHARDING action resource ------------------------------------------------- */
 
+static gboolean
+_sharding_properties_extract(gpointer ctx, guint status UNUSED, MESSAGE reply)
+{
+	GTree *props = ctx;
+	EXTRA_ASSERT(props != NULL);
+
+	/* Extract properties and merge them into the temporary TreeSet. */
+	gchar **names = metautils_message_get_field_names(reply);
+	for (gchar **n = names; names && *n; ++n) {
+		if (!g_str_has_prefix(*n, NAME_MSGKEY_PREFIX_PROPERTY))
+			continue;
+		g_tree_replace(props,
+				g_strdup((*n) + sizeof(NAME_MSGKEY_PREFIX_PROPERTY) - 1),
+				metautils_message_extract_string_copy(reply, *n));
+	}
+	if (names)
+		g_strfreev(names);
+
+	return TRUE;
+}
+
 static GError *
 _load_simplified_shard_ranges(struct json_object *jbody, GSList **out)
 {
@@ -2472,18 +2497,54 @@ _reply_shard_ranges_list_result(struct req_args_s *args, GError * err,
 }
 
 static enum http_rc_e
+action_m2_container_sharding_prepare(struct req_args_s *args,
+		struct json_object *j UNUSED)
+{
+	GError *err = NULL;
+	GTree *properties = g_tree_new_full(metautils_strcmp3, NULL, g_free, g_free);
+
+	PACKER_VOID(_pack) {
+		return m2v2_remote_pack_PREPARE_SHARDING(args->url, DL());
+	};
+	err = _resolve_meta2(args, _prefer_master(), _pack,
+			properties, _sharding_properties_extract);
+	if (err)
+		return _reply_common_error(args, err);
+
+	GString *gstr = g_string_sized_new(256);
+	gboolean first = TRUE;
+	gboolean _func(gpointer k, gpointer v, gpointer i UNUSED) {
+		gboolean is_sharding_property = g_str_has_prefix((gchar*)k,
+				"sys.m2.sharding.");
+		COMA(gstr, first);
+		if (is_sharding_property)
+			k += sizeof("sys.m2.sharding.") - 1;
+		oio_str_gstring_append_json_pair(gstr, (const char *)k,
+				(const char *)v);
+		return FALSE;
+	}
+	g_string_append_c(gstr, '{');
+	g_tree_foreach(properties, _func, NULL);
+	g_string_append_c(gstr, '}');
+	g_tree_destroy(properties);
+	return _reply_success_json(args, gstr);
+}
+
+static enum http_rc_e
 action_m2_container_sharding_create_shard(struct req_args_s *args,
 		struct json_object *j)
 {
 	GError *err = NULL;
 	struct json_object *jroot = NULL, *jparent = NULL, *jlower = NULL,
-			*jupper = NULL;
+			*jupper = NULL, *jtimestamp = NULL, *jmaster = NULL;
 	struct oio_ext_json_mapping_s mapping[] = {
-		{"root",   &jroot,   json_type_string, 1},
-		{"parent", &jparent, json_type_string, 1},
-		{"lower",  &jlower,  json_type_string, 1},
-		{"upper",  &jupper,  json_type_string, 1},
-		{NULL,     NULL,     0,                0}
+		{"root",      &jroot,      json_type_string, 1},
+		{"parent",    &jparent,    json_type_string, 1},
+		{"lower",     &jlower,     json_type_string, 1},
+		{"upper",     &jupper,     json_type_string, 1},
+		{"timestamp", &jtimestamp, json_type_int,    1},
+		{"master",    &jmaster,    json_type_string, 1},
+		{NULL,        NULL,        0,                0}
 	};
 	err = oio_ext_extract_json(j, mapping);
 	if (err) {
@@ -2492,6 +2553,9 @@ action_m2_container_sharding_create_shard(struct req_args_s *args,
 	gchar *root = g_strdup(json_object_get_string(jroot));
 	gchar *admin_lower = g_strconcat(">", json_object_get_string(jlower), NULL);
 	gchar *admin_upper = g_strconcat("<", json_object_get_string(jupper), NULL);
+	gint64 timestamp = json_object_get_int64(jtimestamp);
+	gchar *master = g_strdup(json_object_get_string(jmaster));
+	gchar *src_suffix = g_strdup_printf("sharding-%"G_GINT64_FORMAT, timestamp);
 
 	gchar *shard_properties[8] = {
 		M2V2_ADMIN_SHARDING_ROOT, root,
@@ -2504,13 +2568,15 @@ action_m2_container_sharding_create_shard(struct req_args_s *args,
 	oio_url_set(parent_url, OIOURL_ACCOUNT, NULL);
 	oio_url_set(parent_url, OIOURL_USER, NULL);
 	oio_url_set(parent_url, OIOURL_HEXID, json_object_get_string(jparent));
-	enum http_rc_e rc = _container_snapshot(args, parent_url, 1, args->url,
-			shard_properties);
+	enum http_rc_e rc = _container_snapshot(args, master, parent_url, 1,
+			src_suffix, args->url, shard_properties);
 	oio_url_clean(parent_url);
 
 	g_free(root);
 	g_free(admin_lower);
 	g_free(admin_upper);
+	g_free(master);
+	g_free(src_suffix);
 	return rc;
 }
 
@@ -2533,6 +2599,42 @@ action_m2_container_sharding_replace(struct req_args_s *args,
 }
 
 // SHARDING{{
+// POST /v3.0/{NS}/container/sharding/prepare?acct={account}&ref={container}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Prepare container to be shard.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/container/sharding/prepare?acct=my_account&ref=mycontainer HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.58.0
+//    Accept: */*
+//    Content-Length: 110
+//    Content-Type: application/x-www-form-urlencoded
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 225
+//
+//    {
+//      "master": "127.0.0.1:6008",
+//      "queue": "beanstalk://127.0.0.1:6005",
+//      "state": "1",
+//      "timestamp": "1623948108576683"
+//    }
+//
+// }}SHARDING
+enum http_rc_e
+action_container_sharding_prepare(struct req_args_s *args)
+{
+	return rest_action(args, action_m2_container_sharding_prepare);
+}
+
+// SHARDING{{
 // POST /v3.0/{NS}/container/sharding/create_shard?acct={account}&ref={container}
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Create shard of container.
@@ -2550,7 +2652,9 @@ action_m2_container_sharding_replace(struct req_args_s *args,
 //      "lower": "",
 //      "upper": "shard",
 //      "root": "594C8B26EA13E562391013AE6FC360C2C1691F314164DD457EF583B16712E360",
-//      "parent": "594C8B26EA13E562391013AE6FC360C2C1691F314164DD457EF583B16712E360"
+//      "parent": "594C8B26EA13E562391013AE6FC360C2C1691F314164DD457EF583B16712E360",
+//      "timestamp": 1623946933424828,
+//      "master": "127.0.0.1:6008"
 //    }
 //
 //
