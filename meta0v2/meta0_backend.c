@@ -277,7 +277,8 @@ _open_and_lock(struct meta0_backend_s *m0, enum m0v2_open_type_e how,
 
 	/* Now open/lock the base in a way suitable for our op */
 	enum sqlx_open_type_e flag = m0_to_sqlx(how);
-	struct sqlx_name_s n = {.base=m0->ns, .type=NAME_SRVTYPE_META0, .ns=m0->ns};
+	struct sqlx_name_s n = {.base=m0->ns, .type=NAME_SRVTYPE_META0, .ns=m0->ns,
+			.suffix=""};
 	err = sqlx_repository_open_and_lock(m0->repository, &n, flag, handle, NULL);
 
 	if (err != NULL) {

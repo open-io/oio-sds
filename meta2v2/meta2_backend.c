@@ -19,6 +19,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include <glib.h>
+#include <linux/fs.h>
+#include <sys/ioctl.h>
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/common_variables.h>
@@ -26,6 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <server/server_variables.h>
 #include <meta2v2/meta2_variables.h>
 #include <events/events_variables.h>
+#include <sqlx/sqlx_service.h>
 
 #include <cluster/lib/gridcluster.h>
 
@@ -1102,7 +1105,7 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		}
 		if (!err || err->code == CODE_REDIRECT_SHARD) {
 			if (!oio_ext_is_shard() && out_properties)
-				*out_properties = sqlx_admin_get_keyvalues(sq3);
+				*out_properties = sqlx_admin_get_keyvalues(sq3, NULL);
 		}
 		if (!err) {
 			if (end_cb)
@@ -2190,6 +2193,143 @@ meta2_backend_content_from_contentid (struct meta2_backend_s *m2b,
 
 /* Sharding ----------------------------------------------------------------- */
 
+static GError*
+__copy_base(struct sqlx_sqlite3_s *sq3 UNUSED, gchar *dst)
+{
+	EXTRA_ASSERT(dst != NULL);
+
+	GError *err = NULL;
+	FILE *src_fp = NULL, *dest_fp = NULL;
+
+	GRID_DEBUG("Copying base %s to %s with reflink", sq3->path_inline, dst);
+	src_fp = fopen(sq3->path_inline, "r");
+	if (!src_fp) {
+		err = NEWERROR(errno, "Failed to open: %s", strerror(errno));
+		goto end;
+	}
+	dest_fp = fopen(dst, "w");
+	if (!dest_fp) {
+		err = NEWERROR(errno, "Failed to open: %s", strerror(errno));
+		goto end;
+	}
+	gint rc = ioctl(fileno(dest_fp), FICLONE, fileno(src_fp));
+	if (rc != 0) {
+		if (errno == EOPNOTSUPP) {
+			GRID_WARN("Reflink is not enabled, "
+					"copying base %s to %s without reflink",
+					sq3->path_inline, dst);
+			gchar bytes[4096];
+			size_t nb_read = 0;
+			size_t nb_written = 0;
+			while (!feof(src_fp)) {
+				nb_read = fread(bytes, sizeof(gchar), sizeof(bytes), src_fp);
+				if (nb_read != sizeof(bytes) && !feof(src_fp)) {
+					err = SYSERR("Failed to read");
+					goto end;
+				}
+				nb_written = fwrite(bytes, sizeof(gchar), nb_read, dest_fp);
+				if (nb_written != nb_read) {
+					err = SYSERR("Failed to write");
+					goto end;
+				}
+			}
+			rc = fflush(dest_fp);
+			if (rc == EOF) {
+				err = NEWERROR(errno, "Failed to flush: %s",
+						strerror(errno));
+				goto end;
+			}
+		} else {
+			err = NEWERROR(errno, "Failed to share data: %s",
+					strerror(errno));
+			goto end;
+		}
+	}
+end:
+	if (err)
+		g_prefix_error(&err, "Failed to copy %s to %s: ", sq3->path_inline,
+				dst);
+	if (src_fp)
+		fclose(src_fp);
+	if (dest_fp)
+		fclose(dest_fp);
+	return err;
+}
+
+GError*
+meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, gchar ***out_properties)
+{
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	const gchar *master = sqlx_get_service_id();
+
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	if (!master || !*master) {
+		return SYSERR("No service ID");
+	}
+
+	gboolean _sharding_filter(const gchar *k) {
+		return g_str_has_prefix(k, M2V2_ADMIN_PREFIX_SHARDING);
+	}
+
+	err = m2b_open(m2b, url,
+			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT, &sq3);
+	if (!err) {
+		gint64 timestamp = oio_ext_real_time();
+		gchar *copy_path = NULL;
+
+		gint64 sharding_state = sqlx_admin_get_i64(sq3,
+				M2V2_ADMIN_SHARDING_STATE, 0);
+		if (sharding_state
+				&& sharding_state != CONTAINER_TO_SHARD_STATE_SHARDED
+				&& sharding_state != NEW_SHARD_STATE_APPLYING_SAVED_WRITES
+				&& sharding_state != CONTAINER_TO_SHARD_STATE_ABORTED) {
+			err = BADREQ("Sharding is already in progress");
+			goto rollback;
+		}
+
+		copy_path = g_strdup_printf("%s.sharding-%"G_GINT64_FORMAT,
+					sq3->path_inline, timestamp);
+		err = __copy_base(sq3, copy_path);
+		if (err)
+			goto rollback;
+
+		// TODO(adu) Save writes in a queue
+
+		struct sqlx_repctx_s *repctx = NULL;
+		if (!(err = _transaction_begin(sq3, url, &repctx))) {
+			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
+					CONTAINER_TO_SHARD_STATE_SAVING_WRITES);
+			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, timestamp);
+			sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_MASTER, master);
+			m2db_increment_version(sq3);
+			err = sqlx_transaction_end(repctx, err);
+			if (!err)
+				m2b_add_modified_container(m2b, sq3);
+		}
+
+		if (!err && out_properties) {
+			*out_properties = sqlx_admin_get_keyvalues(sq3, _sharding_filter);
+		}
+
+rollback:
+		if (err) {
+			if (copy_path && remove(copy_path)) {
+				GRID_WARN("Failed to remove file %s: (%d) %s", copy_path,
+						errno, strerror(errno));
+			}
+		}
+		g_free(copy_path);
+
+		m2b_close(sq3);
+	}
+
+	return err;
+}
+
 GError*
 meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *beans)
@@ -2253,7 +2393,7 @@ meta2_backend_show_sharding(struct meta2_backend_s *m2b, struct oio_url_s *url,
 			err = m2db_list_shard_ranges(sq3, lp, cb, u0);
 		}
 		if (!err && out_properties) {
-			*out_properties = sqlx_admin_get_keyvalues(sq3);
+			*out_properties = sqlx_admin_get_keyvalues(sq3, NULL);
 		}
 		m2b_close(sq3);
 	}

@@ -41,6 +41,10 @@ make_request(const gchar *rn, struct oio_url_s *url,
 	MESSAGE req = metautils_message_create_named(rn, deadline);
 	metautils_message_add_field_str(req, NAME_MSGKEY_BASENAME, name->base);
 	metautils_message_add_field_str(req, NAME_MSGKEY_BASETYPE, name->type);
+	if (name->suffix && *name->suffix) {
+		metautils_message_add_field_str(req, NAME_MSGKEY_BASESUFFIX,
+				name->suffix);
+	}
 	if (url) {
 		metautils_message_add_url(req, url);
 	} else {
@@ -152,12 +156,13 @@ sqlx_pack_EXITELECTION(const struct sqlx_name_s *name, gint64 deadline)
 
 GByteArray*
 sqlx_pack_SNAPSHOT(const struct sqlx_name_s *name, const gchar *src_addr,
-		const gchar *src_base, gchar **dest_properties, const gchar **fields,
-		gint64 deadline)
+		const gchar *src_base, const gchar *src_suffix, gchar **dest_properties,
+		const gchar **fields, gint64 deadline)
 {
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_SNAPSHOT, NULL, name, deadline);
 	metautils_message_add_field_str(req, NAME_MSGKEY_SRC, src_addr);
 	metautils_message_add_field_str(req, NAME_MSGKEY_SRC_BASE, src_base);
+	metautils_message_add_field_str(req, NAME_MSGKEY_SRC_SUFFIX, src_suffix);
 	metautils_message_add_fields_str(req, fields);
 	metautils_message_add_body_unref(req,
 			KV_encode_gba((gchar**)dest_properties));
@@ -290,6 +295,7 @@ sqlx_inline_name_fill_type_asis  (struct sqlx_name_inline_s *n,
 
 	g_strlcpy(n->ns, oio_url_get (url, OIOURL_NS), sizeof(n->ns));
 	g_strlcpy(n->type, srvtype, sizeof(n->type));
+	g_strlcpy(n->suffix, "", sizeof(n->suffix));
 
 	if (!strcmp(srvtype, NAME_SRVTYPE_META0)) {
 		const gchar *ns = oio_url_get (url, OIOURL_NS);

@@ -25,15 +25,18 @@ License along with this library.
 	EXTRA_ASSERT((C) != NULL);\
 	EXTRA_ASSERT(oio_str_is_set((C)->base)); \
 	EXTRA_ASSERT(oio_str_is_set((C)->type)); \
+	EXTRA_ASSERT((C)->suffix != NULL); \
 	EXTRA_ASSERT(oio_str_is_set((C)->ns)); \
 } while (0)
 
-#define NAME2CONST(n, n0) struct sqlx_name_s n = { (n0).ns, (n0).base, (n0).type }
+#define NAME2CONST(n, n0) struct sqlx_name_s n = { (n0).ns, (n0).base, \
+		(n0).type , (n0).suffix}
 
 #define NAMEFILL(Name, Src) do { \
 	g_strlcpy((Name).ns, (Src).ns, sizeof((Name).ns)); \
 	g_strlcpy((Name).base, (Src).base, sizeof((Name).base)); \
 	g_strlcpy((Name).type, (Src).type, sizeof((Name).type)); \
+	g_strlcpy((Name).suffix, (Src).suffix, sizeof((Name).suffix)); \
 } while (0)
 
 #define SQLXNAME_CHECK(p) do { EXTRA_ASSERT((p) != NULL); NAME_CHECK(p); } while (0)
@@ -51,6 +54,7 @@ struct sqlx_name_inline_s
 	gchar ns[LIMIT_LENGTH_NSNAME];
 	gchar base[LIMIT_LENGTH_BASENAME];
 	gchar type[LIMIT_LENGTH_BASETYPE];
+	gchar suffix[LIMIT_LENGTH_BASESUFFIX];
 };
 
 struct sqlx_name_s
@@ -58,6 +62,7 @@ struct sqlx_name_s
 	const char *ns;
 	const char *base;
 	const char *type;
+	const char *suffix;
 };
 
 #define sqlx_inline_name_fill sqlx_inline_name_fill_type_asis
@@ -98,8 +103,8 @@ GByteArray* sqlx_pack_GETVERS(const struct sqlx_name_s *name, const gchar *peers
 		gint64 deadline);
 
 GByteArray* sqlx_pack_SNAPSHOT(const struct sqlx_name_s *name,
-		const gchar *src_addr, const gchar *src_base, gchar **dest_properties,
-		const gchar **fields, gint64 deadline);
+		const gchar *src_addr, const gchar *src_base, const gchar *src_suffix,
+		gchar **dest_properties, const gchar **fields, gint64 deadline);
 GByteArray* sqlx_pack_PIPEFROM(const struct sqlx_name_s *name, const gchar *source, gint check_type, gint64 deadline);
 GByteArray* sqlx_pack_PIPETO(const struct sqlx_name_s *name, const gchar *target, gint64 deadline);
 GByteArray* sqlx_pack_REMOVE(const struct sqlx_name_s *name, gint64 deadline);

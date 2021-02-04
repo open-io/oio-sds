@@ -224,6 +224,10 @@ GError* meta2_backend_get_max_versions(struct meta2_backend_s *m2b,
 
 /* Sharding ----------------------------------------------------------------- */
 
+/** Prepare container to be shard */
+GError* meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, gchar ***out_properties);
+
 /** Replace shard ranges in root container */
 GError* meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *beans);

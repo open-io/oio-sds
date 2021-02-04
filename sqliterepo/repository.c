@@ -266,6 +266,10 @@ _default_locator (gpointer ignored, const struct sqlx_name_s *n, GString *result
 	g_string_append (result, n->base);
 	g_string_append_c (result, '.');
 	g_string_append (result, n->type);
+	if (*n->suffix) {
+		g_string_append_c (result, '.');
+		g_string_append (result, n->suffix);
+	}
 }
 
 /* ------------------------------------------------------------------------- */
@@ -666,6 +670,7 @@ _open_fill_args(struct open_args_s *args, struct sqlx_repository_s *repo,
 	SQLXNAME_CHECK(n);
 
 	args->repo = repo;
+	args->name.suffix = n->suffix;
 	args->name.type = n->type;
 	args->name.base = n->base;
 	args->name.ns = n->ns;

@@ -2,6 +2,7 @@
 OpenIO SDS sqlx
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -142,5 +143,7 @@ extern int sqlite_service_main(int argc, char **argv,
  * server enable it in its post-config hook. This is destined to
  * be registered in a task queue. */
 void sqlx_task_reload_lb(struct sqlx_service_s *ss);
+
+const gchar *sqlx_get_service_id(void);
 
 #endif /*OIO_SDS__sqlx__sqlx_service_h*/

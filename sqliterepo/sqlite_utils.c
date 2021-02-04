@@ -343,10 +343,13 @@ sqlx_admin_get_keys(struct sqlx_sqlite3_s *sq3)
 }
 
 gchar**
-sqlx_admin_get_keyvalues (struct sqlx_sqlite3_s *sq3)
+sqlx_admin_get_keyvalues(struct sqlx_sqlite3_s *sq3,
+		gboolean (*filter)(const gchar *k))
 {
 	gboolean runner(gchar *k, struct _cache_entry_s *v, GPtrArray *tmp) {
 		if (v->flag_deleted)
+			return FALSE;
+		if (filter && !filter(k))
 			return FALSE;
 		g_ptr_array_add(tmp, g_strdup(k));
 		if (!v->buffer)

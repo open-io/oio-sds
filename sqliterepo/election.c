@@ -1247,6 +1247,7 @@ _LOCKED_init_member(struct election_manager_s *manager,
 		g_strlcpy(member->key, key, sizeof(member->key));
 		g_strlcpy(member->inline_name.base, n->base, sizeof(member->inline_name.base));
 		g_strlcpy(member->inline_name.type, n->type, sizeof(member->inline_name.type));
+		g_strlcpy(member->inline_name.suffix, n->suffix, sizeof(member->inline_name.suffix));
 		g_strlcpy(member->inline_name.ns, n->ns, sizeof(member->inline_name.ns));
 		member->refcount = 2;
 		member->cond = _manager_get_condition(manager, member->key);

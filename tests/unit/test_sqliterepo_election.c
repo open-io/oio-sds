@@ -503,7 +503,8 @@ test_election_init(void)
 	election_manager_set_peering (m, peering);
 
 	for (int i=0; i<8 ;++i) {
-		struct sqlx_name_inline_s n0 = {.ns="NS", .base="", .type="type"};
+		struct sqlx_name_inline_s n0 = {.ns="NS", .base="", .type="type",
+				.suffix=""};
 		g_snprintf(n0.base, sizeof(n0.base),
 				"base-%"G_GUINT32_FORMAT, oio_ext_rand_int());
 		NAME2CONST(n, n0);
@@ -533,7 +534,8 @@ test_create_ok(void)
 }
 
 #define TEST_HEAD() \
-	struct sqlx_name_s name = { .base = "base", .type = "type", .ns = "NS", }; \
+	struct sqlx_name_s name = { .base="base", .type="type", .ns="NS", \
+			.suffix=""}; \
 	struct replication_config_s config = { \
 		_get_id, _get_peers, _get_vers, NULL, ELECTION_MODE_GROUP \
 	}; \
