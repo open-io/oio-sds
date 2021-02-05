@@ -17,14 +17,14 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"log/syslog"
 	"os"
-	"strconv"
-	"strings"
 	"sync"
 	"time"
+	"text/template"
 )
 
 type oioLogger interface {
@@ -38,6 +38,11 @@ var accessLogGet = configAccessLogDefaultGet
 var accessLogPut = configAccessLogDefaultPut
 var accessLogDel = configAccessLogDefaultDelete
 
+var logFormat = "{{ .Pid }} log {{ .Severity }} - {{ .Message }}"
+var logAccessFormat = "{{ .Pid }} access INF - {{ .Local }} {{ .Peer }} {{ .Method }} {{ .Status }} {{ .TimeSpent }} {{ .BytesOut }} {{ .BytesIn }} - {{ .ReqId }} {{ .Path }}  http{{ if .TLS }}s{{ end }}"
+var logTemplate *template.Template = nil
+var logAccessTemplate *template.Template = nil
+
 // Activate the extreme verbosity on the RAWX. This is has to be set at the
 // startup of the service.
 var logExtremeVerbosity = false
@@ -50,28 +55,45 @@ var logSeverity = logDefaultSeverity
 
 // The RAWX doesn't daemonize, we can save one syscall for each access log line
 // with this little variable caching the PID once for all.
-var strPid = strconv.Itoa(os.Getpid())
+var pid = os.Getpid()
 
 // The singleton logger that will be used by all the coroutine
 var logger oioLogger
 
 type AccessLogEvent struct {
-	status    int
-	bytesIn   uint64
-	bytesOut  uint64
-	timeSpent uint64
-	method    string
-	local     string
-	peer      string
-	path      string
-	reqId     string
-	tls       bool
+	Pid       int
+	Status    int
+	BytesIn   uint64
+	BytesOut  uint64
+	TimeSpent uint64
+	Method    string
+	Local     string
+	Peer      string
+	Path      string
+	ReqId     string
+	TLS       bool
 }
 
 type NoopLogger struct{}
 
 type StderrLogger struct {
 	logger *log.Logger
+}
+
+type LogTemplateInventory struct {
+	Pid      int
+	Severity string
+	Message  string
+}
+
+func InitLogTemplates() error {
+	var err error
+	logTemplate, err = template.New("logTemplate").Parse(logFormat)
+	if err != nil {
+	    return err
+	}
+	logAccessTemplate, err = template.New("logAccessTemplate").Parse(logAccessFormat)
+	return err
 }
 
 func isVerbose() bool {
@@ -121,17 +143,28 @@ func writeLogFmt(pri syslog.Priority, format string, v ...interface{}) {
 		return
 	}
 	erroneous, severityName := getSeverity(pri)
-	sb := strings.Builder{}
-	sb.Grow(256)
-	sb.WriteString(strPid)
-	sb.WriteString(" log ")
-	sb.WriteString(severityName)
-	sb.WriteString(" - ")
-	sb.WriteString(fmt.Sprintf(format, v...))
-	if erroneous {
-		logger.writeError(sb.String())
+
+	var output bytes.Buffer
+	if logTemplate != nil {
+		err := logTemplate.Execute(&output, LogTemplateInventory{
+			Pid: pid,
+			Severity: severityName,
+			Message: fmt.Sprintf(format, v...),
+		})
+
+		if err != nil {
+			log.Printf("Error while executing logTemplate: %v", err)
+			return
+		}
 	} else {
-		logger.writeInfo(sb.String())
+		log.Printf(format, v...)
+		return
+	}
+
+	if erroneous {
+		logger.writeError(output.String())
+	} else {
+		logger.writeInfo(output.String())
 	}
 }
 
@@ -157,36 +190,15 @@ func LogDebug(format string, v ...interface{}) {
 }
 
 func (evt AccessLogEvent) String() string {
-	sb := strings.Builder{}
-	sb.Grow(256)
-	// Preamble
-	sb.WriteString(strPid)
-	sb.WriteString(" access INF - ")
-	// Payload
-	sb.WriteString(evt.local)
-	sb.WriteRune(' ')
-	sb.WriteString(evt.peer)
-	sb.WriteRune(' ')
-	sb.WriteString(evt.method)
-	sb.WriteRune(' ')
-	sb.WriteString(itoa(evt.status))
-	sb.WriteRune(' ')
-	sb.WriteString(utoa(evt.timeSpent))
-	sb.WriteRune(' ')
-	sb.WriteString(utoa(evt.bytesOut))
-	sb.WriteRune(' ')
-	sb.WriteString(utoa(evt.bytesIn))
-	sb.WriteString(" - ")
-	sb.WriteString(evt.reqId)
-	sb.WriteRune(' ')
-	sb.WriteString(evt.path)
-	sb.WriteRune(' ')
-	if evt.tls {
-		sb.WriteString("https")
-	} else {
-		sb.WriteString("http")
+	evt.Pid = pid
+	var output bytes.Buffer
+	err := logAccessTemplate.Execute(&output, evt)
+
+	if err != nil {
+		log.Printf("Error while executing logAccessTemplate: %v", err)
+		return ""
 	}
-	return sb.String()
+	return output.String()
 }
 
 func LogHttp(evt AccessLogEvent) {

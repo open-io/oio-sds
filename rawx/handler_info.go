@@ -61,16 +61,16 @@ func (rr *rawxRequest) serveInfo() {
 	}
 	if isVerbose() {
 		LogHttp(AccessLogEvent{
-			status:    rr.status,
-			timeSpent: spent,
-			bytesIn:   rr.bytesIn,
-			bytesOut:  rr.bytesOut,
-			method:    rr.req.Method,
-			local:     rr.req.Host,
-			peer:      rr.req.RemoteAddr,
-			path:      rr.req.URL.Path,
-			reqId:     rr.reqid,
-			tls:       rr.req.TLS != nil,
+			Status:    rr.status,
+			TimeSpent: spent,
+			BytesIn:   rr.bytesIn,
+			BytesOut:  rr.bytesOut,
+			Method:    rr.req.Method,
+			Local:     rr.req.Host,
+			Peer:      rr.req.RemoteAddr,
+			Path:      rr.req.URL.Path,
+			ReqId:     rr.reqid,
+			TLS:       rr.req.TLS != nil,
 		})
 	}
 }

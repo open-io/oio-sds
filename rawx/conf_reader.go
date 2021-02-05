@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"log"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -31,6 +32,9 @@ var ok = []string{"ok", "yes", "true", "enable", "enabled", "yeah", "on"}
 
 // An array of all the string that evaluate as FALSE
 var nok = []string{"ko", "no", "false", "disable", "disabled", "nope", "off", "wot?"}
+
+// regex to extract a double quoted string
+var regexString = regexp.MustCompile(`^[^"]*("[^"\\]*(?:\\.[^"\\]*)*")[^"]*$`)
 
 var loadedOpts = map[string]string{
 	// Long historical names
@@ -87,6 +91,8 @@ var loadedOpts = map[string]string{
 	"log_access_get":    "log_access_get",
 	"log_access_put":    "log_access_put",
 	"log_access_delete": "log_access_delete",
+	"log_access_format": "log_access_format",
+	"log_format":        "log_format",
 	// TODO(jfs): also implement a cachedir
 }
 
@@ -108,14 +114,25 @@ func readConfig(conf string) (optionsMap, error) {
 
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
-		fields := strings.Fields(sc.Text())
+		line := sc.Text()
+		fields := strings.Fields(line)
 		if len(fields) > 1 {
-			if v, found := loadedOpts[fields[0]]; found {
-				opts[v] = fields[1]
+			optionName := fields[0]
+			optionValue := fields[1]
+			if optionValue != "" && optionValue[0] == '"' {
+				s, err := strconv.Unquote(regexString.ReplaceAllString(line, "$1"))
+				if err != nil {
+					log.Fatal("Unable to convert quoted string from line `%s`", line)
+					continue
+				}
+				optionValue = s
 			}
-			if v, found := deprecatedOpts[fields[0]]; found {
+			if v, found := loadedOpts[optionName]; found {
+				opts[v] = optionValue
+			}
+			if v, found := deprecatedOpts[optionName]; found {
 				LogWarning("DEPRECATED option used: %s", fields[0])
-				opts[v] = fields[1]
+				opts[v] = optionValue
 			}
 		}
 	}

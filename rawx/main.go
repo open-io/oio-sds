@@ -158,6 +158,16 @@ func main() {
 		log.Fatalf("Exiting with error: %v", err.Error())
 	}
 
+	if opts["log_format"] != "" {
+		logFormat = opts["log_format"]
+	}
+	if opts["log_access_format"] != "" {
+		logAccessFormat = opts["log_access_format"]
+	}
+	if err := InitLogTemplates(); err != nil {
+		log.Fatal("Unable to init log templates: %v", err.Error())
+	}
+
 	if logExtremeVerbosity {
 		InitStderrLogger()
 	} else if *syslogIDPtr != "" {
