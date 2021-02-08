@@ -11,6 +11,11 @@ workflow:
     application: oio-sds
     depends_on:
       - root
+    conditions:
+      check:
+        - variable: cds.triggered_by.username
+          operator: ne
+          value: "cds.scheduler"
 
   tests-single:
     pipeline: oio-sds-test-functional
@@ -18,6 +23,11 @@ workflow:
     environment: oio-sds-env-single
     depends_on:
       - root
+    conditions:
+      check:
+        - variable: cds.triggered_by.username
+          operator: ne
+          value: "cds.scheduler"
 
   tests-cli:
     pipeline: oio-sds-test-functional
@@ -25,6 +35,11 @@ workflow:
     environment: oio-sds-env-cli
     depends_on:
       - root
+    conditions:
+      check:
+        - variable: cds.triggered_by.username
+          operator: ne
+          value: "cds.scheduler"
 
   tests-3copies:
     pipeline: oio-sds-test-functional
@@ -32,6 +47,11 @@ workflow:
     environment: oio-sds-env-3copies
     depends_on:
       - root
+    conditions:
+      check:
+        - variable: cds.triggered_by.username
+          operator: ne
+          value: "cds.scheduler"
 
         # Disabled: problem with gridinit not restarting
         #  tests-ec:
