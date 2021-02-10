@@ -84,25 +84,25 @@ def redirect_stdio(logger):
     sys.stderr = StreamToLogger(logger, 'STDERR')
 
 
-def get_logger(
-        conf,
-        name=None,
-        verbose=False,
-        fmt="%(process)d %(thread)X %(name)s %(levelname)s %(message)s"):
+def get_logger(conf, name=None, verbose=False, fmt=None):
     if not conf:
         conf = {}
+
     if name is None:
         name = 'log'
+
+    if fmt is None:
+        fmt = conf.get(
+            'log_format',
+            "%(process)d %(thread)X %(name)s %(levelname)s %(message)s")
+        fmt = fmt.encode("utf-8").decode("unicode-escape")
+
     logger = logging.getLogger(name)
     logger.propagate = False
-
-    syslog_prefix = conf.get('syslog_prefix', '')
 
     formatter = logging.Formatter(
         fmt='%(asctime)s.%(msecs)03d ' + fmt,
         datefmt='%Y-%m-%d %H:%M:%S')
-    if syslog_prefix:
-        fmt = '%s: %s' % (syslog_prefix, fmt)
 
     syslog_formatter = logging.Formatter(fmt=fmt)
 
@@ -131,6 +131,10 @@ def get_logger(
                 handler = SysLogHandler(facility=facility)
         else:
             handler = SysLogHandler(facility=facility)
+
+    syslog_prefix = conf.get('syslog_prefix', '')
+    if syslog_prefix:
+        handler.ident = "%s: " % syslog_prefix
 
     handler.setFormatter(syslog_formatter)
     logger.addHandler(handler)

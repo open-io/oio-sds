@@ -63,7 +63,22 @@ def read_conf(conf_path, section_name=None, defaults=None, use_yaml=False):
         sys.exit(1)
     if section_name:
         if parser.has_section(section_name):
+
+            # if log_format is set, extract it from the parser
+            # to prevent to expand variables which can, in case of
+            # log_format throw a ConfigParser.InterpolationMissingOptionError
+            log_format = None
+            if parser.has_option(section_name, 'log_format'):
+                log_format = parser.get(section_name, 'log_format', raw=True)
+                # don't use remove_options because it can fail without reason
+                parser.set(section_name, 'log_format', '')
+
             conf = dict(parser.items(section_name))
+
+            # Add log_format again, after parsing
+            if log_format:
+                conf['log_format'] = log_format
+
         else:
             print('Unable to find section %s in config %s' % (section_name,
                                                               conf_path))
@@ -71,7 +86,22 @@ def read_conf(conf_path, section_name=None, defaults=None, use_yaml=False):
     else:
         conf = {}
         for section in parser.sections():
+
+            # if log_format is set, extract it from the parser
+            # to prevent to expand variables which can, in case of
+            # log_format throw a ConfigParser.InterpolationMissingOptionError
+            log_format = None
+            if parser.has_option(section, 'log_format'):
+                log_format = parser.get(section, 'log_format', raw=True)
+                # don't use remove_options because it can fail without reason
+                parser.set(section, 'log_format', '')
+
             conf.update({section: dict(parser.items(section))})
+
+            # Add log_format again, after parsing
+            if log_format:
+                conf[section]['log_format'] = log_format
+
     return conf
 
 

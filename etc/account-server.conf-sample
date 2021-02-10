@@ -7,6 +7,7 @@ workers = 2
 log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log
+#log_format = %(process)d %(thread)X %(name)s %(levelname)s %(message)s
 syslog_prefix = OIO,OPENIO,account,1
 proc_name = oio-account-server
 

@@ -10,4 +10,5 @@ db_path=/var/lib/oio/sds/vol1/NS/rdir-1
 log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
+#log_format = %(process)d %(thread)X %(name)s %(levelname)s %(message)s
 syslog_prefix = OIO,NS,rdir,1
