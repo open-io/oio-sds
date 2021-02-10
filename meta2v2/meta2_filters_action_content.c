@@ -299,11 +299,11 @@ meta2_filter_action_put_content(struct gridd_filter_ctx_s *ctx,
 		e = meta2_backend_force_alias(m2b, url, beans, missing_chunks,
 				_bean_list_cb, &deleted, _bean_list_cb, &added);
 	} else if (meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_UPDATE)) {
-		reply->subject("(update)");
+		reply->subject("action:update");
 		e = meta2_backend_update_content(m2b, url, beans, missing_chunks,
 				_bean_list_cb, &deleted, _bean_list_cb, &added);
 	} else if (meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_CHANGE_POLICY)) {
-		reply->subject("(policy change)");
+		reply->subject("action:policy change");
 		e = meta2_backend_change_alias_policy(m2b, url, beans, missing_chunks,
 				_bean_list_cb, &deleted, _bean_list_cb, &added);
 	} else {
@@ -642,7 +642,7 @@ meta2_filter_action_generate_beans(struct gridd_filter_ctx_s *ctx,
 
 	// Spare beans request
 	if (spare_type != NULL) {
-		reply->subject("%s|%s|%s", oio_url_get(url, OIOURL_WHOLE),
+		reply->subject("url:%s\thexid:%s\tspare_type:%s", oio_url_get(url, OIOURL_WHOLE),
 				oio_url_get(url, OIOURL_HEXID), spare_type);
 		if (strcmp(spare_type, M2V2_SPARE_BY_BLACKLIST) == 0) {
 			e = _spare_with_blacklist(m2b, ctx, obc, url, policy_str);

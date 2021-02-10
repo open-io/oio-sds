@@ -160,7 +160,7 @@ meta0_dispatch_v1_GETONE(struct gridd_reply_ctx_s *reply,
 	if (err) {
 		reply->send_error(CODE_BAD_REQUEST, err);
 	} else {
-		reply->subject("%02X%02X", prefix[0], prefix[1]);
+		reply->subject("prefix:%02X%02X", prefix[0], prefix[1]);
 		gchar **urlv = NULL;
 		err = meta0_backend_get_one(m0disp->m0, prefix, &urlv);
 		if (err) {

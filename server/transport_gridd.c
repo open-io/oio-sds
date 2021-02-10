@@ -207,29 +207,32 @@ network_client_log_access(struct log_item_s *item)
 	GString *gstr = g_string_sized_new(256);
 
 	/* mandatory */
+	g_string_append_static(gstr, "local:");
 	g_string_append(gstr, ensure(r->client->local_name));
-	g_string_append_c(gstr, ' ');
+	g_string_append_static(gstr, "\tpeer:");
 	g_string_append(gstr, ensure(r->client->peer_name));
-	g_string_append_c(gstr, ' ');
+	g_string_append(gstr, "\tmethod:");
 	g_string_append_len(gstr, ensure(hashstr_str(r->reqname)),
 			hashstr_len(r->reqname)?:1);
-	g_string_append_printf(gstr, " %d %"G_GINT64_FORMAT" %"G_GSIZE_FORMAT" - ",
-			item->code, diff_total, item->out_len);
+	g_string_append_printf(gstr, "\tstatus_int:%d", item->code);
+	g_string_append_printf(gstr, "\trequest_time_int:%"G_GINT64_FORMAT, diff_total);
+	g_string_append_printf(gstr, "\tbytes_sent_int:%"G_GSIZE_FORMAT, item->out_len);
+	g_string_append_static(gstr, "\trequest_id:");
 	g_string_append(gstr, ensure(r->reqid));
 
 	/* arbitrary */
-	g_string_append_printf(gstr, " t=%"G_GINT64_FORMAT, diff_handler);
+	g_string_append_printf(gstr, "\ttime_spent_handler_int:%"G_GINT64_FORMAT, diff_handler);
 	GHashTable *perfdata = oio_ext_get_perfdata();
 	if (perfdata) {
 		void __log_perfdata(gpointer key, gpointer val, gpointer udata UNUSED)
 		{
-			g_string_append_printf(gstr, " %s=%"G_GINT64_FORMAT,
+			g_string_append_printf(gstr, "\tperfdata_%s:%"G_GINT64_FORMAT,
 				(char*)key, (gint64)GPOINTER_TO_INT(val));
 		}
 		g_hash_table_foreach(perfdata, __log_perfdata, NULL);
 	}
 	if (r->subject) {
-		g_string_append_c (gstr, ' ');
+		g_string_append_c(gstr, '\t');
 		g_string_append(gstr, ensure(r->subject));
 	}
 
@@ -473,7 +476,7 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 		va_end(args);
 
 		const gchar *old = req_ctx->subject;
-		gchar *s = g_strconcat (old?:"", old?" ":"", tail, NULL);
+		gchar *s = g_strconcat (old?:"", old?"\t":"", tail, NULL);
 		oio_str_reuse(&req_ctx->subject, s);
 		g_free0 (tail);
 	}
@@ -530,9 +533,9 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 		EXTRA_ASSERT(e != NULL);
 		EXTRA_ASSERT(body == NULL);
 		if (e->code == CODE_REDIRECT)
-			_subject ("e=(%d) redirect to %s", e->code, e->message);
+			_subject ("error_code_int:%d\terror:redirect to %s", e->code, e->message);
 		else
-			_subject ("e=(%d) %s", e->code, e->message);
+			_subject ("error_code_int:%d\terror:%s", e->code, e->message);
 		if (code)
 			e->code = code;
 		if (CODE_IS_NETWORK_ERROR(e->code))

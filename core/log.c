@@ -182,28 +182,29 @@ oio_log_syslog(const gchar *log_domain, GLogLevelFlags log_level,
 	/* Rough estimation that should be enough in most cases */
 	GString *gstr = g_string_sized_new(512);
 
-	g_string_append_printf(gstr, "%d %04X", getpid(), oio_log_current_thread_id());
+	g_string_append_printf(gstr, "pid:%d\ttid:%04X", getpid(), oio_log_current_thread_id());
 
 	const int facility = oio_log_domain2facility(log_domain);
+	g_string_append_static(gstr, "\tlog_level:");
+	g_string_append(gstr, oio_log_lvl2str(log_level));
 	switch (facility) {
 		case LOG_LOCAL1:
-			g_string_append_static(gstr, " access ");
-			g_string_append(gstr, oio_log_lvl2str(log_level));
+			g_string_append_static(gstr, "\tlog_type:access\t");
 			break;
 		case LOG_LOCAL2:
-			g_string_append_static(gstr, " out ");
-			g_string_append(gstr, oio_log_lvl2str(log_level));
+			g_string_append_static(gstr, "\tlog_type:out\tmessage:");
 			break;
 		default:
-			g_string_append_static(gstr, " log ");
-			g_string_append(gstr, oio_log_lvl2str(log_level));
-			g_string_append_c(gstr, ' ');
-			if (!log_domain || !*log_domain)
-				log_domain = "-";
-			g_string_append(gstr, log_domain);
+			if (log_domain && *log_domain) {
+				g_string_append_static(gstr, "\tlog_domain:");
+				g_string_append(gstr, log_domain);
+			}
+			g_string_append_static(gstr, "\tlog_type:log\tmessage:");
 	}
-
-	g_string_append_c(gstr, ' ');
+    /*
+     * message is already LTSV encoded with access logs (LOG_LOCAL1)
+     * that is why "message:" is not added to those logs
+     */
 	g_string_append(gstr, message);
 
 	const int severity = oio_log_lvl2severity(log_level);

@@ -692,7 +692,7 @@ _load_sqlx_name (struct gridd_reply_ctx_s *ctx,
 	flush = metautils_message_extract_flag(ctx->request,
 			NAME_MSGKEY_FLUSH, FALSE);
 
-	ctx->subject("%s.%s%s", base, type, local?"|LOCAL":"");
+	ctx->subject("base:%s.%s\top_type:%s", base, type, local ? "local" : "replicated");
 
 	memset(n, 0, sizeof(*n));
 	g_strlcpy(n->ns, ns, sizeof(n->ns));
@@ -1008,7 +1008,7 @@ _handler_PIPETO(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 	EXTRACT_STRING("DST", target);
-	reply->subject("%s.%s|%s", name.base, name.type, target);
+	reply->subject("base:%s.%s\ttarget:%s", name.base, name.type, target);
 
 	/* Dump the base in a locked manner */
 	err = _dump(repo, &n0, &dump);
@@ -1153,7 +1153,7 @@ _handler_PIPEFROM(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 	EXTRACT_STRING("SRC", source);
-	reply->subject("%s.%s|%s", name.base, name.type, source);
+	reply->subject("base:%s.%s\tsource:%s", name.base, name.type, source);
 
 	if (NULL != (err = _pipe_from(source, repo, &n0)))
 		reply->send_error(0, err);
@@ -1184,7 +1184,7 @@ _handler_SNAPSHOT(struct gridd_reply_ctx_s *reply,
 	EXTRACT_STRING(NAME_MSGKEY_SRC, source);
 	EXTRACT_STRING(NAME_MSGKEY_CONTAINERID, cid);
 	EXTRACT_STRING(NAME_MSGKEY_SEQNUM, seq_num);
-	reply->subject("%s.%s|%s", name.base, name.type, source);
+	reply->subject("base:%s.%s\tsource:%s", name.base, name.type, source);
 	_load_sqlx_peers(reply, &peers);
 
 	full_base_name = g_strconcat(cid, seq_num, NULL);
@@ -1912,7 +1912,7 @@ _handler_BALM(struct gridd_reply_ctx_s *reply,
 
 	max = CLAMP(max,1,9999);
 	inactivity = CLAMP(inactivity, 0, 86400);
-	reply->subject("max=%u inactivity=%"G_GINT64_FORMAT, max, inactivity);
+	reply->subject("max_int:%u\tinactivity_int:%"G_GINT64_FORMAT, max, inactivity);
 
 	guint count = election_manager_balance_masters(
 			sqlx_repository_get_elections_manager(repo),

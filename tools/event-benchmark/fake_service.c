@@ -118,7 +118,7 @@ _reply_json_error(struct http_reply_ctx_s *rp,
 		int code, const char *msg, GString * gstr)
 {
 	if (gstr && gstr->len)
-		rp->access_tail("e=%.*s", gstr->len, gstr->str);
+		rp->access_tail("error:%.*s", gstr->len, gstr->str);
 	return _reply_json(rp, code, msg, gstr);
 }
 

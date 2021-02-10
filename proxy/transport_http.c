@@ -352,22 +352,25 @@ _access_log(struct req_ctx_s *r, gint status, gsize out_len, const gchar *tail)
 	GString *gstr = g_string_sized_new(256);
 
 	/* mandatory */
+	g_string_append_static(gstr, "local:");
 	g_string_append(gstr, ensure(r->client->local_name));
-	g_string_append_c(gstr, ' ');
+	g_string_append_static(gstr, "\tpeer:");
 	g_string_append(gstr, ensure(r->client->peer_name));
-	g_string_append_c(gstr, ' ');
+	g_string_append_static(gstr, "\tmethod:");
 	g_string_append(gstr, ensure(r->request->cmd));
-	g_string_append_printf(gstr, " %d %"G_GINT64_FORMAT" %"G_GSIZE_FORMAT" - ",
-			status, diff_total, out_len);
+	g_string_append_printf(gstr, "\tstatus_int:%d", status);
+	g_string_append_printf(gstr, "\trequest_time_int:%"G_GINT64_FORMAT, diff_total);
+	g_string_append_printf(gstr, "\tbytes_sent_int:%"G_GSIZE_FORMAT, out_len);
+	g_string_append_static(gstr, "\trequest_id:");
 	g_string_append(gstr, ensure(reqid));
 
 	/* arbitrary */
-	g_string_append_c(gstr, ' ');
+	g_string_append_static(gstr, "\tpath:");
 	g_string_append(gstr, ensure(r->request->req_uri));
-	g_string_append_printf(gstr, " t=%"G_GINT64_FORMAT" ", diff_handler);
+	g_string_append_printf(gstr, "\ttime_spent_handler_int:%"G_GINT64_FORMAT, diff_handler);
 	if (tail) {
-		g_string_append_c (gstr, ' ');
-		g_string_append (gstr, tail);
+		g_string_append_c(gstr, '\t');
+		g_string_append(gstr, tail);
 	}
 
 	INCOMING("%s", gstr->str);

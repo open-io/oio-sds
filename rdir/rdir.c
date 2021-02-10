@@ -137,7 +137,7 @@ _reply_json_error(struct http_reply_ctx_s *rp,
 		int code, const char *msg, GString * gstr)
 {
 	if (gstr)
-		rp->access_tail("e=%.*s", gstr->len, gstr->str);
+		rp->access_tail("error:%.*s", gstr->len, gstr->str);
 	return _reply_json(rp, code, msg, gstr);
 }
 
@@ -1243,7 +1243,7 @@ _route_vol_push(struct req_args_s *args, struct json_object *jbody,
 
 	GString *key = _record_to_key(&rec);
 	GString *value = g_string_sized_new(1024);
-	args->rp->access_tail("k=%s", key->str);
+	args->rp->access_tail("key:%s", key->str);
 	_record_encode(&rec, value);
 
 	/* Eventually push the record in the database */
@@ -2226,7 +2226,7 @@ _route_meta2_push(struct req_args_s *args, struct json_object *jbody,
 		return _reply_format_error(args->rp, err);
 	}
 	GString *value = g_string_sized_new(1024);
-	args->rp->access_tail("k=%s", key->str);
+	args->rp->access_tail("key:%s", key->str);
 	_meta2_record_encode(&rec, value);
 
 
@@ -2297,7 +2297,7 @@ _route_meta2_delete(struct req_args_s *args, struct json_object *jbody,
 		return _reply_format_error(args->rp, err);
 	}
 
-	args->rp->access_tail("k=%s", key->str);
+	args->rp->access_tail("key:%s", key->str);
 
 	/* Eventually delete the record from the database */
 	err = _meta2_db_delete(meta2_address, key);

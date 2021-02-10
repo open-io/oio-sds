@@ -85,7 +85,7 @@ meta2_filter_fill_subject(struct gridd_filter_ctx_s *ctx,
 {
 	TRACE_FILTER();
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
-	reply->subject("%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
+	reply->subject("url:%s\thexid:%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
 	return FILTER_OK;
 }
 

@@ -88,7 +88,7 @@ _reply_json_error(struct req_args_s *args, int code, const char *msg,
 	GString * gstr)
 {
 	if (gstr && gstr->len)
-		args->rp->access_tail("e=%.*s", gstr->len, gstr->str);
+		args->rp->access_tail("error:%.*s", gstr->len, gstr->str);
 	return _reply_json(args, code, msg, gstr);
 }
 

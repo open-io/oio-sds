@@ -18,6 +18,7 @@ License along with this library.
 */
 
 #include "metautils_errors.h"
+#include <core/oiostr.h>
 
 void
 g_error_trace(GError ** e, const char *dom, int code,
@@ -29,23 +30,23 @@ g_error_trace(GError ** e, const char *dom, int code,
 		return;
 
 	GString *gstr = g_string_sized_new(128);
+	g_string_printf(gstr, "error_code_int:%i", (code?code:(*e?(*e)->code:0)));
 #ifdef HAVE_EXTRA_DEBUG
-	if (line && func && file)
-		g_string_printf(gstr, "(code=%i) %s,%d ", (code?code:(*e?(*e)->code:0)), func, line);
-	else
+	if (line && func && file) {
+		g_string_append_printf(gstr, "\tfunction:%s\tline:%d\tfile:%s", func, line, file);
+	}
 #endif
-		g_string_printf(gstr, "(code=%i) - ", (code?code:(*e?(*e)->code:0)));
 
 	va_list localVA;
 	va_start(localVA, fmt);
+	g_string_append_static(gstr, "\tmessage:");
 	g_string_append_vprintf(gstr, fmt, localVA);
 	va_end(localVA);
 
 	if (!*e)
 		*e = g_error_new(g_quark_from_static_string(dom), code, "%s", gstr->str);
 	else {
-		g_string_append_c(gstr, ' ');
-		g_prefix_error(e, "%s", gstr->str);
+		g_prefix_error(e, "%s\terror:", gstr->str);
 		if (code)
 			(*e)->code = code;
 	}
