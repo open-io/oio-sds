@@ -1,5 +1,5 @@
 Source: ${PACKAGE}
-Section: unknown
+Section: Network
 Priority: optional
 Maintainer: PU ObjectStorage <pu.objectstorage@internal.ovh.net>
 Uploaders: PU ObjectStorage <pu.objectstorage@internal.ovh.net>
