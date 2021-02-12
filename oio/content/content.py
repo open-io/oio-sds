@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -133,7 +134,7 @@ class Content(object):
             raise ValueError("'value' must be a dict")
         self.metadata['properties'] = value
 
-    def _get_spare_chunk(self, chunks_notin, chunks_broken,
+    def _get_spare_chunk(self, chunks_notin, chunks_broken, position,
                          max_attempts=3, check_quality=False,
                          fake_excluded_chunks=None, **kwargs):
         notin = ChunksHelper(chunks_notin, False).raw()
@@ -155,7 +156,8 @@ class Content(object):
             try:
                 spare_resp = self.container_client.content_spare(
                     cid=self.container_id, path=self.content_id,
-                    data=spare_data, stgpol=self.policy, **kwargs)
+                    data=spare_data, stgpol=self.policy, position=position,
+                    **kwargs)
                 quals = extract_chunk_qualities(
                     spare_resp.get('properties', {}), raw=True)
                 if check_quality:
@@ -267,7 +269,7 @@ class Content(object):
 
         spare_urls, qualities = self._get_spare_chunk(
             other_chunks, [current_chunk], check_quality=check_quality,
-            max_attempts=max_attempts, **kwargs)
+            max_attempts=max_attempts, position=current_chunk.pos, **kwargs)
 
         # Sort chunks by score to try to copy with higher score.
         # When scores are close together (e.g. [95, 94, 94, 93, 50]),

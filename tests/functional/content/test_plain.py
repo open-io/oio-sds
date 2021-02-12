@@ -295,7 +295,7 @@ class TestPlainContent(BaseTestCase):
                        self.stgpol_threecopies):
             data = random_data(self.chunk_size)
             content, _ = self._new_content(stgpol, data)
-            meta, chunks = self.container_client.content_locate(
+            _meta, chunks = self.container_client.content_locate(
                 cid=self.container_id, content=content.content_id)
             for _ in range(2):
                 spare_data = {
@@ -305,7 +305,8 @@ class TestPlainContent(BaseTestCase):
                 try:
                     self.container_client.content_spare(
                         cid=self.container_id, content=content.content_id,
-                        data=spare_data, stgpol=stgpol)
+                        data=spare_data, stgpol=stgpol,
+                        position=chunks[0]['pos'])
                 except BadRequest as exc:
                     self.assertIn("too many locations already known",
                                   exc.message)
