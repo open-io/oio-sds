@@ -1770,7 +1770,7 @@ _meta2_backend_force_prepare_data_unlocked(struct meta2_backend_s *m2b,
  * without taking the lock on the database file. If the container
  * is frozen or disabled, decache this data.
  */
-static void
+static void UNUSED
 _meta2_backend_force_prepare_data(struct meta2_backend_s *m2b,
 		const gchar *key, struct sqlx_sqlite3_s *sq3)
 {
@@ -1859,7 +1859,7 @@ meta2_backend_close_callback(struct sqlx_sqlite3_s *sq3,
 
 void
 meta2_backend_change_callback(struct sqlx_sqlite3_s *sq3,
-		struct meta2_backend_s *m2b)
+		struct meta2_backend_s *m2b UNUSED)
 {
 	gchar *account = sqlx_admin_get_str(sq3, SQLX_ADMIN_ACCOUNT);
 	gchar *user = sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME);
@@ -1868,15 +1868,10 @@ meta2_backend_change_callback(struct sqlx_sqlite3_s *sq3,
 				" in database %s (reqid=%s)", sq3->path_inline,
 				oio_ext_get_reqid());
 	} else {
-		struct oio_url_s *url = oio_url_empty();
-		oio_url_set(url, OIOURL_NS, m2b->ns_name);
-		oio_url_set(url, OIOURL_ACCOUNT, account);
-		oio_url_set(url, OIOURL_USER, user);
-
-		_meta2_backend_force_prepare_data(m2b,
-				oio_url_get(url, OIOURL_HEXID), sq3);
-
-		oio_url_clean(url);
+		/* There used to be a code calling _meta2_backend_force_prepare_data()
+		 * here. But the "prepare data" is only used by some tests of the
+		 * meta2 backend, not by production requests, thus we do not need
+		 * to compute it anymore. */
 	}
 	g_free(user);
 	g_free(account);
@@ -2130,59 +2125,6 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 end:
 	namespace_info_free(nsinfo);
 	storage_policy_clean(policy);
-	return err;
-}
-
-static GError*
-_load_storage_policy(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		const gchar *polname, struct storage_policy_s **pol)
-{
-	GError *err = NULL;
-	namespace_info_t *nsinfo = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-
-	if (!(nsinfo = meta2_backend_get_nsinfo(m2b)))
-		return NEWERROR(CODE_INTERNAL_ERROR, "NS not ready");
-
-	if (polname) {
-		if (!(*pol = storage_policy_init(nsinfo, polname)))
-			err = NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy [%s]",
-					polname);
-	} else {
-		err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY
-				|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN, &sq3);
-		if (!err) {
-			/* check pol from container / ns */
-			err = m2db_get_storage_policy(sq3, url, nsinfo, FALSE, pol);
-			if (err || !*pol) {
-				gchar *def = oio_var_get_string(oio_ns_storage_policy);
-				if (oio_str_is_set(def)) {
-					if (!(*pol = storage_policy_init(nsinfo, def)))
-						err = NEWERROR(CODE_POLICY_NOT_SUPPORTED,
-								"Invalid policy [%s]", def);
-				}
-				g_free0(def);
-			}
-		}
-		m2b_close(sq3);
-	}
-
-	namespace_info_free(nsinfo);
-	return err;
-}
-
-GError*
-meta2_backend_get_conditionned_spare_chunks_v2(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, const gchar *polname, GSList *notin,
-		GSList *broken, GSList **result)
-{
-	struct storage_policy_s *pol = NULL;
-	GError *err = _load_storage_policy(m2b, url, polname, &pol);
-	if (!err)
-		err = get_conditioned_spare_chunks(m2b->lb, pol,
-				m2b->ns_name, notin, broken, result);
-	if (pol)
-		storage_policy_clean(pol);
 	return err;
 }
 

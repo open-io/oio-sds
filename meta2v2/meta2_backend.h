@@ -229,9 +229,4 @@ GError* meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 GError* meta2_backend_get_max_versions(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gint64 *result);
 
-/** Generate spare chunks (in form of a bean_CHUNKS_s list).  */
-GError* meta2_backend_get_conditionned_spare_chunks_v2(
-		struct meta2_backend_s *m2b, struct oio_url_s *url, const gchar *stgpol,
-		GSList *notin, GSList *broken, GSList **result);
-
 #endif /*OIO_SDS__meta2v2__meta2_backend_h*/
