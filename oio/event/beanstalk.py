@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -25,8 +26,7 @@ import yaml
 from oio.common import exceptions
 
 
-SYM_CRLF = '\r\n'
-SYM_CRLF_BYTES = b'\r\n'
+SYM_CRLF = b'\r\n'
 
 DEFAULT_PRIORITY = 2 ** 31
 
@@ -106,13 +106,13 @@ class Reader(object):
         if self.bytes_read == self.bytes_written:
             self.purge()
 
-        return data[:-2].decode('utf-8')
+        return data[:-2]
 
     def readline(self):
         buf = self._buffer
         buf.seek(self.bytes_read)
         data = buf.readline()
-        while not data.endswith(SYM_CRLF_BYTES):
+        while not data.endswith(SYM_CRLF):
             self._read_from_socket()
             buf.seek(self.bytes_read)
             data = buf.readline()
@@ -122,7 +122,7 @@ class Reader(object):
         if self.bytes_read == self.bytes_written:
             self.purge()
 
-        return data[:-2].decode('utf-8')
+        return data[:-2]
 
     def purge(self):
         self._buffer.seek(0)
@@ -150,7 +150,6 @@ class BaseParser(object):
     def on_connect(self, connection):
         self._sock = connection._sock
         self._buffer = Reader(self._sock, self.socket_read_size)
-        self.encoding = connection.encoding
 
     def on_disconnect(self):
         if self._sock is not None:
@@ -159,7 +158,6 @@ class BaseParser(object):
         if self._buffer is not None:
             self._buffer.close()
             self._buffer = None
-        self.encoding = None
 
     def can_read(self):
         # pylint: disable=no-member
@@ -170,7 +168,7 @@ class BaseParser(object):
         if not response:
             raise ConnectionError(SERVER_CLOSED_CONNECTION_ERROR)
         response = response.split()
-        return response[0], response[1:]
+        return response[0].decode('utf-8'), response[1:]
 
     def read(self, size):
         response = self._buffer.read(size)
@@ -196,12 +194,10 @@ class Connection(object):
     def __init__(self, host=None, port=None, use_tubes=None,
                  watch_tubes=None, socket_timeout=None,
                  socket_connect_timeout=None, socket_keepalive=False,
-                 socket_keepalive_options=None, encoding='utf-8',
-                 socket_read_size=65536):
+                 socket_keepalive_options=None, socket_read_size=65536):
         self.pid = os.getpid()
         self.host = host
         self.port = int(port)
-        self.encoding = encoding
         self.socket_timeout = socket_timeout
         self.socket_connect_timeout = socket_connect_timeout
         self.socket_keepalive = socket_keepalive
@@ -308,16 +304,17 @@ class Connection(object):
 
     def pack_command(self, command, body, *args):
         output = []
-        # TODO handle encoding
-        output.append(command)
+        output.append(command.encode('utf-8'))
         for arg in args:
-            output.append(' ' + str(arg))
+            output.append(b' ' + str(arg).encode('utf-8'))
         if body is not None:
-            output.append(' ' + str(len(body)))
+            if isinstance(body, str):
+                body = body.encode('utf-8')
+            output.append(b' ' + str(len(body)).encode('utf-8'))
             output.append(SYM_CRLF)
             output.append(body)
         output.append(SYM_CRLF)
-        return ''.join(output).encode('utf-8')
+        return b''.join(output)
 
     def send_command(self, command, *args, **kwargs):
         encoded = self.pack_command(command, kwargs.get('body'), *args)
@@ -381,7 +378,7 @@ def parse_yaml(connection, response, **kwargs):
 
 def parse_body(connection, response, **kwargs):
     results = response[1]
-    job_id = results[0]
+    job_id = results[0].decode('utf-8')
     job_size = int(results[1])
     body = connection.read_body(job_size)
     if job_size > 0 and not body:
@@ -510,11 +507,11 @@ class Beanstalk(object):
         else:
             raise InvalidResponse(command_name, status, results)
 
-        return response
-
     def put(self, body, priority=DEFAULT_PRIORITY, delay=0, ttr=DEFAULT_TTR):
         assert isinstance(body, str), 'body must be str'
-        job_id = self.execute_command('put', priority, delay, ttr, body=body)
+        _, results = self.execute_command('put', priority, delay, ttr,
+                                          body=body)
+        job_id = results[0].decode('utf-8')
         return job_id
 
     def use(self, tube):
