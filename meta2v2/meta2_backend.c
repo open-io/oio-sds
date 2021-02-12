@@ -2179,28 +2179,8 @@ meta2_backend_get_conditionned_spare_chunks_v2(struct meta2_backend_s *m2b,
 	struct storage_policy_s *pol = NULL;
 	GError *err = _load_storage_policy(m2b, url, polname, &pol);
 	if (!err)
-		err = get_conditioned_spare_chunks(m2b->lb,
-				storage_policy_get_service_pool(pol),
+		err = get_conditioned_spare_chunks(m2b->lb, pol,
 				m2b->ns_name, notin, broken, result);
-	if (pol)
-		storage_policy_clean(pol);
-	return err;
-}
-
-GError*
-meta2_backend_get_spare_chunks(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		const char *polname, GSList **result)
-{
-	GRID_TRACE("SPARE(%s,%s)", oio_url_get(url, OIOURL_WHOLE), polname);
-	EXTRA_ASSERT(m2b != NULL);
-
-	// TODO: we can avoid instantiating storage policy
-	// but we need to review several function calls
-	struct storage_policy_s *pol = NULL;
-	GError *err = _load_storage_policy(m2b, url, polname, &pol);
-	if (!err)
-		err = get_spare_chunks(m2b->lb, storage_policy_get_service_pool(pol),
-				result);
 	if (pol)
 		storage_policy_clean(pol);
 	return err;

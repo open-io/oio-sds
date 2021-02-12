@@ -98,12 +98,6 @@ get_spare_chunks_focused(struct oio_lb_s *lb, const char *pool,
 	return err;
 }
 
-GError*
-get_spare_chunks(struct oio_lb_s *lb, const char *pool, GSList **result)
-{
-	return get_spare_chunks_focused(lb, pool, 0, 0, result);
-}
-
 /* ------------------------------------------------------------------------- */
 
 static oio_location_t *
@@ -133,12 +127,14 @@ convert_chunks_to_locations(struct oio_lb_pool_s *pool, const gchar *ns_name,
 }
 
 GError*
-get_conditioned_spare_chunks(struct oio_lb_s *lb, const char *pool,
+get_conditioned_spare_chunks(struct oio_lb_s *lb,
+		struct storage_policy_s *policy,
 		const gchar *ns_name, GSList *already, GSList *broken,
 		GSList **result)
 {
 	GError *err = NULL;
 	GSList *beans = NULL;
+	const gchar *pool = storage_policy_get_service_pool(policy);
 
 	GRID_TRACE("%s", __FUNCTION__);
 
