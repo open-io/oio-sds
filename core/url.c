@@ -2,6 +2,7 @@
 OpenIO SDS core library
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -23,6 +24,7 @@ License along with this library.
 
 #include <core/oiostr.h>
 #include <core/oioext.h>
+#include <core/internals.h>
 #include <core/url_ext.h>
 #include <core/client_variables.h>
 #include <core/oiolog.h>
@@ -112,22 +114,22 @@ _check_parsed_url (struct oio_url_s *u)
 static void
 _replace (gchar **pp, const char *s, const gboolean unescape)
 {
-  if (unescape)
-    oio_str_reuse(pp, g_uri_unescape_string (s, NULL));
-  else
-    oio_str_reuse(pp, g_strdup(s));
+	if (unescape)
+		oio_str_reuse(pp, g_uri_unescape_string (s, NULL));
+	else
+		oio_str_reuse(pp, g_strdup(s));
 }
 
 static void
 _copy(gchar *dst, gsize dstlen, const char *src, const gboolean unescape)
 {
-  if (!unescape) {
-    g_strlcpy(dst, src, dstlen);
-  } else {
-    gchar *tmp = g_uri_unescape_string (src, NULL);
-    g_strlcpy(dst, tmp, dstlen);
-    g_free(tmp);
-  }
+	if (!unescape) {
+		g_strlcpy(dst, src, dstlen);
+	} else {
+		gchar *tmp = g_uri_unescape_string (src, NULL);
+		g_strlcpy(dst, tmp, dstlen);
+		g_free(tmp);
+	}
 }
 
 static int
@@ -677,4 +679,46 @@ oio_url_check(const struct oio_url_s *u, const char *namespace,
 	return TRUE;
 
 #undef _ERR
+}
+
+GError *
+oio_url_compute_chunk_id(struct oio_url_s *url, const char *position,
+		const char *policy, char *out, size_t outsize)
+{
+	g_assert_nonnull(out);
+
+	const gchar *hexid = oio_url_get(url, OIOURL_HEXID);
+	const gchar *alias = oio_url_get(url, OIOURL_PATH);
+	const gchar *version = oio_url_get(url, OIOURL_VERSION);
+
+	if (!oio_str_is_set(hexid)) {
+		return BADREQ("Null or empty container ID");
+	}
+	if (!oio_str_is_set(alias)) {
+		return BADREQ("Null or empty object alias");
+	}
+	if (!oio_str_is_set(version)) {
+		return BADREQ("Missing object version");
+	}
+	if (!oio_str_is_set(position)) {
+		return BADREQ("Missing chunk position");
+	}
+	if (!oio_str_is_set(policy)) {
+		return BADREQ("Missing object storage policy");
+	}
+
+	GChecksum *sum = g_checksum_new(G_CHECKSUM_SHA256);
+	g_checksum_update(sum, (guint8*)hexid, -1);
+	g_checksum_update(sum, (guint8*)alias, -1);
+	g_checksum_update(sum, (guint8*)version, -1);
+	g_checksum_update(sum, (guint8*)position, -1);
+	g_checksum_update(sum, (guint8*)policy, -1);
+
+	gsize sz = 64;
+	guint8 buf[sz];
+	g_checksum_get_digest(sum, buf, &sz);
+	g_checksum_free(sum);
+	oio_str_bin2hex(buf, sz, out, outsize);
+
+	return NULL;
 }
