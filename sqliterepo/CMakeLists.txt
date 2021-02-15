@@ -81,6 +81,6 @@ add_library(sqliterepo STATIC
 		restoration.c
 		${CMAKE_CURRENT_BINARY_DIR}/sqliterepo_variables.c)
 
-target_link_libraries(sqliterepo metautils
+target_link_libraries(sqliterepo oioevents metautils
 		sqlitereporemote sqliteutils
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES} ${ZK_LIBRARIES})

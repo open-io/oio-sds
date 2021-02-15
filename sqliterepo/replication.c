@@ -2,6 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -612,6 +613,7 @@ sqlx_transaction_begin(struct sqlx_sqlite3_s *sq3,
 	sqlx_exec(sq3->db, "BEGIN");
 	/*sqlx_admin_reload(sq3);*/
 	*result = repctx;
+	sq3->transaction = 1;
 	return NULL;
 }
 
@@ -732,6 +734,14 @@ sqlx_transaction_end(struct sqlx_repctx_s *ctx, GError *err)
 	sqlite3_commit_hook(ctx->sq3->db, NULL, NULL);
 	sqlite3_rollback_hook(ctx->sq3->db, NULL, NULL);
 	sqlite3_update_hook(ctx->sq3->db, NULL, NULL);
+	ctx->sq3->transaction = 0;
+	if (!err) {
+		ctx->sq3->update_queries = g_list_concat(ctx->sq3->update_queries,
+				ctx->sq3->transaction_update_queries);
+	} else {
+		g_list_free_full(ctx->sq3->transaction_update_queries, g_free);
+	}
+	ctx->sq3->transaction_update_queries = NULL;
 	sqlx_replication_free_context(ctx);
 	return err;
 }

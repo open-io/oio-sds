@@ -2,6 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -28,6 +29,7 @@ License along with this library.
 
 #include <sqlite3.h>
 
+#include <events/beanstalkd.h>
 #include <metautils/lib/metautils.h>
 #include <sqliterepo/sqliterepo_variables.h>
 
@@ -142,6 +144,25 @@ __rename_base(struct sqlx_sqlite3_s *sq3, const gchar *dst)
 }
 
 static void
+__unlock_base(struct sqlx_sqlite3_s *sq3)
+{
+	if (!sq3) {
+		GRID_DEBUG("Unlocking a NULL db handle");
+		return;
+	}
+
+	GRID_TRACE2("DB being unlocked [%s][%s]", sq3->name.base,
+			sq3->name.type);
+
+	sq3->save_update_queries = 0;
+	sq3->transaction = 0;
+	g_list_free_full(sq3->transaction_update_queries, g_free);
+	sq3->transaction_update_queries = NULL;
+	g_list_free_full(sq3->update_queries, g_free);
+	sq3->update_queries = NULL;
+}
+
+static void
 __close_base(struct sqlx_sqlite3_s *sq3)
 {
 	if (!sq3) {
@@ -194,6 +215,10 @@ __close_base(struct sqlx_sqlite3_s *sq3)
 	if (sq3->admin)
 		g_tree_destroy(sq3->admin);
 	sq3->bd = -1;
+	g_list_free_full(sq3->transaction_update_queries, g_free);
+	g_list_free_full(sq3->update_queries, g_free);
+	beanstalkd_destroy(sq3->sharding_queue);
+	sq3->sharding_queue = NULL;
 	g_slice_free(struct sqlx_sqlite3_s, sq3);
 }
 
@@ -336,6 +361,8 @@ sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
 
 	if (!(cfg->flags & SQLX_REPO_NOCACHE)) {
 		repo->cache = sqlx_cache_init();
+		sqlx_cache_set_unlock_hook(repo->cache,
+				(sqlx_cache_unlock_hook)__unlock_base);
 		sqlx_cache_set_close_hook(repo->cache,
 				(sqlx_cache_close_hook)__close_base);
 	}

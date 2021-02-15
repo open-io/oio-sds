@@ -36,6 +36,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sqliterepo/sqliterepo.h>
 #include <sqliterepo/election.h>
 
+#include <events/beanstalkd.h>
 #include <events/oio_events_queue.h>
 
 #include <meta2v2/generic.h>
@@ -87,6 +88,10 @@ gchar* SHARED_KEYS[6] = {
 	M2V2_ADMIN_VERSIONING_POLICY,
 	NULL
 };
+
+static GError* _connect_to_sharding_queue(struct oio_url_s *url,
+		gchar *beanstalkd_endpoint, gint64 timestamp,
+		struct beanstalkd_s **pbeanstalkd);
 
 static void _meta2_backend_force_prepare_data(struct meta2_backend_s *m2b,
 		const gchar *key, struct sqlx_sqlite3_s *sq3);
@@ -418,11 +423,44 @@ m2b_add_modified_container(struct meta2_backend_s *m2b,
 }
 
 static void
-m2b_close(struct sqlx_sqlite3_s *sq3)
+_sql_queries_pack(gpointer value, gpointer data) {
+	GString *beanstalkd_job = data;
+	if (!value)
+		return;
+	if (beanstalkd_job->str[beanstalkd_job->len - 1] != '[')
+		g_string_append_c(beanstalkd_job, ',');
+	oio_str_gstring_append_json_quote(beanstalkd_job, value);
+}
+
+static void
+m2b_close(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 {
-	if (sq3) {
-		sqlx_repository_unlock_and_close_noerror(sq3);
+	if (!sq3)
+		return;
+	if (!sq3->sharding_queue || !sq3->update_queries)
+		goto exit;
+
+	GString *beanstalkd_job = g_string_new("{");
+	oio_str_gstring_append_json_pair(beanstalkd_job, "path",
+			url ? oio_url_get(url, OIOURL_PATH): NULL);
+	g_string_append_c(beanstalkd_job, ',');
+	oio_str_gstring_append_json_quote(beanstalkd_job, "queries");
+	g_string_append(beanstalkd_job, ":[");
+	g_list_foreach(sq3->update_queries, _sql_queries_pack, beanstalkd_job);
+	g_string_append(beanstalkd_job, "]}");
+	GError *err = beanstalkd_put_job(sq3->sharding_queue, beanstalkd_job->str,
+			beanstalkd_job->len);
+	g_string_free(beanstalkd_job, TRUE);
+	if (err) {
+		GRID_ERROR("Failed to put in sharding queue, "
+				"aborting sharding...: (%d) %s", err->code, err->message);
+		g_clear_error(&err);
+		// TODO(adu): Abort sharding
+		goto exit;
 	}
+
+exit:
+	sqlx_repository_unlock_and_close_noerror(sq3);
 }
 
 static void
@@ -464,7 +502,7 @@ m2b_open_with_args(struct meta2_backend_s *m2, struct oio_url_s *url,
 	 * - creation: init not done */
 	const gboolean _create = (M2V2_OPEN_AUTOCREATE == (how & M2V2_OPEN_AUTOCREATE));
 	if (_create && _is_container_initiated(sq3)) {
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 		return NEWERROR(CODE_CONTAINER_EXISTS,
 				"container already initiated");
 	}
@@ -491,8 +529,91 @@ static GError *
 m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
 		enum m2v2_open_type_e how, struct sqlx_sqlite3_s **result)
 {
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct m2_open_args_s args = {how, NULL};
-	return m2b_open_with_args(m2, url, &args, result);
+	enum m2v2_open_type_e replimode = how & M2V2_OPEN_REPLIMODE;
+
+	err = m2b_open_with_args(m2, url, &args, &sq3);
+	if (err)
+		return err;
+
+	if (replimode != M2V2_OPEN_MASTERONLY)
+		goto exit;
+
+	gint64 sharding_state = sqlx_admin_get_i64(sq3,
+			M2V2_ADMIN_SHARDING_STATE, 0);
+	if (sharding_state != CONTAINER_TO_SHARD_STATE_SAVING_WRITES) {
+		if (sq3->sharding_queue) {
+			// Should never happen
+			GRID_WARN("For sharding, "
+					"a connection to the beanstalkd was left open");
+			beanstalkd_destroy(sq3->sharding_queue);
+			sq3->sharding_queue = NULL;
+		}
+		goto exit;
+	}
+	// CONTAINER_TO_SHARD_STATE_SAVING_WRITES
+	// Check sharding properties
+	gint64 sharding_timestamp = sqlx_admin_get_i64(sq3,
+			M2V2_ADMIN_SHARDING_TIMESTAMP, 0);
+	if (!sharding_timestamp) {
+		// Should never happen
+		GRID_ERROR("Missing sharding timestamp, aborting sharding...");
+		// TODO(adu): Abort sharding
+		goto exit;
+	}
+	gchar *sharding_master = sqlx_admin_get_str(sq3,
+			M2V2_ADMIN_SHARDING_MASTER);
+	if (!sharding_master) {
+		// Should never happen
+		GRID_ERROR("Missing sharding master, aborting sharding...");
+		// TODO(adu): Abort sharding
+		goto exit;
+	}
+	gchar *sharding_queue = sqlx_admin_get_str(sq3,
+			M2V2_ADMIN_SHARDING_QUEUE);
+	if (!sharding_queue) {
+		// Should never happen
+		GRID_ERROR("Missing sharding queue, aborting sharding...");
+		// TODO(adu): Abort sharding
+		goto exit;
+	}
+	// Check sharding master
+	const gchar *master = sqlx_get_service_id();
+	if (!master || !*master) {
+		// Should never happen
+		GRID_ERROR("No service ID, aborting sharding...");
+		// TODO(adu): Abort sharding
+		goto exit;
+	}
+	if (g_strcmp0(master, sharding_master) != 0) {
+		GRID_ERROR("Master has changed, aborting sharding...");
+		// TODO(adu): Abort sharding
+		goto exit;
+	}
+	// Check sharding queue
+	if (!sq3->sharding_queue) {
+		struct beanstalkd_s *beanstalkd = NULL;
+		err = _connect_to_sharding_queue(url,
+				sharding_queue, sharding_timestamp, &beanstalkd);
+		if (err) {
+			GRID_ERROR("Failed to connect to sharding queue, "
+					"aborting sharding...: (%d) %s", err->code, err->message);
+			g_clear_error(&err);
+			// TODO(adu): Abort sharding
+			goto exit;
+		}
+		sq3->sharding_queue = beanstalkd;
+	}
+	sq3->save_update_queries = 1;
+
+exit:
+	if (err)
+		m2b_close(sq3, url);
+	else
+		*result = sq3;
+	return err;
 }
 
 static GError *
@@ -620,6 +741,29 @@ end:
 	return err;
 }
 
+static GError*
+_connect_to_sharding_queue(struct oio_url_s *url,
+		gchar *beanstalkd_endpoint, gint64 timestamp,
+		struct beanstalkd_s **pbeanstalkd)
+{
+	GError *err = NULL;
+	struct beanstalkd_s *beanstalkd = NULL;
+
+	gchar *tube = g_strdup_printf("%s.sharding-%"G_GINT64_FORMAT,
+			oio_url_get(url, OIOURL_HEXID), timestamp);
+	err = beanstalkd_factory(beanstalkd_endpoint, tube, &beanstalkd);
+	g_free(tube);
+	if (err)
+		return err;
+
+	err = beanstalkd_reconnect(beanstalkd);
+	if (err)
+		beanstalkd_destroy(beanstalkd);
+	else
+		*pbeanstalkd = beanstalkd;
+	return err;
+}
+
 static GError *
 m2b_open_for_object(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		enum m2v2_open_type_e how, struct sqlx_sqlite3_s **result)
@@ -639,7 +783,7 @@ m2b_open_for_object(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	else
 		err = _redirect_to_shard(sq3, path);
 	if (err)
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	else
 		*result = sq3;
 	return err;
@@ -701,14 +845,16 @@ meta2_backend_has_container(struct meta2_backend_s *m2,
 		if (!_is_container_initiated(sq3))
 			err = NEWERROR(CODE_CONTAINER_NOTFOUND,
 					"Container created but not initiated");
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 	return err;
 }
 
 static GError *
-_check_if_container_empty (struct sqlx_sqlite3_s *sq3)
+_check_if_container_empty(struct sqlx_sqlite3_s *sq3)
 {
+	EXTRA_ASSERT(sq3 != NULL && sq3->db != NULL);
+
 	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
 	gint64 count = 0;
@@ -727,7 +873,7 @@ _check_if_container_empty (struct sqlx_sqlite3_s *sq3)
 					rc, sqlite3_errmsg(sq3->db));
 		}
 	}
-	(void) sqlite3_finalize (stmt);
+	sqlx_sqlite3_finalize(sq3, stmt, err);
 
 	if (!err && count > 0)
 		err = NEWERROR(CODE_CONTAINER_NOTEMPTY, "Container not empty");
@@ -746,7 +892,7 @@ meta2_backend_container_isempty (struct meta2_backend_s *m2,
 	GError *err = m2b_open(m2, url, _mode_masterslave(0), &sq3);
 	if (!err) {
 		err = _check_if_container_empty (sq3);
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 	return err;
 }
@@ -765,7 +911,7 @@ meta2_backend_get_max_versions(struct meta2_backend_s *m2b,
 	err = m2b_open(m2b, url, _mode_readonly(0), &sq3);
 	if (!err) {
 		*result = _maxvers(sq3);
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
 	return err;
@@ -914,7 +1060,7 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 	 * M2_PREP that occured after a GETVERS (the meta1 is filled) but before
 	 * the CREATE. */
 	meta2_backend_change_callback(sq3, m2);
-	m2b_close(sq3);
+	m2b_close(sq3, url);
 	return err;
 }
 
@@ -966,7 +1112,7 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 			}
 			g_free(bucket);
 		} else {
-			m2b_close(sq3);
+			m2b_close(sq3, url);
 		}
 	}
 
@@ -1005,7 +1151,7 @@ meta2_backend_flush_container(struct meta2_backend_s *m2, struct oio_url_s *url,
 				}
 			}
 		}
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
 	return err;
@@ -1034,7 +1180,7 @@ meta2_backend_purge_container(struct meta2_backend_s *m2, struct oio_url_s *url,
 		}
 		if (!err)
 			m2b_add_modified_container(m2, sq3);
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
 	return err;
@@ -1119,7 +1265,7 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 			g_free((gchar *)lp->marker_end);
 			lp->marker_end = current_marker_end;
 		}
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
 	return err;
@@ -1139,7 +1285,7 @@ meta2_backend_get_alias(struct meta2_backend_s *m2b,
 	err = m2b_open_for_object(m2b, url, _mode_readonly(flags), &sq3);
 	if (!err) {
 		err = m2db_get_alias(sq3, url, flags, cb, u0);
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
 	return err;
@@ -1162,12 +1308,12 @@ meta2_backend_notify_container_state(struct meta2_backend_s *m2b,
 			if (!(err = _transaction_begin(sq3, url, &repctx))) {
 				guint64 size = 0u;
 				gint64 count = 0;
-				m2db_get_container_size_and_obj_count(sq3->db, FALSE,
+				m2db_get_container_size_and_obj_count(sq3, FALSE,
 						&size, &count);
 				m2db_set_size(sq3, size);
 				m2db_set_obj_count(sq3, count);
 				gint64 shard_count = 0;
-				m2db_get_container_shard_count(sq3->db, &shard_count);
+				m2db_get_container_shard_count(sq3, &shard_count);
 				m2db_set_shard_count(sq3, shard_count);
 				m2db_increment_version(sq3);
 				err = sqlx_transaction_end(repctx, err);
@@ -1175,7 +1321,7 @@ meta2_backend_notify_container_state(struct meta2_backend_s *m2b,
 		}
 		if (!err)
 			m2b_add_modified_container(m2b, sq3);
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
 	return err;
@@ -1196,7 +1342,7 @@ meta2_backend_drain_content(struct meta2_backend_s *m2,
 			err = m2db_drain_content(sq3, url, cb, u0);
 			err = sqlx_transaction_end(repctx, err);
 		}
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 	return err;
 }
@@ -1232,7 +1378,7 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 		}
 		if (!err)
 			m2b_add_modified_container(m2b, sq3);
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
 	return err;
@@ -1275,7 +1421,7 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 			if (!err)
 				m2b_add_modified_container(m2b, sq3);
 		}
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
 	return err;
@@ -1315,7 +1461,7 @@ meta2_backend_change_alias_policy(struct meta2_backend_s *m2b,
 			if (!err)
 				m2b_add_modified_container(m2b, sq3);
 		}
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
 	return err;
@@ -1350,7 +1496,7 @@ meta2_backend_update_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 			if (!err)
 				m2b_add_modified_container(m2b, sq3);
 		}
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
 	return err;
@@ -1382,7 +1528,7 @@ meta2_backend_truncate_content(struct meta2_backend_s *m2b,
 			if (!err)
 				m2b_add_modified_container(m2b, sq3);
 		}
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
 	return err;
@@ -1422,7 +1568,7 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		if (!err)
 			m2b_add_modified_container(m2b, sq3);
 
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
 	return err;
@@ -1460,7 +1606,7 @@ meta2_backend_purge_alias(struct meta2_backend_s *m2, struct oio_url_s *url,
 		}
 		if (!err)
 			m2b_add_modified_container(m2, sq3);
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
 	return err;
@@ -1489,9 +1635,9 @@ meta2_backend_insert_beans(struct meta2_backend_s *m2b,
 	if (!err) {
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (force)
-				err = _db_save_beans_list (sq3->db, beans);
+				err = _db_save_beans_list(sq3, beans);
 			else
-				err = _db_insert_beans_list (sq3->db, beans);
+				err = _db_insert_beans_list(sq3, beans);
 			if (!err) {
 				m2db_increment_version(sq3);
 			} else {
@@ -1504,7 +1650,7 @@ meta2_backend_insert_beans(struct meta2_backend_s *m2b,
 		}
 		if (!err)
 			m2b_add_modified_container(m2b, sq3);
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
 	if (error_already) {
@@ -1538,13 +1684,13 @@ meta2_backend_delete_beans(struct meta2_backend_s *m2b,
 			for (; !err && beans; beans = beans->next) {
 				if (unlikely(NULL == beans->data))
 					continue;
-				err = _db_delete_bean (sq3->db, beans->data);
+				err = _db_delete_bean(sq3, beans->data);
 			}
 			if (!err)
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
 		}
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
 	return err;
@@ -1582,12 +1728,12 @@ meta2_backend_update_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			for (GSList *l0=old_chunks, *l1=new_chunks;
 					!err && l0 && l1 ; l0=l0->next,l1=l1->next)
-				err = _db_substitute_bean(sq3->db, l0->data, l1->data);
+				err = _db_substitute_bean(sq3, l0->data, l1->data);
 			if (!err)
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
 		}
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
 	return err;
@@ -1604,7 +1750,7 @@ meta2_backend_get_alias_version(struct meta2_backend_s *m2b,
 	GError *err = m2b_open_for_object(m2b, url, _mode_readonly(0), &sq3);
 	if (!err) {
 		err = m2db_get_alias_version(sq3, url, version);
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 	return err;
 }
@@ -1636,7 +1782,7 @@ meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 		}
 		if (!err)
 			m2b_add_modified_container(m2b, sq3);
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
 	namespace_info_free (nsinfo);
@@ -1655,7 +1801,7 @@ meta2_backend_get_properties(struct meta2_backend_s *m2b,
 	GError *err = m2b_open_for_object(m2b, url, _mode_readonly(flags), &sq3);
 	if (!err) {
 		err = m2db_get_properties(sq3, url, cb, u0);
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 	return err;
 }
@@ -1679,7 +1825,7 @@ meta2_backend_del_properties(struct meta2_backend_s *m2b,
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
 		}
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
 	return err;
@@ -1706,7 +1852,7 @@ meta2_backend_set_properties(struct meta2_backend_s *m2b, struct oio_url_s *url,
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
 		}
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
 	return err;
@@ -2095,7 +2241,7 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 				"Container's quota reached (%"G_GINT64_FORMAT" bytes)",
 				pdata.quota);
 
-	m2b_close(sq3);
+	m2b_close(sq3, url);
 
 	/* Let's continue to generate the beans, no need for an open container for the moment */
 	if (!err) {
@@ -2126,14 +2272,14 @@ meta2_backend_content_from_chunkid(struct meta2_backend_s *m2b,
 	if (!err) {
 		GVariant *params[2] = {NULL, NULL};
 		params[0] = g_variant_new_string(chunk_id);
-		err = CONTENTS_HEADERS_load (sq3->db, " id IN"
+		err = CONTENTS_HEADERS_load(sq3, " id IN"
 				" (SELECT DISTINCT content FROM chunks "
 				"  WHERE id = ?) LIMIT 1", params, cb, u0);
 		metautils_gvariant_unrefv(params);
 		if (!err) {
 			/* TODO follow the FK to the aliases */
 		}
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
 	return err;
@@ -2154,12 +2300,12 @@ meta2_backend_content_from_contenthash (struct meta2_backend_s *m2b,
 	if (!err) {
 		GVariant *params[2] = {NULL, NULL};
 		params[0] = _gb_to_gvariant(h);
-		err = CONTENTS_HEADERS_load (sq3->db, " hash = ?", params, cb, u0);
+		err = CONTENTS_HEADERS_load(sq3, " hash = ?", params, cb, u0);
 		metautils_gvariant_unrefv(params);
 		if (!err) {
 			/* TODO follow the FK to the aliases */
 		}
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
 	return err;
@@ -2180,12 +2326,12 @@ meta2_backend_content_from_contentid (struct meta2_backend_s *m2b,
 	if (!err) {
 		GVariant *params[2] = {NULL, NULL};
 		params[0] = _gb_to_gvariant(h);
-		err = CONTENTS_HEADERS_load (sq3->db, " id = ?", params, cb, u0);
+		err = CONTENTS_HEADERS_load(sq3, " id = ?", params, cb, u0);
 		metautils_gvariant_unrefv(params);
 		if (!err) {
 			/* TODO follow the FK to the aliases */
 		}
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
 	return err;
@@ -2263,6 +2409,7 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	const gchar *master = sqlx_get_service_id();
+	gchar *queue_url = NULL;
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -2275,11 +2422,26 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 		return g_str_has_prefix(k, M2V2_ADMIN_PREFIX_SHARDING);
 	}
 
+	gchar *cfg = oio_cfg_get_eventagent(m2b->nsinfo->name);
+	if (!cfg)
+		return SYSERR("Missing queue URL");
+	STRING_STACKIFY(cfg);
+	gchar **eventagent_urls = g_strsplit(cfg, OIO_CSV_SEP2, -1);
+	for (gchar **eventagent_url = eventagent_urls; *eventagent_url && !err;
+			++eventagent_url) {
+		if (g_str_has_prefix(*eventagent_url, BEANSTALKD_PREFIX))
+			queue_url = g_strdup(*eventagent_url);
+	}
+	g_strfreev(eventagent_urls);
+	if (!queue_url)
+		return SYSERR("Missing beanstalkd URL");
+
 	err = m2b_open(m2b, url,
 			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT, &sq3);
 	if (!err) {
 		gint64 timestamp = oio_ext_real_time();
 		gchar *copy_path = NULL;
+		struct beanstalkd_s *beanstalkd = NULL;
 
 		gint64 sharding_state = sqlx_admin_get_i64(sq3,
 				M2V2_ADMIN_SHARDING_STATE, 0);
@@ -2297,7 +2459,19 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 		if (err)
 			goto rollback;
 
-		// TODO(adu) Save writes in a queue
+		err = _connect_to_sharding_queue(url, queue_url, timestamp,
+				&beanstalkd);
+		if (err) {
+			g_prefix_error(&err, "Failed to connect to beanstalkd: ");
+			goto rollback;
+		}
+		if (sq3->sharding_queue) {
+			// Should never happen
+			GRID_WARN("For sharding, "
+					"a connection to the beanstalkd was left open");
+			beanstalkd_destroy(sq3->sharding_queue);
+		}
+		sq3->sharding_queue = beanstalkd;
 
 		struct sqlx_repctx_s *repctx = NULL;
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
@@ -2305,6 +2479,7 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 					CONTAINER_TO_SHARD_STATE_SAVING_WRITES);
 			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, timestamp);
 			sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_MASTER, master);
+			sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_QUEUE, queue_url);
 			m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
 			if (!err)
@@ -2321,12 +2496,24 @@ rollback:
 				GRID_WARN("Failed to remove file %s: (%d) %s", copy_path,
 						errno, strerror(errno));
 			}
+
+			if (beanstalkd) {
+				if (beanstalkd != sq3->sharding_queue) {
+					// Should never happen
+					GRID_WARN("For sharding, "
+							"a connection to the beanstalkd was left open");
+					beanstalkd_destroy(sq3->sharding_queue);
+				}
+				beanstalkd_destroy(beanstalkd);
+				sq3->sharding_queue = NULL;
+			}
 		}
 		g_free(copy_path);
 
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
+	g_free(queue_url);
 	return err;
 }
 
@@ -2365,7 +2552,7 @@ meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 					m2b_add_modified_container(m2b, sq3);
 			}
 		}
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
 	return err;
@@ -2395,7 +2582,7 @@ meta2_backend_show_sharding(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		if (!err && out_properties) {
 			*out_properties = sqlx_admin_get_keyvalues(sq3, NULL);
 		}
-		m2b_close(sq3);
+		m2b_close(sq3, url);
 	}
 
 	return err;

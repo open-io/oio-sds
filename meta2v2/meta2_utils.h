@@ -105,11 +105,12 @@ void m2v2_shorten_chunk_ids(GSList *beans);
 typedef void (*m2_onbean_cb) (gpointer u, gpointer bean);
 
 /** Get the cumulated size and number of contents in the database. */
-void m2db_get_container_size_and_obj_count(sqlite3 *db, gboolean check_alias,
-		guint64 *size, gint64 *count);
+void m2db_get_container_size_and_obj_count(struct sqlx_sqlite3_s *sq3,
+		gboolean check_alias, guint64 *size, gint64 *count);
 
 /** Get the number of shard ranges in the database. */
-void m2db_get_container_shard_count(sqlite3 *db, gint64 *shard_count_out);
+void m2db_get_container_shard_count(struct sqlx_sqlite3_s *sq3,
+		gint64 *shard_count_out);
 
 gint64 m2db_get_max_versions(struct sqlx_sqlite3_s *sq3, gint64 def);
 

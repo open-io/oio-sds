@@ -2,6 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -114,6 +115,7 @@ struct sqlx_cache_s
 	struct beacon_s beacon_idle_hot;
 	struct beacon_s beacon_used;
 
+	sqlx_cache_unlock_hook unlock_hook;
 	sqlx_cache_close_hook close_hook;
 };
 
@@ -529,6 +531,13 @@ sqlx_cache_reconfigure(sqlx_cache_t *cache)
 }
 
 void
+sqlx_cache_set_unlock_hook(sqlx_cache_t *cache, sqlx_cache_unlock_hook hook)
+{
+	EXTRA_ASSERT(cache != NULL);
+	cache->unlock_hook = hook;
+}
+
+void
 sqlx_cache_set_close_hook(sqlx_cache_t *cache, sqlx_cache_close_hook hook)
 {
 	EXTRA_ASSERT(cache != NULL);
@@ -829,6 +838,10 @@ sqlx_cache_unlock_and_close_base(sqlx_cache_t *cache, gint bd, guint32 flags)
 					_expire_base(cache, base, flags & SQLX_CLOSE_FOR_DELETION);
 				} else {
 					sqlx_base_debug("CLOSING", base);
+
+					if (cache->unlock_hook)
+						cache->unlock_hook(base->handle);
+
 					base->owner = NULL;
 					if (base->heat >= _cache_heat_threshold)
 						sqlx_base_move_to_list(cache, base, SQLX_BASE_IDLE_HOT);

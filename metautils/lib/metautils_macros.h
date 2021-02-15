@@ -102,6 +102,7 @@ License along with this library.
 #define NAME_MSGKEY_USER               "USR"
 #define NAME_MSGKEY_VERPOLICY          "VP"
 #define NAME_MSGKEY_VERSION            "VER"
+#define NAME_MSGKEY_QUEUE_URL          "QUEUE"
 
 #define NS_STATE_VALUE_MASTER     "master"
 #define NS_STATE_VALUE_SLAVE      "slave"
