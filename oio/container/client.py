@@ -751,15 +751,20 @@ class ContainerClient(ProxyClient):
 
     @extract_reference_params
     def content_prepare(self, account=None, reference=None, path=None,
-                        size=None, cid=None, stgpol=None, content_id=None,
-                        version=None, params=None, **kwargs):
+                        position=0, size=None, cid=None, stgpol=None,
+                        content_id=None, version=None, params=None, **kwargs):
         """
         Prepare an upload: get URLs of chunks on available rawx.
 
+        :param position: position a the metachunk that must be prepared
+        :param stgpol: name of the storage policy of the object being uploaded
+        :param version: version of the object being uploaded. This is required
+            only on the second and later calls to this method to get coherent
+            results.
         :keyword autocreate: create container if it doesn't exist
         """
         uri = self._make_uri('content/prepare')
-        data = {'size': size}
+        data = {'size': size, 'position': position}
         if stgpol:
             data['policy'] = stgpol
         data = json.dumps(data)
@@ -859,7 +864,8 @@ class ContainerClient(ProxyClient):
         self._direct_request('POST', uri, params=params, **kwargs)
 
     @extract_reference_params
-    def content_spare(self, account=None, reference=None, path=None, data=None,
+    def content_spare(self, account=None, reference=None, path=None,
+                      version=None, data=None,
                       cid=None, stgpol=None, position=None, params=None,
                       **kwargs):
         uri = self._make_uri('content/spare')

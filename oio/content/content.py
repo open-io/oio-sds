@@ -155,8 +155,9 @@ class Content(object):
         for attempt in range(max_attempts):
             try:
                 spare_resp = self.container_client.content_spare(
-                    cid=self.container_id, path=self.content_id,
-                    data=spare_data, stgpol=self.policy, position=position,
+                    cid=self.container_id, path=self.path,
+                    version=self.version, data=spare_data,
+                    stgpol=self.policy, position=position,
                     **kwargs)
                 quals = extract_chunk_qualities(
                     spare_resp.get('properties', {}), raw=True)
@@ -268,8 +269,8 @@ class Content(object):
             metapos=current_chunk.metapos).exclude(id=chunk_id).all()
 
         spare_urls, qualities = self._get_spare_chunk(
-            other_chunks, [current_chunk], check_quality=check_quality,
-            max_attempts=max_attempts, position=current_chunk.pos, **kwargs)
+            other_chunks, [current_chunk], position=current_chunk.pos,
+            check_quality=check_quality, max_attempts=max_attempts, **kwargs)
 
         # Sort chunks by score to try to copy with higher score.
         # When scores are close together (e.g. [95, 94, 94, 93, 50]),

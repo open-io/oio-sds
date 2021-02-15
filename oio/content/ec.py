@@ -59,7 +59,8 @@ class ECContent(Content):
         broken_list = list()
         if not allow_same_rawx and chunk_id is not None:
             broken_list.append(current_chunk)
-        spare_url, _quals = self._get_spare_chunk(chunks.all(), broken_list)
+        spare_url, _quals = self._get_spare_chunk(chunks.all(), broken_list,
+                                                  position=current_chunk.pos)
         new_chunk = Chunk({'pos': current_chunk.pos, 'url': spare_url[0]})
 
         # Regenerate the lost chunk's data, from existing chunks

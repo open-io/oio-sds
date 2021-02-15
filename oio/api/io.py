@@ -795,6 +795,8 @@ class MetachunkPreparer(object):
         self._fix_mc_pos(self.first_body, mc_pos)
         self._all_chunks.extend(self.first_body)
         yield self.first_body
+        if 'version' not in self.extra_kwargs:
+            self.extra_kwargs['version'] = self.obj_meta['version']
         while True:
             mc_pos += 1
             # If we are here, we know that the client is still
@@ -802,7 +804,8 @@ class MetachunkPreparer(object):
             # postpone the deadline.
             set_deadline_from_read_timeout(self.extra_kwargs, force=True)
             meta, next_body = self.container_client.content_prepare(
-                    self.account, self.container, self.obj_name, size=1,
+                    self.account, self.container, self.obj_name,
+                    position=mc_pos, size=1,
                     stgpol=self.policy, **self.extra_kwargs)
             self.obj_meta['properties'].update(meta.get('properties', {}))
             self._fix_mc_pos(next_body, mc_pos)

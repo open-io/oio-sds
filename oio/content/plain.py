@@ -83,7 +83,7 @@ class PlainContent(Content):
         if not allow_same_rawx and chunk_id is not None:
             broken_list.append(current_chunk)
         spare_urls, _quals = self._get_spare_chunk(
-            duplicate_chunks, broken_list)
+            duplicate_chunks, broken_list, position=current_chunk.pos)
         spare_url = spare_urls[0]
 
         # Actually create the spare chunk, by duplicating a good one
