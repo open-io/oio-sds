@@ -1,6 +1,7 @@
 /*
 OpenIO SDS event queue
 Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -24,6 +25,7 @@ License along with this library.
 #include <core/url_ext.h>
 #include <metautils/lib/metautils_resolv.h>
 
+#include "beanstalkd.h"
 #include "oio_events_queue.h"
 #include "oio_events_queue_internals.h"
 #include "oio_events_queue_fanout.h"
@@ -149,7 +151,7 @@ oio_events_queue_factory__create (const char *cfg, const char *tube,
 	} else {
 		const char *tmp;
 
-		if (NULL != (tmp = _has_prefix (cfg, "beanstalk://")))
+		if ((tmp = _has_prefix(cfg, BEANSTALKD_PREFIX)) != NULL)
 			return oio_events_queue_factory__create_beanstalkd(tmp, tube, out);
 
 		return BADREQ("implementation not recognized");

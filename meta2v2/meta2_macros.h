@@ -73,6 +73,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define M2V2_ADMIN_SHARDING_MASTER M2V2_ADMIN_PREFIX_SHARDING "master"
 # endif
 
+# ifndef M2V2_ADMIN_SHARDING_QUEUE
+# define M2V2_ADMIN_SHARDING_QUEUE M2V2_ADMIN_PREFIX_SHARDING "queue"
+# endif
+
 # ifndef M2V2_ADMIN_SHARDING_ROOT
 # define M2V2_ADMIN_SHARDING_ROOT M2V2_ADMIN_PREFIX_SHARDING "root"
 # endif

@@ -2,6 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -22,6 +23,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # include <glib.h>
 # include <sqlite3.h>
+
+#include <sqliterepo/sqlite_utils.h>
 
 # define BEAN_FLAG_DIRTY     0x01
 # define BEAN_FLAG_TRANSIENT 0x02
@@ -131,41 +134,43 @@ void _bean_cleanv(gpointer *beanv);
 void _bean_cleanv2(GPtrArray *v);
 void _bean_cleanl2(GSList *v);
 
-GError* _db_insert_bean(sqlite3 *db, gpointer bean);
-GError* _db_insert_beans_list(sqlite3 *db, GSList *list);
+GError* _db_insert_bean(struct sqlx_sqlite3_s *sq3, gpointer bean);
+GError* _db_insert_beans_list(struct sqlx_sqlite3_s *sq3, GSList *list);
 
-GError* _db_save_bean(sqlite3 *db, gpointer bean);
-GError* _db_save_beans_list(sqlite3 *db, GSList *list);
+GError* _db_save_bean(struct sqlx_sqlite3_s *sq3, gpointer bean);
+GError* _db_save_beans_list(struct sqlx_sqlite3_s *sq3, GSList *list);
 
 /* substitues bean0 by bean1, with an UPDATE statement that will
  * even overwrite the fields of the PK */
-GError* _db_substitute_bean(sqlite3 *db, gpointer bean0, gpointer bean1);
+GError* _db_substitute_bean(struct sqlx_sqlite3_s *sq3, gpointer bean0,
+		gpointer bean1);
 
-GError* _db_delete_bean(sqlite3 *db, gpointer bean);
-GError* _db_delete(const struct bean_descriptor_s *descr, sqlite3 *db,
-		const gchar *clause, GVariant **params);
+GError* _db_delete_bean(struct sqlx_sqlite3_s *sq3, gpointer bean);
+GError* _db_delete(const struct bean_descriptor_s *descr,
+		struct sqlx_sqlite3_s *sq3, const gchar *clause, GVariant **params);
 
 /** Fills 'result' with beans described by 'descr', filtered with
  * the 'clause' and its parameters. */
 GError* _db_get_bean(const struct bean_descriptor_s *descr,
-		sqlite3 *db, const gchar *clause, GVariant **params,
+		struct sqlx_sqlite3_s *sq3, const gchar *clause, GVariant **params,
 		on_bean_f cb, gpointer u);
 
 GError* _db_count_bean(const struct bean_descriptor_s *descr,
-		sqlite3 *db, const gchar *clause, GVariant **params,
+		struct sqlx_sqlite3_s *sq3, const gchar *clause, GVariant **params,
 		gint64 *pcount);
 
 /** Finds the FK descriptor, then calls _db_get_FK() */
 GError* _db_get_FK_by_name(gpointer bean, const gchar *name,
-		sqlite3 *db, on_bean_f cb, gpointer u);
+		struct sqlx_sqlite3_s *sq3, on_bean_f cb, gpointer u);
 
-GError* _db_del_FK_by_name(gpointer bean, const gchar *name, sqlite3 *db);
+GError* _db_del_FK_by_name(gpointer bean, const gchar *name,
+		struct sqlx_sqlite3_s *sq3);
 
 GError* _db_count_FK_by_name(gpointer bean, const gchar *name,
-		sqlite3 *db, gint64 *pcount);
+		struct sqlx_sqlite3_s *sq3, gint64 *pcount);
 
 GError* _db_get_FK_by_name_buffered(gpointer bean, const gchar *name,
-		sqlite3 *db, GPtrArray *result);
+		struct sqlx_sqlite3_s *sq3, GPtrArray *result);
 
 GString* _bean_debug(GString *gstr, gpointer bean);
 void _bean_debugl2 (const char *tag, GSList *beans);

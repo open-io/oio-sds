@@ -2,6 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -118,6 +119,17 @@ struct sqlx_sqlite3_s
 	struct sqlx_name_inline_s name;
 	gchar path_inline[LIMIT_LENGTH_NSNAME + LIMIT_LENGTH_BASENAME
 			+ LIMIT_LENGTH_BASETYPE + LIMIT_LENGTH_BASESUFFIX];
+
+	// Save all update queries while the database is opening
+	// (except for admin table)
+	// FIXME(adu): It only works for meta2 databases
+	guint8 save_update_queries: 1;
+	guint8 transaction : 1;
+	GList *transaction_update_queries;
+	GList *update_queries;
+
+	// Sharding
+	struct beanstalkd_s *sharding_queue;
 };
 
 struct sqlx_repo_config_s

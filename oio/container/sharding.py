@@ -13,6 +13,9 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from oio.common.green import eventlet, eventlet_yield, time, Empty, LightQueue
+
+from greenlet import GreenletExit
 from urllib.parse import unquote
 
 from oio.common import exceptions
@@ -21,10 +24,218 @@ from oio.common.constants import HEADER_PREFIX, M2_PROP_ACCOUNT_NAME, \
     M2_PROP_CONTAINER_NAME, M2_PROP_SHARDS, M2_PROP_SHARDING_ROOT, \
     M2_PROP_SHARDING_LOWER, M2_PROP_SHARDING_UPPER, STRLEN_CID
 from oio.common.easy_value import int_value, is_hexa, true_value
-from oio.common.exceptions import OioException
+from oio.common.exceptions import OioException, OioTimeout
 from oio.common.json import json
+from oio.common.logger import get_logger
 from oio.common.utils import cid_from_name, depaginate
 from oio.container.client import ContainerClient
+from oio.event.beanstalk import Beanstalk, ResponseError
+
+
+class SavedWritesApplicator(object):
+
+    def __init__(self, sharding_client, parent_shard, new_shards,
+                 logger=None, **kwargs):
+        self.sharding_client = sharding_client
+        self.logger = logger or get_logger(dict())
+        url = parent_shard['sharding']['queue']
+        tube = parent_shard['cid'] + '.sharding-' \
+            + str(parent_shard['sharding']['timestamp'])
+        self.logger.info('Connecting to beanstalk tube (URL=%s TUBE=%s)',
+                         url, tube)
+        self.beanstalk = Beanstalk.from_url(url)
+        self.beanstalk.use(tube)
+        self.beanstalk.watch(tube)
+        self.new_shards = list()
+        for new_shard in new_shards:
+            self.new_shards.append(new_shard.copy())
+
+        self.main_thread = None
+        self.queue_is_empty = False
+        self.flush_queries = False
+        self.running = True
+
+    def _update_new_shard(self, new_shard, buffer_size=1000, **kwargs):
+        queue = new_shard['queue']
+        last_queries = False
+        buffer = list()
+        while True:
+            max_remaining = buffer_size
+            try:
+                queries = queue.get(block=False)
+                if queries is None:
+                    last_queries = True
+                    max_remaining = 0
+                else:
+                    buffer += queries
+            except Empty:
+                if self.flush_queries and buffer:
+                    max_remaining = 0
+                else:
+                    eventlet_yield()
+                    continue
+
+            while buffer and len(buffer) >= max_remaining:
+                queries_to_sent = buffer[:buffer_size]
+                buffer = buffer[buffer_size:]
+                # TODO(adu) Really update the new shards
+                print(queries_to_sent)
+
+            if last_queries:
+                if buffer:
+                    raise OioException('Should never happen')
+                return
+
+    def _fetch_and_dispatch_queries(self, **kwargs):
+        last_check = False
+        while True:
+            data = None
+            try:
+                job_id, data = self.beanstalk.reserve(timeout=0)
+                self.queue_is_empty = False
+                self.beanstalk.delete(job_id)
+            except ResponseError as exc:
+                if 'TIMED_OUT' in str(exc):
+                    self.queue_is_empty = True
+                    if not self.running:
+                        if last_check:
+                            for new_shard in self.new_shards:
+                                new_shard['queue'].put(None)
+                            return
+                        last_check = True
+                    else:
+                        eventlet_yield()
+                    continue
+                raise
+
+            if not data:
+                continue
+            data = json.loads(data)
+            path = data.get('path')
+            queries = data['queries']
+            if not queries:
+                continue
+
+            relevant_queues = list()
+            for new_shard in self.new_shards:
+                if not path:
+                    relevant_queues.append(new_shard['queue'])
+                    continue
+                if new_shard['lower'] and path <= new_shard['lower']:
+                    continue
+                if new_shard['upper'] and path > new_shard['upper']:
+                    continue
+                relevant_queues.append(new_shard['queue'])
+            if not relevant_queues:
+                raise OioException(
+                    'The path does not belong to any of the shards')
+            for relevant_queue in relevant_queues:
+                relevant_queue.put(queries)
+
+    def apply_in_background(self, **kwargs):
+        for new_shard in self.new_shards:
+            new_shard['queue'] = LightQueue()
+            new_shard['thread'] = eventlet.spawn(
+                self._update_new_shard, new_shard, **kwargs)
+        self.main_thread = eventlet.spawn(
+            self._fetch_and_dispatch_queries, **kwargs)
+
+        # Let these threads start
+        eventlet_yield()
+
+    def wait_until_queue_is_almost_empty(self, timeout=30, **kwargs):
+        start_time = time.time()
+        while True:
+            if self.queue_is_empty:
+                for new_shard in self.new_shards:
+                    shard_queue = new_shard.get('queue')
+                    if shard_queue is not None and shard_queue.qsize() > 2:
+                        break
+                else:
+                    return
+
+            # Check if the timeout has not expired
+            if time.time() - start_time > timeout:
+                raise OioTimeout(
+                    'After more than %d seconds, '
+                    'the queue is still not nearly empty' % timeout)
+
+            # In the meantime, let the other threads run
+            eventlet_yield()
+
+    def flush(self, **kwargs):
+        self.flush_queries = True
+
+    def close(self, timeout=10, **kwargs):
+        self.running = False
+        self.flush_queries = True
+        success = True
+
+        # Wait for the timeout to expire before killing all threads
+        all_threads = list()
+        if self.main_thread is not None:
+            all_threads.append(self.main_thread)
+        for new_shard in self.new_shards:
+            shard_thread = new_shard.get('thread')
+            if shard_thread is not None:
+                all_threads.append(shard_thread)
+        start_time = time.time()
+        while True:
+            if all((thread.dead for thread in all_threads)):
+                break
+
+            # Check if the timeout has not expired
+            if time.time() - start_time > timeout:
+                for thread in all_threads:
+                    thread.kill()
+                break
+
+            # In the meantime, let the other threads run
+            eventlet_yield()
+
+        # Close the beanstalk connection
+        try:
+            self.beanstalk.close()
+        except Exception as exc:
+            self.logger.error('Failed to close beanstalk connection: %s', exc)
+            success = False
+
+        # Fetch all results of all threads.
+        # These operations should not be blocking because
+        # the threads terminated normally or the threads were killed.
+        if self.main_thread is not None:
+            try:
+                self.main_thread.wait()
+            except GreenletExit:
+                self.logger.error(
+                    'Failed to fetch and dispatch queries: '
+                    'After more than %d seconds, '
+                    'the thread is still not finished', timeout)
+                success = False
+            except Exception as exc:
+                self.logger.error(
+                    'Failed to fetch and dispatch queries: %s', exc)
+                success = False
+        for new_shard in self.new_shards:
+            shard_thread = new_shard.get('thread')
+            if shard_thread is None:
+                continue
+            try:
+                shard_thread.wait()
+            except GreenletExit:
+                self.logger.error(
+                    'Failed to update new shard (CID=%s): '
+                    'After more than %d seconds, '
+                    'the thread is still not finished',
+                    new_shard['cid'], timeout)
+                success = False
+            except Exception as exc:
+                self.logger.error(
+                    'Failed to update new shard (CID=%s): %s',
+                    new_shard['cid'], exc)
+                success = False
+
+        return success
 
 
 class ContainerSharding(ProxyClient):
@@ -278,11 +489,24 @@ class ContainerSharding(ProxyClient):
             self._create_shard(root_account, root_container, parent_shard,
                                new_shard, **kwargs)
 
-        # TODO(adu) Apply saved writes on the new shards in the background
+        # Apply saved writes on the new shards in the background
+        saved_writes_applicator = SavedWritesApplicator(
+            self, parent_shard, new_shards, logger=self.logger, **kwargs)
+        try:
+            saved_writes_applicator.apply_in_background(**kwargs)
+            saved_writes_applicator.wait_until_queue_is_almost_empty(**kwargs)
+            saved_writes_applicator.flush(**kwargs)
 
-        # TODO(adu) When the queue is empty, lock the container to shard
+            # TODO(adu) When the queue is empty, lock the container to shard
+        except Exception:
+            # Immediately close the applicator
+            saved_writes_applicator.close(timeout=0, **kwargs)
+            raise
 
-        # Remplace the shards in the root container
+        # When the queue is empty again,
+        # remplace the shards in the root container
+        if not saved_writes_applicator.close(**kwargs):
+            raise OioException('New shards could not be updated correctly')
         self._replace_shards(root_account, root_container, new_shards,
                              **kwargs)
         parent_shard.pop('sharding', None)

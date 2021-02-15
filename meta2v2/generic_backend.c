@@ -2,6 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -108,7 +109,7 @@ _db_del_FK(gpointer bean,
 		const struct fk_field_s *fkf0,
 		const struct bean_descriptor_s *descr,
 		const struct fk_field_s *fkf1,
-		sqlite3 *db)
+		struct sqlx_sqlite3_s *sq3)
 {
 	GError *err;
 	guint count;
@@ -131,7 +132,7 @@ _db_del_FK(gpointer bean,
 	g_ptr_array_add(p, NULL);
 
 	/* execute the query */
-	err = _db_delete(descr, db, gsql->str, (GVariant**)(p->pdata));
+	err = _db_delete(descr, sq3, gsql->str, (GVariant**)(p->pdata));
 
 	g_string_free(gsql, TRUE);
 	gv_freev((GVariant**) g_ptr_array_free(p, FALSE), FALSE);
@@ -144,7 +145,7 @@ _db_get_FK(gpointer bean,
 		const struct fk_field_s *fkf0,
 		const struct bean_descriptor_s *descr,
 		const struct fk_field_s *fkf1,
-		sqlite3 *db,
+		struct sqlx_sqlite3_s *sq3,
 		on_bean_f cb, gpointer u)
 {
 	GError *err;
@@ -168,7 +169,7 @@ _db_get_FK(gpointer bean,
 	g_ptr_array_add(p, NULL);
 
 	/* execute the query */
-	err = _db_get_bean(descr, db, gsql->str, (GVariant**)(p->pdata), cb, u);
+	err = _db_get_bean(descr, sq3, gsql->str, (GVariant**)(p->pdata), cb, u);
 
 	g_string_free(gsql, TRUE);
 	gv_freev((GVariant**) g_ptr_array_free(p, FALSE), FALSE);
@@ -177,23 +178,23 @@ _db_get_FK(gpointer bean,
 }
 
 GError*
-_db_del_FK_by_name(gpointer bean, const gchar *name, sqlite3 *db)
+_db_del_FK_by_name(gpointer bean, const gchar *name, struct sqlx_sqlite3_s *sq3)
 {
 	const struct fk_descriptor_s *fk;
 
 	EXTRA_ASSERT(name != NULL);
 	EXTRA_ASSERT(bean != NULL);
-	EXTRA_ASSERT(db != NULL);
+	EXTRA_ASSERT(sq3 != NULL);
 
 	for (fk=DESCR(bean)->fk; fk->src ;fk++) {
 		if (!strcmp(fk->name, name)) {
 			EXTRA_ASSERT(DESCR(bean) == fk->src || DESCR(bean) == fk->dst);
 			if (DESCR(bean) == fk->src)
 				return _db_del_FK(bean, fk->dst_fields, fk->dst,
-						fk->src_fields, db);
+						fk->src_fields, sq3);
 			if (DESCR(bean) == fk->dst)
 				return _db_del_FK(bean, fk->src_fields, fk->src,
-						fk->dst_fields, db);
+						fk->dst_fields, sq3);
 		}
 	}
 
@@ -202,14 +203,14 @@ _db_del_FK_by_name(gpointer bean, const gchar *name, sqlite3 *db)
 }
 
 GError*
-_db_get_FK_by_name(gpointer bean, const gchar *name, sqlite3 *db,
+_db_get_FK_by_name(gpointer bean, const gchar *name, struct sqlx_sqlite3_s *sq3,
 		on_bean_f cb, gpointer u)
 {
 	const struct fk_descriptor_s *fk;
 
 	EXTRA_ASSERT(name != NULL);
 	EXTRA_ASSERT(bean != NULL);
-	EXTRA_ASSERT(db != NULL);
+	EXTRA_ASSERT(sq3 != NULL);
 	EXTRA_ASSERT(cb != NULL);
 
 	for (fk=DESCR(bean)->fk; fk->src ;fk++) {
@@ -217,10 +218,10 @@ _db_get_FK_by_name(gpointer bean, const gchar *name, sqlite3 *db,
 			EXTRA_ASSERT(DESCR(bean) == fk->src || DESCR(bean) == fk->dst);
 			if (DESCR(bean) == fk->src)
 				return _db_get_FK(bean, fk->dst_fields, fk->dst,
-						fk->src_fields, db, cb, u);
+						fk->src_fields, sq3, cb, u);
 			if (DESCR(bean) == fk->dst)
 				return _db_get_FK(bean, fk->src_fields, fk->src,
-						fk->dst_fields, db, cb, u);
+						fk->dst_fields, sq3, cb, u);
 		}
 	}
 
@@ -233,7 +234,7 @@ _db_count_FK(gpointer bean,
 		const struct fk_field_s *fkf0,
 		const struct bean_descriptor_s *descr,
 		const struct fk_field_s *fkf1,
-		sqlite3 *db,
+		struct sqlx_sqlite3_s *sq3,
 		gint64 *pcount)
 {
 	GError *err;
@@ -257,7 +258,7 @@ _db_count_FK(gpointer bean,
 	g_ptr_array_add(p, NULL);
 
 	/* execute the query */
-	err = _db_count_bean(descr, db, gsql->str, (GVariant**)(p->pdata), pcount);
+	err = _db_count_bean(descr, sq3, gsql->str, (GVariant**)(p->pdata), pcount);
 
 	g_string_free(gsql, TRUE);
 	gv_freev((GVariant**) g_ptr_array_free(p, FALSE), FALSE);
@@ -267,7 +268,7 @@ _db_count_FK(gpointer bean,
 
 GError*
 _db_count_FK_by_name(gpointer bean, const gchar *name,
-		sqlite3 *db, gint64 *pcount)
+		struct sqlx_sqlite3_s *sq3, gint64 *pcount)
 {
 	const struct fk_descriptor_s *fk;
 
@@ -280,10 +281,10 @@ _db_count_FK_by_name(gpointer bean, const gchar *name,
 			EXTRA_ASSERT(DESCR(bean) == fk->src || DESCR(bean) == fk->dst);
 			if (DESCR(bean) == fk->src)
 				return _db_count_FK(bean, fk->dst_fields, fk->dst,
-						fk->src_fields, db, pcount);
+						fk->src_fields, sq3, pcount);
 			if (DESCR(bean) == fk->dst)
 				return _db_count_FK(bean, fk->src_fields, fk->src,
-						fk->dst_fields, db, pcount);
+						fk->dst_fields, sq3, pcount);
 		}
 	}
 
@@ -293,9 +294,9 @@ _db_count_FK_by_name(gpointer bean, const gchar *name,
 
 GError*
 _db_get_FK_by_name_buffered(gpointer bean, const gchar *name,
-		sqlite3 *db, GPtrArray *result)
+		struct sqlx_sqlite3_s *sq3, GPtrArray *result)
 {
-	return _db_get_FK_by_name(bean, name, db, _bean_buffer_cb, result);
+	return _db_get_FK_by_name(bean, name, sq3, _bean_buffer_cb, result);
 }
 
 /* SQLite/Bean utils ------------------------------------------------------- */
@@ -469,13 +470,16 @@ _db_prepare_statement(sqlite3 *db, const gchar *sql, int len, sqlite3_stmt **res
 }
 
 static GError*
-_db_execute(sqlite3 *db, const gchar *query, int len, GVariant **params)
+_db_execute(struct sqlx_sqlite3_s *sq3, const gchar *query, int len,
+		GVariant **params)
 {
+	EXTRA_ASSERT(sq3 != NULL && sq3->db != NULL);
+
 	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
 	gint rc;
 
-	err = _db_prepare_statement(db, query, len, &stmt);
+	err = _db_prepare_statement(sq3->db, query, len, &stmt);
 	if (NULL != err) {
 		g_prefix_error(&err, "Prepare error: ");
 		return err;
@@ -487,12 +491,12 @@ _db_execute(sqlite3 *db, const gchar *query, int len, GVariant **params)
 	else {
 		while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) { }
 		if (rc != SQLITE_DONE && rc != SQLITE_OK) {
-			err = M2_SQLITE_GERROR(db,rc);
+			err = M2_SQLITE_GERROR(sq3->db,rc);
 			g_prefix_error(&err, "Step error: ");
 		}
 	}
 
-	sqlite3_finalize(stmt);
+	sqlx_sqlite3_finalize(sq3, stmt, err);
 	return err;
 }
 
@@ -546,7 +550,7 @@ _row_to_bean(const struct bean_descriptor_s *descr, sqlite3_stmt *stmt)
 
 GError *
 _db_get_bean(const struct bean_descriptor_s *descr,
-		sqlite3 *db, const gchar *clause, GVariant **params,
+		struct sqlx_sqlite3_s *sq3, const gchar *clause, GVariant **params,
 		on_bean_f cb, gpointer u)
 {
 	GError *err = NULL;
@@ -554,18 +558,19 @@ _db_get_bean(const struct bean_descriptor_s *descr,
 	gint rc;
 
 	EXTRA_ASSERT(descr != NULL);
-	EXTRA_ASSERT(db != NULL);
+	EXTRA_ASSERT(sq3 != NULL && sq3->db != NULL);
 	EXTRA_ASSERT(params != NULL);
 	EXTRA_ASSERT(cb != NULL);
 
 	if (!clause || !*clause)
-		err = _db_prepare_statement(db, descr->sql_select, descr->sql_select_len, &stmt);
+		err = _db_prepare_statement(sq3->db, descr->sql_select,
+				descr->sql_select_len, &stmt);
 	else {
 		GString *sql = g_string_sized_new(128 + descr->sql_select_len);
 		g_string_append_len (sql, descr->sql_select, descr->sql_select_len);
 		g_string_append_static (sql, " WHERE ");
 		g_string_append (sql, clause);
-		err = _db_prepare_statement(db, sql->str, sql->len, &stmt);
+		err = _db_prepare_statement(sq3->db, sql->str, sql->len, &stmt);
 		g_string_free(sql, TRUE);
 	}
 
@@ -584,14 +589,13 @@ _db_get_bean(const struct bean_descriptor_s *descr,
 		}
 	}
 
-	sqlite3_finalize(stmt);
-	stmt = NULL;
+	sqlx_sqlite3_finalize(sq3, stmt, err);
 	return err;
 }
 
 GError*
 _db_count_bean(const struct bean_descriptor_s *descr,
-		sqlite3 *db, const gchar *clause, GVariant **params,
+		struct sqlx_sqlite3_s *sq3, const gchar *clause, GVariant **params,
 		gint64 *pcount)
 {
 	GError *err = NULL;
@@ -599,17 +603,18 @@ _db_count_bean(const struct bean_descriptor_s *descr,
 	gint rc;
 
 	EXTRA_ASSERT(descr != NULL);
-	EXTRA_ASSERT(db != NULL);
+	EXTRA_ASSERT(sq3 != NULL && sq3->db != NULL);
 	EXTRA_ASSERT(pcount != NULL);
 
 	if (!clause || !*clause)
-		err = _db_prepare_statement(db, descr->sql_count, descr->sql_count_len, &stmt);
+		err = _db_prepare_statement(sq3->db, descr->sql_count,
+				descr->sql_count_len, &stmt);
 	else {
 		GString *sql = g_string_sized_new(128 + descr->sql_count_len);
 		g_string_append_len (sql, descr->sql_count, descr->sql_count_len);
 		g_string_append_static (sql, " WHERE ");
 		g_string_append (sql, clause);
-		err = _db_prepare_statement(db, sql->str, sql->len, &stmt);
+		err = _db_prepare_statement(sq3->db, sql->str, sql->len, &stmt);
 		g_string_free(sql, TRUE);
 	}
 
@@ -629,8 +634,7 @@ _db_count_bean(const struct bean_descriptor_s *descr,
 		}
 	}
 
-	sqlite3_finalize(stmt);
-	stmt = NULL;
+	sqlx_sqlite3_finalize(sq3, stmt, err);
 	return err;
 }
 
@@ -645,7 +649,7 @@ _bean_query_DELETE(gpointer bean)
 }
 
 GError*
-_db_delete_bean(sqlite3 *db, gpointer bean)
+_db_delete_bean(struct sqlx_sqlite3_s *sq3, gpointer bean)
 {
 	GVariant** _params_delete() {
 		GPtrArray *v = g_ptr_array_sized_new(1 + DESCR(bean)->count_fields);
@@ -662,7 +666,7 @@ _db_delete_bean(sqlite3 *db, gpointer bean)
 
 	GVariant **params = _params_delete();
 	GString *sql = _bean_query_DELETE(bean);
-	GError *err = _db_execute(db, sql->str, sql->len, params);
+	GError *err = _db_execute(sq3, sql->str, sql->len, params);
 	gv_freev(params, FALSE);
 	g_string_free(sql, TRUE);
 
@@ -670,13 +674,13 @@ _db_delete_bean(sqlite3 *db, gpointer bean)
 }
 
 GError*
-_db_delete(const struct bean_descriptor_s *descr, sqlite3 *db,
+_db_delete(const struct bean_descriptor_s *descr, struct sqlx_sqlite3_s *sq3,
 		const gchar *clause, GVariant **params)
 {
 	GString *sql = g_string_sized_new(128 + descr->sql_delete_len);
 	g_string_append_len (sql, descr->sql_delete, descr->sql_delete_len);
 	g_string_append(sql, clause);
-	GError *err = _db_execute(db, sql->str, sql->len, params);
+	GError *err = _db_execute(sq3, sql->str, sql->len, params);
 	g_string_free(sql, TRUE);
 	return err;
 }
@@ -748,54 +752,54 @@ _bean_params_substitute (gpointer bean0, gpointer bean1)
 }
 
 GError*
-_db_insert_bean(sqlite3 *db, gpointer bean)
+_db_insert_bean(struct sqlx_sqlite3_s *sq3, gpointer bean)
 {
-	EXTRA_ASSERT(db != NULL);
+	EXTRA_ASSERT(sq3 != NULL);
 	EXTRA_ASSERT(bean != NULL);
 
 	GVariant **params = _bean_params_insert_or_replace (bean);
-	GError *err = _db_execute(db, DESCR(bean)->sql_insert,
+	GError *err = _db_execute(sq3, DESCR(bean)->sql_insert,
 			DESCR(bean)->sql_insert_len, params);
 	gv_freev(params, FALSE);
 	return err;
 }
 
 GError *
-_db_insert_beans_list (sqlite3 *db, GSList *list)
+_db_insert_beans_list(struct sqlx_sqlite3_s *sq3, GSList *list)
 {
-	EXTRA_ASSERT(db != NULL);
+	EXTRA_ASSERT(sq3 != NULL);
 	GError *err = NULL;
 	for (; !err && list ;list=list->next)
-		err = _db_insert_bean (db, list->data);
+		err = _db_insert_bean(sq3, list->data);
 	return err;
 }
 
 GError*
-_db_substitute_bean(sqlite3 *db, gpointer bean0, gpointer bean1)
+_db_substitute_bean(struct sqlx_sqlite3_s *sq3, gpointer bean0, gpointer bean1)
 {
-	EXTRA_ASSERT(db != NULL);
+	EXTRA_ASSERT(sq3 != NULL);
 	EXTRA_ASSERT(bean0 != NULL);
 	EXTRA_ASSERT(bean1 != NULL);
 	EXTRA_ASSERT(DESCR(bean0) == DESCR(bean1));
 
 	/* an UPDATE query with the form '... SET [all] WHERE [pk]' */
 	GVariant **params = _bean_params_substitute(bean0, bean1);
-	GError *err = _db_execute(db,
+	GError *err = _db_execute(sq3,
 			DESCR(bean0)->sql_substitute, DESCR(bean0)->sql_substitute_len,
 			params);
 	gv_freev(params, FALSE);
 
 	if (!err) {
-		if (0 == sqlite3_changes(db))
+		if (0 == sqlite3_changes(sq3->db))
 			err = NEWERROR(CODE_CONTENT_NOTFOUND, "bean not found");
 	}
 	return err;
 }
 
 GError*
-_db_save_bean(sqlite3 *db, gpointer bean)
+_db_save_bean(struct sqlx_sqlite3_s *sq3, gpointer bean)
 {
-	EXTRA_ASSERT(db != NULL);
+	EXTRA_ASSERT(sq3 != NULL);
 	EXTRA_ASSERT(bean != NULL);
 
 	/* an UPDATE query with the form '... SET [non-pk] WHERE [pk]' */
@@ -803,11 +807,11 @@ _db_save_bean(sqlite3 *db, gpointer bean)
 	GVariant **params = NULL;
 	if (HDR(bean)->flags & BEAN_FLAG_TRANSIENT) {
 		params = _bean_params_insert_or_replace (bean);
-		err = _db_execute(db, DESCR(bean)->sql_replace,
+		err = _db_execute(sq3, DESCR(bean)->sql_replace,
 				DESCR(bean)->sql_replace_len, params);
 	} else {
 		params = _bean_params_update (bean);
-		err = _db_execute(db, DESCR(bean)->sql_update,
+		err = _db_execute(sq3, DESCR(bean)->sql_update,
 				DESCR(bean)->sql_update_len, params);
 	}
 
@@ -816,11 +820,11 @@ _db_save_bean(sqlite3 *db, gpointer bean)
 }
 
 GError*
-_db_save_beans_list(sqlite3 *db, GSList *list)
+_db_save_beans_list(struct sqlx_sqlite3_s *sq3, GSList *list)
 {
-	EXTRA_ASSERT(db != NULL);
+	EXTRA_ASSERT(sq3 != NULL);
 	GError *err = NULL;
 	for (; !err && list ;list=list->next)
-		err = _db_save_bean(db, list->data);
+		err = _db_save_bean(sq3, list->data);
 	return err;
 }

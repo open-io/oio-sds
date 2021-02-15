@@ -26,6 +26,7 @@ add_custom_command(
 		${CMAKE_SOURCE_DIR}/conf.json)
 
 add_library(oioevents STATIC
+	beanstalkd.c
 	oio_events_queue.c
 	oio_events_queue_buffer.c
 	oio_events_queue_internals.c

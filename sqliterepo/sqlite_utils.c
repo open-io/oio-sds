@@ -2,6 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -80,6 +81,30 @@ sqlx_exec(sqlite3 *handle, const gchar *sql)
 	}
 
 	return grc;
+}
+
+int
+sqlx_sqlite3_finalize(struct sqlx_sqlite3_s *sq3, sqlite3_stmt *stmt,
+		GError *err)
+{
+	EXTRA_ASSERT(sq3 != NULL);
+
+	if (err || !sq3->save_update_queries
+			|| sqlite3_stmt_readonly(stmt))
+		goto end;
+
+	gchar *expanded_sql = sqlite3_expanded_sql(stmt);
+	if (sq3->transaction) {
+		sq3->transaction_update_queries = g_list_append(
+				sq3->transaction_update_queries, g_strdup(expanded_sql));
+	} else {
+		sq3->update_queries = g_list_append(sq3->update_queries,
+				g_strdup(expanded_sql));
+	}
+	sqlite3_free(expanded_sql);
+
+end:
+	return sqlite3_finalize(stmt);
 }
 
 #ifdef HAVE_EXTRA_DEBUG

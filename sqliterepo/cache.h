@@ -2,6 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -24,6 +25,8 @@ License along with this library.
 
 struct hashstr_s;
 
+typedef void (*sqlx_cache_unlock_hook)(gpointer);
+
 typedef void (*sqlx_cache_close_hook)(gpointer);
 
 typedef struct sqlx_cache_s sqlx_cache_t;
@@ -33,6 +36,9 @@ gpointer sqlx_cache_get_handle(sqlx_cache_t *cache, gint bd);
 void sqlx_cache_set_handle(sqlx_cache_t *cache, gint bd, gpointer handle);
 
 sqlx_cache_t * sqlx_cache_init(void);
+
+void sqlx_cache_set_unlock_hook(sqlx_cache_t *cache,
+	sqlx_cache_unlock_hook hook);
 
 void sqlx_cache_set_close_hook(sqlx_cache_t *cache,
 	sqlx_cache_close_hook hook);

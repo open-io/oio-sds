@@ -2,6 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -135,6 +136,9 @@ const char * sqlite_strerror(const int rc);
 int sqlx_exec(sqlite3 *handle, const gchar *sql);
 
 struct sqlx_sqlite3_s;
+
+int sqlx_sqlite3_finalize(struct sqlx_sqlite3_s *sq3, sqlite3_stmt *stmt,
+		GError *err);
 
 struct oio_url_s* sqlx_admin_get_url (struct sqlx_sqlite3_s *sq3);
 

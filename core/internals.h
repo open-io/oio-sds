@@ -20,6 +20,8 @@ License along with this library.
 #ifndef OIO_SDS__core__internals_h
 # define OIO_SDS__core__internals_h 1
 
+#include <glib.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif

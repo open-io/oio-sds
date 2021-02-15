@@ -119,9 +119,11 @@ m2v2_position_decode (const char *s)
 }
 
 void
-m2db_get_container_size_and_obj_count(sqlite3 *db, gboolean check_alias,
-		guint64 *size_out, gint64 *obj_count_out)
+m2db_get_container_size_and_obj_count(struct sqlx_sqlite3_s *sq3,
+		gboolean check_alias, guint64 *size_out, gint64 *obj_count_out)
 {
+	EXTRA_ASSERT(sq3 != NULL && sq3->db != NULL);
+
 	guint64 size = 0;
 	gint64 obj_count = 0;
 	gchar tmp[512];
@@ -135,7 +137,7 @@ m2db_get_container_size_and_obj_count(sqlite3 *db, gboolean check_alias,
 
 	while ((grc == SQLITE_OK) && sql && *sql) {
 		next = NULL;
-		sqlite3_prepare_debug(rc, db, sql, -1, &stmt, &next);
+		sqlite3_prepare_debug(rc, sq3->db, sql, -1, &stmt, &next);
 		sql = next;
 		if (rc != SQLITE_OK && rc != SQLITE_DONE)
 			grc = rc;
@@ -147,7 +149,7 @@ m2db_get_container_size_and_obj_count(sqlite3 *db, gboolean check_alias,
 			if (rc != SQLITE_OK && rc != SQLITE_DONE) {
 				grc = rc;
 			}
-			rc = sqlite3_finalize(stmt);
+			rc = sqlx_sqlite3_finalize(sq3, stmt, NULL);
 		}
 
 		stmt = NULL;
@@ -159,7 +161,8 @@ m2db_get_container_size_and_obj_count(sqlite3 *db, gboolean check_alias,
 }
 
 void
-m2db_get_container_shard_count(sqlite3 *db, gint64 *shard_count_out)
+m2db_get_container_shard_count(struct sqlx_sqlite3_s *sq3,
+		gint64 *shard_count_out)
 {
 	gint64 shard_count = 0;
 	const gchar *sql = "SELECT COUNT(*) FROM shard_ranges";
@@ -169,7 +172,7 @@ m2db_get_container_shard_count(sqlite3 *db, gint64 *shard_count_out)
 
 	while ((grc == SQLITE_OK) && sql && *sql) {
 		next = NULL;
-		sqlite3_prepare_debug(rc, db, sql, -1, &stmt, &next);
+		sqlite3_prepare_debug(rc, sq3->db, sql, -1, &stmt, &next);
 		sql = next;
 		if (rc != SQLITE_OK && rc != SQLITE_DONE)
 			grc = rc;
@@ -180,7 +183,7 @@ m2db_get_container_shard_count(sqlite3 *db, gint64 *shard_count_out)
 			if (rc != SQLITE_OK && rc != SQLITE_DONE) {
 				grc = rc;
 			}
-			rc = sqlite3_finalize(stmt);
+			rc = sqlx_sqlite3_finalize(sq3, stmt, NULL);
 		}
 
 		stmt = NULL;
@@ -479,13 +482,13 @@ m2v2_shorten_chunk_ids(GSList *beans)
 /** Load all chunks related to the specified content header,
  * pass them to the callback function. */
 static GError*
-_manage_header(sqlite3 *db, struct bean_CONTENTS_HEADERS_s *bean,
+_manage_header(struct sqlx_sqlite3_s *sq3, struct bean_CONTENTS_HEADERS_s *bean,
 		m2_onbean_cb cb, gpointer u0)
 {
 	GError *err = NULL;
 
 	GPtrArray *tmp = g_ptr_array_new();
-	err = _db_get_FK_by_name_buffered(bean, "chunks", db, tmp);
+	err = _db_get_FK_by_name_buffered(bean, "chunks", sq3, tmp);
 	if (!err) {
 		while (tmp->len > 0) {
 			struct bean_CHUNKS_s *chunk = tmp->pdata[0];
@@ -505,11 +508,11 @@ _manage_header(sqlite3 *db, struct bean_CONTENTS_HEADERS_s *bean,
  * pass them to the callback function. If "deeper" is false, load only
  * the content header. */
 static GError*
-_manage_alias(sqlite3 *db, struct bean_ALIASES_s *bean,
+_manage_alias(struct sqlx_sqlite3_s *sq3, struct bean_ALIASES_s *bean,
 		gboolean deeper, m2_onbean_cb cb, gpointer u0)
 {
 	GPtrArray *tmp = g_ptr_array_new();
-	GError *err = _db_get_FK_by_name_buffered(bean, "image", db, tmp);
+	GError *err = _db_get_FK_by_name_buffered(bean, "image", sq3, tmp);
 	if (!err) {
 		while (tmp->len > 0) {
 			struct bean_CONTENTS_HEADERS_s *header = tmp->pdata[0];
@@ -517,7 +520,7 @@ _manage_alias(sqlite3 *db, struct bean_ALIASES_s *bean,
 			if (!header)
 				continue;
 			if (deeper)
-				_manage_header(db, header, cb, u0);
+				_manage_header(sq3, header, cb, u0);
 			else
 				cb(u0, header);
 		}
@@ -548,7 +551,7 @@ _alias_fetch_info(struct sqlx_sqlite3_s *sq3, guint32 flags, GPtrArray *beans,
 				continue;
 			if ((flags & M2V2_FLAG_NODELETED) && ALIASES_get_deleted(alias))
 				continue;
-			_manage_alias(sq3->db, alias, !(flags & M2V2_FLAG_NORECURSION), cb, u0);
+			_manage_alias(sq3, alias, !(flags & M2V2_FLAG_NORECURSION), cb, u0);
 		}
 	}
 
@@ -559,7 +562,7 @@ _alias_fetch_info(struct sqlx_sqlite3_s *sq3, guint32 flags, GPtrArray *beans,
 			if (!alias)
 				continue;
 			GPtrArray *props = g_ptr_array_new();
-			err = _db_get_FK_by_name_buffered(alias, "properties", sq3->db, props);
+			err = _db_get_FK_by_name_buffered(alias, "properties", sq3, props);
 			if (!err) {
 				for (guint j = 0; j < props->len; ++j) {
 					cb(u0, props->pdata[j]);
@@ -648,7 +651,7 @@ m2db_get_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *u,
 
 	GPtrArray *tmp = g_ptr_array_new();
 	if (!err)
-		err = ALIASES_load(sq3->db, sql, params, _bean_buffer_cb, tmp);
+		err = ALIASES_load(sq3, sql, params, _bean_buffer_cb, tmp);
 	metautils_gvariant_unrefv(params);
 
 	if (!err) {
@@ -840,7 +843,7 @@ _load_fk_by_name(struct sqlx_sqlite3_s *sq3, struct bean_ALIASES_s *alias,
 	EXTRA_ASSERT(cb != NULL);
 
 	GPtrArray *t0 = g_ptr_array_new();
-	GError *err = _db_get_FK_by_name_buffered(alias, fk_name, sq3->db, t0);
+	GError *err = _db_get_FK_by_name_buffered(alias, fk_name, sq3, t0);
 	if (err) {
 		GRID_WARN("Failed to load FK '%s' for alias [%s]: (%d) %s", fk_name,
 				ALIASES_get_alias(alias)->str, err->code, err->message);
@@ -891,7 +894,7 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 		// List the next items
 		GString *clause = g_string_sized_new(128);
 		GVariant **params = _list_params_to_sql_clause (&lp, clause, headers);
-		err = ALIASES_load(sq3->db, clause->str, params,
+		err = ALIASES_load(sq3, clause->str, params,
 				_bean_buffer_cb, cur_aliases);
 		metautils_gvariant_unrefv(params);
 		g_free(params), params = NULL;
@@ -1014,11 +1017,11 @@ m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		PROPERTIES_set_alias(prop, name);
 		PROPERTIES_set_version(prop, version);
 		if (_is_empty_prop(prop)) {
-			err = _db_delete_bean(sq3->db, prop);
+			err = _db_delete_bean(sq3, prop);
 			// In case it is empty but not NULL
 			PROPERTIES_set_value(prop, NULL);
 		} else {
-			err = _db_save_bean(sq3->db, prop);
+			err = _db_save_bean(sq3, prop);
 		}
 		g_hash_table_replace(
 				modified, PROPERTIES_get_key(prop)->str, _bean_dup(prop));
@@ -1066,7 +1069,7 @@ m2db_del_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 				/* explicit properties to be deleted */
 				for (gchar **p = namev; *p; ++p) {
 					if (!strcmp(*p, PROPERTIES_get_key(bean)->str)) {
-						err = _db_delete_bean(sq3->db, bean);
+						err = _db_delete_bean(sq3, bean);
 						if (err)
 							goto end;
 						tmp->pdata[i] = NULL;  // Prevent double free
@@ -1077,7 +1080,7 @@ m2db_del_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 				}
 			} else {
 				/* all properties to be deleted */
-				err = _db_delete_bean(sq3->db, bean);
+				err = _db_delete_bean(sq3, bean);
 				if (err)
 					goto end;
 				tmp->pdata[i] = NULL;  // Prevent double free
@@ -1107,7 +1110,7 @@ m2db_purge_alias_being_deleted(struct sqlx_sqlite3_s *sq3, GSList *beans,
 
 	gboolean check_FK(gpointer bean, const gchar *fk) {
 		gint64 count = 0;
-		err = _db_count_FK_by_name(bean, fk, sq3->db, &count);
+		err = _db_count_FK_by_name(bean, fk, sq3, &count);
 		return (NULL == err) && (1 >= count);
 	}
 
@@ -1159,7 +1162,7 @@ _real_delete(struct sqlx_sqlite3_s *sq3, GSList *beans, GSList **deleted_beans)
 
 	// Now really delete the beans, and notify them.
 	for (GSList *l = deleted; l; l = l->next) {
-		err = _db_delete_bean(sq3->db, l->data);
+		err = _db_delete_bean(sq3, l->data);
 		if (err != NULL) {
 			GRID_WARN("Bean delete failed: (%d) %s", err->code, err->message);
 			goto end;
@@ -1205,10 +1208,10 @@ m2db_drain_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	if (!err) {
 		for (GSList *l = beans; l && !err; l = l->next) {
 			if (DESCR(l->data) == &descr_struct_CHUNKS) {
-				err = _db_delete_bean(sq3->db, l->data);
+				err = _db_delete_bean(sq3, l->data);
 			} else if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS) {
 				CONTENTS_HEADERS_set2_chunk_method(l->data, CHUNK_METHOD_DRAINED);
-				err = _db_save_bean(sq3->db, l->data);
+				err = _db_save_bean(sq3, l->data);
 			}
 		}
 	}
@@ -1252,7 +1255,7 @@ _real_delete_and_save_deleted_beans(struct sqlx_sqlite3_s *sq3, GSList *beans,
 	// sqliterepo might disable foreign keys management, so that we have
 	// to manage this by ourselves.
 	if (!err && alias)
-		err = _db_del_FK_by_name (alias, "properties", sq3->db);
+		err = _db_del_FK_by_name(alias, "properties", sq3);
 
 	return err;
 }
@@ -1399,7 +1402,7 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 			g_byte_array_free(content, FALSE);
 			ALIASES_set_ctime(new_alias, now);
 			ALIASES_set_mtime(new_alias, now);
-			err = _db_save_bean(sq3->db, new_alias);
+			err = _db_save_bean(sq3, new_alias);
 			if (!err && cb)
 				cb(u0, new_alias);
 			else
@@ -1492,7 +1495,7 @@ m2db_truncate_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	}
 
 	for (GSList *l = discarded; l && !err; l = l->next)
-		err = _db_delete_bean(sq3->db, l->data);
+		err = _db_delete_bean(sq3, l->data);
 	if (err)
 		goto cleanup;
 
@@ -1516,7 +1519,7 @@ m2db_truncate_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	}
 	g_slist_free(content.aliases);
 	content.aliases = NULL;
-	err = _db_save_beans_list(sq3->db, kept);
+	err = _db_save_beans_list(sq3, kept);
 
 	if (!err) {
 		m2db_set_size(sq3, m2db_get_size(sq3) - sz_gap);
@@ -1675,7 +1678,7 @@ static GError* m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, GSList *beans,
 		if (_is_empty_prop(l->data))
 			PROPERTIES_set_value(l->data, NULL);
 		else
-			err = _db_save_bean(sq3->db, l->data);
+			err = _db_save_bean(sq3, l->data);
 	}
 	if (!err && cb) {
 		for (GSList *l = beans; l; l = l->next)
@@ -1691,7 +1694,7 @@ static GError* m2db_check_content_absent(struct sqlx_sqlite3_s *sq3,
 	GPtrArray *tmp = g_ptr_array_new ();
 	GVariant *params[2] = {NULL, NULL};
 	params[0] = _bytes_to_gvariant(uid, len);
-	GError *err = CONTENTS_HEADERS_load (sq3->db, " id = ? LIMIT 1", params,
+	GError *err = CONTENTS_HEADERS_load(sq3, " id = ? LIMIT 1", params,
 			_bean_buffer_cb, tmp);
 	metautils_gvariant_unrefv(params);
 	guint count = tmp->len;
@@ -1762,7 +1765,7 @@ GError* m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 			if (DESCR(bean) != &descr_struct_CHUNKS &&
 				DESCR(bean) != &descr_struct_PROPERTIES)
 				continue;
-			if (!(err = _db_insert_bean(args->sq3->db, bean))) {
+			if (!(err = _db_insert_bean(args->sq3, bean))) {
 				if (cb_added)
 					cb_added(u0_added, _bean_dup(bean));
 			}
@@ -1856,13 +1859,13 @@ GError* m2db_update_content(struct sqlx_sqlite3_s *sq3,
 		ALIASES_set_mtime(alias, now);
 		new_beans = g_slist_prepend(new_beans, alias);
 	}
-	err = _db_save_beans_list(sq3->db, new_beans);
+	err = _db_save_beans_list(sq3, new_beans);
 	if (err)
 		goto cleanup;
 
 	/* Remove old chunks from the database */
 	for (GSList *l = old_beans; l && !err; l = l->next) {
-		err = _db_delete_bean(sq3->db, l->data);
+		err = _db_delete_bean(sq3, l->data);
 	}
 	if (err)
 		goto cleanup;
@@ -2021,7 +2024,7 @@ suspended:
 	if (!err && purge_latest && latest) {
 		GRID_TRACE("Need to purge the previous LATEST");
 		GSList *inplace = g_slist_prepend (NULL, _bean_dup(latest));
-		err = _manage_alias (args->sq3->db, latest, TRUE, _bean_list_cb, &inplace);
+		err = _manage_alias(args->sq3, latest, TRUE, _bean_list_cb, &inplace);
 		if (!err) { /* remove the alias, header, content, chunk */
 			GSList *deleted = NULL;
 			err = _real_delete (args->sq3, inplace, &deleted);
@@ -2037,7 +2040,7 @@ suspended:
 		}
 		_bean_cleanl2 (inplace);
 		if (!err) /* remove the properties */
-			err = _db_del_FK_by_name (latest, "properties", args->sq3->db);
+			err = _db_del_FK_by_name(latest, "properties", args->sq3);
 	}
 
 	/* Purge the exceeding aliases */
@@ -2282,11 +2285,11 @@ GError* m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	g_byte_array_free(cid_gba, TRUE);
 
 	/* Save the modified content header */
-	if ((err = _db_save_bean(sq3->db, header)))
+	if ((err = _db_save_bean(sq3, header)))
 		goto out;
 
 	/* Now insert each chunk bean */
-	if (!(err = _db_insert_beans_list (sq3->db, newchunks))) {
+	if (!(err = _db_insert_beans_list(sq3, newchunks))) {
 		if (cb) {
 			for (GSList *l = newchunks; l; l = l->next) {
 				cb (u0, l->data);
@@ -2722,7 +2725,7 @@ _get_content_policy(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 
 	if (!(err = m2db_latest_alias(sq3, url, &latest))) {
 		if (latest != NULL) {
-			err = _db_get_FK_by_name(latest, "image", sq3->db, _bean_buffer_cb, tmp);
+			err = _db_get_FK_by_name(latest, "image", sq3, _bean_buffer_cb, tmp);
 			if (!err && tmp->len > 0) {
 				struct bean_CONTENTS_HEADERS_s *header = tmp->pdata[0];
 				GString *polname = CONTENTS_HEADERS_get_policy(header);
@@ -2822,6 +2825,8 @@ static GError*
 _purge_exceeding_aliases(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		const gchar *alias, m2_onbean_cb cb, gpointer u0)
 {
+	EXTRA_ASSERT(sq3 != NULL && sq3->db != NULL);
+
 	struct elt_s {
 		gchar *alias;
 		gint64 count;
@@ -2874,14 +2879,14 @@ _purge_exceeding_aliases(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		elt->count = sqlite3_column_int64(stmt, 1);
 		to_be_deleted = g_slist_prepend(to_be_deleted, elt);
 	}
-	(void) sqlite3_finalize(stmt);
+	sqlx_sqlite3_finalize(sq3, stmt, err);
 
 	GRID_DEBUG("Nb alias to drop: %d", g_slist_length(to_be_deleted));
 
 	// Delete the alias bean and send it to callback
 	void _delete_cb(gpointer udata, struct bean_ALIASES_s *alias_to_delete)
 	{
-		GError *local_err = _db_delete_bean(sq3->db, alias_to_delete);
+		GError *local_err = _db_delete_bean(sq3, alias_to_delete);
 		if (!local_err) {
 			_bean_list_cb(udata, alias_to_delete);
 		} else {
@@ -2902,7 +2907,7 @@ _purge_exceeding_aliases(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		struct elt_s *elt = l->data;
 		params[0] = g_variant_new_string(elt->alias);
 		params[1] = g_variant_new_int64(elt->count - max_versions);
-		err = ALIASES_load(sq3->db, sql_delete, params,
+		err = ALIASES_load(sq3, sql_delete, params,
 				(m2_onbean_cb)_delete_cb, &deleted_aliases);
 		if (err) {
 			GRID_WARN("Failed to drop exceeding copies of %s: %s",
@@ -2970,7 +2975,7 @@ _purge_deleted_aliases(struct sqlx_sqlite3_s *sq3, gint64 delay,
 	// Delete the alias bean and send it to callback
 	void _delete_cb(gpointer udata, struct bean_ALIASES_s *alias_to_delete)
 	{
-		GError *local_err = _db_delete_bean(sq3->db, alias_to_delete);
+		GError *local_err = _db_delete_bean(sq3, alias_to_delete);
 		if (!local_err) {
 			_bean_list_cb(udata, alias_to_delete);
 		} else {
@@ -2995,7 +3000,7 @@ _purge_deleted_aliases(struct sqlx_sqlite3_s *sq3, gint64 delay,
 	} else {
 		params[0] = g_variant_new_int64(time_limit);
 	}
-	err = ALIASES_load(sq3->db, sql, params,
+	err = ALIASES_load(sq3, sql, params,
 			(m2_onbean_cb)_delete_cb, &deleted_aliases);
 	if (err) {
 		_bean_cleanl2(deleted_aliases);
@@ -3054,7 +3059,7 @@ m2db_flush_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0,
 	GVariant *params[3] = {NULL};
 	gchar sql[32];
 	g_snprintf(sql, 32, "1 LIMIT %"G_GINT64_FORMAT, limit);
-	err = ALIASES_load(sq3->db, sql, params, _bean_buffer_cb, aliases);
+	err = ALIASES_load(sq3, sql, params, _bean_buffer_cb, aliases);
 	metautils_gvariant_unrefv(params);
 
 	guint nb_aliases = aliases->len;
@@ -3140,7 +3145,7 @@ _m2db_get_shard_ranges(struct sqlx_sqlite3_s *sq3, const gchar *lower,
 	GString *clause = g_string_sized_new(128);
 	GVariant **params = _sharding_get_params_to_sql_clause(lower, upper,
 			clause);
-	GError *err = SHARD_RANGE_load(sq3->db, clause->str, params, _bean_buffer_cb,
+	GError *err = SHARD_RANGE_load(sq3, clause->str, params, _bean_buffer_cb,
 			beans);
 	if (!err) {
 		if (beans->len > 0) {
@@ -3238,10 +3243,10 @@ m2db_replace_shard_ranges(struct sqlx_sqlite3_s *sq3, GSList *new_shard_ranges)
 	err = _m2db_get_shard_ranges(sq3, first_lower, last_upper, _bean_list_cb,
 			&deleted);
 	for (GSList *l = deleted; !err && l; l = l->next) {
-		err = _db_delete_bean(sq3->db, l->data);
+		err = _db_delete_bean(sq3, l->data);
 	}
 	if (!err) {
-		err = _db_save_beans_list(sq3->db, new_shard_ranges);
+		err = _db_save_beans_list(sq3, new_shard_ranges);
 	}
 	if (!err) {
 		gint64 shard_count = m2db_get_shard_count(sq3);
@@ -3259,7 +3264,7 @@ m2db_list_shard_ranges(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp,
 {
 	GString *clause = g_string_sized_new(128);
 	GVariant **params = _sharding_list_params_to_sql_clause(lp, clause);
-	GError *err = SHARD_RANGE_load(sq3->db, clause->str, params, cb, u);
+	GError *err = SHARD_RANGE_load(sq3, clause->str, params, cb, u);
 	metautils_gvariant_unrefv(params);
 	g_free(params), params = NULL;
 	g_string_free(clause, TRUE);
@@ -3286,7 +3291,7 @@ m2db_get_shard_range(struct sqlx_sqlite3_s *sq3, const gchar *path,
 	};
 
 	GPtrArray *beans = g_ptr_array_new();
-	err = SHARD_RANGE_load(sq3->db, sql, params, _bean_buffer_cb, beans);
+	err = SHARD_RANGE_load(sq3, sql, params, _bean_buffer_cb, beans);
 	metautils_gvariant_unrefv(params);
 	if (!err) {
 		if (beans->len <= 0) {
