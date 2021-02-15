@@ -49,21 +49,28 @@ class PlainContent(Content):
         self._create_object(**kwargs)
         return final_chunks, bytes_transferred, content_checksum
 
-    def rebuild_chunk(self, chunk_id, allow_same_rawx=False, chunk_pos=None,
+    def rebuild_chunk(self, chunk_id, service_id=None,
+                      allow_same_rawx=False, chunk_pos=None,
                       allow_frozen_container=False):
         # Identify the chunk to rebuild
-        current_chunk = self.chunks.filter(id=chunk_id).one()
+        candidates = self.chunks.filter(id=chunk_id)
+        if service_id is not None:
+            candidates = candidates.filter(host=service_id)
+        current_chunk = candidates.one()
         if current_chunk is None and chunk_pos is None:
             raise exc.OrphanChunk("Chunk not found in content")
-        elif chunk_pos is None:
+        if chunk_pos is None:
             chunk_pos = current_chunk.pos
 
         # Sort chunks by score to try to copy with higher score.
         # When scores are close together (e.g. [95, 94, 94, 93, 50]),
         # don't always start with the highest element.
-        duplicate_chunks = self.chunks \
-            .filter(pos=chunk_pos) \
-            .exclude(id=chunk_id) \
+        candidates = self.chunks.filter(pos=chunk_pos)
+        if service_id:
+            candidates = candidates.exclude(host=service_id)
+        else:
+            candidates = candidates.exclude(id=chunk_id)
+        duplicate_chunks = candidates \
             .sort(key=lambda chunk: _get_weighted_random_score(chunk.raw()),
                   reverse=True) \
             .all()

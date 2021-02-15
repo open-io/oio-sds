@@ -237,8 +237,8 @@ class Content(object):
             mime_type=self.mime_type, data=data,
             **kwargs)
 
-    def rebuild_chunk(self, chunk_id, allow_same_rawx=False, chunk_pos=None,
-                      allow_frozen_container=False):
+    def rebuild_chunk(self, chunk_id, service_id=None, allow_same_rawx=False,
+                      chunk_pos=None, allow_frozen_container=False):
         raise NotImplementedError()
 
     def create(self, stream, **kwargs):
@@ -251,7 +251,8 @@ class Content(object):
         self.container_client.content_delete(
             cid=self.container_id, path=self.path, **kwargs)
 
-    def move_chunk(self, chunk_id, check_quality=False, dry_run=False,
+    def move_chunk(self, chunk_id, service_id=None,
+                   check_quality=False, dry_run=False,
                    max_attempts=3, **kwargs):
         """
         Move a chunk to another place. Optionally ensure that the
@@ -261,7 +262,15 @@ class Content(object):
             current_chunk = chunk_id
             chunk_id = current_chunk.id
         else:
-            current_chunk = self.chunks.filter(id=chunk_id).one()
+            candidates = self.chunks.filter(id=chunk_id)
+            if len(candidates) > 1:
+                if service_id is None:
+                    raise exc.ChunkException(
+                        "Several chunks with ID %s and no service ID" % (
+                            chunk_id, ))
+                candidates = candidates.filter(host=service_id)
+            current_chunk = candidates.one()
+
         if current_chunk is None or current_chunk not in self.chunks:
             raise exc.OrphanChunk("Chunk not found in content")
 
@@ -489,7 +498,14 @@ class ChunksHelper(object):
             self.chunks = [Chunk(c) for c in chunks]
         else:
             self.chunks = chunks
-        self.sort_key = sort_key
+        if sort_key is not None:
+            self.sort_key = sort_key
+        else:
+            # Some old tests expect chunks to be sorted by chunk ID,
+            # for the same position. Starting from version 7.2.0, chunks
+            # for the same position can have the same ID, so we must sort
+            # them by host (or URL) for the order to be consistent.
+            self.sort_key = lambda c: (c.pos, c.id, c.url)
         self.sort_reverse = sort_reverse
         self.chunks.sort(key=self.sort_key, reverse=self.sort_reverse)
 

@@ -25,14 +25,18 @@ from oio.common.storage_functions import _get_weighted_random_score
 
 
 class ECContent(Content):
-    def rebuild_chunk(self, chunk_id, allow_same_rawx=False, chunk_pos=None,
+    def rebuild_chunk(self, chunk_id, service_id=None,
+                      allow_same_rawx=False, chunk_pos=None,
                       allow_frozen_container=False):
         # Identify the chunk to rebuild
-        current_chunk = self.chunks.filter(id=chunk_id).one()
+        candidates = self.chunks.filter(id=chunk_id)
+        if service_id is not None:
+            candidates = candidates.filter(host=service_id)
+        current_chunk = candidates.one()
 
         if current_chunk is None and chunk_pos is None:
             raise OrphanChunk("Chunk not found in content")
-        elif current_chunk is None:
+        if current_chunk is None:
             current_chunk = self.chunks.filter(pos=chunk_pos).one()
             if current_chunk is None:
                 chunk = {'pos': chunk_pos, 'url': ''}
