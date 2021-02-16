@@ -18,7 +18,6 @@ package main
 
 import (
 	"bufio"
-	"log"
 	"os"
 	"regexp"
 	"strconv"
@@ -122,7 +121,7 @@ func readConfig(conf string) (optionsMap, error) {
 			if optionValue != "" && optionValue[0] == '"' {
 				s, err := strconv.Unquote(regexString.ReplaceAllString(line, "$1"))
 				if err != nil {
-					log.Fatal("Unable to convert quoted string from line `%s`", line)
+					LogFatal("Unable to convert quoted string from line `%s`", line)
 					continue
 				}
 				optionValue = s
@@ -150,7 +149,7 @@ func (m optionsMap) getInt(k string, def int) int {
 	}
 	i64, err := strconv.ParseInt(v, 0, 32)
 	if err != nil {
-		log.Fatalf("Invalid integer option for %s: %s (%s)", k, v, err.Error())
+		LogFatal("Invalid integer option for %s: %s (%s)", k, v, err.Error())
 		return 0
 	}
 	return int(i64)

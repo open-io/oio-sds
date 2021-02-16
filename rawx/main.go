@@ -165,7 +165,7 @@ func main() {
 		logAccessFormat = opts["log_access_format"]
 	}
 	if err := InitLogTemplates(); err != nil {
-		log.Fatal("Unable to init log templates: %v", err.Error())
+		log.Fatalf("Unable to init log templates: %v", err.Error())
 	}
 
 	if logExtremeVerbosity {
