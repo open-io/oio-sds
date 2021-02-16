@@ -90,19 +90,19 @@ jobs:
       env: TEST_SUITE=cli
       python: 3.6
     - script: ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=rebuilder,with-service-id,zlib
+      env: TEST_SUITE=rebuilder,with-service-id,zlib,predictible-chunk-ids
       python: 3.6
     - script: ./tools/oio-travis-suites.sh
       env: TEST_SUITE=repli,with_tls
       python: 3.6
     - script: ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=ec,with-service-id
+      env: TEST_SUITE=ec,with-service-id,predictible-chunk-ids
       python: 3.6
     - script: ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=3copies,with-service-id
+      env: TEST_SUITE=3copies,with-service-id,predictible-chunk-ids
       python: 3.6
     - script: ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=mover,with-service-id
+      env: TEST_SUITE=mover,with-service-id,predictible-chunk-ids
       python: 3.6
 
     - stage: Functional tests (Python 2)
@@ -111,7 +111,7 @@ jobs:
     - script: ./tools/oio-travis-suites.sh
       env: TEST_SUITE=ec,with-service-id,with_tls
     - script: ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=3copies,with-service-id
+      env: TEST_SUITE=3copies,with-service-id,predictible-chunk-ids
     - script: ./tools/oio-travis-suites.sh
       env: TEST_SUITE=single,small-cache,fsync,webhook,zlib
     - script: ./tools/oio-travis-suites.sh

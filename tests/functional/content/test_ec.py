@@ -59,7 +59,7 @@ class TestECContent(BaseTestCase):
                                                reference=self.container_name)
         self.container_id = cid_from_name(self.account,
                                           self.container_name).upper()
-        self.content = random_str(64)
+        self.content = "%s-%s" % (self.__class__.__name__, random_str(4))
         self.stgpol = "EC"
         self.size = 1024*1024 + 320
         self.k = 6
