@@ -78,8 +78,8 @@ class SavedWritesApplicator(object):
             while buffer and len(buffer) >= max_remaining:
                 queries_to_sent = buffer[:buffer_size]
                 buffer = buffer[buffer_size:]
-                # TODO(adu) Really update the new shards
-                print(queries_to_sent)
+                self.sharding_client._update_new_shard(
+                    new_shard, queries_to_sent, **kwargs)
 
             if last_queries:
                 if buffer:
@@ -432,6 +432,16 @@ class ContainerSharding(ProxyClient):
 
         # Fill the shard info with the CID of the shard container
         shard['cid'] = cid_from_name(shard_account, shard_container)
+
+    def _update_new_shard(self, new_shard, queries, **kwargs):
+        if not queries:
+            return
+
+        params = self._make_params(cid=new_shard['cid'], **kwargs)
+        resp, body = self._request('POST', '/update_shard', params=params,
+                                   json=queries, **kwargs)
+        if resp.status != 204:
+            raise exceptions.from_response(resp, body)
 
     def _replace_shards(self, root_account, root_container, shards, **kwargs):
         params = self._make_params(account=root_account,

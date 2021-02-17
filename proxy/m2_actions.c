@@ -2556,8 +2556,10 @@ action_m2_container_sharding_create_shard(struct req_args_s *args,
 	gint64 timestamp = json_object_get_int64(jtimestamp);
 	gchar *master = g_strdup(json_object_get_string(jmaster));
 	gchar *src_suffix = g_strdup_printf("sharding-%"G_GINT64_FORMAT, timestamp);
+	gchar *state = g_strdup_printf("%d", NEW_SHARD_STATE_APPLYING_SAVED_WRITES);
 
-	gchar *shard_properties[8] = {
+	gchar *shard_properties[10] = {
+		M2V2_ADMIN_SHARDING_STATE, state,
 		M2V2_ADMIN_SHARDING_ROOT, root,
 		M2V2_ADMIN_SHARDING_LOWER, admin_lower,
 		M2V2_ADMIN_SHARDING_UPPER, admin_upper,
@@ -2577,7 +2579,29 @@ action_m2_container_sharding_create_shard(struct req_args_s *args,
 	g_free(admin_upper);
 	g_free(master);
 	g_free(src_suffix);
+	g_free(state);
 	return rc;
+}
+
+static enum http_rc_e
+action_m2_container_sharding_update_shard(struct req_args_s *args,
+		struct json_object *j UNUSED)
+{
+	if (!json_object_is_type(j, json_type_array))
+		return _reply_format_error(args, BADREQ("Array argument expected"));
+
+	gchar **queries = NULL;
+	GError *err = STRV_decode_object(j, &queries);
+	EXTRA_ASSERT((err != NULL) ^ (queries != NULL));
+	if (err)
+		return _reply_format_error(args, err);
+
+	PACKER_VOID(_pack) {
+		return m2v2_remote_pack_UPDATE_SHARD(args->url, queries, DL());
+	};
+	err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
+	g_strfreev(queries);
+	return _reply_m2_error(args, err);
 }
 
 static enum http_rc_e
@@ -2669,6 +2693,40 @@ enum http_rc_e
 action_container_sharding_create_shard(struct req_args_s *args)
 {
 	return rest_action(args, action_m2_container_sharding_create_shard);
+}
+
+// SHARDING{{
+// POST /v3.0/{NS}/container/sharding/update_shard?acct={account}&ref={container}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Update new shard with SQL update queries.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/container/sharding/update_shard?acct=my_account&ref=mycontainer HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.58.0
+//    Accept: */*
+//    Content-Length: 110
+//    Content-Type: application/x-www-form-urlencoded
+//
+//    [
+//      "INSERT OR REPLACE INTO chunks(id,content,position,hash,size,ctime) VALUES ('http://127.0.0.1:6011/2EE13DF4D55AF992C992BE6C4779179C58F484EBD589E4EE86DF0325680FFCB2',x'daf77a6876bb050008c356e9ff2e70db','0',x'272913026300e7ae9b5e2d51f138e674',111,1613492116)",
+//      "INSERT OR REPLACE INTO contents(id,hash,size,ctime,mtime,mime_type,chunk_method,policy) VALUES (x'daf77a6876bb050008c356e9ff2e70db',x'272913026300e7ae9b5e2d51f138e674',111,1613492116,1613492116,'application/octet-stream','plain/nb_copy=1','SINGLE')",
+//      "INSERT OR REPLACE INTO aliases(alias,version,content,deleted,ctime,mtime) VALUES ('obj',1613492116977628,x'daf77a6876bb050008c356e9ff2e70db',0,1613492116,1613492116)"
+//    ]
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}SHARDING
+enum http_rc_e
+action_container_sharding_update_shard(struct req_args_s *args)
+{
+	return rest_action(args, action_m2_container_sharding_update_shard);
 }
 
 // SHARDING{{

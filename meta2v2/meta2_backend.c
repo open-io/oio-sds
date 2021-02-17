@@ -2454,6 +2454,49 @@ rollback:
 }
 
 GError*
+meta2_backend_update_shard(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, gchar **queries)
+{
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	if (!queries || !*queries)
+		return BADREQ("No query");
+
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+
+	err = m2b_open(m2b, url,
+			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT, &sq3);
+	if (!err) {
+		gint64 sharding_state = sqlx_admin_get_i64(sq3,
+				M2V2_ADMIN_SHARDING_STATE, 0);
+		if (sharding_state != NEW_SHARD_STATE_APPLYING_SAVED_WRITES) {
+			err = BADREQ("Container is not a new shard");
+		}
+		if (!err) {
+			gint64 timestamp = oio_ext_real_time();
+			struct sqlx_repctx_s *repctx = NULL;
+			if (!(err = _transaction_begin(sq3, url, &repctx))) {
+				for (gchar **query = queries; *query; query++) {
+					err = _db_execute(sq3, *query, strlen(*query), NULL);
+					if (err)
+						break;
+				}
+				if (!err) {
+					sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP,
+							timestamp);
+				}
+				err = sqlx_transaction_end(repctx, err);
+			}
+		}
+		m2b_close(sq3, url);
+	}
+
+	return err;
+}
+
+GError*
 meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *beans)
 {

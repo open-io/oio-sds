@@ -134,6 +134,9 @@ void _bean_cleanv(gpointer *beanv);
 void _bean_cleanv2(GPtrArray *v);
 void _bean_cleanl2(GSList *v);
 
+GError* _db_execute(struct sqlx_sqlite3_s *sq3, const gchar *query, int len,
+		GVariant **params);
+
 GError* _db_insert_bean(struct sqlx_sqlite3_s *sq3, gpointer bean);
 GError* _db_insert_beans_list(struct sqlx_sqlite3_s *sq3, GSList *list);
 

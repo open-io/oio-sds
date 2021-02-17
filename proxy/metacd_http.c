@@ -1080,6 +1080,7 @@ configure_request_handlers (void)
 	// Sharding
 	SET("/$NS/container/sharding/prepare/#POST", action_container_sharding_prepare);
 	SET("/$NS/container/sharding/create_shard/#POST", action_container_sharding_create_shard);
+	SET("/$NS/container/sharding/update_shard/#POST", action_container_sharding_update_shard);
 	SET("/$NS/container/sharding/replace/#POST", action_container_sharding_replace);
 	SET("/$NS/container/sharding/show/#GET", action_container_sharding_show);
 
