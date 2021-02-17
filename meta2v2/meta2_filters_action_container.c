@@ -603,6 +603,29 @@ meta2_filter_action_prepare_sharding(struct gridd_filter_ctx_s *ctx,
 }
 
 int
+meta2_filter_action_update_shard(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GError *err = NULL;
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	gsize len = 0;
+	void *buf = metautils_message_get_BODY(reply->request, &len);
+	gchar **queries = NULL;
+	err = STRV_decode_buffer(buf, len, &queries);
+	if (!err) {
+		err = meta2_backend_update_shard(m2b, url, queries);
+	}
+
+	g_strfreev(queries);
+	if (!err) {
+		return FILTER_OK;
+	}
+	meta2_filter_ctx_set_error(ctx, err);
+	return FILTER_KO;
+}
+
+int
 meta2_filter_action_replace_sharding(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply UNUSED)
 {

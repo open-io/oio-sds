@@ -469,7 +469,7 @@ _db_prepare_statement(sqlite3 *db, const gchar *sql, int len, sqlite3_stmt **res
 	return NULL;
 }
 
-static GError*
+GError*
 _db_execute(struct sqlx_sqlite3_s *sq3, const gchar *query, int len,
 		GVariant **params)
 {
@@ -485,10 +485,9 @@ _db_execute(struct sqlx_sqlite3_s *sq3, const gchar *query, int len,
 		return err;
 	}
 
-	if (NULL != (err = _stmt_apply_GV_parameters(stmt, params))) {
+	if (params && (err = _stmt_apply_GV_parameters(stmt, params)) != NULL) {
 		g_prefix_error(&err, "Parameters error: ");
-	}
-	else {
+	} else {
 		while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) { }
 		if (rc != SQLITE_DONE && rc != SQLITE_OK) {
 			err = M2_SQLITE_GERROR(sq3->db,rc);

@@ -497,6 +497,14 @@ m2v2_remote_pack_PREPARE_SHARDING(struct oio_url_s *url, gint64 dl)
 }
 
 GByteArray*
+m2v2_remote_pack_UPDATE_SHARD(struct oio_url_s *url, gchar **queries, gint64 dl)
+{
+	GByteArray *body = g_bytes_unref_to_array(
+			g_string_free_to_bytes(STRV_encode_gstr(queries)));
+	return _m2v2_pack_request(NAME_MSGNAME_M2V2_UPDATE_SHARD, url, body, dl);
+}
+
+GByteArray*
 m2v2_remote_pack_REPLACE_SHARDING(struct oio_url_s *url, GSList *beans,
 		gint64 dl)
 {
