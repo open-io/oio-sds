@@ -3,6 +3,7 @@
 # OpenIO SDS meta2v2
 # Copyright (C) 2014 Worldline, as part of Redcurrant
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -96,6 +97,7 @@ class Field(object):
         self.position = 0
         self.struct = None
         self.mandatory = True
+        self.unique = False
 
     def __repr__(self):
         return '<Field name="{0}" type="{1}/{2}" pos="{3}">' \
@@ -158,10 +160,11 @@ class Struct(object):
         l.append("</Struct>")
         return "\n".join(l)
 
-    def field(self, f, mandatory=True):
+    def field(self, f, mandatory=True, unique=False):
         f.set_index(len(self.fields))
         f.struct = self
         f.mandatory = bool(mandatory)
+        f.unique = bool(unique)
         self.fields.append(f)
         return self
 
@@ -308,6 +311,8 @@ the list."""
                 tmp.append(" "+f.name+' '+f.type_sql)
                 if f.mandatory:
                     tmp.append(" NOT NULL")
+                if f.unique:
+                    tmp.append(" UNIQUE")
                 tmp.append(",")
                 print_quoted(''.join(tmp))
             for fk in t.fk_outgoing:
@@ -555,6 +560,14 @@ chunks = generator.add_bean(Struct("chunks")
                             .PK(("id", ))
                             .index('chunk_index_by_header', ['content'])
                             .set_sql_name("chunks")).set_order(3)
+
+shards = generator.add_bean(Struct('shard_range')
+                            .field(Text('lower'), unique=True)
+                            .field(Text('upper'), unique=True)
+                            .field(Blob('cid'), unique=True)
+                            .field(Text('metadata'), mandatory=False)
+                            .PK(('lower', ))
+                            .set_sql_name('shard_ranges')).set_order(6)
 
 generator.add_fk(ForeignKey((properties, ('alias', 'version'), "alias"),
                             (alias, ('alias', 'version'), "properties")))

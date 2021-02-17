@@ -86,11 +86,19 @@ BEGIN
 		value   [3] OCTET STRING
 	}
 
+	M2V2ShardRange ::= SEQUENCE {
+		lower    [0] PrintableString,
+		upper    [1] PrintableString,
+		cid      [2] OCTET STRING,
+		metadata [3] PrintableString OPTIONAL
+	}
+
 	M2V2Bean ::= SEQUENCE {
-		alias  [0] M2V2Alias OPTIONAL,
-		header [1] M2V2ContentHeader OPTIONAL,
-		chunk  [2] M2V2Chunk OPTIONAL,
-		prop   [3] M2V2Property OPTIONAL
+		alias      [0] M2V2Alias OPTIONAL,
+		header     [1] M2V2ContentHeader OPTIONAL,
+		chunk      [2] M2V2Chunk OPTIONAL,
+		prop       [3] M2V2Property OPTIONAL,
+		shardrange [4] M2V2ShardRange OPTIONAL
 	}
 
 	M2V2BeanSequence ::= SEQUENCE OF M2V2Bean

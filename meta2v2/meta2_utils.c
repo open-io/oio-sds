@@ -2,6 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -157,6 +158,37 @@ m2db_get_container_size_and_obj_count(sqlite3 *db, gboolean check_alias,
 		*obj_count_out = obj_count;
 }
 
+void
+m2db_get_container_shard_count(sqlite3 *db, gint64 *shard_count_out)
+{
+	gint64 shard_count = 0;
+	const gchar *sql = "SELECT COUNT(*) FROM shard_ranges";
+	int rc, grc = SQLITE_OK;
+	const gchar *next;
+	sqlite3_stmt *stmt = NULL;
+
+	while ((grc == SQLITE_OK) && sql && *sql) {
+		next = NULL;
+		sqlite3_prepare_debug(rc, db, sql, -1, &stmt, &next);
+		sql = next;
+		if (rc != SQLITE_OK && rc != SQLITE_DONE)
+			grc = rc;
+		else if (stmt) {
+			while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
+				shard_count = sqlite3_column_int64(stmt, 0);
+			}
+			if (rc != SQLITE_OK && rc != SQLITE_DONE) {
+				grc = rc;
+			}
+			rc = sqlite3_finalize(stmt);
+		}
+
+		stmt = NULL;
+	}
+	if (shard_count_out)
+		*shard_count_out = shard_count;
+}
+
 gint64
 m2db_get_max_versions(struct sqlx_sqlite3_s *sq3, gint64 def)
 {
@@ -229,6 +261,18 @@ void
 m2db_set_obj_count(struct sqlx_sqlite3_s *sq3, gint64 count)
 {
 	sqlx_admin_set_i64(sq3, M2V2_ADMIN_OBJ_COUNT, count);
+}
+
+gint64
+m2db_get_shard_count(struct sqlx_sqlite3_s *sq3)
+{
+	return sqlx_admin_get_i64(sq3, M2V2_ADMIN_SHARD_COUNT, 0);
+}
+
+void
+m2db_set_shard_count(struct sqlx_sqlite3_s *sq3, gint64 count)
+{
+	sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARD_COUNT, count);
 }
 
 gint64

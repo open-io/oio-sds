@@ -2,6 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -124,6 +125,25 @@ _generate_api_prop(const M2V2Bean_t * asn)
 	return result;
 }
 
+static gpointer
+_generate_api_shard_range(const M2V2Bean_t * asn)
+{
+	gpointer result = NULL;
+	result = _bean_create(&descr_struct_SHARD_RANGE);
+
+	SHARD_RANGE_set2_lower(result, (const char *)asn->shardrange->lower.buf);
+	SHARD_RANGE_set2_upper(result, (const char *)asn->shardrange->upper.buf);
+	SHARD_RANGE_set2_cid(result, asn->shardrange->cid.buf,
+			asn->shardrange->cid.size);
+	if (asn->shardrange->metadata && asn->shardrange->metadata->buf
+			&& asn->shardrange->metadata->size > 0) {
+		SHARD_RANGE_set2_metadata(result,
+				(const char *)asn->shardrange->metadata->buf);
+	}
+
+	return result;
+}
+
 static gboolean
 _header_to_asn(gpointer api, M2V2Bean_t *asn)
 {
@@ -220,6 +240,32 @@ _alias_to_asn(gpointer api, M2V2Bean_t *asn)
 	return TRUE;
 }
 
+static gboolean
+_shard_range_to_asn(gpointer api, M2V2Bean_t *asn)
+{
+	struct bean_SHARD_RANGE_s *shard_range = (struct bean_SHARD_RANGE_s *) api;
+	asn->shardrange = ASN1C_CALLOC(1, sizeof(M2V2ShardRange_t));
+
+	GString *lower = SHARD_RANGE_get_lower(shard_range);
+	OCTET_STRING_fromBuf(&(asn->shardrange->lower), lower->str, lower->len);
+
+	GString *upper = SHARD_RANGE_get_upper(shard_range);
+	OCTET_STRING_fromBuf(&(asn->shardrange->upper), upper->str, upper->len);
+
+	GByteArray *cid = SHARD_RANGE_get_cid(shard_range);
+	OCTET_STRING_fromBuf(&(asn->shardrange->cid), (const char *)cid->data,
+			cid->len);
+
+	GString *metadata = SHARD_RANGE_get_metadata(shard_range);
+	if (metadata != NULL) {
+		asn->shardrange->metadata = OCTET_STRING_new_fromBuf(
+				&asn_DEF_OCTET_STRING, (const char *)metadata->str,
+				metadata->len);
+	}
+
+	return TRUE;
+}
+
 /* -------------------------------------------------------------------------- */
 
 gpointer
@@ -235,6 +281,8 @@ bean_ASN2API(const M2V2Bean_t * asn)
 		return _generate_api_chunk(asn);
 	if (asn->prop)
 		return _generate_api_prop(asn);
+	if (asn->shardrange)
+		return _generate_api_shard_range(asn);
 	return NULL;
 }
 
@@ -253,6 +301,8 @@ bean_API2ASN(gpointer * api, M2V2Bean_t * asn)
 		return _chunk_to_asn(api, asn);
 	if (DESCR(api) == &descr_struct_PROPERTIES)
 		return _property_to_asn(api, asn);
+	if (DESCR(api) == &descr_struct_SHARD_RANGE)
+		return _shard_range_to_asn(api, asn);
 	return FALSE;
 }
 

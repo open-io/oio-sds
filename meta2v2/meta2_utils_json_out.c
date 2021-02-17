@@ -2,6 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -87,6 +88,21 @@ encode_property(GString *g, gpointer bean)
 	}
 }
 
+static void
+encode_shard_range(GString *g, gpointer bean)
+{
+	OIO_JSON_append_gstr(g, "lower", SHARD_RANGE_get_lower(bean));
+	g_string_append_c(g, ',');
+	OIO_JSON_append_gstr(g, "upper", SHARD_RANGE_get_upper(bean));
+	g_string_append_c(g, ',');
+	OIO_JSON_append_gba(g, "cid", SHARD_RANGE_get_cid(bean));
+	g_string_append_c(g, ',');
+	GString *metadata = SHARD_RANGE_get_metadata(bean);
+	if (!metadata || metadata->len == 0)
+		metadata = NULL;
+	OIO_JSON_append_gstr(g, "metadata", metadata);
+}
+
 void
 meta2_json_encode_bean(GString *g, gpointer bean)
 {
@@ -98,6 +114,8 @@ meta2_json_encode_bean(GString *g, gpointer bean)
 		return encode_alias (g, bean);
 	if (DESCR(bean) == &descr_struct_PROPERTIES)
 		return encode_property (g, bean);
+	if (DESCR(bean) == &descr_struct_SHARD_RANGE)
+		return encode_shard_range(g, bean);
 	g_assert_not_reached ();
 }
 
@@ -150,6 +168,13 @@ meta2_json_properties_only(GString *gstr, GSList *l, gboolean extend)
 }
 
 void
+meta2_json_shard_ranges_only(GString *gstr, GSList *l, gboolean extend)
+{
+	_json_BEAN_only(gstr, l, &descr_struct_SHARD_RANGE, extend,
+			encode_shard_range);
+}
+
+void
 meta2_json_dump_all_xbeans(GString *gstr, GSList *beans)
 {
 	_json_BEAN_only(gstr, beans, NULL, TRUE, meta2_json_encode_bean);
@@ -166,6 +191,8 @@ meta2_json_dump_all_beans(GString *gstr, GSList *beans)
 	meta2_json_chunks_only(gstr, beans, FALSE);
 	g_string_append_static(gstr, "],\"properties\":[");
 	meta2_json_properties_only(gstr, beans, FALSE);
+	g_string_append_static(gstr, "],\"shard_ranges\":[");
+	meta2_json_shard_ranges_only(gstr, beans, FALSE);
 	g_string_append_c(gstr, ']');
 }
 

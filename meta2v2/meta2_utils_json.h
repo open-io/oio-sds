@@ -2,6 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -28,6 +29,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 GError* m2v2_json_load_single_alias (struct json_object *j, gpointer *pbean);
 GError* m2v2_json_load_single_header (struct json_object *j, gpointer *pbean);
 GError* m2v2_json_load_single_chunk (struct json_object *j, gpointer *pbean);
+GError* m2v2_json_load_single_shard_range(struct json_object *j,
+		gpointer *pbean);
 
 /* the type is discovered in the json object */
 GError *m2v2_json_load_single_xbean (struct json_object *j, gpointer *pbean);
@@ -53,6 +56,10 @@ void meta2_json_chunks_only(GString *gstr, GSList *l, gboolean extend);
 /** Convert property beans to their JSON representation.
  * Ignores beans of other types. */
 void meta2_json_properties_only(GString *gstr, GSList *l, gboolean extend);
+
+/** Convert shard range beans to their JSON representation.
+ * Ignores beans of other types. */
+void meta2_json_shard_ranges_only(GString *gstr, GSList *l, gboolean extend);
 
 /** Serialize beans to JSON.
  * The output has the form:

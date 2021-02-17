@@ -2,6 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -187,6 +188,47 @@ exit:
 	return err;
 }
 
+GError*
+m2v2_json_load_single_shard_range(struct json_object *j, gpointer *pbean)
+{
+	GError *err = NULL;
+	GByteArray *cid = NULL;
+	struct bean_SHARD_RANGE_s *shard_range = NULL;
+	struct json_object *jlower = NULL, *jupper = NULL, *jcid = NULL,
+			*jmetadata = NULL;
+	struct oio_ext_json_mapping_s mapping[] = {
+		{"lower",    &jlower,    json_type_string, 1},
+		{"upper",    &jupper,    json_type_string, 1},
+		{"cid",      &jcid,      json_type_string, 1},
+		{"metadata", &jmetadata, json_type_object, 0},
+		{NULL, NULL, 0, 0}
+	};
+
+	*pbean = NULL;
+	if (NULL != (err = oio_ext_extract_json(j, mapping)))
+		goto exit;
+
+	cid = metautils_gba_from_hexstring(json_object_get_string(jcid));
+	if (!cid) {
+		err = NEWERROR(CODE_BAD_REQUEST, "Invalid CID, not hexa ID");
+		goto exit;
+	}
+
+	shard_range = _bean_create(&descr_struct_SHARD_RANGE);
+	SHARD_RANGE_set2_lower(shard_range, json_object_get_string(jlower));
+	SHARD_RANGE_set2_upper(shard_range, json_object_get_string(jupper));
+	SHARD_RANGE_set_cid(shard_range, cid);
+	if (jmetadata)
+		SHARD_RANGE_set2_metadata(shard_range,
+				json_object_get_string(jmetadata));
+	*pbean = shard_range;
+	shard_range = NULL;
+
+exit:
+	_bean_clean(shard_range);
+	return err;
+}
+
 GError *
 m2v2_json_load_single_xbean (struct json_object *j, gpointer *pbean)
 {
@@ -205,6 +247,8 @@ m2v2_json_load_single_xbean (struct json_object *j, gpointer *pbean)
 		return m2v2_json_load_single_header (j, pbean);
 	if (!g_ascii_strcasecmp(stype, "chunk"))
 		return m2v2_json_load_single_chunk (j, pbean);
+	if (!g_ascii_strcasecmp(stype, "shard_range"))
+		return m2v2_json_load_single_shard_range(j, pbean);
 
 	return NEWERROR(CODE_BAD_REQUEST, "Unexpected 'type' field");
 }

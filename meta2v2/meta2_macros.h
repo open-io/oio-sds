@@ -2,6 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -42,6 +43,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # ifndef M2V2_ADMIN_OBJ_COUNT
 # define M2V2_ADMIN_OBJ_COUNT M2V2_ADMIN_PREFIX_SYS "objects"
+# endif
+
+# ifndef M2V2_ADMIN_SHARD_COUNT
+# define M2V2_ADMIN_SHARD_COUNT M2V2_ADMIN_PREFIX_SYS "shards"
 # endif
 
 # ifndef M2V2_ADMIN_DAMAGED_OBJECTS

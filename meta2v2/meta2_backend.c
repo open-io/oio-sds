@@ -2,6 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -618,6 +619,7 @@ _init_container(struct sqlx_sqlite3_s *sq3,
 		m2db_set_ctime (sq3, oio_ext_real_time());
 		m2db_set_size(sq3, 0);
 		m2db_set_obj_count(sq3, 0);
+		m2db_set_shard_count(sq3, 0);
 		m2db_set_damaged_objects(sq3, 0);
 		m2db_set_missing_chunks(sq3, 0);
 		sqlx_admin_set_status(sq3, ADMIN_STATUS_ENABLED);
@@ -1064,6 +1066,9 @@ meta2_backend_notify_container_state(struct meta2_backend_s *m2b,
 						&size, &count);
 				m2db_set_size(sq3, size);
 				m2db_set_obj_count(sq3, count);
+				gint64 shard_count = 0;
+				m2db_get_container_shard_count(sq3->db, &shard_count);
+				m2db_set_shard_count(sq3, shard_count);
 				m2db_set_damaged_objects(sq3, damaged_objects);
 				m2db_set_missing_chunks(sq3, missing_chunks);
 				m2db_increment_version(sq3);

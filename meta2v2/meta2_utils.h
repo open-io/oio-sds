@@ -2,6 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -86,6 +87,9 @@ typedef void (*m2_onbean_cb) (gpointer u, gpointer bean);
 void m2db_get_container_size_and_obj_count(sqlite3 *db, gboolean check_alias,
 		guint64 *size, gint64 *count);
 
+/** Get the number of shard ranges in the database. */
+void m2db_get_container_shard_count(sqlite3 *db, gint64 *shard_count_out);
+
 gint64 m2db_get_max_versions(struct sqlx_sqlite3_s *sq3, gint64 def);
 
 void m2db_set_max_versions(struct sqlx_sqlite3_s *sq3, gint64 max);
@@ -110,6 +114,10 @@ void m2db_set_size(struct sqlx_sqlite3_s *sq3, gint64 size);
 gint64 m2db_get_obj_count(struct sqlx_sqlite3_s *sq3);
 
 void m2db_set_obj_count(struct sqlx_sqlite3_s *sq3, gint64 count);
+
+gint64 m2db_get_shard_count(struct sqlx_sqlite3_s *sq3);
+
+void m2db_set_shard_count(struct sqlx_sqlite3_s *sq3, gint64 count);
 
 gint64 m2db_get_damaged_objects(struct sqlx_sqlite3_s *sq3);
 
