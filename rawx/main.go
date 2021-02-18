@@ -73,10 +73,11 @@ func installSigHandlers(srv *http.Server) {
 			case syscall.SIGUSR2:
 				resetVerbosity()
 			case syscall.SIGINT, syscall.SIGTERM:
-				ctx, _ := context.WithTimeout(context.Background(), 10*time.Second)
+				ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 				if err := srv.Shutdown(ctx); err != nil {
 					LogWarning("graceful shutdown error: %v", err)
 				}
+				cancel() // releases resources if Shutdown completes before timeout elapses
 			}
 		}
 	}()
