@@ -1402,6 +1402,15 @@ Used by `gcc`
  * cmake directive: *OIO_SQLITEREPO_CLIENT_TIMEOUT_ALERT_IF_LONGER*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
+### sqliterepo.dump.check_type
+
+> How to check the database before executing a DB_DUMP request. 0: no check. 1: quick_check (the default). 2: integrity_check.
+
+ * default: **1**
+ * type: gint
+ * cmake directive: *OIO_SQLITEREPO_DUMP_CHECK_TYPE*
+ * range: 0 -> 2
+
 ### sqliterepo.dump.chunk_size
 
 > Size of data chunks when copying a database using the chunked DB_PIPEFROM/DB_DUMP mechanism.

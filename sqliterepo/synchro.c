@@ -657,6 +657,7 @@ static gboolean _direct_pipefrom (struct sqlx_peering_s *self,
 		const char *url,
 		const struct sqlx_name_inline_s *n,
 		const char *src,
+		const gint check_type,
 		/* out */
 		struct election_member_s *m,
 		guint reqid,
@@ -864,6 +865,7 @@ _direct_pipefrom (struct sqlx_peering_s *self,
 		const char *url,
 		const struct sqlx_name_inline_s *n,
 		const char *src,
+		const gint check_type,
 		/* out */
 		struct election_member_s *m,
 		guint reqid,
@@ -896,7 +898,7 @@ _direct_pipefrom (struct sqlx_peering_s *self,
 		return FALSE;
 	} else {
 		NAME2CONST(n0, *n);
-		GByteArray *req = sqlx_pack_PIPEFROM(&n0, src,
+		GByteArray *req = sqlx_pack_PIPEFROM(&n0, src, check_type,
 				oio_clamp_deadline(oio_election_resync_timeout_req, deadline));
 		err = gridd_client_request(mc->ec.client, req, NULL, NULL);
 		g_byte_array_unref(req);
@@ -1086,14 +1088,15 @@ sqlx_peering__pipefrom (struct sqlx_peering_s *self,
 		const char *url,
 		const struct sqlx_name_inline_s *n,
 		const char *src,
+		const gint check_type,
 		/* out */
 		struct election_member_s *m,
 		guint reqid,
 		sqlx_peering_pipefrom_end_f result)
 {
 #ifdef HAVE_EXTRA_DEBUG
-	PEER_CALL(self,pipefrom)(self, url, n, src, m, reqid, result);
+	PEER_CALL(self,pipefrom)(self, url, n, src, check_type, m, reqid, result);
 #else
-	return _direct_pipefrom(self, url, n, src, m, reqid, result);
+	return _direct_pipefrom(self, url, n, src, check_type, m, reqid, result);
 #endif
 }

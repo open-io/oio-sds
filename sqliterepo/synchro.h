@@ -175,6 +175,7 @@ struct sqlx_peering_vtable_s
 			const char *url,
 			const struct sqlx_name_inline_s *n,
 			const char *src,
+			const gint check_type,
 			/* out */
 			struct election_member_s *m,
 			guint reqid,
@@ -212,6 +213,7 @@ gboolean sqlx_peering__pipefrom (struct sqlx_peering_s *self,
 		const char *url,
 		const struct sqlx_name_inline_s *n,
 		const char *src,
+		const gint check_type,
 		/* out */
 		struct election_member_s *m,
 		guint reqid,

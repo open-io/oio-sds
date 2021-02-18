@@ -129,6 +129,7 @@ static gboolean _peering_pipefrom (struct sqlx_peering_s *self,
 		const char *url,
 		const struct sqlx_name_inline_s *n,
 		const char *src,
+		const gint check_type,
 		/* out */
 		struct election_member_s *m,
 		guint reqid,
@@ -176,12 +177,13 @@ _peering_pipefrom (struct sqlx_peering_s *self,
 		const char *url,
 		const struct sqlx_name_inline_s *n,
 		const char *src,
+		const gint check_type,
 		/* out */
 		struct election_member_s *m,
 		guint reqid,
 		sqlx_peering_pipefrom_end_f result)
 {
-	(void) self, (void) url, (void) n, (void) src;
+	(void) self, (void) url, (void) n, (void) src, (void) check_type;
 	(void) m, (void) reqid, (void) result;
 	return FALSE;
 }
