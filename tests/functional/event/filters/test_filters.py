@@ -71,19 +71,27 @@ class TestContentRebuildFilter(BaseTestCase):
                         "id": self.container_id, "content": content_id}
         return event
 
-    def _is_chunks_created(self, previous, after, pos_created):
-        remain = list(after)
-        for p in previous:
-            for r in remain:
-                if p["url"] == r["url"]:
-                    remain.remove(r)
-                    break
-        if len(remain) != len(pos_created):
+    def _was_created_before(self, url, time_point):
+        chunk_md = self.storage.blob_client.chunk_head(url)
+        print("chunk_mtime: %f, rebuild_time: %f" % (
+            chunk_md['chunk_mtime'], time_point))
+        return chunk_md['chunk_mtime'] <= time_point
+
+    def _is_chunks_created(self, previous, after, pos_created, time_point):
+        created = list(after)
+        for cr in after:
+            if (self._was_created_before(cr['url'], time_point)):
+                # The chunk was there before: it has not been created
+                created.remove(cr)
+        if len(created) != len(pos_created):
+            print("The number of newly created chunks is not as expected: "
+                  "%d vs %d" % (len(created), len(pos_created)))
             return False
-        for r in remain:
-            if r["pos"] in pos_created:
-                remain.remove(r)
+        for cr in created:
+            if cr['pos'] in pos_created:
+                created.remove(cr)
             else:
+                # The position of one of the new chunks is not as expected
                 return False
         return True
 
@@ -103,10 +111,16 @@ class TestContentRebuildFilter(BaseTestCase):
             chunk['type'] = 'chunk'
         self.container_client.container_raw_delete(
             self.account, self.container, data=chunks)
+        try:
+            self.storage.blob_client.chunk_delete_many(chunks)
+        except Exception:
+            pass
 
     def _check_rebuild(self, content_name, chunks, missing_pos, meta,
                        chunks_to_remove, chunk_created=True):
+        start = time.time()
         self._remove_chunks(chunks_to_remove, meta['id'])
+        time.sleep(1)  # Need to sleep 1s, because mtime has 1s precision
         event = self._create_event(content_name, chunks, missing_pos,
                                    meta['id'])
         self.notify_filter.process(event, None, None)
@@ -115,7 +129,8 @@ class TestContentRebuildFilter(BaseTestCase):
                         container=self.container, obj=content_name,
                         account=self.account)
         self.assertIs(chunk_created,
-                      self._is_chunks_created(chunks, after, missing_pos))
+                      self._is_chunks_created(chunks, after, missing_pos,
+                                              start))
 
     def test_nothing_missing(self):
         content_name = "test_nothing_missing"

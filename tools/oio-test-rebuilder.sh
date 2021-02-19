@@ -423,11 +423,13 @@ openioadmin_rawx_rebuild()
     OLD_IFS=$IFS
     IFS=$'\n'
     for CHUNK_URL in ${CHUNK_URLS}; do
-      if [ "${CHUNK_URL##*/}" = "${CHUNK_ID}" ]; then
-        echo >&2 "${CHUNK}: (${CHUNK_URL}) meta2 not updated for rawx ${RAWX_ID_TO_REBUILD}"
-        FAIL=true
-        continue
-      fi
+      # Cannot check if the URL is different: it may be the same since we
+      # generate predictible chunk IDs.
+      #if [ "${CHUNK_URL##*/}" = "${CHUNK_ID}" ]; then
+      #  echo >&2 "${CHUNK}: (${CHUNK_URL}) meta2 not updated for rawx ${RAWX_ID_TO_REBUILD}"
+      #  FAIL=true
+      #  continue
+      #fi
       if ! $INTEGRITY "$NAMESPACE" "${ACCOUNT}" \
           "${CONTAINER}" "${CONTENT}" "${CHUNK_URL}" &>> "$INTEGRITY_LOG"; then
         echo >&2 "${CHUNK}: (${CHUNK_URL}) oio-crawler-integrity failed for rawx ${RAWX_ID_TO_REBUILD}"

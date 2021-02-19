@@ -113,8 +113,13 @@ class TestBlobMover(BaseTestCase):
                                    self.version, self.content_id)
         self.assertEqual(fullpath, new_chunk_headers['full_path'])
         del new_chunk_headers['full_path']
-        self.assertNotEqual(chunk_headers['chunk_id'],
-                            new_chunk_headers['chunk_id'])
+        # Since we generate predictible chunk IDs, they can be equal
+        # self.assertNotEqual(chunk_headers['chunk_id'],
+        #                     new_chunk_headers['chunk_id'])
+        # We could compare the modification time of the chunks,
+        # but unfortunately they have a 1s resolution...
+        # self.assertNotEqual(chunk_headers['chunk_mtime'],
+        #                    new_chunk_headers['chunk_mtime'])
         new_chunk_id = new_chunk['url'].split('/')[3]
         self.assertEqual(new_chunk_id, new_chunk_headers['chunk_id'])
         del chunk_headers['chunk_id']

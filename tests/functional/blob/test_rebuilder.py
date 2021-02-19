@@ -100,8 +100,10 @@ class TestBlobRebuilder(BaseTestCase):
                 self.assertIsNone(new_chunk)
                 new_chunk = c
 
-        self.assertNotEqual(chunk['real_url'], new_chunk['real_url'])
-        self.assertNotEqual(chunk['url'], new_chunk['url'])
+        # Cannot check if the URL is different: it may be the same since we
+        # generate predictible chunk IDs.
+        # self.assertNotEqual(chunk['real_url'], new_chunk['real_url'])
+        # self.assertNotEqual(chunk['url'], new_chunk['url'])
         self.assertEqual(chunk['pos'], new_chunk['pos'])
         self.assertEqual(chunk['size'], new_chunk['size'])
         self.assertEqual(chunk['hash'], new_chunk['hash'])
@@ -115,8 +117,13 @@ class TestBlobRebuilder(BaseTestCase):
                                    self.version, self.content_id)
         self.assertEqual(fullpath, new_chunk_headers['full_path'])
         del new_chunk_headers['full_path']
-        self.assertNotEqual(chunk_headers['chunk_id'],
-                            new_chunk_headers['chunk_id'])
+        # Since we generate predictible chunk IDs, they can be equal
+        # self.assertNotEqual(chunk_headers['chunk_id'],
+        #                     new_chunk_headers['chunk_id'])
+        # We could compare the modification time of the chunks,
+        # but unfortunately they have a 1s resolution...
+        # self.assertNotEqual(chunk_headers['chunk_mtime'],
+        #                     new_chunk_headers['chunk_mtime'])
         new_chunk_id = new_chunk['url'].split('/')[3]
         self.assertEqual(new_chunk_id, new_chunk_headers['chunk_id'])
         del chunk_headers['chunk_id']

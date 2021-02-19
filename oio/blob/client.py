@@ -17,8 +17,10 @@
 from oio.common.green import GreenPile
 
 import random
+from email.utils import parsedate
 from functools import wraps
 from six.moves.urllib_parse import unquote
+from time import mktime
 
 from oio.common.logger import get_logger
 from oio.common.http_urllib3 import get_pool_manager, \
@@ -63,6 +65,9 @@ def extract_headers_meta(headers, check=True):
                 missing.append(exc.MissingAttribute(mkey))
     if check and missing:
         raise exc.FaultyChunk(*missing)
+    mtime = meta.get('chunk_mtime')
+    if mtime:
+        meta['chunk_mtime'] = mktime(parsedate(mtime))
     return meta
 
 

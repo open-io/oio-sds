@@ -237,7 +237,12 @@ class ContainerTest(CliTestCase):
         self._test_container_refresh(with_cid=True)
 
     def _test_container_snapshot(self, with_cid=False):
-        self.wait_for_score(('meta2', ))
+        self.wait_for_score(('meta2', 'meta1'))
+        # Please don't ask...
+        try:
+            self.openio('election sync meta2 ' + self.NAME)
+        except Exception:
+            pass
         # Snapshot should reply the name of the snapshot on success
         opts = self.get_format_opts('json')
         cid_opt = ''

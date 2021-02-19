@@ -21,6 +21,7 @@ from oio.content.content import Content, Chunk
 from oio.common import exceptions as exc
 from oio.common.exceptions import UnrecoverableContent
 from oio.common.storage_functions import _get_weighted_random_score
+from oio.common.utils import group_chunk_errors
 
 
 class PlainContent(Content):
@@ -94,6 +95,7 @@ class PlainContent(Content):
         spare_url = spare_urls[0]
 
         # Actually create the spare chunk, by duplicating a good one
+        errors = list()
         for src in duplicate_chunks:
             try:
                 self.blob_client.chunk_copy(
@@ -108,16 +110,23 @@ class PlainContent(Content):
                 self.logger.warn(
                     "Failed to copy chunk from %s to %s: %s %s", src.url,
                     spare_url, type(err), err)
+                errors.append((src.url, err))
         else:
-            raise UnrecoverableContent("No copy available of missing chunk")
+            raise UnrecoverableContent("No copy available of missing chunk, "
+                                       "or could not copy them. %s" % (
+                                           group_chunk_errors(errors),))
 
-        # Register the spare chunk in object's metadata
-        if chunk_id is None:
-            self._add_raw_chunk(current_chunk, spare_url,
-                                frozen=allow_frozen_container)
-        else:
-            self._update_spare_chunk(current_chunk, spare_url,
-                                     frozen=allow_frozen_container)
+        try:
+            # Register the spare chunk in object's metadata
+            if chunk_id is None:
+                self._add_raw_chunk(current_chunk, spare_url,
+                                    frozen=allow_frozen_container)
+            else:
+                self._update_spare_chunk(current_chunk, spare_url,
+                                         frozen=allow_frozen_container)
+        except Exception:
+            self.blob_client.chunk_delete(spare_url)
+            raise
         self.logger.debug('Chunk %s repaired in %s',
                           chunk_id or chunk_pos, spare_url)
 

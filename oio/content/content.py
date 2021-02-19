@@ -261,6 +261,7 @@ class Content(object):
         if isinstance(chunk_id, Chunk):
             current_chunk = chunk_id
             chunk_id = current_chunk.id
+            service_id = current_chunk.host
         else:
             candidates = self.chunks.filter(id=chunk_id)
             if len(candidates) > 1:
@@ -274,8 +275,12 @@ class Content(object):
         if current_chunk is None or current_chunk not in self.chunks:
             raise exc.OrphanChunk("Chunk not found in content")
 
-        other_chunks = self.chunks.filter(
-            metapos=current_chunk.metapos).exclude(id=chunk_id).all()
+        if service_id:
+            other_chunks = self.chunks.filter(
+                metapos=current_chunk.metapos).exclude(host=service_id).all()
+        else:
+            other_chunks = self.chunks.filter(
+                metapos=current_chunk.metapos).exclude(id=chunk_id).all()
 
         spare_urls, qualities = self._get_spare_chunk(
             other_chunks, [current_chunk], position=current_chunk.pos,
