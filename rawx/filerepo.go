@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	syscall "golang.org/x/sys/unix"
 )
@@ -391,6 +392,15 @@ type realFileReader struct {
 
 func (fr *realFileReader) fd() int {
 	return int(fr.f.Fd())
+}
+
+func (fr *realFileReader) mtime() time.Time {
+	fi, err := fr.f.Stat()
+	if err != nil {
+		return time.Unix(0, 0)
+	} else {
+		return fi.ModTime()
+	}
 }
 
 func (fr *realFileReader) size() int64 {

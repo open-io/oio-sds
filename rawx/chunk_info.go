@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 type chunkInfo struct {
@@ -46,6 +47,7 @@ type chunkInfo struct {
 	OioVersion         string `json:"oio_version,omitempty"`
 
 	compression string
+	mtime       time.Time
 	size        int64
 }
 
@@ -231,6 +233,7 @@ func loadAttr(inChunk fileReader, chunkID string, reqid string) (chunkInfo, erro
 		}
 	}
 
+	chunk.mtime = inChunk.mtime()
 	chunk.size, err = strconv.ParseInt(chunk.ChunkSize, 10, 63)
 	if err != nil {
 		err = errMissingXattr(AttrNameChunkSize, err)
@@ -487,6 +490,7 @@ func (chunk chunkInfo) fillHeaders(headers http.Header) {
 	setHeader(headers, HeaderNameChunkChecksum, chunk.ChunkHash)
 	setHeader(headers, HeaderNameChunkSize, chunk.ChunkSize)
 	setHeader(headers, HeaderNameXattrVersion, chunk.OioVersion)
+	setHeader(headers, "Last-Modified", chunk.mtime.Format(time.RFC1123))
 }
 
 // Fill the headers of the reply with the chunk info calculated by the rawx
