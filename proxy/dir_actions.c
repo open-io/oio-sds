@@ -51,8 +51,13 @@ static GError * _m1_action (struct oio_url_s *url, gchar ** m1v,
 		}
 		gsize len = oio_ext_array_partition ((void**)m1v,
 				g_strv_length (m1v), _wrap);
-		if (len > 1 && oio_proxy_dir_shuffle)
+		if (len <= 0) {
+			/* Maybe all meta1 databases have been moved
+			 * and the old meta1 has been shut down */
+			hc_decache_reference(resolver, url);
+		} else if (oio_proxy_dir_shuffle) {
 			oio_ext_array_shuffle ((void**)m1v, len);
+		}
 	}
 
 	for (gchar ** pm1 = m1v; *pm1; ++pm1) {
@@ -85,6 +90,9 @@ static GError * _m1_action (struct oio_url_s *url, gchar ** m1v,
 		if (CODE_IS_NETWORK_ERROR (err->code) || err->code == CODE_REDIRECT)
 			g_clear_error (&err);
 		else {
+			if (error_clue_for_decache(err)) {
+				hc_decache_reference(resolver, url);
+			}
 			g_prefix_error (&err, "META1 error: ");
 			return err;
 		}
@@ -620,7 +628,7 @@ enum http_rc_e action_ref_destroy (struct req_args_s *args) {
 			for (gchar ** p = srvtypes; *p; ++p)
 				hc_decache_reference_service (resolver, args->url, *p);
 		});
-		hc_decache_reference (resolver, args->url);
+		hc_decache_reference(resolver, args->url);
 	}
 	if (!err)
 		return _reply_nocontent (args);
