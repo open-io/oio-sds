@@ -442,7 +442,8 @@ class RdirClient(HttpApi):
 
     def chunk_fetch(self, volume, limit=1000, rebuild=False,
                     container_id=None, max_attempts=3,
-                    start_after=None, shuffle=False, **kwargs):
+                    start_after=None, shuffle=False, full_urls=False,
+                    **kwargs):
         """
         Fetch the list of chunks belonging to the specified volume.
 
@@ -501,6 +502,8 @@ class RdirClient(HttpApi):
                 random.shuffle(resp_body)
             for (key, value) in resp_body:
                 container, content, chunk = key.split('|')
+                if full_urls:
+                    chunk = 'http://%s/%s' % (volume, chunk)
                 yield container, content, chunk, value
 
             if not truncated:
