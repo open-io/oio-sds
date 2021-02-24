@@ -29,6 +29,7 @@ def make_logger_args_parser():
                             help="Log level")
     log_parser.add_argument('--log-syslog-prefix', help="Syslog prefix")
     log_parser.add_argument('--log-facility', help="Log facility")
+    log_parser.add_argument('--log-format', help="Log format")
     log_parser.add_argument('--log-address', help="Log address")
     log_parser.add_argument('-q', '--quiet', action='store_true',
                             help="Don't print logs on console")
@@ -43,6 +44,8 @@ def get_logger_from_args(args, default_conf=None):
         conf['log_level'] = args.log_level
     if args.log_facility is not None:
         conf['log_facility'] = args.log_facility
+    if args.log_format is not None:
+        conf['log_format'] = args.log_format
     if args.log_address is not None:
         conf['log_address'] = args.log_address
     if args.log_syslog_prefix is not None:
