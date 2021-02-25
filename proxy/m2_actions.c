@@ -2377,8 +2377,7 @@ _get_conditioned_spare_chunks(const char *polname,
 	if (!policy)
 		return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Unexpected storage policy");
 	GError *err = get_conditioned_spare_chunks(
-			lb_rawx, storage_policy_get_service_pool(policy), ns_name,
-			notin, broken, beans);
+			lb_rawx, policy, ns_name, notin, broken, beans);
 	storage_policy_clean(policy);
 	return err;
 }

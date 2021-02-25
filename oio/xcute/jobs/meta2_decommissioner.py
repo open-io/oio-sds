@@ -68,7 +68,7 @@ class Meta2DecommissionJob(XcuteRdirJob):
 
         sanitized_job_params['dst'] = job_params.get('dst')
 
-        return sanitized_job_params, 'meta2/%s' % src
+        return sanitized_job_params, 'meta2'
 
     def __init__(self, conf, logger=None):
         super(Meta2DecommissionJob, self).__init__(conf, logger=logger)

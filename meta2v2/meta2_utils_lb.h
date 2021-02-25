@@ -54,10 +54,6 @@ GError* get_spare_chunks_focused(struct oio_lb_s *lb,
 		oio_location_t pin, int mode,
 		GSList **result);
 
-/* @deprecated Only used in an obsolete call of te meta2 */
-GError* get_spare_chunks(struct oio_lb_s *lb,
-		const char *stgpol_name, GSList **result);
-
 /**
  * Get spare chunks according to a storage policy and lists of already
  * known chunks. Will return enough spare chunks to complete a metachunk,
@@ -74,7 +70,7 @@ GError* get_spare_chunks(struct oio_lb_s *lb,
  * @return A GError in case of error
  */
 GError* get_conditioned_spare_chunks(struct oio_lb_s *lb,
-		const char *pool, const gchar *ns_name,
+		struct storage_policy_s *stgpol, const gchar *ns_name,
 		GSList *notin, GSList *broken,
 		GSList **result);
 
