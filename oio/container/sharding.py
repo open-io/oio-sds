@@ -443,6 +443,12 @@ class ContainerSharding(ProxyClient):
         if resp.status != 204:
             raise exceptions.from_response(resp, body)
 
+    def _lock_parent(self, parent_shard, **kwargs):
+        params = self._make_params(cid=parent_shard['cid'], **kwargs)
+        resp, body = self._request('POST', '/lock', params=params, **kwargs)
+        if resp.status != 204:
+            raise exceptions.from_response(resp, body)
+
     def _replace_shards(self, root_account, root_container, shards, **kwargs):
         params = self._make_params(account=root_account,
                                    reference=root_container, **kwargs)
@@ -507,7 +513,8 @@ class ContainerSharding(ProxyClient):
             saved_writes_applicator.wait_until_queue_is_almost_empty(**kwargs)
             saved_writes_applicator.flush(**kwargs)
 
-            # TODO(adu) When the queue is empty, lock the container to shard
+            # When the queue is empty, lock the container to shard
+            self._lock_parent(parent_shard)
         except Exception:
             # Immediately close the applicator
             saved_writes_applicator.close(timeout=0, **kwargs)

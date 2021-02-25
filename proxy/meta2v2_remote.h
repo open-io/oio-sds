@@ -214,6 +214,10 @@ GByteArray* m2v2_remote_pack_UPDATE_SHARD(
 		gchar **queries,
 		gint64 dl);
 
+GByteArray* m2v2_remote_pack_LOCK_SHARDING(
+		struct oio_url_s *url,
+		gint64 dl);
+
 GByteArray* m2v2_remote_pack_REPLACE_SHARDING(
 		struct oio_url_s *url,
 		GSList *beans,

@@ -529,15 +529,26 @@ m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
 	struct m2_open_args_s args = {how, NULL};
 	enum m2v2_open_type_e replimode = how & M2V2_OPEN_REPLIMODE;
 
+reopen:
 	err = m2b_open_with_args(m2, url, &args, &sq3);
 	if (err)
 		return err;
 
-	if (replimode != M2V2_OPEN_MASTERONLY)
+	if (replimode == M2V2_OPEN_LOCAL)
 		goto exit;
 
 	gint64 sharding_state = sqlx_admin_get_i64(sq3,
 			M2V2_ADMIN_SHARDING_STATE, 0);
+	if (sharding_state == CONTAINER_TO_SHARD_STATE_LOCKED) {
+		m2b_close(sq3, url);
+		sq3 = NULL;
+		g_thread_yield();
+		goto reopen;
+	}
+
+	if (replimode != M2V2_OPEN_MASTERONLY)
+		goto exit;
+
 	if (sharding_state != CONTAINER_TO_SHARD_STATE_SAVING_WRITES) {
 		if (sq3->sharding_queue) {
 			// Should never happen
@@ -548,6 +559,7 @@ m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
 		}
 		goto exit;
 	}
+
 	// CONTAINER_TO_SHARD_STATE_SAVING_WRITES
 	// Check sharding properties
 	gint64 sharding_timestamp = sqlx_admin_get_i64(sq3,
@@ -2497,8 +2509,8 @@ meta2_backend_update_shard(struct meta2_backend_s *m2b,
 }
 
 GError*
-meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, GSList *beans)
+meta2_backend_lock_sharding(struct meta2_backend_s *m2b,
+		struct oio_url_s *url)
 {
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -2509,8 +2521,77 @@ meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 	err = m2b_open(m2b, url,
 			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT, &sq3);
 	if (!err) {
+		gint64 sharding_state = sqlx_admin_get_i64(sq3,
+				M2V2_ADMIN_SHARDING_STATE, 0);
+		if (sharding_state != CONTAINER_TO_SHARD_STATE_SAVING_WRITES) {
+			err = BADREQ("Container isn't being sharded");
+		}
+		if (!err) {
+			gint64 timestamp = oio_ext_real_time();
+			gint64 sharding_timestamp = sqlx_admin_get_i64(sq3,
+						M2V2_ADMIN_SHARDING_TIMESTAMP, 0);
+			struct sqlx_repctx_s *repctx = NULL;
+			if (!(err = _transaction_begin(sq3, url, &repctx))) {
+				sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
+						CONTAINER_TO_SHARD_STATE_LOCKED);
+				sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP,
+						timestamp);
+				sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_MASTER);
+				sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_QUEUE);
+				err = sqlx_transaction_end(repctx, err);
+				if (!err)
+					m2b_add_modified_container(m2b, sq3);
+			}
+			if (!err) {
+				if (sharding_timestamp) {
+					gchar *copy_path = g_strdup_printf(
+							"%s.sharding-%"G_GINT64_FORMAT, sq3->path_inline,
+							sharding_timestamp);
+					if (remove(copy_path)) {
+						GRID_WARN("Failed to remove file %s: (%d) %s",
+								copy_path, errno, strerror(errno));
+					}
+					g_free(copy_path);
+				}
+				if (sq3->sharding_queue) {
+					beanstalkd_destroy(sq3->sharding_queue);
+					sq3->sharding_queue = NULL;
+				}
+			}
+		}
+		m2b_close(sq3, url);
+	}
+
+	return err;
+}
+
+GError*
+meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, GSList *beans)
+{
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+
+	// Open the meta2 database ignoring the sharding lock
+	struct m2_open_args_s args = {
+			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT,
+			NULL
+		};
+	err = m2b_open_with_args(m2b, url, &args, &sq3);
+	if (!err) {
 		if (sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
 			err = BADREQ("Container is a shard");
+		} else {
+			gint64 sharding_state = sqlx_admin_get_i64(sq3,
+					M2V2_ADMIN_SHARDING_STATE, 0);
+			if (sharding_state != CONTAINER_TO_SHARD_STATE_LOCKED
+					&& sharding_state != CONTAINER_TO_SHARD_STATE_SHARDED
+					&& sharding_state != NEW_SHARD_STATE_CLEANED_UP) {
+				err = BADREQ("Container isn't ready to replace the shards");
+			}
 		}
 		if (!err) {
 			gint64 timestamp = oio_ext_real_time();

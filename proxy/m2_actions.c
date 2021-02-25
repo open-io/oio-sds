@@ -2605,6 +2605,20 @@ action_m2_container_sharding_update_shard(struct req_args_s *args,
 }
 
 static enum http_rc_e
+action_m2_container_sharding_lock(struct req_args_s *args,
+		struct json_object *j UNUSED)
+{
+	GError *err = NULL;
+	if (!err) {
+		PACKER_VOID(_pack) {
+			return m2v2_remote_pack_LOCK_SHARDING(args->url, DL());
+		};
+		err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
+	}
+	return _reply_m2_error(args, err);
+}
+
+static enum http_rc_e
 action_m2_container_sharding_replace(struct req_args_s *args,
 		struct json_object *j)
 {
@@ -2727,6 +2741,36 @@ enum http_rc_e
 action_container_sharding_update_shard(struct req_args_s *args)
 {
 	return rest_action(args, action_m2_container_sharding_update_shard);
+}
+
+// SHARDING{{
+// POST /v3.0/{NS}/container/sharding/lock?acct={account}&ref={container}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Lock the container to put all requests on hold.
+// This container will soon be replaced by new shards.
+// It's a temporary state.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/container/sharding/lock?acct=myaccount&ref=mycontainer HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.58.0
+//    Accept: */*
+//    Content-Length: 0
+//    Content-Type: application/x-www-form-urlencoded
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}SHARDING
+enum http_rc_e
+action_container_sharding_lock(struct req_args_s *args)
+{
+	return rest_action(args, action_m2_container_sharding_lock);
 }
 
 // SHARDING{{

@@ -232,6 +232,12 @@ GError* meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 GError* meta2_backend_update_shard(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gchar **queries);
 
+/** Lock the container to put all requests on hold.
+ *  This container will soon be replaced by new shards.
+ *  It's a temporary state. */
+GError* meta2_backend_lock_sharding(struct meta2_backend_s *m2b,
+		struct oio_url_s *url);
+
 /** Replace shard ranges in root container */
 GError* meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *beans);
