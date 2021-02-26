@@ -245,11 +245,11 @@ func (rr *rawxRequest) uploadChunk() {
 func (rr *rawxRequest) copyChunk() {
 	var err error
 	if rr.chunk, err = retrieveDestinationHeader(&rr.req.Header, rr.rawx, rr.chunkID); err != nil {
-		rr.replyError("copyChunk()", err)
+		rr.replyError("copyChunk() dest", err)
 		return
 	}
 	if err := rr.chunk.retrieveContentFullpathHeader(&rr.req.Header); err != nil {
-		rr.replyError("copyChunk()", err)
+		rr.replyError("copyChunk() fullpath", err)
 		return
 	}
 
@@ -489,7 +489,9 @@ func (rr *rawxRequest) removeChunk() {
 }
 
 func (rr *rawxRequest) serveChunk() {
-	if !isHexaString(rr.req.URL.Path[1:], 64) {
+	// 24 digits (96 bits) seems reasonable to avoid collisions.
+	// TODO(FVE): make the minimum and maximum configurable
+	if !isHexaString(rr.req.URL.Path[1:], 24, 64) {
 		rr.replyError("", errInvalidChunkID)
 		return
 	}

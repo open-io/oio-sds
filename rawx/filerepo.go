@@ -211,7 +211,8 @@ func (fr *fileRepository) linkRelPath(fromPath, toPath string) (linkOperation, e
 			if e0 := syscall.Faccessat(fr.rootFd, fromPath, syscall.F_OK, 0); e0 != nil {
 				return nil, err
 			}
-			if e0 := os.MkdirAll(filepath.Dir(toPath), fr.putMkdirMode); e0 != nil {
+			if e0 := os.MkdirAll(filepath.Dir(filepath.Join(fr.root, toPath)),
+					fr.putMkdirMode); e0 != nil {
 				return nil, err
 			}
 		default:

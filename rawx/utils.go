@@ -46,7 +46,7 @@ func init() {
 	}
 }
 
-func isHexaString(name string, length int) bool {
+func isHexaString(name string, minLen int, maxLen int) bool {
 	var i int
 	var n rune
 	for i, n = range name {
@@ -54,7 +54,7 @@ func isHexaString(name string, length int) bool {
 			return false
 		}
 	}
-	return length <= 0 || i+1 == length
+	return i+1 >= minLen && i < maxLen
 }
 
 func hasPrefix(s, prefix string) (string, bool) {
