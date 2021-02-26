@@ -3203,6 +3203,34 @@ _sharding_list_params_to_sql_clause(struct list_params_s *lp, GString *clause)
 	return (GVariant**) g_ptr_array_free(params, FALSE);
 }
 
+static GVariant **
+_sharding_clean_shard_aliases_to_sql_clause(const gchar *lower,
+		const gchar *upper, GString *clause)
+{
+	void lazy_or() {
+		if (clause->len > 0) g_string_append_static(clause, " OR");
+	}
+	GPtrArray *params = g_ptr_array_new();
+
+	if (lower && *lower) {
+		lazy_or();
+		g_string_append_static(clause, " alias <= ?");
+		g_ptr_array_add(params, g_variant_new_string(lower));
+	}
+
+	if (upper && *upper) {
+		lazy_or();
+		g_string_append_static(clause, " alias > ?");
+		g_ptr_array_add(params, g_variant_new_string(upper));
+	}
+
+	if (clause->len == 0)
+		clause = g_string_append_static(clause, " 0");
+
+	g_ptr_array_add(params, NULL);
+	return (GVariant**) g_ptr_array_free(params, FALSE);
+}
+
 GError*
 m2db_replace_shard_ranges(struct sqlx_sqlite3_s *sq3, GSList *new_shard_ranges)
 {
@@ -3339,5 +3367,94 @@ m2db_check_shard_range(struct sqlx_sqlite3_s *sq3, const gchar *path)
 end:
 	g_free(lower);
 	g_free(upper);
+	return err;
+}
+
+GError*
+m2db_clean_shard(struct sqlx_sqlite3_s *sq3)
+{
+	GError *err = NULL;
+	gchar *lower = NULL;
+	gchar *upper = NULL;
+
+	if (!err) {
+		lower = m2db_get_sharding_lower(sq3, &err);
+	}
+	if (!err) {
+		upper = m2db_get_sharding_upper(sq3, &err);
+	}
+
+	// Remove aliases out of range
+	GString *clause = g_string_sized_new(128);
+	GVariant **params = _sharding_clean_shard_aliases_to_sql_clause(
+			lower, upper, clause);
+	err = _db_delete(&descr_struct_ALIASES, sq3, clause->str, params);
+	metautils_gvariant_unrefv(params);
+	g_free(params), params = NULL;
+	g_string_free(clause, TRUE);
+	if (err) {
+		goto end;
+	}
+	// Remove orphan properties
+	clause = g_string_sized_new(128);
+	params = _sharding_clean_shard_aliases_to_sql_clause(
+			lower, upper, clause);
+	err = _db_delete(&descr_struct_PROPERTIES, sq3, clause->str, params);
+	metautils_gvariant_unrefv(params);
+	g_free(params), params = NULL;
+	g_string_free(clause, TRUE);
+	if (err) {
+		goto end;
+	}
+	// Remove orphan contents
+	err = _db_delete(&descr_struct_CONTENTS_HEADERS, sq3,
+			"id NOT IN (SELECT content FROM aliases)", NULL);
+	if (err) {
+		goto end;
+	}
+	// Remove orphan chunks
+	err = _db_delete(&descr_struct_CHUNKS, sq3,
+			"content NOT IN (SELECT content FROM aliases)", NULL);
+	if (err) {
+		goto end;
+	}
+
+	guint64 size = 0;
+	gint64 obj_count = 0;
+	m2db_get_container_size_and_obj_count(sq3, FALSE, &size, &obj_count);
+	m2db_set_size(sq3, size);
+	m2db_set_obj_count(sq3, obj_count);
+
+end:
+	g_free(lower);
+	g_free(upper);
+	return err;
+}
+
+GError*
+m2db_clean_root_container(struct sqlx_sqlite3_s *sq3)
+{
+	GError *err = NULL;
+
+	err = _db_delete(&descr_struct_CHUNKS, sq3, "1", NULL);
+	if (err) {
+		return err;
+	}
+	err = _db_delete(&descr_struct_CONTENTS_HEADERS, sq3, "1", NULL);
+	if (err) {
+		return err;
+	}
+	err = _db_delete(&descr_struct_PROPERTIES, sq3, "1", NULL);
+	if (err) {
+		return err;
+	}
+	err = _db_delete(&descr_struct_ALIASES, sq3, "1", NULL);
+	if (err) {
+		return err;
+	}
+
+	m2db_set_size(sq3, 0);
+	m2db_set_obj_count(sq3, 0);
+
 	return err;
 }

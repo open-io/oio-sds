@@ -2392,7 +2392,7 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 				M2V2_ADMIN_SHARDING_STATE, 0);
 		if (sharding_state
 				&& sharding_state != CONTAINER_TO_SHARD_STATE_SHARDED
-				&& sharding_state != NEW_SHARD_STATE_APPLYING_SAVED_WRITES
+				&& sharding_state != NEW_SHARD_STATE_CLEANED_UP
 				&& sharding_state != CONTAINER_TO_SHARD_STATE_ABORTED) {
 			err = BADREQ("Sharding is already in progress");
 			goto rollback;
@@ -2611,6 +2611,46 @@ meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 				if (!err)
 					m2b_add_modified_container(m2b, sq3);
 			}
+		}
+		m2b_close(sq3, url);
+	}
+
+	return err;
+}
+
+GError*
+meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
+		struct oio_url_s *url)
+{
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+
+	err = m2b_open(m2b, url,
+			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT, &sq3);
+	if (!err) {
+		gint64 timestamp = oio_ext_real_time();
+		struct sqlx_repctx_s *repctx = NULL;
+		if (!(err = _transaction_begin(sq3, url, &repctx))) {
+			if (sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
+				err = m2db_clean_shard(sq3);
+			} else if (m2db_get_shard_count(sq3)) {
+				err = m2db_clean_root_container(sq3);
+			} else {
+				err = BADREQ("Not a shard or a root container");
+			}
+			if (!err) {
+				sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
+						NEW_SHARD_STATE_CLEANED_UP);
+				sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP,
+						timestamp);
+				sqlx_transaction_notify_huge_changes(repctx);
+			}
+			err = sqlx_transaction_end(repctx, err);
+			if (!err)
+				m2b_add_modified_container(m2b, sq3);
 		}
 		m2b_close(sq3, url);
 	}

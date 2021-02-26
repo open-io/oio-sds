@@ -520,6 +520,12 @@ m2v2_remote_pack_REPLACE_SHARDING(struct oio_url_s *url, GSList *beans,
 }
 
 GByteArray*
+m2v2_remote_pack_CLEAN_SHARDING(struct oio_url_s *url, gint64 dl)
+{
+	return _m2v2_pack_request(NAME_MSGNAME_M2V2_CLEAN_SHARDING, url, NULL, dl);
+}
+
+GByteArray*
 m2v2_remote_pack_SHOW_SHARDING(struct oio_url_s *url,
 		struct list_params_s *params, gint64 dl)
 {

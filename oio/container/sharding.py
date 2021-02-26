@@ -29,6 +29,7 @@ from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.utils import cid_from_name, depaginate
 from oio.container.client import ContainerClient
+from oio.directory.admin import AdminClient
 from oio.event.beanstalk import Beanstalk, ResponseError
 
 
@@ -248,6 +249,9 @@ class ContainerSharding(ProxyClient):
         # Make sure to use up-to-date information
         self.force_master = True
 
+        self.admin = AdminClient(
+            self.conf, pool_manager=self.pool_manager, logger=self.logger,
+            **kwargs)
         self.container = ContainerClient(
             self.conf, pool_manager=self.pool_manager, logger=self.logger,
             **kwargs)
@@ -457,6 +461,29 @@ class ContainerSharding(ProxyClient):
         if resp.status != 204:
             raise exceptions.from_response(resp, body)
 
+    def _clean(self, shard, **kwargs):
+        params = self._make_params(cid=shard['cid'], **kwargs)
+        resp, body = self._request('POST', '/clean', params=params, **kwargs)
+        if resp.status != 204:
+            raise exceptions.from_response(resp, body)
+
+    def _safe_clean(self, shard, **kwargs):
+        try:
+            self._clean(shard, **kwargs)
+        except Exception as exc:
+            self.logger.warning(
+                'Failed to clean the container (CID=%s): %s',
+                shard['cid'], exc)
+            return
+
+        try:
+            self.admin.vacuum_base("meta2", cid=shard['cid'], **kwargs)
+        except Exception as exc:
+            self.logger.warning(
+                'Failed to vacuum the container (CID=%s): %s',
+                shard['cid'], exc)
+            return
+
     def _show_shards(self, root_account, root_container, limit=None,
                      marker=None, **kwargs):
         params = self._make_params(account=root_account,
@@ -530,13 +557,18 @@ class ContainerSharding(ProxyClient):
 
         root_cid = cid_from_name(root_account, root_container)
         if parent_shard['cid'] == root_cid:
-            # TODO(adu) Clean up root container
-            pass
+            # Clean up root container
+            root_shard = {
+                'cid': root_cid
+            }
+            self._safe_clean(root_shard, **kwargs)
         else:
             # TODO(adu) Delete parent shard
             pass
 
-        # TODO(adu) Clean up new shards
+        # Clean up new shards
+        for new_shard in new_shards:
+            self._safe_clean(new_shard, **kwargs)
 
     def _almost_safe_shard_container(self, root_account, root_container,
                                      parent_shard, new_shards, **kwargs):

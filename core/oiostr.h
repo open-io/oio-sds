@@ -1,6 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -40,7 +41,10 @@ extern "C" {
 #define OIO_STRV_APPEND_COPY(Tab,S0) do { (Tab) = oio_strv_append((Tab), g_strdup(S0)); } while (0)
 
 #define g_string_append_static(out,Static) \
-	g_string_append_len(out, Static, sizeof(Static)-1) \
+	g_string_append_len(out, Static, sizeof(Static)-1)
+
+#define g_string_prepend_static(out,Static) \
+	g_string_prepend_len(out, Static, sizeof(Static)-1)
 
 #define oio_ptrv_length(v) oio_constptrv_length((const void * const *)(v))
 

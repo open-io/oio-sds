@@ -242,6 +242,10 @@ GError* meta2_backend_lock_sharding(struct meta2_backend_s *m2b,
 GError* meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *beans);
 
+/** Clean up new shard (and the root container). */
+GError* meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
+		struct oio_url_s *url);
+
 /** Get shard ranges in root container */
 GError* meta2_backend_show_sharding(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, struct list_params_s *lp, m2_onbean_cb cb,
