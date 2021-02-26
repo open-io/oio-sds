@@ -223,6 +223,10 @@ GByteArray* m2v2_remote_pack_REPLACE_SHARDING(
 		GSList *beans,
 		gint64 dl);
 
+GByteArray* m2v2_remote_pack_CLEAN_SHARDING(
+		struct oio_url_s *url,
+		gint64 dl);
+
 GByteArray* m2v2_remote_pack_SHOW_SHARDING(
 		struct oio_url_s *url,
 		struct list_params_s *params,

@@ -599,6 +599,22 @@ static gridd_filter M2V2_REPLACE_SHARDING_FILTERS[] =
 	NULL
 };
 
+static gridd_filter M2V2_CLEAN_SHARDING_FILTERS[] =
+{
+	meta2_filter_extract_header_url,
+	meta2_filter_extract_admin,
+	meta2_filter_extract_user_agent,
+	meta2_filter_extract_sharding_info,
+	meta2_filter_fill_subject,
+	meta2_filter_check_url_cid,
+	meta2_filter_check_backend,
+	meta2_filter_check_ns_name,
+	meta2_filter_check_ns_is_master,
+	meta2_filter_action_clean_sharding,
+	meta2_filter_reply_success,
+	NULL
+};
+
 static gridd_filter M2V2_SHOW_SHARDING_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
@@ -638,6 +654,7 @@ meta2_gridd_get_v2_requests(void)
 		{NAME_MSGNAME_M2V2_UPDATE_SHARD,     (hook) meta2_dispatch_all, M2V2_UPDATE_SHARD_FILTERS},
 		{NAME_MSGNAME_M2V2_LOCK_SHARDING,    (hook) meta2_dispatch_all, M2V2_LOCK_SHARDING_FILTERS},
 		{NAME_MSGNAME_M2V2_REPLACE_SHARDING, (hook) meta2_dispatch_all, M2V2_REPLACE_SHARDING_FILTERS},
+		{NAME_MSGNAME_M2V2_CLEAN_SHARDING,   (hook) meta2_dispatch_all, M2V2_CLEAN_SHARDING_FILTERS},
 		{NAME_MSGNAME_M2V2_SHOW_SHARDING,    (hook) meta2_dispatch_all, M2V2_SHOW_SHARDING_FILTERS},
 
 		/* contents */

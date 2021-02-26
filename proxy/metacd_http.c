@@ -1083,6 +1083,7 @@ configure_request_handlers (void)
 	SET("/$NS/container/sharding/update_shard/#POST", action_container_sharding_update_shard);
 	SET("/$NS/container/sharding/lock/#POST", action_container_sharding_lock);
 	SET("/$NS/container/sharding/replace/#POST", action_container_sharding_replace);
+	SET("/$NS/container/sharding/clean/#POST", action_container_sharding_clean);
 	SET("/$NS/container/sharding/show/#GET", action_container_sharding_show);
 
 	// Content
