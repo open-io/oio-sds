@@ -273,6 +273,8 @@ class BlobClient(object):
         Generate new chunk URLs, by replacing the last `random_hex`
         characters of the original URLs by random hexadecimal digits.
         """
+        maxlen = len(chunk) - chunk.rfind('/') - 1
+        random_hex = min(random_hex, maxlen)
         rnd = ''.join(random.choice('0123456789ABCDEF')
                       for _ in range(random_hex))
         return chunk[:-random_hex] + rnd
@@ -285,6 +287,10 @@ class BlobClient(object):
         hdrs = headers.copy()
         if link is None:
             link = self._generate_fullchunk_copy(target, **kwargs)
+        elif not link.startswith('http://'):
+            offset = target.rfind('/')
+            maxlen = len(target) - offset - 1
+            link = target[:offset+1] + link[:maxlen]
         hdrs['Destination'] = link
         hdrs[CHUNK_HEADERS['full_path']] = fullpath
         if write_timeout is not None:

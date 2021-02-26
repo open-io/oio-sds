@@ -1640,8 +1640,9 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
             self.chunk_size * 2, 'THREECOPIES', 'SINGLE')
 
     def test_change_content_with_same_policy(self):
-        self._test_change_policy(
-            1, 'TWOCOPIES', 'TWOCOPIES')
+        self.assertRaises(exc.Conflict,
+                          self._test_change_policy,
+                          1, 'TWOCOPIES', 'TWOCOPIES')
 
     def test_change_policy_with_versioning(self):
         self._test_change_policy(

@@ -18,10 +18,10 @@ from __future__ import print_function
 import ctypes
 import os
 import grp
+import hashlib
 import pwd
 import fcntl
 from collections import OrderedDict
-from hashlib import sha256
 from math import sqrt
 from random import getrandbits
 from io import RawIOBase
@@ -195,7 +195,7 @@ def cid_from_name(account, ref):
     """
     Compute a container ID from an account and a reference name.
     """
-    hash_ = sha256()
+    hash_ = hashlib.new('sha256')
     for v in [account, '\0', ref]:
         if isinstance(v, text_type):
             v = v.encode('utf-8')
@@ -526,3 +526,14 @@ def compute_perfdata_stats(perfdata, prefix='upload.'):
     rawx_perfdata[prefix + 'AVG'] = avg
     rawx_perfdata[prefix + 'SD'] = sdev
     rawx_perfdata[prefix + 'RSD'] = sdev/avg
+
+
+def compute_chunk_id(cid, path, version, position, policy, hash_algo='sha256'):
+    """
+    Compute the predictable chunk ID for the specified object version,
+    position and policy.
+    """
+    base = cid + path + str(version) + str(position) + policy
+    hash_ = hashlib.new(hash_algo)
+    hash_.update(base.encode('utf-8'))
+    return hash_.hexdigest().upper()
