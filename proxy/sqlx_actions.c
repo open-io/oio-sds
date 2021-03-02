@@ -174,7 +174,7 @@ action_sqlx_copyto (struct req_args_s *args, struct json_object *jargs)
 	} else {
 		/* Source service provided, use DB_PIPEFROM. */
 		NAME2CONST(n, ctx.name);
-		GByteArray *encoded = sqlx_pack_PIPEFROM(&n, from, DL());
+		GByteArray *encoded = sqlx_pack_PIPEFROM(&n, from, -1, DL());
 		err = gridd_client_exec(to,
 				oio_clamp_timeout(proxy_timeout_common, oio_ext_get_deadline()),
 				encoded);
@@ -337,7 +337,11 @@ enum http_rc_e
 action_admin_sync (struct req_args_s *args)
 {
 	oio_ext_set_admin(TRUE);
-	PACKER_VOID(_pack) { return sqlx_pack_RESYNC (_u, DL()); }
+	gint64 check_type = -1;
+	const gchar *check_type_str = _req_get_option(args, "check_type");
+	if (oio_str_is_set(check_type_str))
+		check_type = g_ascii_strtoll(check_type_str, NULL, 10);
+	PACKER_VOID(_pack) { return sqlx_pack_RESYNC(_u, (gint)check_type, DL()); }
 	return _sqlx_action_noreturn (args, CLIENT_RUN_ALL, _pack);
 }
 

@@ -111,7 +111,8 @@ peers_restore(gchar **targets, struct sqlx_name_s *name,
 
 GError *
 peer_dump(const gchar *target, struct sqlx_name_s *name, gboolean chunked,
-		peer_dump_cb callback, gpointer cb_arg, gint64 deadline)
+		gint check_type, peer_dump_cb callback, gpointer cb_arg,
+		gint64 deadline)
 {
 	struct gridd_client_s *client;
 	GByteArray *encoded;
@@ -147,7 +148,7 @@ peer_dump(const gchar *target, struct sqlx_name_s *name, gboolean chunked,
 	if (!target)
 		return SYSERR("No target URL");
 
-	encoded = sqlx_pack_DUMP(name, chunked, deadline);
+	encoded = sqlx_pack_DUMP(name, chunked, check_type, deadline);
 	client = gridd_client_create(target, encoded, NULL, on_reply);
 	g_byte_array_unref(encoded);
 

@@ -236,24 +236,6 @@ _election_key(struct client_ctx_s *ctx)
 }
 
 static gboolean
-error_clue_for_decache(GError *err)
-{
-	if (!err)
-		return FALSE;
-	switch (err->code) {
-		case CODE_CONTAINER_NOTFOUND:
-		/* DO NOT consider CODE_USER_NOTFOUND as a valid reason
-		 * to trigger a decache. This is a normal return code */
-		case CODE_RANGE_NOTFOUND:
-		case CODE_SRVTYPE_NOTMANAGED:
-		case CODE_ACCOUNT_NOTFOUND:
-			return TRUE;
-		default:
-			return FALSE;
-	}
-}
-
-static gboolean
 context_clue_for_decache(struct client_ctx_s *ctx)
 {
 	if (!ctx->errorv)
@@ -321,8 +303,10 @@ label_retry:
 	if (err) {
 		EXTRA_ASSERT(m1uv == NULL);
 		if (retry && error_clue_for_decache(err)) {
+			/* We may have asked the wrong meta1, try again.
+			 * The reference has already been freed from the cache
+			 * in `_resolve_service_through_many_meta1`. */
 			retry = FALSE;
-			cache_flush_reference(args, ctx);
 			g_clear_error(&err);
 			goto label_retry;
 		} else {

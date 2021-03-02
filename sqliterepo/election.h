@@ -149,7 +149,7 @@ struct election_manager_vtable_s
 			gint64 deadline);
 
 	GError* (*election_trigger_RESYNC) (struct election_manager_s *m,
-			const struct sqlx_name_s *n);
+			const struct sqlx_name_s *n, const gint check_type);
 };
 
 struct abstract_election_manager_s
@@ -182,8 +182,8 @@ GError* election_get_peers (struct election_manager_s *manager,
 	((struct abstract_election_manager_s*)m)->vtable->election_get_status(\
 		m,n,pmaster,deadline)
 
-#define election_manager_trigger_RESYNC(m,n) \
-	((struct abstract_election_manager_s*)m)->vtable->election_trigger_RESYNC(m,n)
+#define election_manager_trigger_RESYNC(m,n,c) \
+	((struct abstract_election_manager_s*)m)->vtable->election_trigger_RESYNC(m,n,c)
 
 /* wraps election_get_peers() */
 GError * election_has_peers (struct election_manager_s *m,

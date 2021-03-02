@@ -23,6 +23,7 @@ License along with this library.
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/codec.h>
 #include <sqliterepo/sqliterepo_remote_variables.h>
+#include <sqliterepo/sqliterepo_variables.h>
 
 #include "sqliterepo.h"
 #include "election.h"
@@ -503,7 +504,8 @@ sqlx_synchronous_resync(struct sqlx_repctx_s *ctx, gchar **peers)
 	GError *err;
 
 	// Generate the DUMP
-	err = sqlx_repository_dump_base_gba(ctx->sq3, &dump);
+	err = sqlx_repository_dump_base_gba(ctx->sq3, sqliterepo_dump_check_type,
+			&dump);
 	if (NULL != err) {
 		GRID_WARN("[%s][%s] Synchronous COMMIT not possible: (%d) %s reqid=%s",
 				ctx->sq3->name.base, ctx->sq3->name.type,
