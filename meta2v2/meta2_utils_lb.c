@@ -191,6 +191,32 @@ m2v2_build_chunk_url (const char *srv, const char *id)
 	return g_strconcat("http://", srv, "/", id, NULL);
 }
 
+void
+m2v2_extend_chunk_url(struct oio_url_s *url, const gchar *policy,
+		struct bean_CHUNKS_s *chunk)
+{
+	GString *chunk_id = CHUNKS_get_id(chunk);
+	if (chunk_id && chunk_id->len > 0 &&
+			g_str_has_prefix(chunk_id->str, "http")) {
+		return;
+	}
+	EXTRA_ASSERT(policy != NULL);
+	GString *chunk_url = g_string_sized_new(LIMIT_LENGTH_CHUNKURL);
+	g_string_append_static(chunk_url, "http://");
+	g_string_append(chunk_url, chunk_id->str);
+	g_string_append_c(chunk_url, '/');
+	/* Use the internal buffer to avoid string copies. */
+	gchar *id_offset = chunk_url->str + chunk_url->len;
+	size_t id_max_len = LIMIT_LENGTH_CHUNKURL - chunk_url->len;
+	oio_url_compute_chunk_id(url, CHUNKS_get_position(chunk)->str, policy,
+			id_offset, id_max_len);
+	/* We need to update the length or the next operation won't copy
+	 * the whole URL. */
+	g_string_set_size(chunk_url, strlen(chunk_url->str));
+	CHUNKS_set_id(chunk, chunk_url);
+	g_string_free(chunk_url, TRUE);
+}
+
 struct gen_ctx_s
 {
 	struct oio_url_s *url;
@@ -255,6 +281,7 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 	CONTENTS_HEADERS_set2_mime_type(header, OIO_DEFAULT_MIMETYPE);
 
 	GString *chunk_method = storage_policy_to_chunk_method(ctx->pol);
+	// TODO(FVE): store the name of the algorithm used to generate chunk IDs
 	CONTENTS_HEADERS_set_chunk_method(header, chunk_method);
 	g_string_free(chunk_method, TRUE);
 	_collect_bean(ctx, header);

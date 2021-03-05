@@ -580,6 +580,7 @@ _reply_simplified_beans_ext(struct req_args_s *args, GError *err,
 	struct bean_ALIASES_s *alias = NULL;
 	struct bean_CONTENTS_HEADERS_s *header = NULL;
 	gboolean first = TRUE, first_prop = TRUE;
+	const gchar *policy = NULL;
 
 	GString *gstr, *props_gstr = NULL;
 	if (!legacy_format)
@@ -600,10 +601,15 @@ _reply_simplified_beans_ext(struct req_args_s *args, GError *err,
 			first = FALSE;
 
 			struct bean_CHUNKS_s *chunk = l0->data;
+			m2v2_extend_chunk_url(args->url, policy, chunk);
 			_serialize_chunk(chunk, chunks_gstr, _loca);
 		}
 		else if (&descr_struct_ALIASES == DESCR(l0->data)) {
 			alias = l0->data;
+			gchar strver[24];
+			g_snprintf(strver, sizeof(strver), "%"G_GINT64_FORMAT,
+					ALIASES_get_version(alias));
+			oio_url_set(args->url, OIOURL_VERSION, strver);
 			if (ALIASES_get_deleted(alias) &&
 					!oio_str_parse_bool(OPT("deleted"), FALSE)) {
 				g_string_free(chunks_gstr, TRUE);
@@ -614,6 +620,7 @@ _reply_simplified_beans_ext(struct req_args_s *args, GError *err,
 		}
 		else if (&descr_struct_CONTENTS_HEADERS == DESCR(l0->data)) {
 			header = l0->data;
+			policy = CONTENTS_HEADERS_get_policy(header)->str;
 		}
 		else if (&descr_struct_PROPERTIES == DESCR(l0->data)) {
 			struct bean_PROPERTIES_s *prop = l0->data;

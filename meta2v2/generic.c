@@ -449,6 +449,6 @@ _bean_compare_kind (gconstpointer b0, gconstpointer b1)
 	if (!b0 && !b1) return 0;
 	if (!b0) return 1;
 	if (!b1) return -1;
-	return DESCR(b1)->order - DESCR(b0)->order;
+	return DESCR(b0)->order - DESCR(b1)->order;
 }
 

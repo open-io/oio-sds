@@ -73,9 +73,20 @@ struct m2v2_position_s m2v2_position_decode(const char *str);
 
 void m2v2_position_encode(GString *out, struct m2v2_position_s *p);
 
+/* If the chunk has a short ID, with only a service ID, replace it
+ * by a full URL composed of the service ID and a path generated
+ * from an object's description, the storage policy and the chunk position. */
+void m2v2_extend_chunk_url(struct oio_url_s *url, const gchar *policy,
+		struct bean_CHUNKS_s *chunk);
+
 /* Sort the beans of a content. Use m2v2_sorted_content_free to free
  * the result. The beans must be freed separately. */
 void m2v2_sort_content(GSList *beans, struct m2v2_sorted_content_s **content);
+
+/* For each chunk of the content, replace the short chunk ID by a full URL,
+ * if the chunk ID is not already a URL. */
+void m2v2_sorted_content_extend_chunk_urls(struct m2v2_sorted_content_s *content,
+		struct oio_url_s *url);
 
 /* Free a sorted content (the beans must be freed separately). */
 void m2v2_sorted_content_free(struct m2v2_sorted_content_s *content);

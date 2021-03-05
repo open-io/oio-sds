@@ -557,7 +557,7 @@ chunks = generator.add_bean(Struct("chunks")
                             .field(Blob("hash"))
                             .field(Int("size"))
                             .field(Int("ctime"))
-                            .PK(("id", ))
+                            .PK(("id", "content", "position"))
                             .index('chunk_index_by_header', ['content'])
                             .set_sql_name("chunks")).set_order(3)
 

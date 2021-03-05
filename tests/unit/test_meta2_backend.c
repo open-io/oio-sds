@@ -1211,12 +1211,14 @@ test_content_append(void)
 		g_assert_cmpuint(tmp->len, ==, expected);
 		_bean_cleanv2(tmp);
 
-		/* append th same chunks */
-		tmp = g_ptr_array_new ();
-		err = meta2_backend_append_to_alias(m2, u, beans, _bean_buffer_cb, tmp);
-		g_assert_nonnull(err);
-		g_clear_error (&err);
-		_bean_cleanv2 (tmp);
+		/* append th same chunks.
+		 * This used to be forbidden, but now it is possible, since the
+		 * primary key contains the chunk's position. */
+		// tmp = g_ptr_array_new ();
+		// err = meta2_backend_append_to_alias(m2, u, beans, _bean_buffer_cb, tmp);
+		// g_assert_nonnull(err);
+		// g_clear_error (&err);
+		// _bean_cleanv2 (tmp);
 
 		/* append new chunks */
 		struct oio_url_s *u1 = oio_url_dup(u);
