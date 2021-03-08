@@ -26,15 +26,15 @@ from oio.common.daemon import Daemon
 from oio.common import exceptions as exc
 from oio.common.constants import STRLEN_CHUNKID, CHUNK_SUFFIX_PENDING, \
     REQID_HEADER
-from oio.common.easy_value import int_value, true_value
+from oio.common.easy_value import int_value
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.logger import get_logger
 from oio.common.utils import paths_gen, request_id
-from oio.blob.converter import BlobConverter
 
 
 class BlobIndexer(Daemon):
-    def __init__(self, conf, **kwargs):
+
+    def __init__(self, conf, **_kwargs):
         super(BlobIndexer, self).__init__(conf)
         self.logger = get_logger(conf)
         volume = conf.get('volume')
@@ -57,22 +57,6 @@ class BlobIndexer(Daemon):
         self.index_client = RdirClient(conf, logger=self.logger,
                                        pool_manager=pm)
         self.namespace, self.volume_id = check_volume(self.volume)
-        self.convert_chunks = true_value(conf.get('convert_chunks'))
-        if self.convert_chunks:
-            converter_conf = self.conf.copy()
-            converter_conf['no_backup'] = True
-            self.converter = BlobConverter(converter_conf, logger=self.logger,
-                                           pool_manager=pm)
-        else:
-            self.converter = None
-
-    def safe_recover_fullpath(self, path):
-        try:
-            return self.converter.recover_chunk_fullpath(path)
-        except Exception as err:
-            self.logger.error('Could not recover fullpath xattr of %s: %s',
-                              path, err)
-        return False
 
     def safe_update_index(self, path):
         chunk_id = path.rsplit('/', 1)[-1]
@@ -101,20 +85,8 @@ class BlobIndexer(Daemon):
             # error. Let the upper level retry later.
             raise
         except (exc.ChunkException, exc.MissingAttribute) as err:
-            if (self.convert_chunks and self.converter and
-                    self.converter.is_fullpath_error(err)):
-                self.logger.warn(
-                    'Could not update %s: %s, will try to recover', path, err)
-                if self.safe_recover_fullpath(path):
-                    self.successes += 1
-                    self.logger.info(
-                        'Fullpath xattr of %s was recovered', path)
-                else:
-                    self.errors += 1
-                    # Logging already done by safe_recover_fullpath
-            else:
-                self.errors += 1
-                self.logger.error('ERROR while updating %s: %s', path, err)
+            self.errors += 1
+            self.logger.error('ERROR while updating %s: %s', path, err)
         except Exception as err:
             # We cannot compare errno in the 'except' line.
             # pylint: disable=no-member
@@ -173,8 +145,6 @@ class BlobIndexer(Daemon):
         with open(path) as file_:
             try:
                 meta = None
-                if self.convert_chunks and self.converter:
-                    _, meta = self.converter.convert_chunk(file_, chunk_id)
                 if meta is None:
                     meta, _ = read_chunk_metadata(file_, chunk_id)
             except exc.MissingAttribute as err:
