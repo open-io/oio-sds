@@ -975,7 +975,7 @@ meta2_backend_drain_content(struct meta2_backend_s *m2,
 
 GError*
 meta2_backend_delete_alias(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, gboolean delete_marker,
+		struct oio_url_s *url, gboolean create_delete_marker,
 		m2_onbean_cb cb, gpointer u0)
 {
 	GError *err = NULL;
@@ -995,8 +995,8 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 				max_versions = atoi(oio_ext_get_force_versioning());
 				m2db_set_max_versions(sq3, max_versions);
 			}
-			if (!(err = m2db_delete_alias(sq3, max_versions, delete_marker,
-					url, cb, u0))) {
+			if (!(err = m2db_delete_alias(sq3, max_versions,
+					create_delete_marker, url, cb, u0))) {
 				m2db_increment_version(sq3);
 			}
 			err = sqlx_transaction_end(repctx, err);
@@ -1245,6 +1245,10 @@ meta2_backend_insert_beans(struct meta2_backend_s *m2b,
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
 
+	// TODO(FVE): to migrate from old URLs to new URLs we need to try
+	// with unmodified URLs first.
+	m2v2_shorten_chunk_ids(beans);
+
 	gint flags = M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED;
 	if (frozen)
 		flags |= M2V2_OPEN_FROZEN;
@@ -1290,6 +1294,10 @@ meta2_backend_delete_beans(struct meta2_backend_s *m2b,
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
 
+	// TODO(FVE): to migrate from old URLs to new URLs we need to try
+	// with unmodified URLs first.
+	m2v2_shorten_chunk_ids(beans);
+
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
@@ -1324,6 +1332,11 @@ meta2_backend_update_beans(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		if (DESCR(l0->data) != DESCR(l1->data))
 			return NEWERROR(CODE_BAD_REQUEST, "BeanSet type mismatch");
 	}
+
+	// TODO(FVE): to migrate from old URLs to new URLs we need to try
+	// with unmodified URLs first.
+	m2v2_shorten_chunk_ids(old_chunks);
+	m2v2_shorten_chunk_ids(new_chunks);
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);

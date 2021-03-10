@@ -166,7 +166,7 @@ struct oio_proxy_content_prepare_out_s
 };
 
 GError * oio_proxy_call_content_prepare (CURL *h, struct oio_url_s *u,
-		gsize size, const char *stgpol,
+		gsize size, const char *stgpol, guint start_pos, gboolean append,
 		struct oio_proxy_content_prepare_out_s *out);
 
 struct oio_proxy_content_create_in_s

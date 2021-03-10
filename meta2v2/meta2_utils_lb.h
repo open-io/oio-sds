@@ -32,10 +32,20 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 	uid.th = oio_log_current_thread_id(); \
 	gsize uid_size = sizeof(uid);
 
+struct oio_generate_beans_params_s {
+	struct oio_lb_s *lb;
+	struct oio_url_s *url;
+	gint64 pos;
+	gint64 size;
+	gint64 chunk_size;
+	struct storage_policy_s *pol;
+	oio_location_t pin;
+	int mode;
+	gboolean random_ids;
+};
+
 GError* oio_generate_focused_beans(
-		struct oio_url_s *url, gint64 pos, gint64 size, gint64 chunk_size,
-		struct storage_policy_s *pol, struct oio_lb_s *lb,
-		oio_location_t pin, int mode,
+		struct oio_generate_beans_params_s *params,
 		GSList **out);
 
 /* @deprecated only used in a deprecated function of meta2 */

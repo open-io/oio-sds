@@ -1,4 +1,5 @@
-# Copyright (C) 2015-2021 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,7 +19,7 @@ import hashlib
 import os
 import time
 
-from oio.common.utils import cid_from_name
+from oio.common.utils import cid_from_name, compute_chunk_id
 from oio.common.xattr import xattr
 from oio.common.logger import get_logger
 from oio.blob.auditor import BlobAuditorWorker
@@ -36,7 +37,7 @@ class TestContent(object):
     def __init__(self, account, ref):
         self.cid = cid_from_name(account, ref)
         self.path = random_str(6)
-        self.version = 1
+        self.version = int(time.time()*1000000)
         self.id = random_id(32)
         self.fullpath = encode_fullpath(
             account, ref, self.path, self.version, self.id)
@@ -48,16 +49,20 @@ class TestContent(object):
 
 
 class TestChunk(object):
-    def __init__(self, rawx_id, rawx_loc, metachunk_size, metachunk_hash):
-        self.id = random_id(64)
+    def __init__(self, cid, path, version, policy,
+                 rawx_id, rawx_loc, metachunk_size, metachunk_hash):
+        self.pos = 0
+        self.id = compute_chunk_id(cid, path, version, self.pos, policy)
         self.url = "%s/%s" % (rawx_id, self.id)
         self.path = rawx_loc + '/' + self.id[0:3] + '/' + self.id
-        self.pos = 0
         self.metachunk_size = metachunk_size
         self.metachunk_hash = metachunk_hash
 
 
 class TestBlobAuditorFunctional(BaseTestCase):
+
+    storage_policy = 'SINGLE'
+
     def setUp(self):
         super(TestBlobAuditorFunctional, self).setUp()
         self.namespace = self.conf['namespace']
@@ -74,7 +79,9 @@ class TestBlobAuditorFunctional(BaseTestCase):
 
         self.container_client.container_create(self.account, self.ref)
         self.content = TestContent(self.account, self.ref)
-        self.chunk = TestChunk(self.rawx_id, rawx_loc,
+        self.chunk = TestChunk(self.content.cid, self.content.path,
+                               self.content.version, self.storage_policy,
+                               self.rawx_id, rawx_loc,
                                self.content.size, self.content.hash)
 
         chunk_meta = {
@@ -84,7 +91,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
             'id': self.content.id,
             'full_path': self.content.fullpath,
             'chunk_method': 'plain/nb_copy=3',
-            'policy': 'TESTPOLICY',
+            'policy': self.storage_policy,
             'chunk_id': self.chunk.id,
             'chunk_pos': self.chunk.pos,
             'chunk_hash': self.chunk.metachunk_hash,
@@ -122,9 +129,9 @@ class TestBlobAuditorFunctional(BaseTestCase):
             "size": self.chunk.metachunk_size}
         self.container_client.content_create(
             self.account, self.ref, self.content.path,
-            version=int(time.time()*1000000), content_id=self.content.id,
+            version=self.content.version, content_id=self.content.id,
             size=self.content.size, checksum=self.content.hash,
-            data={'chunks': [chunk_proxy]}, stgpol="SINGLE")
+            data={'chunks': [chunk_proxy]}, stgpol=self.storage_policy)
 
     def test_chunk_audit(self):
         self.init_content()
@@ -233,8 +240,10 @@ class TestBlobAuditorFunctional(BaseTestCase):
                           self.chunk.path, self.chunk.id)
 
     def test_chunk_bad_meta2_chunk_url(self):
+        if self.conf['config'].get('meta2.store_chunk_ids') is False:
+            self.skipTest('Not relevant when not storing chunk IDs')
+
         self.chunk.url = '%s/0123456789ABCDEF' % self.rawx_id
         self.init_content()
-
         self.assertRaises(exc.OrphanChunk, self.auditor.chunk_audit,
                           self.chunk.path, self.chunk.id)

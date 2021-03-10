@@ -191,14 +191,18 @@ _load_one_chunk (struct json_object *jurl, struct json_object *jsize,
 }
 
 static const char *
-_chunk_pack_position (const struct chunk_s *c, gchar *buf, gsize len)
+_chunk_pack_position(const struct chunk_s *c, gboolean composed_positions,
+		gchar *buf, gsize len)
 {
-	g_snprintf (buf, len, "%u.%u", c->position.meta, c->position.intra);
+	if (composed_positions)
+		g_snprintf(buf, len, "%u.%u", c->position.meta, c->position.intra);
+	else
+		g_snprintf(buf, len, "%u", c->position.meta);
 	return buf;
 }
 
 static void
-_chunks_pack (GString *gs, GSList *chunks)
+_chunks_pack(GString *gs, GSList *chunks, gboolean composed_positions)
 {
 	gchar strpos[32];
 
@@ -207,7 +211,7 @@ _chunks_pack (GString *gs, GSList *chunks)
 		struct chunk_s *c = l->data;
 		if (gs->str[gs->len - 1] != '[')
 			g_string_append_c (gs, ',');
-		_chunk_pack_position (c, strpos, sizeof(strpos));
+		_chunk_pack_position(c, composed_positions, strpos, sizeof(strpos));
 		g_string_append_printf (gs,
 				"{\"url\":\"%s\","
 				"\"size\":%"G_GSIZE_FORMAT","
@@ -332,8 +336,8 @@ _get_meta_bound (GSList *lchunks)
 }
 
 static GError *
-_organize_chunks (GSList *lchunks, struct metachunk_s ***result,
-		gboolean no_shuffle, gint64 k)
+_organize_chunks(GSList *lchunks, struct metachunk_s ***result,
+		gboolean no_shuffle, gint64 k, guint mc_start_pos)
 {
 	*result = NULL;
 
@@ -345,13 +349,13 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result,
 
 	/* build the metachunk */
 	struct metachunk_s **out = g_malloc0 ((meta_bound+1) * sizeof(void*));
-	for (guint i = 0; i < meta_bound; ++i) {
+	for (guint i = 0; i < meta_bound - mc_start_pos; ++i) {
 		out[i] = g_malloc0 (sizeof(struct metachunk_s));
-		out[i]->meta = i;
+		out[i]->meta = i + mc_start_pos;
 	}
 	for (GSList *l = lchunks; l; l = l->next) {
 		struct chunk_s *c = l->data;
-		guint i = c->position.meta;
+		guint i = c->position.meta - mc_start_pos;
 		struct metachunk_s *mc = out[i];
 		mc->chunks = g_slist_prepend(mc->chunks, c);
 	}
@@ -359,7 +363,7 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result,
 	/* check the sequence of metachunks has no gap. In addition we
 	 * apply a shuffling of the chunks to avoid preferring always the
 	 * same 'first' chunk returned by the proxy. */
-	for (guint i = 0; i < meta_bound; ++i) {
+	for (guint i = 0; i < meta_bound - mc_start_pos; ++i) {
 		struct metachunk_s *mc = out[i];
 		if (!mc->chunks) {
 			_metachunk_cleanv (out);
@@ -372,14 +376,14 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result,
 	}
 
 	/* Compute each metachunk's size */
-	for (guint i = 0; i < meta_bound; ++i) {
+	for (guint i = 0; i < meta_bound - mc_start_pos; ++i) {
 		/* Even with EC, the value of the 'chunk_size' attribute stored with each
 		 * chunk is the size of the metachunk. */
 		out[i]->size = ((struct chunk_s*)(out[i]->chunks->data))->size;
 	}
 
 	/* patch each metachunk-size and multiply it by K */
-	for (guint i = 0; i < meta_bound; ++i) {
+	for (guint i = 0; i < meta_bound - mc_start_pos; ++i) {
 		struct metachunk_s *mc = out[i];
 		mc->size = mc->size * k;
 		for (GSList *l=mc->chunks; l ;l=l->next) {
@@ -390,7 +394,7 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result,
 
 	/* Compute each metachunk's offset in the main content */
 	gsize offset = 0;
-	for (guint i = 0; i < meta_bound; ++i) {
+	for (guint i = 0; i < meta_bound - mc_start_pos; ++i) {
 		out[i]->offset = offset;
 		offset += out[i]->size;
 	}
@@ -1017,7 +1021,7 @@ _download_to_hook (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 			.sds = sds, .dst = dst, .src = src, .chunk_method = chunk_method,
 			.metachunks = NULL, .chunks = chunks,
 		};
-		err = _organize_chunks(chunks, &dl.metachunks, sds->no_shuffle, 1);
+		err = _organize_chunks(chunks, &dl.metachunks, sds->no_shuffle, 1, 0);
 		if (!err) {
 			EXTRA_ASSERT (dl.metachunks != NULL);
 			err = _download (&dl);
@@ -1366,6 +1370,7 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 	GError *err = NULL;
 	GString *request_body = g_string_sized_new(128);
 	GString *reply_body = g_string_sized_new (1024);
+	guint mc_start_pos = g_list_length(ul->metachunk_done);
 
 	/* get the beans from the proxy, for the size announced.
 	 * The reply will only carry the official chunk_size and
@@ -1380,8 +1385,15 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 			.header_chunk_method = NULL,
 			.header_mime_type = NULL,
 		};
+		if (ul->version > 0 && !oio_url_has(ul->dst->url, OIOURL_VERSION)) {
+			gchar vbuf[LIMIT_LENGTH_VERSION] = {0};
+			g_snprintf(vbuf, sizeof(vbuf), "%"G_GINT64_FORMAT, ul->version);
+			oio_url_set(ul->dst->url, OIOURL_VERSION, vbuf);
+		}
 		CURL_DO(ul->sds, H, err = oio_proxy_call_content_prepare(
-					H, ul->dst->url, size, NULL, &out));
+					H, ul->dst->url, size, NULL,
+					mc_start_pos, ul->dst->append || ul->dst->partial,
+					&out));
 
 		if (!err && out.header_content && !oio_str_ishexa1 (out.header_content))
 			err = SYSERR("returned content-id not hexadecimal");
@@ -1473,7 +1485,7 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 	/* Organize the set of chunks into metachunks. */
 	if (!err) {
 		struct metachunk_s **out = NULL;
-		if ((err = _organize_chunks(_chunks, &out, ul->sds->no_shuffle, k)))
+		if ((err = _organize_chunks(_chunks, &out, ul->sds->no_shuffle, k, mc_start_pos)))
 			g_prefix_error (&err, "Logic: ");
 		else
 			for (struct metachunk_s **p = out; *p; ++p)
@@ -1673,6 +1685,7 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 
 	/* Initiate the PolyPut (c) with all its targets */
 	ul->put = http_put_create (-1, ul->chunk_size);
+	gboolean composed_positions = _chunk_method_is_EC(ul->chunk_method);
 	if (oio_sds_upload_needs_ecd(ul)) {
 		// TODO: allow getting ecd from proxy
 		char ecd[128] = {0};
@@ -1703,7 +1716,7 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 					"%s", strrchr(c->url, '/')+1);
 
 			gchar strpos[32];
-			_chunk_pack_position (c, strpos, sizeof(strpos));
+			_chunk_pack_position(c, composed_positions, strpos, sizeof(strpos));
 			http_put_dest_add_header (dest, RAWX_HEADER_CHUNK_POS,
 					"%s", strpos);
 
@@ -1874,7 +1887,8 @@ oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 
 	GString *request_body = g_string_sized_new(2048);
 	GString *reply_body = g_string_sized_new (256);
-	_chunks_pack (request_body, ul->chunks_done);
+	gboolean composed_positions = _chunk_method_is_EC(ul->chunk_method);
+	_chunks_pack(request_body, ul->chunks_done, composed_positions);
 
 	gchar hash[STRLEN_CHUNKHASH];
 	g_strlcpy (hash, g_checksum_get_string (ul->checksum_content), sizeof(hash));

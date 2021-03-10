@@ -408,6 +408,7 @@ _roundtrip_put_multipart (const char * const * properties)
 	struct file_info_s fi0 = FILE_INFO_INIT;
 	_checksum_file (source_path, &fi0);
 
+	oio_url_set(url, OIOURL_VERSION, "");
 	CHECK_ABSENT(client,url);
 
 	struct oio_sds_ul_dst_s ul_dst = OIO_SDS_UPLOAD_DST_INIT;

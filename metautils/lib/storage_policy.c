@@ -255,7 +255,7 @@ data_security_get_int64_param(const struct data_security_s *ds, const char *key,
 }
 
 static GString *
-_rain_policy_to_chunk_method(const struct data_security_s *datasec)
+_ec_policy_to_chunk_method(const struct data_security_s *datasec)
 {
 	GString *result = g_string_sized_new(64);
 
@@ -290,7 +290,7 @@ storage_policy_to_chunk_method(const struct storage_policy_s *sp)
 	const struct data_security_s *datasec = storage_policy_get_data_security(sp);
 	switch (data_security_get_type(datasec)) {
 		case STGPOL_DS_EC:
-			return _rain_policy_to_chunk_method(datasec);
+			return _ec_policy_to_chunk_method(datasec);
 		case STGPOL_DS_PLAIN:
 			return _plain_policy_to_chunk_method(datasec);
 		default:

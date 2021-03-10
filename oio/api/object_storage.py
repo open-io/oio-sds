@@ -1565,6 +1565,14 @@ class ObjectStorageApi(object):
         for target, copy in zip(targets, copies):
             targets_beans.append(self._m2_chunk_bean(target, content))
             copies_beans.append(self._m2_chunk_bean(copy, content))
+
+        # We need to sort the chunks so the meta2 can optimize the update.
+        # We could let the meta2 do the sorting but it's easier to do it here.
+        def sort_key(chunk):
+            return chunk['id']
+
+        targets_beans.sort(key=sort_key)
+        copies_beans.sort(key=sort_key)
         return targets_beans, copies_beans
 
     @staticmethod

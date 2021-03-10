@@ -188,7 +188,9 @@ class TestECContent(BaseTestCase):
             del old_info[pos]["dl_meta"]["chunk_mtime"]
             del rebuilt_meta["chunk_mtime"]
             del old_info[pos]["dl_meta"]["chunk_id"]
+            del old_info[pos]["dl_meta"]["chunk_mtime"]
             del rebuilt_meta["chunk_id"]
+            del rebuilt_meta["chunk_mtime"]
             self.assertEqual(rebuilt_meta, old_info[pos]["dl_meta"])
 
     def test_content_0_byte_rebuild(self):

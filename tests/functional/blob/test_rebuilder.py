@@ -131,4 +131,6 @@ class TestBlobRebuilder(BaseTestCase):
         self.assertEqual(OIO_VERSION, new_chunk_headers['oio_version'])
         del chunk_headers['oio_version']
         del new_chunk_headers['oio_version']
+        del chunk_headers['chunk_mtime']
+        del new_chunk_headers['chunk_mtime']
         self.assertEqual(chunk_headers, new_chunk_headers)

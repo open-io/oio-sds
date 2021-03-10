@@ -157,6 +157,9 @@ _curl_content_url (struct oio_url_s *u, const char *action)
 	_append (hu, '?', "acct", oio_url_get (u, OIOURL_ACCOUNT));
 	_append (hu, '&', "ref",  oio_url_get (u, OIOURL_USER));
 	_append (hu, '&', "path", oio_url_get (u, OIOURL_PATH));
+	if (oio_url_has(u, OIOURL_VERSION)) {
+		_append(hu, '&', "version", oio_url_get(u, OIOURL_VERSION));
+	}
 	return hu;
 }
 
@@ -634,7 +637,7 @@ oio_proxy_call_content_truncate (CURL *h, struct oio_url_s *u, gint64 size)
 
 GError *
 oio_proxy_call_content_prepare (CURL *h, struct oio_url_s *u,
-		gsize size, const char *stgpol,
+		gsize size, const char *stgpol, guint start_pos, gboolean append,
 		struct oio_proxy_content_prepare_out_s *out)
 {
 	gboolean use_legacy = FALSE;
@@ -658,11 +661,14 @@ retry:
 	};
 
 	if (stgpol) {
-		i.body = _gs_vprintf ("{\"size\":%"G_GSIZE_FORMAT",\"policy\":\"%s\"}",
-				size, stgpol);
+		i.body = _gs_vprintf ("{\"size\":%"G_GSIZE_FORMAT",\"policy\":\"%s\","
+				"\"position\",%u,\"append\":%s}",
+				size, stgpol, start_pos, append? "true" : "false");
 	} else {
 		i.body =
-			_gs_vprintf("{\"size\":%"G_GSIZE_FORMAT",\"policy\":null}", size);
+			_gs_vprintf("{\"size\":%"G_GSIZE_FORMAT",\"policy\":null,"
+					"\"position\":%u,\"append\": %s}",
+					size, start_pos, append? "true" : "false");
 	}
 
 	GError *err = _proxy_call (h, "POST", http_url->str, &i, &o);

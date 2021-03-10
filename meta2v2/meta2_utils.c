@@ -355,6 +355,46 @@ m2v2_sorted_content_free(struct m2v2_sorted_content_s *content)
 	g_free(content);
 }
 
+struct _url_n_pol_s {
+	struct oio_url_s *url;
+	const gchar *pol;
+	GError *err;
+};
+
+static gboolean
+_foreach_chunk_extend_url(gpointer key UNUSED, gpointer value, gpointer data)
+{
+	GError *err = NULL;
+	struct _url_n_pol_s *url_n_pol = data;
+
+	for (GSList *chunks = value; chunks != NULL; chunks = chunks->next) {
+		struct bean_CHUNKS_s *chunk = chunks->data;
+		err = m2v2_extend_chunk_url(url_n_pol->url, url_n_pol->pol, chunk);
+		if (err) {
+			// Discard the previous error
+			g_clear_error(&url_n_pol->err);
+			url_n_pol->err = err;
+		}
+	}
+	return FALSE;
+}
+
+GError *
+m2v2_sorted_content_extend_chunk_urls(struct m2v2_sorted_content_s *content,
+		struct oio_url_s *url)
+{
+	if (g_tree_nnodes(content->metachunks) < 1)
+		return NULL;  // No chunk, nothing to do.
+
+	struct _url_n_pol_s url_n_pol = {
+		url,
+		CONTENTS_HEADERS_get_policy(content->header)->str,
+		NULL
+	};
+	g_tree_foreach(content->metachunks, _foreach_chunk_extend_url, &url_n_pol);
+	return url_n_pol.err;
+}
+
 void
 m2v2_sort_content(GSList *beans, struct m2v2_sorted_content_s **content)
 {
@@ -370,6 +410,34 @@ m2v2_sort_content(GSList *beans, struct m2v2_sorted_content_s **content)
 	}
 }
 
+void
+m2v2_shorten_chunk_id(struct bean_CHUNKS_s *bean)
+{
+	EXTRA_ASSERT(bean != NULL);
+	GString *url = CHUNKS_get_id(bean);
+	gchar *netloc = NULL;
+	oio_parse_chunk_url(url->str, NULL, &netloc, NULL);
+	CHUNKS_set2_id(bean, netloc);
+	g_free(netloc);
+}
+
+void
+m2v2_shorten_chunk_ids(GSList *beans)
+{
+	if (meta2_flag_store_chunk_ids)
+		return;
+
+	for (GSList *l = beans; l; l = l->next) {
+		gpointer bean = l->data;
+		if (DESCR(bean) != &descr_struct_CHUNKS)
+			continue;
+
+		m2v2_shorten_chunk_id(bean);
+	}
+}
+
+/** Load all chunks related to the specified content header,
+ * pass them to the callback function. */
 static GError*
 _manage_header(sqlite3 *db, struct bean_CONTENTS_HEADERS_s *bean,
 		m2_onbean_cb cb, gpointer u0)
@@ -393,6 +461,9 @@ _manage_header(sqlite3 *db, struct bean_CONTENTS_HEADERS_s *bean,
 	return err;
 }
 
+/** Load the content header and all chunks related to the specified alias,
+ * pass them to the callback function. If "deeper" is false, load only
+ * the content header. */
 static GError*
 _manage_alias(sqlite3 *db, struct bean_ALIASES_s *bean,
 		gboolean deeper, m2_onbean_cb cb, gpointer u0)
@@ -1201,7 +1272,7 @@ _real_delete_aliases(struct sqlx_sqlite3_s *sq3, GPtrArray *aliases,
 
 GError*
 m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
-		gboolean delete_marker, struct oio_url_s *url,
+		gboolean create_delete_marker, struct oio_url_s *url,
 		m2_onbean_cb cb, gpointer u0)
 {
 	GError *err;
@@ -1241,26 +1312,23 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 			max_versions, ALIASES_get_deleted(alias),
 			oio_url_has(url, OIOURL_VERSION), oio_url_get(url, OIOURL_VERSION));
 
-	gboolean add_delete_marker = FALSE;
 	if (VERSIONS_DISABLED(max_versions) || VERSIONS_SUSPENDED(max_versions) ||
 			oio_url_has(url, OIOURL_VERSION) || ALIASES_get_deleted(alias)) {
-		if (delete_marker) {
+		if (create_delete_marker) {
 			if (VERSIONS_DISABLED(max_versions) ||
 					VERSIONS_SUSPENDED(max_versions)) {
 				err = BADREQ("Versioning not enabled and delete marker specified");
 			} else if (ALIASES_get_deleted(alias)) {
 				err = BADREQ("Alias is a delete marker and delete marker specified");
-			} else {
-				add_delete_marker = TRUE;
 			}
 		} else {
 			err = _real_delete_and_save_deleted_beans(sq3, beans,
 					alias, header, cb, u0);
 		}
 	} else {
-		add_delete_marker = TRUE;
+		create_delete_marker = TRUE;
 	}
-	if (!err && add_delete_marker) {
+	if (!err && create_delete_marker) {
 		/* Check if delete marker already exists */
 		struct oio_url_s *delete_marker_url = oio_url_dup(url);
 		oio_url_set(delete_marker_url, OIOURL_PATH,
@@ -1388,6 +1456,9 @@ m2db_truncate_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	if (err)
 		goto cleanup;
 
+	/* The header is required to compute the chunk IDs,
+	 * make a copy before modifiying it. */
+	discarded = g_slist_prepend(discarded, _bean_dup(content.header));
 	/* Update size and mtime in header */
 	const gint64 now = oio_ext_real_time() / G_TIME_SPAN_SECOND;
 	gint64 sz_gap = CONTENTS_HEADERS_get_size(content.header) - truncate_size;
@@ -1895,6 +1966,8 @@ suspended:
 		_patch_beans_defaults(beans);
 		_patch_beans_with_time(beans, latest);
 		_patch_beans_with_version(beans, version);
+		if (!args->preserve_chunk_ids)
+			m2v2_shorten_chunk_ids(beans);
 
 		err = m2db_real_put_alias(args->sq3, beans, cb_added, u0_added);
 	}
@@ -1975,13 +2048,13 @@ m2db_change_alias_policy(struct m2db_put_args_s *args, GSList *new_beans,
 			beans_to_delete = g_slist_prepend(beans_to_delete, bean);
 		}
 	}
-	struct oio_url_s *url_with_version = oio_url_dup(args->url);
-	gchar *version_str = g_strdup_printf("%"G_GINT64_FORMAT, version);
-	oio_url_set(url_with_version, OIOURL_VERSION, version_str);
-	g_free(version_str);
-	err = m2db_get_alias(args->sq3, url_with_version,
+	if (!oio_url_has(args->url, OIOURL_VERSION)) {
+		gchar *version_str = g_strdup_printf("%"G_GINT64_FORMAT, version);
+		oio_url_set(args->url, OIOURL_VERSION, version_str);
+		g_free(version_str);
+	}
+	err = m2db_get_alias(args->sq3, args->url,
 			M2V2_FLAG_NOPROPS|M2V2_FLAG_HEADERS, _search_alias_and_size, NULL);
-	oio_url_clean(url_with_version);
 	if (err) {
 		goto label_end;
 	}
@@ -2105,7 +2178,8 @@ GError* m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		args.url = url;
 		/* whatever, the content is not present, we won't reach a limit */
 		args.ns_max_versions = -1;
-		return m2db_put_alias(&args, beans, NULL, NULL, NULL, NULL);
+		args.preserve_chunk_ids = TRUE;
+		return m2db_put_alias(&args, beans, NULL, NULL, cb, u0);
 	}
 
 	/* a content is present, let's append the chunks. Let's start by filtering

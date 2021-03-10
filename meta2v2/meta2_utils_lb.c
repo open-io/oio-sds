@@ -85,7 +85,8 @@ get_spare_chunks_focused(struct oio_url_s *url, const gchar *pos,
 
 	void _on_id(struct oio_lb_selected_item_s *sel, gpointer u UNUSED)
 	{
-		struct bean_CHUNKS_s *chunk = generate_chunk_bean(url, pos, sel, policy);
+		struct bean_CHUNKS_s *chunk = generate_chunk_bean(
+				url, pos, sel, policy, FALSE);
 		struct bean_PROPERTIES_s *prop = generate_chunk_quality_bean(
 				sel, CHUNKS_get_id(chunk)->str, NULL);
 		beans = g_slist_prepend(beans, prop);
@@ -155,7 +156,7 @@ get_conditioned_spare_chunks(struct oio_url_s *url, const gchar *pos,
 	void _on_id(struct oio_lb_selected_item_s *sel, gpointer u UNUSED)
 	{
 		struct bean_CHUNKS_s *chunk = generate_chunk_bean(url, pos, sel,
-				policy);
+				policy, FALSE);
 		struct bean_PROPERTIES_s *prop = generate_chunk_quality_bean(
 				sel, CHUNKS_get_id(chunk)->str, NULL);
 		beans = g_slist_prepend(beans, prop);
@@ -191,16 +192,15 @@ m2v2_build_chunk_url (const char *srv, const char *id)
 	return g_strconcat("http://", srv, "/", id, NULL);
 }
 
-void
+GError *
 m2v2_extend_chunk_url(struct oio_url_s *url, const gchar *policy,
 		struct bean_CHUNKS_s *chunk)
 {
 	GString *chunk_id = CHUNKS_get_id(chunk);
 	if (chunk_id && chunk_id->len > 0 &&
 			g_str_has_prefix(chunk_id->str, "http")) {
-		return;
+		return NULL;
 	}
-	EXTRA_ASSERT(policy != NULL);
 	GString *chunk_url = g_string_sized_new(LIMIT_LENGTH_CHUNKURL);
 	g_string_append_static(chunk_url, "http://");
 	g_string_append(chunk_url, chunk_id->str);
@@ -208,31 +208,28 @@ m2v2_extend_chunk_url(struct oio_url_s *url, const gchar *policy,
 	/* Use the internal buffer to avoid string copies. */
 	gchar *id_offset = chunk_url->str + chunk_url->len;
 	size_t id_max_len = LIMIT_LENGTH_CHUNKURL - chunk_url->len;
-	oio_url_compute_chunk_id(url, CHUNKS_get_position(chunk)->str, policy,
+	GError *err = oio_url_compute_chunk_id(
+			url, CHUNKS_get_position(chunk)->str, policy,
 			id_offset, id_max_len);
-	/* We need to update the length or the next operation won't copy
-	 * the whole URL. */
-	g_string_set_size(chunk_url, strlen(chunk_url->str));
-	CHUNKS_set_id(chunk, chunk_url);
+	if (!err) {
+		/* We need to update the length or the next operation won't
+		 * copy the whole URL. */
+		g_string_set_size(chunk_url, strlen(chunk_url->str));
+		CHUNKS_set_id(chunk, chunk_url);
+	}
 	g_string_free(chunk_url, TRUE);
+	return err;
 }
 
+/* Internal extension to the oio_generate_beans_params_s structure */
 struct gen_ctx_s
 {
-	struct oio_url_s *url;
-	const struct storage_policy_s *pol;
-	struct oio_lb_s *lb;
+	const struct oio_generate_beans_params_s *params;
+
 	guint8 *uid;
 	gsize uid_size;
 	guint8 h[16];
-	gint64 size;
-	gint64 chunk_size;
-	gint64 pos;
-	gint64 version;
-
-	/* location focused mode */
-	oio_location_t pin;
-	int mode;
+	gint64 version;  // parsed from params->url
 
 	GSList **out;
 };
@@ -247,21 +244,23 @@ static void
 _m2_generate_alias_header(struct gen_ctx_s *ctx)
 {
 	const gchar *p;
-	p = ctx->pol ? storage_policy_get_name(ctx->pol) : "none";
+	p = ctx->params->pol ? storage_policy_get_name(ctx->params->pol) : "none";
 
-	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
+	GRID_TRACE2("%s(%s)",
+			__FUNCTION__, oio_url_get(ctx->params->url, OIOURL_WHOLE));
 	const gint64 now = oio_ext_real_time ();
 
 	struct bean_ALIASES_s *alias = _bean_create(&descr_struct_ALIASES);
-	ALIASES_set2_alias(alias, oio_url_get(ctx->url, OIOURL_PATH));
+	ALIASES_set2_alias(alias, oio_url_get(ctx->params->url, OIOURL_PATH));
 	gint64 version;
-	if (!oio_url_has(ctx->url, OIOURL_VERSION) ||
+	if (!oio_url_has(ctx->params->url, OIOURL_VERSION) ||
 			(version = g_ascii_strtoll(
-				oio_url_get(ctx->url, OIOURL_VERSION), NULL, 10)) <= 0) {
+				oio_url_get(ctx->params->url, OIOURL_VERSION),
+				NULL, 10)) <= 0) {
 		version = now;
 		gchar sver[LIMIT_LENGTH_VERSION] = {0};
 		g_snprintf(sver, sizeof(sver), "%"G_GINT64_FORMAT, version);
-		oio_url_set(ctx->url, OIOURL_VERSION, sver);
+		oio_url_set(ctx->params->url, OIOURL_VERSION, sver);
 	}
 	ALIASES_set_version(alias, version);
 	ALIASES_set_ctime(alias, now / G_TIME_SPAN_SECOND);
@@ -272,7 +271,7 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 
 	struct bean_CONTENTS_HEADERS_s *header;
 	header = _bean_create(&descr_struct_CONTENTS_HEADERS);
-	CONTENTS_HEADERS_set_size(header, ctx->size);
+	CONTENTS_HEADERS_set_size(header, ctx->params->size);
 	CONTENTS_HEADERS_set2_id(header, ctx->uid, ctx->uid_size);
 	CONTENTS_HEADERS_set2_policy(header, p);
 	CONTENTS_HEADERS_nullify_hash(header);
@@ -280,7 +279,7 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 	CONTENTS_HEADERS_set_mtime(header, now / G_TIME_SPAN_SECOND);
 	CONTENTS_HEADERS_set2_mime_type(header, OIO_DEFAULT_MIMETYPE);
 
-	GString *chunk_method = storage_policy_to_chunk_method(ctx->pol);
+	GString *chunk_method = storage_policy_to_chunk_method(ctx->params->pol);
 	// TODO(FVE): store the name of the algorithm used to generate chunk IDs
 	CONTENTS_HEADERS_set_chunk_method(header, chunk_method);
 	g_string_free(chunk_method, TRUE);
@@ -290,12 +289,13 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 struct bean_CHUNKS_s *
 generate_chunk_bean(struct oio_url_s *url, const gchar *pos,
 		struct oio_lb_selected_item_s *sel,
-		const struct storage_policy_s *policy)
+		const struct storage_policy_s *policy,
+		gboolean force_random_ids)
 {
 	guint8 binid[32];
 	gchar *chunkid = NULL, strid[65];
 
-	if (oio_lb_random_chunk_ids) {
+	if (oio_lb_random_chunk_ids || force_random_ids) {
 		oio_buf_randomize(binid, sizeof(binid));
 		oio_str_bin2hex(binid, sizeof(binid), strid, sizeof(strid));
 	} else {
@@ -363,7 +363,8 @@ _gen_chunk(struct gen_ctx_s *ctx, struct oio_lb_selected_item_s *sel,
 		g_snprintf(strpos, sizeof(strpos), "%u.%d", pos, subpos);
 
 	struct bean_CHUNKS_s *chunk = generate_chunk_bean(
-			ctx->url, strpos, sel, ctx->pol);
+			ctx->params->url, strpos, sel, ctx->params->pol,
+			ctx->params->random_ids);
 	CHUNKS_set2_content(chunk, ctx->uid, ctx->uid_size);
 	CHUNKS_set2_hash(chunk, ctx->h, sizeof(ctx->h));
 	CHUNKS_set_size(chunk, cs);
@@ -372,7 +373,7 @@ _gen_chunk(struct gen_ctx_s *ctx, struct oio_lb_selected_item_s *sel,
 
 	/* Create a property to represent the quality of the selected chunk. */
 	struct bean_PROPERTIES_s *prop = generate_chunk_quality_bean(
-			sel, CHUNKS_get_id(chunk)->str, ctx->url);
+			sel, CHUNKS_get_id(chunk)->str, ctx->params->url);
 	_collect_bean(ctx, prop);
 
 }
@@ -386,20 +387,20 @@ _m2_generate_chunks(struct gen_ctx_s *ctx,
 
 	_m2_generate_alias_header(ctx);
 
-	guint pos = ctx->pos;
-	gint64 esize = MAX(ctx->size, 1);
+	guint pos = ctx->params->pos;
+	gint64 esize = MAX(ctx->params->size, 1);
 	for (gint64 s = 0; s < esize && !err; s += mcs, ++pos) {
 		int i = 0;
 		void _on_id(struct oio_lb_selected_item_s *sel, gpointer u UNUSED)
 		{
-			_gen_chunk(ctx, sel, ctx->chunk_size, pos, subpos? i : -1);
+			_gen_chunk(ctx, sel, ctx->params->chunk_size, pos, subpos? i : -1);
 			i++;
 		}
-		const char *pool = storage_policy_get_service_pool(ctx->pol);
+		const char *pool = storage_policy_get_service_pool(ctx->params->pol);
 		// FIXME(FVE): set last argument
 
-		err = oio_lb__poll_pool_around(ctx->lb, pool,
-				ctx->pin, ctx->mode, _on_id, NULL);
+		err = oio_lb__poll_pool_around(ctx->params->lb, pool,
+				ctx->params->pin, ctx->params->mode, _on_id, NULL);
 
 		if (err != NULL) {
 			g_prefix_error(&err, "at position %u: did not find enough "
@@ -416,30 +417,41 @@ oio_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,
 		struct storage_policy_s *pol, struct oio_lb_s *lb,
 		GSList **out)
 {
-	return oio_generate_focused_beans(url, 0, size, chunk_size, pol, lb, 0, 0, out);
+	struct oio_generate_beans_params_s params = {
+		.lb=lb,
+		.url=oio_url_dup(url),
+		.pos=0,
+		.size=size,
+		.chunk_size=chunk_size,
+		.pol=pol,
+		.pin=0,
+		.mode=0
+	};
+	GError *err = oio_generate_focused_beans(&params, out);
+	oio_url_clean(params.url);
+	return err;
 }
 
 GError *
 oio_generate_focused_beans(
-		struct oio_url_s *url, gint64 pos, gint64 size, gint64 chunk_size,
-		struct storage_policy_s *pol, struct oio_lb_s *lb,
-		oio_location_t pin, int mode,
+		struct oio_generate_beans_params_s *params,
 		GSList **out)
 {
-	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(params->url != NULL);
 
-	GRID_TRACE("%s pin=%"G_GINT64_MODIFIER"x mode=%d", __FUNCTION__, pin, mode);
+	GRID_TRACE("%s pin=%"G_GINT64_MODIFIER"x mode=%d", __FUNCTION__,
+			params->pin, params->mode);
 
-	if (!oio_url_has(url, OIOURL_PATH))
+	if (!oio_url_has(params->url, OIOURL_PATH))
 		return BADREQ("Missing path");
-	if (size < 0)
+	if (params->size < 0)
 		return BADREQ("Invalid size");
-	if (chunk_size <= 0)
+	if (params->chunk_size <= 0)
 		return BADREQ("Invalid chunk size");
 
 	RANDOM_UID(_uid, uid_size);
 	guint8 *uid = (guint8 *) &_uid;
-	const gchar *content_id = oio_url_get(url, OIOURL_CONTENTID);
+	const gchar *content_id = oio_url_get(params->url, OIOURL_CONTENTID);
 	if (content_id) {
 		gsize len = strlen(content_id);
 		uid_size = len/2;
@@ -447,30 +459,24 @@ oio_generate_focused_beans(
 	}
 
 	struct gen_ctx_s ctx = {};
-	ctx.url = oio_url_dup(url);
-	ctx.pol = pol;
+	ctx.params = params;
 	ctx.uid = uid;
 	ctx.uid_size = uid_size;
-	ctx.size = size;
-	ctx.chunk_size = chunk_size;
-	ctx.pos = pos;
-	ctx.lb = lb;
 	ctx.out = out;
-	ctx.pin = pin;
-	ctx.mode = mode;
 
 	GError *err = NULL;
-	if (!pol) {
-		err = _m2_generate_chunks(&ctx, chunk_size, 0);
+	if (!params->pol) {
+		err = _m2_generate_chunks(&ctx, params->chunk_size, 0);
 	} else {
 		gint64 k;
-		switch (data_security_get_type(storage_policy_get_data_security(pol))) {
+		switch (data_security_get_type(storage_policy_get_data_security(
+				params->pol))) {
 			case STGPOL_DS_PLAIN:
-				err = _m2_generate_chunks(&ctx, chunk_size, 0);
+				err = _m2_generate_chunks(&ctx, params->chunk_size, 0);
 				break;
 			case STGPOL_DS_EC:
-				k = storage_policy_parameter(pol, DS_KEY_K, 6);
-				err = _m2_generate_chunks(&ctx, k*chunk_size, TRUE);
+				k = storage_policy_parameter(params->pol, DS_KEY_K, 6);
+				err = _m2_generate_chunks(&ctx, k*params->chunk_size, TRUE);
 				break;
 			default:
 				err = NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy type");
@@ -478,6 +484,5 @@ oio_generate_focused_beans(
 		}
 	}
 
-	oio_url_clean(ctx.url);
 	return err;
 }
