@@ -265,7 +265,7 @@ class ContainerClient(ProxyClient):
             return results
 
     def container_delete(self, account=None, reference=None, cid=None,
-                         **kwargs):
+                         force=False, **kwargs):
         """
         Delete a container.
 
@@ -276,10 +276,16 @@ class ContainerClient(ProxyClient):
         :param cid: container id that can be used instead of account
             and reference
         :type cid: `str`
+        :param force: Force the deletion of the container,
+            even if it is not empty
+            (only the metadata of the objects will be deleted)
+        :type force: `bool`
         :keyword headers: extra headers to send to the proxy
         :type headers: `dict`
         """
         params = self._make_params(account, reference, cid=cid)
+        if force:
+            params['force'] = True
 
         del_cached_container_metadata(
             account=account, reference=reference, cid=cid, **kwargs)
