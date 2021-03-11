@@ -61,27 +61,61 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 	GError *err = NULL;
 	struct oio_url_s *original_url = args->url;
 	struct oio_url_s *redirect_url = NULL;
-redirect_shard:
-	err = gridd_request_replicated_with_retry(args, &ctx, pack);
+
+	guint nb_redirects = 0;
+	while (TRUE) {
+		if (nb_redirects >= 2) {
+			err = NEWERROR(CODE_TOOMANY_REDIRECT,
+				"Too many redirections (to shards)");
+			break;
+		}
+
+		err = gridd_request_replicated_with_retry(args, &ctx, pack);
+		if (!err) {
+			break;
+		}
+
+		if (err->code == CODE_REDIRECT_SHARD) {
+			if (redirect_url) {
+				g_error_free(err);
+				err = SYSERR("Shard redirect to another shard");
+				break;
+			}
+
+			// Redirect to the shard having the object manipulated
+			nb_redirects++;
+			redirect_url = oio_url_dup(args->url);
+			oio_url_unset(redirect_url, OIOURL_ACCOUNT);
+			oio_url_unset(redirect_url, OIOURL_USER);
+			oio_url_set(redirect_url, OIOURL_HEXID, err->message);
+			args->url = redirect_url;
+			client_clean(&ctx);
+			client_init(&ctx, args, NAME_SRVTYPE_META2, 1, how,
+					decoder, out);
+			oio_ext_set_is_shard(TRUE);
+			g_clear_error(&err);
+			continue;
+		}
+		if (redirect_url && (
+				err->code == CODE_CONTAINER_FROZEN
+				|| err->code == CODE_CONTAINER_NOTFOUND
+				|| err->code == CODE_USER_NOTFOUND)) {
+			// Maybe the shard is being deleted,
+			// retry on the root container
+			args->url = original_url;
+			oio_url_clean(redirect_url);
+			redirect_url = NULL;
+			client_clean(&ctx);
+			client_init(&ctx, args, NAME_SRVTYPE_META2, 1, how,
+					decoder, out);
+			oio_ext_set_is_shard(FALSE);
+			g_clear_error(&err);
+			continue;
+		}
+		break;
+	}
 
 	if (err) {
-		if (err->code == CODE_REDIRECT_SHARD) {
-			if (!redirect_url) {
-				redirect_url = oio_url_dup(args->url);
-				oio_url_unset(redirect_url, OIOURL_ACCOUNT);
-				oio_url_unset(redirect_url, OIOURL_USER);
-				oio_url_set(redirect_url, OIOURL_HEXID, err->message);
-				args->url = redirect_url;
-				client_clean(&ctx);
-				client_init(&ctx, args, NAME_SRVTYPE_META2, 1, how,
-						decoder, out);
-				oio_ext_set_is_shard(TRUE);
-				g_clear_error(&err);
-				goto redirect_shard;
-			}
-			g_error_free(err);
-			err = SYSERR("Already redirect to shard");
-		}
 		GRID_DEBUG("M2V2 call failed: %d %s", err->code, err->message);
 	} else if (out_list) {
 		EXTRA_ASSERT(ctx.bodyv != NULL);

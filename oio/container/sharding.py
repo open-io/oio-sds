@@ -563,8 +563,15 @@ class ContainerSharding(ProxyClient):
             }
             self._safe_clean(root_shard, **kwargs)
         else:
-            # TODO(adu) Delete parent shard
-            pass
+            # Delete parent shard
+            try:
+                self.container.container_delete(
+                    cid=parent_shard['cid'], force=True, **kwargs)
+            except Exception as exc:
+                # "Create" an orphan shard
+                self.logger.warning(
+                    'Failed to delete old parent shard (CID=%s): %s',
+                    parent_shard['cid'], exc)
 
         # Clean up new shards
         for new_shard in new_shards:
