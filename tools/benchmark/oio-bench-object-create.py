@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -18,13 +19,17 @@
 from __future__ import print_function
 
 import time
+import os
+# parser
+import argparse
+
 from eventlet import sleep
 from eventlet.greenpool import GreenPool
 from eventlet.queue import LightQueue
 from oio import ObjectStorageApi
 from oio.common.utils import depaginate
 
-
+# globals
 ACCOUNT = None
 API = None
 POOL = None
@@ -32,11 +37,13 @@ RESULTS = None
 POLICY = None
 
 
-def create_loop(container, prefix):
+def create_loop(container, prefix, obj_count):
     iteration = 0
     while True:
         name = prefix + str(iteration)
         iteration += 1
+        if iteration > obj_count > 0:
+            break
         try:
             API.object_create(ACCOUNT, container, obj_name=name, data='',
                               policy=POLICY)
@@ -57,13 +64,24 @@ def list_objects(container):
     return [obj['name'] for obj in objects_iter]
 
 
-def main(threads, delay=5.0, duration=60.0):
+def compute_meta2_db_size(container):
+    container_result = API.container_get_properties(ACCOUNT, container,
+                                                    admin_mode=True)
+    page_count = int(container_result['system']['stats.page_count'])
+    page_size = int(container_result['system']['stats.page_size'])
+    meta2_db_size = page_count * page_size
+    print("Meta2 database size: %d bytes, page count: %d, page size: %d." % (
+        meta2_db_size, page_count, page_size))
+    return meta2_db_size
+
+
+def create_objects_in_period(threads, delay=5.0, duration=60.0):
     counter = 0
     created = list()
     cname = 'benchmark-%d' % int(time.time())
     now = start = checkpoint = time.time()
     POOL.starmap(create_loop,
-                 [(cname, '%d-' % n, ) for n in range(threads)])
+                 [(cname, '%d-' % n, 0) for n in range(threads)])
     while now - start < duration:
         res = RESULTS.get()
         counter += 1
@@ -88,6 +106,45 @@ def main(threads, delay=5.0, duration=60.0):
     end = time.time()
     print("Listing %d objects took %fs seconds, %f objects per second." % (
         len(all_objects), end - start, len(all_objects) / (end - start)))
+    compute_meta2_db_size(cname)
+    print("Cleaning...")
+    for _ in POOL.starmap(API.object_delete,
+                          [(ACCOUNT, cname, obj)
+                           for obj in all_objects]):
+        pass
+    POOL.waitall()
+    return rate
+
+
+def create_fixed_number_of_objects(threads, obj_count=1000):
+    created = list()
+    cname = 'benchmark-%d' % int(time.time())
+    quotient, remainder = divmod(obj_count, threads)
+    portion_to_generate = list()
+    for i in range(threads):
+        nb_objects = quotient
+        if i < remainder:
+            nb_objects += 1
+        portion_to_generate.append(nb_objects)
+
+    start = time.time()
+    POOL.starmap(create_loop,
+                 [(cname, '%d-' % n, portion_to_generate[n])
+                  for n in range(threads)])
+    while len(created) < obj_count:
+        res = RESULTS.get()
+        created.append(res)
+    end = time.time()
+    rate = len(created) / (end - start)
+    print("End. %d objects created in %fs, %f objects per second." % (
+          len(created), end - start, rate))
+    print("Listing.")
+    start = time.time()
+    all_objects = list_objects(cname)
+    end = time.time()
+    print("Listing %d objects took %fs seconds, %f objects per second." % (
+        len(all_objects), end - start, len(all_objects) / (end - start)))
+    compute_meta2_db_size(cname)
     print("Cleaning...")
     for _ in POOL.starmap(API.object_delete,
                           [(ACCOUNT, cname, obj)
@@ -106,26 +163,47 @@ USAGE = """Concurrently create many fake objects in the same container.
 The account name is taken from the OIO_ACCOUNT environement variable, the
 container name is 'benchmark-' followed by a timestamp.
 Does not create chunks, just save chunk addresses.
-
-usage: %s [THREADS [POLICY [DURATION]]]
-
-    THREAD is 1 by default
-    POLICY is "SINGLE" by default
-    DURATION is 60.0 seconds by default
 """
 
+
 if __name__ == '__main__':
-    import os
-    import sys
-    if len(sys.argv) > 1 and sys.argv[1] in ('-h', '--help'):
-        print(USAGE % sys.argv[0])
-        sys.exit(0)
-    THREADS = int(sys.argv[1]) if len(sys.argv) > 1 else 1
-    POLICY = sys.argv[2] if len(sys.argv) > 2 else 'SINGLE'
-    DURATION = float(sys.argv[3]) if len(sys.argv) > 3 else 60.0
+    parser = argparse.ArgumentParser(description=USAGE)
+    parser.add_argument(
+        '-c', '--concurrency', type=int, default=1,
+        help='Number of coroutines to spawn (1 by default).')
+    parser.add_argument(
+        '-s', '--storage-policy', '--policy', type=str, default='SINGLE',
+        help='Storage policy of the fake objects ("SINGLE" by default).')
+    parser.add_argument(
+        '-d', '--duration', type=float,
+        help='Keep generating objects for this duration (60s by default).')
+    parser.add_argument(
+        '-n', '--object-count', type=int,
+        help='Total number of objects to create (duration will be ignored).')
+
+    args = parser.parse_args()
+
+    THREADS = args.concurrency
+    POLICY = args.storage_policy
+    DURATION = 60.0
+    OBJECT_COUNT = 1000
+
+    CREATION_MODE = 'duration'
+    if args.duration is not None:
+        CREATION_MODE = 'duration'
+        DURATION = args.duration
+    if args.object_count is not None:
+        CREATION_MODE = 'object count'
+
     ACCOUNT = os.getenv('OIO_ACCOUNT', 'benchmark')
     API = ObjectStorageApi(os.getenv('OIO_NS', 'OPENIO'))
     API._object_upload = _object_upload
     RESULTS = LightQueue(THREADS * 10)
     POOL = GreenPool(THREADS)
-    main(THREADS, duration=DURATION)
+
+    if CREATION_MODE == 'duration':
+        print("Creating objects during %f seconds." % DURATION)
+        create_objects_in_period(THREADS, duration=DURATION)
+    else:
+        print("Creating %d objects." % args.object_count)
+        create_fixed_number_of_objects(THREADS, obj_count=args.object_count)
