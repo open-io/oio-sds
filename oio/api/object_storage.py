@@ -1093,18 +1093,6 @@ class ObjectStorageApi(object):
         return link_meta
 
     @staticmethod
-    def _cache_wrapper(account, container, obj, version, stream, **kwargs):
-        try:
-            for dat in stream:
-                yield dat
-        except exc.UnrecoverableContent:
-            # The cache may no longer be valid
-            del_cached_object_metadata(
-                account=account, reference=container, path=obj,
-                version=version, **kwargs)
-            raise
-
-    @staticmethod
     def _ttfb_wrapper(stream, req_start, download_start, perfdata):
         """Keep track of time-to-first-byte and time-to-last-byte"""
         perfdata_rawx = perfdata.setdefault('rawx', dict())
@@ -1168,9 +1156,6 @@ class ObjectStorageApi(object):
         if perfdata is not None:
             stream = self._ttfb_wrapper(
                 stream, req_start, download_start, perfdata)
-        if kwargs.get('cache'):
-            stream = self._cache_wrapper(
-                account, container, obj, version, stream, **kwargs)
 
         return meta, stream
 
@@ -1218,19 +1203,23 @@ class ObjectStorageApi(object):
             except exc.UnrecoverableContent:
                 # Maybe we got this error because the cached object
                 # metadata was stale.
-                cache = kwargs.pop('cache', None)
+                cache = kwargs.get('cache', None)
                 if cache is None:
                     # No cache configured: nothing more to do.
                     raise
-                elif blocks >= 1:
+                # Clear the cache
+                del_cached_object_metadata(
+                    account=account, reference=container, path=obj,
+                    version=version, **kwargs)
+                if blocks >= 1:
                     # The first blocks of data were already sent to the
                     # caller, we cannot start again.
                     raise
                 # Retry the request without reading from the cache.
                 new_meta, new_stream = self._object_fetch_impl(
                     account, container, obj,
-                    version=version, ranges=ranges,
-                    key_file=key_file, cache=None, **kwargs)
+                    version=version, ranges=ranges, key_file=key_file,
+                    **kwargs)
                 # Hack the metadata dictionary which has already been
                 # returned to the caller.
                 meta.update(new_meta)

@@ -84,7 +84,7 @@ def get_cached_object_metadata(account=None, reference=None, path=None,
     Get the object metadata and location from the cache (if there is one)
     """
     if cache is None or version:
-        # Cache isn't compatible with versionning
+        # Cache isn't compatible with versioning
         return None, None
 
     cache_key = _get_object_metadata_cache_key(
@@ -114,7 +114,7 @@ def set_cached_object_metadata(content_meta, content_chunks,
     Set the object metadata and location in the cache (if there is one)
     """
     if cache is None or version:
-        # Cache isn't compatible with versionning
+        # Cache isn't compatible with versioning
         return
 
     if content_meta is None:
