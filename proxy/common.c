@@ -658,8 +658,14 @@ GError * KV_read_properties (struct json_object *j, gchar ***out,
 	EXTRA_ASSERT(oio_str_is_set(section));
 
 	*out = NULL;
-	if (!json_object_is_type(j, json_type_object))
-		return BADREQ("Object argument expected");
+	if (json_object_get_type(j) == json_type_null && !fail_if_empty) {
+		*out = g_malloc0(sizeof(gchar*));
+		return NULL;
+	}
+	if (!json_object_is_type(j, json_type_object)) {
+		return BADREQ("Object argument expected, got %s",
+				json_type_to_name(json_object_get_type(j)));
+	}
 	struct json_object *jprops = NULL;
 
 	if (!json_object_object_get_ex(j, section, &jprops)) {
