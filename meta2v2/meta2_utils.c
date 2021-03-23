@@ -2112,12 +2112,13 @@ GError* m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 
 	GPtrArray *tmp = g_ptr_array_new ();
-	if (oio_url_has(url, OIOURL_VERSION))
+	if (!oio_url_has(url, OIOURL_VERSION)) {
 		err = m2db_get_alias(sq3, url, M2V2_FLAG_LATEST|M2V2_FLAG_NOPROPS,
 							 _bean_buffer_cb, tmp);
-	else
+	} else {
 		err = m2db_get_alias(sq3, url, M2V2_FLAG_NOPROPS,
 							 _bean_buffer_cb, tmp);
+	}
 
 	/* Content does not exist or is deleted -> the append is a PUT */
 	if (err) {
