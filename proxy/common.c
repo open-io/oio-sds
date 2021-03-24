@@ -455,6 +455,15 @@ label_retry:
 						&& ctx->which != CLIENT_SPECIFIED) && !next_url) {
 					err = BUSY("No service replied");
 					stop = TRUE;
+				} else if (ctx->which == CLIENT_PREFER_MASTER &&
+						(err->code == ERRCODE_CONN_CLOSED
+						|| err->code == ERRCODE_READ_TIMEOUT)) {
+					/* Maybe the request is running in the background.
+					 * For requests on master, let the client decide to try again.
+					 * Retrying may trigger an error (such as a conflict),
+					 * if the request has already been executed. */
+					err = BUSY("No service replied");
+					stop = TRUE;
 				}
 			} else if (CODE_IS_RETRY(err->code)) {
 				/* the target service is in bad shape, let's avoid it for
