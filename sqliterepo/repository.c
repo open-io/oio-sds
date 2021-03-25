@@ -1137,11 +1137,10 @@ sqlx_repository_timed_open_and_lock(sqlx_repository_t *repo,
 	struct open_args_s args = {0};
 
 	EXTRA_ASSERT(repo != NULL);
+	EXTRA_ASSERT(result != NULL);
+	EXTRA_ASSERT(*result == NULL);
 	SQLXNAME_CHECK(n);
 	GRID_TRACE("%s (%s,%s)", __FUNCTION__, n->base, n->type);
-
-	if (result)
-		*result = NULL;
 
 	if (!repo->running)
 		return NEWERROR(CODE_UNAVAILABLE, "Repository being closed");
@@ -1174,25 +1173,26 @@ sqlx_repository_timed_open_and_lock(sqlx_repository_t *repo,
 	}
 
 	_open_clean_args(&args);
+	if (err)
+		return err;
+	EXTRA_ASSERT(*result != NULL);
 
-	if (!err && result) {
-		gint64 expected_status = how & SQLX_OPEN_STATUS;
-		if (expected_status) {
+	gint64 expected_status = how & SQLX_OPEN_STATUS;
+	if (expected_status) {
+		gint64 flags = sqlx_admin_get_status(*result);
+		gint64 mode = SQLX_OPEN_ENABLED;
+		if (flags == ADMIN_STATUS_FROZEN)
+			mode = SQLX_OPEN_FROZEN;
+		else if (flags == ADMIN_STATUS_DISABLED)
+			mode = SQLX_OPEN_DISABLED;
 
-			gint64 flags = sqlx_admin_get_status(*result);
-			gint64 mode = SQLX_OPEN_ENABLED;
-			if (flags == ADMIN_STATUS_FROZEN)
-				mode = SQLX_OPEN_FROZEN;
-			else if (flags == ADMIN_STATUS_DISABLED)
-				mode = SQLX_OPEN_DISABLED;
-
-			if (!(mode & expected_status)) {
-				err = NEWERROR(CODE_CONTAINER_FROZEN,
-						"Invalid status: %s", sqlx_admin_status2str(flags));
-				sqlx_repository_unlock_and_close_noerror(*result);
-			}
+		if (!(mode & expected_status)) {
+			err = NEWERROR(CODE_CONTAINER_FROZEN,
+					"Invalid status: %s", sqlx_admin_status2str(flags));
 		}
+	}
 
+	if (!err) {
 		/* XXX(jfs): patching the db handle so it has the lastest election_manager
 		   allows reusing a handle from the cache, and that was initiated during
 		   the _post_config hook (when the election_manager was not associated yet
@@ -1208,16 +1208,18 @@ sqlx_repository_timed_open_and_lock(sqlx_repository_t *repo,
 		// TODO FIXME this is maybe a good place for an assert().
 		if ((*result)->deleted)
 			err = NEWERROR(CODE_CONTAINER_FROZEN, "destruction pending");
+	}
 
-		if (!err)
-			err = sqlx_repository_call_open_callback(*result, how);
+	if (!err) {
+		err = sqlx_repository_call_open_callback(*result, how);
+	}
 
-		if (err) {
-			sqlx_repository_unlock_and_close_noerror(*result);
-			if (lead && *lead) {
-				g_free(*lead);
-				*lead = NULL;
-			}
+	if (err) {
+		sqlx_repository_unlock_and_close_noerror(*result);
+		*result = NULL;
+		if (lead && *lead) {
+			g_free(*lead);
+			*lead = NULL;
 		}
 	}
 
