@@ -371,17 +371,17 @@ class ClusterWait(Lister):
                 self.log.debug("Conscience busy: %s", exc)
                 continue
 
-            ko = len([s['score'] for s in descr if s['score'] < min_score])
-            if ko > 0:
-                self.log.debug("Still %d services down", ko)
-                continue
-
             # If a minimum has been specified, let's check we have enough
             # services
             if parsed_args.count:
                 ok = len([s for s in descr if s['score'] >= min_score])
                 if ok < parsed_args.count:
                     self.log.debug("Only %d services up", ok)
+                    continue
+            else:
+                ko = len([s['score'] for s in descr if s['score'] < min_score])
+                if ko > 0:
+                    self.log.debug("Still %d services down", ko)
                     continue
 
             # No service down, and enough services, we are done.

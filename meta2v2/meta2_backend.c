@@ -1777,7 +1777,6 @@ meta2_backend_open_callback(struct sqlx_sqlite3_s *sq3,
 	 * - replicated access : init done */
 	if (!oio_ext_is_admin() && !_create && !_local
 			&& !_is_container_initiated(sq3)) {
-		m2b_close(sq3);
 		return NEWERROR(CODE_CONTAINER_NOTFOUND,
 				"container created but not initiated");
 	}

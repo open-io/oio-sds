@@ -46,6 +46,9 @@ extern "C" {
 #define ON_ENUM(P,E) case P##E: return #E
 
 #define CODE_IS_NETWORK_ERROR(C) ((C) > ERRCODE_PARAM && (C) <= CODE_NETWORK_ERROR)
+/* Tell if the error is a network error and appears after
+ * the connection has been established. */
+#define CODE_IS_ERR_AFTER_START(C) ((C) >= ERRCODE_CONN_RESET && (C) <= ERRCODE_CONN_TIMEOUT)
 
 #define CODE_IS_OK(C)       (((C) >= CODE_FINAL_OK) && ((C) < CODE_BEACON_REDIRECT))
 #define CODE_IS_TEMP(C)     (((C) >= CODE_TEMPORARY) && ((C) < CODE_FINAL_OK))
@@ -104,6 +107,8 @@ extern "C" {
 	period_reload = CLAMP(period_reload,2,(P)); \
 	tick_reload = 1
 
+/* Some macros make assumptions about the ordering of these error codes.
+ * Be careful if you plan to change them. */
 enum {
 	ERRCODE_UNKNOWN_ERROR = 0,
 	ERRCODE_PARAM = 1,
