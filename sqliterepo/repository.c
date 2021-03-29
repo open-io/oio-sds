@@ -1088,11 +1088,10 @@ sqlx_repository_timed_open_and_lock(sqlx_repository_t *repo,
 	struct open_args_s args = {0};
 
 	EXTRA_ASSERT(repo != NULL);
+	EXTRA_ASSERT(result != NULL);
+	EXTRA_ASSERT(*result == NULL);
 	SQLXNAME_CHECK(n);
 	GRID_TRACE("%s (%s,%s)", __FUNCTION__, n->base, n->type);
-
-	if (result)
-		*result = NULL;
 
 	if (!repo->running)
 		return NEWERROR(CODE_UNAVAILABLE, "Repository being closed");
@@ -1125,25 +1124,26 @@ sqlx_repository_timed_open_and_lock(sqlx_repository_t *repo,
 	}
 
 	_open_clean_args(&args);
+	if (err)
+		return err;
+	EXTRA_ASSERT(*result != NULL);
 
-	if (!err && result) {
-		gint64 expected_status = how & SQLX_OPEN_STATUS;
-		if (expected_status) {
+	gint64 expected_status = how & SQLX_OPEN_STATUS;
+	if (expected_status) {
+		gint64 flags = sqlx_admin_get_status(*result);
+		gint64 mode = SQLX_OPEN_ENABLED;
+		if (flags == ADMIN_STATUS_FROZEN)
+			mode = SQLX_OPEN_FROZEN;
+		else if (flags == ADMIN_STATUS_DISABLED)
+			mode = SQLX_OPEN_DISABLED;
 
-			gint64 flags = sqlx_admin_get_status(*result);
-			gint64 mode = SQLX_OPEN_ENABLED;
-			if (flags == ADMIN_STATUS_FROZEN)
-				mode = SQLX_OPEN_FROZEN;
-			else if (flags == ADMIN_STATUS_DISABLED)
-				mode = SQLX_OPEN_DISABLED;
-
-			if (!(mode & expected_status)) {
-				err = NEWERROR(CODE_CONTAINER_FROZEN,
-						"Invalid status: %s", sqlx_admin_status2str(flags));
-				sqlx_repository_unlock_and_close_noerror(*result);
-			}
+		if (!(mode & expected_status)) {
+			err = NEWERROR(CODE_CONTAINER_FROZEN,
+					"Invalid status: %s", sqlx_admin_status2str(flags));
 		}
+	}
 
+	if (!err) {
 		/* XXX(jfs): patching the db handle so it has the lastest election_manager
 		   allows reusing a handle from the cache, and that was initiated during
 		   the _post_config hook (when the election_manager was not associated yet
@@ -1159,16 +1159,18 @@ sqlx_repository_timed_open_and_lock(sqlx_repository_t *repo,
 		// TODO FIXME this is maybe a good place for an assert().
 		if ((*result)->deleted)
 			err = NEWERROR(CODE_CONTAINER_FROZEN, "destruction pending");
+	}
 
-		if (!err)
-			err = sqlx_repository_call_open_callback(*result, how);
+	if (!err) {
+		err = sqlx_repository_call_open_callback(*result, how);
+	}
 
-		if (err) {
-			sqlx_repository_unlock_and_close_noerror(*result);
-			if (lead && *lead) {
-				g_free(*lead);
-				*lead = NULL;
-			}
+	if (err) {
+		sqlx_repository_unlock_and_close_noerror(*result);
+		*result = NULL;
+		if (lead && *lead) {
+			g_free(*lead);
+			*lead = NULL;
 		}
 	}
 
@@ -1565,7 +1567,8 @@ sqlite3_db_cacheflush(sqlite3 *db UNUSED)
 
 GError*
 sqlx_repository_dump_base_fd_no_copy(struct sqlx_sqlite3_s *sq3,
-		gboolean check_size, dump_base_fd_cb read_file_cb, gpointer cb_arg)
+		gboolean check_size, gint check_type,
+		dump_base_fd_cb read_file_cb, gpointer cb_arg)
 {
 	int rc = 0, fd = -1;
 	struct stat st;
@@ -1608,10 +1611,28 @@ sqlx_repository_dump_base_fd_no_copy(struct sqlx_sqlite3_s *sq3,
 
 	/* Detect a wrong/corrupted database file */
 	gint64 now = oio_ext_monotonic_time();
-	rc = sqlx_exec(sq3->db, "PRAGMA quick_check");
-	GRID_INFO("Pragma quick check took %"G_GINT64_FORMAT" ms [%s][%s]",
-		(oio_ext_monotonic_time () - now) / G_TIME_SPAN_MILLISECOND,
-		sq3->name.base, sq3->name.type);
+	switch (check_type) {
+		case 0:
+			rc = SQLITE_OK;
+			break;
+		default:
+			GRID_WARN("Invalid value %d for sqliterepo.dump.check_type, "
+					"using 1 (quick_check).", check_type);
+			// FALLTHROUGH
+		case 1:
+			rc = sqlx_exec(sq3->db, "PRAGMA quick_check");
+			GRID_INFO("Pragma quick_check took %"G_GINT64_FORMAT" ms [%s][%s]",
+					(oio_ext_monotonic_time () - now) / G_TIME_SPAN_MILLISECOND,
+					sq3->name.base, sq3->name.type);
+			break;
+		case 2:
+			rc = sqlx_exec(sq3->db, "PRAGMA integrity_check");
+			GRID_INFO("Pragma integrity_check took "
+					"%"G_GINT64_FORMAT" ms [%s][%s]",
+					(oio_ext_monotonic_time () - now) / G_TIME_SPAN_MILLISECOND,
+					sq3->name.base, sq3->name.type);
+			break;
+	}
 
 	if (rc != SQLITE_OK) {
 		if (rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT) {
@@ -1648,7 +1669,8 @@ end:
 }
 
 GError*
-sqlx_repository_dump_base_gba(struct sqlx_sqlite3_s *sq3, GByteArray **dump)
+sqlx_repository_dump_base_gba(struct sqlx_sqlite3_s *sq3, gint check_type,
+		GByteArray **dump)
 {
 	GError *_monolytic_dump_cb(int fd, gpointer arg)
 	{
@@ -1662,12 +1684,14 @@ sqlx_repository_dump_base_gba(struct sqlx_sqlite3_s *sq3, GByteArray **dump)
 			g_byte_array_free(_dump, TRUE);
 		return _err;
 	}
-	return sqlx_repository_dump_base_fd_no_copy(sq3, TRUE, _monolytic_dump_cb, dump);
+	return sqlx_repository_dump_base_fd_no_copy(sq3, TRUE, check_type,
+			_monolytic_dump_cb, dump);
 }
 
 GError*
 sqlx_repository_dump_base_chunked(struct sqlx_sqlite3_s *sq3,
-		gint chunk_size, dump_base_chunked_cb callback, gpointer callback_arg)
+		gint chunk_size, gint check_type,
+		dump_base_chunked_cb callback, gpointer callback_arg)
 {
 	GError *_chunked_dump_cb(int fd, gpointer arg)
 	{
@@ -1691,7 +1715,8 @@ sqlx_repository_dump_base_chunked(struct sqlx_sqlite3_s *sq3,
 		} while (!err && bytes_read < st.st_size);
 		return err;
 	}
-	return sqlx_repository_dump_base_fd_no_copy(sq3, FALSE, _chunked_dump_cb, NULL);
+	return sqlx_repository_dump_base_fd_no_copy(sq3, FALSE, check_type,
+			_chunked_dump_cb, NULL);
 }
 
 GError*
@@ -1777,13 +1802,15 @@ sqlx_repository_restore_base(struct sqlx_sqlite3_s *sq3, guint8 *raw, gsize raws
 }
 
 GError*
-sqlx_repository_restore_from_master(struct sqlx_sqlite3_s *sq3)
+sqlx_repository_restore_from_master(struct sqlx_sqlite3_s *sq3,
+		const gint check_type)
 {
 	EXTRA_ASSERT(sq3 != NULL);
 	NAME2CONST(n, sq3->name);
 	return !election_manager_configured(sq3->repo->election_manager)
 		? NEWERROR(CODE_INTERNAL_ERROR, "Replication not configured")
-		: election_manager_trigger_RESYNC(sq3->repo->election_manager, &n);
+		: election_manager_trigger_RESYNC(sq3->repo->election_manager, &n,
+				check_type);
 }
 
 GError*

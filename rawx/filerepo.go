@@ -23,6 +23,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	syscall "golang.org/x/sys/unix"
 )
@@ -210,7 +211,8 @@ func (fr *fileRepository) linkRelPath(fromPath, toPath string) (linkOperation, e
 			if e0 := syscall.Faccessat(fr.rootFd, fromPath, syscall.F_OK, 0); e0 != nil {
 				return nil, err
 			}
-			if e0 := os.MkdirAll(filepath.Dir(toPath), fr.putMkdirMode); e0 != nil {
+			if e0 := os.MkdirAll(filepath.Dir(filepath.Join(fr.root, toPath)),
+					fr.putMkdirMode); e0 != nil {
 				return nil, err
 			}
 		default:
@@ -391,6 +393,15 @@ type realFileReader struct {
 
 func (fr *realFileReader) fd() int {
 	return int(fr.f.Fd())
+}
+
+func (fr *realFileReader) mtime() time.Time {
+	fi, err := fr.f.Stat()
+	if err != nil {
+		return time.Unix(0, 0)
+	} else {
+		return fi.ModTime()
+	}
 }
 
 func (fr *realFileReader) size() int64 {

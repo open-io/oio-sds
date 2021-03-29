@@ -42,4 +42,18 @@ gboolean oio_requri_parse (const char *packed, struct oio_requri_s *ruri);
 
 void oio_requri_clear (struct oio_requri_s *ruri);
 
+/**
+ * Compute the ID of the chunk at the specified position for the specified
+ * storage policy.
+ *
+ * @param u the URL
+ * @param position the position of the chunk, simple ("1") or composed ("1.1")
+ * @param policy the name of the storage policy
+ * @param out an output buffer
+ * @param outsize size of the output buffer. In case the ID is longer than the
+ *                buffer, it will be truncated.
+ */
+GError *oio_url_compute_chunk_id(struct oio_url_s *u, const char *position,
+		const char *policy, char *out, size_t outsize);
+
 #endif /*OIO_SDS__metautils__lib__oio_url_ext_h*/

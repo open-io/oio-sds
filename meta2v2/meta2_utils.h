@@ -274,7 +274,8 @@ GError* m2db_flush_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb,
 /* --- Low level ----------------------------------------------------------- */
 
 /** Generate a chunk "bean", filled with only an address and ctime. */
-struct bean_CHUNKS_s *generate_chunk_bean(struct oio_lb_selected_item_s *sel,
+struct bean_CHUNKS_s *generate_chunk_bean(struct oio_url_s *url,
+		const gchar *pos, struct oio_lb_selected_item_s *sel,
 		const struct storage_policy_s *policy);
 
 /** Generate a property "bean", with details about the quality of a chunk. */

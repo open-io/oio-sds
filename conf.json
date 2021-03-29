@@ -41,7 +41,12 @@
 			{ "type": "int64", "name": "meta2_flush_limit",
 				"key": "meta2.flush_limit",
 				"descr": "When flushing a container, limits the number of deleted objects.",
-				"def": 1000, "min": 0, "max": "max" }
+				"def": 1000, "min": 0, "max": "max" },
+
+			{ "type": "bool", "name": "meta2_flag_store_chunk_ids",
+				"key": "meta2.store_chunk_ids",
+				"descr": "Should the meta2 store complete chunk IDs (URL) or just store service IDs. If this is set to false, core.lb.generate_random_chunk_ids should be set to false also.",
+				"def": true }
 		]
 	},
 	"rawx": {
@@ -657,6 +662,11 @@
 				"descr": "CID of the base to force a double master condition on.",
 				"def": "", "limit": 256 },
 
+			{ "type": "int", "name": "sqliterepo_dump_check_type",
+				"key": "sqliterepo.dump.check_type",
+				"descr": "How to check the database before executing a DB_DUMP request. 0: no check. 1: quick_check (the default). 2: integrity_check.",
+				"def": "1", "min": 0, "max": "2" },
+
 			{ "type": "int64", "name": "sqliterepo_dump_chunk_size",
 				"key": "sqliterepo.dump.chunk_size",
 				"descr": "Size of data chunks when copying a database using the chunked DB_PIPEFROM/DB_DUMP mechanism.",
@@ -827,7 +837,7 @@
 		"variables": [
 			{ "type": "int", "name": "oio_proxy_local_prepare",
 				"key": "proxy.srv_local.prepare",
-				"descr": "Should the proxy allocate services with a local preference. 0 for no, 1 for only one local service and 2 for a maimum of services in spite of the location constraints. The value 2 is a quirk that should be avoided unless upon exceptional conditon wherein you accept the risk.",
+				"descr": "Should the proxy allocate services with a local preference. 0 for no, 1 for only one local service and 2 for a maximum of services in spite of the location constraints. The value 2 is a quirk that should be avoided unless upon exceptional conditon wherein you accept the risk.",
 				"def": 0, "min": 0, "max": 2},
 
 			{ "type": "string", "name": "oio_proxy_location",
@@ -1117,7 +1127,11 @@
 			{ "type": "bool", "name": "oio_lb_allow_distance_bypass",
 				"key": "core.lb.allow_distance_bypass",
 				"def": "true",
-				"descr": "Compare the number of items to select to the number of items available at the current location level, and decide if it is desirable to bypass or slacken the time-consuming distance checks. Disable this if you detect too many situations where distance between selected items could have been bigger." }
+				"descr": "Compare the number of items to select to the number of items available at the current location level, and decide if it is desirable to bypass or slacken the time-consuming distance checks. Disable this if you detect too many situations where distance between selected items could have been bigger." },
+			{ "type": "bool", "name": "oio_lb_random_chunk_ids",
+				"key": "core.lb.generate_random_chunk_ids",
+				"def": "true",
+				"descr": "Generate random, 64 bytes long chunk IDs. If set to false, the chunk IDs will be generated from the container and object names, object version and storage policy, and chunk position." }
 		]
 	}
 }

@@ -135,10 +135,12 @@ label_retry:
 			peers = NULL;
 		} else {
 			EXTRA_ASSERT(peers == NULL);
-			if (retry > 0 && err->code == CODE_RANGE_NOTFOUND) {
-				// We may have asked the wrong meta1
-				hc_decache_reference(ss->resolver, u);
-				retry --;
+			if (retry > 0 && error_clue_for_decache(err)) {
+				/* We may have asked the wrong meta1, try again.
+				 * The reference has already been freed from the cache
+				 * in `_resolve_service_through_many_meta1`. */
+				retry--;
+				g_clear_error(&err);
 				goto label_retry;
 			}
 			g_prefix_error(&err, "Peer resolution error: ");

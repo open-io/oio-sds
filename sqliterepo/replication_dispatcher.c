@@ -2,6 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -496,7 +497,7 @@ _restore_snapshot(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 
 static GError *
 _dump(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
-		GByteArray **result)
+		gint check_type, GByteArray **result)
 {
 	GRID_TRACE2("%s(%p,%s,%s,%p)", __FUNCTION__, repo, name->base, name->type, result);
 
@@ -507,7 +508,7 @@ _dump(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 		return err;
 
 	GByteArray *dump = NULL;
-	err = sqlx_repository_dump_base_gba(sq3, &dump);
+	err = sqlx_repository_dump_base_gba(sq3, check_type, &dump);
 	if (!err) {
 		GRID_TRACE("Dump done!");
 		*result = dump;
@@ -524,6 +525,7 @@ _dump(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 
 static GError *
 _dump_chunked(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
+		gint check_type,
 		void (*_send_chunk)(GByteArray *chunk, gint64 remaining))
 {
 	guint64 sent = 0;
@@ -545,7 +547,7 @@ _dump_chunked(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 	}
 
 	err = sqlx_repository_dump_base_chunked(sq3, sqliterepo_dump_chunk_size,
-			_dump_chunked_cb, NULL);
+			check_type, _dump_chunked_cb, NULL);
 
 	sqlx_repository_unlock_and_close_noerror(sq3);
 	return err;
@@ -553,7 +555,7 @@ _dump_chunked(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 
 static GError *
 _pipe_base_from(const gchar *source, struct sqlx_repository_s *repo,
-		struct sqlx_name_s *name, struct restore_ctx_s **ctx)
+		struct sqlx_name_s *name, gint check_type, struct restore_ctx_s **ctx)
 {
 	GError *err;
 	gboolean try_slash_tmp = FALSE, autocreate = TRUE;
@@ -597,17 +599,18 @@ retry:
 		return err2;
 	}
 
-	return peer_dump(source, name, TRUE, _pipe_from_cb, NULL, oio_ext_get_deadline());
+	return peer_dump(source, name, TRUE, check_type, _pipe_from_cb, NULL,
+			oio_ext_get_deadline());
 }
 
 static GError *
 _pipe_from(const gchar *source, struct sqlx_repository_s *repo,
-		struct sqlx_name_s *name)
+		struct sqlx_name_s *name, gint check_type)
 {
 	GError *err;
 	struct restore_ctx_s *ctx = NULL;
 	gint64 now = oio_ext_monotonic_time();
-	err = _pipe_base_from(source, repo, name, &ctx);
+	err = _pipe_base_from(source, repo, name, check_type, &ctx);
 	gint64 elapsed = oio_ext_monotonic_time();
 	GRID_INFO("pipe_base_from took %"G_GINT64_FORMAT" ms",
 		(elapsed - now) / G_TIME_SPAN_MILLISECOND);
@@ -630,7 +633,7 @@ _snapshot_from(const gchar *source, struct sqlx_repository_s *repo,
 {
 	GError *err = NULL;
 	struct restore_ctx_s *ctx = NULL;
-	err = _pipe_base_from(source, repo, source_name, &ctx);
+	err = _pipe_base_from(source, repo, source_name, -1, &ctx);
 	if (!err)
 		err = _restore_snapshot(repo, dest_name, ctx->path, peers);
 
@@ -727,6 +730,19 @@ _load_sqlx_peers(struct gridd_reply_ctx_s *ctx, gchar **peers)
 				(int)msglen, msg, oio_ext_get_reqid());
 	}
 	g_clear_error(&err);
+}
+
+static void
+_maybe_override_check_type(struct gridd_reply_ctx_s *ctx, gint *check_type)
+{
+	gint64 _check_type = -1;
+	GError *err = metautils_message_extract_strint64(ctx->request,
+			NAME_MSGKEY_CHECK_TYPE, &_check_type);
+	if (err) {
+		g_clear_error(&err);
+	} else if (_check_type >= 0) {
+		*check_type = (gint)_check_type;
+	}
 }
 
 /* ------------------------------------------------------------------------- */
@@ -1011,7 +1027,7 @@ _handler_PIPETO(struct gridd_reply_ctx_s *reply,
 	reply->subject("base:%s.%s\ttarget:%s", name.base, name.type, target);
 
 	/* Dump the base in a locked manner */
-	err = _dump(repo, &n0, &dump);
+	err = _dump(repo, &n0, sqliterepo_dump_check_type, &dump);
 	if (NULL != err) {
 		g_prefix_error(&err, "Dump failed: ");
 		reply->send_error(0, err);
@@ -1064,6 +1080,7 @@ _handler_DUMP(struct gridd_reply_ctx_s *reply,
 {
 	GError *err = NULL;
 	guint32 flags = 0;
+	gint check_type = sqliterepo_dump_check_type;
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
@@ -1071,6 +1088,7 @@ _handler_DUMP(struct gridd_reply_ctx_s *reply,
 		reply->send_error(0, err);
 		return TRUE;
 	}
+	_maybe_override_check_type(reply, &check_type);
 
 	void _send_part(GByteArray *part, gint64 remaining)
 	{
@@ -1085,11 +1103,11 @@ _handler_DUMP(struct gridd_reply_ctx_s *reply,
 	}
 
 	if (flags & FLAG_CHUNKED) {
-		err = _dump_chunked(repo, &n0, _send_part);
+		err = _dump_chunked(repo, &n0, (gint)check_type, _send_part);
 	} else {
 		GByteArray *dump = NULL;
 		/* Open and lock the base */
-		err = _dump(repo, &n0, &dump);
+		err = _dump(repo, &n0, (gint)check_type, &dump);
 		if (!err) {
 			reply->add_body(dump);
 		}
@@ -1145,6 +1163,7 @@ _handler_PIPEFROM(struct gridd_reply_ctx_s *reply,
 {
 	GError *err;
 	gchar source[64];
+	gint check_type = -1;  // -1 -> user server default
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
@@ -1153,9 +1172,10 @@ _handler_PIPEFROM(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 	EXTRACT_STRING("SRC", source);
+	_maybe_override_check_type(reply, &check_type);
 	reply->subject("base:%s.%s\tsource:%s", name.base, name.type, source);
 
-	if (NULL != (err = _pipe_from(source, repo, &n0)))
+	if ((err = _pipe_from(source, repo, &n0, check_type)))
 		reply->send_error(0, err);
 	else
 		reply->send_reply(CODE_FINAL_OK, "OK");
@@ -1204,6 +1224,7 @@ _handler_RESYNC(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	GError *err = NULL;
+	gint check_type = -1;
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
 
@@ -1211,6 +1232,7 @@ _handler_RESYNC(struct gridd_reply_ctx_s *reply,
 		reply->send_error(0, err);
 		return TRUE;
 	}
+	_maybe_override_check_type(reply, &check_type);
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	err = sqlx_repository_open_and_lock(repo, &n0,
@@ -1220,7 +1242,7 @@ _handler_RESYNC(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	err = sqlx_repository_restore_from_master(sq3);
+	err = sqlx_repository_restore_from_master(sq3, check_type);
 	sqlx_repository_unlock_and_close_noerror(sq3);
 
 	if (NULL != err) {

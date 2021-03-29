@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -750,15 +751,20 @@ class ContainerClient(ProxyClient):
 
     @extract_reference_params
     def content_prepare(self, account=None, reference=None, path=None,
-                        size=None, cid=None, stgpol=None, content_id=None,
-                        version=None, params=None, **kwargs):
+                        position=0, size=None, cid=None, stgpol=None,
+                        content_id=None, version=None, params=None, **kwargs):
         """
         Prepare an upload: get URLs of chunks on available rawx.
 
+        :param position: position a the metachunk that must be prepared
+        :param stgpol: name of the storage policy of the object being uploaded
+        :param version: version of the object being uploaded. This is required
+            only on the second and later calls to this method to get coherent
+            results.
         :keyword autocreate: create container if it doesn't exist
         """
         uri = self._make_uri('content/prepare')
-        data = {'size': size}
+        data = {'size': size, 'position': position}
         if stgpol:
             data['policy'] = stgpol
         data = json.dumps(data)
@@ -858,11 +864,15 @@ class ContainerClient(ProxyClient):
         self._direct_request('POST', uri, params=params, **kwargs)
 
     @extract_reference_params
-    def content_spare(self, account=None, reference=None, path=None, data=None,
-                      cid=None, stgpol=None, params=None, **kwargs):
+    def content_spare(self, account=None, reference=None, path=None,
+                      version=None, data=None,
+                      cid=None, stgpol=None, position=None, params=None,
+                      **kwargs):
         uri = self._make_uri('content/spare')
-        if stgpol:
-            params['stgpol'] = stgpol
+        if None in (stgpol, position):
+            raise ValueError('stgpol and position cannot be None')
+        params['stgpol'] = stgpol
+        params['position'] = position
         data = json.dumps(data)
         _resp, body = self._direct_request(
             'POST', uri, data=data, params=params, **kwargs)

@@ -17,8 +17,10 @@
 from oio.common.green import GreenPile
 
 import random
+from email.utils import parsedate
 from functools import wraps
 from six.moves.urllib_parse import unquote
+from time import mktime
 
 from oio.common.logger import get_logger
 from oio.common.http_urllib3 import get_pool_manager, \
@@ -63,6 +65,9 @@ def extract_headers_meta(headers, check=True):
                 missing.append(exc.MissingAttribute(mkey))
     if check and missing:
         raise exc.FaultyChunk(*missing)
+    mtime = meta.get('chunk_mtime')
+    if mtime:
+        meta['chunk_mtime'] = mktime(parsedate(mtime))
     return meta
 
 
@@ -268,6 +273,8 @@ class BlobClient(object):
         Generate new chunk URLs, by replacing the last `random_hex`
         characters of the original URLs by random hexadecimal digits.
         """
+        maxlen = len(chunk) - chunk.rfind('/') - 1
+        random_hex = min(random_hex, maxlen)
         rnd = ''.join(random.choice('0123456789ABCDEF')
                       for _ in range(random_hex))
         return chunk[:-random_hex] + rnd
@@ -280,6 +287,10 @@ class BlobClient(object):
         hdrs = headers.copy()
         if link is None:
             link = self._generate_fullchunk_copy(target, **kwargs)
+        elif not link.startswith('http://'):
+            offset = target.rfind('/')
+            maxlen = len(target) - offset - 1
+            link = target[:offset+1] + link[:maxlen]
         hdrs['Destination'] = link
         hdrs[CHUNK_HEADERS['full_path']] = fullpath
         if write_timeout is not None:

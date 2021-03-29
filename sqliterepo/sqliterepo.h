@@ -281,7 +281,7 @@ GError* sqlx_repository_status_base(sqlx_repository_t *repo,
 /** Collect into a buffer the binary dump of the base (i.e. the content
  *  of a valid sqlite3 file, with only the meaningful pages). */
 GError* sqlx_repository_dump_base_gba(struct sqlx_sqlite3_s *sq3,
-		GByteArray **dump);
+		gint check_type, GByteArray **dump);
 
 /** Callback for sqlx_repository_dump_base_fd(). */
 typedef GError*(*dump_base_fd_cb)(int fd, gpointer arg);
@@ -293,10 +293,12 @@ GError* sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 
 /** Open the database file read-only,
  *  check the file size against sqliterepo_dump_max_size if required,
+ *  check the database integrity if required,
  *  and pass the file descriptor to a callback.
  *  Falls back on sqlx_repository_dump_base_fd in case of error. */
 GError* sqlx_repository_dump_base_fd_no_copy(struct sqlx_sqlite3_s *sq3,
-		gboolean check_size, dump_base_fd_cb read_file_cb, gpointer cb_arg);
+		gboolean check_size, gint check_type,
+		dump_base_fd_cb read_file_cb, gpointer cb_arg);
 
 /** Callback for sqlx_repository_dump_base_chunked() */
 typedef GError*(*dump_base_chunked_cb)(GByteArray *gba, gint64 remaining_bytes,
@@ -306,7 +308,8 @@ typedef GError*(*dump_base_chunked_cb)(GByteArray *gba, gint64 remaining_bytes,
  *  and send parts of it to a callback, as GByteArrays (must be cleaned
  *  by caller). */
 GError* sqlx_repository_dump_base_chunked(struct sqlx_sqlite3_s *sq3,
-		gint chunk_size, dump_base_chunked_cb callback, gpointer callback_arg);
+		gint chunk_size, gint check_type,
+		dump_base_chunked_cb callback, gpointer callback_arg);
 
 GError* sqlx_repository_restore_base(struct sqlx_sqlite3_s *sq3,
 		guint8 *raw, gsize rawsize);
@@ -314,7 +317,8 @@ GError* sqlx_repository_restore_base(struct sqlx_sqlite3_s *sq3,
 GError* sqlx_repository_restore_from_file(struct sqlx_sqlite3_s *sq3,
 		const gchar *path);
 
-GError* sqlx_repository_restore_from_master(struct sqlx_sqlite3_s *sq3);
+GError* sqlx_repository_restore_from_master(struct sqlx_sqlite3_s *sq3,
+		const gint check_type);
 
 /* ------------------------------------------------------------------------- */
 

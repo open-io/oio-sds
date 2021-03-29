@@ -16,6 +16,7 @@
 import math
 import time
 from io import BytesIO
+from six.moves.urllib_parse import urlparse
 from testtools.matchers import NotEquals
 from testtools.testcase import ExpectedException
 
@@ -55,7 +56,7 @@ class TestPlainContent(BaseTestCase):
                                                reference=self.container_name)
         self.container_id = cid_from_name(self.account,
                                           self.container_name).upper()
-        self.content = random_str(64)
+        self.content = "%s-%s" % (self.__class__.__name__, random_str(4))
         self.stgpol = "SINGLE"
         self.stgpol_twocopies = "TWOCOPIES"
         self.stgpol_threecopies = "THREECOPIES"
@@ -166,7 +167,8 @@ class TestPlainContent(BaseTestCase):
                            allow_frozen_container=False):
         rebuild_pos, rebuild_idx = full_rebuild_pos
         rebuild_chunk_info = broken_chunks_info[rebuild_pos][rebuild_idx]
-        content.rebuild_chunk(rebuild_chunk_info["id"],
+        service_id = urlparse(rebuild_chunk_info['url']).netloc
+        content.rebuild_chunk(rebuild_chunk_info["id"], service_id=service_id,
                               allow_frozen_container=allow_frozen_container)
 
         # get the new structure of the content
@@ -179,7 +181,7 @@ class TestPlainContent(BaseTestCase):
                 # not the rebuilt chunk
                 # if this chunk is broken, it must not have been rebuilt
                 for b_c_i in broken_chunks_info[rebuild_pos].values():
-                    if c.id == b_c_i["id"]:
+                    if c.url == b_c_i['url']:
                         with ExpectedException(NotFound):
                             _, _ = self.blob_client.chunk_get(c.url)
                 continue
@@ -189,6 +191,11 @@ class TestPlainContent(BaseTestCase):
                              rebuild_chunk_info["dl_hash"])
             self.assertEqual(c.checksum, rebuild_chunk_info["hash"])
             self.assertThat(c.url, NotEquals(rebuild_chunk_info["url"]))
+            self.assertGreaterEqual(
+                meta['chunk_mtime'],
+                rebuild_chunk_info['dl_meta']['chunk_mtime'])
+            del meta["chunk_mtime"]
+            del rebuild_chunk_info["dl_meta"]["chunk_mtime"]
             del meta["chunk_id"]
             del rebuild_chunk_info["dl_meta"]["chunk_id"]
             self.assertEqual(meta, rebuild_chunk_info["dl_meta"])
@@ -235,8 +242,10 @@ class TestPlainContent(BaseTestCase):
             full_rebuild_pos = (0, 0)
             rebuild_pos, rebuild_idx = full_rebuild_pos
             rebuild_chunk_info = broken_chunks_info[rebuild_pos][rebuild_idx]
+            service_id = urlparse(rebuild_chunk_info['url']).netloc
             self.assertRaises(ServiceBusy,
-                              content.rebuild_chunk, rebuild_chunk_info["id"])
+                              content.rebuild_chunk,
+                              rebuild_chunk_info["id"], service_id=service_id)
         finally:
             system['sys.status'] = str(OIO_DB_ENABLED)
             self.container_client.container_set_properties(
@@ -295,7 +304,7 @@ class TestPlainContent(BaseTestCase):
                        self.stgpol_threecopies):
             data = random_data(self.chunk_size)
             content, _ = self._new_content(stgpol, data)
-            meta, chunks = self.container_client.content_locate(
+            _meta, chunks = self.container_client.content_locate(
                 cid=self.container_id, content=content.content_id)
             for _ in range(2):
                 spare_data = {
@@ -305,7 +314,8 @@ class TestPlainContent(BaseTestCase):
                 try:
                     self.container_client.content_spare(
                         cid=self.container_id, content=content.content_id,
-                        data=spare_data, stgpol=stgpol)
+                        data=spare_data, stgpol=stgpol,
+                        position=chunks[0]['pos'])
                 except BadRequest as exc:
                     self.assertIn("too many locations already known",
                                   exc.message)

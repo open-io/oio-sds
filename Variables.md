@@ -182,6 +182,14 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_CORE_LB_ALLOW_DISTANCE_BYPASS*
 
+### core.lb.generate_random_chunk_ids
+
+> Generate random, 64 bytes long chunk IDs. If set to false, the chunk IDs will be generated from the container and object names, object version and storage policy, and chunk position.
+
+ * default: **TRUE**
+ * type: gboolean
+ * cmake directive: *OIO_CORE_LB_GENERATE_RANDOM_CHUNK_IDS*
+
 ### core.lb.weighted_random_attempts
 
 > How many times shall we try to select a service using a weighted random algorithm, before switching to the shuffled selection. Increase this if you observe too many choices of low-score services while high-score services are available.
@@ -540,6 +548,14 @@ Used by `gcc`
  * cmake directive: *OIO_META2_RETENTION_PERIOD*
  * range: 1 -> 2592000
 
+### meta2.store_chunk_ids
+
+> Should the meta2 store complete chunk IDs (URL) or just store service IDs. If this is set to false, core.lb.generate_random_chunk_ids should be set to false also.
+
+ * default: **TRUE**
+ * type: gboolean
+ * cmake directive: *OIO_META2_STORE_CHUNK_IDS*
+
 ### meta2.tube.container_deleted
 
 > TODO: to be documented
@@ -878,7 +894,7 @@ Used by `gcc`
 
 ### proxy.srv_local.prepare
 
-> Should the proxy allocate services with a local preference. 0 for no, 1 for only one local service and 2 for a maimum of services in spite of the location constraints. The value 2 is a quirk that should be avoided unless upon exceptional conditon wherein you accept the risk.
+> Should the proxy allocate services with a local preference. 0 for no, 1 for only one local service and 2 for a maximum of services in spite of the location constraints. The value 2 is a quirk that should be avoided unless upon exceptional conditon wherein you accept the risk.
 
  * default: **0**
  * type: gint
@@ -1401,6 +1417,15 @@ Used by `gcc`
  * type: gint64
  * cmake directive: *OIO_SQLITEREPO_CLIENT_TIMEOUT_ALERT_IF_LONGER*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
+
+### sqliterepo.dump.check_type
+
+> How to check the database before executing a DB_DUMP request. 0: no check. 1: quick_check (the default). 2: integrity_check.
+
+ * default: **1**
+ * type: gint
+ * cmake directive: *OIO_SQLITEREPO_DUMP_CHECK_TYPE*
+ * range: 0 -> 2
 
 ### sqliterepo.dump.chunk_size
 

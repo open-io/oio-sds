@@ -199,6 +199,8 @@ struct election_member_s
 
 	guint8 log_index;
 
+	gint8 db_check_type;  /* How to check the DB when doing DUMP/PIPEFROM */
+
 	enum election_step_e step : 8;
 
 	/* Peers as they are at the election start */
@@ -336,7 +338,7 @@ static GError * _election_get_peers(struct election_manager_s *manager,
 		const struct sqlx_name_s *n, guint32 flags, gchar ***peers);
 
 static GError * _election_trigger_RESYNC(struct election_manager_s *manager,
-		const struct sqlx_name_s *n);
+		const struct sqlx_name_s *n, gint check_type);
 
 static GError * _election_init(struct election_manager_s *manager,
 		const struct sqlx_name_s *n, const gchar *peers,
@@ -2052,7 +2054,8 @@ member_warn_failed_action(struct election_member_s *member, int zrc,
 /* ------------------------------------------------------------------------- */
 
 enum election_op_e {
-	ELOP_NONE, ELOP_START, ELOP_RESYNC, ELOP_EXIT
+	ELOP_NONE, ELOP_START, ELOP_RESYNC, ELOP_RESYNC_CHECK, ELOP_RESYNC_NOCHECK,
+	ELOP_EXIT
 };
 
 static void
@@ -2144,6 +2147,16 @@ _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
 			_election_atime(member);
 			transition(member, EVT_SYNC_REQ, NULL);
 			break;
+		case ELOP_RESYNC_CHECK:
+			member->db_check_type = 2;
+			_election_atime(member);
+			transition(member, EVT_SYNC_REQ, NULL);
+			break;
+		case ELOP_RESYNC_NOCHECK:
+			member->db_check_type = 0;
+			_election_atime(member);
+			transition(member, EVT_SYNC_REQ, NULL);
+			break;
 		case ELOP_EXIT:
 			if (member)
 				transition(member, EVT_LEAVE_REQ, NULL);
@@ -2162,9 +2175,21 @@ _election_make(struct election_manager_s *m, const struct sqlx_name_s *n,
 
 static GError *
 _election_trigger_RESYNC(struct election_manager_s *manager,
-		const struct sqlx_name_s *n)
+		const struct sqlx_name_s *n, const gint check_type)
 {
-	return _election_make(manager, n, ELOP_RESYNC, NULL, NULL, NULL);
+	enum election_op_e op;
+	switch (check_type) {
+		case 0:
+			op = ELOP_RESYNC_NOCHECK;
+			break;
+		case 2:
+			op = ELOP_RESYNC_CHECK;
+			break;
+		default:
+			op = ELOP_RESYNC;
+			break;
+	}
+	return _election_make(manager, n, op, NULL, NULL, NULL);
 }
 
 static GError *
@@ -2744,6 +2769,7 @@ member_action_to_SYNCING(struct election_member_s *member)
 	member_ref(member);
 	member->manager->deferred_peering_notify |= sqlx_peering__pipefrom(
 			member->manager->peering, target, &member->inline_name, source,
+			member->db_check_type,
 			member, 0, _result_PIPEFROM);
 	TRACE_EXECUTION(member->manager);
 
@@ -3828,6 +3854,7 @@ _member_react_SYNCING(struct election_member_s *member, enum event_type_e evt)
 		case EVT_SYNC_OK:
 		case EVT_SYNC_KO:
 			member->pending_PIPEFROM = 0;
+			member->db_check_type = (gint8)-1;
 			if (member->requested_LEAVE)
 				return member_action_to_LEAVING(member);
 			if (member->requested_LEFT_SELF)

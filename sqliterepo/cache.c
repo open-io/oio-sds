@@ -784,20 +784,44 @@ sqlx_cache_unlock_and_close_base(sqlx_cache_t *cache, gint bd, guint32 flags)
 	switch (base->status) {
 
 		case SQLX_BASE_FREE:
-			EXTRA_ASSERT(base->count_open == 0);
-			EXTRA_ASSERT(base->owner == NULL);
+			if (base->owner != NULL) {
+				GRID_ERROR("[SQLX_BASE_FREE] Base still used by the thread "
+						"%d %04X", getpid(), oio_log_thread_id(base->owner));
+				g_assert_not_reached();
+			} else if (base->count_open != 0) {
+				GRID_ERROR("[SQLX_BASE_FREE] Base still open: %"
+						G_GUINT32_FORMAT " openings", base->count_open);
+				g_assert_not_reached();
+			}
 			err = NEWERROR(CODE_INTERNAL_ERROR, "base not used");
 			break;
 
 		case SQLX_BASE_IDLE:
 		case SQLX_BASE_IDLE_HOT:
-			EXTRA_ASSERT(base->count_open == 0);
-			EXTRA_ASSERT(base->owner == NULL);
+			if (base->owner != NULL) {
+				GRID_ERROR("[SQLX_BASE_IDLE] Base still used by the thread "
+						"%d %04X", getpid(), oio_log_thread_id(base->owner));
+				g_assert_not_reached();
+			} else if (base->count_open != 0) {
+				GRID_ERROR("[SQLX_BASE_IDLE] Base still open: %"
+						G_GUINT32_FORMAT " openings", base->count_open);
+				g_assert_not_reached();
+			}
 			err = NEWERROR(CODE_INTERNAL_ERROR, "base closed");
 			break;
 
 		case SQLX_BASE_USED:
-			EXTRA_ASSERT(base->count_open > 0);
+			if (base->owner == NULL) {
+				GRID_ERROR("[SQLX_BASE_USED] Unknown thread use the base");
+				g_assert_not_reached();
+			} else if (base->owner != g_thread_self()) {
+				GRID_ERROR("[SQLX_BASE_USED] Base used by the other thread "
+						"%d %04X", getpid(), oio_log_thread_id(base->owner));
+				g_assert_not_reached();
+			} else if (base->count_open < 1) {
+				GRID_ERROR("[SQLX_BASE_USED] Base not open");
+				g_assert_not_reached();
+			}
 			lock_time = oio_ext_monotonic_time() - base->last_update;
 			/* held by the current thread */
 			if (!(-- base->count_open)) {  /* to be closed */
@@ -824,8 +848,14 @@ sqlx_cache_unlock_and_close_base(sqlx_cache_t *cache, gint bd, guint32 flags)
 
 		case SQLX_BASE_CLOSING:
 		case SQLX_BASE_CLOSING_FOR_DELETION:
-			EXTRA_ASSERT(base->owner != NULL);
-			EXTRA_ASSERT(base->owner != g_thread_self());
+			if (base->owner == NULL) {
+				GRID_ERROR("[SQLX_BASE_CLOSING] Unknown thread use the base");
+				g_assert_not_reached();
+			} else if (base->owner == g_thread_self()) {
+				GRID_ERROR("[SQLX_BASE_CLOSING] Already closing "
+						"by this thread");
+				g_assert_not_reached();
+			}
 			err = NEWERROR(CODE_INTERNAL_ERROR, "base being closed");
 			break;
 	}

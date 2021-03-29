@@ -478,7 +478,7 @@ class ObjectStorageApi(object):
             target_beans = []
             copy_beans = []
             for obj in obj_gen:
-                _, chunks = self.object_locate(
+                obj_meta, chunks = self.object_locate(
                     account, container, obj["name"], version=obj['version'],
                     **kwargs)
                 fullpath = encode_fullpath(
@@ -489,16 +489,17 @@ class ObjectStorageApi(object):
                                              logger=self.logger)
                 handler = LinkHandler(
                     fullpath, chunks_by_pos, storage_method,
-                    self.blob_client, **kwargs)
+                    self.blob_client, policy=obj_meta['policy'],
+                    **kwargs)
                 try:
                     chunks_copies = handler.link()
                 except exc.UnfinishedUploadException as ex:
                     self.logger.warn(
                         'Failed to upload all data (%s), deleting chunks',
                         ex.exception)
+                    kwargs['cid'] = obj['container_id']
                     self._delete_orphan_chunks(
-                        ex.chunks_already_uploaded, obj['container_id'],
-                        **kwargs)
+                        ex.chunks_already_uploaded, **kwargs)
                     ex.reraise()
                 t_beans, c_beans = self._prepare_meta2_raw_update(
                     chunks, chunks_copies, obj['content'])
@@ -796,6 +797,16 @@ class ObjectStorageApi(object):
         """
         meta, stream = self.object_fetch(
             account, container, obj, **kwargs)
+        # Before we started generating predictable chunk IDs, it was possible
+        # to change to the same policy: it just renewed all chunks and updated
+        # the modification time.
+        # Now that we generate predictable chunk IDs, we must change something
+        # in the object description in order to get a different set of chunks
+        # (we don't want to change the object version).
+        if meta['policy'] == policy:
+            del stream
+            raise exc.Conflict(
+                'The object is already using the %s storage policy' % policy)
         kwargs['version'] = meta['version']
         return self.object_create_ext(
             account, container, obj_name=meta['name'],
@@ -1081,9 +1092,9 @@ class ObjectStorageApi(object):
             self.logger.warn(
                 'Failed to upload all data (%s), deleting chunks',
                 ex.exception)
+            kwargs['cid'] = link_meta['container_id']
             self._delete_orphan_chunks(
-                ex.chunks_already_uploaded, link_meta['container_id'],
-                **kwargs)
+                ex.chunks_already_uploaded, **kwargs)
             ex.reraise()
 
         data = {'chunks': chunks_copies,
@@ -1108,22 +1119,10 @@ class ObjectStorageApi(object):
         except (exc.Conflict, exc.DeadlineReached) as ex:
             self.logger.warn(
                 'Failed to commit to meta2 (%s), deleting chunks', ex)
-            self._delete_orphan_chunks(
-                chunks_copies, link_meta['container_id'], **kwargs)
+            kwargs['cid'] = link_meta['container_id']
+            self._delete_orphan_chunks(chunks_copies, **kwargs)
             raise
         return link_meta
-
-    @staticmethod
-    def _cache_wrapper(account, container, obj, version, stream, **kwargs):
-        try:
-            for dat in stream:
-                yield dat
-        except exc.UnrecoverableContent:
-            # The cache may no longer be valid
-            del_cached_object_metadata(
-                account=account, reference=container, path=obj,
-                version=version, **kwargs)
-            raise
 
     @staticmethod
     def _ttfb_wrapper(stream, req_start, download_start, perfdata):
@@ -1185,9 +1184,6 @@ class ObjectStorageApi(object):
         if perfdata is not None:
             stream = self._ttfb_wrapper(
                 stream, req_start, download_start, perfdata)
-        if kwargs.get('cache'):
-            stream = self._cache_wrapper(
-                account, container, obj, version, stream, **kwargs)
 
         return meta, stream
 
@@ -1235,19 +1231,23 @@ class ObjectStorageApi(object):
             except exc.UnrecoverableContent:
                 # Maybe we got this error because the cached object
                 # metadata was stale.
-                cache = kwargs.pop('cache', None)
+                cache = kwargs.get('cache', None)
                 if cache is None:
                     # No cache configured: nothing more to do.
                     raise
-                elif blocks >= 1:
+                # Clear the cache
+                del_cached_object_metadata(
+                    account=account, reference=container, path=obj,
+                    version=version, **kwargs)
+                if blocks >= 1:
                     # The first blocks of data were already sent to the
                     # caller, we cannot start again.
                     raise
                 # Retry the request without reading from the cache.
                 new_meta, new_stream = self._object_fetch_impl(
                     account, container, obj,
-                    version=version, ranges=ranges,
-                    key_file=key_file, cache=None, **kwargs)
+                    version=version, ranges=ranges, key_file=key_file,
+                    **kwargs)
                 # Hack the metadata dictionary which has already been
                 # returned to the caller.
                 meta.update(new_meta)
@@ -1391,9 +1391,11 @@ class ObjectStorageApi(object):
 
         storage_method = STORAGE_METHODS.load(obj_meta['chunk_method'])
         if link:
+            if not policy:
+                policy = obj_meta['policy']
             handler = LinkHandler(
                     obj_meta['full_path'], None, storage_method,
-                    self.blob_client, **kwargs)
+                    self.blob_client, policy=policy, **kwargs)
             return obj_meta, handler, None
 
         if storage_method.ec:
@@ -1424,10 +1426,9 @@ class ObjectStorageApi(object):
         except exc.OioException as ex:
             self.logger.warn(
                 'Failed to upload all data (%s), deleting chunks', ex)
+            kwargs['cid'] = obj_meta['container_id']
             self._delete_orphan_chunks(
-                chunk_prep.all_chunks_so_far(),
-                obj_meta['container_id'],
-                **kwargs)
+                chunk_prep.all_chunks_so_far(), **kwargs)
             raise
 
         etag = obj_meta.get('etag')
@@ -1460,8 +1461,8 @@ class ObjectStorageApi(object):
         except (exc.Conflict, exc.DeadlineReached) as ex:
             self.logger.warn(
                 'Failed to commit to meta2 (%s), deleting chunks', ex)
-            self._delete_orphan_chunks(ul_chunks, obj_meta['container_id'],
-                                       **kwargs)
+            kwargs['cid'] = obj_meta['container_id']
+            self._delete_orphan_chunks(ul_chunks, **kwargs)
             raise
         return ul_chunks, ul_bytes, obj_checksum, obj_meta
 

@@ -383,8 +383,13 @@ _resolve_service_through_many_meta1(struct hc_resolver_s *r,
 			}
 			len = oio_ext_array_partition((void**)urlv, len, _wrap);
 		}
-		if (len > 1 && oio_resolver_dir_shuffle)
+		if (len <= 0) {
+			/* Maybe all meta1 databases have been moved
+			 * and the old meta1 has been shut down */
+			hc_decache_reference(r, u);
+		} else if (oio_resolver_dir_shuffle) {
 			oio_ext_array_shuffle((void**)urlv, len);
+		}
 	}
 
 	for (const char * const *purl=urlv; *purl ;++purl) {
@@ -397,8 +402,12 @@ _resolve_service_through_many_meta1(struct hc_resolver_s *r,
 
 		if (!err)
 			return NULL;
-		if (!CODE_IS_NETWORK_ERROR(err->code))
+		if (!CODE_IS_NETWORK_ERROR(err->code)) {
+			if (error_clue_for_decache(err)) {
+				hc_decache_reference(r, u);
+			}
 			return err;
+		}
 		g_clear_error(&err);
 	}
 
@@ -497,6 +506,24 @@ hc_resolve_reference_service(struct hc_resolver_s *r, struct oio_url_s *url,
 	if (*result && oio_resolver_srv_shuffle)
 		oio_ext_array_shuffle((void**)*result, g_strv_length(*result));
 	return err;
+}
+
+gboolean
+error_clue_for_decache(GError *err)
+{
+	if (!err)
+		return FALSE;
+	switch (err->code) {
+		case CODE_CONTAINER_NOTFOUND:
+		/* DO NOT consider CODE_USER_NOTFOUND as a valid reason
+		 * to trigger a decache. This is a normal return code */
+		case CODE_RANGE_NOTFOUND:
+		case CODE_SRVTYPE_NOTMANAGED:
+		case CODE_ACCOUNT_NOTFOUND:
+			return TRUE;
+		default:
+			return FALSE;
+	}
 }
 
 void

@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -133,7 +134,7 @@ class Content(object):
             raise ValueError("'value' must be a dict")
         self.metadata['properties'] = value
 
-    def _get_spare_chunk(self, chunks_notin, chunks_broken,
+    def _get_spare_chunk(self, chunks_notin, chunks_broken, position,
                          max_attempts=3, check_quality=False,
                          fake_excluded_chunks=None, **kwargs):
         notin = ChunksHelper(chunks_notin, False).raw()
@@ -154,8 +155,10 @@ class Content(object):
         for attempt in range(max_attempts):
             try:
                 spare_resp = self.container_client.content_spare(
-                    cid=self.container_id, path=self.content_id,
-                    data=spare_data, stgpol=self.policy, **kwargs)
+                    cid=self.container_id, path=self.path,
+                    version=self.version, data=spare_data,
+                    stgpol=self.policy, position=position,
+                    **kwargs)
                 quals = extract_chunk_qualities(
                     spare_resp.get('properties', {}), raw=True)
                 if check_quality:
@@ -234,8 +237,8 @@ class Content(object):
             mime_type=self.mime_type, data=data,
             **kwargs)
 
-    def rebuild_chunk(self, chunk_id, allow_same_rawx=False, chunk_pos=None,
-                      allow_frozen_container=False):
+    def rebuild_chunk(self, chunk_id, service_id=None, allow_same_rawx=False,
+                      chunk_pos=None, allow_frozen_container=False):
         raise NotImplementedError()
 
     def create(self, stream, **kwargs):
@@ -248,7 +251,8 @@ class Content(object):
         self.container_client.content_delete(
             cid=self.container_id, path=self.path, **kwargs)
 
-    def move_chunk(self, chunk_id, check_quality=False, dry_run=False,
+    def move_chunk(self, chunk_id, service_id=None,
+                   check_quality=False, dry_run=False,
                    max_attempts=3, **kwargs):
         """
         Move a chunk to another place. Optionally ensure that the
@@ -257,17 +261,30 @@ class Content(object):
         if isinstance(chunk_id, Chunk):
             current_chunk = chunk_id
             chunk_id = current_chunk.id
+            service_id = current_chunk.host
         else:
-            current_chunk = self.chunks.filter(id=chunk_id).one()
+            candidates = self.chunks.filter(id=chunk_id)
+            if len(candidates) > 1:
+                if service_id is None:
+                    raise exc.ChunkException(
+                        "Several chunks with ID %s and no service ID" % (
+                            chunk_id, ))
+                candidates = candidates.filter(host=service_id)
+            current_chunk = candidates.one()
+
         if current_chunk is None or current_chunk not in self.chunks:
             raise exc.OrphanChunk("Chunk not found in content")
 
-        other_chunks = self.chunks.filter(
-            metapos=current_chunk.metapos).exclude(id=chunk_id).all()
+        if service_id:
+            other_chunks = self.chunks.filter(
+                metapos=current_chunk.metapos).exclude(host=service_id).all()
+        else:
+            other_chunks = self.chunks.filter(
+                metapos=current_chunk.metapos).exclude(id=chunk_id).all()
 
         spare_urls, qualities = self._get_spare_chunk(
-            other_chunks, [current_chunk], check_quality=check_quality,
-            max_attempts=max_attempts, **kwargs)
+            other_chunks, [current_chunk], position=current_chunk.pos,
+            check_quality=check_quality, max_attempts=max_attempts, **kwargs)
 
         # Sort chunks by score to try to copy with higher score.
         # When scores are close together (e.g. [95, 94, 94, 93, 50]),
@@ -486,7 +503,14 @@ class ChunksHelper(object):
             self.chunks = [Chunk(c) for c in chunks]
         else:
             self.chunks = chunks
-        self.sort_key = sort_key
+        if sort_key is not None:
+            self.sort_key = sort_key
+        else:
+            # Some old tests expect chunks to be sorted by chunk ID,
+            # for the same position. Starting from version 7.2.0, chunks
+            # for the same position can have the same ID, so we must sort
+            # them by host (or URL) for the order to be consistent.
+            self.sort_key = lambda c: (c.pos, c.id, c.url)
         self.sort_reverse = sort_reverse
         self.chunks.sort(key=self.sort_key, reverse=self.sort_reverse)
 

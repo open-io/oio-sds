@@ -98,12 +98,12 @@ GByteArray* sqlx_pack_GETVERS(const struct sqlx_name_s *name, const gchar *peers
 
 GByteArray* sqlx_pack_SNAPSHOT(const struct sqlx_name_s *name, const gchar *source,
 		const gchar *cid, const gchar *seq_num, const gchar **fields, gint64 deadline);
-GByteArray* sqlx_pack_PIPEFROM(const struct sqlx_name_s *name, const gchar *source, gint64 deadline);
+GByteArray* sqlx_pack_PIPEFROM(const struct sqlx_name_s *name, const gchar *source, gint check_type, gint64 deadline);
 GByteArray* sqlx_pack_PIPETO(const struct sqlx_name_s *name, const gchar *target, gint64 deadline);
 GByteArray* sqlx_pack_REMOVE(const struct sqlx_name_s *name, gint64 deadline);
-GByteArray* sqlx_pack_RESYNC(const struct sqlx_name_s *name, gint64 deadline);
+GByteArray* sqlx_pack_RESYNC(const struct sqlx_name_s *name, const gint check_type, gint64 deadline);
 GByteArray* sqlx_pack_VACUUM(const struct sqlx_name_s *name, gboolean local, gint64 deadline);
-GByteArray* sqlx_pack_DUMP(const struct sqlx_name_s *name, gboolean chunked, gint64 deadline);
+GByteArray* sqlx_pack_DUMP(const struct sqlx_name_s *name, gboolean chunked, gint check_type, gint64 deadline);
 GByteArray* sqlx_pack_RESTORE(const struct sqlx_name_s *name, const guint8 *raw, gsize rawsize, gint64 deadline);
 
 GByteArray* sqlx_pack_REPLICATE(const struct sqlx_name_s *name, struct TableSequence *tabseq, gint64 deadline);
@@ -128,6 +128,6 @@ GError * peer_restore(const gchar *target, struct sqlx_name_s *name,
 typedef GError* (*peer_dump_cb)(GByteArray *part, gint64 remaining, gpointer arg);
 
 GError * peer_dump(const gchar *target, struct sqlx_name_s *name, gboolean chunked,
-		peer_dump_cb, gpointer cb_arg, gint64 deadline);
+		gint check_type, peer_dump_cb, gpointer cb_arg, gint64 deadline);
 
 #endif /*OIO_SDS__sqliterepo__sqlx_remote_h*/

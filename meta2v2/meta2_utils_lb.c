@@ -2,6 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -29,6 +30,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/meta2_utils.h>
 
 #include <core/oiolb.h>
+#include <core/lb_variables.h>
+#include <core/url_ext.h>
 #include <glib.h>
 
 static GError*
@@ -69,18 +72,20 @@ out:
 /* ------------------------------------------------------------------------- */
 
 GError*
-get_spare_chunks_focused(struct oio_lb_s *lb, const char *pool,
+get_spare_chunks_focused(struct oio_url_s *url, const gchar *pos,
+		struct oio_lb_s *lb, struct storage_policy_s *policy,
 		oio_location_t pin, int mode,
 		GSList **result)
 {
 	GError *err = NULL;
 	GSList *beans = NULL;
+	const gchar *pool = storage_policy_get_service_pool(policy);
 
 	GRID_TRACE("%s pin=%"G_GINT64_MODIFIER"x mode=%d", __FUNCTION__, pin, mode);
 
 	void _on_id(struct oio_lb_selected_item_s *sel, gpointer u UNUSED)
 	{
-		struct bean_CHUNKS_s *chunk = generate_chunk_bean(sel, NULL);
+		struct bean_CHUNKS_s *chunk = generate_chunk_bean(url, pos, sel, policy);
 		struct bean_PROPERTIES_s *prop = generate_chunk_quality_bean(
 				sel, CHUNKS_get_id(chunk)->str, NULL);
 		beans = g_slist_prepend(beans, prop);
@@ -96,12 +101,6 @@ get_spare_chunks_focused(struct oio_lb_s *lb, const char *pool,
 		*result = beans;
 	}
 	return err;
-}
-
-GError*
-get_spare_chunks(struct oio_lb_s *lb, const char *pool, GSList **result)
-{
-	return get_spare_chunks_focused(lb, pool, 0, 0, result);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -133,12 +132,15 @@ convert_chunks_to_locations(struct oio_lb_pool_s *pool, const gchar *ns_name,
 }
 
 GError*
-get_conditioned_spare_chunks(struct oio_lb_s *lb, const char *pool,
+get_conditioned_spare_chunks(struct oio_url_s *url, const gchar *pos,
+		struct oio_lb_s *lb,
+		struct storage_policy_s *policy,
 		const gchar *ns_name, GSList *already, GSList *broken,
 		GSList **result)
 {
 	GError *err = NULL;
 	GSList *beans = NULL;
+	const gchar *pool = storage_policy_get_service_pool(policy);
 
 	GRID_TRACE("%s", __FUNCTION__);
 
@@ -152,7 +154,8 @@ get_conditioned_spare_chunks(struct oio_lb_s *lb, const char *pool,
 
 	void _on_id(struct oio_lb_selected_item_s *sel, gpointer u UNUSED)
 	{
-		struct bean_CHUNKS_s *chunk = generate_chunk_bean(sel, NULL);
+		struct bean_CHUNKS_s *chunk = generate_chunk_bean(url, pos, sel,
+				policy);
 		struct bean_PROPERTIES_s *prop = generate_chunk_quality_bean(
 				sel, CHUNKS_get_id(chunk)->str, NULL);
 		beans = g_slist_prepend(beans, prop);
@@ -198,6 +201,8 @@ struct gen_ctx_s
 	guint8 h[16];
 	gint64 size;
 	gint64 chunk_size;
+	gint64 pos;
+	gint64 version;
 
 	/* location focused mode */
 	oio_location_t pin;
@@ -224,13 +229,15 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 	struct bean_ALIASES_s *alias = _bean_create(&descr_struct_ALIASES);
 	ALIASES_set2_alias(alias, oio_url_get(ctx->url, OIOURL_PATH));
 	gint64 version;
-	if (oio_url_has(ctx->url, OIOURL_VERSION) &&
+	if (!oio_url_has(ctx->url, OIOURL_VERSION) ||
 			(version = g_ascii_strtoll(
-				oio_url_get(ctx->url, OIOURL_VERSION), NULL, 10)) > 0) {
-		ALIASES_set_version(alias, version);
-	} else {
-		ALIASES_set_version(alias, now);
+				oio_url_get(ctx->url, OIOURL_VERSION), NULL, 10)) <= 0) {
+		version = now;
+		gchar sver[LIMIT_LENGTH_VERSION] = {0};
+		g_snprintf(sver, sizeof(sver), "%"G_GINT64_FORMAT, version);
+		oio_url_set(ctx->url, OIOURL_VERSION, sver);
 	}
+	ALIASES_set_version(alias, version);
 	ALIASES_set_ctime(alias, now / G_TIME_SPAN_SECOND);
 	ALIASES_set_mtime(alias, now / G_TIME_SPAN_SECOND);
 	ALIASES_set_deleted(alias, FALSE);
@@ -254,14 +261,29 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 }
 
 struct bean_CHUNKS_s *
-generate_chunk_bean(struct oio_lb_selected_item_s *sel,
-		const struct storage_policy_s *policy UNUSED)
+generate_chunk_bean(struct oio_url_s *url, const gchar *pos,
+		struct oio_lb_selected_item_s *sel,
+		const struct storage_policy_s *policy)
 {
 	guint8 binid[32];
 	gchar *chunkid = NULL, strid[65];
 
-	oio_buf_randomize(binid, sizeof(binid));
-	oio_str_bin2hex(binid, sizeof(binid), strid, sizeof(strid));
+	if (oio_lb_random_chunk_ids) {
+		oio_buf_randomize(binid, sizeof(binid));
+		oio_str_bin2hex(binid, sizeof(binid), strid, sizeof(strid));
+	} else {
+		GError *err = oio_url_compute_chunk_id(
+				url, pos, storage_policy_get_name(policy),
+				strid, sizeof(strid));
+		if (err != NULL) {
+			GRID_WARN("Cannot compute chunk ID, will generate a random one: "
+					"%s (reqid=%s)",
+					err->message, oio_ext_get_reqid());
+			oio_buf_randomize(binid, sizeof(binid));
+			oio_str_bin2hex(binid, sizeof(binid), strid, sizeof(strid));
+			g_clear_error(&err);
+		}
+	}
 
 	if (sel->item->id) {
 		gchar shifted_id[LIMIT_LENGTH_SRVID];
@@ -269,7 +291,7 @@ generate_chunk_bean(struct oio_lb_selected_item_s *sel,
 		meta1_url_shift_addr(shifted_id);
 		chunkid = m2v2_build_chunk_url(shifted_id, strid);
 	} else {
-		/* legacy function called here to build URL 
+		/* legacy function called here to build URL
 		 * when chunks were stored on
 		 * other backend than SDS */
 		GRID_ERROR("Deprecated code path called");
@@ -313,7 +335,8 @@ _gen_chunk(struct gen_ctx_s *ctx, struct oio_lb_selected_item_s *sel,
 	else
 		g_snprintf(strpos, sizeof(strpos), "%u.%d", pos, subpos);
 
-	struct bean_CHUNKS_s *chunk = generate_chunk_bean(sel, ctx->pol);
+	struct bean_CHUNKS_s *chunk = generate_chunk_bean(
+			ctx->url, strpos, sel, ctx->pol);
 	CHUNKS_set2_content(chunk, ctx->uid, ctx->uid_size);
 	CHUNKS_set2_hash(chunk, ctx->h, sizeof(ctx->h));
 	CHUNKS_set_size(chunk, cs);
@@ -336,7 +359,7 @@ _m2_generate_chunks(struct gen_ctx_s *ctx,
 
 	_m2_generate_alias_header(ctx);
 
-	guint pos = 0;
+	guint pos = ctx->pos;
 	gint64 esize = MAX(ctx->size, 1);
 	for (gint64 s = 0; s < esize && !err; s += mcs, ++pos) {
 		int i = 0;
@@ -366,12 +389,12 @@ oio_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,
 		struct storage_policy_s *pol, struct oio_lb_s *lb,
 		GSList **out)
 {
-	return oio_generate_focused_beans(url, size, chunk_size, pol, lb, 0, 0, out);
+	return oio_generate_focused_beans(url, 0, size, chunk_size, pol, lb, 0, 0, out);
 }
 
 GError *
 oio_generate_focused_beans(
-		struct oio_url_s *url, gint64 size, gint64 chunk_size,
+		struct oio_url_s *url, gint64 pos, gint64 size, gint64 chunk_size,
 		struct storage_policy_s *pol, struct oio_lb_s *lb,
 		oio_location_t pin, int mode,
 		GSList **out)
@@ -397,28 +420,37 @@ oio_generate_focused_beans(
 	}
 
 	struct gen_ctx_s ctx = {};
-	ctx.url = url;
+	ctx.url = oio_url_dup(url);
 	ctx.pol = pol;
 	ctx.uid = uid;
 	ctx.uid_size = uid_size;
 	ctx.size = size;
 	ctx.chunk_size = chunk_size;
+	ctx.pos = pos;
 	ctx.lb = lb;
 	ctx.out = out;
 	ctx.pin = pin;
 	ctx.mode = mode;
 
-	if (!pol)
-		return _m2_generate_chunks(&ctx, chunk_size, 0);
-
-	gint64 k;
-	switch (data_security_get_type(storage_policy_get_data_security(pol))) {
-		case STGPOL_DS_PLAIN:
-			return _m2_generate_chunks(&ctx, chunk_size, 0);
-		case STGPOL_DS_EC:
-			k = storage_policy_parameter(pol, DS_KEY_K, 6);
-			return _m2_generate_chunks(&ctx, k*chunk_size, TRUE);
-		default:
-			return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy type");
+	GError *err = NULL;
+	if (!pol) {
+		err = _m2_generate_chunks(&ctx, chunk_size, 0);
+	} else {
+		gint64 k;
+		switch (data_security_get_type(storage_policy_get_data_security(pol))) {
+			case STGPOL_DS_PLAIN:
+				err = _m2_generate_chunks(&ctx, chunk_size, 0);
+				break;
+			case STGPOL_DS_EC:
+				k = storage_policy_parameter(pol, DS_KEY_K, 6);
+				err = _m2_generate_chunks(&ctx, k*chunk_size, TRUE);
+				break;
+			default:
+				err = NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy type");
+				break;
+		}
 	}
+
+	oio_url_clean(ctx.url);
+	return err;
 }

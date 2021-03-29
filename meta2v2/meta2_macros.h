@@ -148,8 +148,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 /* Request N spare chunks which should not be on provided blacklist */
 #define M2V2_SPARE_BY_BLACKLIST "SPARE_BLACKLIST"
-/* Request N spare chunks according to a storage policy */
-#define M2V2_SPARE_BY_STGPOL "SPARE_STGPOL"
 
 struct m2v2_create_params_s
 {

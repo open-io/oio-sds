@@ -27,7 +27,7 @@ add_custom_command(
 		${CMAKE_CURRENT_SOURCE_DIR}/rawx.go
 		${CMAKE_CURRENT_SOURCE_DIR}/repo.go
 	COMMAND
-	cd ${CMAKE_CURRENT_SOURCE_DIR} && ${GO_BUILD}
+	cd ${CMAKE_CURRENT_SOURCE_DIR} && ${GO_EXECUTABLE} vet . && ${GO_BUILD}
 	COMMENT
 		"Build RAWX v2, written in Golang"
 )

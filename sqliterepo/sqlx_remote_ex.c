@@ -32,7 +32,7 @@ sqlx_remote_execute_RESYNC_many(gchar **targets, GByteArray *sid,
 {
 	(void) sid;
 	GError *err = NULL;
-	GByteArray *req = sqlx_pack_RESYNC(name, deadline);
+	GByteArray *req = sqlx_pack_RESYNC(name, -1, deadline);
 	struct gridd_client_s **clients = gridd_client_create_many(
 			targets, req, NULL, NULL);
 	metautils_gba_unref(req);

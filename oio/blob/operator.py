@@ -13,10 +13,23 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from six.moves.urllib_parse import urlparse
+
 from oio.common.exceptions import ContentNotFound, OrphanChunk
 from oio.common.logger import get_logger
 from oio.content.factory import ContentFactory
 from oio.rdir.client import RdirClient
+
+
+def looks_like_chunk_position(somestring):
+    """Tell if the string represents a chunk position."""
+    if len(somestring) > 10:
+        return False
+    try:
+        float(somestring)
+        return True
+    except ValueError:
+        return False
 
 
 class ChunkOperator(object):
@@ -43,24 +56,33 @@ class ChunkOperator(object):
             raise OrphanChunk('Content not found: possible orphan chunk')
 
         chunk_pos = None
-        if len(chunk_id_or_pos) < 32:
+        if looks_like_chunk_position(chunk_id_or_pos):
             chunk_pos = chunk_id_or_pos
             chunk_id = None
         else:
             if '/' in chunk_id_or_pos:
-                chunk_id = chunk_id_or_pos.rsplit('/', 1)[-1]
+                parsed = urlparse(chunk_id_or_pos)
+                chunk_id = parsed.path.lstrip('/')
+                rawx_id = parsed.netloc
             else:
                 chunk_id = chunk_id_or_pos
 
-            chunk = content.chunks.filter(id=chunk_id).one()
+            candidates = content.chunks.filter(id=chunk_id)
+            # FIXME(FVE): if for some reason the chunks have been registered
+            # with an IP address and port instead of an ID, this won't work.
+            if rawx_id:
+                candidates = candidates.filter(host=rawx_id)
+            chunk = candidates.one()
             if chunk is None:
                 raise OrphanChunk(
-                    'Chunk not found in content: possible orphan chunk')
+                    'Chunk not found in content: possible orphan chunk: ' +
+                    '%s' % (candidates.all(), ))
             elif rawx_id and chunk.host != rawx_id:
                 raise ValueError('Chunk does not belong to this rawx')
 
         rebuilt_bytes = content.rebuild_chunk(
-            chunk_id, allow_frozen_container=allow_frozen_container,
+            chunk_id, service_id=rawx_id,
+            allow_frozen_container=allow_frozen_container,
             allow_same_rawx=allow_same_rawx,
             chunk_pos=chunk_pos)
 

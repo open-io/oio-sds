@@ -165,6 +165,16 @@ class ElectionDebug(ElectionCmd):
 class ElectionSync(ElectionCmd):
     """Try to synchronize a dubious election."""
 
+    def get_parser(self, prog_name):
+        parser = super(ElectionSync, self).get_parser(prog_name)
+        parser.add_argument('--check-type', type=int, choices=(-1, 0, 1, 2),
+                            default=-1,
+                            help=("Choose how to check the database before "
+                                  "syncing it. -1: use server default, "
+                                  "0: do not check, 1: quick check, "
+                                  "2: full check."))
+        return parser
+
     def take_action(self, parsed_args):
         self.log.debug('take_action(%s)', parsed_args)
 
@@ -172,6 +182,7 @@ class ElectionSync(ElectionCmd):
 
         data = self.app.client_manager.admin.election_sync(
             service_type, account=account, reference=reference, cid=cid,
+            check_type=parsed_args.check_type,
             timeout=parsed_args.timeout, service_id=parsed_args.service_id)
 
         columns = ('Id', 'Status', 'Message', 'Body')

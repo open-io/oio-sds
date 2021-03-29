@@ -236,24 +236,6 @@ _election_key(struct client_ctx_s *ctx)
 }
 
 static gboolean
-error_clue_for_decache(GError *err)
-{
-	if (!err)
-		return FALSE;
-	switch (err->code) {
-		case CODE_CONTAINER_NOTFOUND:
-		/* DO NOT consider CODE_USER_NOTFOUND as a valid reason
-		 * to trigger a decache. This is a normal return code */
-		case CODE_RANGE_NOTFOUND:
-		case CODE_SRVTYPE_NOTMANAGED:
-		case CODE_ACCOUNT_NOTFOUND:
-			return TRUE;
-		default:
-			return FALSE;
-	}
-}
-
-static gboolean
 context_clue_for_decache(struct client_ctx_s *ctx)
 {
 	if (!ctx->errorv)
@@ -321,8 +303,10 @@ label_retry:
 	if (err) {
 		EXTRA_ASSERT(m1uv == NULL);
 		if (retry && error_clue_for_decache(err)) {
+			/* We may have asked the wrong meta1, try again.
+			 * The reference has already been freed from the cache
+			 * in `_resolve_service_through_many_meta1`. */
 			retry = FALSE;
-			cache_flush_reference(args, ctx);
 			g_clear_error(&err);
 			goto label_retry;
 		} else {
@@ -457,21 +441,35 @@ label_retry:
 				 * the subsequent requests. */
 				service_invalidate(url);
 
-				/* TODO(jfs): should we let the client retry or occupy a
-				 * thread in the proxy to make all the necessary retries ? */
+				/* JFS: should we let the client retry or occupy a
+				 * thread in the proxy to make all the necessary retries?
+				 * FVE: in some cases where we are not sure the request
+				 * actually failed, we will let the client retry. */
 
 				/* that error is not strong enough to stop the iteration, we
 				 * just try with another service */
-				g_clear_error (&err);
+				GError *last_err = err;
+				err = NULL;
 
 				/* But if we expected at least one service to respond,
 				 * and we still encounter that error with the last URL of the
 				 * array (!pu[1]), then this is an overall error that we should return. */
 				if ((ctx->which != CLIENT_RUN_ALL
 						&& ctx->which != CLIENT_SPECIFIED) && !next_url) {
-					err = BUSY("No service replied");
+					err = BUSY("No service replied (last error: (%d) %s)",
+							last_err->code, last_err->message);
+					stop = TRUE;
+				} else if (ctx->which == CLIENT_PREFER_MASTER &&
+						CODE_IS_ERR_AFTER_START(last_err->code)) {
+					/* Maybe the request is running in the background.
+					 * For requests on master, let the client decide to try again.
+					 * Retrying may trigger an error (such as a conflict),
+					 * if the request has already been executed. */
+					err = BUSY("No service replied (last error: (%d) %s)",
+							last_err->code, last_err->message);
 					stop = TRUE;
 				}
+				g_clear_error(&last_err);
 			} else if (CODE_IS_RETRY(err->code)) {
 				/* the target service is in bad shape, let's avoid it for
 				 * the subsequent requests. And we currently we choose to
@@ -660,8 +658,14 @@ GError * KV_read_properties (struct json_object *j, gchar ***out,
 	EXTRA_ASSERT(oio_str_is_set(section));
 
 	*out = NULL;
-	if (!json_object_is_type(j, json_type_object))
-		return BADREQ("Object argument expected");
+	if (json_object_get_type(j) == json_type_null && !fail_if_empty) {
+		*out = g_malloc0(sizeof(gchar*));
+		return NULL;
+	}
+	if (!json_object_is_type(j, json_type_object)) {
+		return BADREQ("Object argument expected, got %s",
+				json_type_to_name(json_object_get_type(j)));
+	}
 	struct json_object *jprops = NULL;
 
 	if (!json_object_object_get_ex(j, section, &jprops)) {

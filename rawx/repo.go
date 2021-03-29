@@ -19,6 +19,7 @@ package main
 import (
 	"io"
 	"os"
+	"time"
 )
 
 type decorable interface {
@@ -31,6 +32,7 @@ type fileReader interface {
 	// Return the underlying os.File
 	File() *os.File
 
+	mtime() time.Time
 	size() int64
 	seek(int64) error
 	getAttr(key string, value []byte) (int, error)

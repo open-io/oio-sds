@@ -1569,7 +1569,7 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
         elif 'SINGLE' in (old_policy, new_policy) and self.nb_rawx < 1:
             self.skipTest("need at least 1 rawx to run")
 
-        name = random_str(32)
+        name = 'change-policy-' + random_str(6)
         self._create(name)
 
         if versioning:
@@ -1596,8 +1596,17 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
         # One of the checks below verifies that the old chunks have actually
         # been deleted. Since this is an asynchronous process, we used to see
         # random failures when the event treatment was a little slow.
-        self.wait_for_event('oio-preserved',
-                            types=(EventTypes.CHUNK_DELETED, ), timeout=5.0)
+        evt = self.wait_for_event('oio-preserved',
+                                  types=(EventTypes.CHUNK_DELETED,
+                                         EventTypes.CONTENT_BROKEN),
+                                  timeout=5.0)
+        if evt.event_type == EventTypes.CONTENT_BROKEN:
+            self.logger.warning("One of the new chunks was not uploaded, "
+                                "wait a few seconds for the rebuilder "
+                                "to rebuild it.")
+            self.wait_for_event('oio-preserved',
+                                types=(EventTypes.CHUNK_NEW, ),
+                                timeout=6.0)
 
         obj2, chunks2 = self.api.object_locate(
             self.account, name, name, version=obj1['version'])
@@ -1693,8 +1702,9 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
             self.chunk_size * 2, 'THREECOPIES', 'SINGLE')
 
     def test_change_content_with_same_policy(self):
-        self._test_change_policy(
-            1, 'TWOCOPIES', 'TWOCOPIES')
+        self.assertRaises(exc.Conflict,
+                          self._test_change_policy,
+                          1, 'TWOCOPIES', 'TWOCOPIES')
 
     def test_change_policy_with_versioning(self):
         self._test_change_policy(

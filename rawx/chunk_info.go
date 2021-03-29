@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 type chunkInfo struct {
@@ -46,6 +47,7 @@ type chunkInfo struct {
 	OioVersion         string `json:"oio_version,omitempty"`
 
 	compression string
+	mtime       time.Time
 	size        int64
 }
 
@@ -231,6 +233,7 @@ func loadAttr(inChunk fileReader, chunkID string, reqid string) (chunkInfo, erro
 		}
 	}
 
+	chunk.mtime = inChunk.mtime()
 	chunk.size, err = strconv.ParseInt(chunk.ChunkSize, 10, 63)
 	if err != nil {
 		err = errMissingXattr(AttrNameChunkSize, err)
@@ -309,7 +312,7 @@ func (chunk *chunkInfo) retrieveContentFullpathHeader(headers *http.Header) erro
 	chunk.ContentVersion = version
 
 	contentID, err := url.PathUnescape(fullpath[4])
-	if err != nil || !isHexaString(contentID, 0) {
+	if err != nil || !isHexaString(contentID, 0, 64) {
 		return errInvalidHeader
 	}
 	headerContentID := headers.Get(HeaderNameContentID)
@@ -342,7 +345,8 @@ func retrieveDestinationHeader(headers *http.Header, rawx *rawxService, srcChunk
 		return chunk, os.ErrPermission
 	}
 	chunk.ChunkID = filepath.Base(filepath.Clean(dstURL.Path))
-	if !isHexaString(chunk.ChunkID, 64) {
+	if !isHexaString(chunk.ChunkID, 24, 64) {
+		LogWarning("%s did not parse as hexadecimal string", chunk.ChunkID)
 		return chunk, errInvalidHeader
 	}
 	chunk.ChunkID = strings.ToUpper(chunk.ChunkID)
@@ -377,7 +381,7 @@ func retrieveHeaders(headers *http.Header, chunkID string) (chunkInfo, error) {
 
 	chunk.MetachunkHash = headers.Get(HeaderNameMetachunkChecksum)
 	if chunk.MetachunkHash != "" {
-		if !isHexaString(chunk.MetachunkHash, 0) {
+		if !isHexaString(chunk.MetachunkHash, 0, 64) {
 			return chunk, errInvalidHeader
 		}
 		chunk.MetachunkHash = strings.ToUpper(chunk.MetachunkHash)
@@ -391,7 +395,7 @@ func retrieveHeaders(headers *http.Header, chunkID string) (chunkInfo, error) {
 
 	chunk.ChunkHash = headers.Get(HeaderNameChunkChecksum)
 	if chunk.ChunkHash != "" {
-		if !isHexaString(chunk.ChunkHash, 0) {
+		if !isHexaString(chunk.ChunkHash, 0, 64) {
 			return chunk, errInvalidHeader
 		}
 		chunk.ChunkHash = strings.ToUpper(chunk.ChunkHash)
@@ -414,7 +418,7 @@ func (chunk *chunkInfo) patchWithTrailers(trailers *http.Header, ul uploadInfo) 
 	if trailerMetachunkHash != "" {
 		chunk.MetachunkHash = trailerMetachunkHash
 		if chunk.MetachunkHash != "" {
-			if !isHexaString(chunk.MetachunkHash, 0) {
+			if !isHexaString(chunk.MetachunkHash, 0, 64) {
 				return errInvalidHeader
 			}
 			chunk.MetachunkHash = strings.ToUpper(chunk.MetachunkHash)
@@ -487,6 +491,7 @@ func (chunk chunkInfo) fillHeaders(headers http.Header) {
 	setHeader(headers, HeaderNameChunkChecksum, chunk.ChunkHash)
 	setHeader(headers, HeaderNameChunkSize, chunk.ChunkSize)
 	setHeader(headers, HeaderNameXattrVersion, chunk.OioVersion)
+	setHeader(headers, "Last-Modified", chunk.mtime.Format(time.RFC1123))
 }
 
 // Fill the headers of the reply with the chunk info calculated by the rawx

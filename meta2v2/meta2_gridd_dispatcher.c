@@ -268,25 +268,6 @@ static gridd_filter M2V2_LHHASH_FILTERS[] =
 	NULL
 };
 
-static gridd_filter M2V2_BEANS_FILTER[] =
-{
-	meta2_filter_extract_header_url,
-	meta2_filter_extract_header_append,
-	meta2_filter_extract_header_spare,
-	meta2_filter_extract_header_storage_policy,
-	meta2_filter_extract_header_string_size,
-	meta2_filter_extract_header_localflag,
-	meta2_filter_extract_admin,
-	meta2_filter_extract_user_agent,
-	meta2_filter_fill_subject,
-	meta2_filter_check_url_cid,
-	meta2_filter_check_backend,
-	meta2_filter_check_ns_name,
-	meta2_filter_extract_body_beans,
-	meta2_filter_action_generate_beans,
-	NULL
-};
-
 static gridd_filter M2V2_PUT_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
@@ -537,7 +518,6 @@ meta2_gridd_get_v2_requests(void)
 		{NAME_MSGNAME_M2V2_FLUSH,   (hook) meta2_dispatch_all, M2V2_FLUSH_FILTERS},
 
 		/* contents */
-		{NAME_MSGNAME_M2V2_BEANS,   (hook) meta2_dispatch_all, M2V2_BEANS_FILTER},
 		{NAME_MSGNAME_M2V2_GET,     (hook) meta2_dispatch_all, M2V2_GET_FILTERS},
 
 		{NAME_MSGNAME_M2V2_PUT,     (hook) meta2_dispatch_all, M2V2_PUT_FILTERS},

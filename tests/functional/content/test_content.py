@@ -249,11 +249,13 @@ class TestContentFactory(BaseTestCase):
         data = random_data(self.chunk_size)
         content = self._new_content(policy, data)
 
-        chunk_id = content.chunks.filter(metapos=0)[0].id
-        chunk_url = content.chunks.filter(metapos=0)[0].url
+        mc = content.chunks.filter(metapos=0)
+        chunk_id = mc[0].id
+        chunk_url = mc[0].url
+        chunk_host = mc[0].host
         chunk_meta, chunk_stream = self.blob_client.chunk_get(chunk_url)
         chunk_hash = md5_stream(chunk_stream)
-        new_chunk = content.move_chunk(chunk_id)
+        new_chunk = content.move_chunk(chunk_id, service_id=chunk_host)
 
         content_updated = self.content_factory.get(self.container_id,
                                                    content.content_id)
@@ -261,7 +263,7 @@ class TestContentFactory(BaseTestCase):
         hosts = []
         for c in content_updated.chunks.filter(metapos=0):
             self.assertThat(hosts, Not(Contains(c.host)))
-            self.assertNotEqual(c.id, chunk_id)
+            self.assertNotEqual(c.url, chunk_url)
             hosts.append(c.host)
 
         new_chunk_meta, new_chunk_stream = self.blob_client.chunk_get(
@@ -269,9 +271,13 @@ class TestContentFactory(BaseTestCase):
         new_chunk_hash = md5_stream(new_chunk_stream)
 
         self.assertEqual(new_chunk_hash, chunk_hash)
+        self.assertGreaterEqual(new_chunk_meta['chunk_mtime'],
+                                chunk_meta['chunk_mtime'])
 
         del chunk_meta["chunk_id"]
         del new_chunk_meta["chunk_id"]
+        del chunk_meta["chunk_mtime"]
+        del new_chunk_meta["chunk_mtime"]
         self.assertEqual(new_chunk_meta, chunk_meta)
 
     def test_single_move_chunk(self):

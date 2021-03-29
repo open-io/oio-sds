@@ -39,7 +39,7 @@ class BlobMoverWorker(object):
         self.conf = conf
         self.logger = logger or get_logger(conf)
         self.volume = volume
-        self.namespace, self.address = check_volume(self.volume)
+        self.namespace, self.service_id = check_volume(self.volume)
         self.running = False
         self.run_time = 0
         self.passes = 0
@@ -214,11 +214,12 @@ class BlobMoverWorker(object):
             raise exc.OrphanChunk('Content not found')
 
         new_chunk = content.move_chunk(
-            chunk_id, fake_excluded_chunks=self.fake_excluded_chunks)
+            chunk_id, service_id=self.service_id,
+            fake_excluded_chunks=self.fake_excluded_chunks)
 
         self.logger.info(
             'moved chunk http://%s/%s to %s',
-            self.address, chunk_id, new_chunk['url'])
+            self.service_id, chunk_id, new_chunk['url'])
 
         if self.allow_links:
             old_links = meta['links']
@@ -239,7 +240,7 @@ class BlobMoverWorker(object):
 
                 self.logger.info(
                     'moved chunk http://%s/%s to %s',
-                    self.address, chunk_id, new_linked_chunk['url'])
+                    self.service_id, chunk_id, new_linked_chunk['url'])
 
 
 class BlobMover(Daemon):

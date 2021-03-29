@@ -2,6 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -592,86 +593,6 @@ meta2_filter_action_del_content_properties(struct gridd_filter_ctx_s *ctx,
 	} else {
 		return FILTER_OK;
 	}
-}
-
-static GError*
-_spare_with_blacklist(struct meta2_backend_s *m2b,
-		struct gridd_filter_ctx_s *ctx, struct on_bean_ctx_s *obc,
-		struct oio_url_s *url, const gchar *polname)
-{
-	GError *err = NULL;
-	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
-	GSList *notin = NULL, *broken = NULL;
-
-	for (; beans != NULL; beans = beans->next) {
-		if (DESCR(beans->data) != &descr_struct_CHUNKS)
-			continue;
-		if (CHUNKS_get_size(beans->data) == -1)
-			broken = g_slist_prepend(broken, beans->data);
-		else
-			notin = g_slist_prepend(notin, beans->data);
-	}
-
-	err = meta2_backend_get_conditionned_spare_chunks_v2(m2b, url, polname,
-			notin, broken, &(obc->l));
-
-	g_slist_free(notin);
-	g_slist_free(broken);
-	return err;
-}
-
-int
-meta2_filter_action_generate_beans(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	(void) reply;
-	GError *e = NULL;
-	gint64 size = 0;
-
-	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
-	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
-	const char *size_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_CONTENTLENGTH);
-	const char *policy_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_STGPOLICY);
-	const char *spare_type = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_SPARE);
-	gboolean append = (NULL != meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_APPEND));
-
-	TRACE_FILTER();
-	if (NULL != size_str)
-		size = g_ascii_strtoll(size_str, NULL, 10);
-
-	// Spare beans request
-	if (spare_type != NULL) {
-		reply->subject("url:%s\thexid:%s\tspare_type:%s", oio_url_get(url, OIOURL_WHOLE),
-				oio_url_get(url, OIOURL_HEXID), spare_type);
-		if (strcmp(spare_type, M2V2_SPARE_BY_BLACKLIST) == 0) {
-			e = _spare_with_blacklist(m2b, ctx, obc, url, policy_str);
-		} else if (strcmp(spare_type, M2V2_SPARE_BY_STGPOL) == 0) {
-			e = meta2_backend_get_spare_chunks(m2b, url, policy_str, &(obc->l));
-		} else {
-			e = BADREQ("Unknown type of spare request: %s", spare_type);
-		}
-		if (e != NULL) {
-			meta2_filter_ctx_set_error(ctx, e);
-			return FILTER_KO;
-		}
-	}
-	// Standard beans request
-	else {
-		e = meta2_backend_generate_beans(m2b, url, size, policy_str, append,
-				_bean_list_cb, &obc->l);
-		if (NULL != e) {
-			GRID_DEBUG("Failed to return alias for url: %s",
-					oio_url_get(url, OIOURL_WHOLE));
-			_on_bean_ctx_clean(obc);
-			meta2_filter_ctx_set_error(ctx, e);
-			return FILTER_KO;
-		}
-	}
-
-	_on_bean_ctx_send_list(obc);
-	_on_bean_ctx_clean(obc);
-	return FILTER_OK;
 }
 
 int

@@ -124,7 +124,7 @@ class BlobConverter(object):
             end = start + len(chunk_part)
             chunk_path += '/' + chunk_id[start:end]
             start = end
-        chunk_path += '/' + chunk_path_split[-1]
+        chunk_path += '/' + chunk_id
         return chunk_path
 
     def cid_from_name(self, account, container):

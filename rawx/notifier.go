@@ -166,13 +166,13 @@ func MakeNotifier(config string, rawx *rawxService) (*notifier, error) {
 	return n, nil
 }
 
-func (n notifier) notifyNew(requestID string, chunk chunkInfo) {
+func (n *notifier) notifyNew(requestID string, chunk chunkInfo) {
 	if notifAllowed {
 		n.asyncNotify(eventTypeNewChunk, requestID, chunk)
 	}
 }
 
-func (n notifier) notifyDel(requestID string, chunk chunkInfo) {
+func (n *notifier) notifyDel(requestID string, chunk chunkInfo) {
 	if notifAllowed {
 		n.asyncNotify(eventTypeDelChunk, requestID, chunk)
 	}
@@ -204,7 +204,7 @@ type EventPayload struct {
 	OioVersion     string `json:"oio_version"`
 }
 
-func (n notifier) asyncNotify(eventType, requestID string, chunk chunkInfo) {
+func (n *notifier) asyncNotify(eventType, requestID string, chunk chunkInfo) {
 	sb := bytes.Buffer{}
 	sb.Grow(2048)
 	evt := EncodableEvent{

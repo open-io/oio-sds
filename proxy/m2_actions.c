@@ -2365,8 +2365,8 @@ enum http_rc_e action_container_raw_delete (struct req_args_s *args) {
 /* CONTENT action resource -------------------------------------------------- */
 
 static GError*
-_get_conditioned_spare_chunks(const char *polname,
-	   GSList *notin, GSList *broken, GSList **beans)
+_get_conditioned_spare_chunks(struct oio_url_s *url, const gchar *position,
+		const char *polname, GSList *notin, GSList *broken, GSList **beans)
 {
 	struct namespace_info_s ni = {};
 	NSINFO_READ(namespace_info_copy(&nsinfo, &ni));
@@ -2375,15 +2375,15 @@ _get_conditioned_spare_chunks(const char *polname,
 
 	if (!policy)
 		return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Unexpected storage policy");
-	GError *err = get_conditioned_spare_chunks(
-			lb_rawx, storage_policy_get_service_pool(policy), ns_name,
-			notin, broken, beans);
+	GError *err = get_conditioned_spare_chunks(url, position,
+			lb_rawx, policy, ns_name, notin, broken, beans);
 	storage_policy_clean(policy);
 	return err;
 }
 
 static GError*
-_get_spare_chunks(const char *polname, GSList **beans)
+_get_spare_chunks(struct oio_url_s *url, const gchar *position,
+		const char *polname, GSList **beans)
 {
 	struct namespace_info_s ni = {};
 	NSINFO_READ(namespace_info_copy(&nsinfo, &ni));
@@ -2392,8 +2392,8 @@ _get_spare_chunks(const char *polname, GSList **beans)
 
 	if (!policy)
 		return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Unexpected storage policy");
-	GError *err = get_spare_chunks_focused(
-			lb_rawx, storage_policy_get_service_pool(policy),
+	GError *err = get_spare_chunks_focused(url, position,
+			lb_rawx, policy,
 			location_num, oio_proxy_local_prepare,
 			beans);
 	storage_policy_clean(policy);
@@ -2401,7 +2401,8 @@ _get_spare_chunks(const char *polname, GSList **beans)
 }
 
 static GError*
-_generate_beans(struct oio_url_s *url, gint64 size, const char *polname, GSList **beans)
+_generate_beans(struct oio_url_s *url, gint64 pos,  gint64 size,
+		const char *polname, GSList **beans)
 {
 	struct namespace_info_s ni = {};
 	NSINFO_READ(namespace_info_copy(&nsinfo, &ni));
@@ -2412,7 +2413,7 @@ _generate_beans(struct oio_url_s *url, gint64 size, const char *polname, GSList 
 		return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Unexpected storage policy");
 
 	GError *err = oio_generate_focused_beans(
-			url, size, oio_ns_chunk_size, policy, lb_rawx,
+			url, pos, size, oio_ns_chunk_size, policy, lb_rawx,
 			location_num, oio_proxy_local_prepare,
 			beans);
 
@@ -2424,12 +2425,14 @@ static enum http_rc_e
 _action_m2_content_prepare(struct req_args_s *args, struct json_object *jargs,
 		enum http_rc_e (*_reply_beans_func)(struct req_args_s *, GError *, GSList *))
 {
-	struct json_object *jsize = NULL, *jpol = NULL;
+	struct json_object *jsize = NULL, *jpol = NULL, *jpos = NULL;
 	json_object_object_get_ex(jargs, "size", &jsize);
 	json_object_object_get_ex(jargs, "policy", &jpol);
+	json_object_object_get_ex(jargs, "position", &jpos);
 
 	const gchar *strsize = !jsize ? NULL : json_object_get_string (jsize);
 	const gchar *stgpol = !jpol ? oio_ns_storage_policy : json_object_get_string (jpol);
+	const gchar *strpos = !jpos ? "0" : json_object_get_string(jpos);
 
 	/* Parse the size */
 	if (!strsize)
@@ -2440,9 +2443,15 @@ _action_m2_content_prepare(struct req_args_s *args, struct json_object *jargs,
 	if ((end && *end) || errno == ERANGE || errno == EINVAL)
 		return _reply_format_error (args, BADREQ("Invalid size format"));
 
+	end = NULL;
+	gint64 pos = g_ascii_strtoll(strpos, &end, 10);
+	if ((end && *end) || errno == ERANGE || errno == EINVAL)
+		return _reply_format_error(args,
+				BADREQ("Invalid position format (integer expected)"));
+
 	/* Local generation of beans */
 	GSList *beans = NULL;
-	GError *err = _generate_beans(args->url, size, stgpol, &beans);
+	GError *err = _generate_beans(args->url, pos, size, stgpol, &beans);
 
 	/* Patch the chunk size to ease putting contents with unknown size. */
 	if (!err) {
@@ -2482,7 +2491,7 @@ static GError *_m2_json_spare (struct req_args_s *args,
 	*out = NULL;
 	const char *stgpol = OPT("stgpol");
 	if (!stgpol)
-		return BADREQ("'policy' field not a string");
+		return BADREQ("'stgpol' field not a string");
 
 	if (!json_object_is_type (jbody, json_type_object))
 		return BADREQ ("Body is not a valid JSON object");
@@ -2505,9 +2514,10 @@ static GError *_m2_json_spare (struct req_args_s *args,
 
 	if (!notin && !broken) {
 		/* traditional prepare but only for chunks */
-		err = _get_spare_chunks(stgpol, &obeans);
+		err = _get_spare_chunks(args->url, OPT("position"), stgpol, &obeans);
 	} else {
-		err = _get_conditioned_spare_chunks(stgpol, notin, broken, &obeans);
+		err = _get_conditioned_spare_chunks(args->url, OPT("position"),
+				stgpol, notin, broken, &obeans);
 	}
 	EXTRA_ASSERT ((err != NULL) ^ (obeans != NULL));
 

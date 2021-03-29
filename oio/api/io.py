@@ -25,11 +25,13 @@ from six.moves.urllib_parse import urlparse
 
 from oio.common import exceptions as exc, green
 from oio.common.constants import REQID_HEADER
+from oio.common.fullpath import decode_fullpath
 from oio.common.http import parse_content_type,\
     parse_content_range, ranges_from_http_header, http_header_from_ranges
 from oio.common.http_eventlet import http_connect
 from oio.common.utils import GeneratorIO, group_chunk_errors, \
-    deadline_to_timeout, monotonic_time, set_deadline_from_read_timeout
+    deadline_to_timeout, monotonic_time, set_deadline_from_read_timeout, \
+    cid_from_name, compute_chunk_id
 from oio.common.storage_method import STORAGE_METHODS
 from oio.common.logger import get_logger
 
@@ -116,11 +118,12 @@ class _WriteHandler(object):
 
 class LinkHandler(_WriteHandler):
     def __init__(self, fullpath, chunk_preparer, storage_method, blob_client,
-                 headers=None, **kwargs):
+                 policy, headers=None, **kwargs):
         super(LinkHandler, self).__init__(
             chunk_preparer, storage_method, headers=headers, **kwargs)
         self.fullpath = fullpath
         self.blob_client = blob_client
+        self.policy = policy
 
     def link(self):
         content_chunks = list()
@@ -131,6 +134,7 @@ class LinkHandler(_WriteHandler):
                 handler = MetachunkLinker(
                     meta_chunk, self.fullpath, self.blob_client,
                     storage_method=self.storage_method,
+                    policy=self.policy,
                     reqid=self.headers.get(REQID_HEADER),
                     connection_timeout=self.connection_timeout,
                     write_timeout=self.write_timeout, **kwargs)
@@ -681,9 +685,9 @@ class _MetachunkWriter(object):
 
 class MetachunkLinker(_MetachunkWriter):
     """
-    Base class for metachunk linkers
+    Create new hard links for all the chunks of a metachunk.
     """
-    def __init__(self, meta_chunk_target, fullpath, blob_client,
+    def __init__(self, meta_chunk_target, fullpath, blob_client, policy,
                  storage_method=None, quorum=None, reqid=None, perfdata=None,
                  connection_timeout=None, write_timeout=None,
                  **kwargs):
@@ -693,6 +697,7 @@ class MetachunkLinker(_MetachunkWriter):
         self.meta_chunk_target = meta_chunk_target
         self.fullpath = fullpath
         self.blob_client = blob_client
+        self.policy = policy
         self.connection_timeout = connection_timeout or CONNECTION_TIMEOUT
         self.write_timeout = write_timeout or CHUNK_TIMEOUT
         self.logger = kwargs.get('logger', LOGGER)
@@ -704,12 +709,21 @@ class MetachunkLinker(_MetachunkWriter):
                          'logger')}
 
     def link(self):
+        """
+        Create new hard links for all the chunks of a metachunk.
+        """
         new_meta_chunks = list()
         failed_chunks = list()
+        # pylint: disable=unbalanced-tuple-unpacking
+        acct, ct, path, vers, _ = decode_fullpath(self.fullpath)
+        cid = cid_from_name(acct, ct)
         for chunk_target in self.meta_chunk_target:
             try:
+                chunk_id = compute_chunk_id(cid, path, vers,
+                                            chunk_target['pos'],
+                                            self.policy)
                 resp, new_chunk_url = self.blob_client.chunk_link(
-                    chunk_target['url'], None, self.fullpath,
+                    chunk_target['url'], chunk_id, self.fullpath,
                     connection_timeout=self.connection_timeout,
                     write_timeout=self.write_timeout, reqid=self.reqid,
                     perfdata=self.perfdata, logger=self.logger)
@@ -795,6 +809,8 @@ class MetachunkPreparer(object):
         self._fix_mc_pos(self.first_body, mc_pos)
         self._all_chunks.extend(self.first_body)
         yield self.first_body
+        if 'version' not in self.extra_kwargs:
+            self.extra_kwargs['version'] = self.obj_meta['version']
         while True:
             mc_pos += 1
             # If we are here, we know that the client is still
@@ -802,7 +818,8 @@ class MetachunkPreparer(object):
             # postpone the deadline.
             set_deadline_from_read_timeout(self.extra_kwargs, force=True)
             meta, next_body = self.container_client.content_prepare(
-                    self.account, self.container, self.obj_name, size=1,
+                    self.account, self.container, self.obj_name,
+                    position=mc_pos, size=1,
                     stgpol=self.policy, **self.extra_kwargs)
             self.obj_meta['properties'].update(meta.get('properties', {}))
             self._fix_mc_pos(next_body, mc_pos)

@@ -22,7 +22,12 @@ License along with this library.
 #include <stdio.h>
 
 #include <core/oio_core.h>
+#include <core/url_ext.h>
 #include <metautils/lib/common_main.h>
+#include <core/internals.h>
+
+#undef GQ
+#define GQ() g_quark_from_static_string("oio.core")
 
 struct test_data_s {
 	const char *url; /* to be decoded */
@@ -217,6 +222,116 @@ test_dup (void)
 	oio_url_pclean (&u0);
 }
 
+/* Test the generation of chunk IDs depending on object name */
+static void
+test_chunk_id_generation(void)
+{
+	char buf[65] = {0};
+	struct oio_url_s *url = oio_url_init("NS/ACCT/FVE/1/obj");
+	const char expected_id[] =
+			"9EA177B73CDE093ED3530DA1A06BA7DA1F038327FA5F2A56B5417140B8A616BD";
+	const char expected_id_1[] =
+			"A69598A38612D0B126EA0BD55A538362D454BAE6555F8348251A1C3D1F5EDF42";
+	const char expected_id_2[] =
+			"F67A7270D181449C6DDC547A4233AF29B6C9C2055DCBF9326322AB8C118C7942";
+
+	g_assert_no_error(
+			oio_url_compute_chunk_id(url, "0", "SINGLE", buf, sizeof(buf)));
+	g_assert_cmpint(64, ==, strlen(buf));
+	g_assert_cmpstr(expected_id, ==, buf);
+
+	/* Short buffer */
+	g_assert_no_error(
+		oio_url_compute_chunk_id(url, "0", "SINGLE", buf, 33));
+	g_assert_cmpint(32, ==, strlen(buf));
+	g_assert_cmpstr("9EA177B73CDE093ED3530DA1A06BA7DA", ==, buf);
+
+	/* Different position */
+	g_assert_no_error(
+		oio_url_compute_chunk_id(url, "1", "SINGLE", buf, 33));
+	g_assert_cmpint(32, ==, strlen(buf));
+	g_assert_cmpstr("9EA177B73CDE093ED3530DA1A06BA7DA", !=, buf);
+	g_assert_no_error(
+		oio_url_compute_chunk_id(url, "0.1", "SINGLE", buf, 33));
+	g_assert_cmpint(32, ==, strlen(buf));
+	g_assert_cmpstr("9EA177B73CDE093ED3530DA1A06BA7DA", !=, buf);
+	g_assert_no_error(
+		oio_url_compute_chunk_id(url, "11.11", "SINGLE", buf, 33));
+	g_assert_cmpint(32, ==, strlen(buf));
+	g_assert_cmpstr("9EA177B73CDE093ED3530DA1A06BA7DA", !=, buf);
+
+	/* Different policy */
+	g_assert_no_error(
+		oio_url_compute_chunk_id(url, "0", "DUP", buf, 33));
+	g_assert_cmpint(32, ==, strlen(buf));
+	g_assert_cmpstr("9EA177B73CDE093ED3530DA1A06BA7DA", !=, buf);
+	g_assert_no_error(
+		oio_url_compute_chunk_id(url, "0", "THREECOPIES", buf, 33));
+	g_assert_cmpint(32, ==, strlen(buf));
+	g_assert_cmpstr("9EA177B73CDE093ED3530DA1A06BA7DA", !=, buf);
+
+	/* Different version */
+	oio_url_set(url, OIOURL_VERSION, "2");
+	g_assert_no_error(
+		oio_url_compute_chunk_id(url, "0", "SINGLE", buf, sizeof(buf)));
+	g_assert_cmpint(64, ==, strlen(buf));
+	g_assert_cmpstr(expected_id_1, ==, buf);
+
+	oio_url_set(url, OIOURL_VERSION, "3");
+	g_assert_no_error(
+		oio_url_compute_chunk_id(url, "0", "SINGLE", buf, sizeof(buf)));
+	g_assert_cmpint(64, ==, strlen(buf));
+	g_assert_cmpstr(expected_id_2, ==, buf);
+
+	oio_url_pclean (&url);
+}
+
+static void
+test_chunk_id_generation_invalid_input(void)
+{
+	char buf[33] = {0};
+	struct oio_url_s *url = NULL;
+	GError *err = NULL;
+
+	/* URL without object name */
+	url = oio_url_init("NS/ACCT/FVE");
+	err = oio_url_compute_chunk_id(url, "0", "SINGLE", buf, sizeof(buf));
+	g_assert_error(err, GQ(), CODE_BAD_REQUEST);
+	g_assert_nonnull(g_strstr_len(err->message, -1, "object alias"));
+	g_clear_error(&err);
+	oio_url_pclean(&url);
+
+	/* No version */
+	url = oio_url_init("NS/ACCT/FVE//obj");
+	err = oio_url_compute_chunk_id(url, NULL, "SINGLE", buf, sizeof(buf));
+	g_assert_error(err, GQ(), CODE_BAD_REQUEST);
+	g_assert_nonnull(g_strstr_len(err->message, -1, "object version"));
+	g_clear_error(&err);
+	oio_url_pclean(&url);
+
+	/* No position */
+	url = oio_url_init("NS/ACCT/FVE/1/obj");
+	err = oio_url_compute_chunk_id(url, NULL, "SINGLE", buf, sizeof(buf));
+	g_assert_error(err, GQ(), CODE_BAD_REQUEST);
+	g_assert_nonnull(g_strstr_len(err->message, -1, "chunk position"));
+	g_clear_error(&err);
+
+	/* No storage policy */
+	err = oio_url_compute_chunk_id(url, "0", NULL, buf, sizeof(buf));
+	g_assert_error(err, GQ(), CODE_BAD_REQUEST);
+	g_assert_nonnull(g_strstr_len(err->message, -1, "storage policy"));
+	g_clear_error(&err);
+	oio_url_pclean(&url);
+
+	/* Empty URL */
+	url = oio_url_empty();
+	err = oio_url_compute_chunk_id(url, "0", "SINGLE", buf, sizeof(buf));
+	g_assert_error(err, GQ(), CODE_BAD_REQUEST);
+	g_assert_nonnull(g_strstr_len(err->message, -1, "container ID"));
+	g_clear_error(&err);
+	oio_url_pclean(&url);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -224,6 +339,9 @@ main(int argc, char **argv)
 	g_test_add_func("/core/url/configure/valid", test_configure_valid);
 	g_test_add_func("/core/url/configure/invalid", test_configure_invalid);
 	g_test_add_func("/core/url/dup", test_dup);
+	g_test_add_func("/core/url/chunkid/valid", test_chunk_id_generation);
+	g_test_add_func("/core/url/chunkid/invalid",
+			test_chunk_id_generation_invalid_input);
 	return g_test_run();
 }
 

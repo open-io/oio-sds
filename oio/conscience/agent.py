@@ -273,7 +273,16 @@ class ConscienceAgent(Daemon):
             for cfgfile in cfgfiles:
                 name = os.path.basename(cfgfile)
                 name = os.path.splitext(name)[0]
-                self.conf['services'][name] = parse_config(cfgfile)
+                config = parse_config(cfgfile)
+                if not config:
+                    self.logger.warning('Ignoring empty config file %s',
+                                        cfgfile)
+                    continue
+                if not isinstance(config, dict):
+                    raise TypeError(
+                        'Expecting YAML dictionary for the config file %s',
+                        cfgfile)
+                self.conf['services'][name] = config
                 self.conf['services'][name]['cfgfile'] = cfgfile
 
     def check_for_conflicts(self):

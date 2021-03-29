@@ -139,6 +139,7 @@ class BlobRebuilder(Tool):
     def _fetch_items_from_rawx_id(self):
         lost_chunks = self.rdir_client.chunk_fetch(
             self.rawx_id, limit=self.rdir_fetch_limit, rebuild=True,
+            full_urls=True,
             shuffle=self.rdir_shuffle_chunks, timeout=self.rdir_timeout)
         for container_id, content_id, chunk_id, _ in lost_chunks:
             yield self.namespace, container_id, content_id, chunk_id
