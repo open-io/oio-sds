@@ -135,8 +135,7 @@ _bean_cleanv2(GPtrArray *v)
 		gpointer p = v->pdata[0];
 		v->pdata[0] = NULL;
 		g_ptr_array_remove_index_fast(v, 0);
-		if (p)
-			_bean_clean(p);
+		_bean_clean(p);
 	}
 	g_ptr_array_free(v, TRUE);
 }

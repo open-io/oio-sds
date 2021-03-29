@@ -87,6 +87,7 @@ License along with this library.
 #define NAME_MSGKEY_QUERY              "Q"
 #define NAME_MSGKEY_RECOMPUTE          "RECOMPUTE"
 #define NAME_MSGKEY_REPLICAS           "REPLICAS"
+#define NAME_MSGKEY_SHARDING_STRATEGY  "SHARDING_STRATEGY"
 #define NAME_MSGKEY_SIM_VER            "SIM_VER"
 #define NAME_MSGKEY_SPARE              "SPARE"
 #define NAME_MSGKEY_SRC                "SRC"

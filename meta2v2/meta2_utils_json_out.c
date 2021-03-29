@@ -95,8 +95,11 @@ encode_shard_range(GString *g, gpointer bean)
 	g_string_append_c(g, ',');
 	OIO_JSON_append_gstr(g, "upper", SHARD_RANGE_get_upper(bean));
 	g_string_append_c(g, ',');
-	OIO_JSON_append_gba(g, "cid", SHARD_RANGE_get_cid(bean));
-	g_string_append_c(g, ',');
+	GByteArray *cid = SHARD_RANGE_get_cid(bean);
+	if (cid && cid->len > 0) {
+		OIO_JSON_append_gba(g, "cid", cid);
+		g_string_append_c(g, ',');
+	}
 	GString *metadata = SHARD_RANGE_get_metadata(bean);
 	g_string_append_static(g, "\"metadata\":");
 	if (!metadata || metadata->len == 0)

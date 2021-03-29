@@ -80,6 +80,7 @@ M2V2_DECLARE_FILTER(meta2_filter_extract_force_master);
 M2V2_DECLARE_FILTER(meta2_filter_extract_user_agent);
 M2V2_DECLARE_FILTER(meta2_filter_extract_force_versioning);
 M2V2_DECLARE_FILTER(meta2_filter_extract_simulate_versioning);
+M2V2_DECLARE_FILTER(meta2_filter_extract_find_shards_params);
 M2V2_DECLARE_FILTER(meta2_filter_extract_sharding_info);
 
 M2V2_DECLARE_FILTER(meta2_filter_fill_subject);
@@ -114,6 +115,7 @@ M2V2_DECLARE_FILTER(meta2_filter_action_touch_container);
 M2V2_DECLARE_FILTER(meta2_filter_action_insert_beans);
 M2V2_DECLARE_FILTER(meta2_filter_action_delete_beans);
 M2V2_DECLARE_FILTER(meta2_filter_action_update_beans);
+M2V2_DECLARE_FILTER(meta2_filter_action_find_shards);
 M2V2_DECLARE_FILTER(meta2_filter_action_prepare_sharding);
 M2V2_DECLARE_FILTER(meta2_filter_action_update_shard);
 M2V2_DECLARE_FILTER(meta2_filter_action_lock_sharding);

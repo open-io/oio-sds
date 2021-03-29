@@ -205,6 +205,12 @@ GByteArray* m2v2_remote_pack_TOUCHC(
 		struct oio_url_s *url,
 		gint64 deadline);
 
+GByteArray* m2v2_remote_pack_FIND_SHARDS(
+		struct oio_url_s *url,
+		const gchar* strategy,
+		GByteArray *startegy_params,
+		gint64 dl);
+
 GByteArray* m2v2_remote_pack_PREPARE_SHARDING(
 		struct oio_url_s *url,
 		gint64 dl);

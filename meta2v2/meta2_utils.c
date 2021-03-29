@@ -3178,6 +3178,66 @@ _m2db_get_shard_ranges(struct sqlx_sqlite3_s *sq3, const gchar *lower,
 }
 
 static GVariant **
+_sharding_find_upper_to_sql_clause(const gchar *lower, gint64 shard_size,
+		const gchar *max_upper, GString *clause)
+{
+	void lazy_and () {
+		if (clause->len > 0) g_string_append_static(clause, " AND");
+	}
+	GPtrArray *params = g_ptr_array_new();
+
+	if (lower && *lower) {
+		lazy_and();
+		g_string_append_static(clause, " alias > ?");
+		g_ptr_array_add(params, g_variant_new_string(lower));
+	}
+
+	if (max_upper && *max_upper) {
+		lazy_and();
+		g_string_append_static(clause, " alias <= ?");
+		g_ptr_array_add(params, g_variant_new_string(max_upper));
+	}
+
+	if (clause->len == 0)
+		clause = g_string_append_static(clause, " 1");
+
+	g_string_append_static(clause, " ORDER BY alias ASC");
+	g_string_append_static(clause, " LIMIT 1");
+	g_string_append_printf(clause, " OFFSET %"G_GINT64_FORMAT, shard_size - 1);
+
+	g_ptr_array_add(params, NULL);
+	return (GVariant**) g_ptr_array_free(params, FALSE);
+}
+
+static GVariant **
+_sharding_compute_size_to_sql_clause(const gchar *lower, const gchar *upper,
+		GString *clause)
+{
+	void lazy_and () {
+		if (clause->len > 0) g_string_append_static(clause, " AND");
+	}
+	GPtrArray *params = g_ptr_array_new();
+
+	if (lower && *lower) {
+		lazy_and();
+		g_string_append_static(clause, " alias > ?");
+		g_ptr_array_add(params, g_variant_new_string(lower));
+	}
+
+	if (upper && *upper) {
+		lazy_and();
+		g_string_append_static(clause, " alias <= ?");
+		g_ptr_array_add(params, g_variant_new_string(upper));
+	}
+
+	if (clause->len == 0)
+		clause = g_string_append_static(clause, " 1");
+
+	g_ptr_array_add(params, NULL);
+	return (GVariant**) g_ptr_array_free(params, FALSE);
+}
+
+static GVariant **
 _sharding_list_params_to_sql_clause(struct list_params_s *lp, GString *clause)
 {
 	void lazy_and () {
@@ -3229,6 +3289,141 @@ _sharding_clean_shard_aliases_to_sql_clause(const gchar *lower,
 
 	g_ptr_array_add(params, NULL);
 	return (GVariant**) g_ptr_array_free(params, FALSE);
+}
+
+GError*
+m2db_find_shard_ranges(struct sqlx_sqlite3_s *sq3, gint64 threshold,
+		GError* (*get_shard_size)(gint64, guint, gint64*),
+		m2_onbean_cb cb, gpointer u0)
+{
+	GError *err = NULL;
+	gchar *lower = NULL;
+	gchar *upper = NULL;
+	gchar *max_upper = NULL;
+	GPtrArray *shard_ranges = g_ptr_array_new();
+
+	if (sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
+		if (!err) {
+			lower = m2db_get_sharding_lower(sq3, &err);
+		}
+		if (!err) {
+			max_upper = m2db_get_sharding_upper(sq3, &err);
+		}
+	} else {
+		lower = g_strdup("");
+		max_upper = g_strdup("");
+	}
+
+	gint64 obj_count = m2db_get_obj_count(sq3);
+	if (obj_count < threshold) {
+		// Do nothing
+		upper = max_upper;
+		struct bean_SHARD_RANGE_s *shard_range = _bean_create(
+				&descr_struct_SHARD_RANGE);
+		SHARD_RANGE_set2_lower(shard_range, lower);
+		SHARD_RANGE_set2_upper(shard_range, upper);
+		GString * metadata = g_string_new("{");
+		OIO_JSON_append_int(metadata, "count", obj_count);
+		g_string_append_c(metadata, '}');
+		SHARD_RANGE_set_metadata(shard_range, metadata);
+		g_string_free(metadata, TRUE);
+		g_ptr_array_add(shard_ranges, shard_range);
+		goto end;
+	}
+
+	gboolean is_finished = FALSE;
+	for (guint i = 0; !err && !is_finished; i++) {
+		// Compute the shard size for the new shard
+		gint64 shard_size = 0;
+		err = get_shard_size(obj_count, i, &shard_size);
+
+		// Find alias at the specific position
+		GString *clause = g_string_sized_new(128);
+		GVariant **params = _sharding_find_upper_to_sql_clause(
+				lower, shard_size, max_upper, clause);
+		GPtrArray *aliases = g_ptr_array_new();
+		err = ALIASES_load(sq3, clause->str, params, _bean_buffer_cb, aliases);
+		metautils_gvariant_unrefv(params);
+		g_free(params);
+		g_string_free(clause, TRUE);
+		if (err) {
+			goto end_for;
+		}
+
+		// Prepare upper and actual shard size
+		upper = NULL;
+		if (aliases->len <= 0) {
+			is_finished = TRUE;
+			upper = g_strdup(max_upper);
+
+			// Compute the actual count for this shards
+			clause = g_string_sized_new(128);
+			params = _sharding_compute_size_to_sql_clause(lower, upper, clause);
+			err = _db_count_bean(&descr_struct_ALIASES, sq3,
+					clause->str, params, &shard_size);
+			metautils_gvariant_unrefv(params);
+			g_free(params);
+			g_string_free(clause, TRUE);
+			if (err) {
+				goto end_for;
+			}
+
+			if (shard_size == 0 && shard_ranges->len > 0) {
+				// If the last shard range is empty, delete it
+				// and merge with the before last
+				SHARD_RANGE_set2_upper(shard_ranges->pdata[shard_ranges->len-1],
+						upper);
+				goto end_for;
+			}
+		} else {
+			upper = g_strdup(ALIASES_get_alias(aliases->pdata[0])->str);
+		}
+		if (*lower && *upper && g_strcmp0(lower, upper) >= 0) {
+			err = SYSERR("Lower must be lower than upper");
+			goto end_for;
+		}
+
+		// Create the shard
+		struct bean_SHARD_RANGE_s *shard_range = _bean_create(
+				&descr_struct_SHARD_RANGE);
+		SHARD_RANGE_set2_lower(shard_range, lower);
+		SHARD_RANGE_set2_upper(shard_range, upper);
+		GString * metadata = g_string_new("{");
+		OIO_JSON_append_int(metadata, "count", shard_size);
+		g_string_append_c(metadata, '}');
+		SHARD_RANGE_set_metadata(shard_range, metadata);
+		g_string_free(metadata, TRUE);
+		g_ptr_array_add(shard_ranges, shard_range);
+
+end_for:
+		// Prepare the next shard
+		if (upper) {
+			g_free(lower);
+			lower = upper;
+		}
+		_bean_cleanv2(aliases);
+	}
+
+end:
+	if (!err) {
+		if (shard_ranges->len == 0) {
+			err = SYSERR("No shard range");
+		} else if (g_strcmp0(upper, max_upper) != 0) {
+			err = SYSERR("Wrong upper for the last shard");
+		}
+	}
+
+	if (!err && cb) {
+		for (guint i = 0; i < shard_ranges->len; i++) {
+			cb(u0, shard_ranges->pdata[i]);
+			shard_ranges->pdata[i] = NULL;
+		}
+	}
+
+	g_free(lower);
+	g_free(max_upper);
+	_bean_cleanv2(shard_ranges);
+	return err;
 }
 
 GError*
