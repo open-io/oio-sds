@@ -170,6 +170,47 @@ class ReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
         return ('Modified', ), [(str(modified), )]
 
 
+class FindAndReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
+    """
+    Find the distribution of shards
+    and replace current shard with the new shards.
+    """
+
+    log = getLogger(__name__ + '.FindAndReplaceContainerSharding')
+
+    def get_parser(self, prog_name):
+        parser = super(FindAndReplaceContainerSharding, self).get_parser(
+            prog_name)
+        self.patch_parser_container_sharding(parser)
+        parser = FindContainerSharding.patch_parser(parser)
+        parser.add_argument(
+            '--enable',
+            default=False,
+            action='store_true',
+            help='Enable the sharding for this container'
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        strategy, strategy_params = FindContainerSharding.prepare_startegy(
+            parsed_args)
+
+        modified = False
+        container_sharding = ContainerSharding(
+            self.app.client_manager.sds_conf,
+            logger=self.app.client_manager.logger)
+        found_shards = container_sharding.find_shards(
+            self.app.client_manager.account, parsed_args.container,
+            strategy=strategy, strategy_params=strategy_params)
+        modified = container_sharding.replace_shard(
+            self.app.client_manager.account, parsed_args.container,
+            found_shards, enable=parsed_args.enable)
+
+        return ('Modified', ), [(str(modified), )]
+
+
 class ShowContainerSharding(ContainerShardingCommandMixin, Lister):
     """Show current shards."""
 
