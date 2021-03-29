@@ -224,6 +224,14 @@ GError* meta2_backend_get_max_versions(struct meta2_backend_s *m2b,
 
 /* Sharding ----------------------------------------------------------------- */
 
+/** Find the distribution of shard ranges */
+GError* meta2_backend_find_shards_with_partition(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, json_object *jstrategy_params,
+		m2_onbean_cb cb, gpointer u0, gchar ***out_properties);
+GError* meta2_backend_find_shards_with_size(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, json_object *jstrategy_params,
+		m2_onbean_cb cb, gpointer u0, gchar ***out_properties);
+
 /** Prepare container to be shard */
 GError* meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gchar ***out_properties);

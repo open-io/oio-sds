@@ -18,6 +18,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <math.h>
 #include <glib.h>
 
 #include <metautils/lib/metautils.h>
@@ -2346,6 +2347,173 @@ meta2_backend_content_from_contentid (struct meta2_backend_s *m2b,
 }
 
 /* Sharding ----------------------------------------------------------------- */
+
+GError*
+meta2_backend_find_shards_with_partition(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, json_object *jstrategy_params,
+		m2_onbean_cb cb, gpointer u0, gchar ***out_properties)
+{
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	guint partition_len = 0;
+	gdouble *partition = NULL;
+	gdouble total = 0;
+	gint64 threshold = 0;
+
+	if (!jstrategy_params) {
+		err = BADREQ("Missing strategy parameters");
+		goto end;
+	}
+
+	struct json_object *jpartition = NULL, *jthreshold = NULL;
+	struct oio_ext_json_mapping_s m[] = {
+		{"partition", &jpartition, json_type_array, 1},
+		{"threshold", &jthreshold, json_type_int,   0},
+		{NULL, NULL, 0, 0}
+	};
+	err = oio_ext_extract_json(jstrategy_params, m);
+	if (err) {
+		err = BADREQ("Invalid strategy parameters: (%d) %s",
+				err->code, err->message);
+		goto end;
+	}
+	partition_len = json_object_array_length(jpartition);
+	partition = g_malloc0(sizeof(gdouble) * partition_len);
+	for (guint i = 0; i < partition_len; i++) {
+		struct json_object *jitem = json_object_array_get_idx(jpartition, i);
+		gdouble item = 0;
+
+		if (json_object_is_type(jitem, json_type_int)) {
+			item = json_object_get_int(jitem);
+		} else if (json_object_is_type(jitem, json_type_double)) {
+			item = json_object_get_double(jitem);
+		} else {
+			err = BADREQ("Invalid partition: expected integers or floats");
+			goto end;
+		}
+
+		if (item <= 0) {
+			err = BADREQ("Invalid partition: expected positive float");
+			goto end;
+		}
+		total += item;
+		partition[i] = item;
+	}
+	if (100 > total || total > 100) {
+		err = BADREQ("Invalid partition: total must be exactly 100 (not %lf)",
+				total);
+		goto end;
+	}
+	if (jthreshold) {
+		threshold = json_object_get_int64(jthreshold);
+		if (threshold < 0) {
+			err = BADREQ("Invalid threshold: expected positive integer");
+			goto end;
+		}
+	}
+
+	GError* get_shard_size(gint64 obj_count, guint index, gint64 *pshard_size) {
+		if (index >= partition_len) {
+			return SYSERR("Partition is too small");
+		}
+		gint64 shard_size = ceil(partition[index] / 100 * obj_count);
+		if (shard_size <= 0)
+			shard_size = 1;
+		*pshard_size = shard_size;
+		return NULL;
+	}
+
+	err = m2b_open(m2b, url, _mode_readonly(M2V2_FLAG_MASTER), &sq3);
+	if (!err) {
+		if (m2db_get_shard_count(sq3)) {
+			err = BADREQ("Container is a root container");
+		}
+		if (!err) {
+			err = m2db_find_shard_ranges(sq3,
+					threshold, get_shard_size, cb, u0);
+		}
+		if (!err && out_properties) {
+			*out_properties = sqlx_admin_get_keyvalues(sq3, NULL);
+		}
+		m2b_close(sq3, url);
+	}
+end:
+	g_free(partition);
+	return err;
+}
+
+GError*
+meta2_backend_find_shards_with_size(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, json_object *jstrategy_params,
+		m2_onbean_cb cb, gpointer u0, gchar ***out_properties)
+{
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	gint64 shard_size = 0;
+	gint64 first_shard_size = 0;
+
+	if (!jstrategy_params) {
+		err = BADREQ("Missing strategy parameters");
+		goto end;
+	}
+
+	struct json_object *jshard_size = NULL, *jfirst_shard_size = NULL;
+	struct oio_ext_json_mapping_s m[] = {
+		{"shard_size",       &jshard_size,       json_type_int, 1},
+		{"first_shard_size", &jfirst_shard_size, json_type_int, 0},
+		{NULL, NULL, 0, 0}
+	};
+	err = oio_ext_extract_json(jstrategy_params, m);
+	if (err) {
+		err = BADREQ("Invalid strategy parameters: (%d) %s",
+				err->code, err->message);
+		goto end;
+	}
+	shard_size = json_object_get_int64(jshard_size);
+	if (shard_size <= 0) {
+		err = BADREQ("Invalid shard size: expected strictly positive integer");
+		goto end;
+	}
+	if (jfirst_shard_size) {
+		first_shard_size = json_object_get_int64(jfirst_shard_size);
+		if (first_shard_size < 0) {
+			err = BADREQ("Invalid first shard size: expected positive integer");
+			goto end;
+		}
+	}
+
+	GError* get_shard_size(gint64 obj_count UNUSED, guint index,
+			gint64 *pshard_size) {
+		if (index == 0 && first_shard_size > 0) {
+			*pshard_size = first_shard_size;
+		} else {
+			*pshard_size = shard_size;
+		}
+		return NULL;
+	}
+
+	err = m2b_open(m2b, url, _mode_readonly(M2V2_FLAG_MASTER), &sq3);
+	if (!err) {
+		if (m2db_get_shard_count(sq3)) {
+			err = BADREQ("Container is a root container");
+		}
+		if (!err) {
+			err = m2db_find_shard_ranges(sq3, 0, get_shard_size, cb, u0);
+		}
+		if (!err && out_properties) {
+			*out_properties = sqlx_admin_get_keyvalues(sq3, NULL);
+		}
+		m2b_close(sq3, url);
+	}
+end:
+	return err;
+}
 
 GError*
 meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,

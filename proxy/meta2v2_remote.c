@@ -490,6 +490,21 @@ m2v2_remote_execute_DESTROY_many(gchar **targets, struct oio_url_s *url, guint32
 /* Sharding ----------------------------------------------------------------- */
 
 GByteArray*
+m2v2_remote_pack_FIND_SHARDS(struct oio_url_s *url, const gchar* strategy,
+		GByteArray *startegy_params, gint64 dl)
+{
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_FIND_SHARDS, url,
+			NULL, dl);
+	metautils_message_add_field_str(msg, NAME_MSGKEY_SHARDING_STRATEGY,
+			strategy);
+	if (startegy_params) {
+		metautils_message_set_BODY(msg, startegy_params->data,
+				startegy_params->len);
+	}
+	return message_marshall_gba_and_clean(msg);
+}
+
+GByteArray*
 m2v2_remote_pack_PREPARE_SHARDING(struct oio_url_s *url, gint64 dl)
 {
 	return _m2v2_pack_request(NAME_MSGNAME_M2V2_PREPARE_SHARDING, url, NULL,

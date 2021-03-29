@@ -241,6 +241,10 @@ class SavedWritesApplicator(object):
 
 class ContainerSharding(ProxyClient):
 
+    DEFAULT_STRATEGY = 'shard-with-partition'
+    DEFAULT_PARTITION = [50, 50]
+    DEFAULT_SHARD_SIZE = 100000
+
     def __init__(self, conf, logger=None, pool_manager=None, **kwargs):
         super(ContainerSharding, self).__init__(
             conf, request_prefix="/container/sharding", logger=logger,
@@ -380,6 +384,16 @@ class ContainerSharding(ProxyClient):
             raise ValueError('Expected a JSON object for the "metadata"')
         formatted_shard['metadata'] = shard_metadata
 
+        shard_count = shard.get('count')
+        if shard_count is None and shard_metadata:
+            shard_count = shard_metadata.pop('count', None)
+        if shard_count is not None:
+            try:
+                shard_count = int(shard_count)
+            except ValueError:
+                raise ValueError('Expected a number for the "count"')
+            formatted_shard['count'] = shard_count
+
         return formatted_shard
 
     def format_shards(self, shards, are_new=False, **kwargs):
@@ -399,6 +413,97 @@ class ContainerSharding(ProxyClient):
         # Check all shards before returning the formatted shards
         return list(self._check_shards(
             formatted_shards, are_new=are_new, **kwargs))
+
+    def _find_shards(self, shard, strategy, strategy_params=None, **kwargs):
+        params = self._make_params(cid=shard['cid'], **kwargs)
+        params['strategy'] = strategy
+        resp, body = self._request('GET', '/find', params=params,
+                                   json=strategy_params, **kwargs)
+        if resp.status != 200:
+            raise exceptions.from_response(resp, body)
+
+        if not body.get('shard_ranges'):
+            raise OioException('Missing found shards')
+        return body
+
+    def _find_shards_with_partition(self, shard, incomplete_shard=None,
+                                    strategy_params=None, **kwargs):
+        if strategy_params is None:
+            strategy_params = dict()
+        partition = strategy_params.get('partition')
+        if not partition:
+            partition = self.DEFAULT_PARTITION
+        else:
+            if isinstance(partition, str):
+                partition = partition.split(',')
+            partition = [float(part) for part in partition]
+        threshold = int_value(strategy_params.get('threshold'),
+                              self.DEFAULT_SHARD_SIZE)
+
+        formatted_strategy_params = dict()
+        formatted_strategy_params['partition'] = partition
+        if threshold:
+            formatted_strategy_params['threshold'] = threshold
+
+        found_shards = self._find_shards(
+            shard, 'shard-with-partition',
+            strategy_params=formatted_strategy_params, **kwargs)
+        return len(partition), None, found_shards['shard_ranges']
+
+    def _find_shards_with_size(self, shard, incomplete_shard=None,
+                               strategy_params=None, **kwargs):
+        first_shard_size = None
+        shard_size = int_value(strategy_params.get('shard_size'),
+                               self.DEFAULT_SHARD_SIZE)
+        if incomplete_shard is not None:
+            first_shard_size = incomplete_shard.get('available')
+
+        formatted_strategy_params = dict()
+        formatted_strategy_params['shard_size'] = shard_size
+        if first_shard_size:
+            formatted_strategy_params['first_shard_size'] = first_shard_size
+
+        found_shards = self._find_shards(
+            shard, 'shard-with-size',
+            strategy_params=formatted_strategy_params, **kwargs)
+        return None, shard_size, found_shards['shard_ranges']
+
+    STRATEGIES = {
+        'shard-with-partition': _find_shards_with_partition,
+        'shard-with-size': _find_shards_with_size
+    }
+
+    def _find_formatted_shards(self, shard, strategy=None, index=0, **kwargs):
+        if strategy is None:
+            strategy = self.DEFAULT_STRATEGY
+
+        find_shards = self.STRATEGIES.get(strategy)
+        if find_shards is None:
+            raise OioException('Unknown sharding strategy')
+        nb_shards, shard_size, found_shards = find_shards(
+            self, shard, **kwargs)
+
+        found_formatted_shards = list()
+        for found_shard in found_shards:
+            found_shard['index'] = index
+            index += 1
+            found_formatted_shard = self._format_shard(
+                found_shard, is_new=True, **kwargs)
+            found_formatted_shards.append(found_formatted_shard)
+        return nb_shards, shard_size, found_formatted_shards
+
+    def find_shards(self, account, container, **kwargs):
+        fake_shard = {
+            'index': -1,
+            'lower': '',
+            'upper': '',
+            'cid': cid_from_name(account, container),
+            'metadata': None
+        }
+        _, _, formatted_shards = self._find_formatted_shards(
+            fake_shard, **kwargs)
+        return self._check_shards(formatted_shards,
+                                  are_new=True, partial=True, **kwargs)
 
     def _prepare_sharding(self, parent_shard, **kwargs):
         params = self._make_params(cid=parent_shard['cid'], **kwargs)

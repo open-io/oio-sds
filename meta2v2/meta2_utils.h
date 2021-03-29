@@ -301,6 +301,10 @@ gint64 find_alias_version(GSList *bean);
 
 /* Sharding ----------------------------------------------------------------- */
 
+GError* m2db_find_shard_ranges(struct sqlx_sqlite3_s *sq3, gint64 threshold,
+		GError* (*get_shard_size)(gint64, guint, gint64*),
+		m2_onbean_cb cb, gpointer u0);
+
 GError* m2db_replace_shard_ranges(struct sqlx_sqlite3_s *sq3,
 		GSList *new_shard_ranges);
 

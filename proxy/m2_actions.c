@@ -2685,6 +2685,91 @@ action_m2_container_sharding_clean(struct req_args_s *args,
 }
 
 // SHARDING{{
+// GET /v3.0/{NS}/container/sharding/find?acct={account}&ref={container}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Find the distribution of shard ranges on unsharded container
+// or an existing shard
+//
+// .. code-block:: http
+//
+//    GET /v3.0/OPENIO/container/sharding/find?acct=my_account&ref=mycontainer&strategy=shard-with-partition HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.58.0
+//    Accept: */*
+//    Content-Length: 38
+//    Content-Type: application/x-www-form-urlencoded
+//
+//    {
+//      "partition": [50, 50]
+//    }
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 476
+//
+//    {
+//      "properties": {},
+//      "system": {
+//        "sys.account": "myaccount",
+//        "sys.m2.chunks.missing": "0",
+//        "sys.m2.ctime": "1613657902787922",
+//        "sys.m2.init": "1",
+//        "sys.m2.objects": "4",
+//        "sys.m2.objects.damaged": "0",
+//        "sys.m2.usage": "0",
+//        "sys.m2.version": "1",
+//        "sys.name": "594C8B26EA13E562391013AE6FC360C2C1691F314164DD457EF583B16712E360.1",
+//        "sys.ns": "OPENIO",
+//        "sys.status": "0",
+//        "sys.type": "meta2",
+//        "sys.user.name": "mycontainer"
+//      },
+//      "shard_ranges": [
+//        {
+//          "lower": "",
+//          "upper": "shard",
+//          "metadata": {"count":2}
+//        },
+//        {
+//          "lower": "shard",
+//          "upper": "",
+//          "metadata": {"count":2}
+//        }
+//      ]
+//    }
+//
+// }}SHARDING
+enum http_rc_e
+action_container_sharding_find(struct req_args_s *args)
+{
+	GError *err = NULL;
+	struct list_result_s list_out = {0};
+
+	const gchar *strategy = OPT("strategy");
+	if (!strategy) {
+		err = BADREQ("Missing strategy");
+		return _reply_format_error (args, err);
+	}
+
+	m2v2_list_result_init(&list_out);
+	if (!err) {
+		PACKER_VOID(_pack) {
+			return m2v2_remote_pack_FIND_SHARDS(args->url,
+					strategy, args->rq->body, DL());
+		};
+		err = _resolve_meta2(args, _prefer_master(), _pack, &list_out,
+				m2v2_list_result_extract);
+	}
+
+	enum http_rc_e rc = _reply_shard_ranges_list_result(args, err, &list_out);
+	m2v2_list_result_clean(&list_out);
+	return rc;
+}
+
+// SHARDING{{
 // POST /v3.0/{NS}/container/sharding/prepare?acct={account}&ref={container}
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Prepare container to be shard.

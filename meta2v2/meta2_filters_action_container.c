@@ -575,6 +575,86 @@ meta2_filter_action_touch_container(struct gridd_filter_ctx_s *ctx,
 /* Sharding ----------------------------------------------------------------- */
 
 int
+meta2_filter_action_find_shards(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GError *err = NULL;
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
+	gchar **properties = NULL;
+
+	const char *strategy = meta2_filter_ctx_get_param(ctx,
+			NAME_MSGKEY_SHARDING_STRATEGY);
+	if (!strategy) {
+		err = BADREQ("Missing strategy");
+		meta2_filter_ctx_set_error(ctx, err);
+		return FILTER_KO;
+	}
+
+	gsize length = 0;
+	void *strategy_params = metautils_message_get_BODY(reply->request, &length);
+	json_object *jstrategy_params = NULL;
+	if (strategy_params) {
+		err = JSON_parse_buffer(strategy_params, length, &jstrategy_params);
+		if (!err && !json_object_is_type(jstrategy_params, json_type_object)) {
+			err = BADREQ("Expected JSON object for strategy parameters");
+		}
+
+		if (err) {
+			if (jstrategy_params)
+				json_object_put(jstrategy_params);
+			meta2_filter_ctx_set_error(ctx, err);
+			return FILTER_KO;
+		}
+	}
+
+	GRID_DEBUG("FSP strategy:%s", strategy);
+
+	if (g_strcmp0(strategy, "shard-with-partition") == 0) {
+		err = meta2_backend_find_shards_with_partition(m2b, url,
+				jstrategy_params, _bean_list_cb, &(obc->l), &properties);
+	} else if (g_strcmp0(strategy, "shard-with-size") == 0) {
+		err = meta2_backend_find_shards_with_size(m2b, url,
+				jstrategy_params, _bean_list_cb, &(obc->l), &properties);
+	} else {
+		err = BADREQ("Unknown strategy");
+	}
+	obc->l = g_slist_reverse(obc->l);
+
+	if (err) {
+		GRID_DEBUG("Fail to find shards for url: %s",
+				oio_url_get(url, OIOURL_WHOLE));
+		_on_bean_ctx_clean(obc);
+		if (properties)
+			g_strfreev(properties);
+		if (jstrategy_params)
+			json_object_put(jstrategy_params);
+		meta2_filter_ctx_set_error(ctx, err);
+		return FILTER_KO;
+	}
+
+	if (properties) {
+		for (gchar **p=properties; *p && *(p+1) ;p+=2) {
+			if (!g_str_has_prefix(*p, SQLX_ADMIN_PREFIX_USER)
+					&& !g_str_has_prefix(*p, SQLX_ADMIN_PREFIX_SYS))
+				continue;
+			gchar *k = g_strconcat(NAME_MSGKEY_PREFIX_PROPERTY, *p, NULL);
+			reply->add_header(k, metautils_gba_from_string(*(p+1)));
+			g_free(k);
+		}
+	}
+
+	_on_bean_ctx_send_list(obc);
+	_on_bean_ctx_clean(obc);
+	if (properties)
+		g_strfreev(properties);
+	if (jstrategy_params)
+		json_object_put(jstrategy_params);
+	return FILTER_OK;
+}
+
+int
 meta2_filter_action_prepare_sharding(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {

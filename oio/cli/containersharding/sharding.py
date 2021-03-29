@@ -32,6 +32,88 @@ class ContainerShardingCommandMixin(object):
         )
 
 
+class FindContainerSharding(ContainerShardingCommandMixin, Lister):
+    """Find the distribution of shards."""
+
+    log = getLogger(__name__ + '.FindContainerSharding')
+
+    @staticmethod
+    def patch_parser(parser):
+        parser.add_argument(
+            '--strategy',
+            choices=ContainerSharding.STRATEGIES,
+            help="""
+            What strategy to use to shard a container.
+            (default: %s)
+            """ % ContainerSharding.DEFAULT_STRATEGY
+        )
+        parser.add_argument(
+            '--partition',
+            type=str,
+            help="""
+            [shard-with-partition]
+            Percentage distribution of the shards size.
+            (default: %s)
+            """ % ','.join((str(part)
+                            for part in ContainerSharding.DEFAULT_PARTITION))
+        )
+        parser.add_argument(
+            '--threshold',
+            type=int,
+            help="""
+            [shard-with-partition]
+            Number of objects in a container from which sharding is applied.
+            (default: %d)
+            """ % ContainerSharding.DEFAULT_SHARD_SIZE
+        )
+        parser.add_argument(
+            '--shard-size',
+            type=int,
+            help="""
+            [shard-with-size]
+            Number of objects expected in the shards to find.
+            (default: %d)
+            """ % ContainerSharding.DEFAULT_SHARD_SIZE
+        )
+        return parser
+
+    def get_parser(self, prog_name):
+        parser = super(FindContainerSharding, self).get_parser(prog_name)
+        self.patch_parser_container_sharding(parser)
+        return self.patch_parser(parser)
+
+    @staticmethod
+    def prepare_startegy(parsed_args):
+        strategy_params = dict()
+        if parsed_args.partition is not None:
+            strategy_params['partition'] = parsed_args.partition
+        if parsed_args.threshold is not None:
+            strategy_params['threshold'] = parsed_args.threshold
+        if parsed_args.shard_size is not None:
+            strategy_params['shard_size'] = parsed_args.shard_size
+        return parsed_args.strategy, strategy_params
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        strategy, strategy_params = self.prepare_startegy(parsed_args)
+
+        container_sharding = ContainerSharding(
+            self.app.client_manager.sds_conf,
+            logger=self.app.client_manager.logger)
+        found_shards = container_sharding.find_shards(
+            self.app.client_manager.account, parsed_args.container,
+            strategy=strategy, strategy_params=strategy_params)
+
+        columns = ('Index', 'Lower', 'Upper', 'Count')
+        if parsed_args.formatter == 'json':
+            columns = ('index', 'lower', 'upper', 'count')
+
+        return (columns,
+                ((shard['index'], shard['lower'], shard['upper'],
+                  shard['count']) for shard in found_shards))
+
+
 class ReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
     """Replace current shard with the new shards."""
 

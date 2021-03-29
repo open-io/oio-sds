@@ -532,6 +532,24 @@ static gridd_filter M2V2_FILTERS_touch_container[] =
 
 /* ------------------------------------------------------------------------- */
 
+static gridd_filter M2V2_FIND_SHARDS_FILTERS[] =
+{
+	meta2_filter_extract_header_url,
+	meta2_filter_extract_header_localflag,
+	meta2_filter_extract_force_master,
+	meta2_filter_extract_user_agent,
+	meta2_filter_extract_sharding_info,
+	meta2_filter_extract_header_flags32,
+	meta2_filter_extract_find_shards_params,
+	meta2_filter_fill_subject,
+	meta2_filter_check_url_cid,
+	meta2_filter_check_backend,
+	meta2_filter_check_ns_name,
+	meta2_filter_check_ns_is_master,
+	meta2_filter_action_find_shards,
+	NULL
+};
+
 static gridd_filter M2V2_PREPARE_SHARDING_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
@@ -650,6 +668,7 @@ meta2_gridd_get_v2_requests(void)
 		{NAME_MSGNAME_M2V2_FLUSH,   (hook) meta2_dispatch_all, M2V2_FLUSH_FILTERS},
 
 		/* sharding */
+		{NAME_MSGNAME_M2V2_FIND_SHARDS,      (hook) meta2_dispatch_all, M2V2_FIND_SHARDS_FILTERS},
 		{NAME_MSGNAME_M2V2_PREPARE_SHARDING, (hook) meta2_dispatch_all, M2V2_PREPARE_SHARDING_FILTERS},
 		{NAME_MSGNAME_M2V2_UPDATE_SHARD,     (hook) meta2_dispatch_all, M2V2_UPDATE_SHARD_FILTERS},
 		{NAME_MSGNAME_M2V2_LOCK_SHARDING,    (hook) meta2_dispatch_all, M2V2_LOCK_SHARDING_FILTERS},
