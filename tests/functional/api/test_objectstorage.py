@@ -570,8 +570,6 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertEqual('10', objects)
         usage = meta['system']['sys.m2.usage']
         self.assertEqual('40', usage)
-        damaged_objects = meta['system']['sys.m2.objects.damaged']
-        missing_chunks = meta['system']['sys.m2.chunks.missing']
         for i in range(10):
             reqid = 'content' + name + str(i)
             self.wait_for_event(
@@ -614,10 +612,6 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         meta = self.api.container_get_properties(self.account, name)
         self.assertEqual(objects, meta['system']['sys.m2.objects'])
         self.assertEqual(usage, meta['system']['sys.m2.usage'])
-        self.assertEqual(damaged_objects,
-                         meta['system']['sys.m2.objects.damaged'])
-        self.assertEqual(missing_chunks,
-                         meta['system']['sys.m2.chunks.missing'])
         containers = self.api.container_list(self.account)
         self.assertEqual(1, len(containers))
         self.assertListEqual(

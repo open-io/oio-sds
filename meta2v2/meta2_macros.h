@@ -49,14 +49,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define M2V2_ADMIN_SHARD_COUNT M2V2_ADMIN_PREFIX_SYS "shards"
 # endif
 
-# ifndef M2V2_ADMIN_DAMAGED_OBJECTS
-# define M2V2_ADMIN_DAMAGED_OBJECTS M2V2_ADMIN_PREFIX_SYS "objects.damaged"
-# endif
-
-# ifndef M2V2_ADMIN_MISSING_CHUNKS
-# define M2V2_ADMIN_MISSING_CHUNKS M2V2_ADMIN_PREFIX_SYS "chunks.missing"
-# endif
-
 # ifndef M2V2_ADMIN_CTIME
 # define M2V2_ADMIN_CTIME M2V2_ADMIN_PREFIX_SYS "ctime"
 # endif

@@ -51,8 +51,6 @@ def create_loop(api, prefix, results):
         'bucket': prefix,
         'objects': 0,
         'bytes': 0,
-        'damaged_objects': 0,
-        'missing_chunks': 0,
         'mtime': time.time()
     }
     # Create the "main" shard

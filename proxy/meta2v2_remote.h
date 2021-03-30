@@ -197,9 +197,7 @@ GByteArray* m2v2_remote_pack_TOUCHB(
 		struct oio_url_s *url,
 		guint32 flags,
 		gint64 deadline,
-		gboolean recompute,
-		gint64 damaged_objects,
-		gint64 missing_chunks);
+		gboolean recompute);
 
 GByteArray* m2v2_remote_pack_TOUCHC(
 		struct oio_url_s *url,

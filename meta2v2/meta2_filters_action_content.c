@@ -228,16 +228,9 @@ meta2_filter_action_check_content(struct gridd_filter_ctx_s * ctx,
 		meta2_filter_ctx_defer_event(ctx, event);
 	}
 	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
-	gint64 missing_chunks = 0;
-	err = meta2_backend_check_content(m2b, url, &beans, &missing_chunks,
-			_send_event, is_update);
+	err = meta2_backend_check_content(m2b, url, &beans, _send_event, is_update);
 	meta2_filter_ctx_set_input_udata2(ctx, beans,
 			(GDestroyNotify)_bean_cleanl2, FALSE);
-	gchar *missing_chunks_str = g_strdup_printf(
-			"%"G_GINT64_FORMAT, missing_chunks);
-	meta2_filter_ctx_add_param(ctx, NAME_MSGKEY_MISSING_CHUNKS,
-			missing_chunks_str);
-	g_free(missing_chunks_str);
 	if (err) {
 		if (err->code != CODE_CONTENT_UNCOMPLETE) {
 			meta2_filter_ctx_set_error(ctx, err);
@@ -290,26 +283,20 @@ meta2_filter_action_put_content(struct gridd_filter_ctx_s *ctx,
 			meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_CHANGE_POLICY)?
 			" (policy change)":"");
 
-	gint64 missing_chunks = 0;
-	const gchar *missing_chunks_str = meta2_filter_ctx_get_param(
-			ctx, NAME_MSGKEY_MISSING_CHUNKS);
-	if (missing_chunks_str)
-		missing_chunks = g_ascii_strtoll(missing_chunks_str, NULL, 10);
-
 	if (meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_OVERWRITE)) {
-		e = meta2_backend_force_alias(m2b, url, beans, missing_chunks,
+		e = meta2_backend_force_alias(m2b, url, beans,
 				_bean_list_cb, &deleted, _bean_list_cb, &added);
 	} else if (meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_UPDATE)) {
 		reply->subject("action:update");
-		e = meta2_backend_update_content(m2b, url, beans, missing_chunks,
+		e = meta2_backend_update_content(m2b, url, beans,
 				_bean_list_cb, &deleted, _bean_list_cb, &added);
 	} else if (meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_CHANGE_POLICY)) {
 		reply->subject("action:policy change");
-		e = meta2_backend_change_alias_policy(m2b, url, beans, missing_chunks,
+		e = meta2_backend_change_alias_policy(m2b, url, beans,
 				_bean_list_cb, &deleted, _bean_list_cb, &added);
 	} else {
-		e = meta2_backend_put_alias(m2b, url, beans, missing_chunks,
-				_bean_list_cb, &deleted, _bean_list_cb, &added);
+		e = meta2_backend_put_alias(m2b, url, beans, _bean_list_cb, &deleted,
+				_bean_list_cb, &added);
 	}
 
 	if (NULL != e) {
@@ -346,14 +333,7 @@ meta2_filter_action_append_content(struct gridd_filter_ctx_s *ctx,
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 	GRID_DEBUG("Appending %d beans", g_slist_length(beans));
 
-	gint64 missing_chunks = 0;
-	const gchar *missing_chunks_str = meta2_filter_ctx_get_param(
-			ctx, NAME_MSGKEY_MISSING_CHUNKS);
-	if (missing_chunks_str)
-		missing_chunks = g_ascii_strtoll(missing_chunks_str, NULL, 10);
-
-	e = meta2_backend_append_to_alias(m2b, url, beans, missing_chunks,
-			_bean_list_cb, &obc->l);
+	e = meta2_backend_append_to_alias(m2b, url, beans, _bean_list_cb, &obc->l);
 	if(NULL != e) {
 		GRID_DEBUG("Fail to append to alias (%s)", oio_url_get(url, OIOURL_WHOLE));
 		meta2_filter_ctx_set_error(ctx, e);

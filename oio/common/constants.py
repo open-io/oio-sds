@@ -152,13 +152,9 @@ BUCKET_PROP_REPLI_ENABLED = 'replication_enabled'
 M2_PROP_BUCKET_NAME = 'sys.m2.bucket.name'
 # Container creation time (microseconds).
 M2_PROP_CTIME = 'sys.m2.ctime'
-# Number of objects with problems held by the container.
-M2_PROP_DAMAGED_OBJECTS = 'sys.m2.objects.damaged'
 # Tells whether to delete exceeding object versions on-the-fly (1),
 # or let the lifecycle management do the job asynchronously (0).
 M2_PROP_DEL_EXC_VERSIONS = 'sys.m2.policy.version.delete_exceeding'
-# Number of chunks missing from objects held by the container.
-M2_PROP_MISSING_CHUNKS = 'sys.m2.chunks.missing'
 # Number of objects held by the container.
 M2_PROP_OBJECTS = 'sys.m2.objects'
 # Sets a limit on the total size of objects help by the container.

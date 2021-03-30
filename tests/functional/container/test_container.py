@@ -416,8 +416,8 @@ class TestMeta2Containers(BaseTestCase):
         del_properties(list(p0.keys()))
         check_properties(p1)
 
-    def _create_content(self, name, version=None, missing_chunks=0,
-                        headers_add=None, create_status=204):
+    def _create_content(self, name, version=None, headers_add=None,
+                        create_status=204):
         headers = {'X-oio-action-mode': 'autocreate'}
         params = self.param_content(self.ref, name, version=version)
 
@@ -425,8 +425,6 @@ class TestMeta2Containers(BaseTestCase):
                             headers=headers, data=json.dumps({'size': '1024'}))
         self.assertEqual(200, resp.status)
         chunks = self.json_loads(resp.data)
-        for _ in range(0, missing_chunks):
-            chunks.pop()
 
         stgpol = resp.getheader('x-oio-content-meta-policy')
         version = resp.getheader('x-oio-content-meta-version')
@@ -442,15 +440,13 @@ class TestMeta2Containers(BaseTestCase):
                             headers=headers, data=json.dumps(chunks))
         self.assertEqual(create_status, resp.status)
 
-    def _append_content(self, name, missing_chunks=0):
+    def _append_content(self, name):
         headers = {'X-oio-action-mode': 'autocreate'}
         params = self.param_content(self.ref, name)
         resp = self.request('POST', self.url_content('prepare'), params=params,
                             headers=headers, data=json.dumps({'size': '1024'}))
         self.assertEqual(resp.status, 200)
         chunks = self.json_loads(resp.data)
-        for _ in range(0, missing_chunks):
-            chunks.pop()
 
         params['append'] = 1
         stgpol = resp.getheader('x-oio-content-meta-policy')
@@ -577,105 +573,11 @@ class TestMeta2Containers(BaseTestCase):
         flush_and_check(truncated=True, objects=16, usage=16384)
         flush_and_check()
 
-    def _check_missing_chunks(self, expected_damaged_objects,
-                              expected_missing_chunks):
-        params = self.param_ref(self.ref)
-        resp = self.request('POST', self.url_container('get_properties'),
-                            params=params)
-        self.assertEqual(resp.status, 200)
-        data = self.json_loads(resp.data)
-        self.assertEqual(str(expected_damaged_objects),
-                         data['system']['sys.m2.objects.damaged'])
-        self.assertEqual(str(expected_missing_chunks),
-                         data['system']['sys.m2.chunks.missing'])
-
     def _delete_content(self, obj_name, headers=None):
         params = self.param_content(self.ref, obj_name)
         resp = self.request('POST', self.url_content('delete'), params=params,
                             headers=headers)
         self.assertEqual(resp.status, 204)
-
-    def test_missing_chunks(self):
-        stg_policy = self.conscience.info().get(
-            'options', dict()).get('storage_policy')
-        if stg_policy != 'THREECOPIES' and stg_policy != 'EC':
-            self.skipTest('The storage policy must be THREECOPIES or EC')
-
-        self._create_content('content0', missing_chunks=0)
-        self._check_missing_chunks(0, 0)
-
-        self._create_content('content1', missing_chunks=1)
-        self._check_missing_chunks(1, 1)
-
-        self._create_content('content2', missing_chunks=0)
-        self._check_missing_chunks(1, 1)
-        self._create_content('content2', missing_chunks=1)
-        self._check_missing_chunks(2, 2)
-
-        self._create_content('content3', missing_chunks=1)
-        self._check_missing_chunks(3, 3)
-        self._create_content('content3', missing_chunks=0)
-        self._check_missing_chunks(2, 2)
-
-        self._delete_content('content1')
-        self._check_missing_chunks(1, 1)
-
-        if stg_policy != "EC":
-            return
-
-        self._create_content('content4', missing_chunks=2)
-        self._check_missing_chunks(2, 3)
-
-        self._create_content('content5', missing_chunks=0)
-        self._check_missing_chunks(2, 3)
-        self._create_content('content5', missing_chunks=2)
-        self._check_missing_chunks(3, 5)
-
-        self._create_content('content6', missing_chunks=2)
-        self._check_missing_chunks(4, 7)
-        self._create_content('content6', missing_chunks=0)
-        self._check_missing_chunks(3, 5)
-
-        self._delete_content('content4')
-        self._check_missing_chunks(2, 3)
-
-    def test_missing_chunks_append_truncate(self):
-        stg_policy = self.conscience.info().get(
-            'options', dict()).get('storage_policy')
-        if stg_policy != 'THREECOPIES' and stg_policy != 'EC':
-            self.skipTest('The storage policy must be THREECOPIES or EC')
-
-        self._create_content('content0', missing_chunks=0)
-        self._check_missing_chunks(0, 0)
-        self._append_content('content0', missing_chunks=0)
-        self._check_missing_chunks(0, 0)
-
-        self._create_content('content1', missing_chunks=0)
-        self._check_missing_chunks(0, 0)
-        self._append_content('content1', missing_chunks=1)
-        self._check_missing_chunks(1, 1)
-
-        self._create_content('content2', missing_chunks=1)
-        self._check_missing_chunks(2, 2)
-        self._append_content('content2', missing_chunks=0)
-        self._check_missing_chunks(2, 2)
-
-        self._create_content('content3', missing_chunks=1)
-        self._check_missing_chunks(3, 3)
-        self._append_content('content3', missing_chunks=1)
-        self._check_missing_chunks(3, 4)
-
-        self._truncate_content('content0')
-        self._check_missing_chunks(3, 4)
-
-        self._truncate_content('content1')
-        self._check_missing_chunks(2, 3)
-
-        self._truncate_content('content2')
-        self._check_missing_chunks(2, 3)
-
-        self._truncate_content('content3')
-        self._check_missing_chunks(2, 2)
 
     def test_object_with_versioning_header(self):
         path = random_content()

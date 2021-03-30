@@ -25,8 +25,7 @@ from oio.common.utils import depaginate, request_id, timeout_to_deadline
 from oio.common.constants import \
     BUCKET_PROP_REPLI_ENABLED, \
     OIO_DB_STATUS_NAME, OIO_DB_ENABLED, OIO_DB_DISABLED, OIO_DB_FROZEN, \
-    M2_PROP_BUCKET_NAME, M2_PROP_CTIME, M2_PROP_DAMAGED_OBJECTS, \
-    M2_PROP_DEL_EXC_VERSIONS, M2_PROP_MISSING_CHUNKS, \
+    M2_PROP_BUCKET_NAME, M2_PROP_CTIME, M2_PROP_DEL_EXC_VERSIONS, \
     M2_PROP_OBJECTS, M2_PROP_QUOTA, M2_PROP_STORAGE_POLICY, \
     M2_PROP_USAGE, M2_PROP_VERSIONING_POLICY
 from oio.common.easy_value import boolean_value, int_value, float_value
@@ -429,8 +428,6 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
         ctime = float(sys[M2_PROP_CTIME]) / 1000000.
         bytes_usage = sys.get(M2_PROP_USAGE, 0)
         objects = sys.get(M2_PROP_OBJECTS, 0)
-        damaged_objects = sys.get(M2_PROP_DAMAGED_OBJECTS, 0)
-        missing_chunks = sys.get(M2_PROP_MISSING_CHUNKS, 0)
         if parsed_args.formatter == 'table':
             ctime = int(ctime)
             bytes_usage = convert_size(int(bytes_usage), unit="B")
@@ -443,8 +440,6 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
             'bytes_usage': bytes_usage,
             'quota': sys.get(M2_PROP_QUOTA, "Namespace default"),
             'objects': objects,
-            'damaged_objects': damaged_objects,
-            'missing_chunks': missing_chunks,
             'storage_policy': sys.get(M2_PROP_STORAGE_POLICY,
                                       "Namespace default"),
             'max_versions': sys.get(M2_PROP_VERSIONING_POLICY,

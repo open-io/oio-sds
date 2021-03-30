@@ -98,64 +98,52 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(info['id'], account_id)
         self.assertEqual(info['objects'], 0)
         self.assertEqual(info['bytes'], 0)
-        self.assertEqual(info['damaged_objects'], 0)
-        self.assertEqual(info['missing_chunks'], 0)
         self.assertEqual(info['containers'], 0)
         self.assertTrue(info['ctime'])
 
         # first container
         self.backend.update_container(
-            account_id, 'c1', Timestamp().normal, 0, 1, 1, 1, 1)
+            account_id, 'c1', Timestamp().normal, 0, 1, 1)
         info = self.backend.info_account(account_id)
         self.assertEqual(info['containers'], 1)
         self.assertEqual(info['objects'], 1)
         self.assertEqual(info['bytes'], 1)
-        self.assertEqual(info['damaged_objects'], 1)
-        self.assertEqual(info['missing_chunks'], 1)
 
         # second container
         sleep(.00001)
         self.backend.update_container(
-            account_id, 'c2', Timestamp().normal, 0, 0, 0, 0, 0)
+            account_id, 'c2', Timestamp().normal, 0, 0, 0)
         info = self.backend.info_account(account_id)
         self.assertEqual(info['containers'], 2)
         self.assertEqual(info['objects'], 1)
         self.assertEqual(info['bytes'], 1)
-        self.assertEqual(info['damaged_objects'], 1)
-        self.assertEqual(info['missing_chunks'], 1)
 
         # update second container
         sleep(.00001)
         self.backend.update_container(
-            account_id, 'c2', Timestamp().normal, 0, 1, 1, 1, 2)
+            account_id, 'c2', Timestamp().normal, 0, 1, 1)
         info = self.backend.info_account(account_id)
         self.assertEqual(info['containers'], 2)
         self.assertEqual(info['objects'], 2)
         self.assertEqual(info['bytes'], 2)
-        self.assertEqual(info['damaged_objects'], 2)
-        self.assertEqual(info['missing_chunks'], 3)
 
         # delete first container
         sleep(.00001)
         self.backend.update_container(
-            account_id, 'c1', 0, Timestamp().normal, 0, 0, 0, 0)
+            account_id, 'c1', 0, Timestamp().normal, 0, 0)
         info = self.backend.info_account(account_id)
         self.assertEqual(info['containers'], 1)
         self.assertEqual(info['objects'], 1)
         self.assertEqual(info['bytes'], 1)
-        self.assertEqual(info['damaged_objects'], 1)
-        self.assertEqual(info['missing_chunks'], 2)
 
         # delete second container
         sleep(.00001)
         self.backend.update_container(
-            account_id, 'c2', 0, Timestamp().normal, 0, 0, 0, 0)
+            account_id, 'c2', 0, Timestamp().normal, 0, 0)
         info = self.backend.info_account(account_id)
         self.assertEqual(info['containers'], 0)
         self.assertEqual(info['objects'], 0)
         self.assertEqual(info['bytes'], 0)
-        self.assertEqual(info['damaged_objects'], 0)
-        self.assertEqual(info['missing_chunks'], 0)
 
     def test_update_after_container_deletion(self):
         account_id = 'test-%06x' % int(time())
@@ -163,18 +151,15 @@ class TestAccountBackend(BaseTestCase):
 
         # Container create event, sent immediately after creation
         self.backend.update_container(
-            account_id, 'c1', Timestamp().normal,
-            None, None, None, None, None)
+            account_id, 'c1', Timestamp().normal, None, None, None)
 
         # Container update event
         self.backend.update_container(
-            account_id, 'c1', Timestamp().normal, None, 3, 30, 7, 5)
+            account_id, 'c1', Timestamp().normal, None, 3, 30)
         info = self.backend.info_account(account_id)
         self.assertEqual(info['containers'], 1)
         self.assertEqual(info['objects'], 3)
         self.assertEqual(info['bytes'], 30)
-        self.assertEqual(info['damaged_objects'], 7)
-        self.assertEqual(info['missing_chunks'], 5)
 
         # Container is flushed, but the event is deferred
         flush_timestamp = Timestamp().normal
@@ -182,18 +167,15 @@ class TestAccountBackend(BaseTestCase):
         sleep(.00001)
         # Container delete event, sent immediately after deletion
         self.backend.update_container(
-            account_id, 'c1', None, Timestamp().normal,
-            None, None, None, None)
+            account_id, 'c1', None, Timestamp().normal, None, None)
 
         # Deferred container update event (with lower timestamp)
         self.backend.update_container(
-            account_id, 'c1', flush_timestamp, None, 0, 0, 0, 0)
+            account_id, 'c1', flush_timestamp, None, 0, 0)
         info = self.backend.info_account(account_id)
         self.assertEqual(info['containers'], 0)
         self.assertEqual(info['objects'], 0)
         self.assertEqual(info['bytes'], 0)
-        self.assertEqual(info['damaged_objects'], 0)
-        self.assertEqual(info['missing_chunks'], 0)
 
     def test_delete_container(self):
         account_id = 'test'
@@ -203,7 +185,7 @@ class TestAccountBackend(BaseTestCase):
         mtime = Timestamp().normal
 
         # initial container
-        self.backend.update_container(account_id, name, mtime, 0, 0, 0, 0, 0)
+        self.backend.update_container(account_id, name, mtime, 0, 0, 0)
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
         self.assertEqual(res[0].decode('utf-8'), name)
@@ -211,8 +193,7 @@ class TestAccountBackend(BaseTestCase):
         # delete event
         sleep(.00001)
         dtime = Timestamp().normal
-        self.backend.update_container(
-            account_id, name, mtime, dtime, 0, 0, 0, 0)
+        self.backend.update_container(account_id, name, mtime, dtime, 0, 0)
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
         self.assertEqual(len(res), 0)
@@ -221,8 +202,7 @@ class TestAccountBackend(BaseTestCase):
 
         # same event
         with ExpectedException(Conflict):
-            self.backend.update_container(
-                account_id, name, mtime, dtime, 0, 0, 0, 0)
+            self.backend.update_container(account_id, name, mtime, dtime, 0, 0)
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
         self.assertEqual(len(res), 0)
@@ -231,8 +211,7 @@ class TestAccountBackend(BaseTestCase):
 
         # old event
         with ExpectedException(Conflict):
-            self.backend.update_container(
-                account_id, name, old_mtime, 0, 0, 0, 0, 0)
+            self.backend.update_container(account_id, name, old_mtime, 0, 0, 0)
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
         self.assertEqual(len(res), 0)
@@ -246,7 +225,7 @@ class TestAccountBackend(BaseTestCase):
         mtime = Timestamp().normal
 
         # create container
-        self.backend.update_container(account_id, name, mtime, 0, 0, 0, 0, 0)
+        self.backend.update_container(account_id, name, mtime, 0, 0, 0)
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
         self.assertEqual(text_type(res[0], 'utf8'), name)
@@ -259,7 +238,7 @@ class TestAccountBackend(BaseTestCase):
         # delete container
         sleep(.00001)
         dtime = Timestamp().normal
-        self.backend.update_container(account_id, name, 0, dtime, 0, 0, 0, 0)
+        self.backend.update_container(account_id, name, 0, dtime, 0, 0)
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
         self.assertEqual(len(res), 0)
@@ -268,8 +247,7 @@ class TestAccountBackend(BaseTestCase):
 
         # ensure it has been removed
         with ExpectedException(Conflict):
-            self.backend.update_container(
-                account_id, name, 0, dtime, 0, 0, 0, 0)
+            self.backend.update_container(account_id, name, 0, dtime, 0, 0)
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
         self.assertEqual(len(res), 0)
@@ -283,7 +261,7 @@ class TestAccountBackend(BaseTestCase):
         # initial container
         name = '"{<container \'&\' name>}"'
         mtime = Timestamp().normal
-        self.backend.update_container(account_id, name, mtime, 0, 0, 0, 0, 0)
+        self.backend.update_container(account_id, name, mtime, 0, 0, 0)
 
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
@@ -295,8 +273,7 @@ class TestAccountBackend(BaseTestCase):
 
         # same event
         with ExpectedException(Conflict):
-            self.backend.update_container(
-                account_id, name, mtime, 0, 0, 0, 0, 0)
+            self.backend.update_container(account_id, name, mtime, 0, 0, 0)
 
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
@@ -309,7 +286,7 @@ class TestAccountBackend(BaseTestCase):
         # New event
         sleep(.00001)
         mtime = Timestamp().normal
-        self.backend.update_container(account_id, name, mtime, 0, 0, 0, 0, 0)
+        self.backend.update_container(account_id, name, mtime, 0, 0, 0)
 
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
@@ -322,8 +299,7 @@ class TestAccountBackend(BaseTestCase):
         # Old event
         old_mtime = Timestamp(time() - 1).normal
         with ExpectedException(Conflict):
-            self.backend.update_container(
-                account_id, name, old_mtime, 0, 0, 0, 0, 0)
+            self.backend.update_container(account_id, name, old_mtime, 0, 0, 0)
 
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
@@ -336,8 +312,7 @@ class TestAccountBackend(BaseTestCase):
         # Old delete event
         dtime = Timestamp(time() - 1).normal
         with ExpectedException(Conflict):
-            self.backend.update_container(
-                account_id, name, 0, dtime, 0, 0, 0, 0)
+            self.backend.update_container(account_id, name, 0, dtime, 0, 0)
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
         self.assertEqual(res[0].decode('utf-8'), name)
@@ -348,7 +323,7 @@ class TestAccountBackend(BaseTestCase):
         # New delete event
         sleep(.00001)
         mtime = Timestamp().normal
-        self.backend.update_container(account_id, name, 0, mtime, 0, 0, 0, 0)
+        self.backend.update_container(account_id, name, 0, mtime, 0, 0)
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
         self.assertEqual(len(res), 0)
@@ -358,7 +333,7 @@ class TestAccountBackend(BaseTestCase):
         # New event
         sleep(.00001)
         mtime = Timestamp().normal
-        self.backend.update_container(account_id, name, mtime, 0, 0, 0, 0, 0)
+        self.backend.update_container(account_id, name, mtime, 0, 0, 0)
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
         self.assertEqual(res[0].decode('utf-8'), name)
@@ -377,17 +352,17 @@ class TestAccountBackend(BaseTestCase):
             for cont2 in xrange(125):
                 name = '%d-%04d' % (cont1, cont2)
                 self.backend.update_container(
-                    account_id, name, Timestamp().normal, 0, 0, 0, 0, 0)
+                    account_id, name, Timestamp().normal, 0, 0, 0)
 
         for cont in xrange(125):
             name = '2-0051-%04d' % cont
             self.backend.update_container(
-                account_id, name, Timestamp().normal, 0, 0, 0, 0, 0)
+                account_id, name, Timestamp().normal, 0, 0, 0)
 
         for cont in xrange(125):
             name = '3-%04d-0049' % cont
             self.backend.update_container(
-                account_id, name, Timestamp().normal, 0, 0, 0, 0, 0)
+                account_id, name, Timestamp().normal, 0, 0, 0)
 
         listing = self.backend.list_containers(
             account_id, marker='', delimiter='', limit=100)
@@ -466,7 +441,7 @@ class TestAccountBackend(BaseTestCase):
 
         name = '3-0049-'
         self.backend.update_container(
-            account_id, name, Timestamp().normal, 0, 0, 0, 0, 0)
+            account_id, name, Timestamp().normal, 0, 0, 0)
         listing = self.backend.list_containers(
             account_id, marker='3-0048', limit=10)
         self.assertEqual(len(listing), 10)
@@ -497,8 +472,6 @@ class TestAccountBackend(BaseTestCase):
 
         total_bytes = 0
         total_objects = 0
-        total_damaged_objects = 0
-        total_missing_chunks = 0
 
         # 10 containers with bytes and objects
         for i in range(10):
@@ -508,36 +481,20 @@ class TestAccountBackend(BaseTestCase):
             total_bytes += nb_bytes
             nb_objets = random.randrange(100)
             total_objects += nb_objets
-            damaged_objects = random.randrange(100)
-            total_damaged_objects += damaged_objects
-            missing_chunks = random.randrange(100)
-            total_missing_chunks += missing_chunks
             self.backend.update_container(
-                account_id, name, mtime, 0, nb_objets, nb_bytes,
-                damaged_objects, missing_chunks)
+                account_id, name, mtime, 0, nb_objets, nb_bytes)
 
         # change values
         self.backend.conn.hset(account_key, 'bytes', 1)
         self.backend.conn.hset(account_key, 'objects', 2)
-        self.backend.conn.hset(account_key, 'damaged_objects', 3)
-        self.backend.conn.hset(account_key, 'missing_chunks', 4)
         self.assertEqual(self.backend.conn.hget(account_key, 'bytes'), b'1')
         self.assertEqual(self.backend.conn.hget(account_key, 'objects'), b'2')
-        self.assertEqual(
-            self.backend.conn.hget(account_key, 'damaged_objects'), b'3')
-        self.assertEqual(
-            self.backend.conn.hget(account_key, 'missing_chunks'), b'4')
 
         self.backend.refresh_account(account_id)
         self.assertEqual(self.backend.conn.hget(account_key, 'bytes'),
                          str(total_bytes).encode('utf-8'))
         self.assertEqual(self.backend.conn.hget(account_key, 'objects'),
                          str(total_objects).encode('utf-8'))
-        self.assertEqual(
-            self.backend.conn.hget(account_key, 'damaged_objects'),
-            str(total_damaged_objects).encode('utf-8'))
-        self.assertEqual(self.backend.conn.hget(account_key, 'missing_chunks'),
-                         str(total_missing_chunks).encode('utf-8'))
 
     def test_update_container_wrong_timestamp_format(self):
         account_id = 'test'
@@ -546,7 +503,7 @@ class TestAccountBackend(BaseTestCase):
         # initial container
         name = '"{<container \'&\' name>}"'
         mtime = "12456.0000076"
-        self.backend.update_container(account_id, name, mtime, 0, 0, 0, 0, 0)
+        self.backend.update_container(account_id, name, mtime, 0, 0, 0)
 
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
@@ -554,15 +511,14 @@ class TestAccountBackend(BaseTestCase):
 
         # same event
         with ExpectedException(Conflict):
-            self.backend.update_container(
-                account_id, name, mtime, 0, 0, 0, 0, 0)
+            self.backend.update_container(account_id, name, mtime, 0, 0, 0)
 
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
         self.assertEqual(res[0].decode('utf-8'), name)
 
         mtime = "0000012456.00005"
-        self.backend.update_container(account_id, name, mtime, 0, 0, 0, 0, 0)
+        self.backend.update_container(account_id, name, mtime, 0, 0, 0)
 
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
@@ -573,7 +529,7 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(tmtime.decode('utf-8'), mtime)
 
         mtime = "0000012456.00035"
-        self.backend.update_container(account_id, name, mtime, 0, 0, 0, 0, 0)
+        self.backend.update_container(account_id, name, mtime, 0, 0, 0)
 
         res = self.backend.conn.zrangebylex(
             'containers:%s' % account_id, '-', '+')
@@ -582,18 +538,6 @@ class TestAccountBackend(BaseTestCase):
         tmtime = self.backend.conn.hget(
             'container:%s:%s' % (account_id, name), 'mtime')
         self.assertEqual(tmtime.decode('utf-8'), mtime)
-
-    def test_update_container_missing_damaged_object(self):
-        account_id = random_str(16)
-        self.assertEqual(self.backend.create_account(account_id), account_id)
-        # initial container
-        name = '"{<container \'&\' name>}"'
-        self.backend.update_container(account_id, name, 0, 0, 0, 0, 0, 0)
-        self.backend.conn.hdel(
-            'container:%s:%s' % (account_id, name), 'damaged_objects')
-        self.backend.refresh_account(account_id)
-        self.assertEqual(self.backend.conn.hget(
-            'account:%s' % (account_id), 'damaged_objects'), b'0')
 
     def test_is_sup(self):
         # HACK: replace %%d by %d
@@ -633,8 +577,6 @@ class TestAccountBackend(BaseTestCase):
 
         total_bytes = 0
         total_objects = 0
-        total_damaged_objects = 0
-        total_missing_chunks = 0
 
         # 10 containers with bytes and objects
         for i in range(10):
@@ -644,31 +586,17 @@ class TestAccountBackend(BaseTestCase):
             total_bytes += nb_bytes
             nb_objets = random.randrange(100)
             total_objects += nb_objets
-            damaged_objects = random.randrange(100)
-            total_damaged_objects += damaged_objects
-            missing_chunks = random.randrange(100)
-            total_missing_chunks += missing_chunks
             self.backend.update_container(
-                account_id, name, mtime, 0, nb_objets, nb_bytes,
-                damaged_objects, missing_chunks)
+                account_id, name, mtime, 0, nb_objets, nb_bytes)
 
         self.assertEqual(self.backend.conn.hget(account_key, 'bytes'),
                          str(total_bytes).encode('utf-8'))
         self.assertEqual(self.backend.conn.hget(account_key, 'objects'),
                          str(total_objects).encode('utf-8'))
-        self.assertEqual(
-            self.backend.conn.hget(account_key, 'damaged_objects'),
-            str(total_damaged_objects).encode('utf-8'))
-        self.assertEqual(self.backend.conn.hget(account_key, 'missing_chunks'),
-                         str(total_missing_chunks).encode('utf-8'))
 
         self.backend.flush_account(account_id)
         self.assertEqual(self.backend.conn.hget(account_key, 'bytes'), b'0')
         self.assertEqual(self.backend.conn.hget(account_key, 'objects'), b'0')
-        self.assertEqual(
-            self.backend.conn.hget(account_key, 'damaged_objects'), b'0')
-        self.assertEqual(
-            self.backend.conn.hget(account_key, 'missing_chunks'), b'0')
         self.assertEqual(
             self.backend.conn.zcard("containers:%s" % account_id), 0)
         self.assertEqual(self.backend.conn.exists("container:test:*"), 0)
@@ -682,8 +610,6 @@ class TestAccountBackend(BaseTestCase):
 
         total_bytes = 0
         total_objects = 0
-        total_damaged_objects = 0
-        total_missing_chunks = 0
 
         # 10 containers with bytes and objects
         for i in range(10):
@@ -693,26 +619,16 @@ class TestAccountBackend(BaseTestCase):
             total_bytes += nb_bytes
             nb_objets = random.randrange(100)
             total_objects += nb_objets
-            damaged_objects = random.randrange(100)
-            total_damaged_objects += damaged_objects
-            missing_chunks = random.randrange(100)
-            total_missing_chunks += missing_chunks
             self.backend.update_container(
                 account_id, name, mtime, 0, nb_objets, nb_bytes,
-                damaged_objects, missing_chunks, bucket_name=bucket)
+                bucket_name=bucket)
 
         bkey = self.backend.bkey(bucket)
         # change values
         self.backend.conn.hset(bkey, 'bytes', 1)
         self.backend.conn.hset(bkey, 'objects', 2)
-        self.backend.conn.hset(bkey, 'damaged_objects', 3)
-        self.backend.conn.hset(bkey, 'missing_chunks', 4)
         self.assertEqual(self.backend.conn.hget(bkey, 'bytes'), b'1')
         self.assertEqual(self.backend.conn.hget(bkey, 'objects'), b'2')
-        self.assertEqual(
-            self.backend.conn.hget(bkey, 'damaged_objects'), b'3')
-        self.assertEqual(
-            self.backend.conn.hget(bkey, 'missing_chunks'), b'4')
 
         # force pagination
         self.backend.refresh_bucket(bucket, batch_size=6)
@@ -721,12 +637,6 @@ class TestAccountBackend(BaseTestCase):
                          str(total_bytes))
         self.assertEqual(conn.hget(account_key, 'objects').decode('utf-8'),
                          str(total_objects))
-        self.assertEqual(
-            conn.hget(account_key, 'damaged_objects').decode('utf-8'),
-            str(total_damaged_objects))
-        self.assertEqual(
-            conn.hget(account_key, 'missing_chunks').decode('utf-8'),
-            str(total_missing_chunks))
 
     def test_refresh_bucket_with_lock(self):
         account_id = random_str(16)
@@ -736,11 +646,11 @@ class TestAccountBackend(BaseTestCase):
 
         mtime = Timestamp().normal
         self.backend.update_container(account_id, "cnt-1", mtime, 0,
-                                      100, 100, 100, 100, bucket_name=bucket)
+                                      100, 100, bucket_name=bucket)
         self.backend.update_container(account_id, "cnt-2", mtime, 0,
-                                      500, 500, 500, 500, bucket_name=bucket)
+                                      500, 500, bucket_name=bucket)
         self.backend.update_container(account_id, "cnt-3", mtime, 0,
-                                      999, 999, 999, 999, bucket_name=bucket)
+                                      999, 999, bucket_name=bucket)
 
         bkey = self.backend.bkey(bucket)
 
@@ -756,25 +666,23 @@ class TestAccountBackend(BaseTestCase):
         # change value of first container
         self.backend.conn.hset(bkey, 'bytes', 100)
         self.backend.conn.hset(bkey, 'objects', 100)
-        self.backend.conn.hset(bkey, 'damaged_objects', 100)
-        self.backend.conn.hset(bkey, 'missing_chunks', 100)
 
         # update a container before marker, update is ok
         mtime = Timestamp().normal
         self.backend.update_container(account_id, "cnt-1", mtime, 0,
-                                      200, 200, 200, 200, bucket_name=bucket)
+                                      200, 200, bucket_name=bucket)
         self.assertEqual(self.backend.conn.hget(bkey, 'bytes'), b'200')
 
         # update a container equal to marker, update is ok
         mtime = Timestamp().normal
         self.backend.update_container(account_id, "cnt-2", mtime, 0,
-                                      600, 600, 600, 600, bucket_name=bucket)
+                                      600, 600, bucket_name=bucket)
         self.assertEqual(self.backend.conn.hget(bkey, 'bytes'), b'300')
 
         # update container after marker, update is not done
         mtime = Timestamp().normal
         self.backend.update_container(account_id, "cnt-3", mtime, 0,
-                                      998, 998, 998, 998, bucket_name=bucket)
+                                      998, 998, bucket_name=bucket)
         self.assertEqual(self.backend.conn.hget(bkey, 'bytes'), b'300')
 
         # update lock with very old timestamp

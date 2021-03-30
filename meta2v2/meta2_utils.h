@@ -64,7 +64,6 @@ struct m2v2_sorted_content_s {
 	GSList *aliases;    // GSList<struct bean_ALIASES_s*>
 	GSList *properties; // GSList<struct bean_PROPERTIES_s*>
 	GTree *metachunks;  // GTree<gint,GSList<struct bean_CHUNKS_s*>>
-	gint64 n_chunks;
 };
 
 struct checked_content_s;
@@ -118,14 +117,6 @@ void m2db_set_obj_count(struct sqlx_sqlite3_s *sq3, gint64 count);
 gint64 m2db_get_shard_count(struct sqlx_sqlite3_s *sq3);
 
 void m2db_set_shard_count(struct sqlx_sqlite3_s *sq3, gint64 count);
-
-gint64 m2db_get_damaged_objects(struct sqlx_sqlite3_s *sq3);
-
-void m2db_set_damaged_objects(struct sqlx_sqlite3_s *sq3, gint64 damaged);
-
-gint64 m2db_get_missing_chunks(struct sqlx_sqlite3_s *sq3);
-
-void m2db_set_missing_chunks(struct sqlx_sqlite3_s *sq3, gint64 missing);
 
 void m2db_increment_version(struct sqlx_sqlite3_s *sq3);
 
@@ -191,15 +182,9 @@ void checked_content_free(struct checked_content_s *checked_content);
 void checked_content_append_json_string(struct checked_content_s *checked_content,
 		GString *message);
 
-guint checked_content_get_missing_chunks(struct checked_content_s *checked_content);
-
 GError* m2db_check_content(struct m2v2_sorted_content_s *sorted_content,
 		struct namespace_info_s *nsinfo,
 		struct checked_content_s **checked_content, gboolean update);
-
-GError* m2db_get_content_missing_chunks(
-		struct m2v2_sorted_content_s *sorted_content,
-		struct namespace_info_s *nsinfo, gint64 *missing_chunks);
 
 void m2db_check_content_quality(
 		struct m2v2_sorted_content_s *sorted_content, GSList *chunk_meta,

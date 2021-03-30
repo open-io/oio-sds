@@ -448,15 +448,10 @@ class ContainerClient(ProxyClient):
         return body
 
     def container_touch(self, account=None, reference=None, cid=None,
-                        recompute=False, damaged_objects=None,
-                        missing_chunks=None, **kwargs):
+                        recompute=False, **kwargs):
         params = self._make_params(account, reference, cid=cid)
         if recompute:
             params['recompute'] = True
-            if damaged_objects is not None:
-                params['damaged_objects'] = damaged_objects
-            if missing_chunks is not None:
-                params['missing_chunks'] = missing_chunks
         self._request('POST', '/touch', params=params, **kwargs)
 
     def container_dedup(self, account=None, reference=None, cid=None,

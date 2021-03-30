@@ -595,13 +595,10 @@ class Account(WerkzeugApp):
         dtime = data.get('dtime')
         object_count = data.get('objects')
         bytes_used = data.get('bytes')
-        damaged_objects = data.get('damaged_objects')
-        missing_chunks = data.get('missing_chunks')
         bucket_name = data.get('bucket')  # can be None
         # Exceptions are catched by dispatch_request
         info = self.backend.update_container(
-            account_id, name, mtime, dtime,
-            object_count, bytes_used, damaged_objects, missing_chunks,
+            account_id, name, mtime, dtime, object_count, bytes_used,
             bucket_name=bucket_name, **kwargs)
         result = json.dumps(info)
         return Response(result, mimetype=HTTP_CONTENT_TYPE_JSON)
@@ -651,12 +648,9 @@ class Account(WerkzeugApp):
         dtime = None
         object_count = 0
         bytes_used = 0
-        damaged_objects = 0
-        missing_chunks = 0
         # Exceptions are catched by dispatch_request
         self.backend.update_container(
-            account_id, name, mtime, dtime,
-            object_count, bytes_used, damaged_objects, missing_chunks,
+            account_id, name, mtime, dtime, object_count, bytes_used,
             autocreate_container=False, **kwargs)
         return Response(status=204)
 
@@ -746,8 +740,6 @@ class Account(WerkzeugApp):
     #    {
     #      "account": "myaccount",
     #      "bytes": 11300,
-    #      "damaged_objects": 0,
-    #      "missing_objects": 0,
     #      "mtime": "1533127401.08165",
     #      "objects": 100,
     #      "replication_enabled": false
@@ -805,8 +797,6 @@ class Account(WerkzeugApp):
     #    {
     #      "account": "myaccount",
     #      "bytes": 11300,
-    #      "damaged_objects": 0,
-    #      "missing_objects": 0,
     #      "mtime": "1533127401.08165",
     #      "objects": 100,
     #      "replication_enabled": false
@@ -893,9 +883,7 @@ class Account(WerkzeugApp):
     #    {
     #      "bucket": "buck0",
     #      "bytes": 2052,
-    #      "damaged_objects": 0,
     #      "dtime": "0",
-    #      "missing_chunks": 0,
     #      "mtime": "1583772880.48631",
     #      "name": "buck0",
     #      "objects": 2,

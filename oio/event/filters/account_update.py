@@ -60,8 +60,6 @@ class AccountUpdateFilter(Filter):
                 if event.event_type == EventTypes.CONTAINER_STATE:
                     body['objects'] = data.get('object-count', 0)
                     body['bytes'] = data.get('bytes-count', 0)
-                    body['damaged_objects'] = data.get('damaged-objects', 0)
-                    body['missing_chunks'] = data.get('missing-chunks', 0)
                     body['mtime'] = mtime
                 elif event.event_type == EventTypes.CONTAINER_NEW:
                     body['mtime'] = mtime

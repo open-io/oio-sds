@@ -508,15 +508,8 @@ meta2_filter_action_touch_container(struct gridd_filter_ctx_s *ctx,
 	gboolean recompute = FALSE;
 	metautils_message_extract_boolean(reply->request,
 			NAME_MSGKEY_RECOMPUTE, FALSE, &recompute);
-	gint64 damaged_objects = 0;
-	metautils_message_extract_strint64(reply->request,
-			NAME_MSGKEY_DAMAGED_OBJECTS, &damaged_objects);
-	gint64 missing_chunks = 0;
-	metautils_message_extract_strint64(reply->request,
-			NAME_MSGKEY_MISSING_CHUNKS, &missing_chunks);
 
-	GError *err = meta2_backend_notify_container_state(m2b, url,
-			recompute, damaged_objects, missing_chunks);
+	GError *err = meta2_backend_notify_container_state(m2b, url, recompute);
 	if (!err)
 		return FILTER_OK;
 	meta2_filter_ctx_set_error(ctx, err);

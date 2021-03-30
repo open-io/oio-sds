@@ -120,33 +120,32 @@ GError* meta2_backend_update_beans(struct meta2_backend_s *m2b,
 		gboolean frozen);
 
 GError* meta2_backend_notify_container_state(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, gboolean recompute,
-		gint64 damaged_objects, gint64 missing_chunks);
+		struct oio_url_s *url, gboolean recompute);
 
 GError* meta2_backend_put_alias(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, GSList *in, gint64 missing_chunks,
+		struct oio_url_s *url, GSList *in,
 		m2_onbean_cb cb_deleted, gpointer u0_deleted,
 		m2_onbean_cb cb_added, gpointer u0_added);
 
 GError* meta2_backend_change_alias_policy(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, GSList *in, gint64 missing_chunks,
+		struct oio_url_s *url, GSList *in,
 		m2_onbean_cb cb_deleted, gpointer u0_deleted,
 		m2_onbean_cb cb_added, gpointer u0_added);
 
 GError* meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, GSList *beans, gint64 missing_chunks,
+		struct oio_url_s *url, GSList *beans,
 		m2_onbean_cb cb, gpointer u0);
 
 typedef void (*meta2_send_event_cb)(gchar *event, gpointer udata);
 
 GError* meta2_backend_check_content(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, GSList **beans, gint64 *missing_chunks,
+		struct oio_url_s *url, GSList **beans,
 		meta2_send_event_cb send_event, gboolean update);
 
 /** Update a content with the given chunks replacing the existing chunks
  *  at the same position. */
 GError *meta2_backend_update_content(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, GSList *in, gint64 missing_chunks,
+		struct oio_url_s *url, GSList *in,
 		m2_onbean_cb cb_deleted, gpointer u0_deleted,
 		m2_onbean_cb cb_added, gpointer u0_added);
 
@@ -159,7 +158,7 @@ GError * meta2_backend_truncate_content(struct meta2_backend_s *m2b,
 /** Create a new version of the ALIAS but with the given chunks linked to
  * the existing CONTENT.  */
 GError* meta2_backend_force_alias(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, GSList *in, gint64 missing_chunks,
+		struct oio_url_s *url, GSList *in,
 		m2_onbean_cb cb_deleted, gpointer u0_deleted,
 		m2_onbean_cb cb_added, gpointer u0_added);
 

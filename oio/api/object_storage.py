@@ -257,35 +257,6 @@ class ObjectStorageApi(object):
         return self.container.container_create(
             account, container, properties=properties, **kwargs)
 
-    def _recompute_missing_chunks(self, account, container, **kwargs):
-        damaged_objects = 0
-        missing_chunks = 0
-        for obj_meta in depaginate(
-                self.object_list,
-                listing_key=lambda x: x['objects'],
-                marker_key=lambda x: x.get('next_marker'),
-                truncated_key=lambda x: x['truncated'],
-                account=account,
-                container=container,
-                properties=True,
-                versions=True,
-                **kwargs):
-            try:
-                obj_meta, chunks = self.object_locate(
-                    account, container, obj_meta['name'],
-                    version=obj_meta['version'], **kwargs)
-                stg_met = STORAGE_METHODS.load(obj_meta['chunk_method'])
-                chunks_by_pos = _sort_chunks(chunks, stg_met.ec,
-                                             logger=self.logger)
-                expected_chunks = len(chunks_by_pos) * stg_met.expected_chunks
-                diff = expected_chunks - len(chunks)
-                if diff > 0:
-                    damaged_objects += 1
-                    missing_chunks += diff
-            except exc.NoSuchObject:
-                pass
-        return damaged_objects, missing_chunks
-
     @handle_container_not_found
     @patch_kwargs
     @ensure_headers
@@ -299,15 +270,8 @@ class ObjectStorageApi(object):
         :param container: name of the container
         :type container: `str`
         """
-        damaged_objects = None
-        missing_chunks = None
-        if (recompute):
-            damaged_objects, missing_chunks = self._recompute_missing_chunks(
-                account, container, **kwargs)
         self.container.container_touch(
-                account, container, recompute=recompute,
-                damaged_objects=damaged_objects, missing_chunks=missing_chunks,
-                **kwargs)
+                account, container, recompute=recompute, **kwargs)
 
     @patch_kwargs
     @ensure_headers
