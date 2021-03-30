@@ -935,25 +935,25 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             sorted(container_names), [b[0] for b in containers])
 
     def test_buckets_list_check_name(self):
-        account = random_str(32)
+        account = 'test-buckets-list-' + random_str(6)
 
         bucket_names = list()
         bucket_names.append(  # Name
             random_str(16).lower() + "." + random_str(16).lower())
         bucket_names.append(  # OK label
-            random_str(10).lower() + '.' + random_str(10).lower())
+            "labelled-" + random_str(6).lower() + '.' + random_str(10).lower())
 
         container_names = list()
         container_names += bucket_names
         container_names.append(random_str(2).lower())  # Too small name
         container_names.append(random_str(64).lower())  # Too long name
-        container_names.append(  # Underscore name
-            random_str(16).lower() + "_" + random_str(16).lower())
-        container_names.append("." + random_str(16).lower())  # Start with dot
-        container_names.append(random_str(32).upper())  # Uppercase
+        container_names.append("name_with_underscore_" + random_str(6).lower())
+        container_names.append(".startswithdot-" + random_str(6).lower())
+        container_names.append("UPPERCASE-" + random_str(6).upper())
         container_names.append("192.168.5.4")  # IP address
         container_names.append(  # KO label
-            random_str(10).lower() + '.' + random_str(10))
+            "labelled-but-invalid-" + random_str(6).lower() +
+            '.' + random_str(6) + 'A')
 
         for container_name in container_names:
             self.api.container_create(account, container_name)
