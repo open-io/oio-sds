@@ -604,24 +604,24 @@ score_variation_bound=20
 lock_at_first_register=false
 
 [type:meta1]
-score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+score_expr=((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
 score_timeout=120
 lock_at_first_register=false
 
 [type:meta2]
-score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+score_expr=((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
 score_timeout=120
 
 [type:rawx]
-score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+score_expr=((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
 score_timeout=120
 
 [type:rdir]
-score_expr=((num stat.cpu)>0) * ((num stat.io)>0) * ((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+score_expr=((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
 score_timeout=120
 
 [type:redis]
-score_expr=(num stat.cpu)
+score_expr=(1 + (num stat.cpu))
 score_timeout=120
 
 [type:account]
