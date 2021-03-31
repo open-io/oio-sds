@@ -34,7 +34,7 @@ workflow:
     application: oio-sds
     environment: oio-sds-env-cli
     depends_on:
-      - root
+      - tests-fast
     conditions:
       check:
         - variable: cds.triggered_by.username
@@ -46,7 +46,7 @@ workflow:
     application: oio-sds
     environment: oio-sds-env-3copies
     depends_on:
-      - root
+      - tests-fast
     conditions:
       check:
         - variable: cds.triggered_by.username
