@@ -26,7 +26,7 @@ from oio.common.green import ratelimit, sleep, threading, time
 from oio.common.json import json
 from oio.conscience.client import ConscienceClient
 from oio.event.beanstalk import Beanstalk, BeanstalkdListener, \
-    ConnectionError, DEFAULT_TTR
+    BeanstalkError, ConnectionError, DEFAULT_TTR
 from oio.event.evob import EventTypes
 from oio.xcute.common.backend import XcuteBackend
 from oio.xcute.common.job import XcuteJobStatus
@@ -100,13 +100,20 @@ class XcuteOrchestrator(object):
             self.exit_gracefully()
 
         if self.refresh_beanstalkd_workers_thread:
+            self.logger.info('Waiting thread to refresh beanstalkd workers')
             self.refresh_beanstalkd_workers_thread.join()
         if self.listen_beanstalkd_reply_thread:
+            self.logger.info('Waiting thread to listen beanstalkd reply')
             self.listen_beanstalkd_reply_thread.join()
-        for dispatch_tasks_thread in self.dispatch_tasks_threads.values():
+        for job_id, dispatch_tasks_thread \
+                in self.dispatch_tasks_threads.items():
+            self.logger.info(
+                '[job_id=%s] Waiting thread to dispatch tasks', job_id)
             dispatch_tasks_thread.join()
-        for compute_total_tasks_thread \
-                in self.compute_total_tasks_threads.values():
+        for job_id, compute_total_tasks_thread \
+                in self.compute_total_tasks_threads.items():
+            self.logger.info(
+                '[job_id=%s] Waiting thread to compute total tasks', job_id)
             compute_total_tasks_thread.join()
         self.logger.info('Exited running thread')
 
@@ -235,6 +242,9 @@ class XcuteOrchestrator(object):
                     'with the failure: %s', job_id, exc)
         finally:
             del self.dispatch_tasks_threads[job_id]
+
+        self.logger.debug(
+            '[job_id=%s] Exited thread to dispatch tasks', job_id)
 
     def adapt_speed(self, job_id, job_config, last_check, period=300):
         """
@@ -567,6 +577,9 @@ class XcuteOrchestrator(object):
         finally:
             del self.compute_total_tasks_threads[job_id]
 
+        self.logger.debug(
+            '[job_id=%s] Exited thread to compute total tasks', job_id)
+
     def compute_total_tasks(self, job_id, job_type, job_info, job):
         job_params = job_info['config']['params']
         total_marker = job_info['tasks']['total_marker']
@@ -602,17 +615,22 @@ class XcuteOrchestrator(object):
 
         self.logger.info('Connecting to the reply beanstalkd')
 
-        while self.running:
+        while True:
             try:
                 listener = BeanstalkdListener(
                     addr=self.beanstalkd_reply_addr,
                     tube=self.beanstalkd_reply_tube,
                     logger=self.logger)
-
                 break
-            except ConnectionError:
-                self.logger.error('Failed to connect to the reply beanstalkd')
+            except ConnectionError as exc:
+                self.logger.error(
+                    'Failed to connect to the reply beanstalkd: %s', exc)
+            except Exception:
+                self.logger.exception(
+                    'Failed to connect to the reply beanstalkd')
 
+            if not self.running:
+                return
             sleep(5)
 
         self.logger.info('Listening to replies on %s (tube=%s)',
@@ -628,14 +646,15 @@ class XcuteOrchestrator(object):
             if connection_error:
                 sleep(2)
 
-        self.logger.info('Exited listening thread')
+        listener.close()
+        self.logger.info('Exited thread to listen beanstalkd reply')
 
     def listen_loop(self, listener):
         """
             One iteration of the listening loop
         """
 
-        connection_error = False
+        connection_error = True
         try:
             replies = listener.fetch_job(
                 self.process_reply, timeout=self.DEFAULT_DISPATCHER_TIMEOUT)
@@ -643,9 +662,14 @@ class XcuteOrchestrator(object):
             # to force the execution of process_reply
             # if there were no replies, consider it as a connection error
             connection_error = len(list(replies)) == 0
-
         except OioTimeout:
             pass
+        except ConnectionError as exc:
+            self.logger.error(
+                'Failed to fetch job in the reply beanstalkd: %s', exc)
+        except Exception:
+            self.logger.exception(
+                'Failed to fetch job in the reply beanstalkd')
 
         return connection_error
 
@@ -714,7 +738,7 @@ class XcuteOrchestrator(object):
                     break
                 sleep(1)
 
-        self.logger.info('Exited beanstalkd workers thread')
+        self.logger.info('Exited thread to refresh beanstalkd workers')
 
     def _find_beanstalkd_workers(self):
         """
@@ -754,10 +778,15 @@ class XcuteOrchestrator(object):
 
         beanstalkd_tubes = beanstalkd.tubes()
         if self.beanstalkd_workers_tube not in beanstalkd_tubes:
+            beanstalkd.is_broken = True
             self.logger.debug(
                 'Ignore beanstalkd %s: '
                 'No worker has ever listened to the tube %s',
                 beanstalkd_addr, self.beanstalkd_workers_tube)
+            try:
+                beanstalkd.close()
+            except BeanstalkError:
+                pass
             return None
 
         current_stats = beanstalkd.stats_tube(
@@ -766,19 +795,29 @@ class XcuteOrchestrator(object):
         if beanstalkd_jobs_ready > 0:
             beanstalkd_jobs_reserved = current_stats['current-jobs-reserved']
             if beanstalkd_jobs_reserved <= 0:
+                beanstalkd.is_broken = True
                 self.logger.warn(
                     'Ignore beanstalkd %s: The worker doesn\'t process task '
                     '(current-jobs-ready=%d, current-jobs-reserved=%d)',
                     beanstalkd_addr, beanstalkd_jobs_ready,
                     beanstalkd_jobs_reserved)
+                try:
+                    beanstalkd.close()
+                except BeanstalkError:
+                    pass
                 return None
 
             if beanstalkd_jobs_ready >= self.max_jobs_per_beanstalkd:
+                beanstalkd.is_broken = True
                 self.logger.warn(
                     'Ignore beanstalkd %s: The queue is full '
                     '(current-jobs-ready=%d, current-jobs-reserved=%d)',
                     beanstalkd_addr, beanstalkd_jobs_ready,
                     beanstalkd_jobs_reserved)
+                try:
+                    beanstalkd.close()
+                except BeanstalkError:
+                    pass
                 return None
 
         if hasattr(beanstalkd, 'is_broken') and beanstalkd.is_broken:
