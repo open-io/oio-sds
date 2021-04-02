@@ -39,6 +39,10 @@ class ObjectTest(CliTestCase):
 
     CONTAINER_NAME = uuid.uuid4().hex
 
+    def setUp(self):
+        super(ObjectTest, self).setUp()
+        self.wait_for_score(('rawx', 'meta2'), score_threshold=1, timeout=5.0)
+
     @classmethod
     def _get_cid_from_name(self, name):
         opts = self.get_opts([], 'json')

@@ -87,22 +87,23 @@ class ClusterTest(CliTestCase):
         data = json.loads(output)
         nodeid = data[0]['Addr']
 
-        # Wait for score to be non-zero
+        # -- Wait for score to be non-zero --
 
         # Lock that rawx
         output = self.openio('cluster lock rawx ' + nodeid + opts)
         data = json.loads(output)
         self.assertEqual(data[0]['Result'], 'locked to 0')
+        self._reload_proxy()
         time.sleep(4)
         # Ensure it is zero-scored
         output = self.openio('cluster list rawx' + opts)
         data = json.loads(output)
-        zeroed = [node['Score'] == 0 for node in data
+        zeroed = [node for node in data
                   if node['Addr'] == nodeid]
         # We should have only one service left in this list: the rawx we locked
         self.assertEqual(len(zeroed), 1)
         # And its score should be zero
-        self.assertTrue(zeroed[0])
+        self.assertEqual(zeroed[0]['Score'], 0)
         # Unlock all services
         output = self.openio('cluster unlockall' + opts)
         data = json.loads(output)
@@ -112,22 +113,23 @@ class ClusterTest(CliTestCase):
         data = json.loads(output)
         self.assertTrue(all([node['Score'] > 0 for node in data]))
 
-        # Wait for score to reach 20
+        # -- Wait for score to reach 1 --
 
         # Lock that rawx
         output = self.openio('cluster lock rawx ' + nodeid + opts)
         data = json.loads(output)
         self.assertEqual(data[0]['Result'], 'locked to 0')
+        self._reload_proxy()
         time.sleep(4)
         # Ensure it is zero-scored
         output = self.openio('cluster list rawx' + opts)
         data = json.loads(output)
-        zeroed = [node['Score'] == 0 for node in data
+        zeroed = [node for node in data
                   if node['Addr'] == nodeid]
         # We should have only one service left in this list: the rawx we locked
         self.assertEqual(len(zeroed), 1)
         # And its score should be zero
-        self.assertTrue(zeroed[0])
+        self.assertEqual(zeroed[0]['Score'], 0)
         # Unlock all services
         output = self.openio('cluster unlockall' + opts)
         data = json.loads(output)
