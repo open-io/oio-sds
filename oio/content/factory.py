@@ -96,7 +96,10 @@ class ContentFactory(object):
                 container_name = container_info['sys.user.name']
         cls = ECContent if storage_method.ec else PlainContent
         return cls(self.conf, container_id, meta, chunks, storage_method,
-                   account, container_name)
+                   account, container_name,
+                   container_client=self.container_client,
+                   blob_client=self.blob_client,
+                   logger=self.logger)
 
     def copy(self, origin, policy=None):
         if not policy:
@@ -122,4 +125,7 @@ class ContentFactory(object):
         cls = ECContent if storage_method.ec else PlainContent
         return cls(self.conf, origin.container_id,
                    metadata, chunks, storage_method,
-                   origin.account, origin.container_name)
+                   origin.account, origin.container_name,
+                   container_client=self.container_client,
+                   blob_client=self.blob_client,
+                   logger=self.logger)
