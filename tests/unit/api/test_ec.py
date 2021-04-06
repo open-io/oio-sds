@@ -749,7 +749,9 @@ class TestEC(unittest.TestCase):
         with set_http_requests(get_response) as conn_record:
             handler = ECRebuildHandler(
                 meta_chunk, missing, self.storage_method)
-            stream = handler.rebuild()
+            expected_chunk_size, stream = handler.rebuild()
+            if expected_chunk_size is not None:
+                self.assertEqual(expected_chunk_size, len(missing_chunk_body))
             result = ''.join(stream)
             self.assertEqual(len(result), len(missing_chunk_body))
             self.assertEqual(self.checksum(result).hexdigest(),
@@ -789,7 +791,10 @@ class TestEC(unittest.TestCase):
             with set_http_requests(get_response) as conn_record:
                 handler = ECRebuildHandler(
                     meta_chunk, missing, self.storage_method)
-                stream = handler.rebuild()
+                expected_chunk_size, stream = handler.rebuild()
+                if expected_chunk_size is not None:
+                    self.assertEqual(expected_chunk_size,
+                                     len(missing_chunk_body))
                 result = ''.join(stream)
                 self.assertEqual(len(result), len(missing_chunk_body))
                 self.assertEqual(self.checksum(result).hexdigest(),
@@ -829,7 +834,10 @@ class TestEC(unittest.TestCase):
             with set_http_requests(get_response) as conn_record:
                 handler = ECRebuildHandler(
                     meta_chunk, missing, self.storage_method)
-                stream = handler.rebuild()
+                expected_chunk_size, stream = handler.rebuild()
+                if expected_chunk_size is not None:
+                    self.assertEqual(expected_chunk_size,
+                                     len(missing_chunk_body))
                 result = ''.join(stream)
                 self.assertEqual(len(result), len(missing_chunk_body))
                 self.assertEqual(self.checksum(result).hexdigest(),
@@ -888,7 +896,9 @@ class TestEC(unittest.TestCase):
         with set_http_requests(get_response) as conn_record:
             handler = ECRebuildHandler(
                 meta_chunk, missing, self.storage_method)
-            stream = handler.rebuild()
+            expected_chunk_size, stream = handler.rebuild()
+            if expected_chunk_size is not None:
+                self.assertEqual(expected_chunk_size, len(missing_chunk_body))
             result = ''.join(stream)
             self.assertEqual(len(result), len(missing_chunk_body))
             self.assertEqual(self.checksum(result).hexdigest(),

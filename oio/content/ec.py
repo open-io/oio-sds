@@ -16,6 +16,7 @@
 from oio.common.exceptions import OrphanChunk
 from oio.content.content import Content, Chunk
 from oio.api.ec import ECWriteHandler, ECRebuildHandler
+from oio.common.exceptions import ChunkException
 from oio.common.storage_functions import _sort_chunks, fetch_stream_ec
 from oio.common.utils import GeneratorIO
 from oio.common.constants import OIO_VERSION
@@ -63,7 +64,7 @@ class ECContent(Content):
         # Regenerate the lost chunk's data, from existing chunks
         handler = ECRebuildHandler(
             chunks.raw(), current_chunk.subpos, self.storage_method)
-        stream = handler.rebuild()
+        expected_chunk_size, stream = handler.rebuild()
 
         # Actually create the spare chunk
         meta = {}
@@ -95,6 +96,14 @@ class ECContent(Content):
         meta['oio_version'] = OIO_VERSION
         bytes_transferred, _ = self.blob_client.chunk_put(
             spare_url[0], meta, GeneratorIO(stream))
+        if expected_chunk_size is not None \
+                and bytes_transferred != expected_chunk_size:
+            try:
+                self.blob_client.chunk_delete(spare_url[0])
+            except Exception as exc:
+                self.logger.warning(
+                    'Failed to rollback the rebuild of the chunk: %s', exc)
+            raise ChunkException('The rebuilt chunk is not the correct size')
 
         # Register the spare chunk in object's metadata
         if chunk_id is None:

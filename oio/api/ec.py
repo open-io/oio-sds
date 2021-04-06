@@ -1129,7 +1129,8 @@ class ECRebuildHandler(object):
         for resp in pile:
             if not resp:
                 continue
-            chunk_size = resp.getheader(CHUNK_HEADERS['chunk_size'], None)
+            chunk_size = int_value(
+                resp.getheader(CHUNK_HEADERS['chunk_size'], None), None)
             if chunk_size is None:
                 self.logger.warning('Missing chunk size')
                 resps_without_chunk_size.append(resp)
@@ -1170,7 +1171,7 @@ class ECRebuildHandler(object):
                 'Use chunk(s) without size information to rebuild a chunk')
 
         rebuild_iter = self._make_rebuild_iter(resps[:nb_data])
-        return rebuild_iter
+        return assumed_chunk_size, rebuild_iter
 
     def _make_rebuild_iter(self, resps):
         def _get_frag(resp):
