@@ -862,3 +862,35 @@ class TestEC(unittest.TestCase):
             # TODO use specialized exception
             self.assertRaises(exc.OioException, handler.rebuild)
             self.assertEqual(len(conn_record), nb - 1)
+
+    def test_rebuild_with_wrong_chunk_size(self):
+        test_data = ('1234' * self.storage_method.ec_segment_size)[:-777]
+        ec_chunks = self._make_ec_chunks(test_data)
+        missing_chunk_body = ec_chunks.pop(1)
+        meta_chunk = self.meta_chunk()
+        missing_chunk = meta_chunk.pop(1)
+
+        responses = list()
+        for i, ec_chunk in enumerate(ec_chunks):
+            chunk_size = len(ec_chunk)
+            if i < self.storage_method.ec_nb_parity - 1:
+                # Change the chunk size for the first chunks
+                chunk_size = random.randrange(chunk_size)
+            headers = {'x-oio-chunk-meta-chunk-size': chunk_size}
+            responses.append(FakeResponse(200, ec_chunk[:chunk_size], headers))
+
+        def get_response(req):
+            return responses.pop(0) if responses else FakeResponse(404)
+
+        missing = missing_chunk['num']
+        nb = self.storage_method.ec_nb_data + self.storage_method.ec_nb_parity
+
+        with set_http_requests(get_response) as conn_record:
+            handler = ECRebuildHandler(
+                meta_chunk, missing, self.storage_method)
+            stream = handler.rebuild()
+            result = ''.join(stream)
+            self.assertEqual(len(result), len(missing_chunk_body))
+            self.assertEqual(self.checksum(result).hexdigest(),
+                             self.checksum(missing_chunk_body).hexdigest())
+            self.assertEqual(len(conn_record), nb - 1)

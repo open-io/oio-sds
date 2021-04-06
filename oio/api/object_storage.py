@@ -1603,7 +1603,7 @@ class ObjectStorageApi(object):
         new_chunks = list()
         # TODO(FVE): use a GreenPool to parallelize
         for chunk in targets:
-            resp, new_chunk_url = self.blob_client.chunk_link(
+            _, new_chunk_url = self.blob_client.chunk_link(
                 chunk['url'], None, fullpath, **kwargs)
             new_chunk = chunk.copy()
             new_chunk['url'] = new_chunk_url
