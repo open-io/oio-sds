@@ -137,43 +137,8 @@ class TestContainerLifecycle(BaseTestCase):
 
     def test_save_to_container_property(self):
         source = """
-        <LifecycleConfiguration>
-            <Rule>
-                <ID>rule1</ID>
-                <Filter>
-                    <And>
-                        <Prefix>documents/</Prefix>
-                        <Tag>
-                            <Key>key</Key>
-                            <Value>value</Value>
-                        </Tag>
-                    </And>
-                </Filter>
-                <Status>Enabled</Status>
-                <Transition>
-                    <Days>1</Days>
-                    <StorageClass>THREECOPIES</StorageClass>
-                </Transition>
-                <Expiration>
-                    <Days>60</Days>
-                </Expiration>
-                <Transition>
-                    <Days>30</Days>
-                    <StorageClass>SINGLE</StorageClass>
-                </Transition>
-                <NoncurrentVersionTransition>
-                    <NoncurrentDays>1</NoncurrentDays>
-                    <StorageClass>THREECOPIES</StorageClass>
-                </NoncurrentVersionTransition>
-                <NoncurrentVersionExpiration>
-                    <NoncurrentDays>60</NoncurrentDays>
-                </NoncurrentVersionExpiration>
-            </Rule>
-        </LifecycleConfiguration>
-        """
-
-        expected_source = """
-        <LifecycleConfiguration>
+        <LifecycleConfiguration
+                xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
             <Rule>
                 <ID>rule1</ID>
                 <Filter>
@@ -213,8 +178,8 @@ class TestContainerLifecycle(BaseTestCase):
         self.lifecycle.save()
         xml = self.lifecycle.get_configuration()
         self.assertEqual(
-            expected_source.replace(' ', '').replace('\n', ''),
-            xml)
+            source.replace(' ', '').replace('\n', ''),
+            xml.replace(' ', '').replace('\n', ''))
 
     def test_immediate_expiration_by_date(self):
         obj_meta = self._upload_something()
