@@ -623,12 +623,28 @@ class ContainerSharding(ProxyClient):
             root_account, root_container, **kwargs)
         return self._check_shards(formatted_shards, **kwargs)
 
+    def _abort_sharding(self, parent_shard, **kwargs):
+        params = self._make_params(cid=parent_shard['cid'], **kwargs)
+        resp, body = self._request('POST', '/abort', params=params, **kwargs)
+        if resp.status != 204:
+            raise exceptions.from_response(resp, body)
+
+    def _safe_abort_sharding(self, parent_shard, **kwargs):
+        try:
+            self._abort_sharding(parent_shard, **kwargs)
+        except Exception as exc:
+            self.logger.error(
+                'Failed to abort sharding (CID=%s): %s',
+                parent_shard['cid'], exc)
+
     def _shard_container(self, root_account, root_container,
                          parent_shard, new_shards, **kwargs):
         self.logger.info(
             'Sharding %s with %s', str(parent_shard), str(new_shards))
+        parent_shard['sharding'] = None
 
         # Prepare the sharding for the container to shard
+        # FIXME(adu): ServiceBusy or Timeout
         sharding_info = self._prepare_sharding(parent_shard, **kwargs)
         parent_shard['sharding'] = sharding_info
 
@@ -656,6 +672,7 @@ class ContainerSharding(ProxyClient):
         # remplace the shards in the root container
         if not saved_writes_applicator.close(**kwargs):
             raise OioException('New shards could not be updated correctly')
+        # FIXME(adu): ServiceBusy or Timeout
         self._replace_shards(root_account, root_container, new_shards,
                              **kwargs)
         parent_shard.pop('sharding', None)
@@ -682,14 +699,64 @@ class ContainerSharding(ProxyClient):
         for new_shard in new_shards:
             self._safe_clean(new_shard, **kwargs)
 
+    def _rollback_sharding(self, parent_shard, new_shards, **kwargs):
+        if 'sharding' not in parent_shard:
+            # Sharding is complete, but not everything has been cleaned up
+            self.logger.error(
+                'Failed to clean up at the end of the sharding (CID=%s)',
+                parent_shard['cid'])
+            return
+
+        self.logger.error(
+            'Failed to shard container (CID=%s), aborting...',
+            parent_shard['cid'])
+        self._safe_abort_sharding(parent_shard, **kwargs)
+        for new_shard in new_shards:
+            if 'cid' not in new_shard:
+                # Shard doesn't exist yet
+                continue
+            self.logger.info(
+                'Deleting new shard (CID=%s)', new_shard['cid'])
+            try:
+                self.container.container_delete(
+                    cid=new_shard['cid'], force=True, **kwargs)
+            except Exception as exc:
+                # "Create" an orphan shard
+                self.logger.warning(
+                    'Failed to delete new shard (CID=%s): %s',
+                    new_shard['cid'], exc)
+
+        if parent_shard['sharding'] is None:
+            # Sharding hasn't even started
+            return
+
+        # Drain beanstalk tube
+        beanstalk_url = parent_shard['sharding']['queue']
+        beanstalk_tube = parent_shard['cid'] + '.sharding-' \
+            + str(parent_shard['sharding']['timestamp'])
+        self.logger.info(
+            'Drain beanstalk tube (URL=%s TUBE=%s)',
+            beanstalk_url, beanstalk_tube)
+        try:
+            beanstalk = Beanstalk.from_url(beanstalk_url)
+            beanstalk.drain_tube(beanstalk_tube)
+        except Exception as exc:
+            self.logger.warning(
+                'Failed to drain the beanstalk tube (URL=%s TUBE=%s): %s',
+                beanstalk_url, beanstalk_tube, exc)
+
     def _almost_safe_shard_container(self, root_account, root_container,
                                      parent_shard, new_shards, **kwargs):
         try:
             self._shard_container(root_account, root_container,
                                   parent_shard, new_shards, **kwargs)
         except Exception:
-            self.logger.exception('Failed to shard container')
-            # TODO(adu) Rollback sharding
+            try:
+                self._rollback_sharding(parent_shard, new_shards, **kwargs)
+            except Exception:
+                self.logger.exception(
+                    'Failed to rollback sharding (CID=%s)',
+                    parent_shard['cid'])
             raise
 
     def _shard_container_by_dichotomy(self, root_account, root_container,
