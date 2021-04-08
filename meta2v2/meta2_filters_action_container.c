@@ -827,3 +827,18 @@ meta2_filter_action_show_sharding(struct gridd_filter_ctx_s *ctx,
 		g_strfreev(properties);
 	return FILTER_OK;
 }
+
+int
+meta2_filter_action_abort_sharding(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply UNUSED)
+{
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+
+	GError *err = meta2_backend_abort_sharding(m2b, url);
+	if (err) {
+		meta2_filter_ctx_set_error(ctx, err);
+		return FILTER_KO;
+	}
+	return FILTER_OK;
+}

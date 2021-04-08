@@ -2855,3 +2855,65 @@ meta2_backend_show_sharding(struct meta2_backend_s *m2b, struct oio_url_s *url,
 
 	return err;
 }
+
+GError*
+meta2_backend_abort_sharding(struct meta2_backend_s *m2b, struct oio_url_s *url)
+{
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	// Open the meta2 database ignoring the sharding lock
+	struct m2_open_args_s args = {
+			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT,
+			NULL
+		};
+	err = m2b_open_with_args(m2b, url, &args, &sq3);
+	if (!err) {
+		gint64 timestamp = oio_ext_real_time();
+
+		gint64 sharding_state = sqlx_admin_get_i64(sq3,
+				M2V2_ADMIN_SHARDING_STATE, 0);
+		if (sharding_state != CONTAINER_TO_SHARD_STATE_SAVING_WRITES
+				&& sharding_state != CONTAINER_TO_SHARD_STATE_LOCKED) {
+			err = BADREQ("No sharding in progress");
+			goto end;
+		}
+
+		if (sharding_state == CONTAINER_TO_SHARD_STATE_SAVING_WRITES) {
+			gchar *copy_path = g_strdup_printf("%s.sharding-%"G_GINT64_FORMAT,
+					sq3->path_inline,
+					sqlx_admin_get_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, 0));
+			if (remove(copy_path)) {
+				GRID_WARN("Failed to remove file %s: (%d) %s", copy_path,
+						errno, strerror(errno));
+			}
+			g_free(copy_path);
+
+			if (sq3->sharding_queue) {
+				beanstalkd_destroy(sq3->sharding_queue);
+				sq3->sharding_queue = NULL;
+			}
+		}
+
+		struct sqlx_repctx_s *repctx = NULL;
+		if (!(err = _transaction_begin(sq3, url, &repctx))) {
+			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
+					CONTAINER_TO_SHARD_STATE_ABORTED);
+			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, timestamp);
+			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_MASTER);
+			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_QUEUE);
+			m2db_increment_version(sq3);
+			err = sqlx_transaction_end(repctx, err);
+			if (!err)
+				m2b_add_modified_container(m2b, sq3);
+		}
+
+end:
+		m2b_close(sq3, url);
+	}
+
+	return err;
+}

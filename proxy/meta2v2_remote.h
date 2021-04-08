@@ -238,4 +238,8 @@ GByteArray* m2v2_remote_pack_SHOW_SHARDING(
 		struct list_params_s *params,
 		gint64 dl);
 
+GByteArray* m2v2_remote_pack_ABORT_SHARDING(
+		struct oio_url_s *url,
+		gint64 dl);
+
 #endif /*OIO_SDS__meta2v2__meta2v2_remote_h*/

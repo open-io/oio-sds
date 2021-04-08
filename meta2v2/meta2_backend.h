@@ -259,4 +259,8 @@ GError* meta2_backend_show_sharding(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, struct list_params_s *lp, m2_onbean_cb cb,
 		gpointer u0, gchar ***out_properties);
 
+/** Abort sharding. */
+GError* meta2_backend_abort_sharding(struct meta2_backend_s *m2b,
+		struct oio_url_s *url);
+
 #endif /*OIO_SDS__meta2v2__meta2_backend_h*/
