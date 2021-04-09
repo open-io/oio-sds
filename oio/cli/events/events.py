@@ -15,7 +15,7 @@
 
 from logging import getLogger
 
-from oio.cli import ShowOne
+from oio.cli import Lister, ShowOne
 
 
 class StatsEvents(ShowOne):
@@ -64,3 +64,15 @@ class EventsExhume(ShowOne):
         count = self.app.client_manager.event.exhume(parsed_args.limit,
                                                      parsed_args.tube)
         return [("Exhumed",), (count,)]
+
+
+class ListTubes(Lister):
+    """
+    Get the list of all tubes known by the beanstalkd service
+    behind the local event-agent.
+    """
+
+    def take_action(self, parsed_args):
+        tubes = self.app.client_manager.event.list_tubes()
+        print(tubes)
+        return [("Tubes",), ((x, ) for x in tubes)]
