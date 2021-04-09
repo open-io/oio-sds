@@ -46,7 +46,12 @@
 			{ "type": "bool", "name": "meta2_flag_store_chunk_ids",
 				"key": "meta2.store_chunk_ids",
 				"descr": "Should the meta2 store complete chunk IDs (URL) or just store service IDs. If this is set to false, core.lb.generate_random_chunk_ids should be set to false also.",
-				"def": false }
+				"def": false },
+
+			{ "type": "monotonic", "name": "meta2_sharding_timeout",
+				"key": "meta2.sharding.timeout",
+				"descr": "Maximum time allowed between the preparation phase and the locking phase to shard a container.",
+				"def": "5m", "min": "1s", "max": "1h" }
 		]
 	},
 	"rawx": {

@@ -98,6 +98,9 @@ static GError* _transaction_begin(struct sqlx_sqlite3_s *sq3,
 static void m2b_add_modified_container(struct meta2_backend_s *m2b,
 		struct sqlx_sqlite3_s *sq3);
 
+static GError* _meta2_abort_sharding(struct sqlx_sqlite3_s *sq3,
+		struct oio_url_s *url);
+
 static enum m2v2_open_type_e
 _mode_masterslave(guint32 flags)
 {
@@ -451,7 +454,12 @@ m2b_close(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 		GRID_ERROR("Failed to put in sharding queue, "
 				"aborting sharding...: (%d) %s", err->code, err->message);
 		g_clear_error(&err);
-		// TODO(adu): Abort sharding
+		err = _meta2_abort_sharding(sq3, url);
+		if (err) {
+			GRID_ERROR("Failed to abort sharding: (%d) %s",
+					err->code, err->message);
+			g_clear_error(&err);
+		}
 		goto exit;
 	}
 
@@ -568,7 +576,12 @@ reopen:
 	if (!sharding_timestamp) {
 		// Should never happen
 		GRID_ERROR("Missing sharding timestamp, aborting sharding...");
-		// TODO(adu): Abort sharding
+		err = _meta2_abort_sharding(sq3, url);
+		if (err) {
+			GRID_ERROR("Failed to abort sharding: (%d) %s",
+					err->code, err->message);
+			g_clear_error(&err);
+		}
 		goto exit;
 	}
 	gchar *sharding_master = sqlx_admin_get_str(sq3,
@@ -576,7 +589,12 @@ reopen:
 	if (!sharding_master) {
 		// Should never happen
 		GRID_ERROR("Missing sharding master, aborting sharding...");
-		// TODO(adu): Abort sharding
+		err = _meta2_abort_sharding(sq3, url);
+		if (err) {
+			GRID_ERROR("Failed to abort sharding: (%d) %s",
+					err->code, err->message);
+			g_clear_error(&err);
+		}
 		goto exit;
 	}
 	gchar *sharding_queue = sqlx_admin_get_str(sq3,
@@ -584,7 +602,26 @@ reopen:
 	if (!sharding_queue) {
 		// Should never happen
 		GRID_ERROR("Missing sharding queue, aborting sharding...");
-		// TODO(adu): Abort sharding
+		err = _meta2_abort_sharding(sq3, url);
+		if (err) {
+			GRID_ERROR("Failed to abort sharding: (%d) %s",
+					err->code, err->message);
+			g_clear_error(&err);
+		}
+		goto exit;
+	}
+	// Check if sharding timeout has not expired
+	gint64 timestamp = oio_ext_real_time();
+	if (timestamp - sharding_timestamp > meta2_sharding_timeout) {
+		GRID_ERROR("After more than %"G_GINT64_FORMAT" seconds, "
+				"sharding is still not complete, aborting sharding...",
+				meta2_sharding_timeout);
+		err = _meta2_abort_sharding(sq3, url);
+		if (err) {
+			GRID_ERROR("Failed to abort sharding: (%d) %s",
+					err->code, err->message);
+			g_clear_error(&err);
+		}
 		goto exit;
 	}
 	// Check sharding master
@@ -592,12 +629,22 @@ reopen:
 	if (!master || !*master) {
 		// Should never happen
 		GRID_ERROR("No service ID, aborting sharding...");
-		// TODO(adu): Abort sharding
+		err = _meta2_abort_sharding(sq3, url);
+		if (err) {
+			GRID_ERROR("Failed to abort sharding: (%d) %s",
+					err->code, err->message);
+			g_clear_error(&err);
+		}
 		goto exit;
 	}
 	if (g_strcmp0(master, sharding_master) != 0) {
 		GRID_ERROR("Master has changed, aborting sharding...");
-		// TODO(adu): Abort sharding
+		err = _meta2_abort_sharding(sq3, url);
+		if (err) {
+			GRID_ERROR("Failed to abort sharding: (%d) %s",
+					err->code, err->message);
+			g_clear_error(&err);
+		}
 		goto exit;
 	}
 	// Check sharding queue
@@ -609,7 +656,12 @@ reopen:
 			GRID_ERROR("Failed to connect to sharding queue, "
 					"aborting sharding...: (%d) %s", err->code, err->message);
 			g_clear_error(&err);
-			// TODO(adu): Abort sharding
+			err = _meta2_abort_sharding(sq3, url);
+			if (err) {
+				GRID_ERROR("Failed to abort sharding: (%d) %s",
+						err->code, err->message);
+				g_clear_error(&err);
+			}
 			goto exit;
 		}
 		sq3->sharding_queue = beanstalkd;
@@ -2856,6 +2908,54 @@ meta2_backend_show_sharding(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	return err;
 }
 
+static GError*
+_meta2_abort_sharding(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
+{
+	GError *err = NULL;
+
+	EXTRA_ASSERT(sq3 != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	gint64 timestamp = oio_ext_real_time();
+
+	gint64 sharding_state = sqlx_admin_get_i64(sq3,
+			M2V2_ADMIN_SHARDING_STATE, 0);
+	if (sharding_state != CONTAINER_TO_SHARD_STATE_SAVING_WRITES
+			&& sharding_state != CONTAINER_TO_SHARD_STATE_LOCKED) {
+		err = BADREQ("No sharding in progress");
+		return err;
+	}
+
+	if (sharding_state == CONTAINER_TO_SHARD_STATE_SAVING_WRITES) {
+		gchar *copy_path = g_strdup_printf("%s.sharding-%"G_GINT64_FORMAT,
+				sq3->path_inline,
+				sqlx_admin_get_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, 0));
+		if (remove(copy_path)) {
+			GRID_WARN("Failed to remove file %s: (%d) %s", copy_path,
+					errno, strerror(errno));
+		}
+		g_free(copy_path);
+
+		if (sq3->sharding_queue) {
+			beanstalkd_destroy(sq3->sharding_queue);
+			sq3->sharding_queue = NULL;
+		}
+	}
+
+	struct sqlx_repctx_s *repctx = NULL;
+	if (!(err = _transaction_begin(sq3, url, &repctx))) {
+		sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
+				CONTAINER_TO_SHARD_STATE_ABORTED);
+		sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, timestamp);
+		sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_MASTER);
+		sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_QUEUE);
+		m2db_increment_version(sq3);
+		err = sqlx_transaction_end(repctx, err);
+	}
+
+	return err;
+}
+
 GError*
 meta2_backend_abort_sharding(struct meta2_backend_s *m2b, struct oio_url_s *url)
 {
@@ -2872,46 +2972,9 @@ meta2_backend_abort_sharding(struct meta2_backend_s *m2b, struct oio_url_s *url)
 		};
 	err = m2b_open_with_args(m2b, url, &args, &sq3);
 	if (!err) {
-		gint64 timestamp = oio_ext_real_time();
-
-		gint64 sharding_state = sqlx_admin_get_i64(sq3,
-				M2V2_ADMIN_SHARDING_STATE, 0);
-		if (sharding_state != CONTAINER_TO_SHARD_STATE_SAVING_WRITES
-				&& sharding_state != CONTAINER_TO_SHARD_STATE_LOCKED) {
-			err = BADREQ("No sharding in progress");
-			goto end;
-		}
-
-		if (sharding_state == CONTAINER_TO_SHARD_STATE_SAVING_WRITES) {
-			gchar *copy_path = g_strdup_printf("%s.sharding-%"G_GINT64_FORMAT,
-					sq3->path_inline,
-					sqlx_admin_get_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, 0));
-			if (remove(copy_path)) {
-				GRID_WARN("Failed to remove file %s: (%d) %s", copy_path,
-						errno, strerror(errno));
-			}
-			g_free(copy_path);
-
-			if (sq3->sharding_queue) {
-				beanstalkd_destroy(sq3->sharding_queue);
-				sq3->sharding_queue = NULL;
-			}
-		}
-
-		struct sqlx_repctx_s *repctx = NULL;
-		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
-					CONTAINER_TO_SHARD_STATE_ABORTED);
-			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, timestamp);
-			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_MASTER);
-			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_QUEUE);
-			m2db_increment_version(sq3);
-			err = sqlx_transaction_end(repctx, err);
-			if (!err)
-				m2b_add_modified_container(m2b, sq3);
-		}
-
-end:
+		err = _meta2_abort_sharding(sq3, url);
+		if (!err)
+			m2b_add_modified_container(m2b, sq3);
 		m2b_close(sq3, url);
 	}
 
