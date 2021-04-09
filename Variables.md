@@ -546,6 +546,15 @@ Used by `gcc`
  * cmake directive: *OIO_META2_RETENTION_PERIOD*
  * range: 1 -> 2592000
 
+### meta2.sharding.timeout
+
+> Maximum time allowed between the preparation phase and the locking phase to shard a container.
+
+ * default: **5 * G_TIME_SPAN_MINUTE**
+ * type: gint64
+ * cmake directive: *OIO_META2_SHARDING_TIMEOUT*
+ * range: 1 * G_TIME_SPAN_SECOND -> 1 * G_TIME_SPAN_HOUR
+
 ### meta2.store_chunk_ids
 
 > Should the meta2 store complete chunk IDs (URL) or just store service IDs. If this is set to false, core.lb.generate_random_chunk_ids should be set to false also.
