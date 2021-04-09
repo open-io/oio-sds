@@ -1,0 +1,36 @@
+version: v1.0
+name: oio-sds-test-functional
+environment: oio-sds-env
+jobs:
+  - job: Run functional tests
+    steps:
+
+      - name: Checkout application
+        checkout: '{{ .cds.workspace }}'
+
+      - name: Install dependencies
+        script: |+
+          #!/bin/bash
+          set -x
+          curl http://mirror.openio.io/pub/repo/openio/APT-GPG-KEY-OPENIO-0 | apt-key add -
+          apt-add-repository "deb http://mirror.openio.io/pub/repo/openio/sds/19.04/ubuntu/ bionic/"
+          apt install -y $(tr '\n' ' ' < .cds/deps-ubuntu-bionic.txt)
+          go get gopkg.in/ini.v1 golang.org/x/sys/unix
+          mkdir /tmp/oio
+          # We need these permissions for the ECD and container backup services to work
+          chmod a+rX $(dirname $HOME)
+          chmod -R a+rX $HOME
+          virtualenv -p /usr/bin/python3 $HOME/oiovenv
+          . $HOME/oiovenv/bin/activate
+          pip install --upgrade pip setuptools virtualenv tox -r all-requirements.txt -r test-requirements.txt
+
+      - name: Run functional tests
+        script:
+          - rsyslogd &
+          # Required for oio-gdb.py, but does not work
+          #- sysctl -w kernel.core_pattern='/tmp/core.%p.%E'
+          - . $HOME/oiovenv/bin/activate
+          - ./tools/oio-travis-suites.sh
+
+    requirements:
+        - model: openio-debbuild-18.04

@@ -16,7 +16,9 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 set -e
-source $HOME/oio/bin/activate
+
+# Not required, Travis and CDS tests already run in a virtualenv if language is python.
+#source $HOME/oio/bin/activate
 
 fold_start() { echo -e "travis_fold:start:$1\033[33;1m$2\033[0m" ; }
 fold_end() { echo -e "\ntravis_fold:end:$1\r" ; }

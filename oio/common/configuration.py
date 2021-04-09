@@ -94,7 +94,7 @@ def _config_paths():
     yield '/etc/oio/sds.conf', True
     for conf_path in glob('/etc/oio/sds.conf.d/*'):
         yield conf_path, True
-    yield path.expanduser('~/.oio/sds.conf'), False
+    yield path.expandvars('${HOME}/.oio/sds.conf'), False
 
 
 # Keep namespace configurations, avoid loading files everytime
