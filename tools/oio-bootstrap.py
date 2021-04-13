@@ -172,6 +172,20 @@ log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
 """
 
+template_meta2_checker_service = """
+[meta2-checker]
+namespace = ${NS}
+user = ${USER}
+volume_list = ${META2_VOLUMES}
+interval = 30
+report_interval = 5
+log_level = INFO
+log_facility = LOG_LOCAL0
+log_address = /dev/log
+syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
+handlers_conf = ${CFGDIR}/sanity-modules-${SRVNUM}.conf
+"""
+
 template_rawx_service = """
 Listen ${IP}:${PORT}
 PidFile ${RUNDIR}/${NS}-${SRVTYPE}-${SRVNUM}.pid
@@ -725,6 +739,16 @@ start_at_boot=false
 on_die=cry
 """
 
+
+template_gridinit_meta2_checker = """
+[Service.${NS}-${SRVTYPE}-${SRVNUM}]
+group=${NS},localhost,${GROUPTYPE}
+command=oio-meta2-checker ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+enabled=true
+start_at_boot=false
+on_die=cry
+"""
+
 template_gridinit_rawx_command_options = \
     '-s OIO,${NS},${SRVTYPE},${SRVNUM} -D FOREGROUND ' \
     '-f ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.httpd.conf'
@@ -1059,6 +1083,25 @@ enabled=true
 start_at_boot=true
 command=oio-webhook-test.py --port 9081
 env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/${PYTHON_VERSION}/site-packages
+"""
+
+template_sanity_tools = """
+[handler:sharding]
+pipeline = self_healing auto_sharding
+
+[filter:auto_sharding]
+use = egg:oio#auto_sharding
+namespace = ${NS}
+volume_list = ${META2_VOLUMES}
+shard_size = 40
+shard_threshold = 40
+sharding_strategy = shard-with-partition
+shrink_threshold = 20
+
+
+[filter:self_healing]
+use = egg:oio#self_healing
+volume_list = ${META2_VOLUMES}
 """
 
 
@@ -1493,6 +1536,28 @@ def generate(options):
     # then the gridinit conf
     tpl = Template(template_gridinit_meta2_indexer)
     with open(gridinit(_tmp_env), 'a+') as f:
+        f.write(tpl.safe_substitute(_tmp_env))
+
+    # oio-meta2-checker
+    _tmp_env = subenv({
+        'META2_VOLUMES': ",".join(meta2_volumes),
+        'SRVTYPE': 'meta2-checker',
+        'SRVNUM': '1',
+        'GROUPTYPE': 'indexer',
+    })
+    # first the conf
+    tpl = Template(template_meta2_checker_service)
+    to_write = tpl.safe_substitute(_tmp_env)
+    path = '{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.conf'.format(**_tmp_env)
+    with open(path, 'w+') as f:
+        f.write(to_write)
+    # then the gridinit conf
+    tpl = Template(template_gridinit_meta2_checker)
+    with open(gridinit(_tmp_env), 'a+') as f:
+        f.write(tpl.safe_substitute(_tmp_env))
+
+    with open(CFGDIR + '/sanity-modules-'+str(num)+'.conf', 'w+') as f:
+        tpl = Template(template_sanity_tools)
         f.write(tpl.safe_substitute(_tmp_env))
 
     # RAWX
