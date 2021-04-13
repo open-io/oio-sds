@@ -208,7 +208,7 @@ class ServiceWatcher(object):
 
 
 class ConscienceAgent(Daemon):
-    def __init__(self, conf):
+    def __init__(self, conf, **kwargs):
         validate_service_conf(conf)
         self.running = True
         self.conf = conf

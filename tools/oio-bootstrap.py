@@ -172,6 +172,35 @@ log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
 """
 
+template_meta2_crawler_service = """
+[meta2-crawler]
+namespace = ${NS}
+user = ${USER}
+volume_list = ${META2_VOLUMES}
+
+interval = 1200
+report_interval = 300
+scanned_per_second = 10
+
+log_level = INFO
+log_facility = LOG_LOCAL0
+log_address = /dev/log
+syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
+
+[pipeline:main]
+pipeline = logger auto_sharding
+
+[filter:auto_sharding]
+use = egg:oio#auto_sharding
+sharding_strategy = shard-with-partition
+sharding_shard_size = 100000
+sharding_threshold = 100000
+sharding_partition = 50, 50
+
+[filter:logger]
+use = egg:oio#logger
+"""
+
 template_rawx_service = """
 Listen ${IP}:${PORT}
 PidFile ${RUNDIR}/${NS}-${SRVTYPE}-${SRVNUM}.pid
@@ -720,6 +749,15 @@ template_gridinit_meta2_indexer = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${GROUPTYPE}
 command=oio-meta2-indexer ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+enabled=true
+start_at_boot=false
+on_die=cry
+"""
+
+template_gridinit_meta2_crawler = """
+[Service.${NS}-${SRVTYPE}-${SRVNUM}]
+group=${NS},localhost,${GROUPTYPE}
+command=oio-meta2-crawler ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 enabled=true
 start_at_boot=false
 on_die=cry
@@ -1492,6 +1530,24 @@ def generate(options):
         f.write(to_write)
     # then the gridinit conf
     tpl = Template(template_gridinit_meta2_indexer)
+    with open(gridinit(_tmp_env), 'a+') as f:
+        f.write(tpl.safe_substitute(_tmp_env))
+
+    # oio-meta2-crawler
+    _tmp_env = subenv({
+        'META2_VOLUMES': ",".join(meta2_volumes),
+        'SRVTYPE': 'meta2-crawler',
+        'SRVNUM': '1',
+        'GROUPTYPE': 'indexer',
+    })
+    # first the conf
+    tpl = Template(template_meta2_crawler_service)
+    to_write = tpl.safe_substitute(_tmp_env)
+    path = '{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.conf'.format(**_tmp_env)
+    with open(path, 'w+') as f:
+        f.write(to_write)
+    # then the gridinit conf
+    tpl = Template(template_gridinit_meta2_crawler)
     with open(gridinit(_tmp_env), 'a+') as f:
         f.write(tpl.safe_substitute(_tmp_env))
 

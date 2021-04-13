@@ -249,7 +249,7 @@ class Meta2Indexer(Daemon):
     for each volume.
     """
 
-    def __init__(self, conf):
+    def __init__(self, conf, **kwargs):
         super(Meta2Indexer, self).__init__(conf=conf)
         self.logger = get_logger(conf)
         if not conf.get("volume_list"):

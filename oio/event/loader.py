@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -38,7 +39,7 @@ class _Handler(_Type):
     config_prefixes = ['handler']
 
     def invoke(self, context, **kwargs):
-        if context.protocol == 'oio.event.handler_factory':
+        if context.protocol in self.egg_protocols:
             app = kwargs.pop('app')
             return context.object(
                 app, context.global_conf, **context.local_conf)
@@ -55,7 +56,7 @@ class _Filter(_Type):
     config_prefixes = ['filter']
 
     def invoke(self, context, **kwargs):
-        if context.protocol == 'oio.event.filter_factory':
+        if context.protocol in self.egg_protocols:
             return context.object(context.global_conf, **context.local_conf)
         else:
             assert 0, 'Protocol %r unknown' % context.protocol
@@ -90,7 +91,7 @@ def loadhandlers(path, global_conf=None, **kwargs):
 
 
 def loadhandler(loader, name, global_conf=None, **kwargs):
-    context = loader.get_context(HANDLER, name, global_conf)
+    context = loader.get_context(loader.HANDLER, name, global_conf)
     return context.create(**kwargs)
 
 
@@ -129,6 +130,11 @@ class CustomConfigParser(configparser.ConfigParser):
 
 
 class ConfigLoader(object):
+
+    HANDLER = HANDLER
+    FILTER = FILTER
+    PIPELINE = PIPELINE
+
     def __init__(self, filename):
         self.filename = filename = filename.strip()
         defaults = {
@@ -160,7 +166,7 @@ class ConfigLoader(object):
             if option in defaults:
                 continue
             local_conf[option] = self.parser.get(section, option)
-        if obj_type == HANDLER:
+        if obj_type == self.HANDLER:
             context = self._pipeline_context(
                 obj_type, section, name=name, global_conf=global_conf,
                 local_conf=local_conf)
@@ -179,13 +185,13 @@ class ConfigLoader(object):
         else:
             pipeline = local_conf.pop('pipeline').split()
         context = LoaderContext(
-            None, PIPELINE, None, global_conf, local_conf, self)
+            None, self.PIPELINE, None, global_conf, local_conf, self)
         # context.handler_context = self._context_from_use(
         #     obj_type, local_conf, global_conf, section)
         context.handler_context = loadcontext(
-                HANDLER, DEFAULT_HANDLER, global_conf=global_conf)
+                self.HANDLER, DEFAULT_HANDLER, global_conf=global_conf)
         context.filter_contexts = [
-            self.get_context(FILTER, n, global_conf)
+            self.get_context(self.FILTER, n, global_conf)
             for n in pipeline]
         return context
 

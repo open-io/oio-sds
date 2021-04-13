@@ -75,7 +75,7 @@ def run_daemon(klass, conf_file, section_name=None, **kwargs):
     logger = get_logger(
         conf, section_name, verbose=kwargs.pop('verbose', False))
     try:
-        klass(conf).start(**kwargs)
+        klass(conf, conf_file=conf_file).start(**kwargs)
     except KeyboardInterrupt:
         logger.info('User interrupt')
     logger.info('Daemon exited')
