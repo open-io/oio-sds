@@ -44,6 +44,10 @@ def int_to_iso8601(when):
     return datetime.utcfromtimestamp(when).isoformat()
 
 
+def tag(tagname):
+    return '{%s}%s' % (XMLNS_S3, tagname)
+
+
 class ProcessedVersions(object):
     """
     Save the processed versions of the last object
@@ -125,19 +129,24 @@ class ContainerLifecycle(object):
         """
         tree = etree.fromstring(xml_str)
         root_ns = tree.nsmap.get(None)
-        root_tag = 'LifecycleConfiguration'
-        if root_ns is not None:
-            root_tag = '{%s}%s' % (root_ns, root_tag)
-        if tree.tag != root_tag:
+
+        # Enforce the use of a namespace to avoid problems
+        # with different versions of libxml2.
+        if root_ns is None:
+            tree.attrib['xmlns'] = XMLNS_S3
+            return self.load_xml(etree.tostring(tree))
+
+        if tree.tag != tag('LifecycleConfiguration'):
             raise ValueError(
                 "Expected 'LifecycleConfiguration' as root tag, got '%s'" %
                 tree.tag)
-        for rule_elt in tree.findall('Rule', tree.nsmap):
+        for rule_elt in tree.findall(tag('Rule'), tree.nsmap):
             rule = LifecycleRule.from_element(rule_elt, lifecycle=self)
             self.rules.append(rule)
 
     def _to_element_tree(self, **kwargs):
-        lifecycle_elt = etree.Element('LifecycleConfiguration')
+        lifecycle_elt = etree.Element('LifecycleConfiguration',
+                                      nsmap={None: XMLNS_S3})
 
         for rule in self.rules:
             rule_elt = rule._to_element_tree(**kwargs)
@@ -294,7 +303,7 @@ class LifecycleRule(object):
         """
         nsmap = rule_elt.nsmap
         try:
-            id_ = rule_elt.findall('ID', nsmap)[-1].text
+            id_ = rule_elt.findall(tag('ID'), nsmap)[-1].text
             if id_ is None:
                 raise ValueError("Missing value for 'ID' element")
         except IndexError:
@@ -302,12 +311,12 @@ class LifecycleRule(object):
 
         try:
             filter_ = LifecycleRuleFilter.from_element(
-                rule_elt.findall('Filter', nsmap)[-1])
+                rule_elt.findall(tag('Filter'), nsmap)[-1])
         except IndexError:
             raise ValueError("Missing 'Filter' element")
 
         try:
-            status = rule_elt.findall('Status', nsmap)[-1].text
+            status = rule_elt.findall(tag('Status'), nsmap)[-1].text
             if status is None:
                 raise ValueError("Missing value for 'Status' element")
             status = status.lower()
@@ -320,7 +329,7 @@ class LifecycleRule(object):
         actions = list()
         try:
             expiration = Expiration.from_element(
-                rule_elt.findall('Expiration', nsmap)[-1], **kwargs)
+                rule_elt.findall(tag('Expiration'), nsmap)[-1], **kwargs)
             action_filter_type = type(expiration.filter)
             actions.append(expiration)
         except IndexError:
@@ -328,7 +337,7 @@ class LifecycleRule(object):
             action_filter_type = None
 
         transitions = list()
-        for transition_elt in rule_elt.findall('Transition', nsmap):
+        for transition_elt in rule_elt.findall(tag('Transition'), nsmap):
             transition = Transition.from_element(transition_elt, **kwargs)
             if action_filter_type is None:
                 action_filter_type = type(transition.filter)
@@ -361,7 +370,8 @@ class LifecycleRule(object):
 
         try:
             expiration = NoncurrentVersionExpiration.from_element(
-                rule_elt.findall('NoncurrentVersionExpiration', nsmap)[-1],
+                rule_elt.findall(tag('NoncurrentVersionExpiration'),
+                                 nsmap)[-1],
                 **kwargs)
             action_filter_type = type(expiration.filter)
             actions.append(expiration)
@@ -370,8 +380,8 @@ class LifecycleRule(object):
             action_filter_type = None
 
         transitions = list()
-        for transition_elt in rule_elt.findall('NoncurrentVersionTransition',
-                                               nsmap):
+        for transition_elt in rule_elt.findall(
+                tag('NoncurrentVersionTransition'), nsmap):
             transition = NoncurrentVersionTransition.from_element(
                 transition_elt, **kwargs)
             if action_filter_type is None:
@@ -488,9 +498,9 @@ class LifecycleRuleFilter(object):
         """
         nsmap = filter_elt.nsmap
         try:
-            and_elt = filter_elt.findall('And', nsmap)[-1]
+            and_elt = filter_elt.findall(tag('And'), nsmap)[-1]
             try:
-                prefix = and_elt.findall('Prefix', nsmap)[-1].text
+                prefix = and_elt.findall(tag('Prefix'), nsmap)[-1].text
                 if prefix is None:
                     raise ValueError("Missing value for 'Prefix' element")
             except IndexError:
@@ -498,14 +508,14 @@ class LifecycleRuleFilter(object):
             tags = cls._tags_from_element(and_elt)
         except IndexError:
             try:
-                prefix = filter_elt.findall('Prefix', nsmap)[-1].text
+                prefix = filter_elt.findall(tag('Prefix'), nsmap)[-1].text
                 if prefix is None:
                     raise ValueError("Missing value for 'Prefix' element")
             except IndexError:
                 prefix = None
             try:
                 k, v = cls._tag_from_element(
-                    filter_elt.findall('Tag', nsmap)[-1])
+                    filter_elt.findall(tag('Tag'), nsmap)[-1])
                 tags = {k: v}
             except IndexError:
                 tags = {}
@@ -570,7 +580,7 @@ class LifecycleRuleFilter(object):
                     raise ValueError(
                         "Expected 'Tagging' as root tag, got '%s'" %
                         tagging_elt.tag)
-                tags_elt = tagging_elt.find('TagSet', tagging_elt.nsmap)
+                tags_elt = tagging_elt.find(tag('TagSet'), tagging_elt.nsmap)
                 if tags_elt is None:
                     raise ValueError("Missing 'TagSet' element in 'Tagging'")
                 tags = self._tags_from_element(tags_elt, tags_elt.nsmap)
@@ -583,13 +593,13 @@ class LifecycleRuleFilter(object):
     @staticmethod
     def _tag_from_element(tag_elt, nsmap=None):
         try:
-            k = tag_elt.findall('Key', nsmap)[-1].text
+            k = tag_elt.findall(tag('Key'), nsmap)[-1].text
             if k is None:
                 raise ValueError("Missing value for 'Key' element")
         except IndexError:
             raise ValueError("Missing 'Key' element in 'Tag'")
         try:
-            v = tag_elt.findall('Value', nsmap)[-1].text
+            v = tag_elt.findall(tag('Value'), nsmap)[-1].text
             if v is None:
                 raise ValueError("Missing value for 'Value' element")
         except IndexError:
@@ -599,7 +609,7 @@ class LifecycleRuleFilter(object):
     @staticmethod
     def _tags_from_element(tags_elt, nsmap=None):
         tags = dict()
-        for tag_elt in tags_elt.findall('Tag', tags_elt.nsmap):
+        for tag_elt in tags_elt.findall(tag('Tag'), tags_elt.nsmap):
             k, v = LifecycleRuleFilter._tag_from_element(tag_elt, nsmap=nsmap)
             if tags.get(k, None) is not None:
                 raise ValueError("Duplicate Tag Keys are not allowed")
@@ -774,11 +784,11 @@ class Expiration(LifecycleAction):
         """
         nsmap = expiration_elt.nsmap
         try:
-            days_elt = expiration_elt.findall('Days', nsmap)[-1]
+            days_elt = expiration_elt.findall(tag('Days'), nsmap)[-1]
         except IndexError:
             days_elt = None
         try:
-            date_elt = expiration_elt.findall('Date', nsmap)[-1]
+            date_elt = expiration_elt.findall(tag('Date'), nsmap)[-1]
         except IndexError:
             date_elt = None
 
@@ -831,7 +841,7 @@ class Transition(LifecycleAction):
         nsmap = transition_elt.nsmap
         try:
             policy = transition_elt.findall(
-                cls.STORAGE_POLICY_XML_TAG, nsmap)[-1].text
+                tag(cls.STORAGE_POLICY_XML_TAG), nsmap)[-1].text
             if policy is None:
                 raise ValueError("Missing value for '%s' element" %
                                  cls.STORAGE_POLICY_XML_TAG)
@@ -840,11 +850,11 @@ class Transition(LifecycleAction):
                              cls.STORAGE_POLICY_XML_TAG)
 
         try:
-            days_elt = transition_elt.findall('Days', nsmap)[-1]
+            days_elt = transition_elt.findall(tag('Days'), nsmap)[-1]
         except IndexError:
             days_elt = None
         try:
-            date_elt = transition_elt.findall('Date', nsmap)[-1]
+            date_elt = transition_elt.findall(tag('Date'), nsmap)[-1]
         except IndexError:
             date_elt = None
 
@@ -896,11 +906,12 @@ class NoncurrentVersionExpiration(Expiration):
         """
         nsmap = expiration_elt.nsmap
         try:
-            days_elt = expiration_elt.findall('NoncurrentDays', nsmap)[-1]
+            days_elt = expiration_elt.findall(tag('NoncurrentDays'), nsmap)[-1]
         except IndexError:
             days_elt = None
         try:
-            count_elt = expiration_elt.findall('NoncurrentCount', nsmap)[-1]
+            count_elt = expiration_elt.findall(
+                tag('NoncurrentCount'), nsmap)[-1]
         except IndexError:
             count_elt = None
 
@@ -952,7 +963,7 @@ class NoncurrentVersionTransition(Transition):
         nsmap = transition_elt.nsmap
         try:
             policy = transition_elt.findall(
-                cls.STORAGE_POLICY_XML_TAG, nsmap)[-1].text
+                tag(cls.STORAGE_POLICY_XML_TAG), nsmap)[-1].text
             if policy is None:
                 raise ValueError("Missing value for '%s' element" %
                                  cls.STORAGE_POLICY_XML_TAG)
@@ -962,7 +973,7 @@ class NoncurrentVersionTransition(Transition):
                 (cls.STORAGE_POLICY_XML_TAG))
 
         try:
-            days_elt = transition_elt.findall('NoncurrentDays', nsmap)[-1]
+            days_elt = transition_elt.findall(tag('NoncurrentDays'), nsmap)[-1]
         except IndexError:
             days_elt = None
 

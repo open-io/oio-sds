@@ -21,7 +21,7 @@ BASEDIR=$1 ; [[ -n "$BASEDIR" ]] ; [[ -d "$BASEDIR" ]]
 
 echo "Checking for missing copyright mentions."
 /bin/ls -1f ${BASEDIR} \
-| grep -i -v -e '^\.' -e '^build' -e '^cmake' -e '^setup' \
+| grep -i -v -e '^\.' -e '^build' -e '^cmake' -e '^setup' -e '^oioenv' \
 | while read D ; do
 	/usr/bin/find "${BASEDIR}/${D}" -type f \
 		-name '*.h' -or -name '*.c' -or -name '*.py' -or -name '*.go' \

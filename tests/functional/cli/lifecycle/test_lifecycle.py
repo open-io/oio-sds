@@ -21,7 +21,7 @@ from tests.functional.cli import CliTestCase, CommandFailed
 class LifecycleCliTest(CliTestCase):
     """Functional tests for container lifecycle CLI."""
     NAME = uuid.uuid4().hex
-    CONF = """
+    CONF_WITHOUT_NS = """
         <LifecycleConfiguration>
             <Rule>
                 <ID>0123456789abcdef</ID>
@@ -36,7 +36,7 @@ class LifecycleCliTest(CliTestCase):
         </LifecycleConfiguration>
         """
 
-    CONF_WITH_NS = """
+    CONF = """
         <LifecycleConfiguration
                 xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
             <Rule>
@@ -76,7 +76,7 @@ class LifecycleCliTest(CliTestCase):
         cls.assertOutput('', output)
 
     def test_lifecycle_set(self):
-        self.openio('lifecycle set %s "%s"' % (self.NAME, self.CONF))
+        self.openio("lifecycle set %s '%s'" % (self.NAME, self.CONF))
 
     def test_lifecycle_set_file(self):
         with NamedTemporaryFile() as file_:
@@ -92,11 +92,12 @@ class LifecycleCliTest(CliTestCase):
                 CommandFailed, self.openio,
                 'lifecycle set %s --from-file %s' % (self.NAME, file_.name))
 
-    def test_lifecycle_set_with_ns(self):
-        self.openio("lifecycle set %s '%s'" % (self.NAME, self.CONF_WITH_NS))
+    def test_lifecycle_set_without_ns(self):
+        self.openio("lifecycle set %s '%s'" % (
+            self.NAME, self.CONF_WITHOUT_NS))
 
     def test_lifecycle_get(self):
-        self.openio('lifecycle set %s "%s"' % (self.NAME, self.CONF))
+        self.openio("lifecycle set %s '%s'" % (self.NAME, self.CONF))
         output = self.openio('lifecycle get ' + self.NAME)
         self.assertEqual(
             self.CONF.replace(' ', '').replace('\n', ''),
@@ -104,7 +105,7 @@ class LifecycleCliTest(CliTestCase):
 
     def test_lifecycle_apply(self):
         self.openio('container set --max-versions -1 ' + self.NAME)
-        self.openio('lifecycle set %s "%s"' % (self.NAME, self.CONF))
+        self.openio("lifecycle set %s '%s'" % (self.NAME, self.CONF))
         with NamedTemporaryFile() as file_:
             file_.write(b'test')
             file_.flush()

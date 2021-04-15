@@ -17,7 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 set -e
 
-# Not required, Travis tests already run in a virtualenv if language is python.
+# Not required, Travis and CDS tests already run in a virtualenv if language is python.
 #source $HOME/oio/bin/activate
 
 fold_start() { echo -e "travis_fold:start:$1\033[33;1m$2\033[0m" ; }

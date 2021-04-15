@@ -1,0 +1,43 @@
+name: oio-sds
+version: v2.0
+
+workflow:
+  root:
+    pipeline: oio-sds-root
+    application: oio-sds
+
+  tests-fast:
+    pipeline: oio-sds-test-fast
+    environment: oio-sds-env-test-fast
+    application: oio-sds
+    depends_on:
+      - root
+    conditions:
+      check:
+        - variable: cds.triggered_by.username
+          operator: ne
+          value: "cds.scheduler"
+
+  mirror:
+    pipeline: oio-sds-mirror
+    application: oio-sds
+    depends_on:
+      - root
+
+metadata:
+  default_tags: git.branch,git.author,git.tag
+
+retention_policy: return (git_branch_exist == "false" and run_days_before < 2) or run_days_before < 365
+
+notifications:
+  - type: vcs
+    settings:
+      on_success: always
+
+hooks:
+  root:
+    - type: Scheduler
+      config:
+        # once very hour
+        cron: "7 * * * *"
+        timezone: UTC

@@ -38,6 +38,13 @@ class EventClient(object):
             self.beanstalk.use(tube)
         return self.beanstalk.kick(bound=limit)
 
+    def list_tubes(self):
+        """
+        Get the list of tubes known by the beanstalkd service behind
+        the local event-agent.
+        """
+        return self.beanstalk.tubes()
+
     def stats(self, tube=None):
         tube = tube or 'oio'
         return self.beanstalk.stats_tube(tube)

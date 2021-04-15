@@ -28,6 +28,7 @@ from greenlet import GreenletExit
 from oio.api import io
 from oio.common import exceptions
 from oio.common.constants import CHUNK_HEADERS, REQID_HEADER
+from oio.common.easy_value import int_value
 from oio.common.exceptions import SourceReadError
 from oio.common.http import HeadersDict, parse_content_range, \
     ranges_from_http_header, headers_from_object_metadata
@@ -1125,20 +1126,56 @@ class ECRebuildHandler(object):
         for chunk in self.meta_chunk:
             pile.spawn(self._get_response, chunk, headers)
 
-        resps = []
+        # Sort all responses according to the chunk size
+        total_resps = 0
+        resps_by_size = dict()
+        resps_without_chunk_size = list()
         for resp in pile:
             if not resp:
                 continue
-            resps.append(resp)
-            if len(resps) >= self.storage_method.ec_nb_data:
-                break
+            chunk_size = int_value(
+                resp.getheader(CHUNK_HEADERS['chunk_size'], None), None)
+            if chunk_size is None:
+                self.logger.warning('Missing chunk size')
+                resps_without_chunk_size.append(resp)
+                continue
+            total_resps += 1
+            resps_by_size.setdefault(chunk_size, list()).append(resp)
+        # Select the chunk with the majority chunk size
+        resps = None
+        max_resps = 0
+        assumed_chunk_size = None
+        for chunk_size, resps in resps_by_size.items():
+            nb_resp = len(resps)
+            if nb_resp > max_resps:
+                max_resps = nb_resp
+                assumed_chunk_size = chunk_size
+        if assumed_chunk_size is None:
+            self.logger.warning(
+                'No chunk available with chunk size information')
+            resps = list()
         else:
-            self.logger.error('Unable to read enough valid sources to rebuild')
-            raise exceptions.UnrecoverableContent(
-                'Not enough valid sources to rebuild')
+            resps = resps_by_size[assumed_chunk_size]
+            if max_resps != total_resps:
+                self.logger.warning(
+                    '%d/%d chunks are not the same size as others (%d), '
+                    'they should be removed',
+                    total_resps - max_resps, total_resps, assumed_chunk_size)
+        # Check the number of chunks available
+        if max_resps < nb_data:
+            # Add the chunks without size information
+            # assuming they are the correct size
+            resps = resps + resps_without_chunk_size
+            if len(resps) < nb_data:
+                self.logger.error(
+                    'Unable to read enough valid sources to rebuild')
+                raise exceptions.UnrecoverableContent(
+                    'Not enough valid sources to rebuild')
+            self.logger.warning(
+                'Use chunk(s) without size information to rebuild a chunk')
 
         rebuild_iter = self._make_rebuild_iter(resps[:nb_data])
-        return rebuild_iter
+        return assumed_chunk_size, rebuild_iter
 
     def _make_rebuild_iter(self, resps):
         def _get_frag(resp):

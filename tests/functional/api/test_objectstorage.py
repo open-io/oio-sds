@@ -23,6 +23,7 @@ from functools import partial
 from urllib3 import HTTPResponse
 from oio.api.object_storage import ObjectStorageApi
 from oio.common import exceptions as exc
+from oio.common.cache import get_cached_object_metadata
 from oio.common.constants import REQID_HEADER
 from oio.common.storage_functions import _sort_chunks as sort_chunks
 from oio.common.utils import cid_from_name, request_id, depaginate
@@ -2141,14 +2142,22 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         # Fetch the original object to make sure the cache is filled.
         self.api.object_fetch(
             self.account, self.container, self.path)
+        cached_meta, cached_chunks = get_cached_object_metadata(
+            account=self.account, reference=self.container, path=self.path,
+            cache=self.cache)
+        self.assertIsNotNone(cached_meta)
+        self.assertIsNotNone(cached_chunks)
+
         # Make the cache invalid by overwriting the object without
         # clearing the cache.
         self.api.object_create(self.account, self.container,
                                obj_name=self.path, data='overwritten',
                                cache=None)
-        # Wait for the original chunks to be deleted.
-        self.wait_for_event('oio-preserved',
-                            types=(EventTypes.CHUNK_DELETED, ), timeout=5.0)
+        # Wait until all the original chunks are deleted
+        for _ in range(len(cached_chunks)):
+            self.wait_for_event('oio-preserved',
+                                types=(EventTypes.CHUNK_DELETED, ),
+                                timeout=5.0)
         # Read the object. An error will be raised internally, but the latest
         # object should be fetched.
         meta, stream = self.api.object_fetch(

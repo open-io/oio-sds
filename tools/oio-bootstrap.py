@@ -258,6 +258,10 @@ WSGISocketPrefix ${RUNDIR}/
 WSGIChunkedRequest On
 LimitRequestFields 200
 
+<Directory />
+AllowOverride none
+</Directory>
+
 <VirtualHost ${IP}:${PORT}>
 # Leave Empty
 </VirtualHost>
@@ -1582,7 +1586,8 @@ def generate(options):
         f.write(tpl.safe_substitute(env))
 
     # ecd
-    env = subenv({'SRVTYPE': 'ecd', 'SRVNUM': 1, 'PORT': port_ecd})
+    env = subenv({'SRVTYPE': 'ecd', 'SRVNUM': 1, 'PORT': port_ecd,
+                  'USER': 'nobody', 'GROUP': 'nogroup'})
     add_service(env)
     tpl = Template(template_gridinit_httpd)
     with open(gridinit(env), 'a+') as f:
@@ -1601,7 +1606,8 @@ def generate(options):
         f.write(to_write)
 
     # container
-    env = subenv({'SRVTYPE': 'container', 'SRVNUM': 1, 'PORT': port_admin})
+    env = subenv({'SRVTYPE': 'container', 'SRVNUM': 1, 'PORT': port_admin,
+                  'USER': 'nobody', 'GROUP': 'nogroup'})
     add_service(env)
     tpl = Template(template_gridinit_httpd)
     with open(gridinit(env), 'a+') as f:
