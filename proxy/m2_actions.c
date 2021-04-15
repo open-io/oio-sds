@@ -2,6 +2,7 @@
 OpenIO SDS proxy
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -1414,54 +1415,53 @@ action_m2_container_propdel (struct req_args_s *args, struct json_object *jargs)
 }
 
 static enum http_rc_e
-_m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
+_container_snapshot(struct req_args_s *args,
+		struct oio_url_s *src_url, const gint src_seq,
+		struct oio_url_s *dest_url)
 {
+	EXTRA_ASSERT(src_url != NULL);
+	EXTRA_ASSERT(dest_url != NULL);
+
 	GError *err = NULL;
-	gchar **urlv = NULL;
-	gchar **urlv_snapshot = NULL;
-	const char *target_account, *target_container;
-	char target_cid[65] = {};
-	target_account = oio_url_get(args->url, OIOURL_ACCOUNT);
-	target_container = oio_url_get(args->url, OIOURL_USER);
-	g_strlcpy(target_cid, oio_url_get(args->url, OIOURL_HEXID),
-			sizeof(target_cid));
-	err = hc_resolve_reference_service(resolver, args->url, NAME_SRVTYPE_META2,
-			&urlv, oio_ext_get_deadline());
-	if (!err && (!urlv || !*urlv)) {
-		err = NEWERROR(CODE_CONTAINER_NOTFOUND, "No service located");
+	gchar **src_urlv = NULL;
+	gchar *src_base = NULL;
+	const gchar *src_cid = oio_url_get(src_url, OIOURL_HEXID);
+	gchar **dest_urlv = NULL;
+	const gchar *dest_account = oio_url_get(dest_url, OIOURL_ACCOUNT);
+	const gchar *dest_container = oio_url_get(dest_url, OIOURL_USER);
+	const gchar *dest_cid = oio_url_get(dest_url, OIOURL_HEXID);
+	struct oio_url_s *orig_url = args->url;
+	args->url = dest_url;
+
+	if (!src_cid || !*src_cid) {
+		err = BADREQ("Missing source container URL");
+		goto cleanup;
 	}
-	if (err)
+
+	if (!dest_account || !*dest_account
+			|| !dest_container || !*dest_container) {
+		err = BADREQ("Missing destination account name or container name");
 		goto cleanup;
+	}
 
-	struct json_object *jaccount = NULL;
-	struct json_object *jcontainer = NULL;
-	struct json_object *jseq_num = NULL;
-	struct oio_ext_json_mapping_s m[] = {
-		{"account", &jaccount, json_type_string, 1},
-		{"container", &jcontainer, json_type_string, 1},
-		{"seq_num", &jseq_num, json_type_string, 0},
-		{NULL, NULL, 0, 0}
-	};
-
-	err = oio_ext_extract_json(jargs, m);
-	if (err)
-		goto cleanup;
-
-	const gchar *account = json_object_get_string(jaccount);
-	const gchar *container = json_object_get_string(jcontainer);
-	const gchar *seq_num = jseq_num? json_object_get_string(jseq_num): ".1";
-	if (!strcmp(account, target_account) &&
-			!strcmp(container, target_container)) {
+	if (strcmp(src_cid, dest_cid) == 0) {
 		err = BADREQ("The snapshot must either have a different name or "
 				"be placed in another account");
 		goto cleanup;
 	}
 
-	oio_url_set(args->url, OIOURL_ACCOUNT, account);
-	oio_url_set(args->url, OIOURL_USER, container);
-	oio_url_set(args->url, OIOURL_HEXID, NULL);
-	err = hc_resolve_reference_service(resolver, args->url,
-			NAME_SRVTYPE_META2, &urlv_snapshot, oio_ext_get_deadline());
+	src_base = g_strdup_printf("%s.%d", src_cid, src_seq);
+
+	err = hc_resolve_reference_service(resolver, src_url, NAME_SRVTYPE_META2,
+			&src_urlv, oio_ext_get_deadline());
+	if (!err && (!src_urlv || !*src_urlv)) {
+		err = NEWERROR(CODE_CONTAINER_NOTFOUND, "No service located");
+	}
+	if (err)
+		goto cleanup;
+
+	err = hc_resolve_reference_service(resolver, dest_url,
+			NAME_SRVTYPE_META2, &dest_urlv, oio_ext_get_deadline());
 	if (!err) {
 		err = BADREQ("Container already exists");
 		goto cleanup;
@@ -1472,50 +1472,79 @@ _m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
 
 	GError *hook_dir(const char *m1) {
 		GError *err2 = meta1v2_remote_link_service(
-				m1, args->url, NAME_SRVTYPE_META2, FALSE, TRUE, &urlv_snapshot,
+				m1, dest_url, NAME_SRVTYPE_META2, FALSE, TRUE, &dest_urlv,
 				oio_ext_get_deadline());
-		if (urlv_snapshot) {
-			g_strfreev(urlv_snapshot);
-			urlv_snapshot = NULL;
+		if (dest_urlv) {
+			g_strfreev(dest_urlv);
+			dest_urlv = NULL;
 		}
 		return err2;
 	}
-	err = _m1_locate_and_action(args->url, hook_dir);
+	err = _m1_locate_and_action(dest_url, hook_dir);
 	if (err)
 		goto cleanup;
 
-	meta1_urlv_shift_addr(urlv);
+	gchar *dest_properties[6] = {
+		SQLX_ADMIN_ACCOUNT, (gchar*) dest_account,
+		SQLX_ADMIN_USERNAME, (gchar*) dest_container,
+		NULL, NULL
+	};
+
+	meta1_urlv_shift_addr(src_urlv);
 	CLIENT_CTX(ctx, args, NAME_SRVTYPE_META2, 1);
-	gchar *url = _resolve_service_id(urlv[0]);
+	gchar *src_addr = _resolve_service_id(src_urlv[0]);
 	GByteArray * _pack_snapshot(const struct sqlx_name_s *n,
 			const gchar **headers) {
-		return sqlx_pack_SNAPSHOT(n, url, target_cid, seq_num, headers, DL());
+		return sqlx_pack_SNAPSHOT(n, src_addr, src_base, dest_properties,
+				headers, DL());
 	}
 	err = _resolve_meta2(args, CLIENT_PREFER_MASTER,
 			_pack_snapshot, NULL, NULL);
-	g_free(url);
-
-	/* Give the snapshot its name. */
-	if (!err) {
-		gchar *props[5] = {
-			SQLX_ADMIN_ACCOUNT, (gchar*)account,
-			SQLX_ADMIN_USERNAME, (gchar*)container,
-			NULL
-		};
-		GByteArray * _pack_propset(const struct sqlx_name_s *n,
-				const gchar **headers UNUSED) {
-			return sqlx_pack_PROPSET_tab(args->url, n, FALSE, props, DL());
-		}
-		err = _resolve_meta2(args, CLIENT_PREFER_MASTER,
-				_pack_propset, NULL, NULL);
-	}
+	g_free(src_addr);
 
 cleanup:
-	if (urlv_snapshot)
-		g_strfreev(urlv_snapshot);
-	if (urlv)
-		g_strfreev(urlv);
+	args->url = orig_url;
+	g_free(src_base);
+	if (dest_urlv)
+		g_strfreev(dest_urlv);
+	if (src_urlv)
+		g_strfreev(src_urlv);
 	return _reply_m2_error(args, err);
+}
+
+static enum http_rc_e
+_m2_container_snapshot(struct req_args_s *args, struct json_object *jargs)
+{
+	GError *err = NULL;
+
+	struct json_object *jaccount = NULL;
+	struct json_object *jcontainer = NULL;
+	struct json_object *jseq_num = NULL;
+	struct oio_ext_json_mapping_s m[] = {
+		{"account", &jaccount, json_type_string, 1},
+		{"container", &jcontainer, json_type_string, 1},
+		{"seq_num", &jseq_num, json_type_int, 0},
+		{NULL, NULL, 0, 0}
+	};
+
+	err = oio_ext_extract_json(jargs, m);
+	if (err)
+		return _reply_m2_error(args, err);
+
+	const gchar *account = json_object_get_string(jaccount);
+	const gchar *container = json_object_get_string(jcontainer);
+	const gint seq_num = jseq_num ? json_object_get_int(jseq_num) : 1;
+
+	struct oio_url_s *dest_url = oio_url_dup(args->url);
+	oio_url_set(dest_url, OIOURL_ACCOUNT, account);
+	oio_url_set(dest_url, OIOURL_USER, container);
+	oio_url_set(dest_url, OIOURL_HEXID, NULL);
+
+	enum http_rc_e rc = _container_snapshot(args, args->url, seq_num,
+			dest_url);
+
+	oio_url_clean(dest_url);
+	return rc;
 }
 
 static enum http_rc_e

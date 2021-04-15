@@ -2,6 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -150,15 +151,16 @@ sqlx_pack_EXITELECTION(const struct sqlx_name_s *name, gint64 deadline)
 }
 
 GByteArray*
-sqlx_pack_SNAPSHOT(const struct sqlx_name_s *name, const gchar *source,
-		const gchar *cid, const gchar *seq_num, const gchar **fields,
+sqlx_pack_SNAPSHOT(const struct sqlx_name_s *name, const gchar *src_addr,
+		const gchar *src_base, gchar **dest_properties, const gchar **fields,
 		gint64 deadline)
 {
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_SNAPSHOT, NULL, name, deadline);
-	metautils_message_add_field_str(req, NAME_MSGKEY_SRC, source);
-	metautils_message_add_field_str(req, NAME_MSGKEY_CONTAINERID, cid);
-	metautils_message_add_field_str(req, NAME_MSGKEY_SEQNUM, seq_num);
+	metautils_message_add_field_str(req, NAME_MSGKEY_SRC, src_addr);
+	metautils_message_add_field_str(req, NAME_MSGKEY_SRC_BASE, src_base);
 	metautils_message_add_fields_str(req, fields);
+	metautils_message_add_body_unref(req,
+			KV_encode_gba((gchar**)dest_properties));
 	return message_marshall_gba_and_clean(req);
 }
 

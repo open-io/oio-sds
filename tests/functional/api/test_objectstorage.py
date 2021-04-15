@@ -23,6 +23,7 @@ from functools import partial
 from urllib3 import HTTPResponse
 from oio.api.object_storage import ObjectStorageApi
 from oio.common import exceptions as exc
+from oio.common.cache import get_cached_object_metadata
 from oio.common.constants import REQID_HEADER
 from oio.common.http_eventlet import CustomHTTPResponse
 from oio.common.storage_functions import _sort_chunks as sort_chunks
@@ -1031,8 +1032,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_account_refresh(self):
         # account_refresh on unknown account
-        account = random_str(32)
-        self.wait_for_score(('account', 'meta2'))
+        account = 'test_account_refresh_' + random_str(6)
+        self.wait_for_score(('account', 'meta2'), score_threshold=15)
         self.assertRaises(
             exc.NoSuchAccount, self.api.account_refresh, account)
 
@@ -1045,8 +1046,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertEqual(res["objects"], 0)
         self.assertEqual(res["containers"], 0)
 
-        name = random_str(32)
-        self.api.object_create(account, name, data="data", obj_name=name)
+        name = 'test_account_refresh_' + random_str(6)
+        self.api.object_create(account, name, data=b'data', obj_name=name)
         self.wait_for_event('oio-preserved',
                             fields={'account': account},
                             types=[EventTypes.CONTAINER_STATE])
@@ -1065,6 +1066,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         # Again, wait for the container event to be processed.
         self.wait_for_event('oio-preserved',
                             types=[EventTypes.ACCOUNT_SERVICES])
+        self.wait_for_event('oio-preserved',
+                            types=(EventTypes.CONTAINER_DELETED, ))
         self.api.account_delete(account)
         # account_refresh on deleted account
         self.assertRaises(
@@ -2197,14 +2200,22 @@ class TestObjectStorageApiUsingCache(ObjectStorageApiTestBase):
         # Fetch the original object to make sure the cache is filled.
         self.api.object_fetch(
             self.account, self.container, self.path)
+        cached_meta, cached_chunks = get_cached_object_metadata(
+            account=self.account, reference=self.container, path=self.path,
+            cache=self.cache)
+        self.assertIsNotNone(cached_meta)
+        self.assertIsNotNone(cached_chunks)
+
         # Make the cache invalid by overwriting the object without
         # clearing the cache.
         self.api.object_create(self.account, self.container,
                                obj_name=self.path, data='overwritten',
                                cache=None)
-        # Wait for the original chunks to be deleted.
-        self.wait_for_event('oio-preserved',
-                            types=(EventTypes.CHUNK_DELETED, ), timeout=5.0)
+        # Wait until all the original chunks are deleted
+        for _ in range(len(cached_chunks)):
+            self.wait_for_event('oio-preserved',
+                                types=(EventTypes.CHUNK_DELETED, ),
+                                timeout=5.0)
         # Read the object. An error will be raised internally, but the latest
         # object should be fetched.
         meta, stream = self.api.object_fetch(

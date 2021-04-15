@@ -27,6 +27,7 @@ jobs:
 
       - name: Run fast tests
         script:
+          - rsyslogd &
           - . $HOME/oioenv/bin/activate
           - ./tools/oio-travis-failfast.sh
 

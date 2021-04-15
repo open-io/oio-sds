@@ -21,6 +21,7 @@ try:
 except ImportError:
     from xml.etree import cElementTree as etree
 
+import oio.container.lifecycle as lifecycle_mod
 from oio.container.lifecycle import LifecycleRule, LifecycleRuleFilter, \
     DaysActionFilter, DateActionFilter, NoncurrentCountActionFilter, \
     NoncurrentDaysActionFilter, Expiration, Transition, \
@@ -47,6 +48,17 @@ class TestContainerLifecycle(unittest.TestCase):
         'mime_type': 'application/octet-stream',
         'name': 'Makefile'
     }
+
+    @classmethod
+    def setUpClass(cls):
+        super(TestContainerLifecycle, cls).setUpClass()
+        lifecycle_mod.orig_tag = lifecycle_mod.tag
+        lifecycle_mod.tag = lambda x: x
+
+    @classmethod
+    def tearDownClass(cls):
+        lifecycle_mod.tag = lifecycle_mod.orig_tag
+        super(TestContainerLifecycle, cls).tearDownClass()
 
     def test_DaysActionFilter_from_element(self):
         days_elt = etree.XML(

@@ -8,6 +8,7 @@ workflow:
 
   tests-fast:
     pipeline: oio-sds-test-fast
+    environment: oio-sds-env-test-fast
     application: oio-sds
     depends_on:
       - root
