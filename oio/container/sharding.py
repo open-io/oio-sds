@@ -470,7 +470,8 @@ class ContainerSharding(ProxyClient):
 
     STRATEGIES = {
         'shard-with-partition': _find_shards_with_partition,
-        'shard-with-size': _find_shards_with_size
+        'shard-with-size': _find_shards_with_size,
+        'rebalance': _find_shards_with_size
     }
 
     def _find_formatted_shards(self, shard, strategy=None, index=0, **kwargs):
@@ -504,6 +505,78 @@ class ContainerSharding(ProxyClient):
             fake_shard, **kwargs)
         return self._check_shards(formatted_shards,
                                   are_new=True, partial=True, **kwargs)
+
+    def _find_all_formatted_shards(self, root_account, root_container,
+                                   strategy=None, **kwargs):
+        no_shrinking = True
+        if strategy is None:
+            strategy = self.DEFAULT_STRATEGY
+        if strategy == 'rebalance':
+            no_shrinking = False
+
+        current_shards = self.show_shards(root_account, root_container,
+                                          **kwargs)
+
+        incomplete_shard = None
+        index = 0
+        for current_shard in current_shards:
+            # Find the possible new shards
+            _, shard_size, found_shards = self._find_formatted_shards(
+                current_shard, strategy=strategy, index=index,
+                incomplete_shard=incomplete_shard, **kwargs)
+
+            # If the last shard was too small,
+            # merge this last shard with this first shard
+            first_shard = found_shards[0]
+            if incomplete_shard is not None:
+                if incomplete_shard['upper'] != first_shard['lower']:
+                    raise OioException('Shards do not follow one another')
+                first_shard['lower'] = incomplete_shard['lower']
+                first_shard['count'] = first_shard['count'] \
+                    + incomplete_shard['count']
+
+            # Return all found shards, except the last shard
+            for found_shard in found_shards[:-1]:
+                yield found_shard
+
+            # If the last shard is the correct size,
+            # return it immediately
+            last_shard = found_shards[-1]
+            if no_shrinking or shard_size is None \
+                    or last_shard['count'] >= shard_size:
+                index = last_shard['index'] + 1
+                incomplete_shard = None
+                yield last_shard
+            else:
+                index = last_shard['index']
+                incomplete_shard = last_shard
+                available = shard_size - incomplete_shard['count']
+                if available > 0:
+                    incomplete_shard['available'] = available
+
+        if incomplete_shard is not None:
+            yield incomplete_shard
+            return
+        if index > 0:
+            return
+
+        # Container not yet sharded
+        current_shard = {
+            'index': -1,
+            'lower': '',
+            'upper': '',
+            'cid': cid_from_name(root_account, root_container),
+            'metadata': None
+        }
+        _, _, found_shards = self._find_formatted_shards(
+            current_shard, strategy=strategy, **kwargs)
+        for found_shard in found_shards:
+            yield found_shard
+
+    def find_all_shards(self, root_account, root_container, **kwargs):
+        formatted_shards = self._find_all_formatted_shards(
+            root_account, root_container, **kwargs)
+        return self._check_shards(formatted_shards, are_new=True, **kwargs)
 
     def _prepare_sharding(self, parent_shard, **kwargs):
         params = self._make_params(cid=parent_shard['cid'], **kwargs)
@@ -853,3 +926,126 @@ class ContainerSharding(ProxyClient):
             root_account, root_container, current_shard, shards_for_sharding,
             **kwargs)
         return True
+
+    def _sharding_replace_shards(self, root_account, root_container,
+                                 current_shards, current_shard,
+                                 new_shards, new_shard, **kwargs):
+        tmp_new_shard = None
+        shards_for_sharding = list()
+        shards_for_sharding.append(new_shard)
+        while True:
+            try:
+                new_shard = next(new_shards)
+            except StopIteration:
+                raise OioException('Should never happen')
+
+            if current_shard['upper'] == new_shard['upper']:
+                shards_for_sharding.append(new_shard)
+                break
+            elif current_shard['upper'] == '' \
+                    or (new_shard['upper'] != '' and
+                        current_shard['upper'] > new_shard['upper']):
+                shards_for_sharding.append(new_shard)
+            else:
+                tmp_new_shard = new_shard.copy()
+                tmp_new_shard['upper'] = current_shard['upper']
+                shards_for_sharding.append(tmp_new_shard)
+                break
+
+        self._shard_container_by_dichotomy(
+            root_account, root_container, current_shard, shards_for_sharding,
+            **kwargs)
+
+        if tmp_new_shard is None:
+            # current_shard['upper'] == new_shard['upper']:
+            if current_shard['upper'] == '':
+                # all new shards have been created
+                return None, None
+
+            try:
+                current_shard = next(current_shards)
+            except StopIteration:
+                raise OioException('Should never happen')
+            try:
+                new_shard = next(new_shards)
+            except StopIteration:
+                raise OioException('Should never happen')
+        else:
+            current_shard = tmp_new_shard
+        return current_shard, new_shard
+
+    def _shrinking_replace_shards(self, root_account, root_container,
+                                  current_shards, current_shard,
+                                  new_shards, new_shard, **kwargs):
+        raise NotImplementedError('Shrinking not implemented')
+
+    def replace_all_shards(self, root_account, root_container, new_shards,
+                           **kwargs):
+        current_shards = self.show_shards(
+            root_account, root_container, **kwargs)
+        new_shards = self._check_shards(new_shards, are_new=True, **kwargs)
+
+        current_shard = None
+        try:
+            current_shard = next(current_shards)
+        except StopIteration:
+            raise ValueError(
+                'No current shard for this container')
+        new_shard = None
+        try:
+            new_shard = next(new_shards)
+        except StopIteration:
+            new_shard = {
+                'index': -1,
+                'lower': '',
+                'upper': '',
+                'cid': cid_from_name(root_account, root_container),
+                'metadata': None
+            }
+
+        modified = False
+        while current_shard is not None and new_shard is not None:
+            # Sanity check
+            if current_shard['lower'] != new_shard['lower']:
+                raise OioException('Should never happen')
+
+            if current_shard['upper'] == new_shard['upper']:
+                # Shard doesn't change
+                if current_shard['upper'] == '':
+                    # All new shards have been created
+                    current_shard = None
+                    new_shard = None
+                else:
+                    try:
+                        current_shard = next(current_shards)
+                    except StopIteration:
+                        raise OioException('Should never happen')
+                    try:
+                        new_shard = next(new_shards)
+                    except StopIteration:
+                        raise OioException('Should never happen')
+                continue
+            modified = True
+
+            if current_shard['upper'] == '' \
+                    or (new_shard['upper'] != '' and
+                        current_shard['upper'] > new_shard['upper']):
+                current_shard, new_shard = self._sharding_replace_shards(
+                    root_account, root_container,
+                    current_shards, current_shard,
+                    new_shards, new_shard, **kwargs)
+                # Sub-change is complete
+                continue
+
+            if new_shard['upper'] == '' \
+                    or (current_shard['upper'] != '' and
+                        current_shard['upper'] < new_shard['upper']):
+                current_shard, new_shard = self._shrinking_replace_shards(
+                    root_account, root_container,
+                    current_shards, current_shard,
+                    new_shards, new_shard, **kwargs)
+                # Sub-change is complete
+                continue
+
+            raise OioException('Should never happen')
+        return modified

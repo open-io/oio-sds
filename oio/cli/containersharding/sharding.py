@@ -70,7 +70,7 @@ class FindContainerSharding(ContainerShardingCommandMixin, Lister):
             '--shard-size',
             type=int,
             help="""
-            [shard-with-size]
+            [shard-with-size|rebalance]
             Number of objects expected in the shards to find.
             (default: %d)
             """ % ContainerSharding.DEFAULT_SHARD_SIZE
@@ -80,6 +80,13 @@ class FindContainerSharding(ContainerShardingCommandMixin, Lister):
     def get_parser(self, prog_name):
         parser = super(FindContainerSharding, self).get_parser(prog_name)
         self.patch_parser_container_sharding(parser)
+        parser.add_argument(
+            '--all',
+            action='store_true',
+            help="""
+            Use all existing shards to find shards for the root container.
+            """
+        )
         return self.patch_parser(parser)
 
     @staticmethod
@@ -101,9 +108,14 @@ class FindContainerSharding(ContainerShardingCommandMixin, Lister):
         container_sharding = ContainerSharding(
             self.app.client_manager.sds_conf,
             logger=self.app.client_manager.logger)
-        found_shards = container_sharding.find_shards(
-            self.app.client_manager.account, parsed_args.container,
-            strategy=strategy, strategy_params=strategy_params)
+        if parsed_args.all:
+            found_shards = container_sharding.find_all_shards(
+                self.app.client_manager.account, parsed_args.container,
+                strategy=strategy, strategy_params=strategy_params)
+        else:
+            found_shards = container_sharding.find_shards(
+                self.app.client_manager.account, parsed_args.container,
+                strategy=strategy, strategy_params=strategy_params)
 
         columns = ('Index', 'Lower', 'Upper', 'Count')
         if parsed_args.formatter == 'json':
@@ -115,7 +127,7 @@ class FindContainerSharding(ContainerShardingCommandMixin, Lister):
 
 
 class ReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
-    """Replace current shard with the new shards."""
+    """Replace current shard(s) with the new shards."""
 
     log = getLogger(__name__ + '.ReplaceContainerSharding')
 
@@ -147,6 +159,13 @@ class ReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
             Enable the sharding for this container.
             """
         )
+        parser.add_argument(
+            '--all',
+            action='store_true',
+            help="""
+            Replace all current shards with new shards.
+            """
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -163,9 +182,14 @@ class ReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
             self.app.client_manager.sds_conf,
             logger=self.app.client_manager.logger)
         new_shards = container_sharding.format_shards(new_shards, are_new=True)
-        modified = container_sharding.replace_shard(
-            self.app.client_manager.account, parsed_args.container,
-            new_shards, enable=parsed_args.enable)
+        if parsed_args.all:
+            modified = container_sharding.replace_all_shards(
+                self.app.client_manager.account, parsed_args.container,
+                new_shards, enable=parsed_args.enable)
+        else:
+            modified = container_sharding.replace_shard(
+                self.app.client_manager.account, parsed_args.container,
+                new_shards, enable=parsed_args.enable)
 
         return ('Modified', ), [(str(modified), )]
 
@@ -173,7 +197,7 @@ class ReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
 class FindAndReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
     """
     Find the distribution of shards
-    and replace current shard with the new shards.
+    and replace current shard(s) with the new shards.
     """
 
     log = getLogger(__name__ + '.FindAndReplaceContainerSharding')
@@ -189,6 +213,14 @@ class FindAndReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
             action='store_true',
             help='Enable the sharding for this container'
         )
+        parser.add_argument(
+            '--all',
+            action='store_true',
+            help="""
+            Use all existing shards to find shards for the root container.
+            And replace all current shards with these found shards.
+            """
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -201,12 +233,20 @@ class FindAndReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
         container_sharding = ContainerSharding(
             self.app.client_manager.sds_conf,
             logger=self.app.client_manager.logger)
-        found_shards = container_sharding.find_shards(
-            self.app.client_manager.account, parsed_args.container,
-            strategy=strategy, strategy_params=strategy_params)
-        modified = container_sharding.replace_shard(
-            self.app.client_manager.account, parsed_args.container,
-            found_shards, enable=parsed_args.enable)
+        if parsed_args.all:
+            found_shards = container_sharding.find_all_shards(
+                self.app.client_manager.account, parsed_args.container,
+                strategy=strategy, strategy_params=strategy_params)
+            modified = container_sharding.replace_all_shards(
+                self.app.client_manager.account, parsed_args.container,
+                found_shards, enable=parsed_args.enable)
+        else:
+            found_shards = container_sharding.find_shards(
+                self.app.client_manager.account, parsed_args.container,
+                strategy=strategy, strategy_params=strategy_params)
+            modified = container_sharding.replace_shard(
+                self.app.client_manager.account, parsed_args.container,
+                found_shards, enable=parsed_args.enable)
 
         return ('Modified', ), [(str(modified), )]
 
