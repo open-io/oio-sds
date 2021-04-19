@@ -356,6 +356,7 @@ host: ${IP}
 port: ${PORT}
 type: rdir
 location: ${LOC}
+${WANT_SERVICE_ID}service_id: ${SERVICE_ID}
 checks:
     - {type: tcp}
 slots:
@@ -781,7 +782,6 @@ meta2.flush_limit=64
 # Limit the maximum number of databases open simultaneously
 # to avoid using too much RAM
 sqliterepo.repo.hard_max=1024
-proxy.location=${LOC_PROXYD}
 
 admin=${IP}:${PORT_ADMIN}
 iam.connection=redis://${IP}:${REDIS_PORT}/?allow_empty_policy_name=False
@@ -1036,6 +1036,7 @@ threads = 1
 log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
+${WANT_SERVICE_ID}service_id = ${SERVICE_ID}
 syslog_prefix = OIO,${NS},rdir,${SRVNUM}
 """
 
@@ -1638,6 +1639,7 @@ def generate(options):
         env = subenv({'SRVTYPE': 'rdir',
                       'SRVNUM': num + 1,
                       'PORT': next(ports)})
+        env['SERVICE_ID'] = "{NS}-{SRVTYPE}-{SRVNUM}".format(**env)
         add_service(env)
         with open(gridinit(env), 'a+') as f:
             tpl = Template(template_gridinit_rdir)
