@@ -2790,9 +2790,16 @@ grid_main_configure(int argc, char **argv)
 
 	/* Validate the volume was never used for another rdir */
 	err = volume_service_lock(basedir, NAME_SRVTYPE_RDIR,
-				  cfg_main_url, ns_name, oio_volume_lock_lazy);
-	if (err != NULL)
+				  service_id?:cfg_main_url, ns_name, oio_volume_lock_lazy);
+	if (err != NULL) {
+		if (service_id) {
+			GRID_NOTICE("The configured service ID is %s. If there was no "
+					"service ID before, you must fix the 'user.server.id' "
+					"xattr at %s.",
+					service_id, basedir);
+		}
 		return _config_error("Volume lock error", err);
+	}
 
 	/* Prepare the network side of the application */
 	server = network_server_init();
