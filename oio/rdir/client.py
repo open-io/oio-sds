@@ -42,6 +42,16 @@ def _make_id(ns, type_, addr):
     return "%s|%s|%s" % (ns, type_, addr)
 
 
+def _build_dict_by_id(ns, all_rdir):
+    """
+    Build a dictionary of all rdir services indexed by their ID.
+    """
+    return {
+        _make_id(ns, 'rdir', x['tags'].get('tag.service_id', x['addr'])): x
+        for x in all_rdir
+    }
+
+
 def _filter_rdir_host(allsrv):
     for srv in allsrv.get('srv', {}):
         if srv['type'] == 'rdir':
@@ -58,16 +68,13 @@ class RdirDispatcher(object):
         if rdir_client:
             self.rdir = rdir_client
         else:
-            self.rdir = RdirClient(conf, logger=self.logger, **kwargs)
-        self._cs = None
+            self.rdir = RdirClient(conf, directory_client=self.directory,
+                                   logger=self.logger, **kwargs)
         self._pool_options = None
 
     @property
     def cs(self):
-        if not self._cs:
-            self._cs = ConscienceClient(self.conf, logger=self.logger,
-                                        pool_manager=self.rdir.pool_manager)
-        return self._cs
+        return self.rdir.cs
 
     def get_assignments(self, service_type, **kwargs):
         """
@@ -79,8 +86,7 @@ class RdirDispatcher(object):
         """
         all_services = self.cs.all_services(service_type, **kwargs)
         all_rdir = self.cs.all_services('rdir', True, **kwargs)
-        by_id = {_make_id(self.ns, 'rdir', x['addr']): x
-                 for x in all_rdir}
+        by_id = _build_dict_by_id(self.ns, all_rdir)
 
         for service in all_services:
             try:
@@ -144,8 +150,7 @@ class RdirDispatcher(object):
         if len(all_rdir) <= 0:
             raise ServiceUnavailable("No rdir service found in %s" % self.ns)
 
-        by_id = {_make_id(self.ns, 'rdir', x['addr']): x
-                 for x in all_rdir}
+        by_id = _build_dict_by_id(self.ns, all_rdir)
 
         errors = list()
         for provider in all_services:
@@ -240,7 +245,8 @@ class RdirDispatcher(object):
             upper_limit = sum(opened_db) / float(len(opened_db))
         else:
             upper_limit = max_per_rdir - 1
-        avoids = [_make_id(self.ns, "rdir", x['addr'])
+        avoids = [_make_id(self.ns, "rdir", x['tags'].get('tag.service_id',
+                                                          x['addr']))
                   for x in all_rdir
                   if x['score'] > 0 and
                   x['tags'].get('stat.opened_db_count', 0) > upper_limit]
@@ -359,11 +365,22 @@ class RdirClient(HttpApi):
         'meta2': 'rdir/meta2',
     }
 
-    def __init__(self, conf, **kwargs):
+    def __init__(self, conf, directory_client=None, **kwargs):
         super(RdirClient, self).__init__(service_type='rdir', **kwargs)
-        self.directory = DirectoryClient(conf, **kwargs)
+        self.directory = directory_client or DirectoryClient(conf, **kwargs)
         self.ns = conf['namespace']
         self._addr_cache = dict()
+        self.conf = conf
+        self._cs = None
+
+    @property
+    def cs(self):
+        if not self._cs:
+            self._cs = ConscienceClient(
+                self.conf,
+                logger=self.directory.logger,
+                pool_manager=self.directory.pool_manager)
+        return self._cs
 
     def _clear_cache(self, volume_id):
         self._addr_cache.pop(volume_id, None)
@@ -379,9 +396,10 @@ class RdirClient(HttpApi):
                                        service_type='rdir',
                                        headers=headers)
             host = _filter_rdir_host(resp)
+            cur_host = self.cs.resolve_service_id('rdir', host)
             # Add the new service to the cache
-            self._addr_cache[volume_id] = host
-            return host
+            self._addr_cache[volume_id] = cur_host
+            return cur_host
         except NotFound:
             raise VolumeException('No rdir assigned to volume %s' % volume_id)
 
