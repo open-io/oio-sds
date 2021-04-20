@@ -623,7 +623,7 @@ sqlx_sync_zk_server(struct sqlx_sync_s *ss)
 {
 	if (!ss || !ss->zh)
 		return NULL;
-#if ZOO_MAJOR_VERSION > 3 || (ZOO_MAJOR_VERSION == 3 && ZOO_MINOR_VERSION >= 5)
+#if ZOO_35
 	return zoo_get_current_server(ss->zh);
 #else
 	return "# requires zookeeper>=3.5 #";
