@@ -31,8 +31,8 @@ from tests.functional.blob import convert_to_old_chunk, random_buffer, \
 
 
 map_cfg = {'addr': 'Listen',
-           'ns': 'grid_namespace',
-           'basedir': 'grid_docroot'}
+           'ns': 'namespace',
+           'basedir': 'docroot'}
 
 
 # TODO we should the content of events sent by the rawx

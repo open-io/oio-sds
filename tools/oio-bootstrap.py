@@ -176,29 +176,28 @@ template_rawx_service = """
 Listen ${IP}:${PORT}
 PidFile ${RUNDIR}/${NS}-${SRVTYPE}-${SRVNUM}.pid
 
-grid_docroot           ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
-grid_namespace         ${NS}
-grid_dir_run           ${RUNDIR}
-${WANT_SERVICE_ID}grid_service_id        ${SERVICE_ID}
+docroot           ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
+namespace         ${NS}
+${WANT_SERVICE_ID}service_id        ${SERVICE_ID}
 
 # How many hexdigits must be used to name the indirection directories
-grid_hash_width        3
+hash_width        3
 
 # How many levels of directories are used to store chunks.
-grid_hash_depth        1
+hash_depth        1
 
 # At the end of an upload, perform a fsync() on the chunk file itself
-grid_fsync             ${FSYNC}
-grid_buffer_size 8192
+fsync             ${FSYNC}
+buffer_size 8192
 
 # At the end of an upload, perform a fsync() on the directory holding the chunk
-grid_fsync_dir         ${FSYNC}
+fsync_dir         ${FSYNC}
 
 # Preallocate space for the chunk file (enabled by default)
-#grid_fallocate enabled
+#fallocate enabled
 
 # Enable compression ('zlib' or 'lzo' or 'off')
-grid_compression ${COMPRESSION}
+compression ${COMPRESSION}
 
 #tcp_keepalive disabled
 #timeout_read_header 10

@@ -36,22 +36,6 @@ var nok = []string{"ko", "no", "false", "disable", "disabled", "nope", "off", "w
 var regexString = regexp.MustCompile(`^[^"]*("[^"\\]*(?:\\.[^"\\]*)*")[^"]*$`)
 
 var loadedOpts = map[string]string{
-	// Long historical names
-	"grid_namespace":        "ns",
-	"grid_hash_width":       "hash_width",
-	"grid_hash_depth":       "hash_depth",
-	"grid_fsync":            "fsync_file",
-	"grid_fsync_dir":        "fsync_dir",
-	"grid_docroot":          "basedir",
-	"grid_compression":      "compression",
-	"grid_compress":         "compression",
-	"grid_fallocate":        "fallocate",
-	"grid_service_id":       "id",
-	"grid_checksum":         "checksum",
-	"grid_buffer_size":      "buffer_size",
-	"grid_fadvise_upload":   "fadvise_upload",
-	"grid_fadvise_download": "fadvise_download",
-
 	"listen":           "addr",
 	"Listen":           "addr",
 	"namespace":        "ns",
@@ -98,6 +82,23 @@ var loadedOpts = map[string]string{
 // FIXME(jfs): Schedule the removal of these misleading options
 var deprecatedOpts = map[string]string{
 	"tcp_keepalive": "keepalive",
+
+	// Long historical names
+	"grid_namespace":        "ns",
+	"grid_hash_width":       "hash_width",
+	"grid_hash_depth":       "hash_depth",
+	"grid_fsync":            "fsync_file",
+	"grid_fsync_dir":        "fsync_dir",
+	"grid_docroot":          "basedir",
+	"grid_compression":      "compression",
+	"grid_compress":         "compression",
+	"grid_fallocate":        "fallocate",
+	"grid_service_id":       "id",
+	"grid_checksum":         "checksum",
+	"grid_buffer_size":      "buffer_size",
+	"grid_fadvise_upload":   "fadvise_upload",
+	"grid_fadvise_download": "fadvise_download",
+
 }
 
 // readConfig -- fetch options from conf file and remap their name

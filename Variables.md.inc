@@ -81,14 +81,12 @@ Used by `gcc`
 
 | Name | Type | Default | Description |
 | ---- | ---- | ------- | ----------- |
-| grid_docroot | string | *MANDATORY* | Chunks root directory |
-| grid_namespace | string | *MANDATORY* | Namespace name |
-| grid_dir_run | string | *MANDATORY* | Run directory |
-| grid_hash_width | number | 3 | How many hexdigits must be used to name the indirection directories |
-| grid_hash_depth | number | 1 | How many levels of directories are used to store chunks |
-| grid_fsync | boolean | disabled | At the end of an upload, perform a fsync() on the chunk file itself |
-| grid_fsync_dir | boolean | enabled | At the end of an upload, perform a fsync() on the directory holding the chunk |
-| grid_fallocate | boolean | enabled | Preallocate space for the chunk file |
-| grid_acl | boolean | *IGNORED* | Enable ACL |
-| grid_checksum | string (enabled,disabled,smart) | enabled | Enable checksuming the body of PUT |
+| docroot | string | *MANDATORY* | Chunks root directory |
+| namespace | string | *MANDATORY* | Namespace name |
+| hash_width | number | 3 | How many hexdigits must be used to name the indirection directories |
+| hash_depth | number | 1 | How many levels of directories are used to store chunks |
+| fsync | boolean | disabled | At the end of an upload, perform a fsync() on the chunk file itself |
+| fsync_dir | boolean | enabled | At the end of an upload, perform a fsync() on the directory holding the chunk |
+| fallocate | boolean | enabled | Preallocate space for the chunk file |
+| checksum | string (enabled,disabled,smart) | enabled | Enable checksuming the body of PUT |
 
