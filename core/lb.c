@@ -1211,10 +1211,10 @@ _local__patch(struct oio_lb_pool_s *self,
 			/* the strings are '\0' separated, printf won't display them */
 			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "no service polled "
 					"from [%s], %u/%u services polled, %u known services, "
-					"%u services in slot", *ptarget, count,
+					"%u services in slot, min_dist=%u", *ptarget, count,
 					count_targets - count_known_targets, count_known_targets,
 					oio_lb_world__count_slot_items_unlocked(
-						lb->world, *ptarget));
+						lb->world, *ptarget), lb->min_dist);
 			break;
 		}
 		++ctx.next_polled;
