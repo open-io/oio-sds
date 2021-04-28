@@ -919,11 +919,12 @@ _check_if_container_empty(struct sqlx_sqlite3_s *sq3)
 	sqlite3_stmt *stmt = NULL;
 	gint64 count = 0;
 
+	// Check if the container contains data
 	int rc = sqlite3_prepare(sq3->db,
 			"SELECT exists(SELECT 1 FROM chunks LIMIT 1)",
 			-1, &stmt, NULL);
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt)))
-		count = sqlite3_column_int64 (stmt, 0);
+		count = sqlite3_column_int64(stmt, 0);
 	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
 		if (err) {
 			GRID_WARN("SQLite error: (%d) %s",
@@ -934,6 +935,28 @@ _check_if_container_empty(struct sqlx_sqlite3_s *sq3)
 		}
 	}
 	sqlx_sqlite3_finalize(sq3, stmt, err);
+
+	if (!err && count == 0) {
+		/* Check if the container is sharded.
+		 * If the container is sharded,
+		 * then it probably still contains data in shards. */
+		stmt = NULL;
+		rc = sqlite3_prepare(sq3->db,
+				"SELECT exists(SELECT 1 FROM shard_ranges LIMIT 1)",
+				-1, &stmt, NULL);
+		while (SQLITE_ROW == (rc = sqlite3_step(stmt)))
+			count = sqlite3_column_int64(stmt, 0);
+		if (rc != SQLITE_OK && rc != SQLITE_DONE) {
+			if (err) {
+				GRID_WARN("SQLite error: (%d) %s",
+						rc, sqlite3_errmsg(sq3->db));
+			} else {
+				err = NEWERROR(CODE_INTERNAL_ERROR, "SQLite error: (%d) %s",
+						rc, sqlite3_errmsg(sq3->db));
+			}
+		}
+		sqlx_sqlite3_finalize(sq3, stmt, err);
+	}
 
 	if (!err && count > 0)
 		err = NEWERROR(CODE_CONTAINER_NOTEMPTY, "Container not empty");
