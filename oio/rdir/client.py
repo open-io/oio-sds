@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -14,8 +15,6 @@
 # License along with this library.
 
 import random
-
-from six import iteritems
 
 from oio.api.base import HttpApi
 from oio.common.constants import HEADER_PREFIX, REQID_HEADER
@@ -372,6 +371,7 @@ class RdirClient(HttpApi):
         self._addr_cache = dict()
         self.conf = conf
         self._cs = None
+        self.logger = self.directory.logger
 
     @property
     def cs(self):
@@ -436,13 +436,21 @@ class RdirClient(HttpApi):
                            service_type=service_type, **kwargs)
 
     def chunk_push(self, volume_id, container_id, content_id, chunk_id,
+                   content_path, content_version,
                    headers=None, **data):
         """Reference a chunk in the reverse directory"""
-        body = {'container_id': container_id,
-                'content_id': content_id,
-                'chunk_id': chunk_id}
+        body = {
+            # Will be stripped and kept only in the key
+            'chunk_id': chunk_id,
+            'container_id': container_id,
+            # Will remain in the value
+            'content_id': content_id,
+            'path': content_path,
+            'version': int(content_version)
+        }
 
-        for key, value in iteritems(data):
+        # Mostly mtime
+        for key, value in data.items():
             body[key] = value
 
         self._rdir_request(volume_id, 'POST', 'push', create=True,
@@ -461,7 +469,7 @@ class RdirClient(HttpApi):
     def chunk_fetch(self, volume, limit=1000, rebuild=False,
                     container_id=None, max_attempts=3,
                     start_after=None, shuffle=False, full_urls=False,
-                    **kwargs):
+                    old_format=False, **kwargs):
         """
         Fetch the list of chunks belonging to the specified volume.
 
@@ -479,6 +487,8 @@ class RdirClient(HttpApi):
         :keyword start_after: fetch only chunk that appear after
             this container ID
         :type start_after: `str`
+        :keyword old_format: yield (container, content, chunk and value)
+            instead of just (container, chunk and value).
         """
         req_body = {'limit': limit}
         if rebuild:
@@ -519,10 +529,13 @@ class RdirClient(HttpApi):
             if shuffle:
                 random.shuffle(resp_body)
             for (key, value) in resp_body:
-                container, content, chunk = key.split('|')
+                container, chunk = key.split('|')
                 if full_urls:
                     chunk = 'http://%s/%s' % (volume, chunk)
-                yield container, content, chunk, value
+                if old_format:
+                    yield container, value['content_id'], chunk, value
+                else:
+                    yield container, chunk, value
 
             if not truncated:
                 break

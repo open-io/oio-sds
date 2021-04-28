@@ -156,6 +156,8 @@ class BlobIndexer(Daemon):
                                          meta['container_id'],
                                          meta['content_id'],
                                          meta['chunk_id'],
+                                         meta['content_path'],
+                                         meta['content_version'],
                                          headers=headers,
                                          **data)
 

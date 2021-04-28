@@ -15,6 +15,10 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
+"""Repeatedly send and remove fake records to/from rdir services.
+
+usage: %s NAMESPACE
+"""
 
 from __future__ import print_function
 
@@ -34,7 +38,7 @@ class Harasser(object):
         conf = {'namespace': ns}
         self.cs = ConscienceClient(conf)
         self.rdir = RdirClient(conf)
-        self.rawx_list = [x['addr'] for x in self.cs.all_services('rawx')]
+        self.rawx_list = [x['id'] for x in self.cs.all_services('rawx')]
         self.sent = set()
         self.max_containers = max_containers
         self.max_contents = max_contents
@@ -63,7 +67,8 @@ class Harasser(object):
             chunk_id = "http://%s/%064X" \
                 % (vol_id, random.randrange(2**128))
             self.rdir.chunk_push(
-                vol_id, container_id, content_id, chunk_id, **args)
+                vol_id, container_id, content_id, chunk_id, content_id, 1,
+                **args)
             self.sent.add((vol_id, container_id, content_id, chunk_id))
             loop -= 1
         end = time.time()
@@ -115,6 +120,6 @@ if __name__ == '__main__':
     elif len(sys.argv) > 1:
         HARASS = Harasser(sys.argv[1])
     else:
-        print("usage: %s NS [NB_CONTAINERS [NB_CONTENTS]]" % sys.argv[0])
+        print(__doc__ % sys.argv[0])
         sys.exit(1)
     HARASS()

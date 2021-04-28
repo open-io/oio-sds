@@ -281,8 +281,10 @@ struct rdir_record_s
 {
 	gint64 mtime;
 	gchar container[STRLEN_CONTAINERID];
-	gchar content[LIMIT_LENGTH_CONTENTPATH];
+	gchar content[STRLEN_CONTENTID];
 	gchar chunk[LIMIT_LENGTH_CHUNKURL];
+	gchar path[LIMIT_LENGTH_CONTENTPATH];
+	gint64 version;
 };
 
 static void
@@ -301,11 +303,16 @@ _base_destroy(struct rdir_base_s *base)
 }
 
 static GString *
-_record_to_key(struct rdir_record_s *rec)
+_record_to_key(struct rdir_record_s *rec, gboolean old_format)
 {
 	GString *key = g_string_sized_new(256);
-	g_string_printf(key, CHUNK_PREFIX "%s|%s|%s",
-			rec->container, rec->content, rec->chunk);
+	if (old_format) {
+		g_string_printf(key, CHUNK_PREFIX "%s|%s|%s",
+				rec->container, rec->content, rec->chunk);
+	} else {
+		g_string_printf(key, CHUNK_PREFIX "%s|%s",
+				rec->container, rec->chunk);
+	}
 	return key;
 }
 
@@ -313,41 +320,68 @@ static void
 _record_encode(struct rdir_record_s *rec, GString *value)
 {
 	g_string_append_c(value, '{');
-	oio_str_gstring_append_json_pair(value, "container_id", rec->container);
-	g_string_append_c(value, ',');
 	oio_str_gstring_append_json_pair(value, "content_id", rec->content);
-	g_string_append_c(value, ',');
-	oio_str_gstring_append_json_pair(value, "chunk_id", rec->chunk);
 	if (rec->mtime > 0) {
 		g_string_append_c(value, ',');
 		oio_str_gstring_append_json_pair_int(value, "mtime", rec->mtime);
 	}
+	g_string_append_c(value, ',');
+	oio_str_gstring_append_json_pair(value, "path", rec->path);
+	g_string_append_c(value, ',');
+	oio_str_gstring_append_json_pair_int(value, "version", rec->version);
 	g_string_append_c(value, '}');
 }
 
+/** Parse a JSON document as an rdir record.
+ * mandatory_keys: fail if the fields required to build a key are missing
+ * mandatory_values: fail if mandatory values are missing */
 static GError *
-_record_extract(struct rdir_record_s *rec, struct json_object *jrecord)
+_record_extract(struct rdir_record_s *rec, struct json_object *jrecord,
+		gboolean mandatory_keys, gboolean mandatory_values)
 {
-	struct json_object *jcontainer, *jcontent, *jchunk, *jmtime;
+	struct json_object *jcontainer, *jcontent, *jchunk, *jmtime, *jpath, *jver;
 	struct oio_ext_json_mapping_s map[] = {
-		{"container_id", &jcontainer, json_type_string, 1},
-		{"content_id",   &jcontent,   json_type_string, 1},
-		{"chunk_id",     &jchunk,     json_type_string, 1},
-		{"mtime",        &jmtime,     json_type_int,    0},
+		{"container_id", &jcontainer, json_type_string, mandatory_keys},
+		{"content_id",   &jcontent,   json_type_string, mandatory_values},
+		{"chunk_id",     &jchunk,     json_type_string, mandatory_keys},
+		/* These are not part of the keys. Keeping them optional allows
+		 * this function to be used during delete requests handling. */
+		{"mtime",        &jmtime,     json_type_int,    mandatory_values},
+		{"path",         &jpath,      json_type_string, mandatory_values},
+		{"version",      &jver,       json_type_int,    mandatory_values},
 		{NULL, NULL, 0, 0}
 	};
 	GError *err = oio_ext_extract_json(jrecord, map);
 	if (!err) {
-		g_strlcpy(rec->container, json_object_get_string(jcontainer),
-				sizeof(rec->container));
-		g_strlcpy(rec->content, json_object_get_string(jcontent),
-				sizeof(rec->content));
-		g_strlcpy(rec->chunk, json_object_get_string(jchunk),
-				sizeof(rec->chunk));
+		if (jcontainer) {
+			g_strlcpy(rec->container, json_object_get_string(jcontainer),
+					sizeof(rec->container));
+		}
+
+		if (jcontent) {
+			g_strlcpy(rec->content, json_object_get_string(jcontent),
+					sizeof(rec->content));
+		}
+
+		if (jchunk) {
+			g_strlcpy(rec->chunk, json_object_get_string(jchunk),
+					sizeof(rec->chunk));
+		}
+
 		gint64 mtime = 0;
 		if (jmtime)
 			mtime = json_object_get_int64(jmtime);
 		rec->mtime = mtime;
+
+		if (jpath) {
+			g_strlcpy(rec->path, json_object_get_string(jpath),
+					sizeof(rec->path));
+		}
+
+		gint64 version = 0;
+		if (jver)
+			version = json_object_get_int64(jver);
+		rec->version = version;
 	}
 	return err;
 }
@@ -358,8 +392,12 @@ _record_parse(struct rdir_record_s *rec, const char *value, size_t length)
 	GError *err = NULL;
 	struct json_object *jrecord = NULL;
 
-	if (!(err = JSON_parse_buffer((const guint8*)value, length, &jrecord)))
-		err = _record_extract(rec, jrecord);
+	if (!(err = JSON_parse_buffer((const guint8*)value, length, &jrecord))) {
+		/* This function is called when iterating on the database. The caller
+		 * already knows the record's key, we don't need to build it from the
+		 * record value, hence we don't need all fields to be present. */
+		err = _record_extract(rec, jrecord, FALSE, FALSE);
+	}
 
 	json_object_put(jrecord);
 	return err;
@@ -751,7 +789,13 @@ _db_vol_fetch(const char *volid, struct _listing_req_s *listing_req,
 		g_string_append_c(value, '"');
 		g_string_append_c(value, ',');
 		g_string_append_c(value, '{');
+		oio_str_gstring_append_json_pair(value, "content_id", rec->content);
+		g_string_append_c(value, ',');
 		oio_str_gstring_append_json_pair_int(value, "mtime", rec->mtime);
+		g_string_append_c(value, ',');
+		oio_str_gstring_append_json_pair(value, "path", rec->path);
+		g_string_append_c(value, ',');
+		oio_str_gstring_append_json_pair_int(value, "version", rec->version);
 		g_string_append_c(value, '}');
 		g_string_append_c(value, ']');
 	}
@@ -1061,7 +1105,7 @@ _db_admin_clear(const char *volid, gboolean all, gboolean before_incident,
 			size_t vallen = 0;
 			const char *val = leveldb_iter_value(it, &vallen);
 
-			/* TODO(jfs): we parse the whole object, but we just need the rtime
+			/* TODO(jfs): we parse the whole object, but we just need the mtime
 				* so there is maybe a small room for a lean improvement. */
 			struct rdir_record_s rec = {0};
 			err = _record_parse(&rec, val, vallen);
@@ -1079,7 +1123,7 @@ _db_admin_clear(const char *volid, gboolean all, gboolean before_incident,
 			}
 
 			if (repair) {
-				GString *repaired_key = _record_to_key(&rec);
+				GString *repaired_key = _record_to_key(&rec, FALSE);
 				GString *repaired_val = g_string_sized_new(1024);
 				_record_encode(&rec, repaired_val);
 				err = _db_vol_push(volid, FALSE, repaired_key, repaired_val);
@@ -1117,13 +1161,14 @@ _db_admin_clear(const char *volid, gboolean all, gboolean before_incident,
  * ------------------------------------------------------------------------- */
 
 static GError *
-_request_to_key(struct json_object *jbody, GString **pkey)
+_request_to_key(struct json_object *jbody, gboolean old_format,
+		GString **pkey)
 {
 	struct rdir_record_s rec = {0};
-	GError *err = _record_extract(&rec, jbody);
+	GError *err = _record_extract(&rec, jbody, TRUE, FALSE);
 	if (err)
 		return err;
-	*pkey = _record_to_key(&rec);
+	*pkey = _record_to_key(&rec, old_format);
 	return NULL;
 }
 
@@ -1173,13 +1218,14 @@ _route_vol_delete(struct req_args_s *args, struct json_object *jbody,
 	/* extraction of the parameters */
 	GError *err = NULL;
 	GString *key = NULL;
-	if ((err = _request_to_key(jbody, &key)))
+	if ((err = _request_to_key(jbody, FALSE, &key)))
 		return _reply_format_error(args->rp, err);
 
 	/* Eventually remove the record from the database */
 	err = _db_vol_delete(volid, key);
 	g_string_free(key, TRUE);
 
+	// TODO(FVE): retry with old key format
 	if (err)
 		return _reply_common_error(args->rp, err);
 	return _reply_ok(args->rp, NULL);
@@ -1234,10 +1280,10 @@ _route_vol_push(struct req_args_s *args, struct json_object *jbody,
 	/* extract all the record's fields */
 	GError *err = NULL;
 	struct rdir_record_s rec = {0};
-	if ((err = _record_extract(&rec, jbody)))
+	if ((err = _record_extract(&rec, jbody, TRUE, TRUE)))
 		return _reply_format_error(args->rp, err);
 
-	GString *key = _record_to_key(&rec);
+	GString *key = _record_to_key(&rec, FALSE);
 	GString *value = g_string_sized_new(1024);
 	args->rp->access_tail("key:%s", key->str);
 	_record_encode(&rec, value);

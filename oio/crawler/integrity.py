@@ -342,7 +342,7 @@ class Checker(object):
         # 1. Fetch chunk list from rdir (could be cached).
         # Unfortunately we cannot seek for a chunk ID.
         entries = [x for x in self.rdir_client.chunk_fetch(
-                       rawx_service, limit=-1) if x[2] == chunk_id]
+                       rawx_service, limit=-1) if x[1] == chunk_id]
         if not entries:
             self.logger.warn(
                 'Chunk %s not found in rdir' % chunk_id)
@@ -351,7 +351,8 @@ class Checker(object):
             self.logger.info('Chunk %s appears in %d objects',
                              chunk_id, len(entries))
         # 2. Find content and container IDs
-        target.cid, target.content_id = entries[0][0:2]
+        target.cid = entries[0][0]
+        target.content_id = entries[0][2]['content_id']
         meta = self.api.object_get_properties(
             None, None, None,
             cid=target.cid, content=target.content_id)

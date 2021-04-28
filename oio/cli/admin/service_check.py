@@ -346,7 +346,8 @@ class RawxCheck(MultipleServicesCommandMixin, ItemCheckCommand):
         url = 'http://' + service
         for chunk in chunks:
             checker.check(Target(self.app.options.account,
-                                 chunk=url + '/' + chunk[2],
-                                 content_id=chunk[1], cid=chunk[0]))
+                                 chunk=url + '/' + chunk[1],
+                                 content_id=chunk[2]['content_id'],
+                                 cid=chunk[0]))
             for res in self._format_results(checker):
                 yield res

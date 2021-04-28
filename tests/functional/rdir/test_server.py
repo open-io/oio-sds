@@ -29,7 +29,16 @@ from tests.proc import check_process_absent, \
 
 
 def _key(rec):
-    return '|'.join((rec['container_id'], rec['content_id'], rec['chunk_id']))
+    return '|'.join((rec['container_id'], rec['chunk_id']))
+
+
+def _value(rec):
+    """
+    Get the expected value fetched from the server for the
+    specified record.
+    """
+    return {k: v for k, v in rec.items()
+            if k in ('mtime', 'content_id', 'path', 'version')}
 
 
 map_cfg = {'host': 'bind_addr', 'port': 'bind_port',
@@ -76,7 +85,9 @@ class RdirTestCase(CommonTestCase):
         return {"container_id": random_id(64),
                 "content_id": random_id(32),
                 "chunk_id": random_id(64),
-                "mtime": int(time.time())}
+                "mtime": int(time.time()),
+                "path": "obj-" + random_id(4),
+                "version": 1}
 
     def _meta2_record(self):
         return {"container_id": random_id(64),
@@ -162,7 +173,7 @@ class TestRdirServer(RdirTestCase):
         resp = self._post("/v1/rdir/fetch", params={'vol': self.vol})
         self.assertEqual(resp.status, 200)
         reference = [
-            [_key(rec), {'mtime': rec['mtime']}]
+            [_key(rec), _value(rec)]
         ]
         self.assertListEqual(self.json_loads(resp.data), reference)
 
@@ -202,9 +213,8 @@ class TestRdirServer(RdirTestCase):
         # We must fetch the same data
         resp = self._post("/v1/rdir/fetch", params={'vol': self.vol})
         self.assertEqual(resp.status, 200)
-        self.assertEqual(self.json_loads(resp.data), [
-            [_key(rec), {'mtime': rec['mtime']}]
-        ])
+        self.assertEqual([[_key(rec), _value(rec)]],
+                         self.json_loads(resp.data))
 
     def test_push_missing_fields(self):
         rec = self._record()
@@ -217,7 +227,7 @@ class TestRdirServer(RdirTestCase):
         resp = self._post("/v1/rdir/create", params={'vol': self.vol})
         self.assertEqual(resp.status, 201)
 
-        for k in ['container_id', 'content_id', 'chunk_id']:
+        for k in ('container_id', 'chunk_id', 'path', 'version'):
             save = rec.pop(k)
             # push an incomplete record
             resp = self._post(
