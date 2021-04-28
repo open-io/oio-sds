@@ -48,11 +48,12 @@ class VolumeIndexFilter(Filter):
 
     def _chunk_push(self, reqid,
                     volume_id, container_id, content_id, chunk_id,
-                    args):
+                    content_path, content_ver, args):
         headers = {REQID_HEADER: reqid}
         try:
             return self.rdir.chunk_push(
                     volume_id, container_id, content_id, chunk_id,
+                    content_path, content_ver,
                     headers=headers, **args)
         except Exception as ex:
             self.logger.warn(
@@ -100,6 +101,8 @@ class VolumeIndexFilter(Filter):
             container_id = data.get('container_id')
             content_id = data.get('content_id')
             chunk_id = data.get('chunk_id')
+            content_path = data.get('content_path')
+            content_ver = data.get('content_version')
             try:
                 if event.event_type == EventTypes.CHUNK_DELETED:
                     self._chunk_delete(
@@ -109,7 +112,8 @@ class VolumeIndexFilter(Filter):
                     args = {'mtime': mtime}
                     self._chunk_push(
                         event.reqid,
-                        volume_id, container_id, content_id, chunk_id, args)
+                        volume_id, container_id, content_id, chunk_id,
+                        content_path, content_ver, args)
             except OioException as exc:
                 resp = EventError(event=event,
                                   body="rdir update error: %s" % exc)

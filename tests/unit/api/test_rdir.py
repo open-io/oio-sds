@@ -48,11 +48,11 @@ class TestRdirClient(unittest.TestCase):
                 (
                     FakeResponse(200),
                     [
-                        ["%s|%s|%s" %
-                         (self.container_id_1, self.content_id_1,
+                        ["%s|%s" %
+                         (self.container_id_1,
                           self.chunk_id_1), {'mtime': 10}],
-                        ["%s|%s|%s" %
-                         (self.container_id_2, self.content_id_2,
+                        ["%s|%s" %
+                         (self.container_id_2,
                           self.chunk_id_2), {'mtime': 20}],
                     ]
                 ),
@@ -61,10 +61,10 @@ class TestRdirClient(unittest.TestCase):
         gen = self.rdir_client.chunk_fetch("volume", limit=2)
         items = list(gen)
         self.assertEqual(
-            items[0], (self.container_id_1, self.content_id_1,
+            items[0], (self.container_id_1,
                        self.chunk_id_1, {'mtime': 10}))
         self.assertEqual(
-            items[1], (self.container_id_2, self.content_id_2,
+            items[1], (self.container_id_2,
                        self.chunk_id_2, {'mtime': 20}))
         self.assertEqual(2, len(items))
         self.assertEqual(self.rdir_client._direct_request.call_count, 2)
@@ -75,19 +75,19 @@ class TestRdirClient(unittest.TestCase):
                 (
                     FakeResponse(200),
                     [
-                        ["%s|%s|%s" %
-                         (self.container_id_1, self.content_id_1,
+                        ["%s|%s" %
+                         (self.container_id_1,
                           self.chunk_id_1), {'mtime': 10}],
-                        ["%s|%s|%s" %
-                         (self.container_id_2, self.content_id_2,
+                        ["%s|%s" %
+                         (self.container_id_2,
                           self.chunk_id_2), {'mtime': 20}],
                     ]
                 ),
                 (
                     FakeResponse(200),
                     [
-                        ["%s|%s|%s" %
-                         (self.container_id_3, self.content_id_3,
+                        ["%s|%s" %
+                         (self.container_id_3,
                           self.chunk_id_3), {'mtime': 30}],
                     ]
                 ),
@@ -96,13 +96,13 @@ class TestRdirClient(unittest.TestCase):
         gen = self.rdir_client.chunk_fetch("volume", limit=2)
         items = list(gen)
         self.assertEqual(
-            items[0], (self.container_id_1, self.content_id_1,
+            items[0], (self.container_id_1,
                        self.chunk_id_1, {'mtime': 10}))
         self.assertEqual(
-            items[1], (self.container_id_2, self.content_id_2,
+            items[1], (self.container_id_2,
                        self.chunk_id_2, {'mtime': 20}))
         self.assertEqual(
-            items[2], (self.container_id_3, self.content_id_3,
+            items[2], (self.container_id_3,
                        self.chunk_id_3, {'mtime': 30}))
         self.assertEqual(3, len(items))
         self.assertEqual(self.rdir_client._direct_request.call_count, 3)

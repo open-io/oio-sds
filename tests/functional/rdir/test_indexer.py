@@ -98,23 +98,23 @@ class TestIndexerCrawler(BaseTestCase):
             'user.%s%s' % (CHUNK_XATTR_CONTENT_FULLPATH_PREFIX, chunk_id),
             enc(fullpath))
 
-        return chunk_path, container_id, content_id, chunk_id
+        return chunk_path, container_id, chunk_id
 
     def _get_service_id_or_addr(self):
         return self.rawx_conf.get('service_id', self.rawx_conf['addr'])
 
-    def _rdir_get(self, rawx_addr, container_id, content_id, chunk_id):
+    def _rdir_get(self, rawx_addr, container_id, chunk_id):
         data = self.rdir_client.chunk_fetch(rawx_addr)
-        key = (container_id, content_id, chunk_id)
-        for i_container, i_content, i_chunk, i_value in data:
-            if (i_container, i_content, i_chunk) == key:
+        key = (container_id, chunk_id)
+        for i_container, i_chunk, i_value in data:
+            if (i_container, i_chunk) == key:
                 return i_value
         return None
 
     def _test_index_chunk(self, alias="toto"):
 
         # create a fake chunk
-        chunk_path, container_id, content_id, chunk_id = self._create_chunk(
+        chunk_path, container_id, chunk_id = self._create_chunk(
             self.rawx_conf['path'], alias)
 
         # index the chunk
@@ -126,7 +126,7 @@ class TestIndexerCrawler(BaseTestCase):
 
         # check rdir
         check_value = self._rdir_get(self._get_service_id_or_addr(),
-                                     container_id, content_id, chunk_id)
+                                     container_id, chunk_id)
 
         self.assertIsNotNone(check_value)
 
@@ -139,7 +139,7 @@ class TestIndexerCrawler(BaseTestCase):
 
         # check rdir
         check_value = self._rdir_get(self._get_service_id_or_addr(),
-                                     container_id, content_id, chunk_id)
+                                     container_id, chunk_id)
 
         self.assertIsNotNone(check_value)
 
@@ -153,7 +153,7 @@ class TestIndexerCrawler(BaseTestCase):
 
     def test_index_chunk_missing_xattr(self):
         # create a fake chunk
-        chunk_path, container_id, content_id, chunk_id = self._create_chunk(
+        chunk_path, container_id, chunk_id = self._create_chunk(
             self.rawx_conf['path'])
 
         # remove mandatory xattr
@@ -177,13 +177,13 @@ class TestIndexerCrawler(BaseTestCase):
         errors = indexer.errors
 
         # create fake chunks
-        chunk_path1, _, _, _ = self._create_chunk(
+        chunk_path1, _, _ = self._create_chunk(
             self.rawx_conf['path'], suffix=".pending")
-        chunk_path2, _, _, _ = self._create_chunk(
+        chunk_path2, _, _ = self._create_chunk(
             self.rawx_conf['path'][:-1] + 'G')
-        chunk_path3, _, _, _ = self._create_chunk(
+        chunk_path3, _, _ = self._create_chunk(
             self.rawx_conf['path'] + '0')
-        chunk_path4, _, _, _ = self._create_chunk(
+        chunk_path4, _, _ = self._create_chunk(
             self.rawx_conf['path'][:-1])
 
         # try to index the chunks

@@ -189,11 +189,11 @@ class RawxDecommissionJob(XcuteRdirJob):
                 return
             last_usage_check = now
 
-        chunk_infos = self.get_chunk_infos(job_params, marker=marker)
-        for container_id, content_id, chunk_id, _ in chunk_infos:
-            task_id = '|'.join((container_id, content_id, chunk_id))
+        chunk_info = self.get_chunk_info(job_params, marker=marker)
+        for container_id, chunk_id, descr in chunk_info:
+            task_id = '|'.join((container_id, descr['content_id'], chunk_id))
             yield task_id, {'container_id': container_id,
-                            'content_id': content_id,
+                            'content_id': descr['content_id'],
                             'chunk_id': chunk_id}
 
             if usage_target <= 0:
@@ -219,25 +219,26 @@ class RawxDecommissionJob(XcuteRdirJob):
             return
 
         kept_chunks_ratio = 1 - (usage_target / float(current_usage))
-        chunk_infos = self.get_chunk_infos(job_params, marker=marker)
+        chunk_info = self.get_chunk_info(job_params, marker=marker)
         i = 0
-        for i, (container_id, content_id, chunk_id, _) \
-                in enumerate(chunk_infos, 1):
+        for i, (container_id, chunk_id, descr) \
+                in enumerate(chunk_info, 1):
             if i % 1000 == 0:
-                yield ('|'.join((container_id, content_id, chunk_id)),
+                yield ('|'.join((container_id, descr['content_id'], chunk_id)),
                        int(math.ceil(1000 * kept_chunks_ratio)))
 
         remaining = int(math.ceil(i % 1000 * kept_chunks_ratio))
         if remaining > 0:
-            yield '|'.join((container_id, content_id, chunk_id)), remaining
+            yield ('|'.join((container_id, descr['content_id'], chunk_id)),
+                   remaining)
 
-    def get_chunk_infos(self, job_params, marker=None):
+    def get_chunk_info(self, job_params, marker=None):
         service_id = job_params['service_id']
         rdir_fetch_limit = job_params['rdir_fetch_limit']
         rdir_timeout = job_params['rdir_timeout']
 
-        chunk_infos = self.rdir_client.chunk_fetch(
+        chunk_info = self.rdir_client.chunk_fetch(
             service_id, timeout=rdir_timeout,
             limit=rdir_fetch_limit, start_after=marker)
 
-        return chunk_infos
+        return chunk_info

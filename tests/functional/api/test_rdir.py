@@ -40,8 +40,10 @@ class TestRdirClient(BaseTestCase):
         expected_entries = list()
         for _ in range(4):
             cid = random_id(64)
-            for _ in range(random.randrange(2, 5)):
+            for i in range(random.randrange(2, 5)):
                 content_id = random_id(32)
+                content_path = "obj-%d" % i
+                content_ver = 1
                 for _ in range(random.randrange(2, 5)):
                     chunk_id = random_id(63)
                     mtime = random.randrange(0, max_mtime+1)
@@ -50,8 +52,13 @@ class TestRdirClient(BaseTestCase):
                     else:
                         chunk_id += '1'
                     self.rdir.chunk_push(
-                        self.rawx_id, cid, content_id, chunk_id, mtime=mtime)
-                    entry = (cid, content_id, chunk_id, {'mtime': mtime})
+                        self.rawx_id, cid, content_id, chunk_id,
+                        content_path, content_ver, mtime=mtime)
+                    entry = (cid, chunk_id,
+                             {'content_id': content_id,
+                              'mtime': mtime,
+                              'path': content_path,
+                              'version': content_ver})
                     expected_entries.append(entry)
         self.expected_entries = sorted(expected_entries)
 
@@ -99,7 +106,7 @@ class TestRdirClient(BaseTestCase):
 
     def test_chunk_fetch_with_start_after(self):
         start_after_index = random.randrange(0, len(self.expected_entries))
-        start_after = '|'.join(self.expected_entries[start_after_index][:3])
+        start_after = '|'.join(self.expected_entries[start_after_index][:2])
         entries = self.rdir.chunk_fetch(
             self.rawx_id, start_after=start_after)
         self._assert_chunk_fetch(
@@ -107,7 +114,7 @@ class TestRdirClient(BaseTestCase):
 
     def test_chunk_fetch_with_start_after_limit(self):
         start_after_index = random.randrange(0, len(self.expected_entries))
-        start_after = '|'.join(self.expected_entries[start_after_index][:3])
+        start_after = '|'.join(self.expected_entries[start_after_index][:2])
         entries = self.rdir.chunk_fetch(
             self.rawx_id, start_after=start_after,
             limit=2)
@@ -119,7 +126,7 @@ class TestRdirClient(BaseTestCase):
         expected_entries_cid = [entry for entry in self.expected_entries
                                 if entry[0] == cid]
         start_after_index = random.randrange(0, len(expected_entries_cid))
-        start_after = '|'.join(expected_entries_cid[start_after_index][:3])
+        start_after = '|'.join(expected_entries_cid[start_after_index][:2])
         entries = self.rdir.chunk_fetch(
             self.rawx_id,
             start_after=start_after,
@@ -132,7 +139,7 @@ class TestRdirClient(BaseTestCase):
         expected_entries_cid = [entry for entry in self.expected_entries
                                 if entry[0] == cid]
         start_after_index = random.randrange(0, len(expected_entries_cid))
-        start_after = '|'.join(expected_entries_cid[start_after_index][:3])
+        start_after = '|'.join(expected_entries_cid[start_after_index][:2])
         entries = self.rdir.chunk_fetch(
             self.rawx_id,
             start_after=start_after,
@@ -148,7 +155,7 @@ class TestRdirClient(BaseTestCase):
         self.rdir.admin_incident_set(self.rawx_id, self.incident_date)
         self.rdir._direct_request.reset_mock()
         expected_entries_rebuild = [entry for entry in self.expected_entries
-                                    if entry[2][-1] == '0']
+                                    if entry[1][-1] == '0']
         entries = self.rdir.chunk_fetch(self.rawx_id, rebuild=True)
         self._assert_chunk_fetch(expected_entries_rebuild, entries)
 
@@ -156,7 +163,7 @@ class TestRdirClient(BaseTestCase):
         self.rdir.admin_incident_set(self.rawx_id, self.incident_date)
         self.rdir._direct_request.reset_mock()
         expected_entries_rebuild = [entry for entry in self.expected_entries
-                                    if entry[2][-1] == '0']
+                                    if entry[1][-1] == '0']
         entries = self.rdir.chunk_fetch(self.rawx_id, rebuild=True, limit=2)
         self._assert_chunk_fetch(expected_entries_rebuild, entries, limit=2)
 
@@ -164,7 +171,7 @@ class TestRdirClient(BaseTestCase):
         self.rdir.admin_incident_set(self.rawx_id, self.incident_date)
         self.rdir._direct_request.reset_mock()
         expected_entries_rebuild = [entry for entry in self.expected_entries
-                                    if entry[2][-1] == '0']
+                                    if entry[1][-1] == '0']
         cid = random.choice(self.expected_entries)[0]
         expected_entries_rebuild_cid = \
             [entry for entry in expected_entries_rebuild
@@ -177,12 +184,12 @@ class TestRdirClient(BaseTestCase):
         self.rdir.admin_incident_set(self.rawx_id, self.incident_date)
         self.rdir._direct_request.reset_mock()
         expected_entries_rebuild = [entry for entry in self.expected_entries
-                                    if entry[2][-1] == '0']
+                                    if entry[1][-1] == '0']
         if expected_entries_rebuild:
             start_after_index = random.randrange(
                 0, len(expected_entries_rebuild))
             start_after = '|'.join(
-                expected_entries_rebuild[start_after_index][:3])
+                expected_entries_rebuild[start_after_index][:2])
         else:
             start_after_index = 0
             start_after = '|'.join(
@@ -197,7 +204,7 @@ class TestRdirClient(BaseTestCase):
         self.rdir.admin_incident_set(self.rawx_id, self.incident_date)
         self.rdir._direct_request.reset_mock()
         expected_entries_rebuild = [entry for entry in self.expected_entries
-                                    if entry[2][-1] == '0']
+                                    if entry[1][-1] == '0']
         cid = random.choice(self.expected_entries)[0]
         expected_entries_rebuild_cid = \
             [entry for entry in expected_entries_rebuild
@@ -211,7 +218,7 @@ class TestRdirClient(BaseTestCase):
         self.rdir.admin_incident_set(self.rawx_id, self.incident_date)
         self.rdir._direct_request.reset_mock()
         expected_entries_rebuild = [entry for entry in self.expected_entries
-                                    if entry[2][-1] == '0']
+                                    if entry[1][-1] == '0']
         cid = random.choice(self.expected_entries)[0]
         expected_entries_rebuild_cid = \
             [entry for entry in expected_entries_rebuild
@@ -220,11 +227,11 @@ class TestRdirClient(BaseTestCase):
             start_after_index = random.randrange(
                 0, len(expected_entries_rebuild_cid))
             start_after = '|'.join(
-                expected_entries_rebuild_cid[start_after_index][:3])
+                expected_entries_rebuild_cid[start_after_index][:2])
         else:
             start_after_index = 0
             start_after = '|'.join(
-                (random_id(64), random_id(32), random_id(64)))
+                (random_id(64), random_id(64)))
         entries = self.rdir.chunk_fetch(
             self.rawx_id, rebuild=True, container_id=cid,
             start_after=start_after)
@@ -235,16 +242,16 @@ class TestRdirClient(BaseTestCase):
         self.rdir.admin_incident_set(self.rawx_id, self.incident_date)
         self.rdir._direct_request.reset_mock()
         expected_entries_rebuild = [entry for entry in self.expected_entries
-                                    if entry[2][-1] == '0']
+                                    if entry[1][-1] == '0']
         if expected_entries_rebuild:
             start_after_index = random.randrange(
                 0, len(expected_entries_rebuild))
             start_after = '|'.join(
-                expected_entries_rebuild[start_after_index][:3])
+                expected_entries_rebuild[start_after_index][:2])
         else:
             start_after_index = 0
             start_after = '|'.join(
-                (random_id(64), random_id(32), random_id(64)))
+                (random_id(64), random_id(64)))
         entries = self.rdir.chunk_fetch(
             self.rawx_id, rebuild=True,
             start_after=start_after, limit=2)
@@ -255,7 +262,7 @@ class TestRdirClient(BaseTestCase):
         self.rdir.admin_incident_set(self.rawx_id, self.incident_date)
         self.rdir._direct_request.reset_mock()
         expected_entries_rebuild = [entry for entry in self.expected_entries
-                                    if entry[2][-1] == '0']
+                                    if entry[1][-1] == '0']
         cid = random.choice(self.expected_entries)[0]
         expected_entries_rebuild_cid = \
             [entry for entry in expected_entries_rebuild
@@ -264,11 +271,11 @@ class TestRdirClient(BaseTestCase):
             start_after_index = random.randrange(
                 0, len(expected_entries_rebuild_cid))
             start_after = '|'.join(
-                expected_entries_rebuild_cid[start_after_index][:3])
+                expected_entries_rebuild_cid[start_after_index][:2])
         else:
             start_after_index = 0
             start_after = '|'.join(
-                (random_id(64), random_id(32), random_id(64)))
+                (random_id(64), random_id(64)))
         entries = self.rdir.chunk_fetch(
             self.rawx_id, rebuild=True, container_id=cid,
             start_after=start_after,
@@ -288,7 +295,7 @@ class TestRdirClient(BaseTestCase):
                     entry[0], dict()).get('total', 0) + 1
         if incident:
             expected_entries_rebuild = [entry for entry in expected_entries
-                                        if entry[2][-1] == '0']
+                                        if entry[1][-1] == '0']
             expected_status['chunk']['to_rebuild'] = \
                 len(expected_entries_rebuild)
             for entry in expected_entries_rebuild:
@@ -327,7 +334,7 @@ class TestRdirClient(BaseTestCase):
 
     def test_chunk_status_with_marker(self):
         marker_index = random.randrange(0, len(self.expected_entries))
-        marker = '|'.join(self.expected_entries[marker_index][:3])
+        marker = '|'.join(self.expected_entries[marker_index][:2])
         status = self.rdir.status(
             self.rawx_id, marker=marker)
         self._assert_chunk_status(
@@ -335,7 +342,7 @@ class TestRdirClient(BaseTestCase):
 
     def test_chunk_status_with_marker_max(self):
         marker_index = random.randrange(0, len(self.expected_entries))
-        marker = '|'.join(self.expected_entries[marker_index][:3])
+        marker = '|'.join(self.expected_entries[marker_index][:2])
         status = self.rdir.status(
             self.rawx_id, marker=marker,
             max=2)
@@ -347,7 +354,7 @@ class TestRdirClient(BaseTestCase):
         expected_entries_cid = [entry for entry in self.expected_entries
                                 if entry[0] == cid]
         marker_index = random.randrange(0, len(expected_entries_cid))
-        marker = '|'.join(expected_entries_cid[marker_index][:3])
+        marker = '|'.join(expected_entries_cid[marker_index][:2])
         status = self.rdir.status(
             self.rawx_id,
             marker=marker,
@@ -360,7 +367,7 @@ class TestRdirClient(BaseTestCase):
         expected_entries_cid = [entry for entry in self.expected_entries
                                 if entry[0] == cid]
         marker_index = random.randrange(0, len(expected_entries_cid))
-        marker = '|'.join(expected_entries_cid[marker_index][:3])
+        marker = '|'.join(expected_entries_cid[marker_index][:2])
         status = self.rdir.status(
             self.rawx_id,
             marker=marker,
@@ -406,7 +413,7 @@ class TestRdirClient(BaseTestCase):
         self.rdir.admin_incident_set(self.rawx_id, self.incident_date)
         self.rdir._direct_request.reset_mock()
         marker_index = random.randrange(0, len(self.expected_entries))
-        marker = '|'.join(self.expected_entries[marker_index][:3])
+        marker = '|'.join(self.expected_entries[marker_index][:2])
         status = self.rdir.status(
             self.rawx_id, marker=marker)
         self._assert_chunk_status(
@@ -416,7 +423,7 @@ class TestRdirClient(BaseTestCase):
         self.rdir.admin_incident_set(self.rawx_id, self.incident_date)
         self.rdir._direct_request.reset_mock()
         marker_index = random.randrange(0, len(self.expected_entries))
-        marker = '|'.join(self.expected_entries[marker_index][:3])
+        marker = '|'.join(self.expected_entries[marker_index][:2])
         status = self.rdir.status(
             self.rawx_id, marker=marker,
             max=2)
@@ -431,7 +438,7 @@ class TestRdirClient(BaseTestCase):
         expected_entries_cid = [entry for entry in self.expected_entries
                                 if entry[0] == cid]
         marker_index = random.randrange(0, len(expected_entries_cid))
-        marker = '|'.join(expected_entries_cid[marker_index][:3])
+        marker = '|'.join(expected_entries_cid[marker_index][:2])
         status = self.rdir.status(
             self.rawx_id,
             marker=marker,
@@ -446,7 +453,7 @@ class TestRdirClient(BaseTestCase):
         expected_entries_cid = [entry for entry in self.expected_entries
                                 if entry[0] == cid]
         marker_index = random.randrange(0, len(expected_entries_cid))
-        marker = '|'.join(expected_entries_cid[marker_index][:3])
+        marker = '|'.join(expected_entries_cid[marker_index][:2])
         status = self.rdir.status(
             self.rawx_id,
             marker=marker,
