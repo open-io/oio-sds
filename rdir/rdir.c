@@ -1,6 +1,7 @@
 /*
 OpenIO SDS rdir
 Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -327,14 +328,12 @@ _record_encode(struct rdir_record_s *rec, GString *value)
 static GError *
 _record_extract(struct rdir_record_s *rec, struct json_object *jrecord)
 {
-	struct json_object *jcontainer, *jcontent, *jchunk, *jmtime, *jrtime;
+	struct json_object *jcontainer, *jcontent, *jchunk, *jmtime;
 	struct oio_ext_json_mapping_s map[] = {
 		{"container_id", &jcontainer, json_type_string, 1},
 		{"content_id",   &jcontent,   json_type_string, 1},
 		{"chunk_id",     &jchunk,     json_type_string, 1},
 		{"mtime",        &jmtime,     json_type_int,    0},
-		// FIXME(adu) to delete after deleting all rtime
-		{"rtime",        &jrtime,     json_type_int,    0},
 		{NULL, NULL, 0, 0}
 	};
 	GError *err = oio_ext_extract_json(jrecord, map);
@@ -346,12 +345,9 @@ _record_extract(struct rdir_record_s *rec, struct json_object *jrecord)
 		g_strlcpy(rec->chunk, json_object_get_string(jchunk),
 				sizeof(rec->chunk));
 		gint64 mtime = 0;
-		gint64 rtime = 0;
 		if (jmtime)
 			mtime = json_object_get_int64(jmtime);
-		if (jrtime)
-			rtime = json_object_get_int64(jrtime);
-		rec->mtime = MAX(mtime, rtime);
+		rec->mtime = mtime;
 	}
 	return err;
 }
