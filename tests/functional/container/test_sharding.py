@@ -64,7 +64,9 @@ class TestSharding(TestShardingBase):
                 self.storage.container_delete(account=".shards_test_account",
                                               container=cont[0])
             # delete main container in test_account
-            self.storage.container_delete(self.account, self.cname)
+            # FIXME(adu): Shrink the container to delete it
+            # without using the 'force' option.
+            self.storage.container_delete(self.account, self.cname, force=True)
         except Exception:
             self.logger.warning("Exception during cleaning \
                                 .shards_test_account")
