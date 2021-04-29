@@ -22,7 +22,6 @@ from __future__ import print_function
 from oio.common.green import Event, GreenPool, LightQueue, sleep, Semaphore,\
     ratelimit_function_build
 
-import os
 import csv
 import sys
 from time import time
@@ -1073,6 +1072,13 @@ def main():
         "(starting with account)."
     parser.add_argument('target', metavar='T', nargs='*',
                         help=t_help)
+    parser.add_argument('--from-stdin',
+                        action='store_true',
+                        default=False,
+                        help="""
+                        Fetch elements to check from stdin.
+                        The data must be in CSV format.
+                        """)
     parser.add_argument('--attempts', type=int, default=1,
                         help=('Number of attempts for '
                               'listing requests (default: 1).'))
@@ -1133,7 +1139,7 @@ def main():
     if args.attempts < 1:
         raise ValueError('attempts must be at least 1')
 
-    if not os.isatty(sys.stdin.fileno()):
+    if args.from_stdin:
         source = sys.stdin
         limit_listings = 0  # do full listings, cache the results
         entries = csv.reader(source, delimiter=' ')
