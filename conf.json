@@ -1114,7 +1114,7 @@
 			{ "type": "uint", "name": "oio_lb_weighted_random_attempts",
 				"key": "core.lb.weighted_random_attempts",
 				"descr": "How many times shall we try to select a service using a weighted random algorithm, before switching to the shuffled selection. Increase this if you observe too many choices of low-score services while high-score services are available.",
-				"def": "1", "min": 1, "max": "64k"},
+				"def": "8", "min": 1, "max": "64k"},
 			{ "type": "monotonic", "name": "oio_lb_writer_lock_alert_delay",
 				"key": "core.lb.writer_lock_alert_delay",
 				"descr": "Dump the time spent while holding the global writer lock, when the lock is held for longer than this threshold (in microseconds).",
