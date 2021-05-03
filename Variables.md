@@ -194,7 +194,7 @@ Used by `gcc`
 
 > How many times shall we try to select a service using a weighted random algorithm, before switching to the shuffled selection. Increase this if you observe too many choices of low-score services while high-score services are available.
 
- * default: **1**
+ * default: **8**
  * type: guint
  * cmake directive: *OIO_CORE_LB_WEIGHTED_RANDOM_ATTEMPTS*
  * range: 1 -> 64000
@@ -210,7 +210,7 @@ Used by `gcc`
 
 ### core.period.refresh.cpu_idle
 
-> Sets the miniimal amount of time between two refreshed of the known CPU-idle counters for the current host. Keep this value small.
+> Sets the minimal amount of time between two refreshes of the known CPU-idle counters for the current host. Keep this value small.
 
  * default: **1 * G_TIME_SPAN_SECOND**
  * type: gint64
@@ -523,7 +523,7 @@ Used by `gcc`
 
 ### meta2.reload.lb.period
 
-> Sets the period of the periodical reloading of the Load-balancing state, in the current meta2 service.
+> DEPRECATED. Sets the period of the periodical reloading of the Load-balancing state, in the current meta2 service.
 
  * default: **10**
  * type: gint64
@@ -1050,7 +1050,7 @@ Used by `gcc`
 
 ### server.batch.accept
 
-> In the network core, when the server socket wakes the call to epoll_wait(), that value sets the number of subsequent calls to accept(). Setting it to a low value allows to quickly switch to other events (established connection) and can lead to a strvation on the new connections. Setting to a high value might spend too much time in accepting and ease denials of service (with established but idle cnx).
+> In the network core, when the server socket wakes the call to epoll_wait(), that value sets the number of subsequent calls to accept(). Setting it to a low value allows to quickly switch to other events (established connection) and can lead to a starvation on the new connections. Setting to a high value might spend too much time in accepting and ease denials of service (with established but idle cnx).
 
  * default: **64**
  * type: guint
@@ -1068,7 +1068,7 @@ Used by `gcc`
 
 ### server.cnx.timeout.idle
 
-> In the current server, sets the maximumu amount of time a connection may live without activity since the last activity (i.e. the last reply sent)
+> In the current server, sets the maximum amount of time a connection may live without activity since the last activity (i.e. the last reply sent)
 
  * default: **5 * G_TIME_SPAN_MINUTE**
  * type: gint64
@@ -1086,7 +1086,7 @@ Used by `gcc`
 
 ### server.cnx.timeout.persist
 
-> In the current server, sets the maximum amount of time a connection is allowed to live, since its creation by the accept() call, wheter it presents activity or not.
+> In the current server, sets the maximum amount of time a connection is allowed to live, since its creation by the accept() call, whether it presents activity or not.
 
  * default: **2 * G_TIME_SPAN_HOUR**
  * type: gint64
@@ -1597,7 +1597,7 @@ Used by `gcc`
 
 ### sqliterepo.outgoing.timeout.cnx.use
 
-> Sets the connection timeout when ping'ing a peer database. Keep it small. Only used when UDP is disabled.
+> Sets the connection timeout when pinging a peer database. Keep it small. Only used when UDP is disabled.
 
  * default: **1.0**
  * type: gdouble
@@ -1633,7 +1633,7 @@ Used by `gcc`
 
 ### sqliterepo.outgoing.timeout.req.use
 
-> Sets the global timeout when ping'ing a peer database. Keep it small.
+> Sets the global timeout when pinging a peer database. Keep it small.
 
  * default: **10.0**
  * type: gdouble
@@ -1758,7 +1758,7 @@ Used by `gcc`
 
 ### sqliterepo.zk.rrd.threshold
 
-> Sets the maximum number of reconnections to the ZK that remains acceptable. Beyond that limit, we consider the current service has been disconnected, and that it loast all its nodes.
+> Sets the maximum number of reconnections to the ZK that remains acceptable. Beyond that limit, we consider the current service has been disconnected, and that it lost all its nodes.
 
  * default: **5**
  * type: guint

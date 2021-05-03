@@ -89,7 +89,9 @@ class RawxDecommission(SingleServiceCommandMixin, XcuteRdirCommand):
     """
     Decommission the specified service.
     All chunks matching the size constraints
-    will be moved on the others services.
+    will be moved to others services.
+    /!\\ WARNING /!\\ The specified service must be available.
+    If it's not, please use the command "openio-admin xcute rawx rebuild".
     """
 
     JOB_CLASS = RawxDecommissionJob
