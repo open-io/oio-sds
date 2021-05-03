@@ -121,11 +121,14 @@ class BlobRegistrator(object):
         raise Exception("CHECK not yet implemented")
 
     def _insert_bean(self, meta, bean):
-        self.client.container_raw_insert(bean, cid=meta['container_id'])
+        self.client.container_raw_insert(bean, cid=meta['container_id'],
+                                         path=meta['content_path'],
+                                         version=meta['content_version'])
 
     def _update_bean(self, meta, bean):
         self.client.container_raw_update(
-            [bean], [bean], cid=meta['container_id'])
+            [bean], [bean], cid=meta['container_id'],
+            path=meta['content_path'], version=meta['content_version'])
 
     def _get_report(self, status, end_time):
         time_since_last_report = (end_time - self.last_report) or 0.00001

@@ -103,7 +103,7 @@ class TestContentRebuildFilter(BaseTestCase):
         time.sleep(3)
         self.blob_rebuilder.kill()
 
-    def _remove_chunks(self, chunks, content_id):
+    def _remove_chunks(self, chunks, content_id, path):
         if not chunks:
             return
         for chunk in chunks:
@@ -111,7 +111,8 @@ class TestContentRebuildFilter(BaseTestCase):
             chunk['content'] = content_id
             chunk['type'] = 'chunk'
         self.container_client.container_raw_delete(
-            self.account, self.container, data=chunks)
+            self.account, self.container, data=chunks,
+            path=path)
         try:
             self.storage.blob_client.chunk_delete_many(chunks)
         except Exception:
@@ -120,7 +121,7 @@ class TestContentRebuildFilter(BaseTestCase):
     def _check_rebuild(self, content_name, chunks, missing_pos, meta,
                        chunks_to_remove, chunk_created=True):
         start = time.time()
-        self._remove_chunks(chunks_to_remove, meta['id'])
+        self._remove_chunks(chunks_to_remove, meta['id'], content_name)
         time.sleep(1)  # Need to sleep 1s, because mtime has 1s precision
         event = self._create_event(content_name, chunks, missing_pos,
                                    meta['id'])
