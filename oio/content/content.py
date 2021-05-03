@@ -194,8 +194,11 @@ class Content(object):
                 'pos': current_chunk.pos,
                 'content': self.content_id}
 
+        # path is required in order to redirect the request to the appropriate
+        # shard. version should not be required, but we can pass it anyway.
         self.container_client.container_raw_insert(
-            data, cid=self.container_id, **kwargs)
+            data, cid=self.container_id, path=self.path, version=self.version,
+            **kwargs)
 
     def _update_spare_chunk(self, current_chunk, new_url, **kwargs):
         old = {'type': 'chunk',
@@ -211,7 +214,9 @@ class Content(object):
                'pos': current_chunk.pos,
                'content': self.content_id}
         self.container_client.container_raw_update(
-            [old], [new], cid=self.container_id, **kwargs)
+            [old], [new], cid=self.container_id,
+            path=self.path, version=self.version,
+            **kwargs)
 
     def _generate_sysmeta(self):
         sysmeta = dict()

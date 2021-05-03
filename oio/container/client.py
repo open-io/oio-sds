@@ -468,7 +468,7 @@ class ContainerClient(ProxyClient):
 
     def container_raw_insert(self, bean, account=None, reference=None,
                              cid=None, **kwargs):
-        params = self._make_params(account, reference, cid=cid)
+        params = self._make_params(account, reference, cid=cid, **kwargs)
         data = json.dumps((bean,))
         if kwargs.pop("frozen", None):
             params["frozen"] = 1
@@ -477,7 +477,7 @@ class ContainerClient(ProxyClient):
 
     def container_raw_update(self, old, new, account=None, reference=None,
                              cid=None, **kwargs):
-        params = self._make_params(account, reference, cid=cid)
+        params = self._make_params(account, reference, cid=cid, **kwargs)
         data = json.dumps({"old": old, "new": new})
         if kwargs.pop("frozen", None):
             params["frozen"] = 1
@@ -494,7 +494,7 @@ class ContainerClient(ProxyClient):
             telling which type of bean it is.
         :type data: `list` of `dict` items
         """
-        params = self._make_params(account, reference, cid=cid)
+        params = self._make_params(account, reference, cid=cid, **kwargs)
         data = json.dumps(data)
         self._request(
             'POST', '/raw_delete', data=data, params=params, **kwargs)
