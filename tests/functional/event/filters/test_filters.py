@@ -55,7 +55,8 @@ class TestContentRebuildFilter(BaseTestCase):
         self.conf['tube'] = BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE
         self.notify_filter = NotifyFilter(app=_App, conf=self.conf)
         bt = Beanstalk.from_url(self.conf['queue_url'])
-        bt.drain_tube(BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE)
+        bt.drain_tube(BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE,
+                      timeout=0.5)
         bt.close()
         self.wait_for_score(('rawx', ))
 
