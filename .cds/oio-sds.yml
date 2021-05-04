@@ -62,6 +62,15 @@ workflow:
         #    depends_on:
         #      - root
 
+  coverage:
+    pipeline: oio-sds-coverage
+    depends_on:
+      - tests-cli
+      - tests-fast
+      - tests-single
+      - tests-3copies
+#      - tests-ec
+
   mirror:
     pipeline: oio-sds-mirror
     application: oio-sds

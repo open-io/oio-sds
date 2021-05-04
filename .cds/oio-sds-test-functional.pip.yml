@@ -32,5 +32,10 @@ jobs:
           - . $HOME/oiovenv/bin/activate
           - ./tools/oio-travis-suites.sh
 
+      - name: Save coverage information
+        script:
+          - mv '{{.cds.workspace}}/.coverage' '{{.cds.workspace}}/.coverage.{{.cds.env.TEST_SUITE}}'
+          - worker upload --tag='{{.cds.version}}' '{{.cds.workspace}}/.coverage.{{.cds.env.TEST_SUITE}}'
+
     requirements:
         - model: openio-debbuild-18.04

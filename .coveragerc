@@ -1,0 +1,13 @@
+[paths]
+bin =
+	bin/
+	/tmp/*/run/bin
+oio =
+	oio/
+	/tmp/*/run/oio
+tests =
+	tests/
+	/tmp/*/run/tests
+tools =
+	tools/
+	/tmp/*/run/tools

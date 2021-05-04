@@ -1,0 +1,40 @@
+version: v1.0
+name: oio-sds-coverage
+environment: oio-sds-env
+jobs:
+  - job: Collect code coverage statistics
+    steps:
+
+      - name: Checkout application
+        checkout: '{{ .cds.workspace }}'
+
+      - name: Install dependencies
+        script:
+          - apt install -y python3-virtualenv virtualenv
+          - virtualenv -p /usr/bin/python3 $HOME/oiovenv
+          - . $HOME/oiovenv/bin/activate
+          - pip install --upgrade pip virtualenv coverage
+
+      - artifactDownload:
+          path: '{{.cds.workspace}}'
+          pattern: '.coverage.*'
+          tag: '{{.cds.version}}'
+
+      - name: Aggregate coverage statistics
+        script:
+          - . $HOME/oiovenv/bin/activate
+          - cd {{.cds.workspace}}
+          - coverage combine .coverage.*
+          - coverage report --omit="/usr/lib/python3*" --skip-empty --ignore-errors > coverage-report.txt
+          - worker upload --tag='{{.cds.version}}' {{.cds.workspace}}/coverage-report.txt
+          - coverage html --omit="/usr/lib/python3*" --ignore-errors -d coverage-report
+          - tar -czf coverage-report.tar.gz coverage-report
+          - worker upload --tag='{{.cds.version}}' {{.cds.workspace}}/coverage-report.tar.gz
+
+      - name: Generate coverage report
+        serveStaticFiles:
+          name: coverage-report
+          path: coverage-report
+
+    requirements:
+        - model: openio-debbuild-18.04
