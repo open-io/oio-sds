@@ -391,7 +391,8 @@ class TestDirectoryAPI(BaseTestCase):
 
         # But ensure all calls have been made
         link_calls = [call(rawx['addr'], ANY, max_per_rdir=ANY, max_attempts=1,
-                           min_dist=ANY, service_type='rawx', reassign=False)
+                           min_dist=ANY, service_type='rawx', nb_replicas=1,
+                           reassign=False)
                       for rawx in all_srvs['rawx']]
         disp._smart_link_rdir.assert_has_calls(link_calls)
         force_calls = \
@@ -429,9 +430,10 @@ class TestDirectoryAPI(BaseTestCase):
         by_rdir = dict()
         total = 0
         for rawx in all_rawx:
-            count = by_rdir.get(rawx['rdir']['addr'], 0)
-            total += 1
-            by_rdir[rawx['rdir']['addr']] = count + 1
+            for rdir in rawx['rdir']:
+                count = by_rdir.get(rdir['addr'], 0)
+                total += 1
+                by_rdir[rdir['addr']] = count + 1
         avg = total / float(len(by_rdir))
         print("Ideal number of bases per rdir: ", avg)
         print("Current repartition: ", by_rdir)

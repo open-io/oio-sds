@@ -26,12 +26,14 @@ def _format_assignments(all_services, svc_col_title='Rawx'):
     # we can yield results instead of building a list.
     results = list()
     for svc in all_services:
-        rdir = svc.get('rdir', {'addr': 'n/a', 'tags': {}})
-        results.append(
-            (rdir['tags'].get('tag.service_id') or rdir['addr'],
-             svc['tags'].get('tag.service_id') or svc['addr'],
-             rdir['tags'].get('tag.loc'),
-             svc['tags'].get('tag.loc')))
+        rdirs = svc.get('rdir')
+        for rdir in rdirs:
+            results.append(
+                (rdir['tags'].get('tag.service_id') or rdir['addr'],
+                 svc['tags'].get('tag.service_id') or svc['addr'],
+                 rdir['tags'].get('tag.loc'),
+                 svc['tags'].get('tag.loc')))
+
     results.sort()
     columns = ('Rdir', svc_col_title,
                'Rdir location', '%s location' % svc_col_title)
@@ -60,6 +62,11 @@ class RdirBootstrap(Lister):
             help=("Minimum required distance between any service and "
                   "its assigned rdir service."))
         parser.add_argument(
+            '--replicas',
+            metavar='<N>',
+            type=int,
+            help="Number of rdir replication per service.")
+        parser.add_argument(
             '--service-id',
             metavar='<service-id>',
             help="Assign an rdir only for this service ID.")
@@ -75,6 +82,7 @@ class RdirBootstrap(Lister):
                 parsed_args.service_type,
                 max_per_rdir=parsed_args.max_per_rdir,
                 min_dist=parsed_args.min_dist,
+                nb_replicas=parsed_args.replicas,
                 service_id=parsed_args.service_id,
                 dry_run=parsed_args.dry_run,
                 connection_timeout=30.0, read_timeout=90.0)
@@ -164,6 +172,11 @@ class RdirReassign(Lister):
             help=("Minimum required distance between any service and "
                   "its assigned rdir service."))
         parser.add_argument(
+            '--replicas',
+            metavar='<N>',
+            type=int,
+            help="Number of rdir(s) per service.")
+        parser.add_argument(
             '--service-id',
             metavar='<service-id>',
             help="Assign an rdir only for this service ID.")
@@ -181,6 +194,7 @@ class RdirReassign(Lister):
                 service_id=parsed_args.service_id,
                 max_per_rdir=parsed_args.max_per_rdir,
                 min_dist=parsed_args.min_dist,
+                nb_replicas=parsed_args.replicas,
                 dry_run=parsed_args.dry_run,
                 connection_timeout=30.0, read_timeout=90.0)
         except OioException as exc:
