@@ -36,6 +36,9 @@ RDIR_ACCT = '_RDIR'
 # Special target that will match any service from the "known" service list
 JOKER_SVC_TARGET = '__any_slot'
 
+# Default rdir replicas for meta2/rawx services
+DEFAULT_RDIR_REPLICAS = 3
+
 
 def _make_id(ns, type_, addr):
     return "%s|%s|%s" % (ns, type_, addr)
@@ -51,11 +54,14 @@ def _build_dict_by_id(ns, all_rdir):
     }
 
 
-def _filter_rdir_host(allsrv):
+def _filter_rdir_hosts(allsrv):
+    host_list = list()
     for srv in allsrv.get('srv', {}):
         if srv['type'] == 'rdir':
-            return srv['host']
-    raise NotFound("No rdir service found in %s" % (allsrv,))
+            host_list.append(srv['host'])
+    if not host_list:
+        raise NotFound("No rdir service found in %s" % (allsrv,))
+    return host_list
 
 
 class RdirDispatcher(object):
@@ -94,18 +100,21 @@ class RdirDispatcher(object):
                                            ref or service['addr'],
                                            service_type='rdir',
                                            **kwargs)
-                rdir_host = _filter_rdir_host(resp)
-                try:
-                    service['rdir'] = by_id[
-                        _make_id(self.ns, 'rdir', rdir_host)]
-                except KeyError:
-                    self.logger.warn("rdir %s linked to %s %s seems down",
-                                     rdir_host, service_type,
-                                     service['addr'])
-                    service['rdir'] = {"addr": rdir_host,
-                                       "tags": dict()}
-                    loc_rdir = service['rdir']
-                    by_id[_make_id(self.ns, 'rdir', rdir_host)] = loc_rdir
+                rdir_hosts = _filter_rdir_hosts(resp)
+                service['rdir'] = []
+
+                for el in rdir_hosts:
+                    try:
+                        service['rdir'].append(
+                            by_id[_make_id(self.ns, 'rdir', el)])
+                    except KeyError:
+                        self.logger.warn("rdir %s linked to %s %s seems down",
+                                         el, service_type,
+                                         service['addr'])
+                        service['rdir'].append({"addr": el, "tags": dict()})
+                        loc_rdir = service['rdir']
+                        by_id[_make_id(self.ns, 'rdir', el)] = loc_rdir
+
             except NotFound:
                 self.logger.info("No rdir linked to %s",
                                  service['addr'])
@@ -114,9 +123,8 @@ class RdirDispatcher(object):
                                  service['addr'], exc)
         return all_services, all_rdir
 
-    def assign_services(self, service_type,
-                        max_per_rdir=None, min_dist=None, service_id=None,
-                        reassign=False, **kwargs):
+    def assign_services(self, service_type, max_per_rdir=None, min_dist=None,
+                        service_id=None, reassign=False, **kwargs):
         """
         Assign an rdir service to all `service_type` servers that aren't
         already assigned one.
@@ -155,41 +163,44 @@ class RdirDispatcher(object):
         for provider in all_services:
             provider_id = provider['tags'].get('tag.service_id',
                                                provider['addr'])
-
+            provider['rdir'] = []
             try:
                 resp = self.directory.list(RDIR_ACCT, provider_id,
                                            service_type='rdir', **kwargs)
-                rdir_host = _filter_rdir_host(resp)
-                try:
-                    rdir = by_id[_make_id(self.ns, 'rdir', rdir_host)]
-                    if reassign:
-                        rdir['tags']['stat.opened_db_count'] = \
-                            rdir['tags'].get('stat.opened_db_count', 0) - 1
-                        # TODO(adu) Delete database
-                        raise NotFound('Reassign an rdir services')
-                    provider['rdir'] = rdir
-                except KeyError:
-                    self.logger.warn("rdir %s linked to %s %s seems down",
-                                     rdir_host, service_type,
-                                     provider_id)
-                    if reassign:
-                        raise NotFound('Reassign an rdir services')
+                rdir_hosts = _filter_rdir_hosts(resp)
+                for rdir_host in rdir_hosts:
+                    try:
+                        rdir = by_id[_make_id(self.ns, 'rdir', rdir_host)]
+                        if reassign:
+                            rdir['tags']['stat.opened_db_count'] = \
+                                rdir['tags'].get('stat.opened_db_count', 0) - 1
+                            # TODO(adu) Delete database
+                            raise NotFound('Reassign an rdir services')
+                        provider['rdir'].append(rdir)
+                    except KeyError:
+                        self.logger.warn("rdir %s linked to %s %s seems down",
+                                         rdir_host, service_type,
+                                         provider_id)
+                        if reassign:
+                            raise NotFound('Reassign an rdir services')
             except NotFound:
                 try:
-                    rdir = self._smart_link_rdir(provider_id, all_rdir,
-                                                 service_type=service_type,
-                                                 max_per_rdir=max_per_rdir,
-                                                 min_dist=min_dist,
-                                                 reassign=reassign,
-                                                 **kwargs)
+                    rdirs = self._smart_link_rdir(provider_id, all_rdir,
+                                                  service_type=service_type,
+                                                  max_per_rdir=max_per_rdir,
+                                                  min_dist=min_dist,
+                                                  reassign=reassign,
+                                                  **kwargs)
                 except OioException as exc:
                     self.logger.warn("Failed to link an rdir to %s %s: %s",
                                      service_type, provider_id, exc)
                     errors.append((provider_id, exc))
                     continue
-                n_bases = by_id[rdir]['tags'].get("stat.opened_db_count", 0)
-                by_id[rdir]['tags']["stat.opened_db_count"] = n_bases + 1
-                provider['rdir'] = by_id[rdir]
+
+                for rdir in rdirs:
+                    n_base = by_id[rdir]['tags'].get("stat.opened_db_count", 0)
+                    by_id[rdir]['tags']["stat.opened_db_count"] = n_base + 1
+                    provider['rdir'].append(by_id[rdir])
             except OioException as exc:
                 self.logger.warn("Failed to check rdir linked to %s %s "
                                  "(thus won't try to make the link): %s",
@@ -235,6 +246,7 @@ class RdirDispatcher(object):
         bases than the average (or more than `max_per_rdir`)
         while selecting rdir services.
         """
+        replicas = kwargs.pop('replicas', DEFAULT_RDIR_REPLICAS)
         opened_db = [x['tags'].get('stat.opened_db_count', 0) for x in all_rdir
                      if x['score'] > 0]
         if len(opened_db) <= 0:
@@ -252,12 +264,14 @@ class RdirDispatcher(object):
         known = [_make_id(self.ns, service_type, volume_id)]
         try:
             polled = self._poll_rdir(avoid=avoids, known=known,
-                                     min_dist=min_dist, **kwargs)
+                                     min_dist=min_dist, replicas=replicas,
+                                     **kwargs)
         except ClientException as exc:
             if exc.status != 481 or max_per_rdir:
                 raise
             # Retry without `avoids`, hoping the next iteration will rebalance
-            polled = self._poll_rdir(known=known, min_dist=min_dist, **kwargs)
+            polled = self._poll_rdir(known=known, min_dist=min_dist,
+                                     replicas=replicas, **kwargs)
 
         if dry_run:
             # No association of the rdir to the rawx
@@ -265,8 +279,15 @@ class RdirDispatcher(object):
             return polled['id']
 
         # Associate the rdir to the rawx
-        forced = {'host': polled['addr'], 'type': 'rdir',
-                  'seq': 1, 'args': "", 'id': polled['id']}
+        polled_ids = list()
+        hosts = list()
+        for el in polled:
+            polled_ids.append(el['id'])
+            hosts.append(el['addr'])
+
+        forced = {'host': ','.join(hosts), 'type': 'rdir',
+                  'seq': 1, 'args': "", 'id': ','.join(polled_ids)}
+
         for i in range(max_attempts):
             try:
                 self.directory.force(RDIR_ACCT, volume_id, 'rdir',
@@ -306,10 +327,11 @@ class RdirDispatcher(object):
             self.rdir.create(volume_id, service_type=service_type, **kwargs)
         except Exception as exc:
             self.logger.warn("Failed to create database for %s on %s: %s",
-                             volume_id, polled['addr'], exc)
-        return polled['id']
+                             volume_id, polled, exc)
+        return polled_ids
 
-    def _create_special_pool(self, options=None, force=False, **kwargs):
+    def _create_special_pool(self, options=None, force=False,
+                             replicas=DEFAULT_RDIR_REPLICAS, **kwargs):
         """
         Create the special pool for rdir services.
 
@@ -317,10 +339,11 @@ class RdirDispatcher(object):
         :param force: overwrite the pool if it exists already.
         """
         self.cs.lb.create_pool(
-            '__rawx_rdir', ((1, JOKER_SVC_TARGET), (1, 'rdir')),
+            '__rawx_rdir', ((1, JOKER_SVC_TARGET), (replicas, 'rdir')),
             options=options, force=force, **kwargs)
 
-    def _poll_rdir(self, avoid=None, known=None, min_dist=None, **kwargs):
+    def _poll_rdir(self, avoid=None, known=None, min_dist=None,
+                   replicas=DEFAULT_RDIR_REPLICAS, **kwargs):
         """
         Call the special rdir service pool (created if missing).
 
@@ -336,7 +359,8 @@ class RdirDispatcher(object):
         if options != self._pool_options:
             # Options have changed, overwrite the pool.
             self._pool_options = options
-            self._create_special_pool(self._pool_options, force=True, **kwargs)
+            self._create_special_pool(self._pool_options, force=True,
+                                      replicas=replicas, **kwargs)
 
         try:
             svcs = self.cs.poll('__rawx_rdir', avoid=avoid, known=known,
@@ -344,13 +368,17 @@ class RdirDispatcher(object):
         except ClientException as exc:
             if exc.status != 400:
                 raise
-            self._create_special_pool(self._pool_options, **kwargs)
+            self._create_special_pool(self._pool_options,
+                                      replicas=replicas, **kwargs)
             svcs = self.cs.poll('__rawx_rdir', avoid=avoid, known=known,
                                 **kwargs)
+        count_rdir = 0
         for svc in svcs:
             # FIXME: we should include the service type in a dedicated field
             if 'rdir' in svc['id']:
-                return svc
+                count_rdir = count_rdir+1
+        if (count_rdir == replicas):
+            return svcs
         raise ServerException("LB returned incoherent result: %s" % svcs)
 
 
@@ -395,19 +423,27 @@ class RdirClient(HttpApi):
             resp = self.directory.list(RDIR_ACCT, volume_id,
                                        service_type='rdir',
                                        headers=headers)
-            host = _filter_rdir_host(resp)
-            cur_host = self.cs.resolve_service_id('rdir', host)
-            # Add the new service to the cache
-            self._addr_cache[volume_id] = cur_host
-            return cur_host
+
+            hosts = _filter_rdir_hosts(resp)
+            self._addr_cache[volume_id] = []
+            cur_hosts = list()
+            for host in hosts:
+                cur_host = self.cs.resolve_service_id('rdir', host)
+                cur_hosts.append(cur_host)
+            # Add the list of services to the cache
+            self._addr_cache[volume_id] = cur_hosts
+            return cur_hosts
         except NotFound:
             raise VolumeException('No rdir assigned to volume %s' % volume_id)
 
     def _make_uri(self, action, volume_id, reqid=None, service_type='rawx'):
-        rdir_host = self._get_rdir_addr(volume_id, reqid)
-        return 'http://%s/v1/%s/%s' % (rdir_host,
-                                       self.__class__.base_url[service_type],
-                                       action)
+        rdir_hosts = self._get_rdir_addr(volume_id, reqid)
+        all_uri = list()
+        for rdir_host in rdir_hosts:
+            all_uri.append('http://%s/v1/%s/%s' % (
+                rdir_host,
+                self.__class__.base_url[service_type], action))
+        return all_uri
 
     @ensure_headers
     @ensure_request_id
@@ -418,15 +454,29 @@ class RdirClient(HttpApi):
         params['vol'] = volume
         if create:
             params['create'] = '1'
-        uri = self._make_uri(action, volume,
-                             reqid=kwargs['headers'][REQID_HEADER],
-                             service_type=service_type)
-        try:
-            resp, body = self._direct_request(method, uri, params=params,
-                                              **kwargs)
-        except OioNetworkException:
+        all_uri = self._make_uri(action, volume,
+                                 reqid=kwargs['headers'][REQID_HEADER],
+                                 service_type=service_type)
+
+        resp = ""
+        body = ""
+        errors = list()
+        for uri in all_uri:
+            try:
+                resp, body = self._direct_request(method, uri, params=params,
+                                                  **kwargs)
+
+                # Why: because there are as much of uri requests as rawx/meta2
+                # services. When we fetch chunk we do it once
+                if action in ('fetch', 'status'):
+                    break
+
+            except OioNetworkException as exc:
+                errors.append(exc)
+
+        if len(errors) == len(all_uri):
             self._clear_cache(volume)
-            raise
+            raise OioException('rdir request errors encountered: %s' % errors)
 
         return resp, body
 

@@ -213,8 +213,8 @@ done
 gridinit_cmd -S "$GRIDINIT_SOCK" start "@meta1" >/dev/null
 $cmd_openio cluster wait -d 30 -n "$COUNT_META1" meta1
 
-$cmd_openio rdir bootstrap rawx
-$cmd_openio rdir bootstrap meta2
+$cmd_openio rdir bootstrap rawx --replicas $(oio-test-config.py -v directory_replicas)
+$cmd_openio rdir bootstrap meta2 --replicas $(oio-test-config.py -v directory_replicas)
 
 echo -e "\n### Wait for the services to have a score"
 $cmd_openio cluster unlockall

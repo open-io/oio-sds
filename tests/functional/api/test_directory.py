@@ -315,7 +315,8 @@ class TestDirectoryAPI(BaseTestCase):
         self._register_srv(new_rawx)
         self._reload_proxy()
 
-        all_rawx = disp.assign_all_rawx()
+        all_rawx = disp.assign_all_rawx(
+            replicas=self.conf.get('directory_replicas', 1))
         all_rawx_keys = [x['addr'] for x in all_rawx]
         self.assertIn(new_rawx['addr'], all_rawx_keys)
         rdir_addr = disp.rdir._get_rdir_addr(new_rawx['addr'])
@@ -368,8 +369,9 @@ class TestDirectoryAPI(BaseTestCase):
             return all_srvs[type_]
 
         def _poll(*args, **kwargs):
-            """Pick one mocked random service"""
-            return [random.choice(all_srvs['rdir'])]
+            """Pick directory_replicas mocked random service"""
+            return random.sample(all_srvs['rdir'],
+                                 self.conf.get('directory_replicas', 1))
 
         disp.cs.all_services = Mock(side_effect=_all_services)
         disp.cs.poll = Mock(side_effect=_poll)
@@ -384,14 +386,17 @@ class TestDirectoryAPI(BaseTestCase):
             Mock(wraps=disp.directory.force,
                  side_effect=side_effects)
 
+        rdir_replicas = self.conf.get('directory_replicas', 1)
         # Expect an exception since some assignations will fail
         self.assertRaises(expected_exc,
                           disp.assign_all_rawx,
+                          replicas=rdir_replicas,
                           max_attempts=1)
 
         # But ensure all calls have been made
         link_calls = [call(rawx['addr'], ANY, max_per_rdir=ANY, max_attempts=1,
-                           min_dist=ANY, service_type='rawx', reassign=False)
+                           min_dist=ANY, service_type='rawx', reassign=False,
+                           replicas=rdir_replicas)
                       for rawx in all_srvs['rawx']]
         disp._smart_link_rdir.assert_has_calls(link_calls)
         force_calls = \
@@ -425,16 +430,27 @@ class TestDirectoryAPI(BaseTestCase):
         client = RdirDispatcher({'namespace': self.ns},
                                 pool_manager=self.http_pool)
         self._reload_proxy()
-        all_rawx = client.assign_all_rawx()
+        all_rawx = client.assign_all_rawx(
+            replicas=self.conf.get('directory_replicas', 1))
         self.assertGreater(len(all_rawx), 0)
         by_rdir = dict()
         total = 0
+
         for rawx in all_rawx:
-            count = by_rdir.get(rawx['rdir']['addr'], 0)
-            total += 1
-            by_rdir[rawx['rdir']['addr']] = count + 1
-        avg = total / float(len(by_rdir))
+            for rdir in rawx['rdir']:
+                count = by_rdir.get(rdir['addr'], 0)
+                total += 1
+                by_rdir[rdir['addr']] = count + 1
+        # round average ot integer value
+        avg = round(total / float(len(by_rdir)))
         print("Ideal number of bases per rdir: ", avg)
         print("Current repartition: ", by_rdir)
+
+        # define an acceptable variance for rdir assignement around average
+        epsilon = 2
         for count in by_rdir.values():
-            self.assertLessEqual(count, avg + 1)
+            # Assert upper bounded values
+            self.assertLessEqual(count, avg + epsilon)
+            # Assert lowr bounded values
+            if (avg - epsilon > 0):
+                self.assertGreaterEqual(count, avg - epsilon)

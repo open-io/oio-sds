@@ -1,4 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,6 +19,7 @@ from six import iteritems
 
 from oio.cli import Lister
 from oio.common.exceptions import OioException
+from oio.rdir.client import DEFAULT_RDIR_REPLICAS
 
 
 def _format_assignments(all_services, svc_col_title='Rawx'):
@@ -26,12 +28,14 @@ def _format_assignments(all_services, svc_col_title='Rawx'):
     # we can yield results instead of building a list.
     results = list()
     for svc in all_services:
-        rdir = svc.get('rdir', {'addr': 'n/a', 'tags': {}})
-        results.append(
-            (rdir['tags'].get('tag.service_id') or rdir['addr'],
-             svc['tags'].get('tag.service_id') or svc['addr'],
-             rdir['tags'].get('tag.loc'),
-             svc['tags'].get('tag.loc')))
+        rdirs = svc.get('rdir', [{'addr': 'n/a', 'tags': {}}])
+        for rdir in rdirs:
+            results.append(
+                (rdir['tags'].get('tag.service_id') or rdir['addr'],
+                 svc['tags'].get('tag.service_id') or svc['addr'],
+                 rdir['tags'].get('tag.loc'),
+                 svc['tags'].get('tag.loc')))
+
     results.sort()
     columns = ('Rdir', svc_col_title,
                'Rdir location', '%s location' % svc_col_title)
@@ -60,6 +64,12 @@ class RdirBootstrap(Lister):
             help=("Minimum required distance between any service and "
                   "its assigned rdir service."))
         parser.add_argument(
+            '--replicas',
+            metavar='<N>',
+            type=int,
+            default=DEFAULT_RDIR_REPLICAS,
+            help="Number of rdir replication per service.")
+        parser.add_argument(
             '--service-id',
             metavar='<service-id>',
             help="Assign an rdir only for this service ID.")
@@ -75,16 +85,18 @@ class RdirBootstrap(Lister):
                 parsed_args.service_type,
                 max_per_rdir=parsed_args.max_per_rdir,
                 min_dist=parsed_args.min_dist,
+                replicas=parsed_args.replicas,
                 service_id=parsed_args.service_id,
                 dry_run=parsed_args.dry_run,
                 connection_timeout=30.0, read_timeout=90.0)
         except OioException as exc:
             self.success = False
-            self.log.warn('Failed to assign all %s services: %s',
-                          parsed_args.service_type, exc)
+            self.log.warning('Failed to assign all %s services: %s',
+                             parsed_args.service_type, exc)
             all_services, _ = dispatcher.get_assignments(
                 parsed_args.service_type, connection_timeout=30.0,
                 read_timeout=90.0)
+
         return _format_assignments(all_services,
                                    parsed_args.service_type.capitalize())
 
@@ -118,25 +130,30 @@ class RdirAssignments(Lister):
             columns, results = _format_assignments(
                 all_services, parsed_args.service_type.capitalize())
         else:
-            dummy_rdir = {"addr": "n/a", "tags": {}}
+            dummy_rdir = [{"addr": {"n/a"}, "tags": {}}]
             rdir_by_id = dict()
+            managed_svc = dict()
+
             for svc in all_services:
-                rdir = svc.get('rdir', dummy_rdir)
-                rdir_id = rdir['tags'].get('tag.service_id') or rdir['addr']
-                rdir_by_id[rdir_id] = rdir
-                managed_svc = rdir.get('managed_svc') or list()
-                svc_id = svc['tags'].get('tag.service_id') or svc['addr']
-                managed_svc.append(svc_id)
-                rdir['managed_svc'] = managed_svc
+                rdirs = svc.get('rdir', dummy_rdir)
+                for rdir in rdirs:
+                    rdir_id = rdir['tags'].get('tag.service_id') or \
+                              rdir['addr']
+                    rdir_by_id[rdir_id] = rdir
+                    svc_id = svc['tags'].get('tag.service_id') or svc['addr']
+                    try:
+                        managed_svc[rdir_id].append(svc_id)
+                    except KeyError:
+                        managed_svc[rdir_id] = [svc_id]
             for rdir in all_rdir:
                 rdir_id = rdir['tags'].get('tag.service_id') or rdir['addr']
                 if rdir_id not in rdir_by_id:
-                    rdir['managed_svc'] = list()
+                    managed_svc[rdir_id] = list()
                     rdir_by_id[rdir_id] = rdir
             for addr, rdir in iteritems(rdir_by_id):
                 results.append((addr,
-                                len(rdir['managed_svc']),
-                                ' '.join(rdir['managed_svc'])))
+                                len(managed_svc[addr]),
+                                ' '.join(managed_svc[addr])))
             results.sort()
             columns = ('Rdir', 'Number of bases', 'Bases')
         return columns, results
@@ -164,6 +181,12 @@ class RdirReassign(Lister):
             help=("Minimum required distance between any service and "
                   "its assigned rdir service."))
         parser.add_argument(
+            '--replicas',
+            metavar='<N>',
+            type=int,
+            default=DEFAULT_RDIR_REPLICAS,
+            help="Number of rdir(s) per service.")
+        parser.add_argument(
             '--service-id',
             metavar='<service-id>',
             help="Assign an rdir only for this service ID.")
@@ -181,12 +204,13 @@ class RdirReassign(Lister):
                 service_id=parsed_args.service_id,
                 max_per_rdir=parsed_args.max_per_rdir,
                 min_dist=parsed_args.min_dist,
+                replicas=parsed_args.replicas,
                 dry_run=parsed_args.dry_run,
                 connection_timeout=30.0, read_timeout=90.0)
         except OioException as exc:
             self.success = False
-            self.log.warn('Failed to assign all %s services: %s',
-                          parsed_args.service_type, exc)
+            self.log.warning('Failed to assign all %s services: %s',
+                             parsed_args.service_type, exc)
             all_services, _ = dispatcher.get_assignments(
                 parsed_args.service_type, connection_timeout=30.0,
                 read_timeout=90.0)
