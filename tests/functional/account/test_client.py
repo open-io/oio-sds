@@ -97,6 +97,14 @@ class TestAccountClient(BaseTestCase):
              ["zzz", 12, 42, 0]],
             [x[:4] for x in resp["listing"]])
 
+    def test_container_list_with_prefix_identical_to_marker(self):
+        self.container_client.container_create(account=self.account_id,
+                                               reference="prefix")
+        resp = self.account_client.container_list(self.account_id,
+                                                  prefix='prefix',
+                                                  marker='prefix')
+        self.assertListEqual(list(), resp['listing'])
+
     # TODO: move this test somewhere under tests/unit/
     def test_account_service_refresh(self):
         self.account_client.endpoint = "126.0.0.1:6666"
