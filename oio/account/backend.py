@@ -873,7 +873,7 @@ class AccountBackend(RedisConnection):
             if prefix:
                 min_k = '[' + prefix
                 max_k = '[' + prefix + END_MARKER
-            if marker and (not prefix or marker > prefix):
+            if marker and (not prefix or marker >= prefix):
                 min_k = '(' + marker
             if end_marker and (not prefix
                                or end_marker <= prefix + END_MARKER):
