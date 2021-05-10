@@ -17,6 +17,7 @@ export PATH := $(PYTHON_PATH)/bin:$(GO_PATH)/bin:$(PATH)
 export PKG_CONFIG_PATH := $(PYTHON_PATH)/lib/pkgconfig
 export LIBRARY_PATH := $(PYTHON_PATH)/lib
 export C_INCLUDE_PATH := $(PYTHON_PATH)/include
+export GO111MODULE := auto
 
 export DH_VIRTUALENV_INSTALL_ROOT=/opt
 
