@@ -60,14 +60,16 @@ action_cache_flush_local (struct req_args_s *args)
 	oio_lb_world__flush(lb_world);
 	oio_lb_world__flush(lb_world_rawx);
 	hc_resolver_flush_csm0 (resolver);
-	hc_resolver_flush_services (resolver);
+	hc_resolver_flush_services(resolver);
+	shard_resolver_flush(shard_resolver);
 	return _reply_success_json (args, NULL);
 }
 
 enum http_rc_e
 action_cache_flush_low (struct req_args_s *args)
 {
-	hc_resolver_flush_services (resolver);
+	hc_resolver_flush_services(resolver);
+	shard_resolver_flush(shard_resolver);
 	return _reply_success_json (args, NULL);
 }
 

@@ -43,6 +43,33 @@ _resolve_service_id(const char *service_id)
 }
 
 static GError *
+_load_redirect_shard(gchar *redirect_message, gpointer *predirect_shard)
+{
+	GError *err = NULL;
+	json_object *jredirect_message = NULL, *jredirect = NULL;
+	gpointer redirect_shard = NULL;
+	err = JSON_parse_buffer((const guint8*)redirect_message,
+			strlen(redirect_message), &jredirect_message);
+	if (err)
+		return err;
+	struct oio_ext_json_mapping_s mapping[] = {
+		{"redirect",  &jredirect, json_type_object, 1},
+		{NULL, NULL, 0, 0}
+	};
+	err = oio_ext_extract_json(jredirect_message, mapping);
+	if (err) {
+		json_object_put(jredirect_message);
+		return err;
+	}
+	err = m2v2_json_load_single_shard_range(jredirect, &redirect_shard);
+	json_object_put(jredirect_message);
+	if (err)
+		return err;
+	*predirect_shard = redirect_shard;
+	return NULL;
+}
+
+static GError *
 _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 		request_packer_f pack, gpointer out, client_on_reply decoder)
 {
@@ -61,6 +88,23 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 	GError *err = NULL;
 	struct oio_url_s *original_url = args->url;
 	struct oio_url_s *redirect_url = NULL;
+	gpointer redirect_shard = NULL;
+
+	redirect_shard = shard_resolver_get_cached(shard_resolver, original_url);
+	if (redirect_shard) {
+		redirect_url = oio_url_dup(args->url);
+		oio_url_unset(redirect_url, OIOURL_ACCOUNT);
+		oio_url_unset(redirect_url, OIOURL_USER);
+		gchar *redirect_cid = g_string_free(metautils_gba_to_hexgstr(NULL,
+			SHARD_RANGE_get_cid(redirect_shard)), FALSE);
+		oio_url_set(redirect_url, OIOURL_HEXID, redirect_cid);
+		g_free(redirect_cid);
+		args->url = redirect_url;
+		client_clean(&ctx);
+		client_init(&ctx, args, NAME_SRVTYPE_META2, 1, how,
+				decoder, out);
+		oio_ext_set_is_shard(TRUE);
+	}
 
 	guint nb_redirects = 0;
 	while (TRUE) {
@@ -84,33 +128,55 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 
 			// Redirect to the shard having the object manipulated
 			nb_redirects++;
+			GError *redirect_err = _load_redirect_shard(err->message,
+					&redirect_shard);
+			g_clear_error(&err);
+			if (redirect_err) {
+				err = SYSERR("Failed to decode redirect message: (%d) %s",
+						redirect_err->code, redirect_err->message);
+				g_error_free(redirect_err);
+				break;
+			}
+			shard_resolver_store(shard_resolver, original_url,
+					redirect_shard);
+
 			redirect_url = oio_url_dup(args->url);
 			oio_url_unset(redirect_url, OIOURL_ACCOUNT);
 			oio_url_unset(redirect_url, OIOURL_USER);
-			oio_url_set(redirect_url, OIOURL_HEXID, err->message);
+			gchar *cid = g_string_free(metautils_gba_to_hexgstr(NULL,
+				SHARD_RANGE_get_cid(redirect_shard)), FALSE);
+			oio_url_set(redirect_url, OIOURL_HEXID, cid);
+			g_free(cid);
 			args->url = redirect_url;
 			client_clean(&ctx);
 			client_init(&ctx, args, NAME_SRVTYPE_META2, 1, how,
 					decoder, out);
 			oio_ext_set_is_shard(TRUE);
-			g_clear_error(&err);
 			continue;
 		}
-		if (redirect_url && (
-				err->code == CODE_CONTAINER_FROZEN
-				|| err->code == CODE_CONTAINER_NOTFOUND
-				|| err->code == CODE_USER_NOTFOUND)) {
-			// Maybe the shard is being deleted,
-			// retry on the root container
-			args->url = original_url;
-			oio_url_clean(redirect_url);
-			redirect_url = NULL;
-			client_clean(&ctx);
-			client_init(&ctx, args, NAME_SRVTYPE_META2, 1, how,
-					decoder, out);
-			oio_ext_set_is_shard(FALSE);
-			g_clear_error(&err);
-			continue;
+		if (redirect_url) {
+			if (err->code == CODE_CONTAINER_FROZEN
+					|| err->code == CODE_CONTAINER_NOTFOUND
+					|| err->code == CODE_USER_NOTFOUND) {
+				// Maybe the shard is being deleted,
+				// decache and retry on the root container
+				shard_resolver_forget(shard_resolver, original_url,
+						redirect_shard);
+				args->url = original_url;
+				oio_url_clean(redirect_url);
+				redirect_url = NULL;
+				client_clean(&ctx);
+				client_init(&ctx, args, NAME_SRVTYPE_META2, 1, how,
+						decoder, out);
+				oio_ext_set_is_shard(FALSE);
+				g_clear_error(&err);
+				continue;
+			}
+		} else if (err->code == CODE_CONTAINER_NOTFOUND
+				|| err->code == CODE_USER_NOTFOUND) {
+			// Container no longer exists.
+			// If it had any cached shards, let's forget about them.
+			shard_resolver_forget_root(shard_resolver, original_url);
 		}
 		break;
 	}
@@ -143,6 +209,7 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 	oio_ext_enable_perfdata(FALSE);
 	args->url = original_url;
 	oio_url_clean(redirect_url);
+	_bean_clean(redirect_shard);
 	client_clean(&ctx);
 	return err;
 }
@@ -1828,9 +1895,28 @@ static GError * _list_loop (struct req_args_s *args,
 				in0->marker_start,
 				out0->next_marker?: ctx.latest_name, ctx.latest_prefix);
 
+		/* update path to use sharding resolver */
+		gchar *fake_path = NULL;
+		if (!(in.prefix && *in.prefix)
+				&& !(in.marker_start && *in.marker_start)) {
+			fake_path = g_strdup("");
+		} else if (g_strcmp0(in.prefix, in.marker_start) > 0) {
+			fake_path = g_strdup(in.prefix);
+		} else {
+			/* HACK: "\x01" is the (UTF-8 encoded) first unicode */
+			fake_path = g_strdup_printf("%s\x01", in.marker_start);
+		}
+
 		/* Action */
+		if (fake_path) {
+			oio_url_set(args->url, OIOURL_PATH, fake_path);
+		}
 		err = _resolve_meta2(args, _prefer_slave(), _pack, &out,
 				m2v2_list_result_extract);
+		if (fake_path) {
+			g_free(fake_path);
+			oio_url_unset(args->url, OIOURL_PATH);
+		}
 		oio_str_clean((gchar**)&(in.marker_start));
 		if (err) {
 			if (err->code == CODE_UNAVAILABLE && count > 0) {

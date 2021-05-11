@@ -38,18 +38,19 @@ add_custom_command(
 
 add_executable(metacd_http
 	meta2v2_remote.c
-    metacd_http.c
-    common.c
-    admin_actions.c
-    cache_actions.c
-    cs_actions.c
-    lb_actions.c
-    dir_actions.c
-    m2_actions.c
-    sqlx_actions.c
-    reply.c
-    path_parser.c
-    transport_http.c
+	metacd_http.c
+	common.c
+	admin_actions.c
+	cache_actions.c
+	cs_actions.c
+	lb_actions.c
+	dir_actions.c
+	m2_actions.c
+	sqlx_actions.c
+	reply.c
+	path_parser.c
+	transport_http.c
+	shard_resolver.c
 	${CMAKE_CURRENT_BINARY_DIR}/proxy_variables.c)
 
 bin_prefix(metacd_http -proxy)
@@ -64,4 +65,3 @@ target_link_libraries(metacd_http
 install(TARGETS metacd_http
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		RUNTIME DESTINATION bin)
-

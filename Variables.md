@@ -1037,6 +1037,33 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_RESOLVER_CACHE_ENABLED*
 
+### resolver.cache.root.max.default
+
+> In any shard resolver instanciated, sets the maximum number of root entries
+
+ * default: **4096**
+ * type: guint
+ * cmake directive: *OIO_RESOLVER_CACHE_ROOT_MAX_DEFAULT*
+ * range: 0 -> G_MAXUINT
+
+### resolver.cache.root.ttl.default
+
+> In any shard resolver instanciated, sets the default TTL on the root entries
+
+ * default: **0**
+ * type: gint64
+ * cmake directive: *OIO_RESOLVER_CACHE_ROOT_TTL_DEFAULT*
+ * range: 0 -> G_MAXINT64
+
+### resolver.cache.shards.max.default
+
+> In any shard resolver instanciated, sets the maximum number of shards entries per root
+
+ * default: **16**
+ * type: guint
+ * cmake directive: *OIO_RESOLVER_CACHE_SHARDS_MAX_DEFAULT*
+ * range: 1 -> 128
+
 ### resolver.cache.srv.max.default
 
 > In any service resolver instanciated, sets the maximum number of meta1 entries (data-bound services)

@@ -42,6 +42,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/autogen.h>
 #include <meta2v2/meta2_macros.h>
 #include <meta2v2/meta2_utils_lb.h>
+#include <meta2v2/meta2_utils_json.h>
 #include <meta2v2/meta2_backend_internals.h>
 
 #include <resolver/hc_resolver.h>
@@ -777,11 +778,14 @@ _redirect_to_shard(struct sqlx_sqlite3_s *sq3, const gchar *path)
 	}
 
 	// Redirect to shard
-	GString *cid = metautils_gba_to_hexgstr(NULL,
-			SHARD_RANGE_get_cid(shard_range));
-	err = NEWERROR(CODE_REDIRECT_SHARD, "%s", cid->str);
-	g_string_free(cid, TRUE);
-	_bean_clean(shard_range);
+	GSList *redirect_shard = NULL;
+	redirect_shard = g_slist_prepend(redirect_shard, shard_range);
+	GString *redirect_message = g_string_new("{\"redirect\":");
+	meta2_json_shard_ranges_only(redirect_message, redirect_shard, FALSE);
+	g_string_append_static(redirect_message, "}");
+	err = NEWERROR(CODE_REDIRECT_SHARD, "%s", redirect_message->str);
+	g_string_free(redirect_message, TRUE);
+	_bean_cleanl2(redirect_shard);
 
 	// Share some properties with the shard
 	GPtrArray *tmp = g_ptr_array_new();

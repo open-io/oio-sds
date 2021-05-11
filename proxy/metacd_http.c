@@ -45,6 +45,7 @@ struct oio_lb_world_s *lb_world = NULL;
 struct oio_lb_s *lb = NULL;
 
 struct hc_resolver_s *resolver = NULL;
+struct shard_resolver_s *shard_resolver = NULL;
 
 oio_location_t location_num = 0;
 
@@ -392,6 +393,12 @@ _task_expire_resolver (gpointer p UNUSED)
 	guint count_purge = hc_resolver_purge (resolver);
 	if (count_expire || count_purge) {
 		GRID_DEBUG ("Resolver: expired %u, purged %u",
+				count_expire, count_purge);
+	}
+	count_expire = shard_resolver_expire(shard_resolver);
+	count_purge = shard_resolver_purge(shard_resolver);
+	if (count_expire || count_purge) {
+		GRID_DEBUG("Sharding resolver: expired %u, purged %u",
 				count_expire, count_purge);
 	}
 }
@@ -909,6 +916,10 @@ grid_main_specific_fini (void)
 		hc_resolver_destroy (resolver);
 		resolver = NULL;
 	}
+	if (shard_resolver) {
+		shard_resolver_destroy(shard_resolver);
+		shard_resolver = NULL;
+	}
 	if (srv_down) {
 		lru_tree_destroy (srv_down);
 		srv_down = NULL;
@@ -1247,6 +1258,7 @@ grid_main_configure (int argc, char **argv)
 	resolver = hc_resolver_create (proxy_locate_meta0);
 	hc_resolver_qualify (resolver, service_is_ok);
 	hc_resolver_notify (resolver, service_invalidate);
+	shard_resolver = shard_resolver_create();
 
 	srv_registered = _push_queue_create ();
 

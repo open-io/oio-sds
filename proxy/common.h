@@ -39,6 +39,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/common_variables.h>
 #include <proxy/proxy_variables.h>
+#include <proxy/shard_resolver.h>
 
 #include <cluster/lib/gridcluster.h>
 #include <server/network_server.h>
@@ -136,6 +137,7 @@ extern struct oio_lb_world_s *lb_world;
 extern struct oio_lb_s *lb;
 
 extern struct hc_resolver_s *resolver;
+extern struct shard_resolver_s *shard_resolver;
 extern oio_location_t location_num;
 
 /* Global NS info */
