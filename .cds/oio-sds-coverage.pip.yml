@@ -10,7 +10,7 @@ jobs:
 
       - name: Install dependencies
         script:
-          - apt install -y python3-virtualenv virtualenv
+          - apt install -y python3-virtualenv virtualenv lcov
           - virtualenv -p /usr/bin/python3 $HOME/oiovenv
           - . $HOME/oiovenv/bin/activate
           - pip install --upgrade pip virtualenv coverage
@@ -20,21 +20,39 @@ jobs:
           pattern: '.coverage.*'
           tag: '{{.cds.version}}'
 
-      - name: Aggregate coverage statistics
+      - name: Aggregate Python coverage statistics
         script:
           - . $HOME/oiovenv/bin/activate
           - cd {{.cds.workspace}}
           - coverage combine .coverage.*
-          - coverage report --omit="/usr/lib/python3*" --skip-empty --ignore-errors > coverage-report.txt
-          - worker upload --tag='{{.cds.version}}' {{.cds.workspace}}/coverage-report.txt
-          - coverage html --omit="/usr/lib/python3*" --ignore-errors -d coverage-report
-          - tar -czf coverage-report.tar.gz coverage-report
-          - worker upload --tag='{{.cds.version}}' {{.cds.workspace}}/coverage-report.tar.gz
+          - coverage report --omit="/usr/lib/python3*" --skip-empty --ignore-errors > coverage-report-py.txt
+          - worker upload --tag='{{.cds.version}}' {{.cds.workspace}}/coverage-report-py.txt
+          - coverage html --omit="/usr/lib/python3*" --ignore-errors -d coverage-report-py
 
-      - name: Generate coverage report
+      - name: Aggregate C coverage statistics
+        script:
+          - cd {{.cds.workspace}}
+          - worker download --tag="{{.cds.version}}" --pattern="cmake_coverage.*"
+          - sed -i -r -e 's,^SF:/tmp/[^/]+/run/(.+)$,SF:\1,g' cmake_coverage.*
+          - lcov -a cmake_coverage.3copies -a cmake_coverage.cli -a cmake_coverage.single -o cmake_coverage.all
+          - genhtml --ignore-errors "source" --output-directory coverage-report-c cmake_coverage.all
+
+      - name: Create coverage archive
+        script:
+          - cd {{.cds.workspace}}
+          - tar -czf coverage-report.tar.gz coverage-report-c coverage-report-py
+          - worker upload --tag='{{.cds.version}}' coverage-report.tar.gz
+
+## Need to find why this does not work
+#      - coverage:
+#          format: lcov
+#          minimum: "70"
+#          path: ./cmake_coverage.all
+
+      - name: Publish Python coverage report
         serveStaticFiles:
-          name: coverage-report
-          path: coverage-report
+          name: coverage-report-py
+          path: coverage-report-py
 
     requirements:
         - model: openio-debbuild-18.04

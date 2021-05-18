@@ -35,7 +35,8 @@ jobs:
       - name: Save coverage information
         script:
           - mv '{{.cds.workspace}}/.coverage' '{{.cds.workspace}}/.coverage.{{.cds.env.TEST_SUITE}}'
-          - worker upload --tag='{{.cds.version}}' '{{.cds.workspace}}/.coverage.{{.cds.env.TEST_SUITE}}'
+          - mv '/tmp/cmake_coverage.output' '{{.cds.workspace}}/cmake_coverage.{{.cds.env.TEST_SUITE}}'
+          - worker upload --tag='{{.cds.version}}' '{{.cds.workspace}}/.coverage.{{.cds.env.TEST_SUITE}}' '{{.cds.workspace}}/cmake_coverage.{{.cds.env.TEST_SUITE}}'
 
     requirements:
         - model: openio-debbuild-18.04
