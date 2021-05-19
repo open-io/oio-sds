@@ -112,9 +112,13 @@ class XcuteClient(HttpApi):
                                         'lock': job_lock})
         return data
 
-    def job_create(self, job_type, job_config=None):
+    def job_create(self, job_type, job_config=None,
+                   put_on_hold_if_locked=False):
         _, data = self.xcute_request(
-            'POST', '/job/create', params={'type': job_type}, json=job_config)
+            'POST', '/job/create',
+            params={'type': job_type,
+                    'put_on_hold_if_locked': put_on_hold_if_locked},
+            json=job_config)
         return data
 
     def job_show(self, job_id):
