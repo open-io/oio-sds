@@ -19,7 +19,7 @@ import redis
 import random
 from fnmatch import fnmatchcase
 
-from oio.common.easy_value import true_value
+from oio.common.easy_value import debinarize, true_value
 from oio.common.exceptions import Forbidden, NotFound
 from oio.common.green import datetime
 from oio.common.json import json
@@ -624,7 +624,7 @@ class XcuteBackend(RedisConnection):
 
             pipeline = self.conn.pipeline()
             for job_id in job_ids:
-                self._get_job_info(job_id.decode('utf-8'), client=pipeline)
+                self._get_job_info(job_id, client=pipeline)
             job_infos = pipeline.execute()
 
             for job_info in job_infos:
@@ -732,13 +732,17 @@ class XcuteBackend(RedisConnection):
         if nb_tasks_sent != len(task_ids):
             self.logger.warn('%s tasks were sent several times',
                              len(task_ids) - nb_tasks_sent)
+        status = debinarize(status)
+        old_last_sent = debinarize(old_last_sent)
         return status, old_last_sent
 
     @handle_redis_exceptions
     def abort_tasks_sent(self, job_id, task_ids, old_last_sent):
-        return self.script_abort_tasks_sent(
+        status = self.script_abort_tasks_sent(
             keys=[self._get_timestamp(), job_id, str(old_last_sent)],
             args=task_ids, client=self.conn)
+        status = debinarize(status)
+        return status
 
     @handle_redis_exceptions
     def update_tasks_processed(self, job_id, task_ids,
@@ -753,21 +757,24 @@ class XcuteBackend(RedisConnection):
         if task_results:
             for key, value in task_results.items():
                 counters['results.' + key] = value
-        return self.script_update_tasks_processed(
+        finished = self.script_update_tasks_processed(
             keys=[self._get_timestamp(),
                   job_id] + self._dict_to_lua_array(counters),
             args=task_ids,
             client=self.conn)
+        return finished
 
     @handle_redis_exceptions
     def incr_total_tasks(self, job_id, total_marker, tasks_incr):
-        return self.script_incr_total(
+        stop = self.script_incr_total(
             keys=[self._get_timestamp(), job_id, total_marker, tasks_incr])
+        return stop
 
     @handle_redis_exceptions
     def total_tasks_done(self, job_id):
-        return self.script_total_tasks_done(
+        total_tasks = self.script_total_tasks_done(
             keys=[self._get_timestamp(), job_id])
+        return total_tasks
 
     @handle_redis_exceptions
     def delete(self, job_id):
@@ -782,12 +789,13 @@ class XcuteBackend(RedisConnection):
         return self._unmarshal_job_info(job_info)
 
     def _get_job_info(self, job_id, client):
+        job_id = debinarize(job_id)
         return client.hgetall(self.key_job_info % job_id)
 
     @handle_redis_exceptions
     def list_locks(self):
         locks = self.conn.hgetall(self.key_locks)
-
+        locks = debinarize(locks)
         return [
             dict(lock=lock[0], job_id=lock[1])
             for lock in sorted(locks.items())
@@ -796,7 +804,7 @@ class XcuteBackend(RedisConnection):
     @handle_redis_exceptions
     def get_lock_info(self, lock):
         job_id = self.conn.hget(self.key_locks, lock)
-
+        job_id = debinarize(job_id)
         return dict(lock=lock, job_id=job_id)
 
     @staticmethod
@@ -809,9 +817,9 @@ class XcuteBackend(RedisConnection):
             results=dict(),
             config=dict())
 
+        marshalled_job_info = debinarize(marshalled_job_info)
         for key, value in marshalled_job_info.items():
-            split_key = key.decode('utf-8').split('.', 1)
-            value = value.decode('utf-8')
+            split_key = key.split('.', 1)
             if len(split_key) == 1:
                 job_info[split_key[0]] = value
             else:
