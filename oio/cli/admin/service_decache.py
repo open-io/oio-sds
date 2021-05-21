@@ -41,7 +41,7 @@ class DecacheCommand(MultipleServicesCommandMixin, lister.Lister):
         MultipleServicesCommandMixin.patch_parser(self, parser)
         return parser
 
-    def decache_services(self, services):
+    def decache_services(self, services, _args):
         """Send a decache request to each specified service."""
         raise NotImplementedError()
 
@@ -50,7 +50,8 @@ class DecacheCommand(MultipleServicesCommandMixin, lister.Lister):
             self, self.app, parsed_args)
         self.logger.debug('take_action(%s)', parsed_args)
 
-        return self.columns, self.decache_services(parsed_args.services)
+        return self.columns, self.decache_services(parsed_args.services,
+                                                   parsed_args)
 
     def run(self, parsed_args):
         super(DecacheCommand, self).run(parsed_args)
@@ -63,10 +64,27 @@ class ProxyDecache(DecacheCommand):
 
     service_type = 'oioproxy'
 
-    def decache_services(self, services):
+    def get_parser(self, prog_name):
+        parser = super(ProxyDecache, self).get_parser(prog_name)
+        parser.add_argument(
+            '--high', action='store_false', dest='low',
+            help=('Flush the "high" cache only, i.e. the list of all meta0 '
+                  'services and the prefix/meta1 association '
+                  '(content of meta0 DB).'))
+        parser.add_argument(
+            '--low', action='store_false', dest='high',
+            help=('Flush the "low" cache only, i.e. the reference/service '
+                  'association (content of meta1 DB).'))
+        return parser
+
+    def decache_services(self, services, args):
+        if not (args.high or args.low):
+            args.high = args.low = True
+        reqid = self.app.request_id()
         for srv in services:
             try:
-                self.admin.proxy_flush_cache(proxy_netloc=srv)
+                self.admin.proxy_flush_cache(proxy_netloc=srv, reqid=reqid,
+                                             high=args.high, low=args.low)
                 yield srv, 'OK', None
             except Exception as err:
                 self.success = False
@@ -76,10 +94,11 @@ class ProxyDecache(DecacheCommand):
 class SqliterepoDecacheCommand(DecacheCommand):
     """Flush the cache of an sqliterepo-based service."""
 
-    def decache_services(self, services):
+    def decache_services(self, services, _args):
+        reqid = self.app.request_id()
         for srv in services:
             try:
-                self.admin.service_flush_cache(srv)
+                self.admin.service_flush_cache(srv, reqid=reqid)
                 yield srv, 'OK', None
             except Exception as err:
                 self.success = False
