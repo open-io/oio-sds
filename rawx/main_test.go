@@ -28,7 +28,6 @@ var conf string
 func init() {
 	flag.StringVar(&syslogID, "test.syslog", "", "Activates syslog traces with the given identifier")
 	flag.StringVar(&conf, "test.conf", "", "Path to configuration file")
-	flag.Parse()
 }
 
 func TestSystem(t *testing.T) {
