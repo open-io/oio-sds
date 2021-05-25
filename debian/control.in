@@ -36,11 +36,11 @@ Depends:
   libcurl4,
   zlib1g,
   libglib2.0-0,
-  libjson-c3,
+  libjson-c3 | libjson-c4,
   libzmq5,
   asn1c,
   libattr1,
-  libleveldb1v5,
+  libleveldb1v5 | libleveldb1d,
 Description: OpenIO Cloud Storage Solution
  OpenIO software storage solution is designed to handle PETA-bytes of
  data in a distributed way, data such as: images, videos, documents, emails,
