@@ -244,6 +244,8 @@ class CommonTestCase(testtools.TestCase):
         # Namespace configuration as it was when the test started
         self._ns_conf_backup = None
 
+        self._deregister_at_teardown = list()
+
     def tearDown(self):
         super(CommonTestCase, self).tearDown()
         # Reset namespace configuration as it was before we mess with it
@@ -251,6 +253,11 @@ class CommonTestCase(testtools.TestCase):
             remove = {x for x in self._ns_conf
                       if x not in self._ns_conf_backup}
             self.set_ns_opts(self._ns_conf_backup, remove=remove)
+        for srv in self._deregister_at_teardown:
+            try:
+                self._deregister_srv(srv)
+            except Exception:
+                pass
 
     @classmethod
     def tearDownClass(cls):
@@ -338,10 +345,12 @@ class CommonTestCase(testtools.TestCase):
                             jsonlib.dumps(srv), headers=self.TEST_HEADERS)
         self.assertIn(resp.status, (200, 204))
 
-    def _register_srv(self, srv):
+    def _register_srv(self, srv, deregister=True):
         resp = self.request('POST', self._url_cs("register"),
                             jsonlib.dumps(srv), headers=self.TEST_HEADERS)
         self.assertIn(resp.status, (200, 204))
+        if deregister:
+            self._deregister_at_teardown.append(srv)
 
     def _lock_srv(self, srv):
         resp = self.request('POST', self._url_cs("lock"),

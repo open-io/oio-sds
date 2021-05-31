@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,11 +20,9 @@ import random
 import time
 from mock import MagicMock as Mock, ANY, call
 
-from oio.directory.client import DirectoryClient
 from oio.common.utils import cid_from_name
 from oio.common import exceptions as exc
 from oio.rdir.client import RdirDispatcher, RDIR_ACCT, _make_id
-from oio.account.client import AccountClient
 from tests.utils import random_str, BaseTestCase
 
 
@@ -34,36 +33,36 @@ class TestDirectoryAPI(BaseTestCase):
 
     def setUp(self):
         super(TestDirectoryAPI, self).setUp()
-        self.api = DirectoryClient({'namespace': self.ns}, endpoint=self.uri)
+        self.dir = self.storage.directory
 
     def _create(self, name, metadata=None):
-        return self.api.create(self.account, name, properties=metadata)
+        return self.dir.create(self.account, name, properties=metadata)
 
     def _delete(self, name):
-        self.api.delete(self.account, name)
+        self.dir.delete(self.account, name)
 
     def _clean(self, name, clear=False):
         if clear:
             # must clean properties before
-            self.api.del_properties(self.account, name, [])
+            self.dir.del_properties(self.account, name, [])
         self._delete(name)
 
     def _get_properties(self, name, properties=None):
-        return self.api.get_properties(
+        return self.dir.get_properties(
             self.account, name, properties=properties)
 
     def _set_properties(self, name, properties=None):
-        return self.api.set_properties(
+        return self.dir.set_properties(
             self.account, name, properties=properties)
 
     def test_list(self):
         # get on unknown reference
         name = random_str(32)
-        self.assertRaises(exc.NotFound, self.api.list, self.account, name)
+        self.assertRaises(exc.NotFound, self.dir.list, self.account, name)
 
         self._create(name)
         # get on existing reference
-        res = self.api.list(self.account, name)
+        res = self.dir.list(self.account, name)
         self.assertIsNot(res['dir'], None)
         self.assertIsNot(res['srv'], None)
         self.assertEqual(res['name'], name)
@@ -71,14 +70,14 @@ class TestDirectoryAPI(BaseTestCase):
 
         self._delete(name)
         # get on deleted reference
-        self.assertRaises(exc.NotFound, self.api.list, self.account, name)
+        self.assertRaises(exc.NotFound, self.dir.list, self.account, name)
 
     def test_show_by_cid(self):
         name = random_str(32)
 
         self._create(name)
 
-        res = self.api.list(cid=cid_from_name(self.account, name))
+        res = self.dir.list(cid=cid_from_name(self.account, name))
         self.assertIsNotNone(res['dir'])
         self.assertIsNotNone(res['srv'])
         self.assertEqual(res['name'], name)
@@ -118,23 +117,23 @@ class TestDirectoryAPI(BaseTestCase):
     def test_create_without_account(self):
         account = random_str(32)
         name = random_str(32)
-        account_client = AccountClient(self.conf)
+        account_client = self.storage.account
 
         self.assertRaises(exc.NotFound, account_client.account_show, account)
-        self.api.create(account, name)
+        self.dir.create(account, name)
         time.sleep(0.5)  # ensure account event have been processed
         self.assertEqual(account_client.account_show(account)['id'],
                          account)
 
         # clean
-        self.api.delete(account, name)
+        self.dir.delete(account, name)
         account_client.account_delete(account)
 
     def test_delete(self):
         name = random_str(32)
 
         # delete on unknown reference
-        self.assertRaises(exc.NotFound, self.api.delete, self.account, name)
+        self.assertRaises(exc.NotFound, self.dir.delete, self.account, name)
 
         res = self._create(name)
         self.assertEqual(res, True)
@@ -142,26 +141,26 @@ class TestDirectoryAPI(BaseTestCase):
         self._delete(name)
 
         # verify deleted
-        self.assertRaises(exc.NotFound, self.api.list, self.account, name)
+        self.assertRaises(exc.NotFound, self.dir.list, self.account, name)
 
         # second delete
-        self.assertRaises(exc.NotFound, self.api.delete, self.account, name)
+        self.assertRaises(exc.NotFound, self.dir.delete, self.account, name)
 
         # verify deleted
-        self.assertRaises(exc.NotFound, self.api.list, self.account, name)
+        self.assertRaises(exc.NotFound, self.dir.list, self.account, name)
 
     def test_get_properties(self):
         name = random_str(32)
 
         # get_properties on unknown reference
         self.assertRaises(
-            exc.NotFound, self.api.get_properties, self.account, name)
+            exc.NotFound, self.dir.get_properties, self.account, name)
 
         res = self._create(name)
         self.assertEqual(res, True)
 
         # get_properties on existing reference
-        data = self.api.get_properties(self.account, name)
+        data = self.dir.get_properties(self.account, name)
         self.assertEqual(data['properties'], {})
 
         # get_properties
@@ -171,13 +170,13 @@ class TestDirectoryAPI(BaseTestCase):
         }
         self._set_properties(name, metadata)
 
-        data = self.api.get_properties(self.account, name)
+        data = self.dir.get_properties(self.account, name)
         self.assertEqual(data['properties'], metadata)
 
         # get_properties specify key
         key, old_val = metadata.popitem()
 
-        data = self.api.get_properties(self.account, name, [key])
+        data = self.dir.get_properties(self.account, name, [key])
         self.assertEqual(data['properties'], {key: old_val})
 
         # clean
@@ -185,7 +184,7 @@ class TestDirectoryAPI(BaseTestCase):
 
         # get_properties on deleted reference
         self.assertRaises(
-            exc.NotFound, self.api.get_properties, self.account, name)
+            exc.NotFound, self.dir.get_properties, self.account, name)
 
     def test_set_properties(self):
         name = random_str(32)
@@ -197,14 +196,14 @@ class TestDirectoryAPI(BaseTestCase):
 
         # set_properties on unknown reference
         self.assertRaises(
-            exc.NotFound, self.api.set_properties, self.account, name,
+            exc.NotFound, self.dir.set_properties, self.account, name,
             metadata)
 
         res = self._create(name)
         self.assertEqual(res, True)
 
         # set_properties on existing reference
-        self.api.set_properties(self.account, name, metadata)
+        self.dir.set_properties(self.account, name, metadata)
         data = self._get_properties(name)
         self.assertEqual(data['properties'], metadata)
 
@@ -224,7 +223,7 @@ class TestDirectoryAPI(BaseTestCase):
         metadata3 = {key: value}
 
         metadata.update(metadata3)
-        self.api.set_properties(self.account, name, metadata3)
+        self.dir.set_properties(self.account, name, metadata3)
         data = self._get_properties(name)
         self.assertEqual(data['properties'], metadata)
 
@@ -233,7 +232,7 @@ class TestDirectoryAPI(BaseTestCase):
         metadata4 = {key: ''}
 
         del metadata[key]
-        self.api.set_properties(self.account, name, metadata4)
+        self.dir.set_properties(self.account, name, metadata4)
         data = self._get_properties(name)
         self.assertEqual(data['properties'], metadata)
 
@@ -242,7 +241,7 @@ class TestDirectoryAPI(BaseTestCase):
 
         # set_properties on deleted reference
         self.assertRaises(
-            exc.NotFound, self.api.set_properties, self.account, name,
+            exc.NotFound, self.dir.set_properties, self.account, name,
             metadata)
 
     def test_del_properties(self):
@@ -255,7 +254,7 @@ class TestDirectoryAPI(BaseTestCase):
 
         # del_properties on unknown reference
         self.assertRaises(
-            exc.NotFound, self.api.del_properties, self.account, name, [])
+            exc.NotFound, self.dir.del_properties, self.account, name, [])
 
         res = self._create(name, metadata)
         self.assertEqual(res, True)
@@ -263,7 +262,7 @@ class TestDirectoryAPI(BaseTestCase):
         key, _ = metadata.popitem()
 
         # del_properties on existing reference
-        self.api.del_properties(self.account, name, [key])
+        self.dir.del_properties(self.account, name, [key])
         data = self._get_properties(name)
         self.assertEqual(data['properties'], metadata)
 
@@ -271,9 +270,9 @@ class TestDirectoryAPI(BaseTestCase):
         key = random_str(32)
         # We do not check if a property exists before deleting it
         # self.assertRaises(
-        #     exc.NotFound, self.api.del_properties, self.account, name,
+        #     exc.NotFound, self.dir.del_properties, self.account, name,
         #     [key])
-        self.api.del_properties(self.account, name, [key])
+        self.dir.del_properties(self.account, name, [key])
 
         data = self._get_properties(name)
         self.assertEqual(data['properties'], metadata)
@@ -283,7 +282,7 @@ class TestDirectoryAPI(BaseTestCase):
 
         # del_properties on deleted reference
         self.assertRaises(
-            exc.NotFound, self.api.set_properties, self.account, name,
+            exc.NotFound, self.dir.set_properties, self.account, name,
             metadata)
 
     def test_list_services(self):
@@ -291,12 +290,12 @@ class TestDirectoryAPI(BaseTestCase):
         name = random_str(32)
         echo = 'echo'
         self.assertRaises(
-            exc.NotFound, self.api.list, self.account, name,
+            exc.NotFound, self.dir.list, self.account, name,
             service_type=echo)
 
         self._create(name)
         # list_services on existing reference
-        res = self.api.list(self.account, name, service_type=echo)
+        res = self.dir.list(self.account, name, service_type=echo)
         self.assertIsNot(res['dir'], None)
         self.assertIsNot(res['srv'], None)
         self.assertEqual(res['name'], name)
@@ -304,7 +303,7 @@ class TestDirectoryAPI(BaseTestCase):
 
         self._delete(name)
         # get on deleted reference
-        self.assertRaises(exc.NotFound, self.api.list, self.account, name)
+        self.assertRaises(exc.NotFound, self.dir.list, self.account, name)
 
     def test_link_rdir_to_zero_scored_rawx(self):
         disp = RdirDispatcher({'namespace': self.ns},
@@ -322,8 +321,8 @@ class TestDirectoryAPI(BaseTestCase):
         rdir_addr = disp.rdir._get_rdir_addr(new_rawx['addr'])
         self.assertIsNotNone(rdir_addr)
         try:
-            self.api.unlink(RDIR_ACCT, new_rawx['addr'], 'rdir')
-            self.api.delete(RDIR_ACCT, new_rawx['addr'])
+            self.dir.unlink(RDIR_ACCT, new_rawx['addr'], 'rdir')
+            self.dir.delete(RDIR_ACCT, new_rawx['addr'])
             # self._flush_cs('rawx')
         except Exception:
             pass
@@ -358,7 +357,8 @@ class TestDirectoryAPI(BaseTestCase):
         return all_srvs
 
     def _test_link_rdir_fail_to_force(self, side_effects, expected_exc):
-        disp = RdirDispatcher({'namespace': self.ns})
+        disp = RdirDispatcher({'namespace': self.ns},
+                              pool_manager=self.http_pool)
 
         # Mock rdir and rawx services so we do not pollute following tests
         all_srvs = self._generate_services({'rdir': 3, 'rawx': 3})
@@ -422,7 +422,8 @@ class TestDirectoryAPI(BaseTestCase):
 
     def test_rdir_repartition(self):
         # FIXME(FVE): this test will fail if run after self._flush_cs('rawx')
-        client = RdirDispatcher({'namespace': self.ns})
+        client = RdirDispatcher({'namespace': self.ns},
+                                pool_manager=self.http_pool)
         self._reload_proxy()
         all_rawx = client.assign_all_rawx()
         self.assertGreater(len(all_rawx), 0)
