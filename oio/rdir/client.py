@@ -124,7 +124,7 @@ class RdirDispatcher(object):
         return all_services, all_rdir
 
     def assign_services(self, service_type, max_per_rdir=None, min_dist=None,
-                        service_id=None, reassign=False, **kwargs):
+                        service_id=None, reassign=None, **kwargs):
         """
         Assign an rdir service to all `service_type` servers that aren't
         already assigned one.
@@ -136,8 +136,8 @@ class RdirDispatcher(object):
         :type min_dist: `int`
         :param service_id: Assign only this service ID.
         :type service_id: `str`
-        :param reassign: Reassign an rdir service.
-        :type reassign: `bool`
+        :param reassign: ID of an rdir service to be decommissionned.
+        :type reassign: `str`
         :param dry_run: Display actions but do nothing.
         :type dry_run: `bool`
         :returns: The list of `service_type` services that were assigned
@@ -164,6 +164,7 @@ class RdirDispatcher(object):
             provider_id = provider['tags'].get('tag.service_id',
                                                provider['addr'])
             provider['rdir'] = []
+            rdir_hosts = None
             try:
                 resp = self.directory.list(RDIR_ACCT, provider_id,
                                            service_type='rdir', **kwargs)
@@ -171,18 +172,16 @@ class RdirDispatcher(object):
                 for rdir_host in rdir_hosts:
                     try:
                         rdir = by_id[_make_id(self.ns, 'rdir', rdir_host)]
-                        if reassign:
+                        if reassign == rdir_host:
                             rdir['tags']['stat.opened_db_count'] = \
                                 rdir['tags'].get('stat.opened_db_count', 0) - 1
-                            # TODO(adu) Delete database
-                            raise NotFound('Reassign an rdir services')
                         provider['rdir'].append(rdir)
                     except KeyError:
                         self.logger.warn("rdir %s linked to %s %s seems down",
                                          rdir_host, service_type,
                                          provider_id)
-                        if reassign:
-                            raise NotFound('Reassign an rdir services')
+                if reassign:
+                    raise NotFound('Trick to avoid code duplication')
             except NotFound:
                 try:
                     rdirs = self._smart_link_rdir(provider_id, all_rdir,
@@ -190,6 +189,7 @@ class RdirDispatcher(object):
                                                   max_per_rdir=max_per_rdir,
                                                   min_dist=min_dist,
                                                   reassign=reassign,
+                                                  known_hosts=rdir_hosts,
                                                   **kwargs)
                 except OioException as exc:
                     self.logger.warn("Failed to link an rdir to %s %s: %s",
@@ -197,6 +197,7 @@ class RdirDispatcher(object):
                     errors.append((provider_id, exc))
                     continue
 
+                provider['rdir'] = list()
                 for rdir in rdirs:
                     n_base = by_id[rdir]['tags'].get("stat.opened_db_count", 0)
                     by_id[rdir]['tags']["stat.opened_db_count"] = n_base + 1
@@ -238,61 +239,20 @@ class RdirDispatcher(object):
         """
         return self.assign_services("rawx", max_per_rdir, **kwargs)
 
-    def _smart_link_rdir(self, volume_id, all_rdir, max_per_rdir=None,
-                         max_attempts=7, service_type='rawx', min_dist=None,
-                         reassign=False, dry_run=False, **kwargs):
+    def _assign_rdir(self, volume_id, assignments,
+                     is_reassign=False, max_attempts=7, **kwargs):
         """
-        Force the load balancer to avoid services that already host more
-        bases than the average (or more than `max_per_rdir`)
-        while selecting rdir services.
+        Save the assignment in the directory (meta1).
+
+        :param is_reassign: tell there may be already some assignments,
+            an we want to overwrite them. When False, if there are already
+            some assignments, an exception will be raised.
         """
-        replicas = kwargs.pop('replicas', DEFAULT_RDIR_REPLICAS)
-        opened_db = [x['tags'].get('stat.opened_db_count', 0) for x in all_rdir
-                     if x['score'] > 0]
-        if len(opened_db) <= 0:
-            raise ServiceUnavailable(
-                "No valid rdir service found in %s" % self.ns)
-        if not max_per_rdir:
-            upper_limit = sum(opened_db) / float(len(opened_db))
-        else:
-            upper_limit = max_per_rdir - 1
-        avoids = [_make_id(self.ns, "rdir", x['tags'].get('tag.service_id',
-                                                          x['addr']))
-                  for x in all_rdir
-                  if x['score'] > 0 and
-                  x['tags'].get('stat.opened_db_count', 0) > upper_limit]
-        known = [_make_id(self.ns, service_type, volume_id)]
-        try:
-            polled = self._poll_rdir(avoid=avoids, known=known,
-                                     min_dist=min_dist, replicas=replicas,
-                                     **kwargs)
-        except ClientException as exc:
-            if exc.status != 481 or max_per_rdir:
-                raise
-            # Retry without `avoids`, hoping the next iteration will rebalance
-            polled = self._poll_rdir(known=known, min_dist=min_dist,
-                                     replicas=replicas, **kwargs)
-
-        if dry_run:
-            # No association of the rdir to the rawx
-            # No creation in the rdir
-            return polled['id']
-
-        # Associate the rdir to the rawx
-        polled_ids = list()
-        hosts = list()
-        for el in polled:
-            polled_ids.append(el['id'])
-            hosts.append(el['addr'])
-
-        forced = {'host': ','.join(hosts), 'type': 'rdir',
-                  'seq': 1, 'args': "", 'id': ','.join(polled_ids)}
-
         for i in range(max_attempts):
             try:
                 self.directory.force(RDIR_ACCT, volume_id, 'rdir',
-                                     forced, autocreate=True,
-                                     replace=reassign, **kwargs)
+                                     assignments, autocreate=True,
+                                     replace=is_reassign, **kwargs)
                 break
             except ClientException as ex:
                 # Already done
@@ -322,12 +282,96 @@ class RdirDispatcher(object):
                 # Too many attempts
                 raise
 
+    def _smart_link_rdir(self, volume_id, all_rdir, max_per_rdir=None,
+                         max_attempts=7, service_type='rawx', min_dist=None,
+                         reassign=None, dry_run=False, known_hosts=None,
+                         replicas=DEFAULT_RDIR_REPLICAS, **kwargs):
+        """
+        Force the load balancer to avoid services that already host more
+        bases than the average (or more than `max_per_rdir`)
+        while selecting rdir services.
+
+        :param reassign: ID of the rdir to get rid of, or None
+        :param known_hosts: IDs of rdir services already assigned to volume_id
+
+        :returns: the list of IDs of all rdir services assigned to volume_id.
+        """
+        opened_db = [x['tags'].get('stat.opened_db_count', 0) for x in all_rdir
+                     if x['score'] > 0]
+        if len(opened_db) <= 0:
+            raise ServiceUnavailable(
+                "No valid rdir service found in %s" % self.ns)
+        if not max_per_rdir:
+            upper_limit = sum(opened_db) / float(len(opened_db))
+        else:
+            upper_limit = max_per_rdir - 1
+        avoids = [_make_id(self.ns, "rdir", x['tags'].get('tag.service_id',
+                                                          x['addr']))
+                  for x in all_rdir
+                  if x['score'] > 0 and
+                  x['tags'].get('stat.opened_db_count', 0) > upper_limit]
+
+        # Build the list of known services. The first one is the meta2 or rawx
+        # in need of an rdir (for distance comparison).
+        known_ids = [_make_id(self.ns, service_type, volume_id)]
+        if known_hosts:
+            if reassign:
+                try:
+                    known_hosts.remove(reassign)
+                except ValueError:
+                    pass
+            for host in known_hosts:
+                known_ids.append(_make_id(self.ns, 'rdir', host))
+        reassigned_id = None
+        if reassign:
+            reassigned_id = _make_id(self.ns, 'rdir', reassign)
+            avoids.append(reassigned_id)
+
+        # First try with a non-empty 'avoids' list.
+        try:
+            polled = self._poll_rdir(avoid=avoids, known=known_ids,
+                                     min_dist=min_dist, replicas=replicas,
+                                     **kwargs)
+        except ClientException as exc:
+            if exc.status != 481 or max_per_rdir:
+                raise
+            # Retry with a reduced `avoids`, hoping the next iteration
+            # will rebalance.
+            avoids = [reassigned_id] if reassign else None
+            polled = self._poll_rdir(avoid=avoids, known=known_ids,
+                                     min_dist=min_dist,
+                                     replicas=replicas, **kwargs)
+
+        # Prepare the output list of IDs
+        polled_ids = [p['id'] for p in polled]
+        if reassign:
+            polled_ids = polled_ids + [_make_id(self.ns, 'rdir', host)
+                                       for host in known_hosts]
+        if dry_run:
+            # No association of the rdir to the rawx
+            # No creation in the rdir
+            return polled_ids
+
+        # Associate the rdir to the rawx
+        all_hosts = [el['addr'] for el in polled]
+        if known_hosts:
+            all_hosts = known_hosts + all_hosts
+
+        assignments = {
+            'host': ','.join(all_hosts),
+            'type': 'rdir',
+            'seq': 1, 'args': "",
+            'id': ','.join(polled_ids)}
+        self._assign_rdir(volume_id, assignments, is_reassign=bool(reassign),
+                          max_attempts=max_attempts, **kwargs)
+
         # Do the creation in the rdir itself
         try:
+            self.rdir._clear_cache(volume_id)
             self.rdir.create(volume_id, service_type=service_type, **kwargs)
         except Exception as exc:
-            self.logger.warn("Failed to create database for %s on %s: %s",
-                             volume_id, polled, exc)
+            self.logger.warning("Failed to create database for %s on %s: %s",
+                                volume_id, polled, exc)
         return polled_ids
 
     def _create_special_pool(self, options=None, force=False,
@@ -337,6 +381,7 @@ class RdirDispatcher(object):
 
         :param options: dictionary of custom options for the pool.
         :param force: overwrite the pool if it exists already.
+        :param replicas: number of rdir services which must be selected.
         """
         self.cs.lb.create_pool(
             '__rawx_rdir', ((1, JOKER_SVC_TARGET), (replicas, 'rdir')),
@@ -349,9 +394,14 @@ class RdirDispatcher(object):
 
         :param min_dist: minimum distance to ensure between the known
             service and the selected rdir service.
+        :param replicas: number of rdir services which must be selected.
+
+        :returns: the list of NEW services assigned to volume_id (when
+            reassigning there will be less than 'replicas' services).
         """
-        if not known or len(known) > 1:
-            raise ValueError('There should be exactly one "known" service')
+        if not known or len(known) > replicas:
+            raise ValueError(
+                'There should be at most %d "known" services' % replicas)
 
         options = dict()
         if min_dist is not None:
@@ -372,12 +422,12 @@ class RdirDispatcher(object):
                                       replicas=replicas, **kwargs)
             svcs = self.cs.poll('__rawx_rdir', avoid=avoid, known=known,
                                 **kwargs)
-        count_rdir = 0
+        rdir_count = 0
         for svc in svcs:
             # FIXME: we should include the service type in a dedicated field
             if 'rdir' in svc['id']:
-                count_rdir = count_rdir+1
-        if (count_rdir == replicas):
+                rdir_count += 1
+        if rdir_count == (replicas - len(known) + 1):
             return svcs
         raise ServerException("LB returned incoherent result: %s" % svcs)
 
@@ -475,7 +525,7 @@ class RdirClient(HttpApi):
 
                 # Why: because there are as much of uri requests as rawx/meta2
                 # services. When we fetch chunk we do it once
-                if action in ('fetch', 'status'):
+                if method in ('GET', 'HEAD'):
                     break
 
             except OioNetworkException as exc:
@@ -559,7 +609,7 @@ class RdirClient(HttpApi):
             for i in range(max_attempts):
                 try:
                     resp, resp_body = self._rdir_request(
-                        volume, 'POST', 'fetch', json=req_body, **kwargs)
+                        volume, 'GET', 'fetch', json=req_body, **kwargs)
                     break
                 except OioNetworkException:
                     # Monotonic backoff
@@ -779,7 +829,7 @@ class RdirClient(HttpApi):
             params['marker'] = marker
         if limit:
             params['limit'] = limit
-        _resp, body = self._rdir_request(volume=volume_id, method='POST',
+        _resp, body = self._rdir_request(volume=volume_id, method='GET',
                                          action='fetch', json=params,
                                          service_type='meta2', **kwargs)
         return body

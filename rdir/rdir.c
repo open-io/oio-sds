@@ -218,6 +218,8 @@ _reply_common_error(struct http_reply_ctx_s *rp, GError *err)
 	if (CODE_IS_NOTFOUND(err->code))
 		return _reply_not_found(rp, err);
 	switch (err->code) {
+		case CODE_BAD_REQUEST:
+			return _reply_format_error(rp, err);
 		case CODE_NOT_FOUND:
 			return _reply_not_found(rp, err);
 		case CODE_NOT_ALLOWED:
@@ -1231,6 +1233,28 @@ _route_vol_delete(struct req_args_s *args, struct json_object *jbody,
 	return _reply_ok(args->rp, NULL);
 }
 
+static GError *
+_push_record(struct req_args_s *args, struct json_object *jrec,
+		const char *volid, gboolean autocreate)
+{
+	/* extract all the record's fields */
+	GError *err = NULL;
+	struct rdir_record_s rec = {0};
+	if ((err = _record_extract(&rec, jrec, TRUE, TRUE)))
+		return err;
+
+	GString *key = _record_to_key(&rec, FALSE);
+	GString *value = g_string_sized_new(1024);
+	args->rp->access_tail("key:%s", key->str);
+	_record_encode(&rec, value);
+
+	/* Eventually push the record in the database */
+	err = _db_vol_push(volid, autocreate, key, value);
+	g_string_free(key, TRUE);
+	g_string_free(value, TRUE);
+
+	return err;
+}
 
 // RDIR{{
 // POST /v1/rdir/push?vol=<volume ip>%3A<volume port>
@@ -1276,28 +1300,11 @@ _route_vol_push(struct req_args_s *args, struct json_object *jbody,
 		return _reply_format_error(args->rp, BADREQ("no volume id"));
 
 	gboolean autocreate = oio_str_parse_bool(str_autocreate, FALSE);
-
-	/* extract all the record's fields */
-	GError *err = NULL;
-	struct rdir_record_s rec = {0};
-	if ((err = _record_extract(&rec, jbody, TRUE, TRUE)))
-		return _reply_format_error(args->rp, err);
-
-	GString *key = _record_to_key(&rec, FALSE);
-	GString *value = g_string_sized_new(1024);
-	args->rp->access_tail("key:%s", key->str);
-	_record_encode(&rec, value);
-
-	/* Eventually push the record in the database */
-	err = _db_vol_push(volid, autocreate, key, value);
-	g_string_free(key, TRUE);
-	g_string_free(value, TRUE);
-
+	GError *err = _push_record(args, jbody, volid, autocreate);
 	if (err)
 		return _reply_common_error(args->rp, err);
 	return _reply_ok(args->rp, NULL);
 }
-
 
 // RDIR{{
 // POST /v1/rdir/fetch?vol=<volume ip>%3A<volume port>
@@ -1983,7 +1990,7 @@ _meta2_db_get(const gchar *meta2_address, gboolean autocreate,
  */
 static GError *
 _meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *subset,
-				GString *json_reponse, gboolean *truncated)
+				GString *json_response, gboolean *truncated)
 {
 	GError *err = NULL;
 	struct rdir_base_s *base = NULL;
@@ -2038,7 +2045,7 @@ _meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *s
 			*truncated = TRUE;
 			break;
 		} else if (nb > 0) {
-			g_string_append_c(json_reponse, ',');
+			g_string_append_c(json_response, ',');
 		}
 
 		const char *val = leveldb_iter_value(it, &vallen);
@@ -2049,7 +2056,7 @@ _meta2_db_fetch(const gchar *meta2_address, struct rdir_meta2_record_subset_s *s
 		// debatable especially given that we don't cherry-pick data as in the
 		// chunk part of rdir.
 
-		g_string_append_len(json_reponse, val, vallen);
+		g_string_append_len(json_response, val, vallen);
 	}
 
 	leveldb_iter_destroy(it);
@@ -2504,8 +2511,9 @@ _handler_decode_route(struct req_args_s *args, struct json_object *jbody,
 			return _route_vol_delete(args, jbody, OPT("vol"));
 
 		case OIO_RDIR_VOL_FETCH:
-			CHECK_METHOD("POST");
-			return _route_vol_fetch(args, jbody, OPT("vol"));
+			if (!strcmp(args->rq->cmd, "GET") || !strcmp(args->rq->cmd, "POST"))
+				return _route_vol_fetch(args, jbody, OPT("vol"));
+			return _reply_method_error(args->rp);
 
 		case OIO_RDIR_VOL_STATUS:
 			if (!strcmp(args->rq->cmd, "GET") || !strcmp(args->rq->cmd, "POST"))
@@ -2522,8 +2530,9 @@ _handler_decode_route(struct req_args_s *args, struct json_object *jbody,
 			return _route_meta2_push(args, jbody, OPT("vol"), OPT("create"));
 
 		case OIO_RDIR_META2_FETCH:
-			CHECK_METHOD("POST");
-			return _route_meta2_fetch(args, jbody, OPT("vol"));
+			if (!strcmp(args->rq->cmd, "GET") || !strcmp(args->rq->cmd, "POST"))
+				return _route_meta2_fetch(args, jbody, OPT("vol"));
+			return _reply_method_error(args->rp);
 
 		case OIO_RDIR_META2_DELETE:
 			args->rp->no_access();

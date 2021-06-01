@@ -27,7 +27,7 @@ class TestRdirClient(unittest.TestCase):
         self.namespace = "dummy"
         self.rdir_client = RdirClient({'namespace': self.namespace},
                                       endpoint='127.0.0.0:6000')
-        self.rdir_client._get_rdir_addr = Mock(return_value="0.1.2.3:4567")
+        self.rdir_client._get_rdir_addr = Mock(return_value=["0.1.2.3:4567"])
         self.container_id_1 = random_id(64)
         self.container_id_2 = random_id(64)
         self.container_id_3 = random_id(64)
@@ -136,7 +136,7 @@ class TestRdirMeta2Client(unittest.TestCase):
             return_value=(None, {"records": [], "truncated": False}))
         expected_args = {
             'volume': self.volid,
-            'method': 'POST',
+            'method': 'GET',
             'action': 'fetch',
             'json': {
                 'prefix': self.container_url,

@@ -395,8 +395,8 @@ class TestDirectoryAPI(BaseTestCase):
 
         # But ensure all calls have been made
         link_calls = [call(rawx['addr'], ANY, max_per_rdir=ANY, max_attempts=1,
-                           min_dist=ANY, service_type='rawx', reassign=False,
-                           replicas=rdir_replicas)
+                           min_dist=ANY, service_type='rawx', reassign=None,
+                           replicas=rdir_replicas, known_hosts=ANY)
                       for rawx in all_srvs['rawx']]
         disp._smart_link_rdir.assert_has_calls(link_calls)
         force_calls = \

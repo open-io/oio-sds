@@ -29,16 +29,19 @@ def _format_assignments(all_services, svc_col_title='Rawx'):
     results = list()
     for svc in all_services:
         rdirs = svc.get('rdir', [{'addr': 'n/a', 'tags': {}}])
-        for rdir in rdirs:
-            results.append(
-                (rdir['tags'].get('tag.service_id') or rdir['addr'],
-                 svc['tags'].get('tag.service_id') or svc['addr'],
-                 rdir['tags'].get('tag.loc'),
-                 svc['tags'].get('tag.loc')))
+        joined_ids = ','.join((r['tags'].get('tag.service_id') or r['addr'])
+                              for r in rdirs)
+        joined_loc = ','.join(r['tags'].get('tag.loc')
+                              for r in rdirs)
+        results.append(
+            (svc['tags'].get('tag.service_id') or svc['addr'],
+             joined_ids,
+             svc['tags'].get('tag.loc'),
+             joined_loc))
 
     results.sort()
-    columns = ('Rdir', svc_col_title,
-               'Rdir location', '%s location' % svc_col_title)
+    columns = (svc_col_title, 'Rdir',
+               '%s location' % svc_col_title, 'Rdir location')
     return columns, results
 
 
@@ -160,7 +163,17 @@ class RdirAssignments(Lister):
 
 
 class RdirReassign(Lister):
-    """Reassign rdir services"""
+    """
+    Reassign rdir services.
+
+    This command does not copy the old databases to the new host, neither
+    removes them.
+
+    You can either use the dry-run mode, copy the database to the suggested
+    host, then force the assignment with 'openio reference force --replace'.
+    Or use the standard mode and let the crawlers reindex everything into
+    the new host.
+    """
 
     log = getLogger(__name__ + '.RdirReassign')
 
@@ -169,6 +182,9 @@ class RdirReassign(Lister):
         parser.add_argument(
             'service_type',
             help="Which service type to assign rdir to.")
+        parser.add_argument(
+            'rdir_id',
+            help="ID of an rdir service to be replaced.")
         parser.add_argument(
             '--max-per-rdir',
             metavar='<N>',
@@ -200,7 +216,7 @@ class RdirReassign(Lister):
         try:
             all_services = dispatcher.assign_services(
                 parsed_args.service_type,
-                reassign=True,
+                reassign=parsed_args.rdir_id,
                 service_id=parsed_args.service_id,
                 max_per_rdir=parsed_args.max_per_rdir,
                 min_dist=parsed_args.min_dist,
