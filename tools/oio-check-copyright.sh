@@ -2,6 +2,7 @@
 
 # oio-check-copyright.sh
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -18,13 +19,14 @@
 set -e
 
 BASEDIR=$1 ; [[ -n "$BASEDIR" ]] ; [[ -d "$BASEDIR" ]]
+BRANCH_OR_COMMIT=$2
 
 echo "Checking for missing copyright mentions."
 /bin/ls -1f ${BASEDIR} \
 | grep -i -v -e '^\.' -e '^build' -e '^cmake' -e '^setup' -e '^oioenv' \
 | while read D ; do
 	/usr/bin/find "${BASEDIR}/${D}" -type f \
-		-name '*.h' -or -name '*.c' -or -name '*.py' -or -name '*.go' \
+		-name '*.h' -or -name '*.c' -or -name '*.py' -or -name '*.go' -or -name '*.sh' \
 	| while read F ; do
 		if ! [[ -s "$F" ]] ; then continue ; fi
 		if ! /usr/bin/git ls-files --error-unmatch "$F" &>/dev/null ; then continue ; fi
@@ -43,7 +45,7 @@ function check_files {
 		# Ignore removed files
 		if ! [[ -e "$name" ]] ; then continue ; fi
 
-		COPYRIGHT_LINE=$(grep -E 'Copyright.+[[:digit:]]{4}.+OpenIO' "$name")
+		COPYRIGHT_LINE=$(grep -E 'Copyright.+[[:digit:]]{4}.+OVH' "$name")
 		if [[ ! "$COPYRIGHT_LINE" =~ .+$YEAR.* ]]
 		then
 			echo "ERROR $name ($YEAR) has \"$COPYRIGHT_LINE\""
@@ -53,12 +55,12 @@ function check_files {
 	return $FAIL
 }
 
-if [ -n "$TRAVIS_COMMIT_RANGE" ]
+if [ -n "$BRANCH_OR_COMMIT" ]
 then
-	INCLUDE='^(^setup).+\.(c|go|h|py)$'
+	INCLUDE='^(^setup).+\.(c|go|h|py|sh)$'
 	YEAR=$(date +%Y)
 	FAIL=0
 	echo "Checking copyright for year $YEAR."
-	git diff --name-only "$TRAVIS_COMMIT_RANGE" | grep -E "$INCLUDE" \
+	git diff --name-only "$BRANCH_OR_COMMIT" | grep -E "$INCLUDE" \
 	| check_files || exit 1
 fi

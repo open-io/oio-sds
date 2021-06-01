@@ -2,6 +2,7 @@
 
 # oio-travis-failfast.sh
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -28,9 +29,23 @@ fold() {
 	time ( fold_start "$tag" ; set -x ; $@ ; set +x ; fold_end "$tag" )
 }
 
+if [ -n "$TRAVIS_COMMIT_RANGE" ]
+then
+	export COMMIT_BEFORE="$TRAVIS_COMMIT_RANGE"
+else
+	if [[ ! "$PR_BRANCH" =~ ^\{\{\ .* ]]
+	then
+		export COMMIT_BEFORE="$PR_BRANCH"
+	fi
+	if [[ "$COMMIT_BEFORE" =~ ^\{\{\ .* ]]
+	then
+		export COMMIT_BEFORE="HEAD~1"
+	fi
+fi
+
 fold SDK ./tools/oio-build-sdk.sh ${PWD}
 fold Release ./tools/oio-build-release.sh ${PWD}
 fold Warnings ./tools/oio-build-with-warnings.sh ${PWD}
-fold Copyright ./tools/oio-check-copyright.sh ${PWD}
+fold Copyright ./tools/oio-check-copyright.sh ${PWD} "$COMMIT_BEFORE"
 fold Virtualenv python ./setup.py develop
 fold Variables tox -e variables
