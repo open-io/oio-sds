@@ -132,6 +132,8 @@ class EventWorker(Worker):
         self.tube = self.conf.get("tube", DEFAULT_TUBE)
         acct_refresh_interval = int_value(
             self.conf.get('acct_refresh_interval'), 3600)
+        rdir_refresh_interval = int_value(
+            self.conf.get('rdir_refresh_interval'), 3600)
         self.app_env['account_client'] = AccountClient(
             self.conf,
             logger=self.logger,
@@ -142,6 +144,7 @@ class EventWorker(Worker):
             self.conf,
             logger=self.logger,
             pool_maxsize=self.concurrency,  # 1 cnx per greenthread per host
+            cache_duration=rdir_refresh_interval,
         )
 
         if 'handlers_conf' not in self.conf:

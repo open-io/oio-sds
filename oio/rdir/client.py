@@ -27,7 +27,7 @@ from oio.common.logger import get_logger
 from oio.common.decorators import ensure_headers, ensure_request_id
 from oio.conscience.client import ConscienceClient
 from oio.directory.client import DirectoryClient
-from oio.common.utils import depaginate, cid_from_name
+from oio.common.utils import depaginate, cid_from_name, monotonic_time
 from oio.common.green import sleep
 from oio.common.easy_value import true_value
 
@@ -392,11 +392,13 @@ class RdirClient(HttpApi):
         'meta2': 'rdir/meta2',
     }
 
-    def __init__(self, conf, directory_client=None, **kwargs):
+    def __init__(self, conf, directory_client=None, cache_duration=60.0,
+                 **kwargs):
         super(RdirClient, self).__init__(service_type='rdir', **kwargs)
         self.directory = directory_client or DirectoryClient(conf, **kwargs)
         self.ns = conf['namespace']
         self._addr_cache = dict()
+        self._cache_duration = cache_duration
         self.conf = conf
         self._cs = None
         self.logger = self.directory.logger
@@ -413,11 +415,17 @@ class RdirClient(HttpApi):
     def _clear_cache(self, volume_id):
         self._addr_cache.pop(volume_id, None)
 
-    def _get_rdir_addr(self, volume_id, reqid=None):
+    def _get_rdir_addr(self, volume_id, now=None, reqid=None):
+        if now is None:
+            now = monotonic_time()
         # Initial lookup in the cache
         if volume_id in self._addr_cache:
-            return self._addr_cache[volume_id]
-        # Not cached, try a direct lookup
+            addr, deadline = self._addr_cache[volume_id]
+            if deadline > now:
+                return addr
+            else:
+                del self._addr_cache[volume_id]
+        # Not cached or stale, try a direct lookup
         try:
             headers = {REQID_HEADER: reqid or request_id()}
             resp = self.directory.list(RDIR_ACCT, volume_id,
@@ -425,19 +433,18 @@ class RdirClient(HttpApi):
                                        headers=headers)
 
             hosts = _filter_rdir_hosts(resp)
-            self._addr_cache[volume_id] = []
-            cur_hosts = list()
-            for host in hosts:
-                cur_host = self.cs.resolve_service_id('rdir', host)
-                cur_hosts.append(cur_host)
+            cur_hosts = [self.cs.resolve_service_id('rdir', host)
+                         for host in hosts]
             # Add the list of services to the cache
-            self._addr_cache[volume_id] = cur_hosts
+            self._addr_cache[volume_id] = (
+                cur_hosts,
+                now + self._cache_duration * random.randrange(90, 100) / 100)
             return cur_hosts
         except NotFound:
             raise VolumeException('No rdir assigned to volume %s' % volume_id)
 
     def _make_uri(self, action, volume_id, reqid=None, service_type='rawx'):
-        rdir_hosts = self._get_rdir_addr(volume_id, reqid)
+        rdir_hosts = self._get_rdir_addr(volume_id, reqid=reqid)
         all_uri = list()
         for rdir_host in rdir_hosts:
             all_uri.append('http://%s/v1/%s/%s' % (
