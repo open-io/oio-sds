@@ -579,6 +579,32 @@ _db_insert_generic(struct rdir_base_s *base, GString *key, GString *value)
 }
 
 static GError *
+_db_insert_generic_batch(struct rdir_base_s *base, GString **kv_array)
+{
+	char *errmsg = NULL;
+
+	leveldb_writebatch_t *batch = leveldb_writebatch_create();
+	leveldb_writeoptions_t *options = leveldb_writeoptions_create();
+	leveldb_writeoptions_set_sync(options, 0);
+
+	for (GString **cur = kv_array; kv_array && *cur; cur += 2) {
+		GString *key = *cur;
+		GString *value = *(cur+1);
+		leveldb_writebatch_put(
+				batch, key->str, key->len, value->str, value->len);
+	}
+	leveldb_write(base->base, options, batch, &errmsg);
+
+	leveldb_writeoptions_destroy(options);
+	leveldb_writebatch_destroy(batch);
+
+	if (!errmsg)
+		return NULL;
+
+	return _map_errno_to_gerror(errno, errmsg);
+}
+
+static GError *
 _db_vol_push(const char *volid, gboolean autocreate, GString *key,
 			 GString *value)
 {
@@ -588,6 +614,17 @@ _db_vol_push(const char *volid, gboolean autocreate, GString *key,
 		return err;
 
 	return _db_insert_generic(base, key, value);
+}
+
+static GError *
+_db_vol_push_many(const char *volid, gboolean autocreate, GString **array)
+{
+	struct rdir_base_s *base = NULL;
+	GError *err = _db_get(volid, autocreate, &base);
+	if (err)
+		return err;
+
+	return _db_insert_generic_batch(base, array);
 }
 
 struct _listing_req_s {
@@ -1234,7 +1271,7 @@ _route_vol_delete(struct req_args_s *args, struct json_object *jbody,
 }
 
 static GError *
-_push_record(struct req_args_s *args, struct json_object *jrec,
+_push_chunk_record(struct req_args_s *args, struct json_object *jrec,
 		const char *volid, gboolean autocreate)
 {
 	/* extract all the record's fields */
@@ -1260,7 +1297,7 @@ _push_record(struct req_args_s *args, struct json_object *jrec,
 // POST /v1/rdir/push?vol=<volume ip>%3A<volume port>
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
-// Push the target volume.
+// Push chunks to the database of the target volume.
 //
 // .. code-block:: http
 //
@@ -1277,8 +1314,25 @@ _push_record(struct req_args_s *args, struct json_object *jrec,
 //    {
 //      "container_id":"<container id>",
 //      "content_id":"<object content id>",
-//      "chunk_id":"chunk id"
+//      "chunk_id":"chunk id",
+//      "path":"object path",
+//      "version":<object version>
 //    }
+//
+// OR
+//
+// .. code-block:: json
+//
+//    [
+//      {
+//        "container_id":"<container id>",
+//        "content_id":"<object content id>",
+//        "chunk_id":"chunk id",
+//        "path":"object path",
+//        "version":<object version>
+//      },
+//      ...
+//    ]
 //
 //
 // Standard response:
@@ -1294,13 +1348,43 @@ static enum http_rc_e
 _route_vol_push(struct req_args_s *args, struct json_object *jbody,
 		const char *volid, const char *str_autocreate)
 {
-	if (!jbody || !json_object_is_type(jbody, json_type_object))
-		return _reply_format_error(args->rp, BADREQ("null body"));
 	if (!volid)
 		return _reply_format_error(args->rp, BADREQ("no volume id"));
+	if (!jbody)
+		return _reply_format_error(args->rp, BADREQ("null body"));
 
+	GError *err = NULL;
 	gboolean autocreate = oio_str_parse_bool(str_autocreate, FALSE);
-	GError *err = _push_record(args, jbody, volid, autocreate);
+	if (json_object_is_type(jbody, json_type_object)) {
+		err = _push_chunk_record(args, jbody, volid, autocreate);
+	} else if (json_object_is_type(jbody, json_type_array)) {
+		int record_count = json_object_array_length(jbody);
+		GPtrArray *records = g_ptr_array_new_full(
+				record_count * 2 + 1,
+				(GDestroyNotify)oio_str_gstring_free);
+		for (int i = 0; i < record_count && !err; i++) {
+			struct rdir_record_s rec = {0};
+			struct json_object *jrec = json_object_array_get_idx(jbody, i);
+			if ((err = _record_extract(&rec, jrec, TRUE, TRUE)))
+				break;
+
+			GString *key = _record_to_key(&rec, FALSE);
+			GString *value = g_string_sized_new(1024);
+			_record_encode(&rec, value);
+
+			g_ptr_array_add(records, key);
+			g_ptr_array_add(records, value);
+		}
+		if (!err) {
+			g_ptr_array_add(records, NULL);
+			err = _db_vol_push_many(volid, autocreate,
+					(GString **)records->pdata);
+		}
+		g_ptr_array_free(records, TRUE);
+	} else {
+		err = BADREQ("Body must be a JSON array or object");
+	}
+
 	if (err)
 		return _reply_common_error(args->rp, err);
 	return _reply_ok(args->rp, NULL);
@@ -2077,6 +2161,16 @@ _meta2_db_push(const char *meta2_address, gboolean autocreate, GString * key,
 	return _db_insert_generic(base, key, val);
 }
 
+static GError *
+_meta2_db_push_many(const char *volid, gboolean autocreate, GString **array)
+{
+	struct rdir_base_s *base = NULL;
+	GError *err = _meta2_db_get(volid, autocreate, &base);
+	if (err)
+		return err;
+
+	return _db_insert_generic_batch(base, array);
+}
 /*
  * Remove a record from the database.
  */
@@ -2148,17 +2242,21 @@ static enum http_rc_e
 _route_meta2_fetch(struct req_args_s *args, struct json_object *jbody,
 					const char *meta2_address)
 {
-	if (!jbody || !json_object_is_type(jbody, json_type_object))
-		return _reply_format_error(args->rp, BADREQ("null body"));
 	if (!meta2_address)
 		return _reply_format_error(args->rp, BADREQ("no meta2 id"));
+	if (jbody && !json_object_is_type(jbody, json_type_object))
+		return _reply_format_error(args->rp, BADREQ("null body"));
 
 	GError *err = NULL;
 
-	struct rdir_meta2_record_subset_s subset = {0};
-	err = _meta2_record_subset_extract(&subset, jbody);
-	if (err)
-		return _reply_format_error(args->rp, err);
+	struct rdir_meta2_record_subset_s subset = {
+		NULL, NULL, RDIR_LISTING_DEFAULT_LIMIT
+	};
+	if (jbody) {
+		err = _meta2_record_subset_extract(&subset, jbody);
+		if (err)
+			return _reply_format_error(args->rp, err);
+	}
 
 	GString *response_list = g_string_sized_new(1024);
 	gboolean truncated = FALSE;
@@ -2217,6 +2315,34 @@ _route_meta2_create(struct req_args_s *args, const char *meta2_address)
 	return _reply_created(args->rp);
 }
 
+static GError *
+_push_meta2_record(struct req_args_s *args, struct json_object *jrec,
+		const char *volid, gboolean autocreate)
+{
+	/* extract all the record's fields */
+	GError *err = NULL;
+	struct rdir_meta2_record_s rec = {0};
+	if ((err = _meta2_record_extract(&rec, jrec)))
+		return err;
+
+	GString *key = g_string_new("");
+	if ((err = _meta2_record_to_key(&rec, key))) {
+		g_string_free(key, TRUE);
+		return err;
+	}
+	GString *value = g_string_sized_new(1024);
+	args->rp->access_tail("key:%s", key->str);
+	_meta2_record_encode(&rec, value);
+
+	/* Eventually push the record in the database */
+	err = _meta2_db_push(volid, autocreate, key, value);
+	g_string_free(key, TRUE);
+	g_string_free(value, TRUE);
+	_meta2_record_free(&rec);
+
+	return err;
+}
+
 // RDIR{{
 // POST /v1/rdir/meta2/push?vol=<volume ip>%3A<volume port>
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -2254,36 +2380,45 @@ _route_meta2_create(struct req_args_s *args, const char *meta2_address)
 // }}RDIR
 static enum http_rc_e
 _route_meta2_push(struct req_args_s *args, struct json_object *jbody,
-		const char *meta2_address, const char *str_autocreate)
+		const char *meta2_id, const char *str_autocreate)
 {
-	if (!jbody || !json_object_is_type(jbody, json_type_object))
-		return _reply_format_error(args->rp, BADREQ("null body"));
-	if (!meta2_address)
+	if (!meta2_id)
 		return _reply_format_error(args->rp, BADREQ("no meta2 id"));
-
-	gboolean autocreate = oio_str_parse_bool(str_autocreate, TRUE);
+	if (!jbody)
+		return _reply_format_error(args->rp, BADREQ("null body"));
 
 	GError *err = NULL;
-	struct rdir_meta2_record_s rec = {0};
-	if ((err = _meta2_record_extract(&rec, jbody)))
-		return _reply_format_error(args->rp, err);
+	gboolean autocreate = oio_str_parse_bool(str_autocreate, TRUE);
+	if (json_object_is_type(jbody, json_type_object)) {
+		err = _push_meta2_record(args, jbody, meta2_id, autocreate);
+	} else if (json_object_is_type(jbody, json_type_array)) {
+		int record_count = json_object_array_length(jbody);
+		GPtrArray *records = g_ptr_array_new_full(
+				record_count * 2 + 1,
+				(GDestroyNotify)oio_str_gstring_free);
+		for (int i = 0; i < record_count && !err; i++) {
+			struct rdir_meta2_record_s rec = {0};
+			struct json_object *jrec = json_object_array_get_idx(jbody, i);
+			if ((err = _meta2_record_extract(&rec, jrec)))
+				break;
 
-	GString *key = g_string_new("");
-	err = _meta2_record_to_key(&rec, key);
-	if (err){
-		g_string_free(key, TRUE);
-		return _reply_format_error(args->rp, err);
+			GString *key = g_string_new("");
+			err = _meta2_record_to_key(&rec, key);
+			GString *value = g_string_sized_new(1024);
+			_meta2_record_encode(&rec, value);
+
+			g_ptr_array_add(records, key);
+			g_ptr_array_add(records, value);
+		}
+		if (!err) {
+			g_ptr_array_add(records, NULL);
+			err = _meta2_db_push_many(meta2_id, autocreate,
+					(GString **)records->pdata);
+		}
+		g_ptr_array_free(records, TRUE);
+	} else {
+		err = BADREQ("Body must be a JSON array or object");
 	}
-	GString *value = g_string_sized_new(1024);
-	args->rp->access_tail("key:%s", key->str);
-	_meta2_record_encode(&rec, value);
-
-
-	/* Eventually push the record in the database */
-	err = _meta2_db_push(meta2_address, autocreate, key, value);
-	g_string_free(key, TRUE);
-	g_string_free(value, TRUE);
-	_meta2_record_free(&rec);
 
 	if (err)
 		return _reply_common_error(args->rp, err);

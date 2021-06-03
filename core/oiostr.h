@@ -121,6 +121,9 @@ const char * oio_str_autocontainer (const char *src, guint srclen,
 const char * oio_buf_prefix (const guint8 *src, guint len,
 		char *dst, guint bits);
 
+/** Free a GString including the underlying char array. */
+void oio_str_gstring_free(GString *str);
+
 /** In place transform the input 's' string in its uppercase form */
 void oio_str_upper(register gchar *s);
 

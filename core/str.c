@@ -339,6 +339,11 @@ size_t oio_strv_length_total (const char * const *v) {
 	return total;
 }
 
+void oio_str_gstring_free(GString *str) {
+	if (str != NULL)
+		g_string_free(str, TRUE);
+}
+
 void oio_str_upper(register gchar *s) {
 	if (!s) return;
 	for (; *s ;++s)

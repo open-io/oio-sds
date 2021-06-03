@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,14 +14,15 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import time
-import tempfile
-from shutil import rmtree
-import simplejson as json
 import subprocess
+import tempfile
+import time
 import uuid
 from os import remove, getuid
+from shutil import rmtree
+
 from oio.common.http_urllib3 import get_pool_manager
+from oio.common.json import json
 
 from tests.utils import CommonTestCase, random_str, random_id
 
@@ -57,6 +59,7 @@ def _write_config(path, config):
 class RdirTestCase(CommonTestCase):
     def setUp(self):
         super(RdirTestCase, self).setUp()
+        self.host = self.port = None
         self._http_pool = get_pool_manager(max_retries=10, backoff_factor=0.05)
         self.garbage_files = list()
         self.garbage_procs = list()
@@ -81,20 +84,30 @@ class RdirTestCase(CommonTestCase):
     def _volume(self):
         return random_id(8)
 
-    def _record(self):
-        return {"container_id": random_id(64),
-                "content_id": random_id(32),
-                "chunk_id": random_id(64),
-                "mtime": int(time.time()),
-                "path": "obj-" + random_id(4),
-                "version": 1}
+    def _record(self, new_format=False):
+        rec = {
+            "container_id": random_id(64),
+            "content_id": random_id(32),
+            "chunk_id": random_id(64),
+            "mtime": int(time.time()),
+            "path": "obj-" + random_id(4),
+            "version": 1
+        }
+        if new_format:
+            return [rec]
+        return rec
 
-    def _meta2_record(self):
-        return {"container_id": random_id(64),
-                "container_url": "{0}/{1}/{2}".format(random_str(12),
-                                                      random_str(12),
-                                                      random_str(12)),
-                "mtime": int(time.time())}
+    def _meta2_record(self, new_format=False):
+        rec = {
+            "container_id": random_id(64),
+            "container_url": "{0}/{1}/{2}".format(random_str(12),
+                                                  random_str(12),
+                                                  random_str(12)),
+            "mtime": int(time.time())
+        }
+        if new_format:
+            return [rec]
+        return rec
 
     def _rdir_url(self, tail):
         return 'http://{0}:{1}{2}'.format(self.host, self.port, tail)
@@ -214,6 +227,31 @@ class TestRdirServer(RdirTestCase):
         resp = self._get("/v1/rdir/fetch", params={'vol': self.vol})
         self.assertEqual(resp.status, 200)
         self.assertEqual([[_key(rec), _value(rec)]],
+                         self.json_loads(resp.data))
+
+    def test_push_several_chunks(self):
+        recs = self._record(new_format=True)
+        recs.extend(self._record(new_format=True))
+        recs.extend(self._record(new_format=True))
+
+        # try to push on unknown volume
+        resp = self._post(
+                "/v1/rdir/push", params={'vol': self.vol},
+                data=json.dumps(recs))
+        self.assertEqual(resp.status, 404)
+
+        # try to push on unknown volume WITH create flag
+        resp = self._post(
+                "/v1/rdir/push", params={'vol': self.vol, 'create': True},
+                data=json.dumps(recs))
+        self.assertEqual(resp.status, 204)
+
+        # We must fetch the same data
+        resp = self._get("/v1/rdir/fetch", params={'vol': self.vol})
+        self.assertEqual(resp.status, 200)
+        reference = [[_key(rec), _value(rec)] for rec in recs]
+        reference.sort()
+        self.assertEqual(reference,
                          self.json_loads(resp.data))
 
     def test_push_missing_fields(self):
@@ -491,9 +529,9 @@ class TestRdirServer(RdirTestCase):
                                   rec2['container_id']: {'total': 1}}})
 
 
-class TestRdirServer2(RdirTestCase):
+class TestRdirServerWithSubproces(RdirTestCase):
     def setUp(self):
-        super(TestRdirServer2, self).setUp()
+        super(TestRdirServerWithSubproces, self).setUp()
         # Start a sandboxed rdir service
         self.num, self.host, self.port = 17, '127.0.0.1', 5999
         self.cfg_path = tempfile.mktemp()
@@ -513,9 +551,6 @@ class TestRdirServer2(RdirTestCase):
             raise Exception("The rdir server is too long to start")
         else:
             self.garbage_procs.append(child)
-
-    def tearDown(self):
-        super(TestRdirServer2, self).tearDown()
 
     def test_status(self):
         vol = self._volume()
@@ -601,14 +636,8 @@ class TestRdirServer2(RdirTestCase):
             self.assertEqual(resp.status, 405)
 
 
-class TestRdirServer3(RdirTestCase):
+class TestRdirServerConfig(RdirTestCase):
     """Test the oio-rdir-server with invalid configuration"""
-
-    def setUp(self):
-        super(TestRdirServer3, self).setUp()
-
-    def tearDown(self):
-        super(TestRdirServer3, self).tearDown()
 
     def test_no_config(self):
         with open('/dev/null', 'w') as out:
@@ -697,15 +726,12 @@ class TestRdirServer3(RdirTestCase):
         self.assertTrue(check_process_absent(proc1))
 
 
-class TestRdirServer4(RdirTestCase):
+class TestRdirServerMeta2Ops(RdirTestCase):
     def setUp(self):
-        super(TestRdirServer4, self).setUp()
+        super(TestRdirServerMeta2Ops, self).setUp()
         self.num, self.db_path, self.host, self.port = self.get_service('rdir')
         self.port = int(self.port)
         self.vol = self._volume()
-
-    def tearDown(self):
-        super(TestRdirServer4, self).tearDown()
 
     def test_meta2_fetch_invalid_parameters(self):
         # fetch without volume
@@ -799,6 +825,34 @@ class TestRdirServer4(RdirTestCase):
             "truncated": False
         }
         self.assertEqual(self.json_loads(resp.data), reference)
+
+    def test_meta2_push_several(self):
+        recs = self._meta2_record(new_format=True)
+        recs.extend(self._meta2_record(new_format=True))
+        recs.extend(self._meta2_record(new_format=True))
+
+        # create volume
+        resp = self._post("/v1/rdir/meta2/create", params={'vol': self.vol})
+        self.assertEqual(resp.status, 201)
+
+        # now the push must succeed
+        resp = self._post(
+            "/v1/rdir/meta2/push", params={'vol': self.vol},
+            data=json.dumps(recs))
+        self.assertEqual(resp.status, 204)
+
+        # we must fetch the same data with an additional empty extra_data
+        resp = self._get("/v1/rdir/meta2/fetch", params={'vol': self.vol})
+        self.assertEqual(resp.status, 200)
+
+        recs.sort(key=lambda x: x['container_url'])
+        for rec in recs:
+            rec["extra_data"] = None
+        reference = {
+            "records": recs,
+            "truncated": False
+        }
+        self.assertEqual(reference, self.json_loads(resp.data))
 
     def test_meta2_delete(self):
         rec = self._meta2_record()
