@@ -6,7 +6,7 @@ python:
 addons:
   apt:
     sources:
-    - sourceline: 'deb http://mirror2.openio.io/pub/repo/openio/sds/18.04/ubuntu/ bionic/'
+    - sourceline: 'deb http://mirror2.openio.io/pub/repo/openio/sds/19.04/ubuntu/ bionic/'
       key_url: 'http://mirror2.openio.io/pub/repo/openio/APT-GPG-KEY-OPENIO-0'
 # Please keep the following list sorted!
     packages:
