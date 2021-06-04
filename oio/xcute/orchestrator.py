@@ -143,10 +143,13 @@ class XcuteOrchestrator(object):
             self.logger.warn(
                 'Unable to list running jobs for this orchestrator: %s', exc)
             return
-        for job_info in orchestrator_jobs:
-            if not self.running:
-                return
-            self.safe_handle_running_job(job_info)
+        if orchestrator_jobs:
+            self.logger.info(
+                'Resume %d jobs currently running for this orchestrator')
+            for job_info in orchestrator_jobs:
+                if not self.running:
+                    return
+                self.safe_handle_running_job(job_info)
 
         # run next jobs
         while self.running:
@@ -425,8 +428,9 @@ class XcuteOrchestrator(object):
                             '[job_id=%s] Job could not abort '
                             'the last sent tasks: %s', job_id, exc)
                         break
-                if job_status == XcuteJobStatus.PAUSED:
-                    self.logger.info('Job %s is paused', job_id)
+                if job_status != XcuteJobStatus.RUNNING:
+                    self.logger.info('Job %s is not running: %s', job_id,
+                                     job_status)
                     return
 
                 if not self.running:

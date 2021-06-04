@@ -1237,6 +1237,9 @@ _cs_dispatch_PUSH(struct gridd_reply_ctx_s *reply,
 {
 	reply->no_access();
 
+	/* XXX(FVE): we could extract the namespace name from a header
+	 * and compare it to the local one. I think it was done in the past
+	 * but has been removed to save a bit of bandwidth and CPU time. */
 	GSList *list_srvinfo = NULL;
 	GError *err = metautils_message_extract_body_encoded(
 			reply->request, TRUE, &list_srvinfo, service_info_unmarshall);
@@ -1250,8 +1253,20 @@ _cs_dispatch_PUSH(struct gridd_reply_ctx_s *reply,
 	for (GSList *l = list_srvinfo; l; l = g_slist_next(l)) {
 		struct service_info_s *si = l->data;
 		if (!metautils_addr_valid_for_connect(&si->addr)
-				|| !oio_str_is_set(si->type))
+				|| !oio_str_is_set(si->type)) {
 			continue;
+		} else if (!oio_str_is_set(si->ns_name)) {
+			gchar srvaddr[STRLEN_ADDRINFO];
+			grid_addrinfo_to_string(&si->addr, srvaddr, sizeof(srvaddr));
+			GRID_DEBUG("Got a service without ns_name: %s %s",
+					si->type, srvaddr);
+		} else if (g_strcmp0(nsname, si->ns_name) != 0) {
+			gchar srvaddr[STRLEN_ADDRINFO];
+			grid_addrinfo_to_string(&si->addr, srvaddr, sizeof(srvaddr));
+			GRID_WARN("Got a service from namespace %s: %s %s, refusing it!",
+					si->ns_name, si->type, srvaddr);
+			continue;
+		}
 		struct service_info_dated_s *sid = push_service(si);
 		if (sid) {
 			hub_publish_service(sid);

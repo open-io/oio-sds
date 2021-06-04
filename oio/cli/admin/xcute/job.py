@@ -90,8 +90,13 @@ class JobList(XcuteCommand, Lister):
         for job_info in jobs:
             job_main_info = job_info['job']
             job_tasks = job_info['tasks']
-            progress = \
-                job_tasks['processed'] * 100. / (job_tasks['total'] or 0.00001)
+            try:
+                progress = job_tasks['processed'] * 100. / job_tasks['total']
+            except ZeroDivisionError:
+                if job_tasks['is_total_temp']:
+                    progress = 0.
+                else:
+                    progress = 100.
             yield (job_main_info['id'], job_main_info['status'],
                    job_main_info['type'], job_main_info.get('lock'),
                    '%.2f%%' % progress)
@@ -130,12 +135,25 @@ class JobShow(XcuteCommand, ShowOne):
             job_main_info['duration'] = duration
 
             job_tasks = job_info['tasks']
-            job_tasks['sent_percent'] = \
-                job_tasks['sent'] * 100. / (job_tasks['total'] or 0.00001)
+            try:
+                sent_percent = job_tasks['sent'] * 100. / job_tasks['total']
+            except ZeroDivisionError:
+                if job_tasks['is_total_temp']:
+                    sent_percent = 0.
+                else:
+                    sent_percent = 100.
+            job_tasks['sent_percent'] = sent_percent
             job_tasks['processed_per_second'] = \
                 job_tasks['processed'] / (duration or 0.00001)
-            job_tasks['processed_percent'] = \
-                job_tasks['processed'] * 100. / (job_tasks['total'] or 0.00001)
+            try:
+                processed_percent = \
+                    job_tasks['processed'] * 100. / job_tasks['total']
+            except ZeroDivisionError:
+                if job_tasks['is_total_temp']:
+                    processed_percent = 0.
+                else:
+                    processed_percent = 100.
+            job_tasks['processed_percent'] = processed_percent
 
             if parsed_args.formatter == 'table':
                 if not job_tasks['all_sent']:

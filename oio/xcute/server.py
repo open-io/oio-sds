@@ -20,7 +20,7 @@ from werkzeug.exceptions import HTTPException, \
 from werkzeug.routing import Map, Rule, Submount
 from werkzeug.wrappers import Response
 
-from oio.common.easy_value import int_value
+from oio.common.easy_value import int_value, boolean_value
 from oio.common.exceptions import Forbidden, NotFound
 from oio.common.green import time
 from oio.common.json import json
@@ -132,11 +132,15 @@ class XcuteServer(WerkzeugApp):
         job_class = JOB_TYPES.get(job_type)
         if job_class is None:
             raise HTTPBadRequest('Unknown job type')
+        put_on_hold_if_locked = boolean_value(
+            req.args.get('put_on_hold_if_locked'))
 
         job_config, lock = job_class.sanitize_config(
             json.loads(req.data or '{}'))
 
-        job_id = self.backend.create(job_type, job_config, lock)
+        job_id = self.backend.create(
+            job_type, job_config, lock,
+            put_on_hold_if_locked=put_on_hold_if_locked)
         job_info = self.backend.get_job_info(job_id)
         return Response(
             json.dumps(job_info), mimetype='application/json', status=202)

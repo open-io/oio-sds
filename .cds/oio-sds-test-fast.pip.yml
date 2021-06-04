@@ -16,10 +16,10 @@ jobs:
         script: |+
           #!/bin/bash
           set -x
-          curl http://mirror.openio.io/pub/repo/openio/APT-GPG-KEY-OPENIO-0 | apt-key add -
-          apt-add-repository "deb http://mirror.openio.io/pub/repo/openio/sds/19.04/ubuntu/ bionic/"
+          sudo add-apt-repository ppa:longsleep/golang-backports
+          curl http://mirror2.openio.io/pub/repo/openio/APT-GPG-KEY-OPENIO-0 | apt-key add -
+          apt-add-repository "deb http://mirror2.openio.io/pub/repo/openio/sds/20.04/ubuntu/ bionic/"
           apt install -y $(tr '\n' ' ' < .cds/deps-ubuntu-bionic.txt)
-          go get gopkg.in/ini.v1 golang.org/x/sys/unix
           mkdir /tmp/oio
           virtualenv -p /usr/bin/python3 $HOME/oioenv
           . $HOME/oioenv/bin/activate

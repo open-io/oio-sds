@@ -15,6 +15,7 @@
 
 from oio.conscience.client import ConscienceClient
 from oio.common.decorators import ensure_request_id2
+from oio.common.exceptions import VolumeException
 from oio.common.logger import get_logger
 from oio.directory.admin import AdminClient
 from oio.directory.client import DirectoryClient
@@ -258,8 +259,14 @@ class Meta2Database(object):
         #     sqliterepo layer is the one that notifies the deletion of
         #     the databases.
         if self.service_type == 'meta2':
-            self.rdir.meta2_index_delete(volume_id=src, container_id=cid,
-                                         **kwargs)
+            try:
+                self.rdir.meta2_index_delete(volume_id=src, container_id=cid,
+                                             **kwargs)
+            except VolumeException as err:
+                self.logger.warning("Failed to remove %s from rdir: %s",
+                                    cid, err)
+            except Exception:
+                self.logger.exception("Failed to remove %s from rdir", cid)
 
     def _reset_election(self, bseq, src, dst, **kwargs):
         """

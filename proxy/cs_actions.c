@@ -277,12 +277,21 @@ _load_services_info(struct json_object *jsrv, GSList **services)
 			err = service_info_load_json_object(jitem, &si, TRUE);
 			if (err)
 				break;
+			if (!oio_str_is_set(si->ns_name)) {
+				gchar srvaddr[STRLEN_ADDRINFO];
+				grid_addrinfo_to_string(&si->addr, srvaddr, sizeof(srvaddr));
+				/* We can't require this unless heavily patching the Python
+				 * API, hence the debug message instead of an error. */
+				GRID_DEBUG("Loading service without ns_name: %s (reqid=%s))",
+					srvaddr, oio_ext_get_reqid());
+			}
 			*services = g_slist_prepend(*services, si);
 		}
 	} else if (json_object_is_type(jsrv, json_type_object)) {
 		struct service_info_s *si = NULL;
-		if (!(err = service_info_load_json_object(jsrv, &si, TRUE)))
+		if (!(err = service_info_load_json_object(jsrv, &si, TRUE))) {
 			*services = g_slist_prepend(*services, si);
+		}
 	} else {
 		err = BADREQ("Expected: json object");
 	}

@@ -20,7 +20,7 @@
 
 			{ "type": "epoch", "name": "meta2_reload_lb_period",
 				"key": "meta2.reload.lb.period",
-				"descr": "Sets the period of the periodical reloading of the Load-balancing state, in the current meta2 service.",
+				"descr": "DEPRECATED. Sets the period of the periodical reloading of the Load-balancing state, in the current meta2 service.",
 				"def": "10s", "min": "1s", "max": "1h" },
 
 			{ "type": "epoch", "name": "meta2_reload_nsinfo_period",
@@ -396,12 +396,12 @@
 		"variables": [
 			{ "type": "float", "name": "oio_election_use_timeout_cnx",
 				"key": "sqliterepo.outgoing.timeout.cnx.use",
-				"descr": "Sets the connection timeout when ping'ing a peer database. Keep it small. Only used when UDP is disabled.",
+				"descr": "Sets the connection timeout when pinging a peer database. Keep it small. Only used when UDP is disabled.",
 				"def": 1.0, "min": 0.01, "max": 30.0 },
 
 			{ "type": "float", "name": "oio_election_use_timeout_req",
 				"key": "sqliterepo.outgoing.timeout.req.use",
-				"descr": "Sets the global timeout when ping'ing a peer database. Keep it small.",
+				"descr": "Sets the global timeout when pinging a peer database. Keep it small.",
 				"def": 10.0, "min": 0.01, "max": 30.0 },
 
 			{ "type": "float", "name": "oio_election_getvers_timeout_cnx",
@@ -562,7 +562,7 @@
 
 			{ "type": "uint", "name": "disconnection_threshold",
 				"key": "sqliterepo.zk.rrd.threshold",
-				"descr": "Sets the maximum number of reconnections to the ZK that remains acceptable. Beyond that limit, we consider the current service has been disconnected, and that it loast all its nodes.",
+				"descr": "Sets the maximum number of reconnections to the ZK that remains acceptable. Beyond that limit, we consider the current service has been disconnected, and that it lost all its nodes.",
 				"def": 5, "min": 1, "max": "1 << 32 - 1" },
 
 			{ "type": "int32", "name": "oio_sync_failure_threshold_action",
@@ -720,7 +720,7 @@
 
 			{ "type": "uint", "name": "server_accept_batch_size",
 				"key": "server.batch.accept",
-				"descr": "In the network core, when the server socket wakes the call to epoll_wait(), that value sets the number of subsequent calls to accept(). Setting it to a low value allows to quickly switch to other events (established connection) and can lead to a strvation on the new connections. Setting to a high value might spend too much time in accepting and ease denials of service (with established but idle cnx).",
+				"descr": "In the network core, when the server socket wakes the call to epoll_wait(), that value sets the number of subsequent calls to accept(). Setting it to a low value allows to quickly switch to other events (established connection) and can lead to a starvation on the new connections. Setting to a high value might spend too much time in accepting and ease denials of service (with established but idle cnx).",
 				"def": 64, "min": 1, "max": "4ki" },
 
 			{ "type": "monotonic", "name": "sqliterepo_server_exit_ttl",
@@ -755,12 +755,12 @@
 
 			{ "type": "monotonic", "name": "server_cnx_ttl_persist",
 				"key": "server.cnx.timeout.persist",
-				"descr": "In the current server, sets the maximum amount of time a connection is allowed to live, since its creation by the accept() call, wheter it presents activity or not.",
+				"descr": "In the current server, sets the maximum amount of time a connection is allowed to live, since its creation by the accept() call, whether it presents activity or not.",
 				"def": "2h", "min": 0, "max": "1d" },
 
 			{ "type": "monotonic", "name": "server_cnx_ttl_idle",
 				"key": "server.cnx.timeout.idle",
-				"descr": "In the current server, sets the maximumu amount of time a connection may live without activity since the last activity (i.e. the last reply sent)",
+				"descr": "In the current server, sets the maximum amount of time a connection may live without activity since the last activity (i.e. the last reply sent)",
 				"def": "5m", "min": 0, "max": "1d" },
 
 			{ "type": "monotonic", "name": "server_udp_queue_ttl",
@@ -1071,7 +1071,7 @@
 
 			{ "type": "monotonic", "name": "_refresh_cpu_idle",
 				"key": "core.period.refresh.cpu_idle",
-				"descr": "Sets the miniimal amount of time between two refreshed of the known CPU-idle counters for the current host. Keep this value small.",
+				"descr": "Sets the minimal amount of time between two refreshes of the known CPU-idle counters for the current host. Keep this value small.",
 				"def": "1s", "min": "100ms", "max": "1h" },
 
 			{ "type": "string", "name": "oio_core_http_user_agent",
@@ -1119,7 +1119,7 @@
 			{ "type": "uint", "name": "oio_lb_weighted_random_attempts",
 				"key": "core.lb.weighted_random_attempts",
 				"descr": "How many times shall we try to select a service using a weighted random algorithm, before switching to the shuffled selection. Increase this if you observe too many choices of low-score services while high-score services are available.",
-				"def": "1", "min": 1, "max": "64k"},
+				"def": "8", "min": 1, "max": "64k"},
 			{ "type": "monotonic", "name": "oio_lb_writer_lock_alert_delay",
 				"key": "core.lb.writer_lock_alert_delay",
 				"descr": "Dump the time spent while holding the global writer lock, when the lock is held for longer than this threshold (in microseconds).",

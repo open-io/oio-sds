@@ -174,9 +174,12 @@ class ConscienceClient(ProxyClient):
             raise OioException("failed to get list of local services: %s" %
                                resp.text)
 
-    def service_types(self):
+    def service_types(self, **kwargs):
+        """
+        Get the list of service types known by Conscience.
+        """
         params = {'what': 'types'}
-        resp, body = self._request('GET', '/info', params=params)
+        resp, body = self._request('GET', '/info', params=params, **kwargs)
         if resp.status == 200:
             return body
         else:
@@ -207,7 +210,7 @@ class ConscienceClient(ProxyClient):
         resp, body = self._request("GET", '/info')
         return body
 
-    def lock_score(self, srv_or_list):
+    def lock_score(self, srv_or_list, **kwargs):
         """
         Lock the score of a service.
 
@@ -218,10 +221,11 @@ class ConscienceClient(ProxyClient):
         :type srv_or_list: `dict` or list of `dict`.
         """
         _, body = self._request('POST', '/lock',
-                                data=json.dumps(srv_or_list))
+                                data=json.dumps(srv_or_list),
+                                **kwargs)
         return body
 
-    def unlock_score(self, srv_or_list):
+    def unlock_score(self, srv_or_list, **kwargs):
         """
         Unlock the score of a service, let the Conscience compute it.
 
@@ -230,16 +234,18 @@ class ConscienceClient(ProxyClient):
             - 'type': the service type,
         :type srv_or_list: `dict` or list of `dict`.
         """
-        self._request('POST', '/unlock', data=json.dumps(srv_or_list))
+        self._request('POST', '/unlock', data=json.dumps(srv_or_list),
+                      **kwargs)
 
     def flush(self, srv_type):
         resp, body = self._request('POST', '/flush',
                                    params={'type': srv_type})
 
-    def resolve(self, srv_type, service_id):
+    def resolve(self, srv_type, service_id, **kwargs):
         resp, body = self._request('GET', '/resolve',
                                    params={'type': srv_type,
-                                           'service_id': service_id})
+                                           'service_id': service_id},
+                                   **kwargs)
         if resp.status == 200:
             return body
         else:
@@ -247,7 +253,7 @@ class ConscienceClient(ProxyClient):
                                (service_id, resp.text))
 
     def resolve_service_id(self, service_type, service_id,
-                           check_format=True):
+                           check_format=True, **kwargs):
         """
         :returns: Service address corresponding to the service ID
         """
@@ -263,13 +269,14 @@ class ConscienceClient(ProxyClient):
                      < self._service_id_max_age):
             return cached_service_id['addr']
         result = self.resolve(
-            srv_type=service_type, service_id=service_id)
+            srv_type=service_type, service_id=service_id,
+            **kwargs)
         service_addr = result['addr']
         self._service_ids[service_id] = {'addr': service_addr,
                                          'mtime': time.time()}
         return service_addr
 
-    def resolve_url(self, service_type, url):
+    def resolve_url(self, service_type, url, **kwargs):
         """
         :returns: Resolved URL of a service using a service ID
         """
@@ -282,6 +289,7 @@ class ConscienceClient(ProxyClient):
             return url
 
         service_addr = self.resolve_service_id(
-            service_type, parsed.hostname, check_format=False)
+            service_type, parsed.hostname, check_format=False,
+            **kwargs)
         return urlunparse((parsed.scheme, service_addr, parsed.path,
                            parsed.params, parsed.query, parsed.fragment))

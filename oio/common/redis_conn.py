@@ -47,6 +47,26 @@ def catch_service_errors(func):
     return catch_service_errors_wrapper
 
 
+def catch_io_errors(func):
+    """
+    Catch some write-after-close errors raised as ValueError, transform
+    them to ServiceBusy.
+    """
+    @wraps(func)
+    def catch_io_errors_wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except ValueError as err:
+            if 'I/O operation on closed file' in str(err):
+                # Here we are lying a little: the service is probably not
+                # too busy, it's just that some internal connection has
+                # reached a timeout.
+                msg = str(err) + " (socket_timeout too short?)"
+                raise ServiceBusy(message=msg)
+            raise
+    return catch_io_errors_wrapper
+
+
 class RedisConnection(object):
 
     # Imported from redis-py, for compatibility with pre 2.10.6 versions.
