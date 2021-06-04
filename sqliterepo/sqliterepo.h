@@ -333,6 +333,9 @@ GError* sqlx_repository_restore_from_file(struct sqlx_sqlite3_s *sq3,
 GError* sqlx_repository_restore_from_master(struct sqlx_sqlite3_s *sq3,
 		const gint check_type);
 
+GError* sqlx_repository_vacuum(sqlx_repository_t *repo,
+		const struct sqlx_name_s *n, enum sqlx_open_type_e open_mode);
+
 /* ------------------------------------------------------------------------- */
 
 GError* sqlx_transaction_prepare(struct sqlx_sqlite3_s *sq3,

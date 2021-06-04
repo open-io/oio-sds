@@ -654,14 +654,6 @@ class ContainerSharding(ProxyClient):
                 shard['cid'], exc)
             return
 
-        try:
-            self.admin.vacuum_base("meta2", cid=shard['cid'], **kwargs)
-        except Exception as exc:
-            self.logger.warning(
-                'Failed to vacuum the container (CID=%s): %s',
-                shard['cid'], exc)
-            return
-
     def _show_shards(self, root_account, root_container, limit=None,
                      marker=None, **kwargs):
         params = self._make_params(account=root_account,

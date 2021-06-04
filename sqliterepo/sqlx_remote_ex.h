@@ -25,6 +25,6 @@ License along with this library.
 
 /* Ask followers to download the whole database from the leader. */
 GError* sqlx_remote_execute_RESYNC_many(gchar **targets, GByteArray *sid,
-		struct sqlx_name_s *name, gint64 deadline);
+		const struct sqlx_name_s *name, gint64 deadline);
 
 #endif /*OIO_SDS__sqliterepo__sqlx_remote_ex_h*/

@@ -28,7 +28,7 @@ License along with this library.
 
 GError*
 sqlx_remote_execute_RESYNC_many(gchar **targets, GByteArray *sid,
-		struct sqlx_name_s *name, gint64 deadline)
+		const struct sqlx_name_s *name, gint64 deadline)
 {
 	(void) sid;
 	GError *err = NULL;

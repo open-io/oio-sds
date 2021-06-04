@@ -18,6 +18,8 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <errno.h>
+
 #include <math.h>
 #include <glib.h>
 
@@ -2874,34 +2876,69 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
+	int rc = 0;
 
-	err = m2b_open(m2b, url,
-			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT, &sq3);
-	if (!err) {
-		gint64 timestamp = oio_ext_real_time();
-		struct sqlx_repctx_s *repctx = NULL;
-		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			if (sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
-				err = m2db_clean_shard(sq3);
-			} else if (m2db_get_shard_count(sq3)) {
-				err = m2db_clean_root_container(sq3);
-			} else {
-				err = BADREQ("Not a shard or a root container");
-			}
-			if (!err) {
-				sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
-						NEW_SHARD_STATE_CLEANED_UP);
-				sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP,
-						timestamp);
-				sqlx_transaction_notify_huge_changes(repctx);
-			}
-			err = sqlx_transaction_end(repctx, err);
-			if (!err)
-				m2b_add_modified_container(m2b, sq3);
-		}
-		m2b_close(sq3, url);
+	enum m2v2_open_type_e how = M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|
+			M2V2_OPEN_URGENT;
+	err = m2b_open(m2b, url, how, &sq3);
+	if (err) {
+		return err;
 	}
 
+	// Clean up locally
+	gint64 timestamp = oio_ext_real_time();
+	sqlx_exec(sq3->db, "BEGIN");
+	if (sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
+		err = m2db_clean_shard(sq3);
+	} else if (m2db_get_shard_count(sq3)) {
+		err = m2db_clean_root_container(sq3);
+	} else {
+		err = BADREQ("Not a shard or a root container");
+	}
+	if (err) {
+		rc = sqlx_exec(sq3->db, "ROLLBACK");
+		if (rc != SQLITE_OK && rc != SQLITE_DONE) {
+			GRID_WARN("ROLLBACK failed: (%s) %s",
+					sqlite_strerror(rc), sqlite3_errmsg(sq3->db));
+			if (rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT) {
+				sq3->corrupted = TRUE;
+			}
+		}
+		sqlx_admin_reload(sq3);
+		goto close;
+	}
+	sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
+			NEW_SHARD_STATE_CLEANED_UP);
+	sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, timestamp);
+	/* This is to prevent concurrent changes in case the resync is not
+	 * performed quickly enough. */
+	sqlx_admin_inc_all_versions(sq3, 2);
+	sqlx_admin_save_lazy(sq3);
+	rc = sqlx_exec(sq3->db, "COMMIT");
+	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
+		err = NEWERROR(CODE_UNAVAILABLE, "COMMIT failed: (%s) %s",
+				sqlite_strerror(rc), sqlite3_errmsg(sq3->db));
+		if (rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT) {
+			sq3->corrupted = TRUE;
+		}
+		sqlx_admin_reload(sq3);
+		goto close;
+	}
+
+	// Vacuum and resync
+	NAME2CONST(n, sq3->name);
+	err = sqlx_repository_vacuum(m2b->repo, &n, m2_to_sqlx(how));
+	if (err) {
+		GRID_WARN("Failed to vacuum and/or resync after cleaning shard: "
+				"(%d) %s", err->code, err->message);
+		g_clear_error(&err);
+	}
+
+close:
+	if (!err) {
+		m2b_add_modified_container(m2b, sq3);
+	}
+	m2b_close(sq3, url);
 	return err;
 }
 

@@ -42,6 +42,7 @@ License along with this library.
 #include "internals.h"
 #include "restoration.h"
 #include "sqlx_remote.h"
+#include "sqlx_remote_ex.h"
 
 
 #define GSTR_APPEND_SEP(S) do { \
@@ -1917,4 +1918,100 @@ sqlx_repository_get_version2(sqlx_repository_t *repo, const struct sqlx_name_s *
 
 	*result = version;
 	return NULL;
+}
+
+GError*
+sqlx_repository_vacuum(sqlx_repository_t *repo, const struct sqlx_name_s *n,
+		enum sqlx_open_type_e open_mode)
+{
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	gboolean open_local = FALSE;
+	int rc = 0, fd = -1;
+	struct stat st;
+
+	open_local = (SQLX_OPEN_LOCAL == (open_mode & SQLX_OPEN_REPLIMODE));
+	err = sqlx_repository_open_and_lock(repo, n, open_mode, &sq3, NULL);
+	if (err) {
+		return err;
+	}
+	EXTRA_ASSERT(sq3 != NULL);
+
+	sqlx_exec(sq3->db, "VACUUM");
+
+	fd = open(sq3->path_inline, O_RDONLY);
+	if (fd < 0) {
+		/* This is to prevent concurrent changes. */
+		sqlx_admin_inc_all_versions(sq3, 2);
+		sqlx_admin_save_lazy_tnx(sq3);
+		err = SYSERR("Failed to open the database file: (%d) %s",
+				errno, strerror(errno));
+		goto close;
+	}
+	rc = fstat(fd, &st);
+	metautils_pclose(&fd);
+	if (rc < 0) {
+		/* This is to prevent concurrent changes. */
+		sqlx_admin_inc_all_versions(sq3, 2);
+		sqlx_admin_save_lazy_tnx(sq3);
+		err = SYSERR("Failed to stat the database file: (%d) %s",
+				errno, strerror(errno));
+		goto close;
+	}
+	if (open_local || st.st_size > sqliterepo_dump_max_size) {
+asynchronous:
+		// Asynchronous resync
+		/* Do not explicitly open a transaction! A transaction would trigger
+		 * a synchronous replication, which would fail when the database is big.
+		 * Instead, we will trigger an asynchronous resync. */
+		sqlx_admin_set_i64(sq3, SQLX_ADMIN_LAST_VACUUM, oio_ext_real_seconds());
+		/* This is to prevent concurrent changes in case the resync is not
+		 * performed quickly enough. */
+		sqlx_admin_inc_all_versions(sq3, 2);
+		sqlx_admin_save_lazy_tnx(sq3);
+		if (!open_local) {
+			gchar **peers = NULL;
+			err = election_get_peers(sq3->manager, n, FALSE, &peers);
+			if (err) {
+				goto close;
+			}
+			/* Trigger the resync before unlocking the database, to increase
+			* the chance that the first request handled by the service after
+			* the current one is the DB_DUMP triggered by the resync.
+			* No-op if replication is not enabled. */
+			err = sqlx_remote_execute_RESYNC_many(peers, NULL, n,
+					oio_ext_get_deadline());
+			g_strfreev(peers);
+			if (err) {
+				goto close;
+			}
+		}
+	} else {
+		// Synchronous resync
+		struct sqlx_repctx_s *repctx = NULL;
+		err = sqlx_transaction_begin(sq3, &repctx);
+		if (err) {
+			GRID_WARN("Failed to begin a transaction "
+					"to do a synchronous resync after vacuum, "
+					"retrying with an asynchronous resync: (%d) %s",
+					err->code, err->message);
+			g_clear_error(&err);
+			goto asynchronous;
+		}
+		sqlx_admin_set_i64(sq3, SQLX_ADMIN_LAST_VACUUM, oio_ext_real_seconds());
+		sqlx_transaction_notify_huge_changes(repctx);
+		err = sqlx_transaction_end(repctx, err);
+		if (err) {
+			GRID_WARN("Failed to commit a transaction "
+					"to do a synchronous resync after vacuum, "
+					"retrying with an asynchronous resync: (%d) %s",
+					err->code, err->message);
+			g_clear_error(&err);
+			goto asynchronous;
+		}
+	}
+
+close:
+	sqlx_repository_unlock_and_close_noerror(sq3);
+	return err;
 }
