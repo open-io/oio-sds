@@ -2269,7 +2269,7 @@ _route_meta2_fetch(struct req_args_s *args, struct json_object *jbody,
 
 	if (err) {
 		g_string_free(response_list, TRUE);
-		return _reply_format_error(args->rp, err);
+		return _reply_common_error(args->rp, err);
 	}
 
 	return _reply_ok(args->rp, response_list);

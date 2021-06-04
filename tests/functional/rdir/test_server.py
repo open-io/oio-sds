@@ -744,9 +744,9 @@ class TestRdirServerMeta2Ops(RdirTestCase):
                          data='this is not json')
         self.assertEqual(resp.status, 400)
 
-        # The fetch fails (No JSON body)
+        # The fetch fails (database not found, no body is OK since 8.0.0)
         resp = self._get("/v1/rdir/meta2/fetch", params={'vol': self.vol})
-        self.assertEqual(resp.status, 400)
+        self.assertEqual(resp.status, 404)
 
     def test_meta2_delete_invalid_parameters(self):
         # delete without volume

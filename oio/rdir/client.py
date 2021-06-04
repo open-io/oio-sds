@@ -493,8 +493,13 @@ class RdirClient(HttpApi):
         except NotFound:
             raise VolumeException('No rdir assigned to volume %s' % volume_id)
 
-    def _make_uri(self, action, volume_id, reqid=None, service_type='rawx'):
-        rdir_hosts = self._get_rdir_addr(volume_id, reqid=reqid)
+    def _make_uri(self, action, volume_id, reqid=None, service_type='rawx',
+                  rdir_hosts=None):
+        if not rdir_hosts:
+            rdir_hosts = self._get_rdir_addr(volume_id, reqid=reqid)
+        else:
+            rdir_hosts = [self.cs.resolve_service_id('rdir', host)
+                          for host in rdir_hosts]
         all_uri = list()
         for rdir_host in rdir_hosts:
             all_uri.append('http://%s/v1/%s/%s' % (
@@ -505,7 +510,7 @@ class RdirClient(HttpApi):
     @ensure_headers
     @ensure_request_id
     def _rdir_request(self, volume, method, action, create=False, params=None,
-                      service_type='rawx', **kwargs):
+                      service_type='rawx', rdir_hosts=None, **kwargs):
         if params is None:
             params = dict()
         params['vol'] = volume
@@ -513,7 +518,8 @@ class RdirClient(HttpApi):
             params['create'] = '1'
         all_uri = self._make_uri(action, volume,
                                  reqid=kwargs['headers'][REQID_HEADER],
-                                 service_type=service_type)
+                                 service_type=service_type,
+                                 rdir_hosts=rdir_hosts)
 
         resp = ""
         body = ""
@@ -647,6 +653,35 @@ class RdirClient(HttpApi):
             if not truncated:
                 break
 
+    def chunk_copy_vol(self, volume_id, sources=None, dests=None,
+                       batch_size=1000, create=True, **kwargs):
+        """
+        Copy all chunks records from volume_id from one rdir to another.
+
+        :param volume_id: ID of a rawx service
+        :param sources: optional list of source rdir services
+            (will be fetched from the service directory if empty)
+        :param dests: optional list of destination rdir services
+            (will be fetched from the service directory if empty)
+        :param batch_size: size of record batches
+        :param create: whether to create the database on the destination
+        """
+        batch = list()
+        for cid, chunk, rec in self.chunk_fetch(volume_id,
+                                                rdir_hosts=sources,
+                                                **kwargs):
+            rec['container_id'] = cid
+            rec['chunk_id'] = chunk
+            batch.append(rec)
+
+            if len(batch) >= batch_size:
+                self._rdir_request(volume_id, 'POST', 'push', create=create,
+                                   json=batch, rdir_hosts=dests)
+                batch = list()
+        if batch:
+            self._rdir_request(volume_id, 'POST', 'push', create=create,
+                               json=batch, rdir_hosts=dests)
+
     def admin_incident_set(self, volume, date, **kwargs):
         body = {'date': int(float(date))}
         self._rdir_request(volume, 'POST', 'admin/incident',
@@ -758,10 +793,11 @@ class RdirClient(HttpApi):
         for key, value in kwargs.items():
             body[key] = value
 
-        return self._rdir_request(volume=volume_id, method='POST',
-                                  action='push', create=True, json=body,
-                                  service_type='meta2',
-                                  **kwargs)
+        res = self._rdir_request(volume=volume_id, method='POST',
+                                 action='push', create=True, json=body,
+                                 service_type='meta2',
+                                 **kwargs)
+        return res, body
 
     def _resolve_cid_to_path(self, cid):
         """
@@ -851,3 +887,32 @@ class RdirClient(HttpApi):
             marker_key=lambda x: x['records'][-1]['container_url'],
             **kwargs
         )
+
+    def meta2_copy_vol(self, volume_id, sources=None, dests=None,
+                       batch_size=1000, create=True, **kwargs):
+        """
+        Copy all meta2 records from volume_id from one rdir to another.
+
+        :param volume_id: ID of a meta2 service
+        :param sources: optional list of source rdir services
+            (will be fetched from the service directory if empty)
+        :param dests: optional list of destination rdir services
+            (will be fetched from the service directory if empty)
+        :param batch_size: size of record batches
+        :param create: whether to create the database on the destination
+        """
+        batch = list()
+        for rec in self.meta2_index_fetch_all(volume_id,
+                                              rdir_hosts=sources,
+                                              **kwargs):
+            batch.append(rec)
+
+            if len(batch) >= batch_size:
+                self._rdir_request(volume_id, 'POST', 'push', create=create,
+                                   json=batch, service_type='meta2',
+                                   rdir_hosts=dests)
+                batch = list()
+        if batch:
+            self._rdir_request(volume_id, 'POST', 'push', create=create,
+                               json=batch, service_type='meta2',
+                               rdir_hosts=dests)

@@ -18,8 +18,17 @@ import math
 import random
 from mock import MagicMock as Mock
 
+from oio.common.exceptions import NotFound
+from oio.common.utils import cid_from_name
 from oio.rdir.client import RdirClient
 from tests.utils import BaseTestCase, random_id
+
+
+def gen_to_list(func, *args, **kwargs):
+    """
+    Build a list from all elements from the generator returned by func.
+    """
+    return list(func(*args, **kwargs))
 
 
 class TestRdirClient(BaseTestCase):
@@ -34,18 +43,18 @@ class TestRdirClient(BaseTestCase):
         super(TestRdirClient, cls).tearDownClass()
         cls._service('@indexer', 'start')
 
-    def _push_chunks(self):
+    def _push_chunks(self, max_containers=4, max_objects=5, max_chunks=5):
         max_mtime = 16
         self.incident_date = random.randrange(2, max_mtime-1)
 
         expected_entries = list()
-        for _ in range(4):
+        for _ in range(max_containers):
             cid = random_id(64)
-            for i in range(random.randrange(2, 5)):
+            for i in range(random.randrange(2, max_objects)):
                 content_id = random_id(32)
                 content_path = "obj-%d" % i
                 content_ver = 1
-                for _ in range(random.randrange(2, 5)):
+                for _ in range(random.randrange(2, max_chunks)):
                     chunk_id = random_id(63)
                     mtime = random.randrange(0, max_mtime+1)
                     if mtime <= self.incident_date:
@@ -63,16 +72,43 @@ class TestRdirClient(BaseTestCase):
                     expected_entries.append(entry)
         self.expected_entries = sorted(expected_entries)
 
+    def _push_containers(self, max_containers=16):
+        mtime = 1  # don't care
+        for num in range(max_containers):
+            cname = 'cont-%d' % num
+            cid = cid_from_name(self.account, cname)
+            url = '/'.join((self.ns, self.account, cname))
+            _, rec = self.rdir.meta2_index_push(
+                self.meta2_id, url, cid, mtime)
+            rec['extra_data'] = None
+            self.expected_m2_entries.append(rec)
+        self.expected_m2_entries.sort(key=lambda x: x['container_url'])
+
     def setUp(self):
         super(TestRdirClient, self).setUp()
+        meta2_conf = random.choice(self.conf['services']['meta2'])
+        self.meta2_id = meta2_conf.get("service_id", meta2_conf["addr"])
         self.rawx_conf = random.choice(self.conf['services']['rawx'])
         self.rawx_id = self.rawx_conf.get('service_id', self.rawx_conf['addr'])
         self.rdir = RdirClient(self.conf)
         self.rdir.admin_clear(self.rawx_id, clear_all=True)
+        self.expected_entries = None
+        self.expected_m2_entries = list()
 
         self._push_chunks()
         self.rdir._direct_request = Mock(
             side_effect=self.rdir._direct_request)
+
+    def tearDown(self):
+        for entry in self.expected_m2_entries:
+            try:
+                self.rdir.meta2_index_delete(
+                    self.meta2_id,
+                    entry['container_url'],
+                    entry['container_id'])
+            except Exception:
+                pass
+        super(TestRdirClient, self).tearDown()
 
     def _assert_chunk_fetch(self, expected_entries, entries, limit=0):
         self.assertListEqual(expected_entries, list(entries))
@@ -462,3 +498,77 @@ class TestRdirClient(BaseTestCase):
         self._assert_chunk_status(
             expected_entries_cid[marker_index+1:], status,
             incident=True, max=2)
+
+    def test_chunk_db_copy_to(self):
+        """
+        Test the copy of all records from the assigned rdir service
+        to another one.
+        """
+        all_rdir = self.conscience.all_services('rdir', False)
+        my_rdir = self.rdir._get_rdir_addr(self.rawx_id)
+        candidates = [r['id'] for r in all_rdir
+                      if r['addr'] not in my_rdir]
+
+        dest = candidates[0]
+        self.assertRaises(NotFound,
+                          gen_to_list,
+                          self.rdir.chunk_fetch,
+                          self.rawx_id,
+                          limit=1,
+                          max_attempts=1,
+                          rdir_hosts=(dest,))
+
+        self.rdir.chunk_copy_vol(self.rawx_id, dests=(dest,))
+
+        all_recs = gen_to_list(self.rdir.chunk_fetch,
+                               self.rawx_id,
+                               max_attempts=1,
+                               rdir_hosts=(dest,))
+        all_recs.sort()
+        self.assertListEqual(self.expected_entries, all_recs)
+
+    def test_meta2_db_copy_to(self):
+        """
+        Test the copy of all records from the assigned rdir service
+        to another one.
+        """
+        self._push_containers()
+
+        all_rdir = self.conscience.all_services('rdir', False)
+        my_rdir = self.rdir._get_rdir_addr(self.meta2_id)
+        candidates = [r['id'] for r in all_rdir
+                      if r['addr'] not in my_rdir]
+
+        dests = candidates[0:1]
+        self.assertRaises(NotFound,
+                          gen_to_list,
+                          self.rdir.meta2_index_fetch_all,
+                          self.meta2_id,
+                          limit=1,
+                          max_attempts=1,
+                          rdir_hosts=dests)
+
+        self.rdir.meta2_copy_vol(self.meta2_id, dests=dests)
+
+        # There may be some records we have not put ourselves,
+        # do not rely on self.expected_m2_entries
+        expected_recs = gen_to_list(self.rdir.meta2_index_fetch_all,
+                                    self.meta2_id)
+        all_recs = gen_to_list(self.rdir.meta2_index_fetch_all,
+                               self.meta2_id,
+                               rdir_hosts=dests)
+        all_recs.sort(key=lambda x: x['container_url'])
+        expected_recs.sort(key=lambda x: x['container_url'])
+        self.assertListEqual(expected_recs, all_recs)
+
+        # FIXME(FVE): also remove the database!
+        # Unfortunately there is no request to do that :-(
+        for entry in self.expected_m2_entries:
+            try:
+                self.rdir.meta2_index_delete(
+                    self.meta2_id,
+                    entry['container_url'],
+                    entry['container_id'],
+                    rdir_hosts=dests)
+            except Exception:
+                pass
