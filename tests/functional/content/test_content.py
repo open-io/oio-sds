@@ -271,9 +271,13 @@ class TestContentFactory(BaseTestCase):
         new_chunk_hash = md5_stream(new_chunk_stream)
 
         self.assertEqual(new_chunk_hash, chunk_hash)
+        self.assertGreaterEqual(new_chunk_meta['chunk_mtime'],
+                                chunk_meta['chunk_mtime'])
 
         del chunk_meta["chunk_id"]
         del new_chunk_meta["chunk_id"]
+        del chunk_meta["chunk_mtime"]
+        del new_chunk_meta["chunk_mtime"]
         self.assertEqual(new_chunk_meta, chunk_meta)
 
     def test_single_move_chunk(self):

@@ -876,7 +876,7 @@ class TestEC(unittest.TestCase):
             self.assertEqual(len(conn_record), nb - 1)
 
     def test_rebuild_with_wrong_chunk_size(self):
-        test_data = ('1234' * self.storage_method.ec_segment_size)[:-777]
+        test_data = (b'1234' * self.storage_method.ec_segment_size)[:-777]
         ec_chunks = self._make_ec_chunks(test_data)
         missing_chunk_body = ec_chunks.pop(1)
         meta_chunk = self.meta_chunk()
@@ -903,7 +903,7 @@ class TestEC(unittest.TestCase):
             expected_chunk_size, stream = handler.rebuild()
             if expected_chunk_size is not None:
                 self.assertEqual(expected_chunk_size, len(missing_chunk_body))
-            result = ''.join(stream)
+            result = b''.join(stream)
             self.assertEqual(len(result), len(missing_chunk_body))
             self.assertEqual(self.checksum(result).hexdigest(),
                              self.checksum(missing_chunk_body).hexdigest())

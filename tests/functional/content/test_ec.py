@@ -183,6 +183,10 @@ class TestECContent(BaseTestCase):
                              old_info[pos]["dl_hash"])
             self.assertEqual(c.checksum, old_info[pos]["hash"])
             self.assertNotEqual(c.url, old_info[pos]["url"])
+            self.assertGreaterEqual(rebuilt_meta['chunk_mtime'],
+                                    old_info[pos]['dl_meta']['chunk_mtime'])
+            del old_info[pos]["dl_meta"]["chunk_mtime"]
+            del rebuilt_meta["chunk_mtime"]
             del old_info[pos]["dl_meta"]["chunk_id"]
             del rebuilt_meta["chunk_id"]
             self.assertEqual(rebuilt_meta, old_info[pos]["dl_meta"])

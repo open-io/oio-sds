@@ -20,18 +20,20 @@ from oio.common.logger import get_logger
 class XcuteJobStatus(object):
     """Enum class for job type names."""
 
+    ON_HOLD = 'ON_HOLD'
     WAITING = 'WAITING'
     RUNNING = 'RUNNING'
     PAUSED = 'PAUSED'
-    FINISHED = 'FINISHED'
     FAILED = 'FAILED'
+    FINISHED = 'FINISHED'
 
     ALL = (
+        ON_HOLD,
         WAITING,
         RUNNING,
         PAUSED,
-        FINISHED,
-        FAILED
+        FAILED,
+        FINISHED
     )
 
 

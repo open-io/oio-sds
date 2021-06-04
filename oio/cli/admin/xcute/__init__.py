@@ -38,6 +38,15 @@ class XcuteRdirCommand(XcuteCommand, ShowOne):
         parser = super(XcuteRdirCommand, self).get_parser(prog_name)
 
         parser.add_argument(
+            '--put-on-hold-if-locked',
+            default=False,
+            help="""
+                If the lock is already used,
+                put the job on hold until the lock is released.
+                """,
+            action='store_true')
+
+        parser.add_argument(
             '--rdir-fetch-limit', type=int,
             help='Maximum number of entries returned in each rdir response. '
                  '(default=%d)'
@@ -57,6 +66,7 @@ class XcuteRdirCommand(XcuteCommand, ShowOne):
 
         job_config = self.get_job_config(parsed_args)
         job_info = self.xcute.job_create(
-            self.JOB_CLASS.JOB_TYPE, job_config=job_config)
+            self.JOB_CLASS.JOB_TYPE, job_config=job_config,
+            put_on_hold_if_locked=parsed_args.put_on_hold_if_locked)
         return zip(*sorted(
             flat_dict_from_dict(parsed_args, job_info).items()))

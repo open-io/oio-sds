@@ -1,6 +1,6 @@
 cliff>=2.0.0,!=2.1.0,!=2.18.0,<3.0.0
 cmd2<0.9
-eventlet>=0.18.2,!=0.18.3,!=0.20.1,!=0.21.0,<1.0.0
+eventlet>=0.18.2,!=0.18.3,!=0.20.1,!=0.21.0,<0.30.3  # From 0.30.3, compatibility problem with gunicorn
 gunicorn>=19.4.5,<20.0.0
 lxml<5.0.0
 oiozookeeper>3.5.5

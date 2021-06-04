@@ -1,5 +1,5 @@
 apache2
-apache2-dev
+asn1c
 attr
 beanstalkd
 bison
@@ -23,7 +23,6 @@ libsqlite3-dev
 libzmq3-dev
 libzookeeper-mt-dev
 locales
-openio-asn1c
 openio-gridinit
 python
 python-coverage

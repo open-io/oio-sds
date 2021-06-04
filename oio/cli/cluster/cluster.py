@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -79,13 +80,18 @@ class ClusterList(Lister):
         return parser
 
     def _list_services(self, parsed_args):
+        req_count = 0
+        reqid = self.app.request_id('CLI-list-%d' % req_count)
         if not parsed_args.srv_types:
+            req_count += 1
             parsed_args.srv_types = \
-                    self.app.client_manager.conscience.service_types()
+                self.app.client_manager.conscience.service_types(reqid=reqid)
         for srv_type in parsed_args.srv_types:
+            reqid = self.app.request_id('CLI-list-%d' % req_count)
+            req_count += 1
             try:
                 data = self.app.client_manager.conscience.all_services(
-                    srv_type, parsed_args.stats)
+                    srv_type, parsed_args.stats, reqid=reqid)
             except OioException as exc:
                 self.success = False
                 self.log.error("Failed to list services of type %s: %s",
@@ -193,10 +199,14 @@ class ClusterUnlock(Lister):
             srv_definitions.append(
                 self.app.client_manager.conscience.get_service_definition(
                     parsed_args.srv_type, srv_id))
+        req_count = 0
         for batch in _bounded_batches(srv_definitions):
+            reqid = self.app.request_id('CLI-unlock-%d' % req_count)
+            req_count += 1
             result = "unlocked"
             try:
-                self.app.client_manager.conscience.unlock_score(batch)
+                self.app.client_manager.conscience.unlock_score(
+                    batch, reqid=reqid)
             except Exception as exc:
                 self.success = False
                 result = str(exc)
@@ -225,13 +235,19 @@ class ClusterUnlockAll(Lister):
         return parser
 
     def _unlock_all_services(self, parsed_args):
+        reqid = self.app.request_id('CLI-unlock-0')
         srv_types = parsed_args.srv_types
         if not parsed_args.srv_types:
-            srv_types = self.app.client_manager.conscience.service_types()
+            srv_types = self.app.client_manager.conscience.service_types(
+                reqid=reqid)
+        req_count = 0
         for srv_type in srv_types:
+            req_count += 1
+            reqid = self.app.request_id('CLI-unlock-%d' % req_count)
             try:
                 srv_definitions = \
-                    self.app.client_manager.conscience.all_services(srv_type)
+                    self.app.client_manager.conscience.all_services(
+                        srv_type, reqid=reqid)
             except OioException as exc:
                 self.success = False
                 self.log.error("Failed to list services of type %s: %s",
@@ -240,9 +256,12 @@ class ClusterUnlockAll(Lister):
             for srv_definition in srv_definitions:
                 srv_definition['type'] = srv_type
             for batch in _bounded_batches(srv_definitions):
+                req_count += 1
+                reqid = self.app.request_id('CLI-unlock-%d' % req_count)
                 result = "unlocked"
                 try:
-                    self.app.client_manager.conscience.unlock_score(batch)
+                    self.app.client_manager.conscience.unlock_score(
+                        batch, reqid=reqid)
                 except Exception as exc:
                     self.success = False
                     result = str(exc)
@@ -312,13 +331,15 @@ class ClusterWait(Lister):
         ko = -1
         exc_msg = ("Timeout ({0}s) while waiting for the services to get a "
                    "score >= {1}, {2}")
+        req_count = 0
 
-        def maybe_unlock(allsrv):
+        def maybe_unlock(allsrv, reqid=None):
             if not parsed_args.unlock:
                 return
             if not allsrv:
                 return
-            self.app.client_manager.conscience.unlock_score(allsrv)
+            self.app.client_manager.conscience.unlock_score(
+                allsrv, reqid=reqid)
 
         def check_deadline():
             if now() > deadline:
@@ -342,8 +363,11 @@ class ClusterWait(Lister):
                 check_deadline()
                 sleep(next(interval))
 
+                reqid = self.app.request_id('CLI-wait-%d' % req_count)
+                req_count += 1
                 try:
-                    types = self.app.client_manager.conscience.service_types()
+                    types = self.app.client_manager.conscience.service_types(
+                        reqid=reqid)
                     break
                 except OioNetworkException as exc:
                     self.log.debug("Proxy error: %s", exc)
@@ -353,7 +377,9 @@ class ClusterWait(Lister):
         interval = _sleep_interval(0.0, 1.0, 2.0, 4.0)
         while True:
             check_deadline()
-            maybe_unlock(descr)
+            reqid = self.app.request_id('CLI-wait-%d' % req_count)
+            req_count += 1
+            maybe_unlock(descr, reqid=reqid)
             sleep(next(interval))
 
             descr = []

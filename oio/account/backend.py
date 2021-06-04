@@ -24,7 +24,8 @@ from oio.common.constants import BUCKET_PROP_REPLI_ENABLED
 from oio.common.timestamp import Timestamp
 from oio.common.easy_value import int_value, boolean_value, float_value, \
     debinarize
-from oio.common.redis_conn import RedisConnection, catch_service_errors
+from oio.common.redis_conn import RedisConnection, catch_service_errors, \
+    catch_io_errors
 
 
 END_MARKER = u"\U0010fffd"
@@ -678,6 +679,7 @@ class AccountBackend(RedisConnection):
         return binfo
 
     @catch_service_errors
+    @catch_io_errors
     def get_container_info(self, account_id, cname, **kwargs):
         """
         Get all available information about a container, including some
@@ -784,6 +786,7 @@ class AccountBackend(RedisConnection):
         return debinarize(accounts)
 
     @catch_service_errors
+    @catch_io_errors
     def update_container(self, account_id, name, mtime, dtime,
                          object_count, bytes_used,
                          damaged_objects, missing_chunks,
@@ -992,6 +995,7 @@ class AccountBackend(RedisConnection):
         return status
 
     @catch_service_errors
+    @catch_io_errors
     def refresh_bucket(self, bucket_name, **kwargs):
         """
         Refresh the counters of a bucket. Recompute them from the counters
@@ -1027,6 +1031,7 @@ class AccountBackend(RedisConnection):
             raise
 
     @catch_service_errors
+    @catch_io_errors
     def refresh_account(self, account_id, **kwargs):
         if not account_id:
             raise BadRequest("Missing account")
@@ -1044,6 +1049,7 @@ class AccountBackend(RedisConnection):
                 raise
 
     @catch_service_errors
+    @catch_io_errors
     def flush_account(self, account_id, **kwargs):
         if not account_id:
             raise BadRequest("Missing account")

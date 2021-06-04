@@ -191,6 +191,11 @@ class TestPlainContent(BaseTestCase):
                              rebuild_chunk_info["dl_hash"])
             self.assertEqual(c.checksum, rebuild_chunk_info["hash"])
             self.assertThat(c.url, NotEquals(rebuild_chunk_info["url"]))
+            self.assertGreaterEqual(
+                meta['chunk_mtime'],
+                rebuild_chunk_info['dl_meta']['chunk_mtime'])
+            del meta["chunk_mtime"]
+            del rebuild_chunk_info["dl_meta"]["chunk_mtime"]
             del meta["chunk_id"]
             del rebuild_chunk_info["dl_meta"]["chunk_id"]
             self.assertEqual(meta, rebuild_chunk_info["dl_meta"])
