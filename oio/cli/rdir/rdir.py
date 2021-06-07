@@ -14,6 +14,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+from argparse import ArgumentError
 from logging import getLogger
 from six import iteritems
 
@@ -232,3 +233,54 @@ class RdirReassign(Lister):
                 read_timeout=90.0)
         return _format_assignments(all_services,
                                    parsed_args.service_type.capitalize())
+
+
+class RdirCopyBase(Lister):
+    """
+    Copy one database from an rdir service to another.
+
+    Specify either '--source' or '--dest'. The destination (resp. the source)
+    will be searched in the service directory (meta1). You can specify
+    both to avoid querying the directory.
+    """
+
+    log = getLogger(__name__ + '.RdirBootstrap')
+
+    def get_parser(self, prog_name):
+        parser = super(RdirCopyBase, self).get_parser(prog_name)
+
+        # TODO(FVE): autodetect type
+        parser.add_argument(
+            "service_type",
+            choices=('rawx', 'meta2'),
+            help="The type of service the database belongs to.")
+        parser.add_argument(
+            "service_id",
+            help=("The ID of the service the database belongs to (may be an "
+                  "IP address and a port)."))
+
+        parser.add_argument(
+            "--source", action="append",
+            help="ID of the rdir service to copy from.")
+        parser.add_argument(
+            "--dest", "--destination", action="append",
+            help="ID of the rdir service to copy to.")
+
+        return parser
+
+    def take_action(self, parsed_args):
+        if not (parsed_args.source or parsed_args.dest):
+            raise ArgumentError(parsed_args.source,
+                                "Must specify a source or a destination.")
+
+        reqid = self.app.request_id("ACLI-")
+        copy_func = {
+            'meta2': self.app.client_manager.rdir.meta2_copy_vol,
+            'rawx': self.app.client_manager.rdir.chunk_copy_vol,
+        }
+        copy_func[parsed_args.service_type](
+            parsed_args.service_id,
+            sources=parsed_args.source,
+            dests=parsed_args.dest,
+            reqid=reqid)
+        return ('Status', ), [('OK', )]
