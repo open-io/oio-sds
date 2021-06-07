@@ -19,7 +19,9 @@ License along with this library.
 */
 
 #include <errno.h>
+#include <sys/types.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 
 #include <glib.h>
 #include <sqlite3.h>
@@ -2015,11 +2017,14 @@ static gboolean
 _handler_VACUUM(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
+	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
+	struct sqlx_repctx_s *repctx = NULL;
 	struct sqlx_name_inline_s name;
 	NAME2CONST(n0, name);
-	GError *err = NULL;
 	guint32 flags = 0;
+	int rc = 0, fd = -1;
+	struct stat st;
 
 	if (NULL != (err = _load_sqlx_name(reply, &name, &flags))) {
 		reply->send_error(0, err);
@@ -2029,40 +2034,82 @@ _handler_VACUUM(struct gridd_reply_ctx_s *reply,
 	const enum sqlx_open_type_e how = (flags & FLAG_LOCAL)
 		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERONLY;
 	err = sqlx_repository_open_and_lock(repo, &n0, how, &sq3, NULL);
-	if (err)
-		goto label_exit;
+	if (err) {
+		goto end;
+	}
+	EXTRA_ASSERT(sq3 != NULL);
 
-	gchar **peers = NULL;
-	if (!(flags & FLAG_LOCAL)) {
-		err = election_get_peers(sq3->manager, &n0, FALSE, &peers);
+	sqlx_exec(sq3->db, "VACUUM");
+
+	fd = open(sq3->path_inline, O_RDONLY);
+	if (fd < 0) {
+		err = SYSERR("Failed to open the database file: (%d) %s",
+				errno, strerror(errno));
+		goto close;
+	}
+	rc = fstat(fd, &st);
+	metautils_pclose(&fd);
+	if (rc < 0) {
+		err = SYSERR("Failed to stat the database file: (%d) %s",
+				errno, strerror(errno));
+		goto close;
+	}
+	if ((flags & FLAG_LOCAL) || st.st_size > sqliterepo_dump_max_size) {
+asynchronous:
+		// Asynchronous resync
+		/* Do not explicitly open a transaction! A transaction would trigger
+		 * a synchronous replication, which would fail when the database is big.
+		 * Instead, we will trigger an asynchronous resync. */
+		sqlx_admin_set_i64(sq3, SQLX_ADMIN_LAST_VACUUM, oio_ext_real_seconds());
+		/* This is to prevent concurrent changes in case the resync is not
+		 * performed quickly enough. */
+		sqlx_admin_inc_all_versions(sq3, 2);
+		sqlx_admin_save_lazy_tnx(sq3);
+		if (!(flags & FLAG_LOCAL)) {
+			gchar **peers = NULL;
+			err = election_get_peers(sq3->manager, &n0, FALSE, &peers);
+			if (err) {
+				goto close;
+			}
+			/* Trigger the resync before unlocking the database, to increase
+			* the chance that the first request handled by the service after
+			* the current one is the DB_DUMP triggered by the resync.
+			* No-op if replication is not enabled. */
+			err = sqlx_remote_execute_RESYNC_many(peers, NULL, &n0,
+					oio_ext_get_deadline());
+			g_strfreev(peers);
+			if (err) {
+				goto close;
+			}
+		}
+	} else {
+		// Synchronous resync
+		err = sqlx_transaction_begin(sq3, &repctx);
 		if (err) {
-			goto label_exit;
+			GRID_WARN("Failed to begin a transaction "
+					"to do a synchronous resync after vacuum, "
+					"retrying with an asynchronous resync: (%d) %s",
+					err->code, err->message);
+			g_clear_error(&err);
+			goto asynchronous;
+		}
+		sqlx_admin_set_i64(sq3, SQLX_ADMIN_LAST_VACUUM, oio_ext_real_seconds());
+		sqlx_transaction_notify_huge_changes(repctx);
+		err = sqlx_transaction_end(repctx, err);
+		if (err) {
+			GRID_WARN("Failed to commit a transaction "
+					"to do a synchronous resync after vacuum, "
+					"retrying with an asynchronous resync: (%d) %s",
+					err->code, err->message);
+			g_clear_error(&err);
+			goto asynchronous;
 		}
 	}
 
-	/* Do not explicitly open a transaction! A transaction would trigger
-	 * a synchronous replication, which would fail when the database is big.
-	 * Instead, we will trigger an asyncronous resync. */
-	sqlx_admin_set_i64(sq3, SQLX_ADMIN_LAST_VACUUM, oio_ext_real_seconds());
-	/* This is to prevent concurrent changes in case the resync is not
-	 * performed quickly enough. */
-	sqlx_admin_inc_all_versions(sq3, 2);
-	sqlx_admin_save_lazy_tnx(sq3);
-	sqlx_exec(sq3->db, "VACUUM");
-
-	if (!(flags & FLAG_LOCAL)) {
-		/* Trigger the resync before unlocking the database, to increase
-		 * the chance that the first request handled by the service after
-		 * the current one is the DB_DUMP triggered by the resync.
-		 * No-op if replication is not enabled. */
-		err = sqlx_remote_execute_RESYNC_many(
-				peers, NULL, &n0, oio_ext_get_deadline());
-		g_strfreev(peers);
-	}
-
+close:
 	sqlx_repository_unlock_and_close_noerror(sq3);
 
-label_exit:
+end:
 	if (err) {
 		reply->send_error(0, err);
 	} else {

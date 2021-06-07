@@ -96,6 +96,10 @@ class TestAdmin(BaseTestCase):
             nprops = self.admin.get_properties(
                 "meta2", account=self.account, reference=self.container,
                 service_id=peer)
-            self.assertGreater(nprops['system']['version:main.admin'],
-                               props['system']['version:main.admin'])
+            if len(peers) > 1:  # replication
+                self.assertGreater(nprops['system']['version:main.admin'],
+                                   props['system']['version:main.admin'])
+            else:
+                self.assertEqual(nprops['system']['version:main.admin'],
+                                 props['system']['version:main.admin'])
             self.assertIn('sys.last_vacuum', nprops['system'])
