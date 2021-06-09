@@ -58,7 +58,7 @@ class TestContentRebuildFilter(BaseTestCase):
         bt.drain_tube(BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE,
                       timeout=0.5)
         bt.close()
-        self.wait_for_score(('rawx', ))
+        self.wait_for_score(('rawx', 'meta2'), score_threshold=2, timeout=5.0)
 
     def _create_event(self, content_name, present_chunks, missing_chunks,
                       content_id):

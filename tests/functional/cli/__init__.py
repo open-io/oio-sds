@@ -113,6 +113,13 @@ class CliTestCase(BaseTestCase):
         if expected != actual:
             raise Exception("'" + expected + "' != '" + actual + "'")
 
+    def setUp(self):
+        super(CliTestCase, self).setUp()
+        # Our CLI heavy on CPU usage, making scores go down. To prevent tests
+        # from failing because of low scores, it seems a good idea to check
+        # them before each test.
+        self.wait_for_score(('rawx', 'meta2'), score_threshold=2, timeout=5.0)
+
     def assert_list_output(self, expected_list, actual_output):
         self.assertListEqual(
             sorted(expected_list),

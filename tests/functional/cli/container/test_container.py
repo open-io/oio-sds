@@ -253,7 +253,7 @@ class ContainerTest(CliTestCase):
         output = self.openio('container snapshot ' + cid_opt + cname + opts)
         output = self.json_loads(output)[0]
         self.assertEqual(output['Status'], "OK")
-        # Snapshot should reply Missing container on non existant container
+        # Snapshot should reply Missing container on non existent container
         self.assertRaises(CommandFailed,
                           self.openio,
                           ('container snapshot Should_not_exist' + opts))
