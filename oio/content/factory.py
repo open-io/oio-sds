@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -32,7 +33,8 @@ class ContentFactory(object):
         self.logger = logger or get_logger(conf)
         self.container_client = container_client or \
             ContainerClient(conf, logger=self.logger, **kwargs)
-        self.blob_client = blob_client or BlobClient(conf, **kwargs)
+        self.blob_client = blob_client or \
+            BlobClient(conf, logger=self.logger, **kwargs)
 
     def _get(self, container_id, meta, chunks,
              account=None, container_name=None, **kwargs):

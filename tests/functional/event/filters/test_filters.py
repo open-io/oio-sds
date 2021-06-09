@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,7 +17,6 @@
 # License along with this library.
 
 import time
-import subprocess
 from random import choice
 from six.moves.urllib_parse import quote
 from oio.account.client import AccountClient
@@ -96,11 +96,11 @@ class TestContentRebuildFilter(BaseTestCase):
         return True
 
     def _rebuild(self, event, job_id=0):
-        self.blob_rebuilder = subprocess.Popen(
-                    ['oio-blob-rebuilder', self.ns,
-                     '--beanstalkd=' + self.queue_url])
-        time.sleep(3)
-        self.blob_rebuilder.kill()
+        bt = Beanstalk.from_url(self.conf['queue_url'])
+        bt.wait_until_empty(BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE,
+                            timeout=0.5)
+        bt.close()
+        time.sleep(2)
 
     def _remove_chunks(self, chunks, content_id):
         if not chunks:

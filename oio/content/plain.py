@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,13 +14,14 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import sys
+from six import reraise
 
 from oio.api.replication import ReplicatedWriteHandler
 from oio.common.storage_functions import _sort_chunks, fetch_stream
 from oio.common.storage_method import STORAGE_METHODS
 from oio.content.content import Content, Chunk
-from oio.common import exceptions as exc
-from oio.common.exceptions import UnrecoverableContent
+from oio.common.exceptions import Conflict, OrphanChunk, UnrecoverableContent
 from oio.common.storage_functions import _get_weighted_random_score
 from oio.common.utils import group_chunk_errors
 
@@ -59,7 +61,7 @@ class PlainContent(Content):
             candidates = candidates.filter(host=service_id)
         current_chunk = candidates.one()
         if current_chunk is None and chunk_pos is None:
-            raise exc.OrphanChunk("Chunk not found in content")
+            raise OrphanChunk("Chunk not found in content")
         if chunk_pos is None:
             chunk_pos = current_chunk.pos
 
@@ -98,16 +100,52 @@ class PlainContent(Content):
         errors = list()
         for src in duplicate_chunks:
             try:
-                self.blob_client.chunk_copy(
-                    src.url, spare_url, chunk_id=chunk_id,
-                    fullpath=self.full_path, cid=self.container_id,
-                    path=self.path, version=self.version,
-                    content_id=self.content_id)
+                first = True
+                while True:
+                    try:
+                        self.blob_client.chunk_copy(
+                            src.url, spare_url, chunk_id=chunk_id,
+                            fullpath=self.full_path, cid=self.container_id,
+                            path=self.path, version=self.version,
+                            content_id=self.content_id)
+                        break
+                    except Conflict as exc:
+                        if not first:
+                            raise
+                        storage_method = STORAGE_METHODS.load(
+                            self.chunk_method)
+                        if len(duplicate_chunks) \
+                                > storage_method.expected_chunks - 2:
+                            raise
+                        # Now that chunk IDs are predictable,
+                        # it is possible to have conflicts
+                        # with another chunk being rebuilt at the same time.
+                        exc_info = sys.exc_info()
+                        first = False
+                        self.logger.warning(
+                            'The chunk destination is already used '
+                            'by another chunk, '
+                            'retrying to use another destination: %s', exc)
+                        try:
+                            chunk_notin = current_chunk.raw().copy()
+                            chunk_notin['url'] = spare_url
+                            chunks_notin = duplicate_chunks + [
+                                Chunk(chunk_notin)]
+                            spare_urls, _quals = self._get_spare_chunk(
+                                chunks_notin, broken_list,
+                                position=current_chunk.pos)
+                            spare_url = spare_urls[0]
+                            continue
+                        except Exception as exc2:
+                            self.logger.warning(
+                                'Failed to find another destination: %s',
+                                exc2)
+                        reraise(exc_info[0], exc_info[1], exc_info[2])
                 self.logger.debug('Chunk copied from %s to %s, registering it',
                                   src.url, spare_url)
                 break
             except Exception as err:
-                self.logger.warn(
+                self.logger.warning(
                     "Failed to copy chunk from %s to %s: %s %s", src.url,
                     spare_url, type(err), err)
                 errors.append((src.url, err))

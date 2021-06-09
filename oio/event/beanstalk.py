@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -605,17 +606,14 @@ class Beanstalk(object):
         """
         Wait until the the specified tube is empty, or the timeout expires.
         """
-        # TODO(FVE): check tube stats to ensure some jobs have passed through
-        # and then get rid of the initial_delay
-        # peek-ready requires "use", not "watch"
-        self.use(tube)
+        deadline = time.time() + timeout
         if initial_delay > 0.0:
             time.sleep(initial_delay)
-        job_id, _ = self.peek_ready()
-        deadline = time.time() + timeout
-        while job_id is not None and time.time() < deadline:
+        stats = self.stats_tube(tube)
+        while (stats['current-jobs-ready'] or stats['current-jobs-reserved']) \
+                and time.time() < deadline:
             time.sleep(poll_interval)
-            job_id, _ = self.peek_ready()
+            stats = self.stats_tube(tube)
 
     def wait_for_ready_job(self, tube, timeout=float('inf'),
                            poll_interval=0.2):

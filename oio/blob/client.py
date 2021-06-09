@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -119,7 +120,8 @@ class BlobClient(object):
                         else 'chunk_hash']
         writer = ReplicatedMetachunkWriter(
             meta, [chunk], FakeChecksum(checksum),
-            storage_method, quorum=1, perfdata=self.perfdata)
+            storage_method, quorum=1, perfdata=self.perfdata,
+            logger=self.logger)
         bytes_transferred, chunk_hash, _ = writer.stream(data, None)
         return bytes_transferred, chunk_hash
 

@@ -87,7 +87,7 @@ class Content(object):
         self.chunks = ChunksHelper(chunks)
         self.storage_method = storage_method
         self.logger = logger or get_logger(self.conf)
-        self.blob_client = (blob_client or BlobClient(conf))
+        self.blob_client = blob_client or BlobClient(conf, logger=self.logger)
         self.container_client = (container_client
                                  or ContainerClient(self.conf,
                                                     logger=self.logger))
@@ -165,7 +165,7 @@ class Content(object):
                     bal = ensure_better_chunk_qualities(chunks_broken, quals)
                 break
             except (exc.ClientException, exc.SpareChunkException) as err:
-                self.logger.info(
+                self.logger.warning(
                     "Failed to find spare chunk (attempt %d/%d): %s",
                     attempt + 1, max_attempts, err)
                 last_exc = err
