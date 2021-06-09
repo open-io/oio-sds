@@ -109,7 +109,7 @@ jobs:
     - script:
         - source ~/.gimme/envs/latest.env
         - ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=rebuilder,with-service-id,zlib,predictible-chunk-ids
+      env: TEST_SUITE=rebuilder,with-service-id,zlib,predictable-chunk-ids
       python: 3.6
     - script:
         - source ~/.gimme/envs/latest.env
@@ -119,17 +119,17 @@ jobs:
     - script:
         - source ~/.gimme/envs/latest.env
         - ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=ec,with-service-id,predictible-chunk-ids
+      env: TEST_SUITE=ec,with-service-id,predictable-chunk-ids
       python: 3.6
     - script:
         - source ~/.gimme/envs/latest.env
         - ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=3copies,with-service-id,predictible-chunk-ids
+      env: TEST_SUITE=3copies,with-service-id,predictable-chunk-ids
       python: 3.6
     - script:
         - source ~/.gimme/envs/latest.env
         - ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=mover,with-service-id,predictible-chunk-ids
+      env: TEST_SUITE=mover,with-service-id,predictable-chunk-ids
       python: 3.6
 
     - stage: Functional tests (Python 2)
@@ -144,7 +144,7 @@ jobs:
     - script:
         - source ~/.gimme/envs/latest.env
         - ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=3copies,with-service-id,predictible-chunk-ids
+      env: TEST_SUITE=3copies,with-service-id,predictable-chunk-ids
     - script:
         - source ~/.gimme/envs/latest.env
         - ./tools/oio-travis-suites.sh

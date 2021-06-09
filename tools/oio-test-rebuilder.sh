@@ -424,7 +424,7 @@ openioadmin_rawx_rebuild()
     IFS=$'\n'
     for CHUNK_URL in ${CHUNK_URLS}; do
       # Cannot check if the URL is different: it may be the same since we
-      # generate predictible chunk IDs.
+      # generate predictable chunk IDs.
       #if [ "${CHUNK_URL##*/}" = "${CHUNK_ID}" ]; then
       #  echo >&2 "${CHUNK}: (${CHUNK_URL}) meta2 not updated for rawx ${RAWX_ID_TO_REBUILD}"
       #  FAIL=true
