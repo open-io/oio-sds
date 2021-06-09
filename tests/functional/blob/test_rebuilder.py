@@ -101,7 +101,7 @@ class TestBlobRebuilder(BaseTestCase):
                 new_chunk = c
 
         # Cannot check if the URL is different: it may be the same since we
-        # generate predictible chunk IDs.
+        # generate predictable chunk IDs.
         # self.assertNotEqual(chunk['real_url'], new_chunk['real_url'])
         # self.assertNotEqual(chunk['url'], new_chunk['url'])
         self.assertEqual(chunk['pos'], new_chunk['pos'])
@@ -117,7 +117,7 @@ class TestBlobRebuilder(BaseTestCase):
                                    self.version, self.content_id)
         self.assertEqual(fullpath, new_chunk_headers['full_path'])
         del new_chunk_headers['full_path']
-        # Since we generate predictible chunk IDs, they can be equal
+        # Since we generate predictable chunk IDs, they can be equal
         # self.assertNotEqual(chunk_headers['chunk_id'],
         #                     new_chunk_headers['chunk_id'])
         # We could compare the modification time of the chunks,

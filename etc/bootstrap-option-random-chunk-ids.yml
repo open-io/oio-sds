@@ -1,0 +1,4 @@
+config:
+  core.lb.generate_random_chunk_ids: true
+  meta2.store_chunk_ids: true
+

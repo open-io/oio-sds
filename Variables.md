@@ -184,7 +184,7 @@ Used by `gcc`
 
 > Generate random, 64 bytes long chunk IDs. If set to false, the chunk IDs will be generated from the container and object names, object version and storage policy, and chunk position.
 
- * default: **TRUE**
+ * default: **FALSE**
  * type: gboolean
  * cmake directive: *OIO_CORE_LB_GENERATE_RANDOM_CHUNK_IDS*
 
@@ -550,7 +550,7 @@ Used by `gcc`
 
 > Should the meta2 store complete chunk IDs (URL) or just store service IDs. If this is set to false, core.lb.generate_random_chunk_ids should be set to false also.
 
- * default: **TRUE**
+ * default: **FALSE**
  * type: gboolean
  * cmake directive: *OIO_META2_STORE_CHUNK_IDS*
 

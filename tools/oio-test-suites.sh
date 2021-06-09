@@ -218,9 +218,6 @@ func_tests () {
 	if is_running_test_suite "with_tls"; then
 		args="${args} -f ${SRCDIR}/etc/bootstrap-option-tls.yml"
 	fi
-	if is_running_test_suite "predictible-chunk-ids"; then
-		args="${args} -f ${SRCDIR}/etc/bootstrap-option-predictible-chunk-ids.yml"
-	fi
 	$OIO_RESET ${args} -N $OIO_NS $@
 
 	test_proxy_forward
@@ -411,9 +408,6 @@ func_tests_rebuilder_mover () {
 	fi
 	if is_running_test_suite "with-random-service-id"; then
 		args="${args} -R"
-	fi
-	if is_running_test_suite "predictible-chunk-ids"; then
-		args="${args} -f ${SRCDIR}/etc/bootstrap-option-predictible-chunk-ids.yml"
 	fi
 	$OIO_RESET ${args} -N $OIO_NS $@
 

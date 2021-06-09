@@ -92,15 +92,15 @@ jobs:
       script:
         - source ~/.gimme/envs/latest.env
         - ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=rebuilder,with-service-id,zlib,predictible-chunk-ids
+      env: TEST_SUITE=rebuilder,with-service-id,zlib
     - script:
         - source ~/.gimme/envs/latest.env
         - ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=repli,with_tls,predictible-chunk-ids
+      env: TEST_SUITE=repli,with_tls
     - script:
         - source ~/.gimme/envs/latest.env
         - ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=ec,with-service-id,with_tls,predictible-chunk-ids
+      env: TEST_SUITE=ec,with-service-id,with_tls
     - script:
         - source ~/.gimme/envs/latest.env
         - ./tools/oio-travis-suites.sh
@@ -108,7 +108,7 @@ jobs:
     - script:
         - source ~/.gimme/envs/latest.env
         - ./tools/oio-travis-suites.sh
-      env: TEST_SUITE=mover,with-service-id,predictible-chunk-ids
+      env: TEST_SUITE=mover,with-service-id
     - script:
         - source ~/.gimme/envs/latest.env
         - ./tools/oio-travis-suites.sh

@@ -19,6 +19,7 @@ import hashlib
 import os
 import time
 
+from oio.common.easy_value import boolean_value
 from oio.common.utils import cid_from_name, compute_chunk_id
 from oio.common.xattr import xattr
 from oio.common.logger import get_logger
@@ -240,7 +241,10 @@ class TestBlobAuditorFunctional(BaseTestCase):
                           self.chunk.path, self.chunk.id)
 
     def test_chunk_bad_meta2_chunk_url(self):
-        if self.conf['config'].get('meta2.store_chunk_ids') is False:
+        _, _, meta2_addr, _ = self.get_service_url('meta2')
+        meta2_config = self.admin.service_get_live_config(meta2_addr)
+        store_chunk_ids = meta2_config.get('meta2.store_chunk_ids')
+        if boolean_value(store_chunk_ids, True) is False:
             self.skipTest('Not relevant when not storing chunk IDs')
 
         self.chunk.url = '%s/0123456789ABCDEF' % self.rawx_id
