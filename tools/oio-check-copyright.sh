@@ -2,6 +2,7 @@
 
 # oio-check-copyright.sh
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -15,44 +16,58 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-set -e
 
-BASEDIR=$1 ; [[ -n "$BASEDIR" ]] ; [[ -d "$BASEDIR" ]]
+EXCLUDED_FILES=("metautils/lib/tree.h" "oio/container/md5py.py")
 
-/bin/ls -1f ${BASEDIR} \
-| grep -i -v -e '^\.' -e '^build' -e '^cmake' -e '^setup' -e '^oioenv' \
-| while read D ; do
-	/usr/bin/find "${BASEDIR}/${D}" -type f \
-		-name '*.h' -or -name '*.c' -or -name '*.py' -or -name '*.go' \
-	| while read F ; do
-		if ! [[ -s "$F" ]] ; then continue ; fi
-		if ! /usr/bin/git ls-files --error-unmatch "$F" >/dev/null ; then continue ; fi
-		if ! /bin/grep -q 'Copyright' "$F" ; then
-			echo "Missing Copyright section in $F" 1>&2
+function find_last_modification {
+	FILE=$1
+	(git log -8 --no-merges --pretty="format:%H" -- "${FILE}"; echo) |
+		while read COMMIT; do
+			if [ -z "${COMMIT}" ]; then
+				continue
+			fi
+			MODIFIED=$(git show "${COMMIT}" -- "${FILE}" | grep -v -E '(^(\+\+\+|---)|Copyright \(C\) )' | grep -E '^(\+|-)' | head -n 1)
+			if [ -z "${MODIFIED}" ]; then
+				continue
+			fi
+			echo "${COMMIT}"
+			return
+		done
+}
+
+git ls-tree -r --name-only HEAD |
+	while read FILE; do
+		if [[ ! "${FILE}" =~ ^.+\.(c|go|h|py)$ ]]; then
+			continue
+		fi
+		if [[ "${FILE}" =~ ^setup\.(py|cfg)$ ]]; then
+			continue
+		fi
+		if [ ! -s "${FILE}" ]; then
+			continue
+		fi
+		if [[ " ${EXCLUDED_FILES[@]} " =~ " ${FILE} " ]]; then
+			continue
+		fi
+
+		COMMIT=$(find_last_modification "${FILE}")
+		if [ -z "${COMMIT}" ]; then
+			echo "The last 8 commits of the ${FILE} only modify the Copyright section" 1>&2
+			exit 1
+		fi
+		YEAR=$(git show -s --pretty="format:%cd" --date="format:%Y" "${COMMIT}")
+
+		COMPANY="OpenIO"
+		if [ "${YEAR}" -gt "2020" ]; then
+			COMPANY="OVH"
+		elif [ "${YEAR}" -eq "2020" ]; then
+			COMPANY="(OpenIO|OVH)"
+		fi
+
+		COPYRIGHT_LINE=$(head -n 8 "${FILE}" | grep -E "Copyright \(C\) ([[:digit:]]{4}-|)${YEAR} ${COMPANY} SAS")
+		if [ -z "${COPYRIGHT_LINE}" ]; then
+			echo "The Copyright section in ${FILE} is not up to date, the last modification dates from ${YEAR} with the commit ${COMMIT}" 1>&2
+			git show "${COMMIT}" -- "${FILE}" | head -n 32
 			exit 1
 		fi
 	done
-done
-
-if [ -n "$TRAVIS_COMMIT_RANGE" ]
-then
-	INCLUDE='.+\.(c|go|h|py)$'
-	YEAR=$(date +%Y)
-	FAIL=0
-	echo "Checking copyright for year $YEAR."
-	git diff --name-only "$TRAVIS_COMMIT_RANGE" | grep -E "$INCLUDE" \
-	| while read name ; do
-		# Ignore empty files
-		if ! [[ -s "$name" ]] ; then continue ; fi
-		# Ignore removed files
-		if ! [[ -e "$name" ]] ; then continue ; fi
-
-		COPYRIGHT_LINE=$(grep -E 'Copyright.+[[:digit:]]{4}.+OpenIO' "$name")
-		if [[ ! "$COPYRIGHT_LINE" =~ .+$YEAR.* ]]
-		then
-			echo "ERROR $name ($YEAR) has \"$COPYRIGHT_LINE\""
-			FAIL=1
-		fi
-	done
-	if [[ "$FAIL" != 0 ]] ; then exit $FAIL ; fi
-fi

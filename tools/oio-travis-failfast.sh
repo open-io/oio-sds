@@ -2,6 +2,7 @@
 
 # oio-travis-failfast.sh
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -30,7 +31,6 @@ fold() {
 
 fold SDK ./tools/oio-build-sdk.sh ${PWD}
 fold Release ./tools/oio-build-release.sh ${PWD}
-fold Copyright ./tools/oio-check-copyright.sh ${PWD}
+fold Copyright ./tools/oio-check-copyright.sh
 fold Virtualenv python ./setup.py develop
 fold Variables tox -e variables
-

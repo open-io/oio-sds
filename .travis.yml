@@ -74,6 +74,8 @@ jobs:
       script:
         - source ~/.gimme/envs/latest.env
         - ./tools/oio-travis-failfast.sh
+      git:
+        depth: false
       name: Copyright, Release build, SDK build
     - script:
         - source ~/.gimme/envs/latest.env
