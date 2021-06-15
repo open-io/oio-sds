@@ -2858,6 +2858,7 @@ sqlx_dispatch_all(struct gridd_reply_ctx_s *reply,
 {
 	hook hk;
 	gchar admin[16];
+	gchar user_agent[1024];
 	GError *err = NULL;
 	gboolean res = TRUE;
 
@@ -2870,6 +2871,13 @@ sqlx_dispatch_all(struct gridd_reply_ctx_s *reply,
 	if (err)
 		g_clear_error(&err);
 	oio_ext_set_admin(oio_str_parse_bool(admin, FALSE));
+	/* Extract user-agent */
+	memset(user_agent, 0, sizeof(user_agent));
+	err = metautils_message_extract_string(reply->request,
+			NAME_MSGKEY_USER_AGENT, user_agent, sizeof(user_agent));
+	if (err)
+		g_clear_error(&err);
+	oio_ext_set_user_agent(user_agent);
 
 	if (!hk) {
 		GRID_INFO("No hook defined for this request, consider not yet implemented");
@@ -2879,6 +2887,7 @@ sqlx_dispatch_all(struct gridd_reply_ctx_s *reply,
 	}
 
 	oio_ext_set_admin(FALSE);
+	oio_ext_set_user_agent(NULL);
 	return res;
 }
 
