@@ -623,6 +623,29 @@ db_properties_to_json(
 	return json;
 }
 
+gboolean
+db_properties_has_system_property(struct db_properties_s *db_properties,
+		gchar **properties)
+{
+	if (!db_properties || !db_properties->system) {
+		return FALSE;
+	}
+
+	gboolean has_property = FALSE;
+	gboolean _is_property(gpointer key, gpointer value UNUSED,
+			gpointer data UNUSED) {
+		for (gchar **property=properties; *property; property+=1) {
+			if (g_strcmp0(key, *property) == 0) {
+				has_property = TRUE;
+				return TRUE;
+			}
+		}
+		return FALSE;
+	}
+	g_tree_foreach(db_properties->system, _is_property, NULL);
+	return has_property;
+}
+
 static gint64 _sqlx_get_number(struct sqlx_sqlite3_s *sq3, const gchar *req) {
 	gint64 result = -1;
 	gint rc;

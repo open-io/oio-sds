@@ -187,27 +187,53 @@ action_sqlx_copyto (struct req_args_s *args, struct json_object *jargs)
 }
 
 enum http_rc_e
-action_sqlx_propset (struct req_args_s *args, struct json_object *jargs)
+action_sqlx_propset_with_decoder(struct req_args_s *args,
+		struct json_object *jargs, client_on_reply decoder)
 {
-	enum http_rc_e rc = HTTPRC_ABORT;
-
+	GError *err = NULL;
+	const char *type = TYPE();
+	if (!type)
+		return _reply_format_error(args, BADREQ("No service type"));
+	gchar dirtype[64] = "";
+	_get_sqlx_dirtype (type, dirtype, sizeof(dirtype));
+	gint64 seq = 1;
+	CLIENT_CTX2(ctx, args, dirtype, seq, CLIENT_PREFER_MASTER, decoder, NULL);
 	gchar **kv = NULL;
-	GError *err = KV_read_usersys_properties(jargs, &kv);
-	if (!err && !*kv)
+
+	err = KV_read_usersys_properties(jargs, &kv);
+	if (!err && !*kv) {
 		err = BADREQ("No properties found in JSON object");
-	if (!err) {
-		gboolean flush = _request_get_flag(args, "flush");
-		GByteArray * _pack (const struct sqlx_name_s *n,
-				const gchar **headers UNUSED) {
-			return sqlx_pack_PROPSET_tab(args->url, n, flush, kv, DL());
-		}
-		rc = _sqlx_action_noreturn(args, CLIENT_PREFER_MASTER, _pack);
-	} else {
-		rc = _reply_common_error (args, err);
 	}
-	if (kv)
-		g_strfreev(kv);
-	return rc;
+	if (err) {
+		goto end;
+	}
+
+	gboolean flush = _request_get_flag(args, "flush");
+	GByteArray * _pack (const struct sqlx_name_s *n,
+			const gchar **headers UNUSED) {
+		return sqlx_pack_PROPSET_tab(args->url, n, flush, kv, DL());
+	}
+	err = gridd_request_replicated_with_retry(args, &ctx, _pack);
+	if (err) {
+		goto end;
+	}
+
+end:
+	g_strfreev(kv);
+	client_clean(&ctx);
+	if (err) {
+		if (err->code != CODE_REDIRECT_SHARD) {
+			return _reply_common_error(args, err);
+		}
+		g_clear_error(&err);
+	}
+	return _reply_success_json(args, NULL);
+}
+
+enum http_rc_e
+action_sqlx_propset(struct req_args_s *args, struct json_object *jargs)
+{
+	return action_sqlx_propset_with_decoder(args, jargs, NULL);
 }
 
 enum http_rc_e
@@ -274,22 +300,54 @@ action_sqlx_propget (struct req_args_s *args, struct json_object *jargs)
 }
 
 enum http_rc_e
-action_sqlx_propdel (struct req_args_s *args, struct json_object *jargs)
+action_sqlx_propdel_with_decoder(struct req_args_s *args,
+		struct json_object *jargs, client_on_reply decoder)
 {
-	gchar **namev = _load_stringv (jargs);
-	if (!namev)
-		return _reply_format_error (args, BADREQ("Bad names"));
+	GError *err = NULL;
+	const char *type = TYPE();
+	if (!type)
+		return _reply_format_error(args, BADREQ("No service type"));
+	gchar dirtype[64] = "";
+	_get_sqlx_dirtype (type, dirtype, sizeof(dirtype));
+	gint64 seq = 1;
+	CLIENT_CTX2(ctx, args, dirtype, seq, CLIENT_PREFER_MASTER, decoder, NULL);
+	gchar **namev = NULL;
 
-	for (gchar **p = namev; namev && *p; p++)
-		oio_str_reuse(p, g_strconcat("user.", *p, NULL));
-
-	GByteArray * _pack(const struct sqlx_name_s *n,
-				const gchar **headers UNUSED) {
-		return sqlx_pack_PROPDEL(args->url, n, (const gchar * const * )namev, DL());
+	namev = _load_stringv (jargs);
+	if (!namev) {
+		err = BADREQ("Bad names");
+		goto end;
 	}
-	enum http_rc_e rc = _sqlx_action_noreturn (args, CLIENT_PREFER_MASTER, _pack);
-	g_strfreev (namev);
-	return rc;
+	for (gchar **p = namev; namev && *p; p++) {
+		oio_str_reuse(p, g_strconcat("user.", *p, NULL));
+	}
+
+	GByteArray * _pack (const struct sqlx_name_s *n,
+			const gchar **headers UNUSED) {
+		return sqlx_pack_PROPDEL(args->url, n, (const gchar * const * )namev,
+				DL());
+	}
+	err = gridd_request_replicated_with_retry(args, &ctx, _pack);
+	if (err) {
+		goto end;
+	}
+
+end:
+	g_strfreev(namev);
+	client_clean(&ctx);
+	if (err) {
+		if (err->code != CODE_REDIRECT_SHARD) {
+			return _reply_common_error(args, err);
+		}
+		g_clear_error(&err);
+	}
+	return _reply_success_json(args, NULL);
+}
+
+enum http_rc_e
+action_sqlx_propdel(struct req_args_s *args, struct json_object *jargs)
+{
+	return action_sqlx_propdel_with_decoder(args, jargs, NULL);
 }
 
 enum http_rc_e

@@ -144,9 +144,13 @@ enum http_rc_e action_admin_meta0_force(struct req_args_s *args);
 
 // Deprecated action handlers with no equivalent yet in recent routes
 
-enum http_rc_e action_sqlx_propget (struct req_args_s *args, json_object *jargs);
-enum http_rc_e action_sqlx_propset (struct req_args_s *args, json_object *jargs);
-enum http_rc_e action_sqlx_propdel (struct req_args_s *args, json_object *jargs);
-enum http_rc_e action_sqlx_copyto (struct req_args_s *args, json_object *jargs);
+enum http_rc_e action_sqlx_propget(struct req_args_s *args, json_object *jargs);
+enum http_rc_e action_sqlx_propset_with_decoder(struct req_args_s *args,
+		struct json_object *jargs, client_on_reply decoder);
+enum http_rc_e action_sqlx_propset(struct req_args_s *args, json_object *jargs);
+enum http_rc_e action_sqlx_propdel_with_decoder(struct req_args_s *args,
+		struct json_object *jargs, client_on_reply decoder);
+enum http_rc_e action_sqlx_propdel(struct req_args_s *args, json_object *jargs);
+enum http_rc_e action_sqlx_copyto(struct req_args_s *args, json_object *jargs);
 
 #endif /*OIO_SDS__proxy__actions_h*/

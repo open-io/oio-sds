@@ -1402,6 +1402,14 @@ _handler_PROPDEL(struct gridd_reply_ctx_s *reply,
 
 	sqlx_repository_unlock_and_close_noerror(sq3);
 
+	if (!err) {
+		// Tip for forcing property sharing with shards
+		gchar **shared_properties = oio_ext_get_shared_properties();
+		if (shared_properties) {
+			err = NEWERROR(CODE_REDIRECT_SHARD, "null");
+		}
+	}
+
 label_exit:
 	if (err) {
 		reply->send_error(0, err);
@@ -1555,6 +1563,14 @@ _handler_PROPSET(struct gridd_reply_ctx_s *reply,
 	}
 
 	sqlx_repository_unlock_and_close_noerror(sq3);
+
+	if (!err) {
+		// Tip for forcing property sharing with shards
+		gchar **shared_properties = oio_ext_get_shared_properties();
+		if (shared_properties) {
+			err = NEWERROR(CODE_REDIRECT_SHARD, "null");
+		}
+	}
 
 label_exit:
 	if (err) {
@@ -1967,6 +1983,7 @@ sqlx_dispatch_all(struct gridd_reply_ctx_s *reply,
 {
 	hook hk;
 	gchar admin[16];
+	gchar user_agent[1024];
 	GError *err = NULL;
 	gboolean res = TRUE;
 
@@ -1979,6 +1996,14 @@ sqlx_dispatch_all(struct gridd_reply_ctx_s *reply,
 	if (err)
 		g_clear_error(&err);
 	oio_ext_set_admin(oio_str_parse_bool(admin, FALSE));
+	/* Extract user-agent */
+	memset(user_agent, 0, sizeof(user_agent));
+	err = metautils_message_extract_string(reply->request,
+			NAME_MSGKEY_USER_AGENT, user_agent, sizeof(user_agent));
+	if (err)
+		g_clear_error(&err);
+	oio_ext_set_user_agent(user_agent);
+	oio_ext_set_shared_properties(NULL);
 
 	if (!hk) {
 		GRID_INFO("No hook defined for this request, consider not yet implemented");
@@ -1988,6 +2013,8 @@ sqlx_dispatch_all(struct gridd_reply_ctx_s *reply,
 	}
 
 	oio_ext_set_admin(FALSE);
+	oio_ext_set_user_agent(NULL);
+	oio_ext_set_shared_properties(NULL);
 	return res;
 }
 

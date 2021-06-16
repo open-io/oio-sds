@@ -209,6 +209,9 @@ void db_properties_add(
 GString * db_properties_to_json(
 		struct db_properties_s *db_properties, GString *json);
 
+gboolean db_properties_has_system_property(
+		struct db_properties_s *db_properties, gchar **properties);
+
 /* database stats */
 
 GPtrArray* sqlx_admin_get_usage(struct sqlx_sqlite3_s *sq3);

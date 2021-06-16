@@ -2116,6 +2116,23 @@ meta2_backend_db_properties_change_callback(struct sqlx_sqlite3_s *sq3 UNUSED,
 		oio_events_queue__send(m2b->notifier_container_updated,
 				g_string_free(event, FALSE));
 	}
+
+	if (!m2db_get_shard_count(sq3)) {
+		return;
+	}
+	if (!db_properties_has_system_property(db_properties, SHARED_KEYS)) {
+		return;
+	}
+
+	// Share some properties with the shard
+	GPtrArray *tmp = g_ptr_array_new();
+	for (gchar **shared_key=SHARED_KEYS; *shared_key; shared_key+=1) {
+		gchar *value = sqlx_admin_get_str(sq3, *shared_key);
+		g_ptr_array_add(tmp, g_strdup(*shared_key));
+		g_ptr_array_add(tmp, value ? value : g_strdup(""));
+	}
+	oio_ext_set_shared_properties(
+			(gchar**) metautils_gpa_to_array(tmp, TRUE));
 }
 
 /**

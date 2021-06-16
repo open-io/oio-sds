@@ -1548,18 +1548,99 @@ action_m2_container_propget (struct req_args_s *args, struct json_object *jargs)
 	return action_sqlx_propget(args, jargs);
 }
 
-static enum http_rc_e
-action_m2_container_propset (struct req_args_s *args, struct json_object *jargs)
+static GError* _container_sharding_show(struct req_args_s *args,
+		struct list_params_s list_in, struct list_result_s *plist_out);
+
+static gboolean
+_update_shard_properties(struct req_args_s *args, guint status)
 {
-	_add_meta2_type (args);
-	return action_sqlx_propset(args, jargs);
+	if (status != CODE_REDIRECT_SHARD) {
+		return TRUE;
+	}
+
+	gchar **shared_properties = oio_ext_get_shared_properties();
+	if (!shared_properties) {
+		return TRUE;
+	}
+
+	GError *err = NULL;
+	gchar *marker = NULL;
+	gboolean truncated = TRUE;
+	struct oio_url_s *original_url = args->url;
+	while (!err && truncated) {
+		struct list_params_s list_in = {0};
+		struct list_result_s list_out = {0};
+		list_in.marker_start = marker;
+		list_in.maxkeys = META2_LISTING_DEFAULT_LIMIT;
+		err = _container_sharding_show(args, list_in, &list_out);
+		if (err) {
+			break;
+		}
+		truncated = list_out.truncated;
+		for (GSList *l=list_out.beans; !err && l; l=l->next) {
+			gpointer bean = l->data;
+			if (DESCR(bean) != &descr_struct_SHARD_RANGE) {
+				continue;
+			}
+			struct oio_url_s *shard_url = oio_url_dup(args->url);
+			oio_url_unset(shard_url, OIOURL_ACCOUNT);
+			oio_url_unset(shard_url, OIOURL_USER);
+			gchar *shard_cid = g_string_free(metautils_gba_to_hexgstr(NULL,
+					SHARD_RANGE_get_cid(bean)), FALSE);
+			oio_url_set(shard_url, OIOURL_HEXID, shard_cid);
+			args->url = shard_url;
+			PACKER_VOID(_pack) {
+				return sqlx_pack_PROPSET_tab(args->url, _u, FALSE,
+						shared_properties, DL());
+			};
+			err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
+			if (err) {
+				GRID_WARN("Failed to update properties for shard %s: (%d) %s",
+						shard_cid, err->code, err->message);
+				g_clear_error(&err);
+			}
+			g_free(shard_cid);
+			oio_url_clean(shard_url);
+			args->url = original_url;
+		}
+		m2v2_list_result_clean(&list_out);
+	}
+	if (err) {
+		GRID_WARN("Failed to update shards properties: (%d) %s",
+				err->code, err->message);
+		g_error_free(err);
+	}
+	return TRUE;
 }
 
 static enum http_rc_e
-action_m2_container_propdel (struct req_args_s *args, struct json_object *jargs)
+action_m2_container_propset(struct req_args_s *args, struct json_object *jargs)
+{
+	_add_meta2_type(args);
+
+	gboolean
+	_container_propset_decoder(gpointer UNUSED ctx, guint status,
+			MESSAGE reply UNUSED)
+	{
+		return _update_shard_properties(args, status);
+	};
+	return action_sqlx_propset_with_decoder(args, jargs,
+			_container_propset_decoder);
+}
+
+static enum http_rc_e
+action_m2_container_propdel(struct req_args_s *args, struct json_object *jargs)
 {
 	_add_meta2_type (args);
-	return action_sqlx_propdel(args, jargs);
+
+	gboolean
+	_container_propdel_decoder(gpointer UNUSED ctx, guint status,
+			MESSAGE reply UNUSED)
+	{
+		return _update_shard_properties(args, status);
+	};
+	return action_sqlx_propdel_with_decoder(args, jargs,
+			_container_propdel_decoder);
 }
 
 static enum http_rc_e
@@ -2770,6 +2851,41 @@ action_m2_container_sharding_clean(struct req_args_s *args,
 	return _reply_m2_error(args, err);
 }
 
+static GError*
+_container_sharding_show(struct req_args_s *args,
+		struct list_params_s list_in, struct list_result_s *plist_out)
+{
+	GError *err = NULL;
+	struct list_result_s list_out = {0};
+	if (!err) {
+		m2v2_list_result_init(&list_out);
+	}
+
+	if (!err) {
+		PACKER_VOID(_pack) {
+			return m2v2_remote_pack_SHOW_SHARDING(args->url, &list_in, DL());
+		};
+		err = _resolve_meta2(args, _prefer_slave(), _pack, &list_out,
+				m2v2_list_result_extract);
+	}
+
+	if (!err) {
+		args->rp->add_header(PROXYD_HEADER_PREFIX "list-truncated",
+				g_strdup(list_out.truncated ? "true" : "false"));
+		if (list_out.next_marker) {
+			args->rp->add_header(PROXYD_HEADER_PREFIX "list-marker",
+					g_uri_escape_string(list_out.next_marker, NULL, FALSE));
+		}
+	}
+
+	if (err) {
+		m2v2_list_result_clean(&list_out);
+	} else {
+		*plist_out = list_out;
+	}
+	return err;
+}
+
 static enum http_rc_e
 action_m2_container_sharding_abort(struct req_args_s *args,
 		struct json_object *j UNUSED)
@@ -3147,27 +3263,8 @@ action_container_sharding_show(struct req_args_s *args)
 	// list_in.flag_allversion = 0;
 	// list_in.flag_headers = 1;
 	// list_in.flag_properties = 0;
-	if (!err) {
-		m2v2_list_result_init(&list_out);
-	}
 
-	if (!err) {
-		PACKER_VOID(_pack) {
-			return m2v2_remote_pack_SHOW_SHARDING(args->url, &list_in, DL());
-		};
-		err = _resolve_meta2(args, _prefer_slave(), _pack, &list_out,
-				m2v2_list_result_extract);
-	}
-
-	if (!err) {
-		args->rp->add_header(PROXYD_HEADER_PREFIX "list-truncated",
-				g_strdup(list_out.truncated ? "true" : "false"));
-		if (list_out.next_marker) {
-			args->rp->add_header(PROXYD_HEADER_PREFIX "list-marker",
-					g_uri_escape_string(list_out.next_marker, NULL, FALSE));
-		}
-	}
-
+	err = _container_sharding_show(args, list_in, &list_out);
 	enum http_rc_e rc = _reply_shard_ranges_list_result(args, err, &list_out);
 	m2v2_list_result_clean(&list_out);
 	return rc;

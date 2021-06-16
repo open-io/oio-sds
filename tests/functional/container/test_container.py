@@ -387,13 +387,13 @@ class TestMeta2Containers(BaseTestCase):
         def del_properties(keys):
             resp = self.request('POST', self.url_container('del_properties'),
                                 params=params, data=json.dumps(keys))
-            self.assertEqual(resp.status, 200)
+            self.assertEqual(resp.status, 204)
 
         def set_properties(kv):
             resp = self.request('POST', self.url_container('set_properties'),
                                 params=params,
                                 data=json.dumps({'properties': kv}))
-            self.assertEqual(resp.status, 200)
+            self.assertEqual(resp.status, 204)
 
         # GetProperties on no container
         resp = self.request('POST', self.url_container('get_properties'),
@@ -734,7 +734,7 @@ class TestMeta2Containers(BaseTestCase):
             resp = self.request('POST', self.url_container('set_properties'),
                                 params=params_container,
                                 data=json.dumps(props))
-            self.assertEqual(200, resp.status)
+            self.assertEqual(204, resp.status)
 
         def _random_delete_object():
             version = random.choice(list(versions))
@@ -851,7 +851,7 @@ class TestMeta2Containers(BaseTestCase):
         resp = self.request('POST', self.url_container('set_properties'),
                             params=params_container,
                             data=json.dumps(props))
-        self.assertEqual(200, resp.status)
+        self.assertEqual(204, resp.status)
         resp = self.request('POST', self.url_content('delete'),
                             params=param_content)
         self.assertEqual(204, resp.status)
@@ -899,7 +899,7 @@ class TestMeta2Containers(BaseTestCase):
         resp = self.request('POST', self.url_container('set_properties'),
                             params=params_container,
                             data=json.dumps(props))
-        self.assertEqual(200, resp.status)
+        self.assertEqual(204, resp.status)
 
         self._create_content(path, version=12345)
         self._create_content(path, version=12345, create_status=409)
