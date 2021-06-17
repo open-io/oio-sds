@@ -32,7 +32,7 @@ def _format_assignments(all_services, svc_col_title='Rawx'):
         rdirs = svc.get('rdir', [{'addr': 'n/a', 'tags': {}}])
         joined_ids = ','.join((r['tags'].get('tag.service_id') or r['addr'])
                               for r in rdirs)
-        joined_loc = ','.join(r['tags'].get('tag.loc')
+        joined_loc = ','.join(r['tags'].get('tag.loc', 'n/a')
                               for r in rdirs)
         results.append(
             (svc['tags'].get('tag.service_id') or svc['addr'],
@@ -134,12 +134,12 @@ class RdirAssignments(Lister):
             columns, results = _format_assignments(
                 all_services, parsed_args.service_type.capitalize())
         else:
-            dummy_rdir = [{"addr": {"n/a"}, "tags": {}}]
+            dummy_rdirs = [{"addr": {"n/a"}, "tags": {}}]
             rdir_by_id = dict()
             managed_svc = dict()
 
             for svc in all_services:
-                rdirs = svc.get('rdir', dummy_rdir)
+                rdirs = svc.get('rdir', dummy_rdirs)
                 for rdir in rdirs:
                     rdir_id = rdir['tags'].get('tag.service_id') or \
                               rdir['addr']

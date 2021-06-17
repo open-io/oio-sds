@@ -111,9 +111,9 @@ class RdirDispatcher(object):
                         self.logger.warn("rdir %s linked to %s %s seems down",
                                          el, service_type,
                                          service['addr'])
-                        service['rdir'].append({"addr": el, "tags": dict()})
-                        loc_rdir = service['rdir']
-                        by_id[_make_id(self.ns, 'rdir', el)] = loc_rdir
+                        down_svc = {"addr": el, "score": 0, "tags": dict()}
+                        service['rdir'].append(down_svc)
+                        by_id[_make_id(self.ns, 'rdir', el)] = down_svc
 
             except NotFound:
                 self.logger.info("No rdir linked to %s",
