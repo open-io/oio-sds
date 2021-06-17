@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -680,6 +681,8 @@ class _MetachunkWriter(object):
                     raise exc.SourceReadTimeout(new_exc)
                 elif isinstance(err, (exc.OioTimeout, green.OioTimeout)):
                     raise exc.OioTimeout(new_exc)
+                elif err == 'HTTP 409':
+                    raise exc.Conflict(new_exc)
             raise new_exc
 
 
