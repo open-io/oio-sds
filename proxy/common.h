@@ -188,11 +188,35 @@ gboolean service_is_known (const char *key);
 extern GRWLock master_rwlock;
 extern struct lru_tree_s *srv_master;
 
+enum cache_control_e
+{
+// 	// Meta0
+// 	META0_NO_CACHE           = 0x0001,
+// 	META0_NO_STORE           = 0x0002,
+// #define META0_CACHE_CONTROL    0x000F
+
+// 	// Meta1
+// 	META1_NO_CACHE           = 0x0010,
+// 	META1_NO_STORE           = 0x0020,
+// #define META1_CACHE_CONTROL    0x00F0
+
+// 	// Meta2
+// 	META2_NO_CACHE           = 0x0100,
+// 	META2_NO_STORE           = 0x0200,
+// #define META2_CACHE_CONTROL    0x0F00
+
+	// Sharding
+	SHARDING_NO_CACHE        = 0x1000,
+	SHARDING_NO_STORE        = 0x2000,
+#define SHARDING_CACHE_CONTROL 0xF000
+};
+
 struct req_args_s
 {
 	struct oio_requri_s *req_uri; // parsed URI
 	struct path_matching_s **matchings; // matched handlers
 	struct oio_url_s *url;
+	enum cache_control_e cache_control;
 
 	struct http_request_s *rq;
 	struct http_reply_ctx_s *rp;

@@ -90,7 +90,10 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 	struct oio_url_s *redirect_url = NULL;
 	gpointer redirect_shard = NULL;
 
-	redirect_shard = shard_resolver_get_cached(shard_resolver, original_url);
+	if (!(args->cache_control & SHARDING_NO_CACHE)) {
+		redirect_shard = shard_resolver_get_cached(shard_resolver,
+				original_url);
+	}
 	if (redirect_shard) {
 		redirect_url = oio_url_dup(args->url);
 		oio_url_unset(redirect_url, OIOURL_ACCOUNT);
@@ -137,8 +140,10 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 				g_error_free(redirect_err);
 				break;
 			}
-			shard_resolver_store(shard_resolver, original_url,
-					redirect_shard);
+			if (!(args->cache_control & SHARDING_NO_STORE)) {
+				shard_resolver_store(shard_resolver, original_url,
+						redirect_shard);
+			}
 
 			redirect_url = oio_url_dup(args->url);
 			oio_url_unset(redirect_url, OIOURL_ACCOUNT);
@@ -1992,8 +1997,15 @@ static GError * _list_loop (struct req_args_s *args,
 		if (fake_path) {
 			oio_url_set(args->url, OIOURL_PATH, fake_path);
 		}
+		enum cache_control_e original_cache_control = args->cache_control;
+		if (g_tree_nnodes(out0->props) == 0) {
+			// Disable sharding resolver to fetch container properties
+			// from root container
+			args->cache_control |= SHARDING_NO_CACHE;
+		}
 		err = _resolve_meta2(args, _prefer_slave(), _pack, &out,
 				m2v2_list_result_extract);
+		args->cache_control = original_cache_control;
 		if (fake_path) {
 			g_free(fake_path);
 			oio_url_unset(args->url, OIOURL_PATH);
