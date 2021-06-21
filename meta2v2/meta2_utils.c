@@ -245,7 +245,7 @@ m2db_get_size(struct sqlx_sqlite3_s *sq3)
 void
 m2db_set_size(struct sqlx_sqlite3_s *sq3, gint64 size)
 {
-	sqlx_admin_set_i64(sq3, M2V2_ADMIN_SIZE, size);
+	sqlx_admin_set_i64(sq3, M2V2_ADMIN_SIZE, (size>0)?size:0);
 }
 
 gint64
@@ -263,7 +263,7 @@ m2db_get_obj_count(struct sqlx_sqlite3_s *sq3)
 void
 m2db_set_obj_count(struct sqlx_sqlite3_s *sq3, gint64 count)
 {
-	sqlx_admin_set_i64(sq3, M2V2_ADMIN_OBJ_COUNT, count);
+	sqlx_admin_set_i64(sq3, M2V2_ADMIN_OBJ_COUNT, (count>0)?count:0);
 }
 
 gint64
@@ -275,7 +275,7 @@ m2db_get_shard_count(struct sqlx_sqlite3_s *sq3)
 void
 m2db_set_shard_count(struct sqlx_sqlite3_s *sq3, gint64 count)
 {
-	sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARD_COUNT, count);
+	sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARD_COUNT, (count>0)?count:0);
 }
 
 gchar*
