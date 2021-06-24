@@ -155,8 +155,8 @@ class OpenIOShell(CommonShell):
             res = super(OpenIOShell, self).run(argv)
             perfdata = self.client_manager.cli_conf().get('perfdata')
             if perfdata:
-                LOG.debug("Performance data: x %s",
-                          json.dumps(perfdata, sort_keys=True, indent=4))
+                LOG.warning("Performance data: %s",
+                            json.dumps(perfdata, sort_keys=True, indent=4))
             return res
         except Exception as e:
             LOG.error('Exception raised: %s', e)
