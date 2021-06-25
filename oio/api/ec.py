@@ -21,7 +21,6 @@ from oio.common.green import ChunkReadTimeout, ChunkWriteTimeout, \
 
 import collections
 import math
-import hashlib
 from socket import error as SocketError
 from six import text_type
 from six.moves.urllib_parse import urlparse
@@ -35,7 +34,7 @@ from oio.common.exceptions import SourceReadError
 from oio.common.http import HeadersDict, parse_content_range, \
     ranges_from_http_header, headers_from_object_metadata
 from oio.common.logger import get_logger
-from oio.common.utils import fix_ranges, monotonic_time
+from oio.common.utils import fix_ranges, get_hasher, monotonic_time
 
 
 LOGGER = get_logger({}, __name__)
@@ -84,13 +83,13 @@ def meta_chunk_range_to_segment_range(meta_start, meta_end, segment_size):
 
     """
 
-    segment_start = (int(meta_start // segment_size) *
-                     segment_size) if meta_start is not None else None
+    segment_start = (int(meta_start // segment_size)
+                     * segment_size) if meta_start is not None else None
     segment_end = (None if meta_end is None else
-                   (((int(meta_end // segment_size) + 1) *
-                     segment_size) - 1) if meta_start is not None else
-                   (int(math.ceil((float(meta_end) / segment_size) + 1)) *
-                       segment_size))
+                   (((int(meta_end // segment_size) + 1)
+                     * segment_size) - 1) if meta_start is not None else
+                   (int(math.ceil((float(meta_end) / segment_size) + 1))
+                       * segment_size))
     return (segment_start, segment_end)
 
 
@@ -263,8 +262,8 @@ class ECStream(object):
                     else self.meta_length - 1)
 
         num_segments = int(
-            math.ceil(float(segment_end + 1 - segment_start) /
-                      self.storage_method.ec_segment_size))
+            math.ceil(float(segment_end + 1 - segment_start)
+                      / self.storage_method.ec_segment_size))
 
         # we read full segments from the chunks
         # however we may be requested a byte range
@@ -445,7 +444,7 @@ class ECStream(object):
                 content_range = headers.get('Content-Range')
                 if content_range is not None:
                     fragment_start, fragment_end, fragment_length = \
-                            parse_content_range(content_range)
+                        parse_content_range(content_range)
                 elif self.fragment_length <= 0:
                     fragment_start = None
                     fragment_end = None
@@ -469,9 +468,9 @@ class ECStream(object):
                     range_info = results[(fragment_start, fragment_end)].pop(0)
                 except KeyError:
                     self.logger.error(
-                            "Invalid range: %s, available: %s (reqid=%s)",
-                            repr((fragment_start, fragment_end)),
-                            results.keys(), self.reqid)
+                        "Invalid range: %s, available: %s (reqid=%s)",
+                        repr((fragment_start, fragment_end)),
+                        results.keys(), self.reqid)
                     raise
                 segment_iter = self._decode_segments(fragment_iters)
 
@@ -567,14 +566,14 @@ class EcChunkWriter(object):
     Writes an EC chunk
     """
     def __init__(self, chunk, conn, write_timeout=None,
-                 chunk_checksum_algo='md5', perfdata=None,
+                 chunk_checksum_algo='blake3', perfdata=None,
                  watchdog=None, **kwargs):
         self._chunk = chunk
         self._conn = conn
         self.failed = False
         self.bytes_transferred = 0
         if chunk_checksum_algo:
-            self.checksum = hashlib.new(chunk_checksum_algo)
+            self.checksum = get_hasher(chunk_checksum_algo)
         else:
             self.checksum = None
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
@@ -616,6 +615,8 @@ class EcChunkWriter(object):
         trailers = (CHUNK_HEADERS["metachunk_size"],
                     CHUNK_HEADERS["metachunk_hash"])
         if kwargs.get('chunk_checksum_algo'):
+            hdrs[CHUNK_HEADERS["chunk_hash_algo"]] = \
+                kwargs['chunk_checksum_algo']
             trailers = trailers + (CHUNK_HEADERS["chunk_hash"], )
         hdrs["Trailer"] = ', '.join(trailers)
         with WatchdogTimeout(watchdog,
@@ -771,8 +772,8 @@ class EcMetachunkWriter(io.MetachunkWriter):
         self.meta_chunk = meta_chunk
         self.global_checksum = global_checksum
         # Unlike plain replication, we cannot use the checksum returned
-        # by rawx services, whe have to compute the checksum client-side.
-        self.checksum = hashlib.new(self.chunk_checksum_algo or 'md5')
+        # by rawx services, we have to compute the checksum client-side.
+        self.checksum = get_hasher(self.chunk_checksum_algo or 'blake3')
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
         self.read_timeout = read_timeout or io.CLIENT_TIMEOUT
@@ -1047,7 +1048,7 @@ class ECWriteHandler(io.WriteHandler):
 
     def stream(self):
         # the checksum context for the content
-        global_checksum = hashlib.md5()
+        global_checksum = get_hasher('md5')
         total_bytes_transferred = 0
         content_chunks = []
 

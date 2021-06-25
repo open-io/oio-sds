@@ -18,13 +18,12 @@
 
 import string
 from os.path import isfile
-from hashlib import md5
 from six.moves.urllib_parse import unquote, urlparse
 from oio.common.http import headers_from_object_metadata, HeadersDict
 from oio.common.http_eventlet import http_connect
 from oio.common.constants import OIO_VERSION, CHUNK_HEADERS, REQID_HEADER
 from oio.common.fullpath import encode_fullpath
-from oio.common.utils import cid_from_name, request_id
+from oio.common.utils import cid_from_name, get_hasher, request_id
 from oio.blob.utils import read_chunk_metadata
 from tests.utils import CommonTestCase, random_id, strange_paths
 from tests.functional.blob import convert_to_old_chunk, random_buffer, \
@@ -34,6 +33,15 @@ from tests.functional.blob import convert_to_old_chunk, random_buffer, \
 map_cfg = {'addr': 'Listen',
            'ns': 'namespace',
            'basedir': 'docroot'}
+
+
+def checksum(data=b''):
+    """
+    Get the blake3 checksum of the provided data.
+    """
+    hasher = get_hasher('blake3')
+    hasher.update(data)
+    return hasher
 
 
 # TODO we should the content of events sent by the rawx
@@ -61,7 +69,7 @@ class RawxTestSuite(CommonTestCase):
                 'ec/algo=liberasurecode_rs_vand,k=6,m=3',
             'policy': 'TESTPOLICY',
             'container_id': self.cid,
-            'chunk_hash': md5(data).hexdigest(),
+            'chunk_hash': checksum(data).hexdigest(),
             'full_path': self.fullpath,
             'oio_version': OIO_VERSION
         })
@@ -129,7 +137,7 @@ class RawxTestSuite(CommonTestCase):
         headers = self._chunk_attr(chunkid, chunkdata)
         metachunk_size = 9 * length
         # TODO take random legit value
-        metachunk_hash = md5().hexdigest()
+        metachunk_hash = checksum().hexdigest()
         # TODO should also include meta-chunk-hash
         trailers = {'x-oio-chunk-meta-metachunk-size': str(metachunk_size),
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
@@ -152,8 +160,8 @@ class RawxTestSuite(CommonTestCase):
         headers = {}
         headers["Destination"] = chunkurl
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-                "account-snapshot", "container-snapshot", "test"+"-snapshot",
-                1456938361143741, random_id(32))
+            "account-snapshot", "container-snapshot", "test-snapshot",
+            1456938361143741, random_id(32))
         resp, _ = self._http_request(chunkurl, 'COPY', '', headers)
         self.assertEqual(403, resp.status)
 
@@ -184,7 +192,7 @@ class RawxTestSuite(CommonTestCase):
         # we do not really care about the actual value
         metachunk_size = 9 * length
         # TODO take random legit value
-        metachunk_hash = md5().hexdigest()
+        metachunk_hash = checksum().hexdigest()
         # TODO should also include meta-chunk-hash
         trailers = {'x-oio-chunk-meta-metachunk-size': str(metachunk_size),
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
@@ -199,7 +207,7 @@ class RawxTestSuite(CommonTestCase):
             self.assertFalse(isfile(chunkpath))
             return
         chunk_hash = headers.get('x-oio-chunk-meta-chunk-hash',
-                                 md5(chunkdata).hexdigest()).upper()
+                                 checksum(chunkdata).hexdigest()).upper()
         chunk_size = headers.get('x-oio-chunk-meta-chunk-size', str(length))
         self.assertEqual(chunk_hash,
                          resp.getheader('x-oio-chunk-meta-chunk-hash'))
@@ -242,20 +250,20 @@ class RawxTestSuite(CommonTestCase):
             yield (0, 0)
             if length > 1:
                 yield (0, 1)
-                yield (0, length-1)
-                yield (length-2, length-1)
+                yield (0, length - 1)
+                yield (length - 2, length - 1)
             if length > 4:
-                yield (2, length-3)
+                yield (2, length - 3)
         for start, end in ranges():
             r = "bytes={0}-{1}".format(start, end)
             resp, body = self._http_request(chunkurl, 'GET', '', {'Range': r})
             self.assertEqual(resp.status // 100, 2)
-            self.assertEqual(len(body), end-start+1)
-            self.assertEqual(body, chunkdata[start:end+1])
+            self.assertEqual(len(body), end - start + 1)
+            self.assertEqual(body, chunkdata[start:end + 1])
         if length > 0:
             # TODO FIXME getting an unsatisfiable range on an empty content
             # returns "200 OK" with an empty body, but should return 416
-            r = "bytes={0}-{1}".format(length, length+1)
+            r = "bytes={0}-{1}".format(length, length + 1)
             resp, body = self._http_request(chunkurl, 'GET', '', {'Range': r})
             self.assertEqual(416, resp.status)
 
@@ -282,16 +290,16 @@ class RawxTestSuite(CommonTestCase):
         self._cycle_put(1024, 201)
 
     def test_8K(self):
-        self._cycle_put(8*1024, 201)
+        self._cycle_put(8 * 1024, 201)
 
     def test_64K(self):
-        self._cycle_put(64*1024, 201)
+        self._cycle_put(64 * 1024, 201)
 
     def test_1M(self):
-        self._cycle_put(1024*1024, 201)
+        self._cycle_put(1024 * 1024, 201)
 
     def test_fat_chunk(self):
-        self._cycle_put(1024*1024*128, 201)
+        self._cycle_put(1024 * 1024 * 128, 201)
 
     def test_missing_headers(self):
         self._cycle_put(32, 400,
@@ -370,7 +378,7 @@ class RawxTestSuite(CommonTestCase):
 
     def test_bad_chunkid(self):
         self._check_bad_headers(
-            32, bad_headers={'x-oio-chunk-meta-chunk-id': '00'*32})
+            32, bad_headers={'x-oio-chunk-meta-chunk-id': '00' * 32})
 
     def test_chunkid_lowercase(self):
         self._cycle_put(32, 201, chunkid_lowercase=True)
@@ -383,7 +391,7 @@ class RawxTestSuite(CommonTestCase):
         chunkurl = self._rawx_url(chunkid)
         chunkpath = self._chunk_path(chunkid)
         headers1 = self._chunk_attr(chunkid, chunkdata)
-        metachunk_hash = md5().hexdigest()
+        metachunk_hash = checksum().hexdigest()
         trailers = {'x-oio-chunk-meta-metachunk-size': '1',
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
 
@@ -406,7 +414,7 @@ class RawxTestSuite(CommonTestCase):
         copy_account = "account-snapshot"
         copy_container = "container-snapshot"
         copy_container_id = cid_from_name(copy_account, copy_container)
-        copy_path = path+"-snapshot"
+        copy_path = path + "-snapshot"
         copy_version = 1456938361143741
         copy_id = random_id(32)
         copy_fullpath = encode_fullpath(
@@ -484,7 +492,7 @@ class RawxTestSuite(CommonTestCase):
             self._cycle_copy(path)
 
     def test_copy_with_same_chunkid(self):
-        metachunk_hash = md5().hexdigest()
+        metachunk_hash = checksum().hexdigest()
         trailers = {'x-oio-chunk-meta-metachunk-size': '1',
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
 
@@ -504,13 +512,13 @@ class RawxTestSuite(CommonTestCase):
         headers = {}
         headers["Destination"] = chunkurl1
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-                "account-snapshot", "container-snapshot", "content-snapshot",
-                1456938361143741, random_id(32))
+            "account-snapshot", "container-snapshot", "content-snapshot",
+            1456938361143741, random_id(32))
         resp, _ = self._http_request(chunkurl1, 'COPY', '', headers)
         self.assertEqual(403, resp.status)
 
     def test_copy_with_existing_destination(self):
-        metachunk_hash = md5().hexdigest()
+        metachunk_hash = checksum().hexdigest()
         trailers = {'x-oio-chunk-meta-metachunk-size': '1',
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
 
@@ -543,13 +551,13 @@ class RawxTestSuite(CommonTestCase):
         headers = {}
         headers["Destination"] = chunkurl2
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-                "account-snapshot", "container-snapshot", "content-snapshot",
-                1456938361143741, random_id(32))
+            "account-snapshot", "container-snapshot", "content-snapshot",
+            1456938361143741, random_id(32))
         resp, _ = self._http_request(chunkurl1, 'COPY', '', headers)
         self.assertEqual(409, resp.status)
 
     def test_copy_with_nonexistent_source(self):
-        metachunk_hash = md5().hexdigest()
+        metachunk_hash = checksum().hexdigest()
         trailers = {'x-oio-chunk-meta-metachunk-size': '1',
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
 
@@ -572,13 +580,13 @@ class RawxTestSuite(CommonTestCase):
         headers = {}
         headers["Destination"] = chunkurl2
         headers['x-oio-chunk-meta-full-path'] = encode_fullpath(
-                "account-snapshot", "container-snapshot", "content-snapshot",
-                1456938361143741, random_id(32))
+            "account-snapshot", "container-snapshot", "content-snapshot",
+            1456938361143741, random_id(32))
         resp, _ = self._http_request(chunkurl1, 'COPY', '', headers)
         self.assertEqual(404, resp.status)
 
     def test_wrong_fullpath(self):
-        metachunk_hash = md5().hexdigest()
+        metachunk_hash = checksum().hexdigest()
         trailers = {'x-oio-chunk-meta-metachunk-size': '1',
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
 
@@ -707,7 +715,7 @@ class RawxTestSuite(CommonTestCase):
         self.assertEqual(400, resp.status)
 
     def test_read_old_chunk(self):
-        metachunk_hash = md5().hexdigest()
+        metachunk_hash = checksum().hexdigest()
         trailers = {'x-oio-chunk-meta-metachunk-size': '1',
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
 
@@ -760,7 +768,7 @@ class RawxTestSuite(CommonTestCase):
         copyheaders["Destination"] = copyurl
         copyheaders['x-oio-chunk-meta-full-path'] = encode_fullpath(
             "account-snapshot", "container-snapshot",
-            self.content_path+"-snapshot", 1456938361143741, copycontentid)
+            self.content_path + "-snapshot", 1456938361143741, copycontentid)
         resp, _ = self._http_request(chunkurl, 'COPY', '', copyheaders)
         self.assertEqual(201, resp.status)
 
@@ -798,7 +806,7 @@ class RawxTestSuite(CommonTestCase):
         del headers1['x-oio-chunk-meta-container-id']
         del headers3['x-oio-chunk-meta-container-id']
         self.assertEqual(
-            self.content_path+"-snapshot",
+            self.content_path + "-snapshot",
             unquote(headers3['x-oio-chunk-meta-content-path']))
         del headers1['x-oio-chunk-meta-content-path']
         del headers3['x-oio-chunk-meta-content-path']
@@ -823,7 +831,8 @@ class RawxTestSuite(CommonTestCase):
             meta3['container_id'])
         del meta1['container_id']
         del meta3['container_id']
-        self.assertEqual(self.content_path+"-snapshot", meta3['content_path'])
+        self.assertEqual(self.content_path + "-snapshot",
+                         meta3['content_path'])
         del meta1['content_path']
         del meta3['content_path']
         self.assertEqual('1456938361143741', meta3['content_version'])
@@ -853,7 +862,7 @@ class RawxTestSuite(CommonTestCase):
         self._check_not_present(chunkurl)
         headers = self._chunk_attr(chunkid, chunkdata)
         metachunk_size = 9 * length
-        metachunk_hash = md5(chunkdata).hexdigest()
+        metachunk_hash = checksum(chunkdata).hexdigest()
         # TODO should also include meta-chunk-hash
         trailers = {'x-oio-chunk-meta-metachunk-size': str(metachunk_size),
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
@@ -889,7 +898,7 @@ class RawxTestSuite(CommonTestCase):
         resp, body = self._http_request(
             chunkurl, 'HEAD', '',
             {'x-oio-check-hash': True,
-             'x-oio-chunk-meta-chunk-hash': 'A'*32})
+             'x-oio-chunk-meta-chunk-hash': 'A' * 32})
         self.assertEqual(412, resp.status)
 
         # Corrupt the chunk
@@ -905,7 +914,7 @@ class RawxTestSuite(CommonTestCase):
 
         if not self._compression():
             # Check the hash with corrupted chunk and valid header
-            newh = md5(corrupted_data).hexdigest()
+            newh = checksum(corrupted_data).hexdigest()
             resp, body = self._http_request(
                 chunkurl, 'HEAD', '',
                 {'x-oio-check-hash': True,
@@ -921,7 +930,7 @@ class RawxTestSuite(CommonTestCase):
         resp, body = self._http_request(
             chunkurl, 'HEAD', '',
             {'x-oio-check-hash': True,
-             'x-oio-chunk-meta-chunk-hash': 'A'*32})
+             'x-oio-chunk-meta-chunk-hash': 'A' * 32})
         self.assertEqual(412, resp.status)
 
         # Check without xattr

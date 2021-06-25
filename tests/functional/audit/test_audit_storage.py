@@ -96,12 +96,14 @@ class TestBlobAuditorFunctional(BaseTestCase):
             'chunk_id': self.chunk.id,
             'chunk_pos': self.chunk.pos,
             'chunk_hash': self.chunk.metachunk_hash,
+            'chunk_hash_algo': 'md5',
             'chunk_size': self.chunk.metachunk_size,
             'metachunk_hash': self.chunk.metachunk_hash,
             'metachunk_size': self.chunk.metachunk_size,
             'oio_version': OIO_VERSION}
         self.blob_client.chunk_put(self.chunk.url, chunk_meta,
-                                   self.content.data)
+                                   self.content.data,
+                                   chunk_checksum_algo='md5')
 
     def tearDown(self):
         super(TestBlobAuditorFunctional, self).tearDown()

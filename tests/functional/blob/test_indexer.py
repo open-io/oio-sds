@@ -75,7 +75,7 @@ class TestBlobIndexer(BaseTestCase):
         content_version = 1234567890
         content_id = random_id(32)
         fullpath = encode_fullpath(
-                account, container, content_path, content_version, content_id)
+            account, container, content_path, content_version, content_id)
         chunk_id = random_chunk_id()
         data = random_buffer(string.printable, 100).encode('utf-8')
         meta = {
@@ -88,6 +88,7 @@ class TestBlobIndexer(BaseTestCase):
                 'ec/algo=liberasurecode_rs_vand,k=6,m=3',
             'policy': 'TESTPOLICY',
             'chunk_hash': md5(data).hexdigest().upper(),
+            'chunk_hash_algo': 'md5',
             'oio_version': OIO_VERSION,
             'chunk_pos': 0,
             'metachunk_hash': md5().hexdigest(),
@@ -95,7 +96,8 @@ class TestBlobIndexer(BaseTestCase):
         }
         reqid = request_id()
         self.blob_client.chunk_put('http://' + self.rawx_id + '/' + chunk_id,
-                                   meta, data, reqid=reqid)
+                                   meta, data, reqid=reqid,
+                                   chunk_checksum_algo='md5')
         # ensure chunk event have been processed
         self.wait_for_event('oio-preserved', reqid=reqid,
                             types=(EventTypes.CHUNK_NEW, ))
@@ -105,7 +107,7 @@ class TestBlobIndexer(BaseTestCase):
     def _delete_chunk(self, chunk_id):
         reqid = request_id()
         self.blob_client.chunk_delete(
-                'http://' + self.rawx_id + '/' + chunk_id, reqid=reqid)
+            'http://' + self.rawx_id + '/' + chunk_id, reqid=reqid)
         # ensure chunk event have been processed
         self.wait_for_event('oio-preserved', reqid=reqid,
                             types=(EventTypes.CHUNK_DELETED, ))
@@ -118,7 +120,7 @@ class TestBlobIndexer(BaseTestCase):
         content_version = 1234567890
         content_id = random_id(32)
         fullpath = encode_fullpath(
-                account, container, content_path, content_version, content_id)
+            account, container, content_path, content_version, content_id)
         reqid = request_id()
         _, link = self.blob_client.chunk_link(
             'http://' + self.rawx_id + '/' + target_chunk_id, None, fullpath,

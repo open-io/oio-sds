@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -23,6 +24,8 @@ from oio.api.object_storage import ObjectStorageApi
 from oio.directory.client import DirectoryClient
 
 CHUNK_SIZE = 1048576
+EMPTY_BLAKE3 = \
+    'af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262'
 EMPTY_MD5 = 'd41d8cd98f00b204e9800998ecf8427e'
 EMPTY_SHA256 = \
     'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'

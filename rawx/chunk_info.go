@@ -44,6 +44,7 @@ type chunkInfo struct {
 	ChunkID            string `json:"chunk_id,omitempty"`
 	ChunkPosition      string `json:"chunk_position,omitempty"`
 	ChunkHash          string `json:"chunk_hash,omitempty"`
+	ChunkHashAlgo      string `json:"chunk_hash_algo,omitempty"`
 	ChunkSize          string `json:"chunk_size,omitempty"`
 	OioVersion         string `json:"oio_version,omitempty"`
 
@@ -239,6 +240,11 @@ func loadAttr(inChunk fileReader, chunkID string, reqid string) (chunkInfo, erro
 	if err != nil {
 		err = errMissingXattr(AttrNameChunkSize, err)
 	}
+	if len(chunk.ChunkHash) == 32 {
+		chunk.ChunkHashAlgo = "md5"
+	} else {
+		chunk.ChunkHashAlgo = "blake3"
+	}
 	return chunk, nil
 }
 
@@ -401,6 +407,11 @@ func retrieveHeaders(headers *http.Header, chunkID string) (chunkInfo, error) {
 		}
 		chunk.ChunkHash = strings.ToUpper(chunk.ChunkHash)
 	}
+	chunk.ChunkHashAlgo = headers.Get(HeaderNameChunkChecksumAlgo)
+	if chunk.ChunkHashAlgo != "" && chunk.ChunkHashAlgo != "md5" &&
+			chunk.ChunkHashAlgo != "blake3" && chunk.ChunkHashAlgo != "None" {
+		return chunk, errInvalidHeader
+	}
 	chunk.ChunkSize = headers.Get(HeaderNameChunkSize)
 	if chunk.ChunkSize != "" {
 		if _, err := strconv.ParseInt(chunk.ChunkSize, 10, 64); err != nil {
@@ -490,6 +501,7 @@ func (chunk chunkInfo) fillHeaders(headers http.Header) {
 	setHeader(headers, HeaderNameMetachunkSize, chunk.MetachunkSize)
 	setHeader(headers, HeaderNameChunkPosition, chunk.ChunkPosition)
 	setHeader(headers, HeaderNameChunkChecksum, chunk.ChunkHash)
+	setHeader(headers, HeaderNameChunkChecksumAlgo, chunk.ChunkHashAlgo)
 	setHeader(headers, HeaderNameChunkSize, chunk.ChunkSize)
 	setHeader(headers, HeaderNameXattrVersion, chunk.OioVersion)
 	setHeader(headers, "Last-Modified", chunk.mtime.Format(time.RFC1123))
@@ -498,6 +510,7 @@ func (chunk chunkInfo) fillHeaders(headers http.Header) {
 // Fill the headers of the reply with the chunk info calculated by the rawx
 func (chunk chunkInfo) fillHeadersLight(headers http.Header) {
 	setHeader(headers, HeaderNameChunkChecksum, chunk.ChunkHash)
+	setHeader(headers, HeaderNameChunkChecksumAlgo, chunk.ChunkHashAlgo)
 	setHeader(headers, HeaderNameChunkSize, chunk.ChunkSize)
 	setHeader(headers, HeaderNameXattrVersion, chunk.OioVersion)
 }

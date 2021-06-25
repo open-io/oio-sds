@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,7 +18,6 @@ from oio.common.green import ratelimit
 
 from contextlib import closing
 from string import hexdigits
-import hashlib
 import zlib
 import time
 
@@ -25,7 +25,7 @@ from oio.blob.utils import check_volume, read_chunk_metadata
 from oio.container.client import ContainerClient
 from oio.common.daemon import Daemon
 from oio.common import exceptions as exc
-from oio.common.utils import paths_gen
+from oio.common.utils import get_hasher, paths_gen
 from oio.common.easy_value import int_value
 from oio.common.logger import get_logger
 from oio.common.constants import STRLEN_CHUNKID
@@ -181,8 +181,8 @@ class BlobAuditorWorker(object):
         except exc.MissingAttribute as err:
             raise exc.FaultyChunk(err)
         size = int(meta['chunk_size'])
-        md5_checksum = meta['chunk_hash'].lower()
-        reader = ChunkReader(chunk_file, size, md5_checksum,
+        expected_checksum = meta['chunk_hash'].lower()
+        reader = ChunkReader(chunk_file, size, expected_checksum,
                              compression=meta.get("compression", ""))
         with closing(reader):
             for buf in reader:
@@ -260,7 +260,7 @@ class BlobAuditor(Daemon):
 
 
 class ChunkReader(object):
-    def __init__(self, fp, size, md5_checksum, compression=None):
+    def __init__(self, fp, size, expected_checksum, compression=None):
         self.fp = fp
         self.decompressor = None
         self.error = None
@@ -272,12 +272,13 @@ class ChunkReader(object):
                 self.error = exc.FaultyChunk(msg)
                 raise self.error
         self.size = size
-        self.md5_checksum = md5_checksum
+        self.expected_checksum = expected_checksum
         self.bytes_read = 0
-        self.iter_md5 = None
+        self.iter_hash = None
 
     def __iter__(self):
-        self.iter_md5 = hashlib.md5()
+        self.iter_hash = get_hasher('md5' if len(self.expected_checksum) == 32
+                                    else 'blake3')
         while True:
             buf = self.fp.read()
             if buf and self.decompressor:
@@ -287,7 +288,7 @@ class ChunkReader(object):
                     self.error = exc.CorruptedChunk(zerr)
                     raise self.error
             if buf:
-                self.iter_md5.update(buf)
+                self.iter_hash.update(buf)
                 self.bytes_read += len(buf)
                 yield buf
             else:
@@ -299,12 +300,12 @@ class ChunkReader(object):
         if no error has occurred yet.
         """
         if self.fp and not self.error:
-            md5_read = self.iter_md5.hexdigest()
+            checksum = self.iter_hash.hexdigest()
             if self.bytes_read != self.size:
                 raise exc.FaultyChunk('Invalid size: expected %d, got %d' % (
                                       self.size, self.bytes_read))
 
-            if md5_read != self.md5_checksum:
+            if checksum != self.expected_checksum:
                 raise exc.CorruptedChunk(
                     'checksum does not match %s != %s'
-                    % (md5_read, self.md5_checksum))
+                    % (checksum, self.expected_checksum))

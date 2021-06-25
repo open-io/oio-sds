@@ -29,8 +29,8 @@ from oio.common.fullpath import encode_fullpath
 from oio.container.client import ContainerClient
 from oio.content.content import ChunksHelper
 from oio.content.factory import ContentFactory
-from tests.functional.content.test_content import random_data, md5_data, \
-    md5_stream
+from tests.functional.content.test_content import random_data, hash_data, \
+    hash_stream
 from tests.utils import BaseTestCase, random_str
 
 
@@ -70,7 +70,7 @@ class TestPlainContent(BaseTestCase):
 
         meta, chunks = self.container_client.content_locate(
             cid=self.container_id, content=content.content_id)
-        self.assertEqual(meta['hash'], md5_data(data))
+        self.assertEqual(meta['hash'], hash_data(data, algorithm='md5'))
         self.assertEqual(meta['length'], str(len(data)))
         self.assertEqual(meta['policy'], stgpol)
         self.assertEqual(meta['name'], self.content)
@@ -97,11 +97,11 @@ class TestPlainContent(BaseTestCase):
 
             data_begin = pos * self.chunk_size
             data_end = pos * self.chunk_size + self.chunk_size
-            chunk_hash = md5_data(data[data_begin:data_end])
+            chunk_hash = hash_data(data[data_begin:data_end])
 
             for chunk in chunks_at_pos:
                 meta, stream = self.blob_client.chunk_get(chunk.url)
-                self.assertEqual(md5_stream(stream), chunk_hash)
+                self.assertEqual(hash_stream(stream), chunk_hash)
                 self.assertEqual(meta['content_path'], self.content)
                 self.assertEqual(meta['container_id'], self.container_id)
                 self.assertEqual(meta['content_id'], meta['content_id'])
@@ -155,7 +155,7 @@ class TestPlainContent(BaseTestCase):
                 "id": c.id,
                 "hash": c.checksum,
                 "dl_meta": meta,
-                "dl_hash": md5_stream(stream)
+                "dl_hash": hash_stream(stream)
             }
             self.blob_client.chunk_delete(c.url)
 
@@ -187,7 +187,7 @@ class TestPlainContent(BaseTestCase):
                 continue
             meta, stream = self.blob_client.chunk_get(c.url)
             self.assertEqual(meta["chunk_id"], c.id)
-            self.assertEqual(md5_stream(stream),
+            self.assertEqual(hash_stream(stream),
                              rebuild_chunk_info["dl_hash"])
             self.assertEqual(c.checksum, rebuild_chunk_info["hash"])
             self.assertThat(c.url, NotEquals(rebuild_chunk_info["url"]))

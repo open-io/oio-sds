@@ -27,11 +27,13 @@ from oio.common import exceptions as exc
 from oio.common import green
 from oio.api.replication import ReplicatedMetachunkWriter
 from oio.common.storage_method import STORAGE_METHODS
-from tests.unit.api import CHUNK_SIZE, EMPTY_MD5, EMPTY_SHA256, \
+from tests.unit.api import CHUNK_SIZE, EMPTY_BLAKE3, EMPTY_SHA256, \
     empty_stream, decode_chunked_body, FakeResponse
 from oio.api import io
 from tests.unit import set_http_connect, set_http_requests
 from oio.common.constants import OIO_VERSION
+from oio.common.decorators import ensure_headers
+from oio.common.utils import get_hasher
 
 
 class TestReplication(unittest.TestCase):
@@ -63,7 +65,9 @@ class TestReplication(unittest.TestCase):
         return self._meta_chunk
 
     def checksum(self, d=b''):
-        return hashlib.md5(d)
+        hasher = get_hasher('blake3')
+        hasher.update(d)
+        return hasher
 
     def test_write_simple(self):
         checksum = self.checksum()
@@ -79,7 +83,7 @@ class TestReplication(unittest.TestCase):
                 source, size)
             self.assertEqual(len(chunks), len(meta_chunk))
             self.assertEqual(bytes_transferred, 0)
-            self.assertEqual(checksum, EMPTY_MD5)
+            self.assertEqual(checksum, EMPTY_BLAKE3)
 
     def test_write_exception(self):
         checksum = self.checksum()
@@ -118,7 +122,7 @@ class TestReplication(unittest.TestCase):
             #     self.assertEqual(chunks[i].get('error'), 'HTTP 500')
 
             self.assertEqual(bytes_transferred, 0)
-            self.assertEqual(checksum, EMPTY_MD5)
+            self.assertEqual(checksum, EMPTY_BLAKE3)
 
     def test_write_quorum_error(self):
         checksum = self.checksum()
@@ -158,7 +162,7 @@ class TestReplication(unittest.TestCase):
         #     chunks[len(meta_chunk) - 1].get('error'), '1.0 second')
 
         self.assertEqual(bytes_transferred, 0)
-        self.assertEqual(checksum, EMPTY_MD5)
+        self.assertEqual(checksum, EMPTY_BLAKE3)
 
     def test_write_partial_exception(self):
         checksum = self.checksum()
@@ -181,7 +185,7 @@ class TestReplication(unittest.TestCase):
         # self.assertEqual(chunks[len(meta_chunk) - 1].get('error'), 'failure')
 
         self.assertEqual(bytes_transferred, 0)
-        self.assertEqual(checksum, EMPTY_MD5)
+        self.assertEqual(checksum, EMPTY_BLAKE3)
 
     def test_write_error_source(self):
         class TestReader(object):
@@ -274,6 +278,7 @@ class TestReplication(unittest.TestCase):
             self.assertEqual(len(test_data), len(body))
             self.assertEqual(self.checksum(body).hexdigest(), final_checksum)
 
+    @ensure_headers
     def _test_write_checksum_algo(self, expected_checksum, **kwargs):
         global_checksum = self.checksum()
         source = empty_stream()
@@ -291,10 +296,10 @@ class TestReplication(unittest.TestCase):
         self.assertEqual(expected_checksum, checksum)
 
     def test_write_default_checksum_algo(self):
-        with patch('hashlib.new', wraps=hashlib.new) as algo_new:
-            self._test_write_checksum_algo(EMPTY_MD5)
+        with patch('oio.api.replication.get_hasher', wraps=get_hasher) as gh:
+            self._test_write_checksum_algo(EMPTY_BLAKE3)
             # Called only once for the metachunk
-            algo_new.assert_called_once_with('md5')
+            gh.assert_called_once_with('blake3')
 
     def test_write_custom_checksum_algo(self):
         with patch('hashlib.new', wraps=hashlib.new) as algo_new:
@@ -305,11 +310,11 @@ class TestReplication(unittest.TestCase):
 
     def test_write_no_checksum_algo(self):
         from oio.common.constants import CHUNK_HEADERS
-        headers = {CHUNK_HEADERS['chunk_hash']: EMPTY_MD5}
-        with patch('hashlib.new', wraps=hashlib.new) as algo_new:
+        headers = {CHUNK_HEADERS['chunk_hash']: EMPTY_BLAKE3}
+        with patch('oio.api.replication.get_hasher', wraps=get_hasher) as gh:
             self._test_write_checksum_algo(
-                EMPTY_MD5, chunk_checksum_algo=None, headers=headers)
-            algo_new.assert_not_called()
+                EMPTY_BLAKE3, chunk_checksum_algo=None, headers=headers)
+            gh.assert_not_called()
 
     def test_read(self):
         test_data = (b'1234' * 1024)[:-10]

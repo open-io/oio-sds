@@ -14,14 +14,14 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from six.moves import xrange
-
 import os
 import time
 
 import math
 import random
 from io import BytesIO
+
+from six.moves import xrange
 
 from oio.common.utils import cid_from_name
 from oio.common.exceptions import OrphanChunk, NotFound, \
@@ -31,8 +31,8 @@ from oio.container.client import ContainerClient
 from oio.content.content import ChunksHelper
 from oio.content.factory import ContentFactory
 from oio.content.ec import ECContent
-from tests.functional.content.test_content import md5_stream, random_data, \
-    md5_data
+from tests.functional.content.test_content import hash_stream, random_data, \
+    hash_data
 from tests.utils import BaseTestCase, random_str
 
 
@@ -66,9 +66,6 @@ class TestECContent(BaseTestCase):
         self.k = 6
         self.m = 3
 
-    def tearDown(self):
-        super(TestECContent, self).tearDown()
-
     def random_chunks(self, nb):
         pos = random.sample(xrange(self.k + self.m), nb)
         return ["0.%s" % i for i in pos]
@@ -89,7 +86,7 @@ class TestECContent(BaseTestCase):
             cid=self.container_id, content=content.content_id)
         # verify metadata
         chunks = ChunksHelper(chunks)
-        self.assertEqual(meta['hash'], md5_data(data))
+        self.assertEqual(meta['hash'], hash_data(data, algorithm='md5'))
         self.assertEqual(meta['length'], str(len(data)))
         self.assertEqual(meta['policy'], self.stgpol)
         self.assertEqual(meta['name'], self.content)
@@ -104,7 +101,7 @@ class TestECContent(BaseTestCase):
             if len(chunks_at_pos) < 1:
                 break
             metachunk_size = chunks_at_pos[0].size
-            metachunk_hash = md5_data(data[offset:offset+metachunk_size])
+            metachunk_hash = hash_data(data[offset:offset + metachunk_size])
 
             for chunk in chunks_at_pos:
                 meta, stream = self.blob_client.chunk_get(chunk.url)
@@ -115,7 +112,7 @@ class TestECContent(BaseTestCase):
                 self.assertEqual(meta['content_id'], meta['content_id'])
                 self.assertEqual(meta['chunk_id'], chunk.id)
                 self.assertEqual(meta['chunk_pos'], chunk.pos)
-                self.assertEqual(meta['chunk_hash'], md5_stream(stream))
+                self.assertEqual(meta['chunk_hash'], hash_stream(stream))
                 full_path = encode_fullpath(
                     self.account, self.container_name, self.content,
                     meta['content_version'], meta['content_id'])
@@ -163,7 +160,7 @@ class TestECContent(BaseTestCase):
             chunk_id_to_rebuild = c.id
             meta, stream = self.blob_client.chunk_get(c.url)
             old_info[pos]["dl_meta"] = meta
-            old_info[pos]["dl_hash"] = md5_stream(stream)
+            old_info[pos]["dl_hash"] = hash_stream(stream)
             # delete the chunk
             self.blob_client.chunk_delete(c.url)
 
@@ -180,7 +177,7 @@ class TestECContent(BaseTestCase):
             c = rebuilt_content.chunks.filter(pos=pos)[0]
             rebuilt_meta, rebuilt_stream = self.blob_client.chunk_get(c.url)
             self.assertEqual(rebuilt_meta["chunk_id"], c.id)
-            self.assertEqual(md5_stream(rebuilt_stream),
+            self.assertEqual(hash_stream(rebuilt_stream),
                              old_info[pos]["dl_hash"])
             self.assertEqual(c.checksum, old_info[pos]["hash"])
             self.assertNotEqual(c.url, old_info[pos]["url"])
@@ -243,7 +240,7 @@ class TestECContent(BaseTestCase):
         data = b''.join(content.fetch())
 
         self.assertEqual(len(data), len(test_data))
-        self.assertEqual(md5_data(data), md5_data(test_data))
+        self.assertEqual(hash_data(data), hash_data(test_data))
 
         # verify that chunks are broken
         for pos in broken_pos_list:

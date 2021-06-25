@@ -26,14 +26,14 @@ from six import PY2, text_type
 from six.moves.urllib_parse import urlparse
 
 from oio.common import exceptions as exc, green
-from oio.common.constants import REQID_HEADER
+from oio.common.constants import CHUNK_HEADERS, REQID_HEADER
 from oio.common.fullpath import decode_fullpath
 from oio.common.http import parse_content_type,\
     parse_content_range, ranges_from_http_header, http_header_from_ranges
 from oio.common.http_eventlet import http_connect
 from oio.common.utils import GeneratorIO, group_chunk_errors, \
     deadline_to_timeout, monotonic_time, set_deadline_from_read_timeout, \
-    cid_from_name, compute_chunk_id
+    cid_from_name, compute_chunk_id, get_hasher
 from oio.common.storage_method import STORAGE_METHODS
 from oio.common.logger import get_logger
 
@@ -166,7 +166,7 @@ class WriteHandler(_WriteHandler):
         :param read_timeout: timeout to read a buffer of data from source
         :param chunk_checksum_algo: algorithm to use to compute chunk
             checksums locally. Can be `None` to disable local checksum
-            computation and let the rawx compute it (will be md5).
+            computation and let the rawx compute it (will be blake3).
         """
         super(WriteHandler, self).__init__(
             chunk_preparer, storage_method, headers=headers, **kwargs)
@@ -258,7 +258,7 @@ class ChunkReader(object):
     def __init__(self, chunk_iter, buf_size, headers,
                  connection_timeout=None, read_timeout=None,
                  align=False, perfdata=None, resp_by_chunk=None,
-                 watchdog=None, **_kwargs):
+                 watchdog=None, verify_checksum=False, **_kwargs):
         """
         :param chunk_iter:
         :param buf_size: size of the read buffer
@@ -267,6 +267,10 @@ class ChunkReader(object):
         :param read_timeout: timeout to read a buffer of data
         :param align: if True, the reader will skip some bytes to align
                       on `buf_size`
+        :param verify_checksum: if True, compute the checksum while reading
+            and compare to the value saved in the chunk's extended attributes.
+            If it is a string, compute the checksum and compare to this value.
+            The checksum algorithm is read from the response headers.
         """
         self.chunk_iter = chunk_iter
         self.source = None
@@ -283,6 +287,7 @@ class ChunkReader(object):
             self.read_size = exp_ramp_gen(8192, 1048576)
         self.discard_bytes = 0
         self.align = align
+        self.checksum = None
         self.connection_timeout = connection_timeout or CONNECTION_TIMEOUT
         self.read_timeout = read_timeout or CHUNK_TIMEOUT
         if resp_by_chunk is not None:
@@ -291,6 +296,7 @@ class ChunkReader(object):
             self._resp_by_chunk = dict()
         self.perfdata = perfdata
         self.logger = _kwargs.get('logger', LOGGER)
+        self.verify_checksum = verify_checksum
         self.watchdog = watchdog or get_watchdog()
 
     @property
@@ -387,8 +393,9 @@ class ChunkReader(object):
             self.sources.append((source, chunk))
             return True
         else:
-            self.logger.warn("Invalid response from %s (reqid=%s): %d %s",
-                             chunk, self.reqid, source.status, source.reason)
+            self.logger.warning("Invalid response from %s (reqid=%s): %d %s",
+                                chunk, self.reqid, source.status,
+                                source.reason)
             self._resp_by_chunk[chunk["url"]] = (source.status,
                                                  text_type(source.reason))
             close_source(source, self.logger)
@@ -430,9 +437,30 @@ class ChunkReader(object):
         parts_iter = self.get_iter()
 
         def _iter():
+            if self.verify_checksum:
+                algo = self.headers.get(CHUNK_HEADERS['chunk_hash_algo'],
+                                        'blake3')
+                checksum = get_hasher(algo)
+            else:
+                checksum = None
+
             for part in parts_iter:
                 for data in part['iter']:
+                    if checksum is not None:
+                        checksum.update(data)
                     yield data
+
+            if checksum:
+                self.checksum = checksum.hexdigest()
+                expected = (self.verify_checksum
+                            if isinstance(self.verify_checksum, str)
+                            else self.headers.get(CHUNK_HEADERS['chunk_hash']))
+                if not expected:
+                    self.logger.warning("Cannot verify checksum: "
+                                        "header is missing or empty")
+                elif self.checksum.lower() != expected.lower():
+                    raise exc.CorruptedChunk("Expected %s, computed %s" % (
+                        expected, self.checksum))
             return
 
         if PY2:
@@ -510,7 +538,7 @@ class ChunkReader(object):
                 # find a new source to perform recovery
                 new_source, new_chunk = self._get_source()
                 if new_source:
-                    self.logger.warn(
+                    self.logger.warning(
                         "Failed to read from %s (%s), "
                         "retrying from %s (reqid=%s)",
                         chunk, crto, new_chunk, self.reqid)
@@ -528,8 +556,9 @@ class ChunkReader(object):
                         return
 
                 else:
-                    self.logger.warn("Failed to read from %s (%s, reqid=%s)",
-                                     chunk, crto, self.reqid)
+                    self.logger.warning(
+                        "Failed to read from %s (%s, reqid=%s)",
+                        chunk, crto, self.reqid)
                     # no valid source found to recover
                     raise
             else:
@@ -762,7 +791,7 @@ class MetachunkWriter(_MetachunkWriter):
     Base class for metachunk writers
     """
     def __init__(self, storage_method=None, quorum=None,
-                 chunk_checksum_algo='md5', reqid=None,
+                 chunk_checksum_algo='blake3', reqid=None,
                  chunk_buffer_min=32768, chunk_buffer_max=262144,
                  perfdata=None, **_kwargs):
         super(MetachunkWriter, self).__init__(

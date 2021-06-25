@@ -84,7 +84,7 @@ class ObjectStorageApi(object):
             for all HTTP based APIs (except rawx)
         :type pool_manager: `urllib3.PoolManager`
         :keyword chunk_checksum_algo: algorithm to use for chunk checksums.
-            Only 'md5' and `None` are supported at the moment.
+            Only 'blake3' and `None` are supported at the moment.
         :keyword autocreate: if set, container will be created automatically.
             Default value is True.
         :type autocreate: `bool`

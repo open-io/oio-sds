@@ -30,9 +30,10 @@ from oio.api.ec import EcMetachunkWriter, ECChunkDownloadHandler, \
 from oio.common import exceptions as exc, green
 from oio.common.constants import CHUNK_HEADERS
 from tests.unit.api import empty_stream, decode_chunked_body, \
-    FakeResponse, CHUNK_SIZE, EMPTY_MD5, EMPTY_SHA256
+    FakeResponse, CHUNK_SIZE, EMPTY_BLAKE3, EMPTY_SHA256
 from tests.unit import set_http_connect, set_http_requests
 from oio.common.constants import OIO_VERSION
+from oio.common.utils import get_hasher
 
 
 class TestEC(unittest.TestCase):
@@ -59,14 +60,14 @@ class TestEC(unittest.TestCase):
             'oio_version': OIO_VERSION
         }
         self._meta_chunk = [
-                {'url': 'http://127.0.0.1:7000/0', 'pos': '0.0', 'num': 0},
-                {'url': 'http://127.0.0.1:7001/1', 'pos': '0.1', 'num': 1},
-                {'url': 'http://127.0.0.1:7002/2', 'pos': '0.2', 'num': 2},
-                {'url': 'http://127.0.0.1:7003/3', 'pos': '0.3', 'num': 3},
-                {'url': 'http://127.0.0.1:7004/4', 'pos': '0.4', 'num': 4},
-                {'url': 'http://127.0.0.1:7005/5', 'pos': '0.5', 'num': 5},
-                {'url': 'http://127.0.0.1:7006/6', 'pos': '0.6', 'num': 6},
-                {'url': 'http://127.0.0.1:7007/7', 'pos': '0.7', 'num': 7},
+            {'url': 'http://127.0.0.1:7000/0', 'pos': '0.0', 'num': 0},
+            {'url': 'http://127.0.0.1:7001/1', 'pos': '0.1', 'num': 1},
+            {'url': 'http://127.0.0.1:7002/2', 'pos': '0.2', 'num': 2},
+            {'url': 'http://127.0.0.1:7003/3', 'pos': '0.3', 'num': 3},
+            {'url': 'http://127.0.0.1:7004/4', 'pos': '0.4', 'num': 4},
+            {'url': 'http://127.0.0.1:7005/5', 'pos': '0.5', 'num': 5},
+            {'url': 'http://127.0.0.1:7006/6', 'pos': '0.6', 'num': 6},
+            {'url': 'http://127.0.0.1:7007/7', 'pos': '0.7', 'num': 7},
         ]
 
     def meta_chunk(self):
@@ -76,7 +77,9 @@ class TestEC(unittest.TestCase):
         return deepcopy(self._meta_chunk)
 
     def checksum(self, d=b''):
-        return hashlib.md5(d)
+        hasher = get_hasher('blake3')
+        hasher.update(d)
+        return hasher
 
     def test_write_simple(self):
         checksum = self.checksum()
@@ -91,7 +94,7 @@ class TestEC(unittest.TestCase):
             bytes_transferred, checksum, chunks = handler.stream(source, size)
         self.assertEqual(len(chunks), nb)
         self.assertEqual(bytes_transferred, 0)
-        self.assertEqual(checksum, EMPTY_MD5)
+        self.assertEqual(checksum, EMPTY_BLAKE3)
 
     def test_write_exception(self):
         checksum = self.checksum()
@@ -129,7 +132,7 @@ class TestEC(unittest.TestCase):
             self.assertEqual(chunks[i].get('error'), 'resp: HTTP 500')
 
         self.assertEqual(bytes_transferred, 0)
-        self.assertEqual(checksum, EMPTY_MD5)
+        self.assertEqual(checksum, EMPTY_BLAKE3)
 
     def test_write_quorum_error(self):
         checksum = self.checksum()
@@ -147,9 +150,9 @@ class TestEC(unittest.TestCase):
 
     def test_write_connect_errors(self):
         test_cases = [
-                {'error': green.ConnectionTimeout(1.0),
-                 'msg': 'connect: Connection timeout 1.0 second'},
-                {'error': Exception('failure'), 'msg': 'connect: failure'},
+            {'error': green.ConnectionTimeout(1.0),
+             'msg': 'connect: Connection timeout 1.0 second'},
+            {'error': Exception('failure'), 'msg': 'connect: failure'},
         ]
         for test in test_cases:
             checksum = self.checksum()
@@ -175,13 +178,13 @@ class TestEC(unittest.TestCase):
             self.assertEqual(chunks[nb - 1].get('error'), test['msg'])
 
             self.assertEqual(bytes_transferred, 0)
-            self.assertEqual(checksum, EMPTY_MD5)
+            self.assertEqual(checksum, EMPTY_BLAKE3)
 
     def test_write_response_error(self):
         test_cases = [
-                {'error': green.ChunkWriteTimeout(1.0),
-                 'msg': 'resp: Chunk write timeout 1.0 second'},
-                {'error': Exception('failure'), 'msg': 'resp: failure'},
+            {'error': green.ChunkWriteTimeout(1.0),
+             'msg': 'resp: Chunk write timeout 1.0 second'},
+            {'error': Exception('failure'), 'msg': 'resp: failure'},
         ]
         for test in test_cases:
             checksum = self.checksum()
@@ -205,7 +208,7 @@ class TestEC(unittest.TestCase):
             self.assertEqual(chunks[nb - 1].get('error'), test['msg'])
 
             self.assertEqual(bytes_transferred, 0)
-            self.assertEqual(checksum, EMPTY_MD5)
+            self.assertEqual(checksum, EMPTY_BLAKE3)
 
     def test_write_error_source(self):
         class TestReader(object):
@@ -333,16 +336,16 @@ class TestEC(unittest.TestCase):
         self.assertEqual(expected_checksum, checksum)
 
     def test_write_default_checksum_algo(self):
-        with patch('hashlib.new', wraps=hashlib.new) as algo_new:
-            self._test_write_checksum_algo(EMPTY_MD5)
-            algo_new.assert_called_with('md5')
+        with patch('oio.api.ec.get_hasher', wraps=get_hasher) as alg_new:
+            self._test_write_checksum_algo(EMPTY_BLAKE3)
+            alg_new.assert_called_with('blake3')
             # Should be called once for the metachunk
             # and once for each chunk.
             self.assertEqual(
                 (self.storage_method.ec_nb_data +
                  self.storage_method.ec_nb_parity +
                  1),
-                len(algo_new.call_args_list))
+                len(alg_new.call_args_list))
 
     def test_write_custom_checksum_algo(self):
         with patch('hashlib.new', wraps=hashlib.new) as algo_new:
@@ -358,11 +361,11 @@ class TestEC(unittest.TestCase):
                 len(algo_new.call_args_list))
 
     def test_write_no_checksum_algo(self):
-        with patch('hashlib.new', wraps=hashlib.new) as algo_new:
+        with patch('oio.api.ec.get_hasher', wraps=get_hasher) as alg_new:
             self._test_write_checksum_algo(
-                EMPTY_MD5, chunk_checksum_algo=None)
+                EMPTY_BLAKE3, chunk_checksum_algo=None)
             # Should be called only once for the metachunk
-            algo_new.assert_called_once_with('md5')
+            alg_new.assert_called_once_with('blake3')
 
     def _make_ec_chunks(self, data):
         segment_size = self.storage_method.ec_segment_size
@@ -446,8 +449,8 @@ class TestEC(unittest.TestCase):
             {'path': '/7'},
         ]
         responses = {
-                n['path']: FakeResponse(200, ec_chunks[i])
-                for i, n in enumerate(chunks)
+            n['path']: FakeResponse(200, ec_chunks[i])
+            for i, n in enumerate(chunks)
         }
 
         def get_response(req):
@@ -581,7 +584,7 @@ class TestEC(unittest.TestCase):
         self.assertEqual(len(parts), 1)
         self.assertEqual(parts[0]['start'], 1)
         self.assertEqual(parts[0]['end'], 4)
-        self.assertEqual(data, test_data[meta_start:meta_end+1])
+        self.assertEqual(data, test_data[meta_start:meta_end + 1])
         self.assertEqual(len(conn_record), self.storage_method.ec_nb_data)
 
     def test_read_range_unsatisfiable(self):

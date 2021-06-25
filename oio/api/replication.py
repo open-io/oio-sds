@@ -15,7 +15,6 @@
 # License along with this library.
 
 
-import hashlib
 from oio.common.green import LightQueue, Timeout, GreenPile, WatchdogTimeout
 
 from socket import error as SocketError
@@ -27,7 +26,7 @@ from oio.api import io
 from oio.common.exceptions import OioTimeout, SourceReadError, \
     SourceReadTimeout
 from oio.common.http import headers_from_object_metadata
-from oio.common.utils import encode, monotonic_time
+from oio.common.utils import encode, get_hasher, monotonic_time
 from oio.common.constants import CHUNK_HEADERS
 from oio.common import green
 from oio.common.logger import get_logger
@@ -38,37 +37,47 @@ LOGGER = get_logger({}, __name__)
 class FakeChecksum(object):
     """Acts as a checksum object but does not compute anything"""
 
-    def __init__(self, actual_checksum):
+    def __init__(self, actual_checksum, name=None):
         self.checksum = actual_checksum
+        self._name = name
 
     def hexdigest(self):
         """Returns the checksum passed as constructor parameter"""
         return self.checksum
+
+    @property
+    def name(self):
+        if self._name:
+            return self._name
+        return 'md5' if len(self.checksum) == 32 else 'blake3'
 
     def update(self, *_args, **_kwargs):
         pass
 
 
 class ReplicatedMetachunkWriter(io.MetachunkWriter):
-    def __init__(self, sysmeta, meta_chunk, checksum, storage_method,
+    def __init__(self, sysmeta, meta_chunk, global_checksum, storage_method,
                  quorum=None, connection_timeout=None, write_timeout=None,
                  read_timeout=None, headers=None, **kwargs):
         super(ReplicatedMetachunkWriter, self).__init__(
             storage_method=storage_method, quorum=quorum, **kwargs)
         self.sysmeta = sysmeta
         self.meta_chunk = meta_chunk
-        self.checksum = checksum
+        self.global_checksum = global_checksum
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
         self.write_timeout = write_timeout or io.CHUNK_TIMEOUT
         self.read_timeout = read_timeout or io.CLIENT_TIMEOUT
         self.headers = headers or {}
         self.logger = kwargs.get('logger', LOGGER)
+        if self.chunk_checksum_algo:
+            self.headers[CHUNK_HEADERS["chunk_hash_algo"]] = \
+                self.chunk_checksum_algo
 
     def stream(self, source, size):
         bytes_transferred = 0
         meta_chunk = self.meta_chunk
         if self.chunk_checksum_algo:
-            meta_checksum = hashlib.new(self.chunk_checksum_algo)
+            meta_checksum = get_hasher(self.chunk_checksum_algo)
         else:
             meta_checksum = None
         pile = GreenPile(len(meta_chunk))
@@ -115,7 +124,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                                 if not conn.failed:
                                     conn.queue.put(b'')
                             break
-                    self.checksum.update(data)
+                    self.global_checksum.update(data)
                     if meta_checksum:
                         meta_checksum.update(data)
                     bytes_transferred += len(data)
@@ -159,11 +168,13 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                 continue
             pile.spawn(self._get_response, conn)
 
+        hexsum = meta_checksum.hexdigest() if meta_checksum else None
+
         for (conn, resp) in pile:
             if resp:
                 self._handle_resp(
                     conn, resp,
-                    meta_checksum.hexdigest() if meta_checksum else None,
+                    hexsum,
                     bytes_transferred,
                     success_chunks, failed_chunks)
         self.quorum_or_fail(success_chunks, failed_chunks)
@@ -329,7 +340,7 @@ class ReplicatedWriteHandler(io.WriteHandler):
     """
 
     def stream(self):
-        global_checksum = hashlib.md5()
+        global_checksum = get_hasher('md5')
         total_bytes_transferred = 0
         content_chunks = []
         kwargs = ReplicatedMetachunkWriter.filter_kwargs(self.extra_kwargs)

@@ -1,5 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2019-2020 OpenIO SAS
+// Copyright (C) 2021 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -59,6 +60,7 @@ const (
 	HeaderNameChunkPosition      = "X-oio-Chunk-Meta-Chunk-Pos"
 	HeaderNameChunkSize          = "X-oio-Chunk-Meta-Chunk-Size"
 	HeaderNameChunkChecksum      = "X-oio-Chunk-Meta-Chunk-Hash"
+	HeaderNameChunkChecksumAlgo  = "X-oio-Chunk-Meta-Chunk-Hash-Algorithm"
 	HeaderNameMetachunkSize      = "X-oio-Chunk-Meta-Metachunk-Size"
 	HeaderNameMetachunkChecksum  = "X-oio-Chunk-Meta-Metachunk-Hash"
 	HeaderNameChunkID            = "X-oio-Chunk-Meta-Chunk-Id"
@@ -95,7 +97,7 @@ const (
 	configDefaultSyncFile  = false
 	configDefaultSyncDir   = false
 
-	// By default, no fadvise() will be called before commiting a chunk
+	// By default, no fadvise() will be called before committing a chunk
 	configDefaultFadviseUpload = configFadviseNone
 
 	// By default, no fadvise() will be called before download a chunk

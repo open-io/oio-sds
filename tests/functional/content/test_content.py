@@ -15,8 +15,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import hashlib
-
 import os
 import time
 from io import BytesIO
@@ -28,7 +26,7 @@ from testtools.testcase import ExpectedException
 from six import PY2
 
 from oio.common.exceptions import ContentNotFound, OrphanChunk
-from oio.common.utils import cid_from_name
+from oio.common.utils import cid_from_name, get_hasher
 from oio.common.fullpath import encode_fullpath
 from oio.container.client import ContainerClient
 from oio.content.factory import ContentFactory
@@ -37,15 +35,15 @@ from oio.content.ec import ECContent
 from tests.utils import BaseTestCase, ec, strange_paths
 
 
-def md5_stream(stream):
-    checksum = hashlib.md5()
+def hash_stream(stream, algorithm='blake3'):
+    checksum = get_hasher(algorithm=algorithm)
     for data in stream:
         checksum.update(data)
     return checksum.hexdigest().upper()
 
 
-def md5_data(data):
-    checksum = hashlib.md5()
+def hash_data(data, algorithm='blake3'):
+    checksum = get_hasher(algorithm=algorithm)
     checksum.update(data)
     return checksum.hexdigest().upper()
 
@@ -255,7 +253,7 @@ class TestContentFactory(BaseTestCase):
         chunk_url = mc[0].url
         chunk_host = mc[0].host
         chunk_meta, chunk_stream = self.blob_client.chunk_get(chunk_url)
-        chunk_hash = md5_stream(chunk_stream)
+        chunk_hash = hash_stream(chunk_stream)
         new_chunk = content.move_chunk(chunk_id, service_id=chunk_host)
 
         content_updated = self.content_factory.get(self.container_id,
@@ -269,7 +267,7 @@ class TestContentFactory(BaseTestCase):
 
         new_chunk_meta, new_chunk_stream = self.blob_client.chunk_get(
             new_chunk["url"])
-        new_chunk_hash = md5_stream(new_chunk_stream)
+        new_chunk_hash = hash_stream(new_chunk_stream)
 
         self.assertEqual(new_chunk_hash, chunk_hash)
         self.assertGreaterEqual(new_chunk_meta['chunk_mtime'],

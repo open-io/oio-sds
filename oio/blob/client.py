@@ -119,10 +119,9 @@ class BlobClient(object):
         chunk_method = meta.get('chunk_method',
                                 meta.get('content_chunkmethod'))
         storage_method = STORAGE_METHODS.load(chunk_method)
-        checksum = meta['metachunk_hash' if storage_method.ec
-                        else 'chunk_hash']
+        fake_checksum = FakeChecksum("Don't care")
         writer = ReplicatedMetachunkWriter(
-            meta, [chunk], FakeChecksum(checksum),
+            meta, [chunk], fake_checksum,
             storage_method, quorum=1, perfdata=self.perfdata,
             logger=self.logger, watchdog=self.watchdog, **kwargs)
         bytes_transferred, chunk_hash, _ = writer.stream(data, None)
@@ -174,15 +173,21 @@ class BlobClient(object):
     @update_rawx_perfdata
     @ensure_headers
     @ensure_request_id
-    def chunk_get(self, url, check_headers=True, **kwargs):
+    def chunk_get(self, url, check_headers=True, verify_checksum=False,
+                  **kwargs):
         """
         :keyword check_headers: when True (the default), raise FaultyChunk
             if a mandatory response header is missing.
+        :keyword verify_checksum: if True, compute the checksum while reading
+            and compare to the value saved in the chunk's extended attributes.
+            If any string, compute the checksum and compare to this string.
+            The checksum algorithm is read from the response headers.
         :returns: a tuple with a dictionary of chunk metadata and a stream
             to the chunk's data.
         """
         url = self.resolve_url(url)
         reader = ChunkReader([{'url': url}], None,
+                             verify_checksum=verify_checksum,
                              watchdog=self.watchdog, **kwargs)
         # This must be done now if we want to access headers
         stream = reader.stream()
@@ -191,7 +196,7 @@ class BlobClient(object):
 
     @update_rawx_perfdata
     @ensure_request_id
-    def chunk_head(self, url, **kwargs):
+    def chunk_head(self, url, check_hash=False, **kwargs):
         """
         Perform a HEAD request on a chunk.
 
@@ -210,7 +215,7 @@ class BlobClient(object):
         else:
             headers = headers.copy()
         headers[FETCHXATTR_HEADER] = _xattr
-        if bool(kwargs.get('check_hash', False)):
+        if check_hash:
             headers[CHECKHASH_HEADER] = True
 
         try:
@@ -230,12 +235,16 @@ class BlobClient(object):
     @ensure_request_id
     def chunk_copy(self, from_url, to_url, chunk_id=None, fullpath=None,
                    cid=None, path=None, version=None, content_id=None,
-                   **kwargs):
+                   chunk_checksum_algo='__same__', **kwargs):
         stream = None
         # Check source headers only when new fullpath is not provided
         kwargs['check_headers'] = not bool(fullpath)
         try:
-            meta, stream = self.chunk_get(from_url, **kwargs)
+            # TODO(FVE): we could decide if we want to verify the checksum
+            # after reading the metadata. If the checksum algorithms are
+            # the same, we are computing twice the same thing...
+            meta, stream = self.chunk_get(from_url, verify_checksum=True,
+                                          **kwargs)
             meta['oio_version'] = OIO_VERSION
             meta['chunk_id'] = chunk_id or to_url.split('/')[-1]
             meta['full_path'] = fullpath or meta['full_path']
@@ -247,8 +256,20 @@ class BlobClient(object):
             meta['id'] = content_id or meta.get('content_id')
             meta['chunk_method'] = meta['content_chunkmethod']
             meta['policy'] = meta['content_policy']
+
+            # Allow to reuse the same or change the chunk hash algorithm.
+            # If we change it, we must remove the chunk hash from metadata
+            # or the rawx will try to compare hashes from different algorithms
+            # and return an error.
+            if chunk_checksum_algo == '__same__':
+                chunk_checksum_algo = meta['chunk_hash_algo']
+            elif meta.get('chunk_hash_algo') != chunk_checksum_algo:
+                meta.pop('chunk_hash', None)
+                meta.pop('chunk_hash_algo', None)
+
             bytes_transferred, chunk_hash = self.chunk_put(
-                to_url, meta, stream, **kwargs)
+                to_url, meta, stream, chunk_checksum_algo=chunk_checksum_algo,
+                **kwargs)
         finally:
             if stream:
                 stream.close()
@@ -261,7 +282,14 @@ class BlobClient(object):
                         'Size isn\'t the same for the copied chunk')
 
             expected_chunk_hash = meta.get('chunk_hash')
-            if expected_chunk_hash is not None:
+            expected_hash_algo = meta.get('chunk_hash_algo')
+            if expected_hash_algo != chunk_checksum_algo:
+                self.logger.debug(
+                    "Cannot compare checksums: source chunk uses %s, "
+                    "new chunk uses %s",
+                    expected_hash_algo,
+                    chunk_checksum_algo)
+            elif expected_chunk_hash is not None:
                 expected_chunk_hash = expected_chunk_hash.upper()
                 chunk_hash = chunk_hash.upper()
                 if chunk_hash != expected_chunk_hash:

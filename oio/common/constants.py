@@ -99,6 +99,7 @@ CHUNK_HEADERS = {
     "container_id": "%scontainer-id" % CHUNK_METADATA_PREFIX,
     "chunk_id": "%schunk-id" % CHUNK_METADATA_PREFIX,
     "chunk_hash": "%schunk-hash" % CHUNK_METADATA_PREFIX,
+    "chunk_hash_algo": "%schunk-hash-algorithm" % CHUNK_METADATA_PREFIX,
     "chunk_mtime": "last-modified",
     "chunk_size": "%schunk-size" % CHUNK_METADATA_PREFIX,
     "chunk_pos": "%schunk-pos" % CHUNK_METADATA_PREFIX,
@@ -133,19 +134,20 @@ CHUNK_XATTR_KEYS = {
 CHUNK_XATTR_CONTENT_FULLPATH_PREFIX = 'oio.content.fullpath:'
 
 CHUNK_XATTR_KEYS_OPTIONAL = {
-        'content_chunksnb': True,
-        'chunk_hash': True,
-        'chunk_mtime': True,
-        'chunk_size': True,
-        'metachunk_size': True,
-        'metachunk_hash': True,
-        'oio_version': True,
-        'compression': True,
-        # Superseded by full_path
-        'container_id': True,
-        'content_id': True,
-        'content_path': True,
-        'content_version': True,
+    'content_chunksnb': True,
+    'chunk_hash': True,
+    'chunk_hash_algo': True,
+    'chunk_mtime': True,
+    'chunk_size': True,
+    'metachunk_size': True,
+    'metachunk_hash': True,
+    'oio_version': True,
+    'compression': True,
+    # Superseded by full_path
+    'container_id': True,
+    'content_id': True,
+    'content_path': True,
+    'content_version': True,
 }
 
 VOLUME_XATTR_KEYS = {

@@ -1,3 +1,4 @@
+blake3
 cliff>=3.0.0
 eventlet>=0.25.0,<0.30.3  # From 0.30.3, compatibility problem with gunicorn
 gunicorn>=20.0.0

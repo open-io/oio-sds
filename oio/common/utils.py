@@ -23,6 +23,7 @@ import hashlib
 import pwd
 import fcntl
 import sys
+from blake3 import blake3
 from collections import OrderedDict
 from ctypes import CDLL as orig_CDLL
 from getpass import getuser
@@ -48,6 +49,11 @@ except (ImportError, NotImplementedError):
 utf8_decoder = getdecoder('utf-8')
 utf8_encoder = getencoder('utf-8')
 
+CUSTOM_HASHER = {
+    'blake3': blake3,
+    # 'xxhash': xxhash3_128
+}
+
 
 def quote(value, safe='/'):
     if isinstance(value, text_type):
@@ -57,7 +63,7 @@ def quote(value, safe='/'):
 
 
 def encode(input, codec='utf-8'):
-    """Recursively encode a list of dictionnaries"""
+    """Recursively encode a list of dictionaries"""
     if isinstance(input, dict):
         return {key: encode(value, codec) for key, value in input.items()}
     elif isinstance(input, list):
@@ -131,11 +137,11 @@ def statfs(volume):
     free_blocks = st.f_bavail
     total_blocks = st.f_blocks
     if total_inodes > 0:
-        inode_ratio = float(free_inodes)/float(total_inodes)
+        inode_ratio = float(free_inodes) / float(total_inodes)
     else:
         inode_ratio = 1
     if total_blocks > 0:
-        block_ratio = float(free_blocks)/float(total_blocks)
+        block_ratio = float(free_blocks) / float(total_blocks)
     else:
         block_ratio = 1
     return min(inode_ratio, block_ratio)
@@ -225,18 +231,18 @@ def fix_ranges(ranges, length):
                 continue
             elif end >= length:
                 # all content must be returned
-                result.append((0, length-1))
+                result.append((0, length - 1))
             else:
-                result.append((length - end, length-1))
+                result.append((length - end, length - 1))
             continue
         if end is None:
             if start < length:
-                result.append((start, length-1))
+                result.append((start, length - 1))
             else:
                 # skip
                 continue
         elif start < length:
-            result.append((start, min(end, length-1)))
+            result.append((start, min(end, length - 1)))
 
     return result
 
@@ -250,7 +256,7 @@ def request_id(prefix=''):
     pref_bits = min(112, len(prefix) * 4)
     rand_bits = 112 - pref_bits
     return "%s%04X%0*X" % (prefix, os.getpid(),
-                           rand_bits//4, getrandbits(rand_bits))
+                           rand_bits // 4, getrandbits(rand_bits))
 
 
 if PY2:
@@ -484,7 +490,7 @@ def deadline_to_timeout(deadline, check=False):
     """Convert a deadline (`float` seconds) to a timeout (`float` seconds)"""
     dl_to = deadline - monotonic_time()
     if check and dl_to <= 0.0:
-        raise DeadlineReached()
+        raise DeadlineReached
     return dl_to
 
 
@@ -594,6 +600,17 @@ def compute_chunk_id(cid, path, version, position, policy, hash_algo='sha256'):
     position and policy.
     """
     base = cid + path + str(version) + str(position) + policy
-    hash_ = hashlib.new(hash_algo)
+    hash_ = get_hasher(hash_algo)
     hash_.update(base.encode('utf-8'))
     return hash_.hexdigest().upper()
+
+
+def get_hasher(algorithm='blake3'):
+    """
+    Same hashlib.new, but supports other algorithms like 'blake3'.
+
+    :raises ValueError: if the algorithm is not supported.
+    """
+    if algorithm in CUSTOM_HASHER:
+        return CUSTOM_HASHER[algorithm]()
+    return hashlib.new(algorithm)

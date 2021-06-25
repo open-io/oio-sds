@@ -32,6 +32,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"lukechampine.com/blake3"
 )
 
 var (
@@ -127,7 +129,7 @@ func copyReadWriteBuffer(dst io.Writer, src io.Reader, h hash.Hash, pool bufferP
 				written += int64(nw)
 			}
 			if erw != nil {
-				// Only override the mais error if no strong condition occured
+				// Only override the mais error if no strong condition occurred
 				if er == nil || er == io.EOF {
 					return erw
 				}
@@ -178,7 +180,11 @@ func (rr *rawxRequest) uploadChunk() {
 
 	// Trigger the checksum only if configured so
 	if rr.checksumRequired() {
-		h = md5.New()
+		if rr.chunk.ChunkHashAlgo == "md5" {
+			h = md5.New()
+		} else {
+			h = blake3.New(32, nil)
+		}
 	}
 
 	var ul uploadInfo
@@ -315,8 +321,12 @@ func (rr *rawxRequest) checkChunk() {
 		if filter != nil {
 			defer filter.Close()
 		}
-
-		h := md5.New()
+		var h hash.Hash
+		if len(expected_hash) == 32 {
+			h = md5.New()
+		} else {
+			h = blake3.New(32, nil)
+		}
 		if _, err = io.Copy(h, in); err == nil {
 			actual_hash := strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
 			if expected_hash != actual_hash {
