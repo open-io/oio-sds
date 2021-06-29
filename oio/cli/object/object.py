@@ -19,6 +19,7 @@ from six import iteritems
 import os
 from logging import getLogger
 
+from oio.common.json import json
 from oio.cli import Command, Lister, ShowOne
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.utils import depaginate
@@ -155,6 +156,12 @@ class CreateObject(ContainerCommandMixin, Lister):
             help='Upgrade RAWX connection to TLS',
             default=False
         )
+        parser.add_argument(
+            '--perfdata-column',
+            action="store_true",
+            help='Add a column to display performance data',
+            default=False
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -200,8 +207,9 @@ class CreateObject(ContainerCommandMixin, Lister):
                         tls=parsed_args.tls)
 
                     res = (name, data[1], data[2].upper(), 'Ok')
-                    if perfdata:
-                        res += (perfdata,)
+                    if parsed_args.perfdata_column:
+                        res += (json.dumps(perfdata, sort_keys=True,
+                                indent=4),)
 
                     results.append(res)
             except KeyboardInterrupt:
@@ -216,7 +224,7 @@ class CreateObject(ContainerCommandMixin, Lister):
 
         listing = (obj for obj in results)
         columns = ('Name', 'Size', 'Hash', 'Status')
-        if perfdata:
+        if parsed_args.perfdata_column:
             columns += ('Perfdata',)
         if any_error:
             self.produce_output(parsed_args, columns, listing)
