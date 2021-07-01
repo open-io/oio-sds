@@ -11,7 +11,10 @@ zealous and modify more lines than expected.
 ### Python code
 
 The code must comply with [PEP8](https://www.python.org/dev/peps/pep-0008/).
-Running ``tox -e pep8`` will tell what is wrong.
+Running ``tox -e pep8`` will tell what is wrong
+(this will actually run ``flake8``).
+
+Running pylint on your code is also a good practice.
 
 
 ## Abbreviations
