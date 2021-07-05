@@ -468,8 +468,9 @@ transport_gridd_notify_input(struct network_client_s *clt)
 			continue;
 		}
 
-		if (payload_size > (1024 * 1024 * 1024)) { /* to big */
-			GRID_WARN("fd=%d Request too big (%u)", clt->fd, payload_size);
+		if (payload_size > server_request_max_size) { /* too big */
+			GRID_WARN("fd=%d Request too big (%u > %u)",
+					clt->fd, payload_size, server_request_max_size);
 			data_slab_sequence_unshift(&(clt->input), ds);
 			_ctx_reset(ctx);
 			network_client_close_output(clt, FALSE);
