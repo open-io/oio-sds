@@ -131,6 +131,7 @@ class Meta2Worker(object):
             return False
 
         meta2db = Meta2DB(dict())
+        meta2db.path = db_path
         meta2db.volume_id = self.volume_id
         meta2db.cid = db_id[0]
         meta2db.seq = db_id[1]

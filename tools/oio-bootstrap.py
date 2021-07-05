@@ -192,6 +192,7 @@ pipeline = logger auto_sharding
 
 [filter:auto_sharding]
 use = egg:oio#auto_sharding
+sharding_db_size = 104857600
 sharding_strategy = shard-with-partition
 sharding_shard_size = 100000
 sharding_threshold = 100000

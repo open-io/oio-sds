@@ -27,15 +27,16 @@ class AutomaticSharding(Filter):
     """
 
     NAME = 'AutomaticSharding'
+    DEFAULT_SHARDING_DB_SIZE = 1024 * 1024 * 1024
 
     def init(self):
         self.sharding_strategy_params = {k[9:]: v for k, v in self.conf.items()
                                          if k.startswith("sharding_")}
         self.sharding_strategy = self.sharding_strategy_params.pop(
             'strategy', None)
-        self.sharding_threshold = int_value(
-            self.sharding_strategy_params.get('threshold'),
-            ContainerSharding.DEFAULT_SHARD_SIZE)
+        self.sharding_db_size = int_value(
+            self.sharding_strategy_params.pop('db_size', None),
+            self.DEFAULT_SHARDING_DB_SIZE)
 
         self.api = self.app_env['api']
         self.container_sharding = ContainerSharding(
@@ -55,6 +56,18 @@ class AutomaticSharding(Filter):
         meta2db = Meta2DB(env)
 
         try:
+            meta2db_size = meta2db.file_status['st_size']
+        except Exception as exc:
+            self.errors += 1
+            resp = Meta2DBError(
+                meta2db=meta2db,
+                body='Failed to fetch meta2 database size: %s' % exc)
+            return resp(env, cb)
+        if meta2db_size < self.sharding_db_size:
+            self.skipped += 1
+            return self.app(env, cb)
+
+        try:
             meta = self.api.container_get_properties(
                 None, None, cid=meta2db.cid)
             account = meta['system'][M2_PROP_ACCOUNT_NAME]
@@ -67,25 +80,26 @@ class AutomaticSharding(Filter):
                 body='Failed to fetch container properties: %s' % exc)
             return resp(env, cb)
 
-        if nb_objects >= self.sharding_threshold:
-            try:
-                self.logger.info(
-                    'Sharding container %s with %d objects', meta2db.cid,
-                    nb_objects)
-                shards = self.container_sharding.find_shards(
-                    account, container, strategy=self.sharding_strategy,
-                    strategy_params=self.sharding_strategy_params)
-                modified = self.container_sharding.replace_shard(
-                    account, container, shards, enable=True)
-                if modified:
-                    self.successes += 1
-                    return self.app(env, cb)
-            except Exception as exc:
-                self.errors += 1
-                resp = Meta2DBError(
-                    meta2db=meta2db,
-                    body='Failed to shard container: %s' % exc)
-                return resp(env, cb)
+        try:
+            self.logger.info(
+                'Sharding container %s with %d objects', meta2db.cid,
+                nb_objects)
+            shards = self.container_sharding.find_shards(
+                account, container, strategy=self.sharding_strategy,
+                strategy_params=self.sharding_strategy_params)
+            modified = self.container_sharding.replace_shard(
+                account, container, shards, enable=True)
+            if modified:
+                # The meta2 database has changed, delete the cache
+                meta2db.file_status = None
+                self.successes += 1
+                return self.app(env, cb)
+        except Exception as exc:
+            self.errors += 1
+            resp = Meta2DBError(
+                meta2db=meta2db,
+                body='Failed to shard container: %s' % exc)
+            return resp(env, cb)
 
         self.skipped += 1
         return self.app(env, cb)

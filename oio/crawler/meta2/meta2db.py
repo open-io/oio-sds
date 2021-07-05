@@ -13,13 +13,25 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import os
+
 from functools import partial
 
 
-def _meta2db_env_property(field):
+def _fetch_file_status(meta2db):
+    file_status = os.stat(meta2db.path)
+    return {k: getattr(file_status, k) for k in dir(file_status)
+            if k.startswith('st_')}
+
+
+def _meta2db_env_property(field, fetch_value_function=None):
 
     def getter(self):
-        return self.env.get(field, None)
+        value = self.env.get(field, None)
+        if value is None and fetch_value_function:
+            value = fetch_value_function(self)
+            self.env[field] = value
+        return value
 
     def setter(self, value):
         self.env[field] = value
@@ -29,6 +41,9 @@ def _meta2db_env_property(field):
 
 class Meta2DB(object):
 
+    path = _meta2db_env_property('path')
+    file_status = _meta2db_env_property(
+        'file_status', fetch_value_function=_fetch_file_status)
     volume_id = _meta2db_env_property('volume_id')
     cid = _meta2db_env_property('cid')
     seq = _meta2db_env_property('seq')

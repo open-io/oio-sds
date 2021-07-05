@@ -23,8 +23,15 @@ pipeline = logger auto_sharding
 
 [filter:auto_sharding]
 use = egg:oio#auto_sharding
+# Size of the meta2 database from which sharding can be triggered.
+sharding_db_size = 1073741824
 sharding_strategy = shard-with-partition
 sharding_shard_size = 100000
+# Minimum number of objects to trigger sharding.
+# Notice that this number is a safeguard against concurrent sharding requests.
+# Only the database size is checked by the crawler,
+# this threshold is a parameter for the sharding strategy
+# and won't be checked by the crawler.
 sharding_threshold = 100000
 sharding_partition = 50,50
 
