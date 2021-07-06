@@ -178,6 +178,7 @@ namespace = ${NS}
 user = ${USER}
 volume_list = ${META2_VOLUMES}
 
+wait_random_time_before_starting = True
 interval = 1200
 report_interval = 300
 scanned_per_second = 10

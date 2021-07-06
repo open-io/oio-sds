@@ -13,11 +13,13 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import random
+
 from oio import ObjectStorageApi
 from oio.blob.utils import check_volume_for_service_type
 from oio.common.constants import STRLEN_REFERENCEID
 from oio.common.daemon import Daemon
-from oio.common.easy_value import int_value
+from oio.common.easy_value import boolean_value, int_value
 from oio.common.exceptions import OioException
 from oio.common.green import ratelimit, time, ContextPool
 from oio.common.logger import get_logger
@@ -43,6 +45,8 @@ class Meta2Worker(object):
         self.logger = logger or get_logger(self.conf)
         self.running = True
 
+        self.wait_random_time_before_starting = boolean_value(
+            self.conf.get('wait_random_time_before_starting'), False)
         self.scans_interval = int_value(self.conf.get('interval'), 1800)
         self.report_interval = int_value(self.conf.get('report_interval'), 300)
         self.max_scanned_per_second = int_value(
@@ -176,6 +180,14 @@ class Meta2Worker(object):
         self.successes = 0
 
     def run(self):
+        if self.wait_random_time_before_starting:
+            waiting_time_to_start = random.randint(0, self.scans_interval)
+            self.logger.info('Wait %d secondes before starting',
+                             waiting_time_to_start)
+            for _ in range(waiting_time_to_start):
+                if not self.running:
+                    return
+                time.sleep(1)
         while self.running:
             try:
                 start_crawl = time.time()
@@ -183,8 +195,13 @@ class Meta2Worker(object):
                 crawling_duration = time.time() - start_crawl
                 self.logger.debug("start_crawl %d crawling_duration %d",
                                   start_crawl, crawling_duration)
-                if(crawling_duration < self.scans_interval):
-                    time.sleep(self.scans_interval - crawling_duration)
+                waiting_time_to_restart = \
+                    self.scans_interval - crawling_duration
+                if waiting_time_to_restart > 0:
+                    for _ in range(int(waiting_time_to_restart)):
+                        if not self.running:
+                            return
+                        time.sleep(1)
                 else:
                     self.logger.warning("crawler duration %d for volume %s is \
                                         higher", self.volume,

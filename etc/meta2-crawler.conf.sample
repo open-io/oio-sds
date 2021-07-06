@@ -4,6 +4,9 @@ user = openio
 # Comma separated list of volumes to watch
 volume_list = /var/lib/oio/sds/vol1/NS/meta2-1/,/var/lib/oio/sds/vol1/NS/meta2-2/
 
+# Wait random time before starting
+# to avoid all the crawlers from working at the same time.
+wait_random_time_before_starting = False
 # In seconds, the interval between two full scans. Defaults to half an hour.
 interval = 1200
 # In seconds, the interval between two logs entries (for each volume)
