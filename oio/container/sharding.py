@@ -772,6 +772,10 @@ class ContainerSharding(ProxyClient):
                 parent_shard['cid'])
             return
 
+        if parent_shard['sharding'] is None:
+            # Sharding hasn't even started
+            return
+
         self.logger.error(
             'Failed to shard container (CID=%s), aborting...',
             parent_shard['cid'])
@@ -790,10 +794,6 @@ class ContainerSharding(ProxyClient):
                 self.logger.warning(
                     'Failed to delete new shard (CID=%s): %s',
                     new_shard['cid'], exc)
-
-        if parent_shard['sharding'] is None:
-            # Sharding hasn't even started
-            return
 
         # Drain beanstalk tube
         beanstalk_url = parent_shard['sharding']['queue']
