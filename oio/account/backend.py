@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -80,8 +81,10 @@ class AccountBackend(RedisConnection):
           end;
 
           -- Set the bucket owner.
-          -- FIXME(FVE): do some checks instead of overwriting
-          redis.call('HSET', bucket_key, 'account', account);
+          -- Filter the special accounts hosting bucket shards.
+          if not string.find(account, '^\\.shards_') then
+            redis.call('HSET', bucket_key, 'account', account);
+          end;
 
           -- Update container info
           redis.call('HSET', container_key, 'bucket', bucket_name);
@@ -189,9 +192,9 @@ class AccountBackend(RedisConnection):
     )
 
     lua_update_container = (
-        lua_is_sup +
-        lua_update_bucket_func +
-        """
+        lua_is_sup
+        + lua_update_bucket_func
+        + """
         local akey = KEYS[1]; -- key to the account hash
         local ckey = KEYS[2]; -- key to the container hash
         local clistkey = KEYS[3]; -- key to the account's container set
