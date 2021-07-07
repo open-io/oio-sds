@@ -2854,9 +2854,10 @@ meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 			gint64 sharding_state = sqlx_admin_get_i64(sq3,
 					M2V2_ADMIN_SHARDING_STATE, 0);
 			if (sharding_state != CONTAINER_TO_SHARD_STATE_LOCKED
-					&& sharding_state != CONTAINER_TO_SHARD_STATE_SHARDED
-					&& sharding_state != NEW_SHARD_STATE_CLEANED_UP) {
-				err = BADREQ("Container isn't ready to replace the shards");
+					&& sharding_state != CONTAINER_TO_SHARD_STATE_SHARDED) {
+				err = BADREQ(
+						"Root container isn't ready to replace the shards "
+						"(current state: %"G_GINT64_FORMAT")", sharding_state);
 			}
 		}
 		if (!err) {
@@ -2886,7 +2887,7 @@ meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
-		struct oio_url_s *url)
+		struct oio_url_s *url, gboolean *truncated)
 {
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -2902,13 +2903,31 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 		return err;
 	}
 
+	gboolean is_shard = sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT);
+	gint64 sharding_state = sqlx_admin_get_i64(sq3,
+			M2V2_ADMIN_SHARDING_STATE, 0);
+	if (is_shard) {
+		if (sharding_state != NEW_SHARD_STATE_APPLYING_SAVED_WRITES
+				&& sharding_state != NEW_SHARD_STATE_CLEANING_UP
+				&& sharding_state != NEW_SHARD_STATE_CLEANED_UP
+				&& sharding_state != CONTAINER_TO_SHARD_STATE_ABORTED) {
+			err = BADREQ("Shard isn't ready to be cleaned"
+					"(current state: %"G_GINT64_FORMAT")", sharding_state);
+			goto close;
+		}
+	} else if (sharding_state != CONTAINER_TO_SHARD_STATE_SHARDED) {
+		err = BADREQ("Root container isn't ready to be cleaned"
+				"(current state: %"G_GINT64_FORMAT")", sharding_state);
+		goto close;
+	}
+
 	// Clean up locally
 	gint64 timestamp = oio_ext_real_time();
 	sqlx_exec(sq3->db, "BEGIN");
-	if (sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
-		err = m2db_clean_shard(sq3);
+	if (is_shard) {
+		err = m2db_clean_shard(sq3, truncated);
 	} else if (m2db_get_shard_count(sq3)) {
-		err = m2db_clean_root_container(sq3);
+		err = m2db_clean_root_container(sq3, truncated);
 	} else {
 		err = BADREQ("Not a shard or a root container");
 	}
@@ -2924,9 +2943,16 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 		sqlx_admin_reload(sq3);
 		goto close;
 	}
-	sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
-			NEW_SHARD_STATE_CLEANED_UP);
-	sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, timestamp);
+	if (is_shard) {
+		if (*truncated) {
+			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
+					NEW_SHARD_STATE_CLEANING_UP);
+		} else {
+			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
+					NEW_SHARD_STATE_CLEANED_UP);
+		}
+		sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, timestamp);
+	}
 	/* This is to prevent concurrent changes in case the resync is not
 	 * performed quickly enough. */
 	sqlx_admin_inc_all_versions(sq3, 2);

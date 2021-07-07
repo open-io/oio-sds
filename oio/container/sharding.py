@@ -23,8 +23,8 @@ from oio.common.client import ProxyClient
 from oio.common.constants import HEADER_PREFIX, M2_PROP_ACCOUNT_NAME, \
     M2_PROP_CONTAINER_NAME, M2_PROP_SHARDS, M2_PROP_SHARDING_ROOT, \
     M2_PROP_SHARDING_LOWER, M2_PROP_SHARDING_UPPER, STRLEN_CID
-from oio.common.easy_value import int_value, is_hexa, true_value
-from oio.common.exceptions import OioException, OioTimeout
+from oio.common.easy_value import boolean_value, int_value, is_hexa, true_value
+from oio.common.exceptions import BadRequest, OioException, OioTimeout
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.utils import cid_from_name, depaginate
@@ -639,15 +639,30 @@ class ContainerSharding(ProxyClient):
         if resp.status != 204:
             raise exceptions.from_response(resp, body)
 
-    def _clean(self, shard, **kwargs):
-        params = self._make_params(cid=shard['cid'], **kwargs)
-        resp, body = self._request('POST', '/clean', params=params, **kwargs)
-        if resp.status != 204:
-            raise exceptions.from_response(resp, body)
+    def _clean(self, shard, attempts=1, **kwargs):
+        truncated = True
+        while truncated:
+            params = self._make_params(cid=shard['cid'], **kwargs)
+            for i in range(attempts):
+                try:
+                    resp, body = self._request(
+                        'POST', '/clean', params=params, **kwargs)
+                    if resp.status != 204:
+                        raise exceptions.from_response(resp, body)
+                    break
+                except BadRequest:
+                    raise
+                except Exception as exc:
+                    if i >= attempts - 1:
+                        raise
+                    self.logger.warning(
+                        'Failed to clean the container (CID=%s), '
+                        'retrying...: %s', shard['cid'], exc)
+            truncated = boolean_value(resp.getheader('x-oio-truncated'), False)
 
     def _safe_clean(self, shard, **kwargs):
         try:
-            self._clean(shard, **kwargs)
+            self._clean(shard, attempts=3, **kwargs)
         except Exception as exc:
             self.logger.warning(
                 'Failed to clean the container (CID=%s): %s',
@@ -742,13 +757,15 @@ class ContainerSharding(ProxyClient):
                              **kwargs)
         parent_shard.pop('sharding', None)
 
+        cleaners = list()
         root_cid = cid_from_name(root_account, root_container)
         if parent_shard['cid'] == root_cid:
             # Clean up root container
             root_shard = {
                 'cid': root_cid
             }
-            self._safe_clean(root_shard, **kwargs)
+            cleaners.append(eventlet.spawn(
+                self._safe_clean, root_shard, **kwargs))
         else:
             # Delete parent shard
             try:
@@ -762,7 +779,10 @@ class ContainerSharding(ProxyClient):
 
         # Clean up new shards
         for new_shard in new_shards:
-            self._safe_clean(new_shard, **kwargs)
+            cleaners.append(eventlet.spawn(
+                self._safe_clean, new_shard, **kwargs))
+        for cleaner in cleaners:
+            cleaner.wait()
 
     def _rollback_sharding(self, parent_shard, new_shards, **kwargs):
         if 'sharding' not in parent_shard:

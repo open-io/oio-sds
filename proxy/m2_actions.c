@@ -2857,12 +2857,14 @@ action_m2_container_sharding_clean(struct req_args_s *args,
 		struct json_object *j UNUSED)
 {
 	GError *err = NULL;
-	if (!err) {
-		PACKER_VOID(_pack) {
-			return m2v2_remote_pack_CLEAN_SHARDING(args->url, DL());
-		};
-		err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
-	}
+	gboolean truncated = FALSE;
+	PACKER_VOID(_pack) {
+		return m2v2_remote_pack_CLEAN_SHARDING(args->url, DL());
+	};
+	err = _resolve_meta2(args, _prefer_master(), _pack, &truncated,
+		m2v2_boolean_truncated_extract);
+	args->rp->add_header(PROXYD_HEADER_PREFIX "truncated",
+			g_strdup(truncated ? "true" : "false"));
 	return _reply_m2_error(args, err);
 }
 

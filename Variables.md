@@ -546,6 +546,15 @@ Used by `gcc`
  * cmake directive: *OIO_META2_RETENTION_PERIOD*
  * range: 1 -> 2592000
 
+### meta2.sharding.max_entries_cleaned
+
+> Maximum number of entries cleaned in meta2 database. Of course, the higher this number, the longer the cleaning request will be.
+
+ * default: **100000**
+ * type: gint64
+ * cmake directive: *OIO_META2_SHARDING_MAX_ENTRIES_CLEANED*
+ * range: 1 -> 1000000
+
 ### meta2.sharding.timeout
 
 > Maximum time allowed between the preparation phase and the locking phase to shard a container.
