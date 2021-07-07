@@ -12,10 +12,12 @@ jobs:
         script: |+
           #!/bin/bash
           set -x
-          sudo add-apt-repository ppa:longsleep/golang-backports
           curl http://mirror2.openio.io/pub/repo/openio/APT-GPG-KEY-OPENIO-0 | apt-key add -
           apt-add-repository "deb http://mirror2.openio.io/pub/repo/openio/sds/20.04/ubuntu/ bionic/"
+          apt-add-repository ppa:longsleep/golang-backports
           apt install -y $(tr '\n' ' ' < .cds/deps-ubuntu-bionic.txt)
+          systemctl stop apache2.service redis.service
+          systemctl disable apache2.service redis.service
           mkdir /tmp/oio
           # We need these permissions for the ECD and container backup services to work
           chmod a+rX $(dirname $HOME)
@@ -26,9 +28,10 @@ jobs:
 
       - name: Run functional tests
         script:
-          - rsyslogd &
-          # Required for oio-gdb.py, but does not work
-          #- sysctl -w kernel.core_pattern='/tmp/core.%p.%E'
+          - pgrep rsyslogd || rsyslogd &
+          - sysctl -w kernel.core_pattern='/tmp/core.%p.%E'
+          - ulimit -c unlimited
+          - ulimit -n 8192
           - . $HOME/oiovenv/bin/activate
           - ./tools/oio-travis-suites.sh
 
@@ -39,4 +42,5 @@ jobs:
           - worker upload --tag='{{.cds.version}}' '{{.cds.workspace}}/.coverage.{{.cds.env.TEST_SUITE}}' '{{.cds.workspace}}/cmake_coverage.{{.cds.env.TEST_SUITE}}'
 
     requirements:
-        - model: openio-debbuild-18.04
+        - model: Ubuntu-18.04-VM-b2-15
+          #- model: openio-debbuild-18.04

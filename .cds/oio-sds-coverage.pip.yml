@@ -55,4 +55,5 @@ jobs:
           path: coverage-report-py
 
     requirements:
-        - model: openio-debbuild-18.04
+        - model: ubuntu-bionic
+          #- model: openio-debbuild-18.04

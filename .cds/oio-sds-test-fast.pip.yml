@@ -7,18 +7,14 @@ jobs:
       - name: Checkout application
         checkout: '{{ .cds.workspace }}'
 
-      - name: Clone external-packages
-        script:
-          - eval $(worker key install --env-git proj-ssh-openio)
-          - git clone {{ .cds.proj.STASH_URL }}/openio/external-packages.git /external-packages
-
       - name: Install dependencies
         script: |+
           #!/bin/bash
+          apt install -y gnupg software-properties-common
           set -x
-          sudo add-apt-repository ppa:longsleep/golang-backports
           curl http://mirror2.openio.io/pub/repo/openio/APT-GPG-KEY-OPENIO-0 | apt-key add -
           apt-add-repository "deb http://mirror2.openio.io/pub/repo/openio/sds/20.04/ubuntu/ bionic/"
+          apt-add-repository ppa:longsleep/golang-backports
           apt install -y $(tr '\n' ' ' < .cds/deps-ubuntu-bionic.txt)
           mkdir /tmp/oio
           virtualenv -p /usr/bin/python3 $HOME/oioenv
@@ -27,7 +23,7 @@ jobs:
 
       - name: Run fast tests
         script:
-          - rsyslogd &
+          - pgrep rsyslogd || rsyslogd &
           - . $HOME/oioenv/bin/activate
           - ./tools/oio-travis-failfast.sh
 
@@ -37,4 +33,6 @@ jobs:
           - ./tools/oio-travis-unit.sh
 
     requirements:
-      - model: openio-debbuild-18.04
+      - model: ubuntu-bionic
+        #- model: Ubuntu-18.04-VM-b2-07
+        #- model: openio-debbuild-18.04
