@@ -32,6 +32,36 @@ class ContainerShardingCommandMixin(object):
         )
 
 
+class CleanContainerSharding(ContainerShardingCommandMixin, Lister):
+    """
+    Remove from the container the objects which are outside of the shard range.
+    """
+
+    log = getLogger(__name__ + '.CleanContainerSharding')
+
+    def get_parser(self, prog_name):
+        parser = super(CleanContainerSharding, self).get_parser(prog_name)
+        self.patch_parser_container_sharding(parser)
+        parser.add_argument(
+            '--attempts',
+            type=int,
+            default=1,
+            help='Number of attempts for each clean up request. (default: 1)'
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        container_sharding = ContainerSharding(
+            self.app.client_manager.sds_conf,
+            logger=self.app.client_manager.logger)
+        container_sharding.clean_container(
+            self.app.client_manager.account, parsed_args.container,
+            attempts=parsed_args.attempts)
+        return ('Status', ), [('Ok', )]
+
+
 class FindContainerSharding(ContainerShardingCommandMixin, Lister):
     """Find the distribution of shards."""
 
