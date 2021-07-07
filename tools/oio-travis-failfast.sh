@@ -47,5 +47,5 @@ fold SDK ./tools/oio-build-sdk.sh ${PWD}
 fold Release ./tools/oio-build-release.sh ${PWD}
 fold Warnings ./tools/oio-build-with-warnings.sh ${PWD}
 fold Copyright ./tools/oio-check-copyright.sh ${PWD} "$COMMIT_BEFORE"
-fold Virtualenv python ./setup.py develop
+fold Virtualenv pip install -e .
 fold Variables tox -e variables

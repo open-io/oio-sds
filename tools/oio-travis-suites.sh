@@ -35,7 +35,7 @@ fold() {
 fold configure  cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Debug" ${PWD}
 fold build      make -j 8 all
 fold install    make install
-fold virtualenv python ./setup.py develop
+fold virtualenv pip install -e .
 
 export PYTHON_COVERAGE=1
 fold coverage_init make coverage_init

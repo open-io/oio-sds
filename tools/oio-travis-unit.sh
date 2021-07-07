@@ -35,7 +35,7 @@ fold() {
 fold configure  cmake ${CMAKE_OPTS} -DCMAKE_BUILD_TYPE="Debug"
 fold build      make -j 8 all
 fold install    make install
-fold virtualenv python ./setup.py develop
+fold virtualenv pip install -e .
 fold Versions   ./tools/oio-check-version.sh ${PWD}
 fold Unit       ./tools/oio-test-unit.sh ${PWD} ${PWD}
 
