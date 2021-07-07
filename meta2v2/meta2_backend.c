@@ -2866,6 +2866,10 @@ meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 			if (!(err = _transaction_begin(sq3, url, &repctx))) {
 				err = m2db_replace_shard_ranges(sq3, beans);
 				if (!err) {
+					// Reset these counter
+					// even if the root container has not yet been cleaned.
+					m2db_set_size(sq3, 0);
+					m2db_set_obj_count(sq3, 0);
 					sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
 							CONTAINER_TO_SHARD_STATE_SHARDED);
 					sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP,
