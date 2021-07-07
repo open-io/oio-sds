@@ -694,8 +694,8 @@
 
 			{ "type": "int64", "name": "sqliterepo_dump_max_size",
 				"key": "sqliterepo.dump.max_size",
-				"descr": "Maximum size of a database dump. If a base is bigger than this size, it will be refused the synchronous DB_RESTORE mechanism, and will be ansynchronously restored with the DB_DUMP/DB_PIPEFROM mechanism.",
-				"def": "1024Mi", "min": 0, "max": "2047Mi" }
+				"descr": "Maximum size of a database dump. If a base is bigger than this size, it will be refused the synchronous DB_RESTORE mechanism, and will be ansynchronously restored with the DB_DUMP/DB_PIPEFROM mechanism. This value will be clamped to server.request.max_size - 1024.",
+				"def": "1023Mi", "min": 0, "max": "4095Mi" }
 		]
 	},
 	"rdir": {
@@ -847,8 +847,12 @@
 				"key": "server.request.max_run_time",
 				"descr": "How long a request might take to run on the server side. This value is used to compute a deadline for several waitings (DB cache, manager of elections, etc). Common to all sqliterepo-based services, it might be overriden.",
 				"def": "300s", "min": "1ms", "max": "1h",
-				"aliases": ["server.request.max_delay_start"] }
+				"aliases": ["server.request.max_delay_start"] },
 
+			{ "type": "uint", "name": "server_request_max_size",
+				"key": "server.request.max_size",
+				"descr": "Maximum size of an ASN.1 request to a 'meta' service. A service will refuse to serve a request bigger than this. Be careful to have enough memory on the system.",
+				"def": "1024Mi", "min": "1Mi", "max": "4194303ki" }
 		]
 	},
 	"proxy": {

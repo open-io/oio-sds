@@ -330,6 +330,29 @@ transport_gridd_notify_error(struct network_client_s *clt)
 	 * without data, connect() and close() */
 }
 
+/** Guess if the request is unexpectedly an HTTP request. */
+static gboolean
+detect_http(guint32 payload_size, GByteArray *gba)
+{
+	gboolean is_http = FALSE;
+	gchar *line_end = NULL;
+	switch (payload_size) {
+	case 1145392197:  // DELETE
+	case 1195725856:  // GET
+	case 1212498244:  // HEAD
+	case 1330664521:  // OPTIONS
+	case 1347375956:  // POST
+	case 1347769376:  // PUT
+		line_end = g_strstr_len(
+				(const gchar*)(gba->data + 4), MIN(gba->len, 4096), " HTTP/1.");
+		is_http = line_end != NULL;
+		break;
+	default:
+		break;
+	}
+	return is_http;
+}
+
 static int
 transport_gridd_notify_input(struct network_client_s *clt)
 {
@@ -368,12 +391,28 @@ transport_gridd_notify_input(struct network_client_s *clt)
 			continue;
 		}
 
-		if (payload_size > (1024 * 1024 * 1024)) { /* to big */
-			GRID_WARN("fd=%d Request too big (%u)", clt->fd, payload_size);
+		if (payload_size > server_request_max_size) { /* too big */
+			GRID_WARN("fd=%d Request too big (%u > %u)",
+					clt->fd, payload_size, server_request_max_size);
 			data_slab_sequence_unshift(&(clt->input), ds);
 			_ctx_reset(ctx);
 			network_client_close_output(clt, FALSE);
 			return RC_ERROR;
+		} else if (payload_size > 1024 * 1024 * 1024) {
+			/* Sometimes the server will receive HTTP requests. The HTTP verb
+			 * is interpreted as the request size (>1GiB). We must check for
+			 * this case or the next read will wait a long time before giving
+			 * up. The 4096 bytes readahead is harmless for the next read. */
+			gba_read(ctx->gba_l4v, ds, 4096);
+			data_slab_sequence_unshift(&(clt->input), ds);
+			if (detect_http(payload_size, ctx->gba_l4v)) {
+				network_client_send_slab(clt, data_slab_make_gba(
+						metautils_gba_from_string("HTTP/1.1 418 I'm a teapot\r\n")));
+				network_client_close_output(clt, FALSE);
+				GRID_WARN("fd=%d Received an HTTP request, ASN.1 expected",
+						clt->fd);
+				return RC_ERROR;
+			}
 		}
 
 		gba_read(ctx->gba_l4v, ds, payload_size + 4);
