@@ -1226,6 +1226,15 @@ Used by `gcc`
  * cmake directive: *OIO_SERVER_REQUEST_MAX_RUN_TIME*
  * range: 1 * G_TIME_SPAN_MILLISECOND -> 1 * G_TIME_SPAN_HOUR
 
+### server.request.max_size
+
+> Maximum size of an ASN.1 request to a 'meta' service. A service will refuse to serve a request bigger than this. Be careful to have enough memory on the system.
+
+ * default: **1073741824**
+ * type: guint
+ * cmake directive: *OIO_SERVER_REQUEST_MAX_SIZE*
+ * range: 1048576 -> 4294966272
+
 ### server.task.malloc_trim.period
 
 > In jiffies, how often the periodic task that calls malloc_trim() is fired.
@@ -1438,12 +1447,12 @@ Used by `gcc`
 
 ### sqliterepo.dump.max_size
 
-> Maximum size of a database dump. If a base is bigger than this size, it will be refused the synchronous DB_RESTORE mechanism, and will be ansynchronously restored with the DB_DUMP/DB_PIPEFROM mechanism.
+> Maximum size of a database dump. If a base is bigger than this size, it will be refused the synchronous DB_RESTORE mechanism, and will be ansynchronously restored with the DB_DUMP/DB_PIPEFROM mechanism. This value will be clamped to server.request.max_size - 1024.
 
- * default: **1073741824**
+ * default: **1072693248**
  * type: gint64
  * cmake directive: *OIO_SQLITEREPO_DUMP_MAX_SIZE*
- * range: 0 -> 2146435072
+ * range: 0 -> 4293918720
 
 ### sqliterepo.dumps.max
 

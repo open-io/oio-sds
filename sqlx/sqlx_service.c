@@ -244,6 +244,20 @@ _patch_configuration_maxrss(void)
 }
 
 static void
+_patch_configuration_dump_max_size(void)
+{
+	/* The 1024 bytes are for request headers. */
+	gint64 dump_max_size = server_request_max_size - 1024;
+	if (sqliterepo_dump_max_size > dump_max_size) {
+		GRID_WARN("sqliterepo.dump.max_size is too high. Set it to a lower "
+				"value or raise server.request.max_size.");
+		sqliterepo_dump_max_size = dump_max_size;
+		GRID_NOTICE("sqliterepo.dump.max_size set to %"G_GINT64_FORMAT,
+				sqliterepo_dump_max_size);
+	}
+}
+
+static void
 _patch_configuration_fd(void)
 {
 	/* By design, this function never returns less than 1024. */
@@ -330,6 +344,7 @@ _patch_and_apply_configuration(void)
 {
 	_patch_configuration_fd();
 	_patch_configuration_maxrss();
+	_patch_configuration_dump_max_size();
 
 	if (SRV.server)
 		network_server_reconfigure(SRV.server);
