@@ -2766,16 +2766,17 @@ action_m2_container_sharding_create_shard(struct req_args_s *args,
 	gchar *root = g_strdup(json_object_get_string(jroot));
 	gchar *admin_lower = g_strconcat(">", json_object_get_string(jlower), NULL);
 	gchar *admin_upper = g_strconcat("<", json_object_get_string(jupper), NULL);
-	gint64 timestamp = json_object_get_int64(jtimestamp);
+	gchar *timestamp = (gchar *) json_object_get_string(jtimestamp);
 	gchar *master = g_strdup(json_object_get_string(jmaster));
-	gchar *src_suffix = g_strdup_printf("sharding-%"G_GINT64_FORMAT, timestamp);
+	gchar *src_suffix = g_strdup_printf("sharding-%s", timestamp);
 	gchar *state = g_strdup_printf("%d", NEW_SHARD_STATE_APPLYING_SAVED_WRITES);
 
-	gchar *shard_properties[16] = {
+	gchar *shard_properties[18] = {
 		M2V2_ADMIN_SIZE, "0",
 		M2V2_ADMIN_OBJ_COUNT, "0",
 		M2V2_ADMIN_SHARD_COUNT, "0",
 		M2V2_ADMIN_SHARDING_STATE, state,
+		M2V2_ADMIN_SHARDING_TIMESTAMP, timestamp,
 		M2V2_ADMIN_SHARDING_ROOT, root,
 		M2V2_ADMIN_SHARDING_LOWER, admin_lower,
 		M2V2_ADMIN_SHARDING_UPPER, admin_upper,

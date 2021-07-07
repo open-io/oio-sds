@@ -13,9 +13,13 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import sqlite3
+
 from oio.common.constants import M2_PROP_ACCOUNT_NAME, \
-    M2_PROP_CONTAINER_NAME, M2_PROP_OBJECTS
+    M2_PROP_CONTAINER_NAME, M2_PROP_OBJECTS, \
+    NEW_SHARD_STATE_APPLYING_SAVED_WRITES, NEW_SHARD_STATE_CLEANING_UP
 from oio.common.easy_value import int_value
+from oio.common.green import time
 from oio.container.sharding import ContainerSharding
 from oio.crawler.meta2.filters.base import Filter
 from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBError
@@ -46,6 +50,8 @@ class AutomaticSharding(Filter):
         self.skipped = 0
         self.successes = 0
         self.errors = 0
+        self.cleaning_successes = 0
+        self.cleaning_errors = 0
 
     def process(self, env, cb):
         """
@@ -54,6 +60,42 @@ class AutomaticSharding(Filter):
         returns stats dict
         """
         meta2db = Meta2DB(env)
+
+        # Check if the shard is cleaned up
+        clean_shard = False
+        try:
+            meta2db_conn = sqlite3.connect('file:%s?mode=ro' % meta2db.path,
+                                           uri=True)
+            try:
+                meta2db_cursor = meta2db_conn.cursor()
+                sharding_state = int((meta2db_cursor.execute(
+                    'SELECT v FROM admin WHERE k = "sys.m2.sharding.state"'
+                    ).fetchall() or [(0,)])[0][0])
+                sharding_timestamp = int((meta2db_cursor.execute(
+                    'SELECT v FROM admin WHERE k = "sys.m2.sharding.timestamp"'
+                    ).fetchall() or [(0,)])[0][0]) / 1000000.
+                if ((sharding_state == NEW_SHARD_STATE_APPLYING_SAVED_WRITES
+                     or sharding_state == NEW_SHARD_STATE_CLEANING_UP)
+                        and time.time() - sharding_timestamp > 600):
+                    clean_shard = True
+            finally:
+                meta2db_conn.close()
+        except Exception as exc:
+            self.logger.warning(
+                'Failed to fetch sharding information: %s', exc)
+        if clean_shard:
+            self.logger.warning(
+                'The cleaning was not finished for the container (CID=%s), '
+                'retrying...', meta2db.cid)
+            try:
+                self.container_sharding.clean_container(
+                    None, None, cid=meta2db.cid, attempts=3)
+                self.cleaning_successes += 1
+            except Exception as exc:
+                self.cleaning_errors += 1
+                self.logger.warning(
+                    'Failed to clean the container (CID=%s): %s',
+                    meta2db.cid, exc)
 
         try:
             meta2db_size = meta2db.file_status['st_size']
@@ -108,13 +150,17 @@ class AutomaticSharding(Filter):
         return {
             'skipped': self.skipped,
             'successes': self.successes,
-            'errors': self.errors
+            'errors': self.errors,
+            'cleaning_successes': self.cleaning_successes,
+            'cleaning_errors': self.cleaning_errors
         }
 
     def _reset_filter_stats(self):
         self.skipped = 0
         self.successes = 0
         self.errors = 0
+        self.cleaning_successes = 0
+        self.cleaning_errors = 0
 
 
 def filter_factory(global_conf, **local_conf):

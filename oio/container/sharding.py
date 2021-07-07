@@ -660,6 +660,16 @@ class ContainerSharding(ProxyClient):
                         'retrying...: %s', shard['cid'], exc)
             truncated = boolean_value(resp.getheader('x-oio-truncated'), False)
 
+    def clean_container(self, account, container, cid=None, **kwargs):
+        fake_shard = {
+            'index': -1,
+            'lower': '',
+            'upper': '',
+            'cid': cid or cid_from_name(account, container),
+            'metadata': None
+        }
+        self._clean(fake_shard, **kwargs)
+
     def _safe_clean(self, shard, **kwargs):
         try:
             self._clean(shard, attempts=3, **kwargs)
@@ -667,7 +677,6 @@ class ContainerSharding(ProxyClient):
             self.logger.warning(
                 'Failed to clean the container (CID=%s): %s',
                 shard['cid'], exc)
-            return
 
     def _show_shards(self, root_account, root_container, limit=None,
                      marker=None, **kwargs):
