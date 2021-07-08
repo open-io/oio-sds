@@ -19,7 +19,7 @@ from oio.crawler.meta2.meta2db import Meta2DB
 
 class Logger(Filter):
     """
-    Logger example for pipeline
+    Log info for for given container.
     """
 
     NAME = 'Logger'
@@ -31,7 +31,7 @@ class Logger(Filter):
     def process(self, env, cb):
         try:
             meta2db = Meta2DB(env)
-            self.logger.info('Logger processing container %s', meta2db.cid)
+            self.logger.info('Got container %s', meta2db.cid)
             self.successes += 1
         except Exception:
             self.errors += 1

@@ -22,24 +22,43 @@ log_address = /dev/log
 syslog_prefix = OIO,OPENIO,meta2-crawler,1
 
 [pipeline:main]
-pipeline = logger auto_sharding
+pipeline = logger auto_vacuum auto_sharding
 
 [filter:auto_sharding]
+# Trigger the sharding for given container.
 use = egg:oio#auto_sharding
 # Size of the meta2 database from which sharding can be triggered.
 sharding_db_size = 1073741824
+# Strategy to use to shard thee container.
 sharding_strategy = shard-with-partition
-sharding_shard_size = 100000
-# Minimum number of objects to trigger sharding.
-# Notice that this number is a safeguard against concurrent sharding requests.
-# Only the database size is checked by the crawler,
-# this threshold is a parameter for the sharding strategy
-# and won't be checked by the crawler.
+# Parameters to use for the given strategy.
+## Minimum number of objects to trigger sharding.
+## Notice that this number is a safeguard against concurrent sharding requests.
+## Only the database size is checked by the crawler,
+## this threshold is a parameter for the sharding strategy
+## and won't be checked by the crawler.
 sharding_threshold = 100000
+## Partition to use for cutting the container.
 sharding_partition = 50,50
 # Maximum amount of time the sharding process is allowed to save writes
 # before applying them directly to the new shards
 sharding_save_writes_timeout = 30
 
+[filter:auto_vacuum]
+# Trigger the vacuum for given container.
+use = egg:oio#auto_vacuum
+# Minimum waiting time after the last modification
+# to be sure the container is no longer in use,
+# so as not to interfere with customer requests.
+min_waiting_time_after_last_modification = 30
+# Trigger the vacuum when the ratio is reached
+# AND the base has not been changed recently
+# (cf. "min_waiting_time_after_last_modification").
+soft_max_unused_pages_ratio = 0.1
+# Force the vacuum to be triggered when the ratio is reached
+# (ignore "min_waiting_time_after_last_modification").
+hard_max_unused_pages_ratio = 0.2
+
 [filter:logger]
+# Log info for for given container.
 use = egg:oio#logger

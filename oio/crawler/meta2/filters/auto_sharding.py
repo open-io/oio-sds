@@ -27,7 +27,7 @@ from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBError
 
 class AutomaticSharding(Filter):
     """
-    Perform sharding processing for given container
+    Trigger the sharding for given container.
     """
 
     NAME = 'AutomaticSharding'
@@ -136,19 +136,19 @@ class AutomaticSharding(Filter):
                 strategy_params=self.sharding_strategy_params)
             modified = self.container_sharding.replace_shard(
                 account, container, shards, enable=True)
-            if modified:
-                # The meta2 database has changed, delete the cache
-                meta2db.file_status = None
-                self.successes += 1
-                return self.app(env, cb)
         except Exception as exc:
             self.errors += 1
             resp = Meta2DBError(
                 meta2db=meta2db,
                 body='Failed to shard container: %s' % exc)
             return resp(env, cb)
+        if not modified:
+            self.skipped += 1
+            return self.app(env, cb)
 
-        self.skipped += 1
+        # The meta2 database has changed, delete the cache
+        meta2db.file_status = None
+        self.successes += 1
         return self.app(env, cb)
 
     def _get_filter_stats(self):
