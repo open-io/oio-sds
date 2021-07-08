@@ -54,13 +54,12 @@ workflow:
           operator: ne
           value: "cds.scheduler"
 
-        # Disabled: problem with gridinit not restarting
-        #  tests-ec:
-        #    pipeline: oio-sds-test-functional
-        #    application: oio-sds
-        #    environment: oio-sds-env-ec
-        #    depends_on:
-        #      - root
+  tests-ec:
+    pipeline: oio-sds-test-functional
+    application: oio-sds
+    environment: oio-sds-env-ec
+    depends_on:
+      - root
 
   coverage:
     pipeline: oio-sds-coverage
@@ -69,7 +68,9 @@ workflow:
       - tests-fast
       - tests-single
       - tests-3copies
-#      - tests-ec
+      - tests-ec
+    when:
+      - success
 
   mirror:
     pipeline: oio-sds-mirror
