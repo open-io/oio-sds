@@ -11,7 +11,7 @@ Build-Depends:
   ca-certificates,
   go-1.16.3-ovh410,
   oio-zookeeper-3.7.0-ovh471,
-  python-3.7.10-ovh121,
+  python-3.7.10-ovh127,
   flex,
   bison,
   gcc,
@@ -32,7 +32,7 @@ Architecture: any
 Depends:
   ${shlibs:Depends},
   ${misc:Depends},
-  python-3.7.10-ovh121,
+  python-3.7.10-ovh127,
   libcurl4,
   zlib1g,
   libglib2.0-0,
