@@ -2898,7 +2898,7 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	int rc = 0;
+	struct sqlx_repctx_s *repctx = NULL;
 
 	enum m2v2_open_type_e how = M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|
 			M2V2_OPEN_URGENT;
@@ -2925,9 +2925,11 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 		goto close;
 	}
 
-	// Clean up locally
+	err = sqlx_transaction_begin(sq3, &repctx);
+	if (err) {
+		goto close;
+	}
 	gint64 timestamp = oio_ext_real_time();
-	sqlx_exec(sq3->db, "BEGIN");
 	if (is_shard) {
 		err = m2db_clean_shard(sq3, truncated);
 	} else if (m2db_get_shard_count(sq3)) {
@@ -2935,19 +2937,7 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 	} else {
 		err = BADREQ("Not a shard or a root container");
 	}
-	if (err) {
-		rc = sqlx_exec(sq3->db, "ROLLBACK");
-		if (rc != SQLITE_OK && rc != SQLITE_DONE) {
-			GRID_WARN("ROLLBACK failed: (%s) %s",
-					sqlite_strerror(rc), sqlite3_errmsg(sq3->db));
-			if (rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT) {
-				sq3->corrupted = TRUE;
-			}
-		}
-		sqlx_admin_reload(sq3);
-		goto close;
-	}
-	if (is_shard) {
+	if (!err && is_shard) {
 		if (*truncated) {
 			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
 					NEW_SHARD_STATE_CLEANING_UP);
@@ -2957,29 +2947,7 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 		}
 		sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, timestamp);
 	}
-	/* This is to prevent concurrent changes in case the resync is not
-	 * performed quickly enough. */
-	sqlx_admin_inc_all_versions(sq3, 2);
-	sqlx_admin_save_lazy(sq3);
-	rc = sqlx_exec(sq3->db, "COMMIT");
-	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
-		err = NEWERROR(CODE_UNAVAILABLE, "COMMIT failed: (%s) %s",
-				sqlite_strerror(rc), sqlite3_errmsg(sq3->db));
-		if (rc == SQLITE_NOTADB || rc == SQLITE_CORRUPT) {
-			sq3->corrupted = TRUE;
-		}
-		sqlx_admin_reload(sq3);
-		goto close;
-	}
-
-	// Vacuum and resync
-	NAME2CONST(n, sq3->name);
-	err = sqlx_repository_vacuum(m2b->repo, &n, m2_to_sqlx(how));
-	if (err) {
-		GRID_WARN("Failed to vacuum and/or resync after cleaning shard: "
-				"(%d) %s", err->code, err->message);
-		g_clear_error(&err);
-	}
+	err = sqlx_transaction_end(repctx, err);
 
 close:
 	if (!err) {

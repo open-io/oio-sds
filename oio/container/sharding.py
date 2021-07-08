@@ -660,6 +660,12 @@ class ContainerSharding(ProxyClient):
                         'retrying...: %s', shard['cid'], exc)
             truncated = boolean_value(resp.getheader('x-oio-truncated'), False)
 
+        try:
+            self.admin.vacuum_base('meta2', cid=shard['cid'])
+        except Exception as exc:
+            self.logger.warning('Failed to vacuum container (CID=%s): %s',
+                                shard['cid'], exc)
+
     def clean_container(self, account, container, cid=None, **kwargs):
         fake_shard = {
             'index': -1,

@@ -550,7 +550,7 @@ Used by `gcc`
 
 > Maximum number of entries cleaned in meta2 database. Of course, the higher this number, the longer the cleaning request will be.
 
- * default: **100000**
+ * default: **10000**
  * type: gint64
  * cmake directive: *OIO_META2_SHARDING_MAX_ENTRIES_CLEANED*
  * range: 1 -> 1000000
