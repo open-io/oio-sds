@@ -244,6 +244,7 @@ class ContainerSharding(ProxyClient):
     DEFAULT_STRATEGY = 'shard-with-partition'
     DEFAULT_PARTITION = [50, 50]
     DEFAULT_SHARD_SIZE = 100000
+    DEFAULT_SAVE_WRITES_TIMEOUT = 30
 
     def __init__(self, conf, logger=None, pool_manager=None, **kwargs):
         super(ContainerSharding, self).__init__(
@@ -259,6 +260,8 @@ class ContainerSharding(ProxyClient):
         self.container = ContainerClient(
             self.conf, pool_manager=self.pool_manager, logger=self.logger,
             **kwargs)
+        self.timeout = kwargs.get('save_writes_timeout',
+                                  self.DEFAULT_SAVE_WRITES_TIMEOUT)
 
     def _make_params(self, account=None, reference=None, path=None,
                      cid=None, **kwargs):
@@ -753,7 +756,8 @@ class ContainerSharding(ProxyClient):
             self, parent_shard, new_shards, logger=self.logger, **kwargs)
         try:
             saved_writes_applicator.apply_in_background(**kwargs)
-            saved_writes_applicator.wait_until_queue_is_almost_empty(**kwargs)
+            saved_writes_applicator.wait_until_queue_is_almost_empty(
+                timeout=self.timeout, **kwargs)
             saved_writes_applicator.flush(**kwargs)
 
             # When the queue is empty, lock the container to shard

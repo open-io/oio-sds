@@ -198,6 +198,7 @@ sharding_strategy = shard-with-partition
 sharding_shard_size = 100000
 sharding_threshold = 100000
 sharding_partition = 50, 50
+sharding_save_writes_timeout = 30
 
 [filter:logger]
 use = egg:oio#logger

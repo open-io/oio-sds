@@ -42,10 +42,15 @@ class AutomaticSharding(Filter):
             self.sharding_strategy_params.pop('db_size', None),
             self.DEFAULT_SHARDING_DB_SIZE)
 
+        self.save_writes_timeout = int_value(
+            self.sharding_strategy_params.pop('save_writes_timeout', None),
+            ContainerSharding.DEFAULT_SAVE_WRITES_TIMEOUT)
+
         self.api = self.app_env['api']
         self.container_sharding = ContainerSharding(
             self.conf, logger=self.logger,
-            pool_manager=self.api.container.pool_manager)
+            pool_manager=self.api.container.pool_manager,
+            save_writes_timeout=self.save_writes_timeout)
 
         self.skipped = 0
         self.successes = 0

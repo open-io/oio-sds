@@ -37,6 +37,9 @@ sharding_shard_size = 100000
 # and won't be checked by the crawler.
 sharding_threshold = 100000
 sharding_partition = 50,50
+# Maximum amount of time the sharding process is allowed to save writes
+# before applying them directly to the new shards
+sharding_save_writes_timeout = 30
 
 [filter:logger]
 use = egg:oio#logger
