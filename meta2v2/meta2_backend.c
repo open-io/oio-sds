@@ -100,6 +100,10 @@ static GError* _transaction_begin(struct sqlx_sqlite3_s *sq3,
 
 static void m2b_add_modified_container(struct meta2_backend_s *m2b,
 		struct sqlx_sqlite3_s *sq3);
+/* Interface is a little different from m2b_add_modified_container
+ * because this will be called after sq3 is released. */
+static void m2b_flush_modified_container(struct meta2_backend_s *m2b,
+		gchar *basename);
 
 static GError* _meta2_abort_sharding(struct sqlx_sqlite3_s *sq3,
 		struct oio_url_s *url);
@@ -422,6 +426,20 @@ m2b_add_modified_container(struct meta2_backend_s *m2b,
 		meta2_backend_change_callback(sq3, m2b);
 	}
 	g_clear_error(&err);
+}
+
+static void
+m2b_flush_modified_container(struct meta2_backend_s *m2b,
+		gchar *basename)
+{
+	EXTRA_ASSERT(m2b != NULL);
+	if (m2b->notifier_container_state) {
+		oio_events_queue__flush_overwritable(
+				m2b->notifier_container_state,
+				basename);
+	} else {
+		g_free(basename);
+	}
 }
 
 static void
@@ -1197,7 +1215,9 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 				// Frees gs
 				event_data = _container_state(sq3, gs);
 			}
+			gchar *basename = sqlx_admin_get_str(sq3, SQLX_ADMIN_BASENAME);
 			m2b_destroy(sq3);
+			m2b_flush_modified_container(m2, basename);
 			/* But we send it only after to avoid keeping locks too long. */
 			if (m2->notifier_container_deleted && send_event) {
 				oio_events_queue__send(
