@@ -28,7 +28,7 @@ from oio.common.constants import REQID_HEADER, STRLEN_REQID, \
 from oio.common.easy_value import int_value, true_value
 from oio.common.json import json
 from oio.common.logger import get_logger
-from oio.common.utils import parse_conn_str
+from oio.common.utils import monotonic_time, parse_conn_str
 from oio.common.wsgi import WerkzeugApp
 
 
@@ -38,13 +38,16 @@ DEFAULT_IAM_CONNECTION = 'redis://127.0.0.1:6379'
 
 
 def access_log(func):
+    """
+    Decorator to write a line to the access log each time
+    the decorated method is called.
+    """
 
     @wraps(func)
     def _access_log_wrapper(self, req, *args, **kwargs):
-        from time import time
-        pre = time()
+        pre = monotonic_time()
         rc = func(self, req, *args, **kwargs)
-        post = time()
+        post = monotonic_time()
         reqid = req.headers.get(REQID_HEADER, '-')[:STRLEN_REQID]
         if isinstance(rc, HTTPException):
             code = str(rc.code)

@@ -1,4 +1,5 @@
 # Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -966,9 +967,9 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
     def test_container_refresh(self):
         self.wait_for_score(('account', 'meta2'))
-        account = random_str(32)
+        account = "acct-" + random_str(6)
         # container_refresh on unknown container
-        name = random_str(32)
+        name = "ct-" + random_str(6)
         self.assertRaises(
             exc.NoSuchContainer, self.api.container_refresh, account, name)
 
@@ -1014,7 +1015,8 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.container_delete(account, name)
         # Again, wait for the container event to be processed.
         self.wait_for_event('oio-preserved',
-                            types=[EventTypes.ACCOUNT_SERVICES])
+                            types=[EventTypes.ACCOUNT_SERVICES,
+                                   EventTypes.CONTAINER_DELETED])
         # container_refresh on deleted container
         self.assertRaises(
             exc.NoSuchContainer, self.api.container_refresh, account, name)

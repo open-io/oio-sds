@@ -22,6 +22,7 @@ import random
 from tests.utils import BaseTestCase
 from oio.container.sharding import ContainerSharding
 from oio.event.evob import EventTypes
+from oio.common.constants import M2_PROP_BUCKET_NAME
 from oio.common.green import eventlet
 
 
@@ -74,7 +75,7 @@ class TestSharding(TestShardingBase):
 
     def _add_objects(self, cname, number_of_obj, pattern_name='content'):
         for i in range(number_of_obj):
-            file_name = str(i)+pattern_name
+            file_name = str(i) + pattern_name
             self.storage.object_create(self.account, cname,
                                        obj_name=file_name, data='data',
                                        chunk_checksum_algo=None)
@@ -98,7 +99,7 @@ class TestSharding(TestShardingBase):
         # check shards
         for index, shard in enumerate(new_shards):
             resp = self.storage.container.container_get_properties(
-                                                         cid=shard['cid'])
+                cid=shard['cid'])
             found_object_in_shard = int(resp['system']['sys.m2.objects'])
             self.assertEqual(found_object_in_shard, len(shards_content[index]))
 
@@ -166,12 +167,12 @@ class TestSharding(TestShardingBase):
         self._check_total_objects(nb_obj_to_add)
 
         # push objects
-        file_name = str(0)+'content-dup'
+        file_name = str(0) + 'content-dup'
         self.storage.object_create(self.account, self.cname,
                                    obj_name=file_name, data='data',
                                    chunk_checksum_algo=None)
         self.created.append(file_name)
-        file_name = str(4)+'content'
+        file_name = str(4) + 'content'
         self.storage.object_create(self.account, self.cname,
                                    obj_name=file_name, data='data',
                                    chunk_checksum_algo=None)
@@ -208,12 +209,12 @@ class TestSharding(TestShardingBase):
         # random objec to remove
         file_id = random.randrange(nb_obj_to_add)
 
-        file_name = str(file_id)+'content'
+        file_name = str(file_id) + 'content'
         self.logger.info('file to delete %s', file_name)
         self.storage.object_delete(self.account, self.cname, obj=file_name)
         self.created.remove(file_name)
 
-        self._check_total_objects(nb_obj_to_add-1)
+        self._check_total_objects(nb_obj_to_add - 1)
 
         ct_show = self.storage.object_list(self.account, self.cname)
         for obj in ct_show['objects']:
@@ -244,10 +245,10 @@ class TestSharding(TestShardingBase):
     def test_successive_shards(self):
         self._create(self.cname)
         nb_step = 5
-        nb_total_to_create = nb_step*nb_step
+        nb_total_to_create = nb_step * nb_step
         for i in range(nb_step):
             for j in range(nb_step):
-                file_name = str(i)+str(j)+'/'+'content'
+                file_name = str(i) + str(j) + '/' + 'content'
                 self.storage.object_create(self.account, self.cname,
                                            obj_name=file_name, data='data',
                                            chunk_checksum_algo=None)
@@ -271,10 +272,10 @@ class TestSharding(TestShardingBase):
         # check shards
         for shard in shards:
             resp = self.storage.container.container_get_properties(
-                                                         cid=shard['cid'])
+                cid=shard['cid'])
             found_object_in_shard = int(resp['system']['sys.m2.objects'])
             self.assertEqual(found_object_in_shard, objects_per_shard[index])
-            index = index+1
+            index = index + 1
 
         # reshard
         test_shards = [{"index": 0, "lower": "", "upper": "20"},
@@ -294,10 +295,10 @@ class TestSharding(TestShardingBase):
         # check shards
         for shard in shards:
             resp = self.storage.container.container_get_properties(
-                                                         cid=shard['cid'])
+                cid=shard['cid'])
             found_object_in_shard = int(resp['system']['sys.m2.objects'])
             self.assertEqual(found_object_in_shard, objects_per_shard[index])
-            index = index+1
+            index = index + 1
 
     def test_shard_and_add_delete(self):
         nb_to_create = 140
@@ -313,7 +314,7 @@ class TestSharding(TestShardingBase):
 
         def delete_objects(number_of_objects):
             for i in range(number_of_objects):
-                file_name = str(i)+'content'
+                file_name = str(i) + 'content'
                 self.storage.object_delete(self.account, self.cname,
                                            obj=file_name)
                 self.created.remove(file_name)
@@ -356,7 +357,7 @@ class TestSharding(TestShardingBase):
                 'count': 10}]
         ]
 
-        thresholds = {nb_obj_to_add-1, nb_obj_to_add, nb_obj_to_add+1}
+        thresholds = {nb_obj_to_add - 1, nb_obj_to_add, nb_obj_to_add + 1}
         for i, threshold in enumerate(thresholds):
             shards = self.container_sharding.find_shards(
                 self.account,
@@ -394,8 +395,75 @@ class TestSharding(TestShardingBase):
                 self.account,
                 self.cname,
                 strategy='shard-with-partition',
-                strategy_params={"threshold": nb_obj_to_add-1,
+                strategy_params={"threshold": nb_obj_to_add - 1,
                                  "partition": partition})
 
             for j, shard in enumerate(shards):
                 self.assertDictEqual(shard, expected_shards[i][j])
+
+    def test_bucket_counters_after_sharding(self):
+        # Fill a bucket
+        bkt = "bucket" + str(random.randrange(10000))
+        self.storage.container_create(self.account, bkt,
+                                      system={M2_PROP_BUCKET_NAME: bkt})
+        for i in range(10):
+            self.storage.object_create(self.account, bkt, obj_name=str(i),
+                                       data=str(i).encode('utf-8'))
+        self.wait_for_event('oio-preserved',
+                            timeout=5.0,
+                            types=(EventTypes.CONTAINER_STATE,))
+
+        # Split it in 2
+        params = {"partition": "50,50", "threshold": 4}
+        shards = self.container_sharding.find_shards(
+            self.account, bkt,
+            strategy="shard-with-partition", strategy_params=params)
+        modified = self.container_sharding.replace_shard(
+            self.account, bkt, shards, enable=True, reqid="testingisdoubting")
+        self.assertTrue(modified)
+
+        self.wait_for_event('oio-preserved',
+                            reqid="testingisdoubting",
+                            timeout=2.0,
+                            types=(EventTypes.CONTAINER_NEW,))
+        # Wait for the parent and 2 shards
+        self.wait_for_event('oio-preserved',
+                            timeout=5.0,
+                            types=(EventTypes.CONTAINER_STATE,))
+        self.wait_for_event('oio-preserved',
+                            timeout=5.0,
+                            types=(EventTypes.CONTAINER_STATE,))
+        self.wait_for_event('oio-preserved',
+                            timeout=5.0,
+                            types=(EventTypes.CONTAINER_STATE,))
+        stats = self.storage.account.bucket_show(bkt)
+        self.assertEqual(stats["objects"], 10)
+        self.beanstalkd0.drain_tube('oio-preserved')
+
+        # Split the first shard in 2
+        shards_account = f".shards_{self.account}"
+        res = self.storage.container_list(shards_account, prefix=f"{bkt}-")
+        first = res[0][0]
+        shards = self.container_sharding.find_shards(
+            shards_account, first,
+            strategy="shard-with-partition", strategy_params=params)
+        modified = self.container_sharding.replace_shard(
+            shards_account, first, shards, enable=True)
+        self.assertTrue(modified)
+
+        # Wait for the deletion of the parent and update of the shards
+        self.wait_for_event('oio-preserved',
+                            fields={"user": first},
+                            timeout=2.0,
+                            types=(EventTypes.CONTAINER_DELETED,))
+        self.wait_for_event('oio-preserved',
+                            timeout=5.0,
+                            types=(EventTypes.CONTAINER_STATE,))
+        self.wait_for_event('oio-preserved',
+                            timeout=5.0,
+                            types=(EventTypes.CONTAINER_STATE,))
+        self.wait_for_event('oio-preserved',
+                            timeout=5.0,
+                            types=(EventTypes.CONTAINER_STATE,))
+        stats = self.storage.account.bucket_show(bkt)
+        self.assertEqual(stats["objects"], 10)

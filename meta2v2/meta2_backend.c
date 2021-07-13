@@ -371,27 +371,27 @@ _is_container_initiated(struct sqlx_sqlite3_s *sq3)
 	return FALSE;
 }
 
-/* TODO(jfs): merge the container's state with the m2_prepare_data and keep
- *            it cached? */
 static gchar *
-_container_state (struct sqlx_sqlite3_s *sq3)
+_container_state(struct sqlx_sqlite3_s *sq3, GString *gs)
 {
-	void sep (GString *gs) {
-		if (gs->len > 1 && !strchr(",[{", gs->str[gs->len-1]))
-			g_string_append_c (gs, ',');
+	void sep (GString *gs1) {
+		if (gs1->len > 1 && !strchr(",[{", gs1->str[gs1->len-1]))
+			g_string_append_c(gs1, ',');
 	}
-	void append_int64 (GString *gs, const char *k, gint64 v) {
-		sep (gs);
-		g_string_append_printf (gs, "\"%s\":%"G_GINT64_FORMAT, k, v);
+	void append_int64 (GString *gs1, const char *k, gint64 v) {
+		sep(gs1);
+		g_string_append_printf(gs1, "\"%s\":%"G_GINT64_FORMAT, k, v);
 	}
-	void append_str(GString *gs, const char *k, gchar *v) {
-		sep (gs);
-		oio_str_gstring_append_json_pair(gs, k, v);
+	void append_str(GString *gs1, const char *k, gchar *v) {
+		sep(gs1);
+		oio_str_gstring_append_json_pair(gs1, k, v);
 		g_free(v);
 	}
 
 	struct oio_url_s *u = sqlx_admin_get_url (sq3);
-	GString *gs = oio_event__create (META2_EVENTS_PREFIX ".container.state", u);
+	if (gs == NULL)
+		gs = oio_event__create_with_id(
+			META2_EVENTS_PREFIX ".container.state", u, oio_ext_get_reqid());
 	g_string_append_static (gs, ",\"data\":{");
 	append_str(gs, "bucket", sqlx_admin_get_str(sq3, M2V2_ADMIN_BUCKET_NAME));
 	append_str(gs, "policy", sqlx_admin_get_str(sq3, M2V2_ADMIN_STORAGE_POLICY));
@@ -413,7 +413,7 @@ m2b_add_modified_container(struct meta2_backend_s *m2b,
 		oio_events_queue__send_overwritable(
 				m2b->notifier_container_state,
 				sqlx_admin_get_str(sq3, SQLX_ADMIN_BASENAME),
-				_container_state(sq3));
+				_container_state(sq3, NULL));
 
 	gboolean has_peers = FALSE;
 	NAME2CONST(n, sq3->name);
@@ -1123,7 +1123,8 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 			g_string_free(peers_list, TRUE);
 			return err;
 		}
-		GString *gs = oio_event__create(META2_EVENTS_PREFIX".container.new", url);
+		GString *gs = oio_event__create_with_id(
+				META2_EVENTS_PREFIX".container.new", url, oio_ext_get_reqid());
 		struct db_properties_s *db_properties = db_properties_new();
 		if (params->properties) {
 			for (gchar **p=params->properties; *p && *(p+1); p+=2) {
@@ -1146,7 +1147,7 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 
 	/* Reload any cache maybe already associated with the container.
 	 * It happens that the cache sometimes exists because created during a
-	 * M2_PREP that occured after a GETVERS (the meta1 is filled) but before
+	 * M2_PREP that occurred after a GETVERS (the meta1 is filled) but before
 	 * the CREATE. */
 	meta2_backend_change_callback(sq3, m2);
 	m2b_close(sq3, url);
@@ -1187,19 +1188,21 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 #endif
 
 		if (!err) {
-			gchar *bucket = sqlx_admin_get_str(sq3, M2V2_ADMIN_BUCKET_NAME);
-			m2b_destroy(sq3);
+			gchar *event_data = NULL;
+			/* The event must be computed before destroying the DB. */
 			if (m2->notifier_container_deleted && send_event) {
 				GString *gs = oio_event__create_with_id(
 						META2_EVENTS_PREFIX ".container.deleted", url,
 						oio_ext_get_reqid());
-				g_string_append_static(gs, ",\"data\":{");
-				oio_str_gstring_append_json_pair(gs, "bucket", bucket);
-				g_string_append_static(gs, "}}");
-				oio_events_queue__send(
-						m2->notifier_container_deleted, g_string_free(gs, FALSE));
+				// Frees gs
+				event_data = _container_state(sq3, gs);
 			}
-			g_free(bucket);
+			m2b_destroy(sq3);
+			/* But we send it only after to avoid keeping locks too long. */
+			if (m2->notifier_container_deleted && send_event) {
+				oio_events_queue__send(
+						m2->notifier_container_deleted, event_data);
+			}
 		} else {
 			m2b_close(sq3, url);
 		}
@@ -1766,7 +1769,7 @@ meta2_backend_delete_beans(struct meta2_backend_s *m2b,
 	// TODO(FVE): to migrate from old URLs to new URLs we need to try
 	// with unmodified URLs first.
 	m2v2_shorten_chunk_ids(beans);
-	
+
 	err = m2b_open_for_object(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED,
 			&sq3);
 	if (!err) {

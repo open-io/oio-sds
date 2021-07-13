@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -23,9 +24,9 @@ from oio.event.filters.base import Filter
 
 
 CONTAINER_EVENTS = [
-        EventTypes.CONTAINER_STATE,
-        EventTypes.CONTAINER_NEW,
-        EventTypes.CONTAINER_DELETED]
+    EventTypes.CONTAINER_STATE,
+    EventTypes.CONTAINER_NEW,
+    EventTypes.CONTAINER_DELETED]
 
 
 class AccountUpdateFilter(Filter):
@@ -57,11 +58,11 @@ class AccountUpdateFilter(Filter):
                 url = event.env.get('url')
                 body = dict()
                 body['bucket'] = data.get('bucket')
-                if event.event_type == EventTypes.CONTAINER_STATE:
-                    body['objects'] = data.get('object-count', 0)
-                    body['bytes'] = data.get('bytes-count', 0)
-                    body['mtime'] = mtime
-                elif event.event_type == EventTypes.CONTAINER_NEW:
+                for k1, k2 in (('objects', 'object-count'),
+                               ('bytes', 'bytes-count')):
+                    body[k1] = data.get(k2, 0)
+                if event.event_type in (EventTypes.CONTAINER_STATE,
+                                        EventTypes.CONTAINER_NEW):
                     body['mtime'] = mtime
                 elif event.event_type == EventTypes.CONTAINER_DELETED:
                     body['dtime'] = mtime
@@ -80,14 +81,10 @@ class AccountUpdateFilter(Filter):
                 m2_services = [x for x in new_services
                                if x.get('type') == 'meta2']
                 if not m2_services:
-                    # FIXME(FVE): this block may not be needed anymore,
-                    # since we brought back EventTypes.CONTAINER_DELETED.
-                    # No service in charge, container has been deleted
-                    self.account.container_update(
-                        url.get('account'), url.get('user'),
-                        {'dtime': event.when / 1000000.0},
-                        connection_timeout=self.connection_timeout,
-                        read_timeout=self.read_timeout, headers=headers)
+                    # No service in charge, container has been deleted.
+                    # But we will also receive a CONTAINER_DELETED event,
+                    # so we don't have anything to do here.
+                    pass
                 else:
                     try:
                         self.account.account_create(
@@ -97,7 +94,7 @@ class AccountUpdateFilter(Filter):
                     except OioTimeout as exc:
                         # The account will be autocreated by the next event,
                         # just warn and continue.
-                        self.logger.warn(
+                        self.logger.warning(
                             'Failed to create account %s (reqid=%s): %s',
                             url.get('account'), headers[REQID_HEADER], exc)
         except OioTimeout as exc:
@@ -105,8 +102,8 @@ class AccountUpdateFilter(Filter):
             resp = EventError(event=Event(env), body=msg)
             return resp(env, beanstalkd, cb)
         except ClientException as exc:
-            if (exc.http_status == 409 and
-                    "No update needed" in exc.message):
+            if (exc.http_status == 409
+                    and "No update needed" in exc.message):
                 self.logger.info(
                     "Discarding event %s (job_id=%s, reqid=%s): %s",
                     event.job_id, headers[REQID_HEADER],

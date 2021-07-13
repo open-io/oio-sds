@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -170,7 +171,9 @@ class TestAccountBackend(BaseTestCase):
             account_id, 'c1', None, Timestamp().normal, None, None)
 
         # Deferred container update event (with lower timestamp)
-        self.backend.update_container(
+        self.assertRaises(
+            Conflict,
+            self.backend.update_container,
             account_id, 'c1', flush_timestamp, None, 0, 0)
         info = self.backend.info_account(account_id)
         self.assertEqual(info['containers'], 0)
@@ -541,8 +544,8 @@ class TestAccountBackend(BaseTestCase):
 
     def test_is_sup(self):
         # HACK: replace %%d by %d
-        compare = (self.backend.lua_is_sup % (()) +
-                   """
+        compare = (self.backend.lua_is_sup % (())
+                   + """
             if (is_sup(KEYS[1], KEYS[2])) then
               return redis.status_reply('IS SUP');
             else

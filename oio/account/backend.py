@@ -58,6 +58,14 @@ class AccountBackend(RedisConnection):
                  end;
                  return a > b;
                end;
+               local is_sup_eq = function(a,b)
+                 local int_a = string.match(a,"%%d+")
+                 local int_b = string.match(b,"%%d+")
+                 if string.len(int_a) > string.len(int_b) then
+                   return true;
+                 end;
+                 return a >= b;
+               end;
                """
 
     lua_update_bucket_func = """
@@ -77,22 +85,8 @@ class AccountBackend(RedisConnection):
               -- Also delete the bucket
               redis.call('DEL', bucket_key);
             end;
-            return;
-          end;
-
-          -- Set the bucket owner.
-          -- Filter the special accounts hosting bucket shards.
-          if not string.find(account, '^\\.shards_') then
-            redis.call('HSET', bucket_key, 'account', account);
-          end;
-
-          -- Update container info
-          redis.call('HSET', container_key, 'bucket', bucket_name);
-
-          -- Update the buckets list if it's the root container
-          if bucket_name == container_name then
-            redis.call('ZADD', buckets_list_key, 0, bucket_name);
-            redis.call('ZADD', '%(bucket_list_prefix)s', 0, bucket_name);
+            -- We used to return here. But since we delete shard before
+            -- cleaning them, we need to fix counters first.
           end;
 
           -- For container holding MPU segments, we do not want to count
@@ -111,9 +105,28 @@ class AccountBackend(RedisConnection):
             redis.call('HINCRBY', bucket_key, 'bytes', inc_bytes);
           end;
 
-          -- Finally update the modification time.
+          -- Update the modification time.
           if mtime ~= '' then
             redis.call('HSET', bucket_key, 'mtime', mtime);
+          end;
+
+          if deleted then
+            return;
+          end;
+
+          -- Set the bucket owner.
+          -- Filter the special accounts hosting bucket shards.
+          if not string.find(account, '^\\.shards_') then
+            redis.call('HSET', bucket_key, 'account', account);
+          end;
+
+          -- Update container info
+          redis.call('HSET', container_key, 'bucket', bucket_name);
+
+          -- Update the buckets list if it's the root container
+          if bucket_name == container_name then
+            redis.call('ZADD', buckets_list_key, 0, bucket_name);
+            redis.call('ZADD', '%(bucket_list_prefix)s', 0, bucket_name);
           end;
         end;
     """
@@ -257,7 +270,7 @@ class AccountBackend(RedisConnection):
           bytes = tonumber(bytes);
         end;
 
-        if autocreate_container == 'False' and is_sup(dtime, mtime) then
+        if autocreate_container == 'False' and is_sup_eq(dtime, mtime) then
           return redis.error_reply('no_container');
         end;
 
@@ -277,7 +290,8 @@ class AccountBackend(RedisConnection):
         if is_sup(new_dtime, dtime) then
           dtime = new_dtime;
         end;
-        if is_sup(dtime, mtime) then
+        if is_sup_eq(dtime, mtime) then
+          mtime = dtime;
           -- Protect against "minus zero".
           if objects ~= 0 then
             inc_objects = -objects;
@@ -319,6 +333,7 @@ class AccountBackend(RedisConnection):
         if bucket_name ~= '' then
           local bkey = bkey_prefix .. bucket_name;
 
+          -- FIXME(FVE): this may no be needed anymore
           -- This container is not yet associated with this bucket.
           -- We must add all the totals in case the container already existed
           -- but didn't know its parent bucket.

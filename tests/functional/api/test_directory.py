@@ -115,19 +115,21 @@ class TestDirectoryAPI(BaseTestCase):
         self._clean(name, True)
 
     def test_create_without_account(self):
-        account = random_str(32)
-        name = random_str(32)
+        account = "acct-" + random_str(6)
+        name = "ref-" + random_str(6)
         account_client = self.storage.account
 
         self.assertRaises(exc.NotFound, account_client.account_show, account)
         self.dir.create(account, name)
         time.sleep(0.5)  # ensure account event have been processed
-        self.assertEqual(account_client.account_show(account)['id'],
-                         account)
+        # The account is not updated unless we link meta2 services.
+        self.assertRaises(exc.NotFound, account_client.account_show, account)
+        # Just check we don't get a 404 when listing services.
+        self.assertTrue(self.dir.list(account, name))
 
         # clean
         self.dir.delete(account, name)
-        account_client.account_delete(account)
+        self.assertRaises(exc.NotFound, account_client.account_delete, account)
 
     def test_delete(self):
         name = random_str(32)
