@@ -30,6 +30,7 @@ from oio.directory.client import DirectoryClient
 from oio.common.utils import depaginate, cid_from_name, monotonic_time
 from oio.common.green import sleep
 from oio.common.easy_value import true_value
+from oio.common.green import GreenPile
 
 RDIR_ACCT = '_RDIR'
 
@@ -108,9 +109,10 @@ class RdirDispatcher(object):
                         service['rdir'].append(
                             by_id[_make_id(self.ns, 'rdir', el)])
                     except KeyError:
-                        self.logger.warn("rdir %s linked to %s %s seems down",
-                                         el, service_type,
-                                         service['addr'])
+                        self.logger.warning("rdir %s linked to %s %s seems \
+                                            down",
+                                            el, service_type,
+                                            service['addr'])
                         down_svc = {"addr": el, "score": 0, "tags": dict()}
                         service['rdir'].append(down_svc)
                         by_id[_make_id(self.ns, 'rdir', el)] = down_svc
@@ -119,8 +121,8 @@ class RdirDispatcher(object):
                 self.logger.info("No rdir linked to %s",
                                  service['addr'])
             except OioException as exc:
-                self.logger.warn('Failed to get rdir linked to %s: %s',
-                                 service['addr'], exc)
+                self.logger.warning('Failed to get rdir linked to %s: %s',
+                                    service['addr'], exc)
         return all_services, all_rdir
 
     def assign_services(self, service_type, max_per_rdir=None, min_dist=None,
@@ -177,9 +179,10 @@ class RdirDispatcher(object):
                                 rdir['tags'].get('stat.opened_db_count', 0) - 1
                         provider['rdir'].append(rdir)
                     except KeyError:
-                        self.logger.warn("rdir %s linked to %s %s seems down",
-                                         rdir_host, service_type,
-                                         provider_id)
+                        self.logger.warning("rdir %s linked to %s %s seems \
+                                            down",
+                                            rdir_host, service_type,
+                                            provider_id)
                 if reassign:
                     raise NotFound('Trick to avoid code duplication')
             except NotFound:
@@ -192,8 +195,8 @@ class RdirDispatcher(object):
                                                   known_hosts=rdir_hosts,
                                                   **kwargs)
                 except OioException as exc:
-                    self.logger.warn("Failed to link an rdir to %s %s: %s",
-                                     service_type, provider_id, exc)
+                    self.logger.warning("Failed to link an rdir to %s %s: %s",
+                                        service_type, provider_id, exc)
                     errors.append((provider_id, exc))
                     continue
 
@@ -203,9 +206,9 @@ class RdirDispatcher(object):
                     by_id[rdir]['tags']["stat.opened_db_count"] = n_base + 1
                     provider['rdir'].append(by_id[rdir])
             except OioException as exc:
-                self.logger.warn("Failed to check rdir linked to %s %s "
-                                 "(thus won't try to make the link): %s",
-                                 service_type, provider_id, exc)
+                self.logger.warning("Failed to check rdir linked to %s %s "
+                                    "(thus won't try to make the link): %s",
+                                    service_type, provider_id, exc)
                 errors.append((provider_id, exc))
         if errors:
             # group_chunk_errors is flexible enough to accept service addresses
@@ -524,22 +527,54 @@ class RdirClient(HttpApi):
         resp = ""
         body = ""
         errors = list()
-        for uri in all_uri:
-            try:
-                resp, body = self._direct_request(method, uri, params=params,
-                                                  **kwargs)
+        if method in ('GET', 'HEAD'):
+            for uri in all_uri:
+                try:
+                    resp, body = self._direct_request(method, uri,
+                                                      params=params, **kwargs)
 
-                # Why: because there are as much of uri requests as rawx/meta2
-                # services. When we fetch chunk we do it once
-                if method in ('GET', 'HEAD'):
+                    # Why: because there are as much of uri requests as
+                    # rawx/meta2 services. When we fetch chunk we do it once
                     break
 
-            except OioNetworkException as exc:
-                errors.append(exc)
+                except Exception as exc:
+                    errors.append((uri, exc))
+        else:
+            pile = GreenPile(len(all_uri))
+
+            def _local_request(method, uri, params, **kwargs):
+                try:
+                    return self._direct_request(method, uri, params=params,
+                                                **kwargs)
+                except Exception as exc:
+                    return (uri, exc)
+
+            for uri in all_uri:
+                pile.spawn(_local_request, method, uri, params=params,
+                           **kwargs)
+
+            for el in pile:
+                # exception
+                if el[0] in all_uri:
+                    errors.append(el)
+                else:
+                    resp = el[0]
+                    body = el[1]
 
         if len(errors) == len(all_uri):
             self._clear_cache(volume)
-            raise OioException('rdir request errors encountered: %s' % errors)
+            class_type = type(errors[0][1])
+            same_error = all(isinstance(x, class_type) for (uri, x) in errors)
+            errors = group_chunk_errors(errors)
+            if same_error:
+                err, addrs = errors.popitem()
+                oio_reraise(type(err), err, str(addrs) + " method:" + method)
+            else:
+                raise OioException('Several errors encountered: %s %s' %
+                                   errors, method)
+        elif errors:  # only some requests failed
+            self.logger.warning('rdir requests errors occured for method:'
+                                + method)
 
         return resp, body
 
