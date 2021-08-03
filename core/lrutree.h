@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -62,6 +63,11 @@ gpointer lru_tree_get(struct lru_tree_s *lt, gconstpointer k);
 
 /* Returns TRUE if the item keyed with 'k' has been removed. */
 gboolean lru_tree_remove(struct lru_tree_s *lt, gconstpointer k);
+
+/* Returns the value of the item keyed with 'k', and remove it from the tree.
+ * 'k' is kept, but the internal key is freed. Returns NULL if no item with
+ * such key was present in the tree. */
+gpointer lru_tree_steal(struct lru_tree_s *lt, gconstpointer k);
 
 void lru_tree_foreach(struct lru_tree_s *lt, GTraverseFunc h, gpointer hdata);
 

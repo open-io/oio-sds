@@ -2,6 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -258,6 +259,26 @@ _steal(struct lru_tree_s *lt, gpointer *pk, gpointer *pv, struct _node_s *node)
 	-- lt->count;
 
 	return TRUE;
+}
+
+gpointer
+lru_tree_steal(struct lru_tree_s *lt, gconstpointer k)
+{
+	struct _node_s fake, *node;
+
+	EXTRA_ASSERT(lt != NULL);
+	EXTRA_ASSERT(k != NULL);
+
+	fake.k = (gpointer) k;
+	if (!(node = RB_FIND(_tree_s, lt, &(lt->base), &fake)))
+		return NULL;
+
+	gpointer pk = NULL, pv = NULL;
+	_steal(lt, &pk, &pv, node);
+	if (lt->kfree && pk)
+		lt->kfree(pk);
+
+	return pv;
 }
 
 void

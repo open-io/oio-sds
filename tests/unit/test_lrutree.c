@@ -2,6 +2,7 @@
 OpenIO SDS unit tests
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -44,6 +45,12 @@ main(int argc, char **argv)
 		return FALSE;
 	}
 	lru_tree_foreach(lt, _func, NULL);
+
+	gpointer val = lru_tree_steal(lt, "plop");
+	g_assert_cmpint(GPOINTER_TO_INT(val), ==, 1);
+
+	val = lru_tree_steal(lt, "plop");
+	g_assert_null(val);
 
 	lru_tree_destroy(lt);
 	return 0;
