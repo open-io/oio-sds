@@ -36,6 +36,12 @@ void oio_events_queue_buffer_set_delay(struct oio_events_queue_buffer_s *buf,
 void oio_events_queue_buffer_put(struct oio_events_queue_buffer_s *buf,
 		gchar *key, gchar *msg);
 
+/** Flush the buffered event keyed with `key`, if any, no matter the
+ * configured delay. Does nothing if there is no event.
+ * `key` will be freed. */
+void oio_events_queue_buffer_flush_key(struct oio_events_queue_buffer_s *buf,
+		GHRFunc send, gpointer user_data, gchar *key);
+
 /** Flush at most `max` events older than the configured delay. Each flushed
  *  event is passed to `send` then removed from the buffer. `send` is
  *  responsible for cleaning the event, and should not block. */

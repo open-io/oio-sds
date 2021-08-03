@@ -48,6 +48,19 @@ oio_events_queue__send (struct oio_events_queue_s *self, gchar *msg)
 }
 
 void
+oio_events_queue__flush_overwritable(struct oio_events_queue_s *self,
+		gchar *key)
+{
+	EXTRA_ASSERT (key != NULL);
+	if (VTABLE_HAS(self,struct oio_events_queue_abstract_s*,flush_overwritable)
+			&& key && *key) {
+		EVTQ_CALL(self,flush_overwritable)(self,key);
+	} else {
+		g_free(key);  // safe if key is NULL
+	}
+}
+
+void
 oio_events_queue__send_overwritable(struct oio_events_queue_s *self,
 		gchar *key, gchar *msg)
 {

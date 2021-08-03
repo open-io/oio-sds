@@ -1,6 +1,7 @@
 /*
 OpenIO SDS event queue
 Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -34,12 +35,19 @@ struct oio_events_queue_vtable_s
 	gint64 (*get_health) (struct oio_events_queue_s *self);
 	void (*set_buffering) (struct oio_events_queue_s *self, gint64 v);
 	GError * (*start) (struct oio_events_queue_s *self);
+	void (*flush_overwritable)(struct oio_events_queue_s *self,
+			gchar *key);
 };
 
 struct oio_events_queue_abstract_s
 {
 	struct oio_events_queue_vtable_s *vtable;
 };
+
+/** Flush any overwritable event keyed with `key`,
+ * disregarding the buffer delay. */
+void oio_events_queue_flush_key(struct oio_events_queue_s *self,
+		struct oio_events_queue_buffer_s *buffer, gchar *key);
 
 void oio_events_queue_send_buffered(struct oio_events_queue_s *self,
 		struct oio_events_queue_buffer_s *buffer, guint max);

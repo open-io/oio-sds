@@ -1,6 +1,7 @@
 /*
 OpenIO SDS event queue
 Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -43,6 +44,19 @@ oio_events_queue_buffer_set_delay(struct oio_events_queue_buffer_s *buf,
 		gint64 new_delay)
 {
 	buf->delay = new_delay;
+}
+
+void
+oio_events_queue_buffer_flush_key(struct oio_events_queue_buffer_s *buf,
+		GHRFunc send, gpointer user_data, gchar *key)
+{
+	g_mutex_lock(&(buf->msg_by_key_lock));
+	gchar *msg = lru_tree_steal(buf->msg_by_key, key);
+	g_mutex_unlock(&(buf->msg_by_key_lock));
+	if (msg != NULL) {
+		send(NULL, msg, user_data);
+	}
+	g_free(key);
 }
 
 void

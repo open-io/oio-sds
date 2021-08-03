@@ -1,6 +1,7 @@
 /*
 OpenIO SDS event queue
 Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -24,6 +25,11 @@ void oio_events_queue__destroy (struct oio_events_queue_s *self);
 
 /* msg's ownership is given to the queue. msg has to be valid JSON */
 void oio_events_queue__send (struct oio_events_queue_s *self, gchar *msg);
+
+/* Flush any overwritable event with the specified key, disregarding
+ * the buffer delay. `key` will be freed. */
+void oio_events_queue__flush_overwritable(struct oio_events_queue_s *self,
+		gchar *key);
 
 /* Send an overwritable event, which may itself overwrite any previous event
  * sent with the same key. The actual event sending will be delayed

@@ -47,6 +47,7 @@ License along with this library.
 static void _q_destroy (struct oio_events_queue_s *self);
 static void _q_send (struct oio_events_queue_s *self, gchar *msg);
 static void _q_send_overwritable(struct oio_events_queue_s *self, gchar *key, gchar *msg);
+static void _q_flush_overwritable(struct oio_events_queue_s *self, gchar *key);
 static gboolean _q_is_stalled (struct oio_events_queue_s *self);
 static gint64 _q_get_health(struct oio_events_queue_s *self);
 
@@ -61,7 +62,8 @@ static struct oio_events_queue_vtable_s vtable_FANOUT =
 	.is_stalled = _q_is_stalled,
 	.get_health = _q_get_health,
 	.set_buffering = _q_set_buffering,
-	.start = _q_start
+	.start = _q_start,
+	.flush_overwritable = _q_flush_overwritable,
 };
 
 struct _queue_FANOUT_s
@@ -158,7 +160,7 @@ _q_run (struct _queue_FANOUT_s *q)
 			_flush_buffered(q, !q->running);
 		}
 
-		/* find an event, prefering the last that failed */
+		/* find an event, preferring the last that failed */
 		gchar *msg = saved;
 		saved = NULL;
 		if (!msg) msg = g_async_queue_timeout_pop (q->queue, 300 * G_TIME_SPAN_MILLISECOND);
@@ -265,6 +267,13 @@ _q_send_overwritable(struct oio_events_queue_s *self, gchar *key, gchar *msg)
 {
 	struct _queue_FANOUT_s *q = (struct _queue_FANOUT_s*) self;
 	oio_events_queue_buffer_put(&(q->buffer), key, msg);
+}
+
+static void
+_q_flush_overwritable(struct oio_events_queue_s *self, gchar *key)
+{
+	struct _queue_FANOUT_s *q = (struct _queue_FANOUT_s*) self;
+	oio_events_queue_flush_key((struct oio_events_queue_s*)q, &(q->buffer), key);
 }
 
 static gboolean

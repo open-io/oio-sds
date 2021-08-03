@@ -41,6 +41,7 @@ License along with this library.
 static void _q_destroy (struct oio_events_queue_s *self);
 static void _q_send (struct oio_events_queue_s *self, gchar *msg);
 static void _q_send_overwritable(struct oio_events_queue_s *self, gchar *key, gchar *msg);
+static void _q_flush_overwritable(struct oio_events_queue_s *self, gchar *key);
 static gboolean _q_is_stalled (struct oio_events_queue_s *self);
 static gint64 _q_get_health(struct oio_events_queue_s *self);
 static void _q_set_buffering (struct oio_events_queue_s *self, gint64 v);
@@ -54,7 +55,8 @@ static struct oio_events_queue_vtable_s vtable_BEANSTALKD =
 	.is_stalled = _q_is_stalled,
 	.get_health = _q_get_health,
 	.set_buffering = _q_set_buffering,
-	.start = _q_start
+	.start = _q_start,
+	.flush_overwritable = _q_flush_overwritable,
 };
 
 struct _queue_BEANSTALKD_s
@@ -464,6 +466,13 @@ _q_send_overwritable(struct oio_events_queue_s *self, gchar *key, gchar *msg)
 {
 	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s*) self;
 	oio_events_queue_buffer_put(&(q->buffer), key, msg);
+}
+
+static void
+_q_flush_overwritable(struct oio_events_queue_s *self, gchar *key)
+{
+	struct _queue_BEANSTALKD_s *q = (struct _queue_BEANSTALKD_s*) self;
+	oio_events_queue_flush_key((struct oio_events_queue_s*)q, &(q->buffer), key);
 }
 
 static gboolean

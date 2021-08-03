@@ -1,6 +1,7 @@
 /*
 OpenIO SDS event queue
 Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -43,3 +44,15 @@ oio_events_queue_send_buffered(struct oio_events_queue_s *self,
 	EXTRA_ASSERT(sent <= max);
 }
 
+void
+oio_events_queue_flush_key(struct oio_events_queue_s *self,
+		struct oio_events_queue_buffer_s *buffer, gchar *key)
+{
+	gboolean __send(gpointer key_, gpointer msg, gpointer u UNUSED) {
+		g_free(key_);
+		oio_events_queue__send(self, (gchar*)msg);
+		return TRUE;
+	}
+
+	oio_events_queue_buffer_flush_key(buffer, __send, NULL, key);
+}
