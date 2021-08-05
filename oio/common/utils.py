@@ -531,11 +531,12 @@ def compute_perfdata_stats(perfdata, prefix='upload.'):
             tot += v
             stot += v ** 2
             count += 1
-    avg = tot/count
-    sdev = sqrt(stot/count - avg**2)
+    count = count or 1
+    avg = tot / count
+    sdev = sqrt(stot / count - avg ** 2)
     rawx_perfdata[prefix + 'AVG'] = avg
     rawx_perfdata[prefix + 'SD'] = sdev
-    rawx_perfdata[prefix + 'RSD'] = sdev/avg
+    rawx_perfdata[prefix + 'RSD'] = sdev / (avg or 1)
 
 
 def get_virtualenv_dir(subdir=''):

@@ -188,17 +188,14 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
             hdrs = encode(hdrs)
 
             with green.ConnectionTimeout(self.connection_timeout):
-                if self.perfdata is not None:
-                    connect_start = monotonic_time()
+                perfdata_rawx = self.perfdata.setdefault('rawx', dict()) \
+                    if self.perfdata is not None else None
                 conn = io.http_connect(
                     parsed.netloc, 'PUT', parsed.path, hdrs,
-                    scheme=parsed.scheme)
+                    scheme=parsed.scheme,
+                    perfdata=perfdata_rawx,
+                    perfdata_suffix=chunk['url'])
                 conn.set_cork(True)
-                if self.perfdata is not None:
-                    connect_end = monotonic_time()
-                    perfdata_rawx = self.perfdata.setdefault('rawx', dict())
-                    perfdata_rawx['connect.' + chunk['url']] = \
-                        connect_end - connect_start
                 conn.chunk = chunk
             return conn, chunk
         except (SocketError, Timeout) as err:
@@ -251,7 +248,7 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         """
         Wait for server response.
 
-        :returns: a tuple with `conn` and the reponse object or an exception.
+        :returns: a tuple with `conn` and the response object or an exception.
         """
         try:
             with green.ChunkWriteTimeout(self.write_timeout):

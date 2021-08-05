@@ -1,4 +1,5 @@
 # Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -19,8 +20,9 @@ from six import text_type
 from six.moves.urllib_parse import quote
 
 from oio.common.green import socket, HTTPConnection, HTTPSConnection, \
-                             HTTPResponse, _UNKNOWN
+    HTTPResponse, _UNKNOWN
 from oio.common.logger import get_logger
+from oio.common.utils import monotonic_time
 
 logger = get_logger({}, __name__)
 
@@ -105,7 +107,7 @@ class CustomHttpConnection(HTTPConnection):
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY,
                              1 if enabled else 0)
 
-    def putrequest(self, method, url, skip_host=0, skip_accept_encoding=0):
+    def putrequest(self, method, url, skip_host=0, skip_accept_encoding=True):
         self._method = method
         self._path = url
         return HTTPConnection.putrequest(self, method, url, skip_host,
@@ -133,7 +135,7 @@ class CustomHttpsConnection(HTTPSConnection):
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_CORK,
                              1 if enabled else 0)
 
-    def putrequest(self, method, url, skip_host=0, skip_accept_encoding=0):
+    def putrequest(self, method, url, skip_host=0, skip_accept_encoding=True):
         self._method = method
         self._path = url
         return HTTPSConnection.putrequest(self, method, url, skip_host,
@@ -147,7 +149,7 @@ class CustomHttpsConnection(HTTPSConnection):
 
 
 def http_connect(host, method, path, headers=None, query_string=None,
-                 scheme="http"):
+                 scheme="http", perfdata=None, perfdata_suffix=None):
     if isinstance(path, text_type):
         try:
             path = path.encode('utf-8')
@@ -164,6 +166,12 @@ def http_connect(host, method, path, headers=None, query_string=None,
         conn = CustomHttpConnection(host)
     if query_string:
         path += b'?' + query_string
+    if perfdata is not None:
+        start = monotonic_time()
+        # connect() is called by putrequest() if we don't call it explicitly.
+        # We call it here only because we want to measure it.
+        conn.connect()
+        connect_end = monotonic_time()
     conn.path = path
     conn.putrequest(method, path)
     if headers:
@@ -174,4 +182,10 @@ def http_connect(host, method, path, headers=None, query_string=None,
             else:
                 conn.putheader(header, value)
     conn.endheaders()
+    if perfdata is not None:
+        headers_end = monotonic_time()
+        perfdata['connect.' + perfdata_suffix] = \
+            connect_end - start
+        perfdata['sendheaders.' + perfdata_suffix] = \
+            headers_end - connect_end
     return conn

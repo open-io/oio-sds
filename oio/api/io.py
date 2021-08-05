@@ -144,7 +144,7 @@ class LinkHandler(_WriteHandler):
                 if isinstance(ex, exc.UnfinishedUploadException):
                     # pylint: disable=no-member
                     content_chunks = content_chunks + \
-                            ex.chunks_already_uploaded
+                        ex.chunks_already_uploaded
                     ex = ex.exception
                 raise exc.UnfinishedUploadException(ex, content_chunks)
 
@@ -188,7 +188,7 @@ class WriteHandler(_WriteHandler):
         Uploads a stream of data.
         :returns: a tuple of 3 which contains:
            * the list of chunks to be saved in the container
-           * the number of bytes transfered
+           * the number of bytes transferred
            * the actual checksum of the data that went through the stream.
         """
         raise NotImplementedError()
@@ -346,20 +346,17 @@ class ChunkReader(object):
             with green.ConnectionTimeout(self.connection_timeout):
                 raw_url = chunk.get("real_url", chunk["url"])
                 parsed = urlparse(raw_url)
-                if self.perfdata is not None:
-                    connect_start = monotonic_time()
+                perfdata_rawx = self.perfdata.setdefault('rawx', dict()) \
+                    if self.perfdata is not None else None
                 conn = http_connect(parsed.netloc, 'GET', parsed.path,
-                                    self.request_headers, scheme=parsed.scheme)
-                if self.perfdata is not None:
-                    connect_end = monotonic_time()
-                    rawx_perfdata = self.perfdata.setdefault('rawx', dict())
-                    rawx_perfdata['connect.' + chunk['url']] = \
-                        connect_end - connect_start
+                                    self.request_headers, scheme=parsed.scheme,
+                                    perfdata=perfdata_rawx,
+                                    perfdata_suffix=chunk['url'])
             with green.OioTimeout(self.read_timeout):
                 source = conn.getresponse()
                 source.conn = conn
-                if self.perfdata is not None:
-                    source.download_start = monotonic_time()
+                # Here we may save the TTFB of each chunk. We haven't actually
+                # got the first byte, but we got the response headers.
         except (SocketError, Timeout) as err:
             self.logger.error('Connection failed to %s (reqid=%s): %s',
                               chunk, self.reqid, err)
@@ -480,6 +477,7 @@ class ChunkReader(object):
         if self.perfdata is not None:
             rawx_perfdata = self.perfdata.setdefault('rawx', dict())
             chunk_url = chunk['url']
+            source[0].download_start = monotonic_time()
         while True:
             try:
                 with green.ChunkReadTimeout(self.read_timeout):
@@ -654,7 +652,7 @@ class _MetachunkWriter(object):
         """
         Compare the number of uploads against the quorum.
 
-        :param successes: a list of chunk objects whose upload succeded
+        :param successes: a list of chunk objects whose upload succeeded
         :type successes: `list` or `tuple`
         :param failures: a list of chunk objects whose upload failed
         :type failures: `list` or `tuple`
@@ -821,9 +819,9 @@ class MetachunkPreparer(object):
             # postpone the deadline.
             set_deadline_from_read_timeout(self.extra_kwargs, force=True)
             meta, next_body = self.container_client.content_prepare(
-                    self.account, self.container, self.obj_name,
-                    position=mc_pos, size=1,
-                    stgpol=self.policy, **self.extra_kwargs)
+                self.account, self.container, self.obj_name,
+                position=mc_pos, size=1,
+                stgpol=self.policy, **self.extra_kwargs)
             self.obj_meta['properties'].update(meta.get('properties', {}))
             self._fix_mc_pos(next_body, mc_pos)
             self._all_chunks.extend(next_body)
@@ -850,7 +848,7 @@ def make_iter_from_resp(resp):
     if content_type != 'multipart/byteranges':
         start, end, _ = parse_content_range(
             resp.getheader('Content-Range'))
-        return iter([(start, end, end-start+1, resp.getheaders(), resp)])
+        return iter([(start, end, end - start + 1, resp.getheaders(), resp)])
     else:
         raise ValueError("Invalid response with code %d and content-type %s" %
                          resp.status, content_type)

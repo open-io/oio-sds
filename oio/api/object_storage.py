@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -1103,7 +1104,9 @@ class ObjectStorageApi(object):
         perfdata_rawx['overall'] = perfdata_rawx.get('overall', 0.0) \
             + req_end - download_start
         perfdata['data_size'] = size
+        perfdata['throughput'] = size / perfdata['ttlb']
         compute_perfdata_stats(perfdata, 'connect.')
+        compute_perfdata_stats(perfdata, 'sendheaders.')
         compute_perfdata_stats(perfdata, 'download.')
 
     def _object_fetch_impl(self, account, container, obj,
@@ -1332,7 +1335,9 @@ class ObjectStorageApi(object):
             perfdata_rawx['overall'] = perfdata_rawx.get('overall', 0.0) \
                 + upload_end - upload_start
             perfdata['data_size'] = ul_bytes
+            perfdata['throughput'] = ul_bytes / (upload_end - upload_start)
             compute_perfdata_stats(perfdata, 'connect.')
+            compute_perfdata_stats(perfdata, 'sendheaders.')
             compute_perfdata_stats(perfdata, 'upload.')
         return ul_chunks, ul_bytes, obj_checksum
 

@@ -603,16 +603,12 @@ class EcChunkWriter(object):
         with ConnectionTimeout(
                 connection_timeout or io.CONNECTION_TIMEOUT):
             perfdata = kwargs.get('perfdata', None)
-            if perfdata is not None:
-                connect_start = monotonic_time()
+            perfdata_rawx = perfdata.setdefault('rawx', dict()) \
+                if perfdata is not None else None
             conn = io.http_connect(
-                parsed.netloc, 'PUT', parsed.path, hdrs, scheme=parsed.scheme)
+                parsed.netloc, 'PUT', parsed.path, hdrs, scheme=parsed.scheme,
+                perfdata=perfdata_rawx, perfdata_suffix=chunk['url'])
             conn.set_cork(True)
-            if perfdata is not None:
-                connect_end = monotonic_time()
-                perfdata_rawx = perfdata.setdefault('rawx', dict())
-                perfdata_rawx['connect.' + chunk['url']] = \
-                    connect_end - connect_start
             conn.chunk = chunk
         return cls(chunk, conn, write_timeout=write_timeout,
                    reqid=reqid, **kwargs)
