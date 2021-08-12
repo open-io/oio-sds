@@ -348,9 +348,14 @@ class ECStream(object):
                 finally:
                     if self.perfdata is not None:
                         ec_end = monotonic_time()
+                        duration = ec_end - ec_start
                         rawx_pdata = self.perfdata.setdefault('rawx', dict())
-                        rawx_pdata['ec'] = rawx_pdata.get('ec', 0.0) \
-                            + ec_end - ec_start
+                        rawx_pdata['ec.segments'] = \
+                            rawx_pdata.get('ec.segments', 0) + 1
+                        rawx_pdata['ec.total'] = \
+                            rawx_pdata.get('ec.total', 0.0) + duration
+                        if 'ec.firstsegment' not in rawx_pdata:
+                            rawx_pdata['ec.firstsegment'] = duration
 
                 yield segment
 
@@ -800,7 +805,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
         if self.perfdata is not None:
             ec_end = monotonic_time()
             rawx_perfdata = self.perfdata.setdefault('rawx', dict())
-            rawx_perfdata['ec'] = rawx_perfdata.get('ec', 0.0) \
+            rawx_perfdata['ec.total'] = rawx_perfdata.get('ec.total', 0.0) \
                 + ec_end - ec_start
         if fragments is None:
             # not enough data given

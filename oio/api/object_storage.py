@@ -1103,6 +1103,9 @@ class ObjectStorageApi(object):
         perfdata['ttlb'] = req_end - req_start
         perfdata_rawx['overall'] = perfdata_rawx.get('overall', 0.0) \
             + req_end - download_start
+        if 'ec.segments' in perfdata_rawx:
+            perfdata_rawx['ec.persegment'] = \
+                perfdata_rawx['ec.total'] / perfdata_rawx['ec.segments']
         perfdata['data_size'] = size
         perfdata['throughput'] = size / perfdata['ttlb']
         compute_perfdata_stats(perfdata, 'connect.')
