@@ -353,10 +353,15 @@ class ChunkReader(object):
                                     perfdata=perfdata_rawx,
                                     perfdata_suffix=chunk['url'])
             with green.OioTimeout(self.read_timeout):
+                if perfdata_rawx:
+                    getresp_start = monotonic_time()
                 source = conn.getresponse()
                 source.conn = conn
-                # Here we may save the TTFB of each chunk. We haven't actually
+                # We haven't actually
                 # got the first byte, but we got the response headers.
+                if perfdata_rawx:
+                    perfdata_rawx["ttfb." + chunk['url']] = \
+                        monotonic_time() - getresp_start
         except (SocketError, Timeout) as err:
             self.logger.error('Connection failed to %s (reqid=%s): %s',
                               chunk, self.reqid, err)

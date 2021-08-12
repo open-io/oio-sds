@@ -1107,6 +1107,7 @@ class ObjectStorageApi(object):
         perfdata['throughput'] = size / perfdata['ttlb']
         compute_perfdata_stats(perfdata, 'connect.')
         compute_perfdata_stats(perfdata, 'sendheaders.')
+        compute_perfdata_stats(perfdata, 'ttfb.')
         compute_perfdata_stats(perfdata, 'download.')
 
     def _object_fetch_impl(self, account, container, obj,
