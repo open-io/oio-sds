@@ -192,8 +192,13 @@ class HttpApi(object):
                 request_end = monotonic_time()
                 service_perfdata = perfdata.setdefault(
                     self.service_type, dict())
+                duration = request_end - request_start
                 service_perfdata['overall'] = service_perfdata.get(
-                    'overall', 0.0) + request_end - request_start
+                    'overall', 0.0) + duration
+                if duration > service_perfdata.get('MAX', 0.0):
+                    service_perfdata['MAX'] = duration
+                service_perfdata['requests'] = \
+                    service_perfdata.get('requests', 0) + 1
             body = resp.data
             if body and resp.headers.get('Content-Type') \
                     == HTTP_CONTENT_TYPE_JSON:

@@ -26,7 +26,7 @@ import sys
 from collections import OrderedDict
 from ctypes import CDLL as orig_CDLL
 from getpass import getuser
-from math import sqrt
+# from math import sqrt
 from random import getrandbits
 from io import RawIOBase
 from itertools import chain, islice
@@ -525,18 +525,25 @@ def compute_perfdata_stats(perfdata, prefix='upload.'):
     rawx_perfdata = perfdata.get('rawx')
     if not rawx_perfdata:
         return
-    tot = stot = count = 0
+    count = 0
+    max_ = 0
+    tot = 0
+    # XXX: standard deviation computation disabled because we don't care.
+    # stot = 0
     for k, v in rawx_perfdata.items():
         if k.startswith(prefix):
             tot += v
-            stot += v ** 2
+            # stot += v ** 2
             count += 1
+            if v > max_:
+                max_ = v
     count = count or 1
     avg = tot / count
-    sdev = sqrt(stot / count - avg ** 2)
+    # sdev = sqrt(stot / count - avg ** 2)
     rawx_perfdata[prefix + 'AVG'] = avg
-    rawx_perfdata[prefix + 'SD'] = sdev
-    rawx_perfdata[prefix + 'RSD'] = sdev / (avg or 1)
+    # rawx_perfdata[prefix + 'SD'] = sdev
+    # rawx_perfdata[prefix + 'RSD'] = sdev / (avg or 1)
+    rawx_perfdata[prefix + 'MAX'] = max_
 
 
 def get_virtualenv_dir(subdir=''):

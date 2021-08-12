@@ -49,16 +49,16 @@ class TestObjectStorageApiPerfdata(BaseTestCase):
         self.assertIn('overall', perfdata['proxy'])
         self.assertIn('rawx', perfdata)
         if meta['policy'] == 'EC':
-            self.assertIn('ec', perfdata['rawx'])
+            self.assertIn('ec.total', perfdata['rawx'])
         for chunk in chunks:
             self.assertIn('connect.' + chunk['url'], perfdata['rawx'])
             self.assertIn('upload.' + chunk['url'], perfdata['rawx'])
         self.assertIn('connect.AVG', perfdata['rawx'])
-        self.assertIn('connect.SD', perfdata['rawx'])
-        self.assertIn('connect.RSD', perfdata['rawx'])
+        # self.assertIn('connect.SD', perfdata['rawx'])
+        # self.assertIn('connect.RSD', perfdata['rawx'])
         self.assertIn('upload.AVG', perfdata['rawx'])
-        self.assertIn('upload.SD', perfdata['rawx'])
-        self.assertIn('upload.RSD', perfdata['rawx'])
+        # self.assertIn('upload.SD', perfdata['rawx'])
+        # self.assertIn('upload.RSD', perfdata['rawx'])
         self.assertIn('overall', perfdata['rawx'])
 
         perfdata.clear()
@@ -90,7 +90,7 @@ class TestObjectStorageApiPerfdata(BaseTestCase):
         self.assertEqual(odata, buf)
         self.assertIn('rawx', perfdata)
         if stg_method.ec:
-            self.assertIn('ec', perfdata['rawx'])
+            self.assertIn('ec.total', perfdata['rawx'])
         nb_chunks_to_read = 0
         for chunk in chunks:
             key = "connect." + chunk['url']
