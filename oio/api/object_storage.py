@@ -42,7 +42,8 @@ from oio.common.decorators import handle_account_not_found, \
 from oio.common.storage_functions import _sort_chunks, fetch_stream, \
     fetch_stream_ec
 from oio.common.fullpath import encode_fullpath
-from oio.common.cache import del_cached_object_metadata
+from oio.common.cache import del_cached_object_metadata, \
+    aggregate_cache_perfdata
 
 
 class ObjectStorageApi(object):
@@ -960,6 +961,7 @@ class ObjectStorageApi(object):
         marker_header = HEADER_PREFIX + 'list-marker'
         if marker_header in hdrs:
             resp_body['next_marker'] = unquote(hdrs.get(marker_header))
+        aggregate_cache_perfdata(kwargs.get('perfdata', {}))
         return resp_body
 
     @handle_object_not_found
@@ -1112,6 +1114,7 @@ class ObjectStorageApi(object):
         compute_perfdata_stats(perfdata, 'sendheaders.')
         compute_perfdata_stats(perfdata, 'ttfb.')
         compute_perfdata_stats(perfdata, 'download.')
+        aggregate_cache_perfdata(perfdata)
 
     def _object_fetch_impl(self, account, container, obj,
                            version=None, ranges=None, key_file=None,
@@ -1343,6 +1346,7 @@ class ObjectStorageApi(object):
             compute_perfdata_stats(perfdata, 'connect.')
             compute_perfdata_stats(perfdata, 'sendheaders.')
             compute_perfdata_stats(perfdata, 'upload.')
+            aggregate_cache_perfdata(perfdata)
         return ul_chunks, ul_bytes, obj_checksum
 
     def _object_prepare(self, account, container, obj_name, source,
