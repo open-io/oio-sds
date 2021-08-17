@@ -961,7 +961,9 @@ class ObjectStorageApi(object):
         marker_header = HEADER_PREFIX + 'list-marker'
         if marker_header in hdrs:
             resp_body['next_marker'] = unquote(hdrs.get(marker_header))
-        aggregate_cache_perfdata(kwargs.get('perfdata', {}))
+        perfdata = kwargs.get('perfdata')
+        if perfdata is not None:
+            aggregate_cache_perfdata(perfdata)
         return resp_body
 
     @handle_object_not_found
