@@ -92,7 +92,7 @@ def add_common_parser_options(parser):
         "--profiler",
         default='cProfile',
         help=("Which profiler to use (default: cProfile, "
-              "supported: GreenletProfiler, cProfile, profile)."))
+              "supported: yappi, cProfile, profile)."))
     parser.add_argument(
         "--profile-early",
         action='store_true',
