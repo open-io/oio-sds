@@ -651,7 +651,7 @@ score_expr=((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num s
 score_timeout=120
 
 [type:rawx]
-score_expr=((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+score_expr=((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(1 + (num stat.io))))
 score_timeout=120
 
 [type:rdir]
@@ -1174,7 +1174,7 @@ defaults = {
 # environment. If not, we consider being in a Ubuntu/Debian environment.
 # Sorry for the others, we cannot manage everything in this helper script for
 # developers, so consider using the standard deployment tools for your
-# prefered Linux distribution.
+# preferred Linux distribution.
 HTTPD_BINARY = '/usr/sbin/httpd'
 APACHE2_MODULES_SYSTEM_DIR = ''
 if not os.path.exists('/usr/sbin/httpd'):
@@ -1249,7 +1249,7 @@ def generate(options):
         stgpol = options[M2_STGPOL]
     options['config']['ns.storage_policy'] = stgpol
 
-    # `options` already holds the YAML values overriden by the CLI values
+    # `options` already holds the YAML values overridden by the CLI values
     hosts = options.get(SVC_HOSTS) or defaults[SVC_HOSTS]
 
     ns = options.get('ns') or defaults['NS']
@@ -1963,4 +1963,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
