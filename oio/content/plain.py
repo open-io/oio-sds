@@ -31,7 +31,8 @@ class PlainContent(Content):
         storage_method = STORAGE_METHODS.load(self.chunk_method)
         chunks = _sort_chunks(self.chunks.raw(), storage_method.ec,
                               logger=self.logger)
-        stream = fetch_stream(chunks, None, storage_method)
+        stream = fetch_stream(chunks, None, storage_method,
+                              watchdog=self.blob_client.watchdog)
         return stream
 
     def create(self, stream, **kwargs):
@@ -43,7 +44,8 @@ class PlainContent(Content):
         # TODO deal with headers
         headers = {}
         handler = ReplicatedWriteHandler(
-            stream, sysmeta, chunks, storage_method, headers=headers)
+            stream, sysmeta, chunks, storage_method, headers=headers,
+            watchdog=self.blob_client.watchdog)
         final_chunks, bytes_transferred, content_checksum = handler.stream()
 
         # TODO sanity checks

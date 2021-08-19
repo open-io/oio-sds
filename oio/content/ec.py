@@ -70,7 +70,8 @@ class ECContent(Content):
 
         # Regenerate the lost chunk's data, from existing chunks
         handler = ECRebuildHandler(
-            chunks.raw(), current_chunk.subpos, self.storage_method)
+            chunks.raw(), current_chunk.subpos, self.storage_method,
+            watchdog=self.blob_client.watchdog)
         expected_chunk_size, stream = handler.rebuild()
 
         # Actually create the spare chunk
@@ -127,7 +128,8 @@ class ECContent(Content):
     def fetch(self):
         chunks = _sort_chunks(self.chunks.raw(), self.storage_method.ec,
                               logger=self.logger)
-        stream = fetch_stream_ec(chunks, None, self.storage_method)
+        stream = fetch_stream_ec(chunks, None, self.storage_method,
+                                 watchdog=self.blob_client.watchdog)
         return stream
 
     def create(self, stream, **kwargs):
@@ -137,7 +139,8 @@ class ECContent(Content):
 
         headers = {}
         handler = ECWriteHandler(
-            stream, sysmeta, chunks, self.storage_method, headers=headers)
+            stream, sysmeta, chunks, self.storage_method, headers=headers,
+            watchdog=self.blob_client.watchdog)
 
         final_chunks, bytes_transferred, content_checksum = handler.stream()
 

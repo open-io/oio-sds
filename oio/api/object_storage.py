@@ -63,7 +63,7 @@ class ObjectStorageApi(object):
     """
     EXTRA_KEYWORDS = ('chunk_checksum_algo', 'autocreate',
                       'chunk_buffer_min', 'chunk_buffer_max',
-                      'cache', 'tls')
+                      'cache', 'tls', 'watchdog')
 
     def __init__(self, namespace, logger=None, perfdata=None, **kwargs):
         """
@@ -121,6 +121,13 @@ class ObjectStorageApi(object):
         self._blob_client = None
         self._proxy_client = None
 
+        # The watchdog is required at several places. Unfortunately, our only
+        # "context" is the kwargs parameter we pass everywhere.
+        self._watchdog = self._global_kwargs.get('watchdog', None)
+        if not self._watchdog:
+            # This will create and start one.
+            self._global_kwargs['watchdog'] = self.watchdog
+
     @property
     def blob_client(self):
         """
@@ -133,7 +140,8 @@ class ObjectStorageApi(object):
             connection_pool = self.container.pool_manager
             self._blob_client = BlobClient(
                 conf={"namespace": self.namespace}, logger=self.logger,
-                connection_pool=connection_pool, perfdata=self.perfdata)
+                connection_pool=connection_pool, perfdata=self.perfdata,
+                watchdog=self.watchdog)
         return self._blob_client
 
     # FIXME(FVE): this method should not exist
@@ -149,6 +157,16 @@ class ObjectStorageApi(object):
                 conf, pool_manager=pool_manager, no_ns_in_url=True,
                 logger=self.logger)
         return self._proxy_client
+
+    @property
+    def watchdog(self):
+        """
+        The main watchdog managing timeouts.
+        """
+        if self._watchdog is None:
+            from oio.common.green import get_watchdog
+            self._watchdog = get_watchdog()
+        return self._watchdog
 
     @patch_kwargs
     @ensure_headers
@@ -229,7 +247,7 @@ class ObjectStorageApi(object):
         Delete some properties from the specified account.
         """
         self.account.account_update(account, None,
-                                    [k for k in properties], **kwargs)
+                                    list(properties), **kwargs)
 
     @patch_kwargs
     @ensure_headers
@@ -273,7 +291,7 @@ class ObjectStorageApi(object):
         :type container: `str`
         """
         self.container.container_touch(
-                account, container, recompute=recompute, **kwargs)
+            account, container, recompute=recompute, **kwargs)
 
     @patch_kwargs
     @ensure_headers
@@ -889,7 +907,7 @@ class ObjectStorageApi(object):
             # retrieve partial chunk
             ret = self.object_fetch(account, container, obj,
                                     version=version,
-                                    ranges=[(chunk['offset'], size-1)])
+                                    ranges=[(chunk['offset'], size - 1)])
             # TODO implement a proper object_update
             pos = int(chunk['pos'].split('.')[0])
             self.object_create(account, container, obj_name=obj,
@@ -1373,8 +1391,8 @@ class ObjectStorageApi(object):
             if not policy:
                 policy = obj_meta['policy']
             handler = LinkHandler(
-                    obj_meta['full_path'], None, storage_method,
-                    self.blob_client, policy=policy, **kwargs)
+                obj_meta['full_path'], None, storage_method,
+                self.blob_client, policy=policy, **kwargs)
             return obj_meta, handler, None
 
         if storage_method.ec:
@@ -1383,7 +1401,7 @@ class ObjectStorageApi(object):
             write_handler_cls = ReplicatedWriteHandler
         kwargs['logger'] = self.logger
         handler = write_handler_cls(
-                source, obj_meta, chunk_prep, storage_method, **kwargs)
+            source, obj_meta, chunk_prep, storage_method, **kwargs)
 
         return obj_meta, handler, chunk_prep
 

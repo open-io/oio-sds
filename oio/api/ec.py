@@ -15,7 +15,8 @@
 
 from oio.common.green import ChunkReadTimeout, ChunkWriteTimeout, \
     ContextPool, ConnectionTimeout, Empty, GreenPile, LightQueue, \
-    SourceReadTimeout, Timeout, Queue, eventlet_yield
+    SourceReadTimeout, Timeout, Queue, eventlet_yield, \
+    WatchdogTimeout
 
 import collections
 import math
@@ -99,7 +100,7 @@ class ECChunkDownloadHandler(object):
 
     def __init__(self, storage_method, chunks, meta_start, meta_end, headers,
                  connection_timeout=None, read_timeout=None, reqid=None,
-                 perfdata=None, **_kwargs):
+                 perfdata=None, watchdog=None, **_kwargs):
         """
         :param connection_timeout: timeout to establish the connections
         :param read_timeout: timeout to read a buffer of data
@@ -117,6 +118,9 @@ class ECChunkDownloadHandler(object):
         self.reqid = reqid
         self.perfdata = perfdata
         self.logger = _kwargs.get('logger', LOGGER)
+        self.watchdog = watchdog
+        if not watchdog:
+            raise ValueError("watchdog is None")
         self._resp_by_chunk = dict()
 
     def _get_range_infos(self):
@@ -158,13 +162,14 @@ class ECChunkDownloadHandler(object):
             # only handle one range
             range_info = range_infos[0]
             headers['Range'] = 'bytes=%s-%s' % (
-                    range_info['req_fragment_start'],
-                    range_info['req_fragment_end'])
+                range_info['req_fragment_start'],
+                range_info['req_fragment_end'])
         reader = io.ChunkReader(chunk_iter, storage_method.ec_fragment_size,
                                 headers, self.connection_timeout,
                                 self.read_timeout, perfdata=self.perfdata,
                                 align=True, logger=self.logger,
-                                resp_by_chunk=self._resp_by_chunk)
+                                resp_by_chunk=self._resp_by_chunk,
+                                watchdog=self.watchdog)
         return (reader, reader.get_iter())
 
     def get_stream(self):
@@ -561,7 +566,8 @@ class EcChunkWriter(object):
     Writes an EC chunk
     """
     def __init__(self, chunk, conn, write_timeout=None,
-                 chunk_checksum_algo='md5', perfdata=None, **kwargs):
+                 chunk_checksum_algo='md5', perfdata=None,
+                 watchdog=None, **kwargs):
         self._chunk = chunk
         self._conn = conn
         self.failed = False
@@ -576,6 +582,9 @@ class EcChunkWriter(object):
         self.reqid = kwargs.get('reqid')
         self.perfdata = perfdata
         self.logger = kwargs.get('logger', LOGGER)
+        self.watchdog = watchdog
+        if not watchdog:
+            raise ValueError("watchdog is None")
 
     @property
     def chunk(self):
@@ -587,7 +596,10 @@ class EcChunkWriter(object):
 
     @classmethod
     def connect(cls, chunk, sysmeta, reqid=None,
-                connection_timeout=None, write_timeout=None, **kwargs):
+                connection_timeout=None, write_timeout=None,
+                watchdog=None, **kwargs):
+        if not watchdog:
+            raise ValueError("watchdog is None")
         raw_url = chunk.get("real_url", chunk["url"])
         parsed = urlparse(raw_url)
         chunk_path = parsed.path.split('/')[-1]
@@ -605,8 +617,9 @@ class EcChunkWriter(object):
         if kwargs.get('chunk_checksum_algo'):
             trailers = trailers + (CHUNK_HEADERS["chunk_hash"], )
         hdrs["Trailer"] = ', '.join(trailers)
-        with ConnectionTimeout(
-                connection_timeout or io.CONNECTION_TIMEOUT):
+        with WatchdogTimeout(watchdog,
+                             connection_timeout or io.CONNECTION_TIMEOUT,
+                             ConnectionTimeout):
             perfdata = kwargs.get('perfdata', None)
             perfdata_rawx = perfdata.setdefault('rawx', dict()) \
                 if perfdata is not None else None
@@ -616,7 +629,7 @@ class EcChunkWriter(object):
             conn.set_cork(True)
             conn.chunk = chunk
         return cls(chunk, conn, write_timeout=write_timeout,
-                   reqid=reqid, **kwargs)
+                   reqid=reqid, watchdog=watchdog, **kwargs)
 
     def start(self, pool):
         """Spawn the send coroutine"""
@@ -631,7 +644,8 @@ class EcChunkWriter(object):
             # use HTTP transfer encoding chunked
             # to write data to RAWX
             try:
-                with ChunkWriteTimeout(self.write_timeout):
+                with WatchdogTimeout(self.watchdog, self.write_timeout,
+                                     ChunkWriteTimeout):
                     if self.perfdata is not None \
                             and self.conn.upload_start is None:
                         self.conn.upload_start = monotonic_time()
@@ -703,7 +717,8 @@ class EcChunkWriter(object):
         if self.perfdata is not None:
             fin_start = monotonic_time()
         try:
-            with ChunkWriteTimeout(self.write_timeout):
+            with WatchdogTimeout(self.watchdog, self.write_timeout,
+                                 ChunkWriteTimeout):
                 self.conn.send(to_send)
                 # Last segment sent, disable TCP_CORK to flush buffers
                 self.conn.set_cork(False)
@@ -729,7 +744,8 @@ class EcChunkWriter(object):
             # As the server may buffer data before writing it to non-volatile
             # storage, we don't know if we have to wait while sending data or
             # while reading response, thus we apply the same timeout to both.
-            with ChunkWriteTimeout(self.write_timeout):
+            with WatchdogTimeout(self.watchdog, self.write_timeout,
+                                 ChunkWriteTimeout):
                 resp = self.conn.getresponse()
                 return resp
         finally:
@@ -835,13 +851,14 @@ class EcMetachunkWriter(io.MetachunkWriter):
 
         try:
             # we use eventlet GreenPool to manage writers
-            with ContextPool(len(writers)*2) as pool:
+            with ContextPool(len(writers) * 2) as pool:
                 # init writers in pool
                 for writer in writers:
                     writer.start(pool)
 
                 def read(read_size):
-                    with SourceReadTimeout(self.read_timeout):
+                    with WatchdogTimeout(self.watchdog, self.read_timeout,
+                                         SourceReadTimeout):
                         try:
                             data = source.read(read_size)
                         except (ValueError, IOError) as exc:
@@ -936,7 +953,8 @@ class EcMetachunkWriter(io.MetachunkWriter):
                 write_timeout=self.write_timeout,
                 chunk_checksum_algo=self.chunk_checksum_algo,
                 perfdata=self.perfdata,
-                logger=self.logger)
+                logger=self.logger,
+                watchdog=self.watchdog)
             return writer, chunk
         except (Exception, Timeout) as exc:
             msg = text_type(exc)
@@ -1090,23 +1108,28 @@ class ECWriteHandler(io.WriteHandler):
 class ECRebuildHandler(object):
     def __init__(self, meta_chunk, missing, storage_method,
                  connection_timeout=None, read_timeout=None,
-                 **_kwargs):
+                 watchdog=None, **_kwargs):
         self.meta_chunk = meta_chunk
         self.missing = missing
         self.storage_method = storage_method
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
         self.read_timeout = read_timeout or io.CHUNK_TIMEOUT
         self.logger = _kwargs.get('logger', LOGGER)
+        self.watchdog = watchdog
+        if not watchdog:
+            raise ValueError("watchdog is None")
 
     def _get_response(self, chunk, headers):
         resp = None
         parsed = urlparse(chunk.get('real_url', chunk['url']))
         try:
-            with ConnectionTimeout(self.connection_timeout):
+            with WatchdogTimeout(self.watchdog, self.connection_timeout,
+                                 ConnectionTimeout):
                 conn = io.http_connect(
                     parsed.netloc, 'GET', parsed.path, headers)
 
-            with ChunkReadTimeout(self.read_timeout):
+            with WatchdogTimeout(self.watchdog, self.read_timeout,
+                                 ChunkReadTimeout):
                 resp = conn.getresponse()
             if resp.status != 200:
                 self.logger.warning('Invalid GET response from %s: %s %s',
@@ -1196,7 +1219,8 @@ class ECRebuildHandler(object):
                 for resp in resps:
                     pile.spawn(_get_frag, resp)
                 try:
-                    with Timeout(self.read_timeout):
+                    with WatchdogTimeout(self.watchdog, self.read_timeout,
+                                         Timeout):
                         frag = [frag for frag in pile]
                 except Timeout as to:
                     self.logger.error('ERROR while rebuilding: %s', to)

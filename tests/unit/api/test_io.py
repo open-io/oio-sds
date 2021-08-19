@@ -14,7 +14,7 @@
 # License along with this library.
 
 import unittest
-from mock import patch
+from mock import MagicMock, patch
 from oio.api.io import ChunkReader, discard_bytes, MetachunkWriter
 from oio.common import exceptions
 from oio.common import green
@@ -51,9 +51,14 @@ class FakeSource(object):
 
 
 class IOTest(unittest.TestCase):
+    def setUp(self):
+        super().setUp()
+        self.watchdog = green.get_watchdog()
+
     def test_recover(self):
         # basic without range
-        reader = ChunkReader(None, None, {})
+        reader = ChunkReader(None, None, {},
+                             watchdog=self.watchdog)
         reader.recover(10)
         self.assertEqual(reader.request_headers['Range'], 'bytes=10-')
 
@@ -136,7 +141,7 @@ class MetachunkWriterTest(unittest.TestCase):
     """Test oio.api.io.MetachunkWriter class."""
 
     def setUp(self):
-        self.mcw = MetachunkWriter(quorum=3)
+        self.mcw = MetachunkWriter(quorum=3, watchdog=MagicMock())
 
     def _dummy_chunk(self, error=None):
         chunk = {'url': 'http://127.0.0.1:7000/' + random_id(64)}
@@ -158,9 +163,10 @@ class MetachunkWriterTest(unittest.TestCase):
 
     def test_metachunkwriter_init(self):
         self.assertRaises(ValueError, MetachunkWriter)
-        mcw = MetachunkWriter(quorum=3)
+        mcw = MetachunkWriter(quorum=3, watchdog=MagicMock())
         self.assertEqual(3, mcw.quorum)
-        mcw = MetachunkWriter(STORAGE_METHODS.load('plain'))
+        mcw = MetachunkWriter(STORAGE_METHODS.load('plain'),
+                              watchdog=MagicMock())
         self.assertEqual(1, mcw.quorum)
 
     def test_metachunkwriter_quorum_success(self):

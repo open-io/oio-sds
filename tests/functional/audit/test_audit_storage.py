@@ -30,7 +30,7 @@ from oio.blob.client import BlobClient
 from oio.common.constants import CHUNK_XATTR_KEYS
 from tests.utils import BaseTestCase, random_str, random_id
 from oio.common.constants import OIO_VERSION, \
-        CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
+    CHUNK_XATTR_CONTENT_FULLPATH_PREFIX
 from oio.common.fullpath import encode_fullpath
 
 
@@ -38,7 +38,7 @@ class TestContent(object):
     def __init__(self, account, ref):
         self.cid = cid_from_name(account, ref)
         self.path = random_str(6)
-        self.version = int(time.time()*1000000)
+        self.version = int(time.time() * 1000000)
         self.id = random_id(32)
         self.fullpath = encode_fullpath(
             account, ref, self.path, self.version, self.id)
@@ -76,7 +76,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
 
         self.auditor = BlobAuditorWorker(self.conf, get_logger(None), None)
         self.container_client = ContainerClient(self.conf)
-        self.blob_client = BlobClient(conf=self.conf)
+        self.blob_client = BlobClient(conf=self.conf, watchdog=self.watchdog)
 
         self.container_client.container_create(self.account, self.ref)
         self.content = TestContent(self.account, self.ref)
@@ -124,7 +124,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
 
     def init_content(self):
         chunk_proxy = {
-            "url":  self.chunk.url,
+            "url": self.chunk.url,
             "pos": str(self.chunk.pos),
             "hash": self.chunk.metachunk_hash,
             "size": self.chunk.metachunk_size}

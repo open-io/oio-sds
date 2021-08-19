@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -28,12 +29,14 @@ class ContentReaperFilter(Filter):
 
     def init(self):
         self.handlers = {
-                "plain": self._handle_rawx,
-                "ec": self._handle_rawx,
+            "plain": self._handle_rawx,
+            "ec": self._handle_rawx,
         }
         kwargs = {k: v for k, v in self.conf.items()
                   if k in URLLIB3_POOLMANAGER_KWARGS}
-        self.blob_client = BlobClient(self.conf, logger=self.logger, **kwargs)
+        self.blob_client = BlobClient(self.conf, logger=self.logger,
+                                      watchdog=self.app_env['watchdog'],
+                                      **kwargs)
         self.chunk_concurrency = int(self.conf.get('concurrency', 3))
         self.chunk_timeout = float(self.conf.get('timeout', 5.0))
 

@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -35,7 +36,7 @@ from oio.common.configuration import load_namespace_conf, set_namespace_options
 from oio.common.constants import REQID_HEADER
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.json import json as jsonlib
-from oio.common.green import time
+from oio.common.green import time, get_watchdog
 from oio.event.beanstalk import Beanstalk, ResponseError
 from oio.event.evob import Event
 
@@ -62,20 +63,20 @@ def random_str(size, chars=RANDOM_CHARS):
 
 
 strange_paths = [
-                "Annual report.txt",
-                "foo+bar=foobar.txt",
-                "100%_bug_free.c",
-                "forward/slash/allowed",
-                "I\\put\\backslashes\\and$dollar$signs$in$file$names",
-                "Je suis tombé sur la tête, mais ça va bien.",
-                "%s%f%u%d%%",
-                "{1},{0},{3}",
-                "carriage\rreturn",
-                "line\nfeed",
-                "ta\tbu\tla\ttion",
-                "controlchars",
-                "//azeaze\\//azeaz\\//azea"
-                ]
+    "Annual report.txt",
+    "foo+bar=foobar.txt",
+    "100%_bug_free.c",
+    "forward/slash/allowed",
+    "I\\put\\backslashes\\and$dollar$signs$in$file$names",
+    "Je suis tombé sur la tête, mais ça va bien.",
+    "%s%f%u%d%%",
+    "{1},{0},{3}",
+    "carriage\rreturn",
+    "line\nfeed",
+    "ta\tbu\tla\ttion",
+    "controlchars",
+    "//azeaze\\//azeaz\\//azea"
+]
 
 
 def random_id(size):
@@ -239,6 +240,7 @@ class CommonTestCase(testtools.TestCase):
         self._http_pool = None
         self._logger = None
         self._storage_api = None
+        self._watchdog = None
         # Namespace configuration, from "sds.conf"
         self._ns_conf = None
         # Namespace configuration as it was when the test started
@@ -302,7 +304,8 @@ class CommonTestCase(testtools.TestCase):
         if self._storage_api is None:
             from oio.api.object_storage import ObjectStorageApi
             self._storage_api = ObjectStorageApi(self.ns,
-                                                 pool_manager=self.http_pool)
+                                                 pool_manager=self.http_pool,
+                                                 watchdog=self.watchdog)
         return self._storage_api
 
     @property
@@ -310,6 +313,12 @@ class CommonTestCase(testtools.TestCase):
         if not self._logger:
             self._logger = logging.getLogger('test')
         return self._logger
+
+    @property
+    def watchdog(self):
+        if self._watchdog is None:
+            self._watchdog = get_watchdog()
+        return self._watchdog
 
     @property
     def ns_conf(self):

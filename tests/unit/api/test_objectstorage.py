@@ -29,6 +29,7 @@ from oio.common.constants import CONTAINER_HEADERS, OBJECT_HEADERS, \
     REQID_HEADER
 from oio.common.decorators import handle_container_not_found, \
     handle_object_not_found
+from oio.common.green import get_watchdog
 from oio.common.storage_functions import _sort_chunks
 from oio.api.object_storage import ObjectStorageApi
 from tests.utils import random_str
@@ -37,7 +38,7 @@ from tests.unit.api import FakeStorageApi, FakeApiResponse
 
 def chunk(suffix, position):
     return {"url": "http://1.2.3.4:6000/{0}".format(suffix),
-            "pos": str(position), "size": 32, "hash": "0"*32}
+            "pos": str(position), "size": 32, "hash": "0" * 32}
 
 
 def extend(base, inc):
@@ -48,12 +49,15 @@ def extend(base, inc):
 class ObjectStorageTest(unittest.TestCase):
     def setUp(self):
         self.fake_endpoint = "http://1.2.3.4:8000"
-        self.api = FakeStorageApi("NS", endpoint=self.fake_endpoint)
+        self.watchdog = get_watchdog()
+        self.api = FakeStorageApi("NS", endpoint=self.fake_endpoint,
+                                  watchdog=self.watchdog)
         self.account = "test"
         self.container = "fake"
         reqid = random_str(32)
         self.headers = {REQID_HEADER: reqid}
-        self.common_kwargs = {'headers': self.headers, 'reqid': reqid}
+        self.common_kwargs = {'headers': self.headers, 'reqid': reqid,
+                              'watchdog': self.watchdog}
         self.policy = "THREECOPIES"
         self.uri_base = self.fake_endpoint + "/v3.0/NS"
 

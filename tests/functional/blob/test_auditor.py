@@ -1,4 +1,5 @@
 # Copyright (C) 2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,8 +16,6 @@
 
 import random
 
-from oio.api.object_storage import ObjectStorageApi
-from oio.blob.client import BlobClient
 from oio.common.utils import cid_from_name
 from oio.common.exceptions import OrphanChunk
 from oio.blob.auditor import BlobAuditorWorker
@@ -31,8 +30,8 @@ class TestBlobAuditor(BaseTestCase):
         self.container = random_str(16)
         self.cid = cid_from_name(self.account, self.container)
         self.path = random_str(16)
-        self.api = ObjectStorageApi(self.ns)
-        self.blob_client = BlobClient(self.conf)
+        self.api = self.storage
+        self.blob_client = self.api.blob_client
 
         self.api.container_create(self.account, self.container)
         _, chunks = self.api.container.content_prepare(

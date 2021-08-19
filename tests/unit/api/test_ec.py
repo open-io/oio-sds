@@ -14,7 +14,7 @@
 # License along with this library.
 
 
-from oio.common.green import Timeout
+from oio.common.green import get_watchdog, Timeout
 
 import unittest
 import random
@@ -35,6 +35,12 @@ from oio.common.constants import OIO_VERSION
 
 
 class TestEC(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        super(TestEC, cls).setUpClass()
+        cls.watchdog = get_watchdog()
+
     def setUp(self):
         self.chunk_method = 'ec/algo=liberasurecode_rs_vand,k=6,m=2'
         storage_method = STORAGE_METHODS.load(self.chunk_method)
@@ -79,7 +85,8 @@ class TestEC(unittest.TestCase):
         resps = [201] * nb
         with set_http_connect(*resps):
             handler = EcMetachunkWriter(self.sysmeta, self.meta_chunk(),
-                                        checksum, self.storage_method)
+                                        checksum, self.storage_method,
+                                        watchdog=self.__class__.watchdog)
             bytes_transferred, checksum, chunks = handler.stream(source, size)
         self.assertEqual(len(chunks), nb)
         self.assertEqual(bytes_transferred, 0)
@@ -93,7 +100,8 @@ class TestEC(unittest.TestCase):
         resps = [500] * nb
         with set_http_connect(*resps):
             handler = EcMetachunkWriter(self.sysmeta, self.meta_chunk(),
-                                        checksum, self.storage_method)
+                                        checksum, self.storage_method,
+                                        watchdog=self.__class__.watchdog)
             # From now on, exceptions happening during chunk upload are
             # considered retryable, and thus will tell the caller the
             # service was just too busy.
@@ -109,7 +117,8 @@ class TestEC(unittest.TestCase):
         resps += [500] * (nb - quorum_size)
         with set_http_connect(*resps):
             handler = EcMetachunkWriter(self.sysmeta, self.meta_chunk(),
-                                        checksum, self.storage_method)
+                                        checksum, self.storage_method,
+                                        watchdog=self.__class__.watchdog)
             bytes_transferred, checksum, chunks = handler.stream(source, size)
         self.assertEqual(len(chunks), nb)
 
@@ -131,7 +140,8 @@ class TestEC(unittest.TestCase):
         resps += [201] * (nb - quorum_size)
         with set_http_connect(*resps):
             handler = EcMetachunkWriter(self.sysmeta, self.meta_chunk(),
-                                        checksum, self.storage_method)
+                                        checksum, self.storage_method,
+                                        watchdog=self.__class__.watchdog)
             self.assertRaises(exc.ServiceBusy, handler.stream, source, size)
 
     def test_write_connect_errors(self):
@@ -153,7 +163,8 @@ class TestEC(unittest.TestCase):
             with set_http_connect(*resps):
                 handler = EcMetachunkWriter(self.sysmeta,
                                             self.meta_chunk_copy(),
-                                            checksum, self.storage_method)
+                                            checksum, self.storage_method,
+                                            watchdog=self.__class__.watchdog)
                 bytes_transferred, checksum, chunks = handler.stream(
                     source, size)
 
@@ -182,7 +193,8 @@ class TestEC(unittest.TestCase):
             with set_http_connect(*resps):
                 handler = EcMetachunkWriter(self.sysmeta,
                                             self.meta_chunk_copy(),
-                                            checksum, self.storage_method)
+                                            checksum, self.storage_method,
+                                            watchdog=self.__class__.watchdog)
                 bytes_transferred, checksum, chunks = handler.stream(
                     source, size)
 
@@ -206,7 +218,8 @@ class TestEC(unittest.TestCase):
         resps = [201] * nb
         with set_http_connect(*resps):
             handler = EcMetachunkWriter(self.sysmeta, self.meta_chunk(),
-                                        checksum, self.storage_method)
+                                        checksum, self.storage_method,
+                                        watchdog=self.__class__.watchdog)
             self.assertRaises(exc.SourceReadError, handler.stream, source,
                               size)
 
@@ -221,7 +234,8 @@ class TestEC(unittest.TestCase):
         resps = [201] * nb
         with set_http_connect(*resps):
             handler = EcMetachunkWriter(self.sysmeta, self.meta_chunk(),
-                                        checksum, self.storage_method)
+                                        checksum, self.storage_method,
+                                        watchdog=self.__class__.watchdog)
             self.assertRaises(
                 exc.OioTimeout, handler.stream, source, size)
 
@@ -236,7 +250,8 @@ class TestEC(unittest.TestCase):
         resps = [201] * nb
         with set_http_connect(*resps):
             handler = EcMetachunkWriter(self.sysmeta, self.meta_chunk(),
-                                        checksum, self.storage_method)
+                                        checksum, self.storage_method,
+                                        watchdog=self.__class__.watchdog)
             # TODO specialize exception
             self.assertRaises(Exception, handler.stream, source,
                               size)
@@ -260,7 +275,8 @@ class TestEC(unittest.TestCase):
 
         with set_http_connect(*resps, cb_body=cb_body):
             handler = EcMetachunkWriter(self.sysmeta, self.meta_chunk(),
-                                        checksum, self.storage_method)
+                                        checksum, self.storage_method,
+                                        watchdog=self.__class__.watchdog)
             bytes_transferred, checksum, chunks = handler.stream(source, size)
 
         self.assertEqual(len(test_data), bytes_transferred)
@@ -309,7 +325,7 @@ class TestEC(unittest.TestCase):
             handler = EcMetachunkWriter(
                 self.sysmeta, self.meta_chunk(),
                 global_checksum, self.storage_method,
-                **kwargs)
+                watchdog=self.__class__.watchdog, **kwargs)
             bytes_transferred, checksum, chunks = handler.stream(source, size)
         self.assertEqual(nb, len(chunks))
         self.assertEqual(0, bytes_transferred)
@@ -402,7 +418,8 @@ class TestEC(unittest.TestCase):
         with set_http_connect(*resps, body_iter=body_iter):
             handler = ECChunkDownloadHandler(self.storage_method,
                                              meta_chunk, meta_start,
-                                             meta_end, headers)
+                                             meta_end, headers,
+                                             watchdog=self.__class__.watchdog)
             stream = handler.get_stream()
             body = b''
             for part in stream:
@@ -444,7 +461,8 @@ class TestEC(unittest.TestCase):
         with set_http_requests(get_response) as conn_record:
             handler = ECChunkDownloadHandler(self.storage_method,
                                              meta_chunk, meta_start,
-                                             meta_end, headers)
+                                             meta_end, headers,
+                                             watchdog=self.__class__.watchdog)
             stream = handler.get_stream()
             for part in stream:
                 for x in part['iter']:
@@ -497,7 +515,8 @@ class TestEC(unittest.TestCase):
         parts = []
         with set_http_requests(get_response) as conn_record:
             handler = ECChunkDownloadHandler(
-                self.storage_method, meta_chunk, meta_start, meta_end, headers)
+                self.storage_method, meta_chunk, meta_start, meta_end, headers,
+                watchdog=self.__class__.watchdog)
             stream = handler.get_stream()
             for part in stream:
                 parts.append(part)
@@ -550,7 +569,8 @@ class TestEC(unittest.TestCase):
         parts = []
         with set_http_requests(get_response) as conn_record:
             handler = ECChunkDownloadHandler(
-                self.storage_method, meta_chunk, meta_start, meta_end, headers)
+                self.storage_method, meta_chunk, meta_start, meta_end, headers,
+                watchdog=self.__class__.watchdog)
             stream = handler.get_stream()
             for part in stream:
                 parts.append(part)
@@ -591,7 +611,8 @@ class TestEC(unittest.TestCase):
         nb = self.storage_method.ec_nb_data + self.storage_method.ec_nb_parity
         with set_http_requests(get_response) as conn_record:
             handler = ECChunkDownloadHandler(self.storage_method, meta_chunk,
-                                             meta_start, meta_end, headers)
+                                             meta_start, meta_end, headers,
+                                             watchdog=self.__class__.watchdog)
 
             # TODO specialize Exception here (UnsatisfiableRange)
             self.assertRaises(exc.OioException, handler.get_stream)
@@ -625,7 +646,8 @@ class TestEC(unittest.TestCase):
         meta_end = None
         with set_http_requests(get_response) as conn_record:
             handler = ECChunkDownloadHandler(
-                self.storage_method, meta_chunk, meta_start, meta_end, headers)
+                self.storage_method, meta_chunk, meta_start, meta_end, headers,
+                watchdog=self.__class__.watchdog)
             stream = handler.get_stream()
             body = b''
             for part in stream:
@@ -668,7 +690,7 @@ class TestEC(unittest.TestCase):
         with set_http_requests(get_response) as conn_record:
             handler = ECChunkDownloadHandler(
                 self.storage_method, meta_chunk, meta_start, meta_end, headers,
-                read_timeout=0.05)
+                read_timeout=0.05, watchdog=self.__class__.watchdog)
             stream = handler.get_stream()
             body = b''
             for part in stream:
@@ -709,7 +731,7 @@ class TestEC(unittest.TestCase):
         with set_http_requests(get_response) as conn_record:
             handler = ECChunkDownloadHandler(
                 self.storage_method, meta_chunk, meta_start, meta_end, headers,
-                read_timeout=0.01)
+                read_timeout=0.01, watchdog=self.__class__.watchdog)
             stream = handler.get_stream()
             body = b''
             for part in stream:
@@ -752,7 +774,8 @@ class TestEC(unittest.TestCase):
 
         with set_http_requests(get_response) as conn_record:
             handler = ECRebuildHandler(
-                meta_chunk, missing, self.storage_method)
+                meta_chunk, missing, self.storage_method,
+                watchdog=self.__class__.watchdog)
             expected_chunk_size, stream = handler.rebuild()
             if expected_chunk_size is not None:
                 self.assertEqual(expected_chunk_size, len(missing_chunk_body))
@@ -794,7 +817,8 @@ class TestEC(unittest.TestCase):
 
             with set_http_requests(get_response) as conn_record:
                 handler = ECRebuildHandler(
-                    meta_chunk, missing, self.storage_method)
+                    meta_chunk, missing, self.storage_method,
+                    watchdog=self.__class__.watchdog)
                 expected_chunk_size, stream = handler.rebuild()
                 if expected_chunk_size is not None:
                     self.assertEqual(expected_chunk_size,
@@ -837,7 +861,8 @@ class TestEC(unittest.TestCase):
 
             with set_http_requests(get_response) as conn_record:
                 handler = ECRebuildHandler(
-                    meta_chunk, missing, self.storage_method)
+                    meta_chunk, missing, self.storage_method,
+                    watchdog=self.__class__.watchdog)
                 expected_chunk_size, stream = handler.rebuild()
                 if expected_chunk_size is not None:
                     self.assertEqual(expected_chunk_size,
@@ -870,7 +895,8 @@ class TestEC(unittest.TestCase):
 
         with set_http_requests(get_response) as conn_record:
             handler = ECRebuildHandler(
-                meta_chunk, missing, self.storage_method)
+                meta_chunk, missing, self.storage_method,
+                watchdog=self.__class__.watchdog)
             # TODO use specialized exception
             self.assertRaises(exc.OioException, handler.rebuild)
             self.assertEqual(len(conn_record), nb - 1)
@@ -899,7 +925,8 @@ class TestEC(unittest.TestCase):
 
         with set_http_requests(get_response) as conn_record:
             handler = ECRebuildHandler(
-                meta_chunk, missing, self.storage_method)
+                meta_chunk, missing, self.storage_method,
+                watchdog=self.__class__.watchdog)
             expected_chunk_size, stream = handler.rebuild()
             if expected_chunk_size is not None:
                 self.assertEqual(expected_chunk_size, len(missing_chunk_body))

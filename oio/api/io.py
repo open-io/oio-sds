@@ -16,7 +16,8 @@
 
 
 from __future__ import absolute_import
-from oio.common.green import eventlet_yield, Timeout
+from oio.common.green import eventlet_yield, Timeout, \
+    get_watchdog, WatchdogTimeout
 
 from io import BufferedReader, RawIOBase, IOBase
 import itertools
@@ -257,7 +258,7 @@ class ChunkReader(object):
     def __init__(self, chunk_iter, buf_size, headers,
                  connection_timeout=None, read_timeout=None,
                  align=False, perfdata=None, resp_by_chunk=None,
-                 **_kwargs):
+                 watchdog=None, **_kwargs):
         """
         :param chunk_iter:
         :param buf_size: size of the read buffer
@@ -290,6 +291,7 @@ class ChunkReader(object):
             self._resp_by_chunk = dict()
         self.perfdata = perfdata
         self.logger = _kwargs.get('logger', LOGGER)
+        self.watchdog = watchdog or get_watchdog()
 
     @property
     def reqid(self):
@@ -347,7 +349,8 @@ class ChunkReader(object):
         Save the response object in `self.sources` list.
         """
         try:
-            with green.ConnectionTimeout(self.connection_timeout):
+            with WatchdogTimeout(self.watchdog, self.connection_timeout,
+                                 green.ConnectionTimeout):
                 raw_url = chunk.get("real_url", chunk["url"])
                 parsed = urlparse(raw_url)
                 perfdata_rawx = self.perfdata.setdefault('rawx', dict()) \
@@ -356,7 +359,8 @@ class ChunkReader(object):
                                     self.request_headers, scheme=parsed.scheme,
                                     perfdata=perfdata_rawx,
                                     perfdata_suffix=chunk['url'])
-            with green.OioTimeout(self.read_timeout):
+            with WatchdogTimeout(self.watchdog, self.read_timeout,
+                                 green.OioTimeout):
                 if perfdata_rawx:
                     getresp_start = monotonic_time()
                 source = conn.getresponse()
@@ -461,8 +465,7 @@ class ChunkReader(object):
         self.request_headers['Range'] = http_header_from_ranges(
             new_ranges)
 
-    @staticmethod
-    def get_next_part(parts_iter):
+    def get_next_part(self, parts_iter):
         """
         Gets next part of the body
 
@@ -471,7 +474,8 @@ class ChunkReader(object):
         """
         while True:
             try:
-                with green.ChunkReadTimeout(CHUNK_TIMEOUT):
+                with WatchdogTimeout(self.watchdog, CHUNK_TIMEOUT,
+                                     green.ChunkReadTimeout):
                     start, end, length, headers, part = next(
                         parts_iter[0])
                 return (start, end, length, headers, part)
@@ -489,7 +493,8 @@ class ChunkReader(object):
             source[0].download_start = monotonic_time()
         while True:
             try:
-                with green.ChunkReadTimeout(self.read_timeout):
+                with WatchdogTimeout(self.watchdog, self.read_timeout,
+                                     green.ChunkReadTimeout):
                     data = part.read(next(self.read_size))
                     count += 1
                     buf += data
@@ -642,13 +647,17 @@ def exp_ramp_gen(start, maximum):
 class _MetachunkWriter(object):
 
     def __init__(self, storage_method=None, quorum=None,
-                 reqid=None, perfdata=None, **kwargs):
+                 reqid=None, perfdata=None, watchdog=None,
+                 **kwargs):
         self.storage_method = storage_method
         self._quorum = quorum
         if storage_method is None and quorum is None:
             raise ValueError('Missing storage_method or quorum')
         self.perfdata = perfdata
         self.reqid = reqid
+        self.watchdog = watchdog
+        if not watchdog:
+            raise ValueError('watchdog is None')
 
     @property
     def quorum(self):
@@ -716,7 +725,8 @@ class MetachunkLinker(_MetachunkWriter):
     def filter_kwargs(cls, kwargs):
         return {k: v for k, v in kwargs.items()
                 if k in ('perfdata',
-                         'logger')}
+                         'logger',
+                         'watchdog')}
 
     def link(self):
         """
@@ -771,7 +781,8 @@ class MetachunkWriter(_MetachunkWriter):
                          'chunk_buffer_min',
                          'chunk_buffer_max',
                          'perfdata',
-                         'logger')}
+                         'logger',
+                         'watchdog')}
 
     def buffer_size(self):
         """

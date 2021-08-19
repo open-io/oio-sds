@@ -22,7 +22,6 @@ import math
 import random
 from io import BytesIO
 
-from oio.blob.client import BlobClient
 from oio.common.utils import cid_from_name
 from oio.common.exceptions import OrphanChunk, NotFound, \
     UnrecoverableContent, OioException
@@ -32,7 +31,7 @@ from oio.content.content import ChunksHelper
 from oio.content.factory import ContentFactory
 from oio.content.ec import ECContent
 from tests.functional.content.test_content import md5_stream, random_data, \
-            md5_data
+    md5_data
 from tests.utils import BaseTestCase, random_str
 
 
@@ -51,9 +50,10 @@ class TestECContent(BaseTestCase):
         self.account = self.conf['account']
         self.chunk_size = self.conf['chunk_size']
         self.gridconf = {"namespace": self.namespace}
-        self.content_factory = ContentFactory(self.gridconf)
+        self.content_factory = ContentFactory(
+            self.gridconf, logger=self.logger, watchdog=self.watchdog)
         self.container_client = ContainerClient(self.gridconf)
-        self.blob_client = BlobClient(self.conf)
+        self.blob_client = self.content_factory.blob_client
         self.container_name = "TestECContent%f" % time.time()
         self.container_client.container_create(account=self.account,
                                                reference=self.container_name)
@@ -61,7 +61,7 @@ class TestECContent(BaseTestCase):
                                           self.container_name).upper()
         self.content = "%s-%s" % (self.__class__.__name__, random_str(4))
         self.stgpol = "EC"
-        self.size = 1024*1024 + 320
+        self.size = 1024 * 1024 + 320
         self.k = 6
         self.m = 3
 

@@ -20,7 +20,6 @@ from six.moves.urllib_parse import urlparse
 from testtools.matchers import NotEquals
 from testtools.testcase import ExpectedException
 
-from oio.blob.client import BlobClient
 from oio.common.constants import OIO_DB_ENABLED, OIO_DB_FROZEN
 from oio.common.exceptions import BadRequest, NotFound, \
     UnrecoverableContent, ServiceBusy
@@ -47,10 +46,10 @@ class TestPlainContent(BaseTestCase):
         self.chunk_size = self.conf['chunk_size']
         self.gridconf = {"namespace": self.namespace}
         self.content_factory = ContentFactory(
-            self.gridconf, logger=self.logger)
+            self.gridconf, logger=self.logger, watchdog=self.watchdog)
         self.container_client = ContainerClient(
             self.gridconf, logger=self.logger)
-        self.blob_client = BlobClient(self.conf, logger=self.logger)
+        self.blob_client = self.content_factory.blob_client
         self.container_name = "TestPlainContent-%f" % time.time()
         self.container_client.container_create(account=self.account,
                                                reference=self.container_name)

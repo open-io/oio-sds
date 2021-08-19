@@ -15,7 +15,7 @@
 
 
 import hashlib
-from oio.common.green import LightQueue, Timeout, GreenPile
+from oio.common.green import LightQueue, Timeout, GreenPile, WatchdogTimeout
 
 from socket import error as SocketError
 
@@ -103,7 +103,8 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                             read_size = remaining_bytes
                     else:
                         read_size = buffer_size
-                    with green.SourceReadTimeout(self.read_timeout):
+                    with WatchdogTimeout(self.watchdog, self.read_timeout,
+                                         green.SourceReadTimeout):
                         try:
                             data = source.read(read_size)
                         except (ValueError, IOError) as err:
@@ -187,7 +188,8 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
             hdrs.update(self.headers)
             hdrs = encode(hdrs)
 
-            with green.ConnectionTimeout(self.connection_timeout):
+            with WatchdogTimeout(self.watchdog, self.connection_timeout,
+                                 green.ConnectionTimeout):
                 perfdata_rawx = self.perfdata.setdefault('rawx', dict()) \
                     if self.perfdata is not None else None
                 conn = io.http_connect(
@@ -220,7 +222,8 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
                 data = data.encode('utf-8')
             if not conn.failed:
                 try:
-                    with green.ChunkWriteTimeout(self.write_timeout):
+                    with WatchdogTimeout(self.watchdog, self.write_timeout,
+                                         green.ChunkWriteTimeout):
                         if self.perfdata is not None \
                                 and conn.upload_start is None:
                             conn.upload_start = monotonic_time()
@@ -251,7 +254,8 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         :returns: a tuple with `conn` and the response object or an exception.
         """
         try:
-            with green.ChunkWriteTimeout(self.write_timeout):
+            with WatchdogTimeout(self.watchdog, self.write_timeout,
+                                 green.ChunkWriteTimeout):
                 resp = conn.getresponse()
                 if self.perfdata is not None:
                     upload_end = monotonic_time()

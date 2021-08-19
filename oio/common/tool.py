@@ -18,7 +18,7 @@ import signal
 from oio.common.easy_value import int_value
 from oio.common.exceptions import OioException, OioTimeout, RetryLater
 from oio.common.green import ContextPool, eventlet, ratelimit, sleep, \
-    threading, time
+    threading, time, get_watchdog
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.conscience.client import ConscienceClient
@@ -49,6 +49,7 @@ class Tool(object):
         self.logger = logger or get_logger(self.conf)
         self.namespace = conf['namespace']
         self.success = True
+        self.watchdog = get_watchdog()
 
         # exit gracefully
         self.running = True
@@ -291,11 +292,10 @@ class ToolWorker(object):
 
         res_event = self.tool.res_event_from_task_res(task_res)
         if self.tool.beanstalkd is not None:
-            res_event['beanstalkd_worker'] = \
-                {
-                    'addr': self.tool.beanstalkd.addr,
-                    'tube': self.tool.beanstalkd.tube
-                }
+            res_event['beanstalkd_worker'] = {
+                'addr': self.tool.beanstalkd.addr,
+                'tube': self.tool.beanstalkd.tube
+            }
 
         try:
             if self.beanstalkd_reply is None \

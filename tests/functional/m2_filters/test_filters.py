@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -42,7 +43,8 @@ class TestFilters(BaseTestCase):
         self.namespace = self.conf['namespace']
         self.chunk_size = self.conf['chunk_size']
         self.gridconf = {'namespace': self.namespace}
-        self.content_factory = ContentFactory(self.gridconf)
+        self.content_factory = ContentFactory(self.gridconf,
+                                              watchdog=self.watchdog)
         self.container_name = 'TestFilter%f' % time.time()
         self.container_client = ContainerClient(self.gridconf)
         self.container_client.container_create(

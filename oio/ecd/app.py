@@ -1,4 +1,5 @@
 # Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -22,6 +23,7 @@ from werkzeug.routing import Map, Rule
 from werkzeug.wrappers import Response
 
 from oio.common.constants import REQID_HEADER
+from oio.common.green import get_watchdog
 from oio.common.storage_method import STORAGE_METHODS
 from oio.common.utils import request_id
 from oio.api.ec import EcMetachunkWriter, ECChunkDownloadHandler
@@ -120,12 +122,14 @@ class ECD(WerkzeugApp):
             Rule('/', endpoint='metachunk'),
         ])
         super(ECD, self).__init__(self.url_map)
+        self.watchdog = get_watchdog()
 
     def write_ec_meta_chunk(self, source, size, storage_method, sysmeta,
                             meta_chunk, reqid):
         meta_checksum = md5()
         handler = EcMetachunkWriter(sysmeta, meta_chunk, meta_checksum,
-                                    storage_method, reqid=reqid)
+                                    storage_method, reqid=reqid,
+                                    watchdog=self.watchdog)
         bytes_transferred, checksum, chunks = handler.stream(source, size)
         return Response("OK")
 
@@ -133,8 +137,9 @@ class ECD(WerkzeugApp):
                                meta_chunk):
         meta_checksum = md5()
         handler = ReplicatedMetachunkWriter(
-                sysmeta, meta_chunk, meta_checksum,
-                storage_method=storage_method)
+            sysmeta, meta_chunk, meta_checksum,
+            storage_method=storage_method,
+            watchdog=self.watchdog)
         bytes_transferred, checksum, chunks = handler.stream(source, size)
         return Response("OK")
 
@@ -143,13 +148,14 @@ class ECD(WerkzeugApp):
         headers = {}
         handler = ECChunkDownloadHandler(storage_method, meta_chunk,
                                          meta_start, meta_end, headers,
-                                         reqid=reqid)
+                                         reqid=reqid, watchdog=self.watchdog)
         stream = handler.get_stream()
         return Response(part_iter_to_bytes_iter(stream), 200)
 
     def read_meta_chunk(self, storage_method, meta_chunk,
                         headers={}):
-        handler = ChunkReader(meta_chunk, None, headers)
+        handler = ChunkReader(meta_chunk, None, headers,
+                              watchdog=self.watchdog)
         stream = handler.get_iter()
         return Response(part_iter_to_bytes_iter(stream), 200)
 
@@ -161,8 +167,8 @@ class ECD(WerkzeugApp):
         reqid = req.headers.get(REQID_HEADER, request_id("ECD-"))
 
         if storage_method.ec:
-            nb_chunks = (storage_method.ec_nb_data +
-                         storage_method.ec_nb_parity)
+            nb_chunks = (storage_method.ec_nb_data
+                         + storage_method.ec_nb_parity)
             pos = safe_get_header(req, 'chunk_pos')
             meta_chunk = load_meta_chunk(req, nb_chunks, pos)
             return self.write_ec_meta_chunk(source, size, storage_method,

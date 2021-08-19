@@ -1,4 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -207,7 +208,7 @@ class BlobRebuilder(Tool):
                 'total_errors': total_errors,
                 'total_errors_rate':
                     100 * total_errors / float(total_chunks_processed or 1)
-                })
+            })
         if self.total_expected_items is not None:
             progress = 100 * total_chunks_processed / \
                 float(self.total_expected_items or 1)
@@ -228,8 +229,7 @@ class BlobRebuilder(Tool):
                     'chunk', dict()).get('to_rebuild', None)
             except Exception as exc:
                 self.logger.warn(
-                        'Failed to fetch the total chunks to rebuild: %s',
-                        exc)
+                    'Failed to fetch the total chunks to rebuild: %s', exc)
 
     def run(self):
         if self.rawx_id:
@@ -258,7 +258,8 @@ class BlobRebuilderWorker(ToolWorker):
         self.dry_run = true_value(self.tool.conf.get(
             'dry_run', self.tool.DEFAULT_DRY_RUN))
 
-        self.chunk_operator = ChunkOperator(self.conf, logger=self.logger)
+        self.chunk_operator = ChunkOperator(self.conf, logger=self.logger,
+                                            watchdog=tool.watchdog)
 
     def _process_item(self, item):
         namespace, container_id, content_id, chunk_id_or_pos = item

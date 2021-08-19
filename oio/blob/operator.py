@@ -37,11 +37,12 @@ class ChunkOperator(object):
     Execute maintenance operations on chunks.
     """
 
-    def __init__(self, conf, logger=None):
+    def __init__(self, conf, logger=None, watchdog=None):
         self.conf = conf
         self.logger = logger or get_logger(conf)
         self.rdir_client = RdirClient(conf, logger=self.logger)
-        self.content_factory = ContentFactory(conf, logger=self.logger)
+        self.content_factory = ContentFactory(conf, logger=self.logger,
+                                              watchdog=watchdog)
 
     def rebuild(self, container_id, content_id, chunk_id_or_pos,
                 rawx_id=None, try_chunk_delete=False,

@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -35,7 +36,7 @@ SLEEP_TIME = 30
 
 
 class BlobMoverWorker(object):
-    def __init__(self, conf, logger, volume):
+    def __init__(self, conf, logger, volume, watchdog=None):
         self.conf = conf
         self.logger = logger or get_logger(conf)
         self.volume = volume
@@ -62,7 +63,7 @@ class BlobMoverWorker(object):
             conf.get('chunks_per_second'), 30)
         self.limit = int_value(conf.get('limit'), 0)
         self.allow_links = true_value(conf.get('allow_links', True))
-        self.blob_client = BlobClient(conf)
+        self.blob_client = BlobClient(conf, watchdog=watchdog)
         self.container_client = ContainerClient(conf, logger=self.logger)
         self.content_factory = ContentFactory(
             conf, container_client=self.container_client,

@@ -1,4 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -16,8 +17,6 @@
 import random
 from mock import MagicMock as Mock
 
-from oio.api.object_storage import ObjectStorageApi
-from oio.blob.client import BlobClient
 from oio.common.utils import GeneratorIO, cid_from_name
 from oio.common.constants import OIO_VERSION
 from oio.common.fullpath import encode_fullpath
@@ -31,11 +30,11 @@ class TestBlobMover(BaseTestCase):
 
     def setUp(self):
         super(TestBlobMover, self).setUp()
-        self.container = random_str(16)
+        self.container = "blob-mover-" + random_str(6)
         self.cid = cid_from_name(self.account, self.container)
-        self.path = random_str(16)
-        self.api = ObjectStorageApi(self.ns)
-        self.blob_client = BlobClient(self.conf)
+        self.path = "blob-" + random_str(8)
+        self.api = self.storage
+        self.blob_client = self.api.blob_client
 
         self.api.container_create(self.account, self.container)
         _, chunks = self.api.container.content_prepare(
@@ -83,7 +82,8 @@ class TestBlobMover(BaseTestCase):
         chunks_kept.remove(orig_chunk)
 
         mover = BlobMoverWorker(self.conf, None,
-                                self.rawx_volumes[chunk_volume])
+                                self.rawx_volumes[chunk_volume],
+                                watchdog=self.watchdog)
         mover.chunk_move(self._chunk_path(orig_chunk), chunk_id)
 
         _, new_chunks = self.api.object_locate(
@@ -140,7 +140,8 @@ class TestBlobMover(BaseTestCase):
         chunk_id = orig_chunk['url'].split('/')[3]
 
         mover = BlobMoverWorker(self.conf, None,
-                                self.rawx_volumes[chunk_volume])
+                                self.rawx_volumes[chunk_volume],
+                                watchdog=self.watchdog)
         meta, stream = mover.blob_client.chunk_get(orig_chunk['url'])
         data = b''.join(stream)
         stream.close()

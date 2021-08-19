@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -26,7 +27,6 @@ from testtools.testcase import ExpectedException
 
 from six import PY2
 
-from oio.blob.client import BlobClient
 from oio.common.exceptions import ContentNotFound, OrphanChunk
 from oio.common.utils import cid_from_name
 from oio.common.fullpath import encode_fullpath
@@ -62,9 +62,10 @@ class TestContentFactory(BaseTestCase):
         self.namespace = self.conf['namespace']
         self.chunk_size = self.conf['chunk_size']
         self.gridconf = {"namespace": self.namespace}
-        self.content_factory = ContentFactory(self.gridconf)
+        self.content_factory = ContentFactory(self.gridconf,
+                                              watchdog=self.watchdog)
         self.container_name = "TestContentFactory%f" % time.time()
-        self.blob_client = BlobClient(conf=self.conf)
+        self.blob_client = self.content_factory.blob_client
         self.container_client = ContainerClient(self.gridconf)
         self.container_client.container_create(account=self.account,
                                                reference=self.container_name)

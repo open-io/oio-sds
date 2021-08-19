@@ -1,4 +1,5 @@
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OpenIO SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,7 +19,7 @@ from datetime import datetime
 from oio.common import exceptions
 from oio.common.easy_value import int_value
 from oio.common.fullpath import encode_fullpath
-from oio.common.green import sleep
+from oio.common.green import get_watchdog, sleep
 from oio.common.json import json
 from oio.common.utils import request_id
 from oio.content.factory import ContentFactory
@@ -40,7 +41,9 @@ class BlobImprover(Rebuilder):
 
     def __init__(self, conf, logger, beanstalkd_addr, **kwargs):
         super(BlobImprover, self).__init__(conf, logger, volume=None, **kwargs)
-        self.content_factory = ContentFactory(self.conf, logger=self.logger)
+        self.watchdog = get_watchdog()
+        self.content_factory = ContentFactory(self.conf, logger=self.logger,
+                                              watchdog=self.watchdog)
         beanstalkd_tube = self.conf.get('beanstalkd_tube',
                                         DEFAULT_IMPROVER_TUBE)
         self.listener = BeanstalkdListener(beanstalkd_addr, beanstalkd_tube,
@@ -144,8 +147,8 @@ class BlobImprover(Rebuilder):
                     'total_chunks_rate':
                         total_items_processed / total_time,
                     'total_errors': total_errors,
-                    'total_errors_rate': 100 * total_errors /
-                        float(total_items_processed or 1)
+                    'total_errors_rate': 100 * total_errors
+                        / float(total_items_processed or 1)
                 })
 
 

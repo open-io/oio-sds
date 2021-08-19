@@ -1,4 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -35,7 +36,7 @@ class TestBlobIndexer(BaseTestCase):
     def setUp(self):
         super(TestBlobIndexer, self).setUp()
         self.rdir_client = RdirClient(self.conf)
-        self.blob_client = BlobClient(self.conf)
+        self.blob_client = BlobClient(self.conf, watchdog=self.watchdog)
         _, self.rawx_path, rawx_addr, _ = \
             self.get_service_url('rawx')
         services = self.conscience.all_services('rawx')

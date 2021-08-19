@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.common.green import eventlet, Timeout, greenthread
+from oio.common.green import eventlet, Timeout, greenthread, get_watchdog
 
 import signal
 import os
@@ -146,6 +146,7 @@ class EventWorker(Worker):
             pool_maxsize=self.concurrency,  # 1 cnx per greenthread per host
             cache_duration=rdir_refresh_interval,
         )
+        self.app_env['watchdog'] = get_watchdog()
 
         if 'handlers_conf' not in self.conf:
             raise ValueError("'handlers_conf' path not defined in conf")

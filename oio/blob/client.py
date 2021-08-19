@@ -28,7 +28,7 @@ from oio.common.http_urllib3 import get_pool_manager, \
     oio_exception_from_httperror, urllib3
 from oio.common import exceptions as exc, utils
 from oio.common.constants import CHUNK_HEADERS, CHUNK_XATTR_KEYS_OPTIONAL, \
-        FETCHXATTR_HEADER, OIO_VERSION, REQID_HEADER, CHECKHASH_HEADER
+    FETCHXATTR_HEADER, OIO_VERSION, REQID_HEADER, CHECKHASH_HEADER
 from oio.common.decorators import ensure_headers, ensure_request_id
 from oio.api.io import ChunkReader
 from oio.api.replication import ReplicatedMetachunkWriter, FakeChecksum
@@ -91,9 +91,13 @@ class BlobClient(object):
     """A low-level client to rawx services."""
 
     def __init__(self, conf=None, perfdata=None,
-                 logger=None, connection_pool=None, **kwargs):
+                 logger=None, connection_pool=None,
+                 watchdog=None, **kwargs):
         self.conf = conf
         self.perfdata = perfdata
+        self.watchdog = watchdog
+        if not watchdog:
+            raise ValueError("watchdog is None")
 
         self.logger = logger or get_logger(self.conf)
         # FIXME(FVE): we do not target the same set of services,
@@ -120,7 +124,7 @@ class BlobClient(object):
         writer = ReplicatedMetachunkWriter(
             meta, [chunk], FakeChecksum(checksum),
             storage_method, quorum=1, perfdata=self.perfdata,
-            logger=self.logger)
+            logger=self.logger, watchdog=self.watchdog)
         bytes_transferred, chunk_hash, _ = writer.stream(data, None)
         return bytes_transferred, chunk_hash
 
@@ -179,7 +183,7 @@ class BlobClient(object):
         """
         url = self.resolve_url(url)
         reader = ChunkReader([{'url': url}], None,
-                             **kwargs)
+                             watchdog=self.watchdog, **kwargs)
         # This must be done now if we want to access headers
         stream = reader.stream()
         headers = extract_headers_meta(reader.headers, check=check_headers)
@@ -291,7 +295,7 @@ class BlobClient(object):
         elif not link.startswith('http://'):
             offset = target.rfind('/')
             maxlen = len(target) - offset - 1
-            link = target[:offset+1] + link[:maxlen]
+            link = target[:offset + 1] + link[:maxlen]
         hdrs['Destination'] = link
         hdrs[CHUNK_HEADERS['full_path']] = fullpath
         if write_timeout is not None:
