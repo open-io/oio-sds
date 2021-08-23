@@ -486,7 +486,7 @@ class ChunkReader(object):
         while True:
             try:
                 with green.ChunkReadTimeout(self.read_timeout):
-                    data = part.read(READ_CHUNK_SIZE)
+                    data = part.read(self.buf_size or READ_CHUNK_SIZE)
                     count += 1
                     buf += data
             except (green.ChunkReadTimeout, IOError) as crto:
