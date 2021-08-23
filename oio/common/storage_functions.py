@@ -1,4 +1,5 @@
 # Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -17,7 +18,7 @@
 import random
 from six import iteritems
 
-from oio.api.io import ChunkReader, READ_CHUNK_SIZE
+from oio.api.io import ChunkReader
 from oio.api.ec import ECChunkDownloadHandler
 from oio.common import exceptions as exc
 from oio.common.constants import OBJECT_METADATA_PREFIX
@@ -213,7 +214,7 @@ def fetch_stream(chunks, ranges, storage_method, headers=None,
                 headers['Range'] = http_header_from_ranges(
                     (meta_range_dict[pos], ))
             reader = ChunkReader(
-                iter(chunks[pos]), READ_CHUNK_SIZE, headers=headers,
+                iter(chunks[pos]), None, headers=headers,
                 **kwargs)
             try:
                 it = reader.get_iter()
