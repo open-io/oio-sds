@@ -276,6 +276,10 @@ class ChunkReader(object):
         self.status = None
         # buf size indicates the amount we data we yield
         self.buf_size = buf_size
+        if self.buf_size:
+            self.read_size = itertools.repeat(self.buf_size)
+        else:
+            self.read_size = exp_ramp_gen(8192, 1048576)
         self.discard_bytes = 0
         self.align = align
         self.connection_timeout = connection_timeout or CONNECTION_TIMEOUT
@@ -486,7 +490,7 @@ class ChunkReader(object):
         while True:
             try:
                 with green.ChunkReadTimeout(self.read_timeout):
-                    data = part.read(self.buf_size or READ_CHUNK_SIZE)
+                    data = part.read(next(self.read_size))
                     count += 1
                     buf += data
             except (green.ChunkReadTimeout, IOError) as crto:

@@ -39,7 +39,6 @@ from oio.conscience.client import ConscienceClient
 CONNECTION_TIMEOUT = 10.0
 # chunk operations timeout
 CHUNK_TIMEOUT = 60.0
-READ_BUFFER_SIZE = 65535
 PARALLEL_CHUNKS_DELETE = 3
 
 
@@ -179,7 +178,7 @@ class BlobClient(object):
             to the chunk's data.
         """
         url = self.resolve_url(url)
-        reader = ChunkReader([{'url': url}], READ_BUFFER_SIZE,
+        reader = ChunkReader([{'url': url}], None,
                              **kwargs)
         # This must be done now if we want to access headers
         stream = reader.stream()
