@@ -188,7 +188,7 @@ class WriteHandler(_WriteHandler):
         Uploads a stream of data.
         :returns: a tuple of 3 which contains:
            * the list of chunks to be saved in the container
-           * the number of bytes transfered
+           * the number of bytes transferred
            * the actual checksum of the data that went through the stream.
         """
         raise NotImplementedError()
@@ -483,7 +483,7 @@ class ChunkReader(object):
         while True:
             try:
                 with green.ChunkReadTimeout(self.read_timeout):
-                    data = part.read(READ_CHUNK_SIZE)
+                    data = part.read(self.buf_size or READ_CHUNK_SIZE)
                     count += 1
                     buf += data
             except (green.ChunkReadTimeout, IOError) as crto:
@@ -654,7 +654,7 @@ class _MetachunkWriter(object):
         """
         Compare the number of uploads against the quorum.
 
-        :param successes: a list of chunk objects whose upload succeded
+        :param successes: a list of chunk objects whose upload succeeded
         :type successes: `list` or `tuple`
         :param failures: a list of chunk objects whose upload failed
         :type failures: `list` or `tuple`

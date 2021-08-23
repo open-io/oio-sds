@@ -86,9 +86,10 @@ class CommonShell(App):
             prof_mod = importlib.import_module(self.options.profiler)
             self.profiler = prof_mod.Profile()
             self.profiler.enable()
-        elif self.options.profiler == 'GreenletProfiler':
+        elif self.options.profiler == 'yappi':
             prof_mod = importlib.import_module(self.options.profiler)
             self.profiler = prof_mod
+            self.profiler.set_context_backend('greenlet')
             LOG.debug("Using %s, clock type: %s",
                       self.profiler, self.profiler.get_clock_type())
             self.profiler.start(builtins=True)
@@ -102,7 +103,7 @@ class CommonShell(App):
             self.profiler.disable()
             self.profiler.dump_stats(fname)
             LOG.info('Profiling data saved in %s', fname)
-        elif self.options.profiler == 'GreenletProfiler':
+        elif self.options.profiler == 'yappi':
             stats = self.profiler.get_func_stats()
             stats.save(fname, type='callgrind')
             LOG.info('Profiling data saved in %s', fname)
