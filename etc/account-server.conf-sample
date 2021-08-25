@@ -12,6 +12,9 @@ log_address = /dev/log
 syslog_prefix = OIO,OPENIO,account,1
 proc_name = oio-account-server
 
+backend_type = fdb
+fdb_file = /etc/foundationdb/fdb.cluster
+
 # Configure Redis backend
 #redis_host = 127.0.0.1:6379
 # or

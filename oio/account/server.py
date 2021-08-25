@@ -21,6 +21,8 @@ from werkzeug.routing import Map, Rule
 from werkzeug.exceptions import NotFound, BadRequest, Conflict
 
 from oio.account.backend import AccountBackend
+
+from oio.account.backend_fdb import AccountBackendFdb
 from oio.account.iam import RedisIamDb
 from oio.common.configuration import load_namespace_conf
 from oio.common.constants import HTTP_CONTENT_TYPE_JSON
@@ -922,7 +924,13 @@ def create_app(conf, **kwargs):
         iam_kwargs['sentinel_hosts'] = netloc
     else:
         iam_kwargs['host'] = netloc
-    backend = AccountBackend(conf)
+
+    backend_type = conf.get('backend_type', 'redis')
+    if backend_type == 'fdb':
+        backend = AccountBackendFdb(conf, logger)
+    else:
+        backend = AccountBackend(conf)
+
     iam_db = RedisIamDb(logger=logger, **iam_kwargs)
     app = Account(conf, backend, iam_db, logger=logger)
     return app
