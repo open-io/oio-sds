@@ -19,6 +19,7 @@ package main
 import (
 	"bytes"
 	"net/http"
+	"time"
 )
 
 func doGetInfo(rr *rawxRequest) {
@@ -41,6 +42,7 @@ func doGetInfo(rr *rawxRequest) {
 	}
 
 	rr.replyCode(http.StatusOK)
+	rr.TTFB = time.Since(rr.startTime)
 	rr.rep.Write(bb.Bytes())
 }
 
@@ -51,13 +53,14 @@ func (rr *rawxRequest) serveInfo() {
 	}
 
 	var spent uint64
+	var ttfb uint64
 	switch rr.req.Method {
 	case "GET", "HEAD":
 		doGetInfo(rr)
-		spent = IncrementStatReqInfo(rr)
+		spent, ttfb = IncrementStatReqInfo(rr)
 	default:
 		rr.replyCode(http.StatusMethodNotAllowed)
-		spent = IncrementStatReqOther(rr)
+		spent, ttfb = IncrementStatReqOther(rr)
 	}
 	if isVerbose() {
 		LogHttp(AccessLogEvent{
@@ -71,6 +74,7 @@ func (rr *rawxRequest) serveInfo() {
 			Path:      rr.req.URL.Path,
 			ReqId:     rr.reqid,
 			TLS:       rr.req.TLS != nil,
+			TTFB:      ttfb,
 		})
 	}
 }

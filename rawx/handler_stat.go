@@ -60,14 +60,15 @@ type statInfo struct {
 
 var counters statInfo
 
-func incrementStatReq(rr *rawxRequest) uint64 {
+func incrementStatReq(rr *rawxRequest) (uint64, uint64) {
 	spent := uint64(time.Since(rr.startTime).Nanoseconds() / 1000)
+	ttfb := uint64(rr.TTFB.Nanoseconds() / 1000)
 	atomic.AddUint64(&counters.ReqTimeAll, spent)
 	atomic.AddUint64(&counters.ReqHitsAll, 1)
 
 	if rr.status == 0 {
 		atomic.AddUint64(&counters.RepHitsOther, 1)
-		return spent
+		return spent, ttfb
 	}
 	switch rr.status / 100 {
 	case 2:
@@ -86,65 +87,65 @@ func incrementStatReq(rr *rawxRequest) uint64 {
 		atomic.AddUint64(&counters.RepHitsOther, 1)
 	}
 
-	return spent
+	return spent, ttfb
 }
 
-func IncrementStatReqPut(rr *rawxRequest) uint64 {
-	spent := incrementStatReq(rr)
+func IncrementStatReqPut(rr *rawxRequest) (uint64, uint64) {
+	spent, ttfb := incrementStatReq(rr)
 	atomic.AddUint64(&counters.ReqTimePut, spent)
 	atomic.AddUint64(&counters.ReqHitsPut, 1)
 	atomic.AddUint64(&counters.RepBwritten, rr.bytesIn)
-	return spent
+	return spent, ttfb
 }
 
-func IncrementStatReqCopy(rr *rawxRequest) uint64 {
-	spent := incrementStatReq(rr)
+func IncrementStatReqCopy(rr *rawxRequest) (uint64, uint64) {
+	spent, ttfb := incrementStatReq(rr)
 	atomic.AddUint64(&counters.ReqTimeCopy, spent)
 	atomic.AddUint64(&counters.ReqHitsCopy, 1)
-	return spent
+	return spent, ttfb
 }
 
-func IncrementStatReqHead(rr *rawxRequest) uint64 {
-	spent := incrementStatReq(rr)
+func IncrementStatReqHead(rr *rawxRequest) (uint64, uint64) {
+	spent, ttfb := incrementStatReq(rr)
 	atomic.AddUint64(&counters.ReqTimeHead, spent)
 	atomic.AddUint64(&counters.ReqHitsHead, 1)
-	return spent
+	return spent, ttfb
 }
 
-func IncrementStatReqGet(rr *rawxRequest) uint64 {
-	spent := incrementStatReq(rr)
+func IncrementStatReqGet(rr *rawxRequest) (uint64, uint64) {
+	spent, ttfb := incrementStatReq(rr)
 	atomic.AddUint64(&counters.ReqTimeGet, spent)
 	atomic.AddUint64(&counters.ReqHitsGet, 1)
 	atomic.AddUint64(&counters.RepBread, rr.bytesOut)
-	return spent
+	return spent, ttfb
 }
 
-func IncrementStatReqDel(rr *rawxRequest) uint64 {
-	spent := incrementStatReq(rr)
+func IncrementStatReqDel(rr *rawxRequest) (uint64, uint64) {
+	spent, ttfb := incrementStatReq(rr)
 	atomic.AddUint64(&counters.ReqTimeDel, spent)
 	atomic.AddUint64(&counters.ReqHitsDel, 1)
-	return spent
+	return spent, ttfb
 }
 
-func IncrementStatReqStat(rr *rawxRequest) uint64 {
-	spent := incrementStatReq(rr)
+func IncrementStatReqStat(rr *rawxRequest) (uint64, uint64) {
+	spent, ttfb := incrementStatReq(rr)
 	atomic.AddUint64(&counters.ReqTimeStat, spent)
 	atomic.AddUint64(&counters.ReqHitsStat, 1)
-	return spent
+	return spent, ttfb
 }
 
-func IncrementStatReqInfo(rr *rawxRequest) uint64 {
-	spent := incrementStatReq(rr)
+func IncrementStatReqInfo(rr *rawxRequest) (uint64, uint64) {
+	spent, ttfb := incrementStatReq(rr)
 	atomic.AddUint64(&counters.ReqTimeInfo, spent)
 	atomic.AddUint64(&counters.ReqHitsInfo, 1)
-	return spent
+	return spent, ttfb
 }
 
-func IncrementStatReqOther(rr *rawxRequest) uint64 {
-	spent := incrementStatReq(rr)
+func IncrementStatReqOther(rr *rawxRequest) (uint64, uint64) {
+	spent, ttfb := incrementStatReq(rr)
 	atomic.AddUint64(&counters.ReqTimeOther, spent)
 	atomic.AddUint64(&counters.ReqHitsOther, 1)
-	return spent
+	return spent, ttfb
 }
 
 func doGetStats(rr *rawxRequest) {
@@ -172,6 +173,7 @@ func doGetStats(rr *rawxRequest) {
 	}
 
 	rr.replyCode(http.StatusOK)
+	rr.TTFB = time.Since(rr.startTime)
 	rr.rep.Write(bb.Bytes())
 }
 
@@ -182,13 +184,14 @@ func (rr *rawxRequest) serveStat() {
 	}
 
 	var spent uint64
+	var ttfb uint64
 	switch rr.req.Method {
 	case "GET", "HEAD":
 		doGetStats(rr)
-		spent = IncrementStatReqStat(rr)
+		spent, ttfb = IncrementStatReqStat(rr)
 	default:
 		rr.replyCode(http.StatusMethodNotAllowed)
-		spent = IncrementStatReqOther(rr)
+		spent, ttfb = IncrementStatReqOther(rr)
 	}
 
 	if isVerbose() {
@@ -203,6 +206,7 @@ func (rr *rawxRequest) serveStat() {
 			Path:      rr.req.URL.Path,
 			ReqId:     rr.reqid,
 			TLS:       rr.req.TLS != nil,
+			TTFB:      ttfb,
 		})
 	}
 }

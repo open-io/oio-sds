@@ -23,8 +23,8 @@ import (
 	"log/syslog"
 	"os"
 	"sync"
-	"time"
 	"text/template"
+	"time"
 )
 
 type oioLogger interface {
@@ -39,7 +39,7 @@ var accessLogPut = configAccessLogDefaultPut
 var accessLogDel = configAccessLogDefaultDelete
 
 var logFormat = "{{ .Pid }} log {{ .Severity }} - {{ .Message }}"
-var logAccessFormat = "{{ .Pid }} access INF - {{ .Local }} {{ .Peer }} {{ .Method }} {{ .Status }} {{ .TimeSpent }} {{ .BytesOut }} {{ .BytesIn }} - {{ .ReqId }} {{ .Path }}  http{{ if .TLS }}s{{ end }}"
+var logAccessFormat = "{{ .Pid }} access INF - {{ .Local }} {{ .Peer }} {{ .Method }} {{ .Status }} {{ .TimeSpent }} {{ .BytesOut }} {{ .BytesIn }} - {{ .ReqId }} {{ .Path }} http{{ if .TLS }}s{{ end }} {{ .TTFB }}"
 var logTemplate *template.Template = nil
 var logAccessTemplate *template.Template = nil
 
@@ -72,6 +72,7 @@ type AccessLogEvent struct {
 	Path      string
 	ReqId     string
 	TLS       bool
+	TTFB      uint64
 }
 
 type NoopLogger struct{}
@@ -90,7 +91,7 @@ func InitLogTemplates() error {
 	var err error
 	logTemplate, err = template.New("logTemplate").Parse(logFormat)
 	if err != nil {
-	    return err
+		return err
 	}
 	logAccessTemplate, err = template.New("logAccessTemplate").Parse(logAccessFormat)
 	return err
@@ -147,9 +148,9 @@ func writeLogFmt(pri syslog.Priority, format string, v ...interface{}) {
 	var output bytes.Buffer
 	if logTemplate != nil {
 		err := logTemplate.Execute(&output, LogTemplateInventory{
-			Pid: pid,
+			Pid:      pid,
 			Severity: severityName,
-			Message: fmt.Sprintf(format, v...),
+			Message:  fmt.Sprintf(format, v...),
 		})
 
 		if err != nil {

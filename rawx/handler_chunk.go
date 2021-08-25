@@ -30,6 +30,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var (
@@ -411,6 +412,7 @@ func (rr *rawxRequest) downloadChunk() {
 	}
 
 	// Now transmit the clear data to the client
+	rr.TTFB = time.Since(rr.startTime)
 	nb, err := io.Copy(rr.rep, in)
 	if err == nil {
 		rr.bytesOut = rr.bytesOut + uint64(nb)
@@ -498,6 +500,7 @@ func (rr *rawxRequest) serveChunk() {
 	rr.chunkID = strings.ToUpper(rr.req.URL.Path[1:])
 
 	var spent uint64
+	var ttfb uint64
 	switch rr.req.Method {
 	case "GET":
 		if err := rr.drain(); err != nil {
@@ -505,38 +508,38 @@ func (rr *rawxRequest) serveChunk() {
 		} else {
 			rr.downloadChunk()
 		}
-		spent = IncrementStatReqGet(rr)
+		spent, ttfb = IncrementStatReqGet(rr)
 	case "PUT":
 		rr.uploadChunk()
-		spent = IncrementStatReqPut(rr)
+		spent, ttfb = IncrementStatReqPut(rr)
 	case "DELETE":
 		if err := rr.drain(); err != nil {
 			rr.replyError("", err)
 		} else {
 			rr.removeChunk()
 		}
-		spent = IncrementStatReqDel(rr)
+		spent, ttfb = IncrementStatReqDel(rr)
 	case "HEAD":
 		if err := rr.drain(); err != nil {
 			rr.replyError("", err)
 		} else {
 			rr.checkChunk()
 		}
-		spent = IncrementStatReqHead(rr)
+		spent, ttfb = IncrementStatReqHead(rr)
 	case "COPY":
 		if err := rr.drain(); err != nil {
 			rr.replyError("", err)
 		} else {
 			rr.copyChunk()
 		}
-		spent = IncrementStatReqCopy(rr)
+		spent, ttfb = IncrementStatReqCopy(rr)
 	default:
 		if err := rr.drain(); err != nil {
 			rr.replyError("", err)
 		} else {
 			rr.replyCode(http.StatusMethodNotAllowed)
 		}
-		spent = IncrementStatReqOther(rr)
+		spent, ttfb = IncrementStatReqOther(rr)
 	}
 
 	if shouldAccessLog(rr.status, rr.req.Method) {
@@ -551,6 +554,7 @@ func (rr *rawxRequest) serveChunk() {
 			Path:      rr.req.URL.Path,
 			ReqId:     rr.reqid,
 			TLS:       rr.req.TLS != nil,
+			TTFB:      ttfb,
 		})
 	}
 }

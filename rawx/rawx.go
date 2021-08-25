@@ -51,6 +51,7 @@ type rawxRequest struct {
 	rep       http.ResponseWriter
 	reqid     string
 	startTime time.Time
+	TTFB      time.Duration
 
 	chunkID string
 	chunk   chunkInfo
