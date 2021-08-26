@@ -21,7 +21,8 @@ import redis.sentinel
 import six
 
 from werkzeug.exceptions import NotFound, Conflict, BadRequest
-from oio.common.constants import BUCKET_PROP_REPLI_ENABLED
+from oio.common.constants import BUCKET_PROP_REPLI_ENABLED, \
+    CH_ENCODED_SEPARATOR
 from oio.common.timestamp import Timestamp
 from oio.common.easy_value import int_value, boolean_value, float_value
 from oio.common.redis_conn import RedisConnection, catch_service_errors, \
@@ -905,6 +906,14 @@ class AccountBackend(RedisConnection):
                         break
                 if self._should_be_listed(cname, s3_buckets_only):
                     results.append([cname, 0, 0, 0, 0])
+            if marker and s3_buckets_only:
+                # Avoid listing shards to save a lot of time
+                if '+segments' in marker:
+                    marker = marker.split('+segments', 1)[0] + '+segments' + \
+                        END_MARKER
+                elif CH_ENCODED_SEPARATOR in marker:
+                    marker = marker.split(CH_ENCODED_SEPARATOR, 1)[0] + \
+                        CH_ENCODED_SEPARATOR + END_MARKER
         return results, marker
 
     @catch_service_errors
