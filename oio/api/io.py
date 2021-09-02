@@ -655,9 +655,7 @@ class _MetachunkWriter(object):
             raise ValueError('Missing storage_method or quorum')
         self.perfdata = perfdata
         self.reqid = reqid
-        self.watchdog = watchdog
-        if not watchdog:
-            raise ValueError('watchdog is None')
+        self.watchdog = watchdog or get_watchdog()
 
     @property
     def quorum(self):

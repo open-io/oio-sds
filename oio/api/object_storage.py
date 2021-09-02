@@ -105,6 +105,12 @@ class ObjectStorageApi(object):
         for key in self.__class__.EXTRA_KEYWORDS:
             if key in kwargs:
                 self._global_kwargs[key] = kwargs[key]
+        # The watchdog is required at several places. Unfortunately, our only
+        # "context" is the kwargs parameter we pass everywhere.
+        self._watchdog = self._global_kwargs.get('watchdog', None)
+        if not self._watchdog:
+            # This will create and start one.
+            self._global_kwargs['watchdog'] = self.watchdog
         self.logger.debug("Global API parameters: %s", self._global_kwargs)
 
         from oio.account.client import AccountClient
@@ -120,13 +126,6 @@ class ObjectStorageApi(object):
         self.account = AccountClient(conf, logger=self.logger, **acct_kwargs)
         self._blob_client = None
         self._proxy_client = None
-
-        # The watchdog is required at several places. Unfortunately, our only
-        # "context" is the kwargs parameter we pass everywhere.
-        self._watchdog = self._global_kwargs.get('watchdog', None)
-        if not self._watchdog:
-            # This will create and start one.
-            self._global_kwargs['watchdog'] = self.watchdog
 
     @property
     def blob_client(self):
