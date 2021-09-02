@@ -651,7 +651,7 @@ score_expr=((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(num s
 score_timeout=120
 
 [type:rawx]
-score_expr=((num stat.space)>1) * root(3,((num stat.cpu)*(num stat.space)*(1 + (num stat.io))))
+score_expr=((num stat.space)>1) * root(3,((1 + (num stat.cpu))*(num stat.space)*(1 + (num stat.io))))
 score_timeout=120
 
 [type:rdir]
