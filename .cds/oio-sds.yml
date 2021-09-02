@@ -61,6 +61,13 @@ workflow:
     depends_on:
       - root
 
+  tests-fullrepli:
+    pipeline: oio-sds-test-fullrepli
+    application: oio-sds
+    environment: oio-sds-env-fullrepli
+    depends_on:
+      - root
+
   coverage:
     pipeline: oio-sds-coverage
     depends_on:
@@ -69,6 +76,7 @@ workflow:
       - tests-single
       - tests-3copies
       - tests-ec
+      - tests-fullrepli
     when:
       - success
 

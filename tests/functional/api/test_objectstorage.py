@@ -1015,8 +1015,9 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.container_delete(account, name)
         # Again, wait for the container event to be processed.
         self.wait_for_event('oio-preserved',
-                            types=[EventTypes.ACCOUNT_SERVICES,
-                                   EventTypes.CONTAINER_DELETED])
+                            types=[EventTypes.ACCOUNT_SERVICES])
+        self.wait_for_event('oio-preserved',
+                            types=[EventTypes.CONTAINER_DELETED])
         # container_refresh on deleted container
         self.assertRaises(
             exc.NoSuchContainer, self.api.container_refresh, account, name)

@@ -162,7 +162,7 @@ if [ -n "$ZOOBINDIR" ]
 then
   . $ZOOBINDIR/zkEnv.sh
 else
-  . /usr/bin/zkEnv.sh
+  . /usr/share/zookeeper/bin/zkEnv.sh
 fi
 
 OPERATION=$1

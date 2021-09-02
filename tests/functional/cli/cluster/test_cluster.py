@@ -78,6 +78,8 @@ class ClusterTest(CliTestCase):
         if self.is_running_on_public_ci():
             self.skipTest("Too long to run on public CI")
 
+        attempts = 3
+
         self._flush_cs('rawx')
         time.sleep(3.0)
         opts = self.get_opts([], 'json')
@@ -95,15 +97,24 @@ class ClusterTest(CliTestCase):
         self.assertEqual(data[0]['Result'], 'locked to 0')
         self._reload_proxy()
         time.sleep(4)
-        # Ensure it is zero-scored
-        output = self.openio('cluster list rawx' + opts)
-        data = json.loads(output)
-        zeroed = [node for node in data
-                  if node['Addr'] == nodeid]
-        # We should have only one service left in this list: the rawx we locked
-        self.assertEqual(len(zeroed), 1)
-        # And its score should be zero
-        self.assertEqual(zeroed[0]['Score'], 0)
+        for attempt in range(attempts):
+            # Ensure it is zero-scored
+            output = self.openio('cluster list rawx' + opts)
+            data = json.loads(output)
+            zeroed = [node for node in data
+                      if node['Addr'] == nodeid]
+            try:
+                # We should have only one service left in this list:
+                # the rawx we locked
+                self.assertEqual(len(zeroed), 1)
+                # And its score should be zero
+                self.assertEqual(zeroed[0]['Score'], 0)
+                break
+            except Exception as err:
+                if attempt >= attempts - 1:
+                    raise
+                print("Got an error, but will retry. %s" % (err, ))
+                continue
         # Unlock all services
         output = self.openio('cluster unlockall' + opts)
         data = json.loads(output)

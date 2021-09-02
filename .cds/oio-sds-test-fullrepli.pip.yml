@@ -1,0 +1,48 @@
+version: v1.0
+name: oio-sds-test-fullrepli
+jobs:
+  - job: Run functional tests
+    steps:
+
+      - name: Checkout application
+        checkout: '{{ .cds.workspace }}'
+
+      - name: Install dependencies
+        script: |+
+          #!/bin/bash
+          set -x
+          curl http://mirror2.openio.io/pub/repo/openio/APT-GPG-KEY-OPENIO-0 | apt-key add -
+          apt-add-repository "deb http://mirror2.openio.io/pub/repo/openio/sds/20.04/ubuntu/ bionic/"
+          apt-add-repository ppa:longsleep/golang-backports
+          apt install -y $(tr '\n' ' ' < .cds/deps-ubuntu-bionic.txt)
+          systemctl stop apache2.service redis.service
+          systemctl disable apache2.service redis.service
+          mkdir /tmp/oio
+          # We need these permissions for the ECD and container backup services to work
+          chmod a+rX $(dirname $HOME)
+          chmod -R a+rX $HOME
+          virtualenv -p /usr/bin/python3 $HOME/oiovenv
+          . $HOME/oiovenv/bin/activate
+          pip install --upgrade pip setuptools virtualenv tox -r all-requirements.txt -r test-requirements.txt
+
+      - name: Run functional tests
+        script:
+          - pgrep rsyslogd || rsyslogd &
+          - sysctl -w kernel.core_pattern='/tmp/core.%p.%E'
+          - ulimit -c unlimited
+          - ulimit -n 8192
+          - . $HOME/oiovenv/bin/activate
+          - ./tools/oio-zk-cluster.sh bootstrap 1 2 3
+          - ./tools/oio-zk-cluster.sh start 1 2 3
+          - ./tools/oio-travis-suites.sh
+          - ./tools/oio-zk-cluster.sh stop 1 2 3
+
+      - name: Save coverage information
+        script:
+          - mv '{{.cds.workspace}}/.coverage' '{{.cds.workspace}}/.coverage.{{.cds.env.COV_FILE}}'
+          - mv '/tmp/cmake_coverage.output' '{{.cds.workspace}}/cmake_coverage.{{.cds.env.COV_FILE}}'
+          - worker upload --tag='{{.cds.version}}' '{{.cds.workspace}}/.coverage.{{.cds.env.COV_FILE}}' '{{.cds.workspace}}/cmake_coverage.{{.cds.env.COV_FILE}}'
+
+    requirements:
+        - model: Ubuntu-18.04-VM-b2-30
+          #- model: openio-debbuild-18.04

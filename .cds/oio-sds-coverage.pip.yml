@@ -34,7 +34,7 @@ jobs:
           - cd {{.cds.workspace}}
           - worker download --tag="{{.cds.version}}" --pattern="cmake_coverage.*"
           - sed -i -r -e 's,^SF:/tmp/[^/]+/run/(.+)$,SF:\1,g' cmake_coverage.*
-          - lcov -a cmake_coverage.3copies -a cmake_coverage.cli -a cmake_coverage.single -o cmake_coverage.all
+          - echo cmake_coverage.* | xargs printf -- '-a %s\n' | xargs lcov -o cmake_coverage.all
           - genhtml --ignore-errors "source" --output-directory coverage-report-c cmake_coverage.all
 
       - name: Create coverage archive
