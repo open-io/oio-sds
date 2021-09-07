@@ -25,8 +25,9 @@ Building the entire project will require the SDK dependencies, but also:
 * python-setuptools
 * python-pbr
 * beanstalkd: you need it to have the event-agent working
+* libapache2-mod-wsgi-py3 (as named on Ubuntu), the WSGI module for apache2
 
-In addition, there some dependencies at runtime (the up-to-date list is in [all-requirements.txt](./all-requirements.txt)):
+In addition, there some dependencies at runtime (the up-to-date list is in [all-requirements.txt](./all-requirements.txt)). You don't need to install them on the system, they will be installed by pip in your virtualenv (see [Building](#Building)).
 * python-eventlet
 * python-werkzeug
 * python-gunicorn
@@ -34,7 +35,6 @@ In addition, there some dependencies at runtime (the up-to-date list is in [all-
 * python-requests
 * python-simplejson
 * pyxattr (python-xattr on Debian/Ubuntu)
-* libapache2-mod-wsgi (as named on Ubuntu), the WSGI module for apache2
 * python-cliff
 * python-pyeclib
 * python-futures
