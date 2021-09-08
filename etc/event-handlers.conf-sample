@@ -63,7 +63,10 @@ use = egg:oio#content_cleaner
 # - max_retries (int, 0),
 # - pool_connections (int, 32),
 # - pool_maxsize (int, 32),
-# - timeout (float, 5.0)
+# Timeouts to the rawx service, in seconds
+# (if timeout is not defined)
+#connection_timeout=1.0
+#read_timeout=5.0
 
 [filter:account_update]
 use = egg:oio#account_update
