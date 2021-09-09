@@ -561,20 +561,30 @@ class RdirClient(HttpApi):
                     resp = el[0]
                     body = el[1]
 
-        if len(errors) == len(all_uri):
-            self._clear_cache(volume)
-            class_type = type(errors[0][1])
-            same_error = all(isinstance(x, class_type) for (uri, x) in errors)
-            errors = group_chunk_errors(errors)
-            if same_error:
-                err, addrs = errors.popitem()
-                oio_reraise(type(err), err, str(addrs) + " method:" + method)
-            else:
-                raise OioException('Several errors encountered: %s %s' %
-                                   errors, method)
-        elif errors:  # only some requests failed
-            self.logger.warning('rdir requests errors occured for method:'
-                                + method)
+        if errors:
+            errorsStr = [
+                '%s: %s' % (type(err).__name__, err) for (_, err) in errors]
+            self.logger.warning(
+                'rdir request[%s][%s]: %i/%i subrequests failed:\n%s' % (
+                    method,
+                    kwargs['reqid'],
+                    len(errors),
+                    len(all_uri),
+                    '\n'.join(errorsStr)))
+
+            if len(errors) == len(all_uri):  # all requests failed
+                self._clear_cache(volume)
+                class_type = type(errors[0][1])
+                same_error = all(
+                    isinstance(x, class_type) for (uri, x) in errors)
+                errors = group_chunk_errors(errors)
+                if same_error:
+                    err, addrs = errors.popitem()
+                    oio_reraise(
+                        type(err), err, str(addrs) + " method:" + method)
+                else:
+                    raise OioException(
+                        'Several errors encountered: %s %s' % errors, method)
 
         return resp, body
 
