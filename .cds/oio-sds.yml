@@ -70,6 +70,7 @@ workflow:
 
   coverage:
     pipeline: oio-sds-coverage
+    application: oio-sds
     depends_on:
       - tests-cli
       - tests-fast

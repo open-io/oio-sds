@@ -43,11 +43,11 @@ jobs:
           - tar -czf coverage-report.tar.gz coverage-report-c coverage-report-py
           - worker upload --tag='{{.cds.version}}' coverage-report.tar.gz
 
-## Need to find why this does not work
-#      - coverage:
-#          format: lcov
-#          minimum: "70"
-#          path: ./cmake_coverage.all
+      - optional: true
+        coverage:
+          format: lcov
+          minimum: "70"
+          path: '{{.cds.workspace}}/cmake_coverage.all'
 
       - name: Publish Python coverage report
         serveStaticFiles:
