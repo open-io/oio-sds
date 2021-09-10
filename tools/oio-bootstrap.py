@@ -1536,7 +1536,7 @@ def generate(options):
         'META2_VOLUMES': ",".join(meta2_volumes),
         'SRVTYPE': 'meta2-crawler',
         'SRVNUM': '1',
-        'GROUPTYPE': 'indexer',
+        'GROUPTYPE': 'crawler',
     })
     # first the conf
     tpl = Template(template_meta2_crawler_service)
