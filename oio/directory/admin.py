@@ -36,7 +36,7 @@ def loc_params(func):
     """Wrap database localization parameters in request parameters"""
     @wraps(func)
     def _wrapped(self, service_type=None, account=None, reference=None,
-                 cid=None, service_id=None, **kwargs):
+                 cid=None, service_id=None, suffix=None, **kwargs):
         params = kwargs.pop('params', {})
         if service_type:
             params['type'] = service_type
@@ -53,6 +53,8 @@ def loc_params(func):
             raise ValueError("Missing value for account and reference or cid")
         if service_id:
             params['service_id'] = service_id_to_string(service_id)
+        if suffix:
+            params['suffix'] = suffix
         return func(self, params, **kwargs)
     return _wrapped
 

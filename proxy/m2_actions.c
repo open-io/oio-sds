@@ -75,7 +75,7 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 {
 	GSList **out_list = NULL;
 
-	CLIENT_CTX2(ctx, args, NAME_SRVTYPE_META2, 1, how, decoder, out);
+	CLIENT_CTX2(ctx, args, NAME_SRVTYPE_META2, 1, NULL, how, decoder, out);
 	if (!ctx.decoder && out) {
 		out_list = (GSList **) out;
 		*out_list = NULL;
@@ -104,7 +104,7 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 		g_free(redirect_cid);
 		args->url = redirect_url;
 		client_clean(&ctx);
-		client_init(&ctx, args, NAME_SRVTYPE_META2, 1, how,
+		client_init(&ctx, args, NAME_SRVTYPE_META2, 1, NULL, how,
 				decoder, out);
 		oio_ext_set_is_shard(TRUE);
 	}
@@ -154,7 +154,7 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 			g_free(cid);
 			args->url = redirect_url;
 			client_clean(&ctx);
-			client_init(&ctx, args, NAME_SRVTYPE_META2, 1, how,
+			client_init(&ctx, args, NAME_SRVTYPE_META2, 1, NULL, how,
 					decoder, out);
 			oio_ext_set_is_shard(TRUE);
 			continue;
@@ -171,7 +171,7 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 				oio_url_clean(redirect_url);
 				redirect_url = NULL;
 				client_clean(&ctx);
-				client_init(&ctx, args, NAME_SRVTYPE_META2, 1, how,
+				client_init(&ctx, args, NAME_SRVTYPE_META2, 1, NULL, how,
 						decoder, out);
 				oio_ext_set_is_shard(FALSE);
 				g_clear_error(&err);

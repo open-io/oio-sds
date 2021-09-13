@@ -87,7 +87,7 @@ _sqlx_action_noreturn (struct req_args_s *args, enum proxy_preference_e how,
 
 	gint64 seq = 1;
 
-	CLIENT_CTX2(ctx, args, dirtype, seq, how, NULL, NULL);
+	CLIENT_CTX2(ctx, args, dirtype, seq, SUFFIX(), how, NULL, NULL);
 
 	if (*dirtype == '#' && !strcmp(dirtype+1, NAME_SRVTYPE_META1)) {
 		const guint nb_digits = MIN(oio_ns_meta1_digits, 4);
@@ -159,7 +159,8 @@ action_sqlx_copyto (struct req_args_s *args, struct json_object *jargs)
 
 	gint64 seq = 1;
 	enum http_rc_e rc;
-	CLIENT_CTX(ctx, args, dirtype, seq);
+	CLIENT_CTX2(ctx, args, dirtype, seq, SUFFIX(), CLIENT_PREFER_NONE,
+			NULL, NULL);
 	if (!from) {
 		/* No source, locate services from directory and use DB_PIPETO. */
 		ctx.which = CLIENT_PREFER_MASTER;
@@ -197,7 +198,8 @@ action_sqlx_propset_with_decoder(struct req_args_s *args,
 	gchar dirtype[64] = "";
 	_get_sqlx_dirtype (type, dirtype, sizeof(dirtype));
 	gint64 seq = 1;
-	CLIENT_CTX2(ctx, args, dirtype, seq, CLIENT_PREFER_MASTER, decoder, NULL);
+	CLIENT_CTX2(ctx, args, dirtype, seq, NULL, CLIENT_PREFER_MASTER,
+			decoder, NULL);
 	gchar **kv = NULL;
 
 	err = KV_read_usersys_properties(jargs, &kv);
@@ -310,7 +312,8 @@ action_sqlx_propdel_with_decoder(struct req_args_s *args,
 	gchar dirtype[64] = "";
 	_get_sqlx_dirtype (type, dirtype, sizeof(dirtype));
 	gint64 seq = 1;
-	CLIENT_CTX2(ctx, args, dirtype, seq, CLIENT_PREFER_MASTER, decoder, NULL);
+	CLIENT_CTX2(ctx, args, dirtype, seq, NULL, CLIENT_PREFER_MASTER,
+			decoder, NULL);
 	gchar **namev = NULL;
 
 	namev = _load_stringv (jargs);

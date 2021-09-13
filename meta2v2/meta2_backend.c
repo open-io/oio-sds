@@ -511,7 +511,7 @@ m2b_open_with_args(struct meta2_backend_s *m2, struct oio_url_s *url,
 	EXTRA_ASSERT(m2->repo != NULL);
 
 	struct sqlx_name_inline_s n0;
-	sqlx_inline_name_fill (&n0, url, NAME_SRVTYPE_META2, 1);
+	sqlx_inline_name_fill(&n0, url, NAME_SRVTYPE_META2, 1, NULL);
 	NAME2CONST(n,n0);
 	enum m2v2_open_type_e how = open_args->how;
 
@@ -922,7 +922,7 @@ meta2_backend_has_container(struct meta2_backend_s *m2,
 	GRID_DEBUG("HAS(%s)", oio_url_get(url, OIOURL_WHOLE));
 
 	struct sqlx_name_inline_s n0;
-	sqlx_inline_name_fill (&n0, url, NAME_SRVTYPE_META2, 1);
+	sqlx_inline_name_fill(&n0, url, NAME_SRVTYPE_META2, 1, NULL);
 	NAME2CONST(n,n0);
 
 	err = sqlx_repository_has_base(m2->repo, &n);

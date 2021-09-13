@@ -286,16 +286,17 @@ sqlx_pack_PROPSET_tab(struct oio_url_s *url, const struct sqlx_name_s *name,
 }
 
 void
-sqlx_inline_name_fill_type_asis  (struct sqlx_name_inline_s *n,
-		struct oio_url_s *url, const char *srvtype, gint64 seq)
+sqlx_inline_name_fill_type_asis(struct sqlx_name_inline_s *n,
+		struct oio_url_s *url, const char *srvtype, gint64 seq,
+		const char *suffix)
 {
-	EXTRA_ASSERT (n != NULL);
-	EXTRA_ASSERT (url != NULL);
-	EXTRA_ASSERT (srvtype != NULL);
+	EXTRA_ASSERT(n != NULL);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(srvtype != NULL);
 
 	g_strlcpy(n->ns, oio_url_get (url, OIOURL_NS), sizeof(n->ns));
 	g_strlcpy(n->type, srvtype, sizeof(n->type));
-	g_strlcpy(n->suffix, "", sizeof(n->suffix));
+	g_strlcpy(n->suffix, suffix?:"", sizeof(n->suffix));
 
 	if (!strcmp(srvtype, NAME_SRVTYPE_META0)) {
 		const gchar *ns = oio_url_get (url, OIOURL_NS);

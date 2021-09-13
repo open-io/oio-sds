@@ -72,6 +72,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define SEQ()     OPT("seq")
 #define VERSION() OPT("version")
 #define SERVICE_ID() OPT("service_id")
+#define SUFFIX()  OPT("suffix")
 
 #define GUARDED_READ(Lock,Action) do { \
 	g_rw_lock_reader_lock(&Lock); \
@@ -266,8 +267,8 @@ struct client_ctx_s {
 void cache_flush_user(struct req_args_s *args, struct client_ctx_s *ctx);
 
 void client_init(struct client_ctx_s *ctx, struct req_args_s *args,
-		const char *srvtype, gint64 seq, enum proxy_preference_e how,
-		client_on_reply decoder, gpointer out);
+		const char *srvtype, gint64 seq, const char *suffix,
+		enum proxy_preference_e how, client_on_reply decoder, gpointer out);
 
 void client_clean (struct client_ctx_s *ctx);
 
@@ -287,11 +288,11 @@ enum proxy_preference_e _prefer_master (void);
 
 #define CLIENT_CTX(ctx,args,type,seq)  \
 	struct client_ctx_s ctx = {0}; \
-	client_init(&ctx, args, type, seq, CLIENT_PREFER_NONE, NULL, NULL)
+	client_init(&ctx, args, type, seq, NULL, CLIENT_PREFER_NONE, NULL, NULL)
 
-#define CLIENT_CTX2(ctx,args,type,seq,how,decoder,out)  \
+#define CLIENT_CTX2(ctx,args,type,seq,suffix,how,decoder,out)  \
 	struct client_ctx_s ctx = {0}; \
-	client_init(&ctx, args, type, seq, how, decoder, out)
+	client_init(&ctx, args, type, seq, suffix, how, decoder, out)
 
 GError * _m1_locate_and_action (struct oio_url_s *url,
 		GError * (*hook) (const char *m1addr));

@@ -621,15 +621,16 @@ GBytes* service_is_wanted (const char *type) {
 	return out;
 }
 
-void client_init (struct client_ctx_s *ctx, struct req_args_s *args,
-		const char *srvtype, gint64 seq, enum proxy_preference_e how,
-		client_on_reply decoder, gpointer out) {
+void client_init(struct client_ctx_s *ctx, struct req_args_s *args,
+		const char *srvtype, gint64 seq, const char *suffix,
+		enum proxy_preference_e how, client_on_reply decoder, gpointer out)
+{
 	memset(ctx, 0, sizeof(*ctx));
 	ctx->url = args->url;
 	ctx->type = srvtype;
 	ctx->seq = seq;
-	sqlx_inline_name_fill_type_asis (&ctx->name, args->url,
-			*srvtype == '#' ? srvtype+1 : srvtype, ctx->seq);
+	sqlx_inline_name_fill_type_asis(&ctx->name, args->url,
+			*srvtype == '#' ? srvtype+1 : srvtype, ctx->seq, suffix);
 	if (SERVICE_ID())
 		ctx->which = CLIENT_SPECIFIED;
 	else
