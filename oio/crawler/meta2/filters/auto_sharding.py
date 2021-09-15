@@ -79,18 +79,22 @@ class AutomaticSharding(Filter):
                 sharding_timestamp = int((meta2db_cursor.execute(
                     'SELECT v FROM admin WHERE k = "sys.m2.sharding.timestamp"'
                     ).fetchall() or [(0,)])[0][0]) / 1000000.
-                if ((sharding_state == NEW_SHARD_STATE_APPLYING_SAVED_WRITES
-                     or sharding_state == NEW_SHARD_STATE_CLEANING_UP)
-                        and time.time() - sharding_timestamp > 600):
-                    clean_shard = True
             finally:
                 meta2db_conn.close()
+            no_recent_change = time.time() - sharding_timestamp > 600
+            if no_recent_change:
+                if sharding_state == NEW_SHARD_STATE_APPLYING_SAVED_WRITES:
+                    self.logger.warning(
+                        'Cleaning never started or '
+                        'it is a possible orphan shard (CID=%s)', meta2db.cid)
+                elif sharding_state == NEW_SHARD_STATE_CLEANING_UP:
+                    clean_shard = True
         except Exception as exc:
             self.logger.warning(
                 'Failed to fetch sharding information: %s', exc)
         if clean_shard:
             self.logger.warning(
-                'The cleaning was not finished for the container (CID=%s), '
+                'Cleaning was not finished for the container (CID=%s), '
                 'retrying...', meta2db.cid)
             try:
                 self.container_sharding.clean_container(
