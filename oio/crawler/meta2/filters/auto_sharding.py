@@ -32,6 +32,7 @@ class AutomaticSharding(Filter):
 
     NAME = 'AutomaticSharding'
     DEFAULT_SHARDING_DB_SIZE = 1024 * 1024 * 1024
+    STEP_TIMEOUT = 600
 
     def init(self):
         self.sharding_strategy_params = {k[9:]: v for k, v in self.conf.items()
@@ -42,15 +43,19 @@ class AutomaticSharding(Filter):
             self.sharding_strategy_params.pop('db_size', None),
             self.DEFAULT_SHARDING_DB_SIZE)
 
-        self.save_writes_timeout = int_value(
-            self.sharding_strategy_params.pop('save_writes_timeout', None),
-            ContainerSharding.DEFAULT_SAVE_WRITES_TIMEOUT)
+        kwargs = dict()
+        kwargs['create_shard_timeout'] = self.sharding_strategy_params.pop(
+            'create_shard_timeout', None)
+        kwargs['save_writes_timeout'] = self.sharding_strategy_params.pop(
+            'save_writes_timeout', None)
+        self.step_timeout = int_value(
+            self.sharding_strategy_params.pop('step_timeout', None),
+            self.STEP_TIMEOUT)
 
         self.api = self.app_env['api']
         self.container_sharding = ContainerSharding(
             self.conf, logger=self.logger,
-            pool_manager=self.api.container.pool_manager,
-            save_writes_timeout=self.save_writes_timeout)
+            pool_manager=self.api.container.pool_manager, **kwargs)
 
         self.skipped = 0
         self.successes = 0
@@ -81,7 +86,8 @@ class AutomaticSharding(Filter):
                     ).fetchall() or [(0,)])[0][0]) / 1000000.
             finally:
                 meta2db_conn.close()
-            no_recent_change = time.time() - sharding_timestamp > 600
+            no_recent_change = (time.time() - sharding_timestamp
+                                > self.step_timeout)
             if no_recent_change:
                 if sharding_state == NEW_SHARD_STATE_APPLYING_SAVED_WRITES:
                     self.logger.warning(

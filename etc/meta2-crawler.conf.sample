@@ -40,9 +40,13 @@ sharding_strategy = shard-with-partition
 sharding_threshold = 100000
 ## Partition to use for cutting the container.
 sharding_partition = 50,50
+# Maximum amount of time the sharding process is allowed to create new shard
+sharding_create_shard_timeout = 60
 # Maximum amount of time the sharding process is allowed to save writes
 # before applying them directly to the new shards
-sharding_save_writes_timeout = 30
+sharding_save_writes_timeout = 60
+# Time before considering that one of the sharding steps is blocked
+sharding_step_timeout = 600
 
 [filter:auto_vacuum]
 # Trigger the vacuum for given container.

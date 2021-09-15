@@ -51,7 +51,7 @@
 			{ "type": "monotonic", "name": "meta2_sharding_timeout",
 				"key": "meta2.sharding.timeout",
 				"descr": "Maximum time allowed between the preparation phase and the locking phase to shard a container.",
-				"def": "5m", "min": "1s", "max": "1h" },
+				"def": "8m", "min": "1s", "max": "1h" },
 
 			{ "type": "int64", "name": "meta2_sharding_max_entries_cleaned",
 				"key": "meta2.sharding.max_entries_cleaned",

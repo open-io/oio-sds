@@ -244,7 +244,8 @@ class ContainerSharding(ProxyClient):
     DEFAULT_STRATEGY = 'shard-with-partition'
     DEFAULT_PARTITION = [50, 50]
     DEFAULT_SHARD_SIZE = 100000
-    DEFAULT_SAVE_WRITES_TIMEOUT = 30
+    DEFAULT_CREATE_SHARD_TIMEOUT = 60
+    DEFAULT_SAVE_WRITES_TIMEOUT = 60
 
     def __init__(self, conf, logger=None, pool_manager=None, **kwargs):
         super(ContainerSharding, self).__init__(
@@ -260,8 +261,12 @@ class ContainerSharding(ProxyClient):
         self.container = ContainerClient(
             self.conf, pool_manager=self.pool_manager, logger=self.logger,
             **kwargs)
-        self.timeout = kwargs.get('save_writes_timeout',
-                                  self.DEFAULT_SAVE_WRITES_TIMEOUT)
+        self.create_shard_timeout = int_value(
+            kwargs.get('create_shard_timeout'),
+            self.DEFAULT_CREATE_SHARD_TIMEOUT)
+        self.save_writes_timeout = int_value(
+            kwargs.get('save_writes_timeout'),
+            self.DEFAULT_SAVE_WRITES_TIMEOUT)
 
     def _make_params(self, account=None, reference=None, path=None,
                      cid=None, **kwargs):
@@ -616,8 +621,9 @@ class ContainerSharding(ProxyClient):
 
         params = self._make_params(account=shard_account,
                                    reference=shard_container, **kwargs)
-        resp, body = self._request('POST', '/create_shard', params=params,
-                                   json=shard_info, **kwargs)
+        resp, body = self._request(
+            'POST', '/create_shard', params=params, json=shard_info,
+            timeout=self.create_shard_timeout, **kwargs)
         if resp.status != 204:
             raise exceptions.from_response(resp, body)
 
@@ -760,7 +766,7 @@ class ContainerSharding(ProxyClient):
         try:
             saved_writes_applicator.apply_in_background(**kwargs)
             saved_writes_applicator.wait_until_queue_is_almost_empty(
-                timeout=self.timeout, **kwargs)
+                timeout=self.save_writes_timeout, **kwargs)
             saved_writes_applicator.flush(**kwargs)
 
             # When the queue is empty, lock the container to shard
