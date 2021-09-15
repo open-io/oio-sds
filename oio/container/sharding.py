@@ -608,15 +608,18 @@ class ContainerSharding(ProxyClient):
         shard_info['parent'] = parent_shard['cid']
         shard_info['timestamp'] = parent_shard['sharding']['timestamp']
         shard_info['master'] = parent_shard['sharding']['master']
+
+        # Fill the shard info with the CID of the shard container
+        # Even the request fails,
+        # the CID will be used to attempt to delete this new shard.
+        shard['cid'] = cid_from_name(shard_account, shard_container)
+
         params = self._make_params(account=shard_account,
                                    reference=shard_container, **kwargs)
         resp, body = self._request('POST', '/create_shard', params=params,
                                    json=shard_info, **kwargs)
         if resp.status != 204:
             raise exceptions.from_response(resp, body)
-
-        # Fill the shard info with the CID of the shard container
-        shard['cid'] = cid_from_name(shard_account, shard_container)
 
     def _update_new_shard(self, new_shard, queries, **kwargs):
         if not queries:
