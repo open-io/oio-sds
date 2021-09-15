@@ -326,6 +326,13 @@ class DeleteContainer(ContainersCommandMixin, Command):
     def get_parser(self, prog_name):
         parser = super(DeleteContainer, self).get_parser(prog_name)
         self.patch_parser_container(parser)
+        parser.add_argument(
+            '--force',
+            default=False,
+            help='Force deletion, even if it contains objects '
+                 '(the chunks of these objects will not be deleted)',
+            action="store_true"
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -335,13 +342,13 @@ class DeleteContainer(ContainersCommandMixin, Command):
             for container in parsed_args.containers:
                 self.app.client_manager.storage.container_delete(
                     self.app.client_manager.account,
-                    None, cid=container
+                    None, cid=container, force=parsed_args.force
                 )
         else:
             for container in parsed_args.containers:
                 self.app.client_manager.storage.container_delete(
                     self.app.client_manager.account,
-                    container
+                    container, force=parsed_args.force
                 )
 
 
