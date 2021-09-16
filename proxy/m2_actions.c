@@ -1145,8 +1145,6 @@ struct filter_ctx_s
 	const char *prefix;
 	const char *marker;
 	char delimiter;
-	const gchar *latest_prefix;  // do not free
-	const gchar *latest_name;  // do not free
 };
 
 static void
@@ -1191,18 +1189,15 @@ _filter_list_result(struct filter_ctx_s *ctx, GSList *l)
 					gchar *prefix = g_strndup(name, (p - name) + 1);
 					// Use replace (vs insert) to be sure prefix stays valid
 					g_tree_replace(ctx->prefixes, prefix, GINT_TO_POINTER(1));
-					ctx->latest_prefix = prefix;
 				}
 				forget (l);
 			} else {
 				ctx->count ++;
 				prepend (l);
-				ctx->latest_name = name;
 			}
 		} else {
 			ctx->count ++;
 			prepend (l);
-			ctx->latest_name = name;
 		}
 	}
 }
@@ -1909,46 +1904,61 @@ _m2_container_create_many(struct req_args_s *args, struct json_object *jbody)
 
 typedef GByteArray* (*list_packer_f) (struct list_params_s *);
 
-/* When listing with a delimiter, and the next_marker is further than the last
- * object found, we can build a marker with the last prefix found. */
+/* When listing with a delimiter, if the marker contains this delimiter,
+ * we can build a marker to ignore everything after this delimiter. */
 static gchar *
-_build_next_marker(const char *req_marker, const gchar *obj_marker,
-		const gchar *prefix_marker)
+_build_next_marker(const char *prefix, const char delimiter,
+		const char *marker)
 {
-	GRID_TRACE("Choosing marker among req=%s, obj=%s, prefix=%s",
-			req_marker, obj_marker, prefix_marker);
-	gchar *next_marker = NULL;
-	if (prefix_marker) {
-		if (obj_marker && g_strcmp0(obj_marker, prefix_marker) >= 0) {
-			next_marker = g_strdup(obj_marker);
-		} else {
-			/* HACK: "\xf4\x8f\xbf\xbd" is last valid Unicode character.
-			 * There are very few chances that an object has it in its name,
-			 * and even if it has, it won't be listed
-			 * (because it would be behind the delimiter).
-			 * With such a marker, we will force meta2 to skip objects
-			 * that won't be listed, and won't even be used to generate
-			 * new prefixes (they all share the current prefix).
-			 *
-			 * Here is a trivial example:
-			 * - a/b/0
-			 * - a/b/1
-			 * - a/b/2
-			 * - a/c/3
-			 * - d/e/4
-			 * With a page size of 3, and '/' as a delimiter:
-			 * - the first request will return "a/b/0", "a/b/1", "a/b/2",
-			 *   generating the prefix "a/";
-			 * - the marker for the next iteration will be "a/\xf4\x8f\xbf\xbd";
-			 * - the second request will skip "a/c/3", and return "d/e/4",
-			 *   generating the prefix "d/". */
-			next_marker = g_strdup_printf("%s\xf4\x8f\xbf\xbd", prefix_marker);
-		}
-	} else if (obj_marker) {
-		next_marker = g_strdup(obj_marker);
-	} else if (req_marker) {
-		next_marker = g_strdup(req_marker);
+	GRID_TRACE("Choosing marker with prefix=%s, delimiter=%c, marker=%s",
+			prefix, delimiter, marker);
+	if (!marker) {
+		return NULL;
 	}
+	if (prefix && !g_str_has_prefix(marker, prefix)) {
+		if (g_strcmp0(marker, prefix) < 0) {
+			/* The marker is unnecessary,
+			 * let the prefx determine the start of the listing. */
+			return NULL;
+		}
+		// FIXME(adu): We should directly return an empty list.
+		return g_strdup(marker);
+	}
+	if (!delimiter) {
+		return g_strdup(marker);
+	}
+	gsize prefix_len = prefix ? strlen(prefix) : 0;
+	const char *p = strchr(marker + prefix_len, delimiter);
+	if (!p) {
+		return g_strdup(marker);
+	}
+	/* The marker belongs to a prefix,
+	 * we can ignore all the content of this prefix. */
+	gchar *prefix_marker = g_strndup(marker, (p - marker) + 1);
+	/* HACK: "\xf4\x8f\xbf\xbd" is last valid Unicode character.
+	 * There are very few chances that an object has it in its name,
+	 * and even if it has, it won't be listed
+	 * (because it would be behind the delimiter).
+	 * With such a marker, we will force meta2 to skip objects
+	 * that won't be listed, and won't even be used to generate
+	 * new prefixes (they all share the current prefix).
+	 *
+	 * Here is a trivial example:
+	 * - a/b/0
+	 * - a/b/1
+	 * - a/b/2
+	 * - a/c/3
+	 * - d/e/4
+	 * With a page size of 3, and '/' as a delimiter:
+	 * - the first request will return "a/b/0", "a/b/1", "a/b/2",
+	 *   generating the prefix "a/";
+	 * - the marker for the next iteration will be "a/\xf4\x8f\xbf\xbd";
+	 * - the second request will skip "a/c/3", and return "d/e/4",
+	 *   generating the prefix "d/".
+	 *
+	 * Also we must not return a prefix equal to the marker. */
+	gchar *next_marker = g_strdup_printf("%s\xf4\x8f\xbf\xbd", prefix_marker);
+	g_free(prefix_marker);
 	return next_marker;
 }
 
@@ -1978,8 +1988,8 @@ static GError * _list_loop (struct req_args_s *args,
 		if (in0->maxkeys > 0)
 			in.maxkeys = in0->maxkeys - (count + g_tree_nnodes(tree_prefixes));
 		in.marker_start = _build_next_marker(
-				in0->marker_start,
-				out0->next_marker?: ctx.latest_name, ctx.latest_prefix);
+				in0->prefix, delimiter,
+				out0->next_marker ? : in0->marker_start);
 
 		/* update path to use sharding resolver */
 		gchar *fake_path = NULL;
