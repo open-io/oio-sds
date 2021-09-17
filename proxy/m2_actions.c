@@ -1244,7 +1244,7 @@ retry:
 						m1, args->url, NAME_SRVTYPE_META2, FALSE, TRUE, &urlv,
 						oio_ext_get_deadline());
 				if (!e && urlv && *urlv) {
-					/* Explicitely feeding the meta1 avoids a subsequent
+					/* Explicitly feeding the meta1 avoids a subsequent
 					   call to meta1 to locate the meta2 */
 					hc_resolver_tell (resolver, args->url, NAME_SRVTYPE_META2,
 									  (const char * const *) urlv);
@@ -1329,7 +1329,7 @@ action_m2_container_destroy (struct req_args_s *args)
 		err = _m1_locate_and_action (args->url, _unlink);
 		if (err != NULL) {
 			/* Rolling back will be hard if there is any chance the UNLINK has
-			 * been managed by the server, despite a time-out that occured. */
+			 * been managed by the server, despite a time-out that occurred. */
 			_re_enable (args);
 			goto clean_and_exit;
 		}
@@ -1904,38 +1904,48 @@ _m2_container_create_many(struct req_args_s *args, struct json_object *jbody)
 
 typedef GByteArray* (*list_packer_f) (struct list_params_s *);
 
-/* When listing with a delimiter, if the marker contains this delimiter,
- * we can build a marker to ignore everything after this delimiter. */
+/* Build a marker for the next iteration of the object listing loop.
+ * - marker: the marker specified in the client request or returned
+ *     by the previous iteration of the listing loop.
+ * - delimiter: the delimiter specified in the request.
+ * - req_prefix: the prefix specified in the request. */
 static gchar *
-_build_next_marker(const char *prefix, const char delimiter,
-		const char *marker)
+_build_next_marker(const char *marker, const char delimiter,
+		const char *req_prefix)
 {
-	GRID_TRACE("Choosing marker with prefix=%s, delimiter=%c, marker=%s",
-			prefix, delimiter, marker);
-	if (!marker) {
+	/* There is no input marker, or the marker is before the request's prefix.
+	 * Let the downstream code use the prefix as a marker (or do not use any
+	 * marker if there is no prefix). */
+	if (!marker || g_strcmp0(marker, req_prefix) < 0) {
 		return NULL;
 	}
-	if (prefix && !g_str_has_prefix(marker, prefix)) {
-		if (g_strcmp0(marker, prefix) < 0) {
-			/* The marker is unnecessary,
-			 * let the prefx determine the start of the listing. */
-			return NULL;
-		}
+
+	/* There is a marker and a prefix, but the marker does not contain the
+	 * prefix and is sorted after. This looks like a bad request.
+	 * Or maybe we just reached the end without noticing. */
+	if (req_prefix && !g_str_has_prefix(marker, req_prefix)) {
 		// FIXME(adu): We should directly return an empty list.
 		return g_strdup(marker);
 	}
+
+	/* Nothing special to do. Use the marker as specified by the customer
+	 * or as returned by the last iteration. */
 	if (!delimiter) {
 		return g_strdup(marker);
 	}
-	gsize prefix_len = prefix ? strlen(prefix) : 0;
-	const char *p = strchr(marker + prefix_len, delimiter);
-	if (!p) {
+
+	/* Look for a "sub-prefix" in the candidate marker. */
+	gsize prefix_len = req_prefix ? strlen(req_prefix) : 0;
+	const char *suffix = strchr(marker + prefix_len, delimiter);
+	if (!suffix) {
 		return g_strdup(marker);
 	}
-	/* The marker belongs to a prefix,
-	 * we can ignore all the content of this prefix. */
-	gchar *prefix_marker = g_strndup(marker, (p - marker) + 1);
-	/* HACK: "\xf4\x8f\xbf\xbd" is last valid Unicode character.
+
+	/* HACK: we have found a "sub-prefix" which will be returned to the
+	 * client. Objects containing this prefix won't be returned (because
+	 * the request has a delimiter), and thus we can skip them.
+	 *
+	 * "\xf4\x8f\xbf\xbd" is the last valid Unicode character.
 	 * There are very few chances that an object has it in its name,
 	 * and even if it has, it won't be listed
 	 * (because it would be behind the delimiter).
@@ -1956,9 +1966,10 @@ _build_next_marker(const char *prefix, const char delimiter,
 	 * - the second request will skip "a/c/3", and return "d/e/4",
 	 *   generating the prefix "d/".
 	 *
-	 * Also we must not return a prefix equal to the marker. */
-	gchar *next_marker = g_strdup_printf("%s\xf4\x8f\xbf\xbd", prefix_marker);
-	g_free(prefix_marker);
+	 * Notice that we must not return a prefix equal to the marker. */
+	gchar *sub_prefix = g_strndup(marker, (suffix - marker) + 1);
+	gchar *next_marker = g_strdup_printf("%s\xf4\x8f\xbf\xbd", sub_prefix);
+	g_free(sub_prefix);
 	return next_marker;
 }
 
@@ -1988,8 +1999,8 @@ static GError * _list_loop (struct req_args_s *args,
 		if (in0->maxkeys > 0)
 			in.maxkeys = in0->maxkeys - (count + g_tree_nnodes(tree_prefixes));
 		in.marker_start = _build_next_marker(
-				in0->prefix, delimiter,
-				out0->next_marker ? : in0->marker_start);
+				out0->next_marker?: in0->marker_start,
+				delimiter, in0->prefix);
 
 		/* update path to use sharding resolver */
 		gchar *fake_path = NULL;
@@ -2127,7 +2138,7 @@ enum http_rc_e action_container_snapshot(struct req_args_s *args) {
 // ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
 // For each container, you can specify system and properties value
-// by adding them on dictionnary after container name.
+// by adding them on dictionary after container name.
 // Syntax is same as "container create"
 //
 // .. code-block:: json
