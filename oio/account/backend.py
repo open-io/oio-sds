@@ -84,6 +84,7 @@ class AccountBackend(RedisConnection):
               redis.call('ZREM', '%(bucket_list_prefix)s', bucket_name);
               -- Also delete the bucket
               redis.call('DEL', bucket_key);
+              return;
             end;
             -- We used to return here. But since we delete shard before
             -- cleaning them, we need to fix counters first.

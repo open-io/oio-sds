@@ -41,6 +41,10 @@ class ContainerTest(CliTestCase):
         output = cls.openio('container delete ' + cls.NAME)
         cls.assertOutput('', output)
 
+    def setUp(self):
+        super(ContainerTest, self).setUp()
+        self.beanstalkd0.drain_tube('oio-preserved')
+
     def _test_container_show(self, with_cid=False):
         opts = self.get_format_opts(fields=('container', ))
         cid_opt = ''
@@ -107,10 +111,19 @@ class ContainerTest(CliTestCase):
         output = self.openio('container create --bucket-name %s %s %s' %
                              (cname, cname, opts))
         self.assertOutput(cname + '\n', output)
-
+        self.wait_for_event('oio-preserved',
+                            fields={'user': cname},
+                            types=(EventTypes.CONTAINER_NEW, ))
         opts = self.get_format_opts(fields=('account', 'bytes', 'objects'))
         output = self.openio('bucket show ' + cname + opts)
         self.assertEqual(self.account_from_env() + '\n0\n0\n', output)
+
+        output = self.openio('container delete %s' % cname)
+        self.wait_for_event('oio-preserved',
+                            fields={'user': cname},
+                            types=(EventTypes.CONTAINER_DELETED, ))
+        # Bucket not found (HTTP 404)
+        self.assertRaises(CommandFailed, self.openio, 'bucket show ' + cname)
 
     def test_bucket_show_with_account_refresh(self):
         account = 'myaccount-' + random_str(4).lower()
@@ -122,7 +135,7 @@ class ContainerTest(CliTestCase):
         self.assertOutput(cname + '\n', output)
         self.wait_for_event('oio-preserved',
                             fields={'user': cname},
-                            types=(EventTypes.CONTAINER_STATE, ))
+                            types=(EventTypes.CONTAINER_NEW, ))
 
         with tempfile.NamedTemporaryFile() as file_:
             file_.write(b'test')
@@ -154,7 +167,7 @@ class ContainerTest(CliTestCase):
         self.assertOutput(cname + '\n', output)
         self.wait_for_event('oio-preserved',
                             fields={'user': cname},
-                            types=(EventTypes.CONTAINER_STATE, ))
+                            types=(EventTypes.CONTAINER_NEW, ))
 
         with tempfile.NamedTemporaryFile() as file_:
             file_.write(b'test')
