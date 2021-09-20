@@ -27,7 +27,14 @@ jobs:
           - coverage combine .coverage.*
           - coverage report --omit="/usr/lib/python3*" --skip-empty --ignore-errors > coverage-report-py.txt
           - worker upload --tag='{{.cds.version}}' {{.cds.workspace}}/coverage-report-py.txt
+          - coverage xml --omit="/usr/lib/python3*" --ignore-errors -o coverage-py.xml
           - coverage html --omit="/usr/lib/python3*" --ignore-errors -d coverage-report-py
+
+      - optional: true
+        coverage:
+          format: cobertura
+          minimum: "70"
+          path: '{{.cds.workspace}}/coverage-py.xml'
 
       - name: Aggregate C coverage statistics
         script:
