@@ -46,39 +46,24 @@ class Application(BaseApplication):
         self.cfg.set('worker_connections', self.conf.get(
             'worker_connections', 1000))
         self.cfg.set('syslog_prefix', self.conf.get('syslog_prefix', ''))
-        self.cfg.set('syslog_addr', self.conf.get('log_address', '/dev/log'))
-        self.cfg.set('accesslog', None)
+        log_addr = self.conf.get('log_address', '/dev/log')
+        if '://' not in log_addr:
+            log_addr = "unix://" + log_addr
+        self.cfg.set('syslog_addr', log_addr)
+        self.cfg.set('syslog', True)
         self.cfg.set('keepalive', 30)
         self.cfg.set('access_log_format', self.conf.get('access_log_format',
                                                         self.access_log_fmt))
         self.cfg.set('proc_name',
                      self.conf.get('proc_name',
                                    self.application.__class__.__name__))
+        self.cfg.set('logger_class', self.logger_class)
 
     def load(self):
         return self.application
 
 
 class ServiceLogger(Logger):
-    def __init__(self, cfg):
-        super(ServiceLogger, self).__init__(cfg)
-        prefix = cfg.syslog_prefix if cfg.syslog_prefix else ''
-        address = cfg.syslog_addr if cfg.syslog_addr else '/dev/log'
-
-        error_conf = {
-            'syslog_prefix': prefix,
-            'log_facility': 'LOG_LOCAL0',
-            'log_address': address
-        }
-
-        access_conf = {
-            'syslog_prefix': prefix,
-            'log_facility': 'LOG_LOCAL1',
-            'log_address': address
-        }
-
-        self.error_log = get_logger(error_conf, 'log')
-        self.access_log = get_logger(access_conf, 'access')
 
     def atoms(self, resp, req, environ, request_time):
         atoms = super(ServiceLogger, self).atoms(resp, req, environ,
