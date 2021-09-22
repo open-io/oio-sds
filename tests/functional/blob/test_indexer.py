@@ -33,6 +33,17 @@ from tests.functional.blob import random_chunk_id, random_buffer, \
 
 class TestBlobIndexer(BaseTestCase):
 
+    @classmethod
+    def setUpClass(cls):
+        super(TestBlobIndexer, cls).setUpClass()
+        # Prevent the chunks' rebuilds by the rdir crawlers
+        cls._service(cls._cls_ns + '-rdir-crawler', 'stop', wait=3)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._service(cls._cls_ns + '-rdir-crawler', 'start', wait=1)
+        super(TestBlobIndexer, cls).tearDownClass()
+
     def setUp(self):
         super(TestBlobIndexer, self).setUp()
         self.rdir_client = RdirClient(self.conf)
@@ -123,11 +134,14 @@ class TestBlobIndexer(BaseTestCase):
         return self.rawx_path + '/' + chunk_id[:3] + '/' + chunk_id
 
     def test_blob_indexer(self):
+        chunks = list(self.rdir_client.chunk_fetch(self.rawx_id))
+        previous_nb_chunk = len(chunks)
+
         _, _, expected_cid, _, _, expected_content_id, expected_chunk_id = \
             self._put_chunk()
 
         chunks = list(self.rdir_client.chunk_fetch(self.rawx_id))
-        self.assertEqual(1, len(chunks))
+        self.assertEqual(previous_nb_chunk + 1, len(chunks))
         cid, chunk_id, descr = chunks[0]
         self.assertEqual(expected_cid, cid)
         self.assertEqual(expected_content_id, descr['content_id'])
@@ -140,7 +154,7 @@ class TestBlobIndexer(BaseTestCase):
 
         chunks = self.rdir_client.chunk_fetch(self.rawx_id)
         chunks = list(chunks)
-        self.assertEqual(1, len(chunks))
+        self.assertEqual(previous_nb_chunk + 1, len(chunks))
         cid, chunk_id, descr = chunks[0]
         self.assertEqual(expected_cid, cid)
         self.assertEqual(expected_content_id, descr['content_id'])
@@ -149,7 +163,7 @@ class TestBlobIndexer(BaseTestCase):
         self._delete_chunk(expected_chunk_id)
         chunks = self.rdir_client.chunk_fetch(self.rawx_id)
         chunks = list(chunks)
-        self.assertEqual(0, len(chunks))
+        self.assertEqual(previous_nb_chunk, len(chunks))
 
     def test_blob_indexer_with_old_chunk(self):
         expected_account, expected_container, expected_cid, \

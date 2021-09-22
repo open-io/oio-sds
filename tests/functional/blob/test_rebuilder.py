@@ -58,6 +58,13 @@ class TestBlobRebuilder(BaseTestCase):
         self.version = meta['version']
         self.content_id = meta['id']
 
+        # Prevent the chunks' rebuilds by the rdir crawlers
+        self._service(self.ns + '-rdir-crawler', 'stop', wait=3)
+
+    def tearDown(self):
+        self._service(self.ns + '-rdir-crawler', 'start', wait=1)
+        super(TestBlobRebuilder, self).tearDown()
+
     def _chunk_path(self, chunk):
         url = chunk['url']
         volume_id = url.split('/', 3)[2]

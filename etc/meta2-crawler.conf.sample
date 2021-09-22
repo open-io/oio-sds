@@ -8,7 +8,7 @@ volume_list = /var/lib/oio/sds/vol1/NS/meta2-1/,/var/lib/oio/sds/vol1/NS/meta2-2
 # to avoid all the crawlers from working at the same time.
 wait_random_time_before_starting = False
 # In seconds, the interval between two full scans. Defaults to half an hour.
-interval = 1200
+interval = 1800
 # In seconds, the interval between two logs entries (for each volume)
 # Defaults to 300 seconds.
 report_interval = 300

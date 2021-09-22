@@ -1,4 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -26,7 +27,7 @@ from tests.utils import random_str
 
 
 class ItemCheckTest(CliTestCase):
-    """Functionnal tests for item to check."""
+    """Functional tests for item to check."""
 
     FLAT_BITS = 5
 
@@ -36,6 +37,13 @@ class ItemCheckTest(CliTestCase):
         cls.check_opts = cls.get_opts(['Type', 'Item', 'Status'])
         cls.api = ObjectStorageApi(cls._cls_ns, endpoint=cls._cls_uri)
         cls.autocontainer = HashedContainerBuilder(bits=cls.FLAT_BITS)
+        # Prevent the chunks' rebuilds by the rdir crawlers
+        cls._service(cls._cls_ns + '-rdir-crawler', 'stop', wait=3)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._service(cls._cls_ns + '-rdir-crawler', 'start', wait=1)
+        super(ItemCheckTest, cls).tearDownClass()
 
     def setUp(self):
         super(ItemCheckTest, self).setUp()

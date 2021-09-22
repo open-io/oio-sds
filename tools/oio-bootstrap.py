@@ -211,6 +211,28 @@ hard_max_unused_pages_ratio = 0.2
 use = egg:oio#logger
 """
 
+template_rdir_crawler_service = """
+[rdir-crawler]
+namespace = ${NS}
+user = ${USER}
+volume_list = ${RAWX_VOLUMES}
+
+# How many hexdigits must be used to name the indirection directories
+hash_width = ${HASH_WIDTH}
+# How many levels of directories are used to store chunks
+hash_depth = ${HASH_DEPTH}
+
+wait_random_time_before_starting = True
+interval = 30
+report_interval = 5
+chunks_per_second = 30
+conscience_cache = 30
+log_level = INFO
+log_facility = LOG_LOCAL0
+log_address = /dev/log
+syslog_prefix = OIO,${NS},${SRVTYPE}
+"""
+
 template_rawx_service = """
 Listen ${IP}:${PORT}
 PidFile ${RUNDIR}/${NS}-${SRVTYPE}-${SRVNUM}.pid
@@ -220,10 +242,10 @@ namespace         ${NS}
 ${WANT_SERVICE_ID}service_id        ${SERVICE_ID}
 
 # How many hexdigits must be used to name the indirection directories
-hash_width        3
+hash_width        ${HASH_WIDTH}
 
 # How many levels of directories are used to store chunks.
-hash_depth        1
+hash_depth        ${HASH_DEPTH}
 
 # At the end of an upload, perform a fsync() on the chunk file itself
 fsync             ${FSYNC}
@@ -773,6 +795,15 @@ start_at_boot=false
 on_die=cry
 """
 
+template_gridinit_rdir_crawler = """
+[Service.${NS}-${SRVTYPE}]
+group=${NS},localhost,${GROUPTYPE}
+command=oio-rdir-crawler ${CFGDIR}/${NS}-${SRVTYPE}.conf
+enabled=true
+start_at_boot=false
+on_die=cry
+"""
+
 template_gridinit_rawx_command_options = \
     '-s OIO,${NS},${SRVTYPE},${SRVNUM} -D FOREGROUND ' \
     '-f ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.httpd.conf'
@@ -1141,6 +1172,8 @@ META_HEADER = 'x-oio-chunk-meta'
 COVERAGE = os.getenv('PYTHON_COVERAGE')
 TLS_CERT_FILE = None
 TLS_KEY_FILE = None
+HASH_WIDTH = 'hash_width'
+HASH_DEPTH = 'hash_depth'
 
 defaults = {
     'NS': 'OPENIO',
@@ -1157,7 +1190,9 @@ defaults = {
     'REPLI_M1': 1,
     COMPRESSION: "off",
     MONITOR_PERIOD: 1,
-    M1_DIGITS: 2}
+    M1_DIGITS: 2,
+    HASH_WIDTH: 3,
+    HASH_DEPTH: 1}
 
 # XXX When /usr/sbin/httpd is present we suspect a Redhat/Centos/Fedora
 # environment. If not, we consider being in a Ubuntu/Debian environment.
@@ -1553,6 +1588,7 @@ def generate(options):
     srvtype = 'rawx'
     nb_rawx = getint(options[srvtype].get(SVC_NB), defaults['NB_RAWX'])
     if nb_rawx:
+        rawx_volumes = []
         for i in range(nb_rawx):
             env = subenv({'SRVTYPE': srvtype,
                           'SRVNUM': i + 1,
@@ -1560,8 +1596,11 @@ def generate(options):
                           'COMPRESSION': ENV['COMPRESSION'] if i % 2 else 'off',
                           'EXTRASLOT': ('rawx-even' if i % 2 else 'rawx-odd'),
                           'FSYNC': ('enabled' if options[FSYNC_RAWX]
-                                    else 'disabled')
-                         })
+                                    else 'disabled'),
+                          'HASH_WIDTH': defaults[HASH_WIDTH],
+                          'HASH_DEPTH': defaults[HASH_DEPTH]
+                          })
+            rawx_volumes.append(env['VOLUME'])
             env['SERVICE_ID'] = "{NS}-{SRVTYPE}-{SRVNUM}".format(**env)
             if options.get('use_tls', False):
                 env['TLS_CERT_FILE'] = ENV['TLS_CERT_FILE']
@@ -1573,7 +1612,8 @@ def generate(options):
 
             add_service(env)
             # gridinit (rawx)
-            tpl = Template(template_gridinit_rawx % template_gridinit_rawx_command_options)
+            tpl = Template(template_gridinit_rawx %
+                           template_gridinit_rawx_command_options)
             with open(gridinit(env), 'a+') as f:
                 f.write(tpl.safe_substitute(env))
             # service
@@ -1598,6 +1638,25 @@ def generate(options):
             tpl = Template(template_gridinit_indexer)
             with open(gridinit(env), 'a+') as f:
                 f.write(tpl.safe_substitute(env))
+
+        # oio-rdir-crawler
+        env.update({
+            'RAWX_VOLUMES': ",".join(rawx_volumes),
+            'SRVTYPE': 'rdir-crawler',
+            'GROUPTYPE': 'crawler',
+            'HASH_WIDTH': defaults[HASH_WIDTH],
+            'HASH_DEPTH': defaults[HASH_DEPTH]
+        })
+        # first the conf
+        tpl = Template(template_rdir_crawler_service)
+        to_write = tpl.safe_substitute(env)
+        path = '{CFGDIR}/{NS}-{SRVTYPE}.conf'.format(**env)
+        with open(path, 'w+') as f:
+            f.write(to_write)
+        # then the gridinit conf
+        tpl = Template(template_gridinit_rdir_crawler)
+        with open(gridinit(env), 'a+') as f:
+            f.write(tpl.safe_substitute(env))
 
     # redis
     srvtype = 'redis'

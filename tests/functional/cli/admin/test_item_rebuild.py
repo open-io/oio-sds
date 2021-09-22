@@ -1,4 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -61,6 +62,9 @@ class ItemRebuildTest(CliTestCase):
         return obj_meta, obj_chunks
 
     def test_chunk_rebuild(self):
+        # Prevent the chunks' rebuilds by the rdir crawlers
+        self._service(self.ns + '-rdir-crawler', 'stop', wait=3)
+
         obj_meta, obj_chunks = self.create_object(
             self.account, self.container, self.obj_name)
         cid = cid_from_name(self.account, self.container)
@@ -137,3 +141,5 @@ class ItemRebuildTest(CliTestCase):
             '--oio-account %s chunk rebuild --input-file "%s" %s'
             % (self.account, chunks_to_repair_file, opts))
         self.assert_list_output(expected_items, output)
+
+        self._service(self.ns + '-rdir-crawler', 'start', wait=1)
