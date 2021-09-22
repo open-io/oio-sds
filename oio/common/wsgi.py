@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -27,8 +28,17 @@ from oio.common.logger import get_logger
 
 
 class Application(BaseApplication):
-    access_log_fmt = '%(bind0)s %(h)s:%({remote}p)s %(m)s %(s)s %(D)s ' + \
-                     '%(B)s %(l)s %({x-oio-req-id}i)s %(U)s?%(q)s'
+
+    access_log_fmt = ('%(bind0)s %(h)s:%({remote_port}e)s %(m)s %(s)s %(D)s '
+                      + '%(B)s %(l)s %(reqid)s %(U)s?%(q)s')
+    access_log_fmt_ltsv = (
+        'log_type:access	local:%(bind0)s	'
+        + 'client_ip:%(client)s	remote_addr:%(h)s:%({remote_port}e)s	'
+        + 'protocol:%(H)s	method:%(m)s	path:%(U)s?%(q)s	'
+        + 'status_int:%(s)s	bytes_sent_int:%(b)s	'
+        + 'request_id:%(reqid)s	'
+        + 'request_time_us_int:%(D)s	user_agent:%(a)s'
+    )
 
     def __init__(self, app, conf, logger_class=None):
         self.conf = conf
@@ -52,8 +62,9 @@ class Application(BaseApplication):
         self.cfg.set('syslog_addr', log_addr)
         self.cfg.set('syslog', True)
         self.cfg.set('keepalive', 30)
-        self.cfg.set('access_log_format', self.conf.get('access_log_format',
-                                                        self.access_log_fmt))
+        self.cfg.set('access_log_format',
+                     self.conf.get('access_log_format',
+                                   self.access_log_fmt_ltsv))
         self.cfg.set('proc_name',
                      self.conf.get('proc_name',
                                    self.application.__class__.__name__))
@@ -74,6 +85,15 @@ class ServiceLogger(Logger):
         for bind in self.cfg.bind:
             atoms['bind%d' % index] = bind
             index += 1
+
+        # Since the account service serves IAM requests, we may get requests
+        # not coming from oio-sds services, hence with a different request ID
+        # header.
+        atoms['reqid'] = atoms.get('{x-oio-req-id}i',
+                                   atoms.get('{x-openstack-request-id}i',
+                                             atoms.get('{http_x_oio_req_id}e',
+                                                       '-')))
+        atoms['client'] = atoms.get('{x-forwarded-for}i', atoms['h'])
         return atoms
 
     def access(self, resp, req, environ, request_time):
