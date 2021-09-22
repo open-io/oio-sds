@@ -18,49 +18,22 @@ from functools import wraps
 
 from werkzeug.wrappers import Response
 from werkzeug.routing import Map, Rule
-from werkzeug.exceptions import NotFound, BadRequest, Conflict, HTTPException
+from werkzeug.exceptions import NotFound, BadRequest, Conflict
 
 from oio.account.backend import AccountBackend
 from oio.account.iam import RedisIamDb
 from oio.common.configuration import load_namespace_conf
-from oio.common.constants import REQID_HEADER, STRLEN_REQID, \
-    HTTP_CONTENT_TYPE_JSON
+from oio.common.constants import HTTP_CONTENT_TYPE_JSON
 from oio.common.easy_value import int_value, true_value
 from oio.common.json import json
 from oio.common.logger import get_logger
-from oio.common.utils import monotonic_time, parse_conn_str
+from oio.common.utils import parse_conn_str
 from oio.common.wsgi import WerkzeugApp
 
 
 ACCOUNT_LISTING_DEFAULT_LIMIT = 1000
 ACCOUNT_LISTING_MAX_LIMIT = 10000
 DEFAULT_IAM_CONNECTION = 'redis://127.0.0.1:6379'
-
-
-def access_log(func):
-    """
-    Decorator to write a line to the access log each time
-    the decorated method is called.
-    """
-
-    @wraps(func)
-    def _access_log_wrapper(self, req, *args, **kwargs):
-        pre = monotonic_time()
-        rc = func(self, req, *args, **kwargs)
-        post = monotonic_time()
-        reqid = req.headers.get(REQID_HEADER, '-')[:STRLEN_REQID]
-        if isinstance(rc, HTTPException):
-            code = str(rc.code)
-        elif isinstance(rc, Response):
-            code = str(rc.status_code)
-        else:
-            code = "-"
-        # func time size user reqid
-        self.logger.info("%s %s %0.6f %s %s %s",
-                         func.__name__, code, post - pre, '-', '-', reqid)
-        return rc
-
-    return _access_log_wrapper
 
 
 def force_master(func):
@@ -221,7 +194,6 @@ class Account(WerkzeugApp):
     #    myaccount
     #
     # }}ACCT
-    @access_log
     @force_master
     def on_account_create(self, req, **kwargs):
         account_id = self._get_account_id(req)
@@ -258,7 +230,6 @@ class Account(WerkzeugApp):
     #    ["myaccount"]
     #
     # }}ACCT
-    @access_log
     @force_master
     def on_account_list(self, req, **kwargs):
         accounts = self.backend.list_accounts(**kwargs)
@@ -291,7 +262,6 @@ class Account(WerkzeugApp):
     #    Content-Type: text/plain; charset=utf-8
     #
     # }}ACCT
-    @access_log
     @force_master
     def on_account_delete(self, req, **kwargs):
         account_id = self._get_account_id(req)
@@ -387,7 +357,6 @@ class Account(WerkzeugApp):
     #     }
     #
     # }}ACCT
-    @access_log
     @force_master
     def on_account_show(self, req, **kwargs):
         account_id = self._get_account_id(req)
@@ -455,7 +424,6 @@ class Account(WerkzeugApp):
     #    }
     #
     # }}ACCT
-    @access_log
     @force_master
     def on_account_buckets(self, req, **kwargs):
         account_id = self._get_account_id(req)
@@ -519,7 +487,6 @@ class Account(WerkzeugApp):
     #     }
     #
     # }}ACCT
-    @access_log
     @force_master
     def on_account_containers(self, req, **kwargs):
         account_id = self._get_account_id(req)
@@ -678,7 +645,6 @@ class Account(WerkzeugApp):
     #    Content-Type: text/plain; charset=utf-8
     #
     # }}ACCT
-    @access_log
     @force_master
     def on_account_refresh(self, req, **kwargs):
         account_id = self._get_account_id(req)
@@ -706,7 +672,6 @@ class Account(WerkzeugApp):
     #    Content-Type: text/plain; charset=utf-8
     #
     # }}ACCT
-    @access_log
     @force_master
     def on_account_flush(self, req, **kwargs):
         account_id = self._get_account_id(req)
@@ -749,7 +714,6 @@ class Account(WerkzeugApp):
     #    }
     #
     # }}ACCT
-    @access_log
     @force_master
     def on_bucket_show(self, req, **kwargs):
         """
@@ -894,7 +858,6 @@ class Account(WerkzeugApp):
     #    }
     #
     # }}ACCT
-    @access_log
     @force_master
     def on_account_container_show(self, req, **kwargs):
         account_id = self._get_account_id(req)
@@ -904,7 +867,6 @@ class Account(WerkzeugApp):
             return Response(json.dumps(raw), mimetype=HTTP_CONTENT_TYPE_JSON)
         return NotFound('Container not found')
 
-    @access_log
     def on_iam_delete_user_policy(self, req, **kwargs):
         account = self._get_item_id(req, key='account', what='account')
         user = self._get_item_id(req, key='user', what='user')
@@ -912,7 +874,6 @@ class Account(WerkzeugApp):
         self.iam.delete_user_policy(account, user, policy_name)
         return Response(status=204)
 
-    @access_log
     def on_iam_get_user_policy(self, req, **kwargs):
         account = self._get_item_id(req, key='account', what='account')
         user = self._get_item_id(req, key='user', what='user')
@@ -922,14 +883,12 @@ class Account(WerkzeugApp):
             return NotFound('User policy not found')
         return Response(policy, mimetype=HTTP_CONTENT_TYPE_JSON)
 
-    @access_log
     def on_iam_list_users(self, req, **kwargs):
         account = self._get_item_id(req, key='account', what='account')
         users = self.iam.list_users(account)
         res = {'Users': users}
         return Response(json.dumps(res), mimetype=HTTP_CONTENT_TYPE_JSON)
 
-    @access_log
     def on_iam_list_user_policies(self, req, **kwargs):
         account = self._get_item_id(req, key='account', what='account')
         user = self._get_item_id(req, key='user', what='user')
@@ -937,7 +896,6 @@ class Account(WerkzeugApp):
         res = {'PolicyNames': policies}
         return Response(json.dumps(res), mimetype=HTTP_CONTENT_TYPE_JSON)
 
-    @access_log
     def on_iam_put_user_policy(self, req, **kwargs):
         account = self._get_item_id(req, key='account', what='account')
         user = self._get_item_id(req, key='user', what='user')
