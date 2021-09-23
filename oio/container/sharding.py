@@ -456,7 +456,7 @@ class ContainerSharding(ProxyClient):
         found_shards = self._find_shards(
             shard, 'shard-with-partition',
             strategy_params=formatted_strategy_params, **kwargs)
-        return len(partition), None, found_shards['shard_ranges']
+        return None, found_shards['shard_ranges']
 
     def _find_shards_with_size(self, shard, incomplete_shard=None,
                                strategy_params=None, **kwargs):
@@ -474,7 +474,7 @@ class ContainerSharding(ProxyClient):
         found_shards = self._find_shards(
             shard, 'shard-with-size',
             strategy_params=formatted_strategy_params, **kwargs)
-        return None, shard_size, found_shards['shard_ranges']
+        return shard_size, found_shards['shard_ranges']
 
     STRATEGIES = {
         'shard-with-partition': _find_shards_with_partition,
@@ -489,8 +489,7 @@ class ContainerSharding(ProxyClient):
         find_shards = self.STRATEGIES.get(strategy)
         if find_shards is None:
             raise OioException('Unknown sharding strategy')
-        nb_shards, shard_size, found_shards = find_shards(
-            self, shard, **kwargs)
+        max_shard_size, found_shards = find_shards(self, shard, **kwargs)
 
         found_formatted_shards = list()
         for found_shard in found_shards:
@@ -499,7 +498,7 @@ class ContainerSharding(ProxyClient):
             found_formatted_shard = self._format_shard(
                 found_shard, is_new=True, **kwargs)
             found_formatted_shards.append(found_formatted_shard)
-        return nb_shards, shard_size, found_formatted_shards
+        return max_shard_size, found_formatted_shards
 
     def find_shards(self, account, container, **kwargs):
         fake_shard = {
@@ -509,7 +508,7 @@ class ContainerSharding(ProxyClient):
             'cid': cid_from_name(account, container),
             'metadata': None
         }
-        _, _, formatted_shards = self._find_formatted_shards(
+        _, formatted_shards = self._find_formatted_shards(
             fake_shard, **kwargs)
         return self._check_shards(formatted_shards,
                                   are_new=True, partial=True, **kwargs)
@@ -529,7 +528,7 @@ class ContainerSharding(ProxyClient):
         index = 0
         for current_shard in current_shards:
             # Find the possible new shards
-            _, shard_size, found_shards = self._find_formatted_shards(
+            max_shard_size, found_shards = self._find_formatted_shards(
                 current_shard, strategy=strategy, index=index,
                 incomplete_shard=incomplete_shard, **kwargs)
 
@@ -550,15 +549,15 @@ class ContainerSharding(ProxyClient):
             # If the last shard is the correct size,
             # return it immediately
             last_shard = found_shards[-1]
-            if no_shrinking or shard_size is None \
-                    or last_shard['count'] >= shard_size:
+            if no_shrinking or max_shard_size is None \
+                    or last_shard['count'] >= max_shard_size:
                 index = last_shard['index'] + 1
                 incomplete_shard = None
                 yield last_shard
             else:
                 index = last_shard['index']
                 incomplete_shard = last_shard
-                available = shard_size - incomplete_shard['count']
+                available = max_shard_size - incomplete_shard['count']
                 if available > 0:
                     incomplete_shard['available'] = available
 
@@ -576,7 +575,7 @@ class ContainerSharding(ProxyClient):
             'cid': cid_from_name(root_account, root_container),
             'metadata': None
         }
-        _, _, found_shards = self._find_formatted_shards(
+        _, found_shards = self._find_formatted_shards(
             current_shard, strategy=strategy, **kwargs)
         for found_shard in found_shards:
             yield found_shard
@@ -924,7 +923,7 @@ class ContainerSharding(ProxyClient):
 
         sys = meta['system']
         if int_value(sys.get(M2_PROP_SHARDS), 0):
-            raise OioException('It is a root container')
+            raise ValueError('It is a root container')
 
         root_account = None
         root_container = None
