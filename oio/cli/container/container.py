@@ -28,10 +28,10 @@ from oio.common.constants import \
     OIO_DB_STATUS_NAME, OIO_DB_ENABLED, OIO_DB_DISABLED, OIO_DB_FROZEN, \
     M2_PROP_BUCKET_NAME, M2_PROP_CTIME, M2_PROP_DEL_EXC_VERSIONS, \
     M2_PROP_OBJECTS, M2_PROP_QUOTA, M2_PROP_SHARDING_LOWER, \
-    M2_PROP_SHARDING_ROOT, M2_PROP_SHARDING_STATE, \
-    M2_PROP_SHARDING_TIMESTAMP, M2_PROP_SHARDING_UPPER, M2_PROP_SHARDS, \
-    M2_PROP_STORAGE_POLICY, M2_PROP_USAGE, M2_PROP_VERSIONING_POLICY, \
-    SHARDING_STATE_NAME
+    M2_PROP_SHARDING_MASTER, M2_PROP_SHARDING_QUEUE, M2_PROP_SHARDING_ROOT, \
+    M2_PROP_SHARDING_STATE, M2_PROP_SHARDING_TIMESTAMP, \
+    M2_PROP_SHARDING_UPPER, M2_PROP_SHARDS, M2_PROP_STORAGE_POLICY, \
+    M2_PROP_USAGE, M2_PROP_VERSIONING_POLICY, SHARDING_STATE_NAME
 from oio.common.easy_value import boolean_value, int_value, float_value
 
 
@@ -493,6 +493,10 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
             else:
                 self.log.warn('Wrong format for sharding upper')
             info['sharding.upper'] = sharding_upper
+            if M2_PROP_SHARDING_MASTER in sys:
+                info['sharding.master'] = sys[M2_PROP_SHARDING_MASTER]
+            if M2_PROP_SHARDING_QUEUE in sys:
+                info['sharding.queue'] = sys[M2_PROP_SHARDING_QUEUE]
 
         for k in ('stats.page_count', 'stats.freelist_count',
                   'stats.page_size'):

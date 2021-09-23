@@ -194,6 +194,10 @@ M2_PROP_SHARDING_ROOT = 'sys.m2.sharding.root'
 M2_PROP_SHARDING_LOWER = 'sys.m2.sharding.lower'
 # Upper for the shard container.
 M2_PROP_SHARDING_UPPER = 'sys.m2.sharding.upper'
+# Master used during sharding.
+M2_PROP_SHARDING_MASTER = 'sys.m2.sharding.master'
+# Queue used to save all writes during sharding.
+M2_PROP_SHARDING_QUEUE = 'sys.m2.sharding.queue'
 # Name of the default storage policy for the container.
 M2_PROP_STORAGE_POLICY = 'sys.m2.policy.storage'
 # Total number of bytes of objects held by the container.
