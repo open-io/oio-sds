@@ -2716,8 +2716,6 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 			sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_QUEUE, queue_url);
 			m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
-			if (!err)
-				m2b_add_modified_container(m2b, sq3);
 		}
 
 		if (!err && out_properties) {
@@ -2825,8 +2823,6 @@ meta2_backend_lock_sharding(struct meta2_backend_s *m2b,
 				sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_MASTER);
 				sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_QUEUE);
 				err = sqlx_transaction_end(repctx, err);
-				if (!err)
-					m2b_add_modified_container(m2b, sq3);
 			}
 			if (!err) {
 				if (sharding_timestamp) {
@@ -2970,7 +2966,7 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 	err = sqlx_transaction_end(repctx, err);
 
 close:
-	if (!err) {
+	if (!err && !(*truncated)) {
 		m2b_add_modified_container(m2b, sq3);
 	}
 	m2b_close(sq3, url);
@@ -3072,8 +3068,6 @@ meta2_backend_abort_sharding(struct meta2_backend_s *m2b, struct oio_url_s *url)
 	err = m2b_open_with_args(m2b, url, &args, &sq3);
 	if (!err) {
 		err = _meta2_abort_sharding(sq3, url);
-		if (!err)
-			m2b_add_modified_container(m2b, sq3);
 		m2b_close(sq3, url);
 	}
 
