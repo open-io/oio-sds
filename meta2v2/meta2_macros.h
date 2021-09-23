@@ -213,11 +213,14 @@ enum m2v2_destroy_flag_e
 /* Sharding ----------------------------------------------------------------- */
 
 enum sharding_state_e {
-	// Container to shard
+	// Common states for container to shard/shrink
 	EXISTING_SHARD_STATE_SAVING_WRITES = 1,
 	EXISTING_SHARD_STATE_LOCKED,
 	EXISTING_SHARD_STATE_SHARDED,
 	EXISTING_SHARD_STATE_ABORTED,
+	// Container to shrink
+	EXISTING_SHARD_STATE_WAITING_MERGE,
+	EXISTING_SHARD_STATE_MERGING,
 
 	// New shard
 	NEW_SHARD_STATE_APPLYING_SAVED_WRITES = 128,
