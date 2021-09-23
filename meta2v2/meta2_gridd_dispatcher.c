@@ -556,6 +556,7 @@ static gridd_filter M2V2_PREPARE_SHARDING_FILTERS[] =
 	meta2_filter_extract_admin,
 	meta2_filter_extract_user_agent,
 	meta2_filter_extract_sharding_info,
+	meta2_filter_extract_prepare_shard_params,
 	meta2_filter_fill_subject,
 	meta2_filter_check_url_cid,
 	meta2_filter_check_backend,

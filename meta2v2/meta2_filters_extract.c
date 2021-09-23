@@ -387,6 +387,18 @@ meta2_filter_extract_find_shards_params(struct gridd_filter_ctx_s *ctx,
 
 
 int
+meta2_filter_extract_prepare_shard_params(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GError *e = NULL;
+	gchar buf[1024];
+	TRACE_FILTER();
+	EXTRACT_OPT(NAME_MSGKEY_SHARDING_ACTION);
+	return FILTER_OK;
+}
+
+
+int
 meta2_filter_extract_sharding_info(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {

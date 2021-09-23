@@ -662,9 +662,15 @@ meta2_filter_action_prepare_sharding(struct gridd_filter_ctx_s *ctx,
 	GError *err = NULL;
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	const char *action = meta2_filter_ctx_get_param(ctx,
+			NAME_MSGKEY_SHARDING_ACTION);
 	gchar **properties = NULL;
 
-	err = meta2_backend_prepare_sharding(m2b, url, &properties);
+	if (g_strcmp0(action, "merge") == 0) {
+		err = meta2_backend_prepare_shrinking(m2b, url, &properties);
+	} else {
+		err = meta2_backend_prepare_sharding(m2b, url, &properties);
+	}
 	if (err) {
 		meta2_filter_ctx_set_error(ctx, err);
 		return FILTER_KO;

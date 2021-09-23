@@ -2735,10 +2735,11 @@ action_m2_container_sharding_prepare(struct req_args_s *args,
 		struct json_object *j UNUSED)
 {
 	GError *err = NULL;
+	const gchar *action = OPT("action");
 	GTree *properties = g_tree_new_full(metautils_strcmp3, NULL, g_free, g_free);
 
 	PACKER_VOID(_pack) {
-		return m2v2_remote_pack_PREPARE_SHARDING(args->url, DL());
+		return m2v2_remote_pack_PREPARE_SHARDING(args->url, action, DL());
 	};
 	err = _resolve_meta2(args, _prefer_master(), _pack,
 			properties, _sharding_properties_extract);

@@ -594,8 +594,21 @@ class ContainerSharding(ProxyClient):
             root_account, root_container, **kwargs)
         return self._check_shards(formatted_shards, are_new=True, **kwargs)
 
-    def _prepare_sharding(self, parent_shard, **kwargs):
-        params = self._make_params(cid=parent_shard['cid'], **kwargs)
+    def _prepare_sharding(self, shard, action=None, **kwargs):
+        """
+        If merge:
+        - Change the sharding state to indicate
+          that the container is being merged.
+        else:
+        - Change the sharding state to indicate
+          that the container is being sharded.
+        - Create a queue to save all write on this container.
+        - Create a copy meta2 database to handle this copy
+          without disturbing the container.
+        """
+        params = self._make_params(cid=shard['cid'], **kwargs)
+        if action:
+            params['action'] = action
         resp, body = self._request('POST', '/prepare', params=params, **kwargs)
         if resp.status != 200:
             raise exceptions.from_response(resp, body)

@@ -505,10 +505,16 @@ m2v2_remote_pack_FIND_SHARDS(struct oio_url_s *url, const gchar* strategy,
 }
 
 GByteArray*
-m2v2_remote_pack_PREPARE_SHARDING(struct oio_url_s *url, gint64 dl)
+m2v2_remote_pack_PREPARE_SHARDING(struct oio_url_s *url, const gchar* action,
+		gint64 dl)
 {
-	return _m2v2_pack_request(NAME_MSGNAME_M2V2_PREPARE_SHARDING, url, NULL,
-			dl);
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_PREPARE_SHARDING, url,
+			NULL, dl);
+	if (action && *action) {
+		metautils_message_add_field_str(msg, NAME_MSGKEY_SHARDING_ACTION,
+				action);
+	}
+	return message_marshall_gba_and_clean(msg);
 }
 
 GByteArray*

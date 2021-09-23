@@ -2767,6 +2767,58 @@ rollback:
 }
 
 GError*
+meta2_backend_prepare_shrinking(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, gchar ***out_properties)
+{
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	const gchar *master = sqlx_get_service_id();
+
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	if (!master || !*master) {
+		return SYSERR("No service ID");
+	}
+
+	gboolean _sharding_filter(const gchar *k) {
+		return g_str_has_prefix(k, M2V2_ADMIN_PREFIX_SHARDING);
+	}
+
+	err = m2b_open(m2b, url,
+			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT, &sq3);
+	if (!err) {
+		gint64 timestamp = oio_ext_real_time();
+
+		gint64 sharding_state = sqlx_admin_get_i64(sq3,
+				M2V2_ADMIN_SHARDING_STATE, 0);
+		if (SHARDING_IN_PROGRESS(sharding_state)) {
+			err = BADREQ("Sharding is already in progress");
+			goto rollback;
+		}
+
+		struct sqlx_repctx_s *repctx = NULL;
+		if (!(err = _transaction_begin(sq3, url, &repctx))) {
+			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
+					EXISTING_SHARD_STATE_WAITING_MERGE);
+			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, timestamp);
+			sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_MASTER, master);
+			m2db_increment_version(sq3);
+			err = sqlx_transaction_end(repctx, err);
+		}
+
+		if (!err && out_properties) {
+			*out_properties = sqlx_admin_get_keyvalues(sq3, _sharding_filter);
+		}
+
+rollback:
+		m2b_close(sq3, url);
+	}
+
+	return err;
+}
+
+GError*
 meta2_backend_update_shard(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gchar **queries)
 {

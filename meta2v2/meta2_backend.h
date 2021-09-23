@@ -236,6 +236,10 @@ GError* meta2_backend_find_shards_with_size(struct meta2_backend_s *m2b,
 GError* meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gchar ***out_properties);
 
+/** Prepare container to be merged */
+GError* meta2_backend_prepare_shrinking(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, gchar ***out_properties);
+
 /** Update new shard with SQL update queries */
 GError* meta2_backend_update_shard(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gchar **queries);
