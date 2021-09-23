@@ -2742,8 +2742,9 @@ action_m2_container_sharding_prepare(struct req_args_s *args,
 	};
 	err = _resolve_meta2(args, _prefer_master(), _pack,
 			properties, _sharding_properties_extract);
-	if (err)
-		return _reply_common_error(args, err);
+	if (err) {
+		goto end;
+	}
 
 	GString *gstr = g_string_sized_new(256);
 	gboolean first = TRUE;
@@ -2760,7 +2761,11 @@ action_m2_container_sharding_prepare(struct req_args_s *args,
 	g_string_append_c(gstr, '{');
 	g_tree_foreach(properties, _func, NULL);
 	g_string_append_c(gstr, '}');
+end:
 	g_tree_destroy(properties);
+	if (err) {
+		return _reply_common_error(args, err);
+	}
 	return _reply_success_json(args, gstr);
 }
 
@@ -2784,11 +2789,11 @@ action_m2_container_sharding_create_shard(struct req_args_s *args,
 	if (err) {
 		return _reply_m2_error(args, err);
 	}
-	gchar *root = g_strdup(json_object_get_string(jroot));
+	gchar *root = (gchar *) json_object_get_string(jroot);
 	gchar *admin_lower = g_strconcat(">", json_object_get_string(jlower), NULL);
 	gchar *admin_upper = g_strconcat("<", json_object_get_string(jupper), NULL);
 	gchar *timestamp = (gchar *) json_object_get_string(jtimestamp);
-	gchar *master = g_strdup(json_object_get_string(jmaster));
+	gchar *master = (gchar *) json_object_get_string(jmaster);
 	gchar *src_suffix = g_strdup_printf("sharding-%s", timestamp);
 	gchar *state = g_strdup_printf("%d", NEW_SHARD_STATE_APPLYING_SAVED_WRITES);
 
@@ -2812,10 +2817,8 @@ action_m2_container_sharding_create_shard(struct req_args_s *args,
 			src_suffix, args->url, shard_properties);
 	oio_url_clean(parent_url);
 
-	g_free(root);
 	g_free(admin_lower);
 	g_free(admin_upper);
-	g_free(master);
 	g_free(src_suffix);
 	g_free(state);
 	return rc;
@@ -2870,7 +2873,7 @@ action_m2_container_sharding_replace(struct req_args_s *args,
 		};
 		err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	}
-	_bean_cleanl2 (beans);
+	_bean_cleanl2(beans);
 	return _reply_m2_error(args, err);
 }
 

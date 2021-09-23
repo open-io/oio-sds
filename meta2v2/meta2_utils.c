@@ -3447,20 +3447,20 @@ m2db_replace_shard_ranges(struct sqlx_sqlite3_s *sq3, GSList *new_shard_ranges)
 	gchar *last_upper = NULL;
 	for (GSList *new_shard_range = new_shard_ranges; new_shard_range;
 			new_shard_range=new_shard_range->next) {
-		gchar *current_lower = SHARD_RANGE_get_lower(
+		gchar *lower = SHARD_RANGE_get_lower(
 				new_shard_range->data)->str;
-		gchar *current_upper = SHARD_RANGE_get_upper(
+		gchar *upper = SHARD_RANGE_get_upper(
 				new_shard_range->data)->str;
-		if (*current_upper && strcmp(current_lower, current_upper) >= 0) {
+		if (*upper && strcmp(lower, upper) >= 0) {
 			return BADREQ("The lower must be lower than the upper");
 		}
-		if (last_upper && strcmp(last_upper, current_lower) != 0) {
+		if (last_upper && strcmp(last_upper, lower) != 0) {
 			return BADREQ("Non-consecutive shard ranges");
 		}
 		if (first_lower == NULL) {
-			first_lower = current_lower;
+			first_lower = lower;
 		}
-		last_upper = current_upper;
+		last_upper = upper;
 	}
 
 	GError *err = NULL;

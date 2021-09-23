@@ -586,6 +586,7 @@ meta2_filter_action_find_shards(struct gridd_filter_ctx_s *ctx,
 			NAME_MSGKEY_SHARDING_STRATEGY);
 	if (!strategy) {
 		err = BADREQ("Missing strategy");
+		_on_bean_ctx_clean(obc);
 		meta2_filter_ctx_set_error(ctx, err);
 		return FILTER_KO;
 	}
@@ -600,8 +601,10 @@ meta2_filter_action_find_shards(struct gridd_filter_ctx_s *ctx,
 		}
 
 		if (err) {
-			if (jstrategy_params)
+			_on_bean_ctx_clean(obc);
+			if (jstrategy_params) {
 				json_object_put(jstrategy_params);
+			}
 			meta2_filter_ctx_set_error(ctx, err);
 			return FILTER_KO;
 		}
@@ -676,6 +679,7 @@ meta2_filter_action_prepare_sharding(struct gridd_filter_ctx_s *ctx,
 			reply->add_header(k, metautils_gba_from_string(*(p+1)));
 			g_free(k);
 		}
+		g_strfreev(properties);
 	}
 	return FILTER_OK;
 }
