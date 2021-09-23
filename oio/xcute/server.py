@@ -1,4 +1,5 @@
 # Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -22,35 +23,11 @@ from werkzeug.wrappers import Response
 
 from oio.common.easy_value import int_value, boolean_value
 from oio.common.exceptions import Forbidden, NotFound
-from oio.common.green import time
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.wsgi import WerkzeugApp
 from oio.xcute.common.backend import XcuteBackend
 from oio.xcute.jobs import JOB_TYPES
-
-
-def access_log(func):
-    @wraps(func)
-    def access_log_wrapper(self, req, *args, **kwargs):
-        code = -1
-        pre = time.time()
-        try:
-            rc = func(self, req, *args, **kwargs)
-            code = rc._status_code
-            return rc
-        except HTTPException as exc:
-            code = exc.code
-            raise
-        finally:
-            post = time.time()
-            # remote method code time size user reqid uri
-            self.logger.info(
-                '%s %s %d %d %s %s %s %s',
-                req.environ['HTTP_HOST'], req.environ['REQUEST_METHOD'],
-                code, int((post - pre) * 1000000), '-', '-', '-',
-                req.environ['RAW_URI'])
-    return access_log_wrapper
 
 
 def handle_exceptions(func):
@@ -107,7 +84,6 @@ class XcuteServer(WerkzeugApp):
         status = self.backend.status()
         return Response(json.dumps(status), mimetype='application/json')
 
-    @access_log
     @handle_exceptions
     def on_job_list(self, req):
         limit = int_value(req.args.get('limit'), None)
@@ -123,7 +99,6 @@ class XcuteServer(WerkzeugApp):
         return Response(
             json.dumps(job_infos), mimetype='application/json')
 
-    @access_log
     @handle_exceptions
     def on_job_create(self, req):
         job_type = req.args.get('type')
@@ -152,14 +127,12 @@ class XcuteServer(WerkzeugApp):
             raise HTTPBadRequest('Missing job ID')
         return job_id
 
-    @access_log
     @handle_exceptions
     def on_job_show(self, req):
         job_id = self._get_job_id(req)
         job_info = self.backend.get_job_info(job_id)
         return Response(json.dumps(job_info), mimetype='application/json')
 
-    @access_log
     @handle_exceptions
     def on_job_pause(self, req):
         job_id = self._get_job_id(req)
@@ -168,7 +141,6 @@ class XcuteServer(WerkzeugApp):
         return Response(
             json.dumps(job_info), mimetype='application/json', status=202)
 
-    @access_log
     @handle_exceptions
     def on_job_resume(self, req):
         job_id = self._get_job_id(req)
@@ -177,7 +149,6 @@ class XcuteServer(WerkzeugApp):
         return Response(
             json.dumps(job_info), mimetype='application/json', status=202)
 
-    @access_log
     @handle_exceptions
     def on_job_update(self, req):
         job_id = self._get_job_id(req)
@@ -199,20 +170,17 @@ class XcuteServer(WerkzeugApp):
         return Response(
             json.dumps(job_config), mimetype='application/json', status=202)
 
-    @access_log
     @handle_exceptions
     def on_job_delete(self, req):
         job_id = self._get_job_id(req)
         self.backend.delete(job_id)
         return Response(status=204)
 
-    @access_log
     @handle_exceptions
     def on_lock_list(self, req):
         locks = self.backend.list_locks()
         return Response(json.dumps(locks), mimetype='application/json')
 
-    @access_log
     @handle_exceptions
     def on_lock_show(self, req):
         lock = req.args.get('lock')
