@@ -569,7 +569,7 @@ reopen:
 
 	gint64 sharding_state = sqlx_admin_get_i64(sq3,
 			M2V2_ADMIN_SHARDING_STATE, 0);
-	if (sharding_state == CONTAINER_TO_SHARD_STATE_LOCKED) {
+	if (sharding_state == EXISTING_SHARD_STATE_LOCKED) {
 		m2b_close(sq3, url);
 		sq3 = NULL;
 		g_thread_yield();
@@ -579,7 +579,7 @@ reopen:
 	if (replimode != M2V2_OPEN_MASTERONLY)
 		goto exit;
 
-	if (sharding_state != CONTAINER_TO_SHARD_STATE_SAVING_WRITES) {
+	if (sharding_state != EXISTING_SHARD_STATE_SAVING_WRITES) {
 		if (sq3->sharding_queue) {
 			// Should never happen
 			GRID_WARN("For sharding, "
@@ -590,7 +590,7 @@ reopen:
 		goto exit;
 	}
 
-	// CONTAINER_TO_SHARD_STATE_SAVING_WRITES
+	// EXISTING_SHARD_STATE_SAVING_WRITES
 	// Check sharding properties
 	gint64 sharding_timestamp = sqlx_admin_get_i64(sq3,
 			M2V2_ADMIN_SHARDING_TIMESTAMP, 0);
@@ -2679,10 +2679,7 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 
 		gint64 sharding_state = sqlx_admin_get_i64(sq3,
 				M2V2_ADMIN_SHARDING_STATE, 0);
-		if (sharding_state
-				&& sharding_state != CONTAINER_TO_SHARD_STATE_SHARDED
-				&& sharding_state != NEW_SHARD_STATE_CLEANED_UP
-				&& sharding_state != CONTAINER_TO_SHARD_STATE_ABORTED) {
+		if (SHARDING_IN_PROGRESS(sharding_state)) {
 			err = BADREQ("Sharding is already in progress");
 			goto rollback;
 		}
@@ -2713,7 +2710,7 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 		struct sqlx_repctx_s *repctx = NULL;
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
-					CONTAINER_TO_SHARD_STATE_SAVING_WRITES);
+					EXISTING_SHARD_STATE_SAVING_WRITES);
 			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, timestamp);
 			sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_MASTER, master);
 			sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_QUEUE, queue_url);
@@ -2812,7 +2809,7 @@ meta2_backend_lock_sharding(struct meta2_backend_s *m2b,
 	if (!err) {
 		gint64 sharding_state = sqlx_admin_get_i64(sq3,
 				M2V2_ADMIN_SHARDING_STATE, 0);
-		if (sharding_state != CONTAINER_TO_SHARD_STATE_SAVING_WRITES) {
+		if (sharding_state != EXISTING_SHARD_STATE_SAVING_WRITES) {
 			err = BADREQ("Container isn't being sharded");
 		}
 		if (!err) {
@@ -2822,7 +2819,7 @@ meta2_backend_lock_sharding(struct meta2_backend_s *m2b,
 			struct sqlx_repctx_s *repctx = NULL;
 			if (!(err = _transaction_begin(sq3, url, &repctx))) {
 				sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
-						CONTAINER_TO_SHARD_STATE_LOCKED);
+						EXISTING_SHARD_STATE_LOCKED);
 				sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP,
 						timestamp);
 				sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_MASTER);
@@ -2876,8 +2873,8 @@ meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 		} else {
 			gint64 sharding_state = sqlx_admin_get_i64(sq3,
 					M2V2_ADMIN_SHARDING_STATE, 0);
-			if (sharding_state != CONTAINER_TO_SHARD_STATE_LOCKED
-					&& sharding_state != CONTAINER_TO_SHARD_STATE_SHARDED) {
+			if (sharding_state != EXISTING_SHARD_STATE_LOCKED
+					&& sharding_state != EXISTING_SHARD_STATE_SHARDED) {
 				err = BADREQ(
 						"Root container isn't ready to replace the shards "
 						"(current state: %"G_GINT64_FORMAT")", sharding_state);
@@ -2894,7 +2891,7 @@ meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 					m2db_set_size(sq3, 0);
 					m2db_set_obj_count(sq3, 0);
 					sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
-							CONTAINER_TO_SHARD_STATE_SHARDED);
+							EXISTING_SHARD_STATE_SHARDED);
 					sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP,
 							timestamp);
 				}
@@ -2937,12 +2934,12 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 		if (sharding_state != NEW_SHARD_STATE_APPLYING_SAVED_WRITES
 				&& sharding_state != NEW_SHARD_STATE_CLEANING_UP
 				&& sharding_state != NEW_SHARD_STATE_CLEANED_UP
-				&& sharding_state != CONTAINER_TO_SHARD_STATE_ABORTED) {
+				&& sharding_state != EXISTING_SHARD_STATE_ABORTED) {
 			err = BADREQ("Shard isn't ready to be cleaned"
 					"(current state: %"G_GINT64_FORMAT")", sharding_state);
 			goto close;
 		}
-	} else if (sharding_state != CONTAINER_TO_SHARD_STATE_SHARDED) {
+	} else if (sharding_state != EXISTING_SHARD_STATE_SHARDED) {
 		err = BADREQ("Root container isn't ready to be cleaned"
 				"(current state: %"G_GINT64_FORMAT")", sharding_state);
 		goto close;
@@ -3022,13 +3019,13 @@ _meta2_abort_sharding(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 
 	gint64 sharding_state = sqlx_admin_get_i64(sq3,
 			M2V2_ADMIN_SHARDING_STATE, 0);
-	if (sharding_state != CONTAINER_TO_SHARD_STATE_SAVING_WRITES
-			&& sharding_state != CONTAINER_TO_SHARD_STATE_LOCKED) {
+	if (sharding_state != EXISTING_SHARD_STATE_SAVING_WRITES
+			&& sharding_state != EXISTING_SHARD_STATE_LOCKED) {
 		err = BADREQ("No sharding in progress");
 		return err;
 	}
 
-	if (sharding_state == CONTAINER_TO_SHARD_STATE_SAVING_WRITES) {
+	if (sharding_state == EXISTING_SHARD_STATE_SAVING_WRITES) {
 		gchar *copy_path = g_strdup_printf("%s.sharding-%"G_GINT64_FORMAT,
 				sq3->path_inline,
 				sqlx_admin_get_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, 0));
@@ -3047,7 +3044,7 @@ _meta2_abort_sharding(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 	struct sqlx_repctx_s *repctx = NULL;
 	if (!(err = _transaction_begin(sq3, url, &repctx))) {
 		sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
-				CONTAINER_TO_SHARD_STATE_ABORTED);
+				EXISTING_SHARD_STATE_ABORTED);
 		sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, timestamp);
 		sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_MASTER);
 		sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_QUEUE);
