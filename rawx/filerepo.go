@@ -1,5 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
+// Copyright (C) 2021 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -428,7 +429,7 @@ func (fr *realFileReader) getAttr(key string, value []byte) (int, error) {
 func (fr *fileRepository) nameToRelPath(name string) string {
 	sb := strings.Builder{}
 	for i := 0; i < fr.hashDepth; i++ {
-		start := i * fr.hashDepth
+		start := i * fr.hashWidth
 		sb.WriteString(name[start : start+fr.hashWidth])
 		sb.WriteRune('/')
 	}
