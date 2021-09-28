@@ -1,4 +1,4 @@
-# Copyright (C) 2017-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2017-2020 OpenIO SAS, as part of OpenIO SDS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public

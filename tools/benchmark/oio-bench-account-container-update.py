@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 # Copyright (C) 2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as

@@ -27,6 +27,3 @@ chunks_per_second = 30
 
 # Autocreate a new entry
 autocreate = true
-
-# oio-blob-converter configuration
-# convert_chunks = False

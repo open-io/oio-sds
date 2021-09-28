@@ -1,5 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
+// Copyright (C) 2021 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -98,7 +99,6 @@ var deprecatedOpts = map[string]string{
 	"grid_buffer_size":      "buffer_size",
 	"grid_fadvise_upload":   "fadvise_upload",
 	"grid_fadvise_download": "fadvise_download",
-
 }
 
 // readConfig -- fetch options from conf file and remap their name

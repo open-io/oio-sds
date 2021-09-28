@@ -4,8 +4,13 @@ jobs:
   - job: Run fast tests
     steps:
 
-      - name: Checkout application
-        checkout: '{{ .cds.workspace }}'
+      - gitClone:
+          branch: '{{ .git.branch }}'
+          commit: '{{ .git.hash }}'
+          depth: "false"
+          directory: '{{ .cds.workspace }}'
+          privateKey: proj-ssh-openio
+          url: '{{ .git.url }}'
 
       - name: Install dependencies
         script: |+

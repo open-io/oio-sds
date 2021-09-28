@@ -1,5 +1,5 @@
 /*
-OpenIO SDS metautils
+OpenIO SDS core library
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
 Copyright (C) 2021 OVH SAS
