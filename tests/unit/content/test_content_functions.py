@@ -1,4 +1,4 @@
-# Copyright (C) 2018 OpenIO SAS, as part of
+# Copyright (C) 2018-2019 OpenIO SAS, as part of
 # OpenIO Software Defined Storage
 #
 # This library is free software; you can redistribute it and/or
