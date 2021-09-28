@@ -518,6 +518,14 @@ m2v2_remote_pack_PREPARE_SHARDING(struct oio_url_s *url, const gchar* action,
 }
 
 GByteArray*
+m2v2_remote_pack_MERGE_SHARDING(struct oio_url_s *url, GSList *beans, gint64 dl)
+{
+	GByteArray *body = bean_sequence_marshall(beans);
+	return _m2v2_pack_request(NAME_MSGNAME_M2V2_MERGE_SHARDING, url, body,
+			dl);
+}
+
+GByteArray*
 m2v2_remote_pack_UPDATE_SHARD(struct oio_url_s *url, gchar **queries, gint64 dl)
 {
 	GByteArray *body = g_bytes_unref_to_array(

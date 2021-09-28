@@ -305,6 +305,11 @@ GError* m2db_find_shard_ranges(struct sqlx_sqlite3_s *sq3, gint64 threshold,
 		GError* (*get_shard_size)(gint64, guint, gint64*),
 		m2_onbean_cb cb, gpointer u0);
 
+GError* m2db_merge_shards(struct sqlx_sqlite3_s *sq3,
+		struct sqlx_sqlite3_s *to_merge_sq3, gboolean *truncated);
+
+GError* m2db_remove_merged_entries(struct sqlx_sqlite3_s *sq3);
+
 GError* m2db_replace_shard_ranges(struct sqlx_sqlite3_s *sq3,
 		GSList *new_shard_ranges);
 

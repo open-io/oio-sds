@@ -240,6 +240,10 @@ GError* meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 GError* meta2_backend_prepare_shrinking(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gchar ***out_properties);
 
+/** Merge current shard with the given shard */
+GError* meta2_backend_merge_sharding(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, GSList *beans, gboolean *truncated);
+
 /** Update new shard with SQL update queries */
 GError* meta2_backend_update_shard(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gchar **queries);

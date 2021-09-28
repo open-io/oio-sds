@@ -58,7 +58,8 @@ enum m2v2_open_type_e
 #define M2V2_OPEN_REPLIMODE 0x00F
 
 	M2V2_OPEN_AUTOCREATE  = 0x010,
-	M2V2_OPEN_URGENT      = 0x020,
+	M2V2_OPEN_NOREFCHECK  = 0x020,
+	M2V2_OPEN_URGENT      = 0x040,
 
 	// Set an OR'ed combination of the following flags to require
 	// a check on the container's status during the open phase.
@@ -82,7 +83,7 @@ struct m2_prepare_data
 	gchar storage_policy[LIMIT_LENGTH_STGPOLICY];
 };
 
-gchar* SHARED_KEYS[6] = {
+gchar* SHARED_KEYS[3] = {
 	M2V2_ADMIN_BUCKET_NAME,
 	M2V2_ADMIN_VERSIONING_POLICY,
 	NULL
@@ -343,6 +344,8 @@ m2_to_sqlx(enum m2v2_open_type_e t)
 
 	if (t & M2V2_OPEN_AUTOCREATE)
 		result |= SQLX_OPEN_CREATE;
+	if (t & M2V2_OPEN_NOREFCHECK)
+		result |= SQLX_OPEN_NOREFCHECK;
 	if (t & M2V2_OPEN_URGENT)
 		result |= SQLX_OPEN_URGENT;
 
@@ -500,7 +503,8 @@ m2b_destroy(struct sqlx_sqlite3_s *sq3)
 
 static GError *
 m2b_open_with_args(struct meta2_backend_s *m2, struct oio_url_s *url,
-		struct m2_open_args_s *open_args, struct sqlx_sqlite3_s **result)
+		const char *suffix, struct m2_open_args_s *open_args,
+		struct sqlx_sqlite3_s **result)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -511,7 +515,7 @@ m2b_open_with_args(struct meta2_backend_s *m2, struct oio_url_s *url,
 	EXTRA_ASSERT(m2->repo != NULL);
 
 	struct sqlx_name_inline_s n0;
-	sqlx_inline_name_fill(&n0, url, NAME_SRVTYPE_META2, 1, NULL);
+	sqlx_inline_name_fill(&n0, url, NAME_SRVTYPE_META2, 1, suffix);
 	NAME2CONST(n,n0);
 	enum m2v2_open_type_e how = open_args->how;
 
@@ -570,7 +574,7 @@ m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
 	enum m2v2_open_type_e replimode = how & M2V2_OPEN_REPLIMODE;
 
 reopen:
-	err = m2b_open_with_args(m2, url, &args, &sq3);
+	err = m2b_open_with_args(m2, url, NULL, &args, &sq3);
 	if (err)
 		return err;
 
@@ -1129,7 +1133,7 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 		(params->local ? M2V2_OPEN_LOCAL : M2V2_OPEN_MASTERONLY);
 	open_args.peers = params->peers;
 
-	err = m2b_open_with_args(m2, url, &open_args, &sq3);
+	err = m2b_open_with_args(m2, url, NULL, &open_args, &sq3);
 	EXTRA_ASSERT((sq3 != NULL) ^ (err != NULL));
 	if (err)
 		return err;
@@ -2818,6 +2822,217 @@ rollback:
 	return err;
 }
 
+static GError*
+_get_shard_url_and_suffix(const gchar *namespace,
+		struct bean_SHARD_RANGE_s *shard, struct oio_url_s **result_url,
+		gchar **result_suffix)
+{
+	EXTRA_ASSERT(shard != NULL);
+
+	GError *err = NULL;
+	struct oio_url_s *url = NULL;
+	json_object *jbody = NULL;
+
+	url = oio_url_empty();
+	oio_url_set(url, OIOURL_NS, namespace);
+	gchar *cid = g_string_free(metautils_gba_to_hexgstr(NULL,
+			SHARD_RANGE_get_cid(shard)), FALSE);
+	oio_url_set(url, OIOURL_HEXID, cid);
+	g_free(cid);
+
+	GString *metadata = SHARD_RANGE_get_metadata(shard);
+	if (!metadata) {
+		err = BADREQ("No timestamp to find the shard's copy");
+		goto end;
+	}
+	err = JSON_parse_buffer((guint8 *) metadata->str, metadata->len, &jbody);
+	if (err) {
+		goto end;
+	}
+	struct json_object *jtimestamp = NULL;
+	struct oio_ext_json_mapping_s mapping[] = {
+		{"timestamp", &jtimestamp, json_type_int, 1},
+		{NULL,        NULL,        0,             0}
+	};
+	err = oio_ext_extract_json(jbody, mapping);
+	if (err) {
+		goto end;
+	}
+end:
+	if (err) {
+		oio_url_clean(url);
+	} else {
+		*result_url = url;
+		*result_suffix = g_strdup_printf("sharding-%s",
+				json_object_get_string(jtimestamp));
+	}
+	if (jbody) {
+		json_object_put(jbody);
+	}
+	return err;
+}
+
+static GError*
+_m2b_open_shard_local_copy(struct meta2_backend_s *m2, struct oio_url_s *url,
+		const char *suffix, const char *expected_lower,
+		const char *expected_upper, struct sqlx_sqlite3_s **result)
+{
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(result != NULL);
+	EXTRA_ASSERT(suffix != NULL);
+	EXTRA_ASSERT(m2 != NULL);
+	EXTRA_ASSERT(m2->repo != NULL);
+
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	gchar *lower = NULL, *upper = NULL;
+
+	struct m2_open_args_s args = {
+			M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK|M2V2_OPEN_URGENT,
+			NULL
+		};
+	err = m2b_open_with_args(m2, url, suffix, &args, &sq3);
+	if (err) {
+		return err;
+	}
+	err = m2db_get_sharding_lower(sq3, &lower);
+	if (err) {
+		goto end;
+	}
+	err = m2db_get_sharding_upper(sq3, &upper);
+	if (err) {
+		goto end;
+	}
+	if (strcmp(expected_lower, lower) != 0) {
+		err = BADREQ("Copy's lower mismatch");
+		goto end;
+	}
+	if (strcmp(expected_upper, upper) != 0) {
+		err = BADREQ("Copy's upper mismatch");
+		goto end;
+	}
+
+end:
+	if (err) {
+		m2b_close(sq3, url);
+	} else {
+		*result = sq3;
+	}
+	g_free(lower);
+	g_free(upper);
+	return err;
+}
+
+GError*
+meta2_backend_merge_sharding(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, GSList *beans, gboolean *truncated)
+{
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	GError *err = NULL;
+	struct oio_url_s *to_merge_url = NULL;
+	gchar *to_merge_suffix = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL, *to_merge_sq3 = NULL;
+	gchar *shard_lower = NULL, *shard_upper = NULL;
+
+	if (g_slist_length(beans) != 1) {
+		err = BADREQ("No shard");
+		goto end;
+	}
+	if (DESCR(beans->data) != &descr_struct_SHARD_RANGE) {
+		err = BADREQ("Invalid type: not a shard range");
+		goto end;
+	}
+	err = _get_shard_url_and_suffix(oio_url_get(url, OIOURL_NS), beans->data,
+			&to_merge_url, &to_merge_suffix);
+	if (err) {
+		g_prefix_error(&err, "Failed to find the copy's suffix: ");
+		goto close;
+	}
+	shard_lower = SHARD_RANGE_get_lower(beans->data)->str;
+	shard_upper = SHARD_RANGE_get_upper(beans->data)->str;
+
+	// Open the meta2 database ignoring the sharding lock
+	struct m2_open_args_s args = {
+			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT,
+			NULL
+		};
+	err = m2b_open_with_args(m2b, url, NULL, &args, &sq3);
+	if (!err) {
+		gint64 sharding_state = sqlx_admin_get_i64(sq3,
+				M2V2_ADMIN_SHARDING_STATE, 0);
+		if (sharding_state != EXISTING_SHARD_STATE_WAITING_MERGE
+				&& sharding_state != EXISTING_SHARD_STATE_MERGING) {
+			err = BADREQ(
+					"Root container isn't ready to merge the shards "
+					"(current state: %"G_GINT64_FORMAT")", sharding_state);
+			goto close;
+		}
+
+		err = _m2b_open_shard_local_copy(m2b, to_merge_url, to_merge_suffix,
+				shard_lower, shard_upper, &to_merge_sq3);
+		if (err) {
+			g_prefix_error(&err, "Failed to open the copy: ");
+			goto close;
+		}
+
+		gint64 timestamp = oio_ext_real_time();
+		struct sqlx_repctx_s *repctx = NULL, *to_merge_repctx = NULL;
+		if (!(err = _transaction_begin(sq3, url, &repctx))) {
+			err = m2db_merge_shards(sq3, to_merge_sq3, truncated);
+			if (!err) {
+				// Update the state
+				if (*truncated) {
+					sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
+							EXISTING_SHARD_STATE_MERGING);
+				} else {
+					sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
+							NEW_SHARD_STATE_APPLYING_SAVED_WRITES);
+					// Clean up information that is no longer useful
+					sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_MASTER);
+				}
+				sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP,
+						timestamp);
+				m2db_increment_version(sq3);
+			}
+			err = sqlx_transaction_end(repctx, err);
+			/* Commit/rollback before detaching the database toMerge,
+			 * otherwise the database is locked. */
+			GError *err2 = _db_execute(sq3, "DETACH DATABASE 'toMerge'",
+					-1, NULL);
+			if (err2) {
+				GRID_WARN("Failed to detach database %s: (%d) %s",
+						to_merge_sq3->path_inline, err2->code, err2->message);
+				g_error_free(err2);
+			}
+		}
+		if (err) {
+			g_prefix_error(&err, "Failed to merge shards: ");
+			goto close;
+		}
+
+		/* Remove the merged entries to simplify the SQL query
+		   to merge the remaining entries. */
+		if (!(err = _transaction_begin(to_merge_sq3, to_merge_url,
+				&to_merge_repctx))) {
+			m2db_remove_merged_entries(to_merge_sq3);
+			err = sqlx_transaction_end(to_merge_repctx, err);
+		}
+		if (err) {
+			g_prefix_error(&err, "Failed to remove merged entries: ");
+			goto close;
+		}
+close:
+		m2b_close(to_merge_sq3, to_merge_url);
+		m2b_close(sq3, url);
+	}
+end:
+	oio_url_clean(to_merge_url);
+	g_free(to_merge_suffix);
+	return err;
+}
+
 GError*
 meta2_backend_update_shard(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gchar **queries)
@@ -2933,7 +3148,7 @@ meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT,
 			NULL
 		};
-	err = m2b_open_with_args(m2b, url, &args, &sq3);
+	err = m2b_open_with_args(m2b, url, NULL, &args, &sq3);
 	if (!err) {
 		if (sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
 			err = BADREQ("Container is a shard");
@@ -3132,7 +3347,7 @@ meta2_backend_abort_sharding(struct meta2_backend_s *m2b, struct oio_url_s *url)
 			M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED|M2V2_OPEN_URGENT,
 			NULL
 		};
-	err = m2b_open_with_args(m2b, url, &args, &sq3);
+	err = m2b_open_with_args(m2b, url, NULL, &args, &sq3);
 	if (!err) {
 		err = _meta2_abort_sharding(sq3, url);
 		m2b_close(sq3, url);

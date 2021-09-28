@@ -50,6 +50,14 @@ _tree_compare_int(gconstpointer a, gconstpointer b)
 #define RANGE_ERROR(v) ((v) == G_MININT64 || (v) == G_MAXINT64)
 #define STRTOLL_ERROR(v,s,e) (FORMAT_ERROR(v,s,e) || RANGE_ERROR(v))
 
+const struct bean_descriptor_s *TABLE_TO_MERGE[5] = {
+	&descr_struct_ALIASES,
+	&descr_struct_CONTENTS_HEADERS,
+	&descr_struct_CHUNKS,
+	&descr_struct_PROPERTIES,
+	NULL
+};
+
 /* Tell if a bean represents a property and has a NULL or empty value. */
 static gboolean
 _is_empty_prop(gpointer bean)
@@ -3423,6 +3431,120 @@ end:
 	g_free(lower);
 	g_free(max_upper);
 	_bean_cleanv2(shard_ranges);
+	return err;
+}
+
+GError*
+m2db_merge_shards(struct sqlx_sqlite3_s *sq3,
+		struct sqlx_sqlite3_s *to_merge_sq3, gboolean *truncated)
+{
+	GError *err = NULL;
+	gchar *current_lower = NULL, *current_upper = NULL;
+	gchar *to_merge_lower = NULL, *to_merge_upper = NULL;
+	gchar *new_lower = NULL, *new_upper = NULL;
+	gchar *sql = NULL;
+	gint64 max_entries_merged = meta2_sharding_max_entries_merged;
+
+	current_lower = sqlx_admin_get_str(sq3, M2V2_ADMIN_SHARDING_LOWER);
+	if (!current_lower || *current_lower != '>') {
+		err = BADREQ("Missing current lower");
+		goto end;
+	}
+	current_upper = sqlx_admin_get_str(sq3, M2V2_ADMIN_SHARDING_UPPER);
+	if (!current_upper || *current_upper != '<') {
+		err = BADREQ("Missing current upper");
+		goto end;
+	}
+	to_merge_lower = sqlx_admin_get_str(to_merge_sq3,
+			M2V2_ADMIN_SHARDING_LOWER);
+	if (!to_merge_lower || *to_merge_lower != '>') {
+		err = BADREQ("Missing shard to merge's lower");
+		goto end;
+	}
+	to_merge_upper = sqlx_admin_get_str(to_merge_sq3,
+			M2V2_ADMIN_SHARDING_UPPER);
+	if (!to_merge_upper || *to_merge_upper != '<') {
+		err = BADREQ("Missing shard to merge's upper");
+		goto end;
+	}
+
+	if (current_lower[1]
+			&& strcmp(current_lower + 1, to_merge_upper + 1) == 0) {
+		new_lower = to_merge_lower;
+		new_upper = current_upper;
+	} else if (current_upper[1]
+			&& strcmp(current_upper + 1, to_merge_lower + 1) == 0) {
+		new_lower = current_lower;
+		new_upper = to_merge_upper;
+	} else {
+		err = BADREQ("Shard to merge and current shard must be consecutive");
+		goto end;
+	}
+
+	sql = g_strdup_printf("ATTACH DATABASE '%s' AS toMerge",
+			to_merge_sq3->path_inline);
+	err = _db_execute(sq3, sql, strlen(sql), NULL);
+	g_free(sql);
+	if (err) {
+		goto end;
+	}
+	for (const struct bean_descriptor_s **table=TABLE_TO_MERGE; *table;
+			table+=1) {
+		sql = g_strdup_printf(
+				"INSERT INTO %s SELECT * FROM toMerge.%s ORDER BY ROWID LIMIT %"G_GINT64_FORMAT,
+				(*table)->sql_name, (*table)->sql_name,
+				max_entries_merged);
+		err = _db_execute(sq3, sql, strlen(sql), NULL);
+		g_free(sql);
+		if (err) {
+			goto end;
+		}
+
+		max_entries_merged -= sqlite3_changes(sq3->db);
+		if (max_entries_merged <= 0) {
+			break;
+		}
+	}
+
+end:
+	if (!err) {
+		*truncated = max_entries_merged <= 0;
+		if (!(*truncated)) {
+			sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_LOWER, new_lower);
+			sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_UPPER, new_upper);
+		}
+	}
+	g_free(current_lower);
+	g_free(current_upper);
+	g_free(to_merge_lower);
+	g_free(to_merge_upper);
+	return err;
+}
+
+GError*
+m2db_remove_merged_entries(struct sqlx_sqlite3_s *sq3)
+{
+	GError *err = NULL;
+	gchar *clause = NULL;
+	gint64 max_entries_merged = meta2_sharding_max_entries_merged;
+
+	for (const struct bean_descriptor_s **table=TABLE_TO_MERGE; *table;
+			table+=1) {
+		clause = g_strdup_printf("1 ORDER BY ROWID LIMIT %"G_GINT64_FORMAT,
+				max_entries_merged);
+		err = _db_delete(*table, sq3, clause, NULL);
+		g_free(clause);
+		if (err) {
+			goto end;
+		}
+
+		max_entries_merged -= sqlite3_changes(sq3->db);
+		if (max_entries_merged <= 0) {
+			break;
+		}
+	}
+
+end:
 	return err;
 }
 

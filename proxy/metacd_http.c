@@ -1092,6 +1092,7 @@ configure_request_handlers (void)
 	SET("/$NS/container/sharding/find/#GET", action_container_sharding_find);
 	SET("/$NS/container/sharding/prepare/#POST", action_container_sharding_prepare);
 	SET("/$NS/container/sharding/create_shard/#POST", action_container_sharding_create_shard);
+	SET("/$NS/container/sharding/merge/#POST", action_container_sharding_merge);
 	SET("/$NS/container/sharding/update_shard/#POST", action_container_sharding_update_shard);
 	SET("/$NS/container/sharding/lock/#POST", action_container_sharding_lock);
 	SET("/$NS/container/sharding/replace/#POST", action_container_sharding_replace);

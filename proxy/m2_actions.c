@@ -2826,6 +2826,32 @@ action_m2_container_sharding_create_shard(struct req_args_s *args,
 }
 
 static enum http_rc_e
+action_m2_container_sharding_merge(struct req_args_s *args,
+		struct json_object *j)
+{
+	GError *err = NULL;
+	GSList *beans = NULL;
+	gboolean truncated = FALSE;
+
+	err = _load_simplified_shard_ranges(j, &beans);
+	if (!err) {
+		if (g_slist_length(beans) != 1) {
+			err = BADREQ("Only one shard can be merged");
+		} else {
+			PACKER_VOID(_pack) {
+				return m2v2_remote_pack_MERGE_SHARDING(args->url, beans, DL());
+			};
+			err = _resolve_meta2(args, _prefer_master(), _pack, &truncated,
+					m2v2_boolean_truncated_extract);
+		}
+	}
+	_bean_cleanl2(beans);
+	args->rp->add_header(PROXYD_HEADER_PREFIX "truncated",
+			g_strdup(truncated ? "true" : "false"));
+	return _reply_m2_error(args, err);
+}
+
+static enum http_rc_e
 action_m2_container_sharding_update_shard(struct req_args_s *args,
 		struct json_object *j UNUSED)
 {
@@ -2869,10 +2895,15 @@ action_m2_container_sharding_replace(struct req_args_s *args,
 
 	err = _load_simplified_shard_ranges(j, &beans);
 	if (!err) {
-		PACKER_VOID(_pack) {
-			return m2v2_remote_pack_REPLACE_SHARDING(args->url, beans, DL());
-		};
-		err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
+		if (!g_slist_length(beans)) {
+			err = BADREQ("No shard");
+		} else {
+			PACKER_VOID(_pack) {
+				return m2v2_remote_pack_REPLACE_SHARDING(args->url, beans,
+						DL());
+			};
+			err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
+		}
 	}
 	_bean_cleanl2(beans);
 	return _reply_m2_error(args, err);
@@ -3099,6 +3130,44 @@ enum http_rc_e
 action_container_sharding_create_shard(struct req_args_s *args)
 {
 	return rest_action(args, action_m2_container_sharding_create_shard);
+}
+
+// SHARDING{{
+// POST /v3.0/{NS}/container/sharding/merge?acct={account}&ref={container}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Merge shard with the local copy of the specified shard.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/container/sharding/merge?acct=my_account&ref=mycontainer HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.58.0
+//    Accept: */*
+//    Content-Length: 110
+//    Content-Type: application/x-www-form-urlencoded
+//
+//    {
+//      "cid": "594C8B26EA13E562391013AE6FC360C2C1691F314164DD457EF583B16712E360",
+//      "lower": "",
+//      "upper": "shard",
+//      "metadata": {
+//        "root": "594C8B26EA13E562391013AE6FC360C2C1691F314164DD457EF583B16712E360",
+//        "timestamp": 1623946933424828
+//      }
+//    }
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}SHARDING
+enum http_rc_e
+action_container_sharding_merge(struct req_args_s *args)
+{
+	return rest_action(args, action_m2_container_sharding_merge);
 }
 
 // SHARDING{{

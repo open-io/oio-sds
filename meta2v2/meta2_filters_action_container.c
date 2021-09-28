@@ -691,6 +691,25 @@ meta2_filter_action_prepare_sharding(struct gridd_filter_ctx_s *ctx,
 }
 
 int
+meta2_filter_action_merge_sharding(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply UNUSED)
+{
+	GError *err = NULL;
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
+	gboolean truncated = FALSE;
+
+	err = meta2_backend_merge_sharding(m2b, url, beans, &truncated);
+	if (err) {
+		meta2_filter_ctx_set_error(ctx, err);
+		return FILTER_KO;
+	}
+	S3_RESPONSE_HEADER(NAME_MSGKEY_TRUNCATED, truncated ? "true" : "false");
+	return FILTER_OK;
+}
+
+int
 meta2_filter_action_update_shard(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
