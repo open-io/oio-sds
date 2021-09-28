@@ -278,44 +278,40 @@ m2db_set_shard_count(struct sqlx_sqlite3_s *sq3, gint64 count)
 	sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARD_COUNT, (count>0)?count:0);
 }
 
-gchar*
-m2db_get_sharding_lower(struct sqlx_sqlite3_s *sq3, GError **err)
+GError *
+m2db_get_sharding_lower(struct sqlx_sqlite3_s *sq3, gchar **result)
 {
-	EXTRA_ASSERT(err != NULL);
+	EXTRA_ASSERT(result != NULL);
 
-	gchar *lower = NULL;
 	gchar *admin_lower = sqlx_admin_get_str(sq3, M2V2_ADMIN_SHARDING_LOWER);
 	if (!admin_lower) {
-		*err = SYSERR("No lower for the shard");
-		return NULL;
+		return SYSERR("No lower for the shard");
 	}
 	if (*admin_lower != '>') {
-		*err = SYSERR("Wrong lower prefix for the shard");
-	} else {
-		lower = g_strdup(admin_lower + 1);
+		g_free(admin_lower);
+		return SYSERR("Wrong lower prefix for the shard");
 	}
+	*result = g_strdup(admin_lower + 1);
 	g_free(admin_lower);
-	return lower;
+	return NULL;
 }
 
-gchar*
-m2db_get_sharding_upper(struct sqlx_sqlite3_s *sq3, GError **err)
+GError *
+m2db_get_sharding_upper(struct sqlx_sqlite3_s *sq3, gchar **result)
 {
-	EXTRA_ASSERT(err != NULL);
+	EXTRA_ASSERT(result != NULL);
 
-	gchar *upper = NULL;
 	gchar *admin_upper = sqlx_admin_get_str(sq3, M2V2_ADMIN_SHARDING_UPPER);
 	if (!admin_upper) {
-		*err = SYSERR("No upper for the shard");
-		return NULL;
+		return SYSERR("No upper for the shard");
 	}
 	if (*admin_upper != '<') {
-		*err = SYSERR("Wrong upper prefix for the shard");
-	} else {
-		upper = g_strdup(admin_upper + 1);
+		g_free(admin_upper);
+		return SYSERR("Wrong upper prefix for the shard");
 	}
+	*result = g_strdup(admin_upper + 1);
 	g_free(admin_upper);
-	return upper;
+	return NULL;
 }
 
 /* GET ---------------------------------------------------------------------- */
@@ -3305,11 +3301,13 @@ m2db_find_shard_ranges(struct sqlx_sqlite3_s *sq3, gint64 threshold,
 	GPtrArray *shard_ranges = g_ptr_array_new();
 
 	if (sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
-		if (!err) {
-			lower = m2db_get_sharding_lower(sq3, &err);
+		err = m2db_get_sharding_lower(sq3, &lower);
+		if (err) {
+			goto end;
 		}
-		if (!err) {
-			max_upper = m2db_get_sharding_upper(sq3, &err);
+		err = m2db_get_sharding_upper(sq3, &max_upper);
+		if (err) {
+			goto end;
 		}
 	} else {
 		lower = g_strdup("");
@@ -3542,11 +3540,11 @@ m2db_check_shard_range(struct sqlx_sqlite3_s *sq3, const gchar *path)
 	gchar *lower = NULL;
 	gchar *upper = NULL;
 
-	lower = m2db_get_sharding_lower(sq3, &err);
+	err = m2db_get_sharding_lower(sq3, &lower);
 	if (err) {
 		goto end;
 	}
-	upper = m2db_get_sharding_upper(sq3, &err);
+	err = m2db_get_sharding_upper(sq3, &upper);
 	if (err) {
 		goto end;
 	}
@@ -3575,11 +3573,13 @@ m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gboolean *truncated)
 	gchar *upper = NULL;
 	gint64 max_entries_cleaned = meta2_sharding_max_entries_cleaned;
 
-	if (!err) {
-		lower = m2db_get_sharding_lower(sq3, &err);
+	err = m2db_get_sharding_lower(sq3, &lower);
+	if (err) {
+		goto end;
 	}
-	if (!err) {
-		upper = m2db_get_sharding_upper(sq3, &err);
+	err = m2db_get_sharding_upper(sq3, &upper);
+	if (err) {
+		goto end;
 	}
 
 	// Remove aliases out of range

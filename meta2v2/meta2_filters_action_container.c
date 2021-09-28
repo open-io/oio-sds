@@ -260,8 +260,8 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 			return;
 		}
 
-		GError *err = NULL;
-		gchar *shard_upper = m2db_get_sharding_upper(sq3, &err);
+		gchar *shard_upper = NULL;
+		GError *err = m2db_get_sharding_upper(sq3, &shard_upper);
 		if (err) {
 			GRID_WARN("Failed to get shard upper: (%d) %s",
 					err->code, err->message);

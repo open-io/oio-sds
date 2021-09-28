@@ -145,9 +145,9 @@ void m2db_increment_version(struct sqlx_sqlite3_s *sq3);
 
 void m2db_set_container_name(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url);
 
-gchar* m2db_get_sharding_lower(struct sqlx_sqlite3_s *sq3, GError **err);
+GError* m2db_get_sharding_lower(struct sqlx_sqlite3_s *sq3, gchar **result);
 
-gchar* m2db_get_sharding_upper(struct sqlx_sqlite3_s *sq3, GError **err);
+GError* m2db_get_sharding_upper(struct sqlx_sqlite3_s *sq3, gchar **result);
 
 /* Get just the ALIAS, with version allowed */
 GError* m2db_get_alias1(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,

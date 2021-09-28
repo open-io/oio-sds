@@ -1326,10 +1326,10 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 				err = SYSERR("Not a shard");
 			}
 			if (!err) {
-				shard_lower = m2db_get_sharding_lower(sq3, &err);
+				err = m2db_get_sharding_lower(sq3, &shard_lower);
 			}
 			if (!err) {
-				shard_upper = m2db_get_sharding_upper(sq3, &err);
+				err = m2db_get_sharding_upper(sq3, &shard_upper);
 			}
 			if (!err) {
 				// Update the markers according to the shard range
