@@ -2677,6 +2677,12 @@ meta2_backend_prepare_sharding(struct meta2_backend_s *m2b,
 		gchar *copy_path = NULL;
 		struct beanstalkd_s *beanstalkd = NULL;
 
+		if (!sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)
+				&& m2db_get_shard_count(sq3)) {
+			err = BADREQ("Container is a root container");
+			goto rollback;
+		}
+
 		gint64 sharding_state = sqlx_admin_get_i64(sq3,
 				M2V2_ADMIN_SHARDING_STATE, 0);
 		if (SHARDING_IN_PROGRESS(sharding_state)) {
