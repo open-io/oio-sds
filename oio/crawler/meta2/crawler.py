@@ -17,7 +17,6 @@
 from oio.common.constants import STRLEN_REFERENCEID
 from oio.crawler.common.crawler import Crawler, CrawlerWorker
 from oio.crawler.meta2.meta2db import Meta2DB
-from oio.crawler.meta2.loader import loadpipeline
 
 
 class Meta2Worker(CrawlerWorker):
@@ -29,10 +28,6 @@ class Meta2Worker(CrawlerWorker):
 
     def __init__(self, conf, volume_path, logger=None, api=None):
         super(Meta2Worker, self).__init__(conf, volume_path)
-
-    def _init_pipeline(self):
-        self.pipeline = loadpipeline(self.conf.get('conf_file'),
-                                     global_conf=self.conf, app=self)
 
     def cb(self, status, msg):
         if 500 <= status <= 599:

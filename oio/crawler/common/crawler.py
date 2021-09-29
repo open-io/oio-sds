@@ -23,6 +23,13 @@ from oio.common.exceptions import ConfigurationException
 from oio.common.green import ratelimit, time, ContextPool
 from oio.common.logger import get_logger
 from oio.common.utils import paths_gen
+from oio.crawler.meta2.loader import loadpipeline as meta2_loadpipeline
+from oio.crawler.rawx.loader import loadpipeline as rawx_loadpipeline
+
+LOAD_PIPELINES = {
+    'rawx': rawx_loadpipeline,
+    'meta2': meta2_loadpipeline
+}
 
 
 class CrawlerWorker(object):
@@ -64,11 +71,8 @@ class CrawlerWorker(object):
         self.app_env['api'] = api or ObjectStorageApi(
             self.namespace, logger=self.logger)
 
-        self._init_pipeline()
-
-    def _init_pipeline(self):
-        self.pipeline = None
-        raise NotImplementedError('_init_pipeline not implemented')
+        self.pipeline = LOAD_PIPELINES[self.SERVICE_TYPE](
+            conf.get('conf_file'), global_conf=self.conf, app=self)
 
     def cb(self, status, msg):
         raise NotImplementedError('cb not implemented')

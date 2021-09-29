@@ -15,7 +15,8 @@
 
 
 from oio.event.consumer import StopServe
-from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBOk, Meta2DBError
+from oio.crawler.rawx.chunk_wrapper import ChunkWrapper, RawxCrawlerError, \
+    RawxCrawlerOk
 
 
 class Handler(object):
@@ -26,21 +27,22 @@ class Handler(object):
         self.conf = conf
         self.logger = app.logger
 
-    def process(self, meta2db):
-        return Meta2DBOk(meta2db=meta2db)
+    def process(self, chunk):
+        return RawxCrawlerOk(chunk=chunk)
 
     def __call__(self, env, cb):
-        meta2db = Meta2DB(env)
+        chunk = ChunkWrapper(env)
         try:
-            res = self.process(meta2db)
+            res = self.process(chunk)
             return res(env, cb)
         except StopServe:
-            self.logger.info('CID %s not handled: the process is stopping',
-                             meta2db.cid)
-            res = Meta2DBError(meta2db=meta2db, body='Process is stopping')
+            self.logger.info('chunk_id=%s not handled: the process is '
+                             'stopping', chunk.chunk_id)
+            res = RawxCrawlerError(chunk=chunk, body='Process is stopping')
         except Exception as err:
-            self.logger.exception('CID %s not handled: %s', meta2db.cid, err)
-            res = Meta2DBError(meta2db=meta2db, body='An error occurred')
+            self.logger.exception('chunk_id=%s not handled: %s',
+                                  chunk.chunk_id, err)
+            res = RawxCrawlerError(chunk=chunk, body='An error occurred')
         return res(env, cb)
 
     def get_stats(self):

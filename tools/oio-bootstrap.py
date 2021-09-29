@@ -348,14 +348,36 @@ hash_width = ${HASH_WIDTH}
 hash_depth = ${HASH_DEPTH}
 
 wait_random_time_before_starting = True
-interval = 30
-report_interval = 5
-chunks_per_second = 30
+interval = 1200
+report_interval = 300
+chunks_per_second = 10
 conscience_cache = 30
 log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE}
+"""
+
+template_rawx_crawler_service = """
+[rawx-crawler]
+namespace = ${NS}
+user = ${USER}
+volume_list = ${RAWX_VOLUMES}
+
+wait_random_time_before_starting = True
+interval = 1200
+report_interval = 300
+scanned_per_second = 10
+log_level = INFO
+log_facility = LOG_LOCAL0
+log_address = /dev/log
+syslog_prefix = OIO,${NS},${SRVTYPE}
+
+[pipeline:main]
+pipeline = checksum
+
+[filter:checksum]
+use = egg:oio#checksum
 """
 
 template_rawx_service = """
@@ -1011,11 +1033,29 @@ Environment=HOME=${HOME}
 WantedBy=${PARENT}
 """
 
+template_systemd_service_rawx_crawler = """
+[Unit]
+Description=[OpenIO] Service rawx crawler ${SRVNUM}
+PartOf=${PARENT}
+OioGroup=${NS},localhost,${SRVTYPE}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}.conf
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=HOME=${HOME}
+
+[Install]
+WantedBy=${PARENT}
+"""
+
 template_systemd_rawx_command_options = \
     '-s OIO,${NS},${SRVTYPE},${SRVNUM} -D FOREGROUND ' \
     '-f ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.httpd.conf'
 
-template_systemd_service_rawx="""
+template_systemd_service_rawx = """
 [Unit]
 Description=[OpenIO] Service rawx ${SRVNUM}
 After=network.target
@@ -2029,6 +2069,25 @@ def generate(options):
             f.write(to_write)
         register_service(env, template_systemd_service_rdir_crawler,
             crawler_target, False)
+
+        # oio-rawx-crawler
+        env.update({
+            'RAWX_VOLUMES': ",".join(rawx_volumes),
+            'SRVTYPE': 'rawx-crawler',
+            'EXE': 'oio-rawx-crawler',
+            'GROUPTYPE': 'crawler',
+            'SRVNUM': '1'
+        })
+        # first the conf
+        tpl = Template(template_rawx_crawler_service)
+        to_write = tpl.safe_substitute(env)
+        path = '{CFGDIR}/{NS}-{SRVTYPE}.conf'.format(**env)
+        with open(path, 'w+') as f:
+            f.write(to_write)
+        # then the gridinit conf
+        tpl = Template(template_systemd_service_rawx_crawler)
+        register_service(env, template_systemd_service_rawx_crawler,
+                         crawler_target, False)
 
     # redis
     env = subenv({'SRVTYPE': 'redis', 'SRVNUM': 1, 'PORT': 6379})
