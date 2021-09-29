@@ -21,7 +21,7 @@ from oio.common.constants import M2_PROP_ACCOUNT_NAME, \
 from oio.common.easy_value import int_value
 from oio.common.green import time
 from oio.container.sharding import ContainerSharding
-from oio.crawler.meta2.filters.base import Filter
+from oio.crawler.common.base import Filter
 from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBError
 
 

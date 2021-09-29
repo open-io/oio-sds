@@ -17,7 +17,7 @@ import sqlite3
 
 from oio.common.easy_value import float_value, int_value
 from oio.common.green import time
-from oio.crawler.meta2.filters.base import Filter
+from oio.crawler.common.base import Filter
 from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBError
 from oio.directory.admin import AdminClient
 

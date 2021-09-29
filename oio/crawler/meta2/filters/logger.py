@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from oio.crawler.meta2.filters.base import Filter
+from oio.crawler.common.base import Filter
 from oio.crawler.meta2.meta2db import Meta2DB
 
 
