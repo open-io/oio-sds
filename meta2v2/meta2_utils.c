@@ -3444,16 +3444,19 @@ m2db_merge_shards(struct sqlx_sqlite3_s *sq3,
 	gchar *new_lower = NULL, *new_upper = NULL;
 	gchar *sql = NULL;
 	gint64 max_entries_merged = meta2_sharding_max_entries_merged;
+	gboolean is_shard = sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT);
 
-	current_lower = sqlx_admin_get_str(sq3, M2V2_ADMIN_SHARDING_LOWER);
-	if (!current_lower || *current_lower != '>') {
-		err = BADREQ("Missing current lower");
-		goto end;
-	}
-	current_upper = sqlx_admin_get_str(sq3, M2V2_ADMIN_SHARDING_UPPER);
-	if (!current_upper || *current_upper != '<') {
-		err = BADREQ("Missing current upper");
-		goto end;
+	if (is_shard) {
+		current_lower = sqlx_admin_get_str(sq3, M2V2_ADMIN_SHARDING_LOWER);
+		if (!current_lower || *current_lower != '>') {
+			err = BADREQ("Missing current lower");
+			goto end;
+		}
+		current_upper = sqlx_admin_get_str(sq3, M2V2_ADMIN_SHARDING_UPPER);
+		if (!current_upper || *current_upper != '<') {
+			err = BADREQ("Missing current upper");
+			goto end;
+		}
 	}
 	to_merge_lower = sqlx_admin_get_str(to_merge_sq3,
 			M2V2_ADMIN_SHARDING_LOWER);
@@ -3468,7 +3471,13 @@ m2db_merge_shards(struct sqlx_sqlite3_s *sq3,
 		goto end;
 	}
 
-	if (current_lower[1]
+	if (!is_shard) {
+		if (to_merge_lower[1] || to_merge_upper[1]) {
+			err = BADREQ("Root container can be merged only "
+					"with the one and last shard");
+			goto end;
+		}
+	} else if (current_lower[1]
 			&& strcmp(current_lower + 1, to_merge_upper + 1) == 0) {
 		new_lower = to_merge_lower;
 		new_upper = current_upper;
@@ -3509,7 +3518,7 @@ m2db_merge_shards(struct sqlx_sqlite3_s *sq3,
 end:
 	if (!err) {
 		*truncated = max_entries_merged <= 0;
-		if (!(*truncated)) {
+		if (!(*truncated) && is_shard) {
 			sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_LOWER, new_lower);
 			sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_UPPER, new_upper);
 		}
@@ -3549,7 +3558,8 @@ end:
 }
 
 GError*
-m2db_replace_shard_ranges(struct sqlx_sqlite3_s *sq3, GSList *new_shard_ranges)
+m2db_replace_shard_ranges(struct sqlx_sqlite3_s *sq3,
+		struct oio_url_s *url, GSList *new_shard_ranges)
 {
 	if (!new_shard_ranges)
 		return BADREQ("No shard range");
@@ -3581,6 +3591,16 @@ m2db_replace_shard_ranges(struct sqlx_sqlite3_s *sq3, GSList *new_shard_ranges)
 			first_lower = lower;
 		}
 		last_upper = upper;
+	}
+	if (g_slist_length(new_shard_ranges) == 1
+			&& !(*first_lower) && !(*last_upper)) {
+		gchar *cid = g_string_free(metautils_gba_to_hexgstr(NULL,
+				SHARD_RANGE_get_cid(new_shard_ranges->data)), FALSE);
+		if (strcmp(cid, oio_url_get(url, OIOURL_HEXID)) == 0) {
+			// Switch back to a container without shards
+			new_shard_ranges = NULL;
+		}
+		g_free(cid);
 	}
 
 	GError *err = NULL;

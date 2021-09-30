@@ -311,7 +311,7 @@ GError* m2db_merge_shards(struct sqlx_sqlite3_s *sq3,
 GError* m2db_remove_merged_entries(struct sqlx_sqlite3_s *sq3);
 
 GError* m2db_replace_shard_ranges(struct sqlx_sqlite3_s *sq3,
-		GSList *new_shard_ranges);
+		struct oio_url_s *url, GSList *new_shard_ranges);
 
 GError* m2db_list_shard_ranges(struct sqlx_sqlite3_s *sq3,
 		struct list_params_s *lp, m2_onbean_cb cb, gpointer u);

@@ -2794,6 +2794,18 @@ meta2_backend_prepare_shrinking(struct meta2_backend_s *m2b,
 	if (!err) {
 		gint64 timestamp = oio_ext_real_time();
 
+		if (!sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
+			gint64 shard_count = m2db_get_shard_count(sq3);
+			if (shard_count == 0) {
+				err = BADREQ("Neither shard nor root");
+				goto rollback;
+			}
+			if (shard_count != 1) {
+				err = BADREQ("Root containers must only contain one shard");
+				goto rollback;
+			}
+		}
+
 		gint64 sharding_state = sqlx_admin_get_i64(sq3,
 				M2V2_ADMIN_SHARDING_STATE, 0);
 		if (SHARDING_IN_PROGRESS(sharding_state)) {
@@ -3156,7 +3168,9 @@ meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 			gint64 sharding_state = sqlx_admin_get_i64(sq3,
 					M2V2_ADMIN_SHARDING_STATE, 0);
 			if (SHARDING_IN_PROGRESS(sharding_state)
-					&& sharding_state != EXISTING_SHARD_STATE_LOCKED) {
+					&& sharding_state != EXISTING_SHARD_STATE_LOCKED
+					&& sharding_state != NEW_SHARD_STATE_APPLYING_SAVED_WRITES)
+			{
 				err = BADREQ(
 						"Root container isn't ready to replace the shards "
 						"(current state: %"G_GINT64_FORMAT")", sharding_state);
@@ -3166,7 +3180,7 @@ meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 			gint64 timestamp = oio_ext_real_time();
 			struct sqlx_repctx_s *repctx = NULL;
 			if (!(err = _transaction_begin(sq3, url, &repctx))) {
-				err = m2db_replace_shard_ranges(sq3, beans);
+				err = m2db_replace_shard_ranges(sq3, url, beans);
 				if (!err) {
 					// Reset these counter
 					// even if the root container has not yet been cleaned.
@@ -3231,8 +3245,13 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 		err = m2db_clean_shard(sq3, truncated);
 	} else if (m2db_get_shard_count(sq3)) {  // Root
 		err = m2db_clean_root_container(sq3, truncated);
-	} else {
-		err = BADREQ("Not a shard or a root container");
+	} else {  // Switch back to a container without shards, so recompute stats
+		guint64 size = 0;
+		gint64 obj_count = 0;
+		m2db_get_container_size_and_obj_count(sq3, FALSE, &size, &obj_count);
+		m2db_set_size(sq3, size);
+		m2db_set_obj_count(sq3, obj_count);
+		*truncated = FALSE;
 	}
 	if (!err) {
 		if (*truncated) {
