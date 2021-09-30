@@ -60,6 +60,11 @@ workflow:
     environment: oio-sds-env-ec
     depends_on:
       - root
+    conditions:
+      check:
+        - variable: cds.triggered_by.username
+          operator: ne
+          value: "cds.scheduler"
 
   tests-fullrepli:
     pipeline: oio-sds-test-fullrepli
@@ -67,6 +72,11 @@ workflow:
     environment: oio-sds-env-fullrepli
     depends_on:
       - root
+    conditions:
+      check:
+        - variable: cds.triggered_by.username
+          operator: ne
+          value: "cds.scheduler"
 
   coverage:
     pipeline: oio-sds-coverage
