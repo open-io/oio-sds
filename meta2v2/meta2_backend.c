@@ -2877,8 +2877,8 @@ meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 		} else {
 			gint64 sharding_state = sqlx_admin_get_i64(sq3,
 					M2V2_ADMIN_SHARDING_STATE, 0);
-			if (sharding_state != EXISTING_SHARD_STATE_LOCKED
-					&& sharding_state != EXISTING_SHARD_STATE_SHARDED) {
+			if (SHARDING_IN_PROGRESS(sharding_state)
+					&& sharding_state != EXISTING_SHARD_STATE_LOCKED) {
 				err = BADREQ(
 						"Root container isn't ready to replace the shards "
 						"(current state: %"G_GINT64_FORMAT")", sharding_state);
