@@ -2929,20 +2929,17 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 		return err;
 	}
 
-	gboolean is_shard = sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT);
 	gint64 sharding_state = sqlx_admin_get_i64(sq3,
 			M2V2_ADMIN_SHARDING_STATE, 0);
-	if (is_shard) {
-		if (sharding_state != NEW_SHARD_STATE_APPLYING_SAVED_WRITES
-				&& sharding_state != NEW_SHARD_STATE_CLEANING_UP
-				&& sharding_state != NEW_SHARD_STATE_CLEANED_UP
-				&& sharding_state != EXISTING_SHARD_STATE_ABORTED) {
-			err = BADREQ("Shard isn't ready to be cleaned"
-					"(current state: %"G_GINT64_FORMAT")", sharding_state);
-			goto close;
-		}
-	} else if (sharding_state != EXISTING_SHARD_STATE_SHARDED) {
-		err = BADREQ("Root container isn't ready to be cleaned"
+	if (!sharding_state) {
+		err = BADREQ(
+				"Container has never participated in a sharding operation");
+		goto close;
+	}
+	if (SHARDING_IN_PROGRESS(sharding_state)
+			&& sharding_state != NEW_SHARD_STATE_APPLYING_SAVED_WRITES
+			&& sharding_state != NEW_SHARD_STATE_CLEANING_UP) {
+		err = BADREQ("Container isn't ready to be cleaned"
 				"(current state: %"G_GINT64_FORMAT")", sharding_state);
 		goto close;
 	}
@@ -2952,9 +2949,9 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 		goto close;
 	}
 	gint64 timestamp = oio_ext_real_time();
-	if (is_shard) {
+	if (sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {  // Shard
 		err = m2db_clean_shard(sq3, truncated);
-	} else if (m2db_get_shard_count(sq3)) {
+	} else if (m2db_get_shard_count(sq3)) {  // Root
 		err = m2db_clean_root_container(sq3, truncated);
 	} else {
 		err = BADREQ("Not a shard or a root container");
