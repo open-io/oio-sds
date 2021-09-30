@@ -2788,6 +2788,7 @@ meta2_backend_update_shard(struct meta2_backend_s *m2b,
 				if (!err) {
 					sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP,
 							timestamp);
+					m2db_increment_version(sq3);
 				}
 				err = sqlx_transaction_end(repctx, err);
 			}
@@ -2828,6 +2829,7 @@ meta2_backend_lock_sharding(struct meta2_backend_s *m2b,
 						timestamp);
 				sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_MASTER);
 				sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_QUEUE);
+				m2db_increment_version(sq3);
 				err = sqlx_transaction_end(repctx, err);
 			}
 			if (!err) {
@@ -2896,8 +2898,6 @@ meta2_backend_replace_sharding(struct meta2_backend_s *m2b,
 							EXISTING_SHARD_STATE_SHARDED);
 					sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP,
 							timestamp);
-				}
-				if (!err) {
 					m2db_increment_version(sq3);
 				}
 				err = sqlx_transaction_end(repctx, err);
@@ -2959,7 +2959,7 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 	} else {
 		err = BADREQ("Not a shard or a root container");
 	}
-	if (!err && is_shard) {
+	if (!err) {
 		if (*truncated) {
 			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
 					NEW_SHARD_STATE_CLEANING_UP);
@@ -2968,6 +2968,7 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 					NEW_SHARD_STATE_CLEANED_UP);
 		}
 		sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, timestamp);
+		m2db_increment_version(sq3);
 	}
 	err = sqlx_transaction_end(repctx, err);
 
