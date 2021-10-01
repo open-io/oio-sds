@@ -1,5 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
+// Copyright (C) 2021 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -270,6 +271,7 @@ func (rr *rawxRequest) copyChunk() {
 			// The link already exists and has an xattr. Commit is a matter of sync.
 			_ = op.commit()
 			rr.replyCode(http.StatusCreated)
+			rr.rawx.notifier.notifyNew(rr.reqid, rr.chunk)
 		}
 	}
 }
