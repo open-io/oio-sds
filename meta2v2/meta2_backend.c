@@ -367,7 +367,8 @@ _container_state (struct sqlx_sqlite3_s *sq3)
 	}
 
 	struct oio_url_s *u = sqlx_admin_get_url (sq3);
-	GString *gs = oio_event__create (META2_EVENTS_PREFIX ".container.state", u);
+	GString *gs = oio_event__create_with_id(
+			META2_EVENTS_PREFIX ".container.state", u, oio_ext_get_reqid());
 	g_string_append_static (gs, ",\"data\":{");
 	append_str(gs, "bucket", sqlx_admin_get_str(sq3, M2V2_ADMIN_BUCKET_NAME));
 	append_str(gs, "policy", sqlx_admin_get_str(sq3, M2V2_ADMIN_STORAGE_POLICY));
@@ -725,7 +726,8 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 			g_string_free(peers_list, TRUE);
 			return err;
 		}
-		GString *gs = oio_event__create(META2_EVENTS_PREFIX".container.new", url);
+		GString *gs = oio_event__create_with_id(
+				META2_EVENTS_PREFIX".container.new", url, oio_ext_get_reqid());
 		struct db_properties_s *db_properties = db_properties_new();
 		if (params->properties) {
 			for (gchar **p=params->properties; *p && *(p+1); p+=2) {
