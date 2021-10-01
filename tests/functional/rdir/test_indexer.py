@@ -36,6 +36,18 @@ def enc(my_str):
 
 
 class TestIndexerCrawler(BaseTestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        super(TestIndexerCrawler, cls).setUpClass()
+        # Prevent the chunks' rebuilds or moves by the crawlers
+        cls._service(cls._cls_ns + '-rawx-crawler', 'stop', wait=3)
+
+    @classmethod
+    def tearDownClass(cls):
+        super(TestIndexerCrawler, cls).tearDownClass()
+        cls._service(cls._cls_ns + '-rawx-crawler', 'start', wait=1)
+
     def setUp(self):
         super(TestIndexerCrawler, self).setUp()
 

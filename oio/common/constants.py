@@ -158,6 +158,9 @@ CHUNK_SUFFIX_CORRUPT = '.corrupt'
 # Suffix of chunk file names that are not finished being uploaded
 CHUNK_SUFFIX_PENDING = '.pending'
 
+# Name of the folder for quarantined chunks
+CHUNK_QUARANTINE_FOLDER_NAME = 'quarantined'
+
 # Accounts that are used internally by oio-sds and should stay hidden
 HIDDEN_ACCOUNTS = ("_RDIR",)
 

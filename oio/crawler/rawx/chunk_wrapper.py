@@ -42,6 +42,7 @@ class ChunkWrapper(object):
     volume_path = _rawx_env_property('volume_path')
     chunk_id = _rawx_env_property('chunk_id')
     chunk_path = _rawx_env_property('chunk_path')
+    meta = _rawx_env_property('meta')
 
     def __init__(self, env):
         self.env = env

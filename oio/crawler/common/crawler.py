@@ -63,6 +63,7 @@ class CrawlerWorker(object):
         self.passes = 0
         self.successes = 0
         self.errors = 0
+        self.invalid_paths = 0
         self.start_time = time.time()
         self.last_report_time = 0
         self.scanned_since_last_report = 0
@@ -94,6 +95,7 @@ class CrawlerWorker(object):
             'volume_id=%(volume_id)s '
             'elapsed=%(elapsed).02f '
             'pass=%(pass)d '
+            'invalid_paths=%(invalid_paths)d '
             'errors=%(errors)d '
             'total_scanned=%(total_scanned)d '
             'rate=%(scan_rate).2f/s',
@@ -102,6 +104,7 @@ class CrawlerWorker(object):
                 'volume_id': self.volume_id,
                 'elapsed': elapsed,
                 'pass': self.passes,
+                'invalid_paths': self.invalid_paths,
                 'errors': self.errors,
                 'total_scanned': total,
                 'scan_rate': self.scanned_since_last_report / since_last_rprt,
@@ -158,6 +161,7 @@ class CrawlerWorker(object):
         # reset crawler stats
         self.errors = 0
         self.successes = 0
+        self.invalid_paths = 0
 
     def run(self):
         if self.wait_random_time_before_starting:

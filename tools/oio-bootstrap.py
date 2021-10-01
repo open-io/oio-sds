@@ -378,6 +378,7 @@ pipeline = checksum
 
 [filter:checksum]
 use = egg:oio#checksum
+conscience_cache = 30
 """
 
 template_rawx_service = """
