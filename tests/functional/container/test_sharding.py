@@ -24,6 +24,7 @@ from oio.container.sharding import ContainerSharding
 from oio.event.evob import EventTypes
 from oio.common.constants import M2_PROP_BUCKET_NAME
 from oio.common.green import eventlet
+from oio.common.utils import request_id
 
 
 class TestShardingBase(BaseTestCase):
@@ -406,11 +407,15 @@ class TestSharding(TestShardingBase):
         bkt = "bucket" + str(random.randrange(10000))
         self.storage.container_create(self.account, bkt,
                                       system={M2_PROP_BUCKET_NAME: bkt})
+        reqid = None
         for i in range(10):
+            reqid = request_id()
             self.storage.object_create(self.account, bkt, obj_name=str(i),
-                                       data=str(i).encode('utf-8'))
-        self.wait_for_event('oio-preserved',
-                            timeout=5.0,
+                                       data=str(i).encode('utf-8'),
+                                       reqid=reqid)
+        self.wait_for_event('oio-preserved', reqid=reqid,
+                            fields={'account': self.account,
+                                    'user': bkt},
                             types=(EventTypes.CONTAINER_STATE,))
 
         # Split it in 2
@@ -419,26 +424,17 @@ class TestSharding(TestShardingBase):
             self.account, bkt,
             strategy="shard-with-partition", strategy_params=params)
         modified = self.container_sharding.replace_shard(
-            self.account, bkt, shards, enable=True, reqid="testingisdoubting")
+            self.account, bkt, shards, enable=True,
+            reqid='testingisdoubting')
         self.assertTrue(modified)
 
-        self.wait_for_event('oio-preserved',
-                            reqid="testingisdoubting",
-                            timeout=2.0,
-                            types=(EventTypes.CONTAINER_NEW,))
-        # Wait for the parent and 2 shards
-        self.wait_for_event('oio-preserved',
-                            timeout=5.0,
-                            types=(EventTypes.CONTAINER_STATE,))
-        self.wait_for_event('oio-preserved',
-                            timeout=5.0,
-                            types=(EventTypes.CONTAINER_STATE,))
-        self.wait_for_event('oio-preserved',
-                            timeout=5.0,
-                            types=(EventTypes.CONTAINER_STATE,))
+        # Wait for the update of the root and the 2 new shards
+        for _ in range(3):
+            self.wait_for_event('oio-preserved',
+                                reqid='testingisdoubting',
+                                types=(EventTypes.CONTAINER_STATE,))
         stats = self.storage.account.bucket_show(bkt)
         self.assertEqual(stats["objects"], 10)
-        self.beanstalkd0.drain_tube('oio-preserved')
 
         # Split the first shard in 2
         shards_account = f".shards_{self.account}"
@@ -448,23 +444,17 @@ class TestSharding(TestShardingBase):
             shards_account, first,
             strategy="shard-with-partition", strategy_params=params)
         modified = self.container_sharding.replace_shard(
-            shards_account, first, shards, enable=True)
+            shards_account, first, shards, enable=True,
+            reqid='fixingisfailing')
         self.assertTrue(modified)
 
-        # Wait for the deletion of the parent and update of the shards
-        self.wait_for_event('oio-preserved',
-                            fields={"user": first},
-                            timeout=2.0,
-                            types=(EventTypes.CONTAINER_DELETED,))
-        self.wait_for_event('oio-preserved',
-                            timeout=5.0,
-                            types=(EventTypes.CONTAINER_STATE,))
-        self.wait_for_event('oio-preserved',
-                            timeout=5.0,
-                            types=(EventTypes.CONTAINER_STATE,))
-        self.wait_for_event('oio-preserved',
-                            timeout=5.0,
-                            types=(EventTypes.CONTAINER_STATE,))
+        # Wait for the deletion of the parent and update of the 2 new shards
+        for _ in range(3):
+            self.wait_for_event('oio-preserved',
+                                reqid='fixingisfailing',
+                                fields={'account': shards_account},
+                                types=(EventTypes.CONTAINER_DELETED,
+                                       EventTypes.CONTAINER_STATE))
         stats = self.storage.account.bucket_show(bkt)
         self.assertEqual(stats["objects"], 10)
 
