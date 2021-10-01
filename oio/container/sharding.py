@@ -144,19 +144,28 @@ class SavedWritesApplicator(object):
         # Let these threads start
         eventlet_yield()
 
-    def wait_until_queue_is_almost_empty(self, timeout=30, **kwargs):
+    def wait_until_queue_is_almost_empty(self, limit=100, timeout=30,
+                                         **kwargs):
+        """
+        Checks if the receive queue is empty
+        and if the send queues are almost empty.
+        :keyword limit: Limit at which send queues are almost empty.
+        :type limit: `int`
+        :keyword timeout: Maximum waiting time.
+        :type timeout: `int`
+        """
         start_time = time.time()
         while True:
             if self.queue_is_empty:
                 for new_shard in self.new_shards:
                     shard_queue = new_shard.get('queue')
-                    if shard_queue is not None and shard_queue.qsize() > 2:
+                    if shard_queue is not None and shard_queue.qsize() > limit:
                         break
                 else:
                     return
 
             # Check if the timeout has not expired
-            if time.time() - start_time > timeout:
+            if timeout is not None and time.time() - start_time > timeout:
                 raise OioTimeout(
                     'After more than %d seconds, '
                     'the queue is still not nearly empty' % timeout)
