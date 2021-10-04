@@ -17,6 +17,7 @@
 from logging import getLogger
 
 from oio.cli import Lister
+from oio.common.utils import cid_from_name
 from oio.container.sharding import ContainerSharding
 from oio.common.constants import M2_PROP_OBJECTS
 
@@ -277,6 +278,90 @@ class FindAndReplaceContainerSharding(ContainerShardingCommandMixin, Lister):
             modified = container_sharding.replace_shard(
                 self.app.client_manager.account, parsed_args.container,
                 found_shards, enable=parsed_args.enable)
+
+        return ('Modified', ), [(str(modified), )]
+
+
+class ShrinkContainerSharding(ContainerShardingCommandMixin, Lister):
+    """
+    Shrink the number of shards by merging the given shards.
+    """
+
+    log = getLogger(__name__ + '.ShrinkContainerSharding')
+
+    def get_parser(self, prog_name):
+        parser = super(ShrinkContainerSharding, self).get_parser(
+            prog_name)
+        self.patch_parser_container_sharding(parser)
+        parser.add_argument(
+            'shards',
+            metavar='<shards>',
+            help="""
+            Shard ranges to merge.
+            JSON Syntax:
+            [{"index": 0, "lower": "", "upper": "sharding", "cid": "F09AE7A55960614ACB29E95F92F94A918242BB1CEDBECA3B9BA2392809B046A0"},
+             {"index": 1, "lower": "sharding", "upper": "", "cid": "48E322BD62CE646640E8573F7FE23E4F0F109EC6DC12D582ACACE466347B3322"}]
+            """  # noqa: E501
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        modified = False
+        container_sharding = ContainerSharding(
+            self.app.client_manager.sds_conf,
+            logger=self.app.client_manager.logger)
+        shards = container_sharding.format_shards(
+            parsed_args.shards, partial=True)
+        root_cid = cid_from_name(self.app.client_manager.account,
+                                 parsed_args.container)
+        modified = container_sharding.shrink_shards(shards, root_cid=root_cid)
+
+        return ('Modified', ), [(str(modified), )]
+
+
+class FindAndShrinkContainerSharding(ContainerShardingCommandMixin, Lister):
+    """
+    Find the smaller neighboring shard to shrink the number of shards
+    by merging the specified shard with the neighboring shard.
+    """
+
+    log = getLogger(__name__ + '.FindAndShrinkContainerSharding')
+
+    def get_parser(self, prog_name):
+        parser = super(FindAndShrinkContainerSharding, self).get_parser(
+            prog_name)
+        self.patch_parser_container_sharding(parser)
+        parser.add_argument(
+            'shard',
+            metavar='<shard>',
+            help="""
+            Shard range to merge with the smaller neighboring shard.
+            JSON Syntax:
+            {"index": 1, "lower": "sharding", "upper": ""}
+            """
+        )
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        modified = False
+        container_sharding = ContainerSharding(
+            self.app.client_manager.sds_conf,
+            logger=self.app.client_manager.logger)
+        root_cid = cid_from_name(self.app.client_manager.account,
+                                 parsed_args.container)
+        shard = container_sharding.format_shard(parsed_args.shard)
+        shard, neighboring_shard = \
+            container_sharding.find_smaller_neighboring_shard(
+                shard, root_cid=root_cid)
+        shards = list()
+        shards.append(shard)
+        if neighboring_shard is not None:
+            shards.append(neighboring_shard)
+        modified = container_sharding.shrink_shards(shards, root_cid=root_cid)
 
         return ('Modified', ), [(str(modified), )]
 
