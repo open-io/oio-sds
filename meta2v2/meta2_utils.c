@@ -3519,6 +3519,10 @@ end:
 	if (!err) {
 		*truncated = max_entries_merged <= 0;
 		if (!(*truncated) && is_shard) {
+			sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_PREVIOUS_LOWER,
+					current_lower);
+			sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_PREVIOUS_UPPER,
+					current_upper);
 			sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_LOWER, new_lower);
 			sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_UPPER, new_upper);
 		}

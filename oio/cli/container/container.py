@@ -28,10 +28,12 @@ from oio.common.constants import \
     OIO_DB_STATUS_NAME, OIO_DB_ENABLED, OIO_DB_DISABLED, OIO_DB_FROZEN, \
     M2_PROP_BUCKET_NAME, M2_PROP_CTIME, M2_PROP_DEL_EXC_VERSIONS, \
     M2_PROP_OBJECTS, M2_PROP_QUOTA, M2_PROP_SHARDING_LOWER, \
-    M2_PROP_SHARDING_MASTER, M2_PROP_SHARDING_QUEUE, M2_PROP_SHARDING_ROOT, \
-    M2_PROP_SHARDING_STATE, M2_PROP_SHARDING_TIMESTAMP, \
-    M2_PROP_SHARDING_UPPER, M2_PROP_SHARDS, M2_PROP_STORAGE_POLICY, \
-    M2_PROP_USAGE, M2_PROP_VERSIONING_POLICY, SHARDING_STATE_NAME
+    M2_PROP_SHARDING_MASTER, M2_PROP_SHARDING_PREVIOUS_LOWER, \
+    M2_PROP_SHARDING_PREVIOUS_UPPER, M2_PROP_SHARDING_QUEUE, \
+    M2_PROP_SHARDING_ROOT, M2_PROP_SHARDING_STATE, \
+    M2_PROP_SHARDING_TIMESTAMP, M2_PROP_SHARDING_UPPER, M2_PROP_SHARDS, \
+    M2_PROP_STORAGE_POLICY, M2_PROP_USAGE, M2_PROP_VERSIONING_POLICY, \
+    SHARDING_STATE_NAME
 from oio.common.easy_value import boolean_value, int_value, float_value
 
 
@@ -493,6 +495,20 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
             else:
                 self.log.warn('Wrong format for sharding upper')
             info['sharding.upper'] = sharding_upper
+            sharding_previous_lower = sys.get(M2_PROP_SHARDING_PREVIOUS_LOWER)
+            if sharding_previous_lower:
+                if sharding_previous_lower[0] == '>':
+                    sharding_previous_lower = sharding_previous_lower[1:]
+                else:
+                    self.log.warn('Wrong format for previous sharding lower')
+                info['sharding.lower.previous'] = sharding_previous_lower
+            sharding_previous_upper = sys.get(M2_PROP_SHARDING_PREVIOUS_UPPER)
+            if sharding_previous_upper:
+                if sharding_previous_upper[0] == '<':
+                    sharding_previous_upper = sharding_previous_upper[1:]
+                else:
+                    self.log.warn('Wrong format for previous sharding upper')
+                info['sharding.upper.previous'] = sharding_previous_upper
             if M2_PROP_SHARDING_MASTER in sys:
                 info['sharding.master'] = sys[M2_PROP_SHARDING_MASTER]
             if M2_PROP_SHARDING_QUEUE in sys:
@@ -926,7 +942,7 @@ class RefreshBucket(Command):
 
 
 class RefreshContainer(ContainerCommandMixin, Command):
-    """ Refresh counters of an account (triggers asynchronous treatments) """
+    """Refresh counters of an account (triggers asynchronous treatments)"""
 
     log = getLogger(__name__ + '.RefreshContainer')
 

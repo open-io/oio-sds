@@ -202,6 +202,10 @@ M2_PROP_SHARDING_ROOT = 'sys.m2.sharding.root'
 M2_PROP_SHARDING_LOWER = 'sys.m2.sharding.lower'
 # Upper for the shard container.
 M2_PROP_SHARDING_UPPER = 'sys.m2.sharding.upper'
+# Previous lower for the shard container (during a shrink).
+M2_PROP_SHARDING_PREVIOUS_LOWER = 'sys.m2.sharding.lower.previous'
+# Previous upper for the shard container (during a shrink).
+M2_PROP_SHARDING_PREVIOUS_UPPER = 'sys.m2.sharding.upper.previous'
 # Master used during sharding.
 M2_PROP_SHARDING_MASTER = 'sys.m2.sharding.master'
 # Queue used to save all writes during sharding.

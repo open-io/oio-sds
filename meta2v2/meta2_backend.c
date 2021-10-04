@@ -3258,6 +3258,10 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
 					NEW_SHARD_STATE_CLEANING_UP);
 		} else {
+			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_PREVIOUS_LOWER);
+			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_PREVIOUS_UPPER);
+			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_MASTER);
+			sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_QUEUE);
 			sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
 					NEW_SHARD_STATE_CLEANED_UP);
 		}
@@ -3308,24 +3312,57 @@ static GError*
 _meta2_abort_sharding(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 {
 	GError *err = NULL;
+	struct sqlx_repctx_s *repctx = NULL;
 
 	EXTRA_ASSERT(sq3 != NULL);
 	EXTRA_ASSERT(url != NULL);
 
-	gint64 timestamp = oio_ext_real_time();
-
 	gint64 sharding_state = sqlx_admin_get_i64(sq3,
 			M2V2_ADMIN_SHARDING_STATE, 0);
-	if (sharding_state != EXISTING_SHARD_STATE_SAVING_WRITES
-			&& sharding_state != EXISTING_SHARD_STATE_LOCKED) {
-		err = BADREQ("No sharding in progress");
+	if (!SHARDING_IN_PROGRESS(sharding_state)) {
+		return BADREQ("No sharding in progress");
+	}
+	if (sharding_state == NEW_SHARD_STATE_CLEANING_UP) {
+		return BADREQ("Cleaning in progress");
+	}
+
+	gint64 current_timestamp = sqlx_admin_get_i64(
+			sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, 0);
+	gint64 new_timestamp = oio_ext_real_time();
+	if (!(err = _transaction_begin(sq3, url, &repctx))) {
+		if (sharding_state == NEW_SHARD_STATE_APPLYING_SAVED_WRITES) {
+			gchar *previous_lower = sqlx_admin_get_str(sq3,
+					M2V2_ADMIN_SHARDING_PREVIOUS_LOWER);
+			if (previous_lower) {
+				sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_LOWER,
+						previous_lower);
+				g_free(previous_lower);
+			}
+			gchar *previous_upper = sqlx_admin_get_str(sq3,
+					M2V2_ADMIN_SHARDING_PREVIOUS_UPPER);
+			if (previous_upper) {
+				sqlx_admin_set_str(sq3, M2V2_ADMIN_SHARDING_UPPER,
+						previous_upper);
+				g_free(previous_upper);
+			}
+		}
+		sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_PREVIOUS_LOWER);
+		sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_PREVIOUS_UPPER);
+		sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_MASTER);
+		sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_QUEUE);
+		sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
+				EXISTING_SHARD_STATE_ABORTED);
+		sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, new_timestamp);
+		m2db_increment_version(sq3);
+		err = sqlx_transaction_end(repctx, err);
+	}
+	if (err) {
 		return err;
 	}
 
 	if (sharding_state == EXISTING_SHARD_STATE_SAVING_WRITES) {
 		gchar *copy_path = g_strdup_printf("%s.sharding-%"G_GINT64_FORMAT,
-				sq3->path_inline,
-				sqlx_admin_get_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, 0));
+				sq3->path_inline, current_timestamp);
 		if (remove(copy_path)) {
 			GRID_WARN("Failed to remove file %s: (%d) %s", copy_path,
 					errno, strerror(errno));
@@ -3337,18 +3374,6 @@ _meta2_abort_sharding(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 			sq3->sharding_queue = NULL;
 		}
 	}
-
-	struct sqlx_repctx_s *repctx = NULL;
-	if (!(err = _transaction_begin(sq3, url, &repctx))) {
-		sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_STATE,
-				EXISTING_SHARD_STATE_ABORTED);
-		sqlx_admin_set_i64(sq3, M2V2_ADMIN_SHARDING_TIMESTAMP, timestamp);
-		sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_MASTER);
-		sqlx_admin_del(sq3, M2V2_ADMIN_SHARDING_QUEUE);
-		m2db_increment_version(sq3);
-		err = sqlx_transaction_end(repctx, err);
-	}
-
 	return err;
 }
 

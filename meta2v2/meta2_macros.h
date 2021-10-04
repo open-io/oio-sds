@@ -89,6 +89,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define M2V2_ADMIN_SHARDING_UPPER M2V2_ADMIN_PREFIX_SHARDING "upper"
 # endif
 
+# ifndef M2V2_ADMIN_SHARDING_PREVIOUS_LOWER
+# define M2V2_ADMIN_SHARDING_PREVIOUS_LOWER M2V2_ADMIN_SHARDING_LOWER ".previous"
+# endif
+
+# ifndef M2V2_ADMIN_SHARDING_PREVIOUS_UPPER
+# define M2V2_ADMIN_SHARDING_PREVIOUS_UPPER M2V2_ADMIN_SHARDING_UPPER ".previous"
+# endif
+
 # ifndef M2V2_ADMIN_CTIME
 # define M2V2_ADMIN_CTIME M2V2_ADMIN_PREFIX_SYS "ctime"
 # endif
