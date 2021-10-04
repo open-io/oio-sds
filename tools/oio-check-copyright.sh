@@ -17,7 +17,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-EXCLUDED_FILES=("core/tree.h" "metautils/lib/tree.h" "oio/container/md5py.py")
+EXCLUDED_FILES=("core/tree.h" "metautils/lib/tree.h")
 
 function find_last_modification {
 	FILE=$1

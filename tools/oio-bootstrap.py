@@ -1087,18 +1087,6 @@ ${WANT_SERVICE_ID}service_id = ${SERVICE_ID}
 syslog_prefix = OIO,${NS},rdir,${SRVNUM}
 """
 
-template_admin = """
-[admin-server]
-bind_addr = ${IP}
-bind_port = ${PORT}
-namespace = ${NS}
-log_facility = LOG_LOCAL0
-log_level = INFO
-log_address = /dev/log
-syslog_prefix = OIO,${NS},admin,${SRVNUM}
-redis_host = ${IP}
-"""
-
 template_gridinit_webhook_server = """
 [service.${NS}-webhook]
 group=${NS},localhost,webhook
@@ -1657,32 +1645,6 @@ def generate(options):
     tpl = Template(template_wsgi_service_descr)
     to_write = tpl.safe_substitute(env)
     with open(wsgi(env), 'w+') as f:
-        f.write(to_write)
-
-    # container
-    env = subenv({'SRVTYPE': 'container', 'SRVNUM': 1, 'PORT': port_admin,
-                  'USER': 'nobody', 'GROUP': 'nogroup'})
-    add_service(env)
-    tpl = Template(template_gridinit_httpd)
-    with open(gridinit(env), 'a+') as f:
-        f.write(tpl.safe_substitute(env))
-    # service
-    tpl = Template(template_wsgi_service_host)
-    to_write = tpl.safe_substitute(env)
-    if options.get(OPENSUSE, False):
-        to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
-    with open(httpd_config(env), 'w+') as f:
-        f.write(to_write)
-    # service desc
-    tpl = Template(template_wsgi_service_descr)
-    to_write = tpl.safe_substitute(env, SRVTYPE='container',
-                                   KEY_FILE=config(env))
-    with open(wsgi(env), 'w+') as f:
-        f.write(to_write)
-    # service configuration
-    tpl = Template(template_admin)
-    to_write = tpl.safe_substitute(env)
-    with open(config(env), 'w+') as f:
         f.write(to_write)
 
     # account
