@@ -124,7 +124,7 @@ class BlobClient(object):
         writer = ReplicatedMetachunkWriter(
             meta, [chunk], FakeChecksum(checksum),
             storage_method, quorum=1, perfdata=self.perfdata,
-            logger=self.logger, watchdog=self.watchdog)
+            logger=self.logger, watchdog=self.watchdog, **kwargs)
         bytes_transferred, chunk_hash, _ = writer.stream(data, None)
         return bytes_transferred, chunk_hash
 

@@ -1,9 +1,10 @@
 module openio-sds/rawx
 
-go 1.16
+go 1.17
 
 require (
-	github.com/smartystreets/goconvey v1.6.4 // indirect
-	golang.org/x/sys v0.0.0-20210823070655-63515b42dcdf
-	gopkg.in/ini.v1 v1.62.0
+	golang.org/x/sys v0.0.0-20211003122950-b1ebd4e1001c
+	gopkg.in/ini.v1 v1.63.2
 )
+
+require github.com/stretchr/testify v1.7.0 // indirect

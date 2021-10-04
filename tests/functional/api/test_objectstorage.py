@@ -977,13 +977,19 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.container_create(account, name, reqid=reqid)
         ref_time = time.time()
         # ensure container event has been emitted and processed
-        self.wait_for_event('oio-preserved', types=[EventTypes.CONTAINER_NEW])
+        self.wait_for_event('oio-preserved', reqid=reqid,
+                            fields={'account': account,
+                                    'user': name},
+                            types=[EventTypes.CONTAINER_NEW])
 
         # container_refresh on existing container
-        self.api.container_refresh(account, name)
+        reqid = request_id()
+        self.api.container_refresh(account, name, reqid=reqid)
         # Container events are buffered 1s by default.
         # See "events.common.pending.delay" configuration parameter.
-        self.wait_for_event('oio-preserved',
+        self.wait_for_event('oio-preserved', reqid=reqid,
+                            fields={'account': account,
+                                    'user': name},
                             types=[EventTypes.CONTAINER_STATE])
         res = self.api.container_list(account, prefix=name)
         container_name, nb_objects, nb_bytes, _, mtime = res[0]
@@ -996,13 +1002,16 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         reqid = request_id()
         self.api.object_create(account, name, data="data", obj_name=name,
                                reqid=reqid)
-        self.wait_for_event('oio-preserved', reqid=reqid)
-        self.wait_for_event('oio-preserved',
+        self.wait_for_event('oio-preserved', reqid=reqid,
+                            fields={'account': account,
+                                    'user': name},
                             types=[EventTypes.CONTAINER_STATE])
-        self.beanstalkd0.drain_tube('oio-preserved')
         # container_refresh on existing container with data
-        self.api.container_refresh(account, name)
-        self.wait_for_event('oio-preserved',
+        reqid = request_id()
+        self.api.container_refresh(account, name, reqid=reqid)
+        self.wait_for_event('oio-preserved', reqid=reqid,
+                            fields={'account': account,
+                                    'user': name},
                             types=[EventTypes.CONTAINER_STATE])
         res = self.api.container_list(account, prefix=name)
         container_name, nb_objects, nb_bytes, _, mtime = res[0]
@@ -1012,12 +1021,15 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertGreater(mtime, ref_time)
 
         self.api.object_delete(account, name, name)
-        self.api.container_delete(account, name)
+        reqid = request_id()
+        self.api.container_delete(account, name, reqid=reqid)
         # Again, wait for the container event to be processed.
-        self.wait_for_event('oio-preserved',
-                            types=[EventTypes.ACCOUNT_SERVICES])
-        self.wait_for_event('oio-preserved',
-                            types=[EventTypes.CONTAINER_DELETED])
+        for _ in range(2):
+            self.wait_for_event('oio-preserved', reqid=reqid,
+                                fields={'account': account,
+                                        'user': name},
+                                types=(EventTypes.ACCOUNT_SERVICES,
+                                       EventTypes.CONTAINER_DELETED))
         # container_refresh on deleted container
         self.assertRaises(
             exc.NoSuchContainer, self.api.container_refresh, account, name)
