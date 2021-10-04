@@ -2,6 +2,7 @@
 OpenIO SDS meta1v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -1245,7 +1246,8 @@ __notify_services(struct meta1_backend_s *m1, struct sqlx_sqlite3_s *sq3,
 		struct meta1_service_url_s **services2 = expand_urlv(services);
 		/* This event type is prefixed with "account" because it originally
 		 * targetted account services only. */
-		GString *notif = oio_event__create("account.services", url);
+		GString *notif = oio_event__create_with_id("account.services", url,
+				oio_ext_get_reqid());
 		g_string_append_static (notif, ",\"data\":[");
 		if (services2) {
 			for (struct meta1_service_url_s **svc = services2; *svc ; svc++) {

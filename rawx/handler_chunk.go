@@ -270,6 +270,7 @@ func (rr *rawxRequest) copyChunk() {
 			// The link already exists and has an xattr. Commit is a matter of sync.
 			_ = op.commit()
 			rr.replyCode(http.StatusCreated)
+			rr.rawx.notifier.notifyNew(rr.reqid, rr.chunk)
 		}
 	}
 }
