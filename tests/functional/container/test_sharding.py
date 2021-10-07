@@ -15,103 +15,109 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-# pylint: disable=no-member
-import time
 import random
+import time
 
-from tests.utils import BaseTestCase
+from oio.common.constants import M2_PROP_BUCKET_NAME, M2_PROP_OBJECTS, \
+    M2_PROP_SHARDING_LOWER, M2_PROP_SHARDING_ROOT, M2_PROP_SHARDING_STATE, \
+    M2_PROP_SHARDING_UPPER, NEW_SHARD_STATE_CLEANED_UP
+from oio.common.exceptions import NotFound
+from oio.common.green import eventlet
+from oio.common.utils import cid_from_name, request_id
 from oio.container.sharding import ContainerSharding
 from oio.event.evob import EventTypes
-from oio.common.constants import M2_PROP_BUCKET_NAME
-from oio.common.green import eventlet
-from oio.common.utils import request_id
+from tests.utils import BaseTestCase
 
 
-class TestShardingBase(BaseTestCase):
-
-    @classmethod
-    def setUpClass(cls):
-        super(TestShardingBase, cls).setUpClass()
-        cls._cls_reload_meta()
+class TestSharding(BaseTestCase):
 
     def setUp(self):
-        super(TestShardingBase, self).setUp()
-        self.cname = 'ct-%d' % int(time.time())
-        self.created = list()
-        self.containers = list()
-        self.beanstalkd0.drain_tube('oio-preserved')
+        super(TestSharding, self).setUp()
+        self.cname = 'test_sharding_%f' % time.time()
+        self.created = dict()
         self.container_sharding = ContainerSharding(self.conf)
-
-        services = self.conscience.all_services('rawx')
-        self.rawx_volumes = dict()
-        for rawx in services:
-            tags = rawx['tags']
-            service_id = tags.get('tag.service_id', None)
-            if service_id is None:
-                service_id = rawx['addr']
-            volume = tags.get('tag.vol', None)
-            self.rawx_volumes[service_id] = volume
-
-    def _create(self, name, properties=None):
-        return self.storage.container_create(self.account, name,
-                                             properties=properties)
-
-
-class TestSharding(TestShardingBase):
+        self.beanstalkd0.drain_tube('oio-preserved')
 
     def tearDown(self):
-        try:
-            # delete objects
-            self.storage.object_delete_many(self.account, self.cname,
-                                            objs=self.created)
-            # FIXME temporary cleaning, this should be handled by deleting
-            # root container
-            self.wait_for_event('oio-preserved',
-                                types=[EventTypes.CONTAINER_STATE])
-            resp = self.storage.account.container_list('.shards_test_account')
-            for cont in resp['listing']:
-                # delete sharded account
-                self.storage.container_flush(account=".shards_test_account",
-                                             container=cont[0])
-                self.storage.container_delete(account=".shards_test_account",
-                                              container=cont[0])
-            # delete main container in test_account
-            # FIXME(adu): Shrink the container to delete it
-            # without using the 'force' option.
-            self.storage.container_delete(self.account, self.cname, force=True)
-        except Exception:
-            self.logger.warning("Exception during cleaning \
-                                .shards_test_account")
+        for cname, created in self.created.items():
+            try:
+                # delete objects
+                self.storage.object_delete_many(
+                    self.account, cname, objs=created)
+                # FIXME temporary cleaning, this should be handled by deleting
+                # root container
+                shards = self.container_sharding.show_shards(
+                    self.account, cname)
+                for shard in shards:
+                    self.storage.container.container_delete(cid=shard['cid'])
+                # FIXME(adu): Shrink the container to delete it
+                # without using the 'force' option.
+                self.storage.container_delete(self.account, self.cname,
+                                              force=True)
+            except Exception:
+                self.logger.warning('Failed to cleaning root %s', cname)
         super(TestSharding, self).tearDown()
 
-    def _add_objects(self, cname, number_of_obj, pattern_name='content'):
-        for i in range(number_of_obj):
-            file_name = str(i) + pattern_name
-            self.storage.object_create(self.account, cname,
-                                       obj_name=file_name, data='data',
-                                       chunk_checksum_algo=None)
-            self.created.append(file_name)
+    def _create(self, cname, properties=None, bucket=None):
+        system = None
+        if bucket:
+            system = {M2_PROP_BUCKET_NAME: bucket}
+        created = self.storage.container_create(
+            self.account, cname, properties=properties, system=system)
+        self.assertTrue(created)
+        self.created[cname] = set()
 
-    def _check_total_objects(self, nb_total_objects):
-        ct_show = self.storage.object_list(self.account, self.cname,
-                                           force_master=True)
-        self.assertEqual(len(ct_show['objects']), nb_total_objects)
+    def _add_objects(self, cname, nb_objects, prefix='content',
+                     bucket=None):
+        reqid = None
+        for i in range(nb_objects):
+            obj_name = '%s_%d' % (prefix, i)
+            reqid = request_id()
+            self.storage.object_create(
+                self.account, cname, obj_name=obj_name,
+                data=obj_name.encode('utf-8'), reqid=reqid)
+            self.created[cname].add(obj_name)
+        if bucket:
+            self.wait_for_event('oio-preserved', reqid=reqid,
+                                fields={'account': self.account,
+                                        'user': cname},
+                                types=(EventTypes.CONTAINER_STATE,))
+            stats = self.storage.account.bucket_show(cname)
+            self.assertEqual(len(self.created[cname]), stats['objects'])
 
-        list_objects = list()
-        for obj in ct_show['objects']:
-            list_objects.append(obj['name'])
-            self.assertIn(obj['name'], self.created)
+    def _delete_objects(self, cname, nb_objects, prefix='content',
+                        bucket=None):
+        reqid = None
+        for i in range(nb_objects):
+            obj_name = "%s_%d" % (prefix, i)
+            reqid = request_id()
+            self.storage.object_delete(
+                self.account, cname, obj_name, reqid=reqid)
+            self.created[cname].remove(obj_name)
+        if bucket:
+            self.wait_for_event('oio-preserved', reqid=reqid,
+                                fields={'account': self.account,
+                                        'user': cname},
+                                types=(EventTypes.CONTAINER_STATE,))
+            stats = self.storage.account.bucket_show(cname)
+            self.assertEqual(len(self.created[cname]), stats['objects'])
 
-        # check order
-        sorted_objects = sorted(list_objects)
-        self.assertListEqual(sorted_objects, list_objects)
+    def _check_objects(self, cname):
+        # Check the objects list
+        obj_list = self.storage.object_list(self.account, cname)
+        self.assertListEqual(sorted(self.created[cname]),
+                             [obj['name'] for obj in obj_list['objects']])
+        # Check the objects data
+        for obj_name in self.created[cname]:
+            _, data = self.storage.object_fetch(self.account, cname, obj_name)
+            self.assertEqual(obj_name.encode('utf-8'), b''.join(data))
 
     def _check_shards(self, new_shards, test_shards, shards_content):
         # check shards
         for index, shard in enumerate(new_shards):
             resp = self.storage.container.container_get_properties(
                 cid=shard['cid'])
-            found_object_in_shard = int(resp['system']['sys.m2.objects'])
+            found_object_in_shard = int(resp['system'][M2_PROP_OBJECTS])
             self.assertEqual(found_object_in_shard, len(shards_content[index]))
 
             lower = resp['system']['sys.m2.sharding.lower']
@@ -134,82 +140,76 @@ class TestSharding(TestShardingBase):
             self.assertListEqual(sorted_objects, list_objects)
 
     def test_shard_container(self):
-        nb_obj_to_add = 4
-        shards_content = [{'0content'}, {'1content', '2content', '3content'}]
         self._create(self.cname)
-        self._add_objects(self.cname, nb_obj_to_add)
+        self._add_objects(self.cname, 4)
 
-        test_shards = [{"index": 0, "lower": "", "upper": "1c"},
-                       {"index": 1, "lower": "1c", "upper": ""}]
+        test_shards = [{'index': 0, 'lower': '', 'upper': 'content_0.'},
+                       {'index': 1, 'lower': 'content_0.', 'upper': ''}]
         new_shards = self.container_sharding.format_shards(
             test_shards, are_new=True)
         modified = self.container_sharding.replace_shard(
             self.account, self.cname, new_shards, enable=True)
         self.assertTrue(modified)
-        show_shards = self.container_sharding.show_shards(self.account,
-                                                          self.cname)
+
         # check objects
-        self._check_total_objects(nb_obj_to_add)
+        self._check_objects(self.cname)
 
         # check shards
+        show_shards = self.container_sharding.show_shards(
+            self.account, self.cname)
+        shards_content = [
+            {'content_0'},
+            {'content_1', 'content_2', 'content_3'}
+        ]
         self._check_shards(show_shards, test_shards, shards_content)
 
         # check root container properties
         resp = self.storage.container.container_get_properties(self.account,
                                                                self.cname)
-        self.assertEqual(int(resp['system']['sys.m2.objects']), 0)
+        self.assertEqual(int(resp['system'][M2_PROP_OBJECTS]), 0)
         self.assertEqual(int(resp['system']['sys.m2.shards']),
                          len(test_shards))
 
     def test_add_objects_to_shards(self):
         # add object that gows to first shard
-        nb_obj_to_add = 4
         self._create(self.cname)
-        self._add_objects(self.cname, nb_obj_to_add)
+        self._add_objects(self.cname, 4)
 
-        test_shards = [{"index": 0, "lower": "", "upper": "1c"},
-                       {"index": 1, "lower": "1c", "upper": ""}]
+        test_shards = [{'index': 0, 'lower': '', 'upper': 'content_0.'},
+                       {'index': 1, 'lower': 'content_0.', 'upper': ''}]
         new_shards = self.container_sharding.format_shards(
             test_shards, are_new=True)
         modified = self.container_sharding.replace_shard(
             self.account, self.cname, new_shards, enable=True)
         self.assertTrue(modified)
+
         # check objects
-        self._check_total_objects(nb_obj_to_add)
+        self._check_objects(self.cname)
 
-        # push objects
-        file_name = str(0) + 'content-dup'
-        self.storage.object_create(self.account, self.cname,
-                                   obj_name=file_name, data='data',
-                                   chunk_checksum_algo=None)
-        self.created.append(file_name)
-        file_name = str(4) + 'content'
-        self.storage.object_create(self.account, self.cname,
-                                   obj_name=file_name, data='data',
-                                   chunk_checksum_algo=None)
-        self.created.append(file_name)
+        # push 1 object in the first shard
+        self._add_objects(self.cname, 1, prefix='content-bis')
+        # push 1 object in the second shard
+        self._add_objects(self.cname, 1, prefix='contentbis')
 
-        # check all objects
-        ct_show = self.storage.object_list(self.account, self.cname)
-        for obj in ct_show['objects']:
-            self.assertIn(obj['name'], self.created)
-
-        show_shards = self.container_sharding.show_shards(self.account,
-                                                          self.cname)
-        shards_content = [{'0content', '0content-dup'},
-                          {'1content', '2content', '3content', '4content'}]
+        # check objects
+        self._check_objects(self.cname)
 
         # check shards
+        show_shards = self.container_sharding.show_shards(
+            self.account, self.cname)
+        shards_content = [
+            {'content-bis_0', 'content_0'},
+            {'content_1', 'content_2', 'content_3', 'contentbis_0'}
+        ]
         self._check_shards(show_shards, test_shards, shards_content)
 
     def test_delete_objects_from_shards(self):
-        nb_obj_to_add = 9
         chunk_urls = []
         self._create(self.cname)
-        self._add_objects(self.cname, nb_obj_to_add)
+        self._add_objects(self.cname, 9)
 
-        test_shards = [{"index": 0, "lower": "", "upper": "4"},
-                       {"index": 1, "lower": "4", "upper": ""}]
+        test_shards = [{'index': 0, 'lower': '', 'upper': 'content_3'},
+                       {'index': 1, 'lower': 'content_3', 'upper': ''}]
         new_shards = self.container_sharding.format_shards(
             test_shards, are_new=True)
         modified = self.container_sharding.replace_shard(
@@ -218,24 +218,21 @@ class TestSharding(TestShardingBase):
         shards = self.container_sharding.show_shards(self.account, self.cname)
         self.assertEqual(len(list(shards)), 2)  # two shards
 
-        # random object to remove
-        file_id = random.randrange(nb_obj_to_add)
-        file_name = str(file_id) + 'content'
-
-        # Get all chunks urls before removal
+        # select random object
+        obj_name = random.sample(self.created[self.cname], 1)[0]
+        # get all chunks urls before removal
         _, chunks = self.storage.object_locate(self.account, self.cname,
-                                               file_name)
+                                               obj_name)
         for chunk in chunks:
             chunk_urls.append(chunk['url'])
-
-        self.logger.info('file to delete %s', file_name)
-        self.storage.object_delete(self.account, self.cname, obj=file_name,
+        # remove this object
+        self.storage.object_delete(self.account, self.cname, obj_name,
                                    reqid='delete-from-shards')
-        self.created.remove(file_name)
+        self.created[self.cname].remove(obj_name)
 
-        self._check_total_objects(nb_obj_to_add - 1)
+        self._check_objects(self.cname)
 
-        # Check that all chunk urls are matching expected ones
+        # check that all chunk urls are matching expected ones
         event = self.wait_for_event('oio-preserved',
                                     reqid='delete-from-shards',
                                     types=(EventTypes.CONTENT_DELETED,))
@@ -245,18 +242,13 @@ class TestSharding(TestShardingBase):
                 chunk_urls.remove(event_data.get('id'))
         self.assertEqual(0, len(chunk_urls))
 
-        ct_show = self.storage.object_list(self.account, self.cname)
-        for obj in ct_show['objects']:
-            self.assertNotEqual(file_name, obj)
-
     # test shards with empty container
     def test_shard_with_empty_container(self):
-        nb_obj_to_add = 4
         self._create(self.cname)
-        self._add_objects(self.cname, nb_obj_to_add)
+        self._add_objects(self.cname, 4)
 
-        test_shards = [{"index": 0, "lower": "", "upper": "5"},
-                       {"index": 1, "lower": "5", "upper": ""}]
+        test_shards = [{'index': 0, 'lower': '', 'upper': 'content_5'},
+                       {'index': 1, 'lower': 'content_5', 'upper': ''}]
         new_shards = self.container_sharding.format_shards(
             test_shards, are_new=True)
         modified = self.container_sharding.replace_shard(
@@ -273,28 +265,21 @@ class TestSharding(TestShardingBase):
 
     def test_successive_shards(self):
         self._create(self.cname)
-        nb_step = 5
-        nb_total_to_create = nb_step * nb_step
-        for i in range(nb_step):
-            for j in range(nb_step):
-                file_name = str(i) + str(j) + '/' + 'content'
-                self.storage.object_create(self.account, self.cname,
-                                           obj_name=file_name, data='data',
-                                           chunk_checksum_algo=None)
-                self.created.append(file_name)
+        for i in range(5):
+            self._add_objects(self.cname, 5, prefix='%d-content/' % i)
 
-        test_shards = [{"index": 0, "lower": "", "upper": "20"},
-                       {"index": 1, "lower": "20", "upper": ""}]
+        test_shards = [{'index': 0, 'lower': '', 'upper': '2-content'},
+                       {'index': 1, 'lower': '2-content', 'upper': ''}]
         new_shards = self.container_sharding.format_shards(
             test_shards, are_new=True)
         modified = self.container_sharding.replace_shard(
             self.account, self.cname, new_shards, enable=True)
         self.assertTrue(modified)
-        shards = self.container_sharding.show_shards(self.account,
-                                                     self.cname)
-        self.assertEqual(len(list(shards)), 2)  # number of shards
+        shards = self.container_sharding.show_shards(
+            self.account, self.cname)
+        self.assertEqual(len(list(shards)), 2)
 
-        self._check_total_objects(nb_total_to_create)
+        self._check_objects(self.cname)
 
         index = 0
         objects_per_shard = [10, 15]
@@ -302,14 +287,16 @@ class TestSharding(TestShardingBase):
         for shard in shards:
             resp = self.storage.container.container_get_properties(
                 cid=shard['cid'])
-            found_object_in_shard = int(resp['system']['sys.m2.objects'])
+            found_object_in_shard = int(resp['system'][M2_PROP_OBJECTS])
             self.assertEqual(found_object_in_shard, objects_per_shard[index])
             index = index + 1
 
         # reshard
-        test_shards = [{"index": 0, "lower": "", "upper": "20"},
-                       {"index": 1, "lower": "20", "upper": "30"},
-                       {"index": 2, "lower": "30", "upper": ""}]
+        test_shards = [
+            {'index': 0, 'lower': '', 'upper': '2-content'},
+            {'index': 1, 'lower': '2-content', 'upper': '3-content'},
+            {'index': 2, 'lower': '3-content', 'upper': ''}
+        ]
         new_shards = self.container_sharding.format_shards(
             test_shards, are_new=True)
         modified = self.container_sharding.replace_all_shards(
@@ -325,47 +312,32 @@ class TestSharding(TestShardingBase):
         for shard in shards:
             resp = self.storage.container.container_get_properties(
                 cid=shard['cid'])
-            found_object_in_shard = int(resp['system']['sys.m2.objects'])
+            found_object_in_shard = int(resp['system'][M2_PROP_OBJECTS])
             self.assertEqual(found_object_in_shard, objects_per_shard[index])
             index = index + 1
 
     def test_shard_and_add_delete(self):
-        nb_to_create = 140
-        nb_to_remove = 30
-        nb_to_add = 50
         pool = eventlet.GreenPool(size=2)
         self._create(self.cname)
-        self._add_objects(self.cname, nb_to_create)
+        self._add_objects(self.cname, 140)
 
-        def add_objects(number_of_objects):
-            self._add_objects(self.cname, number_of_objects, "thread_add")
-            return
-
-        def delete_objects(number_of_objects):
-            for i in range(number_of_objects):
-                file_name = str(i) + 'content'
-                self.storage.object_delete(self.account, self.cname,
-                                           obj=file_name)
-                self.created.remove(file_name)
-            return
-
-        test_shards = [{"index": 0, "lower": "", "upper": "89"},
-                       {"index": 1, "lower": "89", "upper": ""}]
+        test_shards = [{'index': 0, 'lower': '', 'upper': 'content_89'},
+                       {'index': 1, 'lower': 'content_89', 'upper': ''}]
         new_shards = self.container_sharding.format_shards(
             test_shards, are_new=True)
 
-        pool.spawn(add_objects, nb_to_add)
-        pool.spawn(delete_objects, nb_to_remove)
+        pool.spawn(self._add_objects, self.cname, 50, prefix='thread_add')
+        pool.spawn(self._delete_objects, self.cname, 30)
 
         modified = self.container_sharding.replace_shard(
             self.account, self.cname, new_shards, enable=True)
         self.assertTrue(modified)
         shards = self.container_sharding.show_shards(self.account, self.cname)
-        self.assertEqual(len(list(shards)), 2)  # two shards
+        self.assertEqual(len(list(shards)), 2)
 
         pool.waitall()
 
-        self._check_total_objects(nb_to_create + nb_to_add - nb_to_remove)
+        self._check_objects(self.cname)
 
     # threshold are applied with partition strategy
     def test_threshold(self):
@@ -374,13 +346,13 @@ class TestSharding(TestShardingBase):
         self._add_objects(self.cname, nb_obj_to_add)
 
         expected_shards = [
-            [{'index': 0, 'lower': '', 'upper': '4content', 'metadata': {},
+            [{'index': 0, 'lower': '', 'upper': 'content_4', 'metadata': {},
                 'count': 5},
-             {'index': 1, 'lower': '4content', 'upper': '', 'metadata': {},
+             {'index': 1, 'lower': 'content_4', 'upper': '', 'metadata': {},
                 'count': 5}],
-            [{'index': 0, 'lower': '', 'upper': '4content', 'metadata': {},
+            [{'index': 0, 'lower': '', 'upper': 'content_4', 'metadata': {},
                 'count': 5},
-             {'index': 1, 'lower': '4content', 'upper': '', 'metadata': {},
+             {'index': 1, 'lower': 'content_4', 'upper': '', 'metadata': {},
                 'count': 5}],
             [{'index': 0, 'lower': '', 'upper': '', 'metadata': {},
                 'count': 10}]
@@ -405,17 +377,17 @@ class TestSharding(TestShardingBase):
 
         partitions = [[10, 90], [50, 50], [60, 40]]
         expected_shards = [
-            [{'index': 0, 'lower': '', 'upper': '0content', 'metadata': {},
+            [{'index': 0, 'lower': '', 'upper': 'content_0', 'metadata': {},
                 'count': 1},
-             {'index': 1, 'lower': '0content', 'upper': '', 'metadata': {},
+             {'index': 1, 'lower': 'content_0', 'upper': '', 'metadata': {},
                 'count': 9}],
-            [{'index': 0, 'lower': '', 'upper': '4content', 'metadata': {},
+            [{'index': 0, 'lower': '', 'upper': 'content_4', 'metadata': {},
                 'count': 5},
-             {'index': 1, 'lower': '4content', 'upper': '', 'metadata': {},
+             {'index': 1, 'lower': 'content_4', 'upper': '', 'metadata': {},
                 'count': 5}],
-            [{'index': 0, 'lower': '', 'upper': '5content', 'metadata': {},
+            [{'index': 0, 'lower': '', 'upper': 'content_5', 'metadata': {},
                 'count': 6},
-             {'index': 1, 'lower': '5content', 'upper': '', 'metadata': {},
+             {'index': 1, 'lower': 'content_5', 'upper': '', 'metadata': {},
                 'count': 4}]
         ]
 
@@ -432,27 +404,16 @@ class TestSharding(TestShardingBase):
 
     def test_bucket_counters_after_sharding(self):
         # Fill a bucket
-        bkt = "bucket" + str(random.randrange(10000))
-        self.storage.container_create(self.account, bkt,
-                                      system={M2_PROP_BUCKET_NAME: bkt})
-        reqid = None
-        for i in range(10):
-            reqid = request_id()
-            self.storage.object_create(self.account, bkt, obj_name=str(i),
-                                       data=str(i).encode('utf-8'),
-                                       reqid=reqid)
-        self.wait_for_event('oio-preserved', reqid=reqid,
-                            fields={'account': self.account,
-                                    'user': bkt},
-                            types=(EventTypes.CONTAINER_STATE,))
+        self._create(self.cname, bucket=self.cname)
+        self._add_objects(self.cname, 10, bucket=self.cname)
 
         # Split it in 2
         params = {"partition": "50,50", "threshold": 4}
         shards = self.container_sharding.find_shards(
-            self.account, bkt,
+            self.account, self.cname,
             strategy="shard-with-partition", strategy_params=params)
         modified = self.container_sharding.replace_shard(
-            self.account, bkt, shards, enable=True,
+            self.account, self.cname, shards, enable=True,
             reqid='testingisdoubting')
         self.assertTrue(modified)
 
@@ -461,12 +422,13 @@ class TestSharding(TestShardingBase):
             self.wait_for_event('oio-preserved',
                                 reqid='testingisdoubting',
                                 types=(EventTypes.CONTAINER_STATE,))
-        stats = self.storage.account.bucket_show(bkt)
-        self.assertEqual(stats["objects"], 10)
+        stats = self.storage.account.bucket_show(self.cname)
+        self.assertEqual(stats['objects'], 10)
 
         # Split the first shard in 2
         shards_account = f".shards_{self.account}"
-        res = self.storage.container_list(shards_account, prefix=f"{bkt}-")
+        res = self.storage.container_list(shards_account,
+                                          prefix=f"{self.cname}-")
         first = res[0][0]
         shards = self.container_sharding.find_shards(
             shards_account, first,
@@ -483,13 +445,13 @@ class TestSharding(TestShardingBase):
                                 fields={'account': shards_account},
                                 types=(EventTypes.CONTAINER_DELETED,
                                        EventTypes.CONTAINER_STATE))
-        stats = self.storage.account.bucket_show(bkt)
-        self.assertEqual(stats["objects"], 10)
+        stats = self.storage.account.bucket_show(self.cname)
+        self.assertEqual(stats['objects'], 10)
 
     def test_listing(self):
         self._create(self.cname)
         for i in range(4):
-            self._add_objects(self.cname, 4, pattern_name='dir/%d' % i)
+            self._add_objects(self.cname, 4, prefix='dir%d/obj' % i)
         # Split it in 2
         params = {"partition": "50,50", "threshold": 1}
         shards = self.container_sharding.find_shards(
@@ -502,56 +464,383 @@ class TestSharding(TestShardingBase):
         objects = self.storage.object_list(self.account, self.cname)
         self.assertListEqual([], objects['prefixes'])
         self.assertListEqual(
-            sorted(self.created),
+            sorted(self.created[self.cname]),
             [obj['name'] for obj in objects['objects']])
         self.assertFalse(objects['truncated'])
         # Listing with prefix
         objects = self.storage.object_list(self.account, self.cname,
-                                           prefix='1dir/')
+                                           prefix='dir1/')
         self.assertListEqual([], objects['prefixes'])
         self.assertListEqual(
-            ['1dir/0', '1dir/1', '1dir/2', '1dir/3'],
+            ['dir1/obj_0', 'dir1/obj_1', 'dir1/obj_2', 'dir1/obj_3'],
             [obj['name'] for obj in objects['objects']])
         self.assertFalse(objects['truncated'])
         # Listing with prefix and limit
         objects = self.storage.object_list(self.account, self.cname,
-                                           prefix='3dir/', limit=1)
+                                           prefix='dir3/', limit=1)
         self.assertListEqual([], objects['prefixes'])
         self.assertListEqual(
-            ['3dir/0'],
+            ['dir3/obj_0'],
             [obj['name'] for obj in objects['objects']])
         self.assertTrue(objects['truncated'])
         # Listing with marker in the first shard
         objects = self.storage.object_list(self.account, self.cname,
-                                           marker='1dir/0')
+                                           marker='dir1/obj_0')
         self.assertListEqual([], objects['prefixes'])
         self.assertListEqual(
-            ['1dir/1', '1dir/2', '1dir/3',
-             '2dir/0', '2dir/1', '2dir/2', '2dir/3',
-             '3dir/0', '3dir/1', '3dir/2', '3dir/3'],
+            ['dir1/obj_1', 'dir1/obj_2', 'dir1/obj_3',
+             'dir2/obj_0', 'dir2/obj_1', 'dir2/obj_2', 'dir2/obj_3',
+             'dir3/obj_0', 'dir3/obj_1', 'dir3/obj_2', 'dir3/obj_3'],
             [obj['name'] for obj in objects['objects']])
         self.assertFalse(objects['truncated'])
         # Listing with marker in the second shard
         objects = self.storage.object_list(self.account, self.cname,
-                                           marker='2dir/2')
+                                           marker='dir2/obj_2')
         self.assertListEqual([], objects['prefixes'])
         self.assertListEqual(
-            ['2dir/3', '3dir/0', '3dir/1', '3dir/2', '3dir/3'],
+            ['dir2/obj_3',
+             'dir3/obj_0', 'dir3/obj_1', 'dir3/obj_2', 'dir3/obj_3'],
             [obj['name'] for obj in objects['objects']])
         self.assertFalse(objects['truncated'])
         # Listing with marker and prefix
         objects = self.storage.object_list(self.account, self.cname,
-                                           marker='2dir/1', prefix='2dir/')
+                                           marker='dir2/obj_1', prefix='dir2/')
         self.assertListEqual([], objects['prefixes'])
         self.assertListEqual(
-            ['2dir/2', '2dir/3'],
+            ['dir2/obj_2', 'dir2/obj_3'],
             [obj['name'] for obj in objects['objects']])
         self.assertFalse(objects['truncated'])
         # Listing with delimiter
         objects = self.storage.object_list(self.account, self.cname,
                                            delimiter='/')
         self.assertListEqual(
-            ['0dir/', '1dir/', '2dir/', '3dir/'],
+            ['dir0/', 'dir1/', 'dir2/', 'dir3/'],
             objects['prefixes'])
         self.assertListEqual([], objects['objects'])
         self.assertFalse(objects['truncated'])
+
+    def _find_and_check(self, shards, small_shard_pos, expected_pos):
+        small_shard = shards[small_shard_pos]
+        shard, neighboring_shard = \
+            self.container_sharding.find_smaller_neighboring_shard(small_shard)
+        self.assertTrue(self.container_sharding._shards_equal(
+            small_shard, shard))
+        if expected_pos is None:
+            self.assertIsNone(neighboring_shard)
+        else:
+            self.assertTrue(self.container_sharding._shards_equal(
+                shards[expected_pos], neighboring_shard))
+        return shard, neighboring_shard
+
+    def test_find_smaller_neighboring_shard(self):
+        self._create(self.cname)
+        self._add_objects(self.cname, 10)
+        # Split it in 5
+        params = {"partition": "30,10,20,30,10", "threshold": 1}
+        shards = self.container_sharding.find_shards(
+            self.account, self.cname,
+            strategy="shard-with-partition", strategy_params=params)
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname, shards, enable=True)
+        self.assertTrue(modified)
+        shards = list(self.container_sharding.show_shards(
+            self.account, self.cname))
+        self.assertEqual(5, len(shards))
+        # First shard
+        self._find_and_check(shards, 0, 1)
+        # Middle shard
+        self._find_and_check(shards, 2, 1)
+        # Last shard
+        self._find_and_check(shards, 4, 3)
+
+    def test_find_smaller_neighboring_shard_with_the_one_and_last_shard(self):
+        self._create(self.cname, bucket=self.cname)
+        self._add_objects(self.cname, 4, bucket=self.cname)
+        # Split it in 2
+        params = {"partition": "50,50", "threshold": 1}
+        shards = self.container_sharding.find_shards(
+            self.account, self.cname,
+            strategy="shard-with-partition", strategy_params=params)
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname, shards, enable=True)
+        self.assertTrue(modified)
+        shards = list(self.container_sharding.show_shards(
+            self.account, self.cname))
+        self.assertEqual(2, len(shards))
+        # Go back to 1 single shard
+        small_shard, neighboring_shard = self._find_and_check(shards, 0, 1)
+        shards_to_merge = list()
+        shards_to_merge.append(small_shard)
+        if neighboring_shard is not None:
+            shards_to_merge.append(neighboring_shard)
+        modified = self.container_sharding.shrink_shards(shards_to_merge)
+        self.assertTrue(modified)
+        new_shards = list(self.container_sharding.show_shards(
+            self.account, self.cname))
+        self.assertEqual(len(shards) - 1, len(new_shards))
+        # Find the root as a neighbor
+        self._find_and_check(new_shards, 0, None)
+
+    def test_find_smaller_neighboring_shard_on_unsharded_container(self):
+        self._create(self.cname, bucket=self.cname)
+        fake_shard = {
+            'index': -1,
+            'lower': '',
+            'upper': '',
+            'cid': cid_from_name(self.account, self.cname),
+            'metadata': None
+        }
+        # Try to find
+        self.assertRaises(
+            ValueError, self.container_sharding.find_smaller_neighboring_shard,
+            fake_shard)
+
+    def test_find_smaller_neighboring_shard_on_root(self):
+        self._create(self.cname, bucket=self.cname)
+        self._add_objects(self.cname, 4, bucket=self.cname)
+        # Split it in 2
+        params = {"partition": "50,50", "threshold": 1}
+        shards = self.container_sharding.find_shards(
+            self.account, self.cname,
+            strategy="shard-with-partition", strategy_params=params)
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname, shards, enable=True)
+        self.assertTrue(modified)
+        shards = list(self.container_sharding.show_shards(
+            self.account, self.cname))
+        self.assertEqual(2, len(shards))
+        fake_shard = {
+            'index': -1,
+            'lower': '',
+            'upper': '',
+            'cid': cid_from_name(self.account, self.cname),
+            'metadata': None
+        }
+        # Try to find
+        self.assertRaises(
+            ValueError, self.container_sharding.find_smaller_neighboring_shard,
+            fake_shard)
+
+    def test_find_smaller_neighboring_shard_on_nonexistent_container(self):
+        fake_shard = {
+            'index': -1,
+            'lower': '',
+            'upper': '',
+            'cid': cid_from_name(self.account, self.cname),
+            'metadata': None
+        }
+        self.assertRaises(
+            NotFound, self.container_sharding.find_smaller_neighboring_shard,
+            fake_shard)
+
+    def _shrink_and_check(self, cname, current_shards, smaller_shard,
+                          bigger_shard, expected_objects, bucket=None):
+        # Trigger the shrinking
+        bigger_is_root = False
+        shards_to_merge = list()
+        shards_to_merge.append(smaller_shard)
+        if bigger_shard is None:  # The one and last shard
+            bigger_is_root = True
+            bigger_shard = {
+                'cid': cid_from_name(self.account, cname),
+                'lower': '',
+                'upper': '',
+                'metadata': None
+            }
+        else:
+            shards_to_merge.append(bigger_shard)
+        reqid = request_id()
+        modified = self.container_sharding.shrink_shards(shards_to_merge,
+                                                         reqid=reqid)
+        self.assertTrue(modified)
+        self.assertIsNotNone(smaller_shard)
+        # Check the smaller shard
+        self.assertRaises(NotFound,
+                          self.storage.container.container_get_properties,
+                          cid=smaller_shard['cid'])
+        # Check the bigger shard
+        new_shard_meta = self.storage.container.container_get_properties(
+            cid=bigger_shard['cid'])
+        self.assertEqual(NEW_SHARD_STATE_CLEANED_UP,
+                         int(new_shard_meta['system'][M2_PROP_SHARDING_STATE]))
+        _, new_shard = self.container_sharding._meta_to_shard(new_shard_meta)
+        if bigger_is_root:  # The one and last shard
+            self.assertIsNone(new_shard)
+            new_shard = {  # Root container
+                'cid': cid_from_name(self.account, cname),
+                'lower': '',
+                'upper': '',
+                'metadata': None,
+                'count': int(new_shard_meta['system'][M2_PROP_OBJECTS])
+            }
+        else:
+            self.assertIsNotNone(new_shard)
+        self.assertEqual(min(smaller_shard['lower'], bigger_shard['lower']),
+                         new_shard['lower'])
+        self.assertEqual(
+            smaller_shard['upper'] if smaller_shard['upper'] == ''
+            else bigger_shard['upper'] if bigger_shard['upper'] == ''
+            else max(smaller_shard['upper'], bigger_shard['upper']),
+            new_shard['upper'])
+        self.assertEqual(expected_objects, new_shard['count'])
+        # Check the new shards list
+        new_shards = list(self.container_sharding.show_shards(
+            self.account, cname))
+        self.assertEqual(len(current_shards) - 1, len(new_shards))
+        if new_shards:
+            delta = 0
+            for i, shard in enumerate(current_shards):
+                if (shard['cid'] == smaller_shard['cid']
+                        or shard['cid'] == bigger_shard['cid']):
+                    self.assertTrue(self.container_sharding._shards_equal(
+                        new_shard, new_shards[i - delta]))
+                    if not delta:
+                        delta = 1
+                else:
+                    self.assertTrue(self.container_sharding._shards_equal(
+                        shard, new_shards[i - delta]))
+        # Check objects
+        self._check_objects(cname)
+        # Check bucket stats
+        if bucket:
+            # Wait for the deletion of the smaller
+            # and update of the bigger and the root
+            nb_events = 3
+            if bigger_is_root:  # The one and last shard
+                # Wait for the deletion of the smaller and update of the root
+                nb_events = 2
+            for _ in range(nb_events):
+                self.wait_for_event('oio-preserved', reqid=reqid,
+                                    types=(EventTypes.CONTAINER_DELETED,
+                                           EventTypes.CONTAINER_STATE))
+            stats = self.storage.account.bucket_show(bucket)
+            self.assertEqual(len(self.created[cname]), stats['objects'])
+        return new_shards
+
+    def test_shrinking(self):
+        self._create(self.cname)
+        self._add_objects(self.cname, 10)
+        # Split it in 5
+        params = {"partition": "30,10,20,30,10", "threshold": 1}
+        shards = self.container_sharding.find_shards(
+            self.account, self.cname,
+            strategy="shard-with-partition", strategy_params=params)
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname, shards, enable=True)
+        self.assertTrue(modified)
+        shards = list(self.container_sharding.show_shards(
+            self.account, self.cname))
+        self.assertEqual(5, len(shards))
+        # First shard
+        shards = self._shrink_and_check(
+            self.cname, shards, shards[1], shards[0], 4)
+        # Middle shard
+        shards = self._shrink_and_check(
+            self.cname, shards, shards[1], shards[2], 5)
+        # Last shard
+        shards = self._shrink_and_check(
+            self.cname, shards, shards[-1], shards[-2], 6)
+
+    def test_shrinking_until_having_container_without_shards(self):
+        self._create(self.cname, bucket=self.cname)
+        self._add_objects(self.cname, 10, bucket=self.cname)
+        # Split it in 2
+        params = {"partition": "60,40", "threshold": 1}
+        shards = self.container_sharding.find_shards(
+            self.account, self.cname,
+            strategy="shard-with-partition", strategy_params=params)
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname, shards, enable=True)
+        self.assertTrue(modified)
+        shards = list(self.container_sharding.show_shards(
+            self.account, self.cname))
+        self.assertEqual(2, len(shards))
+        # Go back to 1 single shard
+        shards = self._shrink_and_check(
+            self.cname, shards, shards[1], shards[0], 10, bucket=self.cname)
+        # Go back to the container without shard
+        shards = self._shrink_and_check(
+            self.cname, shards, shards[0], None, 10, bucket=self.cname)
+        # Check the container without shards
+        root_meta = self.storage.container.container_get_properties(
+            self.account, self.cname)
+        self.assertNotIn(M2_PROP_SHARDING_ROOT, root_meta['system'])
+        self.assertNotIn(M2_PROP_SHARDING_LOWER, root_meta['system'])
+        self.assertNotIn(M2_PROP_SHARDING_UPPER, root_meta['system'])
+
+    def test_shrinking_on_root(self):
+        self._create(self.cname)
+        self._add_objects(self.cname, 2)
+        # Split it in 2
+        params = {"partition": "50,50", "threshold": 1}
+        shards = self.container_sharding.find_shards(
+            self.account, self.cname,
+            strategy="shard-with-partition", strategy_params=params)
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname, shards, enable=True)
+        self.assertTrue(modified)
+        shards = list(self.container_sharding.show_shards(
+            self.account, self.cname))
+        self.assertEqual(2, len(shards))
+        # Try to trigger the shrinking on the root
+        small_shard = {  # Root container
+            'cid': cid_from_name(self.account, self.cname),
+            'lower': '',
+            'upper': '',
+            'metadata': None
+        }
+        self.assertRaises(ValueError, self.container_sharding.shrink_shards,
+                          [small_shard])
+
+    def test_shrinking_with_neighbor_of_neighbor(self):
+        self._create(self.cname)
+        self._add_objects(self.cname, 4)
+        # Split it in 4
+        params = {"partition": "25,25,25,25", "threshold": 1}
+        shards = self.container_sharding.find_shards(
+            self.account, self.cname,
+            strategy="shard-with-partition", strategy_params=params)
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname, shards, enable=True)
+        self.assertTrue(modified)
+        shards = list(self.container_sharding.show_shards(
+            self.account, self.cname))
+        self.assertEqual(4, len(shards))
+        # Try to trigger the shrinking with the neighbor of the neighbor
+        self.assertRaises(ValueError, self.container_sharding.shrink_shards,
+                          [shards[1], shards[3]])
+
+    def test_shrinking_with_no_shard(self):
+        self.assertFalse(self.container_sharding.shrink_shards([]))
+
+    def test_shrinking_not_same_root(self):
+        # First container
+        self._create(self.cname)
+        self._add_objects(self.cname, 2)
+        # Split it in 2
+        params = {"partition": "50,50", "threshold": 1}
+        shards = self.container_sharding.find_shards(
+            self.account, self.cname,
+            strategy="shard-with-partition", strategy_params=params)
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname, shards, enable=True)
+        self.assertTrue(modified)
+        shards = list(self.container_sharding.show_shards(
+            self.account, self.cname))
+        self.assertEqual(2, len(shards))
+        # Second container
+        self._create(self.cname + 'bis')
+        self._add_objects(self.cname + 'bis', 2)
+        # Split the first container in 2
+        shards_bis = self.container_sharding.find_shards(
+            self.account, self.cname + 'bis',
+            strategy="shard-with-partition", strategy_params=params)
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname + 'bis', shards, enable=True)
+        self.assertTrue(modified)
+        shards_bis = list(self.container_sharding.show_shards(
+            self.account, self.cname + 'bis'))
+        self.assertEqual(2, len(shards_bis))
+        # Try to trigger the shrinking with two different root containers
+        self.assertRaises(ValueError, self.container_sharding.shrink_shards,
+                          [shards[0], shards_bis[1]])
