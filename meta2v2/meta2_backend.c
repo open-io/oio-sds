@@ -379,7 +379,7 @@ _is_container_initiated(struct sqlx_sqlite3_s *sq3)
 }
 
 static gchar *
-_container_state(struct sqlx_sqlite3_s *sq3, GString *gs)
+_container_state(struct sqlx_sqlite3_s *sq3, gboolean deleted)
 {
 	void sep (GString *gs1) {
 		if (gs1->len > 1 && !strchr(",[{", gs1->str[gs1->len-1]))
@@ -395,19 +395,22 @@ _container_state(struct sqlx_sqlite3_s *sq3, GString *gs)
 		g_free(v);
 	}
 
-	struct oio_url_s *u = sqlx_admin_get_url (sq3);
-	if (gs == NULL)
-		gs = oio_event__create_with_id(
-			META2_EVENTS_PREFIX ".container.state", u, oio_ext_get_reqid());
+	struct oio_url_s *url = sqlx_admin_get_url(sq3);
+	GString *gs = oio_event__create_with_id(
+			deleted ? META2_EVENTS_PREFIX ".container.deleted"
+					: META2_EVENTS_PREFIX ".container.state",
+			url, oio_ext_get_reqid());
 	g_string_append_static (gs, ",\"data\":{");
 	append_str(gs, "bucket", sqlx_admin_get_str(sq3, M2V2_ADMIN_BUCKET_NAME));
 	append_str(gs, "policy", sqlx_admin_get_str(sq3, M2V2_ADMIN_STORAGE_POLICY));
 	append_int64(gs, "ctime", m2db_get_ctime(sq3));
-	append_int64(gs, "bytes-count", m2db_get_size(sq3));
-	append_int64(gs, "object-count", m2db_get_obj_count(sq3));
+	// If the container is deleted while it contained objects,
+	// send a consistent number of objects
+	append_int64(gs, "bytes-count", deleted ? 0 : m2db_get_size(sq3));
+	append_int64(gs, "object-count", deleted ? 0 : m2db_get_obj_count(sq3));
 	g_string_append_static (gs, "}}");
 
-	oio_url_clean (u);
+	oio_url_clean(url);
 	return g_string_free(gs, FALSE);
 }
 
@@ -420,7 +423,7 @@ m2b_add_modified_container(struct meta2_backend_s *m2b,
 		oio_events_queue__send_overwritable(
 				m2b->notifier_container_state,
 				sqlx_admin_get_str(sq3, SQLX_ADMIN_BASENAME),
-				_container_state(sq3, NULL));
+				_container_state(sq3, FALSE));
 
 	gboolean has_peers = FALSE;
 	NAME2CONST(n, sq3->name);
@@ -1224,11 +1227,7 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 			gchar *event_data = NULL;
 			/* The event must be computed before destroying the DB. */
 			if (m2->notifier_container_deleted && send_event) {
-				GString *gs = oio_event__create_with_id(
-						META2_EVENTS_PREFIX ".container.deleted", url,
-						oio_ext_get_reqid());
-				// Frees gs
-				event_data = _container_state(sq3, gs);
+				event_data = _container_state(sq3, TRUE);
 			}
 			gchar *basename = sqlx_admin_get_str(sq3, SQLX_ADMIN_BASENAME);
 			m2b_destroy(sq3);

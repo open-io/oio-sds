@@ -106,8 +106,8 @@ class AccountUpdateFilter(Filter):
                     and "No update needed" in exc.message):
                 self.logger.info(
                     "Discarding event %s (job_id=%s, reqid=%s): %s",
-                    event.job_id, headers[REQID_HEADER],
-                    event.event_type, exc.message)
+                    event.event_type, event.job_id,
+                    headers[REQID_HEADER], exc.message)
             else:
                 msg = 'account update failure: %s' % str(exc)
                 resp = EventError(event=Event(env), body=msg)

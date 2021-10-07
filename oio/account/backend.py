@@ -339,7 +339,7 @@ class AccountBackend(RedisConnection):
           -- This container is not yet associated with this bucket.
           -- We must add all the totals in case the container already existed
           -- but didn't know its parent bucket.
-          if current_bucket_name == false then
+          if deleted == false and current_bucket_name == false then
             inc_objects = new_total_objects;
             inc_bytes = new_total_bytes;
           end;

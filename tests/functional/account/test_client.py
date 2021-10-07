@@ -20,11 +20,14 @@ from mock import MagicMock as Mock
 
 from oio.account.client import AccountClient
 from oio.common.exceptions import ClientException, OioNetworkException
+from oio.common.utils import request_id
 from oio.container.client import ContainerClient
+from oio.event.evob import EventTypes
 from tests.utils import BaseTestCase
 
 
 class TestAccountClient(BaseTestCase):
+
     def setUp(self):
         super(TestAccountClient, self).setUp()
         self.account_id = "test_account_%f" % time.time()
@@ -42,11 +45,19 @@ class TestAccountClient(BaseTestCase):
                     time.sleep(2)
                 else:
                     raise
-        self.container_client.container_create(account=self.account_id,
-                                               reference="container1")
-        self.container_client.container_create(account=self.account_id,
-                                               reference="container2")
-        time.sleep(.5)  # ensure container event have been processed
+
+        self.beanstalkd0.drain_tube('oio-preserved')
+
+        reqid = request_id()
+        self.container_client.container_create(
+            account=self.account_id, reference='container1', reqid=reqid)
+        self.container_client.container_create(
+            account=self.account_id, reference='container2', reqid=reqid)
+        # ensure container event have been processed
+        for _ in range(2):
+            self.wait_for_event('oio-preserved', reqid=reqid,
+                                fields={'account': self.account_id},
+                                types=(EventTypes.CONTAINER_NEW,))
 
     def test_container_list(self):
         resp = self.account_client.container_list(self.account_id)
@@ -168,3 +179,54 @@ class TestAccountClient(BaseTestCase):
 
         resp = self.account_client.container_list(self.account_id)
         self.assertEqual(len(resp["listing"]), 0)
+
+    def test_account_delete_missing_container(self):
+        bucket = 'bucket-%f' % time.time()
+        metadata = dict()
+        metadata['mtime'] = time.time()
+        metadata['bytes'] = 42
+        metadata['objects'] = 12
+        metadata['bucket'] = bucket
+        self.account_client.container_update(
+            self.account_id, 'container1', metadata=metadata)
+        resp = self.account_client.account_show(self.account_id)
+        self.assertEqual(resp['bytes'], 42)
+        self.assertEqual(resp['objects'], 12)
+        resp = self.account_client.bucket_show(bucket)
+        self.assertEqual(resp['bytes'], 42)
+        self.assertEqual(resp['objects'], 12)
+
+        metadata = dict()
+        metadata['dtime'] = time.time()
+        # The counters are voluntarily positive to verify
+        # that they are indeed ignored.
+        # But should no longer occur,
+        # now that the delete event still has the counters set to 0.
+        metadata['bytes'] = 12
+        metadata['objects'] = 4
+        metadata['bucket'] = bucket
+        self.account_client.container_update(
+            self.account_id, 'container1_1', metadata=metadata)
+        # As the container didn't exist in the account service,
+        # the statistics should not be changed.
+        resp = self.account_client.account_show(self.account_id)
+        self.assertEqual(resp['bytes'], 42)
+        self.assertEqual(resp['objects'], 12)
+        resp = self.account_client.bucket_show(bucket)
+        self.assertEqual(resp['bytes'], 42)
+        self.assertEqual(resp['objects'], 12)
+
+        metadata = dict()
+        metadata['dtime'] = time.time()
+        # To be sure, let's try with 0 counters (as with current requests).
+        metadata['bytes'] = 0
+        metadata['objects'] = 0
+        metadata['bucket'] = bucket
+        self.account_client.container_update(
+            self.account_id, 'container1_2', metadata=metadata)
+        resp = self.account_client.account_show(self.account_id)
+        self.assertEqual(resp['bytes'], 42)
+        self.assertEqual(resp['objects'], 12)
+        resp = self.account_client.bucket_show(bucket)
+        self.assertEqual(resp['bytes'], 42)
+        self.assertEqual(resp['objects'], 12)
