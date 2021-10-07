@@ -36,12 +36,12 @@ class TestRdirClient(BaseTestCase):
     @classmethod
     def setUpClass(cls):
         super(TestRdirClient, cls).setUpClass()
-        cls._service('oio-indexer.target', 'stop')
+        cls._service('oio-rawx-crawler-1.service', 'stop', wait=3)
 
     @classmethod
     def tearDownClass(cls):
+        cls._service('oio-rawx-crawler-1.service', 'start', wait=1)
         super(TestRdirClient, cls).tearDownClass()
-        cls._service('oio-indexer.target', 'start')
 
     def _push_chunks(self, max_containers=4, max_objects=5, max_chunks=5):
         max_mtime = 16

@@ -267,21 +267,6 @@ ${ENVIRONMENT}
 WantedBy=${PARENT}
 """
 
-template_blob_indexer_service = """
-[blob-indexer]
-namespace = ${NS}
-user = ${USER}
-volume = ${VOLUME}
-interval = 30
-report_interval = 5
-chunks_per_second = 30
-autocreate = true
-log_level = INFO
-log_facility = LOG_LOCAL0
-log_address = /dev/log
-syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
-"""
-
 template_meta2_indexer_service = """
 [meta2-indexer]
 namespace = ${NS}
@@ -374,11 +359,14 @@ log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE}
 
 [pipeline:main]
-pipeline = checksum
+pipeline = checksum indexer
 
 [filter:checksum]
 use = egg:oio#checksum
 conscience_cache = 30
+
+[filter:indexer]
+use = egg:oio#indexer
 """
 
 template_rawx_service = """
@@ -949,26 +937,6 @@ ${SERVICEUSER}
 ${SERVICEGROUP}
 Type=simple
 ExecStart=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${IP}:${PORT} ${OPTARGS} ${EXTRA} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
-ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
-Environment=LD_LIBRARY_PATH=${LIBDIR}
-Environment=HOME=${HOME}
-
-[Install]
-WantedBy=${PARENT}
-"""
-
-template_systemd_service_indexer = """
-[Unit]
-Description=[OpenIO] Service indexer ${SRVNUM}
-After=network.target
-PartOf=${PARENT}
-OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-
-[Service]
-${SERVICEUSER}
-${SERVICEGROUP}
-Type=simple
-ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
 ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
@@ -2040,17 +2008,6 @@ def generate(options):
             to_write = tpl.safe_substitute(env)
             with open(watch(env), 'w+') as f:
                 f.write(to_write)
-
-            env.update({'SRVTYPE': 'indexer', 'EXE': 'oio-blob-indexer'})
-            # indexer
-            tpl = Template(template_blob_indexer_service)
-            to_write = tpl.safe_substitute(env)
-            path = '{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.conf'.format(**env)
-            with open(path, 'w+') as f:
-                f.write(to_write)
-
-            register_service(env, template_systemd_service_indexer,
-                indexer_target, False)
 
         # oio-rdir-crawler
         env.update({

@@ -1,0 +1,34 @@
+[rawx-crawler]
+namespace = OPENIO
+user = openio
+# Comma separated list of volumes to watch
+volume_list = /var/lib/oio/sds/vol1/NS/rawx-1/,/var/lib/oio/sds/vol1/NS/rawx-2/
+
+# Wait random time before starting
+# to avoid all the crawlers from working at the same time.
+wait_random_time_before_starting = True
+# In seconds, the interval between two full scans. Defaults to half an hour.
+interval = 1800
+# In seconds, the interval between two logs entries (for each volume)
+# Defaults to 300 seconds.
+report_interval = 300
+# Maximum chunks to be scanned per second. Defaults to 30.
+scanned_per_second = 30
+
+# Common log stuff
+log_level = INFO
+log_facility = LOG_LOCAL0
+log_address = /dev/log
+syslog_prefix = OIO,OPENIO,rawx-crawler
+
+[pipeline:main]
+pipeline = checksum indexer
+
+[filter:checksum]
+use = egg:oio#checksum
+# In seconds, the interval between two requests to the conscience (to check if
+# rawx services are up). Defaults to 30.
+conscience_cache = 30
+
+[filter:indexer]
+use = egg:oio#indexer
