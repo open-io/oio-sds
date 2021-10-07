@@ -29,6 +29,7 @@ from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.utils import cid_from_name, depaginate
 from oio.container.client import ContainerClient
+from oio.common.decorators import ensure_request_id
 from oio.directory.admin import AdminClient
 from oio.event.beanstalk import Beanstalk, ResponseError
 
@@ -509,6 +510,7 @@ class ContainerSharding(ProxyClient):
             found_formatted_shards.append(found_formatted_shard)
         return max_shard_size, found_formatted_shards
 
+    @ensure_request_id
     def find_shards(self, account, container, **kwargs):
         fake_shard = {
             'index': -1,
@@ -589,6 +591,7 @@ class ContainerSharding(ProxyClient):
         for found_shard in found_shards:
             yield found_shard
 
+    @ensure_request_id
     def find_all_shards(self, root_account, root_container, **kwargs):
         formatted_shards = self._find_all_formatted_shards(
             root_account, root_container, **kwargs)
@@ -694,11 +697,12 @@ class ContainerSharding(ProxyClient):
             truncated = boolean_value(resp.getheader('x-oio-truncated'), False)
 
         try:
-            self.admin.vacuum_base('meta2', cid=shard['cid'])
+            self.admin.vacuum_base('meta2', cid=shard['cid'], **kwargs)
         except Exception as exc:
             self.logger.warning('Failed to vacuum container (CID=%s): %s',
                                 shard['cid'], exc)
 
+    @ensure_request_id
     def clean_container(self, account, container, cid=None, **kwargs):
         fake_shard = {
             'index': -1,
@@ -746,6 +750,7 @@ class ContainerSharding(ProxyClient):
             shard = self._format_shard(shard, **kwargs)
             yield shard
 
+    @ensure_request_id
     def show_shards(self, root_account, root_container, **kwargs):
         formatted_shards = self._show_formatted_shards(
             root_account, root_container, **kwargs)
@@ -791,7 +796,7 @@ class ContainerSharding(ProxyClient):
             saved_writes_applicator.flush(**kwargs)
 
             # When the queue is empty, lock the container to shard
-            self._lock_parent(parent_shard)
+            self._lock_parent(parent_shard, **kwargs)
         except Exception:
             # Immediately close the applicator
             saved_writes_applicator.close(timeout=0, **kwargs)
@@ -938,6 +943,7 @@ class ContainerSharding(ProxyClient):
                 max_new_shards_per_op=max_new_shards_per_op,
                 **kwargs)
 
+    @ensure_request_id
     def replace_shard(self, account, container, new_shards,
                       enable=False, **kwargs):
         meta = self.container.container_get_properties(
@@ -1040,6 +1046,7 @@ class ContainerSharding(ProxyClient):
                                   new_shards, new_shard, **kwargs):
         raise NotImplementedError('Shrinking not implemented')
 
+    @ensure_request_id
     def replace_all_shards(self, root_account, root_container, new_shards,
                            **kwargs):
         current_shards = self.show_shards(
