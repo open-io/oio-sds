@@ -358,8 +358,6 @@ _load_list_params(struct list_params_s *lp, struct gridd_filter_ctx_s *ctx,
 
 	lp->prefix = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_PREFIX);
 	lp->marker_start = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MARKER);
-	if (g_strcmp0(lp->prefix, lp->marker_start) > 0)
-		lp->marker_start = lp->prefix;
 	lp->marker_end = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MARKER_END);
 	const char *maxkeys_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MAX_KEYS);
 	if (NULL != maxkeys_str)

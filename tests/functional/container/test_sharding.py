@@ -467,3 +467,73 @@ class TestSharding(TestShardingBase):
                             types=(EventTypes.CONTAINER_STATE,))
         stats = self.storage.account.bucket_show(bkt)
         self.assertEqual(stats["objects"], 10)
+
+    def test_listing(self):
+        self._create(self.cname)
+        for i in range(4):
+            self._add_objects(self.cname, 4, pattern_name='dir/%d' % i)
+        # Split it in 2
+        params = {"partition": "50,50", "threshold": 1}
+        shards = self.container_sharding.find_shards(
+            self.account, self.cname,
+            strategy="shard-with-partition", strategy_params=params)
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname, shards, enable=True)
+        self.assertTrue(modified)
+        # Classic listing
+        objects = self.storage.object_list(self.account, self.cname)
+        self.assertListEqual([], objects['prefixes'])
+        self.assertListEqual(
+            sorted(self.created),
+            [obj['name'] for obj in objects['objects']])
+        self.assertFalse(objects['truncated'])
+        # Listing with prefix
+        objects = self.storage.object_list(self.account, self.cname,
+                                           prefix='1dir/')
+        self.assertListEqual([], objects['prefixes'])
+        self.assertListEqual(
+            ['1dir/0', '1dir/1', '1dir/2', '1dir/3'],
+            [obj['name'] for obj in objects['objects']])
+        self.assertFalse(objects['truncated'])
+        # Listing with prefix and limit
+        objects = self.storage.object_list(self.account, self.cname,
+                                           prefix='3dir/', limit=1)
+        self.assertListEqual([], objects['prefixes'])
+        self.assertListEqual(
+            ['3dir/0'],
+            [obj['name'] for obj in objects['objects']])
+        self.assertTrue(objects['truncated'])
+        # Listing with marker in the first shard
+        objects = self.storage.object_list(self.account, self.cname,
+                                           marker='1dir/0')
+        self.assertListEqual([], objects['prefixes'])
+        self.assertListEqual(
+            ['1dir/1', '1dir/2', '1dir/3',
+             '2dir/0', '2dir/1', '2dir/2', '2dir/3',
+             '3dir/0', '3dir/1', '3dir/2', '3dir/3'],
+            [obj['name'] for obj in objects['objects']])
+        self.assertFalse(objects['truncated'])
+        # Listing with marker in the second shard
+        objects = self.storage.object_list(self.account, self.cname,
+                                           marker='2dir/2')
+        self.assertListEqual([], objects['prefixes'])
+        self.assertListEqual(
+            ['2dir/3', '3dir/0', '3dir/1', '3dir/2', '3dir/3'],
+            [obj['name'] for obj in objects['objects']])
+        self.assertFalse(objects['truncated'])
+        # Listing with marker and prefix
+        objects = self.storage.object_list(self.account, self.cname,
+                                           marker='2dir/1', prefix='2dir/')
+        self.assertListEqual([], objects['prefixes'])
+        self.assertListEqual(
+            ['2dir/2', '2dir/3'],
+            [obj['name'] for obj in objects['objects']])
+        self.assertFalse(objects['truncated'])
+        # Listing with delimiter
+        objects = self.storage.object_list(self.account, self.cname,
+                                           delimiter='/')
+        self.assertListEqual(
+            ['0dir/', '1dir/', '2dir/', '3dir/'],
+            objects['prefixes'])
+        self.assertListEqual([], objects['objects'])
+        self.assertFalse(objects['truncated'])

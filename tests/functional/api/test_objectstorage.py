@@ -1903,6 +1903,39 @@ class TestObjectList(ObjectStorageApiTestBase):
         self.assertFalse(res['objects'])
         self.assertListEqual(['2/'], res['prefixes'])
 
+    def test_object_list_prefix(self):
+        objects = ['1/a', '1/aa', '1/b', '1/c', '2/d', '2/e']
+        self._upload_empty(*objects)
+        res = self.api.object_list(self.account, self.cname,
+                                   prefix='1/')
+        self.assertIn('objects', res)
+        self.assertIn('prefixes', res)
+        self.assertIn('truncated', res)
+        self.assertListEqual(['1/a', '1/aa', '1/b', '1/c'],
+                             [x['name'] for x in res['objects']])
+        self.assertListEqual([], res['prefixes'])
+        self.assertFalse(res['truncated'])
+
+        res = self.api.object_list(self.account, self.cname,
+                                   prefix='2/')
+        self.assertIn('objects', res)
+        self.assertIn('prefixes', res)
+        self.assertIn('truncated', res)
+        self.assertListEqual(['2/d', '2/e'],
+                             [x['name'] for x in res['objects']])
+        self.assertListEqual([], res['prefixes'])
+        self.assertFalse(res['truncated'])
+
+        res = self.api.object_list(self.account, self.cname,
+                                   prefix='1/a')
+        self.assertIn('objects', res)
+        self.assertIn('prefixes', res)
+        self.assertIn('truncated', res)
+        self.assertListEqual(['1/a', '1/aa'],
+                             [x['name'] for x in res['objects']])
+        self.assertListEqual([], res['prefixes'])
+        self.assertFalse(res['truncated'])
+
     def test_depaginate_object_list_with_service_busy(self):
         container = random_str(32)
 

@@ -786,7 +786,7 @@ _list_params_to_sql_clause(struct list_params_s *lp, GString *clause,
 	}
 	GPtrArray *params = g_ptr_array_new ();
 
-	if (lp->marker_start) {
+	if (lp->marker_start && g_strcmp0(lp->marker_start, lp->prefix) >= 0) {
 		lazy_and();
 		g_string_append_static (clause, " alias > ?");
 		g_ptr_array_add (params, g_variant_new_string (lp->marker_start));
