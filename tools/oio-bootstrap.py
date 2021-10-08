@@ -32,6 +32,8 @@ import re
 from string import ascii_letters, digits, Template
 import sys
 import argparse
+from collections import namedtuple
+import shutil
 
 
 template_redis = """
@@ -88,13 +90,44 @@ hz 10
 aof-rewrite-incremental-fsync yes
 """
 
-template_gridinit_redis = """
-[service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-on_die=cry
-enabled=true
-start_at_boot=false
-command=redis-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+template_systemd_service_redis = """
+[Unit]
+Description=[OpenIO] Service redis ${SRVNUM}
+PartOf=${PARENT}
+OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=/usr/bin/redis-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
+Restart=on-failure
+Environment=HOME=${HOME}
+${ENVIRONMENT}
+
+[Install]
+WantedBy=${PARENT}
+"""
+template_systemd_service_beanstalkd = """
+[Unit]
+Description=[OpenIO] Service beanstalkd ${SRVNUM}
+PartOf=${PARENT}
+OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=/usr/bin/beanstalkd -l ${IP} -p ${PORT} -b ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM} -f 1000 -s 10240000
+ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
+Restart=on-failure
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=HOME=${HOME}
+${ENVIRONMENT}
+
+[Install]
+WantedBy=${PARENT}
 """
 
 template_foundationdb = """
@@ -132,59 +165,106 @@ template_foundationdb_cluster = """
 ${DESCRIPTION}:${RANDOMSTR}@${IP}:${PORT}
 """
 
-template_gridinit_foundationdb = """
-[service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-on_die=cry
-enabled=true
-start_at_boot=false
-command=fdbmonitor --conffile ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf --lockfile ${RUNDIR}/${NS}-${SRVTYPE}-${SRVNUM}.pid
+template_systemd_service_foundationdb = """
+[Unit]
+Description=[OpenIO] Service account
+PartOf=${PARENT}
+OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} --conffile ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf --lockfile ${RUNDIR}/${NS}-${SRVTYPE}-${SRVNUM}.pid
+ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
+Restart=on-failure
+Environment=PATH=${PATH}
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=HOME=${HOME}
+
+[Install]
+WantedBy=${PARENT}
 """
 
-template_gridinit_beanstalkd = """
-[service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-on_die=respawn
-enabled=true
-start_at_boot=true
-command=beanstalkd -l ${IP} -p ${PORT} -b ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM} -f 1000 -s 10240000
+template_systemd_service_account = """
+[Unit]
+Description=[OpenIO] Service account
+PartOf=${PARENT}
+OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
+Restart=on-failure
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=HOME=${HOME}
+
+[Install]
+WantedBy=${PARENT}
 """
 
-template_gridinit_account = """
-[service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-on_die=cry
-enabled=true
-start_at_boot=false
-command=oio-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+template_systemd_service_xcute = """
+[Unit]
+Description=[OpenIO] Service xcute ${SRVNUM}
+PartOf=${PARENT}
+OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
+Restart=on-failure
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=HOME=${HOME}
+
+[Install]
+WantedBy=${PARENT}
 """
 
-template_gridinit_xcute = """
-[service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-on_die=cry
-enabled=true
-start_at_boot=false
-command=oio-${SRVTYPE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+template_systemd_service_rdir = """
+[Unit]
+Description=[OpenIO] Service rdir ${SRVNUM}
+PartOf=${PARENT}
+OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
+Restart=on-failure
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=HOME=${HOME}
+
+[Install]
+WantedBy=${PARENT}
 """
 
-template_gridinit_rdir = """
-[service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-on_die=cry
-enabled=true
-start_at_boot=false
-command=oio-${SRVTYPE}-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
-"""
+template_systemd_service_proxy = """
+[Unit]
+Description=[OpenIO] Service proxy ${SRVNUM}
+PartOf=${PARENT}
+OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 
-template_gridinit_proxy = """
-[service.${NS}-proxy]
-group=${NS},localhost,proxy,${IP}:${PORT}
-on_die=cry
-enabled=true
-start_at_boot=false
-#command=${EXE} -s OIO,${NS},proxy -O Bind=${RUNDIR}/${NS}-proxy.sock ${IP}:${PORT} ${NS}
-command=${EXE} -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
+ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
+Restart=on-failure
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=HOME=${HOME}
+${ENVIRONMENT}
+
+[Install]
+WantedBy=${PARENT}
 """
 
 template_blob_indexer_service = """
@@ -489,7 +569,7 @@ stats:
 template_foundationdb_watch = """
 host: ${IP}
 port: ${PORT}
-type: redis
+type: foundationdb
 location: ${LOC}
 checks:
     - {type: tcp}
@@ -744,6 +824,10 @@ score_timeout=120
 score_expr=(1 + (num stat.cpu))
 score_timeout=120
 
+[type:foundationdb]
+score_expr=(1 + (num stat.cpu))
+score_timeout=120
+
 [type:account]
 score_expr=(1 + (num stat.cpu))
 score_timeout=120
@@ -779,118 +863,216 @@ score_timeout=120
 lock_at_first_register=false
 """
 
-template_gridinit_header = """
-[Default]
-listen=${RUNDIR}/gridinit.sock
-pidfile=${RUNDIR}/gridinit.pid
-uid=${UID}
-gid=${GID}
-working_dir=${TMPDIR}
-inherit_env=1
-#env.PATH=${PATH}:${HOME}/.local/bin:${CODEDIR}/bin:/bin:/usr/bin:/usr/local/bin
-env.LD_LIBRARY_PATH=${HOME}/.local/@LD_LIBDIR@:${LIBDIR}
+template_systemd_service_ns = """
+[Unit]
+Description=[OpenIO] Service namespace
+PartOf=${PARENT}
+OioGroup=${NS},localhost,conscience,conscience-agent
 
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} ${CFGDIR}/conscience-agent.yml
+Restart=on-failure
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=PYTHONPATH=${PYTHONPATH}
+Environment=HOME=${HOME}
 
-limit.core_size=-1
-#limit.max_files=2048
-#limit.stack_size=256
-
-#include=${CFGDIR}/*-gridinit.conf
-
+[Install]
+WantedBy=${PARENT}
 """
 
-template_gridinit_ns = """
-[service.${NS}-conscience-agent]
-group=${NS},localhost,conscience,conscience-agent
-on_die=cry
-enabled=true
-start_at_boot=true
-command=oio-conscience-agent ${CFGDIR}/conscience-agent.yml
-env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/${PYTHON_VERSION}/site-packages
+template_systemd_service_conscience = """
+[Unit]
+Description=[OpenIO] Service conscience ${SRVNUM}
+After=network.target
+PartOf=${PARENT}
+OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} -O PersistencePath=${DATADIR}/${NS}-conscience-${SRVNUM}/conscience.dat -O PersistencePeriod=15 -s OIO,${NS},cs,${SRVNUM} ${CFGDIR}/${NS}-conscience-${SRVNUM}.conf
+ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
+Restart=on-failure
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=HOME=${HOME}
+
+[Install]
+WantedBy=${PARENT}
 """
 
-template_gridinit_conscience = """
-[service.${NS}-conscience-${SRVNUM}]
-group=${NS},localhost,conscience,${IP}:${PORT}
-on_die=cry
-enabled=true
-start_at_boot=true
-command=oio-daemon -O PersistencePath=${DATADIR}/${NS}-conscience-${SRVNUM}/conscience.dat -O PersistencePeriod=15 -s OIO,${NS},cs,${SRVNUM} ${CFGDIR}/${NS}-conscience-${SRVNUM}.conf
+template_systemd_target = """
+[Unit]
+Description=[OpenIO] Target ${SRVTYPE}
+${WANTS}
+${AFTER}
+${PARTOF}
+
+[Install]
+${WANTEDBY}
 """
 
-template_gridinit_meta = """
-[service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-on_die=cry
-enabled=true
-start_at_boot=false
-command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${IP}:${PORT} ${OPTARGS} ${EXTRA} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
+template_systemd_service_meta = """
+[Unit]
+Description=[OpenIO] Service ${SRVTYPE} ${SRVNUM}
+PartOf=${PARENT}
+OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${IP}:${PORT} ${OPTARGS} ${EXTRA} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
+ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=HOME=${HOME}
+
+[Install]
+WantedBy=${PARENT}
 """
 
-template_gridinit_indexer = """
-[Service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-command=oio-blob-indexer ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
-enabled=true
-start_at_boot=false
-on_die=cry
+template_systemd_service_indexer = """
+[Unit]
+Description=[OpenIO] Service indexer ${SRVNUM}
+After=network.target
+PartOf=${PARENT}
+OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=HOME=${HOME}
+
+[Install]
+WantedBy=${PARENT}
 """
 
-template_gridinit_meta2_indexer = """
-[Service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${GROUPTYPE}
-command=oio-meta2-indexer ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
-enabled=true
-start_at_boot=false
-on_die=cry
+template_systemd_service_meta2_indexer = """
+[Unit]
+Description=[OpenIO] Service meta2 indexer
+After=network.target
+PartOf=${PARENT}
+OioGroup=${NS},localhost,${SRVTYPE}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=HOME=${HOME}
+
+[Install]
+WantedBy=${PARENT}
 """
 
-template_gridinit_meta2_crawler = """
-[Service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${GROUPTYPE}
-command=oio-meta2-crawler ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
-enabled=true
-start_at_boot=false
-on_die=cry
+template_systemd_service_meta2_crawler = """
+[Unit]
+Description=[OpenIO] Service meta2 indexer
+After=network.target
+PartOf=${PARENT}
+OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=HOME=${HOME}
+
+[Install]
+WantedBy=${PARENT}
 """
 
-template_gridinit_rdir_crawler = """
-[Service.${NS}-${SRVTYPE}]
-group=${NS},localhost,${GROUPTYPE}
-command=oio-rdir-crawler ${CFGDIR}/${NS}-${SRVTYPE}.conf
-enabled=true
-start_at_boot=false
-on_die=cry
+template_systemd_service_rdir_crawler = """
+[Unit]
+Description=[OpenIO] Service rdir crawler ${SRVNUM}
+PartOf=${PARENT}
+OioGroup=${NS},localhost,${SRVTYPE}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}.conf
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=HOME=${HOME}
+
+[Install]
+WantedBy=${PARENT}
 """
 
-template_gridinit_rawx_command_options = \
+template_systemd_rawx_command_options = \
     '-s OIO,${NS},${SRVTYPE},${SRVNUM} -D FOREGROUND ' \
     '-f ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.httpd.conf'
-template_gridinit_rawx = """
-[Service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-command=oio-rawx %s
-enabled=true
-start_at_boot=false
-on_die=cry
+
+template_systemd_service_rawx="""
+[Unit]
+Description=[OpenIO] Service rawx ${SRVNUM}
+After=network.target
+PartOf=${PARENT}
+OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} %s
+ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=HOME=${HOME}
+
+[Install]
+WantedBy=${PARENT}
 """
 
-template_gridinit_httpd = """
-[Service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
-command=${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.httpd.conf -E /tmp/httpd-startup-failures.log
-enabled=true
-start_at_boot=false
-on_die=cry
+template_systemd_service_httpd = """
+[Unit]
+Description=[OpenIO] Service ${SRVTYPE} ${SRVNUM}
+After=network.target
+PartOf=${PARENT}
+OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.httpd.conf -E /tmp/httpd-startup-failures.log
+ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
+Environment=PATH=${PATH}
+Environment=PYTHONPATH=${PYTHONPATH}
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=HOME=${HOME}
+
+[Install]
+WantedBy=${PARENT}
 """
 
-template_gridinit_blob_rebuilder = """
-[Service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE}
-command=oio-blob-rebuilder --concurrency 10 --beanstalkd ${QUEUE_URL} --log-facility local0 --log-syslog-prefix OIO,OPENIO,${SRVTYPE},${SRVNUM} ${NS}
-enabled=true
-start_at_boot=false
-on_die=cry
+template_systemd_service_blob_rebuilder = """
+[Unit]
+Description=[OpenIO] Service blob rebuilder ${SRVNUM}
+PartOf=${PARENT}
+OioGroup=${NS},localhost,${SRVTYPE}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} --concurrency 10 --beanstalkd ${QUEUE_URL} --log-facility local0 --log-syslog-prefix OIO,OPENIO,${SRVTYPE},${SRVNUM} ${NS}
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=HOME=${HOME}
+
+[Install]
+WantedBy=${PARENT}
 """
 
 template_local_header = """
@@ -925,15 +1107,24 @@ iam.connection=redis://${IP}:${REDIS_PORT}/?allow_empty_policy_name=False
 
 """
 
-template_gridinit_event_agent = """
+template_systemd_service_event_agent = """
+[Unit]
+Description=[OpenIO] Service event agent ${SRVNUM}
+After=network.target
+PartOf=${PARENT}
+OioGroup=${NS},localhost,event
 
-[service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,event
-on_die=respawn
-enabled=true
-start_at_boot=false
-command=oio-event-agent ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
-env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/${PYTHON_VERSION}/site-packages
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+Environment=PYTHONPATH=${PYTHONPATH}
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=HOME=${HOME}
+
+[Install]
+WantedBy=${PARENT}
 """
 
 template_event_agent = """
@@ -1070,15 +1261,23 @@ tube = oio-preserved
 queue_url = ${MAIN_QUEUE_URL}
 """
 
-template_gridinit_xcute_event_agent = """
+template_systemd_service_xcute_event_agent = """
+[Unit]
+Description=[OpenIO] Service xcute event agent ${SRVNUM}
+After=network.target
+PartOf=${PARENT}
+OioGroup=${NS},localhost,event
 
-[service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,event
-on_die=respawn
-enabled=true
-start_at_boot=false
-command=oio-event-agent ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
-env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+Environment=PYTHONPATH=${PYTHONPATH}
+Environment=HOME=${HOME}
+
+[Install]
+WantedBy=${PARENT}
 """
 
 template_xcute_event_agent = """
@@ -1177,14 +1376,36 @@ ${WANT_SERVICE_ID}service_id = ${SERVICE_ID}
 syslog_prefix = OIO,${NS},rdir,${SRVNUM}
 """
 
-template_gridinit_webhook_server = """
-[service.${NS}-webhook]
-group=${NS},localhost,webhook
-on_die=cry
-enabled=true
-start_at_boot=true
-command=oio-webhook-test.py --port 9081
-env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/${PYTHON_VERSION}/site-packages
+template_admin = """
+[admin-server]
+bind_addr = ${IP}
+bind_port = ${PORT}
+namespace = ${NS}
+log_facility = LOG_LOCAL0
+log_level = INFO
+log_address = /dev/log
+syslog_prefix = OIO,${NS},admin,${SRVNUM}
+redis_host = ${IP}
+"""
+
+template_systemd_service_webhook_server = """
+[Unit]
+Description=[OpenIO] Service webhook server ${SRVNUM}
+After=network.target
+PartOf=${PARENT}
+OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+
+[Service]
+${SERVICEUSER}
+${SERVICEGROUP}
+Type=simple
+ExecStart=${EXE} --port 9081
+Environment=PYTHONPATH=${PYTHONPATH}
+Environment=LD_LIBRARY_PATH=${LIBDIR}
+Environment=HOME=${HOME}
+
+[Install]
+WantedBy=${PARENT}
 """
 
 
@@ -1200,8 +1421,15 @@ TMPDIR = '/tmp'
 CODEDIR = '@CMAKE_INSTALL_PREFIX@'
 SRCDIR = '@CMAKE_CURRENT_SOURCE_DIR@'
 LIBDIR = CODEDIR + '/@LD_LIBDIR@'
-PATH = HOME+"/.local/bin:@CMAKE_INSTALL_PREFIX@/bin:/usr/sbin"
+BINDIR = CODEDIR + '/bin'
+PATH = HOME + "/.local/bin:@CMAKE_INSTALL_PREFIX@/bin:" + os.environ['PATH']
 PYTHON_VERSION = "python" + ".".join(str(x) for x in sys.version_info[:2])
+VENV = str(os.environ['VIRTUAL_ENV'])
+if VENV:
+    PYTHONPATH = '%s/lib/%s/site-packages' % (
+        VENV, PYTHON_VERSION)
+    BINDIR = VENV + '/bin'
+    PATH = '%s:%s' % (BINDIR, PATH)
 
 # Constants for the configuration of oio-bootstrap
 NS = 'ns'
@@ -1265,6 +1493,15 @@ if not os.path.exists('/usr/sbin/httpd'):
     HTTPD_BINARY = '/usr/sbin/apache2'
     APACHE2_MODULES_SYSTEM_DIR = '/usr/lib/apache2/'
 
+def is_systemd_system():
+    return 'OIO_SYSTEMD_SYSTEM' in os.environ
+
+
+def systemd_dir():
+    if is_systemd_system():
+        return '/etc/systemd/system'
+    return HOME + '/.config/systemd/user'
+
 
 def config(env):
     return '{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.conf'.format(**env)
@@ -1286,9 +1523,17 @@ def cluster(env):
     return '{CFGDIR}/{NS}-fdb.cluster'.format(**env)
 
 
-def gridinit(env):
-    return '{CFGDIR}/gridinit.conf'.format(**env)
+def systemd_service(env):
+    filename = '{PREFIX}{SRVTYPE}'
+    if 'SRVNUM' in env:
+        filename = filename + '-{SRVNUM}'
+    filename = filename + '.service'
 
+    return filename.format(**env)
+
+
+def systemd_target(env):
+    return '{PREFIX}{SRVTYPE}.target'.format(**env)
 
 def mkdir_noerror(d):
     try:
@@ -1296,7 +1541,6 @@ def mkdir_noerror(d):
     except OSError as e:
         if e.errno != errno.EEXIST:
             raise e
-
 
 def type2exe(t):
     return 'oio-' + str(t) + '-server'
@@ -1356,13 +1600,16 @@ def generate(options):
     ENV = dict(ZK_CNXSTRING=options.get('ZK'),
                NS=ns,
                HOME=HOME,
+               BINDIR=BINDIR,
                PATH=PATH,
                LIBDIR=LIBDIR,
+               PYTHONPATH=PYTHONPATH,
                OIODIR=OIODIR,
                SDSDIR=SDSDIR,
                TMPDIR=TMPDIR,
                DATADIR=DATADIR,
                CFGDIR=CFGDIR,
+               SYSTEMDDIR=systemd_dir(),
                RUNDIR=RUNDIR,
                SPOOLDIR=SPOOLDIR,
                LOGDIR=LOGDIR,
@@ -1436,6 +1683,13 @@ def generate(options):
     def build_location(ip, num):
         return "rack.%s.%d" % (ip.replace(".", "-"), num)
 
+
+    targets = dict()
+    systemd_prefix = 'oio-'
+
+
+    Target = namedtuple('Target', ['name','systemd_name', 'parent', 'deps'])
+
     def add_service(env):
         t = env['SRVTYPE']
         if t not in final_services:
@@ -1456,6 +1710,8 @@ def generate(options):
             out['tls_addr'] = '%s:%s' % (env['IP'], env['TLS_PORT'])
         if 'VOLUME' in env:
             out['path'] = env['VOLUME']
+        if 'SYSTEMD_UNIT' in env:
+            out['unit'] = env['SYSTEMD_UNIT']
         # For some types of services, SERVICE_ID is always there, but we do
         # not want it in the test configuration file if service IDs are not
         # globally enabled.
@@ -1463,6 +1719,64 @@ def generate(options):
                 env.get('WANT_SERVICE_ID') != '#'):
             out['service_id'] = env['SERVICE_ID']
         final_services[t].append(out)
+
+
+    def register_target(name, parent=None):
+        if not name in targets:
+            env = subenv({
+                'PREFIX': systemd_prefix,
+                'SRVTYPE': name,
+                'SRVNUM': 1
+            })
+            targets[name] = Target(name,
+                systemd_target(env),
+                parent.systemd_name if parent else None,
+                list())
+        if parent:
+            parent.deps.append(targets[name].systemd_name)
+        return targets[name]
+
+    def register_service(env, template_name, target, add_service_to_conf=True):
+        env.update({'PREFIX': systemd_prefix,
+                    'PARENT': target.systemd_name if target else '',
+                    'SERVICEUSER': 'User={}'.format(env['USER'])\
+                        if is_systemd_system() else '',
+                    'SERVICEGROUP': 'Group={}'.format(env['GROUP'])\
+                        if is_systemd_system() else ''})
+        service_name = systemd_service(env)
+        if add_service_to_conf:
+            env.update({'SYSTEMD_UNIT': service_name})
+            add_service(env)
+        if 'EXE' in env:
+            env['EXE'] = shutil.which(env['EXE'])
+        if target:
+            target.deps.append(service_name)
+        service_path = '{}/{}'.format(env['SYSTEMDDIR'], service_name)
+        environment = list()
+        for key in (k for k in iterkeys(env) if k.startswith("env.")):
+            environment.append("Environment=%s=%s" % (key[4:], env[key]))
+        env.update({ 'ENVIRONMENT': '\n'.join(environment) })
+        with open(service_path, 'w+') as f:
+            tpl = Template(template_name)
+            f.write(tpl.safe_substitute(env))
+        return service_name
+
+    def generate_target(target):
+        env = subenv({
+            'PREFIX': systemd_prefix,
+            'SRVTYPE': target.name,
+            'SRVNUM': 1,
+            'PARTOF': '',
+            'WANTEDBY': '',
+            'WANTS': '\n'.join(['Wants=%s' % t for t in target.deps]),
+            'AFTER': '\n'.join(['After=%s' % t for t in target.deps])})
+        if target.parent:
+            env['PARTOF'] = 'PartOf={}'.format(target.parent)
+            env['WANTEDBY'] = 'WantedBy={}'.format(target.parent)
+        target_path = '{}/{}'.format(env['SYSTEMDDIR'], target.systemd_name)
+        with open(target_path, 'w+') as f:
+            tpl = Template(template_systemd_target)
+            f.write(tpl.safe_substitute(env))
 
     ENV['LOC_PROXYD'] = build_location(hosts[0], ENV['PORT_PROXYD'])
     ENV['MONITOR_PERIOD'] = getint(
@@ -1476,14 +1790,13 @@ def generate(options):
     mkdir_noerror(CODEDIR)
     mkdir_noerror(DATADIR)
     mkdir_noerror(CFGDIR)
+    mkdir_noerror(systemd_dir())
     mkdir_noerror(WATCHDIR)
     mkdir_noerror(RUNDIR)
     mkdir_noerror(LOGDIR)
 
-    # gridinit header
-    with open(gridinit(ENV), 'w+') as f:
-        tpl = Template(template_gridinit_header)
-        f.write(tpl.safe_substitute(ENV))
+    # create root target
+    root_target = register_target('cluster')
 
     # conscience
     nb_conscience = getint(options['conscience'].get(SVC_NB),
@@ -1512,13 +1825,12 @@ def generate(options):
                 ['tcp://'+str(host)+':'+str(hub) for _, host, _, hub in cs]),
         })
         # generate the conscience files
+        conscience_target = register_target('conscience', root_target)
         for num, host, port, hub in cs:
             env = subenv({'SRVTYPE': 'conscience', 'SRVNUM': num,
-                          'PORT': port, 'PORT_HUB': hub})
-            add_service(env)
-            with open(gridinit(env), 'a+') as f:
-                tpl = Template(template_gridinit_conscience)
-                f.write(tpl.safe_substitute(env))
+                          'PORT': port, 'PORT_HUB': hub, 'EXE': 'oio-daemon'})
+            register_service(env, template_systemd_service_conscience,
+                                conscience_target)
             with open(config(env), 'w+') as f:
                 tpl = Template(template_conscience_service)
                 f.write(tpl.safe_substitute(env))
@@ -1532,17 +1844,13 @@ def generate(options):
             h = hosts[num % len(hosts)]
             all_beanstalkd.append((num + 1, h, next(ports)))
         # generate the files
+        beanstalkd_target = register_target('beanstalkd', root_target)
         for num, host, port in all_beanstalkd:
             env = subenv({'SRVTYPE': 'beanstalkd', 'SRVNUM': num,
                           'IP': host, 'PORT': port,
                           'EXE': 'beanstalkd'})
-            add_service(env)
-            # gridinit config
-            tpl = Template(template_gridinit_beanstalkd)
-            with open(gridinit(env), 'a+') as f:
-                f.write(tpl.safe_substitute(env))
-                for key in (k for k in iterkeys(env) if k.startswith("env.")):
-                    f.write("%s=%s\n" % (key, env[key]))
+            register_service(env, template_systemd_service_beanstalkd,
+                beanstalkd_target)
             # watcher
             tpl = Template(template_beanstalkd_watch)
             with open(watch(env), 'w+') as f:
@@ -1559,7 +1867,7 @@ def generate(options):
     meta2_volumes = []
 
     # meta*
-    def generate_meta(t, n, tpl, ext_opt="", service_id=False):
+    def generate_meta(t, n, tpl, parent_target, ext_opt="", service_id=False):
         env = subenv({'SRVTYPE': t, 'SRVNUM': n, 'PORT': next(ports),
                       'EXE': 'oio-' + t + '-server',
                       'EXTRA': ext_opt})
@@ -1570,13 +1878,7 @@ def generate(options):
         else:
             env['WANT_SERVICE_ID'] = '#'
             env['OPTARGS'] = ''
-        add_service(env)
-        # gridinit config
-        tpl = Template(tpl)
-        with open(gridinit(env), 'a+') as f:
-            f.write(tpl.safe_substitute(env))
-            for key in (k for k in iterkeys(env) if k.startswith("env.")):
-                f.write("%s=%s\n" % (key, env[key]))
+        register_service(env, tpl, parent_target)
         # watcher
         tpl = Template(template_meta_watch)
         with open(watch(env), 'w+') as f:
@@ -1591,24 +1893,33 @@ def generate(options):
     nb_meta0 = max(getint(options['meta0'].get(SVC_NB), defaults['NB_M0']),
                    meta1_replicas)
     if nb_meta0:
+        meta0_target = register_target('meta0', root_target)
         for i in range(nb_meta0):
-            generate_meta('meta0', i + 1, template_gridinit_meta,
+            generate_meta('meta0', i + 1,
+                          template_systemd_service_meta,
+                          meta0_target,
                           options['meta0'].get(SVC_PARAMS, ""))
 
     # meta1
     nb_meta1 = max(getint(options['meta1'].get(SVC_NB), defaults['NB_M1']),
                    meta1_replicas)
     if nb_meta1:
+        meta1_target = register_target('meta1', root_target)
         for i in range(nb_meta1):
-            generate_meta('meta1', i + 1, template_gridinit_meta,
+            generate_meta('meta1', i + 1,
+                          template_systemd_service_meta,
+                          meta1_target,
                           options['meta1'].get(SVC_PARAMS, ""))
 
     # meta2
     nb_meta2 = max(getint(options['meta2'].get(SVC_NB), defaults['NB_M2']),
                    meta2_replicas)
     if nb_meta2:
+        meta2_target = register_target('meta2', root_target)
         for i in range(nb_meta2):
-            generate_meta('meta2', i + 1, template_gridinit_meta,
+            generate_meta('meta2', i + 1,
+                          template_systemd_service_meta,
+                          meta2_target,
                           options['meta2'].get(SVC_PARAMS, ""),
                           service_id=options['with_service_id'])
 
@@ -1616,19 +1927,20 @@ def generate(options):
     _tmp_env = subenv({
         'META2_VOLUMES': ",".join(meta2_volumes),
         'SRVTYPE': 'meta2-indexer',
-        'SRVNUM': '1',
+        'SRVNUM': 1,
         'GROUPTYPE': 'indexer',
+        'EXE': 'oio-meta2-indexer'
     })
+    indexer_target = register_target('indexer', root_target)
+    crawler_target = register_target('crawler', root_target)
     # first the conf
     tpl = Template(template_meta2_indexer_service)
     to_write = tpl.safe_substitute(_tmp_env)
     path = '{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.conf'.format(**_tmp_env)
     with open(path, 'w+') as f:
         f.write(to_write)
-    # then the gridinit conf
-    tpl = Template(template_gridinit_meta2_indexer)
-    with open(gridinit(_tmp_env), 'a+') as f:
-        f.write(tpl.safe_substitute(_tmp_env))
+    register_service(_tmp_env, template_systemd_service_meta2_indexer,
+        indexer_target, False)
 
     # oio-meta2-crawler
     _tmp_env = subenv({
@@ -1636,6 +1948,7 @@ def generate(options):
         'SRVTYPE': 'meta2-crawler',
         'SRVNUM': '1',
         'GROUPTYPE': 'crawler',
+        'EXE': 'oio-meta2-crawler'
     })
     # first the conf
     tpl = Template(template_meta2_crawler_service)
@@ -1643,19 +1956,19 @@ def generate(options):
     path = '{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.conf'.format(**_tmp_env)
     with open(path, 'w+') as f:
         f.write(to_write)
-    # then the gridinit conf
-    tpl = Template(template_gridinit_meta2_crawler)
-    with open(gridinit(_tmp_env), 'a+') as f:
-        f.write(tpl.safe_substitute(_tmp_env))
+    register_service(_tmp_env, template_systemd_service_meta2_crawler,
+        crawler_target, False)
 
     # RAWX
     srvtype = 'rawx'
     nb_rawx = getint(options[srvtype].get(SVC_NB), defaults['NB_RAWX'])
     if nb_rawx:
         rawx_volumes = []
+        rawx_target = register_target('rawx', root_target)
         for i in range(nb_rawx):
             env = subenv({'SRVTYPE': srvtype,
                           'SRVNUM': i + 1,
+                          'EXE': 'oio-rawx',
                           'PORT': next(ports),
                           'COMPRESSION': ENV['COMPRESSION'] if i % 2 else 'off',
                           'EXTRASLOT': ('rawx-even' if i % 2 else 'rawx-odd'),
@@ -1673,13 +1986,9 @@ def generate(options):
                 env['USE_TLS'] = ''
             else:
                 env['USE_TLS'] = '#'
+            register_service(env, template_systemd_service_rawx \
+                % template_systemd_rawx_command_options, rawx_target)
 
-            add_service(env)
-            # gridinit (rawx)
-            tpl = Template(template_gridinit_rawx %
-                           template_gridinit_rawx_command_options)
-            with open(gridinit(env), 'a+') as f:
-                f.write(tpl.safe_substitute(env))
             # service
             tpl = Template(template_rawx_service)
             to_write = tpl.safe_substitute(env)
@@ -1691,23 +2000,24 @@ def generate(options):
             with open(watch(env), 'w+') as f:
                 f.write(to_write)
 
-            env.update({'SRVTYPE': 'indexer'})
+            env.update({'SRVTYPE': 'indexer', 'EXE': 'oio-blob-indexer'})
             # indexer
             tpl = Template(template_blob_indexer_service)
             to_write = tpl.safe_substitute(env)
             path = '{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.conf'.format(**env)
             with open(path, 'w+') as f:
                 f.write(to_write)
-            # gridinit (indexer)
-            tpl = Template(template_gridinit_indexer)
-            with open(gridinit(env), 'a+') as f:
-                f.write(tpl.safe_substitute(env))
+
+            register_service(env, template_systemd_service_indexer,
+                indexer_target, False)
 
         # oio-rdir-crawler
         env.update({
             'RAWX_VOLUMES': ",".join(rawx_volumes),
             'SRVTYPE': 'rdir-crawler',
+            'EXE': 'oio-rdir-crawler',
             'GROUPTYPE': 'crawler',
+            'SRVNUM': '1',
             'HASH_WIDTH': defaults[HASH_WIDTH],
             'HASH_DEPTH': defaults[HASH_DEPTH]
         })
@@ -1717,18 +2027,15 @@ def generate(options):
         path = '{CFGDIR}/{NS}-{SRVTYPE}.conf'.format(**env)
         with open(path, 'w+') as f:
             f.write(to_write)
-        # then the gridinit conf
-        tpl = Template(template_gridinit_rdir_crawler)
-        with open(gridinit(env), 'a+') as f:
-            f.write(tpl.safe_substitute(env))
+        register_service(env, template_systemd_service_rdir_crawler,
+            crawler_target, False)
 
     # redis
-    srvtype = 'redis'
-    env = subenv({'SRVTYPE': srvtype, 'SRVNUM': 1, 'PORT': 6379})
-    add_service(env)
+    env = subenv({'SRVTYPE': 'redis', 'SRVNUM': 1, 'PORT': 6379})
     if options.get(ALLOW_REDIS):
-        with open(gridinit(env), 'a+') as f:
-            tpl = Template(template_gridinit_redis)
+        register_service(env, template_systemd_service_redis, root_target)
+        with open(config(env), 'w+') as f:
+            tpl = Template(template_redis)
             f.write(tpl.safe_substitute(env))
         with open(config(env), 'w+') as f:
             tpl = Template(template_redis)
@@ -1742,6 +2049,7 @@ def generate(options):
     env = subenv({
         'SRVTYPE': srvtype,
         'SRVNUM': 1,
+        'EXE': 'fdbmonitor',
         'PORT': 4500,
         'DESCRIPTION': ''.join(
             [choice(ascii_letters + digits) for _ in range(8)]),
@@ -1749,11 +2057,9 @@ def generate(options):
             [choice(ascii_letters + digits) for _ in range(8)]) })
     cluster_file = cluster(env)
     env.update({'CLUSTERFILE': cluster_file})
-    add_service(env)
     if options.get(ALLOW_FDB):
-        with open(gridinit(env), 'a+') as f:
-            tpl = Template(template_gridinit_foundationdb)
-            f.write(tpl.safe_substitute(env))
+        register_service(
+            env, template_systemd_service_foundationdb, root_target)
         with open(config(env), 'w+') as f:
             tpl = Template(template_foundationdb)
             f.write(tpl.safe_substitute(env))
@@ -1767,24 +2073,17 @@ def generate(options):
     # proxy
     env = subenv({'SRVTYPE': 'proxy', 'SRVNUM': 1, 'PORT': port_proxy,
                   'EXE': 'oio-proxy', 'LOC': ENV['LOC_PROXYD']})
-    add_service(env)
-    with open(gridinit(env), 'a+') as f:
-        tpl = Template(template_gridinit_proxy)
-        f.write(tpl.safe_substitute(env))
-        for key in (k for k in iterkeys(env) if k.startswith("env.")):
-            f.write("%s=%s\n" % (key, env[key]))
+    register_service(env, template_systemd_service_proxy, root_target)
+
     with open(watch(env), 'w+') as f:
         tpl = Template(template_proxy_watch)
         f.write(tpl.safe_substitute(env))
 
     # ecd
-    env = subenv({'SRVTYPE': 'ecd', 'SRVNUM': 1, 'PORT': port_ecd,
-                  'USER': 'nobody', 'GROUP': 'nogroup'})
-    add_service(env)
-    tpl = Template(template_gridinit_httpd)
-    with open(gridinit(env), 'a+') as f:
-        f.write(tpl.safe_substitute(env))
+    env = subenv({'SRVTYPE': 'ecd', 'SRVNUM': 1, 'PORT': port_ecd})
+    register_service(env, template_systemd_service_httpd, root_target)
     # service
+    env.update({'USER': 'nobody', 'GROUP': 'nogroup'})
     tpl = Template(template_wsgi_service_host)
     to_write = tpl.safe_substitute(env)
     if options.get(OPENSUSE, False):
@@ -1798,11 +2097,10 @@ def generate(options):
         f.write(to_write)
 
     # account
-    env = subenv({'SRVTYPE': 'account', 'SRVNUM': 1, 'PORT': next(ports)})
-    add_service(env)
-    with open(gridinit(env), 'a+') as f:
-        tpl = Template(template_gridinit_account)
-        f.write(tpl.safe_substitute(env))
+    env = subenv({
+        'SRVTYPE': 'account', 'SRVNUM': 1,
+        'PORT': next(ports), 'EXE': 'oio-account-server'})
+    register_service(env, template_systemd_service_account, root_target)
     with open(config(env), 'w+') as f:
         tpl = Template(template_account)
         f.write(tpl.safe_substitute(env))
@@ -1812,15 +2110,14 @@ def generate(options):
 
     # rdir
     nb_rdir = getint(options['rdir'].get(SVC_NB), 3)
+    rdir_target = register_target('rdir', root_target)
     for num in range(nb_rdir):
         env = subenv({'SRVTYPE': 'rdir',
                       'SRVNUM': num + 1,
-                      'PORT': next(ports)})
+                      'PORT': next(ports),
+                      'EXE': 'oio-rdir-server'})
         env['SERVICE_ID'] = "{NS}-{SRVTYPE}-{SRVNUM}".format(**env)
-        add_service(env)
-        with open(gridinit(env), 'a+') as f:
-            tpl = Template(template_gridinit_rdir)
-            f.write(tpl.safe_substitute(env))
+        register_service(env, template_systemd_service_rdir, rdir_target)
         with open(config(env), 'w+') as f:
             tpl = Template(template_rdir)
             f.write(tpl.safe_substitute(env))
@@ -1828,22 +2125,23 @@ def generate(options):
             tpl = Template(template_rdir_watch)
             f.write(tpl.safe_substitute(env))
 
-
     # For testing purposes, some events must go to the main queue
     if all_beanstalkd:
         _, host, port = all_beanstalkd[0]
         ENV['MAIN_QUEUE_URL'] = 'beanstalk://{0}:{1}'.format(host, port)
+
+    event_target = register_target('event', root_target)
+    conscience_agents_target = register_target('event-agent', event_target)
+    xcute_agents_target = register_target('xcute-event-agent', event_target)
 
     # Event agent configuration -> one per beanstalkd
     for num, host, port in all_beanstalkd:
         bnurl = 'beanstalk://{0}:{1}'.format(host, port)
 
         env = subenv({'SRVTYPE': 'event-agent', 'SRVNUM': num,
-                      'QUEUE_URL': bnurl})
-        add_service(env)
-        with open(gridinit(env), 'a+') as f:
-            tpl = Template(template_gridinit_event_agent)
-            f.write(tpl.safe_substitute(env))
+                      'QUEUE_URL': bnurl, 'EXE': 'oio-event-agent' })
+        register_service(env, template_systemd_service_event_agent,
+            conscience_agents_target)
         with open(config(env), 'w+') as f:
             tpl = Template(template_event_agent)
             f.write(tpl.safe_substitute(env))
@@ -1852,10 +2150,9 @@ def generate(options):
             f.write(tpl.safe_substitute(env))
 
         env = subenv({'SRVTYPE': 'xcute-event-agent', 'SRVNUM': num,
-                      'QUEUE_URL': bnurl})
-        with open(gridinit(env), 'a+') as f:
-            tpl = Template(template_gridinit_xcute_event_agent)
-            f.write(tpl.safe_substitute(env))
+                      'QUEUE_URL': bnurl, 'EXE': 'oio-event-agent'})
+        register_service(env, template_systemd_service_xcute_event_agent,
+            xcute_agents_target, False)
         with open(config(env), 'w+') as f:
             tpl = Template(template_xcute_event_agent)
             f.write(tpl.safe_substitute(env))
@@ -1865,11 +2162,8 @@ def generate(options):
 
     # xcute
     env = subenv({'SRVTYPE': 'xcute', 'SRVNUM': 1, 'PORT': next(ports),
-                  'REDIS_PORT': 6379, 'QUEUE_URL': bnurl})
-    add_service(env)
-    with open(gridinit(env), 'a+') as f:
-        tpl = Template(template_gridinit_xcute)
-        f.write(tpl.safe_substitute(env))
+                  'REDIS_PORT': 6379, 'QUEUE_URL': bnurl, 'EXE': 'oio-xcute'})
+    register_service(env, template_systemd_service_xcute, root_target)
     with open(config(env), 'w+') as f:
         tpl = Template(template_xcute)
         f.write(tpl.safe_substitute(env))
@@ -1878,23 +2172,20 @@ def generate(options):
         f.write(tpl.safe_substitute(env))
 
     # blob-rebuilder configuration -> one per beanstalkd
+    rebuilder_target = register_target('blob-rebuilder', root_target)
     for num, host, port in all_beanstalkd:
         bnurl = 'beanstalk://{0}:{1}'.format(host, port)
         env = subenv({'SRVTYPE': 'blob-rebuilder', 'SRVNUM': num,
-                      'QUEUE_URL': bnurl})
-        add_service(env)
-        with open(gridinit(env), 'a+') as f:
-            tpl = Template(template_gridinit_blob_rebuilder)
-            f.write(tpl.safe_substitute(env))
+                      'QUEUE_URL': bnurl, 'EXE': 'oio-blob-rebuilder'})
+        register_service(env, template_systemd_service_blob_rebuilder,
+            rebuilder_target)
 
     # webhook test server
     if WEBHOOK:
-        env = subenv({'SRVTYPE': 'webhook', 'SRVNUM': 1, 'PORT': 9081})
-        add_service(env)
-        with open(gridinit(env), 'a+') as f:
-            tpl = Template(template_gridinit_webhook_server)
-            f.write(tpl.safe_substitute(env))
-
+        env = subenv({'SRVTYPE': 'webhook', 'SRVNUM': 1,
+            'PORT': 9081, 'EXE': 'oio-webhook-test.py'})
+        register_service(env, template_systemd_service_webhook_server,
+            root_target)
 
     # Conscience agent configuration
     env = subenv({'SRVTYPE': 'conscience-agent', 'SRVNUM': 1})
@@ -1902,10 +2193,10 @@ def generate(options):
         tpl = Template(template_conscience_agent)
         f.write(tpl.safe_substitute(env))
 
-    # gridinit header
-    with open(gridinit(ENV), 'a+') as f:
-        tpl = Template(template_gridinit_ns)
-        f.write(tpl.safe_substitute(ENV))
+    env = subenv({  'SRVTYPE': 'conscience-agent',
+                    'SRVNUM': 1, 'EXE': 'oio-conscience-agent'})
+    register_service(env, template_systemd_service_ns, root_target, False)
+
     # system config
     with open('{OIODIR}/sds.conf'.format(**ENV), 'w+') as f:
         env = merge_env({'IP': hosts[0], 'REDIS_PORT': 6379})
@@ -1919,6 +2210,9 @@ def generate(options):
             if isinstance(v, bool):
                 strv = strv.lower()
             f.write('{0}={1}\n'.format(k, strv))
+
+    for _, v in targets.items():
+        generate_target(v)
 
     # ensure volumes for srvtype in final_services:
     for srvtype in final_services:
@@ -1989,8 +2283,8 @@ def main():
             [template_wsgi_service_coverage_start,
              template_wsgi_service_descr,
              template_wsgi_service_coverage_stop])
-        global template_gridinit_rawx_command_options
-        template_gridinit_rawx_command_options = \
+        global template_systemd_rawx_command_options
+        template_systemd_rawx_command_options = \
             '-test.coverprofile ' \
             '${HOME}/go_coverage.output.${NS}.${SRVTYPE}.${SRVNUM}.${IP}.${PORT} ' \
             '-test.syslog OIO,${NS},${SRVTYPE},${SRVNUM} ' \

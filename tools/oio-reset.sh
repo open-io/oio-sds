@@ -18,12 +18,19 @@
 
 set -e
 
+if [ -v OIO_SYSTEMD_SYSTEM ]; then
+  SYSTEMCTL="systemctl"
+  SYSTEMD_DIR="/etc/systemd/system"
+else
+  SYSTEMCTL="systemctl --user"
+  SYSTEMD_DIR="$HOME/.config/systemd/user"
+fi
+
 NS=OPENIO
 IP=
 PORT=
 OIO="$HOME/.oio"
 SDS="$OIO/sds"
-GRIDINIT_SOCK="${SDS}/run/gridinit.sock"
 BOOTSTRAP_CONFIG=
 SERVICE_ID=
 RANDOM_SERVICE_ID=
@@ -61,18 +68,6 @@ M1_STR="meta1"
 M2_STR="meta2"
 M2_REPLICAS="m2-replicas"
 
-timeout () {
-    num=$1 ; shift
-    if [ $count -gt "$num" ] ; then
-        echo "TIMEOUT! $*"
-        ( ps -o pid,ppid,stat,cmd $(pgrep -u $UID -P "$pidof_gridinit" | sed 's/^/-p /') || exit 0 )
-        exit 1
-    fi
-    sleep 1
-    ((count=count+1))
-}
-
-
 #-------------------------------------------------------------------------------
 
 cmd_openio="openio --oio-ns $NS"
@@ -101,31 +96,9 @@ if [[ -e "$DATADIR" ]] ; then
     [ -w "$DATADIR" ]
 fi
 
-# Stop and clean a previous installation.
-
-if egrep -q '\S+ \S+ \S+ 0001\S* \S+ \S+ \S+ '$GRIDINIT_SOCK /proc/net/unix ; then
-	# There is a gridinit attached to the socket. Let's try a clean stop of the services.
-	if ! gridinit_cmd -S "$GRIDINIT_SOCK" stop >/dev/null ; then
-		echo "Failed to send 'stop' to gridinit"
-	fi
-fi
-
-if [ -r $SDS/run/gridinit.pid ] ; then
-	# There was a gridinit deployed, we send it signals to make it stop
-	pidof_gridinit=$(head $SDS/run/gridinit.pid)
-    count=0
-    while kill "$pidof_gridinit" ; do
-        # Waiting for gridinit ...
-        if [ "$count" -gt 20 ] ; then
-            echo "Gridinit doesn't want to die gracefully. Go for euthanasy"
-            ( pkill -9 -u "$UID" oio-event-agent || exit 0 )
-        fi
-		timeout 30
-	done
-fi
-
-
-# Generate a new configuration and start the new gridinit
+# stop current cluster and clean services and targets
+$SYSTEMCTL stop oio-cluster.target || true
+rm -f $SYSTEMD_DIR/oio-*
 
 mkdir -p "$OIO"
 cd "$OIO"
@@ -144,12 +117,8 @@ bootstrap_opt="$bootstrap_opt -d ${BOOTSTRAP_CONFIG} $NS $IP"
 echo oio-bootstrap.py $bootstrap_opt
 oio-bootstrap.py $bootstrap_opt > /tmp/oio-bootstrap.$$
 
-
 . /tmp/oio-bootstrap.$$
 rm -f /tmp/oio-bootstrap.$$
-
-
-gridinit -s OIO,gridinit -d ${SDS}/conf/gridinit.conf
 
 # Initiate Zookeeper (if necessary)
 if grep -q ^zookeeper $HOME/.oio/sds.conf ; then
@@ -163,26 +132,11 @@ if grep -q ^zookeeper $HOME/.oio/sds.conf ; then
     openio --oio-ns "$NS" zk bootstrap ${opts}
 fi
 
-
-echo -e "\n### Wait for gridinit to get ready"
-count=0
-while ! pkill -u "$UID" --full -0 gridinit ; do
-    timeout 15 "gridinit startup"
-done
-
-while ! egrep -q '\S+ \S+ \S+ 0001\S* \S+ \S+ \S+ '$GRIDINIT_SOCK /proc/net/unix ; do
-    timeout 30 "gridinit readyness"
-done
-pidof_gridinit=$(pgrep -u "$UID" --full gridinit)
-
-
-echo -e "\n### Wait for the services to register"
-gridinit_cmd -S "$GRIDINIT_SOCK" reload >/dev/null
-gridinit_cmd -S "$GRIDINIT_SOCK" start "@${NS}" >/dev/null
+$SYSTEMCTL daemon-reload
+$SYSTEMCTL start oio-cluster.target
 
 COUNT=$(oio-test-config.py -c -t meta2 -t rawx -t meta0 -t meta1 -t rdir)
 $cmd_openio cluster wait -vvv --debug -d 30 -u -n "$COUNT" rawx meta2 meta0 meta1 rdir
-
 
 echo -e "\n### Init the meta0/meta1 directory"
 $cmd_openio directory bootstrap --check \
@@ -196,7 +150,7 @@ fi
 
 echo -e "\n### Assign rdir services"
 # Force meta1 services to reload meta0 cache
-gridinit_cmd -S "$GRIDINIT_SOCK" stop "@meta1" >/dev/null
+$SYSTEMCTL stop oio-meta1.target
 # Wait until the scores are at 0
 MAX_WAITING="30"
 COUNT_META1=$(oio-test-config.py -c -t meta1)
@@ -210,7 +164,7 @@ for i in $(seq 1 "$MAX_WAITING"); do
     fi
     sleep 1
 done
-gridinit_cmd -S "$GRIDINIT_SOCK" start "@meta1" >/dev/null
+$SYSTEMCTL start oio-meta1.target
 $cmd_openio cluster wait -d 30 -n "$COUNT_META1" meta1
 
 $cmd_openio rdir bootstrap rawx --replicas $(oio-test-config.py -v directory_replicas)
@@ -222,7 +176,7 @@ oio-flush-all.sh -n "$NS" >/dev/null
 
 echo -e "\n### Congrats, it's a NS"
 find $SDS -type d | xargs chmod a+rx
-gridinit_cmd -S "$GRIDINIT_SOCK" status2
+$SYSTEMCTL list-dependencies oio.cluster.target
 $cmd_openio cluster list
 
 echo -e "\nexport OIO_NS=$NS OIO_ACCT=ACCT-$RANDOM"
