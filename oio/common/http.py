@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -18,14 +19,12 @@ from six import text_type
 from six.moves.urllib_parse import quote
 
 from oio.common.constants import CHUNK_HEADERS, OIO_VERSION
-from oio.common.http_eventlet import CustomHttpConnection \
-    as NewCustomHttpConnection
 
 
 _TOKEN = r'[^()<>@,;:\"/\[\]?={}\x00-\x20\x7f]+'
 _EXT_PATTERN = re.compile(
-    r'(?:\s*;\s*(' + _TOKEN + r')\s*(?:=\s*(' + _TOKEN +
-    r'|"(?:[^"\\]|\\.)*"))?)')
+    r'(?:\s*;\s*(' + _TOKEN + r')\s*(?:=\s*(' + _TOKEN
+    + r'|"(?:[^"\\]|\\.)*"))?)')
 
 
 def parse_content_type(raw_content_type):
@@ -163,14 +162,3 @@ class HeadersDict(dict):
 
     def pop(self, k, default=None):
         return dict.pop(self, k.title(), default)
-
-
-class CustomHttpConnection(NewCustomHttpConnection):
-    def __init__(self, *args, **kwargs):
-        import warnings
-        warnings.simplefilter('once')
-        warnings.warn(
-            "oio.common.http.CustomHttpConnection is deprecated, "
-            "use oio.common.http_eventlet.CustomHttpConnection",
-            DeprecationWarning, stacklevel=2)
-        NewCustomHttpConnection.__init__(self, *args, **kwargs)

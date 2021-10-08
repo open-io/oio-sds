@@ -57,9 +57,9 @@ class ObjectStorageApiTestBase(BaseTestCase):
                 logging.exception("Failed to delete %s/%s/%s//%s",
                                   self.ns, self.account, ct, name)
 
-    def _create(self, name, metadata=None):
+    def _create(self, name, properties=None):
         return self.api.container_create(self.account, name,
-                                         properties=metadata)
+                                         properties=properties)
 
     def _delete(self, name):
         self.api.container_delete(self.account, name)
@@ -1328,10 +1328,10 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         link_obj = random_str(16)
         self.api.object_create(self.account, target_container, data="1"*128,
                                obj_name=target_obj,
-                               metadata={'AAA': '1', 'BBB': '1'})
+                               properties={'AAA': '1', 'BBB': '1'})
         self.api.object_link(self.account, target_container, target_obj,
                              self.account, link_container, link_obj,
-                             metadata={'BBB': '2'})
+                             properties={'BBB': '2'})
         metadata, _ = self.api.object_fetch(self.account, link_container,
                                             link_obj)
         self.assertDictEqual(metadata.get('properties', {}),
@@ -1339,7 +1339,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
 
         self.api.object_link(self.account, target_container, target_obj,
                              self.account, link_container, link_obj,
-                             metadata={'BBB': '2'},
+                             properties={'BBB': '2'},
                              properties_directive='REPLACE')
         metadata, _ = self.api.object_fetch(self.account, link_container,
                                             link_obj)

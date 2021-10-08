@@ -42,9 +42,9 @@ class TestShardingBase(BaseTestCase):
         self.beanstalkd0.drain_tube('oio-preserved')
         self.container_sharding = ContainerSharding(self.conf)
 
-    def _create(self, name, metadata=None):
+    def _create(self, name, properties=None):
         return self.storage.container_create(self.account, name,
-                                             properties=metadata)
+                                             properties=properties)
 
 
 class TestSharding(TestShardingBase):

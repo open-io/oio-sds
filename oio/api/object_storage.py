@@ -69,7 +69,7 @@ class ObjectStorageApi(object):
         """
         Initialize the object storage API.
 
-        :param namespace: name of the namespace to interract with
+        :param namespace: name of the namespace to interact with
         :type namespace: `str`
 
         :keyword connection_timeout: connection timeout towards proxy and
@@ -619,20 +619,6 @@ class ObjectStorageApi(object):
         self._delete_exceeding_versions(
             account, container, last_object_name, versions, maxvers, **kwargs)
 
-    def container_update(self, account, container, metadata, clear=False,
-                         **kwargs):
-        """
-        :deprecated: use `container_set_properties`
-        """
-        warnings.warn("You'd better use container_set_properties()",
-                      DeprecationWarning)
-        if not metadata:
-            self.container_del_properties(
-                account, container, [], **kwargs)
-        else:
-            self.container_set_properties(
-                account, container, metadata, clear, **kwargs)
-
     def object_create(self, account, container, *args, **kwargs):
         """
         See documentation of object_create_ext for parameters
@@ -649,7 +635,7 @@ class ObjectStorageApi(object):
     @ensure_request_id2(prefix="create-")
     def object_create_ext(self, account, container, file_or_path=None,
                           data=None, etag=None, obj_name=None, mime_type=None,
-                          metadata=None, policy=None, key_file=None,
+                          policy=None, key_file=None,
                           append=False, properties=None, **kwargs):
         """
         Create an object or append data to object in *container* of *account*
@@ -737,14 +723,6 @@ class ObjectStorageApi(object):
 
         sysmeta = {'mime_type': mime_type,
                    'etag': etag}
-        if metadata:
-            warnings.warn(
-                "You'd better use 'properties' instead of 'metadata'",
-                DeprecationWarning, stacklevel=4)
-            if not properties:
-                properties = metadata
-            else:
-                properties.update(metadata)
         if isinstance(src, BytesIO) or hasattr(src, 'read'):
             return self._object_create(
                 account, container, obj_name, src, sysmeta,
@@ -1027,22 +1005,6 @@ class ObjectStorageApi(object):
             return obj_meta, chunks
         return obj_meta, _fetch_ext_info(chunks)
 
-    def object_analyze(self, *args, **kwargs):
-        """
-        :deprecated: use `object_locate`
-        """
-        warnings.warn("You'd better use object_locate()",
-                      DeprecationWarning)
-        return self.object_locate(*args, **kwargs)
-
-    def object_fastcopy(self, *args, **kwargs):
-        """
-        :deprecated: use `object_link`.
-        """
-        warnings.warn("You'd better use object_link()",
-                      DeprecationWarning)
-        return self.object_link(*args, **kwargs)
-
     @patch_kwargs
     @ensure_headers
     @ensure_request_id
@@ -1086,10 +1048,7 @@ class ObjectStorageApi(object):
         data = {'chunks': chunks_copies,
                 'properties': link_meta['properties'] or {}}
         if properties_directive == 'REPLACE':
-            if 'metadata' in kwargs:
-                # TODO it should emit a DeprecationWarning
-                data['properties'] = kwargs['metadata']
-            elif 'properties' in kwargs:
+            if 'properties' in kwargs:
                 data['properties'] = kwargs['properties']
             else:
                 data['properties'] = {}
@@ -1298,21 +1257,6 @@ class ObjectStorageApi(object):
                       DeprecationWarning, stacklevel=5)
         return self.container.content_get_properties(
             account, container, obj, version=version, **kwargs)
-
-    def object_update(self, account, container, obj, metadata,
-                      version=None, clear=False, **kwargs):
-        """
-        :deprecated: use `object_set_properties`
-        """
-        warnings.warn("You'd better use object_set_properties()",
-                      DeprecationWarning, stacklevel=2)
-        if clear and not metadata:
-            self.object_del_properties(
-                account, container, obj, [], version=version, **kwargs)
-            return
-        self.object_set_properties(
-            account, container, obj, metadata, version=version, clear=clear,
-            **kwargs)
 
     @handle_object_not_found
     @patch_kwargs
@@ -1541,14 +1485,6 @@ class ObjectStorageApi(object):
                 # account remove in the meantime
                 pass
 
-    def all_accounts_refresh(self, **kwargs):
-        """
-        :deprecated: call `account_refresh(None)` instead
-        """
-        warnings.warn("You'd better use account_refresh(None)",
-                      DeprecationWarning, stacklevel=2)
-        return self.account_refresh(None, **kwargs)
-
     @handle_account_not_found
     @patch_kwargs
     @ensure_headers
@@ -1645,17 +1581,3 @@ class ObjectStorageApi(object):
         except (exc.NotFound, exc.NoSuchObject, exc.NoSuchContainer):
             return False
         return True
-
-
-class ObjectStorageAPI(ObjectStorageApi):
-    """
-    :deprecated: transitional wrapper for ObjectStorageApi
-    """
-
-    def __init__(self, namespace, endpoint=None, **kwargs):
-        super(ObjectStorageAPI, self).__init__(namespace,
-                                               endpoint=endpoint, **kwargs)
-        warnings.simplefilter('once')
-        warnings.warn(
-            "oio.api.ObjectStorageAPI is deprecated, use oio.ObjectStorageApi",
-            DeprecationWarning, stacklevel=2)

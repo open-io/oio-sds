@@ -26,7 +26,7 @@ from oio.rdir.client import RdirDispatcher, RDIR_ACCT, _make_id
 from tests.utils import random_str, BaseTestCase
 
 
-_fake_location = 'whatever'
+_FAKE_LOCATION = 'whatever'
 
 
 class TestDirectoryAPI(BaseTestCase):
@@ -35,8 +35,8 @@ class TestDirectoryAPI(BaseTestCase):
         super(TestDirectoryAPI, self).setUp()
         self.dir = self.storage.directory
 
-    def _create(self, name, metadata=None):
-        return self.dir.create(self.account, name, properties=metadata)
+    def _create(self, name, properties=None):
+        return self.dir.create(self.account, name, properties=properties)
 
     def _delete(self, name):
         self.dir.delete(self.account, name)
@@ -312,7 +312,7 @@ class TestDirectoryAPI(BaseTestCase):
                               pool_manager=self.http_pool)
 
         # Register a service, with score locked to zero
-        new_rawx = self._srv('rawx', {'tag.loc': _fake_location})
+        new_rawx = self._srv('rawx', {'tag.loc': _FAKE_LOCATION})
         new_rawx['score'] = 0
         self._register_srv(new_rawx)
         self._reload_proxy()
@@ -335,7 +335,7 @@ class TestDirectoryAPI(BaseTestCase):
                               pool_manager=self.http_pool)
 
         # Register a service, with score locked to zero
-        new_rawx = self._srv('rawx', {'tag.loc': _fake_location})
+        new_rawx = self._srv('rawx', {'tag.loc': _FAKE_LOCATION})
         new_rawx['score'] = 90
         self._register_srv(new_rawx)
         self._reload_proxy()
@@ -454,5 +454,5 @@ class TestDirectoryAPI(BaseTestCase):
             # Assert upper bounded values
             self.assertLessEqual(count, avg + epsilon)
             # Assert lowr bounded values
-            if (avg - epsilon > 0):
+            if avg - epsilon > 0:
                 self.assertGreaterEqual(count, avg - epsilon)

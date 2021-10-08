@@ -44,13 +44,13 @@ class ContainerCommandMixin(object):
             'container',
             metavar='<container>',
             nargs='?',
-            help=("Name or cid of the container to interact with.\n" +
-                  "Optional if --auto is specified.")
+            help=("Name or cid of the container to interact with.\n"
+                  + "Optional if --auto is specified.")
         )
         parser.add_argument(
             '--auto',
-            help=("Auto-generate the container name according to the " +
-                  "'flat_*' namespace parameters (<container> is ignored)."),
+            help=("Auto-generate the container name according to the "
+                  + "'flat_*' namespace parameters (<container> is ignored)."),
             action="store_true",
         )
         parser.add_argument(
@@ -126,8 +126,8 @@ class CreateObject(ContainerCommandMixin, Lister):
             metavar='<key>',
             default=[],
             action='append',
-            help=("Name of the object to create. " +
-                  "If not specified, use the basename of the uploaded file.")
+            help=("Name of the object to create. "
+                  + "If not specified, use the basename of the uploaded file.")
         )
         parser.add_argument(
             '--policy',
@@ -201,7 +201,7 @@ class CreateObject(ContainerCommandMixin, Lister):
                         file_or_path=f,
                         obj_name=name,
                         policy=policy,
-                        metadata=properties,
+                        properties=properties,
                         key_file=key_file,
                         mime_type=parsed_args.mime_type,
                         autocreate=autocreate,
@@ -229,7 +229,7 @@ class CreateObject(ContainerCommandMixin, Lister):
             columns += ('Perfdata',)
         if any_error:
             self.produce_output(parsed_args, columns, listing)
-            raise Exception("Too many errors occured")
+            raise Exception("Too many errors occurred")
         return columns, listing
 
 
