@@ -636,7 +636,8 @@ class ObjectStorageApi(object):
     def object_create_ext(self, account, container, file_or_path=None,
                           data=None, etag=None, obj_name=None, mime_type=None,
                           policy=None, key_file=None,
-                          append=False, properties=None, **kwargs):
+                          append=False, properties=None,
+                          properties_callback=None, **kwargs):
         """
         Create an object or append data to object in *container* of *account*
         with data taken from either *data* (`str` or `generator`) or
@@ -683,6 +684,9 @@ class ObjectStorageApi(object):
         :type container_properties: `dict`
         :keyword tls: if set, it will try to use TLS port exposed by rawx
         :type tls: `bool`
+        :keyword properties_callback: called after the upload of the data,
+            but before saving metadata, allow to provide extra object
+            properties. Should return a dictionary.
 
         :returns: `list` of chunks, size, hash and metadata of what has been
             uploaded
@@ -727,13 +731,15 @@ class ObjectStorageApi(object):
             return self._object_create(
                 account, container, obj_name, src, sysmeta,
                 properties=properties, policy=policy, key_file=key_file,
-                append=append, **kwargs)
+                append=append, properties_callback=properties_callback,
+                **kwargs)
         else:
             with open(src, 'rb') as srcf:
                 return self._object_create(
                     account, container, obj_name, srcf, sysmeta,
                     properties=properties, policy=policy,
-                    key_file=key_file, append=append, **kwargs)
+                    key_file=key_file, append=append,
+                    properties_callback=properties_callback, **kwargs)
 
     @handle_object_not_found
     @patch_kwargs
@@ -1349,8 +1355,8 @@ class ObjectStorageApi(object):
         return obj_meta, handler, chunk_prep
 
     def _object_create(self, account, container, obj_name, source,
-                       sysmeta, properties=None, policy=None,
-                       key_file=None, **kwargs):
+                       sysmeta, properties=None, properties_callback=None,
+                       policy=None, key_file=None, **kwargs):
         obj_meta, ul_handler, chunk_prep = self._object_prepare(
             account, container, obj_name, source, sysmeta,
             policy=policy, key_file=key_file,
@@ -1366,21 +1372,44 @@ class ObjectStorageApi(object):
         except exc.OioException as ex:
             self.logger.warn(
                 'Failed to upload all data (%s), deleting chunks', ex)
-            kwargs['cid'] = obj_meta['container_id']
+            kwargs['cid'] = obj_meta.get('container_id')
             self._delete_orphan_chunks(
                 chunk_prep.all_chunks_so_far(), **kwargs)
             raise
 
-        etag = obj_meta.get('etag')
-        if etag and etag.lower() != obj_checksum.lower():
+        try:
+            trailing_props = (properties_callback()
+                              if properties_callback else {})
+            if not isinstance(trailing_props, dict):
+                raise TypeError("The trailing properties callback "
+                                "should return a dictionary")
+        except Exception as err:
+            self.logger.warn(
+                "Failed to commit to call the trailing properties callback "
+                "(%s), deleting chunks", err)
+            kwargs['cid'] = obj_meta.get('container_id')
+            self._delete_orphan_chunks(ul_chunks, **kwargs)
+            raise
+
+        # The client application may provide an ETag (checksum of the object)
+        # before the upload (in obj_meta), or compute it during the upload
+        # (in trailing_props), or not provide it at all. Also, a future commit
+        # will allow to disable the checksum this API computes during the
+        # upload of the chunks. If the ETag is provided in trailing
+        # properties, remove it, because it is not saved at the same place as
+        # other object properties.
+        etag = trailing_props.pop('etag', obj_meta.get('etag'))
+        if etag and obj_checksum and etag.lower() != obj_checksum.lower():
             raise exc.EtagMismatch(
                 "given etag %s != computed %s" % (etag, obj_checksum))
-        obj_meta['etag'] = obj_checksum
+        obj_meta['etag'] = obj_checksum or etag
 
         # obj_meta['properties'] contains special properties
         # describing the quality of selected chunks.
         if properties:
             obj_meta['properties'].update(properties)
+        if trailing_props:
+            obj_meta['properties'].update(trailing_props)
 
         # If we are here, we know that the metadata server is fine
         # (it provided us with chunk addresses) and the client is still

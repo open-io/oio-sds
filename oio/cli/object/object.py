@@ -44,13 +44,13 @@ class ContainerCommandMixin(object):
             'container',
             metavar='<container>',
             nargs='?',
-            help=("Name or cid of the container to interact with.\n"
-                  + "Optional if --auto is specified.")
+            help="Name or cid of the container to interact with.\n"
+                 "Optional if --auto is specified."
         )
         parser.add_argument(
             '--auto',
-            help=("Auto-generate the container name according to the "
-                  + "'flat_*' namespace parameters (<container> is ignored)."),
+            help="Auto-generate the container name according to the "
+                 "'flat_*' namespace parameters (<container> is ignored).",
             action="store_true",
         )
         parser.add_argument(
@@ -126,8 +126,8 @@ class CreateObject(ContainerCommandMixin, Lister):
             metavar='<key>',
             default=[],
             action='append',
-            help=("Name of the object to create. "
-                  + "If not specified, use the basename of the uploaded file.")
+            help="Name of the object to create. "
+                 "If not specified, use the basename of the uploaded file."
         )
         parser.add_argument(
             '--policy',
@@ -554,9 +554,9 @@ class ListObject(ContainerCommandMixin, Lister):
             metavar='<concurrency>',
             type=int,
             default=100,
-            help=('The number of concurrent requests to the container. '
-                  '(Only used when the --auto argument is specified. '
-                  'Default: 100)')
+            help='The number of concurrent requests to the container. '
+                 '(Only used when the --auto argument is specified. '
+                 'Default: 100)'
         )
         parser.add_argument(
             '--attempts',
@@ -576,8 +576,8 @@ class ListObject(ContainerCommandMixin, Lister):
             '--no-paging', '--full',
             dest='full_listing',
             default=False,
-            help=("List all objects without paging "
-                  "(and set output format to 'value')"),
+            help="List all objects without paging "
+                 "(and set output format to 'value')",
             action=ValueFormatStoreTrueAction,
         )
         parser.add_argument(

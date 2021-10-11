@@ -620,6 +620,25 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             [name, int(objects), int(usage), 0, containers[0][4]],
             containers[0])
 
+    def test_object_create_ext(self):
+        name = random_str(32)
+        self._create(name)
+
+        def props_cb(**_kwargs):
+            return {'trailing_prop': 'yes'}
+
+        _, size, _, metadata = self.api.object_create_ext(
+            self.account, name, data=b"data", obj_name=name,
+            properties_callback=props_cb)
+        self.assertEqual(metadata['ns'], self.ns)
+        self.assertIn('version', metadata)
+
+        props = self.api.object_get_properties(self.account, name, name)
+        self.assertEqual(metadata['version'], props['version'])
+        self.assertEqual(int(props['length']), size)
+        self.assertIn('trailing_prop', props['properties'])
+        self.assertEqual('yes', props['properties']['trailing_prop'])
+
     def test_object_create_invalid_name(self):
         ct = random_str(32)
         obj = u"Beno\xeet".encode('latin1')
@@ -1942,8 +1961,8 @@ class TestObjectList(ObjectStorageApiTestBase):
         object_names = list()
         for i in range(8):
             _, _, _, meta = self.api.object_create_ext(
-                self.account, container, data="depaginate",
-                obj_name="depaginate-"+str(i))
+                self.account, container, data=b"depaginate",
+                obj_name="depaginate-%d" % i)
             object_names.append(meta['name'])
 
         def my_object_list(*args, **kwargs):
@@ -1960,18 +1979,6 @@ class TestObjectList(ObjectStorageApiTestBase):
             truncated_key=lambda x: x['truncated'],
             account=self.account, container=container, attempts=2, limit=2)
         self.assertListEqual(object_names, [obj['name'] for obj in obj_gen])
-
-    def test_object_create_ext(self):
-        name = random_str(32)
-        self._create(name)
-        _, size, _, metadata = self.api.object_create_ext(
-            self.account, name, data="data", obj_name=name)
-        self.assertEqual(metadata['ns'], self.ns)
-        self.assertIn('version', metadata)
-
-        props = self.api.object_get_properties(self.account, name, name)
-        self.assertEqual(metadata['version'], props['version'])
-        self.assertEqual(int(props['length']), size)
 
 
 class TestContainerStorageApiUsingCache(ObjectStorageApiTestBase):

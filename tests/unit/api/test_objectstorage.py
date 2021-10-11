@@ -342,6 +342,44 @@ class ObjectStorageTest(unittest.TestCase):
         from io import IOBase
         self.assertIsInstance(call_args[0][3], IOBase)
 
+    def test_object_create_properties_callback(self):
+        obj_meta_in = {'id': None, 'version': 1, 'properties': {},
+                       'policy': 'whatever', 'mime_type': None,
+                       'chunk_method': None}
+        obj_meta_ext = {'a': 'a'}
+        self.api._object_prepare = Mock(
+            return_value=(obj_meta_in, None, None))
+        self.api._object_upload = Mock(return_value=([], 0, None))
+        resp = FakeApiResponse()
+        self.api.container._direct_request = Mock(return_value=(resp, None))
+        name = 'fake'
+        props_cb = Mock(return_value=obj_meta_ext)
+        _, _, _, obj_meta_out = self.api.object_create_ext(
+            self.account, self.container,
+            data=name.encode('utf-8'), obj_name=name,
+            properties_callback=props_cb)
+        props_cb.assert_called_once()
+        self.assertEqual(obj_meta_ext, obj_meta_out['properties'])
+
+    def test_object_create_properties_callback_failure(self):
+        obj_meta_in = {'id': None, 'version': 1, 'properties': {},
+                       'policy': 'whatever', 'mime_type': None,
+                       'chunk_method': None}
+        self.api._blob_client = Mock()
+        self.api._object_prepare = Mock(
+            return_value=(obj_meta_in, None, None))
+        self.api._object_upload = Mock(return_value=([], 0, None))
+        resp = FakeApiResponse()
+        self.api.container._direct_request = Mock(return_value=(resp, None))
+        name = 'fake'
+        props_cb = Mock(return_value="type error")
+        self.assertRaises(
+            TypeError,
+            self.api.object_create_ext,
+            self.account, self.container,
+            data=name.encode('utf-8'), obj_name=name,
+            properties_callback=props_cb)
+
     def test_object_set_properties(self):
         api = self.api
 
@@ -429,7 +467,7 @@ class ObjectStorageTest(unittest.TestCase):
                 extend(chunk("DDDD", "1"), {"offset": 32})],
             2: [extend(chunk("EEEE", "2"), {"offset": 64}),
                 extend(chunk("FFFF", "2"), {"offset": 64})]
-            }
+        }
         self.assertDictEqual(sorted_chunks, chunks)
 
         raw_chunks = [
@@ -488,7 +526,7 @@ class ObjectStorageTest(unittest.TestCase):
         api._object_create.assert_called_with(
             self.account, self.container, 'dummy', ANY, ANY,
             append=ANY, headers=ANY, key_file=ANY, policy=ANY, properties=ANY,
-            reqid=ANY, **kwargs)
+            reqid=ANY, properties_callback=ANY, **kwargs)
 
     def test_container_flush_not_found_1(self):
         self.api.object_list = Mock(
