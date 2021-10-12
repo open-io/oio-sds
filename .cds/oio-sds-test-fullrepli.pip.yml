@@ -19,9 +19,9 @@ jobs:
           systemctl disable apache2.service redis.service
           mkdir /tmp/oio
           # We need these permissions for the ECD and container backup services to work
+          virtualenv -p /usr/bin/python3 $HOME/oiovenv
           chmod a+rX $(dirname $HOME)
           chmod -R a+rX $HOME
-          virtualenv -p /usr/bin/python3 $HOME/oiovenv
           . $HOME/oiovenv/bin/activate
           pip install --upgrade pip setuptools virtualenv tox -r all-requirements.txt -r test-requirements.txt
 

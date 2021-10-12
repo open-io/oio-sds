@@ -23,7 +23,6 @@ libsqlite3-dev
 libzmq3-dev
 libzookeeper-mt-dev
 locales
-openio-gridinit
 python3
 python3-coverage
 python3-dev
