@@ -34,7 +34,8 @@ from oio.common.http_eventlet import http_connect
 from oio.common.utils import GeneratorIO, group_chunk_errors, \
     deadline_to_timeout, monotonic_time, set_deadline_from_read_timeout, \
     cid_from_name, compute_chunk_id, get_hasher
-from oio.common.storage_method import STORAGE_METHODS
+from oio.common.storage_method import STORAGE_METHODS, \
+    parse_chunk_method, unparse_chunk_method
 from oio.common.logger import get_logger
 
 LOGGER = get_logger({}, __name__)
@@ -159,6 +160,7 @@ class LinkHandler(_WriteHandler):
 class WriteHandler(_WriteHandler):
     def __init__(self, source, sysmeta, chunk_preparer,
                  storage_method, headers=None,
+                 object_checksum_algo='md5',
                  **kwargs):
         """
         :param connection_timeout: timeout to establish the connection
@@ -174,7 +176,9 @@ class WriteHandler(_WriteHandler):
             self.source = BufferedReader(source)
         else:
             self.source = BufferedReader(IOBaseWrapper(source))
+        self.object_checksum_algo = object_checksum_algo
         self.sysmeta = sysmeta
+        self.patch_chunk_method()
 
     @property
     def read_timeout(self):
@@ -193,6 +197,19 @@ class WriteHandler(_WriteHandler):
            * the actual checksum of the data that went through the stream.
         """
         raise NotImplementedError()
+
+    def patch_chunk_method(self):
+        chunk_method = self.sysmeta.get('chunk_method')
+        if not chunk_method:
+            if not self.storage_method:
+                raise ValueError(
+                    "Either chunk_method or storage_method must be defined")
+            chunk_method = self.storage_method.to_chunk_method()
+        if 'oca=' not in chunk_method:
+            chunk_method_name, params = parse_chunk_method(chunk_method)
+            params['oca'] = self.object_checksum_algo
+            chunk_method = unparse_chunk_method(chunk_method_name, params)
+        self.sysmeta['chunk_method'] = chunk_method
 
 
 def consume(it):
@@ -298,6 +315,10 @@ class ChunkReader(object):
         self.logger = _kwargs.get('logger', LOGGER)
         self.verify_checksum = verify_checksum
         self.watchdog = watchdog or get_watchdog()
+
+    @property
+    def chunk_method(self):
+        return self.headers.get(CHUNK_HEADERS["content_chunkmethod"], "plain/")
 
     @property
     def reqid(self):
@@ -438,9 +459,8 @@ class ChunkReader(object):
 
         def _iter():
             if self.verify_checksum:
-                algo = self.headers.get(CHUNK_HEADERS['chunk_hash_algo'],
-                                        'blake3')
-                checksum = get_hasher(algo)
+                _, params = parse_chunk_method(self.chunk_method)
+                checksum = get_hasher(params.get('cca', 'md5'))
             else:
                 checksum = None
 
@@ -790,16 +810,22 @@ class MetachunkWriter(_MetachunkWriter):
     """
     Base class for metachunk writers
     """
-    def __init__(self, storage_method=None, quorum=None,
+
+    def __init__(self, sysmeta, storage_method=None, quorum=None,
                  chunk_checksum_algo='blake3', reqid=None,
                  chunk_buffer_min=32768, chunk_buffer_max=262144,
                  perfdata=None, **_kwargs):
         super(MetachunkWriter, self).__init__(
             storage_method=storage_method, quorum=quorum, reqid=reqid,
             perfdata=perfdata, **_kwargs)
-        self.chunk_checksum_algo = chunk_checksum_algo
+        self.sysmeta = sysmeta
+        if self.storage_method and 'cca' in self.storage_method.params:
+            self.chunk_checksum_algo = self.storage_method.params['cca']
+        else:
+            self.chunk_checksum_algo = chunk_checksum_algo
         self._buffer_size_gen = exp_ramp_gen(chunk_buffer_min,
                                              chunk_buffer_max)
+        self.patch_chunk_method()
 
     @classmethod
     def filter_kwargs(cls, kwargs):
@@ -819,6 +845,19 @@ class MetachunkWriter(_MetachunkWriter):
         then grow to avoid too much context switches.
         """
         return next(self._buffer_size_gen)
+
+    def patch_chunk_method(self):
+        chunk_method = self.sysmeta.get('chunk_method')
+        if not chunk_method:
+            if not self.storage_method:
+                raise ValueError(
+                    "Either chunk_method or storage_method must be defined")
+            chunk_method = self.storage_method.to_chunk_method()
+        if 'cca=' not in chunk_method:
+            chunk_method_name, params = parse_chunk_method(chunk_method)
+            params['cca'] = self.chunk_checksum_algo
+            chunk_method = unparse_chunk_method(chunk_method_name, params)
+        self.sysmeta['chunk_method'] = chunk_method
 
 
 class MetachunkPreparer(object):

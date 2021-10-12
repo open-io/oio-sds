@@ -30,7 +30,8 @@ from oio.common.http_eventlet import CustomHTTPResponse
 from oio.common.storage_functions import _sort_chunks as sort_chunks
 from oio.common.utils import cid_from_name, request_id, depaginate, get_hasher
 from oio.common.fullpath import encode_fullpath
-from oio.common.storage_method import STORAGE_METHODS, EC_SEGMENT_SIZE
+from oio.common.storage_method import parse_chunk_method, \
+    STORAGE_METHODS, EC_SEGMENT_SIZE
 from oio.event.evob import EventTypes
 from tests.utils import random_str, random_data, random_id, BaseTestCase
 
@@ -1591,10 +1592,11 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         chunks, _, _, metadata = self.api.object_create_ext(
             self.account, cname, data=data, obj_name=name,
             chunk_checksum_algo='md5')
-        if metadata['chunk_method'].startswith('ec/'):
+        chunk_method_t, params = parse_chunk_method(metadata['chunk_method'])
+        if chunk_method_t == 'ec':
             for chunk in chunks:
                 chunk_info = self.api.blob_client.chunk_head(
-                    chunk['url'], check_hash=True)
+                    chunk['url'], verify_checksum=True)
                 # Each chunk has a different checksum. Just check they
                 # have the standard length: 32 hexadecimal digits.
                 self.assertEqual(32, len(chunk_info['chunk_hash']))
@@ -1604,7 +1606,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             checksum = hasher.hexdigest().upper()
             for chunk in chunks:
                 chunk_info = self.api.blob_client.chunk_head(
-                    chunk['url'], check_hash=True)
+                    chunk['url'], verify_checksum=True)
                 self.assertEqual(checksum, chunk_info['chunk_hash'])
 
         new_meta, new_data = self.api.object_fetch(
@@ -1616,9 +1618,15 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         try:
             for chunk in chunks:
                 new_url = chunk['url'][0:-6] + '000000'
-                self.api.blob_client.chunk_copy(chunk['url'], new_url,
-                                                chunk_checksum_algo='blake3')
+                self.api.blob_client.chunk_copy(chunk['url'], new_url)
                 to_delete.append(new_url)
+                chunk_info = self.api.blob_client.chunk_head(
+                    new_url, verify_checksum=True)
+                if chunk_method_t == 'ec':
+                    self.assertEqual(32, len(chunk_info['chunk_hash']))
+                else:
+                    self.assertEqual(chunk['hash'],
+                                     chunk_info['chunk_hash'].lower())
         finally:
             for chunk_url in to_delete:
                 self.api.blob_client.chunk_delete(chunk_url)

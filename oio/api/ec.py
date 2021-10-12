@@ -615,8 +615,6 @@ class EcChunkWriter(object):
         trailers = (CHUNK_HEADERS["metachunk_size"],
                     CHUNK_HEADERS["metachunk_hash"])
         if kwargs.get('chunk_checksum_algo'):
-            hdrs[CHUNK_HEADERS["chunk_hash_algo"]] = \
-                kwargs['chunk_checksum_algo']
             trailers = trailers + (CHUNK_HEADERS["chunk_hash"], )
         hdrs["Trailer"] = ', '.join(trailers)
         with WatchdogTimeout(watchdog,
@@ -767,8 +765,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
         kwargs.setdefault('chunk_buffer_min', storage_method.ec_segment_size)
         kwargs.setdefault('chunk_buffer_max', storage_method.ec_segment_size)
         super(EcMetachunkWriter, self).__init__(
-            storage_method=storage_method, **kwargs)
-        self.sysmeta = sysmeta
+            sysmeta, storage_method=storage_method, **kwargs)
         self.meta_chunk = meta_chunk
         self.global_checksum = global_checksum
         # Unlike plain replication, we cannot use the checksum returned
@@ -1048,7 +1045,7 @@ class ECWriteHandler(io.WriteHandler):
 
     def stream(self):
         # the checksum context for the content
-        global_checksum = get_hasher('md5')
+        global_checksum = get_hasher(self.object_checksum_algo)
         total_bytes_transferred = 0
         content_chunks = []
 

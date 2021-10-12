@@ -57,9 +57,8 @@ class TestContentFactory(BaseTestCase):
         super(TestContentFactory, self).setUp()
 
         self.wait_for_score(('meta2', ))
-        self.namespace = self.conf['namespace']
         self.chunk_size = self.conf['chunk_size']
-        self.gridconf = {"namespace": self.namespace}
+        self.gridconf = {"namespace": self.ns}
         self.content_factory = ContentFactory(self.gridconf,
                                               watchdog=self.watchdog)
         self.container_name = "TestContentFactory%f" % time.time()
@@ -75,6 +74,10 @@ class TestContentFactory(BaseTestCase):
         self.stgpol_ec = "EC"
 
     def tearDown(self):
+        self.content_factory.container_client.content_locate = \
+            ContainerClient.content_locate
+        self.content_factory.container_client.content_prepare = \
+            ContainerClient.content_prepare
         super(TestContentFactory, self).tearDown()
 
     def test_get_ec(self):

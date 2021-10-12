@@ -16,14 +16,13 @@
 
 import string
 import os
-from hashlib import md5
 
 from oio.rdir.client import RdirClient
 from oio.blob.client import BlobClient
 from oio.blob.indexer import BlobIndexer
 from oio.common.constants import OIO_VERSION
 from oio.common.fullpath import encode_fullpath
-from oio.common.utils import cid_from_name, paths_gen, request_id
+from oio.common.utils import cid_from_name, get_hasher, paths_gen, request_id
 from oio.event.evob import EventTypes
 
 from tests.utils import BaseTestCase, random_str, random_id
@@ -78,6 +77,9 @@ class TestBlobIndexer(BaseTestCase):
             account, container, content_path, content_version, content_id)
         chunk_id = random_chunk_id()
         data = random_buffer(string.printable, 100).encode('utf-8')
+        chunk_checksum = get_hasher('blake3')
+        chunk_checksum.update(data)
+        hex_checksum = chunk_checksum.hexdigest()
         meta = {
             'full_path': fullpath,
             'container_id': cid,
@@ -85,19 +87,17 @@ class TestBlobIndexer(BaseTestCase):
             'version': content_version,
             'id': content_id,
             'chunk_method':
-                'ec/algo=liberasurecode_rs_vand,k=6,m=3',
+                'ec/algo=liberasurecode_rs_vand,k=6,m=3,cca=blake3',
             'policy': 'TESTPOLICY',
-            'chunk_hash': md5(data).hexdigest().upper(),
-            'chunk_hash_algo': 'md5',
+            'chunk_hash': hex_checksum.upper(),
             'oio_version': OIO_VERSION,
             'chunk_pos': 0,
-            'metachunk_hash': md5().hexdigest(),
+            'metachunk_hash': hex_checksum,
             'metachunk_size': 1024
         }
         reqid = request_id()
         self.blob_client.chunk_put('http://' + self.rawx_id + '/' + chunk_id,
-                                   meta, data, reqid=reqid,
-                                   chunk_checksum_algo='md5')
+                                   meta, data, reqid=reqid)
         # ensure chunk event have been processed
         self.wait_for_event('oio-preserved', reqid=reqid,
                             types=(EventTypes.CHUNK_NEW, ))

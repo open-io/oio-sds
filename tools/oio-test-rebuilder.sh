@@ -84,6 +84,11 @@ update_timeout()
   sleep 10
 }
 
+blake3sum()
+{
+  oio-blake3sum $*
+}
+
 check_and_remove_meta()
 {
   TYPE=$1
@@ -190,7 +195,7 @@ openioadmin_meta_rebuild()
   fi
 
   update_timeout 1
-  REBULD_TIME=$(date +%s)
+  REBUILD_TIME=$(date +%s)
   set +e
 
   sleep 3s
@@ -245,8 +250,8 @@ openioadmin_meta_rebuild()
       if [ -z "${LAST_REBUILD}" ]; then
         echo >&2 "${META}: no rebuild date found for ${TYPE} ${META_ID_TO_REBUILD}"
         FAIL=true
-      elif [ "${REBULD_TIME}" -gt "${LAST_REBUILD}" ]; then
-        echo >&2 "${META}: last rebuild date too old for ${TYPE} ${META_ID_TO_REBUILD}: ${LAST_REBUILD} < ${REBULD_TIME}"
+      elif [ "${REBUILD_TIME}" -gt "${LAST_REBUILD}" ]; then
+        echo >&2 "${META}: last rebuild date too old for ${TYPE} ${META_ID_TO_REBUILD}: ${LAST_REBUILD} < ${REBUILD_TIME}"
         FAIL=true
         continue
       fi
@@ -464,8 +469,11 @@ openioadmin_rawx_rebuild()
         FAIL=true
         continue
       fi
+      CHECKSUM_ALGO=$(getfattr -n user.grid.content.chunk_method --only-values "${CHUNK}" 2>/dev/null \
+                      | sed -En -e 's/.+cca=([^,]+).*/\1/p')
+      CHECKSUM_TOOL="${CHECKSUM_ALGO:-md5}sum"
       EXPECT_MD5=$(getfattr -n user.grid.chunk.hash --only-values "${CHUNK}" 2>/dev/null)
-      if ! ACTUAL_MD5=$(/usr/bin/md5sum "${TMP_FILE_AFTER}" | cut -d ' ' -f 1 2> /dev/null); then
+      if ! ACTUAL_MD5=$($CHECKSUM_TOOL "${TMP_FILE_AFTER}" | cut -d ' ' -f 1 2> /dev/null); then
         echo >&2 "${CHUNK}: failed to compute the checksum of the rebuilt chunk (${TMP_FILE_AFTER}) ${RAWX_ID_TO_REBUILD}"
         FAIL=true
         continue

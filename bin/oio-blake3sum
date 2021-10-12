@@ -1,0 +1,40 @@
+#!/usr/bin/env python
+
+# Copyright (C) 2021 OVH SAS
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+import blake3
+import sys
+
+
+def usage():
+    print(f"usage: {sys.argv[0]} [FILE...]\n\n"
+          "Print the blake3 checksum of the specified files.")
+
+
+if len(sys.argv) < 2 or sys.argv[1] in ('-h', '--help'):
+    usage()
+    sys.exit(1)
+
+
+for path in sys.argv[1:]:
+    try:
+        checksum = blake3.blake3()
+        with open(path, 'rb') as ifile:
+            checksum.update(ifile.read())
+        hexdigest = checksum.hexdigest()
+        print(f"{hexdigest}  {path}")
+    except Exception as err:
+        print(f"{err}", file=sys.stderr)

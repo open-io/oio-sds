@@ -29,6 +29,7 @@ from oio.common.utils import get_hasher, paths_gen
 from oio.common.easy_value import int_value
 from oio.common.logger import get_logger
 from oio.common.constants import STRLEN_CHUNKID
+from oio.common.storage_method import parse_chunk_method
 
 
 SLEEP_TIME = 30
@@ -182,8 +183,10 @@ class BlobAuditorWorker(object):
             raise exc.FaultyChunk(err)
         size = int(meta['chunk_size'])
         expected_checksum = meta['chunk_hash'].lower()
+        _, chunk_params = parse_chunk_method(meta['content_chunkmethod'])
         reader = ChunkReader(chunk_file, size, expected_checksum,
-                             compression=meta.get("compression", ""))
+                             compression=meta.get("compression", ""),
+                             chunk_checksum_algo=chunk_params.get('cca'))
         with closing(reader):
             for buf in reader:
                 buf_len = len(buf)
@@ -260,7 +263,8 @@ class BlobAuditor(Daemon):
 
 
 class ChunkReader(object):
-    def __init__(self, fp, size, expected_checksum, compression=None):
+    def __init__(self, fp, size, expected_checksum, compression=None,
+                 chunk_checksum_algo=None):
         self.fp = fp
         self.decompressor = None
         self.error = None
@@ -275,10 +279,14 @@ class ChunkReader(object):
         self.expected_checksum = expected_checksum
         self.bytes_read = 0
         self.iter_hash = None
+        if chunk_checksum_algo is not None:
+            self.chunk_checksum_algo = chunk_checksum_algo
+        else:
+            self.chunk_checksum_algo = \
+                'md5' if len(self.expected_checksum) == 32 else 'blake3'
 
     def __iter__(self):
-        self.iter_hash = get_hasher('md5' if len(self.expected_checksum) == 32
-                                    else 'blake3')
+        self.iter_hash = get_hasher(self.chunk_checksum_algo)
         while True:
             buf = self.fp.read()
             if buf and self.decompressor:

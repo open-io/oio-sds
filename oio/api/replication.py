@@ -34,34 +34,12 @@ from oio.common.logger import get_logger
 LOGGER = get_logger({}, __name__)
 
 
-class FakeChecksum(object):
-    """Acts as a checksum object but does not compute anything"""
-
-    def __init__(self, actual_checksum, name=None):
-        self.checksum = actual_checksum
-        self._name = name
-
-    def hexdigest(self):
-        """Returns the checksum passed as constructor parameter"""
-        return self.checksum
-
-    @property
-    def name(self):
-        if self._name:
-            return self._name
-        return 'md5' if len(self.checksum) == 32 else 'blake3'
-
-    def update(self, *_args, **_kwargs):
-        pass
-
-
 class ReplicatedMetachunkWriter(io.MetachunkWriter):
     def __init__(self, sysmeta, meta_chunk, global_checksum, storage_method,
                  quorum=None, connection_timeout=None, write_timeout=None,
                  read_timeout=None, headers=None, **kwargs):
         super(ReplicatedMetachunkWriter, self).__init__(
-            storage_method=storage_method, quorum=quorum, **kwargs)
-        self.sysmeta = sysmeta
+            sysmeta, storage_method=storage_method, quorum=quorum, **kwargs)
         self.meta_chunk = meta_chunk
         self.global_checksum = global_checksum
         self.connection_timeout = connection_timeout or io.CONNECTION_TIMEOUT
@@ -69,9 +47,6 @@ class ReplicatedMetachunkWriter(io.MetachunkWriter):
         self.read_timeout = read_timeout or io.CLIENT_TIMEOUT
         self.headers = headers or {}
         self.logger = kwargs.get('logger', LOGGER)
-        if self.chunk_checksum_algo:
-            self.headers[CHUNK_HEADERS["chunk_hash_algo"]] = \
-                self.chunk_checksum_algo
 
     def stream(self, source, size):
         bytes_transferred = 0
@@ -340,7 +315,7 @@ class ReplicatedWriteHandler(io.WriteHandler):
     """
 
     def stream(self):
-        global_checksum = get_hasher('md5')
+        global_checksum = get_hasher(self.object_checksum_algo)
         total_bytes_transferred = 0
         content_chunks = []
         kwargs = ReplicatedMetachunkWriter.filter_kwargs(self.extra_kwargs)

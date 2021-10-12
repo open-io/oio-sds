@@ -36,6 +36,10 @@ EC_SEGMENT_SIZE = 1048576
 
 
 def parse_chunk_method(chunk_method):
+    """
+    Split a "packed" chunk method description into the chunk method type
+    and a dictionary of parameters.
+    """
     param_list = dict()
     if '/' in chunk_method:
         chunk_method, params = chunk_method.split('/', 1)
@@ -60,10 +64,10 @@ def unparse_chunk_method(chunk_method, params):
 
 
 def guess_storage_method(url):
-    if url.startswith('kine'):
-        return 'kplain'
-    else:
-        return 'plain'
+    """
+    Guess the storage method from a chunk URL.
+    """
+    return 'plain'
 
 
 class StorageMethods(object):
@@ -109,15 +113,22 @@ class StorageMethod(object):
 
     @property
     def quorum(self):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @property
     def expected_chunks(self):
-        raise NotImplementedError()
+        raise NotImplementedError
 
     @property
     def min_chunks_to_read(self):
-        raise NotImplementedError()
+        raise NotImplementedError
+
+    def to_chunk_method(self):
+        """
+        Serialize this to a chunk_method string.
+        """
+        return unparse_chunk_method('ec' if self.ec else 'plain',
+                                    self.params)
 
     @property
     def params(self):

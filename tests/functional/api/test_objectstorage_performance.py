@@ -1,4 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -15,17 +16,18 @@
 
 import logging
 
-from oio.api.object_storage import ObjectStorageApi
 from oio.common.utils import monotonic_time
 from tests.utils import random_str, BaseTestCase
+
+
+TEST_DATA = b'\0' * 4096
 
 
 class TestObjectStorageApiPerformance(BaseTestCase):
 
     def setUp(self):
         super(TestObjectStorageApiPerformance, self).setUp()
-        self.api = ObjectStorageApi(self.ns, endpoint=self.uri,
-                                    source_address=('127.0.0.8', 0))
+        self.api = self.storage
         self.created = list()
         self.containers = set()
 
@@ -45,13 +47,24 @@ class TestObjectStorageApiPerformance(BaseTestCase):
                 logging.exception('Failed to delete %s/%s/%s',
                                   self.ns, self.account, ct)
 
+    def test_object_create_32_blake3_checksum(self):
+        container = self.__class__.__name__ + random_str(8)
+        for i in range(32):
+            obj = "obj-%03d" % i
+            self.api.object_create(self.account, container,
+                                   obj_name=obj, data=TEST_DATA,
+                                   chunk_checksum_algo='blake3',
+                                   object_checksum_algo='blake3')
+            self.created.append((container, obj))
+
     def test_object_create_32_md5_checksum(self):
         container = self.__class__.__name__ + random_str(8)
         for i in range(32):
             obj = "obj-%03d" % i
             self.api.object_create(self.account, container,
-                                   obj_name=obj, data=obj,
-                                   chunk_checksum_algo='md5')
+                                   obj_name=obj, data=TEST_DATA,
+                                   chunk_checksum_algo='md5',
+                                   object_checksum_algo='md5')
             self.created.append((container, obj))
 
     def test_object_create_32_no_checksum(self):
@@ -59,7 +72,35 @@ class TestObjectStorageApiPerformance(BaseTestCase):
         for i in range(32):
             obj = "obj-%03d" % i
             self.api.object_create(self.account, container,
-                                   obj_name=obj, data=obj,
+                                   obj_name=obj, data=TEST_DATA,
+                                   chunk_checksum_algo=None,
+                                   object_checksum_algo=None)
+            self.created.append((container, obj))
+
+    def test_object_create_32_blake3_chunk_checksum(self):
+        container = self.__class__.__name__ + random_str(8)
+        for i in range(32):
+            obj = "obj-%03d" % i
+            self.api.object_create(self.account, container,
+                                   obj_name=obj, data=TEST_DATA,
+                                   chunk_checksum_algo='blake3')
+            self.created.append((container, obj))
+
+    def test_object_create_32_md5_chunk_checksum(self):
+        container = self.__class__.__name__ + random_str(8)
+        for i in range(32):
+            obj = "obj-%03d" % i
+            self.api.object_create(self.account, container,
+                                   obj_name=obj, data=TEST_DATA,
+                                   chunk_checksum_algo='md5')
+            self.created.append((container, obj))
+
+    def test_object_create_32_no_chunk_checksum(self):
+        container = self.__class__.__name__ + random_str(8)
+        for i in range(32):
+            obj = "obj-%03d" % i
+            self.api.object_create(self.account, container,
+                                   obj_name=obj, data=TEST_DATA,
                                    chunk_checksum_algo=None)
             self.created.append((container, obj))
 

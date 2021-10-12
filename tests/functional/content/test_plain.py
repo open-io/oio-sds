@@ -24,6 +24,7 @@ from testtools.testcase import ExpectedException
 from oio.common.constants import OIO_DB_ENABLED, OIO_DB_FROZEN
 from oio.common.exceptions import BadRequest, NotFound, \
     UnrecoverableContent, ServiceBusy
+from oio.common.storage_method import parse_chunk_method
 from oio.common.utils import cid_from_name
 from oio.common.fullpath import encode_fullpath
 from oio.container.client import ContainerClient
@@ -42,10 +43,9 @@ class TestPlainContent(BaseTestCase):
             self.skipTest(
                 "Plain tests needs more than 3 rawx to run")
 
-        self.namespace = self.conf['namespace']
         self.account = self.conf['account']
         self.chunk_size = self.conf['chunk_size']
-        self.gridconf = {"namespace": self.namespace}
+        self.gridconf = {"namespace": self.ns}
         self.content_factory = ContentFactory(
             self.gridconf, logger=self.logger, watchdog=self.watchdog)
         self.container_client = ContainerClient(
@@ -74,6 +74,7 @@ class TestPlainContent(BaseTestCase):
         self.assertEqual(meta['length'], str(len(data)))
         self.assertEqual(meta['policy'], stgpol)
         self.assertEqual(meta['name'], self.content)
+        _, chunk_params = parse_chunk_method(meta['chunk_method'])
 
         metachunk_nb = int(math.ceil(float(len(data)) / self.chunk_size))
         if metachunk_nb == 0:
@@ -97,11 +98,14 @@ class TestPlainContent(BaseTestCase):
 
             data_begin = pos * self.chunk_size
             data_end = pos * self.chunk_size + self.chunk_size
-            chunk_hash = hash_data(data[data_begin:data_end])
+            chunk_hash = hash_data(data[data_begin:data_end],
+                                   algorithm=chunk_params['cca'])
 
             for chunk in chunks_at_pos:
                 meta, stream = self.blob_client.chunk_get(chunk.url)
-                self.assertEqual(hash_stream(stream), chunk_hash)
+                self.assertEqual(
+                    hash_stream(stream, algorithm=chunk_params['cca']),
+                    chunk_hash)
                 self.assertEqual(meta['content_path'], self.content)
                 self.assertEqual(meta['container_id'], self.container_id)
                 self.assertEqual(meta['content_id'], meta['content_id'])

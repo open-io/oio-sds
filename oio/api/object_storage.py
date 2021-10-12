@@ -63,7 +63,7 @@ class ObjectStorageApi(object):
     """
     EXTRA_KEYWORDS = ('chunk_checksum_algo', 'autocreate',
                       'chunk_buffer_min', 'chunk_buffer_max',
-                      'cache', 'tls', 'watchdog')
+                      'cache', 'object_checksum_algo', 'tls', 'watchdog')
 
     def __init__(self, namespace, logger=None, perfdata=None, **kwargs):
         """

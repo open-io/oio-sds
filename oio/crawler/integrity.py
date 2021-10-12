@@ -196,7 +196,7 @@ class Checker(object):
     def __init__(self, namespace, concurrency=50,
                  error_file=None, rebuild_file=None, check_xattr=True,
                  limit_listings=0, request_attempts=1,
-                 logger=None, verbose=False, check_hash=False,
+                 logger=None, verbose=False, verify_chunk_checksum=False,
                  min_time_in_error=0.0, required_confirmations=0,
                  beanstalkd_addr=None,
                  beanstalkd_tube=BlobRebuilder.DEFAULT_BEANSTALKD_WORKER_TUBE,
@@ -205,7 +205,7 @@ class Checker(object):
         self.error_file = error_file
         self.error_sender = None
         self.check_xattr = bool(check_xattr)
-        self.check_hash = bool(check_hash)
+        self.verify_chunk_checksum = bool(verify_chunk_checksum)
         self.logger = logger or get_logger({'namespace': namespace},
                                            name='integrity', verbose=verbose)
         # Optimisation for when we are only checking one object
@@ -465,7 +465,8 @@ class Checker(object):
         self.logger.debug('Checking chunk "%s"', target)
         try:
             xattr_meta = self.api.blob_client.chunk_head(
-                chunk, xattr=self.check_xattr, check_hash=self.check_hash)
+                chunk, xattr=self.check_xattr,
+                verify_checksum=self.verify_chunk_checksum)
         except exc.NotFound as err:
             self.chunk_not_found += 1
             errors.append('Not found: %s' % (err, ))

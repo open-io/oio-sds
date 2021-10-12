@@ -112,8 +112,9 @@ class ContentRepairerWorker(ToolWorker):
         super(ContentRepairerWorker, self).__init__(
             tool, queue_workers, queue_reply)
 
-        self.chunk_operator = ChunkOperator(self.conf, logger=self.logger)
-        self.blob_client = BlobClient(self.conf)
+        self.chunk_operator = ChunkOperator(self.conf, logger=self.logger,
+                                            watchdog=self.tool.watchdog)
+        self.blob_client = BlobClient(self.conf, watchdog=self.tool.watchdog)
         self.container_client = ContainerClient(self.conf, logger=self.logger)
 
     def _safe_chunk_rebuild(self, item, content_id, chunk_id_or_pos, **kwargs):
@@ -156,7 +157,7 @@ class ContentRepairerWorker(ToolWorker):
         for chunk in chunks:
             try:
                 self.blob_client.chunk_head(
-                    chunk['url'], xattr=True, check_hash=True)
+                    chunk['url'], xattr=True, verify_checksum=True)
             except (NotFound, ClientPreconditionFailed) as e:
                 kwargs = {'try_chunk_delete':
                           isinstance(e, ClientPreconditionFailed)}

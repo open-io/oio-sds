@@ -60,7 +60,6 @@ const (
 	HeaderNameChunkPosition      = "X-oio-Chunk-Meta-Chunk-Pos"
 	HeaderNameChunkSize          = "X-oio-Chunk-Meta-Chunk-Size"
 	HeaderNameChunkChecksum      = "X-oio-Chunk-Meta-Chunk-Hash"
-	HeaderNameChunkChecksumAlgo  = "X-oio-Chunk-Meta-Chunk-Hash-Algorithm"
 	HeaderNameMetachunkSize      = "X-oio-Chunk-Meta-Metachunk-Size"
 	HeaderNameMetachunkChecksum  = "X-oio-Chunk-Meta-Metachunk-Hash"
 	HeaderNameChunkID            = "X-oio-Chunk-Meta-Chunk-Id"

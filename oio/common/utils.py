@@ -605,12 +605,31 @@ def compute_chunk_id(cid, path, version, position, policy, hash_algo='sha256'):
     return hash_.hexdigest().upper()
 
 
+class FakeChecksum(object):
+    """Acts as a checksum object but does not compute anything"""
+
+    def __init__(self, actual_checksum, name=None):
+        self.checksum = actual_checksum
+        self._name = name
+
+    def hexdigest(self):
+        """Returns the checksum passed as constructor parameter"""
+        return self.checksum
+
+    def update(self, *_args, **_kwargs):
+        pass
+
+
 def get_hasher(algorithm='blake3'):
     """
     Same hashlib.new, but supports other algorithms like 'blake3'.
+    Passing None as the algorithm name will return a fake checksum object
+    not computing anything.
 
     :raises ValueError: if the algorithm is not supported.
     """
+    if not algorithm or algorithm.lower() == 'none':
+        return FakeChecksum(None)
     if algorithm in CUSTOM_HASHER:
         return CUSTOM_HASHER[algorithm]()
     return hashlib.new(algorithm)

@@ -142,6 +142,8 @@ class ECContent(Content):
         handler = ECWriteHandler(
             stream, sysmeta, chunks, self.storage_method, headers=headers,
             watchdog=self.blob_client.watchdog)
+        # The write handler may patch the chunk method
+        self.chunk_method = sysmeta['chunk_method']
 
         final_chunks, bytes_transferred, content_checksum = handler.stream()
 

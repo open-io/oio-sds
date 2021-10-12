@@ -38,8 +38,12 @@ class ContentFactory(object):
 
     def _get(self, container_id, meta, chunks,
              account=None, container_name=None, **kwargs):
-        chunk_method = meta['chunk_method']
-        storage_method = STORAGE_METHODS.load(chunk_method)
+        # Some objects may not have cca and oca attributes, which have been
+        # introduced at the same time as the blake3 algorithm. Which means
+        # objects without these attributes use the old default algorithm: md5.
+        storage_method = STORAGE_METHODS.load(meta['chunk_method'])
+        storage_method.fix_missing_checksum_algo(chunk_checksum_algo='md5')
+        meta['chunk_method'] = storage_method.to_chunk_method()
         if not account or not container_name:
             container_info = self.container_client.container_get_properties(
                 cid=container_id, **kwargs)['system']
@@ -87,8 +91,9 @@ class ContentFactory(object):
             cid=container_id, path=path, size=size, stgpol=policy,
             **kwargs)
 
-        chunk_method = meta['chunk_method']
-        storage_method = STORAGE_METHODS.load(chunk_method)
+        storage_method = STORAGE_METHODS.load(meta['chunk_method'])
+        storage_method.fix_missing_checksum_algo()
+        meta['chunk_method'] = storage_method.to_chunk_method()
         if not account or not container_name:
             container_info = self.container_client.container_get_properties(
                 cid=container_id)['system']

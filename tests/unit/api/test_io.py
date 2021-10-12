@@ -142,7 +142,9 @@ class MetachunkWriterTest(unittest.TestCase):
     """Test oio.api.io.MetachunkWriter class."""
 
     def setUp(self):
-        self.mcw = MetachunkWriter(quorum=3, watchdog=MagicMock())
+        self.sysmeta = {'chunk_method': 'plain'}
+        self.mcw = MetachunkWriter(
+            self.sysmeta, quorum=3, watchdog=MagicMock())
 
     def _dummy_chunk(self, error=None):
         chunk = {'url': 'http://127.0.0.1:7000/' + random_id(64)}
@@ -163,10 +165,10 @@ class MetachunkWriterTest(unittest.TestCase):
                 self.assertIn(chunk['url'], msg)
 
     def test_metachunkwriter_init(self):
-        self.assertRaises(ValueError, MetachunkWriter)
-        mcw = MetachunkWriter(quorum=3, watchdog=MagicMock())
+        self.assertRaises(ValueError, MetachunkWriter, self.sysmeta)
+        mcw = MetachunkWriter(self.sysmeta, quorum=3, watchdog=MagicMock())
         self.assertEqual(3, mcw.quorum)
-        mcw = MetachunkWriter(STORAGE_METHODS.load('plain'),
+        mcw = MetachunkWriter(self.sysmeta, STORAGE_METHODS.load('plain'),
                               watchdog=MagicMock())
         self.assertEqual(1, mcw.quorum)
 

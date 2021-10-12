@@ -14,13 +14,11 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import hashlib
-
 import os
 import time
 
 from oio.common.easy_value import boolean_value
-from oio.common.utils import cid_from_name, compute_chunk_id
+from oio.common.utils import cid_from_name, compute_chunk_id, get_hasher
 from oio.common.xattr import xattr
 from oio.common.logger import get_logger
 from oio.blob.auditor import BlobAuditorWorker
@@ -44,9 +42,9 @@ class TestContent(object):
             account, ref, self.path, self.version, self.id)
         self.data = os.urandom(1280)
         self.size = len(self.data)
-        md5 = hashlib.new('md5')
-        md5.update(self.data)
-        self.hash = md5.hexdigest().lower()
+        checksum = get_hasher('blake3')
+        checksum.update(self.data)
+        self.hash = checksum.hexdigest().lower()
 
 
 class TestChunk(object):
@@ -91,19 +89,17 @@ class TestBlobAuditorFunctional(BaseTestCase):
             'version': self.content.version,
             'id': self.content.id,
             'full_path': self.content.fullpath,
-            'chunk_method': 'plain/nb_copy=3',
+            'chunk_method': 'plain/nb_copy=3,cca=blake3,oca=blake3',
             'policy': self.storage_policy,
             'chunk_id': self.chunk.id,
             'chunk_pos': self.chunk.pos,
             'chunk_hash': self.chunk.metachunk_hash,
-            'chunk_hash_algo': 'md5',
             'chunk_size': self.chunk.metachunk_size,
             'metachunk_hash': self.chunk.metachunk_hash,
             'metachunk_size': self.chunk.metachunk_size,
             'oio_version': OIO_VERSION}
         self.blob_client.chunk_put(self.chunk.url, chunk_meta,
-                                   self.content.data,
-                                   chunk_checksum_algo='md5')
+                                   self.content.data)
 
     def tearDown(self):
         super(TestBlobAuditorFunctional, self).tearDown()

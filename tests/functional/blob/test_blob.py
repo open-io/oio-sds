@@ -34,12 +34,14 @@ map_cfg = {'addr': 'Listen',
            'ns': 'namespace',
            'basedir': 'docroot'}
 
+DEFAULT_CHECKSUM_ALGO = "blake3"
+
 
 def checksum(data=b''):
     """
     Get the blake3 checksum of the provided data.
     """
-    hasher = get_hasher('blake3')
+    hasher = get_hasher(DEFAULT_CHECKSUM_ALGO)
     hasher.update(data)
     return hasher
 
@@ -49,14 +51,11 @@ class RawxTestSuite(CommonTestCase):
 
     def setUp(self):
         super(RawxTestSuite, self).setUp()
+        self.content_path = None
         self._setup()
         _, rawx_path, rawx_addr, _ = self.get_service_url('rawx')
         self.rawx = 'http://' + rawx_addr
         self.rawx_path = rawx_path + '/'
-
-    def tearDown(self):
-        super(RawxTestSuite, self).tearDown()
-        self._teardown()
 
     def _chunk_attr(self, chunk_id, data, path=None):
         if path is not None:
@@ -66,7 +65,8 @@ class RawxTestSuite(CommonTestCase):
             'version': self.content_version,
             'content_path': self.content_path,
             'chunk_method':
-                'ec/algo=liberasurecode_rs_vand,k=6,m=3',
+                'ec/algo=liberasurecode_rs_vand,k=6,m=3,cca=%s' % (
+                    DEFAULT_CHECKSUM_ALGO),
             'policy': 'TESTPOLICY',
             'container_id': self.cid,
             'chunk_hash': checksum(data).hexdigest(),
@@ -94,9 +94,6 @@ class RawxTestSuite(CommonTestCase):
         self.fullpath = encode_fullpath(
             self.account, 'blob', self.content_path, self.content_version,
             self.content_id)
-
-    def _teardown(self):
-        pass
 
     def _http_request(self, chunkurl, method, body, headers, trailers=None):
         parsed = urlparse(chunkurl)
@@ -142,8 +139,8 @@ class RawxTestSuite(CommonTestCase):
         trailers = {'x-oio-chunk-meta-metachunk-size': str(metachunk_size),
                     'x-oio-chunk-meta-metachunk-hash': metachunk_hash}
         # Initial put that must succeed
-        resp, body = self._http_request(chunkurl, 'PUT', chunkdata, headers,
-                                        trailers)
+        resp, _body = self._http_request(chunkurl, 'PUT', chunkdata,
+                                         headers, trailers)
         self.assertEqual(201, resp.status)
         self.assertEqual(headers['x-oio-chunk-meta-chunk-hash'].upper(),
                          resp.getheader('x-oio-chunk-meta-chunk-hash'))
@@ -171,8 +168,6 @@ class RawxTestSuite(CommonTestCase):
 
     def _cycle_put(self, length, expected, remove_headers=None, path=None,
                    old_fullpath=False, chunkid_lowercase=False):
-        if path:
-            self.path = path
         chunkid = random_chunk_id()
         chunkdata = random_buffer(string.printable, length).encode('utf-8')
         if chunkid_lowercase:
@@ -384,8 +379,6 @@ class RawxTestSuite(CommonTestCase):
         self._cycle_put(32, 201, chunkid_lowercase=True)
 
     def _cycle_copy(self, path):
-        if path:
-            self.path = path
         chunkid = random_chunk_id()
         chunkdata = random_buffer(string.printable, 1).encode('utf-8')
         chunkurl = self._rawx_url(chunkid)

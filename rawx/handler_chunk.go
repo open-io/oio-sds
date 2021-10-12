@@ -180,10 +180,14 @@ func (rr *rawxRequest) uploadChunk() {
 
 	// Trigger the checksum only if configured so
 	if rr.checksumRequired() {
-		if rr.chunk.ChunkHashAlgo == "md5" {
-			h = md5.New()
-		} else {
+		switch rr.chunk.ChunkHashAlgo {
+		case "blake3":
 			h = blake3.New(32, nil)
+		case "md5":
+			h = md5.New()
+		default:
+			h = blake3.New(32, nil)
+			rr.chunk.ChunkHashAlgo = "blake3"
 		}
 	}
 

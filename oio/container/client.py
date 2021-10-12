@@ -173,7 +173,7 @@ class ContainerClient(ProxyClient):
                     self._refresh_rawx_scores(now, **kwargs)
                 except OioNetworkException as exc:
                     self.logger.warn(
-                            "Failed to refresh rawx service scores: %s", exc)
+                        "Failed to refresh rawx service scores: %s", exc)
                 except Exception:
                     self.logger.exception(
                         "Failed to refresh rawx service scores")
@@ -245,20 +245,20 @@ class ContainerClient(ProxyClient):
             tail = containers[pivot:]
             if head:
                 results += self.container_create_many(
-                        account, head, properties=properties,
-                        **kwargs)
+                    account, head, properties=properties,
+                    **kwargs)
             if tail:
                 results += self.container_create_many(
-                        account, tail, properties=properties,
-                        **kwargs)
+                    account, tail, properties=properties,
+                    **kwargs)
             return results
         except exceptions.NotFound:
             # Batches not supported by the proxy
             for container in containers:
                 try:
                     rc = self.container_create(
-                            account, container, properties=properties,
-                            **kwargs)
+                        account, container, properties=properties,
+                        **kwargs)
                     results.append((container, rc))
                 except Exception:
                     results.append((container, False))
@@ -589,9 +589,10 @@ class ContainerClient(ProxyClient):
             params['id'] = content_id
             uri = self._make_uri('content/update')
         data = json.dumps(data)
-        hdrs = {'x-oio-content-meta-length': str(size),
-                'x-oio-content-meta-hash': checksum}
+        hdrs = {'x-oio-content-meta-length': str(size)}
         hdrs.update(headers)
+        if checksum:
+            hdrs['x-oio-content-meta-hash'] = checksum
         if content_id is not None:
             hdrs['x-oio-content-meta-id'] = content_id
         if stgpol is not None:
@@ -684,12 +685,12 @@ class ContainerClient(ProxyClient):
             tail = paths[pivot:]
             if head:
                 results += self.content_delete_many(
-                        account, reference, head,
-                        cid=cid, **kwargs)
+                    account, reference, head,
+                    cid=cid, **kwargs)
             if tail:
                 results += self.content_delete_many(
-                        account, reference, tail,
-                        cid=cid, **kwargs)
+                    account, reference, tail,
+                    cid=cid, **kwargs)
             return results
         except Exception:
             raise
