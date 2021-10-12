@@ -1,6 +1,3 @@
-[submodule "vendor/gridinit"]
-	path = vendor/gridinit
-	url = https://github.com/open-io/gridinit.git
 [submodule "vendor/asn1c"]
 	path = vendor/asn1c
 	url = https://github.com/vlm/asn1c.git
