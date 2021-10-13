@@ -25,7 +25,11 @@ CONCURRENCY=10
 # and thus this check does not work anymore.
 #SVCID_ENABLED=$(openio cluster list meta2 rawx -c 'Service Id' -f value | grep -v 'n/a')
 SVCID_ENABLED=$(grep "service_id: true" ~/.oio/sds/conf/test.yml)
-GRIDINIT="gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock"
+if [ -v OIO_SYSTEMD_SYSTEM ]; then
+  SYSTEMCTL="systemctl"
+else
+  SYSTEMCTL="systemctl --user"
+fi
 
 usage() {
   echo "Usage: $(basename "${0}") -n namespace -c concurrency"
@@ -115,7 +119,7 @@ check_and_remove_meta()
 
   SERVICE="${META_LOC_TO_REBUILD##*/}"
   echo >&2 "Stop the ${TYPE} ${META_ID_TO_REBUILD}"
-  ${GRIDINIT} stop "${SERVICE}" > /dev/null
+  ${SYSTEMCTL} stop "${SERVICE}" > /dev/null
 
   echo >&2 "Remove the ${TYPE} ${META_ID_TO_REBUILD}"
   /bin/rm -rf "${TMP_VOLUME}"
@@ -124,7 +128,7 @@ check_and_remove_meta()
   /bin/mkdir "${META_LOC_TO_REBUILD}"
 
   echo >&2 "Restart the ${TYPE} ${META_ID_TO_REBUILD}"
-  ${GRIDINIT} restart "${SERVICE}" > /dev/null
+  ${SYSTEMCTL} restart "${SERVICE}" > /dev/null
   ${CLI} cluster wait -s 50 "${TYPE}" > /dev/null
 
   echo "${META_ID_TO_REBUILD} ${META_LOC_TO_REBUILD}"
@@ -331,7 +335,7 @@ remove_rawx()
 
   SERVICE="${RAWX_LOC_TO_REBUILD##*/}"
   echo >&2 "Stop the rawx ${RAWX_ID_TO_REBUILD}"
-  ${GRIDINIT} stop "${SERVICE}" > /dev/null
+  ${SYSTEMCTL} stop "${SERVICE}" > /dev/null
 
   echo >&2 "Remove data from the rawx ${RAWX_ID_TO_REBUILD}"
   /bin/rm -rf "${TMP_VOLUME}"
@@ -340,7 +344,7 @@ remove_rawx()
   /bin/mkdir "${RAWX_LOC_TO_REBUILD}"
 
   echo >&2 "Restart the rawx ${RAWX_ID_TO_REBUILD}"
-  ${GRIDINIT} restart "${SERVICE}" > /dev/null
+  ${SYSTEMCTL} restart "${SERVICE}" > /dev/null
   ${CLI} cluster wait -s 50 rawx > /dev/null
 
   echo "${RAWX_ID_TO_REBUILD} ${RAWX_LOC_TO_REBUILD} ${TOTAL_CHUNKS}"

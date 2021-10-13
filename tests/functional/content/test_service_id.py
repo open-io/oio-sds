@@ -21,7 +21,7 @@ import time
 import yaml
 
 from six.moves import xrange
-from six.moves.configparser import SafeConfigParser
+import configparser
 
 from oio.common.exceptions import ServiceBusy
 from tests.utils import BaseTestCase, random_str
@@ -31,9 +31,42 @@ def exp(path):
     return os.path.expandvars(path)
 
 
-GRID_CONF = exp("${HOME}/.oio/sds/conf/gridinit.conf")
+SYSTEMDDIR = exp("${HOME}/.config/systemd/user")
+if 'OIO_SYSTEMD_SYSTEM' in os.environ:
+    SYSTEMDDIR = '/etc/systemd/system'
+SYSTEMD_CONF = SYSTEMDDIR + "/%s"
 WATCH_CONF = exp("${HOME}/.oio/sds/conf/watch/%s-%s.yml")
 HTTPD_CONF = exp("${HOME}/.oio/sds/conf/%s-%s.httpd.conf")
+
+
+class SystemDict(dict):
+    def __setitem__(self, key, value):
+        if isinstance(value, list) and key in self:
+            self[key].extend(value)
+        else:
+            super().__setitem__(key, value)
+
+
+class SystemdParser(configparser.RawConfigParser):
+    def __init__(self):
+        super().__init__(
+            dict_type=SystemDict, strict=False, allow_no_value=True)
+        self.optionxform = str
+
+    def _join_multiline_values(self):
+        return
+
+    def _write_section(self, fp, section_name, section_items, delimiter):
+        fp.write("[{}]\n".format(section_name))
+        for key, values in section_items:
+            for value in values:
+                value = self._interpolation.before_write(
+                    self, section_name, key, value)
+                if (value is not None and len(value) > 0) \
+                        or not self._allow_no_value:
+                    value = delimiter + str(value).replace('\n', '\n\t')
+                    fp.write("{}{}\n".format(key, value))
+        fp.write("\n")
 
 
 class BaseServiceIdTest(BaseTestCase):
@@ -106,15 +139,16 @@ class BaseServiceIdTest(BaseTestCase):
             yaml.dump(conf, stream=fp)
 
     def _change_rawx_addr(self, name, port):
-        self._service(name, "stop")
+        service = 'oio-%s.service' % name
+        self._service(service, "stop")
 
-        self._update_gridinit_rawx(port)
+        self._update_systemd_service_rawx(service, port)
         self._update_event_watch(name, port)
         self._update_apache(port)
 
-        self._service(self.name, "reload")
-        self._service(self.name, "restart")
-        self._service("conscience-agent", "restart")
+        self._service(service, "reload")
+        self._service(service, "restart")
+        self._service("oio-conscience-agent-1.service", "restart")
         check_call(["openio", "cluster", "flush", "rawx"])
         check_call(["openio", "cluster", "unlockall"])
         self._cache_flush()
@@ -158,18 +192,24 @@ class TestRawxServiceId(BaseServiceIdTest):
                     print("%s: %s", item.get('real_url'), str(exc))
         return False
 
-    def _update_gridinit_rawx(self, port):
-        grid = SafeConfigParser()
-        grid.read(GRID_CONF)
+    def _update_systemd_service_rawx(self, service, port):
+        conf = SystemdParser()
+        conf.read(SYSTEMD_CONF % service)
 
-        section = "Service.%s-%s" % (self.ns, self.name)
-        val = grid.get(section, "Group").split(",")
+        unit = conf['Unit']
+        if 'OioGroup' in unit:
+            val = unit['OioGroup'][0].split(',')
+            old_addr, old_port = val[3].split(':')
+            val[3] = old_addr + ':' + str(port)
+            unit['OioGroup'][0] = ','.join(val)
 
-        val[3] = val[3].split(':')[0] + ':' + str(port)
-        grid.set(section, "Group", ",".join(val))
+            section = conf['Service']
+            if 'ExecStartPost' in section:
+                val = section['ExecStartPost'][0]
+                section['ExecStartPost'][0] = val.replace(old_port, str(port))
 
-        with open(GRID_CONF, "w") as fp:
-            grid.write(fp)
+        with open(SYSTEMD_CONF % service, "w") as fp:
+            conf.write(fp)
 
     def _generate_data(self):
         """
@@ -212,39 +252,42 @@ class TestMeta2ServiceId(BaseServiceIdTest):
     def tearDown(self):
         super(TestMeta2ServiceId, self).tearDown()
 
-    def _update_gridinit_meta(self, name, port):
-        grid = SafeConfigParser()
-        grid.read(GRID_CONF)
+    def _update_systemd_service_meta(self, service, port):
+        conf = SystemdParser()
+        conf.read(SYSTEMD_CONF % service)
 
-        section = "service.%s-%s" % (self.ns, name)
-        val = grid.get(section, "Group").split(",")
+        unit = conf['Unit']
+        if 'OioGroup' in unit:
+            val = unit['OioGroup'][0].split(',')
+            old_addr, old_port = val[3].split(':')
+            val[3] = old_addr + ':' + str(port)
+            unit['OioGroup'][0] = ','.join(val)
 
-        org_addr = val[3]
+            section = conf['Service']
+            if 'ExecStart' in section:
+                val = section['ExecStart'][0]
+                section['ExecStart'][0] = val.replace(old_port, str(port))
+            if 'ExecStartPost' in section:
+                val = section['ExecStartPost'][0]
+                section['ExecStartPost'][0] = val.replace(old_port, str(port))
 
-        val[3] = val[3].split(':')[0] + ':' + str(port)
-        grid.set(section, "Group", ",".join(val))
-
-        cmd = grid.get(section, 'command')
-        if cmd and org_addr in cmd:
-            cmd = cmd.replace(org_addr, val[3])
-            grid.set(section, 'command', cmd)
-
-        with open(GRID_CONF, "w") as fp:
-            grid.write(fp)
+        with open(SYSTEMD_CONF % service, "w") as fp:
+            conf.write(fp)
 
     def _change_meta2_addr(self, field):
         for entry in self.meta2:
             name = "meta2-%s" % entry['num']
             port = entry[field]
 
-            self._service(name, 'stop')
-            self._update_gridinit_meta(name, port)
+            service = 'oio-%s.service' % name
+            self._service(service, 'stop')
+            self._update_systemd_service_meta(service, port)
             self._update_event_watch(name, port)
 
-            self._service(name, 'reload')
-            self._service(name, 'start')
+            self._service(service, 'reload')
+            self._service(service, 'start')
 
-        self._service("conscience-agent", "restart")
+        self._service("oio-conscience-agent-1.service", "restart")
         check_call(["openio", "cluster", "flush", "meta2"])
         check_call(["openio", "cluster", "unlockall"])
         self._cache_flush()

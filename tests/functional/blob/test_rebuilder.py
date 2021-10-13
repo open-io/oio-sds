@@ -59,10 +59,10 @@ class TestBlobRebuilder(BaseTestCase):
         self.content_id = meta['id']
 
         # Prevent the chunks' rebuilds by the rdir crawlers
-        self._service(self.ns + '-rdir-crawler', 'stop', wait=3)
+        self._service('oio-rdir-crawler-1.service', 'stop', wait=3)
 
     def tearDown(self):
-        self._service(self.ns + '-rdir-crawler', 'start', wait=1)
+        self._service('oio-rdir-crawler-1.service', 'start', wait=1)
         super(TestBlobRebuilder, self).tearDown()
 
     def _chunk_path(self, chunk):

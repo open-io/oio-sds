@@ -63,7 +63,7 @@ class ItemRebuildTest(CliTestCase):
 
     def test_chunk_rebuild(self):
         # Prevent the chunks' rebuilds by the rdir crawlers
-        self._service(self.ns + '-rdir-crawler', 'stop', wait=3)
+        self._service('oio-rdir-crawler-1.service', 'stop', wait=3)
 
         obj_meta, obj_chunks = self.create_object(
             self.account, self.container, self.obj_name)
@@ -142,4 +142,4 @@ class ItemRebuildTest(CliTestCase):
             % (self.account, chunks_to_repair_file, opts))
         self.assert_list_output(expected_items, output)
 
-        self._service(self.ns + '-rdir-crawler', 'start', wait=1)
+        self._service('oio-rdir-crawler-1.service', 'start', wait=1)

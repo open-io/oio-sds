@@ -36,11 +36,11 @@ class TestBlobIndexer(BaseTestCase):
     def setUpClass(cls):
         super(TestBlobIndexer, cls).setUpClass()
         # Prevent the chunks' rebuilds by the rdir crawlers
-        cls._service(cls._cls_ns + '-rdir-crawler', 'stop', wait=3)
+        cls._service('oio-rdir-crawler-1.service', 'stop', wait=3)
 
     @classmethod
     def tearDownClass(cls):
-        cls._service(cls._cls_ns + '-rdir-crawler', 'start', wait=1)
+        cls._service('oio-rdir-crawler-1.service', 'start', wait=1)
         super(TestBlobIndexer, cls).tearDownClass()
 
     def setUp(self):

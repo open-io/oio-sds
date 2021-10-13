@@ -1,4 +1,5 @@
 # Copyright (C) 2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -153,9 +154,9 @@ class TestECD(BaseTestCase):
                     if pos == 0:
                         chunk = random.choice(sorted_present_chunks[pos])
                         sorted_present_chunks[pos].remove(chunk)
-                        gridinit_key = self.service_to_gridinit_key(
+                        systemd_key = self.service_to_systemd_key(
                             urlparse(chunk['url']).netloc, 'rawx')
-                        self._service(gridinit_key, 'stop')
+                        self._service(systemd_key, 'stop')
                     resp = self._download_metachunk(meta, sorted_chunks[pos])
                     self.assertEqual(200, resp.status)
                     data += resp.data
@@ -163,10 +164,10 @@ class TestECD(BaseTestCase):
 
             chunk = random.choice(sorted_present_chunks[0])
             sorted_present_chunks[0].remove(chunk)
-            gridinit_key = self.service_to_gridinit_key(
+            systemd_key = self.service_to_systemd_key(
                 urlparse(chunk['url']).netloc, 'rawx')
-            self._service(gridinit_key, 'stop')
+            self._service(systemd_key, 'stop')
             resp = self._download_metachunk(meta, sorted_chunks[pos])
             self.assertEqual(500, resp.status)
         finally:
-            self._service('@rawx', 'start')
+            self._service('oio-rawx.target', 'start')

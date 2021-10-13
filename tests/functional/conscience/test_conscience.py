@@ -253,11 +253,12 @@ class TestConscienceFunctional(BaseTestCase):
         self.conscience.lock_score(one_rawx)
 
         # Stop conscience.
-        self._service('conscience-1', 'stop')
+        self._service('oio-conscience-1.service', 'stop')
         # Ensure conscience is stopped.
-        self.assertRaises(Exception, self._service, 'conscience-1', 'status')
+        self.assertRaises(
+            Exception, self._service, 'oio-conscience-1.service', 'status')
         # Start it again.
-        self._service('conscience-1', 'start')
+        self._service('oio-conscience-1.service', 'start')
         # Load all rawx services.
         # Make several attempts in case conscience is slow to start.
         all_rawx = self.conscience.all_services('rawx', request_attempts=4)
@@ -352,8 +353,8 @@ class TestConscienceFunctional(BaseTestCase):
             self.assertEqual(len(services), len(expeted_services))
             expeted_services.sort(key=lambda x: x['addr'])
 
-            self._service('%s-conscience-1' % self.ns, 'stop')
-            self._service('%s-conscience-1' % self.ns, 'start')
+            self._service('oio-conscience-1.service', 'stop')
+            self._service('oio-conscience-1.service', 'start')
             time.sleep(1)
 
             for _ in range(8):

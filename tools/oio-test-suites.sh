@@ -18,6 +18,15 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
+if [ -v OIO_SYSTEMD_SYSTEM ]; then
+  SYSTEMCTL="systemctl"
+  SYSTEMD_DIR="/etc/systemd/system"
+else
+  SYSTEMCTL="systemctl --user"
+  SYSTEMD_DIR="$HOME/.config/systemd/user"
+fi
+
 function dump_syslog {
 	cmd="tail"
 	if ! [ -r /var/log/syslog ] ; then
@@ -27,7 +36,7 @@ function dump_syslog {
 	#$cmd -n 500 $HOME/.oio/sds/logs/*.log
 	#journalctl -o short-precise -n 500
 	pip list
-	gridinit_cmd -S "$HOME/.oio/sds/run/gridinit.sock" status3
+
 }
 
 function trap_exit {
@@ -39,10 +48,11 @@ function trap_exit {
 	BEANSTALK=$(oio-test-config.py -t beanstalkd)
 	if [ -n "${BEANSTALK}" ]; then
 		# some tests stop all services, we must start beanstalk to dump events
-		gridinit_cmd -S "$HOME/.oio/sds/run/gridinit.sock" start @beanstalkd
+		$SYSTEMCTL start oio-beanstalkd.target
 		oio-dump-buried-events.py ${BEANSTALK}
 	fi
-	gridinit_cmd -S "$HOME/.oio/sds/run/gridinit.sock" status3
+	$SYSTEMCTL list-dependencies --no-page oio-cluster.target
+	ls -1 $SYSTEMD_DIR/oio-* | xargs -n 1 basename | xargs $SYSTEMCTL status --no-page -l
 	#dump_syslog
 	${SRCDIR}/tools/oio-gdb.py
 }
@@ -170,7 +180,7 @@ ec_tests () {
 	/bin/rm "$OIO_PATH"
 	[ "$SIZE0" == "$SIZE" ]
 
-	gridinit_cmd -S "$HOME/.oio/sds/run/gridinit.sock" stop
+	$SYSTEMCTL stop oio-cluster.target
 	sleep 0.5
 }
 
@@ -279,7 +289,7 @@ func_tests () {
 	export OIO_ECD=$(oio-test-config.py -t ecd -1)
 	${WRKDIR}/core/tool_sdk_noconf
 
-	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
+	$SYSTEMCTL stop oio-cluster.target
 	sleep 0.5
 }
 
@@ -291,7 +301,7 @@ test_meta2_filters () {
 	tox -e coverage
 	${PYTHON} $(command -v nosetests) tests.functional.m2_filters.test_filters
 
-	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
+	$SYSTEMCTL stop oio-cluster.target
 	sleep 0.5
 }
 
@@ -304,7 +314,7 @@ test_cli () {
 	cd $SRCDIR
 	tox -e cli
 
-	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
+	$SYSTEMCTL stop oio-cluster.target
 	sleep 0.5
 
 	# This is tested here because we do not need to test it several times,
@@ -429,7 +439,7 @@ func_tests_rebuilder_mover () {
 		${SRCDIR}/tools/oio-test-mover.sh -n "${OIO_NS}"
 	fi
 
-	gridinit_cmd -S $HOME/.oio/sds/run/gridinit.sock stop
+	$SYSTEMCTL stop oio-cluster.target
 	sleep 0.5
 }
 

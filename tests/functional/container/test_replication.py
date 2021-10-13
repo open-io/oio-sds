@@ -1,4 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -57,12 +58,12 @@ class TestContainerReplication(BaseTestCase):
 
     def tearDown(self):
         # Start all services
-        self._service('@' + self.ns, 'start')
+        self._service('oio-cluster.target', 'start')
         super(TestContainerReplication, self).tearDown()
         # Restart meta2 after configuration has been reset by parent tearDown
         if self.must_restart_meta2:
-            self._service('@meta2', 'stop')
-            self._service('@meta2', 'start')
+            self._service('oio-meta2.target', 'stop')
+            self._service('oio-meta2.target', 'start')
             self.wait_for_score(('meta2', ))
 
     def _apply_conf_on_all(self, type_, conf):
@@ -86,13 +87,13 @@ class TestContainerReplication(BaseTestCase):
         kept = peers['srv'][0]['host']
         stopped = peers['srv'][1]['host']
         self.api.logger.info('Stopping meta2 %s', stopped)
-        self._service(self.service_to_gridinit_key(stopped, 'meta2'), 'stop')
+        self._service(self.service_to_systemd_key(stopped, 'meta2'), 'stop')
         # Create an object
         self.api.object_create_ext(self.account, cname,
                                    obj_name=cname, data=cname)
         # Start the stopped peer
         self.api.logger.info('Starting meta2 %s', stopped)
-        self._service(self.service_to_gridinit_key(stopped, 'meta2'), 'start')
+        self._service(self.service_to_systemd_key(stopped, 'meta2'), 'start')
         self.wait_for_score(('meta2', ))
         # Create another object
         self.api.object_create_ext(self.account, cname,
@@ -148,7 +149,7 @@ class TestContainerReplication(BaseTestCase):
         kept = peers['srv'][0]['host']
         stopped = peers['srv'][1]['host']
         self.api.logger.info('Stopping meta2 %s', stopped)
-        self._service(self.service_to_gridinit_key(stopped, 'meta2'), 'stop')
+        self._service(self.service_to_systemd_key(stopped, 'meta2'), 'stop')
         # Delete the database
         vol = [x['path'] for x in self.conf['services']['meta2']
                if x.get('service_id', x['addr']) == stopped][0]
@@ -157,7 +158,7 @@ class TestContainerReplication(BaseTestCase):
         os.remove(path)
         # Start the stopped peer
         self.api.logger.info('Starting meta2 %s', stopped)
-        self._service(self.service_to_gridinit_key(stopped, 'meta2'), 'start')
+        self._service(self.service_to_systemd_key(stopped, 'meta2'), 'start')
         self.wait_for_score(('meta2', ))
         # Create an object (to trigger a database replication)
         self.api.object_create_ext(self.account, cname,

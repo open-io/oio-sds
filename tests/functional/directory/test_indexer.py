@@ -1,4 +1,5 @@
 # Copyright (C) 2018 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -32,7 +33,7 @@ class TestMeta2Indexing(BaseTestCase):
         self.container_client = ContainerClient(self.conf)
         self.containers = [random_str(14) for _ in range(0, randint(1, 10))]
         self.containers_svcs = {}
-        self.event_agent_name = 'event-agent-1'
+        self.event_agent_name = 'oio-event-agent-1.service'
 
     def tearDown(self):
         super(TestMeta2Indexing, self).tearDown()

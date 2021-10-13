@@ -488,36 +488,38 @@ class BaseTestCase(CommonTestCase):
         time.sleep(wait)
 
     @classmethod
-    def _service(cls, name, action, wait=0, socket=None):
+    def _service(cls, name, action, wait=0):
         """
-        Execute a gridinit action on a service, and optionally sleep for
+        Execute a systemctl action on a service, and optionally sleep for
         some seconds before returning.
 
         :param name: The service or group upon which the command
             should be executed.
         :param action: The command to send. (E.g. 'start' or 'stop')
         :param wait: The amount of time in seconds to wait after the command.
-        :param socket: The unix socket on which gridinit is listenting.
-                        defaults to ~/.oio/sds/run/gridinit.sock
         """
-        if not socket:
-            socket = os.path.expandvars('${HOME}/.oio/sds/run/gridinit.sock')
-        if not (name.startswith(cls._cls_ns) or name.startswith('@')):
-            name = "%s-%s" % (cls._cls_ns, name)
-        check_call(['gridinit_cmd', '-S', socket, action, name])
+        cmd = ['systemctl']
+        if 'OIO_SYSTEMD_SYSTEM' not in os.environ:
+            cmd.append('--user')
+
+        if action == 'reload':
+            cmd.extend(['daemon-reload'])
+        else:
+            cmd.extend([action, name])
+        check_call(cmd)
         if wait > 0:
             time.sleep(wait)
 
-    def service_to_gridinit_key(self, svc, type_):
+    def service_to_systemd_key(self, svc, type_):
         """
-        Convert a service addr or ID to the gridinit key for the same service.
+        Convert a service addr or ID to the systemd key for the same service.
         """
         for descr in self.conf['services'][type_]:
             svcid = descr.get('service_id')
             if svc == svcid:
-                return svcid
+                return descr['unit']
             elif svc == descr['addr']:
-                return '%s-%s-%s' % (self.ns, type_, descr['num'])
+                return descr['unit']
         raise ValueError(
             '%s not found in the list of %s services' % (svc, type_))
 

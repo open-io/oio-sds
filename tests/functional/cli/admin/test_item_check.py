@@ -38,11 +38,11 @@ class ItemCheckTest(CliTestCase):
         cls.api = ObjectStorageApi(cls._cls_ns, endpoint=cls._cls_uri)
         cls.autocontainer = HashedContainerBuilder(bits=cls.FLAT_BITS)
         # Prevent the chunks' rebuilds by the rdir crawlers
-        cls._service(cls._cls_ns + '-rdir-crawler', 'stop', wait=3)
+        cls._service('oio-rdir-crawler-1.service', 'stop', wait=3)
 
     @classmethod
     def tearDownClass(cls):
-        cls._service(cls._cls_ns + '-rdir-crawler', 'start', wait=1)
+        cls._service('oio-rdir-crawler-1.service', 'start', wait=1)
         super(ItemCheckTest, cls).tearDownClass()
 
     def setUp(self):
@@ -1223,7 +1223,7 @@ class ItemCheckTest(CliTestCase):
         expected_items.append('chunk chunk=%s error' % missing_chunk['url'])
 
         # Prevent the events
-        self._service('@event', 'stop', wait=3)
+        self._service('oio-event.target', 'stop', wait=10)
 
         try:
             # Delete chunk
@@ -1236,7 +1236,7 @@ class ItemCheckTest(CliTestCase):
                 expected_returncode=1)
             self.assert_list_output(expected_items, output)
         finally:
-            self._service('@event', 'start', wait=3)
+            self._service('oio-event.target', 'start', wait=10)
 
     def test_chunk_check_with_missing_object(self):
         obj_meta, obj_chunks = self.create_object(
@@ -1258,7 +1258,7 @@ class ItemCheckTest(CliTestCase):
         expected_items.append('chunk chunk=%s error' % (chunk['url']))
 
         # Prevent the deletion of chunks
-        self._service('@event', 'stop', wait=3)
+        self._service('oio-event.target', 'stop', wait=10)
 
         try:
             # Delete object
@@ -1270,7 +1270,7 @@ class ItemCheckTest(CliTestCase):
                 % (chunk['url'], self.check_opts), expected_returncode=1)
             self.assert_list_output(expected_items, output)
         finally:
-            self._service('@event', 'start', wait=3)
+            self._service('oio-event.target', 'start', wait=10)
 
     def test_chunk_check_with_missing_container(self):
         obj_meta, obj_chunks = self.create_object(
