@@ -17,8 +17,9 @@
 from __future__ import print_function
 
 import sys
+import yaml
+
 from os import path
-from yaml import load
 from optparse import OptionParser
 from glob import glob
 from six.moves.configparser import SafeConfigParser
@@ -108,7 +109,7 @@ def read_conf(conf_path, section_name=None, defaults=None, use_yaml=False):
 
 def parse_config(conf_path):
     with open(conf_path, 'r') as f:
-        conf = load(f)
+        conf = yaml.load(f, Loader=yaml.Loader)
     return conf
 
 
