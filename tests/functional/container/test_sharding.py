@@ -31,6 +31,17 @@ from tests.utils import BaseTestCase
 
 class TestSharding(BaseTestCase):
 
+    @classmethod
+    def setUpClass(cls):
+        super(TestSharding, cls).setUpClass()
+        # Prevent the sharding/shrinking by the meta2 crawlers
+        cls._service('oio-meta2-crawler-1.service', 'stop', wait=3)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._service('oio-meta2-crawler-1.service', 'start', wait=1)
+        super(TestSharding, cls).tearDownClass()
+
     def setUp(self):
         super(TestSharding, self).setUp()
         self.cname = 'test_sharding_%f' % time.time()

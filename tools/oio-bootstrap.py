@@ -297,7 +297,7 @@ scanned_per_second = 10
 log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log
-syslog_prefix = OIO,${NS},${SRVTYPE},${SRVNUM}
+syslog_prefix = OIO,${NS},${SRVTYPE}
 
 [pipeline:main]
 pipeline = logger auto_vacuum auto_sharding
@@ -983,7 +983,7 @@ OioGroup=${NS},localhost,${SRVTYPE}
 ${SERVICEUSER}
 ${SERVICEGROUP}
 Type=simple
-ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}.conf
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
 
@@ -993,7 +993,7 @@ WantedBy=${PARENT}
 
 template_systemd_service_rdir_crawler = """
 [Unit]
-Description=[OpenIO] Service rdir crawler ${SRVNUM}
+Description=[OpenIO] Service rdir crawler
 PartOf=${PARENT}
 OioGroup=${NS},localhost,${SRVTYPE}
 
@@ -1011,7 +1011,7 @@ WantedBy=${PARENT}
 
 template_systemd_service_rawx_crawler = """
 [Unit]
-Description=[OpenIO] Service rawx crawler ${SRVNUM}
+Description=[OpenIO] Service rawx crawler
 PartOf=${PARENT}
 OioGroup=${NS},localhost,${SRVTYPE}
 
@@ -1969,7 +1969,7 @@ def generate(options):
     # first the conf
     tpl = Template(template_meta2_crawler_service)
     to_write = tpl.safe_substitute(_tmp_env)
-    path = '{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.conf'.format(**_tmp_env)
+    path = '{CFGDIR}/{NS}-{SRVTYPE}.conf'.format(**_tmp_env)
     with open(path, 'w+') as f:
         f.write(to_write)
     register_service(_tmp_env, template_systemd_service_meta2_crawler,
