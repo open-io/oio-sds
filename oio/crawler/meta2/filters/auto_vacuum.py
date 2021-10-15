@@ -13,12 +13,14 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import os
 import sqlite3
 
 from oio.common.easy_value import float_value, int_value
+from oio.common.exceptions import NotFound
 from oio.common.green import time
 from oio.crawler.common.base import Filter
-from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBError
+from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBNotFound, Meta2DBError
 from oio.directory.admin import AdminClient
 
 
@@ -62,8 +64,19 @@ class AutomaticVacuum(Filter):
 
         May raise database exceptions.
         """
-        meta2db_conn = sqlite3.connect('file:%s?mode=ro' % meta2db.path,
-                                       uri=True)
+        meta2db_conn = None
+        try:
+            meta2db_conn = sqlite3.connect(f'file:{meta2db.path}?mode=ro',
+                                           uri=True)
+        except sqlite3.OperationalError:
+            # Check if the meta2 database still exists
+            try:
+                os.stat(meta2db.path)
+            except FileNotFoundError:
+                raise
+            except Exception:
+                pass
+            raise
         try:
             meta2db_cursor = meta2db_conn.cursor()
             unused_pages = meta2db_cursor.execute(
@@ -80,59 +93,56 @@ class AutomaticVacuum(Filter):
         and trigger the vacuum if this ratio is reached
         (and the base has not been changed recently).
         """
-        meta2db = Meta2DB(env)
+        meta2db = Meta2DB(self.app_env, env)
 
         try:
+            skip = True
             page_count, unused_pages = self.get_db_page_count(meta2db)
-        except Exception as exc:
-            self.errors += 1
-            resp = Meta2DBError(
-                meta2db=meta2db,
-                body='Failed to compute the unused pages ratio: %s' % exc)
-            return resp(env, cb)
-
-        unused_pages_ratio = unused_pages / (page_count or 1)
-        skip = True
-        if unused_pages_ratio >= self.hard_max_unused_pages_ratio:
-            skip = False
-        elif unused_pages_ratio >= self.soft_max_unused_pages_ratio:
-            try:
-                meta2db_mtime = meta2db.file_status['st_mtime']
-            except Exception as exc:
-                self.errors += 1
-                resp = Meta2DBError(
-                    meta2db=meta2db,
-                    body='Failed to fetch meta2 database mtime: %s' % exc)
-                return resp(env, cb)
-            if time.time() - meta2db_mtime \
-                    > self.min_waiting_time_after_last_modification:
+            unused_pages_ratio = unused_pages / (page_count or 1)
+            if unused_pages_ratio >= self.hard_max_unused_pages_ratio:
                 skip = False
-            else:
-                self.logger.debug(
-                    'Push back the vacuum to hope to trigger it '
-                    'when the container %s will no longer be used',
-                    meta2db.cid)
-        if skip:
-            self.skipped += 1
-            return self.app(env, cb)
+            elif unused_pages_ratio >= self.soft_max_unused_pages_ratio:
+                meta2db_mtime = meta2db.file_status['st_mtime']
+                if (time.time() - meta2db_mtime
+                        > self.min_waiting_time_after_last_modification):
+                    skip = False
+                else:
+                    self.logger.info(
+                        'Push back the vacuum to hope to trigger it '
+                        'when the container %s will no longer be used',
+                        meta2db.cid)
+            if skip:
+                self.skipped += 1
+                return self.app(env, cb)
 
-        try:
             self.logger.info(
                 'Triggering the vacuum on container %s '
                 'with %.2f%% unused pages',
                 meta2db.cid, unused_pages_ratio * 100)
             self.admin.vacuum_base('meta2', cid=meta2db.cid)
+            self.successes += 1
+
+            # The meta2 database size has changed, delete the cache
+            meta2db.file_status = None
+            return self.app(env, cb)
+        except (FileNotFoundError, NotFound):
+            self.logger.info('Container %s no longer exists', meta2db.cid)
+            # The meta2 database no longer exists, delete the cache
+            meta2db.file_status = None
+            meta2db.system = None
+            resp = Meta2DBNotFound(
+                meta2db,
+                body=f'Container {meta2db.cid} no longer exists')
+            return resp(env, cb)
         except Exception as exc:
+            self.logger.exception('Failed to process %s for the container %s',
+                                  self.NAME, meta2db.cid)
             self.errors += 1
             resp = Meta2DBError(
-                meta2db=meta2db,
-                body='Failed to trigger the vacuum: %s' % exc)
+                meta2db,
+                body=f'Failed to process {self.NAME} '
+                     f'for the container {meta2db.cid}: {exc}')
             return resp(env, cb)
-
-        # The meta2 database has changed, delete the cache
-        meta2db.file_status = None
-        self.successes += 1
-        return self.app(env, cb)
 
     def _get_filter_stats(self):
         return {

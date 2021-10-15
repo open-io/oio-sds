@@ -14,14 +14,10 @@
 # License along with this library.
 
 import os
+import sqlite3
 
 from functools import partial
-
-
-def _fetch_file_status(meta2db):
-    file_status = os.stat(meta2db.path)
-    return {k: getattr(file_status, k) for k in dir(file_status)
-            if k.startswith('st_')}
+from oio.common.easy_value import debinarize
 
 
 def _meta2db_env_property(field, fetch_value_function=None):
@@ -39,17 +35,52 @@ def _meta2db_env_property(field, fetch_value_function=None):
     return property(getter, setter)
 
 
+def _fetch_file_status(meta2db):
+    file_status = os.stat(meta2db.path)
+    return {k: getattr(file_status, k) for k in dir(file_status)
+            if k.startswith('st_')}
+
+
+def _fetch_system(meta2db):
+    meta2db_conn = None
+    try:
+        meta2db_conn = sqlite3.connect(f'file:{meta2db.path}?mode=ro',
+                                       uri=True)
+    except sqlite3.OperationalError:
+        # Check if the meta2 database still exists
+        try:
+            os.stat(meta2db.path)
+        except FileNotFoundError:
+            raise
+        except Exception:
+            pass
+        raise
+    try:
+        system = dict()
+        meta2db_cursor = meta2db_conn.cursor()
+        for key, value in meta2db_cursor.execute(
+                'SELECT k, v FROM admin WHERE k LIKE "sys.%"').fetchall():
+            system[key] = value
+        return debinarize(system)
+    finally:
+        meta2db_conn.close()
+
+
 class Meta2DB(object):
 
     path = _meta2db_env_property('path')
-    file_status = _meta2db_env_property(
-        'file_status', fetch_value_function=_fetch_file_status)
     volume_id = _meta2db_env_property('volume_id')
     cid = _meta2db_env_property('cid')
     seq = _meta2db_env_property('seq')
+    file_status = _meta2db_env_property(
+        'file_status', fetch_value_function=_fetch_file_status)
+    system = _meta2db_env_property(
+        'admin_table', fetch_value_function=_fetch_system)
 
-    def __init__(self, env):
+    def __init__(self, app_env, env):
+        self.app_env = app_env
         self.env = env
+        self.api = self.app_env['api']
 
     def __repr__(self):
         return "Meta2DB [%s,%s.%s]" % (
@@ -58,18 +89,13 @@ class Meta2DB(object):
 
 class Response(object):
 
-    def __init__(self, body=None, status=200, meta2db=None, **kwargs):
-        self.status = status
+    def __init__(self, meta2db, body=None, status=200, **kwargs):
         self.meta2db = meta2db
-        if meta2db:
-            self.env = meta2db.env
-        else:
-            self.env = dict()
         self.body = body
+        self.status = status
+        self.env = meta2db.env
 
     def __call__(self, env, cb):
-        if not self.meta2db:
-            self.meta2db = Meta2DB(env)
         if not self.body:
             self.body = ''
         cb(self.status, self.body)
@@ -90,4 +116,5 @@ class StatusMap(object):
 
 status_map = StatusMap()
 Meta2DBOk = status_map[200]
+Meta2DBNotFound = status_map[404]
 Meta2DBError = status_map[500]

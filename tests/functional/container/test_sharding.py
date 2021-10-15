@@ -663,7 +663,7 @@ class TestSharding(BaseTestCase):
             cid=bigger_shard['cid'])
         self.assertEqual(NEW_SHARD_STATE_CLEANED_UP,
                          int(new_shard_meta['system'][M2_PROP_SHARDING_STATE]))
-        _, new_shard = self.container_sharding._meta_to_shard(new_shard_meta)
+        _, new_shard = self.container_sharding.meta_to_shard(new_shard_meta)
         if bigger_is_root:  # The one and last shard
             self.assertIsNone(new_shard)
             new_shard = {  # Root container

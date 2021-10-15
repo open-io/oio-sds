@@ -27,20 +27,22 @@ class Handler(object):
         self.logger = app.logger
 
     def process(self, meta2db):
-        return Meta2DBOk(meta2db=meta2db)
+        return Meta2DBOk(meta2db)
 
     def __call__(self, env, cb):
-        meta2db = Meta2DB(env)
+        meta2db = Meta2DB(self.app_env, env)
         try:
             res = self.process(meta2db)
             return res(env, cb)
         except StopServe:
-            self.logger.info('CID %s not handled: the process is stopping',
-                             meta2db.cid)
-            res = Meta2DBError(meta2db=meta2db, body='Process is stopping')
+            self.logger.info(
+                'Container %s not handled: the process is stopping',
+                meta2db.cid)
+            res = Meta2DBError(meta2db, body='Process is stopping')
         except Exception as err:
-            self.logger.exception('CID %s not handled: %s', meta2db.cid, err)
-            res = Meta2DBError(meta2db=meta2db, body='An error occurred')
+            self.logger.exception(
+                'Container %s not handled: %s', meta2db.cid, err)
+            res = Meta2DBError(meta2db, body='An error occurred')
         return res(env, cb)
 
     def get_stats(self):

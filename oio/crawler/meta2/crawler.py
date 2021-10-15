@@ -50,7 +50,7 @@ class Meta2Worker(CrawlerWorker):
             self.logger.warning('Not a valid CID: %s', cid_seq)
             return False
 
-        meta2db = Meta2DB(dict())
+        meta2db = Meta2DB(self.app_env, dict())
         meta2db.path = path
         meta2db.volume_id = self.volume_id
         meta2db.cid = db_id[0]

@@ -30,7 +30,7 @@ class Logger(Filter):
 
     def process(self, env, cb):
         try:
-            meta2db = Meta2DB(env)
+            meta2db = Meta2DB(self.app_env, env)
             self.logger.info('Got container %s', meta2db.cid)
             self.successes += 1
         except Exception:

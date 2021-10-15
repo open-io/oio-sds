@@ -290,7 +290,7 @@ class ContainerSharding(ProxyClient):
             params.update({'path': path})
         return params
 
-    def _meta_to_shard(self, meta):
+    def meta_to_shard(self, meta):
         sys = meta['system']
         root_cid = sys.get(M2_PROP_SHARDING_ROOT)
         shard_lower = sys.get(M2_PROP_SHARDING_LOWER)
@@ -325,7 +325,7 @@ class ContainerSharding(ProxyClient):
                 'cid' in shard1 and 'cid' in shard2 and
                 shard1['cid'].upper() == shard2['cid'].upper())
 
-    def _sharding_in_progress(self, meta):
+    def sharding_in_progress(self, meta):
         sharding_state = int_value(
             meta['system'].get(M2_PROP_SHARDING_STATE), 0)
         return (sharding_state and
@@ -1028,7 +1028,7 @@ class ContainerSharding(ProxyClient):
 
         root_account = None
         root_container = None
-        root_cid, current_shard = self._meta_to_shard(meta)
+        root_cid, current_shard = self.meta_to_shard(meta)
         if root_cid is None:
             # First sharding
             if not enable:
@@ -1217,9 +1217,9 @@ class ContainerSharding(ProxyClient):
         if int_value(sys.get(M2_PROP_SHARDS), 0):
             raise ValueError('It is a root container')
 
-        if self._sharding_in_progress(meta):
+        if self.sharding_in_progress(meta):
             raise ValueError('Sharding already in progress')
-        root_cid_, current_shard = self._meta_to_shard(meta)
+        root_cid_, current_shard = self.meta_to_shard(meta)
         if root_cid_ is None:
             raise ValueError('Not a shard')
         elif not root_cid:
@@ -1254,13 +1254,13 @@ class ContainerSharding(ProxyClient):
         for neighboring_shard in neighboring_shards:
             neighboring_shard_meta = self.container.container_get_properties(
                 cid=neighboring_shard['cid'], **kwargs)
-            if self._sharding_in_progress(neighboring_shard_meta):
+            if self.sharding_in_progress(neighboring_shard_meta):
                 self.logger.info(
                     'Sharding in progress for neighboring shard %s' %
                     neighboring_shard['cid'])
                 continue
             neighboring_shard_root_cid, neighboring_shard = \
-                self._meta_to_shard(neighboring_shard_meta)
+                self.meta_to_shard(neighboring_shard_meta)
             if neighboring_shard_root_cid != root_cid:
                 self.logger.warning(
                     'Shard %s does not belong to the root %s, '
@@ -1453,7 +1453,7 @@ class ContainerSharding(ProxyClient):
             sys = meta['system']
             if int_value(sys.get(M2_PROP_SHARDS), 0):
                 raise ValueError('It is a root container')
-            root_cid_, shard_ = self._meta_to_shard(meta)
+            root_cid_, shard_ = self.meta_to_shard(meta)
             if root_cid_ is None:
                 raise ValueError('Not a shard')
             if root_cid is None:
