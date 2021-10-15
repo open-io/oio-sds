@@ -96,6 +96,14 @@ class Account(WerkzeugApp):
             Rule('/v1.0/account/container/update',
                  endpoint='account_container_update',
                  methods=['PUT', 'POST']),  # FIXME(adu) only PUT
+            Rule('/v1.0/account/reserve-bucket', endpoint='bucket_reserve',
+                 methods=['PUT']),
+            Rule('/v1.0/account/release-bucket', endpoint='bucket_release',
+                 methods=['POST']),
+            Rule('/v1.0/account/set-bucket-owner', endpoint='bucket_owner_set',
+                 methods=['PUT']),
+            Rule('/v1.0/account/get-bucket-owner', endpoint='bucket_owner_get',
+                 methods=['GET']),
             # Buckets
             Rule('/v1.0/bucket/show', endpoint='bucket_show',
                  methods=['GET']),
@@ -679,6 +687,168 @@ class Account(WerkzeugApp):
         account_id = self._get_account_id(req)
         self.backend.flush_account(account_id, **kwargs)
         return Response(status=204)
+
+    # ACCT{{
+    # PUT /v1.0/bucket/reserve-bucket?id=bucket_name
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    #
+    # Reserve bucket name.
+    #
+    # Request example:
+    #
+    # .. code-block:: http
+    #
+    #    PUT /v1.0/bucket/reserve-bucket?id=bucket_name HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #    Content-Length: 84
+    #    Content-Type: application/x-www-form-urlencoded
+    #
+    # .. code-block:: json
+    #
+    #    {
+    #      "account": "owner"
+    #    }
+    #
+    # Response example:
+    #
+    # .. code-block:: json
+    #
+    #    {
+    #      "reserved": "1"
+    #    }
+    #
+    # }}ACCT
+    @force_master
+    def on_bucket_reserve(self, req, **kwargs):
+        """
+        Reserve bucket name.
+        """
+        bname = self._get_item_id(req, what='bucket')
+        data = json.loads(req.get_data())
+        account_id = data.get('account')
+
+        status_ = self.backend.reserve_bucket(account_id, bname, **kwargs)
+        return Response(json.dumps(status_), mimetype=HTTP_CONTENT_TYPE_JSON)
+
+    # ACCT{{
+    # PUT /v1.0/bucket/release-bucket?id=bucket_name
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    #
+    # Release reserved bucket name.
+    #
+    # Request example:
+    #
+    # .. code-block:: http
+    #
+    #    PUT /v1.0/bucket/release-bucket?id=bucket_name HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #    Content-Length: 84
+    #    Content-Type: application/x-www-form-urlencoded
+    #
+    # Response example:
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 200 OK
+    #    Server: gunicorn/19.9.0
+    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Connection: keep-alive
+    #    Content-Type: application/json
+    #    Content-Length: 117
+    #
+    # }}ACCT
+    @force_master
+    def on_bucket_release(self, req, **kwargs):
+        """
+        Release a reserved bucket name.
+        """
+        bname = self._get_item_id(req, what='bucket')
+        self.backend.release_bucket(bname, **kwargs)
+        return Response(status=204)
+
+    # ACCT{{
+    # PUT /v1.0/bucket/set-bucket-owner?id=bucket_name
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    #
+    # Set owner on reserved bucket name.
+    #
+    # Request example:
+    #
+    # .. code-block:: http
+    #
+    #    PUT /v1.0/bucket/set-bucket-owner?id=bucket_name HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #    Content-Length: 84
+    #    Content-Type: application/x-www-form-urlencoded
+    #
+    # .. code-block:: json
+    #
+    #    {
+    #      "account": "owner"
+    #    }
+    #
+    # Response example:
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 200 OK
+    #    Server: gunicorn/19.9.0
+    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Connection: keep-alive
+    #    Content-Type: application/json
+    #    Content-Length: 117
+    #
+    # }}ACCT
+    def on_bucket_owner_set(self, req, **kwargs):
+        """
+        Set bucket reservation owner.
+        """
+        bname = self._get_item_id(req, what='bucket')
+        data = json.loads(req.get_data())
+        account_id = data.get('account')
+        bname = self._get_item_id(req, what='bucket')
+        self.backend.set_bucket_owner(account_id, bname, **kwargs)
+        return Response(status=204)
+
+    # ACCT{{
+    # GET /v1.0/bucket/get-bucket-owner?id=bucket_name
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    #
+    # Get owner of bucket name.
+    #
+    # Request example:
+    #
+    # .. code-block:: http
+    #
+    #    PUT /v1.0/bucket/get-bucket-owner?id=bucket_name HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #    Content-Length: 84
+    #    Content-Type: application/x-www-form-urlencoded
+    #
+    # Response example:
+    #
+    # .. code-block:: json
+    #
+    #    {
+    #      "account": "myaccount"
+    #    }
+    #
+    # }}ACCT
+    def on_bucket_owner_get(self, req, **kwargs):
+        """
+        Get bucket_name owner.
+        """
+        bname = self._get_item_id(req, what='bucket')
+        out = self.backend.get_bucket_owner(bname, **kwargs)
+        return Response(json.dumps(out), mimetype=HTTP_CONTENT_TYPE_JSON)
 
     # ACCT{{
     # GET /v1.0/bucket/show?id=<bucket_name>
