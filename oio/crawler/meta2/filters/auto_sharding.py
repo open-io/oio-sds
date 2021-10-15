@@ -14,7 +14,7 @@
 # License along with this library.
 
 from oio.common.constants import M2_PROP_ACCOUNT_NAME, \
-    M2_PROP_CONTAINER_NAME, M2_PROP_SHARDING_STATE, \
+    M2_PROP_CONTAINER_NAME, M2_PROP_SHARDING_ROOT, M2_PROP_SHARDING_STATE, \
     M2_PROP_SHARDING_TIMESTAMP, NEW_SHARD_STATE_APPLYING_SAVED_WRITES, \
     NEW_SHARD_STATE_CLEANING_UP
 from oio.common.easy_value import int_value
@@ -31,6 +31,7 @@ class AutomaticSharding(Filter):
 
     NAME = 'AutomaticSharding'
     DEFAULT_SHARDING_DB_SIZE = 1024 * 1024 * 1024
+    DEFAULT_SHRINKING_DB_SIZE = 256 * 1024 * 1024
     DEFAULT_STEP_TIMEOUT = 600
 
     def init(self):
@@ -41,6 +42,9 @@ class AutomaticSharding(Filter):
         self.sharding_db_size = int_value(
             self.sharding_strategy_params.pop('db_size', None),
             self.DEFAULT_SHARDING_DB_SIZE)
+        self.shrinking_db_size = int_value(
+            self.conf.get('shrinking_db_size', None),
+            self.DEFAULT_SHRINKING_DB_SIZE)
 
         kwargs = dict()
         kwargs['create_shard_timeout'] = self.sharding_strategy_params.pop(
@@ -65,10 +69,13 @@ class AutomaticSharding(Filter):
         self.sharding_no_change = 0
         self.sharding_successes = 0
         self.sharding_errors = 0
+        self.shrinking_no_change = 0
+        self.shrinking_successes = 0
+        self.shrinking_errors = 0
 
     def process(self, env, cb):
         """
-        Trigger cleaning/sharding.
+        Trigger cleaning/sharding/shrinking.
         """
         meta2db = Meta2DB(self.app_env, env)
 
@@ -87,6 +94,10 @@ class AutomaticSharding(Filter):
             if (self.sharding_db_size > 0
                     and meta2db_size > self.sharding_db_size):
                 modified = self._sharding(meta2db)
+            elif (self.shrinking_db_size > 0
+                    and meta2db.system.get(M2_PROP_SHARDING_ROOT) is not None
+                    and meta2db_size < self.shrinking_db_size):
+                modified = self._shrinking(meta2db)
             else:
                 self.skipped += 1
 
@@ -180,6 +191,40 @@ class AutomaticSharding(Filter):
             self.sharding_errors += 1
             raise
 
+    def _shrinking(self, meta2db):
+        self.logger.info(
+            'Shrinking container %s (db size: %d bytes)', meta2db.cid,
+            meta2db.file_status['st_size'])
+        try:
+            root_cid, shard = self.container_sharding.meta_to_shard(
+                {'system': meta2db.system})
+            shard, neighboring_shard = \
+                self.container_sharding.find_smaller_neighboring_shard(
+                    shard, root_cid=root_cid)
+            shards = list()
+            shards.append(shard)
+            if neighboring_shard is not None:
+                shards.append(neighboring_shard)
+            # The "AutoVacuum" filter is very likely to precede,
+            # so there is no need to launch the vacuum first.
+            modified = self.container_sharding.shrink_shards(
+                shards, root_cid=root_cid, pre_vacuum=False)
+            if modified:
+                self.shrinking_successes += 1
+            else:
+                self.logger.warning(
+                    'No change after merging container %s', meta2db.cid)
+                self.shrinking_no_change += 1
+            return modified
+        except FileNotFoundError:
+            # The exception is handled in the "process" method
+            raise
+        except Exception as exc:
+            self.logger.error('Failed to merge container %s: %s',
+                              meta2db.cid, exc)
+            self.shrinking_errors += 1
+            raise
+
     def _get_filter_stats(self):
         return {
             'skipped': self.skipped,
@@ -190,7 +235,10 @@ class AutomaticSharding(Filter):
             'sharding_in_progress': self.sharding_in_progress,
             'sharding_no_change': self.sharding_no_change,
             'sharding_successes': self.sharding_successes,
-            'sharding_errors': self.sharding_errors
+            'sharding_errors': self.sharding_errors,
+            'shrinking_no_change': self.shrinking_no_change,
+            'shrinking_successes': self.shrinking_successes,
+            'shrinking_errors': self.shrinking_errors
         }
 
     def _reset_filter_stats(self):
@@ -203,6 +251,9 @@ class AutomaticSharding(Filter):
         self.sharding_no_change = 0
         self.sharding_successes = 0
         self.sharding_errors = 0
+        self.shrinking_no_change = 0
+        self.shrinking_successes = 0
+        self.shrinking_errors = 0
 
 
 def filter_factory(global_conf, **local_conf):

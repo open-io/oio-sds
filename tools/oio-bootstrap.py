@@ -310,6 +310,7 @@ sharding_shard_size = 100000
 sharding_threshold = 50000
 sharding_partition = 50,50
 sharding_save_writes_timeout = 30
+shrinking_db_size = 26214400
 
 [filter:auto_vacuum]
 use = egg:oio#auto_vacuum
