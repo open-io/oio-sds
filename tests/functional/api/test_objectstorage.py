@@ -421,7 +421,7 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.assertDictEqual(_metadata, event.data['properties'])
 
     def _flush_and_check(self, cname, fast=False):
-        self.api.container_flush(self.account, cname, limit=50)
+        self.api.container_flush(self.account, cname, fast=fast, limit=50)
         self.wait_for_score(('account', 'meta2'))
         properties = self.api.container_get_properties(self.account, cname)
         self.assertEqual(properties['system']['sys.m2.objects'], '0')

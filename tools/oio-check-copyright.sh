@@ -35,15 +35,19 @@ function find_last_modification {
 		done
 }
 
-git ls-tree -r --name-only HEAD |
+check_copyright () {
+	RETCODE=0
 	while read FILE; do
 		if [[ ! "${FILE}" =~ ^.+\.(c|go|h|py)$ ]]; then
+			[ -n "$VERBOSE" ] && echo "${FILE} not source code file"
 			continue
 		fi
 		if [[ "${FILE}" =~ ^setup\.(py|cfg)$ ]]; then
+			[ -n "$VERBOSE" ] && echo "${FILE} on black list"
 			continue
 		fi
 		if [ ! -s "${FILE}" ]; then
+			[ -n "$VERBOSE" ] && echo "${FILE} is empty"
 			continue
 		fi
 		if [[ " ${EXCLUDED_FILES[@]} " =~ " ${FILE} " ]]; then
@@ -52,8 +56,9 @@ git ls-tree -r --name-only HEAD |
 
 		COMMIT=$(find_last_modification "${FILE}")
 		if [ -z "${COMMIT}" ]; then
-			echo "The last 8 commits of the ${FILE} only modify the Copyright section" 1>&2
-			exit 1
+			echo "The last 8 commits of${FILE} only modify the Copyright section" 1>&2
+			RETCODE=1
+            continue
 		fi
 		YEAR=$(git show -s --pretty="format:%cd" --date="format:%Y" "${COMMIT}")
 
@@ -67,7 +72,19 @@ git ls-tree -r --name-only HEAD |
 		COPYRIGHT_LINE=$(head -n 8 "${FILE}" | grep -E "Copyright \(C\) ([[:digit:]]{4}-|)${YEAR} ${COMPANY} SAS")
 		if [ -z "${COPYRIGHT_LINE}" ]; then
 			echo "The Copyright section in ${FILE} is not up to date, the last modification dates from ${YEAR} with the commit ${COMMIT}" 1>&2
-			git show "${COMMIT}" -- "${FILE}" | head -n 32
-			exit 1
+			[ -n "$VERBOSE" ] && git show "${COMMIT}" -- "${FILE}" | head -n 32
+			RETCODE=1
 		fi
 	done
+    exit $RETCODE
+}
+
+declare -x FILES
+if [ ${1:-__all__} == "__all__" ]
+then
+	FILES=$(git ls-tree -r --name-only HEAD)
+else
+	FILES=$(echo "$*" | tr ' ' '\n')
+fi
+
+echo -e "${FILES}" | check_copyright
