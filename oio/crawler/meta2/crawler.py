@@ -38,9 +38,11 @@ class Meta2Worker(CrawlerWorker):
         db_id = path.rsplit("/")[-1].rsplit(".")
         if len(db_id) != 3:
             self.logger.warning("Malformed db file name: %s", path)
+            self.invalid_paths += 1
             return False
         if db_id[2] != 'meta2':
             self.logger.warning("Bad extension filename: %s", path)
+            self.invalid_paths += 1
             return False
 
         cid_seq = ".".join([db_id[0], db_id[1]])
