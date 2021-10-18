@@ -359,7 +359,7 @@ log_address = /dev/log
 syslog_prefix = OIO,${NS},${SRVTYPE}
 
 [pipeline:main]
-pipeline = checksum indexer
+pipeline = logger checksum indexer
 
 [filter:checksum]
 use = egg:oio#checksum
@@ -367,6 +367,9 @@ conscience_cache = 30
 
 [filter:indexer]
 use = egg:oio#indexer
+
+[filter:logger]
+use = egg:oio#logger
 """
 
 template_rawx_service = """

@@ -48,7 +48,7 @@ class ChunkWrapper(object):
         self.env = env
 
     def __repr__(self):
-        return "Chunk [%s,%s]" % (self.volume_id, self.chunk_path)
+        return "Chunk [%s,%s]" % (self.volume_id, self.chunk_id)
 
 
 class RawxCrawlerResponse(object):

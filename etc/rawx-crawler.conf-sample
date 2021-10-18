@@ -22,6 +22,7 @@ log_address = /dev/log
 syslog_prefix = OIO,OPENIO,rawx-crawler
 
 [pipeline:main]
+#pipeline = logger checksum indexer
 pipeline = checksum indexer
 
 [filter:checksum]
@@ -32,3 +33,6 @@ conscience_cache = 30
 
 [filter:indexer]
 use = egg:oio#indexer
+
+[filter:logger]
+use = egg:oio#logger
