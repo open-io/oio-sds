@@ -58,3 +58,10 @@ When creating the pull request on GitHub, please select
 
 If a pull request is still work-in-progress, prefix the title with "[WIP]",
 and the maintainers won't touch it.
+
+
+## Pre-commit hooks
+
+The script [oio-check-copyright.sh](./tools/oio-check-copyright.sh) can be
+add at the end of ``.git/hooks/pre-commit`` and will detect any missing or
+out-of-date copyright mention.
