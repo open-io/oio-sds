@@ -137,13 +137,13 @@ def statfs(volume):
     free_blocks = st.f_bavail
     total_blocks = st.f_blocks
     if total_inodes > 0:
-        inode_ratio = float(free_inodes) / float(total_inodes)
+        inode_ratio = free_inodes / total_inodes
     else:
-        inode_ratio = 1
+        inode_ratio = 1.0
     if total_blocks > 0:
-        block_ratio = float(free_blocks) / float(total_blocks)
+        block_ratio = free_blocks / total_blocks
     else:
-        block_ratio = 1
+        block_ratio = 1.0
     return min(inode_ratio, block_ratio)
 
 

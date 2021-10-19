@@ -940,7 +940,7 @@ class EcMetachunkWriter(io.MetachunkWriter):
         for _pos, chunk in enumerate(self.meta_chunk):
             pile.spawn(self._get_writer, chunk)
 
-        writers = [w for w in pile]
+        writers = list(pile)
         return writers
 
     def _get_writer(self, chunk):
@@ -1118,7 +1118,12 @@ class ECRebuildHandler(object):
         if not watchdog:
             raise ValueError("watchdog is None")
 
-    def _get_response(self, chunk, headers):
+    def _call_GET(self, chunk, headers):
+        """
+        Call GET on the chunk's real URL.
+
+        :returns: the response object (ready to read data)
+        """
         resp = None
         parsed = urlparse(chunk.get('real_url', chunk['url']))
         try:
@@ -1147,7 +1152,7 @@ class ECRebuildHandler(object):
 
         headers = {}
         for chunk in self.meta_chunk:
-            pile.spawn(self._get_response, chunk, headers)
+            pile.spawn(self._call_GET, chunk, headers)
 
         # Sort all responses according to the chunk size
         total_resps = 0
@@ -1220,7 +1225,7 @@ class ECRebuildHandler(object):
                 try:
                     with WatchdogTimeout(self.watchdog, self.read_timeout,
                                          Timeout):
-                        frag = [frag for frag in pile]
+                        frag = list(pile)
                 except Timeout as to:
                     self.logger.error('ERROR while rebuilding: %s', to)
                 except Exception:

@@ -66,6 +66,8 @@ type detailedAttr struct {
 	ptr *string
 }
 
+// parseChunkMethod parses a "chunk method" string into a type and a map
+// of string parameters.
 func parseChunkMethod(chunkMethodStr string) (string, map[string]string) {
 	splitems := strings.SplitN(chunkMethodStr, "/", 2)
 	chunkMethodParams := make(map[string]string)
@@ -82,6 +84,8 @@ func parseChunkMethod(chunkMethodStr string) (string, map[string]string) {
 	return chunkMethodType, chunkMethodParams
 }
 
+// serializeChunkMethod creates a "chunk method" string from a type and a map
+// of string parameters.
 func serializeChunkMethod(chunkMethodType string, params map[string]string) string {
 	out := strings.Builder{}
 	out.WriteString(chunkMethodType)
