@@ -54,7 +54,11 @@ class Meta2Worker(CrawlerWorker):
         meta2db.path = path
         meta2db.volume_id = self.volume_id
         meta2db.cid = db_id[0]
-        meta2db.seq = db_id[1]
+        try:
+            meta2db.seq = int(db_id[1])
+        except ValueError:
+            self.logger.warning('Bad sequence number: %s', db_id[1])
+            return False
 
         try:
             self.pipeline(meta2db.env, self.cb)

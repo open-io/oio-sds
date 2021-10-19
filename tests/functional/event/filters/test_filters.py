@@ -38,6 +38,17 @@ class _App(object):
 
 class TestContentRebuildFilter(BaseTestCase):
 
+    @classmethod
+    def setUpClass(cls):
+        super(TestContentRebuildFilter, cls).setUpClass()
+        # Prevent the sharding/shrinking by the meta2 crawlers
+        cls._service('oio-rdir-crawler-1.service', 'stop', wait=3)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._service('oio-rdir-crawler-1.service', 'start', wait=1)
+        super(TestContentRebuildFilter, cls).tearDownClass()
+
     def setUp(self):
         super(TestContentRebuildFilter, self).setUp()
         self.gridconf = {"namespace": self.ns}
@@ -59,12 +70,6 @@ class TestContentRebuildFilter(BaseTestCase):
                       timeout=0.5)
         bt.close()
         self.wait_for_score(('rawx', 'meta2'), score_threshold=10, timeout=5.0)
-        # Prevent the chunks' rebuilds by the rdir crawlers
-        self._service('oio-rdir-crawler-1.service', 'stop', wait=3)
-
-    def tearDown(self):
-        self._service('oio-rdir-crawler-1.service', 'start', wait=1)
-        super(TestContentRebuildFilter, self).tearDown()
 
     def _create_event(self, content_name, present_chunks, missing_chunks,
                       content_id):
