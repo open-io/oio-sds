@@ -18,7 +18,6 @@ Building the entire project will require the SDK dependencies, but also:
 * httpd, httpd-devel: server base for ECD service (and rawx for code prior to version 6.0.0)
 * apr, apr-util-devel, apr-devel: internally used by rawx modules (prior to version 6.0.0)
 * attr, libattr-devel: we use xattr a lot to stamp rawx chunks and repositories base directory.
-* [gridinit](https://github.com/open-io/gridinit)
 * sqlite, sqlite-devel: base storage for META{0,1,2} services.
 * zeromq3, zeromq3-devel: communication of events between services and forward agents.
 * zookeeper-devel, libzookeeper\_mt.so: building with distribution's zookeeper client is OK, but the package ships with a lot of dependencies, including the openjdk. We recommand to use the official Oracle/Sun JDK, and to build your own zookeeper client from the source to avoid a huge waste of space and bandwith.
