@@ -14,7 +14,7 @@
 # License along with this library.
 
 from collections import namedtuple
-from os import mkdir, remove
+from os import makedirs, remove
 from os.path import isdir
 from shutil import move
 
@@ -23,10 +23,10 @@ from oio.blob.operator import ChunkOperator
 from oio.common import exceptions as exc
 from oio.common.constants import CHUNK_SUFFIX_CORRUPT, \
     CHUNK_QUARANTINE_FOLDER_NAME
-from oio.common.easy_value import int_value
+from oio.common.easy_value import boolean_value, int_value
 from oio.common.green import get_watchdog, time
 from oio.common.storage_method import parse_chunk_method
-from oio.common.utils import get_hasher
+from oio.common.utils import find_mount_point, get_hasher
 from oio.conscience.client import ConscienceClient
 from oio.crawler.common.base import Filter
 from oio.crawler.rawx.chunk_wrapper import ChunkWrapper, RawxCrawlerError
@@ -46,6 +46,9 @@ class Checksum(Filter):
 
         self.conscience_cache = int_value(self.conf.get('conscience_cache'),
                                           30)
+        self.quarantine_mountpoint = boolean_value(
+            self.conf.get('quarantine_mountpoint'), True)
+
         self.watchdog = get_watchdog()
         self.chunk_operator = ChunkOperator(self.conf, logger=self.logger,
                                             watchdog=self.watchdog)
@@ -108,22 +111,35 @@ class Checksum(Filter):
 
     def _rebuild_chunk(self, chunk):
 
-        quarantine_path = '%(volume_path)s/%(quarantine_folder)s' % {
-            'volume_path': chunk.volume_path,
-            'quarantine_folder': CHUNK_QUARANTINE_FOLDER_NAME
-        }
+        if self.quarantine_mountpoint:
+            quarantine_path = '%(mountpoint)s/%(quarantine_folder)s' % {
+                'mountpoint': find_mount_point(chunk.volume_path),
+                'quarantine_folder': CHUNK_QUARANTINE_FOLDER_NAME
+            }
+        else:
+            quarantine_path = '%(volume_path)s/%(quarantine_folder)s' % {
+                'volume_path': chunk.volume_path,
+                'quarantine_folder': CHUNK_QUARANTINE_FOLDER_NAME
+            }
 
-        # Move chunk to quarantine
-        self.logger.warning('moving chunk_id=%s to quarantine',
-                            chunk.chunk_id)
-        if not isdir(quarantine_path):
-            mkdir(quarantine_path)
-        quarantine_chunk = '%(quarantine)s/%(chunk_id)s%(suffix_corrupt)s' % {
-            'quarantine': quarantine_path,
-            'chunk_id': chunk.chunk_id,
-            'suffix_corrupt': CHUNK_SUFFIX_CORRUPT
-        }
-        move(chunk.chunk_path, quarantine_chunk)
+        # Prepare quarantine folder
+        try:
+            if not isdir(quarantine_path):
+                makedirs(quarantine_path)
+            new_chunk_path = '%s/%s%s' % (quarantine_path,
+                                          chunk.chunk_id,
+                                          CHUNK_SUFFIX_CORRUPT)
+            self.logger.warning('moving chunk_id=%s to quarantine %s',
+                                chunk.chunk_id, quarantine_path)
+        except Exception as err:
+            self.logger.error("Error while moving the chunk to quarantine: %s",
+                              str(err))
+            # The quarantine folder can not be created (permission denied ?),
+            # a suffix is added but the chunk remains in the same folder
+            new_chunk_path = '%s%s' % (chunk.chunk_path, CHUNK_SUFFIX_CORRUPT)
+
+        # Move chunk to quarantine (and/or add its corrupted suffix)
+        move(chunk.chunk_path, new_chunk_path)
 
         container_id = chunk.meta['container_id']
         try:
@@ -134,7 +150,7 @@ class Checksum(Filter):
             # Rebuilt OK, corrupted chunk can be removed
             self.logger.warning('removing corrupted chunk_id=%s '
                                 'from quarantine', chunk.chunk_id)
-            remove(quarantine_chunk)
+            remove(new_chunk_path)
             self.recovered_chunk += 1
 
         except exc.OioException as err:

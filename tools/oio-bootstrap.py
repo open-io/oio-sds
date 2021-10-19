@@ -364,6 +364,10 @@ pipeline = logger checksum indexer
 [filter:checksum]
 use = egg:oio#checksum
 conscience_cache = 30
+# Boolean, indicates if the quarantine folder should be at the mountpoint
+# of the rawx or under the corresponding volume path defined in <volume_list>
+# Defaults to True
+quarantine_mountpoint = False
 
 [filter:indexer]
 use = egg:oio#indexer

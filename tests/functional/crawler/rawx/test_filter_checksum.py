@@ -56,6 +56,7 @@ class TestRawxFilterChecksum(BaseTestCase):
             self.rawx_volumes[service_id] = volume
 
         self.rdir_client = RdirClient(self.conf)
+        self.conf.update({'quarantine_mountpoint': False})
         self.checksum = Checksum(app=FilterApp, conf=self.conf)
 
     def _prepare(self, container, path):

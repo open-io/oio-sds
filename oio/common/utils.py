@@ -633,3 +633,13 @@ def get_hasher(algorithm='blake3'):
     if algorithm in CUSTOM_HASHER:
         return CUSTOM_HASHER[algorithm]()
     return hashlib.new(algorithm)
+
+
+def find_mount_point(dirname):
+    """
+    Find the moutpoint associated to the given dir name.
+    """
+    dirname = os.path.abspath(dirname)
+    while not os.path.ismount(dirname):
+        dirname = os.path.dirname(dirname)
+    return dirname
