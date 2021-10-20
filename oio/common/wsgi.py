@@ -27,6 +27,16 @@ from oio.common.configuration import read_conf
 from oio.common.logger import get_logger
 
 
+# hook to call after fork to open db
+def post_fork(server, worker):
+    if hasattr(server.app.application, 'backend'):
+        if hasattr(server.app.application.backend, 'db'):
+            server.app.application.backend.init_db()
+    if hasattr(server.app.application, 'iam'):
+        if hasattr(server.app.application.iam, 'db'):
+            server.app.application.iam.init_db()
+
+
 class Application(BaseApplication):
 
     access_log_fmt = ('%(bind0)s %(h)s:%({remote_port}e)s %(m)s %(s)s %(D)s '
@@ -69,6 +79,7 @@ class Application(BaseApplication):
                      self.conf.get('proc_name',
                                    self.application.__class__.__name__))
         self.cfg.set('logger_class', self.logger_class)
+        self.cfg.set('post_fork', post_fork)
 
     def load(self):
         return self.application
