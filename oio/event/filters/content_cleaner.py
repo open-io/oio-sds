@@ -62,7 +62,8 @@ class ContentReaperFilter(Filter):
 
     def process(self, env, beanstalkd, cb):
         event = Event(env)
-        if event.event_type == EventTypes.CONTENT_DELETED:
+        if event.event_type == EventTypes.CONTENT_DELETED or \
+                event.event_type == EventTypes.CONTENT_DRAINED:
             url = event.env.get('url')
             chunks = []
             content_headers = []
