@@ -17,9 +17,7 @@
 from oio.blob.client import BlobClient
 from oio.common.constants import REQID_HEADER
 from oio.common.easy_value import int_value, float_value
-from oio.common.exceptions import OioException
 from oio.common.http_urllib3 import URLLIB3_POOLMANAGER_KWARGS, urllib3
-from oio.common.storage_method import STORAGE_METHODS, guess_storage_method
 from oio.common.utils import request_id
 from oio.event.evob import Event, EventTypes
 from oio.event.filters.base import Filter
@@ -29,10 +27,6 @@ class ContentReaperFilter(Filter):
     """Filter that deletes chunks on content deletion events"""
 
     def init(self):
-        self.handlers = {
-            "plain": self._handle_rawx,
-            "ec": self._handle_rawx,
-        }
         kwargs = {k: v for k, v in self.conf.items()
                   if k in URLLIB3_POOLMANAGER_KWARGS}
         self.blob_client = BlobClient(self.conf, logger=self.logger,
@@ -48,8 +42,7 @@ class ContentReaperFilter(Filter):
                     connect=connection_timeout,
                     read=read_timeout)
 
-    def _handle_rawx(self, url, chunks, content_headers,
-                     storage_method, reqid):
+    def _process_rawx(self, url, chunks, reqid):
         cid = url.get('id')
         headers = {REQID_HEADER: reqid,
                    'Connection': 'close'}
@@ -67,20 +60,12 @@ class ContentReaperFilter(Filter):
                     'failed to delete chunk %s (HTTP %s)',
                     resp.chunk.get('real_url', resp.chunk['url']), resp.status)
 
-    def _load_handler(self, chunk_method):
-        storage_method = STORAGE_METHODS.load(chunk_method)
-        handler = self.handlers.get(storage_method.type)
-        if not handler:
-            raise OioException("No handler found for chunk method [%s]" %
-                               chunk_method)
-        return handler, storage_method
-
     def process(self, env, beanstalkd, cb):
         event = Event(env)
         if event.event_type == EventTypes.CONTENT_DELETED:
             url = event.env.get('url')
             chunks = []
-            content_headers = list()
+            content_headers = []
 
             for item in event.data:
                 if item.get('type') == 'chunks':
@@ -89,14 +74,9 @@ class ContentReaperFilter(Filter):
                     chunks.append(item)
                 if item.get("type") == 'contents_headers':
                     content_headers.append(item)
-            if len(chunks):
+            if chunks:
                 reqid = event.reqid or request_id('content-cleaner-')
-                if not content_headers:
-                    chunk_method = guess_storage_method(chunks[0]['id']) + '/'
-                else:
-                    chunk_method = content_headers[0]['chunk-method']
-                handler, storage_method = self._load_handler(chunk_method)
-                handler(url, chunks, content_headers, storage_method, reqid)
+                self._process_rawx(url, chunks, reqid)
                 return self.app(env, beanstalkd, cb)
 
         return self.app(env, beanstalkd, cb)
