@@ -16,7 +16,7 @@
 import json
 
 from cliff import lister, show
-from oio.account.iam import RedisIamDb
+
 from oio.common.utils import parse_conn_str
 
 
@@ -25,7 +25,7 @@ class IamCommandMixinBase(object):
     Add IAM-related arguments to a cliff command.
     """
 
-    default_connection = 'redis://127.0.0.1:6379'
+    default_connection = 'fdb://127.0.0.1:6379'
 
     def patch_parser(self, parser):
         parser.add_argument('--connection',
@@ -51,10 +51,23 @@ class IamCommandMixinBase(object):
                              self.default_connection)
         scheme, netloc, kwargs = parse_conn_str(parsed_args.connection)
         if scheme == 'redis+sentinel':
+            from oio.account.iam import RedisIamDb
             kwargs['sentinel_hosts'] = netloc
+            iam = RedisIamDb(**kwargs)
+        elif scheme == 'fdb':
+            from oio.account.iam_fdb import FdbIamDb
+            # TODO pass default fdb file location as parameter
+            parsed_args.fdb_file = self.app.client_manager.sds_conf.get(
+                'fdb_file', '/etc/foundationdb/fdb.cluster')
+            conf = {}
+            conf['fdb_file'] = parsed_args.fdb_file
+            iam = FdbIamDb(conf=conf, **kwargs)
+            iam.init_db()
         else:
+            from oio.account.iam import RedisIamDb
             kwargs['host'] = netloc
-        return RedisIamDb(**kwargs)
+            iam = RedisIamDb(**kwargs)
+        return iam
 
     @property
     def logger(self):

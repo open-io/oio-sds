@@ -20,10 +20,6 @@ from werkzeug.wrappers import Response
 from werkzeug.routing import Map, Rule
 from werkzeug.exceptions import NotFound, BadRequest, Conflict
 
-from oio.account.backend import AccountBackend
-
-from oio.account.backend_fdb import AccountBackendFdb
-from oio.account.iam import RedisIamDb
 from oio.common.configuration import load_namespace_conf
 from oio.common.constants import HTTP_CONTENT_TYPE_JSON
 from oio.common.easy_value import int_value, true_value
@@ -127,6 +123,10 @@ class Account(WerkzeugApp):
             Rule('/v1.0/iam/put-user-policy',
                  endpoint='iam_put_user_policy',
                  methods=['PUT', 'POST']),
+
+            Rule('/v1.0/account/load-merged-user-policies',
+                 endpoint='iam_load_merged_user_policies',
+                 methods=['GET'])
         ])
         super(Account, self).__init__(self.url_map, self.logger)
 
@@ -1079,6 +1079,12 @@ class Account(WerkzeugApp):
         self.iam.put_user_policy(account, user, policy, policy_name)
         return Response(status=201)
 
+    def on_iam_load_merged_user_policies(self, req, **kwargs):
+        account = self._get_item_id(req, key='account', what='account')
+        user = self._get_item_id(req, key='user', what='user')
+        res = self.iam.load_merged_user_policies(account, user)
+        return Response(json.dumps(res), mimetype=HTTP_CONTENT_TYPE_JSON)
+
 
 def create_app(conf, **kwargs):
     logger = get_logger(conf)
@@ -1097,10 +1103,16 @@ def create_app(conf, **kwargs):
 
     backend_type = conf.get('backend_type', 'redis')
     if backend_type == 'fdb':
+        from oio.account.backend_fdb import AccountBackendFdb
+        from oio.account.iam_fdb import FdbIamDb
         backend = AccountBackendFdb(conf, logger)
+        iam_db = FdbIamDb(conf, logger=logger, **iam_kwargs)
     else:
+        from oio.account.backend import AccountBackend
+        from oio.account.iam import RedisIamDb
         backend = AccountBackend(conf)
+        iam_db = RedisIamDb(logger=logger, **iam_kwargs)
 
-    iam_db = RedisIamDb(logger=logger, **iam_kwargs)
+    logger.info('Account using %s backend', backend_type)
     app = Account(conf, backend, iam_db, logger=logger)
     return app

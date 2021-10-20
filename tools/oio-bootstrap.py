@@ -1121,8 +1121,9 @@ meta2.flush_limit=64
 sqliterepo.repo.hard_max=1024
 
 admin=${IP}:${PORT_ADMIN}
-iam.connection=redis://${IP}:${REDIS_PORT}/?allow_empty_policy_name=False
-
+#iam.connection=redis://${IP}:${REDIS_PORT}/?allow_empty_policy_name=False
+iam.connection=fdb://${IP}:0000/?allow_empty_policy_name=False
+fdb_file = ${FDB}/fdb.cluster
 """
 
 template_systemd_service_event_agent = """

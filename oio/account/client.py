@@ -265,3 +265,20 @@ class AccountClient(ServiceClient):
         :type account: `str`
         """
         self.account_request(account, 'POST', 'flush', **kwargs)
+
+    def iam_load_merged_user_policies(self, account, user, **kwargs):
+        """
+        load merged policies for given couple account/user
+
+        :param account: name of the account
+        :type account: `str`
+        :param user: user of account
+        :type user: `str`
+        """
+        params = {"account": account,
+                  "user": user}
+        _resp, body = self.account_request(account, 'GET',
+                                           'load-merged-user-policies',
+                                           params=params,
+                                           **kwargs)
+        return body

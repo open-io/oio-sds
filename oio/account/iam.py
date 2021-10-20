@@ -13,28 +13,27 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-import re
 import time
 
 from oio.common.json import json
-from oio.common.easy_value import true_value
-from oio.common.logger import get_logger
 from oio.common.redis_conn import RedisConnection, catch_service_errors
+from oio.account.iam_base import IamDbBase
 
 
-class RedisIamDb(object):
+class RedisIamDb(IamDbBase):
     """
     High-level API to save IAM rules in a Redis database.
     """
 
     def __init__(self, key_prefix='IAM:', subkey_separator='/', logger=None,
                  allow_empty_policy_name=True, **redis_kwargs):
-        self.allow_empty_policy_name = true_value(allow_empty_policy_name)
-        self.key_prefix = key_prefix
-        self.logger = logger or get_logger(None, 'IAM')
-        self.subkey_sep = subkey_separator
+        super(RedisIamDb, self).__init__(
+            key_prefix=key_prefix,
+            subkey_separator=subkey_separator,
+            allow_empty_policy_name=allow_empty_policy_name,
+            logger=logger)
+
         self.redis = RedisConnection(**redis_kwargs)
-        self.name_regex = re.compile(r'[\w+=,.@-]+')
 
     def key_for_account(self, account):
         """
@@ -98,27 +97,6 @@ class RedisIamDb(object):
                     if name.startswith(prefix) or name == user_b]
         policies.sort()
         return policies
-
-    def append_policy_statements(self, account, user, policy_name, policy,
-                                 all_statements):
-        """
-        Decode the provide policy (JSON bytes) and append all of its
-        statements to the list. Does nothing but logging if the policy
-        cannot be decoded.
-        """
-        try:
-            policy_obj = json.loads(policy.decode('utf-8'))
-            statements = policy_obj.get('Statement')
-            if not statements:
-                self.logger.warning(
-                    'policy %r for %s/%s has no Statement',
-                    policy_name, account, user)
-            else:
-                all_statements.extend(statements)
-        except ValueError as err:
-            self.logger.warning(
-                'policy %r for %s/%s is not JSON-formatted: %s',
-                policy_name, account, user, err)
 
     @catch_service_errors
     def load_merged_user_policies(self, account, user):
