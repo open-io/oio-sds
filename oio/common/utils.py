@@ -35,6 +35,8 @@ from codecs import getdecoder, getencoder
 from six import PY2, binary_type, text_type
 from six.moves import range
 from six.moves.urllib_parse import parse_qs, quote as _quote, urlparse
+from oio.common.constants import MAX_STRLEN_CHUNKID, MIN_STRLEN_CHUNKID
+from oio.common.easy_value import is_hexa
 
 from oio.common.exceptions import OioException, DeadlineReached, ServiceBusy
 
@@ -633,6 +635,22 @@ def get_hasher(algorithm='blake3'):
     if algorithm in CUSTOM_HASHER:
         return CUSTOM_HASHER[algorithm]()
     return hashlib.new(algorithm)
+
+
+def is_chunk_id_valid(chunk_id):
+    """
+    Check if a chunk_id is valid:
+        - should be between 24 and 64 hexa chars
+        - should not end with pending or corrupt suffixes
+    Return True if valid, False otherwise
+    """
+    if len(chunk_id) < MIN_STRLEN_CHUNKID or \
+            len(chunk_id) > MAX_STRLEN_CHUNKID:
+        return False
+    # This (by nature) also check the suffixes
+    if not is_hexa(chunk_id):
+        return False
+    return True
 
 
 def find_mount_point(dirname):

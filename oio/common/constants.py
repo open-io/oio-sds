@@ -41,7 +41,8 @@ TIMEOUT_KEYS = ('connection_timeout', 'read_timeout', 'write_timeout')
 
 STRLEN_REFERENCEID = 66
 STRLEN_CID = 64
-STRLEN_CHUNKID = 64
+MIN_STRLEN_CHUNKID = 24
+MAX_STRLEN_CHUNKID = 64
 STRLEN_REQID = 63
 
 # Version of the format of chunk extended attributes

@@ -15,14 +15,12 @@
 # License along with this library.
 
 from datetime import datetime
-from string import hexdigits
 
 from oio.blob.utils import check_volume, read_chunk_metadata
-from oio.common.constants import STRLEN_CHUNKID, CHUNK_SUFFIX_PENDING
 from oio.common.easy_value import int_value
 from oio.common.exceptions import Conflict, NotFound
 from oio.common.green import ratelimit, time
-from oio.common.utils import paths_gen
+from oio.common.utils import is_chunk_id_valid, paths_gen
 from oio.container.client import ContainerClient
 
 
@@ -227,16 +225,9 @@ class BlobRegistrator(object):
 
     def pass_chunk_file(self, path):
         chunk_id = path.rsplit('/', 1)[-1]
-        if len(chunk_id) != STRLEN_CHUNKID:
-            if chunk_id.endswith(CHUNK_SUFFIX_PENDING):
-                self.logger.info('Skipping pending chunk %s', path)
-            else:
-                self.logger.warn('WARN Not a chunk %s', path)
+        if not is_chunk_id_valid(chunk_id):
+            self.logger.warn('WARN Not a chunk %s', path)
             return
-        for char in chunk_id:
-            if char not in hexdigits:
-                self.logger.warn('WARN Not a chunk %s', path)
-                return
 
         with open(path) as f:
             meta, _ = read_chunk_metadata(f, chunk_id)

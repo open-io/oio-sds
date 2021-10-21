@@ -14,8 +14,6 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
-from string import hexdigits
-
 from oio.common.green import ratelimit, time, GreenPool
 
 from oio.blob.client import BlobClient
@@ -24,10 +22,10 @@ from oio.common.exceptions import ContentNotFound
 from oio.container.client import ContainerClient
 from oio.common.daemon import Daemon
 from oio.common import exceptions as exc
-from oio.common.utils import paths_gen, statfs, cid_from_name
+from oio.common.utils import is_chunk_id_valid, paths_gen, statfs, \
+    cid_from_name
 from oio.common.easy_value import int_value, true_value
 from oio.common.logger import get_logger
-from oio.common.constants import STRLEN_CHUNKID
 from oio.common.fullpath import decode_fullpath
 from oio.conscience.client import ConscienceClient
 from oio.content.factory import ContentFactory
@@ -172,13 +170,9 @@ class BlobMoverWorker(object):
 
     def safe_chunk_move(self, path):
         chunk_id = path.rsplit('/', 1)[-1]
-        if len(chunk_id) != STRLEN_CHUNKID:
+        if not is_chunk_id_valid(chunk_id):
             self.logger.warn('WARN Not a chunk %s' % path)
             return
-        for char in chunk_id:
-            if char not in hexdigits:
-                self.logger.warn('WARN Not a chunk %s' % path)
-                return
         try:
             self.chunk_move(path, chunk_id)
         except Exception as err:

@@ -17,7 +17,6 @@
 from oio.common.green import ratelimit
 
 from contextlib import closing
-from string import hexdigits
 import zlib
 import time
 
@@ -25,10 +24,9 @@ from oio.blob.utils import check_volume, read_chunk_metadata
 from oio.container.client import ContainerClient
 from oio.common.daemon import Daemon
 from oio.common import exceptions as exc
-from oio.common.utils import get_hasher, paths_gen
+from oio.common.utils import get_hasher, is_chunk_id_valid, paths_gen
 from oio.common.easy_value import int_value
 from oio.common.logger import get_logger
-from oio.common.constants import STRLEN_CHUNKID
 from oio.common.storage_method import parse_chunk_method
 
 
@@ -148,13 +146,9 @@ class BlobAuditorWorker(object):
     def safe_chunk_audit(self, path):
         chunk_id = path.rsplit('/', 1)[-1]
         # TODO(FVE): if ".pending" suffix, check for stale upload
-        if len(chunk_id) != STRLEN_CHUNKID:
+        if not is_chunk_id_valid(chunk_id):
             self.logger.warn('WARN Not a chunk %s' % path)
             return
-        for c in chunk_id:
-            if c not in hexdigits:
-                self.logger.warn('WARN Not a chunk %s' % path)
-                return
         try:
             self.chunk_audit(path, chunk_id)
         except exc.FaultyChunk as err:
