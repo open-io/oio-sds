@@ -4471,7 +4471,7 @@ enum http_rc_e action_content_prop_del (struct req_args_s *args) {
 //
 // }}CONTENT
 enum http_rc_e action_content_drain(struct req_args_s *args) {
-	PACKER_VOID(_pack) {return m2v2_remote_pack_DRAIN(args->url, DL());}
+	PACKER_VOID(_pack) {return m2v2_remote_pack_content_DRAIN(args->url, DL());}
 	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
 	return _reply_m2_error(args, err);
 }

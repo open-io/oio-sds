@@ -343,7 +343,7 @@ static gridd_filter M2V2_GET_FILTERS[] =
 	NULL
 };
 
-static gridd_filter M2V2_DRAIN_FILTERS[] =
+static gridd_filter M2V2_DRAIN_CONTENT_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_admin,
@@ -721,7 +721,7 @@ meta2_gridd_get_v2_requests(void)
 
 		{NAME_MSGNAME_M2V2_PUT,     (hook) meta2_dispatch_all, M2V2_PUT_FILTERS},
 		{NAME_MSGNAME_M2V2_APPEND,  (hook) meta2_dispatch_all, M2V2_APPEND_FILTERS},
-		{NAME_MSGNAME_M2V2_DRAIN,   (hook) meta2_dispatch_all, M2V2_DRAIN_FILTERS},
+		{NAME_MSGNAME_M2V2_CONTENT_DRAIN, (hook) meta2_dispatch_all, M2V2_DRAIN_CONTENT_FILTERS},
 		{NAME_MSGNAME_M2V2_DEL,     (hook) meta2_dispatch_all, M2V2_DELETE_FILTERS},
 		{NAME_MSGNAME_M2V2_TRUNC,   (hook) meta2_dispatch_all, M2V2_TRUNCATE_FILTERS},
 
