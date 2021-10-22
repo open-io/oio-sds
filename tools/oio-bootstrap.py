@@ -27,8 +27,9 @@ import grp
 import yaml
 import os
 import pwd
+from random import choice
 import re
-from string import Template
+from string import ascii_letters, digits, Template
 import sys
 import argparse
 
@@ -94,6 +95,50 @@ on_die=cry
 enabled=true
 start_at_boot=false
 command=redis-server ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
+"""
+
+template_foundationdb = """
+## foundationdb.conf
+##
+## Configuration file for FoundationDB server processes
+## Full documentation is available at
+## https://apple.github.io/foundationdb/configuration.html#the-configuration-file
+
+[fdbmonitor]
+user = ${USER}
+group = ${GROUP}
+
+[general]
+restart_delay = 60
+cluster_file = ${CLUSTERFILE}
+
+[fdbserver]
+command = fdbserver
+public_address = auto:$ID
+listen_address = public
+datadir = ${DATADIR}/foundationdb/data/$ID
+logdir = ${LOGDIR}/fdb
+
+[fdbserver.4500]
+
+[backup_agent]
+command = backup_agent
+logdir = ${LOGDIR}/fdb
+
+[backup_agent.1]
+"""
+
+template_foundationdb_cluster = """
+${DESCRIPTION}:${RANDOMSTR}@${IP}:${PORT}
+"""
+
+template_gridinit_foundationdb = """
+[service.${NS}-${SRVTYPE}-${SRVNUM}]
+group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+on_die=cry
+enabled=true
+start_at_boot=false
+command=fdbmonitor --conffile ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf --lockfile ${RUNDIR}/${NS}-${SRVTYPE}-${SRVNUM}.pid
 """
 
 template_gridinit_beanstalkd = """
@@ -428,6 +473,20 @@ stats:
 """
 
 template_redis_watch = """
+host: ${IP}
+port: ${PORT}
+type: redis
+location: ${LOC}
+checks:
+    - {type: tcp}
+slots:
+    - ${SRVTYPE}
+stats:
+    - {type: volume, path: ${VOLUME}}
+    - {type: system}
+"""
+
+template_foundationdb_watch = """
 host: ${IP}
 port: ${PORT}
 type: redis
@@ -1151,6 +1210,7 @@ SVC_HOSTS = 'hosts'
 SVC_NB = 'count'
 SVC_PARAMS = 'params'
 ALLOW_REDIS = 'redis'
+ALLOW_FDB = 'fdb'
 OPENSUSE = 'opensuse'
 ZOOKEEPER = 'zookeeper'
 GO_RAWX = 'go_rawx'
@@ -1220,6 +1280,10 @@ def watch(env):
 
 def wsgi(env):
     return '{CFGDIR}/{NS}-{SRVTYPE}-{SRVNUM}.wsgi'.format(**env)
+
+
+def cluster(env):
+    return '{CFGDIR}/{NS}-fdb.cluster'.format(**env)
 
 
 def gridinit(env):
@@ -1671,6 +1735,33 @@ def generate(options):
             f.write(tpl.safe_substitute(env))
         with open(watch(env), 'w+') as f:
             tpl = Template(template_redis_watch)
+            f.write(tpl.safe_substitute(env))
+
+    # foundationdb
+    srvtype = 'foundationdb'
+    env = subenv({
+        'SRVTYPE': srvtype,
+        'SRVNUM': 1,
+        'PORT': 4500,
+        'DESCRIPTION': ''.join(
+            [choice(ascii_letters + digits) for _ in range(8)]),
+        'RANDOMSTR': ''.join(
+            [choice(ascii_letters + digits) for _ in range(8)]) })
+    cluster_file = cluster(env)
+    env.update({'CLUSTERFILE': cluster_file})
+    add_service(env)
+    if options.get(ALLOW_FDB):
+        with open(gridinit(env), 'a+') as f:
+            tpl = Template(template_gridinit_foundationdb)
+            f.write(tpl.safe_substitute(env))
+        with open(config(env), 'w+') as f:
+            tpl = Template(template_foundationdb)
+            f.write(tpl.safe_substitute(env))
+        with open(watch(env), 'w+') as f:
+            tpl = Template(template_foundationdb_watch)
+            f.write(tpl.safe_substitute(env))
+        with open(cluster_file, 'w+') as f:
+            tpl = Template(template_foundationdb_cluster)
             f.write(tpl.safe_substitute(env))
 
     # proxy
