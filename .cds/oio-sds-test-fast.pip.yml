@@ -38,6 +38,6 @@ jobs:
           - ./tools/oio-travis-unit.sh
 
     requirements:
-      - model: ubuntu-bionic
-        #- model: Ubuntu-18.04-VM-b2-07
+      - model: Ubuntu-18.04-VM-b2-07
+        #- model: ubuntu-bionic
         #- model: openio-debbuild-18.04
