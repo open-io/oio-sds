@@ -75,7 +75,7 @@ def compute_meta2_db_size(container):
     return meta2_db_size
 
 
-def create_objects_in_period(threads, delay=5.0, duration=60.0):
+def create_objects_in_period(threads, delay=5.0, duration=60.0, clean=True):
     counter = 0
     created = list()
     cname = 'benchmark-%d' % int(time.time())
@@ -107,16 +107,19 @@ def create_objects_in_period(threads, delay=5.0, duration=60.0):
     print("Listing %d objects took %fs seconds, %f objects per second." % (
         len(all_objects), end - start, len(all_objects) / (end - start)))
     compute_meta2_db_size(cname)
-    print("Cleaning...")
-    for _ in POOL.starmap(API.object_delete,
-                          [(ACCOUNT, cname, obj)
-                           for obj in all_objects]):
-        pass
-    POOL.waitall()
+    if clean:
+        print("Cleaning...")
+        for _ in POOL.starmap(API.object_delete,
+                              [(ACCOUNT, cname, obj)
+                               for obj in all_objects]):
+            pass
+        POOL.waitall()
     return rate
 
 
-def create_fixed_number_of_objects(threads, obj_count=1000):
+def create_fixed_number_of_objects(threads, delay=5.0, obj_count=1000,
+                                   clean=True):
+    counter = 0
     created = list()
     cname = 'benchmark-%d' % int(time.time())
     quotient, remainder = divmod(obj_count, threads)
@@ -127,13 +130,21 @@ def create_fixed_number_of_objects(threads, obj_count=1000):
             nb_objects += 1
         portion_to_generate.append(nb_objects)
 
-    start = time.time()
+    now = start = checkpoint = time.time()
     POOL.starmap(create_loop,
                  [(cname, '%d-' % n, portion_to_generate[n])
                   for n in range(threads)])
     while len(created) < obj_count:
         res = RESULTS.get()
+        counter += 1
+        if now - checkpoint > delay:
+            print("%d objects in %fs, %f objects per second." % (
+                  counter, now - checkpoint, counter / (now - checkpoint)))
+            counter = 0
+            checkpoint = now
         created.append(res)
+        now = time.time()
+
     end = time.time()
     rate = len(created) / (end - start)
     print("End. %d objects created in %fs, %f objects per second." % (
@@ -145,12 +156,13 @@ def create_fixed_number_of_objects(threads, obj_count=1000):
     print("Listing %d objects took %fs seconds, %f objects per second." % (
         len(all_objects), end - start, len(all_objects) / (end - start)))
     compute_meta2_db_size(cname)
-    print("Cleaning...")
-    for _ in POOL.starmap(API.object_delete,
-                          [(ACCOUNT, cname, obj)
-                           for obj in all_objects]):
-        pass
-    POOL.waitall()
+    if clean:
+        print("Cleaning...")
+        for _ in POOL.starmap(API.object_delete,
+                              [(ACCOUNT, cname, obj)
+                               for obj in all_objects]):
+            pass
+        POOL.waitall()
     return rate
 
 
@@ -180,6 +192,9 @@ if __name__ == '__main__':
     parser.add_argument(
         '-n', '--object-count', type=int,
         help='Total number of objects to create (duration will be ignored).')
+    parser.add_argument(
+        '--do-not-clean', action='store_false', dest='clean',
+        help='Do not clean the container after the benchmark.')
 
     args = parser.parse_args()
 
@@ -203,7 +218,8 @@ if __name__ == '__main__':
 
     if CREATION_MODE == 'duration':
         print("Creating objects during %f seconds." % DURATION)
-        create_objects_in_period(THREADS, duration=DURATION)
+        create_objects_in_period(THREADS, duration=DURATION, clean=args.clean)
     else:
         print("Creating %d objects." % args.object_count)
-        create_fixed_number_of_objects(THREADS, obj_count=args.object_count)
+        create_fixed_number_of_objects(THREADS, obj_count=args.object_count,
+                                       clean=args.clean)
