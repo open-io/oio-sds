@@ -1,5 +1,5 @@
 # Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2020 OVH SAS
+# Copyright (C) 2020-2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -51,6 +51,14 @@ def parse_chunk_method(chunk_method):
     return chunk_method, param_list
 
 
+def unparse_chunk_method(chunk_method, params):
+    """
+    Generate a "packed" version of a chunk method and its parameters.
+    """
+    return (chunk_method + '/'
+            + ','.join(f"{k}={params[k]}" for k in sorted(params.keys())))
+
+
 def guess_storage_method(url):
     if url.startswith('kine'):
         return 'kplain'
@@ -81,11 +89,15 @@ class StorageMethods(object):
 
 
 class StorageMethod(object):
+    """
+    Hold parameters telling how an object is chunked, replicated, checksumed...
+    """
 
-    def __init__(self, name, ec=False):
+    def __init__(self, name, ec=False, **kwargs):
         self._name = name
         self._ec = ec
         self.type = None
+        self._params = kwargs
 
     @property
     def name(self):
@@ -107,22 +119,38 @@ class StorageMethod(object):
     def min_chunks_to_read(self):
         raise NotImplementedError()
 
+    @property
+    def params(self):
+        """
+        Get the dictionary of parameters of the chunk method.
+        """
+        return self._params
+
+    def fix_missing_checksum_algo(self, chunk_checksum_algo='blake3',
+                                  object_checksum_algo='md5'):
+        """
+        Set the chunk checksum algorithm and the object checksum algorithm
+        in case they are not already present in the storage method.
+        """
+        self.params.setdefault('cca', chunk_checksum_algo)
+        self.params.setdefault('oca', object_checksum_algo)
+
 
 class ReplicatedStorageMethod(StorageMethod):
-    def __init__(self, name, nb_copy):
-        super(ReplicatedStorageMethod, self).__init__(name=name)
+    def __init__(self, name, nb_copy, **kwargs):
+        super(ReplicatedStorageMethod, self).__init__(name=name, **kwargs)
 
         try:
-            self._nb_copy = int(nb_copy)
+            self._params['nb_copy'] = int(nb_copy)
         except (TypeError, ValueError):
             raise exceptions.InvalidStorageMethod('Invalid %r nb_copy' %
                                                   nb_copy)
-        self._quorum = (self._nb_copy + 1) // 2
+        self._quorum = (self.nb_copy + 1) // 2
 
     @classmethod
     def build(cls, params):
         nb_copy = params.pop('nb_copy', 1)
-        return cls('repli', nb_copy)
+        return cls('repli', nb_copy, **params)
 
     @property
     def quorum(self):
@@ -130,7 +158,7 @@ class ReplicatedStorageMethod(StorageMethod):
 
     @property
     def expected_chunks(self):
-        return self._nb_copy
+        return self.params['nb_copy']
 
     @property
     def min_chunks_to_read(self):
@@ -138,29 +166,29 @@ class ReplicatedStorageMethod(StorageMethod):
 
     @property
     def nb_copy(self):
-        return self._nb_copy
+        return self.params['nb_copy']
 
 
 class ECStorageMethod(StorageMethod):
 
     def __init__(self, name, ec_segment_size, ec_type, ec_nb_data,
-                 ec_nb_parity):
-        super(ECStorageMethod, self).__init__(name=name, ec=True)
+                 ec_nb_parity, **kwargs):
+        super(ECStorageMethod, self).__init__(name=name, ec=True, **kwargs)
 
         try:
-            self._ec_nb_data = int(ec_nb_data)
+            self.params['k'] = int(ec_nb_data)
         except (TypeError, ValueError):
             raise exceptions.InvalidStorageMethod('Invalid %r ec_nb_data' %
                                                   ec_nb_data)
 
         try:
-            self._ec_nb_parity = int(ec_nb_parity)
+            self.params['m'] = int(ec_nb_parity)
         except (TypeError, ValueError):
             raise exceptions.InvalidStorageMethod('Invalid %r ec_nb_parity' %
                                                   ec_nb_parity)
 
         self._ec_segment_size = ec_segment_size
-        self._ec_type = ec_type
+        self.params['algo'] = ec_type
 
         try:
             self.driver = ECDriver(k=ec_nb_data, m=ec_nb_parity,
@@ -172,7 +200,7 @@ class ECStorageMethod(StorageMethod):
                     exceptions.InvalidStorageMethod(msg),
                     sys.exc_info()[2])
         self._ec_quorum_size = \
-            self._ec_nb_data + self.driver.min_parity_fragments_needed()
+            self.ec_nb_data + self.driver.min_parity_fragments_needed()
 
     @classmethod
     def build(cls, params):
@@ -181,7 +209,7 @@ class ECStorageMethod(StorageMethod):
         ec_type = params.pop('algo')
         return cls('ec', ec_segment_size=EC_SEGMENT_SIZE,
                    ec_type=ec_type, ec_nb_data=ec_nb_data,
-                   ec_nb_parity=ec_nb_parity)
+                   ec_nb_parity=ec_nb_parity, **params)
 
     @property
     def quorum(self):
@@ -189,23 +217,23 @@ class ECStorageMethod(StorageMethod):
 
     @property
     def expected_chunks(self):
-        return self._ec_nb_data + self._ec_nb_parity
+        return self.params['k'] + self.params['m']
 
     @property
     def min_chunks_to_read(self):
-        return self._ec_nb_data
+        return self.params['k']
 
     @property
     def ec_type(self):
-        return self._ec_type
+        return self.params['algo']
 
     @property
     def ec_nb_data(self):
-        return self._ec_nb_data
+        return self.params['k']
 
     @property
     def ec_nb_parity(self):
-        return self._ec_nb_parity
+        return self.params['m']
 
     @property
     def ec_segment_size(self):
