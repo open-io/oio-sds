@@ -19,8 +19,10 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"net/http"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -178,6 +180,90 @@ func doGetStats(rr *rawxRequest) {
 	rr.rep.Write(bb.Bytes())
 }
 
+func doGetStatsPrometheus(rr *rawxRequest) {
+	bb := bytes.Buffer{}
+	values := reflect.ValueOf(&counters).Elem()
+	keys := values.Type()
+
+	labels := fmt.Sprintf(`{service_id="%s",volume="%s",namespace="%s"`, rr.rawx.getURL(), rr.rawx.path, rr.rawx.ns)
+
+	for i := 0; i < values.NumField(); i++ {
+		value := values.Field(i).Interface()
+		key := keys.Field(i).Tag.Get("tag")
+		tags := strings.Split(key, ".")
+		if len(tags) == 0 {
+			continue
+		}
+		bb.WriteString("rawx")
+		switch tags[0] {
+
+		// handle req.* tags
+		case "req":
+			bb.WriteString("_requests")
+			if len(tags) == 2 {
+				tags = append(tags, "all")
+			}
+			switch tags[1] {
+			case "time":
+				bb.WriteString("_duration_ms_total")
+			case "hits":
+				bb.WriteString("_hits_total")
+			default:
+				continue
+			}
+			bb.WriteString(labels)
+			bb.WriteString(`,method="`)
+			bb.WriteString(tags[2])
+			bb.WriteString(`"}`)
+
+		// handle rep.* tags
+		case "rep":
+			bb.WriteString("_responses")
+			switch tags[1] {
+			case "hits":
+				if len(tags) < 3 {
+					continue
+				}
+				bb.WriteString("_hits_total")
+				bb.WriteString(labels)
+				bb.WriteString(`,method="`)
+				bb.WriteString(tags[2])
+				bb.WriteString(`"}`)
+
+			// bread is the sum of the bytes the client has read
+			// which means that this is the sum of byte rawx as sent to clients
+			// in this case, direction label is set to `out`
+			// yes this is confusing ... don't ask
+			case "bread":
+				bb.WriteString("_size_byte_total")
+				bb.WriteString(labels)
+				bb.WriteString(`,direction="out"}`)
+
+			// bwritten is the sum of the bytes written to disk
+			// which means that this is the sum of byte rawx as received from clients
+			// in this case, direction label is set to `in`
+			// yes this is confusing ... don't ask
+			case "bwritten":
+				bb.WriteString("_size_byte_total")
+				bb.WriteString(labels)
+				bb.WriteString(`,direction="in"}`)
+			default:
+				continue
+			}
+		default:
+			continue
+		}
+		bb.WriteString("_total")
+		bb.WriteRune(' ')
+		bb.WriteString(utoa(value.(uint64)))
+		bb.WriteRune('\n')
+	}
+
+	rr.replyCode(http.StatusOK)
+	rr.TTFB = time.Since(rr.startTime)
+	rr.rep.Write(bb.Bytes())
+}
+
 func (rr *rawxRequest) serveStat() {
 	if err := rr.drain(); err != nil {
 		rr.replyError("", err)
@@ -188,7 +274,11 @@ func (rr *rawxRequest) serveStat() {
 	var ttfb uint64
 	switch rr.req.Method {
 	case "GET", "HEAD":
-		doGetStats(rr)
+		if rr.req.URL.Query().Get("format") == "prometheus" {
+			doGetStatsPrometheus(rr)
+		} else {
+			doGetStats(rr)
+		}
 		spent, ttfb = IncrementStatReqStat(rr)
 	default:
 		rr.replyCode(http.StatusMethodNotAllowed)
