@@ -69,7 +69,10 @@ class TestBlobIndexer(BaseTestCase):
                 self.rawx_id = rawx['tags'].get('tag.service_id', None)
         if self.rawx_id is None:
             self.rawx_id = rawx_addr
-        self.indexer = Indexer(app=FilterApp, conf=self.conf)
+        app = FilterApp
+        app.app_env['volume_path'] = self.rawx_path
+        app.app_env['volume_id'] = self.rawx_id
+        self.indexer = Indexer(app=app, conf=self.conf)
         # clear rawx/rdir
         chunk_files = paths_gen(self.rawx_path)
         for chunk_file in chunk_files:
@@ -146,7 +149,20 @@ class TestBlobIndexer(BaseTestCase):
     def _chunk_path(self, chunk_id):
         return self.rawx_path + '/' + chunk_id[:3] + '/' + chunk_id
 
-    def _test_indexer(self):
+    def _index_pass(self, reset_stats=False, callback=None):
+        """Simulates crawl_volume() from oio.crawler.rawx.crawler
+           but only calls the process() function of BlobIndexer
+        """
+        paths = paths_gen(self.rawx_path)
+        if reset_stats:
+            # pylint: disable=protected-access
+            self.indexer._reset_filter_stats()
+        for path in paths:
+            chunk_id = path.rsplit('/', 1)[-1]
+            chunk_env = create_chunk_env(chunk_id, path)
+            self.indexer.process(chunk_env, callback)
+
+    def test_indexer(self):
         chunks = list(self.rdir_client.chunk_fetch(self.rawx_id))
         previous_nb_chunk = len(chunks)
 
@@ -178,21 +194,7 @@ class TestBlobIndexer(BaseTestCase):
         chunks = list(chunks)
         self.assertEqual(previous_nb_chunk, len(chunks))
 
-    def _index_pass(self, reset_stats=False, callback=None):
-        """Simulates crawl_volume() from oio.crawler.rawx.crawler
-           but only calls the process() function of BlobIndexer
-        """
-        paths = paths_gen(self.rawx_path)
-        if reset_stats:
-            # pylint: disable=protected-access
-            self.indexer._reset_filter_stats()
-        for path in paths:
-            chunk_id = path.rsplit('/', 1)[-1]
-            chunk_env = create_chunk_env(self.rawx_id, self.rawx_path,
-                                         chunk_id, path)
-            self.indexer.process(chunk_env, callback)
-
-    def _test_indexer_with_old_chunk(self):
+    def test_indexer_with_old_chunk(self):
         expected_account, expected_container, expected_cid, \
             expected_content_path, expected_content_version, \
             expected_content_id, expected_chunk_id = self._put_chunk()
@@ -354,8 +356,7 @@ class TestBlobIndexer(BaseTestCase):
         chunk_path, container_id, chunk_id = self._write_chunk(
             self.rawx_path, alias)
 
-        chunk_env = create_chunk_env(self.rawx_id, self.rawx_path,
-                                     chunk_id, chunk_path)
+        chunk_env = create_chunk_env(chunk_id, chunk_path)
 
         with patch('oio.crawler.rawx.filters.indexer.time.time',
                    Mock(return_value=1234)):

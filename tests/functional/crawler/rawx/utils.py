@@ -17,11 +17,9 @@
 from oio.blob.utils import read_chunk_metadata
 
 
-def create_chunk_env(volume_id, volume_path, chunk_id, chunk_path):
+def create_chunk_env(chunk_id, chunk_path):
     """Usefull to create ChunkWrapper dict for rawx crawler filters"""
     chunk_env = {}
-    chunk_env['volume_id'] = volume_id
-    chunk_env['volume_path'] = volume_path
     chunk_env['chunk_id'] = chunk_id
     chunk_env['chunk_path'] = chunk_path
     with open(chunk_path, 'rb') as chunk_file:
@@ -29,8 +27,8 @@ def create_chunk_env(volume_id, volume_path, chunk_id, chunk_path):
     return chunk_env
 
 
-class FilterApp(object):
-    app_env = dict()
+class FilterApp():
+    app_env = {}
 
     def __init__(self, env, cb):
         self.env = env

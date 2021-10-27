@@ -48,6 +48,16 @@ class Checksum(Filter):
                                           30)
         self.quarantine_mountpoint = boolean_value(
             self.conf.get('quarantine_mountpoint'), True)
+        self.volume_path = self.app_env['volume_path']
+        self.volume_id = self.app_env['volume_id']
+        if self.quarantine_mountpoint:
+            self.quarantine_path = '%s/%s-%s' % (
+                find_mount_point(self.volume_path),
+                CHUNK_QUARANTINE_FOLDER_NAME, self.volume_id)
+        else:
+            self.quarantine_path = '%s/%s-%s' % (self.volume_path,
+                                                 CHUNK_QUARANTINE_FOLDER_NAME,
+                                                 self.volume_id)
 
         self.watchdog = get_watchdog()
         self.chunk_operator = ChunkOperator(self.conf, logger=self.logger,
@@ -102,7 +112,7 @@ class Checksum(Filter):
             'container_id=%(container_id)s '
             'chunk_id=%(chunk_id)s '
             '%(error)s' % {
-                'volume_id': chunk.volume_id,
+                'volume_id': self.volume_id,
                 'container_id': container_id,
                 'chunk_id': chunk.chunk_id,
                 'error': msg
@@ -111,26 +121,15 @@ class Checksum(Filter):
 
     def _rebuild_chunk(self, chunk):
 
-        if self.quarantine_mountpoint:
-            quarantine_path = '%(mountpoint)s/%(quarantine_folder)s' % {
-                'mountpoint': find_mount_point(chunk.volume_path),
-                'quarantine_folder': CHUNK_QUARANTINE_FOLDER_NAME
-            }
-        else:
-            quarantine_path = '%(volume_path)s/%(quarantine_folder)s' % {
-                'volume_path': chunk.volume_path,
-                'quarantine_folder': CHUNK_QUARANTINE_FOLDER_NAME
-            }
-
         # Prepare quarantine folder
         try:
-            if not isdir(quarantine_path):
-                makedirs(quarantine_path)
-            new_chunk_path = '%s/%s%s' % (quarantine_path,
+            if not isdir(self.quarantine_path):
+                makedirs(self.quarantine_path)
+            new_chunk_path = '%s/%s%s' % (self.quarantine_path,
                                           chunk.chunk_id,
                                           CHUNK_SUFFIX_CORRUPT)
             self.logger.warning('moving chunk_id=%s to quarantine %s',
-                                chunk.chunk_id, quarantine_path)
+                                chunk.chunk_id, self.quarantine_path)
         except Exception as err:
             self.logger.error("Error while moving the chunk to quarantine: %s",
                               str(err))
@@ -145,7 +144,7 @@ class Checksum(Filter):
         try:
             self.chunk_operator.rebuild(container_id, chunk.meta['content_id'],
                                         chunk.chunk_id,
-                                        rawx_id=chunk.volume_id)
+                                        rawx_id=self.volume_id)
 
             # Rebuilt OK, corrupted chunk can be removed
             self.logger.warning('removing corrupted chunk_id=%s '
@@ -185,7 +184,7 @@ class Checksum(Filter):
                               chunk_hash, file_hash, chunk_checksum_algo)
             if chunk_hash != file_hash:
                 self.logger.warning('hash different volume_id=%s '
-                                    'chunk_id=%s', chunk.volume_id,
+                                    'chunk_id=%s', self.volume_id,
                                     chunk.chunk_id)
                 self._rebuild_chunk(chunk)
             else:

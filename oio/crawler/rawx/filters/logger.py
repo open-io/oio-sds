@@ -23,10 +23,11 @@ class Logger(Filter):
 
     def init(self):
         self.successes = 0
+        self.volume_id = self.app_env['volume_id']
 
     def process(self, env, cb):
         chunk = ChunkWrapper(env)
-        self.logger.info("Got chunk %s", chunk)
+        self.logger.info("Got chunk %s volume_id=%s", chunk, self.volume_id)
         self.successes += 1
         return self.app(env, cb)
 

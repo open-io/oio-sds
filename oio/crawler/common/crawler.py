@@ -68,9 +68,13 @@ class CrawlerWorker(object):
         self.last_report_time = 0
         self.scanned_since_last_report = 0
 
+        # This dict is passed to all filters called in the pipeline
+        # of this worker
         self.app_env = {}
         self.app_env['api'] = api or ObjectStorageApi(
             self.namespace, logger=self.logger)
+        self.app_env['volume_path'] = self.volume
+        self.app_env['volume_id'] = self.volume_id
 
         self.pipeline = LOAD_PIPELINES[self.SERVICE_TYPE](
             conf.get('conf_file'), global_conf=self.conf, app=self)

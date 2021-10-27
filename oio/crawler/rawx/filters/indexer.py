@@ -33,6 +33,8 @@ class Indexer(Filter):
         self.successes = 0
         self.errors = 0
 
+        self.volume_id = self.app_env['volume_id']
+
         pool_manager = get_pool_manager(pool_connections=10)
         self.index_client = RdirClient(self.conf, logger=self.logger,
                                        pool_manager=pool_manager)
@@ -53,7 +55,7 @@ class Indexer(Filter):
     def update_index(self, chunk):
         data = {'mtime': int(time.time())}
         headers = {REQID_HEADER: request_id('blob-indexer-')}
-        self.index_client.chunk_push(chunk.volume_id,
+        self.index_client.chunk_push(self.volume_id,
                                      chunk.meta['container_id'],
                                      chunk.meta['content_id'],
                                      chunk.meta['chunk_id'],

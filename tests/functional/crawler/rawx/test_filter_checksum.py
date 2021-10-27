@@ -57,7 +57,6 @@ class TestRawxFilterChecksum(BaseTestCase):
 
         self.rdir_client = RdirClient(self.conf)
         self.conf.update({'quarantine_mountpoint': False})
-        self.checksum = Checksum(app=FilterApp, conf=self.conf)
 
     def _prepare(self, container, path):
         _, chunks = self.api.container.content_prepare(
@@ -81,6 +80,14 @@ class TestRawxFilterChecksum(BaseTestCase):
         chunk_path = volume_path + '/' + chunk_id[:3] + '/' + chunk_id
         return chunk_id, chunk_path, volume_path, volume_id
 
+    @staticmethod
+    def _get_chunk_quarantine_path(volume_path, volume_id, chunk_id):
+        return '%s/%s-%s/%s%s' % (volume_path,
+                                  CHUNK_QUARANTINE_FOLDER_NAME,
+                                  volume_id,
+                                  chunk_id,
+                                  CHUNK_SUFFIX_CORRUPT)
+
     def test_rawx_filter_checksum_1_chunk(self):
         """
         In this test, it is impossible to rebuild the chunk (not enough copies
@@ -94,19 +101,23 @@ class TestRawxFilterChecksum(BaseTestCase):
         chunk = chunks[0]
         chunk_id, chunk_path, volume_path, volume_id = self._chunk_info(chunk)
 
-        chunk_env = create_chunk_env(volume_id, volume_path,
-                                     chunk_id, chunk_path)
+        chunk_env = create_chunk_env(chunk_id, chunk_path)
+
+        app = FilterApp
+        app.app_env['volume_path'] = volume_path
+        app.app_env['volume_id'] = volume_id
+        checksum = Checksum(app=app, conf=self.conf)
 
         # Alteration of the data
         with open(chunk_path, 'wb') as file_:
             file_.write(b'another-data')
             file_.close()
 
-        self.checksum.process(chunk_env, None)
-        self.assertEqual(0, self.checksum.successes)
-        self.assertEqual(0, self.checksum.recovered_chunk)
-        self.assertEqual(1, self.checksum.errors)
-        self.assertEqual(1, self.checksum.unrecoverable_content)
+        checksum.process(chunk_env, None)
+        self.assertEqual(0, checksum.successes)
+        self.assertEqual(0, checksum.recovered_chunk)
+        self.assertEqual(1, checksum.errors)
+        self.assertEqual(1, checksum.unrecoverable_content)
 
         # Check that there is nothing where the chunk should be located
         _, new_chunks = self.api.container.content_locate(
@@ -115,13 +126,8 @@ class TestRawxFilterChecksum(BaseTestCase):
         self.assertFalse(os.path.isfile(new_chunk_path))
 
         # Check that the chunk has been moved in quarantine folder
-        chunk_quarantine = '%(volume)s/%(quar)s/%(chunk_id)s%(suffix)s' % {
-            'volume': volume_path,
-            'quar': CHUNK_QUARANTINE_FOLDER_NAME,
-            'chunk_id': chunk_id,
-            'suffix': CHUNK_SUFFIX_CORRUPT
-        }
-
+        chunk_quarantine = self._get_chunk_quarantine_path(volume_path,
+                                                           volume_id, chunk_id)
         self.assertTrue(os.path.isfile(chunk_quarantine))
 
     def test_rawx_crawler_m_chunk(self):
@@ -136,28 +142,27 @@ class TestRawxFilterChecksum(BaseTestCase):
         chunk = random.choice(chunks)
         chunk_id, chunk_path, volume_path, volume_id = self._chunk_info(chunk)
 
+        app = FilterApp
+        app.app_env['volume_path'] = volume_path
+        app.app_env['volume_id'] = volume_id
+        checksum = Checksum(app=app, conf=self.conf)
+
         # Alteration of the data
         with open(chunk_path, 'wb') as file_:
             file_.write(b'another-data')
             file_.close()
 
-        chunk_env = create_chunk_env(volume_id, volume_path,
-                                     chunk_id, chunk_path)
-        self.checksum.process(chunk_env, None)
-        self.assertEqual(0, self.checksum.successes)
-        self.assertEqual(1, self.checksum.recovered_chunk)
-        self.assertEqual(0, self.checksum.errors)
-        self.assertEqual(0, self.checksum.unrecoverable_content)
+        chunk_env = create_chunk_env(chunk_id, chunk_path)
+        checksum.process(chunk_env, None)
+        self.assertEqual(0, checksum.successes)
+        self.assertEqual(1, checksum.recovered_chunk)
+        self.assertEqual(0, checksum.errors)
+        self.assertEqual(0, checksum.unrecoverable_content)
         _, new_chunks = self.api.container.content_locate(
             self.account, container, object_name)
         self.assertEqual(len(chunks), len(new_chunks))
 
         # Check that the chunk has been removed from quarantine folder
-        chunk_quarantine = '%(volume)s/%(quar)s/%(chunk_id)s%(suffix)s' % {
-            'volume': volume_path,
-            'quar': CHUNK_QUARANTINE_FOLDER_NAME,
-            'chunk_id': chunk_id,
-            'suffix': CHUNK_SUFFIX_CORRUPT
-        }
-
+        chunk_quarantine = self._get_chunk_quarantine_path(volume_path,
+                                                           volume_id, chunk_id)
         self.assertFalse(os.path.isfile(chunk_quarantine))

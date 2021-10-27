@@ -43,8 +43,6 @@ class RawxWorker(CrawlerWorker):
     def process_path(self, path):
 
         chunk = ChunkWrapper({})
-        chunk.volume_id = self.volume_id
-        chunk.volume_path = self.volume
         chunk.chunk_id = path.rsplit('/', 1)[-1]
         chunk.chunk_path = path
 

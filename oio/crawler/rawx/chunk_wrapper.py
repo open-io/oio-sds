@@ -38,8 +38,6 @@ def _rawx_env_property(field):
 
 class ChunkWrapper(object):
 
-    volume_id = _rawx_env_property('volume_id')
-    volume_path = _rawx_env_property('volume_path')
     chunk_id = _rawx_env_property('chunk_id')
     chunk_path = _rawx_env_property('chunk_path')
     meta = _rawx_env_property('meta')
@@ -48,7 +46,7 @@ class ChunkWrapper(object):
         self.env = env
 
     def __repr__(self):
-        return "Chunk [%s,%s]" % (self.volume_id, self.chunk_id)
+        return "chunk_id=%s" % self.chunk_id
 
 
 class RawxCrawlerResponse(object):
