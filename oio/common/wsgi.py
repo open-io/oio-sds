@@ -76,6 +76,14 @@ class Application(BaseApplication):
 
 class ServiceLogger(Logger):
 
+    def setup(self, cfg):
+        # The process ID is already logged by syslog, we don't want it twice.
+        if r"%(process)d" in self.syslog_fmt:
+            # self.syslog_fmt may actually be a class variable, but we can
+            # mask it with an instance variable.
+            self.syslog_fmt = "%(message)s"
+        super(ServiceLogger, self).setup(cfg)
+
     def atoms(self, resp, req, environ, request_time):
         atoms = super(ServiceLogger, self).atoms(resp, req, environ,
                                                  request_time)
