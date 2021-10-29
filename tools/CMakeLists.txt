@@ -81,6 +81,7 @@ install(PROGRAMS
 			oio-reset.sh
 			oio-dump-buried-events.py
 			oio-webhook-test.py
+			openioctl.sh
 		DESTINATION bin
 		CONFIGURATIONS Debug COMPONENT dev)
 
