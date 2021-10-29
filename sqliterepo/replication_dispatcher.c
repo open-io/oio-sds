@@ -2004,6 +2004,7 @@ sqlx_dispatch_all(struct gridd_reply_ctx_s *reply,
 		g_clear_error(&err);
 	oio_ext_set_user_agent(user_agent);
 	oio_ext_set_shared_properties(NULL);
+	oio_ext_allow_long_timeout(FALSE);
 
 	if (!hk) {
 		GRID_INFO("No hook defined for this request, consider not yet implemented");
@@ -2015,6 +2016,7 @@ sqlx_dispatch_all(struct gridd_reply_ctx_s *reply,
 	oio_ext_set_admin(FALSE);
 	oio_ext_set_user_agent(NULL);
 	oio_ext_set_shared_properties(NULL);
+	oio_ext_allow_long_timeout(FALSE);
 	return res;
 }
 

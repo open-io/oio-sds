@@ -187,6 +187,7 @@ struct oio_ext_local_s {
 	gchar **shared_properties;
 	gchar reqid[LIMIT_LENGTH_REQID];
 	GHashTable *perfdata;
+	guint8 allow_long_timeout;
 };
 
 static void _local_free(gpointer p) {
@@ -419,6 +420,16 @@ void oio_ext_add_perfdata(const gchar *key, gint64 value) {
 		g_hash_table_insert(l->perfdata,
 				g_strdup(key), GINT_TO_POINTER(old + value));
 	}
+}
+
+gboolean oio_ext_is_allowed_to_do_long_timeout(void) {
+	const struct oio_ext_local_s *l = _local_ensure ();
+	return BOOL(l->allow_long_timeout);
+}
+
+void oio_ext_allow_long_timeout(const gboolean allow_long_timeout) {
+	struct oio_ext_local_s *l = _local_ensure();
+	l->allow_long_timeout = BOOL(allow_long_timeout);
 }
 
 /* -------------------------------------------------------------------------- */

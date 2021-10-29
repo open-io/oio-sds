@@ -1732,6 +1732,9 @@ _container_snapshot(struct req_args_s *args, gchar *src_service_id,
 			TRUE);
 	CLIENT_CTX(ctx, args, NAME_SRVTYPE_META2, 1);
 	gchar *src_addr = _resolve_service_id(src_service_id);
+	/* Willfully ignore the proxy timeout as for large meta2 databases
+	   the client may need more time. */
+	oio_ext_allow_long_timeout(TRUE);
 	GByteArray * _pack_snapshot(const struct sqlx_name_s *n,
 			const gchar **headers) {
 		return sqlx_pack_SNAPSHOT(n, src_addr, src_base, src_suffix,
@@ -1739,6 +1742,7 @@ _container_snapshot(struct req_args_s *args, gchar *src_service_id,
 	}
 	err = _resolve_meta2(args, CLIENT_PREFER_MASTER,
 			_pack_snapshot, NULL, NULL);
+	oio_ext_allow_long_timeout(FALSE);
 	g_free(all_dest_properties);
 	g_free(src_addr);
 

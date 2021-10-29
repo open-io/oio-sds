@@ -477,6 +477,9 @@ gridd_client_exec_and_decode (const gchar *to, gdouble seconds,
 gdouble
 oio_clamp_timeout(gdouble timeout, gint64 deadline)
 {
+	if (oio_ext_is_allowed_to_do_long_timeout()) {
+		timeout = 3600;
+	}
 	if (deadline <= 0)
 		return timeout;
 
@@ -492,6 +495,9 @@ oio_clamp_timeout(gdouble timeout, gint64 deadline)
 gint64
 oio_clamp_deadline(gdouble timeout, gint64 deadline)
 {
+	if (oio_ext_is_allowed_to_do_long_timeout()) {
+		timeout = 3600;
+	}
 	const gint64 dl_local = oio_ext_monotonic_time() + (G_TIME_SPAN_SECOND * timeout);
 	return (deadline > 0) ? MIN(deadline, dl_local) : dl_local;
 }

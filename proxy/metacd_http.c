@@ -262,6 +262,9 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 	 * The root container query will populate these properties as needed. */
 	oio_ext_set_shared_properties(NULL);
 
+	/* By default, don't allow a long timeout */
+	oio_ext_allow_long_timeout(FALSE);
+
 	/* Load the optional deadline of the current request */
 	const char *tostr = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_TIMEOUT);
 	gint64 to = 0;
