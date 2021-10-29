@@ -28,6 +28,8 @@ CONTAINER_EVENTS = [
     EventTypes.CONTAINER_NEW,
     EventTypes.CONTAINER_DELETED]
 
+LOCATION_PROPERTY_KEY = 'X-Container-Sysmeta-Location'
+
 
 class AccountUpdateFilter(Filter):
     """
@@ -58,6 +60,13 @@ class AccountUpdateFilter(Filter):
                 url = event.env.get('url')
                 body = dict()
                 body['bucket'] = data.get('bucket')
+                if 'properties' in data.keys():
+                    if LOCATION_PROPERTY_KEY in data['properties'].keys():
+                        body['location'] = \
+                            data['properties'][LOCATION_PROPERTY_KEY]
+                    else:
+                        body['location'] = None
+
                 for k1, k2 in (('objects', 'object-count'),
                                ('bytes', 'bytes-count')):
                     body[k1] = data.get(k2, 0)
