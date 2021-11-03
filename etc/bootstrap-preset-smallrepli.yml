@@ -3,6 +3,7 @@ config:
   ns.chunk_size: 1048576
 zookeeper: true
 redis: true
+fdb: true
 directory_replicas: 3
 container_replicas: 3
 conscience:

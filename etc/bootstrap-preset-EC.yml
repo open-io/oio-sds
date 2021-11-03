@@ -2,6 +2,7 @@ storage_policy: "EC"
 config:
   ns.chunk_size: 1048576
 redis: true
+fdb  : true
 rdir:
   count: 2
 rawx:

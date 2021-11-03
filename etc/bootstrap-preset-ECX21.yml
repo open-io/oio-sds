@@ -10,6 +10,7 @@ hosts:
   - "127.0.0.6"
   - "127.0.0.7"
 redis: true
+fdb  : true
 rdir:
   count: 2
 rawx:

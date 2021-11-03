@@ -32,6 +32,11 @@ jobs:
           virtualenv -p /opt/{{ .cds.env.PYTHON_PACKAGE }}/bin/python3 $HOME/oiovenv
           . $HOME/oiovenv/bin/activate
           pip install --upgrade pip setuptools virtualenv tox -r all-requirements.txt -r test-requirements.txt
+          wget -q https://www.foundationdb.org/downloads/${FDB_VERSION}/ubuntu/installers/foundationdb-clients_${FDB_VERSION}-1_amd64.deb
+          wget -q https://www.foundationdb.org/downloads/${FDB_VERSION}/ubuntu/installers/foundationdb-server_${FDB_VERSION}-1_amd64.deb
+          dpkg -i foundationdb-clients_${FDB_VERSION}-1_amd64.deb foundationdb-server_${FDB_VERSION}-1_amd64.deb
+          systemctl stop foundationdb.service
+          systemctl disable foundationdb.service
 
       - name: Run fast tests
         script:

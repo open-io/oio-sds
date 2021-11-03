@@ -146,17 +146,17 @@ restart_delay = 60
 cluster_file = ${CLUSTERFILE}
 
 [fdbserver]
-command = fdbserver
+command = ${fdbserver}
 public_address = auto:$ID
 listen_address = public
 datadir = ${DATADIR}/foundationdb/data/$ID
-logdir = ${LOGDIR}/fdb
+logdir = ${LOGDIRFDB}
 
-[fdbserver.4500]
+[fdbserver.4600]
 
 [backup_agent]
-command = backup_agent
-logdir = ${LOGDIR}/fdb
+command = ${backup_agent}
+logdir = ${LOGDIRFDB}
 
 [backup_agent.1]
 """
@@ -175,12 +175,14 @@ OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 ${SERVICEUSER}
 ${SERVICEGROUP}
 Type=simple
-ExecStart=${EXE} --conffile ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf --lockfile ${RUNDIR}/${NS}-${SRVTYPE}-${SRVNUM}.pid
-ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
-Restart=on-failure
 Environment=PATH=${PATH}
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
+#ExecStartPre=/usr/sbin/service foundationdb stop
+ExecStart=${fdbmonitor} --conffile ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf --lockfile ${RUNDIR}/${NS}-${SRVTYPE}-${SRVNUM}.pid
+ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
+Restart=on-failure
+ExecStartPost=/bin/sleep 5 ; ${fdbcli} -C ${CLUSTERFILE} --exec "configure new ssd single"
 
 [Install]
 WantedBy=${PARENT}
@@ -1123,7 +1125,7 @@ sqliterepo.repo.hard_max=1024
 admin=${IP}:${PORT_ADMIN}
 #iam.connection=redis://${IP}:${REDIS_PORT}/?allow_empty_policy_name=False
 iam.connection=fdb://${IP}:0000/?allow_empty_policy_name=False
-fdb_file = ${FDB}/fdb.cluster
+fdb_file = ${CLUSTERFILE}
 """
 
 template_systemd_service_event_agent = """
@@ -1335,8 +1337,6 @@ fall: 1
 include_dir: ${CFGDIR}/watch
 """
 
-FDB = str(os.environ['HOME']) + '/.local/etc/foundationdb'
-
 template_account = """
 [account-server]
 bind_addr = ${IP}
@@ -1354,7 +1354,7 @@ backend_type = fdb
 # default fdb file /etc/foundationdb/fdb.cluster will be used if fdb_file
 # is not defined
 
-fdb_file = ${FDB}/fdb.cluster
+fdb_file = ${CLUSTERFILE}
 
 # Let this option empty to connect directly to redis_host
 #sentinel_hosts = 127.0.0.1:26379,127.0.0.1:26380,127.0.0.1:26381
@@ -1444,6 +1444,7 @@ SDSDIR = OIODIR + '/sds'
 CFGDIR = SDSDIR + '/conf'
 RUNDIR = SDSDIR + '/run'
 LOGDIR = SDSDIR + '/logs'
+LOGDIRFDB = SDSDIR + '/logs/fdb'
 SPOOLDIR = SDSDIR + '/spool'
 WATCHDIR = SDSDIR + '/conf/watch'
 TMPDIR = '/tmp'
@@ -1645,6 +1646,7 @@ def generate(options):
                RUNDIR=RUNDIR,
                SPOOLDIR=SPOOLDIR,
                LOGDIR=LOGDIR,
+               LOGDIRFDB=LOGDIRFDB,
                CODEDIR=CODEDIR,
                SRCDIR=SRCDIR,
                WATCHDIR=WATCHDIR,
@@ -1673,8 +1675,7 @@ def generate(options):
                WEBHOOK=WEBHOOK,
                WEBHOOK_ENDPOINT=WEBHOOK_ENDPOINT,
                TLS_CERT_FILE=TLS_CERT_FILE,
-               TLS_KEY_FILE=TLS_KEY_FILE,
-               FDB=FDB)
+               TLS_KEY_FILE=TLS_KEY_FILE)
 
     def merge_env(add):
         env = dict(ENV)
@@ -1827,7 +1828,7 @@ def generate(options):
     mkdir_noerror(WATCHDIR)
     mkdir_noerror(RUNDIR)
     mkdir_noerror(LOGDIR)
-
+    mkdir_noerror(LOGDIRFDB)
     # create root target
     root_target = register_target('cluster')
 
@@ -2091,13 +2092,24 @@ def generate(options):
         'SRVTYPE': srvtype,
         'SRVNUM': 1,
         'EXE': 'fdbmonitor',
-        'PORT': 4500,
+        'PORT': 4600,
         'DESCRIPTION': ''.join(
             [choice(ascii_letters + digits) for _ in range(8)]),
         'RANDOMSTR': ''.join(
             [choice(ascii_letters + digits) for _ in range(8)]) })
     cluster_file = cluster(env)
     env.update({'CLUSTERFILE': cluster_file})
+
+    fdbserver = shutil.which('fdbserver')
+    backup_agent = shutil.which('backup_agent', path=PATH + ":" + '/usr/lib/foundationdb/backup_agent')
+    fdbcli = shutil.which('fdbcli')
+    fdbmonitor = shutil.which('fdbmonitor', path=PATH + ":" + '/usr/lib/foundationdb')
+
+    env.update({'fdbserver': fdbserver})
+    env.update({'backup_agent': backup_agent})
+    env.update({'fdbcli': fdbcli})
+    env.update({'fdbmonitor': fdbmonitor})
+
     if options.get(ALLOW_FDB):
         register_service(
             env, template_systemd_service_foundationdb, root_target)
@@ -2124,6 +2136,9 @@ def generate(options):
     env = subenv({
         'SRVTYPE': 'account', 'SRVNUM': 1,
         'PORT': port_account, 'EXE': 'oio-account-server'})
+    if options.get(ALLOW_FDB):
+        cluster_file = cluster(env)
+        env.update({'CLUSTERFILE': cluster_file})
     register_service(env, template_systemd_service_account, root_target)
     with open(config(env), 'w+') as f:
         tpl = Template(template_account)
@@ -2220,11 +2235,15 @@ def generate(options):
 
     env = subenv({  'SRVTYPE': 'conscience-agent',
                     'SRVNUM': 1, 'EXE': 'oio-conscience-agent'})
+    cluster_file = cluster(env)
+    env.update({'CLUSTERFILE': cluster_file})
     register_service(env, template_systemd_service_ns, root_target, False)
 
     # system config
     with open('{OIODIR}/sds.conf'.format(**ENV), 'w+') as f:
         env = merge_env({'IP': hosts[0], 'REDIS_PORT': 6379})
+        cluster_file = cluster(env)
+        env.update({'CLUSTERFILE': cluster_file})
         tpl = Template(template_local_header)
         f.write(tpl.safe_substitute(env))
         tpl = Template(template_local_ns)

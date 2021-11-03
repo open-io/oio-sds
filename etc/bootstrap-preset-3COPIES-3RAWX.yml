@@ -2,5 +2,6 @@ storage_policy: "THREECOPIES"
 config:
   ns.chunk_size: 1048576
 redis: true
+fdb  : true
 rawx:
   count: 3

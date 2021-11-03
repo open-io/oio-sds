@@ -2,6 +2,7 @@ storage_policy: "SINGLE"
 config:
   ns.chunk_size: 1048576
 redis: true
+fdb  : true
 meta0:
   count: 1
 meta1:
