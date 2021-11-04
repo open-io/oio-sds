@@ -176,7 +176,7 @@ oio-flush-all.sh -n "$NS" >/dev/null
 
 echo -e "\n### Congrats, it's a NS"
 find $SDS -type d | xargs chmod a+rx
-$SYSTEMCTL list-dependencies oio.cluster.target
+$SYSTEMCTL list-dependencies oio-cluster.target
 $cmd_openio cluster list
 
 echo -e "\nexport OIO_NS=$NS OIO_ACCT=ACCT-$RANDOM"
