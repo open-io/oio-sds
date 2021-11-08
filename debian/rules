@@ -56,7 +56,7 @@ override_dh_install:
 	  --builtin-venv \
 	  --preinstall wheel \
 	  --requirements all-requirements.txt \
-	  --index-url https://last-pypi.snap.mirrors.ovh.net/simple/
+	  --index-url https://20211021-21h42m17s-pypi.snap.mirrors.ovh.net/simple/
 	# do dh_install after dh_virtualenv as it cleans everything
 	# make install, to install oio except the python part
 	dh_install
