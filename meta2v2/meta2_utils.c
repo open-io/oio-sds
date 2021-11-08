@@ -1684,7 +1684,7 @@ static GError* m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, GSList *beans,
 }
 
 /* Returns NULL if the content is absent, an explicit error indicating it is
- * present or the error that occured while checking (if any) */
+ * present or the error that occurred while checking (if any) */
 static GError* m2db_check_content_absent(struct sqlx_sqlite3_s *sq3,
 		const guint8 *uid, const gsize len) {
 	GPtrArray *tmp = g_ptr_array_new ();

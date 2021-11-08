@@ -52,7 +52,7 @@ struct sqlx_service_config_s
 			gchar ***result);
 
 	// Called at the end of the configure step. Destined to initiating
-	// servces backends, plugging message handers, etc.
+	// services backends, plugging message handers, etc.
 	gboolean (*post_config) (struct sqlx_service_s *ss);
 
 	// Available to override

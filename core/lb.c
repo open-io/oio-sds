@@ -2226,7 +2226,7 @@ _local__poll_around(struct oio_lb_pool_s *self,
 	if (flawed && nb_locals > 0)
 		*flawed = TRUE;
 
-	// If no error occured, we can upstream the polled services
+	// If no error occurred, we can upstream the polled services
 	for (guint i=0; !err && i < selection->len; ++i)
 		on_id(selection->pdata[i], NULL);
 

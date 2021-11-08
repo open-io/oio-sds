@@ -130,7 +130,7 @@ sqlx_code_good(const int rc)
 				sqlite_strerror(R), R); \
 } while (0)
 
-/** Return a string describing the error that occured on the SQLite base */
+/** Return a string describing the error that occurred on the SQLite base */
 const char * sqlite_strerror(const int rc);
 
 int sqlx_exec(sqlite3 *handle, const gchar *sql);

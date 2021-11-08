@@ -200,7 +200,7 @@ const char * oio_error_message (const struct oio_error_s *e);
  *
  * @param out A placeholder for the
  * @param ns
- * @return NULL if an error occured, or a pointer to a valid OpenIO SDS client.
+ * @return NULL if an error occurred, or a pointer to a valid OpenIO SDS client.
  */
 struct oio_error_s * oio_sds_init (struct oio_sds_s **out, const char *ns);
 

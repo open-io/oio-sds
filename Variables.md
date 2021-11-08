@@ -1,6 +1,6 @@
 # OpenIO SDS configuration
 
-`oio-sds` allows you to alter a lot of configuration at compile-time as well at runtime. We use a minimal generation tool for a set of variables that can be modified at runtime, and whose default value can be changed at the compile-time. Those variabes are described [here](./Variables.md)
+`oio-sds` allows you to alter a lot of configuration at compile-time as well at runtime. We use a minimal generation tool for a set of variables that can be modified at runtime, and whose default value can be changed at the compile-time. Those variables are described [here](./Variables.md)
 
 Some variables, though, are not configurable yet, and still require a value to be fixed once for all when compiling the code. Please find below the list of the `cmake` directives to control such variables.
 
@@ -1570,7 +1570,7 @@ Used by `gcc`
 
 ### sqliterepo.election.lazy_recover
 
-> Should the election mecanism try to recreate missing DB?
+> Should the election mechanism try to recreate missing DB?
 
  * default: **FALSE**
  * type: gboolean

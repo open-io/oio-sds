@@ -54,7 +54,7 @@ GTree* version_extract_expected(GTree *current, struct TableSequence *changes);
  * version is > 1 in absolute value.
  *
  * @param worst the worst difference matched, with the considering 'src - dst'
- * @return the error that occured
+ * @return the error that occurred
  */
 GError* version_validate_diff(GTree *src, GTree *dst, gint64 *worst);
 
