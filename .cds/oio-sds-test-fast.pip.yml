@@ -31,7 +31,7 @@ jobs:
           mkdir /tmp/oio
           virtualenv -p /opt/{{ .cds.env.PYTHON_PACKAGE }}/bin/python3 $HOME/oiovenv
           . $HOME/oiovenv/bin/activate
-          pip install --upgrade pip setuptools virtualenv tox -r all-requirements.txt -r test-requirements.txt
+          pip install --upgrade pip setuptools virtualenv tox -r test-requirements.txt
           wget -q https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/foundationdb-clients_${FDB_VERSION}-1_amd64.deb
           wget -q https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/foundationdb-server_${FDB_VERSION}-1_amd64.deb
           dpkg -i foundationdb-clients_${FDB_VERSION}-1_amd64.deb foundationdb-server_${FDB_VERSION}-1_amd64.deb

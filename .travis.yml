@@ -46,7 +46,7 @@ install:
   - source ~/.gimme/envs/latest.env
   - virtualenv $HOME/oio && source $HOME/oio/bin/activate
   - pip install --upgrade pip setuptools virtualenv tox
-  - pip install --upgrade -r all-requirements.txt -r test-requirements.txt
+  - pip install --upgrade -r test-requirements.txt
   - sudo bash -c "echo '/tmp/core.%p.%E' > /proc/sys/kernel/core_pattern"
   - mkdir /tmp/oio
   - git fetch --tags

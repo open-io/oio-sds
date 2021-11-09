@@ -80,10 +80,9 @@ Then follow those steps to setup the automated test suite environment:
 
   virtualenv venv-tests
   source venv-tests/bin/activate
-  pip install -r all-requirements.txt
   pip install -r test-requirements.txt
   # Some tests run the "openio" CLI, so install it (from sources)
-  python setup.py install
+  pip install -e ${SRCDIR}
 
 ## Launching tests
 
