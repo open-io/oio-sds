@@ -266,6 +266,7 @@ class ContainerSharding(ProxyClient):
 
         # Make sure to use up-to-date information
         self.force_master = True
+        kwargs['force_master'] = True
 
         self.admin = AdminClient(
             self.conf, pool_manager=self.pool_manager, logger=self.logger,
