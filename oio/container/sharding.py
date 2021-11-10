@@ -959,6 +959,32 @@ class ContainerSharding(ProxyClient):
 
     def _almost_safe_shard_container(self, root_account, root_container,
                                      parent_shard, new_shards, **kwargs):
+        root_cid = cid_from_name(root_account, root_container)
+        if parent_shard['cid'] != root_cid:
+            # Check if the parent shard belongs to the root container
+            meta = self.container.container_get_properties(
+                cid=parent_shard['cid'], **kwargs)
+            sys = meta['system']
+            if int_value(sys.get(M2_PROP_SHARDS), 0):
+                raise ValueError('It is a root container')
+            root_cid_, shard_ = self.meta_to_shard(meta)
+            if root_cid_ is None:
+                raise ValueError('Not a shard')
+            if root_cid is None:
+                root_cid = root_cid_
+            elif root_cid_ != root_cid:
+                raise ValueError('Root containers are different')
+            if not self._shards_equal(parent_shard, shard_):
+                raise ValueError(
+                    'Mismatch between current shard(s) and given shard(s)')
+            shard_list = list(self.show_shards(
+                None, None, root_cid=root_cid, limit=1, no_paging=False,
+                marker=parent_shard['lower'], **kwargs))
+            if not shard_list or not self._shards_equal(shard_list[0],
+                                                        parent_shard):
+                raise ValueError('Shard %s not in root %s' %
+                                 (parent_shard['cid'], root_cid))
+
         try:
             self._shard_container(root_account, root_container,
                                   parent_shard, new_shards, **kwargs)
