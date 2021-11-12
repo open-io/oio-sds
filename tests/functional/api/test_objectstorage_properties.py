@@ -1,4 +1,5 @@
 # Copyright (C) 2018-2019 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -66,23 +67,27 @@ class ObjectStoragePropertiesTest(BaseTestCase):
         self.assertDictEqual(data['properties'], {})
         self.api.account_delete(aname)
 
-    def test_account_set_properties_65535(self):
-        self._test_set_account_property_with_size(vsize=65535)
+    # redis max key/value 65535/1Mi
+    FDB_MAX_KEY = 10000 - 150  # as we have namespace + account_name etc in key
+    FDB_MAX_VAL = 100000
 
-    def test_account_set_properties_65536(self):
-        self._test_set_account_property_with_size(vsize=65536)
+    def test_account_set_properties_near_max_value(self):
+        self._test_set_account_property_with_size(vsize=self.FDB_MAX_VAL - 1)
 
-    def test_account_set_properties_1Mi(self):
-        self._test_set_account_property_with_size(vsize=1024*1024)
+    def test_account_set_properties_max_value(self):
+        self._test_set_account_property_with_size(vsize=self.FDB_MAX_VAL)
 
-    def test_account_set_properties_key_65535(self):
-        self._test_set_account_property_with_size(ksize=65535)
+    # def test_account_set_properties_1Mi(self):
+    #    self._test_set_account_property_with_size(vsize=1024*1024)
 
-    def test_account_set_properties_key_65536(self):
-        self._test_set_account_property_with_size(ksize=65536)
+    def test_account_set_properties_near_max_key(self):
+        self._test_set_account_property_with_size(ksize=self.FDB_MAX_KEY - 1)
 
-    def test_account_set_properties_key_1Mi(self):
-        self._test_set_account_property_with_size(ksize=1024*1024)
+    def test_account_set_properties_max_key(self):
+        self._test_set_account_property_with_size(ksize=self.FDB_MAX_KEY)
+
+    # def test_account_set_properties_key_1Mi(self):
+    #    self._test_set_account_property_with_size(ksize=1024*1024)
 
     def test_account_set_many_properties(self):
         aname = 'test_account_many_properties_' + random_str(8)
