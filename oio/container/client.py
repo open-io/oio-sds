@@ -295,6 +295,31 @@ class ContainerClient(ProxyClient):
         except exceptions.Conflict as exc:
             raise exceptions.ContainerNotEmpty(exc)
 
+    def container_drain(self, account=None, reference=None,
+                        cid=None, **kwargs):
+        """
+        Drain a container.
+
+        :param account: account from which to drain the container
+        :type account: `str`
+        :param reference: name of the container
+        :type reference: `str`
+        :param cid: container id that can be used instead of account
+            and reference
+        :type cid: `str`
+        :keyword headers: extra headers to send to the proxy
+        :type headers: `dict`
+        """
+        params = self._make_params(account, reference, cid=cid)
+
+        del_cached_container_metadata(
+            account=account, reference=reference, cid=cid, **kwargs)
+
+        resp, body = self._request('POST', '/drain', params=params, **kwargs)
+
+        if resp.status != 204:
+            raise exceptions.from_response(resp, body)
+
     def container_show(self, account=None, reference=None, cid=None, **kwargs):
         """
         Get information about a container (like user properties).

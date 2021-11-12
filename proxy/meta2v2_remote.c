@@ -186,6 +186,12 @@ m2v2_remote_pack_DESTROY(struct oio_url_s *url, guint32 flags, gint64 dl)
 }
 
 GByteArray*
+m2v2_remote_pack_container_DRAIN(struct oio_url_s *url, gint64 dl)
+{
+	return _m2v2_pack_request(NAME_MSGNAME_M2V2_CONTAINER_DRAIN, url, NULL, dl);
+}
+
+GByteArray*
 m2v2_remote_pack_FLUSH(struct oio_url_s *url, gint64 dl)
 {
 	return _m2v2_pack_request(NAME_MSGNAME_M2V2_FLUSH, url, NULL, dl);

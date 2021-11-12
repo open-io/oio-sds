@@ -1424,6 +1424,16 @@ action_m2_container_flush (struct req_args_s *args, struct json_object *j UNUSED
 }
 
 static enum http_rc_e
+action_m2_container_drain(struct req_args_s *args, struct json_object *j UNUSED)
+{
+	PACKER_VOID(_pack) { return m2v2_remote_pack_container_DRAIN (args->url, DL()); }
+	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
+	if (NULL != err)
+		return _reply_common_error (args, err);
+	return _reply_success_json (args, NULL);
+}
+
+static enum http_rc_e
 action_m2_container_dedup (struct req_args_s *args, struct json_object *j UNUSED)
 {
 	PACKER_VOID(_pack) { return m2v2_remote_pack_DEDUP (args->url, DL()); }
@@ -2247,6 +2257,32 @@ enum http_rc_e action_container_create (struct req_args_s *args) {
 // }}CONTAINER
 enum http_rc_e action_container_destroy (struct req_args_s *args) {
 	return action_m2_container_destroy (args);
+}
+
+// CONTAINER{{
+// POST /v3.0/{NS}/container/drain?acct={account}&ref={container}
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//
+// Remove all the objects of a container but keep the properties. We can
+// replace the data or the properties of the content but no action needing
+// the removed chunks are accepted.
+//
+// .. code-block:: http
+//
+//    POST /v3.0/OPENIO/container/drain?acct=my_account&ref=mycontainer HTTP/1.1
+//    Host: 127.0.0.1:6000
+//    User-Agent: curl/7.68.0
+//    Accept: */*
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 204 No Content
+//    Connection: Close
+//    Content-Length: 0
+//
+// }}CONTAINER
+enum http_rc_e action_container_drain(struct req_args_s *args) {
+	return rest_action(args, action_m2_container_drain);
 }
 
 // CONTAINER{{

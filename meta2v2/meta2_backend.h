@@ -92,6 +92,9 @@ GError* meta2_backend_flush_container(struct meta2_backend_s *m2,
 GError* meta2_backend_purge_container(struct meta2_backend_s *m2,
 		struct oio_url_s *url, gint64 *pmaxvers, m2_onbean_cb cb, gpointer u0);
 
+GError *meta2_backend_drain_container(struct meta2_backend_s *m2,
+		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0);
+
 /* -------------------------------------------------------------------------- */
 
 GError* meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,

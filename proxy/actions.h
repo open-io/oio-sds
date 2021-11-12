@@ -78,6 +78,7 @@ enum http_rc_e action_container_snapshot(struct req_args_s *args);
 enum http_rc_e action_container_create_many (struct req_args_s *args);
 enum http_rc_e action_container_create (struct req_args_s *args);
 enum http_rc_e action_container_destroy (struct req_args_s *args);
+enum http_rc_e action_container_drain(struct req_args_s *args);
 enum http_rc_e action_container_show (struct req_args_s *args);
 enum http_rc_e action_container_list (struct req_args_s *args);
 enum http_rc_e action_container_prop_get (struct req_args_s *args);

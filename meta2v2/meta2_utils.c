@@ -475,6 +475,61 @@ m2db_get_sharding_upper(struct sqlx_sqlite3_s *sq3, gchar **result)
 	return NULL;
 }
 
+gint64
+m2db_get_drain_obj_count(struct sqlx_sqlite3_s *sq3)
+{
+	return sqlx_admin_get_i64(sq3, M2V2_ADMIN_DRAINING_OBJ_COUNT, 0);
+}
+
+void
+m2db_set_drain_obj_count(struct sqlx_sqlite3_s *sq3, gint64 count)
+{
+	sqlx_admin_set_i64(sq3, M2V2_ADMIN_DRAINING_OBJ_COUNT, (count>0)?count:0);
+}
+
+void
+m2db_del_drain_obj_count(struct sqlx_sqlite3_s *sq3)
+{
+	sqlx_admin_del(sq3, M2V2_ADMIN_DRAINING_OBJ_COUNT);
+}
+
+gint64
+m2db_get_drain_state(struct sqlx_sqlite3_s *sq3)
+{
+	return sqlx_admin_get_i64(sq3, M2V2_ADMIN_DRAINING_STATE, 0);
+}
+
+void
+m2db_set_drain_state(struct sqlx_sqlite3_s *sq3, gint64 state)
+{
+	sqlx_admin_set_i64(sq3, M2V2_ADMIN_DRAINING_STATE, (state>0)?state:0);
+}
+
+void
+m2db_del_drain_state(struct sqlx_sqlite3_s *sq3)
+{
+	sqlx_admin_del(sq3, M2V2_ADMIN_DRAINING_STATE);
+}
+
+gint64
+m2db_get_drain_timestamp(struct sqlx_sqlite3_s *sq3)
+{
+	return sqlx_admin_get_i64(sq3, M2V2_ADMIN_DRAINING_TIMESTAMP, 0);
+}
+
+void
+m2db_set_drain_timestamp(struct sqlx_sqlite3_s *sq3, gint64 timestamp)
+{
+	sqlx_admin_set_i64(sq3, M2V2_ADMIN_DRAINING_TIMESTAMP,
+			(timestamp>0)?timestamp:0);
+}
+
+void
+m2db_del_drain_timestamp(struct sqlx_sqlite3_s *sq3)
+{
+	sqlx_admin_del(sq3, M2V2_ADMIN_DRAINING_TIMESTAMP);
+}
+
 /* GET ---------------------------------------------------------------------- */
 
 static void
@@ -3276,6 +3331,97 @@ m2db_flush_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0,
 		m2db_set_size(sq3, 0);
 		m2db_set_obj_count(sq3, 0);
 	}
+
+	return err;
+}
+
+static GError*
+_real_drain_beans(struct sqlx_sqlite3_s *sq3, GSList *beans,
+				  m2_onbean_cb cb, gpointer u0)
+{
+	GError *err = NULL;
+
+	for (GSList *bean = beans; bean && ! err; bean = bean->next) {
+		if (DESCR(bean->data) == &descr_struct_CHUNKS) {
+			err = _db_delete_bean(sq3, bean->data);
+		} else if (DESCR(bean->data) == &descr_struct_CONTENTS_HEADERS) {
+			CONTENTS_HEADERS_set2_chunk_method(bean->data, CHUNK_METHOD_DRAINED);
+			err = _db_save_bean(sq3, bean->data);
+		}
+	}
+	if (err) {
+		_bean_cleanl2(beans);
+	} else {
+		for (GSList *l = beans; l; l = l->next) {
+			cb(u0, l->data);
+		}
+		g_slist_free(beans);
+	}
+
+	return err;
+}
+
+GError*
+m2db_drain_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0)
+{
+	GError *err = NULL;
+	gint64 obj_count = 0;
+	gint64 drain_count = 0;
+
+	GPtrArray *tmp = g_ptr_array_new();
+	g_ptr_array_add(tmp, NULL);
+	GSList *beans = NULL;
+	GSList *deleted_beans = NULL;
+
+	GPtrArray *aliases = g_ptr_array_new();
+	GVariant *params[3] = {NULL};
+	gchar clause[1] = "1";
+
+	err = ALIASES_load(sq3, clause, params, _bean_buffer_cb, aliases);
+	metautils_gvariant_unrefv(params);
+
+	for (guint i = 0; !err && i < aliases->len; i++) {
+		tmp->pdata[0] = aliases->pdata[i];
+		beans = NULL;
+		deleted_beans = NULL;
+
+		err = _alias_fetch_info(sq3, 0, tmp, _bean_list_cb, &beans);
+		if (!err) {
+			if (cb) {
+				err = _real_drain_beans(sq3, beans, _bean_list_cb, &deleted_beans);
+				if (deleted_beans != NULL) {
+					cb(u0, deleted_beans);
+				}
+			} else {
+				err = _real_drain_beans(sq3, beans, NULL, NULL);
+			}
+			drain_count ++;
+		}
+
+		aliases->pdata[i] = NULL;
+	}
+
+	obj_count = m2db_get_obj_count(sq3);
+
+	if (drain_count < obj_count) {
+		GRID_DEBUG("Draining not over yet: %ld/%ld", drain_count, obj_count);
+		m2db_set_drain_state(sq3, DRAINING_STATE_IN_PROGRESS);
+		m2db_set_drain_timestamp(sq3, oio_ext_real_time());
+		m2db_set_drain_obj_count(sq3, drain_count);
+	} else if (drain_count == obj_count) {
+		GRID_DEBUG("Container is drained");
+		/* Delete all temporary properties (objects are marked as drained
+		 * individually) */
+		m2db_del_drain_state(sq3);
+		m2db_del_drain_timestamp(sq3);
+		m2db_del_drain_obj_count(sq3);
+	} else {
+		err = SYSERR("More objects drained than in the container");
+	}
+
+	tmp->pdata[0] = NULL;
+	g_ptr_array_free(tmp, TRUE);
+	_bean_cleanv2(aliases);
 
 	return err;
 }

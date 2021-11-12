@@ -105,6 +105,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define M2V2_ADMIN_DRAINING_STATE M2V2_ADMIN_PREFIX_DRAINING "state"
 # endif
 
+# ifndef M2V2_ADMIN_DRAINING_OBJ_COUNT
+# define M2V2_ADMIN_DRAINING_OBJ_COUNT M2V2_ADMIN_PREFIX_DRAINING "objects"
+# endif
+
+# ifndef M2V2_ADMIN_DRAINING_TIMESTAMP
+# define M2V2_ADMIN_DRAINING_TIMESTAMP M2V2_ADMIN_PREFIX_DRAINING "timestamp"
+# endif
+
 # ifndef M2V2_ADMIN_CTIME
 # define M2V2_ADMIN_CTIME M2V2_ADMIN_PREFIX_SYS "ctime"
 # endif
@@ -151,6 +159,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define NAME_MSGNAME_M2V2_APPEND           "M2_APPEND"
 # define NAME_MSGNAME_M2V2_GET              "M2_GET"
 # define NAME_MSGNAME_M2V2_CONTENT_DRAIN    "M2_DRAIN"
+# define NAME_MSGNAME_M2V2_CONTAINER_DRAIN  "M2_BDRAIN"
 # define NAME_MSGNAME_M2V2_DEL              "M2_DEL"
 # define NAME_MSGNAME_M2V2_TRUNC            "M2_TRUNC"
 # define NAME_MSGNAME_M2V2_LIST             "M2_LST"

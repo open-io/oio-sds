@@ -202,6 +202,34 @@ meta2_filter_action_flush_container(struct gridd_filter_ctx_s *ctx,
 	return FILTER_KO;
 }
 
+int
+meta2_filter_action_drain_container(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply UNUSED)
+{
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+	GSList *beans_list_list = NULL;
+
+	GError *err = meta2_backend_drain_container(m2b, url, _bean_list_cb,
+												&beans_list_list);
+
+	if (err != NULL) {
+		GRID_DEBUG("Container drain failed (%d): %s", err->code, err->message);
+		meta2_filter_ctx_set_error(ctx, err);
+		g_slist_free(beans_list_list);
+		return FILTER_KO;
+	}
+
+	for (GSList *bean = beans_list_list; bean; bean = bean->next) {
+		_m2b_notify_beans(m2b->notifier_content_deleted, url, bean->data,
+				"content.drained", TRUE);
+		_bean_cleanl2(bean->data);
+	}
+	g_slist_free(beans_list_list);
+
+	return FILTER_OK;
+}
+
 #define S3_RESPONSE_HEADER(FieldName, Var) do { \
 	if (NULL != (Var)) \
 		reply->add_header((FieldName), metautils_gba_from_string(Var)); \

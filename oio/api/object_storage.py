@@ -361,6 +361,21 @@ class ObjectStorageApi(object):
                 raise exc.OioException(
                     'None of the %d objects could be deleted' % len(deleted))
 
+    @handle_container_not_found
+    @patch_kwargs
+    @ensure_headers
+    @ensure_request_id
+    def container_drain(self, account, container, **kwargs):
+        """
+        Flush a container
+
+        :param account: account from which to drain the container
+        :type account: `str`
+        :param container: name of the container
+        :type container: `str`
+        """
+        self.container.container_drain(account, container, **kwargs)
+
     @handle_account_not_found
     @patch_kwargs
     @ensure_headers

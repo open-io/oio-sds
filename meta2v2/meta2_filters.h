@@ -95,6 +95,7 @@ M2V2_DECLARE_FILTER(meta2_filter_action_has_container);
 M2V2_DECLARE_FILTER(meta2_filter_action_delete_container);
 M2V2_DECLARE_FILTER(meta2_filter_action_purge_container);
 M2V2_DECLARE_FILTER(meta2_filter_action_flush_container);
+M2V2_DECLARE_FILTER(meta2_filter_action_drain_container);
 M2V2_DECLARE_FILTER(meta2_filter_action_list_contents);
 M2V2_DECLARE_FILTER(meta2_filter_action_list_by_chunk_id);
 M2V2_DECLARE_FILTER(meta2_filter_action_list_by_header_id);

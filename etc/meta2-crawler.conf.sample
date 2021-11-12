@@ -22,7 +22,7 @@ log_address = /dev/log
 syslog_prefix = OIO,OPENIO,meta2-crawler,1
 
 [pipeline:main]
-pipeline = logger auto_vacuum auto_sharding
+pipeline = logger draining auto_vacuum auto_sharding
 
 [filter:auto_sharding]
 # Trigger the sharding for given container.
@@ -69,3 +69,7 @@ hard_max_unused_pages_ratio = 0.2
 [filter:logger]
 # Log info for for given container.
 use = egg:oio#logger
+
+[filter:draining]
+# Trigger the draining for a given container.
+use = egg:oio#draining

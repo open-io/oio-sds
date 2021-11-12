@@ -53,6 +53,10 @@ GError* m2v2_remote_execute_DESTROY(
 		struct oio_url_s *url,
 		guint32 flags);
 
+GByteArray* m2v2_remote_pack_container_DRAIN(
+		struct oio_url_s *url,
+		gint64 deadline);
+
 /* deadline known from thread-local
  * Locally destroy a container on several services. */
 GError* m2v2_remote_execute_DESTROY_many(

@@ -1333,6 +1333,29 @@ meta2_backend_purge_container(struct meta2_backend_s *m2, struct oio_url_s *url,
 	return err;
 }
 
+GError *
+meta2_backend_drain_container(struct meta2_backend_s *m2, struct oio_url_s *url,
+		m2_onbean_cb cb, gpointer u0)
+{
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	struct sqlx_repctx_s *repctx = NULL;
+
+	err = m2b_open(m2, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED
+			|M2V2_OPEN_FROZEN, &sq3);
+	if (!err) {
+		EXTRA_ASSERT(sq3 != NULL);
+		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
+			err = m2db_drain_container(sq3, cb, u0);
+			err = sqlx_transaction_end(repctx, err);
+		}
+
+		m2b_close(sq3, url);
+	}
+
+	return err;
+}
+
 /* Contents --------------------------------------------------------------- */
 
 GError*
