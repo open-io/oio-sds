@@ -100,6 +100,8 @@ class Account(WerkzeugApp):
                  methods=['PUT']),
             Rule('/v1.0/account/get-bucket-owner', endpoint='bucket_owner_get',
                  methods=['GET']),
+            Rule('/v1.0/account/metrics', endpoint='account_metrics',
+                 methods=['GET']),
             # Buckets
             Rule('/v1.0/bucket/show', endpoint='bucket_show',
                  methods=['GET']),
@@ -689,6 +691,49 @@ class Account(WerkzeugApp):
         account_id = self._get_account_id(req)
         self.backend.flush_account(account_id, **kwargs)
         return Response(status=204)
+
+    # ACCT{{
+    # GET /v1.0/account/metrics
+    # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    #
+    # Get metrics of specified account.
+    #
+    # Sample request:
+    #
+    # .. code-block:: http
+    #
+    #    GET /v1.0/account/metrics HTTP/1.1
+    #    Host: 127.0.0.1:6013
+    #    User-Agent: curl/7.47.0
+    #    Accept: */*
+    #
+    # Sample response:
+    #
+    # .. code-block:: http
+    #
+    #    HTTP/1.1 200 OK
+    #    Server: gunicorn/19.9.0
+    #    Date: Wed, 01 Aug 2018 12:17:25 GMT
+    #    Connection: keep-alive
+    #    Content-Type: application/json
+    #    Content-Length: 122
+    #
+    # .. code-block:: json
+    # {
+    #   "nb-accounts": 14,
+    #   "nb-buckets": {"RegionOne": 4},
+    #   "nb-containers": {"RegionOne": 15},
+    #   "nb-objects": {"RegionOne": {"highperf": 0}}
+    # }
+    # TODO format of response
+    #
+    # }}ACCT
+    @force_master
+    def on_account_metrics(self, req, **kwargs):
+        raw = self.backend.info_metrics(**kwargs)
+        if raw is not None:
+            return Response(json.dumps(raw), mimetype=HTTP_CONTENT_TYPE_JSON)
+        return NotFound('Account not found')
 
     # ACCT{{
     # PUT /v1.0/bucket/reserve-bucket?id=bucket_name

@@ -81,6 +81,13 @@ class AccountClient(ServiceClient):
             account, 'PUT', 'update',
             json={"metadata": metadata, "to_delete": to_delete}, **kwargs)
 
+    def account_metrics(self, **kwargs):
+        """
+        Metrics of an account.
+        """
+        _resp, body = self.account_request(None, 'GET', 'metrics', **kwargs)
+        return body
+
     def bucket_list(self, account, limit=None, marker=None,
                     prefix=None, **kwargs):
         """

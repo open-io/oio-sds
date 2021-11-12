@@ -46,6 +46,8 @@ METADATA_PREFIX = 'metadata:'
 
 BUCKET_RESERVE_PREFIX = 's3bucket:'
 
+METRICS_PREFIX = 'metrics:'
+
 
 def catch_service_errors(func):
     """
@@ -144,6 +146,8 @@ class AccountBackendFdb():
         self.metadata_subspace = fdb.Subspace((METADATA_PREFIX,))
 
         self.default_location = self.conf.get('default_location', '')
+
+        self.metrics_space = fdb.Subspace((METRICS_PREFIX,))
 
     @catch_service_errors
     def create_account(self, account_id, **kwargs):
@@ -565,10 +569,89 @@ class AccountBackendFdb():
             # TODO check if account is timestamp, (shouldn't happen)
             return {'account': account_}
 
+    @catch_service_errors
+    def info_metrics(self, **kwargs):
+        metrics = dict()
+        # generic metrics:
+        # number of accounts
+        # number of buckets per region
+        # number of containers per region
+        # number of objects per region /storage policy
+        metrics = self._read_all_metrics(self.db)
+
+        return debinarize(metrics)
+
+    @fdb.transactional
+    def _read_all_metrics(self, tr):
+        metrics = dict()
+        metrics['nb-accounts'] = self._read_account_metrics(tr)
+        metrics['nb-buckets'] = self._read_buckets_metrics(tr)
+        metrics['nb-containers'] = self._read_containers_metrics(tr)
+        metrics['nb-objects'] = self._read_objects_metrics(tr)
+        self.logger.info('metrics:', metrics)
+
+        return metrics
+
+    @fdb.transactional
+    def _read_account_metrics(self, tr):
+        nb_accts = tr[self.metrics_space.pack(('nb-accounts',))]
+        if nb_accts is None:
+            nb_accts = 0
+        else:
+            nb_accts = int.from_bytes(nb_accts, byteorder='little')
+        return nb_accts
+
+    @fdb.transactional
+    def _read_buckets_metrics(self, tr):
+        metrics_buckets = dict()
+        bucket_metrics_space = fdb.Subspace(('metrics:', 'nb-buckets'))
+        b_metrics_range = bucket_metrics_space.range()
+        iterator = tr.get_range(b_metrics_range.start, b_metrics_range.stop,
+                                reverse=False)
+        for key, value in iterator:
+            _, _, region = unpack(key)
+            metrics_buckets[region] = int.from_bytes(value, byteorder='little')
+        return metrics_buckets
+
+    @fdb.transactional
+    def _read_containers_metrics(self, tr):
+        metrics_containers = dict()
+        ct_metrics_space = fdb.Subspace(('metrics:', 'nb-containers'))
+        ct_metrics_range = ct_metrics_space.range()
+
+        iterator = tr.get_range(ct_metrics_range.start, ct_metrics_range.stop,
+                                reverse=False)
+        for key, value in iterator:
+            _, _, region = unpack(key)
+            metrics_containers[region] = int.from_bytes(value,
+                                                        byteorder='little')
+        return metrics_containers
+
+    @fdb.transactional
+    def _read_objects_metrics(self, tr):
+        metrics_objects = dict()
+        ct_metrics_space = fdb.Subspace(('metrics:', 'nb-objects'))
+        ct_metrics_range = ct_metrics_space.range()
+
+        iterator = tr.get_range(ct_metrics_range.start, ct_metrics_range.stop,
+                                reverse=False)
+        for key, value in iterator:
+            _, _, region = unpack(key)
+            metrics_objects[region] = int.from_bytes(value, byteorder='little')
+        return metrics_objects
+
+    @fdb.transactional
+    def _increment(self, tr, counter, incr_by=1):
+        tr.add(counter, struct.pack('<i', incr_by))
+
+    @fdb.transactional
+    def _decrement(self, tr, counter, decr_by=-1):
+        tr.add(counter, struct.pack('<i', decr_by))
+
     @fdb.transactional
     def _flush_account(self, tr, account_id):
         tr[self.acct_space.pack((account_id, 'objects'))] = \
-            struct.pack('<i', 0)
+           struct.pack('<i', 0)
         tr[self.acct_space.pack((account_id, 'bytes'))] = struct.pack('<i', 0)
         tr.clear_range_startswith(fdb.Subspace((self._containers_list_prefix,
                                                 account_id)))
@@ -586,6 +669,9 @@ class AccountBackendFdb():
         tr[acct_space.pack((account_id, 'objects'))] = struct.pack('<i', 0)
         tr[acct_space.pack((account_id, 'bytes'))] = struct.pack('<i', 0)
         tr[acct_space.pack((account_id, 'ctime'))] = bytes(str(now), 'utf-8')
+
+        # metrics
+        self._increment(tr, self.metrics_space.pack(('nb-accounts',)))
         return True
 
     @fdb.transactional
@@ -609,6 +695,8 @@ class AccountBackendFdb():
         tr.clear_range_startswith(self.metadata_subspace[account_id])
         # tr.clear_range_startswith(self.ct_space[account_id])
         tr.clear_range_startswith(self.cts_space[account_id])
+        self._decrement(tr, self.metrics_space.pack(('nb-accounts',)))
+        return True
 
     @fdb.transactional
     def _list_accounts(self, tr):
@@ -679,7 +767,7 @@ class AccountBackendFdb():
         elif new_mtime < deleted_time:
             # TODO clear following keys in a method like status or in
             # separate crawler:
-            # ct-to-delete:accountid,contaienrid,deleted
+            # ct-to-delete:accountid,containerid,deleted
 
             return 'no_container'
         else:  # real creation
@@ -717,6 +805,9 @@ class AccountBackendFdb():
                 tr.clear_range_startswith(cts_space.pack((cname,)))
                 tr[to_delete_space.pack((cname, 'deleted'))] = dtime
 
+                # metrics
+                self._decrement(tr, self.metrics_space.pack(
+                            ('nb-containers', bucket_location)))
                 deleted = True
 
             elif mtime > old_mtime:
@@ -730,6 +821,10 @@ class AccountBackendFdb():
                 tr[ct_space.pack((cname, 'name'))] = bytes(str(cname), 'utf-8')
                 tr[ct_space.pack((cname, 'mtime'))] = mtime
                 tr[ct_space.pack((cname, 'dtime'))] = dtime
+
+                # metrics
+                self._increment(tr, self.metrics_space.pack(
+                                ('nb-containers', bucket_location)))
             else:
                 return 'no_update_needed'
 
@@ -741,6 +836,9 @@ class AccountBackendFdb():
             if inc_bytes != 0:
                 tr.add(self.acct_space.pack((account_id, 'bytes')),
                        struct.pack('<i', inc_bytes))
+
+            self._increment(tr, self.metrics_space.pack(
+                            ('nb-objects', bucket_location)), inc_objects)
 
             # define bname here
             current_bucket_name = self._val_element(self.db, ct_space, cname,
@@ -773,6 +871,10 @@ class AccountBackendFdb():
                         # Also delete the bucket
                         tr.clear_range_startswith(
                             self.b_space.pack((bucket_name,)))
+
+                        # decrements metrics
+                        self._decrement(tr, self.metrics_space.pack(
+                                    ('nb-buckets', bucket_location)))
                         return
 
                     # We used to return here. But since we delete shard before
@@ -828,6 +930,9 @@ class AccountBackendFdb():
                     tr[self.bs_space.pack((account_id, bucket_name))] = b'0'
                     tr[self.bs_space.pack((bucket_location, bucket_name))] = \
                         b'0'
+                    # increments metrics
+                    self._increment(tr, self.metrics_space.pack(
+                                    ('nb-buckets', bucket_location)))
         else:
             return 'no_update_needed'
         return 'updated'
