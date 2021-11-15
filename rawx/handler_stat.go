@@ -253,7 +253,6 @@ func doGetStatsPrometheus(rr *rawxRequest) {
 		default:
 			continue
 		}
-		bb.WriteString("_total")
 		bb.WriteRune(' ')
 		bb.WriteString(utoa(value.(uint64)))
 		bb.WriteRune('\n')
