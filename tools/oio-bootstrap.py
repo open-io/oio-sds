@@ -973,17 +973,16 @@ WantedBy=${PARENT}
 
 template_systemd_service_meta2_crawler = """
 [Unit]
-Description=[OpenIO] Service meta2 indexer
+Description=[OpenIO] Service meta2 crawler
 After=network.target
 PartOf=${PARENT}
-OioGroup=${NS},localhost,${SRVTYPE},${IP}:${PORT}
+OioGroup=${NS},localhost,${SRVTYPE}
 
 [Service]
 ${SERVICEUSER}
 ${SERVICEGROUP}
 Type=simple
 ExecStart=${EXE} ${CFGDIR}/${NS}-${SRVTYPE}-${SRVNUM}.conf
-ExecStartPost=/usr/bin/timeout 30 sh -c 'while ! ss -H -t -l -n sport = :${PORT} | grep -q "^LISTEN.*:${PORT}"; do sleep 1; done'
 Environment=LD_LIBRARY_PATH=${LIBDIR}
 Environment=HOME=${HOME}
 
