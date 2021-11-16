@@ -2,6 +2,7 @@
 OpenIO SDS core library
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -47,7 +48,8 @@ enum oio_url_field_e
 	OIOURL_HEXID = 8,  /* read-write */
 	OIOURL_CONTENTID = 9,  /* read-write */
 
-	OIOURL_FULLPATH = 10
+	OIOURL_FULLPATH = 10,
+	OIOURL_ROOT_HEXID = 11,
 };
 
 /** One plus the maximum length of a namespace name
@@ -150,10 +152,10 @@ const void* oio_url_get_id(struct oio_url_s *u);
 /* returns the number of bytes */
 size_t oio_url_get_id_size(struct oio_url_s *u);
 
-/** Returns wether all the mandatory components for a path are present */
+/** Returns whether all the mandatory components for a path are present */
 int oio_url_has_fq_path (const struct oio_url_s *u);
 
-/** Returns wether all the mandatory components for a container are present */
+/** Returns whether all the mandatory components for a container are present */
 int oio_url_has_fq_container (const struct oio_url_s *u);
 
 /** Validate contains of oio_url

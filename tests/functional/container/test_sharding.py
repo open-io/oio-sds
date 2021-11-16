@@ -42,6 +42,16 @@ class TestShardingBase(BaseTestCase):
         self.beanstalkd0.drain_tube('oio-preserved')
         self.container_sharding = ContainerSharding(self.conf)
 
+        services = self.conscience.all_services('rawx')
+        self.rawx_volumes = dict()
+        for rawx in services:
+            tags = rawx['tags']
+            service_id = tags.get('tag.service_id', None)
+            if service_id is None:
+                service_id = rawx['addr']
+            volume = tags.get('tag.vol', None)
+            self.rawx_volumes[service_id] = volume
+
     def _create(self, name, properties=None):
         return self.storage.container_create(self.account, name,
                                              properties=properties)
@@ -194,6 +204,7 @@ class TestSharding(TestShardingBase):
 
     def test_delete_objects_from_shards(self):
         nb_obj_to_add = 9
+        chunk_urls = []
         self._create(self.cname)
         self._add_objects(self.cname, nb_obj_to_add)
 
@@ -207,15 +218,32 @@ class TestSharding(TestShardingBase):
         shards = self.container_sharding.show_shards(self.account, self.cname)
         self.assertEqual(len(list(shards)), 2)  # two shards
 
-        # random objec to remove
+        # random object to remove
         file_id = random.randrange(nb_obj_to_add)
-
         file_name = str(file_id) + 'content'
+
+        # Get all chunks urls before removal
+        _, chunks = self.storage.object_locate(self.account, self.cname,
+                                               file_name)
+        for chunk in chunks:
+            chunk_urls.append(chunk['url'])
+
         self.logger.info('file to delete %s', file_name)
-        self.storage.object_delete(self.account, self.cname, obj=file_name)
+        self.storage.object_delete(self.account, self.cname, obj=file_name,
+                                   reqid='delete-from-shards')
         self.created.remove(file_name)
 
         self._check_total_objects(nb_obj_to_add - 1)
+
+        # Check that all chunk urls are matching expected ones
+        event = self.wait_for_event('oio-preserved',
+                                    reqid='delete-from-shards',
+                                    types=(EventTypes.CONTENT_DELETED,))
+        self.assertIsNotNone(event)
+        for event_data in event.data:
+            if event_data.get('type') == 'chunks':
+                chunk_urls.remove(event_data.get('id'))
+        self.assertEqual(0, len(chunk_urls))
 
         ct_show = self.storage.object_list(self.account, self.cname)
         for obj in ct_show['objects']:

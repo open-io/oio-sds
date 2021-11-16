@@ -1,6 +1,7 @@
 /*
 OpenIO SDS core library
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -37,6 +38,7 @@ struct oio_url_s
 	gchar *fullpath;
 	guint8 id[32];
 	gchar hexid[65];
+	gchar root_hexid[65];
 	guint8 flags;
 };
 

@@ -364,7 +364,7 @@ _is_container_initiated(struct sqlx_sqlite3_s *sq3)
 
 	/* workaround for a known bug, when the container has no flag because
 	 * of some failed replication (yet to be determined) but it is used
-	 * because of a (now-fixed) inexistant check on the flag. */
+	 * because of a (now-fixed) inexistent check on the flag. */
 	if (sqlx_admin_has(sq3, M2V2_ADMIN_OBJ_COUNT)
 			|| sqlx_admin_has(sq3, M2V2_ADMIN_SIZE)) {
 		GRID_DEBUG("DB partially initiated: [%s][%.s]",
@@ -545,6 +545,13 @@ m2b_open_with_args(struct meta2_backend_s *m2, struct oio_url_s *url,
 	set (SQLX_ADMIN_NAMESPACE, OIOURL_NS);
 	set (SQLX_ADMIN_ACCOUNT, OIOURL_ACCOUNT);
 	set (SQLX_ADMIN_USERNAME, OIOURL_USER);
+
+	gchar *root_hexid = sqlx_admin_get_str(sq3, M2V2_ADMIN_SHARDING_ROOT);
+	if (root_hexid != NULL) {
+		oio_url_set(url, OIOURL_ROOT_HEXID, root_hexid);
+	} else {
+		oio_url_unset(url, OIOURL_ROOT_HEXID);
+	}
 
 	*result = sq3;
 	return NULL;

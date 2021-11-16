@@ -108,6 +108,7 @@ _clean_url (struct oio_url_s *u)
 	oio_str_clean(&u->whole);
 	oio_str_clean(&u->fullpath);
 	u->hexid[0] = '\0';
+	u->root_hexid[0] = '\0';
 	u->flags = 0;
 }
 
@@ -238,6 +239,7 @@ oio_url_dup(const struct oio_url_s *u)
 	STRDUP(result, u, whole);
 	STRDUP(result, u, content);
 	STRDUP(result, u, fullpath);
+	g_strlcpy(result->root_hexid, u->root_hexid, sizeof(result->root_hexid));
 	return result;
 }
 
@@ -292,6 +294,10 @@ oio_url_set(struct oio_url_s *u, enum oio_url_field_e f, const char *v)
 				return u;
 			}
 			return NULL;
+
+		case OIOURL_ROOT_HEXID:
+			g_strlcpy(u->root_hexid, v, sizeof(u->root_hexid));
+			return u;
 
 		case OIOURL_CONTENTID:
 			if (!oio_str_ishexa1(v))
@@ -348,6 +354,10 @@ oio_url_unset(struct oio_url_s *u, enum oio_url_field_e f)
 			u->hexid[0] = 0;
 			return;
 
+		case OIOURL_ROOT_HEXID:
+			u->root_hexid[0] = 0;
+			return;
+
 		case OIOURL_CONTENTID:
 			oio_str_clean(&u->content);
 			oio_str_clean(&u->fullpath);
@@ -380,6 +390,8 @@ oio_url_has(const struct oio_url_s *u, enum oio_url_field_e f)
 			return TRUE;
 		case OIOURL_HEXID:
 			return (u->ns[0] && u->hexid[0]) || (u->ns[0] && u->user[0]);
+		case OIOURL_ROOT_HEXID:
+			return oio_str_is_set(u->root_hexid);
 		case OIOURL_CONTENTID:
 			return NULL != u->content;
 	}
@@ -460,6 +472,15 @@ oio_url_get(struct oio_url_s *u, enum oio_url_field_e f)
 			}
 			return u->hexid;
 
+		case OIOURL_ROOT_HEXID:
+			/* Returns the root_hexid if it exists
+			 * Otherwise, returns the hexid.
+			 */
+			if (!oio_str_is_set(u->root_hexid)) {
+				return oio_url_get(u, OIOURL_HEXID);
+			}
+			return u->root_hexid;
+
 		case OIOURL_CONTENTID:
 			return u->content;
 
@@ -495,7 +516,7 @@ oio_url_compute_chunk_id(struct oio_url_s *url, const char *position,
 {
 	g_assert_nonnull(out);
 
-	const gchar *hexid = oio_url_get(url, OIOURL_HEXID);
+	const gchar *hexid = oio_url_get(url, OIOURL_ROOT_HEXID);
 	const gchar *alias = oio_url_get(url, OIOURL_PATH);
 	const gchar *version = oio_url_get(url, OIOURL_VERSION);
 
