@@ -15,6 +15,8 @@ proc_name = oio-account-server
 backend_type = fdb
 fdb_file = /etc/foundationdb/fdb.cluster
 
+default_location = RegionOne
+
 # Configure Redis backend
 #redis_host = 127.0.0.1:6379
 # or

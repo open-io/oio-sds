@@ -21,7 +21,7 @@ from werkzeug.routing import Map, Rule
 from werkzeug.exceptions import NotFound, BadRequest, Conflict
 
 from oio.common.configuration import load_namespace_conf
-from oio.common.constants import HTTP_CONTENT_TYPE_JSON
+from oio.common.constants import HTTP_CONTENT_TYPE_JSON, HTTP_CONTENT_TYPE_TEXT
 from oio.common.easy_value import int_value, true_value
 from oio.common.json import json
 from oio.common.logger import get_logger
@@ -693,7 +693,7 @@ class Account(WerkzeugApp):
         return Response(status=204)
 
     # ACCT{{
-    # GET /v1.0/account/metrics
+    # GET /v1.0/account/metrics?format=json
     # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     #
     # Get metrics of specified account.
@@ -730,10 +730,12 @@ class Account(WerkzeugApp):
     # }}ACCT
     @force_master
     def on_account_metrics(self, req, **kwargs):
-        raw = self.backend.info_metrics(**kwargs)
-        if raw is not None:
+        output_type = req.args.get('format', 'prometheus')
+        raw = self.backend.info_metrics(output_type, **kwargs)
+        if output_type == 'prometheus':
+            return Response(raw, mimetype=HTTP_CONTENT_TYPE_TEXT)
+        else:
             return Response(json.dumps(raw), mimetype=HTTP_CONTENT_TYPE_JSON)
-        return NotFound('Account not found')
 
     # ACCT{{
     # PUT /v1.0/bucket/reserve-bucket?id=bucket_name
