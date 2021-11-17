@@ -16,6 +16,7 @@
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
 
+import re
 import string
 from os.path import isfile
 from six.moves.urllib_parse import unquote, urlparse
@@ -937,3 +938,26 @@ class RawxTestSuite(CommonTestCase):
              REQID_HEADER: request_id('test_HEAD_chunk')})
         # If the size xattr is missing, we cannot read the chunk
         self.assertEqual(500, resp.status)
+
+    def _test_get_rawx_stats(self, stat_line_regex, output_format=''):
+        rawx_svc = self.conscience.next_instance('rawx')
+        addr = self.conscience.resolve_service_id('rawx', rawx_svc['addr'])
+        stat_url = "http://%s/stat" % (addr,)
+        resp = self.request('GET', stat_url, params={'format': output_format})
+        self.assertEqual(200, resp.status)
+        stats = resp.data.decode('utf-8')
+        for line in stats.split('\n'):
+            if not line.strip():
+                continue
+            match = stat_line_regex.match(line)
+            self.assertTrue(
+                match, "'%s' did not match %r" % (
+                    line, stat_line_regex.pattern))
+
+    def test_get_rawx_stats(self):
+        stat_re = re.compile(r'^(counter|config) ([^ ]+) (.+)$')
+        return self._test_get_rawx_stats(stat_re, 'default')
+
+    def test_get_rawx_stats_prometheus(self):
+        stat_re = re.compile(r'^(\w+){(.+)} (\w+)$')
+        return self._test_get_rawx_stats(stat_re, 'prometheus')
