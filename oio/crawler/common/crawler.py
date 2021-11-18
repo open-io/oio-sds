@@ -191,9 +191,10 @@ class CrawlerWorker(object):
                             return
                         time.sleep(1)
                 else:
-                    self.logger.warning("crawler duration %d for volume %s is \
-                                        higher", self.volume,
-                                        crawling_duration)
+                    self.logger.warning('crawling_duration=%d for volume_id=%s'
+                                        ' is higher than interval=%d',
+                                        crawling_duration, self.volume_id,
+                                        self.scans_interval)
             except Exception:
                 self.logger.exception('Failed to crawl volume')
 
