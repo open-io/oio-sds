@@ -4,6 +4,7 @@ bind_port = 5000
 backlog = 2048
 namespace = OPENIO
 workers = 2
+worker_class = gevent
 log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log

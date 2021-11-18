@@ -1338,6 +1338,7 @@ bind_addr = ${IP}
 bind_port = ${PORT}
 namespace = ${NS}
 workers = 2
+worker_class = gevent
 autocreate = true
 log_facility = LOG_LOCAL0
 log_level = INFO

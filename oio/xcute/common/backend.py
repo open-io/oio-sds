@@ -16,13 +16,13 @@
 
 from functools import wraps
 
+from datetime import datetime
 import redis
 import random
 from fnmatch import fnmatchcase
 
 from oio.common.easy_value import debinarize, true_value
 from oio.common.exceptions import Forbidden, NotFound
-from oio.common.green import datetime
 from oio.common.json import json
 from oio.common.logger import get_logger
 from oio.common.redis_conn import RedisConnection

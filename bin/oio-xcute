@@ -16,6 +16,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 
+from oio.common.green import eventlet_monkey_patch
+
+eventlet_monkey_patch()
+
 import signal
 import sys
 from multiprocessing import Process
