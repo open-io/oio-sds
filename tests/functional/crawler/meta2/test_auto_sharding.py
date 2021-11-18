@@ -38,6 +38,9 @@ class App(object):
     def get_stats(self):
         return dict()
 
+    def reset_stats(self):
+        pass
+
 
 class TestAutoSharding(BaseTestCase):
 
@@ -189,6 +192,23 @@ class TestAutoSharding(BaseTestCase):
         shard_cid = random.choice(shards)['cid']
 
         meta2db = self._get_meta2db(None, cid=shard_cid)
+        # Simulate a large size to not trigger shrinking
+        meta2db.file_status['st_size'] = self.conf['shrinking_db_size'] + 1
+        self.auto_sharding.process(meta2db.env, _cb)
+        filter_stats = self.auto_sharding.get_stats()[self.auto_sharding.NAME]
+        for key, value in filter_stats.items():
+            if key == 'skipped':
+                self.assertEqual(1, value)
+            else:
+                self.assertEqual(0, value)
+
+        new_shards = list(self.container_sharding.show_shards(
+            self.account, self.cname))
+        self.assertListEqual(shards, new_shards)
+        shards = new_shards
+
+        self.auto_sharding.reset_stats()
+        meta2db = self._get_meta2db(None, cid=shard_cid)
         self.auto_sharding.process(meta2db.env, _cb)
         filter_stats = self.auto_sharding.get_stats()[self.auto_sharding.NAME]
         for key, value in filter_stats.items():
@@ -200,6 +220,25 @@ class TestAutoSharding(BaseTestCase):
         shards = list(self.container_sharding.show_shards(
             self.account, self.cname))
         self.assertEqual(1, len(shards))
+        shard_cid = shards[0]['cid']
+
+        # Last shard
+        self.auto_sharding.reset_stats()
+        meta2db = self._get_meta2db(None, cid=shard_cid)
+        # Simulate a large size to trigger shrinking
+        meta2db.file_status['st_size'] = \
+            self.conf['sharding_db_size'] - 1
+        self.auto_sharding.process(meta2db.env, _cb)
+        filter_stats = self.auto_sharding.get_stats()[self.auto_sharding.NAME]
+        for key, value in filter_stats.items():
+            if key == 'shrinking_successes':
+                self.assertEqual(1, value)
+            else:
+                self.assertEqual(0, value)
+
+        shards = list(self.container_sharding.show_shards(
+            self.account, self.cname))
+        self.assertEqual(0, len(shards))
 
     def test_cleaning_root(self):
         def _cb(status, _msg):

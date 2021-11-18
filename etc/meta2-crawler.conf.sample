@@ -47,7 +47,8 @@ sharding_create_shard_timeout = 60
 sharding_save_writes_timeout = 60
 # Time before considering that one of the sharding steps is blocked
 sharding_step_timeout = 600
-# Size of the meta2 database from which shrinking can be triggered.
+# Size of the meta2 database from which shrinking can be triggered
+# (except for the one and last shard).
 shrinking_db_size = 268435456
 
 [filter:auto_vacuum]

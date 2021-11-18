@@ -14,7 +14,7 @@
 # License along with this library.
 
 from oio.common.constants import M2_PROP_ACCOUNT_NAME, \
-    M2_PROP_CONTAINER_NAME, M2_PROP_SHARDING_ROOT, M2_PROP_SHARDING_STATE, \
+    M2_PROP_CONTAINER_NAME, M2_PROP_SHARDING_STATE, \
     M2_PROP_SHARDING_TIMESTAMP, NEW_SHARD_STATE_APPLYING_SAVED_WRITES, \
     NEW_SHARD_STATE_CLEANING_UP
 from oio.common.easy_value import int_value
@@ -45,6 +45,11 @@ class AutomaticSharding(Filter):
         self.shrinking_db_size = int_value(
             self.conf.get('shrinking_db_size', None),
             self.DEFAULT_SHRINKING_DB_SIZE)
+        if (self.sharding_db_size > 0
+                and self.shrinking_db_size >= self.sharding_db_size):
+            raise ValueError(
+                'The database size for sharding '
+                'must be larger than the size for shrinking')
 
         kwargs = dict()
         kwargs['create_shard_timeout'] = self.sharding_strategy_params.pop(
@@ -94,11 +99,21 @@ class AutomaticSharding(Filter):
             if (self.sharding_db_size > 0
                     and meta2db_size > self.sharding_db_size):
                 modified = self._sharding(meta2db)
-            elif (self.shrinking_db_size > 0
-                    and meta2db.system.get(M2_PROP_SHARDING_ROOT) is not None
-                    and meta2db_size < self.shrinking_db_size):
-                modified = self._shrinking(meta2db)
-            else:
+            elif self.shrinking_db_size > 0:
+                root_cid, shard = self.container_sharding.meta_to_shard(
+                    {'system': meta2db.system})
+                if root_cid:
+                    if meta2db_size < self.shrinking_db_size:
+                        modified = self._shrinking(meta2db)
+                    elif (not shard['lower'] and not shard['upper']
+                            and meta2db_size < self.sharding_db_size):
+                        # Merge the one and last shard in root ASAP
+                        modified = self._shrinking(meta2db)
+                    else:
+                        self.skipped += 1
+                else:  # Not a shard
+                    self.skipped += 1
+            else:  # Neither sharding nor shrinking is enabled
                 self.skipped += 1
 
             if modified:
