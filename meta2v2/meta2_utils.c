@@ -3785,6 +3785,7 @@ m2db_clean_shard(struct sqlx_sqlite3_s *sq3, gboolean *truncated)
 end:
 	if (!err) {
 		if (max_entries_cleaned > 0) {
+			sqlx_admin_del_all_user(sq3, NULL, NULL);
 			guint64 size = 0;
 			gint64 obj_count = 0;
 			m2db_get_container_size_and_obj_count(sq3, FALSE, &size, &obj_count);

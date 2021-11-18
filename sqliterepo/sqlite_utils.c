@@ -175,7 +175,9 @@ sqlx_admin_del_all_user(struct sqlx_sqlite3_s *sq3, GTraverseFunc func,
 			v->flag_deleted = 1;
 			v->flag_changed = 1;
 			_dump_entry("change", k, v);
-			func(k, NULL, data);
+			if (func) {
+				func(k, NULL, data);
+			}
 		}
 		return FALSE;
 	}
