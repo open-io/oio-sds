@@ -65,6 +65,26 @@ and the maintainers won't touch it.
 
 ## Pre-commit hooks
 
-The script [oio-check-copyright.sh](./tools/oio-check-copyright.sh) can be
-add at the end of ``.git/hooks/pre-commit`` and will detect any missing or
-out-of-date copyright mention.
+There is a bunch of things you can add at the end of ``.git/hooks/pre-commit``:
+
+- The [typos](https://github.com/crate-ci/typos) utility will check for typos.
+- The script [oio-check-copyright.sh](./tools/oio-check-copyright.sh) will
+  detect any missing or out-of-date copyright mention.
+- Tox' pep8 environment will check for coding style issues in Python files.
+
+Copy (or rename) ``.git/hooks/pre-commit.sample`` to ``.git/hooks/pre-commit``,
+and add this at the end:
+
+```bash
+MODIFIED_FILES="$(git diff --diff-filter=d --name-only $against | grep -E -e '.py$' -e '.c$' -e '.h$' -e '.sh$' -e '.go$' || true)"
+MODIFIED_PY_FILES="$(git diff --diff-filter=d --name-only $against | grep -E -e '.py$' || true)"
+if [ -n "$MODIFIED_FILES" ]
+then
+    typos $MODIFIED_FILES
+    ./tools/oio-check-copyright.sh $MODIFIED_FILES
+fi
+if [ -n "$MODIFIED_PY_FILES" ]
+then
+    tox -e pep8 -- $MODIFIED_PY_FILES
+fi
+```
