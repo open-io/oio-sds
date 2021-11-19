@@ -256,7 +256,11 @@ class BlobClient(object):
 
             # md5 was the default before we started saving this information
             _, chunk_params = parse_chunk_method(meta['chunk_method'])
-            chunk_checksum_algo = chunk_params.get('cca', 'md5')
+            chunk_checksum_algo = chunk_params.get('cca')
+            chunk_hash = meta.get('chunk_hash')
+            if not chunk_checksum_algo and chunk_hash:
+                chunk_checksum_algo = \
+                    'md5' if len(chunk_hash) == 32 else 'blake3'
             kwargs.pop('chunk_checksum_algo', None)
 
             bytes_transferred, chunk_hash = self.chunk_put(

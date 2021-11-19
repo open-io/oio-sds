@@ -174,7 +174,7 @@ class Checksum(Filter):
         _, chunk_params = parse_chunk_method(chunk.meta['content_chunkmethod'])
         chunk_checksum_algo = chunk_params.get('cca')
         # md5 was the default before we started saving this information
-        if chunk_checksum_algo is None:
+        if not chunk_checksum_algo:
             chunk_checksum_algo = \
                 'md5' if len(chunk_hash) == 32 else 'blake3'
         file_hash = self._get_file_hash(chunk.chunk_path, chunk_checksum_algo)

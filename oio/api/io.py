@@ -459,9 +459,16 @@ class ChunkReader(object):
 
         def _iter():
             if self.verify_checksum:
+                expected = (self.verify_checksum
+                            if isinstance(self.verify_checksum, str)
+                            else self.headers.get(CHUNK_HEADERS['chunk_hash']))
                 _, params = parse_chunk_method(self.chunk_method)
-                checksum = get_hasher(params.get('cca', 'md5'))
+                checksum_algo = params.get('cca')
+                if not checksum_algo and expected:
+                    checksum_algo = 'md5' if len(expected) == 32 else 'blake3'
+                checksum = get_hasher(checksum_algo)
             else:
+                expected = None
                 checksum = None
 
             for part in parts_iter:
@@ -472,9 +479,6 @@ class ChunkReader(object):
 
             if checksum:
                 self.checksum = checksum.hexdigest()
-                expected = (self.verify_checksum
-                            if isinstance(self.verify_checksum, str)
-                            else self.headers.get(CHUNK_HEADERS['chunk_hash']))
                 if not expected:
                     self.logger.warning("Cannot verify checksum: "
                                         "header is missing or empty")

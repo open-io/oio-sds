@@ -273,7 +273,7 @@ class ChunkReader(object):
         self.expected_checksum = expected_checksum
         self.bytes_read = 0
         self.iter_hash = None
-        if chunk_checksum_algo is not None:
+        if chunk_checksum_algo:
             self.chunk_checksum_algo = chunk_checksum_algo
         else:
             self.chunk_checksum_algo = \

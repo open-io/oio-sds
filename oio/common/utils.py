@@ -631,7 +631,7 @@ def get_hasher(algorithm='blake3'):
     :raises ValueError: if the algorithm is not supported.
     """
     if not algorithm or algorithm.lower() == 'none':
-        return FakeChecksum(None)
+        return FakeChecksum('')
     if algorithm in CUSTOM_HASHER:
         return CUSTOM_HASHER[algorithm]()
     return hashlib.new(algorithm)
