@@ -786,3 +786,126 @@ class TestAccountBackend(BaseTestCase):
             if key in to_delete:
                 found += 1
         self.assertEqual(found, 0)
+
+    def test_metrics_per_region(self):
+        # clear metrics space
+        self.backend.db.clear(fdb.Subspace(('metrics:',)))
+
+        account_id = 'test'
+        self.assertEqual(self.backend.create_account(account_id), account_id)
+
+        # initial container
+        nb_objets = 5
+        nb_bytes = 41
+        params = {'bucket_location': 'test_region1', 'objects-details':
+                  {"THREECOPIES": 2, "EC": 3}}
+        name = 'container_metrics1'
+        mtime = Timestamp().normal
+        self.backend.update_container(account_id, name, mtime, 0,
+                                      nb_objets, nb_bytes, **params)
+
+        metric_space = fdb.Subspace(('metrics:', 'nb-objects'))
+        space_range = metric_space.range()
+        res = self.backend.db.get_range(space_range.start, space_range.stop)
+        for key, val in res:
+            val = int.from_bytes(val, byteorder='little')
+            _, _, reg, pol = unpack(key)
+            if reg == "test_region1" and pol == "THREECOPIES":
+                self.assertEqual(val, 2)
+            if reg == "test_region1" and pol == "EC":
+                self.assertEqual(val, 3)
+
+        # recall with same values => no impact on stats
+        mtime = Timestamp().normal
+        self.backend.update_container(account_id, name, mtime, 0,
+                                      nb_objets, nb_bytes, **params)
+        metric_space = fdb.Subspace(('metrics:', 'nb-objects'))
+        space_range = metric_space.range()
+        res = self.backend.db.get_range(space_range.start, space_range.stop)
+        for key, val in res:
+            val = int.from_bytes(val, byteorder='little')
+            _, _, reg, pol = unpack(key)
+            if reg == "test_region1" and pol == "THREECOPIES":
+                self.assertEqual(val, 2)
+            if reg == "test_region1" and pol == "EC":
+                self.assertEqual(val, 3)
+
+        # update another container and same region/policies
+        nb_objets = 7
+        nb_bytes = 33
+        params = {'bucket_location': 'test_region1', 'objects-details':
+                  {"THREECOPIES": 3, "EC": 4}}
+        name = 'container_metrics2'
+        mtime = Timestamp().normal
+        self.backend.update_container(account_id, name, mtime, 0,
+                                      nb_objets, nb_bytes, **params)
+        metric_space = fdb.Subspace(('metrics:', 'nb-objects'))
+        space_range = metric_space.range()
+        res = self.backend.db.get_range(space_range.start, space_range.stop)
+        for key, val in res:
+            val = int.from_bytes(val, byteorder='little')
+            _, _, reg, pol = unpack(key)
+            if reg == "test_region1" and pol == "THREECOPIES":
+                self.assertEqual(val, 5)
+            if reg == "test_region1" and pol == "EC":
+                self.assertEqual(val, 7)
+        # update first container
+        nb_objets = 1
+        nb_bytes = 20
+        params = {'bucket_location': 'test_region1', 'objects-details':
+                  {"THREECOPIES": 1}}
+        name = 'container_metrics1'
+        mtime = Timestamp().normal
+        self.backend.update_container(account_id, name, mtime, 0,
+                                      nb_objets, nb_bytes, **params)
+        metric_space = fdb.Subspace(('metrics:', 'nb-objects'))
+        space_range = metric_space.range()
+        res = self.backend.db.get_range(space_range.start, space_range.stop)
+        for key, val in res:
+            val = int.from_bytes(val, byteorder='little')
+            _, _, reg, pol = unpack(key)
+            if reg == "test_region1" and pol == "THREECOPIES":
+                self.assertEqual(val, 4)
+            if reg == "test_region1" and pol == "EC":
+                self.assertEqual(val, 4)
+
+    def test_metrics_cleared(self):
+        """
+        test that metrics entries are cleared when counters reach zero,
+        """
+        # create an account and delete it then check metrics:nb-accounts
+        # is not present
+        # TODO extend to all metrics with regions and policies
+
+        account_id = 'test'
+        self.assertEqual(self.backend.create_account(account_id), account_id)
+        metric_space = fdb.Subspace(('metrics:', 'nb-accounts'))
+        status = self.backend.db.get(metric_space)
+
+        self.assertNotEqual(status, None)
+
+        region = 'test_region'
+        params = {'bucket_location': region}
+        name = 'container1'
+        mtime = Timestamp().normal
+        self.backend.update_container(account_id, name, mtime, 0,
+                                      0, 0, **params)
+
+        key_region = self.backend.db.get(fdb.Subspace(('metrics:',
+                                                       'nb-containers',
+                                                       region)))
+        self.assertNotEqual(key_region, None)
+
+        # delete
+        dtime = Timestamp().normal
+        self.backend.update_container(account_id, name, 0, dtime,
+                                      0, 0, **params)
+
+        key_region = self.backend.db.get(fdb.Subspace(('metrics:',
+                                                       'nb-containers',
+                                                       region)))
+        self.assertEqual(key_region, None)
+
+        self.backend.delete_account(account_id)
+        status = self.backend.db.get(metric_space)
+        self.assertEqual(status, None)
