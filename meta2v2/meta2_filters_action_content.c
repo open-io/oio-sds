@@ -358,6 +358,11 @@ meta2_filter_action_get_content(struct gridd_filter_ctx_s *ctx,
 		}
 	}
 
+	const gchar *root_hexid = oio_url_get(url, OIOURL_ROOT_HEXID);
+	if (root_hexid != NULL) {
+		reply->add_header(NAME_MSGKEY_ROOT_HEXID,
+				metautils_gba_from_string(root_hexid));
+	}
 	_on_bean_ctx_send_list(obc);
 	rc = FILTER_OK;
 

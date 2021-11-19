@@ -184,6 +184,7 @@ struct oio_ext_local_s {
 	guint8 simulate_versioning;
 	/** Request originates from a redirect from a root container. */
 	guint8 is_shard;
+	gchar *root_hexid;
 	gchar **shared_properties;
 	gchar reqid[LIMIT_LENGTH_REQID];
 	GHashTable *perfdata;
@@ -381,6 +382,20 @@ gboolean oio_ext_is_shard(void) {
 void oio_ext_set_is_shard(const gboolean is_shard) {
 	struct oio_ext_local_s *l = _local_ensure();
 	l->is_shard = BOOL(is_shard);
+}
+
+const gchar *oio_ext_get_root_hexid(void) {
+	const struct oio_ext_local_s *l = _local_ensure ();
+	return l->root_hexid;
+}
+
+void oio_ext_set_root_hexid(const gchar *root_hexid) {
+	struct oio_ext_local_s *l = _local_ensure();
+	if (l->root_hexid) {
+		g_free(l->root_hexid);
+		l->root_hexid = NULL;
+	}
+	l->root_hexid = g_strdup(root_hexid);
 }
 
 gchar **oio_ext_get_shared_properties(void) {
@@ -773,7 +788,7 @@ gdouble oio_sys_cpu_idle (void) {
 				 _wait = 0, irq = 0, soft = 0, steal = 0, guest = 0,
 				 guest_nice = 0;
 			/* TODO linux provides 10 fields since Linux 2.6.33,
-			 * and we should check the Linux verison to manage the
+			 * and we should check the Linux version to manage the
 			 * old style with 7 fields for earlier releases. */
 			int rc = sscanf(p, "%llu %llu %llu %llu %llu %llu %llu %llu"
 					" %llu %llu", &user, &_nice, &sys, &_idle, &_wait, &irq,

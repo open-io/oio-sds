@@ -118,6 +118,11 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 		}
 
 		err = gridd_request_replicated_with_retry(args, &ctx, pack);
+
+		/* Extract root_hexid */
+		const gchar* root_hexid = oio_ext_get_root_hexid();
+		oio_url_set(ctx.url, OIOURL_ROOT_HEXID, root_hexid);
+
 		if (!err) {
 			break;
 		}
@@ -212,6 +217,7 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 
 	oio_ext_set_is_shard(FALSE);
 	oio_ext_enable_perfdata(FALSE);
+	oio_ext_set_root_hexid(NULL);
 	args->url = original_url;
 	oio_url_clean(redirect_url);
 	_bean_clean(redirect_shard);

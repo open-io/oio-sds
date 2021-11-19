@@ -134,6 +134,10 @@ gboolean oio_ext_is_shard(void);
 
 void oio_ext_set_is_shard(const gboolean is_shard);
 
+const gchar *oio_ext_get_root_hexid(void);
+
+void oio_ext_set_root_hexid(const gchar *root_hexid);
+
 gchar **oio_ext_get_shared_properties(void);
 
 void oio_ext_set_shared_properties(gchar **shared_properties);

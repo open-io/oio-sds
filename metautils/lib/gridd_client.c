@@ -93,10 +93,10 @@ static GTree *tree_errors = NULL;  /* <gchar*> -> <rrd*> */
 static GRWLock lock_down;
 static GTree *tree_down = NULL;  /* <gchar*> -> <constant> */
 
-void  _oio_cache_of_errors_contructor (void);
+void  _oio_cache_of_errors_constructor (void);
 
 void __attribute__ ((constructor))
-_oio_cache_of_errors_contructor (void)
+_oio_cache_of_errors_constructor (void)
 {
 	static volatile guint lazy_init = 1;
 	if (lazy_init) {
@@ -294,9 +294,21 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 			_client_reset_reply(client);
 		}
 		if (client->on_reply) {
-			if (!client->on_reply(client->ctx, status, reply))
+			if (!client->on_reply(client->ctx, status, reply)) {
 				return SYSERR("Handler error");
+			}
 		}
+
+		gchar root_hexid[STRLEN_CONTAINERID];
+		err = metautils_message_extract_string(reply,
+				NAME_MSGKEY_ROOT_HEXID, root_hexid, sizeof(root_hexid));
+		if (err == NULL && oio_str_is_set(root_hexid)) {
+			oio_ext_set_root_hexid(root_hexid);
+		} else {
+			oio_ext_set_root_hexid(NULL);
+			g_error_free(err);
+		}
+
 		return NULL;
 	}
 
