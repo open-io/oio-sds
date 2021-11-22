@@ -25,7 +25,7 @@ from urllib3 import HTTPResponse
 from oio.api.object_storage import ObjectStorageApi
 from oio.common import exceptions as exc
 from oio.common.cache import get_cached_object_metadata
-from oio.common.constants import REQID_HEADER
+from oio.common.constants import M2_PROP_OBJECTS, M2_PROP_USAGE, REQID_HEADER
 from oio.common.http_eventlet import CustomHTTPResponse
 from oio.common.storage_functions import _sort_chunks as sort_chunks
 from oio.common.utils import cid_from_name, request_id, depaginate, get_hasher
@@ -85,6 +85,44 @@ class ObjectStorageApiTestBase(BaseTestCase):
             self.api.object_create(self.account, container,
                                    obj_name=obj, data="", **kwargs)
             self.created.append((container, obj))
+
+    def _check_stats(
+            self, name, expected_count=0, expected_size=0,
+            expected_count_by_policy={}, expected_size_by_policy={},
+            expected_containers=None, reqid=None):
+        # Container
+        meta = self.api.container_get_properties(self.account, name)
+        self.assertEqual(expected_count,
+                         int(meta['system'][M2_PROP_OBJECTS]))
+        self.assertEqual(expected_size,
+                         int(meta['system'][M2_PROP_USAGE]))
+        self.assertDictEqual(
+            expected_count_by_policy,
+            {k[len(M2_PROP_OBJECTS + '.'):]: int(v)
+                for k, v in meta['system'].items()
+                if k.startswith(M2_PROP_OBJECTS + '.')})
+        self.assertDictEqual(
+            expected_size_by_policy,
+            {k[len(M2_PROP_USAGE + '.'):]: int(v)
+                for k, v in meta['system'].items()
+                if k.startswith(M2_PROP_USAGE + '.')})
+        # Account
+        if reqid:
+            self.wait_for_event(
+                'oio-preserved', fields={'user': name}, reqid=reqid,
+                types=[EventTypes.CONTAINER_STATE])
+        containers = self.api.container_list(self.account)
+        if expected_containers is not None:
+            self.assertEqual(expected_containers, len(containers))
+        for container in containers:
+            if container[0] == name:
+                self.assertListEqual(
+                    [name, expected_count, expected_size, 0, container[4]],
+                    container)
+                break
+        else:
+            if expected_containers != 0:
+                self.fail("No container in account")
 
 
 class UnreliableResponse(CustomHTTPResponse):
@@ -425,8 +463,12 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         self.api.container_flush(self.account, cname, fast=fast, limit=50)
         self.wait_for_score(('account', 'meta2'))
         properties = self.api.container_get_properties(self.account, cname)
-        self.assertEqual(properties['system']['sys.m2.objects'], '0')
-        self.assertEqual(properties['system']['sys.m2.usage'], '0')
+        self.assertEqual(properties['system'][M2_PROP_OBJECTS], '0')
+        self.assertEqual(properties['system'][M2_PROP_USAGE], '0')
+        for key in properties['system']:
+            if (key.startswith(M2_PROP_OBJECTS + '.')
+                    or key.startswith(M2_PROP_USAGE + '.')):
+                self.fail('Contains stats by storage policy')
         all_objects = self.api.object_list(self.account, cname)
         self.assertEqual(0, len(all_objects['objects']))
         self.beanstalkd0.drain_buried('oio')
@@ -563,63 +605,57 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
         name = random_str(32)
 
         self._create(name)
+        reqid = None
         for i in range(10):
-            reqid = 'content' + name + str(i)
+            if i < 5 and i % 2 == 0:
+                policy = 'TWOCOPIES'
+            else:
+                policy = 'SINGLE'
+            reqid = request_id()
             self.api.object_create(
-                self.account, name, obj_name=reqid, data='data',
-                reqid=reqid)
-        meta = self.api.container_get_properties(self.account, name)
-        objects = meta['system']['sys.m2.objects']
-        self.assertEqual('10', objects)
-        usage = meta['system']['sys.m2.usage']
-        self.assertEqual('40', usage)
-        for i in range(10):
-            reqid = 'content' + name + str(i)
-            self.wait_for_event(
-                'oio-preserved', reqid=reqid, types=[EventTypes.CONTENT_NEW])
-        self.wait_for_event(
-            'oio-preserved', fields={'user': name},
-            types=[EventTypes.CONTAINER_STATE])
-        containers = self.api.container_list(self.account)
-        for container in containers:
-            if container[0] == name:
-                self.assertListEqual(
-                    [name, int(objects), int(usage), 0, container[4]],
-                    container)
-                break
-        else:
-            self.fail("No container in account")
+                self.account, name, obj_name=f'content-{i}', data='data'+' '*i,
+                policy=policy, reqid=reqid)
+
+        def _check_stats_touch(
+                expected_count=10, expected_size=85,
+                expected_count_by_policy={'TWOCOPIES': 3, 'SINGLE': 7},
+                expected_size_by_policy={'TWOCOPIES': 18, 'SINGLE': 67},
+                **kwargs):
+            self._check_stats(
+                name, expected_count=expected_count,
+                expected_size=expected_size,
+                expected_count_by_policy=expected_count_by_policy,
+                expected_size_by_policy=expected_size_by_policy, **kwargs)
+
+        _check_stats_touch(reqid=reqid)
 
         self.api.account_flush(self.account)
-        self.assertFalse(self.api.container_list(self.account))
+        _check_stats_touch(expected_containers=0)
 
-        self.beanstalkd0.drain_tube('oio-preserved')
         reqid = request_id()
         self.api.container_touch(self.account, name, reqid=reqid)
-        self.wait_for_event(
-            'oio-preserved', fields={'user': name},
-            types=[EventTypes.CONTAINER_STATE])
-        containers = self.api.container_list(self.account)
-        self.assertEqual(1, len(containers))
-        self.assertListEqual(
-            [name, int(objects), int(usage), 0, containers[0][4]],
-            containers[0])
+        _check_stats_touch(expected_containers=1, reqid=reqid)
 
+        self.api.container_set_properties(
+            self.account, name, system={
+                M2_PROP_OBJECTS: '1',
+                M2_PROP_USAGE: '1',
+                M2_PROP_OBJECTS + '.TWOCOPIES': '1',
+                M2_PROP_OBJECTS + '.SINGLE': '1',
+                M2_PROP_USAGE + '.TWOCOPIES': '1',
+                M2_PROP_USAGE + '.SINGLE': '1'
+            })
         self.api.account_flush(self.account)
-        self.assertFalse(self.api.container_list(self.account))
+        _check_stats_touch(
+            expected_count=1, expected_size=1,
+            expected_count_by_policy={'TWOCOPIES': 1, 'SINGLE': 1},
+            expected_size_by_policy={'TWOCOPIES': 1, 'SINGLE': 1},
+            expected_containers=0)
 
-        self.api.container_touch(self.account, name, recompute=True)
-        self.wait_for_event(
-            'oio-preserved', fields={'user': name},
-            types=[EventTypes.CONTAINER_STATE])
-        meta = self.api.container_get_properties(self.account, name)
-        self.assertEqual(objects, meta['system']['sys.m2.objects'])
-        self.assertEqual(usage, meta['system']['sys.m2.usage'])
-        containers = self.api.container_list(self.account)
-        self.assertEqual(1, len(containers))
-        self.assertListEqual(
-            [name, int(objects), int(usage), 0, containers[0][4]],
-            containers[0])
+        reqid = request_id()
+        self.api.container_touch(self.account, name, recompute=True,
+                                 reqid=reqid)
+        _check_stats_touch(expected_containers=1, reqid=reqid)
 
     def test_object_create_ext(self):
         name = random_str(32)
@@ -1631,6 +1667,118 @@ class TestObjectStorageApi(ObjectStorageApiTestBase):
             for chunk_url in to_delete:
                 self.api.blob_client.chunk_delete(chunk_url)
 
+    def test_stats(self):
+        name = random_str(32)
+        self._create(name)
+        expected_count = 0
+        expected_size = 0
+        expected_count_by_policy = dict()
+        expected_size_by_policy = dict()
+        # Add first object
+        reqid = request_id()
+        self.api.object_create(
+            self.account, name, obj_name='content-0', data=random_data(12),
+            policy='SINGLE', reqid=reqid)
+        expected_count += 1
+        expected_size += 12
+        expected_count_by_policy['SINGLE'] = \
+            expected_count_by_policy.get('SINGLE', 0) + 1
+        expected_size_by_policy['SINGLE'] = \
+            expected_size_by_policy.get('SINGLE', 0) + 12
+        self._check_stats(
+            name, expected_count=expected_count,
+            expected_size=expected_size,
+            expected_count_by_policy=expected_count_by_policy,
+            expected_size_by_policy=expected_size_by_policy, reqid=reqid)
+        # Add second object with a different storage policy
+        reqid = request_id()
+        self.api.object_create(
+            self.account, name, obj_name='content-1', data=random_data(42),
+            policy='TWOCOPIES', reqid=reqid)
+        expected_count += 1
+        expected_size += 42
+        expected_count_by_policy['TWOCOPIES'] = \
+            expected_count_by_policy.get('TWOCOPIES', 0) + 1
+        expected_size_by_policy['TWOCOPIES'] = \
+            expected_size_by_policy.get('TWOCOPIES', 0) + 42
+        self._check_stats(
+            name, expected_count=expected_count,
+            expected_size=expected_size,
+            expected_count_by_policy=expected_count_by_policy,
+            expected_size_by_policy=expected_size_by_policy, reqid=reqid)
+        # Overwrite the first object to have only one storage policy
+        reqid = request_id()
+        self.api.object_create(
+            self.account, name, obj_name='content-0', data=random_data(16),
+            policy='TWOCOPIES', reqid=reqid)
+        expected_count += (-1 + 1)
+        expected_size += (-12 + 16)
+        del expected_count_by_policy['SINGLE']
+        del expected_size_by_policy['SINGLE']
+        expected_count_by_policy['TWOCOPIES'] = \
+            expected_count_by_policy.get('TWOCOPIES', 0) + 1
+        expected_size_by_policy['TWOCOPIES'] = \
+            expected_size_by_policy.get('TWOCOPIES', 0) + 16
+        self._check_stats(
+            name, expected_count=expected_count,
+            expected_size=expected_size,
+            expected_count_by_policy=expected_count_by_policy,
+            expected_size_by_policy=expected_size_by_policy, reqid=reqid)
+        # Add third object with the first storage policy
+        reqid = request_id()
+        self.api.object_create(
+            self.account, name, obj_name='content-2', data=random_data(5),
+            policy='SINGLE', reqid=reqid)
+        expected_count += 1
+        expected_size += 5
+        expected_count_by_policy['SINGLE'] = \
+            expected_count_by_policy.get('SINGLE', 0) + 1
+        expected_size_by_policy['SINGLE'] = \
+            expected_size_by_policy.get('SINGLE', 0) + 5
+        self._check_stats(
+            name, expected_count=expected_count,
+            expected_size=expected_size,
+            expected_count_by_policy=expected_count_by_policy,
+            expected_size_by_policy=expected_size_by_policy, reqid=reqid)
+        # Delete one of the 2 objects with the second storage policy
+        reqid = request_id()
+        self.api.object_delete(self.account, name, 'content-0', reqid=reqid)
+        expected_count += -1
+        expected_size += -16
+        expected_count_by_policy['TWOCOPIES'] = \
+            expected_count_by_policy.get('TWOCOPIES', 0) - 1
+        expected_size_by_policy['TWOCOPIES'] = \
+            expected_size_by_policy.get('TWOCOPIES', 0) - 16
+        self._check_stats(
+            name, expected_count=expected_count,
+            expected_size=expected_size,
+            expected_count_by_policy=expected_count_by_policy,
+            expected_size_by_policy=expected_size_by_policy, reqid=reqid)
+        # Delete last object with the second storage policy
+        reqid = request_id()
+        self.api.object_delete(self.account, name, 'content-1', reqid=reqid)
+        expected_count += -1
+        expected_size += -42
+        del expected_count_by_policy['TWOCOPIES']
+        del expected_size_by_policy['TWOCOPIES']
+        self._check_stats(
+            name, expected_count=expected_count,
+            expected_size=expected_size,
+            expected_count_by_policy=expected_count_by_policy,
+            expected_size_by_policy=expected_size_by_policy, reqid=reqid)
+        # Delete last object
+        reqid = request_id()
+        self.api.object_delete(self.account, name, 'content-2', reqid=reqid)
+        expected_count = 0
+        expected_size = 0
+        expected_count_by_policy = dict()
+        expected_size_by_policy = dict()
+        self._check_stats(
+            name, expected_count=expected_count,
+            expected_size=expected_size,
+            expected_count_by_policy=expected_count_by_policy,
+            expected_size_by_policy=expected_size_by_policy, reqid=reqid)
+
 
 class TestObjectChangePolicy(ObjectStorageApiTestBase):
 
@@ -1653,27 +1801,63 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
         name = 'change-policy-' + random_str(6)
         self._create(name)
 
+        expected_count = 0
+        expected_size = 0
+        expected_count_by_policy = dict()
+        expected_size_by_policy = dict()
         if versioning:
             self.api.container_set_properties(
                 self.account, name, system={'sys.m2.policy.version': '-1'})
             self.api.object_create(
-                self.account, name, obj_name=name, data=random_data(42))
+                self.account, name, obj_name=name, data=random_data(42),
+                policy='SINGLE')
+            expected_count += 1
+            expected_size += 42
+            expected_count_by_policy['SINGLE'] = \
+                expected_count_by_policy.get('SINGLE', 0) + 1
+            expected_size_by_policy['SINGLE'] = \
+                expected_size_by_policy.get('SINGLE', 0) + 42
         data = random_data(data_size)
+        reqid = request_id()
         self.api.object_create(
             self.account, name, obj_name=name,
-            data=data, policy=old_policy, properties={'test': 'it works'})
+            data=data, policy=old_policy, properties={'test': 'it works'},
+            reqid=reqid)
+        expected_count += 1
+        expected_size += data_size
+        expected_count_by_policy[old_policy] = \
+            expected_count_by_policy.get(old_policy, 0) + 1
+        expected_size_by_policy[old_policy] = \
+            expected_size_by_policy.get(old_policy, 0) + data_size
+        if expected_size_by_policy[old_policy] == 0:
+            del expected_size_by_policy[old_policy]
         obj1, chunks1 = self.api.object_locate(self.account, name, name)
-        cnt_props1 = self.api.container_get_properties(self.account, name)
         if versioning:
-            self.api.object_delete(self.account, name, name)
-        self.wait_for_event('oio-preserved',
-                            types=[EventTypes.CONTAINER_STATE], timeout=1.0)
-        cnt_info1 = [cont_info
-                     for cont_info in self.api.container_list(self.account)
-                     if cont_info[0] == name]
+            reqid = request_id()
+            self.api.object_delete(self.account, name, name, reqid=reqid)
+        self._check_stats(
+            name, expected_count=expected_count, expected_size=expected_size,
+            expected_count_by_policy=expected_count_by_policy,
+            expected_size_by_policy=expected_size_by_policy, reqid=reqid)
 
+        reqid = request_id()
         self.api.object_change_policy(
-            self.account, name, name, new_policy, version=obj1['version'])
+            self.account, name, name, new_policy, version=obj1['version'],
+            reqid=reqid)
+        expected_count_by_policy[old_policy] = \
+            expected_count_by_policy.get(old_policy, 0) - 1
+        if expected_count_by_policy[old_policy] == 0:
+            del expected_count_by_policy[old_policy]
+        expected_count_by_policy[new_policy] = \
+            expected_count_by_policy.get(new_policy, 0) + 1
+        expected_size_by_policy[old_policy] = \
+            expected_size_by_policy.get(old_policy, 0) - data_size
+        if expected_size_by_policy[old_policy] == 0:
+            del expected_size_by_policy[old_policy]
+        expected_size_by_policy[new_policy] = \
+            expected_size_by_policy.get(new_policy, 0) + data_size
+        if expected_size_by_policy[new_policy] == 0:
+            del expected_size_by_policy[new_policy]
         # One of the checks below verifies that the old chunks have actually
         # been deleted. Since this is an asynchronous process, we used to see
         # random failures when the event treatment was a little slow.
@@ -1691,14 +1875,6 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
 
         obj2, chunks2 = self.api.object_locate(
             self.account, name, name, version=obj1['version'])
-        cnt_props2 = self.api.container_get_properties(self.account, name)
-
-        self.wait_for_event('oio-preserved',
-                            types=[EventTypes.CONTAINER_STATE], timeout=2.0)
-        cnt_info2 = [cont_info
-                     for cont_info in self.api.container_list(self.account)
-                     if cont_info[0] == name]
-
         self.assertNotEqual(obj1['id'], obj2['id'])
         self.assertEqual(old_policy, obj1['policy'])
         self.assertEqual(new_policy, obj2['policy'])
@@ -1706,11 +1882,10 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
         obj1['chunk_method'] = obj2['chunk_method']
         obj1['policy'] = obj2['policy']
         self.assertDictEqual(obj1, obj2)
-        self.assertEqual(cnt_props1['system']['sys.m2.objects'],
-                         cnt_props2['system']['sys.m2.objects'])
-        self.assertEqual(cnt_props1['system']['sys.m2.usage'],
-                         cnt_props2['system']['sys.m2.usage'])
-        self.assertListEqual(cnt_info1[:-1], cnt_info2[:-1])
+        self._check_stats(
+            name, expected_count=expected_count, expected_size=expected_size,
+            expected_count_by_policy=expected_count_by_policy,
+            expected_size_by_policy=expected_size_by_policy, reqid=reqid)
 
         _, stream = self.api.object_fetch(
             self.account, name, name, version=obj2['version'])

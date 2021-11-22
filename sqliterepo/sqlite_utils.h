@@ -149,6 +149,8 @@ void sqlx_admin_load(struct sqlx_sqlite3_s *sq3);
 void sqlx_admin_reload(struct sqlx_sqlite3_s *sq3);
 
 void sqlx_admin_del(struct sqlx_sqlite3_s *sq3, const gchar *k);
+void sqlx_admin_del_all_keys_with_prefix(struct sqlx_sqlite3_s *sq3,
+		const gchar *prefix, GTraverseFunc func, gpointer data);
 void sqlx_admin_del_all_user(struct sqlx_sqlite3_s *sq3, GTraverseFunc func,
 		gpointer data);
 

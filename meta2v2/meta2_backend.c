@@ -395,20 +395,41 @@ _container_state(struct sqlx_sqlite3_s *sq3, gboolean deleted)
 		g_free(v);
 	}
 
+	gchar **properties = NULL;
 	struct oio_url_s *url = sqlx_admin_get_url(sq3);
 	GString *gs = oio_event__create_with_id(
 			deleted ? META2_EVENTS_PREFIX ".container.deleted"
 					: META2_EVENTS_PREFIX ".container.state",
 			url, oio_ext_get_reqid());
-	g_string_append_static (gs, ",\"data\":{");
+	g_string_append_static(gs, ",\"data\":{");
 	append_str(gs, "bucket", sqlx_admin_get_str(sq3, M2V2_ADMIN_BUCKET_NAME));
 	append_str(gs, "policy", sqlx_admin_get_str(sq3, M2V2_ADMIN_STORAGE_POLICY));
 	append_int64(gs, "ctime", m2db_get_ctime(sq3));
 	// If the container is deleted while it contained objects,
-	// send a consistent number of objects
+	// send a consistent number of bytes
 	append_int64(gs, "bytes-count", deleted ? 0 : m2db_get_size(sq3));
+	properties = m2db_get_size_properties_by_policy(sq3);
+	if (properties) {
+		g_string_append_static(gs, ",\"bytes-details\":{");
+		for (gchar **p=properties; *p && *(p+1) ;p+=2) {
+			append_int64(gs, (*p) + sizeof(M2V2_ADMIN_SIZE".") - 1,
+					g_ascii_strtoll(*(p+1), NULL, 10));
+		}
+		g_string_append_static(gs, "}");
+	}
+	// If the container is deleted while it contained objects,
+	// send a consistent number of objects
 	append_int64(gs, "object-count", deleted ? 0 : m2db_get_obj_count(sq3));
-	g_string_append_static (gs, "}}");
+	properties = m2db_get_obj_count_properties_by_policy(sq3);
+	if (properties) {
+		g_string_append_static(gs, ",\"objects-details\":{");
+		for (gchar **p=properties; *p && *(p+1) ;p+=2) {
+			append_int64(gs, (*p) + sizeof(M2V2_ADMIN_OBJ_COUNT".") - 1,
+					g_ascii_strtoll(*(p+1), NULL, 10));
+		}
+		g_string_append_static(gs, "}");
+	}
+	g_string_append_static(gs, "}}");
 
 	oio_url_clean(url);
 	return g_string_free(gs, FALSE);
@@ -1433,12 +1454,7 @@ meta2_backend_notify_container_state(struct meta2_backend_s *m2b,
 		if (recompute) {
 			struct sqlx_repctx_s *repctx = NULL;
 			if (!(err = _transaction_begin(sq3, url, &repctx))) {
-				guint64 size = 0u;
-				gint64 count = 0;
-				m2db_get_container_size_and_obj_count(sq3, FALSE,
-						&size, &count);
-				m2db_set_size(sq3, size);
-				m2db_set_obj_count(sq3, count);
+				m2db_recompute_container_size_and_obj_count(sq3, FALSE);
 				gint64 shard_count = 0;
 				m2db_get_container_shard_count(sq3, &shard_count);
 				m2db_set_shard_count(sq3, shard_count);
@@ -3245,11 +3261,7 @@ meta2_backend_clean_sharding(struct meta2_backend_s *m2b,
 	} else if (m2db_get_shard_count(sq3)) {  // Root
 		err = m2db_clean_root_container(sq3, truncated);
 	} else {  // Switch back to a container without shards, so recompute stats
-		guint64 size = 0;
-		gint64 obj_count = 0;
-		m2db_get_container_size_and_obj_count(sq3, FALSE, &size, &obj_count);
-		m2db_set_size(sq3, size);
-		m2db_set_obj_count(sq3, obj_count);
+		m2db_recompute_container_size_and_obj_count(sq3, FALSE);
 		*truncated = FALSE;
 	}
 	if (!err) {

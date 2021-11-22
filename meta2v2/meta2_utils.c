@@ -126,46 +126,100 @@ m2v2_position_decode (const char *s)
 	return out;
 }
 
-void
-m2db_get_container_size_and_obj_count(struct sqlx_sqlite3_s *sq3,
-		gboolean check_alias, guint64 *size_out, gint64 *obj_count_out)
+static void
+_get_container_size_and_obj_count_by_policy(struct sqlx_sqlite3_s *sq3,
+		gboolean check_alias, const gchar *policy,
+		guint64 *size_out, gint64 *obj_count_out)
 {
 	EXTRA_ASSERT(sq3 != NULL && sq3->db != NULL);
 
 	guint64 size = 0;
 	gint64 obj_count = 0;
-	gchar tmp[512];
-	g_snprintf(tmp, sizeof(tmp), "%s%s", "SELECT SUM(size),COUNT(id) FROM contents",
+	gchar sql[512];
+	g_snprintf(sql, sizeof(sql),
+			"SELECT SUM(size),COUNT(id) FROM contents WHERE policy == ?%s",
 			!check_alias ? "" :
-			" WHERE EXISTS (SELECT content FROM aliases WHERE content = id)");
-	const gchar *sql = tmp;
-	int rc, grc = SQLITE_OK;
-	const gchar *next;
+			" AND EXISTS (SELECT content FROM aliases WHERE content = id)");
 	sqlite3_stmt *stmt = NULL;
+	int rc;
 
-	while ((grc == SQLITE_OK) && sql && *sql) {
-		next = NULL;
-		sqlite3_prepare_debug(rc, sq3->db, sql, -1, &stmt, &next);
-		sql = next;
-		if (rc != SQLITE_OK && rc != SQLITE_DONE)
-			grc = rc;
-		else if (stmt) {
-			while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
-				size = sqlite3_column_int64(stmt, 0);
-				obj_count = sqlite3_column_int64(stmt, 1);
-			}
-			if (rc != SQLITE_OK && rc != SQLITE_DONE) {
-				grc = rc;
-			}
-			rc = sqlx_sqlite3_finalize(sq3, stmt, NULL);
-		}
-
-		stmt = NULL;
+	// Find used storage policies
+	sqlite3_prepare_debug(rc, sq3->db, sql, -1, &stmt, NULL);
+	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
+		GRID_WARN("Failed to compute size and object count "
+				"for storage policy %s: (%d/%s) %s reqid=%s",
+				policy, rc, sqlite_strerror(rc), sqlite3_errmsg(sq3->db),
+				oio_ext_get_reqid());
+		return;
 	}
+	(void) sqlite3_bind_text(stmt, 1, policy, -1, NULL);
+	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
+		size = sqlite3_column_int64(stmt, 0);
+		obj_count = sqlite3_column_int64(stmt, 1);
+	}
+	sqlite3_finalize_debug(rc, stmt);
+	if (rc != SQLITE_DONE && rc != SQLITE_OK) {
+		GRID_WARN("Failed to compute size and object count "
+			"for storage policy %s: (%d/%s) %s reqid=%s",
+			policy, rc, sqlite_strerror(rc), sqlite3_errmsg(sq3->db),
+			oio_ext_get_reqid());
+		return;
+	}
+
 	if (size_out)
 		*size_out = size;
 	if (obj_count_out)
 		*obj_count_out = obj_count;
+}
+
+void
+m2db_recompute_container_size_and_obj_count(struct sqlx_sqlite3_s *sq3,
+		gboolean check_alias UNUSED)
+{
+	GPtrArray *policies = g_ptr_array_new_with_free_func(g_free);
+	sqlite3_stmt *stmt = NULL;
+	int rc;
+
+	// Reset stats
+	m2db_set_size(sq3, 0);
+	m2db_set_obj_count(sq3, 0);
+
+	// Find used storage policies
+	sqlite3_prepare_debug(rc, sq3->db,
+			"SELECT DISTINCT policy FROM contents", -1, &stmt, NULL);
+	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
+		GRID_WARN("Failed to find storage policies: (%d/%s) %s reqid=%s",
+				rc, sqlite_strerror(rc), sqlite3_errmsg(sq3->db),
+				oio_ext_get_reqid());
+		goto end;
+	}
+	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
+		g_ptr_array_add(policies, g_strndup(
+				(gchar*) sqlite3_column_text(stmt, 0),
+					sqlite3_column_bytes(stmt, 0)));
+	}
+	sqlite3_finalize_debug(rc, stmt);
+	if (rc != SQLITE_DONE && rc != SQLITE_OK) {
+		GRID_WARN("Failed to find storage policies: (%d/%s) %s reqid=%s",
+				rc, sqlite_strerror(rc), sqlite3_errmsg(sq3->db),
+				oio_ext_get_reqid());
+		goto end;
+	}
+
+	guint64 size = 0u;
+	gint64 count = 0;
+	for (guint i=0; i < policies->len; i++) {
+		gchar *policy = policies->pdata[i];
+		size = 0u;
+		count = 0;
+		_get_container_size_and_obj_count_by_policy(sq3, check_alias, policy,
+				&size, &count);
+		m2db_update_size(sq3, size, policy);
+		m2db_update_obj_count(sq3, count, policy);
+	}
+
+end:
+	g_ptr_array_free(policies, TRUE);
 }
 
 void
@@ -250,10 +304,59 @@ m2db_get_size(struct sqlx_sqlite3_s *sq3)
 	return sqlx_admin_get_i64(sq3, M2V2_ADMIN_SIZE, 0);
 }
 
+gint64
+m2db_get_size_by_policy(struct sqlx_sqlite3_s *sq3, const gchar *policy)
+{
+	gchar * policy_key = g_strdup_printf(M2V2_ADMIN_SIZE".%s", policy);
+	gint64 size = sqlx_admin_get_i64(sq3, policy_key, 0);
+	g_free(policy_key);
+	return size;
+}
+
+static gboolean
+_size_property_filter(const gchar *k)
+{
+	return g_str_has_prefix(k, M2V2_ADMIN_SIZE".");
+}
+
+gchar**
+m2db_get_size_properties_by_policy(struct sqlx_sqlite3_s *sq3)
+{
+	return sqlx_admin_get_keyvalues(sq3, _size_property_filter);
+}
+
 void
 m2db_set_size(struct sqlx_sqlite3_s *sq3, gint64 size)
 {
 	sqlx_admin_set_i64(sq3, M2V2_ADMIN_SIZE, (size>0)?size:0);
+	if (size <= 0) {
+		sqlx_admin_del_all_keys_with_prefix(sq3, M2V2_ADMIN_SIZE".",
+				NULL, NULL);
+	}
+}
+
+void
+m2db_set_size_by_policy(struct sqlx_sqlite3_s *sq3, gint64 size,
+		const gchar *policy)
+{
+	gchar * policy_key = g_strdup_printf(M2V2_ADMIN_SIZE".%s", policy);
+	if (size > 0) {
+		sqlx_admin_set_i64(sq3, policy_key, size);
+	} else {
+		sqlx_admin_del(sq3, policy_key);
+	}
+	g_free(policy_key);
+}
+
+void
+m2db_update_size(struct sqlx_sqlite3_s *sq3, gint64 inc, const gchar *policy)
+{
+	gint64 current_size = m2db_get_size(sq3);
+	m2db_set_size(sq3, current_size + inc);
+	if (policy) {
+		current_size = m2db_get_size_by_policy(sq3, policy);
+		m2db_set_size_by_policy(sq3, current_size + inc, policy);
+	}
 }
 
 gint64
@@ -268,10 +371,60 @@ m2db_get_obj_count(struct sqlx_sqlite3_s *sq3)
 	return sqlx_admin_get_i64(sq3, M2V2_ADMIN_OBJ_COUNT, 0);
 }
 
+gint64
+m2db_get_obj_count_by_policy(struct sqlx_sqlite3_s *sq3, const gchar *policy)
+{
+	gchar * policy_key = g_strdup_printf(M2V2_ADMIN_OBJ_COUNT".%s", policy);
+	gint64 count = sqlx_admin_get_i64(sq3, policy_key, 0);
+	g_free(policy_key);
+	return count;
+}
+
+static gboolean
+_obj_count_property_filter(const gchar *k)
+{
+	return g_str_has_prefix(k, M2V2_ADMIN_OBJ_COUNT".");
+}
+
+gchar**
+m2db_get_obj_count_properties_by_policy(struct sqlx_sqlite3_s *sq3)
+{
+	return sqlx_admin_get_keyvalues(sq3, _obj_count_property_filter);
+}
+
 void
 m2db_set_obj_count(struct sqlx_sqlite3_s *sq3, gint64 count)
 {
 	sqlx_admin_set_i64(sq3, M2V2_ADMIN_OBJ_COUNT, (count>0)?count:0);
+	if (count <= 0) {
+		sqlx_admin_del_all_keys_with_prefix(sq3, M2V2_ADMIN_OBJ_COUNT".",
+				NULL, NULL);
+	}
+}
+
+void
+m2db_set_obj_count_by_policy(struct sqlx_sqlite3_s *sq3, gint64 count,
+		const gchar *policy)
+{
+	gchar * policy_key = g_strdup_printf(M2V2_ADMIN_OBJ_COUNT".%s", policy);
+	if (count > 0) {
+		sqlx_admin_set_i64(sq3, policy_key, count);
+	} else {
+		sqlx_admin_del(sq3, policy_key);
+	}
+	g_free(policy_key);
+}
+
+void
+m2db_update_obj_count(struct sqlx_sqlite3_s *sq3, gint64 inc,
+		const gchar *policy)
+{
+	gint64 current_count = m2db_get_obj_count(sq3);
+	m2db_set_obj_count(sq3, current_count + inc);
+	if (policy) {
+		current_count = m2db_get_obj_count_by_policy(sq3, policy);
+		m2db_set_obj_count_by_policy(sq3, current_count + inc, policy);
+	}
 }
 
 gint64
@@ -1173,16 +1326,17 @@ _real_delete(struct sqlx_sqlite3_s *sq3, GSList *beans, GSList **deleted_beans)
 		}
 	}
 
-	gint64 obj_count = m2db_get_obj_count(sq3);
 	for (GSList *l = deleted; l; l = l->next) {
 		// recompute container size and object count
 		if (&descr_struct_CONTENTS_HEADERS == DESCR(l->data)) {
 			gint64 decrement = CONTENTS_HEADERS_get_size(l->data);
-			gint64 size = m2db_get_size(sq3) - decrement;
-			m2db_set_size(sq3, size);
-			GRID_DEBUG("CONTAINER size = %"G_GINT64_FORMAT
-					" (lost %"G_GINT64_FORMAT")", size, decrement);
-			obj_count--;
+			const gchar *policy = NULL;
+			GString *policy_str = CONTENTS_HEADERS_get_policy(l->data);
+			if (policy_str && policy_str->str) {
+				policy = policy_str->str;
+			}
+			m2db_update_size(sq3, -decrement, policy);
+			m2db_update_obj_count(sq3, -1, policy);
 		}
 
 		// But do not notify ALIAS already marked deleted
@@ -1193,7 +1347,6 @@ _real_delete(struct sqlx_sqlite3_s *sq3, GSList *beans, GSList **deleted_beans)
 			l->data = NULL;
 		}
 	}
-	m2db_set_obj_count(sq3, obj_count);
 
 end:
 	// deleted contains direct pointers to the original beans
@@ -1505,7 +1658,8 @@ m2db_truncate_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 
 	/* The header is required to compute the chunk IDs,
 	 * make a copy before modifiying it. */
-	discarded = g_slist_prepend(discarded, _bean_dup(content.header));
+	struct bean_CONTENTS_HEADERS_s *original_header = _bean_dup(content.header);
+	discarded = g_slist_prepend(discarded, original_header);
 	/* Update size and mtime in header */
 	const gint64 now = oio_ext_real_time() / G_TIME_SPAN_SECOND;
 	gint64 sz_gap = CONTENTS_HEADERS_get_size(content.header) - truncate_size;
@@ -1526,7 +1680,12 @@ m2db_truncate_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	err = _db_save_beans_list(sq3, kept);
 
 	if (!err) {
-		m2db_set_size(sq3, m2db_get_size(sq3) - sz_gap);
+		const gchar *policy = NULL;
+		GString *policy_str = CONTENTS_HEADERS_get_policy(original_header);
+		if (policy_str && policy_str->str) {
+			policy = policy_str->str;
+		}
+		m2db_update_size(sq3, -sz_gap, policy);
 		*out_added = kept;
 		*out_deleted = discarded;
 		// prevent cleanup
@@ -1623,11 +1782,30 @@ gint64 find_alias_version (GSList *beans) {
 	return -1;
 }
 
-static gint64 _fetch_content_size (GSList *beans) {
+static gint64
+_fetch_content_size(GSList *beans)
+{
 	for (GSList *l = beans; l; l = l->next) {
 		gpointer bean = l->data;
 		if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS)
 			return CONTENTS_HEADERS_get_size(bean);
+	}
+	return 0;
+}
+
+static const gchar*
+_fetch_content_policy(GSList *beans)
+{
+	for (GSList *l = beans; l; l = l->next) {
+		gpointer bean = l->data;
+		if (DESCR(bean) != &descr_struct_CONTENTS_HEADERS) {
+			continue;
+		}
+		GString *policy = CONTENTS_HEADERS_get_policy(bean);
+		if (policy && policy->str) {
+			return policy->str;
+		}
+		return NULL;
 	}
 	return 0;
 }
@@ -1745,9 +1923,6 @@ GError* m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 	_patch_beans_defaults(beans);
 	_patch_beans_with_time(beans, latest);
 
-	gint64 added_size = 0;
-	gint64 obj_count = m2db_get_obj_count(args->sq3);
-
 	if (!latest) {
 		/* put everything (and patch everything */
 		RANDOM_UID(uid, uid_size);
@@ -1755,8 +1930,9 @@ GError* m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 		_patch_beans_with_version(beans, find_alias_version(beans));
 		err = m2db_real_put_alias(args->sq3, beans, cb_added, u0_added);
 		if (!err) {
-			added_size = _fetch_content_size(beans);
-			obj_count++;
+			const gchar *policy = _fetch_content_policy(beans);
+			m2db_update_size(args->sq3, _fetch_content_size(beans), policy);
+			m2db_update_obj_count(args->sq3, 1, policy);
 		}
 	} else {
 		/* We found an ALIAS with the same name and version. Just add the chunks
@@ -1775,11 +1951,6 @@ GError* m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 			}
 		}
 		/* TODO need to recompute the container's size */
-	}
-
-	if (!err) {
-		m2db_set_size(args->sq3, m2db_get_size(args->sq3) + added_size);
-		m2db_set_obj_count(args->sq3, obj_count);
 	}
 
 cleanup:
@@ -1875,7 +2046,12 @@ GError* m2db_update_content(struct sqlx_sqlite3_s *sq3,
 		goto cleanup;
 
 	/* Update the size of the container and notify the caller with new beans */
-	m2db_set_size(sq3, m2db_get_size(sq3) + added_size);
+	const gchar *policy = NULL;
+	GString *policy_str = CONTENTS_HEADERS_get_policy(header);
+	if (policy_str && policy_str->str) {
+		policy = policy_str->str;
+	}
+	m2db_update_size(sq3, added_size, policy);
 	if (cb_deleted) {
 		cb_deleted(u0_deleted, g_slist_prepend(old_beans, header));
 		header = NULL;
@@ -2019,9 +2195,9 @@ suspended:
 		err = m2db_real_put_alias(args->sq3, beans, cb_added, u0_added);
 	}
 	if (!err) {
-		m2db_set_size(args->sq3,
-				m2db_get_size(args->sq3) + _fetch_content_size(beans));
-		m2db_set_obj_count(args->sq3, m2db_get_obj_count(args->sq3) + 1);
+		const gchar *policy = _fetch_content_policy(beans);
+		m2db_update_size(args->sq3,  _fetch_content_size(beans), policy);
+		m2db_update_obj_count(args->sq3, 1, policy);
 	}
 
 	/* Purge the latest alias if the condition was met */
@@ -2171,10 +2347,14 @@ m2db_change_alias_policy(struct m2db_put_args_s *args, GSList *new_beans,
 
 	err = m2db_real_put_alias(args->sq3, new_beans, cb_added, u0_added);
 	if (!err) {
-		m2db_set_size(args->sq3,
-				m2db_get_size(args->sq3) +
-				CONTENTS_HEADERS_get_size(new_header));
-		m2db_set_obj_count(args->sq3, m2db_get_obj_count(args->sq3) + 1);
+		gint64 size = CONTENTS_HEADERS_get_size(new_header);
+		const gchar *policy = NULL;
+		GString *policy_str = CONTENTS_HEADERS_get_policy(new_header);
+		if (policy_str && policy_str->str) {
+			policy = policy_str->str;
+		}
+		m2db_update_size(args->sq3, size, policy);
+		m2db_update_obj_count(args->sq3, 1, policy);
 	}
 
 label_end:
@@ -2302,8 +2482,14 @@ GError* m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 			cb(u0, _bean_dup(header));
 		}
 	}
-	if (!err)
-		m2db_set_size(sq3, m2db_get_size(sq3) + added_size);
+	if (!err) {
+		const gchar *policy = NULL;
+		GString *policy_str = CONTENTS_HEADERS_get_policy(header);
+		if (policy_str && policy_str->str) {
+			policy = policy_str->str;
+		}
+		m2db_update_size(sq3, added_size, policy);
+	}
 
 out:
 	_bean_cleanl2(newchunks);
@@ -3786,11 +3972,7 @@ end:
 	if (!err) {
 		if (max_entries_cleaned > 0) {
 			sqlx_admin_del_all_user(sq3, NULL, NULL);
-			guint64 size = 0;
-			gint64 obj_count = 0;
-			m2db_get_container_size_and_obj_count(sq3, FALSE, &size, &obj_count);
-			m2db_set_size(sq3, size);
-			m2db_set_obj_count(sq3, obj_count);
+			m2db_recompute_container_size_and_obj_count(sq3, FALSE);
 			*truncated = FALSE;
 		} else {
 			*truncated = TRUE;

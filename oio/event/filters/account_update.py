@@ -61,6 +61,10 @@ class AccountUpdateFilter(Filter):
                 for k1, k2 in (('objects', 'object-count'),
                                ('bytes', 'bytes-count')):
                     body[k1] = data.get(k2, 0)
+                for key in ('bytes-details', 'objects-details'):
+                    value = data.get(key)
+                    if value:
+                        body[key] = value
                 if event.event_type in (EventTypes.CONTAINER_STATE,
                                         EventTypes.CONTAINER_NEW):
                     body['mtime'] = mtime

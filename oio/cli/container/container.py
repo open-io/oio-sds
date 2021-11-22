@@ -462,6 +462,16 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
                                     "Namespace default"),
             'status': OIO_DB_STATUS_NAME.get(sys.get('sys.status'), "Unknown"),
         }
+        for key, value in sys.items():
+            if key.startswith(M2_PROP_USAGE + '.'):
+                key = f'bytes_usage.{key[len(M2_PROP_USAGE + "."):]}'
+                value = convert_size(int(value), unit="B")
+            elif key.startswith(M2_PROP_OBJECTS + '.'):
+                key = f'objects.{key[len(M2_PROP_OBJECTS + "."):]}'
+                value = convert_size(int(value))
+            else:
+                continue
+            info[key] = value
 
         if M2_PROP_SHARDING_STATE in sys:
             sharding_state = sys[M2_PROP_SHARDING_STATE]

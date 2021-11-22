@@ -104,9 +104,10 @@ void m2v2_shorten_chunk_ids(GSList *beans);
 
 typedef void (*m2_onbean_cb) (gpointer u, gpointer bean);
 
-/** Get the cumulated size and number of contents in the database. */
-void m2db_get_container_size_and_obj_count(struct sqlx_sqlite3_s *sq3,
-		gboolean check_alias, guint64 *size, gint64 *count);
+/** Recompute the cumulated size and number of contents in the database
+ * 	(for each policy). */
+void m2db_recompute_container_size_and_obj_count(struct sqlx_sqlite3_s *sq3,
+		gboolean check_alias);
 
 /** Get the number of shard ranges in the database. */
 void m2db_get_container_shard_count(struct sqlx_sqlite3_s *sq3,
@@ -131,11 +132,32 @@ gint64 m2db_get_quota(struct sqlx_sqlite3_s *sq3, gint64 def);
 
 gint64 m2db_get_size(struct sqlx_sqlite3_s *sq3);
 
+gint64 m2db_get_size_by_policy(struct sqlx_sqlite3_s *sq3, const gchar *policy);
+
+gchar** m2db_get_size_properties_by_policy(struct sqlx_sqlite3_s *sq3);
+
 void m2db_set_size(struct sqlx_sqlite3_s *sq3, gint64 size);
+
+void m2db_set_size_by_policy(struct sqlx_sqlite3_s *sq3, gint64 size,
+		const gchar *policy);
+
+void m2db_update_size(struct sqlx_sqlite3_s *sq3, gint64 inc,
+		const gchar *policy);
 
 gint64 m2db_get_obj_count(struct sqlx_sqlite3_s *sq3);
 
+gint64 m2db_get_obj_count_by_policy(struct sqlx_sqlite3_s *sq3,
+		const gchar *policy);
+
+gchar** m2db_get_obj_count_properties_by_policy(struct sqlx_sqlite3_s *sq3);
+
 void m2db_set_obj_count(struct sqlx_sqlite3_s *sq3, gint64 count);
+
+void m2db_set_obj_count_by_policy(struct sqlx_sqlite3_s *sq3, gint64 count,
+		const gchar *policy);
+
+void m2db_update_obj_count(struct sqlx_sqlite3_s *sq3, gint64 inc,
+		const gchar *policy);
 
 gint64 m2db_get_shard_count(struct sqlx_sqlite3_s *sq3);
 

@@ -28,7 +28,8 @@ from tests.utils import BaseTestCase, random_str, random_id, strange_paths
 from oio.common import exceptions as exc
 from oio.common.constants import OIO_DB_STATUS_NAME, OIO_DB_ENABLED, \
     OIO_DB_FROZEN, OIO_DB_DISABLED, OBJECT_METADATA_PREFIX, \
-    FORCEVERSIONING_HEADER, SIMULATEVERSIONING_HEADER
+    FORCEVERSIONING_HEADER, M2_PROP_OBJECTS, M2_PROP_USAGE, \
+    SIMULATEVERSIONING_HEADER
 from oio.common.easy_value import boolean_value
 from oio.conscience.client import ConscienceClient
 
@@ -484,7 +485,7 @@ class TestMeta2Containers(BaseTestCase):
                                 params=params)
             data = self.json_loads(resp.data)
             self.assertEqual(str(expected_object),
-                             data['system']['sys.m2.objects'])
+                             data['system'][M2_PROP_OBJECTS])
             resp = self.request('GET', self.url_container('list'),
                                 params=merge(params, {'all': 1}))
             data = self.json_loads(resp.data)
@@ -553,8 +554,16 @@ class TestMeta2Containers(BaseTestCase):
             resp = self.request('POST', self.url_container('get_properties'),
                                 params=params)
             data = self.json_loads(resp.data)
-            self.assertEqual(data['system']['sys.m2.objects'], str(objects))
-            self.assertEqual(data['system']['sys.m2.usage'], str(usage))
+            self.assertEqual(data['system'][M2_PROP_OBJECTS], str(objects))
+            self.assertEqual(data['system'][M2_PROP_USAGE], str(usage))
+            if objects:
+                self.assertEqual(objects, sum(
+                    (int(v) for k, v in data['system'].items()
+                     if k.startswith(M2_PROP_OBJECTS + '.'))))
+            if usage:
+                self.assertEqual(usage, sum(
+                    (int(v) for k, v in data['system'].items()
+                     if k.startswith(M2_PROP_USAGE + '.'))))
             resp = self.request('GET', self.url_container('list'),
                                 params=params)
             data = self.json_loads(resp.data)
@@ -653,7 +662,7 @@ class TestMeta2Containers(BaseTestCase):
                             params=params)
         data = json.loads(resp.data)
         self.assertNotIn("sys.m2.policy.version", data['system'].keys())
-        self.assertEqual("8", data['system'].get('sys.m2.objects', -1))
+        self.assertEqual("8", data['system'].get(M2_PROP_OBJECTS, -1))
 
         # delete two objects with header enabling versioning
         data = {'contents': [{'name': objs.pop()}, {'name': objs.pop()}]}
@@ -706,7 +715,7 @@ class TestMeta2Containers(BaseTestCase):
             data = json.loads(resp.data)
             self.assertEqual(str(len([version for version, deleted
                                       in versions.items() if not deleted])),
-                             data['system']['sys.m2.objects'])
+                             data['system'][M2_PROP_OBJECTS])
             if max_versions is None:
                 self.assertNotIn('sys.m2.policy.version',
                                  data['system'].keys())
@@ -1371,7 +1380,7 @@ class TestMeta2Contents(BaseTestCase):
                                 params=params)
             data = self.json_loads(resp.data)
             self.assertEqual(str(expected_object),
-                             data['system']['sys.m2.objects'])
+                             data['system'][M2_PROP_OBJECTS])
             resp = self.request('GET', self.url_container('list'),
                                 params=merge(params, {'all': 1}))
             data = self.json_loads(resp.data)

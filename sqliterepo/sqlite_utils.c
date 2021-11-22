@@ -165,13 +165,13 @@ sqlx_admin_del(struct sqlx_sqlite3_s *sq3, const gchar *k)
 }
 
 void
-sqlx_admin_del_all_user(struct sqlx_sqlite3_s *sq3, GTraverseFunc func,
-		gpointer data)
+sqlx_admin_del_all_keys_with_prefix(struct sqlx_sqlite3_s *sq3,
+		const gchar *prefix, GTraverseFunc func, gpointer data)
 {
 	gboolean runner(gchar *k, struct _cache_entry_s *v, gpointer i UNUSED) {
 		if (v->flag_deleted)
 			return FALSE;
-		if (g_str_has_prefix(k, SQLX_ADMIN_PREFIX_USER)) {
+		if (g_str_has_prefix(k, prefix)) {
 			v->flag_deleted = 1;
 			v->flag_changed = 1;
 			_dump_entry("change", k, v);
@@ -183,6 +183,14 @@ sqlx_admin_del_all_user(struct sqlx_sqlite3_s *sq3, GTraverseFunc func,
 	}
 	g_tree_foreach(sq3->admin, (GTraverseFunc)runner, NULL);
 	sq3->admin_dirty = TRUE;
+}
+
+void
+sqlx_admin_del_all_user(struct sqlx_sqlite3_s *sq3, GTraverseFunc func,
+		gpointer data)
+{
+	return sqlx_admin_del_all_keys_with_prefix(sq3, SQLX_ADMIN_PREFIX_USER,
+			func, data);
 }
 
 int
