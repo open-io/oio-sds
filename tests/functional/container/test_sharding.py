@@ -21,7 +21,7 @@ import time
 from oio.common.constants import M2_PROP_BUCKET_NAME, M2_PROP_OBJECTS, \
     M2_PROP_SHARDING_LOWER, M2_PROP_SHARDING_ROOT, M2_PROP_SHARDING_STATE, \
     M2_PROP_SHARDING_UPPER, NEW_SHARD_STATE_CLEANED_UP
-from oio.common.exceptions import NotFound
+from oio.common.exceptions import Forbidden, NotFound
 from oio.common.green import eventlet
 from oio.common.utils import cid_from_name, request_id
 from oio.container.sharding import ContainerSharding
@@ -79,22 +79,26 @@ class TestSharding(BaseTestCase):
         self.created[cname] = set()
 
     def _add_objects(self, cname, nb_objects, prefix='content',
-                     bucket=None):
+                     bucket=None, account=None, cname_root=None):
         reqid = None
+        if not account:
+            account = self.account
+        if not cname_root:
+            cname_root = cname
         for i in range(nb_objects):
             obj_name = '%s_%d' % (prefix, i)
             reqid = request_id()
             self.storage.object_create(
-                self.account, cname, obj_name=obj_name,
+                account, cname, obj_name=obj_name,
                 data=obj_name.encode('utf-8'), reqid=reqid)
-            self.created[cname].add(obj_name)
+            self.created[cname_root].add(obj_name)
         if bucket:
             self.wait_for_event('oio-preserved', reqid=reqid,
-                                fields={'account': self.account,
+                                fields={'account': account,
                                         'user': cname},
                                 types=(EventTypes.CONTAINER_STATE,))
             stats = self.storage.account.bucket_show(cname)
-            self.assertEqual(len(self.created[cname]), stats['objects'])
+            self.assertEqual(len(self.created[cname_root]), stats['objects'])
 
     def _delete_objects(self, cname, nb_objects, prefix='content',
                         bucket=None):
@@ -855,3 +859,132 @@ class TestSharding(BaseTestCase):
         # Try to trigger the shrinking with two different root containers
         self.assertRaises(ValueError, self.container_sharding.shrink_shards,
                           [shards[0], shards_bis[1]])
+
+    def _get_account_cname_shard(self, shard_index):
+        shards = self.container_sharding.show_shards(self.account,
+                                                     self.cname)
+        for _ in range(shard_index + 1):
+            shard_cid = next(shards)['cid']
+        props = self.storage.container.container_get_properties(cid=shard_cid)
+        shard_cname = props['system']['sys.user.name']
+        shard_account = '.shards_%s' % self.account
+        return shard_account, shard_cname
+
+    def _test_locate_on_shard(self, chunks, obj_name, shard_index):
+        shard_account, shard_cname = self._get_account_cname_shard(
+            shard_index)
+        _, chunks_shard = self.storage.object_locate(shard_account,
+                                                     shard_cname,
+                                                     obj_name)
+        self.assertCountEqual(chunks, chunks_shard)
+        for i in range(len(chunks)):
+            self.assertEqual(chunks[i]['url'], chunks_shard[i]['url'])
+            self.assertEqual(chunks[i]['real_url'],
+                             chunks_shard[i]['real_url'])
+
+    def test_locate_on_shard(self):
+        """
+        Check the locate command directly on the shard (with account and cname
+        of the shard).
+        """
+        nb_obj_to_add = 10
+        self._create(self.cname)
+        self._add_objects(self.cname, nb_obj_to_add)
+
+        # random object to locate (that will be located in first shard)
+        obj_id_s1 = random.randrange(nb_obj_to_add // 2)
+        obj_name_s1 = 'content_' + str(obj_id_s1)
+        _, chunks_s1 = self.storage.object_locate(self.account, self.cname,
+                                                  obj_name_s1)
+
+        # random object to locate (that will be located in second shard)
+        obj_id_s2 = random.randrange(nb_obj_to_add // 2, nb_obj_to_add)
+        obj_name_s2 = 'content_' + str(obj_id_s2)
+        _, chunks_s2 = self.storage.object_locate(self.account, self.cname,
+                                                  obj_name_s2)
+
+        # Split it in 2
+        params = {"partition": "50,50", "threshold": 1}
+        shards = self.container_sharding.find_shards(
+            self.account, self.cname,
+            strategy="shard-with-partition", strategy_params=params)
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname, shards, enable=True)
+        self.assertTrue(modified)
+
+        # Test locate on both shards
+        self._test_locate_on_shard(chunks_s1, obj_name_s1, 0)
+        self._test_locate_on_shard(chunks_s2, obj_name_s2, 1)
+
+    def test_create_on_shard(self):
+        """
+        Check the create command directly on the shard (with account and cname
+        of the shard).
+        Right now, it is not implemented, so check that 403 error is raised.
+        """
+        nb_obj_to_add = 10
+        self._create(self.cname)
+        self._add_objects(self.cname, nb_obj_to_add)
+
+        # Split it in 2
+        params = {"partition": "50,50", "threshold": 1}
+        shards = self.container_sharding.find_shards(
+            self.account, self.cname,
+            strategy="shard-with-partition", strategy_params=params)
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname, shards, enable=True)
+        self.assertTrue(modified)
+
+        # Get cname and account of the first shard
+        shard_account, shard_cname = self._get_account_cname_shard(0)
+        # Adding 1 object directly in this shard should raises a 403 error
+        self.assertRaises(Forbidden, self._add_objects, shard_cname, 1,
+                          prefix='content-bis', account=shard_account,
+                          cname_root=self.cname)
+        self._check_objects(self.cname)
+
+        # Get cname and account of the second shard
+        shard_account, shard_cname = self._get_account_cname_shard(1)
+        # Adding 1 object directly in this shard should raises a 403 error
+        self.assertRaises(Forbidden, self._add_objects, shard_cname, 1,
+                          prefix='contentbis', account=shard_account,
+                          cname_root=self.cname)
+        self._check_objects(self.cname)
+
+    def test_delete_on_shard(self):
+        """
+        Check the delete command directly on the shard (with account and cname
+        of the shard).
+        """
+        nb_obj_to_add = 10
+        self._create(self.cname)
+        self._add_objects(self.cname, nb_obj_to_add)
+
+        # Split it in 2
+        params = {"partition": "50,50", "threshold": 1}
+        shards = self.container_sharding.find_shards(
+            self.account, self.cname,
+            strategy="shard-with-partition", strategy_params=params)
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname, shards, enable=True)
+        self.assertTrue(modified)
+
+        # Get cname and account of the first shard
+        shard_account, shard_cname = self._get_account_cname_shard(0)
+        # Delete 1 object directly in this shard
+        file_id = random.randrange(nb_obj_to_add // 2)
+        obj_name = 'content_%s' % file_id
+        self.storage.object_delete(shard_account, shard_cname, obj_name)
+        self.created[self.cname].remove(obj_name)
+
+        self._check_objects(self.cname)
+
+        # Get cname and account of the second shard
+        shard_account, shard_cname = self._get_account_cname_shard(1)
+        # Delete 1 object directly in this shard
+        file_id = random.randrange(nb_obj_to_add // 2, nb_obj_to_add)
+        obj_name = 'content_%s' % file_id
+        self.storage.object_delete(shard_account, shard_cname, obj_name)
+        self.created[self.cname].remove(obj_name)
+
+        self._check_objects(self.cname)
