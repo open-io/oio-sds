@@ -16,7 +16,7 @@
 
 
 from oio.common.constants import REQID_HEADER, CONNECTION_TIMEOUT, \
-    READ_TIMEOUT, HIDDEN_ACCOUNTS
+    READ_TIMEOUT, HIDDEN_ACCOUNTS, M2_PROP_LOCATION
 from oio.common.exceptions import ClientException, OioTimeout
 from oio.common.utils import request_id
 from oio.event.evob import Event, EventError, EventTypes
@@ -60,12 +60,15 @@ class AccountUpdateFilter(Filter):
                 url = event.env.get('url')
                 body = dict()
                 body['bucket'] = data.get('bucket')
+                body['location'] = None
+                if 'system' in data.keys():
+                    if M2_PROP_LOCATION in data['system'].keys():
+                        body['location'] = data['system'][M2_PROP_LOCATION]
+
                 if 'properties' in data.keys():
                     if LOCATION_PROPERTY_KEY in data['properties'].keys():
                         body['location'] = \
                             data['properties'][LOCATION_PROPERTY_KEY]
-                    else:
-                        body['location'] = None
 
                 for k1, k2 in (('objects', 'object-count'),
                                ('bytes', 'bytes-count')):

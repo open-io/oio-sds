@@ -35,7 +35,8 @@ from oio.common.constants import \
     M2_PROP_SHARDING_TIMESTAMP, M2_PROP_SHARDING_UPPER, M2_PROP_SHARDS, \
     M2_PROP_STORAGE_POLICY, M2_PROP_USAGE, M2_PROP_VERSIONING_POLICY, \
     SHARDING_STATE_NAME, M2_PROP_DRAINING_STATE, DRAINING_STATE_NEEDED, \
-    DRAINING_STATE_NAME, M2_PROP_DRAINING_TIMESTAMP
+    DRAINING_STATE_NAME, M2_PROP_DRAINING_TIMESTAMP, \
+    M2_PROP_LOCATION
 from oio.common.easy_value import boolean_value, int_value, float_value
 
 
@@ -139,6 +140,10 @@ class CreateContainer(SetPropertyCommandMixin, Lister):
             help=('Declare the container belongs to the specified bucket')
         )
         parser.add_argument(
+            '--location',
+            help=('Declare the container belongs to the specified region')
+        )
+        parser.add_argument(
             'containers',
             metavar='<container-name>',
             nargs='+',
@@ -162,6 +167,8 @@ class CreateContainer(SetPropertyCommandMixin, Lister):
         if parsed_args.delete_exceeding_versions is not None:
             system[M2_PROP_DEL_EXC_VERSIONS] = \
                 str(int(parsed_args.delete_exceeding_versions))
+        if parsed_args.location:
+            system[M2_PROP_LOCATION] = parsed_args.location
 
         results = []
         account = self.app.client_manager.account
@@ -472,6 +479,7 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
         sys = data['system']
         ctime = float(sys[M2_PROP_CTIME]) / 1000000.
         bytes_usage = sys.get(M2_PROP_USAGE, 0)
+        location = sys.get(M2_PROP_LOCATION, "Location default")
         objects = sys.get(M2_PROP_OBJECTS, 0)
         shards = sys.get(M2_PROP_SHARDS, 0)
         if parsed_args.formatter == 'table':
@@ -485,6 +493,7 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
             'container': sys['sys.user.name'],
             'ctime': ctime,
             'bytes_usage': bytes_usage,
+            'location': location,
             'objects': objects,
             'shards': shards,
             'quota': sys.get(M2_PROP_QUOTA, "Namespace default"),
