@@ -511,6 +511,32 @@ m2db_del_drain_state(struct sqlx_sqlite3_s *sq3)
 	sqlx_admin_del(sq3, M2V2_ADMIN_DRAINING_STATE);
 }
 
+GError *
+m2db_get_drain_marker(struct sqlx_sqlite3_s *sq3, gchar **result)
+{
+	EXTRA_ASSERT(result != NULL);
+	*result = NULL;
+
+	gchar *marker = sqlx_admin_get_str(sq3, M2V2_ADMIN_DRAINING_MARKER);
+	if (marker != NULL) {
+		*result = marker;
+	}
+	
+	return NULL;
+}
+
+void
+m2db_set_drain_marker(struct sqlx_sqlite3_s *sq3, const gchar *marker)
+{
+	sqlx_admin_set_str(sq3, M2V2_ADMIN_DRAINING_MARKER, marker);
+}
+
+void
+m2db_del_drain_marker(struct sqlx_sqlite3_s *sq3)
+{
+	sqlx_admin_del(sq3, M2V2_ADMIN_DRAINING_MARKER);
+}
+
 gint64
 m2db_get_drain_timestamp(struct sqlx_sqlite3_s *sq3)
 {
@@ -3361,24 +3387,70 @@ _real_drain_beans(struct sqlx_sqlite3_s *sq3, GSList *beans,
 	return err;
 }
 
+static GVariant **
+_build_drain_container_clause(gchar *marker_start, GString *clause,
+		gint64 limit)
+{
+	GPtrArray *params = g_ptr_array_new ();
+	if (marker_start != NULL) {
+		g_string_append_static(clause, " alias > ?");
+		g_ptr_array_add(params, g_variant_new_string(marker_start));
+	}
+
+	if (clause->len == 0) {
+		clause = g_string_append_static (clause, " 1");
+	}
+
+	g_string_append_static(clause, " ORDER BY alias ASC, version DESC");
+
+	if (limit > 0) {
+		g_string_append_printf(clause, " LIMIT %"G_GINT64_FORMAT, limit);
+	}
+
+	g_ptr_array_add (params, NULL);
+	return (GVariant**) g_ptr_array_free (params, FALSE);
+}
+
 GError*
-m2db_drain_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0)
+m2db_drain_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0,
+		gboolean *truncated)
 {
 	GError *err = NULL;
+	gchar *marker_start = NULL;
+	err = m2db_get_drain_marker(sq3, &marker_start);
+	if (err) {
+		g_free(marker_start);
+		return err;
+	}
+	gchar *next_marker = NULL;
+	gint64 limit = meta2_drain_limit;
 	gint64 obj_count = 0;
-	gint64 drain_count = 0;
-
+	gint64 drain_count = m2db_get_drain_obj_count(sq3);
 	GPtrArray *tmp = g_ptr_array_new();
 	g_ptr_array_add(tmp, NULL);
 	GSList *beans = NULL;
 	GSList *deleted_beans = NULL;
 
 	GPtrArray *aliases = g_ptr_array_new();
-	GVariant *params[3] = {NULL};
-	gchar clause[1] = "1";
+	guint nb_aliases = 0;
 
-	err = ALIASES_load(sq3, clause, params, _bean_buffer_cb, aliases);
+	GString *clause = g_string_sized_new(128);
+	GVariant **params = _build_drain_container_clause(marker_start, clause,
+		limit + 1);
+
+	err = ALIASES_load(sq3, clause->str, params, _bean_buffer_cb, aliases);
 	metautils_gvariant_unrefv(params);
+	g_free(params), params = NULL;
+	g_string_free(clause, TRUE);
+
+	nb_aliases = aliases->len;
+	if (nb_aliases == limit + 1) {
+		next_marker = g_strdup(ALIASES_get_alias(aliases->pdata[limit-1])->str);
+		_bean_clean(aliases->pdata[limit]);
+		aliases->pdata[limit] = NULL;
+		g_ptr_array_remove_index_fast(aliases, limit);
+		*truncated = TRUE;
+	}
 
 	for (guint i = 0; !err && i < aliases->len; i++) {
 		tmp->pdata[0] = aliases->pdata[i];
@@ -3404,24 +3476,39 @@ m2db_drain_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0)
 	obj_count = m2db_get_obj_count(sq3);
 
 	if (drain_count < obj_count) {
+		if (!*truncated) {
+			err = SYSERR("Error during draining (not all expected objects "
+					"have been processed)");
+			goto end;
+		}
 		GRID_DEBUG("Draining not over yet: %ld/%ld", drain_count, obj_count);
 		m2db_set_drain_state(sq3, DRAINING_STATE_IN_PROGRESS);
 		m2db_set_drain_timestamp(sq3, oio_ext_real_time());
 		m2db_set_drain_obj_count(sq3, drain_count);
+		m2db_set_drain_marker(sq3, next_marker);
 	} else if (drain_count == obj_count) {
 		GRID_DEBUG("Container is drained");
+		if (*truncated) {
+			err = SYSERR("Error during draining (more objects have been "
+					"processed than expected)");
+			goto end;
+		}
 		/* Delete all temporary properties (objects are marked as drained
 		 * individually) */
 		m2db_del_drain_state(sq3);
 		m2db_del_drain_timestamp(sq3);
 		m2db_del_drain_obj_count(sq3);
+		m2db_del_drain_marker(sq3);
 	} else {
 		err = SYSERR("More objects drained than in the container");
 	}
 
+end:
 	tmp->pdata[0] = NULL;
 	g_ptr_array_free(tmp, TRUE);
 	_bean_cleanv2(aliases);
+	g_free(marker_start);
+	g_free(next_marker);
 
 	return err;
 }

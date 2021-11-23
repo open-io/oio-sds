@@ -16,7 +16,7 @@
 from oio.common.constants import DRAINING_STATE_IN_PROGRESS, \
     DRAINING_STATE_NEEDED, M2_PROP_ACCOUNT_NAME, \
     M2_PROP_CONTAINER_NAME, M2_PROP_DRAINING_STATE, M2_PROP_SHARDS
-from oio.common.easy_value import int_value
+from oio.common.easy_value import boolean_value, int_value
 from oio.container.sharding import ContainerSharding
 from oio.crawler.common.base import Filter
 from oio.crawler.meta2.meta2db import Meta2DB, Meta2DBError
@@ -45,9 +45,11 @@ class Draining(Filter):
         account = meta2db.system[M2_PROP_ACCOUNT_NAME]
         container = meta2db.system[M2_PROP_CONTAINER_NAME]
 
+        truncated = True
         try:
-            self.api.container_drain(account, container)
-
+            while truncated:
+                resp = self.api.container_drain(account, container)
+                truncated = boolean_value(resp.get('truncated'), False)
         except Exception as exc:
             self.errors += 1
             resp = Meta2DBError(

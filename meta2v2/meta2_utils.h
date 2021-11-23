@@ -183,6 +183,12 @@ void m2db_set_drain_state(struct sqlx_sqlite3_s *sq3, gint64 state);
 
 void m2db_del_drain_state(struct sqlx_sqlite3_s *sq3);
 
+GError* m2db_get_drain_marker(struct sqlx_sqlite3_s *sq3, gchar **result);
+
+void m2db_set_drain_marker(struct sqlx_sqlite3_s *sq3, const gchar *marker);
+
+void m2db_del_drain_marker(struct sqlx_sqlite3_s *sq3);
+
 gint64 m2db_get_drain_timestamp(struct sqlx_sqlite3_s *sq3);
 
 void m2db_set_drain_timestamp(struct sqlx_sqlite3_s *sq3, gint64 timestamp);
@@ -325,7 +331,7 @@ GError* m2db_flush_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb,
 		gpointer u0, gboolean *truncated);
 
 GError* m2db_drain_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb,
-		gpointer u0);
+		gpointer u0, gboolean *truncated);
 
 /* --- Low level ----------------------------------------------------------- */
 

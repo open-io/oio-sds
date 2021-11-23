@@ -105,6 +105,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define M2V2_ADMIN_DRAINING_STATE M2V2_ADMIN_PREFIX_DRAINING "state"
 # endif
 
+# ifndef M2V2_ADMIN_DRAINING_MARKER
+# define M2V2_ADMIN_DRAINING_MARKER M2V2_ADMIN_PREFIX_DRAINING "marker"
+# endif
+
 # ifndef M2V2_ADMIN_DRAINING_OBJ_COUNT
 # define M2V2_ADMIN_DRAINING_OBJ_COUNT M2V2_ADMIN_PREFIX_DRAINING "objects"
 # endif

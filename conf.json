@@ -38,6 +38,11 @@
 				"descr": "When adding alias with versioning, deletes exceeding versions.",
 				"def": false },
 
+			{ "type": "int64", "name": "meta2_drain_limit",
+					"key": "meta2.drain_limit",
+					"descr": "When draining a container, limits the number of drained objects per call.",
+					"def": 1000, "min": 0, "max": "100000" },
+
 			{ "type": "int64", "name": "meta2_flush_limit",
 				"key": "meta2.flush_limit",
 				"descr": "When flushing a container, limits the number of deleted objects.",

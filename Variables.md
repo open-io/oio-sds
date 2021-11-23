@@ -493,6 +493,15 @@ Used by `gcc`
  * type: gboolean
  * cmake directive: *OIO_META2_DELETE_EXCEEDING_VERSIONS*
 
+### meta2.drain_limit
+
+> When draining a container, limits the number of drained objects per call.
+
+ * default: **1000**
+ * type: gint64
+ * cmake directive: *OIO_META2_DRAIN_LIMIT*
+ * range: 0 -> 100000
+
 ### meta2.flush_limit
 
 > When flushing a container, limits the number of deleted objects.

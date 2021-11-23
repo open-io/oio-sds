@@ -320,6 +320,8 @@ class ContainerClient(ProxyClient):
         if resp.status != 204:
             raise exceptions.from_response(resp, body)
 
+        return resp.headers, body
+
     def container_show(self, account=None, reference=None, cid=None, **kwargs):
         """
         Get information about a container (like user properties).

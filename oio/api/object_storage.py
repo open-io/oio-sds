@@ -367,14 +367,17 @@ class ObjectStorageApi(object):
     @ensure_request_id
     def container_drain(self, account, container, **kwargs):
         """
-        Flush a container
+        Drain a container
 
         :param account: account from which to drain the container
         :type account: `str`
         :param container: name of the container
         :type container: `str`
         """
-        self.container.container_drain(account, container, **kwargs)
+        resp = {}
+        hdrs, _ = self.container.container_drain(account, container,  **kwargs)
+        resp['truncated'] = true_value(hdrs.get(HEADER_PREFIX + 'truncated'))
+        return resp
 
     @handle_account_not_found
     @patch_kwargs

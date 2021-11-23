@@ -1426,11 +1426,18 @@ action_m2_container_flush (struct req_args_s *args, struct json_object *j UNUSED
 static enum http_rc_e
 action_m2_container_drain(struct req_args_s *args, struct json_object *j UNUSED)
 {
-	PACKER_VOID(_pack) { return m2v2_remote_pack_container_DRAIN (args->url, DL()); }
-	GError *err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);
-	if (NULL != err)
-		return _reply_common_error (args, err);
-	return _reply_success_json (args, NULL);
+	GError *err = NULL;
+	gboolean truncated = FALSE;
+	PACKER_VOID(_pack) {
+		return m2v2_remote_pack_container_DRAIN (args->url, DL());
+	}
+	err = _resolve_meta2(args, _prefer_master(), _pack, &truncated,
+		m2v2_boolean_truncated_extract);
+
+	args->rp->add_header(PROXYD_HEADER_PREFIX "truncated",
+		g_strdup(truncated ? "true" : "false"));
+
+	return _reply_m2_error(args, err);
 }
 
 static enum http_rc_e
