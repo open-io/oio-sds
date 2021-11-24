@@ -3413,7 +3413,7 @@ _build_drain_container_clause(gchar *marker_start, GString *clause,
 
 GError*
 m2db_drain_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0,
-		gboolean *truncated)
+		gint64 limit, gboolean *truncated)
 {
 	GError *err = NULL;
 	gchar *marker_start = NULL;
@@ -3423,7 +3423,6 @@ m2db_drain_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0,
 		return err;
 	}
 	gchar *next_marker = NULL;
-	gint64 limit = meta2_drain_limit;
 	gint64 obj_count = 0;
 	gint64 drain_count = m2db_get_drain_obj_count(sq3);
 	GPtrArray *tmp = g_ptr_array_new();

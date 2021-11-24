@@ -73,3 +73,9 @@ use = egg:oio#logger
 [filter:draining]
 # Trigger the draining for a given container.
 use = egg:oio#draining
+# Drain limit for each call from the crawler to the meta2. It aims to limit
+# the number of draining events generated. Default to 1000.
+drain_limit = 1000
+# Drain limit for each pass/iteration of the crawler. It aims to limit the 
+# meta2 usage and to smooth out the calls over time. Default to 100000.
+drain_limit_per_pass = 100000

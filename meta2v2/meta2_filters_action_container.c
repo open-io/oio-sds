@@ -213,11 +213,19 @@ meta2_filter_action_drain_container(struct gridd_filter_ctx_s *ctx,
 {
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
+	const gchar *limit_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_LIMIT);
+	gint64 limit;
+	/* If no limit found in the context, take the default one in the conf.
+	 * Otherwise, take the lowest one. */
+	if (!oio_str_is_number(limit_str, &limit) || limit <= 0 ||
+			limit > meta2_drain_limit) {
+		limit = meta2_drain_limit;
+	}
 
 	GSList *beans_list_list = NULL;
 	gboolean truncated = FALSE;
 
-	GError *err = meta2_backend_drain_container(m2b, url, _bean_list_cb,
+	GError *err = meta2_backend_drain_container(m2b, url, limit, _bean_list_cb,
 			&beans_list_list, &truncated);
 
 	if (err != NULL) {

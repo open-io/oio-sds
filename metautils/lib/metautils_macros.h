@@ -68,6 +68,7 @@ License along with this library.
 #define NAME_MSGKEY_FROZEN             "FROZEN"
 #define NAME_MSGKEY_FULL               "FULL"
 #define NAME_MSGKEY_KEY                "K"
+#define NAME_MSGKEY_LIMIT              "LIMIT"
 #define NAME_MSGKEY_LOCAL              "LOCAL"
 #define NAME_MSGKEY_MASTER             "MASTER"
 #define NAME_MSGKEY_MARKER             "MRK"

@@ -331,7 +331,7 @@ GError* m2db_flush_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb,
 		gpointer u0, gboolean *truncated);
 
 GError* m2db_drain_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb,
-		gpointer u0, gboolean *truncated);
+		gpointer u0, gint64 limit, gboolean *truncated);
 
 /* --- Low level ----------------------------------------------------------- */
 

@@ -345,6 +345,17 @@ meta2_filter_extract_list_params(struct gridd_filter_ctx_s *ctx,
 }
 
 int
+meta2_filter_extract_limit(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GError *e = NULL;
+	gchar buf[1024];
+	TRACE_FILTER();
+	EXTRACT_OPT(NAME_MSGKEY_LIMIT);
+	return FILTER_OK;
+}
+
+int
 meta2_filter_extract_force_versioning(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {

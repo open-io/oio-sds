@@ -75,6 +75,7 @@ M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_delete_marker);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_overwrite);
 M2V2_DECLARE_FILTER(meta2_filter_extract_header_string_maxvers);
 M2V2_DECLARE_FILTER(meta2_filter_extract_list_params);
+M2V2_DECLARE_FILTER(meta2_filter_extract_limit);
 M2V2_DECLARE_FILTER(meta2_filter_extract_admin);
 M2V2_DECLARE_FILTER(meta2_filter_extract_force_master);
 M2V2_DECLARE_FILTER(meta2_filter_extract_user_agent);

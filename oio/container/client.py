@@ -296,7 +296,7 @@ class ContainerClient(ProxyClient):
             raise exceptions.ContainerNotEmpty(exc)
 
     def container_drain(self, account=None, reference=None,
-                        cid=None, **kwargs):
+                        cid=None, limit=None, **kwargs):
         """
         Drain a container.
 
@@ -307,10 +307,14 @@ class ContainerClient(ProxyClient):
         :param cid: container id that can be used instead of account
             and reference
         :type cid: `str`
+        :param limit: drain limit for each call from the crawler to the meta2.
+        :type limit: `int`
         :keyword headers: extra headers to send to the proxy
         :type headers: `dict`
         """
         params = self._make_params(account, reference, cid=cid)
+        if limit:
+            params.update({'limit': limit})
 
         del_cached_container_metadata(
             account=account, reference=reference, cid=cid, **kwargs)

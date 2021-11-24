@@ -1428,14 +1428,19 @@ action_m2_container_drain(struct req_args_s *args, struct json_object *j UNUSED)
 {
 	GError *err = NULL;
 	gboolean truncated = FALSE;
-	PACKER_VOID(_pack) {
-		return m2v2_remote_pack_container_DRAIN (args->url, DL());
-	}
-	err = _resolve_meta2(args, _prefer_master(), _pack, &truncated,
-		m2v2_boolean_truncated_extract);
+	const gchar *limit_str = OPT("limit");
+	if (limit_str != NULL && !oio_str_is_number(limit_str, NULL)) {
+		err = BADREQ("Invalid limit parameter: %s", limit_str);
+	} else {
+		PACKER_VOID(_pack) {
+			return m2v2_remote_pack_container_DRAIN(args->url, limit_str, DL());
+		}
+		err = _resolve_meta2(args, _prefer_master(), _pack, &truncated,
+			m2v2_boolean_truncated_extract);
 
-	args->rp->add_header(PROXYD_HEADER_PREFIX "truncated",
-		g_strdup(truncated ? "true" : "false"));
+		args->rp->add_header(PROXYD_HEADER_PREFIX "truncated",
+			g_strdup(truncated ? "true" : "false"));
+	}
 
 	return _reply_m2_error(args, err);
 }

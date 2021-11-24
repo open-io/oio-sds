@@ -55,6 +55,7 @@ GError* m2v2_remote_execute_DESTROY(
 
 GByteArray* m2v2_remote_pack_container_DRAIN(
 		struct oio_url_s *url,
+		const char *limit_str,
 		gint64 deadline);
 
 /* deadline known from thread-local

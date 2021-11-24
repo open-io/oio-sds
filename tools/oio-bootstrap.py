@@ -320,6 +320,8 @@ hard_max_unused_pages_ratio = 0.2
 
 [filter:draining]
 use = egg:oio#draining
+drain_limit = 1000
+drain_limit_per_pass = 100000
 
 [filter:logger]
 use = egg:oio#logger

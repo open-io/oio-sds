@@ -28,9 +28,19 @@ class Draining(Filter):
     """
 
     NAME = 'Draining'
+    DEFAULT_DRAIN_LIMIT = 1000
+    DEFAULT_DRAIN_LIMIT_PER_PASS = 100000
 
     def init(self):
         self.api = self.app_env['api']
+        self.drain_limit = int_value(self.conf.get('drain_limit'),
+                                     Draining.DEFAULT_DRAIN_LIMIT)
+        self.limit_per_pass = int_value(self.conf.get('drain_limit_per_pass'),
+                                        Draining.DEFAULT_DRAIN_LIMIT_PER_PASS)
+
+        if self.drain_limit > self.limit_per_pass:
+            raise ValueError('Drain limit should never be greater than the '
+                             'limit per pass')
 
         self.container_sharding = ContainerSharding(
             self.conf, logger=self.logger,
@@ -46,10 +56,15 @@ class Draining(Filter):
         container = meta2db.system[M2_PROP_CONTAINER_NAME]
 
         truncated = True
+        nb_objects = 0
         try:
-            while truncated:
-                resp = self.api.container_drain(account, container)
+            while truncated and \
+                    nb_objects + self.drain_limit <= self.limit_per_pass:
+                resp = self.api.container_drain(account, container,
+                                                limit=self.drain_limit)
                 truncated = boolean_value(resp.get('truncated'), False)
+                if truncated:
+                    nb_objects = nb_objects + self.drain_limit
         except Exception as exc:
             self.errors += 1
             resp = Meta2DBError(
