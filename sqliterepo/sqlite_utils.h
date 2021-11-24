@@ -211,6 +211,9 @@ void db_properties_add(
 GString * db_properties_to_json(
 		struct db_properties_s *db_properties, GString *json);
 
+GPtrArray * db_properties_system_to_gpa(struct db_properties_s *db_properties,
+		GPtrArray *gpa);
+
 gboolean db_properties_has_system_property(
 		struct db_properties_s *db_properties, gchar **properties);
 

@@ -18,6 +18,7 @@
 
 from six import iteritems
 from logging import getLogger
+from time import time as now
 
 from oio.cli import Command, Lister, ShowOne
 from oio.common.exceptions import NoSuchContainer
@@ -33,7 +34,8 @@ from oio.common.constants import \
     M2_PROP_SHARDING_ROOT, M2_PROP_SHARDING_STATE, \
     M2_PROP_SHARDING_TIMESTAMP, M2_PROP_SHARDING_UPPER, M2_PROP_SHARDS, \
     M2_PROP_STORAGE_POLICY, M2_PROP_USAGE, M2_PROP_VERSIONING_POLICY, \
-    SHARDING_STATE_NAME
+    SHARDING_STATE_NAME, M2_PROP_DRAINING_STATE, DRAINING_STATE_NEEDED, \
+    M2_PROP_DRAINING_TIMESTAMP
 from oio.common.easy_value import boolean_value, int_value, float_value
 
 
@@ -383,6 +385,33 @@ class FlushContainer(ContainerCommandMixin, Command):
                     parsed_args.cid)
         self.app.client_manager.storage.container_flush(
             account, container, fast=parsed_args.quick)
+
+
+class DrainContainer(ContainersCommandMixin, Command):
+    """Drain an object container."""
+
+    log = getLogger(__name__ + '.DrainContainer')
+
+    def get_parser(self, prog_name):
+        parser = super(DrainContainer, self).get_parser(prog_name)
+        self.patch_parser_container(parser)
+        return parser
+
+    def take_action(self, parsed_args):
+        self.log.debug('take_action(%s)', parsed_args)
+
+        system = {M2_PROP_DRAINING_STATE: str(DRAINING_STATE_NEEDED),
+                  M2_PROP_DRAINING_TIMESTAMP: str(round(now() * 1000000))}
+        for container in parsed_args.containers:
+            account = self.app.client_manager.account
+            cid = None
+            if parsed_args.is_cid:
+                cid = container
+
+            self.app.client_manager.storage.container_set_properties(
+                account, container, cid=cid, system=system,
+                propagate_to_shards=True
+            )
 
 
 class ShowBucket(ShowOne):

@@ -583,14 +583,14 @@ sqlx_repository_configure_db_properties_change_callback(
 void
 sqlx_repository_call_db_properties_change_callback(
 		struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
-		struct db_properties_s *db_properties)
+		struct db_properties_s *db_properties, gboolean propagate_to_shards)
 {
 	if (!sq3 || !sq3->repo || !sq3->repo->running
 			|| !sq3->repo->db_properties_change_callback)
 		return;
 	return sq3->repo->db_properties_change_callback(sq3,
 			sq3->repo->db_properties_change_callback_data,
-			url, db_properties);
+			url, db_properties, propagate_to_shards);
 }
 
 void

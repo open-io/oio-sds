@@ -83,6 +83,9 @@ SHARDING_STATE_NAME = {
     NEW_SHARD_STATE_CLEANED_UP: 'Cleaned up'
 }
 
+DRAINING_STATE_NEEDED = 1
+DRAINING_STATE_IN_PROGRESS = 2
+
 CONTAINER_HEADERS = {
     "size": "%ssys-m2-usage" % CONTAINER_METADATA_PREFIX,
     "ns": "%ssys-ns" % CONTAINER_METADATA_PREFIX
@@ -216,6 +219,10 @@ M2_PROP_STORAGE_POLICY = 'sys.m2.policy.storage'
 M2_PROP_USAGE = 'sys.m2.usage'
 # Number of object versions to keep. -1 for unlimited.
 M2_PROP_VERSIONING_POLICY = 'sys.m2.policy.version'
+# Draining state for the container and its shards.
+M2_PROP_DRAINING_STATE = 'sys.m2.draining.state'
+# Draining timestamp for the container and its shards.
+M2_PROP_DRAINING_TIMESTAMP = 'sys.m2.draining.timestamp'
 
 # HTTP Content-Type
 HTTP_CONTENT_TYPE_BINARY = 'application/octet-stream'

@@ -276,12 +276,16 @@ sqlx_pack_PROPDEL(struct oio_url_s *url, const struct sqlx_name_s *name,
 
 GByteArray *
 sqlx_pack_PROPSET_tab(struct oio_url_s *url, const struct sqlx_name_s *name,
-		gboolean flush, gchar **kv, gint64 deadline)
+		gboolean flush, gboolean propagate_to_shards, gchar **kv, gint64 deadline)
 {
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PROPSET, url, name, deadline);
-	if (flush)
-		metautils_message_add_field_strint (req, NAME_MSGKEY_FLUSH, 1);
-	metautils_message_add_body_unref (req, KV_encode_gba((gchar**)kv));
+	if (flush) {
+		metautils_message_add_field_strint(req, NAME_MSGKEY_FLUSH, 1);
+	}
+	if (propagate_to_shards) {
+		metautils_message_add_field_strint(req, NAME_MSGKEY_PROPAGATE_SHARDS, 1);
+	}
+	metautils_message_add_body_unref(req, KV_encode_gba((gchar**)kv));
 	return message_marshall_gba_and_clean(req);
 }
 

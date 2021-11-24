@@ -85,6 +85,7 @@ License along with this library.
 #define NAME_MSGKEY_OVERWRITE          "OVERWRITE"
 #define NAME_MSGKEY_PERFDATA           "PERF"
 #define NAME_MSGKEY_PREFIX             "PREFIX"
+#define NAME_MSGKEY_PROPAGATE_SHARDS   "PROP_SHARDS"
 #define NAME_MSGKEY_QUERY              "Q"
 #define NAME_MSGKEY_RECOMPUTE          "RECOMPUTE"
 #define NAME_MSGKEY_REPLICAS           "REPLICAS"

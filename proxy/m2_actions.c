@@ -1596,7 +1596,7 @@ _update_shard_properties(struct req_args_s *args, guint status)
 			oio_url_set(shard_url, OIOURL_HEXID, shard_cid);
 			args->url = shard_url;
 			PACKER_VOID(_pack) {
-				return sqlx_pack_PROPSET_tab(args->url, _u, FALSE,
+				return sqlx_pack_PROPSET_tab(args->url, _u, FALSE, FALSE,
 						shared_properties, DL());
 			};
 			err = _resolve_meta2(args, _prefer_master(), _pack, NULL, NULL);

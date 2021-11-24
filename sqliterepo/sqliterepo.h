@@ -51,7 +51,8 @@ typedef void (*sqlx_repo_change_hook)(struct sqlx_sqlite3_s *sq3,
 
 typedef void (*sqlx_repo_db_properties_change_hook)(struct sqlx_sqlite3_s *sq3,
 		gpointer cb_data, struct oio_url_s *url,
-		struct db_properties_s *db_properties);
+		struct db_properties_s *db_properties,
+		gboolean propagate_to_shards);
 
 typedef void (*sqlx_file_locator_f) (gpointer locator_data,
 		const struct sqlx_name_s *n, GString *file_name);
@@ -220,7 +221,8 @@ void sqlx_repository_configure_db_properties_change_callback(
 
 void sqlx_repository_call_db_properties_change_callback(
 		struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
-		struct db_properties_s *db_properties);
+		struct db_properties_s *db_properties,
+		gboolean propagate_to_shards);
 
 /* Bases operations -------------------------------------------------------- */
 

@@ -211,9 +211,11 @@ action_sqlx_propset_with_decoder(struct req_args_s *args,
 	}
 
 	gboolean flush = _request_get_flag(args, "flush");
+	gboolean propagate_to_shards = _request_get_flag(args, "propagate_to_shards");
 	GByteArray * _pack (const struct sqlx_name_s *n,
 			const gchar **headers UNUSED) {
-		return sqlx_pack_PROPSET_tab(args->url, n, flush, kv, DL());
+		return sqlx_pack_PROPSET_tab(args->url, n, flush, propagate_to_shards,
+				kv, DL());
 	}
 	err = gridd_request_replicated_with_retry(args, &ctx, _pack);
 	if (err) {

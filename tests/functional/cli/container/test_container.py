@@ -358,6 +358,32 @@ class ContainerTest(CliTestCase):
     def test_container_flush_quickly_with_cid(self):
         self._test_container_flush_quickly(with_cid=True)
 
+    def _test_container_drain(self, with_cid=False):
+        cid_opt = ''
+        name = self.NAME
+        if with_cid:
+            cid_opt = '--cid '
+            name = self.CID
+        with tempfile.NamedTemporaryFile() as ntf:
+            ntf.write(b'test_exists')
+            ntf.flush()
+            obj = ntf.name
+            for _ in range(5):
+                obj_name = random_str(6)
+                self.openio('object create ' + cid_opt + name
+                            + ' ' + obj + ' --name ' + obj_name)
+        output = self.openio('container drain ' + cid_opt + name)
+        self.assertEqual('', output)
+        # Clean container as teardown expect an empty one
+        output = self.openio('container flush ' + cid_opt + name)
+        self.assertEqual('', output)
+
+    def test_container_drain(self):
+        self._test_container_drain()
+
+    def test_container_drain_with_cid(self):
+        self._test_container_drain(with_cid=True)
+
     def _test_container_set_bucket_name(self, with_cid=False):
         cid_opt = ' '
         name = self.NAME

@@ -678,10 +678,11 @@ _snapshot_from(const gchar *src_addr, struct sqlx_repository_s *repo,
 
 /* ------------------------------------------------------------------------- */
 
-#define FLAG_LOCAL      0x02
-#define FLAG_NOCHECK    0x08
-#define FLAG_CHUNKED    0x10
-#define FLAG_FLUSH      0x20
+#define FLAG_LOCAL                  0x02
+#define FLAG_NOCHECK                0x08
+#define FLAG_CHUNKED                0x10
+#define FLAG_FLUSH                  0x20
+#define FLAG_PROPAGATE_TO_SHARDS    0x40
 
 static GError *
 _load_sqlx_name (struct gridd_reply_ctx_s *ctx,
@@ -693,9 +694,9 @@ _load_sqlx_name (struct gridd_reply_ctx_s *ctx,
 		base[LIMIT_LENGTH_BASENAME],
 		type[LIMIT_LENGTH_BASETYPE],
 		suffix[LIMIT_LENGTH_BASESUFFIX];
-	gboolean flush, nocheck, local, chunked;
+	gboolean flush, nocheck, local, chunked, propagate_to_shards;
 
-	flush = local = nocheck = chunked = FALSE;
+	flush = local = nocheck = chunked = propagate_to_shards = FALSE;
 
 	err = metautils_message_extract_string(ctx->request,
 			NAME_MSGKEY_NAMESPACE, ns, sizeof(ns));
@@ -724,6 +725,8 @@ _load_sqlx_name (struct gridd_reply_ctx_s *ctx,
 			NAME_MSGKEY_CHUNKED, FALSE);
 	flush = metautils_message_extract_flag(ctx->request,
 			NAME_MSGKEY_FLUSH, FALSE);
+	propagate_to_shards = metautils_message_extract_flag(ctx->request,
+			NAME_MSGKEY_PROPAGATE_SHARDS, FALSE);
 
 	ctx->subject("base:%s.%s\top_type:%s", base, type, local ? "local" : "replicated");
 
@@ -739,6 +742,7 @@ _load_sqlx_name (struct gridd_reply_ctx_s *ctx,
 		*pflags |= (nocheck ? FLAG_NOCHECK : 0);
 		*pflags |= (chunked ? FLAG_CHUNKED : 0);
 		*pflags |= (flush ? FLAG_FLUSH : 0);
+		*pflags |= (propagate_to_shards ? FLAG_PROPAGATE_TO_SHARDS : 0);
 	}
 	return NULL;
 }
@@ -1396,7 +1400,7 @@ _handler_PROPDEL(struct gridd_reply_ctx_s *reply,
 		struct oio_url_s *url = metautils_message_extract_url(
 				reply->request);
 		sqlx_repository_call_db_properties_change_callback(
-				sq3, url, db_properties);
+				sq3, url, db_properties, FALSE);
 		oio_url_clean(url);
 	}
 
@@ -1558,7 +1562,7 @@ _handler_PROPSET(struct gridd_reply_ctx_s *reply,
 		struct oio_url_s *url = metautils_message_extract_url(
 				reply->request);
 		sqlx_repository_call_db_properties_change_callback(
-				sq3, url, db_properties);
+				sq3, url, db_properties, flags & FLAG_PROPAGATE_TO_SHARDS);
 		oio_url_clean(url);
 	}
 

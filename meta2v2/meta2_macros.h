@@ -97,6 +97,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define M2V2_ADMIN_SHARDING_PREVIOUS_UPPER M2V2_ADMIN_SHARDING_UPPER ".previous"
 # endif
 
+# ifndef M2V2_ADMIN_PREFIX_DRAINING
+# define M2V2_ADMIN_PREFIX_DRAINING M2V2_ADMIN_PREFIX_SYS "draining."
+# endif
+
+# ifndef M2V2_ADMIN_DRAINING_STATE
+# define M2V2_ADMIN_DRAINING_STATE M2V2_ADMIN_PREFIX_DRAINING "state"
+# endif
+
 # ifndef M2V2_ADMIN_CTIME
 # define M2V2_ADMIN_CTIME M2V2_ADMIN_PREFIX_SYS "ctime"
 # endif
@@ -242,5 +250,13 @@ enum sharding_state_e {
 		&& (S) != EXISTING_SHARD_STATE_SHARDED \
 		&& (S) != NEW_SHARD_STATE_CLEANED_UP \
 		&& (S) != EXISTING_SHARD_STATE_ABORTED)
+
+/* Draining ----------------------------------------------------------------- */
+
+enum draining_state_e {
+	// Container to drain
+	DRAINING_STATE_NEEDED = 1,
+	DRAINING_STATE_IN_PROGRESS,
+};
 
 #endif /*OIO_SDS__meta2v2__meta2_macros_h*/

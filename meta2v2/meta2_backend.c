@@ -2007,7 +2007,6 @@ meta2_backend_set_properties(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	struct sqlx_repctx_s *repctx = NULL;
 
 	GRID_TRACE("M2 PROPSET(%s)", oio_url_get(url, OIOURL_WHOLE));
-
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
 
@@ -2175,10 +2174,12 @@ meta2_backend_change_callback(struct sqlx_sqlite3_s *sq3,
 }
 
 void
-meta2_backend_db_properties_change_callback(struct sqlx_sqlite3_s *sq3 UNUSED,
+meta2_backend_db_properties_change_callback(struct sqlx_sqlite3_s *sq3,
 		struct meta2_backend_s *m2b, struct oio_url_s *url,
-		struct db_properties_s *db_properties)
+		struct db_properties_s *db_properties, gboolean propagate_to_shards UNUSED)
 {
+	GPtrArray *tmp = g_ptr_array_new();
+
 	if (m2b->notifier_container_updated) {
 		GString *event = oio_event__create_with_id(
 				META2_EVENTS_PREFIX ".container.update", url,
@@ -2197,19 +2198,27 @@ meta2_backend_db_properties_change_callback(struct sqlx_sqlite3_s *sq3 UNUSED,
 	if (!m2db_get_shard_count(sq3)) {
 		return;
 	}
-	if (!db_properties_has_system_property(db_properties, SHARED_KEYS)) {
-		return;
+	if (db_properties_has_system_property(db_properties, SHARED_KEYS)) {
+		// Share some properties with the shard
+		for (gchar **shared_key=SHARED_KEYS; *shared_key; shared_key+=1) {
+			gchar *value = sqlx_admin_get_str(sq3, *shared_key);
+			g_ptr_array_add(tmp, g_strdup(*shared_key));
+			g_ptr_array_add(tmp, value ? value : g_strdup(""));
+		}
 	}
 
-	// Share some properties with the shard
-	GPtrArray *tmp = g_ptr_array_new();
-	for (gchar **shared_key=SHARED_KEYS; *shared_key; shared_key+=1) {
-		gchar *value = sqlx_admin_get_str(sq3, *shared_key);
-		g_ptr_array_add(tmp, g_strdup(*shared_key));
-		g_ptr_array_add(tmp, value ? value : g_strdup(""));
+	/* If <propagate_to_shards> is True, user explicitely wants to propagate
+	 * the properties to the shards */
+	if (propagate_to_shards) {
+		tmp = db_properties_system_to_gpa(db_properties, tmp);
 	}
-	oio_ext_set_shared_properties(
-			(gchar**) metautils_gpa_to_array(tmp, TRUE));
+
+	if (tmp->len > 0) {
+		oio_ext_set_shared_properties(
+				(gchar**) metautils_gpa_to_array(tmp, TRUE));
+	} else {
+		g_ptr_array_free(tmp, TRUE);
+	}
 }
 
 /**
