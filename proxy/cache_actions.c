@@ -31,10 +31,14 @@ action_forward_stats (struct req_args_s *args)
 	const char *id = OPT("id");
 	if (!id)
 		return _reply_format_error (args, BADREQ("Missing SRVID"));
+	const char *format = OPT("format");
 
 	MESSAGE req = metautils_message_create_named("REQ_STATS",
 			oio_clamp_deadline(proxy_timeout_stat, oio_ext_get_deadline()));
-	GByteArray *encoded = message_marshall_gba_and_clean (req);
+	if (format) {
+		metautils_message_add_field_str(req, NAME_MSGKEY_FORMAT, format);
+	}
+	GByteArray *encoded = message_marshall_gba_and_clean(req);
 	gchar *packed = NULL;
 	GError *err = gridd_client_exec_and_concat_string(id,
 			oio_clamp_timeout(proxy_timeout_stat, oio_ext_get_deadline()),
@@ -48,8 +52,6 @@ action_forward_stats (struct req_args_s *args)
 		}
 		return _reply_common_error (args, err);
 	}
-
-	for (gchar *s=packed; *s ;++s) { if (*s == '=') *s = ' '; }
 
 	return _reply_success_bytes(args, HTTP_CONTENT_TYPE_TEXT,
 			g_bytes_new_take((guint8*)packed, strlen(packed)));

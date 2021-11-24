@@ -698,7 +698,9 @@ sqlx_service_action(void)
 			return _action_report_error(err, "Volume lock failed");
 	}
 
+	oio_server_service_id = sqlx_get_service_id();
 	oio_server_volume = SRV.volume;
+	oio_server_namespace = SRV.ns_name;
 
 	election_manager_set_peering(SRV.election_manager, SRV.peering);
 	if (SRV.sync_tab && SRV.sync_tab->len > 0) {

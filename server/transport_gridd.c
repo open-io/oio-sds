@@ -91,7 +91,9 @@ static gboolean _client_manage_l4v(struct network_client_s *clt, GByteArray *gba
 /* XXX(jfs): ugly quirk, ok, but helpful to keep simple the stats support in
  * the server but allow it to reply "config volume /path/to/docroot" in its
  * stats. */
+const char *oio_server_service_id = NULL;
 const char *oio_server_volume = NULL;
+const char *oio_server_namespace = NULL;
 
 static int _local_variable = 0;
 
@@ -852,31 +854,139 @@ dispatch_REDIRECT(struct gridd_reply_ctx_s *reply,
 	return TRUE;
 }
 
-#define VOLPREFIX "config volume="
+#define VOLPREFIX "config volume "
+
+static GByteArray*
+_convert_stats_to_prometheus(GArray *stats)
+{
+	// Rough estimate, will be automatically resized if needed
+	GByteArray *body = g_byte_array_sized_new(stats->len * 64);
+	gchar **stat = NULL;
+	gchar **tags = NULL;
+	GString *key_suffix = NULL;
+	GString *labels_suffix = NULL;
+	for (guint i = 0; i < stats->len; ++i) {
+		stat = NULL;
+		tags = NULL;
+		key_suffix = g_string_sized_new(16);
+		labels_suffix = g_string_sized_new(16);
+		const struct stat_record_s *st =
+				&g_array_index(stats, struct stat_record_s, i);
+		stat = g_strsplit(g_quark_to_string(st->which), " ", 3);
+		if (g_strv_length(stat) != 2) {
+			goto error;
+		}
+		if (strcmp(stat[0], "counter") == 0) {
+			tags = g_strsplit(stat[1], ".", 4);
+			if (g_strv_length(tags) < 1) {
+				goto error;
+			}
+			if (strcmp(tags[0], "req") == 0) {
+				if (g_strv_length(tags) != 3) {
+					if (g_strv_length(tags) == 2
+							&& (strcmp(tags[1], "hits")
+								|| strcmp(tags[1], "time"))) {
+						/* req.hits and req.time must not be exported
+						 * to prometheus as it's the sum of all the methods
+						 * (prom will do the sum) */
+						goto next;
+					}
+					goto error;
+				}
+				if (strcmp(tags[1], "hits") == 0) {
+					g_string_append_static(key_suffix, "requests_");
+				} else if (strcmp(tags[1], "time") == 0) {
+					g_string_append_static(key_suffix,
+							"requests_duration_second_");
+				} else {
+					goto error;
+				}
+				g_string_append_static(key_suffix, "total");
+				g_string_append_printf(labels_suffix, ",method=\"%s\"",
+						tags[2]);
+				goto next;
+			}
+			if (strcmp(tags[0], "cnx") == 0) {
+				if (g_strv_length(tags) != 2) {
+					goto error;
+				}
+				g_string_append_static(key_suffix, "connections_total");
+				g_string_append_printf(labels_suffix, ",type=\"%s\"", tags[1]);
+				goto next;
+			}
+			goto error;
+		}
+		if (strcmp(stat[0], "gauge") == 0) {
+			if (strcmp(stat[1], "thread.active") == 0) {
+				g_string_append_static(key_suffix, "threads_active");
+				goto next;
+			}
+			if (strcmp(stat[1], "cnx.client") == 0) {
+				g_string_append_static(key_suffix, "connections_active");
+				goto next;
+			}
+			goto error;
+		}
+error:
+		GRID_WARN("The statistic '%s' is not supported "
+				"for the prometheus format", g_quark_to_string(st->which));
+next:
+		if (key_suffix->len > 0
+				&& key_suffix->str[key_suffix->len - 1] != '_') {
+			gchar tmp[256];
+			gint len = g_snprintf(tmp, sizeof(tmp),
+					"meta_%s"
+					"{service_id=\"%s\",volume=\"%s\",namespace=\"%s\"%s}"
+					" %"G_GUINT64_FORMAT"\n",
+					key_suffix->str, oio_server_service_id, oio_server_volume,
+					oio_server_namespace, labels_suffix->str, st->value);
+			g_byte_array_append(body, (guint8*)tmp, len);
+		}
+		g_string_free(labels_suffix, TRUE);
+		g_string_free(key_suffix, TRUE);
+		g_strfreev(tags);
+		g_strfreev(stat);
+	}
+	return body;
+}
+
+static GByteArray*
+_convert_stats_to_text(GArray *stats)
+{
+	// Rough estimate, will be automatically resized if needed
+	GByteArray *body = g_byte_array_sized_new(stats->len * 32);
+	for (guint i = 0; i < stats->len; ++i) {
+		const struct stat_record_s *st =
+				&g_array_index(stats, struct stat_record_s, i);
+		gchar tmp[256];
+		gint len = g_snprintf(tmp, sizeof(tmp), "%s %"G_GUINT64_FORMAT"\n",
+				g_quark_to_string(st->which), st->value);
+		g_byte_array_append(body, (guint8*)tmp, len);
+	}
+	if (oio_server_volume) {
+		g_byte_array_append(body,
+				(guint8*)VOLPREFIX, sizeof(VOLPREFIX)-1);
+		g_byte_array_append(body,
+				(guint8*)oio_server_volume, strlen(oio_server_volume));
+	}
+	return body;
+}
 
 static gboolean
 dispatch_STATS(struct gridd_reply_ctx_s *reply,
 		gpointer gdata UNUSED, gpointer hdata UNUSED)
 {
-	GArray *array = network_server_stat_getall();
-	// Rough estimate, will be automatically resized if needed
-	GByteArray *body = g_byte_array_sized_new(array->len * 32);
-	for (guint i = 0; i < array->len; ++i) {
-		const struct stat_record_s *st =
-				&g_array_index(array, struct stat_record_s, i);
-		gchar tmp[256];
-		gint len = g_snprintf(tmp, sizeof(tmp), "%s=%"G_GUINT64_FORMAT"\n",
-				g_quark_to_string(st->which), st->value);
-		g_byte_array_append(body, (guint8*)tmp, len);
+	gchar *format = metautils_message_extract_string_copy(reply->request,
+			NAME_MSGKEY_FORMAT);
+	GArray *stats = network_server_stat_getall();
+	static GByteArray* body = NULL;
+	if (g_strcmp0(format, "prometheus") == 0) {
+		body = _convert_stats_to_prometheus(stats);
+	} else {
+		body = _convert_stats_to_text(stats);
 	}
-	g_array_free(array, TRUE);
-
-	if (oio_server_volume) {
-		g_byte_array_append (body,
-				(guint8*)VOLPREFIX, sizeof(VOLPREFIX)-1);
-		g_byte_array_append (body,
-				(guint8*)oio_server_volume, strlen(oio_server_volume));
-	}
+	g_array_free(stats, TRUE);
+	g_free(format);
 
 	reply->no_access();
 	reply->add_body(body);

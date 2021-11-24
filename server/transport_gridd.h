@@ -2,6 +2,7 @@
 OpenIO SDS server
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -22,7 +23,9 @@ License along with this library.
 
 # include <glib.h>
 
+extern const char *oio_server_service_id;
 extern const char *oio_server_volume;
+extern const char *oio_server_namespace;
 
 /* Forward declarations externally defined */
 struct network_client_s;
