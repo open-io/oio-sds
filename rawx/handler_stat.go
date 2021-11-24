@@ -226,7 +226,7 @@ func doGetStatsPrometheus(rr *rawxRequest) {
 				}
 				bb.WriteString("_hits_total")
 				bb.WriteString(labels)
-				bb.WriteString(`,method="`)
+				bb.WriteString(`,status_code="`)
 				bb.WriteString(tags[2])
 				bb.WriteString(`"}`)
 
