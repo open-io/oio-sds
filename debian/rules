@@ -17,7 +17,6 @@ export PATH := $(PYTHON_PATH)/bin:$(GO_PATH)/bin:$(PATH)
 export PKG_CONFIG_PATH := $(PYTHON_PATH)/lib/pkgconfig
 export LIBRARY_PATH := $(PYTHON_PATH)/lib
 export C_INCLUDE_PATH := $(PYTHON_PATH)/include
-export GO111MODULE := auto
 
 export DH_VIRTUALENV_INSTALL_ROOT=/opt
 
@@ -39,10 +38,6 @@ override_dh_auto_configure:
 	-DSOCKET_OPTIMIZED=1
 
 override_dh_auto_build:
-	# Get golang dependencies
-	go get gopkg.in/tylerb/graceful.v1
-	go get gopkg.in/ini.v1
-	go get golang.org/x/sys/unix
 	dh_auto_build
 	python3 setup.py build
 
