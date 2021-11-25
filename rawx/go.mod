@@ -3,9 +3,9 @@ module openio-sds/rawx
 go 1.17
 
 require (
-	golang.org/x/sys v0.0.0-20211003122950-b1ebd4e1001c
-	gopkg.in/ini.v1 v1.63.2
-	lukechampine.com/blake3 v1.1.6
+	golang.org/x/sys v0.0.0-20211124211545-fe61309f8881
+	gopkg.in/ini.v1 v1.64.0
+	lukechampine.com/blake3 v1.1.7
 )
 
 require (
