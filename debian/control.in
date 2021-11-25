@@ -9,7 +9,7 @@ Build-Depends:
   cmake,
   wget,
   ca-certificates,
-  go-1.16.3-ovh410,
+  go-1.17.3-ovh617,
   oio-zookeeper-3.7.0-ovh514,
   python-3.7.10-ovh127,
   flex,
