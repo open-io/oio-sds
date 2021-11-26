@@ -61,18 +61,19 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define TOK(N)    _req_get_token(args,(N))
 #define NS()      TOK("NS")
 
-#define OPT(N)    _req_get_option(args,(N))
-#define CID()     OPT("cid")
-#define ACCOUNT() OPT("acct")
-#define POOL()    OPT("pool")
-#define CONTENT() OPT("content")
-#define TYPE()    OPT("type")
-#define REF()     OPT("ref")
-#define PATH()    OPT("path")
-#define SEQ()     OPT("seq")
-#define VERSION() OPT("version")
+#define OPT(N)       _req_get_option(args,(N))
+#define CID()        OPT("cid")
+#define CONSCIENCE() OPT("cs")
+#define ACCOUNT()    OPT("acct")
+#define POOL()       OPT("pool")
+#define CONTENT()    OPT("content")
+#define TYPE()       OPT("type")
+#define REF()        OPT("ref")
+#define PATH()       OPT("path")
+#define SEQ()        OPT("seq")
+#define VERSION()    OPT("version")
 #define SERVICE_ID() OPT("service_id")
-#define SUFFIX()  OPT("suffix")
+#define SUFFIX()     OPT("suffix")
 
 #define GUARDED_READ(Lock,Action) do { \
 	g_rw_lock_reader_lock(&Lock); \
@@ -349,23 +350,23 @@ enum http_rc_e _reply_common_error (struct req_args_s *args, GError *err);
 
 /* -------------------------------------------------------------------------- */
 
-GError * conscience_remote_get_namespace(gchar **cs,
+GError * conscience_remote_get_namespace(struct req_args_s *args, gchar **cs,
 		namespace_info_t **out,
 		gint64 deadline);
 
-GError * conscience_remote_get_services(gchar **cs,
+GError * conscience_remote_get_services(struct req_args_s *args, gchar **cs,
 		const char *type, gboolean full, GSList **out,
 		gint64 deadline);
 
-GError * conscience_remote_get_types(gchar **cs,
+GError * conscience_remote_get_types(struct req_args_s *args, gchar **cs,
 		gchar ***out,
 		gint64 deadline);
 
-GError * conscience_remote_push_services(gchar **cs,
+GError * conscience_remote_push_services(struct req_args_s *args, gchar **cs,
 		GSList *ls,
 		gint64 deadline);
 
-GError* conscience_remote_remove_services(gchar **cs,
+GError* conscience_remote_remove_services(struct req_args_s *args, gchar **cs,
 		const char *type, GSList *ls,
 		gint64 deadline);
 

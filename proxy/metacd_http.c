@@ -585,7 +585,8 @@ lb_cache_reload (void)
 	for (char **pt=tabtypes; *pt ;++pt) {
 		GSList *srv = NULL;
 		/* TODO(mbo): only retrieve static tags to still use cache on conscience side */
-		GError *e = conscience_remote_get_services(cs, *pt, TRUE, &srv, oio_ext_get_deadline());
+		GError *e = conscience_remote_get_services(NULL, cs, *pt, TRUE, &srv,
+				oio_ext_get_deadline());
 		if (e) {
 			GRID_WARN("Failed to load the list of [%s] in NS=%s", *pt, ns_name);
 			any_loading_error = TRUE;
@@ -679,7 +680,8 @@ _task_reload_nsinfo (gpointer p UNUSED)
 		return;
 
 	struct namespace_info_s *ni = NULL;
-	GError *err = conscience_remote_get_namespace (cs, &ni, oio_ext_get_deadline());
+	GError *err = conscience_remote_get_namespace(NULL, cs, &ni,
+			oio_ext_get_deadline());
 	if (err) {
 		gchar *tmp = g_strjoinv("/", cs);
 		STRING_STACKIFY(tmp);
@@ -706,7 +708,8 @@ _task_reload_srvtypes (gpointer p UNUSED)
 		return;
 
 	gchar **types = NULL;
-	GError *err = conscience_remote_get_types (cs, &types, oio_ext_get_deadline());
+	GError *err = conscience_remote_get_types(NULL, cs, &types,
+			oio_ext_get_deadline());
 	EXTRA_ASSERT((err != NULL) ^ (types != NULL));
 
 	if (err != NULL) {
@@ -749,7 +752,8 @@ _task_push (gpointer p UNUSED)
 		if (!cs) {
 			GRID_ERROR("Push error: %s", "No/Invalid conscience for namespace NS");
 		} else {
-			GError *err = conscience_remote_push_services (cs, tmp, oio_ext_get_deadline());
+			GError *err = conscience_remote_push_services(NULL, cs, tmp,
+					oio_ext_get_deadline());
 			if (err != NULL) {
 				GRID_WARN("Push error: (%d) %s", err->code, err->message);
 				g_clear_error(&err);

@@ -22,11 +22,19 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "actions.h"
 
 static GError *
-_loop_on_allcs_while_neterror(gchar **allcs, GError* (action)(const char *cs))
+_loop_on_allcs_while_neterror(struct req_args_s *args, gchar **allcs,
+		GError* (action)(const char *cs))
 {
 	EXTRA_ASSERT(allcs != NULL);
 
+	const gchar *cs = NULL;
+	if (args) {
+		cs = CONSCIENCE();
+	}
 	for (gchar **pcs = allcs; *pcs; ++pcs) {
+		if (cs && *cs && strcmp(*pcs, cs) != 0) {
+			continue;
+		}
 		GError *err = action(*pcs);
 		if (!err)
 			return NULL;
@@ -43,7 +51,8 @@ _loop_on_allcs_while_neterror(gchar **allcs, GError* (action)(const char *cs))
 }
 
 GError *
-conscience_remote_get_namespace (gchar **allcs, namespace_info_t **out, gint64 deadline)
+conscience_remote_get_namespace(struct req_args_s *args, gchar **allcs,
+		namespace_info_t **out, gint64 deadline)
 {
 	GError * action (const char *cs) {
 		GByteArray *gba = NULL;
@@ -61,12 +70,12 @@ conscience_remote_get_namespace (gchar **allcs, namespace_info_t **out, gint64 d
 		g_prefix_error(&err, "Decoding error: ");
 		return err;
 	}
-	return _loop_on_allcs_while_neterror(allcs, action);
+	return _loop_on_allcs_while_neterror(args, allcs, action);
 }
 
 GError *
-conscience_remote_get_services(gchar **allcs, const char *type, gboolean full,
-		GSList **out, gint64 deadline)
+conscience_remote_get_services(struct req_args_s *args, gchar **allcs,
+		const char *type, gboolean full, GSList **out, gint64 deadline)
 {
 	EXTRA_ASSERT(type != NULL);
 	GError * action (const char *cs) {
@@ -79,11 +88,12 @@ conscience_remote_get_services(gchar **allcs, const char *type, gboolean full,
 				oio_clamp_timeout(proxy_timeout_conscience, deadline),
 				message_marshall_gba_and_clean(req), out, service_info_unmarshall);
 	}
-	return _loop_on_allcs_while_neterror(allcs, action);
+	return _loop_on_allcs_while_neterror(args, allcs, action);
 }
 
 GError *
-conscience_remote_get_types(gchar **allcs, gchar ***out, gint64 deadline)
+conscience_remote_get_types(struct req_args_s *args, gchar **allcs,
+		gchar ***out, gint64 deadline)
 {
 	GError * action(const char *cs) {
 		MESSAGE req = metautils_message_create_named("CS_TYP",
@@ -102,11 +112,12 @@ conscience_remote_get_types(gchar **allcs, gchar ***out, gint64 deadline)
 		}
 		return err;
 	}
-	return _loop_on_allcs_while_neterror(allcs, action);
+	return _loop_on_allcs_while_neterror(args, allcs, action);
 }
 
 GError *
-conscience_remote_push_services(gchar **allcs, GSList *ls, gint64 deadline)
+conscience_remote_push_services(struct req_args_s *args, gchar **allcs,
+		GSList *ls, gint64 deadline)
 {
 	if (!ls)  /* Avoid sending an empty request */
 		return NULL;
@@ -119,11 +130,12 @@ conscience_remote_push_services(gchar **allcs, GSList *ls, gint64 deadline)
 				oio_clamp_timeout(proxy_timeout_conscience, deadline),
 				message_marshall_gba_and_clean(req));
 	}
-	return _loop_on_allcs_while_neterror(allcs, action);
+	return _loop_on_allcs_while_neterror(args, allcs, action);
 }
 
 GError *
-conscience_remote_remove_services(gchar **allcs, const char *type, GSList *ls, gint64 deadline)
+conscience_remote_remove_services(struct req_args_s *args, gchar **allcs,
+		const char *type, GSList *ls, gint64 deadline)
 {
 	GError * action(const char *cs) {
 		MESSAGE req = metautils_message_create_named("CS_DEL",
@@ -136,7 +148,7 @@ conscience_remote_remove_services(gchar **allcs, const char *type, GSList *ls, g
 				oio_clamp_timeout(proxy_timeout_conscience, deadline),
 				message_marshall_gba_and_clean(req));
 	}
-	return _loop_on_allcs_while_neterror(allcs, action);
+	return _loop_on_allcs_while_neterror(args, allcs, action);
 }
 
 GError *
@@ -222,7 +234,7 @@ proxy_locate_meta0(const char *ns UNUSED, gchar ***result, gint64 deadline)
 		}
 	}
 
-	err = conscience_remote_get_services(cs, NAME_SRVTYPE_META0,
+	err = conscience_remote_get_services(NULL, cs, NAME_SRVTYPE_META0,
 			FALSE, &sl, deadline);
 	if (NULL != err) {
 		g_slist_free_full (sl, (GDestroyNotify) service_info_clean);
@@ -318,7 +330,7 @@ enum reg_op_e {
 };
 
 static GError *
-_registration_batch (enum reg_op_e op, GSList *services)
+_registration_batch(struct req_args_s *args, enum reg_op_e op, GSList *services)
 {
 	const gint64 now = oio_ext_real_seconds();
 
@@ -398,7 +410,8 @@ _registration_batch (enum reg_op_e op, GSList *services)
 		return NULL;
 	} else {
 		CSURL(cs);
-		return conscience_remote_push_services (cs, services, oio_ext_get_deadline());
+		return conscience_remote_push_services(args, cs, services,
+				oio_ext_get_deadline());
 	}
 }
 
@@ -420,7 +433,7 @@ _registration(struct req_args_s *args, enum reg_op_e op, struct json_object *jsr
 	}
 
 	/* Register the whole batch */
-	err = _registration_batch(op, services);
+	err = _registration_batch(args, op, services);
 
 	g_slist_free_full(services, (GDestroyNotify)service_info_clean);
 	if (err)
@@ -444,7 +457,7 @@ _deregistration(struct req_args_s *args, struct json_object *jsrv)
 
 	/* Deregister */
 	CSURL(cs);
-	err = conscience_remote_remove_services(cs, NULL, services,
+	err = conscience_remote_remove_services(args, cs, NULL, services,
 			oio_ext_get_deadline());
 
 	g_slist_free_full(services, (GDestroyNotify)service_info_clean);
@@ -565,8 +578,8 @@ action_local_list (struct req_args_s *args)
 }
 
 // CS{{
-// GET /v3.0/{NS}/conscience/list?type=<services type>
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// GET /v3.0/{NS}/conscience/list?type=<services type>[&cs=<conscience addr>]
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
 // Get list of services registered
 //
@@ -611,7 +624,7 @@ action_conscience_list (struct req_args_s *args)
 	if (NULL != (err = _cs_check_tokens(args)))
 		return _reply_common_error(args, err);
 
-	if (json_format && flag_cache_enabled) {
+	if (!CONSCIENCE() && json_format && flag_cache_enabled) {
 		service_remember_wanted (type);
 		if (!full) {
 			GBytes *prepared = service_is_wanted (type);
@@ -635,7 +648,8 @@ action_conscience_list (struct req_args_s *args)
 
 	CSURL(cs);
 	GSList *sl = NULL;
-	err = conscience_remote_get_services (cs, type, full, &sl, oio_ext_get_deadline());
+	err = conscience_remote_get_services(args, cs, type, full, &sl,
+			oio_ext_get_deadline());
 	if (NULL != err) {
 		g_slist_free_full (sl, (GDestroyNotify) service_info_clean);
 		g_prefix_error (&err, "Conscience error: ");
@@ -780,8 +794,8 @@ action_conscience_resolve_service_id (struct req_args_s *args)
 }
 
 // CS{{
-// POST /v3.0/{NS}/conscience/flush?type=<service_type>
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// POST /v3.0/{NS}/conscience/flush?type=<service_type>[&cs=<conscience addr>]
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
 // Deregister all services with the given type.
 //
@@ -817,7 +831,7 @@ action_conscience_flush (struct req_args_s *args)
 #endif
 
 	CSURL(cs);
-	err = conscience_remote_remove_services(cs, srvtype, NULL,
+	err = conscience_remote_remove_services(args, cs, srvtype, NULL,
 			oio_ext_get_deadline());
 
 	if (err) {
@@ -834,8 +848,8 @@ _rest_conscience_deregister(struct req_args_s *args, struct json_object *jargs)
 }
 
 // CS{{
-// POST /v3.0/{NS}/conscience/deregister?type=<services type>
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// POST /v3.0/{NS}/conscience/deregister?type=<services type>[&cs=<conscience addr>]
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
 // .. code-block:: http
 //
@@ -888,8 +902,8 @@ _rest_conscience_register(struct req_args_s *args, struct json_object *jargs)
 }
 
 // CS{{
-// POST /v3.0/{NS}/conscience/register
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// POST /v3.0/{NS}/conscience/register[?cs=<conscience addr>]
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
 // .. code-block:: http
 //
@@ -946,8 +960,8 @@ _rest_conscience_lock(struct req_args_s *args, struct json_object *jargs)
 }
 
 // CS{{
-// POST /v3.0/{NS}/conscience/lock
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// POST /v3.0/{NS}/conscience/lock[?cs=<conscience addr>]
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
 // .. code-block:: http
 //
@@ -1000,8 +1014,8 @@ _rest_conscience_unlock (struct req_args_s *args, struct json_object *jargs)
 }
 
 // CS{{
-// POST /v3.0/{NS}/conscience/unlock
-// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// POST /v3.0/{NS}/conscience/unlock[?cs=<conscience addr>]
+// ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 //
 // .. code-block:: http
 //
