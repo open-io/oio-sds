@@ -18,9 +18,11 @@
 import random
 import time
 
-from oio.common.constants import M2_PROP_BUCKET_NAME, M2_PROP_OBJECTS, \
+from oio.common.constants import M2_PROP_BUCKET_NAME, \
+    M2_PROP_DRAINING_TIMESTAMP, M2_PROP_OBJECTS, \
     M2_PROP_SHARDING_LOWER, M2_PROP_SHARDING_ROOT, M2_PROP_SHARDING_STATE, \
-    M2_PROP_SHARDING_UPPER, NEW_SHARD_STATE_CLEANED_UP
+    M2_PROP_SHARDING_UPPER, NEW_SHARD_STATE_CLEANED_UP, \
+    M2_PROP_VERSIONING_POLICY
 from oio.common.exceptions import Forbidden, NotFound
 from oio.common.green import eventlet
 from oio.common.utils import cid_from_name, request_id
@@ -988,3 +990,71 @@ class TestSharding(BaseTestCase):
         self.created[self.cname].remove(obj_name)
 
         self._check_objects(self.cname)
+
+    def _set_property(self, property_, value, expected_value_shards,
+                      flag_propagate_to_shards=False):
+        # Set properties to root
+        system = {property_: value}
+        output = self.storage.container_set_properties(
+            self.account, self.cname, system=system,
+            propagate_to_shards=flag_propagate_to_shards
+        )
+        self.assertEqual(b'', output)
+
+        # Check property on root
+        resp = self.storage.container.container_get_properties(self.account,
+                                                               self.cname)
+        self.assertEqual(value, resp['system'][property_])
+
+        # Check property on each shards
+        show_shards = self.container_sharding.show_shards(self.account,
+                                                          self.cname)
+        for _, shard in enumerate(show_shards):
+            resp = self.storage.container.container_get_properties(
+                cid=shard['cid'])
+            self.assertEqual(expected_value_shards, resp['system'][property_])
+
+    def test_set_properties(self):
+        """
+        Test that properties are propagated from root to shards.
+        """
+        nb_obj_to_add = 4
+        self._create(self.cname)
+        self._add_objects(self.cname, nb_obj_to_add)
+
+        # Split it in 2
+        params = {"partition": "50,50", "threshold": 1}
+        shards = self.container_sharding.find_shards(
+            self.account, self.cname,
+            strategy="shard-with-partition", strategy_params=params)
+        modified = self.container_sharding.replace_shard(
+            self.account, self.cname, shards, enable=True)
+        self.assertTrue(modified)
+
+        # Propagatation of property with property that should always be
+        # propagated to shards
+        value_1 = str(random.randrange(0, 10))
+        self._set_property(M2_PROP_VERSIONING_POLICY, value_1, value_1)
+
+        value_2 = str(random.randrange(10, 20))
+        self._set_property(M2_PROP_VERSIONING_POLICY, value_2, value_2)
+
+        # Reset to 0
+        # Needed for the flush in the teardown of the test
+        value_3 = str(0)
+        self._set_property(M2_PROP_VERSIONING_POLICY, value_3, value_3)
+
+        # Propagatation of property with propagation flag
+        value_1 = str(random.randrange(0, 10))
+        self._set_property(M2_PROP_DRAINING_TIMESTAMP, value_1, value_1,
+                           flag_propagate_to_shards=True)
+
+        # Propagatation of property without propagation flag (shard keeps
+        # old value)
+        value_2 = str(random.randrange(10, 20))
+        self._set_property(M2_PROP_DRAINING_TIMESTAMP, value_2, value_1)
+
+        # Reset value
+        value_3 = str(0)
+        self._set_property(M2_PROP_DRAINING_TIMESTAMP, value_3, value_3,
+                           flag_propagate_to_shards=True)
