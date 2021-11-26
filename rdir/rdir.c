@@ -2541,7 +2541,7 @@ _route_srv_status(struct req_args_s *args)
 	} else if (!g_strcmp0(format, "prometheus")) {
 		// FIXME(FVE): find something more appropriate than syslog_id
 		g_string_append_printf(gstr,
-				"oio_opened_db{namespace=\"%s\", service=\"%s\"} "
+				"rdir_opened_db{namespace=\"%s\", service=\"%s\"} "
 				"%u",
 				ns_name, syslog_id, count);
 	} else {
