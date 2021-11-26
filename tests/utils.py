@@ -36,7 +36,7 @@ from oio.common.configuration import load_namespace_conf, set_namespace_options
 from oio.common.constants import REQID_HEADER
 from oio.common.http_urllib3 import get_pool_manager
 from oio.common.json import json as jsonlib
-from oio.common.green import time, get_watchdog
+from oio.common.green import time, get_watchdog, eventlet
 from oio.event.beanstalk import Beanstalk, ResponseError
 from oio.event.evob import Event
 
@@ -210,8 +210,13 @@ class CommonTestCase(testtools.TestCase):
                                    http_pool=self.http_pool)
 
     @classmethod
+    def _monkey_patch(cls):
+        eventlet.patcher.monkey_patch(os=False)
+
+    @classmethod
     def setUpClass(cls):
         super(CommonTestCase, cls).setUpClass()
+        cls._monkey_patch()
         cls._cls_conf = get_config()
         cls._cls_account = cls._cls_conf['account']
         cls._cls_ns = cls._cls_conf['namespace']

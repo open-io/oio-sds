@@ -16,13 +16,17 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import argparse
-import json
-import logging
-from os import getenv
+from oio.common.green import eventlet_monkey_patch
+eventlet_monkey_patch()
 
-from oio.common.http_urllib3 import get_pool_manager
-from oio.common.configuration import load_namespace_conf
+import argparse  # noqa
+import json  # noqa
+import logging  # noqa
+from os import getenv  # noqa
+
+from oio.common.http_urllib3 import get_pool_manager  # noqa
+from oio.common.configuration import load_namespace_conf  # noqa
+
 
 http = get_pool_manager()
 

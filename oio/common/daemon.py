@@ -15,7 +15,7 @@
 # License along with this library.
 
 
-from oio.common.green import eventlet_hubs, get_hub
+from oio.common.green import eventlet_hubs, get_hub, eventlet_monkey_patch
 
 import sys
 import signal
@@ -26,6 +26,8 @@ from re import sub
 from oio.common.utils import drop_privileges
 from oio.common.configuration import read_conf
 from oio.common.logger import redirect_stdio, get_logger
+
+eventlet_monkey_patch()
 
 
 class Daemon(object):

@@ -16,12 +16,14 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+from oio.common.green import eventlet_monkey_patch
+eventlet_monkey_patch()
+
 import argparse
 import sys
 
 from oio.rebuilder.meta1_rebuilder import Meta1Rebuilder
 from oio.common.logger import get_logger
-
 
 def make_arg_parser():
     log_parser = argparse.ArgumentParser(add_help=False)
