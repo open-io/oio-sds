@@ -16,6 +16,7 @@
 
 import logging
 import random
+import re
 import time
 
 from flaky import flaky
@@ -369,3 +370,33 @@ class TestConscienceFunctional(BaseTestCase):
                     self._unlock_srv(service)
             except Exception:
                 pass
+
+    def _test_list_services(self, stat_line_regex, service_type='rawx',
+                            output_format=None):
+        params = {'type': service_type}
+        if output_format:
+            params['format'] = output_format
+        resp = self.request('GET', self._url_cs('list'), params=params)
+        self.assertEqual(200, resp.status)
+        services = resp.data.decode('utf-8')
+        if not stat_line_regex and (
+                not output_format or output_format == 'json'):
+            json.loads(services)
+        else:
+            for line in services.split('\n'):
+                if not line.strip():
+                    continue
+                match = stat_line_regex.match(line)
+                self.assertTrue(
+                    match, "'%s' did not match %r" % (
+                        line, stat_line_regex.pattern))
+
+    def test_list_services_no_format(self):
+        self._test_list_services(None)
+
+    def test_list_services_json(self):
+        self._test_list_services(None, output_format='json')
+
+    def test_list_services_prometheus(self):
+        stat_re = re.compile(r'^(\w+){(.+)} ([\w\.]+)$')
+        self._test_list_services(stat_re, output_format='prometheus')

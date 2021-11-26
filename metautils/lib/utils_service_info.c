@@ -2,7 +2,7 @@
 OpenIO SDS metautils
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2017 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2020 OVH SAS
+Copyright (C) 2020-2021 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -492,6 +492,115 @@ service_info_encode_json(GString *gstr, const struct service_info_s *si, gboolea
 	g_string_append_static(gstr, ",\"tags\":{");
 	_append_all_tags(gstr, si->tags);
 	g_string_append_static(gstr, "}}");
+}
+
+static gchar *
+_service_tag_value_encode_str(GString *gstr, struct service_tag_s *tag,
+		gboolean numerical)
+{
+	switch (tag->type) {
+		case STVT_I64:
+			g_string_append_printf(gstr, "%"G_GINT64_FORMAT,
+					tag->value.i);
+			break;
+		case STVT_REAL:
+			g_string_append_printf(gstr, "%f", tag->value.r);
+			break;
+		case STVT_BOOL:
+			if (numerical) {
+				if (tag->value.b) {
+					g_string_append_static(gstr, "1");
+				} else {
+					g_string_append_static(gstr, "0");
+				}
+			} else {
+				if (tag->value.b) {
+					g_string_append_static(gstr, "true");
+				} else {
+					g_string_append_static(gstr, "false");
+				}
+			}
+			break;
+		case STVT_STR:
+			if (!numerical) {
+				g_string_append(gstr, tag->value.s);
+			}
+			break;
+		case STVT_BUF:
+			if (!numerical) {
+				g_string_append(gstr, tag->value.buf);
+			}
+			break;
+	}
+}
+
+static gchar*
+_service_info_encode_prometheus_labels(const struct service_info_s *si)
+{
+	GString *labels = g_string_sized_new(128);
+	gchar straddr[STRLEN_ADDRINFO];
+	grid_addrinfo_to_string(&(si->addr), straddr, sizeof(straddr));
+	g_string_append_printf(labels, "addr=\"%s\"", straddr);
+
+	if (!si->tags || !si->tags->len) {
+		goto end;
+	}
+	guint i, max;
+	struct service_tag_s *tag = NULL;
+	gchar *tag_name = NULL;
+	for (i=0, max=si->tags->len; i < max; i++) {
+		tag = si->tags->pdata[i];
+		if (!g_str_has_prefix(tag->name, "tag.")) {
+			continue;
+		}
+		tag_name = tag->name + 4;
+		if (strcmp(tag_name, "loc") == 0) {
+			tag_name = "location";
+		} else if (strcmp(tag_name, "service_id") == 0) {
+			tag_name = "id";
+		} else if (strcmp(tag_name, "vol") == 0) {
+			tag_name = "volume";
+		}
+		g_string_append_printf(labels, ",%s=\"", tag_name);
+		_service_tag_value_encode_str(labels, tag, FALSE);
+		g_string_append_c(labels, '"');
+	}
+end:
+	return g_string_free(labels, FALSE);
+}
+
+void
+service_info_encode_prometheus(GString *gstr, const struct service_info_s *si)
+{
+	if (!si)
+		return;
+
+	gchar *labels = _service_info_encode_prometheus_labels(si);
+	g_string_append_printf(gstr, "conscience_score{%s} %"G_GINT32_FORMAT"\n",
+			labels, si->score.value);
+
+	if (!si->tags || !si->tags->len) {
+		goto end;
+	}
+	guint i, max;
+	struct service_tag_s *tag = NULL;
+	for (i=0, max=si->tags->len; i < max; i++) {
+		tag = si->tags->pdata[i];
+		if (!g_str_has_prefix(tag->name, "stat.")) {
+			continue;
+		}
+		if (tag->type != STVT_I64 &&
+		    tag->type != STVT_REAL &&
+		    tag->type != STVT_BOOL) {
+			continue;
+		}
+		g_string_append_printf(gstr, "conscience_stat{%s,type=\"%s\"} ",
+				labels, tag->name + 5);
+		_service_tag_value_encode_str(gstr, tag, TRUE);
+		g_string_append_c(gstr, '\n');
+	}
+end:
+	g_free(labels);
 }
 
 static struct service_tag_s *
