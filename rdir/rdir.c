@@ -2542,8 +2542,8 @@ _route_srv_status(struct req_args_s *args)
 		// FIXME(FVE): find something more appropriate than syslog_id
 		g_string_append_printf(gstr,
 				"oio_opened_db{namespace=\"%s\", service=\"%s\"} "
-				"%u %"G_GINT64_FORMAT,
-				ns_name, syslog_id, count, oio_ext_real_time());
+				"%u",
+				ns_name, syslog_id, count);
 	} else {
 		g_string_free(gstr, TRUE);
 		return _reply_format_error(
