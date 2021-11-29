@@ -137,12 +137,12 @@ class ConscienceClient(ProxyClient):
         """
         return self.lb.poll(pool, **kwargs)
 
-    def all_services(self, type_, full=False, **kwargs):
+    def all_services(self, service_type, full=False, **kwargs):
         """
         Get the list of all services of a specific type.
 
-        :param type_: the type of services to get (ex: 'rawx')
-        :type type_: `str`
+        :param service_type: the type of services to get (ex: 'rawx')
+        :type service_type: `str`
         :param full: whether to get all metrics for each service
         :returns: the list of all services of the specified type.
         :rtype: `list` of `dict` objects, each containing at least
@@ -151,7 +151,7 @@ class ConscienceClient(ProxyClient):
             - 'score' (`int`),
             - 'tags' (`dict`).
         """
-        params = {'type': type_}
+        params = {'type': service_type}
         if full:
             params['full'] = '1'
         resp, body = self._request('GET', '/list', params=params, **kwargs)
@@ -164,7 +164,7 @@ class ConscienceClient(ProxyClient):
             return body
         else:
             raise OioException("failed to get list of %s services: %s"
-                               % (type_, resp.text))
+                               % (service_type, resp.text))
 
     def local_services(self):
         url = self.endpoint.replace('conscience', 'local/list')

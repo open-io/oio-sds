@@ -1175,6 +1175,7 @@ static gboolean
 _cs_dispatch_SRV(struct gridd_reply_ctx_s *reply,
 	 gpointer g UNUSED, gpointer h UNUSED)
 {
+	GError *err = NULL;
 	gchar strtype[LIMIT_LENGTH_SRVTYPE] = {};
 
 	if (!metautils_message_extract_string_noerror(
@@ -1191,8 +1192,17 @@ _cs_dispatch_SRV(struct gridd_reply_ctx_s *reply,
 	GByteArray *gba = g_byte_array_sized_new(8192);
 	g_byte_array_append(gba, header, 2);
 
-	GError *err = conscience_run_srvtypes(strtype,
-			full ? _prepare_full : _prepare_cached, gba);
+	if (strcmp(strtype, "all") == 0) {
+		gchar **services_names = conscience_get_srvtype_names();
+		for (gchar **name = services_names; !err && *name; name++){
+			err = conscience_run_srvtypes(*name,
+					full ? _prepare_full : _prepare_cached, gba);
+		}
+		g_free(services_names);
+	} else {
+		err = conscience_run_srvtypes(strtype,
+				full ? _prepare_full : _prepare_cached, gba);
+	}
 
 	if (err) {
 		g_byte_array_free(gba, TRUE);

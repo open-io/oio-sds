@@ -372,7 +372,8 @@ class TestConscienceFunctional(BaseTestCase):
                 pass
 
     def _test_list_services(self, stat_line_regex, service_type='rawx',
-                            output_format=None, cs=None, expected_status=200):
+                            output_format=None, cs=None, expected_status=200,
+                            expected_nb_services=None):
         params = {'type': service_type}
         if output_format:
             params['format'] = output_format
@@ -383,9 +384,10 @@ class TestConscienceFunctional(BaseTestCase):
         if expected_status != 200:
             return
         services = resp.data.decode('utf-8')
+        nb_services = 0
         if not stat_line_regex and (
                 not output_format or output_format == 'json'):
-            json.loads(services)
+            nb_services = len(json.loads(services))
         else:
             for line in services.split('\n'):
                 if not line.strip():
@@ -394,6 +396,14 @@ class TestConscienceFunctional(BaseTestCase):
                 self.assertTrue(
                     match, "'%s' did not match %r" % (
                         line, stat_line_regex.pattern))
+                if output_format == "prometheus":
+                    if line.startswith('conscience_score{'):
+                        nb_services += 1
+                else:
+                    nb_services += 1
+        if expected_nb_services is not None:
+            self.assertEqual(expected_nb_services, nb_services)
+        return nb_services
 
     def test_list_services_no_format(self):
         self._test_list_services(None)
@@ -402,21 +412,44 @@ class TestConscienceFunctional(BaseTestCase):
         self._test_list_services(None, output_format='json')
 
     def test_list_services_prometheus(self):
-        stat_re = re.compile(r'^(\w+){(.+)} ([\w\.]+)$')
+        stat_re = re.compile(r'^(\w+){(.+)} ([\w\.-]+)$')
         self._test_list_services(stat_re, output_format='prometheus')
 
     def test_list_services_with_specific_cs(self):
         cs = random.choice(self.conf['services']['conscience'])['addr']
         self._test_list_services(None, cs=cs)
         self._test_list_services(None, output_format='json', cs=cs)
-        stat_re = re.compile(r'^(\w+){(.+)} ([\w\.]+)$')
+        stat_re = re.compile(r'^(\w+){(.+)} ([\w\.-]+)$')
         self._test_list_services(stat_re, output_format='prometheus', cs=cs)
 
     def test_list_services_with_unknown_cs(self):
-        stat_re = re.compile(r'^(\w+){(.+)} ([\w\.]+)$')
+        stat_re = re.compile(r'^(\w+){(.+)} ([\w\.-]+)$')
         self._test_list_services(stat_re, cs='127.0.0.1:8888',
                                  expected_status=503)
         self._test_list_services(stat_re, output_format='json',
                                  cs='127.0.0.1:8888', expected_status=503)
         self._test_list_services(stat_re, output_format='prometheus',
                                  cs='127.0.0.1:8888', expected_status=503)
+
+    def _service_types(self):
+        params = {'what': 'types'}
+        resp = self.request('GET', self._url_cs('info'), params=params)
+        self.assertEqual(200, resp.status)
+        return json.loads(resp.data)
+
+    def test_list_all_services(self):
+        nb_services = 0
+        srv_types = self._service_types()
+        for srv_type in srv_types:
+            nb_services += self._test_list_services(
+                None, service_type=srv_type)
+
+        self._test_list_services(
+            None, service_type='all', expected_nb_services=nb_services)
+        self._test_list_services(
+            None, service_type='all', output_format='json',
+            expected_nb_services=nb_services)
+        stat_re = re.compile(r'^(\w+){(.+)} ([\w\.-]+)$')
+        self._test_list_services(
+            stat_re, service_type='all', output_format='prometheus',
+            expected_nb_services=nb_services)

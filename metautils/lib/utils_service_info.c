@@ -540,7 +540,9 @@ _service_info_encode_prometheus_labels(const struct service_info_s *si)
 	GString *labels = g_string_sized_new(128);
 	gchar straddr[STRLEN_ADDRINFO];
 	grid_addrinfo_to_string(&(si->addr), straddr, sizeof(straddr));
-	g_string_append_printf(labels, "addr=\"%s\"", straddr);
+	g_string_append_printf(labels,
+			"namespace=\"%s\",service_type=\"%s\",addr=\"%s\"",
+			si->ns_name, si->type, straddr);
 
 	if (!si->tags || !si->tags->len) {
 		goto end;

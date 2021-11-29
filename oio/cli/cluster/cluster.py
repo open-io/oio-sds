@@ -107,7 +107,10 @@ class ClusterList(Lister):
                 locked = boolean_value(tags.pop('tag.lock', False), False)
                 up = tags.pop('tag.up', 'n/a')
                 score = srv['score']
-                values = [srv_type, addr, service_id, volume, location,
+                service_type = srv_type
+                if service_type == "all":
+                    service_type = srv['type']
+                values = [service_type, addr, service_id, volume, location,
                           slots, up, score, locked]
                 if parsed_args.stats:
                     stats = ["%s=%s" % (k, v) for k, v in iteritems(tags)
