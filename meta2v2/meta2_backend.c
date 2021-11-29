@@ -549,6 +549,7 @@ m2b_open_with_args(struct meta2_backend_s *m2, struct oio_url_s *url,
 	gchar *root_hexid = sqlx_admin_get_str(sq3, M2V2_ADMIN_SHARDING_ROOT);
 	if (root_hexid != NULL) {
 		oio_url_set(url, OIOURL_ROOT_HEXID, root_hexid);
+		g_free(root_hexid);
 	} else {
 		oio_url_unset(url, OIOURL_ROOT_HEXID);
 	}
@@ -562,6 +563,8 @@ m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
 		enum m2v2_open_type_e how, struct sqlx_sqlite3_s **result)
 {
 	GError *err = NULL;
+	gchar *sharding_master = NULL;
+	gchar *sharding_queue = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct m2_open_args_s args = {how, NULL};
 	enum m2v2_open_type_e replimode = how & M2V2_OPEN_REPLIMODE;
@@ -612,8 +615,7 @@ reopen:
 		}
 		goto exit;
 	}
-	gchar *sharding_master = sqlx_admin_get_str(sq3,
-			M2V2_ADMIN_SHARDING_MASTER);
+	sharding_master = sqlx_admin_get_str(sq3, M2V2_ADMIN_SHARDING_MASTER);
 	if (!sharding_master) {
 		// Should never happen
 		GRID_ERROR("Missing sharding master, aborting sharding...");
@@ -625,7 +627,7 @@ reopen:
 		}
 		goto exit;
 	}
-	gchar *sharding_queue = sqlx_admin_get_str(sq3,
+	sharding_queue = sqlx_admin_get_str(sq3,
 			M2V2_ADMIN_SHARDING_QUEUE);
 	if (!sharding_queue) {
 		// Should never happen
@@ -701,6 +703,8 @@ exit:
 		m2b_close(sq3, url);
 	else
 		*result = sq3;
+	g_free(sharding_master);
+	g_free(sharding_queue);
 	return err;
 }
 
