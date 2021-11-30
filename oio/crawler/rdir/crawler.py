@@ -73,6 +73,7 @@ class RdirWorker(object):
 
         self.passes = 0
         self.errors = 0
+        self.orphans = 0
         self.repaired = 0
         self.unrecoverable_content = 0
         self.last_report_time = 0
@@ -128,11 +129,12 @@ class RdirWorker(object):
         since_last_rprt = (now - self.last_report_time) or 0.00001
 
         self.logger.info('%s volume_id=%s pass=%d repaired=%d errors=%d '
-                         'unrecoverable=%d chunks=%d '
+                         'unrecoverable=%d orphans=%d chunks=%d '
                          'rate_since_last_report=%.2f/s',
                          tag, self.volume_id,
                          self.passes, self.repaired, self.errors,
                          self.unrecoverable_content,
+                         self.orphans,
                          self.scanned_since_last_report,
                          self.scanned_since_last_report / since_last_rprt)
         self.last_report_time = now
@@ -161,15 +163,17 @@ class RdirWorker(object):
                 rawx_id=self.volume_id)
             self.repaired += 1
         except exc.OioException as err:
-            # Note for later: if it an orphan chunk, we should tag it and
-            # increment a counter for stats. Another tool could be responsible
-            # for those tagged chunks.
             self.errors += 1
             if isinstance(err, exc.UnrecoverableContent):
                 self.unrecoverable_content += 1
                 if self._check_rawx_up():
                     error = '%(err)s, action required' % {'err': str(err)}
                     self.error(container_id, chunk_id, error)
+            elif isinstance(err, exc.OrphanChunk):
+                # Note for later: if it an orphan chunk, we should tag it and
+                # increment a counter for stats. Another tool could be
+                # responsible for those tagged chunks.
+                self.orphans += 1
             else:
                 error = '%(err)s, not possible to get list of rawx' \
                     % {'err': str(err)}
@@ -191,6 +195,7 @@ class RdirWorker(object):
         self.report('starting', force=True)
         # reset crawler stats
         self.errors = 0
+        self.orphans = 0
         self.repaired = 0
         self.unrecoverable_content = 0
         last_scan_time = 0
