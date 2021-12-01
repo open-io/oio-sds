@@ -500,7 +500,6 @@ host: ${IP}
 port: ${PORT}
 type: ${SRVTYPE}
 location: ${LOC}
-${WANT_SERVICE_ID}service_id: ${SERVICE_ID}
 slots:
     - ${SRVTYPE}
 checks:

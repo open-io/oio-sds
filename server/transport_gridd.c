@@ -854,6 +854,7 @@ dispatch_REDIRECT(struct gridd_reply_ctx_s *reply,
 	return TRUE;
 }
 
+#define SERVICEIDPREFIX "config service_id "
 #define VOLPREFIX "config volume "
 
 static GByteArray*
@@ -934,12 +935,18 @@ next:
 		if (key_suffix->len > 0
 				&& key_suffix->str[key_suffix->len - 1] != '_') {
 			gchar tmp[256];
-			gint len = g_snprintf(tmp, sizeof(tmp),
-					"meta_%s"
-					"{service_id=\"%s\",volume=\"%s\",namespace=\"%s\"%s}"
-					" %"G_GUINT64_FORMAT"\n",
-					key_suffix->str, oio_server_service_id, oio_server_volume,
-					oio_server_namespace, labels_suffix->str, st->value);
+			gint len = g_snprintf(tmp, sizeof(tmp), "meta_%s{",
+					key_suffix->str);
+			g_byte_array_append(body, (guint8*)tmp, len);
+			if (oio_server_service_id) {
+				len = g_snprintf(tmp, sizeof(tmp), "service_id=\"%s\",",
+						oio_server_service_id);
+				g_byte_array_append(body, (guint8*)tmp, len);
+			}
+			len = g_snprintf(tmp, sizeof(tmp),
+					"volume=\"%s\",namespace=\"%s\"%s} %"G_GUINT64_FORMAT"\n",
+					oio_server_volume, oio_server_namespace,
+					labels_suffix->str, st->value);
 			g_byte_array_append(body, (guint8*)tmp, len);
 		}
 		g_string_free(labels_suffix, TRUE);
@@ -968,6 +975,14 @@ _convert_stats_to_text(GArray *stats)
 				(guint8*)VOLPREFIX, sizeof(VOLPREFIX)-1);
 		g_byte_array_append(body,
 				(guint8*)oio_server_volume, strlen(oio_server_volume));
+		g_byte_array_append(body, (guint8*)"\n", 1);
+	}
+	if (oio_server_service_id) {
+		g_byte_array_append(body,
+				(guint8*)SERVICEIDPREFIX, sizeof(SERVICEIDPREFIX)-1);
+		g_byte_array_append(body,
+				(guint8*)oio_server_service_id, strlen(oio_server_service_id));
+		g_byte_array_append(body, (guint8*)"\n", 1);
 	}
 	return body;
 }

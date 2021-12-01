@@ -698,7 +698,8 @@ sqlx_service_action(void)
 			return _action_report_error(err, "Volume lock failed");
 	}
 
-	oio_server_service_id = sqlx_get_service_id();
+	oio_server_service_id = (SRV.service_id && SRV.service_id->str)
+			? SRV.service_id->str : NULL;
 	oio_server_volume = SRV.volume;
 	oio_server_namespace = SRV.ns_name;
 

@@ -1,4 +1,5 @@
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -22,6 +23,10 @@ class MetaStat(HttpStat):
     Expects one stat per line
     """
 
+    config_keys = {
+        'service_id': 'tag.service_id'
+    }
+
     def configure(self):
         super(MetaStat, self).configure()
         self.uri = '/forward/stats'
@@ -31,12 +36,16 @@ class MetaStat(HttpStat):
 
     def get_stats(self):
         resp, _body = self.agent.client._request(
-                'POST', self.uri, params=self.params, retries=False)
+            'POST', self.uri, params=self.params, retries=False)
         stats = self._parse_stats_lines(resp.data)
-        # In Py3, keys() returns a view, and it's not safe to add
-        # items while iterating over it. And so we build a list.
-        for key in list(stats):
+        output = dict()
+        for key in stats:
             if key.startswith('gauge'):
                 stat_key = 'stat.' + key.split(None, 1)[1]
-                stats[stat_key] = stats[key]
-        return stats
+                output[stat_key] = stats[key]
+            if key.startswith('config'):
+                config_type = key.split(None, 1)[1]
+                config_key = self.config_keys.get(config_type)
+                if config_key is not None:
+                    output[config_key] = stats[key]
+        return output
