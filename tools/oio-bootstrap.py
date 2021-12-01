@@ -560,14 +560,13 @@ host: ${IP}
 port: ${PORT}
 type: rdir
 location: ${LOC}
-${WANT_SERVICE_ID}service_id: ${SERVICE_ID}
 checks:
     - {type: http, uri: /info}
 slots:
     - ${SRVTYPE}
 stats:
     - {type: volume, path: ${VOLUME}}
-    - {type: http, path: /status, parser: json}
+    - {type: rdir, path: /status, parser: json}
     - {type: system}
 """
 
