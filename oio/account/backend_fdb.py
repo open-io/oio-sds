@@ -689,18 +689,18 @@ class AccountBackendFdb():
 
     @fdb.transactional
     def _increment(self, tr, counter, incr_by=1):
-        tr.add(counter, struct.pack('<i', incr_by))
+        tr.add(counter, struct.pack('<q', incr_by))
 
     @fdb.transactional
     def _decrement(self, tr, counter, decr_by=-1):
-        tr.add(counter, struct.pack('<i', decr_by))
-        tr.compare_and_clear(counter, struct.pack('<i', 0))
+        tr.add(counter, struct.pack('<q', decr_by))
+        tr.compare_and_clear(counter, struct.pack('<q', 0))
 
     @fdb.transactional
     def _flush_account(self, tr, account_id):
         tr[self.acct_space.pack((account_id, 'objects'))] = \
-           struct.pack('<i', 0)
-        tr[self.acct_space.pack((account_id, 'bytes'))] = struct.pack('<i', 0)
+           struct.pack('<q', 0)
+        tr[self.acct_space.pack((account_id, 'bytes'))] = struct.pack('<q', 0)
         tr.clear_range_startswith(fdb.Subspace((self._containers_list_prefix,
                                                 account_id)))
         tr.clear_range_startswith(fdb.Subspace((self._container_list_prefix,
@@ -714,8 +714,8 @@ class AccountBackendFdb():
         tr[accts_space.pack((account_id,))] = b'1'
         tr[acct_space.pack((account_id, 'id'))] = \
             bytes(account_id, 'utf-8')
-        tr[acct_space.pack((account_id, 'objects'))] = struct.pack('<i', 0)
-        tr[acct_space.pack((account_id, 'bytes'))] = struct.pack('<i', 0)
+        tr[acct_space.pack((account_id, 'objects'))] = struct.pack('<q', 0)
+        tr[acct_space.pack((account_id, 'bytes'))] = struct.pack('<q', 0)
         tr[acct_space.pack((account_id, 'ctime'))] = bytes(str(now), 'utf-8')
 
         # metrics
@@ -776,9 +776,9 @@ class AccountBackendFdb():
                 sum_objects += struct.unpack('<q', v)[0]
 
         tr[self.acct_space.pack((account_id, 'bytes'))] = \
-            struct.pack('<i', sum_bytes)
+            struct.pack('<q', sum_bytes)
         tr[self.acct_space.pack((account_id, 'objects'))] = \
-            struct.pack('<i', sum_objects)
+            struct.pack('<q', sum_objects)
 
     @fdb.transactional
     def _update_container(self, tr, cts_space, ct_space, account_id, cname,
@@ -867,9 +867,9 @@ class AccountBackendFdb():
                 inc_objects = new_total_objects - int(nb_objects)
                 inc_bytes = new_total_bytes - int(nb_bytes)
                 tr[ct_space.pack((cname, 'objects'))] = \
-                    struct.pack('<i', new_total_objects)
+                    struct.pack('<q', new_total_objects)
                 tr[ct_space.pack((cname, 'bytes'))] = \
-                    struct.pack('<i', new_total_bytes)
+                    struct.pack('<q', new_total_bytes)
                 tr[cts_space.pack((cname,))] = b'1'
                 tr[ct_space.pack((cname, 'name'))] = bytes(str(cname), 'utf-8')
                 tr[ct_space.pack((cname, 'mtime'))] = mtime
@@ -884,12 +884,14 @@ class AccountBackendFdb():
 
             # increase account stats
             if inc_objects != 0:
-                tr.add(self.acct_space.pack((account_id, 'objects')),
-                       struct.pack('<i', inc_objects))
+                self._increment(tr,
+                                self.acct_space.pack((account_id, 'objects')),
+                                inc_objects)
 
             if inc_bytes != 0:
-                tr.add(self.acct_space.pack((account_id, 'bytes')),
-                       struct.pack('<i', inc_bytes))
+                self._increment(tr,
+                                self.acct_space.pack((account_id, 'bytes')),
+                                inc_bytes)
 
             deltas = self._update_ct_stats_policy(tr, cname, region,
                                                   objects_details,
@@ -919,7 +921,7 @@ class AccountBackendFdb():
                 # This container is not yet associated with this bucket.
                 # We must add all the totals in case the container
                 # already existed but didn't know its parent bucket.
-                if current_bucket_name is None:
+                if not deleted and current_bucket_name is None:
                     inc_objects = new_total_objects
                     inc_bytes = new_total_bytes
 
@@ -961,17 +963,17 @@ class AccountBackendFdb():
                 # if marker == false or container_name <= marker then
                 if tr[self.b_space.pack((bucket_name, 'objects'))].present():
                     tr.add(self.b_space.pack((bucket_name, 'objects')),
-                           struct.pack('<i', inc_objects))
+                           struct.pack('<q', inc_objects))
                 else:
                     tr[self.b_space.pack((bucket_name, 'objects'))] = \
-                                         struct.pack('<i', 0)
+                                         struct.pack('<q', inc_objects)
 
                 if tr[self.b_space.pack((bucket_name, 'bytes'))].present():
                     tr.add(self.b_space.pack((bucket_name, 'bytes')),
-                           struct.pack('<i', inc_bytes))
+                           struct.pack('<q', inc_bytes))
                 else:
                     tr[self.b_space.pack((bucket_name, 'bytes'))] = \
-                                         struct.pack('<i', 0)
+                                        struct.pack('<q', inc_bytes)
 
                 tr[self.b_space.pack((bucket_name, 'region'))] = \
                     bytes(str(region), 'utf-8')
@@ -1044,7 +1046,7 @@ class AccountBackendFdb():
             if value > 0 and delta != 0:
                 deltas[policy]['nb-objects'] = delta
                 tr[c_space.pack((policy, 'nb-objects'))] = \
-                    struct.pack('<i', value)
+                    struct.pack('<q', value)
 
         for policy, value in bytes_per_policy.items():
             if policy not in current_values.keys():
@@ -1065,7 +1067,7 @@ class AccountBackendFdb():
             if value > 0 and delta != 0:
                 deltas[policy]['nb-bytes'] = delta
                 tr[c_space.pack((policy, 'nb-bytes'))] = \
-                    struct.pack('<i', value)
+                    struct.pack('<q', value)
 
         # empty policies that are not present in objs_per_policy
         reg_space = fdb.Subspace((METRICS_PREFIX, cname, region))
@@ -1362,9 +1364,9 @@ class AccountBackendFdb():
 
         if marker is None:
             tr[self.b_space.pack((bucket_name, 'objects'))] = \
-                struct.pack('<i', 0)
+                struct.pack('<q', 0)
             tr[self.b_space.pack((bucket_name, 'bytes'))] = \
-                struct.pack('<i', 0)
+                struct.pack('<q', 0)
 
         for key, val in iterator:
             _, _, container, unpacked_key = fdb.tuple.unpack(key)
@@ -1393,8 +1395,8 @@ class AccountBackendFdb():
             if count == 2 * batch_size:
                 break
 
-        tr.add(bucket_key.pack(('objects',)), struct.pack('<i', sum_objects))
-        tr.add(bucket_key.pack(('bytes',)), struct.pack('<i', sum_bytes))
+        tr.add(bucket_key.pack(('objects',)), struct.pack('<q', sum_objects))
+        tr.add(bucket_key.pack(('bytes',)), struct.pack('<q', sum_bytes))
         return new_marker
 
     @fdb.transactional
@@ -1471,13 +1473,13 @@ class AccountBackendFdb():
 
         if found:
             if orig_marker is None:
-                tr[ct_space.pack((cname, 'objects'))] = struct.pack('<i', 0)
-                tr[ct_space.pack((cname, 'bytes'))] = struct.pack('<i', 0)
+                tr[ct_space.pack((cname, 'objects'))] = struct.pack('<q', 0)
+                tr[ct_space.pack((cname, 'bytes'))] = struct.pack('<q', 0)
 
             tr.add(ct_space.pack((cname, 'objects')),
-                   struct.pack('<i', sum_objects))
+                   struct.pack('<q', sum_objects))
             tr.add(ct_space.pack((cname, 'bytes')),
-                   struct.pack('<i', sum_bytes))
+                   struct.pack('<q', sum_bytes))
         else:
             new_marker = None
         if ended:
