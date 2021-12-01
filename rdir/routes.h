@@ -1,6 +1,7 @@
 /*
 OpenIO SDS rdir
 Copyright (C) 2017-2018 OpenIO SAS, as part of OpenIO SDS
+Copyright (C) 2021 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -25,6 +26,7 @@ extern "C" {
 
 enum rdir_route_e {
     OIO_RDIR_NOT_MATCHED = 0 /* Returned upon error */,
+    OIO_ROUTE_INFO,
     OIO_ROUTE_STATUS,
     OIO_ROUTE_CONFIG,
     OIO_RDIR_STATUS,

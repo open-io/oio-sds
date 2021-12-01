@@ -562,7 +562,7 @@ type: rdir
 location: ${LOC}
 ${WANT_SERVICE_ID}service_id: ${SERVICE_ID}
 checks:
-    - {type: tcp}
+    - {type: http, uri: /info}
 slots:
     - ${SRVTYPE}
 stats:

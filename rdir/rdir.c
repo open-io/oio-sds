@@ -2499,6 +2499,45 @@ _route_meta2_delete(struct req_args_s *args, struct json_object *jbody,
  * ------------------------------------------------------------------------- */
 
 // RDIR{{
+// GET /info
+// ~~~~~~~~~~~
+// Return a brief summary of the target service.
+//
+// .. code-block:: http
+//
+//    GET /info HTTP/1.1
+//    Host: 127.0.0.1:6022
+//    User-Agent: curl/7.58.0
+//    Accept: */*
+//
+//
+// .. code-block:: http
+//
+//    HTTP/1.1 200 OK
+//    Connection: Close
+//    Content-Type: application/json
+//    Content-Length: 21
+//
+//    namespace OPENIO
+//    path /dev/OPENIO/rdir-11526
+//    service_id rdir-11526
+//
+// }}RDIR
+static enum http_rc_e
+_route_srv_info(struct req_args_s *args)
+{
+	GString *gstr = g_string_sized_new(128);
+	g_string_append_printf(gstr, "namespace %s\n", ns_name);
+	g_string_append_printf(gstr, "path %s\n", basedir);
+	if (service_id) {
+		g_string_append_printf(gstr, "service_id %s\n", service_id);
+	}
+
+	return _reply_bytes(args->rp, HTTP_CODE_OK, "OK", HTTP_CONTENT_TYPE_TEXT,
+			g_string_free_to_bytes(gstr));
+}
+
+// RDIR{{
 // GET /status
 // ~~~~~~~~~~~
 // Return a brief summary of the usage on the target service.
@@ -2594,6 +2633,11 @@ _handler_decode_route(struct req_args_s *args, struct json_object *jbody,
 		enum rdir_route_e route)
 {
 	switch (route) {
+		case OIO_ROUTE_INFO:
+			args->rp->no_access();
+			CHECK_METHOD("GET");
+			return _route_srv_info(args);
+
 		case OIO_ROUTE_STATUS:
 			args->rp->no_access();
 			CHECK_METHOD("GET");
