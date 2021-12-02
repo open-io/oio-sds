@@ -1544,6 +1544,12 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	err = m2b_open_for_object(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED,
 			&sq3);
 	if (!err) {
+		if (!oio_ext_is_shard_redirection()
+				&& sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
+			m2b_close(sq3, url);
+			return NEWERROR(CODE_NOT_ALLOWED, "Creating an object directly on "
+					"shard is not allowed. Please use the root container.");
+		}
 		struct m2db_put_args_s args;
 		memset(&args, 0, sizeof(args));
 		args.sq3 = sq3;
@@ -1588,6 +1594,12 @@ meta2_backend_change_alias_policy(struct meta2_backend_s *m2b,
 	err = m2b_open_for_object(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED,
 			&sq3);
 	if (!err) {
+		if (!oio_ext_is_shard_redirection()
+				&& sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
+			m2b_close(sq3, url);
+			return NEWERROR(CODE_NOT_ALLOWED, "Creating an object directly on "
+					"shard is not allowed. Please use the root container.");
+		}
 		struct m2db_put_args_s args;
 		memset(&args, 0, sizeof(args));
 		args.sq3 = sq3;
@@ -1630,6 +1642,12 @@ meta2_backend_update_content(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	err = m2b_open_for_object(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED,
 			&sq3);
 	if (!err) {
+		if (!oio_ext_is_shard_redirection()
+				&& sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
+			m2b_close(sq3, url);
+			return NEWERROR(CODE_NOT_ALLOWED, "Creating an object directly on "
+					"shard is not allowed. Please use the root container.");
+		}
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_update_content(sq3, url, in,
 					cb_deleted, u0_deleted, cb_added, u0_added))) {
@@ -1694,6 +1712,12 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	err = m2b_open_for_object(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED,
 			&sq3);
 	if (!err) {
+		if (!oio_ext_is_shard_redirection()
+				&& sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
+			m2b_close(sq3, url);
+			return NEWERROR(CODE_NOT_ALLOWED, "Creating an object directly on "
+					"shard is not allowed. Please use the root container.");
+		}
 		struct m2db_put_args_s args;
 		memset(&args, 0, sizeof(args));
 		args.sq3 = sq3;
