@@ -130,9 +130,9 @@ gboolean oio_ext_has_simulate_versioning(void);
 
 void oio_ext_set_simulate_versioning(const gboolean simulate_versioning);
 
-gboolean oio_ext_is_shard(void);
+gboolean oio_ext_is_shard_redirection(void);
 
-void oio_ext_set_is_shard(const gboolean is_shard);
+void oio_ext_set_is_shard_redirection(const gboolean is_shard);
 
 const gchar *oio_ext_get_root_hexid(void);
 

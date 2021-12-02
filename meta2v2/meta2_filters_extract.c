@@ -408,9 +408,9 @@ meta2_filter_extract_sharding_info(struct gridd_filter_ctx_s *ctx,
 	EXTRACT_OPT(NAME_MSGKEY_SHARD_COMMAND);
 	const char *is_shard = meta2_filter_ctx_get_param(ctx,
 			NAME_MSGKEY_SHARD_COMMAND);
-	oio_ext_set_is_shard(oio_str_parse_bool(is_shard, FALSE));
+	oio_ext_set_is_shard_redirection(oio_str_parse_bool(is_shard, FALSE));
 
-	if (oio_ext_is_shard()) {
+	if (oio_ext_is_shard_redirection()) {
 		GPtrArray *tmp = g_ptr_array_new();
 		gchar **names = metautils_message_get_field_names(reply->request);
 		for (gchar **n = names; names && *n; ++n) {

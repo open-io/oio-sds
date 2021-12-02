@@ -246,7 +246,7 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		}
 	}
 	void s3_list_end_cb(struct sqlx_sqlite3_s *sq3) {
-		if (!oio_ext_is_shard()) {
+		if (!oio_ext_is_shard_redirection()) {
 			// Not a request for a shard
 			return;
 		} else if (!sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {

@@ -54,7 +54,7 @@ meta2_dispatch_all(struct gridd_reply_ctx_s *reply,
 	oio_ext_set_force_versioning(NULL);
 	oio_ext_set_user_agent(NULL);
 	oio_ext_set_simulate_versioning(FALSE);
-	oio_ext_set_is_shard(FALSE);
+	oio_ext_set_is_shard_redirection(FALSE);
 	oio_ext_set_shared_properties(NULL);
 	oio_ext_allow_long_timeout(FALSE);
 
@@ -91,7 +91,7 @@ meta2_dispatch_all(struct gridd_reply_ctx_s *reply,
 	oio_ext_set_force_versioning(NULL);
 	oio_ext_set_user_agent(NULL);
 	oio_ext_set_simulate_versioning(FALSE);
-	oio_ext_set_is_shard(FALSE);
+	oio_ext_set_is_shard_redirection(FALSE);
 	oio_ext_set_shared_properties(NULL);
 	oio_ext_allow_long_timeout(FALSE);
 	return TRUE;

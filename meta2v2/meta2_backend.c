@@ -900,7 +900,7 @@ m2b_open_for_object(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		return err;
 
 	const gchar *path = oio_url_get(url, OIOURL_PATH);
-	if (oio_ext_is_shard())
+	if (oio_ext_is_shard_redirection())
 		err = _check_shard_range(sq3, url, path,
 				replimode != M2V2_OPEN_MASTERONLY);
 	else
@@ -1354,7 +1354,7 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 	if (!err) {
 		const gchar *current_marker_start = lp->marker_start;
 		const gchar *current_marker_end = lp->marker_end;
-		if (oio_ext_is_shard()) {
+		if (oio_ext_is_shard_redirection()) {
 			gchar *shard_lower = NULL;
 			gchar *shard_upper = NULL;
 			if (!sqlx_admin_has(sq3, M2V2_ADMIN_SHARDING_ROOT)) {
@@ -1398,7 +1398,7 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 			err = m2db_list_aliases(sq3, lp, headers, cb, u0);
 		}
 		if (!err || err->code == CODE_REDIRECT_SHARD) {
-			if (!oio_ext_is_shard() && out_properties)
+			if (!oio_ext_is_shard_redirection() && out_properties)
 				*out_properties = sqlx_admin_get_keyvalues(sq3, NULL);
 		}
 		if (!err) {

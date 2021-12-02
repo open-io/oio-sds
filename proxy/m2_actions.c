@@ -106,7 +106,7 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 		client_clean(&ctx);
 		client_init(&ctx, args, NAME_SRVTYPE_META2, 1, NULL, how,
 				decoder, out);
-		oio_ext_set_is_shard(TRUE);
+		oio_ext_set_is_shard_redirection(TRUE);
 	}
 
 	guint nb_redirects = 0;
@@ -161,7 +161,7 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 			client_clean(&ctx);
 			client_init(&ctx, args, NAME_SRVTYPE_META2, 1, NULL, how,
 					decoder, out);
-			oio_ext_set_is_shard(TRUE);
+			oio_ext_set_is_shard_redirection(TRUE);
 			continue;
 		}
 		if (redirect_url) {
@@ -178,7 +178,7 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 				client_clean(&ctx);
 				client_init(&ctx, args, NAME_SRVTYPE_META2, 1, NULL, how,
 						decoder, out);
-				oio_ext_set_is_shard(FALSE);
+				oio_ext_set_is_shard_redirection(FALSE);
 				g_clear_error(&err);
 				continue;
 			}
@@ -215,7 +215,7 @@ _resolve_meta2(struct req_args_s *args, enum proxy_preference_e how,
 		args->rp->add_header(PROXYD_HEADER_PERFDATA, perfdata);
 	}
 
-	oio_ext_set_is_shard(FALSE);
+	oio_ext_set_is_shard_redirection(FALSE);
 	oio_ext_enable_perfdata(FALSE);
 	oio_ext_set_root_hexid(NULL);
 	args->url = original_url;

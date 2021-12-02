@@ -255,7 +255,7 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 
 	/* Set sharding request to FALSE.
 	 * Only a root container redirect set to TRUE. */
-	oio_ext_set_is_shard(FALSE);
+	oio_ext_set_is_shard_redirection(FALSE);
 
 	/* Init shared properties to NULL.
 	 * These shared properties are only used with sharded container.

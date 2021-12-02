@@ -183,7 +183,7 @@ struct oio_ext_local_s {
 	gchar *force_versioning;
 	guint8 simulate_versioning;
 	/** Request originates from a redirect from a root container. */
-	guint8 is_shard;
+	guint8 is_shard_redirection;
 	gchar *root_hexid;
 	gchar **shared_properties;
 	gchar reqid[LIMIT_LENGTH_REQID];
@@ -374,14 +374,14 @@ void oio_ext_set_simulate_versioning(const gboolean simulate_versioning) {
 	l->simulate_versioning = BOOL(simulate_versioning);
 }
 
-gboolean oio_ext_is_shard(void) {
+gboolean oio_ext_is_shard_redirection(void) {
 	const struct oio_ext_local_s *l = _local_ensure ();
-	return BOOL(l->is_shard);
+	return BOOL(l->is_shard_redirection);
 }
 
-void oio_ext_set_is_shard(const gboolean is_shard) {
+void oio_ext_set_is_shard_redirection(const gboolean is_shard_redirection) {
 	struct oio_ext_local_s *l = _local_ensure();
-	l->is_shard = BOOL(is_shard);
+	l->is_shard_redirection = BOOL(is_shard_redirection);
 }
 
 const gchar *oio_ext_get_root_hexid(void) {
