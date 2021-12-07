@@ -1379,6 +1379,16 @@ class ObjectStorageApi(object):
     def _object_create(self, account, container, obj_name, source,
                        sysmeta, properties=None, properties_callback=None,
                        policy=None, key_file=None, **kwargs):
+        if kwargs.get('restore_drained'):
+            obj_meta = self.object_get_properties(account, container, obj_name,
+                                                  **kwargs)
+            kwargs['version'] = obj_meta['version']
+            # Check that object is drained. Otherwise chunks could be deleted
+            # during upload to come because of the same version.
+            if obj_meta['chunk_method'] != 'drained':
+                raise exc.Forbidden(message='Restoring is only allowed on '
+                                    'drained objects.')
+
         obj_meta, ul_handler, chunk_prep = self._object_prepare(
             account, container, obj_name, source, sysmeta,
             policy=policy, key_file=key_file,
@@ -1449,7 +1459,8 @@ class ObjectStorageApi(object):
                 stgpol=obj_meta['policy'], mime_type=obj_meta['mime_type'],
                 chunk_method=obj_meta['chunk_method'],
                 **kwargs)
-        except (exc.Conflict, exc.DeadlineReached) as ex:
+        except (exc.Conflict, exc.DeadlineReached, exc.BadRequest,
+                exc.Forbidden) as ex:
             self.logger.warning(
                 'Failed to commit to meta2 (%s), deleting chunks', ex)
             kwargs['cid'] = obj_meta['container_id']

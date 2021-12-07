@@ -1813,24 +1813,28 @@ _patch_beans_with_contentid(GSList *beans, const guint8 *uid, gsize len)
 	}
 }
 
-static void _patch_beans_with_time (GSList *beans,
-		struct bean_ALIASES_s *latest) {
+static void _patch_beans_with_time(GSList *beans,
+		struct bean_ALIASES_s *latest, gboolean keep_mtime) {
 	gint64 now = oio_ext_real_seconds();
 	gint64 ctime = now;
+	gint64 mtime = now;
 	if (latest) {
 		/* Keep the same ctime if the object already exists */
 		ctime = ALIASES_get_ctime(latest);
+		if (keep_mtime) {
+			mtime = ALIASES_get_mtime(latest);
+		}
 	}
 	for (GSList *l = beans; l; l = l->next) {
 		gpointer bean = l->data;
 		if (DESCR(bean) == &descr_struct_ALIASES) {
 			ALIASES_set_ctime(bean, ctime);
-			ALIASES_set_mtime(bean, now);
+			ALIASES_set_mtime(bean, mtime);
 		} else if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
-			CONTENTS_HEADERS_set_ctime(bean, now);
-			CONTENTS_HEADERS_set_mtime(bean, now);
+			CONTENTS_HEADERS_set_ctime(bean, mtime);
+			CONTENTS_HEADERS_set_mtime(bean, mtime);
 		} else if (DESCR(bean) == &descr_struct_CHUNKS) {
-			CHUNKS_set_ctime(bean, now);
+			CHUNKS_set_ctime(bean, mtime);
 		}
 	}
 }
@@ -2002,7 +2006,7 @@ GError* m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 	}
 
 	_patch_beans_defaults(beans);
-	_patch_beans_with_time(beans, latest);
+	_patch_beans_with_time(beans, latest, FALSE);
 
 	if (!latest) {
 		/* put everything (and patch everything */
@@ -2268,7 +2272,7 @@ suspended:
 	if (!err) {
 		/* Patch the beans, before inserting */
 		_patch_beans_defaults(beans);
-		_patch_beans_with_time(beans, latest);
+		_patch_beans_with_time(beans, latest, FALSE);
 		_patch_beans_with_version(beans, version);
 		if (!args->preserve_chunk_ids)
 			m2v2_shorten_chunk_ids(beans);
@@ -2321,6 +2325,11 @@ m2db_change_alias_policy(struct m2db_put_args_s *args, GSList *new_beans,
 {
 	GError *err;
 	struct bean_ALIASES_s *current_alias = NULL;
+	/* This pointer is a helper to manipulate the current header.
+	 * A next variable <beans_to_delete> also works with this same pointer.
+	 * <beans_to_delete> is responsible for cleaning the pointer, this is why
+	 * <new_header> is not explicitely freed.
+	 */
 	struct bean_CONTENTS_HEADERS_s *current_header = NULL;
 	struct bean_ALIASES_s *new_alias = NULL;
 	struct bean_CONTENTS_HEADERS_s *new_header = NULL;
@@ -2420,14 +2429,15 @@ m2db_change_alias_policy(struct m2db_put_args_s *args, GSList *new_beans,
 
 	/* Patch the beans, before inserting */
 	_patch_beans_defaults(new_beans);
-	_patch_beans_with_time(new_beans, current_alias);
+	_patch_beans_with_time(new_beans, current_alias, TRUE);
 	/* Ensure the beans are all linked to the content (with their content-id) */
 	_patch_beans_with_contentid(new_beans, content_id, content_idlen);
-	/* Keep the same mtime */
-	ALIASES_set_mtime(new_alias, ALIASES_get_mtime(current_alias));
 
 	err = m2db_real_put_alias(args->sq3, new_beans, cb_added, u0_added);
 	if (!err) {
+		/* The function <_real_delete_and_save_deleted_beans> updated the
+		 * counters, we need to update them again.
+		 */
 		gint64 size = CONTENTS_HEADERS_get_size(new_header);
 		const gchar *policy = NULL;
 		GString *policy_str = CONTENTS_HEADERS_get_policy(new_header);
@@ -2446,6 +2456,137 @@ label_end:
 		cb_deleted(u0_deleted, deleted_beans);
 	else
 		_bean_cleanl2(deleted_beans);
+
+	return err;
+}
+
+GError*
+m2db_restore_drained(struct m2db_put_args_s *args, GSList *new_beans,
+		m2_onbean_cb cb_deleted, gpointer u0_deleted,
+		m2_onbean_cb cb_added, gpointer u0_added)
+{
+	EXTRA_ASSERT(args != NULL);
+	EXTRA_ASSERT(args->sq3 != NULL);
+	EXTRA_ASSERT(args->url != NULL);
+
+	GError *err;
+	GSList *deleted_beans = NULL;
+	struct bean_ALIASES_s *current_alias = NULL;
+	struct bean_CONTENTS_HEADERS_s *new_header = NULL;
+	/* This pointer is a helper to manipulate the current header.
+	 * A next variable <beans_to_delete> also works with this same pointer.
+	 * <beans_to_delete> is responsible for cleaning the pointer, this is why
+	 * <new_header> is not explicitely freed.
+	 */
+	struct bean_CONTENTS_HEADERS_s *current_header = NULL;
+	GSList *beans_to_delete = NULL;
+
+	if (args->worm_mode) {
+		err = NEWERROR(CODE_CONTENT_EXISTS, "NS wormed! Cannot overwrite.");
+		goto label_end;
+	}
+
+	/* Extract new beans */
+	for (GSList *l = new_beans; l; l = l->next) {
+		if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS) {
+			new_header = l->data;
+		}
+	}
+
+	/* Get current existing beans */
+	void _get_current_beans(gpointer ignored, gpointer bean) {
+		(void) ignored;
+		if (DESCR(bean) == &descr_struct_ALIASES) {
+			current_alias = bean;
+		} else if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
+			current_header = bean;
+			beans_to_delete = g_slist_prepend(beans_to_delete, bean);
+		} else if (DESCR(bean) == &descr_struct_CHUNKS) {
+			beans_to_delete = g_slist_prepend(beans_to_delete, bean);
+		}
+	}
+	err = m2db_get_alias(args->sq3, args->url,
+			M2V2_FLAG_NOPROPS|M2V2_FLAG_HEADERS, _get_current_beans, NULL);
+	if (err) {
+		goto label_end;
+	}
+
+	/* Checks and consistency */
+	gint64 container_draining_state = m2db_get_drain_state(args->sq3);
+	if (container_draining_state == DRAINING_STATE_NEEDED ||
+			container_draining_state == DRAINING_STATE_IN_PROGRESS) {
+		err = NEWERROR(CODE_NOT_ALLOWED,
+				"Container draining needed or in progress, cannot restore");
+		goto label_end;
+	}
+	if (g_strcmp0(CONTENTS_HEADERS_get_chunk_method(current_header)->str,
+				  CHUNK_METHOD_DRAINED) != 0) {
+		err = NEWERROR(CODE_NOT_ALLOWED,
+					   "Restoring is only allowed on drained objects");
+		goto label_end;
+	}
+	if (CONTENTS_HEADERS_get_size(current_header) !=
+			CONTENTS_HEADERS_get_size(new_header)) {
+		err = BADREQ("Different size: current=%ld; new=%ld)",
+					 CONTENTS_HEADERS_get_size(current_header),
+					 CONTENTS_HEADERS_get_size(new_header));
+		goto label_end;
+	}
+	if (!metautils_gba_equal(CONTENTS_HEADERS_get_hash(current_header),
+							 CONTENTS_HEADERS_get_hash(new_header))) {
+		GString *current_hash = metautils_gba_to_hexgstr(NULL,
+				CONTENTS_HEADERS_get_hash(current_header));
+		GString *new_hash = metautils_gba_to_hexgstr(NULL,
+				CONTENTS_HEADERS_get_hash(new_header));
+		err = BADREQ("Different hash: current=%s; new=%s)",
+				current_hash->str, new_hash->str);
+		g_string_free(current_hash, TRUE);
+		g_string_free(new_hash, TRUE);
+		goto label_end;
+	}
+	if (g_strcmp0(CONTENTS_HEADERS_get_policy(current_header)->str,
+		CONTENTS_HEADERS_get_policy(new_header)->str) != 0) {
+		err = NEWERROR(CODE_NOT_ALLOWED,
+					   "Different policies, cannot restore");
+		goto label_end;
+	}
+
+	/* Modify new beans with current mtime and ctime */
+	CONTENTS_HEADERS_set_mime_type(new_header,
+		CONTENTS_HEADERS_get_mime_type(current_header));
+	_patch_beans_with_time(new_beans, current_alias, TRUE);
+	m2v2_shorten_chunk_ids(new_beans);
+
+	err = _real_delete_and_save_deleted_beans(args->sq3,
+			beans_to_delete, NULL, current_header,
+			_bean_list_cb, &deleted_beans);
+	if (err) {
+		goto label_end;
+	}
+
+	err = m2db_real_put_alias(args->sq3, new_beans, cb_added, u0_added);
+	if (!err) {
+		/* The function <_real_delete_and_save_deleted_beans> updated the
+		 * counters, we need to update them again.
+		 */
+		gint64 size = CONTENTS_HEADERS_get_size(new_header);
+		const gchar *policy = NULL;
+		GString *policy_str = CONTENTS_HEADERS_get_policy(new_header);
+		if (policy_str && policy_str->str) {
+			policy = policy_str->str;
+		}
+		m2db_update_size(args->sq3, size, policy);
+		m2db_update_obj_count(args->sq3, 1, policy);
+	}
+label_end:
+
+	_bean_clean(current_alias);
+	if (!err && cb_deleted && deleted_beans) {
+		cb_deleted(u0_deleted, deleted_beans);
+	} else {
+		_bean_cleanl2(deleted_beans);
+	}
+	_bean_cleanl2(beans_to_delete);
 
 	return err;
 }

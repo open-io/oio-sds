@@ -270,6 +270,15 @@ m2v2_remote_pack_CHANGE_POLICY(struct oio_url_s *url, GSList *beans, gint64 dl)
 }
 
 GByteArray*
+m2v2_remote_pack_RESTORE_DRAINED(struct oio_url_s *url, GSList *beans, gint64 dl)
+{
+	GByteArray *body = bean_sequence_marshall(beans);
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_PUT, url, body, dl);
+	metautils_message_add_field_str(msg, NAME_MSGKEY_RESTORE_DRAINED, "1");
+	return message_marshall_gba_and_clean(msg);
+}
+
+GByteArray*
 m2v2_remote_pack_APPEND(struct oio_url_s *url, GSList *beans, gint64 dl)
 {
 	GByteArray *body = bean_sequence_marshall(beans);

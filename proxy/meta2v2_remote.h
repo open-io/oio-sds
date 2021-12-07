@@ -119,6 +119,11 @@ GByteArray* m2v2_remote_pack_CHANGE_POLICY(
 		GSList *beans,
 		gint64 deadline);
 
+GByteArray* m2v2_remote_pack_RESTORE_DRAINED(
+		struct oio_url_s *url,
+		GSList *beans,
+		gint64 deadline);
+
 GByteArray* m2v2_remote_pack_APPEND(
 		struct oio_url_s *url,
 		GSList *beans,

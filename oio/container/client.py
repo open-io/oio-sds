@@ -605,6 +605,8 @@ class ContainerClient(ProxyClient):
         :type append: `bool`
         :param change_policy: change policy of an existing object
         :type change_policy: `bool`
+        :param restore_drained: restore a drained object (keeping its metadata)
+        :type restore_drained: `bool`
         """
         uri = self._make_uri('content/create')
         params = self._make_params(account, reference, path, cid=cid)
@@ -612,6 +614,8 @@ class ContainerClient(ProxyClient):
             params['append'] = '1'
         if change_policy:
             params['change_policy'] = '1'
+        if kwargs.get('restore_drained'):
+            params['restore_drained'] = '1'
         # TODO(FVE): implement 'force' parameter
         if not isinstance(data, dict):
             warnings.simplefilter('once')

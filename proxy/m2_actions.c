@@ -3742,6 +3742,7 @@ static GError *_m2_json_put (struct req_args_s *args,
 	const gboolean append = _request_get_flag (args, "append");
 	const gboolean force = _request_get_flag (args, "force");
 	const gboolean change_policy = _request_get_flag (args, "change_policy");
+	const gboolean restore_drained = _request_get_flag (args, "restore_drained");
 	/* used from oio-swift for "sharding" in containers */
 	const char* force_versioning = g_tree_lookup(args->rq->tree_headers,
 			PROXYD_HEADER_FORCE_VERSIONING);
@@ -3765,9 +3766,10 @@ static GError *_m2_json_put (struct req_args_s *args,
 	}
 
 	PACKER_VOID(_pack) {
-		if (force) return m2v2_remote_pack_OVERWRITE (args->url, ibeans, DL());
-		if (append) return m2v2_remote_pack_APPEND (args->url, ibeans, DL());
-		if (change_policy) return m2v2_remote_pack_CHANGE_POLICY (args->url, ibeans, DL());
+		if (force) return m2v2_remote_pack_OVERWRITE(args->url, ibeans, DL());
+		if (append) return m2v2_remote_pack_APPEND(args->url, ibeans, DL());
+		if (change_policy) return m2v2_remote_pack_CHANGE_POLICY(args->url, ibeans, DL());
+		if (restore_drained) return m2v2_remote_pack_RESTORE_DRAINED(args->url, ibeans, DL());
 		return m2v2_remote_pack_PUT (args->url, ibeans, DL());
 	}
 	err = _resolve_meta2(args, _prefer_master(), _pack, &obeans, NULL);

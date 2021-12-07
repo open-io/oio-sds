@@ -140,6 +140,11 @@ GError* meta2_backend_change_alias_policy(struct meta2_backend_s *m2b,
 		m2_onbean_cb cb_deleted, gpointer u0_deleted,
 		m2_onbean_cb cb_added, gpointer u0_added);
 
+GError* meta2_backend_restore_drained(struct meta2_backend_s *m2b,
+		struct oio_url_s *url, GSList *in,
+		m2_onbean_cb cb_deleted, gpointer u0_deleted,
+		m2_onbean_cb cb_added, gpointer u0_added);
+
 GError* meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, GSList *beans,
 		m2_onbean_cb cb, gpointer u0);

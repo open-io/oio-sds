@@ -163,6 +163,12 @@ class CreateObject(ContainerCommandMixin, Lister):
             help='Add a column to display performance data',
             default=False
         )
+        parser.add_argument(
+            '--restore-drained',
+            action="store_true",
+            help='Restore a drained object (keeping its metadata)',
+            default=False
+        )
         return parser
 
     def take_action(self, parsed_args):
@@ -205,7 +211,8 @@ class CreateObject(ContainerCommandMixin, Lister):
                         key_file=key_file,
                         mime_type=parsed_args.mime_type,
                         autocreate=autocreate,
-                        tls=parsed_args.tls)
+                        tls=parsed_args.tls,
+                        restore_drained=parsed_args.restore_drained)
 
                     res = (name, data[1], data[2].upper(), 'Ok')
                     if parsed_args.perfdata_column:

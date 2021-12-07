@@ -2,7 +2,7 @@
 OpenIO SDS meta2v2
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -247,14 +247,16 @@ meta2_filter_action_put_content(struct gridd_filter_ctx_s *ctx,
 
 	GSList *added = NULL, *deleted = NULL;
 
-	GRID_DEBUG("Putting %d beans in [%s]%s%s%s", g_slist_length(beans),
+	GRID_DEBUG("Putting %d beans in [%s]%s%s%s%s", g_slist_length(beans),
 			oio_url_get(url, OIOURL_WHOLE),
 			meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_OVERWRITE)?
 			" (overwrite)":"",
 			meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_UPDATE)?
 			" (update)":"",
 			meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_CHANGE_POLICY)?
-			" (policy change)":"");
+			" (policy change)":"",
+			meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_RESTORE_DRAINED)?
+			" (restore drained)":"");
 
 	if (meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_OVERWRITE)) {
 		e = meta2_backend_force_alias(m2b, url, beans,
@@ -266,6 +268,10 @@ meta2_filter_action_put_content(struct gridd_filter_ctx_s *ctx,
 	} else if (meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_CHANGE_POLICY)) {
 		reply->subject("action:policy change");
 		e = meta2_backend_change_alias_policy(m2b, url, beans,
+				_bean_list_cb, &deleted, _bean_list_cb, &added);
+	} else if (meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_RESTORE_DRAINED)) {
+		reply->subject("action:restore drained");
+		e = meta2_backend_restore_drained(m2b, url, beans,
 				_bean_list_cb, &deleted, _bean_list_cb, &added);
 	} else {
 		e = meta2_backend_put_alias(m2b, url, beans, _bean_list_cb, &deleted,
