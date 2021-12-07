@@ -367,7 +367,11 @@ class ObjectStorageApi(object):
     @ensure_request_id
     def container_drain(self, account, container, **kwargs):
         """
-        Drain a container
+        Drain objects from a container.
+        This method is usually called by the meta2-crawler which schedule the
+        draining with a given <limit> size.
+        The container must be in the correct draining state (need or
+        in progress), this state can be set with the cli.
 
         :param account: account from which to drain the container
         :type account: `str`

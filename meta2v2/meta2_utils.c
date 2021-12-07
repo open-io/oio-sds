@@ -3417,6 +3417,14 @@ m2db_drain_container(struct sqlx_sqlite3_s *sq3, m2_onbean_cb cb, gpointer u0,
 {
 	GError *err = NULL;
 	gchar *marker_start = NULL;
+	gint64 draining_state = m2db_get_drain_state(sq3);
+
+	if (draining_state != DRAINING_STATE_NEEDED &&
+			draining_state != DRAINING_STATE_IN_PROGRESS) {
+		err = SYSERR("draining_state=%ld invalid for draining", draining_state);
+		return err;
+	}
+
 	err = m2db_get_drain_marker(sq3, &marker_start);
 	if (err) {
 		g_free(marker_start);

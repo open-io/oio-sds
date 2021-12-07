@@ -388,7 +388,10 @@ class FlushContainer(ContainerCommandMixin, Command):
 
 
 class DrainContainer(ContainersCommandMixin, Command):
-    """Drain an object container."""
+    """
+    Set the draining state to 'needed'. Draining is not performed here,
+    the meta2-crawler will do it on his next pass.
+    """
 
     log = getLogger(__name__ + '.DrainContainer')
 
