@@ -434,14 +434,14 @@ the list."""
             # sql_update
             t0 = ",".join([f.name+'=?' for f in t.fields if f.name not in t.pk])
             t1 = " AND ".join([f.name+'=?' for f in t.fields if f.name in t.pk])
-            sql = "UPDATE "+t.name+" SET "+t0+" WHERE "+t1
+            sql = "UPDATE "+t.sql_name+" SET "+t0+" WHERE "+t1
             out.write('\t'+dquoted(sql)+',\n')
             out.write('\t'+str(len(sql))+',\n')
 
-            # sql_substitue
+            # sql_substitute
             t0 = ",".join([f.name+'=?' for f in t.fields])
             t1 = " AND ".join([f.name+'=?' for f in t.fields if f.name in t.pk])
-            sql = "UPDATE "+t.name+" SET "+t0+" WHERE "+t1
+            sql = "UPDATE "+t.sql_name+" SET "+t0+" WHERE "+t1
             out.write('\t'+dquoted(sql)+',\n')
             out.write('\t'+str(len(sql))+',\n')
 
