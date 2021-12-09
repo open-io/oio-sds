@@ -59,7 +59,6 @@ In addition to common cmake options, these specific options are also available:
 | --------- | ---- |
 | LD\_LIBDIR | Path suffix to the installation prefix, to define the default directory for libraries. E.g. "lib" or "lib64", depending on the architecture. |
 | STACK\_PROTECTOR | Trigger stack protection code. Only active when CMAKE\_BUILD\_TYPE is set to "Debug" or "RelWithDebInfo" |
-| APACHE2\_MODDIR | Installation directory for apache2 modules. |
 | ALLOW\_BACKTRACE | generate backtraces in errors. |
 | FORBID\_DEPRECATED | define it to turn into errors the warnings for deprecated symbols from the GLib2. |
 | EXE\_PREFIX | Defines a prefix to all CLI tool. By default, set to "sds". |
@@ -69,7 +68,13 @@ In addition to common cmake options, these specific options are also available:
 | SOCKET\_DEFAULT\_QUICKACK | boolean |
 | SOCKET\_DEFAULT\_NODELAY | boolean |
 
-In addition, some options axist to specify uncommon installation paths. Their format is ``${DEP}_INCDIR`` or ``${DEP}_LIBDIR``, and ``DEP`` might take the given values ``APACHE2``, ``ASN1C``, ``ATTR``, ``CURL``, ``JSONC``, ``ZK``, ``ZLIB``, ``ZMQ``
+Also, some options exist to specify uncommon installation paths. Their format is ``${DEP}_INCDIR`` or ``${DEP}_LIBDIR``, and ``DEP`` might take the given values ``ASN1C``, ``ATTR``, ``CURL``, ``JSONC``, ``LEVELDB``, ``ZK``, ``ZLIB``, ``ZMQ``
+
+We recommend that you specify the installation directory (especially if you are not root)
+at this step so you don't need to repeat it when calling ``make install``:
+```
+cmake -DCMAKE_INSTALL_PREFIX=$HOME/.local [OTHER CMAKE PARAMETERS] ${SRCDIR}
+```
 
 ## Building
 
@@ -77,7 +82,7 @@ Now that ``cmake`` succeeded, it is time to build and install the binaries with 
 ```
 make
 make test
-make DESTDIR=${install_dir} install
+make install  # or make DESTDIR=${install_dir} install
 ```
 
 We suggest to install Python dependencies in a virtualenv instead of directly on the system.
