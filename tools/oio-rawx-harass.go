@@ -1,5 +1,6 @@
 // OpenIO SDS oio-rawx-harass
 // Copyright (C) 2019-2020 OpenIO SAS
+// Copyright (C) 2021 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Lesser General Public
@@ -49,11 +50,14 @@ const (
 )
 
 var (
-	rawxUrl    string = ""
-	nsName     string = ""
-	bufferSize uint   = 0
-	buffer     []byte
-	reuseCnx   = 0
+	rawxUrl          string = ""
+	nsName           string = ""
+	nextStepAfterPUT uint   = stepGet
+	nextStepAfterGET uint   = stepDelete
+	nextStepAfterDEL uint   = stepPut
+	bufferSize       uint   = 0
+	buffer           []byte
+	reuseCnx         = 0
 )
 
 var transport http.Transport = http.Transport{
@@ -77,7 +81,7 @@ type RawxClient struct {
 	chunkId     string
 	size        uint
 
-	// Managed by the controler
+	// Managed by the controller
 	step uint
 
 	// Read-Only
@@ -247,7 +251,7 @@ func (rc *RawxClient) Step() {
 		atomic.AddUint64(&statTimePut, uint64(post.Sub(pre)))
 		atomic.AddUint64(&statHitsPut, 1)
 		if status/100 == 2 {
-			rc.step = stepGet
+			rc.step = nextStepAfterPUT
 			atomic.AddUint64(&statBytesPut, uint64(size))
 		} else {
 			atomic.AddUint64(&statErrorPut, 1)
@@ -258,7 +262,7 @@ func (rc *RawxClient) Step() {
 		atomic.AddUint64(&statTimeGet, uint64(post.Sub(pre)))
 		atomic.AddUint64(&statHitsGet, 1)
 		if status/100 == 2 {
-			rc.step = stepDelete
+			rc.step = nextStepAfterGET
 			atomic.AddUint64(&statBytesGet, uint64(size))
 		} else {
 			atomic.AddUint64(&statErrorGet, 1)
@@ -269,7 +273,7 @@ func (rc *RawxClient) Step() {
 		atomic.AddUint64(&statTimeDel, uint64(post.Sub(pre)))
 		atomic.AddUint64(&statHitsDel, 1)
 		if status/100 == 2 {
-			rc.step = stepPut
+			rc.step = nextStepAfterDEL
 		} else {
 			atomic.AddUint64(&statErrorDel, 1)
 		}
@@ -280,12 +284,16 @@ func main() {
 	var nbWorkers uint
 	var nbScenarios uint
 	var duration time.Duration
+	var noGet bool
+	var noDel bool
 
 	flag.UintVar(&bufferSize, "size", 64, "Set the size of the buffer to be sent (kiB)")
 	flag.DurationVar(&duration, "duration", 30*time.Second, "Set the duration of the whole test")
 	flag.UintVar(&nbScenarios, "scenarios", 1024, "Set the number of concurrent scenarios")
 	flag.UintVar(&nbWorkers, "concurrency", 16, "Set the number of concurrent coroutines")
 	flag.StringVar(&nsName, "ns", "OPENIO", "Set the namespace name")
+	flag.BoolVar(&noGet, "noGet", false, "Disable the read operations")
+	flag.BoolVar(&noDel, "noDel", false, "Disable the delete operations")
 	flag.Parse()
 
 	if flag.NArg() != 1 {
@@ -305,6 +313,15 @@ func main() {
 	exited := make(chan bool)
 	waiting := list.New()
 	runningWorkers := 0
+
+	// Prepare the order of the steps
+	if noGet && noDel {
+		nextStepAfterPUT = stepPut
+	} else if noGet {
+		nextStepAfterPUT = stepDelete
+	} else if noDel {
+		nextStepAfterGET = stepPut
+	}
 
 	// Prepare the scenarios
 	for i := uint(0); i < nbScenarios; i++ {
