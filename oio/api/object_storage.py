@@ -126,6 +126,8 @@ class ObjectStorageApi(object):
         self._acct_kwargs['endpoint'] = \
             self._acct_kwargs.pop('account_endpoint', None)
         self._account_client = None
+        self._bucket_client = None
+        self._iam_client = None
         self._blob_client = None
         self._conscience_client = None
         self._directory_client = None
@@ -143,7 +145,44 @@ class ObjectStorageApi(object):
             self._account_client = AccountClient({"namespace": self.namespace},
                                                  logger=self.logger,
                                                  **self._acct_kwargs)
+            # Share the connection pool
+            self._acct_kwargs['pool_manager'] = \
+                self._account_client.pool_manager
         return self._account_client
+
+    @property
+    def bucket(self):
+        """
+        Get an instance of BucketClient.
+
+        :rtype: `oio.account.bucket_client.BucketClient`
+        """
+        if self._bucket_client is None:
+            from oio.account.bucket_client import BucketClient
+            self._bucket_client = BucketClient({"namespace": self.namespace},
+                                               logger=self.logger,
+                                               **self._acct_kwargs)
+            # Share the connection pool
+            self._acct_kwargs['pool_manager'] = \
+                self._bucket_client.pool_manager
+        return self._bucket_client
+
+    @property
+    def iam(self):
+        """
+        Get an instance of IamClient.
+
+        :rtype: `oio.account.iam_client.IamClient`
+        """
+        if self._iam_client is None:
+            from oio.account.iam_client import IamClient
+            self._iam_client = IamClient({"namespace": self.namespace},
+                                         logger=self.logger,
+                                         **self._acct_kwargs)
+            # Share the connection pool
+            self._acct_kwargs['pool_manager'] = \
+                self._iam_client.pool_manager
+        return self._iam_client
 
     @property
     def blob_client(self):

@@ -92,16 +92,9 @@ class Account(WerkzeugApp):
             Rule('/v1.0/account/container/update',
                  endpoint='account_container_update',
                  methods=['PUT', 'POST']),  # FIXME(adu) only PUT
-            Rule('/v1.0/account/reserve-bucket', endpoint='bucket_reserve',
-                 methods=['PUT']),
-            Rule('/v1.0/account/release-bucket', endpoint='bucket_release',
-                 methods=['POST']),
-            Rule('/v1.0/account/set-bucket-owner', endpoint='bucket_owner_set',
-                 methods=['PUT']),
-            Rule('/v1.0/account/get-bucket-owner', endpoint='bucket_owner_get',
-                 methods=['GET']),
             Rule('/v1.0/account/metrics', endpoint='account_metrics',
                  methods=['GET']),
+
             # Buckets
             Rule('/v1.0/bucket/show', endpoint='bucket_show',
                  methods=['GET']),
@@ -109,6 +102,15 @@ class Account(WerkzeugApp):
                  methods=['PUT']),
             Rule('/v1.0/bucket/refresh', endpoint='bucket_refresh',
                  methods=['POST']),
+            Rule('/v1.0/bucket/reserve-bucket', endpoint='bucket_reserve',
+                 methods=['PUT']),
+            Rule('/v1.0/bucket/release-bucket', endpoint='bucket_release',
+                 methods=['POST']),
+            Rule('/v1.0/bucket/set-bucket-owner', endpoint='bucket_owner_set',
+                 methods=['PUT']),
+            Rule('/v1.0/bucket/get-bucket-owner', endpoint='bucket_owner_get',
+                 methods=['GET']),
+
             # IAM
             Rule('/v1.0/iam/delete-user-policy',
                  endpoint='iam_delete_user_policy',
@@ -125,8 +127,7 @@ class Account(WerkzeugApp):
             Rule('/v1.0/iam/put-user-policy',
                  endpoint='iam_put_user_policy',
                  methods=['PUT', 'POST']),
-
-            Rule('/v1.0/account/load-merged-user-policies',
+            Rule('/v1.0/iam/load-merged-user-policies',
                  endpoint='iam_load_merged_user_policies',
                  methods=['GET'])
         ])

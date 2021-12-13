@@ -145,38 +145,6 @@ class AccountClient(ServiceClient):
         """
         self.account_request(bucket, 'POST', 'refresh-bucket', **kwargs)
 
-    def bucket_reserve(self, bucket, **kwargs):
-        """
-        Reserve the bucket name during bucket creation.
-        """
-        data = json.dumps({'account': kwargs.get('owner')})
-        _resp, body = self.account_request(bucket, 'PUT', 'reserve-bucket',
-                                           data=data, **kwargs)
-        return body
-
-    def bucket_release(self, bucket, **kwargs):
-        """
-        Release the bucket reservration after success.
-        """
-        self.account_request(bucket, 'POST', 'release-bucket', **kwargs)
-
-    def set_bucket_owner(self, bucket, **kwargs):
-        """
-        Set the bucket owner during reservation.
-        """
-        data = json.dumps({'account': kwargs.get('owner')})
-        _resp, body = self.account_request(bucket, 'PUT', 'set-bucket-owner',
-                                           data=data, **kwargs)
-        return body
-
-    def get_bucket_owner(self, bucket, **kwargs):
-        """
-        Get the bucket owner.
-        """
-        _resp, body = self.account_request(bucket, 'GET', 'get-bucket-owner',
-                                           **kwargs)
-        return body
-
     def container_list(self, account, limit=None, marker=None,
                        end_marker=None, prefix=None, delimiter=None,
                        s3_buckets_only=False, **kwargs):
@@ -272,20 +240,3 @@ class AccountClient(ServiceClient):
         :type account: `str`
         """
         self.account_request(account, 'POST', 'flush', **kwargs)
-
-    def iam_load_merged_user_policies(self, account, user, **kwargs):
-        """
-        load merged policies for given couple account/user
-
-        :param account: name of the account
-        :type account: `str`
-        :param user: user of account
-        :type user: `str`
-        """
-        params = {"account": account,
-                  "user": user}
-        _resp, body = self.account_request(account, 'GET',
-                                           'load-merged-user-policies',
-                                           params=params,
-                                           **kwargs)
-        return body
