@@ -1,5 +1,5 @@
 # Copyright (C) 2016-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -25,7 +25,8 @@ from urllib3 import HTTPResponse
 from oio.api.object_storage import ObjectStorageApi
 from oio.common import exceptions as exc
 from oio.common.cache import get_cached_object_metadata
-from oio.common.constants import M2_PROP_OBJECTS, M2_PROP_USAGE, REQID_HEADER
+from oio.common.constants import DRAINING_STATE_IN_PROGRESS, \
+    M2_PROP_DRAINING_STATE, M2_PROP_OBJECTS, M2_PROP_USAGE, REQID_HEADER
 from oio.common.http_eventlet import CustomHTTPResponse
 from oio.common.storage_functions import _sort_chunks as sort_chunks
 from oio.common.utils import cid_from_name, request_id, depaginate, get_hasher
@@ -2040,6 +2041,195 @@ class TestObjectChangePolicy(ObjectStorageApiTestBase):
             exc.ClientException, self.api.object_create,
             self.account, name, obj_name=name, version=obj['version'],
             data='test', policy='SINGLE', change_policy=True)
+
+
+class TestObjectRestoreDrained(ObjectStorageApiTestBase):
+
+    def setUp(self):
+        super(TestObjectRestoreDrained, self).setUp()
+        self.chunk_size = self.conf['chunk_size']
+        self.nb_rawx = len(self.conf['services']['rawx'])
+        self.patched_args = None
+        self.patched_kwargs = None
+
+    def _test_restore_drained(self, data_size):
+
+        name = 'restore-drained-' + random_str(6)
+        self._create(name)
+
+        expected_count = 0
+        expected_size = 0
+        expected_count_by_policy = {}
+        expected_size_by_policy = {}
+
+        # Create the object
+        data = random_data(data_size)
+        chunks, _, _ = self.api.object_create(
+            self.account, name, obj_name=name,
+            data=data, properties={'test': 'it works'})
+        obj1, chunks1 = self.api.object_locate(self.account, name, name)
+        expected_count += 1
+        expected_size += data_size
+        expected_count_by_policy[obj1['policy']] = 1
+        expected_size_by_policy[obj1['policy']] = data_size
+
+        # Drain the object
+        reqid = request_id()
+        self.api.object_drain(self.account, name, name, reqid=reqid)
+        evt = self.wait_for_event('oio-preserved',
+                                  types=(EventTypes.CONTENT_DRAINED),
+                                  reqid=reqid,
+                                  timeout=5.0)
+
+        self.assertIsNotNone(evt)
+        self.assertEqual(len(chunks),
+                         sum(data['type'] == "chunks" for data in evt.data))
+
+        # Check the object is really drained (to be sure that restore actually
+        # do something)
+        resp = self.api.object_show(self.account, name, name)
+        self.assertEqual('drained', resp['chunk_method'])
+        for chunk in chunks1:
+            self.assertRaises(
+                exc.NotFound, self.api.blob_client.chunk_head, chunk['url'])
+
+        # Restore the object
+        reqid = request_id()
+        self.api.object_create(self.account, name, obj_name=name,
+                               data=data, restore_drained=True, reqid=reqid)
+
+        obj2, chunks2 = self.api.object_locate(self.account, name, name)
+
+        # Ids will differ but every other element should be the same
+        obj1.pop('id')
+        obj2.pop('id')
+        self.assertDictEqual(obj1, obj2)
+
+        if expected_size > 0:
+            self._check_stats(
+                name, expected_count=expected_count,
+                expected_size=expected_size,
+                expected_count_by_policy=expected_count_by_policy,
+                expected_size_by_policy=expected_size_by_policy, reqid=reqid)
+        else:
+            self._check_stats(
+                name, expected_count=expected_count,
+                expected_size=expected_size,
+                expected_count_by_policy=expected_count_by_policy, reqid=reqid)
+
+        for chunk in chunks2:
+            meta = self.api.blob_client.chunk_head(chunk['url'])
+            self.assertEqual(chunk['url'].rsplit('/', 1)[-1], meta['chunk_id'])
+            self.assertEqual(chunk['pos'], meta['chunk_pos'])
+            self.assertGreaterEqual(self.chunk_size, int(meta['chunk_size']))
+            self.assertEqual(
+                cid_from_name(self.account, name), meta['container_id'])
+            self.assertEqual(obj2['chunk_method'], meta['content_chunkmethod'])
+            self.assertEqual(obj2['name'], meta['content_path'])
+            self.assertEqual(obj2['policy'], meta['content_policy'])
+            self.assertEqual(obj2['version'], meta['content_version'])
+
+    def test_restore_drained_0_byte(self):
+        self._test_restore_drained(0)
+
+    def test_restore_drained_chunksize_byte(self):
+        self._test_restore_drained(self.chunk_size)
+
+    def test_restore_drained_2xchunksize_byte(self):
+        self._test_restore_drained(self.chunk_size * 2)
+
+    def test_restore_drained_no_object(self):
+        name = 'restore-drained-' + random_str(6)
+        self._create(name)
+
+        data = random_data(self.chunk_size)
+        self.assertRaises(exc.NoSuchObject, self.api.object_create,
+                          self.account, name, obj_name=name, data=data,
+                          restore_drained=True)
+
+    def test_restore_drained_no_drain(self):
+        name = 'restore-drained-' + random_str(6)
+        self._create(name)
+
+        data = random_data(self.chunk_size)
+        self.api.object_create(self.account, name, obj_name=name,
+                               data=data, properties={'test': 'it works'})
+
+        self.assertRaises(exc.Forbidden, self.api.object_create, self.account,
+                          name, obj_name=name, data=data, restore_drained=True)
+
+    def test_restore_drained_wrong_flag(self):
+        name = 'restore-drained-' + random_str(6)
+        self._create(name)
+
+        data = random_data(self.chunk_size)
+        self.api.object_create(self.account, name, obj_name=name,
+                               data=data, properties={'test': 'it works'})
+
+        system = {M2_PROP_DRAINING_STATE: str(DRAINING_STATE_IN_PROGRESS + 1)}
+        output = self.storage.container_set_properties(self.account, name,
+                                                       system=system)
+        self.assertEqual(b'', output)
+
+        self.assertRaises(exc.Forbidden, self.api.object_create, self.account,
+                          name, obj_name=name, data=data, restore_drained=True)
+
+    def test_restore_drained_different_data(self):
+        name = 'restore-drained-' + random_str(6)
+        self._create(name)
+
+        data = random_data(self.chunk_size)
+        chunks, _, _ = self.api.object_create(
+            self.account, name, obj_name=name,
+            data=data, properties={'test': 'it works'})
+
+        # Drain the object
+        reqid = request_id()
+        self.api.object_drain(self.account, name, name, reqid=reqid)
+        evt = self.wait_for_event('oio-preserved',
+                                  types=(EventTypes.CONTENT_DRAINED),
+                                  reqid=reqid,
+                                  timeout=5.0)
+
+        self.assertIsNotNone(evt)
+        self.assertEqual(len(chunks),
+                         sum(data['type'] == "chunks" for data in evt.data))
+
+        data = random_data(self.chunk_size)
+
+        # pylint: disable=protected-access
+        with patch('oio.api.object_storage.ObjectStorageApi.'
+                   '_delete_orphan_chunks',
+                   wraps=self.api._delete_orphan_chunks) as patched:
+            self.assertRaises(exc.BadRequest, self.api.object_create,
+                              self.account, name, obj_name=name, data=data,
+                              restore_drained=True)
+            self.assertEqual(1, patched.call_count)
+
+    def test_restore_drained_different_size(self):
+        name = 'restore-drained-' + random_str(6)
+        self._create(name)
+
+        data = random_data(self.chunk_size)
+        chunks, _, _ = self.api.object_create(
+            self.account, name, obj_name=name,
+            data=data, properties={'test': 'it works'})
+
+        # Drain the object
+        reqid = request_id()
+        self.api.object_drain(self.account, name, name, reqid=reqid)
+        evt = self.wait_for_event('oio-preserved',
+                                  types=(EventTypes.CONTENT_DRAINED),
+                                  reqid=reqid,
+                                  timeout=5.0)
+
+        self.assertIsNotNone(evt)
+        self.assertEqual(len(chunks),
+                         sum(data['type'] == "chunks" for data in evt.data))
+
+        data = random_data(self.chunk_size * 2)
+        self.assertRaises(exc.BadRequest, self.api.object_create, self.account,
+                          name, obj_name=name, data=data, restore_drained=True)
 
 
 class TestObjectList(ObjectStorageApiTestBase):

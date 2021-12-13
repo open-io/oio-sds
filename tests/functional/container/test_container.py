@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -1067,7 +1067,8 @@ class TestMeta2Contents(BaseTestCase):
                             data=json.dumps({"notin": [], "broken": []}))
         self.assertError(resp, 400, 400)
 
-    def _create_content(self, name):
+    def _create_content(self, name, expected_status_create=204,
+                        restore_drained=False):
         headers = {'X-oio-action-mode': 'autocreate'}
         params = self.param_content(self.ref, name)
         resp = self.request('POST', self.url_content('prepare'), params=params,
@@ -1081,9 +1082,11 @@ class TestMeta2Contents(BaseTestCase):
                    'x-oio-content-meta-policy': stgpol,
                    'x-oio-content-meta-version': int(time.time()*1000000),
                    'x-oio-content-meta-id': random_id(32)}
+        if restore_drained:
+            params['restore_drained'] = '1'
         resp = self.request('POST', self.url_content('create'), params=params,
                             headers=headers, data=json.dumps(chunks))
-        self.assertEqual(resp.status, 204)
+        self.assertEqual(resp.status, expected_status_create)
 
     def test_delete_many(self):
         # Send no account
@@ -1362,6 +1365,28 @@ class TestMeta2Contents(BaseTestCase):
         params = self.param_content(self.ref, 'Non_existing')
         resp = self.request('POST', self.url_content('drain'), params=params)
         self.assertError(resp, 404, 420)
+
+    def test_restore_drained_content(self):
+        path = random_content()
+        params = self.param_content(self.ref, path)
+
+        # Restore should fail on not existing object
+        self._create_content(path, expected_status_create=404,
+                             restore_drained=True)
+        self._create_content(path)
+        # Restore should fail on not drained objects
+        self._create_content(path, expected_status_create=403,
+                             restore_drained=True)
+
+        # Drain Content
+        resp = self.request('POST', self.url_content('drain'), params=params)
+        self.assertEqual(resp.status, 204)
+
+        # Restore content and check locate
+        self._create_content(path, expected_status_create=204,
+                             restore_drained=True)
+        resp = self.request('GET', self.url_content('locate'), params=params)
+        self.assertEqual(resp.status, 200)
 
     def test_purge(self):
         path = random_content()
