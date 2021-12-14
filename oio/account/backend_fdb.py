@@ -276,14 +276,13 @@ class AccountBackendFdb():
 
         if _acct_id is None:
             if self.autocreate:
-                self.create_account(_acct_id)
+                self.create_account(account_id)
             else:
                 return None
-        _acct_id = _acct_id.decode('utf-8')
 
         if not metadata and not to_delete:
             return account_id
-        self._manage_metadata(self.db, self.metadata_subspace, _acct_id,
+        self._manage_metadata(self.db, self.metadata_subspace, account_id,
                               metadata, to_delete)
 
         return account_id

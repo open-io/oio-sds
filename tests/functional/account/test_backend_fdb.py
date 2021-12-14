@@ -71,6 +71,16 @@ class TestAccountBackend(BaseTestCase):
         self.assertEqual(self.backend.create_account(account_id), None)
 
     def test_update_account_metadata(self):
+        account_id = 'test_not_yet_created'
+
+        # create meta for non existing account => as auto_create is true
+        # this will create the account
+
+        self.backend.update_account_metadata(account_id, {'x': '1'})
+        metadata = self.backend.get_account_metadata(account_id)
+        self.assertIn('x', metadata)
+        self.assertEqual(metadata['x'], '1')
+
         account_id = 'test'
         self.assertEqual(self.backend.create_account(account_id), account_id)
 
