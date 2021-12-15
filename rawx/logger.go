@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021 OVH SAS
+// Copyright (C) 2021-2022 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -40,8 +40,10 @@ var accessLogPut = configAccessLogDefaultPut
 var accessLogDel = configAccessLogDefaultDelete
 
 var logFormat = "{{ .Pid }} log {{ .Severity }} - {{ .Message }}"
+var logRequestFormat = "{{ .Pid }} log {{ .Severity }} - {{ .Local }} {{ .Peer }} {{ .Method }} - {{ .ReqId }} {{ .Path }} http{{ if .TLS }}s{{ end }} - {{ .Message }}"
 var logAccessFormat = "{{ .Pid }} access INF - {{ .Local }} {{ .Peer }} {{ .Method }} {{ .Status }} {{ .TimeSpent }} {{ .BytesOut }} {{ .BytesIn }} - {{ .ReqId }} {{ .Path }} http{{ if .TLS }}s{{ end }} {{ .TTFB }}"
 var logTemplate *template.Template = nil
+var logRequestTemplate *template.Template = nil
 var logAccessTemplate *template.Template = nil
 
 // Activate the extreme verbosity on the RAWX. This is has to be set at the
@@ -88,9 +90,25 @@ type LogTemplateInventory struct {
 	Message  string
 }
 
+type LogRequestTemplateInventory struct {
+	Pid      int
+	Severity string
+	Local    string
+	Peer     string
+	Method   string
+	ReqId    string
+	Path     string
+	TLS      bool
+	Message  string
+}
+
 func InitLogTemplates() error {
 	var err error
 	logTemplate, err = template.New("logTemplate").Parse(logFormat)
+	if err != nil {
+		return err
+	}
+	logRequestTemplate, err = template.New("logRequestTemplate").Parse(logRequestFormat)
 	if err != nil {
 		return err
 	}
@@ -189,6 +207,84 @@ func LogInfo(format string, v ...interface{}) {
 
 func LogDebug(format string, v ...interface{}) {
 	writeLogFmt(syslog.LOG_DEBUG, format, v...)
+}
+
+func writeLogRequestFmt(rr *rawxRequest, pri syslog.Priority, format string, v ...interface{}) {
+	if !severityAllowed(pri) {
+		return
+	}
+	erroneous, severityName := getSeverity(pri)
+
+	var output bytes.Buffer
+	if logRequestTemplate != nil {
+		var local string
+		var peer string
+		var method string
+		var reqId string
+		var path string
+		var TLS bool
+		if rr != nil {
+			local = rr.req.Host
+			peer = rr.req.RemoteAddr
+			method = rr.req.Method
+			reqId = rr.reqid
+			path = rr.req.URL.Path
+			TLS = rr.req.TLS != nil
+		} else {
+			local = ""
+			peer = ""
+			method = ""
+			reqId = ""
+			path = ""
+			TLS = false
+		}
+		err := logRequestTemplate.Execute(&output, LogRequestTemplateInventory{
+			Pid:      pid,
+			Severity: severityName,
+			Local:    local,
+			Peer:     peer,
+			Method:   method,
+			ReqId:    reqId,
+			Path:     path,
+			TLS:      TLS,
+			Message:  fmt.Sprintf(format, v...),
+		})
+
+		if err != nil {
+			log.Printf("Error while executing logRequestTemplate: %v", err)
+			return
+		}
+	} else {
+		log.Printf(format, v...)
+		return
+	}
+
+	if erroneous {
+		logger.writeError(output.String())
+	} else {
+		logger.writeInfo(output.String())
+	}
+}
+
+func LogRequestFatal(rr *rawxRequest, format string, v ...interface{}) {
+	writeLogRequestFmt(rr, syslog.LOG_ERR, format, v...)
+	log.Fatalf(format, v...)
+}
+
+func LogRequestError(rr *rawxRequest, format string, v ...interface{}) {
+	writeLogRequestFmt(rr, syslog.LOG_ERR, format, v...)
+}
+
+func LogRequestWarning(rr *rawxRequest, format string, v ...interface{}) {
+	writeLogRequestFmt(rr, syslog.LOG_WARNING, format, v...)
+}
+
+func LogRequestInfo(rr *rawxRequest, format string, v ...interface{}) {
+	writeLogRequestFmt(rr, syslog.LOG_INFO, format, v...)
+}
+
+func LogRequestDebug(rr *rawxRequest, format string, v ...interface{}) {
+	writeLogRequestFmt(rr, syslog.LOG_DEBUG, format, v...)
 }
 
 func (evt AccessLogEvent) String() string {

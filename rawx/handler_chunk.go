@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021 OVH SAS
+// Copyright (C) 2021-2022 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -294,9 +294,9 @@ func (rr *rawxRequest) checkChunk() {
 	}
 	defer chunkIn.Close()
 
-	rr.chunk, err = loadAttr(chunkIn, rr.chunkID, rr.reqid)
+	rr.chunk, err = loadAttr(rr, chunkIn, rr.chunkID)
 	if err != nil {
-		LogDebug(msgErrorAction("Getxattr()", rr.reqid, err))
+		LogRequestDebug(rr, msgErrorAction("Getxattr()", err))
 		rr.replyError("", err)
 		return
 	}
@@ -318,7 +318,7 @@ func (rr *rawxRequest) checkChunk() {
 		var in *io.LimitedReader
 		in, filter, err = rr.getChunkReader(chunkIn, rr.chunk.size, rangeInfo{})
 		if err != nil {
-			LogDebug(msgErrorAction("getChunkReader()", rr.reqid, err))
+			LogRequestDebug(rr, msgErrorAction("getChunkReader()", err))
 			rr.replyError("checkChunk()", err)
 			return
 		}
@@ -334,13 +334,13 @@ func (rr *rawxRequest) checkChunk() {
 		if _, err = io.Copy(h, in); err == nil {
 			actual_hash := strings.ToUpper(hex.EncodeToString(h.Sum(nil)))
 			if expected_hash != actual_hash {
-				LogDebug(msgErrorAction("hash comparison", rr.reqid, nil))
+				LogRequestDebug(rr, msgErrorAction("hash comparison", nil))
 				rr.replyCode(http.StatusPreconditionFailed)
 				return
 			}
 		}
 		if err != nil {
-			LogDebug(msgErrorAction("hash computation", rr.reqid, nil))
+			LogRequestDebug(rr, msgErrorAction("hash computation", err))
 			rr.replyError("", err)
 			return
 		}
@@ -388,7 +388,7 @@ func (rr *rawxRequest) downloadChunk() {
 	}
 	defer inChunk.Close()
 
-	if rr.chunk, err = loadAttr(inChunk, rr.chunkID, rr.reqid); err != nil {
+	if rr.chunk, err = loadAttr(rr, inChunk, rr.chunkID); err != nil {
 		rr.replyError("downloadChunk()", err)
 		return
 	}
@@ -433,7 +433,7 @@ func (rr *rawxRequest) downloadChunk() {
 	if err == nil {
 		rr.bytesOut = rr.bytesOut + uint64(nb)
 	} else {
-		LogError(msgErrorAction("Write()", rr.reqid, err))
+		LogRequestError(rr, msgErrorAction("Write()", err))
 	}
 }
 
@@ -586,18 +586,16 @@ func packRangeHeader(start, last, size int64) string {
 	return sb.String()
 }
 
-func msgErrorAction(action, reqid string, err error) string {
+func msgErrorAction(action string, err error) string {
 	sb := strings.Builder{}
 	sb.WriteString(action)
 	if err == nil {
-		sb.WriteString(" error (nil) (reqid=")
+		sb.WriteString(" error (nil)")
 	} else {
 		sb.WriteString(" error (")
 		sb.WriteString(err.Error())
-		sb.WriteString(") (reqid=")
+		sb.WriteString(")")
 	}
-	sb.WriteString(reqid)
-	sb.WriteRune(')')
 	return sb.String()
 }
 

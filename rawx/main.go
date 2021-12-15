@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021 OVH SAS
+// Copyright (C) 2021-2022 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -162,6 +162,9 @@ func main() {
 
 	if opts["log_format"] != "" {
 		logFormat = opts["log_format"]
+	}
+	if opts["log_request_format"] != "" {
+		logFormat = opts["log_request_format"]
 	}
 	if opts["log_access_format"] != "" {
 		logAccessFormat = opts["log_access_format"]

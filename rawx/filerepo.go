@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021 OVH SAS
+// Copyright (C) 2021-2022 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -108,7 +108,7 @@ func (fr *fileRepository) del(name string) error {
 
 	err := syscall.Removexattr(absPath, xattrName)
 	if err != nil {
-		LogWarning(msgErrorAction(joinPath2("Removexattr", name), "", err))
+		LogWarning(msgErrorAction(joinPath2("Removexattr", name), err))
 	}
 
 	err = syscall.Unlinkat(fr.rootFd, relPath, 0)
@@ -213,7 +213,7 @@ func (fr *fileRepository) linkRelPath(fromPath, toPath string) (linkOperation, e
 				return nil, err
 			}
 			if e0 := os.MkdirAll(filepath.Dir(filepath.Join(fr.root, toPath)),
-					fr.putMkdirMode); e0 != nil {
+				fr.putMkdirMode); e0 != nil {
 				return nil, err
 			}
 		default:

@@ -1,6 +1,6 @@
 // OpenIO SDS Go rawx
 // Copyright (C) 2015-2020 OpenIO SAS
-// Copyright (C) 2021 OVH SAS
+// Copyright (C) 2021-2022 OVH SAS
 //
 // This library is free software; you can redistribute it and/or
 // modify it under the terms of the GNU Affero General Public
@@ -187,7 +187,7 @@ func loadFullPath(getter func(string, string) (string, error), chunkID string) (
 	return chunk, nil
 }
 
-func loadAttr(inChunk fileReader, chunkID string, reqid string) (chunkInfo, error) {
+func loadAttr(rr *rawxRequest, inChunk fileReader, chunkID string) (chunkInfo, error) {
 	var chunk chunkInfo
 
 	buf := xattrBufferPool.Acquire()
@@ -238,7 +238,8 @@ func loadAttr(inChunk fileReader, chunkID string, reqid string) (chunkInfo, erro
 		_chunkID, err := getAttr(AttrNameChunkID)
 		if err != nil {
 			if err == syscall.ENODATA {
-				LogWarning(msgMissingXattr(chunkID, reqid, AttrNameChunkID, err))
+				LogRequestWarning(rr,
+					msgMissingXattr(chunkID, AttrNameChunkID, err))
 			} else {
 				return chunk, err
 			}
@@ -266,7 +267,7 @@ func loadAttr(inChunk fileReader, chunkID string, reqid string) (chunkInfo, erro
 				if hs.key == AttrNameCompression {
 					continue
 				}
-				LogWarning(msgMissingXattr(chunkID, reqid, hs.key, err))
+				LogRequestWarning(rr, msgMissingXattr(chunkID, hs.key, err))
 			} else {
 				return chunk, err
 			}
@@ -280,12 +281,12 @@ func loadAttr(inChunk fileReader, chunkID string, reqid string) (chunkInfo, erro
 	}
 	if chunk.ContentChunkMethod != "" {
 		chunkMethodType, params := parseChunkMethod(chunk.ContentChunkMethod)
-		algo, found := params["cca"]  // cca = Chunk Checksum Algo
+		algo, found := params["cca"] // cca = Chunk Checksum Algo
 		if found {
 			chunk.ChunkHashAlgo = algo
 		} else {
 			if len(chunk.ChunkHash) == 32 {
-				chunk.ChunkHashAlgo = "md5"  // old default value
+				chunk.ChunkHashAlgo = "md5" // old default value
 			} else {
 				chunk.ChunkHashAlgo = "blake3"
 			}
@@ -296,8 +297,8 @@ func loadAttr(inChunk fileReader, chunkID string, reqid string) (chunkInfo, erro
 	return chunk, nil
 }
 
-func msgMissingXattr(chunk, reqid, key string, cause error) string {
-	return msgErrorAction(key, reqid, cause)
+func msgMissingXattr(chunk, key string, cause error) string {
+	return msgErrorAction(key, cause)
 }
 
 func errMissingXattr(key string, cause error) error {
@@ -425,7 +426,7 @@ func retrieveHeaders(headers *http.Header, chunkID string) (chunkInfo, error) {
 		return chunk, errMissingHeader
 	}
 	chunkMethodType, chunkParams := parseChunkMethod(chunk.ContentChunkMethod)
-	chunk.ChunkHashAlgo = chunkParams["cca"]  // cca = Chunk Checksum Algo
+	chunk.ChunkHashAlgo = chunkParams["cca"] // cca = Chunk Checksum Algo
 	if chunk.ChunkHashAlgo == "" {
 		// md5 was the default before we saved the algorithm name
 		chunk.ChunkHashAlgo = "md5"
