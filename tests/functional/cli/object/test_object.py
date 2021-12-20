@@ -32,8 +32,8 @@ CONTAINER_FIELDS = ['account', 'base_name', 'bytes_usage', 'container',
                     'stats.freelist_count', 'stats.page_count',
                     'stats.page_size', 'stats.space_wasted', 'status',
                     'storage_policy']
-OBJ_FIELDS = ['account', 'container', 'ctime', 'hash', 'id', 'mime-type',
-              'mtime', 'object', 'policy', 'size', 'version']
+OBJ_FIELDS = ['account', 'chunk_method', 'container', 'ctime', 'hash', 'id',
+              'mime-type', 'mtime', 'object', 'policy', 'size', 'version']
 
 
 class ObjectTest(CliTestCase):

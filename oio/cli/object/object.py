@@ -388,7 +388,8 @@ class ShowObject(ObjectCommandMixin, ShowOne):
                 'object': obj}
         conv = {'id': 'id', 'version': 'version', 'mime-type': 'mime_type',
                 'size': 'length', 'hash': 'hash', 'ctime': 'ctime',
-                'mtime': 'mtime', 'policy': 'policy'}
+                'mtime': 'mtime', 'policy': 'policy',
+                'chunk_method': 'chunk_method'}
         for key0, key1 in conv.items():
             info[key0] = data.get(key1, 'n/a')
         for k, v in iteritems(data['properties']):

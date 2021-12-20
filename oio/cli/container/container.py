@@ -35,7 +35,7 @@ from oio.common.constants import \
     M2_PROP_SHARDING_TIMESTAMP, M2_PROP_SHARDING_UPPER, M2_PROP_SHARDS, \
     M2_PROP_STORAGE_POLICY, M2_PROP_USAGE, M2_PROP_VERSIONING_POLICY, \
     SHARDING_STATE_NAME, M2_PROP_DRAINING_STATE, DRAINING_STATE_NEEDED, \
-    M2_PROP_DRAINING_TIMESTAMP
+    DRAINING_STATE_NAME, M2_PROP_DRAINING_TIMESTAMP
 from oio.common.easy_value import boolean_value, int_value, float_value
 
 
@@ -555,6 +555,19 @@ class ShowContainer(ContainerCommandMixin, ShowOne):
                 info['sharding.master'] = sys[M2_PROP_SHARDING_MASTER]
             if M2_PROP_SHARDING_QUEUE in sys:
                 info['sharding.queue'] = sys[M2_PROP_SHARDING_QUEUE]
+
+        if M2_PROP_DRAINING_STATE in sys:
+            draining_state = sys[M2_PROP_DRAINING_STATE]
+            try:
+                draining_state = DRAINING_STATE_NAME[int(draining_state)]
+            except (ValueError, KeyError, TypeError):
+                draining_state = 'Unknown'
+            info['draining.state'] = draining_state
+            draining_timestamp = sys.get(M2_PROP_DRAINING_TIMESTAMP)
+            if draining_timestamp is not None:
+                if parsed_args.formatter == 'table':
+                    draining_timestamp = int(draining_timestamp)
+                info['draining.timestamp'] = draining_timestamp
 
         for k in ('stats.page_count', 'stats.freelist_count',
                   'stats.page_size'):
