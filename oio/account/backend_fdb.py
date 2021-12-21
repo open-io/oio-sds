@@ -246,7 +246,7 @@ class AccountBackendFdb():
         """
         if not cname:
             return None
-        ct_space = fdb.Subspace((self._container_list_prefix, account_id))
+        ct_space = self.ct_space[account_id]
         info = self._multi_get(self.db, ct_space, cname)
 
         replication_enabled = b'False'
@@ -384,8 +384,8 @@ class AccountBackendFdb():
         bytes_details = kwargs.get('bytes-details', {})
 
         # read mtime & dtime
-        ct_space = fdb.Subspace((self._container_list_prefix, account_id))
-        cts_space = fdb.Subspace((self._containers_list_prefix, account_id))
+        ct_space = self.ct_space[account_id]
+        cts_space = self.cts_space[account_id]
 
         new_mtime = bytes(mtime, 'utf-8')
         new_dtime = bytes(dtime, 'utf-8')
@@ -419,7 +419,7 @@ class AccountBackendFdb():
         if prefix is None:
             prefix = ''
 
-        bs_space = fdb.Subspace((self._buckets_list_prefix, account_id))
+        bs_space = self.bs_space[account_id]
 
         raw_list, next_marker = self._raw_listing_m1(
             self.db, bs_space, limit, prefix,
@@ -447,7 +447,7 @@ class AccountBackendFdb():
                         s3_buckets_only=False, **kwargs):
         if prefix is None:
             prefix = ''
-        ct_space = fdb.Subspace((self._container_list_prefix, account_id))
+        ct_space = self.ct_space[account_id]
         raw_list, next_marker = self._raw_listing(
             self.db, ct_space, limit=limit, marker=marker,
             end_marker=end_marker, prefix=prefix,
@@ -482,7 +482,7 @@ class AccountBackendFdb():
         batch_size = kwargs.get("batch_size", self.BATCH_SIZE)
         marker = None
         # refresh sharded containers
-        bucket_space = fdb.Subspace((self._bucket_prefix, bucket_name))
+        bucket_space = self.b_space[bucket_name]
         account_id = self.db[bucket_space.pack(('account',))]
         if account_id is None:
             return
@@ -700,10 +700,8 @@ class AccountBackendFdb():
         tr[self.acct_space.pack((account_id, 'objects'))] = \
            struct.pack('<q', 0)
         tr[self.acct_space.pack((account_id, 'bytes'))] = struct.pack('<q', 0)
-        tr.clear_range_startswith(fdb.Subspace((self._containers_list_prefix,
-                                                account_id)))
-        tr.clear_range_startswith(fdb.Subspace((self._container_list_prefix,
-                                                account_id)))
+        tr.clear_range_startswith(self.cts_space[account_id])
+        tr.clear_range_startswith(self.ct_space[account_id])
 
     @fdb.transactional
     def _create_account(self, tr, accts_space, acct_space, account_id, now):
@@ -760,7 +758,7 @@ class AccountBackendFdb():
         if not self._is_element(self.db, self.accts_space, account_id):
             raise NotFound(account_id)
 
-        ct_space = fdb.Subspace((self._container_list_prefix, account_id))
+        ct_space = self.ct_space[account_id]
         s_range = ct_space.range()
 
         iterator = tr.snapshot.get_range(s_range.start, s_range.stop,
@@ -787,7 +785,7 @@ class AccountBackendFdb():
                           objects_details, bytes_details):
 
         creation = False
-        to_delete_space = fdb.Subspace((self.ct_to_delete_prefix, account_id))
+        to_delete_space = self.ct_to_delete_space[account_id]
 
         account_exists = self._is_element(self.db, self.accts_space,
                                           account_id)
@@ -1276,7 +1274,7 @@ class AccountBackendFdb():
                     nb_objects = 0
                     nb_bytes = 0
                     mtime = 0
-                    bucket_space = fdb.Subspace((self._bucket_prefix, ctr))
+                    bucket_space = self.b_space[ctr]
                     bucket_range = bucket_space.range()
                     bucket_it = tr.get_range(bucket_range.start,
                                              bucket_range.stop, reverse=False)
@@ -1344,7 +1342,7 @@ class AccountBackendFdb():
             return 'no_bucket'
 
         account_id = tr[bucket_key.pack(('account',))].decode('utf-8')
-        ckey_prefix = fdb.Subspace((self._container_list_prefix, account_id))
+        ckey_prefix = self.ct_space[account_id]
 
         # get_range is fetching data in batchs, the default mode for
         # streaming_mode is iterator which is efficient.
@@ -1410,9 +1408,8 @@ class AccountBackendFdb():
         if not sharded_account_exists:
             return
 
-        ct_space = fdb.Subspace((self._container_list_prefix, account_id))
-        ckey_prefix = fdb.Subspace((self._container_list_prefix,
-                                    sharded_account_id))
+        ct_space = self.ct_space[account_id]
+        ckey_prefix = self.ct_space[sharded_account_id]
 
         orig_marker = marker
         new_marker = None
@@ -1495,7 +1492,7 @@ class AccountBackendFdb():
         if not sharded_account_exist:
             return
 
-        ct_space = fdb.Subspace((self._container_list_prefix, account_id))
+        ct_space = self.ct_space[account_id]
 
         containers = list()
         start = ct_space.range().start
