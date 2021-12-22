@@ -62,7 +62,7 @@ class FdbIamDb(IamDbBase):
         self.iam_directory = None
         self.account = None
 
-    def init_db(self):
+    def init_db(self, event_model='gevent'):
         """
         This method makes connexion to fdb database. It could be called
         any time in mono process, but in case we fork processes it should be
@@ -73,11 +73,10 @@ class FdbIamDb(IamDbBase):
             self.fdb_file = FdbIamDb.DEFAULT_FDB
         else:
             self.fdb_file = self.conf.get('fdb_file', FdbIamDb.DEFAULT_FDB)
-        self.logger.info('iam fdb backend using %s file', self.fdb_file)
 
         try:
             if self.db is None:
-                self.db = fdb.open(self.fdb_file, event_model='gevent')
+                self.db = fdb.open(self.fdb_file, event_model=event_model)
         except Exception as exc:
             self.logger.error("can't open fdb file: %s exception %s",
                               self.fdb_file, exc)

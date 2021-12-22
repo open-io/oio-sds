@@ -98,7 +98,7 @@ class AccountBackendFdb():
     # by batch is too long
     BATCH_SIZE = 10000
 
-    def init_db(self):
+    def init_db(self, event_model='gevent'):
         """
         This method makes connexion to fdb database. It could be called
         any time in mono process, but in case we fork processes it should be
@@ -107,11 +107,9 @@ class AccountBackendFdb():
         """
         self.fdb_file = self.conf.get('fdb_file',
                                       AccountBackendFdb.DEFAULT_FDB)
-        self.logger.info('fdb backend using %s file', self.fdb_file)
-
         try:
             if self.db is None:
-                self.db = fdb.open(self.fdb_file, event_model='gevent')
+                self.db = fdb.open(self.fdb_file, event_model=event_model)
         except Exception as exc:
             self.logger.error("can't open fdb file: %s exception %s",
                               self.fdb_file, exc)
@@ -121,7 +119,6 @@ class AccountBackendFdb():
         self.db = None
         self.conf = conf
         self.logger = logger
-        self.logger.info('fdb backend')
         self.fdb_file = None
         self.autocreate = boolean_value(conf.get('autocreate'), True)
         self._accounts_prefix = conf.get('accounts_prefix',

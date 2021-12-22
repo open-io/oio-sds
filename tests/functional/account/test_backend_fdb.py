@@ -21,6 +21,8 @@ import logging
 import random
 import eventlet
 
+from nose.plugins.attrib import attr
+
 from six import text_type
 from six.moves import xrange
 
@@ -41,6 +43,7 @@ from fdb.tuple import unpack
 fdb.api_version(630)
 
 
+@attr('no_thread_patch')
 class TestAccountBackend(BaseTestCase):
     def setUp(self):
         logger = logging.getLogger('test')
@@ -54,7 +57,7 @@ class TestAccountBackend(BaseTestCase):
         self.account_conf = {
                 'fdb_file': fdb_file}
         self.backend = AccountBackendFdb(self.account_conf, logger)
-        self.backend.init_db()
+        self.backend.init_db(None)
         del (self.backend.db[:])
         self.beanstalkd0.drain_tube('oio-preserved')
 

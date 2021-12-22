@@ -18,6 +18,8 @@ import os
 import simplejson as json
 from pathlib import Path
 
+from nose.plugins.attrib import attr
+
 from werkzeug.test import Client
 from werkzeug.wrappers import BaseResponse
 
@@ -29,6 +31,7 @@ import fdb
 fdb.api_version(630)
 
 
+@attr('no_thread_patch')
 class TestAccountServerBase(BaseTestCase):
     def setUp(self):
         super(TestAccountServerBase, self).setUp()
@@ -46,8 +49,8 @@ class TestAccountServerBase(BaseTestCase):
 
         self.account_id = 'test'
         self.acct_app = create_app(conf)
-        self.acct_app.backend.init_db()
-        self.acct_app.iam.init_db()
+        self.acct_app.backend.init_db(None)
+        self.acct_app.iam.init_db(None)
         self.app = Client(self.acct_app, BaseResponse)
 
     @classmethod
