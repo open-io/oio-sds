@@ -57,11 +57,6 @@ jobs:
           minimum: "70"
           path: '{{.cds.workspace}}/cmake_coverage.all'
 
-      - name: Publish Python coverage report
-        serveStaticFiles:
-          name: coverage-report-py
-          path: coverage-report-py
-
     requirements:
         - model: ubuntu-bionic
           #- model: openio-debbuild-18.04
