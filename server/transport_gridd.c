@@ -2,7 +2,7 @@
 OpenIO SDS server
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -857,11 +857,12 @@ dispatch_REDIRECT(struct gridd_reply_ctx_s *reply,
 #define SERVICEIDPREFIX "config service_id "
 #define VOLPREFIX "config volume "
 
-static GByteArray*
-_convert_stats_to_prometheus(GArray *stats)
+GByteArray*
+network_server_stats_to_prometheus(GArray *stats, GByteArray *body)
 {
 	// Rough estimate, will be automatically resized if needed
-	GByteArray *body = g_byte_array_sized_new(stats->len * 64);
+	if (body == NULL)
+		body = g_byte_array_sized_new(stats->len * 64);
 	gchar **stat = NULL;
 	gchar **tags = NULL;
 	GString *key_suffix = NULL;
@@ -996,7 +997,7 @@ dispatch_STATS(struct gridd_reply_ctx_s *reply,
 	GArray *stats = network_server_stat_getall();
 	static GByteArray* body = NULL;
 	if (g_strcmp0(format, "prometheus") == 0) {
-		body = _convert_stats_to_prometheus(stats);
+		body = network_server_stats_to_prometheus(stats, NULL);
 	} else {
 		body = _convert_stats_to_text(stats);
 	}

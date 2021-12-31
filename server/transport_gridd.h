@@ -2,7 +2,7 @@
 OpenIO SDS server
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2020 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -32,7 +32,7 @@ struct network_client_s;
 struct network_server_s;
 struct network_transport_s;
 
-/* Hidden structures internally definied */
+/* Hidden structures internally defined */
 struct gridd_request_dispatcher_s;
 
 /* Given to the request dispatcher, it allows him to reply to
@@ -103,7 +103,7 @@ struct gridd_request_dispatcher_s * transport_gridd_build_empty_dispatcher(void)
 /* Cleans a GRIDD request dispatcher and all the internal structures
  * associated to requests.
  * Obviously, please do not call this when still using the dispatcher.
- * Rather call this when no worker threads still exsist. */
+ * Rather call this when no worker threads still exist. */
 void gridd_request_dispatcher_clean(struct gridd_request_dispatcher_s *disp);
 
 /* Associates the given client to the given request dispatcher into
@@ -135,5 +135,10 @@ gboolean grid_daemon_is_io_ok(struct gridd_request_dispatcher_s *disp);
 /* When grid_daemon_is_io_ok() returns false, calling this will report the
  * last message emitted by the IO checking thread. */
 const gchar* grid_daemon_last_io_msg(struct gridd_request_dispatcher_s *disp);
+
+
+/* Export an array of server request statistics to an array of bytes suitable
+ * as input to Prometheus. The output buffer can be NULL. */
+GByteArray* network_server_stats_to_prometheus(GArray *stats, GByteArray *buffer);
 
 #endif /*OIO_SDS__server__transport_gridd_h*/

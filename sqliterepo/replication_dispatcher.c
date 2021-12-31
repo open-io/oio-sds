@@ -2,7 +2,7 @@
 OpenIO SDS sqliterepo
 Copyright (C) 2014 Worldline, as part of Redcurrant
 Copyright (C) 2015-2019 OpenIO SAS, as part of OpenIO SDS
-Copyright (C) 2021 OVH SAS
+Copyright (C) 2021-2022 OVH SAS
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -1819,23 +1819,35 @@ _info_repository(struct sqlx_repository_s *r, GString *gstr)
 }
 
 static void
-_info_elections(struct sqlx_repository_s *repo, GString *gstr)
+_info_elections(struct sqlx_repository_s *repo, GString *gstr,
+		gboolean prometheus_format)
 {
 	struct election_counts_s count = election_manager_count(
 			sqlx_repository_get_elections_manager(repo));
-	g_string_append_static(gstr, "\"elections\":{");
-	oio_str_gstring_append_json_pair_int(gstr, "total", count.total);
-	g_string_append_c(gstr, ',');
-	oio_str_gstring_append_json_pair_int(gstr, "none", count.none);
-	g_string_append_c(gstr, ',');
-	oio_str_gstring_append_json_pair_int(gstr, "pending", count.pending);
-	g_string_append_c(gstr, ',');
-	oio_str_gstring_append_json_pair_int(gstr, "failed", count.failed);
-	g_string_append_c(gstr, ',');
-	oio_str_gstring_append_json_pair_int(gstr, "slave", count.slave);
-	g_string_append_c(gstr, ',');
-	oio_str_gstring_append_json_pair_int(gstr, "master", count.master);
-	g_string_append_c(gstr, '}');
+	if (prometheus_format) {
+		g_string_append_printf(gstr,
+				"meta_base_elections{status=\"none\"} %u\n"
+				"meta_base_elections{status=\"pending\"} %u\n"
+				"meta_base_elections{status=\"failed\"} %u\n"
+				"meta_base_elections{status=\"slave\"} %u\n"
+				"meta_base_elections{status=\"master\"} %u\n",
+				count.none, count.pending, count.failed,
+				count.slave, count.master);
+	} else {
+		g_string_append_static(gstr, "\"elections\":{");
+		oio_str_gstring_append_json_pair_int(gstr, "total", count.total);
+		g_string_append_c(gstr, ',');
+		oio_str_gstring_append_json_pair_int(gstr, "none", count.none);
+		g_string_append_c(gstr, ',');
+		oio_str_gstring_append_json_pair_int(gstr, "pending", count.pending);
+		g_string_append_c(gstr, ',');
+		oio_str_gstring_append_json_pair_int(gstr, "failed", count.failed);
+		g_string_append_c(gstr, ',');
+		oio_str_gstring_append_json_pair_int(gstr, "slave", count.slave);
+		g_string_append_c(gstr, ',');
+		oio_str_gstring_append_json_pair_int(gstr, "master", count.master);
+		g_string_append_c(gstr, '}');
+	}
 }
 
 static const char*
@@ -1862,21 +1874,32 @@ _info_replication(struct sqlx_repository_s *repo, GString *gstr)
 }
 
 static void
-_info_cache(struct sqlx_repository_s *repo, GString *gstr)
+_info_cache(struct sqlx_repository_s *repo, GString *gstr,
+		gboolean prometheus_format)
 {
 	struct cache_counts_s count = sqlx_cache_count(
 			sqlx_repository_get_cache(repo));
-	g_string_append_static(gstr, "\"cache\":{");
-	oio_str_gstring_append_json_pair_int(gstr, "max", count.max);
-	g_string_append_c(gstr, ',');
-	oio_str_gstring_append_json_pair_int(gstr, "soft_max", count.soft_max);
-	g_string_append_c(gstr, ',');
-	oio_str_gstring_append_json_pair_int(gstr, "hot", count.hot);
-	g_string_append_c(gstr, ',');
-	oio_str_gstring_append_json_pair_int(gstr, "cold", count.cold);
-	g_string_append_c(gstr, ',');
-	oio_str_gstring_append_json_pair_int(gstr, "used", count.used);
-	g_string_append_c(gstr, '}');
+	if (prometheus_format) {
+		g_string_append_printf(gstr,
+				"meta_base_cache{type=\"max\"} %u\n"
+				"meta_base_cache{type=\"soft_max\"} %u\n"
+				"meta_base_cache{type=\"hot\"} %u\n"
+				"meta_base_cache{type=\"cold\"} %u\n"
+				"meta_base_cache{type=\"used\"} %u\n",
+				count.max, count.soft_max, count.hot, count.cold, count.used);
+	} else {
+		g_string_append_static(gstr, "\"cache\":{");
+		oio_str_gstring_append_json_pair_int(gstr, "max", count.max);
+		g_string_append_c(gstr, ',');
+		oio_str_gstring_append_json_pair_int(gstr, "soft_max", count.soft_max);
+		g_string_append_c(gstr, ',');
+		oio_str_gstring_append_json_pair_int(gstr, "hot", count.hot);
+		g_string_append_c(gstr, ',');
+		oio_str_gstring_append_json_pair_int(gstr, "cold", count.cold);
+		g_string_append_c(gstr, ',');
+		oio_str_gstring_append_json_pair_int(gstr, "used", count.used);
+		g_string_append_c(gstr, '}');
+	}
 }
 
 static void
@@ -1891,29 +1914,50 @@ _info_server(struct gridd_reply_ctx_s *reply, GString *gstr)
 	g_string_append_static(gstr, "}}");
 }
 
+static void
+_append_request_stats(GByteArray *body)
+{
+	GArray *stats = network_server_stat_getall();
+	network_server_stats_to_prometheus(stats, body);
+	g_array_free(stats, TRUE);
+}
+
 static gboolean
 _handler_INFO(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored UNUSED)
 {
 	reply->no_access();
 
+	gchar format[64] = {0};
+	metautils_message_extract_string_noerror(
+			reply->request, NAME_MSGKEY_FORMAT, format, sizeof(format));
+
 	GString *gstr = g_string_sized_new(2048);
-	g_string_append_c(gstr, '{');
-	_info_sqlite(gstr);
-	g_string_append_c(gstr, ',');
-	_info_repository(repo, gstr);
-	g_string_append_c(gstr, ',');
-	_info_replication(repo, gstr);
-	g_string_append_c(gstr, ',');
-	_info_elections(repo, gstr);
-	g_string_append_c(gstr, ',');
-	_info_cache(repo, gstr);
-	g_string_append_c(gstr, ',');
-	_info_server(reply, gstr);
-	g_string_append_c(gstr, ',');
-	oio_str_gstring_append_json_pair(gstr, "version", OIOSDS_PROJECT_VERSION);
-	g_string_append_c(gstr, '}');
-	reply->add_body(metautils_gba_from_string(gstr->str));
+	GByteArray *body = NULL;
+	if (g_strcmp0(format, "prometheus") == 0) {
+		_info_elections(repo, gstr, TRUE);
+		_info_cache(repo, gstr, TRUE);
+		body = metautils_gba_from_string(gstr->str);
+		_append_request_stats(body);
+	} else {
+		g_string_append_c(gstr, '{');
+		_info_sqlite(gstr);
+		g_string_append_c(gstr, ',');
+		_info_repository(repo, gstr);
+		g_string_append_c(gstr, ',');
+		_info_replication(repo, gstr);
+		g_string_append_c(gstr, ',');
+		_info_elections(repo, gstr, FALSE);
+		g_string_append_c(gstr, ',');
+		_info_cache(repo, gstr, FALSE);
+		g_string_append_c(gstr, ',');
+		_info_server(reply, gstr);
+		g_string_append_c(gstr, ',');
+		oio_str_gstring_append_json_pair(gstr, "version", OIOSDS_PROJECT_VERSION);
+		g_string_append_c(gstr, '}');
+		body = metautils_gba_from_string(gstr->str);
+	}
+	reply->add_body(body);
 	g_string_free(gstr, TRUE);
 
 	reply->send_reply(CODE_FINAL_OK, "OK");

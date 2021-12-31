@@ -1,4 +1,4 @@
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This library is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -66,3 +66,30 @@ class TestMetaX(BaseTestCase):
     def test_get_meta2_stats(self):
         self._test_get_stats_no_format('meta2')
         self._test_get_stats_prometheus('meta2')
+
+    def _test_get_info_prometheus(self, service_type):
+        stat_re = re.compile(r'^(\w+){(.+)} (\w+)$')
+        services = self.conscience.all_services(service_type)
+        service = random.choice(services)
+        service_id = service['tags'].get('tag.service_id', service['addr'])
+        params = {'id': service_id, 'format': 'prometheus'}
+        resp, body = self.proxy_client._request('GET', '/forward/info',
+                                                params=params)
+        self.assertEqual(200, resp.status)
+        stats = body.decode('utf-8')
+        for line in stats.split('\n'):
+            if not line.strip():
+                continue
+            match = stat_re.match(line)
+            self.assertTrue(
+                match, "'%s' did not match %r" % (
+                    line, stat_re.pattern))
+
+    def test_get_meta0_info(self):
+        self._test_get_info_prometheus('meta0')
+
+    def test_get_meta1_info(self):
+        self._test_get_info_prometheus('meta1')
+
+    def test_get_meta2_info(self):
+        self._test_get_info_prometheus('meta2')
