@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
 # Copyright (C) 2021 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify

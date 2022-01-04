@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Copyright (C) 2021 OVH SAS
+# Copyright (C) 2019-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2021-2022 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -14,6 +15,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+OPENIOCTL=$(command -v openioctl.sh)
 CLI=$(command -v openio)
 ADMIN_CLI=$(command -v openio-admin)
 CONFIG=$(command -v oio-test-config.py)
@@ -25,11 +27,6 @@ CONCURRENCY=10
 # and thus this check does not work anymore.
 #SVCID_ENABLED=$(openio cluster list meta2 rawx -c 'Service Id' -f value | grep -v 'n/a')
 SVCID_ENABLED=$(grep "service_id: true" ~/.oio/sds/conf/test.yml)
-if [ -v OIO_SYSTEMD_SYSTEM ]; then
-  SYSTEMCTL="systemctl"
-else
-  SYSTEMCTL="systemctl --user"
-fi
 
 usage() {
   echo "Usage: $(basename "${0}") -n namespace -c concurrency"
@@ -119,7 +116,7 @@ check_and_remove_meta()
 
   SERVICE="${META_LOC_TO_REBUILD##*/}"
   echo >&2 "Stop the ${TYPE} ${META_ID_TO_REBUILD}"
-  ${SYSTEMCTL} stop "${SERVICE}" > /dev/null
+  ${OPENIOCTL} stop "@${META_IP_TO_REBUILD}" > /dev/null
 
   echo >&2 "Remove the ${TYPE} ${META_ID_TO_REBUILD}"
   /bin/rm -rf "${TMP_VOLUME}"
@@ -128,7 +125,7 @@ check_and_remove_meta()
   /bin/mkdir "${META_LOC_TO_REBUILD}"
 
   echo >&2 "Restart the ${TYPE} ${META_ID_TO_REBUILD}"
-  ${SYSTEMCTL} restart "${SERVICE}" > /dev/null
+  ${OPENIOCTL} restart "@${META_IP_TO_REBUILD}" > /dev/null
   ${CLI} cluster wait -s 50 "${TYPE}" > /dev/null
 
   echo "${META_ID_TO_REBUILD} ${META_LOC_TO_REBUILD}"
@@ -204,15 +201,48 @@ openioadmin_meta_rebuild()
 
   sleep 3s
 
-  echo >&2 "Start the rebuilding for ${TYPE} ${META_ID_TO_REBUILD}" \
-      "with ${CONCURRENCY} coroutines"
-  if [ "${TYPE}" == "meta1" ]; then
-    if ! $ADMIN_CLI $TYPE rebuild --concurrency "${CONCURRENCY}"; then
-        FAIL=true
+  echo >&2 "Start the rebuilding for ${TYPE} ${META_ID_TO_REBUILD}"
+  if [ -n "${XCUTE}" ]; then
+    XCUTE_COMMAND=" xcute"
+    JOB_ID=$($ADMIN_CLI xcute ${TYPE} rebuild "${META_ID_TO_REBUILD}" -c job.id -f value)
+    if [ $? -ne 0 ]; then
+      echo >&2 "openio-admin xcute ${TYPE} rebuild FAILED"
+      FAIL=true
+    else
+      while true; do
+        JOB_STATUS=$($ADMIN_CLI xcute job show "${JOB_ID}" -c job.status -f value)
+        if [ $? -ne 0 ]; then
+          echo >&2 "openio-admin xcute job show \"${JOB_ID}\" FAILED"
+          FAIL=true
+          break
+        elif [ "$JOB_STATUS" == "WAITING" ]; then
+          continue
+        elif [ "$JOB_STATUS" == "RUNNING" ]; then
+          continue
+        else
+          break
+        fi
+        sleep 1
+      done
+      if [ "${FAIL}" != true ]; then
+        if [ "$JOB_STATUS" != "FINISHED" ]; then
+          echo >&2 "Job \"${JOB_ID}\" FAILED (status: ${JOB_STATUS})"
+          FAIL=true
+        fi
+      fi
     fi
   else
-    if ! $ADMIN_CLI $TYPE rebuild --concurrency "${CONCURRENCY}" "${META_ID_TO_REBUILD}"; then
-        FAIL=true
+    XCUTE_COMMAND=""
+    if [ "${TYPE}" == "meta1" ]; then
+      if ! $ADMIN_CLI $TYPE rebuild --concurrency "${CONCURRENCY}"; then
+          echo >&2 "openio-admin $TYPE rebuild FAILED"
+          FAIL=true
+      fi
+    else
+      if ! $ADMIN_CLI $TYPE rebuild --concurrency "${CONCURRENCY}" "${META_ID_TO_REBUILD}"; then
+        echo >&2 "openio-admin $TYPE rebuild FAILED"
+          FAIL=true
+      fi
     fi
   fi
 
@@ -295,10 +325,10 @@ openioadmin_meta_rebuild()
   done
 
   if [ "${FAIL}" = true ]; then
-    printf "${RED}\nopenio-admin %s rebuild: FAILED\n${NO_COLOR}" "${TYPE}"
+    printf "${RED}\nopenio-admin${XCUTE_COMMAND} %s rebuild: FAILED\n${NO_COLOR}" "${TYPE}"
     exit 1
   else
-    printf "${GREEN}\nopenio-admin %s rebuild: OK\n${NO_COLOR}" "${TYPE}"
+    printf "${GREEN}\nopenio-admin${XCUTE_COMMAND} %s rebuild: OK\n${NO_COLOR}" "${TYPE}"
   fi
 }
 
@@ -335,7 +365,7 @@ remove_rawx()
 
   SERVICE="${RAWX_LOC_TO_REBUILD##*/}"
   echo >&2 "Stop the rawx ${RAWX_ID_TO_REBUILD}"
-  ${SYSTEMCTL} stop "${SERVICE}" > /dev/null
+  ${OPENIOCTL} stop "@${RAWX_IP_TO_REBUILD}" > /dev/null
 
   echo >&2 "Remove data from the rawx ${RAWX_ID_TO_REBUILD}"
   /bin/rm -rf "${TMP_VOLUME}"
@@ -344,7 +374,7 @@ remove_rawx()
   /bin/mkdir "${RAWX_LOC_TO_REBUILD}"
 
   echo >&2 "Restart the rawx ${RAWX_ID_TO_REBUILD}"
-  ${SYSTEMCTL} restart "${SERVICE}" > /dev/null
+  ${OPENIOCTL} restart "@${RAWX_IP_TO_REBUILD}" > /dev/null
   ${CLI} cluster wait -s 50 rawx > /dev/null
 
   echo "${RAWX_ID_TO_REBUILD} ${RAWX_LOC_TO_REBUILD} ${TOTAL_CHUNKS}"
@@ -391,10 +421,42 @@ openioadmin_rawx_rebuild()
   fi
 
   echo >&2 "Start the rebuilding for rawx ${RAWX_ID_TO_REBUILD}"
-  if ! $ADMIN_CLI rawx $CLI_ACTION "${BLOB_REBUILDER_OPTIONS[@]}" \
-      "${RAWX_ID_TO_REBUILD}"; then
-    echo >&2 "openio-admin rawx $CLI_ACTION FAILED"
-    FAIL=true
+  if [ -n "${XCUTE}" ]; then
+    XCUTE_COMMAND=" xcute"
+    JOB_ID=$($ADMIN_CLI xcute rawx rebuild "${RAWX_ID_TO_REBUILD}" -c job.id -f value)
+    if [ $? -ne 0 ]; then
+      echo >&2 "openio-admin xcute rawx rebuild FAILED"
+      FAIL=true
+    else
+      while true; do
+        JOB_STATUS=$($ADMIN_CLI xcute job show "${JOB_ID}" -c job.status -f value)
+        if [ $? -ne 0 ]; then
+          echo >&2 "openio-admin xcute job show \"${JOB_ID}\" FAILED"
+          FAIL=true
+          break
+        elif [ "$JOB_STATUS" == "WAITING" ]; then
+          continue
+        elif [ "$JOB_STATUS" == "RUNNING" ]; then
+          continue
+        else
+          break
+        fi
+        sleep 1
+      done
+      if [ "${FAIL}" != true ]; then
+        if [ "$JOB_STATUS" != "FINISHED" ]; then
+          echo >&2 "Job \"${JOB_ID}\" FAILED (status: ${JOB_STATUS})"
+          FAIL=true
+        fi
+      fi
+    fi
+  else
+    XCUTE_COMMAND=""
+    if ! $ADMIN_CLI rawx $CLI_ACTION "${BLOB_REBUILDER_OPTIONS[@]}" \
+        "${RAWX_ID_TO_REBUILD}"; then
+      echo >&2 "openio-admin rawx $CLI_ACTION FAILED"
+      FAIL=true
+    fi
   fi
 
   set -e
@@ -497,13 +559,13 @@ openioadmin_rawx_rebuild()
   echo "Verification duration: $((END - START))s"
 
   if [ "${FAIL}" = true ]; then
-    printf "${RED}\nopenio-admin rawx rebuild: FAILED\n${NO_COLOR}"
+    printf "${RED}\nopenio-admin${XCUTE_COMMAND} rawx rebuild: FAILED\n${NO_COLOR}"
     exit 1
   else
     echo >&2 "Remove the incident for rawx ${RAWX_ID_TO_REBUILD}"
     $CLI volume admin clear --before-incident "${RAWX_ID_TO_REBUILD}"
 
-    printf "${GREEN}\nopenio-admin rawx rebuild: OK\n${NO_COLOR}"
+    printf "${GREEN}\nopenio-admin${XCUTE_COMMAND} rawx rebuild: OK\n${NO_COLOR}"
   fi
 }
 
@@ -567,6 +629,8 @@ openioadmin_all_rebuild()
 # These tests have been disabled to gain time during CI.
 # They are indirectly called by openioadmin_all_rebuild anyway.
 #openioadmin_meta_rebuild "meta1"
-#openioadmin_meta_rebuild "meta2"
-#openioadmin_rawx_rebuild
+export XCUTE=1
+openioadmin_meta_rebuild "meta2"
+openioadmin_rawx_rebuild
+unset XCUTE
 openioadmin_all_rebuild

@@ -78,6 +78,30 @@ workflow:
           operator: ne
           value: "cds.scheduler"
 
+  tests-rebuilder:
+    pipeline: oio-sds-test-functional
+    application: oio-sds
+    environment: oio-sds-env-rebuilder
+    depends_on:
+      - root
+    conditions:
+      check:
+        - variable: cds.triggered_by.username
+          operator: ne
+          value: "cds.scheduler"
+
+  tests-mover:
+    pipeline: oio-sds-test-functional
+    application: oio-sds
+    environment: oio-sds-env-mover
+    depends_on:
+      - root
+    conditions:
+      check:
+        - variable: cds.triggered_by.username
+          operator: ne
+          value: "cds.scheduler"
+
   coverage:
     pipeline: oio-sds-coverage
     application: oio-sds
@@ -88,6 +112,8 @@ workflow:
       - tests-3copies
       - tests-ec
       - tests-fullrepli
+      - tests-rebuilder
+      - tests-mover
     when:
       - success
 

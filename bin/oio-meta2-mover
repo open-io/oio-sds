@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 # Copyright (C) 2018-2020 OpenIO SAS, as part of OpenIO SDS
+# Copyright (C) 2022 OVH SAS
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
@@ -17,8 +18,6 @@
 
 from oio.common.green import eventlet_monkey_patch
 eventlet_monkey_patch()
-
-from __future__ import print_function
 
 import argparse
 import sys
